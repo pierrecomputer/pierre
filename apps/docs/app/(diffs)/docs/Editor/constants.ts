@@ -184,63 +184,6 @@ export const EDITOR_SELECTION_ACTION_CONTEXT_TYPE: PreloadFileOptions<undefined>
     options,
   };
 
-export const EDITOR_MARKER_TYPE: PreloadFileOptions<undefined> = {
-  file: {
-    name: 'marker.ts',
-    contents: `type MarkerSeverity = 'error' | 'warning' | 'info' | 'hint';
-
-interface Marker {
-  /** Controls the marker color and popover styling. */
-  severity: MarkerSeverity;
-  /** Popover content. Pass trusted HTML with \`{ html }\`. */
-  message: string | { html: string } | HTMLElement;
-  /** Start position (zero-based line and character). */
-  start: { line: number; character: number };
-  /** End position (zero-based line and character). */
-  end: { line: number; character: number };
-  /** Optional origin label shown in the popover, e.g. "eslint". */
-  source?: string;
-  /** Optional arbitrary data carried alongside the marker. */
-  metadata?: Record<string, unknown>;
-}`,
-  },
-  options,
-};
-
-export const EDITOR_MARKER_EXAMPLE: PreloadFileOptions<undefined> = {
-  file: {
-    name: 'editor_markers.ts',
-    contents: `import { Editor } from '@pierre/diffs/editor';
-
-const editor = new Editor();
-editor.edit(fileInstance);
-
-// Apply diagnostics, e.g. from a linter or language server. Inlining the array
-// lets TypeScript check the severity literals against the Marker type without
-// importing it (the type is reached through editor.setMarkers).
-editor.setMarkers([
-  {
-    severity: 'error',
-    source: 'eslint',
-    message: 'Expected === and instead saw ==.',
-    start: { line: 9, character: 12 },
-    end: { line: 9, character: 14 },
-  },
-  {
-    severity: 'warning',
-    source: 'eslint',
-    message: 'Unexpected var, use let or const instead.',
-    start: { line: 1, character: 2 },
-    end: { line: 1, character: 5 },
-  },
-]);
-
-// Pass an empty array to clear all markers.
-editor.setMarkers([]);`,
-  },
-  options,
-};
-
 export const EDITOR_PROGRAMMATIC_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
     name: 'editor_programmatic.ts',
@@ -261,52 +204,6 @@ editor.setSelections([
 
 // Move focus into the editor (the caret follows the primary selection).
 editor.focus();`,
-  },
-  options,
-};
-
-export const EDITOR_UNDO_REDO_EXAMPLE: PreloadFileOptions<undefined> = {
-  file: {
-    name: 'editor_undo_redo.tsx',
-    contents: `import { Editor } from '@pierre/diffs/editor';
-import { EditorProvider, File } from '@pierre/diffs/react';
-import { useMemo, useState } from 'react';
-
-export function EditorWithHistoryToolbar() {
-  const [canUndo, setCanUndo] = useState(false);
-  const [canRedo, setCanRedo] = useState(false);
-
-  const editor = useMemo(
-    () =>
-      new Editor({
-        onChange() {
-          // Undo and redo run through the same change path as edits, so refresh
-          // toolbar state from \`onChange\` rather than only after button clicks.
-          setCanUndo(editor.canUndo);
-          setCanRedo(editor.canRedo);
-        },
-      }),
-    []
-  );
-
-  return (
-    <EditorProvider editor={editor}>
-      <div className="toolbar">
-        <button type="button" disabled={!canUndo} onClick={() => editor.undo()}>
-          Undo
-        </button>
-        <button type="button" disabled={!canRedo} onClick={() => editor.redo()}>
-          Redo
-        </button>
-      </div>
-
-      <File
-        file={{ name: 'example.ts', contents: 'export const x = 1;' }}
-        contentEditable
-      />
-    </EditorProvider>
-  );
-}`,
   },
   options,
 };
@@ -556,7 +453,16 @@ interface EditorOptions<LAnnotation> {
 export const EDITOR_PUBLIC_API: PreloadFileOptions<undefined> = {
   file: {
     name: 'editor_public_api.ts',
-    contents: `import { Editor } from '@pierre/diffs/editor';
+    contents: `import type {
+  EditorState,
+  FileContents,
+} from '@pierre/diffs';
+import { Editor } from '@pierre/diffs/editor';
+import { CodeEditor } from '@pierre/diffs';
+
+// Editor
+// Most methods require an attached surface via edit(), or a CodeEditor that
+// handles attachment for you.
 
 const editor = new Editor();
 
@@ -571,72 +477,100 @@ editor.setOptions({
 
 // Attach to a rendered File, FileDiff, or virtualized variant.
 // Normalizes conflicting fileInstance options and returns a dispose function.
-const dispose = editor.edit(fileInstance)
+const dispose = editor.edit(fileInstance);
 
 // Detach, remove listeners, and clean up injected editor DOM.
-// same as dispose()
-editor.cleanUp()
+// Pass recycle=true when a virtualized host is temporarily unmounting.
+editor.cleanUp();
+editor.cleanUp(true);
 
-// Apply text edits to the attached document
-// The range is 0-indexed
+// Apply text edits to the attached document. Positions are zero-based.
+// Pass true as the second argument to push the edits onto the undo stack.
 editor.applyEdits([
   {
     range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
     newText: 'Hello, world!',
   },
-])
+]);
+editor.applyEdits(
+  [
+    {
+      range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
+      newText: 'Hello, world!',
+    },
+  ],
+  true
+);
 
-// Apply text edits and update the undo stack
-editor.applyEdits([
-  {
-    range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
-    newText: 'Hello, world!',
-  },
-], true)
+// Live FileContents for the attached document. Undefined when nothing is
+// attached.
+const file: FileContents | undefined = editor.getFile();
 
-// Get the current editor state - file, selections, lineAnnotations, renderRange
-const state = editor.getState()
-const stateRaw = JSON.stringify(state) // serialize the state to a json string for storage/persistence
+// Full document text, or '' when nothing is attached.
+const text: string = editor.getText();
 
-// Restore editor state after re-rendering the underlying component.
-editor.setState(state)
+// Snapshot selections and scroll position for persistence or remount restore.
+const state: EditorState = editor.getState();
+// EditorState = {
+//   selections?: EditorSelection[];
+//   view?: { scrollLeft: number; scrollTop: number };
+// }
 
-// Replace all cursors and ranges programmatically.
-// The start/end positions are 0-indexed
+// Restore selections and scroll after re-rendering the underlying component.
+editor.setState(state);
+
+// Replace all cursors and ranges programmatically. Positions are zero-based;
+// direction controls which end the caret uses for keyboard extension.
 editor.setSelections([
   {
     start: { line: 0, character: 2 },
     end: { line: 0, character: 8 },
-    direction: 'forward',
+    direction: 'forward', // 'forward' | 'backward' | 'none'
   },
-])
+]);
 
-// Show inline diagnostic markers. Pass [] to clear.
+// Show inline diagnostic markers. Pass [] to clear. Throws if not attached.
 editor.setMarkers([
   {
-    start: { line: 1,  character: 2 },
-    end: {  line: 1, character: 8 },
-    severity: 'error', // or 'warning', 'info', 'hint'
-    message: {
-      html: 'Some lint message',
-    },
+    start: { line: 1, character: 2 },
+    end: { line: 1, character: 8 },
+    severity: 'error', // 'error' | 'warning' | 'info' | 'hint'
+    message: { html: 'Some lint message' },
+    source: 'eslint',
   },
-])
+]);
+editor.setMarkers([]);
 
-// Focus the editor.
-editor.focus()
-
-// Blur the editor.
-editor.blur()
+// Focus the editable content. preventScroll skips scrolling the caret into view.
+// Blur removes focus from the content area.
+editor.focus();
+editor.focus({ preventScroll: true });
+editor.blur();
 
 // Whether there is an edit to undo or redo.
-editor.canUndo
-editor.canRedo
+editor.canUndo;
+editor.canRedo;
 
 // Undo the last edit or redo the last undone edit. No-ops when history is empty.
-editor.undo()
-editor.redo()
-`,
+editor.undo();
+editor.redo();
+
+// CodeEditor
+// High-level single-file editor. It inherits every Editor method above and adds:
+
+const codeEditor = new CodeEditor();
+
+// Mount into root. Omit file to show renderPlaceholder (if provided).
+codeEditor.render(root, file, lineAnnotations);
+
+// Swap the open file (and optional annotations) without recreating the editor.
+codeEditor.setFile(file, lineAnnotations);
+
+// Update annotations for the current file only.
+codeEditor.setLineAnnotations(lineAnnotations);
+
+// Also cleans up the managed scroll container, virtualizer, and file instance.
+codeEditor.cleanUp();`,
   },
   options,
 };
@@ -707,3 +641,177 @@ export function EditorComponent() {
     },
     options,
   };
+
+export const EDITOR_CODE_EDITOR_REACT_EXAMPLE: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'code_editor_react.tsx',
+    contents: `import type { FileContents } from '@pierre/diffs';
+import type { Editor } from '@pierre/diffs/editor';
+import { CodeEditor } from '@pierre/diffs/react';
+import { useRef } from 'react';
+
+const file: FileContents = {
+  name: 'example.ts',
+  contents: \`function greet(name: string) {
+  console.log(\\\`Hello, \\\${name}!\\\`);
+}
+
+export { greet };\`,
+};
+
+export function CodeEditorComponent() {
+  const editorRef = useRef<Editor | null>(null);
+
+  return (
+    <CodeEditor
+      ref={editorRef}
+      file={file}
+      theme={{ dark: 'pierre-dark', light: 'pierre-light' }}
+      style={{
+        height: '16rem',
+        borderRadius: '0.5rem',
+        overflow: 'hidden',
+      }}
+      onChange={(nextFile, lineAnnotations) => {
+        console.log('change', nextFile.name, lineAnnotations);
+      }}
+      renderPlaceholder={() => (
+        <p style={{ padding: '1rem' }}>No file selected</p>
+      )}
+    />
+  );
+}`,
+  },
+  options,
+};
+
+export const EDITOR_CODE_EDITOR_VANILLA_EXAMPLE: PreloadFileOptions<undefined> =
+  {
+    file: {
+      name: 'code_editor_vanilla.ts',
+      contents: `import { CodeEditor, type FileContents } from '@pierre/diffs';
+
+const root = document.getElementById('editor-root');
+if (root == null) {
+  throw new Error('Expected #editor-root to exist');
+}
+
+root.style.height = '16rem';
+
+const file: FileContents = {
+  name: 'example.ts',
+  contents: \`function greet(name: string) {
+  console.log(\\\`Hello, \\\${name}!\\\`);
+}
+
+export { greet };\`,
+};
+
+const editor = new CodeEditor({
+  theme: { dark: 'pierre-dark', light: 'pierre-light' },
+  onChange(nextFile) {
+    console.log('change', nextFile.name, nextFile.contents);
+  },
+  renderPlaceholder() {
+    const placeholder = document.createElement('p');
+    placeholder.textContent = 'No file selected';
+    return placeholder;
+  },
+});
+
+editor.render(root, file);
+
+// Swap the open file without recreating the editor:
+// editor.setFile(otherFile);
+
+// Update annotations for the current file:
+// editor.setLineAnnotations([{ lineNumber: 2, metadata: note }]);
+
+editor.cleanUp();`,
+    },
+    options,
+  };
+
+export const EDITOR_CODE_EDITOR_OPTIONS_TYPE: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'code_editor_options_type.ts',
+    contents: `import type {
+  FileContents,
+  LineAnnotation,
+  WorkerPoolManager,
+} from '@pierre/diffs';
+import type { EditorOptions } from '@pierre/diffs/editor';
+import type { CSSProperties, ReactNode } from 'react';
+
+// CodeEditorOptions combines EditorOptions with selected File options.
+export interface CodeEditorOptions<LAnnotation, ElementType = HTMLElement>
+  extends EditorOptions<LAnnotation> {
+  // Theme for syntax highlighting. Can be a single theme name or an
+  // object with 'dark' and 'light' keys for automatic switching.
+  // Built-in options: 'pierre-dark', 'pierre-light', or any Shiki theme.
+  // See: https://shiki.style/themes
+  theme?: string | { dark: string; light: string };
+
+  // Long line handling: 'scroll' (default) or 'wrap'.
+  overflow?: 'scroll' | 'wrap';
+
+  // When using a dark/light theme object, choose the active theme.
+  // 'system' (default) follows the OS preference.
+  themeType?: 'system' | 'dark' | 'light';
+
+  // Choose the Shiki engine: 'shiki-js' (default) or 'shiki-wasm'.
+  preferredHighlighter?: 'shiki-js' | 'shiki-wasm';
+
+  // Skip syntax highlighting for lines exceeding this length (default: 1000).
+  tokenizeMaxLineLength?: number;
+
+  // Max total characters to tokenize before falling back to plain text.
+  tokenizeMaxLength?: number;
+
+  // Hide line numbers when true (default: false).
+  disableLineNumbers?: boolean;
+
+  // Rethrow rendering errors instead of catching and displaying them
+  // in the DOM. Useful for testing or custom error handling. (default: false)
+  disableErrorHandling?: boolean;
+
+  // Extra lines kept rendered above/below the viewport for smoother scrolling.
+  overscrollSize?: number;
+
+  // Vanilla: pass a pool to the managed VirtualizedFile.
+  // React: prefer WorkerPoolContextProvider, or set disableWorkerPool.
+  workerPoolManager?: WorkerPoolManager;
+
+  // Custom line annotation UI. Return an ElementType (HTMLElement in vanilla,
+  // ReactNode in React) rendered beside the annotated line.
+  renderAnnotation?: (annotation: LineAnnotation<LAnnotation>) => ElementType;
+
+  // Shown when \`file\` is nullish instead of rendering an empty editor.
+  renderPlaceholder?: () => ElementType;
+}
+
+// Props for the React <CodeEditor> component.
+export interface CodeEditorProps<
+  LAnnotation = undefined,
+> extends CodeEditorOptions<LAnnotation, ReactNode> {
+  // File to edit. Omit to show renderPlaceholder.
+  file?: FileContents;
+
+  // Line annotations rendered via renderAnnotation.
+  lineAnnotations?: LineAnnotation<LAnnotation>[];
+
+  // Server-preloaded HTML for first paint / hydration (from @pierre/diffs/ssr).
+  prerenderedHTML?: string;
+
+  // Class name applied to the scroll container.
+  className?: string;
+
+  // Inline styles applied to the scroll container. Set a height for scrolling.
+  style?: CSSProperties;
+
+  // Skip the shared worker pool and highlight on the main thread (default: false).
+  disableWorkerPool?: boolean;
+}`,
+  },
+  options,
+};

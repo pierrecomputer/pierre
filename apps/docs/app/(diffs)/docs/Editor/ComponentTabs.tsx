@@ -8,27 +8,39 @@ import { DocsCodeExample } from '@/components/docs/DocsCodeExample';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 import { Notice } from '@/components/ui/notice';
 
-type EditorComponentMode = 'file' | 'file-diff' | 'multi-file-diff';
+type EditorComponentMode =
+  | 'code-editor'
+  | 'file'
+  | 'file-diff'
+  | 'multi-file-diff';
 
 interface EditorComponentTabsProps {
+  codeEditorExample?: PreloadedFileResult<undefined>;
   fileExample: PreloadedFileResult<undefined>;
   fileDiffExample: PreloadedFileResult<undefined>;
   multiFileDiffExample?: PreloadedFileResult<undefined>;
 }
 
 export function EditorComponentTabs({
+  codeEditorExample,
   fileExample,
   fileDiffExample,
   multiFileDiffExample,
 }: EditorComponentTabsProps) {
-  const [mode, setMode] = useState<EditorComponentMode>('file');
+  const [mode, setMode] = useState<EditorComponentMode>(
+    codeEditorExample != null ? 'code-editor' : 'file'
+  );
 
   return (
     <>
       <ButtonGroup
         value={mode}
         onValueChange={(value) => setMode(value as EditorComponentMode)}
+        className="no-scrollbar max-w-full overflow-x-auto md:overflow-visible"
       >
+        {codeEditorExample != null ? (
+          <ButtonGroupItem value="code-editor">CodeEditor</ButtonGroupItem>
+        ) : null}
         <ButtonGroupItem value="file">File</ButtonGroupItem>
         <ButtonGroupItem value="file-diff">FileDiff</ButtonGroupItem>
         {multiFileDiffExample != null ? (
@@ -39,6 +51,10 @@ export function EditorComponentTabs({
       </ButtonGroup>
       {(() => {
         switch (mode) {
+          case 'code-editor':
+            return codeEditorExample != null ? (
+              <DocsCodeExample {...codeEditorExample} key={mode} />
+            ) : null;
           case 'file':
             return <DocsCodeExample {...fileExample} key={mode} />;
           case 'file-diff':

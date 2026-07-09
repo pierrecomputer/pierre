@@ -18,6 +18,11 @@ virtualization. Edit mode includes:
 - SSR support
 - Mobile-friendly
 
+For one editable file, start with `CodeEditor` in the [React](#edit-mode-react)
+or [Vanilla JS](#edit-mode-vanilla-js) guide. Use the lower-level `Editor` API
+when you need to add editing to an existing `File`, `FileDiff`, `MultiFileDiff`,
+or `PatchDiff`.
+
 To enable edit mode on a `File` instance, import `Editor` from
 `@pierre/diffs/editor`. It is intentionally separate from the core bundle so you
 can lazy-load it when editing is optional.
@@ -55,13 +60,21 @@ deleted lines and annotation lines remain read-only.
 
 ### React
 
-Create one `Editor` instance (typically with `useMemo`), wrap your tree in
-`EditorProvider`, and set `contentEditable` on `File`, `FileDiff`,
-`MultiFileDiff`, or `PatchDiff` when editing should be active. The provider
-cleans up the editor on unmount. We highly recommend using the `Virtualizer`
-component for best performance when editing large files.
+For one editable file, use `CodeEditor` from `@pierre/diffs/react`. It combines
+a scroll container, virtualized `File`, and attached `Editor`, so you do not
+need to wire `Virtualizer`, `File`, and `EditorProvider` yourself. Pass `file`,
+editor callbacks (`onChange`, `onAttach`), and file options such as `theme` as
+top-level props. Use `ref` to reach the underlying `Editor` for
+[`getState` / `setState`](#edit-mode-api-reference) and programmatic selections.
+Omit `file` to show `renderPlaceholder`.
+
+To edit an existing surface, create one `Editor` instance (typically with
+`useMemo`), wrap your tree in `EditorProvider`, and set `contentEditable` on
+`File`, `FileDiff`, `MultiFileDiff`, or `PatchDiff`. The provider cleans up on
+unmount. Use `Virtualizer` for large editable files.
 
 <EditorComponentTabs
+  codeEditorExample={editorCodeEditorReactExample}
   fileExample={editorReactExample}
   fileDiffExample={editorReactFileDiffExample}
   multiFileDiffExample={editorReactMultiFileDiffExample}
@@ -69,11 +82,17 @@ component for best performance when editing large files.
 
 ### Vanilla JS
 
-For vanilla integrations, render with `File` or `FileDiff` first, then attach
-the editor. For best performance when editing large files, we strongly recommend
-using `VirtualizedFile` and `VirtualizedFileDiff`.
+For one editable file, use `CodeEditor` from `@pierre/diffs`. Construct
+`new CodeEditor(options)`, then call `render(root, file?)`, `setFile`, or
+`setLineAnnotations` as needed. Call `cleanUp()` when the editor is removed.
+Omit `file` on `render` to show `renderPlaceholder`.
+
+For other surfaces, render with `File` or `FileDiff` first, then attach the
+editor. Use `VirtualizedFile` and `VirtualizedFileDiff` for large editable
+files.
 
 <EditorComponentTabs
+  codeEditorExample={editorCodeEditorVanillaExample}
   fileExample={editorVanillaFileExample}
   fileDiffExample={editorVanillaFileDiffExample}
 />
@@ -81,15 +100,22 @@ using `VirtualizedFile` and `VirtualizedFileDiff`.
 ### Editor Options
 
 Pass these when constructing `new Editor({ ... })`, or update them later with
-[`setOptions`](#api-reference).
+[`setOptions`](#edit-mode-api-reference).
 
 <DocsCodeExample {...editorOptionsType} />
 
+`CodeEditor` options combine the `Editor` options above with selected `File`
+options, plus `overscrollSize`, `renderAnnotation`, and `renderPlaceholder`. In
+React, pass them as top-level props; in vanilla, pass them to the constructor.
+
+<DocsCodeExample {...editorCodeEditorOptionsType} />
+
 ### API Reference
 
-These methods are available after you create an `Editor` instance. Attach the
-editor to a rendered `File` or `FileDiff` first, then use the methods below to
-query state, apply edits, and control selections programmatically.
+These methods are available on an `Editor` instance. Attach it to a rendered
+`File` or `FileDiff` with `edit()` first, or use `CodeEditor` to manage that
+step for you. `CodeEditor` inherits the full `Editor` API and adds `render`,
+`setFile`, and `setLineAnnotations`.
 
 <DocsCodeExample {...editorPublicApi} />
 
@@ -136,26 +162,6 @@ selection (`getSelectionText`, `replaceSelectionText`, `applyEdits`), and
 
 <DocsCodeExample {...editorSelectionActionContextType} />
 
-### Markers
-
-Markers add inline diagnostics—errors, warnings, and other annotations—to the
-editable surface, with a hover popover that shows each marker's message. They
-are useful for surfacing linter or language-server output alongside live edits.
-
-Each marker is positioned with zero-based `start` and `end` positions and a
-`severity` that drives its color and popover styling:
-
-<DocsCodeExample {...editorMarkerType} />
-
-Call `editor.setMarkers(markers)` after the editor has attached to a surface
-(calling it before attaching throws). Inlining the array lets TypeScript check
-the `severity` literals against the `Marker` type without importing it.
-
-<DocsCodeExample {...editorMarkerExample} />
-
-Markers re-anchor as the document changes, so they stay attached to their text
-while you edit. Pass an empty array to clear them.
-
 ### Programmatic Control
 
 You can drive the editor's selection from code instead of relying solely on user
@@ -164,23 +170,6 @@ more than one for multiple cursors—and `editor.focus()` moves focus into the
 editor, placing the caret at the primary selection.
 
 <DocsCodeExample {...editorProgrammaticExample} />
-
-### History
-
-The editor keeps an undo stack for user edits and for programmatic edits applied
-with `applyEdits(..., true)`. Use `editor.canUndo` and `editor.canRedo` to
-enable or disable toolbar buttons, and call `editor.undo()` or `editor.redo()`
-to step through history from code. These methods share the same stack as the
-keyboard shortcuts (<kbd>Cmd/Ctrl-Z</kbd> and <kbd>Cmd/Ctrl-Shift-Z</kbd>).
-
-`undo()` and `redo()` are no-ops when there is nothing to undo or redo. Both run
-through the same change path as a normal edit, so your `onChange` handler fires
-and you can re-read `canUndo` / `canRedo` to keep UI state in sync.
-
-Limit the stack size with `historyMaxEntries` in
-[Editor Options](#editor-options) (default: 100).
-
-<DocsCodeExample {...editorUndoRedoExample} />
 
 ### Keyboard Shortcuts
 

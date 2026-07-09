@@ -6,7 +6,12 @@ import { useState } from 'react';
 import { DocsCodeExample } from '@/components/docs/DocsCodeExample';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 
-type ComponentType = 'code-view' | 'file-diff' | 'file' | 'unresolved-file';
+type ComponentType =
+  | 'code-view'
+  | 'file-diff'
+  | 'file'
+  | 'code-editor'
+  | 'unresolved-file';
 type PropsType = 'file-diff' | 'file';
 type DiffHunksType = 'from-file' | 'from-patch';
 
@@ -14,6 +19,7 @@ interface VanillaComponentTabsProps {
   codeViewExample: PreloadedFileResult<undefined>;
   fileDiffExample: PreloadedFileResult<undefined>;
   fileExample: PreloadedFileResult<undefined>;
+  codeEditorExample: PreloadedFileResult<undefined>;
   unresolvedFileExample: PreloadedFileResult<undefined>;
 }
 
@@ -21,6 +27,7 @@ export function VanillaComponentTabs({
   codeViewExample,
   fileDiffExample,
   fileExample,
+  codeEditorExample,
   unresolvedFileExample,
 }: VanillaComponentTabsProps) {
   const [componentType, setComponentType] =
@@ -31,8 +38,10 @@ export function VanillaComponentTabs({
       <ButtonGroup
         value={componentType}
         onValueChange={(value) => setComponentType(value as ComponentType)}
+        className="no-scrollbar max-w-full overflow-x-auto md:overflow-visible"
       >
         <ButtonGroupItem value="code-view">CodeView</ButtonGroupItem>
+        <ButtonGroupItem value="code-editor">CodeEditor</ButtonGroupItem>
         <ButtonGroupItem value="file-diff">FileDiff</ButtonGroupItem>
         <ButtonGroupItem value="file">File</ButtonGroupItem>
         <ButtonGroupItem value="unresolved-file">
@@ -45,6 +54,14 @@ export function VanillaComponentTabs({
             return (
               <DocsCodeExample
                 {...codeViewExample}
+                key={`component-type-${componentType}`}
+              />
+            );
+
+          case 'code-editor':
+            return (
+              <DocsCodeExample
+                {...codeEditorExample}
                 key={`component-type-${componentType}`}
               />
             );

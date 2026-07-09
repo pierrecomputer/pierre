@@ -16,6 +16,7 @@ type ExampleTypes =
   | 'patch-diff'
   | 'file-diff'
   | 'file'
+  | 'code-editor'
   | 'unresolved-file';
 type SharedPropsTypes =
   | 'diff-options'
@@ -29,6 +30,7 @@ interface ComponentTabsProps {
   reactAPIFileDiff: PreloadedFileResult<undefined>;
   reactAPIPatch: PreloadedFileResult<undefined>;
   reactAPIFile: PreloadedFileResult<undefined>;
+  reactAPICodeEditor: PreloadedFileResult<undefined>;
   reactAPIUnresolvedFile: PreloadedFileResult<undefined>;
 }
 
@@ -38,6 +40,7 @@ export function ComponentTabs({
   reactAPIFileDiff,
   reactAPIPatch,
   reactAPIFile,
+  reactAPICodeEditor,
   reactAPIUnresolvedFile,
 }: ComponentTabsProps) {
   const [example, setExample] = useState<ExampleTypes>('code-view');
@@ -47,8 +50,10 @@ export function ComponentTabs({
       <ButtonGroup
         value={example}
         onValueChange={(value) => setExample(value as ExampleTypes)}
+        className="no-scrollbar max-w-full overflow-x-auto md:overflow-visible"
       >
         <ButtonGroupItem value="code-view">CodeView</ButtonGroupItem>
+        <ButtonGroupItem value="code-editor">CodeEditor</ButtonGroupItem>
         <ButtonGroupItem value="multi-file-diff">MultiFileDiff</ButtonGroupItem>
         <ButtonGroupItem value="patch-diff">PatchDiff</ButtonGroupItem>
         <ButtonGroupItem value="file-diff">FileDiff</ButtonGroupItem>
@@ -61,6 +66,8 @@ export function ComponentTabs({
         switch (example) {
           case 'code-view':
             return <DocsCodeExample {...reactAPICodeView} key={example} />;
+          case 'code-editor':
+            return <DocsCodeExample {...reactAPICodeEditor} key={example} />;
           case 'multi-file-diff':
             return <DocsCodeExample {...reactAPIMultiFileDiff} key={example} />;
           case 'file-diff':
