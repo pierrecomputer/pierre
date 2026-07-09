@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>diffs edit-mode fixture</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 16px;
+        font-family: system-ui, sans-serif;
+      }
+      [data-diff-mount] {
+        max-width: 900px;
+      }
+      [data-editor-log] {
+        margin-top: 16px;
+        font-family: ui-monospace, monospace;
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <a
+      data-fixtures-index
+      href="/test/e2e/fixtures/index.html"
+      style="
+        display: inline-block;
+        margin-bottom: 16px;
+        font-family: system-ui, sans-serif;
+        font-size: 14px;
+        font-weight: 600;
+        color: #0b62d6;
+        text-decoration: none;
+      "
+      >&larr; All fixtures</a
+    >
+    <!--
+      NOTE: clicking into the additions column to place the caret exercises a
+      real cross-browser gap. The editor reads its selection through the shadow
+      root, and the pinned CI Chromium (and older browsers/WebViews) lack
+      Selection.getComposedRanges. That path now falls back to the older
+      ShadowRoot.getSelection() (see getShadowRootRange in src/editor/editor.ts),
+      so a plain click seeds the caret and typing works without a workaround.
+      edit.pw.ts intentionally clicks-then-types to guard this behavior.
+    -->
+    <div data-diff-mount></div>
+    <div data-editor-log></div>
+
+    <script type="module">
+      import { FileDiff } from '/dist/index.js';
+      import { Editor } from '/dist/editor/index.js';
+
+      const mount = document.querySelector('[data-diff-mount]');
+      const log = document.querySelector('[data-editor-log]');
+      if (!(mount instanceof HTMLElement) || !(log instanceof HTMLElement)) {
+        throw new Error('Missing edit fixture nodes.');
+      }
+
+      const oldFile = {
+        name: 'edit.ts',
+        contents: `const value = 1;
+const removed = 'old';
+export default value;
+`,
+      };
+
+      const newFile = {
+        name: 'edit.ts',
+        contents: `const value = 1;
+const added = 'new';
+export default value;
+`,
+      };
+
+      // Every onChange payload is recorded so tests can assert the editor emits
+      // the updated file contents rather than inspecting the DOM alone.
+      const events = [];
+      window.__editorEvents = events;
+
+      const editor = new Editor({
+        onChange(file) {
+          events.push(file.contents);
+          log.textContent = `changes: ${events.length}`;
+        },
+      });
+      window.__editor = editor;
+
+      const instance = new FileDiff({
+        disableFileHeader: true,
+        theme: { dark: 'pierre-dark', light: 'pierre-light' },
+        themeType: 'dark',
+        diffStyle: 'split',
+      });
+
+      instance.render({ oldFile, newFile, containerWrapper: mount });
+      editor.edit(instance);
+
+      const findAdditionsContent = () => {
+        const host = mount.querySelector('diffs-container');
+        const shadow = host?.shadowRoot;
+        if (shadow == null) {
+          return undefined;
+        }
+        for (const code of shadow.querySelectorAll('[data-code]')) {
+          if (code.dataset.deletions !== undefined) {
+            continue;
+          }
+          for (const child of code.children) {
+            if (child.dataset.content !== undefined) {
+              return child;
+            }
+          }
+        }
+        return undefined;
+      };
+
+      const waitForEditable = async () => {
+        const started = performance.now();
+        while (true) {
+          const content = findAdditionsContent();
+          if (
+            content != null &&
+            content.getAttribute('contenteditable') === 'true'
+          ) {
+            return;
+          }
+          if (performance.now() - started > 5000) {
+            throw new Error('Timed out waiting for editable additions column.');
+          }
+          await new Promise((resolve) => requestAnimationFrame(resolve));
+        }
+      };
+
+      await waitForEditable();
+      window.__editReady = true;
+    </script>
+  </body>
+</html>

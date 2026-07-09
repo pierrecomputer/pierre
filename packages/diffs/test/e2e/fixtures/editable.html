@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>diffs editable-file fixture</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 16px;
+        font-family: system-ui, sans-serif;
+      }
+      [data-diff-mount] {
+        max-width: 900px;
+      }
+    </style>
+  </head>
+  <body>
+    <a
+      data-fixtures-index
+      href="/test/e2e/fixtures/index.html"
+      style="
+        display: inline-block;
+        margin-bottom: 16px;
+        font-family: system-ui, sans-serif;
+        font-size: 14px;
+        font-weight: 600;
+        color: #0b62d6;
+        text-decoration: none;
+      "
+      >&larr; All fixtures</a
+    >
+    <div data-diff-mount></div>
+
+    <script type="module">
+      import { File } from '/dist/index.js';
+      import { Editor } from '/dist/editor/index.js';
+
+      const mount = document.querySelector('[data-diff-mount]');
+      if (!(mount instanceof HTMLElement)) {
+        throw new Error('Missing editable fixture mount.');
+      }
+
+      const file = {
+        name: 'editable.ts',
+        contents: `const foo = 1;
+const bar = foo + foo;
+const baz = foo;
+`,
+      };
+
+      // Record every onChange so tests can assert the emitted file contents,
+      // which is more robust than scraping tokenized DOM text.
+      const events = [];
+      window.__editorEvents = events;
+
+      const editor = new Editor({
+        onChange(next) {
+          events.push(next.contents);
+        },
+      });
+      window.__editor = editor;
+
+      // Editable single-file surface: `useTokenTransformer` mirrors what the
+      // React <File contentEditable> path enables before attaching an editor.
+      const instance = new File({
+        disableFileHeader: true,
+        theme: { dark: 'pierre-dark', light: 'pierre-light' },
+        themeType: 'dark',
+        useTokenTransformer: true,
+      });
+      instance.render({ file, containerWrapper: mount });
+      editor.edit(instance);
+
+      const waitForEditable = async () => {
+        const started = performance.now();
+        while (true) {
+          const host = mount.querySelector('diffs-container');
+          const content = host?.shadowRoot?.querySelector('[data-content]');
+          if (content?.getAttribute('contenteditable') === 'true') {
+            return;
+          }
+          if (performance.now() - started > 5000) {
+            throw new Error('Timed out waiting for editable content.');
+          }
+          await new Promise((resolve) => requestAnimationFrame(resolve));
+        }
+      };
+
+      await waitForEditable();
+      window.__editableReady = true;
+    </script>
+  </body>
+</html>

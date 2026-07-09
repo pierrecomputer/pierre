@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>diffs render fixture</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 16px;
+        font-family: system-ui, sans-serif;
+      }
+      [data-controls] {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 16px;
+      }
+      [data-diff-mount] {
+        max-width: 900px;
+      }
+    </style>
+  </head>
+  <body>
+    <a
+      data-fixtures-index
+      href="/test/e2e/fixtures/index.html"
+      style="
+        display: inline-block;
+        margin-bottom: 16px;
+        font-family: system-ui, sans-serif;
+        font-size: 14px;
+        font-weight: 600;
+        color: #0b62d6;
+        text-decoration: none;
+      "
+      >&larr; All fixtures</a
+    >
+    <div data-controls>
+      <button type="button" data-toggle-style>Toggle split/unified</button>
+      <button type="button" data-reject-hunk>Reject first hunk</button>
+      <span data-current-style></span>
+    </div>
+    <div data-diff-mount></div>
+
+    <script type="module">
+      import { FileDiff, parseDiffFromFile } from '/dist/index.js';
+      import { diffAcceptRejectHunk } from '/dist/index.js';
+
+      const mount = document.querySelector('[data-diff-mount]');
+      const styleLabel = document.querySelector('[data-current-style]');
+      if (!(mount instanceof HTMLElement)) {
+        throw new Error('Missing diff mount.');
+      }
+
+      // Two changed regions separated by a block of unchanged lines. The
+      // unchanged middle is large enough to collapse into a clickable hunk
+      // separator so the expand-context interaction has something to reveal.
+      const oldFile = {
+        name: 'greetings.ts',
+        contents: `export function greet(name) {
+  return 'hi ' + name;
+}
+
+const a = 1;
+const b = 2;
+const c = 3;
+const d = 4;
+const e = 5;
+const f = 6;
+const g = 7;
+const h = 8;
+
+export function farewell(name) {
+  return 'bye ' + name;
+}
+`,
+      };
+
+      const newFile = {
+        name: 'greetings.ts',
+        contents: `export function greet(name) {
+  return \`hi \${name}!\`;
+}
+
+const a = 1;
+const b = 2;
+const c = 3;
+const d = 4;
+const e = 5;
+const f = 6;
+const g = 7;
+const h = 8;
+
+export function farewell(name) {
+  return \`bye \${name}!\`;
+}
+`,
+      };
+
+      let fileDiff = parseDiffFromFile(oldFile, newFile);
+
+      const instance = new FileDiff({
+        disableFileHeader: true,
+        theme: { dark: 'pierre-dark', light: 'pierre-light' },
+        themeType: 'dark',
+        diffStyle: 'split',
+      });
+
+      const renderDiff = () => {
+        instance.render({ fileDiff, containerWrapper: mount });
+        styleLabel.textContent = instance.options.diffStyle ?? 'split';
+      };
+
+      renderDiff();
+
+      // Wait until the shadow DOM has committed real diff rows before signalling
+      // readiness so tests never race the async highlighter's first paint.
+      const waitForRows = async () => {
+        const started = performance.now();
+        while (true) {
+          const host = mount.querySelector('diffs-container');
+          const row = host?.shadowRoot?.querySelector('[data-line-type]');
+          if (row != null) {
+            return;
+          }
+          if (performance.now() - started > 5000) {
+            throw new Error('Timed out waiting for diff rows.');
+          }
+          await new Promise((resolve) => requestAnimationFrame(resolve));
+        }
+      };
+
+      document
+        .querySelector('[data-toggle-style]')
+        .addEventListener('click', () => {
+          instance.setOptions({
+            ...instance.options,
+            diffStyle:
+              instance.options.diffStyle === 'split' ? 'unified' : 'split',
+          });
+          instance.rerender();
+          styleLabel.textContent = instance.options.diffStyle ?? 'split';
+        });
+
+      document
+        .querySelector('[data-reject-hunk]')
+        .addEventListener('click', () => {
+          fileDiff = diffAcceptRejectHunk(fileDiff, 0, 'reject');
+          renderDiff();
+        });
+
+      // Expose the instance for tests that need to assert on option state.
+      window.__diffFixture = {
+        instance,
+        get fileDiff() {
+          return fileDiff;
+        },
+      };
+
+      await waitForRows();
+      window.__diffReady = true;
+    </script>
+  </body>
+</html>

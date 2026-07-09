@@ -83,7 +83,7 @@ jobs:
         run: >-
           moon ci --include-relations --summary detailed :build demo:build
           diffshub:build docs:build docs:build-trees-site path-store:build-demo
-          :test :typecheck trees:test-e2e root:lint root:lint-css
+          :test :typecheck trees:test-e2e diffs:test-e2e root:lint root:lint-css
 
   actions-pinned:
     name: Actions pinned to SHA

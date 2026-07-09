@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>diffs merge-conflict fixture</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 16px;
+        font-family: system-ui, sans-serif;
+      }
+      [data-diff-mount] {
+        max-width: 900px;
+      }
+      [data-log] {
+        margin-top: 16px;
+        font-family: ui-monospace, monospace;
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <a
+      data-fixtures-index
+      href="/test/e2e/fixtures/index.html"
+      style="
+        display: inline-block;
+        margin-bottom: 16px;
+        font-family: system-ui, sans-serif;
+        font-size: 14px;
+        font-weight: 600;
+        color: #0b62d6;
+        text-decoration: none;
+      "
+      >&larr; All fixtures</a
+    >
+    <div data-diff-mount></div>
+    <div data-log></div>
+
+    <script type="module">
+      import { UnresolvedFile } from '/dist/index.js';
+
+      const mount = document.querySelector('[data-diff-mount]');
+      const log = document.querySelector('[data-log]');
+      if (!(mount instanceof HTMLElement) || !(log instanceof HTMLElement)) {
+        throw new Error('Missing conflict fixture nodes.');
+      }
+
+      // Two independent conflicts so a test can resolve the first and confirm
+      // the second is still interactive. No base marker (2-way conflict).
+      const file = {
+        name: 'session.ts',
+        contents: [
+          'const start = true;',
+          '<<<<<<< HEAD',
+          'const ttl = 12;',
+          '=======',
+          'const ttl = 24;',
+          '>>>>>>> feature',
+          'const middle = true;',
+          '<<<<<<< HEAD',
+          'const max = 1;',
+          '=======',
+          'const max = 2;',
+          '>>>>>>> feature',
+          'const end = true;',
+          '',
+        ].join('\n'),
+      };
+
+      // Each resolution is recorded so tests can assert the callback fires with
+      // the chosen side rather than only inspecting the DOM.
+      const resolutions = [];
+      window.__conflictResolutions = resolutions;
+
+      // Uncontrolled mode: with no onMergeConflictAction, clicking an action
+      // button resolves the conflict and re-renders internally;
+      // onMergeConflictResolve is the post-resolution notification.
+      const instance = new UnresolvedFile({
+        disableFileHeader: true,
+        theme: { dark: 'pierre-dark', light: 'pierre-light' },
+        themeType: 'dark',
+        mergeConflictActionsType: 'default',
+        onMergeConflictResolve(_file, payload) {
+          resolutions.push(payload.resolution);
+        },
+      });
+
+      instance.render({ file, containerWrapper: mount });
+      window.__conflictInstance = instance;
+
+      // The diff renders asynchronously while the highlighter loads; wait until
+      // the first conflict's action button is committed to the shadow DOM.
+      const waitForActions = async () => {
+        const started = performance.now();
+        while (true) {
+          const host = mount.querySelector('diffs-container');
+          const button = host?.shadowRoot?.querySelector(
+            '[data-merge-conflict-action]'
+          );
+          if (button != null) {
+            return;
+          }
+          if (performance.now() - started > 5000) {
+            throw new Error('Timed out waiting for conflict actions.');
+          }
+          await new Promise((resolve) => requestAnimationFrame(resolve));
+        }
+      };
+
+      await waitForActions();
+      window.__conflictReady = true;
+    </script>
+  </body>
+</html>

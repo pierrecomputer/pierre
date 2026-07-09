@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>diffs line-selection fixture</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 16px;
+        font-family: system-ui, sans-serif;
+      }
+      [data-diff-mount] {
+        max-width: 900px;
+      }
+    </style>
+  </head>
+  <body>
+    <a
+      data-fixtures-index
+      href="/test/e2e/fixtures/index.html"
+      style="
+        display: inline-block;
+        margin-bottom: 16px;
+        font-family: system-ui, sans-serif;
+        font-size: 14px;
+        font-weight: 600;
+        color: #0b62d6;
+        text-decoration: none;
+      "
+      >&larr; All fixtures</a
+    >
+    <div data-diff-mount></div>
+
+    <script type="module">
+      import { File } from '/dist/index.js';
+
+      const mount = document.querySelector('[data-diff-mount]');
+      if (!(mount instanceof HTMLElement)) {
+        throw new Error('Missing line-select fixture mount.');
+      }
+
+      const file = {
+        name: 'lines.ts',
+        contents: `const one = 1;
+const two = 2;
+const three = 3;
+const four = 4;
+const five = 5;
+const six = 6;
+`,
+      };
+
+      // Record interaction callbacks so tests can assert the exact line ranges
+      // the component reports, alongside the DOM state.
+      const lineNumberClicks = [];
+      const selectionChanges = [];
+      const gutterClicks = [];
+      window.__lineNumberClicks = lineNumberClicks;
+      window.__selectionChanges = selectionChanges;
+      window.__gutterClicks = gutterClicks;
+
+      const instance = new File({
+        disableFileHeader: true,
+        theme: { dark: 'pierre-dark', light: 'pierre-light' },
+        themeType: 'dark',
+        enableLineSelection: true,
+        enableGutterUtility: true,
+        onLineNumberClick(props) {
+          lineNumberClicks.push(props.lineNumber ?? props);
+        },
+        onLineSelectionChange(range) {
+          selectionChanges.push(range);
+        },
+        onGutterUtilityClick(range) {
+          gutterClicks.push(range);
+        },
+      });
+      instance.render({ file, containerWrapper: mount });
+
+      const waitForGutter = async () => {
+        const started = performance.now();
+        while (true) {
+          const host = mount.querySelector('diffs-container');
+          const row = host?.shadowRoot?.querySelector(
+            '[data-gutter] [data-column-number]'
+          );
+          if (row != null) {
+            return;
+          }
+          if (performance.now() - started > 5000) {
+            throw new Error('Timed out waiting for gutter rows.');
+          }
+          await new Promise((resolve) => requestAnimationFrame(resolve));
+        }
+      };
+
+      await waitForGutter();
+      window.__lineSelectReady = true;
+    </script>
+  </body>
+</html>

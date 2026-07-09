@@ -37,6 +37,7 @@ const PORT_BASES = {
   docsDiffshub: 3692,
   docsE2E: 4174,
   treesE2E: 4173,
+  diffsE2E: 4175,
   pathStoreE2E: 4176,
   chrome: 9222,
 } as const;
@@ -366,6 +367,7 @@ function cmdPs(): number {
     ['docsDiffshub', 'diffshub'],
     ['docsE2E', 'docsE2E'],
     ['treesE2E', 'treesE2E'],
+    ['diffsE2E', 'diffsE2E'],
     ['pathStoreE2E', 'psE2E'],
     ['chrome', 'chrome'],
   ];
@@ -634,6 +636,7 @@ Worktree: ${slug} (offset ${offset})
   trees dev:    http://localhost:${ports.docsTrees}
   docs E2E:     http://localhost:${ports.docsE2E}
   trees E2E:    http://localhost:${ports.treesE2E}
+  diffs E2E:    http://localhost:${ports.diffsE2E}
   path-store:   http://localhost:${ports.pathStoreE2E}
   chrome debug: localhost:${ports.chrome} (user-data-dir /tmp/chrome-devtools-${slug})
 

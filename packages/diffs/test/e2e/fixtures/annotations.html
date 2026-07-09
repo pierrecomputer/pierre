@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>diffs annotations fixture</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 16px;
+        font-family: system-ui, sans-serif;
+      }
+      [data-diff-mount] {
+        max-width: 900px;
+      }
+    </style>
+  </head>
+  <body>
+    <a
+      data-fixtures-index
+      href="/test/e2e/fixtures/index.html"
+      style="
+        display: inline-block;
+        margin-bottom: 16px;
+        font-family: system-ui, sans-serif;
+        font-size: 14px;
+        font-weight: 600;
+        color: #0b62d6;
+        text-decoration: none;
+      "
+      >&larr; All fixtures</a
+    >
+    <div data-diff-mount></div>
+
+    <script type="module">
+      import { File } from '/dist/index.js';
+
+      const mount = document.querySelector('[data-diff-mount]');
+      if (!(mount instanceof HTMLElement)) {
+        throw new Error('Missing annotations fixture mount.');
+      }
+
+      const file = {
+        name: 'annotated.ts',
+        contents: `function add(a, b) {
+  return a + b;
+}
+const sum = add(1, 2);
+`,
+      };
+
+      // A single inline annotation attached to line 2 (the return statement).
+      const lineAnnotations = [{ lineNumber: 2 }];
+
+      const instance = new File({
+        disableFileHeader: true,
+        theme: { dark: 'pierre-dark', light: 'pierre-light' },
+        themeType: 'dark',
+        renderAnnotation(annotation) {
+          const el = document.createElement('div');
+          el.dataset.testAnnotation = '';
+          el.textContent = `note on line ${annotation.lineNumber}`;
+          return el;
+        },
+      });
+      instance.render({ file, lineAnnotations, containerWrapper: mount });
+
+      const waitForAnnotation = async () => {
+        const started = performance.now();
+        while (true) {
+          const host = mount.querySelector('diffs-container');
+          const slotted = host?.querySelector('[data-annotation-slot]');
+          const row = host?.shadowRoot?.querySelector('[data-line-annotation]');
+          if (slotted != null && row != null) {
+            return;
+          }
+          if (performance.now() - started > 5000) {
+            throw new Error('Timed out waiting for annotation.');
+          }
+          await new Promise((resolve) => requestAnimationFrame(resolve));
+        }
+      };
+
+      await waitForAnnotation();
+      window.__annotationsReady = true;
+    </script>
+  </body>
+</html>

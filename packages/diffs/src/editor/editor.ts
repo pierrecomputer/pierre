@@ -109,6 +109,32 @@ import {
   round,
 } from './utils';
 
+// ShadowRoot.getSelection is a non-standard Blink/WebKit method (predates the
+// spec'd Selection.getComposedRanges) and is missing from the DOM lib types.
+type ShadowRootWithSelection = ShadowRoot & {
+  getSelection?: () => Selection | null;
+};
+
+// Fallback for browsers without Selection.getComposedRanges: read the first
+// range from the shadow root's own selection so the editor can still map a
+// caret placed by a click inside its shadow tree. Normalized to a StaticRange
+// so it matches the getComposedRanges return shape the callers expect. Returns
+// undefined when the API or a live range is unavailable.
+function getShadowRootRange(shadowRoot: ShadowRoot): StaticRange | undefined {
+  const selection = (shadowRoot as ShadowRootWithSelection).getSelection?.();
+  if (selection == null || selection.rangeCount === 0) {
+    return undefined;
+  }
+  const range = selection.getRangeAt(0);
+  return {
+    collapsed: range.collapsed,
+    startContainer: range.startContainer,
+    startOffset: range.startOffset,
+    endContainer: range.endContainer,
+    endOffset: range.endOffset,
+  };
+}
+
 export interface EditorOptions<LAnnotation> {
   /** The maximum number of entries to keep in the undo stack. */
   historyMaxEntries?: number;
@@ -948,19 +974,23 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           }
 
           const selectionRaw = document.getSelection();
-          // getComposedRanges is the only selection API that reads through the
-          // editor's shadow root, but it is newly available and missing on
-          // older browsers and embedded WebViews. Bail out instead of throwing
-          // out of this listener on every selectionchange when it is absent.
-          if (
-            selectionRaw == null ||
-            typeof selectionRaw.getComposedRanges !== 'function'
-          ) {
+          if (selectionRaw == null) {
             return;
           }
-          const composedRange = selectionRaw.getComposedRanges({
-            shadowRoots: [shadowRoot],
-          })?.[0];
+          // Read the caret/selection through the editor's shadow root.
+          // getComposedRanges is the standard, spec'd way to do this but is only
+          // available in newer browsers. When it is missing (older browsers,
+          // embedded WebViews, and the pinned CI Chromium), fall back to the
+          // older Blink/WebKit-specific ShadowRoot.getSelection(), which still
+          // reports the range inside the shadow tree. Only bail when neither API
+          // yields a range, so a click can still seed the caret rather than
+          // leaving the surface unusable.
+          const composedRange =
+            typeof selectionRaw.getComposedRanges === 'function'
+              ? selectionRaw.getComposedRanges({
+                  shadowRoots: [shadowRoot],
+                })?.[0]
+              : getShadowRootRange(shadowRoot);
           if (
             composedRange === undefined ||
             !this.#rangeBelongsToEditor(composedRange)

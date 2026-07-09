@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>diffs theme fixture</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 16px;
+        font-family: system-ui, sans-serif;
+      }
+      [data-diff-mount] {
+        max-width: 900px;
+      }
+    </style>
+  </head>
+  <body>
+    <a
+      data-fixtures-index
+      href="/test/e2e/fixtures/index.html"
+      style="
+        display: inline-block;
+        margin-bottom: 16px;
+        font-family: system-ui, sans-serif;
+        font-size: 14px;
+        font-weight: 600;
+        color: #0b62d6;
+        text-decoration: none;
+      "
+      >&larr; All fixtures</a
+    >
+    <button type="button" data-toggle-theme>Toggle theme</button>
+    <div data-diff-mount></div>
+
+    <script type="module">
+      import { File } from '/dist/index.js';
+      import { Editor } from '/dist/editor/index.js';
+
+      const mount = document.querySelector('[data-diff-mount]');
+      if (!(mount instanceof HTMLElement)) {
+        throw new Error('Missing theme fixture mount.');
+      }
+
+      const file = {
+        name: 'theme.ts',
+        contents: `const greeting = 'hello world';
+const count = 42;
+export { greeting, count };
+`,
+      };
+
+      const editor = new Editor({});
+      window.__editor = editor;
+
+      const instance = new File({
+        disableFileHeader: true,
+        theme: { dark: 'pierre-dark', light: 'pierre-light' },
+        themeType: 'dark',
+        useTokenTransformer: true,
+      });
+      instance.render({ file, containerWrapper: mount });
+      editor.edit(instance);
+
+      // Flip between the configured dark and light themes. setThemeType swaps
+      // the theme CSS in place without re-rendering the content, which is what
+      // lets an active selection survive the switch.
+      document
+        .querySelector('[data-toggle-theme]')
+        .addEventListener('click', () => {
+          const next = instance.options.themeType === 'dark' ? 'light' : 'dark';
+          instance.setThemeType(next);
+        });
+
+      const waitForEditable = async () => {
+        const started = performance.now();
+        while (true) {
+          const host = mount.querySelector('diffs-container');
+          const content = host?.shadowRoot?.querySelector('[data-content]');
+          if (content?.getAttribute('contenteditable') === 'true') {
+            return;
+          }
+          if (performance.now() - started > 5000) {
+            throw new Error('Timed out waiting for editable content.');
+          }
+          await new Promise((resolve) => requestAnimationFrame(resolve));
+        }
+      };
+
+      await waitForEditable();
+      window.__themeReady = true;
+    </script>
+  </body>
+</html>
