@@ -277,6 +277,9 @@ export class SearchPanelWidget {
         searchParams.replaceText = (e.target as HTMLInputElement).value;
       },
       onkeydown: (e: KeyboardEvent) => {
+        if (e.isComposing) {
+          return;
+        }
         const findAgain = resolveFindAgainShortcut(e);
         if (e.key === 'Escape') {
           e.preventDefault();
