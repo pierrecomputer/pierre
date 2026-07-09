@@ -3988,7 +3988,11 @@ export class CodeView<LAnnotation = undefined> {
           item.item.fileDiff
         );
         if (fileDiff != null) {
-          item.item.fileDiff = fileDiff;
+          // Hydration is staged on a clone so layout only changes during this
+          // render pass, then copied back to preserve the caller's diff
+          // identity which matches the rest of the architecture of how we
+          // handle partial hydration
+          Object.assign(item.item.fileDiff, fileDiff);
         }
         item.height = item.instance.prepareCodeViewItem(
           item.item.fileDiff,
