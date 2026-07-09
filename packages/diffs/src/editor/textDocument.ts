@@ -101,8 +101,12 @@ export interface TextDocumentChange {
   readonly startLine: number;
   /** Character on the first changed line where the edit began. */
   readonly startCharacter: number;
+  /** Character on the original last changed line where the edit ended. */
+  readonly endCharacter: number;
   /** Last line whose rendered content may have changed after the edit. */
   readonly endLine: number;
+  /** Whether the original edit range ended at the previous document EOF. */
+  readonly endedAtDocumentEnd: boolean;
   /** Line count before the edit was applied. */
   readonly previousLineCount: number;
   /** Line count after the edit was applied. */
@@ -416,12 +420,19 @@ export class TextDocument<LAnnotation> {
       editPositions
     );
     const startPosition = editPositions[0];
+    const endPosition = editPositions[editPositions.length - 1];
+    const endedAtDocumentEnd =
+      endPosition.line === previousLineCount - 1 &&
+      endPosition.character ===
+        this.#pieceTable.getLineLength(endPosition.line);
     this.#pieceTable.applyEdits(edits);
     const lineCount = this.#pieceTable.lineCount;
     const change: TextDocumentChange = {
       startLine: changedLineRange.startLine,
       startCharacter: startPosition.character,
+      endCharacter: endPosition.character,
       endLine: Math.min(changedLineRange.endLine, Math.max(0, lineCount - 1)),
+      endedAtDocumentEnd,
       previousLineCount,
       lineCount,
       lineDelta: lineCount - previousLineCount,

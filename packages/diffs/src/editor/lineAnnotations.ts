@@ -123,10 +123,8 @@ function getLineAnnotationChanges(
   }
   const removedLineCount = Math.max(0, -change.lineDelta);
   const deletedToDocumentEnd =
-    change.startLine === 0 &&
-    change.startCharacter === 0 &&
-    change.lineCount === 1 &&
-    change.lineDelta === 1 - change.previousLineCount;
+    change.endedAtDocumentEnd &&
+    change.startLine + removedLineCount === change.previousLineCount - 1;
   return [
     {
       startLine: change.startLine,

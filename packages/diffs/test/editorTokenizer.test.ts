@@ -97,7 +97,9 @@ describe('EditorTokenizer', () => {
         {
           startLine: 0,
           startCharacter: 0,
+          endCharacter: 0,
           endLine: 19,
+          endedAtDocumentEnd: false,
           previousLineCount: textDocument.lineCount,
           lineCount: textDocument.lineCount,
           lineDelta: 0,
@@ -144,7 +146,9 @@ describe('EditorTokenizer', () => {
     const change: TextDocumentChange = {
       startLine: 0,
       startCharacter: 0,
+      endCharacter: 0,
       endLine: 0,
+      endedAtDocumentEnd: false,
       previousLineCount: textDocument.lineCount,
       lineCount: textDocument.lineCount,
       lineDelta: 0,
@@ -223,7 +227,9 @@ describe('EditorTokenizer', () => {
       tokenizer.tokenize({
         startLine: 0,
         startCharacter: 0,
+        endCharacter: 0,
         endLine: 0,
+        endedAtDocumentEnd: false,
         previousLineCount: textDocument.lineCount,
         lineCount: textDocument.lineCount,
         lineDelta: 0,
@@ -289,7 +295,9 @@ describe('EditorTokenizer', () => {
         {
           startLine: 0,
           startCharacter: 0,
+          endCharacter: 0,
           endLine: 999,
+          endedAtDocumentEnd: false,
           previousLineCount: textDocument.lineCount,
           lineCount: textDocument.lineCount,
           lineDelta: 1,
@@ -362,7 +370,9 @@ describe('EditorTokenizer', () => {
       {
         startLine: 0,
         startCharacter: 0,
+        endCharacter: 0,
         endLine: 109,
+        endedAtDocumentEnd: false,
         previousLineCount: textDocument.lineCount,
         lineCount: textDocument.lineCount,
         lineDelta: 0,
@@ -445,7 +455,9 @@ describe('EditorTokenizer', () => {
         {
           startLine: 0,
           startCharacter: 0,
+          endCharacter: 0,
           endLine: textDocument.lineCount - 1,
+          endedAtDocumentEnd: false,
           previousLineCount: textDocument.lineCount,
           lineCount: textDocument.lineCount,
           lineDelta: 0,
@@ -551,7 +563,9 @@ describe('EditorTokenizer', () => {
         {
           startLine: 0,
           startCharacter: 0,
+          endCharacter: 0,
           endLine: 19,
+          endedAtDocumentEnd: false,
           previousLineCount: textDocument.lineCount,
           lineCount: textDocument.lineCount,
           lineDelta: 0,
@@ -641,7 +655,9 @@ describe('EditorTokenizer', () => {
         {
           startLine: 0,
           startCharacter: 0,
+          endCharacter: 0,
           endLine: 0,
+          endedAtDocumentEnd: false,
           previousLineCount: textDocument.lineCount,
           lineCount: textDocument.lineCount,
           lineDelta: 0,
@@ -700,7 +716,9 @@ describe('EditorTokenizer', () => {
       {
         startLine: 0,
         startCharacter: 0,
+        endCharacter: 0,
         endLine: 0,
+        endedAtDocumentEnd: false,
         previousLineCount: textDocument.lineCount,
         lineCount: textDocument.lineCount,
         lineDelta: 0,
@@ -788,7 +806,9 @@ describe('EditorTokenizer', () => {
       const change: TextDocumentChange = {
         startLine: 0,
         startCharacter: 0,
+        endCharacter: 0,
         endLine: 0,
+        endedAtDocumentEnd: false,
         previousLineCount: textDocument.lineCount,
         lineCount: textDocument.lineCount,
         lineDelta: 0,
@@ -877,7 +897,9 @@ describe('EditorTokenizer', () => {
       const change: TextDocumentChange = {
         startLine: 0,
         startCharacter: 0,
+        endCharacter: 0,
         endLine: 0,
+        endedAtDocumentEnd: false,
         previousLineCount: textDocument.lineCount,
         lineCount: textDocument.lineCount,
         lineDelta: 0,
@@ -965,7 +987,9 @@ describe('EditorTokenizer', () => {
         {
           startLine: 0,
           startCharacter: 0,
+          endCharacter: 0,
           endLine: 0,
+          endedAtDocumentEnd: false,
           previousLineCount: textDocument.lineCount,
           lineCount: textDocument.lineCount,
           lineDelta: 0,
@@ -1020,7 +1044,9 @@ describe('EditorTokenizer', () => {
       {
         startLine: 0,
         startCharacter: 0,
+        endCharacter: 0,
         endLine: 799,
+        endedAtDocumentEnd: false,
         previousLineCount: textDocument.lineCount,
         lineCount: textDocument.lineCount,
         lineDelta: 1,
