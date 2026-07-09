@@ -141,7 +141,6 @@ export class FileRenderer<LAnnotation = undefined> {
   }
 
   public recycle(): void {
-    this.syncEditedContentsToFile();
     this.clearRenderCache();
     this.highlighter = undefined;
     this.workerManager?.cleanUpTasks(this);
@@ -175,6 +174,7 @@ export class FileRenderer<LAnnotation = undefined> {
   }
 
   public clearRenderCache(): void {
+    this.syncEditedContentsToFile();
     const renderCache = this.renderCache;
     this.renderCache = undefined;
     if (
@@ -330,7 +330,7 @@ export class FileRenderer<LAnnotation = undefined> {
             tagName: 'span',
             properties: {
               'data-char': char,
-              style: `--diffs-token-${themeType}:${fg};`,
+              style: `color:${fg};`,
             },
             children: [{ type: 'text', value: text }],
           };
@@ -404,6 +404,14 @@ export class FileRenderer<LAnnotation = undefined> {
   ): FileRenderResult | undefined {
     if (file == null) {
       return undefined;
+    }
+    if (
+      this.renderCache?.isDirty === true &&
+      !areFilesEqual(file, this.renderCache.file)
+    ) {
+      this.clearRenderCache();
+      this.lineCache = undefined;
+      this.textDocumentCache = new WeakMap();
     }
     let { options, forceHighlight } = this.getRenderOptions(file);
     const cache = this.getMatchingWorkerResultCache(file, options);

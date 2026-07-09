@@ -6,7 +6,7 @@ import type { FileOptions } from './File';
 import { VirtualizedFile } from './VirtualizedFile';
 import { Virtualizer } from './Virtualizer';
 
-export interface CodeEditorOptions<LAnnotation>
+export interface CodeEditorOptions<LAnnotation, ElementType = HTMLElement>
   extends
     EditorOptions<LAnnotation>,
     Pick<
@@ -14,12 +14,16 @@ export interface CodeEditorOptions<LAnnotation>
       | 'theme'
       | 'overflow'
       | 'themeType'
-      | 'renderAnnotation'
+      | 'preferredHighlighter'
+      | 'tokenizeMaxLineLength'
+      | 'tokenizeMaxLength'
+      | 'disableLineNumbers'
       | 'disableErrorHandling'
     > {
   overscrollSize?: number;
   workerPoolManager?: WorkerPoolManager;
-  renderPlaceholder?: () => HTMLElement;
+  renderAnnotation?: (annotation: LineAnnotation<LAnnotation>) => ElementType;
+  renderPlaceholder?: () => ElementType;
 }
 
 export class CodeEditor<LAnnotation> extends Editor<LAnnotation> {
@@ -30,38 +34,32 @@ export class CodeEditor<LAnnotation> extends Editor<LAnnotation> {
   private fileInstance: VirtualizedFile<LAnnotation>;
   private renderPlaceholder?: () => HTMLElement;
 
-  constructor(options: CodeEditorOptions<LAnnotation> = {}) {
+  constructor(options: CodeEditorOptions<LAnnotation, HTMLElement> = {}) {
     const {
-      theme,
-      overflow,
-      themeType,
-      renderAnnotation,
-      disableErrorHandling,
-      overscrollSize = 0,
+      fileOptions,
+      editorOptions,
+      overscrollSize,
       workerPoolManager,
+      renderAnnotation,
       renderPlaceholder,
-      ...editorOptions
-    } = options;
+    } = splitCodeEditorOptions(options);
+    fileOptions.renderAnnotation = renderAnnotation;
 
     super(editorOptions);
 
-    this.virtualizer = new Virtualizer({
-      overscrollSize,
-      intersectionObserverMargin: overscrollSize * 4,
-    });
+    this.virtualizer = new Virtualizer(
+      overscrollSize == null
+        ? undefined
+        : {
+            overscrollSize,
+            intersectionObserverMargin: overscrollSize * 4,
+          }
+    );
 
     this.scrollContainer = document.createElement('div');
     this.fileContainer = document.createElement(DIFFS_TAG_NAME);
     this.fileInstance = new VirtualizedFile<LAnnotation>(
-      {
-        theme,
-        overflow,
-        themeType,
-        renderAnnotation,
-        disableErrorHandling,
-        useTokenTransformer: true,
-        disableFileHeader: true,
-      },
+      fileOptions,
       this.virtualizer,
       undefined,
       workerPoolManager
@@ -139,4 +137,47 @@ export class CodeEditor<LAnnotation> extends Editor<LAnnotation> {
       this.file = undefined;
     }
   }
+}
+
+export function splitCodeEditorOptions<LAnnotation, ElementType = HTMLElement>({
+  theme,
+  overflow,
+  themeType,
+  preferredHighlighter,
+  tokenizeMaxLineLength,
+  tokenizeMaxLength,
+  renderAnnotation,
+  disableErrorHandling,
+  disableLineNumbers,
+  overscrollSize,
+  workerPoolManager,
+  renderPlaceholder,
+  ...editorOptions
+}: CodeEditorOptions<LAnnotation, ElementType>): {
+  fileOptions: FileOptions<LAnnotation>;
+  editorOptions: EditorOptions<LAnnotation>;
+  overscrollSize?: number;
+  workerPoolManager?: WorkerPoolManager;
+  renderPlaceholder?: () => ElementType;
+  renderAnnotation?: (annotation: LineAnnotation<LAnnotation>) => ElementType;
+} {
+  return {
+    fileOptions: {
+      theme,
+      overflow,
+      themeType,
+      preferredHighlighter,
+      tokenizeMaxLineLength,
+      tokenizeMaxLength,
+      disableErrorHandling,
+      disableLineNumbers,
+      useTokenTransformer: true,
+      disableFileHeader: true,
+    },
+    editorOptions,
+    overscrollSize,
+    workerPoolManager,
+    renderAnnotation,
+    renderPlaceholder,
+  };
 }

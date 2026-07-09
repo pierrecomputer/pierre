@@ -269,7 +269,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         if (line >= startingLine && line < endLine) {
           const lineElement = this.#getLineElement(line);
           if (lineElement !== undefined) {
-            lineElement.replaceChildren(...renderLineTokens(tokens, themeType));
+            lineElement.replaceChildren(...renderLineTokens(tokens));
           }
         }
       }
@@ -2091,9 +2091,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           const lineIndex = lineNumber - 1;
           if (dirtyLines.has(lineIndex)) {
             const tokens = dirtyLines.get(lineIndex)!;
-            child.replaceChildren(
-              ...renderLineTokens(tokens, tokenizer.themeType)
-            );
+            child.replaceChildren(...renderLineTokens(tokens));
             dirtyLineIndexes.delete(lineIndex);
             if (dirtyLineIndexes.size === 0) {
               break;
@@ -2116,7 +2114,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
                 lineIndex: lineIndex.toString(),
               },
               // oxlint-disable-next-line react/no-children-prop
-              children: renderLineTokens(tokens, tokenizer.themeType),
+              children: renderLineTokens(tokens),
             },
             contentEl
           );

@@ -2,89 +2,108 @@
 
 import {
   type CSSProperties,
-  useContext,
-  useEffect,
-  useLayoutEffect,
-  useRef,
+  type ForwardedRef,
+  forwardRef,
+  type ReactNode,
+  useImperativeHandle,
+  useMemo,
 } from 'react';
 
 import {
-  CodeEditor as CodeEditorClass,
   type CodeEditorOptions,
+  splitCodeEditorOptions,
 } from '../components/CodeEditor';
+import type { Editor } from '../editor';
 import type { FileContents, LineAnnotation } from '../types';
-import { areOptionsEqual } from '../utils/areOptionsEqual';
-import { WorkerPoolContext } from './WorkerPoolContext';
+import { EditorProvider } from './EditorContext';
+import { File } from './File';
+import { useStableEditor } from './utils/useStableEditor';
+import { Virtualizer } from './Virtualizer';
 
-const useIsomorphicLayoutEffect =
-  typeof window === 'undefined' ? useEffect : useLayoutEffect;
-
-export interface CodeEditorProps<LAnnotation = undefined> {
+export interface CodeEditorProps<
+  LAnnotation = undefined,
+> extends CodeEditorOptions<LAnnotation, ReactNode> {
   file?: FileContents;
   lineAnnotations?: LineAnnotation<LAnnotation>[];
-  options?: Omit<CodeEditorOptions<LAnnotation>, 'workerPoolManager'>;
+  prerenderedHTML?: string;
   className?: string;
   style?: CSSProperties;
   disableWorkerPool?: boolean;
 }
 
-export function CodeEditor<LAnnotation = undefined>({
-  className,
-  disableWorkerPool = false,
-  file,
-  lineAnnotations,
-  options,
-  style,
-}: CodeEditorProps<LAnnotation>): React.JSX.Element {
-  const poolManager = useContext(WorkerPoolContext);
-  const rootRef = useRef<HTMLDivElement | null>(null);
-  const editorRef = useRef<CodeEditorClass<LAnnotation> | null>(null);
-  const optionsRef = useRef<CodeEditorOptions<LAnnotation> | undefined>(
-    undefined
-  );
+function CodeEditorImpl<LAnnotation = undefined>(
+  {
+    className,
+    disableWorkerPool = false,
+    file,
+    lineAnnotations,
+    prerenderedHTML,
+    style,
+    ...options
+  }: CodeEditorProps<LAnnotation>,
+  ref: ForwardedRef<Editor<LAnnotation>>
+): React.JSX.Element {
+  const {
+    fileOptions,
+    editorOptions,
+    overscrollSize,
+    renderPlaceholder,
+    renderAnnotation,
+  } = splitCodeEditorOptions(options);
 
-  useIsomorphicLayoutEffect(() => {
-    const root = rootRef.current;
-    if (root == null) {
-      return;
-    }
-
-    const nextOptions: CodeEditorOptions<LAnnotation> | undefined =
-      options == null && (disableWorkerPool || poolManager == null)
+  const editor = useStableEditor(editorOptions);
+  const virtualizerConfig = useMemo(
+    () =>
+      overscrollSize == null
         ? undefined
         : {
-            ...options,
-            workerPoolManager: !disableWorkerPool ? poolManager : undefined,
-          };
+            overscrollSize,
+            intersectionObserverMargin: overscrollSize * 4,
+          },
+    [overscrollSize]
+  );
 
-    if (
-      editorRef.current == null ||
-      !areOptionsEqual(optionsRef.current, nextOptions)
-    ) {
-      editorRef.current?.cleanUp();
-      root.replaceChildren();
-      editorRef.current = new CodeEditorClass<LAnnotation>(nextOptions);
-      optionsRef.current = nextOptions;
-      editorRef.current.render(root, file, lineAnnotations);
-      return;
-    }
+  useImperativeHandle(ref, () => editor, [editor]);
 
-    if (file == null) {
-      editorRef.current.render(root);
-    } else {
-      editorRef.current.setFile(file, lineAnnotations);
-    }
-  });
-
-  useEffect(() => {
-    const root = rootRef.current;
-    return () => {
-      editorRef.current?.cleanUp();
-      editorRef.current = null;
-      optionsRef.current = undefined;
-      root?.replaceChildren();
-    };
-  }, []);
-
-  return <div ref={rootRef} className={className} style={style} />;
+  return (
+    <EditorProvider editor={editor}>
+      <Virtualizer
+        key={overscrollSize ?? 'default'}
+        config={virtualizerConfig}
+        className={className}
+        style={style}
+        contentStyle={{
+          display: 'flex',
+          minHeight: '100%',
+          width: '100%',
+        }}
+      >
+        {file == null ? (
+          renderPlaceholder?.()
+        ) : (
+          <File
+            style={{
+              flex: '1 1 auto',
+              minWidth: '100%',
+            }}
+            file={file}
+            lineAnnotations={lineAnnotations}
+            options={fileOptions}
+            renderAnnotation={renderAnnotation}
+            disableWorkerPool={disableWorkerPool}
+            prerenderedHTML={prerenderedHTML}
+            contentEditable
+          />
+        )}
+      </Virtualizer>
+    </EditorProvider>
+  );
 }
+
+export const CodeEditor = forwardRef(CodeEditorImpl) as <
+  LAnnotation = undefined,
+>(
+  props: CodeEditorProps<LAnnotation> & {
+    ref?: ForwardedRef<Editor<LAnnotation>>;
+  }
+) => React.JSX.Element;

@@ -300,7 +300,7 @@ export function DemoTreeAppClient({
       <TreeApp
         className="max-md:w-[720px] max-md:min-w-[720px]"
         contextMenuPortalContainer={portalContainer}
-        fileOptions={fileOptionsByTheme}
+        editorOptions={fileOptionsByTheme}
         files={filesByPath}
         height={TREE_NEW_VIEWPORT_HEIGHTS.treeApp}
         initialActivePath={initialActivePath}

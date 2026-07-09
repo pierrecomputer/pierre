@@ -39,6 +39,16 @@ function renderAnnotation(annotation: LineAnnotation<string>): HTMLElement {
   return element;
 }
 
+function renderReactAnnotation(
+  annotation: LineAnnotation<string>
+): ReactElement {
+  return createElement(
+    'span',
+    { 'data-test-annotation': '' },
+    annotation.metadata
+  );
+}
+
 async function waitForRenderedText(
   container: HTMLElement,
   text: string
@@ -225,11 +235,9 @@ describe('React CodeEditor', () => {
         root,
         createElement(ReactCodeEditorComponent, {
           disableWorkerPool: true,
+          disableErrorHandling: true,
           file: makeFile('react.txt', 'alpha\n'),
-          options: {
-            disableErrorHandling: true,
-            renderAnnotation,
-          },
+          renderAnnotation: renderReactAnnotation,
         })
       );
 
@@ -244,12 +252,10 @@ describe('React CodeEditor', () => {
         root,
         createElement(ReactCodeEditorComponent, {
           disableWorkerPool: true,
+          disableErrorHandling: true,
           file: makeFile('react.txt', 'bravo\n'),
           lineAnnotations: [{ lineNumber: 1, metadata: 'react note' }],
-          options: {
-            disableErrorHandling: true,
-            renderAnnotation,
-          },
+          renderAnnotation: renderReactAnnotation,
         })
       );
       await waitForRenderedText(fileContainer!, 'bravo');
@@ -267,7 +273,7 @@ describe('React CodeEditor', () => {
     }
   });
 
-  test('recreates the editor when options change and clears it on unmount', async () => {
+  test('remounts the virtualizer when overscroll changes and clears it on unmount', async () => {
     const { cleanup } = installDom();
     const cleanupActEnvironment = installReactActEnvironment();
     const container = document.createElement('div');
@@ -280,25 +286,27 @@ describe('React CodeEditor', () => {
         root,
         createElement(ReactCodeEditorComponent, {
           disableWorkerPool: true,
+          disableErrorHandling: true,
           file: makeFile('react.txt', 'alpha\n'),
-          options: { disableErrorHandling: true, overscrollSize: 0 },
+          overscrollSize: 0,
         })
       );
 
-      const host = container.firstElementChild as HTMLElement | null;
-      const firstScrollContainer = host?.firstElementChild;
+      const firstScrollContainer =
+        container.firstElementChild as HTMLElement | null;
       expect(firstScrollContainer).not.toBeNull();
 
       await renderReactElement(
         root,
         createElement(ReactCodeEditorComponent, {
           disableWorkerPool: true,
+          disableErrorHandling: true,
           file: makeFile('react.txt', 'alpha\n'),
-          options: { disableErrorHandling: true, overscrollSize: 8 },
+          overscrollSize: 8,
         })
       );
 
-      expect(host?.firstElementChild).not.toBe(firstScrollContainer);
+      expect(container.firstElementChild).not.toBe(firstScrollContainer);
 
       await unmountRoot(root);
       root = undefined;

@@ -1,6 +1,6 @@
 import { afterAll, describe, expect, mock, spyOn, test } from 'bun:test';
 
-import { File } from '../src/components/File';
+import { File, type FileOptions } from '../src/components/File';
 import { DEFAULT_THEMES } from '../src/constants';
 import { Editor, type EditorOptions } from '../src/editor/editor';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
@@ -42,12 +42,16 @@ interface EditorFixture {
   cleanup(): void;
   content: HTMLElement;
   editor: Editor<undefined>;
+  file: File<undefined>;
+  fileContainer: HTMLElement;
+  fileContents: FileContents;
   window: EditorTestWindow;
 }
 
 async function createEditorFixture(
   contents: string,
-  editorOptions?: EditorOptions<undefined>
+  editorOptions?: EditorOptions<undefined>,
+  fileOptions?: Partial<FileOptions<undefined>>
 ): Promise<EditorFixture> {
   const dom = installDom();
   const fileContainer = document.createElement('div');
@@ -56,6 +60,7 @@ async function createEditorFixture(
   const file = new File<undefined>({
     disableFileHeader: true,
     theme: DEFAULT_THEMES,
+    ...fileOptions,
   });
   const editor = new Editor<undefined>(editorOptions);
   const initialFile: FileContents = { name: 'edits.ts', contents };
@@ -73,6 +78,9 @@ async function createEditorFixture(
     },
     content,
     editor,
+    file,
+    fileContainer,
+    fileContents: initialFile,
     window: dom.window as unknown as EditorTestWindow,
   };
 }
@@ -113,6 +121,44 @@ function pressMoveLine(
 }
 
 describe('Editor.applyEdits selection sync', () => {
+  test('keeps inserted file lines coherent when switching files', async () => {
+    const { cleanup, editor, file, fileContainer, fileContents } =
+      await createEditorFixture('alpha\nbravo\n', undefined, {
+        disableErrorHandling: true,
+      });
+
+    try {
+      editor.applyEdits([
+        {
+          range: {
+            start: { line: 1, character: 5 },
+            end: { line: 1, character: 5 },
+          },
+          newText: '\ncharlie',
+        },
+      ]);
+
+      expect(editor.getText()).toBe('alpha\nbravo\ncharlie\n');
+
+      const otherFile: FileContents = {
+        name: 'other.ts',
+        contents: 'one\n',
+        cacheKey: 'other.ts',
+      };
+      expect(() =>
+        file.render({ file: otherFile, fileContainer, forceRender: true })
+      ).not.toThrow();
+
+      expect(fileContents.contents).toBe('alpha\nbravo\ncharlie\n');
+      expect(() =>
+        file.render({ file: fileContents, fileContainer, forceRender: true })
+      ).not.toThrow();
+      expect(editor.getText()).toBe('alpha\nbravo\ncharlie\n');
+    } finally {
+      cleanup();
+    }
+  });
+
   test('shifts the caret down when an edit inserts lines above it', async () => {
     const { cleanup, editor } = await createEditorFixture(
       'alpha\nbravo\ncharlie'

@@ -1,7 +1,8 @@
 'use client';
 
-import type { FileContents } from '@pierre/diffs';
-import { File, type FileOptions } from '@pierre/diffs/react';
+import type { EditorState, FileContents } from '@pierre/diffs';
+import type { Editor } from '@pierre/diffs/editor';
+import { CodeEditor, type CodeEditorProps } from '@pierre/diffs/react';
 import {
   IconFilePlus,
   IconFolderPlus,
@@ -85,7 +86,7 @@ function pickByTheme<T>(
 }
 
 // Theme-scoped chrome presets used for TreeApp's own wrapping elements. Tree
-// and File visuals are driven by the caller-supplied per-theme payloads, but
+// and editor visuals are driven by the caller-supplied per-theme payloads, but
 // the surrounding container, tab bar, and default header/tab/empty slots all
 // come from here so the toggle actually flips every pixel TreeApp owns.
 interface TreeAppChromeStyles {
@@ -151,12 +152,6 @@ export interface TreeAppTabRenderContext {
   path: string;
 }
 
-export interface TreeAppEditorRenderContext {
-  file: FileContents | undefined;
-  path: string;
-  prerenderedHTML: string | undefined;
-}
-
 export interface TreeAppContextMenuActions {
   addFile: () => void;
   addFolder: () => void;
@@ -202,11 +197,12 @@ export interface TreeAppProps<LAnnotation = unknown> {
 
   // Editor side: files keyed by their tree path. Mirrors the
   // preloadedDataById pattern already used by tree demos. Both the prerendered
-  // HTML map and the File options may be scoped per theme so the active File
-  // picks up the right syntax-highlight colors when the theme toggles.
+  // HTML map and the editor options may be scoped per theme so the active
+  // CodeEditor picks up the right syntax-highlight colors when the theme
+  // toggles.
   files?: Readonly<Record<string, FileContents>>;
   prerenderedHTMLByPath?: TreeAppThemeValue<Readonly<Record<string, string>>>;
-  fileOptions?: TreeAppThemeValue<FileOptions<LAnnotation>>;
+  editorOptions?: TreeAppThemeValue<CodeEditorProps<LAnnotation>>;
 
   // Light/dark theming. TreeApp owns the state by default; callers can observe
   // changes via `onThemeChange` or drive it externally by passing `theme`.
@@ -259,7 +255,6 @@ export interface TreeAppProps<LAnnotation = unknown> {
   renderWindowChrome?: () => ReactNode;
   renderTab?: (context: TreeAppTabRenderContext) => ReactNode;
   showTabs?: boolean;
-  renderEditor?: (context: TreeAppEditorRenderContext) => ReactNode;
   renderEmpty?: () => ReactNode;
   tabIcons?: FileTreeIcons;
 }
@@ -326,6 +321,25 @@ function remapMovedPaths(
     remapped.push(nextPath);
   }
   return remapped;
+}
+
+// Remaps per-file editor state (scroll + selections) after a tree move so
+// returning to a renamed/moved tab restores the same caret and viewport.
+function remapEditorStateMap(
+  stateByPath: Map<string, EditorState>,
+  fromPath: string,
+  toPath: string
+): Map<string, EditorState> {
+  let changed = false;
+  const next = new Map<string, EditorState>();
+  for (const [path, state] of stateByPath) {
+    const nextPath = remapMovedPath(path, fromPath, toPath);
+    if (nextPath !== path) {
+      changed = true;
+    }
+    next.set(nextPath, state);
+  }
+  return changed ? next : stateByPath;
 }
 
 // Walks an integer suffix until we find a path that does not collide with an
@@ -556,6 +570,9 @@ interface UseOpenTabsOptions {
   // are discarded the moment the viewport flips to mobile.
   isMobile?: boolean;
   model: FileTreeModel;
+  // Fired immediately before `activePath` changes so the host can snapshot
+  // editor scroll/selection via getState before the CodeEditor remounts.
+  onBeforeActivePathChange?: () => void;
 }
 
 interface UseOpenTabsResult {
@@ -573,6 +590,7 @@ function useOpenTabs({
   initialOpenPaths,
   isMobile = false,
   model,
+  onBeforeActivePathChange,
 }: UseOpenTabsOptions): UseOpenTabsResult {
   const [openPaths, setOpenPaths] = useState<readonly string[]>(() => {
     const seed = initialOpenPaths ?? [];
@@ -589,6 +607,29 @@ function useOpenTabs({
     initialActivePath ?? null
   );
   const selectedPaths = useFileTreeSelection(model);
+  const onBeforeActivePathChangeRef = useRef(onBeforeActivePathChange);
+  onBeforeActivePathChangeRef.current = onBeforeActivePathChange;
+  // Mirrors `activePath` for changeActivePath so path transitions can snapshot
+  // editor state without putting side effects inside a setState updater.
+  const activePathRefForTabs = useRef<string | null>(activePath);
+  activePathRefForTabs.current = activePath;
+
+  // Snapshot editor state, then update activePath. Reads the live path from
+  // activePathRefForTabs so we never put side effects inside a setState
+  // updater. Skips the callback when the path is unchanged.
+  const changeActivePath = useCallback(
+    (nextPath: string | null | ((current: string | null) => string | null)) => {
+      const current = activePathRefForTabs.current;
+      const resolved =
+        typeof nextPath === 'function' ? nextPath(current) : nextPath;
+      if (resolved !== current) {
+        onBeforeActivePathChangeRef.current?.();
+      }
+      activePathRefForTabs.current = resolved;
+      setActivePath(resolved);
+    },
+    []
+  );
 
   // Track which selected paths we have already turned into tabs so a re-render
   // does not re-open a tab the user just closed.
@@ -621,10 +662,10 @@ function useOpenTabs({
         }
         return current.includes(candidate) ? current : [...current, candidate];
       });
-      setActivePath(candidate);
+      changeActivePath(candidate);
       break;
     }
-  }, [isMobile, model, selectedPaths]);
+  }, [changeActivePath, isMobile, model, selectedPaths]);
 
   // When the viewport flips into mobile, drop any extra tabs from a previous
   // desktop session so only the active file remains. We never re-expand the
@@ -654,26 +695,34 @@ function useOpenTabs({
 
       setOpenPaths((current) => {
         const nextOpen = current.filter((entry) => entry !== path);
-        setActivePath((currentActive) => {
-          if (currentActive !== path) {
-            return currentActive;
-          }
-          if (nextOpen.length === 0) {
-            return null;
-          }
-          const closedIndex = current.indexOf(path);
-          const fallbackIndex = Math.min(closedIndex, nextOpen.length - 1);
-          return nextOpen[fallbackIndex] ?? null;
-        });
         return nextOpen;
       });
+
+      // Resolve the next active tab outside setState so changeActivePath can
+      // snapshot editor state before the remount without nesting updaters.
+      const currentOpen = openPaths;
+      const nextOpen = currentOpen.filter((entry) => entry !== path);
+      changeActivePath((currentActive) => {
+        if (currentActive !== path) {
+          return currentActive;
+        }
+        if (nextOpen.length === 0) {
+          return null;
+        }
+        const closedIndex = currentOpen.indexOf(path);
+        const fallbackIndex = Math.min(closedIndex, nextOpen.length - 1);
+        return nextOpen[fallbackIndex] ?? null;
+      });
     },
-    [activePath, model]
+    [activePath, changeActivePath, model, openPaths]
   );
 
-  const activateTab = useCallback((path: string) => {
-    setActivePath(path);
-  }, []);
+  const activateTab = useCallback(
+    (path: string) => {
+      changeActivePath(path);
+    },
+    [changeActivePath]
+  );
 
   useEffect(() => {
     if (activePath == null) {
@@ -721,7 +770,7 @@ function useOpenTabs({
           }
           return nextPaths;
         });
-        setActivePath((current) => {
+        changeActivePath((current) => {
           if (current == null) {
             return current;
           }
@@ -733,7 +782,7 @@ function useOpenTabs({
           return nextPath;
         });
       }),
-    [model]
+    [changeActivePath, model]
   );
 
   return { activePath, activateTab, closeTab, openPaths };
@@ -1063,7 +1112,7 @@ export function TreeApp<LAnnotation = unknown>({
   contextMenuPortalContainer,
   defaultTheme = 'dark',
   files,
-  fileOptions,
+  editorOptions: editorOptionsProp,
   height = '100%',
   initialActivePath,
   initialExplorerWidth = DEFAULT_EXPLORER_WIDTH,
@@ -1078,7 +1127,6 @@ export function TreeApp<LAnnotation = unknown>({
   prerenderedHTMLByPath,
   projectName,
   renderContextMenu,
-  renderEditor,
   renderEmpty,
   renderProjectHeader,
   renderTab,
@@ -1097,19 +1145,42 @@ export function TreeApp<LAnnotation = unknown>({
   const theme = themeProp ?? internalTheme;
   const chrome = CHROME_STYLES[theme];
 
+  // Per-path scroll + selection snapshots. CodeEditor remounts on path/theme
+  // changes (keyed below), so we getState before the remount and setState from
+  // onAttach once the new editor is attached.
+  const editorRef = useRef<Editor<LAnnotation> | null>(null);
+  const editorStateByPathRef = useRef(new Map<string, EditorState>());
+  const activePathRef = useRef<string | null>(initialActivePath ?? null);
+
+  const saveActiveEditorState = useCallback(() => {
+    const path = activePathRef.current;
+    const editor = editorRef.current;
+    if (path == null || editor == null) {
+      return;
+    }
+    try {
+      editorStateByPathRef.current.set(path, editor.getState());
+    } catch {
+      // Editor may already be detached mid-unmount; skip the snapshot.
+    }
+  }, []);
+
   const toggleTheme = useCallback(() => {
+    // Theme remounts CodeEditor (keyed by path:theme); snapshot first so the
+    // restored editor keeps scroll/selection after the palette flip.
+    saveActiveEditorState();
     const nextTheme: TreeAppTheme = theme === 'dark' ? 'light' : 'dark';
     if (themeProp == null) {
       setInternalTheme(nextTheme);
     }
     onThemeChange?.(nextTheme);
-  }, [onThemeChange, theme, themeProp]);
+  }, [onThemeChange, saveActiveEditorState, theme, themeProp]);
 
   // Resolve the theme-scoped inputs once. The caller can pass either a plain
   // value or a `{ light, dark }` pair; `pickByTheme` returns the right one.
   const resolvedTreeStyle = pickByTheme(treeStyle, theme);
   const resolvedTreeClassName = pickByTheme(treeClassName, theme);
-  const resolvedFileOptions = pickByTheme(fileOptions, theme);
+  const resolvedEditorOptions = pickByTheme(editorOptionsProp, theme);
   const resolvedPrerenderedHTMLByPath = pickByTheme(
     prerenderedHTMLByPath,
     theme
@@ -1124,12 +1195,54 @@ export function TreeApp<LAnnotation = unknown>({
     minExplorerWidth,
     maxExplorerWidth
   );
+
   const { activePath, activateTab, closeTab, openPaths } = useOpenTabs({
     initialActivePath,
     initialOpenPaths,
     isMobile,
     model,
+    onBeforeActivePathChange: saveActiveEditorState,
   });
+  activePathRef.current = activePath;
+
+  useEffect(
+    () =>
+      model.onMutation('*', (event) => {
+        const moveEvents =
+          event.operation === 'move'
+            ? [event]
+            : event.operation === 'batch'
+              ? event.events.filter((entry) => entry.operation === 'move')
+              : [];
+        if (moveEvents.length === 0) {
+          return;
+        }
+
+        let nextStateByPath = editorStateByPathRef.current;
+        for (const moveEvent of moveEvents) {
+          nextStateByPath = remapEditorStateMap(
+            nextStateByPath,
+            moveEvent.from,
+            moveEvent.to
+          );
+        }
+        editorStateByPathRef.current = nextStateByPath;
+      }),
+    [model]
+  );
+
+  const handleEditorAttach = useCallback((editor: Editor<LAnnotation>) => {
+    const path = activePathRef.current;
+    if (path == null) {
+      return;
+    }
+    const saved = editorStateByPathRef.current.get(path);
+    if (saved == null) {
+      return;
+    }
+    editor.setState(saved);
+  }, []);
+
   const mutations = useTreeMutations({
     model,
     newFileTemplateName,
@@ -1144,16 +1257,18 @@ export function TreeApp<LAnnotation = unknown>({
     search.open();
   }, [search]);
 
-  // TreeApp always renders its file editor with soft wrapping so long lines
-  // stay visible without horizontal scrolling inside the fixed-width editor
-  // pane.
-  const effectiveFileOptions = useMemo<FileOptions<LAnnotation>>(
-    () =>
-      ({
-        ...resolvedFileOptions,
-        overflow: 'wrap',
-      }) as FileOptions<LAnnotation>,
-    [resolvedFileOptions]
+  const editorOptions = useMemo<CodeEditorProps<LAnnotation>>(
+    () => ({
+      ...resolvedEditorOptions,
+      overflow: 'wrap',
+      onAttach: (editor, fileInstance) => {
+        handleEditorAttach(editor);
+        resolvedEditorOptions?.onAttach?.(editor, fileInstance);
+      },
+      renderPlaceholder: () =>
+        renderEmpty?.() ?? <DefaultEmpty theme={theme} />,
+    }),
+    [handleEditorAttach, renderEmpty, theme, resolvedEditorOptions]
   );
 
   const treeSurfaceColor = useMemo(() => {
@@ -1309,48 +1424,11 @@ export function TreeApp<LAnnotation = unknown>({
     [buildContextMenuActions, contextMenuPortalContainer, renderContextMenu]
   );
 
-  const editor = useMemo(() => {
-    if (activePath == null) {
-      return renderEmpty != null ? (
-        renderEmpty()
-      ) : (
-        <DefaultEmpty theme={theme} />
-      );
-    }
-    const file = files?.[activePath];
-    const prerenderedHTML = resolvedPrerenderedHTMLByPath?.[activePath];
-    if (renderEditor != null) {
-      return renderEditor({ file, path: activePath, prerenderedHTML });
-    }
-    if (file == null) {
-      return renderEmpty != null ? (
-        renderEmpty()
-      ) : (
-        <DefaultEmpty theme={theme} />
-      );
-    }
-    // Keying the File by `theme` forces a remount when the user toggles modes.
-    // Prerendered HTML is theme-specific (different syntax colors) and
-    // re-running the highlighter against a stale cached tree can show the
-    // wrong palette for a frame.
-    return (
-      <File
-        key={`${activePath}:${theme}`}
-        file={file}
-        options={effectiveFileOptions}
-        prerenderedHTML={prerenderedHTML}
-        className="min-h-0 flex-1 overflow-auto"
-      />
-    );
-  }, [
-    activePath,
-    effectiveFileOptions,
-    files,
-    renderEditor,
-    renderEmpty,
-    resolvedPrerenderedHTMLByPath,
-    theme,
-  ]);
+  const activeFile = activePath == null ? undefined : files?.[activePath];
+  const activePrerenderedHTML =
+    activePath == null
+      ? undefined
+      : resolvedPrerenderedHTMLByPath?.[activePath];
 
   const hasTabs = showTabs && openPaths.length > 0;
   // Render the tab bar whenever there's something to put in it: either tabs,
@@ -1552,7 +1630,17 @@ export function TreeApp<LAnnotation = unknown>({
               className="relative flex min-h-0 flex-1"
               inert={isMobile ? true : undefined}
             >
-              {editor}
+              {/* Key by path+theme so prerendered HTML (theme-specific
+                  syntax colors) remounts cleanly when the toggle flips.
+                  Scroll/selection are restored via getState/setState. */}
+              <CodeEditor
+                key={`${activePath ?? 'empty'}:${theme}`}
+                ref={editorRef}
+                file={activeFile}
+                {...editorOptions}
+                className="relative min-h-0 min-w-0 flex-1 overflow-auto"
+                prerenderedHTML={activePrerenderedHTML}
+              />
             </div>
           </div>
         </section>

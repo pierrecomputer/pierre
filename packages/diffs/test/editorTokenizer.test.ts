@@ -1032,4 +1032,69 @@ describe('EditorTokenizer', () => {
       globalThis.window.matchMedia = originalMatchMedia;
     }
   });
+
+  // Dual-theme SSR (`themes: {dark,light}`) leaves the shared highlighter on the
+  // last theme it applied (usually light). The tokenizer caches a single-theme
+  // colorMap from construction; without re-activating that theme before an edit,
+  // grammar color indices are looked up in the wrong map — property names resolve
+  // to a near-foreground gray while types/comments (stable across maps) still
+  // look correct. Switching files recreates the tokenizer and hides the bug.
+  test('re-activates its theme before tokenize so dual-theme SSR cannot desync colorMap', async () => {
+    const { disposeHighlighter, getSharedHighlighter } =
+      await import('../src/highlighter/shared_highlighter');
+    const { DEFAULT_THEMES } = await import('../src/constants');
+    const { renderFileWithHighlighter } =
+      await import('../src/utils/renderFileWithHighlighter');
+
+    const code = `export interface ButtonProps {
+  variant?: 'primary';
+  isLoading?: boolean; //
+}
+`;
+    const highlighter = await getSharedHighlighter({
+      themes: [DEFAULT_THEMES.dark, DEFAULT_THEMES.light],
+      langs: ['tsx'],
+    });
+    const textDocument = new TextDocument('Button.tsx', code, 'tsx');
+    const tokenizer = new EditorTokenizer({
+      highlighter,
+      textDocument,
+      codeOptions: { theme: DEFAULT_THEMES, themeType: 'dark' },
+      setStyle: noopSetStyle,
+      onDeferTokenize: () => {},
+    });
+
+    try {
+      // Same dual-theme pass File/Diff renderers run on first load — leaves the
+      // shared highlighter on the light theme while the tokenizer still holds the
+      // dark colorMap captured at construction.
+      renderFileWithHighlighter(
+        { name: 'Button.tsx', contents: code, lang: 'tsx' },
+        highlighter,
+        {
+          theme: DEFAULT_THEMES,
+          useTokenTransformer: true,
+          tokenizeMaxLineLength: 1000,
+        }
+      );
+
+      const dirtyLines = tokenizer.tokenize({
+        startLine: 2,
+        startCharacter: 20,
+        endLine: 2,
+        previousLineCount: textDocument.lineCount,
+        lineCount: textDocument.lineCount,
+        lineDelta: 0,
+        changedLineRanges: [[2, 2]],
+      });
+
+      const isLoading = dirtyLines
+        .get(2)
+        ?.find((token) => token[2].includes('isLoading'));
+      expect(isLoading?.[1]).toBe('#FFA359');
+    } finally {
+      tokenizer.cleanUp();
+      await disposeHighlighter();
+    }
+  });
 });
