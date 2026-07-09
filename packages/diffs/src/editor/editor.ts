@@ -42,7 +42,11 @@ import {
   type SearchPanelMode,
   SearchPanelWidget,
 } from './searchPanel';
-import type { AutoSurround, EditorSelection } from './selection';
+import type {
+  AutoSurround,
+  CursorMoveOptions,
+  EditorSelection,
+} from './selection';
 import {
   applyDeleteCharacterToSelections,
   applyDeleteHardLineForwardToSelections,
@@ -1302,13 +1306,24 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           mvShortcut !== undefined &&
           textDocument !== undefined
         ) {
+          const cursorMoveOptions = this.#getCursorMoveOptions();
           if (e.shiftKey) {
             this.#updateSelections(
-              mapSelectionShift(textDocument, this.#selections, mvShortcut)
+              mapSelectionShift(
+                textDocument,
+                this.#selections,
+                mvShortcut,
+                cursorMoveOptions
+              )
             );
           } else {
             this.#updateSelections(
-              mapCursorMove(textDocument, this.#selections, mvShortcut)
+              mapCursorMove(
+                textDocument,
+                this.#selections,
+                mvShortcut,
+                cursorMoveOptions
+              )
             );
           }
           this.#scrollToPrimaryCaret();
@@ -3701,6 +3716,15 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         this.#applyChangeToLineAnnotations(change)
       );
     }
+  }
+
+  #getCursorMoveOptions(): CursorMoveOptions | undefined {
+    if (!this.#isWrap) {
+      return undefined;
+    }
+    return {
+      getSoftLineOffsets: (line) => this.#wrapLineText(line),
+    };
   }
 
   #deleteSoftLineBackward() {
