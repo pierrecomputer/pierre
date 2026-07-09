@@ -67,3 +67,102 @@ test.describe('selection action popover', () => {
     await expect.poll(() => actionClicks(page)).toEqual(['alpha']);
   });
 });
+
+// Reads the popover's --popover-y-shift, which encodes the resolved side:
+// '0px' means placed below the anchor, '-100%' means lifted above it.
+function popoverShift(page: Page): Promise<string> {
+  return page.evaluate((sel) => {
+    const root = document.querySelector('diffs-container')?.shadowRoot;
+    const popover = root?.querySelector(sel);
+    if (!(popover instanceof HTMLElement)) {
+      return '';
+    }
+    return popover.style.getPropertyValue('--popover-y-shift').trim();
+  }, POPOVER);
+}
+
+// Drags a real mouse selection from the center of one line's identifier token to
+// another's. The drag direction sets the selection direction (and thus which
+// side the popover prefers): a downward drag is forward, an upward drag is
+// backward, with the head landing on the drag's end line.
+async function dragSelect(
+  page: Page,
+  fromToken: string,
+  toToken: string
+): Promise<void> {
+  const center = async (token: string): Promise<{ x: number; y: number }> => {
+    const box = await page
+      .locator(CONTENT)
+      .getByText(token, { exact: true })
+      .first()
+      .boundingBox();
+    if (box == null) {
+      throw new Error(`no bounding box for ${token}`);
+    }
+    return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+  };
+  const from = await center(fromToken);
+  const to = await center(toToken);
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move(to.x, to.y, { steps: 10 });
+  await page.mouse.up();
+}
+
+// The taller 16-line fixture exists so a selection's head can sit exactly on the
+// first or last row: cases where the popover's preferred side would be clipped
+// by [data-code]'s own `overflow-y: clip` even though the window still has room
+// beyond that edge. Each case asserts the popover stays within the file
+// component and, for the edge cases, that it flipped to the fitting side.
+test.describe('selection action popover placement (edges)', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/test/e2e/fixtures/selection-action-edges.html');
+    await page.waitForFunction(
+      () => window.__selectionActionEdgesReady === true
+    );
+  });
+
+  test('forward selection mid-file places the popover below, within bounds', async ({
+    page,
+  }) => {
+    await dragSelect(page, 'line06', 'line09');
+
+    await expect(page.locator(POPOVER)).toBeVisible();
+    expect(await popoverShift(page)).toBe('0px');
+    expect(await popoverWithinHost(page)).toBe(true);
+  });
+
+  test('backward selection mid-file places the popover above, within bounds', async ({
+    page,
+  }) => {
+    await dragSelect(page, 'line11', 'line08');
+
+    await expect(page.locator(POPOVER)).toBeVisible();
+    expect(await popoverShift(page)).toBe('-100%');
+    expect(await popoverWithinHost(page)).toBe(true);
+  });
+
+  test('backward selection up to the first line flips below, within bounds', async ({
+    page,
+  }) => {
+    await dragSelect(page, 'line05', 'line01');
+
+    await expect(page.locator(POPOVER)).toBeVisible();
+    // Preferred (above the first row) would be clipped by the code box top, so
+    // it must flip below the selection's bottom edge instead of spilling out.
+    expect(await popoverShift(page)).toBe('0px');
+    expect(await popoverWithinHost(page)).toBe(true);
+  });
+
+  test('forward selection down to the last line flips above, within bounds', async ({
+    page,
+  }) => {
+    await dragSelect(page, 'line12', 'line16');
+
+    await expect(page.locator(POPOVER)).toBeVisible();
+    // Preferred (below the last row) would be clipped by the code box bottom, so
+    // it must flip above the selection's top edge instead of spilling out.
+    expect(await popoverShift(page)).toBe('-100%');
+    expect(await popoverWithinHost(page)).toBe(true);
+  });
+});

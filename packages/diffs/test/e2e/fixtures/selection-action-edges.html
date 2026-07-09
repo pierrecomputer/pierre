@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>diffs selection-action edges fixture</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 16px;
+        font-family: system-ui, sans-serif;
+      }
+      /* Push the editor down so there is window room above its top edge; this
+         lets the first-line placement tests prove the popover flips off the
+         code element's own clip box rather than merely the window edge. */
+      [data-spacer] {
+        height: 64px;
+      }
+      [data-diff-mount] {
+        max-width: 900px;
+      }
+    </style>
+  </head>
+  <body>
+    <a
+      data-fixtures-index
+      href="/test/e2e/fixtures/index.html"
+      style="
+        display: inline-block;
+        margin-bottom: 16px;
+        font-family: system-ui, sans-serif;
+        font-size: 14px;
+        font-weight: 600;
+        color: #0b62d6;
+        text-decoration: none;
+      "
+      >&larr; All fixtures</a
+    >
+    <div data-spacer></div>
+    <div data-diff-mount></div>
+
+    <script type="module">
+      import { File } from '/dist/index.js';
+      import { Editor } from '/dist/editor/index.js';
+
+      const mount = document.querySelector('[data-diff-mount]');
+      if (!(mount instanceof HTMLElement)) {
+        throw new Error('Missing selection-action-edges fixture mount.');
+      }
+
+      // A 16-line file (no trailing newline, so line16 is the last line). Each
+      // line carries a unique `lineNN` identifier the tests can target to drag a
+      // selection whose head sits mid-file or exactly on the first/last row.
+      const lineCount = 16;
+      const lines = Array.from(
+        { length: lineCount },
+        (_, index) =>
+          `const line${String(index + 1).padStart(2, '0')} = 'v${String(
+            index + 1
+          ).padStart(2, '0')}';`
+      );
+      const file = {
+        name: 'edges.ts',
+        contents: lines.join('\n'),
+      };
+
+      const editor = new Editor({
+        enabledSelectionAction: true,
+        renderSelectionAction({ getSelectionText, close }) {
+          const container = document.createElement('div');
+          container.dataset.testAction = '';
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.dataset.testActionButton = '';
+          button.textContent = 'Capture';
+          // Prevent the mousedown from blurring the editor and collapsing the
+          // selection before the click handler reads it.
+          button.addEventListener('mousedown', (e) => e.preventDefault());
+          button.addEventListener('click', () => {
+            close();
+          });
+          container.appendChild(button);
+          return container;
+        },
+      });
+      window.__editor = editor;
+
+      const instance = new File({
+        disableFileHeader: true,
+        theme: { dark: 'pierre-dark', light: 'pierre-light' },
+        themeType: 'dark',
+        useTokenTransformer: true,
+      });
+      instance.render({ file, containerWrapper: mount });
+      editor.edit(instance);
+
+      const waitForEditable = async () => {
+        const started = performance.now();
+        while (true) {
+          const host = mount.querySelector('diffs-container');
+          const content = host?.shadowRoot?.querySelector('[data-content]');
+          if (content?.getAttribute('contenteditable') === 'true') {
+            return;
+          }
+          if (performance.now() - started > 5000) {
+            throw new Error('Timed out waiting for editable content.');
+          }
+          await new Promise((resolve) => requestAnimationFrame(resolve));
+        }
+      };
+
+      await waitForEditable();
+      window.__selectionActionEdgesReady = true;
+    </script>
+  </body>
+</html>
