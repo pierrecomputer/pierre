@@ -1,0 +1,841 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <!-- maximum-scale=1 stops iOS zooming the page when a control gets focus
+       (pinch-zoom still works for accessibility); viewport-fit=cover lets the
+       canvas extend into the safe areas in fullscreen / standalone mode. -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover"
+    />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta
+      name="apple-mobile-web-app-status-bar-style"
+      content="black-translucent"
+    />
+    <meta name="theme-color" content="#000000" />
+    <meta name="color-scheme" content="dark" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%23000'/><path d='M2 12h5V7h7' stroke='%23c8a032' stroke-width='3' fill='none'/></svg>"
+    />
+    <title>@pierre/pipes</title>
+    <style>
+      /* color-scheme: dark makes mobile Safari pick its dark chrome material
+       for the toolbars instead of the default light one. iOS long-press
+       selection honors only the -webkit- prefixed user-select, and the
+       long-press callout menu is its own -webkit-touch-callout property. */
+      html {
+        color-scheme: dark;
+        user-select: none;
+        -webkit-user-select: none;
+        -webkit-touch-callout: none;
+      }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #000;
+        overflow: hidden;
+      }
+      /* Safari 26 tints its bottom bar by sampling the background-color of a
+       fixed element sitting within a few px of the layout-viewport bottom.
+       The canvas overshoots past the bottom (100lvh), which the sampler
+       seems to ignore — so give it a dedicated sliver anchored at exactly
+       bottom: 0. Invisible over the matching background. */
+      #edgeTint {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 2px;
+        background-color: #000;
+        pointer-events: none;
+      }
+      /* Fixed + lvh (the LARGE viewport): the canvas escapes the body's clip
+       and always extends underneath mobile browser toolbars. The explicit
+       background-color matters: Safari 26 ignores theme-color and instead
+       samples the background-color of FIXED elements touching the viewport
+       edges to tint its toolbars — WebGL content itself is never sampled. */
+      canvas {
+        display: block;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        height: 100lvh;
+        background-color: #000;
+      }
+
+      /* Windows 95 chrome, drawn by hand. The bevel formulas are the classic
+       two-ring highlight/shadow stacks the real widget set used. */
+      .panel {
+        --raised:
+          inset -1px -1px #0a0a0a, inset 1px 1px #fff, inset -2px -2px #808080,
+          inset 2px 2px #dfdfdf;
+        --pressed:
+          inset -1px -1px #fff, inset 1px 1px #0a0a0a, inset -2px -2px #dfdfdf,
+          inset 2px 2px #808080;
+        --sunken:
+          inset -1px -1px #fff, inset 1px 1px #808080, inset -2px -2px #dfdfdf,
+          inset 2px 2px #0a0a0a;
+        position: fixed;
+        top: max(16px, env(safe-area-inset-top));
+        right: max(16px, env(safe-area-inset-right));
+        width: min(280px, calc(100vw - 16px));
+        background: #c0c0c0;
+        color: #000;
+        padding: 3px;
+        box-shadow: var(--raised);
+        font:
+          11px Tahoma,
+          'MS Sans Serif',
+          system-ui,
+          sans-serif;
+        line-height: 12px;
+        user-select: none;
+        -webkit-user-select: none;
+        -webkit-touch-callout: none;
+        /* stay hidden until the script restores position/collapse state,
+         so the window doesn't visibly jump around on load */
+        visibility: hidden;
+      }
+      .panel.ready {
+        visibility: visible;
+      }
+      .titlebar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background: #000080;
+        color: #fff;
+        font-weight: bold;
+        padding: 2px 1px 1px 5px;
+        letter-spacing: 0;
+        touch-action: none; /* draggable via pointer events */
+      }
+      .titlebar button {
+        width: 16px;
+        height: 14px;
+        padding: 0;
+        background: #c0c0c0;
+        color: #000;
+        border: none;
+        box-shadow:
+          inset -1px -1px #0a0a0a,
+          inset 1px 1px #fff,
+          inset -2px -2px #808080,
+          inset 2px 2px #dfdfdf;
+        position: relative;
+      }
+      .titlebar button:active {
+        box-shadow:
+          inset -1px -1px #fff,
+          inset 1px 1px #0a0a0a,
+          inset -2px -2px #dfdfdf,
+          inset 2px 2px #808080;
+      }
+      /* the minimize glyph: a short bar near the bottom */
+      .titlebar button::after {
+        content: '';
+        position: absolute;
+        left: 4px;
+        bottom: 3px;
+        width: 6px;
+        height: 2px;
+        background: #000;
+      }
+      .panel-body {
+        padding: 8px 6px 6px;
+        overflow-y: auto;
+        box-sizing: border-box;
+      }
+      .panel.collapsed .panel-body {
+        display: none;
+      }
+
+      /* group box */
+      fieldset {
+        margin: 0 0 10px;
+        padding: 8px;
+        min-inline-size: 0;
+        border: 1px solid #808080;
+        box-shadow:
+          inset 1px 1px #fff,
+          1px 1px #fff;
+      }
+      legend {
+        padding: 0 3px;
+        background: #c0c0c0;
+      }
+
+      .row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin: 5px 0;
+      }
+      .row label:first-child {
+        flex: 0 0 92px;
+      }
+      .val {
+        flex: 0 0 32px;
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+      }
+
+      /* trackbar */
+      input[type='range'] {
+        flex: 1;
+        min-width: 0;
+        appearance: none;
+        -webkit-appearance: none;
+        height: 21px;
+        background: transparent;
+        margin: 0;
+      }
+      input[type='range']::-webkit-slider-runnable-track {
+        height: 4px;
+        background: #c0c0c0;
+        box-shadow:
+          inset -1px -1px #fff,
+          inset 1px 1px #808080,
+          inset 2px 2px #0a0a0a;
+        border: none;
+      }
+      input[type='range']::-webkit-slider-thumb {
+        appearance: none;
+        -webkit-appearance: none;
+        width: 11px;
+        height: 19px;
+        margin-top: -8px;
+        background: #c0c0c0;
+        border: none;
+        border-radius: 0;
+        box-shadow:
+          inset -1px -1px #0a0a0a,
+          inset 1px 1px #fff,
+          inset -2px -2px #808080,
+          inset 2px 2px #dfdfdf;
+      }
+      input[type='range']:disabled::-webkit-slider-thumb {
+        background: #c0c0c0;
+        box-shadow:
+          inset -1px -1px #808080,
+          inset 1px 1px #fff;
+      }
+      input[type='range']::-moz-range-track {
+        height: 4px;
+        background: #a0a0a0;
+        border: 1px solid #808080;
+      }
+      input[type='range']::-moz-range-thumb {
+        width: 11px;
+        height: 19px;
+        border-radius: 0;
+        background: #c0c0c0;
+        border: none;
+        box-shadow:
+          inset -1px -1px #0a0a0a,
+          inset 1px 1px #fff,
+          inset -2px -2px #808080,
+          inset 2px 2px #dfdfdf;
+      }
+
+      /* combo box: sunken white field with a raised drop button */
+      select {
+        flex: 1;
+        appearance: none;
+        -webkit-appearance: none;
+        font:
+          11px Tahoma,
+          'MS Sans Serif',
+          sans-serif;
+        background-color: #fff;
+        color: #000;
+        border: none;
+        border-radius: 0;
+        box-shadow:
+          inset -1px -1px #fff,
+          inset 1px 1px #808080,
+          inset -2px -2px #dfdfdf,
+          inset 2px 2px #0a0a0a;
+        padding: 3px 22px 3px 5px;
+        background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="17"><rect width="16" height="17" fill="%23c0c0c0"/><path d="M0 0h15v1H0z" fill="%23fff"/><path d="M0 0v16h1V0z" fill="%23fff"/><path d="M15 0v17h1V0z" fill="%230a0a0a"/><path d="M0 16h16v1H0z" fill="%230a0a0a"/><path d="M14 1v15h1V1z" fill="%23808080"/><path d="M1 15h14v1H1z" fill="%23808080"/><path d="M4 7h8l-4 4z" fill="%23000"/></svg>');
+        background-repeat: no-repeat;
+        background-position: right 2px center;
+      }
+
+      /* checkbox: sunken white square with a drawn check */
+      input[type='checkbox'] {
+        appearance: none;
+        -webkit-appearance: none;
+        width: 13px;
+        height: 13px;
+        margin: 0;
+        background: #fff;
+        /* iOS applies its own border-radius to form controls even with
+         appearance: none — zero it or everything turns into pills */
+        border: none;
+        border-radius: 0;
+        flex: none;
+        box-shadow:
+          inset -1px -1px #fff,
+          inset 1px 1px #808080,
+          inset -2px -2px #dfdfdf,
+          inset 2px 2px #0a0a0a;
+      }
+      input[type='checkbox']:checked {
+        background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13"><path d="M3 5v2l2.5 2.5L10 5V3L5.5 7.5z" fill="%23000"/></svg>');
+      }
+      .check {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        margin: 5px 0;
+      }
+
+      input[type='color'] {
+        appearance: none;
+        -webkit-appearance: none;
+        width: 48px;
+        height: 20px;
+        padding: 2px;
+        border: none;
+        border-radius: 0;
+        background: #c0c0c0;
+        box-shadow:
+          inset -1px -1px #fff,
+          inset 1px 1px #808080,
+          inset -2px -2px #dfdfdf,
+          inset 2px 2px #0a0a0a;
+      }
+      /* the color input draws through a pseudo-element with its own rounding */
+      input[type='color']::-webkit-color-swatch-wrapper {
+        padding: 0;
+      }
+      input[type='color']::-webkit-color-swatch {
+        border: none;
+        border-radius: 0;
+      }
+
+      .buttons {
+        display: flex;
+        gap: 6px;
+        justify-content: flex-end;
+        margin-top: 2px;
+        flex-wrap: wrap;
+      }
+      .buttons button {
+        min-width: 64px;
+        padding: 4px 10px;
+        background: #c0c0c0;
+        color: #000;
+        border: none;
+        border-radius: 0;
+        box-shadow:
+          inset -1px -1px #0a0a0a,
+          inset 1px 1px #fff,
+          inset -2px -2px #808080,
+          inset 2px 2px #dfdfdf;
+        font:
+          11px Tahoma,
+          'MS Sans Serif',
+          sans-serif;
+      }
+      .buttons button:active {
+        box-shadow:
+          inset -1px -1px #fff,
+          inset 1px 1px #0a0a0a,
+          inset -2px -2px #dfdfdf,
+          inset 2px 2px #808080;
+        padding: 5px 9px 3px 11px;
+      }
+      .hint {
+        color: #333;
+        margin: 8px 2px 2px;
+      }
+
+      /* the classic dithered scrollbar */
+      .panel-body::-webkit-scrollbar {
+        width: 17px;
+      }
+      .panel-body::-webkit-scrollbar-track {
+        background-image:
+          linear-gradient(
+            45deg,
+            #fff 25%,
+            transparent 25%,
+            transparent 75%,
+            #fff 75%
+          ),
+          linear-gradient(
+            45deg,
+            #fff 25%,
+            transparent 25%,
+            transparent 75%,
+            #fff 75%
+          );
+        background-color: #c0c0c0;
+        background-size: 2px 2px;
+        background-position:
+          0 0,
+          1px 1px;
+      }
+      .panel-body::-webkit-scrollbar-thumb {
+        background: #c0c0c0;
+        box-shadow:
+          inset -1px -1px #0a0a0a,
+          inset 1px 1px #fff,
+          inset -2px -2px #808080,
+          inset 2px 2px #dfdfdf;
+        border-right: 1px solid transparent;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="gl"></canvas>
+    <div id="edgeTint" aria-hidden="true"></div>
+
+    <div class="panel" id="panel">
+      <div class="titlebar">
+        <span>3D Pipes Settings</span>
+        <button id="collapse" title="Collapse"></button>
+      </div>
+      <div class="panel-body">
+        <fieldset>
+          <legend>Pipes</legend>
+          <div class="row">
+            <label>Style</label>
+            <select id="pipeStyle">
+              <option value="normal">Normal</option>
+              <option value="flex">Flex</option>
+              <option value="mixed">Mixed</option>
+            </select>
+          </div>
+          <div class="row">
+            <label>Joints</label>
+            <select id="jointStyle">
+              <option value="elbow">Elbows</option>
+              <option value="ball">Balls</option>
+              <option value="mixed">Mixed</option>
+              <option value="cycle">Cycle</option>
+            </select>
+          </div>
+          <div class="row">
+            <label>Teapot chance</label
+            ><input
+              type="range"
+              id="teapotChance"
+              min="0"
+              max="0.25"
+              step="0.001"
+            /><span class="val" id="teapotChance-v"></span>
+          </div>
+          <div class="row">
+            <label>Pipe radius</label
+            ><input
+              type="range"
+              id="pipeRadius"
+              min="0.06"
+              max="0.45"
+              step="0.01"
+            /><span class="val" id="pipeRadius-v"></span>
+          </div>
+          <div class="row">
+            <label>Speed</label
+            ><input type="range" id="speed" min="1" max="40" step="1" /><span
+              class="val"
+              id="speed-v"
+            ></span>
+          </div>
+          <div class="row">
+            <label>Growth</label>
+            <select id="growth">
+              <option value="smooth">Smooth</option>
+              <option value="step">Step (original)</option>
+            </select>
+          </div>
+          <div class="check">
+            <input type="checkbox" id="weighted" /><label for="weighted"
+              >Original turn weighting</label
+            >
+          </div>
+          <div class="row">
+            <label>Straight bias</label
+            ><input
+              type="range"
+              id="straightBias"
+              min="0"
+              max="1"
+              step="0.05"
+            /><span class="val" id="straightBias-v"></span>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Rounds</legend>
+          <div class="row">
+            <label>Grid size</label
+            ><input type="range" id="gridSize" min="8" max="40" step="1" /><span
+              class="val"
+              id="gridSize-v"
+            ></span>
+          </div>
+          <div class="row">
+            <label>Pipe count</label
+            ><input type="range" id="pipeCount" min="1" max="8" step="1" /><span
+              class="val"
+              id="pipeCount-v"
+            ></span>
+          </div>
+          <div class="row">
+            <label>Pipes / round</label
+            ><input
+              type="range"
+              id="pipesPerRound"
+              min="1"
+              max="20"
+              step="1"
+            /><span class="val" id="pipesPerRound-v"></span>
+          </div>
+          <div class="row">
+            <label>Max seconds</label
+            ><input
+              type="range"
+              id="roundDuration"
+              min="5"
+              max="120"
+              step="5"
+            /><span class="val" id="roundDuration-v"></span>
+          </div>
+          <div class="row">
+            <label>Fill limit</label
+            ><input
+              type="range"
+              id="resetThreshold"
+              min="0.1"
+              max="1"
+              step="0.05"
+            /><span class="val" id="resetThreshold-v"></span>
+          </div>
+          <div class="row">
+            <label>Fade seconds</label
+            ><input
+              type="range"
+              id="fadeSeconds"
+              min="0"
+              max="3"
+              step="0.1"
+            /><span class="val" id="fadeSeconds-v"></span>
+          </div>
+          <div class="check">
+            <input type="checkbox" id="multiPipes" /><label for="multiPipes"
+              >Multiple pipes at once</label
+            >
+          </div>
+          <div class="check">
+            <input type="checkbox" id="chase" /><label for="chase"
+              >Chase rounds</label
+            >
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Display</legend>
+          <div class="row">
+            <label>Pixel size</label
+            ><input type="range" id="pixelSize" min="1" max="8" step="1" /><span
+              class="val"
+              id="pixelSize-v"
+            ></span>
+          </div>
+          <div class="row">
+            <label>Background</label
+            ><input type="color" id="bgColor" value="#000000" />
+          </div>
+          <div class="check">
+            <input type="checkbox" id="bgTransparent" /><label
+              for="bgTransparent"
+              >Transparent background</label
+            >
+          </div>
+          <div class="check">
+            <input type="checkbox" id="cameraDrift" /><label for="cameraDrift"
+              >Camera drift</label
+            >
+          </div>
+        </fieldset>
+
+        <div class="buttons">
+          <button id="fullscreen">Full Screen</button>
+          <button id="defaults">Defaults</button>
+          <button id="newRound">New Round</button>
+        </div>
+        <p class="hint">Most changes apply live. Press "r" for a new round.</p>
+      </div>
+    </div>
+
+    <script type="module">
+      import { createPipes } from '/src/index.ts';
+
+      const DEFAULTS = {
+        pipeStyle: 'normal',
+        jointStyle: 'elbow',
+        teapotChance: 0.001,
+        pipeRadius: 1 / 7,
+        speed: 11,
+        growth: 'smooth',
+        weighted: true,
+        straightBias: 0.7,
+        gridSize: 20,
+        pipeCount: 4,
+        pipesPerRound: 5,
+        roundDuration: 45,
+        resetThreshold: 0.6,
+        fadeSeconds: 1.2,
+        multiPipes: true,
+        chase: true,
+        pixelSize: 2,
+        bgColor: '#000000',
+        bgTransparent: false,
+        cameraDrift: false,
+      };
+      // These are baked into the meshes / pipe pool; changing them rebuilds the
+      // instance. Everything else goes through pipes.setOptions, live.
+      const REBUILD_KEYS = new Set(['pipeRadius', 'pipeCount']);
+      const STORE_KEY = 'pierre-pipes-settings';
+
+      const $ = (id) => document.getElementById(id);
+      const controls = Object.keys(DEFAULTS);
+
+      function loadSettings() {
+        try {
+          return {
+            ...DEFAULTS,
+            ...JSON.parse(localStorage.getItem(STORE_KEY) || '{}'),
+          };
+        } catch {
+          return { ...DEFAULTS };
+        }
+      }
+
+      function setUI(s) {
+        for (const key of controls) {
+          const el = $(key);
+          if (el.type === 'checkbox') el.checked = s[key];
+          else el.value = s[key];
+        }
+        refreshLabels();
+      }
+
+      function readUI() {
+        const s = {};
+        for (const key of controls) {
+          const el = $(key);
+          if (el.type === 'checkbox') s[key] = el.checked;
+          else if (el.type === 'range') s[key] = parseFloat(el.value);
+          else s[key] = el.value;
+        }
+        return s;
+      }
+
+      function refreshLabels() {
+        for (const el of document.querySelectorAll('input[type=range]')) {
+          const label = $(el.id + '-v');
+          if (label)
+            label.textContent = parseFloat(el.value).toFixed(
+              el.step.includes('.') ? 2 : 0
+            );
+        }
+        $('straightBias').disabled = $('weighted').checked;
+      }
+
+      function hexToRgb(hex) {
+        return [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+      }
+
+      function toOptions(s) {
+        return {
+          pipeStyle: s.pipeStyle,
+          jointStyle: s.jointStyle,
+          teapotChance: s.teapotChance,
+          pipeRadius: s.pipeRadius,
+          speed: s.speed,
+          growth: s.growth,
+          straightBias: s.weighted ? undefined : s.straightBias,
+          gridSize: s.gridSize,
+          pipeCount: s.pipeCount,
+          pipesPerRound: s.pipesPerRound,
+          roundDuration: s.roundDuration,
+          resetThreshold: s.resetThreshold,
+          fadeSeconds: s.fadeSeconds,
+          multiPipes: s.multiPipes,
+          chase: s.chase,
+          pixelSize: s.pixelSize,
+          backgroundColor: s.bgTransparent
+            ? 'transparent'
+            : hexToRgb(s.bgColor),
+          cameraDrift: s.cameraDrift,
+        };
+      }
+
+      let pipes;
+      function rebuild() {
+        const s = readUI();
+        pipes?.destroy();
+        // Fresh canvas: context attributes (antialias, alpha) are fixed at the
+        // first getContext, so pixel size and transparency need a new one.
+        const old = $('gl');
+        const canvas = document.createElement('canvas');
+        canvas.id = 'gl';
+        old.replaceWith(canvas);
+        applyPageColors(s);
+        pipes = createPipes(canvas, toOptions(s));
+        window.__pipes = pipes;
+      }
+
+      // Safari 26 tints its toolbars from the background-color of fixed
+      // elements at the viewport edges (the canvas) with body as fallback —
+      // keep both in sync with the chosen background so mobile chrome matches.
+      function applyPageColors(s) {
+        document.body.style.background = s.bgTransparent
+          ? 'linear-gradient(135deg, #1a5276, #7d3c98) #1a5276'
+          : '#000';
+        $('gl').style.backgroundColor = s.bgTransparent
+          ? 'transparent'
+          : s.bgColor;
+        $('edgeTint').style.backgroundColor = s.bgTransparent
+          ? '#7d3c98'
+          : s.bgColor;
+      }
+
+      function applyChange(key) {
+        const s = readUI();
+        localStorage.setItem(STORE_KEY, JSON.stringify(s));
+        applyPageColors(s);
+        if (REBUILD_KEYS.has(key)) rebuild();
+        else pipes.setOptions(toOptions(s));
+      }
+
+      for (const key of controls) {
+        const el = $(key);
+        el.addEventListener('change', () => {
+          refreshLabels();
+          applyChange(key);
+        });
+        if (el.type === 'range' && !REBUILD_KEYS.has(key)) {
+          // Live keys update continuously while dragging.
+          el.addEventListener('input', () => {
+            refreshLabels();
+            pipes.setOptions(toOptions(readUI()));
+          });
+        } else if (el.type === 'range') {
+          el.addEventListener('input', refreshLabels);
+        }
+      }
+      $('bgColor').addEventListener('input', () =>
+        pipes.setOptions(toOptions(readUI()))
+      );
+      // Drag the window around by its title bar, Windows style.
+      const panel = $('panel');
+      const titlebar = panel.querySelector('.titlebar');
+      const POS_KEY = 'pierre-pipes-panel-pos';
+      function moveTo(x, y) {
+        const rect = panel.getBoundingClientRect();
+        // Keep the whole window inside the viewport.
+        x = Math.min(Math.max(x, 0), Math.max(0, innerWidth - rect.width));
+        y = Math.min(Math.max(y, 0), Math.max(0, innerHeight - rect.height));
+        panel.style.left = x + 'px';
+        panel.style.top = y + 'px';
+        panel.style.right = 'auto';
+        return { x, y };
+      }
+      // Fit the dialog to the viewport only when it actually has to: keep its
+      // natural size, nudge it back on-screen first, and only shrink (with an
+      // inner scrollbar) when the window is too short for it.
+      const panelBody = panel.querySelector('.panel-body');
+      function fit() {
+        panelBody.style.maxHeight = '';
+        if (panel.style.left) {
+          const rect = panel.getBoundingClientRect();
+          moveTo(rect.left, rect.top);
+        }
+        const rect = panel.getBoundingClientRect();
+        const overflow = rect.bottom - innerHeight;
+        if (overflow > 0) {
+          const bodyHeight = panelBody.getBoundingClientRect().height;
+          panelBody.style.maxHeight =
+            Math.max(80, bodyHeight - overflow) + 'px';
+        }
+      }
+      addEventListener('resize', fit);
+      let drag = null;
+      titlebar.addEventListener('pointerdown', (e) => {
+        if (e.target.tagName === 'BUTTON') return;
+        const rect = panel.getBoundingClientRect();
+        drag = { dx: e.clientX - rect.left, dy: e.clientY - rect.top };
+        titlebar.setPointerCapture(e.pointerId);
+      });
+      titlebar.addEventListener('pointermove', (e) => {
+        if (drag) moveTo(e.clientX - drag.dx, e.clientY - drag.dy);
+      });
+      titlebar.addEventListener('pointerup', () => {
+        if (!drag) return;
+        drag = null;
+        fit();
+        const rect = panel.getBoundingClientRect();
+        localStorage.setItem(
+          POS_KEY,
+          JSON.stringify({ x: rect.left, y: rect.top })
+        );
+      });
+      try {
+        const pos = JSON.parse(localStorage.getItem(POS_KEY));
+        if (pos) moveTo(pos.x, pos.y);
+      } catch {}
+      // On phones, start with just the title bar so the pipes get the screen.
+      if (matchMedia('(max-width: 600px)').matches)
+        panel.classList.add('collapsed');
+      fit();
+
+      $('newRound').addEventListener('click', () => pipes.reset());
+      $('defaults').addEventListener('click', () => {
+        setUI({ ...DEFAULTS });
+        localStorage.removeItem(STORE_KEY);
+        rebuild();
+      });
+      // True fullscreen (iPhone Safari 16.4+, everything else for ages) — the
+      // only way to get out from under mobile browser toolbars.
+      const fsBtn = $('fullscreen');
+      const root = document.documentElement;
+      if (!root.requestFullscreen && !root.webkitRequestFullscreen)
+        fsBtn.style.display = 'none';
+      fsBtn.addEventListener('click', () => {
+        const active =
+          document.fullscreenElement || document.webkitFullscreenElement;
+        if (active)
+          (document.exitFullscreen || document.webkitExitFullscreen).call(
+            document
+          );
+        else
+          (root.requestFullscreen || root.webkitRequestFullscreen).call(root);
+      });
+      $('collapse').addEventListener('click', () => {
+        $('panel').classList.toggle('collapsed');
+        fit();
+      });
+      addEventListener('keydown', (e) => {
+        if (e.key === 'r' && document.activeElement?.tagName !== 'INPUT')
+          pipes.reset();
+      });
+
+      setUI(loadSettings());
+      rebuild();
+      panel.classList.add('ready');
+    </script>
+  </body>
+</html>

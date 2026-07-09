@@ -1,6 +1,9 @@
 import { DEFAULT_THEMES, DIFFS_TAG_NAME } from '../constants';
 import { getSharedHighlighter } from '../highlighter/shared_highlighter';
-import { queueRender } from '../managers/UniversalRenderingManager';
+import {
+  dequeueRender,
+  queueRender,
+} from '../managers/UniversalRenderingManager';
 import { CodeToTokenTransformStream, type RecallToken } from '../shiki-stream';
 import type {
   AppliedThemeStyleCache,
@@ -55,6 +58,7 @@ export class FileStream {
   }
 
   cleanUp(): void {
+    dequeueRender(this.render);
     this.abortController?.abort();
     this.abortController = undefined;
   }

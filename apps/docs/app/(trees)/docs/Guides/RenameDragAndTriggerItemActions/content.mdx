@@ -68,6 +68,20 @@ In React, the wrapper can render menu content for you:
 In vanilla, use `composition.contextMenu.render` when you want to provide the
 menu element directly from the runtime config.
 
+#### Lock window scroll while a menu is open
+
+While a context menu is open, the tree blocks scrolling inside its own pane so
+the menu cannot drift away from its row. It cannot reach the scroll containers
+your page owns: a portaled menu is anchored to a viewport point, so if the
+window keeps scrolling, the menu disconnects from the row it was opened for.
+Lock window scroll for the menu's lifetime and release it when the menu closes:
+
+<DocsCodeExample {...RENAME_DRAG_SCROLL_LOCK} />
+
+Menu primitives with a modal mode (Radix, and libraries built on it such as
+shadcn/ui) already do this when the menu is rendered as modal. Apply the manual
+lock when you render a non-modal menu, as the docs demos on this site do.
+
 #### Keep keyboard and focus behavior predictable
 
 The focused row is the anchor for rename and keyboard-invoked commands. Opening

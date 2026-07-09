@@ -6,7 +6,19 @@ interface CodeColumnUpdate {
   measuredNumberInlineSize?: number;
 }
 
+interface CodeColumnVariableChanges {
+  codeWidthChanged: boolean;
+  numberWidthChanged: boolean;
+}
+
 type CodeUpdateMap = Map<ObservedGridNodes, CodeColumnUpdate>;
+
+export type ResizeManagerColumnVariableMode = 'apply' | 'measure';
+
+export interface ResizeManagerSetupOptions {
+  disableAnnotations: boolean;
+  columnVariables?: ResizeManagerColumnVariableMode;
+}
 
 interface AnnotationSetup {
   child1: HTMLElement;
@@ -55,8 +67,12 @@ export class ResizeManager {
     ObservedAnnotationNodes | ObservedGridNodes
   >();
 
-  setup(pre: HTMLPreElement, disableAnnotations: boolean): void {
+  setup(
+    pre: HTMLPreElement,
+    { disableAnnotations, columnVariables = 'apply' }: ResizeManagerSetupOptions
+  ): void {
     const annotationUpdates = new Set<AnnotationSetup>();
+    const applyColumnVariables = columnVariables === 'apply';
     let columnCount = 0;
     const observedNodes = new Map(this.observedNodes);
     this.observedNodes.clear();
@@ -109,6 +125,7 @@ export class ResizeManager {
         } else {
           item.numberWidth = 0;
         }
+        syncColumnVariableMode(item, applyColumnVariables);
       } else {
         item = {
           type: 'code',
@@ -116,6 +133,7 @@ export class ResizeManager {
           numberElement,
           codeWidth: 'auto',
           numberWidth: 0,
+          applyColumnVariables,
         };
         this.observedNodes.set(codeElement, item);
         this.observe(codeElement);
@@ -368,32 +386,11 @@ export class ResizeManager {
       item.codeWidth = nextCodeWidth;
       item.numberWidth = nextNumberWidth;
 
-      if (codeWidthChanged) {
-        item.codeElement.style.setProperty(
-          '--diffs-column-width',
-          `${typeof nextCodeWidth === 'number' ? `${nextCodeWidth}px` : 'auto'}`
-        );
-      }
-
-      if (numberWidthChanged) {
-        item.codeElement.style.setProperty(
-          '--diffs-column-number-width',
-          `${nextNumberWidth === 0 ? 'auto' : `${nextNumberWidth}px`}`
-        );
-      }
-
-      if (
-        codeWidthChanged ||
-        (numberWidthChanged && nextCodeWidth !== 'auto')
-      ) {
-        const targetWidth =
-          typeof nextCodeWidth === 'number'
-            ? Math.max(nextCodeWidth - nextNumberWidth, 0)
-            : 0;
-        item.codeElement.style.setProperty(
-          '--diffs-column-content-width',
-          `${targetWidth > 0 ? `${targetWidth}px` : 'auto'}`
-        );
+      if (item.applyColumnVariables) {
+        applyCodeColumnVariables(item, {
+          codeWidthChanged,
+          numberWidthChanged,
+        });
       }
     }
   };
@@ -422,11 +419,63 @@ function resolveNumberWidth(inlineSize: number): number {
   return Math.max(Math.ceil(inlineSize), 0);
 }
 
+function syncColumnVariableMode(
+  item: ObservedGridNodes,
+  applyColumnVariables: boolean
+): void {
+  if (item.applyColumnVariables === applyColumnVariables) {
+    return;
+  }
+
+  item.applyColumnVariables = applyColumnVariables;
+  if (applyColumnVariables) {
+    applyCodeColumnVariables(item, {
+      codeWidthChanged: true,
+      numberWidthChanged: true,
+    });
+  } else {
+    removeCodeColumnVariables(item);
+  }
+}
+
+function applyCodeColumnVariables(
+  item: ObservedGridNodes,
+  { codeWidthChanged, numberWidthChanged }: CodeColumnVariableChanges
+): void {
+  const { codeElement, codeWidth, numberWidth } = item;
+  if (codeWidthChanged) {
+    codeElement.style.setProperty(
+      '--diffs-column-width',
+      `${typeof codeWidth === 'number' ? `${codeWidth}px` : 'auto'}`
+    );
+  }
+
+  if (numberWidthChanged) {
+    codeElement.style.setProperty(
+      '--diffs-column-number-width',
+      `${numberWidth === 0 ? 'auto' : `${numberWidth}px`}`
+    );
+  }
+
+  if (codeWidthChanged || (numberWidthChanged && codeWidth !== 'auto')) {
+    const targetWidth =
+      typeof codeWidth === 'number' ? Math.max(codeWidth - numberWidth, 0) : 0;
+    codeElement.style.setProperty(
+      '--diffs-column-content-width',
+      `${targetWidth > 0 ? `${targetWidth}px` : 'auto'}`
+    );
+  }
+}
+
+function removeCodeColumnVariables(item: ObservedGridNodes): void {
+  item.codeElement.style.removeProperty('--diffs-column-content-width');
+  item.codeElement.style.removeProperty('--diffs-column-number-width');
+  item.codeElement.style.removeProperty('--diffs-column-width');
+}
+
 function cleanupStaleCodeItem(item: ObservedGridNodes): void {
   if (item.codeElement.isConnected) {
-    item.codeElement.style.removeProperty('--diffs-column-content-width');
-    item.codeElement.style.removeProperty('--diffs-column-number-width');
-    item.codeElement.style.removeProperty('--diffs-column-width');
+    removeCodeColumnVariables(item);
   }
 }
 

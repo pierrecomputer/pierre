@@ -78,7 +78,9 @@ async function waitForThemeScheme(
   scheme: 'light' | 'dark'
 ): Promise<HTMLStyleElement> {
   const expected = `color-scheme: ${scheme};`;
-  for (let attempt = 0; attempt < 50; attempt++) {
+  // ~4s budget: returns as soon as the style lands, so passing runs only pay
+  // a few iterations; the headroom is for loaded CI runners.
+  for (let attempt = 0; attempt < 400; attempt++) {
     const style = element.shadowRoot?.querySelector<HTMLStyleElement>(
       'style[data-theme-css]'
     );

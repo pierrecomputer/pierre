@@ -1148,6 +1148,7 @@ export class CodeView<LAnnotation = undefined> {
   }
 
   public reset(): void {
+    dequeueRender(this.computeRenderRangeAndEmit);
     this.clearReadySubscription();
     this.restoreScrollInteractions();
     this.cleanAllRenderedItems();

@@ -55,7 +55,9 @@ async function waitForPhases(
   phases: readonly { id: string; phase: PostRenderPhase }[],
   expected: readonly { id: string; phase: PostRenderPhase }[]
 ): Promise<void> {
-  for (let attempt = 0; attempt < 50; attempt++) {
+  // ~4s budget: returns as soon as the phases match, so passing runs only pay
+  // a few iterations; the headroom is for loaded CI runners.
+  for (let attempt = 0; attempt < 400; attempt++) {
     try {
       expect(phases).toEqual(expected);
       return;

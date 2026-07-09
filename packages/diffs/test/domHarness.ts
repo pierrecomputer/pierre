@@ -2,6 +2,7 @@ import { JSDOM } from 'jsdom';
 
 import type { CodeView } from '../src/components/CodeView';
 import { resetPlatformDetectionForTests } from '../src/editor/platform';
+import { clearRenderQueue } from '../src/managers/UniversalRenderingManager';
 import type { CodeViewItem, FileContents } from '../src/types';
 
 export interface InstallDomNavigatorOptions {
@@ -37,6 +38,7 @@ export interface DomHandle {
 // in the past and caused harness bugs, while unused extras are harmless. The
 // returned cleanup() restores (or deletes) every global it touched.
 export function installDom(options: InstallDomOptions = {}): DomHandle {
+  clearRenderQueue();
   const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>', {
     url: 'http://localhost',
   });
@@ -275,6 +277,7 @@ export function installDom(options: InstallDomOptions = {}): DomHandle {
       }
     },
     cleanup() {
+      clearRenderQueue();
       for (const timeout of frames.values()) {
         clearTimeout(timeout);
       }
