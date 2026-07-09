@@ -53,6 +53,7 @@ export class EditorTokenizer {
 
   // state
   #stateStack: StateStack[] = [INITIAL]; // cached state stack by line index
+  #comparisonStateStack: StateStack[] = [];
   #lastLine: number = -1;
   #isStopped: boolean = true;
   #isPaused: boolean = false;
@@ -197,6 +198,7 @@ export class EditorTokenizer {
     this.#setTheme(themeName);
     this.stopBackgroundTokenize();
     this.#stateStack = [INITIAL];
+    this.#comparisonStateStack = [];
     if (this.#grammar !== undefined && this.#textDocument.lineCount > 0) {
       this.#scheduleBackgroundTokenize(0);
     }
@@ -318,6 +320,7 @@ export class EditorTokenizer {
       dirtyStart >= viewStart;
     const changedLineRanges: readonly [number, number][] =
       change.changedLineRanges ?? [[dirtyStart, change.endLine]];
+    this.#comparisonStateStack = [];
     let offscreenSyncEnd = -1;
     if (dirtyStart < viewStart) {
       for (const [rangeStart, rangeEnd] of changedLineRanges) {
@@ -335,7 +338,7 @@ export class EditorTokenizer {
     if (canReuseCachedStates) {
       this.#buildStateStack(dirtyStart);
     } else {
-      this.#shiftCachedStateStack(change);
+      this.#shiftComparisonStateStack(change);
       if (renderRange === undefined || dirtyStart >= viewStart) {
         this.#buildStateStack(viewStart);
       }
@@ -479,6 +482,7 @@ export class EditorTokenizer {
     this.#lastLine = -1;
     this.#backgroundChangedLineRanges = undefined;
     this.#backgroundChangedRangeIndex = 0;
+    this.#comparisonStateStack = [];
     this.#detachMessageListener();
   }
 
@@ -620,14 +624,15 @@ export class EditorTokenizer {
     }
   }
 
-  // Preserve old end states past a line-count edit at their new indexes. Those
-  // shifted states let background tokenization stop once the grammar state
-  // matches the pre-edit tail again instead of scanning to EOF.
-  #shiftCachedStateStack(change: TextDocumentChange): void {
+  // Preserve old end states as comparison-only sentinels. They let background
+  // tokenization stop when grammar state reconverges without letting foreground
+  // tokenization seed from stale pre-edit states.
+  #shiftComparisonStateStack(change: TextDocumentChange): void {
     const lineChanges: readonly [number, number, number][] =
       change.changedLineChanges ?? [
         [change.startLine, change.endLine, change.lineDelta],
       ];
+    const comparisonStateStack = this.#stateStack.slice();
 
     for (const [startLine, endLine, lineDelta] of lineChanges) {
       if (lineDelta === 0) {
@@ -638,37 +643,53 @@ export class EditorTokenizer {
       const oldLineSpan = insertedLineSpan - lineDelta;
       const sourceStart = startLine + oldLineSpan + 1;
       const targetStart = startLine + insertedLineSpan + 1;
-      const originalLength = this.#stateStack.length;
+      const originalLength = comparisonStateStack.length;
 
       if (lineDelta > 0) {
         for (let line = originalLength - 1; line >= sourceStart; line--) {
           const targetLine = line + lineDelta;
-          if (line in this.#stateStack) {
-            this.#stateStack[targetLine] = this.#stateStack[line];
+          if (line in comparisonStateStack) {
+            comparisonStateStack[targetLine] = comparisonStateStack[line];
           } else {
-            Reflect.deleteProperty(this.#stateStack, targetLine);
+            Reflect.deleteProperty(comparisonStateStack, targetLine);
           }
         }
       } else {
         for (let line = sourceStart; line < originalLength; line++) {
           const targetLine = line + lineDelta;
-          if (line in this.#stateStack) {
-            this.#stateStack[targetLine] = this.#stateStack[line];
+          if (line in comparisonStateStack) {
+            comparisonStateStack[targetLine] = comparisonStateStack[line];
           } else {
-            Reflect.deleteProperty(this.#stateStack, targetLine);
+            Reflect.deleteProperty(comparisonStateStack, targetLine);
           }
         }
-        const retainedPrefixLength = Math.min(originalLength, startLine + 1);
-        this.#stateStack.length = Math.max(
-          retainedPrefixLength,
+        comparisonStateStack.length = Math.max(
+          Math.min(originalLength, startLine + 1),
           originalLength + lineDelta
         );
       }
 
       for (let line = startLine + 1; line < targetStart; line++) {
-        Reflect.deleteProperty(this.#stateStack, line);
+        Reflect.deleteProperty(comparisonStateStack, line);
       }
     }
+
+    this.#stateStack.length = Math.min(
+      this.#stateStack.length,
+      change.startLine + 1
+    );
+    comparisonStateStack.length = Math.min(
+      comparisonStateStack.length,
+      this.#textDocument.lineCount + 1
+    );
+    for (let line = 0; line <= change.startLine; line++) {
+      Reflect.deleteProperty(comparisonStateStack, line);
+    }
+    this.#comparisonStateStack = comparisonStateStack;
+  }
+
+  #getPreviousEndState(line: number): StateStack | undefined {
+    return this.#comparisonStateStack[line] ?? this.#stateStack[line];
   }
 
   #buildStateStack(endAt: number) {
@@ -731,7 +752,7 @@ export class EditorTokenizer {
 
       const previousNextState =
         currentChangedRangeEnd !== undefined
-          ? this.#stateStack[line + 1]
+          ? this.#getPreviousEndState(line + 1)
           : undefined;
       const lineText = this.#textDocument.getLineText(line);
       if (lineText.length > this.#tokenizeMaxLineLength) {

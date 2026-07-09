@@ -713,6 +713,104 @@ describe('EditorTokenizer', () => {
     }
   });
 
+  test('does not seed foreground tokenization from shifted convergence states', () => {
+    const originalAddEventListener = globalThis.addEventListener;
+    const originalRemoveEventListener = globalThis.removeEventListener;
+    const originalPostMessage = globalThis.postMessage;
+    globalThis.addEventListener =
+      (() => {}) as typeof globalThis.addEventListener;
+    globalThis.removeEventListener =
+      (() => {}) as typeof globalThis.removeEventListener;
+    globalThis.postMessage = (() => {}) as typeof globalThis.postMessage;
+
+    try {
+      const insideComment = {
+        equals: (other: StateStack) => other === insideComment,
+      } as unknown as StateStack;
+      const grammar = {
+        tokenizeLine2(lineText: string, ruleStack: StateStack) {
+          const inside = ruleStack === insideComment;
+          const stillInside = inside
+            ? !lineText.includes('*/')
+            : lineText.includes('/*');
+          return {
+            tokens: new Uint32Array([0, inside ? 1 << 15 : 0]),
+            ruleStack: stillInside ? insideComment : INITIAL,
+            stoppedEarly: false,
+            lineText,
+          };
+        },
+      } as unknown as IGrammar;
+      const textDocument = new TextDocument(
+        'test.ts',
+        Array.from({ length: 150 }, (_, i) => `line ${i}`).join('\n'),
+        'typescript'
+      );
+      const tokenizer = new EditorTokenizer({
+        highlighter: createTestHighlighter({
+          getLanguage: () => grammar,
+          setTheme: () => ({ colorMap: ['#code', '#comment'] }),
+        }),
+        textDocument,
+        codeOptions: { theme: 'test-theme', themeType: 'dark' },
+        setStyle: noopSetStyle,
+        onDeferTokenize: () => {},
+      });
+
+      tokenizer.tokenize(
+        {
+          startLine: 0,
+          startCharacter: 0,
+          endLine: textDocument.lineCount - 1,
+          previousLineCount: textDocument.lineCount,
+          lineCount: textDocument.lineCount,
+          lineDelta: 0,
+          changedLineRanges: [[0, textDocument.lineCount - 1]],
+        },
+        { startingLine: 0, totalLines: 150, bufferBefore: 0, bufferAfter: 0 }
+      );
+
+      const insertComment = textDocument.applyEdits([
+        {
+          range: {
+            start: { line: 0, character: 0 },
+            end: { line: 0, character: 0 },
+          },
+          newText: '/*\n',
+        },
+      ])!;
+      tokenizer.tokenize(insertComment, {
+        startingLine: 0,
+        totalLines: 1,
+        bufferBefore: 0,
+        bufferAfter: 0,
+      });
+
+      const lowerLineText = textDocument.getLineText(100);
+      const changeLowerLine = textDocument.applyEdits([
+        {
+          range: {
+            start: { line: 100, character: 0 },
+            end: { line: 100, character: lowerLineText.length },
+          },
+          newText: 'changed inside comment',
+        },
+      ])!;
+      const dirtyLines = tokenizer.tokenize(changeLowerLine, {
+        startingLine: 100,
+        totalLines: 1,
+        bufferBefore: 0,
+        bufferAfter: 0,
+      });
+
+      expect(dirtyLines.get(100)?.[0]?.[1]).toBe('#comment');
+    } finally {
+      globalThis.addEventListener = originalAddEventListener;
+      globalThis.removeEventListener = originalRemoveEventListener;
+      globalThis.postMessage = originalPostMessage;
+    }
+  });
+
   test('registers global message listener only while background tokenization runs', () => {
     const originalAddEventListener = globalThis.addEventListener;
     const originalRemoveEventListener = globalThis.removeEventListener;
