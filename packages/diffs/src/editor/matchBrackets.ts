@@ -60,7 +60,7 @@ function findAdjacentBracket<LAnnotation>(
   tokenizer: EditorTokenizer,
   position: Position
 ): BracketPosition | undefined {
-  const previousPosition = getPreviousCharacterPosition(textDocument, position);
+  const previousPosition = getPreviousCharacterPosition(position);
   if (previousPosition !== undefined) {
     const previousBracket = getBracketAtPosition(
       textDocument,
@@ -74,22 +74,15 @@ function findAdjacentBracket<LAnnotation>(
   return getBracketAtPosition(textDocument, tokenizer, position);
 }
 
-function getPreviousCharacterPosition<LAnnotation>(
-  textDocument: TextDocument<LAnnotation>,
+function getPreviousCharacterPosition(
   position: Position
 ): Position | undefined {
   if (position.character > 0) {
     return { line: position.line, character: position.character - 1 };
   }
-  if (position.line <= 0) {
-    return undefined;
-  }
-  const previousLine = position.line - 1;
-  const previousLineLength = textDocument.getLineText(previousLine).length;
-  if (previousLineLength === 0) {
-    return undefined;
-  }
-  return { line: previousLine, character: previousLineLength - 1 };
+  // Bracket adjacency is line-local: column-zero carets are not visually next to
+  // the previous line's last character.
+  return undefined;
 }
 
 function getBracketAtPosition<LAnnotation>(

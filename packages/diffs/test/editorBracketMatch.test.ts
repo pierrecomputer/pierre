@@ -255,6 +255,26 @@ describe('editor bracket matching', () => {
     ]);
   });
 
+  test('does not match a bracket before a column-zero caret', () => {
+    const textDocument = new TextDocument(
+      'inmemory://1',
+      'if (ok) {\nreturn ok;\n}',
+      'ts'
+    );
+    const tokenizer = {
+      getStringCommentRegexpRangesInLine() {
+        return null;
+      },
+    } as unknown as EditorTokenizer;
+
+    expect(
+      findBracketMatchRanges(textDocument, tokenizer, {
+        line: 1,
+        character: 0,
+      })
+    ).toBeUndefined();
+  });
+
   test('bounds forward scans for unmatched opening brackets', () => {
     const contents = ['(', ...Array.from({ length: 1_199 }, () => 'x')].join(
       '\n'
