@@ -184,6 +184,63 @@ export const EDITOR_SELECTION_ACTION_CONTEXT_TYPE: PreloadFileOptions<undefined>
     options,
   };
 
+export const EDITOR_MARKER_TYPE: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'marker.ts',
+    contents: `type MarkerSeverity = 'error' | 'warning' | 'info' | 'hint';
+
+interface Marker {
+  /** Controls the marker color and popover styling. */
+  severity: MarkerSeverity;
+  /** Popover content. Pass trusted HTML with \`{ html }\`. */
+  message: string | { html: string } | HTMLElement;
+  /** Start position (zero-based line and character). */
+  start: { line: number; character: number };
+  /** End position (zero-based line and character). */
+  end: { line: number; character: number };
+  /** Optional origin label shown in the popover, e.g. "eslint". */
+  source?: string;
+  /** Optional arbitrary data carried alongside the marker. */
+  metadata?: Record<string, unknown>;
+}`,
+  },
+  options,
+};
+
+export const EDITOR_MARKER_EXAMPLE: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'editor_markers.ts',
+    contents: `import { Editor } from '@pierre/diffs/editor';
+
+const editor = new Editor();
+editor.edit(fileInstance);
+
+// Apply diagnostics, e.g. from a linter or language server. Inlining the array
+// lets TypeScript check the severity literals against the Marker type without
+// importing it (the type is reached through editor.setMarkers).
+editor.setMarkers([
+  {
+    severity: 'error',
+    source: 'eslint',
+    message: 'Expected === and instead saw ==.',
+    start: { line: 9, character: 12 },
+    end: { line: 9, character: 14 },
+  },
+  {
+    severity: 'warning',
+    source: 'eslint',
+    message: 'Unexpected var, use let or const instead.',
+    start: { line: 1, character: 2 },
+    end: { line: 1, character: 5 },
+  },
+]);
+
+// Pass an empty array to clear all markers.
+editor.setMarkers([]);`,
+  },
+  options,
+};
+
 export const EDITOR_PROGRAMMATIC_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
     name: 'editor_programmatic.ts',
@@ -204,6 +261,52 @@ editor.setSelections([
 
 // Move focus into the editor (the caret follows the primary selection).
 editor.focus();`,
+  },
+  options,
+};
+
+export const EDITOR_UNDO_REDO_EXAMPLE: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'editor_undo_redo.tsx',
+    contents: `import { Editor } from '@pierre/diffs/editor';
+import { EditorProvider, File } from '@pierre/diffs/react';
+import { useMemo, useState } from 'react';
+
+export function EditorWithHistoryToolbar() {
+  const [canUndo, setCanUndo] = useState(false);
+  const [canRedo, setCanRedo] = useState(false);
+
+  const editor = useMemo(
+    () =>
+      new Editor({
+        onChange() {
+          // Undo and redo run through the same change path as edits, so refresh
+          // toolbar state from \`onChange\` rather than only after button clicks.
+          setCanUndo(editor.canUndo);
+          setCanRedo(editor.canRedo);
+        },
+      }),
+    []
+  );
+
+  return (
+    <EditorProvider editor={editor}>
+      <div className="toolbar">
+        <button type="button" disabled={!canUndo} onClick={() => editor.undo()}>
+          Undo
+        </button>
+        <button type="button" disabled={!canRedo} onClick={() => editor.redo()}>
+          Redo
+        </button>
+      </div>
+
+      <File
+        file={{ name: 'example.ts', contents: 'export const x = 1;' }}
+        contentEditable
+      />
+    </EditorProvider>
+  );
+}`,
   },
   options,
 };
