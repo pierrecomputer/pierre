@@ -1262,7 +1262,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       addEventListener(contentEl, 'keydown', (e) => {
         if (e.key === 'Escape') {
           e.preventDefault();
-          this.#searchPanel?.cleanup();
+          this.#searchPanel?.close();
           this.#searchPanel = undefined;
           this.#retainSearchPanelFocus = false;
           this.#selectionAction?.cleanup();

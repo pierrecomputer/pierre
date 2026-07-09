@@ -38,6 +38,7 @@ export class SearchPanelWidget {
   #updateMatches?: (options?: { syncSelection?: boolean }) => void;
   #applyMode?: (mode: SearchPanelMode) => void;
   #navigate?: (findPrevious: boolean) => void;
+  #close?: () => void;
 
   constructor(options: SearchPanelOptions) {
     const {
@@ -78,13 +79,10 @@ export class SearchPanelWidget {
       prevButton.disabled = noMatches;
       nextButton.disabled = noMatches;
 
-      if (searchParams.text === '') {
-        matchResultElement.textContent = 'No results';
-        matchResultElement.dataset.noMatches = '';
-        return;
-      }
-
-      if (matches.all.length === 0) {
+      // An empty query and a query with zero hits are the same "no results"
+      // state. Both push an empty match set through onUpdate so the editor
+      // drops #matches and clears the painted highlights.
+      if (noMatches) {
         matchResultElement.textContent = 'No results';
         matchResultElement.dataset.noMatches = '';
         matches.current = undefined;
@@ -217,6 +215,7 @@ export class SearchPanelWidget {
       this.cleanup();
       onClose();
     };
+    this.#close = close;
 
     // Shared builder for the panel's icon controls. Every clickable control is a
     // real <button> so it gets focus, keyboard activation, and native disabled
@@ -446,6 +445,16 @@ export class SearchPanelWidget {
     this.#applyMode?.(mode);
   }
 
+  // Tears the panel down the way the close button and Escape-in-input do:
+  // removes the DOM and runs onClose so the editor clears its match highlights.
+  // Prefer this over cleanup() for any user-initiated dismissal.
+  close(): void {
+    this.#close?.();
+  }
+
+  // DOM-only teardown. Does NOT run onClose, so it leaves the editor's match
+  // highlights in place; only use it when the caller clears that state itself
+  // (e.g. a full editor reset). User-initiated dismissals should call close().
   cleanup(): void {
     this.#container.remove();
   }
