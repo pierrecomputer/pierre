@@ -54,7 +54,9 @@ immutability or deep equality checks, which can quickly become expensive.
 - `loadDiffFiles` is one of those shared diff options. It applies to diff items
   rendered inside `CodeView`, which is useful for large patch-driven review UIs
   where full file contents should be fetched only when users expand unchanged
-  context.
+  context. Hydration updates the existing `fileDiff` object in place, so keep
+  its identity stable when the hydrated metadata should persist across later
+  renders.
 
 ### Padding &amp; Gap
 
