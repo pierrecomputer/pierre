@@ -24,14 +24,19 @@ interface E2ESelection {
 }
 
 interface E2EEditorState {
-  file: { contents: string };
   selections?: E2ESelection[];
+  view?: {
+    scrollLeft: number;
+    scrollTop: number;
+  };
 }
 
 // The subset of the real Editor surface the fixtures expose on `window`.
 interface E2EEditor {
   canUndo: boolean;
   canRedo: boolean;
+  getText: () => string;
+  getFile: () => { contents: string } | undefined;
   getState: () => E2EEditorState;
   setSelections: (selections: E2ESelection[]) => void;
   focus: () => void;
