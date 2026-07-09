@@ -300,6 +300,23 @@ function dispatchPaste(target: HTMLElement, text: string): void {
   expect(event.defaultPrevented).toBe(true);
 }
 
+function dispatchBeforeInput(target: HTMLElement, inputType: string): void {
+  const view = target.ownerDocument.defaultView;
+  if (view == null) {
+    throw new Error('target element is not attached to a window');
+  }
+  const event = new view.InputEvent('beforeinput', {
+    bubbles: true,
+    cancelable: true,
+    composed: true,
+    inputType,
+    data: null,
+  });
+
+  target.dispatchEvent(event);
+  expect(event.defaultPrevented).toBe(true);
+}
+
 function dispatchPasteShortcutKeydown(
   target: HTMLElement,
   repeat = false,
@@ -809,6 +826,46 @@ describe('Editor clipboard events', () => {
     }
   });
 
+  test('custom clipboard provider matches the document EOL when the file uses CRLF', async () => {
+    const { cleanup } = installDom();
+    let reads = 0;
+
+    const editor = new Editor<undefined>({
+      clipboard: {
+        readText: () => {
+          reads++;
+          return 'X\nY';
+        },
+      },
+    });
+    const component = new TestEditableComponent({
+      name: 'example.txt',
+      contents: 'alpha\r\nbravo',
+      lang: 'text',
+    });
+
+    try {
+      editor.edit(component);
+      editor.setSelections([
+        {
+          start: { line: 1, character: 5 },
+          end: { line: 1, character: 5 },
+          direction: 'none',
+        },
+      ]);
+
+      const keydown = dispatchPasteShortcutKeydown(component.contentElement);
+      await wait();
+
+      expect(keydown.defaultPrevented).toBe(true);
+      expect(reads).toBe(1);
+      expect(editor.getState().file.contents).toBe('alpha\r\nbravoX\r\nY');
+    } finally {
+      editor.cleanUp();
+      cleanup();
+    }
+  });
+
   test('matches the document EOL when the file uses lone CR', () => {
     const { cleanup } = installDom();
 
@@ -840,4 +897,37 @@ describe('Editor clipboard events', () => {
       cleanup();
     }
   });
+});
+
+describe('Editor line break input', () => {
+  for (const inputType of ['insertLineBreak', 'insertParagraph'] as const) {
+    test(`${inputType} inserts the document EOL when the file uses CRLF`, () => {
+      const { cleanup } = installDom();
+
+      const editor = new Editor<undefined>();
+      const component = new TestEditableComponent({
+        name: 'example.txt',
+        contents: 'alpha\r\nbravo',
+        lang: 'text',
+      });
+
+      try {
+        editor.edit(component);
+        editor.setSelections([
+          {
+            start: { line: 1, character: 5 },
+            end: { line: 1, character: 5 },
+            direction: 'none',
+          },
+        ]);
+
+        dispatchBeforeInput(component.contentElement, inputType);
+
+        expect(editor.getState().file.contents).toBe('alpha\r\nbravo\r\n');
+      } finally {
+        editor.cleanUp();
+        cleanup();
+      }
+    });
+  }
 });
