@@ -12,11 +12,11 @@ import { round } from '../src/editor/utils';
 import { type DomHandle, installDom } from './domHarness';
 
 // Replaces HTMLElement.prototype.getBoundingClientRect with a stub that counts
-// invocations and reports a fixed sub-pixel width. domMeasureTextWidth() is the
-// only code under test that calls getBoundingClientRect, so the count equals the
+// invocations and reports a controlled width. domMeasureTextWidth() is the only
+// code under test that calls getBoundingClientRect, so the count equals the
 // number of forced layouts it performed. Returns the call counter and a restore
 // function.
-function stubBoundingClientRectWidth(width: number): {
+function stubBoundingClientRectWidth(width: number | (() => number)): {
   getCallCount: () => number;
   restore: () => void;
 } {
@@ -26,12 +26,13 @@ function stubBoundingClientRectWidth(width: number): {
     configurable: true,
     value(): DOMRect {
       calls++;
+      const measuredWidth = typeof width === 'function' ? width() : width;
       return {
-        width,
+        width: measuredWidth,
         height: 0,
         top: 0,
         left: 0,
-        right: width,
+        right: measuredWidth,
         bottom: 0,
         x: 0,
         y: 0,
@@ -252,6 +253,55 @@ describe('Metrics.remeasureCharacterWidth', () => {
     glyphWidth = 11;
     expect(metrics.remeasureCharacterWidth()).toBe(true);
     expect(metrics.ch).toBe(11);
+  });
+
+  test('clears cached DOM widths when ch changes after the font loads', () => {
+    let domWidth = 24;
+    const rect = stubBoundingClientRectWidth(() => domWidth);
+    try {
+      const metrics = initMetrics();
+      const emoji = '😀';
+
+      expect(metrics.measureTextWidth(emoji)).toBe(round(24));
+      expect(metrics.measureTextWidth(emoji)).toBe(round(24));
+      expect(rect.getCallCount()).toBe(1);
+
+      // The loaded font changes both the ASCII ch width and the DOM-measured
+      // emoji width while getComputedStyle(root).fontFamily stays the same.
+      glyphWidth = 11;
+      domWidth = 31;
+      expect(metrics.remeasureCharacterWidth()).toBe(true);
+
+      expect(metrics.measureTextWidth(emoji)).toBe(round(31));
+      expect(rect.getCallCount()).toBe(2);
+    } finally {
+      rect.restore();
+    }
+  });
+
+  test('clears cached DOM widths when ch is unchanged after the font loads', () => {
+    let domWidth = 24;
+    const rect = stubBoundingClientRectWidth(() => domWidth);
+    try {
+      const metrics = initMetrics();
+      const emoji = '😀';
+
+      expect(metrics.measureTextWidth(emoji)).toBe(round(24));
+      expect(metrics.measureTextWidth(emoji)).toBe(round(24));
+      expect(rect.getCallCount()).toBe(1);
+
+      // Some fonts keep the same ASCII advance as the fallback font while
+      // changing DOM-measured emoji widths. The stale cache still has to be
+      // cleared and reported so the editor repaints selection/caret overlays.
+      domWidth = 31;
+      expect(metrics.remeasureCharacterWidth()).toBe(true);
+      expect(metrics.ch).toBe(8);
+
+      expect(metrics.measureTextWidth(emoji)).toBe(round(31));
+      expect(rect.getCallCount()).toBe(2);
+    } finally {
+      rect.restore();
+    }
   });
 
   test('reports no change when the measured width is stable', () => {
