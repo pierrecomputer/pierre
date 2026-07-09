@@ -302,7 +302,7 @@ export class SearchPanelWidget {
           close();
         } else if (e.key === 'Enter') {
           e.preventDefault();
-          findNextMatch(false, true);
+          findNextMatch(e.shiftKey, true);
         } else if (findAgain !== undefined) {
           // Override the native browser find-again shortcut so cmd+g steps to
           // the next match and cmd+shift+g to the previous one.
