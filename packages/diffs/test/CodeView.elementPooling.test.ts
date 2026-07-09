@@ -82,7 +82,9 @@ async function waitForShellCounts(
   element: HTMLElement,
   expected: ReturnType<typeof getShellCounts>
 ): Promise<void> {
-  for (let attempt = 0; attempt < 50; attempt++) {
+  // ~4s budget: returns as soon as the counts match, so passing runs only pay
+  // a few iterations; the headroom is for loaded CI runners.
+  for (let attempt = 0; attempt < 400; attempt++) {
     try {
       expect(getShellCounts(element)).toEqual(expected);
       return;

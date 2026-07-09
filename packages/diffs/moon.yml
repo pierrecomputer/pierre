@@ -5,6 +5,13 @@ layer: 'library'
 tags: ['tsdown', 'publishable']
 
 tasks:
+  # Bun's default per-test timeout (5s) is the same as the domHarness waitFor
+  # budget, so a stalled wait would hit Bun's generic timeout before the
+  # caller's informative expect fires. Keep the per-test limit comfortably
+  # above the wait budget.
+  test:
+    args: '--timeout 15000'
+
   # No preset: presets force `runInCI: skip` and moon refuses to run such
   # tasks in CI-detected shells (agent harnesses export CI=1). Never
   # targeted by the CI lanes.
