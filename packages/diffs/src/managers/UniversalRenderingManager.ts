@@ -17,6 +17,17 @@ export function dequeueRender(callback: Callback): void {
   }
 }
 
+// Drops every queued callback and cancels the pending frame. The guard
+// matters in test teardown, where the harness may have already removed the
+// requestAnimationFrame globals.
+export function clearRenderQueue(): void {
+  callbacks.clear();
+  if (frameId != null && typeof cancelAnimationFrame === 'function') {
+    cancelAnimationFrame(frameId);
+  }
+  frameId = null;
+}
+
 function render(time: number): void {
   const toIterate = new Set(callbacks);
   callbacks.clear();

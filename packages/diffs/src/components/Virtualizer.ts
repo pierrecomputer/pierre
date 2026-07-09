@@ -1,4 +1,7 @@
-import { queueRender } from '../managers/UniversalRenderingManager';
+import {
+  dequeueRender,
+  queueRender,
+} from '../managers/UniversalRenderingManager';
 import type { VirtualWindowSpecs } from '../types';
 import { areVirtualWindowSpecsEqual } from '../utils/areVirtualWindowSpecsEqual';
 import { createWindowFromScrollPosition } from '../utils/createWindowFromScrollPosition';
@@ -233,6 +236,7 @@ export class Virtualizer {
   }
 
   cleanUp(): void {
+    dequeueRender(this.computeRenderRangeAndEmit);
     this.resizeObserver?.disconnect();
     this.resizeObserver = undefined;
     this.intersectionObserver?.disconnect();

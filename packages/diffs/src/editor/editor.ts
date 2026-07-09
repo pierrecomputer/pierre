@@ -1,4 +1,7 @@
-import { queueRender } from '../managers/UniversalRenderingManager';
+import {
+  dequeueRender,
+  queueRender,
+} from '../managers/UniversalRenderingManager';
 import type {
   DiffLineAnnotation,
   DiffsEditableComponent,
@@ -524,6 +527,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   }
 
   cleanUp(recycle = false): void {
+    dequeueRender(this.#handleCustomPasteEvent);
     // The tokenizer is destroyed in both modes: it holds highlighter/worker
     // resources and writes into the (removed below) theme style element.
     // __syncRenderView recreates one for a retained document on re-attach.
