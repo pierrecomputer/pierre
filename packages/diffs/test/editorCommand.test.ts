@@ -150,6 +150,67 @@ describe('resolveEditorShortcutCommand', () => {
       { event: { key: 'Tab', ctrlKey: true }, expected: undefined },
     ]);
   });
+
+  test('opens the search panel with the find shortcut on macOS', () => {
+    expectShortcuts('MacIntel', [
+      { event: { key: 'f', metaKey: true }, expected: 'openSearchPanel' },
+      {
+        event: { key: 'f', metaKey: true, altKey: true },
+        expected: 'openSearchReplacePanel',
+      },
+      // Option+F emits a dead key ('ƒ') on macOS, so the physical F is
+      // recognized through event.code instead of the character.
+      {
+        event: { key: 'ƒ', code: 'KeyF', metaKey: true, altKey: true },
+        expected: 'openSearchReplacePanel',
+      },
+      { event: { key: 'f', ctrlKey: true }, expected: undefined },
+    ]);
+  });
+
+  test('opens the search panel with the find shortcut on windows and linux', () => {
+    expectShortcuts('Linux x86_64', [
+      { event: { key: 'f', ctrlKey: true }, expected: 'openSearchPanel' },
+      {
+        event: { key: 'f', ctrlKey: true, altKey: true },
+        expected: 'openSearchReplacePanel',
+      },
+      { event: { key: 'f', metaKey: true }, expected: undefined },
+    ]);
+  });
+
+  test('maps the find-next shortcut', () => {
+    expectShortcuts('MacIntel', [
+      { event: { key: 'd', metaKey: true }, expected: 'findNextMatch' },
+    ]);
+    expectShortcuts('Linux x86_64', [
+      { event: { key: 'd', ctrlKey: true }, expected: 'findNextMatch' },
+      { event: { key: 'd' }, expected: undefined },
+    ]);
+  });
+
+  test('expands the selection to the document edges with shift', () => {
+    expectShortcuts('MacIntel', [
+      {
+        event: { key: 'ArrowUp', metaKey: true, shiftKey: true },
+        expected: 'expandSelectionDocStart',
+      },
+      {
+        event: { key: 'ArrowDown', metaKey: true, shiftKey: true },
+        expected: 'expandSelectionDocEnd',
+      },
+    ]);
+    expectShortcuts('Linux x86_64', [
+      {
+        event: { key: 'Home', ctrlKey: true, shiftKey: true },
+        expected: 'expandSelectionDocStart',
+      },
+      {
+        event: { key: 'End', ctrlKey: true, shiftKey: true },
+        expected: 'expandSelectionDocEnd',
+      },
+    ]);
+  });
 });
 
 describe('resolveFindAgainShortcut', () => {
