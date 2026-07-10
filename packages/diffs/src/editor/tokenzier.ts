@@ -155,7 +155,9 @@ export class EditorTokenizer {
     this.#mediaQueryList = window.matchMedia('(prefers-color-scheme: dark)');
     let themeType: 'light' | 'dark' | undefined;
     if (themeTypeOption === 'system') {
-      themeType = this.#mediaQueryList.matches ? 'dark' : 'light';
+      // Prefer the host document's computed color-scheme (page CSS/classes can
+      // force light/dark while the OS media query differs) over matchMedia.
+      themeType = this.#resolveSystemThemeType();
     } else {
       themeType = themeTypeOption;
     }
@@ -172,10 +174,7 @@ export class EditorTokenizer {
             attributeName !== null &&
             (attributeName === 'class' || attributeName.startsWith('data-'))
           ) {
-            const themeType =
-              getComputedStyle(document.body).colorScheme === 'dark'
-                ? 'dark'
-                : 'light';
+            const themeType = this.#resolveSystemThemeType();
             this.#emitThemeChange(theme[themeType], themeType);
             break;
           }
@@ -184,8 +183,10 @@ export class EditorTokenizer {
       observer.observe(document.documentElement, { attributes: true });
       observer.observe(document.body, { attributes: true });
       this.#disposes = [
-        addEventListener(this.#mediaQueryList, 'change', (e) => {
-          const themeType = e.matches ? 'dark' : 'light';
+        addEventListener(this.#mediaQueryList, 'change', () => {
+          // Re-read computed color-scheme so a host-forced scheme still wins
+          // when the OS preference changes underneath it.
+          const themeType = this.#resolveSystemThemeType();
           this.#emitThemeChange(theme[themeType], themeType);
         }),
         () => observer.disconnect(),
@@ -222,6 +223,29 @@ export class EditorTokenizer {
     this.#onThemeChange?.();
   }
 
+  // Resolve `themeType: 'system'` the same way the MutationObserver does: from
+  // the host document's computed `color-scheme`. Apps often force a scheme via
+  // page CSS/classes while the OS `prefers-color-scheme` media query differs;
+  // using matchMedia here would flip tokens back to the OS preference on every
+  // render sync and fight the observer.
+  #resolveSystemThemeType(): 'light' | 'dark' {
+    try {
+      if (
+        typeof document !== 'undefined' &&
+        typeof getComputedStyle === 'function' &&
+        document.body != null
+      ) {
+        return getComputedStyle(document.body).colorScheme === 'dark'
+          ? 'dark'
+          : 'light';
+      }
+    } catch {
+      // jsdom and similar harnesses may lack getComputedStyle or throw; fall
+      // through to the OS media query.
+    }
+    return this.#mediaQueryList.matches ? 'dark' : 'light';
+  }
+
   // Re-apply the editor's theme from the surface's current code options. Edit
   // mode reuses a single tokenizer across re-renders, so when the host swaps the
   // theme — a theme picker, a light/dark toggle, etc. — we must recompute the
@@ -233,11 +257,7 @@ export class EditorTokenizer {
   syncTheme(codeOptions: BaseCodeOptions): void {
     const { themeType = 'system', theme = DEFAULT_THEMES } = codeOptions;
     const nextThemeType =
-      themeType === 'system'
-        ? this.#mediaQueryList.matches
-          ? 'dark'
-          : 'light'
-        : themeType;
+      themeType === 'system' ? this.#resolveSystemThemeType() : themeType;
     const nextThemeName =
       typeof theme === 'string' ? theme : theme[nextThemeType];
     if (

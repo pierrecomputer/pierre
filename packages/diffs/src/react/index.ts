@@ -19,4 +19,3 @@ export * from './utils/templateRender';
 export * from './utils/useFileDiffInstance';
 export * from './utils/useFileInstance';
 export * from './utils/useStableCallback';
-export * from './utils/useStableEditor';
