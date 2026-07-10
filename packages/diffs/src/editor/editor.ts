@@ -1669,7 +1669,14 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     const clipboard = this.#options.clipboard;
     if (clipboard !== undefined) {
       const text = await clipboard.readText();
-      this.#replaceSelectionText(text, undefined, true);
+      const textDocument = this.#textDocument;
+      if (textDocument !== undefined) {
+        this.#replaceSelectionText(
+          textDocument.normalizeEol(text),
+          undefined,
+          true
+        );
+      }
     }
   };
 
@@ -2286,8 +2293,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         break;
       case 'insertLineBreak':
       case 'insertParagraph':
-        // TODO(@ije): use document.EOF instead of '\n'
-        this.#replaceSelectionText('\n');
+        this.#replaceSelectionText(this.#textDocument?.eol ?? '\n');
         break;
       case 'deleteContentBackward':
         this.#deleteSelectionText();
