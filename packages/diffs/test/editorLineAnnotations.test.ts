@@ -396,6 +396,36 @@ describe('renderLineAnnotations', () => {
       cleanup();
     }
   });
+
+  test('renders addition annotations when there is no paired deletions side', async () => {
+    const { cleanup } = installDom();
+    try {
+      const { content, gutter } = createUnifiedAnnotationHost(3);
+
+      renderLineAnnotations(
+        [{ side: 'additions', lineNumber: 2, metadata: 'new' }],
+        content,
+        gutter
+      );
+      await wait();
+
+      expect(
+        content.querySelector(
+          '[data-line-annotation="0,1"] slot[name="annotation-additions-2"]'
+        )
+      ).not.toBeNull();
+      // Without a deletions sibling only the addition side renders: one content
+      // annotation and one gutter buffer, and no left-side elements at all.
+      expect(content.querySelectorAll('[data-line-annotation]')).toHaveLength(
+        1
+      );
+      expect(
+        gutter.querySelectorAll('[data-gutter-buffer="annotation"]')
+      ).toHaveLength(1);
+    } finally {
+      cleanup();
+    }
+  });
 });
 
 function createSplitAnnotationHost(lineCount: number): {
@@ -442,4 +472,27 @@ function appendRenderedLine(
   const gutterLine = document.createElement('div');
   gutterLine.dataset.columnNumber = String(lineNumber);
   gutter.append(gutterLine);
+}
+
+// A single (unified) code element with no left [data-deletions] sibling, which
+// drives renderLineAnnotations' additions-only path.
+function createUnifiedAnnotationHost(lineCount: number): {
+  content: HTMLElement;
+  gutter: HTMLElement;
+} {
+  const root = document.createElement('div');
+  const code = document.createElement('div');
+  const gutter = document.createElement('div');
+  gutter.dataset.gutter = '';
+  const content = document.createElement('div');
+  content.dataset.content = '';
+  code.append(gutter, content);
+  root.append(code);
+  document.body.append(root);
+
+  for (let lineNumber = 1; lineNumber <= lineCount; lineNumber++) {
+    appendRenderedLine(content, gutter, lineNumber);
+  }
+
+  return { content, gutter };
 }
