@@ -22,6 +22,20 @@ export const DirectionBackward = -1;
 export const DirectionNone = 0;
 export const DirectionForward = 1;
 
+const SURROUNDING_PAIRS: Array<[openChar: string, closeChar: string]> = [
+  ["'", "'"],
+  ['"', '"'],
+  ['`', '`'],
+  ['{', '}'],
+  ['[', ']'],
+  ['<', '>'],
+  ['(', ')'],
+];
+
+const AUTO_SURROUND_CLOSE_CHARS = new Map(SURROUNDING_PAIRS);
+const AUTO_SURROUND_QUOTE_CHARS = new Set(["'", '"', '`']);
+const AUTO_SURROUND_BRACKET_CHARS = new Set(['{', '[', '(', '<']);
+
 export interface CursorMoveOptions {
   getSoftLineOffsets?: (line: number) => ArrayLike<number> | undefined;
 }
@@ -520,6 +534,28 @@ export function applyTextChangeToSelections<LAnnotation>(
  * When the inserted text still contains the original selection (auto-surround),
  * the inner range is reselected to match VS Code/CodeMirror behavior.
  */
+// Detect exact auto-surround replacements before a substring search can match
+// the newly inserted opening delimiter instead of the preserved selection.
+function getAutoSurroundPreservedOffset(
+  originalText: string,
+  newText: string
+): number | undefined {
+  if (newText.length !== originalText.length + 2) {
+    return undefined;
+  }
+
+  const closeChar = AUTO_SURROUND_CLOSE_CHARS.get(newText[0]);
+  if (
+    closeChar === undefined ||
+    newText[newText.length - 1] !== closeChar ||
+    newText.slice(1, -1) !== originalText
+  ) {
+    return undefined;
+  }
+
+  return 1;
+}
+
 function getNextSelectionOffsetPairAfterReplace(
   textDocument: TextDocument<unknown>,
   entry: { start: number; end: number },
@@ -531,7 +567,9 @@ function getNextSelectionOffsetPairAfterReplace(
   const originalLength = entry.end - entry.start;
   if (originalLength > 0) {
     const originalText = textDocument.getTextSlice(entry.start, entry.end);
-    const preservedOffset = newText.indexOf(originalText);
+    const preservedOffset =
+      getAutoSurroundPreservedOffset(originalText, newText) ??
+      newText.indexOf(originalText);
     if (
       preservedOffset !== -1 &&
       preservedOffset + originalText.length <= newText.length
@@ -716,20 +754,6 @@ export function applyTextReplaceToSelections<LAnnotation>(
   }
   return { nextSelections, change };
 }
-
-const SURROUNDING_PAIRS: Array<[openChar: string, closeChar: string]> = [
-  ["'", "'"],
-  ['"', '"'],
-  ['`', '`'],
-  ['{', '}'],
-  ['[', ']'],
-  ['<', '>'],
-  ['(', ')'],
-];
-
-const AUTO_SURROUND_CLOSE_CHARS = new Map(SURROUNDING_PAIRS);
-const AUTO_SURROUND_QUOTE_CHARS = new Set(["'", '"', '`']);
-const AUTO_SURROUND_BRACKET_CHARS = new Set(['{', '[', '(', '<']);
 
 export type AutoSurround =
   | 'default'
