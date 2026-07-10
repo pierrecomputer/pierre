@@ -2,7 +2,7 @@
 
 import { DEFAULT_THEMES } from '@pierre/diffs';
 import { Editor } from '@pierre/diffs/editor';
-import { EditorProvider, File } from '@pierre/diffs/react';
+import { EditProvider, File } from '@pierre/diffs/react';
 import type { PreloadedFileResult } from '@pierre/diffs/ssr';
 import {
   IconArrow,
@@ -171,9 +171,9 @@ export function SelectionDemo({ prerenderedFile }: SelectionDemoProps) {
 
   return (
     <div className="not-prose grid grid-cols-[minmax(0,1fr)] gap-4 md:grid-cols-[minmax(0,1fr)_20rem]">
-      <EditorProvider editor={editor}>
+      <EditProvider editor={editor}>
         <File {...prerenderedFile} className="diff-container" contentEditable />
-      </EditorProvider>
+      </EditProvider>
 
       {/* The wrapper takes its height from the editor column (its only in-flow
           sibling); the aside fills it absolutely at md+ so a long snippet list

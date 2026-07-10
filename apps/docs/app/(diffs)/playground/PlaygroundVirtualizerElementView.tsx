@@ -7,7 +7,7 @@ import type {
   SelectedLineRange,
 } from '@pierre/diffs';
 import { Editor } from '@pierre/diffs/editor';
-import { EditorProvider, FileDiff, Virtualizer } from '@pierre/diffs/react';
+import { EditProvider, FileDiff, Virtualizer } from '@pierre/diffs/react';
 import { useCallback, useMemo, useState } from 'react';
 
 import { ITEM_UNSAFE_CSS } from './constants';
@@ -124,7 +124,7 @@ function ElementVirtualizerDiff({
   );
 
   return (
-    <EditorProvider editor={editor}>
+    <EditProvider editor={editor}>
       <FileDiff
         fileDiff={fileDiff}
         contentEditable={editing}
@@ -149,6 +149,6 @@ function ElementVirtualizerDiff({
           />
         )}
       />
-    </EditorProvider>
+    </EditProvider>
   );
 }

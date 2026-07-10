@@ -2,7 +2,7 @@
 
 import { DEFAULT_THEMES } from '@pierre/diffs';
 import { Editor } from '@pierre/diffs/editor';
-import { EditorProvider, FileDiff } from '@pierre/diffs/react';
+import { EditProvider, FileDiff } from '@pierre/diffs/react';
 import { IconArrow, IconChevronSm, IconSparkle } from '@pierre/icons';
 import { FileTree, type FileTreeRowDecoration } from '@pierre/trees';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -285,7 +285,7 @@ export function AgentUi({
   }, [activePath]);
 
   return (
-    <EditorProvider editor={editor}>
+    <EditProvider editor={editor}>
       <div className="aui" data-theme-type={themeType} data-embedded="true">
         <div className="aui-body">
           <section className="aui-center">
@@ -385,6 +385,6 @@ export function AgentUi({
           </aside>
         </div>
       </div>
-    </EditorProvider>
+    </EditProvider>
   );
 }

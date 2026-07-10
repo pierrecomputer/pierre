@@ -1,8 +1,13 @@
 'use client';
 
-import type { EditorState, FileContents } from '@pierre/diffs';
+import type { EditorState, FileContents, FileOptions } from '@pierre/diffs';
 import type { Editor } from '@pierre/diffs/editor';
-import { CodeEditor, type CodeEditorProps } from '@pierre/diffs/react';
+import {
+  EditProvider,
+  File,
+  useStableEditor,
+  Virtualizer,
+} from '@pierre/diffs/react';
 import {
   IconFilePlus,
   IconFolderPlus,
@@ -200,12 +205,11 @@ export interface TreeAppProps<LAnnotation = unknown> {
 
   // Editor side: files keyed by their tree path. Mirrors the
   // preloadedDataById pattern already used by tree demos. Both the prerendered
-  // HTML map and the editor options may be scoped per theme so the active
-  // CodeEditor picks up the right syntax-highlight colors when the theme
-  // toggles.
+  // HTML map and the file options may be scoped per theme so the active File
+  // picks up the right syntax-highlight colors when the theme toggles.
   files?: Readonly<Record<string, FileContents>>;
   prerenderedHTMLByPath?: TreeAppThemeValue<Readonly<Record<string, string>>>;
-  editorOptions?: TreeAppThemeValue<CodeEditorProps<LAnnotation>>;
+  fileOptions?: TreeAppThemeValue<FileOptions<LAnnotation>>;
   // Fired on Cmd/Ctrl+S after TreeApp clears the tab's unsaved indicator.
   // Hosts that own the `files` map should update it here so the next edit
   // cycle compares against the saved contents.
@@ -616,7 +620,7 @@ interface UseOpenTabsOptions {
   isMobile?: boolean;
   model: FileTreeModel;
   // Fired immediately before `activePath` changes so the host can snapshot
-  // editor scroll/selection via getState before the CodeEditor remounts.
+  // editor scroll/selection via getState before the editable File remounts.
   onBeforeActivePathChange?: () => void;
 }
 
@@ -1169,7 +1173,7 @@ export function TreeApp<LAnnotation = unknown>({
   contextMenuPortalContainer,
   defaultTheme = 'dark',
   files,
-  editorOptions: editorOptionsProp,
+  fileOptions: fileOptionsProp,
   height = '100%',
   initialActivePath,
   initialExplorerWidth = DEFAULT_EXPLORER_WIDTH,
@@ -1203,9 +1207,9 @@ export function TreeApp<LAnnotation = unknown>({
   const theme = themeProp ?? internalTheme;
   const chrome = CHROME_STYLES[theme];
 
-  // Per-path scroll + selection snapshots. CodeEditor remounts on path/theme
-  // changes (keyed below), so we getState before the remount and setState from
-  // onAttach once the new editor is attached.
+  // Per-path scroll + selection snapshots. The editable File remounts on
+  // path/theme changes (keyed below), so we getState before the remount and
+  // setState from onAttach once the new editor is attached.
   const editorRef = useRef<Editor<LAnnotation> | null>(null);
   const editorStateByPathRef = useRef(new Map<string, EditorState>());
   const activePathRef = useRef<string | null>(initialActivePath ?? null);
@@ -1291,8 +1295,8 @@ export function TreeApp<LAnnotation = unknown>({
   );
 
   const toggleTheme = useCallback(() => {
-    // Theme remounts CodeEditor (keyed by path:theme); snapshot first so the
-    // restored editor keeps scroll/selection after the palette flip.
+    // Theme remounts the editable File (keyed by path:theme); snapshot first
+    // so the restored editor keeps scroll/selection after the palette flip.
     saveActiveEditorState();
     const nextTheme: TreeAppTheme = theme === 'dark' ? 'light' : 'dark';
     if (themeProp == null) {
@@ -1305,31 +1309,24 @@ export function TreeApp<LAnnotation = unknown>({
   // value or a `{ light, dark }` pair; `pickByTheme` returns the right one.
   const resolvedTreeStyle = pickByTheme(treeStyle, theme);
   const resolvedTreeClassName = pickByTheme(treeClassName, theme);
-  const resolvedEditorOptions = pickByTheme(editorOptionsProp, theme);
+  const resolvedFileOptions = pickByTheme(fileOptionsProp, theme);
   const resolvedPrerenderedHTMLByPath = pickByTheme(
     prerenderedHTMLByPath,
     theme
   );
 
   const handleEditorChange = useCallback(
-    (
-      file: FileContents,
-      lineAnnotations?: Parameters<
-        NonNullable<CodeEditorProps<LAnnotation>['onChange']>
-      >[1]
-    ) => {
+    (file: FileContents) => {
       const path = activePathRef.current;
       if (path == null) {
-        resolvedEditorOptions?.onChange?.(file, lineAnnotations);
         return;
       }
 
       const baseline = savedBaselinesByPath[path] ?? files?.[path];
       const isUnsaved = baseline == null || file.contents !== baseline.contents;
       syncUnsavedPath(path, file, isUnsaved);
-      resolvedEditorOptions?.onChange?.(file, lineAnnotations);
     },
-    [files, resolvedEditorOptions, savedBaselinesByPath, syncUnsavedPath]
+    [files, savedBaselinesByPath, syncUnsavedPath]
   );
 
   // Cmd/Ctrl+S: treat the current buffer as saved. Clears the tab's unsaved
@@ -1548,26 +1545,20 @@ export function TreeApp<LAnnotation = unknown>({
     search.open();
   }, [search]);
 
-  const editorOptions = useMemo<CodeEditorProps<LAnnotation>>(
+  const fileOptions = useMemo<FileOptions<LAnnotation>>(
     () => ({
-      ...resolvedEditorOptions,
+      ...resolvedFileOptions,
       overflow: 'wrap',
-      onAttach: (editor, fileInstance) => {
-        handleEditorAttach(editor);
-        resolvedEditorOptions?.onAttach?.(editor, fileInstance);
-      },
-      onChange: handleEditorChange,
-      renderPlaceholder: () =>
-        renderEmpty?.() ?? <DefaultEmpty theme={theme} />,
+      disableFileHeader: true,
     }),
-    [
-      handleEditorAttach,
-      handleEditorChange,
-      renderEmpty,
-      theme,
-      resolvedEditorOptions,
-    ]
+    [resolvedFileOptions]
   );
+
+  const editor = useStableEditor<LAnnotation>({
+    onAttach: handleEditorAttach,
+    onChange: handleEditorChange,
+  });
+  editorRef.current = editor;
 
   const treeSurfaceColor = useMemo(() => {
     const explicitTreeBackground =
@@ -1940,17 +1931,38 @@ export function TreeApp<LAnnotation = unknown>({
               className="relative flex min-h-0 flex-1"
               inert={isMobile ? true : undefined}
             >
-              {/* Key by path+theme so prerendered HTML (theme-specific
+              {/* Key File by path+theme so prerendered HTML (theme-specific
                   syntax colors) remounts cleanly when the toggle flips.
-                  Scroll/selection are restored via getState/setState. */}
-              <CodeEditor
-                key={`${activePath ?? 'empty'}:${theme}`}
-                ref={editorRef}
-                file={activeFile}
-                {...editorOptions}
-                className="relative min-h-0 min-w-0 flex-1 overflow-auto"
-                prerenderedHTML={activePrerenderedHTML}
-              />
+                  Keep EditProvider stable so the shared Editor is not cleaned
+                  up between tab/theme switches. Scroll/selection restore via
+                  getState/setState in onAttach. */}
+              <EditProvider editor={editor}>
+                <Virtualizer
+                  className="relative min-h-0 min-w-0 flex-1 overflow-auto"
+                  style={{ overflow: 'auto' }}
+                  contentStyle={{
+                    display: 'flex',
+                    minHeight: '100%',
+                    width: '100%',
+                  }}
+                >
+                  {activeFile == null ? (
+                    (renderEmpty?.() ?? <DefaultEmpty theme={theme} />)
+                  ) : (
+                    <File
+                      key={`${activePath ?? 'empty'}:${theme}`}
+                      style={{
+                        flex: '1 1 auto',
+                        minWidth: '100%',
+                      }}
+                      file={activeFile}
+                      options={fileOptions}
+                      prerenderedHTML={activePrerenderedHTML}
+                      contentEditable
+                    />
+                  )}
+                </Virtualizer>
+              </EditProvider>
             </div>
           </div>
         </section>

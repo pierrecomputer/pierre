@@ -1,7 +1,7 @@
 'use client';
 
 import { Editor } from '@pierre/diffs/editor';
-import { EditorProvider, File } from '@pierre/diffs/react';
+import { EditProvider, File } from '@pierre/diffs/react';
 import type { PreloadedFileResult } from '@pierre/diffs/ssr';
 import { useEffect, useMemo } from 'react';
 
@@ -34,9 +34,9 @@ export function MarkerDemo({ prerenderedFile }: MarkerDemoProps) {
 
   return (
     <div className="not-prose">
-      <EditorProvider editor={editor}>
+      <EditProvider editor={editor}>
         <File {...prerenderedFile} className="diff-container" contentEditable />
-      </EditorProvider>
+      </EditProvider>
     </div>
   );
 }

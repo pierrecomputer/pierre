@@ -269,7 +269,7 @@ export const EDITOR_UNDO_REDO_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
     name: 'editor_undo_redo.tsx',
     contents: `import { Editor } from '@pierre/diffs/editor';
-import { EditorProvider, File } from '@pierre/diffs/react';
+import { EditProvider, File } from '@pierre/diffs/react';
 import { useMemo, useState } from 'react';
 
 export function EditorWithHistoryToolbar() {
@@ -290,7 +290,7 @@ export function EditorWithHistoryToolbar() {
   );
 
   return (
-    <EditorProvider editor={editor}>
+    <EditProvider editor={editor}>
       <div className="toolbar">
         <button type="button" disabled={!canUndo} onClick={() => editor.undo()}>
           Undo
@@ -304,7 +304,7 @@ export function EditorWithHistoryToolbar() {
         file={{ name: 'example.ts', contents: 'export const x = 1;' }}
         contentEditable
       />
-    </EditorProvider>
+    </EditProvider>
   );
 }`,
   },
@@ -316,7 +316,7 @@ export const EDITOR_REACT_EXAMPLE: PreloadFileOptions<undefined> = {
     name: 'editor_react.tsx',
     contents: `import type { FileContents } from '@pierre/diffs';
 import { Editor } from '@pierre/diffs/editor';
-import { EditorProvider, File, Virtualizer } from '@pierre/diffs/react';
+import { EditProvider, File, Virtualizer } from '@pierre/diffs/react';
 import { useMemo, useState } from 'react';
 
 const file: FileContents = {
@@ -341,7 +341,7 @@ export function EditorComponent() {
   );
 
   return (
-    <EditorProvider editor={editor}>
+    <EditProvider editor={editor}>
       <button type="button" onClick={() => setEditable((value) => !value)}>
         {editable ? 'Disable editing' : 'Enable editing'}
       </button>
@@ -361,7 +361,7 @@ export function EditorComponent() {
           contentEditable={editable}
         />
       </Virtualizer>
-    </EditorProvider>
+    </EditProvider>
   );
 }`,
   },
@@ -374,7 +374,7 @@ export const EDITOR_REACT_FILE_DIFF_EXAMPLE: PreloadFileOptions<undefined> = {
     contents: `import { Editor } from '@pierre/diffs/editor';
 import {
   type FileDiffMetadata,
-  EditorProvider,
+  EditProvider,
   FileDiff,
   parseDiffFromFile,
   Virtualizer,
@@ -400,7 +400,7 @@ export function EditorComponent() {
   );
 
   return (
-    <EditorProvider editor={editor}>
+    <EditProvider editor={editor}>
       <button type="button" onClick={() => setEditable((value) => !value)}>
         {editable ? 'Disable editing' : 'Enable editing'}
       </button>
@@ -420,7 +420,7 @@ export function EditorComponent() {
           contentEditable={editable}
         />
       </Virtualizer>
-    </EditorProvider>
+    </EditProvider>
   );
 }`,
   },
@@ -466,7 +466,7 @@ export const EDITOR_WORKER_POOL_REACT_EXAMPLE: PreloadFileOptions<undefined> = {
 
 import { Editor } from '@pierre/diffs/editor';
 import {
-  EditorProvider,
+  EditProvider,
   File,
   WorkerPoolContextProvider,
 } from '@pierre/diffs/react';
@@ -483,12 +483,12 @@ export function EditorWithWorkerPool() {
         useTokenTransformer: true,
       }}
     >
-      <EditorProvider editor={editor}>
+      <EditProvider editor={editor}>
         <File
           file={{ name: 'example.ts', contents: 'export const x = 1;' }}
           contentEditable
         />
-      </EditorProvider>
+      </EditProvider>
     </WorkerPoolContextProvider>
   );
 }`,
@@ -564,11 +564,9 @@ export const EDITOR_PUBLIC_API: PreloadFileOptions<undefined> = {
   FileContents,
 } from '@pierre/diffs';
 import { Editor } from '@pierre/diffs/editor';
-import { CodeEditor } from '@pierre/diffs';
 
 // Editor
-// Most methods require an attached surface via edit(), or a CodeEditor that
-// handles attachment for you.
+// Most methods require an attached surface via edit().
 
 const editor = new Editor();
 
@@ -660,23 +658,7 @@ editor.canRedo;
 // Undo the last edit or redo the last undone edit. No-ops when history is empty.
 editor.undo();
 editor.redo();
-
-// CodeEditor
-// High-level single-file editor. It inherits every Editor method above and adds:
-
-const codeEditor = new CodeEditor();
-
-// Mount into root. Omit file to show renderPlaceholder (if provided).
-codeEditor.render(root, file, lineAnnotations);
-
-// Swap the open file (and optional annotations) without recreating the editor.
-codeEditor.setFile(file, lineAnnotations);
-
-// Update annotations for the current file only.
-codeEditor.setLineAnnotations(lineAnnotations);
-
-// Also cleans up the managed scroll container, virtualizer, and file instance.
-codeEditor.cleanUp();`,
+`,
   },
   options,
 };
@@ -688,7 +670,7 @@ export const EDITOR_REACT_MULTI_FILE_DIFF_EXAMPLE: PreloadFileOptions<undefined>
       contents: `import type { FileContents } from '@pierre/diffs';
 import { Editor } from '@pierre/diffs/editor';
 import {
-  EditorProvider,
+  EditProvider,
   MultiFileDiff,
   Virtualizer,
 } from '@pierre/diffs/react';
@@ -720,7 +702,7 @@ export function EditorComponent() {
   );
 
   return (
-    <EditorProvider editor={editor}>
+    <EditProvider editor={editor}>
       <button type="button" onClick={() => setEditable((value) => !value)}>
         {editable ? 'Disable editing' : 'Enable editing'}
       </button>
@@ -741,182 +723,9 @@ export function EditorComponent() {
           contentEditable={editable}
         />
       </Virtualizer>
-    </EditorProvider>
+    </EditProvider>
   );
 }`,
     },
     options,
   };
-
-export const EDITOR_CODE_EDITOR_REACT_EXAMPLE: PreloadFileOptions<undefined> = {
-  file: {
-    name: 'code_editor_react.tsx',
-    contents: `import type { FileContents } from '@pierre/diffs';
-import type { Editor } from '@pierre/diffs/editor';
-import { CodeEditor } from '@pierre/diffs/react';
-import { useRef } from 'react';
-
-const file: FileContents = {
-  name: 'example.ts',
-  contents: \`function greet(name: string) {
-  console.log(\\\`Hello, \\\${name}!\\\`);
-}
-
-export { greet };\`,
-};
-
-export function CodeEditorComponent() {
-  const editorRef = useRef<Editor | null>(null);
-
-  return (
-    <CodeEditor
-      ref={editorRef}
-      file={file}
-      theme={{ dark: 'pierre-dark', light: 'pierre-light' }}
-      style={{
-        height: '16rem',
-        borderRadius: '0.5rem',
-      }}
-      onChange={(nextFile, lineAnnotations) => {
-        console.log('change', nextFile.name, lineAnnotations);
-      }}
-      renderPlaceholder={() => (
-        <p style={{ padding: '1rem' }}>No file selected</p>
-      )}
-    />
-  );
-}`,
-  },
-  options,
-};
-
-export const EDITOR_CODE_EDITOR_VANILLA_EXAMPLE: PreloadFileOptions<undefined> =
-  {
-    file: {
-      name: 'code_editor_vanilla.ts',
-      contents: `import { CodeEditor, type FileContents } from '@pierre/diffs';
-
-const root = document.getElementById('editor-root');
-if (root == null) {
-  throw new Error('Expected #editor-root to exist');
-}
-
-root.style.height = '16rem';
-
-const file: FileContents = {
-  name: 'example.ts',
-  contents: \`function greet(name: string) {
-  console.log(\\\`Hello, \\\${name}!\\\`);
-}
-
-export { greet };\`,
-};
-
-const editor = new CodeEditor({
-  theme: { dark: 'pierre-dark', light: 'pierre-light' },
-  onChange(nextFile) {
-    console.log('change', nextFile.name, nextFile.contents);
-  },
-  renderPlaceholder() {
-    const placeholder = document.createElement('p');
-    placeholder.textContent = 'No file selected';
-    return placeholder;
-  },
-});
-
-editor.render(root, file);
-
-// Swap the open file without recreating the editor:
-// editor.setFile(otherFile);
-
-// Update annotations for the current file:
-// editor.setLineAnnotations([{ lineNumber: 2, metadata: note }]);
-
-editor.cleanUp();`,
-    },
-    options,
-  };
-
-export const EDITOR_CODE_EDITOR_OPTIONS_TYPE: PreloadFileOptions<undefined> = {
-  file: {
-    name: 'code_editor_options_type.ts',
-    contents: `import type {
-  FileContents,
-  LineAnnotation,
-  WorkerPoolManager,
-} from '@pierre/diffs';
-import type { EditorOptions } from '@pierre/diffs/editor';
-import type { CSSProperties, ReactNode } from 'react';
-
-// CodeEditorOptions combines EditorOptions with selected File options.
-export interface CodeEditorOptions<LAnnotation, ElementType = HTMLElement>
-  extends EditorOptions<LAnnotation> {
-  // Theme for syntax highlighting. Can be a single theme name or an
-  // object with 'dark' and 'light' keys for automatic switching.
-  // Built-in options: 'pierre-dark', 'pierre-light', or any Shiki theme.
-  // See: https://shiki.style/themes
-  theme?: string | { dark: string; light: string };
-
-  // Long line handling: 'scroll' (default) or 'wrap'.
-  overflow?: 'scroll' | 'wrap';
-
-  // When using a dark/light theme object, choose the active theme.
-  // 'system' (default) follows the OS preference.
-  themeType?: 'system' | 'dark' | 'light';
-
-  // Choose the Shiki engine: 'shiki-js' (default) or 'shiki-wasm'.
-  preferredHighlighter?: 'shiki-js' | 'shiki-wasm';
-
-  // Skip syntax highlighting for lines exceeding this length (default: 1000).
-  tokenizeMaxLineLength?: number;
-
-  // Max total characters to tokenize before falling back to plain text.
-  tokenizeMaxLength?: number;
-
-  // Hide line numbers when true (default: false).
-  disableLineNumbers?: boolean;
-
-  // Rethrow rendering errors instead of catching and displaying them
-  // in the DOM. Useful for testing or custom error handling. (default: false)
-  disableErrorHandling?: boolean;
-
-  // Extra lines kept rendered above/below the viewport for smoother scrolling.
-  overscrollSize?: number;
-
-  // Vanilla: pass a pool to the managed VirtualizedFile.
-  // React: prefer WorkerPoolContextProvider, or set disableWorkerPool.
-  workerPoolManager?: WorkerPoolManager;
-
-  // Custom line annotation UI. Return an ElementType (HTMLElement in vanilla,
-  // ReactNode in React) rendered beside the annotated line.
-  renderAnnotation?: (annotation: LineAnnotation<LAnnotation>) => ElementType;
-
-  // Shown when \`file\` is nullish instead of rendering an empty editor.
-  renderPlaceholder?: () => ElementType;
-}
-
-// Props for the React <CodeEditor> component.
-export interface CodeEditorProps<
-  LAnnotation = undefined,
-> extends CodeEditorOptions<LAnnotation, ReactNode> {
-  // File to edit. Omit to show renderPlaceholder.
-  file?: FileContents;
-
-  // Line annotations rendered via renderAnnotation.
-  lineAnnotations?: LineAnnotation<LAnnotation>[];
-
-  // Server-preloaded HTML for first paint / hydration (from @pierre/diffs/ssr).
-  prerenderedHTML?: string;
-
-  // Class name applied to the scroll container.
-  className?: string;
-
-  // Inline styles applied to the scroll container. Set a height for scrolling.
-  style?: CSSProperties;
-
-  // Skip the shared worker pool and highlight on the main thread (default: false).
-  disableWorkerPool?: boolean;
-}`,
-  },
-  options,
-};

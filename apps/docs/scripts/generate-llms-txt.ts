@@ -88,13 +88,13 @@ const SECTION_DESCRIPTIONS: Record<string, Record<string, string>> = {
     CoreTypes:
       'FileContents, FileDiffMetadata, and creating diffs from files or patches',
     ReactAPI:
-      'React components for CodeView, diffs, files, CodeEditor, UnresolvedFile, and shared props',
+      'React components for CodeView, diffs, files, UnresolvedFile, EditProvider, and shared props',
     VanillaAPI:
-      'Vanilla classes for CodeView, FileDiff, File, CodeEditor, UnresolvedFile, props, and low-level renderers',
+      'Vanilla classes for CodeView, FileDiff, File, UnresolvedFile, props, and low-level renderers',
     CodeView:
       'One virtualized scroll region for mixed file and diff lists, with scrollTo targeting, viewer-wide selection, sticky headers, and header/footer regions',
     Editor:
-      'CodeEditor and lower-level editing for File surfaces, with selections, history, search, actions, and shortcuts',
+      'Edit mode for File surfaces via Editor and EditProvider, with selections, history, search, actions, and shortcuts',
     Virtualization: 'Virtual scrolling for large diffs and files',
     CustomHunkSeparators:
       'Built-in separator presets, CSS customization hooks, and the discouraged vanilla escape hatch',

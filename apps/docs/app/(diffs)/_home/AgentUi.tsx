@@ -2,7 +2,7 @@
 
 import { DEFAULT_THEMES, type FileDiffMetadata } from '@pierre/diffs';
 import { Editor } from '@pierre/diffs/editor';
-import { EditorProvider, File, FileDiff } from '@pierre/diffs/react';
+import { EditProvider, File, FileDiff } from '@pierre/diffs/react';
 import {
   IconArrow,
   IconChevronSm,
@@ -1217,7 +1217,7 @@ export function AgentUi({
     // carrying `view-transition-name: aui-window`, so the manually-driven View
     // Transition (see navigateWithViewTransition) morphs the same element's
     // size/position/corner-radius between routes instead of cutting.
-    <EditorProvider editor={editor}>
+    <EditProvider editor={editor}>
       <div
         className="aui"
         data-theme-type="dark"
@@ -1420,6 +1420,6 @@ export function AgentUi({
           </aside>
         </div>
       </div>
-    </EditorProvider>
+    </EditProvider>
   );
 }

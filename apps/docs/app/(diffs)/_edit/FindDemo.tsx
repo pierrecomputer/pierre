@@ -1,7 +1,7 @@
 'use client';
 
 import { Editor } from '@pierre/diffs/editor';
-import { EditorProvider, File } from '@pierre/diffs/react';
+import { EditProvider, File } from '@pierre/diffs/react';
 import type { PreloadedFileResult } from '@pierre/diffs/ssr';
 import { useEffect, useMemo, useRef } from 'react';
 
@@ -122,13 +122,13 @@ export function FindDemo({ prerenderedFile }: FindDemoProps) {
 
   return (
     <div className="not-prose" ref={wrapperRef}>
-      <EditorProvider editor={editor}>
+      <EditProvider editor={editor}>
         <File
           {...prerenderedFile}
           className="diff-container max-h-[420px] overflow-auto"
           contentEditable
         />
-      </EditorProvider>
+      </EditProvider>
     </div>
   );
 }

@@ -9,7 +9,7 @@ import type {
   SelectedLineRange,
 } from '@pierre/diffs';
 import { Editor } from '@pierre/diffs/editor';
-import { EditorProvider, FileDiff, useWorkerPool } from '@pierre/diffs/react';
+import { EditProvider, FileDiff, useWorkerPool } from '@pierre/diffs/react';
 import type { PreloadFileDiffResult } from '@pierre/diffs/ssr';
 import {
   IconCheck,
@@ -1156,7 +1156,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
       </div>
 
       {/*
-        Normal view keeps EditorProvider mounted in both Review and Edit so
+        Normal view keeps EditProvider mounted in both Review and Edit so
         toggling modes only flips `contentEditable` (the editor attaches lazily
         when that turns true). Conditionally wrapping would change the child
         component type and remount FileDiff, which recreates the shadow root and
@@ -1164,7 +1164,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
         avoiding here. Mirrors the LiveEditing demo.
       */}
       {viewMode === 'normal' ? (
-        <EditorProvider editor={editor}>{fileDiff}</EditorProvider>
+        <EditProvider editor={editor}>{fileDiff}</EditProvider>
       ) : viewMode === 'virtualizer' ? (
         <PlaygroundVirtualizerView
           diffs={VIRTUALIZER_FILE_DIFFS}

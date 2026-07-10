@@ -18,10 +18,10 @@ virtualization. Edit mode includes:
 - SSR support
 - Mobile-friendly
 
-For one editable file, start with `CodeEditor` in the [React](#edit-mode-react)
-or [Vanilla JS](#edit-mode-vanilla-js) guide. Use the lower-level `Editor` API
-when you need to add editing to an existing `File`, `FileDiff`, `MultiFileDiff`,
-or `PatchDiff`.
+Use the `Editor` API to add editing to a rendered `File`, `FileDiff`,
+`MultiFileDiff`, or `PatchDiff`. In React, wrap the surface in `EditProvider`
+and set `contentEditable`. In vanilla JS, call `editor.edit(component)` after
+render.
 
 To enable edit mode on a `File` instance, import `Editor` from
 `@pierre/diffs/editor`. It is intentionally separate from the core bundle so you
@@ -36,9 +36,8 @@ You render the surface first, then attach editing:
 
 1. **Attach** — Call `editor.edit(component)` in vanilla JS, or pass
    `contentEditable` on a React `File`, `FileDiff`, `MultiFileDiff`, or
-   `PatchDiff` wrapped in `EditorProvider`. The hookup returns a dispose
-   function (vanilla) or runs automatically when `contentEditable` toggles
-   (React).
+   `PatchDiff` wrapped in `EditProvider`. The hookup returns a dispose function
+   (vanilla) or runs automatically when `contentEditable` toggles (React).
 2. **Edit surface** — Edit mode sets `contentEditable` on the code content
    element so mobile keyboards, paste, and native selection UI work as users
    expect. Clipboard shortcuts are handled by the browser; edit mode commands
@@ -60,21 +59,20 @@ deleted lines and annotation lines remain read-only.
 
 ### React
 
-For one editable file, use `CodeEditor` from `@pierre/diffs/react`. It combines
-a scroll container, virtualized `File`, and attached `Editor`, so you do not
-need to wire `Virtualizer`, `File`, and `EditorProvider` yourself. Pass `file`,
-editor callbacks (`onChange`, `onAttach`), and file options such as `theme` as
-top-level props. Use `ref` to reach the underlying `Editor` for
-[`getState` / `setState`](#edit-mode-api-reference) and programmatic selections.
-Omit `file` to show `renderPlaceholder`.
+Create one `Editor` instance (typically with `useMemo` or `useStableEditor`),
+wrap your tree in `EditProvider`, and set `contentEditable` on `File`,
+`FileDiff`, `MultiFileDiff`, or `PatchDiff`. The provider cleans up on unmount.
+Use `Virtualizer` for large editable files. A common single-file pattern is:
 
-To edit an existing surface, create one `Editor` instance (typically with
-`useMemo`), wrap your tree in `EditorProvider`, and set `contentEditable` on
-`File`, `FileDiff`, `MultiFileDiff`, or `PatchDiff`. The provider cleans up on
-unmount. Use `Virtualizer` for large editable files.
+```tsx
+<EditProvider editor={editor}>
+  <Virtualizer>
+    <File file={file} contentEditable />
+  </Virtualizer>
+</EditProvider>
+```
 
 <EditorComponentTabs
-  codeEditorExample={editorCodeEditorReactExample}
   fileExample={editorReactExample}
   fileDiffExample={editorReactFileDiffExample}
   multiFileDiffExample={editorReactMultiFileDiffExample}
@@ -82,17 +80,11 @@ unmount. Use `Virtualizer` for large editable files.
 
 ### Vanilla JS
 
-For one editable file, use `CodeEditor` from `@pierre/diffs`. Construct
-`new CodeEditor(options)`, then call `render(root, file?)`, `setFile`, or
-`setLineAnnotations` as needed. Call `cleanUp()` when the editor is removed.
-Omit `file` on `render` to show `renderPlaceholder`.
-
-For other surfaces, render with `File` or `FileDiff` first, then attach the
-editor. Use `VirtualizedFile` and `VirtualizedFileDiff` for large editable
-files.
+Render with `File` or `FileDiff` first, then attach the editor with
+`editor.edit(component)`. Use `VirtualizedFile` and `VirtualizedFileDiff` for
+large editable files. Call `cleanUp()` when the editor is removed.
 
 <EditorComponentTabs
-  codeEditorExample={editorCodeEditorVanillaExample}
   fileExample={editorVanillaFileExample}
   fileDiffExample={editorVanillaFileDiffExample}
 />
@@ -104,18 +96,10 @@ Pass these when constructing `new Editor({ ... })`, or update them later with
 
 <DocsCodeExample {...editorOptionsType} />
 
-`CodeEditor` options combine the `Editor` options above with selected `File`
-options, plus `overscrollSize`, `renderAnnotation`, and `renderPlaceholder`. In
-React, pass them as top-level props; in vanilla, pass them to the constructor.
-
-<DocsCodeExample {...editorCodeEditorOptionsType} />
-
 ### API Reference
 
 These methods are available on an `Editor` instance. Attach it to a rendered
-`File` or `FileDiff` with `edit()` first, or use `CodeEditor` to manage that
-step for you. `CodeEditor` inherits the full `Editor` API and adds `render`,
-`setFile`, and `setLineAnnotations`.
+`File` or `FileDiff` with `edit()` first.
 
 <DocsCodeExample {...editorPublicApi} />
 

@@ -10,12 +10,10 @@ similar types of props, which you can find documented in
 
 ### Components
 
-The React API exposes seven main components:
+The React API exposes six main components:
 
 - `CodeView` renders a mixed, virtualized list of files and diffs inside one
   scroll container
-- `CodeEditor` renders one editable, virtualized file with edit mode built in
-  - _Currently in beta/experimental and may change in future releases._
 - `MultiFileDiff` compares file contents directly
 - `PatchDiff` renders from a patch string
 - `FileDiff` renders a pre-parsed `FileDiffMetadata`
@@ -29,12 +27,11 @@ The React API exposes seven main components:
   reactAPIFileDiff={reactAPIFileDiff}
   reactAPIPatch={reactAPIPatch}
   reactAPIFile={reactAPIFile}
-  reactAPICodeEditor={reactAPICodeEditor}
   reactAPIUnresolvedFile={reactAPIUnresolvedFile}
 />
 
-See [Edit mode → React](#edit-mode-react) for `CodeEditor` options,
-placeholders, refs, and its relationship to the lower-level `Editor` API.
+See [Edit mode → React](#edit-mode-react) for attaching `Editor` via
+`EditProvider` and `contentEditable`.
 
 `UnresolvedFile` is intentionally uncontrolled in React. Treat `file` as initial
 input and remount (for example, with a changing `key`) when you want to reset.

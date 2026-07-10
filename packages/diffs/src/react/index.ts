@@ -2,7 +2,6 @@
 /// <reference path="./jsx.d.ts" />
 
 export * from '../types';
-export * from './CodeEditor';
 export * from './CodeView';
 export * from './File';
 export * from './FileDiff';
@@ -11,7 +10,7 @@ export * from './MultiFileDiff';
 export * from './PatchDiff';
 export * from './Virtualizer';
 export * from './WorkerPoolContext';
-export * from './EditorContext';
+export * from './EditContext';
 export * from './constants';
 export * from './types';
 export * from './utils/renderDiffChildren';

@@ -29,9 +29,6 @@ import {
   CUSTOM_HUNK_SEPARATORS_SWITCHER,
 } from '../docs/CustomHunkSeparators/constants';
 import {
-  EDITOR_CODE_EDITOR_OPTIONS_TYPE,
-  EDITOR_CODE_EDITOR_REACT_EXAMPLE,
-  EDITOR_CODE_EDITOR_VANILLA_EXAMPLE,
   EDITOR_LAZY_FILE_EXAMPLE,
   EDITOR_MARKER_EXAMPLE,
   EDITOR_MARKER_TYPE,
@@ -292,7 +289,6 @@ async function ReactAPISection() {
     reactAPIFile,
     reactAPIPatch,
     reactAPIFileDiff,
-    reactAPICodeEditor,
     reactAPIUnresolvedFile,
     postRenderLifecycleExample,
     loadDiffFilesExample,
@@ -306,7 +302,6 @@ async function ReactAPISection() {
     preloadFile(REACT_API_FILE),
     preloadFile(REACT_API_PATCH_DIFF),
     preloadFile(REACT_API_FILE_DIFF),
-    preloadFile(EDITOR_CODE_EDITOR_REACT_EXAMPLE),
     preloadFile(REACT_API_UNRESOLVED_FILE),
     preloadFile(REACT_API_POST_RENDER_LIFECYCLE),
     preloadFile(REACT_API_LOAD_DIFF_FILES),
@@ -323,7 +318,6 @@ async function ReactAPISection() {
       reactAPIPatch,
       reactAPIFileDiff,
       reactAPIFile,
-      reactAPICodeEditor,
       reactAPIUnresolvedFile,
       postRenderLifecycleExample,
       loadDiffFilesExample,
@@ -341,7 +335,6 @@ async function VanillaAPISection() {
     codeViewExample,
     fileDiffExample,
     fileExample,
-    codeEditorExample,
     fileDiffProps,
     fileProps,
     unresolvedFileExample,
@@ -355,7 +348,6 @@ async function VanillaAPISection() {
     preloadFile(VANILLA_API_CODE_VIEW_EXAMPLE),
     preloadFile(VANILLA_API_FILE_DIFF_EXAMPLE),
     preloadFile(VANILLA_API_FILE_EXAMPLE),
-    preloadFile(EDITOR_CODE_EDITOR_VANILLA_EXAMPLE),
     preloadFile(VANILLA_API_FILE_DIFF_PROPS),
     preloadFile(VANILLA_API_FILE_PROPS),
     preloadFile(VANILLA_API_UNRESOLVED_FILE_EXAMPLE),
@@ -372,7 +364,6 @@ async function VanillaAPISection() {
       codeViewExample,
       fileDiffExample,
       fileExample,
-      codeEditorExample,
       fileDiffProps,
       fileProps,
       unresolvedFileExample,
@@ -425,9 +416,6 @@ async function CodeViewSection() {
 
 async function EditorSection() {
   const [
-    editorCodeEditorReactExample,
-    editorCodeEditorVanillaExample,
-    editorCodeEditorOptionsType,
     editorVanillaFileExample,
     editorVanillaFileDiffExample,
     editorLazyFileExample,
@@ -445,9 +433,6 @@ async function EditorSection() {
     editorWorkerPoolReactExample,
     editorWorkerPoolVanillaExample,
   ] = await Promise.all([
-    preloadFile(EDITOR_CODE_EDITOR_REACT_EXAMPLE),
-    preloadFile(EDITOR_CODE_EDITOR_VANILLA_EXAMPLE),
-    preloadFile(EDITOR_CODE_EDITOR_OPTIONS_TYPE),
     preloadFile(EDITOR_VANILLA_FILE_EXAMPLE),
     preloadFile(EDITOR_VANILLA_FILE_DIFF_EXAMPLE),
     preloadFile(EDITOR_LAZY_FILE_EXAMPLE),
@@ -468,9 +453,6 @@ async function EditorSection() {
   const content = await renderMDX({
     filePath: '(diffs)/docs/Editor/content.mdx',
     scope: {
-      editorCodeEditorReactExample,
-      editorCodeEditorVanillaExample,
-      editorCodeEditorOptionsType,
       editorVanillaFileExample,
       editorVanillaFileDiffExample,
       editorLazyFileExample,
