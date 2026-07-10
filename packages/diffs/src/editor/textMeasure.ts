@@ -1,10 +1,12 @@
 import { getGraphemeSegmenter, h, round } from './utils';
 
 // Upper bound on cached DOM text-width measurements. The cache only holds
-// non-ASCII runs (emoji, ZWJ sequences, variation selectors), so it stays
-// small for ordinary code, but capping it prevents unbounded growth on
-// emoji-heavy documents. Past the cap the oldest entry is evicted.
+// non-ASCII runs (emoji, ZWJ sequences, variation selectors, combining marks),
+// so it stays small for ordinary code, but capping it prevents unbounded growth
+// on emoji-heavy documents. Past the cap the oldest entry is evicted.
 const TEXT_WIDTH_CACHE_LIMIT = 4096;
+
+const COMBINING_MARK_PATTERN = /\p{Mark}/u;
 
 export class Metrics {
   #root?: HTMLElement;
@@ -191,7 +193,8 @@ export function needsDomTextMeasurement(text: string): boolean {
       (code >= 0xd800 && code <= 0xdfff) ||
       code === 0x200d ||
       code === 0xfe0e ||
-      code === 0xfe0f
+      code === 0xfe0f ||
+      (code > 0x7f && COMBINING_MARK_PATTERN.test(text.charAt(i)))
     ) {
       return true;
     }

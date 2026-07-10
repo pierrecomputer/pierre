@@ -331,6 +331,22 @@ describe('editor wrap caret position', () => {
     }
   });
 
+  test('wrap navigation keeps NFD combining marks with their base character', async () => {
+    const { cleanup, content, editor, window } = await createWrapEditor(
+      'e\u0301x',
+      1
+    );
+
+    try {
+      setCaret(editor, 0, 0);
+
+      dispatchMovementKey(window, content, { key: 'ArrowDown' });
+      expectCaret(editor, 0, 2);
+    } finally {
+      cleanup();
+    }
+  });
+
   // When word wrap is on, growing a line until it wraps onto a second visual
   // row keeps the logical line count unchanged (change.lineDelta === 0) but
   // pushes every following line down by a row. The cached line-Y positions of

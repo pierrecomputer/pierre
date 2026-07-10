@@ -69,6 +69,11 @@ describe('needsDomTextMeasurement', () => {
     expect(needsDomTextMeasurement('\uFE0F')).toBe(true);
     expect(needsDomTextMeasurement('1\uFE0F\u20E3')).toBe(true);
   });
+
+  test('returns true for NFD combining marks', () => {
+    expect(needsDomTextMeasurement('e\u0301')).toBe(true);
+    expect(needsDomTextMeasurement('Cafe\u0301')).toBe(true);
+  });
 });
 
 describe('snapTextOffsetToUnicodeBoundary', () => {
@@ -114,6 +119,13 @@ describe('snapTextOffsetToUnicodeBoundary', () => {
       );
     }
   });
+
+  test('snaps offsets inside NFD combining-mark graphemes', () => {
+    const nfd = 'e\u0301x';
+    expect(needsDomTextMeasurement(nfd)).toBe(true);
+    expect(snapTextOffsetToUnicodeBoundary(nfd, 1)).toBe(2);
+    expect(snapTextOffsetToUnicodeBoundary(nfd, 2)).toBe(2);
+  });
 });
 
 describe('getUnicodeMeasurementOffsets', () => {
@@ -137,6 +149,10 @@ describe('getUnicodeMeasurementOffsets', () => {
   test('returns one offset per grapheme for ZWJ sequences', () => {
     const family = '👨‍👩‍👧‍👦';
     expect(getUnicodeMeasurementOffsets(family)).toEqual([0, family.length]);
+  });
+
+  test('returns one offset per grapheme for NFD combining marks', () => {
+    expect(getUnicodeMeasurementOffsets('e\u0301x')).toEqual([0, 2, 3]);
   });
 });
 
