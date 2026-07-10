@@ -189,6 +189,7 @@ export interface EditorOptions<LAnnotation> {
 // larger inserts fall back to the bounded buffer-only path instead of building a
 // row per inserted line. A safety bound, not a correctness-critical value.
 const MAX_EDIT_WIDEN_WINDOW_MULTIPLE = 2;
+const SELECTION_ACTION_POPOVER_PLACEMENT_KEY = 'selection-action';
 
 export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #options: EditorOptions<LAnnotation>;
@@ -906,8 +907,13 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
   #getPopoverManager(): PopoverManager {
     return (this.#popoverManager ??= new PopoverManager({
-      hasActivePopover: () => this.#selectionAction !== undefined,
-      updateActivePopover: () => this.#updateSelectionActionPopover(),
+      hasActivePopover: () =>
+        this.#selectionAction !== undefined ||
+        this.#markerRenderer?.isPopupVisible() === true,
+      updateActivePopover: () => {
+        this.#updateSelectionActionPopover();
+        this.#markerRenderer?.updatePopupPosition();
+      },
     }));
   }
 
@@ -3380,7 +3386,9 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         () => this.#updateSelectionActionPopover()
       );
       // Avoid biasing the first decision with a stale side from a prior popover.
-      this.#getPopoverManager().resetPlacement();
+      this.#getPopoverManager().resetPlacement(
+        SELECTION_ACTION_POPOVER_PLACEMENT_KEY
+      );
     }
 
     const lineHeight = this.#metrics.lineHeight;
@@ -3422,17 +3430,22 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       : head.line >= lineCount - POPOVER_BOUNDARY_LINES;
     const canUseFallback = this.#isLineVisible(fallback.anchor.line);
     const popoverManager = this.#getPopoverManager();
+    const viewport = popoverManager.getPlacementBounds();
     const useFallback =
       canUseFallback &&
       popoverManager.choosePlacement({
         preferred: preferredGeometry,
         fallback: fallbackGeometry,
-        viewport: popoverManager.getPlacementBounds(),
+        viewport,
         popoverHeight,
         atDocumentEdge,
+        placementKey: SELECTION_ACTION_POPOVER_PLACEMENT_KEY,
       }) === 'fallback';
     if (!canUseFallback) {
-      popoverManager.setPlacement('preferred');
+      popoverManager.setPlacement(
+        'preferred',
+        SELECTION_ACTION_POPOVER_PLACEMENT_KEY
+      );
     }
     const { placeAbove } = useFallback ? fallback : preferred;
     const { left, anchorTop } = useFallback
@@ -3443,7 +3456,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       left,
       anchorTop,
       this.#getGutterWidth(),
-      placeAbove
+      placeAbove,
+      viewport
     );
   }
 

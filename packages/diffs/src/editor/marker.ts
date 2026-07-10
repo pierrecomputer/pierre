@@ -3,6 +3,7 @@ import {
   POPOVER_BOUNDARY_LINES,
   type PopoverManager,
   type PopoverPlacementBounds,
+  setPopoverPositionStyles,
 } from './popover';
 import { selectionIntersects } from './selection';
 import type { TextDocument } from './textDocument';
@@ -10,6 +11,7 @@ import { addEventListener, getLineNumberAttr, h } from './utils';
 
 const MARKER_POPUP_SHOW_DELAY_MS = 300;
 const MARKER_POPUP_HIDE_DELAY_MS = 100;
+const MARKER_POPUP_PLACEMENT_KEY = 'marker-popup';
 
 export type MarkerSeverity = 'error' | 'warning' | 'info' | 'hint';
 
@@ -54,6 +56,20 @@ export class MarkerRenderer {
 
   isPopupVisible(): boolean {
     return this.#hoveredMarkerIndex !== undefined;
+  }
+
+  updatePopupPosition(): void {
+    const hoveredMarkerIndex = this.#hoveredMarkerIndex;
+    const popup = this.#markerPopupElement;
+    if (hoveredMarkerIndex === undefined || popup === undefined) {
+      return;
+    }
+    const marker = this.#markers[hoveredMarkerIndex];
+    if (marker === undefined) {
+      this.removePopup();
+      return;
+    }
+    this.#positionMarkerPopup(popup, marker.start.line, marker.start.character);
   }
 
   setMarkers<LAnnotation>(
@@ -215,15 +231,16 @@ export class MarkerRenderer {
     popup: HTMLElement,
     x: number,
     y: number,
-    placeAbove: boolean
+    placeAbove: boolean,
+    viewport = this.#options.popoverManager.getPlacementBounds()
   ): void {
-    popup.style.setProperty(
-      '--gutter-width',
-      this.#options.getGutterWidth() + 'px'
-    );
-    popup.style.setProperty('--popover-x', x + 'px');
-    popup.style.setProperty('--popover-y', y + 'px');
-    popup.style.setProperty('--popover-y-shift', placeAbove ? '-100%' : '0px');
+    setPopoverPositionStyles(popup, {
+      gutterWidth: this.#options.getGutterWidth(),
+      placeAbove,
+      viewport,
+      x,
+      y,
+    });
   }
 
   // Positions the popup for a marker at `(line, character)`: prefers below
@@ -251,20 +268,22 @@ export class MarkerRenderer {
     };
     const atDocumentEdge = line >= this.#lineCount - POPOVER_BOUNDARY_LINES;
     const viewport = popoverManager.getPlacementBounds();
-    let placeAbove: boolean;
-    if (viewport !== undefined && popoverHeight > 0) {
-      const fits = (bounds: PopoverPlacementBounds): boolean =>
-        bounds.top >= viewport.top && bounds.bottom <= viewport.bottom;
-      placeAbove = !fits(preferred) && fits(fallback);
-    } else {
-      placeAbove = atDocumentEdge;
-    }
+    const placeAbove =
+      popoverManager.choosePlacement({
+        preferred,
+        fallback,
+        viewport,
+        popoverHeight,
+        atDocumentEdge,
+        placementKey: MARKER_POPUP_PLACEMENT_KEY,
+      }) === 'fallback';
 
     this.#setMarkerPopupPosition(
       popup,
       left,
       placeAbove ? rowTop : rowTop + lineHeight,
-      placeAbove
+      placeAbove,
+      viewport
     );
   }
 
@@ -275,6 +294,7 @@ export class MarkerRenderer {
     this.#markerPopupElement = undefined;
     this.#hoveredMarkerIndex = undefined;
     this.#isMarkerPopupHovered = false;
+    this.#options.popoverManager.resetPlacement(MARKER_POPUP_PLACEMENT_KEY);
   }
 
   #renderMarkerPopup(hoveredMarkerIndex: number): void {
@@ -290,6 +310,7 @@ export class MarkerRenderer {
     const { start, message, severity } = this.#markers[hoveredMarkerIndex];
     const { line, character } = start;
     const popup = this.#markerPopupElement;
+    this.#options.popoverManager.resetPlacement(MARKER_POPUP_PLACEMENT_KEY);
 
     if (popup !== undefined) {
       setMarkerPopupSeverity(popup, severity);

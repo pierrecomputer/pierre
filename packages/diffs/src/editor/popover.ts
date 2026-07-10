@@ -21,6 +21,13 @@ export interface PopoverPlacementBounds {
   bottom: number;
 }
 
+export interface PopoverViewportBounds extends PopoverPlacementBounds {
+  /** The left edge of the visible viewport in overlay coordinate space. */
+  left: number;
+  /** The right edge of the visible viewport in overlay coordinate space. */
+  right: number;
+}
+
 export interface PopoverManagerOptions {
   hasActivePopover: () => boolean;
   updateActivePopover: () => void;
@@ -38,9 +45,12 @@ export class PopoverManager {
   #scrollContainerSource?: HTMLElement;
   #cachedCodeRect?: DOMRect;
   #cachedScrollContainerRect?: DOMRect;
+  #cachedCodeScrollLeft = 0;
+  #cachedCodeScrollTop = 0;
+  #cachedCodeClientWidth = 0;
   #viewportRectsDirty = true;
   #viewportRectListenersDisposes?: (() => void)[];
-  #placement?: 'preferred' | 'fallback';
+  #placements = new Map<string, 'preferred' | 'fallback'>();
 
   readonly #hasActivePopover: () => boolean;
   readonly #updateActivePopover: () => void;
@@ -54,8 +64,11 @@ export class PopoverManager {
     fileContainer: HTMLElement,
     codeElement: HTMLElement
   ): void {
+    const viewportElementChanged =
+      this.#fileContainer !== fileContainer ||
+      this.#codeElement !== codeElement;
     this.#fileContainer = fileContainer;
-    if (this.#codeElement === codeElement) {
+    if (!viewportElementChanged) {
       return;
     }
     this.#codeElement = codeElement;
@@ -63,6 +76,8 @@ export class PopoverManager {
     // full re-render loaded a different file, possibly at a different on-screen
     // position) even without an intervening scroll/resize event.
     this.#viewportRectsDirty = true;
+    this.#viewportRectListenersDisposes?.forEach((dispose) => dispose());
+    this.#viewportRectListenersDisposes = undefined;
   }
 
   cleanUp(): void {
@@ -72,18 +87,24 @@ export class PopoverManager {
     this.#scrollContainerSource = undefined;
     this.#cachedCodeRect = undefined;
     this.#cachedScrollContainerRect = undefined;
+    this.#cachedCodeScrollLeft = 0;
+    this.#cachedCodeScrollTop = 0;
+    this.#cachedCodeClientWidth = 0;
     this.#viewportRectsDirty = true;
     this.#viewportRectListenersDisposes?.forEach((dispose) => dispose());
     this.#viewportRectListenersDisposes = undefined;
-    this.#placement = undefined;
+    this.#placements.clear();
   }
 
-  resetPlacement(): void {
-    this.#placement = undefined;
+  resetPlacement(placementKey = 'default'): void {
+    this.#placements.delete(placementKey);
   }
 
-  setPlacement(placement: 'preferred' | 'fallback'): void {
-    this.#placement = placement;
+  setPlacement(
+    placement: 'preferred' | 'fallback',
+    placementKey = 'default'
+  ): void {
+    this.#placements.set(placementKey, placement);
   }
 
   // Flips to the opposite side only when the preferred side would be clipped by
@@ -100,16 +121,25 @@ export class PopoverManager {
     popoverHeight: number;
     /** Whether the anchor is within the document's first/last rows; only used as a fallback signal when `viewport` is unavailable. */
     atDocumentEdge: boolean;
+    /** Keeps hysteresis independent when more than one popover kind is active. */
+    placementKey?: string;
   }): 'preferred' | 'fallback' {
-    const { preferred, fallback, viewport, popoverHeight, atDocumentEdge } =
-      input;
+    const {
+      preferred,
+      fallback,
+      viewport,
+      popoverHeight,
+      atDocumentEdge,
+      placementKey = 'default',
+    } = input;
+    const previousPlacement = this.#placements.get(placementKey);
     let placement: 'preferred' | 'fallback';
     if (viewport !== undefined && popoverHeight > 0) {
       const fits = (bounds: PopoverPlacementBounds, margin = 0): boolean =>
         bounds.top >= viewport.top + margin &&
         bounds.bottom <= viewport.bottom - margin;
       if (
-        this.#placement === 'fallback' &&
+        previousPlacement === 'fallback' &&
         fits(fallback) &&
         !fits(preferred, POPOVER_FLIP_HYSTERESIS_PX)
       ) {
@@ -122,14 +152,14 @@ export class PopoverManager {
     } else {
       placement = atDocumentEdge ? 'fallback' : 'preferred';
     }
-    this.#placement = placement;
+    this.#placements.set(placementKey, placement);
     return placement;
   }
 
   /**
    * Returns the bounds of the popover in overlay coordinate space.
    */
-  getPlacementBounds(): PopoverPlacementBounds | undefined {
+  getPlacementBounds(): PopoverViewportBounds | undefined {
     const codeRect = this.#getCodeRect();
     if (codeRect === undefined) {
       return undefined;
@@ -149,9 +179,33 @@ export class PopoverManager {
     if (bottomScreen <= topScreen) {
       return undefined;
     }
+    const codeScrollLeft = this.#cachedCodeScrollLeft;
+    const codeScrollTop = this.#cachedCodeScrollTop;
+    const codeViewportWidth =
+      this.#cachedCodeClientWidth > 0
+        ? this.#cachedCodeClientWidth
+        : codeRect.width;
+    const leftScreen =
+      scrollContainerRect !== undefined ? scrollContainerRect.left : 0;
+    const rightScreen =
+      scrollContainerRect !== undefined
+        ? scrollContainerRect.right
+        : window.innerWidth;
+    const codeViewportLeft = codeScrollLeft;
+    const codeViewportRight = codeScrollLeft + codeViewportWidth;
+    const visibleLeft = Math.max(
+      codeViewportLeft,
+      leftScreen - codeRect.left + codeScrollLeft
+    );
+    const visibleRight = Math.min(
+      codeViewportRight,
+      rightScreen - codeRect.left + codeScrollLeft
+    );
     return {
-      top: topScreen - codeRect.top,
-      bottom: bottomScreen - codeRect.top,
+      top: topScreen - codeRect.top + codeScrollTop,
+      bottom: bottomScreen - codeRect.top + codeScrollTop,
+      left: visibleLeft,
+      right: Math.max(visibleLeft, visibleRight),
     };
   }
 
@@ -212,7 +266,11 @@ export class PopoverManager {
       return;
     }
     this.#ensureViewportRectListeners();
-    this.#cachedCodeRect = this.#codeElement?.getBoundingClientRect();
+    const codeElement = this.#codeElement;
+    this.#cachedCodeRect = codeElement?.getBoundingClientRect();
+    this.#cachedCodeScrollLeft = codeElement?.scrollLeft ?? 0;
+    this.#cachedCodeScrollTop = codeElement?.scrollTop ?? 0;
+    this.#cachedCodeClientWidth = codeElement?.clientWidth ?? 0;
     this.#cachedScrollContainerRect =
       this.#getScrollContainer()?.getBoundingClientRect();
     this.#viewportRectsDirty = false;
@@ -248,10 +306,18 @@ export class PopoverManager {
       });
     };
     const scroller = this.#getScrollContainer();
+    const codeElement = this.#codeElement;
     this.#viewportRectListenersDisposes = [
       scroller !== undefined
         ? addEventListener(scroller, 'scroll', markDirty, { passive: true })
         : addEventListener(window, 'scroll', markDirty, { passive: true }),
+      ...(codeElement !== undefined
+        ? [
+            addEventListener(codeElement, 'scroll', markDirty, {
+              passive: true,
+            }),
+          ]
+        : []),
       addEventListener(window, 'resize', markDirty, { passive: true }),
       () => {
         if (repositionRafId !== undefined) {
@@ -261,4 +327,33 @@ export class PopoverManager {
       },
     ];
   }
+}
+
+export function setPopoverPositionStyles(
+  popover: HTMLElement,
+  {
+    gutterWidth,
+    placeAbove,
+    viewport,
+    x,
+    y,
+  }: {
+    gutterWidth: number;
+    placeAbove: boolean;
+    viewport: PopoverViewportBounds | undefined;
+    x: number;
+    y: number;
+  }
+): void {
+  popover.style.setProperty('--gutter-width', gutterWidth + 'px');
+  popover.style.setProperty('--popover-x', x + 'px');
+  popover.style.setProperty('--popover-y', y + 'px');
+  popover.style.setProperty('--popover-y-shift', placeAbove ? '-100%' : '0px');
+  if (viewport === undefined) {
+    popover.style.removeProperty('--popover-viewport-left');
+    popover.style.removeProperty('--popover-viewport-right');
+    return;
+  }
+  popover.style.setProperty('--popover-viewport-left', viewport.left + 'px');
+  popover.style.setProperty('--popover-viewport-right', viewport.right + 'px');
 }

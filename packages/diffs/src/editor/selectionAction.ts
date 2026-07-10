@@ -1,4 +1,8 @@
 import type { EditorSelection, TextEdit } from '../types';
+import {
+  type PopoverViewportBounds,
+  setPopoverPositionStyles,
+} from './popover';
 import type { TextDocument } from './textDocument';
 import { h } from './utils';
 
@@ -63,15 +67,16 @@ export class SelectionActionWidget {
     left: number,
     top: number,
     gutterWidth: number,
-    placeAbove: boolean
+    placeAbove: boolean,
+    viewport?: PopoverViewportBounds
   ): void {
-    this.#root.style.setProperty('--gutter-width', gutterWidth + 'px');
-    this.#root.style.setProperty('--popover-x', left + 'px');
-    this.#root.style.setProperty('--popover-y', top + 'px');
-    this.#root.style.setProperty(
-      '--popover-y-shift',
-      placeAbove ? '-100%' : '0px'
-    );
+    setPopoverPositionStyles(this.#root, {
+      gutterWidth,
+      placeAbove,
+      viewport,
+      x: left,
+      y: top,
+    });
   }
 
   /**

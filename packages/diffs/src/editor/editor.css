@@ -233,18 +233,26 @@
 /* Shared geometry for the overlay popovers (marker hover popup and
    selection-action popover). Both are positioned in overlay coordinate space via
    --popover-x/--popover-y (set in JS). The left edge is clamped so the popover
-   never slides under the line-number gutter (--gutter-width, also set in JS) and
-   the width is capped so it never overflows the visible code column. Builds on
-   [data-editor-widget]. */
+   never slides under the line-number gutter (--gutter-width, also set in JS) or
+   outside the visible scroll viewport, and the width is capped to match. Builds
+   on [data-editor-widget]. */
 [data-marker-popup],
 [data-selection-action-popover] {
-  --popover-min-left: calc(var(--gutter-width, 0px) + 8px);
-  --popover-available-width: calc(100cqw - var(--gutter-width, 0px) - 16px);
+  --popover-viewport-left: 0px;
+  --popover-viewport-right: 100cqw;
+  --popover-min-left: max(
+    calc(var(--gutter-width, 0px) + 8px),
+    calc(var(--popover-viewport-left) + 8px)
+  );
+  --popover-available-width: max(
+    0px,
+    calc(var(--popover-viewport-right) - var(--popover-min-left) - 8px)
+  );
   max-width: min(640px, var(--popover-available-width));
   translate: clamp(
       var(--popover-min-left),
       var(--popover-x, var(--popover-min-left)),
-      calc(100cqw - 8px - 100%)
+      calc(var(--popover-viewport-right) - 8px - 100%)
     )
     calc(var(--popover-y, 0px) + var(--popover-y-shift, 0px));
 }
@@ -255,7 +263,7 @@
     0 4px 8px rgb(0 0 0 / 0.15), 0 6px 18px rgb(0 0 0 / 0.15);
 
   padding: 8px 12px;
-  min-width: min(180px, calc(100cqw - 24px));
+  min-width: min(180px, var(--popover-available-width));
   overflow-wrap: anywhere;
   color: var(--diffs-marker-contrast, contrast-color(#fff, #000));
   white-space: normal;
