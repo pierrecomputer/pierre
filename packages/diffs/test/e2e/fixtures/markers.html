@@ -48,6 +48,7 @@
   return conut;
 }
 var label = 'x';
+${' '.repeat(80)}scrolledMarkerTarget_${'x'.repeat(180)}();
 `,
       };
 
@@ -83,6 +84,12 @@ var label = 'x';
           message: 'Unexpected var, use let or const',
           start: { line: 4, character: 0 },
           end: { line: 4, character: 3 },
+        },
+        {
+          severity: 'hint',
+          message: 'Long scrolled marker',
+          start: { line: 5, character: 80 },
+          end: { line: 5, character: 100 },
         },
       ];
 
