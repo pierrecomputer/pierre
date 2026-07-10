@@ -20,9 +20,8 @@ import { type ColorMode } from '@pierre/theming';
 import Link from 'next/link';
 import {
   type CSSProperties,
-  type Dispatch,
   memo,
-  type SetStateAction,
+  useCallback,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -44,6 +43,11 @@ import {
 import { Switch } from '@/components/Switch';
 import { docsThemeCatalog } from '@/components/themeCatalog';
 import { cn } from '@/lib/cn';
+import {
+  DIFFS_HUB_CODE_FONT_OPTIONS,
+  type DiffsHubCodeFont,
+  isDiffsHubDefaultCodeFont,
+} from '@/lib/displayPreferences';
 import { diffshubChromeMapping } from '@/lib/theme/diffshubChromeMapping';
 import { getDropdownThemeStyle } from '@/lib/theme/dropdownChromeStyle';
 
@@ -55,6 +59,7 @@ const SETTING_ROW_CLASS =
 
 interface HeaderProps {
   className?: string;
+  codeFont: DiffsHubCodeFont;
   collapseMode: 'expanded' | 'collapsed';
   colorMode: ColorMode;
   darkThemeName: DarkThemeName;
@@ -68,19 +73,21 @@ interface HeaderProps {
   overflow: 'wrap' | 'scroll';
   onToggleCollapseMode(): void;
   onToggleFileTreeOverlay(): void;
+  setCodeFont(value: DiffsHubCodeFont): void;
   setColorMode(mode: ColorMode): void;
   setDarkThemeName(name: DarkThemeName): void;
-  setDiffIndicators: Dispatch<SetStateAction<DiffIndicators>>;
-  setDiffStyle: Dispatch<SetStateAction<'split' | 'unified'>>;
+  setDiffIndicators(value: DiffIndicators): void;
+  setDiffStyle(value: 'split' | 'unified'): void;
   setLightThemeName(name: LightThemeName): void;
-  setLineNumbers: Dispatch<SetStateAction<boolean>>;
-  setOverflow: Dispatch<SetStateAction<'wrap' | 'scroll'>>;
-  setShowBackgrounds: Dispatch<SetStateAction<boolean>>;
+  setLineNumbers(value: boolean): void;
+  setOverflow(value: 'wrap' | 'scroll'): void;
+  setShowBackgrounds(value: boolean): void;
   showBackgrounds: boolean;
 }
 
 export const DiffsHubHeader = memo(function DiffsHubHeader({
   className,
+  codeFont,
   collapseMode,
   colorMode,
   darkThemeName,
@@ -94,6 +101,7 @@ export const DiffsHubHeader = memo(function DiffsHubHeader({
   overflow,
   onToggleCollapseMode,
   onToggleFileTreeOverlay,
+  setCodeFont,
   setColorMode,
   setDarkThemeName,
   setDiffIndicators,
@@ -105,6 +113,20 @@ export const DiffsHubHeader = memo(function DiffsHubHeader({
   showBackgrounds,
 }: HeaderProps) {
   const [currentUrl, setCurrentUrl] = useState(initialUrl);
+  const codeFontSelection = codeFont.kind === 'default' ? 'default' : 'custom';
+  const customCodeFontFamily =
+    codeFont.kind === 'default' ? '' : codeFont.input;
+  const focusCustomCodeFontInput = useCallback(
+    (input: HTMLInputElement | null) => {
+      if (input == null || document.activeElement === input) {
+        return;
+      }
+
+      input.focus({ preventScroll: true });
+      input.setSelectionRange(input.value.length, input.value.length);
+    },
+    []
+  );
   // Only show the external-link button when the input still reflects the
   // committed URL — otherwise we'd be pointing at a draft the user is editing.
   const showExternalLink = currentUrl === initialUrl;
@@ -238,7 +260,7 @@ export const DiffsHubHeader = memo(function DiffsHubHeader({
               </DropdownMenuTrigger>
               <DropdownMenuContent
                 align="end"
-                className="w-58 p-2"
+                className="w-72 p-2"
                 style={dropdownThemeStyle}
               >
                 <DropdownMenuItem
@@ -279,6 +301,67 @@ export const DiffsHubHeader = memo(function DiffsHubHeader({
                     />
                   </label>
                 </DropdownMenuItem>
+                <div className="flex flex-col items-stretch gap-2 px-2 py-1.5 text-sm">
+                  <div className="flex w-full items-center justify-between gap-4">
+                    <span className="min-w-0 whitespace-nowrap">Code font</span>
+                    <ButtonGroup
+                      className="ml-auto w-40"
+                      value={codeFontSelection}
+                      onValueChange={(value) => {
+                        if (isDiffsHubDefaultCodeFont(value)) {
+                          setCodeFont({
+                            kind: 'default',
+                          });
+                          return;
+                        }
+
+                        if (value === 'custom') {
+                          setCodeFont(
+                            codeFont.kind !== 'default'
+                              ? codeFont
+                              : {
+                                  input: '',
+                                  kind: 'custom',
+                                }
+                          );
+                        }
+                      }}
+                    >
+                      {DIFFS_HUB_CODE_FONT_OPTIONS.map((option) => (
+                        <ButtonGroupItem
+                          key={option.value}
+                          value={option.value}
+                          className="h-7 flex-1 px-2"
+                        >
+                          {option.label}
+                        </ButtonGroupItem>
+                      ))}
+                      <ButtonGroupItem
+                        value="custom"
+                        className="h-7 flex-1 px-2"
+                      >
+                        Custom
+                      </ButtonGroupItem>
+                    </ButtonGroup>
+                  </div>
+                  {codeFont.kind !== 'default' && (
+                    <input
+                      ref={focusCustomCodeFontInput}
+                      className="border-input bg-background text-foreground placeholder:text-muted-foreground focus-visible:ring-ring/50 h-8 w-full rounded-md border px-2 text-sm outline-none focus-visible:ring-2"
+                      enterKeyHint="done"
+                      placeholder="JetBrains Mono"
+                      spellCheck={false}
+                      value={customCodeFontFamily}
+                      onChange={({ currentTarget }) => {
+                        setCodeFont({
+                          input: currentTarget.value,
+                          kind: 'custom',
+                        });
+                      }}
+                      onKeyDown={(event) => event.stopPropagation()}
+                    />
+                  )}
+                </div>
                 <DropdownMenuItem
                   className="w-full px-2 focus:bg-transparent"
                   onSelect={(e) => e.preventDefault()}

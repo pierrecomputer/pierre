@@ -1,6 +1,5 @@
 'use client';
 
-import { type DiffIndicators } from '@pierre/diffs';
 import { type CodeViewHandle, useWorkerPool } from '@pierre/diffs/react';
 import { type ColorMode } from '@pierre/theming';
 import { useThemeController } from '@pierre/theming/react';
@@ -24,6 +23,10 @@ import {
   themeController,
 } from '@/components/themeController';
 import { preloadAvatars } from '@/lib/annotation';
+import {
+  getDiffsHubCodeFontFamily,
+  useDiffsHubDisplayPreferences,
+} from '@/lib/displayPreferences';
 import { removeSavedCommentSidebarEntry } from '@/lib/removeSavedCommentSidebarEntry';
 import type { DarkThemeName, LightThemeName } from '@/lib/themeNames';
 import type {
@@ -54,15 +57,31 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
   useEffect(preloadAvatars, []);
 
   const isWorkerPoolReadyOrDisable = useIsWorkerPoolReadyOrDisabled();
-  const [diffStyle, setDiffStyle] = useState<'split' | 'unified'>('split');
-  const [collapseMode, setCollapseMode] = useState<'expanded' | 'collapsed'>(
-    'expanded'
-  );
   const [fileTreeOverlayOpen, setFileTreeOverlayOpen] = useState(false);
-  const [overflow, setOverflow] = useState<'wrap' | 'scroll'>('scroll');
-  const [showBackgrounds, setShowBackgrounds] = useState(true);
-  const [diffIndicators, setDiffIndicators] = useState<DiffIndicators>('bars');
-  const [lineNumbers, setLineNumbers] = useState(true);
+  const [forceUnifiedDiffStyle, setForceUnifiedDiffStyle] = useState(false);
+  const {
+    displayPreferences,
+    displayPreferencesHydrated,
+    setCodeFont,
+    setDiffIndicators,
+    setDiffStyle,
+    setLineNumbers,
+    setOverflow,
+    setShowBackgrounds,
+    updateDisplayPreferences,
+  } = useDiffsHubDisplayPreferences();
+  const {
+    collapseMode,
+    codeFont,
+    diffIndicators,
+    lineNumbers,
+    overflow,
+    showBackgrounds,
+  } = displayPreferences;
+  const diffStyle = forceUnifiedDiffStyle
+    ? 'unified'
+    : displayPreferences.diffStyle;
+  const codeFontFamily = getDiffsHubCodeFontFamily(codeFont);
   // All theming state — color mode and the light/dark theme-name picks — lives
   // in the single @pierre/theming controller (the same instance the app-wide
   // ThemeProvider is bound to). Reading it here means picking Auto/Light/Dark
@@ -137,6 +156,7 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
   } = usePatchLoader({
     collapseMode,
     domain,
+    enabled: displayPreferencesHydrated,
     onLoadStart: handlePatchLoadStart,
     path,
     viewerRef,
@@ -145,7 +165,7 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
   useEffect(() => {
     const mediaQuery = window.matchMedia('(max-width: 767px)');
     const updateMobileState = (matches: boolean) => {
-      setDiffStyle(matches ? 'unified' : 'split');
+      setForceUnifiedDiffStyle(matches);
       if (!matches) setFileTreeOverlayOpen(false);
     };
     const handleChange = (event: MediaQueryListEvent) => {
@@ -177,9 +197,12 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
   }, []);
   const handleToggleCollapseMode = useCallback(() => {
     const next = collapseMode === 'expanded' ? 'collapsed' : 'expanded';
-    setCollapseMode(next);
+    updateDisplayPreferences((previous) => ({
+      ...previous,
+      collapseMode: next,
+    }));
     applyCollapseModeToLoaded(next);
-  }, [applyCollapseModeToLoaded, collapseMode]);
+  }, [applyCollapseModeToLoaded, collapseMode, updateDisplayPreferences]);
   const handleCommentSaved = useCallback(
     (comment: DiffsHubSavedCommentEvent) => {
       setCommentSections((prev) =>
@@ -227,6 +250,7 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
   // first batch of files against the wrong palette.
   const viewerAvailable =
     isWorkerPoolReadyOrDisable &&
+    displayPreferencesHydrated &&
     themesHydrated &&
     (loadState === 'ready' ||
       (loadState === 'streaming' && initialItems.length > 0));
@@ -235,6 +259,7 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
     <ReviewGrid>
       <DiffsHubHeader
         className="[grid-area:header]"
+        codeFont={codeFont}
         collapseMode={collapseMode}
         colorMode={colorMode}
         darkThemeName={darkThemeName}
@@ -248,6 +273,7 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
         fileTreeAvailable={treeSource != null}
         onToggleCollapseMode={handleToggleCollapseMode}
         onToggleFileTreeOverlay={handleToggleFileTreeOverlay}
+        setCodeFont={setCodeFont}
         setColorMode={setColorMode}
         setDarkThemeName={setDarkThemeName}
         setDiffIndicators={setDiffIndicators}
@@ -276,6 +302,7 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
           <DiffsHubViewer
             key={viewerKey}
             className="[grid-area:viewer]"
+            codeFontFamily={codeFontFamily}
             diffStyle={diffStyle}
             overflow={overflow}
             showBackgrounds={showBackgrounds}
