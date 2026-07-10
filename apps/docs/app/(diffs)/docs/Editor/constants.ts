@@ -241,30 +241,6 @@ editor.setMarkers([]);`,
   options,
 };
 
-export const EDITOR_PROGRAMMATIC_EXAMPLE: PreloadFileOptions<undefined> = {
-  file: {
-    name: 'editor_programmatic.ts',
-    contents: `import { Editor } from '@pierre/diffs/editor';
-
-const editor = new Editor();
-editor.edit(fileInstance);
-
-// Drive the selection from code. Positions are zero-based; \`direction\` controls
-// which end the caret sits at when the selection is extended with the keyboard.
-editor.setSelections([
-  {
-    start: { line: 0, character: 0 },
-    end: { line: 0, character: 5 },
-    direction: 'forward',
-  },
-]);
-
-// Move focus into the editor (the caret follows the primary selection).
-editor.focus();`,
-  },
-  options,
-};
-
 export const EDITOR_UNDO_REDO_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
     name: 'editor_undo_redo.tsx',
@@ -569,6 +545,9 @@ import { Editor } from '@pierre/diffs/editor';
 // Most methods require an attached surface via edit().
 
 const editor = new Editor();
+
+// attach to a rendered File, FileDiff, or virtualized variant.
+const dispose = editor.edit(fileInstance);
 
 // Merge partial options at runtime. Existing fields are preserved.
 // onChange and similar handlers read from the latest options on each call;

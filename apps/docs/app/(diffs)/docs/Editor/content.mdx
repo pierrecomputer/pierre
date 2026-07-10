@@ -103,6 +103,43 @@ These methods are available on an `Editor` instance. Attach it to a rendered
 
 <DocsCodeExample {...editorPublicApi} />
 
+#### Markers
+
+Markers add inline diagnostics—errors, warnings, and other annotations—to the
+editable surface, with a hover popover that shows each marker's message. They
+are useful for surfacing linter or language-server output alongside live edits.
+
+Each marker is positioned with zero-based `start` and `end` positions and a
+`severity` that drives its color and popover styling:
+
+<DocsCodeExample {...editorMarkerType} />
+
+Call `editor.setMarkers(markers)` after the editor has attached to a surface
+(calling it before attaching throws). Inlining the array lets TypeScript check
+the `severity` literals against the `Marker` type without importing it.
+
+<DocsCodeExample {...editorMarkerExample} />
+
+Markers re-anchor as the document changes, so they stay attached to their text
+while you edit. Pass an empty array to clear them.
+
+#### History
+
+The editor keeps an undo stack for user edits and for programmatic edits applied
+with `applyEdits(..., true)`. Use `editor.canUndo` and `editor.canRedo` to
+enable or disable toolbar buttons, and call `editor.undo()` or `editor.redo()`
+to step through history from code. These methods share the same stack as the
+keyboard shortcuts (<kbd>Cmd/Ctrl-Z</kbd> and <kbd>Cmd/Ctrl-Shift-Z</kbd>).
+
+`undo()` and `redo()` are no-ops when there is nothing to undo or redo. Both run
+through the same change path as a normal edit, so your `onChange` handler fires
+and you can re-read `canUndo` / `canRedo` to keep UI state in sync.
+
+Limit the stack size with `historyMaxEntries` in
+[Editor Options](#edit-mode-editor-options) (default: 100).
+
+<DocsCodeExample {...editorUndoRedoExample} />
+
 ### Using Worker Pool
 
 When you offload syntax highlighting to a worker pool, edit mode still needs the
@@ -145,52 +182,6 @@ selection (`getSelectionText`, `replaceSelectionText`, `applyEdits`), and
 `close` to dismiss the popover:
 
 <DocsCodeExample {...editorSelectionActionContextType} />
-
-### Programmatic Control
-
-You can drive the editor from code instead of relying solely on user input.
-`editor.setSelections(selections)` replaces the current selections—pass more
-than one for multiple cursors—and `editor.focus()` moves focus into the editor,
-placing the caret at the primary selection.
-
-<DocsCodeExample {...editorProgrammaticExample} />
-
-#### Markers
-
-Markers add inline diagnostics—errors, warnings, and other annotations—to the
-editable surface, with a hover popover that shows each marker's message. They
-are useful for surfacing linter or language-server output alongside live edits.
-
-Each marker is positioned with zero-based `start` and `end` positions and a
-`severity` that drives its color and popover styling:
-
-<DocsCodeExample {...editorMarkerType} />
-
-Call `editor.setMarkers(markers)` after the editor has attached to a surface
-(calling it before attaching throws). Inlining the array lets TypeScript check
-the `severity` literals against the `Marker` type without importing it.
-
-<DocsCodeExample {...editorMarkerExample} />
-
-Markers re-anchor as the document changes, so they stay attached to their text
-while you edit. Pass an empty array to clear them.
-
-#### History
-
-The editor keeps an undo stack for user edits and for programmatic edits applied
-with `applyEdits(..., true)`. Use `editor.canUndo` and `editor.canRedo` to
-enable or disable toolbar buttons, and call `editor.undo()` or `editor.redo()`
-to step through history from code. These methods share the same stack as the
-keyboard shortcuts (<kbd>Cmd/Ctrl-Z</kbd> and <kbd>Cmd/Ctrl-Shift-Z</kbd>).
-
-`undo()` and `redo()` are no-ops when there is nothing to undo or redo. Both run
-through the same change path as a normal edit, so your `onChange` handler fires
-and you can re-read `canUndo` / `canRedo` to keep UI state in sync.
-
-Limit the stack size with `historyMaxEntries` in
-[Editor Options](#edit-mode-editor-options) (default: 100).
-
-<DocsCodeExample {...editorUndoRedoExample} />
 
 ### Keyboard Shortcuts
 
