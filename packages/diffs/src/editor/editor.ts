@@ -328,7 +328,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       useTokenTransformer,
       enableGutterUtility,
       enableLineSelection,
-      expandUnchanged,
       lineHoverHighlight = 'disabled',
       ...rest
     } = fileInstance.options;
@@ -336,7 +335,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       useTokenTransformer !== true ||
       enableGutterUtility === true ||
       enableLineSelection === true ||
-      (expandUnchanged !== true && fileInstance.type === 'file-diff') ||
       lineHoverHighlight !== 'disabled'
     ) {
       fileInstance.setOptions({
@@ -344,7 +342,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         useTokenTransformer: true,
         enableGutterUtility: false,
         enableLineSelection: false,
-        expandUnchanged: true,
         lineHoverHighlight: 'disabled',
       });
       fileInstance.rerender();

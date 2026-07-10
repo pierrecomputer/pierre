@@ -940,10 +940,15 @@ export class VirtualizedFileDiff<
     });
   }
 
-  // Session region changes alter the rendered row set without a line-count
-  // change, so the layout caches need the same invalidation a document change
-  // gets; rerender() defers the actual render through the virtualizer queue.
-  protected override escalateEditSessionRender(): void {
+  /**
+   * Invalidate layout after an edit session changed the rendered row set
+   * without a line-count change (a mid-session region change or the exit
+   * recompute): estimated heights bake the hunk shapes in, and nothing else
+   * invalidates them now that editing does not flip expandUnchanged. Public
+   * so CodeView can run it when reaping a session whose instance was already
+   * released.
+   */
+  public invalidateEditSessionLayout(): void {
     this.getSimpleVirtualizer()?.markDOMDirty();
     this.resetLayoutCache({
       forceSimpleRecompute: this.isSimpleMode(),
@@ -953,6 +958,13 @@ export class VirtualizedFileDiff<
     if (!this.isSimpleMode()) {
       this.computeApproximateSize(true);
     }
+    this.getSimpleVirtualizer()?.requestHeightReconcile(this);
+  }
+
+  // Session region changes need the same invalidation a document change
+  // gets; rerender() defers the actual render through the virtualizer queue.
+  protected override escalateEditSessionRender(): void {
+    this.invalidateEditSessionLayout();
     this.rerender();
   }
 

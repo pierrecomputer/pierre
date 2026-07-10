@@ -81,7 +81,6 @@ export const LIVE_EDITOR_OPTIONS: MultiFileDiffProps<undefined>['options'] = {
   useTokenTransformer: true,
   enableGutterUtility: false,
   enableLineSelection: false,
-  expandUnchanged: true,
   lineHoverHighlight: 'disabled',
 };
 
@@ -97,7 +96,7 @@ export const LIVE_EDITOR_EXAMPLE: PreloadMultiFileDiffOptions<undefined> = {
 // File-mode options for the Live editing example. They mirror the editor's
 // enforced contentEditable state (see LIVE_EDITOR_OPTIONS) so the SSR-rendered
 // File matches what the editor attaches to, avoiding a rerender flash on
-// hydration. Diff-only keys (diffStyle/expandUnchanged) don't apply to a File.
+// hydration. The diff-only diffStyle key doesn't apply to a File.
 export const LIVE_EDITOR_FILE_OPTIONS: FileOptions<undefined> = {
   theme: DEFAULT_THEMES,
   themeType: 'dark',

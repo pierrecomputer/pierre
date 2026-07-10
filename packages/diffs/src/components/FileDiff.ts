@@ -1273,6 +1273,11 @@ export class FileDiff<
     if (this.type === 'file-diff') {
       this.hunksRenderer.beginEditSession(this.fileDiffCache);
     }
+    // The editor sync below refuses partial diffs (it needs the full file
+    // contents); kick off hydration so the loaded re-render re-runs it.
+    if (this.fileDiff?.isPartial === true) {
+      this.loadFilesIfNecessary();
+    }
     this.syncRenderViewToEditor();
     return (recycle?: boolean) => {
       this.editor = undefined;
@@ -1287,9 +1292,11 @@ export class FileDiff<
   }
 
   // Genuine session exit: restore recompute-shaped hunks (a context-only
-  // region collapses away, boundaries re-derive) and repaint. Safe on a
-  // cleaned-up instance — the recompute is pure metadata work and rerender is
-  // enabled-guarded.
+  // region collapses away, boundaries re-derive) and repaint through the
+  // session render path, which also invalidates virtualized layout — nothing
+  // else invalidates layout at exit now that editing does not flip
+  // expandUnchanged. Safe on a cleaned-up instance: the recompute is pure
+  // metadata work and the deferred rerender is enabled-guarded.
   private finishEditSession(): void {
     this.hunksRenderer.endEditSession();
     const fileDiff = this.fileDiffCache;
@@ -1297,7 +1304,7 @@ export class FileDiff<
       fileDiff != null &&
       finishEditSessionForDiff(fileDiff, this.options.parseDiffOptions)
     ) {
-      this.rerender();
+      this.escalateEditSessionRender();
     }
   }
 

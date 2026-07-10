@@ -333,7 +333,6 @@ const CODE_VIEW_EDIT_FORCED_OPTION_KEYS: ReadonlySet<string> = new Set([
   'enableGutterUtility',
   'enableLineSelection',
   'lineHoverHighlight',
-  'expandUnchanged',
 ]);
 
 type CodeViewPassThroughOptions<LAnnotation> = Pick<
@@ -2108,8 +2107,10 @@ export class CodeView<LAnnotation = undefined> {
       if (
         itemSnapshot?.type === 'diff' &&
         finishEditSessionForDiff(itemSnapshot.fileDiff) &&
-        item != null
+        item != null &&
+        item.type === 'diff'
       ) {
+        item.instance.invalidateEditSessionLayout();
         this.markItemLayoutDirty(item);
         this.render();
       }
@@ -2232,8 +2233,6 @@ export class CodeView<LAnnotation = undefined> {
     // Edit-forced options: while the item is in edit mode these serve the
     // values Editor.edit requires so it never falls back to
     // instance.setOptions (which throws for CodeView-managed instances).
-    // Diffs additionally require expandUnchanged so every editable line of
-    // the new file is renderable.
     defineItemOption(prototype, 'useTokenTransformer', (receiver) =>
       this.isReceiverEdited(receiver, 'diff')
         ? true
@@ -2253,11 +2252,6 @@ export class CodeView<LAnnotation = undefined> {
       this.isReceiverEdited(receiver, 'diff')
         ? 'disabled'
         : this.options.lineHoverHighlight
-    );
-    defineItemOption(prototype, 'expandUnchanged', (receiver) =>
-      this.isReceiverEdited(receiver, 'diff')
-        ? true
-        : this.options.expandUnchanged
     );
 
     defineItemOption(

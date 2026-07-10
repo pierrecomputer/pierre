@@ -130,6 +130,43 @@ function typeAt(
   );
 }
 
+describe('diff editor: attach-time option normalization', () => {
+  test('the fallback setOptions preserves a host expandUnchanged option', async () => {
+    const dom = installDom();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    // useTokenTransformer: false triggers Editor.edit's setOptions fallback,
+    // which replaces options wholesale — the host's own expandUnchanged must
+    // flow through it.
+    const fileDiff = new FileDiff<undefined>({
+      disableFileHeader: true,
+      theme: DEFAULT_THEMES,
+      diffStyle: 'split',
+      expandUnchanged: true,
+      useTokenTransformer: false,
+    });
+    const editor = new Editor<undefined>();
+    try {
+      fileDiff.render({
+        oldFile: { name: 'edit.ts', contents: 'a\nb\n' },
+        newFile: { name: 'edit.ts', contents: 'a\nB\n' },
+        fileContainer: container,
+        forceRender: true,
+      });
+      editor.edit(fileDiff);
+      await wait(10);
+
+      expect(fileDiff.options.useTokenTransformer).toBe(true);
+      expect(fileDiff.options.expandUnchanged).toBe(true);
+    } finally {
+      await wait(10);
+      editor.cleanUp();
+      fileDiff.cleanUp();
+      dom.cleanup();
+    }
+  });
+});
+
 describe('diff editor: collapsed regions during edit', () => {
   test('renders sparse rows with read-only separators and column parity', async () => {
     const fixture = await createCollapsedEditFixture();

@@ -186,7 +186,9 @@ describe('CodeView item edit mode', () => {
       if (renderedB.type !== 'diff') {
         throw new Error('expected a rendered diff item');
       }
-      expect(renderedB.instance.options.expandUnchanged).toBe(true);
+      // expandUnchanged is not edit-forced: collapsed unchanged regions stay
+      // collapsed during editing, so the item serves the pass-through value.
+      expect(renderedB.instance.options.expandUnchanged).toBe(false);
       // ...while non-edited siblings keep the parent options.
       expect(renderedC.instance.options.useTokenTransformer).toBe(false);
       expect(renderedC.instance.options.enableLineSelection).toBe(true);
@@ -467,12 +469,12 @@ describe('CodeView item edit mode', () => {
     }
   });
 
-  test('layout height tracks the edit-forced expandUnchanged expansion', async () => {
+  test('entering edit mode keeps the collapsed layout height', async () => {
     const { cleanup } = installDom();
     const { createEditor } = createEditorHarness();
     const viewer = new CodeView({ createEditor });
-    // A diff with a large unchanged region, so expandUnchanged materially
-    // changes the item's height (collapsed context rows become real rows).
+    // A diff with a large unchanged region: collapsed regions stay collapsed
+    // during editing, so entering edit mode must not change the layout.
     const oldContents = Array.from(
       { length: 60 },
       (_, index) => `line ${index}`
@@ -493,15 +495,9 @@ describe('CodeView item edit mode', () => {
       await renderItems(viewer, [item]);
       const collapsedHeight = viewer.getScrollHeight();
 
-      // Edit mode forces expandUnchanged for the item, which must flow into
-      // the computed layout height immediately — a stale collapsed height is
-      // what made remounts render taller than their layout slot (the scroll
-      // jump this pins).
       await applyItemUpdate(viewer, { ...item, edit: true, version: 1 });
-      const expandedHeight = viewer.getScrollHeight();
-      expect(expandedHeight).toBeGreaterThan(collapsedHeight);
+      expect(viewer.getScrollHeight()).toBe(collapsedHeight);
 
-      // Toggling edit off restores the collapsed layout.
       await applyItemUpdate(viewer, { ...item, edit: false, version: 2 });
       expect(viewer.getScrollHeight()).toBe(collapsedHeight);
     } finally {
@@ -722,6 +718,42 @@ describe('CodeView item edit mode', () => {
         expect(
           edited.type === 'diff' && edited.fileDiff.hunks[0].hunkContent[0].type
         ).toBe('context');
+      } finally {
+        viewer.cleanUp();
+        await wait(0);
+        cleanup();
+      }
+    });
+
+    test('ending a session reconciles the item layout height', async () => {
+      const { cleanup } = installDom();
+      const { createEditor } = createEditorHarness();
+      const viewer = new CodeView({ createEditor });
+      const edited = makeSessionDiffItem('edited');
+      const below = makeEditFileItem('below', false, 10);
+      try {
+        viewer.setup(createRoot());
+        await renderItems(viewer, [edited, below]);
+        await wait(10);
+        const heightDuring = viewer.getScrollHeight();
+
+        // Reverting one hunk keeps it rendered as a context-only region, so
+        // the mid-session layout height is unchanged.
+        revertLineTen(edited, viewer);
+        viewer.render(true);
+        await wait(20);
+        expect(viewer.getScrollHeight()).toBe(heightDuring);
+
+        // Exit runs the recompute: the reverted region collapses away and
+        // the layout must shrink with it — a stale estimated height here is
+        // what made items overlap.
+        expect(viewer.updateItem({ ...edited, edit: false, version: 1 })).toBe(
+          true
+        );
+        viewer.render(true);
+        await wait(30);
+        expect(edited.type === 'diff' && edited.fileDiff.hunks.length).toBe(1);
+        expect(viewer.getScrollHeight()).toBeLessThan(heightDuring);
       } finally {
         viewer.cleanUp();
         await wait(0);
