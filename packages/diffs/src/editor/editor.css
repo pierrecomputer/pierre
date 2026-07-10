@@ -240,9 +240,8 @@
 [data-selection-action-popover] {
   --popover-viewport-left: 0px;
   --popover-viewport-right: 100cqw;
-  --popover-min-left: max(
-    calc(var(--gutter-width, 0px) + 8px),
-    calc(var(--popover-viewport-left) + 8px)
+  --popover-min-left: calc(
+    var(--popover-viewport-left) + var(--gutter-width, 0px) + 8px
   );
   --popover-available-width: max(
     0px,
