@@ -5,6 +5,7 @@ const PANEL = '[data-search-panel]';
 const SEARCH_INPUT = '[data-search-panel] input[data-search]';
 const REPLACE_INPUT = '[data-search-panel] input[data-replace]';
 const MATCHES = '[data-search-panel] [data-matches]';
+const HIGHLIGHTS = '[data-match-range]';
 
 async function openFixture(page: Page): Promise<void> {
   await page.goto('/test/e2e/fixtures/editable.html');
@@ -65,5 +66,58 @@ test.describe('find and replace', () => {
     await expect.poll(() => contents(page)).toContain('const qux = 1;');
     await expect.poll(() => contents(page)).toContain('const bar = qux + qux;');
     await expect.poll(() => contents(page)).not.toContain('foo');
+  });
+
+  test('clearing the query removes the match highlights', async ({ page }) => {
+    await openFixture(page);
+    await openSearchPanel(page);
+
+    await page.locator(SEARCH_INPUT).fill('foo');
+    await expect(page.locator(MATCHES)).toContainText('4');
+    // "foo" is a single-line match, so each of the four hits paints one block.
+    await expect(page.locator(HIGHLIGHTS)).toHaveCount(4);
+
+    // Emptying the query returns the panel to its "No results" state; the
+    // highlights must clear with it rather than linger over an empty box.
+    await page.locator(SEARCH_INPUT).fill('');
+    await expect(page.locator(MATCHES)).toContainText('No results');
+    await expect(page.locator(HIGHLIGHTS)).toHaveCount(0);
+  });
+
+  test('Escape in the search input closes the panel and clears highlights', async ({
+    page,
+  }) => {
+    await openFixture(page);
+    await openSearchPanel(page);
+
+    await page.locator(SEARCH_INPUT).fill('foo');
+    await expect(page.locator(HIGHLIGHTS)).toHaveCount(4);
+
+    // Escape while the search input holds focus is the already-correct teardown
+    // path; keep it covered as the counterpart to the content-Escape case.
+    await page.locator(SEARCH_INPUT).press('Escape');
+
+    await expect(page.locator(PANEL)).toHaveCount(0);
+    await expect(page.locator(HIGHLIGHTS)).toHaveCount(0);
+  });
+
+  test('Escape from the editor content closes the panel and clears highlights', async ({
+    page,
+  }) => {
+    await openFixture(page);
+    await openSearchPanel(page);
+
+    await page.locator(SEARCH_INPUT).fill('foo');
+    await expect(page.locator(HIGHLIGHTS)).toHaveCount(4);
+
+    // Click into the editor text so focus leaves the search input, then press
+    // Escape. This is handled by the content-focused keydown handler, a
+    // separate teardown path that must clear the highlights too.
+    await page.locator(CONTENT).click();
+    await expect(page.locator(PANEL)).toHaveCount(1);
+    await page.keyboard.press('Escape');
+
+    await expect(page.locator(PANEL)).toHaveCount(0);
+    await expect(page.locator(HIGHLIGHTS)).toHaveCount(0);
   });
 });

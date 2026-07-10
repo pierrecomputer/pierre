@@ -59,10 +59,10 @@ deleted lines and annotation lines remain read-only.
 
 ### React
 
-Create one `Editor` instance (typically with `useMemo` or `useStableEditor`),
-wrap your tree in `EditProvider`, and set `contentEditable` on `File`,
-`FileDiff`, `MultiFileDiff`, or `PatchDiff`. The provider cleans up on unmount.
-Use `Virtualizer` for large editable files. A common single-file pattern is:
+Create one `Editor` instance (typically with `useMemo`), wrap your tree in
+`EditProvider`, and set `contentEditable` on `File`, `FileDiff`,
+`MultiFileDiff`, or `PatchDiff`. The provider cleans up on unmount. Use
+`Virtualizer` for large editable files. A common single-file pattern is:
 
 ```tsx
 <EditProvider editor={editor}>

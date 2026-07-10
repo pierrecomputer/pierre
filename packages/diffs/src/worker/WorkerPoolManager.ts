@@ -1022,8 +1022,8 @@ export class WorkerPoolManager {
             }
             const { request } = task;
             this.syncCustomExtensionVersion(managedWorker, request);
-            if (request.file.cacheKey != null) {
-              this.fileCache.set(request.file.cacheKey, { result, options });
+            if (task.cacheKeyAtDispatch != null) {
+              this.fileCache.set(task.cacheKeyAtDispatch, { result, options });
             }
             this.resolveRenderTaskCallbacks(task);
             this.notifyFileInstances(task, result, options);
@@ -1042,8 +1042,8 @@ export class WorkerPoolManager {
             }
             const { request } = task;
             this.syncCustomExtensionVersion(managedWorker, request);
-            if (request.diff.cacheKey != null) {
-              this.diffCache.set(request.diff.cacheKey, { result, options });
+            if (task.cacheKeyAtDispatch != null) {
+              this.diffCache.set(task.cacheKeyAtDispatch, { result, options });
             }
             this.resolveRenderTaskCallbacks(task);
             this.notifyDiffInstances(task, result, options);
@@ -1120,6 +1120,13 @@ export class WorkerPoolManager {
       managedWorker.langs.add(lang);
     }
     try {
+      // postMessage clones the request now, so keep the matching cache key on
+      // the task instead of reading the caller's mutable target on response.
+      if (task.type === 'file') {
+        task.cacheKeyAtDispatch = task.request.file.cacheKey;
+      } else if (task.type === 'diff') {
+        task.cacheKeyAtDispatch = task.request.diff.cacheKey;
+      }
       managedWorker.worker.postMessage(task.request);
     } catch (error) {
       console.error('Failed to post message to worker:', error);

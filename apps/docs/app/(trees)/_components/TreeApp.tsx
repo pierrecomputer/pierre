@@ -1,13 +1,8 @@
 'use client';
 
 import type { EditorState, FileContents, FileOptions } from '@pierre/diffs';
-import type { Editor } from '@pierre/diffs/editor';
-import {
-  EditProvider,
-  File,
-  useStableEditor,
-  Virtualizer,
-} from '@pierre/diffs/react';
+import { Editor } from '@pierre/diffs/editor';
+import { EditProvider, File, Virtualizer } from '@pierre/diffs/react';
 import {
   IconFilePlus,
   IconFolderPlus,
@@ -1210,7 +1205,6 @@ export function TreeApp<LAnnotation = unknown>({
   // Per-path scroll + selection snapshots. The editable File remounts on
   // path/theme changes (keyed below), so we getState before the remount and
   // setState from onAttach once the new editor is attached.
-  const editorRef = useRef<Editor<LAnnotation> | null>(null);
   const editorStateByPathRef = useRef(new Map<string, EditorState>());
   const activePathRef = useRef<string | null>(initialActivePath ?? null);
   // Edited buffers keyed by path. Prefer these over the caller-supplied `files`
@@ -1239,10 +1233,29 @@ export function TreeApp<LAnnotation = unknown>({
   unsavedPathsRef.current = unsavedPaths;
   const containerRef = useRef<HTMLDivElement | null>(null);
 
+  // Keep attach/change handlers fresh without recreating the Editor. The
+  // shared instance must stay stable across tab/theme switches so EditProvider
+  // does not clean it up between remounts of the keyed File.
+  const handleEditorAttachRef = useRef<(editor: Editor<LAnnotation>) => void>(
+    () => {}
+  );
+  const handleEditorChangeRef = useRef<(file: FileContents) => void>(() => {});
+  const editor = useMemo(
+    () =>
+      new Editor<LAnnotation>({
+        onAttach(nextEditor) {
+          handleEditorAttachRef.current(nextEditor);
+        },
+        onChange(file) {
+          handleEditorChangeRef.current(file);
+        },
+      }),
+    []
+  );
+
   const saveActiveEditorState = useCallback(() => {
     const path = activePathRef.current;
-    const editor = editorRef.current;
-    if (path == null || editor == null) {
+    if (path == null) {
       return;
     }
     try {
@@ -1250,7 +1263,7 @@ export function TreeApp<LAnnotation = unknown>({
     } catch {
       // Editor may already be detached mid-unmount; skip the snapshot.
     }
-  }, []);
+  }, [editor]);
 
   // Marks a path unsaved (or clean). Snapshots edited contents so tab switches
   // keep the dirty buffer.
@@ -1338,10 +1351,9 @@ export function TreeApp<LAnnotation = unknown>({
       return false;
     }
 
-    const editor = editorRef.current;
     let file: FileContents | undefined;
     try {
-      file = editor?.getFile() ?? editedFilesByPath[path] ?? files?.[path];
+      file = editor.getFile() ?? editedFilesByPath[path] ?? files?.[path];
     } catch {
       file = editedFilesByPath[path] ?? files?.[path];
     }
@@ -1372,7 +1384,7 @@ export function TreeApp<LAnnotation = unknown>({
     }
     onSave?.(path, snapshot);
     return true;
-  }, [editedFilesByPath, files, onSave]);
+  }, [editedFilesByPath, editor, files, onSave]);
 
   useEffect(() => {
     const acknowledgedPaths = new Set<string>();
@@ -1519,7 +1531,7 @@ export function TreeApp<LAnnotation = unknown>({
     [model]
   );
 
-  const handleEditorAttach = useCallback((editor: Editor<LAnnotation>) => {
+  const handleEditorAttach = useCallback((nextEditor: Editor<LAnnotation>) => {
     const path = activePathRef.current;
     if (path == null) {
       return;
@@ -1528,8 +1540,10 @@ export function TreeApp<LAnnotation = unknown>({
     if (saved == null) {
       return;
     }
-    editor.setState(saved);
+    nextEditor.setState(saved);
   }, []);
+  handleEditorAttachRef.current = handleEditorAttach;
+  handleEditorChangeRef.current = handleEditorChange;
 
   const mutations = useTreeMutations({
     model,
@@ -1553,12 +1567,6 @@ export function TreeApp<LAnnotation = unknown>({
     }),
     [resolvedFileOptions]
   );
-
-  const editor = useStableEditor<LAnnotation>({
-    onAttach: handleEditorAttach,
-    onChange: handleEditorChange,
-  });
-  editorRef.current = editor;
 
   const treeSurfaceColor = useMemo(() => {
     const explicitTreeBackground =

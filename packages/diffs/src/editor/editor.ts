@@ -1284,7 +1284,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       addEventListener(contentEl, 'keydown', (e) => {
         if (e.key === 'Escape') {
           e.preventDefault();
-          this.#searchPanel?.cleanup();
+          this.#searchPanel?.close();
           this.#searchPanel = undefined;
           this.#retainSearchPanelFocus = false;
           this.#selectionAction?.cleanup();
@@ -2292,9 +2292,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       case 'insertCompositionText':
         break;
       case 'insertLineBreak':
-      case 'insertParagraph':
+      case 'insertParagraph': {
         this.#replaceSelectionText(this.#textDocument?.eol ?? '\n');
         break;
+      }
       case 'deleteContentBackward':
         this.#deleteSelectionText();
         break;

@@ -193,6 +193,8 @@ export interface RenderFileTask {
   type: 'file';
   id: WorkerRequestId;
   request: RenderFileRequest;
+  /** Cache key included in the payload when it was dispatched to the worker. */
+  cacheKeyAtDispatch?: string;
   instances: Set<FileRendererInstance>;
   // If primeCache is true, then the request will still be sent to workers
   // regardless of whether there's any instances subscribed to the task
@@ -207,6 +209,8 @@ export interface RenderDiffTask {
   type: 'diff';
   id: WorkerRequestId;
   request: RenderDiffRequest;
+  /** Cache key included in the payload when it was dispatched to the worker. */
+  cacheKeyAtDispatch?: string;
   instances: Set<DiffRendererInstance>;
   // If primeCache is true, then the request will still be sent to workers
   // regardless of whether there's any instances subscribed to the task
