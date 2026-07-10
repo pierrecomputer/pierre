@@ -2021,7 +2021,7 @@ function resolveDeleteWordBackwardRange(
     if (match !== undefined && nextMatch !== match) {
       break;
     }
-    if (nextChar !== ' ' || pos !== head) {
+    if (nextMatch !== 0 || pos !== head) {
       match = nextMatch;
     }
     pos = prev;

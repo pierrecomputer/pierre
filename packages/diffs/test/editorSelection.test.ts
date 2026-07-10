@@ -2078,8 +2078,32 @@ describe('applyDeleteWordBackwardToSelections', () => {
     expect(nextSelections).toEqual([createSelection(0, 0, 0, 0)]);
   });
 
+  test('deletes the preceding word and single trailing tab', () => {
+    const textDocument = new TextDocument('inmemory://1', 'hello\tworld');
+    const selections = [createSelection(0, 6, 0, 6)];
+    const { nextSelections } = applyDeleteWordBackwardToSelections(
+      textDocument,
+      selections
+    );
+
+    expect(textDocument.getText()).toBe('world');
+    expect(nextSelections).toEqual([createSelection(0, 0, 0, 0)]);
+  });
+
   test('deletes a multi-space run as its own group', () => {
     const textDocument = new TextDocument('inmemory://1', 'hello  world');
+    const selections = [createSelection(0, 7, 0, 7)];
+    const { nextSelections } = applyDeleteWordBackwardToSelections(
+      textDocument,
+      selections
+    );
+
+    expect(textDocument.getText()).toBe('helloworld');
+    expect(nextSelections).toEqual([createSelection(0, 5, 0, 5)]);
+  });
+
+  test('deletes a multi-tab run as its own group', () => {
+    const textDocument = new TextDocument('inmemory://1', 'hello\t\tworld');
     const selections = [createSelection(0, 7, 0, 7)];
     const { nextSelections } = applyDeleteWordBackwardToSelections(
       textDocument,
