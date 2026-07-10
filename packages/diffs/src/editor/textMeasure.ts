@@ -105,11 +105,48 @@ export class Metrics {
 
   /** measure the width of the text */
   measureTextWidth(text: string): number {
-    const textWithExpandedTabs = expandTabsToSpaces(text, this.tabSize);
-    if (needsDomTextMeasurement(textWithExpandedTabs)) {
-      return this.domMeasureTextWidth(textWithExpandedTabs);
+    if (!text.includes('\t')) {
+      return this.#measureTextWidthWithoutTabs(text);
     }
-    return this.canvasMeasureTextWidth(textWithExpandedTabs);
+    if (this.#canvasCtx === undefined) {
+      throw new Error('Metrics not initialized');
+    }
+    const asciiColumns = getExpandedAsciiTextColumns(text, this.tabSize);
+    if (asciiColumns !== -1) {
+      return asciiColumns * this.ch;
+    }
+
+    let width = 0;
+    let runStart = 0;
+    const tabStopWidth = this.tabSize * this.ch;
+    for (let i = 0; i < text.length; i++) {
+      if (text.charCodeAt(i) !== /* '\t' */ 9) {
+        continue;
+      }
+
+      if (i > runStart) {
+        width += this.#measureTextWidthWithoutTabs(text.slice(runStart, i));
+      }
+      // CSS tab stops are pixel positions, so wide glyphs before a tab must
+      // contribute their measured width rather than one logical column.
+      if (tabStopWidth > 0) {
+        const remainder = width % tabStopWidth;
+        width += remainder === 0 ? tabStopWidth : tabStopWidth - remainder;
+      }
+      runStart = i + 1;
+    }
+
+    if (runStart < text.length) {
+      width += this.#measureTextWidthWithoutTabs(text.slice(runStart));
+    }
+    return round(width);
+  }
+
+  #measureTextWidthWithoutTabs(text: string): number {
+    if (needsDomTextMeasurement(text)) {
+      return this.domMeasureTextWidth(text);
+    }
+    return this.canvasMeasureTextWidth(text);
   }
 
   /** measure the width of the text using the canvas measureText API */
@@ -271,32 +308,6 @@ export function getUnicodeMeasurementOffsets(
     offsets.push(offset);
   }
   return offsets;
-}
-
-/**
- * Expand tab characters to spaces using fixed tab stops: each tab advances to
- * the next multiple of tabSize from its running column, matching how the
- * rendered text expands tabs via CSS `tab-size`. Expanding every tab to a flat
- * tabSize would mis-measure tabs that follow other characters on the same line
- * (e.g. an alignment tab in `foo\tbar`).
- */
-export function expandTabsToSpaces(text: string, tabSize: number): string {
-  if (!text.includes('\t')) {
-    return text;
-  }
-  let result = '';
-  let column = 0;
-  for (let i = 0; i < text.length; i++) {
-    if (text.charCodeAt(i) === /* '\t' */ 9) {
-      const advance = tabSize - (column % tabSize);
-      result += ' '.repeat(advance);
-      column += advance;
-    } else {
-      result += text[i];
-      column += 1;
-    }
-  }
-  return result;
 }
 
 /**

@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 
 import {
-  expandTabsToSpaces,
   getExpandedAsciiTextColumns,
   getUnicodeMeasurementOffsets,
   Metrics,
@@ -49,6 +48,19 @@ function stubBoundingClientRectWidth(width: number | (() => number)): {
       });
     },
   };
+}
+
+function stubCanvasTextWidth(measureTextWidth: (text: string) => number): void {
+  Object.defineProperty(window.HTMLCanvasElement.prototype, 'getContext', {
+    configurable: true,
+    value: (contextId: string) =>
+      contextId === '2d'
+        ? {
+            font: '',
+            measureText: (text: string) => ({ width: measureTextWidth(text) }),
+          }
+        : null,
+  });
 }
 
 describe('needsDomTextMeasurement', () => {
@@ -204,29 +216,58 @@ describe('getExpandedAsciiTextColumns', () => {
   });
 });
 
-describe('expandTabsToSpaces', () => {
-  test('returns the input unchanged when there are no tabs', () => {
-    const text = 'no tabs here';
-    expect(expandTabsToSpaces(text, 4)).toBe(text);
-  });
+describe('Metrics.measureTextWidth (tab stops)', () => {
+  function installTabMetrics(): {
+    cleanup(): void;
+    metrics: Metrics;
+  } {
+    const { cleanup } = installDom();
+    const realGetComputedStyle = globalThis.getComputedStyle;
+    globalThis.getComputedStyle = (() =>
+      ({
+        fontSize: '12px',
+        fontFamily: 'monospace',
+        tabSize: '4',
+        lineHeight: '20px',
+        paddingTop: '0px',
+      }) as CSSStyleDeclaration) as typeof getComputedStyle;
 
-  test('expands leading tabs to a full tab stop', () => {
-    expect(expandTabsToSpaces('\t', 4)).toBe('    ');
-    expect(expandTabsToSpaces('\t\t', 4)).toBe('        ');
-  });
+    // ASCII and spaces are 1ch. CJK characters are 2ch, matching common
+    // monospace rendering where East Asian glyphs are double-width.
+    stubCanvasTextWidth((text) => {
+      let width = 0;
+      for (const char of text) {
+        const codePoint = char.codePointAt(0)!;
+        width += codePoint >= 0x4e00 && codePoint <= 0x9fff ? 20 : 10;
+      }
+      return width;
+    });
 
-  // Regression: the space count for a mid-line tab depends on its column.
-  test('expands mid-line tabs to the next tab stop', () => {
-    // 'foo' (col 3) -> 1 space to reach col 4.
-    expect(expandTabsToSpaces('foo\t', 4)).toBe('foo ');
-    expect(expandTabsToSpaces('foo\tbar', 4)).toBe('foo bar');
-    // tabSize 2: 'a' (col 1) -> 1 space to reach col 2.
-    expect(expandTabsToSpaces('a\tb', 2)).toBe('a b');
-  });
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    const metrics = new Metrics();
+    metrics.init(root);
 
-  test('preserves non-ASCII characters while expanding tabs by column', () => {
-    // 'é' occupies one column; the tab then fills cols 1-4.
-    expect(expandTabsToSpaces('é\t', 4)).toBe('é   ');
+    return {
+      cleanup(): void {
+        globalThis.getComputedStyle = realGetComputedStyle;
+        cleanup();
+      },
+      metrics,
+    };
+  }
+
+  test('advances tabs from measured pixel width after wide glyphs', () => {
+    const { cleanup, metrics } = installTabMetrics();
+    try {
+      expect(metrics.ch).toBe(10);
+      expect(metrics.measureTextWidth('\t')).toBe(40);
+      expect(metrics.measureTextWidth('a\tvalue')).toBe(90);
+      expect(metrics.measureTextWidth('変\tvalue')).toBe(90);
+      expect(metrics.measureTextWidth('変数\tvalue')).toBe(130);
+    } finally {
+      cleanup();
+    }
   });
 });
 
