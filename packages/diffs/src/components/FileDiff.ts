@@ -89,7 +89,12 @@ import { parseDiffFromFile } from '../utils/parseDiffFromFile';
 import { prerenderHTMLIfNecessary } from '../utils/prerenderHTMLIfNecessary';
 import { getMeasuredScrollbarGutter } from '../utils/scrollbarGutter';
 import { setPreNodeProperties } from '../utils/setWrapperNodeProps';
-import { isAdditionLineRenderable } from '../utils/virtualDiffLayout';
+import {
+  getExpandedRegion,
+  getNearestRenderableAdditionLine,
+  getTrailingExpandedRegion,
+  isAdditionLineRenderable,
+} from '../utils/virtualDiffLayout';
 import type { WorkerPoolManager } from '../worker';
 import { DiffsContainerLoaded } from './web-components';
 
@@ -1171,7 +1176,7 @@ export class FileDiff<
     onPostRender?.(fileContainer, this, phase);
   }
 
-  private get fileDiffCache(): FileDiffMetadata | undefined {
+  protected get fileDiffCache(): FileDiffMetadata | undefined {
     return this.hunksRenderer.diffCache ?? this.fileDiff;
   }
 
@@ -1386,6 +1391,118 @@ export class FileDiff<
         : this.hunksRenderer.getExpandedHunksMap(),
       collapsedContextThreshold,
     });
+  }
+
+  // Fold-skip companion to isLineRenderable: the nearest renderable one-based
+  // new-file line at or beyond lineNumber in the given direction.
+  public getNearestRenderableLine(
+    lineNumber: number,
+    direction: 'up' | 'down'
+  ): number | undefined {
+    const fileDiff = this.fileDiffCache;
+    if (fileDiff == null) {
+      return lineNumber;
+    }
+    const {
+      expandUnchanged = false,
+      collapsedContextThreshold = DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
+    } = this.options;
+    return getNearestRenderableAdditionLine({
+      fileDiff,
+      lineNumber,
+      direction,
+      expandedHunks: expandUnchanged
+        ? true
+        : this.hunksRenderer.getExpandedHunksMap(),
+      collapsedContextThreshold,
+    });
+  }
+
+  // Expand collapsed context so a one-based new-file line can render: one
+  // deterministic expansion from the nearest gap edge, sized to reach the
+  // target plus the normal expansion step (clamped to the gap at render).
+  // Routed through expandHunk so subclass expansion flows (CodeView's
+  // deferred pendingExpansions) apply.
+  public revealLine(lineNumber: number): boolean {
+    const fileDiff = this.fileDiffCache;
+    const {
+      expandUnchanged = false,
+      collapsedContextThreshold = DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
+      expansionLineCount = 100,
+    } = this.options;
+    if (fileDiff == null || fileDiff.isPartial || expandUnchanged) {
+      return false;
+    }
+    const expandedHunks = this.hunksRenderer.getExpandedHunksMap();
+
+    for (const [hunkIndex, hunk] of fileDiff.hunks.entries()) {
+      if (lineNumber < hunk.additionStart) {
+        const region = getExpandedRegion({
+          isPartial: fileDiff.isPartial,
+          rangeSize: hunk.collapsedBefore,
+          expandedHunks,
+          hunkIndex,
+          collapsedContextThreshold,
+        });
+        const gapStart = hunk.additionStart - region.rangeSize;
+        if (
+          region.renderAll ||
+          lineNumber < gapStart + region.fromStart ||
+          lineNumber >= hunk.additionStart - region.fromEnd
+        ) {
+          return false;
+        }
+        const fromStartDistance =
+          lineNumber - (gapStart + region.fromStart) + 1;
+        const fromEndDistance =
+          hunk.additionStart - region.fromEnd - lineNumber;
+        if (fromStartDistance <= fromEndDistance) {
+          this.expandHunk(
+            hunkIndex,
+            'up',
+            fromStartDistance + expansionLineCount
+          );
+        } else {
+          this.expandHunk(
+            hunkIndex,
+            'down',
+            fromEndDistance + expansionLineCount
+          );
+        }
+        return true;
+      }
+      if (lineNumber < hunk.additionStart + hunk.additionCount) {
+        return false;
+      }
+    }
+
+    const trailingRegion = getTrailingExpandedRegion({
+      fileDiff,
+      hunkIndex: fileDiff.hunks.length - 1,
+      expandedHunks,
+      collapsedContextThreshold,
+      errorPrefix: 'FileDiff.revealLine',
+    });
+    if (trailingRegion == null || trailingRegion.renderAll) {
+      return false;
+    }
+    const lastHunk = fileDiff.hunks[fileDiff.hunks.length - 1];
+    const trailingStart = lastHunk.additionStart + lastHunk.additionCount;
+    if (
+      lineNumber < trailingStart + trailingRegion.fromStart ||
+      lineNumber >= trailingStart + trailingRegion.rangeSize
+    ) {
+      return false;
+    }
+    this.expandHunk(
+      fileDiff.hunks.length,
+      'up',
+      lineNumber -
+        (trailingStart + trailingRegion.fromStart) +
+        1 +
+        expansionLineCount
+    );
+    return true;
   }
 
   // Whether render() may run the session-exit recompute on dirty metadata.

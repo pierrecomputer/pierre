@@ -302,6 +302,92 @@ export function isAdditionLineRenderable({
   );
 }
 
+export interface GetNearestRenderableAdditionLineProps extends IsAdditionLineRenderableProps {
+  direction: 'up' | 'down';
+}
+
+/**
+ * The nearest renderable new-file line at or beyond `lineNumber` in the
+ * given direction (one-based), or undefined when every line that way is
+ * hidden inside collapsed regions. Sequential caret motion uses this to skip
+ * over collapsed regions like code folds; it walks the hunk metadata once
+ * instead of probing line by line across a gap.
+ */
+export function getNearestRenderableAdditionLine({
+  fileDiff,
+  lineNumber,
+  direction,
+  expandedHunks,
+  collapsedContextThreshold,
+}: GetNearestRenderableAdditionLineProps): number | undefined {
+  if (expandedHunks === true || fileDiff.isPartial) {
+    return lineNumber;
+  }
+
+  // Renderable [start, end) line ranges in ascending order, plus the
+  // exclusive end of the modeled range — anything past it (the editor's
+  // phantom document-end line) counts as renderable.
+  const ranges: Array<[start: number, end: number]> = [];
+  let modeledEnd = 1;
+  for (const [hunkIndex, hunk] of fileDiff.hunks.entries()) {
+    const region = getExpandedRegion({
+      isPartial: fileDiff.isPartial,
+      rangeSize: hunk.collapsedBefore,
+      expandedHunks,
+      hunkIndex,
+      collapsedContextThreshold,
+    });
+    const gapStart = hunk.additionStart - region.rangeSize;
+    if (region.renderAll) {
+      ranges.push([gapStart, hunk.additionStart]);
+    } else {
+      if (region.fromStart > 0) {
+        ranges.push([gapStart, gapStart + region.fromStart]);
+      }
+      if (region.fromEnd > 0) {
+        ranges.push([hunk.additionStart - region.fromEnd, hunk.additionStart]);
+      }
+    }
+    ranges.push([hunk.additionStart, hunk.additionStart + hunk.additionCount]);
+    modeledEnd = hunk.additionStart + hunk.additionCount;
+  }
+  const trailingRegion = getTrailingExpandedRegion({
+    fileDiff,
+    hunkIndex: fileDiff.hunks.length - 1,
+    expandedHunks,
+    collapsedContextThreshold,
+    errorPrefix: 'getNearestRenderableAdditionLine',
+  });
+  if (trailingRegion != null) {
+    const trailingStart = modeledEnd;
+    modeledEnd = trailingStart + trailingRegion.rangeSize;
+    if (trailingRegion.renderAll) {
+      ranges.push([trailingStart, modeledEnd]);
+    } else if (trailingRegion.fromStart > 0) {
+      ranges.push([trailingStart, trailingStart + trailingRegion.fromStart]);
+    }
+  }
+
+  if (lineNumber >= modeledEnd) {
+    return lineNumber;
+  }
+  if (direction === 'down') {
+    for (const [start, end] of ranges) {
+      if (end > lineNumber) {
+        return Math.max(start, lineNumber);
+      }
+    }
+    return undefined;
+  }
+  for (let index = ranges.length - 1; index >= 0; index--) {
+    const [start, end] = ranges[index];
+    if (start <= lineNumber) {
+      return Math.min(end - 1, lineNumber);
+    }
+  }
+  return undefined;
+}
+
 export function getHunkSeparatorHeight({
   type,
   metrics,

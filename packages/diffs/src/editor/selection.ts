@@ -24,6 +24,14 @@ export const DirectionForward = 1;
 
 export interface CursorMoveOptions {
   getSoftLineOffsets?: (line: number) => ArrayLike<number> | undefined;
+  /**
+   * Fold-skip resolver for vertical motion crossing document lines: the
+   * nearest renderable line at or beyond the target in the move direction,
+   * or undefined when everything that way is hidden inside a collapsed
+   * region (the caret then stays put). Soft-line moves within one document
+   * line never consult it.
+   */
+  resolveRenderableLine?: ResolveRenderableLine;
 }
 
 interface SoftLineInfo {
@@ -123,6 +131,17 @@ export function resolveIndentEdits(
 }
 
 /**
+ * The nearest zero-based document line at or beyond `line` in `direction`
+ * that has a rendered row, or undefined when everything that way is hidden
+ * inside a collapsed region. Vertical caret motion uses it to skip collapsed
+ * regions atomically, like code folds.
+ */
+export type ResolveRenderableLine = (
+  line: number,
+  direction: 'up' | 'down'
+) => number | undefined;
+
+/**
  * Maps the cursor move to all selections.
  */
 export function mapCursorMove(
@@ -160,8 +179,13 @@ export function mapCursorMove(
       if (moved !== undefined) {
         line = moved.line;
         character = moved.character;
-      } else {
-        line = Math.max(0, line - 1);
+      } else if (line > 0) {
+        // Fold-skip: when the line above is collapsed, jump to the nearest
+        // renderable line above it; stay put when nothing above renders.
+        line =
+          options.resolveRenderableLine == null
+            ? line - 1
+            : (options.resolveRenderableLine(line - 1, 'up') ?? line);
       }
     } else if (shortcut === 'down') {
       const moved = moveBySoftLine(textDocument, line, character, 1, options);
@@ -169,7 +193,16 @@ export function mapCursorMove(
         line = moved.line;
         character = moved.character;
       } else {
-        line = Math.min(Math.max(lineCount - 1, 0), line + 1);
+        const maxLine = Math.max(lineCount - 1, 0);
+        if (line < maxLine) {
+          line =
+            options.resolveRenderableLine == null
+              ? line + 1
+              : Math.min(
+                  options.resolveRenderableLine(line + 1, 'down') ?? line,
+                  maxLine
+                );
+        }
       }
     } else if (isCollapsedSelection(selection)) {
       const lineLength = textDocument.getLineLength(line);
@@ -238,7 +271,20 @@ function moveBySoftLine(
       return { line, character };
     }
 
-    targetLine = nextLine;
+    // Fold-skip: crossing to another document line skips collapsed regions;
+    // when nothing renders in that direction the caret stays put.
+    const resolvedLine =
+      options.resolveRenderableLine == null
+        ? nextLine
+        : options.resolveRenderableLine(
+            nextLine,
+            direction < 0 ? 'up' : 'down'
+          );
+    if (resolvedLine === undefined) {
+      return { line, character };
+    }
+
+    targetLine = Math.min(resolvedLine, textDocument.lineCount - 1);
     const targetCount = getSoftLineCount(textDocument, targetLine, options);
     target = getSoftLineInfoAtIndex(
       textDocument,

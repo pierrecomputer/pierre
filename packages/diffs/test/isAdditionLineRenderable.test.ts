@@ -3,7 +3,10 @@ import { describe, expect, test } from 'bun:test';
 import type { FileDiffMetadata, HunkExpansionRegion } from '../src/types';
 import { iterateOverDiff } from '../src/utils/iterateOverDiff';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
-import { isAdditionLineRenderable } from '../src/utils/virtualDiffLayout';
+import {
+  getNearestRenderableAdditionLine,
+  isAdditionLineRenderable,
+} from '../src/utils/virtualDiffLayout';
 
 const COLLAPSED_CONTEXT_THRESHOLD = 1;
 
@@ -100,5 +103,60 @@ describe('isAdditionLineRenderable', () => {
         collapsedContextThreshold: COLLAPSED_CONTEXT_THRESHOLD,
       })
     ).toBe(true);
+  });
+});
+
+describe('getNearestRenderableAdditionLine', () => {
+  // The 40-line fixture's hunks (context 4) cover lines 6-14 and 26-34;
+  // gaps are 1-5, 15-25, and trailing 35-40.
+  function nearest(
+    lineNumber: number,
+    direction: 'up' | 'down',
+    expandedHunks: Map<number, HunkExpansionRegion> = new Map()
+  ): number | undefined {
+    return getNearestRenderableAdditionLine({
+      fileDiff: makeDiff(),
+      lineNumber,
+      direction,
+      expandedHunks,
+      collapsedContextThreshold: COLLAPSED_CONTEXT_THRESHOLD,
+    });
+  }
+
+  test('returns renderable lines unchanged', () => {
+    expect(nearest(10, 'down')).toBe(10);
+    expect(nearest(10, 'up')).toBe(10);
+  });
+
+  test('skips down across the collapsed gap to the next hunk', () => {
+    expect(nearest(15, 'down')).toBe(26);
+  });
+
+  test('skips up across the collapsed gap to the previous hunk', () => {
+    expect(nearest(25, 'up')).toBe(14);
+  });
+
+  test('lands on partially expanded gap edges', () => {
+    const expanded = new Map<number, HunkExpansionRegion>([
+      [1, { fromStart: 2, fromEnd: 3 }],
+    ]);
+    // Gap 15-25: lines 15-16 and 23-25 render.
+    expect(nearest(15, 'down', expanded)).toBe(15);
+    expect(nearest(17, 'down', expanded)).toBe(23);
+    expect(nearest(22, 'up', expanded)).toBe(16);
+  });
+
+  test('stays put inside the collapsed trailing gap going down', () => {
+    expect(nearest(36, 'down')).toBeUndefined();
+    expect(nearest(36, 'up')).toBe(34);
+  });
+
+  test('stays put inside the collapsed leading gap going up', () => {
+    expect(nearest(3, 'up')).toBeUndefined();
+    expect(nearest(3, 'down')).toBe(6);
+  });
+
+  test('treats lines beyond the modeled range as renderable', () => {
+    expect(nearest(41, 'down')).toBe(41);
   });
 });

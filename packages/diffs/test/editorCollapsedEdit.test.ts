@@ -167,7 +167,7 @@ describe('diff editor: collapsed regions during edit', () => {
       // Line 50 (index 49) sits below the collapsed gap.
       typeAt(fixture.editor, 49, 0, 'X');
       await wait(0);
-      expect(editor.getState().file.contents).toContain('Xline 50 changed');
+      expect(editor.getFile()?.contents).toContain('Xline 50 changed');
 
       const content = findAdditionContent(container);
       const rows = content?.querySelectorAll('[data-line="50"]') ?? [];
@@ -198,9 +198,7 @@ describe('diff editor: collapsed regions during edit', () => {
       typeAt(editor, 49, 'line 50 changed'.length + 1, '\nNEW LINE');
       await wait(20);
 
-      expect(editor.getState().file.contents).toContain(
-        'line 50 changed\nNEW LINE'
-      );
+      expect(editor.getFile()?.contents).toContain('line 50 changed\nNEW LINE');
       const lineNumbers = renderedLineNumbers(container);
       expect(new Set(lineNumbers).size).toBe(lineNumbers.length);
       // The collapsed gap stays collapsed across the full re-render.

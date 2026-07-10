@@ -46,7 +46,11 @@ import {
   type SearchPanelMode,
   SearchPanelWidget,
 } from './searchPanel';
-import type { AutoSurround, CursorMoveOptions } from './selection';
+import type {
+  AutoSurround,
+  CursorMoveOptions,
+  ResolveRenderableLine,
+} from './selection';
 import {
   applyDeleteCharacterToSelections,
   applyDeleteHardLineForwardToSelections,
@@ -523,6 +527,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       return { direction, start, end };
     });
     this.#updateSelections(resolvedSelections);
+    const primarySelection = resolvedSelections.at(-1);
+    if (primarySelection !== undefined) {
+      this.#revealLineIfCollapsed(getCaretPosition(primarySelection).line);
+    }
     this.#scrollToPrimaryCaret();
   }
 
@@ -906,6 +914,32 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   // line as renderable.
   #isLineRenderable(line: number): boolean {
     return this.#fileInstance?.isLineRenderable?.(line + 1) ?? true;
+  }
+
+  // Fold-skip resolver for vertical caret motion (zero-based lines), or
+  // undefined for hosts without collapsible regions so motion stays plain
+  // line arithmetic.
+  get #resolveRenderableLine(): ResolveRenderableLine | undefined {
+    const fileInstance = this.#fileInstance;
+    if (fileInstance?.getNearestRenderableLine == null) {
+      return undefined;
+    }
+    return (line, direction) => {
+      const nearest = fileInstance.getNearestRenderableLine!(
+        line + 1,
+        direction
+      );
+      return nearest == null ? undefined : nearest - 1;
+    };
+  }
+
+  // Jump targets (search matches, undo restores, setSelections, doc-end
+  // moves) may land inside a collapsed region; expand it minimally so the
+  // caret's row can render before the scroll below retries toward it.
+  #revealLineIfCollapsed(line: number): void {
+    if (!this.#isLineRenderable(line)) {
+      this.#fileInstance?.revealLine?.(line + 1);
+    }
   }
 
   get #diffSyle(): 'unified' | 'split' {
@@ -1340,11 +1374,12 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           mvShortcut !== undefined &&
           textDocument !== undefined
         ) {
-          const cursorMoveOptions: CursorMoveOptions | undefined = this.#isWrap
-            ? {
-                getSoftLineOffsets: (line) => this.#wrapLineText(line),
-              }
-            : undefined;
+          const cursorMoveOptions: CursorMoveOptions = {
+            getSoftLineOffsets: this.#isWrap
+              ? (line) => this.#wrapLineText(line)
+              : undefined,
+            resolveRenderableLine: this.#resolveRenderableLine,
+          };
           if (e.shiftKey) {
             this.#updateSelections(
               mapSelectionShift(
@@ -1774,6 +1809,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           const nextMatch = findNexMatch(textDocument, selections);
           if (nextMatch !== undefined) {
             this.#updateSelections(nextMatch);
+            const primaryMatch = nextMatch.at(-1);
+            if (primaryMatch !== undefined) {
+              this.#revealLineIfCollapsed(getCaretPosition(primaryMatch).line);
+            }
             this.#scrollToPrimaryCaret();
           }
         }
@@ -1915,9 +1954,13 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       case 'moveCursorToDocEnd':
         {
           const atEnd = command === 'moveCursorToDocEnd';
-          this.#updateSelections([
-            getDocumentBoundarySelection(textDocument, atEnd, this.#isDiff),
-          ]);
+          const boundarySelection = getDocumentBoundarySelection(
+            textDocument,
+            atEnd,
+            this.#isDiff
+          );
+          this.#updateSelections([boundarySelection]);
+          this.#revealLineIfCollapsed(getCaretPosition(boundarySelection).line);
           this.#scrollToPrimaryCaret();
         }
         break;
@@ -1928,11 +1971,16 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           const atEnd = command === 'expandSelectionDocEnd';
           const selections = this.#selections;
           if (selections !== undefined) {
+            const boundarySelection = getDocumentBoundarySelection(
+              textDocument,
+              atEnd,
+              this.#isDiff
+            );
             this.#updateSelections(
-              extendSelections(
-                selections,
-                getDocumentBoundarySelection(textDocument, atEnd, this.#isDiff)
-              )
+              extendSelections(selections, boundarySelection)
+            );
+            this.#revealLineIfCollapsed(
+              getCaretPosition(boundarySelection).line
             );
             this.#scrollToPrimaryCaret();
           }
@@ -3554,6 +3602,9 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         endOffset
       );
       this.#updateSelections([nextSelection]);
+      // Search counts include matches hidden in collapsed regions; navigating
+      // to one reveals it.
+      this.#revealLineIfCollapsed(getCaretPosition(nextSelection).line);
       this.#scrollToPrimaryCaret(true); // scroll to the primary caret and don't focus
       this.#retainSearchPanelFocus = retainFocus;
     };
@@ -4010,6 +4061,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       // focus to update the native window selection, and scroll to the caret
       // to mock the 'contenteditable' behavior
       if (options?.skipFocus !== true) {
+        // An undo/redo caret restore can land inside a collapsed region.
+        const revealTarget = newSelections.at(-1);
+        if (revealTarget !== undefined) {
+          this.#revealLineIfCollapsed(getCaretPosition(revealTarget).line);
+        }
         if (this.#primaryCaretElement !== undefined) {
           requestAnimationFrame(() => {
             this.#primaryCaretElement?.scrollIntoView({

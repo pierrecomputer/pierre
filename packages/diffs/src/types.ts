@@ -1037,6 +1037,22 @@ export interface DiffsEditableComponent<
    */
   isLineRenderable?: (lineNumber: number) => boolean;
   /**
+   * The nearest renderable one-based new-file line at or beyond `lineNumber`
+   * in the given direction, or undefined when every line that way is hidden
+   * inside collapsed regions. Sequential caret motion uses this to skip
+   * collapsed regions like code folds.
+   */
+  getNearestRenderableLine?: (
+    lineNumber: number,
+    direction: 'up' | 'down'
+  ) => number | undefined;
+  /**
+   * Expand collapsed context so the given one-based new-file line can
+   * render. Returns true when an expansion was performed (a re-render will
+   * follow, possibly deferred).
+   */
+  revealLine?: (lineNumber: number) => boolean;
+  /**
    * Attach an editor to this component. The returned detach closure receives
    * `recycle: true` when the editor is only being released by a virtualized
    * unmount (the session continues on remount) and no argument/false on a
