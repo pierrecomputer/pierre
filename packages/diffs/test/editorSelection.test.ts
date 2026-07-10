@@ -902,6 +902,25 @@ describe('getAutoSurroundReplacementTexts', () => {
     ]);
   });
 
+  test('reselects the original quote when auto-surrounding a quote', () => {
+    const textDocument = new TextDocument('inmemory://1', '"');
+    const selections = [createSelection(0, 0, 0, 1, DirectionForward)];
+    const texts = getAutoSurroundReplacementTexts(
+      textDocument,
+      selections,
+      '"'
+    );
+    const { nextSelections } = applyTextReplaceToSelections(
+      textDocument,
+      selections,
+      texts!
+    );
+    expect(textDocument.getText()).toBe('"""');
+    expect(nextSelections).toEqual([
+      createSelection(0, 1, 0, 2, DirectionForward),
+    ]);
+  });
+
   test('never disables auto-surround for quotes and brackets', () => {
     const textDocument = new TextDocument('inmemory://1', 'hello');
     const selections = [createSelection(0, 0, 0, 5, DirectionForward)];
