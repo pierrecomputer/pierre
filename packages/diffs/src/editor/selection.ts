@@ -1,12 +1,16 @@
-import type { DiffLineAnnotation } from '../types';
-import { applyDocumentChangeToLineAnnotations } from './lineAnnotations';
 import type {
+  DiffLineAnnotation,
+  EditorSelection,
   Position,
   Range,
+  SelectionDirection,
+  TextEdit,
+} from '../types';
+import { applyDocumentChangeToLineAnnotations } from './lineAnnotations';
+import type {
   ResolvedTextEdit,
   TextDocument,
   TextDocumentChange,
-  TextEdit,
 } from './textDocument';
 import {
   createSegmenter,
@@ -17,15 +21,6 @@ import {
 export const DirectionBackward = -1;
 export const DirectionNone = 0;
 export const DirectionForward = 1;
-
-export type SelectionDirection =
-  | typeof DirectionBackward
-  | typeof DirectionNone
-  | typeof DirectionForward;
-
-export interface EditorSelection extends Range {
-  direction: SelectionDirection;
-}
 
 export interface CursorMoveOptions {
   getSoftLineOffsets?: (line: number) => ArrayLike<number> | undefined;

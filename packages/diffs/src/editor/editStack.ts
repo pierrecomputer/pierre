@@ -1,5 +1,4 @@
-import type { DiffLineAnnotation } from '../types';
-import type { EditorSelection } from './selection';
+import type { DiffLineAnnotation, EditorSelection } from '../types';
 import type { ResolvedTextEdit, TextDocument } from './textDocument';
 
 /** Largest number of undo or redo entries kept; oldest entries drop first once exceeded. */

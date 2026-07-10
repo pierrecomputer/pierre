@@ -1,7 +1,7 @@
 'use client';
 
 import { Editor } from '@pierre/diffs/editor';
-import { EditorProvider, File } from '@pierre/diffs/react';
+import { EditProvider, File } from '@pierre/diffs/react';
 import type { PreloadedFileResult } from '@pierre/diffs/ssr';
 import { useMemo } from 'react';
 
@@ -25,13 +25,13 @@ export function EditShortcuts({ prerenderedFile }: EditShortcutsProps) {
   return (
     <div className="grid grid-cols-1 items-start gap-8 md:grid-cols-5">
       <div className="not-prose md:col-span-3">
-        <EditorProvider editor={editor}>
+        <EditProvider editor={editor}>
           <File
             {...prerenderedFile}
             className="diff-container"
             contentEditable
           />
-        </EditorProvider>
+        </EditProvider>
       </div>
 
       <div className="not-prose overflow-hidden rounded-lg border md:col-span-2">

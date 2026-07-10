@@ -10,10 +10,9 @@
 The Vanilla JS API exposes four core components: `CodeView` (render a mixed,
 virtualized list of files and diffs in one scroll container), `FileDiff`
 (compare file contents directly or render a pre-parsed `FileDiffMetadata`),
-`File` (render a single code file without diff), and `UnresolvedFile` (render
-merge conflicts with built-in resolution controls). Typically you'll want to
-interface with these as they'll handle the complicated aspects of syntax
-highlighting, theming, and interactivity for you.
+`File` (render a single code file without a diff), and `UnresolvedFile` (render
+merge conflicts with built-in resolution controls). Start with these components
+for syntax highlighting, theming, layout, and interactivity.
 
 <VanillaComponentTabs
   codeViewExample={codeViewExample}
@@ -24,6 +23,9 @@ highlighting, theming, and interactivity for you.
 
 > `UnresolvedFile` is currently beta/experimental and may change in future
 > releases.
+
+See [Edit mode → Vanilla JS](#edit-mode-vanilla-js) for attaching `Editor` to a
+rendered `File` or `FileDiff` with `edit()`.
 
 `UnresolvedFile` in vanilla supports both uncontrolled and controlled callbacks
 (`onMergeConflictResolve` / `onMergeConflictAction`).

@@ -1,4 +1,10 @@
-import type { DiffLineAnnotation } from '../types';
+import type {
+  DiffLineAnnotation,
+  EditorSelection,
+  Position,
+  Range,
+  TextEdit,
+} from '../types';
 import { countLineBreaks } from '../utils/computeFileOffsets';
 import {
   coalesceEditStackEntries,
@@ -8,80 +14,8 @@ import {
 } from './editStack';
 import { PieceTable } from './pieceTable';
 import type { SearchParams } from './searchPanel';
-import { type EditorSelection } from './selection';
 
-/**
- * Position in a text document expressed as zero-based line and character offset.
- * The offsets are based on a UTF-16 string representation. So a string of the form
- * `a𐐀b` the character offset of the character `a` is 0, the character offset of `𐐀`
- * is 1 and the character offset of b is 3 since `𐐀` is represented using two code
- * units in UTF-16.
- *
- * Positions are line end character agnostic. So you can not specify a position that
- * denotes `\r|\n` or `\n|` where `|` represents the character offset.
- */
-export interface Position {
-  /**
-   * Line position in a document (zero-based).
-   *
-   * If a line number is greater than the number of lines in a document, it
-   * defaults back to the number of lines in the document.
-   * If a line number is negative, it defaults to 0.
-   *
-   * The above two properties are implementation specific.
-   */
-  readonly line: number;
-  /**
-   * Character offset on a line in a document (zero-based).
-   *
-   * The meaning of this offset is determined by the negotiated
-   * `PositionEncodingKind`.
-   *
-   * If the character value is greater than the line length it defaults back
-   * to the line length. This property is implementation specific.
-   */
-  readonly character: number;
-}
-
-/**
- * A range in a text document expressed as (zero-based) start and end positions.
- *
- * If you want to specify a range that contains a line including the line ending
- * character(s) then use an end position denoting the start of the next line.
- * For example:
- * ```ts
- * {
- *     start: { line: 5, character: 23 }
- *     end : { line 6, character : 0 }
- * }
- * ```
- */
-export interface Range {
-  /**
-   * The range's start position.
-   */
-  readonly start: Position;
-  /**
-   * The range's end position.
-   */
-  readonly end: Position;
-}
-
-/**
- * A text edit applicable to a text document.
- */
-export interface TextEdit {
-  /**
-   * The range of the text document to be manipulated. To insert
-   * text into a document create a range where start === end.
-   */
-  readonly range: Range;
-  /**
-   * The string to be inserted. For delete operations use an
-   * empty string.
-   */
-  readonly newText: string;
-}
+export type { Position, Range, TextEdit } from '../types';
 
 /** Different with `TextEdit`, the range has been resolved to offsets. */
 export interface ResolvedTextEdit {
@@ -139,7 +73,7 @@ export class TextDocument<LAnnotation> {
   constructor(
     uri: string,
     text: string,
-    languageId = 'plaintext',
+    languageId = 'text',
     version = 0,
     editStack: EditStack<LAnnotation> = new EditStack()
   ) {

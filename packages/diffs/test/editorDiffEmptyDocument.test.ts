@@ -73,9 +73,9 @@ async function createDiffEditorFixture(
     theme: DEFAULT_THEMES,
     diffStyle,
   });
-  const editor = new Editor<undefined>();
   const oldFile: FileContents = { name: 'edit.ts', contents: oldContents };
   const newFile: FileContents = { name: 'edit.ts', contents: newContents };
+  const editor = new Editor<undefined>();
 
   fileDiff.render({
     oldFile,
@@ -111,7 +111,7 @@ async function createDiffEditorFixture(
 // Replaces the whole document with `newText`, mirroring select-all then a
 // delete or paste.
 function replaceAll(editor: Editor<undefined>, newText: string): void {
-  const lines = editor.getState().file.contents.split('\n');
+  const lines = editor.getText().split('\n');
   const end = { line: lines.length - 1, character: lines.at(-1)!.length };
   editor.setSelections([
     { start: { line: 0, character: 0 }, end, direction: 'none' },
@@ -136,7 +136,7 @@ describe('diff editor: select-all then delete', () => {
         // Delete everything.
         replaceAll(editor, '');
         await wait(0);
-        expect(editor.getState().file.contents).toBe('');
+        expect(editor.getText()).toBe('');
 
         // The additions column must still exist with one empty editable line.
         const content = findAdditionContent(container);
@@ -158,18 +158,18 @@ describe('diff editor: select-all then delete', () => {
           true
         );
         await wait(0);
-        expect(editor.getState().file.contents).toBe('hello');
+        expect(editor.getText()).toBe('hello');
 
         // Undo reverts the typing, then the deletion, back to the original.
         editor.undo();
         editor.undo();
         for (let attempt = 0; attempt < 40; attempt++) {
-          if (editor.getState().file.contents === 'a\nb\nc\n') {
+          if (editor.getText() === 'a\nb\nc\n') {
             break;
           }
           await wait(10);
         }
-        expect(editor.getState().file.contents).toBe('a\nb\nc\n');
+        expect(editor.getText()).toBe('a\nb\nc\n');
       } finally {
         await fixture.cleanup();
       }
@@ -194,7 +194,7 @@ describe('diff editor: select-all then delete', () => {
       try {
         replaceAll(editor, '');
         for (let attempt = 0; attempt < 40; attempt++) {
-          if (editor.getState().file.contents === '') {
+          if (editor.getText() === '') {
             break;
           }
           await wait(10);
@@ -275,7 +275,7 @@ describe('diff editor: select-all then delete', () => {
       try {
         replaceAll(editor, '');
         await wait(0);
-        expect(editor.getState().file.contents).toBe('');
+        expect(editor.getText()).toBe('');
 
         editor.setSelections([
           {
@@ -315,7 +315,7 @@ describe('diff editor: select-all then delete', () => {
           await wait(10);
         }
 
-        expect(editor.getState().file.contents).toBe('a\n');
+        expect(editor.getText()).toBe('a\n');
         const freshContent = findAdditionContent(container);
         expect(freshContent).toBeDefined();
         if (freshContent == null) return;
@@ -381,7 +381,7 @@ describe('diff editor: cmd+backspace (deleteHardLineBackward) deletes to line st
         ]);
         dispatchBeforeInput(content, 'deleteHardLineBackward');
         await wait(0);
-        expect(editor.getState().file.contents).toBe('\nfoo\n');
+        expect(editor.getText()).toBe('\nfoo\n');
       } finally {
         await fixture.cleanup();
       }

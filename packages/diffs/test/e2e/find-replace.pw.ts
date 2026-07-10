@@ -13,7 +13,7 @@ async function openFixture(page: Page): Promise<void> {
 }
 
 const contents = (page: Page): Promise<string> =>
-  page.evaluate(() => window.__editor?.getState().file.contents ?? '');
+  page.evaluate(() => window.__editor?.getText() ?? '');
 
 // Focus the editor surface, then open the search panel with the real shortcut.
 // The panel container is a zero-height CSS grid wrapper (its cells are laid out

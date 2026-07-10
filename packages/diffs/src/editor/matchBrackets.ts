@@ -1,4 +1,5 @@
-import type { Position, Range, TextDocument } from './textDocument';
+import type { Position, Range } from '../types';
+import type { TextDocument } from './textDocument';
 import type { EditorTokenizer } from './tokenzier';
 
 const OPEN_BRACKETS = new Map([

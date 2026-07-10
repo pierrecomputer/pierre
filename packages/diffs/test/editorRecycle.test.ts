@@ -15,8 +15,10 @@ import { installDom } from './domHarness';
 
 function createTestHighlighter(): DiffsHighlighter {
   return {
+    getLanguage: () => undefined,
     getLoadedLanguages: () => [],
     getTheme: () => ({ colors: {} }),
+    loadLanguage: async () => {},
     setTheme: () => ({ colorMap: [''] }),
   } as unknown as DiffsHighlighter;
 }
@@ -188,7 +190,7 @@ describe('Editor recycle cleanUp', () => {
       const first = new TestEditableComponent(createFile());
       editor.edit(first);
       insertAtStart(editor, 'X');
-      expect(editor.getState().file.contents).toBe(`X${FILE_CONTENTS}`);
+      expect(editor.getText()).toBe(`X${FILE_CONTENTS}`);
 
       // Simulate a virtualized unmount: the host recycles, the editor is
       // detached non-destructively.
@@ -199,11 +201,11 @@ describe('Editor recycle cleanUp', () => {
       // document (holding the unsaved edit) must win over host contents.
       const second = new TestEditableComponent(createFile());
       editor.edit(second);
-      expect(editor.getState().file.contents).toBe(`X${FILE_CONTENTS}`);
+      expect(editor.getText()).toBe(`X${FILE_CONTENTS}`);
 
       // Undo history lives in the retained document and survives with it.
       editor.undo();
-      expect(editor.getState().file.contents).toBe(FILE_CONTENTS);
+      expect(editor.getText()).toBe(FILE_CONTENTS);
 
       editor.cleanUp();
     } finally {
@@ -228,7 +230,7 @@ describe('Editor recycle cleanUp', () => {
       editor.edit(second);
       insertAtStart(editor, 'Y');
 
-      expect(editor.getState().file.contents).toBe(`Y${FILE_CONTENTS}`);
+      expect(editor.getText()).toBe(`Y${FILE_CONTENTS}`);
       const firstLine = second.contentElement.children[0] as HTMLElement;
       expect(firstLine.textContent).toBe('Yalpha');
 
@@ -245,7 +247,7 @@ describe('Editor recycle cleanUp', () => {
       const first = new TestEditableComponent(createFile());
       editor.edit(first);
       insertAtStart(editor, 'X');
-      expect(editor.getState().file.contents).toBe(`X${FILE_CONTENTS}`);
+      expect(editor.getText()).toBe(`X${FILE_CONTENTS}`);
 
       editor.cleanUp();
       first.cleanUp();
@@ -254,10 +256,10 @@ describe('Editor recycle cleanUp', () => {
       // from whatever the host currently renders and undo history is gone.
       const second = new TestEditableComponent(createFile());
       editor.edit(second);
-      expect(editor.getState().file.contents).toBe(FILE_CONTENTS);
+      expect(second.contentElement.textContent).toBe('alphabravocharlie');
 
       editor.undo();
-      expect(editor.getState().file.contents).toBe(FILE_CONTENTS);
+      expect(second.contentElement.textContent).toBe('alphabravocharlie');
 
       editor.cleanUp();
     } finally {
@@ -284,7 +286,7 @@ describe('Editor recycle cleanUp', () => {
         lang: 'text',
       });
       editor.edit(other);
-      expect(editor.getState().file.contents).toBe('zulu');
+      expect(other.contentElement.textContent).toBe('zulu');
 
       editor.cleanUp();
     } finally {

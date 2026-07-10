@@ -8,7 +8,7 @@ async function openFixture(page: Page): Promise<void> {
 }
 
 const contents = (page: Page): Promise<string> =>
-  page.evaluate(() => window.__editor?.getState().file.contents ?? '');
+  page.evaluate(() => window.__editor?.getText() ?? '');
 
 test.describe('multi-cursor and indentation', () => {
   // Adding a caret with a modifier-click can't be simulated in the pinned

@@ -28,6 +28,7 @@ export function EditorComponentTabs({
       <ButtonGroup
         value={mode}
         onValueChange={(value) => setMode(value as EditorComponentMode)}
+        className="no-scrollbar max-w-full overflow-x-auto md:overflow-visible"
       >
         <ButtonGroupItem value="file">File</ButtonGroupItem>
         <ButtonGroupItem value="file-diff">FileDiff</ButtonGroupItem>

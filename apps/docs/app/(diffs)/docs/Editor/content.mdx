@@ -18,6 +18,11 @@ virtualization. Edit mode includes:
 - SSR support
 - Mobile-friendly
 
+Use the `Editor` API to add editing to a rendered `File`, `FileDiff`,
+`MultiFileDiff`, or `PatchDiff`. In React, wrap the surface in `EditProvider`
+and set `contentEditable`. In vanilla JS, call `editor.edit(component)` after
+render.
+
 To enable edit mode on a `File` instance, import `Editor` from
 `@pierre/diffs/editor`. It is intentionally separate from the core bundle so you
 can lazy-load it when editing is optional.
@@ -31,9 +36,8 @@ You render the surface first, then attach editing:
 
 1. **Attach** — Call `editor.edit(component)` in vanilla JS, or pass
    `contentEditable` on a React `File`, `FileDiff`, `MultiFileDiff`, or
-   `PatchDiff` wrapped in `EditorProvider`. The hookup returns a dispose
-   function (vanilla) or runs automatically when `contentEditable` toggles
-   (React).
+   `PatchDiff` wrapped in `EditProvider`. The hookup returns a dispose function
+   (vanilla) or runs automatically when `contentEditable` toggles (React).
 2. **Edit surface** — Edit mode sets `contentEditable` on the code content
    element so mobile keyboards, paste, and native selection UI work as users
    expect. Clipboard shortcuts are handled by the browser; edit mode commands
@@ -56,10 +60,17 @@ deleted lines and annotation lines remain read-only.
 ### React
 
 Create one `Editor` instance (typically with `useMemo`), wrap your tree in
-`EditorProvider`, and set `contentEditable` on `File`, `FileDiff`,
-`MultiFileDiff`, or `PatchDiff` when editing should be active. The provider
-cleans up the editor on unmount. We highly recommend using the `Virtualizer`
-component for best performance when editing large files.
+`EditProvider`, and set `contentEditable` on `File`, `FileDiff`,
+`MultiFileDiff`, or `PatchDiff`. The provider cleans up on unmount. Use
+`Virtualizer` for large editable files. A common single-file pattern is:
+
+```tsx
+<EditProvider editor={editor}>
+  <Virtualizer>
+    <File file={file} contentEditable />
+  </Virtualizer>
+</EditProvider>
+```
 
 <EditorComponentTabs
   fileExample={editorReactExample}
@@ -69,9 +80,9 @@ component for best performance when editing large files.
 
 ### Vanilla JS
 
-For vanilla integrations, render with `File` or `FileDiff` first, then attach
-the editor. For best performance when editing large files, we strongly recommend
-using `VirtualizedFile` and `VirtualizedFileDiff`.
+Render with `File` or `FileDiff` first, then attach the editor with
+`editor.edit(component)`. Use `VirtualizedFile` and `VirtualizedFileDiff` for
+large editable files. Call `cleanUp()` when the editor is removed.
 
 <EditorComponentTabs
   fileExample={editorVanillaFileExample}
@@ -81,17 +92,53 @@ using `VirtualizedFile` and `VirtualizedFileDiff`.
 ### Editor Options
 
 Pass these when constructing `new Editor({ ... })`, or update them later with
-[`setOptions`](#api-reference).
+[`setOptions`](#edit-mode-api-reference).
 
 <DocsCodeExample {...editorOptionsType} />
 
 ### API Reference
 
-These methods are available after you create an `Editor` instance. Attach the
-editor to a rendered `File` or `FileDiff` first, then use the methods below to
-query state, apply edits, and control selections programmatically.
+These methods are available on an `Editor` instance. Attach it to a rendered
+`File` or `FileDiff` with `edit()` first.
 
 <DocsCodeExample {...editorPublicApi} />
+
+#### Markers
+
+Markers add inline diagnostics—errors, warnings, and other annotations—to the
+editable surface, with a hover popover that shows each marker's message. They
+are useful for surfacing linter or language-server output alongside live edits.
+
+Each marker is positioned with zero-based `start` and `end` positions and a
+`severity` that drives its color and popover styling:
+
+<DocsCodeExample {...editorMarkerType} />
+
+Call `editor.setMarkers(markers)` after the editor has attached to a surface
+(calling it before attaching throws). Inlining the array lets TypeScript check
+the `severity` literals against the `Marker` type without importing it.
+
+<DocsCodeExample {...editorMarkerExample} />
+
+Markers re-anchor as the document changes, so they stay attached to their text
+while you edit. Pass an empty array to clear them.
+
+#### History
+
+The editor keeps an undo stack for user edits and for programmatic edits applied
+with `applyEdits(..., true)`. Use `editor.canUndo` and `editor.canRedo` to
+enable or disable toolbar buttons, and call `editor.undo()` or `editor.redo()`
+to step through history from code. These methods share the same stack as the
+keyboard shortcuts (<kbd>Cmd/Ctrl-Z</kbd> and <kbd>Cmd/Ctrl-Shift-Z</kbd>).
+
+`undo()` and `redo()` are no-ops when there is nothing to undo or redo. Both run
+through the same change path as a normal edit, so your `onChange` handler fires
+and you can re-read `canUndo` / `canRedo` to keep UI state in sync.
+
+Limit the stack size with `historyMaxEntries` in
+[Editor Options](#edit-mode-editor-options) (default: 100).
+
+<DocsCodeExample {...editorUndoRedoExample} />
 
 ### Using Worker Pool
 
@@ -135,52 +182,6 @@ selection (`getSelectionText`, `replaceSelectionText`, `applyEdits`), and
 `close` to dismiss the popover:
 
 <DocsCodeExample {...editorSelectionActionContextType} />
-
-### Markers
-
-Markers add inline diagnostics—errors, warnings, and other annotations—to the
-editable surface, with a hover popover that shows each marker's message. They
-are useful for surfacing linter or language-server output alongside live edits.
-
-Each marker is positioned with zero-based `start` and `end` positions and a
-`severity` that drives its color and popover styling:
-
-<DocsCodeExample {...editorMarkerType} />
-
-Call `editor.setMarkers(markers)` after the editor has attached to a surface
-(calling it before attaching throws). Inlining the array lets TypeScript check
-the `severity` literals against the `Marker` type without importing it.
-
-<DocsCodeExample {...editorMarkerExample} />
-
-Markers re-anchor as the document changes, so they stay attached to their text
-while you edit. Pass an empty array to clear them.
-
-### Programmatic Control
-
-You can drive the editor's selection from code instead of relying solely on user
-input. `editor.setSelections(selections)` replaces the current selections—pass
-more than one for multiple cursors—and `editor.focus()` moves focus into the
-editor, placing the caret at the primary selection.
-
-<DocsCodeExample {...editorProgrammaticExample} />
-
-### History
-
-The editor keeps an undo stack for user edits and for programmatic edits applied
-with `applyEdits(..., true)`. Use `editor.canUndo` and `editor.canRedo` to
-enable or disable toolbar buttons, and call `editor.undo()` or `editor.redo()`
-to step through history from code. These methods share the same stack as the
-keyboard shortcuts (<kbd>Cmd/Ctrl-Z</kbd> and <kbd>Cmd/Ctrl-Shift-Z</kbd>).
-
-`undo()` and `redo()` are no-ops when there is nothing to undo or redo. Both run
-through the same change path as a normal edit, so your `onChange` handler fires
-and you can re-read `canUndo` / `canRedo` to keep UI state in sync.
-
-Limit the stack size with `historyMaxEntries` in
-[Editor Options](#editor-options) (default: 100).
-
-<DocsCodeExample {...editorUndoRedoExample} />
 
 ### Keyboard Shortcuts
 

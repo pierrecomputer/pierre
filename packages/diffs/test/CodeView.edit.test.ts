@@ -7,7 +7,7 @@ import type {
   CodeViewItem,
   DiffLineAnnotation,
   DiffsEditableComponent,
-  DiffsEditorHost,
+  DiffsEditor,
   FileContents,
   HighlightedToken,
 } from '../src/types';
@@ -21,7 +21,7 @@ import {
   wait,
 } from './domHarness';
 
-interface StubEditor extends DiffsEditorHost<undefined> {
+interface StubEditor extends DiffsEditor<undefined> {
   /** Instances passed to edit(), in order. */
   edits: DiffsEditableComponent<undefined>[];
   fullCleanUps: number;

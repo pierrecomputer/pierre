@@ -241,35 +241,11 @@ editor.setMarkers([]);`,
   options,
 };
 
-export const EDITOR_PROGRAMMATIC_EXAMPLE: PreloadFileOptions<undefined> = {
-  file: {
-    name: 'editor_programmatic.ts',
-    contents: `import { Editor } from '@pierre/diffs/editor';
-
-const editor = new Editor();
-editor.edit(fileInstance);
-
-// Drive the selection from code. Positions are zero-based; \`direction\` controls
-// which end the caret sits at when the selection is extended with the keyboard.
-editor.setSelections([
-  {
-    start: { line: 0, character: 0 },
-    end: { line: 0, character: 5 },
-    direction: 'forward',
-  },
-]);
-
-// Move focus into the editor (the caret follows the primary selection).
-editor.focus();`,
-  },
-  options,
-};
-
 export const EDITOR_UNDO_REDO_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
     name: 'editor_undo_redo.tsx',
     contents: `import { Editor } from '@pierre/diffs/editor';
-import { EditorProvider, File } from '@pierre/diffs/react';
+import { EditProvider, File } from '@pierre/diffs/react';
 import { useMemo, useState } from 'react';
 
 export function EditorWithHistoryToolbar() {
@@ -290,7 +266,7 @@ export function EditorWithHistoryToolbar() {
   );
 
   return (
-    <EditorProvider editor={editor}>
+    <EditProvider editor={editor}>
       <div className="toolbar">
         <button type="button" disabled={!canUndo} onClick={() => editor.undo()}>
           Undo
@@ -304,7 +280,7 @@ export function EditorWithHistoryToolbar() {
         file={{ name: 'example.ts', contents: 'export const x = 1;' }}
         contentEditable
       />
-    </EditorProvider>
+    </EditProvider>
   );
 }`,
   },
@@ -316,7 +292,7 @@ export const EDITOR_REACT_EXAMPLE: PreloadFileOptions<undefined> = {
     name: 'editor_react.tsx',
     contents: `import type { FileContents } from '@pierre/diffs';
 import { Editor } from '@pierre/diffs/editor';
-import { EditorProvider, File, Virtualizer } from '@pierre/diffs/react';
+import { EditProvider, File, Virtualizer } from '@pierre/diffs/react';
 import { useMemo, useState } from 'react';
 
 const file: FileContents = {
@@ -341,7 +317,7 @@ export function EditorComponent() {
   );
 
   return (
-    <EditorProvider editor={editor}>
+    <EditProvider editor={editor}>
       <button type="button" onClick={() => setEditable((value) => !value)}>
         {editable ? 'Disable editing' : 'Enable editing'}
       </button>
@@ -361,7 +337,7 @@ export function EditorComponent() {
           contentEditable={editable}
         />
       </Virtualizer>
-    </EditorProvider>
+    </EditProvider>
   );
 }`,
   },
@@ -374,7 +350,7 @@ export const EDITOR_REACT_FILE_DIFF_EXAMPLE: PreloadFileOptions<undefined> = {
     contents: `import { Editor } from '@pierre/diffs/editor';
 import {
   type FileDiffMetadata,
-  EditorProvider,
+  EditProvider,
   FileDiff,
   parseDiffFromFile,
   Virtualizer,
@@ -400,7 +376,7 @@ export function EditorComponent() {
   );
 
   return (
-    <EditorProvider editor={editor}>
+    <EditProvider editor={editor}>
       <button type="button" onClick={() => setEditable((value) => !value)}>
         {editable ? 'Disable editing' : 'Enable editing'}
       </button>
@@ -420,7 +396,7 @@ export function EditorComponent() {
           contentEditable={editable}
         />
       </Virtualizer>
-    </EditorProvider>
+    </EditProvider>
   );
 }`,
   },
@@ -466,7 +442,7 @@ export const EDITOR_WORKER_POOL_REACT_EXAMPLE: PreloadFileOptions<undefined> = {
 
 import { Editor } from '@pierre/diffs/editor';
 import {
-  EditorProvider,
+  EditProvider,
   File,
   WorkerPoolContextProvider,
 } from '@pierre/diffs/react';
@@ -483,12 +459,12 @@ export function EditorWithWorkerPool() {
         useTokenTransformer: true,
       }}
     >
-      <EditorProvider editor={editor}>
+      <EditProvider editor={editor}>
         <File
           file={{ name: 'example.ts', contents: 'export const x = 1;' }}
           contentEditable
         />
-      </EditorProvider>
+      </EditProvider>
     </WorkerPoolContextProvider>
   );
 }`,
@@ -559,9 +535,19 @@ interface EditorOptions<LAnnotation> {
 export const EDITOR_PUBLIC_API: PreloadFileOptions<undefined> = {
   file: {
     name: 'editor_public_api.ts',
-    contents: `import { Editor } from '@pierre/diffs/editor';
+    contents: `import type {
+  EditorState,
+  FileContents,
+} from '@pierre/diffs';
+import { Editor } from '@pierre/diffs/editor';
+
+// Editor
+// Most methods require an attached surface via edit().
 
 const editor = new Editor();
+
+// attach to a rendered File, FileDiff, or virtualized variant.
+const dispose = editor.edit(fileInstance);
 
 // Merge partial options at runtime. Existing fields are preserved.
 // onChange and similar handlers read from the latest options on each call;
@@ -574,71 +560,83 @@ editor.setOptions({
 
 // Attach to a rendered File, FileDiff, or virtualized variant.
 // Normalizes conflicting fileInstance options and returns a dispose function.
-const dispose = editor.edit(fileInstance)
+const dispose = editor.edit(fileInstance);
 
 // Detach, remove listeners, and clean up injected editor DOM.
-// same as dispose()
-editor.cleanUp()
+// Pass recycle=true when a virtualized host is temporarily unmounting.
+editor.cleanUp();
+editor.cleanUp(true);
 
-// Apply text edits to the attached document
-// The range is 0-indexed
+// Apply text edits to the attached document. Positions are zero-based.
+// Pass true as the second argument to push the edits onto the undo stack.
 editor.applyEdits([
   {
     range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
     newText: 'Hello, world!',
   },
-])
+]);
+editor.applyEdits(
+  [
+    {
+      range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
+      newText: 'Hello, world!',
+    },
+  ],
+  true
+);
 
-// Apply text edits and update the undo stack
-editor.applyEdits([
-  {
-    range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
-    newText: 'Hello, world!',
-  },
-], true)
+// Live FileContents for the attached document. Undefined when nothing is
+// attached.
+const file: FileContents | undefined = editor.getFile();
 
-// Get the current editor state - file, selections, lineAnnotations, renderRange
-const state = editor.getState()
-const stateRaw = JSON.stringify(state) // serialize the state to a json string for storage/persistence
+// Full document text, or '' when nothing is attached.
+const text: string = editor.getText();
 
-// Restore editor state after re-rendering the underlying component.
-editor.setState(state)
+// Snapshot selections and scroll position for persistence or remount restore.
+const state: EditorState = editor.getState();
+// EditorState = {
+//   selections?: EditorSelection[];
+//   view?: { scrollLeft: number; scrollTop: number };
+// }
 
-// Replace all cursors and ranges programmatically.
-// The start/end positions are 0-indexed
+// Restore selections and scroll after re-rendering the underlying component.
+editor.setState(state);
+
+// Replace all cursors and ranges programmatically. Positions are zero-based;
+// direction controls which end the caret uses for keyboard extension.
 editor.setSelections([
   {
     start: { line: 0, character: 2 },
     end: { line: 0, character: 8 },
-    direction: 'forward',
+    direction: 'forward', // 'forward' | 'backward' | 'none'
   },
-])
+]);
 
-// Show inline diagnostic markers. Pass [] to clear.
+// Show inline diagnostic markers. Pass [] to clear. Throws if not attached.
 editor.setMarkers([
   {
-    start: { line: 1,  character: 2 },
-    end: {  line: 1, character: 8 },
-    severity: 'error', // or 'warning', 'info', 'hint'
-    message: {
-      html: 'Some lint message',
-    },
+    start: { line: 1, character: 2 },
+    end: { line: 1, character: 8 },
+    severity: 'error', // 'error' | 'warning' | 'info' | 'hint'
+    message: { html: 'Some lint message' },
+    source: 'eslint',
   },
-])
+]);
+editor.setMarkers([]);
 
-// Focus the editor.
-editor.focus()
-
-// Blur the editor.
-editor.blur()
+// Focus the editable content. preventScroll skips scrolling the caret into view.
+// Blur removes focus from the content area.
+editor.focus();
+editor.focus({ preventScroll: true });
+editor.blur();
 
 // Whether there is an edit to undo or redo.
-editor.canUndo
-editor.canRedo
+editor.canUndo;
+editor.canRedo;
 
 // Undo the last edit or redo the last undone edit. No-ops when history is empty.
-editor.undo()
-editor.redo()
+editor.undo();
+editor.redo();
 `,
   },
   options,
@@ -651,7 +649,7 @@ export const EDITOR_REACT_MULTI_FILE_DIFF_EXAMPLE: PreloadFileOptions<undefined>
       contents: `import type { FileContents } from '@pierre/diffs';
 import { Editor } from '@pierre/diffs/editor';
 import {
-  EditorProvider,
+  EditProvider,
   MultiFileDiff,
   Virtualizer,
 } from '@pierre/diffs/react';
@@ -683,7 +681,7 @@ export function EditorComponent() {
   );
 
   return (
-    <EditorProvider editor={editor}>
+    <EditProvider editor={editor}>
       <button type="button" onClick={() => setEditable((value) => !value)}>
         {editable ? 'Disable editing' : 'Enable editing'}
       </button>
@@ -704,7 +702,7 @@ export function EditorComponent() {
           contentEditable={editable}
         />
       </Virtualizer>
-    </EditorProvider>
+    </EditProvider>
   );
 }`,
     },

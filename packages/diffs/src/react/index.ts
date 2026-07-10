@@ -10,7 +10,7 @@ export * from './MultiFileDiff';
 export * from './PatchDiff';
 export * from './Virtualizer';
 export * from './WorkerPoolContext';
-export * from './EditorContext';
+export * from './EditContext';
 export * from './constants';
 export * from './types';
 export * from './utils/renderDiffChildren';

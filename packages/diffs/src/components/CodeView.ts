@@ -28,7 +28,7 @@ import type {
   CodeViewScrollBehavior,
   CodeViewScrollTarget,
   DiffLineAnnotation,
-  DiffsEditorHost,
+  DiffsEditor,
   FileContents,
   HunkSeparators,
   PendingCodeViewLayoutReset,
@@ -457,7 +457,7 @@ interface CodeViewItemEditorState<LAnnotation> {
 
 // Editor bookkeeping for one edit-mode item.
 interface CodeViewItemEditorRecord<LAnnotation> {
-  editor: DiffsEditorHost<LAnnotation>;
+  editor: DiffsEditor<LAnnotation>;
   state: CodeViewItemEditorState<LAnnotation>;
 }
 
@@ -543,7 +543,7 @@ export interface CodeViewOptions<LAnnotation>
    */
   createEditor?(
     options: CodeViewCreateEditorOptions<LAnnotation>
-  ): DiffsEditorHost<LAnnotation> | undefined;
+  ): DiffsEditor<LAnnotation> | undefined;
   /**
    * Called when an edited item's document changes, with the owning item
    * resolved by CodeView.
@@ -1474,7 +1474,7 @@ export class CodeView<LAnnotation = undefined> {
    * editor APIs CodeView does not wrap (applyEdits, undo, setMarkers, …).
    * Returns undefined once the item leaves edit mode.
    */
-  public getEditor(itemId: string): DiffsEditorHost<LAnnotation> | undefined {
+  public getEditor(itemId: string): DiffsEditor<LAnnotation> | undefined {
     return this.itemEditors.get(itemId)?.editor;
   }
 

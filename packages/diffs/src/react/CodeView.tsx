@@ -29,7 +29,7 @@ import {
   type CodeViewScrollTarget,
   type CodeViewSlotSnapshot,
   type DiffLineAnnotation,
-  type DiffsEditorHost,
+  type DiffsEditor,
   type FileContents,
   type GetHoveredLineResult,
   type LineAnnotation,
@@ -70,7 +70,7 @@ interface CodeViewBaseProps<LAnnotation> {
    */
   createEditor?(
     options: CodeViewCreateEditorOptions<LAnnotation>
-  ): DiffsEditorHost<LAnnotation> | undefined;
+  ): DiffsEditor<LAnnotation> | undefined;
   /** Called with the owning item on every edited-document change. */
   onItemEditChange?(
     item: CodeViewItem<LAnnotation>,
@@ -132,7 +132,7 @@ export interface CodeViewHandle<LAnnotation> {
   setSelectedLines(selection: CodeViewLineSelection | null): void;
   getSelectedLines(): CodeViewLineSelection | null;
   clearSelectedLines(): void;
-  getEditor(id: string): DiffsEditorHost<LAnnotation> | undefined;
+  getEditor(id: string): DiffsEditor<LAnnotation> | undefined;
   getInstance(): CodeViewClass<LAnnotation> | undefined;
 }
 

@@ -2,7 +2,7 @@
 
 import { cloneFileDiffMetadata } from '@pierre/diffs';
 import { Editor } from '@pierre/diffs/editor';
-import { EditorProvider, File, FileDiff } from '@pierre/diffs/react';
+import { EditProvider, File, FileDiff } from '@pierre/diffs/react';
 import type {
   PreloadedFileResult,
   PreloadFileDiffResult,
@@ -231,7 +231,7 @@ export function LiveEditing({
       </div>
 
       <div>
-        <EditorProvider editor={editor}>
+        <EditProvider editor={editor}>
           {surface === 'file' ? (
             <File
               key={resetKey}
@@ -255,7 +255,7 @@ export function LiveEditing({
               contentEditable={contentEditable}
             />
           )}
-        </EditorProvider>
+        </EditProvider>
       </div>
     </div>
   );

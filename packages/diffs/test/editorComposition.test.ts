@@ -5,7 +5,7 @@ import { DEFAULT_THEMES } from '../src/constants';
 import { Editor } from '../src/editor/editor';
 import { DirectionForward, DirectionNone } from '../src/editor/selection';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
-import type { DiffsEditorSelection, FileContents } from '../src/types';
+import type { FileContents } from '../src/types';
 import { installDom, wait } from './domHarness';
 
 afterAll(async () => {
@@ -49,10 +49,14 @@ interface EditorTestWindow extends Window {
   };
 }
 
+type EditableSelection = Parameters<
+  Editor<undefined>['setSelections']
+>[0][number];
+
 interface CreateEditorFixtureOptions {
   contents?: string;
   platform?: string;
-  selections?: DiffsEditorSelection[];
+  selections?: EditableSelection[];
 }
 
 async function createEditorFixture(
@@ -67,11 +71,11 @@ async function createEditorFixture(
     disableFileHeader: true,
     theme: DEFAULT_THEMES,
   });
-  const editor = new Editor<undefined>();
   const initialFile: FileContents = {
     name: 'editor.ts',
     contents,
   };
+  const editor = new Editor<undefined>();
 
   file.render({
     file: initialFile,
@@ -191,7 +195,7 @@ describe('Editor composition input', () => {
 
       expect(preview.defaultPrevented).toBe(false);
       expect(consoleWarn).not.toHaveBeenCalled();
-      expect(editor.getState().file.contents).toBe('line 1');
+      expect(editor.getText()).toBe('line 1');
 
       content.dispatchEvent(
         new window.CompositionEvent('compositionend', {
@@ -201,7 +205,7 @@ describe('Editor composition input', () => {
         })
       );
 
-      expect(editor.getState().file.contents).toBe('line 1あ');
+      expect(editor.getText()).toBe('line 1あ');
     } finally {
       consoleWarn.mockRestore();
       cleanup();
@@ -233,7 +237,7 @@ describe('Editor composition input', () => {
         })
       );
 
-      expect(editor.getState().file.contents).toBe('line 1');
+      expect(editor.getText()).toBe('line 1');
     } finally {
       cleanup();
     }
@@ -260,7 +264,7 @@ describe('Editor composition input', () => {
       document.dispatchEvent(new Event('selectionchange'));
 
       expect(consoleError).not.toHaveBeenCalled();
-      expect(editor.getState().file.contents).toBe('line 1');
+      expect(editor.getText()).toBe('line 1');
     } finally {
       consoleError.mockRestore();
       cleanup();
@@ -351,7 +355,7 @@ describe('Editor keyboard editing', () => {
       const event = dispatchKeydown(window, replaceInput, { key: 'Enter' });
 
       expect(event.defaultPrevented).toBe(true);
-      expect(editor.getState().file.contents).toBe('omega beta alpha');
+      expect(editor.getText()).toBe('omega beta alpha');
     } finally {
       cleanup();
     }
@@ -381,7 +385,7 @@ describe('Editor keyboard editing', () => {
 
       expect(event.defaultPrevented).toBe(false);
       expect(panel.isConnected).toBe(true);
-      expect(editor.getState().file.contents).toBe('alpha beta');
+      expect(editor.getText()).toBe('alpha beta');
     } finally {
       cleanup();
     }
@@ -438,7 +442,7 @@ describe('Editor keyboard editing', () => {
       const event = dispatchKeydown(window, content, { key: 'Tab' });
 
       expect(event.defaultPrevented).toBe(true);
-      expect(editor.getState().file.contents).toBe('  alpha\n  beta');
+      expect(editor.getText()).toBe('  alpha\n  beta');
     } finally {
       cleanup();
     }
@@ -460,7 +464,7 @@ describe('Editor keyboard editing', () => {
       const event = dispatchBackspace(window, content);
 
       expect(event.defaultPrevented).toBe(true);
-      expect(editor.getState().file.contents).toBe('foo');
+      expect(editor.getText()).toBe('foo');
       expect(editor.getState().selections).toEqual([
         {
           start: { line: 0, character: 0 },
@@ -489,7 +493,7 @@ describe('Editor keyboard editing', () => {
       const event = dispatchBackspace(window, content);
 
       expect(event.defaultPrevented).toBe(true);
-      expect(editor.getState().file.contents).toBe('foo');
+      expect(editor.getText()).toBe('foo');
       expect(editor.getState().selections).toEqual([
         {
           start: { line: 0, character: 0 },
@@ -518,7 +522,7 @@ describe('Editor keyboard editing', () => {
       const event = dispatchBackspace(window, content);
 
       expect(event.defaultPrevented).toBe(true);
-      expect(editor.getState().file.contents).toBe(' foo');
+      expect(editor.getText()).toBe(' foo');
       expect(editor.getState().selections).toEqual([
         {
           start: { line: 0, character: 1 },
@@ -552,7 +556,7 @@ describe('Editor keyboard editing', () => {
       const event = dispatchKeydown(window, content, { key: 'Tab' });
 
       expect(event.defaultPrevented).toBe(true);
-      expect(editor.getState().file.contents).toBe('  abcde  fgh');
+      expect(editor.getText()).toBe('  abcde  fgh');
       // The second caret follows its own inserted indent (column 9), not the
       // pre-shift column 7 that lands before it.
       expect(editor.getState().selections).toEqual([

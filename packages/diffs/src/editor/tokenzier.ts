@@ -39,7 +39,10 @@ export class EditorTokenizer {
   #highlighter: DiffsHighlighter;
   #grammar: IGrammar | undefined;
   #mediaQueryList: MediaQueryList;
-  #themeType: 'light' | 'dark';
+  #themeType: 'light' | 'dark' = 'dark';
+  // The resolved name of the theme currently applied to the editor (e.g.
+  // `github-light`). Tracked so `syncTheme` can detect a host-driven theme swap
+  // even when the light/dark mode itself is unchanged.
   #themeName = '';
   #colorMap: string[];
   #textDocument: TextDocument<unknown>;
@@ -50,6 +53,7 @@ export class EditorTokenizer {
   #matchBrackets: boolean;
   #debug: boolean;
   #disposes?: (() => void)[];
+  #isCleanedUp = false;
 
   // state
   #stateStack: StateStack[] = [INITIAL]; // cached state stack by line index
@@ -64,6 +68,11 @@ export class EditorTokenizer {
   #isMessageListenerAttached: boolean = false;
 
   #prebuildStateStack = debounce(async (renderRange?: RenderRange) => {
+    // Drop work scheduled before cleanUp; a late timer must not call setTheme
+    // on a highlighter that tests (or hosts) have already disposed.
+    if (this.#isCleanedUp) {
+      return;
+    }
     const { startingLine = 0, totalLines = Infinity } = renderRange ?? {};
     const endLine = Math.min(
       totalLines === Infinity ? Infinity : startingLine + totalLines,
@@ -74,10 +83,14 @@ export class EditorTokenizer {
       !isGrammarlessLanguage(this.#textDocument.languageId)
     ) {
       await this.#highlighter.loadLanguage(this.#textDocument.languageId);
+      if (this.#isCleanedUp) {
+        return;
+      }
       this.#grammar = this.#highlighter.getLanguage(
         this.#textDocument.languageId
       );
     }
+    this.#ensureActiveTheme();
     this.#buildStateStack(endLine);
   }, 500);
 
@@ -136,22 +149,25 @@ export class EditorTokenizer {
     __debug,
   }: EditorTokenizerProps) {
     const {
-      themeType = 'system',
+      themeType: themeTypeOption = 'system',
       theme = DEFAULT_THEMES,
       tokenizeMaxLineLength = 1000,
     } = codeOptions;
     this.#mediaQueryList = window.matchMedia('(prefers-color-scheme: dark)');
-    if (themeType === 'system') {
-      this.#themeType = this.#mediaQueryList.matches ? 'dark' : 'light';
+    let themeType: 'light' | 'dark' | undefined;
+    if (themeTypeOption === 'system') {
+      // Prefer the host document's computed color-scheme (page CSS/classes can
+      // force light/dark while the OS media query differs) over matchMedia.
+      themeType = this.#resolveSystemThemeType();
     } else {
-      this.#themeType = themeType;
+      themeType = themeTypeOption;
     }
     // Only track the document/system color scheme when the surface follows it
     // (`themeType: 'system'`). A surface pinned to an explicit 'dark'/'light'
     // theme keeps that theme regardless of the page, so re-tokenizing after an
     // edit must emit the same `--diffs-token-{theme}` variable the SSR markup
     // used; otherwise the edited tokens fall back to the default foreground.
-    if (typeof theme !== 'string' && themeType === 'system') {
+    if (typeof theme !== 'string' && themeTypeOption === 'system') {
       const observer = new MutationObserver((mutations) => {
         for (const { type, attributeName } of mutations) {
           if (
@@ -159,10 +175,7 @@ export class EditorTokenizer {
             attributeName !== null &&
             (attributeName === 'class' || attributeName.startsWith('data-'))
           ) {
-            const themeType =
-              getComputedStyle(document.body).colorScheme === 'dark'
-                ? 'dark'
-                : 'light';
+            const themeType = this.#resolveSystemThemeType();
             this.#emitThemeChange(theme[themeType], themeType);
             break;
           }
@@ -171,8 +184,10 @@ export class EditorTokenizer {
       observer.observe(document.documentElement, { attributes: true });
       observer.observe(document.body, { attributes: true });
       this.#disposes = [
-        addEventListener(this.#mediaQueryList, 'change', (e) => {
-          const themeType = e.matches ? 'dark' : 'light';
+        addEventListener(this.#mediaQueryList, 'change', () => {
+          // Re-read computed color-scheme so a host-forced scheme still wins
+          // when the OS preference changes underneath it.
+          const themeType = this.#resolveSystemThemeType();
           this.#emitThemeChange(theme[themeType], themeType);
         }),
         () => observer.disconnect(),
@@ -188,14 +203,16 @@ export class EditorTokenizer {
     this.#debug = __debug ?? false;
     this.#ensureGrammar();
     this.#colorMap = [];
-    this.#setTheme(typeof theme === 'string' ? theme : theme[this.#themeType]);
+    this.#setTheme(
+      typeof theme === 'string' ? theme : theme[themeType],
+      themeType
+    );
   }
 
   // By default, diffs components support dual themes, but the tokenizer only renders
   // the preferred theme. When the theme type is changed, the tokenizer will re-tokenize the document.
   #emitThemeChange(themeName: string, themeType: 'light' | 'dark') {
-    this.#themeType = themeType;
-    this.#setTheme(themeName);
+    this.#setTheme(themeName, themeType);
     this.stopBackgroundTokenize();
     this.#stateStack = [INITIAL];
     this.#comparisonStateStack = [];
@@ -206,6 +223,29 @@ export class EditorTokenizer {
     // theme color (e.g. rounded selection corner masks) can recompute against
     // the new colors instead of keeping the old light/dark value.
     this.#onThemeChange?.();
+  }
+
+  // Resolve `themeType: 'system'` the same way the MutationObserver does: from
+  // the host document's computed `color-scheme`. Apps often force a scheme via
+  // page CSS/classes while the OS `prefers-color-scheme` media query differs;
+  // using matchMedia here would flip tokens back to the OS preference on every
+  // render sync and fight the observer.
+  #resolveSystemThemeType(): 'light' | 'dark' {
+    try {
+      if (
+        typeof document !== 'undefined' &&
+        typeof getComputedStyle === 'function' &&
+        document.body != null
+      ) {
+        return getComputedStyle(document.body).colorScheme === 'dark'
+          ? 'dark'
+          : 'light';
+      }
+    } catch {
+      // jsdom and similar harnesses may lack getComputedStyle or throw; fall
+      // through to the OS media query.
+    }
+    return this.#mediaQueryList.matches ? 'dark' : 'light';
   }
 
   // Re-apply the editor's theme from the surface's current code options. Edit
@@ -219,11 +259,7 @@ export class EditorTokenizer {
   syncTheme(codeOptions: BaseCodeOptions): void {
     const { themeType = 'system', theme = DEFAULT_THEMES } = codeOptions;
     const nextThemeType =
-      themeType === 'system'
-        ? this.#mediaQueryList.matches
-          ? 'dark'
-          : 'light'
-        : themeType;
+      themeType === 'system' ? this.#resolveSystemThemeType() : themeType;
     const nextThemeName =
       typeof theme === 'string' ? theme : theme[nextThemeType];
     if (
@@ -235,9 +271,8 @@ export class EditorTokenizer {
     this.#emitThemeChange(nextThemeName, nextThemeType);
   }
 
-  #setTheme(themeName: string) {
-    this.#themeName = themeName;
-    this.#colorMap = this.#highlighter.setTheme(themeName).colorMap;
+  #setTheme(themeName: string, themeType?: 'light' | 'dark') {
+    const { theme, colorMap } = this.#highlighter.setTheme(themeName);
     const { colors = {} } = this.#highlighter.getTheme(themeName);
     const selectionBackground = colors['editor.selectionBackground'];
     const lineHighlightBackground = colors['editor.lineHighlightBackground'];
@@ -264,9 +299,28 @@ export class EditorTokenizer {
       --diffs-editor-warning-fg: ${warningForeground ?? 'initial'};
       --diffs-editor-error-fg: ${errorForeground ?? 'initial'};
     }`);
+    this.#themeName = themeName;
+    this.#themeType = themeType ?? theme.type;
+    this.#colorMap = colorMap;
+  }
+
+  // The shared highlighter is also used for dual-theme SSR (`themes: {dark,light}`),
+  // which leaves its active theme on whichever pass finished last (usually light).
+  // The tokenizer caches a single-theme colorMap from construction; if we tokenize
+  // without re-activating that theme, grammar color indices are looked up in the
+  // wrong map — property names resolve to a near-foreground gray while types and
+  // comments (stable across maps) still look correct. Re-apply before every
+  // tokenize path so a first edit after load matches a later file-switch re-attach.
+  #ensureActiveTheme(): void {
+    if (this.#themeName === '') {
+      return;
+    }
+    const { colorMap } = this.#highlighter.setTheme(this.#themeName);
+    this.#colorMap = colorMap;
   }
 
   cleanUp(): void {
+    this.#isCleanedUp = true;
     this.stopBackgroundTokenize();
     this.#detachMessageListener();
     this.#disposes?.forEach((dispose) => dispose());
@@ -280,6 +334,7 @@ export class EditorTokenizer {
     renderRange?: RenderRange
   ): Map<number, Array<HighlightedToken>> {
     this.#ensureGrammar();
+    this.#ensureActiveTheme();
     if (
       this.#grammar === undefined &&
       !isGrammarlessLanguage(this.#textDocument.languageId)
@@ -628,10 +683,9 @@ export class EditorTokenizer {
   // tokenization stop when grammar state reconverges without letting foreground
   // tokenization seed from stale pre-edit states.
   #shiftComparisonStateStack(change: TextDocumentChange): void {
-    const lineChanges: readonly [number, number, number][] =
-      change.changedLineChanges ?? [
-        [change.startLine, change.endLine, change.lineDelta],
-      ];
+    const lineChanges =
+      change.changedLineChanges ??
+      ([[change.startLine, change.endLine, change.lineDelta]] as const);
     const comparisonStateStack = this.#stateStack.slice();
 
     for (const [startLine, endLine, lineDelta] of lineChanges) {
@@ -736,6 +790,8 @@ export class EditorTokenizer {
     ) {
       return;
     }
+
+    this.#ensureActiveTheme();
 
     const t = performance.now();
     const lines = new Map<number, Array<HighlightedToken>>();
@@ -873,8 +929,7 @@ function tokenizeLine(
 }
 
 export function renderLineTokens(
-  tokens: Array<HighlightedToken>,
-  themeType: 'light' | 'dark'
+  tokens: Array<HighlightedToken>
 ): (HTMLElement | string)[] {
   return tokens.map(([char, fg, textContent]) => {
     if (char === 0 && fg === '') {
@@ -887,7 +942,7 @@ export function renderLineTokens(
       dataset: {
         char: char.toString(),
       },
-      style: `--diffs-token-${themeType}:${fg};`,
+      style: `color:${fg};`,
       textContent: textContent,
     });
   });

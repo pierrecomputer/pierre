@@ -2,7 +2,7 @@
 
 import type { FileContents } from '@pierre/diffs';
 import { Editor } from '@pierre/diffs/editor';
-import { EditorProvider, File } from '@pierre/diffs/react';
+import { EditProvider, File } from '@pierre/diffs/react';
 import { useMemo, useState } from 'react';
 
 const initialFile: FileContents = {
@@ -62,7 +62,7 @@ export function EditorDemo() {
           Changes: {changeCount}
         </div>
       </div>
-      <EditorProvider editor={editor}>
+      <EditProvider editor={editor}>
         <File
           className="max-h-[480px] overflow-auto rounded-none border-0"
           options={{
@@ -72,7 +72,7 @@ export function EditorDemo() {
           file={file}
           contentEditable
         />
-      </EditorProvider>
+      </EditProvider>
     </div>
   );
 }

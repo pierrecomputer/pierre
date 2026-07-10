@@ -84,9 +84,9 @@ async function createFixture(
     theme: DEFAULT_THEMES,
     diffStyle: 'split',
   });
-  const editor = new Editor<undefined>();
   const oldFile: FileContents = { name: 'edit.ts', contents: oldContents };
   const newFile: FileContents = { name: 'edit.ts', contents: newContents };
+  const editor = new Editor<undefined>();
 
   fileDiff.render({
     oldFile,
@@ -157,7 +157,7 @@ describe('diff editor: display-option toggle mid-edit', () => {
     try {
       typeAt(editor, 0, 5, 'X');
       await wait(0);
-      expect(editor.getState().file.contents).toBe('alphaX\nCHANGED\n');
+      expect(editor.getText()).toBe('alphaX\nCHANGED\n');
       // The edit is on screen before the toggle.
       expect(lineText(container, 1)).toBe('alphaX');
 
@@ -185,7 +185,7 @@ describe('diff editor: display-option toggle mid-edit', () => {
       typeAt(editor, 0, 6, 'Y');
       await wait(0);
 
-      expect(editor.getState().file.contents).toBe('alphaXY\nCHANGED\n');
+      expect(editor.getText()).toBe('alphaXY\nCHANGED\n');
       expect(lineText(container, 1)).toBe('alphaXY');
     } finally {
       await fixture.cleanup();
@@ -204,7 +204,7 @@ describe('diff editor: display-option toggle mid-edit', () => {
       await fixture.toggleDisplayOption();
 
       expect(lineText(container, 1)).toBe('alpha');
-      expect(editor.getState().file.contents).toBe('alpha\nCHANGED\n');
+      expect(editor.getText()).toBe('alpha\nCHANGED\n');
     } finally {
       await fixture.cleanup();
     }
@@ -249,9 +249,7 @@ describe('diff editor: display-option toggle mid-edit', () => {
       // A line-count-changing edit: split line 0 into two lines.
       typeAt(editor, 0, 5, '\nINSERTED');
       await wait(0);
-      expect(editor.getState().file.contents).toBe(
-        'alpha\nINSERTED\nCHANGED\n'
-      );
+      expect(editor.getText()).toBe('alpha\nINSERTED\nCHANGED\n');
       expect(lineText(container, 1)).toBe('alpha');
       expect(lineText(container, 2)).toBe('INSERTED');
 
@@ -260,9 +258,7 @@ describe('diff editor: display-option toggle mid-edit', () => {
       // Both the edited line and the inserted line must survive the re-render.
       expect(lineText(container, 1)).toBe('alpha');
       expect(lineText(container, 2)).toBe('INSERTED');
-      expect(editor.getState().file.contents).toBe(
-        'alpha\nINSERTED\nCHANGED\n'
-      );
+      expect(editor.getText()).toBe('alpha\nINSERTED\nCHANGED\n');
     } finally {
       await fixture.cleanup();
     }
@@ -378,7 +374,7 @@ describe('diff editor: detach then re-attach', () => {
       // edit (getState below) while the rendered line stayed stale.
       typeAt(editor, 1, 0, 'Q');
       await wait(0);
-      expect(editor.getState().file.contents).toBe('alphaX\nQCHANGED\n');
+      expect(editor.getText()).toBe('alphaX\nQCHANGED\n');
       expect(lineText(container, 2)).toBe('QCHANGED');
     } finally {
       await fixture.cleanup();
@@ -390,7 +386,6 @@ describe('diff editor: detach then re-attach', () => {
     const container = document.createElement('div');
     document.body.appendChild(container);
 
-    const editor = new Editor<undefined>();
     const oldFile: FileContents = {
       name: 'edit.ts',
       contents: 'alpha\nbravo\n',
@@ -401,6 +396,7 @@ describe('diff editor: detach then re-attach', () => {
       contents: 'alpha\nCHANGED\n',
       cacheKey: 'new:initial',
     };
+    const editor = new Editor<undefined>();
     const fileDiff = new FileDiff<undefined>(
       {
         disableFileHeader: true,
@@ -478,7 +474,7 @@ describe('diff editor: detach then re-attach', () => {
       typeAt(editor, 1, 0, 'Q');
       await wait(0);
 
-      expect(editor.getState().file.contents).toBe('alpha\nQCHANGED\n');
+      expect(editor.getText()).toBe('alpha\nQCHANGED\n');
       expect(lineText(remountedContainer, 1)).toBe('alpha');
       expect(lineText(remountedContainer, 2)).toBe('QCHANGED');
     } finally {

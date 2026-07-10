@@ -7,7 +7,7 @@ import {
   preloadHighlighter,
 } from '@pierre/diffs';
 import { Editor } from '@pierre/diffs/editor';
-import { EditorProvider, File } from '@pierre/diffs/react';
+import { EditProvider, File } from '@pierre/diffs/react';
 import type { PreloadedFileResult } from '@pierre/diffs/ssr';
 import {
   IconApproved,
@@ -456,13 +456,13 @@ export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
 
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:gap-8">
         <div className="min-w-0 flex-1">
-          <EditorProvider editor={editor}>
+          <EditProvider editor={editor}>
             <File
               {...prerenderedFile}
               className="diff-container"
               contentEditable
             />
-          </EditorProvider>
+          </EditProvider>
         </div>
 
         <div className="flex w-full shrink-0 flex-col gap-3 lg:w-72">

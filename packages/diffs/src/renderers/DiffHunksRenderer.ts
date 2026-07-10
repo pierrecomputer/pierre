@@ -395,7 +395,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             tagName: 'span',
             properties: {
               'data-char': char,
-              style: `--diffs-token-${themeType}:${fg};`,
+              style: `color:${fg};`,
             },
             children: [{ type: 'text', value: text }],
           };

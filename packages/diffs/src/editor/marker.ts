@@ -1,10 +1,11 @@
+import type { Position, Range } from '../types';
 import {
   POPOVER_BOUNDARY_LINES,
   type PopoverManager,
   type PopoverPlacementBounds,
 } from './popover';
 import { selectionIntersects } from './selection';
-import type { Position, Range, TextDocument } from './textDocument';
+import type { TextDocument } from './textDocument';
 import { addEventListener, getLineNumberAttr, h } from './utils';
 
 const MARKER_POPUP_SHOW_DELAY_MS = 300;

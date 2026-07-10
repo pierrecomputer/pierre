@@ -142,7 +142,7 @@ describe('Editor selection action', () => {
       expect(captured!.getSelectionText()).toBe('hello');
 
       captured!.replaceSelectionText(`TODO(${captured!.getSelectionText()})`);
-      expect(editor.getState().file.contents).toBe('TODO(hello) world');
+      expect(editor.getText()).toBe('TODO(hello) world');
     } finally {
       cleanup();
     }

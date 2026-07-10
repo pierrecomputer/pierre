@@ -6,12 +6,16 @@ import type {
   DiffLineAnnotation,
   DiffsEditableComponent,
   DiffsEditor,
-  DiffsEditorSelection,
   DiffsHighlighter,
+  EditorSelection,
+  EditorState,
   FileContents,
   FileDiffMetadata,
   HighlightedToken,
+  Position,
+  Range,
   RenderRange,
+  TextEdit,
 } from '../types';
 import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
 import {
@@ -42,11 +46,7 @@ import {
   type SearchPanelMode,
   SearchPanelWidget,
 } from './searchPanel';
-import type {
-  AutoSurround,
-  CursorMoveOptions,
-  EditorSelection,
-} from './selection';
+import type { AutoSurround, CursorMoveOptions } from './selection';
 import {
   applyDeleteCharacterToSelections,
   applyDeleteHardLineForwardToSelections,
@@ -90,12 +90,9 @@ import {
 } from './selectionAction';
 import { createSpriteElement } from './sprite';
 import {
-  type Position,
-  type Range,
   type ResolvedTextEdit,
   TextDocument,
   type TextDocumentChange,
-  type TextEdit,
 } from './textDocument';
 import {
   getExpandedAsciiTextColumns,
@@ -186,13 +183,6 @@ export interface EditorOptions<LAnnotation> {
   __debug?: boolean;
 }
 
-export interface EditorState<LAnnotation> {
-  file: FileContents;
-  lineAnnotations?: DiffLineAnnotation<LAnnotation>[];
-  selections?: EditorSelection[];
-  renderRange?: RenderRange;
-}
-
 // Cap on how far an edit may widen the virtualized render window, as a multiple
 // of the bounded window the virtualizer last synced (~viewport + 2*hunkLineCount).
 // Edits within this many lines of the window bottom widen so their caret renders;
@@ -241,7 +231,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
   // state
   #fileInstance?: DiffsEditableComponent<LAnnotation>;
-  #fileInfo?: Omit<FileContents, 'contents'>;
+  #fileInfo?: Omit<FileContents, 'contents' | 'header'>;
   #lineAnnotations?: DiffLineAnnotation<LAnnotation>[];
   #textDocument?: TextDocument<LAnnotation>;
   #renderRange?: RenderRange;
@@ -311,7 +301,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         if (line >= startingLine && line < endLine) {
           const lineElement = this.#getLineElement(line);
           if (lineElement !== undefined) {
-            lineElement.replaceChildren(...renderLineTokens(tokens, themeType));
+            lineElement.replaceChildren(...renderLineTokens(tokens));
           }
         }
       }
@@ -460,36 +450,63 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#runCommand('redo');
   }
 
-  getState(): EditorState<LAnnotation> {
-    const fileRef = this.#getFileRef();
-    if (fileRef === undefined) {
-      throw new Error('Editor is not attached');
+  getFile(): FileContents | undefined {
+    const fileInfo = this.#fileInfo;
+    const textDocument = this.#textDocument;
+    if (fileInfo === undefined || textDocument === undefined) {
+      return undefined;
     }
+    const file = { ...fileInfo }; // copy
+    Object.defineProperty(file, 'contents', {
+      enumerable: true,
+      get: () => textDocument.getText(),
+    });
+    return file as FileContents;
+  }
+
+  getText(): string {
+    return this.#textDocument?.getText() ?? '';
+  }
+
+  getState(): EditorState {
+    const scrollContainer = this.#fileInstance?.getScrollContainer?.();
     return {
-      file: { ...fileRef, cacheKey: 'edited-at-' + Date.now() },
       selections: this.#selections,
-      lineAnnotations: this.#lineAnnotations,
-      renderRange: this.#renderRange,
+      view:
+        scrollContainer !== undefined
+          ? {
+              scrollLeft: scrollContainer.scrollLeft,
+              scrollTop: scrollContainer.scrollTop,
+            }
+          : undefined,
     };
   }
 
-  setState({
-    file,
-    lineAnnotations,
-    renderRange,
-    selections,
-  }: EditorState<LAnnotation>): void {
-    this.#resetCache();
-    this.#resetState();
-    this.#initSelections = selections;
-    this.#fileInstance?.render({
-      file: { ...file, cacheKey: 'edited-at-' + Date.now() },
-      lineAnnotations,
-      renderRange,
-    });
+  setState({ selections, view }: EditorState): void {
+    if (this.#fileInstance === undefined || this.#textDocument === undefined) {
+      throw new Error('Editor is not attached');
+    }
+    this.#updateSelections(selections ?? []);
+    // When a saved view is present, honor its scroll offsets exactly. Scrolling
+    // the caret into view afterward would overwrite them whenever the caret
+    // sits outside that viewport (e.g. TreeApp remount restore).
+    if (view !== undefined) {
+      const scrollContainer = this.#fileInstance.getScrollContainer?.();
+      if (scrollContainer !== undefined) {
+        scrollContainer.scrollTo({
+          left: view.scrollLeft,
+          top: view.scrollTop,
+          behavior: 'instant',
+        });
+      }
+      return;
+    }
+    this.#scrollToPrimaryCaret();
   }
 
-  setSelections(selections: DiffsEditorSelection[]): void {
+  setSelections(
+    selections: (Range & { direction: 'none' | 'backward' | 'forward' })[]
+  ): void {
     const textDocument = this.#textDocument;
     if (textDocument === undefined) {
       throw new Error('Text document is not initialized');
@@ -715,14 +732,15 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       const editStack = new EditStack<LAnnotation>({
         maxEntries: this.#options.historyMaxEntries,
       });
-      const textDocument = new TextDocument<LAnnotation>(
+      const { name, lang, cacheKey } = fileOrDiff;
+      const languageId = lang ?? getFiletypeFromFileName(fileOrDiff.name);
+      const textDocument = new TextDocument(
         fileOrDiff.name,
         contents,
-        fileOrDiff.lang ?? getFiletypeFromFileName(fileOrDiff.name),
+        languageId,
         0,
         editStack
       );
-      const { name, lang, cacheKey } = fileOrDiff;
       this.#fileInfo = { name, lang, cacheKey };
       this.#textDocument = textDocument;
       this.#tokenizer?.cleanUp();
@@ -2137,9 +2155,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           const lineIndex = lineNumber - 1;
           if (dirtyLines.has(lineIndex)) {
             const tokens = dirtyLines.get(lineIndex)!;
-            child.replaceChildren(
-              ...renderLineTokens(tokens, tokenizer.themeType)
-            );
+            child.replaceChildren(...renderLineTokens(tokens));
             dirtyLineIndexes.delete(lineIndex);
             if (dirtyLineIndexes.size === 0) {
               break;
@@ -2162,7 +2178,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
                 lineIndex: lineIndex.toString(),
               },
               // oxlint-disable-next-line react/no-children-prop
-              children: renderLineTokens(tokens, tokenizer.themeType),
+              children: renderLineTokens(tokens),
             },
             contentEl
           );
@@ -3819,27 +3835,13 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
   }
 
-  #getFileRef(): FileContents | undefined {
-    const fileInfo = this.#fileInfo;
-    const textDocument = this.#textDocument;
-    if (fileInfo === undefined || textDocument === undefined) {
-      return undefined;
-    }
-    const file = { ...fileInfo }; // copy
-    Object.defineProperty(file, 'contents', {
-      enumerable: true,
-      get: () => textDocument.getText(),
-    });
-    return file as FileContents;
-  }
-
   #applyChange(
     change: TextDocumentChange,
     newSelections?: EditorSelection[],
     newLineAnnotations?: DiffLineAnnotation<LAnnotation>[],
     options?: { skipSearchRefresh?: boolean; skipFocus?: boolean }
   ) {
-    const fileRef = this.#getFileRef();
+    const fileRef = this.getFile();
     const onChange = this.#options.onChange;
     if (fileRef !== undefined && onChange !== undefined) {
       onChange(fileRef, newLineAnnotations ?? this.#lineAnnotations);

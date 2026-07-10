@@ -1004,6 +1004,10 @@ export interface DiffsEditableComponent<
   getLinePosition?: (
     lineNumber: number
   ) => { top: number; height: number } | undefined;
+  /**
+   * Return the scroll container element.
+   */
+  getScrollContainer?: () => HTMLElement | undefined;
   attachEditor: (editor: DiffsEditor<LAnnotation>) => () => void;
   applyDocumentChange: (
     textDocument: DiffsTextDocument,
@@ -1029,24 +1033,107 @@ export interface DiffsEditor<LAnnotation> {
       | undefined,
     renderRange: RenderRange | undefined
   ): void;
-  /**
-   * Detach from the host component and release all DOM-bound state. With
-   * `recycle` the editor keeps its parsed document, undo history, and file
-   * identity so a later `edit()` against the same file resumes where it left
-   * off — used when a virtualized host temporarily unmounts. Without it the
-   * editor fully resets and the next `edit()` rebuilds from host contents.
-   */
+  edit(fileInstance: DiffsEditableComponent<LAnnotation>): () => void;
   cleanUp(recycle?: boolean): void;
 }
 
 /**
- * The editor surface CodeView drives for items in edit mode. Structurally
- * matches the `Editor` class from `@pierre/diffs/editor` without importing it,
- * keeping editor code out of the main entry. Apps supply instances through the
- * CodeView `createEditor` option.
+ * Position in a text document expressed as zero-based line and character offset.
+ * The offsets are based on a UTF-16 string representation. So a string of the form
+ * `a𐐀b` the character offset of the character `a` is 0, the character offset of `𐐀`
+ * is 1 and the character offset of b is 3 since `𐐀` is represented using two code
+ * units in UTF-16.
+ *
+ * Positions are line end character agnostic. So you can not specify a position that
+ * denotes `\r|\n` or `\n|` where `|` represents the character offset.
  */
-export interface DiffsEditorHost<LAnnotation> extends DiffsEditor<LAnnotation> {
-  edit(fileInstance: DiffsEditableComponent<LAnnotation>): () => void;
+export interface Position {
+  /**
+   * Line position in a document (zero-based).
+   *
+   * If a line number is greater than the number of lines in a document, it
+   * defaults back to the number of lines in the document.
+   * If a line number is negative, it defaults to 0.
+   *
+   * The above two properties are implementation specific.
+   */
+  readonly line: number;
+  /**
+   * Character offset on a line in a document (zero-based).
+   *
+   * The meaning of this offset is determined by the negotiated
+   * `PositionEncodingKind`.
+   *
+   * If the character value is greater than the line length it defaults back
+   * to the line length. This property is implementation specific.
+   */
+  readonly character: number;
+}
+
+/**
+ * A range in a text document expressed as (zero-based) start and end positions.
+ *
+ * If you want to specify a range that contains a line including the line ending
+ * character(s) then use an end position denoting the start of the next line.
+ * For example:
+ * ```ts
+ * {
+ *     start: { line: 5, character: 23 }
+ *     end : { line 6, character : 0 }
+ * }
+ * ```
+ */
+export interface Range {
+  /**
+   * The range's start position.
+   */
+  readonly start: Position;
+  /**
+   * The range's end position.
+   */
+  readonly end: Position;
+}
+
+/**
+ * A text edit applicable to a text document.
+ */
+export interface TextEdit {
+  /**
+   * The range of the text document to be manipulated. To insert
+   * text into a document create a range where start === end.
+   */
+  readonly range: Range;
+  /**
+   * The string to be inserted. For delete operations use an
+   * empty string.
+   */
+  readonly newText: string;
+}
+
+/**
+ * The direction of a selection.
+ * -1: backward
+ *  0: none
+ *  1: forward
+ */
+export type SelectionDirection = -1 | 0 | 1;
+
+export interface EditorSelection extends Range {
+  direction: SelectionDirection;
+}
+
+export interface EditorState {
+  selections?: EditorSelection[];
+  view?: {
+    scrollLeft: number;
+    scrollTop: number;
+  };
+}
+
+export interface DiffsTextDocument {
+  readonly lineCount: number;
+  getLineText: (lineNumber: number, includeLineBreak?: boolean) => string;
+  getText: () => string;
 }
 
 /**
@@ -1062,22 +1149,4 @@ export interface CodeViewCreateEditorOptions<LAnnotation> {
     file: FileContents,
     lineAnnotations?: DiffLineAnnotation<LAnnotation>[]
   ) => void;
-}
-
-export interface DiffsEditorSelection {
-  start: {
-    line: number;
-    character: number;
-  };
-  end: {
-    line: number;
-    character: number;
-  };
-  direction: 'none' | 'backward' | 'forward';
-}
-
-export interface DiffsTextDocument {
-  readonly lineCount: number;
-  getLineText: (lineNumber: number, includeLineBreak?: boolean) => string;
-  getText: () => string;
 }

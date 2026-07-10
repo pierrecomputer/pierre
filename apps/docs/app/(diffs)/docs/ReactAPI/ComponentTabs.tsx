@@ -47,6 +47,7 @@ export function ComponentTabs({
       <ButtonGroup
         value={example}
         onValueChange={(value) => setExample(value as ExampleTypes)}
+        className="no-scrollbar max-w-full overflow-x-auto md:overflow-visible"
       >
         <ButtonGroupItem value="code-view">CodeView</ButtonGroupItem>
         <ButtonGroupItem value="multi-file-diff">MultiFileDiff</ButtonGroupItem>

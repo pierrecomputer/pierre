@@ -156,6 +156,10 @@ export class Virtualizer {
     return this.windowSpecs;
   }
 
+  getRoot(): HTMLElement | Document | undefined {
+    return this.root;
+  }
+
   isInstanceVisible(elementTop: number, elementHeight: number): boolean {
     const scrollTop = this.getScrollTop();
     const height = this.getHeight();

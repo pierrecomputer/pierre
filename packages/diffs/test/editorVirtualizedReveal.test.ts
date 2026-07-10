@@ -16,8 +16,10 @@ const MODEL_LINE_TOP = 20;
 
 function createTestHighlighter(): DiffsHighlighter {
   return {
+    getLanguage: () => undefined,
     getLoadedLanguages: () => [],
     getTheme: () => ({ colors: {} }),
+    loadLanguage: async () => {},
     setTheme: () => ({ colorMap: [''] }),
   } as unknown as DiffsHighlighter;
 }

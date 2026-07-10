@@ -1,6 +1,6 @@
 import { afterAll, describe, expect, mock, spyOn, test } from 'bun:test';
 
-import { File } from '../src/components/File';
+import { File, type FileOptions } from '../src/components/File';
 import { DEFAULT_THEMES } from '../src/constants';
 import { Editor, type EditorOptions } from '../src/editor/editor';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
@@ -42,12 +42,16 @@ interface EditorFixture {
   cleanup(): void;
   content: HTMLElement;
   editor: Editor<undefined>;
+  file: File<undefined>;
+  fileContainer: HTMLElement;
+  fileContents: FileContents;
   window: EditorTestWindow;
 }
 
 async function createEditorFixture(
   contents: string,
-  editorOptions?: EditorOptions<undefined>
+  editorOptions?: EditorOptions<undefined>,
+  fileOptions?: Partial<FileOptions<undefined>>
 ): Promise<EditorFixture> {
   const dom = installDom();
   const fileContainer = document.createElement('div');
@@ -56,6 +60,7 @@ async function createEditorFixture(
   const file = new File<undefined>({
     disableFileHeader: true,
     theme: DEFAULT_THEMES,
+    ...fileOptions,
   });
   const editor = new Editor<undefined>(editorOptions);
   const initialFile: FileContents = { name: 'edits.ts', contents };
@@ -73,6 +78,9 @@ async function createEditorFixture(
     },
     content,
     editor,
+    file,
+    fileContainer,
+    fileContents: initialFile,
     window: dom.window as unknown as EditorTestWindow,
   };
 }
@@ -113,6 +121,44 @@ function pressMoveLine(
 }
 
 describe('Editor.applyEdits selection sync', () => {
+  test('keeps inserted file lines coherent when switching files', async () => {
+    const { cleanup, editor, file, fileContainer, fileContents } =
+      await createEditorFixture('alpha\nbravo\n', undefined, {
+        disableErrorHandling: true,
+      });
+
+    try {
+      editor.applyEdits([
+        {
+          range: {
+            start: { line: 1, character: 5 },
+            end: { line: 1, character: 5 },
+          },
+          newText: '\ncharlie',
+        },
+      ]);
+
+      expect(editor.getText()).toBe('alpha\nbravo\ncharlie\n');
+
+      const otherFile: FileContents = {
+        name: 'other.ts',
+        contents: 'one\n',
+        cacheKey: 'other.ts',
+      };
+      expect(() =>
+        file.render({ file: otherFile, fileContainer, forceRender: true })
+      ).not.toThrow();
+
+      expect(fileContents.contents).toBe('alpha\nbravo\ncharlie\n');
+      expect(() =>
+        file.render({ file: fileContents, fileContainer, forceRender: true })
+      ).not.toThrow();
+      expect(editor.getText()).toBe('alpha\nbravo\ncharlie\n');
+    } finally {
+      cleanup();
+    }
+  });
+
   test('shifts the caret down when an edit inserts lines above it', async () => {
     const { cleanup, editor } = await createEditorFixture(
       'alpha\nbravo\ncharlie'
@@ -137,9 +183,7 @@ describe('Editor.applyEdits selection sync', () => {
         },
       ]);
 
-      expect(editor.getState().file.contents).toBe(
-        'NEW\nalpha\nbravo\ncharlie'
-      );
+      expect(editor.getText()).toBe('NEW\nalpha\nbravo\ncharlie');
       // The caret was inside "charlie"; inserting a line above must move it down
       // one line so it still points at the same character of "charlie".
       expect(editor.getState().selections).toEqual([
@@ -176,7 +220,7 @@ describe('Editor.applyEdits selection sync', () => {
         },
       ]);
 
-      expect(editor.getState().file.contents).toBe('alXYZpha\nbravo');
+      expect(editor.getText()).toBe('alXYZpha\nbravo');
       // The caret must follow the inserted text so the next keystroke lands
       // after it, not in front of it.
       expect(editor.getState().selections).toEqual([
@@ -251,9 +295,7 @@ describe('Editor.applyEdits selection sync', () => {
         },
       ]);
 
-      expect(editor.getState().file.contents).toBe(
-        'alpha\nbravo\nNEW\ncharlie'
-      );
+      expect(editor.getText()).toBe('alpha\nbravo\nNEW\ncharlie');
       expect(editor.getState().selections).toEqual([
         {
           start: { line: 0, character: 2 },
@@ -294,7 +336,7 @@ describe('Editor.applyEdits selection sync', () => {
       );
 
       pressUndoRedo(window, content, false);
-      expect(editor.getState().file.contents).toBe('alpha\nbravo\ncharlie');
+      expect(editor.getText()).toBe('alpha\nbravo\ncharlie');
       expect(editor.getState().selections).toEqual([
         {
           start: { line: 2, character: 3 },
@@ -304,9 +346,7 @@ describe('Editor.applyEdits selection sync', () => {
       ]);
 
       pressUndoRedo(window, content, true);
-      expect(editor.getState().file.contents).toBe(
-        'NEW\nalpha\nbravo\ncharlie'
-      );
+      expect(editor.getText()).toBe('NEW\nalpha\nbravo\ncharlie');
       // Redo must restore the caret to the post-edit (remapped) position, not
       // leave it where undo placed it.
       expect(editor.getState().selections).toEqual([
@@ -628,7 +668,7 @@ describe('Editor move line commands', () => {
       ]);
 
       pressMoveLine(window, content, 'up');
-      expect(editor.getState().file.contents).toBe('bravo\nalpha\ncharlie');
+      expect(editor.getText()).toBe('bravo\nalpha\ncharlie');
       expect(editor.getState().selections).toEqual([
         {
           start: { line: 0, character: 2 },
@@ -638,7 +678,7 @@ describe('Editor move line commands', () => {
       ]);
 
       pressMoveLine(window, content, 'down');
-      expect(editor.getState().file.contents).toBe('alpha\nbravo\ncharlie');
+      expect(editor.getText()).toBe('alpha\nbravo\ncharlie');
       expect(editor.getState().selections).toEqual([
         {
           start: { line: 1, character: 2 },
@@ -666,7 +706,7 @@ describe('Editor move line commands', () => {
       ]);
 
       pressMoveLine(window, content, 'up');
-      expect(editor.getState().file.contents).toBe('alpha\ncharlie\nbravo');
+      expect(editor.getText()).toBe('alpha\ncharlie\nbravo');
       expect(editor.getState().selections).toEqual([
         {
           start: { line: 1, character: 3 },
@@ -694,9 +734,7 @@ describe('Editor move line commands', () => {
       ]);
 
       pressMoveLine(window, content, 'down');
-      expect(editor.getState().file.contents).toBe(
-        'zero\nfour\none\ntwo\nthree'
-      );
+      expect(editor.getText()).toBe('zero\nfour\none\ntwo\nthree');
       expect(editor.getState().selections).toEqual([
         {
           start: { line: 2, character: 1 },
@@ -724,7 +762,7 @@ describe('Editor move line commands', () => {
       ]);
 
       pressMoveLine(window, content, 'down');
-      expect(editor.getState().file.contents).toBe('alpha\ncharlie\nbravo');
+      expect(editor.getText()).toBe('alpha\ncharlie\nbravo');
       expect(editor.getState().selections).toEqual([
         {
           start: { line: 2, character: 0 },
@@ -756,7 +794,7 @@ describe('Editor move line commands', () => {
       ]);
 
       pressMoveLine(window, content, 'up');
-      expect(editor.getState().file.contents).toBe('b\na\nc\ne\nd\nf');
+      expect(editor.getText()).toBe('b\na\nc\ne\nd\nf');
       expect(editor.getState().selections).toEqual([
         {
           start: { line: 0, character: 0 },
@@ -795,7 +833,7 @@ describe('Editor undo/redo API', () => {
 
       editor.applyEdits(insertBang, true);
 
-      expect(editor.getState().file.contents).toBe('alpha!');
+      expect(editor.getText()).toBe('alpha!');
       expect(editor.canUndo).toBe(true);
       expect(editor.canRedo).toBe(false);
     } finally {
@@ -808,15 +846,15 @@ describe('Editor undo/redo API', () => {
 
     try {
       editor.applyEdits(insertBang, true);
-      expect(editor.getState().file.contents).toBe('alpha!');
+      expect(editor.getText()).toBe('alpha!');
 
       editor.undo();
-      expect(editor.getState().file.contents).toBe('alpha');
+      expect(editor.getText()).toBe('alpha');
       expect(editor.canUndo).toBe(false);
       expect(editor.canRedo).toBe(true);
 
       editor.redo();
-      expect(editor.getState().file.contents).toBe('alpha!');
+      expect(editor.getText()).toBe('alpha!');
       expect(editor.canUndo).toBe(true);
       expect(editor.canRedo).toBe(false);
     } finally {
@@ -831,7 +869,7 @@ describe('Editor undo/redo API', () => {
       editor.undo();
       editor.redo();
 
-      expect(editor.getState().file.contents).toBe('alpha');
+      expect(editor.getText()).toBe('alpha');
       expect(editor.canUndo).toBe(false);
       expect(editor.canRedo).toBe(false);
     } finally {
@@ -856,13 +894,13 @@ describe('Editor undo/redo API', () => {
 
       editor.applyEdits(edit, true);
       pressUndoRedo(window, content, false);
-      const keyboardResult = editor.getState().file.contents;
+      const keyboardResult = editor.getText();
 
       pressUndoRedo(window, content, true);
-      expect(editor.getState().file.contents).toBe('Xalpha');
+      expect(editor.getText()).toBe('Xalpha');
 
       editor.undo();
-      expect(editor.getState().file.contents).toBe(keyboardResult);
+      expect(editor.getText()).toBe(keyboardResult);
     } finally {
       cleanup();
     }

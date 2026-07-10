@@ -31,6 +31,7 @@ export function VanillaComponentTabs({
       <ButtonGroup
         value={componentType}
         onValueChange={(value) => setComponentType(value as ComponentType)}
+        className="no-scrollbar max-w-full overflow-x-auto md:overflow-visible"
       >
         <ButtonGroupItem value="code-view">CodeView</ButtonGroupItem>
         <ButtonGroupItem value="file-diff">FileDiff</ButtonGroupItem>
@@ -48,6 +49,7 @@ export function VanillaComponentTabs({
                 key={`component-type-${componentType}`}
               />
             );
+
           case 'file-diff':
             return (
               <DocsCodeExample
