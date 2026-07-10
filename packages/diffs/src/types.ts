@@ -835,6 +835,17 @@ export interface RenderedDiffASTCache {
   isDirty?: boolean;
 }
 
+/**
+ * A window of rendered content. Two unit interpretations exist:
+ *
+ * - Renderer consumers (`iterateOverDiff` window predicates, windowed AST
+ *   requests, buffers, sticky specs) read `startingLine`/`totalLines` as
+ *   dense rendered-row indexes for the active diff style.
+ * - The editor reads them as zero-based document-line indexes of the new
+ *   file. `FileDiff.computeEditorRenderRange` converts the renderer range on
+ *   the editor-bound copy; the two coincide only while every line renders
+ *   (`expandUnchanged`).
+ */
 export interface RenderRange {
   startingLine: number;
   totalLines: number;
@@ -1018,6 +1029,13 @@ export interface DiffsEditableComponent<
    * Return the scroll container element.
    */
   getScrollContainer?: () => HTMLElement | undefined;
+  /**
+   * Whether the given one-based new-file line currently has (or will have on
+   * scroll) a rendered row. False only for lines hidden inside a collapsed
+   * unchanged region. Components without collapsible regions leave this
+   * unimplemented and the editor treats every line as renderable.
+   */
+  isLineRenderable?: (lineNumber: number) => boolean;
   /**
    * Attach an editor to this component. The returned detach closure receives
    * `recycle: true` when the editor is only being released by a virtualized

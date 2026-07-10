@@ -3,6 +3,7 @@ import { toHtml } from 'hast-util-to-html';
 
 import {
   CUSTOM_HEADER_SLOT_ID,
+  DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
   DEFAULT_THEMES,
   DEFAULT_TOKENIZE_MAX_LENGTH,
   DIFFS_TAG_NAME,
@@ -80,12 +81,15 @@ import { getLineAnnotationName } from '../utils/getLineAnnotationName';
 import { getOrCreateCodeNode } from '../utils/getOrCreateCodeNode';
 import { upsertHostThemeStyle } from '../utils/hostTheme';
 import { hydratePartialDiff } from '../utils/hydratePartialDiff';
+import { isDefaultRenderRange } from '../utils/isDefaultRenderRange';
 import { isDiffPlainText } from '../utils/isDiffPlainText';
 import { isStyleNode } from '../utils/isStyleNode';
+import { iterateOverDiff } from '../utils/iterateOverDiff';
 import { parseDiffFromFile } from '../utils/parseDiffFromFile';
 import { prerenderHTMLIfNecessary } from '../utils/prerenderHTMLIfNecessary';
 import { getMeasuredScrollbarGutter } from '../utils/scrollbarGutter';
 import { setPreNodeProperties } from '../utils/setWrapperNodeProps';
+import { isAdditionLineRenderable } from '../utils/virtualDiffLayout';
 import type { WorkerPoolManager } from '../worker';
 import { DiffsContainerLoaded } from './web-components';
 
@@ -1176,7 +1180,7 @@ export class FileDiff<
     const fileContainer = this.fileContainer;
     const fileDiff = this.fileDiffCache;
     const lineAnnotations = this.lineAnnotations;
-    const renderRange = this.renderRange;
+    const renderRange = this.computeEditorRenderRange(this.renderRange);
     if (
       editor != null &&
       fileContainer != null &&
@@ -1201,6 +1205,56 @@ export class FileDiff<
         );
       });
     }
+  }
+
+  // The stored render range is in rendered-row units for the windowed AST
+  // pipeline, but the editor consumes render ranges in document-line units.
+  // Derive the addition-side document window covered by the rendered rows:
+  // startingLine = first addition line with a row in the window, totalLines =
+  // last such line - first + 1, and 0 when the window holds no addition rows
+  // (e.g. a pure-deletion run taller than the viewport).
+  private computeEditorRenderRange(
+    renderRange: RenderRange | undefined
+  ): RenderRange | undefined {
+    const fileDiff = this.fileDiffCache;
+    if (
+      renderRange == null ||
+      fileDiff == null ||
+      isDefaultRenderRange(renderRange)
+    ) {
+      return renderRange;
+    }
+    const {
+      diffStyle = 'split',
+      expandUnchanged = false,
+      collapsedContextThreshold = DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
+    } = this.options;
+    let firstLineNumber: number | undefined;
+    let lastLineNumber: number | undefined;
+    iterateOverDiff({
+      diff: fileDiff,
+      diffStyle,
+      startingLine: renderRange.startingLine,
+      totalLines: renderRange.totalLines,
+      expandedHunks: expandUnchanged
+        ? true
+        : this.hunksRenderer.getExpandedHunksMap(),
+      collapsedContextThreshold,
+      callback: ({ additionLine }) => {
+        if (additionLine != null) {
+          firstLineNumber ??= additionLine.lineNumber;
+          lastLineNumber = additionLine.lineNumber;
+        }
+      },
+    });
+    if (firstLineNumber == null || lastLineNumber == null) {
+      return { ...renderRange, startingLine: 0, totalLines: 0 };
+    }
+    return {
+      ...renderRange,
+      startingLine: firstLineNumber - 1,
+      totalLines: lastLineNumber - firstLineNumber + 1,
+    };
   }
 
   public attachEditor(
@@ -1310,6 +1364,28 @@ export class FileDiff<
         }
       }, 150);
     }
+  }
+
+  // Editor-facing visibility oracle: whether a one-based new-file line has
+  // (or will have on scroll) a rendered row under the current expansion
+  // state. See isAdditionLineRenderable.
+  public isLineRenderable(lineNumber: number): boolean {
+    const fileDiff = this.fileDiffCache;
+    if (fileDiff == null) {
+      return true;
+    }
+    const {
+      expandUnchanged = false,
+      collapsedContextThreshold = DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
+    } = this.options;
+    return isAdditionLineRenderable({
+      fileDiff,
+      lineNumber,
+      expandedHunks: expandUnchanged
+        ? true
+        : this.hunksRenderer.getExpandedHunksMap(),
+      collapsedContextThreshold,
+    });
   }
 
   // Whether render() may run the session-exit recompute on dirty metadata.

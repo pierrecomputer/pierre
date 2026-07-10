@@ -235,6 +235,73 @@ export function getTrailingExpandedRegion({
   };
 }
 
+export interface IsAdditionLineRenderableProps {
+  fileDiff: FileDiffMetadata;
+  /** One-based line number in the new file. */
+  lineNumber: number;
+  expandedHunks: Map<number, HunkExpansionRegion> | true | undefined;
+  collapsedContextThreshold: number;
+}
+
+/**
+ * Whether a one-based new-file line currently has (or will have on scroll) a
+ * rendered row under the given expansion state — the editor-facing
+ * visibility oracle. False only for lines hidden inside a collapsed
+ * unchanged region; lines outside the diff's modeled range report true so
+ * callers keep their existing missing-row handling. Computed from the same
+ * inputs as `iterateOverDiff` so layout math and the oracle cannot diverge.
+ */
+export function isAdditionLineRenderable({
+  fileDiff,
+  lineNumber,
+  expandedHunks,
+  collapsedContextThreshold,
+}: IsAdditionLineRenderableProps): boolean {
+  if (expandedHunks === true || fileDiff.isPartial) {
+    return true;
+  }
+
+  for (const [hunkIndex, hunk] of fileDiff.hunks.entries()) {
+    if (lineNumber < hunk.additionStart) {
+      // Inside the collapsed gap before this hunk: renderable only within
+      // the expanded slices at the gap's edges.
+      const region = getExpandedRegion({
+        isPartial: fileDiff.isPartial,
+        rangeSize: hunk.collapsedBefore,
+        expandedHunks,
+        hunkIndex,
+        collapsedContextThreshold,
+      });
+      const gapStart = hunk.additionStart - region.rangeSize;
+      return (
+        region.renderAll ||
+        lineNumber < gapStart + region.fromStart ||
+        lineNumber >= hunk.additionStart - region.fromEnd
+      );
+    }
+    if (lineNumber < hunk.additionStart + hunk.additionCount) {
+      return true;
+    }
+  }
+
+  const trailingRegion = getTrailingExpandedRegion({
+    fileDiff,
+    hunkIndex: fileDiff.hunks.length - 1,
+    expandedHunks,
+    collapsedContextThreshold,
+    errorPrefix: 'isAdditionLineRenderable',
+  });
+  if (trailingRegion == null || trailingRegion.renderAll) {
+    return true;
+  }
+  const lastHunk = fileDiff.hunks[fileDiff.hunks.length - 1];
+  const trailingStart = lastHunk.additionStart + lastHunk.additionCount;
+  return (
+    lineNumber < trailingStart + trailingRegion.fromStart ||
+    lineNumber >= trailingStart + trailingRegion.rangeSize
+  );
+}
+
 export function getHunkSeparatorHeight({
   type,
   metrics,
