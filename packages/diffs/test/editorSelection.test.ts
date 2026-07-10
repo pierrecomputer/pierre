@@ -15,18 +15,25 @@ import {
   DirectionNone,
   expandCollapsedSelectionToWord,
   extendSelection,
+  extendSelections,
   findNexMatch,
   getAutoSurroundReplacementTexts,
   getCaretPosition,
   getDocumentBoundarySelection,
+  getDocumentFullSelection,
+  getSelectedLineBlocks,
   getSelectionAnchor,
   getSelectionText,
+  isLineEditable,
   mapCursorMove,
   mapSelectionShift,
   mergeOverlappingSelections,
+  remapSelectionsAfterEdits,
   resolveDeleteCharacterRange,
   resolveIndentEdits,
+  resolveSelectionCut,
   selectionIntersects,
+  shiftSelectionLines,
 } from '../src/editor/selection';
 import { DirectionBackward } from '../src/editor/selection';
 import { TextDocument } from '../src/editor/textDocument';
@@ -2367,6 +2374,90 @@ describe('resolveIndentEdits', () => {
       createSelection(0, 0, 2, 0, DirectionForward)
     );
   });
+
+  test('indent inserts a tab when the line already starts with a tab', () => {
+    const textDocument = new TextDocument('inmemory://1', '\tfoo');
+    const selection = createSelection(0, 1, 0, 2, DirectionForward);
+    const [edits, nextSelection] = resolveIndentEdits(
+      textDocument,
+      selection,
+      4,
+      false
+    );
+
+    expect(edits).toEqual([
+      {
+        range: {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 0 },
+        },
+        newText: '\t',
+      },
+    ]);
+    // Both edges shift right by the single column the inserted tab occupies.
+    expect(nextSelection).toEqual(
+      createSelection(0, 2, 0, 3, DirectionForward)
+    );
+  });
+
+  test('indent inserts soft-tab spaces and skips a trailing column-zero line', () => {
+    const textDocument = new TextDocument('inmemory://1', 'foo\nbar\nbaz');
+    // The selection ends at the very start of line 2, so line 2 is not indented.
+    const selection = createSelection(0, 0, 2, 0, DirectionForward);
+    const [edits, nextSelection] = resolveIndentEdits(
+      textDocument,
+      selection,
+      2,
+      false
+    );
+
+    expect(edits).toEqual([
+      {
+        range: {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 0 },
+        },
+        newText: '  ',
+      },
+      {
+        range: {
+          start: { line: 1, character: 0 },
+          end: { line: 1, character: 0 },
+        },
+        newText: '  ',
+      },
+    ]);
+    // Only the start edge sits on an indented line, so only it shifts right.
+    expect(nextSelection).toEqual(
+      createSelection(0, 2, 2, 0, DirectionForward)
+    );
+  });
+
+  test('outdent removes only the leading spaces that exist and skips unindented lines', () => {
+    const textDocument = new TextDocument('inmemory://1', '  foo\nbaz');
+    const selection = createSelection(0, 2, 1, 3, DirectionForward);
+    const [edits, nextSelection] = resolveIndentEdits(
+      textDocument,
+      selection,
+      4,
+      true
+    );
+
+    // Line 0 has only two leading spaces (fewer than tabSize), so only those two
+    // are removed; line 1 has no indentation and produces no edit at all.
+    expect(edits).toEqual([
+      {
+        range: {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 2 },
+        },
+        newText: '',
+      },
+    ]);
+    expect(nextSelection).toEqual(
+      createSelection(0, 0, 1, 3, DirectionForward)
+    );
+  });
 });
 
 describe('expandCollapsedSelectionToWord', () => {
@@ -2510,6 +2601,222 @@ describe('findNextMatch', () => {
       start: { line: 0, character: 6 },
       end: { line: 0, character: 8 },
       direction: DirectionForward,
+    });
+  });
+});
+
+describe('isLineEditable', () => {
+  test('permits editing context and addition lines only', () => {
+    expect(isLineEditable('context')).toBe(true);
+    expect(isLineEditable('context-expanded')).toBe(true);
+    expect(isLineEditable('change-addition')).toBe(true);
+    expect(isLineEditable('change-deletion')).toBe(false);
+    expect(isLineEditable('spacer')).toBe(false);
+    expect(isLineEditable('')).toBe(false);
+  });
+});
+
+describe('getDocumentFullSelection', () => {
+  test('spans from the document start to the end of the last line', () => {
+    const textDocument = new TextDocument(
+      'inmemory://1',
+      'alpha\nbravo\ncharlie'
+    );
+    expect(getDocumentFullSelection(textDocument)).toEqual(
+      createSelection(0, 0, 2, 7, DirectionForward)
+    );
+  });
+
+  test('collapses to an empty range for an empty document', () => {
+    const textDocument = new TextDocument('inmemory://1', '');
+    expect(getDocumentFullSelection(textDocument)).toEqual(
+      createSelection(0, 0, 0, 0, DirectionForward)
+    );
+  });
+});
+
+describe('getSelectedLineBlocks', () => {
+  test('drops the trailing line when a ranged selection ends at column zero', () => {
+    expect(
+      getSelectedLineBlocks([createSelection(1, 2, 3, 0, DirectionForward)])
+    ).toEqual([{ startLine: 1, endLine: 2 }]);
+  });
+
+  test('keeps the line for a collapsed caret at column zero', () => {
+    expect(getSelectedLineBlocks([createSelection(2, 0, 2, 0)])).toEqual([
+      { startLine: 2, endLine: 2 },
+    ]);
+  });
+
+  test('sorts blocks, merges adjacent ones, and keeps gaps split', () => {
+    const blocks = getSelectedLineBlocks([
+      createSelection(4, 0, 4, 3, DirectionForward),
+      createSelection(0, 0, 1, 2, DirectionForward),
+      createSelection(2, 0, 2, 1, DirectionForward),
+    ]);
+    // Lines 0-1 and line 2 are directly adjacent and merge into one block; line
+    // 4 is separated from line 2 by the gap at line 3 and stays its own block.
+    expect(blocks).toEqual([
+      { startLine: 0, endLine: 2 },
+      { startLine: 4, endLine: 4 },
+    ]);
+  });
+});
+
+describe('shiftSelectionLines', () => {
+  const lineLengths = [5, 6, 7];
+  const getLineLength = (line: number) => lineLengths[line] ?? 0;
+
+  test('moves both edges down one line and keeps their columns', () => {
+    expect(
+      shiftSelectionLines(
+        createSelection(0, 2, 0, 4, DirectionForward),
+        1,
+        3,
+        getLineLength
+      )
+    ).toEqual(createSelection(1, 2, 1, 4, DirectionForward));
+  });
+
+  test('clamps to the end of the last line when moving past the bottom', () => {
+    expect(
+      shiftSelectionLines(
+        createSelection(2, 1, 2, 3, DirectionForward),
+        1,
+        3,
+        getLineLength
+      )
+    ).toEqual(createSelection(2, 7, 2, 7, DirectionForward));
+  });
+
+  test('clamps to the document start when moving past the top', () => {
+    expect(
+      shiftSelectionLines(
+        createSelection(0, 3, 0, 5, DirectionBackward),
+        -1,
+        3,
+        getLineLength
+      )
+    ).toEqual(createSelection(0, 0, 0, 0, DirectionBackward));
+  });
+});
+
+describe('extendSelections', () => {
+  test('extends every selection to the target and merges the overlaps', () => {
+    const result = extendSelections(
+      [createSelection(0, 1, 0, 1), createSelection(0, 4, 0, 4)],
+      createSelection(0, 0, 0, 6, DirectionForward)
+    );
+    // Both carets extend their focus to column 6, so the two resulting ranges
+    // overlap and merge into a single selection.
+    expect(result).toEqual([createSelection(0, 1, 0, 6, DirectionForward)]);
+  });
+});
+
+describe('remapSelectionsAfterEdits', () => {
+  test('shifts a caret right past an earlier insertion', () => {
+    // "hello" with "XYZ" inserted at offset 0 becomes "XYZhello"; the caret that
+    // sat at offset 2 now sits at offset 5.
+    const textDocument = new TextDocument('inmemory://1', 'XYZhello');
+    const remapped = remapSelectionsAfterEdits(
+      textDocument,
+      [createSelection(0, 2, 0, 2)],
+      [[2, 2]],
+      [{ start: 0, end: 0, text: 'XYZ' }]
+    );
+    expect(remapped).toEqual([createSelection(0, 5, 0, 5)]);
+  });
+
+  test('collapses a caret inside a replaced range to the end of the replacement', () => {
+    // "abcde" with offsets [1,4) ("bcd") replaced by "XY" becomes "aXYe"; a caret
+    // that sat inside the replaced text lands just after it, at offset 3.
+    const textDocument = new TextDocument('inmemory://1', 'aXYe');
+    const remapped = remapSelectionsAfterEdits(
+      textDocument,
+      [createSelection(0, 2, 0, 2)],
+      [[2, 2]],
+      [{ start: 1, end: 4, text: 'XY' }]
+    );
+    expect(remapped).toEqual([createSelection(0, 3, 0, 3)]);
+  });
+
+  test('preserves selection direction while remapping both edges', () => {
+    // Deleting offsets [0,2) of "abcdef" leaves "cdef"; a backward selection over
+    // offsets 2..5 shifts to 0..3 and stays backward.
+    const textDocument = new TextDocument('inmemory://1', 'cdef');
+    const remapped = remapSelectionsAfterEdits(
+      textDocument,
+      [createSelection(0, 2, 0, 5, DirectionBackward)],
+      [[2, 5]],
+      [{ start: 0, end: 2, text: '' }]
+    );
+    expect(remapped).toEqual([createSelection(0, 0, 0, 3, DirectionBackward)]);
+  });
+});
+
+describe('resolveSelectionCut', () => {
+  test('cuts only the selected text for a ranged selection', () => {
+    const textDocument = new TextDocument('inmemory://1', 'hello world');
+    expect(
+      resolveSelectionCut(textDocument, [
+        createSelection(0, 0, 0, 5, DirectionForward),
+      ])
+    ).toEqual({
+      text: 'hello',
+      edits: [{ start: 0, end: 5, text: '' }],
+      nextSelectionOffsets: [0],
+    });
+  });
+
+  test('cuts a whole non-final line, including its trailing break, for a caret', () => {
+    const textDocument = new TextDocument(
+      'inmemory://1',
+      'alpha\nbravo\ncharlie'
+    );
+    expect(
+      resolveSelectionCut(textDocument, [createSelection(0, 2, 0, 2)])
+    ).toEqual({
+      text: 'alpha\n',
+      edits: [{ start: 0, end: 6, text: '' }],
+      nextSelectionOffsets: [0],
+    });
+  });
+
+  test('removes the preceding break instead of the trailing one when cutting the final line', () => {
+    const textDocument = new TextDocument('inmemory://1', 'alpha\nbravo');
+    // The clipboard text is just the line content, but the deletion also removes
+    // the newline before it so no blank line is left behind.
+    expect(
+      resolveSelectionCut(textDocument, [createSelection(1, 1, 1, 1)])
+    ).toEqual({
+      text: 'bravo',
+      edits: [{ start: 5, end: 11, text: '' }],
+      nextSelectionOffsets: [5],
+    });
+  });
+
+  test('deletes content only when the caret is on the sole line', () => {
+    const textDocument = new TextDocument('inmemory://1', 'hello');
+    expect(
+      resolveSelectionCut(textDocument, [createSelection(0, 2, 0, 2)])
+    ).toEqual({
+      text: 'hello',
+      edits: [{ start: 0, end: 5, text: '' }],
+      nextSelectionOffsets: [0],
+    });
+  });
+
+  test('merges two carets on the same line into a single deletion', () => {
+    const textDocument = new TextDocument('inmemory://1', 'alpha\nbravo');
+    expect(
+      resolveSelectionCut(textDocument, [
+        createSelection(0, 1, 0, 1),
+        createSelection(0, 3, 0, 3),
+      ])
+    ).toEqual({
+      text: 'alpha\n',
+      edits: [{ start: 0, end: 6, text: '' }],
+      nextSelectionOffsets: [0, 0],
     });
   });
 });
