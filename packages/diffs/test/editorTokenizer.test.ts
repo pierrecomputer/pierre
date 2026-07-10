@@ -1113,6 +1113,111 @@ describe('EditorTokenizer', () => {
     }
   });
 
+  // Apps often force a scheme via page CSS/classes while the OS media query
+  // differs. syncTheme must use the same computed color-scheme source as the
+  // MutationObserver; otherwise a render sync flips tokens back to the OS
+  // preference and edited lines render the wrong theme colors.
+  test('syncTheme resolves system theme from host color-scheme, not OS media query', () => {
+    const originalMatchMedia = globalThis.window.matchMedia;
+    const originalGetComputedStyle = Reflect.get(
+      globalThis,
+      'getComputedStyle'
+    );
+    const originalDocument = Reflect.get(globalThis, 'document');
+    const originalMutationObserver = Reflect.get(
+      globalThis,
+      'MutationObserver'
+    );
+
+    globalThis.window.matchMedia = (() =>
+      ({
+        addEventListener: () => {},
+        addListener: () => {},
+        dispatchEvent: () => false,
+        // OS prefers light, but the host document forces dark.
+        matches: false,
+        media: '(prefers-color-scheme: dark)',
+        onchange: null,
+        removeEventListener: () => {},
+        removeListener: () => {},
+      }) as MediaQueryList) as typeof window.matchMedia;
+    Reflect.set(globalThis, 'document', {
+      body: {},
+      documentElement: {},
+    });
+    Reflect.set(
+      globalThis,
+      'getComputedStyle',
+      (() =>
+        ({
+          colorScheme: 'dark',
+        }) as CSSStyleDeclaration) as typeof getComputedStyle
+    );
+    Reflect.set(
+      globalThis,
+      'MutationObserver',
+      class {
+        observe() {}
+        disconnect() {}
+        takeRecords() {
+          return [];
+        }
+      }
+    );
+
+    try {
+      const grammar = {
+        tokenizeLine2(lineText: string, ruleStack: StateStack) {
+          return {
+            tokens: new Uint32Array([0, 0]),
+            ruleStack,
+            stoppedEarly: false,
+            lineText,
+          };
+        },
+      } as unknown as IGrammar;
+      const textDocument = new TextDocument('test.ts', 'line 0', 'typescript');
+      const dualThemes = { light: 'light-theme', dark: 'dark-theme' };
+      const tokenizer = new EditorTokenizer({
+        highlighter: createTestHighlighter({
+          getLanguage: () => grammar,
+        }),
+        textDocument,
+        codeOptions: {
+          theme: dualThemes,
+          themeType: 'system',
+        },
+        setStyle: noopSetStyle,
+        onDeferTokenize: () => {},
+      });
+
+      expect(tokenizer.themeType).toBe('dark');
+
+      // A later render sync must not flip back to the OS light preference.
+      tokenizer.syncTheme({ theme: dualThemes, themeType: 'system' });
+      expect(tokenizer.themeType).toBe('dark');
+
+      tokenizer.cleanUp();
+    } finally {
+      globalThis.window.matchMedia = originalMatchMedia;
+      if (originalGetComputedStyle === undefined) {
+        Reflect.deleteProperty(globalThis, 'getComputedStyle');
+      } else {
+        Reflect.set(globalThis, 'getComputedStyle', originalGetComputedStyle);
+      }
+      if (originalDocument === undefined) {
+        Reflect.deleteProperty(globalThis, 'document');
+      } else {
+        Reflect.set(globalThis, 'document', originalDocument);
+      }
+      if (originalMutationObserver === undefined) {
+        Reflect.deleteProperty(globalThis, 'MutationObserver');
+      } else {
+        Reflect.set(globalThis, 'MutationObserver', originalMutationObserver);
+      }
+    }
+  });
+
   // Dual-theme SSR (`themes: {dark,light}`) leaves the shared highlighter on the
   // last theme it applied (usually light). The tokenizer caches a single-theme
   // colorMap from construction; without re-activating that theme before an edit,
