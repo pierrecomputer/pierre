@@ -347,7 +347,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       region.fromEnd += expansionLineCount;
     }
     // NOTE(amadeus): If our render cache is not highlighted, we need to clear
-    // it, otherwise we won't have the correct AST lines
+    // it, otherwise we won't have the correct AST lines. Clearing is safe
+    // mid-edit-session even though the dirty cache carries live edits: both
+    // session hunk-update paths keep diff.additionLines current every pass,
+    // so the rebuilt AST reproduces the live document.
     if (this.renderCache?.highlighted !== true) {
       this.clearRenderCache();
     }

@@ -191,6 +191,75 @@ describe('diff editor: collapsed regions during edit', () => {
     }
   });
 
+  test('clicking a separator expand button mid-edit reveals rows and keeps edits', async () => {
+    const fixture = await createCollapsedEditFixture();
+    const { container, editor } = fixture;
+    try {
+      // An edit made before the expansion, to prove the reveal re-render
+      // does not clobber the live document.
+      typeAt(editor, 9, 0, 'EDIT-');
+      await wait(0);
+
+      const content = findAdditionContent(container)!;
+      const expandButton = content
+        .querySelector('[data-separator][data-expand-index="1"]')
+        ?.querySelector('[data-expand-button]');
+      expect(expandButton).not.toBeNull();
+      const MouseEventCtor = content.ownerDocument.defaultView!.MouseEvent;
+      expandButton!.dispatchEvent(
+        new MouseEventCtor('click', { bubbles: true, composed: true })
+      );
+      await wait(10);
+
+      // The gap between the hunks is fully revealed (expansionLineCount
+      // clamps to the gap), and the pre-expansion edit survives.
+      const revealed = findAdditionContent(container)!;
+      expect(revealed.querySelector('[data-line="30"]')).not.toBeNull();
+      expect(revealed.querySelector('[data-line="10"]')?.textContent).toBe(
+        'EDIT-line 10 changed'
+      );
+      expect(editor.getFile()?.contents).toContain('EDIT-line 10 changed');
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  test('typing into context revealed mid-edit lands correctly and undoes', async () => {
+    const fixture = await createCollapsedEditFixture();
+    const { container, editor, fileDiff } = fixture;
+    try {
+      // Reveal the gap through the same flow a separator click uses.
+      fileDiff.handleExpandHunk(1, 'both');
+      await wait(10);
+      const content = findAdditionContent(container)!;
+      expect(content.querySelector('[data-line="30"]')).not.toBeNull();
+
+      // Type into the revealed context line: a gap edit that synthesizes a
+      // session region.
+      typeAt(editor, 29, 0, 'typed ');
+      await wait(30);
+
+      expect(editor.getFile()?.contents).toContain('typed line 30');
+      const rows =
+        findAdditionContent(container)!.querySelectorAll('[data-line="30"]');
+      expect(rows.length).toBe(1);
+      expect(rows[0].textContent).toBe('typed line 30');
+      const lineNumbers = renderedLineNumbers(container);
+      expect(new Set(lineNumbers).size).toBe(lineNumbers.length);
+
+      // Undo restores the context text; the row stays rendered.
+      editor.undo();
+      await wait(30);
+      expect(editor.getFile()?.contents).not.toContain('typed line 30');
+      const restored =
+        findAdditionContent(container)!.querySelectorAll('[data-line="30"]');
+      expect(restored.length).toBe(1);
+      expect(restored[0].textContent).toBe('line 30');
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
   test('a line-count edit below the gap re-renders without duplicates', async () => {
     const fixture = await createCollapsedEditFixture();
     const { container, editor } = fixture;
