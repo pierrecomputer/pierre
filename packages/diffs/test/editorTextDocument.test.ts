@@ -92,12 +92,14 @@ describe('TextDocument', () => {
     expect(change).toEqual({
       startLine: 0,
       startCharacter: 0,
+      endCharacter: 5,
       endLine: 0,
+      endedAtDocumentEnd: true,
       previousLineCount: 2,
       lineCount: 1,
       lineDelta: -1,
       changedLineRanges: [[0, 0]],
-      changedLineChanges: [[0, 0, -1]],
+      changedLineChanges: [[0, 0, -1, 0, 5, true]],
     });
   });
 
@@ -197,12 +199,14 @@ describe('TextDocument', () => {
     expect(change).toEqual({
       startLine: 0,
       startCharacter: 6,
+      endCharacter: 11,
       endLine: 0,
+      endedAtDocumentEnd: true,
       previousLineCount: 1,
       lineCount: 1,
       lineDelta: 0,
       changedLineRanges: [[0, 0]],
-      changedLineChanges: [[0, 0, 0]],
+      changedLineChanges: [[0, 0, 0, 6, 11, true]],
     });
   });
 
@@ -258,12 +262,14 @@ describe('TextDocument', () => {
     expect(change).toEqual({
       startLine: 1,
       startCharacter: 0,
+      endCharacter: 1,
       endLine: 1,
+      endedAtDocumentEnd: false,
       previousLineCount: 3,
       lineCount: 3,
       lineDelta: 0,
       changedLineRanges: [[1, 1]],
-      changedLineChanges: [[1, 1, 0]],
+      changedLineChanges: [[1, 1, 0, 0, 1, false]],
     });
   });
 
@@ -282,12 +288,14 @@ describe('TextDocument', () => {
     expect(change).toEqual({
       startLine: 0,
       startCharacter: 1,
+      endCharacter: 1,
       endLine: 1,
+      endedAtDocumentEnd: true,
       previousLineCount: 1,
       lineCount: 2,
       lineDelta: 1,
       changedLineRanges: [[0, 1]],
-      changedLineChanges: [[0, 1, 1]],
+      changedLineChanges: [[0, 1, 1, 1, 1, true]],
     });
   });
 
@@ -306,12 +314,14 @@ describe('TextDocument', () => {
     expect(change).toEqual({
       startLine: 0,
       startCharacter: 1,
+      endCharacter: 0,
       endLine: 0,
+      endedAtDocumentEnd: false,
       previousLineCount: 3,
       lineCount: 1,
       lineDelta: -2,
       changedLineRanges: [[0, 0]],
-      changedLineChanges: [[0, 0, -2]],
+      changedLineChanges: [[0, 0, -2, 1, 0, false]],
     });
   });
 
@@ -345,12 +355,14 @@ describe('TextDocument', () => {
     expect(change).toEqual({
       startLine: 0,
       startCharacter: 1,
+      endCharacter: 1,
       endLine: 1,
+      endedAtDocumentEnd: true,
       previousLineCount: 1,
       lineCount: 2,
       lineDelta: 1,
       changedLineRanges: [[0, 1]],
-      changedLineChanges: [[0, 1, 1]],
+      changedLineChanges: [[0, 1, 1, 1, 1, true]],
     });
   });
 
@@ -370,12 +382,14 @@ describe('TextDocument', () => {
     expect(change).toEqual({
       startLine: 0,
       startCharacter: 5,
+      endCharacter: 5,
       endLine: 2,
+      endedAtDocumentEnd: true,
       previousLineCount: 1,
       lineCount: 3,
       lineDelta: 2,
       changedLineRanges: [[0, 2]],
-      changedLineChanges: [[0, 2, 2]],
+      changedLineChanges: [[0, 2, 2, 5, 5, true]],
     });
   });
 
@@ -1057,12 +1071,14 @@ describe('TextDocument', () => {
     expect(undoResult?.[0]).toEqual({
       startLine: 0,
       startCharacter: 1,
+      endCharacter: 2,
       endLine: 0,
+      endedAtDocumentEnd: true,
       previousLineCount: 1,
       lineCount: 1,
       lineDelta: 0,
       changedLineRanges: [[0, 0]],
-      changedLineChanges: [[0, 0, 0]],
+      changedLineChanges: [[0, 0, 0, 1, 2, true]],
     });
     expect(d.canUndo).toBe(false);
     expect(d.canRedo).toBe(true);
@@ -1072,12 +1088,14 @@ describe('TextDocument', () => {
     expect(redoResult?.[0]).toEqual({
       startLine: 0,
       startCharacter: 1,
+      endCharacter: 1,
       endLine: 0,
+      endedAtDocumentEnd: true,
       previousLineCount: 1,
       lineCount: 1,
       lineDelta: 0,
       changedLineRanges: [[0, 0]],
-      changedLineChanges: [[0, 0, 0]],
+      changedLineChanges: [[0, 0, 0, 1, 1, true]],
     });
     expect(d.canUndo).toBe(true);
     expect(d.canRedo).toBe(false);

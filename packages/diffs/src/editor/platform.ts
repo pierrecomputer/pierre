@@ -75,6 +75,10 @@ export function isMoveCursorShortcut(
       return 'left';
     } else if (e.key === 'ArrowRight') {
       return 'right';
+    } else if (e.key === 'Home') {
+      return 'start';
+    } else if (e.key === 'End') {
+      return 'end';
     }
   }
 

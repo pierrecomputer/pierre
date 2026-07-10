@@ -74,15 +74,18 @@ export class Metrics {
 
   /**
    * Re-measure the '0' character width against the font that is loaded right
-   * now, returning true when it changed.
+   * now, returning true when measurement-dependent UI should refresh.
    *
    * A custom web font can finish loading after the editor first renders.
    * Until then canvas measureText reports the fallback font's width, and
    * getComputedStyle returns the same font-family string before and after the
    * file arrives, so init()'s font guard never re-measures on its own. Call
    * this once fonts have settled (e.g. on document.fonts.ready) to replace a
-   * width measured against the fallback font with the real glyph width. The
-   * boolean return lets the caller skip re-rendering when nothing changed.
+   * width measured against the fallback font with the real glyph width. Font
+   * completion can also change DOM-measured emoji/ZWJ widths while leaving the
+   * ASCII width unchanged, and the computed font string stays the same in both
+   * cases. The boolean return lets the caller skip re-rendering when there is no
+   * measured state to refresh.
    */
   remeasureCharacterWidth(): boolean {
     if (this.#canvasCtx === undefined || this.#font === undefined) {
@@ -90,11 +93,12 @@ export class Metrics {
     }
     this.#canvasCtx.font = this.#font;
     const ch = this.canvasMeasureTextWidth('0');
-    if (ch === this.ch) {
-      return false;
+    const characterWidthChanged = ch !== this.ch;
+    if (characterWidthChanged) {
+      this.ch = ch;
     }
-    this.ch = ch;
-    return true;
+    const textWidthCacheCleared = this.#clearTextWidthCache();
+    return characterWidthChanged || textWidthCacheCleared;
   }
 
   /** measure the width of the text */
@@ -169,7 +173,13 @@ export class Metrics {
    * init(), e.g. on a layout reflow, so stale widths are not reused
    */
   clearTextWidthCache(): void {
+    this.#clearTextWidthCache();
+  }
+
+  #clearTextWidthCache(): boolean {
+    const hadCachedTextWidths = this.#textWidthCache.size > 0;
     this.#textWidthCache.clear();
+    return hadCachedTextWidths;
   }
 }
 

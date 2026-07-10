@@ -57,6 +57,7 @@ export class EditorTokenizer {
 
   // state
   #stateStack: StateStack[] = [INITIAL]; // cached state stack by line index
+  #comparisonStateStack: StateStack[] = [];
   #lastLine: number = -1;
   #isStopped: boolean = true;
   #isPaused: boolean = false;
@@ -214,6 +215,7 @@ export class EditorTokenizer {
     this.#setTheme(themeName, themeType);
     this.stopBackgroundTokenize();
     this.#stateStack = [INITIAL];
+    this.#comparisonStateStack = [];
     if (this.#grammar !== undefined && this.#textDocument.lineCount > 0) {
       this.#scheduleBackgroundTokenize(0);
     }
@@ -371,9 +373,9 @@ export class EditorTokenizer {
       canReuseCachedStates ||
       renderRange === undefined ||
       dirtyStart >= viewStart;
-    const changedLineRanges: readonly [number, number][] = canReuseCachedStates
-      ? (change.changedLineRanges ?? [[dirtyStart, change.endLine]])
-      : [[dirtyStart, change.endLine]];
+    const changedLineRanges: readonly [number, number][] =
+      change.changedLineRanges ?? [[dirtyStart, change.endLine]];
+    this.#comparisonStateStack = [];
     let offscreenSyncEnd = -1;
     if (dirtyStart < viewStart) {
       for (const [rangeStart, rangeEnd] of changedLineRanges) {
@@ -391,10 +393,7 @@ export class EditorTokenizer {
     if (canReuseCachedStates) {
       this.#buildStateStack(dirtyStart);
     } else {
-      this.#stateStack.length = Math.min(
-        this.#stateStack.length,
-        dirtyStart + 1
-      );
+      this.#shiftComparisonStateStack(change);
       if (renderRange === undefined || dirtyStart >= viewStart) {
         this.#buildStateStack(viewStart);
       }
@@ -427,9 +426,7 @@ export class EditorTokenizer {
           offscreenState = resolved.state;
           offscreenDirtyLines.set(offscreenLine, resolved.resolvedTokens);
         }
-        if (canCacheTokenizedStates) {
-          this.#stateStack[offscreenEnd] = offscreenState;
-        }
+        this.#stateStack[offscreenEnd] = offscreenState;
       }
     }
     // Seed the loop's grammar state after the offscreen flush, not before it.
@@ -518,7 +515,7 @@ export class EditorTokenizer {
             : line;
       this.#scheduleBackgroundTokenize(
         backgroundLine,
-        canReuseCachedStates ? changedLineRanges : undefined,
+        changedLineRanges,
         changedRangeIndex
       );
     }
@@ -540,6 +537,7 @@ export class EditorTokenizer {
     this.#lastLine = -1;
     this.#backgroundChangedLineRanges = undefined;
     this.#backgroundChangedRangeIndex = 0;
+    this.#comparisonStateStack = [];
     this.#detachMessageListener();
   }
 
@@ -681,6 +679,73 @@ export class EditorTokenizer {
     }
   }
 
+  // Preserve old end states as comparison-only sentinels. They let background
+  // tokenization stop when grammar state reconverges without letting foreground
+  // tokenization seed from stale pre-edit states.
+  #shiftComparisonStateStack(change: TextDocumentChange): void {
+    const lineChanges =
+      change.changedLineChanges ??
+      ([[change.startLine, change.endLine, change.lineDelta]] as const);
+    const comparisonStateStack = this.#stateStack.slice();
+
+    for (const [startLine, endLine, lineDelta] of lineChanges) {
+      if (lineDelta === 0) {
+        continue;
+      }
+
+      const insertedLineSpan = endLine - startLine;
+      const oldLineSpan = insertedLineSpan - lineDelta;
+      const sourceStart = startLine + oldLineSpan + 1;
+      const targetStart = startLine + insertedLineSpan + 1;
+      const originalLength = comparisonStateStack.length;
+
+      if (lineDelta > 0) {
+        for (let line = originalLength - 1; line >= sourceStart; line--) {
+          const targetLine = line + lineDelta;
+          if (line in comparisonStateStack) {
+            comparisonStateStack[targetLine] = comparisonStateStack[line];
+          } else {
+            Reflect.deleteProperty(comparisonStateStack, targetLine);
+          }
+        }
+      } else {
+        for (let line = sourceStart; line < originalLength; line++) {
+          const targetLine = line + lineDelta;
+          if (line in comparisonStateStack) {
+            comparisonStateStack[targetLine] = comparisonStateStack[line];
+          } else {
+            Reflect.deleteProperty(comparisonStateStack, targetLine);
+          }
+        }
+        comparisonStateStack.length = Math.max(
+          Math.min(originalLength, startLine + 1),
+          originalLength + lineDelta
+        );
+      }
+
+      for (let line = startLine + 1; line < targetStart; line++) {
+        Reflect.deleteProperty(comparisonStateStack, line);
+      }
+    }
+
+    this.#stateStack.length = Math.min(
+      this.#stateStack.length,
+      change.startLine + 1
+    );
+    comparisonStateStack.length = Math.min(
+      comparisonStateStack.length,
+      this.#textDocument.lineCount + 1
+    );
+    for (let line = 0; line <= change.startLine; line++) {
+      Reflect.deleteProperty(comparisonStateStack, line);
+    }
+    this.#comparisonStateStack = comparisonStateStack;
+  }
+
+  #getPreviousEndState(line: number): StateStack | undefined {
+    return this.#comparisonStateStack[line] ?? this.#stateStack[line];
+  }
+
   #buildStateStack(endAt: number) {
     const boundedEndAt = Math.min(
       Math.max(0, endAt),
@@ -743,7 +808,7 @@ export class EditorTokenizer {
 
       const previousNextState =
         currentChangedRangeEnd !== undefined
-          ? this.#stateStack[line + 1]
+          ? this.#getPreviousEndState(line + 1)
           : undefined;
       const lineText = this.#textDocument.getLineText(line);
       if (lineText.length > this.#tokenizeMaxLineLength) {

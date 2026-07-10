@@ -29,11 +29,33 @@ async function waitForEditableContent(
   throw new Error('editor content did not become editable');
 }
 
+interface EditorTestWindow extends Window {
+  KeyboardEvent: {
+    new (type: string, eventInitDict?: KeyboardEventInit): KeyboardEvent;
+  };
+}
+
 // Height the test uses for a single visual row. Deliberately not the editor's
 // default 20px line height: the caret's y must come from the measured line
 // offsetTop, so a distinct value proves it is not coincidentally matching a
 // fixed lineHeight multiple.
 const ROW = 23;
+
+function rect(left: number, top: number, width = 1, height = 1): DOMRect {
+  return {
+    bottom: top + height,
+    height,
+    left,
+    right: left + width,
+    top,
+    width,
+    x: left,
+    y: top,
+    toJSON() {
+      return {};
+    },
+  } as DOMRect;
+}
 
 // jsdom performs no layout, so every element.offsetTop is 0 and the wrap-induced
 // vertical shift this test exercises would be invisible. Install a getter that
@@ -77,6 +99,63 @@ function installLineLayout(): {
   };
 }
 
+function restorePrototypeProperty(
+  proto: object,
+  property: string,
+  descriptor: PropertyDescriptor | undefined
+): void {
+  if (descriptor !== undefined) {
+    Object.defineProperty(proto, property, descriptor);
+  } else {
+    Reflect.deleteProperty(proto, property);
+  }
+}
+
+// #wrapLineText detects visual row starts by checking when a Range's top moves
+// downward. jsdom does not measure ranges, so this harness reports a new top
+// every `columns` UTF-16 offsets, making wrap offsets deterministic.
+function installWrapMeasurement(columns: number): { restore(): void } {
+  const rangeProto = Object.getPrototypeOf(document.createRange()) as object;
+  const elementProto = HTMLElement.prototype;
+  const originalRangeRect = Object.getOwnPropertyDescriptor(
+    rangeProto,
+    'getBoundingClientRect'
+  );
+  const originalElementRect = Object.getOwnPropertyDescriptor(
+    elementProto,
+    'getBoundingClientRect'
+  );
+
+  Object.defineProperty(rangeProto, 'getBoundingClientRect', {
+    configurable: true,
+    value(this: Range): DOMRect {
+      const offset = this.startOffset;
+      return rect((offset % columns) * 8, Math.floor(offset / columns) * ROW);
+    },
+  });
+  Object.defineProperty(elementProto, 'getBoundingClientRect', {
+    configurable: true,
+    value(): DOMRect {
+      return rect(0, 0, columns * 8, ROW);
+    },
+  });
+
+  return {
+    restore(): void {
+      restorePrototypeProperty(
+        rangeProto,
+        'getBoundingClientRect',
+        originalRangeRect
+      );
+      restorePrototypeProperty(
+        elementProto,
+        'getBoundingClientRect',
+        originalElementRect
+      );
+    },
+  };
+}
+
 function caretTranslateY(container: HTMLElement): number {
   const caret = container.shadowRoot?.querySelector('[data-caret]');
   if (!(caret instanceof HTMLElement)) {
@@ -99,7 +178,159 @@ function caretAt(line: number) {
   ];
 }
 
+async function createWrapEditor(
+  contents: string,
+  wrapColumns: number
+): Promise<{
+  cleanup(): void;
+  content: HTMLElement;
+  editor: Editor<undefined>;
+  window: EditorTestWindow;
+}> {
+  const dom = installDom();
+  const wrapMeasurement = installWrapMeasurement(wrapColumns);
+  const fileContainer = document.createElement('div');
+  document.body.appendChild(fileContainer);
+
+  const file = new File<undefined>({
+    disableFileHeader: true,
+    theme: DEFAULT_THEMES,
+    overflow: 'wrap',
+  });
+  const editor = new Editor<undefined>();
+  const initialFile: FileContents = {
+    name: 'wrap.ts',
+    contents,
+  };
+
+  file.render({ file: initialFile, fileContainer, forceRender: true });
+  editor.edit(file);
+  const content = await waitForEditableContent(fileContainer);
+
+  return {
+    cleanup(): void {
+      wrapMeasurement.restore();
+      editor.cleanUp();
+      file.cleanUp();
+      dom.cleanup();
+    },
+    content,
+    editor,
+    window: dom.window as unknown as EditorTestWindow,
+  };
+}
+
+function dispatchMovementKey(
+  window: EditorTestWindow,
+  content: HTMLElement,
+  init: KeyboardEventInit & { key: string }
+): KeyboardEvent {
+  const event = new window.KeyboardEvent('keydown', {
+    bubbles: true,
+    cancelable: true,
+    composed: true,
+    ...init,
+  });
+  content.dispatchEvent(event);
+  return event;
+}
+
+function setCaret(editor: Editor<undefined>, line: number, character: number) {
+  editor.setSelections([
+    {
+      start: { line, character },
+      end: { line, character },
+      direction: 'none',
+    },
+  ]);
+}
+
+function expectCaret(
+  editor: Editor<undefined>,
+  line: number,
+  character: number
+): void {
+  const selection = editor.getState().selections?.at(-1);
+  expect(selection?.start).toEqual({ line, character });
+  expect(selection?.end).toEqual({ line, character });
+}
+
 describe('editor wrap caret position', () => {
+  test('arrow keys move through wrapped visual rows before changing logical lines', async () => {
+    const { cleanup, content, editor, window } = await createWrapEditor(
+      '012345678901234567890123456789\nshort',
+      10
+    );
+
+    try {
+      setCaret(editor, 0, 15);
+
+      const downWithinLine = dispatchMovementKey(window, content, {
+        key: 'ArrowDown',
+      });
+      expect(downWithinLine.defaultPrevented).toBe(true);
+      expectCaret(editor, 0, 25);
+
+      dispatchMovementKey(window, content, { key: 'ArrowUp' });
+      expectCaret(editor, 0, 15);
+
+      setCaret(editor, 0, 25);
+      dispatchMovementKey(window, content, { key: 'ArrowDown' });
+      expectCaret(editor, 1, 5);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('line-boundary shortcuts use wrapped visual row boundaries', async () => {
+    const { cleanup, content, editor, window } = await createWrapEditor(
+      '  abcdefghij  klmnop',
+      12
+    );
+
+    try {
+      setCaret(editor, 0, 16);
+
+      const commandLeft = dispatchMovementKey(window, content, {
+        key: 'ArrowLeft',
+        metaKey: true,
+      });
+      expect(commandLeft.defaultPrevented).toBe(true);
+      expectCaret(editor, 0, 14);
+
+      dispatchMovementKey(window, content, {
+        key: 'ArrowLeft',
+        metaKey: true,
+      });
+      expectCaret(editor, 0, 12);
+
+      setCaret(editor, 0, 16);
+      dispatchMovementKey(window, content, {
+        key: 'ArrowRight',
+        metaKey: true,
+      });
+      expectCaret(editor, 0, 20);
+
+      setCaret(editor, 0, 16);
+      dispatchMovementKey(window, content, { key: 'a', ctrlKey: true });
+      expectCaret(editor, 0, 12);
+
+      setCaret(editor, 0, 16);
+      dispatchMovementKey(window, content, { key: 'e', ctrlKey: true });
+      expectCaret(editor, 0, 20);
+
+      setCaret(editor, 0, 16);
+      dispatchMovementKey(window, content, { key: 'Home' });
+      expectCaret(editor, 0, 12);
+
+      setCaret(editor, 0, 16);
+      dispatchMovementKey(window, content, { key: 'End' });
+      expectCaret(editor, 0, 20);
+    } finally {
+      cleanup();
+    }
+  });
+
   // When word wrap is on, growing a line until it wraps onto a second visual
   // row keeps the logical line count unchanged (change.lineDelta === 0) but
   // pushes every following line down by a row. The cached line-Y positions of

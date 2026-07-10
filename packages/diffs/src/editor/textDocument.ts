@@ -35,8 +35,12 @@ export interface TextDocumentChange {
   readonly startLine: number;
   /** Character on the first changed line where the edit began. */
   readonly startCharacter: number;
+  /** Character on the original last changed line where the edit ended. */
+  readonly endCharacter: number;
   /** Last line whose rendered content may have changed after the edit. */
   readonly endLine: number;
+  /** Whether the original edit range ended at the previous document EOF. */
+  readonly endedAtDocumentEnd: boolean;
   /** Line count before the edit was applied. */
   readonly previousLineCount: number;
   /** Line count after the edit was applied. */
@@ -50,6 +54,9 @@ export interface TextDocumentChange {
     startLine: number,
     endLine: number,
     lineDelta: number,
+    startCharacter?: number,
+    endCharacter?: number,
+    endedAtDocumentEnd?: boolean,
   ][];
 }
 
@@ -350,12 +357,19 @@ export class TextDocument<LAnnotation> {
       editPositions
     );
     const startPosition = editPositions[0];
+    const endPosition = editPositions[editPositions.length - 1];
+    const endedAtDocumentEnd =
+      endPosition.line === previousLineCount - 1 &&
+      endPosition.character ===
+        this.#pieceTable.getLineLength(endPosition.line);
     this.#pieceTable.applyEdits(edits);
     const lineCount = this.#pieceTable.lineCount;
     const change: TextDocumentChange = {
       startLine: changedLineRange.startLine,
       startCharacter: startPosition.character,
+      endCharacter: endPosition.character,
       endLine: Math.min(changedLineRange.endLine, Math.max(0, lineCount - 1)),
+      endedAtDocumentEnd,
       previousLineCount,
       lineCount,
       lineDelta: lineCount - previousLineCount,
@@ -372,14 +386,30 @@ export class TextDocument<LAnnotation> {
     startLine: number;
     endLine: number;
     ranges: [number, number][];
-    changes: [startLine: number, endLine: number, lineDelta: number][];
+    changes: [
+      startLine: number,
+      endLine: number,
+      lineDelta: number,
+      startCharacter: number,
+      endCharacter: number,
+      endedAtDocumentEnd: boolean,
+    ][];
   } {
     let startLine = Infinity;
     let endLine = 0;
     let lineDeltaBeforeEdit = 0;
     const ranges: [number, number][] = [];
-    const changes: [startLine: number, endLine: number, lineDelta: number][] =
-      [];
+    const changes: [
+      startLine: number,
+      endLine: number,
+      lineDelta: number,
+      startCharacter: number,
+      endCharacter: number,
+      endedAtDocumentEnd: boolean,
+    ][] = [];
+    const previousLastLine = this.#pieceTable.lineCount - 1;
+    const previousLastLineLength =
+      this.#pieceTable.getLineLength(previousLastLine);
     for (let i = 0; i < edits.length; i++) {
       const edit = edits[i];
       const editStart = editPositions[i * 2];
@@ -401,7 +431,15 @@ export class TextDocument<LAnnotation> {
       } else {
         ranges.push([changedStartLine, changedEndLine]);
       }
-      changes.push([changedStartLine, changedEndLine, lineDelta]);
+      changes.push([
+        changedStartLine,
+        changedEndLine,
+        lineDelta,
+        editStart.character,
+        editEnd.character,
+        editEndLine === previousLastLine &&
+          editEnd.character === previousLastLineLength,
+      ]);
       lineDeltaBeforeEdit += lineDelta;
     }
     if (startLine === Infinity) {
@@ -409,7 +447,7 @@ export class TextDocument<LAnnotation> {
         startLine: 0,
         endLine: 0,
         ranges: [[0, 0]],
-        changes: [[0, 0, 0]],
+        changes: [[0, 0, 0, 0, 0, false]],
       };
     }
     return { startLine, endLine, ranges, changes };

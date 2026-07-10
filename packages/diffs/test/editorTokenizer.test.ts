@@ -97,7 +97,9 @@ describe('EditorTokenizer', () => {
         {
           startLine: 0,
           startCharacter: 0,
+          endCharacter: 0,
           endLine: 19,
+          endedAtDocumentEnd: false,
           previousLineCount: textDocument.lineCount,
           lineCount: textDocument.lineCount,
           lineDelta: 0,
@@ -144,7 +146,9 @@ describe('EditorTokenizer', () => {
     const change: TextDocumentChange = {
       startLine: 0,
       startCharacter: 0,
+      endCharacter: 0,
       endLine: 0,
+      endedAtDocumentEnd: false,
       previousLineCount: textDocument.lineCount,
       lineCount: textDocument.lineCount,
       lineDelta: 0,
@@ -223,7 +227,9 @@ describe('EditorTokenizer', () => {
       tokenizer.tokenize({
         startLine: 0,
         startCharacter: 0,
+        endCharacter: 0,
         endLine: 0,
+        endedAtDocumentEnd: false,
         previousLineCount: textDocument.lineCount,
         lineCount: textDocument.lineCount,
         lineDelta: 0,
@@ -289,7 +295,9 @@ describe('EditorTokenizer', () => {
         {
           startLine: 0,
           startCharacter: 0,
+          endCharacter: 0,
           endLine: 999,
+          endedAtDocumentEnd: false,
           previousLineCount: textDocument.lineCount,
           lineCount: textDocument.lineCount,
           lineDelta: 1,
@@ -362,7 +370,9 @@ describe('EditorTokenizer', () => {
       {
         startLine: 0,
         startCharacter: 0,
+        endCharacter: 0,
         endLine: 109,
+        endedAtDocumentEnd: false,
         previousLineCount: textDocument.lineCount,
         lineCount: textDocument.lineCount,
         lineDelta: 0,
@@ -445,7 +455,9 @@ describe('EditorTokenizer', () => {
         {
           startLine: 0,
           startCharacter: 0,
+          endCharacter: 0,
           endLine: textDocument.lineCount - 1,
+          endedAtDocumentEnd: false,
           previousLineCount: textDocument.lineCount,
           lineCount: textDocument.lineCount,
           lineDelta: 0,
@@ -551,7 +563,9 @@ describe('EditorTokenizer', () => {
         {
           startLine: 0,
           startCharacter: 0,
+          endCharacter: 0,
           endLine: 19,
+          endedAtDocumentEnd: false,
           previousLineCount: textDocument.lineCount,
           lineCount: textDocument.lineCount,
           lineDelta: 0,
@@ -578,6 +592,222 @@ describe('EditorTokenizer', () => {
 
       messageListener?.({ data: activeJobMessage } as MessageEvent);
       expect(deferredUpdates.at(-1)?.get(10)?.[0]?.[2]).toBe('inserted 10');
+    } finally {
+      globalThis.addEventListener = originalAddEventListener;
+      globalThis.removeEventListener = originalRemoveEventListener;
+      globalThis.postMessage = originalPostMessage;
+    }
+  });
+
+  test('settles background tokenization after newline insertions reconverge', () => {
+    const originalAddEventListener = globalThis.addEventListener;
+    const originalRemoveEventListener = globalThis.removeEventListener;
+    const originalPostMessage = globalThis.postMessage;
+    const originalPerformanceNow = performance.now;
+    let messageListener: ((event: MessageEvent) => void) | undefined;
+    const postedMessages: unknown[] = [];
+
+    globalThis.addEventListener = ((
+      type: string,
+      listener: EventListenerOrEventListenerObject
+    ) => {
+      if (type === 'message' && typeof listener === 'function') {
+        messageListener = listener as (event: MessageEvent) => void;
+      }
+    }) as typeof globalThis.addEventListener;
+    globalThis.removeEventListener = ((
+      type: string,
+      listener: EventListenerOrEventListenerObject
+    ) => {
+      if (type === 'message' && listener === messageListener) {
+        messageListener = undefined;
+      }
+    }) as typeof globalThis.removeEventListener;
+    globalThis.postMessage = ((message: unknown) => {
+      postedMessages.push(message);
+    }) as typeof globalThis.postMessage;
+    Object.defineProperty(performance, 'now', {
+      configurable: true,
+      value: () => 0,
+    });
+
+    try {
+      let tokenizeLineCount = 0;
+      const grammar = {
+        tokenizeLine2(lineText: string, ruleStack: StateStack) {
+          tokenizeLineCount++;
+          return {
+            tokens: new Uint32Array([0, 0]),
+            ruleStack,
+            stoppedEarly: false,
+            lineText,
+          };
+        },
+      } as unknown as IGrammar;
+      const textDocument = new TextDocument(
+        'test.ts',
+        Array.from({ length: 200 }, (_, i) => `line ${i}`).join('\n'),
+        'typescript'
+      );
+      const tokenizer = new EditorTokenizer({
+        highlighter: createTestHighlighter({
+          getLanguage: () => grammar,
+        }),
+        textDocument,
+        codeOptions: { theme: 'test-theme', themeType: 'dark' },
+        setStyle: noopSetStyle,
+        onDeferTokenize: () => {},
+      });
+
+      tokenizer.tokenize(
+        {
+          startLine: 0,
+          startCharacter: 0,
+          endCharacter: 0,
+          endLine: textDocument.lineCount - 1,
+          endedAtDocumentEnd: false,
+          previousLineCount: textDocument.lineCount,
+          lineCount: textDocument.lineCount,
+          lineDelta: 0,
+          changedLineRanges: [[0, textDocument.lineCount - 1]],
+        },
+        {
+          startingLine: 0,
+          totalLines: textDocument.lineCount,
+          bufferBefore: 0,
+          bufferAfter: 0,
+        }
+      );
+      tokenizeLineCount = 0;
+      postedMessages.length = 0;
+
+      const change = textDocument.applyEdits([
+        {
+          range: {
+            start: { line: 0, character: 'line 0'.length },
+            end: { line: 0, character: 'line 0'.length },
+          },
+          newText: '\ninserted line',
+        },
+      ])!;
+      tokenizer.tokenize(change, {
+        startingLine: 0,
+        totalLines: 1,
+        bufferBefore: 0,
+        bufferAfter: 0,
+      });
+      const activeJobMessage = postedMessages.at(-1);
+      tokenizeLineCount = 0;
+
+      expect(activeJobMessage).toBeDefined();
+      messageListener?.({ data: activeJobMessage } as MessageEvent);
+
+      expect(tokenizeLineCount).toBe(1);
+      expect(messageListener).toBeUndefined();
+    } finally {
+      globalThis.addEventListener = originalAddEventListener;
+      globalThis.removeEventListener = originalRemoveEventListener;
+      globalThis.postMessage = originalPostMessage;
+      Object.defineProperty(performance, 'now', {
+        configurable: true,
+        value: originalPerformanceNow,
+      });
+    }
+  });
+
+  test('does not seed foreground tokenization from shifted convergence states', () => {
+    const originalAddEventListener = globalThis.addEventListener;
+    const originalRemoveEventListener = globalThis.removeEventListener;
+    const originalPostMessage = globalThis.postMessage;
+    globalThis.addEventListener =
+      (() => {}) as typeof globalThis.addEventListener;
+    globalThis.removeEventListener =
+      (() => {}) as typeof globalThis.removeEventListener;
+    globalThis.postMessage = (() => {}) as typeof globalThis.postMessage;
+
+    try {
+      const insideComment = {
+        equals: (other: StateStack) => other === insideComment,
+      } as unknown as StateStack;
+      const grammar = {
+        tokenizeLine2(lineText: string, ruleStack: StateStack) {
+          const inside = ruleStack === insideComment;
+          const stillInside = inside
+            ? !lineText.includes('*/')
+            : lineText.includes('/*');
+          return {
+            tokens: new Uint32Array([0, inside ? 1 << 15 : 0]),
+            ruleStack: stillInside ? insideComment : INITIAL,
+            stoppedEarly: false,
+            lineText,
+          };
+        },
+      } as unknown as IGrammar;
+      const textDocument = new TextDocument(
+        'test.ts',
+        Array.from({ length: 150 }, (_, i) => `line ${i}`).join('\n'),
+        'typescript'
+      );
+      const tokenizer = new EditorTokenizer({
+        highlighter: createTestHighlighter({
+          getLanguage: () => grammar,
+          setTheme: () => ({ colorMap: ['#code', '#comment'] }),
+        }),
+        textDocument,
+        codeOptions: { theme: 'test-theme', themeType: 'dark' },
+        setStyle: noopSetStyle,
+        onDeferTokenize: () => {},
+      });
+
+      tokenizer.tokenize(
+        {
+          startLine: 0,
+          startCharacter: 0,
+          endCharacter: 0,
+          endLine: textDocument.lineCount - 1,
+          endedAtDocumentEnd: false,
+          previousLineCount: textDocument.lineCount,
+          lineCount: textDocument.lineCount,
+          lineDelta: 0,
+          changedLineRanges: [[0, textDocument.lineCount - 1]],
+        },
+        { startingLine: 0, totalLines: 150, bufferBefore: 0, bufferAfter: 0 }
+      );
+
+      const insertComment = textDocument.applyEdits([
+        {
+          range: {
+            start: { line: 0, character: 0 },
+            end: { line: 0, character: 0 },
+          },
+          newText: '/*\n',
+        },
+      ])!;
+      tokenizer.tokenize(insertComment, {
+        startingLine: 0,
+        totalLines: 1,
+        bufferBefore: 0,
+        bufferAfter: 0,
+      });
+
+      const lowerLineText = textDocument.getLineText(100);
+      const changeLowerLine = textDocument.applyEdits([
+        {
+          range: {
+            start: { line: 100, character: 0 },
+            end: { line: 100, character: lowerLineText.length },
+          },
+          newText: 'changed inside comment',
+        },
+      ])!;
+      const dirtyLines = tokenizer.tokenize(changeLowerLine, {
+        startingLine: 100,
+        totalLines: 1,
+        bufferBefore: 0,
+        bufferAfter: 0,
+      });
+
+      expect(dirtyLines.get(100)?.[0]?.[1]).toBe('#comment');
     } finally {
       globalThis.addEventListener = originalAddEventListener;
       globalThis.removeEventListener = originalRemoveEventListener;
@@ -641,7 +871,9 @@ describe('EditorTokenizer', () => {
         {
           startLine: 0,
           startCharacter: 0,
+          endCharacter: 0,
           endLine: 0,
+          endedAtDocumentEnd: false,
           previousLineCount: textDocument.lineCount,
           lineCount: textDocument.lineCount,
           lineDelta: 0,
@@ -700,7 +932,9 @@ describe('EditorTokenizer', () => {
       {
         startLine: 0,
         startCharacter: 0,
+        endCharacter: 0,
         endLine: 0,
+        endedAtDocumentEnd: false,
         previousLineCount: textDocument.lineCount,
         lineCount: textDocument.lineCount,
         lineDelta: 0,
@@ -788,7 +1022,9 @@ describe('EditorTokenizer', () => {
       const change: TextDocumentChange = {
         startLine: 0,
         startCharacter: 0,
+        endCharacter: 0,
         endLine: 0,
+        endedAtDocumentEnd: false,
         previousLineCount: textDocument.lineCount,
         lineCount: textDocument.lineCount,
         lineDelta: 0,
@@ -877,7 +1113,9 @@ describe('EditorTokenizer', () => {
       const change: TextDocumentChange = {
         startLine: 0,
         startCharacter: 0,
+        endCharacter: 0,
         endLine: 0,
+        endedAtDocumentEnd: false,
         previousLineCount: textDocument.lineCount,
         lineCount: textDocument.lineCount,
         lineDelta: 0,
@@ -965,7 +1203,9 @@ describe('EditorTokenizer', () => {
         {
           startLine: 0,
           startCharacter: 0,
+          endCharacter: 0,
           endLine: 0,
+          endedAtDocumentEnd: false,
           previousLineCount: textDocument.lineCount,
           lineCount: textDocument.lineCount,
           lineDelta: 0,
@@ -1020,7 +1260,9 @@ describe('EditorTokenizer', () => {
       {
         startLine: 0,
         startCharacter: 0,
+        endCharacter: 0,
         endLine: 799,
+        endedAtDocumentEnd: false,
         previousLineCount: textDocument.lineCount,
         lineCount: textDocument.lineCount,
         lineDelta: 1,
@@ -1266,7 +1508,9 @@ describe('EditorTokenizer', () => {
       const dirtyLines = tokenizer.tokenize({
         startLine: 2,
         startCharacter: 20,
+        endCharacter: 20,
         endLine: 2,
+        endedAtDocumentEnd: false,
         previousLineCount: textDocument.lineCount,
         lineCount: textDocument.lineCount,
         lineDelta: 0,

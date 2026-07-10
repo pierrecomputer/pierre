@@ -46,7 +46,7 @@ import {
   type SearchPanelMode,
   SearchPanelWidget,
 } from './searchPanel';
-import type { AutoSurround } from './selection';
+import type { AutoSurround, CursorMoveOptions } from './selection';
 import {
   applyDeleteCharacterToSelections,
   applyDeleteHardLineForwardToSelections,
@@ -1324,13 +1324,28 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           mvShortcut !== undefined &&
           textDocument !== undefined
         ) {
+          const cursorMoveOptions: CursorMoveOptions | undefined = this.#isWrap
+            ? {
+                getSoftLineOffsets: (line) => this.#wrapLineText(line),
+              }
+            : undefined;
           if (e.shiftKey) {
             this.#updateSelections(
-              mapSelectionShift(textDocument, this.#selections, mvShortcut)
+              mapSelectionShift(
+                textDocument,
+                this.#selections,
+                mvShortcut,
+                cursorMoveOptions
+              )
             );
           } else {
             this.#updateSelections(
-              mapCursorMove(textDocument, this.#selections, mvShortcut)
+              mapCursorMove(
+                textDocument,
+                this.#selections,
+                mvShortcut,
+                cursorMoveOptions
+              )
             );
           }
           this.#scrollToPrimaryCaret();
