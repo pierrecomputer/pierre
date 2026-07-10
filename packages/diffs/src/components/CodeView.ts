@@ -2100,19 +2100,21 @@ export class CodeView<LAnnotation = undefined> {
       this.attachedEditors.delete(id);
       // When the session's instance was released by virtualization, the
       // cleanUp above had no detach closure left to run the exit recompute,
-      // so finish the session directly against the diff metadata (idempotent:
-      // the dirty marker clears on the first run). The metadata comes from
-      // the live item, or from the last change's snapshot for removed items.
+      // so finish the session here (idempotent: the dirty marker clears on
+      // the first run). A live item goes through its instance, which also
+      // preserves expansion state and invalidates layout; removed items fall
+      // back to a plain metadata recompute from the last change's snapshot.
       const itemSnapshot = item?.item ?? record.state.lastChange?.item;
-      if (
-        itemSnapshot?.type === 'diff' &&
-        finishEditSessionForDiff(itemSnapshot.fileDiff) &&
-        item != null &&
-        item.type === 'diff'
-      ) {
-        item.instance.invalidateEditSessionLayout();
-        this.markItemLayoutDirty(item);
-        this.render();
+      if (itemSnapshot?.type === 'diff') {
+        if (
+          item != null &&
+          item.type === 'diff' &&
+          item.instance.completeEditSession()
+        ) {
+          this.markItemLayoutDirty(item);
+          this.render();
+        }
+        finishEditSessionForDiff(itemSnapshot.fileDiff);
       }
       const { lastChange } = record.state;
       if (lastChange != null) {

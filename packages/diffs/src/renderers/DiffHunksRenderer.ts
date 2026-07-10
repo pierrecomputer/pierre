@@ -365,6 +365,13 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     return this.expandedHunks;
   }
 
+  /** Replace the whole expansion map (session-exit expansion remapping). */
+  public setExpandedHunksMap(
+    expandedHunks: Map<number, HunkExpansionRegion>
+  ): void {
+    this.expandedHunks = expandedHunks;
+  }
+
   public setLineAnnotations(
     lineAnnotations: DiffLineAnnotation<LAnnotation>[]
   ): void {

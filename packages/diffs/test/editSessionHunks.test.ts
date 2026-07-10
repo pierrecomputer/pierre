@@ -4,9 +4,11 @@ import type { FileDiffMetadata, HunkExpansionRegion } from '../src/types';
 import {
   applySessionChangedLines,
   applySessionEditWindow,
+  captureExpansionAnchors,
   findChangedLineWindow,
   finishEditSessionForDiff,
   normalizeEditorLines,
+  rebuildExpansionFromAnchors,
   remapExpandedHunksForRegionChange,
 } from '../src/utils/editSessionHunks';
 import { iterateOverDiff } from '../src/utils/iterateOverDiff';
@@ -335,6 +337,68 @@ describe('remapExpandedHunksForRegionChange', () => {
         [3, region(0, 2)],
       ])
     );
+  });
+});
+
+describe('expansion anchors across the exit recompute', () => {
+  const THRESHOLD = 1;
+
+  test('a gap that still exists keeps its edge expansions', () => {
+    const diff = makeDiff();
+    const expandedHunks = new Map<number, HunkExpansionRegion>([
+      [1, { fromStart: 2, fromEnd: 3 }],
+    ]);
+    const anchors = captureExpansionAnchors(diff, expandedHunks, THRESHOLD);
+    expect(anchors.length).toBe(2);
+
+    // A session insert inside the first hunk shifts the addition side but
+    // leaves old-side coordinates alone.
+    diff.additionLines.splice(3, 0, 'inserted\n');
+    applySessionEditWindow(diff, { start: 3, prevEnd: 3, nextEnd: 4 });
+    finishEditSessionForDiff(diff);
+
+    const rebuilt = rebuildExpansionFromAnchors(diff, anchors);
+    expect(rebuilt.get(1)).toEqual({ fromStart: 2, fromEnd: 3 });
+  });
+
+  test('anchors interior to a merged gap drop; edge-anchored ones survive', () => {
+    const diff = makeDiff();
+    const expandedHunks = new Map<number, HunkExpansionRegion>([
+      [1, { fromStart: 2, fromEnd: 3 }],
+    ]);
+    const anchors = captureExpansionAnchors(diff, expandedHunks, THRESHOLD);
+
+    // Reverting the first hunk removes it at exit, merging its leading gap
+    // with the gap between the hunks.
+    diff.additionLines[2] = 'l3\n';
+    applySessionEditWindow(diff, { start: 2, prevEnd: 3, nextEnd: 3 });
+    finishEditSessionForDiff(diff);
+    expect(diff.hunks).toHaveLength(1);
+
+    const rebuilt = rebuildExpansionFromAnchors(diff, anchors);
+    // The fromEnd slice still touches the surviving gap's end edge; the
+    // fromStart slice is now interior to the bigger gap and drops.
+    expect(rebuilt.get(0)).toEqual({ fromStart: 0, fromEnd: 3 });
+    expect(rebuilt.size).toBe(1);
+  });
+
+  test('trailing pseudo-key expansion survives', () => {
+    const diff = makeDiff();
+    const expandedHunks = new Map<number, HunkExpansionRegion>([
+      [2, { fromStart: 4, fromEnd: 0 }],
+    ]);
+    const anchors = captureExpansionAnchors(diff, expandedHunks, THRESHOLD);
+    expect(anchors.length).toBe(1);
+
+    diff.additionLines[2] = 'changed differently\n';
+    applySessionEditWindow(diff, { start: 2, prevEnd: 3, nextEnd: 3 });
+    finishEditSessionForDiff(diff);
+
+    const rebuilt = rebuildExpansionFromAnchors(diff, anchors);
+    expect(rebuilt.get(diff.hunks.length)).toEqual({
+      fromStart: 4,
+      fromEnd: 0,
+    });
   });
 });
 

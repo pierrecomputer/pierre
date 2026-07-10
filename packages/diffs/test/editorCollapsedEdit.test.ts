@@ -297,6 +297,36 @@ describe('diff editor: collapsed regions during edit', () => {
     }
   });
 
+  test('a mid-session expansion whose gap still exists survives session exit', async () => {
+    const fixture = await createCollapsedEditFixture();
+    const { container, editor, fileDiff } = fixture;
+    try {
+      // Reveal five lines at the start of the gap (lines 15-19), then make
+      // an edit so a genuine exit recompute runs.
+      fileDiff.handleExpandHunk(1, 'up', 5);
+      await wait(10);
+      expect(fileDiff.isLineRenderable(15)).toBe(true);
+      typeAt(editor, 49, 0, 'X');
+      await wait(10);
+
+      // Genuine session end: the recompute runs, and the expansion remaps
+      // onto the recomputed hunks via old-side anchors.
+      editor.cleanUp();
+      await wait(20);
+
+      expect(fileDiff.fileDiff?.editSessionDirty).toBeUndefined();
+      expect(fileDiff.isLineRenderable(15)).toBe(true);
+      expect(fileDiff.isLineRenderable(19)).toBe(true);
+      // The gap interior stays collapsed.
+      expect(fileDiff.isLineRenderable(30)).toBe(false);
+      const content = findAdditionContent(container);
+      expect(content?.querySelector('[data-line="15"]')).not.toBeNull();
+      expect(content?.querySelector('[data-line="30"]')).toBeNull();
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
   test('a line-count edit below the gap re-renders without duplicates', async () => {
     const fixture = await createCollapsedEditFixture();
     const { container, editor } = fixture;

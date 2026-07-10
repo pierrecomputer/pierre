@@ -962,10 +962,17 @@ export class VirtualizedFileDiff<
   }
 
   // Session region changes need the same invalidation a document change
-  // gets; rerender() defers the actual render through the virtualizer queue.
+  // gets. The virtualizer is told the layout changed (rendered rows and
+  // heights moved) and defers the actual render through its own queue; a
+  // released instance stops at the cache invalidation and the host relayout
+  // covers it.
   protected override escalateEditSessionRender(): void {
     this.invalidateEditSessionLayout();
-    this.rerender();
+    if (!this.enabled || this.fileDiff == null) {
+      return;
+    }
+    this.forceRenderOverride = true;
+    this.virtualizer.instanceChanged(this, true);
   }
 
   protected override shouldSelfHealEditSession(): boolean {

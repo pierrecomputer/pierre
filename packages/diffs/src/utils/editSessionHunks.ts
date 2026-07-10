@@ -15,6 +15,10 @@ import {
   recomputeHunkRenderLineCounts,
   syncHunkNoEOFCRFromFullFile,
 } from './updateDiffHunks';
+import {
+  getExpandedRegion,
+  getTrailingExpandedRegion,
+} from './virtualDiffLayout';
 
 // While an editor is attached to a FileDiff, hunks are treated as a frozen
 // "region skeleton": each hunk is one region spanning its full range, regions
@@ -305,6 +309,118 @@ export function remapExpandedHunksForRegionChange(
     }
   }
   return remapped;
+}
+
+/**
+ * An expanded gap-edge slice in old-side (deletion-line) coordinates as a
+ * `[start, end)` range. Old-side coordinates survive the exit recompute
+ * unchanged — edits only touch the new side — so these anchor best-effort
+ * expansion preservation across the recompute.
+ */
+export type ExpansionAnchorRange = [start: number, end: number];
+
+/** Snapshot the expanded gap-edge slices before the exit recompute. */
+export function captureExpansionAnchors(
+  diff: FileDiffMetadata,
+  expandedHunks: Map<number, HunkExpansionRegion>,
+  collapsedContextThreshold: number
+): ExpansionAnchorRange[] {
+  const anchors: ExpansionAnchorRange[] = [];
+  if (diff.isPartial) {
+    return anchors;
+  }
+  for (const [hunkIndex, hunk] of diff.hunks.entries()) {
+    const region = getExpandedRegion({
+      isPartial: diff.isPartial,
+      rangeSize: hunk.collapsedBefore,
+      expandedHunks,
+      hunkIndex,
+      collapsedContextThreshold,
+    });
+    // Gaps at or below the threshold render on their own; only explicit
+    // expansion state needs preserving.
+    if (region.rangeSize <= collapsedContextThreshold) {
+      continue;
+    }
+    const gapEnd = hunk.deletionLineIndex;
+    const gapStart = gapEnd - region.rangeSize;
+    if (region.fromStart > 0) {
+      anchors.push([gapStart, gapStart + region.fromStart]);
+    }
+    if (region.fromEnd > 0) {
+      anchors.push([gapEnd - region.fromEnd, gapEnd]);
+    }
+  }
+  const trailingRegion = getTrailingExpandedRegion({
+    fileDiff: diff,
+    hunkIndex: diff.hunks.length - 1,
+    expandedHunks,
+    collapsedContextThreshold,
+    errorPrefix: 'captureExpansionAnchors',
+  });
+  if (
+    trailingRegion != null &&
+    trailingRegion.fromStart > 0 &&
+    trailingRegion.rangeSize > collapsedContextThreshold
+  ) {
+    const lastHunk = diff.hunks[diff.hunks.length - 1];
+    const gapStart = lastHunk.deletionLineIndex + lastHunk.deletionCount;
+    anchors.push([gapStart, gapStart + trailingRegion.fromStart]);
+  }
+  return anchors;
+}
+
+/**
+ * Rebuild gap expansion state against the recomputed hunks: for each new
+ * gap, an anchor touching the gap's start edge restores `fromStart`, one
+ * touching its end edge restores `fromEnd`, and anchors for gaps that no
+ * longer exist drop.
+ */
+export function rebuildExpansionFromAnchors(
+  diff: FileDiffMetadata,
+  anchors: ExpansionAnchorRange[]
+): Map<number, HunkExpansionRegion> {
+  const rebuilt = new Map<number, HunkExpansionRegion>();
+  if (anchors.length === 0) {
+    return rebuilt;
+  }
+  const applyGap = (key: number, gapStart: number, gapEnd: number) => {
+    if (gapEnd <= gapStart) {
+      return;
+    }
+    let fromStart = 0;
+    let fromEnd = 0;
+    for (const [start, end] of anchors) {
+      if (end <= gapStart || start >= gapEnd) {
+        continue;
+      }
+      if (start <= gapStart) {
+        fromStart = Math.max(fromStart, Math.min(end, gapEnd) - gapStart);
+      }
+      if (end >= gapEnd) {
+        fromEnd = Math.max(fromEnd, gapEnd - Math.max(start, gapStart));
+      }
+    }
+    if (fromStart > 0 || fromEnd > 0) {
+      rebuilt.set(key, { fromStart, fromEnd });
+    }
+  };
+  for (const [hunkIndex, hunk] of diff.hunks.entries()) {
+    applyGap(
+      hunkIndex,
+      hunk.deletionLineIndex - Math.max(hunk.collapsedBefore, 0),
+      hunk.deletionLineIndex
+    );
+  }
+  const lastHunk = diff.hunks[diff.hunks.length - 1];
+  if (lastHunk != null && !diff.isPartial && diff.deletionLines.length > 0) {
+    applyGap(
+      diff.hunks.length,
+      lastHunk.deletionLineIndex + lastHunk.deletionCount,
+      diff.deletionLines.length
+    );
+  }
+  return rebuilt;
 }
 
 /**

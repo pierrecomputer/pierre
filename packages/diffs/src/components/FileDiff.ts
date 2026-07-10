@@ -74,7 +74,11 @@ import {
   wrapThemeCSS,
   wrapUnsafeCSS,
 } from '../utils/cssWrappers';
-import { finishEditSessionForDiff } from '../utils/editSessionHunks';
+import {
+  captureExpansionAnchors,
+  finishEditSessionForDiff,
+  rebuildExpansionFromAnchors,
+} from '../utils/editSessionHunks';
 import { getDiffFileInput } from '../utils/getDiffFileInput';
 import { getDiffHunksRendererOptions } from '../utils/getDiffHunksRendererOptions';
 import { getLineAnnotationName } from '../utils/getLineAnnotationName';
@@ -1291,21 +1295,42 @@ export class FileDiff<
     };
   }
 
-  // Genuine session exit: restore recompute-shaped hunks (a context-only
-  // region collapses away, boundaries re-derive) and repaint through the
-  // session render path, which also invalidates virtualized layout — nothing
-  // else invalidates layout at exit now that editing does not flip
-  // expandUnchanged. Safe on a cleaned-up instance: the recompute is pure
-  // metadata work and the deferred rerender is enabled-guarded.
+  // Genuine session exit for the live detach path.
   private finishEditSession(): void {
     this.hunksRenderer.endEditSession();
+    this.completeEditSession();
+  }
+
+  /**
+   * Run the genuine session-end recompute: restore recompute-shaped hunks (a
+   * context-only region collapses away, boundaries re-derive), preserve
+   * expansion state best-effort via old-side anchors, and repaint through
+   * the session render path — which also invalidates virtualized layout,
+   * since nothing else does at exit now that editing does not flip
+   * expandUnchanged. Marker-guarded and idempotent; CodeView also calls this
+   * when reaping a session whose detach closure was consumed by a recycle.
+   * Safe on a cleaned-up instance: the recompute is pure metadata work and
+   * the deferred rerender is enabled-guarded. Returns true when a recompute
+   * ran.
+   */
+  public completeEditSession(): boolean {
     const fileDiff = this.fileDiffCache;
-    if (
-      fileDiff != null &&
-      finishEditSessionForDiff(fileDiff, this.options.parseDiffOptions)
-    ) {
-      this.escalateEditSessionRender();
+    if (fileDiff == null || fileDiff.editSessionDirty !== true) {
+      return false;
     }
+    const { collapsedContextThreshold = DEFAULT_COLLAPSED_CONTEXT_THRESHOLD } =
+      this.options;
+    const anchors = captureExpansionAnchors(
+      fileDiff,
+      this.hunksRenderer.getExpandedHunksMap(),
+      collapsedContextThreshold
+    );
+    finishEditSessionForDiff(fileDiff, this.options.parseDiffOptions);
+    this.hunksRenderer.setExpandedHunksMap(
+      rebuildExpansionFromAnchors(fileDiff, anchors)
+    );
+    this.escalateEditSessionRender();
+    return true;
   }
 
   // normally triggered by the host when the document line count changes
