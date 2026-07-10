@@ -24,6 +24,10 @@ import {
 import { ResizeManager } from '../managers/ResizeManager';
 import { ScrollSyncManager } from '../managers/ScrollSyncManager';
 import {
+  dequeueRender,
+  queueRender,
+} from '../managers/UniversalRenderingManager';
+import {
   DiffHunksRenderer,
   type DiffHunksRendererOptions,
   type HunksRenderResult,
@@ -69,6 +73,7 @@ import {
   wrapThemeCSS,
   wrapUnsafeCSS,
 } from '../utils/cssWrappers';
+import { finishEditSessionForDiff } from '../utils/editSessionHunks';
 import { getDiffFileInput } from '../utils/getDiffFileInput';
 import { getDiffHunksRendererOptions } from '../utils/getDiffHunksRendererOptions';
 import { getLineAnnotationName } from '../utils/getLineAnnotationName';
@@ -541,6 +546,7 @@ export class FileDiff<
   }
 
   public cleanUp(recycle: boolean = false): void {
+    dequeueRender(this.handleEditSessionRender);
     this.emitPostRender(true);
     this.resizeManager.cleanUp();
     this.interactionManager.cleanUp();
@@ -982,6 +988,15 @@ export class FileDiff<
     if (this.fileDiff == null) {
       return false;
     }
+    // Backstop for sessions that ended without their exit hook running (e.g.
+    // session-shaped metadata reused after a host teardown): restore
+    // recompute-shaped hunks before rendering.
+    if (
+      this.fileDiff.editSessionDirty === true &&
+      this.shouldSelfHealEditSession()
+    ) {
+      finishEditSessionForDiff(this.fileDiff, this.options.parseDiffOptions);
+    }
     if (expandUnchanged) {
       this.loadFilesIfNecessary();
     }
@@ -1188,15 +1203,43 @@ export class FileDiff<
     }
   }
 
-  public attachEditor(editor: DiffsEditor<LAnnotation>): () => void {
+  public attachEditor(
+    editor: DiffsEditor<LAnnotation>
+  ): (recycle?: boolean) => void {
     this.editor?.cleanUp();
     this.editor = editor;
     this.interactionManager.setEditorAttached(true);
+    // Edit sessions are a plain-diff concern; subclasses with their own hunk
+    // semantics (merge conflicts) keep the per-edit recompute pipeline.
+    if (this.type === 'file-diff') {
+      this.hunksRenderer.beginEditSession(this.fileDiffCache);
+    }
     this.syncRenderViewToEditor();
-    return () => {
+    return (recycle?: boolean) => {
       this.editor = undefined;
       this.interactionManager.setEditorAttached(false);
+      // A recycle detach is a virtualized unmount mid-session: the session
+      // continues on remount, so hunks stay session-shaped. Only a genuine
+      // end runs the exit recompute.
+      if (recycle !== true) {
+        this.finishEditSession();
+      }
     };
+  }
+
+  // Genuine session exit: restore recompute-shaped hunks (a context-only
+  // region collapses away, boundaries re-derive) and repaint. Safe on a
+  // cleaned-up instance — the recompute is pure metadata work and rerender is
+  // enabled-guarded.
+  private finishEditSession(): void {
+    this.hunksRenderer.endEditSession();
+    const fileDiff = this.fileDiffCache;
+    if (
+      fileDiff != null &&
+      finishEditSessionForDiff(fileDiff, this.options.parseDiffOptions)
+    ) {
+      this.rerender();
+    }
   }
 
   // normally triggered by the host when the document line count changes
@@ -1228,9 +1271,28 @@ export class FileDiff<
   public updateRenderCache(
     dirtyLines: Map<number, Array<HighlightedToken>>,
     themeType: 'dark' | 'light',
-    shouldRefreshView: boolean
+    shouldRefreshView: boolean,
+    lineCountChangeInFlight = false
   ): void {
-    this.hunksRenderer.updateRenderCache(dirtyLines, themeType);
+    const regionsChanged = this.hunksRenderer.updateRenderCache(
+      dirtyLines,
+      themeType,
+      lineCountChangeInFlight
+    );
+    // A same-line-count edit that reshaped the session regions (an edit into
+    // a collapsed gap) changes the rendered row set, which the debounced
+    // line-type refresh below cannot express. Escalate to a deferred full
+    // re-render — never a synchronous one, since this runs mid-editor-pass
+    // and rebuilding rows the editor is about to touch detaches its geometry
+    // caches.
+    if (regionsChanged) {
+      if (this.refreshViewTimeout != null) {
+        clearTimeout(this.refreshViewTimeout);
+        this.refreshViewTimeout = undefined;
+      }
+      this.escalateEditSessionRender();
+      return;
+    }
     if (shouldRefreshView) {
       if (this.refreshViewTimeout != null) {
         clearTimeout(this.refreshViewTimeout);
@@ -1249,6 +1311,27 @@ export class FileDiff<
       }, 150);
     }
   }
+
+  // Whether render() may run the session-exit recompute on dirty metadata.
+  // False while an editor is attached (the session is live). CodeView-managed
+  // instances override this: their sessions survive recycling with no editor
+  // attached, and CodeView runs the exit recompute itself when it reaps a
+  // session.
+  protected shouldSelfHealEditSession(): boolean {
+    return this.editor == null;
+  }
+
+  // Deferred full re-render for session region changes. The subsequent
+  // render() ends in syncRenderViewToEditor, which resets the editor's
+  // geometry caches against the rebuilt rows. VirtualizedFileDiff overrides
+  // this to also invalidate its layout caches.
+  protected escalateEditSessionRender(): void {
+    queueRender(this.handleEditSessionRender);
+  }
+
+  private handleEditSessionRender = (): void => {
+    this.rerender();
+  };
 
   private removeRenderedCode(): void {
     this.resizeManager.cleanUp();

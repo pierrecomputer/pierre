@@ -41,7 +41,7 @@ function createEditorHarness() {
   const createEditor = (
     options: CodeViewCreateEditorOptions<undefined>
   ): StubEditor => {
-    let detach: (() => void) | undefined;
+    let detach: ((recycle?: boolean) => void) | undefined;
     const editor: StubEditor = {
       edits: [],
       fullCleanUps: 0,
@@ -58,7 +58,9 @@ function createEditorHarness() {
         } else {
           editor.fullCleanUps += 1;
         }
-        detach?.();
+        // Like the real editor, the detach closure learns whether this is a
+        // virtualized recycle or a genuine session end.
+        detach?.(recycle);
         detach = undefined;
       },
       __postponeBgTokenizeToNextFrame() {},
@@ -632,6 +634,159 @@ describe('CodeView item edit mode', () => {
       await wait(0);
       cleanup();
     }
+  });
+
+  describe('edit-session hunks across virtualization', () => {
+    // A diff item whose session state is observable: two separated changes
+    // (lines 10 and 40 of 60) produce two hunks, and reverting one of them
+    // mid-session leaves a context-only hunk that only the genuine-exit
+    // recompute may collapse away.
+    function makeSessionDiffItem(id: string): CodeViewItem<undefined> {
+      const oldContents =
+        Array.from({ length: 60 }, (_, index) => `line ${index}`).join('\n') +
+        '\n';
+      const newContents = oldContents
+        .replace('line 10\n', 'line 10 changed\n')
+        .replace('line 40\n', 'line 40 changed\n');
+      return {
+        id,
+        type: 'diff',
+        fileDiff: parseDiffFromFile(
+          { name: `${id}.txt`, contents: oldContents, cacheKey: `${id}:old` },
+          { name: `${id}.txt`, contents: newContents, cacheKey: `${id}:new` }
+        ),
+        version: 0,
+        edit: true,
+      };
+    }
+
+    function revertLineTen(item: CodeViewItem<undefined>, viewer: CodeView) {
+      const rendered = viewer
+        .getRenderedItems()
+        .find((entry) => entry.id === item.id);
+      expect(rendered).toBeDefined();
+      const tokens: HighlightedToken[] = [[0, '', 'line 10']];
+      rendered!.instance.updateRenderCache(
+        new Map([[10, tokens]]),
+        'light',
+        false
+      );
+    }
+
+    test('session-shaped hunks survive a recycle and remount', async () => {
+      const { cleanup } = installDom();
+      const { editors, createEditor } = createEditorHarness();
+      const viewer = new CodeView({ createEditor });
+      const edited = makeSessionDiffItem('edited');
+      const items: CodeViewItem<undefined>[] = [
+        edited,
+        ...Array.from({ length: 39 }, (_, index) =>
+          makeEditFileItem(`file-${index}`, false, 30)
+        ),
+      ];
+      try {
+        const root = createRoot();
+        viewer.setup(root);
+        await renderItems(viewer, items);
+        await wait(10);
+
+        // Revert one hunk mid-session: it persists as a context-only region.
+        revertLineTen(edited, viewer);
+        expect(edited.type === 'diff' && edited.fileDiff.hunks.length).toBe(2);
+        expect(
+          edited.type === 'diff' && edited.fileDiff.hunks[0].hunkContent[0].type
+        ).toBe('context');
+        expect(edited.type === 'diff' && edited.fileDiff.editSessionDirty).toBe(
+          true
+        );
+
+        // Scroll out (recycle): no exit recompute may run.
+        root.scrollTop = 30_000;
+        dispatchScroll(root);
+        viewer.render(true);
+        await wait(0);
+        expect(editors[0].recycleCleanUps).toBe(1);
+        expect(edited.type === 'diff' && edited.fileDiff.hunks.length).toBe(2);
+        expect(edited.type === 'diff' && edited.fileDiff.editSessionDirty).toBe(
+          true
+        );
+
+        // Scroll back: the same editor re-attaches and the session-shaped
+        // hunks are still in place.
+        root.scrollTop = 0;
+        dispatchScroll(root);
+        viewer.render(true);
+        await wait(0);
+        expect(editors[0].edits.length).toBe(2);
+        expect(edited.type === 'diff' && edited.fileDiff.hunks.length).toBe(2);
+        expect(
+          edited.type === 'diff' && edited.fileDiff.hunks[0].hunkContent[0].type
+        ).toBe('context');
+      } finally {
+        viewer.cleanUp();
+        await wait(0);
+        cleanup();
+      }
+    });
+
+    test('ending a session after its instance was released still recomputes', async () => {
+      const { cleanup } = installDom();
+      const { editors, createEditor } = createEditorHarness();
+      const viewer = new CodeView({ createEditor });
+      const edited = makeSessionDiffItem('edited');
+      const items: CodeViewItem<undefined>[] = [
+        edited,
+        ...Array.from({ length: 39 }, (_, index) =>
+          makeEditFileItem(`file-${index}`, false, 30)
+        ),
+      ];
+      try {
+        const root = createRoot();
+        viewer.setup(root);
+        await renderItems(viewer, items);
+        await wait(10);
+
+        revertLineTen(edited, viewer);
+        expect(edited.type === 'diff' && edited.fileDiff.hunks.length).toBe(2);
+
+        // Scroll the edited item out: its instance recycles and the detach
+        // closure is consumed non-destructively.
+        root.scrollTop = 30_000;
+        dispatchScroll(root);
+        viewer.render(true);
+        await wait(0);
+        expect(editors[0].recycleCleanUps).toBe(1);
+
+        // Ending the session while released must still run the exit
+        // recompute: the reverted, context-only region collapses away.
+        expect(viewer.updateItem({ ...edited, edit: false, version: 1 })).toBe(
+          true
+        );
+        viewer.render(true);
+        await wait(0);
+        expect(editors[0].fullCleanUps).toBeGreaterThanOrEqual(1);
+        expect(edited.type === 'diff' && edited.fileDiff.hunks.length).toBe(1);
+        expect(
+          edited.type === 'diff' && edited.fileDiff.editSessionDirty
+        ).toBeUndefined();
+
+        // Scrolling back renders the recomputed diff without errors.
+        root.scrollTop = 0;
+        dispatchScroll(root);
+        viewer.render(true);
+        await wait(0);
+        const remounted = viewer
+          .getRenderedItems()
+          .find((entry) => entry.id === 'edited');
+        expect(
+          remounted?.element.shadowRoot?.querySelector('[data-error-wrapper]')
+        ).toBeNull();
+      } finally {
+        viewer.cleanUp();
+        await wait(0);
+        cleanup();
+      }
+    });
   });
 
   describe('onItemEditComplete', () => {

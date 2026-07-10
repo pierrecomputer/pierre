@@ -896,6 +896,28 @@ export class VirtualizedFileDiff<
     super.loadFilesIfNecessary();
   }
 
+  // Session region changes alter the rendered row set without a line-count
+  // change, so the layout caches need the same invalidation a document change
+  // gets; rerender() defers the actual render through the virtualizer queue.
+  protected override escalateEditSessionRender(): void {
+    this.getSimpleVirtualizer()?.markDOMDirty();
+    this.resetLayoutCache({
+      forceSimpleRecompute: this.isSimpleMode(),
+      includeEstimatedHeights: true,
+      resetRenderRange: false,
+    });
+    if (!this.isSimpleMode()) {
+      this.computeApproximateSize(true);
+    }
+    this.rerender();
+  }
+
+  protected override shouldSelfHealEditSession(): boolean {
+    // CodeView sessions survive recycling with no editor attached; CodeView
+    // itself runs the exit recompute when it reaps a session.
+    return !this.isAdvancedMode() && super.shouldSelfHealEditSession();
+  }
+
   public setVisibility(visible: boolean): void {
     if (this.isAdvancedMode() || this.fileContainer == null) {
       return;

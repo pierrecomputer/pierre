@@ -45,6 +45,7 @@ import { areSelectionsEqual } from '../utils/areSelectionsEqual';
 import { areThemesEqual } from '../utils/areThemesEqual';
 import { createCodeViewHeaderFooterHostElement } from '../utils/createCodeViewHeaderFooterHostElement';
 import { createWindowFromScrollPosition } from '../utils/createWindowFromScrollPosition';
+import { finishEditSessionForDiff } from '../utils/editSessionHunks';
 import { isStyleNode } from '../utils/isStyleNode';
 import { prefersReducedMotion } from '../utils/prefersReducedMotion';
 import { roundToDevicePixel } from '../utils/roundToDevicePixel';
@@ -2098,6 +2099,20 @@ export class CodeView<LAnnotation = undefined> {
       record.editor.cleanUp();
       this.itemEditors.delete(id);
       this.attachedEditors.delete(id);
+      // When the session's instance was released by virtualization, the
+      // cleanUp above had no detach closure left to run the exit recompute,
+      // so finish the session directly against the diff metadata (idempotent:
+      // the dirty marker clears on the first run). The metadata comes from
+      // the live item, or from the last change's snapshot for removed items.
+      const itemSnapshot = item?.item ?? record.state.lastChange?.item;
+      if (
+        itemSnapshot?.type === 'diff' &&
+        finishEditSessionForDiff(itemSnapshot.fileDiff) &&
+        item != null
+      ) {
+        this.markItemLayoutDirty(item);
+        this.render();
+      }
       const { lastChange } = record.state;
       if (lastChange != null) {
         // Prefer the current item record (it carries the update that ended

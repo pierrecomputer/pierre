@@ -349,6 +349,16 @@ export interface FileDiffMetadata {
    */
   additionLines: string[];
   /**
+   * Set while an attached editor's session-scoped hunk updates have reshaped
+   * `hunks` away from a plain recompute (regions stay frozen during an edit
+   * session). Consumed by the session-exit recompute, which restores
+   * recompute-shaped hunks and clears the flag. It lives on the metadata so
+   * it survives instance recycling and pooling.
+   *
+   * @internal
+   */
+  editSessionDirty?: boolean;
+  /**
    * This unique key is only used for Worker Pools to avoid subsequent requests
    * to highlight if we've already highlighted the diff.  Please note that if
    * you modify the contents of the diff in any way, you will need to update
@@ -1008,16 +1018,30 @@ export interface DiffsEditableComponent<
    * Return the scroll container element.
    */
   getScrollContainer?: () => HTMLElement | undefined;
-  attachEditor: (editor: DiffsEditor<LAnnotation>) => () => void;
+  /**
+   * Attach an editor to this component. The returned detach closure receives
+   * `recycle: true` when the editor is only being released by a virtualized
+   * unmount (the session continues on remount) and no argument/false on a
+   * genuine session end.
+   */
+  attachEditor: (
+    editor: DiffsEditor<LAnnotation>
+  ) => (recycle?: boolean) => void;
   applyDocumentChange: (
     textDocument: DiffsTextDocument,
     newLineAnnotations?: DiffLineAnnotation<LAnnotation>[],
     shouldUpdateBuffer?: boolean
   ) => void;
+  /**
+   * `lineCountChangeInFlight` is true only during an edit pass whose line
+   * count changed, where an authoritative `applyDocumentChange` follows in
+   * the same pass; deferred background-tokenize passes always pass false.
+   */
   updateRenderCache: (
     lines: Map<number, Array<HighlightedToken>>,
     themeType: 'dark' | 'light',
-    shouldRefreshView: boolean
+    shouldRefreshView: boolean,
+    lineCountChangeInFlight?: boolean
   ) => void;
 }
 

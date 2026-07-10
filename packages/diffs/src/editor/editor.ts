@@ -200,7 +200,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #editorEventDisposes?: (() => void)[];
   #globalEventDisposes?: (() => void)[];
   #selectEventDisposes?: (() => void)[];
-  #detach?: () => void;
+  #detach?: (recycle?: boolean) => void;
 
   // cache
   #contentOffset?: { left: number; top: number };
@@ -285,7 +285,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     lines: Map<number, Array<HighlightedToken>>,
     themeType: 'light' | 'dark'
   ) => {
-    this.#fileInstance?.updateRenderCache(lines, themeType, false);
+    this.#fileInstance?.updateRenderCache(lines, themeType, false, false);
     // update the view if the render range is updated by scrolling
     // and the deferred tokenized lines inside the render range
     if (
@@ -600,7 +600,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#editorEventDisposes = undefined;
     this.#selectEventDisposes?.forEach((dispose) => dispose());
     this.#selectEventDisposes = undefined;
-    this.#detach?.();
+    this.#detach?.(recycle);
     this.#detach = undefined;
 
     // cache
@@ -2248,7 +2248,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     fileInstance.updateRenderCache(
       dirtyLines,
       tokenizer.themeType,
-      !didLineCountChange
+      !didLineCountChange,
+      didLineCountChange
     );
     if (didLineCountChange) {
       // Line-count change: recompute hunks from the full document and re-render.
