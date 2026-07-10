@@ -184,6 +184,105 @@ describe('TextDocument', () => {
     expect(d.offsetAt({ line: 2, character: 0 })).toBe(13);
   });
 
+  test('positionsAt maps a batch of offsets to positions', () => {
+    const d = doc('ab\ncd');
+    expect(d.positionsAt([0, 1, 3, 4])).toEqual([
+      { line: 0, character: 0 },
+      { line: 0, character: 1 },
+      { line: 1, character: 0 },
+      { line: 1, character: 1 },
+    ]);
+  });
+
+  test('charAt reads a character by offset or by clamped position', () => {
+    const d = doc('ab\ncd');
+    expect(d.charAt(0)).toBe('a');
+    expect(d.charAt(4)).toBe('d');
+    expect(d.charAt({ line: 1, character: 1 })).toBe('d');
+    // A position past the end of its line is normalized before lookup; here it
+    // clamps to the end of the document, which has no character.
+    expect(d.charAt({ line: 1, character: 99 })).toBe('');
+  });
+
+  test('getTextSlice returns the substring between two offsets', () => {
+    const d = doc('hello world');
+    expect(d.getTextSlice(0, 5)).toBe('hello');
+    expect(d.getTextSlice(6, 11)).toBe('world');
+    expect(d.getTextSlice(3, 3)).toBe('');
+  });
+
+  test('search returns match ranges for the query', () => {
+    const d = doc('foo bar foo');
+    expect(
+      d.search({
+        text: 'foo',
+        replaceText: '',
+        caseSensitive: false,
+        wholeWord: false,
+        regex: false,
+      })
+    ).toEqual([
+      [0, 3],
+      [8, 11],
+    ]);
+  });
+
+  test('findNextNonOverlappingSubstring skips occupied ranges', () => {
+    const d = doc('foo foo foo');
+    // The first "foo" is occupied, so the next match starts at offset 4.
+    expect(d.findNextNonOverlappingSubstring('foo', [[0, 3]])).toBe(4);
+  });
+
+  test('eol reports the document line ending', () => {
+    expect(doc('a\nb').eol).toBe('\n');
+    expect(doc('a\r\nb').eol).toBe('\r\n');
+    expect(doc('a\rb').eol).toBe('\r');
+    // A single-line document has no break to detect and defaults to \n.
+    expect(doc('abc').eol).toBe('\n');
+  });
+
+  test('normalizeEol rewrites mixed line endings to the document EOL', () => {
+    const d = doc('a\r\nb');
+    expect(d.normalizeEol('x\ny\rz\r\nw')).toBe('x\r\ny\r\nz\r\nw');
+  });
+
+  test('normalizePosition clamps line and character into range', () => {
+    const d = doc('ab\ncd');
+    expect(d.normalizePosition({ line: 0, character: 1 })).toEqual({
+      line: 0,
+      character: 1,
+    });
+    // A character past the line content clamps to the line length, which
+    // excludes the trailing line break.
+    expect(d.normalizePosition({ line: 0, character: 99 })).toEqual({
+      line: 0,
+      character: 2,
+    });
+    // A line past the document clamps to the last line.
+    expect(d.normalizePosition({ line: 9, character: 0 })).toEqual({
+      line: 1,
+      character: 0,
+    });
+    // Negative values clamp to zero.
+    expect(d.normalizePosition({ line: -3, character: -5 })).toEqual({
+      line: 0,
+      character: 0,
+    });
+  });
+
+  test('getText clamps an overshooting range column so it excludes the line break', () => {
+    const d = doc('first\nsecond');
+    // A range end whose character overshoots the line (a preserved vertical-move
+    // goal column) clamps to the line content, so the trailing newline is not
+    // pulled into the copied text.
+    expect(
+      d.getText({
+        start: { line: 0, character: 0 },
+        end: { line: 0, character: 99 },
+      })
+    ).toBe('first');
+  });
+
   test('applyEdits single replacement', () => {
     const d = doc('hello world');
     const change = d.applyEdits([
