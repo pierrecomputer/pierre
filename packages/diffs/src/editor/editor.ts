@@ -1306,7 +1306,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           mvShortcut !== undefined &&
           textDocument !== undefined
         ) {
-          const cursorMoveOptions = this.#getCursorMoveOptions();
+          const cursorMoveOptions: CursorMoveOptions | undefined = this.#isWrap
+            ? {
+                getSoftLineOffsets: (line) => this.#wrapLineText(line),
+              }
+            : undefined;
           if (e.shiftKey) {
             this.#updateSelections(
               mapSelectionShift(
@@ -3716,15 +3720,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         this.#applyChangeToLineAnnotations(change)
       );
     }
-  }
-
-  #getCursorMoveOptions(): CursorMoveOptions | undefined {
-    if (!this.#isWrap) {
-      return undefined;
-    }
-    return {
-      getSoftLineOffsets: (line) => this.#wrapLineText(line),
-    };
   }
 
   #deleteSoftLineBackward() {
