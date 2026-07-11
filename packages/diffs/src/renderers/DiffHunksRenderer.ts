@@ -1354,6 +1354,12 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             }
             pendingSplitContext.side = missingSide;
             pendingSplitContext.increment();
+          } else if (type === 'change') {
+            // A change row with both sides fills the column a pending
+            // one-sided buffer was holding open (an insert/delete block
+            // directly followed by a paired block, from similarity
+            // realignment); flush first so the buffer lands above this row.
+            pendingSplitContext.flush();
           }
 
           const annotationSpans = this.getAnnotations(

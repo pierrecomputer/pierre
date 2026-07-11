@@ -216,6 +216,50 @@ describe('DiffHunksRenderer', () => {
     }).toMatchSnapshot('rendered rows');
   });
 
+  test('an insert block above a paired change keeps split columns aligned', async () => {
+    // Realignment splits "blank line inserted above an edited line" into an
+    // addition-only block directly followed by a paired block. The renderer
+    // must flush the pending deletion-side buffer before the paired block's
+    // deletion row, so the buffer renders above it and the columns stay
+    // index-parallel.
+    const instance = new DiffHunksRenderer(mockDiffs.diffRowBufferTest.options);
+    const context = 'alpha\nbravo\ncharlie\ndelta\n';
+    const diff = parseDiffFromFile(
+      {
+        name: 'a.ts',
+        contents: `${context}const value = compute();\n${context}`,
+      },
+      {
+        name: 'a.ts',
+        contents: `${context}\nconst value = computed();\n${context}`,
+      }
+    );
+    expect(verifyHunkLineValues(diff)).toEqual([]);
+    const result = await instance.asyncRender(diff);
+    assertDefined(
+      result.deletionsContentAST,
+      'result.deletionsContentAST should be defined'
+    );
+    assertDefined(
+      result.additionsContentAST,
+      'result.additionsContentAST should be defined'
+    );
+
+    const deletionRows = projectColumn(result.deletionsContentAST);
+    const additionRows = projectColumn(result.additionsContentAST);
+    // The deletion column renders the gap above the paired old line.
+    const bufferIndex = deletionRows.findIndex((row) => row.kind === 'buffer');
+    const deletionLineIndex = deletionRows.findIndex((row) =>
+      rowDigests([row])[0].includes('const value = compute();')
+    );
+    expect(bufferIndex).toBeGreaterThan(-1);
+    expect(deletionLineIndex).toBe(bufferIndex + 1);
+    // Both columns cover the same rendered rows.
+    const rowSpan = (rows: ReturnType<typeof projectColumn>) =>
+      rows.reduce((total, row) => total + (row.bufferSize ?? 1), 0);
+    expect(rowSpan(deletionRows)).toBe(rowSpan(additionRows));
+  });
+
   test('additions and deletions should be empty when unified', async () => {
     const instance = new DiffHunksRenderer({
       ...mockDiffs.diffRowBufferTest.options,

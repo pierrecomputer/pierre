@@ -552,12 +552,18 @@ function rediffRegion(
       { ...parseDiffOptions, context: 0 }
     );
     // Walk the zero-context hunks, re-deriving the unchanged stretches
-    // between them from the addition side (context is paired, so both sides
-    // advance by the same amount).
+    // between them (context is paired, so both sides advance by the same
+    // amount). The stretch length must come from a side the hunk has content
+    // on: a zero-count side's start follows the unified `N,0` convention
+    // (the line *before* the change), so its lineIndex is one short of the
+    // lines consumed ahead of the hunk.
     let coveredAdditions = 0;
     let coveredDeletions = 0;
     for (const parsedHunk of reparsed.hunks) {
-      const contextLines = parsedHunk.additionLineIndex - coveredAdditions;
+      const contextLines =
+        parsedHunk.additionCount > 0
+          ? parsedHunk.additionLineIndex - coveredAdditions
+          : parsedHunk.deletionLineIndex - coveredDeletions;
       pushContext(
         contextLines,
         bounds.additionStart + coveredAdditions,

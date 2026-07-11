@@ -66,7 +66,7 @@ for (const diffStyle of ['split', 'unified'] as const) {
       await expect(row(page, 10)).toHaveText('line 10');
 
       // The reverted hunk persists as a context-only region mid-session.
-      let lines = await renderedLines(page);
+      const lines = await renderedLines(page);
       expect(lines).toContain(10);
       expect(lines).not.toContain(30);
 

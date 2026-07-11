@@ -311,6 +311,65 @@ describe('DiffHunksRenderer edit-session hunk updates', () => {
     expect(diff.additionLines.join('')).toBe(postEditLines.join(''));
   });
 
+  test('a blank line pushed above an edited line keeps the pair aligned', async () => {
+    const { renderer, diff } = await createSessionRenderer();
+    // Edit line 3 into a near-match of its old side ("line 3" -> "line 3x"),
+    // then press Enter at its start: a blank line pushes it down one row.
+    renderer.updateRenderCache(makeDirtyLines([[2, 'line 3x']]), 'light');
+    const postEditLines = [
+      ...SESSION_NEW.slice(0, 2),
+      '\n',
+      'line 3x\n',
+      ...SESSION_NEW.slice(3),
+    ];
+    renderer.applyDocumentChange(makeTextDocument(postEditLines));
+
+    // The edited line stays paired with its old side; the blank line renders
+    // as its own insert row above the pair instead of consuming the pairing.
+    const blocks = diff.hunks[0].hunkContent.filter(
+      (content) => content.type === 'change'
+    );
+    expect(
+      blocks.map(({ deletions, additions }) => [deletions, additions])
+    ).toEqual([
+      [0, 1],
+      [1, 1],
+    ]);
+  });
+
+  test('deleting a line keeps later context paired with its old side', async () => {
+    const { renderer, diff } = await createSessionRenderer();
+    // Delete context line 5 inside the first region. The region re-diff then
+    // contains a deletion-only parsed hunk after shared context; its
+    // zero-count addition side reports a `N,0`-convention line index, which
+    // previously shifted every following block by one row (the deleted row
+    // rendered against the wrong old line until session exit).
+    const postEditLines = [...SESSION_NEW.slice(0, 4), ...SESSION_NEW.slice(5)];
+    renderer.applyDocumentChange(makeTextDocument(postEditLines));
+
+    const rows: string[] = [];
+    iterateOverDiff({
+      diff,
+      diffStyle: 'split',
+      expandedHunks: true,
+      callback: ({ type, deletionLine, additionLine }) => {
+        rows.push(
+          `${type}:${deletionLine?.lineNumber ?? '-'}/${additionLine?.lineNumber ?? '-'}`
+        );
+        return rows.length >= 7;
+      },
+    });
+    expect(rows).toEqual([
+      'context:1/1',
+      'context:2/2',
+      'change:3/3',
+      'context:4/4',
+      'change:5/-',
+      'context:6/5',
+      'context:7/6',
+    ]);
+  });
+
   test('emptying the document behaves like the non-session shim', async () => {
     const { renderer, diff } = await createSessionRenderer();
     renderer.applyDocumentChange(makeTextDocument(['']));
