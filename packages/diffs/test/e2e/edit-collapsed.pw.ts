@@ -93,6 +93,17 @@ for (const diffStyle of ['split', 'unified'] as const) {
 
       await page.keyboard.press('ArrowUp');
       await expect.poll(() => caretLine(page)).toBe(13);
+
+      // Horizontal motion at the boundary skips the gap too: ArrowRight at
+      // the line's end lands at the next renderable line's start, ArrowLeft
+      // at a line's start lands at the previous renderable line's end.
+      await page.keyboard.press('End');
+      await page.keyboard.press('ArrowRight');
+      await expect.poll(() => caretLine(page)).toBe(45);
+
+      await page.keyboard.press('Home');
+      await page.keyboard.press('ArrowLeft');
+      await expect.poll(() => caretLine(page)).toBe(13);
     });
 
     test('search navigation to a hidden match reveals it', async ({ page }) => {

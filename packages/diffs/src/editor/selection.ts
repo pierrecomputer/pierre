@@ -218,8 +218,16 @@ export function mapCursorMove(
             false
           );
         } else if (line > 0) {
-          line = line - 1;
-          character = textDocument.getLineLength(line);
+          // Fold-skip: land at the end of the nearest renderable line above;
+          // stay put when everything above is collapsed.
+          const targetLine =
+            options.resolveRenderableLine == null
+              ? line - 1
+              : options.resolveRenderableLine(line - 1, 'up');
+          if (targetLine !== undefined) {
+            line = targetLine;
+            character = textDocument.getLineLength(line);
+          }
         }
       } else if (character < lineLength) {
         character = stepCharacterByGrapheme(
@@ -229,8 +237,16 @@ export function mapCursorMove(
           true
         );
       } else if (line < lineCount - 1) {
-        line = line + 1;
-        character = 0;
+        // Fold-skip: land at the start of the nearest renderable line below;
+        // stay put when everything below is collapsed.
+        const targetLine =
+          options.resolveRenderableLine == null
+            ? line + 1
+            : options.resolveRenderableLine(line + 1, 'down');
+        if (targetLine !== undefined) {
+          line = Math.min(targetLine, lineCount - 1);
+          character = 0;
+        }
       }
     }
     const pos = { line, character };

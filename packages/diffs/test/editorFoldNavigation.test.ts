@@ -158,6 +158,80 @@ describe('diff editor: fold-skip navigation', () => {
     }
   });
 
+  test('arrow-right at the end of a hunk boundary line skips the gap', async () => {
+    const fixture = await createFoldFixture();
+    const { editor, content } = fixture;
+    try {
+      // End of line 14 (index 13), the last rendered line before the gap.
+      setCaret(editor, 13, 'line 14'.length);
+      await wait(0);
+      pressKey(content, 'ArrowRight');
+      const selection = editor.getState().selections?.at(-1);
+      // The caret lands at the start of the next renderable line (46).
+      expect(selection?.start.line).toBe(45);
+      expect(selection?.start.character).toBe(0);
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  test('arrow-left at the start of a hunk boundary line skips the gap', async () => {
+    const fixture = await createFoldFixture();
+    const { editor, content } = fixture;
+    try {
+      // Start of line 46 (index 45), the first rendered line after the gap.
+      setCaret(editor, 45, 0);
+      await wait(0);
+      pressKey(content, 'ArrowLeft');
+      const selection = editor.getState().selections?.at(-1);
+      // The caret lands at the end of the previous renderable line (14).
+      expect(selection?.start.line).toBe(13);
+      expect(selection?.start.character).toBe('line 14'.length);
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  test('shift+arrow-right extends the selection across the gap', async () => {
+    const fixture = await createFoldFixture();
+    const { editor, content } = fixture;
+    try {
+      setCaret(editor, 13, 'line 14'.length);
+      await wait(0);
+      pressKey(content, 'ArrowRight', { shiftKey: true });
+      const selection = editor.getState().selections?.at(-1);
+      expect(selection?.start.line).toBe(13);
+      expect(selection?.end.line).toBe(45);
+      expect(selection?.end.character).toBe(0);
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  test('horizontal motion stays put when only collapsed lines remain', async () => {
+    const fixture = await createFoldFixture();
+    const { editor, content } = fixture;
+    try {
+      // End of line 54 (index 53): only the collapsed trailing gap is below.
+      setCaret(editor, 53, 'line 54'.length);
+      await wait(0);
+      pressKey(content, 'ArrowRight');
+      let selection = editor.getState().selections?.at(-1);
+      expect(selection?.start.line).toBe(53);
+      expect(selection?.start.character).toBe('line 54'.length);
+
+      // Start of line 6 (index 5): only the collapsed leading gap is above.
+      setCaret(editor, 5, 0);
+      await wait(0);
+      pressKey(content, 'ArrowLeft');
+      selection = editor.getState().selections?.at(-1);
+      expect(selection?.start.line).toBe(5);
+      expect(selection?.start.character).toBe(0);
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
   test('shift+arrow-down builds a selection spanning the gap', async () => {
     const fixture = await createFoldFixture();
     const { editor, content } = fixture;
