@@ -1,4 +1,9 @@
-import type { ChangeContent, ContextContent, FileDiffMetadata } from '../types';
+import type {
+  ChangeContent,
+  ContextContent,
+  FileDiffMetadata,
+  Hunk,
+} from '../types';
 
 // The diff library emits one change block per replaced run, ordering every
 // deleted line before every added line. Renderers pair a block's lines
@@ -23,7 +28,8 @@ const MIN_IMPROVEMENT_PER_PAIR = 0.5;
 
 /**
  * Re-split count-mismatched change blocks in every hunk so paired lines are
- * chosen by content similarity instead of position. Mutates `hunks` in
+ * chosen by content similarity instead of position, then slide blank-line
+ * insert/delete blocks to the top of their blank run. Mutates `hunks` in
  * place; rendered row counts are unchanged (a split block covers the same
  * split/unified rows as the original).
  */
@@ -41,6 +47,100 @@ export function realignChangeContentBySimilarity(
         hunk.hunkContent.splice(index, 1, ...replacement);
         index += replacement.length - 1;
       }
+    }
+    slideBlankBoundaryBlocksUp(hunk, diff);
+  }
+}
+
+/**
+ * Slide pure insert/delete blocks made entirely of blank lines to the top of
+ * the blank run they sit in. Adding or removing a blank line next to
+ * existing blanks is ambiguous, and the diff library reports the change at
+ * the run's bottom — so pressing Enter at the end of a line marks a blank
+ * *below* the caret as inserted while the caret's own new line renders as
+ * context. Sliding up anchors the change to the content above it (the caret
+ * line after an Enter) instead. Non-blank blocks never slide, so code that
+ * merely ends like its neighbor (an added function before an identical `}`)
+ * keeps the library's canonical position. Runs on final assembled
+ * hunkContent: from the parse post-pass above and from the edit session's
+ * region re-diff, so mid-session and exit renderings agree.
+ */
+export function slideBlankBoundaryBlocksUp(
+  hunk: Hunk,
+  diff: Pick<FileDiffMetadata, 'additionLines' | 'deletionLines'>
+): void {
+  const { hunkContent } = hunk;
+  for (let index = 1; index < hunkContent.length; index++) {
+    const block = hunkContent[index];
+    const previous = hunkContent[index - 1];
+    if (
+      block.type !== 'change' ||
+      (block.additions > 0 && block.deletions > 0) ||
+      previous.type !== 'context'
+    ) {
+      continue;
+    }
+    const isInsert = block.additions > 0;
+    const lines = isInsert ? diff.additionLines : diff.deletionLines;
+    const blockStart = isInsert
+      ? block.additionLineIndex
+      : block.deletionLineIndex;
+    const blockLength = isInsert ? block.additions : block.deletions;
+
+    // Sliding through identical lines is only well-defined when the block is
+    // a uniform run; require every block line to equal the first one, and
+    // that line to be blank.
+    const unit = lines[blockStart] ?? '';
+    if (unit.trim() !== '') {
+      continue;
+    }
+    let uniform = true;
+    for (let offset = 1; offset < blockLength; offset++) {
+      if (lines[blockStart + offset] !== unit) {
+        uniform = false;
+        break;
+      }
+    }
+    if (!uniform) {
+      continue;
+    }
+
+    // Slide distance: how many trailing context lines match the block's line
+    // exactly (context lines are identical on both sides by definition).
+    let slide = 0;
+    while (
+      slide < previous.lines &&
+      diff.additionLines[
+        previous.additionLineIndex + previous.lines - 1 - slide
+      ] === unit
+    ) {
+      slide++;
+    }
+    if (slide === 0) {
+      continue;
+    }
+
+    block.additionLineIndex -= slide;
+    block.deletionLineIndex -= slide;
+    const blockAdditionEnd = block.additionLineIndex + block.additions;
+    const blockDeletionEnd = block.deletionLineIndex + block.deletions;
+    const next = hunkContent[index + 1];
+    if (next?.type === 'context') {
+      next.lines += slide;
+      next.additionLineIndex = blockAdditionEnd;
+      next.deletionLineIndex = blockDeletionEnd;
+    } else {
+      hunkContent.splice(index + 1, 0, {
+        type: 'context',
+        lines: slide,
+        additionLineIndex: blockAdditionEnd,
+        deletionLineIndex: blockDeletionEnd,
+      });
+    }
+    previous.lines -= slide;
+    if (previous.lines === 0) {
+      hunkContent.splice(index - 1, 1);
+      index--;
     }
   }
 }

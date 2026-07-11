@@ -8,6 +8,7 @@ import type {
   HunkExpansionRegion,
 } from '../types';
 import { parseDiffFromFile } from './parseDiffFromFile';
+import { slideBlankBoundaryBlocksUp } from './realignChangeContent';
 import {
   offsetHunkContent,
   recomputeDiffHunksForEdit,
@@ -573,10 +574,23 @@ function rediffRegion(
       coveredDeletions += contextLines;
       for (const content of parsedHunk.hunkContent) {
         // Parsed content indexes are relative to the slice; offset them into
-        // full-file coordinates.
-        hunkContent.push(
-          offsetHunkContent(content, bounds.additionStart, bounds.deletionStart)
+        // full-file coordinates. A zero-count side carries the `N,0`
+        // convention (one short of the lines consumed), so pin it to the
+        // running counter instead.
+        const offset = offsetHunkContent(
+          content,
+          bounds.additionStart,
+          bounds.deletionStart
         );
+        if (offset.type === 'change') {
+          if (offset.additions === 0) {
+            offset.additionLineIndex = bounds.additionStart + coveredAdditions;
+          }
+          if (offset.deletions === 0) {
+            offset.deletionLineIndex = bounds.deletionStart + coveredDeletions;
+          }
+        }
+        hunkContent.push(offset);
       }
       additionChangedLines += parsedHunk.additionLines;
       deletionChangedLines += parsedHunk.deletionLines;
@@ -609,6 +623,10 @@ function rediffRegion(
     noEOFCRAdditions: false,
     noEOFCRDeletions: false,
   };
+  // The inner parse runs with zero context, so blank-run slides can only
+  // apply once the context blocks are reassembled here — keeping the session
+  // rendering identical to the exit parse, which slides in its own post-pass.
+  slideBlankBoundaryBlocksUp(hunk, diff);
   recomputeHunkRenderLineCounts(hunk);
   return hunk;
 }

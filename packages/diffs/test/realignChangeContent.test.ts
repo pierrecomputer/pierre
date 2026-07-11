@@ -158,3 +158,108 @@ describe('parseDiffFromFile change-block realignment', () => {
     expect(diff.additionLines[4]).toBe('// note\n');
   });
 });
+
+describe('blank-run slide canonicalization', () => {
+  test('a blank inserted beside an existing blank slides up to the change above', () => {
+    // Enter at the end of an edited line inserts a blank before an existing
+    // one; the library reports the insert at the run's bottom, the slide
+    // anchors it to the edited line (where the caret is).
+    const diff = parse('const a = 1;\n\nrest\n', 'const a = 2;\n\n\nrest\n');
+    expect(changeBlocks(diff)).toEqual([
+      {
+        type: 'change',
+        deletions: 1,
+        additions: 1,
+        deletionLineIndex: 4,
+        additionLineIndex: 4,
+      },
+      {
+        type: 'change',
+        deletions: 0,
+        additions: 1,
+        deletionLineIndex: 5,
+        additionLineIndex: 5,
+      },
+    ]);
+  });
+
+  test('a blank removed beside an existing blank slides up', () => {
+    const diff = parse('const a = 1;\n\n\nrest\n', 'const a = 2;\n\nrest\n');
+    expect(changeBlocks(diff)).toEqual([
+      {
+        type: 'change',
+        deletions: 1,
+        additions: 1,
+        deletionLineIndex: 4,
+        additionLineIndex: 4,
+      },
+      {
+        type: 'change',
+        deletions: 1,
+        additions: 0,
+        deletionLineIndex: 5,
+        additionLineIndex: 5,
+      },
+    ]);
+  });
+
+  test('identical non-blank lines never slide', () => {
+    // Adding a function before an identical closing brace: the canonical
+    // position (insert after the existing `}`) must be preserved.
+    const diff = parse(
+      'function a() {\n}\n',
+      'function a() {\n}\nfunction b() {\n}\n'
+    );
+    expect(changeBlocks(diff)).toEqual([
+      {
+        type: 'change',
+        deletions: 0,
+        additions: 2,
+        deletionLineIndex: 6,
+        additionLineIndex: 6,
+      },
+    ]);
+  });
+
+  test('whitespace-only but unequal lines do not slide', () => {
+    // The context line holds a single space; the inserted line is empty.
+    // They are not identical, so sliding would change the diff's meaning.
+    const diff = parse('x = 1;\n \nrest\n', 'x = 2;\n \n\nrest\n');
+    expect(changeBlocks(diff)).toEqual([
+      {
+        type: 'change',
+        deletions: 1,
+        additions: 1,
+        deletionLineIndex: 4,
+        additionLineIndex: 4,
+      },
+      {
+        type: 'change',
+        deletions: 0,
+        additions: 1,
+        deletionLineIndex: 6,
+        additionLineIndex: 6,
+      },
+    ]);
+  });
+
+  test('slides to the top of a multi-blank run', () => {
+    const diff = parse('head;\n\n\n\ntail;\n', 'head!;\n\n\n\n\ntail;\n');
+    expect(changeBlocks(diff)).toEqual([
+      {
+        type: 'change',
+        deletions: 1,
+        additions: 1,
+        deletionLineIndex: 4,
+        additionLineIndex: 4,
+      },
+      {
+        type: 'change',
+        deletions: 0,
+        additions: 1,
+        deletionLineIndex: 5,
+        additionLineIndex: 5,
+      },
+    ]);
+  });
+});

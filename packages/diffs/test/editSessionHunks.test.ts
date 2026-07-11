@@ -242,6 +242,48 @@ describe('applySessionEditWindow', () => {
       expect(hunk.hunkContent[0].type).toBe('context');
     }
   });
+
+  test('a blank pushed beside an existing blank stays anchored to the edit', () => {
+    // Enter at the end of a changed line that is followed by a blank line:
+    // the prefix scan slides the detected insert past the identical blank,
+    // but the blank-run slide re-anchors it to the edited line, matching the
+    // exit parse.
+    const oldContents = 'a\nb\ntarget\n\nafter\nz1\nz2\nz3\nz4\nz5\n';
+    const newContents = oldContents.replace('target\n', 'target!\n');
+    const diff = parseDiffFromFile(
+      { name: 't.ts', contents: oldContents },
+      { name: 't.ts', contents: newContents }
+    );
+    diff.additionLines.splice(3, 0, '\n');
+    // The scan reports the insert after the pre-existing blank at index 3.
+    const change = applySessionEditWindow(diff, {
+      start: 4,
+      prevEnd: 4,
+      nextEnd: 5,
+    });
+
+    expect(change).toBeUndefined();
+    // The line pairing matches what the exit recompute will produce: the
+    // change blocks are identical (hunk bounds legitimately differ — the
+    // frozen region keeps its envelope while exit re-derives context).
+    const exit = parseDiffFromFile(
+      { name: 't.ts', contents: oldContents },
+      { name: 't.ts', contents: diff.additionLines.join('') }
+    );
+    const changesOf = (hunkContent: (typeof diff.hunks)[0]['hunkContent']) =>
+      hunkContent.filter((block) => block.type === 'change');
+    expect(changesOf(diff.hunks[0].hunkContent)).toEqual(
+      changesOf(exit.hunks[0].hunkContent)
+    );
+    // Anchored directly after the edited line, not after the old blank.
+    expect(changesOf(diff.hunks[0].hunkContent)[1]).toEqual({
+      type: 'change',
+      deletions: 0,
+      additions: 1,
+      deletionLineIndex: 3,
+      additionLineIndex: 3,
+    });
+  });
 });
 
 describe('applySessionChangedLines', () => {
