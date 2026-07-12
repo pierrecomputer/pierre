@@ -349,6 +349,16 @@ export interface FileDiffMetadata {
    */
   additionLines: string[];
   /**
+   * Set while an attached editor's session-scoped hunk updates have reshaped
+   * `hunks` away from a plain recompute (regions stay frozen during an edit
+   * session). Consumed by the session-exit recompute, which restores
+   * recompute-shaped hunks and clears the flag. It lives on the metadata so
+   * it survives instance recycling and pooling.
+   *
+   * @internal
+   */
+  editSessionDirty?: boolean;
+  /**
    * This unique key is only used for Worker Pools to avoid subsequent requests
    * to highlight if we've already highlighted the diff.  Please note that if
    * you modify the contents of the diff in any way, you will need to update
@@ -825,6 +835,17 @@ export interface RenderedDiffASTCache {
   isDirty?: boolean;
 }
 
+/**
+ * A window of rendered content. Two unit interpretations exist:
+ *
+ * - Renderer consumers (`iterateOverDiff` window predicates, windowed AST
+ *   requests, buffers, sticky specs) read `startingLine`/`totalLines` as
+ *   dense rendered-row indexes for the active diff style.
+ * - The editor reads them as zero-based document-line indexes of the new
+ *   file. `FileDiff.computeEditorRenderRange` converts the renderer range on
+ *   the editor-bound copy; the two coincide only while every line renders
+ *   (`expandUnchanged`).
+ */
 export interface RenderRange {
   startingLine: number;
   totalLines: number;
@@ -1008,16 +1029,53 @@ export interface DiffsEditableComponent<
    * Return the scroll container element.
    */
   getScrollContainer?: () => HTMLElement | undefined;
-  attachEditor: (editor: DiffsEditor<LAnnotation>) => () => void;
+  /**
+   * Whether the given one-based new-file line currently has (or will have on
+   * scroll) a rendered row. False only for lines hidden inside a collapsed
+   * unchanged region. Components without collapsible regions leave this
+   * unimplemented and the editor treats every line as renderable.
+   */
+  isLineRenderable?: (lineNumber: number) => boolean;
+  /**
+   * The nearest renderable one-based new-file line at or beyond `lineNumber`
+   * in the given direction, or undefined when every line that way is hidden
+   * inside collapsed regions. Sequential caret motion uses this to skip
+   * collapsed regions like code folds.
+   */
+  getNearestRenderableLine?: (
+    lineNumber: number,
+    direction: 'up' | 'down'
+  ) => number | undefined;
+  /**
+   * Expand collapsed context so the given one-based new-file line can
+   * render. Returns true when an expansion was performed (a re-render will
+   * follow, possibly deferred).
+   */
+  revealLine?: (lineNumber: number) => boolean;
+  /**
+   * Attach an editor to this component. The returned detach closure receives
+   * `recycle: true` when the editor is only being released by a virtualized
+   * unmount (the session continues on remount) and no argument/false on a
+   * genuine session end.
+   */
+  attachEditor: (
+    editor: DiffsEditor<LAnnotation>
+  ) => (recycle?: boolean) => void;
   applyDocumentChange: (
     textDocument: DiffsTextDocument,
     newLineAnnotations?: DiffLineAnnotation<LAnnotation>[],
     shouldUpdateBuffer?: boolean
   ) => void;
+  /**
+   * `lineCountChangeInFlight` is true only during an edit pass whose line
+   * count changed, where an authoritative `applyDocumentChange` follows in
+   * the same pass; deferred background-tokenize passes always pass false.
+   */
   updateRenderCache: (
     lines: Map<number, Array<HighlightedToken>>,
     themeType: 'dark' | 'light',
-    shouldRefreshView: boolean
+    shouldRefreshView: boolean,
+    lineCountChangeInFlight?: boolean
   ) => void;
 }
 

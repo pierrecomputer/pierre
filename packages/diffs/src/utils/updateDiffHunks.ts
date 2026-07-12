@@ -156,12 +156,7 @@ export function recomputeDiffHunksForEdit(
   }
   const additionLines = diff.additionLines;
   const recomputed = recomputeDiffHunks(diff, parseDiffOptions);
-  if (
-    additionLines.length > recomputed.additionLines.length &&
-    hasTrailingEditorBlankLine(additionLines)
-  ) {
-    preserveTrailingEditorBlankLine(recomputed, additionLines);
-  }
+  preserveTrailingEditorBlankLine(recomputed, additionLines);
   return recomputed;
 }
 
@@ -169,10 +164,19 @@ function hasTrailingEditorBlankLine(additionLines: string[]): boolean {
   return additionLines.length > 1 && additionLines.at(-1) === '';
 }
 
-function preserveTrailingEditorBlankLine(
-  recomputed: FullDiffHunkUpdate,
+// Re-adds the editor's phantom trailing empty line (a document ending in a
+// newline exposes one extra empty line) as an addition row when the last
+// hunk's final change block can absorb it, so the caret keeps a rendered row.
+export function preserveTrailingEditorBlankLine(
+  recomputed: Pick<
+    FullDiffHunkUpdate,
+    'hunks' | 'additionLines' | 'splitLineCount' | 'unifiedLineCount'
+  >,
   additionLines: string[]
 ): void {
+  if (!hasTrailingEditorBlankLine(additionLines)) {
+    return;
+  }
   const extraLineCount = additionLines.length - recomputed.additionLines.length;
   if (extraLineCount <= 0) {
     return;
@@ -366,7 +370,7 @@ function reparseHunkRegion(
   return true;
 }
 
-function syncHunkNoEOFCRFromFullFile(
+export function syncHunkNoEOFCRFromFullFile(
   diff: FileDiffMetadata,
   hunkIndex: number
 ): void {
@@ -417,7 +421,7 @@ function applyReparsedHunk(target: Hunk, parsed: Hunk): void {
   recomputeHunkRenderLineCounts(target);
 }
 
-function offsetHunkContent(
+export function offsetHunkContent(
   content: HunkContent,
   additionOffset: number,
   deletionOffset: number
@@ -429,7 +433,7 @@ function offsetHunkContent(
   };
 }
 
-function recomputeHunkRenderLineCounts(hunk: Hunk): void {
+export function recomputeHunkRenderLineCounts(hunk: Hunk): void {
   let splitLineCount = 0;
   let unifiedLineCount = 0;
 
@@ -447,8 +451,11 @@ function recomputeHunkRenderLineCounts(hunk: Hunk): void {
   hunk.unifiedLineCount = unifiedLineCount;
 }
 
-function recomputeDiffRenderLineCounts(
-  diff: HunkMetadataUpdate & Pick<FileDiffMetadata, 'additionLines'>
+export function recomputeDiffRenderLineCounts(
+  diff: Pick<
+    FileDiffMetadata,
+    'hunks' | 'splitLineCount' | 'unifiedLineCount' | 'additionLines'
+  >
 ): void {
   let splitTotal = 0;
   let unifiedTotal = 0;

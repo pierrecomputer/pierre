@@ -22,7 +22,6 @@ export const LIVE_DIFF_EDITOR_EXAMPLE: PreloadFileDiffOptions<undefined> = {
     useTokenTransformer: true,
     enableGutterUtility: false,
     enableLineSelection: false,
-    expandUnchanged: true,
     lineHoverHighlight: 'disabled',
   },
 };

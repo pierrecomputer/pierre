@@ -258,6 +258,71 @@ const user = await getUser('123');
 \`\`\`
 `;
 
+// Nested markup with meaningful indentation, for exercising edit-mode diff
+// alignment: wrapping/unwrapping containers, pushing lines around with
+// Enter, and re-indenting all reshape change blocks whose lines differ only
+// (or mostly) in whitespace. The unchanged middle keeps a collapsible gap
+// between the changed regions.
+const OLD_MARKUP_CONTENT = `<section class="profile">
+  <header class="profile-header">
+    <div class="avatar-wrap">
+      <img src="/avatars/ada.png" alt="Ada Lovelace" />
+    </div>
+    <h2 class="profile-name">Ada Lovelace</h2>
+  </header>
+  <div class="profile-body">
+    <p class="bio">Mathematician and writer.</p>
+    <ul class="links">
+      <li>
+        <a href="/notes">Notes</a>
+      </li>
+      <li>
+        <a href="/programs">Programs</a>
+      </li>
+      <li>
+        <a href="/letters">Letters</a>
+      </li>
+    </ul>
+    <div class="stats">
+      <span class="stat">12 notes</span>
+      <span class="stat">3 programs</span>
+    </div>
+  </div>
+  <footer class="profile-footer">
+    <button class="follow">Follow</button>
+  </footer>
+</section>
+`;
+
+const NEW_MARKUP_CONTENT = `<section class="profile profile--wide">
+  <header class="profile-header">
+    <img src="/avatars/ada.png" alt="Ada Lovelace" />
+    <h2 class="profile-name">Ada Lovelace</h2>
+  </header>
+  <div class="profile-body">
+    <p class="bio">Mathematician and writer.</p>
+    <ul class="links">
+      <li>
+        <a href="/notes">Notes</a>
+      </li>
+      <li>
+        <a href="/programs">Programs</a>
+      </li>
+      <li>
+        <a href="/letters">Letters</a>
+      </li>
+    </ul>
+    <div class="stats">
+      <span class="stat">12 notes</span>
+      <span class="stat">3 programs</span>
+    </div>
+  </div>
+  <footer class="profile-footer">
+    <button class="follow" type="button">Follow</button>
+  </footer>
+</section>
+`;
+
 // The base files are replicated into several uniquely-named variants so the
 // Virtualizer and CodeView demos have enough content to scroll through. Each
 // variant is a full (non-partial) diff parsed from complete old/new contents.
@@ -287,7 +352,18 @@ const README_BASE: BaseDiff = {
   newContents: NEW_README_CONTENT,
 };
 
-const BASE_DIFFS: BaseDiff[] = [USERS_BASE, STYLES_BASE, README_BASE];
+const MARKUP_BASE: BaseDiff = {
+  name: 'ui/profile-card.html',
+  oldContents: OLD_MARKUP_CONTENT,
+  newContents: NEW_MARKUP_CONTENT,
+};
+
+const BASE_DIFFS: BaseDiff[] = [
+  USERS_BASE,
+  MARKUP_BASE,
+  STYLES_BASE,
+  README_BASE,
+];
 
 // Appends a variant index before the file extension (e.g. `users.ts` ->
 // `users-2.ts`) so each replicated file has a distinct name and id.
@@ -328,6 +404,11 @@ export const CODE_VIEW_ITEMS: CodeViewItem<PlaygroundAnnotationMetadata>[] =
           id: `diff:${variantName(USERS_BASE.name, index)}`,
           type: 'diff',
           fileDiff: variantDiff(USERS_BASE, index),
+        },
+        {
+          id: `diff:${variantName(MARKUP_BASE.name, index)}`,
+          type: 'diff',
+          fileDiff: variantDiff(MARKUP_BASE, index),
         },
         {
           id: `file:${readmeName}`,

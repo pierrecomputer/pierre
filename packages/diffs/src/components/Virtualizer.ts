@@ -137,8 +137,8 @@ export class Virtualizer {
   // host/React-driven render call, an async highlight completion). Those
   // renders queue themselves here so their measured line deltas — wrapped
   // lines, annotation heights — are re-captured; otherwise a layout reset
-  // (e.g. an edit-mode expandUnchanged flip) leaves the instance stuck on
-  // its baseline estimate and its placeholder renders the wrong height.
+  // (e.g. an edit-session exit recompute) leaves the instance stuck on its
+  // baseline estimate and its placeholder renders the wrong height.
   requestHeightReconcile(instance: SubscribedInstance): void {
     this.reconcileQueue.add(instance);
     queueRender(this.computeRenderRangeAndEmit);

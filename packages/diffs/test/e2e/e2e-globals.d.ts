@@ -31,6 +31,11 @@ interface E2EEditorState {
   };
 }
 
+interface E2ETextEdit {
+  range: { start: E2ESelectionPoint; end: E2ESelectionPoint };
+  newText: string;
+}
+
 // The subset of the real Editor surface the fixtures expose on `window`.
 interface E2EEditor {
   canUndo: boolean;
@@ -39,7 +44,9 @@ interface E2EEditor {
   getFile: () => { contents: string } | undefined;
   getState: () => E2EEditorState;
   setSelections: (selections: E2ESelection[]) => void;
+  applyEdits: (edits: E2ETextEdit[], updateHistory?: boolean) => void;
   focus: () => void;
+  cleanUp: () => void;
 }
 
 interface Window {
@@ -64,4 +71,9 @@ interface Window {
 
   // Editor handle exposed by the editable fixtures.
   __editor?: E2EEditor;
+
+  // edit-collapsed.html helpers: rendered new-file line numbers in the
+  // editable column, and the primary caret's zero-based line.
+  __renderedLines?: () => number[];
+  __caretLine?: () => number | undefined;
 }

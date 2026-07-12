@@ -205,7 +205,6 @@ function mergeFileDiffOptions<LAnnotation>({
           useTokenTransformer: true,
           enableGutterUtility: false,
           enableLineSelection: false,
-          expandUnchanged: true,
           lineHoverHighlight: 'disabled',
         }
       : null),

@@ -6,7 +6,9 @@ import {
   parseDiffFromFile,
 } from '../src';
 import { TextDocument } from '../src/editor/textDocument';
-import type { DiffsTextDocument, HighlightedToken } from '../src/types';
+import type { FileDiffMetadata, HighlightedToken } from '../src/types';
+import type { DiffsTextDocument } from '../src/types';
+import { finishEditSessionForDiff } from '../src/utils/editSessionHunks';
 import { iterateOverDiff } from '../src/utils/iterateOverDiff';
 
 afterAll(async () => {
@@ -193,6 +195,226 @@ describe('DiffHunksRenderer content-edit recompute split', () => {
       '}\n',
     ]);
     expect(rendered.additionLines.join('')).toBe(EDITED_LINES.join('\n'));
+  });
+});
+
+// While an editor session is active, hunk updates preserve the current region
+// skeleton: regions never merge/split/drop on their own, a reverted region
+// persists as a context-only hunk, and the real recompute runs once on
+// genuine session end.
+describe('DiffHunksRenderer edit-session hunk updates', () => {
+  const SESSION_LINE_COUNT = 30;
+
+  function sessionLines(edits: Record<number, string> = {}): string[] {
+    return Array.from(
+      { length: SESSION_LINE_COUNT },
+      (_, index) => (edits[index + 1] ?? `line ${index + 1}`) + '\n'
+    );
+  }
+
+  const SESSION_OLD = sessionLines();
+  const SESSION_NEW = sessionLines({ 3: 'changed 3', 20: 'changed 20' });
+
+  async function createSessionRenderer(): Promise<{
+    renderer: DiffHunksRenderer;
+    diff: FileDiffMetadata;
+  }> {
+    const renderer = new DiffHunksRenderer({
+      theme: 'github-light',
+      diffStyle: 'split',
+    });
+    const diff = parseDiffFromFile(
+      { name: 'session.ts', contents: SESSION_OLD.join(''), cacheKey: 's:o' },
+      { name: 'session.ts', contents: SESSION_NEW.join(''), cacheKey: 's:n' }
+    );
+    await renderer.asyncRender(diff);
+    renderer.renderDiff(diff);
+    renderer.beginEditSession(diff);
+    return { renderer, diff };
+  }
+
+  test('reverting a hunk keeps it as a context-only region', async () => {
+    const { renderer, diff } = await createSessionRenderer();
+    const boundsBefore = diff.hunks.map((hunk) => ({
+      additionLineIndex: hunk.additionLineIndex,
+      additionCount: hunk.additionCount,
+    }));
+
+    const regionsChanged = renderer.updateRenderCache(
+      makeDirtyLines([[2, 'line 3']]),
+      'light'
+    );
+
+    expect(regionsChanged).toBe(false);
+    expect(diff.hunks).toHaveLength(2);
+    expect(diff.hunks[0].additionLineIndex).toBe(
+      boundsBefore[0].additionLineIndex
+    );
+    expect(diff.hunks[0].additionCount).toBe(boundsBefore[0].additionCount);
+    expect(diff.hunks[0].hunkContent).toHaveLength(1);
+    expect(diff.hunks[0].hunkContent[0].type).toBe('context');
+    expect(diff.editSessionDirty).toBe(true);
+  });
+
+  test('a gap edit synthesizes a region and reports the escalation', async () => {
+    const { renderer, diff } = await createSessionRenderer();
+
+    const regionsChanged = renderer.updateRenderCache(
+      makeDirtyLines([[11, 'replaced in gap']]),
+      'light'
+    );
+
+    expect(regionsChanged).toBe(true);
+    expect(diff.hunks).toHaveLength(3);
+    expect(diff.hunks[1].additionLineIndex).toBe(11);
+  });
+
+  // The regression guard for the same-pass contamination trap: a line-count
+  // pass tokenizes every shifted line as dirty at post-edit indexes while
+  // diff.additionLines still holds pre-edit content. Region work must wait
+  // for applyDocumentChange, which scans against the pass snapshot.
+  test('an Enter keystroke does not disturb other regions', async () => {
+    const { renderer, diff } = await createSessionRenderer();
+    const secondRegionBefore = {
+      deletionLineIndex: diff.hunks[1].deletionLineIndex,
+      deletionCount: diff.hunks[1].deletionCount,
+      additionCount: diff.hunks[1].additionCount,
+      hunkContent: structuredClone(diff.hunks[1].hunkContent),
+    };
+
+    // Enter in the middle of "changed 3" (line index 2).
+    const postEditLines = [
+      ...SESSION_NEW.slice(0, 2),
+      'chan\n',
+      'ged 3\n',
+      ...SESSION_NEW.slice(3),
+    ];
+    // The tokenizer emits every line from the change to the document end as
+    // dirty, using post-edit indexes.
+    const denseDirty: Array<[number, string]> = [];
+    for (let line = 2; line < postEditLines.length; line++) {
+      denseDirty.push([line, postEditLines[line].replace('\n', '')]);
+    }
+    renderer.updateRenderCache(makeDirtyLines(denseDirty), 'light', true);
+    renderer.applyDocumentChange(makeTextDocument(postEditLines));
+
+    expect(diff.hunks).toHaveLength(2);
+    // The edited region grew by the inserted line...
+    expect(diff.hunks[0].additionCount).toBeGreaterThan(0);
+    // ...while the other region only shifted, keeping its shape and its
+    // old-side anchors.
+    expect(diff.hunks[1].deletionLineIndex).toBe(
+      secondRegionBefore.deletionLineIndex
+    );
+    expect(diff.hunks[1].deletionCount).toBe(secondRegionBefore.deletionCount);
+    expect(diff.hunks[1].additionCount).toBe(secondRegionBefore.additionCount);
+    expect(diff.additionLines.join('')).toBe(postEditLines.join(''));
+  });
+
+  test('a blank line pushed above an edited line keeps the pair aligned', async () => {
+    const { renderer, diff } = await createSessionRenderer();
+    // Edit line 3 into a near-match of its old side ("line 3" -> "line 3x"),
+    // then press Enter at its start: a blank line pushes it down one row.
+    renderer.updateRenderCache(makeDirtyLines([[2, 'line 3x']]), 'light');
+    const postEditLines = [
+      ...SESSION_NEW.slice(0, 2),
+      '\n',
+      'line 3x\n',
+      ...SESSION_NEW.slice(3),
+    ];
+    renderer.applyDocumentChange(makeTextDocument(postEditLines));
+
+    // The edited line stays paired with its old side; the blank line renders
+    // as its own insert row above the pair instead of consuming the pairing.
+    const blocks = diff.hunks[0].hunkContent.filter(
+      (content) => content.type === 'change'
+    );
+    expect(
+      blocks.map(({ deletions, additions }) => [deletions, additions])
+    ).toEqual([
+      [0, 1],
+      [1, 1],
+    ]);
+  });
+
+  test('deleting a line keeps later context paired with its old side', async () => {
+    const { renderer, diff } = await createSessionRenderer();
+    // Delete context line 5 inside the first region. The region re-diff then
+    // contains a deletion-only parsed hunk after shared context; its
+    // zero-count addition side reports a `N,0`-convention line index, which
+    // previously shifted every following block by one row (the deleted row
+    // rendered against the wrong old line until session exit).
+    const postEditLines = [...SESSION_NEW.slice(0, 4), ...SESSION_NEW.slice(5)];
+    renderer.applyDocumentChange(makeTextDocument(postEditLines));
+
+    const rows: string[] = [];
+    iterateOverDiff({
+      diff,
+      diffStyle: 'split',
+      expandedHunks: true,
+      callback: ({ type, deletionLine, additionLine }) => {
+        rows.push(
+          `${type}:${deletionLine?.lineNumber ?? '-'}/${additionLine?.lineNumber ?? '-'}`
+        );
+        return rows.length >= 7;
+      },
+    });
+    expect(rows).toEqual([
+      'context:1/1',
+      'context:2/2',
+      'change:3/3',
+      'context:4/4',
+      'change:5/-',
+      'context:6/5',
+      'context:7/6',
+    ]);
+  });
+
+  test('emptying the document behaves like the non-session shim', async () => {
+    const { renderer, diff } = await createSessionRenderer();
+    renderer.applyDocumentChange(makeTextDocument(['']));
+
+    expect(diff.additionLines).toEqual(['']);
+    const result = renderer.renderDiff();
+    expect(result).toBeDefined();
+    if (result == null) return;
+    expect(renderer.renderFullHTML(result)).toContain('change-addition');
+  });
+
+  test('genuine session end recomputes; a zero-edit session does not', async () => {
+    const { renderer, diff } = await createSessionRenderer();
+    const untouchedHunks = diff.hunks;
+
+    // Zero-edit end leaves patch-derived hunks untouched.
+    expect(finishEditSessionForDiff(diff)).toBe(false);
+    expect(diff.hunks).toBe(untouchedHunks);
+
+    // Revert the first hunk mid-session, then end: the context-only region
+    // collapses away in the recompute.
+    renderer.updateRenderCache(makeDirtyLines([[2, 'line 3']]), 'light');
+    expect(diff.hunks[0].hunkContent[0].type).toBe('context');
+    expect(finishEditSessionForDiff(diff)).toBe(true);
+    expect(diff.hunks).toHaveLength(1);
+    expect(diff.hunks[0].hunkContent.some((c) => c.type === 'change')).toBe(
+      true
+    );
+    expect(diff.editSessionDirty).toBeUndefined();
+  });
+
+  test('a session-shaped diff renders through a bounded window', async () => {
+    const { renderer, diff } = await createSessionRenderer();
+    renderer.updateRenderCache(makeDirtyLines([[2, 'line 3']]), 'light');
+    expect(diff.hunks[0].hunkContent[0].type).toBe('context');
+
+    const result = renderer.renderDiff(diff, {
+      startingLine: 0,
+      totalLines: 10,
+      bufferBefore: 0,
+      bufferAfter: 0,
+    });
+    expect(result).toBeDefined();
+    if (result == null) return;
+    expect(result.rowCount).toBeGreaterThan(0);
   });
 });
 

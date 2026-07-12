@@ -3,6 +3,7 @@ import { toHtml } from 'hast-util-to-html';
 
 import {
   CUSTOM_HEADER_SLOT_ID,
+  DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
   DEFAULT_THEMES,
   DEFAULT_TOKENIZE_MAX_LENGTH,
   DIFFS_TAG_NAME,
@@ -23,6 +24,10 @@ import {
 } from '../managers/InteractionManager';
 import { ResizeManager } from '../managers/ResizeManager';
 import { ScrollSyncManager } from '../managers/ScrollSyncManager';
+import {
+  dequeueRender,
+  queueRender,
+} from '../managers/UniversalRenderingManager';
 import {
   DiffHunksRenderer,
   type DiffHunksRendererOptions,
@@ -69,18 +74,31 @@ import {
   wrapThemeCSS,
   wrapUnsafeCSS,
 } from '../utils/cssWrappers';
+import {
+  captureExpansionAnchors,
+  finishEditSessionForDiff,
+  rebuildExpansionFromAnchors,
+} from '../utils/editSessionHunks';
 import { getDiffFileInput } from '../utils/getDiffFileInput';
 import { getDiffHunksRendererOptions } from '../utils/getDiffHunksRendererOptions';
 import { getLineAnnotationName } from '../utils/getLineAnnotationName';
 import { getOrCreateCodeNode } from '../utils/getOrCreateCodeNode';
 import { upsertHostThemeStyle } from '../utils/hostTheme';
 import { hydratePartialDiff } from '../utils/hydratePartialDiff';
+import { isDefaultRenderRange } from '../utils/isDefaultRenderRange';
 import { isDiffPlainText } from '../utils/isDiffPlainText';
 import { isStyleNode } from '../utils/isStyleNode';
+import { iterateOverDiff } from '../utils/iterateOverDiff';
 import { parseDiffFromFile } from '../utils/parseDiffFromFile';
 import { prerenderHTMLIfNecessary } from '../utils/prerenderHTMLIfNecessary';
 import { getMeasuredScrollbarGutter } from '../utils/scrollbarGutter';
 import { setPreNodeProperties } from '../utils/setWrapperNodeProps';
+import {
+  getExpandedRegion,
+  getNearestRenderableAdditionLine,
+  getTrailingExpandedRegion,
+  isAdditionLineRenderable,
+} from '../utils/virtualDiffLayout';
 import type { WorkerPoolManager } from '../worker';
 import { DiffsContainerLoaded } from './web-components';
 
@@ -541,6 +559,7 @@ export class FileDiff<
   }
 
   public cleanUp(recycle: boolean = false): void {
+    dequeueRender(this.handleEditSessionRender);
     this.emitPostRender(true);
     this.resizeManager.cleanUp();
     this.interactionManager.cleanUp();
@@ -982,6 +1001,15 @@ export class FileDiff<
     if (this.fileDiff == null) {
       return false;
     }
+    // Backstop for sessions that ended without their exit hook running (e.g.
+    // session-shaped metadata reused after a host teardown): restore
+    // recompute-shaped hunks before rendering.
+    if (
+      this.fileDiff.editSessionDirty === true &&
+      this.shouldSelfHealEditSession()
+    ) {
+      finishEditSessionForDiff(this.fileDiff, this.options.parseDiffOptions);
+    }
     if (expandUnchanged) {
       this.loadFilesIfNecessary();
     }
@@ -1152,7 +1180,7 @@ export class FileDiff<
     onPostRender?.(fileContainer, this, phase);
   }
 
-  private get fileDiffCache(): FileDiffMetadata | undefined {
+  protected get fileDiffCache(): FileDiffMetadata | undefined {
     return this.hunksRenderer.diffCache ?? this.fileDiff;
   }
 
@@ -1161,7 +1189,7 @@ export class FileDiff<
     const fileContainer = this.fileContainer;
     const fileDiff = this.fileDiffCache;
     const lineAnnotations = this.lineAnnotations;
-    const renderRange = this.renderRange;
+    const renderRange = this.computeEditorRenderRange(this.renderRange);
     if (
       editor != null &&
       fileContainer != null &&
@@ -1188,15 +1216,121 @@ export class FileDiff<
     }
   }
 
-  public attachEditor(editor: DiffsEditor<LAnnotation>): () => void {
+  // The stored render range is in rendered-row units for the windowed AST
+  // pipeline, but the editor consumes render ranges in document-line units.
+  // Derive the addition-side document window covered by the rendered rows:
+  // startingLine = first addition line with a row in the window, totalLines =
+  // last such line - first + 1, and 0 when the window holds no addition rows
+  // (e.g. a pure-deletion run taller than the viewport).
+  private computeEditorRenderRange(
+    renderRange: RenderRange | undefined
+  ): RenderRange | undefined {
+    const fileDiff = this.fileDiffCache;
+    if (
+      renderRange == null ||
+      fileDiff == null ||
+      isDefaultRenderRange(renderRange)
+    ) {
+      return renderRange;
+    }
+    const {
+      diffStyle = 'split',
+      expandUnchanged = false,
+      collapsedContextThreshold = DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
+    } = this.options;
+    let firstLineNumber: number | undefined;
+    let lastLineNumber: number | undefined;
+    iterateOverDiff({
+      diff: fileDiff,
+      diffStyle,
+      startingLine: renderRange.startingLine,
+      totalLines: renderRange.totalLines,
+      expandedHunks: expandUnchanged
+        ? true
+        : this.hunksRenderer.getExpandedHunksMap(),
+      collapsedContextThreshold,
+      callback: ({ additionLine }) => {
+        if (additionLine != null) {
+          firstLineNumber ??= additionLine.lineNumber;
+          lastLineNumber = additionLine.lineNumber;
+        }
+      },
+    });
+    if (firstLineNumber == null || lastLineNumber == null) {
+      return { ...renderRange, startingLine: 0, totalLines: 0 };
+    }
+    return {
+      ...renderRange,
+      startingLine: firstLineNumber - 1,
+      totalLines: lastLineNumber - firstLineNumber + 1,
+    };
+  }
+
+  public attachEditor(
+    editor: DiffsEditor<LAnnotation>
+  ): (recycle?: boolean) => void {
     this.editor?.cleanUp();
     this.editor = editor;
     this.interactionManager.setEditorAttached(true);
+    // Edit sessions are a plain-diff concern; subclasses with their own hunk
+    // semantics (merge conflicts) keep the per-edit recompute pipeline.
+    if (this.type === 'file-diff') {
+      this.hunksRenderer.beginEditSession(this.fileDiffCache);
+    }
+    // The editor sync below refuses partial diffs (it needs the full file
+    // contents); kick off hydration so the loaded re-render re-runs it.
+    if (this.fileDiff?.isPartial === true) {
+      this.loadFilesIfNecessary();
+    }
     this.syncRenderViewToEditor();
-    return () => {
+    return (recycle?: boolean) => {
       this.editor = undefined;
       this.interactionManager.setEditorAttached(false);
+      // A recycle detach is a virtualized unmount mid-session: the session
+      // continues on remount, so hunks stay session-shaped. Only a genuine
+      // end runs the exit recompute.
+      if (recycle !== true) {
+        this.finishEditSession();
+      }
     };
+  }
+
+  // Genuine session exit for the live detach path.
+  private finishEditSession(): void {
+    this.hunksRenderer.endEditSession();
+    this.completeEditSession();
+  }
+
+  /**
+   * Run the genuine session-end recompute: restore recompute-shaped hunks (a
+   * context-only region collapses away, boundaries re-derive), preserve
+   * expansion state best-effort via old-side anchors, and repaint through
+   * the session render path — which also invalidates virtualized layout,
+   * since nothing else does at exit now that editing does not flip
+   * expandUnchanged. Marker-guarded and idempotent; CodeView also calls this
+   * when reaping a session whose detach closure was consumed by a recycle.
+   * Safe on a cleaned-up instance: the recompute is pure metadata work and
+   * the deferred rerender is enabled-guarded. Returns true when a recompute
+   * ran.
+   */
+  public completeEditSession(): boolean {
+    const fileDiff = this.fileDiffCache;
+    if (fileDiff == null || fileDiff.editSessionDirty !== true) {
+      return false;
+    }
+    const { collapsedContextThreshold = DEFAULT_COLLAPSED_CONTEXT_THRESHOLD } =
+      this.options;
+    const anchors = captureExpansionAnchors(
+      fileDiff,
+      this.hunksRenderer.getExpandedHunksMap(),
+      collapsedContextThreshold
+    );
+    finishEditSessionForDiff(fileDiff, this.options.parseDiffOptions);
+    this.hunksRenderer.setExpandedHunksMap(
+      rebuildExpansionFromAnchors(fileDiff, anchors)
+    );
+    this.escalateEditSessionRender();
+    return true;
   }
 
   // normally triggered by the host when the document line count changes
@@ -1228,9 +1362,28 @@ export class FileDiff<
   public updateRenderCache(
     dirtyLines: Map<number, Array<HighlightedToken>>,
     themeType: 'dark' | 'light',
-    shouldRefreshView: boolean
+    shouldRefreshView: boolean,
+    lineCountChangeInFlight = false
   ): void {
-    this.hunksRenderer.updateRenderCache(dirtyLines, themeType);
+    const regionsChanged = this.hunksRenderer.updateRenderCache(
+      dirtyLines,
+      themeType,
+      lineCountChangeInFlight
+    );
+    // A same-line-count edit that reshaped the session regions (an edit into
+    // a collapsed gap) changes the rendered row set, which the debounced
+    // line-type refresh below cannot express. Escalate to a deferred full
+    // re-render — never a synchronous one, since this runs mid-editor-pass
+    // and rebuilding rows the editor is about to touch detaches its geometry
+    // caches.
+    if (regionsChanged) {
+      if (this.refreshViewTimeout != null) {
+        clearTimeout(this.refreshViewTimeout);
+        this.refreshViewTimeout = undefined;
+      }
+      this.escalateEditSessionRender();
+      return;
+    }
     if (shouldRefreshView) {
       if (this.refreshViewTimeout != null) {
         clearTimeout(this.refreshViewTimeout);
@@ -1249,6 +1402,161 @@ export class FileDiff<
       }, 150);
     }
   }
+
+  // Editor-facing visibility oracle: whether a one-based new-file line has
+  // (or will have on scroll) a rendered row under the current expansion
+  // state. See isAdditionLineRenderable.
+  public isLineRenderable(lineNumber: number): boolean {
+    const fileDiff = this.fileDiffCache;
+    if (fileDiff == null) {
+      return true;
+    }
+    const {
+      expandUnchanged = false,
+      collapsedContextThreshold = DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
+    } = this.options;
+    return isAdditionLineRenderable({
+      fileDiff,
+      lineNumber,
+      expandedHunks: expandUnchanged
+        ? true
+        : this.hunksRenderer.getExpandedHunksMap(),
+      collapsedContextThreshold,
+    });
+  }
+
+  // Fold-skip companion to isLineRenderable: the nearest renderable one-based
+  // new-file line at or beyond lineNumber in the given direction.
+  public getNearestRenderableLine(
+    lineNumber: number,
+    direction: 'up' | 'down'
+  ): number | undefined {
+    const fileDiff = this.fileDiffCache;
+    if (fileDiff == null) {
+      return lineNumber;
+    }
+    const {
+      expandUnchanged = false,
+      collapsedContextThreshold = DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
+    } = this.options;
+    return getNearestRenderableAdditionLine({
+      fileDiff,
+      lineNumber,
+      direction,
+      expandedHunks: expandUnchanged
+        ? true
+        : this.hunksRenderer.getExpandedHunksMap(),
+      collapsedContextThreshold,
+    });
+  }
+
+  // Expand collapsed context so a one-based new-file line can render: one
+  // deterministic expansion from the nearest gap edge, sized to reach the
+  // target plus the normal expansion step (clamped to the gap at render).
+  // Routed through expandHunk so subclass expansion flows (CodeView's
+  // deferred pendingExpansions) apply.
+  public revealLine(lineNumber: number): boolean {
+    const fileDiff = this.fileDiffCache;
+    const {
+      expandUnchanged = false,
+      collapsedContextThreshold = DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
+      expansionLineCount = 100,
+    } = this.options;
+    if (fileDiff == null || fileDiff.isPartial || expandUnchanged) {
+      return false;
+    }
+    const expandedHunks = this.hunksRenderer.getExpandedHunksMap();
+
+    for (const [hunkIndex, hunk] of fileDiff.hunks.entries()) {
+      if (lineNumber < hunk.additionStart) {
+        const region = getExpandedRegion({
+          isPartial: fileDiff.isPartial,
+          rangeSize: hunk.collapsedBefore,
+          expandedHunks,
+          hunkIndex,
+          collapsedContextThreshold,
+        });
+        const gapStart = hunk.additionStart - region.rangeSize;
+        if (
+          region.renderAll ||
+          lineNumber < gapStart + region.fromStart ||
+          lineNumber >= hunk.additionStart - region.fromEnd
+        ) {
+          return false;
+        }
+        const fromStartDistance =
+          lineNumber - (gapStart + region.fromStart) + 1;
+        const fromEndDistance =
+          hunk.additionStart - region.fromEnd - lineNumber;
+        if (fromStartDistance <= fromEndDistance) {
+          this.expandHunk(
+            hunkIndex,
+            'up',
+            fromStartDistance + expansionLineCount
+          );
+        } else {
+          this.expandHunk(
+            hunkIndex,
+            'down',
+            fromEndDistance + expansionLineCount
+          );
+        }
+        return true;
+      }
+      if (lineNumber < hunk.additionStart + hunk.additionCount) {
+        return false;
+      }
+    }
+
+    const trailingRegion = getTrailingExpandedRegion({
+      fileDiff,
+      hunkIndex: fileDiff.hunks.length - 1,
+      expandedHunks,
+      collapsedContextThreshold,
+      errorPrefix: 'FileDiff.revealLine',
+    });
+    if (trailingRegion == null || trailingRegion.renderAll) {
+      return false;
+    }
+    const lastHunk = fileDiff.hunks[fileDiff.hunks.length - 1];
+    const trailingStart = lastHunk.additionStart + lastHunk.additionCount;
+    if (
+      lineNumber < trailingStart + trailingRegion.fromStart ||
+      lineNumber >= trailingStart + trailingRegion.rangeSize
+    ) {
+      return false;
+    }
+    this.expandHunk(
+      fileDiff.hunks.length,
+      'up',
+      lineNumber -
+        (trailingStart + trailingRegion.fromStart) +
+        1 +
+        expansionLineCount
+    );
+    return true;
+  }
+
+  // Whether render() may run the session-exit recompute on dirty metadata.
+  // False while an editor is attached (the session is live). CodeView-managed
+  // instances override this: their sessions survive recycling with no editor
+  // attached, and CodeView runs the exit recompute itself when it reaps a
+  // session.
+  protected shouldSelfHealEditSession(): boolean {
+    return this.editor == null;
+  }
+
+  // Deferred full re-render for session region changes. The subsequent
+  // render() ends in syncRenderViewToEditor, which resets the editor's
+  // geometry caches against the rebuilt rows. VirtualizedFileDiff overrides
+  // this to also invalidate its layout caches.
+  protected escalateEditSessionRender(): void {
+    queueRender(this.handleEditSessionRender);
+  }
+
+  private handleEditSessionRender = (): void => {
+    this.rerender();
+  };
 
   private removeRenderedCode(): void {
     this.resizeManager.cleanUp();

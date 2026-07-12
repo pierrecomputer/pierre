@@ -235,6 +235,159 @@ export function getTrailingExpandedRegion({
   };
 }
 
+export interface IsAdditionLineRenderableProps {
+  fileDiff: FileDiffMetadata;
+  /** One-based line number in the new file. */
+  lineNumber: number;
+  expandedHunks: Map<number, HunkExpansionRegion> | true | undefined;
+  collapsedContextThreshold: number;
+}
+
+/**
+ * Whether a one-based new-file line currently has (or will have on scroll) a
+ * rendered row under the given expansion state — the editor-facing
+ * visibility oracle. False only for lines hidden inside a collapsed
+ * unchanged region; lines outside the diff's modeled range report true so
+ * callers keep their existing missing-row handling. Computed from the same
+ * inputs as `iterateOverDiff` so layout math and the oracle cannot diverge.
+ */
+export function isAdditionLineRenderable({
+  fileDiff,
+  lineNumber,
+  expandedHunks,
+  collapsedContextThreshold,
+}: IsAdditionLineRenderableProps): boolean {
+  if (expandedHunks === true || fileDiff.isPartial) {
+    return true;
+  }
+
+  for (const [hunkIndex, hunk] of fileDiff.hunks.entries()) {
+    if (lineNumber < hunk.additionStart) {
+      // Inside the collapsed gap before this hunk: renderable only within
+      // the expanded slices at the gap's edges.
+      const region = getExpandedRegion({
+        isPartial: fileDiff.isPartial,
+        rangeSize: hunk.collapsedBefore,
+        expandedHunks,
+        hunkIndex,
+        collapsedContextThreshold,
+      });
+      const gapStart = hunk.additionStart - region.rangeSize;
+      return (
+        region.renderAll ||
+        lineNumber < gapStart + region.fromStart ||
+        lineNumber >= hunk.additionStart - region.fromEnd
+      );
+    }
+    if (lineNumber < hunk.additionStart + hunk.additionCount) {
+      return true;
+    }
+  }
+
+  const trailingRegion = getTrailingExpandedRegion({
+    fileDiff,
+    hunkIndex: fileDiff.hunks.length - 1,
+    expandedHunks,
+    collapsedContextThreshold,
+    errorPrefix: 'isAdditionLineRenderable',
+  });
+  if (trailingRegion == null || trailingRegion.renderAll) {
+    return true;
+  }
+  const lastHunk = fileDiff.hunks[fileDiff.hunks.length - 1];
+  const trailingStart = lastHunk.additionStart + lastHunk.additionCount;
+  return (
+    lineNumber < trailingStart + trailingRegion.fromStart ||
+    lineNumber >= trailingStart + trailingRegion.rangeSize
+  );
+}
+
+export interface GetNearestRenderableAdditionLineProps extends IsAdditionLineRenderableProps {
+  direction: 'up' | 'down';
+}
+
+/**
+ * The nearest renderable new-file line at or beyond `lineNumber` in the
+ * given direction (one-based), or undefined when every line that way is
+ * hidden inside collapsed regions. Sequential caret motion uses this to skip
+ * over collapsed regions like code folds; it walks the hunk metadata once
+ * instead of probing line by line across a gap.
+ */
+export function getNearestRenderableAdditionLine({
+  fileDiff,
+  lineNumber,
+  direction,
+  expandedHunks,
+  collapsedContextThreshold,
+}: GetNearestRenderableAdditionLineProps): number | undefined {
+  if (expandedHunks === true || fileDiff.isPartial) {
+    return lineNumber;
+  }
+
+  // Renderable [start, end) line ranges in ascending order, plus the
+  // exclusive end of the modeled range — anything past it (the editor's
+  // phantom document-end line) counts as renderable.
+  const ranges: Array<[start: number, end: number]> = [];
+  let modeledEnd = 1;
+  for (const [hunkIndex, hunk] of fileDiff.hunks.entries()) {
+    const region = getExpandedRegion({
+      isPartial: fileDiff.isPartial,
+      rangeSize: hunk.collapsedBefore,
+      expandedHunks,
+      hunkIndex,
+      collapsedContextThreshold,
+    });
+    const gapStart = hunk.additionStart - region.rangeSize;
+    if (region.renderAll) {
+      ranges.push([gapStart, hunk.additionStart]);
+    } else {
+      if (region.fromStart > 0) {
+        ranges.push([gapStart, gapStart + region.fromStart]);
+      }
+      if (region.fromEnd > 0) {
+        ranges.push([hunk.additionStart - region.fromEnd, hunk.additionStart]);
+      }
+    }
+    ranges.push([hunk.additionStart, hunk.additionStart + hunk.additionCount]);
+    modeledEnd = hunk.additionStart + hunk.additionCount;
+  }
+  const trailingRegion = getTrailingExpandedRegion({
+    fileDiff,
+    hunkIndex: fileDiff.hunks.length - 1,
+    expandedHunks,
+    collapsedContextThreshold,
+    errorPrefix: 'getNearestRenderableAdditionLine',
+  });
+  if (trailingRegion != null) {
+    const trailingStart = modeledEnd;
+    modeledEnd = trailingStart + trailingRegion.rangeSize;
+    if (trailingRegion.renderAll) {
+      ranges.push([trailingStart, modeledEnd]);
+    } else if (trailingRegion.fromStart > 0) {
+      ranges.push([trailingStart, trailingStart + trailingRegion.fromStart]);
+    }
+  }
+
+  if (lineNumber >= modeledEnd) {
+    return lineNumber;
+  }
+  if (direction === 'down') {
+    for (const [start, end] of ranges) {
+      if (end > lineNumber) {
+        return Math.max(start, lineNumber);
+      }
+    }
+    return undefined;
+  }
+  for (let index = ranges.length - 1; index >= 0; index--) {
+    const [start, end] = ranges[index];
+    if (start <= lineNumber) {
+      return Math.min(end - 1, lineNumber);
+    }
+  }
+  return undefined;
+}
+
 export function getHunkSeparatorHeight({
   type,
   metrics,

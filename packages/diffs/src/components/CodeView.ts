@@ -45,6 +45,7 @@ import { areSelectionsEqual } from '../utils/areSelectionsEqual';
 import { areThemesEqual } from '../utils/areThemesEqual';
 import { createCodeViewHeaderFooterHostElement } from '../utils/createCodeViewHeaderFooterHostElement';
 import { createWindowFromScrollPosition } from '../utils/createWindowFromScrollPosition';
+import { finishEditSessionForDiff } from '../utils/editSessionHunks';
 import { isStyleNode } from '../utils/isStyleNode';
 import { prefersReducedMotion } from '../utils/prefersReducedMotion';
 import { roundToDevicePixel } from '../utils/roundToDevicePixel';
@@ -332,7 +333,6 @@ const CODE_VIEW_EDIT_FORCED_OPTION_KEYS: ReadonlySet<string> = new Set([
   'enableGutterUtility',
   'enableLineSelection',
   'lineHoverHighlight',
-  'expandUnchanged',
 ]);
 
 type CodeViewPassThroughOptions<LAnnotation> = Pick<
@@ -2098,6 +2098,24 @@ export class CodeView<LAnnotation = undefined> {
       record.editor.cleanUp();
       this.itemEditors.delete(id);
       this.attachedEditors.delete(id);
+      // When the session's instance was released by virtualization, the
+      // cleanUp above had no detach closure left to run the exit recompute,
+      // so finish the session here (idempotent: the dirty marker clears on
+      // the first run). A live item goes through its instance, which also
+      // preserves expansion state and invalidates layout; removed items fall
+      // back to a plain metadata recompute from the last change's snapshot.
+      const itemSnapshot = item?.item ?? record.state.lastChange?.item;
+      if (itemSnapshot?.type === 'diff') {
+        if (
+          item != null &&
+          item.type === 'diff' &&
+          item.instance.completeEditSession()
+        ) {
+          this.markItemLayoutDirty(item);
+          this.render();
+        }
+        finishEditSessionForDiff(itemSnapshot.fileDiff);
+      }
       const { lastChange } = record.state;
       if (lastChange != null) {
         // Prefer the current item record (it carries the update that ended
@@ -2217,8 +2235,6 @@ export class CodeView<LAnnotation = undefined> {
     // Edit-forced options: while the item is in edit mode these serve the
     // values Editor.edit requires so it never falls back to
     // instance.setOptions (which throws for CodeView-managed instances).
-    // Diffs additionally require expandUnchanged so every editable line of
-    // the new file is renderable.
     defineItemOption(prototype, 'useTokenTransformer', (receiver) =>
       this.isReceiverEdited(receiver, 'diff')
         ? true
@@ -2238,11 +2254,6 @@ export class CodeView<LAnnotation = undefined> {
       this.isReceiverEdited(receiver, 'diff')
         ? 'disabled'
         : this.options.lineHoverHighlight
-    );
-    defineItemOption(prototype, 'expandUnchanged', (receiver) =>
-      this.isReceiverEdited(receiver, 'diff')
-        ? true
-        : this.options.expandUnchanged
     );
 
     defineItemOption(

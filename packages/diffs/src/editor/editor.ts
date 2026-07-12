@@ -46,7 +46,11 @@ import {
   type SearchPanelMode,
   SearchPanelWidget,
 } from './searchPanel';
-import type { AutoSurround, CursorMoveOptions } from './selection';
+import type {
+  AutoSurround,
+  CursorMoveOptions,
+  ResolveRenderableLine,
+} from './selection';
 import {
   applyDeleteCharacterToSelections,
   applyDeleteHardLineForwardToSelections,
@@ -201,7 +205,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #editorEventDisposes?: (() => void)[];
   #globalEventDisposes?: (() => void)[];
   #selectEventDisposes?: (() => void)[];
-  #detach?: () => void;
+  #detach?: (recycle?: boolean) => void;
 
   // cache
   #contentOffset?: { left: number; top: number };
@@ -286,7 +290,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     lines: Map<number, Array<HighlightedToken>>,
     themeType: 'light' | 'dark'
   ) => {
-    this.#fileInstance?.updateRenderCache(lines, themeType, false);
+    this.#fileInstance?.updateRenderCache(lines, themeType, false, false);
     // update the view if the render range is updated by scrolling
     // and the deferred tokenized lines inside the render range
     if (
@@ -325,7 +329,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       useTokenTransformer,
       enableGutterUtility,
       enableLineSelection,
-      expandUnchanged,
       lineHoverHighlight = 'disabled',
       ...rest
     } = fileInstance.options;
@@ -333,7 +336,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       useTokenTransformer !== true ||
       enableGutterUtility === true ||
       enableLineSelection === true ||
-      (expandUnchanged !== true && fileInstance.type === 'file-diff') ||
       lineHoverHighlight !== 'disabled'
     ) {
       fileInstance.setOptions({
@@ -341,7 +343,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         useTokenTransformer: true,
         enableGutterUtility: false,
         enableLineSelection: false,
-        expandUnchanged: true,
         lineHoverHighlight: 'disabled',
       });
       fileInstance.rerender();
@@ -524,6 +525,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       return { direction, start, end };
     });
     this.#updateSelections(resolvedSelections);
+    const primarySelection = resolvedSelections.at(-1);
+    if (primarySelection !== undefined) {
+      this.#revealLineIfCollapsed(getCaretPosition(primarySelection).line);
+    }
     this.#scrollToPrimaryCaret();
   }
 
@@ -601,7 +606,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#editorEventDisposes = undefined;
     this.#selectEventDisposes?.forEach((dispose) => dispose());
     this.#selectEventDisposes = undefined;
-    this.#detach?.();
+    this.#detach?.(recycle);
     this.#detach = undefined;
 
     // cache
@@ -815,14 +820,22 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       contentEl.ariaLabel = fileOrDiff.name;
     }
 
+    // Annotation rows, unified deleted rows, and hunk separators are
+    // non-document rows living inside the contenteditable column; mark them
+    // read-only so the caret can never enter them. Separators render in both
+    // diff styles whenever a collapsed region exists.
     if (
       (lineAnnotations !== undefined && lineAnnotations.length > 0) ||
-      (this.#isDiff && this.#diffSyle === 'unified')
+      this.#isDiff
     ) {
       for (const child of this.#contentElement.children) {
         const el = child as HTMLElement;
-        const { lineAnnotation, lineType } = el.dataset;
-        if (lineAnnotation !== undefined || lineType === 'change-deletion') {
+        const { lineAnnotation, lineType, separator } = el.dataset;
+        if (
+          lineAnnotation !== undefined ||
+          separator !== undefined ||
+          lineType === 'change-deletion'
+        ) {
           el.setAttribute('contenteditable', 'false');
         }
       }
@@ -892,6 +905,40 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       );
     }
   };
+
+  // Whether a zero-based document line has (or will have on scroll) a
+  // rendered row. False only for lines hidden inside a collapsed unchanged
+  // region of a diff host; hosts without collapsible regions treat every
+  // line as renderable.
+  #isLineRenderable(line: number): boolean {
+    return this.#fileInstance?.isLineRenderable?.(line + 1) ?? true;
+  }
+
+  // Fold-skip resolver for vertical caret motion (zero-based lines), or
+  // undefined for hosts without collapsible regions so motion stays plain
+  // line arithmetic.
+  get #resolveRenderableLine(): ResolveRenderableLine | undefined {
+    const fileInstance = this.#fileInstance;
+    if (fileInstance?.getNearestRenderableLine == null) {
+      return undefined;
+    }
+    return (line, direction) => {
+      const nearest = fileInstance.getNearestRenderableLine!(
+        line + 1,
+        direction
+      );
+      return nearest == null ? undefined : nearest - 1;
+    };
+  }
+
+  // Jump targets (search matches, undo restores, setSelections, doc-end
+  // moves) may land inside a collapsed region; expand it minimally so the
+  // caret's row can render before the scroll below retries toward it.
+  #revealLineIfCollapsed(line: number): void {
+    if (!this.#isLineRenderable(line)) {
+      this.#fileInstance?.revealLine?.(line + 1);
+    }
+  }
 
   get #diffSyle(): 'unified' | 'split' {
     return this.#fileInstance?.options.diffStyle ?? 'split';
@@ -1330,11 +1377,12 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           mvShortcut !== undefined &&
           textDocument !== undefined
         ) {
-          const cursorMoveOptions: CursorMoveOptions | undefined = this.#isWrap
-            ? {
-                getSoftLineOffsets: (line) => this.#wrapLineText(line),
-              }
-            : undefined;
+          const cursorMoveOptions: CursorMoveOptions = {
+            getSoftLineOffsets: this.#isWrap
+              ? (line) => this.#wrapLineText(line)
+              : undefined,
+            resolveRenderableLine: this.#resolveRenderableLine,
+          };
           if (e.shiftKey) {
             this.#updateSelections(
               mapSelectionShift(
@@ -1764,6 +1812,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           const nextMatch = findNexMatch(textDocument, selections);
           if (nextMatch !== undefined) {
             this.#updateSelections(nextMatch);
+            const primaryMatch = nextMatch.at(-1);
+            if (primaryMatch !== undefined) {
+              this.#revealLineIfCollapsed(getCaretPosition(primaryMatch).line);
+            }
             this.#scrollToPrimaryCaret();
           }
         }
@@ -1905,9 +1957,13 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       case 'moveCursorToDocEnd':
         {
           const atEnd = command === 'moveCursorToDocEnd';
-          this.#updateSelections([
-            getDocumentBoundarySelection(textDocument, atEnd, this.#isDiff),
-          ]);
+          const boundarySelection = getDocumentBoundarySelection(
+            textDocument,
+            atEnd,
+            this.#isDiff
+          );
+          this.#updateSelections([boundarySelection]);
+          this.#revealLineIfCollapsed(getCaretPosition(boundarySelection).line);
           this.#scrollToPrimaryCaret();
         }
         break;
@@ -1918,11 +1974,16 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           const atEnd = command === 'expandSelectionDocEnd';
           const selections = this.#selections;
           if (selections !== undefined) {
+            const boundarySelection = getDocumentBoundarySelection(
+              textDocument,
+              atEnd,
+              this.#isDiff
+            );
             this.#updateSelections(
-              extendSelections(
-                selections,
-                getDocumentBoundarySelection(textDocument, atEnd, this.#isDiff)
-              )
+              extendSelections(selections, boundarySelection)
+            );
+            this.#revealLineIfCollapsed(
+              getCaretPosition(boundarySelection).line
             );
             this.#scrollToPrimaryCaret();
           }
@@ -2146,11 +2207,23 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
     if (dirtyLines.size > 0) {
       const children = contentEl.children;
-      const dirtyLineIndexes = new Set<number>(dirtyLines.keys());
+      // Lines hidden inside a collapsed region have no row to patch, and
+      // letting them reach the create branch below would append rows for
+      // them; the tokenizer still received them (dirtyLines is forwarded to
+      // the host untouched).
+      const dirtyLineIndexes = new Set<number>();
+      for (const lineIndex of dirtyLines.keys()) {
+        if (this.#isLineRenderable(lineIndex)) {
+          dirtyLineIndexes.add(lineIndex);
+        }
+      }
 
-      // update line elements that have been changed in the document
-      const startingLine = renderRange?.startingLine ?? 0;
-      for (let i = change.startLine - startingLine; i < children.length; i++) {
+      // Update line elements that have been changed in the document. The
+      // scan starts at 0 because rendered rows can be sparse (collapsed
+      // regions): a dirty line's row may sit at a smaller child index than
+      // its dense line-arithmetic position, and overshooting it would fall
+      // through to the create branch below as a duplicate row.
+      for (let i = 0; i < children.length; i++) {
         const child = children[i] as HTMLElement | undefined;
         if (child !== undefined) {
           const lineNumber = getLineNumberAttr(child);
@@ -2159,7 +2232,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
             continue;
           }
           const lineIndex = lineNumber - 1;
-          if (dirtyLines.has(lineIndex)) {
+          if (dirtyLineIndexes.has(lineIndex)) {
             const tokens = dirtyLines.get(lineIndex)!;
             child.replaceChildren(...renderLineTokens(tokens));
             dirtyLineIndexes.delete(lineIndex);
@@ -2170,9 +2243,27 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         }
       }
 
-      // create new line elements for the new lines
+      // Create new line elements for the new lines — only beyond the last
+      // existing rendered row: rows are appended to the column end, so any
+      // earlier missing row belongs at a collapsed-region boundary and is
+      // owned by the full re-render that follows a hunk-structure change.
       if (dirtyLineIndexes.size > 0) {
+        let lastRenderedLineNumber = 0;
+        for (let i = children.length - 1; i >= 0; i--) {
+          const child = children[i] as HTMLElement;
+          const lineNumber = getLineNumberAttr(child);
+          if (
+            lineNumber !== undefined &&
+            child.dataset.lineType !== 'change-deletion'
+          ) {
+            lastRenderedLineNumber = lineNumber;
+            break;
+          }
+        }
         for (const lineIndex of dirtyLineIndexes) {
+          if (lineIndex < lastRenderedLineNumber) {
+            continue;
+          }
           const tokens = dirtyLines.get(lineIndex)!;
           const lineNumber = String(lineIndex + 1);
           h(
@@ -2254,7 +2345,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     fileInstance.updateRenderCache(
       dirtyLines,
       tokenizer.themeType,
-      !didLineCountChange
+      !didLineCountChange,
+      didLineCountChange
     );
     if (didLineCountChange) {
       // Line-count change: recompute hunks from the full document and re-render.
@@ -2496,7 +2588,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         virtualCaret.style.top = modelLinePosition.top + 'px';
         this.#fileContainer?.shadowRoot?.appendChild(virtualCaret);
         virtualCaret.scrollIntoView({ block: 'center', inline: 'nearest' });
-        if (modelLinePosition.height > 0) {
+        // A collapsed line reports its separator's (nonzero) geometry, so
+        // parking the retry for it would re-scroll on every sync forever;
+        // only renderable lines may keep the retry alive.
+        if (modelLinePosition.height > 0 && this.#isLineRenderable(line)) {
           this.#scrollingToLine = line;
           this.#scrollingToLineChar = char;
           this.#scrollingToLineNoFocus = noFocus;
@@ -2539,8 +2634,9 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         virtualCaret.scrollIntoView({ block: 'center', inline: 'nearest' });
 
         if (
-          this.#scrollingToLine === line &&
-          (yFix === 0 || this.#scrollingToLineFixed)
+          (this.#scrollingToLine === line &&
+            (yFix === 0 || this.#scrollingToLineFixed)) ||
+          !this.#isLineRenderable(line)
         ) {
           this.#scrollingToLine = undefined;
           this.#scrollingToLineChar = undefined;
@@ -3517,6 +3613,9 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         endOffset
       );
       this.#updateSelections([nextSelection]);
+      // Search counts include matches hidden in collapsed regions; navigating
+      // to one reveals it.
+      this.#revealLineIfCollapsed(getCaretPosition(nextSelection).line);
       this.#scrollToPrimaryCaret(true); // scroll to the primary caret and don't focus
       this.#retainSearchPanelFocus = retainFocus;
     };
@@ -3931,7 +4030,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         // next scroll.
         if (
           change.startLine <= renderRangeEndLine &&
-          widenedTotalLines <= maxWidenLines
+          widenedTotalLines <= maxWidenLines &&
+          // Widening exists to give the caret's line a row; a caret target
+          // hidden in a collapsed region can never gain one, so take the
+          // buffer-only path instead of building rows toward it.
+          this.#isLineRenderable(primarySelection.end.line)
         ) {
           if (primarySelection.end.line > renderRangeEndLine) {
             // The line count grew below the window, so the buffer spacer must be
@@ -3969,6 +4072,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       // focus to update the native window selection, and scroll to the caret
       // to mock the 'contenteditable' behavior
       if (options?.skipFocus !== true) {
+        // An undo/redo caret restore can land inside a collapsed region.
+        const revealTarget = newSelections.at(-1);
+        if (revealTarget !== undefined) {
+          this.#revealLineIfCollapsed(getCaretPosition(revealTarget).line);
+        }
         if (this.#primaryCaretElement !== undefined) {
           requestAnimationFrame(() => {
             this.#primaryCaretElement?.scrollIntoView({

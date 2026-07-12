@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>diffs edit-collapsed fixture</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 16px;
+        font-family: system-ui, sans-serif;
+      }
+      [data-diff-mount] {
+        max-width: 900px;
+      }
+    </style>
+  </head>
+  <body>
+    <a
+      data-fixtures-index
+      href="/test/e2e/fixtures/index.html"
+      style="
+        display: inline-block;
+        margin-bottom: 16px;
+        font-family: system-ui, sans-serif;
+        font-size: 14px;
+        font-weight: 600;
+        color: #0b62d6;
+        text-decoration: none;
+      "
+      >&larr; All fixtures</a
+    >
+    <div data-diff-mount></div>
+
+    <script type="module">
+      import { FileDiff } from '/dist/index.js';
+      import { Editor } from '/dist/editor/index.js';
+
+      const mount = document.querySelector('[data-diff-mount]');
+      if (!(mount instanceof HTMLElement)) {
+        throw new Error('Missing edit-collapsed fixture mount.');
+      }
+
+      // A 60-line file with two separated changes (lines 10 and 50), so the
+      // diff renders two hunks with a large collapsible unchanged gap between
+      // them — collapsed regions must stay collapsed during editing.
+      // `?diffStyle=unified` switches from the default split view.
+      const lineCount = 60;
+      const oldContents =
+        Array.from({ length: lineCount }, (_, i) => `line ${i + 1}`).join(
+          '\n'
+        ) + '\n';
+      const newContents = oldContents
+        .replace('line 10\n', 'line 10 changed\n')
+        .replace('line 50\n', 'line 50 changed\n');
+
+      const diffStyle =
+        new URLSearchParams(location.search).get('diffStyle') === 'unified'
+          ? 'unified'
+          : 'split';
+
+      const events = [];
+      window.__editorEvents = events;
+
+      const editor = new Editor({
+        onChange(file) {
+          events.push(file.contents);
+        },
+      });
+      window.__editor = editor;
+
+      const instance = new FileDiff({
+        disableFileHeader: true,
+        theme: { dark: 'pierre-dark', light: 'pierre-light' },
+        themeType: 'dark',
+        diffStyle,
+      });
+      window.__instance = instance;
+
+      instance.render({
+        oldFile: { name: 'edit.ts', contents: oldContents },
+        newFile: { name: 'edit.ts', contents: newContents },
+        containerWrapper: mount,
+      });
+      editor.edit(instance);
+
+      const findEditableContent = () => {
+        const host = mount.querySelector('diffs-container');
+        const shadow = host?.shadowRoot;
+        if (shadow == null) {
+          return undefined;
+        }
+        for (const code of shadow.querySelectorAll('[data-code]')) {
+          if (code.dataset.deletions !== undefined) {
+            continue;
+          }
+          for (const child of code.children) {
+            if (child.dataset.content !== undefined) {
+              return child;
+            }
+          }
+        }
+        return undefined;
+      };
+
+      // One-based new-file line numbers with a rendered row in the editable
+      // column (unified rows include deleted lines; those are filtered out).
+      window.__renderedLines = () => {
+        const content = findEditableContent();
+        const lines = [];
+        for (const row of content?.querySelectorAll('[data-line]') ?? []) {
+          if (row.getAttribute('data-line-type') === 'change-deletion') {
+            continue;
+          }
+          lines.push(Number(row.getAttribute('data-line')));
+        }
+        return lines;
+      };
+
+      window.__caretLine = () => {
+        const selection = editor.getState().selections?.at(-1);
+        return selection == null ? undefined : selection.end.line;
+      };
+
+      const waitForEditable = async () => {
+        const started = performance.now();
+        while (true) {
+          const content = findEditableContent();
+          if (content?.getAttribute('contenteditable') === 'true') {
+            return;
+          }
+          if (performance.now() - started > 5000) {
+            throw new Error('Timed out waiting for editable content.');
+          }
+          await new Promise((resolve) => requestAnimationFrame(resolve));
+        }
+      };
+
+      await waitForEditable();
+      window.__editReady = true;
+    </script>
+  </body>
+</html>

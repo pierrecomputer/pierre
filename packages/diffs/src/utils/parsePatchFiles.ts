@@ -17,6 +17,7 @@ import type {
 } from '../types';
 import { cleanLastNewline } from './cleanLastNewline';
 import { detachString, releaseStringDetachBuffer } from './detachString';
+import { realignChangeContentBySimilarity } from './realignChangeContent';
 
 interface ParsedHunkHeader {
   additionCount: number;
@@ -577,6 +578,10 @@ function _processFile(
   ) {
     currentFile.prevName = undefined;
   }
+  // Pair change-block lines by similarity instead of the patch's positional
+  // ordering. Partial diffs work too: their hunk line indexes point into the
+  // patch-built line arrays, which hold every line a block references.
+  realignChangeContentBySimilarity(currentFile);
   return currentFile;
 }
 

@@ -43,6 +43,7 @@ import {
   getLeadingHunkSeparatorLayout,
   getTrailingExpandedRegion,
   getTrailingHunkSeparatorLayout,
+  isAdditionLineRenderable,
 } from '../utils/virtualDiffLayout';
 import type { WorkerPoolManager } from '../worker';
 import type { CodeView } from './CodeView';
@@ -894,6 +895,90 @@ export class VirtualizedFileDiff<
     }
 
     super.loadFilesIfNecessary();
+  }
+
+  // In advanced (CodeView) mode, expansions are staged in pendingExpansions
+  // until the next layout consume, so the renderer's expansion map lags a
+  // just-requested reveal. Account for the staged expansions so callers (the
+  // editor's caret-scroll retry) see the post-consume visibility.
+  override isLineRenderable(lineNumber: number): boolean {
+    if (super.isLineRenderable(lineNumber)) {
+      return true;
+    }
+    const { pendingExpansions } = this;
+    const fileDiff = this.fileDiffCache;
+    if (
+      pendingExpansions == null ||
+      pendingExpansions.length === 0 ||
+      fileDiff == null
+    ) {
+      return false;
+    }
+    const {
+      expansionLineCount = 100,
+      collapsedContextThreshold = DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
+    } = this.options;
+    const staged = new Map(this.hunksRenderer.getExpandedHunksMap());
+    for (const expansion of pendingExpansions) {
+      const region = {
+        ...(staged.get(expansion.hunkIndex) ?? { fromStart: 0, fromEnd: 0 }),
+      };
+      const count = expansion.expansionLineCountOverride ?? expansionLineCount;
+      if (expansion.direction === 'up' || expansion.direction === 'both') {
+        region.fromStart += count;
+      }
+      if (expansion.direction === 'down' || expansion.direction === 'both') {
+        region.fromEnd += count;
+      }
+      staged.set(expansion.hunkIndex, region);
+    }
+    return isAdditionLineRenderable({
+      fileDiff,
+      lineNumber,
+      expandedHunks: staged,
+      collapsedContextThreshold,
+    });
+  }
+
+  /**
+   * Invalidate layout after an edit session changed the rendered row set
+   * without a line-count change (a mid-session region change or the exit
+   * recompute): estimated heights bake the hunk shapes in, and nothing else
+   * invalidates them now that editing does not flip expandUnchanged. Public
+   * so CodeView can run it when reaping a session whose instance was already
+   * released.
+   */
+  public invalidateEditSessionLayout(): void {
+    this.getSimpleVirtualizer()?.markDOMDirty();
+    this.resetLayoutCache({
+      forceSimpleRecompute: this.isSimpleMode(),
+      includeEstimatedHeights: true,
+      resetRenderRange: false,
+    });
+    if (!this.isSimpleMode()) {
+      this.computeApproximateSize(true);
+    }
+    this.getSimpleVirtualizer()?.requestHeightReconcile(this);
+  }
+
+  // Session region changes need the same invalidation a document change
+  // gets. The virtualizer is told the layout changed (rendered rows and
+  // heights moved) and defers the actual render through its own queue; a
+  // released instance stops at the cache invalidation and the host relayout
+  // covers it.
+  protected override escalateEditSessionRender(): void {
+    this.invalidateEditSessionLayout();
+    if (!this.enabled || this.fileDiff == null) {
+      return;
+    }
+    this.forceRenderOverride = true;
+    this.virtualizer.instanceChanged(this, true);
+  }
+
+  protected override shouldSelfHealEditSession(): boolean {
+    // CodeView sessions survive recycling with no editor attached; CodeView
+    // itself runs the exit recompute when it reaps a session.
+    return !this.isAdvancedMode() && super.shouldSelfHealEditSession();
   }
 
   public setVisibility(visible: boolean): void {

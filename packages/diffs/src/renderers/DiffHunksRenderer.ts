@@ -51,6 +51,14 @@ import { createFileHeaderElement } from '../utils/createFileHeaderElement';
 import { createNoNewlineElement } from '../utils/createNoNewlineElement';
 import { createPreElement } from '../utils/createPreElement';
 import { createSeparator } from '../utils/createSeparator';
+import {
+  applySessionChangedLines,
+  applySessionEditWindow,
+  findChangedLineWindow,
+  normalizeEditorLines,
+  remapExpandedHunksForRegionChange,
+  type SessionRegionChange,
+} from '../utils/editSessionHunks';
 import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
 import { getHighlighterOptions } from '../utils/getHighlighterOptions';
 import { getHunkSeparatorSlotName } from '../utils/getHunkSeparatorSlotName';
@@ -75,8 +83,11 @@ import { iterateOverDiff } from '../utils/iterateOverDiff';
 import { renderDiffWithHighlighter } from '../utils/renderDiffWithHighlighter';
 import { shouldUseTokenTransformer } from '../utils/shouldUseTokenTransformer';
 import {
+  preserveTrailingEditorBlankLine,
   recomputeDiffHunksForEdit,
   recomputeEmptyDocumentDiff,
+  recomputeTopAlignedAdditionDiff,
+  shouldTopAlignAdditionRecompute,
   updateDiffHunks,
 } from '../utils/updateDiffHunks';
 import { getTrailingContextRangeSize } from '../utils/virtualDiffLayout';
@@ -229,6 +240,15 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   private computedLang: SupportedLanguages = 'text';
   private renderCache: RenderedDiffASTCache | undefined;
 
+  // Edit-session state: while active, hunk updates go through the frozen
+  // region skeleton (editSessionHunks) instead of the full recompute.
+  private editSessionActive = false;
+  // Addition lines as of the last completed hunk-update pass, used by the
+  // prefix/suffix scan in applyDocumentChange. Line-count passes write dirty
+  // line text at stale indexes into `diff.additionLines` before the document
+  // rebuild lands, so the live array can never serve as the "before" side.
+  private editSessionLines: string[] | undefined;
+
   constructor(
     public options: DiffHunksRendererOptions = { theme: DEFAULT_THEMES },
     private onRenderUpdate?: () => unknown,
@@ -255,6 +275,31 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     this.additionAnnotations = {};
     this.deletionAnnotations = {};
     this.workerManager?.cleanUpTasks(this);
+    // Session hunks and the metadata dirty marker survive recycle in the
+    // shared FileDiffMetadata; the renderer-local state re-seeds on the next
+    // attach (beginEditSession).
+    this.endEditSession();
+  }
+
+  /**
+   * Enter edit-session mode: hunk updates preserve the current region
+   * skeleton instead of recomputing hunks. Called on every editor attach,
+   * including a re-attach after recycle, which losslessly re-seeds the pass
+   * snapshot because both hunk-update paths keep `diff.additionLines`
+   * current.
+   */
+  public beginEditSession(diff: FileDiffMetadata | undefined): void {
+    this.editSessionActive = true;
+    this.editSessionLines =
+      diff != null
+        ? normalizeEditorLines(diff.additionLines).slice()
+        : undefined;
+  }
+
+  /** Leave edit-session mode. The exit recompute is the host's concern. */
+  public endEditSession(): void {
+    this.editSessionActive = false;
+    this.editSessionLines = undefined;
   }
 
   public get diffCache(): FileDiffMetadata | undefined {
@@ -302,7 +347,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       region.fromEnd += expansionLineCount;
     }
     // NOTE(amadeus): If our render cache is not highlighted, we need to clear
-    // it, otherwise we won't have the correct AST lines
+    // it, otherwise we won't have the correct AST lines. Clearing is safe
+    // mid-edit-session even though the dirty cache carries live edits: both
+    // session hunk-update paths keep diff.additionLines current every pass,
+    // so the rebuilt AST reproduces the live document.
     if (this.renderCache?.highlighted !== true) {
       this.clearRenderCache();
     }
@@ -315,6 +363,13 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
   public getExpandedHunksMap(): Map<number, HunkExpansionRegion> {
     return this.expandedHunks;
+  }
+
+  /** Replace the whole expansion map (session-exit expansion remapping). */
+  public setExpandedHunksMap(
+    expandedHunks: Map<number, HunkExpansionRegion>
+  ): void {
+    this.expandedHunks = expandedHunks;
   }
 
   public setLineAnnotations(
@@ -337,16 +392,23 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     }
   }
 
+  /**
+   * Returns true when a session-mode pass changed the region skeleton itself
+   * (a gap edit synthesized or merged regions), which changes the rendered
+   * row set without a line-count change — the host must escalate to a full
+   * re-render instead of its cheap refresh path.
+   */
   public updateRenderCache(
     dirtyLines: Map<number, Array<HighlightedToken>>,
-    themeType: 'dark' | 'light'
-  ): void {
+    themeType: 'dark' | 'light',
+    lineCountChangeInFlight = false
+  ): boolean {
     if (this.renderCache == null) {
-      return;
+      return false;
     }
     const { result, diff } = this.renderCache;
     if (result == null) {
-      return;
+      return false;
     }
     if (diff.isPartial) {
       throw new Error('Could not update render cache for partial diff');
@@ -403,19 +465,51 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       };
     }
 
+    let regionsChanged = false;
     if (changedAdditionLines.length > 0) {
-      Object.assign(
-        diff,
-        updateDiffHunks(
+      if (this.editSessionActive && !diff.isPartial) {
+        // On a line-count pass the tokenizer emits shifted-but-unedited lines
+        // as dirty and the writes above land at stale indexes, so hunk work
+        // must wait for the authoritative applyDocumentChange in this same
+        // pass. Otherwise (including deferred background passes, which carry
+        // genuine changes and are never followed by applyDocumentChange) the
+        // explicit changed indexes are current.
+        if (!lineCountChangeInFlight) {
+          const changes = applySessionChangedLines(
+            diff,
+            changedAdditionLines,
+            this.options.parseDiffOptions
+          );
+          this.applyExpansionRemaps(changes);
+          regionsChanged = changes.length > 0;
+          this.editSessionLines = normalizeEditorLines(
+            diff.additionLines
+          ).slice();
+        }
+      } else {
+        Object.assign(
           diff,
-          changedAdditionLines,
-          this.options.parseDiffOptions
-        )
-      );
+          updateDiffHunks(
+            diff,
+            changedAdditionLines,
+            this.options.parseDiffOptions
+          )
+        );
+      }
     }
 
     result.baseThemeType = themeType;
     this.renderCache.isDirty = true;
+    return regionsChanged;
+  }
+
+  private applyExpansionRemaps(changes: SessionRegionChange[]): void {
+    for (const change of changes) {
+      this.expandedHunks = remapExpandedHunksForRegionChange(
+        this.expandedHunks,
+        change
+      );
+    }
   }
 
   // Normally triggered by the host when the document line count changes.
@@ -461,6 +555,9 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           recomputeEmptyDocumentDiff(diff, this.options.parseDiffOptions)
         );
         additionHastLines[0] = createPlainAdditionLineElement(0, textDocument);
+        this.markEditSessionPass(diff);
+      } else if (this.editSessionActive) {
+        this.applySessionDocumentChange(diff);
       } else {
         Object.assign(
           diff,
@@ -470,6 +567,52 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     }
 
     this.renderCache.isDirty = true;
+  }
+
+  // Session-mode counterpart of the line-count recompute: locate the changed
+  // window with a prefix/suffix scan of the pass snapshot against the rebuilt
+  // document lines, then update only the region skeleton it covers.
+  private applySessionDocumentChange(diff: FileDiffMetadata): void {
+    const { parseDiffOptions } = this.options;
+    const rawLines = diff.additionLines;
+    if (shouldTopAlignAdditionRecompute(diff, rawLines)) {
+      Object.assign(
+        diff,
+        recomputeTopAlignedAdditionDiff(diff, rawLines, parseDiffOptions)
+      );
+      this.markEditSessionPass(diff);
+      return;
+    }
+    const previousLines = this.editSessionLines;
+    const nextLines = normalizeEditorLines(rawLines);
+    if (previousLines == null) {
+      // No pass snapshot (the editor attached without diff data): fall back
+      // to the full recompute for this pass and start tracking from it.
+      Object.assign(diff, recomputeDiffHunksForEdit(diff, parseDiffOptions));
+      this.markEditSessionPass(diff);
+      return;
+    }
+    diff.additionLines = nextLines;
+    const window = findChangedLineWindow(previousLines, nextLines);
+    if (window != null) {
+      const change = applySessionEditWindow(diff, window, parseDiffOptions);
+      if (change != null) {
+        this.applyExpansionRemaps([change]);
+      }
+    }
+    preserveTrailingEditorBlankLine(diff, rawLines);
+    this.editSessionLines = nextLines.slice();
+  }
+
+  // Records a session pass that replaced hunks wholesale (empty-document /
+  // top-aligned shims or a snapshotless fallback): the skeleton collapsed to
+  // the recompute result, and the pass snapshot restarts from it.
+  private markEditSessionPass(diff: FileDiffMetadata): void {
+    if (!this.editSessionActive) {
+      return;
+    }
+    diff.editSessionDirty = true;
+    this.editSessionLines = normalizeEditorLines(diff.additionLines).slice();
   }
 
   protected getUnifiedLineDecoration({
@@ -1211,6 +1354,12 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             }
             pendingSplitContext.side = missingSide;
             pendingSplitContext.increment();
+          } else if (type === 'change') {
+            // A change row with both sides fills the column a pending
+            // one-sided buffer was holding open (an insert/delete block
+            // directly followed by a paired block, from similarity
+            // realignment); flush first so the buffer lands above this row.
+            pendingSplitContext.flush();
           }
 
           const annotationSpans = this.getAnnotations(
