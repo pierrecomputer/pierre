@@ -15,19 +15,25 @@ function makeManager(): PopoverManager {
 }
 
 // jsdom performs no layout, so declare the screen-space rect getPlacementBounds
-// reads off the code and scroll-container elements. Only top/bottom matter.
-function stubRect(element: HTMLElement, top: number, bottom: number): void {
+// reads off the code and scroll-container elements.
+function stubRect(
+  element: HTMLElement,
+  top: number,
+  bottom: number,
+  left = 0,
+  right = 0
+): void {
   Object.defineProperty(element, 'getBoundingClientRect', {
     configurable: true,
     value: () =>
       ({
         top,
         bottom,
-        left: 0,
-        right: 0,
-        width: 0,
+        left,
+        right,
+        width: right - left,
         height: bottom - top,
-        x: 0,
+        x: left,
         y: top,
         toJSON: () => ({}),
       }) as DOMRect,
@@ -146,12 +152,17 @@ describe('PopoverManager.getPlacementBounds', () => {
       const codeElement = document.createElement('div');
       scroller.appendChild(fileContainer);
       document.body.appendChild(scroller);
-      stubRect(scroller, 20, 120);
-      stubRect(codeElement, 50, 90);
+      stubRect(scroller, 20, 120, 20, 120);
+      stubRect(codeElement, 50, 90, 50, 150);
 
       manager.setViewportElements(fileContainer, codeElement);
       // Subtract the code element's top so the bounds are relative to it.
-      expect(manager.getPlacementBounds()).toEqual({ top: -30, bottom: 70 });
+      expect(manager.getPlacementBounds()).toEqual({
+        top: -30,
+        bottom: 70,
+        left: 0,
+        right: 70,
+      });
     } finally {
       manager.cleanUp();
       dom.cleanup();
@@ -165,12 +176,14 @@ describe('PopoverManager.getPlacementBounds', () => {
       const fileContainer = document.createElement('div');
       const codeElement = document.createElement('div');
       document.body.appendChild(fileContainer);
-      stubRect(codeElement, 50, 90);
+      stubRect(codeElement, 50, 90, 50, 150);
 
       manager.setViewportElements(fileContainer, codeElement);
       expect(manager.getPlacementBounds()).toEqual({
         top: -50,
         bottom: window.innerHeight - 50,
+        left: 0,
+        right: 100,
       });
     } finally {
       manager.cleanUp();
