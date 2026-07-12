@@ -1,6 +1,10 @@
 import { createThemeController, type ThemePersistence } from '@pierre/theming';
 
 import { docsThemeCatalog } from './themeCatalog';
+import {
+  readBrowserStorageKey,
+  writeBrowserStorageKey,
+} from '@/lib/browserStorage';
 
 export { docsThemeCatalog } from './themeCatalog';
 
@@ -23,30 +27,14 @@ const MODE_KEY = 'theme';
 const LIGHT_THEME_KEY = 'diffshub-light-theme';
 const DARK_THEME_KEY = 'diffshub-dark-theme';
 
-function readKey(key: string): string | null {
-  try {
-    return globalThis.localStorage?.getItem(key) ?? null;
-  } catch {
-    return null;
-  }
-}
-
-function writeKey(key: string, value: string): void {
-  try {
-    globalThis.localStorage?.setItem(key, value);
-  } catch {
-    // Storage may be unavailable (private mode / denied) — non-fatal.
-  }
-}
-
 // Maps the controller's selection onto the app's three storage keys: mode as a
 // plain `light`/`dark`/`system` string under `theme` (what the bootstrap script
 // reads), and the theme names under the diffshub-prefixed keys.
 const docsPersistence: ThemePersistence = {
   load() {
-    const mode = readKey(MODE_KEY);
-    const light = readKey(LIGHT_THEME_KEY);
-    const dark = readKey(DARK_THEME_KEY);
+    const mode = readBrowserStorageKey(MODE_KEY);
+    const light = readBrowserStorageKey(LIGHT_THEME_KEY);
+    const dark = readBrowserStorageKey(DARK_THEME_KEY);
     if (mode == null && light == null && dark == null) return null;
     const validMode =
       mode === 'light' || mode === 'dark' || mode === 'system'
@@ -59,9 +47,9 @@ const docsPersistence: ThemePersistence = {
     };
   },
   save(selection) {
-    writeKey(MODE_KEY, selection.mode);
-    writeKey(LIGHT_THEME_KEY, selection.lightThemeName);
-    writeKey(DARK_THEME_KEY, selection.darkThemeName);
+    writeBrowserStorageKey(MODE_KEY, selection.mode);
+    writeBrowserStorageKey(LIGHT_THEME_KEY, selection.lightThemeName);
+    writeBrowserStorageKey(DARK_THEME_KEY, selection.darkThemeName);
   },
 };
 

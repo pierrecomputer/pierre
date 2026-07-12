@@ -56,6 +56,7 @@ const GENERIC_PATCH_LOAD_ERROR_MESSAGE =
 interface UsePatchLoaderOptions {
   collapseMode: 'expanded' | 'collapsed';
   domain?: string;
+  enabled: boolean;
   onLoadStart(): void;
   path: string;
   viewerRef: RefObject<CodeViewHandle<CommentMetadata> | null>;
@@ -80,6 +81,7 @@ interface UsePatchLoaderResult {
 export function usePatchLoader({
   collapseMode,
   domain,
+  enabled,
   onLoadStart,
   path,
   viewerRef,
@@ -212,6 +214,10 @@ export function usePatchLoader({
   );
 
   useEffect(() => {
+    if (!enabled) {
+      return;
+    }
+
     const patchRequestKey =
       domain == null || domain === '' ? path : `${domain}${path}`;
     const patchSearchParams = new URLSearchParams({ path });
@@ -488,6 +494,7 @@ export function usePatchLoader({
     };
   }, [
     domain,
+    enabled,
     loadAttempt,
     onLoadStart,
     path,
