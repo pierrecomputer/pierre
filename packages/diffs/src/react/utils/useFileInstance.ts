@@ -132,7 +132,16 @@ export function useFileInstance<LAnnotation>({
       newOptions
     );
     instanceRef.current.setOptions(newOptions);
-    void instanceRef.current.render({ file, lineAnnotations, forceRender });
+    const editorFile = contentEditable ? editor?.getFile() : undefined;
+    const renderFile =
+      editorFile !== undefined && hasSameEditorContents(editorFile, file)
+        ? (instanceRef.current.file ?? file)
+        : file;
+    void instanceRef.current.render({
+      file: renderFile,
+      lineAnnotations,
+      forceRender,
+    });
     if (selectedLines !== undefined) {
       instanceRef.current.setSelectedLines(selectedLines);
     }
@@ -154,6 +163,20 @@ export function useFileInstance<LAnnotation>({
     return instanceRef.current?.getHoveredLine();
   }, []);
   return { ref, getHoveredLine };
+}
+
+// A controlled React parent can echo an Editor onChange value with a new
+// cacheKey. Keep the attached instance when the document itself is unchanged
+// so the editor does not rebuild its selection and history state.
+function hasSameEditorContents(
+  editorFile: FileContents,
+  file: FileContents
+): boolean {
+  return (
+    editorFile.name === file.name &&
+    editorFile.contents === file.contents &&
+    editorFile.lang === file.lang
+  );
 }
 
 interface MergeFileOptionsProps<LAnnotation> {
