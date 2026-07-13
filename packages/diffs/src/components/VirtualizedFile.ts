@@ -661,7 +661,7 @@ export class VirtualizedFile<
     }
   }
 
-  override render({
+  protected override renderPreparedFile({
     fileContainer,
     file,
     forceRender = false,
@@ -725,7 +725,7 @@ export class VirtualizedFile<
       fileTop,
       windowSpecs
     );
-    const rendered = super.render({
+    const rendered = super.renderPreparedFile({
       file: this.file,
       fileContainer,
       renderRange,

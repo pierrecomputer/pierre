@@ -527,7 +527,7 @@ export class File<
     const preparedFile =
       this.file == null ? undefined : editor.__prepareFile?.(this.file);
     if (preparedFile !== undefined && preparedFile !== this.file) {
-      this.render({
+      this.renderPreparedFile({
         file: preparedFile,
         forceRender: true,
         preventEmit: true,
@@ -566,7 +566,22 @@ export class File<
     this.fileRenderer.updateRenderCache(dirtyLines, themeType);
   }
 
-  public render({
+  public render(props: FileRenderProps<LAnnotation>): boolean {
+    if (!this.enabled) {
+      throw new Error(
+        'File.render: attempting to call render after cleaned up'
+      );
+    }
+
+    const file = this.editor?.__prepareFile?.(props.file) ?? props.file;
+    return this.renderPreparedFile(
+      file === props.file ? props : { ...props, file }
+    );
+  }
+
+  // Renders a file whose persisted document has already been restored. The
+  // virtualized subclass overrides this phase so layout uses the same file.
+  protected renderPreparedFile({
     file,
     fileContainer,
     forceRender = false,
@@ -576,14 +591,6 @@ export class File<
     lineAnnotations,
     renderRange,
   }: FileRenderProps<LAnnotation>): boolean {
-    if (!this.enabled) {
-      throw new Error(
-        'File.render: attempting to call render after cleaned up'
-      );
-    }
-
-    file = this.editor?.__prepareFile?.(file) ?? file;
-
     // use the file name as the cache key if it is not set
     file.cacheKey ??= file.name;
 
