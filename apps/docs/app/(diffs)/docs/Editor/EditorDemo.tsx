@@ -16,7 +16,7 @@ const fileInstance = new VirtualizedFile({
 
 // render the file into a DOM container
 fileInstance.render({
-  file: { name: 'index.ts', contents: 'export const foo: string = "bar";\n' },
+  file: { name: 'index.ts', contents: 'export const foo: string = "bar";\\n' },
   containerWrapper: document.getElementById('file-container')
 });
 

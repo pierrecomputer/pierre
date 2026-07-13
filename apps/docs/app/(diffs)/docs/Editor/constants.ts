@@ -110,6 +110,78 @@ editor.cleanUp();`,
   options,
 };
 
+export const EDITOR_VANILLA_CODE_VIEW_EXAMPLE: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'editor_vanilla_code_view.ts',
+    contents: `import { CodeView, type CodeViewItem } from '@pierre/diffs';
+import { Editor } from '@pierre/diffs/editor';
+
+const root = document.getElementById('code-view');
+const toggleButton = document.getElementById('toggle-editing');
+if (root == null || toggleButton == null) {
+  throw new Error('Expected CodeView containers to exist');
+}
+
+root.style.height = '24rem';
+root.style.overflow = 'auto';
+
+const viewer = new CodeView({
+  theme: { dark: 'pierre-dark', light: 'pierre-light' },
+  createEditor(options) {
+    return new Editor(options);
+  },
+  onItemEditComplete(item, file) {
+    if (item.type !== 'file') {
+      return;
+    }
+    const version = (item.version ?? 0) + 1;
+    viewer.updateItem({
+      ...item,
+      edit: false,
+      version,
+      file: {
+        ...item.file,
+        contents: file.contents,
+        cacheKey: \`\${item.id}:v\${version}\`,
+      },
+    });
+  },
+});
+
+viewer.setup(root);
+
+const item: CodeViewItem = {
+  id: 'example.ts',
+  type: 'file',
+  file: {
+    name: 'example.ts',
+    contents: 'export const answer = 42;',
+  },
+  edit: true,
+  version: 0,
+};
+
+viewer.setItems([item]);
+
+toggleButton.addEventListener('click', () => {
+  const current = viewer.getItem(item.id);
+  if (current == null) {
+    return;
+  }
+  viewer.updateItem({
+    ...current,
+    edit: current.edit !== true,
+    version: (current.version ?? 0) + 1,
+  });
+});
+
+window.addEventListener('beforeunload', () => {
+  viewer.cleanUp();
+});`,
+  },
+  options,
+};
+
 export const EDITOR_LAZY_FILE_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
     name: 'editor_lazy_file.ts',
@@ -397,6 +469,80 @@ export function EditorComponent() {
         />
       </Virtualizer>
     </EditProvider>
+  );
+}`,
+  },
+  options,
+};
+
+export const EDITOR_REACT_CODE_VIEW_EXAMPLE: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'editor_react_code_view.tsx',
+    contents: `import type { CodeViewItem, FileContents } from '@pierre/diffs';
+import { Editor } from '@pierre/diffs/editor';
+import { CodeView } from '@pierre/diffs/react';
+import { useCallback, useState } from 'react';
+
+const initialItems: CodeViewItem[] = [
+  {
+    id: 'example.ts',
+    type: 'file',
+    file: {
+      name: 'example.ts',
+      contents: 'export const answer = 42;',
+    },
+    edit: true,
+    version: 0,
+  },
+];
+
+export function EditableCodeView() {
+  const [items, setItems] = useState(initialItems);
+
+  const toggleEditing = useCallback(() => {
+    setItems((current) =>
+      current.map((item) => ({
+        ...item,
+        edit: item.edit !== true,
+        version: (item.version ?? 0) + 1,
+      }))
+    );
+  }, []);
+
+  const commitEdit = useCallback((item: CodeViewItem, file: FileContents) => {
+    setItems((current) =>
+      current.map((existing) => {
+        if (existing.id !== item.id || existing.type !== 'file') {
+          return existing;
+        }
+        const version = (existing.version ?? 0) + 1;
+        return {
+          ...existing,
+          edit: false,
+          version,
+          file: {
+            ...existing.file,
+            contents: file.contents,
+            cacheKey: \`\${existing.id}:v\${version}\`,
+          },
+        };
+      })
+    );
+  }, []);
+
+  return (
+    <>
+      <button type="button" onClick={toggleEditing}>
+        {items[0]?.edit === true ? 'Disable editing' : 'Enable editing'}
+      </button>
+
+      <CodeView
+        items={items}
+        style={{ height: '24rem', overflow: 'auto' }}
+        createEditor={(options) => new Editor(options)}
+        onItemEditComplete={commitEdit}
+      />
+    </>
   );
 }`,
   },
