@@ -34,7 +34,7 @@
 
     <script type="module">
       import { File } from '/dist/index.js';
-      import { Editor } from '/dist/editor/index.js';
+      import { Edit } from '/dist/edit/index.js';
 
       const mount = document.querySelector('[data-diff-mount]');
       if (!(mount instanceof HTMLElement)) {
@@ -53,7 +53,7 @@ const gamma = 'third';
       const actionClicks = [];
       window.__actionClicks = actionClicks;
 
-      const editor = new Editor({
+      const edit = new Edit({
         enabledSelectionAction: true,
         renderSelectionAction({ getSelectionText, close }) {
           const container = document.createElement('div');
@@ -62,7 +62,7 @@ const gamma = 'third';
           button.type = 'button';
           button.dataset.testActionButton = '';
           button.textContent = 'Capture';
-          // Prevent the mousedown from blurring the editor and collapsing the
+          // Prevent the mousedown from blurring the edit and collapsing the
           // selection before the click handler reads it.
           button.addEventListener('mousedown', (e) => e.preventDefault());
           button.addEventListener('click', () => {
@@ -73,7 +73,7 @@ const gamma = 'third';
           return container;
         },
       });
-      window.__editor = editor;
+      window.__editor = edit;
 
       const instance = new File({
         disableFileHeader: true,
@@ -82,7 +82,7 @@ const gamma = 'third';
         useTokenTransformer: true,
       });
       instance.render({ file, containerWrapper: mount });
-      editor.edit(instance);
+      edit.edit(instance);
 
       const waitForEditable = async () => {
         const started = performance.now();

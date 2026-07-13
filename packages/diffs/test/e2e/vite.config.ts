@@ -26,7 +26,7 @@ function logFixturesIndex(): Plugin {
 }
 
 // Serve the package root so fixtures can import the built library directly via
-// `/dist/index.js` and `/dist/editor/index.js`. Vite resolves the bundle's bare
+// `/dist/index.js` and `/dist/edit/index.js`. Vite resolves the bundle's bare
 // dependency imports (shiki, etc.) from node_modules on the fly.
 const config: UserConfig = defineConfig({
   root: resolve(import.meta.dirname, '..', '..'),

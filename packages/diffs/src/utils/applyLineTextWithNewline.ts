@@ -1,4 +1,4 @@
-// Editor token text omits line endings; renderer line caches (diff
+// Edit token text omits line endings; renderer line caches (diff
 // `additionLines`, FileRenderer's split-line cache) keep the suffix from
 // parsing. Re-apply the previous line's ending so edited text can be written
 // back into those caches without corrupting reconstructed file contents.

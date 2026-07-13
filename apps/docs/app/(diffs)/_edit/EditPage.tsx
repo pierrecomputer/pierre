@@ -19,8 +19,8 @@ import { Header } from '@/components/Header';
 import { PierreCompanySection } from '@/components/PierreCompanySection';
 
 interface EditPageProps {
-  liveEditorFile: PreloadedFileResult<undefined>;
-  liveDiffEditorDiff: PreloadFileDiffResult<undefined>;
+  liveEditFile: PreloadedFileResult<undefined>;
+  liveDiffEditDiff: PreloadFileDiffResult<undefined>;
   markerFile: PreloadedFileResult<undefined>;
   findFile: PreloadedFileResult<undefined>;
   historyFile: PreloadedFileResult<undefined>;
@@ -29,8 +29,8 @@ interface EditPageProps {
 }
 
 export function EditPage({
-  liveEditorFile,
-  liveDiffEditorDiff,
+  liveEditFile,
+  liveDiffEditDiff,
   markerFile,
   findFile,
   historyFile,
@@ -46,8 +46,8 @@ export function EditPage({
 
         <section className="space-y-16 pb-8">
           <LiveEditing
-            prerenderedFile={liveEditorFile}
-            prerenderedDiff={liveDiffEditorDiff}
+            prerenderedFile={liveEditFile}
+            prerenderedDiff={liveDiffEditDiff}
           />
 
           <div className="space-y-5">
@@ -74,7 +74,7 @@ export function EditPage({
               title="Annotate code with markers"
               description={
                 <>
-                  Use <code>editor.setMarkers()</code> to inject inline context
+                  Use <code>edit.setMarkers()</code> to inject inline context
                   into your code for linter, formatting, and more. Includes
                   support for severity-aware underlines and hover popups. Hover
                   over markers (shown with wavy, colored underlines) in the
@@ -112,10 +112,10 @@ export function EditPage({
                 <>
                   Edits land on a structure-aware undo stack out of the box.
                   Walk it with keyboard shortcuts and the toolbar below, or
-                  drive it in code with <code>editor.undo()</code>,{' '}
-                  <code>editor.redo()</code>, and{' '}
-                  <code>editor.applyEdits()</code>. The example loads with a
-                  short refactor already applied across several commits.
+                  drive it in code with <code>edit.undo()</code>,{' '}
+                  <code>edit.redo()</code>, and <code>edit.applyEdits()</code>.
+                  The example loads with a short refactor already applied across
+                  several commits.
                 </>
               }
             />

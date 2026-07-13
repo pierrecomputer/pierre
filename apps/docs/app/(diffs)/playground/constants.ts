@@ -114,7 +114,7 @@ export async function deleteUser(id: string): Promise<void> {
 // Diagnostics for the playground's edit-mode marker toggle. Positions are
 // zero-based line/character ranges into NEW_USERS_CONTENT (the diff's editable
 // new-file side), so keep them in sync if that content changes. Severities are
-// `as const` so the literals satisfy the editor's MarkerSeverity union without
+// `as const` so the literals satisfy the edit's MarkerSeverity union without
 // importing the Marker type (mirrors _edit/constants.ts MARKER_DEMO_MARKERS).
 // Covers all four severities so the toggle exercises every marker color.
 export const PLAYGROUND_MARKERS = [

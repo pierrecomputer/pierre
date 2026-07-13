@@ -27,7 +27,7 @@ let cachedPrerenderedDiffs: Promise<Record<string, string>> | null = null;
 // Server-renders the agent demo's changed-file diffs once, keyed by path, so
 // both the homepage windowed card and the fullscreen /edit/live route can hand
 // the matching highlighted markup to each FileDiff. Prerendering avoids a
-// first-paint highlight flash and keeps the SSR/client DOM in sync (the editor
+// first-paint highlight flash and keeps the SSR/client DOM in sync (the edit
 // only attaches cleanly when the hydrated markup matches its line model).
 export function preloadAuiPrerenderedDiffs(): Promise<Record<string, string>> {
   cachedPrerenderedDiffs ??= computeAuiPrerenderedDiffs();

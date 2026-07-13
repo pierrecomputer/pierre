@@ -53,12 +53,12 @@ export interface OnDiffLineEnterLeaveProps extends DiffLineEventBaseProps {
 export interface SelectionWriteOptions {
   notify?: boolean;
   // Limit the selected-line highlight to one side's column of a split diff.
-  // The editor sets this to 'additions' so its active-line highlight stays on
+  // The edit sets this to 'additions' so its active-line highlight stays on
   // the editable pane instead of also lighting up the read-only deletions
   // pane. It has no effect on unified or single-file views, whose one code
   // column carries no side attribute.
   activeLineSide?: SelectionSide;
-  // Highlight only the gutter line number, not the line background. The editor
+  // Highlight only the gutter line number, not the line background. The edit
   // sets this while text is selected: the caret line keeps its highlighted
   // number, but the full-line background gives way to the text selection.
   lineNumberOnly?: boolean;
@@ -254,13 +254,13 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
   // When set, the active-line highlight is confined to this side's column in a
   // split diff (see SelectionWriteOptions.activeLineSide). Tracks the current
   // selectedRange and is cleared by any gutter-driven selection. Only the
-  // editor's own active-line highlight sets a side, so a non-null value also
-  // marks the selection as editor-driven (see highlightLineNumberOnly).
+  // edit's own active-line highlight sets a side, so a non-null value also
+  // marks the selection as edit-driven (see highlightLineNumberOnly).
   private activeLineHighlightSide: SelectionSide | undefined;
   // When true, the active-line highlight marks only the gutter line number and
   // not the line background (see SelectionWriteOptions.lineNumberOnly).
   private activeLineNumberOnly = false;
-  // True while an editor is attached (edit mode). The editor draws selection as
+  // True while an edit is attached (edit mode). The edit draws selection as
   // text, so a host or gutter line selection then highlights only the gutter
   // line numbers, never the full-line background.
   private editorAttached = false;
@@ -340,10 +340,10 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
     this.renderedSelectionRange = undefined;
   }
 
-  // Toggle edit mode. While an editor is attached, host and gutter line
-  // selections are shown as gutter-number-only highlights (the editor renders
+  // Toggle edit mode. While an edit is attached, host and gutter line
+  // selections are shown as gutter-number-only highlights (the edit renders
   // the selected text itself), so the full-line background is suppressed.
-  setEditorAttached(attached: boolean): void {
+  setEditAttached(attached: boolean): void {
     if (this.editorAttached === attached) {
       return;
     }
@@ -1497,7 +1497,7 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
       return;
     }
     // A gutter selection spans both columns and the full line, so drop any
-    // side or number-only restriction left over from the editor's active-line
+    // side or number-only restriction left over from the edit's active-line
     // highlight.
     this.activeLineHighlightSide = undefined;
     this.activeLineNumberOnly = false;
@@ -1540,13 +1540,13 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
   }
 
   // Whether to highlight only the gutter line number and leave the full-line
-  // background for the editor's text selection. The decision splits on who drove
-  // the selection, which activeLineHighlightSide records: the editor's own
+  // background for the edit's text selection. The decision splits on who drove
+  // the selection, which activeLineHighlightSide records: the edit's own
   // active-line highlight always sets a side, while gutter and host selections
   // never do. Re-evaluated on every render so toggling edit mode
-  // (setEditorAttached) reflows the current selection.
+  // (setEditAttached) reflows the current selection.
   private highlightLineNumberOnly(): boolean {
-    // The editor's own side-confined active-line highlight controls the
+    // The edit's own side-confined active-line highlight controls the
     // background itself via lineNumberOnly: off for a bare caret (keep the
     // background), on once text is selected so the text selection is the only
     // line-level marker.
@@ -1554,7 +1554,7 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
       return this.activeLineNumberOnly;
     }
     // A gutter or host line selection: number-only when the caller asked for it,
-    // or while an editor is attached — in edit mode the editor renders the
+    // or while an edit is attached — in edit mode the edit renders the
     // selected text itself, so the full-line background gives way to it.
     return this.activeLineNumberOnly || this.editorAttached;
   }
@@ -1602,7 +1602,7 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
     const last = Math.max(rowRange.start, rowRange.end);
     const numberOnly = this.highlightLineNumberOnly();
     for (const code of codeElements) {
-      // When the highlight is confined to one side (the editor's active-line
+      // When the highlight is confined to one side (the edit's active-line
       // highlight), skip the opposite split-diff column. The deletions column
       // carries `data-deletions` and the additions column `data-additions`; a
       // unified or single-file column has neither, so it is never skipped.

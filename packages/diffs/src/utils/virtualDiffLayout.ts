@@ -245,7 +245,7 @@ export interface IsAdditionLineRenderableProps {
 
 /**
  * Whether a one-based new-file line currently has (or will have on scroll) a
- * rendered row under the given expansion state — the editor-facing
+ * rendered row under the given expansion state — the edit-facing
  * visibility oracle. False only for lines hidden inside a collapsed
  * unchanged region; lines outside the diff's modeled range report true so
  * callers keep their existing missing-row handling. Computed from the same
@@ -325,7 +325,7 @@ export function getNearestRenderableAdditionLine({
   }
 
   // Renderable [start, end) line ranges in ascending order, plus the
-  // exclusive end of the modeled range — anything past it (the editor's
+  // exclusive end of the modeled range — anything past it (the edit's
   // phantom document-end line) counts as renderable.
   const ranges: Array<[start: number, end: number]> = [];
   let modeledEnd = 1;

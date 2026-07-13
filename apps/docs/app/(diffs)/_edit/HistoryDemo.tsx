@@ -6,7 +6,7 @@ import {
   getHighlighterIfLoaded,
   preloadHighlighter,
 } from '@pierre/diffs';
-import { Editor } from '@pierre/diffs/editor';
+import { Edit } from '@pierre/diffs/edit';
 import { EditProvider, File } from '@pierre/diffs/react';
 import type { PreloadedFileResult } from '@pierre/diffs/ssr';
 import {
@@ -36,7 +36,7 @@ const TOTAL_EDITS = HISTORY_DEMO_EDITS.length;
 
 // SNAPSHOTS[i] is the document with the first `i` edits applied (0 = original,
 // TOTAL_EDITS = fully refactored), built with the same find/replace the replay
-// uses. Mapping the editor's live text back to its index drives the step count
+// uses. Mapping the edit's live text back to its index drives the step count
 // from real content rather than a click tally, so it can't drift on undo/redo.
 const SNAPSHOTS: readonly string[] = (() => {
   const result = [HISTORY_DEMO_FILE.contents];
@@ -54,7 +54,7 @@ const SNAPSHOTS: readonly string[] = (() => {
   return result;
 })();
 
-// Normalize line endings and trailing newlines so the editor's serialized text
+// Normalize line endings and trailing newlines so the edit's serialized text
 // matches a snapshot regardless of EOL handling.
 function normalize(text: string): string {
   return text.replace(/\r\n/g, '\n').replace(/\n+$/, '');
@@ -62,7 +62,7 @@ function normalize(text: string): string {
 
 const NORMALIZED_SNAPSHOTS = SNAPSHOTS.map(normalize);
 
-// Index of the snapshot matching the editor's current text, or -1 if the text
+// Index of the snapshot matching the edit's current text, or -1 if the text
 // has been changed in a way the demo doesn't track (e.g. free-form typing).
 function snapshotIndexFor(text: string): number {
   const exact = SNAPSHOTS.indexOf(text);
@@ -72,12 +72,12 @@ function snapshotIndexFor(text: string): number {
   return NORMALIZED_SNAPSHOTS.indexOf(normalize(text));
 }
 
-// Language the editor tokenizes this file as. Editing before its grammar has
+// Language the edit tokenizes this file as. Editing before its grammar has
 // loaded throws ("Grammar not loaded"), so we gate the seeded replay on it.
 const LANGUAGE = getFiletypeFromFileName(HISTORY_DEMO_FILE.name);
 
 // True once the shared main-thread highlighter has this file's grammar, which
-// is what the editor tokenizes edits with.
+// is what the edit tokenizes edits with.
 function isLanguageReady(): boolean {
   return (
     getHighlighterIfLoaded()?.getLoadedLanguages().includes(LANGUAGE) ?? false
@@ -96,7 +96,7 @@ function detectMac(): boolean {
   return /mac|iphone|ipad|ipod/i.test(platform);
 }
 
-// Convert a string offset into the {line, character} position the editor's
+// Convert a string offset into the {line, character} position the edit's
 // selection API expects, by counting the newlines that precede it.
 function offsetToPosition(
   text: string,
@@ -125,7 +125,7 @@ export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
   // original snapshot.
   const userEditedBeforeSeedRef = useRef(false);
 
-  // Number of edits currently applied, derived from the editor's live text on
+  // Number of edits currently applied, derived from the edit's live text on
   // every `onChange` (undo, redo, controls, or keyboard) so it always matches.
   const [applied, setApplied] = useState(0);
   // True once the document no longer matches any seeded snapshot, i.e. the user
@@ -133,9 +133,9 @@ export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
   // mapping to the undo stack in that state, so we surface an off-track UI and a
   // Reset rather than letting the step count freeze at a stale value.
   const [diverged, setDiverged] = useState(false);
-  const editor = useMemo(
+  const edit = useMemo(
     () =>
-      new Editor<undefined>({
+      new Edit<undefined>({
         onChange: (file) => {
           const index = snapshotIndexFor(file.contents);
           if (index >= 0) {
@@ -152,7 +152,7 @@ export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
     []
   );
 
-  // Resolve the editor's editable content element inside the open shadow root,
+  // Resolve the edit's editable content element inside the open shadow root,
   // or null until the File has highlighted and attached.
   const getContent = useCallback((): HTMLElement | null => {
     const host = wrapperRef.current?.querySelector<HTMLElement>(DIFFS_TAG_NAME);
@@ -184,8 +184,8 @@ export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
     [getScroller]
   );
 
-  // Fire the editor's real undo (Cmd/Ctrl-Z) or redo (adds Shift) shortcut on
-  // the content element. The editor applies the change and its `onChange`
+  // Fire the edit's real undo (Cmd/Ctrl-Z) or redo (adds Shift) shortcut on
+  // the content element. The edit applies the change and its `onChange`
   // updates the step count, so the controls and the keyboard share one path.
   const dispatchHistoryKey = useCallback(
     (content: HTMLElement, redo: boolean) => {
@@ -210,34 +210,34 @@ export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
   }, []);
 
   // Apply a single edit by locating its `find` anchor in that step's snapshot
-  // (the document text right before the edit) and replacing it. The editor's
+  // (the document text right before the edit) and replacing it. The edit's
   // `onChange` advances the step count once the edit lands.
   const applyEdit = useCallback(
     (content: HTMLElement, index: number) => {
-      const edit = HISTORY_DEMO_EDITS[index];
+      const step = HISTORY_DEMO_EDITS[index];
       const text = SNAPSHOTS[index];
-      const at = text.indexOf(edit.find);
+      const at = text.indexOf(step.find);
       if (at < 0) {
         return;
       }
-      editor.setSelections([
+      edit.setSelections([
         {
           start: offsetToPosition(text, at),
-          end: offsetToPosition(text, at + edit.find.length),
+          end: offsetToPosition(text, at + step.find.length),
           direction: 'forward',
         },
       ]);
       content.dispatchEvent(
         new InputEvent('beforeinput', {
           inputType: 'insertText',
-          data: edit.replace,
+          data: step.replace,
           bubbles: true,
           cancelable: true,
           composed: true,
         })
       );
     },
-    [editor]
+    [edit]
   );
 
   // Apply every edit in one synchronous pass to build the full undo stack. Each
@@ -254,7 +254,7 @@ export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
         for (let index = 0; index < TOTAL_EDITS; index++) {
           applyEdit(content, index);
         }
-        editor.setSelections([
+        edit.setSelections([
           {
             start: { line: 0, character: 0 },
             end: { line: 0, character: 0 },
@@ -266,16 +266,16 @@ export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
         isAutoSeedingRef.current = false;
       }
     },
-    [applyEdit, editor]
+    [applyEdit, edit]
   );
 
   // Build the undo stack once the demo is on screen so the surface arrives
   // already fully refactored with history intact. We defer until visible
   // because seeding scrolls the caret into view and would yank the page down
   // to this below-the-fold demo on first load. We poll until the content
-  // element has attached AND the editor's grammar is ready, because seeding an
-  // edit before the editor can tokenize throws ("Grammar not loaded") inside
-  // the editor.
+  // element has attached AND the edit's grammar is ready, because seeding an
+  // edit before the edit can tokenize throws ("Grammar not loaded") inside
+  // the edit.
   useEffect(() => {
     const wrapper = wrapperRef.current;
     if (wrapper == null) {
@@ -305,7 +305,7 @@ export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
     };
 
     const startSeeding = () => {
-      // Warm the shared highlighter before polling so the editor tokenizer can
+      // Warm the shared highlighter before polling so the edit tokenizer can
       // pick up the grammar synchronously once the surface attaches.
       void preloadHighlighter({
         themes: [DEFAULT_THEMES.dark, DEFAULT_THEMES.light],
@@ -380,7 +380,7 @@ export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
 
   // Recover the guided demo after the user typed their own edit. We unwind the
   // whole undo stack (the stray edit plus the seeded steps) back to the original
-  // document via the editor's programmatic `undo()`, which is reliable
+  // document via the edit's programmatic `undo()`, which is reliable
   // regardless of where focus sits, then replay all seeded edits so the surface
   // lands back at the fully-refactored 7/7 state with its history intact.
   const reset = useCallback(() => {
@@ -390,13 +390,13 @@ export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
     }
     preserveScroll(() => {
       let guard = 0;
-      while (editor.canUndo && guard < 1000) {
-        editor.undo();
+      while (edit.canUndo && guard < 1000) {
+        edit.undo();
         guard += 1;
       }
       seedAll(content);
     });
-  }, [editor, getContent, preserveScroll, seedAll]);
+  }, [edit, getContent, preserveScroll, seedAll]);
 
   const canUndo = !diverged && applied > 0;
   const canRedo = !diverged && applied < TOTAL_EDITS;
@@ -456,7 +456,7 @@ export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
 
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:gap-8">
         <div className="min-w-0 flex-1">
-          <EditProvider editor={editor}>
+          <EditProvider edit={edit}>
             <File
               {...prerenderedFile}
               className="diff-container"

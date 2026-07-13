@@ -900,7 +900,7 @@ export class VirtualizedFileDiff<
   // In advanced (CodeView) mode, expansions are staged in pendingExpansions
   // until the next layout consume, so the renderer's expansion map lags a
   // just-requested reveal. Account for the staged expansions so callers (the
-  // editor's caret-scroll retry) see the post-consume visibility.
+  // edit's caret-scroll retry) see the post-consume visibility.
   override isLineRenderable(lineNumber: number): boolean {
     if (super.isLineRenderable(lineNumber)) {
       return true;
@@ -976,7 +976,7 @@ export class VirtualizedFileDiff<
   }
 
   protected override shouldSelfHealEditSession(): boolean {
-    // CodeView sessions survive recycling with no editor attached; CodeView
+    // CodeView sessions survive recycling with no edit attached; CodeView
     // itself runs the exit recompute when it reaps a session.
     return !this.isAdvancedMode() && super.shouldSelfHealEditSession();
   }

@@ -15,7 +15,7 @@ export function EditHero() {
           Edit files and diffs
         </h1>
         <p className="text-md text-muted-foreground mb-0 max-w-[740px] text-pretty lg:text-lg">
-          Enable a full-featured yet lightweight editor that lazy-loads when
+          Enable a full-featured yet lightweight edit mode that lazy-loads when
           needed on top of any <code>File</code> or <code>FileDiff</code>. All
           the ergonomics and customization of <code>@pierre/diffs</code>, with
           everything you need to edit in place.

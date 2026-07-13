@@ -1,7 +1,7 @@
 import { JSDOM } from 'jsdom';
 
 import type { CodeView } from '../src/components/CodeView';
-import { resetPlatformDetectionForTests } from '../src/editor/platform';
+import { resetPlatformDetectionForTests } from '../src/edit/platform';
 import { clearRenderQueue } from '../src/managers/UniversalRenderingManager';
 import type { CodeViewItem, FileContents } from '../src/types';
 

@@ -39,8 +39,8 @@ import type {
   BaseDiffOptions,
   CustomPreProperties,
   DiffLineAnnotation,
+  DiffsEdit,
   DiffsEditableComponent,
-  DiffsEditor,
   DiffsTextDocument,
   ExpansionDirections,
   FileContents,
@@ -280,7 +280,7 @@ export class FileDiff<
 
   protected enabled = true;
 
-  protected editor: DiffsEditor<LAnnotation> | undefined;
+  protected edit: DiffsEdit<LAnnotation> | undefined;
   protected refreshViewTimeout: ReturnType<typeof setTimeout> | undefined;
   protected deferSetSelection:
     | [SelectedLineRange | null, SelectionWriteOptions | undefined]
@@ -623,8 +623,8 @@ export class FileDiff<
 
     this.enabled = false;
 
-    this.editor?.cleanUp(recycle);
-    this.editor = undefined;
+    this.edit?.cleanUp(recycle);
+    this.edit = undefined;
     if (this.refreshViewTimeout != null) {
       clearTimeout(this.refreshViewTimeout);
       this.refreshViewTimeout = undefined;
@@ -930,7 +930,7 @@ export class FileDiff<
 
     // postpone background tokenizing to next frame for avoiding UI freeze
     // during render
-    this.editor?.__postponeBgTokenizeToNextFrame();
+    this.edit?.__postponeBgTokenizeToNextFrame();
 
     const {
       collapsed = false,
@@ -1135,8 +1135,8 @@ export class FileDiff<
         this.flushManagers();
       }
 
-      if (this.editor != null) {
-        this.syncRenderViewToEditor();
+      if (this.edit != null) {
+        this.syncRenderViewToEdit();
       }
     } catch (error: unknown) {
       if (disableErrorHandling) {
@@ -1184,14 +1184,14 @@ export class FileDiff<
     return this.hunksRenderer.diffCache ?? this.fileDiff;
   }
 
-  private syncRenderViewToEditor(): void {
-    const editor = this.editor;
+  private syncRenderViewToEdit(): void {
+    const edit = this.edit;
     const fileContainer = this.fileContainer;
     const fileDiff = this.fileDiffCache;
     const lineAnnotations = this.lineAnnotations;
-    const renderRange = this.computeEditorRenderRange(this.renderRange);
+    const renderRange = this.computeEditRenderRange(this.renderRange);
     if (
-      editor != null &&
+      edit != null &&
       fileContainer != null &&
       fileDiff != null &&
       !fileDiff.isPartial
@@ -1199,13 +1199,13 @@ export class FileDiff<
       void this.hunksRenderer.initializeHighlighter().then((highlighter) => {
         if (
           !this.enabled ||
-          this.editor !== editor ||
+          this.edit !== edit ||
           this.fileContainer !== fileContainer ||
           this.fileDiffCache !== fileDiff
         ) {
           return;
         }
-        editor.__syncRenderView(
+        edit.__syncRenderView(
           highlighter,
           fileContainer,
           fileDiff,
@@ -1217,12 +1217,12 @@ export class FileDiff<
   }
 
   // The stored render range is in rendered-row units for the windowed AST
-  // pipeline, but the editor consumes render ranges in document-line units.
+  // pipeline, but the edit consumes render ranges in document-line units.
   // Derive the addition-side document window covered by the rendered rows:
   // startingLine = first addition line with a row in the window, totalLines =
   // last such line - first + 1, and 0 when the window holds no addition rows
   // (e.g. a pure-deletion run taller than the viewport).
-  private computeEditorRenderRange(
+  private computeEditRenderRange(
     renderRange: RenderRange | undefined
   ): RenderRange | undefined {
     const fileDiff = this.fileDiffCache;
@@ -1266,26 +1266,24 @@ export class FileDiff<
     };
   }
 
-  public attachEditor(
-    editor: DiffsEditor<LAnnotation>
-  ): (recycle?: boolean) => void {
-    this.editor?.cleanUp();
-    this.editor = editor;
-    this.interactionManager.setEditorAttached(true);
+  public attachEdit(edit: DiffsEdit<LAnnotation>): (recycle?: boolean) => void {
+    this.edit?.cleanUp();
+    this.edit = edit;
+    this.interactionManager.setEditAttached(true);
     // Edit sessions are a plain-diff concern; subclasses with their own hunk
     // semantics (merge conflicts) keep the per-edit recompute pipeline.
     if (this.type === 'file-diff') {
       this.hunksRenderer.beginEditSession(this.fileDiffCache);
     }
-    // The editor sync below refuses partial diffs (it needs the full file
+    // The edit sync below refuses partial diffs (it needs the full file
     // contents); kick off hydration so the loaded re-render re-runs it.
     if (this.fileDiff?.isPartial === true) {
       this.loadFilesIfNecessary();
     }
-    this.syncRenderViewToEditor();
+    this.syncRenderViewToEdit();
     return (recycle?: boolean) => {
-      this.editor = undefined;
-      this.interactionManager.setEditorAttached(false);
+      this.edit = undefined;
+      this.interactionManager.setEditAttached(false);
       // A recycle detach is a virtualized unmount mid-session: the session
       // continues on remount, so hunks stay session-shaped. Only a genuine
       // end runs the exit recompute.
@@ -1374,7 +1372,7 @@ export class FileDiff<
     // a collapsed gap) changes the rendered row set, which the debounced
     // line-type refresh below cannot express. Escalate to a deferred full
     // re-render — never a synchronous one, since this runs mid-editor-pass
-    // and rebuilding rows the editor is about to touch detaches its geometry
+    // and rebuilding rows the edit is about to touch detaches its geometry
     // caches.
     if (regionsChanged) {
       if (this.refreshViewTimeout != null) {
@@ -1403,7 +1401,7 @@ export class FileDiff<
     }
   }
 
-  // Editor-facing visibility oracle: whether a one-based new-file line has
+  // Edit-facing visibility oracle: whether a one-based new-file line has
   // (or will have on scroll) a rendered row under the current expansion
   // state. See isAdditionLineRenderable.
   public isLineRenderable(lineNumber: number): boolean {
@@ -1538,16 +1536,16 @@ export class FileDiff<
   }
 
   // Whether render() may run the session-exit recompute on dirty metadata.
-  // False while an editor is attached (the session is live). CodeView-managed
-  // instances override this: their sessions survive recycling with no editor
+  // False while an edit is attached (the session is live). CodeView-managed
+  // instances override this: their sessions survive recycling with no edit
   // attached, and CodeView runs the exit recompute itself when it reaps a
   // session.
   protected shouldSelfHealEditSession(): boolean {
-    return this.editor == null;
+    return this.edit == null;
   }
 
   // Deferred full re-render for session region changes. The subsequent
-  // render() ends in syncRenderViewToEditor, which resets the editor's
+  // render() ends in syncRenderViewToEdit, which resets the edit's
   // geometry caches against the rebuilt rows. VirtualizedFileDiff overrides
   // this to also invalidate its layout caches.
   protected escalateEditSessionRender(): void {
@@ -2520,8 +2518,8 @@ export class FileDiff<
     this.managersDirty = true;
     this.flushManagers();
 
-    // sync the render view to the editor
-    this.syncRenderViewToEditor();
+    // sync the render view to the edit
+    this.syncRenderViewToEdit();
   }
 
   private renderPartialColumn(

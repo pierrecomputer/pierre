@@ -26,8 +26,8 @@ import { SVGSpriteSheet } from '../sprite';
 import type {
   AppliedThemeStyleCache,
   BaseCodeOptions,
+  DiffsEdit,
   DiffsEditableComponent,
-  DiffsEditor,
   DiffsTextDocument,
   FileContents,
   HighlightedToken,
@@ -176,7 +176,7 @@ export class File<
   protected renderRange: RenderRange | undefined;
   protected enabled = true;
 
-  protected editor: DiffsEditor<LAnnotation> | undefined;
+  protected edit: DiffsEdit<LAnnotation> | undefined;
 
   constructor(
     public options: FileOptions<LAnnotation> = { theme: DEFAULT_THEMES },
@@ -361,8 +361,8 @@ export class File<
 
     this.enabled = false;
 
-    this.editor?.cleanUp(recycle);
-    this.editor = undefined;
+    this.edit?.cleanUp(recycle);
+    this.edit = undefined;
   }
 
   public virtualizedSetup(): void {
@@ -493,23 +493,23 @@ export class File<
     }
   }
 
-  private syncRenderViewToEditor(): void {
-    const editor = this.editor;
+  private syncRenderViewToEdit(): void {
+    const edit = this.edit;
     const fileContainer = this.fileContainer;
     const file = this.file;
     const lineAnnotations = this.lineAnnotations;
     const renderRange = this.renderRange;
-    if (editor != null && fileContainer != null && file != null) {
+    if (edit != null && fileContainer != null && file != null) {
       void this.fileRenderer.initializeHighlighter().then((highlighter) => {
         if (
           !this.enabled ||
-          this.editor !== editor ||
+          this.edit !== edit ||
           this.fileContainer !== fileContainer ||
           this.file !== file
         ) {
           return;
         }
-        editor.__syncRenderView(
+        edit.__syncRenderView(
           highlighter,
           fileContainer,
           file,
@@ -520,14 +520,14 @@ export class File<
     }
   }
 
-  public attachEditor(editor: DiffsEditor<LAnnotation>): () => void {
-    this.editor?.cleanUp();
-    this.editor = editor;
-    this.interactionManager.setEditorAttached(true);
-    this.syncRenderViewToEditor();
+  public attachEdit(edit: DiffsEdit<LAnnotation>): () => void {
+    this.edit?.cleanUp();
+    this.edit = edit;
+    this.interactionManager.setEditAttached(true);
+    this.syncRenderViewToEdit();
     return () => {
-      this.editor = undefined;
-      this.interactionManager.setEditorAttached(false);
+      this.edit = undefined;
+      this.interactionManager.setEditAttached(false);
     };
   }
 
@@ -578,7 +578,7 @@ export class File<
 
     // postpone background tokenizing to next frame for avoiding UI freeze
     // during render
-    this.editor?.__postponeBgTokenizeToNextFrame();
+    this.edit?.__postponeBgTokenizeToNextFrame();
 
     const { collapsed = false, themeType = 'system' } = this.options;
     const nextRenderRange = collapsed ? undefined : renderRange;
@@ -704,8 +704,8 @@ export class File<
       }
       this.renderAnnotations();
       this.renderGutterUtility();
-      if (this.editor != null) {
-        this.syncRenderViewToEditor();
+      if (this.edit != null) {
+        this.syncRenderViewToEdit();
       }
     } catch (error: unknown) {
       if (disableErrorHandling) {

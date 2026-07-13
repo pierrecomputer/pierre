@@ -2,11 +2,11 @@ import { DEFAULT_THEMES, type FileContents } from '@pierre/diffs';
 import type { FileOptions } from '@pierre/diffs/react';
 import type { PreloadFileOptions } from '@pierre/diffs/ssr';
 
-// Options mirror the state the editor enforces when it attaches in
+// Options mirror the state edit mode enforces when it attaches in
 // `contentEditable` mode (token transformer on, gutter/line-selection/hover
 // off). Baking them into the SSR preload makes the server HTML identical to the
-// editor's post-attach render, so hydrating from `prerenderedHTML` doesn't
-// flash or rerender. Mirrors LiveEditor/constants.ts.
+// edit's post-attach render, so hydrating from `prerenderedHTML` doesn't
+// flash or rerender. Mirrors LiveEdit/constants.ts.
 const EDITABLE_FILE_OPTIONS: FileOptions<undefined> = {
   theme: DEFAULT_THEMES,
   themeType: 'dark',
@@ -45,7 +45,7 @@ function calculateTotal(items, taxRate) {
 
 // Diagnostics a real linter might produce for MARKER_DEMO_FILE. Positions are
 // zero-based line/character ranges. Severities are `as const` so the literals
-// satisfy the editor's MarkerSeverity union without importing the (not yet
+// satisfy the edit's MarkerSeverity union without importing the (not yet
 // exported) Marker type.
 export const MARKER_DEMO_MARKERS = [
   {
@@ -243,10 +243,10 @@ export const HISTORY_DEMO_EDITS: readonly HistoryDemoEdit[] = [
 
 // Keyboard-shortcut reference data. This is the single source of truth for the
 // shortcuts section: the table renders by mapping over these groups, and the
-// editor demo beside it shows this same data serialized back to source (see
+// edit demo beside it shows this same data serialized back to source (see
 // `serializeShortcutGroups`)—so the code on the left literally describes the
 // table on the right.
-export interface EditorShortcut {
+export interface EditShortcut {
   // Interchangeable main keys, shown joined by `/` (e.g. ['Home', 'End'] reads
   // as "Home / End"). A single entry renders as one key.
   keys: readonly string[];
@@ -259,12 +259,12 @@ export interface EditorShortcut {
   mod?: boolean;
 }
 
-export interface EditorShortcutGroup {
+export interface EditShortcutGroup {
   label: string;
-  shortcuts: readonly EditorShortcut[];
+  shortcuts: readonly EditShortcut[];
 }
 
-export const EDITOR_SHORTCUT_GROUPS: readonly EditorShortcutGroup[] = [
+export const EDIT_SHORTCUT_GROUPS: readonly EditShortcutGroup[] = [
   {
     label: 'Editing',
     shortcuts: [
@@ -350,10 +350,10 @@ export const EDITOR_SHORTCUT_GROUPS: readonly EditorShortcutGroup[] = [
 ];
 
 // Serialize the shortcut groups back to a readable `const shortcuts = [...]`
-// source string. The editor demo renders this, so editing the data above keeps
+// source string. The edit demo renders this, so editing the data above keeps
 // the on-screen code snippet and the rendered table perfectly in sync.
 export function serializeShortcutGroups(
-  groups: readonly EditorShortcutGroup[]
+  groups: readonly EditShortcutGroup[]
 ): string {
   const lines: string[] = [
     '// The data behind the table on the right—this very page maps over it.',
@@ -382,10 +382,10 @@ export function serializeShortcutGroups(
 }
 
 // The meta "code that built the table" surface. Its contents are generated from
-// EDITOR_SHORTCUT_GROUPS so the snippet can never drift from the rendered table.
+// EDIT_SHORTCUT_GROUPS so the snippet can never drift from the rendered table.
 export const SHORTCUTS_DEMO_FILE: FileContents = {
   name: 'shortcuts.ts',
-  contents: serializeShortcutGroups(EDITOR_SHORTCUT_GROUPS),
+  contents: serializeShortcutGroups(EDIT_SHORTCUT_GROUPS),
 };
 
 // Server-side preload inputs. Spreading the resolved results into <File> ships

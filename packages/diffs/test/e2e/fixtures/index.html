@@ -69,18 +69,18 @@
       <li>
         <a href="/test/e2e/fixtures/edit.html">edit.html</a>
         <p class="desc">
-          A <code>FileDiff</code> attached to the <code>Editor</code> (edit
-          mode). The additions column is editable; deletions are read-only.
-          Drives <code>edit.pw.ts</code> (typing, onChange, undo/redo). Ready
-          flag: <code>window.__editReady</code>; edits are logged to
+          A <code>FileDiff</code> attached to the <code>Edit</code> (edit mode).
+          The additions column is editable; deletions are read-only. Drives
+          <code>edit.pw.ts</code> (typing, onChange, undo/redo). Ready flag:
+          <code>window.__editReady</code>; edits are logged to
           <code>window.__editorEvents</code>.
         </p>
       </li>
       <li>
         <a href="/test/e2e/fixtures/edit-collapsed.html">edit-collapsed.html</a>
         <p class="desc">
-          A <code>FileDiff</code> + <code>Editor</code> over a 60-line file
-          whose unchanged gap collapses. Drives
+          A <code>FileDiff</code> + <code>Edit</code> over a 60-line file whose
+          unchanged gap collapses. Drives
           <code>edit-collapsed.pw.ts</code> (fold-skip navigation, reveal on
           search, separator expansion mid-edit, session exit).
           <code>?diffStyle=unified</code> switches views. Ready flag:
@@ -109,7 +109,7 @@
       <li>
         <a href="/test/e2e/fixtures/editable.html">editable.html</a>
         <p class="desc">
-          A single editable <code>File</code> + <code>Editor</code>. Drives
+          A single editable <code>File</code> + <code>Edit</code>. Drives
           <code>find-replace.pw.ts</code> (Cmd/Ctrl+F, Replace All),
           <code>multi-edit.pw.ts</code> (multi-caret, Tab/Shift+Tab), and
           <code>edit-rewrite.pw.ts</code> (select-all rewrite). Ready flag:
@@ -119,7 +119,7 @@
       <li>
         <a href="/test/e2e/fixtures/markers.html">markers.html</a>
         <p class="desc">
-          An editor with <code>setMarkers</code> squiggles (error/warning/info),
+          An edit with <code>setMarkers</code> squiggles (error/warning/info),
           hover popups, and boundary containment. Drives
           <code>markers.pw.ts</code>. Ready flag:
           <code>window.__markersReady</code>.
@@ -146,8 +146,8 @@
       <li>
         <a href="/test/e2e/fixtures/theme.html">theme.html</a>
         <p class="desc">
-          An editor that toggles between the dark and light themes; verifies
-          token colors change and a selection survives the switch. Drives
+          An edit that toggles between the dark and light themes; verifies token
+          colors change and a selection survives the switch. Drives
           <code>theme.pw.ts</code>. Ready flag:
           <code>window.__themeReady</code>.
         </p>
@@ -157,7 +157,7 @@
           >selection-action.html</a
         >
         <p class="desc">
-          An editor with <code>enabledSelectionAction</code> and a custom
+          An edit with <code>enabledSelectionAction</code> and a custom
           <code>renderSelectionAction</code> popover; verifies it appears on a
           selection, stays in bounds, and reports the selected text. Drives
           <code>selection-action.pw.ts</code>. Ready flag:

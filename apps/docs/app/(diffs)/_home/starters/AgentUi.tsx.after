@@ -1,7 +1,7 @@
 'use client';
 
 import { DEFAULT_THEMES } from '@pierre/diffs';
-import { Editor } from '@pierre/diffs/editor';
+import { Edit } from '@pierre/diffs/edit';
 import { EditProvider, FileDiff } from '@pierre/diffs/react';
 import { IconArrow, IconChevronSm, IconSparkle } from '@pierre/icons';
 import { FileTree, type FileTreeRowDecoration } from '@pierre/trees';
@@ -18,12 +18,12 @@ import {
   getSessionPaths,
 } from './mockData';
 
-// The editor's stylesheet flattens every line number to one neutral colour
+// The edit's stylesheet flattens every line number to one neutral colour
 // (`--diffs-editor-line-number-fg`) and is injected as an unlayered <style>,
 // so it overrides the library's per-line colouring (which lives in @layer
 // base). We adopt this extra, higher-specificity unlayered sheet into the
-// editor's shadow root to restore jade/red numbers for added and deleted
-// lines, while leaving the active/selected line to the editor's own styling.
+// edit's shadow root to restore jade/red numbers for added and deleted
+// lines, while leaving the active/selected line to the edit's own styling.
 const LINE_NUMBER_COLOR_CSS = `
 [data-column-number][data-line-type='change-addition']:not([data-selected-line]):not([data-active]) {
   color: var(--diffs-addition-base);
@@ -180,16 +180,16 @@ export function AgentUi({ theme = DEFAULT_THEMES, prerenderedDiffs }: AgentUiPro
   // Persisted in-editor edits keyed by path, so switching files keeps the
   // agent's tweaked output.
   const editsRef = useRef<Map<string, string>>(new Map());
-  // The editor's debounced onChange fires without a path argument, so we track
+  // The edit's debounced onChange fires without a path argument, so we track
   // the live target here.
   const activeTargetRef = useRef<string | null>(null);
   useEffect(() => {
     activeTargetRef.current = activePath;
   }, [activePath]);
 
-  const editor = useMemo(
+  const edit = useMemo(
     () =>
-      new Editor({
+      new Edit({
         enabledSelectionAction: true,
         renderSelectionAction({ close, getSelectionText, replaceSelectionText }) {
           const container = document.createElement('div');
@@ -271,7 +271,7 @@ export function AgentUi({ theme = DEFAULT_THEMES, prerenderedDiffs }: AgentUiPro
   }, [activePath]);
 
   return (
-    <EditProvider editor={editor}>
+    <EditProvider edit={edit}>
       <div className="aui" data-theme-type="dark" data-embedded="true">
         <div className="aui-body">
           <section className="aui-center">

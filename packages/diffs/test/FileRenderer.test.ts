@@ -1,6 +1,6 @@
 import { afterAll, describe, expect, test } from 'bun:test';
 
-import { TextDocument } from '../src/editor/textDocument';
+import { TextDocument } from '../src/edit/textDocument';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
 import { FileRenderer } from '../src/renderers/FileRenderer';
 import type { FileContents } from '../src/types';

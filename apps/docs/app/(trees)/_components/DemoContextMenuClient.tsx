@@ -243,7 +243,7 @@ export function DemoContextMenuClient({
             treeStyle={contextMenuPanelStyle}
             renderEmpty={() => (
               <div className="flex flex-1 items-center justify-center px-6 text-sm text-zinc-500">
-                Editor canvas intentionally empty.
+                Edit canvas intentionally empty.
               </div>
             )}
           />

@@ -34,7 +34,7 @@
 
     <script type="module">
       import { File } from '/dist/index.js';
-      import { Editor } from '/dist/editor/index.js';
+      import { Edit } from '/dist/edit/index.js';
 
       const mount = document.querySelector('[data-diff-mount]');
       if (!(mount instanceof HTMLElement)) {
@@ -54,15 +54,15 @@ const baz = foo;
       const events = [];
       window.__editorEvents = events;
 
-      const editor = new Editor({
+      const edit = new Edit({
         onChange(next) {
           events.push(next.contents);
         },
       });
-      window.__editor = editor;
+      window.__editor = edit;
 
       // Editable single-file surface: `useTokenTransformer` mirrors what the
-      // React <File contentEditable> path enables before attaching an editor.
+      // React <File contentEditable> path enables before attaching an edit.
       const instance = new File({
         disableFileHeader: true,
         theme: { dark: 'pierre-dark', light: 'pierre-light' },
@@ -70,7 +70,7 @@ const baz = foo;
         useTokenTransformer: true,
       });
       instance.render({ file, containerWrapper: mount });
-      editor.edit(instance);
+      edit.edit(instance);
 
       const waitForEditable = async () => {
         const started = performance.now();

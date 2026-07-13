@@ -93,7 +93,7 @@ export function shouldTopAlignAdditionRecompute(
 
 // Rebuilds hunk metadata while keeping the editable addition rows top-aligned in
 // split view. The sentinel only shapes hunks; the caller's addition lines are
-// preserved so the editor document stays the source of truth.
+// preserved so the edit document stays the source of truth.
 export function recomputeTopAlignedAdditionDiff(
   diff: FileDiffMetadata,
   additionLines: string[],
@@ -128,9 +128,9 @@ export function recomputeTopAlignedAdditionDiff(
 
 // Rebuilds hunk metadata when the editable side has been emptied of all text.
 //
-// The editor always keeps one (empty) line for an empty document, but an empty
+// The edit always keeps one (empty) line for an empty document, but an empty
 // string splits into zero addition lines, so a normal recompute produces a diff
-// with no addition rows at all. Rendering that leaves the attached editor with
+// with no addition rows at all. Rendering that leaves the attached edit with
 // no line element to host its caret.
 export function recomputeEmptyDocumentDiff(
   diff: FileDiffMetadata,
@@ -156,25 +156,25 @@ export function recomputeDiffHunksForEdit(
   }
   const additionLines = diff.additionLines;
   const recomputed = recomputeDiffHunks(diff, parseDiffOptions);
-  preserveTrailingEditorBlankLine(recomputed, additionLines);
+  preserveTrailingEditBlankLine(recomputed, additionLines);
   return recomputed;
 }
 
-function hasTrailingEditorBlankLine(additionLines: string[]): boolean {
+function hasTrailingEditBlankLine(additionLines: string[]): boolean {
   return additionLines.length > 1 && additionLines.at(-1) === '';
 }
 
-// Re-adds the editor's phantom trailing empty line (a document ending in a
+// Re-adds the edit's phantom trailing empty line (a document ending in a
 // newline exposes one extra empty line) as an addition row when the last
 // hunk's final change block can absorb it, so the caret keeps a rendered row.
-export function preserveTrailingEditorBlankLine(
+export function preserveTrailingEditBlankLine(
   recomputed: Pick<
     FullDiffHunkUpdate,
     'hunks' | 'additionLines' | 'splitLineCount' | 'unifiedLineCount'
   >,
   additionLines: string[]
 ): void {
-  if (!hasTrailingEditorBlankLine(additionLines)) {
+  if (!hasTrailingEditBlankLine(additionLines)) {
     return;
   }
   const extraLineCount = additionLines.length - recomputed.additionLines.length;

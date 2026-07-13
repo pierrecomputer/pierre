@@ -21,7 +21,7 @@ import {
   getTrailingExpandedRegion,
 } from './virtualDiffLayout';
 
-// While an editor is attached to a FileDiff, hunks are treated as a frozen
+// While an edit is attached to a FileDiff, hunks are treated as a frozen
 // "region skeleton": each hunk is one region spanning its full range, regions
 // never merge/split/drop on their own, and each edit re-diffs only the region
 // it lands in. A region whose re-diff comes back empty persists as a
@@ -58,11 +58,11 @@ interface RegionBounds {
 }
 
 /**
- * Drops the editor document's phantom trailing empty line (a document ending
+ * Drops the edit document's phantom trailing empty line (a document ending
  * in a newline exposes one extra empty line the parsed diff never contains)
  * so session line arrays compare like parse-derived ones.
  */
-export function normalizeEditorLines(lines: string[]): string[] {
+export function normalizeEditLines(lines: string[]): string[] {
   if (lines.length > 1 && lines[lines.length - 1] === '') {
     return lines.slice(0, -1);
   }

@@ -10,12 +10,12 @@ import { GENERATED_AUI_SESSIONS } from './mockData.generated';
 
 // Render options shared by the agent demo's SSR preload (Home.tsx) and its
 // client FileDiff (AgentUi). Beyond the visual options, these bake in the
-// exact state the editor enforces when it attaches to an editable FileDiff:
+// exact state edit mode enforces when it attaches to an editable FileDiff:
 // the token transformer on, gutter utility and line selection off, and
-// line-hover highlighting disabled. The editor only re-renders an attached
+// line-hover highlighting disabled. The edit only re-renders an attached
 // surface when these aren't already set, so if the prerendered markup omits
 // them (especially `useTokenTransformer`) the hydrated DOM no longer matches
-// the editor's line model — which mis-positions the caret/selection and
+// edit mode's line model — which mis-positions the caret/selection and
 // breaks editing. Sharing one constant also keeps the server and client
 // diffStyle in lockstep so the prerendered HTML always matches what the
 // client renders.
@@ -104,7 +104,7 @@ export const AUI_FULL_TREE_PATHS: string[] = [
   'apps/docs/next.config.mjs',
   'apps/docs/package.json',
   'apps/docs/tsconfig.json',
-  'packages/diffs/src/editor/editor.ts',
+  'packages/diffs/src/edit/edit.ts',
   'packages/diffs/src/react/FileDiff.tsx',
   'packages/diffs/src/index.ts',
   'packages/diffs/src/style.css',

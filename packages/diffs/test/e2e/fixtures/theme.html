@@ -35,7 +35,7 @@
 
     <script type="module">
       import { File } from '/dist/index.js';
-      import { Editor } from '/dist/editor/index.js';
+      import { Edit } from '/dist/edit/index.js';
 
       const mount = document.querySelector('[data-diff-mount]');
       if (!(mount instanceof HTMLElement)) {
@@ -50,8 +50,8 @@ export { greeting, count };
 `,
       };
 
-      const editor = new Editor({});
-      window.__editor = editor;
+      const edit = new Edit({});
+      window.__editor = edit;
 
       const instance = new File({
         disableFileHeader: true,
@@ -60,7 +60,7 @@ export { greeting, count };
         useTokenTransformer: true,
       });
       instance.render({ file, containerWrapper: mount });
-      editor.edit(instance);
+      edit.edit(instance);
 
       // Flip between the configured dark and light themes. setThemeType swaps
       // the theme CSS in place without re-rendering the content, which is what

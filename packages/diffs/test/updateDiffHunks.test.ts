@@ -266,7 +266,7 @@ describe('updateDiffHunks', () => {
 
     updateDiffHunks(diff, [line], PARSE_OPTIONS);
 
-    // Simulate deferred tokenization growing additionLines for an editor-only
+    // Simulate deferred tokenization growing additionLines for an edit-only
     // trailing line without updating hunk metadata.
     diff.additionLines.push('');
 
@@ -281,7 +281,7 @@ describe('updateDiffHunks', () => {
     );
   });
 
-  test('preserves context when a contentful edit has an editor-only trailing blank line', () => {
+  test('preserves context when a contentful edit has an edit-only trailing blank line', () => {
     const oldContents = ['drop 1', 'kept', 'drop 2', ''].join('\n');
     const diff = parseDiffFromFile(
       { name: 'example.ts', contents: oldContents },
@@ -290,7 +290,7 @@ describe('updateDiffHunks', () => {
     );
 
     // Mirrors edit mode after deleting all but one matching line in a longer
-    // file and pressing Enter: the editor has a final logical empty line that
+    // file and pressing Enter: the edit has a final logical empty line that
     // patch-style splitting would normally drop.
     diff.additionLines = ['kept\n', ''];
 
@@ -345,7 +345,7 @@ describe('updateDiffHunks', () => {
     ]);
   });
 
-  test('top-aligns an editor-only trailing blank line after replacing a longer file', () => {
+  test('top-aligns an edit-only trailing blank line after replacing a longer file', () => {
     const oldContents = ['old 1', 'old 2', 'old 3', 'old 4', ''].join('\n');
     const diff = parseDiffFromFile(
       { name: 'example.ts', contents: oldContents },
@@ -353,7 +353,7 @@ describe('updateDiffHunks', () => {
       { context: 3 }
     );
 
-    // Mirrors select-all, type "a", then press Enter: the editor has a second
+    // Mirrors select-all, type "a", then press Enter: the edit has a second
     // logical row for the trailing blank line before tokenization sees content
     // on that row.
     diff.additionLines = ['a\n', ''];
@@ -397,7 +397,7 @@ describe('updateDiffHunks', () => {
     ]);
   });
 
-  test('does not append an editor-only trailing blank line as an EOF change addition', () => {
+  test('does not append an edit-only trailing blank line as an EOF change addition', () => {
     const oldContents = ['line 1', 'remove me', 'line 3', ''].join('\n');
     const diff = parseDiffFromFile(
       { name: 'example.ts', contents: oldContents },
@@ -408,7 +408,7 @@ describe('updateDiffHunks', () => {
       { context: 3 }
     );
 
-    // The editor exposes the final logical empty row for a file ending in a
+    // The edit exposes the final logical empty row for a file ending in a
     // newline. That row belongs to document state, not to diff hunk metadata.
     diff.additionLines = ['line 1\n', 'add me\n', 'line 3\n', ''];
 

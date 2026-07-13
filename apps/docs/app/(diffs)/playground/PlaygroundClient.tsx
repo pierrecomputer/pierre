@@ -8,7 +8,7 @@ import type {
   FileDiffOptions,
   SelectedLineRange,
 } from '@pierre/diffs';
-import { Editor } from '@pierre/diffs/editor';
+import { Edit } from '@pierre/diffs/edit';
 import { EditProvider, FileDiff, useWorkerPool } from '@pierre/diffs/react';
 import type { PreloadFileDiffResult } from '@pierre/diffs/ssr';
 import {
@@ -99,8 +99,8 @@ const HUNK_SEPARATOR_OPTIONS = [
 type HunkSeparatorValue = (typeof HUNK_SEPARATOR_OPTIONS)[number]['value'];
 
 // The editable surface is rendered read-only (Review) or attached to a live
-// editor (Edit). Markers are diagnostics shown only while editing.
-type EditorMode = 'review' | 'edit';
+// edit (Edit). Markers are diagnostics shown only while editing.
+type EditMode = 'review' | 'edit';
 
 // The rendering surface the playground diff(s) are drawn with. 'normal' is the
 // single editable FileDiff; 'virtualizer' renders several diffs with window
@@ -155,7 +155,7 @@ const DEFAULTS = {
   gutterButton: true,
   interactionMode: 'comment' as const,
   annotations: true,
-  editorMode: 'review' as EditorMode,
+  editorMode: 'review' as EditMode,
   markers: false,
 } as const;
 
@@ -192,8 +192,8 @@ interface PlaygroundControlsContentProps {
   setEnableGutterUtility: (v: boolean) => void;
   showAnnotations: boolean;
   setShowAnnotations: (v: boolean) => void;
-  editorMode: EditorMode;
-  setEditorMode: (v: EditorMode) => void;
+  editorMode: EditMode;
+  setEditMode: (v: EditMode) => void;
   showMarkers: boolean;
   setShowMarkers: (v: boolean) => void;
   selectedRange: SelectedLineRange | null;
@@ -235,7 +235,7 @@ function PlaygroundControlsContent({
   showAnnotations,
   setShowAnnotations,
   editorMode,
-  setEditorMode,
+  setEditMode,
   showMarkers,
   setShowMarkers,
   selectedRange,
@@ -326,8 +326,8 @@ function PlaygroundControlsContent({
 
             <ButtonGroup
               value={editorMode}
-              onValueChange={(value) => setEditorMode(value as EditorMode)}
-              aria-label="Editor mode"
+              onValueChange={(value) => setEditMode(value as EditMode)}
+              aria-label="Edit mode"
               size="icon"
             >
               <ButtonGroupItem value="review">
@@ -515,14 +515,14 @@ function PlaygroundControlsContent({
           onCheckedChange={setShowAnnotations}
         />
 
-        {/* Markers come from the global editor, which only exists in Normal. */}
+        {/* Markers come from the global edit, which only exists in Normal. */}
         {viewMode === 'normal' && (
           <ToggleButton
             icon={<IconCiWarning />}
             label="Markers"
             checked={showMarkers}
             onCheckedChange={setShowMarkers}
-            // Markers require an attached editor, so they only apply in Edit mode.
+            // Markers require an attached edit, so they only apply in Edit mode.
             disabled={editorMode !== 'edit'}
             title={
               editorMode !== 'edit'
@@ -635,7 +635,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
   const router = useRouter();
 
   // The app-wide color scheme resolved by @pierre/theming (the shared theme
-  // controller). The diff's "system" mode must follow this so the editor stays
+  // controller). The diff's "system" mode must follow this so the edit stays
   // in sync with the rest of the app. See `effectiveColorMode`.
   const { resolvedColorScheme } = useTheme();
 
@@ -732,7 +732,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
   );
   // Edit mode only exists in the Normal view (other views render per-file
   // edit controls instead), so only honor `?edit=edit` when starting there.
-  const [editorMode, setEditorMode] = useState<EditorMode>(
+  const [editorMode, setEditMode] = useState<EditMode>(
     viewMode === 'normal' && getParam('edit', DEFAULTS.editorMode) === 'edit'
       ? 'edit'
       : 'review'
@@ -773,15 +773,15 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
 
   const contentEditable = editorMode === 'edit';
 
-  // The editor attaches to the diff's editable (new-file) side. Recreate it
+  // The edit attaches to the diff's editable (new-file) side. Recreate it
   // when the diff layout or edit mode changes so it re-attaches to the freshly
   // relaid-out surface with a clean document instead of reusing a torn-down
-  // instance (mirrors LiveEditing's editor lifecycle).
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- deps intentionally force a fresh editor; the factory takes no inputs
-  const editor = useMemo(() => new Editor({}), []);
+  // instance (mirrors LiveEditing's edit lifecycle).
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- deps intentionally force a fresh edit; the factory takes no inputs
+  const edit = useMemo(() => new Edit({}), []);
 
-  // Apply (or clear) the demo markers whenever the editor, mode, or toggle
-  // changes. `setMarkers` throws until the editor attaches to its surface
+  // Apply (or clear) the demo markers whenever the edit, mode, or toggle
+  // changes. `setMarkers` throws until the edit attaches to its surface
   // (async), so retry each frame until the call sticks (mirrors MarkerDemo).
   useEffect(() => {
     if (!contentEditable) {
@@ -790,14 +790,14 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
     let frame = 0;
     const apply = () => {
       try {
-        editor.setMarkers(showMarkers ? PLAYGROUND_MARKERS : []);
+        edit.setMarkers(showMarkers ? PLAYGROUND_MARKERS : []);
       } catch {
         frame = requestAnimationFrame(apply);
       }
     };
     apply();
     return () => cancelAnimationFrame(frame);
-  }, [editor, contentEditable, showMarkers]);
+  }, [edit, contentEditable, showMarkers]);
 
   // Build URL with current config
   const buildUrl = useCallback(() => {
@@ -948,15 +948,15 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
 
   // Leaving the Normal view drops back to Review: the global Edit toggle only
   // exists there, and a stale 'edit' would keep `contentEditable` true with no
-  // mounted editor to attach to, so the marker effect would retry forever.
-  const setViewModeAndResetEditor = useCallback((mode: ViewMode) => {
+  // mounted edit to attach to, so the marker effect would retry forever.
+  const setViewModeAndResetEdit = useCallback((mode: ViewMode) => {
     setViewMode(mode);
-    if (mode !== 'normal') setEditorMode('review');
+    if (mode !== 'normal') setEditMode('review');
   }, []);
 
   const controlsContentProps = {
     viewMode,
-    setViewMode: setViewModeAndResetEditor,
+    setViewMode: setViewModeAndResetEdit,
     diffStyle,
     setDiffStyle,
     colorMode,
@@ -984,7 +984,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
     showAnnotations,
     setShowAnnotations,
     editorMode,
-    setEditorMode,
+    setEditMode,
     showMarkers,
     setShowMarkers,
     selectedRange,
@@ -994,10 +994,10 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
 
   // The diff's own "system" mode follows the OS (its shadow root declares
   // `color-scheme: light dark`), which drifts from the app whenever the app's
-  // theme differs from the OS preference. To keep the editor in sync with the
+  // theme differs from the OS preference. To keep the edit in sync with the
   // app, resolve "system" to the app's current scheme from @pierre/theming and
   // pass that concrete light/dark to the diff; "light"/"dark" still force the
-  // editor independently. Before the controller has mounted
+  // edit independently. Before the controller has mounted
   // `resolvedColorScheme` is undefined, so fall back to "system" to match the
   // prerendered diff.
   const effectiveColorMode =
@@ -1157,14 +1157,14 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
 
       {/*
         Normal view keeps EditProvider mounted in both Review and Edit so
-        toggling modes only flips `contentEditable` (the editor attaches lazily
+        toggling modes only flips `contentEditable` (the edit attaches lazily
         when that turns true). Conditionally wrapping would change the child
         component type and remount FileDiff, which recreates the shadow root and
         re-injects the dark SSR HTML for a frame — the light->dark flash we're
         avoiding here. Mirrors the LiveEditing demo.
       */}
       {viewMode === 'normal' ? (
-        <EditProvider editor={editor}>{fileDiff}</EditProvider>
+        <EditProvider edit={edit}>{fileDiff}</EditProvider>
       ) : viewMode === 'virtualizer' ? (
         <PlaygroundVirtualizerView
           diffs={VIRTUALIZER_FILE_DIFFS}

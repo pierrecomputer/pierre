@@ -21,8 +21,8 @@ const RESPONSIVENESS_DEMO_PATHS = [
   'apps/web/app/settings/account/page.tsx',
   'apps/web/app/settings/billing/page.tsx',
   'apps/web/app/settings/team/page.tsx',
-  'apps/web/components/editor/EditorShell.tsx',
-  'apps/web/components/editor/Toolbar.tsx',
+  'apps/web/components/edit/EditShell.tsx',
+  'apps/web/components/edit/Toolbar.tsx',
   'packages/ui/src/button/Button.tsx',
   'packages/ui/src/button/Button.test.tsx',
   'packages/ui/src/forms/Input.tsx',
@@ -347,9 +347,9 @@ export function ResponsivenessDemoClient() {
               </h2>
             </div>
             <p>
-              In real apps the tree usually sits beside editor or detail
-              content. This filler pane keeps the demo honest without needing a
-              full-page layout.
+              In real apps the tree usually sits beside edit or detail content.
+              This filler pane keeps the demo honest without needing a full-page
+              layout.
             </p>
             <div className="grid gap-3 lg:grid-cols-2">
               <div className="rounded-md border border-white/10 bg-white/5 p-3">

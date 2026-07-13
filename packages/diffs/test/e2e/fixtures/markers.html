@@ -34,7 +34,7 @@
 
     <script type="module">
       import { File } from '/dist/index.js';
-      import { Editor } from '/dist/editor/index.js';
+      import { Edit } from '/dist/edit/index.js';
 
       const mount = document.querySelector('[data-diff-mount]');
       if (!(mount instanceof HTMLElement)) {
@@ -52,8 +52,8 @@ ${' '.repeat(80)}scrolledMarkerTarget_${'x'.repeat(180)}();
 `,
       };
 
-      const editor = new Editor({});
-      window.__editor = editor;
+      const edit = new Edit({});
+      window.__editor = edit;
 
       const instance = new File({
         disableFileHeader: true,
@@ -62,7 +62,7 @@ ${' '.repeat(80)}scrolledMarkerTarget_${'x'.repeat(180)}();
         useTokenTransformer: true,
       });
       instance.render({ file, containerWrapper: mount });
-      editor.edit(instance);
+      edit.edit(instance);
 
       // Ranges are 0-based line/character. One of each severity so the test can
       // assert per-severity rendering.
@@ -93,13 +93,13 @@ ${' '.repeat(80)}scrolledMarkerTarget_${'x'.repeat(180)}();
         },
       ];
 
-      // setMarkers throws until the editor attaches to its surface (async), so
+      // setMarkers throws until the edit attaches to its surface (async), so
       // retry each frame until it sticks and the squiggles are in the DOM.
       const applyMarkers = async () => {
         const started = performance.now();
         while (true) {
           try {
-            editor.setMarkers(markers);
+            edit.setMarkers(markers);
             const host = mount.querySelector('diffs-container');
             const rendered = host?.shadowRoot?.querySelector(
               '[data-marker-range]'
@@ -108,7 +108,7 @@ ${' '.repeat(80)}scrolledMarkerTarget_${'x'.repeat(180)}();
               return;
             }
           } catch {
-            // editor not attached yet
+            // edit not attached yet
           }
           if (performance.now() - started > 5000) {
             throw new Error('Timed out waiting for markers.');

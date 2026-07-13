@@ -21,7 +21,7 @@ import {
   areOptionsEqual,
   CodeView as CodeViewClass,
   type CodeViewCoordinator,
-  type CodeViewCreateEditorOptions,
+  type CodeViewCreateEditOptions,
   type CodeViewItem,
   type CodeViewLineSelection,
   type CodeViewOptions,
@@ -29,7 +29,7 @@ import {
   type CodeViewScrollTarget,
   type CodeViewSlotSnapshot,
   type DiffLineAnnotation,
-  type DiffsEditor,
+  type DiffsEdit,
   type FileContents,
   type GetHoveredLineResult,
   type LineAnnotation,
@@ -64,13 +64,13 @@ interface CodeViewBaseProps<LAnnotation> {
   renderCodeViewFooter?(): ReactNode;
   /**
    * Enables editing for items with `edit: true`. Pass the given options into
-   * the editor constructor — `new Editor(options)` from `@pierre/diffs/editor`
+   * the edit constructor — `new Edit(options)` from `@pierre/diffs/edit`
    * — so document changes route to `onItemEditChange` and
-   * `onItemEditComplete`. CodeView owns the returned editor's lifecycle.
+   * `onItemEditComplete`. CodeView owns the returned edit's lifecycle.
    */
-  createEditor?(
-    options: CodeViewCreateEditorOptions<LAnnotation>
-  ): DiffsEditor<LAnnotation> | undefined;
+  createEdit?(
+    options: CodeViewCreateEditOptions<LAnnotation>
+  ): DiffsEdit<LAnnotation> | undefined;
   /** Called with the owning item on every edited-document change. */
   onItemEditChange?(
     item: CodeViewItem<LAnnotation>,
@@ -132,7 +132,7 @@ export interface CodeViewHandle<LAnnotation> {
   setSelectedLines(selection: CodeViewLineSelection | null): void;
   getSelectedLines(): CodeViewLineSelection | null;
   clearSelectedLines(): void;
-  getEditor(id: string): DiffsEditor<LAnnotation> | undefined;
+  getEdit(id: string): DiffsEdit<LAnnotation> | undefined;
   getInstance(): CodeViewClass<LAnnotation> | undefined;
 }
 
@@ -181,7 +181,7 @@ function CodeViewInner<LAnnotation = undefined>(
   const {
     className,
     containerRef,
-    createEditor,
+    createEdit,
     disableWorkerPool = false,
     initialItems,
     items: controlledItems,
@@ -225,11 +225,11 @@ function CodeViewInner<LAnnotation = undefined>(
   );
   const controlledSelection = selectedLines !== undefined;
 
-  // Stable identities for the editor callbacks so inline props don't churn
+  // Stable identities for the edit callbacks so inline props don't churn
   // managedOptions (a changed options object forces a full item re-render).
-  const stableCreateEditor = useStableCallback(
-    (editorOptions: CodeViewCreateEditorOptions<LAnnotation>) =>
-      createEditor?.(editorOptions)
+  const stableCreateEdit = useStableCallback(
+    (editorOptions: CodeViewCreateEditOptions<LAnnotation>) =>
+      createEdit?.(editorOptions)
   );
   const emitItemEditChange = useStableCallback(
     (
@@ -261,7 +261,7 @@ function CodeViewInner<LAnnotation = undefined>(
         onSelectedLinesChange:
           onSelectedLinesChange != null ? emitSelectedLinesChange : undefined,
         controlledSelection,
-        createEditor: createEditor != null ? stableCreateEditor : undefined,
+        createEdit: createEdit != null ? stableCreateEdit : undefined,
         onItemEditChange:
           onItemEditChange != null ? emitItemEditChange : undefined,
         onItemEditComplete:
@@ -276,8 +276,8 @@ function CodeViewInner<LAnnotation = undefined>(
       onSelectedLinesChange,
       emitSelectedLinesChange,
       controlledSelection,
-      createEditor,
-      stableCreateEditor,
+      createEdit,
+      stableCreateEdit,
       onItemEditChange,
       emitItemEditChange,
       onItemEditComplete,
@@ -556,14 +556,14 @@ function CodeViewInner<LAnnotation = undefined>(
           emitSelectedLinesChange(null);
         }
       },
-      getEditor(id) {
+      getEdit(id) {
         const { instance } = cachedDataRef.current;
         if (instance == null) {
-          console.error('CodeView.getEditor: no valid instance exists', id);
+          console.error('CodeView.getEdit: no valid instance exists', id);
           return undefined;
         }
 
-        return instance.getEditor(id);
+        return instance.getEdit(id);
       },
       getInstance() {
         return cachedDataRef.current.instance;
@@ -683,7 +683,7 @@ interface CreateManagedCodeViewOptionsProps<LAnnotation> {
   hasCodeViewFooter: boolean;
   onSelectedLinesChange?(selection: CodeViewLineSelection | null): void;
   controlledSelection: boolean;
-  createEditor: CodeViewOptions<LAnnotation>['createEditor'];
+  createEdit: CodeViewOptions<LAnnotation>['createEdit'];
   onItemEditChange: CodeViewOptions<LAnnotation>['onItemEditChange'];
   onItemEditComplete: CodeViewOptions<LAnnotation>['onItemEditComplete'];
 }
@@ -696,7 +696,7 @@ function createManagedCodeViewOptions<LAnnotation>({
   hasCodeViewFooter,
   onSelectedLinesChange,
   controlledSelection,
-  createEditor,
+  createEdit,
   onItemEditChange,
   onItemEditComplete,
 }: CreateManagedCodeViewOptionsProps<LAnnotation>):
@@ -709,7 +709,7 @@ function createManagedCodeViewOptions<LAnnotation>({
     !hasCodeViewFooter &&
     onSelectedLinesChange == null &&
     !controlledSelection &&
-    createEditor == null &&
+    createEdit == null &&
     onItemEditChange == null &&
     onItemEditComplete == null
   ) {
@@ -717,10 +717,10 @@ function createManagedCodeViewOptions<LAnnotation>({
   }
   options = { ...options, controlledSelection, onSelectedLinesChange };
 
-  // Prop-level editor callbacks win over their options-object counterparts,
+  // Prop-level edit callbacks win over their options-object counterparts,
   // but an absent prop must not clobber a value provided via `options`.
-  if (createEditor != null) {
-    options.createEditor = createEditor;
+  if (createEdit != null) {
+    options.createEdit = createEdit;
   }
   if (onItemEditChange != null) {
     options.onItemEditChange = onItemEditChange;

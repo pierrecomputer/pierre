@@ -13,7 +13,7 @@ const contents = (page: Page): Promise<string> =>
 test.describe('multi-cursor and indentation', () => {
   // Adding a caret with a modifier-click can't be simulated in the pinned
   // headless Chromium: selectionchange fires before pointerdown there, so the
-  // editor can't reserve the prior caret before the new one lands. We instead
+  // edit can't reserve the prior caret before the new one lands. We instead
   // seed two carets through the public setSelections API and drive real
   // keyboard input, which exercises the multi-caret edit pipeline itself.
   test('typing with multiple carets edits every caret', async ({ page }) => {
@@ -21,12 +21,12 @@ test.describe('multi-cursor and indentation', () => {
 
     await page.locator(CONTENT).click();
     await page.evaluate(() => {
-      const editor = window.__editor;
-      if (editor == null) {
+      const edit = window.__editor;
+      if (edit == null) {
         throw new Error('editor missing');
       }
-      editor.focus();
-      editor.setSelections([
+      edit.focus();
+      edit.setSelections([
         {
           start: { line: 0, character: 0 },
           end: { line: 0, character: 0 },

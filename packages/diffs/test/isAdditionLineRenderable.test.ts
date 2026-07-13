@@ -94,7 +94,7 @@ describe('isAdditionLineRenderable', () => {
 
   test('reports lines beyond the modeled range as renderable', () => {
     const diff = makeDiff();
-    // The editor document exposes one phantom line past the file end.
+    // The edit document exposes one phantom line past the file end.
     expect(
       isAdditionLineRenderable({
         fileDiff: diff,

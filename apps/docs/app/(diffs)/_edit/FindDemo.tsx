@@ -1,6 +1,6 @@
 'use client';
 
-import { Editor } from '@pierre/diffs/editor';
+import { Edit } from '@pierre/diffs/edit';
 import { EditProvider, File } from '@pierre/diffs/react';
 import type { PreloadedFileResult } from '@pierre/diffs/ssr';
 import { useEffect, useMemo, useRef } from 'react';
@@ -25,16 +25,16 @@ function detectMac(): boolean {
   return /mac|iphone|ipad|ipod/i.test(platform);
 }
 
-// Demo of the editor's find overlay. With no public API to open the search
+// Demo of the edit's find overlay. With no public API to open the search
 // panel, we do what a reader would: dispatch Cmd/Ctrl-F on the content element
 // (polling for it, since it attaches asynchronously after the File hydrates).
 // We deliberately leave the input blank and never seed a query — seeding makes
-// the editor scroll its first match into view, and that scroll bubbles up to
+// the edit scroll its first match into view, and that scroll bubbles up to
 // the page, yanking the reader down to this (below-the-fold) demo on load.
 // Opening an empty panel scrolls nothing.
 export function FindDemo({ prerenderedFile }: FindDemoProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
-  const editor = useMemo(() => new Editor({}), []);
+  const edit = useMemo(() => new Edit({}), []);
 
   useEffect(() => {
     const wrapper = wrapperRef.current;
@@ -59,7 +59,7 @@ export function FindDemo({ prerenderedFile }: FindDemoProps) {
       if (content == null) {
         return;
       }
-      editor.setSelections([
+      edit.setSelections([
         {
           start: { line: 0, character: 5 },
           end: { line: 0, character: 5 },
@@ -80,7 +80,7 @@ export function FindDemo({ prerenderedFile }: FindDemoProps) {
 
     // Poll until the content element has attached, open the panel once, then
     // stop. We leave the input blank, so nothing scrolls: opening an empty panel
-    // reveals no match for the editor to scroll into view.
+    // reveals no match for the edit to scroll into view.
     const tick = () => {
       if (cancelled) {
         return;
@@ -99,7 +99,7 @@ export function FindDemo({ prerenderedFile }: FindDemoProps) {
     };
 
     // Defer until the demo nears the viewport so we only open the panel (and
-    // focus its editor) as the reader approaches it, rather than on load.
+    // focus its edit) as the reader approaches it, rather than on load.
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries.some((entry) => entry.isIntersecting)) {
@@ -118,11 +118,11 @@ export function FindDemo({ prerenderedFile }: FindDemoProps) {
         window.clearTimeout(timer);
       }
     };
-  }, [editor]);
+  }, [edit]);
 
   return (
     <div className="not-prose" ref={wrapperRef}>
-      <EditProvider editor={editor}>
+      <EditProvider edit={edit}>
         <File
           {...prerenderedFile}
           className="diff-container max-h-[420px] overflow-auto"

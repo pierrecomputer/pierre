@@ -1,6 +1,6 @@
 'use client';
 
-import { Editor } from '@pierre/diffs/editor';
+import { Edit } from '@pierre/diffs/edit';
 import { EditProvider, File } from '@pierre/diffs/react';
 import type { PreloadedFileResult } from '@pierre/diffs/ssr';
 import { useEffect, useMemo } from 'react';
@@ -12,29 +12,29 @@ interface MarkerDemoProps {
   prerenderedFile: PreloadedFileResult<undefined>;
 }
 
-// Demo of the editor's lint markers, applied imperatively via `editor.setMarkers`
+// Demo of the edit's lint markers, applied imperatively via `edit.setMarkers`
 // (the same call a real linter integration would make) and shown by default.
 export function MarkerDemo({ prerenderedFile }: MarkerDemoProps) {
-  const editor = useMemo(() => new Editor({}), []);
+  const edit = useMemo(() => new Edit({}), []);
 
-  // `setMarkers` throws until the editor attaches to its surface (async), so
+  // `setMarkers` throws until the edit attaches to its surface (async), so
   // retry each frame until the call sticks.
   useEffect(() => {
     let frame = 0;
     const apply = () => {
       try {
-        editor.setMarkers(MARKER_DEMO_MARKERS);
+        edit.setMarkers(MARKER_DEMO_MARKERS);
       } catch {
         frame = requestAnimationFrame(apply);
       }
     };
     apply();
     return () => cancelAnimationFrame(frame);
-  }, [editor]);
+  }, [edit]);
 
   return (
     <div className="not-prose">
-      <EditProvider editor={editor}>
+      <EditProvider edit={edit}>
         <File {...prerenderedFile} className="diff-container" contentEditable />
       </EditProvider>
     </div>

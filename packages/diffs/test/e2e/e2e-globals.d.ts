@@ -1,6 +1,6 @@
 // Shared ambient globals for the diffs E2E fixtures.
 //
-// Each fixture stashes a ready flag (and sometimes an editor handle or an
+// Each fixture stashes a ready flag (and sometimes an edit handle or an
 // interaction log) on `window` so the Playwright specs can await setup and read
 // state. TypeScript merges the `Window` interface across the whole program, so
 // declaring these per-file with `declare global` produced conflicting `__editor`
@@ -23,7 +23,7 @@ interface E2ESelection {
   direction?: 'none' | 'backward' | 'forward';
 }
 
-interface E2EEditorState {
+interface E2EEditState {
   selections?: E2ESelection[];
   view?: {
     scrollLeft: number;
@@ -36,13 +36,13 @@ interface E2ETextEdit {
   newText: string;
 }
 
-// The subset of the real Editor surface the fixtures expose on `window`.
-interface E2EEditor {
+// The subset of the real Edit surface the fixtures expose on `window`.
+interface E2EEdit {
   canUndo: boolean;
   canRedo: boolean;
   getText: () => string;
   getFile: () => { contents: string } | undefined;
-  getState: () => E2EEditorState;
+  getState: () => E2EEditState;
   setSelections: (selections: E2ESelection[]) => void;
   applyEdits: (edits: E2ETextEdit[], updateHistory?: boolean) => void;
   focus: () => void;
@@ -69,8 +69,8 @@ interface Window {
   __gutterClicks?: E2ELineRange[];
   __actionClicks?: string[];
 
-  // Editor handle exposed by the editable fixtures.
-  __editor?: E2EEditor;
+  // Edit handle exposed by the editable fixtures.
+  __editor?: E2EEdit;
 
   // edit-collapsed.html helpers: rendered new-file line numbers in the
   // editable column, and the primary caret's zero-based line.

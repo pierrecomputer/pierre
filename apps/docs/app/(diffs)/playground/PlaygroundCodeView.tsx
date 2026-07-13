@@ -2,7 +2,7 @@
 
 import {
   type AnnotationSide,
-  type CodeViewCreateEditorOptions,
+  type CodeViewCreateEditOptions,
   type CodeViewItem,
   type CodeViewOptions,
   type DiffLineAnnotation,
@@ -11,7 +11,7 @@ import {
   parseDiffFromFile,
   type SelectedLineRange,
 } from '@pierre/diffs';
-import { Editor } from '@pierre/diffs/editor';
+import { Edit } from '@pierre/diffs/edit';
 import { CodeView, useStableCallback } from '@pierre/diffs/react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
@@ -35,8 +35,8 @@ interface PlaygroundCodeViewProps {
 //
 // This view also demos first-class item editing: each header carries an Edit
 // checkbox that flips the item's `edit` flag (any number of items can be in
-// edit mode at once). CodeView creates one Editor per edited item through
-// `createEditor` and keeps it attached across virtualization scroll-out, so
+// edit mode at once). CodeView creates one Edit per edited item through
+// `createEdit` and keeps it attached across virtualization scroll-out, so
 // unsaved edits and undo history survive scrolling. When a session ends
 // (checkbox off), `onItemEditComplete` hands us the final contents and we
 // persist them back into the item — file items swap contents directly, diff
@@ -273,7 +273,7 @@ export function PlaygroundCodeView({
       className="border-border rounded-lg border"
       style={CODE_VIEW_STYLES}
       options={codeViewOptions}
-      createEditor={createEditor}
+      createEdit={createEdit}
       onItemEditComplete={handleEditComplete}
       renderHeaderMetadata={renderHeaderMetadata}
       renderAnnotation={renderAnnotation}
@@ -281,8 +281,8 @@ export function PlaygroundCodeView({
   );
 }
 
-function createEditor(
-  editorOptions: CodeViewCreateEditorOptions<PlaygroundAnnotationMetadata>
+function createEdit(
+  editorOptions: CodeViewCreateEditOptions<PlaygroundAnnotationMetadata>
 ) {
-  return new Editor(editorOptions);
+  return new Edit(editorOptions);
 }

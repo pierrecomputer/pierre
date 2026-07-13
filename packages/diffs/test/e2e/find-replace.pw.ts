@@ -15,7 +15,7 @@ async function openFixture(page: Page): Promise<void> {
 const contents = (page: Page): Promise<string> =>
   page.evaluate(() => window.__editor?.getText() ?? '');
 
-// Focus the editor surface, then open the search panel with the real shortcut.
+// Focus the edit surface, then open the search panel with the real shortcut.
 // The panel container is a zero-height CSS grid wrapper (its cells are laid out
 // individually), so wait on the visible search input rather than the wrapper.
 async function openSearchPanel(page: Page): Promise<void> {
@@ -101,7 +101,7 @@ test.describe('find and replace', () => {
     await expect(page.locator(HIGHLIGHTS)).toHaveCount(0);
   });
 
-  test('Escape from the editor content closes the panel and clears highlights', async ({
+  test('Escape from the edit content closes the panel and clears highlights', async ({
     page,
   }) => {
     await openFixture(page);
@@ -110,7 +110,7 @@ test.describe('find and replace', () => {
     await page.locator(SEARCH_INPUT).fill('foo');
     await expect(page.locator(HIGHLIGHTS)).toHaveCount(4);
 
-    // Click into the editor text so focus leaves the search input, then press
+    // Click into the edit text so focus leaves the search input, then press
     // Escape. This is handled by the content-focused keydown handler, a
     // separate teardown path that must clear the highlights too.
     await page.locator(CONTENT).click();

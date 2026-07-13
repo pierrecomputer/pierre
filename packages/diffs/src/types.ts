@@ -349,7 +349,7 @@ export interface FileDiffMetadata {
    */
   additionLines: string[];
   /**
-   * Set while an attached editor's session-scoped hunk updates have reshaped
+   * Set while an attached edit's session-scoped hunk updates have reshaped
    * `hunks` away from a plain recompute (regions stay frozen during an edit
    * session). Consumed by the session-exit recompute, which restores
    * recompute-shaped hunks and clears the flag. It lives on the metadata so
@@ -555,7 +555,7 @@ export type CodeViewFileItem<T = undefined> = {
   version?: number;
   collapsed?: boolean;
   /**
-   * Put this item into edit mode. Requires the CodeView `createEditor` option;
+   * Put this item into edit mode. Requires the CodeView `createEdit` option;
    * ignored while `collapsed` is true. Make sure you bump the version when
    * also changing the value.
    */
@@ -570,7 +570,7 @@ export type CodeViewDiffItem<T = undefined> = {
   version?: number;
   collapsed?: boolean;
   /**
-   * Put this item into edit mode. Requires the CodeView `createEditor` option;
+   * Put this item into edit mode. Requires the CodeView `createEdit` option;
    * ignored while `collapsed` is true. Make sure you bump the version when
    * also changing the value.
    */
@@ -841,9 +841,9 @@ export interface RenderedDiffASTCache {
  * - Renderer consumers (`iterateOverDiff` window predicates, windowed AST
  *   requests, buffers, sticky specs) read `startingLine`/`totalLines` as
  *   dense rendered-row indexes for the active diff style.
- * - The editor reads them as zero-based document-line indexes of the new
- *   file. `FileDiff.computeEditorRenderRange` converts the renderer range on
- *   the editor-bound copy; the two coincide only while every line renders
+ * - The edit reads them as zero-based document-line indexes of the new
+ *   file. `FileDiff.computeEditRenderRange` converts the renderer range on
+ *   the edit-bound copy; the two coincide only while every line renders
  *   (`expandUnchanged`).
  */
 export interface RenderRange {
@@ -1033,7 +1033,7 @@ export interface DiffsEditableComponent<
    * Whether the given one-based new-file line currently has (or will have on
    * scroll) a rendered row. False only for lines hidden inside a collapsed
    * unchanged region. Components without collapsible regions leave this
-   * unimplemented and the editor treats every line as renderable.
+   * unimplemented and the edit treats every line as renderable.
    */
   isLineRenderable?: (lineNumber: number) => boolean;
   /**
@@ -1053,14 +1053,12 @@ export interface DiffsEditableComponent<
    */
   revealLine?: (lineNumber: number) => boolean;
   /**
-   * Attach an editor to this component. The returned detach closure receives
-   * `recycle: true` when the editor is only being released by a virtualized
+   * Attach an edit to this component. The returned detach closure receives
+   * `recycle: true` when the edit is only being released by a virtualized
    * unmount (the session continues on remount) and no argument/false on a
    * genuine session end.
    */
-  attachEditor: (
-    editor: DiffsEditor<LAnnotation>
-  ) => (recycle?: boolean) => void;
+  attachEdit: (edit: DiffsEdit<LAnnotation>) => (recycle?: boolean) => void;
   applyDocumentChange: (
     textDocument: DiffsTextDocument,
     newLineAnnotations?: DiffLineAnnotation<LAnnotation>[],
@@ -1079,7 +1077,7 @@ export interface DiffsEditableComponent<
   ) => void;
 }
 
-export interface DiffsEditor<LAnnotation> {
+export interface DiffsEdit<LAnnotation> {
   __postponeBgTokenizeToNextFrame(): void;
   __syncRenderView(
     highlighter: DiffsHighlighter,
@@ -1176,12 +1174,12 @@ export interface TextEdit {
  */
 export type SelectionDirection = -1 | 0 | 1;
 
-export interface EditorSelection extends Range {
+export interface EditSelection extends Range {
   direction: SelectionDirection;
 }
 
-export interface EditorState {
-  selections?: EditorSelection[];
+export interface EditState {
+  selections?: EditSelection[];
   view?: {
     scrollLeft: number;
     scrollTop: number;
@@ -1195,14 +1193,14 @@ export interface DiffsTextDocument {
 }
 
 /**
- * Options CodeView passes to its `createEditor` factory. A structural subset
- * of `EditorOptions` from `@pierre/diffs/editor`, so factories can spread
- * them straight into the constructor — `new Editor({ ...options })` — and
- * layer any editor configuration of their own on top. Forwarding `onChange`
+ * Options CodeView passes to its `createEdit` factory. A structural subset
+ * of `EditOptions` from `@pierre/diffs/edit`, so factories can spread
+ * them straight into the constructor — `new Edit({ ...options })` — and
+ * layer any edit configuration of their own on top. Forwarding `onChange`
  * is what lets CodeView resolve document changes back to the owning item and
  * emit them through its own `onItemEditChange` option.
  */
-export interface CodeViewCreateEditorOptions<LAnnotation> {
+export interface CodeViewCreateEditOptions<LAnnotation> {
   onChange: (
     file: FileContents,
     lineAnnotations?: DiffLineAnnotation<LAnnotation>[]

@@ -16,7 +16,7 @@ import {
   queueRender,
 } from '../managers/UniversalRenderingManager';
 import type {
-  CodeViewCreateEditorOptions,
+  CodeViewCreateEditOptions,
   CodeViewDiffItem,
   CodeViewFileItem,
   CodeViewItem,
@@ -28,7 +28,7 @@ import type {
   CodeViewScrollBehavior,
   CodeViewScrollTarget,
   DiffLineAnnotation,
-  DiffsEditor,
+  DiffsEdit,
   FileContents,
   HunkSeparators,
   PendingCodeViewLayoutReset,
@@ -322,11 +322,11 @@ export const CODE_VIEW_FILE_OPTION_KEYS = [
 type CodeViewFileOptionKeys = (typeof CODE_VIEW_FILE_OPTION_KEYS)[number];
 
 // FIXME(amadeus): Ideally we don't ever require this...
-// Option values Editor.edit requires before it attaches to an instance. These
+// Option values Edit.edit requires before it attaches to an instance. These
 // keys are excluded from the plain pass-through loops (defineItemOption
 // properties are non-configurable and cannot be redefined) so the prototypes
-// can define edit-aware getters that serve the editor-required value while an
-// item is in edit mode. Without this, Editor.edit would fall back to
+// can define edit-aware getters that serve the edit-required value while an
+// item is in edit mode. Without this, Edit.edit would fall back to
 // instance.setOptions, which throws for CodeView-managed instances.
 const CODE_VIEW_EDIT_FORCED_OPTION_KEYS: ReadonlySet<string> = new Set([
   'useTokenTransformer',
@@ -435,7 +435,7 @@ type CodeViewItemOptions<
   [CODE_VIEW_ITEM_OPTIONS_STATE]: CodeViewItemOptionsState;
 };
 
-// One document change published by an item's editor, as delivered to the
+// One document change published by an item's edit, as delivered to the
 // onItemEditChange/onItemEditComplete options.
 interface CodeViewItemEditChange<LAnnotation> {
   // Item snapshot from the time of the change; used as a fallback when the
@@ -449,16 +449,16 @@ interface CodeViewItemEditChange<LAnnotation> {
 // The closure resolves the owning item through `id` (kept current by
 // updateItemId) and caches each document change in `lastChange` so the final
 // contents can be published through onItemEditComplete when the session ends
-// — even if the editor is detached (scrolled out) at that moment.
-interface CodeViewItemEditorState<LAnnotation> {
+// — even if the edit is detached (scrolled out) at that moment.
+interface CodeViewItemEditState<LAnnotation> {
   id: string;
   lastChange?: CodeViewItemEditChange<LAnnotation>;
 }
 
-// Editor bookkeeping for one edit-mode item.
-interface CodeViewItemEditorRecord<LAnnotation> {
-  editor: DiffsEditor<LAnnotation>;
-  state: CodeViewItemEditorState<LAnnotation>;
+// Edit bookkeeping for one edit-mode item.
+interface CodeViewItemEditRecord<LAnnotation> {
+  edit: DiffsEdit<LAnnotation>;
+  state: CodeViewItemEditState<LAnnotation>;
 }
 
 function defineOptionsState<LAnnotation, TMode extends CodeViewMode>(
@@ -532,18 +532,18 @@ export interface CodeViewOptions<LAnnotation>
   onSelectedLinesChange?(selection: CodeViewLineSelection | null): void;
   layout?: CodeViewLayout;
   /**
-   * Create an editor for an item entering edit mode (`edit: true`). Providing
+   * Create an edit for an item entering edit mode (`edit: true`). Providing
    * this option is what enables item editing. Pass the given options into the
-   * editor constructor — `new Editor(options)` — so CodeView can route
+   * edit constructor — `new Edit(options)` — so CodeView can route
    * document changes to `onItemEditChange`. CodeView owns the returned
-   * editor's lifecycle: it attaches when the edited item mounts, re-attaches
-   * across virtualization unmounts, and cleans the editor up once the item
+   * edit's lifecycle: it attaches when the edited item mounts, re-attaches
+   * across virtualization unmounts, and cleans the edit up once the item
    * stops being editable (edit off, collapsed, or removed). Returning
    * undefined declines the attach; CodeView retries on later render passes.
    */
-  createEditor?(
-    options: CodeViewCreateEditorOptions<LAnnotation>
-  ): DiffsEditor<LAnnotation> | undefined;
+  createEdit?(
+    options: CodeViewCreateEditOptions<LAnnotation>
+  ): DiffsEdit<LAnnotation> | undefined;
   /**
    * Called when an edited item's document changes, with the owning item
    * resolved by CodeView.
@@ -556,7 +556,7 @@ export interface CodeViewOptions<LAnnotation>
   /**
    * Called once when an item's edit session ends — edit turned off, item
    * removed (including a controlled `setItems([])` that empties the list),
-   * item collapsed, or `createEditor` unset — with the final contents from
+   * item collapsed, or `createEdit` unset — with the final contents from
    * the session's last document change. Not called when the session produced
    * no changes, nor on a direct `reset()`/`cleanUp()` teardown.
    *
@@ -658,15 +658,15 @@ export class CodeView<LAnnotation = undefined> {
   private items: CodeViewContextItem<LAnnotation>[] = [];
   private idToItem: Map<string, CodeViewContextItem<LAnnotation>> = new Map();
   private selectedLines: CodeViewLineSelection | null = null;
-  // One editor per edit-mode item, created lazily via options.createEditor.
+  // One edit per edit-mode item, created lazily via options.createEdit.
   // Entries survive virtualization unmounts so a remounted item re-attaches
-  // its existing editor; attachedEditors tracks which entries are currently
+  // its existing edit; attachedEdits tracks which entries are currently
   // bound to a mounted instance. Each record's `id` is mutable so
-  // updateItemId can keep the editor's onChange closure resolving the
+  // updateItemId can keep the edit's onChange closure resolving the
   // current item (mirroring updateItemOptionsId for item options state).
-  private itemEditors: Map<string, CodeViewItemEditorRecord<LAnnotation>> =
+  private itemEdits: Map<string, CodeViewItemEditRecord<LAnnotation>> =
     new Map();
-  private attachedEditors: Set<string> = new Set();
+  private attachedEdits: Set<string> = new Set();
   // NOTE(amadeus): We should probably attach an id to instances and use that
   // for lookups, instead of maintaining this map...
   private instanceToItem: Map<
@@ -1152,13 +1152,13 @@ export class CodeView<LAnnotation = undefined> {
     this.clearReadySubscription();
     this.restoreScrollInteractions();
     this.cleanAllRenderedItems();
-    // Rendered-item cleanup above already detached mounted editors; cleaning
-    // an already-detached editor is a no-op, so this covers both cases.
-    for (const record of this.itemEditors.values()) {
-      record.editor.cleanUp();
+    // Rendered-item cleanup above already detached mounted edits; cleaning
+    // an already-detached edit is a no-op, so this covers both cases.
+    for (const record of this.itemEdits.values()) {
+      record.edit.cleanUp();
     }
-    this.itemEditors.clear();
-    this.attachedEditors.clear();
+    this.itemEdits.clear();
+    this.attachedEdits.clear();
     this.selectedLines = null;
     this.items.length = 0;
     this.idToItem.clear();
@@ -1277,9 +1277,9 @@ export class CodeView<LAnnotation = undefined> {
     }
 
     item.instance.cleanUp(true);
-    // Instance cleanup fully detached any attached editor. The editor itself
-    // stays in itemEditors so the item re-attaches it on remount.
-    this.attachedEditors.delete(item.item.id);
+    // Instance cleanup fully detached any attached edit. The edit itself
+    // stays in itemEdits so the item re-attaches it on remount.
+    this.attachedEdits.delete(item.item.id);
     item.element = undefined;
     if (element == null) {
       return;
@@ -1470,12 +1470,12 @@ export class CodeView<LAnnotation = undefined> {
   }
 
   /**
-   * Get the live editor for an item currently in edit mode. Use this to drive
-   * editor APIs CodeView does not wrap (applyEdits, undo, setMarkers, …).
+   * Get the live edit for an item currently in edit mode. Use this to drive
+   * edit APIs CodeView does not wrap (applyEdits, undo, setMarkers, …).
    * Returns undefined once the item leaves edit mode.
    */
-  public getEditor(itemId: string): DiffsEditor<LAnnotation> | undefined {
-    return this.itemEditors.get(itemId)?.editor;
+  public getEdit(itemId: string): DiffsEdit<LAnnotation> | undefined {
+    return this.itemEdits.get(itemId)?.edit;
   }
 
   public updateItem(input: CodeViewItem<LAnnotation>): boolean {
@@ -1493,7 +1493,7 @@ export class CodeView<LAnnotation = undefined> {
     this.scrollDirty = true;
     this.render();
     this.syncSelection();
-    this.syncItemEditors();
+    this.syncItemEdits();
     return true;
   }
 
@@ -1522,13 +1522,13 @@ export class CodeView<LAnnotation = undefined> {
       this.selectedLines = { ...this.selectedLines, id: newId };
       this.options.onSelectedLinesChange?.(this.selectedLines);
     }
-    const editorRecord = this.itemEditors.get(oldId);
+    const editorRecord = this.itemEdits.get(oldId);
     if (editorRecord != null) {
       editorRecord.state.id = newId;
-      this.itemEditors.delete(oldId);
-      this.itemEditors.set(newId, editorRecord);
-      if (this.attachedEditors.delete(oldId)) {
-        this.attachedEditors.add(newId);
+      this.itemEdits.delete(oldId);
+      this.itemEdits.set(newId, editorRecord);
+      if (this.attachedEdits.delete(oldId)) {
+        this.attachedEdits.add(newId);
       }
     }
     this.renamePendingScrollTarget(oldId, newId);
@@ -1544,7 +1544,7 @@ export class CodeView<LAnnotation = undefined> {
   public addItems(inputs: readonly CodeViewItem<LAnnotation>[]): void {
     this.appendItemsInternal(inputs);
     this.syncSelection();
-    this.syncItemEditors();
+    this.syncItemEdits();
   }
 
   public setItems(items: readonly CodeViewItem<LAnnotation>[]): void {
@@ -1555,7 +1555,7 @@ export class CodeView<LAnnotation = undefined> {
       // reset()/cleanUp() calls stay silent — those are teardowns, not item
       // data updates.
       const completions: CodeViewItemEditChange<LAnnotation>[] = [];
-      for (const record of this.itemEditors.values()) {
+      for (const record of this.itemEdits.values()) {
         const { lastChange } = record.state;
         if (lastChange != null) {
           completions.push(lastChange);
@@ -1563,7 +1563,7 @@ export class CodeView<LAnnotation = undefined> {
       }
       this.reset();
       // Fired after reset so a handler that calls back into setItems/addItems
-      // runs against clean state (mirrors syncItemEditors' post-loop firing).
+      // runs against clean state (mirrors syncItemEdits' post-loop firing).
       for (const { item, file, lineAnnotations } of completions) {
         this.options.onItemEditComplete?.(item, file, lineAnnotations);
       }
@@ -1573,7 +1573,7 @@ export class CodeView<LAnnotation = undefined> {
       this.reconcileItems(items);
     }
     this.syncSelection();
-    this.syncItemEditors();
+    this.syncItemEdits();
   }
 
   /**
@@ -1685,7 +1685,7 @@ export class CodeView<LAnnotation = undefined> {
       this.renderOptionsRevision++;
     }
 
-    this.syncItemEditors();
+    this.syncItemEdits();
 
     // Render when there are items, OR when the header/footer presence changed —
     // an otherwise-empty CodeView still needs a render to mount/unmount its hosts.
@@ -1994,19 +1994,19 @@ export class CodeView<LAnnotation = undefined> {
     item.instance.setSelectedLines(this.selectedLines.range, { notify: false });
   }
 
-  // An item is editable only when the app can supply editors and the item is
+  // An item is editable only when the app can supply edits and the item is
   // flagged for editing while expanded. Collapsing an edited item suspends
   // editing until it expands again.
   private isItemInEditMode(item: CodeViewContextItem<LAnnotation>): boolean {
     return (
-      this.options.createEditor != null &&
+      this.options.createEdit != null &&
       item.item.edit === true &&
       item.item.collapsed !== true
     );
   }
 
   // True when the receiving item options belong to an item currently in edit
-  // mode. The edit-forced option getters use this to serve editor-required
+  // mode. The edit-forced option getters use this to serve edit-required
   // values (see CODE_VIEW_EDIT_FORCED_OPTION_KEYS).
   private isReceiverEdited<TMode extends CodeViewMode>(
     receiver: CodeViewModeOptions<LAnnotation, TMode>,
@@ -2021,35 +2021,35 @@ export class CodeView<LAnnotation = undefined> {
   }
 
   /**
-   * Attach (or lazily create) the editor for a mounted edit-mode item. Called
+   * Attach (or lazily create) the edit for a mounted edit-mode item. Called
    * from the render loop so every mounted item passes through it: fresh
    * mounts, remounts after virtualization released the item, and items whose
-   * edit flag was just turned on. Editors persist across unmounts, so a
-   * remounted item re-attaches its existing editor and resumes the retained
+   * edit flag was just turned on. Edits persist across unmounts, so a
+   * remounted item re-attaches its existing edit and resumes the retained
    * document; the renderers keep the host's file/diff data in sync with the
    * session so the remount paints the edited text.
    */
-  private attachItemEditor(item: CodeViewContextItem<LAnnotation>): void {
+  private attachItemEdit(item: CodeViewContextItem<LAnnotation>): void {
     const { id } = item.item;
-    const { createEditor } = this.options;
+    const { createEdit } = this.options;
     if (
-      createEditor == null ||
+      createEdit == null ||
       item.element == null ||
-      this.attachedEditors.has(id) ||
+      this.attachedEdits.has(id) ||
       !this.isItemInEditMode(item)
     ) {
       return;
     }
 
-    let record = this.itemEditors.get(id);
+    let record = this.itemEdits.get(id);
     if (record == null) {
       // The onChange closure resolves the owning item through the record
       // state's current id (not the id captured here) so updateItemId
       // renames keep it pointed at the right item. It also reads the change
       // callback off this.options at invocation time so later setOptions
       // swaps aren't stranded on the callback captured at creation.
-      const state: CodeViewItemEditorState<LAnnotation> = { id };
-      const editor = createEditor({
+      const state: CodeViewItemEditState<LAnnotation> = { id };
+      const edit = createEdit({
         onChange: (file, lineAnnotations) => {
           const latest = this.idToItem.get(state.id);
           if (latest == null) {
@@ -2059,11 +2059,11 @@ export class CodeView<LAnnotation = undefined> {
           this.options.onItemEditChange?.(latest.item, file, lineAnnotations);
         },
       });
-      if (editor == null) {
+      if (edit == null) {
         return;
       }
-      record = { editor, state };
-      this.itemEditors.set(id, record);
+      record = { edit, state };
+      this.itemEdits.set(id, record);
     }
 
     // Editing takes over the item's pointer interactions; drop any line
@@ -2072,32 +2072,32 @@ export class CodeView<LAnnotation = undefined> {
     if (this.selectedLines?.id === id) {
       this.applySelectedLines(null, { notify: false });
     }
-    record.editor.edit(item.instance);
-    this.attachedEditors.add(id);
+    record.edit.edit(item.instance);
+    this.attachedEdits.add(id);
   }
 
   /**
-   * Drop editors for items that can no longer be edited: removed, edit turned
-   * off, collapsed, or the createEditor option was unset. Attachment happens
-   * in the render loop via attachItemEditor, so this only reconciles editors
+   * Drop edits for items that can no longer be edited: removed, edit turned
+   * off, collapsed, or the createEdit option was unset. Attachment happens
+   * in the render loop via attachItemEdit, so this only reconciles edits
    * CodeView is already holding.
    */
-  private syncItemEditors(): void {
-    if (this.itemEditors.size === 0) {
+  private syncItemEdits(): void {
+    if (this.itemEdits.size === 0) {
       return;
     }
 
     const completions: CodeViewItemEditChange<LAnnotation>[] = [];
-    for (const [id, record] of this.itemEditors) {
+    for (const [id, record] of this.itemEdits) {
       const item = this.idToItem.get(id);
       if (item != null && this.isItemInEditMode(item)) {
         continue;
       }
-      // cleanUp is idempotent, so editors already detached by their released
+      // cleanUp is idempotent, so edits already detached by their released
       // instance are safe to clean again.
-      record.editor.cleanUp();
-      this.itemEditors.delete(id);
-      this.attachedEditors.delete(id);
+      record.edit.cleanUp();
+      this.itemEdits.delete(id);
+      this.attachedEdits.delete(id);
       // When the session's instance was released by virtualization, the
       // cleanUp above had no detach closure left to run the exit recompute,
       // so finish the session here (idempotent: the dirty marker clears on
@@ -2172,7 +2172,7 @@ export class CodeView<LAnnotation = undefined> {
     }
 
     // Edit-forced options: while the item is in edit mode these serve the
-    // values Editor.edit requires so it never falls back to
+    // values Edit.edit requires so it never falls back to
     // instance.setOptions (which throws for CodeView-managed instances).
     defineItemOption(prototype, 'useTokenTransformer', (receiver) =>
       this.isReceiverEdited(receiver, 'file')
@@ -2233,7 +2233,7 @@ export class CodeView<LAnnotation = undefined> {
     }
 
     // Edit-forced options: while the item is in edit mode these serve the
-    // values Editor.edit requires so it never falls back to
+    // values Edit.edit requires so it never falls back to
     // instance.setOptions (which throws for CodeView-managed instances).
     defineItemOption(prototype, 'useTokenTransformer', (receiver) =>
       this.isReceiverEdited(receiver, 'diff')
@@ -3299,10 +3299,10 @@ export class CodeView<LAnnotation = undefined> {
         }
         prevElement = item.element;
       }
-      // Bind editors after the item render kicked off; attachItemEditor
+      // Bind edits after the item render kicked off; attachItemEdit
       // no-ops unless the item is in edit mode and not already attached.
       if (item.item.edit === true) {
-        this.attachItemEditor(item);
+        this.attachItemEdit(item);
       }
     }
 

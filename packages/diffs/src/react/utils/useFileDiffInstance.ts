@@ -17,7 +17,7 @@ import type {
 } from '../../types';
 import { areOptionsEqual } from '../../utils/areOptionsEqual';
 import { noopRender } from '../constants';
-import { useEditor } from '../EditContext';
+import { useEdit } from '../EditContext';
 import { useVirtualizer } from '../Virtualizer';
 import { WorkerPoolContext } from '../WorkerPoolContext';
 import { useStableCallback } from './useStableCallback';
@@ -58,7 +58,7 @@ export function useFileDiffInstance<LAnnotation>({
   const simpleVirtualizer = useVirtualizer();
   const controlledSelection = selectedLines !== undefined;
   const poolManager = useContext(WorkerPoolContext);
-  const editor = useEditor<LAnnotation>();
+  const edit = useEdit<LAnnotation>();
   const instanceRef = useRef<
     FileDiff<LAnnotation> | VirtualizedFileDiff<LAnnotation> | null
   >(null);
@@ -75,7 +75,7 @@ export function useFileDiffInstance<LAnnotation>({
             controlledSelection,
             contentEditable,
             hasCustomHeader,
-            hasEditor: editor !== undefined,
+            hasEdit: edit !== undefined,
             hasGutterRenderUtility,
             options,
           }),
@@ -90,7 +90,7 @@ export function useFileDiffInstance<LAnnotation>({
             controlledSelection,
             contentEditable,
             hasCustomHeader,
-            hasEditor: editor !== undefined,
+            hasEdit: edit !== undefined,
             hasGutterRenderUtility,
             options,
           }),
@@ -122,7 +122,7 @@ export function useFileDiffInstance<LAnnotation>({
       controlledSelection,
       contentEditable,
       hasCustomHeader,
-      hasEditor: editor !== undefined,
+      hasEdit: edit !== undefined,
       hasGutterRenderUtility,
       options,
     });
@@ -140,13 +140,13 @@ export function useFileDiffInstance<LAnnotation>({
 
   useIsometricEffect(() => {
     if (contentEditable && instanceRef.current != null) {
-      if (editor === undefined) {
-        throw new Error('FileDiff: Editor is not attached');
+      if (edit === undefined) {
+        throw new Error('FileDiff: Edit is not attached');
       }
-      return editor.edit(instanceRef.current);
+      return edit.edit(instanceRef.current);
     }
     return undefined;
-  }, [contentEditable, editor]);
+  }, [contentEditable, edit]);
 
   const getHoveredLine = useCallback(():
     | GetHoveredLineResult<'diff'>
@@ -163,7 +163,7 @@ export function useFileDiffInstance<LAnnotation>({
 interface MergeFileDiffOptionsProps<LAnnotation> {
   controlledSelection: boolean;
   contentEditable: boolean;
-  hasEditor: boolean;
+  hasEdit: boolean;
   hasCustomHeader: boolean;
   hasGutterRenderUtility: boolean;
   options: FileDiffOptions<LAnnotation> | undefined;
@@ -174,16 +174,16 @@ function mergeFileDiffOptions<LAnnotation>({
   controlledSelection,
   contentEditable,
   hasCustomHeader,
-  hasEditor,
+  hasEdit,
   hasGutterRenderUtility,
 }: MergeFileDiffOptionsProps<LAnnotation>):
   | FileDiffOptions<LAnnotation>
   | undefined {
-  const needsEditorOptions = contentEditable && hasEditor;
+  const needsEditOptions = contentEditable && hasEdit;
   const needsReactOverrides =
     controlledSelection || hasGutterRenderUtility || hasCustomHeader;
 
-  if (!needsReactOverrides && !needsEditorOptions) {
+  if (!needsReactOverrides && !needsEditOptions) {
     return options;
   }
 
@@ -200,7 +200,7 @@ function mergeFileDiffOptions<LAnnotation>({
             : options?.renderGutterUtility,
         }
       : null),
-    ...(needsEditorOptions
+    ...(needsEditOptions
       ? {
           useTokenTransformer: true,
           enableGutterUtility: false,

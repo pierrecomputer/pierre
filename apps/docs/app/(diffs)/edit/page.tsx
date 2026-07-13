@@ -9,8 +9,8 @@ import {
   SHORTCUTS_DEMO_FILE_EXAMPLE,
 } from '../_edit/constants';
 import { EditPage } from '../_edit/EditPage';
-import { LIVE_DIFF_EDITOR_EXAMPLE } from '../_examples/LiveDiffEditor/constants';
-import { LIVE_EDITOR_FILE_EXAMPLE } from '../_examples/LiveEditor/constants';
+import { LIVE_DIFF_EDIT_EXAMPLE } from '../_examples/LiveDiffEdit/constants';
+import { LIVE_EDIT_FILE_EXAMPLE } from '../_examples/LiveEdit/constants';
 
 const editTitle = 'Pierre Diffs — now with edit';
 const editDescription =
@@ -36,15 +36,15 @@ export const metadata: Metadata = {
 export default async function EditRoute() {
   const [
     liveFile,
-    liveDiffEditorDiff,
+    liveDiffEditDiff,
     markerFile,
     findFile,
     historyFile,
     shortcutsFile,
     selectionFile,
   ] = await Promise.all([
-    preloadFile(LIVE_EDITOR_FILE_EXAMPLE),
-    preloadFileDiff(LIVE_DIFF_EDITOR_EXAMPLE),
+    preloadFile(LIVE_EDIT_FILE_EXAMPLE),
+    preloadFileDiff(LIVE_DIFF_EDIT_EXAMPLE),
     preloadFile(MARKER_DEMO_FILE_EXAMPLE),
     preloadFile(FIND_DEMO_FILE_EXAMPLE),
     preloadFile(HISTORY_DEMO_FILE_EXAMPLE),
@@ -54,8 +54,8 @@ export default async function EditRoute() {
 
   return (
     <EditPage
-      liveEditorFile={liveFile}
-      liveDiffEditorDiff={liveDiffEditorDiff}
+      liveEditFile={liveFile}
+      liveDiffEditDiff={liveDiffEditDiff}
       markerFile={markerFile}
       findFile={findFile}
       historyFile={historyFile}

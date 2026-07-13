@@ -7,7 +7,7 @@ import {
   VirtualizedFileDiff,
   Virtualizer,
 } from '@pierre/diffs';
-import { Editor } from '@pierre/diffs/editor';
+import { Edit } from '@pierre/diffs/edit';
 import { useWorkerPool } from '@pierre/diffs/react';
 import { useEffect, useRef } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -68,9 +68,9 @@ function annotationKey(
 // directly to get window/body scroll.
 //
 // Each diff header carries its own "Edit" checkbox (in the header metadata
-// slot); toggling it attaches a per-file Editor to that diff and flips its
+// slot); toggling it attaches a per-file Edit to that diff and flips its
 // new-file surface into contentEditable. Files are edited independently because
-// one Editor only binds to one instance at a time.
+// one Edit only binds to one instance at a time.
 //
 // Gutter comments reuse the shared React CommentForm: the vanilla
 // renderAnnotation callback returns an element hosting a small React root.
@@ -100,7 +100,7 @@ export function PlaygroundVirtualizerView({
     setTimeout(() => root.unmount(), 0);
   };
 
-  // Build the virtualizer and one VirtualizedFileDiff (+ editor) per diff once
+  // Build the virtualizer and one VirtualizedFileDiff (+ edit) per diff once
   // the content container and worker pool are available. Rebuilds only when the
   // diff list or pool identity changes; live option edits go through the effect
   // below so we don't tear down the virtualizer on every toggle.
@@ -115,7 +115,7 @@ export function PlaygroundVirtualizerView({
     virtualizer.setup(document);
 
     annotationsRef.current = diffs.map(() => []);
-    const editors: Editor<undefined>[] = [];
+    const edits: Edit<undefined>[] = [];
     const instances = diffs.map((fileDiff, index) => {
       // `diffs-container` is the library's default (registered) container
       // element. We create and append it ourselves so the virtualizer can
@@ -124,8 +124,8 @@ export function PlaygroundVirtualizerView({
       fileContainer.style.display = 'block';
       content.appendChild(fileContainer);
 
-      const editor = new Editor<undefined>({});
-      editors.push(editor);
+      const edit = new Edit<undefined>({});
+      edits.push(edit);
       const { element: editToggle, input } = createEditToggle();
 
       const rerenderWithAnnotations = () => {
@@ -193,13 +193,13 @@ export function PlaygroundVirtualizerView({
         pool
       );
 
-      // Attaching the editor flips the new-file surface to contentEditable;
+      // Attaching the edit flips the new-file surface to contentEditable;
       // detaching restores read-only review.
       input.addEventListener('change', () => {
         if (input.checked) {
-          editor.edit(instance);
+          edit.edit(instance);
         } else {
-          editor.cleanUp();
+          edit.cleanUp();
         }
       });
 
@@ -210,9 +210,9 @@ export function PlaygroundVirtualizerView({
 
     const annotationRoots = annotationRootsRef.current;
     return () => {
-      // cleanUp is a safe no-op on editors that were never attached.
-      for (const editor of editors) {
-        editor.cleanUp();
+      // cleanUp is a safe no-op on edits that were never attached.
+      for (const edit of edits) {
+        edit.cleanUp();
       }
       for (const instance of instances) {
         instance.cleanUp();

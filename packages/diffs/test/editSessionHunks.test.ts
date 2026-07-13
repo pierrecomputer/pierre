@@ -7,7 +7,7 @@ import {
   captureExpansionAnchors,
   findChangedLineWindow,
   finishEditSessionForDiff,
-  normalizeEditorLines,
+  normalizeEditLines,
   rebuildExpansionFromAnchors,
   remapExpandedHunksForRegionChange,
 } from '../src/utils/editSessionHunks';
@@ -58,11 +58,11 @@ function countRenderedRows(diff: FileDiffMetadata): number {
   return rows;
 }
 
-describe('normalizeEditorLines', () => {
+describe('normalizeEditLines', () => {
   test('drops only the phantom trailing empty line', () => {
-    expect(normalizeEditorLines(['a\n', 'b\n', ''])).toEqual(['a\n', 'b\n']);
-    expect(normalizeEditorLines(['a\n', 'b'])).toEqual(['a\n', 'b']);
-    expect(normalizeEditorLines([''])).toEqual(['']);
+    expect(normalizeEditLines(['a\n', 'b\n', ''])).toEqual(['a\n', 'b\n']);
+    expect(normalizeEditLines(['a\n', 'b'])).toEqual(['a\n', 'b']);
+    expect(normalizeEditLines([''])).toEqual(['']);
   });
 });
 

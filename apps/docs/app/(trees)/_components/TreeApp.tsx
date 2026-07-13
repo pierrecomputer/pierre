@@ -1,7 +1,7 @@
 'use client';
 
-import type { EditorState, FileContents, FileOptions } from '@pierre/diffs';
-import { Editor } from '@pierre/diffs/editor';
+import type { EditState, FileContents, FileOptions } from '@pierre/diffs';
+import { Edit } from '@pierre/diffs/edit';
 import { EditProvider, File, Virtualizer } from '@pierre/diffs/react';
 import {
   IconFilePlus,
@@ -87,7 +87,7 @@ function pickByTheme<T>(
 }
 
 // Theme-scoped chrome presets used for TreeApp's own wrapping elements. Tree
-// and editor visuals are driven by the caller-supplied per-theme payloads, but
+// and edit visuals are driven by the caller-supplied per-theme payloads, but
 // the surrounding container, tab bar, and default header/tab/empty slots all
 // come from here so the toggle actually flips every pixel TreeApp owns.
 interface TreeAppChromeStyles {
@@ -198,7 +198,7 @@ export interface TreeAppProps<LAnnotation = unknown> {
   treeClassName?: TreeAppThemeValue<string>;
   treeStyle?: TreeAppThemeValue<CSSProperties>;
 
-  // Editor side: files keyed by their tree path. Mirrors the
+  // Edit side: files keyed by their tree path. Mirrors the
   // preloadedDataById pattern already used by tree demos. Both the prerendered
   // HTML map and the file options may be scoped per theme so the active File
   // picks up the right syntax-highlight colors when the theme toggles.
@@ -292,7 +292,7 @@ function getParentPath(path: string): string {
     : `${normalizedPath.slice(0, lastSlashIndex + 1)}`;
 }
 
-// Remaps one path after a tree move so open tabs and editor state keep
+// Remaps one path after a tree move so open tabs and edit state keep
 // following the same file or directory even when its parent folder changes.
 function remapMovedPath(
   path: string,
@@ -615,7 +615,7 @@ interface UseOpenTabsOptions {
   isMobile?: boolean;
   model: FileTreeModel;
   // Fired immediately before `activePath` changes so the host can snapshot
-  // editor scroll/selection via getState before the editable File remounts.
+  // edit scroll/selection via getState before the editable File remounts.
   onBeforeActivePathChange?: () => void;
 }
 
@@ -654,11 +654,11 @@ function useOpenTabs({
   const onBeforeActivePathChangeRef = useRef(onBeforeActivePathChange);
   onBeforeActivePathChangeRef.current = onBeforeActivePathChange;
   // Mirrors `activePath` for changeActivePath so path transitions can snapshot
-  // editor state without putting side effects inside a setState updater.
+  // edit state without putting side effects inside a setState updater.
   const activePathRefForTabs = useRef<string | null>(activePath);
   activePathRefForTabs.current = activePath;
 
-  // Snapshot editor state, then update activePath. Reads the live path from
+  // Snapshot edit state, then update activePath. Reads the live path from
   // activePathRefForTabs so we never put side effects inside a setState
   // updater. Skips the callback when the path is unchanged.
   const changeActivePath = useCallback(
@@ -743,7 +743,7 @@ function useOpenTabs({
       });
 
       // Resolve the next active tab outside setState so changeActivePath can
-      // snapshot editor state before the remount without nesting updaters.
+      // snapshot edit state before the remount without nesting updaters.
       const currentOpen = openPaths;
       const nextOpen = currentOpen.filter((entry) => entry !== path);
       changeActivePath((currentActive) => {
@@ -1204,8 +1204,8 @@ export function TreeApp<LAnnotation = unknown>({
 
   // Per-path scroll + selection snapshots. The editable File remounts on
   // path/theme changes (keyed below), so we getState before the remount and
-  // setState from onAttach once the new editor is attached.
-  const editorStateByPathRef = useRef(new Map<string, EditorState>());
+  // setState from onAttach once the new edit is attached.
+  const editorStateByPathRef = useRef(new Map<string, EditState>());
   const activePathRef = useRef<string | null>(initialActivePath ?? null);
   // Edited buffers keyed by path. Prefer these over the caller-supplied `files`
   // map so tab switches keep unsaved text without requiring the host to own
@@ -1233,37 +1233,37 @@ export function TreeApp<LAnnotation = unknown>({
   unsavedPathsRef.current = unsavedPaths;
   const containerRef = useRef<HTMLDivElement | null>(null);
 
-  // Keep attach/change handlers fresh without recreating the Editor. The
+  // Keep attach/change handlers fresh without recreating the Edit. The
   // shared instance must stay stable across tab/theme switches so EditProvider
   // does not clean it up between remounts of the keyed File.
-  const handleEditorAttachRef = useRef<(editor: Editor<LAnnotation>) => void>(
+  const handleEditAttachRef = useRef<(edit: Edit<LAnnotation>) => void>(
     () => {}
   );
-  const handleEditorChangeRef = useRef<(file: FileContents) => void>(() => {});
-  const editor = useMemo(
+  const handleEditChangeRef = useRef<(file: FileContents) => void>(() => {});
+  const edit = useMemo(
     () =>
-      new Editor<LAnnotation>({
-        onAttach(nextEditor) {
-          handleEditorAttachRef.current(nextEditor);
+      new Edit<LAnnotation>({
+        onAttach(nextEdit) {
+          handleEditAttachRef.current(nextEdit);
         },
         onChange(file) {
-          handleEditorChangeRef.current(file);
+          handleEditChangeRef.current(file);
         },
       }),
     []
   );
 
-  const saveActiveEditorState = useCallback(() => {
+  const saveActiveEditState = useCallback(() => {
     const path = activePathRef.current;
     if (path == null) {
       return;
     }
     try {
-      editorStateByPathRef.current.set(path, editor.getState());
+      editorStateByPathRef.current.set(path, edit.getState());
     } catch {
-      // Editor may already be detached mid-unmount; skip the snapshot.
+      // Edit may already be detached mid-unmount; skip the snapshot.
     }
-  }, [editor]);
+  }, [edit]);
 
   // Marks a path unsaved (or clean). Snapshots edited contents so tab switches
   // keep the dirty buffer.
@@ -1282,7 +1282,7 @@ export function TreeApp<LAnnotation = unknown>({
       }
 
       if (isUnsaved) {
-        // Snapshot contents now: editor `onChange` may hand back a FileContents
+        // Snapshot contents now: edit `onChange` may hand back a FileContents
         // whose `contents` is a live getter over the current TextDocument.
         const snapshot: FileContents = {
           ...nextFile,
@@ -1309,14 +1309,14 @@ export function TreeApp<LAnnotation = unknown>({
 
   const toggleTheme = useCallback(() => {
     // Theme remounts the editable File (keyed by path:theme); snapshot first
-    // so the restored editor keeps scroll/selection after the palette flip.
-    saveActiveEditorState();
+    // so the restored edit keeps scroll/selection after the palette flip.
+    saveActiveEditState();
     const nextTheme: TreeAppTheme = theme === 'dark' ? 'light' : 'dark';
     if (themeProp == null) {
       setInternalTheme(nextTheme);
     }
     onThemeChange?.(nextTheme);
-  }, [onThemeChange, saveActiveEditorState, theme, themeProp]);
+  }, [onThemeChange, saveActiveEditState, theme, themeProp]);
 
   // Resolve the theme-scoped inputs once. The caller can pass either a plain
   // value or a `{ light, dark }` pair; `pickByTheme` returns the right one.
@@ -1328,7 +1328,7 @@ export function TreeApp<LAnnotation = unknown>({
     theme
   );
 
-  const handleEditorChange = useCallback(
+  const handleEditChange = useCallback(
     (file: FileContents) => {
       const path = activePathRef.current;
       if (path == null) {
@@ -1353,7 +1353,7 @@ export function TreeApp<LAnnotation = unknown>({
 
     let file: FileContents | undefined;
     try {
-      file = editor.getFile() ?? editedFilesByPath[path] ?? files?.[path];
+      file = edit.getFile() ?? editedFilesByPath[path] ?? files?.[path];
     } catch {
       file = editedFilesByPath[path] ?? files?.[path];
     }
@@ -1384,7 +1384,7 @@ export function TreeApp<LAnnotation = unknown>({
     }
     onSave?.(path, snapshot);
     return true;
-  }, [editedFilesByPath, editor, files, onSave]);
+  }, [editedFilesByPath, edit, files, onSave]);
 
   useEffect(() => {
     const acknowledgedPaths = new Set<string>();
@@ -1438,7 +1438,7 @@ export function TreeApp<LAnnotation = unknown>({
       if (event.key !== 's' && event.key !== 'S') {
         return;
       }
-      // composedPath crosses shadow roots (editor + tree), which `contains`
+      // composedPath crosses shadow roots (edit + tree), which `contains`
       // does not. Only handle when the event originated inside TreeApp.
       if (!event.composedPath().includes(container)) {
         return;
@@ -1468,7 +1468,7 @@ export function TreeApp<LAnnotation = unknown>({
     initialOpenPaths,
     isMobile,
     model,
-    onBeforeActivePathChange: saveActiveEditorState,
+    onBeforeActivePathChange: saveActiveEditState,
   });
   activePathRef.current = activePath;
 
@@ -1531,7 +1531,7 @@ export function TreeApp<LAnnotation = unknown>({
     [model]
   );
 
-  const handleEditorAttach = useCallback((nextEditor: Editor<LAnnotation>) => {
+  const handleEditAttach = useCallback((nextEdit: Edit<LAnnotation>) => {
     const path = activePathRef.current;
     if (path == null) {
       return;
@@ -1540,10 +1540,10 @@ export function TreeApp<LAnnotation = unknown>({
     if (saved == null) {
       return;
     }
-    nextEditor.setState(saved);
+    nextEdit.setState(saved);
   }, []);
-  handleEditorAttachRef.current = handleEditorAttach;
-  handleEditorChangeRef.current = handleEditorChange;
+  handleEditAttachRef.current = handleEditAttach;
+  handleEditChangeRef.current = handleEditChange;
 
   const mutations = useTreeMutations({
     model,
@@ -1731,7 +1731,7 @@ export function TreeApp<LAnnotation = unknown>({
     activePath != null && usesLocalFile
       ? (editedFilesByPath[activePath] ?? activeHostFile)
       : activeHostFile;
-  // Skip stale prerendered HTML while the editor is showing local contents.
+  // Skip stale prerendered HTML while the edit is showing local contents.
   const activePrerenderedHTML =
     activePath == null || usesLocalFile
       ? undefined
@@ -1745,7 +1745,7 @@ export function TreeApp<LAnnotation = unknown>({
   // the `useOpenTabs` hook already collapses `openPaths` to just the active
   // file so the strip naturally shows a single tab. The close button inside
   // that tab is hidden on mobile (see DefaultTab) so the user can't orphan
-  // themselves into an empty editor state.
+  // themselves into an empty edit state.
   const showTabBar = hasTabs || showThemeToggle;
 
   // Scroll the active tab into view when the active path changes or when tabs
@@ -1931,7 +1931,7 @@ export function TreeApp<LAnnotation = unknown>({
             className="relative flex min-h-0 flex-1"
             style={{ backgroundColor: 'var(--tree-app-editor-bg)' }}
           >
-            {/* `inert` removes the editor contents from the focus order on
+            {/* `inert` removes the edit contents from the focus order on
                 mobile so keyboard users can't tab into a region that's
                 visually faded out and mostly clipped off-screen. Passing
                 `undefined` on desktop disables the attribute entirely. */}
@@ -1941,10 +1941,10 @@ export function TreeApp<LAnnotation = unknown>({
             >
               {/* Key File by path+theme so prerendered HTML (theme-specific
                   syntax colors) remounts cleanly when the toggle flips.
-                  Keep EditProvider stable so the shared Editor is not cleaned
+                  Keep EditProvider stable so the shared Edit is not cleaned
                   up between tab/theme switches. Scroll/selection restore via
                   getState/setState in onAttach. */}
-              <EditProvider editor={editor}>
+              <EditProvider edit={edit}>
                 <Virtualizer
                   className="relative min-h-0 min-w-0 flex-1 overflow-auto"
                   style={{ overflow: 'auto' }}

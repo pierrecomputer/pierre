@@ -4,24 +4,24 @@
 import type { Context, PropsWithChildren } from 'react';
 import { createContext, useContext, useEffect } from 'react';
 
-import type { Editor } from '../editor';
+import type { Edit } from '../edit';
 
-export const EditContext: Context<Editor<any> | undefined> = createContext<
-  Editor<any> | undefined
+export const EditContext: Context<Edit<any> | undefined> = createContext<
+  Edit<any> | undefined
 >(undefined);
 
 export function EditProvider({
   children,
-  editor,
-}: PropsWithChildren<{ editor: Editor<any> }>): React.JSX.Element {
+  edit,
+}: PropsWithChildren<{ edit: Edit<any> }>): React.JSX.Element {
   useEffect(() => {
     return () => {
-      editor.cleanUp();
+      edit.cleanUp();
     };
-  }, [editor]);
-  return <EditContext.Provider value={editor}>{children}</EditContext.Provider>;
+  }, [edit]);
+  return <EditContext.Provider value={edit}>{children}</EditContext.Provider>;
 }
 
-export function useEditor<LAnnotation>(): Editor<LAnnotation> | undefined {
+export function useEdit<LAnnotation>(): Edit<LAnnotation> | undefined {
   return useContext(EditContext);
 }

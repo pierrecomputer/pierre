@@ -22,7 +22,7 @@ import {
   VirtualizedFileDiff,
   Virtualizer,
 } from '@pierre/diffs';
-import { Editor } from '@pierre/diffs/editor';
+import { Edit } from '@pierre/diffs/edit';
 import type { WorkerPoolManager } from '@pierre/diffs/worker';
 import {
   IconCiFailedOctagonFill,
@@ -72,7 +72,7 @@ const CODE_VIEW_TYPE: 'old-new-full' | 'old-new-hydration' | 'patch-file' =
   'old-new-full';
 
 // Pre-render the @pierre/icons SVG markup once so it can be embedded into the
-// `message.html` strings the editor injects for markers. The icons default to
+// `message.html` strings the edit injects for markers. The icons default to
 // `fill: currentcolor`, so each one inherits the surrounding text color.
 const MARKER_INFO_ICON = renderToStaticMarkup(
   createElement(IconInfoFill, { size: 16 })
@@ -85,7 +85,7 @@ const MARKER_ERROR_ICON = renderToStaticMarkup(
 );
 
 // Builds the HTML for a marker overlay: a leading icon and message with an
-// indented description. The popover is severity-colored (see editor.css), so
+// indented description. The popover is severity-colored (see edit.css), so
 // the icon and text inherit white instead of painting their own color, which
 // would vanish against the fill.
 function markerMessage(opts: {
@@ -397,9 +397,9 @@ function renderDiff(parsedPatches: ParsedPatch[], manager?: WorkerPoolManager) {
     const patchAnnotations = FAKE_DIFF_LINE_ANNOTATIONS[patchIndex] ?? [];
     let hunkIndex = 0;
     for (const fileDiff of parsedPatch.files) {
-      const editor = new Editor<LineCommentMetadata>({
-        onAttach: (editor) => {
-          editor.setSelections([
+      const edit = new Edit<LineCommentMetadata>({
+        onAttach: (edit) => {
+          edit.setSelections([
             {
               start: {
                 line: 3,
@@ -450,9 +450,9 @@ function renderDiff(parsedPatches: ParsedPatch[], manager?: WorkerPoolManager) {
             (checked) => {
               isEditing = checked;
               if (isEditing) {
-                editor.edit(instance);
+                edit.edit(instance);
               } else {
-                editor.cleanUp();
+                edit.cleanUp();
               }
             }
           );
@@ -960,7 +960,7 @@ if (renderFileButton != null) {
 
     virtualizer?.setup(globalThis.document);
     const wrap = getWrapped();
-    const editor = new Editor<LineCommentMetadata>({
+    const edit = new Edit<LineCommentMetadata>({
       clipboard: navigator.clipboard,
       enabledSelectionAction: true,
       renderSelectionAction: (ctx) => {
@@ -981,10 +981,10 @@ if (renderFileButton != null) {
       onChange: (file, lineAnnotations) => {
         console.log('change', file, lineAnnotations);
       },
-      onAttach: (editor) => {
-        const { selections } = editor.getState();
+      onAttach: (edit) => {
+        const { selections } = edit.getState();
         if (selections === undefined || selections.length === 0) {
-          editor.setSelections([
+          edit.setSelections([
             {
               start: {
                 line: 0,
@@ -997,7 +997,7 @@ if (renderFileButton != null) {
               direction: 'none',
             },
           ]);
-          editor.setMarkers([
+          edit.setMarkers([
             {
               start: {
                 line: 1,
@@ -1057,7 +1057,7 @@ if (renderFileButton != null) {
       },
       __debug: true,
     });
-    Object.assign(window, { editor });
+    Object.assign(window, { edit });
     const fileContainer = document.createElement(DIFFS_TAG_NAME);
     wrapper.appendChild(fileContainer);
     let isEditing = false;
@@ -1093,9 +1093,9 @@ if (renderFileButton != null) {
           (checked) => {
             isEditing = checked;
             if (isEditing) {
-              editor.edit(instance);
+              edit.edit(instance);
             } else {
-              editor.cleanUp();
+              edit.cleanUp();
             }
           }
         );

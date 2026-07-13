@@ -88,8 +88,8 @@ const CAPABILITY_GROUPS: ReferenceGroup[] = [
         description: (
           <>
             Edit virtualized <code>CodeView</code> instances with{' '}
-            <code>edit: true</code>. Your <code>createEditor</code> function
-            creates the editor instance on demand, and editors persist as files
+            <code>edit: true</code>. Your <code>createEdit</code> function
+            creates the edit instance on demand, and edits persist as files
             scroll in and out.
           </>
         ),
@@ -107,7 +107,7 @@ const CAPABILITY_GROUPS: ReferenceGroup[] = [
       {
         term: 'Themes & color modes',
         description:
-          'Tokens and editor chrome follow the surface theme, re-tokenizing live when you switch themes or toggle light and dark.',
+          'Tokens and edit chrome follow the surface theme, re-tokenizing live when you switch themes or toggle light and dark.',
       },
       {
         term: 'UI adapts to container',
@@ -159,7 +159,7 @@ const CAPABILITY_GROUPS: ReferenceGroup[] = [
         term: 'Lazy-loadable',
         description: (
           <>
-            Standalone <code>@pierre/diffs/editor</code> entry point—import it
+            Standalone <code>@pierre/diffs/edit</code> entry point—import it
             only when editing begins.
           </>
         ),

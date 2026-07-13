@@ -55,7 +55,7 @@ import {
   applySessionChangedLines,
   applySessionEditWindow,
   findChangedLineWindow,
-  normalizeEditorLines,
+  normalizeEditLines,
   remapExpandedHunksForRegionChange,
   type SessionRegionChange,
 } from '../utils/editSessionHunks';
@@ -83,7 +83,7 @@ import { iterateOverDiff } from '../utils/iterateOverDiff';
 import { renderDiffWithHighlighter } from '../utils/renderDiffWithHighlighter';
 import { shouldUseTokenTransformer } from '../utils/shouldUseTokenTransformer';
 import {
-  preserveTrailingEditorBlankLine,
+  preserveTrailingEditBlankLine,
   recomputeDiffHunksForEdit,
   recomputeEmptyDocumentDiff,
   recomputeTopAlignedAdditionDiff,
@@ -283,7 +283,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
   /**
    * Enter edit-session mode: hunk updates preserve the current region
-   * skeleton instead of recomputing hunks. Called on every editor attach,
+   * skeleton instead of recomputing hunks. Called on every edit attach,
    * including a re-attach after recycle, which losslessly re-seeds the pass
    * snapshot because both hunk-update paths keep `diff.additionLines`
    * current.
@@ -291,9 +291,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   public beginEditSession(diff: FileDiffMetadata | undefined): void {
     this.editSessionActive = true;
     this.editSessionLines =
-      diff != null
-        ? normalizeEditorLines(diff.additionLines).slice()
-        : undefined;
+      diff != null ? normalizeEditLines(diff.additionLines).slice() : undefined;
   }
 
   /** Leave edit-session mode. The exit recompute is the host's concern. */
@@ -482,7 +480,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           );
           this.applyExpansionRemaps(changes);
           regionsChanged = changes.length > 0;
-          this.editSessionLines = normalizeEditorLines(
+          this.editSessionLines = normalizeEditLines(
             diff.additionLines
           ).slice();
         }
@@ -524,13 +522,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
     // updateRenderCache may already have extended diff.additionLines for the
     // same edit pass, so never bail out purely on matching lengths here.
-    // Read line-by-line from the editor document instead of materializing the
+    // Read line-by-line from the edit document instead of materializing the
     // entire text. This preserves blank documents and the final editable empty
     // row after a trailing line break.
-    diff.additionLines = getEditorDocumentLines(
-      textDocument,
-      diff.additionLines
-    );
+    diff.additionLines = getEditDocumentLines(textDocument, diff.additionLines);
 
     const newLength = diff.additionLines.length;
     const additionHastLines = result.code.additionLines;
@@ -584,9 +579,9 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       return;
     }
     const previousLines = this.editSessionLines;
-    const nextLines = normalizeEditorLines(rawLines);
+    const nextLines = normalizeEditLines(rawLines);
     if (previousLines == null) {
-      // No pass snapshot (the editor attached without diff data): fall back
+      // No pass snapshot (the edit attached without diff data): fall back
       // to the full recompute for this pass and start tracking from it.
       Object.assign(diff, recomputeDiffHunksForEdit(diff, parseDiffOptions));
       this.markEditSessionPass(diff);
@@ -600,7 +595,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         this.applyExpansionRemaps([change]);
       }
     }
-    preserveTrailingEditorBlankLine(diff, rawLines);
+    preserveTrailingEditBlankLine(diff, rawLines);
     this.editSessionLines = nextLines.slice();
   }
 
@@ -612,7 +607,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       return;
     }
     diff.editSessionDirty = true;
-    this.editSessionLines = normalizeEditorLines(diff.additionLines).slice();
+    this.editSessionLines = normalizeEditLines(diff.additionLines).slice();
   }
 
   protected getUnifiedLineDecoration({
@@ -2147,7 +2142,7 @@ function createPlainAdditionLineElement(
   };
 }
 
-function getEditorDocumentLines(
+function getEditDocumentLines(
   textDocument: DiffsTextDocument,
   previousLines: string[]
 ): string[] {

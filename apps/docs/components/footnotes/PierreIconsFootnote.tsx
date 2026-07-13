@@ -5,7 +5,7 @@ import { IconFootnote } from './IconFootnote';
 export function PierreIconsFootnote() {
   return (
     <IconFootnote icon={<IconArrowDownRight />}>
-      Want matching file icons in your editor?{' '}
+      Want matching file icons in your edit?{' '}
       <a
         href="https://marketplace.visualstudio.com/items?itemName=pierrecomputer.pierre-vscode-icons"
         className="inline-link"

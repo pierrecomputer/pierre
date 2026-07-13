@@ -17,7 +17,7 @@ import type {
 } from '../../types';
 import { areOptionsEqual } from '../../utils/areOptionsEqual';
 import { noopRender } from '../constants';
-import { useEditor } from '../EditContext';
+import { useEdit } from '../EditContext';
 import { useVirtualizer } from '../Virtualizer';
 import { WorkerPoolContext } from '../WorkerPoolContext';
 import { useStableCallback } from './useStableCallback';
@@ -62,7 +62,7 @@ export function useFileInstance<LAnnotation>({
   const simpleVirtualizer = useVirtualizer();
   const controlledSelection = selectedLines !== undefined;
   const poolManager = useContext(WorkerPoolContext);
-  const editor = useEditor<LAnnotation>();
+  const edit = useEdit<LAnnotation>();
   const instanceRef = useRef<
     File<LAnnotation> | VirtualizedFile<LAnnotation> | null
   >(null);
@@ -79,7 +79,7 @@ export function useFileInstance<LAnnotation>({
             controlledSelection,
             contentEditable,
             hasCustomHeader,
-            hasEditor: editor !== undefined,
+            hasEdit: edit !== undefined,
             hasGutterRenderUtility,
             options,
           }),
@@ -94,7 +94,7 @@ export function useFileInstance<LAnnotation>({
             controlledSelection,
             contentEditable,
             hasCustomHeader,
-            hasEditor: editor !== undefined,
+            hasEdit: edit !== undefined,
             hasGutterRenderUtility,
             options,
           }),
@@ -123,7 +123,7 @@ export function useFileInstance<LAnnotation>({
       controlledSelection,
       contentEditable,
       hasCustomHeader,
-      hasEditor: editor !== undefined,
+      hasEdit: edit !== undefined,
       hasGutterRenderUtility,
       options,
     });
@@ -140,13 +140,13 @@ export function useFileInstance<LAnnotation>({
 
   useIsometricEffect(() => {
     if (contentEditable && instanceRef.current != null) {
-      if (editor === undefined) {
-        throw new Error('File: Editor is not attached');
+      if (edit === undefined) {
+        throw new Error('File: Edit is not attached');
       }
-      return editor.edit(instanceRef.current);
+      return edit.edit(instanceRef.current);
     }
     return undefined;
-  }, [contentEditable, editor]);
+  }, [contentEditable, edit]);
 
   const getHoveredLine = useCallback(():
     | GetHoveredLineResult<'file'>
@@ -160,7 +160,7 @@ interface MergeFileOptionsProps<LAnnotation> {
   options: FileOptions<LAnnotation> | undefined;
   controlledSelection: boolean;
   contentEditable: boolean;
-  hasEditor: boolean;
+  hasEdit: boolean;
   hasGutterRenderUtility: boolean;
   hasCustomHeader: boolean;
 }
@@ -170,14 +170,14 @@ function mergeFileOptions<LAnnotation>({
   controlledSelection,
   contentEditable,
   hasCustomHeader,
-  hasEditor,
+  hasEdit,
   hasGutterRenderUtility,
 }: MergeFileOptionsProps<LAnnotation>): FileOptions<LAnnotation> | undefined {
-  const needsEditorOptions = contentEditable && hasEditor;
+  const needsEditOptions = contentEditable && hasEdit;
   const needsReactOverrides =
     controlledSelection || hasGutterRenderUtility || hasCustomHeader;
 
-  if (!needsReactOverrides && !needsEditorOptions) {
+  if (!needsReactOverrides && !needsEditOptions) {
     return options;
   }
 
@@ -196,7 +196,7 @@ function mergeFileOptions<LAnnotation>({
     };
   }
 
-  if (needsEditorOptions) {
+  if (needsEditOptions) {
     merged = {
       ...merged,
       useTokenTransformer: true,

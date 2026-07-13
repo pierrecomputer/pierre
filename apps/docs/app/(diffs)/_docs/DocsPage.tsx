@@ -29,25 +29,25 @@ import {
   CUSTOM_HUNK_SEPARATORS_SWITCHER,
 } from '../docs/CustomHunkSeparators/constants';
 import {
-  EDITOR_DEMO_FILE_EXAMPLE,
-  EDITOR_LAZY_FILE_EXAMPLE,
-  EDITOR_MARKER_EXAMPLE,
-  EDITOR_MARKER_TYPE,
-  EDITOR_OPTIONS_TYPE,
-  EDITOR_PUBLIC_API,
-  EDITOR_REACT_CODE_VIEW_EXAMPLE,
-  EDITOR_REACT_EXAMPLE,
-  EDITOR_REACT_FILE_DIFF_EXAMPLE,
-  EDITOR_REACT_MULTI_FILE_DIFF_EXAMPLE,
-  EDITOR_SELECTION_ACTION_CONTEXT_TYPE,
-  EDITOR_SELECTION_ACTION_EXAMPLE,
-  EDITOR_UNDO_REDO_EXAMPLE,
-  EDITOR_VANILLA_CODE_VIEW_EXAMPLE,
-  EDITOR_VANILLA_FILE_DIFF_EXAMPLE,
-  EDITOR_VANILLA_FILE_EXAMPLE,
-  EDITOR_WORKER_POOL_REACT_EXAMPLE,
-  EDITOR_WORKER_POOL_VANILLA_EXAMPLE,
-} from '../docs/Editor/constants';
+  EDIT_DEMO_FILE_EXAMPLE,
+  EDIT_LAZY_FILE_EXAMPLE,
+  EDIT_MARKER_EXAMPLE,
+  EDIT_MARKER_TYPE,
+  EDIT_OPTIONS_TYPE,
+  EDIT_PUBLIC_API,
+  EDIT_REACT_CODE_VIEW_EXAMPLE,
+  EDIT_REACT_EXAMPLE,
+  EDIT_REACT_FILE_DIFF_EXAMPLE,
+  EDIT_REACT_MULTI_FILE_DIFF_EXAMPLE,
+  EDIT_SELECTION_ACTION_CONTEXT_TYPE,
+  EDIT_SELECTION_ACTION_EXAMPLE,
+  EDIT_UNDO_REDO_EXAMPLE,
+  EDIT_VANILLA_CODE_VIEW_EXAMPLE,
+  EDIT_VANILLA_FILE_DIFF_EXAMPLE,
+  EDIT_VANILLA_FILE_EXAMPLE,
+  EDIT_WORKER_POOL_REACT_EXAMPLE,
+  EDIT_WORKER_POOL_VANILLA_EXAMPLE,
+} from '../docs/Edit/constants';
 import {
   INSTALLATION_EXAMPLES,
   PACKAGE_MANAGERS,
@@ -187,7 +187,7 @@ export default function DocsPage() {
           <ReactAPISection />
           <VanillaAPISection />
           <CodeViewSection />
-          <EditorSection />
+          <EditSection />
           <VirtualizationSection />
           <CustomHunkSeparatorsSection />
           <UtilitiesSection />
@@ -416,7 +416,7 @@ async function CodeViewSection() {
   return <ProseWrapper>{content}</ProseWrapper>;
 }
 
-async function EditorSection() {
+async function EditSection() {
   const [
     editorDemoFile,
     editorVanillaFileExample,
@@ -437,27 +437,27 @@ async function EditorSection() {
     editorWorkerPoolReactExample,
     editorWorkerPoolVanillaExample,
   ] = await Promise.all([
-    preloadFile(EDITOR_DEMO_FILE_EXAMPLE),
-    preloadFile(EDITOR_VANILLA_FILE_EXAMPLE),
-    preloadFile(EDITOR_VANILLA_FILE_DIFF_EXAMPLE),
-    preloadFile(EDITOR_VANILLA_CODE_VIEW_EXAMPLE),
-    preloadFile(EDITOR_LAZY_FILE_EXAMPLE),
-    preloadFile(EDITOR_OPTIONS_TYPE),
-    preloadFile(EDITOR_PUBLIC_API),
-    preloadFile(EDITOR_SELECTION_ACTION_CONTEXT_TYPE),
-    preloadFile(EDITOR_SELECTION_ACTION_EXAMPLE),
-    preloadFile(EDITOR_MARKER_TYPE),
-    preloadFile(EDITOR_MARKER_EXAMPLE),
-    preloadFile(EDITOR_REACT_CODE_VIEW_EXAMPLE),
-    preloadFile(EDITOR_REACT_EXAMPLE),
-    preloadFile(EDITOR_REACT_FILE_DIFF_EXAMPLE),
-    preloadFile(EDITOR_REACT_MULTI_FILE_DIFF_EXAMPLE),
-    preloadFile(EDITOR_UNDO_REDO_EXAMPLE),
-    preloadFile(EDITOR_WORKER_POOL_REACT_EXAMPLE),
-    preloadFile(EDITOR_WORKER_POOL_VANILLA_EXAMPLE),
+    preloadFile(EDIT_DEMO_FILE_EXAMPLE),
+    preloadFile(EDIT_VANILLA_FILE_EXAMPLE),
+    preloadFile(EDIT_VANILLA_FILE_DIFF_EXAMPLE),
+    preloadFile(EDIT_VANILLA_CODE_VIEW_EXAMPLE),
+    preloadFile(EDIT_LAZY_FILE_EXAMPLE),
+    preloadFile(EDIT_OPTIONS_TYPE),
+    preloadFile(EDIT_PUBLIC_API),
+    preloadFile(EDIT_SELECTION_ACTION_CONTEXT_TYPE),
+    preloadFile(EDIT_SELECTION_ACTION_EXAMPLE),
+    preloadFile(EDIT_MARKER_TYPE),
+    preloadFile(EDIT_MARKER_EXAMPLE),
+    preloadFile(EDIT_REACT_CODE_VIEW_EXAMPLE),
+    preloadFile(EDIT_REACT_EXAMPLE),
+    preloadFile(EDIT_REACT_FILE_DIFF_EXAMPLE),
+    preloadFile(EDIT_REACT_MULTI_FILE_DIFF_EXAMPLE),
+    preloadFile(EDIT_UNDO_REDO_EXAMPLE),
+    preloadFile(EDIT_WORKER_POOL_REACT_EXAMPLE),
+    preloadFile(EDIT_WORKER_POOL_VANILLA_EXAMPLE),
   ]);
   const content = await renderMDX({
-    filePath: '(diffs)/docs/Editor/content.mdx',
+    filePath: '(diffs)/docs/Edit/content.mdx',
     scope: {
       editorDemoFile,
       editorVanillaFileExample,

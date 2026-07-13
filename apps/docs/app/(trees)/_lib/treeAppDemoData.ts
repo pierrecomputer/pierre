@@ -24,7 +24,7 @@ coverage
 .env.local
 .env.*.local
 
-# Editors
+# Edits
 .vscode/*
 !.vscode/extensions.json
 .idea

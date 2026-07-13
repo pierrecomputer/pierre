@@ -5,7 +5,7 @@ import {
   disposeHighlighter,
   parseDiffFromFile,
 } from '../src';
-import { TextDocument } from '../src/editor/textDocument';
+import { TextDocument } from '../src/edit/textDocument';
 import type { FileDiffMetadata, HighlightedToken } from '../src/types';
 import type { DiffsTextDocument } from '../src/types';
 import { finishEditSessionForDiff } from '../src/utils/editSessionHunks';
@@ -69,7 +69,7 @@ function makeTextDocument(lines: string[]): DiffsTextDocument {
 }
 
 // Builds a renderer with a populated (highlighted) render cache, mirroring the
-// state the editor operates on mid-session.
+// state the edit operates on mid-session.
 async function createPrimedRenderer(
   diffStyle: 'split' | 'unified' = 'split'
 ): Promise<DiffHunksRenderer> {
@@ -198,7 +198,7 @@ describe('DiffHunksRenderer content-edit recompute split', () => {
   });
 });
 
-// While an editor session is active, hunk updates preserve the current region
+// While an edit session is active, hunk updates preserve the current region
 // skeleton: regions never merge/split/drop on their own, a reverted region
 // persists as a context-only hunk, and the real recompute runs once on
 // genuine session end.
@@ -418,16 +418,16 @@ describe('DiffHunksRenderer edit-session hunk updates', () => {
   });
 });
 
-// Deleting every character empties the editor's document, whose text is "".
+// Deleting every character empties the edit's document, whose text is "".
 // splitFileContents("") is [], so a naive recompute drops the addition side to
-// zero lines — but the editor always keeps one (empty) line, so the addition
-// column must keep one empty editable row. Without it the attached editor has
+// zero lines — but the edit always keeps one (empty) line, so the addition
+// column must keep one empty editable row. Without it the attached edit has
 // no element to host its caret: the additions column disappears entirely in
 // split (an uneditable view) and unified renders only deletions (nothing to
 // type into).
 describe('DiffHunksRenderer.applyDocumentChange empty document', () => {
-  // The editor reports a single empty line for an emptied document ([''] joins
-  // to "", the editor's empty text).
+  // The edit reports a single empty line for an emptied document ([''] joins
+  // to "", the edit's empty text).
   const EMPTY_DOCUMENT = makeTextDocument(['']);
 
   for (const diffStyle of ['split', 'unified'] as const) {
@@ -585,7 +585,7 @@ describe('DiffHunksRenderer.applyDocumentChange empty document', () => {
       expect(additionSplitLines).toEqual([0, 1, 2]);
     });
 
-    test(`renders one row per editor line after insertLineBreak (${diffStyle})`, async () => {
+    test(`renders one row per edit line after insertLineBreak (${diffStyle})`, async () => {
       const oldContents =
         Array.from({ length: 40 }, (_, index) => `line ${index + 1}`).join(
           '\n'

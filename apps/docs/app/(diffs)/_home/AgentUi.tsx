@@ -1,7 +1,7 @@
 'use client';
 
 import { DEFAULT_THEMES, type FileDiffMetadata } from '@pierre/diffs';
-import { Editor } from '@pierre/diffs/editor';
+import { Edit } from '@pierre/diffs/edit';
 import { EditProvider, File, FileDiff } from '@pierre/diffs/react';
 import {
   IconArrow,
@@ -66,12 +66,12 @@ function countDiffStats(diff: FileDiffMetadata): DiffStats {
   return { additions, deletions };
 }
 
-// The editor's stylesheet flattens every line number to one neutral colour
+// The edit's stylesheet flattens every line number to one neutral colour
 // (`--diffs-editor-line-number-fg`) and is injected as an unlayered <style>,
 // so it overrides the library's per-line colouring (which lives in @layer
 // base). We adopt this extra, higher-specificity unlayered sheet into the
-// editor's shadow root to restore jade/red numbers for added and deleted
-// lines, while leaving the active/selected line to the editor's own styling.
+// edit's shadow root to restore jade/red numbers for added and deleted
+// lines, while leaving the active/selected line to the edit's own styling.
 const LINE_NUMBER_COLOR_CSS = `
 [data-column-number][data-line-type='change-addition']:not([data-selected-line]):not([data-active]) {
   color: var(--diffs-addition-base);
@@ -94,7 +94,7 @@ function getLineNumberColorSheet(): CSSStyleSheet | null {
 }
 
 // `renderSelectionAction` returns a plain DOM node, not React, and renders into
-// the editor's shadow DOM where the page's CSS (including agent-ui.css) doesn't
+// the edit's shadow DOM where the page's CSS (including agent-ui.css) doesn't
 // reach, so the comment icon is inlined as markup painted with `currentColor`
 // and the buttons are styled inline.
 const ICON_COMMENT_FILL_SVG = `<svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M2.19406e-05 8C2.19406e-05 3.58172 3.58174 0 8.00002 0C9.17929 0 10.3009 0.255639 11.3107 0.715237C13.4225 1.67636 15.0429 3.52827 15.6917 5.79351C15.8926 6.49527 16 7.23572 16 8C16 12.4183 12.4183 16 8.00002 16H0.750022C0.446675 16 0.173198 15.8173 0.0571123 15.537C-0.0589735 15.2568 0.00519335 14.9342 0.219692 14.7197L1.83763 13.1017C0.690449 11.7174 2.19406e-05 9.93877 2.19406e-05 8Z" fill="currentColor"/></svg>`;
@@ -309,7 +309,7 @@ const HIDDEN_SEARCH_CSS = `
 
 // The fullscreen editor's left-hand file explorer: a full project tree (not
 // just the changed files) so the standalone /edit/live view reads like a real
-// editor sidebar. It reuses the same imperative @pierre/trees FileTree, but
+// edit sidebar. It reuses the same imperative @pierre/trees FileTree, but
 // with search enabled (the input stays hidden until toggled from the toolbar)
 // and inline renaming enabled so the toolbar's New file / New folder buttons
 // can add an item and immediately drop it into rename mode. Git-status colours
@@ -794,7 +794,7 @@ export function AgentUi({
     });
   }, [router]);
 
-  // Escape exits fullscreen, matching the native editor-fullscreen affordance.
+  // Escape exits fullscreen, matching the native edit-fullscreen affordance.
   useEffect(() => {
     if (variant !== 'fullscreen') {
       return;
@@ -941,13 +941,13 @@ export function AgentUi({
   // can be surfaced in the Changes panel as modified files; reverting an edit
   // back to the original drops the path again (see recordEditedStats).
   const [editedPlaceholders, setEditedPlaceholders] = useState<string[]>([]);
-  // Mirror of the latest edits so the editor's onChange (recreated per file) can
+  // Mirror of the latest edits so the edit's onChange (recreated per file) can
   // rebuild a placeholder's Changes entry without depending on edit state.
   const editedPlaceholdersRef = useRef(editedPlaceholders);
   editedPlaceholdersRef.current = editedPlaceholders;
 
   // Snippets sent from the selection action's "Add to chat" land here as
-  // composer attachments. The editor is recreated per file, but routing the add
+  // composer attachments. The edit is recreated per file, but routing the add
   // through a ref keeps the latest setter without depending on that lifecycle.
   const [snippets, setSnippets] = useState<AuiSnippet[]>([]);
   const snippetIdRef = useRef(0);
@@ -975,7 +975,7 @@ export function AgentUi({
   }, []);
 
   // Recomputes a file's +/- totals from its live edits. Routed through a ref so
-  // the per-file editor (recreated on `activePath`) can call the latest version
+  // the per-file edit (recreated on `activePath`) can call the latest version
   // without listing `session` as a dependency.
   const recordEditedStats = useCallback(
     (target: string, contents: string) => {
@@ -1032,7 +1032,7 @@ export function AgentUi({
   // Persisted in-editor edits keyed by path, so switching files keeps the
   // agent's tweaked output.
   const editsRef = useRef<Map<string, string>>(new Map());
-  // The editor's debounced onChange fires without a path argument, so we track
+  // The edit's debounced onChange fires without a path argument, so we track
   // the live target here.
   const activeTargetRef = useRef<string | null>(null);
   useEffect(() => {
@@ -1069,14 +1069,14 @@ export function AgentUi({
   // swaps the `fileDiff` prop and re-renders in place, preserving the server
   // `prerenderedHTML` (which SSR injects only on mount).
   //
-  // The editor, however, IS recreated per file (`activePath` in the deps). The
-  // library rebuilds the editor's TextDocument only when the `editor` reference
-  // changes, not when `fileDiff` changes, so a stable editor would keep the
+  // The edit, however, IS recreated per file (`activePath` in the deps). The
+  // library rebuilds the edit's TextDocument only when the `edit` reference
+  // changes, not when `fileDiff` changes, so a stable edit would keep the
   // first file's document while the surface shows another file — mis-positioning
   // the caret and breaking edits.
-  const editor = useMemo(
+  const edit = useMemo(
     () =>
-      new Editor({
+      new Edit({
         enabledSelectionAction: true,
         renderSelectionAction(selectionAction) {
           const container = document.createElement('div');
@@ -1087,7 +1087,7 @@ export function AgentUi({
           addToChat.style.cssText = SELECTION_PRIMARY_BUTTON_STYLE;
           addToChat.innerHTML = `${ICON_COMMENT_FILL_SVG} Add to chat`;
           // Suppress the default mousedown so clicking the action doesn't blur
-          // the editor and collapse the selection we're about to read.
+          // the edit and collapse the selection we're about to read.
           addToChat.addEventListener('mousedown', (event) =>
             event.preventDefault()
           );
@@ -1217,7 +1217,7 @@ export function AgentUi({
     // carrying `view-transition-name: aui-window`, so the manually-driven View
     // Transition (see navigateWithViewTransition) morphs the same element's
     // size/position/corner-radius between routes instead of cutting.
-    <EditProvider editor={editor}>
+    <EditProvider edit={edit}>
       <div
         className="aui"
         data-theme-type="dark"
@@ -1297,7 +1297,7 @@ export function AgentUi({
               ) : placeholderContents != null && activePath != null ? (
                 // Editable view for explorer files that aren't part of the change
                 // set (e.g. the root README or a generated stub). It picks up the
-                // shared editor from context via `contentEditable`, and seeds from
+                // shared edit from context via `contentEditable`, and seeds from
                 // any persisted edit so tweaks survive switching files and back.
                 // Highlighted on the main thread since this File is mounted
                 // dynamically outside the editable surface's worker pool.
@@ -1349,7 +1349,7 @@ export function AgentUi({
                           disableLineNumbers: true,
                         }}
                         // The page's shared worker pool is wired up for the
-                        // editable editor surface; a dynamically mounted
+                        // editable edit surface; a dynamically mounted
                         // read-only File isn't highlighted through it, so
                         // highlight on the main thread.
                         disableWorkerPool

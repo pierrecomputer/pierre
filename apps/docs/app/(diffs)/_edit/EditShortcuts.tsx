@@ -1,11 +1,11 @@
 'use client';
 
-import { Editor } from '@pierre/diffs/editor';
+import { Edit } from '@pierre/diffs/edit';
 import { EditProvider, File } from '@pierre/diffs/react';
 import type { PreloadedFileResult } from '@pierre/diffs/ssr';
 import { useMemo } from 'react';
 
-import { EDITOR_SHORTCUT_GROUPS, type EditorShortcutGroup } from './constants';
+import { EDIT_SHORTCUT_GROUPS, type EditShortcutGroup } from './constants';
 import { ShortcutKeys } from '@/components/Shortcut';
 
 interface EditShortcutsProps {
@@ -14,18 +14,18 @@ interface EditShortcutsProps {
   prerenderedFile: PreloadedFileResult<undefined>;
 }
 
-// The keyboard-shortcut reference: a live editor showing the data that drives
+// The keyboard-shortcut reference: a live edit showing the data that drives
 // the table (left) next to the table itself (right). Both read from
-// EDITOR_SHORTCUT_GROUPS, so the snippet and the rendered keys stay in lockstep.
+// EDIT_SHORTCUT_GROUPS, so the snippet and the rendered keys stay in lockstep.
 // The platform modifier (Cmd on macOS/iOS, Ctrl elsewhere) is resolved
 // client-side by `ShortcutKeys`.
 export function EditShortcuts({ prerenderedFile }: EditShortcutsProps) {
-  const editor = useMemo(() => new Editor({}), []);
+  const edit = useMemo(() => new Edit({}), []);
 
   return (
     <div className="grid grid-cols-1 items-start gap-8 md:grid-cols-5">
       <div className="not-prose md:col-span-3">
-        <EditProvider editor={editor}>
+        <EditProvider edit={edit}>
           <File
             {...prerenderedFile}
             className="diff-container"
@@ -43,7 +43,7 @@ export function EditShortcuts({ prerenderedFile }: EditShortcutsProps) {
             </tr>
           </thead>
           <tbody>
-            {EDITOR_SHORTCUT_GROUPS.map((group) => (
+            {EDIT_SHORTCUT_GROUPS.map((group) => (
               <GroupRows key={group.label} group={group} />
             ))}
           </tbody>
@@ -53,7 +53,7 @@ export function EditShortcuts({ prerenderedFile }: EditShortcutsProps) {
   );
 }
 
-function GroupRows({ group }: { group: EditorShortcutGroup }) {
+function GroupRows({ group }: { group: EditShortcutGroup }) {
   return (
     <>
       <tr className="bg-muted/30 border-b">

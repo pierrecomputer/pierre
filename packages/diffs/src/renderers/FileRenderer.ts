@@ -147,7 +147,7 @@ export class FileRenderer<LAnnotation = undefined> {
     this.lineCache = undefined;
     // The edited-document cache is only coherent alongside the render cache
     // it patched. Keeping it across a recycle would let getLineCount report
-    // editor-session line counts (keyed by the long-lived file object) against
+    // edit-session line counts (keyed by the long-lived file object) against
     // a result rebuilt from the file's own contents, which processFileResult
     // treats as a missing-line error.
     this.textDocumentCache = new WeakMap();
@@ -155,7 +155,7 @@ export class FileRenderer<LAnnotation = undefined> {
 
   // An edit session patches the render caches in place but never rewrites
   // `file.contents`, so a recycled host would otherwise rebuild from the
-  // pre-edit text while the editor resumes its retained (edited) document.
+  // pre-edit text while the edit resumes its retained (edited) document.
   // Diffs don't have this problem because DiffHunksRenderer keeps
   // `diff.additionLines` in sync during the session; the file equivalent is
   // joining the session-synced line cache back into the file object before
@@ -288,7 +288,7 @@ export class FileRenderer<LAnnotation = undefined> {
     // Mirror DiffHunksRenderer keeping `diff.additionLines` in sync during an
     // edit session: patch the split-line cache with the edited line text so
     // recycle() can persist the session's contents into the file. The line
-    // cache includes the document's trailing empty line, so editor line
+    // cache includes the document's trailing empty line, so edit line
     // indexes map 1:1; lines past the cache (document grew) are handled by
     // applyDocumentChange instead.
     const lineCache =

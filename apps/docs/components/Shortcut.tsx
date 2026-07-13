@@ -21,7 +21,7 @@ interface ShortcutProps {
 
 // True when the current device uses the Cmd key (macOS / iOS) rather than Ctrl.
 // `navigator.platform` is deprecated but still the most reliable signal across
-// browsers, and matches the detection already used by the LiveEditor demo.
+// browsers, and matches the detection already used by the LiveEdit demo.
 function detectIsMac(): boolean {
   return /Mac|iP(?:hone|ad|od)/i.test(navigator.platform);
 }

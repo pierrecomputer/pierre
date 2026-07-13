@@ -6,7 +6,7 @@ import type {
   FileDiffOptions,
   SelectedLineRange,
 } from '@pierre/diffs';
-import { Editor } from '@pierre/diffs/editor';
+import { Edit } from '@pierre/diffs/edit';
 import { EditProvider, FileDiff, Virtualizer } from '@pierre/diffs/react';
 import { useCallback, useMemo, useState } from 'react';
 
@@ -60,8 +60,8 @@ interface ElementVirtualizerDiffProps {
 }
 
 // One diff in the element-scroll list. Each file is its own state island: a
-// dedicated Editor (one editor binds to one instance, so per-file editing
-// needs per-file editors/providers), its own edit toggle, and its own
+// dedicated Edit (one edit binds to one instance, so per-file editing
+// needs per-file edits/providers), its own edit toggle, and its own
 // annotation list — all through the first-class React FileDiff props, the
 // same way the Normal view is wired.
 function ElementVirtualizerDiff({
@@ -70,7 +70,7 @@ function ElementVirtualizerDiff({
   enableGutterComments,
   showAnnotations,
 }: ElementVirtualizerDiffProps) {
-  const editor = useMemo(() => new Editor<undefined>({}), []);
+  const edit = useMemo(() => new Edit<undefined>({}), []);
   const [editing, setEditing] = useState(false);
   const [annotations, setAnnotations] = useState<
     DiffLineAnnotation<undefined>[]
@@ -124,7 +124,7 @@ function ElementVirtualizerDiff({
   );
 
   return (
-    <EditProvider editor={editor}>
+    <EditProvider edit={edit}>
       <FileDiff
         fileDiff={fileDiff}
         contentEditable={editing}
