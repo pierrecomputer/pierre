@@ -203,7 +203,7 @@ export interface TreeAppProps<LAnnotation = unknown> {
   // HTML map and the file options may be scoped per theme so the active File
   // picks up the right syntax-highlight colors when the theme toggles. Give
   // files unique, rename-stable cacheKeys so persisted editor state follows
-  // moves; without one, Editor falls back to the file name.
+  // moves; without one, TreeApp uses the current path.
   files?: Readonly<Record<string, FileContents>>;
   prerenderedHTMLByPath?: TreeAppThemeValue<Readonly<Record<string, string>>>;
   fileOptions?: TreeAppThemeValue<FileOptions<LAnnotation>>;
@@ -1656,6 +1656,15 @@ export function TreeApp<LAnnotation = unknown>({
     activePath != null && usesLocalFile
       ? (editedFilesByPath[activePath] ?? activeHostFile)
       : activeHostFile;
+  // File names are commonly only basenames, so use the unique tree path as
+  // the persistence identity unless the caller supplied a stable cache key.
+  const activeEditorFile = useMemo(
+    () =>
+      activeFile == null || activePath == null || activeFile.cacheKey != null
+        ? activeFile
+        : { ...activeFile, cacheKey: activePath },
+    [activeFile, activePath]
+  );
   // Skip stale prerendered HTML while the editor is showing local contents.
   const activePrerenderedHTML =
     activePath == null || usesLocalFile
@@ -1879,7 +1888,7 @@ export function TreeApp<LAnnotation = unknown>({
                     width: '100%',
                   }}
                 >
-                  {activeFile == null ? (
+                  {activeEditorFile == null ? (
                     (renderEmpty?.() ?? <DefaultEmpty theme={theme} />)
                   ) : (
                     <File
@@ -1888,7 +1897,7 @@ export function TreeApp<LAnnotation = unknown>({
                         flex: '1 1 auto',
                         minWidth: '100%',
                       }}
-                      file={activeFile}
+                      file={activeEditorFile}
                       options={fileOptions}
                       prerenderedHTML={activePrerenderedHTML}
                       contentEditable
