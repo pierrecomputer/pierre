@@ -27,6 +27,14 @@ surfaces in `EditProvider` and set `contentEditable`. `CodeView` instead uses an
 item's `edit` flag and a `createEditor` factory. For standalone vanilla JS
 surfaces, call `editor.edit(component)` after render.
 
+Edit mode is not a full-fledged IDE, though you may certainly use it to create
+your own IDE-like experiences. Edit mode is purpose-built and best suited for
+editing code rendered by our Diffs library. It builds on our already powerful
+file and diff surfaces to preserve diff layout, annotations, syntax
+highlighting, SSR, and virtualization while adding editing, multiple selections,
+history, search and replace, and markers. This makes it most ideal for “review
+and correct” flows with generative code changes.
+
 ### Demo
 
 To enable edit mode on a `File` instance, import `Editor` from
@@ -238,46 +246,3 @@ and <kbd>End</kbd> keys; on macOS, the modifier with ↑ and ↓ arrows works to
 | Find next match of selection | <Shortcut>D</Shortcut>                                                        |
 | Undo                         | <Shortcut>Z</Shortcut>                                                        |
 | Redo                         | <Shortcut modifiers={['Shift']}>Z</Shortcut>                                  |
-
-### Compared with Monaco Editor and CodeMirror
-
-The edit mode of diffs provides the primary editing features most file and diff
-workflows need. It is designed for code review, agent, and diff workflows built
-with `File` or `FileDiff`, not as a full code editor or general-purpose editor
-framework.
-
-[Monaco Editor](https://microsoft.github.io/monaco-editor/) is the browser code
-editor that powers VS Code. It supports IDE-like capabilities such as
-IntelliSense and validation through models, providers, and web workers, plus
-dedicated diff editors. Monaco is not the full VS Code workbench, and VS Code
-extensions do not run in it automatically. Choose Monaco when editing is central
-to your product and warrants a larger integration surface.
-
-[CodeMirror](https://codemirror.net/) is a modular, extensible web editor.
-Features such as history, line numbers, linting, and autocompletion are
-extensions. `basicSetup` provides a baseline, while language support and
-specialized features use separate packages. Diff and merge views come from
-[`@codemirror/merge`](https://codemirror.net/docs/ref/#merge). Choose CodeMirror
-to compose a general-purpose editor with precise control over its behavior.
-
-|                       | Pierre edit mode                                                  | Monaco Editor                                       | CodeMirror                                      |
-| --------------------- | ----------------------------------------------------------------- | --------------------------------------------------- | ----------------------------------------------- |
-| Best fit              | **In-place editing in Pierre files and diffs**                    | IDE-like browser editing                            | Custom editor assembled from extensions         |
-| Diff support          | **Built into `FileDiff`, `MultiFileDiff`, and `PatchDiff`**       | Dedicated diff and multi-file diff editors          | Merge and unified views via `@codemirror/merge` |
-| Editing basics        | **Selections, indentation, history, search/replace, and markers** | Broad VS Code-derived editing feature set           | Baseline setup plus optional extensions         |
-| Language intelligence | **External diagnostics through markers or custom UI**             | Completion, hover, folding, and other providers     | Language packages and feature extensions        |
-| Rendering             | **Pierre layout, annotations, highlighting, and virtualization**  | Editor-owned model and view                         | Editor-owned state and view                     |
-| Setup                 | **Built-in core features; lazy-loadable**                         | Integrate models, URIs, providers, and workers      | Choose packages, extensions, and languages      |
-| Mobile                | **Mobile-friendly as a `contentEditable` element**                | Use hidden `textarea` with a poor mobile experience | Same `contentEditable` approach as Pierre       |
-
-Choose Pierre edit mode when editing is part of an existing file or diff
-experience. It preserves Pierre's diff layout, annotations, syntax highlighting,
-SSR, and virtualization while adding editing, multiple selections, history,
-search and replace, and markers. It suits reviewing and correcting code without
-replacing the surrounding diff UI.
-
-Edit mode does not include built-in autocomplete, hover, go-to-definition,
-formatting providers, a workspace model, a command palette, a minimap, or an
-extension runtime. Add these at the application layer when needed. For example,
-display linter or language-server diagnostics with `setMarkers()`, or expose a
-custom transform through Selection Action and `applyEdits()`.
