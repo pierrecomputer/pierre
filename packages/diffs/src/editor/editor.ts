@@ -2087,27 +2087,32 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     if (textDocument === undefined || selections === undefined) {
       return;
     }
-    const selectionOffsets = selections.map(
-      (selection) =>
-        [
-          textDocument.offsetAt(selection.start),
-          textDocument.offsetAt(selection.end),
-        ] as const
-    );
-    const resolvedEdits = edits
-      .map((edit) => {
-        const start = textDocument.offsetAt(edit.range.start);
-        const end = textDocument.offsetAt(edit.range.end);
-        return {
-          start: Math.min(start, end),
-          end: Math.max(start, end),
-          text: edit.newText,
-        };
-      })
-      .sort((a, b) => {
-        const startOrder = a.start - b.start;
-        return startOrder !== 0 ? startOrder : a.end - b.end;
-      });
+    const remapSelections = resolveNextSelections === undefined;
+    const selectionOffsets = remapSelections
+      ? selections.map(
+          (selection) =>
+            [
+              textDocument.offsetAt(selection.start),
+              textDocument.offsetAt(selection.end),
+            ] as const
+        )
+      : undefined;
+    const resolvedEdits = remapSelections
+      ? edits
+          .map((edit) => {
+            const start = textDocument.offsetAt(edit.range.start);
+            const end = textDocument.offsetAt(edit.range.end);
+            return {
+              start: Math.min(start, end),
+              end: Math.max(start, end),
+              text: edit.newText,
+            };
+          })
+          .sort((a, b) => {
+            const startOrder = a.start - b.start;
+            return startOrder !== 0 ? startOrder : a.end - b.end;
+          })
+      : undefined;
     const change = textDocument.applyEdits(
       edits,
       true,
@@ -2118,14 +2123,14 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     if (change === undefined) {
       return;
     }
-    const nextSelections =
-      resolveNextSelections?.(textDocument) ??
-      remapSelectionsAfterEdits(
-        textDocument,
-        selections,
-        selectionOffsets,
-        resolvedEdits
-      );
+    const nextSelections = remapSelections
+      ? remapSelectionsAfterEdits(
+          textDocument,
+          selections,
+          selectionOffsets!,
+          resolvedEdits!
+        )
+      : resolveNextSelections(textDocument);
     textDocument.setLastUndoSelectionsAfter(nextSelections);
     this.#applyChange(
       change,
@@ -2153,9 +2158,13 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       copiedLinesBefore.push(copiedLineCount);
       const blockLineCount = block.endLine - block.startLine + 1;
       copiedLineCount += blockLineCount;
-      const text = Array.from({ length: blockLineCount }, (_, index) =>
-        textDocument.getLineText(block.startLine + index)
-      ).join(textDocument.eol);
+      const text = textDocument.getText({
+        start: { line: block.startLine, character: 0 },
+        end: {
+          line: block.endLine,
+          character: textDocument.getLineLength(block.endLine),
+        },
+      });
 
       if (direction > 0) {
         const position = { line: block.startLine, character: 0 };
@@ -2181,7 +2190,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       }
     }
 
-    const findBlockIndex = (line: number): number => {
+    const nextSelections = selections.map((selection) => {
+      const line = selection.start.line;
       let low = 0;
       let high = blocks.length - 1;
       while (low <= high) {
@@ -2192,13 +2202,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         } else if (line > block.endLine) {
           low = middle + 1;
         } else {
-          return middle;
+          low = middle;
+          break;
         }
       }
-      return Math.max(0, high);
-    };
-    const nextSelections = selections.map((selection) => {
-      const blockIndex = findBlockIndex(selection.start.line);
+      const blockIndex = Math.max(0, low <= high ? low : high);
       const block = blocks[blockIndex];
       const shift =
         copiedLinesBefore[blockIndex] +
@@ -2220,9 +2228,12 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       return;
     }
 
-    const targetLines = Array.from(
-      new Set(selections.map((selection) => selection.end.line))
-    ).sort((a, b) => a - b);
+    const selectionLines = selections.map(
+      (selection) => getCaretPosition(selection).line
+    );
+    const targetLines = Array.from(new Set(selectionLines)).sort(
+      (a, b) => a - b
+    );
     const targetIndex = new Map<number, number>();
     const indents = new Map<number, string>();
     const edits: TextEdit[] = [];
@@ -2242,8 +2253,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       });
     }
 
-    const nextSelections = selections.map<EditorSelection>((selection) => {
-      const line = selection.end.line;
+    const nextSelections = selections.map<EditorSelection>((_, index) => {
+      const line = selectionLines[index];
       const position = {
         line: line + 1 + targetIndex.get(line)!,
         character: indents.get(line)!.length,

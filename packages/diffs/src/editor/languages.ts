@@ -270,10 +270,23 @@ function findBlockComment(
 function mapOffset(
   offset: number,
   edits: readonly OffsetEdit[],
+  cumulativeDeltas: readonly number[],
   association: -1 | 1
 ): number {
-  let delta = 0;
-  for (const edit of edits) {
+  let low = 0;
+  let high = edits.length;
+  while (low < high) {
+    const middle = (low + high) >>> 1;
+    if (edits[middle].end < offset) {
+      low = middle + 1;
+    } else {
+      high = middle;
+    }
+  }
+
+  let delta = cumulativeDeltas[low];
+  for (let index = low; index < edits.length; index++) {
+    const edit = edits[index];
     if (offset < edit.start) {
       break;
     }
@@ -296,24 +309,6 @@ function mapOffset(
   return offset + delta;
 }
 
-/** Expands a selection to its selected lines while keeping leading indentation. */
-function expandSelectionToLines(
-  textDocument: TextDocument<unknown>,
-  selection: EditorSelection
-): EditorSelection {
-  let endLine = selection.end.line;
-  if (selection.start.line < endLine && selection.end.character === 0) {
-    endLine--;
-  }
-  const firstLine = textDocument.getLineText(selection.start.line);
-  const indent = firstLine.length - firstLine.trimStart().length;
-  return {
-    start: { line: selection.start.line, character: indent },
-    end: { line: endLine, character: textDocument.getLineLength(endLine) },
-    direction: selection.direction,
-  };
-}
-
 /** Builds block-comment edits and content-preserving post-edit selections. */
 export function resolveBlockCommentEdits(
   textDocument: TextDocument<unknown>,
@@ -322,16 +317,44 @@ export function resolveBlockCommentEdits(
   linewise = false
 ): BlockCommentEditResult | undefined {
   const ranges = selections.map((selection) => {
-    const target = linewise
-      ? expandSelectionToLines(textDocument, selection)
-      : selection;
+    let { start, end } = selection;
+    if (linewise) {
+      let endLine = end.line;
+      if (start.line < endLine && end.character === 0) {
+        endLine--;
+      }
+      const firstLine = textDocument.getLineText(start.line);
+      const indent = firstLine.length - firstLine.trimStart().length;
+      start = { line: start.line, character: indent };
+      end = {
+        line: endLine,
+        character: textDocument.getLineLength(endLine),
+      };
+    }
     return {
-      from: textDocument.offsetAt(target.start),
-      to: textDocument.offsetAt(target.end),
+      from: textDocument.offsetAt(start),
+      to: textDocument.offsetAt(end),
       direction: selection.direction,
       comment: undefined as BlockCommentMatch | undefined,
     };
   });
+  if (linewise && ranges.length > 1) {
+    ranges.sort((a, b) => {
+      const startOrder = a.from - b.from;
+      return startOrder !== 0 ? startOrder : a.to - b.to;
+    });
+    let lastRangeIndex = 0;
+    for (let index = 1; index < ranges.length; index++) {
+      const previous = ranges[lastRangeIndex];
+      const current = ranges[index];
+      if (current.from <= previous.to) {
+        previous.to = Math.max(previous.to, current.to);
+      } else {
+        ranges[++lastRangeIndex] = current;
+      }
+    }
+    ranges.length = lastRangeIndex + 1;
+  }
   for (const range of ranges) {
     range.comment = findBlockComment(
       textDocument,
@@ -344,34 +367,13 @@ export function resolveBlockCommentEdits(
 
   const shouldUncomment = ranges.every((range) => range.comment !== undefined);
   const offsetEdits: OffsetEdit[] = [];
-  const collapsedInsertions = new Map<number, number>();
-  const logicalRanges: Array<{
-    start: number;
-    end: number;
-    startAssociation: -1 | 1;
-    endAssociation: -1 | 1;
-  }> = [];
-
-  for (let index = 0; index < ranges.length; index++) {
-    const range = ranges[index];
+  for (const range of ranges) {
     const comment = range.comment;
     if (shouldUncomment && comment !== undefined) {
       offsetEdits.push(comment.open, comment.close);
-      logicalRanges.push({
-        start: comment.contentStart,
-        end: comment.contentEnd,
-        startAssociation: 1,
-        endAssociation: -1,
-      });
       continue;
     }
     if (comment !== undefined) {
-      logicalRanges.push({
-        start: range.from,
-        end: range.to,
-        startAssociation: 1,
-        endAssociation: 1,
-      });
       continue;
     }
     if (range.from === range.to) {
@@ -380,25 +382,12 @@ export function resolveBlockCommentEdits(
         end: range.to,
         text: open + '  ' + close,
       });
-      collapsedInsertions.set(index, open.length + 1);
-      logicalRanges.push({
-        start: range.from,
-        end: range.to,
-        startAssociation: -1,
-        endAssociation: -1,
-      });
       continue;
     }
     offsetEdits.push(
       { start: range.from, end: range.from, text: open + ' ' },
       { start: range.to, end: range.to, text: ' ' + close }
     );
-    logicalRanges.push({
-      start: range.from,
-      end: range.to,
-      startAssociation: 1,
-      endAssociation: -1,
-    });
   }
 
   if (offsetEdits.length === 0) {
@@ -408,27 +397,86 @@ export function resolveBlockCommentEdits(
     const startOrder = a.start - b.start;
     return startOrder !== 0 ? startOrder : a.end - b.end;
   });
+  const edits = offsetEdits.map((edit) => ({
+    range: {
+      start: textDocument.positionAt(edit.start),
+      end: textDocument.positionAt(edit.end),
+    },
+    newText: edit.text,
+  }));
+  if (linewise) {
+    return { edits, nextSelectionOffsets: [] };
+  }
 
+  const logicalRanges: Array<{
+    start: number;
+    end: number;
+    startAssociation: -1 | 1;
+    endAssociation: -1 | 1;
+    collapsedInset?: number;
+  }> = ranges.map((range) => {
+    const comment = range.comment;
+    if (shouldUncomment && comment !== undefined) {
+      return {
+        start: comment.contentStart,
+        end: comment.contentEnd,
+        startAssociation: 1,
+        endAssociation: -1,
+      };
+    }
+    if (comment !== undefined) {
+      return {
+        start: range.from,
+        end: range.to,
+        startAssociation: 1,
+        endAssociation: 1,
+      };
+    }
+    if (range.from === range.to) {
+      return {
+        start: range.from,
+        end: range.to,
+        startAssociation: -1,
+        endAssociation: -1,
+        collapsedInset: open.length + 1,
+      };
+    }
+    return {
+      start: range.from,
+      end: range.to,
+      startAssociation: 1,
+      endAssociation: -1,
+    };
+  });
+  const cumulativeDeltas = new Array<number>(offsetEdits.length + 1);
+  cumulativeDeltas[0] = 0;
+  for (let index = 0; index < offsetEdits.length; index++) {
+    const edit = offsetEdits[index];
+    cumulativeDeltas[index + 1] =
+      cumulativeDeltas[index] + edit.text.length - (edit.end - edit.start);
+  }
   const nextSelectionOffsets = logicalRanges.map((range, index) => {
-    const collapsedInset = collapsedInsertions.get(index);
     const start =
-      mapOffset(range.start, offsetEdits, range.startAssociation) +
-      (collapsedInset ?? 0);
+      mapOffset(
+        range.start,
+        offsetEdits,
+        cumulativeDeltas,
+        range.startAssociation
+      ) + (range.collapsedInset ?? 0);
     const end =
-      collapsedInset === undefined
-        ? mapOffset(range.end, offsetEdits, range.endAssociation)
+      range.collapsedInset === undefined
+        ? mapOffset(
+            range.end,
+            offsetEdits,
+            cumulativeDeltas,
+            range.endAssociation
+          )
         : start;
     return [start, end, ranges[index].direction] as const;
   });
 
   return {
-    edits: offsetEdits.map((edit) => ({
-      range: {
-        start: textDocument.positionAt(edit.start),
-        end: textDocument.positionAt(edit.end),
-      },
-      newText: edit.text,
-    })),
+    edits,
     nextSelectionOffsets,
   };
 }

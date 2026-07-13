@@ -952,6 +952,34 @@ describe('Editor editing commands', () => {
     }
   });
 
+  test('inserts a blank line below the active end of a backward selection', async () => {
+    const { cleanup, content, editor, window } =
+      await createEditorFixture('zero\n  one\ntwo');
+
+    try {
+      editor.setSelections([
+        {
+          start: { line: 0, character: 2 },
+          end: { line: 1, character: 3 },
+          direction: 'backward',
+        },
+      ]);
+
+      pressKey(window, content, { key: 'Enter', metaKey: true });
+
+      expect(editor.getText()).toBe('zero\n\n  one\ntwo');
+      expect(editor.getState().selections).toEqual([
+        {
+          start: { line: 1, character: 0 },
+          end: { line: 1, character: 0 },
+          direction: 0,
+        },
+      ]);
+    } finally {
+      cleanup();
+    }
+  });
+
   test('indents whole lines with the bracket shortcuts', async () => {
     const { cleanup, content, editor, window } =
       await createEditorFixture('alpha');
@@ -1047,13 +1075,13 @@ describe('Editor editing commands', () => {
         { name }
       );
       try {
-        fixture.editor.setSelections([
-          {
-            start: { line: 0, character: 4 },
-            end: { line: 0, character: 4 },
-            direction: 'none',
-          },
-        ]);
+        fixture.editor.setSelections(
+          [4, 8].map((character) => ({
+            start: { line: 0, character },
+            end: { line: 0, character },
+            direction: 'none' as const,
+          }))
+        );
 
         pressKey(fixture.window, fixture.content, {
           key: '/',

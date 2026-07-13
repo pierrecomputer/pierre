@@ -20,5 +20,13 @@ describe('resolveCommentConfig', () => {
       lineComment: null,
       blockComment: ['/*', '*/'],
     });
+
+    const overrides = {
+      custom: { lineComment: '#', blockComment: ['<#', '#>'] },
+    } as const;
+    expect(resolveCommentConfig('custom', overrides)).toEqual({
+      lineComment: '#',
+      blockComment: ['<#', '#>'],
+    });
   });
 });
