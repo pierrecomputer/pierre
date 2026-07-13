@@ -1,48 +1,25 @@
 'use client';
 
-import type { FileContents } from '@pierre/diffs';
 import { Editor } from '@pierre/diffs/editor';
 import { EditProvider, File } from '@pierre/diffs/react';
+import type { PreloadedFileResult } from '@pierre/diffs/ssr';
 import { useMemo, useState } from 'react';
 
-const initialFile: FileContents = {
-  name: 'editable-demo.ts',
-  contents: `import { VirtualizedFile } from '@pierre/diffs';
-import { Editor } from '@pierre/diffs/editor';
+interface EditorDemoProps {
+  // Server-preloaded, already-highlighted file. Spreading it into <File> ships
+  // the highlighted surface in the initial SSR HTML and hydrates from it, so
+  // the demo paints instantly instead of flashing in after the client attaches
+  // the editor.
+  prerenderedFile: PreloadedFileResult<undefined>;
+}
 
-const fileInstance = new VirtualizedFile({
-  theme: { dark: 'pierre-dark', light: 'pierre-light' },
-});
-
-// render the file into a DOM container
-fileInstance.render({
-  file: { name: 'index.ts', contents: 'export const foo: string = "bar";\n' },
-  containerWrapper: document.getElementById('file-container')
-});
-
-const editor = new Editor({
-  onChange(file, lineAnnotations) {
-    console.log('change', file.name, lineAnnotations);
-  },
-});
-
-// Attach the editor to the file instance
-const dispose = editor.edit(fileInstance);
-
-// Later, when the editor is no longer needed:
-dispose();
-`,
-};
-
-export function EditorDemo() {
-  const [file, _setFile] = useState<FileContents>(initialFile);
+export function EditorDemo({ prerenderedFile }: EditorDemoProps) {
   const [changeCount, setChangeCount] = useState(0);
 
   const editor = useMemo(
     () =>
       new Editor({
-        onChange(_file) {
-          // setFile(nextFile);
+        onChange() {
           setChangeCount((count) => count + 1);
         },
       }),
@@ -64,12 +41,8 @@ export function EditorDemo() {
       </div>
       <EditProvider editor={editor}>
         <File
+          {...prerenderedFile}
           className="max-h-[480px] overflow-auto rounded-none border-0"
-          options={{
-            theme: { dark: 'pierre-dark', light: 'pierre-light' },
-            disableFileHeader: true,
-          }}
-          file={file}
           contentEditable
         />
       </EditProvider>
