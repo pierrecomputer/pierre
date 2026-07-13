@@ -1,3 +1,4 @@
+import type { FileOptions } from '@pierre/diffs/react';
 import type { PreloadFileOptions } from '@pierre/diffs/ssr';
 
 import { CustomScrollbarCSS } from '@/components/CustomScrollbarCSS';
@@ -7,6 +8,56 @@ const options = {
   disableFileHeader: true,
   unsafeCSS: CustomScrollbarCSS,
 } as const;
+
+// Options for the live editable demo below. They mirror the state the editor
+// enforces when it attaches in `contentEditable` mode (token transformer on;
+// gutter, line selection, and line hover off), so the server-rendered HTML
+// matches the editor's post-attach client render and hydrating from
+// `prerenderedHTML` neither flashes nor re-highlights. Mirrors
+// `(diffs)/_edit/constants.ts`.
+const editableDemoOptions: FileOptions<undefined> = {
+  theme: { dark: 'pierre-dark', light: 'pierre-light' },
+  disableFileHeader: true,
+  useTokenTransformer: true,
+  enableGutterUtility: false,
+  enableLineSelection: false,
+  lineHoverHighlight: 'disabled',
+};
+
+// The file rendered by the interactive `<EditorDemo />` on the Editor page.
+// Preloaded server-side so the surface is highlighted in the initial HTML
+// instead of flashing in after the client attaches the editor.
+export const EDITOR_DEMO_FILE_EXAMPLE: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'editable-demo.ts',
+    contents: `import { VirtualizedFile } from '@pierre/diffs';
+import { Editor } from '@pierre/diffs/editor';
+
+const fileInstance = new VirtualizedFile({
+  theme: { dark: 'pierre-dark', light: 'pierre-light' },
+});
+
+// render the file into a DOM container
+fileInstance.render({
+  file: { name: 'index.ts', contents: 'export const foo: string = "bar";\\n' },
+  containerWrapper: document.getElementById('file-container')
+});
+
+const editor = new Editor({
+  onChange(file, lineAnnotations) {
+    console.log('change', file.name, lineAnnotations);
+  },
+});
+
+// Attach the editor to the file instance
+const dispose = editor.edit(fileInstance);
+
+// Later, when the editor is no longer needed:
+dispose();
+`,
+  },
+  options: editableDemoOptions,
+};
 
 export const EDITOR_VANILLA_FILE_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
