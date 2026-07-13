@@ -804,7 +804,7 @@ describe('TextDocument', () => {
       [caret(0, 0)]
     );
     // Paste a single-line string at the caret. The trailing `true` marks it as
-    // an undo boundary, like the edit's paste handler. Without it the paste
+    // an undo boundary, like edit mode's paste handler. Without it the paste
     // looks just like typing and would merge into the previous step.
     d.applyEdits(
       [

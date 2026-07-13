@@ -93,7 +93,7 @@ ${' '.repeat(80)}scrolledMarkerTarget_${'x'.repeat(180)}();
         },
       ];
 
-      // setMarkers throws until the edit attaches to its surface (async), so
+      // setMarkers throws until edit mode attaches to its surface (async), so
       // retry each frame until it sticks and the squiggles are in the DOM.
       const applyMarkers = async () => {
         const started = performance.now();

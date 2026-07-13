@@ -69,7 +69,7 @@ function makeTextDocument(lines: string[]): DiffsTextDocument {
 }
 
 // Builds a renderer with a populated (highlighted) render cache, mirroring the
-// state the edit operates on mid-session.
+// state edit mode operates on mid-session.
 async function createPrimedRenderer(
   diffStyle: 'split' | 'unified' = 'split'
 ): Promise<DiffHunksRenderer> {
@@ -418,16 +418,16 @@ describe('DiffHunksRenderer edit-session hunk updates', () => {
   });
 });
 
-// Deleting every character empties the edit's document, whose text is "".
+// Deleting every character empties edit mode's document, whose text is "".
 // splitFileContents("") is [], so a naive recompute drops the addition side to
-// zero lines — but the edit always keeps one (empty) line, so the addition
+// zero lines — but edit mode always keeps one (empty) line, so the addition
 // column must keep one empty editable row. Without it the attached edit has
 // no element to host its caret: the additions column disappears entirely in
 // split (an uneditable view) and unified renders only deletions (nothing to
 // type into).
 describe('DiffHunksRenderer.applyDocumentChange empty document', () => {
   // The edit reports a single empty line for an emptied document ([''] joins
-  // to "", the edit's empty text).
+  // to "", edit mode's empty text).
   const EMPTY_DOCUMENT = makeTextDocument(['']);
 
   for (const diffStyle of ['split', 'unified'] as const) {

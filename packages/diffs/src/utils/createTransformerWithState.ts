@@ -83,7 +83,7 @@ export function createTransformerWithState(
     transformers.push(tokenStyleNormalizer, toClass);
   }
   if (useTokenTransformer) {
-    // shiki renders empty lines as " " that breaks the edit selection.
+    // shiki renders empty lines as " " that breaks edit mode's selection.
     // We replace them with <br> tags.
     transformers.push({
       line: (node) => {

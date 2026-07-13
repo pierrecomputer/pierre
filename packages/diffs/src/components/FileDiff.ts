@@ -1217,7 +1217,7 @@ export class FileDiff<
   }
 
   // The stored render range is in rendered-row units for the windowed AST
-  // pipeline, but the edit consumes render ranges in document-line units.
+  // pipeline, but edit mode consumes render ranges in document-line units.
   // Derive the addition-side document window covered by the rendered rows:
   // startingLine = first addition line with a row in the window, totalLines =
   // last such line - first + 1, and 0 when the window holds no addition rows
@@ -1372,7 +1372,7 @@ export class FileDiff<
     // a collapsed gap) changes the rendered row set, which the debounced
     // line-type refresh below cannot express. Escalate to a deferred full
     // re-render — never a synchronous one, since this runs mid-editor-pass
-    // and rebuilding rows the edit is about to touch detaches its geometry
+    // and rebuilding rows edit mode is about to touch detaches its geometry
     // caches.
     if (regionsChanged) {
       if (this.refreshViewTimeout != null) {
@@ -1545,7 +1545,7 @@ export class FileDiff<
   }
 
   // Deferred full re-render for session region changes. The subsequent
-  // render() ends in syncRenderViewToEdit, which resets the edit's
+  // render() ends in syncRenderViewToEdit, which resets edit mode's
   // geometry caches against the rebuilt rows. VirtualizedFileDiff overrides
   // this to also invalidate its layout caches.
   protected escalateEditSessionRender(): void {
@@ -2518,7 +2518,7 @@ export class FileDiff<
     this.managersDirty = true;
     this.flushManagers();
 
-    // sync the render view to the edit
+    // sync the render view to edit mode
     this.syncRenderViewToEdit();
   }
 

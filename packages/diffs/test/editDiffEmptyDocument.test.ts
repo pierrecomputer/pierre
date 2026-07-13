@@ -334,7 +334,7 @@ describe('diff edit: select-all then delete', () => {
   }
 });
 
-// Fires the beforeinput the browser would send, so the edit's own handler
+// Fires the beforeinput the browser would send, so edit mode's own handler
 // runs (it reads e.inputType and edits #selections). cancelable lets the
 // handler preventDefault as it does in the browser. InputEvent lives on the
 // jsdom window rather than globalThis, so reach it through the element.
@@ -355,7 +355,7 @@ function dispatchBeforeInput(content: HTMLElement, inputType: string): void {
 }
 
 // cmd+backspace deletes to the start of the line. Chrome reports it as
-// deleteSoftLineBackward, but Safari reports deleteHardLineBackward; the edit
+// deleteSoftLineBackward, but Safari reports deleteHardLineBackward; edit mode
 // must treat both the same or Safari's cmd+backspace silently does nothing.
 describe('diff edit: cmd+backspace (deleteHardLineBackward) deletes to line start', () => {
   for (const diffStyle of ['split', 'unified'] as const) {

@@ -192,7 +192,7 @@ describe('Edit recycle cleanUp', () => {
       insertAtStart(edit, 'X');
       expect(edit.getText()).toBe(`X${FILE_CONTENTS}`);
 
-      // Simulate a virtualized unmount: the host recycles, the edit is
+      // Simulate a virtualized unmount: the host recycles, edit mode is
       // detached non-destructively.
       edit.cleanUp(true);
       first.cleanUp();

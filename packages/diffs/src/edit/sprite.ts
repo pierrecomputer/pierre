@@ -10,7 +10,7 @@ export type SVGSpriteNames =
 
 // Icon artwork is sourced from `@pierre/icons` (IconSearch, IconX,
 // IconArrowRight, IconType, IconTypeWord, IconRegex, IconReplace,
-// IconReplaceAll) so the edit matches the rest of the product. The arrow glyph
+// IconReplaceAll) so edit mode matches the rest of the product. The arrow glyph
 // is the full-size right arrow rotated to point up/down for the search
 // "previous"/"next" controls. `getEditIconSvg` omits an outer viewBox so each
 // symbol scales to fill the requested size regardless of its intrinsic

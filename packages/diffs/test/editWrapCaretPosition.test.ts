@@ -35,7 +35,7 @@ interface EditTestWindow extends Window {
   };
 }
 
-// Height the test uses for a single visual row. Deliberately not the edit's
+// Height the test uses for a single visual row. Deliberately not edit mode's
 // default 20px line height: the caret's y must come from the measured line
 // offsetTop, so a distinct value proves it is not coincidentally matching a
 // fixed lineHeight multiple.
@@ -60,7 +60,7 @@ function rect(left: number, top: number, width = 1, height = 1): DOMRect {
 // jsdom performs no layout, so every element.offsetTop is 0 and the wrap-induced
 // vertical shift this test exercises would be invisible. Install a getter that
 // reports each rendered row's top from a layout map the test controls, keyed by
-// the 1-based data-line attribute the edit stamps on each line element.
+// the 1-based data-line attribute edit mode stamps on each line element.
 // Elements without a mapped data-line (e.g. the content wrapper) keep offsetTop
 // 0, matching their jsdom default.
 function installLineLayout(): {

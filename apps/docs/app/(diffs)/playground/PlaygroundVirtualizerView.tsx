@@ -193,7 +193,7 @@ export function PlaygroundVirtualizerView({
         pool
       );
 
-      // Attaching the edit flips the new-file surface to contentEditable;
+      // Attaching edit mode flips the new-file surface to contentEditable;
       // detaching restores read-only review.
       input.addEventListener('change', () => {
         if (input.checked) {

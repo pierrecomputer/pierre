@@ -1028,7 +1028,7 @@ export class VirtualizedFileDiff<
       this.computeApproximateSize(true);
     }
 
-    // Recompute the buffer spacer when the edit grew the document below the
+    // Recompute the buffer spacer when an edit grew the document below the
     // rendered window so scroll/caret positioning stays correct before the next
     // virtualizer re-sync.
     if (

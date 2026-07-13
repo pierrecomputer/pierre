@@ -1209,7 +1209,7 @@ export function TreeApp<LAnnotation = unknown>({
   const activePathRef = useRef<string | null>(initialActivePath ?? null);
   // Edited buffers keyed by path. Prefer these over the caller-supplied `files`
   // map so tab switches keep unsaved text without requiring the host to own
-  // the edit loop.
+  // the editing loop.
   const [editedFilesByPath, setEditedFilesByPath] = useState<
     Readonly<Record<string, FileContents>>
   >({});
@@ -1731,7 +1731,7 @@ export function TreeApp<LAnnotation = unknown>({
     activePath != null && usesLocalFile
       ? (editedFilesByPath[activePath] ?? activeHostFile)
       : activeHostFile;
-  // Skip stale prerendered HTML while the edit is showing local contents.
+  // Skip stale prerendered HTML while edit mode is showing local contents.
   const activePrerenderedHTML =
     activePath == null || usesLocalFile
       ? undefined
@@ -1931,7 +1931,7 @@ export function TreeApp<LAnnotation = unknown>({
             className="relative flex min-h-0 flex-1"
             style={{ backgroundColor: 'var(--tree-app-editor-bg)' }}
           >
-            {/* `inert` removes the edit contents from the focus order on
+            {/* `inert` removes edit mode's contents from the focus order on
                 mobile so keyboard users can't tab into a region that's
                 visually faded out and mostly clipped off-screen. Passing
                 `undefined` on desktop disables the attribute entirely. */}

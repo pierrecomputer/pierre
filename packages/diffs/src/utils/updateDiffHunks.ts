@@ -93,7 +93,7 @@ export function shouldTopAlignAdditionRecompute(
 
 // Rebuilds hunk metadata while keeping the editable addition rows top-aligned in
 // split view. The sentinel only shapes hunks; the caller's addition lines are
-// preserved so the edit document stays the source of truth.
+// preserved so the edit-mode document stays the source of truth.
 export function recomputeTopAlignedAdditionDiff(
   diff: FileDiffMetadata,
   additionLines: string[],
@@ -164,7 +164,7 @@ function hasTrailingEditBlankLine(additionLines: string[]): boolean {
   return additionLines.length > 1 && additionLines.at(-1) === '';
 }
 
-// Re-adds the edit's phantom trailing empty line (a document ending in a
+// Re-adds edit mode's phantom trailing empty line (a document ending in a
 // newline exposes one extra empty line) as an addition row when the last
 // hunk's final change block can absorb it, so the caret keeps a rendered row.
 export function preserveTrailingEditBlankLine(

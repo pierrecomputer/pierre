@@ -52,7 +52,7 @@ const LANGUAGE_COMMENT_CONFIGS: LanguageConfigMap = {
   prompt: { lineComment: null, blockComment: ['<!--', '-->'] },
 };
 
-/** Resolves language-specific comment tokens over the edit defaults. */
+/** Resolves language-specific comment tokens over edit mode's defaults. */
 export function resolveCommentConfig(
   languageId: string,
   overrides?: LanguageConfigMap

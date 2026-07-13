@@ -62,7 +62,7 @@ const gamma = 'third';
           button.type = 'button';
           button.dataset.testActionButton = '';
           button.textContent = 'Capture';
-          // Prevent the mousedown from blurring the edit and collapsing the
+          // Prevent the mousedown from blurring edit mode and collapsing the
           // selection before the click handler reads it.
           button.addEventListener('mousedown', (e) => e.preventDefault());
           button.addEventListener('click', () => {

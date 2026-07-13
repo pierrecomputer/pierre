@@ -58,7 +58,7 @@ interface RegionBounds {
 }
 
 /**
- * Drops the edit document's phantom trailing empty line (a document ending
+ * Drops the edit-mode document's phantom trailing empty line (a document ending
  * in a newline exposes one extra empty line the parsed diff never contains)
  * so session line arrays compare like parse-derived ones.
  */

@@ -37,7 +37,7 @@ interface EditFixture {
 }
 
 // Mounts a real File-backed edit, mirroring the harness the applyEdits and
-// marker suites use, and returns the edit plus its contenteditable element.
+// marker suites use, and returns the edit instance plus its contenteditable element.
 async function createEditFixture(
   contents: string,
   editorOptions?: EditOptions<undefined>
@@ -179,7 +179,7 @@ describe('Edit.setOptions', () => {
 });
 
 describe('Edit focus lifecycle', () => {
-  test('fires onAttach when the edit attaches to a file', async () => {
+  test('fires onAttach when edit mode attaches to a file', async () => {
     const onAttach = mock((_editor: Edit<undefined>) => {});
     const { cleanup, edit } = await createEditFixture('alpha\nbravo', {
       onAttach,

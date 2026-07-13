@@ -34,7 +34,7 @@ export interface PopoverManagerOptions {
 }
 
 /**
- * Shared placement logic for the edit's overlay popovers: each anchors below
+ * Shared placement logic for edit mode's overlay popovers: each anchors below
  * or above a document position, flipping to the opposite side only when the
  * preferred side would be clipped by the visible scrollport.
  */

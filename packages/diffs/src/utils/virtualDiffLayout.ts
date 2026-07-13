@@ -325,7 +325,7 @@ export function getNearestRenderableAdditionLine({
   }
 
   // Renderable [start, end) line ranges in ascending order, plus the
-  // exclusive end of the modeled range — anything past it (the edit's
+  // exclusive end of the modeled range — anything past it (edit mode's
   // phantom document-end line) counts as renderable.
   const ranges: Array<[start: number, end: number]> = [];
   let modeledEnd = 1;

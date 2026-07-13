@@ -66,12 +66,12 @@ function countDiffStats(diff: FileDiffMetadata): DiffStats {
   return { additions, deletions };
 }
 
-// The edit's stylesheet flattens every line number to one neutral colour
+// Edit mode's stylesheet flattens every line number to one neutral colour
 // (`--diffs-editor-line-number-fg`) and is injected as an unlayered <style>,
 // so it overrides the library's per-line colouring (which lives in @layer
 // base). We adopt this extra, higher-specificity unlayered sheet into the
-// edit's shadow root to restore jade/red numbers for added and deleted
-// lines, while leaving the active/selected line to the edit's own styling.
+// edit-mode shadow root to restore jade/red numbers for added and deleted
+// lines, while leaving the active/selected line to edit mode's own styling.
 const LINE_NUMBER_COLOR_CSS = `
 [data-column-number][data-line-type='change-addition']:not([data-selected-line]):not([data-active]) {
   color: var(--diffs-addition-base);
@@ -94,7 +94,7 @@ function getLineNumberColorSheet(): CSSStyleSheet | null {
 }
 
 // `renderSelectionAction` returns a plain DOM node, not React, and renders into
-// the edit's shadow DOM where the page's CSS (including agent-ui.css) doesn't
+// edit mode's shadow DOM where the page's CSS (including agent-ui.css) doesn't
 // reach, so the comment icon is inlined as markup painted with `currentColor`
 // and the buttons are styled inline.
 const ICON_COMMENT_FILL_SVG = `<svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M2.19406e-05 8C2.19406e-05 3.58172 3.58174 0 8.00002 0C9.17929 0 10.3009 0.255639 11.3107 0.715237C13.4225 1.67636 15.0429 3.52827 15.6917 5.79351C15.8926 6.49527 16 7.23572 16 8C16 12.4183 12.4183 16 8.00002 16H0.750022C0.446675 16 0.173198 15.8173 0.0571123 15.537C-0.0589735 15.2568 0.00519335 14.9342 0.219692 14.7197L1.83763 13.1017C0.690449 11.7174 2.19406e-05 9.93877 2.19406e-05 8Z" fill="currentColor"/></svg>`;
@@ -941,13 +941,13 @@ export function AgentUi({
   // can be surfaced in the Changes panel as modified files; reverting an edit
   // back to the original drops the path again (see recordEditedStats).
   const [editedPlaceholders, setEditedPlaceholders] = useState<string[]>([]);
-  // Mirror of the latest edits so the edit's onChange (recreated per file) can
+  // Mirror of the latest edits so edit mode's onChange (recreated per file) can
   // rebuild a placeholder's Changes entry without depending on edit state.
   const editedPlaceholdersRef = useRef(editedPlaceholders);
   editedPlaceholdersRef.current = editedPlaceholders;
 
   // Snippets sent from the selection action's "Add to chat" land here as
-  // composer attachments. The edit is recreated per file, but routing the add
+  // composer attachments. Edit mode is recreated per file, but routing the add
   // through a ref keeps the latest setter without depending on that lifecycle.
   const [snippets, setSnippets] = useState<AuiSnippet[]>([]);
   const snippetIdRef = useRef(0);
@@ -1032,7 +1032,7 @@ export function AgentUi({
   // Persisted in-editor edits keyed by path, so switching files keeps the
   // agent's tweaked output.
   const editsRef = useRef<Map<string, string>>(new Map());
-  // The edit's debounced onChange fires without a path argument, so we track
+  // Edit mode's debounced onChange fires without a path argument, so we track
   // the live target here.
   const activeTargetRef = useRef<string | null>(null);
   useEffect(() => {
@@ -1069,8 +1069,8 @@ export function AgentUi({
   // swaps the `fileDiff` prop and re-renders in place, preserving the server
   // `prerenderedHTML` (which SSR injects only on mount).
   //
-  // The edit, however, IS recreated per file (`activePath` in the deps). The
-  // library rebuilds the edit's TextDocument only when the `edit` reference
+  // Edit mode, however, IS recreated per file (`activePath` in the deps). The
+  // library rebuilds edit mode's TextDocument only when the `edit` reference
   // changes, not when `fileDiff` changes, so a stable edit would keep the
   // first file's document while the surface shows another file — mis-positioning
   // the caret and breaking edits.
@@ -1087,7 +1087,7 @@ export function AgentUi({
           addToChat.style.cssText = SELECTION_PRIMARY_BUTTON_STYLE;
           addToChat.innerHTML = `${ICON_COMMENT_FILL_SVG} Add to chat`;
           // Suppress the default mousedown so clicking the action doesn't blur
-          // the edit and collapse the selection we're about to read.
+          // edit mode and collapse the selection we're about to read.
           addToChat.addEventListener('mousedown', (event) =>
             event.preventDefault()
           );

@@ -28,19 +28,19 @@ export interface EditTokenizerProps {
     themeType: 'dark' | 'light'
   ) => void;
   // Fired after the active theme (light/dark mode or theme name) changes and the
-  // new theme CSS has been applied. Lets the edit recompute overlay pieces
+  // new theme CSS has been applied. Lets edit mode recompute overlay pieces
   // that captured a resolved theme color, e.g. rounded selection corner masks.
   onThemeChange?: () => void;
   __debug?: boolean;
 }
 
-/** Stoppable code tokenizer for the edit */
+/** Stoppable code tokenizer for edit mode */
 export class EditTokenizer {
   #highlighter: DiffsHighlighter;
   #grammar: IGrammar | undefined;
   #mediaQueryList: MediaQueryList;
   #themeType: 'light' | 'dark' = 'dark';
-  // The resolved name of the theme currently applied to the edit (e.g.
+  // The resolved name of the theme currently applied to edit mode (e.g.
   // `github-light`). Tracked so `syncTheme` can detect a host-driven theme swap
   // even when the light/dark mode itself is unchanged.
   #themeName = '';
@@ -248,10 +248,10 @@ export class EditTokenizer {
     return this.#mediaQueryList.matches ? 'dark' : 'light';
   }
 
-  // Re-apply the edit's theme from the surface's current code options. Edit
+  // Re-apply edit mode's theme from the surface's current code options. Edit
   // mode reuses a single tokenizer across re-renders, so when the host swaps the
   // theme — a theme picker, a light/dark toggle, etc. — we must recompute the
-  // active theme and re-tokenize. Without this the edit keeps rendering the
+  // active theme and re-tokenize. Without this edit mode keeps rendering the
   // theme it captured when it first attached (stale line-highlight background
   // and token colors). System-driven changes are still handled by the
   // observers wired up in the constructor; this covers explicit `themeType`/
@@ -345,7 +345,7 @@ export class EditTokenizer {
     }
 
     if (this.#matchBrackets) {
-      // Clear ignored token ranges for lines invalidated by the edit.
+      // Clear ignored token ranges for lines invalidated by the change.
       for (const line of this.#bracketIgnoredRanges.keys()) {
         if (line >= change.startLine) {
           this.#bracketIgnoredRanges.delete(line);

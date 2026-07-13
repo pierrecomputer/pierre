@@ -49,7 +49,7 @@ test.describe('selection action popover', () => {
     await expect(popover.locator('[data-test-action-button]')).toBeVisible();
   });
 
-  test('stays within the edit bounds', async ({ page }) => {
+  test('stays within edit mode bounds', async ({ page }) => {
     await openFixture(page);
     await selectWord(page);
 

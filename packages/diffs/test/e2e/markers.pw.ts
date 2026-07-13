@@ -10,7 +10,7 @@ async function openFixture(page: Page): Promise<void> {
 
 // Returns true when every element matching `selector` is laid out inside the
 // edit's host element (with a 1px tolerance for sub-pixel rounding). Used to
-// prove marker squiggles and popups never render outside the edit boundary.
+// prove marker squiggles and popups never render outside edit mode's boundary.
 function allWithinHost(page: Page, selector: string): Promise<boolean> {
   return page.evaluate((sel) => {
     const host = document.querySelector('diffs-container');
@@ -103,7 +103,9 @@ test.describe('editor markers', () => {
     await expect(popup).toContainText('Cannot find name conut');
   });
 
-  test('squiggles and popups stay within the edit bounds', async ({ page }) => {
+  test('squiggles and popups stay within edit mode bounds', async ({
+    page,
+  }) => {
     await openFixture(page);
 
     expect(await allWithinHost(page, RANGE)).toBe(true);

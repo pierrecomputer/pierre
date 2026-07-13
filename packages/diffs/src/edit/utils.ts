@@ -133,7 +133,7 @@ export function createSegmenter(
 }
 
 // Lazily created and cached grapheme segmenter. Avoids constructing
-// Intl.Segmenter at import time so importing the edit never throws on
+// Intl.Segmenter at import time so importing edit mode never throws on
 // engines that lack it. Undefined when the engine has no Intl.Segmenter.
 let graphemeSegmenter: Intl.Segmenter | undefined;
 let graphemeSegmenterInit = false;

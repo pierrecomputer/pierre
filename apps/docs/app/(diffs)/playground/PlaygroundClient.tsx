@@ -635,7 +635,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
   const router = useRouter();
 
   // The app-wide color scheme resolved by @pierre/theming (the shared theme
-  // controller). The diff's "system" mode must follow this so the edit stays
+  // controller). The diff's "system" mode must follow this so edit mode stays
   // in sync with the rest of the app. See `effectiveColorMode`.
   const { resolvedColorScheme } = useTheme();
 
@@ -780,8 +780,8 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
   // eslint-disable-next-line react-hooks/exhaustive-deps -- deps intentionally force a fresh edit; the factory takes no inputs
   const edit = useMemo(() => new Edit({}), []);
 
-  // Apply (or clear) the demo markers whenever the edit, mode, or toggle
-  // changes. `setMarkers` throws until the edit attaches to its surface
+  // Apply (or clear) the demo markers whenever the edit instance, mode, or toggle
+  // changes. `setMarkers` throws until edit mode attaches to its surface
   // (async), so retry each frame until the call sticks (mirrors MarkerDemo).
   useEffect(() => {
     if (!contentEditable) {
@@ -994,7 +994,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
 
   // The diff's own "system" mode follows the OS (its shadow root declares
   // `color-scheme: light dark`), which drifts from the app whenever the app's
-  // theme differs from the OS preference. To keep the edit in sync with the
+  // theme differs from the OS preference. To keep edit mode in sync with the
   // app, resolve "system" to the app's current scheme from @pierre/theming and
   // pass that concrete light/dark to the diff; "light"/"dark" still force the
   // edit independently. Before the controller has mounted
@@ -1157,7 +1157,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
 
       {/*
         Normal view keeps EditProvider mounted in both Review and Edit so
-        toggling modes only flips `contentEditable` (the edit attaches lazily
+        toggling modes only flips `contentEditable` (edit mode attaches lazily
         when that turns true). Conditionally wrapping would change the child
         component type and remount FileDiff, which recreates the shadow root and
         re-injects the dark SSR HTML for a frame — the light->dark flash we're

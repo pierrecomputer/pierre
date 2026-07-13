@@ -72,7 +72,7 @@ const CODE_VIEW_TYPE: 'old-new-full' | 'old-new-hydration' | 'patch-file' =
   'old-new-full';
 
 // Pre-render the @pierre/icons SVG markup once so it can be embedded into the
-// `message.html` strings the edit injects for markers. The icons default to
+// `message.html` strings edit mode injects for markers. The icons default to
 // `fill: currentcolor`, so each one inherits the surrounding text color.
 const MARKER_INFO_ICON = renderToStaticMarkup(
   createElement(IconInfoFill, { size: 16 })

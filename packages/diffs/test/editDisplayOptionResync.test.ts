@@ -148,7 +148,7 @@ function typeAt(
 
 describe('diff edit: display-option toggle mid-edit', () => {
   test('keeps the edited line text visible when a display option is toggled', async () => {
-    // old/new differ so the additions column (the edit's target) renders; the
+    // old/new differ so the additions column (edit mode's target) renders; the
     // edit targets line 0 ("alpha"), an unchanged context line — the "rename a
     // function" case from the bug report.
     const fixture = await createFixture('alpha\nbravo\n', 'alpha\nCHANGED\n');
@@ -333,7 +333,7 @@ describe('diff edit: display-option toggle mid-edit', () => {
   });
 });
 
-// Waits for the edit to mark the additions column editable after an attach.
+// Waits for edit mode to mark the additions column editable after an attach.
 async function waitForEditable(container: HTMLElement): Promise<void> {
   for (let attempt = 0; attempt < 40; attempt++) {
     const content = findAdditionContent(container);
@@ -346,7 +346,7 @@ async function waitForEditable(container: HTMLElement): Promise<void> {
 
 describe('diff edit: detach then re-attach', () => {
   // Mirrors the demo's Edit-mode toggle and surface switch: turning editing off
-  // detaches the edit (edit.cleanUp), turning it back on re-attaches the
+  // detaches edit mode (edit.cleanUp), turning it back on re-attaches the
   // same instance (edit.edit). cleanUp tears down the tokenizer, so the
   // re-attach must rebuild it before any edit can render. Pre-fix cleanUp kept
   // the parsed document and its cacheKey, so __syncRenderView treated the

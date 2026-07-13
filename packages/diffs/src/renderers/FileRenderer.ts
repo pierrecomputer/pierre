@@ -155,7 +155,7 @@ export class FileRenderer<LAnnotation = undefined> {
 
   // An edit session patches the render caches in place but never rewrites
   // `file.contents`, so a recycled host would otherwise rebuild from the
-  // pre-edit text while the edit resumes its retained (edited) document.
+  // pre-edit text while edit mode resumes its retained (edited) document.
   // Diffs don't have this problem because DiffHunksRenderer keeps
   // `diff.additionLines` in sync during the session; the file equivalent is
   // joining the session-synced line cache back into the file object before

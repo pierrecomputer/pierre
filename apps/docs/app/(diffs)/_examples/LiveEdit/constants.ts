@@ -93,9 +93,9 @@ export const LIVE_EDIT_EXAMPLE: PreloadMultiFileDiffOptions<undefined> = {
   options: LIVE_EDIT_OPTIONS,
 };
 
-// File-mode options for the Live editing example. They mirror the edit's
+// File-mode options for the Live editing example. They mirror edit mode's
 // enforced contentEditable state (see LIVE_EDIT_OPTIONS) so the SSR-rendered
-// File matches what the edit attaches to, avoiding a rerender flash on
+// File matches what edit mode attaches to, avoiding a rerender flash on
 // hydration. The diff-only diffStyle key doesn't apply to a File.
 export const LIVE_EDIT_FILE_OPTIONS: FileOptions<undefined> = {
   theme: DEFAULT_THEMES,

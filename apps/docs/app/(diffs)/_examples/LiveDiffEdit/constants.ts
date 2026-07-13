@@ -8,7 +8,7 @@ import { CustomScrollbarCSS } from '@/components/CustomScrollbarCSS';
 // LiveEdit debounce.ts before/after files so the surface shows a real diff,
 // then make the additions side editable in place. The options mirror the state
 // edit mode enforces when it attaches (see LIVE_EDIT_OPTIONS) so the
-// SSR-rendered diff matches the edit's surface and hydration doesn't flash.
+// SSR-rendered diff matches edit mode's surface and hydration doesn't flash.
 export const LIVE_DIFF_EDIT_EXAMPLE: PreloadFileDiffOptions<undefined> = {
   fileDiff: parseDiffFromFile(LIVE_EDIT_OLD_FILE, LIVE_EDIT_NEW_FILE),
   options: {

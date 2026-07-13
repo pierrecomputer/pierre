@@ -45,7 +45,7 @@ function calculateTotal(items, taxRate) {
 
 // Diagnostics a real linter might produce for MARKER_DEMO_FILE. Positions are
 // zero-based line/character ranges. Severities are `as const` so the literals
-// satisfy the edit's MarkerSeverity union without importing the (not yet
+// satisfy edit mode's MarkerSeverity union without importing the (not yet
 // exported) Marker type.
 export const MARKER_DEMO_MARKERS = [
   {

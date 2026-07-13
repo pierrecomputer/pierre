@@ -12,12 +12,12 @@ interface MarkerDemoProps {
   prerenderedFile: PreloadedFileResult<undefined>;
 }
 
-// Demo of the edit's lint markers, applied imperatively via `edit.setMarkers`
+// Demo of edit mode's lint markers, applied imperatively via `edit.setMarkers`
 // (the same call a real linter integration would make) and shown by default.
 export function MarkerDemo({ prerenderedFile }: MarkerDemoProps) {
   const edit = useMemo(() => new Edit({}), []);
 
-  // `setMarkers` throws until the edit attaches to its surface (async), so
+  // `setMarkers` throws until edit mode attaches to its surface (async), so
   // retry each frame until the call sticks.
   useEffect(() => {
     let frame = 0;

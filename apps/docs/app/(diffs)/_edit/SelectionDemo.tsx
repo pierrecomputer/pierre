@@ -31,7 +31,7 @@ interface SelectionDemoProps {
 // is inlined as markup and painted with `currentColor`.
 const ICON_COMMENT_FILL_SVG = `<svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M2.19406e-05 8C2.19406e-05 3.58172 3.58174 0 8.00002 0C9.17929 0 10.3009 0.255639 11.3107 0.715237C13.4225 1.67636 15.0429 3.52827 15.6917 5.79351C15.8926 6.49527 16 7.23572 16 8C16 12.4183 12.4183 16 8.00002 16H0.750022C0.446675 16 0.173198 15.8173 0.0571123 15.537C-0.0589735 15.2568 0.00519335 14.9342 0.219692 14.7197L1.83763 13.1017C0.690449 11.7174 2.19406e-05 9.93877 2.19406e-05 8Z" fill="currentColor"/></svg>`;
 
-// The actions render into the edit's shadow DOM, where the page's Tailwind
+// The actions render into edit mode's shadow DOM, where the page's Tailwind
 // classes don't reach, so they're styled inline.
 const PRIMARY_BUTTON_STYLE =
   'display: inline-flex; align-items: center; gap: 2px; font-size: 12px; font-weight: 500; padding: 4px 10px 4px 8px; border-radius: 6px; border: 0; background-color: #6366f1; color: #fff; cursor: pointer;';
@@ -89,7 +89,7 @@ function formatSelectionLineLabel(
     : `(${String(snippet.lineStart)}-${String(snippet.lineEnd)})`;
 }
 
-// Demo of the edit's opt-in Selection Action: with `enabledSelectionAction`,
+// Demo of edit mode's opt-in Selection Action: with `enabledSelectionAction`,
 // selecting text immediately reveals a floating popover (anchored below the
 // selection) whose contents come from `renderSelectionAction`. Here it mimics an
 // edit's "Add to chat": the primary action sends the selected snippet to a
@@ -100,7 +100,7 @@ export function SelectionDemo({ prerenderedFile }: SelectionDemoProps) {
 
   // The popover lives inside the edit instance, which is created once. Route
   // its "Add to chat" click through a ref so it always calls the latest setter
-  // without recreating the edit.
+  // without recreating the edit instance.
   const addSnippet = useCallback(
     (text: string, source: ChatSnippetSource) => {
       const trimmed = text.trim();
@@ -137,7 +137,7 @@ export function SelectionDemo({ prerenderedFile }: SelectionDemoProps) {
           addToChat.style.cssText = PRIMARY_BUTTON_STYLE;
           addToChat.innerHTML = `${ICON_COMMENT_FILL_SVG} Add to chat`;
           // Suppress the default mousedown so clicking the action doesn't blur
-          // the edit and collapse the selection we're about to read.
+          // edit mode and collapse the selection we're about to read.
           addToChat.addEventListener('mousedown', (event) =>
             event.preventDefault()
           );
@@ -175,11 +175,11 @@ export function SelectionDemo({ prerenderedFile }: SelectionDemoProps) {
         <File {...prerenderedFile} className="diff-container" contentEditable />
       </EditProvider>
 
-      {/* The wrapper takes its height from the edit column (its only in-flow
+      {/* The wrapper takes its height from the edit-mode column (its only in-flow
           sibling); the aside fills it absolutely at md+ so a long snippet list
           scrolls inside instead of stretching the panel. On mobile it falls back
           to normal flow. The min-height keeps the chat panel from collapsing
-          when the edit column is short. */}
+          when the edit-mode column is short. */}
       <div className="relative min-h-80">
         <aside className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-neutral-800 bg-neutral-950 md:absolute md:inset-0">
           <div className="flex items-center justify-between border-b border-neutral-800 px-4 py-3">

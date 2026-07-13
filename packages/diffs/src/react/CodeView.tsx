@@ -64,7 +64,7 @@ interface CodeViewBaseProps<LAnnotation> {
   renderCodeViewFooter?(): ReactNode;
   /**
    * Enables editing for items with `edit: true`. Pass the given options into
-   * the edit constructor — `new Edit(options)` from `@pierre/diffs/edit`
+   * the `Edit` constructor — `new Edit(options)` from `@pierre/diffs/edit`
    * — so document changes route to `onItemEditChange` and
    * `onItemEditComplete`. CodeView owns the returned edit's lifecycle.
    */
@@ -225,7 +225,7 @@ function CodeViewInner<LAnnotation = undefined>(
   );
   const controlledSelection = selectedLines !== undefined;
 
-  // Stable identities for the edit callbacks so inline props don't churn
+  // Stable identities for edit mode's callbacks so inline props don't churn
   // managedOptions (a changed options object forces a full item re-render).
   const stableCreateEdit = useStableCallback(
     (editorOptions: CodeViewCreateEditOptions<LAnnotation>) =>

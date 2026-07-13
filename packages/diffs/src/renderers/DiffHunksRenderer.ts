@@ -522,7 +522,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
     // updateRenderCache may already have extended diff.additionLines for the
     // same edit pass, so never bail out purely on matching lengths here.
-    // Read line-by-line from the edit document instead of materializing the
+    // Read line-by-line from the edit-mode document instead of materializing the
     // entire text. This preserves blank documents and the final editable empty
     // row after a trailing line break.
     diff.additionLines = getEditDocumentLines(textDocument, diff.additionLines);
@@ -581,7 +581,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     const previousLines = this.editSessionLines;
     const nextLines = normalizeEditLines(rawLines);
     if (previousLines == null) {
-      // No pass snapshot (the edit attached without diff data): fall back
+      // No pass snapshot (edit mode attached without diff data): fall back
       // to the full recompute for this pass and start tracking from it.
       Object.assign(diff, recomputeDiffHunksForEdit(diff, parseDiffOptions));
       this.markEditSessionPass(diff);

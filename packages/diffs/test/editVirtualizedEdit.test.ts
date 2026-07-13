@@ -70,7 +70,7 @@ interface WindowedEdit {
   fileContainer: HTMLElement;
 }
 
-// Renders a long file into a partial window so the edit virtualizes: only the
+// Renders a long file into a partial window so edit mode virtualizes: only the
 // lines inside `range` get DOM rows, mirroring a scrolled-down CodeView.
 async function createWindowedEdit(
   lineCount: number,
@@ -275,7 +275,7 @@ describe('Edit edits at the bottom of a virtualized window', () => {
   // change.startLine, so widening would append the edited rows right after the
   // window with the intervening lines unbuilt, while #isLineVisible reports them
   // visible: a discontiguous render with the rows/caret mispositioned. The
-  // window must stay bounded and contiguous; the edit renders on the next scroll.
+  // window must stay bounded and contiguous; edit mode renders on the next scroll.
   test('does not widen for an edit that starts below the rendered window', async () => {
     const { cleanup, content, edit } = await createWindowedEdit(
       300,

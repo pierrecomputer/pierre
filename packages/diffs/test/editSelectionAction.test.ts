@@ -192,7 +192,7 @@ describe('Edit selection action', () => {
   });
 
   // A ten-line document used by the placement tests so a selection's head can
-  // sit clear of the first/last rows where the edit flips placement.
+  // sit clear of the first/last rows where edit mode flips placement.
   const MULTILINE = 'l0\nl1\nl2\nl3\nl4\nl5\nl6\nl7\nl8\nl9';
 
   // A bottom-up (backward) selection has its head at the top, so the popover

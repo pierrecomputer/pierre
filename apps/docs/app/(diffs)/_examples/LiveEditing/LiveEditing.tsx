@@ -34,7 +34,7 @@ interface LiveEditingProps {
 type Surface = 'file' | 'diff';
 
 // Review renders the surface read-only (how diffs renders by default); Edit
-// attaches the edit and makes it editable in place.
+// attaches edit mode and makes it editable in place.
 type EditMode = 'review' | 'edit';
 
 // Layout the diff renders in. Only applies to the FileDiff surface.
@@ -46,7 +46,7 @@ export function LiveEditing({
 }: LiveEditingProps) {
   const [hasEdits, setHasEdits] = useState(false);
   const [surface, setSurface] = useState<Surface>('file');
-  // Default to Edit so the edit is live on first paint; the toggle drops back
+  // Default to Edit so edit mode is live on first paint; the toggle drops back
   // to a read-only Review of the same surface.
   const [mode, setMode] = useState<EditMode>('edit');
   // Default to the layout the diff was prerendered in (unified) so the first
@@ -72,7 +72,7 @@ export function LiveEditing({
     }),
     [pristineFileDiff, resetKey]
   );
-  // Edits emit through the edit's debounced `onChange`. After a remount (reset
+  // Edits emit through edit mode's debounced `onChange`. After a remount (reset
   // or a control change) a change scheduled just before can still fire ~500ms
   // later carrying the pre-remount (edited) contents, which would flip
   // `hasEdits` back on. We drop any `onChange` inside a short window after a
@@ -108,10 +108,10 @@ export function LiveEditing({
   }, []);
 
   // Reset by remounting the editable surface. Bumping `resetKey` unmounts the
-  // current File/FileDiff — whose teardown runs the edit's detach
+  // current File/FileDiff — whose teardown runs edit mode's detach
   // (`edit.cleanUp()`), dropping the edited TextDocument and undo history —
   // and mounts a fresh one that re-hydrates the original prerendered HTML and
-  // re-attaches the edit with a clean document.
+  // re-attaches edit mode with a clean document.
   const handleReset = useCallback(() => {
     setResetKey((key) => key + 1);
     resetEditedState();

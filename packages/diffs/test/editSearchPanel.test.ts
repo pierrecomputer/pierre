@@ -48,7 +48,7 @@ interface WidgetHarness {
 // Mounts a SearchPanelWidget over an in-memory document and records everything
 // the widget hands back to its host (scroll targets, replace edits, match-set
 // updates, and close). The default onUpdate selects the first match as current,
-// like the edit selecting the first hit on open; pass `selectCurrent: false`
+// like edit mode selecting the first hit on open; pass `selectCurrent: false`
 // to model a host with no match under the caret (the "N results" state).
 function createWidget(
   contents: string,
@@ -165,7 +165,7 @@ describe('SearchPanelWidget', () => {
       setInputValue(harness.input, '');
 
       expect(harness.matchesText()).toBe('No results');
-      // An empty query pushes an empty match set so the edit drops its
+      // An empty query pushes an empty match set so edit mode drops its
       // highlights, and the prev/next arrows go disabled.
       expect(harness.updates.at(-1)).toEqual([]);
       expect(harness.button('search-nav', 0).disabled).toBe(true);

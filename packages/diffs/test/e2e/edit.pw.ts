@@ -19,7 +19,7 @@ const changeCount = (page: Page): Promise<number> =>
 // caret, then typing flows through the genuine keyboard -> beforeinput ->
 // onChange pipeline. This guards the shadow-selection fallback in
 // src/edit/edit.ts: the pinned Chromium here lacks
-// Selection.getComposedRanges, so the edit reads the caret via
+// Selection.getComposedRanges, so edit mode reads the caret via
 // ShadowRoot.getSelection() instead. Without that fallback a click left the
 // caret unseeded and every keystroke was silently dropped.
 async function clickIntoAdditions(page: Page): Promise<void> {

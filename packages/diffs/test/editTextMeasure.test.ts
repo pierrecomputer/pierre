@@ -349,7 +349,7 @@ describe('Metrics.remeasureCharacterWidth', () => {
 
       // Some fonts keep the same ASCII advance as the fallback font while
       // changing DOM-measured emoji widths. The stale cache still has to be
-      // cleared and reported so the edit repaints selection/caret overlays.
+      // cleared and reported so edit mode repaints selection/caret overlays.
       domWidth = 31;
       expect(metrics.remeasureCharacterWidth()).toBe(true);
       expect(metrics.ch).toBe(8);

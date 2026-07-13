@@ -90,7 +90,7 @@ async function createEditFixture(
   };
 }
 
-// Drives the edit's undo/redo keyboard shortcut. The harness navigator
+// Drives edit mode's undo/redo keyboard shortcut. The harness navigator
 // reports macOS, so the primary modifier is the meta key; `shift` selects redo.
 function pressUndoRedo(
   window: EditTestWindow,
@@ -375,7 +375,7 @@ describe('Edit.applyEdits selection sync', () => {
     }
   });
 
-  test('does not steal focus when the edit is not focused', async () => {
+  test('does not steal focus when edit mode is not focused', async () => {
     const { cleanup, content, edit } = await createEditFixture(
       'alpha\nbravo\ncharlie'
     );
@@ -389,8 +389,8 @@ describe('Edit.applyEdits selection sync', () => {
         },
       ]);
       // The edit tracks focus via focus/blur on the content element. Focus
-      // first so the edit is genuinely focused, then blur to mimic the user
-      // moving to another input on the page. The focus is required: the edit
+      // first so edit mode is genuinely focused, then blur to mimic the user
+      // moving to another input on the page. The focus is required: edit mode
       // starts unfocused, so without it the blur would be a no-op and the test
       // would pass even if the blur handler stopped clearing focus.
       content.dispatchEvent(new Event('focus'));
@@ -415,7 +415,7 @@ describe('Edit.applyEdits selection sync', () => {
           direction: 0,
         },
       ]);
-      // ...but the edit must not pull focus back to itself.
+      // ...but edit mode must not pull focus back to itself.
       expect(focusSpy).not.toHaveBeenCalled();
       focusSpy.mockRestore();
     } finally {
@@ -423,7 +423,7 @@ describe('Edit.applyEdits selection sync', () => {
     }
   });
 
-  test('repositions focus when the edit is already focused', async () => {
+  test('repositions focus when edit mode is already focused', async () => {
     const { cleanup, content, edit } = await createEditFixture(
       'alpha\nbravo\ncharlie'
     );
@@ -436,7 +436,7 @@ describe('Edit.applyEdits selection sync', () => {
           direction: 'none',
         },
       ]);
-      // Mark the edit as focused the same way a real focus would.
+      // Mark edit mode as focused the same way a real focus would.
       content.dispatchEvent(new Event('focus'));
 
       const focusSpy = spyOn(edit, 'focus');
@@ -477,7 +477,7 @@ describe('Edit.applyEdits selection sync', () => {
       ]);
       // focus() queues the real contentElement.focus() in a rAF, so the focus
       // event has not fired yet. A same-tick applyEdits (the common
-      // set-selection-then-edit flow) must still treat the edit as focused and
+      // set-selection-then-edit flow) must still treat edit mode as focused and
       // reposition, rather than skip and leave the native selection stale while
       // the queued focus lands afterward.
       edit.focus();
@@ -507,7 +507,7 @@ describe('Edit.applyEdits selection sync', () => {
     }
   });
 
-  test('ignores a selectionchange while the edit is unfocused', async () => {
+  test('ignores a selectionchange while edit mode is unfocused', async () => {
     const { cleanup, content, edit } = await createEditFixture(
       'alpha\nbravo\ncharlie'
     );
@@ -547,14 +547,14 @@ describe('Edit.applyEdits selection sync', () => {
       getSelectionStub = spyOn(document, 'getSelection').mockReturnValue({
         getComposedRanges: () => [composedRange],
       } as unknown as Selection);
-      // The focus events below also drive the edit's native-selection re-sync
+      // The focus events below also drive edit mode's native-selection re-sync
       // (window.getSelection().setBaseAndExtent), so stub that to a no-op rather
       // than let jsdom's partial Selection throw.
       windowSelectionStub = spyOn(window, 'getSelection').mockReturnValue({
         setBaseAndExtent: () => {},
       } as unknown as Selection);
 
-      // Unfocused: a selectionchange whose range still belongs to the edit
+      // Unfocused: a selectionchange whose range still belongs to edit mode
       // must not overwrite the remapped caret before the user returns.
       content.dispatchEvent(new Event('focus'));
       content.dispatchEvent(new Event('blur'));

@@ -9,10 +9,10 @@ const options = {
   unsafeCSS: CustomScrollbarCSS,
 } as const;
 
-// Options for the live editable demo below. They mirror the state the edit
+// Options for the live editable demo below. They mirror the state edit mode
 // enforces when it attaches in `contentEditable` mode (token transformer on;
 // gutter, line selection, and line hover off), so the server-rendered HTML
-// matches the edit's post-attach client render and hydrating from
+// matches edit mode's post-attach client render and hydrating from
 // `prerenderedHTML` neither flashes nor re-highlights. Mirrors
 // `(diffs)/_edit/constants.ts`.
 const editableDemoOptions: FileOptions<undefined> = {
@@ -26,7 +26,7 @@ const editableDemoOptions: FileOptions<undefined> = {
 
 // The file rendered by the interactive `<EditDemo />` on the Edit page.
 // Preloaded server-side so the surface is highlighted in the initial HTML
-// instead of flashing in after the client attaches the edit.
+// instead of flashing in after the client attaches edit mode.
 export const EDIT_DEMO_FILE_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
     name: 'editable-demo.ts',
@@ -49,10 +49,10 @@ const edit = new Edit({
   },
 });
 
-// Attach the edit to the file instance
+// Attach edit mode to the file instance
 const dispose = edit.edit(fileInstance);
 
-// Later, when the edit is no longer needed:
+// Later, when edit mode is no longer needed:
 dispose();
 `,
   },
@@ -101,7 +101,7 @@ edit.edit(fileInstance);
 const newFile: FileContents = { ... }
 fileInstance.render({ file: newFile });
 
-// Later, when the edit is no longer needed:
+// Later, when edit mode is no longer needed:
 edit.cleanUp();`,
   },
   options,
@@ -155,7 +155,7 @@ edit.edit(fileDiffInstance);
 const newFile: FileContents = { ... }
 fileInstance.render({ file: newFile });
 
-// Later, when the edit is no longer needed:
+// Later, when edit mode is no longer needed:
 edit.cleanUp();`,
   },
   options,
@@ -250,7 +250,7 @@ async function edit(fileInstance: VirtualizedFile): Promise<() => void> {
   return edit.edit(fileInstance);
 }
 
-// Click to edit and lazy-load the edit bundle only when it is needed.
+// Click to edit and lazy-load the edit-mode bundle only when it is needed.
 button.addEventListener('click', () => {
   void edit(fileInstance);
 });`,

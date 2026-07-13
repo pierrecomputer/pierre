@@ -290,7 +290,7 @@ describe('updateDiffHunks', () => {
     );
 
     // Mirrors edit mode after deleting all but one matching line in a longer
-    // file and pressing Enter: the edit has a final logical empty line that
+    // file and pressing Enter: edit mode has a final logical empty line that
     // patch-style splitting would normally drop.
     diff.additionLines = ['kept\n', ''];
 
@@ -353,7 +353,7 @@ describe('updateDiffHunks', () => {
       { context: 3 }
     );
 
-    // Mirrors select-all, type "a", then press Enter: the edit has a second
+    // Mirrors select-all, type "a", then press Enter: edit mode has a second
     // logical row for the trailing blank line before tokenization sees content
     // on that row.
     diff.additionLines = ['a\n', ''];

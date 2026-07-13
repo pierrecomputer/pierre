@@ -209,7 +209,7 @@ describe('CodeView item edit mode', () => {
     }
   });
 
-  test('toggling edit off discards the edit; re-toggling creates a fresh one', async () => {
+  test('toggling edit off discards the edit instance; re-toggling creates a fresh one', async () => {
     const { cleanup } = installDom();
     const { edits, createEdit } = createEditHarness();
     const viewer = new CodeView({ createEdit });
@@ -288,7 +288,7 @@ describe('CodeView item edit mode', () => {
     }
   });
 
-  test('removing an edited item cleans up its edit', async () => {
+  test('removing an edited item cleans up its edit instance', async () => {
     const { cleanup } = installDom();
     const { edits, createEdit } = createEditHarness();
     const viewer = new CodeView({ createEdit });
@@ -327,7 +327,7 @@ describe('CodeView item edit mode', () => {
       expect(edit.edits.length).toBe(1);
 
       // Scroll the edited item out of the render window: the instance recycles
-      // and detaches the edit non-destructively.
+      // and detaches edit mode non-destructively.
       root.scrollTop = 20_000;
       dispatchScroll(root);
       viewer.render(true);
@@ -366,7 +366,7 @@ describe('CodeView item edit mode', () => {
       viewer.setup(root);
       await renderItems(viewer, items);
 
-      // Mimic an edit session that grew the document: the edit pushes the
+      // Mimic an edit session that grew the document: edit mode pushes the
       // larger document into the host, which patches its render caches and
       // remembers the document's line count.
       const edited = viewer.getRenderedItems()[0];
@@ -432,7 +432,7 @@ describe('CodeView item edit mode', () => {
       viewer.setup(root);
       await renderItems(viewer, items);
 
-      // Mimic a same-line-count edit: the edit pushes the dirty line's
+      // Mimic a same-line-count edit: edit mode pushes the dirty line's
       // tokens into the host render caches, exactly like #applyChange does
       // after a keystroke.
       const edited = viewer.getRenderedItems()[0];
@@ -582,7 +582,7 @@ describe('CodeView item edit mode', () => {
     }
   });
 
-  test('updateItemId keeps the edit and routes changes to the renamed item', async () => {
+  test('updateItemId keeps the edit instance and routes changes to the renamed item', async () => {
     const { cleanup } = installDom();
     const { edits, createEdit } = createEditHarness();
     const changes: string[] = [];

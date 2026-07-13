@@ -80,7 +80,7 @@ export class SearchPanelWidget {
       nextButton.disabled = noMatches;
 
       // An empty query and a query with zero hits are the same "no results"
-      // state. Both push an empty match set through onUpdate so the edit
+      // state. Both push an empty match set through onUpdate so edit mode
       // drops #matches and clears the painted highlights.
       if (noMatches) {
         matchResultElement.textContent = 'No results';
@@ -455,13 +455,13 @@ export class SearchPanelWidget {
   }
 
   // Tears the panel down the way the close button and Escape-in-input do:
-  // removes the DOM and runs onClose so the edit clears its match highlights.
+  // removes the DOM and runs onClose so edit mode clears its match highlights.
   // Prefer this over cleanup() for any user-initiated dismissal.
   close(): void {
     this.#close?.();
   }
 
-  // DOM-only teardown. Does NOT run onClose, so it leaves the edit's match
+  // DOM-only teardown. Does NOT run onClose, so it leaves edit mode's match
   // highlights in place; only use it when the caller clears that state itself
   // (e.g. a full edit reset). User-initiated dismissals should call close().
   cleanup(): void {

@@ -25,11 +25,11 @@ function detectMac(): boolean {
   return /mac|iphone|ipad|ipod/i.test(platform);
 }
 
-// Demo of the edit's find overlay. With no public API to open the search
+// Demo of edit mode's find overlay. With no public API to open the search
 // panel, we do what a reader would: dispatch Cmd/Ctrl-F on the content element
 // (polling for it, since it attaches asynchronously after the File hydrates).
 // We deliberately leave the input blank and never seed a query — seeding makes
-// the edit scroll its first match into view, and that scroll bubbles up to
+// edit mode scroll its first match into view, and that scroll bubbles up to
 // the page, yanking the reader down to this (below-the-fold) demo on load.
 // Opening an empty panel scrolls nothing.
 export function FindDemo({ prerenderedFile }: FindDemoProps) {
@@ -80,7 +80,7 @@ export function FindDemo({ prerenderedFile }: FindDemoProps) {
 
     // Poll until the content element has attached, open the panel once, then
     // stop. We leave the input blank, so nothing scrolls: opening an empty panel
-    // reveals no match for the edit to scroll into view.
+    // reveals no match for edit mode to scroll into view.
     const tick = () => {
       if (cancelled) {
         return;
@@ -99,7 +99,7 @@ export function FindDemo({ prerenderedFile }: FindDemoProps) {
     };
 
     // Defer until the demo nears the viewport so we only open the panel (and
-    // focus its edit) as the reader approaches it, rather than on load.
+    // focus edit mode) as the reader approaches it, rather than on load.
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries.some((entry) => entry.isIntersecting)) {

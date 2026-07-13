@@ -1033,7 +1033,7 @@ export interface DiffsEditableComponent<
    * Whether the given one-based new-file line currently has (or will have on
    * scroll) a rendered row. False only for lines hidden inside a collapsed
    * unchanged region. Components without collapsible regions leave this
-   * unimplemented and the edit treats every line as renderable.
+   * unimplemented and edit mode treats every line as renderable.
    */
   isLineRenderable?: (lineNumber: number) => boolean;
   /**
@@ -1054,7 +1054,7 @@ export interface DiffsEditableComponent<
   revealLine?: (lineNumber: number) => boolean;
   /**
    * Attach an edit to this component. The returned detach closure receives
-   * `recycle: true` when the edit is only being released by a virtualized
+   * `recycle: true` when edit mode is only being released by a virtualized
    * unmount (the session continues on remount) and no argument/false on a
    * genuine session end.
    */

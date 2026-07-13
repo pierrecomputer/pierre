@@ -449,7 +449,7 @@ interface CodeViewItemEditChange<LAnnotation> {
 // The closure resolves the owning item through `id` (kept current by
 // updateItemId) and caches each document change in `lastChange` so the final
 // contents can be published through onItemEditComplete when the session ends
-// — even if the edit is detached (scrolled out) at that moment.
+// — even if edit mode is detached (scrolled out) at that moment.
 interface CodeViewItemEditState<LAnnotation> {
   id: string;
   lastChange?: CodeViewItemEditChange<LAnnotation>;
@@ -536,8 +536,8 @@ export interface CodeViewOptions<LAnnotation>
    * this option is what enables item editing. Pass the given options into the
    * edit constructor — `new Edit(options)` — so CodeView can route
    * document changes to `onItemEditChange`. CodeView owns the returned
-   * edit's lifecycle: it attaches when the edited item mounts, re-attaches
-   * across virtualization unmounts, and cleans the edit up once the item
+   * edit instance's lifecycle: it attaches when the edited item mounts, re-attaches
+   * across virtualization unmounts, and cleans it up once the item
    * stops being editable (edit off, collapsed, or removed). Returning
    * undefined declines the attach; CodeView retries on later render passes.
    */
@@ -662,7 +662,7 @@ export class CodeView<LAnnotation = undefined> {
   // Entries survive virtualization unmounts so a remounted item re-attaches
   // its existing edit; attachedEdits tracks which entries are currently
   // bound to a mounted instance. Each record's `id` is mutable so
-  // updateItemId can keep the edit's onChange closure resolving the
+  // updateItemId can keep edit mode's onChange closure resolving the
   // current item (mirroring updateItemOptionsId for item options state).
   private itemEdits: Map<string, CodeViewItemEditRecord<LAnnotation>> =
     new Map();
@@ -2021,7 +2021,7 @@ export class CodeView<LAnnotation = undefined> {
   }
 
   /**
-   * Attach (or lazily create) the edit for a mounted edit-mode item. Called
+   * Attach (or lazily create) the edit instance for a mounted edit-mode item. Called
    * from the render loop so every mounted item passes through it: fresh
    * mounts, remounts after virtualization released the item, and items whose
    * edit flag was just turned on. Edits persist across unmounts, so a

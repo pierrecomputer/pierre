@@ -20,12 +20,12 @@ import {
 
 export type ThemeType = 'light' | 'dark';
 
-// The edit's stylesheet flattens every line number to one neutral colour
+// Edit mode's stylesheet flattens every line number to one neutral colour
 // (`--diffs-editor-line-number-fg`) and is injected as an unlayered <style>,
 // so it overrides the library's per-line colouring (which lives in @layer
 // base). We adopt this extra, higher-specificity unlayered sheet into the
-// edit's shadow root to restore jade/red numbers for added and deleted
-// lines, while leaving the active/selected line to the edit's own styling.
+// edit-mode shadow root to restore jade/red numbers for added and deleted
+// lines, while leaving the active/selected line to edit mode's own styling.
 const LINE_NUMBER_COLOR_CSS = `
 [data-column-number][data-line-type='change-addition']:not([data-selected-line]):not([data-active]) {
   color: var(--diffs-addition-base);
@@ -189,7 +189,7 @@ export function AgentUi({
   // Persisted in-editor edits keyed by path, so switching files keeps the
   // agent's tweaked output.
   const editsRef = useRef<Map<string, string>>(new Map());
-  // The edit's debounced onChange fires without a path argument, so we track
+  // Edit mode's debounced onChange fires without a path argument, so we track
   // the live target here.
   const activeTargetRef = useRef<string | null>(null);
   useEffect(() => {

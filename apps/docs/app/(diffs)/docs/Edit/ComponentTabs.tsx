@@ -56,7 +56,7 @@ export function EditComponentTabs({
             Editing a <code>FileDiff</code> requires the full file contents. The
             edit targets the addition side (the new version of the file) and
             cannot reconstruct it from a partial diff. Make sure one of the
-            following is true before attaching the edit:
+            following is true before attaching edit mode:
           </p>
           <ul className="list-disc pl-5">
             <li>

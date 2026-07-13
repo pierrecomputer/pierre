@@ -127,7 +127,7 @@ type ShadowRootWithSelection = ShadowRoot & {
 };
 
 // Fallback for browsers without Selection.getComposedRanges: read the first
-// range from the shadow root's own selection so the edit can still map a
+// range from the shadow root's own selection so edit mode can still map a
 // caret placed by a click inside its shadow tree. Normalized to a StaticRange
 // so it matches the getComposedRanges return shape the callers expect. Returns
 // undefined when the API or a live range is unavailable.
@@ -177,19 +177,19 @@ export interface EditOptions<LAnnotation> {
   renderSelectionAction?: (
     context: SelectionActionContext<LAnnotation>
   ) => HTMLElement;
-  /** Callback when the edit is attached to a file. */
+  /** Callback when edit mode is attached to a file. */
   onAttach?: (
     edit: Edit<LAnnotation>,
     fileInstance: DiffsEditableComponent<LAnnotation>
   ) => void;
-  /** Callback when the edit document changes. */
+  /** Callback when the document changes. */
   onChange?: (
     file: FileContents,
     lineAnnotations?: DiffLineAnnotation<LAnnotation>[]
   ) => void;
-  /** Callback when the edit gains focus. */
+  /** Callback when edit mode gains focus. */
   onFocus?: () => void;
-  /** Callback when the edit loses focus. */
+  /** Callback when edit mode loses focus. */
   onBlur?: () => void;
   // debug flag
   __debug?: boolean;
@@ -369,7 +369,7 @@ export class Edit<LAnnotation> implements DiffsEdit<LAnnotation> {
     if (textDocument == null) {
       throw new Error('Edit is not attached');
     }
-    // Only reposition focus and scroll when the edit already holds focus. A
+    // Only reposition focus and scroll when edit mode already holds focus. A
     // programmatic edit must not pull focus from another input the user is
     // typing in; the selection state below is re-anchored either way.
     const wasFocused = this.#contentHasFocus;
@@ -411,7 +411,7 @@ export class Edit<LAnnotation> implements DiffsEdit<LAnnotation> {
       return;
     }
 
-    // Re-anchor selections against the applied edits so the edit #selections,
+    // Re-anchor selections against the applied edits so edit mode's #selections,
     // the native window selection, and the on-screen caret stay in sync with
     // the new buffer. Skipping this leaves a programmatic edit (e.g. an AI or
     // codemod insertion) with a stale caret and corrupts the next keystroke.
@@ -851,7 +851,7 @@ export class Edit<LAnnotation> implements DiffsEdit<LAnnotation> {
     // The tokenizer is created once per attached document and reused across
     // re-renders, so a host-driven theme swap (theme picker, light/dark toggle)
     // wouldn't otherwise reach it. Re-apply the surface's current theme on every
-    // sync so the edit's line-highlight/token colors track the active theme.
+    // sync so edit mode's line-highlight/token colors track the active theme.
     this.#tokenizer?.syncTheme(this.#fileInstance?.options ?? {});
 
     this.#lineAnnotations = lineAnnotations;
@@ -1031,7 +1031,7 @@ export class Edit<LAnnotation> implements DiffsEdit<LAnnotation> {
           // Ignore selection changes while the contenteditable is unfocused. A
           // programmatic applyEdits (skipFocus) re-anchors #selections without
           // syncing the native Selection, so a DOM-driven or refocus
-          // selectionchange whose range still belongs to the edit must not
+          // selectionchange whose range still belongs to edit mode must not
           // overwrite the remapped #selections before the user returns to type.
           if (
             this.#shouldIgnoreSelectionChange ||
@@ -1057,7 +1057,7 @@ export class Edit<LAnnotation> implements DiffsEdit<LAnnotation> {
           if (selectionRaw == null) {
             return;
           }
-          // Read the caret/selection through the edit's shadow root.
+          // Read the caret/selection through edit mode's shadow root.
           // getComposedRanges is the standard, spec'd way to do this but is only
           // available in newer browsers. When it is missing (older browsers,
           // embedded WebViews, and the pinned CI Chromium), fall back to the
@@ -1234,7 +1234,7 @@ export class Edit<LAnnotation> implements DiffsEdit<LAnnotation> {
           // A keyboard or direct programmatic refocus restores a stale native
           // Selection that the selectionchange handler would apply over the
           // remapped #selections (after an applyEdits inserted a line above the
-          // unfocused caret). Re-assert the edit's selection so the caret
+          // unfocused caret). Re-assert edit mode's selection so the caret
           // stays anchored. A pointer focus is left to the click, and #focus()
           // already syncs the selection during an edit-driven focus.
           if (
@@ -1436,7 +1436,7 @@ export class Edit<LAnnotation> implements DiffsEdit<LAnnotation> {
           return;
         }
         e.preventDefault();
-        // A read-only deleted-text selection lives outside the edit's
+        // A read-only deleted-text selection lives outside edit mode's
         // document, so #getSelectionText() would be empty. Copy the selected
         // deleted text instead.
         e.clipboardData?.setData(
@@ -1535,7 +1535,7 @@ export class Edit<LAnnotation> implements DiffsEdit<LAnnotation> {
 
     // A selection in the read-only deletions column is painted natively (see
     // the gated ::selection rule). Starting one there reveals that selection
-    // and clears the edit's own selection on the additions side, so only one
+    // and clears edit mode's own selection on the additions side, so only one
     // column shows a selection at a time. Non-diff files have no deletions
     // column.
     const deletionsCode =
@@ -1552,7 +1552,7 @@ export class Edit<LAnnotation> implements DiffsEdit<LAnnotation> {
             // and dragging extends the selection across deletion lines (like a
             // click/drag on an addition line number); clicking its text lets
             // the browser place/extend the selection directly. Either way the
-            // deleted-text marker reveals it and the edit drops its own
+            // deleted-text marker reveals it and edit mode drops its own
             // selection.
             const target = e.composedPath()[0];
             const gutterRow =
@@ -1620,7 +1620,7 @@ export class Edit<LAnnotation> implements DiffsEdit<LAnnotation> {
               e.composedPath()[0] as HTMLElement | undefined
             );
             // Clicking a read-only deleted line's number (unified view) selects
-            // that line's text natively, since the line is not in the edit's
+            // that line's text natively, since the line is not in edit mode's
             // document. This runs before the mouse-only gate below: a deletion
             // tap registers no drag state to strand, so it works on touch too,
             // matching the split deletions column.
@@ -1996,7 +1996,7 @@ export class Edit<LAnnotation> implements DiffsEdit<LAnnotation> {
         // are currently rendered, and in a virtualized diff most of the document
         // is offscreen, so anchor the native range to the editable lines on
         // screen rather than the document bounds. The native range only needs to
-        // be non-collapsed — the edit uses #selections, which still spans the
+        // be non-collapsed — edit mode uses #selections, which still spans the
         // whole document. #suppressNativeSelectionSync then stops the resulting
         // selectionchange from reading that shorter range back over #selections
         // before the delete runs.
@@ -2392,7 +2392,7 @@ export class Edit<LAnnotation> implements DiffsEdit<LAnnotation> {
     this.#computeContentOffset(this.#contentElement!);
   };
 
-  // A custom monospace web font can finish loading after the edit first
+  // A custom monospace web font can finish loading after edit mode first
   // renders. Until then Metrics measured the '0' width against the fallback
   // font, so the gutter width and every caret/selection x-position (each
   // offset by a whole number of `ch` units) are wrong. Re-measure once fonts
@@ -2694,7 +2694,7 @@ export class Edit<LAnnotation> implements DiffsEdit<LAnnotation> {
 
   #focus(position?: Position, preventScroll = true) {
     // Mark focus eagerly: the positional branch defers the real focus() to a
-    // rAF, so a same-tick applyEdits would otherwise see the edit as
+    // rAF, so a same-tick applyEdits would otherwise see edit mode as
     // unfocused and skip repositioning while this focus still lands afterward.
     this.#contentHasFocus = true;
     if (position !== undefined) {
@@ -2935,7 +2935,7 @@ export class Edit<LAnnotation> implements DiffsEdit<LAnnotation> {
 
   // A pointer gesture targets read-only deleted text when its closest row is a
   // change-deletion. Used to route a click in unified view's deleted text to a
-  // native selection instead of the edit's own.
+  // native selection instead of edit mode's own.
   #isDeletedLineTarget(event: Event): boolean {
     const target = event.composedPath()[0];
     return (
@@ -2947,9 +2947,9 @@ export class Edit<LAnnotation> implements DiffsEdit<LAnnotation> {
 
   // Select read-only deleted text with the native selection, spanning from the
   // anchor row to the focus row (the same row for a click). Deleted lines are
-  // not part of the edit's document, so they cannot be selected as edit
+  // not part of edit mode's document, so they cannot be selected as editable
   // text; instead select their DOM text, reveal it via the deleted-text marker,
-  // drop the edit's own selection, and highlight the deleted gutter numbers so
+  // drop edit mode's own selection, and highlight the deleted gutter numbers so
   // the result matches a click/drag on an addition line.
   #selectDeletedLines(
     anchorContent: HTMLElement,
@@ -3044,7 +3044,7 @@ export class Edit<LAnnotation> implements DiffsEdit<LAnnotation> {
     }
     this.#selectDeletedLines(anchorContent, anchorContent, code);
     // The document pointerup disposes this listener; it must not set
-    // #isGutterMouseDown, whose pointerup focuses the edit and would collapse
+    // #isGutterMouseDown, whose pointerup focuses edit mode and would collapse
     // the native deletion selection.
     if (isMouse) {
       this.#replaceSelectEventListeners([
@@ -3079,7 +3079,7 @@ export class Edit<LAnnotation> implements DiffsEdit<LAnnotation> {
 
   // Whether a read-only deleted-text selection is currently active (the marker
   // #setDeletedTextSelectionActive sets). The copy/cut handlers read this to
-  // copy the native selection instead of the edit's empty document selection.
+  // copy the native selection instead of edit mode's empty document selection.
   #isDeletedTextSelectionActive(): boolean {
     return (
       this.#fileContainer?.shadowRoot
@@ -3134,7 +3134,7 @@ export class Edit<LAnnotation> implements DiffsEdit<LAnnotation> {
   ): void {
     try {
       // notify: false renders the active-line highlight without firing the
-      // host's onLineSelected callback. A caret or text selection in the edit
+      // host's onLineSelected callback. A caret or text selection in edit mode
       // is not a gutter line selection, so it must not publish one.
       //
       // activeLineSide keeps the highlight on the additions pane, the side the
@@ -3510,7 +3510,7 @@ export class Edit<LAnnotation> implements DiffsEdit<LAnnotation> {
     ) => {
       const top = this.#getLineY(line) + wrapLine * lineHeight;
       // Match the corner mask to the line color behind the selection; when
-      // absent (context lines) the CSS falls back to the edit base bg.
+      // absent (context lines) the CSS falls back to edit mode's base bg.
       const cornerBg = this.#lineBackgroundColor(line);
       const css =
         `width:${ch}px;transform:translateX(${left}px) translateY(${top}px);` +
@@ -4209,7 +4209,7 @@ export class Edit<LAnnotation> implements DiffsEdit<LAnnotation> {
       onChange(fileRef, newLineAnnotations ?? this.#lineAnnotations);
     }
 
-    // Invalidate layout caches touched by the edit. Clear cached line Y
+    // Invalidate layout caches touched by the change. Clear cached line Y
     // positions from startLine onward when either:
     // - the line count changed (inserts/deletes renumber every later line), or
     // - wrap is on, where editing a line can add or remove a wrapped row and
@@ -4269,12 +4269,12 @@ export class Edit<LAnnotation> implements DiffsEdit<LAnnotation> {
           this.#viewportWindowLines === Infinity
             ? Infinity
             : this.#viewportWindowLines * MAX_EDIT_WIDEN_WINDOW_MULTIPLE;
-        // Only widen when the edit actually reaches the rendered window — its
+        // Only widen when the change actually reaches the rendered window — its
         // dirty lines start at or before the window end. #rerender materializes
         // rows from change.startLine onward, so widening for an edit that starts
         // entirely below the window (e.g. setSelections to an offscreen line
         // then applyEdits before the virtualizer re-syncs) would leave the
-        // rows between the window and the edit unbuilt while #isLineVisible
+        // rows between the window and the change unbuilt while #isLineVisible
         // reports them visible, mispositioning the new rows and caret until the
         // next scroll.
         if (

@@ -9,7 +9,7 @@ interface EditDemoProps {
   // Server-preloaded, already-highlighted file. Spreading it into <File> ships
   // the highlighted surface in the initial SSR HTML and hydrates from it, so
   // the demo paints instantly instead of flashing in after the client attaches
-  // the edit.
+  // edit mode.
   prerenderedFile: PreloadedFileResult<undefined>;
 }
 

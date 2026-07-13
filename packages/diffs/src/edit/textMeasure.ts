@@ -78,7 +78,7 @@ export class Metrics {
    * Re-measure the '0' character width against the font that is loaded right
    * now, returning true when measurement-dependent UI should refresh.
    *
-   * A custom web font can finish loading after the edit first renders.
+   * A custom web font can finish loading after edit mode first renders.
    * Until then canvas measureText reports the fallback font's width, and
    * getComputedStyle returns the same font-family string before and after the
    * file arrives, so init()'s font guard never re-measures on its own. Call

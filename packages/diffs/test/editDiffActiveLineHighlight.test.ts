@@ -120,7 +120,7 @@ async function createDiffEditFixture(
   edit.edit(fileDiff);
   // The content rows are rendered synchronously by fileDiff.render() (the diff
   // hunks renderer can produce rows from a cache or a plain-text fallback), but
-  // the edit's text document is only created later, inside the async
+  // edit mode's text document is only created later, inside the async
   // initializeHighlighter().then(edit.__syncRenderView) callback in
   // FileDiff.syncRenderViewToEdit(). Until that callback runs, setSelections
   // throws "Text document is not initialized". So polling for rows alone can
@@ -199,7 +199,7 @@ describe('editor active-line highlight on a diff', () => {
       expect(highlightedLineNumbers(additions)).toEqual([1]);
 
       // A pointerdown in the read-only deletions column hands the selection to
-      // that column (painted natively), so the edit drops its additions-side
+      // that column (painted natively), so edit mode drops its additions-side
       // selection — only one column is selected at a time.
       deletions?.dispatchEvent(
         new PointerEvent('pointerdown', { bubbles: true })
@@ -259,7 +259,7 @@ describe('editor active-line highlight on a diff', () => {
     }
   });
 
-  test('unified: selecting a deleted line clears the edit selection and toggles the deleted-text marker', async () => {
+  test('unified: selecting a deleted line clears edit mode selection and toggles the deleted-text marker', async () => {
     const fixture = await createDiffEditFixture('unified', OLD, NEW);
     try {
       const shadow = fixture.container.shadowRoot;
@@ -308,7 +308,7 @@ describe('editor active-line highlight on a diff', () => {
     }
   });
 
-  test('unified: clicking a deleted line number selects the line and clears the edit selection', async () => {
+  test('unified: clicking a deleted line number selects the line and clears edit mode selection', async () => {
     const fixture = await createDiffEditFixture('unified', OLD, NEW);
     try {
       const shadow = fixture.container.shadowRoot;
@@ -331,7 +331,7 @@ describe('editor active-line highlight on a diff', () => {
       expect(highlightedGutterNumbers(additions).length).toBeGreaterThan(0);
 
       // Clicking the deleted line's gutter number hands selection to that
-      // (read-only) line: the edit drops its own selection, the deleted line's
+      // (read-only) line: edit mode drops its own selection, the deleted line's
       // own gutter number becomes highlighted (matching an addition click), and
       // the deleted-text marker turns on.
       deletedGutterNumber?.dispatchEvent(
@@ -593,9 +593,9 @@ describe('editor active-line highlight on a diff', () => {
         () => deletedGutterNumber?.hasAttribute('data-selected-line') === true
       );
 
-      // The deleted row lives inside the edit's contentEl (unified view), so a
-      // copy event reaches the edit's copy handler. The deleted text isn't in
-      // the edit's document, so the handler must copy the selected deleted
+      // The deleted row lives inside edit mode's contentEl (unified view), so a
+      // copy event reaches edit mode's copy handler. The deleted text isn't in
+      // edit mode's document, so the handler must copy the selected deleted
       // line's text rather than the empty document selection.
       const writes = dispatchCopy(content);
       const copied = writes.find(([type]) => type === 'text')?.[1] ?? '';

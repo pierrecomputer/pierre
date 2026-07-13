@@ -243,7 +243,7 @@ describe('applySessionEditWindow', () => {
     }
   });
 
-  test('a blank pushed beside an existing blank stays anchored to the edit', () => {
+  test('a blank pushed beside an existing blank stays anchored to edit mode', () => {
     // Enter at the end of a changed line that is followed by a blank line:
     // the prefix scan slides the detected insert past the identical blank,
     // but the blank-run slide re-anchors it to the edited line, matching the

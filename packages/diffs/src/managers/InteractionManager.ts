@@ -341,7 +341,7 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
   }
 
   // Toggle edit mode. While an edit is attached, host and gutter line
-  // selections are shown as gutter-number-only highlights (the edit renders
+  // selections are shown as gutter-number-only highlights (edit mode renders
   // the selected text itself), so the full-line background is suppressed.
   setEditAttached(attached: boolean): void {
     if (this.editorAttached === attached) {
@@ -1497,7 +1497,7 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
       return;
     }
     // A gutter selection spans both columns and the full line, so drop any
-    // side or number-only restriction left over from the edit's active-line
+    // side or number-only restriction left over from edit mode's active-line
     // highlight.
     this.activeLineHighlightSide = undefined;
     this.activeLineNumberOnly = false;
@@ -1540,8 +1540,8 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
   }
 
   // Whether to highlight only the gutter line number and leave the full-line
-  // background for the edit's text selection. The decision splits on who drove
-  // the selection, which activeLineHighlightSide records: the edit's own
+  // background for edit mode's text selection. The decision splits on who drove
+  // the selection, which activeLineHighlightSide records: edit mode's own
   // active-line highlight always sets a side, while gutter and host selections
   // never do. Re-evaluated on every render so toggling edit mode
   // (setEditAttached) reflows the current selection.
@@ -1554,7 +1554,7 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
       return this.activeLineNumberOnly;
     }
     // A gutter or host line selection: number-only when the caller asked for it,
-    // or while an edit is attached — in edit mode the edit renders the
+    // or while an edit is attached — in edit mode it renders the
     // selected text itself, so the full-line background gives way to it.
     return this.activeLineNumberOnly || this.editorAttached;
   }
@@ -1602,7 +1602,7 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
     const last = Math.max(rowRange.start, rowRange.end);
     const numberOnly = this.highlightLineNumberOnly();
     for (const code of codeElements) {
-      // When the highlight is confined to one side (the edit's active-line
+      // When the highlight is confined to one side (edit mode's active-line
       // highlight), skip the opposite split-diff column. The deletions column
       // carries `data-deletions` and the additions column `data-additions`; a
       // unified or single-file column has neither, so it is never skipped.
