@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>diffs persisted editor state fixture</title>
+  </head>
+  <body>
+    <div data-editor-mount></div>
+    <div data-persist-state-result data-status="pending"></div>
+
+    <script type="module">
+      import { File } from '/dist/index.js';
+      import { Editor } from '/dist/editor/index.js';
+
+      const DATABASE_NAME = 'pierre-diffs-editor-state';
+      const STORE_NAME = 'states';
+      const CACHE_KEY = 'persist-state-indexeddb-test';
+      const mount = document.querySelector('[data-editor-mount]');
+      const result = document.querySelector('[data-persist-state-result]');
+
+      if (!(mount instanceof HTMLElement) || !(result instanceof HTMLElement)) {
+        throw new Error('Missing persisted-state fixture nodes.');
+      }
+
+      const requestResult = (request) =>
+        new Promise((resolve, reject) => {
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => reject(request.error);
+        });
+
+      const waitFor = async (getValue) => {
+        const started = performance.now();
+        while (true) {
+          const value = await getValue();
+          if (value !== undefined) {
+            return value;
+          }
+          if (performance.now() - started > 5000) {
+            throw new Error('Timed out waiting for persisted editor state.');
+          }
+          await new Promise((resolve) => requestAnimationFrame(resolve));
+        }
+      };
+
+      const deleteDatabase = () =>
+        requestResult(indexedDB.deleteDatabase(DATABASE_NAME));
+
+      const readState = async () => {
+        const database = await requestResult(indexedDB.open(DATABASE_NAME, 1));
+        try {
+          return await requestResult(
+            database
+              .transaction(STORE_NAME, 'readonly')
+              .objectStore(STORE_NAME)
+              .get(CACHE_KEY)
+          );
+        } finally {
+          database.close();
+        }
+      };
+
+      const createSession = async () => {
+        const file = new File({
+          disableFileHeader: true,
+          theme: { dark: 'pierre-dark', light: 'pierre-light' },
+          themeType: 'dark',
+          useTokenTransformer: true,
+        });
+        file.render({
+          file: {
+            cacheKey: CACHE_KEY,
+            name: 'persisted.ts',
+            contents: 'alpha\nbravo\n',
+          },
+          containerWrapper: mount,
+        });
+
+        const editor = new Editor({
+          persistState: true,
+          persistStateStorage: 'indexedDB',
+        });
+        editor.edit(file);
+        await waitFor(() =>
+          editor.getFile() === undefined ? undefined : true
+        );
+        return { editor, file };
+      };
+
+      try {
+        await deleteDatabase();
+
+        const first = await createSession();
+        first.editor.setSelections([
+          {
+            start: { line: 0, character: 3 },
+            end: { line: 0, character: 3 },
+            direction: 'none',
+          },
+        ]);
+        first.file.render({
+          file: {
+            cacheKey: 'other-file',
+            name: 'other.ts',
+            contents: 'other\n',
+          },
+          containerWrapper: mount,
+          forceRender: true,
+        });
+
+        const storedState = await waitFor(readState);
+        result.dataset.storedCharacter = String(
+          storedState.selections?.[0]?.start.character
+        );
+        first.editor.cleanUp();
+        first.file.cleanUp();
+
+        const second = await createSession();
+        const restoredState = await waitFor(() => {
+          const state = second.editor.getState();
+          return state.selections?.[0]?.start.character === 3
+            ? state
+            : undefined;
+        });
+        result.dataset.restoredCharacter = String(
+          restoredState.selections[0].start.character
+        );
+        result.dataset.status = 'ready';
+      } catch (error) {
+        result.dataset.status = 'error';
+        result.textContent =
+          error instanceof Error ? error.message : String(error);
+      }
+    </script>
+  </body>
+</html>

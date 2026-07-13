@@ -32,9 +32,10 @@ export interface FileContents {
   lang?: SupportedLanguages;
   /** Optional header passed to the jsdiff library's `createTwoFilesPatch`. */
   header?: string;
-  /** This unique key is only used for Worker Pools to avoid subsequent requests
-   * if we've already highlighted the file.  Please note that if you modify the
-   * `contents` or `name`, you must update the `cacheKey`. */
+  /**
+   * Identifies a file revision for worker highlighting and persisted editor
+   * state. Editor persistence falls back to `name` when this is omitted.
+   */
   cacheKey?: string;
 }
 
@@ -1080,6 +1081,8 @@ export interface DiffsEditableComponent<
 }
 
 export interface DiffsEditor<LAnnotation> {
+  /** @internal */
+  __prepareFile?(file: FileContents): FileContents;
   __postponeBgTokenizeToNextFrame(): void;
   __syncRenderView(
     highlighter: DiffsHighlighter,

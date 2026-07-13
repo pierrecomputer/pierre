@@ -524,7 +524,18 @@ export class File<
     this.editor?.cleanUp();
     this.editor = editor;
     this.interactionManager.setEditorAttached(true);
-    this.syncRenderViewToEditor();
+    const preparedFile =
+      this.file == null ? undefined : editor.__prepareFile?.(this.file);
+    if (preparedFile !== undefined && preparedFile !== this.file) {
+      this.render({
+        file: preparedFile,
+        forceRender: true,
+        preventEmit: true,
+        renderRange: this.renderRange,
+      });
+    } else {
+      this.syncRenderViewToEditor();
+    }
     return () => {
       this.editor = undefined;
       this.interactionManager.setEditorAttached(false);
@@ -571,10 +582,10 @@ export class File<
       );
     }
 
+    file = this.editor?.__prepareFile?.(file) ?? file;
+
     // use the file name as the cache key if it is not set
-    if (file.cacheKey === undefined) {
-      file.cacheKey = file.name;
-    }
+    file.cacheKey ??= file.name;
 
     // postpone background tokenizing to next frame for avoiding UI freeze
     // during render

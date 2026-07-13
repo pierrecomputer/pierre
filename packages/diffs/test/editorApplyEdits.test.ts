@@ -2,10 +2,10 @@ import { afterAll, describe, expect, mock, spyOn, test } from 'bun:test';
 
 import { File, type FileOptions } from '../src/components/File';
 import { DEFAULT_THEMES } from '../src/constants';
-import { Editor, type EditorOptions } from '../src/editor/editor';
+import { Editor, type EditorOptions, type IStateStorage } from '../src/editor';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
 import type { FileContents } from '../src/types';
-import { installDom, wait } from './domHarness';
+import { installDom, wait, waitFor } from './domHarness';
 
 afterAll(async () => {
   await disposeHighlighter();
@@ -119,6 +119,173 @@ function pressMoveLine(
     })
   );
 }
+
+function insertAtStart(editor: Editor<undefined>, text: string): void {
+  editor.applyEdits(
+    [
+      {
+        range: {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 0 },
+        },
+        newText: text,
+      },
+    ],
+    true
+  );
+}
+
+async function renderFileAndWait(
+  fixture: EditorFixture,
+  fileContents: FileContents
+): Promise<void> {
+  const cacheKey = fileContents.cacheKey ?? fileContents.name;
+  fixture.file.render({
+    file: fileContents,
+    fileContainer: fixture.fileContainer,
+    forceRender: true,
+  });
+  await waitFor(() => {
+    const file = fixture.editor.getFile();
+    return file !== undefined && (file.cacheKey ?? file.name) === cacheKey;
+  });
+}
+
+describe('Editor persisted file state', () => {
+  test('is disabled by default', async () => {
+    const storageCalls: string[] = [];
+    const storage: IStateStorage = {
+      get(cacheKey) {
+        storageCalls.push(`get:${cacheKey}`);
+        return undefined;
+      },
+      set(cacheKey) {
+        storageCalls.push(`set:${cacheKey}`);
+      },
+    };
+    const fixture = await createEditorFixture('alpha\nbravo\n', {
+      persistStateStorage: storage,
+    });
+
+    try {
+      insertAtStart(fixture.editor, 'X');
+      await renderFileAndWait(fixture, {
+        name: 'other.ts',
+        contents: 'one\n',
+        cacheKey: 'other',
+      });
+      await renderFileAndWait(fixture, {
+        name: 'edits.ts',
+        contents: 'alpha\nbravo\n',
+      });
+
+      expect(fixture.editor.getText()).toBe('alpha\nbravo\n');
+      expect(fixture.editor.canUndo).toBe(false);
+      expect(storageCalls).toEqual([]);
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('restores the cached document, undo history, and editor state', async () => {
+    const fixture = await createEditorFixture('alpha\nbravo\n', {
+      persistState: true,
+    });
+
+    try {
+      insertAtStart(fixture.editor, 'X');
+      fixture.editor.setSelections([
+        {
+          start: { line: 1, character: 1 },
+          end: { line: 1, character: 4 },
+          direction: 'forward',
+        },
+      ]);
+
+      await renderFileAndWait(fixture, {
+        name: 'other.ts',
+        contents: 'one\n',
+        cacheKey: 'other',
+      });
+      // This fresh object carries the original contents and no explicit key;
+      // the persisted document is found through the filename fallback.
+      await renderFileAndWait(fixture, {
+        name: 'edits.ts',
+        contents: 'alpha\nbravo\n',
+      });
+
+      expect(fixture.editor.getText()).toBe('Xalpha\nbravo\n');
+      expect(fixture.editor.getState().selections).toEqual([
+        {
+          start: { line: 1, character: 1 },
+          end: { line: 1, character: 4 },
+          direction: 1,
+        },
+      ]);
+      expect(
+        fixture.fileContainer.shadowRoot?.querySelector(
+          '[data-content] [data-line="1"]'
+        )?.textContent
+      ).toBe('Xalpha');
+      expect(fixture.editor.canUndo).toBe(true);
+
+      fixture.editor.undo();
+      expect(fixture.editor.getText()).toBe('alpha\nbravo\n');
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('uses a custom state storage with the normalized file key', async () => {
+    const states = new Map<string, ReturnType<Editor<undefined>['getState']>>();
+    const calls: string[] = [];
+    const storage: IStateStorage = {
+      get(cacheKey) {
+        calls.push(`get:${cacheKey}`);
+        return states.get(cacheKey);
+      },
+      set(cacheKey, state) {
+        calls.push(`set:${cacheKey}`);
+        states.set(cacheKey, state);
+      },
+    };
+    const fixture = await createEditorFixture('alpha\nbravo\n', {
+      persistState: true,
+      persistStateStorage: storage,
+    });
+
+    try {
+      fixture.editor.setSelections([
+        {
+          start: { line: 0, character: 2 },
+          end: { line: 0, character: 2 },
+          direction: 'none',
+        },
+      ]);
+      await renderFileAndWait(fixture, {
+        name: 'other.ts',
+        contents: 'one\n',
+        cacheKey: 'other-revision',
+      });
+      await renderFileAndWait(fixture, {
+        name: 'edits.ts',
+        contents: 'alpha\nbravo\n',
+      });
+
+      expect(calls).toContain('set:edits.ts');
+      expect(calls).toContain('get:other-revision');
+      expect(calls).toContain('set:other-revision');
+      expect(calls.at(-1)).toBe('get:edits.ts');
+      expect(fixture.editor.getState().selections?.[0]).toMatchObject({
+        start: { line: 0, character: 2 },
+        end: { line: 0, character: 2 },
+        direction: 0,
+      });
+    } finally {
+      fixture.cleanup();
+    }
+  });
+});
 
 describe('Editor.applyEdits selection sync', () => {
   test('keeps inserted file lines coherent when switching files', async () => {

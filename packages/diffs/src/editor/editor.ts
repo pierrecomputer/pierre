@@ -94,6 +94,12 @@ import {
 } from './selectionAction';
 import { createSpriteElement } from './sprite';
 import {
+  cloneEditorState,
+  createStateStorage,
+  type IStateStorage,
+  type PersistStateStorage,
+} from './stateStorage';
+import {
   type ResolvedTextEdit,
   TextDocument,
   type TextDocumentChange,
@@ -140,9 +146,31 @@ function getShadowRootRange(shadowRoot: ShadowRoot): StaticRange | undefined {
   };
 }
 
+function getPersistedCacheKey(
+  file: Pick<FileContents, 'cacheKey' | 'name'>
+): string {
+  return file.cacheKey ?? file.name;
+}
+
+function isPromise<T>(value: T | Promise<T>): value is Promise<T> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'then' in value &&
+    typeof value.then === 'function'
+  );
+}
+
 export interface EditorOptions<LAnnotation> {
   /** The maximum number of entries to keep in the undo stack. */
   historyMaxEntries?: number;
+  /** Preserve each file's document and editor state when switching files. */
+  persistState?: boolean;
+  /**
+   * Storage for serializable editor state. Text documents stay in this Editor's
+   * in-memory cache. Defaults to `"inMemory"`.
+   */
+  persistStateStorage?: PersistStateStorage;
   /** Render rounded corners for selection ranges, default is true. */
   roundedSelection?: boolean;
   /** Highlight matching brackets near the caret, default is true. */
@@ -200,6 +228,20 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #metrics = new Metrics();
   #tokenizer?: EditorTokenizer;
   #popoverManager?: PopoverManager;
+  #textDocumentCache = new Map<string, TextDocument<LAnnotation>>();
+  #stateStorage?: IStateStorage;
+  #stateStorageOption?: PersistStateStorage;
+  #pendingStateWrites = new Map<string, Promise<void>>();
+  #pendingStateRestore?: {
+    cacheKey: string;
+    textDocument: TextDocument<LAnnotation>;
+    documentVersion: number;
+    selections: EditorSelection[] | undefined;
+    view: EditorState['view'];
+    completion: Promise<void>;
+  };
+  #stateRestoreGeneration = 0;
+  #restoreStateOnNextSync = false;
 
   // event disposes
   #editorEventDisposes?: (() => void)[];
@@ -318,10 +360,26 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   }
 
   setOptions(options: EditorOptions<LAnnotation>): void {
+    const previousStorageOption =
+      this.#options.persistStateStorage ?? 'inMemory';
     this.#options = {
       ...this.#options,
       ...options,
     };
+    if (this.#options.persistState !== true) {
+      this.#textDocumentCache.clear();
+      this.#stateRestoreGeneration++;
+      this.#restoreStateOnNextSync = false;
+    }
+    if (
+      (this.#options.persistStateStorage ?? 'inMemory') !==
+      previousStorageOption
+    ) {
+      this.#stateRestoreGeneration++;
+      this.#stateStorage = undefined;
+      this.#stateStorageOption = undefined;
+      this.#pendingStateWrites.clear();
+    }
   }
 
   edit(fileInstance: DiffsEditableComponent<LAnnotation>): () => void {
@@ -580,6 +638,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   }
 
   cleanUp(recycle = false): void {
+    const shouldRestoreState = this.#isStatePersistenceEnabled;
+    this.#stateRestoreGeneration++;
+    this.#persistCurrentState();
+    this.#restoreStateOnNextSync = shouldRestoreState;
     dequeueRender(this.#handleCustomPasteEvent);
     // The tokenizer is destroyed in both modes: it holds highlighter/worker
     // resources and writes into the (removed below) theme style element.
@@ -646,6 +708,33 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
 
     this.#resetState();
+  }
+
+  /** @internal Capture outgoing state and substitute cached text before render. */
+  __prepareFile(file: FileContents): FileContents {
+    if (this.#options.persistState !== true) {
+      return file;
+    }
+
+    const fileInfo = this.#fileInfo;
+    const languageId = file.lang ?? getFiletypeFromFileName(file.name);
+    if (
+      fileInfo !== undefined &&
+      (getPersistedCacheKey(fileInfo) !== getPersistedCacheKey(file) ||
+        fileInfo.name !== file.name ||
+        this.#textDocument?.languageId !== languageId)
+    ) {
+      this.#stateRestoreGeneration++;
+      this.#persistCurrentState();
+    }
+    const textDocument = this.#getCachedTextDocument(file);
+    if (
+      textDocument === undefined ||
+      textDocument.getText() === file.contents
+    ) {
+      return file;
+    }
+    return { ...file, contents: textDocument.getText() };
   }
 
   /** @internal */
@@ -728,6 +817,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#fileInfo.lang !== fileOrDiff.lang ||
       this.#fileInfo.cacheKey !== fileOrDiff.cacheKey;
 
+    let persistedStateTarget:
+      | { cacheKey: string; textDocument: TextDocument<LAnnotation> }
+      | undefined;
+
     if (shouldRebuildDocument) {
       let contents = '';
       if ('contents' in fileOrDiff) {
@@ -740,15 +833,22 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       });
       const { name, lang, cacheKey } = fileOrDiff;
       const languageId = lang ?? getFiletypeFromFileName(fileOrDiff.name);
-      const textDocument = new TextDocument(
-        fileOrDiff.name,
-        contents,
-        languageId,
-        0,
-        editStack
-      );
+      const persistedCacheKey = getPersistedCacheKey(fileOrDiff);
+      const cachedTextDocument = this.#isStatePersistenceEnabled
+        ? this.#getCachedTextDocument(fileOrDiff)
+        : undefined;
+      const textDocument =
+        cachedTextDocument ??
+        new TextDocument(fileOrDiff.name, contents, languageId, 0, editStack);
       this.#fileInfo = { name, lang, cacheKey };
       this.#textDocument = textDocument;
+      if (this.#isStatePersistenceEnabled) {
+        this.#textDocumentCache.set(persistedCacheKey, textDocument);
+        persistedStateTarget = {
+          cacheKey: persistedCacheKey,
+          textDocument,
+        };
+      }
       this.#tokenizer?.cleanUp();
       this.#tokenizer = undefined;
       this.#resetState();
@@ -762,6 +862,18 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           fileOrDiff.name
         );
       }
+    }
+
+    if (
+      persistedStateTarget === undefined &&
+      this.#restoreStateOnNextSync &&
+      this.#isStatePersistenceEnabled &&
+      this.#textDocument !== undefined
+    ) {
+      persistedStateTarget = {
+        cacheKey: getPersistedCacheKey(fileOrDiff),
+        textDocument: this.#textDocument,
+      };
     }
 
     // The tokenizer is (re)created whenever the current document lacks one:
@@ -904,7 +1016,190 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         'lines'
       );
     }
+
+    if (persistedStateTarget !== undefined) {
+      this.#restoreStateOnNextSync = false;
+      this.#restorePersistedState(
+        persistedStateTarget.cacheKey,
+        persistedStateTarget.textDocument
+      );
+    }
   };
+
+  get #isStatePersistenceEnabled(): boolean {
+    return (
+      this.#options.persistState === true && this.#fileInstance?.type === 'file'
+    );
+  }
+
+  #getCachedTextDocument(
+    file: FileContents | FileDiffMetadata
+  ): TextDocument<LAnnotation> | undefined {
+    const textDocument = this.#textDocumentCache.get(
+      getPersistedCacheKey(file)
+    );
+    const languageId = file.lang ?? getFiletypeFromFileName(file.name);
+    return textDocument?.languageId === languageId ? textDocument : undefined;
+  }
+
+  #getStateStorage(): IStateStorage {
+    const option = this.#options.persistStateStorage ?? 'inMemory';
+    if (
+      this.#stateStorage === undefined ||
+      this.#stateStorageOption !== option
+    ) {
+      this.#stateStorage = createStateStorage(option);
+      this.#stateStorageOption = option;
+    }
+    return this.#stateStorage;
+  }
+
+  #persistCurrentState(): void {
+    const fileInfo = this.#fileInfo;
+    const textDocument = this.#textDocument;
+    if (
+      !this.#isStatePersistenceEnabled ||
+      fileInfo === undefined ||
+      textDocument === undefined
+    ) {
+      return;
+    }
+
+    const cacheKey = getPersistedCacheKey(fileInfo);
+    this.#textDocumentCache.set(cacheKey, textDocument);
+
+    let storage: IStateStorage;
+    try {
+      storage = this.#getStateStorage();
+    } catch {
+      return;
+    }
+    const state = cloneEditorState(this.getState());
+    const pendingRestore = this.#pendingStateRestore;
+    if (
+      pendingRestore?.cacheKey === cacheKey &&
+      pendingRestore.textDocument === textDocument
+    ) {
+      this.#pendingStateRestore = undefined;
+      if (
+        textDocument.version === pendingRestore.documentVersion &&
+        this.#selections === pendingRestore.selections &&
+        state.view?.scrollLeft === pendingRestore.view?.scrollLeft &&
+        state.view?.scrollTop === pendingRestore.view?.scrollTop
+      ) {
+        return;
+      }
+      this.#writeState(storage, cacheKey, state, pendingRestore.completion);
+      return;
+    }
+
+    this.#writeState(storage, cacheKey, state);
+  }
+
+  // Writes for the same key stay ordered even when custom storage is async.
+  #writeState(
+    storage: IStateStorage,
+    cacheKey: string,
+    state: EditorState,
+    waitFor?: Promise<void>
+  ): void {
+    const previousWrite = this.#pendingStateWrites.get(cacheKey);
+    if (waitFor !== undefined || previousWrite !== undefined) {
+      let pending = waitFor ?? Promise.resolve();
+      if (previousWrite !== undefined) {
+        pending = pending.then(() => previousWrite);
+      }
+      this.#trackStateWrite(
+        cacheKey,
+        pending.then(() => storage.set(cacheKey, state))
+      );
+      return;
+    }
+
+    let result: void | Promise<void>;
+    try {
+      result = storage.set(cacheKey, state);
+    } catch {
+      return;
+    }
+    if (!isPromise(result)) {
+      return;
+    }
+
+    this.#trackStateWrite(cacheKey, result);
+  }
+
+  #trackStateWrite(cacheKey: string, result: Promise<void>): void {
+    const pending = result.catch(() => {});
+    this.#pendingStateWrites.set(cacheKey, pending);
+    void pending.finally(() => {
+      if (this.#pendingStateWrites.get(cacheKey) === pending) {
+        this.#pendingStateWrites.delete(cacheKey);
+      }
+    });
+  }
+
+  #restorePersistedState(
+    cacheKey: string,
+    textDocument: TextDocument<LAnnotation>
+  ): void {
+    const generation = ++this.#stateRestoreGeneration;
+    const documentVersion = textDocument.version;
+    const selections = this.#selections;
+    const view = this.getState().view;
+    const applyState = (state: EditorState | undefined): void => {
+      const currentView = this.getState().view;
+      if (
+        state === undefined ||
+        generation !== this.#stateRestoreGeneration ||
+        this.#textDocument !== textDocument ||
+        textDocument.version !== documentVersion ||
+        this.#selections !== selections ||
+        currentView?.scrollLeft !== view?.scrollLeft ||
+        currentView?.scrollTop !== view?.scrollTop ||
+        this.#fileInfo === undefined ||
+        getPersistedCacheKey(this.#fileInfo) !== cacheKey
+      ) {
+        return;
+      }
+      this.setState(cloneEditorState(state));
+    };
+    const readState = (): void | Promise<void> => {
+      let result: EditorState | undefined | Promise<EditorState | undefined>;
+      try {
+        result = this.#getStateStorage().get(cacheKey);
+      } catch {
+        return;
+      }
+      if (isPromise(result)) {
+        return result.then(applyState).catch(() => {});
+      } else {
+        try {
+          applyState(result);
+        } catch {}
+      }
+    };
+
+    const pendingWrite = this.#pendingStateWrites.get(cacheKey);
+    const result =
+      pendingWrite === undefined ? readState() : pendingWrite.then(readState);
+    if (isPromise(result)) {
+      const pendingRestore = {
+        cacheKey,
+        textDocument,
+        documentVersion,
+        selections,
+        view,
+        completion: result.catch(() => {}),
+      };
+      this.#pendingStateRestore = pendingRestore;
+      void pendingRestore.completion.finally(() => {
+        if (this.#pendingStateRestore === pendingRestore) {
+          this.#pendingStateRestore = undefined;
+        }
+      });
+    }
+  }
 
   // Whether a zero-based document line has (or will have on scroll) a
   // rendered row. False only for lines hidden inside a collapsed unchanged
