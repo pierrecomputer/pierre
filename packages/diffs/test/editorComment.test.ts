@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import { resolveCommentConfig } from '../src/editor/languages';
+import { getFiletypeFromFileName } from '../src/utils/getFiletypeFromFileName';
 
 describe('resolveCommentConfig', () => {
   test('uses modern-monaco language comment tokens', () => {
@@ -12,7 +13,7 @@ describe('resolveCommentConfig', () => {
       lineComment: null,
       blockComment: ['<!--', '-->'],
     });
-    expect(resolveCommentConfig('make')).toEqual({
+    expect(resolveCommentConfig('makefile')).toEqual({
       lineComment: '#',
       blockComment: ['/*', '*/'],
     });
@@ -28,5 +29,23 @@ describe('resolveCommentConfig', () => {
       lineComment: '#',
       blockComment: ['<#', '#>'],
     });
+  });
+
+  test('uses comment configs for resolved file language ids', () => {
+    const cases = [
+      ['script.sh', '#'],
+      ['build.bat', '@REM'],
+      ['Makefile', '#'],
+      ['Dockerfile', '#'],
+      ['README.rst', '..'],
+      ['paper.tex', '%'],
+      ['config.yml', '#'],
+    ] as const;
+
+    for (const [fileName, lineComment] of cases) {
+      expect(
+        resolveCommentConfig(getFiletypeFromFileName(fileName)).lineComment
+      ).toBe(lineComment);
+    }
   });
 });
