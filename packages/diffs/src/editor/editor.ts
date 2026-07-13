@@ -26,6 +26,12 @@ import {
 import editorCSS from './editor.css?inline';
 import { EditStack } from './editStack';
 import {
+  type LanguageConfigMap,
+  resolveBlockCommentEdits,
+  resolveCommentConfig,
+  resolveLineCommentEdits,
+} from './languages';
+import {
   applyDocumentChangeToLineAnnotations,
   renderLineAnnotations,
 } from './lineAnnotations';
@@ -152,6 +158,8 @@ export interface EditorOptions<LAnnotation> {
    * Default is `"default"` (both quotes and brackets).
    */
   autoSurround?: AutoSurround;
+  /** Per-language comment tokens used by the comment commands. */
+  languageCommentConfig?: LanguageConfigMap;
   /**
    * Show a floating selection action popover anchored to the active selection,
    * default is disabled.
@@ -1342,23 +1350,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           this.#retainSearchPanelFocus = false;
           this.#selectionAction?.cleanup();
           this.#selectionAction = undefined;
-          if (this.#selections !== undefined && this.#selections.length > 0) {
-            const primarySelection = this.#selections.at(-1)!;
-            if (
-              !isCollapsedSelection(primarySelection) ||
-              this.#selections.length > 1
-            ) {
-              const pos = getCaretPosition(primarySelection);
-              this.#updateSelections([
-                {
-                  start: pos,
-                  end: pos,
-                  direction: DirectionNone,
-                },
-              ]);
-              this.#focus(pos);
-            }
-          }
+          this.#runCommand('simplifySelection');
           return;
         }
         if (!targetIsContentElement(e)) {
@@ -1827,8 +1819,79 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         this.#moveSelectedLines(command === 'moveLineUp' ? -1 : 1);
         break;
 
+      case 'copyLineUp':
+      case 'copyLineDown':
+        this.#copySelectedLines(command === 'copyLineUp' ? -1 : 1);
+        break;
+
+      case 'simplifySelection': {
+        const selections = this.#selections;
+        const primarySelection = selections?.at(-1);
+        if (selections === undefined || primarySelection === undefined) {
+          break;
+        }
+        if (selections.length > 1) {
+          this.#updateSelections([primarySelection]);
+          this.#focus(getCaretPosition(primarySelection));
+        } else if (!isCollapsedSelection(primarySelection)) {
+          const caret = getCaretPosition(primarySelection);
+          this.#updateSelections([
+            { start: caret, end: caret, direction: DirectionNone },
+          ]);
+          this.#focus(caret);
+        }
+        break;
+      }
+
+      case 'insertBlankLine':
+        this.#insertBlankLine();
+        break;
+
+      case 'toggleComment':
+      case 'toggleBlockComment': {
+        const selections = this.#selections;
+        if (selections === undefined) {
+          break;
+        }
+        const { lineComment, blockComment } = resolveCommentConfig(
+          textDocument.languageId,
+          this.#options.languageCommentConfig
+        );
+        if (command === 'toggleComment' && lineComment !== null) {
+          this.#applyCommandEdits(
+            resolveLineCommentEdits(textDocument, selections, lineComment)
+          );
+          break;
+        }
+        const linewise = command === 'toggleComment';
+        const result = resolveBlockCommentEdits(
+          textDocument,
+          selections,
+          blockComment,
+          linewise
+        );
+        if (result !== undefined) {
+          this.#applyCommandEdits(
+            result.edits,
+            linewise
+              ? undefined
+              : (document) =>
+                  result.nextSelectionOffsets.map(
+                    ([start, end, direction]) => ({
+                      start: document.positionAt(start),
+                      end: document.positionAt(end),
+                      direction,
+                    })
+                  )
+          );
+        }
+        break;
+      }
+
       case 'indent':
       case 'outdent':
+      case 'indentLess':
+      case 'indentMore':
         if (this.#selections !== undefined) {
           const edits: TextEdit[] = [];
           const nextSelections: EditorSelection[] = [];
@@ -1845,8 +1908,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           }> = [];
           for (const selection of this.#selections) {
             const startLine = selection.start.line;
-            const outdent = command === 'outdent';
-            if (startLine !== selection.end.line || outdent) {
+            const outdent = command === 'outdent' || command === 'indentLess';
+            const lineBased =
+              command === 'indentLess' || command === 'indentMore';
+            if (startLine !== selection.end.line || outdent || lineBased) {
               const ret = resolveIndentEdits(
                 textDocument,
                 selection,
@@ -2008,6 +2073,195 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         }
         break;
     }
+  }
+
+  /** Applies one undoable command batch and records its resulting selections. */
+  #applyCommandEdits(
+    edits: TextEdit[],
+    resolveNextSelections?: (
+      textDocument: TextDocument<LAnnotation>
+    ) => EditorSelection[]
+  ): void {
+    const textDocument = this.#textDocument;
+    const selections = this.#selections;
+    if (textDocument === undefined || selections === undefined) {
+      return;
+    }
+    const remapSelections = resolveNextSelections === undefined;
+    const selectionOffsets = remapSelections
+      ? selections.map(
+          (selection) =>
+            [
+              textDocument.offsetAt(selection.start),
+              textDocument.offsetAt(selection.end),
+            ] as const
+        )
+      : undefined;
+    const resolvedEdits = remapSelections
+      ? edits
+          .map((edit) => {
+            const start = textDocument.offsetAt(edit.range.start);
+            const end = textDocument.offsetAt(edit.range.end);
+            return {
+              start: Math.min(start, end),
+              end: Math.max(start, end),
+              text: edit.newText,
+            };
+          })
+          .sort((a, b) => {
+            const startOrder = a.start - b.start;
+            return startOrder !== 0 ? startOrder : a.end - b.end;
+          })
+      : undefined;
+    const change = textDocument.applyEdits(
+      edits,
+      true,
+      selections,
+      undefined,
+      true
+    );
+    if (change === undefined) {
+      return;
+    }
+    const nextSelections = remapSelections
+      ? remapSelectionsAfterEdits(
+          textDocument,
+          selections,
+          selectionOffsets!,
+          resolvedEdits!
+        )
+      : resolveNextSelections(textDocument);
+    textDocument.setLastUndoSelectionsAfter(nextSelections);
+    this.#applyChange(
+      change,
+      nextSelections,
+      this.#applyChangeToLineAnnotations(change)
+    );
+  }
+
+  /** Copies selected line blocks and keeps the selection in the requested copy. */
+  #copySelectedLines(direction: -1 | 1): void {
+    const textDocument = this.#textDocument;
+    const selections = this.#selections;
+    if (textDocument === undefined || selections === undefined) {
+      return;
+    }
+
+    const blocks = getSelectedLineBlocks(selections);
+    if (blocks.length === 0) {
+      return;
+    }
+    const copiedLinesBefore: number[] = [];
+    let copiedLineCount = 0;
+    const edits: TextEdit[] = [];
+    for (const block of blocks) {
+      copiedLinesBefore.push(copiedLineCount);
+      const blockLineCount = block.endLine - block.startLine + 1;
+      copiedLineCount += blockLineCount;
+      const text = textDocument.getText({
+        start: { line: block.startLine, character: 0 },
+        end: {
+          line: block.endLine,
+          character: textDocument.getLineLength(block.endLine),
+        },
+      });
+
+      if (direction > 0) {
+        const position = { line: block.startLine, character: 0 };
+        edits.push({
+          range: { start: position, end: position },
+          newText: text + textDocument.eol,
+        });
+      } else if (block.endLine < textDocument.lineCount - 1) {
+        const position = { line: block.endLine + 1, character: 0 };
+        edits.push({
+          range: { start: position, end: position },
+          newText: text + textDocument.eol,
+        });
+      } else {
+        const position = {
+          line: block.endLine,
+          character: textDocument.getLineLength(block.endLine),
+        };
+        edits.push({
+          range: { start: position, end: position },
+          newText: textDocument.eol + text,
+        });
+      }
+    }
+
+    const nextSelections = selections.map((selection) => {
+      const line = selection.start.line;
+      let low = 0;
+      let high = blocks.length - 1;
+      while (low <= high) {
+        const middle = (low + high) >>> 1;
+        const block = blocks[middle];
+        if (line < block.startLine) {
+          high = middle - 1;
+        } else if (line > block.endLine) {
+          low = middle + 1;
+        } else {
+          low = middle;
+          break;
+        }
+      }
+      const blockIndex = Math.max(0, low <= high ? low : high);
+      const block = blocks[blockIndex];
+      const shift =
+        copiedLinesBefore[blockIndex] +
+        (direction > 0 ? block.endLine - block.startLine + 1 : 0);
+      return {
+        start: { ...selection.start, line: selection.start.line + shift },
+        end: { ...selection.end, line: selection.end.line + shift },
+        direction: selection.direction,
+      };
+    });
+    this.#applyCommandEdits(edits, () => nextSelections);
+  }
+
+  /** Inserts an indented blank line after each selection's final line. */
+  #insertBlankLine(): void {
+    const textDocument = this.#textDocument;
+    const selections = this.#selections;
+    if (textDocument === undefined || selections === undefined) {
+      return;
+    }
+
+    const selectionLines = selections.map(
+      (selection) => getCaretPosition(selection).line
+    );
+    const targetLines = Array.from(new Set(selectionLines)).sort(
+      (a, b) => a - b
+    );
+    const targetIndex = new Map<number, number>();
+    const indents = new Map<number, string>();
+    const edits: TextEdit[] = [];
+    for (let index = 0; index < targetLines.length; index++) {
+      const line = targetLines[index];
+      const lineText = textDocument.getLineText(line);
+      const indent = /^\s*/.exec(lineText)?.[0] ?? '';
+      targetIndex.set(line, index);
+      indents.set(line, indent);
+      const position = {
+        line,
+        character: textDocument.getLineLength(line),
+      };
+      edits.push({
+        range: { start: position, end: position },
+        newText: textDocument.eol + indent,
+      });
+    }
+
+    const nextSelections = selections.map<EditorSelection>((_, index) => {
+      const line = selectionLines[index];
+      const position = {
+        line: line + 1 + targetIndex.get(line)!,
+        character: indents.get(line)!.length,
+      };
+      return { start: position, end: position, direction: DirectionNone };
+    });
+    this.#applyCommandEdits(edits, () => nextSelections);
   }
 
   #moveSelectedLines(direction: -1 | 1): void {
