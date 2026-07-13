@@ -27,10 +27,10 @@ interface FileContents {
   // See: https://shiki.style/languages
   lang?: SupportedLanguages;
 
-  // Optional: Cache key for AST caching in Worker Pool.
-  // When provided, rendered AST results are cached and reused.
-  // IMPORTANT: The key must change whenever the content, filename,
-  // lang, or revision changes!
+  // Optional identity for Worker Pool caching and Editor persistence.
+  // For read-only rendering, change it whenever the content, filename,
+  // language, or revision changes. With Editor.persistState, reusing a key
+  // intentionally resumes that cached editing session.
   cacheKey?: string;
 }
 
@@ -39,7 +39,7 @@ const file: FileContents = {
   // We'll attempt to detect the language based on file extension
   name: 'example.tsx',
   contents: 'export function Hello() { return <div>Hello</div>; }',
-  cacheKey: 'example-file-v1', // Must change if contents change
+  cacheKey: 'example-file-v1',
 };
 
 // With explicit language override
