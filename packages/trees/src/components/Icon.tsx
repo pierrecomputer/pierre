@@ -13,6 +13,7 @@ export function Icon({
   name,
   remappedFrom,
   token,
+  color: propColor,
   width: propWidth,
   height: propHeight,
   viewBox: propViewBox,
@@ -22,6 +23,7 @@ export function Icon({
   name: string;
   remappedFrom?: string;
   token?: string;
+  color?: string;
   width?: number;
   height?: number;
   viewBox?: string;
@@ -55,6 +57,7 @@ export function Icon({
       data-icon-token={token}
       data-align-capitals={alignCapitals}
       {...a11yProps}
+      style={propColor != null ? { color: propColor } : undefined}
       viewBox={viewBox}
       width={width}
       height={height}

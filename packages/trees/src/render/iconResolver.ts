@@ -10,6 +10,7 @@ import {
 import type { SVGSpriteNames } from '../sprite';
 
 export interface FileTreeResolvedIcon {
+  color?: string;
   height?: number;
   name: string;
   remappedFrom?: string;
@@ -56,6 +57,13 @@ export function createFileTreeIconResolver(icons?: FileTreeIcons): {
 } {
   const normalizedIcons = normalizeFileTreeIcons(icons);
   const iconRemap = normalizedIcons.remap;
+  const iconByFilePath = new Map<string, RemappedIcon>();
+  for (const [filePath, icon] of Object.entries(
+    normalizedIcons.byFilePath ?? {}
+  )) {
+    iconByFilePath.set(filePath, icon);
+  }
+
   const iconByFileName = new Map<string, RemappedIcon>();
   for (const [fileName, icon] of Object.entries(
     normalizedIcons.byFileName ?? {}
@@ -82,6 +90,11 @@ export function createFileTreeIconResolver(icons?: FileTreeIcons): {
     filePath?: string
   ): FileTreeResolvedIcon => {
     if (name === 'file-tree-icon-file' && filePath != null) {
+      const filePathEntry = iconByFilePath.get(filePath);
+      if (filePathEntry != null) {
+        return remapEntryToIcon(filePathEntry, name);
+      }
+
       const fileName = getBaseFileName(filePath);
       const lowerFileName = fileName.toLowerCase();
       const fileNameEntry = iconByFileName.get(lowerFileName);
