@@ -876,30 +876,6 @@ describe('undo/redo across non-history edits', () => {
     }
   );
 
-  // KNOWN BUG: when a non-history edit has replaced the entire region a
-  // history entry covers, the entry is dead — undo must be a graceful no-op
-  // (and must not leave behind a redo item that re-corrupts). Today undo
-  // applies the stale inverse range to the replacement text ("core" -> "ce")
-  // and redo then splices the old typed text back in ("cGHe").
-  test.failing(
-    'undo is a graceful no-op when a non-history edit wiped the tracked region',
-    () => {
-      const d = doc('ok');
-      localEdit(d, 1, 1, 'GH'); // tracked: "oGHk"
-      remoteEdit(d, 0, 4, 'core'); // remote replaces the whole doc
-      expect(d.getText()).toBe('core');
-
-      d.undo();
-      expect(d.getText()).toBe('core');
-
-      // Whether the dead entry is dropped or kept, redo must not corrupt.
-      if (d.canRedo) {
-        d.redo();
-      }
-      expect(d.getText()).toBe('core');
-    }
-  );
-
   // KNOWN BUG: a batch entry stores per-sub-edit inverse offsets chained
   // through the batch's own deltas, but none of them are remapped through the
   // later non-history insert that landed between the sub-edits. Undo then

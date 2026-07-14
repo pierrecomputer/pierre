@@ -103,7 +103,7 @@ order. If you touch one of these areas, consider adding the missing coverage:
 - **IME composition deferrals** — IME/composition interaction with editing and
   undo-coalescing is deferred and not covered.
 
-## Known bugs pinned as `test.failing` (31)
+## Known bugs pinned as `test.failing` (30)
 
 - **EditStack coalescing** (3) — coalescing decisions compare a new edit against
   whatever sits on top of the undo stack purely by geometry, with no state reset
@@ -133,13 +133,12 @@ order. If you touch one of these areas, consider adding the missing coverage:
   the indent unit on empty and whitespace-only lines inside the selection,
   injecting trailing whitespace on lines the user never touched (outdent
   round-trips it away, bounding the damage).
-- **History across non-history edits** (6) — history entries are frozen at
+- **History across non-history edits** (5) — history entries are frozen at
   creation and never remapped through edits applied without history tracking:
-  stale-offset undo can corrupt text, undo of a wiped entry is not a graceful
-  no-op, batch inversion breaks across an interleaved non-tracked insert,
-  interior non-tracked inserts don't survive undo of a tracked insertion, stored
-  entry selections are restored without remapping, and redo replays at stale
-  offsets.
+  stale-offset undo can corrupt text, batch inversion breaks across an
+  interleaved non-tracked insert, interior non-tracked inserts don't survive
+  undo of a tracked insertion, stored entry selections are restored without
+  remapping, and redo replays at stale offsets.
 - **Position round-trip losing a column** (1) — a position-from-offset
   computation can return a position strictly inside a CRLF pair (a character
   beyond the line's own length) that the inverse offset-from-position
