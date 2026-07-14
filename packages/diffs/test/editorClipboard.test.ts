@@ -242,60 +242,97 @@ class TestEditableComponent implements DiffsEditableComponent<undefined> {
   }
 }
 
+class TestClipboardItem {
+  readonly kind = 'string';
+
+  constructor(
+    readonly type: string,
+    readonly data: string
+  ) {}
+
+  getAsString(callback: (data: string) => void): void {
+    queueMicrotask(() => callback(this.data));
+  }
+}
+
+class TestClipboardItemList extends Array<TestClipboardItem> {
+  add(data: string, type: string): TestClipboardItem {
+    const item = new TestClipboardItem(type, data);
+    this.push(item);
+    return item;
+  }
+}
+
+class TestClipboardData {
+  readonly items = new TestClipboardItemList();
+  readonly writes: Array<[type: string, text: string]> = [];
+  readonly #data = new Map<string, string>();
+
+  constructor(text?: string) {
+    if (text !== undefined) {
+      this.#data.set('text', text);
+    }
+  }
+
+  setData(type: string, text: string): void {
+    this.writes.push([type, text]);
+    this.#data.set(type, text);
+  }
+
+  getData(type: string): string {
+    return this.#data.get(type) ?? '';
+  }
+}
+
 function dispatchCut(target: HTMLElement): Array<[type: string, text: string]> {
-  const writes: Array<[type: string, text: string]> = [];
+  const clipboardData = new TestClipboardData();
   const event = new window.Event('cut', {
     bubbles: true,
     cancelable: true,
     composed: true,
   });
   Object.defineProperty(event, 'clipboardData', {
-    value: {
-      setData(type: string, text: string) {
-        writes.push([type, text]);
-      },
-    },
+    value: clipboardData,
   });
 
   target.dispatchEvent(event);
   expect(event.defaultPrevented).toBe(true);
-  return writes;
+  return clipboardData.writes;
 }
 
 function dispatchCopy(
   target: HTMLElement
 ): Array<[type: string, text: string]> {
-  const writes: Array<[type: string, text: string]> = [];
+  return dispatchCopyData(target).writes;
+}
+
+function dispatchCopyData(target: HTMLElement): TestClipboardData {
+  const clipboardData = new TestClipboardData();
   const event = new window.Event('copy', {
     bubbles: true,
     cancelable: true,
     composed: true,
   });
   Object.defineProperty(event, 'clipboardData', {
-    value: {
-      setData(type: string, text: string) {
-        writes.push([type, text]);
-      },
-    },
+    value: clipboardData,
   });
 
   target.dispatchEvent(event);
   expect(event.defaultPrevented).toBe(true);
-  return writes;
+  return clipboardData;
 }
 
-function dispatchPaste(target: HTMLElement, text: string): void {
+function dispatchPaste(
+  target: HTMLElement,
+  data: string | TestClipboardData
+): void {
   const event = new window.Event('paste', {
     bubbles: true,
     cancelable: true,
     composed: true,
   });
   Object.defineProperty(event, 'clipboardData', {
-    value: {
-      getData(_type: string) {
-        return text;
-      },
-    },
+    value: typeof data === 'string' ? new TestClipboardData(data) : data,
   });
 
   target.dispatchEvent(event);
@@ -614,6 +651,101 @@ describe('Editor clipboard events', () => {
     }
   });
 
+  test('pastes copied selection texts into matching selections', async () => {
+    const { cleanup } = installDom();
+
+    const editor = new Editor<undefined>();
+    const component = new TestEditableComponent({
+      name: 'example.txt',
+      contents: 'one two\nthree four\n---\nAA\nBB',
+      lang: 'text',
+    });
+
+    try {
+      editor.edit(component);
+      editor.setSelections([
+        {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 3 },
+          direction: 'forward',
+        },
+        {
+          start: { line: 1, character: 0 },
+          end: { line: 1, character: 5 },
+          direction: 'forward',
+        },
+      ]);
+
+      const clipboardData = dispatchCopyData(component.contentElement);
+      expect(clipboardData.writes).toEqual([['text', 'one\nthree']]);
+      expect(clipboardData.items.map((item) => item.type)).toEqual([
+        'application/vnd.pierre.editor-selections+json',
+      ]);
+
+      editor.setSelections([
+        {
+          start: { line: 3, character: 0 },
+          end: { line: 3, character: 2 },
+          direction: 'forward',
+        },
+        {
+          start: { line: 4, character: 0 },
+          end: { line: 4, character: 2 },
+          direction: 'forward',
+        },
+      ]);
+      dispatchPaste(component.contentElement, clipboardData);
+      await wait();
+
+      expect(editor.getText()).toBe('one two\nthree four\n---\none\nthree');
+    } finally {
+      editor.cleanUp();
+      cleanup();
+    }
+  });
+
+  test('uses plain text when copied and target selection counts differ', () => {
+    const { cleanup } = installDom();
+
+    const editor = new Editor<undefined>();
+    const component = new TestEditableComponent({
+      name: 'example.txt',
+      contents: 'one two\nthree four\n---\nAA',
+      lang: 'text',
+    });
+
+    try {
+      editor.edit(component);
+      editor.setSelections([
+        {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 3 },
+          direction: 'forward',
+        },
+        {
+          start: { line: 1, character: 0 },
+          end: { line: 1, character: 5 },
+          direction: 'forward',
+        },
+      ]);
+      const clipboardData = dispatchCopyData(component.contentElement);
+
+      editor.setSelections([
+        {
+          start: { line: 3, character: 0 },
+          end: { line: 3, character: 2 },
+          direction: 'forward',
+        },
+      ]);
+      dispatchPaste(component.contentElement, clipboardData);
+
+      expect(editor.getText()).toBe('one two\nthree four\n---\none\nthree');
+    } finally {
+      editor.cleanUp();
+      cleanup();
+    }
+  });
+
   test('allows the first browser paste shortcut in a diff and suppresses repeat paste', async () => {
     const fixture = await createDiffEditorFixture('alpha\nold', 'alpha\nnew');
     const { editor, container } = fixture;
@@ -729,6 +861,56 @@ describe('Editor clipboard events', () => {
       expect(keydown.defaultPrevented).toBe(true);
       expect(reads).toBe(1);
       expect(editor.getText()).toBe('alpha bravo');
+    } finally {
+      editor.cleanUp();
+      cleanup();
+    }
+  });
+
+  test('reads matching selections from a custom clipboard provider', async () => {
+    const { cleanup } = installDom();
+    const reads: Array<string | undefined> = [];
+
+    const editor = new Editor<undefined>({
+      clipboard: {
+        readText: (type) => {
+          reads.push(type);
+          return type === 'application/vnd.pierre.editor-selections+json'
+            ? JSON.stringify(['one', 'two'])
+            : 'one\ntwo';
+        },
+      },
+    });
+    const component = new TestEditableComponent({
+      name: 'example.txt',
+      contents: 'AA\nBB',
+      lang: 'text',
+    });
+
+    try {
+      editor.edit(component);
+      editor.setSelections([
+        {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 2 },
+          direction: 'forward',
+        },
+        {
+          start: { line: 1, character: 0 },
+          end: { line: 1, character: 2 },
+          direction: 'forward',
+        },
+      ]);
+
+      const keydown = dispatchPasteShortcutKeydown(component.contentElement);
+      await wait();
+
+      expect(keydown.defaultPrevented).toBe(true);
+      expect(reads).toEqual([
+        undefined,
+        'application/vnd.pierre.editor-selections+json',
+      ]);
+      expect(editor.getText()).toBe('one\ntwo');
     } finally {
       editor.cleanUp();
       cleanup();

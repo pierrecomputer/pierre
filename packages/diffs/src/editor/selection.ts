@@ -1714,6 +1714,28 @@ interface ClipboardRegion {
   end: number;
 }
 
+/** Resolves the document offset range one selection contributes to a copy. */
+function resolveClipboardRegion(
+  textDocument: TextDocument<unknown>,
+  selection: EditorSelection
+): ClipboardRegion {
+  if (isCollapsedSelection(selection)) {
+    const line = selection.start.line;
+    const start = textDocument.offsetAt({ line, character: 0 });
+    const end =
+      line < textDocument.lineCount - 1
+        ? textDocument.offsetAt({ line: line + 1, character: 0 })
+        : textDocument.offsetAt({
+            line,
+            character: textDocument.getLineLength(line),
+          });
+    return { start, end };
+  }
+  const start = textDocument.offsetAt(selection.start);
+  const end = textDocument.offsetAt(selection.end);
+  return start <= end ? { start, end } : { start: end, end: start };
+}
+
 /**
  * Resolves the document offset range each selection contributes to the
  * clipboard, ordered by position. A collapsed selection contributes its whole
@@ -1725,27 +1747,25 @@ function resolveClipboardRegions(
   selections: EditorSelection[]
 ): ClipboardRegion[] {
   return selections
-    .map((selection) => {
-      if (isCollapsedSelection(selection)) {
-        const line = selection.start.line;
-        const start = textDocument.offsetAt({ line, character: 0 });
-        const end =
-          line < textDocument.lineCount - 1
-            ? textDocument.offsetAt({ line: line + 1, character: 0 })
-            : textDocument.offsetAt({
-                line,
-                character: textDocument.getLineLength(line),
-              });
-        return { start, end };
-      }
-      const start = textDocument.offsetAt(selection.start);
-      const end = textDocument.offsetAt(selection.end);
-      return start <= end ? { start, end } : { start: end, end: start };
-    })
+    .map((selection) => resolveClipboardRegion(textDocument, selection))
     .sort((a, b) => {
       const startOrder = a.start - b.start;
       return startOrder !== 0 ? startOrder : a.end - b.end;
     });
+}
+
+/**
+ * Gets the text contributed by each selection in selection order, preserving
+ * the pairing needed to paste the values into another set of selections.
+ */
+export function getSelectionClipboardTexts(
+  textDocument: TextDocument<unknown>,
+  selections: EditorSelection[]
+): string[] {
+  return selections.map((selection) => {
+    const { start, end } = resolveClipboardRegion(textDocument, selection);
+    return textDocument.getTextSlice(start, end);
+  });
 }
 
 /**

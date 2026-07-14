@@ -82,6 +82,7 @@ import {
   getDocumentFullSelection,
   getSelectedLineBlocks,
   getSelectionAnchor,
+  getSelectionClipboardTexts,
   getSelectionText,
   isCollapsedSelection,
   isLineEditable,
@@ -171,7 +172,7 @@ export interface EditorOptions<LAnnotation> {
    * see https://www.electronjs.org/docs/latest/api/clipboard
    */
   clipboard?: {
-    readText: () => Promise<string> | string;
+    readText: (type?: string) => Promise<string> | string;
   };
   /** Render the selection action widget element. */
   renderSelectionAction?: (
@@ -202,6 +203,8 @@ export interface EditorOptions<LAnnotation> {
 // row per inserted line. A safety bound, not a correctness-critical value.
 const MAX_EDIT_WIDEN_WINDOW_MULTIPLE = 2;
 const SELECTION_ACTION_POPOVER_PLACEMENT_KEY = 'selection-action';
+const MULTI_SELECTION_CLIPBOARD_TYPE =
+  'application/vnd.pierre.diffs-selections+json';
 
 export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #options: EditorOptions<LAnnotation>;
@@ -1442,12 +1445,15 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         // A read-only deleted-text selection lives outside the editor's
         // document, so #getSelectionText() would be empty. Copy the selected
         // deleted text instead.
-        e.clipboardData?.setData(
-          'text',
-          this.#isDeletedTextSelectionActive()
-            ? this.#deletedTextForClipboard()
-            : this.#getSelectionText()
-        );
+        if (this.#isDeletedTextSelectionActive()) {
+          e.clipboardData?.setData('text', this.#deletedTextForClipboard());
+        } else {
+          this.#writeSelectionClipboardData(
+            e.clipboardData,
+            this.#getSelectionText(),
+            this.#getSelectionClipboardTexts()
+          );
+        }
       }),
 
       addEventListener(contentEl, 'cut', (e) => {
@@ -1457,12 +1463,16 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         e.preventDefault();
         // Deleted text is read-only and can't be removed, so a cut there copies
         // the selected deleted text (like the copy handler) without editing.
-        e.clipboardData?.setData(
-          'text',
-          this.#isDeletedTextSelectionActive()
-            ? this.#deletedTextForClipboard()
-            : this.#cutSelectionText()
-        );
+        if (this.#isDeletedTextSelectionActive()) {
+          e.clipboardData?.setData('text', this.#deletedTextForClipboard());
+        } else {
+          const selectionTexts = this.#getSelectionClipboardTexts();
+          this.#writeSelectionClipboardData(
+            e.clipboardData,
+            this.#cutSelectionText(),
+            selectionTexts
+          );
+        }
       }),
 
       addEventListener(contentEl, 'paste', (e) => {
@@ -1470,18 +1480,37 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           return;
         }
         e.preventDefault();
-        const text = e.clipboardData?.getData('text');
+        const clipboardData = e.clipboardData;
         const textDocument = this.#textDocument;
-        if (text !== undefined && textDocument !== undefined) {
-          // Rewrite clipboard line breaks to the document's EOL so a Windows
-          // clipboard (\r\n or \r) doesn't leave mixed line endings behind.
-          // TODO(@ije): Add support of multiple selections copy&paste
-          this.#replaceSelectionText(
-            textDocument.normalizeEol(text),
-            undefined,
-            true
-          );
+        if (clipboardData === null || textDocument === undefined) {
+          return;
         }
+
+        let text: string | string[] = clipboardData.getData('text');
+
+        const multiSelectionText = clipboardData.getData(
+          MULTI_SELECTION_CLIPBOARD_TYPE
+        );
+        if (multiSelectionText !== undefined) {
+          try {
+            const selectionTexts = JSON.parse(multiSelectionText);
+            if (Array.isArray(selectionTexts) && selectionTexts.length > 0) {
+              text = selectionTexts;
+            }
+          } catch {
+            // ignore the invalid custom clipboard data
+          }
+        }
+
+        // Rewrite clipboard line breaks to the document's EOL so a Windows
+        // clipboard (\r\n or \r) doesn't leave mixed line endings behind.
+        this.#replaceSelectionText(
+          Array.isArray(text)
+            ? text.map((t) => textDocument.normalizeEol(t))
+            : textDocument.normalizeEol(text),
+          undefined,
+          true
+        );
       }),
 
       addEventListener(contentEl, 'beforeinput', (e) => {
@@ -1729,11 +1758,29 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #handleCustomPasteEvent = async () => {
     const clipboard = this.#options.clipboard;
     if (clipboard !== undefined) {
-      const text = await clipboard.readText();
+      let text: string | string[] | undefined;
+      const multiSelectionText = await clipboard.readText(
+        MULTI_SELECTION_CLIPBOARD_TYPE
+      );
+      if (multiSelectionText !== undefined) {
+        try {
+          const selectionTexts = JSON.parse(multiSelectionText);
+          if (Array.isArray(selectionTexts) && selectionTexts.length > 0) {
+            text = selectionTexts;
+          }
+        } catch {
+          // Invalid custom clipboard data falls back to its plain-text representation.
+        }
+      }
+      if (text === undefined) {
+        text = await clipboard.readText();
+      }
       const textDocument = this.#textDocument;
       if (textDocument !== undefined) {
         this.#replaceSelectionText(
-          textDocument.normalizeEol(text),
+          Array.isArray(text)
+            ? text.map((t) => textDocument.normalizeEol(t))
+            : textDocument.normalizeEol(text),
           undefined,
           true
         );
@@ -1769,7 +1816,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     return undefined;
   }
 
-  // TODO(@ije): add command registry
   #runCommand(command: EditorCommand) {
     const textDocument = this.#textDocument;
     if (textDocument === undefined) {
@@ -3968,6 +4014,33 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       return '';
     }
     return getSelectionText(textDocument, selections);
+  }
+
+  #getSelectionClipboardTexts(): string[] {
+    const textDocument = this.#textDocument;
+    const selections = this.#selections;
+    if (textDocument === undefined || selections === undefined) {
+      return [];
+    }
+    return getSelectionClipboardTexts(textDocument, selections);
+  }
+
+  /** Writes both the portable text and the selection pairing metadata. */
+  #writeSelectionClipboardData(
+    clipboardData: DataTransfer | null,
+    text: string,
+    selectionTexts: string[]
+  ): void {
+    if (clipboardData === null) {
+      return;
+    }
+    clipboardData.setData('text', text);
+    if (selectionTexts.length > 1) {
+      clipboardData.setData(
+        MULTI_SELECTION_CLIPBOARD_TYPE,
+        JSON.stringify(selectionTexts)
+      );
+    }
   }
 
   #cutSelectionText(): string {
