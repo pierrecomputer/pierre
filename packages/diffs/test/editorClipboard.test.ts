@@ -242,29 +242,10 @@ class TestEditableComponent implements DiffsEditableComponent<undefined> {
   }
 }
 
-class TestClipboardItem {
-  readonly kind = 'string';
-
-  constructor(
-    readonly type: string,
-    readonly data: string
-  ) {}
-
-  getAsString(callback: (data: string) => void): void {
-    queueMicrotask(() => callback(this.data));
-  }
-}
-
-class TestClipboardItemList extends Array<TestClipboardItem> {
-  add(data: string, type: string): TestClipboardItem {
-    const item = new TestClipboardItem(type, data);
-    this.push(item);
-    return item;
-  }
-}
+const MULTI_SELECTION_CLIPBOARD_TYPE =
+  'application/vnd.pierre.diffs-selections+json';
 
 class TestClipboardData {
-  readonly items = new TestClipboardItemList();
   readonly writes: Array<[type: string, text: string]> = [];
   readonly #data = new Map<string, string>();
 
@@ -440,7 +421,13 @@ describe('Editor clipboard events', () => {
 
       const writes = dispatchCut(component.contentElement);
 
-      expect(writes).toEqual([['text', 'alpha\ncharlie\n']]);
+      expect(writes).toEqual([
+        ['text', 'alpha\ncharlie\n'],
+        [
+          MULTI_SELECTION_CLIPBOARD_TYPE,
+          JSON.stringify(['alpha\n', 'charlie\n']),
+        ],
+      ]);
       expect(editor.getText()).toBe('bravo\ndelta');
       expect(editor.getState().selections).toEqual([
         {
@@ -487,7 +474,10 @@ describe('Editor clipboard events', () => {
 
       const writes = dispatchCut(component.contentElement);
 
-      expect(writes).toEqual([['text', 'rav\ncharlie\n']]);
+      expect(writes).toEqual([
+        ['text', 'rav\ncharlie\n'],
+        [MULTI_SELECTION_CLIPBOARD_TYPE, JSON.stringify(['rav', 'charlie\n'])],
+      ]);
       expect(editor.getText()).toBe('alpha\nbo\ndelta');
       expect(editor.getState().selections).toEqual([
         {
@@ -534,7 +524,13 @@ describe('Editor clipboard events', () => {
 
       const writes = dispatchCut(component.contentElement);
 
-      expect(writes).toEqual([['text', 'bravo\n']]);
+      expect(writes).toEqual([
+        ['text', 'bravo\n'],
+        [
+          MULTI_SELECTION_CLIPBOARD_TYPE,
+          JSON.stringify(['bravo\n', 'bravo\n']),
+        ],
+      ]);
       expect(editor.getText()).toBe('alpha\ncharlie');
       expect(editor.getState().selections).toEqual([
         {
@@ -576,7 +572,10 @@ describe('Editor clipboard events', () => {
 
       const writes = dispatchCut(component.contentElement);
 
-      expect(writes).toEqual([['text', 'bravo\n']]);
+      expect(writes).toEqual([
+        ['text', 'bravo\n'],
+        [MULTI_SELECTION_CLIPBOARD_TYPE, JSON.stringify(['br', 'bravo\n'])],
+      ]);
       expect(editor.getText()).toBe('alpha\ncharlie');
       expect(editor.getState().selections).toEqual([
         {
@@ -677,9 +676,9 @@ describe('Editor clipboard events', () => {
       ]);
 
       const clipboardData = dispatchCopyData(component.contentElement);
-      expect(clipboardData.writes).toEqual([['text', 'one\nthree']]);
-      expect(clipboardData.items.map((item) => item.type)).toEqual([
-        'application/vnd.pierre.editor-selections+json',
+      expect(clipboardData.writes).toEqual([
+        ['text', 'one\nthree'],
+        [MULTI_SELECTION_CLIPBOARD_TYPE, JSON.stringify(['one', 'three'])],
       ]);
 
       editor.setSelections([
@@ -875,7 +874,7 @@ describe('Editor clipboard events', () => {
       clipboard: {
         readText: (type) => {
           reads.push(type);
-          return type === 'application/vnd.pierre.editor-selections+json'
+          return type === MULTI_SELECTION_CLIPBOARD_TYPE
             ? JSON.stringify(['one', 'two'])
             : 'one\ntwo';
         },
@@ -906,10 +905,7 @@ describe('Editor clipboard events', () => {
       await wait();
 
       expect(keydown.defaultPrevented).toBe(true);
-      expect(reads).toEqual([
-        undefined,
-        'application/vnd.pierre.editor-selections+json',
-      ]);
+      expect(reads).toEqual([undefined, MULTI_SELECTION_CLIPBOARD_TYPE]);
       expect(editor.getText()).toBe('one\ntwo');
     } finally {
       editor.cleanUp();

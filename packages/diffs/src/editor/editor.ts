@@ -1758,22 +1758,19 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #handleCustomPasteEvent = async () => {
     const clipboard = this.#options.clipboard;
     if (clipboard !== undefined) {
-      let text: string | string[] | undefined;
-      const multiSelectionText = await clipboard.readText(
-        MULTI_SELECTION_CLIPBOARD_TYPE
-      );
-      if (multiSelectionText !== undefined) {
+      let text: string | string[] = await clipboard.readText();
+      if ((this.#selections?.length ?? 0) > 1) {
+        const multiSelectionText = await clipboard.readText(
+          MULTI_SELECTION_CLIPBOARD_TYPE
+        );
         try {
           const selectionTexts = JSON.parse(multiSelectionText);
           if (Array.isArray(selectionTexts) && selectionTexts.length > 0) {
             text = selectionTexts;
           }
         } catch {
-          // Invalid custom clipboard data falls back to its plain-text representation.
+          // Invalid selection metadata falls back to the plain-text value.
         }
-      }
-      if (text === undefined) {
-        text = await clipboard.readText();
       }
       const textDocument = this.#textDocument;
       if (textDocument !== undefined) {
