@@ -1762,10 +1762,8 @@ export function getSelectionClipboardTexts(
   textDocument: TextDocument<unknown>,
   selections: EditorSelection[]
 ): string[] {
-  return selections.map((selection) => {
-    const { start, end } = resolveClipboardRegion(textDocument, selection);
-    return textDocument.getTextSlice(start, end);
-  });
+  const regions = resolveClipboardRegions(textDocument, selections);
+  return regions.map(({ start, end }) => textDocument.getTextSlice(start, end));
 }
 
 /**

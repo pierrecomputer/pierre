@@ -1488,17 +1488,19 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
         let text: string | string[] = clipboardData.getData('text');
 
-        const multiSelectionText = clipboardData.getData(
-          MULTI_SELECTION_CLIPBOARD_TYPE
-        );
-        if (multiSelectionText !== undefined) {
-          try {
-            const selectionTexts = JSON.parse(multiSelectionText);
-            if (Array.isArray(selectionTexts) && selectionTexts.length > 0) {
-              text = selectionTexts;
+        if ((this.#selections?.length ?? 0) > 1) {
+          const multiSelectionText = clipboardData.getData(
+            MULTI_SELECTION_CLIPBOARD_TYPE
+          );
+          if (multiSelectionText !== undefined) {
+            try {
+              const selectionTexts = JSON.parse(multiSelectionText);
+              if (Array.isArray(selectionTexts) && selectionTexts.length > 0) {
+                text = selectionTexts;
+              }
+            } catch {
+              // ignore the invalid custom clipboard data
             }
-          } catch {
-            // ignore the invalid custom clipboard data
           }
         }
 
