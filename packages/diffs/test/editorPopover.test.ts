@@ -153,13 +153,15 @@ describe('PopoverManager.getPlacementBounds', () => {
       scroller.appendChild(fileContainer);
       document.body.appendChild(scroller);
       stubRect(scroller, 20, 120, 20, 120);
-      stubRect(codeElement, 50, 90, 50, 150);
+      // The code box spans past the scroller (top 10 -> 200), so the scroller is
+      // the binding clip and only its top/bottom drive the vertical bounds.
+      stubRect(codeElement, 10, 200, 50, 150);
 
       manager.setViewportElements(fileContainer, codeElement);
       // Subtract the code element's top so the bounds are relative to it.
       expect(manager.getPlacementBounds()).toEqual({
-        top: -30,
-        bottom: 70,
+        top: 10,
+        bottom: 110,
         left: 0,
         right: 70,
       });
@@ -176,12 +178,43 @@ describe('PopoverManager.getPlacementBounds', () => {
       const fileContainer = document.createElement('div');
       const codeElement = document.createElement('div');
       document.body.appendChild(fileContainer);
-      stubRect(codeElement, 50, 90, 50, 150);
+      // The code box spans past the window (0 -> 1000), so the window is the
+      // binding clip and its full height drives the vertical bounds.
+      stubRect(codeElement, 0, 1000, 50, 150);
 
       manager.setViewportElements(fileContainer, codeElement);
       expect(manager.getPlacementBounds()).toEqual({
-        top: -50,
-        bottom: window.innerHeight - 50,
+        top: 0,
+        bottom: window.innerHeight,
+        left: 0,
+        right: 100,
+      });
+    } finally {
+      manager.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test('clips the bounds to the code box when the file is shorter than the scrollport', () => {
+    const dom = installDom();
+    const manager = makeManager();
+    try {
+      const scroller = document.createElement('div');
+      scroller.style.overflowY = 'auto';
+      const fileContainer = document.createElement('div');
+      const codeElement = document.createElement('div');
+      scroller.appendChild(fileContainer);
+      document.body.appendChild(scroller);
+      stubRect(scroller, 0, 200, 0, 200);
+      // A short file (top 50 -> 90) fully inside the scrollport: `[data-code]`
+      // uses overflow-y: clip, so its own box, not the taller scroller, bounds
+      // the popover.
+      stubRect(codeElement, 50, 90, 0, 100);
+
+      manager.setViewportElements(fileContainer, codeElement);
+      expect(manager.getPlacementBounds()).toEqual({
+        top: 0,
+        bottom: 40,
         left: 0,
         right: 100,
       });
