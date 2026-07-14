@@ -66,15 +66,13 @@ You render the surface first, then attach editing:
    mode. Your `onChange` handler receives updated `FileContents` (and line
    annotations when present).
 
-When attaching, edit mode normalizes component options that conflict with
-editing and triggers a re-render: it turns on the token transformer and turns
-off gutter utilities, line selection, and line-hover highlighting. Collapsed
-unchanged regions stay collapsed: arrow keys skip over them like code folds,
-jumps that must land inside one (search matches, undo, Cmd/Ctrl+End) expand it
-just enough to show the target, and the separator expand buttons keep working.
-The diff layout is preserved, so a `FileDiff` or `MultiFileDiff` stays in
-whatever view it was rendered in; in unified diffs, deleted lines and annotation
-lines remain read-only.
+When attaching, edit mode turns on the token transformer and triggers a
+re-render if necessary. Collapsed unchanged regions stay collapsed: arrow keys
+skip over them like code folds, jumps that must land inside one (search matches,
+undo, Cmd/Ctrl+End) expand it just enough to show the target, and the separator
+expand buttons keep working. The diff layout is preserved, so a `FileDiff` or
+`MultiFileDiff` stays in whatever view it was rendered in; in unified diffs,
+deleted lines and annotation lines remain read-only.
 
 ### React
 

@@ -74,14 +74,9 @@ export const LIVE_EDITOR_OPTIONS: MultiFileDiffProps<undefined>['options'] = {
   themeType: 'dark',
   diffStyle: 'unified',
   unsafeCSS: CustomScrollbarCSS,
-  // Editor mode (contentEditable) forces these options when it attaches and
-  // will rerender the surface if the hydrated markup doesn't already match.
-  // Baking them into the preload makes the server HTML identical to the
-  // editor's enforced state, so hydration doesn't cause a visible flash.
+  // The editor requires the token transformer and rerenders when it enables it
+  // after attaching. Enable it in the preload so hydration does not flash.
   useTokenTransformer: true,
-  enableGutterUtility: false,
-  enableLineSelection: false,
-  lineHoverHighlight: 'disabled',
 };
 
 // Server-side preload input for the homepage Live editing example. Spreading
@@ -93,18 +88,14 @@ export const LIVE_EDITOR_EXAMPLE: PreloadMultiFileDiffOptions<undefined> = {
   options: LIVE_EDITOR_OPTIONS,
 };
 
-// File-mode options for the Live editing example. They mirror the editor's
-// enforced contentEditable state (see LIVE_EDITOR_OPTIONS) so the SSR-rendered
-// File matches what the editor attaches to, avoiding a rerender flash on
-// hydration. The diff-only diffStyle key doesn't apply to a File.
+// File-mode options for the Live editing example. Pre-enable the token
+// transformer for SSR parity (see LIVE_EDITOR_OPTIONS). The diff-only diffStyle
+// key does not apply to a File.
 export const LIVE_EDITOR_FILE_OPTIONS: FileOptions<undefined> = {
   theme: DEFAULT_THEMES,
   themeType: 'dark',
   unsafeCSS: CustomScrollbarCSS,
   useTokenTransformer: true,
-  enableGutterUtility: false,
-  enableLineSelection: false,
-  lineHoverHighlight: 'disabled',
 };
 
 // Server-side preload input for the File view of the Live editing example.

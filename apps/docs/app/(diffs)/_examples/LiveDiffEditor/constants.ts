@@ -9,9 +9,9 @@ import { CustomScrollbarCSS } from '@/components/CustomScrollbarCSS';
 
 // Server-side preload input for the "Live diff editing" example. We reuse the
 // LiveEditor debounce.ts before/after files so the surface shows a real diff,
-// then make the additions side editable in place. The options mirror the state
-// the editor enforces when it attaches (see LIVE_EDITOR_OPTIONS) so the
-// SSR-rendered diff matches the editor's surface and hydration doesn't flash.
+// then make the additions side editable in place. Pre-enabling the token
+// transformer keeps the SSR-rendered diff aligned with the attached editor so
+// hydration does not flash.
 export const LIVE_DIFF_EDITOR_EXAMPLE: PreloadFileDiffOptions<undefined> = {
   fileDiff: parseDiffFromFile(LIVE_EDITOR_OLD_FILE, LIVE_EDITOR_NEW_FILE),
   options: {
@@ -20,8 +20,5 @@ export const LIVE_DIFF_EDITOR_EXAMPLE: PreloadFileDiffOptions<undefined> = {
     diffStyle: 'unified',
     unsafeCSS: CustomScrollbarCSS,
     useTokenTransformer: true,
-    enableGutterUtility: false,
-    enableLineSelection: false,
-    lineHoverHighlight: 'disabled',
   },
 };
