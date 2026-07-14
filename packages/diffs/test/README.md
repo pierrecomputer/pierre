@@ -8,11 +8,12 @@ AGENT=1 bun test
 
 ## Legacy-editor test suites
 
-`monaco-legacy-tests/` (microsoft/vscode, MIT) and `codemirror-legacy-tests/`
-(CodeMirror 6, MIT) hold editor-behavior scenarios harvested from other editors'
-test suites. See each directory's README for provenance, the `test.failing`
-known-bug convention, and the `DIVERGENCE:` comment policy. Discovered by the
-normal `bun test` run like any other `*.test.ts` files.
+`monaco-legacy-tests/` (microsoft/vscode, MIT), `codemirror-legacy-tests/`
+(CodeMirror 6, MIT), and `atom-legacy-tests/` (atom/text-buffer +
+atom/superstring, MIT) hold editor-behavior scenarios harvested from other
+editors' test suites. See each directory's README for provenance, the
+`test.failing` known-bug convention, and the `DIVERGENCE:` comment policy.
+Discovered by the normal `bun test` run like any other `*.test.ts` files.
 
 Authorship hygiene for any future additions to these suites: derive only from
 permissively-licensed (e.g. MIT) sources; write your own test names (never reuse
