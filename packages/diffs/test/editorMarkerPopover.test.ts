@@ -87,13 +87,13 @@ function hoverMarkerLine(content: HTMLElement, oneIndexedLine: number): void {
   content.dispatchEvent(event);
 }
 
-function findMarkerPopup(content: HTMLElement): HTMLElement {
+function findMarkerPopover(content: HTMLElement): HTMLElement {
   const root = content.getRootNode() as ShadowRoot;
-  const popup = root.querySelector<HTMLElement>('[data-marker-popup]');
-  if (popup === null) {
-    throw new Error('marker popup was not rendered');
+  const popover = root.querySelector<HTMLElement>('[data-marker-popover]');
+  if (popover === null) {
+    throw new Error('marker popover was not rendered');
   }
-  return popup;
+  return popover;
 }
 
 function makeRect({
@@ -122,7 +122,7 @@ function makeRect({
   } as DOMRect;
 }
 
-function installMarkerPopupHeight(height: number): () => void {
+function installMarkerPopoverHeight(height: number): () => void {
   const original = Object.getOwnPropertyDescriptor(
     HTMLElement.prototype,
     'offsetHeight'
@@ -130,7 +130,7 @@ function installMarkerPopupHeight(height: number): () => void {
   Object.defineProperty(HTMLElement.prototype, 'offsetHeight', {
     configurable: true,
     get() {
-      return (this as HTMLElement).dataset.markerPopup !== undefined
+      return (this as HTMLElement).dataset.markerPopover !== undefined
         ? height
         : 0;
     },
@@ -220,8 +220,8 @@ function createDirectMarkerFixture({
 
   const rendererRef: { current?: MarkerRenderer } = {};
   const popoverManager = new PopoverManager({
-    hasActivePopover: () => rendererRef.current?.isPopupVisible() === true,
-    updateActivePopover: () => rendererRef.current?.updatePopupPosition(),
+    hasActivePopover: () => rendererRef.current?.isPopoverVisible() === true,
+    updateActivePopover: () => rendererRef.current?.updatePopoverPosition(),
   });
   popoverManager.setViewportElements(fileContainer, codeElement);
 
@@ -263,9 +263,9 @@ function createDirectMarkerFixture({
   };
 }
 
-describe('Editor marker popup placement', () => {
+describe('Editor marker popover placement', () => {
   // Default, unchanged by the viewport-aware flip: anchor below the marker.
-  test('places the popup below the marker by default', async () => {
+  test('places the popover below the marker by default', async () => {
     const MULTILINE = 'l0\nl1\nl2\nl3\nl4\nl5\nl6\nl7\nl8\nl9';
     const { cleanup, editor, content } = await createMarkerFixture(MULTILINE);
 
@@ -283,8 +283,8 @@ describe('Editor marker popup placement', () => {
       hoverMarkerLine(content, 5);
       await wait(350);
 
-      const popup = findMarkerPopup(content);
-      expect(popup.style.getPropertyValue('--popover-y-shift').trim()).toBe(
+      const popover = findMarkerPopover(content);
+      expect(popover.style.getPropertyValue('--popover-y-shift').trim()).toBe(
         '0px'
       );
     } finally {
@@ -294,8 +294,8 @@ describe('Editor marker popup placement', () => {
 
   // A marker within POPOVER_BOUNDARY_LINES of the document's last row hits
   // the no-viewport document-edge fallback (the only path reachable in this
-  // DOM harness), so the popup must flip above instead of below.
-  test('flips the popup above a marker near the document`s bottom edge', async () => {
+  // DOM harness), so the popover must flip above instead of below.
+  test('flips the popover above a marker near the document`s bottom edge', async () => {
     const MULTILINE = 'l0\nl1\nl2\nl3\nl4\nl5\nl6\nl7\nl8\nl9';
     const { cleanup, editor, content } = await createMarkerFixture(MULTILINE);
 
@@ -313,8 +313,8 @@ describe('Editor marker popup placement', () => {
       hoverMarkerLine(content, 10);
       await wait(350);
 
-      const popup = findMarkerPopup(content);
-      expect(popup.style.getPropertyValue('--popover-y-shift').trim()).toBe(
+      const popover = findMarkerPopover(content);
+      expect(popover.style.getPropertyValue('--popover-y-shift').trim()).toBe(
         '-100%'
       );
     } finally {
@@ -322,20 +322,20 @@ describe('Editor marker popup placement', () => {
     }
   });
 
-  test('re-flips an open marker popup when the scroll viewport changes', async () => {
+  test('re-flips an open marker popover when the scroll viewport changes', async () => {
     const { cleanup, content, scrollRoot } = createDirectMarkerFixture({
       initialScrollTop: 50,
       rowTop: 70,
       viewportHeight: 100,
     });
-    const restoreHeight = installMarkerPopupHeight(60);
+    const restoreHeight = installMarkerPopoverHeight(60);
 
     try {
       hoverMarkerLine(content, 5);
       await wait(350);
 
-      const popup = findMarkerPopup(content);
-      expect(popup.style.getPropertyValue('--popover-y-shift').trim()).toBe(
+      const popover = findMarkerPopover(content);
+      expect(popover.style.getPropertyValue('--popover-y-shift').trim()).toBe(
         '0px'
       );
 
@@ -343,7 +343,7 @@ describe('Editor marker popup placement', () => {
       scrollRoot.dispatchEvent(new Event('scroll'));
       await wait(0);
 
-      expect(popup.style.getPropertyValue('--popover-y-shift').trim()).toBe(
+      expect(popover.style.getPropertyValue('--popover-y-shift').trim()).toBe(
         '-100%'
       );
     } finally {
@@ -364,15 +364,17 @@ describe('Editor marker popup placement', () => {
       hoverMarkerLine(content, 5);
       await wait(350);
 
-      const popup = findMarkerPopup(content);
+      const popover = findMarkerPopover(content);
       expect(
-        popup.style.getPropertyValue('--popover-viewport-left').trim()
+        popover.style.getPropertyValue('--popover-viewport-left').trim()
       ).toBe('600px');
       expect(
-        popup.style.getPropertyValue('--popover-viewport-right').trim()
+        popover.style.getPropertyValue('--popover-viewport-right').trim()
       ).toBe('760px');
-      expect(popup.style.getPropertyValue('--popover-x').trim()).toBe('900px');
-      expect(popup.style.getPropertyValue('--gutter-width').trim()).toBe(
+      expect(popover.style.getPropertyValue('--popover-x').trim()).toBe(
+        '900px'
+      );
+      expect(popover.style.getPropertyValue('--gutter-width').trim()).toBe(
         '40px'
       );
     } finally {

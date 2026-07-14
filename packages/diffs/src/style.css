@@ -73,6 +73,7 @@
     --diffs-gap-style
     --diffs-scrollbar-gutter-override
     --diffs-tab-size
+    --diffs-popover-gap (edit mode: inset for edge-clamped popovers)
     */
 
     color-scheme: light dark;

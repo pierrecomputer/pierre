@@ -54,7 +54,7 @@ export const MARKER_DEMO_MARKERS = [
     message: 'Unresolved TODO comment',
     // Spans the whole comment: hover detection keys off the hovered token's
     // start column, and the line comment is a single token starting at char 0,
-    // so the marker must include char 0 for the popup to trigger.
+    // so the marker must include char 0 for the popover to trigger.
     start: { line: 0, character: 0 },
     end: { line: 0, character: 50 },
   },

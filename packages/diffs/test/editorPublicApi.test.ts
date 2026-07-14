@@ -90,15 +90,15 @@ function insertText(
   );
 }
 
-function markerPopup(content: HTMLElement): HTMLElement | null {
+function markerPopover(content: HTMLElement): HTMLElement | null {
   return (content.getRootNode() as ShadowRoot).querySelector(
-    '[data-marker-popup]'
+    '[data-marker-popover]'
   );
 }
 
 // Hovers the marker over `oneIndexedLine` by dispatching a mouseover whose
 // composedPath points at that row's first tokenized span, matching the marker
-// popup suite (jsdom does not report composedPath across the shadow boundary).
+// popover suite (jsdom does not report composedPath across the shadow boundary).
 function hoverMarkerLine(content: HTMLElement, oneIndexedLine: number): void {
   const lineElement = Array.from(
     content.querySelectorAll<HTMLElement>('[data-line]')
@@ -264,7 +264,7 @@ describe('Editor focus lifecycle', () => {
 });
 
 describe('Editor.setMarkers', () => {
-  test('clearing markers tears down the renderer and its popup', async () => {
+  test('clearing markers tears down the renderer and its popover', async () => {
     const { cleanup, editor, content } = await createEditorFixture(
       'l0\nl1\nl2\nl3\nl4\nl5'
     );
@@ -283,11 +283,11 @@ describe('Editor.setMarkers', () => {
       editor.setMarkers(markers);
       hoverMarkerLine(content, 4);
       await wait(350);
-      expect(markerPopup(content)).not.toBeNull();
+      expect(markerPopover(content)).not.toBeNull();
 
-      // Clearing markers disposes the renderer and removes its popup.
+      // Clearing markers disposes the renderer and removes its popover.
       editor.setMarkers([]);
-      expect(markerPopup(content)).toBeNull();
+      expect(markerPopover(content)).toBeNull();
     } finally {
       cleanup();
     }

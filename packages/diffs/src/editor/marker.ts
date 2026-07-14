@@ -9,9 +9,9 @@ import { selectionIntersects } from './selection';
 import type { TextDocument } from './textDocument';
 import { addEventListener, getLineNumberAttr, h } from './utils';
 
-const MARKER_POPUP_SHOW_DELAY_MS = 300;
-const MARKER_POPUP_HIDE_DELAY_MS = 100;
-const MARKER_POPUP_PLACEMENT_KEY = 'marker-popup';
+const MARKER_POPOVER_SHOW_DELAY_MS = 300;
+const MARKER_POPOVER_HIDE_DELAY_MS = 100;
+const MARKER_POPOVER_PLACEMENT_KEY = 'marker-popover';
 
 export type MarkerSeverity = 'error' | 'warning' | 'info' | 'hint';
 
@@ -37,14 +37,14 @@ export class MarkerRenderer {
   #markers: Marker[] = [];
   // Document line count, used only by the no-viewport document-edge fallback.
   #lineCount = 0;
-  #markerPopupElement?: HTMLElement;
-  #markerPopupEventDisposes?: (() => void)[];
+  #markerPopoverElement?: HTMLElement;
+  #markerPopoverEventDisposes?: (() => void)[];
   #markerEventDisposes?: (() => void)[];
-  #markerPopupShowTimeout?: ReturnType<typeof setTimeout>;
-  #markerPopupHideTimeout?: ReturnType<typeof setTimeout>;
-  #pendingMarkerPopupIndex?: number;
+  #markerPopoverShowTimeout?: ReturnType<typeof setTimeout>;
+  #markerPopoverHideTimeout?: ReturnType<typeof setTimeout>;
+  #pendingMarkerPopoverIndex?: number;
   #hoveredMarkerIndex?: number;
-  #isMarkerPopupHovered = false;
+  #isMarkerPopoverHovered = false;
 
   constructor(editor: MarkerRenderOptions) {
     this.#options = editor;
@@ -54,22 +54,26 @@ export class MarkerRenderer {
     return this.#markers;
   }
 
-  isPopupVisible(): boolean {
+  isPopoverVisible(): boolean {
     return this.#hoveredMarkerIndex !== undefined;
   }
 
-  updatePopupPosition(): void {
+  updatePopoverPosition(): void {
     const hoveredMarkerIndex = this.#hoveredMarkerIndex;
-    const popup = this.#markerPopupElement;
-    if (hoveredMarkerIndex === undefined || popup === undefined) {
+    const popover = this.#markerPopoverElement;
+    if (hoveredMarkerIndex === undefined || popover === undefined) {
       return;
     }
     const marker = this.#markers[hoveredMarkerIndex];
     if (marker === undefined) {
-      this.removePopup();
+      this.removePopover();
       return;
     }
-    this.#positionMarkerPopup(popup, marker.start.line, marker.start.character);
+    this.#positionMarkerPopover(
+      popover,
+      marker.start.line,
+      marker.start.character
+    );
   }
 
   setMarkers<LAnnotation>(
@@ -82,7 +86,7 @@ export class MarkerRenderer {
       start: textDocument.normalizePosition(marker.start),
       end: textDocument.normalizePosition(marker.end),
     }));
-    this.removePopup();
+    this.removePopover();
   }
 
   listenHover(contentEl: HTMLElement): void {
@@ -104,29 +108,29 @@ export class MarkerRenderer {
 
         const hoverMarkerIndex = this.#findHoveredMarkerIndex(target);
         if (hoverMarkerIndex !== undefined) {
-          this.#scheduleMarkerPopup(hoverMarkerIndex);
+          this.#scheduleMarkerPopover(hoverMarkerIndex);
         } else {
-          this.#cancelMarkerPopupShow();
-          this.#scheduleMarkerPopupHide();
+          this.#cancelMarkerPopoverShow();
+          this.#scheduleMarkerPopoverHide();
         }
       }),
       addEventListener(contentEl, 'mouseleave', () => {
-        this.#cancelMarkerPopupShow();
-        this.#scheduleMarkerPopupHide();
+        this.#cancelMarkerPopoverShow();
+        this.#scheduleMarkerPopoverHide();
       }),
     ];
   }
 
-  removePopup(): void {
-    this.#cancelMarkerPopupShow();
-    this.#cancelMarkerPopupHide();
-    this.#dismissMarkerPopup();
+  removePopover(): void {
+    this.#cancelMarkerPopoverShow();
+    this.#cancelMarkerPopoverHide();
+    this.#dismissMarkerPopover();
   }
 
   cleanup(): void {
     this.#markerEventDisposes?.forEach((dispose) => dispose());
     this.#markerEventDisposes = undefined;
-    this.removePopup();
+    this.removePopover();
     this.#markers = [];
   }
 
@@ -171,70 +175,70 @@ export class MarkerRenderer {
     return undefined;
   }
 
-  #cancelMarkerPopupShow(): void {
-    if (this.#markerPopupShowTimeout !== undefined) {
-      clearTimeout(this.#markerPopupShowTimeout);
-      this.#markerPopupShowTimeout = undefined;
+  #cancelMarkerPopoverShow(): void {
+    if (this.#markerPopoverShowTimeout !== undefined) {
+      clearTimeout(this.#markerPopoverShowTimeout);
+      this.#markerPopoverShowTimeout = undefined;
     }
-    this.#pendingMarkerPopupIndex = undefined;
+    this.#pendingMarkerPopoverIndex = undefined;
   }
 
-  #cancelMarkerPopupHide(): void {
-    if (this.#markerPopupHideTimeout !== undefined) {
-      clearTimeout(this.#markerPopupHideTimeout);
-      this.#markerPopupHideTimeout = undefined;
+  #cancelMarkerPopoverHide(): void {
+    if (this.#markerPopoverHideTimeout !== undefined) {
+      clearTimeout(this.#markerPopoverHideTimeout);
+      this.#markerPopoverHideTimeout = undefined;
     }
   }
 
-  #scheduleMarkerPopup(markerIndex: number): void {
+  #scheduleMarkerPopover(markerIndex: number): void {
     if (
       markerIndex === this.#hoveredMarkerIndex ||
-      markerIndex === this.#pendingMarkerPopupIndex
+      markerIndex === this.#pendingMarkerPopoverIndex
     ) {
-      this.#cancelMarkerPopupHide();
+      this.#cancelMarkerPopoverHide();
       return;
     }
 
-    this.#cancelMarkerPopupShow();
-    this.#cancelMarkerPopupHide();
-    if (this.#markerPopupElement !== undefined) {
-      this.#renderMarkerPopup(markerIndex);
+    this.#cancelMarkerPopoverShow();
+    this.#cancelMarkerPopoverHide();
+    if (this.#markerPopoverElement !== undefined) {
+      this.#renderMarkerPopover(markerIndex);
       return;
     }
 
-    this.#pendingMarkerPopupIndex = markerIndex;
-    this.#markerPopupShowTimeout = setTimeout(() => {
-      this.#markerPopupShowTimeout = undefined;
-      this.#pendingMarkerPopupIndex = undefined;
-      this.#renderMarkerPopup(markerIndex);
-    }, MARKER_POPUP_SHOW_DELAY_MS);
+    this.#pendingMarkerPopoverIndex = markerIndex;
+    this.#markerPopoverShowTimeout = setTimeout(() => {
+      this.#markerPopoverShowTimeout = undefined;
+      this.#pendingMarkerPopoverIndex = undefined;
+      this.#renderMarkerPopover(markerIndex);
+    }, MARKER_POPOVER_SHOW_DELAY_MS);
   }
 
-  #scheduleMarkerPopupHide(): void {
-    if (this.#isMarkerPopupHovered) {
+  #scheduleMarkerPopoverHide(): void {
+    if (this.#isMarkerPopoverHovered) {
       return;
     }
 
-    this.#cancelMarkerPopupHide();
-    this.#markerPopupHideTimeout = setTimeout(() => {
-      this.#markerPopupHideTimeout = undefined;
-      if (!this.#isMarkerPopupHovered) {
-        this.removePopup();
+    this.#cancelMarkerPopoverHide();
+    this.#markerPopoverHideTimeout = setTimeout(() => {
+      this.#markerPopoverHideTimeout = undefined;
+      if (!this.#isMarkerPopoverHovered) {
+        this.removePopover();
       }
-    }, MARKER_POPUP_HIDE_DELAY_MS);
+    }, MARKER_POPOVER_HIDE_DELAY_MS);
   }
 
-  // Positions the popup in overlay coordinate space (see [data-marker-popup]
+  // Positions the popover in overlay coordinate space (see [data-marker-popover]
   // in editor.css). When `placeAbove` is true, `y` is the top edge of the
-  // marker's row and the popup is shifted up by its own height.
-  #setMarkerPopupPosition(
-    popup: HTMLElement,
+  // marker's row and the popover is shifted up by its own height.
+  #setMarkerPopoverPosition(
+    popover: HTMLElement,
     x: number,
     y: number,
     placeAbove: boolean,
     viewport = this.#options.popoverManager.getPlacementBounds()
   ): void {
-    setPopoverPositionStyles(popup, {
+    setPopoverPositionStyles(popover, {
       gutterWidth: this.#options.getGutterWidth(),
       placeAbove,
       viewport,
@@ -243,12 +247,12 @@ export class MarkerRenderer {
     });
   }
 
-  // Positions the popup for a marker at `(line, character)`: prefers below
+  // Positions the popover for a marker at `(line, character)`: prefers below
   // (the default), flipping above when below would be clipped by the visible
-  // scrollport. Must run after the popup's content is final, since it reads
-  // the popup's rendered height to decide whether either side fits.
-  #positionMarkerPopup(
-    popup: HTMLElement,
+  // scrollport. Must run after the popover's content is final, since it reads
+  // the popover's rendered height to decide whether either side fits.
+  #positionMarkerPopover(
+    popover: HTMLElement,
     line: number,
     character: number
   ): void {
@@ -256,7 +260,7 @@ export class MarkerRenderer {
     const [left, wrapLine] = getCharX(line, character);
     const lineHeight = getLineHeight();
     const rowTop = getLineY(line) + wrapLine * lineHeight;
-    const popoverHeight = popup.offsetHeight;
+    const popoverHeight = popover.offsetHeight;
 
     const preferred: PopoverPlacementBounds = {
       top: rowTop + lineHeight,
@@ -275,11 +279,11 @@ export class MarkerRenderer {
         viewport,
         popoverHeight,
         atDocumentEdge,
-        placementKey: MARKER_POPUP_PLACEMENT_KEY,
+        placementKey: MARKER_POPOVER_PLACEMENT_KEY,
       }) === 'fallback';
 
-    this.#setMarkerPopupPosition(
-      popup,
+    this.#setMarkerPopoverPosition(
+      popover,
       left,
       placeAbove ? rowTop : rowTop + lineHeight,
       placeAbove,
@@ -287,17 +291,17 @@ export class MarkerRenderer {
     );
   }
 
-  #dismissMarkerPopup(): void {
-    this.#markerPopupEventDisposes?.forEach((dispose) => dispose());
-    this.#markerPopupEventDisposes = undefined;
-    this.#markerPopupElement?.remove();
-    this.#markerPopupElement = undefined;
+  #dismissMarkerPopover(): void {
+    this.#markerPopoverEventDisposes?.forEach((dispose) => dispose());
+    this.#markerPopoverEventDisposes = undefined;
+    this.#markerPopoverElement?.remove();
+    this.#markerPopoverElement = undefined;
     this.#hoveredMarkerIndex = undefined;
-    this.#isMarkerPopupHovered = false;
-    this.#options.popoverManager.resetPlacement(MARKER_POPUP_PLACEMENT_KEY);
+    this.#isMarkerPopoverHovered = false;
+    this.#options.popoverManager.resetPlacement(MARKER_POPOVER_PLACEMENT_KEY);
   }
 
-  #renderMarkerPopup(hoveredMarkerIndex: number): void {
+  #renderMarkerPopover(hoveredMarkerIndex: number): void {
     if (hoveredMarkerIndex === this.#hoveredMarkerIndex) {
       return;
     }
@@ -309,12 +313,12 @@ export class MarkerRenderer {
 
     const { start, message, severity } = this.#markers[hoveredMarkerIndex];
     const { line, character } = start;
-    const popup = this.#markerPopupElement;
-    this.#options.popoverManager.resetPlacement(MARKER_POPUP_PLACEMENT_KEY);
+    const popover = this.#markerPopoverElement;
+    this.#options.popoverManager.resetPlacement(MARKER_POPOVER_PLACEMENT_KEY);
 
-    if (popup !== undefined) {
-      setMarkerPopupSeverity(popup, severity);
-      const content = popup.firstElementChild as HTMLElement | null;
+    if (popover !== undefined) {
+      setMarkerPopoverSeverity(popover, severity);
+      const content = popover.firstElementChild as HTMLElement | null;
       if (content?.dataset.markerMessage !== undefined) {
         if (typeof message === 'string') {
           content.textContent = message;
@@ -325,18 +329,18 @@ export class MarkerRenderer {
         }
       }
       // Position after updating content: a different message size changes
-      // the offsetHeight #positionMarkerPopup reads to decide placement.
-      this.#positionMarkerPopup(popup, line, character);
+      // the offsetHeight #positionMarkerPopover reads to decide placement.
+      this.#positionMarkerPopover(popover, line, character);
       this.#hoveredMarkerIndex = hoveredMarkerIndex;
       return;
     }
 
-    this.#markerPopupElement = h(
+    this.#markerPopoverElement = h(
       'div',
       {
         dataset: {
           editorWidget: '',
-          markerPopup: '',
+          markerPopover: '',
           [markerSeverityDatasetKey(severity)]: '',
         },
         children: [
@@ -352,16 +356,16 @@ export class MarkerRenderer {
       },
       overlayElement
     );
-    this.#positionMarkerPopup(this.#markerPopupElement, line, character);
+    this.#positionMarkerPopover(this.#markerPopoverElement, line, character);
     this.#hoveredMarkerIndex = hoveredMarkerIndex;
-    this.#markerPopupEventDisposes = [
-      addEventListener(this.#markerPopupElement, 'mouseenter', () => {
-        this.#isMarkerPopupHovered = true;
-        this.#cancelMarkerPopupHide();
+    this.#markerPopoverEventDisposes = [
+      addEventListener(this.#markerPopoverElement, 'mouseenter', () => {
+        this.#isMarkerPopoverHovered = true;
+        this.#cancelMarkerPopoverHide();
       }),
-      addEventListener(this.#markerPopupElement, 'mouseleave', () => {
-        this.#isMarkerPopupHovered = false;
-        this.#scheduleMarkerPopupHide();
+      addEventListener(this.#markerPopoverElement, 'mouseleave', () => {
+        this.#isMarkerPopoverHovered = false;
+        this.#scheduleMarkerPopoverHide();
       }),
     ];
   }
@@ -374,18 +378,18 @@ const MARKER_SEVERITIES: readonly MarkerSeverity[] = [
   'hint',
 ];
 
-// Marks the popup with data-marker-<severity> (the same boolean attribute the
+// Marks the popover with data-marker-<severity> (the same boolean attribute the
 // squiggle range element uses) so the CSS severity palette can target both with
-// a single selector. The popup element is reused across hovers, so any
+// a single selector. The popover element is reused across hovers, so any
 // previously applied severity attribute is cleared first.
-function setMarkerPopupSeverity(
-  popup: HTMLElement,
+function setMarkerPopoverSeverity(
+  popover: HTMLElement,
   severity: MarkerSeverity
 ): void {
   for (const candidate of MARKER_SEVERITIES) {
-    delete popup.dataset[markerSeverityDatasetKey(candidate)];
+    delete popover.dataset[markerSeverityDatasetKey(candidate)];
   }
-  popup.dataset[markerSeverityDatasetKey(severity)] = '';
+  popover.dataset[markerSeverityDatasetKey(severity)] = '';
 }
 
 export function markerSeverityDatasetKey(severity: MarkerSeverity): string {

@@ -76,9 +76,9 @@ export function EditPage({
                 <>
                   Use <code>editor.setMarkers()</code> to inject inline context
                   into your code for linter, formatting, and more. Includes
-                  support for severity-aware underlines and hover popups. Hover
-                  over markers (shown with wavy, colored underlines) in the
-                  example below.
+                  support for severity-aware underlines and hover popovers.
+                  Hover over markers (shown with wavy, colored underlines) in
+                  the example below.
                 </>
               }
             />
