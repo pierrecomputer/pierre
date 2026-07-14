@@ -438,6 +438,89 @@ describe('TextDocument', () => {
     expect(d.getText()).toBe('a\r\nB\r\nc');
   });
 
+  test('reports the added line when inserting inside CRLF', () => {
+    const d = doc('a\r\nb');
+    const change = d.applyResolvedEdits([{ start: 2, end: 2, text: 'X' }]);
+
+    expect(d.getText()).toBe('a\rX\nb');
+    expect(change).toEqual({
+      startLine: 0,
+      startCharacter: 2,
+      endCharacter: 2,
+      endLine: 1,
+      endedAtDocumentEnd: false,
+      previousLineCount: 2,
+      lineCount: 3,
+      lineDelta: 1,
+      changedLineRanges: [[0, 1]],
+      changedLineChanges: [[0, 1, 1, 2, 2, false]],
+    });
+  });
+
+  test('keeps line metadata stable when deleting LF from CRLF', () => {
+    const d = doc('a\r\nb');
+    const change = d.applyResolvedEdits([{ start: 2, end: 3, text: '' }]);
+
+    expect(d.getText()).toBe('a\rb');
+    expect(change).toEqual({
+      startLine: 0,
+      startCharacter: 2,
+      endCharacter: 0,
+      endLine: 1,
+      endedAtDocumentEnd: false,
+      previousLineCount: 2,
+      lineCount: 2,
+      lineDelta: 0,
+      changedLineRanges: [[0, 1]],
+      changedLineChanges: [[0, 1, 0, 2, 0, false]],
+    });
+  });
+
+  test('reports no line delta when separate appends form CRLF', () => {
+    const d = doc('');
+    d.applyResolvedEdits([{ start: 0, end: 0, text: '\r' }]);
+    const change = d.applyResolvedEdits([{ start: 1, end: 1, text: '\n' }]);
+
+    expect(d.getText()).toBe('\r\n');
+    expect(change).toEqual({
+      startLine: 1,
+      startCharacter: 0,
+      endCharacter: 0,
+      endLine: 1,
+      endedAtDocumentEnd: true,
+      previousLineCount: 2,
+      lineCount: 2,
+      lineDelta: 0,
+      changedLineRanges: [[1, 1]],
+      changedLineChanges: [[1, 1, 0, 0, 0, true]],
+    });
+  });
+
+  test('reports one line when same-offset edits form CRLF', () => {
+    const d = doc('x');
+    const change = d.applyResolvedEdits([
+      { start: 0, end: 0, text: '\r' },
+      { start: 0, end: 0, text: '\n' },
+    ]);
+
+    expect(d.getText()).toBe('\r\nx');
+    expect(change).toEqual({
+      startLine: 0,
+      startCharacter: 0,
+      endCharacter: 0,
+      endLine: 1,
+      endedAtDocumentEnd: false,
+      previousLineCount: 1,
+      lineCount: 2,
+      lineDelta: 1,
+      changedLineRanges: [[0, 1]],
+      changedLineChanges: [
+        [0, 1, 1, 0, 0, false],
+        [1, 1, 0, 0, 0, false],
+      ],
+    });
+  });
+
   test('applyEdits reports inserted lines for a lone CR line ending', () => {
     const d = doc('a');
     const change = d.applyEdits([

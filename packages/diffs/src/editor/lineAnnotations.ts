@@ -12,6 +12,8 @@ interface LineAnnotationChange {
   readonly lineDelta: number;
 }
 
+const annotationFrames = new WeakMap<HTMLElement, number>();
+
 export function applyDocumentChangeToLineAnnotations<T>(
   change: TextDocumentChange,
   lineAnnotations: DiffLineAnnotation<T>[]
@@ -228,6 +230,7 @@ export function renderLineAnnotations<LAnnotation>(
   contentEl: HTMLElement,
   gutterEl?: HTMLElement
 ): void {
+  cancelLineAnnotationRender(contentEl);
   const additionAnnotations = new Map<number, string[]>();
   const deletionAnnotations = new Map<number, string[]>();
   for (const annotation of lineAnnotations) {
@@ -284,14 +287,25 @@ export function renderLineAnnotations<LAnnotation>(
     leftGutterElement
   );
 
-  requestAnimationFrame(() => {
+  const frame = requestAnimationFrame(() => {
+    if (annotationFrames.get(contentEl) !== frame) {
+      return;
+    }
+    annotationFrames.delete(contentEl);
     syncPairedLineAnnotationHeights(
-      additionAnnotations,
-      deletionAnnotations,
       additionsAnnotationElements,
       deletionsAnnotationElements
     );
   });
+  annotationFrames.set(contentEl, frame);
+}
+
+export function cancelLineAnnotationRender(contentEl: HTMLElement): void {
+  const frame = annotationFrames.get(contentEl);
+  if (frame !== undefined) {
+    cancelAnimationFrame(frame);
+    annotationFrames.delete(contentEl);
+  }
 }
 
 function cleanLineAnnotationElements(
@@ -364,40 +378,24 @@ function createLineAnnotationElements(
 }
 
 function syncPairedLineAnnotationHeights(
-  additionAnnotations: Map<number, string[]>,
-  deletionAnnotations: Map<number, string[]>,
   additionAnnotationElements: Map<number, HTMLElement>,
   deletionAnnotationElements: Map<number, HTMLElement>
 ): void {
-  const offsetHeights = new Map<number, number>();
-  for (const [lineNumber, annotations] of additionAnnotations.entries()) {
-    const annotationElement = deletionAnnotationElements.get(lineNumber);
-    if (annotations.length === 0 && annotationElement !== undefined) {
-      const height = measureAnnotationContentHeight(annotationElement);
-      if (height > 0) {
-        offsetHeights.set(lineNumber, height);
-      }
+  for (const [lineNumber, additionElement] of additionAnnotationElements) {
+    const deletionElement = deletionAnnotationElements.get(lineNumber);
+    if (deletionElement === undefined) {
+      continue;
+    }
+    const additionHeight = measureAnnotationContentHeight(additionElement);
+    const deletionHeight = measureAnnotationContentHeight(deletionElement);
+    const height = Math.max(additionHeight, deletionHeight);
+    if (additionHeight < height) {
+      setAnnotationMinHeight(additionElement, height);
+    }
+    if (deletionHeight < height) {
+      setAnnotationMinHeight(deletionElement, height);
     }
   }
-  for (const [lineNumber, annotations] of deletionAnnotations.entries()) {
-    const annotationElement = additionAnnotationElements.get(lineNumber);
-    if (annotations.length === 0 && annotationElement !== undefined) {
-      const height = measureAnnotationContentHeight(annotationElement);
-      if (height > 0) {
-        offsetHeights.set(lineNumber, height);
-      }
-    }
-  }
-  applyLineAnnotationMinHeights(
-    additionAnnotations,
-    additionAnnotationElements,
-    offsetHeights
-  );
-  applyLineAnnotationMinHeights(
-    deletionAnnotations,
-    deletionAnnotationElements,
-    offsetHeights
-  );
 }
 
 function measureAnnotationContentHeight(lineAnnotationEl: HTMLElement): number {
@@ -408,19 +406,6 @@ function measureAnnotationContentHeight(lineAnnotationEl: HTMLElement): number {
   return content.getBoundingClientRect().height;
 }
 
-function applyLineAnnotationMinHeights(
-  lineAnnotations: Map<number, string[]>,
-  annotationElements: Map<number, HTMLElement>,
-  offsetHeights: Map<number, number>
-): void {
-  for (const [lineNumber, annotationElement] of annotationElements.entries()) {
-    const annotations = lineAnnotations.get(lineNumber);
-    const offsetHeight = offsetHeights.get(lineNumber);
-    if (annotations?.length === 0 && offsetHeight !== undefined) {
-      annotationElement.style.setProperty(
-        '--diffs-annotation-min-height',
-        `${offsetHeight}px`
-      );
-    }
-  }
+function setAnnotationMinHeight(element: HTMLElement, height: number): void {
+  element.style.setProperty('--diffs-annotation-min-height', `${height}px`);
 }

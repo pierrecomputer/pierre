@@ -12,11 +12,7 @@ import type {
   TextDocument,
   TextDocumentChange,
 } from './textDocument';
-import {
-  createSegmenter,
-  endsWithLineBreak,
-  getGraphemeSegmenter,
-} from './utils';
+import { getGraphemeSegmenter, getWordSegmenter } from './utils';
 
 export const DirectionBackward = -1;
 export const DirectionNone = 0;
@@ -155,21 +151,31 @@ export type ResolveRenderableLine = (
   direction: 'up' | 'down'
 ) => number | undefined;
 
+type CursorMove =
+  | 'textStart'
+  | 'start'
+  | 'end'
+  | 'up'
+  | 'down'
+  | 'left'
+  | 'right'
+  | 'wordLeft'
+  | 'wordRight';
+
 /**
  * Maps the cursor move to all selections.
  */
 export function mapCursorMove(
   textDocument: TextDocument<unknown>,
   selections: EditorSelection[],
-  shortcut: 'textStart' | 'start' | 'end' | 'up' | 'down' | 'left' | 'right',
+  shortcut: CursorMove,
   options: CursorMoveOptions = {}
 ): EditorSelection[] {
   const lineCount = textDocument.lineCount;
   return selections.map((selection) => {
-    let { line, character } =
-      shortcut === 'up' || shortcut === 'left'
-        ? selection.start
-        : selection.end;
+    const movesBackward =
+      shortcut === 'up' || shortcut === 'left' || shortcut === 'wordLeft';
+    let { line, character } = movesBackward ? selection.start : selection.end;
     if (
       shortcut === 'textStart' ||
       shortcut === 'start' ||
@@ -221,7 +227,39 @@ export function mapCursorMove(
     } else if (isCollapsedSelection(selection)) {
       const lineLength = textDocument.getLineLength(line);
       character = Math.min(character, lineLength);
-      if (shortcut === 'left') {
+      if (shortcut === 'wordLeft' || shortcut === 'wordRight') {
+        if (character > 0 && shortcut === 'wordLeft') {
+          character = getWordBoundary(
+            textDocument.getLineText(line),
+            character,
+            false
+          );
+        } else if (character < lineLength && shortcut === 'wordRight') {
+          character = getWordBoundary(
+            textDocument.getLineText(line),
+            character,
+            true
+          );
+        } else {
+          const direction = shortcut === 'wordLeft' ? 'up' : 'down';
+          const adjacentLine = line + (direction === 'up' ? -1 : 1);
+          const targetLine =
+            adjacentLine < 0 || adjacentLine >= lineCount
+              ? undefined
+              : options.resolveRenderableLine == null
+                ? adjacentLine
+                : options.resolveRenderableLine(adjacentLine, direction);
+          if (
+            targetLine !== undefined &&
+            targetLine >= 0 &&
+            targetLine < lineCount
+          ) {
+            line = targetLine;
+            character =
+              direction === 'up' ? textDocument.getLineLength(line) : 0;
+          }
+        }
+      } else if (shortcut === 'left') {
         if (character > 0) {
           // Step left by a whole grapheme so the caret never lands inside an
           // emoji or other multi-code-unit character.
@@ -399,7 +437,7 @@ function getSoftLineInfoAtIndex(
 export function mapSelectionShift(
   textDocument: TextDocument<unknown>,
   selections: EditorSelection[],
-  shortcut: 'textStart' | 'start' | 'end' | 'up' | 'down' | 'left' | 'right',
+  shortcut: CursorMove,
   options: CursorMoveOptions = {}
 ): EditorSelection[] {
   return selections.map((selection) => {
@@ -421,6 +459,57 @@ export function mapSelectionShift(
     );
     return createSelectionFrom(selection, movedFocusSelection);
   });
+}
+
+function getWordBoundary(
+  lineText: string,
+  character: number,
+  forward: boolean
+): number {
+  const segmenter = getWordSegmenter();
+  if (segmenter !== undefined) {
+    let boundary = forward ? lineText.length : 0;
+    for (const segment of segmenter.segment(lineText)) {
+      if (segment.isWordLike !== true) {
+        continue;
+      }
+      const start = segment.index;
+      const end = start + segment.segment.length;
+      if (forward) {
+        if (end > character) {
+          return end;
+        }
+      } else if (start < character) {
+        boundary = start;
+        if (end >= character) {
+          break;
+        }
+      } else {
+        break;
+      }
+    }
+    return boundary;
+  }
+
+  const words = lineText.matchAll(/[\p{Alphabetic}\p{Number}_]+/gu);
+  let boundary = forward ? lineText.length : 0;
+  for (const word of words) {
+    const start = word.index;
+    const end = start + word[0].length;
+    if (forward) {
+      if (end > character) {
+        return end;
+      }
+    } else if (start < character) {
+      boundary = start;
+      if (end >= character) {
+        break;
+      }
+    } else {
+      break;
+    }
+  }
+  return boundary;
 }
 
 /**
@@ -734,24 +823,20 @@ export function applyTextReplaceToSelections<LAnnotation>(
     if (!hasEffect) {
       return { nextSelections: selections };
     }
+    ordered.sort((a, b) => a.end - b.end);
+    let editIndex = 0;
+    let delta = 0;
     for (const entry of ordered) {
       const caret = entry.end;
-      let delta = 0;
-      let next = caret;
-      for (const edit of edits) {
-        if (caret <= edit.start) {
-          break;
-        }
-        if (caret >= edit.end) {
-          delta -= edit.end - edit.start;
-          continue;
-        }
-        next = edit.start + delta;
-        break;
+      while (editIndex < edits.length && caret >= edits[editIndex].end) {
+        const edit = edits[editIndex++];
+        delta -= edit.end - edit.start;
       }
-      if (next === caret) {
-        next += delta;
-      }
+      const edit = edits[editIndex];
+      const next =
+        edit !== undefined && caret > edit.start
+          ? edit.start + delta
+          : caret + delta;
       nextSelectionOffsetPairs[entry.index] = [next, next];
     }
   } else {
@@ -1330,32 +1415,6 @@ export function createSelectionFromAnchorAndFocusOffsets(
 }
 
 /**
- * Maps a single offset from the pre-edit document into the post-edit document.
- * `edits` are resolved edits in pre-edit offsets, sorted ascending and
- * non-overlapping. An offset at or after an edit's start shifts to the end of
- * that edit's replacement (right gravity), so text inserted at the caret pushes
- * the caret past it; an offset strictly before an edit is only shifted by the
- * net length change of the edits that precede it.
- */
-function remapOffsetThroughEdits(
-  offset: number,
-  edits: readonly ResolvedTextEdit[]
-): number {
-  let delta = 0;
-  for (const edit of edits) {
-    if (offset < edit.start) {
-      break;
-    }
-    if (offset >= edit.end) {
-      delta += edit.text.length - (edit.end - edit.start);
-    } else {
-      return edit.start + delta + edit.text.length;
-    }
-  }
-  return offset + delta;
-}
-
-/**
  * Re-anchors selections after a batch of text edits has been applied, so the
  * caret keeps pointing at the same logical location in the changed buffer.
  *
@@ -1370,10 +1429,38 @@ export function remapSelectionsAfterEdits(
   selectionOffsets: ReadonlyArray<readonly [number, number]>,
   edits: readonly ResolvedTextEdit[]
 ): EditorSelection[] {
+  const editDeltas = new Int32Array(edits.length + 1);
+  for (let index = 0; index < edits.length; index++) {
+    const edit = edits[index];
+    editDeltas[index + 1] =
+      editDeltas[index] + edit.text.length - (edit.end - edit.start);
+  }
+  // Prefix deltas plus a binary search avoid rescanning every edit for every
+  // selection edge when a programmatic batch updates many carets.
+  const remapOffset = (offset: number): number => {
+    let low = 0;
+    let high = edits.length;
+    while (low < high) {
+      const middle = (low + high) >>> 1;
+      if (edits[middle].start <= offset) {
+        low = middle + 1;
+      } else {
+        high = middle;
+      }
+    }
+    const index = low - 1;
+    if (index < 0) {
+      return offset;
+    }
+    const edit = edits[index];
+    return offset < edit.end
+      ? edit.start + editDeltas[index] + edit.text.length
+      : offset + editDeltas[index + 1];
+  };
   return selections.map((selection, index) => {
     const [startOffset, endOffset] = selectionOffsets[index];
-    const nextStart = remapOffsetThroughEdits(startOffset, edits);
-    const nextEnd = remapOffsetThroughEdits(endOffset, edits);
+    const nextStart = remapOffset(startOffset);
+    const nextEnd = remapOffset(endOffset);
     const anchorOffset =
       selection.direction === DirectionBackward ? nextEnd : nextStart;
     const focusOffset =
@@ -1618,7 +1705,7 @@ export function shiftSelectionLines(
 /**
  * Finds the next matching word and updates the selections.
  */
-export function findNexMatch(
+export function findNextMatch(
   textDocument: TextDocument<unknown>,
   selections: EditorSelection[]
 ): EditorSelection[] | undefined {
@@ -1776,7 +1863,7 @@ export function getSelectionText(
       }
       continue;
     }
-    if (result.length > 0 && !endsWithLineBreak(result)) {
+    if (result.length > 0 && !result.endsWith('\n') && !result.endsWith('\r')) {
       result += eol;
     }
     result += textDocument.getTextSlice(region.start, region.end);
@@ -2018,7 +2105,7 @@ function expandCollapsedLineWord(
   lineText: string,
   character: number
 ): { start: number; end: number } | undefined {
-  const segmenter = createSegmenter({ granularity: 'word' });
+  const segmenter = getWordSegmenter();
   if (segmenter !== undefined) {
     for (const seg of segmenter.segment(lineText)) {
       if (seg.isWordLike !== true) {
@@ -2071,9 +2158,13 @@ function resolveDeleteWordBackwardRange(
   const lineText = textDocument.getLineText(line);
   const graphemeStarts = getLineGraphemeStarts(lineText);
   let pos = head;
+  let clusterIndex = graphemeStarts.length - 1;
+  while (clusterIndex >= 0 && graphemeStarts[clusterIndex] >= head) {
+    clusterIndex--;
+  }
   let match: number | undefined;
   while (pos > 0) {
-    const prev = findClusterBreak(lineText, pos, false, graphemeStarts);
+    const prev = clusterIndex >= 0 ? graphemeStarts[clusterIndex--] : 0;
     const nextChar = lineText.slice(prev, pos);
     const nextMatch = !/\S/.test(nextChar)
       ? 0

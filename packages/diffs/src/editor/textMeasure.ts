@@ -5,6 +5,7 @@ import { getGraphemeSegmenter, h, round } from './utils';
 // so it stays small for ordinary code, but capping it prevents unbounded growth
 // on emoji-heavy documents. Past the cap the oldest entry is evicted.
 const TEXT_WIDTH_CACHE_LIMIT = 4096;
+const TEXT_WIDTH_CACHE_MAX_TEXT_LENGTH = 256;
 
 const COMBINING_MARK_PATTERN = /\p{Mark}/u;
 
@@ -27,15 +28,7 @@ export class Metrics {
 
   /** initialize the metrics */
   init(root: HTMLElement): void {
-    if (
-      this.#root === root &&
-      this.#canvasCtx !== undefined &&
-      this.ch !== -1
-    ) {
-      // already initialized
-      return;
-    }
-
+    const rootChanged = this.#root !== root;
     this.#root = root;
     this.#canvasCtx ??=
       document.createElement('canvas').getContext('2d') ?? undefined;
@@ -44,24 +37,31 @@ export class Metrics {
     }
 
     const parent = root.parentElement;
-    if (parent !== null) {
-      const { paddingTop } = getComputedStyle(parent);
-      if (paddingTop.endsWith('px')) {
-        this.paddingTop = parseFloat(paddingTop.slice(0, -2));
-      }
-    }
+    const paddingTop =
+      parent === null ? '' : getComputedStyle(parent).paddingTop;
+    this.paddingTop = paddingTop.endsWith('px') ? parseFloat(paddingTop) : 0;
 
-    const { fontSize, fontFamily, tabSize, lineHeight } =
-      getComputedStyle(root);
+    const {
+      fontFamily,
+      fontSize,
+      fontStretch,
+      fontStyle,
+      fontWeight,
+      lineHeight,
+      tabSize,
+    } = getComputedStyle(root);
     if (lineHeight.endsWith('px')) {
-      this.lineHeight = parseFloat(lineHeight.slice(0, -2));
+      this.lineHeight = parseFloat(lineHeight);
     } else if (fontSize.endsWith('px')) {
-      this.lineHeight = round(
-        parseFloat(fontSize.slice(0, -2)) * parseFloat(lineHeight)
-      );
+      const multiplier = parseFloat(lineHeight);
+      this.lineHeight = Number.isNaN(multiplier)
+        ? 20
+        : round(parseFloat(fontSize) * multiplier);
+    } else {
+      this.lineHeight = 20;
     }
-    const font = fontSize + ' ' + fontFamily;
-    if (this.#font !== font || this.ch === -1) {
+    const font = `${fontStyle === '' ? 'normal' : fontStyle} ${fontWeight === '' ? 'normal' : fontWeight} ${fontStretch === '' ? 'normal' : fontStretch} ${fontSize} ${fontFamily}`;
+    if (rootChanged || this.#font !== font || this.ch === -1) {
       this.#font = font;
       this.#canvasCtx.font = font;
       this.ch = this.canvasMeasureTextWidth('0');
@@ -69,9 +69,18 @@ export class Metrics {
       this.clearTextWidthCache();
     }
     const nextTabSize = parseInt(tabSize, 10);
-    if (!Number.isNaN(nextTabSize)) {
-      this.tabSize = nextTabSize;
-    }
+    this.tabSize = Number.isNaN(nextTabSize) ? 2 : Math.max(0, nextTabSize);
+  }
+
+  /** Release DOM and cached measurements held by this instance. */
+  cleanUp(): void {
+    this.#root = undefined;
+    this.#font = undefined;
+    this.#textWidthCache.clear();
+    this.ch = -1;
+    this.tabSize = 2;
+    this.lineHeight = 20;
+    this.paddingTop = 0;
   }
 
   /**
@@ -166,8 +175,8 @@ export class Metrics {
     if (this.#root === undefined) {
       throw new Error('Metrics not initialized');
     }
-    const cacheKey = text + '|' + this.#font;
-    const cached = this.#textWidthCache.get(cacheKey);
+    const shouldCache = text.length <= TEXT_WIDTH_CACHE_MAX_TEXT_LENGTH;
+    const cached = shouldCache ? this.#textWidthCache.get(text) : undefined;
     if (cached !== undefined) {
       return cached;
     }
@@ -196,13 +205,15 @@ export class Metrics {
     } finally {
       measureEl.remove();
     }
-    if (this.#textWidthCache.size >= TEXT_WIDTH_CACHE_LIMIT) {
-      const oldestKey = this.#textWidthCache.keys().next().value;
-      if (oldestKey !== undefined) {
-        this.#textWidthCache.delete(oldestKey);
+    if (shouldCache) {
+      if (this.#textWidthCache.size >= TEXT_WIDTH_CACHE_LIMIT) {
+        const oldestKey = this.#textWidthCache.keys().next().value;
+        if (oldestKey !== undefined) {
+          this.#textWidthCache.delete(oldestKey);
+        }
       }
+      this.#textWidthCache.set(text, width);
     }
-    this.#textWidthCache.set(cacheKey, width);
     return width;
   }
 
@@ -320,12 +331,19 @@ export function getExpandedAsciiTextColumns(
   tabSize: number
 ): number {
   let columns = 0;
+  const hasTabStops = tabSize > 0;
   for (let i = 0; i < text.length; i++) {
     const code = text.charCodeAt(i);
     if (code > 127) {
       return -1;
     }
-    columns += code === /* '\t' */ 9 ? tabSize - (columns % tabSize) : 1;
+    if (code === /* '\t' */ 9) {
+      if (hasTabStops) {
+        columns += tabSize - (columns % tabSize);
+      }
+    } else {
+      columns++;
+    }
   }
   return columns;
 }

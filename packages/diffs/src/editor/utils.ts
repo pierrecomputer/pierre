@@ -68,7 +68,7 @@ export function addEventListener(
   options?: AddEventListenerOptions
 ) {
   el.addEventListener(event, listener, options);
-  return () => el.removeEventListener(event, listener);
+  return () => el.removeEventListener(event, listener, options);
 }
 
 export function getLineNumberAttr(
@@ -97,33 +97,13 @@ export function clampDomOffset(node: Node, offset: number): number {
   return 0;
 }
 
-export function extend<T extends object>(obj: T, attrs: Partial<T>): T {
-  return Object.assign(obj, attrs);
-}
-
-// oxlint-disable-next-line typescript/no-explicit-any
-export function debounce<T extends (...args: any[]) => void>(
-  func: T,
-  wait: number
-): (...args: Parameters<T>) => void {
-  let timeout: ReturnType<typeof setTimeout>;
-  return function (this: ThisType<T>, ...args: Parameters<T>) {
-    clearTimeout(timeout);
-    timeout = setTimeout(() => func.apply(this, args), wait);
-  };
-}
-
 export function round(value: number, precision: number = 1000): number {
   return Math.round(value * precision) / precision;
 }
 
-export function endsWithLineBreak(text: string): boolean {
-  return text.endsWith('\n') || text.endsWith('\r');
-}
-
 // Creates an Intl.Segmenter, or undefined when the engine lacks support.
 // Callers must fall back to a degraded path when this returns undefined.
-export function createSegmenter(
+function createSegmenter(
   options: Intl.SegmenterOptions
 ): Intl.Segmenter | undefined {
   if (typeof Intl === 'undefined' || typeof Intl.Segmenter !== 'function') {
@@ -143,4 +123,16 @@ export function getGraphemeSegmenter(): Intl.Segmenter | undefined {
     graphemeSegmenterInit = true;
   }
   return graphemeSegmenter;
+}
+
+let wordSegmenter: Intl.Segmenter | undefined;
+let wordSegmenterInit = false;
+// Word expansion is used on every find-next command; share the segmenter
+// instead of rebuilding its locale tables per caret.
+export function getWordSegmenter(): Intl.Segmenter | undefined {
+  if (!wordSegmenterInit) {
+    wordSegmenter = createSegmenter({ granularity: 'word' });
+    wordSegmenterInit = true;
+  }
+  return wordSegmenter;
 }

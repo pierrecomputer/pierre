@@ -114,6 +114,28 @@ function createWidget(
 }
 
 describe('SearchPanelWidget', () => {
+  test('cleanup cancels deferred initialization and is idempotent', async () => {
+    const harness = createWidget('foo foo', { defaultQuery: 'foo' });
+    let selectCalls = 0;
+    harness.input.select = () => {
+      selectCalls++;
+    };
+
+    try {
+      harness.widget.cleanup();
+      harness.widget.cleanup();
+      harness.widget.updateMatches();
+      harness.widget.setMode('replace');
+      await wait(0);
+
+      expect(harness.updates).toEqual([]);
+      expect(selectCalls).toBe(0);
+      expect(document.querySelector('[data-search-panel]')).toBeNull();
+    } finally {
+      harness.cleanup();
+    }
+  });
+
   test('Shift+Enter in the find input navigates to the previous match', async () => {
     const harness = createWidget('foo foo foo');
     try {

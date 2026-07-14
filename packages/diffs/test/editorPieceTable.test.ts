@@ -2,24 +2,13 @@ import { describe, expect, test } from 'bun:test';
 
 import { PieceTable } from '../src/editor/pieceTable';
 import type { Position } from '../src/types';
+import { computeLineOffsets } from '../src/utils/computeFileOffsets';
 
 function lineTexts(text: string): string[] {
-  if (text === '') {
-    return [''];
-  }
-
-  const lines: string[] = [];
-  let start = 0;
-  for (let i = 0; i < text.length; i++) {
-    if (text.charCodeAt(i) === 10) {
-      lines.push(text.slice(start, i + 1));
-      start = i + 1;
-    }
-  }
-  if (start <= text.length) {
-    lines.push(text.slice(start));
-  }
-  return lines;
+  const offsets = computeLineOffsets(text);
+  return offsets.map((start, line) =>
+    text.slice(start, offsets[line + 1] ?? text.length)
+  );
 }
 
 /** Trailing CR/LF removed, matching `PieceTable.getLineText` / `getTextSlice(..., true)`. */
@@ -37,25 +26,18 @@ function isLineEnding(c: number): boolean {
 
 function positionAt(text: string, offset: number): Position {
   const clampedOffset = Math.min(Math.max(offset, 0), text.length);
-  let line = 0;
-  let lineStart = 0;
-
-  for (let i = 0; i < text.length; i++) {
-    if (text.charCodeAt(i) !== 10) {
-      continue;
+  const offsets = computeLineOffsets(text);
+  let line = offsets.length - 1;
+  for (let i = 1; i < offsets.length; i++) {
+    if (clampedOffset < offsets[i]) {
+      line = i - 1;
+      break;
     }
-
-    const lineEnd = i + 1;
-    if (clampedOffset < lineEnd) {
-      return { line, character: clampedOffset - lineStart };
-    }
-    line++;
-    lineStart = lineEnd;
   }
 
   return {
     line,
-    character: clampedOffset - lineStart,
+    character: clampedOffset - offsets[line],
   };
 }
 
@@ -228,6 +210,35 @@ describe('PieceTable', () => {
     expect(table.getLineText(0)).toBe('a');
     expect(table.positionAt(2)).toEqual({ line: 0, character: 2 });
     expect(table.positionAt(3)).toEqual({ line: 1, character: 0 });
+  });
+
+  test('updates line metadata when an edit splits or removes half of CRLF', () => {
+    const inserted = new PieceTable('a\r\nb');
+    inserted.insert('X', 2);
+    expectTableToMatchText(inserted, 'a\rX\nb');
+    expect(inserted.positionAt(2)).toEqual({ line: 1, character: 0 });
+
+    const deletedLF = new PieceTable('a\r\nb');
+    deletedLF.delete(2, 1);
+    expectTableToMatchText(deletedLF, 'a\rb');
+    expect(deletedLF.positionAt(2)).toEqual({ line: 1, character: 0 });
+
+    const deletedCR = new PieceTable('a\r\nb');
+    deletedCR.delete(1, 1);
+    expectTableToMatchText(deletedCR, 'a\nb');
+  });
+
+  test('counts CRLF appended in separate edits by document adjacency', () => {
+    const adjacent = new PieceTable('');
+    adjacent.insert('\r', 0);
+    adjacent.insert('\n', 1);
+    expectTableToMatchText(adjacent, '\r\n');
+    expect(adjacent.positionAt(1)).toEqual({ line: 0, character: 1 });
+
+    const reversed = new PieceTable('');
+    reversed.insert('\r', 0);
+    reversed.insert('\n', 0);
+    expectTableToMatchText(reversed, '\n\r');
   });
 
   test('handles an empty document', () => {
@@ -540,10 +551,8 @@ describe('PieceTable', () => {
   });
 
   test('preserves CR/LF content across random edits that split pairs', () => {
-    // Edits can slice a `\r\n` pair across a piece boundary, so this stresses
-    // the split/merge content path (getText walks pieces in order; getTextSlice
-    // uses findPieceAtOffset and parent links). Line counting is buffer-based
-    // and pinned by the explicit CRLF tests, so it is not re-derived here.
+    // Edits can slice a `\r\n` pair across a piece boundary. Check line metadata
+    // after every edit against the canonical CR/LF-aware offset scanner.
     for (let seed = 1; seed <= 5; seed++) {
       const random = createRandom(seed * 977 + 5);
       let text = 'a\r\nb\nc\r\n';
@@ -565,7 +574,38 @@ describe('PieceTable', () => {
 
         expect(table.getText()).toBe(text);
         expect(table.getTextSlice(0, text.length)).toBe(text);
+        expect(table.lineCount).toBe(computeLineOffsets(text).length);
       }
+
+      expectTableToMatchText(table, text);
     }
+  });
+
+  test('keeps pure-deletion treaps balanced across many original slices', () => {
+    const pieceCount = 8000;
+    const table = new PieceTable('ab'.repeat(pieceCount));
+    table.applyEdits(
+      Array.from({ length: pieceCount }, (_, index) => ({
+        start: index * 2 + 1,
+        end: index * 2 + 2,
+        text: '',
+      }))
+    );
+
+    expectTableToMatchText(table, 'a'.repeat(pieceCount));
+  });
+
+  test('preserves live added pieces when compacting deleted add-buffer text', () => {
+    const table = new PieceTable('');
+    const live = 'head\r\ntail';
+    const dead = 'x'.repeat(1_100_000);
+    table.insert(live + dead, 0);
+    table.delete(live.length, dead.length);
+    expectTableToMatchText(table, live);
+
+    table.insert('X', 5);
+    expectTableToMatchText(table, 'head\rX\ntail');
+    table.delete(5, 1);
+    expectTableToMatchText(table, live);
   });
 });

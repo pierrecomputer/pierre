@@ -129,6 +129,47 @@ describe('diff editor: fold-skip navigation', () => {
     expect(isMoveCursorShortcut(keyEvent('PageUp'))).toBeUndefined();
   });
 
+  test('maps platform word-movement shortcuts', () => {
+    const dom = installDom({ navigator: { platform: 'Linux x86_64' } });
+    try {
+      const event = new window.KeyboardEvent('keydown', {
+        key: 'ArrowLeft',
+        ctrlKey: true,
+      });
+      expect(isMoveCursorShortcut(event)).toBe('wordLeft');
+    } finally {
+      dom.cleanup();
+    }
+  });
+
+  test('moves every caret by word instead of desynchronizing multi-select', async () => {
+    const fixture = await createFoldFixture();
+    const { editor, content } = fixture;
+    try {
+      editor.setSelections([
+        {
+          start: { line: 9, character: 12 },
+          end: { line: 9, character: 12 },
+          direction: 'none',
+        },
+        {
+          start: { line: 49, character: 12 },
+          end: { line: 49, character: 12 },
+          direction: 'none',
+        },
+      ]);
+      await wait(0);
+      pressKey(content, 'ArrowLeft', { altKey: true });
+
+      expect(editor.getState().selections?.map(({ start }) => start)).toEqual([
+        { line: 9, character: 8 },
+        { line: 49, character: 8 },
+      ]);
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
   test('arrow-down at a hunk boundary skips the collapsed gap', async () => {
     const fixture = await createFoldFixture();
     const { editor, content } = fixture;

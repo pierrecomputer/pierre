@@ -410,16 +410,41 @@ export class TextDocument<LAnnotation> {
     const previousLastLine = this.#pieceTable.lineCount - 1;
     const previousLastLineLength =
       this.#pieceTable.getLineLength(previousLastLine);
+    let previousEditEnd = -1;
+    let adjacentLeftCharacter = '';
     for (let i = 0; i < edits.length; i++) {
       const edit = edits[i];
       const editStart = editPositions[i * 2];
       const editEnd = editPositions[i * 2 + 1];
       const editStartLine = editStart.line;
       const editEndLine = editEnd.line;
-      const insertedLineSpan = countLineBreaks(edit.text);
+      const removedLineSpan = editEndLine - editStartLine;
+      const leftCharacter =
+        edit.start === previousEditEnd
+          ? adjacentLeftCharacter
+          : this.#pieceTable.charAt(edit.start - 1);
+      const oldFirstCharacter = this.#pieceTable.charAt(edit.start);
+      const rightCharacter = this.#pieceTable.charAt(edit.end);
+      const newFirstCharacter = edit.text.at(0) ?? rightCharacter;
+      const oldBreakBefore =
+        leftCharacter === '\n' ||
+        (leftCharacter === '\r' && oldFirstCharacter !== '\n')
+          ? 1
+          : 0;
+      const newBreakBefore =
+        leftCharacter === '\n' ||
+        (leftCharacter === '\r' && newFirstCharacter !== '\n')
+          ? 1
+          : 0;
+      const lineDelta =
+        countLineBreaks(edit.text) -
+        removedLineSpan +
+        newBreakBefore -
+        oldBreakBefore -
+        (edit.text.endsWith('\r') && rightCharacter === '\n' ? 1 : 0);
+      const insertedLineSpan = Math.max(0, removedLineSpan + lineDelta);
       const changedStartLine = editStartLine + lineDeltaBeforeEdit;
       const changedEndLine = changedStartLine + insertedLineSpan;
-      const lineDelta = insertedLineSpan - (editEndLine - editStartLine);
       startLine = Math.min(startLine, editStartLine);
       endLine = Math.max(endLine, changedEndLine);
       const lastRange = ranges[ranges.length - 1];
@@ -441,6 +466,8 @@ export class TextDocument<LAnnotation> {
           editEnd.character === previousLastLineLength,
       ]);
       lineDeltaBeforeEdit += lineDelta;
+      adjacentLeftCharacter = edit.text.at(-1) ?? leftCharacter;
+      previousEditEnd = edit.end;
     }
     if (startLine === Infinity) {
       return {

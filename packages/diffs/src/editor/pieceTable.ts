@@ -4,25 +4,23 @@ import type { SearchParams } from './searchPanel';
 import type { ResolvedTextEdit } from './textDocument';
 
 const MAX_FIND_MATCHES = 100000;
+const ADD_BUFFER_COMPACTION_MIN_DEAD_LENGTH = 1024 * 1024;
 // TODO(ije): use Intl.Segmenter instead of regex for word separators
 const WORD_SEPARATORS = '`~!@#$%^&*()-=+[{]}\\|;:\'",.<>/?' as const;
 
 // A piece is a segment of text that is either original or added.
 class Piece {
-  static Original = 0;
-  static Added = 1;
+  static readonly Original = 0;
+  static readonly Added = 1;
 
   constructor(
     public readonly source: number,
     public readonly offset: number,
     public readonly length: number,
-    public readonly lineOffsetStart: number,
-    public readonly lineOffsetEnd: number
+    public readonly lineBreakCount: number,
+    public readonly startsWithLF: boolean,
+    public readonly endsWithCR: boolean
   ) {}
-
-  get lineBreakCount(): number {
-    return this.lineOffsetEnd - this.lineOffsetStart;
-  }
 }
 
 // A text buffer is a string with its line offsets.
@@ -33,16 +31,47 @@ class TextBuffer {
     this.lineOffsets = computeLineOffsets(text);
   }
 
-  // the append operation is efficient because it only appends
-  // elements to the lineOffsets array in the end
+  // Only a trailing CR entry can change when the appended text starts with LF;
+  // every other line offset is appended in place.
   append(text: string): number {
     const offset = this.text.length;
+    if (
+      offset > 0 &&
+      text.charCodeAt(0) === /* \n */ 10 &&
+      this.text.charCodeAt(offset - 1) === /* \r */ 13 &&
+      this.lineOffsets[this.lineOffsets.length - 1] === offset
+    ) {
+      this.lineOffsets.pop();
+    }
     const appendedLineOffsets = computeLineOffsets(text);
     for (let i = 1; i < appendedLineOffsets.length; i++) {
       this.lineOffsets.push(offset + appendedLineOffsets[i]);
     }
     this.text += text;
     return offset;
+  }
+
+  countLineBreaks(start: number, end: number): number {
+    if (start >= end) {
+      return 0;
+    }
+    const first = upperBound(this.lineOffsets, start);
+    const last = upperBound(this.lineOffsets, end);
+    return (
+      last -
+      first +
+      (end < this.text.length &&
+      this.text.charCodeAt(end - 1) === /* \r */ 13 &&
+      this.text.charCodeAt(end) === /* \n */ 10
+        ? 1
+        : 0)
+    );
+  }
+
+  lineBreakOffset(start: number, end: number, index: number): number {
+    const first = upperBound(this.lineOffsets, start);
+    const offset = this.lineOffsets[first + index];
+    return offset !== undefined && offset <= end ? offset : end;
   }
 }
 
@@ -54,14 +83,21 @@ class PieceNode {
   right: PieceNode | null = null;
   parent: PieceNode | null = null;
   priority = 0;
+  subtreeAddLength: number;
+  subtreeStartsWithLF: boolean;
+  subtreeEndsWithCR: boolean;
 
   constructor(
     public piece: Piece,
     public subtreeLength: number = piece.length,
     public subtreeLineBreakCount: number = piece.lineBreakCount
-  ) {}
+  ) {
+    this.subtreeAddLength = piece.source === Piece.Added ? piece.length : 0;
+    this.subtreeStartsWithLF = piece.startsWithLF;
+    this.subtreeEndsWithCR = piece.endsWithCR;
+  }
 
-  updateSubtreeLength(): void {
+  updateMetadata(): void {
     this.subtreeLength =
       (this.left?.subtreeLength ?? 0) +
       this.piece.length +
@@ -70,6 +106,20 @@ class PieceNode {
       (this.left?.subtreeLineBreakCount ?? 0) +
       this.piece.lineBreakCount +
       (this.right?.subtreeLineBreakCount ?? 0);
+    if (this.left?.subtreeEndsWithCR === true && this.piece.startsWithLF) {
+      this.subtreeLineBreakCount--;
+    }
+    if (this.piece.endsWithCR && this.right?.subtreeStartsWithLF === true) {
+      this.subtreeLineBreakCount--;
+    }
+    this.subtreeAddLength =
+      (this.left?.subtreeAddLength ?? 0) +
+      (this.piece.source === Piece.Added ? this.piece.length : 0) +
+      (this.right?.subtreeAddLength ?? 0);
+    this.subtreeStartsWithLF =
+      this.left?.subtreeStartsWithLF ?? this.piece.startsWithLF;
+    this.subtreeEndsWithCR =
+      this.right?.subtreeEndsWithCR ?? this.piece.endsWithCR;
   }
 }
 
@@ -374,6 +424,7 @@ export class PieceTable {
     }
     const start = clamp(offset, 0, this.#length);
     this.#replaceRangeIncremental(start, start, text);
+    this.#compactAddBufferIfNeeded();
   }
 
   delete(offset: number, length: number): void {
@@ -386,6 +437,7 @@ export class PieceTable {
       return;
     }
     this.#replaceRangeIncremental(start, end, '');
+    this.#compactAddBufferIfNeeded();
   }
 
   applyEdits(edits: readonly ResolvedTextEdit[]): void {
@@ -402,6 +454,7 @@ export class PieceTable {
       const end = clamp(edit.end, start, this.#length);
       this.#replaceRangeIncremental(start, end, edit.text);
     }
+    this.#compactAddBufferIfNeeded();
   }
 
   positionAt(offset: number): Position {
@@ -514,8 +567,11 @@ export class PieceTable {
 
   #lineAtOffset(offset: number): number {
     let node = this.#root;
-    let remaining = clamp(offset, 0, this.#length);
+    const clampedOffset = clamp(offset, 0, this.#length);
+    let remaining = clampedOffset;
     let line = 0;
+    let hasPrefix = false;
+    let prefixEndsWithCR = false;
 
     while (node !== null) {
       const leftLength = node.left?.subtreeLength ?? 0;
@@ -524,53 +580,99 @@ export class PieceTable {
         continue;
       }
 
-      line += node.left?.subtreeLineBreakCount ?? 0;
+      if (node.left !== null) {
+        line += node.left.subtreeLineBreakCount;
+        if (hasPrefix && prefixEndsWithCR && node.left.subtreeStartsWithLF) {
+          line--;
+        }
+        hasPrefix = true;
+        prefixEndsWithCR = node.left.subtreeEndsWithCR;
+      }
       remaining -= leftLength;
       if (remaining <= node.piece.length) {
-        const buffer = this.#bufferFor(node.piece.source);
-        line +=
-          upperBound(buffer.lineOffsets, node.piece.offset + remaining) -
-          node.piece.lineOffsetStart;
-        return line;
+        if (remaining > 0) {
+          const buffer = this.#bufferFor(node.piece.source);
+          const end = node.piece.offset + remaining;
+          line += buffer.countLineBreaks(node.piece.offset, end);
+          if (hasPrefix && prefixEndsWithCR && node.piece.startsWithLF) {
+            line--;
+          }
+          hasPrefix = true;
+          prefixEndsWithCR = buffer.text.charCodeAt(end - 1) === /* \r */ 13;
+        }
+        break;
       }
 
       line += node.piece.lineBreakCount;
+      if (hasPrefix && prefixEndsWithCR && node.piece.startsWithLF) {
+        line--;
+      }
+      hasPrefix = true;
+      prefixEndsWithCR = node.piece.endsWithCR;
       remaining -= node.piece.length;
       node = node.right;
     }
 
-    return this.#lineCount - 1;
+    if (
+      hasPrefix &&
+      prefixEndsWithCR &&
+      this.charAt(clampedOffset).charCodeAt(0) === /* \n */ 10
+    ) {
+      line--;
+    }
+    return line;
   }
 
   #lineBreakOffset(lineBreakIndex: number): number {
-    let node = this.#root;
-    let remaining = lineBreakIndex;
-    let documentOffset = 0;
+    return this.#lineBreakOffsetInNode(this.#root, lineBreakIndex, 0, false);
+  }
 
-    while (node !== null) {
-      const leftLineBreakCount = node.left?.subtreeLineBreakCount ?? 0;
-      if (remaining < leftLineBreakCount) {
-        node = node.left;
-        continue;
-      }
-
-      const leftLength = node.left?.subtreeLength ?? 0;
-      documentOffset += leftLength;
-      remaining -= leftLineBreakCount;
-
-      if (remaining < node.piece.lineBreakCount) {
-        const bufferLineOffset = this.#bufferFor(node.piece.source).lineOffsets[
-          node.piece.lineOffsetStart + remaining
-        ];
-        return documentOffset + (bufferLineOffset - node.piece.offset);
-      }
-
-      documentOffset += node.piece.length;
-      remaining -= node.piece.lineBreakCount;
-      node = node.right;
+  #lineBreakOffsetInNode(
+    node: PieceNode | null,
+    lineBreakIndex: number,
+    documentOffset: number,
+    nextIsLF: boolean
+  ): number {
+    if (node === null) {
+      return this.#length;
     }
 
-    return this.#length;
+    const leftNextIsLF = node.piece.startsWithLF;
+    const leftLineBreakCount =
+      (node.left?.subtreeLineBreakCount ?? 0) -
+      (leftNextIsLF && node.left?.subtreeEndsWithCR === true ? 1 : 0);
+    if (lineBreakIndex < leftLineBreakCount) {
+      return this.#lineBreakOffsetInNode(
+        node.left,
+        lineBreakIndex,
+        documentOffset,
+        leftNextIsLF
+      );
+    }
+
+    const leftLength = node.left?.subtreeLength ?? 0;
+    documentOffset += leftLength;
+    lineBreakIndex -= leftLineBreakCount;
+
+    const pieceNextIsLF = node.right?.subtreeStartsWithLF ?? nextIsLF;
+    const pieceLineBreakCount =
+      node.piece.lineBreakCount -
+      (pieceNextIsLF && node.piece.endsWithCR ? 1 : 0);
+    if (lineBreakIndex < pieceLineBreakCount) {
+      const bufferOffset = this.#bufferFor(node.piece.source).lineBreakOffset(
+        node.piece.offset,
+        node.piece.offset + node.piece.length,
+        lineBreakIndex
+      );
+      return documentOffset + bufferOffset - node.piece.offset;
+    }
+
+    return this.#lineBreakOffsetInNode(
+      node.right,
+      lineBreakIndex - pieceLineBreakCount,
+      documentOffset + node.piece.length,
+      nextIsLF
+    );
   }
 
   #textFromPieces(): string {
@@ -586,18 +688,12 @@ export class PieceTable {
       readonly start: number;
       readonly end: number;
       readonly text: string;
-      readonly lineOffsets: number[];
-      readonly lineOffsetStart: number;
-      readonly lineOffsetEnd: number;
     }) => boolean | void
   ): void {
     this.#walk(this.#root, (node) => {
       const buffer = this.#bufferFor(node.piece.source);
       return callback({
         text: buffer.text,
-        lineOffsets: buffer.lineOffsets,
-        lineOffsetStart: node.piece.lineOffsetStart,
-        lineOffsetEnd: node.piece.lineOffsetEnd,
         start: node.piece.offset,
         end: node.piece.offset + node.piece.length,
       });
@@ -610,12 +706,14 @@ export class PieceTable {
 
   #createPiece(source: number, offset: number, length: number): Piece {
     const buffer = this.#bufferFor(source);
+    const end = offset + length;
     return new Piece(
       source,
       offset,
       length,
-      upperBound(buffer.lineOffsets, offset),
-      upperBound(buffer.lineOffsets, offset + length)
+      buffer.countLineBreaks(offset, end),
+      buffer.text.charCodeAt(offset) === /* \n */ 10,
+      buffer.text.charCodeAt(end - 1) === /* \r */ 13
     );
   }
 
@@ -684,6 +782,13 @@ export class PieceTable {
   // Attaches `child` as a side of `node`, keeping the parent pointer in sync so
   // read-side iteration (#nextNode) can still walk back up the tree.
   #setLeft(node: PieceNode, child: PieceNode | null): void {
+    if (
+      node.left !== null &&
+      node.left !== child &&
+      node.left.parent === node
+    ) {
+      node.left.parent = null;
+    }
     node.left = child;
     if (child !== null) {
       child.parent = node;
@@ -691,16 +796,22 @@ export class PieceTable {
   }
 
   #setRight(node: PieceNode, child: PieceNode | null): void {
+    if (
+      node.right !== null &&
+      node.right !== child &&
+      node.right.parent === node
+    ) {
+      node.right.parent = null;
+    }
     node.right = child;
     if (child !== null) {
       child.parent = node;
     }
   }
 
-  // Splits the subtree into [0, offset) and [offset, length). When the offset
-  // falls inside a piece, that piece is sliced in two so the split lands on a
-  // clean boundary. Internal parent pointers stay correct; the caller fixes the
-  // returned roots' own parents when it reattaches or stores them.
+  // Splits the subtree into [0, offset) and [offset, length). Fresh priorities
+  // for sliced pieces are merged back through the treap so repeated splits of
+  // one original piece cannot form a same-priority linear chain.
   #split(
     node: PieceNode | null,
     offset: number
@@ -711,44 +822,46 @@ export class PieceTable {
 
     const leftLength = node.left?.subtreeLength ?? 0;
     if (offset <= leftLength) {
-      const [left, right] = this.#split(node.left, offset);
-      this.#setLeft(node, right);
-      node.updateSubtreeLength();
-      return [left, node];
+      const child = node.left;
+      this.#setLeft(node, null);
+      node.updateMetadata();
+      const [left, right] = this.#split(child, offset);
+      return [left, this.#mergeNodes(right, node)];
     }
 
     const pieceLength = node.piece.length;
     if (offset >= leftLength + pieceLength) {
+      const child = node.right;
+      this.#setRight(node, null);
+      node.updateMetadata();
       const [left, right] = this.#split(
-        node.right,
+        child,
         offset - leftLength - pieceLength
       );
-      this.#setRight(node, left);
-      node.updateSubtreeLength();
-      return [node, right];
+      return [this.#mergeNodes(node, left), right];
     }
 
-    // The offset is strictly inside this node's piece: slice it in two. Both
-    // halves inherit this node's priority, which keeps the heap valid because
-    // this node already outranked both of its children.
+    // The offset is strictly inside this node's piece. Detach both neighboring
+    // subtrees, then merge independently prioritized slice nodes into them.
     const inPiece = offset - leftLength;
-    const leftNode = new PieceNode(
+    const leftTree = node.left;
+    const rightTree = node.right;
+    this.#setLeft(node, null);
+    this.#setRight(node, null);
+    const leftNode = this.#createNode(
       this.#createPiece(node.piece.source, node.piece.offset, inPiece)
     );
-    const rightNode = new PieceNode(
+    const rightNode = this.#createNode(
       this.#createPiece(
         node.piece.source,
         node.piece.offset + inPiece,
         pieceLength - inPiece
       )
     );
-    leftNode.priority = node.priority;
-    rightNode.priority = node.priority;
-    this.#setLeft(leftNode, node.left);
-    this.#setRight(rightNode, node.right);
-    leftNode.updateSubtreeLength();
-    rightNode.updateSubtreeLength();
-    return [leftNode, rightNode];
+    return [
+      this.#mergeNodes(leftTree, leftNode),
+      this.#mergeNodes(rightNode, rightTree),
+    ];
   }
 
   // Joins two subtrees where every offset in `left` precedes every offset in
@@ -765,11 +878,11 @@ export class PieceTable {
     }
     if (left.priority >= right.priority) {
       this.#setRight(left, this.#mergeNodes(left.right, right));
-      left.updateSubtreeLength();
+      left.updateMetadata();
       return left;
     }
     this.#setLeft(right, this.#mergeNodes(left, right.left));
-    right.updateSubtreeLength();
+    right.updateMetadata();
     return right;
   }
 
@@ -786,10 +899,14 @@ export class PieceTable {
       last = last.right;
     }
     if (canCoalescePieces(last.piece, piece)) {
-      last.piece = coalesceTwoPieces(last.piece, piece);
+      last.piece = this.#createPiece(
+        last.piece.source,
+        last.piece.offset,
+        last.piece.length + piece.length
+      );
       // The last piece grew, so refresh aggregates from it up to the root.
       for (let node: PieceNode | null = last; node !== null; ) {
-        node.updateSubtreeLength();
+        node.updateMetadata();
         if (node === tree) {
           break;
         }
@@ -811,11 +928,13 @@ export class PieceTable {
       return [undefined, null];
     }
     if (tree.left === null) {
-      return [tree.piece, tree.right];
+      const rest = tree.right;
+      this.#setRight(tree, null);
+      return [tree.piece, rest];
     }
     const [piece, newLeft] = this.#popLeftmost(tree.left);
     this.#setLeft(tree, newLeft);
-    tree.updateSubtreeLength();
+    tree.updateMetadata();
     return [piece, tree];
   }
 
@@ -833,6 +952,55 @@ export class PieceTable {
       return false;
     }
     return this.#walk(node.right, visit);
+  }
+
+  // Rebuilds only the append buffer after enough deleted insertion text has
+  // accumulated. Original text remains immutable; live added pieces keep their
+  // tree nodes and priorities, so compaction is occasional O(P + live bytes).
+  #compactAddBufferIfNeeded(): void {
+    const liveLength = this.#root?.subtreeAddLength ?? 0;
+    const deadLength = this.#add.text.length - liveLength;
+    if (
+      deadLength < ADD_BUFFER_COMPACTION_MIN_DEAD_LENGTH ||
+      deadLength < liveLength
+    ) {
+      return;
+    }
+
+    const oldAdd = this.#add;
+    const chunks: string[] = [];
+    const nodes: PieceNode[] = [];
+    this.#walk(this.#root, (node) => {
+      if (node.piece.source !== Piece.Added) {
+        return;
+      }
+      const { length } = node.piece;
+      chunks.push(
+        oldAdd.text.slice(node.piece.offset, node.piece.offset + length)
+      );
+      nodes.push(node);
+    });
+
+    this.#add = new TextBuffer(chunks.join(''));
+    let offset = 0;
+    for (const node of nodes) {
+      const { length } = node.piece;
+      node.piece = this.#createPiece(Piece.Added, offset, length);
+      offset += length;
+    }
+    this.#refreshSubtree(this.#root);
+    this.#lineCount = (this.#root?.subtreeLineBreakCount ?? 0) + 1;
+    this.#lastVisitedLine = null;
+    this.#lastVisitedLineLength = null;
+  }
+
+  #refreshSubtree(node: PieceNode | null): void {
+    if (node === null) {
+      return;
+    }
+    this.#refreshSubtree(node.left);
+    this.#refreshSubtree(node.right);
+    node.updateMetadata();
   }
 }
 
@@ -911,19 +1079,6 @@ function rangeOverlaps(
 function canCoalescePieces(prev: Piece, next: Piece): boolean {
   return (
     prev.source === next.source && prev.offset + prev.length === next.offset
-  );
-}
-
-// Joins two adjacent pieces (see canCoalescePieces) into one. Keeping the table
-// compact after every edit is what stops the piece count from growing without
-// bound during normal typing.
-function coalesceTwoPieces(prev: Piece, next: Piece): Piece {
-  return new Piece(
-    prev.source,
-    prev.offset,
-    prev.length + next.length,
-    prev.lineOffsetStart,
-    next.lineOffsetEnd
   );
 }
 

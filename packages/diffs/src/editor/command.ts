@@ -1,4 +1,4 @@
-import { isMacLike, isPrimaryModifier } from './platform';
+import { isLinux, isMacLike, isPrimaryModifier } from './platform';
 
 export type EditorCommand =
   | 'indent'
@@ -37,11 +37,7 @@ export function resolveEditorCommandFromKeyboardEvent(
     if (!event.ctrlKey && altKey && normalizedKey === 'ArrowDown') {
       return 'moveLineDown';
     }
-    if (
-      (isMac || navigator.platform.includes('Linux')) &&
-      event.ctrlKey &&
-      altKey
-    ) {
+    if ((isMac || isLinux()) && event.ctrlKey && altKey) {
       if (normalizedKey === 'p' || event.code === 'KeyP') {
         return 'moveLineUp';
       }

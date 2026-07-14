@@ -13,9 +13,12 @@ import type {
   RenderRange,
 } from '../types';
 import type { TextDocument, TextDocumentChange } from './textDocument';
-import { addEventListener, debounce, h } from './utils';
+import { addEventListener, h } from './utils';
 
 const TOKENIZE_TIME_LIMIT = 500;
+const PREBUILD_DELAY = 500;
+
+let nextSchedulerToken = 0;
 
 export interface EditorTokenizerProps {
   highlighter: DiffsHighlighter;
@@ -52,7 +55,9 @@ export class EditorTokenizer {
   #onThemeChange: EditorTokenizerProps['onThemeChange'];
   #matchBrackets: boolean;
   #debug: boolean;
-  #disposes?: (() => void)[];
+  #systemTheme?: NonNullable<BaseCodeOptions['theme']>;
+  #systemThemeDisposes?: (() => void)[];
+  #prebuildTimeout?: ReturnType<typeof setTimeout>;
   #isCleanedUp = false;
 
   // state
@@ -64,10 +69,11 @@ export class EditorTokenizer {
   #backgroundJobId: number = 0;
   #backgroundChangedLineRanges: readonly [number, number][] | undefined;
   #backgroundChangedRangeIndex: number = 0;
-  #bracketIgnoredRanges: Map<number, [number, number][] | null> = new Map();
+  #bracketIgnoredRanges: ([number, number][] | null | undefined)[] = [];
   #isMessageListenerAttached: boolean = false;
+  #schedulerToken = nextSchedulerToken++;
 
-  #prebuildStateStack = debounce(async (renderRange?: RenderRange) => {
+  async #prebuildStateStack(renderRange?: RenderRange): Promise<void> {
     // Drop work scheduled before cleanUp; a late timer must not call setTheme
     // on a highlighter that tests (or hosts) have already disposed.
     if (this.#isCleanedUp) {
@@ -92,18 +98,20 @@ export class EditorTokenizer {
     }
     this.#ensureActiveTheme();
     this.#buildStateStack(endLine);
-  }, 500);
+  }
 
   #onMessage = ({ data }: MessageEvent<unknown>) => {
     if (typeof data !== 'object' || data === null) {
       return;
     }
-    const { type, jobId } = data as {
+    const { type, schedulerToken, jobId } = data as {
       type?: unknown;
+      schedulerToken?: unknown;
       jobId?: unknown;
     };
     if (
       type === 'tokenize' &&
+      schedulerToken === this.#schedulerToken &&
       typeof jobId === 'number' &&
       jobId === this.#backgroundJobId
     ) {
@@ -129,13 +137,13 @@ export class EditorTokenizer {
     if (this.#grammar === undefined) {
       return null;
     }
-    if (!this.#bracketIgnoredRanges.has(lineIndex)) {
+    if (this.#bracketIgnoredRanges[lineIndex] === undefined) {
       this.#buildStateStack(lineIndex);
       const state = this.#stateStack[lineIndex] ?? INITIAL;
       const result = this.#tokenizeLineAt(lineIndex, state);
       this.#stateStack[lineIndex + 1] = result.state;
     }
-    return this.#bracketIgnoredRanges.get(lineIndex) ?? null;
+    return this.#bracketIgnoredRanges[lineIndex] ?? null;
   }
 
   constructor({
@@ -162,37 +170,6 @@ export class EditorTokenizer {
     } else {
       themeType = themeTypeOption;
     }
-    // Only track the document/system color scheme when the surface follows it
-    // (`themeType: 'system'`). A surface pinned to an explicit 'dark'/'light'
-    // theme keeps that theme regardless of the page, so re-tokenizing after an
-    // edit must emit the same `--diffs-token-{theme}` variable the SSR markup
-    // used; otherwise the edited tokens fall back to the default foreground.
-    if (typeof theme !== 'string' && themeTypeOption === 'system') {
-      const observer = new MutationObserver((mutations) => {
-        for (const { type, attributeName } of mutations) {
-          if (
-            type === 'attributes' &&
-            attributeName !== null &&
-            (attributeName === 'class' || attributeName.startsWith('data-'))
-          ) {
-            const themeType = this.#resolveSystemThemeType();
-            this.#emitThemeChange(theme[themeType], themeType);
-            break;
-          }
-        }
-      });
-      observer.observe(document.documentElement, { attributes: true });
-      observer.observe(document.body, { attributes: true });
-      this.#disposes = [
-        addEventListener(this.#mediaQueryList, 'change', () => {
-          // Re-read computed color-scheme so a host-forced scheme still wins
-          // when the OS preference changes underneath it.
-          const themeType = this.#resolveSystemThemeType();
-          this.#emitThemeChange(theme[themeType], themeType);
-        }),
-        () => observer.disconnect(),
-      ];
-    }
     this.#highlighter = highlighter;
     this.#textDocument = textDocument;
     this.#tokenizeMaxLineLength = tokenizeMaxLineLength;
@@ -207,6 +184,7 @@ export class EditorTokenizer {
       typeof theme === 'string' ? theme : theme[themeType],
       themeType
     );
+    this.#observeSystemTheme(themeTypeOption === 'system' ? theme : undefined);
   }
 
   // By default, diffs components support dual themes, but the tokenizer only renders
@@ -248,16 +226,69 @@ export class EditorTokenizer {
     return this.#mediaQueryList.matches ? 'dark' : 'light';
   }
 
+  #observeSystemTheme(
+    theme: NonNullable<BaseCodeOptions['theme']> | undefined
+  ): void {
+    this.#systemTheme = theme;
+    if (theme === undefined) {
+      this.#stopObservingSystemTheme();
+      return;
+    }
+    if (this.#systemThemeDisposes !== undefined) {
+      return;
+    }
+
+    const observer = new MutationObserver((mutations) => {
+      for (const { type, attributeName } of mutations) {
+        if (
+          type === 'attributes' &&
+          attributeName !== null &&
+          (attributeName === 'class' || attributeName.startsWith('data-'))
+        ) {
+          this.#syncSystemTheme();
+          break;
+        }
+      }
+    });
+    observer.observe(document.documentElement, { attributes: true });
+    observer.observe(document.body, { attributes: true });
+    this.#systemThemeDisposes = [
+      addEventListener(this.#mediaQueryList, 'change', () => {
+        // Re-read computed color-scheme so a host-forced scheme still wins
+        // when the OS preference changes underneath it.
+        this.#syncSystemTheme();
+      }),
+      () => observer.disconnect(),
+    ];
+  }
+
+  #stopObservingSystemTheme(): void {
+    this.#systemThemeDisposes?.forEach((dispose) => dispose());
+    this.#systemThemeDisposes = undefined;
+  }
+
+  #syncSystemTheme(): void {
+    const theme = this.#systemTheme;
+    if (theme === undefined || this.#isCleanedUp) {
+      return;
+    }
+    const themeType = this.#resolveSystemThemeType();
+    const themeName = typeof theme === 'string' ? theme : theme[themeType];
+    if (themeType !== this.#themeType || themeName !== this.#themeName) {
+      this.#emitThemeChange(themeName, themeType);
+    }
+  }
+
   // Re-apply the editor's theme from the surface's current code options. Edit
   // mode reuses a single tokenizer across re-renders, so when the host swaps the
   // theme — a theme picker, a light/dark toggle, etc. — we must recompute the
   // active theme and re-tokenize. Without this the editor keeps rendering the
   // theme it captured when it first attached (stale line-highlight background
-  // and token colors). System-driven changes are still handled by the
-  // observers wired up in the constructor; this covers explicit `themeType`/
-  // `theme` option changes that those observers don't see.
+  // and token colors). This also rewires system-theme observers when a reused
+  // editor switches between explicit and system modes.
   syncTheme(codeOptions: BaseCodeOptions): void {
     const { themeType = 'system', theme = DEFAULT_THEMES } = codeOptions;
+    this.#observeSystemTheme(themeType === 'system' ? theme : undefined);
     const nextThemeType =
       themeType === 'system' ? this.#resolveSystemThemeType() : themeType;
     const nextThemeName =
@@ -321,13 +352,18 @@ export class EditorTokenizer {
 
   cleanUp(): void {
     this.#isCleanedUp = true;
+    if (this.#prebuildTimeout !== undefined) {
+      clearTimeout(this.#prebuildTimeout);
+      this.#prebuildTimeout = undefined;
+    }
     this.stopBackgroundTokenize();
     this.#detachMessageListener();
-    this.#disposes?.forEach((dispose) => dispose());
-    this.#disposes = undefined;
+    this.#systemTheme = undefined;
+    this.#stopObservingSystemTheme();
+    this.#bracketIgnoredRanges.length = 0;
   }
 
-  // to use `tokenize`, call `prebuildStateStackMap` first to prebuild
+  // To use `tokenize`, call `prebuildStateStack` first to prebuild
   // the state stack map for the given render range.
   tokenize(
     change: TextDocumentChange,
@@ -346,11 +382,10 @@ export class EditorTokenizer {
 
     if (this.#matchBrackets) {
       // Clear ignored token ranges for lines invalidated by the edit.
-      for (const line of this.#bracketIgnoredRanges.keys()) {
-        if (line >= change.startLine) {
-          this.#bracketIgnoredRanges.delete(line);
-        }
-      }
+      this.#bracketIgnoredRanges.length = Math.min(
+        this.#bracketIgnoredRanges.length,
+        Math.max(0, change.startLine)
+      );
     }
 
     const { lineCount } = this.#textDocument;
@@ -524,8 +559,17 @@ export class EditorTokenizer {
   }
 
   prebuildStateStack(renderRange?: RenderRange): void {
+    if (this.#isCleanedUp) {
+      return;
+    }
     this.#ensureGrammar();
-    this.#prebuildStateStack(renderRange);
+    if (this.#prebuildTimeout !== undefined) {
+      clearTimeout(this.#prebuildTimeout);
+    }
+    this.#prebuildTimeout = setTimeout(() => {
+      this.#prebuildTimeout = undefined;
+      void this.#prebuildStateStack(renderRange);
+    }, PREBUILD_DELAY);
   }
 
   stopBackgroundTokenize(): void {
@@ -603,7 +647,11 @@ export class EditorTokenizer {
 
   #postTokenizeMessage(jobId: number): void {
     // use `postMessage` instead of `setTimeout(fn, 0)` to avoid 4ms delay
-    globalThis.postMessage({ type: 'tokenize', jobId });
+    globalThis.postMessage({
+      type: 'tokenize',
+      schedulerToken: this.#schedulerToken,
+      jobId,
+    });
   }
 
   #scheduleBackgroundTokenize(
@@ -675,7 +723,7 @@ export class EditorTokenizer {
     ranges: [number, number][] | null
   ): void {
     if (this.#matchBrackets) {
-      this.#bracketIgnoredRanges.set(line, ranges);
+      this.#bracketIgnoredRanges[line] = ranges;
     }
   }
 

@@ -33,12 +33,14 @@ export interface SearchPanelOptions {
 }
 
 export class SearchPanelWidget {
-  #container: HTMLDivElement;
-  #inputElement: HTMLInputElement;
+  #container?: HTMLDivElement;
+  #inputElement?: HTMLInputElement;
   #updateMatches?: (options?: { syncSelection?: boolean }) => void;
   #applyMode?: (mode: SearchPanelMode) => void;
   #navigate?: (findPrevious: boolean) => void;
   #close?: () => void;
+  #initFrame?: number;
+  #cleanedUp = false;
 
   constructor(options: SearchPanelOptions) {
     const {
@@ -73,6 +75,9 @@ export class SearchPanelWidget {
       textContent: 'No results',
     });
     const updateMatches = (options?: { syncSelection?: boolean }) => {
+      if (this.#cleanedUp) {
+        return;
+      }
       matches.all =
         searchParams.text !== '' ? textDocument.search(searchParams) : [];
       const noMatches = matches.all.length === 0;
@@ -212,6 +217,9 @@ export class SearchPanelWidget {
     };
 
     const close = () => {
+      if (this.#cleanedUp) {
+        return;
+      }
       this.cleanup();
       onClose();
     };
@@ -409,9 +417,12 @@ export class SearchPanelWidget {
     // Toggles the panel between find and find/replace modes by showing or
     // hiding the replace cells, then returns focus to the find input.
     const applyMode = (next: SearchPanelMode) => {
+      if (this.#cleanedUp) {
+        return;
+      }
       gridElement.dataset.mode = next;
-      this.#inputElement.focus();
-      this.#inputElement.select();
+      this.#inputElement?.focus();
+      this.#inputElement?.select();
     };
     this.#applyMode = applyMode;
 
@@ -428,18 +439,22 @@ export class SearchPanelWidget {
     matches.current = initialMatch;
     containerElement.before(this.#container);
 
-    requestAnimationFrame(() => {
+    this.#initFrame = requestAnimationFrame(() => {
+      this.#initFrame = undefined;
+      if (this.#cleanedUp) {
+        return;
+      }
       if (initialMatch !== undefined) {
         updateMatches();
       } else {
         onUpdate([]);
       }
-      this.#inputElement.select();
+      this.#inputElement?.select();
     });
   }
 
   focus(): void {
-    this.#inputElement.focus();
+    this.#inputElement?.focus();
   }
 
   navigate(findPrevious: boolean): void {
@@ -465,6 +480,20 @@ export class SearchPanelWidget {
   // highlights in place; only use it when the caller clears that state itself
   // (e.g. a full editor reset). User-initiated dismissals should call close().
   cleanup(): void {
-    this.#container.remove();
+    if (this.#cleanedUp) {
+      return;
+    }
+    this.#cleanedUp = true;
+    if (this.#initFrame !== undefined) {
+      cancelAnimationFrame(this.#initFrame);
+      this.#initFrame = undefined;
+    }
+    this.#container?.remove();
+    this.#container = undefined;
+    this.#inputElement = undefined;
+    this.#updateMatches = undefined;
+    this.#applyMode = undefined;
+    this.#navigate = undefined;
+    this.#close = undefined;
   }
 }

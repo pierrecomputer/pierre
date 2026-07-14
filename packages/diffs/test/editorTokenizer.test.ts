@@ -5,7 +5,7 @@ import {
   TextDocument,
   type TextDocumentChange,
 } from '../src/editor/textDocument';
-import { EditorTokenizer } from '../src/editor/tokenzier';
+import { EditorTokenizer } from '../src/editor/tokenizer';
 import type { DiffsHighlighter, HighlightedToken } from '../src/types';
 
 const noopSetStyle = () => {};
@@ -244,6 +244,58 @@ describe('EditorTokenizer', () => {
     expect(createTokenizer(false).getStringCommentRegexpRangesInLine(0)).toBe(
       null
     );
+  });
+
+  test('invalidates bracket ranges from the first changed line', () => {
+    const stringTokenMetadata = 2 << 8;
+    let tokenizeLineCount = 0;
+    const grammar = {
+      tokenizeLine2(lineText: string, ruleStack: StateStack) {
+        tokenizeLineCount++;
+        return {
+          tokens: new Uint32Array([0, stringTokenMetadata]),
+          ruleStack,
+          stoppedEarly: false,
+          lineText,
+        };
+      },
+    } as unknown as IGrammar;
+    const textDocument = new TextDocument(
+      'test.ts',
+      ['line 0', 'line 1', 'line 2'].join('\n'),
+      'typescript'
+    );
+    const tokenizer = new EditorTokenizer({
+      highlighter: createTestHighlighter({ getLanguage: () => grammar }),
+      textDocument,
+      codeOptions: { theme: 'test-theme', themeType: 'dark' },
+      setStyle: noopSetStyle,
+      onDeferTokenize: () => {},
+    });
+
+    try {
+      tokenizer.getStringCommentRegexpRangesInLine(0);
+      tokenizer.getStringCommentRegexpRangesInLine(2);
+
+      const change = textDocument.applyEdits([
+        {
+          range: {
+            start: { line: 1, character: 0 },
+            end: { line: 1, character: 1 },
+          },
+          newText: 'L',
+        },
+      ])!;
+      tokenizer.tokenize(change);
+      tokenizeLineCount = 0;
+
+      tokenizer.getStringCommentRegexpRangesInLine(0);
+      expect(tokenizeLineCount).toBe(0);
+      tokenizer.getStringCommentRegexpRangesInLine(2);
+      expect(tokenizeLineCount).toBe(1);
+    } finally {
+      tokenizer.cleanUp();
+    }
   });
 
   test('limits foreground tokenization to the render range after prepending lines', () => {
@@ -897,6 +949,155 @@ describe('EditorTokenizer', () => {
     }
   });
 
+  test('routes background messages only to their owning tokenizer', () => {
+    const originalAddEventListener = globalThis.addEventListener;
+    const originalRemoveEventListener = globalThis.removeEventListener;
+    const originalPostMessage = globalThis.postMessage;
+    const listeners: EventListener[] = [];
+    const postedMessages: unknown[] = [];
+
+    globalThis.addEventListener = ((type: string, listener: EventListener) => {
+      if (type === 'message') {
+        listeners.push(listener);
+      }
+    }) as typeof globalThis.addEventListener;
+    globalThis.removeEventListener = ((
+      type: string,
+      listener: EventListener
+    ) => {
+      if (type === 'message') {
+        const index = listeners.indexOf(listener);
+        if (index !== -1) {
+          listeners.splice(index, 1);
+        }
+      }
+    }) as typeof globalThis.removeEventListener;
+    globalThis.postMessage = ((message: unknown) => {
+      postedMessages.push(message);
+    }) as typeof globalThis.postMessage;
+
+    const tokenizeCounts = [0, 0];
+    const tokenizers: EditorTokenizer[] = [];
+    try {
+      for (let index = 0; index < 2; index++) {
+        const grammar = {
+          tokenizeLine2(lineText: string, ruleStack: StateStack) {
+            tokenizeCounts[index]++;
+            return {
+              tokens: new Uint32Array([0, 0]),
+              ruleStack,
+              stoppedEarly: false,
+              lineText,
+            };
+          },
+        } as unknown as IGrammar;
+        const textDocument = new TextDocument(
+          `test-${index}.ts`,
+          ['line 0', 'line 1', 'line 2'].join('\n'),
+          'typescript'
+        );
+        const tokenizer = new EditorTokenizer({
+          highlighter: createTestHighlighter({ getLanguage: () => grammar }),
+          textDocument,
+          codeOptions: { theme: 'test-theme', themeType: 'dark' },
+          setStyle: noopSetStyle,
+          onDeferTokenize: () => {},
+        });
+        tokenizers.push(tokenizer);
+        tokenizer.tokenize(
+          {
+            startLine: 0,
+            startCharacter: 0,
+            endCharacter: 0,
+            endLine: 0,
+            endedAtDocumentEnd: false,
+            previousLineCount: textDocument.lineCount,
+            lineCount: textDocument.lineCount,
+            lineDelta: 0,
+            changedLineRanges: [[0, 0]],
+          },
+          { startingLine: 0, totalLines: 1, bufferBefore: 0, bufferAfter: 0 }
+        );
+      }
+
+      const [firstMessage, secondMessage] = postedMessages as {
+        schedulerToken: number;
+      }[];
+      expect(firstMessage.schedulerToken).not.toBe(
+        secondMessage.schedulerToken
+      );
+      tokenizeCounts.fill(0);
+
+      for (const listener of [...listeners]) {
+        listener({ data: firstMessage } as MessageEvent);
+      }
+
+      expect(tokenizeCounts[0]).toBeGreaterThan(0);
+      expect(tokenizeCounts[1]).toBe(0);
+    } finally {
+      tokenizers.forEach((tokenizer) => tokenizer.cleanUp());
+      globalThis.addEventListener = originalAddEventListener;
+      globalThis.removeEventListener = originalRemoveEventListener;
+      globalThis.postMessage = originalPostMessage;
+    }
+  });
+
+  test('cancels pending state prebuilds on reschedule and cleanup', () => {
+    const originalSetTimeout = globalThis.setTimeout;
+    const originalClearTimeout = globalThis.clearTimeout;
+    const callbacks: (() => void)[] = [];
+    const clearedTimeouts: number[] = [];
+
+    globalThis.setTimeout = ((callback: TimerHandler) => {
+      callbacks.push(callback as () => void);
+      return callbacks.length;
+    }) as typeof globalThis.setTimeout;
+    globalThis.clearTimeout = ((timeout: number) => {
+      clearedTimeouts.push(timeout);
+    }) as typeof globalThis.clearTimeout;
+
+    let tokenizeLineCount = 0;
+    const grammar = {
+      tokenizeLine2(lineText: string, ruleStack: StateStack) {
+        tokenizeLineCount++;
+        return {
+          tokens: new Uint32Array([0, 0]),
+          ruleStack,
+          stoppedEarly: false,
+          lineText,
+        };
+      },
+    } as unknown as IGrammar;
+    const textDocument = new TextDocument(
+      'test.ts',
+      ['line 0', 'line 1'].join('\n'),
+      'typescript'
+    );
+    const tokenizer = new EditorTokenizer({
+      highlighter: createTestHighlighter({ getLanguage: () => grammar }),
+      textDocument,
+      codeOptions: { theme: 'test-theme', themeType: 'dark' },
+      setStyle: noopSetStyle,
+      onDeferTokenize: () => {},
+    });
+
+    try {
+      tokenizer.prebuildStateStack();
+      tokenizer.prebuildStateStack();
+      expect(clearedTimeouts).toEqual([1]);
+
+      tokenizer.cleanUp();
+      expect(clearedTimeouts).toEqual([1, 2]);
+
+      callbacks.forEach((callback) => callback());
+      expect(tokenizeLineCount).toBe(0);
+    } finally {
+      tokenizer.cleanUp();
+      globalThis.setTimeout = originalSetTimeout;
+      globalThis.clearTimeout = originalClearTimeout;
+    }
+  });
+
   test('settles zero-line edits before the viewport without rebuilding to the viewport', () => {
     let tokenizeLineCount = 0;
     const grammar = {
@@ -1441,6 +1642,144 @@ describe('EditorTokenizer', () => {
 
       tokenizer.cleanUp();
     } finally {
+      globalThis.window.matchMedia = originalMatchMedia;
+      if (originalGetComputedStyle === undefined) {
+        Reflect.deleteProperty(globalThis, 'getComputedStyle');
+      } else {
+        Reflect.set(globalThis, 'getComputedStyle', originalGetComputedStyle);
+      }
+      if (originalDocument === undefined) {
+        Reflect.deleteProperty(globalThis, 'document');
+      } else {
+        Reflect.set(globalThis, 'document', originalDocument);
+      }
+      if (originalMutationObserver === undefined) {
+        Reflect.deleteProperty(globalThis, 'MutationObserver');
+      } else {
+        Reflect.set(globalThis, 'MutationObserver', originalMutationObserver);
+      }
+    }
+  });
+
+  test('rewires system theme observers when sync options change', () => {
+    const originalMatchMedia = globalThis.window.matchMedia;
+    const originalGetComputedStyle = Reflect.get(
+      globalThis,
+      'getComputedStyle'
+    );
+    const originalDocument = Reflect.get(globalThis, 'document');
+    const originalMutationObserver = Reflect.get(
+      globalThis,
+      'MutationObserver'
+    );
+    let colorScheme: 'light' | 'dark' = 'light';
+    let mediaListener: EventListener | undefined;
+    let mutationCallback: MutationCallback | undefined;
+    let disconnectCount = 0;
+
+    globalThis.window.matchMedia = (() =>
+      ({
+        addEventListener: (_type: string, listener: EventListener) => {
+          mediaListener = listener;
+        },
+        addListener: () => {},
+        dispatchEvent: () => false,
+        matches: false,
+        media: '(prefers-color-scheme: dark)',
+        onchange: null,
+        removeEventListener: (_type: string, listener: EventListener) => {
+          if (mediaListener === listener) {
+            mediaListener = undefined;
+          }
+        },
+        removeListener: () => {},
+      }) as MediaQueryList) as typeof window.matchMedia;
+    Reflect.set(globalThis, 'document', {
+      body: {},
+      documentElement: {},
+    });
+    Reflect.set(
+      globalThis,
+      'getComputedStyle',
+      (() =>
+        ({ colorScheme }) as CSSStyleDeclaration) as typeof getComputedStyle
+    );
+    Reflect.set(
+      globalThis,
+      'MutationObserver',
+      class {
+        constructor(callback: MutationCallback) {
+          mutationCallback = callback;
+        }
+        observe() {}
+        disconnect() {
+          disconnectCount++;
+        }
+        takeRecords() {
+          return [];
+        }
+      }
+    );
+
+    const appliedThemes: string[] = [];
+    const tokenizer = new EditorTokenizer({
+      highlighter: createTestHighlighter({
+        getLoadedLanguages: () => [],
+        setTheme: (themeName: string) => {
+          appliedThemes.push(themeName);
+          return { colorMap: [''] };
+        },
+      }),
+      textDocument: new TextDocument('test.ts', 'line 0', 'typescript'),
+      codeOptions: {
+        theme: { light: 'initial-light', dark: 'initial-dark' },
+        themeType: 'light',
+      },
+      setStyle: noopSetStyle,
+      onDeferTokenize: () => {},
+    });
+
+    try {
+      expect(mediaListener).toBeUndefined();
+
+      tokenizer.syncTheme({
+        theme: { light: 'system-light', dark: 'system-dark' },
+        themeType: 'system',
+      });
+      expect(mediaListener).toBeDefined();
+      expect(appliedThemes.at(-1)).toBe('system-light');
+
+      colorScheme = 'dark';
+      mutationCallback?.(
+        [{ type: 'attributes', attributeName: 'class' } as MutationRecord],
+        {} as MutationObserver
+      );
+      expect(appliedThemes.at(-1)).toBe('system-dark');
+
+      tokenizer.syncTheme({
+        theme: { light: 'latest-light', dark: 'latest-dark' },
+        themeType: 'system',
+      });
+      colorScheme = 'light';
+      mutationCallback?.(
+        [{ type: 'attributes', attributeName: 'data-theme' } as MutationRecord],
+        {} as MutationObserver
+      );
+      expect(appliedThemes.at(-1)).toBe('latest-light');
+
+      const staleMutationCallback = mutationCallback;
+      tokenizer.syncTheme({ theme: 'fixed-theme', themeType: 'dark' });
+      expect(mediaListener).toBeUndefined();
+      expect(disconnectCount).toBe(1);
+      expect(appliedThemes.at(-1)).toBe('fixed-theme');
+
+      staleMutationCallback?.(
+        [{ type: 'attributes', attributeName: 'class' } as MutationRecord],
+        {} as MutationObserver
+      );
+      expect(appliedThemes.at(-1)).toBe('fixed-theme');
+    } finally {
+      tokenizer.cleanUp();
       globalThis.window.matchMedia = originalMatchMedia;
       if (originalGetComputedStyle === undefined) {
         Reflect.deleteProperty(globalThis, 'getComputedStyle');

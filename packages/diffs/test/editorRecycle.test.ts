@@ -293,4 +293,29 @@ describe('Editor recycle cleanUp', () => {
       dom.cleanup();
     }
   });
+
+  test('an old detach callback cannot clean up a newer attachment', () => {
+    const dom = installDom();
+    try {
+      const editor = new Editor<undefined>();
+      const first = new TestEditableComponent(createFile());
+      const detachFirst = editor.edit(first);
+      const second = new TestEditableComponent({
+        name: 'other.ts',
+        contents: 'zulu',
+        lang: 'text',
+      });
+      const detachSecond = editor.edit(second);
+
+      detachFirst();
+      expect(editor.getText()).toBe('zulu');
+      insertAtStart(editor, 'Y');
+      expect(editor.getText()).toBe('Yzulu');
+
+      detachSecond();
+      expect(editor.getText()).toBe('');
+    } finally {
+      dom.cleanup();
+    }
+  });
 });

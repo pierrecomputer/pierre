@@ -27,6 +27,7 @@ import editorCSS from './editor.css?inline';
 import { EditStack } from './editStack';
 import {
   applyDocumentChangeToLineAnnotations,
+  cancelLineAnnotationRender,
   renderLineAnnotations,
 } from './lineAnnotations';
 import {
@@ -69,7 +70,7 @@ import {
   expandCollapsedSelectionToWord,
   extendSelection,
   extendSelections,
-  findNexMatch,
+  findNextMatch,
   getAutoSurroundReplacementTexts,
   getCaretPosition,
   getDocumentBoundarySelection,
@@ -104,11 +105,10 @@ import {
   Metrics,
   snapTextOffsetToUnicodeBoundary,
 } from './textMeasure';
-import { EditorTokenizer, renderLineTokens } from './tokenzier';
+import { EditorTokenizer, renderLineTokens } from './tokenizer';
 import {
   addEventListener,
   clampDomOffset,
-  extend,
   getLineNumberAttr,
   h,
   round,
@@ -206,6 +206,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #globalEventDisposes?: (() => void)[];
   #selectEventDisposes?: (() => void)[];
   #detach?: (recycle?: boolean) => void;
+  #animationFrames = new Set<number>();
+  #lifecycle = 0;
 
   // cache
   #contentOffset?: { left: number; top: number };
@@ -275,7 +277,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   // handlers prefer this. Empty for a direct content drag (no gutter range).
   #deletedSelectionText = '';
   #reservedSelections?: EditorSelection[];
-  #initSelections?: EditorSelection[];
   #selections?: EditorSelection[];
   #matches?: MatchRange[];
   #scrollingToLine?: number;
@@ -325,6 +326,9 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   }
 
   edit(fileInstance: DiffsEditableComponent<LAnnotation>): () => void {
+    if (this.#fileInstance !== undefined || this.#detach !== undefined) {
+      this.cleanUp();
+    }
     const {
       useTokenTransformer,
       enableGutterUtility,
@@ -350,7 +354,15 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#fileInstance = fileInstance;
     this.#initialize();
     this.#detach = fileInstance.attachEditor(this);
-    return () => this.cleanUp();
+    const lifecycle = this.#lifecycle;
+    return () => {
+      if (
+        lifecycle === this.#lifecycle &&
+        this.#fileInstance === fileInstance
+      ) {
+        this.cleanUp();
+      }
+    };
   }
 
   /**
@@ -580,6 +592,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   }
 
   cleanUp(recycle = false): void {
+    this.#lifecycle++;
+    this.#cancelFrames();
     dequeueRender(this.#handleCustomPasteEvent);
     // The tokenizer is destroyed in both modes: it holds highlighter/worker
     // resources and writes into the (removed below) theme style element.
@@ -599,7 +613,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#fileInfo = undefined;
     }
 
-    // dispse event listeners
+    // dispose event listeners
     this.#globalEventDisposes?.forEach((dispose) => dispose());
     this.#globalEventDisposes = undefined;
     this.#editorEventDisposes?.forEach((dispose) => dispose());
@@ -630,22 +644,42 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#popoverManager?.cleanUp();
     this.#popoverManager = undefined;
     this.#gutterElement = undefined;
-    this.#contentElement?.removeAttribute('contentEditable');
+    if (this.#contentElement !== undefined) {
+      cancelLineAnnotationRender(this.#contentElement);
+      this.#contentElement.removeAttribute('contentEditable');
+    }
     this.#contentElement = undefined;
     this.#contentHasFocus = false;
     this.#overlayElement?.remove();
     this.#overlayElement = undefined;
     this.#resizeObserver?.disconnect();
     this.#resizeObserver = undefined;
+    this.#metrics.cleanUp();
     // Let a reused instance schedule the font re-measure again on its next
     // mount, where a different font-family string may not be loaded yet.
     this.#fontRemeasureScheduled = false;
-    if (this.#themeSelectionRefreshFrame !== undefined) {
-      cancelAnimationFrame(this.#themeSelectionRefreshFrame);
-      this.#themeSelectionRefreshFrame = undefined;
-    }
-
     this.#resetState();
+    this.#fileInstance = undefined;
+  }
+
+  #cancelFrames(): void {
+    for (const frame of this.#animationFrames) {
+      cancelAnimationFrame(frame);
+    }
+    this.#animationFrames.clear();
+    this.#themeSelectionRefreshFrame = undefined;
+  }
+
+  #requestFrame(callback: () => void): number {
+    const lifecycle = this.#lifecycle;
+    const frame = requestAnimationFrame(() => {
+      this.#animationFrames.delete(frame);
+      if (lifecycle === this.#lifecycle) {
+        callback();
+      }
+    });
+    this.#animationFrames.add(frame);
+    return frame;
   }
 
   /** @internal */
@@ -653,7 +687,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     const tokenizer = this.#tokenizer;
     if (tokenizer !== undefined) {
       tokenizer.pauseBackgroundTokenize();
-      requestAnimationFrame(() => {
+      this.#requestFrame(() => {
         tokenizer.resumeBackgroundTokenize();
       });
     }
@@ -752,9 +786,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#tokenizer?.cleanUp();
       this.#tokenizer = undefined;
       this.#resetState();
-      this.#selections = this.#initSelections;
-      requestAnimationFrame(() => {
-        this.#options.onAttach?.(this, this.#fileInstance!);
+      this.#requestFrame(() => {
+        const fileInstance = this.#fileInstance;
+        if (fileInstance !== undefined) {
+          this.#options.onAttach?.(this, fileInstance);
+        }
       });
       if (this.#textDocument !== undefined && this.#options.__debug === true) {
         console.log(
@@ -787,7 +823,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
     if (this.#contentElement !== contentEl) {
       this.#gutterElement = gutterEl;
-      this.#contentElement = extend(contentEl, {
+      this.#contentElement = Object.assign(contentEl, {
         contentEditable: 'true',
         role: 'textbox',
         ariaMultiLine: 'true',
@@ -868,13 +904,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#updateSelections(this.#selections ?? []);
     }
 
-    if (
-      this.#initSelections !== undefined &&
-      this.#primaryCaretElement !== undefined
-    ) {
-      this.#initSelections = undefined;
-      this.#scrollToPrimaryCaret(false, 'center');
-    } else if (this.#scrollingToLine !== undefined) {
+    if (this.#scrollingToLine !== undefined) {
       this.#scrollToLine(
         this.#scrollingToLine,
         this.#scrollingToLineChar,
@@ -940,7 +970,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
   }
 
-  get #diffSyle(): 'unified' | 'split' {
+  get #diffStyle(): 'unified' | 'split' {
     return this.#fileInstance?.options.diffStyle ?? 'split';
   }
 
@@ -972,15 +1002,34 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   }
 
   #resetState(): void {
+    this.#cancelFrames();
     this.#setSelectedLinesSafe(null);
     this.#gutterWidthCache = undefined;
     this.#contentWidthCache = undefined;
+    this.#contentOffset = undefined;
     this.#shouldIgnoreSelectionChange = false;
+    this.#suppressNativeSelectionSync = false;
+    this.#contentHasFocus = false;
+    this.#isComposing = false;
+    this.#isGutterMouseDown = false;
+    this.#isContentMouseDown = false;
+    this.#shiftKeyPressed = false;
+    this.#selectionStart = undefined;
+    this.#deletedSelectionText = '';
     this.#overlayElements?.forEach((el) => el.remove());
     this.#overlayElements = undefined;
+    this.#primaryCaretElement = undefined;
     this.#selections = undefined;
     this.#reservedSelections = undefined;
+    this.#matches = undefined;
+    this.#lineAnnotations = undefined;
+    this.#renderRange = undefined;
+    this.#viewportWindowLines = undefined;
     this.#scrollingToLine = undefined;
+    this.#scrollingToLineChar = undefined;
+    this.#scrollingToLineFixed = false;
+    this.#scrollingToLineNoFocus = false;
+    this.#retainSearchPanelFocus = false;
     this.#markerRenderer?.cleanup();
     this.#markerRenderer = undefined;
     this.#searchPanel?.cleanup();
@@ -1209,7 +1258,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   }
 
   #listenContentElement(contentEl: HTMLElement, gutterEl?: HTMLElement): void {
-    const { onFocus, onBlur } = this.#options;
     const targetIsContentElement = (e: Event) => {
       const target = e.composedPath()[0] as HTMLElement | undefined;
       return (
@@ -1225,7 +1273,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         'focus',
         () => {
           this.#contentHasFocus = true;
-          onFocus?.();
+          this.#options.onFocus?.();
           // A keyboard or direct programmatic refocus restores a stale native
           // Selection that the selectionchange handler would apply over the
           // remapped #selections (after an applyEdits inserted a line above the
@@ -1248,7 +1296,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         'blur',
         () => {
           this.#contentHasFocus = false;
-          onBlur?.();
+          this.#options.onBlur?.();
         },
         { passive: true }
       ),
@@ -1736,16 +1784,23 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
   #handleCustomPasteEvent = async () => {
     const clipboard = this.#options.clipboard;
-    if (clipboard !== undefined) {
-      const text = await clipboard.readText();
-      const textDocument = this.#textDocument;
-      if (textDocument !== undefined) {
-        this.#replaceSelectionText(
-          textDocument.normalizeEol(text),
-          undefined,
-          true
-        );
-      }
+    const textDocument = this.#textDocument;
+    if (clipboard === undefined || textDocument === undefined) {
+      return;
+    }
+    const lifecycle = this.#lifecycle;
+    let text: string;
+    try {
+      text = await clipboard.readText();
+    } catch {
+      return;
+    }
+    if (lifecycle === this.#lifecycle && textDocument === this.#textDocument) {
+      this.#replaceSelectionText(
+        textDocument.normalizeEol(text),
+        undefined,
+        true
+      );
     }
   };
 
@@ -1754,7 +1809,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   // this function computes the content offset to fix
   // the overlay element position.
   #computeContentOffset(contentEl: HTMLElement) {
-    if (this.#isDiff && this.#diffSyle === 'split' && this.#isWrap) {
+    if (this.#isDiff && this.#diffStyle === 'split' && this.#isWrap) {
       this.#contentOffset = {
         top: contentEl.offsetTop,
         left: contentEl.offsetLeft - this.#getGutterWidth(),
@@ -1771,7 +1826,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   // the offset only while the live layout is the one that produced it, so a
   // stale value is never applied to caret, selection, or line-Y positions.
   get #activeContentOffset(): { left: number; top: number } | undefined {
-    if (this.#isDiff && this.#diffSyle === 'split' && this.#isWrap) {
+    if (this.#isDiff && this.#diffStyle === 'split' && this.#isWrap) {
       return this.#contentOffset;
     }
     return undefined;
@@ -1809,7 +1864,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           this.#updateSelections(expanded);
           this.focus();
         } else {
-          const nextMatch = findNexMatch(textDocument, selections);
+          const nextMatch = findNextMatch(textDocument, selections);
           if (nextMatch !== undefined) {
             this.#updateSelections(nextMatch);
             const primaryMatch = nextMatch.at(-1);
@@ -1885,15 +1940,26 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
               });
             }
           }
+          sameLineIndents.sort((a, b) => {
+            const lineOrder = a.line - b.line;
+            return lineOrder !== 0
+              ? lineOrder
+              : a.startCharacter - b.startCharacter;
+          });
+          let line = -1;
+          let startCharacter = -1;
+          let shift = 0;
+          let groupAddedLength = 0;
           for (const indent of sameLineIndents) {
-            let shift = 0;
-            for (const other of sameLineIndents) {
-              if (
-                other.line === indent.line &&
-                other.startCharacter < indent.startCharacter
-              ) {
-                shift += other.addedLength;
-              }
+            if (indent.line !== line) {
+              line = indent.line;
+              startCharacter = indent.startCharacter;
+              shift = 0;
+              groupAddedLength = 0;
+            } else if (indent.startCharacter !== startCharacter) {
+              startCharacter = indent.startCharacter;
+              shift += groupAddedLength;
+              groupAddedLength = 0;
             }
             if (shift !== 0) {
               const current = nextSelections[indent.selectionIndex];
@@ -1907,6 +1973,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
                 direction: DirectionNone,
               };
             }
+            groupAddedLength += indent.addedLength;
           }
           const change = textDocument.applyEdits(
             edits,
@@ -2156,9 +2223,14 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     if (fonts === undefined) {
       return;
     }
+    if (this.#contentElement === undefined) {
+      return;
+    }
+    const lifecycle = this.#lifecycle;
     this.#fontRemeasureScheduled = true;
     void fonts.ready.then(() => {
       if (
+        lifecycle !== this.#lifecycle ||
         this.#contentElement === undefined ||
         !this.#metrics.remeasureCharacterWidth()
       ) {
@@ -2198,7 +2270,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       return;
     }
 
-    // cancel existing background tokenzier task
+    // cancel existing background tokenizer task
     tokenizer.stopBackgroundTokenize();
 
     const t = performance.now();
@@ -2366,7 +2438,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     // the caret would render at the top - the following #scrollToPrimaryCaret
     // then scrolls the viewport there. Drop the geometry caches so the overlay
     // re-measures against the freshly rebuilt rows and the caret stays put.
-    if (this.#isDiff && (this.#diffSyle === 'unified' || didLineCountChange)) {
+    if (this.#isDiff && (this.#diffStyle === 'unified' || didLineCountChange)) {
       this.#resetCache();
     }
 
@@ -2455,11 +2527,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       });
       // call focus in a request animation frame to prevent conflict with
       // the `setBaseAndExtent` method
-      requestAnimationFrame(() => {
+      this.#requestFrame(() => {
         this.#contentElement?.focus({ preventScroll });
         // another request animation frame since the `focus` call
         // may trigger a selectionchange event, which should be ignored
-        requestAnimationFrame(() => {
+        this.#requestFrame(() => {
           this.#shouldIgnoreSelectionChange = false;
         });
       });
@@ -2916,7 +2988,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     if (this.#themeSelectionRefreshFrame !== undefined) {
       return;
     }
-    this.#themeSelectionRefreshFrame = requestAnimationFrame(() => {
+    this.#themeSelectionRefreshFrame = this.#requestFrame(() => {
       this.#themeSelectionRefreshFrame = undefined;
       if (
         this.#selections !== undefined ||
@@ -3007,7 +3079,46 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         primarySelection !== undefined
           ? textDocument.offsetAt(primarySelection.end)
           : -1;
-      for (const [startOffset, endOffset] of this.#matches) {
+      let matchIndex = 0;
+      let visibleEndOffset = Infinity;
+      const renderRange = this.#renderRange;
+      if (
+        renderRange !== undefined &&
+        Number.isFinite(renderRange.totalLines)
+      ) {
+        const { lineCount } = textDocument;
+        const firstLine = Math.max(0, renderRange.startingLine);
+        const lastLine = Math.min(
+          lineCount - 1,
+          firstLine + renderRange.totalLines - 1
+        );
+        if (lastLine < firstLine) {
+          matchIndex = this.#matches.length;
+        } else {
+          const visibleStartOffset = textDocument.offsetAt({
+            line: firstLine,
+            character: 0,
+          });
+          visibleEndOffset = textDocument.offsetAt({
+            line: lastLine,
+            character: textDocument.getLineLength(lastLine),
+          });
+          let high = this.#matches.length;
+          while (matchIndex < high) {
+            const middle = (matchIndex + high) >>> 1;
+            if (this.#matches[middle][1] <= visibleStartOffset) {
+              matchIndex = middle + 1;
+            } else {
+              high = middle;
+            }
+          }
+        }
+      }
+      for (; matchIndex < this.#matches.length; matchIndex++) {
+        const [startOffset, endOffset] = this.#matches[matchIndex];
+        if (startOffset > visibleEndOffset) {
+          break;
+        }
         const range: Range = {
           start: textDocument.positionAt(startOffset),
           end: textDocument.positionAt(endOffset),
@@ -3056,7 +3167,17 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
 
     const { start, end } = range;
-    for (let line = start.line; line <= end.line; line++) {
+    let firstLine = start.line;
+    let lastLine = end.line;
+    const renderRange = this.#renderRange;
+    if (renderRange !== undefined && Number.isFinite(renderRange.totalLines)) {
+      firstLine = Math.max(firstLine, renderRange.startingLine);
+      lastLine = Math.min(
+        lastLine,
+        renderRange.startingLine + renderRange.totalLines - 1
+      );
+    }
+    for (let line = firstLine; line <= lastLine; line++) {
       if (!this.#isLineVisible(line)) {
         continue;
       }
@@ -4078,7 +4199,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           this.#revealLineIfCollapsed(getCaretPosition(revealTarget).line);
         }
         if (this.#primaryCaretElement !== undefined) {
-          requestAnimationFrame(() => {
+          this.#requestFrame(() => {
             this.#primaryCaretElement?.scrollIntoView({
               block: 'nearest',
               inline: 'nearest',
@@ -4186,9 +4307,15 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
     // check if the line is within the render range (fast)
     if (this.#renderRange !== undefined) {
-      const { startingLine } = this.#renderRange;
+      const { startingLine, totalLines } = this.#renderRange;
+      if (
+        Number.isFinite(totalLines) &&
+        (line < startingLine || line >= startingLine + totalLines)
+      ) {
+        return undefined;
+      }
       const { children } = contentElement;
-      for (let i = line - startingLine; i <= children.length; i++) {
+      for (let i = line - startingLine; i < children.length; i++) {
         const child = children[i] as HTMLElement | undefined;
         if (child === undefined) {
           break;
@@ -4210,14 +4337,12 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     // fallback to query selector
     lineElement ??= contentElement.querySelector<HTMLElement>(
       `[data-line="${line + 1}"]` +
-        (this.#diffSyle === 'unified'
+        (this.#diffStyle === 'unified'
           ? ':not([data-line-type="change-deletion"])'
           : '')
     );
 
-    if (lineElement !== undefined) {
-      this.#lineElementsCache.set(line, lineElement);
-    }
+    this.#lineElementsCache.set(line, lineElement ?? null);
     return lineElement ?? undefined;
   }
 

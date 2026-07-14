@@ -735,6 +735,56 @@ describe('Editor clipboard events', () => {
     }
   });
 
+  test('ignores a custom paste that resolves after the editor is recycled', async () => {
+    const { cleanup } = installDom();
+    let resolveRead!: (text: string) => void;
+    let reads = 0;
+    const editor = new Editor<undefined>({
+      clipboard: {
+        readText: () => {
+          reads++;
+          return new Promise<string>((resolve) => {
+            resolveRead = resolve;
+          });
+        },
+      },
+    });
+    const first = new TestEditableComponent({
+      name: 'first.txt',
+      contents: 'alpha',
+      lang: 'text',
+    });
+
+    try {
+      editor.edit(first);
+      editor.setSelections([
+        {
+          start: { line: 0, character: 5 },
+          end: { line: 0, character: 5 },
+          direction: 'none',
+        },
+      ]);
+      dispatchPasteShortcutKeydown(first.contentElement);
+      await wait();
+      expect(reads).toBe(1);
+
+      editor.cleanUp(true);
+      const second = new TestEditableComponent({
+        name: 'second.txt',
+        contents: 'bravo',
+        lang: 'text',
+      });
+      editor.edit(second);
+      resolveRead(' stale');
+      await wait();
+
+      expect(editor.getText()).toBe('bravo');
+    } finally {
+      editor.cleanUp();
+      cleanup();
+    }
+  });
+
   test('rewrites Windows clipboard line breaks to the document EOL on paste', () => {
     const { cleanup } = installDom();
 

@@ -47,9 +47,12 @@ export function isMoveCursorShortcut(
   | 'start'
   | 'textStart'
   | 'end'
+  | 'wordLeft'
+  | 'wordRight'
   | undefined {
+  const isMac = isMacLike();
   // emacs key bindings
-  if (isMacLike() && e.ctrlKey && !e.altKey && !e.metaKey) {
+  if (isMac && e.ctrlKey && !e.altKey && !e.metaKey) {
     switch (e.key) {
       case 'a':
         return 'start';
@@ -63,6 +66,17 @@ export function isMoveCursorShortcut(
         return 'right';
       case 'b':
         return 'left';
+    }
+  }
+
+  const wordModifier = isMac
+    ? e.altKey && !e.ctrlKey && !e.metaKey
+    : e.ctrlKey && !e.altKey && !e.metaKey;
+  if (wordModifier) {
+    if (e.key === 'ArrowLeft') {
+      return 'wordLeft';
+    } else if (e.key === 'ArrowRight') {
+      return 'wordRight';
     }
   }
 
@@ -82,7 +96,7 @@ export function isMoveCursorShortcut(
     }
   }
 
-  if (isPrimaryModifier(e)) {
+  if (isMac && isPrimaryModifier(e, isMac)) {
     if (e.key === 'ArrowLeft') {
       return 'textStart';
     } else if (e.key === 'ArrowRight') {

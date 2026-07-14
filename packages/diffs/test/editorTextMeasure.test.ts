@@ -50,17 +50,26 @@ function stubBoundingClientRectWidth(width: number | (() => number)): {
   };
 }
 
-function stubCanvasTextWidth(measureTextWidth: (text: string) => number): void {
+function stubCanvasTextWidth(
+  measureTextWidth: (text: string) => number
+): () => string {
+  let font = '';
   Object.defineProperty(window.HTMLCanvasElement.prototype, 'getContext', {
     configurable: true,
     value: (contextId: string) =>
       contextId === '2d'
         ? {
-            font: '',
+            get font(): string {
+              return font;
+            },
+            set font(value: string) {
+              font = value;
+            },
             measureText: (text: string) => ({ width: measureTextWidth(text) }),
           }
         : null,
   });
+  return () => font;
 }
 
 describe('needsDomTextMeasurement', () => {
@@ -183,6 +192,12 @@ describe('getExpandedAsciiTextColumns', () => {
     expect(getExpandedAsciiTextColumns('\t', 4)).toBe(4);
     expect(getExpandedAsciiTextColumns('\t\t', 4)).toBe(8);
     expect(getExpandedAsciiTextColumns('\t', 2)).toBe(2);
+  });
+
+  test('non-positive tab sizes treat tabs as zero-width', () => {
+    expect(getExpandedAsciiTextColumns('\t', 0)).toBe(0);
+    expect(getExpandedAsciiTextColumns('a\tb', 0)).toBe(2);
+    expect(getExpandedAsciiTextColumns('\t', -2)).toBe(0);
   });
 
   // Regression: a tab is a tab stop, not a fixed tabSize-wide character. A tab
@@ -412,41 +427,113 @@ describe('Metrics.measureTextWidth (DOM path)', () => {
     }
   });
 
-  test('re-measures after the font changes', () => {
+  test('refreshes styles and cached widths when the same root font changes', () => {
     const { cleanup } = installDom();
     const rect = stubBoundingClientRectWidth(10);
     const realGetComputedStyle = globalThis.getComputedStyle;
+    const root = document.createElement('div');
+    document.body.appendChild(root);
     let fontFamily = 'monospace';
-    // Drive the font Metrics.init() reads so the test controls when the font
-    // string changes, independent of jsdom's computed-style behavior.
-    globalThis.getComputedStyle = (() =>
-      ({
-        fontSize: '12px',
-        fontFamily,
-        tabSize: '2',
-        lineHeight: '20px',
-        paddingTop: '0px',
-      }) as CSSStyleDeclaration) as typeof getComputedStyle;
+    let fontStretch = 'normal';
+    let fontStyle = 'normal';
+    let fontWeight = '400';
+    let lineHeight = '20px';
+    let paddingTop = '1px';
+    let tabSize = '2';
+    const getCanvasFont = stubCanvasTextWidth(() => 8);
+    globalThis.getComputedStyle = ((element: Element) =>
+      (element === root
+        ? {
+            fontFamily,
+            fontSize: '12px',
+            fontStretch,
+            fontStyle,
+            fontWeight,
+            lineHeight,
+            tabSize,
+          }
+        : {
+            paddingTop,
+          }) as unknown as CSSStyleDeclaration) as typeof getComputedStyle;
     try {
-      const rootA = document.createElement('div');
-      document.body.appendChild(rootA);
       const metrics = new Metrics();
-      metrics.init(rootA);
+      metrics.init(root);
 
       const emoji = '😀';
       metrics.measureTextWidth(emoji);
       metrics.measureTextWidth(emoji);
       expect(rect.getCallCount()).toBe(1);
 
-      // A new content element with a different font invalidates cached widths.
+      // Re-initializing the same element still reads its current inherited
+      // layout and the complete canvas font signature.
       fontFamily = 'serif';
-      const rootB = document.createElement('div');
-      document.body.appendChild(rootB);
-      metrics.init(rootB);
+      fontStretch = 'condensed';
+      fontStyle = 'italic';
+      fontWeight = '700';
+      lineHeight = '24px';
+      paddingTop = '6px';
+      tabSize = '4';
+      metrics.init(root);
+
+      expect(getCanvasFont()).toBe('italic 700 condensed 12px serif');
+      expect(metrics.lineHeight).toBe(24);
+      expect(metrics.paddingTop).toBe(6);
+      expect(metrics.tabSize).toBe(4);
       metrics.measureTextWidth(emoji);
       expect(rect.getCallCount()).toBe(2);
     } finally {
       globalThis.getComputedStyle = realGetComputedStyle;
+      rect.restore();
+      cleanup();
+    }
+  });
+
+  test('does not retain very large Unicode strings in the width cache', () => {
+    const { cleanup } = installDom();
+    const rect = stubBoundingClientRectWidth(20);
+    try {
+      const root = document.createElement('div');
+      document.body.appendChild(root);
+      const metrics = new Metrics();
+      metrics.init(root);
+
+      const text = '😀'.repeat(1024);
+      metrics.measureTextWidth(text);
+      metrics.measureTextWidth(text);
+
+      expect(rect.getCallCount()).toBe(2);
+    } finally {
+      rect.restore();
+      cleanup();
+    }
+  });
+
+  test('cleanUp releases the root and cached measurements', () => {
+    const { cleanup } = installDom();
+    const rect = stubBoundingClientRectWidth(20);
+    try {
+      const root = document.createElement('div');
+      document.body.appendChild(root);
+      const metrics = new Metrics();
+      metrics.init(root);
+
+      const emoji = '😀';
+      metrics.measureTextWidth(emoji);
+      metrics.measureTextWidth(emoji);
+      expect(rect.getCallCount()).toBe(1);
+
+      metrics.cleanUp();
+      expect(metrics.ch).toBe(-1);
+      expect(() => metrics.domMeasureTextWidth(emoji)).toThrow(
+        'Metrics not initialized'
+      );
+
+      const nextRoot = document.createElement('div');
+      document.body.appendChild(nextRoot);
+      metrics.init(nextRoot);
+      metrics.measureTextWidth(emoji);
+      expect(rect.getCallCount()).toBe(2);
+    } finally {
       rect.restore();
       cleanup();
     }

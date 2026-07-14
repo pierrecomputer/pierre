@@ -397,6 +397,106 @@ describe('renderLineAnnotations', () => {
     }
   });
 
+  test('aligns unequal non-empty paired annotation heights', async () => {
+    const { cleanup } = installDom();
+    try {
+      const { content, gutter, leftContent } = createSplitAnnotationHost(1);
+
+      renderLineAnnotations(
+        [
+          { side: 'additions', lineNumber: 1, metadata: 'new' },
+          { side: 'deletions', lineNumber: 1, metadata: 'old' },
+        ],
+        content,
+        gutter
+      );
+      const addition = content.querySelector<HTMLElement>(
+        '[data-line-annotation="0,0"]'
+      )!;
+      const deletion = leftContent.querySelector<HTMLElement>(
+        '[data-line-annotation="0,0"]'
+      )!;
+      setAnnotationContentHeight(addition, 12);
+      setAnnotationContentHeight(deletion, 24);
+
+      await wait();
+
+      expect(
+        addition.style.getPropertyValue('--diffs-annotation-min-height')
+      ).toBe('24px');
+      expect(
+        deletion.style.getPropertyValue('--diffs-annotation-min-height')
+      ).toBe('');
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('cancels and ignores a stale frame when rendered twice', () => {
+    const { cleanup } = installDom();
+    try {
+      const frames = new Map<number, FrameRequestCallback>();
+      const canceledFrames: number[] = [];
+      let nextFrame = 0;
+      globalThis.requestAnimationFrame = (callback) => {
+        const frame = ++nextFrame;
+        frames.set(frame, callback);
+        return frame;
+      };
+      globalThis.cancelAnimationFrame = (frame) => {
+        canceledFrames.push(frame);
+      };
+      const { content, gutter, leftContent } = createSplitAnnotationHost(2);
+
+      renderLineAnnotations(
+        [
+          { side: 'additions', lineNumber: 1, metadata: 'new-1' },
+          { side: 'deletions', lineNumber: 1, metadata: 'old-1' },
+        ],
+        content,
+        gutter
+      );
+      const staleAddition = content.querySelector<HTMLElement>(
+        '[data-line-annotation="0,0"]'
+      )!;
+      const staleDeletion = leftContent.querySelector<HTMLElement>(
+        '[data-line-annotation="0,0"]'
+      )!;
+      setAnnotationContentHeight(staleAddition, 10);
+      setAnnotationContentHeight(staleDeletion, 20);
+
+      renderLineAnnotations(
+        [
+          { side: 'additions', lineNumber: 2, metadata: 'new-2' },
+          { side: 'deletions', lineNumber: 2, metadata: 'old-2' },
+        ],
+        content,
+        gutter
+      );
+      const currentAddition = content.querySelector<HTMLElement>(
+        '[data-line-annotation="0,1"]'
+      )!;
+      const currentDeletion = leftContent.querySelector<HTMLElement>(
+        '[data-line-annotation="0,1"]'
+      )!;
+      setAnnotationContentHeight(currentAddition, 30);
+      setAnnotationContentHeight(currentDeletion, 40);
+
+      expect(canceledFrames).toEqual([1]);
+      frames.get(1)!(0);
+      expect(
+        staleAddition.style.getPropertyValue('--diffs-annotation-min-height')
+      ).toBe('');
+
+      frames.get(2)!(0);
+      expect(
+        currentAddition.style.getPropertyValue('--diffs-annotation-min-height')
+      ).toBe('40px');
+    } finally {
+      cleanup();
+    }
+  });
+
   test('renders addition annotations when there is no paired deletions side', async () => {
     const { cleanup } = installDom();
     try {
@@ -472,6 +572,16 @@ function appendRenderedLine(
   const gutterLine = document.createElement('div');
   gutterLine.dataset.columnNumber = String(lineNumber);
   gutter.append(gutterLine);
+}
+
+function setAnnotationContentHeight(
+  annotation: HTMLElement,
+  height: number
+): void {
+  Object.defineProperty(annotation.firstElementChild, 'getBoundingClientRect', {
+    configurable: true,
+    value: () => ({ height }) as DOMRect,
+  });
 }
 
 // A single (unified) code element with no left [data-deletions] sibling, which

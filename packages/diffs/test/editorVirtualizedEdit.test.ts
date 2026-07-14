@@ -304,3 +304,45 @@ describe('Editor edits at the bottom of a virtualized window', () => {
     }
   });
 });
+
+describe('Editor selections in a virtualized window', () => {
+  test('bounds document-wide selection lookups to the rendered lines', async () => {
+    const lineCount = 10_000;
+    const range = makeRange(4_000, 50);
+    const { cleanup, content, editor } = await createWindowedEditor(
+      lineCount,
+      range
+    );
+    const querySelector = content.querySelector.bind(content);
+    let lineQueries = 0;
+    Object.defineProperty(content, 'querySelector', {
+      configurable: true,
+      value(selectors: string) {
+        if (selectors.startsWith('[data-line="')) {
+          lineQueries++;
+        }
+        return querySelector(selectors);
+      },
+    });
+
+    try {
+      const event = new window.KeyboardEvent('keydown', {
+        key: 'a',
+        code: 'KeyA',
+        metaKey: true,
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+      });
+      content.dispatchEvent(event);
+
+      const selection = editor.getState().selections?.[0];
+      expect(event.defaultPrevented).toBe(true);
+      expect(selection?.start.line).toBe(0);
+      expect(selection?.end.line).toBe(lineCount - 1);
+      expect(lineQueries).toBeLessThanOrEqual(range.totalLines);
+    } finally {
+      cleanup();
+    }
+  });
+});
