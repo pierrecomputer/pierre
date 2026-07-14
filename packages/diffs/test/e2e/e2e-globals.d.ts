@@ -61,6 +61,7 @@ interface Window {
   __annotationsReady?: boolean;
   __themeReady?: boolean;
   __selectionActionReady?: boolean;
+  __selectionActionEdgesReady?: boolean;
 
   // Interaction logs populated by fixture callbacks.
   __editorEvents?: string[];

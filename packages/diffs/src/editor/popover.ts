@@ -176,6 +176,15 @@ export class PopoverManager {
       topScreen = 0;
       bottomScreen = window.innerHeight;
     }
+    // The overlay that hosts the popover lives inside `[data-code]`, which uses
+    // `overflow-y: clip` (see style.css). A short file smaller than the
+    // scrollport therefore clips the popover at its own top/bottom even when the
+    // window/scroll container still has room beyond those edges. Intersect the
+    // scrollport with the code element's own box so a first/last-line popover
+    // flips to the side that actually fits within that clip, not just within the
+    // outer viewport.
+    topScreen = Math.max(topScreen, codeRect.top);
+    bottomScreen = Math.min(bottomScreen, codeRect.bottom);
     if (bottomScreen <= topScreen) {
       return undefined;
     }
@@ -215,13 +224,14 @@ export class PopoverManager {
   // file container so it is not re-resolved on every render.
   //
   // Known limitations: this only inspects light-DOM ancestors outside the
-  // shadow root, so it cannot see a clip boundary inside it (e.g. `[data-code]`
-  // itself uses `overflow-y: clip`, which also is not one of the values matched
-  // below) and cannot cross into an outer shadow root if the file container is
-  // itself nested in another web component. It also only considers the
-  // *nearest* scrollable ancestor, not the intersection of every clipping
-  // ancestor, so a popover could still be clipped by an outer scroll context
-  // even when it fits within this nearer one.
+  // shadow root, so it cannot see arbitrary clip boundaries inside it and cannot
+  // cross into an outer shadow root if the file container is itself nested in
+  // another web component. It also only considers the *nearest* scrollable
+  // ancestor, not the intersection of every clipping ancestor, so a popover
+  // could still be clipped by an outer scroll context even when it fits within
+  // this nearer one. The `[data-code]` element's own `overflow-y: clip` box is
+  // handled separately in getPlacementBounds, which intersects it with whatever
+  // scrollport this method resolves.
   #getScrollContainer(): HTMLElement | undefined {
     const fileContainer = this.#fileContainer;
     if (fileContainer === undefined) {
