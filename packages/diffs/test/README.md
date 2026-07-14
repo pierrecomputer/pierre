@@ -103,7 +103,7 @@ order. If you touch one of these areas, consider adding the missing coverage:
 - **IME composition deferrals** — IME/composition interaction with editing and
   undo-coalescing is deferred and not covered.
 
-## Known bugs pinned as `test.failing` (30)
+## Known bugs pinned as `test.failing` (32)
 
 - **EditStack coalescing** (3) — coalescing decisions compare a new edit against
   whatever sits on top of the undo stack purely by geometry, with no state reset
@@ -133,12 +133,22 @@ order. If you touch one of these areas, consider adding the missing coverage:
   the indent unit on empty and whitespace-only lines inside the selection,
   injecting trailing whitespace on lines the user never touched (outdent
   round-trips it away, bounding the damage).
-- **History across non-history edits** (5) — history entries are frozen at
-  creation and never remapped through edits applied without history tracking:
-  stale-offset undo can corrupt text, batch inversion breaks across an
-  interleaved non-tracked insert, interior non-tracked inserts don't survive
-  undo of a tracked insertion, stored entry selections are restored without
-  remapping, and redo replays at stale offsets.
+- **History equivalence across non-history edits** (7) — edits applied with
+  `updateHistory=false` are an implementation detail of how an edit reaches
+  `applyEdits`, not a separate semantic class: a mixed programmatic/local
+  sequence must leave history equivalent to the same sequence applied
+  all-local, so undo-to-exhaustion restores the original byte-exact text and
+  redo-to-exhaustion the final text. Today untracked edits bypass the edit
+  stack and existing entries apply at stale offsets, so exhaustion corrupts
+  instead: a stale-offset undo deletes the wrong characters, a replacement
+  batch breaks across an interleaved untracked insert, an untracked interior
+  insert is erased while tracked text is stranded, an untracked
+  whole-document replace produces spliced states that never existed on any
+  timeline, typing coalesced around an untracked insert unwinds to the
+  untracked remainder instead of the original text, the unwind that should
+  restore recorded selections verbatim never reaches the original text, and a
+  pending redo survives an untracked edit (instead of being cleared like any
+  new edit) and replays at stale offsets.
 - **Position round-trip losing a column** (1) — a position-from-offset
   computation can return a position strictly inside a CRLF pair (a character
   beyond the line's own length) that the inverse offset-from-position
