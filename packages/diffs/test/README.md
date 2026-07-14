@@ -6,6 +6,16 @@ Run from this package directory:
 AGENT=1 bun test
 ```
 
+## Legacy-editor test suites
+
+`monaco-legacy-tests/` (microsoft/vscode, MIT), `codemirror-legacy-tests/`
+(CodeMirror 6, MIT), and `textmate-legacy-tests/` (TextMate 2, GPL-3.0 —
+behavioral contracts only, zero adapted source; see its README) hold
+editor-behavior scenarios harvested from other editors' test suites. See each
+directory's README for provenance, the `test.failing` known-bug convention, and
+the `DIVERGENCE:` comment policy. Discovered by the normal `bun test` run like
+any other `*.test.ts` files.
+
 ## Conventions
 
 - Shared DOM bootstrap lives in `domHarness.ts` (`installDom` always installs
