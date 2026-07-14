@@ -49,4 +49,18 @@ describe('FileRenderer', () => {
     const cache = (instance as unknown as FileRendererCacheProbe).renderCache;
     expect(cache?.result?.code).toHaveLength(2);
   });
+
+  test('rebuilds an unkeyed file mutated in place', async () => {
+    const instance = new FileRenderer();
+    const file: FileContents = {
+      contents: 'alpha',
+      name: 'mutable.ts',
+    };
+
+    await instance.asyncRender(file);
+    expect(instance.renderFile(file)?.rowCount).toBe(1);
+
+    file.contents = 'alpha\nbeta\ngamma';
+    expect(instance.renderFile(file)?.rowCount).toBe(3);
+  });
 });

@@ -85,6 +85,7 @@ export interface FileRenderResult {
 interface LineCache {
   cacheKey: string | undefined;
   file: FileContents;
+  sourceContents: string;
   lines: string[];
 }
 
@@ -92,7 +93,7 @@ interface LineCache {
 // files stay isolated by object identity while still supporting edit recycle.
 function isLineCacheForFile(lineCache: LineCache, file: FileContents): boolean {
   return file.cacheKey == null
-    ? lineCache.file === file
+    ? lineCache.file === file && lineCache.sourceContents === file.contents
     : lineCache.cacheKey === file.cacheKey;
 }
 
@@ -181,6 +182,26 @@ export class FileRenderer<LAnnotation = undefined> {
     renderCache.file.contents = lineCache.lines.join('');
   }
 
+  // Unkeyed files use object identity, so compare the retained source text to
+  // detect in-place mutations that an aliased file object cannot reveal.
+  public hasUnkeyedFileContentsChanged(file: FileContents): boolean {
+    const { lineCache } = this;
+    return (
+      file.cacheKey == null &&
+      lineCache != null &&
+      lineCache.file === file &&
+      lineCache.sourceContents !== file.contents
+    );
+  }
+
+  private invalidateChangedUnkeyedFile(file: FileContents): void {
+    if (!this.hasUnkeyedFileContentsChanged(file)) return;
+    this.workerManager?.cleanUpTasks(this);
+    this.clearRenderCache();
+    this.lineCache = undefined;
+    this.textDocumentCache = new WeakMap();
+  }
+
   public clearRenderCache(): void {
     this.syncEditedContentsToFile();
     const renderCache = this.renderCache;
@@ -255,11 +276,13 @@ export class FileRenderer<LAnnotation = undefined> {
   }
 
   public getOrCreateLineCache(file: FileContents): string[] {
+    this.invalidateChangedUnkeyedFile(file);
     let { lineCache } = this;
     if (lineCache == null || !isLineCacheForFile(lineCache, file)) {
       lineCache = {
         cacheKey: file.cacheKey,
         file,
+        sourceContents: file.contents,
         lines: linesFromFileContents(file.contents),
       };
     }
@@ -270,10 +293,8 @@ export class FileRenderer<LAnnotation = undefined> {
   // when a emitLineCountChange is called,
   // calculate the line count using the cached text document
   public getLineCount(file: FileContents): number {
-    return (
-      this.textDocumentCache.get(file)?.lineCount ??
-      this.getOrCreateLineCache(file).length
-    );
+    const lines = this.getOrCreateLineCache(file);
+    return this.textDocumentCache.get(file)?.lineCount ?? lines.length;
   }
 
   public updateRenderCache(
@@ -392,6 +413,7 @@ export class FileRenderer<LAnnotation = undefined> {
     this.lineCache = {
       cacheKey: file.cacheKey,
       file,
+      sourceContents: file.contents,
       lines: linesFromFileContents(textDocument.getText()),
     };
     this.textDocumentCache.set(file, textDocument);
@@ -404,6 +426,7 @@ export class FileRenderer<LAnnotation = undefined> {
     if (file == null) {
       return undefined;
     }
+    this.invalidateChangedUnkeyedFile(file);
     if (
       this.renderCache?.isDirty === true &&
       !areFilesEqual(file, this.renderCache.file)

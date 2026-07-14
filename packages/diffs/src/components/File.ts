@@ -608,7 +608,9 @@ export class File<
       (lineAnnotations.length > 0 || this.lineAnnotations.length > 0)
         ? lineAnnotations !== this.lineAnnotations
         : false;
-    const didFileChange = !areFilesEqual(this.file, file);
+    const didFileChange =
+      !areFilesEqual(this.file, file) ||
+      this.fileRenderer.hasUnkeyedFileContentsChanged(file);
     if (
       !collapsed &&
       !forceRender &&
