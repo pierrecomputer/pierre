@@ -33,8 +33,9 @@ export interface FileContents {
   /** Optional header passed to the jsdiff library's `createTwoFilesPatch`. */
   header?: string;
   /**
-   * Identifies a file revision for worker highlighting and persisted editor
-   * state. Editor persistence falls back to `name` when this is omitted.
+   * Identifies a file for caching. Optional for read-only rendering, but
+   * required and expected to be unique and stable when Editor `persistState`
+   * is enabled.
    */
   cacheKey?: string;
 }
@@ -1017,6 +1018,8 @@ export interface DiffsBaseComponent {
 export interface DiffsEditableComponent<
   LAnnotation,
 > extends DiffsBaseComponent {
+  /** @internal Return the current file when this component renders one. */
+  __getCurrentFile?: () => FileContents | undefined;
   /**
    * Return the position and height of a one-based line relative to this component.
    * The host uses it to scroll to virtualized lines before their DOM nodes exist.

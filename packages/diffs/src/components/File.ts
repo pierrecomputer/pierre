@@ -209,6 +209,10 @@ export class File<
     });
   }
 
+  public __getCurrentFile(): FileContents | undefined {
+    return this.file;
+  }
+
   public onThemeChange(): void {
     this.fileRenderer.clearRenderCache();
     this.rerender();
@@ -591,9 +595,6 @@ export class File<
     lineAnnotations,
     renderRange,
   }: FileRenderProps<LAnnotation>): boolean {
-    // use the file name as the cache key if it is not set
-    file.cacheKey ??= file.name;
-
     // postpone background tokenizing to next frame for avoiding UI freeze
     // during render
     this.editor?.__postponeBgTokenizeToNextFrame();

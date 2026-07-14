@@ -42,6 +42,7 @@ describe('VirtualizedFile persisted layout', () => {
     const originalFile: FileContents = {
       name: 'file.ts',
       contents: 'one',
+      cacheKey: 'file',
     };
     const cachedFile: FileContents = {
       ...originalFile,

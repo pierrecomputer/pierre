@@ -486,8 +486,9 @@ interface EditorOptions<LAnnotation> {
   // Max undo stack entries
   historyMaxEntries?: number;
 
-  // Preserve each File's document and editor state between renders
-  // (default: false)
+  // Preserve each File's document and editor state between renders.
+  // Requires every editable file to provide a unique, stable cacheKey.
+  // Default: false.
   persistState?: boolean;
 
   // Where serializable editor state is stored. Text documents and undo

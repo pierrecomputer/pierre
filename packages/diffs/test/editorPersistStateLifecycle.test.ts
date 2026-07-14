@@ -14,6 +14,7 @@ afterAll(async () => {
 const ORIGINAL_FILE: FileContents = {
   name: 'persisted.ts',
   contents: 'alpha\nbravo\n',
+  cacheKey: 'persisted.ts',
 };
 
 interface AttachedFile {
@@ -74,10 +75,12 @@ async function renderFile(
     fileContainer: attached.container,
     forceRender: true,
   });
-  const expectedKey = fileContents.cacheKey ?? fileContents.name;
   await waitFor(() => {
     const file = editor.getFile();
-    return file !== undefined && (file.cacheKey ?? file.name) === expectedKey;
+    return (
+      file?.name === fileContents.name &&
+      file.cacheKey === fileContents.cacheKey
+    );
   });
 }
 
@@ -154,6 +157,7 @@ describe('Editor persisted state lifecycle', () => {
       await renderFile(editor, attached, {
         name: 'next.ts',
         contents: 'zulu\n',
+        cacheKey: 'next.ts',
       });
       editor.setSelections([
         {
@@ -204,12 +208,14 @@ describe('Editor persisted state lifecycle', () => {
       await renderFile(editor, attached, {
         name: 'saved.ts',
         contents: 'saved\n',
+        cacheKey: 'saved.ts',
       });
       await waitFor(() => delayedReadStarted);
 
       await renderFile(editor, attached, {
         name: 'next.ts',
         contents: 'next\n',
+        cacheKey: 'next.ts',
       });
       pendingRead.resolve(storedState);
       await wait(0);
@@ -219,6 +225,7 @@ describe('Editor persisted state lifecycle', () => {
       await renderFile(editor, attached, {
         name: 'saved.ts',
         contents: 'saved\n',
+        cacheKey: 'saved.ts',
       });
       expect(editor.getState().selections).toEqual(storedState.selections);
     } finally {
@@ -272,6 +279,7 @@ describe('Editor persisted state lifecycle', () => {
       await renderFile(editor, attached, {
         name: 'next.ts',
         contents: 'next\n',
+        cacheKey: 'next.ts',
       });
 
       await renderFile(editor, attached, { ...ORIGINAL_FILE });
@@ -285,6 +293,7 @@ describe('Editor persisted state lifecycle', () => {
       await renderFile(editor, attached, {
         name: 'next.ts',
         contents: 'next\n',
+        cacheKey: 'next.ts',
       });
 
       expect(writes).toHaveLength(1);

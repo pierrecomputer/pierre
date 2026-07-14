@@ -63,7 +63,11 @@ async function createEditorFixture(
     ...fileOptions,
   });
   const editor = new Editor<undefined>(editorOptions);
-  const initialFile: FileContents = { name: 'edits.ts', contents };
+  const initialFile: FileContents = {
+    name: 'edits.ts',
+    contents,
+    ...(editorOptions?.persistState === true ? { cacheKey: 'edits-file' } : {}),
+  };
 
   file.render({ file: initialFile, fileContainer, forceRender: true });
   editor.edit(file);
@@ -139,7 +143,6 @@ async function renderFileAndWait(
   fixture: EditorFixture,
   fileContents: FileContents
 ): Promise<void> {
-  const cacheKey = fileContents.cacheKey ?? fileContents.name;
   fixture.file.render({
     file: fileContents,
     fileContainer: fixture.fileContainer,
@@ -147,11 +150,68 @@ async function renderFileAndWait(
   });
   await waitFor(() => {
     const file = fixture.editor.getFile();
-    return file !== undefined && (file.cacheKey ?? file.name) === cacheKey;
+    return (
+      file?.name === fileContents.name &&
+      file.cacheKey === fileContents.cacheKey
+    );
   });
 }
 
 describe('Editor persisted file state', () => {
+  test('requires an explicit cache key when enabled', () => {
+    const dom = installDom();
+    const fileContainer = document.createElement('div');
+    const fileContents: FileContents = {
+      name: 'unkeyed.ts',
+      contents: 'alpha\n',
+    };
+    const file = new File<undefined>({
+      disableFileHeader: true,
+      theme: DEFAULT_THEMES,
+    });
+    const editor = new Editor<undefined>({ persistState: true });
+
+    try {
+      file.render({ file: fileContents, fileContainer, forceRender: true });
+
+      expect(() => editor.edit(file)).toThrow(
+        'Editor persistState requires a non-empty file.cacheKey for "unkeyed.ts".'
+      );
+      expect(fileContents.cacheKey).toBeUndefined();
+    } finally {
+      editor.cleanUp();
+      file.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test('rejects enabling persistence before an attached file finishes syncing', () => {
+    const dom = installDom();
+    const fileContainer = document.createElement('div');
+    const file = new File<undefined>({
+      disableFileHeader: true,
+      theme: DEFAULT_THEMES,
+    });
+    const editor = new Editor<undefined>();
+
+    try {
+      file.render({
+        file: { name: 'edits.ts', contents: 'alpha\n' },
+        fileContainer,
+        forceRender: true,
+      });
+      editor.edit(file);
+
+      expect(() => editor.setOptions({ persistState: true })).toThrow(
+        'Editor persistState requires a non-empty file.cacheKey for "edits.ts".'
+      );
+    } finally {
+      editor.cleanUp();
+      file.cleanUp();
+      dom.cleanup();
+    }
+  });
+
   test('is disabled by default', async () => {
     const storageCalls: string[] = [];
     const storage: IStateStorage = {
@@ -177,6 +237,7 @@ describe('Editor persisted file state', () => {
       await renderFileAndWait(fixture, {
         name: 'edits.ts',
         contents: 'alpha\nbravo\n',
+        cacheKey: 'edits-file',
       });
 
       expect(fixture.editor.getText()).toBe('alpha\nbravo\n');
@@ -207,11 +268,11 @@ describe('Editor persisted file state', () => {
         contents: 'one\n',
         cacheKey: 'other',
       });
-      // This fresh object carries the original contents and no explicit key;
-      // the persisted document is found through the filename fallback.
+      // A fresh object with the same explicit key resumes the editing session.
       await renderFileAndWait(fixture, {
         name: 'edits.ts',
         contents: 'alpha\nbravo\n',
+        cacheKey: 'edits-file',
       });
 
       expect(fixture.editor.getText()).toBe('Xalpha\nbravo\n');
@@ -236,7 +297,7 @@ describe('Editor persisted file state', () => {
     }
   });
 
-  test('uses a custom state storage with the normalized file key', async () => {
+  test('uses a custom state storage with the explicit file key', async () => {
     const states = new Map<string, ReturnType<Editor<undefined>['getState']>>();
     const calls: string[] = [];
     const storage: IStateStorage = {
@@ -270,12 +331,13 @@ describe('Editor persisted file state', () => {
       await renderFileAndWait(fixture, {
         name: 'edits.ts',
         contents: 'alpha\nbravo\n',
+        cacheKey: 'edits-file',
       });
 
-      expect(calls).toContain('set:edits.ts');
+      expect(calls).toContain('set:edits-file');
       expect(calls).toContain('get:other-revision');
       expect(calls).toContain('set:other-revision');
-      expect(calls.at(-1)).toBe('get:edits.ts');
+      expect(calls.at(-1)).toBe('get:edits-file');
       expect(fixture.editor.getState().selections?.[0]).toMatchObject({
         start: { line: 0, character: 2 },
         end: { line: 0, character: 2 },

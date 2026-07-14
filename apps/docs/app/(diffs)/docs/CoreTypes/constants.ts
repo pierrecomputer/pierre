@@ -27,10 +27,9 @@ interface FileContents {
   // See: https://shiki.style/languages
   lang?: SupportedLanguages;
 
-  // Optional identity for Worker Pool caching and Editor persistence.
-  // For read-only rendering, change it whenever the content, filename,
-  // language, or revision changes. With Editor.persistState, reusing a key
-  // intentionally resumes that cached editing session.
+  // Optional identity for Worker Pool caching. Required when
+  // Editor.persistState is enabled; use a unique, stable key for that editing
+  // session and reuse it only when the cached document should resume.
   cacheKey?: string;
 }
 

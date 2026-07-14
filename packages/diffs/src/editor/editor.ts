@@ -146,10 +146,15 @@ function getShadowRootRange(shadowRoot: ShadowRoot): StaticRange | undefined {
   };
 }
 
-function getPersistedCacheKey(
+function requirePersistedCacheKey(
   file: Pick<FileContents, 'cacheKey' | 'name'>
 ): string {
-  return file.cacheKey ?? file.name;
+  if (typeof file.cacheKey !== 'string' || file.cacheKey.length === 0) {
+    throw new Error(
+      `Editor persistState requires a non-empty file.cacheKey for "${file.name}". Provide a unique, stable cacheKey for every editable file.`
+    );
+  }
+  return file.cacheKey;
 }
 
 function isPromise<T>(value: T | Promise<T>): value is Promise<T> {
@@ -164,7 +169,10 @@ function isPromise<T>(value: T | Promise<T>): value is Promise<T> {
 export interface EditorOptions<LAnnotation> {
   /** The maximum number of entries to keep in the undo stack. */
   historyMaxEntries?: number;
-  /** Preserve each file's document and editor state when switching files. */
+  /**
+   * Preserve each file's document and editor state when switching files.
+   * Every editable file must provide a unique, stable `cacheKey`.
+   */
   persistState?: boolean;
   /**
    * Storage for serializable editor state. Text documents stay in this Editor's
@@ -362,10 +370,20 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   setOptions(options: EditorOptions<LAnnotation>): void {
     const previousStorageOption =
       this.#options.persistStateStorage ?? 'inMemory';
-    this.#options = {
+    const nextOptions = {
       ...this.#options,
       ...options,
     };
+    if (
+      nextOptions.persistState === true &&
+      this.#fileInstance?.type === 'file'
+    ) {
+      const file = this.#fileInstance.__getCurrentFile?.() ?? this.#fileInfo;
+      if (file !== undefined) {
+        requirePersistedCacheKey(file);
+      }
+    }
+    this.#options = nextOptions;
     if (this.#options.persistState !== true) {
       this.#textDocumentCache.clear();
       this.#stateRestoreGeneration++;
@@ -383,6 +401,12 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   }
 
   edit(fileInstance: DiffsEditableComponent<LAnnotation>): () => void {
+    if (this.#options.persistState === true && fileInstance.type === 'file') {
+      const file = fileInstance.__getCurrentFile?.();
+      if (file !== undefined) {
+        requirePersistedCacheKey(file);
+      }
+    }
     const {
       useTokenTransformer,
       enableGutterUtility,
@@ -716,18 +740,19 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       return file;
     }
 
+    const cacheKey = requirePersistedCacheKey(file);
     const fileInfo = this.#fileInfo;
     const languageId = file.lang ?? getFiletypeFromFileName(file.name);
     if (
       fileInfo !== undefined &&
-      (getPersistedCacheKey(fileInfo) !== getPersistedCacheKey(file) ||
+      (requirePersistedCacheKey(fileInfo) !== cacheKey ||
         fileInfo.name !== file.name ||
         this.#textDocument?.languageId !== languageId)
     ) {
       this.#stateRestoreGeneration++;
       this.#persistCurrentState();
     }
-    const textDocument = this.#getCachedTextDocument(file);
+    const textDocument = this.#getCachedTextDocument(file, cacheKey);
     if (
       textDocument === undefined ||
       textDocument.getText() === file.contents
@@ -816,6 +841,9 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#fileInfo.name !== fileOrDiff.name ||
       this.#fileInfo.lang !== fileOrDiff.lang ||
       this.#fileInfo.cacheKey !== fileOrDiff.cacheKey;
+    const persistedCacheKey = this.#isStatePersistenceEnabled
+      ? requirePersistedCacheKey(fileOrDiff)
+      : undefined;
 
     let persistedStateTarget:
       | { cacheKey: string; textDocument: TextDocument<LAnnotation> }
@@ -833,16 +861,16 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       });
       const { name, lang, cacheKey } = fileOrDiff;
       const languageId = lang ?? getFiletypeFromFileName(fileOrDiff.name);
-      const persistedCacheKey = getPersistedCacheKey(fileOrDiff);
-      const cachedTextDocument = this.#isStatePersistenceEnabled
-        ? this.#getCachedTextDocument(fileOrDiff)
-        : undefined;
+      const cachedTextDocument =
+        persistedCacheKey !== undefined
+          ? this.#getCachedTextDocument(fileOrDiff, persistedCacheKey)
+          : undefined;
       const textDocument =
         cachedTextDocument ??
         new TextDocument(fileOrDiff.name, contents, languageId, 0, editStack);
       this.#fileInfo = { name, lang, cacheKey };
       this.#textDocument = textDocument;
-      if (this.#isStatePersistenceEnabled) {
+      if (persistedCacheKey !== undefined) {
         this.#textDocumentCache.set(persistedCacheKey, textDocument);
         persistedStateTarget = {
           cacheKey: persistedCacheKey,
@@ -867,11 +895,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     if (
       persistedStateTarget === undefined &&
       this.#restoreStateOnNextSync &&
-      this.#isStatePersistenceEnabled &&
+      persistedCacheKey !== undefined &&
       this.#textDocument !== undefined
     ) {
       persistedStateTarget = {
-        cacheKey: getPersistedCacheKey(fileOrDiff),
+        cacheKey: persistedCacheKey,
         textDocument: this.#textDocument,
       };
     }
@@ -1033,11 +1061,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   }
 
   #getCachedTextDocument(
-    file: FileContents | FileDiffMetadata
+    file: FileContents | FileDiffMetadata,
+    cacheKey: string
   ): TextDocument<LAnnotation> | undefined {
-    const textDocument = this.#textDocumentCache.get(
-      getPersistedCacheKey(file)
-    );
+    const textDocument = this.#textDocumentCache.get(cacheKey);
     const languageId = file.lang ?? getFiletypeFromFileName(file.name);
     return textDocument?.languageId === languageId ? textDocument : undefined;
   }
@@ -1065,7 +1092,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       return;
     }
 
-    const cacheKey = getPersistedCacheKey(fileInfo);
+    const cacheKey = requirePersistedCacheKey(fileInfo);
     this.#textDocumentCache.set(cacheKey, textDocument);
 
     let storage: IStateStorage;
@@ -1158,7 +1185,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         currentView?.scrollLeft !== view?.scrollLeft ||
         currentView?.scrollTop !== view?.scrollTop ||
         this.#fileInfo === undefined ||
-        getPersistedCacheKey(this.#fileInfo) !== cacheKey
+        requirePersistedCacheKey(this.#fileInfo) !== cacheKey
       ) {
         return;
       }
