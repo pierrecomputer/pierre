@@ -2268,6 +2268,33 @@ describe('indentLess on tab and mixed indentation', () => {
   });
 });
 
+describe('block indent over blank and whitespace-only lines', () => {
+  // KNOWN BUG: resolveIndentEdits emits an insert at column 0 of every line
+  // the selection touches, including empty and whitespace-only lines, so a
+  // block indent injects trailing whitespace on lines the user never typed
+  // on. The conventional behavior is to skip lines with no content. Outdent
+  // strips the injected unit back off, so a full indent/outdent round trip
+  // self-heals — the damage is bounded to the indented state.
+  test.failing(
+    'block indent leaves blank and whitespace-only lines untouched',
+    () => {
+      const d = doc('alpha\n\n   \nbeta');
+      const [edits] = resolveIndentEdits(
+        d,
+        {
+          start: { line: 0, character: 0 },
+          end: { line: 3, character: 4 },
+          direction: DirectionForward,
+        },
+        2,
+        false
+      );
+      d.applyEdits(edits);
+      expect(d.getText()).toBe('  alpha\n\n   \n  beta');
+    }
+  );
+});
+
 describe('move line commands with merged and same-line multi-cursor blocks', () => {
   test('interleaved ranges and a caret merge into one block moving up', () => {
     // The three selections touch lines 1-2, 3, and 3-4; the merged block is

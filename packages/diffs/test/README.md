@@ -103,7 +103,7 @@ order. If you touch one of these areas, consider adding the missing coverage:
 - **IME composition deferrals** — IME/composition interaction with editing and
   undo-coalescing is deferred and not covered.
 
-## Known bugs pinned as `test.failing` (30)
+## Known bugs pinned as `test.failing` (31)
 
 - **EditStack coalescing** (3) — coalescing decisions compare a new edit against
   whatever sits on top of the undo stack purely by geometry, with no state reset
@@ -129,6 +129,10 @@ order. If you touch one of these areas, consider adding the missing coverage:
   concatenates per-selection edits with no shared-line dedupe, so a line under
   two carets/ranges indents twice; the outdent variant emits two identical
   deletes that fail overlap validation and the whole command throws.
+- **Block indent dirties blank lines** (1) — a multi-line block indent inserts
+  the indent unit on empty and whitespace-only lines inside the selection,
+  injecting trailing whitespace on lines the user never touched (outdent
+  round-trips it away, bounding the damage).
 - **History across non-history edits** (6) — history entries are frozen at
   creation and never remapped through edits applied without history tracking:
   stale-offset undo can corrupt text, undo of a wiped entry is not a graceful
