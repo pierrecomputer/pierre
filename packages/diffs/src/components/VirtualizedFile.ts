@@ -317,8 +317,12 @@ export class VirtualizedFile<
     lineAnnotations?: LineAnnotation<LAnnotation>[]
   ): number {
     const annotationsChanged = this.syncLineAnnotations(lineAnnotations);
+    const unkeyedContentsChanged =
+      this.fileRenderer.hasUnkeyedFileContentsChanged(file);
     let shouldResetLayoutCache =
-      reset?.resetFileLayoutCache === true || annotationsChanged;
+      reset?.resetFileLayoutCache === true ||
+      annotationsChanged ||
+      unkeyedContentsChanged;
     if (reset?.metrics != null) {
       this.metrics = reset.metrics;
       shouldResetLayoutCache = true;
@@ -661,14 +665,17 @@ export class VirtualizedFile<
     }
   }
 
-  override render({
+  protected override renderPreparedFile({
     fileContainer,
     file,
     forceRender = false,
     lineAnnotations,
     ...props
   }: FileRenderProps<LAnnotation>): boolean {
-    const didFileChange = this.file == null || !areFilesEqual(this.file, file);
+    const didFileChange =
+      this.file == null ||
+      !areFilesEqual(this.file, file) ||
+      this.fileRenderer.hasUnkeyedFileContentsChanged(file);
     const { forceRenderOverride, isSetup } = this;
     this.forceRenderOverride = undefined;
     const annotationsChanged = this.syncLineAnnotations(lineAnnotations);
@@ -725,7 +732,7 @@ export class VirtualizedFile<
       fileTop,
       windowSpecs
     );
-    const rendered = super.render({
+    const rendered = super.renderPreparedFile({
       file: this.file,
       fileContainer,
       renderRange,

@@ -17,6 +17,14 @@ does not exist. Empty file contents are still a real file; represent them with
 
 <DocsCodeExample {...fileContentsType} />
 
+For read-only rendering and Worker Pool caching, `cacheKey` is optional; when
+provided, treat it as a revision identity and change it with the contents,
+filename, language, or revision. When
+[`Editor.persistState`](#edit-mode-persisting-file-state) is enabled, every
+editable file requires an explicit, non-empty `cacheKey`. Use unique, stable
+keys for editing sessions, and change the key when incoming contents should
+replace the cached document.
+
 ### FileDiffMetadata
 
 `FileDiffMetadata` represents the differences between file versions. It contains

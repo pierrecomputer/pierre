@@ -32,9 +32,11 @@ export interface FileContents {
   lang?: SupportedLanguages;
   /** Optional header passed to the jsdiff library's `createTwoFilesPatch`. */
   header?: string;
-  /** This unique key is only used for Worker Pools to avoid subsequent requests
-   * if we've already highlighted the file.  Please note that if you modify the
-   * `contents` or `name`, you must update the `cacheKey`. */
+  /**
+   * Identifies a file for caching. Optional for read-only rendering, but
+   * required and expected to be unique and stable when Editor `persistState`
+   * is enabled.
+   */
   cacheKey?: string;
 }
 
@@ -1016,6 +1018,8 @@ export interface DiffsBaseComponent {
 export interface DiffsEditableComponent<
   LAnnotation,
 > extends DiffsBaseComponent {
+  /** @internal Return the current file when this component renders one. */
+  __getCurrentFile?: () => FileContents | undefined;
   /**
    * Return the position and height of a one-based line relative to this component.
    * The host uses it to scroll to virtualized lines before their DOM nodes exist.
@@ -1080,6 +1084,8 @@ export interface DiffsEditableComponent<
 }
 
 export interface DiffsEditor<LAnnotation> {
+  /** @internal */
+  __prepareFile?(file: FileContents): FileContents;
   __postponeBgTokenizeToNextFrame(): void;
   __syncRenderView(
     highlighter: DiffsHighlighter,

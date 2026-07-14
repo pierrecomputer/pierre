@@ -677,11 +677,21 @@ export const EDITOR_OPTIONS_TYPE: PreloadFileOptions<undefined> = {
   DiffsEditableComponent,
   FileContents,
 } from '@pierre/diffs';
-import { Editor } from '@pierre/diffs/editor';
+import { Editor, type IStateStorage } from '@pierre/diffs/editor';
 
 interface EditorOptions<LAnnotation> {
   // Max undo stack entries
   historyMaxEntries?: number;
+
+  // Preserve each File's document and editor state between renders.
+  // Requires every editable file to provide a unique, stable cacheKey.
+  // Default: false.
+  persistState?: boolean;
+
+  // Where serializable editor state is stored. Text documents and undo
+  // history remain in this Editor instance's in-memory cache.
+  // Defaults to 'inMemory' when persistState is enabled.
+  persistStateStorage?: 'inMemory' | 'indexedDB' | IStateStorage;
 
   // Render rounded corners on selection ranges (default: true)
   roundedSelection?: boolean;

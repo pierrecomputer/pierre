@@ -1,3 +1,4 @@
+import type { FileContents } from '@pierre/diffs';
 import { preloadFile } from '@pierre/diffs/ssr';
 import { FILE_TREE_DENSITY_PRESETS } from '@pierre/trees';
 import { preloadFileTree } from '@pierre/trees/ssr';
@@ -30,6 +31,16 @@ const TREE_APP_LIGHT_FILE_OPTIONS = {
   themeType: 'light',
 } as const;
 
+// Initial paths are unique and survive moves because every file remap spreads
+// the existing value. Use them as stable editor identities for this demo.
+const TREE_APP_EDITOR_FILES: Readonly<Record<string, FileContents>> =
+  Object.fromEntries(
+    Object.entries(TREE_APP_DEMO_FILES).map(
+      ([path, file]) =>
+        [path, { ...file, cacheKey: file.cacheKey ?? path }] as const
+    )
+  );
+
 export async function DemoTreeApp() {
   const treePreloadedData = preloadFileTree({
     dragAndDrop: true,
@@ -54,7 +65,7 @@ export async function DemoTreeApp() {
   // fall back to an on-the-fly highlighter pass. Each file produces two
   // results, so we run them all in a single Promise.all to minimize latency.
   const preloadedEntries = await Promise.all(
-    Object.entries(TREE_APP_DEMO_FILES).map(async ([path, file]) => {
+    Object.entries(TREE_APP_EDITOR_FILES).map(async ([path, file]) => {
       const [darkResult, lightResult] = await Promise.all([
         preloadFile({ file, options: TREE_APP_DARK_FILE_OPTIONS }),
         preloadFile({ file, options: TREE_APP_LIGHT_FILE_OPTIONS }),
@@ -81,7 +92,7 @@ export async function DemoTreeApp() {
 
   return (
     <DemoTreeAppClient
-      files={TREE_APP_DEMO_FILES}
+      files={TREE_APP_EDITOR_FILES}
       initialActivePath={TREE_APP_DEMO_INITIAL_ACTIVE_PATH}
       initialExpandedPaths={TREE_APP_DEMO_INITIAL_EXPANDED_PATHS}
       paths={TREE_APP_DEMO_PATHS}

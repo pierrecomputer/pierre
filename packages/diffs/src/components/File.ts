@@ -209,6 +209,10 @@ export class File<
     });
   }
 
+  public __getCurrentFile(): FileContents | undefined {
+    return this.file;
+  }
+
   public onThemeChange(): void {
     this.fileRenderer.clearRenderCache();
     this.rerender();
@@ -524,7 +528,18 @@ export class File<
     this.editor?.cleanUp();
     this.editor = editor;
     this.interactionManager.setEditorAttached(true);
-    this.syncRenderViewToEditor();
+    const preparedFile =
+      this.file == null ? undefined : editor.__prepareFile?.(this.file);
+    if (preparedFile !== undefined && preparedFile !== this.file) {
+      this.renderPreparedFile({
+        file: preparedFile,
+        forceRender: true,
+        preventEmit: true,
+        renderRange: this.renderRange,
+      });
+    } else {
+      this.syncRenderViewToEditor();
+    }
     return () => {
       this.editor = undefined;
       this.interactionManager.setEditorAttached(false);
@@ -555,7 +570,22 @@ export class File<
     this.fileRenderer.updateRenderCache(dirtyLines, themeType);
   }
 
-  public render({
+  public render(props: FileRenderProps<LAnnotation>): boolean {
+    if (!this.enabled) {
+      throw new Error(
+        'File.render: attempting to call render after cleaned up'
+      );
+    }
+
+    const file = this.editor?.__prepareFile?.(props.file) ?? props.file;
+    return this.renderPreparedFile(
+      file === props.file ? props : { ...props, file }
+    );
+  }
+
+  // Renders a file whose persisted document has already been restored. The
+  // virtualized subclass overrides this phase so layout uses the same file.
+  protected renderPreparedFile({
     file,
     fileContainer,
     forceRender = false,
@@ -565,17 +595,6 @@ export class File<
     lineAnnotations,
     renderRange,
   }: FileRenderProps<LAnnotation>): boolean {
-    if (!this.enabled) {
-      throw new Error(
-        'File.render: attempting to call render after cleaned up'
-      );
-    }
-
-    // use the file name as the cache key if it is not set
-    if (file.cacheKey === undefined) {
-      file.cacheKey = file.name;
-    }
-
     // postpone background tokenizing to next frame for avoiding UI freeze
     // during render
     this.editor?.__postponeBgTokenizeToNextFrame();
@@ -589,7 +608,9 @@ export class File<
       (lineAnnotations.length > 0 || this.lineAnnotations.length > 0)
         ? lineAnnotations !== this.lineAnnotations
         : false;
-    const didFileChange = !areFilesEqual(this.file, file);
+    const didFileChange =
+      !areFilesEqual(this.file, file) ||
+      this.fileRenderer.hasUnkeyedFileContentsChanged(file);
     if (
       !collapsed &&
       !forceRender &&

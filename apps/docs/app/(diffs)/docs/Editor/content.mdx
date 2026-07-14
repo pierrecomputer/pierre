@@ -129,6 +129,58 @@ Pass these when constructing `new Editor({ ... })`, or update them later with
 
 <DocsCodeExample {...editorOptionsType} />
 
+#### Persisting file state
+
+State persistence is disabled by default. Set `persistState: true` to preserve
+an editable `File`'s text document, undo history, selections, and scroll
+position when the attached file renders a different file and later returns. This
+currently applies to `File` and `VirtualizedFile` surfaces; diff surfaces do not
+use the persistence cache.
+
+Every editable file must provide an explicit, non-empty `file.cacheKey` while
+`persistState` is enabled. The editor throws if it encounters an unkeyed file;
+it does not fall back to `file.name`. Cache keys must be unique and stable
+within the persistence storage namespace. Reuse the same key when a rename or
+move should resume the same editing session; change it when new incoming
+contents should start a fresh document.
+
+```ts
+import type { EditorState, FileContents } from '@pierre/diffs';
+import { Editor, type IStateStorage } from '@pierre/diffs/editor';
+
+const editor = new Editor({
+  persistState: true,
+  persistStateStorage: 'inMemory',
+});
+
+const file: FileContents = {
+  name: 'src/example.ts',
+  contents: 'export const value = 1;',
+  cacheKey: 'workspace-file-1',
+};
+
+// Custom storage may be synchronous or asynchronous.
+const states = new Map<string, EditorState>();
+const customStorage: IStateStorage = {
+  get(cacheKey) {
+    return states.get(cacheKey);
+  },
+  set(cacheKey, state) {
+    states.set(cacheKey, state);
+  },
+};
+
+const editorWithCustomStorage = new Editor({
+  persistState: true,
+  persistStateStorage: customStorage,
+});
+```
+
+`persistStateStorage` accepts `'inMemory'`, `'indexedDB'`, or an `IStateStorage`
+implementation. It defaults to `'inMemory'`. Text documents and undo history
+remain scoped to the `Editor` instance; IndexedDB and custom storage persist
+only the serializable editor state (`selections` and `view`).
+
 ### API Reference
 
 These methods are available on an `Editor` instance. Attach it to a rendered

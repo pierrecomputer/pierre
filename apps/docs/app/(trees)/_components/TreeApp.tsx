@@ -1,6 +1,6 @@
 'use client';
 
-import type { EditorState, FileContents, FileOptions } from '@pierre/diffs';
+import type { FileContents, FileOptions } from '@pierre/diffs';
 import { Editor } from '@pierre/diffs/editor';
 import { EditProvider, File, Virtualizer } from '@pierre/diffs/react';
 import {
@@ -201,7 +201,9 @@ export interface TreeAppProps<LAnnotation = unknown> {
   // Editor side: files keyed by their tree path. Mirrors the
   // preloadedDataById pattern already used by tree demos. Both the prerendered
   // HTML map and the file options may be scoped per theme so the active File
-  // picks up the right syntax-highlight colors when the theme toggles.
+  // picks up the right syntax-highlight colors when the theme toggles. Give
+  // files unique, rename-stable cacheKeys so persisted editor state follows
+  // moves; without one, TreeApp uses the current path.
   files?: Readonly<Record<string, FileContents>>;
   prerenderedHTMLByPath?: TreeAppThemeValue<Readonly<Record<string, string>>>;
   fileOptions?: TreeAppThemeValue<FileOptions<LAnnotation>>;
@@ -292,7 +294,7 @@ function getParentPath(path: string): string {
     : `${normalizedPath.slice(0, lastSlashIndex + 1)}`;
 }
 
-// Remaps one path after a tree move so open tabs and editor state keep
+// Remaps one path after a tree move so open tabs and path-keyed state keep
 // following the same file or directory even when its parent folder changes.
 function remapMovedPath(
   path: string,
@@ -303,12 +305,13 @@ function remapMovedPath(
     return toPath;
   }
 
-  const descendantPrefix = `${fromPath}/`;
+  const descendantPrefix = fromPath.endsWith('/') ? fromPath : `${fromPath}/`;
   if (!path.startsWith(descendantPrefix)) {
     return path;
   }
 
-  return `${toPath}${path.slice(fromPath.length)}`;
+  const destinationPrefix = toPath.endsWith('/') ? toPath : `${toPath}/`;
+  return `${destinationPrefix}${path.slice(descendantPrefix.length)}`;
 }
 
 function remapMovedPaths(
@@ -614,9 +617,6 @@ interface UseOpenTabsOptions {
   // are discarded the moment the viewport flips to mobile.
   isMobile?: boolean;
   model: FileTreeModel;
-  // Fired immediately before `activePath` changes so the host can snapshot
-  // editor scroll/selection via getState before the editable File remounts.
-  onBeforeActivePathChange?: () => void;
 }
 
 interface UseOpenTabsResult {
@@ -634,7 +634,6 @@ function useOpenTabs({
   initialOpenPaths,
   isMobile = false,
   model,
-  onBeforeActivePathChange,
 }: UseOpenTabsOptions): UseOpenTabsResult {
   const [openPaths, setOpenPaths] = useState<readonly string[]>(() => {
     const seed = initialOpenPaths ?? [];
@@ -651,29 +650,6 @@ function useOpenTabs({
     initialActivePath ?? null
   );
   const selectedPaths = useFileTreeSelection(model);
-  const onBeforeActivePathChangeRef = useRef(onBeforeActivePathChange);
-  onBeforeActivePathChangeRef.current = onBeforeActivePathChange;
-  // Mirrors `activePath` for changeActivePath so path transitions can snapshot
-  // editor state without putting side effects inside a setState updater.
-  const activePathRefForTabs = useRef<string | null>(activePath);
-  activePathRefForTabs.current = activePath;
-
-  // Snapshot editor state, then update activePath. Reads the live path from
-  // activePathRefForTabs so we never put side effects inside a setState
-  // updater. Skips the callback when the path is unchanged.
-  const changeActivePath = useCallback(
-    (nextPath: string | null | ((current: string | null) => string | null)) => {
-      const current = activePathRefForTabs.current;
-      const resolved =
-        typeof nextPath === 'function' ? nextPath(current) : nextPath;
-      if (resolved !== current) {
-        onBeforeActivePathChangeRef.current?.();
-      }
-      activePathRefForTabs.current = resolved;
-      setActivePath(resolved);
-    },
-    []
-  );
 
   // Track which selected paths we have already turned into tabs so a re-render
   // does not re-open a tab the user just closed.
@@ -706,10 +682,10 @@ function useOpenTabs({
         }
         return current.includes(candidate) ? current : [...current, candidate];
       });
-      changeActivePath(candidate);
+      setActivePath(candidate);
       break;
     }
-  }, [changeActivePath, isMobile, model, selectedPaths]);
+  }, [isMobile, model, selectedPaths]);
 
   // When the viewport flips into mobile, drop any extra tabs from a previous
   // desktop session so only the active file remains. We never re-expand the
@@ -742,11 +718,9 @@ function useOpenTabs({
         return nextOpen;
       });
 
-      // Resolve the next active tab outside setState so changeActivePath can
-      // snapshot editor state before the remount without nesting updaters.
       const currentOpen = openPaths;
       const nextOpen = currentOpen.filter((entry) => entry !== path);
-      changeActivePath((currentActive) => {
+      setActivePath((currentActive) => {
         if (currentActive !== path) {
           return currentActive;
         }
@@ -758,15 +732,12 @@ function useOpenTabs({
         return nextOpen[fallbackIndex] ?? null;
       });
     },
-    [activePath, changeActivePath, model, openPaths]
+    [activePath, model, openPaths]
   );
 
-  const activateTab = useCallback(
-    (path: string) => {
-      changeActivePath(path);
-    },
-    [changeActivePath]
-  );
+  const activateTab = useCallback((path: string) => {
+    setActivePath(path);
+  }, []);
 
   useEffect(() => {
     if (activePath == null) {
@@ -814,7 +785,7 @@ function useOpenTabs({
           }
           return nextPaths;
         });
-        changeActivePath((current) => {
+        setActivePath((current) => {
           if (current == null) {
             return current;
           }
@@ -826,7 +797,7 @@ function useOpenTabs({
           return nextPath;
         });
       }),
-    [changeActivePath, model]
+    [model]
   );
 
   return { activePath, activateTab, closeTab, openPaths };
@@ -1202,10 +1173,6 @@ export function TreeApp<LAnnotation = unknown>({
   const theme = themeProp ?? internalTheme;
   const chrome = CHROME_STYLES[theme];
 
-  // Per-path scroll + selection snapshots. The editable File remounts on
-  // path/theme changes (keyed below), so we getState before the remount and
-  // setState from onAttach once the new editor is attached.
-  const editorStateByPathRef = useRef(new Map<string, EditorState>());
   const activePathRef = useRef<string | null>(initialActivePath ?? null);
   // Edited buffers keyed by path. Prefer these over the caller-supplied `files`
   // map so tab switches keep unsaved text without requiring the host to own
@@ -1233,37 +1200,21 @@ export function TreeApp<LAnnotation = unknown>({
   unsavedPathsRef.current = unsavedPaths;
   const containerRef = useRef<HTMLDivElement | null>(null);
 
-  // Keep attach/change handlers fresh without recreating the Editor. The
+  // Keep the change handler fresh without recreating the Editor. The
   // shared instance must stay stable across tab/theme switches so EditProvider
   // does not clean it up between remounts of the keyed File.
-  const handleEditorAttachRef = useRef<(editor: Editor<LAnnotation>) => void>(
-    () => {}
-  );
   const handleEditorChangeRef = useRef<(file: FileContents) => void>(() => {});
   const editor = useMemo(
     () =>
       new Editor<LAnnotation>({
-        onAttach(nextEditor) {
-          handleEditorAttachRef.current(nextEditor);
-        },
+        persistState: true,
+        persistStateStorage: 'inMemory',
         onChange(file) {
           handleEditorChangeRef.current(file);
         },
       }),
     []
   );
-
-  const saveActiveEditorState = useCallback(() => {
-    const path = activePathRef.current;
-    if (path == null) {
-      return;
-    }
-    try {
-      editorStateByPathRef.current.set(path, editor.getState());
-    } catch {
-      // Editor may already be detached mid-unmount; skip the snapshot.
-    }
-  }, [editor]);
 
   // Marks a path unsaved (or clean). Snapshots edited contents so tab switches
   // keep the dirty buffer.
@@ -1308,15 +1259,12 @@ export function TreeApp<LAnnotation = unknown>({
   );
 
   const toggleTheme = useCallback(() => {
-    // Theme remounts the editable File (keyed by path:theme); snapshot first
-    // so the restored editor keeps scroll/selection after the palette flip.
-    saveActiveEditorState();
     const nextTheme: TreeAppTheme = theme === 'dark' ? 'light' : 'dark';
     if (themeProp == null) {
       setInternalTheme(nextTheme);
     }
     onThemeChange?.(nextTheme);
-  }, [onThemeChange, saveActiveEditorState, theme, themeProp]);
+  }, [onThemeChange, theme, themeProp]);
 
   // Resolve the theme-scoped inputs once. The caller can pass either a plain
   // value or a `{ light, dark }` pair; `pickByTheme` returns the right one.
@@ -1468,7 +1416,6 @@ export function TreeApp<LAnnotation = unknown>({
     initialOpenPaths,
     isMobile,
     model,
-    onBeforeActivePathChange: saveActiveEditorState,
   });
   activePathRef.current = activePath;
 
@@ -1484,16 +1431,6 @@ export function TreeApp<LAnnotation = unknown>({
         if (moveEvents.length === 0) {
           return;
         }
-
-        let nextStateByPath = editorStateByPathRef.current;
-        for (const moveEvent of moveEvents) {
-          nextStateByPath = remapPathMap(
-            nextStateByPath,
-            moveEvent.from,
-            moveEvent.to
-          );
-        }
-        editorStateByPathRef.current = nextStateByPath;
 
         let nextHostFilesAtSave = hostFilesAtSaveByPathRef.current;
         for (const moveEvent of moveEvents) {
@@ -1531,18 +1468,6 @@ export function TreeApp<LAnnotation = unknown>({
     [model]
   );
 
-  const handleEditorAttach = useCallback((nextEditor: Editor<LAnnotation>) => {
-    const path = activePathRef.current;
-    if (path == null) {
-      return;
-    }
-    const saved = editorStateByPathRef.current.get(path);
-    if (saved == null) {
-      return;
-    }
-    nextEditor.setState(saved);
-  }, []);
-  handleEditorAttachRef.current = handleEditorAttach;
   handleEditorChangeRef.current = handleEditorChange;
 
   const mutations = useTreeMutations({
@@ -1731,6 +1656,15 @@ export function TreeApp<LAnnotation = unknown>({
     activePath != null && usesLocalFile
       ? (editedFilesByPath[activePath] ?? activeHostFile)
       : activeHostFile;
+  // File names are commonly only basenames, so use the unique tree path as
+  // the persistence identity unless the caller supplied a stable cache key.
+  const activeEditorFile = useMemo(
+    () =>
+      activeFile == null || activePath == null || activeFile.cacheKey != null
+        ? activeFile
+        : { ...activeFile, cacheKey: activePath },
+    [activeFile, activePath]
+  );
   // Skip stale prerendered HTML while the editor is showing local contents.
   const activePrerenderedHTML =
     activePath == null || usesLocalFile
@@ -1942,8 +1876,8 @@ export function TreeApp<LAnnotation = unknown>({
               {/* Key File by path+theme so prerendered HTML (theme-specific
                   syntax colors) remounts cleanly when the toggle flips.
                   Keep EditProvider stable so the shared Editor is not cleaned
-                  up between tab/theme switches. Scroll/selection restore via
-                  getState/setState in onAttach. */}
+                  up between tab/theme switches. Editor persistence restores
+                  the cached document and view state. */}
               <EditProvider editor={editor}>
                 <Virtualizer
                   className="relative min-h-0 min-w-0 flex-1 overflow-auto"
@@ -1954,7 +1888,7 @@ export function TreeApp<LAnnotation = unknown>({
                     width: '100%',
                   }}
                 >
-                  {activeFile == null ? (
+                  {activeEditorFile == null ? (
                     (renderEmpty?.() ?? <DefaultEmpty theme={theme} />)
                   ) : (
                     <File
@@ -1963,7 +1897,7 @@ export function TreeApp<LAnnotation = unknown>({
                         flex: '1 1 auto',
                         minWidth: '100%',
                       }}
-                      file={activeFile}
+                      file={activeEditorFile}
                       options={fileOptions}
                       prerenderedHTML={activePrerenderedHTML}
                       contentEditable
