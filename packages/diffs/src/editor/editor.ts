@@ -3513,12 +3513,13 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       const top = this.#getLineY(line) + wrapLine * lineHeight;
       // Match the corner mask to the line color behind the selection; when
       // absent (context lines) the CSS falls back to the editor base bg.
-      const cornerBg = this.#lineBackgroundColor(line);
-      const css =
-        `width:${ch}px;transform:translateX(${left}px) translateY(${top}px);` +
-        (cornerBg !== undefined
-          ? `--diffs-selection-corner-bg:${cornerBg};`
-          : '');
+      const lineElement = this.#getLineElement(line);
+      let cornerBg = 'initial';
+      if (this.#isDiff && lineElement?.dataset.lineType === 'change-addition') {
+        cornerBg =
+          getComputedStyle(lineElement).getPropertyValue('--diffs-line-bg');
+      }
+      const css = `width:${ch}px;transform:translateX(${left}px) translateY(${top}px);--diffs-selection-corner-bg:${cornerBg}`;
       const dataset = {
         selectionCorner: '',
         [radius]: '',
@@ -4363,30 +4364,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       }
     }
     return undefined;
-  }
-
-  // TODO(@ije): remove this
-  // Painted background color of a line, read from the [data-line]::after layer
-  // (the line element itself is transparent in edit mode). Returns undefined when
-  // that layer is transparent (e.g. context lines).
-  #lineBackgroundColor(line: number): string | undefined {
-    const lineElement = this.#getLineElement(line);
-    if (lineElement === undefined) {
-      return undefined;
-    }
-    // testing environment like jsdom doesn't implement the getComputedStyle API
-    if (navigator.userAgent.includes('jsdom')) {
-      return undefined;
-    }
-    const backgroundColor = getComputedStyle(
-      lineElement,
-      '::after'
-    ).backgroundColor;
-    return backgroundColor === '' ||
-      backgroundColor === 'transparent' ||
-      backgroundColor === 'rgba(0, 0, 0, 0)'
-      ? undefined
-      : backgroundColor;
   }
 
   // Returns the first and last document lines that have an editable row in the
