@@ -90,6 +90,7 @@ function dispatchCopy(
 interface DiffEditorFixture {
   container: HTMLElement;
   editor: Editor<undefined>;
+  fileDiff: FileDiff<undefined>;
   cleanup(): Promise<void>;
 }
 
@@ -146,6 +147,7 @@ async function createDiffEditorFixture(
   return {
     container,
     editor,
+    fileDiff,
     async cleanup() {
       await wait(10);
       editor.cleanUp();
@@ -178,6 +180,33 @@ describe('editor active-line highlight on a diff', () => {
       expect(highlightedLineNumbers(additions)).toEqual([1]);
       // The read-only deletions column must not be highlighted.
       expect(highlightedLineNumbers(deletions)).toEqual([]);
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  test('split: refresh defers editor active lines and selected lines independently', async () => {
+    const fixture = await createDiffEditorFixture('split', OLD, NEW);
+    try {
+      fixture.fileDiff.updateRenderCache(new Map(), 'light', true);
+      fixture.fileDiff.setSelectedLines({ start: 2, end: 2 });
+      fixture.fileDiff.setEditorActiveLine(1);
+
+      const { additions, deletions } = findCodeColumns(fixture.container);
+      await wait(175);
+      await waitFor(() =>
+        arraysEqual(highlightedGutterNumbers(additions), [2])
+      );
+
+      expect(highlightedGutterNumbers(additions)).toEqual([2]);
+      expect(highlightedGutterNumbers(deletions)).toEqual([2]);
+
+      fixture.fileDiff.setSelectedLines(null);
+      await waitFor(() =>
+        arraysEqual(highlightedGutterNumbers(additions), [1])
+      );
+      expect(highlightedGutterNumbers(additions)).toEqual([1]);
+      expect(highlightedGutterNumbers(deletions)).toEqual([]);
     } finally {
       await fixture.cleanup();
     }

@@ -53,15 +53,16 @@ export interface OnDiffLineEnterLeaveProps extends DiffLineEventBaseProps {
 export interface SelectionWriteOptions {
   notify?: boolean;
   // Limit the selected-line highlight to one side's column of a split diff.
-  // The editor sets this to 'additions' so its active-line highlight stays on
-  // the editable pane instead of also lighting up the read-only deletions
-  // pane. It has no effect on unified or single-file views, whose one code
-  // column carries no side attribute.
+  // It has no effect on unified or single-file views, whose one code column
+  // carries no side attribute.
   activeLineSide?: SelectionSide;
-  // Highlight only the gutter line number, not the line background. The editor
-  // sets this while text is selected: the caret line keeps its highlighted
-  // number, but the full-line background gives way to the text selection.
+  // Highlight only the gutter line number, not the line background.
   lineNumberOnly?: boolean;
+}
+
+interface EditorActiveLineWriteOptions {
+  lineNumberOnly?: boolean;
+  side?: SelectionSide;
 }
 
 export type GetLineIndexUtility = (
@@ -114,6 +115,15 @@ interface SelectionInfoOptions extends SelectionHitOptions {
 interface SelectionEnds {
   top: SelectionPoint;
   bottom: SelectionPoint;
+}
+
+type SelectionRenderSource = 'selected-lines' | 'editor-active-line' | 'none';
+
+interface SelectionRenderState {
+  source: SelectionRenderSource;
+  range: SelectedLineRange | null;
+  highlightSide: SelectionSide | undefined;
+  lineNumberOnly: boolean;
 }
 
 interface ResolvedLineTarget<TMode extends InteractionManagerMode> {
@@ -251,21 +261,19 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
   private hasDocumentPointerListeners = false;
 
   private selectedRange: SelectedLineRange | null = null;
-  // When set, the active-line highlight is confined to this side's column in a
-  // split diff (see SelectionWriteOptions.activeLineSide). Tracks the current
-  // selectedRange and is cleared by any gutter-driven selection. Only the
-  // editor's own active-line highlight sets a side, so a non-null value also
-  // marks the selection as editor-driven (see highlightLineNumberOnly).
-  private activeLineHighlightSide: SelectionSide | undefined;
-  // When true, the active-line highlight marks only the gutter line number and
-  // not the line background (see SelectionWriteOptions.lineNumberOnly).
-  private activeLineNumberOnly = false;
-  // True while an editor is attached (edit mode). The editor draws selection as
-  // text, so a host or gutter line selection then highlights only the gutter
-  // line numbers, never the full-line background.
+  private selectedRangeHighlightSide: SelectionSide | undefined;
+  private selectedRangeLineNumberOnly = false;
+  // Editor caret highlights are retained separately so they cannot overwrite
+  // selected lines. Selected lines take visual precedence.
+  private editorActiveLine: number | null = null;
+  private editorActiveLineSide: SelectionSide | undefined;
+  private editorLineNumberOnly = false;
+  // True while an editor is attached (edit mode). The editor draws text
+  // selection, so selected lines then highlight only the gutter line numbers,
+  // never the full-line background.
   private editorAttached = false;
   private proposedSelectedRange: SelectedLineRange | null | undefined;
-  private renderedSelectionRange: SelectedLineRange | null | undefined;
+  private renderedSelectionState: SelectionRenderState | undefined;
   private selectionAnchor: SelectionPoint | undefined;
   private queuedSelectionRender: number | undefined;
   private pointerSession: PointerSession = { mode: 'idle' };
@@ -337,12 +345,12 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
   }
 
   setSelectionDirty(): void {
-    this.renderedSelectionRange = undefined;
+    this.renderedSelectionState = undefined;
   }
 
-  // Toggle edit mode. While an editor is attached, host and gutter line
-  // selections are shown as gutter-number-only highlights (the editor renders
-  // the selected text itself), so the full-line background is suppressed.
+  // Toggle edit mode. While an editor is attached, selected lines are shown as
+  // gutter-number-only highlights (the editor renders the selected text
+  // itself), so the full-line background is suppressed.
   setEditorAttached(attached: boolean): void {
     if (this.editorAttached === attached) {
       return;
@@ -353,7 +361,7 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
   }
 
   isSelectionDirty(): boolean {
-    return this.renderedSelectionRange === null;
+    return this.renderedSelectionState === undefined;
   }
 
   setSelection(
@@ -364,18 +372,41 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
       range === this.selectedRange ||
       areSelectionsEqual(range ?? undefined, this.selectedRange ?? undefined)
     );
-    if (!this.isSelectionDirty() && !isRangeChange) {
+    const lineNumberOnly = options?.lineNumberOnly ?? false;
+    const isStyleChange =
+      options?.activeLineSide !== this.selectedRangeHighlightSide ||
+      lineNumberOnly !== this.selectedRangeLineNumberOnly;
+    if (!this.isSelectionDirty() && !isRangeChange && !isStyleChange) {
       return;
     }
     this.proposedSelectedRange = undefined;
     this.selectedRange = range;
-    this.activeLineHighlightSide = options?.activeLineSide;
-    this.activeLineNumberOnly = options?.lineNumberOnly ?? false;
+    this.selectedRangeHighlightSide = options?.activeLineSide;
+    this.selectedRangeLineNumberOnly = lineNumberOnly;
     this.renderSelection();
     this.placeUtility();
     if (isRangeChange && options?.notify !== false) {
       this.notifySelectionCommitted();
     }
+  }
+
+  // Update the editor caret decoration without changing selected lines,
+  // callbacks, or gutter utility placement.
+  setEditorActiveLine(
+    lineNumber: number | null,
+    { lineNumberOnly = false, side }: EditorActiveLineWriteOptions = {}
+  ): void {
+    const isLineChange = lineNumber !== this.editorActiveLine;
+    const isStyleChange =
+      side !== this.editorActiveLineSide ||
+      lineNumberOnly !== this.editorLineNumberOnly;
+    if (!this.isSelectionDirty() && !isLineChange && !isStyleChange) {
+      return;
+    }
+    this.editorActiveLine = lineNumber;
+    this.editorActiveLineSide = side;
+    this.editorLineNumberOnly = lineNumberOnly;
+    this.renderSelection();
   }
 
   getSelection(): SelectedLineRange | null {
@@ -1496,11 +1527,8 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
     ) {
       return;
     }
-    // A gutter selection spans both columns and the full line, so drop any
-    // side or number-only restriction left over from the editor's active-line
-    // highlight.
-    this.activeLineHighlightSide = undefined;
-    this.activeLineNumberOnly = false;
+    this.selectedRangeHighlightSide = undefined;
+    this.selectedRangeLineNumberOnly = false;
     if (this.options.controlledSelection === true) {
       this.proposedSelectedRange = nextRange;
     } else {
@@ -1539,24 +1567,31 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
       : undefined;
   }
 
-  // Whether to highlight only the gutter line number and leave the full-line
-  // background for the editor's text selection. The decision splits on who drove
-  // the selection, which activeLineHighlightSide records: the editor's own
-  // active-line highlight always sets a side, while gutter and host selections
-  // never do. Re-evaluated on every render so toggling edit mode
-  // (setEditorAttached) reflows the current selection.
-  private highlightLineNumberOnly(): boolean {
-    // The editor's own side-confined active-line highlight controls the
-    // background itself via lineNumberOnly: off for a bare caret (keep the
-    // background), on once text is selected so the text selection is the only
-    // line-level marker.
-    if (this.activeLineHighlightSide != null) {
-      return this.activeLineNumberOnly;
+  // Resolve selected lines and the editor active line independently. Selected
+  // lines win until they are explicitly cleared.
+  private getSelectionRenderState(): SelectionRenderState {
+    if (this.selectedRange != null) {
+      return {
+        source: 'selected-lines',
+        range: this.selectedRange,
+        highlightSide: this.selectedRangeHighlightSide,
+        lineNumberOnly: this.selectedRangeLineNumberOnly || this.editorAttached,
+      };
     }
-    // A gutter or host line selection: number-only when the caller asked for it,
-    // or while an editor is attached — in edit mode the editor renders the
-    // selected text itself, so the full-line background gives way to it.
-    return this.activeLineNumberOnly || this.editorAttached;
+    if (this.editorActiveLine != null) {
+      return {
+        source: 'editor-active-line',
+        range: { start: this.editorActiveLine, end: this.editorActiveLine },
+        highlightSide: this.editorActiveLineSide,
+        lineNumberOnly: this.editorLineNumberOnly,
+      };
+    }
+    return {
+      source: 'none',
+      range: null,
+      highlightSide: undefined,
+      lineNumberOnly: false,
+    };
   }
 
   private renderSelection = (): void => {
@@ -1564,9 +1599,10 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
       cancelAnimationFrame(this.queuedSelectionRender);
       this.queuedSelectionRender = undefined;
     }
+    const renderState = this.getSelectionRenderState();
     if (
       this.pre == null ||
-      this.renderedSelectionRange === this.selectedRange
+      areSelectionRenderStatesEqual(this.renderedSelectionState, renderState)
     ) {
       return;
     }
@@ -1576,8 +1612,9 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
       element.removeAttribute('data-selected-line');
     }
 
-    this.renderedSelectionRange = this.selectedRange;
-    if (this.selectedRange == null) {
+    this.renderedSelectionState = renderState;
+    const { highlightSide, lineNumberOnly, range } = renderState;
+    if (range == null) {
       return;
     }
 
@@ -1592,25 +1629,25 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
       );
     }
     const split = this.pre.getAttribute('data-diff-type') === 'split';
-    const rowRange = this.getIndexesFromSelection(this.selectedRange, split);
+    const rowRange = this.getIndexesFromSelection(range, split);
     if (rowRange == null) {
-      console.error({ rowRange, selectedRange: this.selectedRange });
+      console.error({ rowRange, selectedRange: range });
       throw new Error('InteractionManager.renderSelection: No valid rowRange');
     }
     const isSingle = rowRange.start === rowRange.end;
     const first = Math.min(rowRange.start, rowRange.end);
     const last = Math.max(rowRange.start, rowRange.end);
-    const numberOnly = this.highlightLineNumberOnly();
     for (const code of codeElements) {
       // When the highlight is confined to one side (the editor's active-line
       // highlight), skip the opposite split-diff column. The deletions column
       // carries `data-deletions` and the additions column `data-additions`; a
       // unified or single-file column has neither, so it is never skipped.
-      const side = this.activeLineHighlightSide;
       if (
-        side != null &&
-        ((side === 'additions' && code.hasAttribute('data-deletions')) ||
-          (side === 'deletions' && code.hasAttribute('data-additions')))
+        highlightSide != null &&
+        ((highlightSide === 'additions' &&
+          code.hasAttribute('data-deletions')) ||
+          (highlightSide === 'deletions' &&
+            code.hasAttribute('data-additions')))
       ) {
         continue;
       }
@@ -1648,7 +1685,7 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
         gutterElement.setAttribute('data-selected-line', attributeValue);
         // A number-only highlight marks just the gutter number, leaving the
         // line background and any annotation rows untouched.
-        if (numberOnly) {
+        if (lineNumberOnly) {
           continue;
         }
         contentElement.setAttribute('data-selected-line', attributeValue);
@@ -2244,6 +2281,28 @@ function hasElementFromPoint(
     value != null &&
     typeof (value as Partial<ElementFromPointRoot>).elementFromPoint ===
       'function'
+  );
+}
+
+function areSelectionRangesEqual(
+  first: SelectedLineRange | null,
+  second: SelectedLineRange | null
+): boolean {
+  return (
+    first === second ||
+    areSelectionsEqual(first ?? undefined, second ?? undefined)
+  );
+}
+
+function areSelectionRenderStatesEqual(
+  first: SelectionRenderState | undefined,
+  second: SelectionRenderState
+): boolean {
+  return (
+    first?.source === second.source &&
+    first.highlightSide === second.highlightSide &&
+    first.lineNumberOnly === second.lineNumberOnly &&
+    areSelectionRangesEqual(first.range, second.range)
   );
 }
 

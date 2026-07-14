@@ -125,6 +125,155 @@ function getUtilityButton(row: HTMLElement): HTMLButtonElement {
   return button;
 }
 
+function isSelected(row: HTMLElement): boolean {
+  return row.hasAttribute('data-selected-line');
+}
+
+describe('InteractionManager editor active-line state', () => {
+  test('keeps editor active-line writes out of selected lines and gutter utility state', () => {
+    const { cleanup } = installDom();
+    const committedRanges: (SelectedLineRange | null)[] = [];
+    const manager = new InteractionManager('file', {
+      enableGutterUtility: true,
+      onLineSelected: (range) => committedRanges.push(range),
+    });
+    try {
+      const { contentRows, gutterRows, pre } = createFilePre(4);
+      manager.setup(pre);
+      manager.setSelection({ start: 1, end: 2 });
+      committedRanges.length = 0;
+
+      manager.setEditorActiveLine(4, { side: 'additions' });
+
+      expect(manager.getSelection()).toEqual({ start: 1, end: 2 });
+      expect(committedRanges).toEqual([]);
+      expect(isSelected(contentRows[0])).toBe(true);
+      expect(isSelected(contentRows[1])).toBe(true);
+      expect(isSelected(contentRows[3])).toBe(false);
+      expect(
+        gutterRows[1].querySelector('[data-gutter-utility-slot]')
+      ).not.toBe(null);
+
+      manager.setSelection(null, { notify: false });
+
+      expect(manager.getSelection()).toBe(null);
+      expect(isSelected(contentRows[0])).toBe(false);
+      expect(isSelected(contentRows[1])).toBe(false);
+      expect(isSelected(contentRows[3])).toBe(true);
+      expect(pre.querySelector('[data-gutter-utility-slot]')).toBe(null);
+    } finally {
+      manager.cleanUp();
+      cleanup();
+    }
+  });
+
+  test('invalidates equal ranges when the render source or style changes', () => {
+    const { cleanup } = installDom();
+    const manager = new InteractionManager('file', {});
+    try {
+      const { contentRows, gutterRows, pre } = createFilePre(3);
+      manager.setup(pre);
+      manager.setEditorAttached(true);
+
+      manager.setEditorActiveLine(2, { side: 'additions' });
+      expect(isSelected(contentRows[1])).toBe(true);
+
+      manager.setEditorActiveLine(2, {
+        lineNumberOnly: true,
+        side: 'additions',
+      });
+      expect(isSelected(gutterRows[1])).toBe(true);
+      expect(isSelected(contentRows[1])).toBe(false);
+
+      manager.setEditorActiveLine(2, { side: 'additions' });
+      expect(isSelected(contentRows[1])).toBe(true);
+
+      manager.setSelection({ start: 2, end: 2 }, { notify: false });
+      expect(isSelected(gutterRows[1])).toBe(true);
+      expect(isSelected(contentRows[1])).toBe(false);
+
+      manager.setSelection(null, { notify: false });
+      expect(isSelected(contentRows[1])).toBe(true);
+    } finally {
+      manager.cleanUp();
+      cleanup();
+    }
+  });
+
+  test('changes selected-line rendering when the editor attaches', () => {
+    const { cleanup } = installDom();
+    const manager = new InteractionManager('file', {});
+    try {
+      const { contentRows, gutterRows, pre } = createFilePre(3);
+      manager.setup(pre);
+      manager.setSelection({ start: 2, end: 2 }, { notify: false });
+
+      expect(isSelected(gutterRows[1])).toBe(true);
+      expect(isSelected(contentRows[1])).toBe(true);
+
+      manager.setEditorAttached(true);
+      expect(isSelected(gutterRows[1])).toBe(true);
+      expect(isSelected(contentRows[1])).toBe(false);
+
+      manager.setEditorAttached(false);
+      expect(isSelected(gutterRows[1])).toBe(true);
+      expect(isSelected(contentRows[1])).toBe(true);
+    } finally {
+      manager.cleanUp();
+      cleanup();
+    }
+  });
+
+  test('preserves a controlled gutter gesture across editor writes', () => {
+    const { cleanup } = installDom();
+    const events: Array<[string, SelectedLineRange | null]> = [];
+    const manager = new InteractionManager('file', {
+      controlledSelection: true,
+      enableGutterUtility: true,
+      enableLineSelection: true,
+      onLineSelected: (range) => {
+        events.push(['committed', range]);
+        manager.setSelection(range, { notify: false });
+      },
+      onLineSelectionEnd: (range) => events.push(['end', range]),
+      onLineSelectionStart: (range) => events.push(['start', range]),
+    });
+    try {
+      const { contentRows, gutterRows, pre } = createFilePre(4);
+      manager.setup(pre);
+      manager.setSelection({ start: 1, end: 1 }, { notify: false });
+
+      dispatchPointer(gutterRows[2], 'pointerdown', {
+        pointerId: 13,
+        pointerType: 'mouse',
+      });
+      manager.setEditorActiveLine(4, { side: 'additions' });
+      dispatchPointer(document, 'pointerup', {
+        pointerId: 13,
+        pointerType: 'mouse',
+      });
+
+      const selectedLine = { start: 3, end: 3 };
+      expect(events).toEqual([
+        ['start', selectedLine],
+        ['end', selectedLine],
+        ['committed', selectedLine],
+      ]);
+      expect(manager.getSelection()).toEqual(selectedLine);
+      expect(isSelected(contentRows[2])).toBe(true);
+      expect(
+        gutterRows[2].querySelector('[data-gutter-utility-slot]')
+      ).not.toBe(null);
+
+      manager.setSelection(null, { notify: false });
+      expect(isSelected(contentRows[3])).toBe(true);
+    } finally {
+      manager.cleanUp();
+      cleanup();
+    }
+  });
+});
+
 describe('InteractionManager gutter utility', () => {
   test('does not reveal the gutter utility while touch dragging from content', () => {
     const { cleanup } = installDom();

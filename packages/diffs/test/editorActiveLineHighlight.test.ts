@@ -150,7 +150,7 @@ describe('editor active line highlight', () => {
       ]);
       // A non-empty selection draws no full-line highlight...
       expect(highlightedLineNumbers(content)).toEqual([]);
-      // ...and text selection is not a gutter line selection, so a consumer's
+      // ...and text selection is not a gutter line selection, so the
       // onLineSelected handler must not fire.
       expect(notifiedRanges).toEqual([]);
     } finally {

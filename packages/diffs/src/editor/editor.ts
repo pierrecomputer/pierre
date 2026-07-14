@@ -1312,7 +1312,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   }
 
   #resetState(): void {
-    this.#setSelectedLinesSafe(null);
+    this.#setEditorActiveLineSafe(null);
     this.#gutterWidthCache = undefined;
     this.#contentWidthCache = undefined;
     this.#shouldIgnoreSelectionChange = false;
@@ -3553,25 +3553,15 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
   }
 
-  #setSelectedLinesSafe(
-    range: { start: number; end: number } | null,
+  #setEditorActiveLineSafe(
+    lineNumber: number | null,
     lineNumberOnly = false
   ): void {
     try {
-      // notify: false renders the active-line highlight without firing the
-      // host's onLineSelected callback. A caret or text selection in the editor
-      // is not a gutter line selection, so it must not publish one.
-      //
-      // activeLineSide keeps the highlight on the additions pane, the side the
-      // editor edits. Without it a split diff also highlights the matching
-      // read-only deletions row on the left.
-      //
-      // lineNumberOnly marks just the caret line's gutter number while text is
-      // selected, so the line keeps its highlighted number but drops the
-      // full-line background in favor of the text selection.
-      this.#fileInstance?.setSelectedLines(range, {
-        notify: false,
-        activeLineSide: 'additions',
+      // Keep the caret decoration separate from selected lines. The component
+      // confines it to the editable additions pane, and a text selection keeps
+      // only the caret line's gutter number highlighted.
+      this.#fileInstance?.setEditorActiveLine(lineNumber, {
         lineNumberOnly,
       });
     } catch {
@@ -3608,7 +3598,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.__postponeBgTokenizeToNextFrame();
 
     this.#primaryCaretElement = undefined;
-    this.#setSelectedLinesSafe(null);
+    this.#setEditorActiveLineSafe(null);
 
     if (
       selections.length === 0 &&
@@ -3642,10 +3632,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       );
       const caretLine = getCaretPosition(primarySelection).line + 1;
 
-      this.#setSelectedLinesSafe(
-        { start: caretLine, end: caretLine },
-        hasNonEmptySelection
-      );
+      this.#setEditorActiveLineSafe(caretLine, hasNonEmptySelection);
 
       for (const selection of normalizedSelections) {
         if (!isCollapsedSelection(selection)) {

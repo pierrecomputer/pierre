@@ -29,6 +29,7 @@ import type {
   DiffsEditableComponent,
   DiffsEditor,
   DiffsTextDocument,
+  EditorActiveLineOptions,
   FileContents,
   HighlightedToken,
   LineAnnotation,
@@ -287,6 +288,16 @@ export class File<
     options?: SelectionWriteOptions
   ): void {
     this.interactionManager.setSelection(range, options);
+  }
+
+  public setEditorActiveLine(
+    lineNumber: number | null,
+    options?: EditorActiveLineOptions
+  ): void {
+    this.interactionManager.setEditorActiveLine(lineNumber, {
+      lineNumberOnly: options?.lineNumberOnly,
+      side: 'additions',
+    });
   }
 
   public flushManagers(): void {
