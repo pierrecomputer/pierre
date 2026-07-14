@@ -103,7 +103,7 @@ order. If you touch one of these areas, consider adding the missing coverage:
 - **IME composition deferrals** — IME/composition interaction with editing and
   undo-coalescing is deferred and not covered.
 
-## Known bugs pinned as `test.failing` (32)
+## Known bugs pinned as `test.failing` (30)
 
 - **EditStack coalescing** (3) — coalescing decisions compare a new edit against
   whatever sits on top of the undo stack purely by geometry, with no state reset
@@ -168,9 +168,3 @@ order. If you touch one of these areas, consider adding the missing coverage:
   (or up across a logical-line boundary) can park the caret between the halves
   of an astral character; a subsequent insert there splits the pair into lone
   surrogates.
-- **Malformed position components destroy the document** (2) — position
-  normalization has no finiteness/integer guard, so a `NaN` (or fractional)
-  line/character flows through min/max clamping into the offset computation, the
-  resolved offset becomes `NaN`, and the degenerate range resolves to a
-  whole-document replace — an insert with one malformed position component
-  silently erases everything else.

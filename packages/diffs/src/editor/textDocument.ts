@@ -316,14 +316,26 @@ export class TextDocument<LAnnotation> {
   }
 
   normalizePosition(position: Position): Position {
-    const line = Math.max(0, Math.min(position.line, this.lineCount - 1));
+    const line = TextDocument.#clampIndex(position.line, this.lineCount - 1);
     return {
       line,
-      character: Math.max(
-        0,
-        Math.min(position.character, this.getLineLength(line))
+      character: TextDocument.#clampIndex(
+        position.character,
+        this.getLineLength(line)
       ),
     };
+  }
+
+  // Math.min/max pass NaN through, and a fractional index breaks the
+  // integer-keyed line-offset lookup — either way the resolved offset becomes
+  // NaN and a degenerate edit range can swallow the whole document. Malformed
+  // components clamp like any other out-of-range value: NaN and -Infinity act
+  // as 0, fractions floor, +Infinity clamps to the max.
+  static #clampIndex(value: number, max: number): number {
+    if (Number.isNaN(value)) {
+      return 0;
+    }
+    return Math.max(0, Math.min(Math.floor(value), max));
   }
 
   #resolveEdit(edit: TextEdit): ResolvedTextEdit {
