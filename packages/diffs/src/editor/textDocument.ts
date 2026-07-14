@@ -212,6 +212,16 @@ export class TextDocument<LAnnotation> {
     );
   }
 
+  // Every edit joins the undo timeline: an edit applied with
+  // `updateHistory=false` affects the edit stack exactly as the identical
+  // call with `updateHistory=true` and no selections or undo boundary would.
+  // The flag only controls whether the caller's interaction metadata is
+  // recorded on the entry; the entry itself is always pushed (clearing any
+  // pending redo) and coalesces by the normal geometry rules. This keeps a
+  // mixed tracked/untracked sequence equivalent to the all-tracked sequence —
+  // undo-to-exhaustion restores the original text, redo-to-exhaustion the
+  // final text — instead of leaving frozen entries whose offsets go stale.
+  // Only history replay (undo/redo) writes to the buffer without recording.
   applyResolvedEdits(
     edits: ResolvedTextEdit[],
     updateHistory = false,
@@ -223,35 +233,30 @@ export class TextDocument<LAnnotation> {
       return undefined;
     }
     const resolvedEdits = this.#sortAndValidateResolvedEdits(edits);
-    if (updateHistory) {
-      const entry = createEditStackEntry(
-        this,
-        resolvedEdits,
-        this.#version,
-        this.#version + 1,
-        selectionsBefore,
-        selectionsAfter
-      );
-      if (undoBoundary) {
-        entry.undoBoundary = true;
-      }
-      const previousEntry = this.#editStack.peekUndo();
-      const change = this.#applyResolvedEditsToBuffer(resolvedEdits);
-      this.#version++;
-      if (
-        change.lineDelta === 0 &&
-        shouldCoalesceEditStackEntry(previousEntry, entry)
-      ) {
-        this.#editStack.replaceLastUndo(
-          coalesceEditStackEntries(previousEntry!, entry)
-        );
-      } else {
-        this.#editStack.push(entry);
-      }
-      return change;
+    const entry = createEditStackEntry(
+      this,
+      resolvedEdits,
+      this.#version,
+      this.#version + 1,
+      updateHistory ? selectionsBefore : undefined,
+      updateHistory ? selectionsAfter : undefined
+    );
+    if (updateHistory && undoBoundary) {
+      entry.undoBoundary = true;
     }
+    const previousEntry = this.#editStack.peekUndo();
     const change = this.#applyResolvedEditsToBuffer(resolvedEdits);
     this.#version++;
+    if (
+      change.lineDelta === 0 &&
+      shouldCoalesceEditStackEntry(previousEntry, entry)
+    ) {
+      this.#editStack.replaceLastUndo(
+        coalesceEditStackEntries(previousEntry!, entry)
+      );
+    } else {
+      this.#editStack.push(entry);
+    }
     return change;
   }
 

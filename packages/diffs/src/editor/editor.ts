@@ -444,9 +444,16 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   }
 
   /**
-   * Apply edits to current attached file.
+   * Apply edits to current attached file. Every edit joins the undo timeline:
+   * a programmatic edit must leave the document and its history exactly as
+   * the same edit typed by the user would (history equivalence — see
+   * TextDocument.applyResolvedEdits), so it is undoable like any other edit.
+   *
+   * @param _updateHistory Deprecated: has no effect. Programmatic edits are
+   * always undoable; history is reset by rebuilding the document (and its
+   * EditStack), never by bypassing it.
    */
-  applyEdits(edits: TextEdit[], updateHistory = false): void {
+  applyEdits(edits: TextEdit[], _updateHistory?: boolean): void {
     const textDocument = this.#textDocument;
     if (textDocument == null) {
       throw new Error('Editor is not attached');
@@ -484,11 +491,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
             })
             .sort((a, b) => a.start - b.start);
 
-    const change = textDocument.applyEdits(
-      edits,
-      updateHistory,
-      selectionsBefore
-    );
+    const change = textDocument.applyEdits(edits, true, selectionsBefore);
     if (change === undefined) {
       return;
     }
@@ -509,9 +512,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         selectionOffsetsBefore,
         resolvedEditOffsets
       );
-      if (updateHistory) {
-        textDocument.setLastUndoSelectionsAfter(nextSelections);
-      }
+      textDocument.setLastUndoSelectionsAfter(nextSelections);
     }
 
     this.#applyChange(
@@ -4041,7 +4042,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         get selection(): EditorSelection {
           return getActiveSelection();
         },
-        applyEdits: (edits: TextEdit[]) => this.applyEdits(edits, true),
+        applyEdits: (edits: TextEdit[]) => this.applyEdits(edits),
         getSelectionText: () =>
           this.#textDocument?.getText(getActiveSelection()) ?? '',
         replaceSelectionText: (text: string) => {
