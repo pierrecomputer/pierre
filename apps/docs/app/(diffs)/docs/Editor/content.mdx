@@ -7,7 +7,9 @@
 Edit mode is a pluggable editing layer for `File`-style code surfaces. It adds
 keyboard-driven editing to an already-rendered `File` or `FileDiff` while the
 existing renderer continues to own syntax highlighting, layout, annotations, and
-virtualization. Edit mode includes:
+virtualization.
+
+Edit mode features include:
 
 - Text editing
 - Selection management, including multiple cursors
@@ -25,11 +27,21 @@ surfaces in `EditProvider` and set `contentEditable`. `CodeView` instead uses an
 item's `edit` flag and a `createEditor` factory. For standalone vanilla JS
 surfaces, call `editor.edit(component)` after render.
 
+Edit mode is not a full-fledged IDE, though you may certainly use it to create
+your own IDE-like experiences. Edit mode is purpose-built and best suited for
+editing code rendered by our Diffs library. It builds on our already powerful
+file and diff surfaces to preserve diff layout, annotations, syntax
+highlighting, SSR, and virtualization while adding editing, multiple selections,
+history, search and replace, and markers. This makes it most ideal for “review
+and correct” flows with generative code changes.
+
+### Demo
+
 To enable edit mode on a `File` instance, import `Editor` from
 `@pierre/diffs/editor`. It is intentionally separate from the core bundle so you
 can lazy-load it when editing is optional.
 
-<EditorDemo />
+<EditorDemo prerenderedFile={editorDemoFile} />
 
 ### How It Works
 

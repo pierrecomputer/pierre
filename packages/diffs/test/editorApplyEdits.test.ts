@@ -51,7 +51,8 @@ interface EditorFixture {
 async function createEditorFixture(
   contents: string,
   editorOptions?: EditorOptions<undefined>,
-  fileOptions?: Partial<FileOptions<undefined>>
+  fileOptions?: Partial<FileOptions<undefined>>,
+  fileContents?: Partial<FileContents>
 ): Promise<EditorFixture> {
   const dom = installDom();
   const fileContainer = document.createElement('div');
@@ -63,7 +64,11 @@ async function createEditorFixture(
     ...fileOptions,
   });
   const editor = new Editor<undefined>(editorOptions);
-  const initialFile: FileContents = { name: 'edits.ts', contents };
+  const initialFile: FileContents = {
+    name: 'edits.ts',
+    contents,
+    ...fileContents,
+  };
 
   file.render({ file: initialFile, fileContainer, forceRender: true });
   editor.edit(file);
@@ -118,6 +123,21 @@ function pressMoveLine(
       cancelable: true,
     })
   );
+}
+
+function pressKey(
+  window: EditorTestWindow,
+  content: HTMLElement,
+  init: KeyboardEventInit
+): KeyboardEvent {
+  const event = new window.KeyboardEvent('keydown', {
+    bubbles: true,
+    composed: true,
+    cancelable: true,
+    ...init,
+  });
+  content.dispatchEvent(event);
+  return event;
 }
 
 describe('Editor.applyEdits selection sync', () => {
@@ -807,6 +827,356 @@ describe('Editor move line commands', () => {
           direction: 1,
         },
       ]);
+    } finally {
+      cleanup();
+    }
+  });
+});
+
+describe('Editor editing commands', () => {
+  test('copies selected lines and keeps the requested copy selected', async () => {
+    const { cleanup, content, editor, window } = await createEditorFixture(
+      'alpha\nbravo\ncharlie'
+    );
+
+    try {
+      editor.setSelections([
+        {
+          start: { line: 1, character: 2 },
+          end: { line: 1, character: 2 },
+          direction: 'none',
+        },
+      ]);
+
+      pressKey(window, content, {
+        key: 'ArrowUp',
+        altKey: true,
+        shiftKey: true,
+      });
+      expect(editor.getText()).toBe('alpha\nbravo\nbravo\ncharlie');
+      expect(editor.getState().selections?.[0].start).toEqual({
+        line: 1,
+        character: 2,
+      });
+
+      pressKey(window, content, {
+        key: 'ArrowDown',
+        altKey: true,
+        shiftKey: true,
+      });
+      expect(editor.getText()).toBe('alpha\nbravo\nbravo\nbravo\ncharlie');
+      expect(editor.getState().selections?.[0].start).toEqual({
+        line: 2,
+        character: 2,
+      });
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('simplifies to the primary range before collapsing it', async () => {
+    const { cleanup, content, editor, window } =
+      await createEditorFixture('alpha\nbravo');
+
+    try {
+      editor.setSelections([
+        {
+          start: { line: 0, character: 1 },
+          end: { line: 0, character: 1 },
+          direction: 'none',
+        },
+        {
+          start: { line: 1, character: 1 },
+          end: { line: 1, character: 4 },
+          direction: 'forward',
+        },
+      ]);
+
+      pressKey(window, content, { key: 'Escape' });
+      expect(editor.getState().selections).toEqual([
+        {
+          start: { line: 1, character: 1 },
+          end: { line: 1, character: 4 },
+          direction: 1,
+        },
+      ]);
+
+      pressKey(window, content, { key: 'Escape' });
+      expect(editor.getState().selections).toEqual([
+        {
+          start: { line: 1, character: 4 },
+          end: { line: 1, character: 4 },
+          direction: 0,
+        },
+      ]);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('inserts an indented blank line after every selected final line', async () => {
+    const { cleanup, content, editor, window } =
+      await createEditorFixture('zero\n  one\ntwo');
+
+    try {
+      editor.setSelections([
+        {
+          start: { line: 0, character: 2 },
+          end: { line: 0, character: 2 },
+          direction: 'none',
+        },
+        {
+          start: { line: 1, character: 2 },
+          end: { line: 1, character: 5 },
+          direction: 'forward',
+        },
+      ]);
+
+      pressKey(window, content, { key: 'Enter', metaKey: true });
+
+      expect(editor.getText()).toBe('zero\n\n  one\n  \ntwo');
+      expect(editor.getState().selections).toEqual([
+        {
+          start: { line: 1, character: 0 },
+          end: { line: 1, character: 0 },
+          direction: 0,
+        },
+        {
+          start: { line: 3, character: 2 },
+          end: { line: 3, character: 2 },
+          direction: 0,
+        },
+      ]);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('inserts a blank line below the active end of a backward selection', async () => {
+    const { cleanup, content, editor, window } =
+      await createEditorFixture('zero\n  one\ntwo');
+
+    try {
+      editor.setSelections([
+        {
+          start: { line: 0, character: 2 },
+          end: { line: 1, character: 3 },
+          direction: 'backward',
+        },
+      ]);
+
+      pressKey(window, content, { key: 'Enter', metaKey: true });
+
+      expect(editor.getText()).toBe('zero\n\n  one\ntwo');
+      expect(editor.getState().selections).toEqual([
+        {
+          start: { line: 1, character: 0 },
+          end: { line: 1, character: 0 },
+          direction: 0,
+        },
+      ]);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('indents whole lines with the bracket shortcuts', async () => {
+    const { cleanup, content, editor, window } =
+      await createEditorFixture('alpha');
+
+    try {
+      editor.setSelections([
+        {
+          start: { line: 0, character: 3 },
+          end: { line: 0, character: 3 },
+          direction: 'none',
+        },
+      ]);
+
+      pressKey(window, content, { key: ']', metaKey: true });
+      expect(editor.getText()).toBe('  alpha');
+      expect(editor.getState().selections?.[0].start.character).toBe(5);
+
+      pressKey(window, content, { key: '[', metaKey: true });
+      expect(editor.getText()).toBe('alpha');
+      expect(editor.getState().selections?.[0].start.character).toBe(3);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('toggles default and SQL line comments', async () => {
+    const typescriptFixture = await createEditorFixture('  const value = 1;');
+    try {
+      typescriptFixture.editor.setSelections([
+        {
+          start: { line: 0, character: 2 },
+          end: { line: 0, character: 2 },
+          direction: 'none',
+        },
+      ]);
+      pressKey(typescriptFixture.window, typescriptFixture.content, {
+        key: '/',
+        metaKey: true,
+      });
+      expect(typescriptFixture.editor.getText()).toBe('  // const value = 1;');
+      pressKey(typescriptFixture.window, typescriptFixture.content, {
+        key: '/',
+        metaKey: true,
+      });
+      expect(typescriptFixture.editor.getText()).toBe('  const value = 1;');
+    } finally {
+      typescriptFixture.cleanup();
+    }
+
+    const sqlFixture = await createEditorFixture(
+      'select * from users;',
+      undefined,
+      undefined,
+      { name: 'query.sql' }
+    );
+    try {
+      sqlFixture.editor.setSelections([
+        {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 0 },
+          direction: 'none',
+        },
+      ]);
+      pressKey(sqlFixture.window, sqlFixture.content, {
+        key: '/',
+        metaKey: true,
+      });
+      expect(sqlFixture.editor.getText()).toBe('-- select * from users;');
+    } finally {
+      sqlFixture.cleanup();
+    }
+  });
+
+  test('uses line-wise block comments when a language has no line token', async () => {
+    const cases = [
+      {
+        name: 'styles.css',
+        contents: '  color: red;',
+        commented: '  /* color: red; */',
+      },
+      {
+        name: 'index.html',
+        contents: '  <div></div>',
+        commented: '  <!-- <div></div> -->',
+      },
+    ];
+
+    for (const { name, contents, commented } of cases) {
+      const fixture = await createEditorFixture(
+        contents,
+        undefined,
+        undefined,
+        { name }
+      );
+      try {
+        fixture.editor.setSelections(
+          [4, 8].map((character) => ({
+            start: { line: 0, character },
+            end: { line: 0, character },
+            direction: 'none' as const,
+          }))
+        );
+
+        pressKey(fixture.window, fixture.content, {
+          key: '/',
+          metaKey: true,
+        });
+        expect(fixture.editor.getText()).toBe(commented);
+
+        pressKey(fixture.window, fixture.content, {
+          key: '/',
+          metaKey: true,
+        });
+        expect(fixture.editor.getText()).toBe(contents);
+      } finally {
+        fixture.cleanup();
+      }
+    }
+  });
+
+  test('toggles block comments while preserving the selected content', async () => {
+    const { cleanup, content, editor, window } =
+      await createEditorFixture('alpha beta');
+
+    try {
+      editor.setSelections([
+        {
+          start: { line: 0, character: 6 },
+          end: { line: 0, character: 10 },
+          direction: 'forward',
+        },
+      ]);
+
+      pressKey(window, content, {
+        key: 'A',
+        code: 'KeyA',
+        altKey: true,
+        shiftKey: true,
+      });
+      expect(editor.getText()).toBe('alpha /* beta */');
+      expect(editor.getState().selections).toEqual([
+        {
+          start: { line: 0, character: 9 },
+          end: { line: 0, character: 13 },
+          direction: 1,
+        },
+      ]);
+
+      pressKey(window, content, {
+        key: 'A',
+        code: 'KeyA',
+        altKey: true,
+        shiftKey: true,
+      });
+      expect(editor.getText()).toBe('alpha beta');
+      expect(editor.getState().selections).toEqual([
+        {
+          start: { line: 0, character: 6 },
+          end: { line: 0, character: 10 },
+          direction: 1,
+        },
+      ]);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('places a collapsed caret inside a new block comment', async () => {
+    const { cleanup, content, editor, window } =
+      await createEditorFixture('alpha ');
+
+    try {
+      editor.setSelections([
+        {
+          start: { line: 0, character: 6 },
+          end: { line: 0, character: 6 },
+          direction: 'none',
+        },
+      ]);
+
+      pressKey(window, content, {
+        key: 'A',
+        code: 'KeyA',
+        altKey: true,
+        shiftKey: true,
+      });
+      expect(editor.getText()).toBe('alpha /*  */');
+      expect(editor.getState().selections?.[0].start.character).toBe(9);
+
+      pressKey(window, content, {
+        key: 'A',
+        code: 'KeyA',
+        altKey: true,
+        shiftKey: true,
+      });
+      expect(editor.getText()).toBe('alpha ');
+      expect(editor.getState().selections?.[0].start.character).toBe(6);
     } finally {
       cleanup();
     }

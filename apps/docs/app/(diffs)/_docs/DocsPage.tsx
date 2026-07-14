@@ -29,6 +29,7 @@ import {
   CUSTOM_HUNK_SEPARATORS_SWITCHER,
 } from '../docs/CustomHunkSeparators/constants';
 import {
+  EDITOR_DEMO_FILE_EXAMPLE,
   EDITOR_LAZY_FILE_EXAMPLE,
   EDITOR_MARKER_EXAMPLE,
   EDITOR_MARKER_TYPE,
@@ -417,6 +418,7 @@ async function CodeViewSection() {
 
 async function EditorSection() {
   const [
+    editorDemoFile,
     editorVanillaFileExample,
     editorVanillaFileDiffExample,
     editorVanillaCodeViewExample,
@@ -435,6 +437,7 @@ async function EditorSection() {
     editorWorkerPoolReactExample,
     editorWorkerPoolVanillaExample,
   ] = await Promise.all([
+    preloadFile(EDITOR_DEMO_FILE_EXAMPLE),
     preloadFile(EDITOR_VANILLA_FILE_EXAMPLE),
     preloadFile(EDITOR_VANILLA_FILE_DIFF_EXAMPLE),
     preloadFile(EDITOR_VANILLA_CODE_VIEW_EXAMPLE),
@@ -456,6 +459,7 @@ async function EditorSection() {
   const content = await renderMDX({
     filePath: '(diffs)/docs/Editor/content.mdx',
     scope: {
+      editorDemoFile,
       editorVanillaFileExample,
       editorVanillaFileDiffExample,
       editorVanillaCodeViewExample,

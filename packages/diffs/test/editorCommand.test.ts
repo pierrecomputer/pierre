@@ -76,6 +76,26 @@ describe('resolveEditorShortcutCommand', () => {
       { event: { key: 'ArrowUp', altKey: true }, expected: 'moveLineUp' },
       { event: { key: 'ArrowDown', altKey: true }, expected: 'moveLineDown' },
       {
+        event: { key: 'ArrowUp', altKey: true, shiftKey: true },
+        expected: 'copyLineUp',
+      },
+      {
+        event: { key: 'ArrowDown', altKey: true, shiftKey: true },
+        expected: 'copyLineDown',
+      },
+      {
+        event: { key: 'Enter', metaKey: true },
+        expected: 'insertBlankLine',
+      },
+      { event: { key: '[', metaKey: true }, expected: 'indentLess' },
+      { event: { key: ']', metaKey: true }, expected: 'indentMore' },
+      { event: { key: '/', metaKey: true }, expected: 'toggleComment' },
+      {
+        event: { key: 'A', code: 'KeyA', altKey: true, shiftKey: true },
+        expected: 'toggleBlockComment',
+      },
+      { event: { key: 'Escape' }, expected: 'simplifySelection' },
+      {
         event: { key: 'p', altKey: true, ctrlKey: true },
         expected: 'moveLineUp',
       },
@@ -108,6 +128,26 @@ describe('resolveEditorShortcutCommand', () => {
       { event: { key: 'ArrowUp', altKey: true }, expected: 'moveLineUp' },
       { event: { key: 'ArrowDown', altKey: true }, expected: 'moveLineDown' },
       {
+        event: { key: 'ArrowUp', altKey: true, shiftKey: true },
+        expected: 'copyLineUp',
+      },
+      {
+        event: { key: 'ArrowDown', altKey: true, shiftKey: true },
+        expected: 'copyLineDown',
+      },
+      {
+        event: { key: 'Enter', ctrlKey: true },
+        expected: 'insertBlankLine',
+      },
+      { event: { key: '[', ctrlKey: true }, expected: 'indentLess' },
+      { event: { key: ']', ctrlKey: true }, expected: 'indentMore' },
+      { event: { key: '/', ctrlKey: true }, expected: 'toggleComment' },
+      {
+        event: { key: 'A', code: 'KeyA', altKey: true, shiftKey: true },
+        expected: 'toggleBlockComment',
+      },
+      { event: { key: 'Escape' }, expected: 'simplifySelection' },
+      {
         event: { key: 'p', altKey: true, ctrlKey: true },
         expected: 'moveLineUp',
       },
@@ -139,7 +179,25 @@ describe('resolveEditorShortcutCommand', () => {
   test('ignores modified alt shortcuts and unsupported navigation', () => {
     expectShortcuts('Linux x86_64', [
       { event: { key: 'ArrowUp', ctrlKey: true }, expected: undefined },
+      {
+        event: { key: 'ArrowUp', ctrlKey: true, altKey: true },
+        expected: undefined,
+      },
+      {
+        event: { key: 'ArrowDown', ctrlKey: true, altKey: true },
+        expected: undefined,
+      },
       { event: { key: 'z', ctrlKey: true, altKey: true }, expected: undefined },
+    ]);
+    expectShortcuts('MacIntel', [
+      {
+        event: { key: 'ArrowUp', metaKey: true, altKey: true },
+        expected: undefined,
+      },
+      {
+        event: { key: 'ArrowDown', metaKey: true, altKey: true },
+        expected: undefined,
+      },
     ]);
   });
 
