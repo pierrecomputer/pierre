@@ -138,27 +138,51 @@ describe('word delete vs word select on CJK and mixed-script runs', () => {
     expect(nextSelections).toEqual([caret(0, 0)]);
   });
 
-  test('double-click word expansion splits Latin, Han, and digits into three words', () => {
-    // monaco-legacy: src/vs/editor/contrib/wordOperations/test/browser/wordOperations.test.ts — "cursorWordLeft - Recognize words"
-    // DIVERGENCE: the same string that deleteWordBackward erases whole yields
-    // three distinct double-click words (Latin, Han, digits).
-    const d = doc('na\u00EFve東京42');
-    expect(expandCollapsedSelectionToWord(d, caret(0, 2))).toEqual({
-      start: { line: 0, character: 0 },
-      end: { line: 0, character: 5 },
-      direction: DirectionForward,
-    });
-    expect(expandCollapsedSelectionToWord(d, caret(0, 6))).toEqual({
-      start: { line: 0, character: 5 },
-      end: { line: 0, character: 7 },
-      direction: DirectionForward,
-    });
-    expect(expandCollapsedSelectionToWord(d, caret(0, 8))).toEqual({
-      start: { line: 0, character: 7 },
-      end: { line: 0, character: 9 },
-      direction: DirectionForward,
-    });
-  });
+  // Intl.Segmenter's isWordLike classification varies across ICU builds
+  // (whether bare digit runs and Han segments count as word-like differs
+  // between engines and platforms). Gate the segmenter-side pin on the
+  // runtime agreeing with the segmentation our dev and CI environments ship,
+  // so a divergent ICU skips visibly instead of going red.
+  const segmenterSplitsMixedRun = (() => {
+    const wordLike = [
+      ...new Intl.Segmenter(undefined, { granularity: 'word' }).segment(
+        'naïve東京42'
+      ),
+    ]
+      .filter((seg) => seg.isWordLike === true)
+      .map((seg) => seg.segment);
+    return (
+      wordLike.length === 3 &&
+      wordLike[0] === 'naïve' &&
+      wordLike[1] === '東京' &&
+      wordLike[2] === '42'
+    );
+  })();
+
+  test.skipIf(!segmenterSplitsMixedRun)(
+    'double-click word expansion splits Latin, Han, and digits into three words',
+    () => {
+      // monaco-legacy: src/vs/editor/contrib/wordOperations/test/browser/wordOperations.test.ts — "cursorWordLeft - Recognize words"
+      // DIVERGENCE: the same string that deleteWordBackward erases whole yields
+      // three distinct double-click words (Latin, Han, digits).
+      const d = doc('na\u00EFve東京42');
+      expect(expandCollapsedSelectionToWord(d, caret(0, 2))).toEqual({
+        start: { line: 0, character: 0 },
+        end: { line: 0, character: 5 },
+        direction: DirectionForward,
+      });
+      expect(expandCollapsedSelectionToWord(d, caret(0, 6))).toEqual({
+        start: { line: 0, character: 5 },
+        end: { line: 0, character: 7 },
+        direction: DirectionForward,
+      });
+      expect(expandCollapsedSelectionToWord(d, caret(0, 8))).toEqual({
+        start: { line: 0, character: 7 },
+        end: { line: 0, character: 9 },
+        direction: DirectionForward,
+      });
+    }
+  );
 });
 
 describe('word delete around emoji and grapheme clusters', () => {
