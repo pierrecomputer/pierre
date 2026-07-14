@@ -18,6 +18,27 @@ AGENT=1 bun test
   be a compact projection of just the behavior its test owns, small enough to
   review line by line. When a snapshot fails, read the diff — do not reflexively
   `bun test -u`.
+- `test.failing(...)` marks a **known bug**: the test encodes the _correct_
+  expected behavior and currently fails. When the bug is fixed, `bun test` will
+  report the test as unexpectedly passing — remove the `.failing` modifier then.
+  `DIVERGENCE:` comments pin places where this package intentionally (or at
+  least knowingly) behaves differently from an alternative it was compared
+  against; those tests pin _our_ behavior and document the difference — they are
+  decisions, not bugs. `KNOWN BUG:` comments accompany every `test.failing` with
+  the root cause.
+
+## Provenance
+
+A set of behavioral scenarios in this suite was derived by auditing the test
+suites of other open-source editors — microsoft/vscode @
+`86f5a62f058e3905f74a9fa65d04b2f3b533408e`, CodeMirror 6
+(`state@9c801279cb83011e6f92af778f4443406e8f1200`,
+`commands@5b9bac974f2c4af3e20b045adef949667872ecad`), and
+atom/text-buffer@`b1f093269b175ce6cc9728c7a4d50ca75bb031b6` +
+atom/superstring@`6732087fac04cd68d14e93d4f83f246879200ab5` (all MIT) — as
+behavioral rewrites with original names, fixtures, helpers, and granularity; no
+code was copied. Future derivations must use permissively-licensed sources only
+and follow the same rewrite discipline.
 
 ## Known coverage gaps (confirmed by the 2026-06 test audit)
 
@@ -51,3 +72,105 @@ order. If you touch one of these areas, consider adding the missing coverage:
   branches.
 - **DOM virtualization buffers** (`data-virtualizer-buffer`): created by
   File/FileDiff `applyBuffers` on live DOM; no test asserts them anywhere.
+- **Forward word-delete family** (delete-word-right, delete-word-start-right)
+  and **deleteInsideWord** — no equivalent commands exist yet.
+- **Line-join whitespace collapsing** — a "join lines" command that collapses
+  the whitespace at the join point is not implemented.
+- **Forward transpose at end-of-line** — transposing characters across a line
+  break in the forward direction has no implementation.
+- **CJK visual-column vertical movement** — vertical caret movement does not
+  preserve the visual column across full-width CJK characters (requires canvas
+  text-measure stubbing to test properly).
+- **Preferred line-ending override** — no setter/option lets a host force an
+  LF/CRLF policy for inserted text; line ending is a derived getter only.
+- **Range-scoped search** — search params have no range field; selection-scoped
+  find/replace is not possible today.
+- **Multi-line pattern search** — the piece-table search rejects patterns
+  containing line breaks; matching across line breaks is unsupported.
+- **Transactions, checkpoints, and retroactive change grouping** — no
+  `transact()`/nested-transaction/abort API, no checkpoint/revert-to-checkpoint
+  concept, and no public API to retroactively merge the last N history entries;
+  history grouping today is purely geometric typing-coalescing plus an
+  undo-boundary marker.
+- **Edit-tracking markers with invalidation strategies** — markers are
+  render-only today; there is no remapping of marker positions through edits
+  with configurable invalidation strategies.
+- **Soft-wrap continuation-row hanging indent** — wrapped continuation rows do
+  not support a hanging indent.
+- **Time-based undo grouping** — undo coalescing is geometry-based with no clock
+  input; a `newGroupDelay`-style time window is a policy decision, not
+  implemented.
+- **IME composition deferrals** — IME/composition interaction with editing and
+  undo-coalescing is deferred and not covered.
+
+## Known bugs pinned as `test.failing` (32)
+
+- **EditStack coalescing** (3) — coalescing decisions compare a new edit against
+  whatever sits on top of the undo stack purely by geometry, with no state reset
+  after undo/redo: an undo can expose a stale top entry that new typing then
+  fuses into; an undo-boundary marker stops blocking merges once it is undone;
+  and backspace followed by forward-delete at the same pivot coalesces into a
+  single undo step instead of getting an undo stop when the delete direction
+  flips.
+- **Surrogate-pair edit boundaries** (3) — edit range endpoints landing strictly
+  inside a surrogate pair split the pair and corrupt the buffer instead of
+  snapping to pair boundaries; affects insert-inside-a-pair and replaces
+  starting or ending inside one.
+- **PieceTable CRLF line metadata** (5, spanning piece-table and search
+  coverage) — line-break bookkeeping goes stale when a CRLF pair is split or
+  assembled across edits (deleting exactly the `\n` of a pair, inserting between
+  the `\r` and `\n`, assembling CRLF from two separate inserts, plus a
+  CRLF-biased fuzz oracle), and the same stale metadata drives search astray
+  (shifted or missing match ranges) even though `getText()` stays correct.
+- **Batch edit ordering sensitivity** (1) — accepting a batch containing a
+  delete and an insert at the same offset depends on the caller's array order:
+  delete-first throws an overlap error, insert-first succeeds.
+- **Line indent/outdent multi-selection dedupe** (3) — indent dispatch
+  concatenates per-selection edits with no shared-line dedupe, so a line under
+  two carets/ranges indents twice; the outdent variant emits two identical
+  deletes that fail overlap validation and the whole command throws.
+- **Block indent dirties blank lines** (1) — a multi-line block indent inserts
+  the indent unit on empty and whitespace-only lines inside the selection,
+  injecting trailing whitespace on lines the user never touched (outdent
+  round-trips it away, bounding the damage).
+- **History equivalence across non-history edits** (7) — edits applied with
+  `updateHistory=false` are an implementation detail of how an edit reaches
+  `applyEdits`, not a separate semantic class: a mixed programmatic/local
+  sequence must leave history equivalent to the same sequence applied all-local,
+  so undo-to-exhaustion restores the original byte-exact text and
+  redo-to-exhaustion the final text. Today untracked edits bypass the edit stack
+  and existing entries apply at stale offsets, so exhaustion corrupts instead: a
+  stale-offset undo deletes the wrong characters, a replacement batch breaks
+  across an interleaved untracked insert, an untracked interior insert is erased
+  while tracked text is stranded, an untracked whole-document replace produces
+  spliced states that never existed on any timeline, typing coalesced around an
+  untracked insert unwinds to the untracked remainder instead of the original
+  text, the unwind that should restore recorded selections verbatim never
+  reaches the original text, and a pending redo survives an untracked edit
+  (instead of being cleared like any new edit) and replays at stale offsets.
+- **Position round-trip losing a column** (1) — a position-from-offset
+  computation can return a position strictly inside a CRLF pair (a character
+  beyond the line's own length) that the inverse offset-from-position
+  computation clamps away, so the round trip silently loses a column.
+- **Inverted selection after normalization** (1) — setting selections normalizes
+  positions but never reorders a start-after-end pair, storing an inverted
+  selection that violates the start-before-or-equal-end invariant downstream
+  code assumes.
+- **Search-replace capture expansion with lookaround** (3) — replacement-text
+  expansion re-executes the pattern against only the matched slice, so
+  lookaround context outside the slice is lost: a lookbehind whose context sits
+  before the slice, a lookahead whose context sits after the slice, and a
+  lookahead that re-matches shorter on the slice all fall back to inserting the
+  literal (unexpanded) replacement text.
+- **Soft-wrap vertical motion splits surrogate pairs** (2) — vertical motion
+  into a wrapped continuation row computes the landing spot as raw UTF-16 units
+  with no grapheme/surrogate snapping, so moving down into a continuation row
+  (or up across a logical-line boundary) can park the caret between the halves
+  of an astral character; a subsequent insert there splits the pair into lone
+  surrogates.
+- **Malformed position components destroy the document** (2) — position
+  normalization has no finiteness/integer guard, so a `NaN` (or fractional)
+  line/character flows through min/max clamping into the offset computation, the
+  resolved offset becomes `NaN`, and the degenerate range resolves to a
+  whole-document replace — an insert with one malformed position component
+  silently erases everything else.

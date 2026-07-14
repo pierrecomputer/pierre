@@ -1,5 +1,9 @@
-import { describe, expect, test } from 'bun:test';
+import { afterAll, describe, expect, test } from 'bun:test';
 
+import { File } from '../src/components/File';
+import { DEFAULT_THEMES } from '../src/constants';
+import { Editor } from '../src/editor/editor';
+import { EditStack } from '../src/editor/editStack';
 import {
   applyDeleteCharacterToSelections,
   applyDeleteHardLineForwardToSelections,
@@ -37,7 +41,18 @@ import {
 } from '../src/editor/selection';
 import { DirectionBackward } from '../src/editor/selection';
 import { TextDocument } from '../src/editor/textDocument';
-import type { EditorSelection, SelectionDirection } from '../src/types';
+import type { ResolvedTextEdit } from '../src/editor/textDocument';
+import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
+import type {
+  EditorSelection,
+  FileContents,
+  SelectionDirection,
+} from '../src/types';
+import { installDom, wait } from './domHarness';
+
+afterAll(async () => {
+  await disposeHighlighter();
+});
 
 type MockNode = {
   nodeType: number;
@@ -2862,4 +2877,1577 @@ describe('resolveSelectionCut', () => {
       nextSelectionOffsets: [0, 0],
     });
   });
+});
+
+// ---------------------------------------------------------------------------
+// Consolidated selection/word-operation suites (migrated).
+// ---------------------------------------------------------------------------
+
+function doc(text: string) {
+  return new TextDocument('inmemory://1', text, 'plain');
+}
+
+function caret(line: number, character: number): EditorSelection {
+  const position = { line, character };
+  return { start: position, end: position, direction: DirectionNone };
+}
+
+// Flat single-line selection helper: every fixture below that uses it lives
+// on line 0, so `character` doubles as the flat offset.
+function sel(
+  startCharacter: number,
+  endCharacter: number,
+  direction: SelectionDirection = DirectionForward
+): EditorSelection {
+  return {
+    start: { line: 0, character: startCharacter },
+    end: { line: 0, character: endCharacter },
+    direction,
+  };
+}
+
+// Runs one Backspace at the given selections and returns the selections that
+// result, mutating `d` in place.
+function backspace(d: ReturnType<typeof doc>, selections: EditorSelection[]) {
+  return applyDeleteCharacterToSelections(d, selections, false).nextSelections;
+}
+
+describe('backward delete over grapheme clusters', () => {
+  test('backspace removes a whole ZWJ family emoji without splitting the cluster', () => {
+    // DIVERGENCE: the conventional behavior peels one ZWJ component off the
+    // end per keystroke (family → couple → single person → empty, one
+    // Backspace each). pierre-fe steps by Intl.Segmenter grapheme clusters,
+    // so the entire family emoji is one unit and a single Backspace removes
+    // it all. Both policies agree on the invariant this regression was about:
+    // no keystroke may split a surrogate pair or strand a lone ZWJ/modifier
+    // in the buffer.
+    const family = '\u{1F469}‍\u{1F469}‍\u{1F466}‍\u{1F466}'; // 👩‍👩‍👦‍👦
+    expect(family.length).toBe(11); // 4 surrogate pairs + 3 ZWJs
+
+    const d = doc(`hi${family}!`);
+    // Caret between the family emoji and the trailing '!'.
+    const range = resolveDeleteCharacterRange(d, caret(0, 13), false);
+    expect(range).toEqual([
+      { line: 0, character: 2 },
+      { line: 0, character: 13 },
+    ]);
+
+    const next = backspace(d, [caret(0, 13)]);
+    expect(d.getText()).toBe('hi!');
+    expect(next).toEqual([caret(0, 2)]);
+  });
+
+  test('backspace removes base emoji and skin-tone modifier as one unit', () => {
+    const thumbs = '\u{1F44D}\u{1F3FD}'; // 👍🏽 = base + Fitzpatrick modifier
+    expect(thumbs.length).toBe(4);
+
+    const d = doc(`ok ${thumbs}`);
+    const range = resolveDeleteCharacterRange(d, caret(0, 7), false);
+    expect(range).toEqual([
+      { line: 0, character: 3 },
+      { line: 0, character: 7 },
+    ]);
+
+    const next = backspace(d, [caret(0, 7)]);
+    // One keystroke removes the modifier together with its base — the buffer
+    // never holds a bare modifier or half a surrogate pair.
+    expect(d.getText()).toBe('ok ');
+    expect(next).toEqual([caret(0, 3)]);
+  });
+
+  test('backspace steps over Thai combining marks one grapheme cluster at a time', () => {
+    // DIVERGENCE: the conventional behavior deliberately deletes one UTF-16
+    // code unit per Backspace in combining-mark scripts (Thai users filed the
+    // regressions this pins because they expect to erase a tone/vowel mark
+    // without losing the base consonant; that fixture needs six keystrokes
+    // for six code units). pierre-fe deletes whole Intl.Segmenter grapheme
+    // clusters everywhere, so a base consonant and its attached marks always
+    // leave together. Never splitting a cluster also means no keystroke can
+    // strand a combining mark.
+    const thai = 'น้ำใจ'; // น + ◌้ + ◌ำ (one cluster), ใ, จ
+    expect(thai.length).toBe(5);
+
+    const d = doc(thai);
+    let selections = [caret(0, 5)];
+
+    // จ is a single-unit cluster.
+    expect(resolveDeleteCharacterRange(d, selections[0], false)).toEqual([
+      { line: 0, character: 4 },
+      { line: 0, character: 5 },
+    ]);
+    selections = backspace(d, selections);
+    expect(d.getText()).toBe('น้ำใ');
+
+    selections = backspace(d, selections);
+    expect(d.getText()).toBe('น้ำ');
+
+    // The remaining three code units are one cluster: base consonant plus two
+    // combining marks are removed by a single keystroke.
+    expect(resolveDeleteCharacterRange(d, selections[0], false)).toEqual([
+      { line: 0, character: 0 },
+      { line: 0, character: 3 },
+    ]);
+    selections = backspace(d, selections);
+    expect(d.getText()).toBe('');
+    expect(selections).toEqual([caret(0, 0)]);
+  });
+});
+
+describe('select next occurrence with touching matches', () => {
+  test('finds a repeat that touches the current selection with zero gap', () => {
+    const d = doc('abcabc');
+    const first = createSelection(0, 0, 0, 3, DirectionForward);
+
+    // The second "abc" starts exactly where the selected one ends. It must be
+    // returned as the next match, not skipped as overlapping.
+    const next = findNexMatch(d, [first]);
+    expect(next).toEqual([
+      first,
+      createSelection(0, 3, 0, 6, DirectionForward),
+    ]);
+
+    // Both occurrences are now held; nothing is left to add.
+    expect(findNexMatch(d, next!)).toBeUndefined();
+  });
+
+  test('repeated next-occurrence walks through touching matches across lines', () => {
+    const d = doc('rowrow\nrow\nrowrow');
+    let selections: EditorSelection[] | undefined = [
+      createSelection(0, 0, 0, 3, DirectionForward),
+    ];
+
+    const expected = [
+      createSelection(0, 3, 0, 6, DirectionForward), // touching repeat on the same line
+      createSelection(1, 0, 1, 3, DirectionForward),
+      createSelection(2, 0, 2, 3, DirectionForward),
+      createSelection(2, 3, 2, 6, DirectionForward), // touching repeat on the last line
+    ];
+    for (const added of expected) {
+      selections = findNexMatch(d, selections!);
+      expect(selections![selections!.length - 1]).toEqual(added);
+    }
+    expect(selections!.length).toBe(5);
+
+    // All five occurrences selected — the next request finds nothing new.
+    expect(findNexMatch(d, selections!)).toBeUndefined();
+  });
+});
+
+describe('carets converging through a delete', () => {
+  test('carets that converge via backspace merge and type the next character once', () => {
+    // The regression this pins reproduces the double-insert users saw when
+    // merge-on-overlap is disabled; with merging on (like pierre-fe's
+    // always-on mergeOverlappingSelections) the two converged carets collapse
+    // to one and the typed character is inserted once.
+    const d = doc('name = ""');
+    // One caret after each quote.
+    const afterDelete = backspace(d, [caret(0, 8), caret(0, 9)]);
+
+    // Each caret deleted its own quote; both land on the same position.
+    expect(d.getText()).toBe('name = ');
+    expect(afterDelete).toEqual([caret(0, 7), caret(0, 7)]);
+
+    const merged = mergeOverlappingSelections(afterDelete);
+    expect(merged).toEqual([caret(0, 7)]);
+
+    // Type a single quote at the merged caret: it must appear exactly once.
+    const { nextSelections } = applyTextChangeToSelections(d, merged, {
+      start: 7,
+      end: 7,
+      text: "'",
+    });
+    expect(d.getText()).toBe("name = '");
+    expect(nextSelections).toEqual([caret(0, 8)]);
+  });
+});
+
+describe('auto-surround next to an astral character', () => {
+  test('surrounding a selection just before an emoji survives undo intact', () => {
+    // The owl is a surrogate pair at characters 1-2; the wrapped selection is
+    // the double quote at character 0, so the inserted closing quote lands
+    // immediately before the high surrogate.
+    const d = doc('"🦉"');
+    const selections = [createSelection(0, 0, 0, 1, DirectionForward)];
+
+    const texts = getAutoSurroundReplacementTexts(d, selections, "'");
+    expect(texts).toEqual(["'\"'"]);
+
+    const { nextSelections } = applyTextReplaceToSelections(
+      d,
+      selections,
+      texts!
+    );
+    expect(d.getText()).toBe('\'"\'🦉"');
+    // The originally selected text stays selected inside the new pair.
+    expect(nextSelections).toEqual([
+      createSelection(0, 1, 0, 2, DirectionForward),
+    ]);
+
+    // Undo must restore the buffer byte-for-byte — the emoji is not mangled.
+    expect(d.canUndo).toBe(true);
+    d.undo();
+    expect(d.getText()).toBe('"🦉"');
+
+    // And the round trip keeps working in both directions.
+    d.redo();
+    expect(d.getText()).toBe('\'"\'🦉"');
+    d.undo();
+    expect(d.getText()).toBe('"🦉"');
+  });
+
+  test('surrounding a selection just after an emoji survives undo intact', () => {
+    // Mirror case: the wrapped selection is the closing quote at character 3,
+    // so the inserted opening bracket lands immediately after the low
+    // surrogate.
+    const d = doc('"🦉"');
+    const selections = [createSelection(0, 3, 0, 4, DirectionForward)];
+
+    const texts = getAutoSurroundReplacementTexts(d, selections, '(');
+    expect(texts).toEqual(['(")']);
+
+    const { nextSelections } = applyTextReplaceToSelections(
+      d,
+      selections,
+      texts!
+    );
+    expect(d.getText()).toBe('"🦉(")');
+    expect(nextSelections).toEqual([
+      createSelection(0, 4, 0, 5, DirectionForward),
+    ]);
+
+    d.undo();
+    expect(d.getText()).toBe('"🦉"');
+  });
+});
+
+// Word-granularity segments the runtime's ICU reports as word-like for a
+// fixture. Used to gate segmenter-side pins: isWordLike classification
+// varies across ICU builds (dictionary-based CJK segmentation especially),
+// so each pin runs only where the runtime agrees with the segmentation our
+// dev and CI environments ship, and skips visibly elsewhere.
+function wordLikeSegments(text: string): string[] {
+  return [
+    ...new Intl.Segmenter(undefined, { granularity: 'word' }).segment(text),
+  ]
+    .filter((seg) => seg.isWordLike === true)
+    .map((seg) => seg.segment);
+}
+
+// Explicit escapes so source normalization (NFC/NFD) can never change the
+// fixture: a ZWJ family sequence (7 code points, 11 UTF-16 units) and a
+// baby emoji with a Fitzpatrick skin-tone modifier (2 code points, 4 units).
+const FAMILY = '\u{1F468}\u200D\u{1F469}\u200D\u{1F467}\u200D\u{1F466}'; // 👨‍👩‍👧‍👦
+const TONED_BABY = '\u{1F476}\u{1F3FE}'; // 👶🏾
+
+describe('word delete vs word select on CJK and mixed-script runs', () => {
+  // Both halves of this describe block pin an internal inconsistency on
+  // purpose: deleteWordBackward's classifier groups every contiguous
+  // \p{Alphabetic} grapheme into ONE run (Han/Hiragana/Katakana are all
+  // Alphabetic), while double-click word expansion uses Intl.Segmenter and
+  // splits the very same text into words. The tests make the inconsistency
+  // visible; they do not pick a winner.
+
+  test('delete word backward swallows an unbroken Chinese run in one stroke', () => {
+    // DIVERGENCE: the conventional behavior segments CJK per-word only when
+    // word-segmenter locales are explicitly configured (and then Ctrl+Backspace
+    // removes one segment at a time); pierre-fe's delete-word classifier
+    // treats the whole Alphabetic run as one word, so a single stroke deletes
+    // the entire sentence — and this disagrees with pierre-fe's own
+    // double-click segmentation below.
+    const d = doc('你好世界');
+    const { nextSelections } = applyDeleteWordBackwardToSelections(d, [
+      caret(0, 4),
+    ]);
+    expect(d.getText()).toBe('');
+    expect(nextSelections).toEqual([caret(0, 0)]);
+  });
+
+  const segmenterSplitsChineseRun =
+    wordLikeSegments('你好世界').join('|') === '你好|世界';
+
+  test.skipIf(!segmenterSplitsChineseRun)(
+    'double-click word expansion splits the same Chinese run into segments',
+    () => {
+      // DIVERGENCE: the conventional default (no word-segmenter locales
+      // configured) selects the whole CJK run on double-click; pierre-fe
+      // always runs Intl.Segmenter, so the exact text deleteWordBackward
+      // treats as one word splits in two here.
+      const d = doc('你好世界');
+      expect(expandCollapsedSelectionToWord(d, caret(0, 2))).toEqual({
+        start: { line: 0, character: 0 },
+        end: { line: 0, character: 2 },
+        direction: DirectionForward,
+      });
+      expect(expandCollapsedSelectionToWord(d, caret(0, 4))).toEqual({
+        start: { line: 0, character: 2 },
+        end: { line: 0, character: 4 },
+        direction: DirectionForward,
+      });
+    }
+  );
+
+  test('delete word backward swallows a whole Japanese sentence in one stroke', () => {
+    // DIVERGENCE: Hiragana and Han are both \p{Alphabetic}, so the classifier
+    // sees one uninterrupted word run across the whole sentence. The
+    // conventional behavior, with segmentation enabled, stops at each
+    // particle/word boundary.
+    const d = doc('私は猫が好き');
+    const { nextSelections } = applyDeleteWordBackwardToSelections(d, [
+      caret(0, 6),
+    ]);
+    expect(d.getText()).toBe('');
+    expect(nextSelections).toEqual([caret(0, 0)]);
+  });
+
+  const segmenterIsolatesTheNoun =
+    wordLikeSegments('私は猫が好き').includes('猫');
+
+  test.skipIf(!segmenterIsolatesTheNoun)(
+    'double-click word expansion segments the same Japanese sentence',
+    () => {
+      // DIVERGENCE: Intl.Segmenter (dictionary-based, engine/ICU dependent)
+      // isolates 猫 as its own word here, while deleteWordBackward above
+      // erases the entire sentence as a single unit.
+      const d = doc('私は猫が好き');
+      expect(expandCollapsedSelectionToWord(d, caret(0, 3))).toEqual({
+        start: { line: 0, character: 2 },
+        end: { line: 0, character: 3 },
+        direction: DirectionForward,
+      });
+    }
+  );
+
+  test('delete word backward swallows a mixed Latin-Katakana run in one stroke', () => {
+    // DIVERGENCE: Latin letters and Katakana are both \p{Alphabetic}, so the
+    // script boundary inside "helloワールド" is invisible to the delete-word
+    // classifier and one stroke removes both halves.
+    const d = doc('helloワールド');
+    const { nextSelections } = applyDeleteWordBackwardToSelections(d, [
+      caret(0, 9),
+    ]);
+    expect(d.getText()).toBe('');
+    expect(nextSelections).toEqual([caret(0, 0)]);
+  });
+
+  const segmenterSplitsKatakanaRun =
+    wordLikeSegments('helloワールド').join('|') === 'hello|ワールド';
+
+  test.skipIf(!segmenterSplitsKatakanaRun)(
+    'double-click word expansion splits the mixed run at the script boundary',
+    () => {
+      // DIVERGENCE: Intl.Segmenter breaks "helloワールド" at the
+      // Latin/Katakana boundary, so double-click selects only one script's
+      // half while deleteWordBackward above removes both in a single stroke.
+      const d = doc('helloワールド');
+      expect(expandCollapsedSelectionToWord(d, caret(0, 2))).toEqual({
+        start: { line: 0, character: 0 },
+        end: { line: 0, character: 5 },
+        direction: DirectionForward,
+      });
+      expect(expandCollapsedSelectionToWord(d, caret(0, 7))).toEqual({
+        start: { line: 0, character: 5 },
+        end: { line: 0, character: 9 },
+        direction: DirectionForward,
+      });
+    }
+  );
+
+  test('delete word backward treats Latin, Han, and digits as one run', () => {
+    // DIVERGENCE: the classifier lumps \p{Alphabetic}, \p{Number}, and _ into
+    // the same class, so accented Latin + Han + digits form one deletable
+    // run.
+    const d = doc('naïve東京42'); // "naïve東京42", 9 UTF-16 units
+    const { nextSelections } = applyDeleteWordBackwardToSelections(d, [
+      caret(0, 9),
+    ]);
+    expect(d.getText()).toBe('');
+    expect(nextSelections).toEqual([caret(0, 0)]);
+  });
+
+  // Intl.Segmenter's isWordLike classification varies across ICU builds
+  // (whether bare digit runs and Han segments count as word-like differs
+  // between engines and platforms). Gate the segmenter-side pin on the
+  // runtime agreeing with the segmentation our dev and CI environments ship,
+  // so a divergent ICU skips visibly instead of going red.
+  const segmenterSplitsMixedRun =
+    wordLikeSegments('naïve東京42').join('|') === 'naïve|東京|42';
+
+  test.skipIf(!segmenterSplitsMixedRun)(
+    'double-click word expansion splits Latin, Han, and digits into three words',
+    () => {
+      // DIVERGENCE: the same string that deleteWordBackward erases whole
+      // yields three distinct double-click words (Latin, Han, digits).
+      const d = doc('naïve東京42');
+      expect(expandCollapsedSelectionToWord(d, caret(0, 2))).toEqual({
+        start: { line: 0, character: 0 },
+        end: { line: 0, character: 5 },
+        direction: DirectionForward,
+      });
+      expect(expandCollapsedSelectionToWord(d, caret(0, 6))).toEqual({
+        start: { line: 0, character: 5 },
+        end: { line: 0, character: 7 },
+        direction: DirectionForward,
+      });
+      expect(expandCollapsedSelectionToWord(d, caret(0, 8))).toEqual({
+        start: { line: 0, character: 7 },
+        end: { line: 0, character: 9 },
+        direction: DirectionForward,
+      });
+    }
+  );
+});
+
+describe('word delete around emoji and grapheme clusters', () => {
+  // Probed against the current implementation: every case below removes whole
+  // grapheme clusters — no surrogate halves, orphan ZWJs, lone modifiers, or
+  // stranded combining marks are ever left behind — so these pin the coherent
+  // current behavior rather than flagging bugs.
+
+  test('deletes a lone emoji as its own run without splitting the surrogate pair', () => {
+    const d = doc('word🎉');
+    const { nextSelections } = applyDeleteWordBackwardToSelections(d, [
+      caret(0, 6),
+    ]);
+    expect(d.getText()).toBe('word');
+    expect(nextSelections).toEqual([caret(0, 4)]);
+  });
+
+  test('stops a word delete at an adjacent emoji and leaves it intact', () => {
+    const d = doc('x 🎉party');
+    const { nextSelections } = applyDeleteWordBackwardToSelections(d, [
+      caret(0, 9),
+    ]);
+    expect(d.getText()).toBe('x 🎉');
+    expect(nextSelections).toEqual([caret(0, 4)]);
+  });
+
+  test('deletes a ZWJ family emoji as one grapheme cluster', () => {
+    const d = doc(`crew ${FAMILY}`);
+    const { nextSelections } = applyDeleteWordBackwardToSelections(d, [
+      caret(0, 5 + FAMILY.length),
+    ]);
+    expect(d.getText()).toBe('crew ');
+    expect(nextSelections).toEqual([caret(0, 5)]);
+  });
+
+  test('deletes only the ZWJ cluster when it directly follows a word', () => {
+    const d = doc(`name${FAMILY}`);
+    const { nextSelections } = applyDeleteWordBackwardToSelections(d, [
+      caret(0, 4 + FAMILY.length),
+    ]);
+    expect(d.getText()).toBe('name');
+    expect(nextSelections).toEqual([caret(0, 4)]);
+  });
+
+  test('deletes a word without disturbing a preceding ZWJ cluster', () => {
+    const d = doc(`${FAMILY}crew`);
+    const { nextSelections } = applyDeleteWordBackwardToSelections(d, [
+      caret(0, FAMILY.length + 4),
+    ]);
+    expect(d.getText()).toBe(FAMILY);
+    expect(nextSelections).toEqual([caret(0, FAMILY.length)]);
+  });
+
+  test('deletes a skin-tone modified emoji together with its base', () => {
+    const d = doc(`hug${TONED_BABY}`);
+    const { nextSelections } = applyDeleteWordBackwardToSelections(d, [
+      caret(0, 3 + TONED_BABY.length),
+    ]);
+    expect(d.getText()).toBe('hug');
+    expect(nextSelections).toEqual([caret(0, 3)]);
+  });
+
+  test('removes a word containing a combining mark without leaving an orphan mark', () => {
+    // "mañana" in decomposed form: the ñ is n + U+0303 combining tilde.
+    const d = doc('mañana');
+    const { nextSelections } = applyDeleteWordBackwardToSelections(d, [
+      caret(0, 7),
+    ]);
+    expect(d.getText()).toBe('');
+    expect(nextSelections).toEqual([caret(0, 0)]);
+  });
+
+  test('removes a word ending in a combining-mark cluster in one piece', () => {
+    // "go piña" in decomposed form; the final cluster is n + U+0303 + a.
+    const d = doc('go piña');
+    const { nextSelections } = applyDeleteWordBackwardToSelections(d, [
+      caret(0, 8),
+    ]);
+    expect(d.getText()).toBe('go ');
+    expect(nextSelections).toEqual([caret(0, 3)]);
+  });
+});
+
+describe('multi-cursor word delete across shifting line numbers', () => {
+  test('joins lines at one caret while remapping a second caret on a lower line', () => {
+    // Caret 1 sits at column 0 of line 1, so its delete consumes the newline
+    // after "alpha"; caret 2 deletes the word on line 2, which becomes line 1.
+    const d = doc('alpha\nbravo\ncharlie');
+    const { nextSelections, change } = applyDeleteWordBackwardToSelections(d, [
+      caret(1, 0),
+      caret(2, 7),
+    ]);
+    expect(change).toBeDefined();
+    expect(d.getText()).toBe('alphabravo\n');
+    expect(nextSelections).toEqual([caret(0, 5), caret(1, 0)]);
+  });
+
+  test('word delete on a shifted line lands mid-line after an upstream join', () => {
+    // The second caret deletes only the trailing word, so its remapped caret
+    // must land mid-line on the renumbered line, not at column 0.
+    const d = doc('first\nsecond\nthird word');
+    const { nextSelections } = applyDeleteWordBackwardToSelections(d, [
+      caret(1, 0),
+      caret(2, 10),
+    ]);
+    expect(d.getText()).toBe('firstsecond\nthird ');
+    expect(nextSelections).toEqual([caret(0, 5), caret(1, 6)]);
+  });
+});
+
+describe('word delete at column zero preserves whitespace byte-for-byte', () => {
+  test('keeps the joined line leading spaces intact', () => {
+    // Joining must remove exactly the newline: the four leading spaces on the
+    // second line survive untouched, with no collapse to a single space.
+    const d = doc('first line stops.\n    indented next');
+    const { nextSelections } = applyDeleteWordBackwardToSelections(d, [
+      caret(1, 0),
+    ]);
+    expect(d.getText()).toBe('first line stops.    indented next');
+    expect(nextSelections).toEqual([caret(0, 17)]);
+  });
+
+  test('keeps leading tabs intact when joining', () => {
+    const d = doc('top\n\t\tkeep tabs');
+    const { nextSelections } = applyDeleteWordBackwardToSelections(d, [
+      caret(1, 0),
+    ]);
+    expect(d.getText()).toBe('top\t\tkeep tabs');
+    expect(nextSelections).toEqual([caret(0, 3)]);
+  });
+
+  test('keeps trailing spaces on the surviving line intact when joining', () => {
+    const d = doc('padded out   \nnext');
+    const { nextSelections } = applyDeleteWordBackwardToSelections(d, [
+      caret(1, 0),
+    ]);
+    expect(d.getText()).toBe('padded out   next');
+    expect(nextSelections).toEqual([caret(0, 13)]);
+  });
+});
+
+// Applies `edits` (resolved, pre-edit offsets) to a fresh document built from
+// `preText` and returns the post-edit document, ready to be handed to
+// remapSelectionsAfterEdits. Going through applyEdits keeps the fixture honest:
+// the expected post text asserted in each test is produced by the real edit
+// path, not by hand-splicing.
+function applyBatch(preText: string, edits: ResolvedTextEdit[]) {
+  const pre = doc(preText);
+  const post = doc(preText);
+  post.applyEdits(
+    edits.map((edit) => ({
+      range: {
+        start: pre.positionAt(edit.start),
+        end: pre.positionAt(edit.end),
+      },
+      newText: edit.text,
+    }))
+  );
+  return post;
+}
+
+// Remaps one selection, given as a pre-edit [start, end] offset pair, through
+// `edits`. All fixtures are single-line, so the returned offsets are the
+// post-edit character columns.
+function remapPair(
+  preText: string,
+  pair: readonly [number, number],
+  edits: ResolvedTextEdit[],
+  direction: SelectionDirection = DirectionNone
+) {
+  const pre = doc(preText);
+  const post = applyBatch(preText, edits);
+  const selection: EditorSelection = {
+    start: pre.positionAt(pair[0]),
+    end: pre.positionAt(pair[1]),
+    direction,
+  };
+  const [result] = remapSelectionsAfterEdits(post, [selection], [pair], edits);
+  return {
+    post,
+    result,
+    offsets: [post.offsetAt(result.start), post.offsetAt(result.end)] as const,
+  };
+}
+
+describe('remap through replacements', () => {
+  test('caret at the start boundary of a replaced range lands after the replacement', () => {
+    // DIVERGENCE: the conventional behavior maps a position sitting exactly
+    // at the start of a replaced span back to the span's start regardless of
+    // which side it's associated with (a position at that boundary never
+    // moves through the replacement). pierre-fe's remapOffsetThroughEdits
+    // applies uniform right gravity to every offset at or after an edit's
+    // start — a documented policy on the function — so the caret lands just
+    // AFTER the replacement text instead. Disorienting by that other
+    // convention, but the caret stays at a valid buffer position and the
+    // policy matches the typing case (text inserted at the caret pushes the
+    // caret past it); the main suite already pins the interior-caret variant
+    // of the same rule.
+    const { post, offsets, result } = remapPair(
+      'papaya mango salad',
+      [7, 7], // caret exactly at the 'm' of the replaced word
+      [{ start: 7, end: 12, text: 'fig' }]
+    );
+    expect(post.getText()).toBe('papaya fig salad');
+    // The conventional behavior would report 7 (the replacement start);
+    // pierre reports 10, after 'fig'.
+    expect(offsets).toEqual([10, 10]);
+    expect(result.direction).toBe(DirectionNone);
+  });
+
+  test('carets at the start and end boundaries of one replacement converge after it', () => {
+    // DIVERGENCE (same right-gravity policy as above): the start-boundary
+    // caret goes through the "inside the edit" branch and the end-boundary
+    // caret through the "past the edit" delta branch, yet both come out at
+    // the same offset — the two sides of a replacement are not kept apart
+    // the way an assoc-aware mapping convention keeps them ([start -> start,
+    // end -> after]).
+    const edits: ResolvedTextEdit[] = [{ start: 4, end: 9, text: 'DOWN' }];
+    const preText = 'shutproof latch';
+    const atStart = remapPair(preText, [4, 4], edits);
+    const atEnd = remapPair(preText, [9, 9], edits);
+    expect(atStart.post.getText()).toBe('shutDOWN latch');
+    expect(atStart.offsets).toEqual([8, 8]);
+    expect(atEnd.offsets).toEqual([8, 8]);
+  });
+
+  test('caret between two adjacent replacements lands after the second one', () => {
+    // DIVERGENCE: the conventional behavior keeps a caret at the seam of two
+    // touching replacements exactly at that seam (regardless of association
+    // side). pierre-fe's right-gravity branch treats offset == start of the
+    // second replacement as "inside" it, so the caret is carried past the
+    // second replacement's inserted text. Coherent (valid offset, same
+    // documented policy), but the caret does not stay between the two spans.
+    const { post, offsets } = remapPair(
+      'ppqqrr',
+      [2, 2], // caret at the seam between the two replaced spans
+      [
+        { start: 0, end: 2, text: '11' },
+        { start: 2, end: 4, text: '2233' },
+      ]
+    );
+    expect(post.getText()).toBe('112233rr');
+    // The conventional behavior would report 2 (the seam, unchanged by the
+    // equal-length first replacement); pierre reports 6, after '2233'.
+    expect(offsets).toEqual([6, 6]);
+  });
+});
+
+describe('insertion at range-selection boundaries', () => {
+  const preText = 'stormcloud';
+  // Selection over offsets [3, 7] — the letters 'rmcl'.
+  const pair: [number, number] = [3, 7];
+
+  test('insertion exactly at the selection end is absorbed into the selection', () => {
+    // DIVERGENCE: the conventional behavior maps a non-empty range's edges
+    // with outward bias (excluding insertions at either edge), so an
+    // insertion touching either boundary is never absorbed and the selected
+    // text stays the same. pierre-fe remaps both edges with the same right
+    // gravity, so an insertion exactly at the END boundary lands inside the
+    // selection and grows it.
+    const edits: ResolvedTextEdit[] = [{ start: 7, end: 7, text: '__' }];
+
+    const forward = remapPair(preText, pair, edits, DirectionForward);
+    expect(forward.post.getText()).toBe('stormcl__oud');
+    expect(forward.offsets).toEqual([3, 9]); // 'rmcl__' — the insert is inside
+    expect(forward.result.direction).toBe(DirectionForward);
+
+    const backward = remapPair(preText, pair, edits, DirectionBackward);
+    expect(backward.offsets).toEqual([3, 9]);
+    expect(backward.result.direction).toBe(DirectionBackward);
+  });
+
+  test('insertion exactly at the selection start shifts the selection without absorbing', () => {
+    // The other half of the asymmetry: at the START boundary the same right
+    // gravity pushes the start edge past the inserted text, so the whole
+    // selection slides right and keeps covering exactly the original letters.
+    // (This half agrees with the outward-bias convention of mapping the
+    // `from` edge.)
+    const edits: ResolvedTextEdit[] = [{ start: 3, end: 3, text: '__' }];
+
+    const forward = remapPair(preText, pair, edits, DirectionForward);
+    expect(forward.post.getText()).toBe('sto__rmcloud');
+    expect(forward.offsets).toEqual([5, 9]); // still exactly 'rmcl'
+    expect(forward.post.getTextSlice(5, 9)).toBe('rmcl');
+    expect(forward.result.direction).toBe(DirectionForward);
+
+    const backward = remapPair(preText, pair, edits, DirectionBackward);
+    expect(backward.offsets).toEqual([5, 9]);
+    expect(backward.result.direction).toBe(DirectionBackward);
+  });
+});
+
+describe('remap through deletions', () => {
+  // Deleting offsets [3, 7) — the letters 'rotc' of 'carrotcake'.
+  const preText = 'carrotcake';
+  const edits: ResolvedTextEdit[] = [{ start: 3, end: 7, text: '' }];
+
+  test('carets at deletion start, strictly inside, and at deletion end all converge to the deletion start', () => {
+    // Matches the conventional plain mapping behavior (no map-mode variants):
+    // every position touching the deleted span collapses to where the span
+    // used to begin. That convention can still distinguish the three via
+    // explicit tracking modes; pierre-fe has no map-mode equivalent, so plain
+    // convergence is the whole contract.
+    const atStart = remapPair(preText, [3, 3], edits);
+    const inside = remapPair(preText, [5, 5], edits);
+    const atEnd = remapPair(preText, [7, 7], edits);
+
+    expect(atStart.post.getText()).toBe('carake');
+    expect(atStart.offsets).toEqual([3, 3]);
+    expect(inside.offsets).toEqual([3, 3]);
+    expect(atEnd.offsets).toEqual([3, 3]);
+  });
+
+  test('a backward selection exactly spanning the deleted range collapses to a direction-none caret', () => {
+    // Both edges converge to the deletion start, and
+    // createSelectionFromAnchorAndFocusOffsets re-derives direction from the
+    // remapped offsets — equal anchor and focus must yield DirectionNone, not a
+    // stale backward direction on a zero-length range.
+    const { offsets, result } = remapPair(
+      preText,
+      [3, 7],
+      edits,
+      DirectionBackward
+    );
+    expect(offsets).toEqual([3, 3]);
+    expect(result.direction).toBe(DirectionNone);
+  });
+});
+
+describe('remap through multi-edit batches', () => {
+  test('caret after an insert + delete + replace batch accumulates every delta', () => {
+    // Digits/letters make the offsets self-documenting: the caret sits on 'E'
+    // (offset 14) and must still sit on 'E' after all three edits before it.
+    const preText = '0123456789ABCDEF';
+    const { post, offsets } = remapPair(
+      preText,
+      [14, 14],
+      [
+        { start: 2, end: 2, text: '+++' }, // insert, +3
+        { start: 5, end: 7, text: '' }, // delete '56', -2
+        { start: 9, end: 11, text: 'WXYZ' }, // replace '9A', +2
+      ]
+    );
+    expect(post.getText()).toBe('01+++23478WXYZBCDEF');
+    expect(offsets).toEqual([17, 17]); // 14 + 3 - 2 + 2
+    expect(post.getTextSlice(17, 18)).toBe('E');
+  });
+
+  test('edits must be sorted ascending by start: unsorted input silently drops earlier edits', () => {
+    // DIVERGENCE / contract pin: the conventional behavior accepts change
+    // specs in any order and normalizes them internally, so every change is
+    // always seen regardless of input order. pierre-fe's remap walks the edit
+    // array once and stops at the first edit whose start lies past the
+    // offset — a documented precondition ("sorted ascending and
+    // non-overlapping" on remapOffsetThroughEdits). When a caller violates
+    // it, edits listed after the early-exit point are silently ignored, even
+    // though they sit before the offset. This test pins the precondition by
+    // contrasting sorted and unsorted calls over the same batch; it is the
+    // caller's job to sort, not corruption inside the remap.
+    const preText = '0123456789ABCDEF';
+    const edits: ResolvedTextEdit[] = [
+      { start: 0, end: 0, text: 'YY' },
+      { start: 10, end: 10, text: 'XX' },
+    ];
+
+    const sorted = remapPair(preText, [5, 5], edits);
+    expect(sorted.post.getText()).toBe('YY0123456789XXABCDEF');
+    // Only the insert at 0 precedes the caret: 5 + 2.
+    expect(sorted.offsets).toEqual([7, 7]);
+
+    // Same batch listed descending: the walk sees the edit at 10 first,
+    // breaks (5 < 10), and never applies the insert at 0 — the caret keeps
+    // its stale pre-edit offset.
+    const unsorted = remapPair(preText, [5, 5], [edits[1], edits[0]]);
+    expect(unsorted.post.getText()).toBe('YY0123456789XXABCDEF');
+    expect(unsorted.offsets).toEqual([5, 5]);
+  });
+});
+
+describe('caret at the shared boundary of touching ranges', () => {
+  test('boundary caret is absorbed into the left neighbor and the ranges stay separate', () => {
+    // Two non-empty ranges touch at character 10 with a caret sitting exactly
+    // on the seam. Non-empty touching ranges never merge with each other, but
+    // the caret intersects both; it must be absorbed exactly once. Both
+    // pierre-fe and the conventional behavior fold it into the LEFT range
+    // (8-10): the caret's character equals the left range's end, and the
+    // single merge pass reaches it while the left range is still current.
+    const merged = mergeOverlappingSelections([
+      sel(8, 10),
+      caret(0, 10),
+      sel(10, 12),
+    ]);
+    expect(merged).toEqual([
+      // The caret was the latest of the merged pair, so direction is
+      // re-derived from its side: the caret sits at the merged range's end,
+      // making the result forward.
+      sel(8, 10, DirectionForward),
+      sel(10, 12, DirectionForward),
+    ]);
+  });
+
+  test('absorbing the boundary caret overrides a backward left neighbor to forward', () => {
+    // Same geometry with a backward 8-10 range. The caret is the later entry
+    // in the merged pair, so its (recomputed) direction wins: the caret lands
+    // at the merged end => forward. The conventional behavior derives the
+    // same answer — the later range's anchor/head order decides, and a
+    // cursor is never backward.
+    const merged = mergeOverlappingSelections([
+      sel(8, 10, DirectionBackward),
+      caret(0, 10),
+      sel(10, 12),
+    ]);
+    expect(merged).toEqual([
+      sel(8, 10, DirectionForward),
+      sel(10, 12, DirectionForward),
+    ]);
+  });
+});
+
+describe('normalization stress from scrambled input', () => {
+  test('one range transitively swallows contained ranges while touching ranges stay separate', () => {
+    // Eight shuffled ranges. 0-6 contains 3-4 and 4-5 outright; 6-7 touches
+    // 0-6's end but is non-empty, so it stays separate (as do 7-8 and 13-14
+    // against their neighbors). 9-13 contains 10-12. Five ranges survive:
+    // {0-6, 6-7, 7-8, 9-13, 13-14} — the same set the conventional
+    // normalization produces.
+    const merged = mergeOverlappingSelections([
+      sel(10, 12), // index 0: swallowed by 9-13
+      sel(6, 7), //   index 1
+      sel(4, 5), //   index 2: swallowed by 0-6
+      sel(3, 4), //   index 3: swallowed by 0-6
+      sel(0, 6), //   index 4
+      sel(7, 8), //   index 5
+      sel(9, 13), //  index 6
+      sel(13, 14), // index 7
+    ]);
+    // DIVERGENCE: the conventional behavior returns ranges re-sorted by
+    // position (0/6,6/7,7/8,9/13,13/14) and tracks the primary via a separate
+    // index. pierre-fe's primary selection is "last element of the array",
+    // so mergeOverlappingSelections restores the caller's original index
+    // order instead, with each merged group keeping the LATEST participating
+    // index: the 0-6 group keeps index 4, the 9-13 group keeps index 6.
+    // Hence 6-7 (index 1) precedes 0-6 (index 4) in the output.
+    expect(merged).toEqual([
+      sel(6, 7),
+      sel(0, 6),
+      sel(7, 8),
+      sel(9, 13),
+      sel(13, 14),
+    ]);
+  });
+});
+
+describe('per-range replacements of different lengths on one line', () => {
+  test('every later selection shifts by the cumulative length delta of preceding replacements', () => {
+    // Four single-character selections on one line, each replaced by a
+    // different-length string. Each replacement lands at its original offset
+    // plus the summed growth of everything before it on the same line.
+    const d = doc('a b c d');
+    const selections = [sel(0, 1), sel(2, 3), sel(4, 5), sel(6, 7)];
+    const texts = ['x', 'yy', 'zzz', 'wwww'];
+
+    const { nextSelections } = applyTextReplaceToSelections(
+      d,
+      selections,
+      texts
+    );
+
+    expect(d.getText()).toBe('x yy zzz wwww');
+
+    // Cumulative deltas per slot: +0, +0, +1, +3. The conventional per-range
+    // remap reports the spans 0-1 / 2-4 / 5-8 / 9-13; pierre-fe collapses
+    // each result to a caret after the inserted text, i.e. at those spans'
+    // ends.
+    expect(nextSelections).toEqual([
+      caret(0, 1),
+      caret(0, 4),
+      caret(0, 8),
+      caret(0, 13),
+    ]);
+    // The caret offsets are exactly originalStart + cumulativeDelta + inserted
+    // length.
+    let delta = 0;
+    for (let index = 0; index < selections.length; index++) {
+      const start = selections[index].start.character;
+      const inserted = texts[index].length;
+      expect(nextSelections[index].end.character).toBe(
+        start + delta + inserted
+      );
+      delta += inserted - 1; // each replacement consumed one character
+    }
+  });
+
+  test('replacement texts stay paired with their selection when input is not in document order', () => {
+    // Same replacement set handed over in reverse document order: texts must
+    // travel with their selection, and results must come back in the caller's
+    // input order (not sorted document order).
+    const d = doc('a b c d');
+    const { nextSelections } = applyTextReplaceToSelections(
+      d,
+      [sel(6, 7), sel(4, 5), sel(2, 3), sel(0, 1)],
+      ['wwww', 'zzz', 'yy', 'x']
+    );
+
+    expect(d.getText()).toBe('x yy zzz wwww');
+    expect(nextSelections).toEqual([
+      caret(0, 13),
+      caret(0, 8),
+      caret(0, 4),
+      caret(0, 1),
+    ]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Public Editor.setSelections scenarios: these need the real Editor, mounted
+// through the same File-backed harness the editorPublicApi suite uses.
+// ---------------------------------------------------------------------------
+
+async function waitForEditableContent(
+  container: HTMLElement
+): Promise<HTMLElement> {
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const content = container.shadowRoot?.querySelector('[data-content]');
+    if (
+      content instanceof HTMLElement &&
+      (content.contentEditable === 'true' ||
+        content.getAttribute('contenteditable') === 'true')
+    ) {
+      return content;
+    }
+    await wait(0);
+  }
+
+  throw new Error('editor content did not become editable');
+}
+
+interface EditorFixture {
+  cleanup(): void;
+  editor: Editor<undefined>;
+}
+
+async function createEditorFixture(contents: string): Promise<EditorFixture> {
+  const dom = installDom();
+  const fileContainer = document.createElement('div');
+  document.body.appendChild(fileContainer);
+
+  const file = new File<undefined>({
+    disableFileHeader: true,
+    theme: DEFAULT_THEMES,
+  });
+  const editor = new Editor<undefined>();
+  const initialFile: FileContents = { name: 'selections.txt', contents };
+
+  file.render({ file: initialFile, fileContainer, forceRender: true });
+  editor.edit(file);
+  await waitForEditableContent(fileContainer);
+
+  return {
+    cleanup() {
+      editor.cleanUp();
+      file.cleanUp();
+      dom.cleanup();
+    },
+    editor,
+  };
+}
+
+describe('Editor.setSelections position clamping', () => {
+  test('positions past a line length or past the last line clamp instead of throwing', async () => {
+    // DIVERGENCE: a stricter contract would reject out-of-range selections
+    // with a RangeError; pierre-fe's setSelections routes every position
+    // through TextDocument.normalizePosition, clamping line to the last line
+    // and character to that line's length. Out-of-bounds input is accepted
+    // and the caret lands on real content.
+    const { cleanup, editor } = await createEditorFixture(
+      'alpha\nbravo\ncharlie'
+    );
+    try {
+      // Character overshoots line 1 ("bravo", length 5): clamps to the line
+      // end, keeping the line.
+      editor.setSelections([
+        {
+          start: { line: 1, character: 99 },
+          end: { line: 1, character: 99 },
+          direction: 'none',
+        },
+      ]);
+      expect(editor.getState().selections).toEqual([caret(1, 5)]);
+
+      // Both line and character overshoot: the primary caret lands exactly at
+      // the document end ("charlie" is line 2, length 7).
+      editor.setSelections([
+        {
+          start: { line: 99, character: 99 },
+          end: { line: 99, character: 99 },
+          direction: 'none',
+        },
+      ]);
+      expect(editor.getState().selections).toEqual([caret(2, 7)]);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('a range whose end overshoots the document clamps only the overshooting edge', async () => {
+    const { cleanup, editor } = await createEditorFixture(
+      'alpha\nbravo\ncharlie'
+    );
+    try {
+      editor.setSelections([
+        {
+          start: { line: 0, character: 2 },
+          end: { line: 99, character: 99 },
+          direction: 'forward',
+        },
+      ]);
+      // The valid start edge is untouched; the end edge clamps to doc end and
+      // the direction survives.
+      expect(editor.getState().selections).toEqual([
+        {
+          start: { line: 0, character: 2 },
+          end: { line: 2, character: 7 },
+          direction: DirectionForward,
+        },
+      ]);
+    } finally {
+      cleanup();
+    }
+  });
+});
+
+describe('Editor.setSelections with a reversed range', () => {
+  // KNOWN BUG: setSelections normalizes each position independently but never
+  // reorders the pair, so a selection whose start sits after its end is
+  // stored inverted (start 1:3 / end 0:2), violating the start <= end
+  // invariant that downstream code (offset resolution, rendering, merge)
+  // assumes. The conventional normalization of a range(3, 2) input resolves
+  // to from=2/to=3 with the backward flag; the equivalent here is swapping
+  // start/end and flipping the direction to backward, since the focus edge
+  // the caller supplied now sits first.
+  test.failing(
+    'a start-after-end selection is stored with ordered edges and backward direction',
+    async () => {
+      const { cleanup, editor } = await createEditorFixture(
+        'alpha\nbravo\ncharlie'
+      );
+      try {
+        editor.setSelections([
+          {
+            start: { line: 1, character: 3 },
+            end: { line: 0, character: 2 },
+            direction: 'forward',
+          },
+        ]);
+        expect(editor.getState().selections).toEqual([
+          {
+            start: { line: 0, character: 2 },
+            end: { line: 1, character: 3 },
+            direction: DirectionBackward,
+          },
+        ]);
+      } finally {
+        cleanup();
+      }
+    }
+  );
+});
+
+// Splices `edits` (pre-edit offsets, sorted ascending, non-overlapping) into
+// `text` at the string level. The seeded sweep below cross-checks this against
+// the real applyEdits path on every random case, so the fixed fixtures can use
+// it directly without losing honesty.
+function spliceString(text: string, edits: readonly ResolvedTextEdit[]) {
+  let result = '';
+  let consumed = 0;
+  for (const edit of edits) {
+    result += text.slice(consumed, edit.start) + edit.text;
+    consumed = edit.end;
+  }
+  return result + text.slice(consumed);
+}
+
+// Remaps one single-line selection, given as pre-edit offsets, through `edits`
+// and reports the post-edit offsets plus the re-derived direction.
+function remapRange(
+  preText: string,
+  selStart: number,
+  selEnd: number,
+  direction: SelectionDirection,
+  edits: readonly ResolvedTextEdit[]
+) {
+  const pre = doc(preText);
+  const postText = spliceString(preText, edits);
+  const post = doc(postText);
+  const selection: EditorSelection = {
+    start: pre.positionAt(selStart),
+    end: pre.positionAt(selEnd),
+    direction,
+  };
+  const [next] = remapSelectionsAfterEdits(
+    post,
+    [selection],
+    [[selStart, selEnd]],
+    edits
+  );
+  return {
+    post,
+    postText,
+    start: post.offsetAt(next.start),
+    end: post.offsetAt(next.end),
+    direction: next.direction,
+  };
+}
+
+// remapOffsetThroughEdits is module-private, so single offsets travel through
+// remapSelectionsAfterEdits as a collapsed selection. The input selection's
+// positions are never read by the remap (only its direction is), so a dummy
+// caret suffices; `target` must already reflect `edits`.
+function mapOffset(
+  target: TextDocument<unknown>,
+  offset: number,
+  edits: readonly ResolvedTextEdit[]
+): number {
+  const probe: EditorSelection = {
+    start: { line: 0, character: 0 },
+    end: { line: 0, character: 0 },
+    direction: DirectionNone,
+  };
+  const [mapped] = remapSelectionsAfterEdits(
+    target,
+    [probe],
+    [[offset, offset]],
+    edits
+  );
+  return target.offsetAt(mapped.start);
+}
+
+// Deterministic 32-bit PRNG (mulberry32) so the seeded sweep is reproducible.
+function seededRandom(seed: number): () => number {
+  let state = seed >>> 0;
+  return () => {
+    state = (state + 0x6d2b79f5) | 0;
+    let t = Math.imul(state ^ (state >>> 15), state | 1);
+    t = (t + Math.imul(t ^ (t >>> 7), t | 61)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 0x100000000;
+  };
+}
+
+describe('replacement overlapping one selection edge', () => {
+  test('start-edge overlap clips the selection start to the replacement end and shifts the end by the delta', () => {
+    // 'thicket' [8,15) is selected; the replacement covers 'r th' [6,10) —
+    // text before the selection plus its first two letters — and is one
+    // character shorter than what it removed. The conventional default
+    // marker bias and pierre's right gravity agree here: the start lands
+    // right after the new text and the end just absorbs the -1 length delta.
+    const preText = 'juniper thicket';
+    const edits: ResolvedTextEdit[] = [{ start: 6, end: 10, text: 'y w' }];
+
+    const forward = remapRange(preText, 8, 15, DirectionForward, edits);
+    expect(forward.postText).toBe('junipey wicket');
+    expect([forward.start, forward.end]).toEqual([9, 14]);
+    // Only the un-replaced tail of the original word stays selected.
+    expect(forward.post.getTextSlice(9, 14)).toBe('icket');
+    expect(forward.direction).toBe(DirectionForward);
+
+    const backward = remapRange(preText, 8, 15, DirectionBackward, edits);
+    expect([backward.start, backward.end]).toEqual([9, 14]);
+    expect(backward.direction).toBe(DirectionBackward);
+  });
+
+  test('end-edge overlap keeps the selection start and carries the end to the end of the new text', () => {
+    // 'lantern' [7,14) is selected; the replacement covers 'rn g' [12,16) —
+    // the word's last two letters plus text after it — and is one character
+    // longer. The start edge sits strictly before the edit so it never moves;
+    // the end edge rides to the end of the replacement, so the selection
+    // absorbs ALL of the new text (also the conventional default bias).
+    const preText = 'harbor lantern glow';
+    const edits: ResolvedTextEdit[] = [{ start: 12, end: 16, text: '&&&&&' }];
+
+    const forward = remapRange(preText, 7, 14, DirectionForward, edits);
+    expect(forward.postText).toBe('harbor lante&&&&&low');
+    expect([forward.start, forward.end]).toEqual([7, 17]);
+    expect(forward.post.getTextSlice(7, 17)).toBe('lante&&&&&');
+    expect(forward.direction).toBe(DirectionForward);
+
+    const backward = remapRange(preText, 7, 14, DirectionBackward, edits);
+    expect([backward.start, backward.end]).toEqual([7, 17]);
+    expect(backward.direction).toBe(DirectionBackward);
+  });
+});
+
+describe('replacement surrounding the whole selection', () => {
+  test('a surrounding replacement collapses the selection to a caret after the new text and resets direction', () => {
+    // 'two' [4,7) is selected; the replacement ' two t' [3,9) swallows the
+    // selection on both sides. Both edges collapse to the offset just past the
+    // replacement text ('#' occupies [3,4), caret at 4), and because
+    // createSelectionFromAnchorAndFocusOffsets re-derives direction from the
+    // remapped offsets, a stale forward/backward direction cannot survive on
+    // the zero-length result — probed: it really does come back DirectionNone.
+    const preText = 'one two three';
+    const edits: ResolvedTextEdit[] = [{ start: 3, end: 9, text: '#' }];
+
+    const forward = remapRange(preText, 4, 7, DirectionForward, edits);
+    expect(forward.postText).toBe('one#hree');
+    expect([forward.start, forward.end]).toEqual([4, 4]);
+    expect(forward.direction).toBe(DirectionNone);
+
+    const backward = remapRange(preText, 4, 7, DirectionBackward, edits);
+    expect([backward.start, backward.end]).toEqual([4, 4]);
+    expect(backward.direction).toBe(DirectionNone);
+  });
+});
+
+describe('replacement anchored at the selection start', () => {
+  test('a contained replacement starting exactly at the selection start shrinks the selection to the un-replaced tail', () => {
+    // DIVERGENCE: the conventional default marker bias treats a change that
+    // begins exactly at a tailed marker's start as INSIDE the marker — the
+    // start stays anchored and the range absorbs the new text (here [7,12)
+    // would grow to [7,13)). pierre's uniform right gravity pushes any offset
+    // at or inside an edit past the replacement, so the selection start lands
+    // after the new text and only the un-replaced tail stays selected — the
+    // exact shape that convention reserves for its 'inside'-strategy markers.
+    // Coherent policy, pinned here.
+    const preText = 'silver maple grove';
+    // 'maple' [7,12) selected; 'ma' [7,9) replaced by three characters.
+    const edits: ResolvedTextEdit[] = [{ start: 7, end: 9, text: 'STE' }];
+
+    const forward = remapRange(preText, 7, 12, DirectionForward, edits);
+    expect(forward.postText).toBe('silver STEple grove');
+    expect([forward.start, forward.end]).toEqual([10, 13]);
+    expect(forward.post.getTextSlice(10, 13)).toBe('ple');
+    expect(forward.direction).toBe(DirectionForward);
+
+    const backward = remapRange(preText, 7, 12, DirectionBackward, edits);
+    expect([backward.start, backward.end]).toEqual([10, 13]);
+    expect(backward.direction).toBe(DirectionBackward);
+  });
+});
+
+describe('seeded sweep against a splice reference model', () => {
+  test('200 seeded single-edit remaps match the right-gravity reference model', () => {
+    // Reference model for one edit, applied independently to each endpoint:
+    //   strictly before the edit -> unchanged
+    //   at or after the edit end -> shifted by the net length delta
+    //   otherwise (inside)       -> the offset just past the replacement text
+    // An endpoint EXACTLY at the edit start is the one genuinely
+    // bias-ambiguous spot (the conventional anchoring keeps it in place,
+    // pierre pushes it past the new text — see the anchored-start test
+    // above), so the generator nudges endpoints off that offset and the
+    // model stays unambiguous. An endpoint exactly at the edit END is not
+    // ambiguous: the shift branch and the inside branch produce the same
+    // offset there.
+    const random = seededRandom(0xa70b1a5);
+    const randomInt = (bound: number) => Math.floor(random() * bound);
+    const lower = () => String.fromCharCode(97 + randomInt(26));
+    const upper = () => String.fromCharCode(65 + randomInt(26));
+
+    const problems: string[] = [];
+    for (let round = 0; round < 200; round++) {
+      const length = 8 + randomInt(25);
+      let preText = '';
+      for (let i = 0; i < length; i++) {
+        preText += lower();
+      }
+
+      const editStart = randomInt(length + 1);
+      const editEnd = editStart + randomInt(length - editStart + 1);
+      let newText = '';
+      const newLength = randomInt(7);
+      for (let i = 0; i < newLength; i++) {
+        newText += upper();
+      }
+      const edit: ResolvedTextEdit = {
+        start: editStart,
+        end: editEnd,
+        text: newText,
+      };
+      const delta = newText.length - (editEnd - editStart);
+
+      const nudge = (offset: number) =>
+        offset === editStart
+          ? offset === length
+            ? offset - 1
+            : offset + 1
+          : offset;
+      const a = nudge(randomInt(length + 1));
+      const b = nudge(randomInt(length + 1));
+      const selStart = Math.min(a, b);
+      const selEnd = Math.max(a, b);
+      const direction: SelectionDirection =
+        selStart === selEnd
+          ? DirectionNone
+          : random() < 0.5
+            ? DirectionForward
+            : DirectionBackward;
+
+      const refMap = (offset: number) =>
+        offset < editStart
+          ? offset
+          : offset >= editEnd
+            ? offset + delta
+            : editStart + newText.length;
+      const wantStart = refMap(selStart);
+      const wantEnd = refMap(selEnd);
+      const wantDirection = wantStart === wantEnd ? DirectionNone : direction;
+
+      const pre = doc(preText);
+      const post = doc(preText);
+      post.applyEdits([
+        {
+          range: {
+            start: pre.positionAt(editStart),
+            end: pre.positionAt(editEnd),
+          },
+          newText,
+        },
+      ]);
+      const spliced =
+        preText.slice(0, editStart) + newText + preText.slice(editEnd);
+      if (post.getText() !== spliced) {
+        problems.push(
+          `#${round}: applyEdits produced '${post.getText()}', splice reference '${spliced}'`
+        );
+        continue;
+      }
+
+      const selection: EditorSelection = {
+        start: pre.positionAt(selStart),
+        end: pre.positionAt(selEnd),
+        direction,
+      };
+      const [next] = remapSelectionsAfterEdits(
+        post,
+        [selection],
+        [[selStart, selEnd]],
+        [edit]
+      );
+      const gotStart = post.offsetAt(next.start);
+      const gotEnd = post.offsetAt(next.end);
+      const label = `#${round} text='${preText}' edit=[${editStart},${editEnd})->'${newText}' sel=[${selStart},${selEnd}] dir=${direction}`;
+      if (gotStart > gotEnd || gotStart < 0 || gotEnd > spliced.length) {
+        problems.push(
+          `${label}: out-of-order or out-of-bounds result [${gotStart},${gotEnd}]`
+        );
+      }
+      if (gotStart !== wantStart || gotEnd !== wantEnd) {
+        problems.push(
+          `${label}: remapped to [${gotStart},${gotEnd}], reference [${wantStart},${wantEnd}]`
+        );
+      }
+      if (next.direction !== wantDirection) {
+        problems.push(
+          `${label}: direction ${next.direction}, reference ${wantDirection}`
+        );
+      }
+    }
+    expect(problems).toEqual([]);
+  });
+});
+
+describe('bidirectional round-trip through history inverse edits', () => {
+  // Three hunks with unequal old/new lengths: a growing replacement, a pure
+  // insertion, and a shrinking replacement that crosses a line break.
+  const baseText = 'cedar\nbirch\noak\nwillow';
+  const hunks: ResolvedTextEdit[] = [
+    { start: 1, end: 4, text: 'OPPER' }, // 'eda' -> 'OPPER' (+2)
+    { start: 8, end: 8, text: '-tree' }, // insertion (+5)
+    { start: 12, end: 20, text: 'elm' }, // 'oak\nwill' -> 'elm' (-5)
+  ];
+
+  // Applies the batch through the history-tracked path with an injected
+  // EditStack, so the inverse edits come from the real undo entry rather than
+  // being hand-built. The entry's inverseEdits are expressed in POST-edit
+  // offsets, which is exactly the coordinate space the return leg needs.
+  function buildHistoryEntry() {
+    const stack = new EditStack<unknown>();
+    const post = new TextDocument<unknown>(
+      'inmemory://1',
+      baseText,
+      'plain',
+      0,
+      stack
+    );
+    post.applyResolvedEdits(hunks, true);
+    const entry = stack.peekUndo();
+    if (entry === undefined) {
+      throw new Error('expected a history entry after the tracked batch');
+    }
+    return { post, entry };
+  }
+
+  test('offsets outside every hunk round-trip exactly through forward then inverse edits', () => {
+    const { post, entry } = buildHistoryEntry();
+    const preDoc = doc(baseText);
+    expect(post.getText()).toBe('cOPPERr\nbi-treerch\nelmow');
+    expect(entry.inverseEdits).toEqual([
+      { start: 1, end: 6, text: 'eda' },
+      { start: 10, end: 15, text: '' },
+      { start: 19, end: 22, text: 'oak\nwill' },
+    ]);
+
+    // "Outside" means before a hunk's start or at/after its end. That includes
+    // the zero-width insertion hunk's own offset 8: right gravity pushes it
+    // past '-tree' on the way forward and the inverse deletion pulls it back.
+    expect(mapOffset(post, 8, entry.forwardEdits)).toBe(15);
+
+    const outside = [0, 4, 5, 6, 7, 8, 9, 10, 11, 20, 21, 22];
+    const trips = outside.map((offset) => {
+      const mapped = mapOffset(post, offset, entry.forwardEdits);
+      return mapOffset(preDoc, mapped, entry.inverseEdits);
+    });
+    expect(trips).toEqual(outside);
+  });
+
+  test('offsets inside a replaced hunk clamp to the hunk trailing edge instead of round-tripping', () => {
+    // Interior offsets are lossy by construction — the text they addressed is
+    // gone. Forward they collapse to the end of that hunk's replacement text;
+    // the return leg then clamps to the hunk's PRE-edit end offset, never
+    // resurrecting the original interior position. The conventional patch
+    // translation is likewise lossy inside a change, clamping to the change's
+    // boundary.
+    const { post, entry } = buildHistoryEntry();
+    const preDoc = doc(baseText);
+
+    const insideFirstHunk = [1, 2, 3].map((offset) =>
+      mapOffset(post, offset, entry.forwardEdits)
+    );
+    expect(insideFirstHunk).toEqual([6, 6, 6]); // just past 'OPPER'
+    const insideLastHunk = [12, 15, 19].map((offset) =>
+      mapOffset(post, offset, entry.forwardEdits)
+    );
+    expect(insideLastHunk).toEqual([22, 22, 22]); // just past 'elm'
+
+    expect(mapOffset(preDoc, 6, entry.inverseEdits)).toBe(4); // hunk 1 pre-edit end
+    expect(mapOffset(preDoc, 22, entry.inverseEdits)).toBe(20); // hunk 3 pre-edit end
+  });
+});
+
+describe('delete word backward at whitespace and newline boundaries', () => {
+  test('after a single leading space it deletes only the line-local space', () => {
+    // The scan is strictly per-line: even though only one space separates the
+    // caret from column 0, the delete stops at the line start instead of
+    // crossing the break into the previous line's word.
+    const d = doc('apex \n mono');
+    const { nextSelections } = applyDeleteWordBackwardToSelections(d, [
+      caret(1, 1),
+    ]);
+    expect(d.getText()).toBe('apex \nmono');
+    expect(nextSelections).toEqual([caret(1, 0)]);
+  });
+
+  test('after a multi-space leading run it deletes the run and stops at column 0', () => {
+    const d = doc('gate\n   crux');
+    const { nextSelections } = applyDeleteWordBackwardToSelections(d, [
+      caret(1, 3),
+    ]);
+    expect(d.getText()).toBe('gate\ncrux');
+    expect(nextSelections).toEqual([caret(1, 0)]);
+  });
+
+  test('at column 0 it deletes exactly the break and keeps the trailing space above', () => {
+    // Joining consumes only the newline: the previous line's trailing space
+    // survives byte-for-byte and the caret lands after it.
+    const d = doc('apex \nmono');
+    const { nextSelections } = applyDeleteWordBackwardToSelections(d, [
+      caret(1, 0),
+    ]);
+    expect(d.getText()).toBe('apex mono');
+    expect(nextSelections).toEqual([caret(0, 5)]);
+  });
+});
+
+describe('delete word backward character groups', () => {
+  test('a multi-character punctuation run deletes as one group', () => {
+    const d = doc('stop...halt');
+    const { nextSelections } = applyDeleteWordBackwardToSelections(d, [
+      caret(0, 7),
+    ]);
+    expect(d.getText()).toBe('stophalt');
+    expect(nextSelections).toEqual([caret(0, 4)]);
+  });
+
+  test('a mixed space-and-tab run deletes as one whitespace group', () => {
+    // ' \t ' is heterogeneous whitespace; the category loop must treat spaces
+    // and tabs as the same group and stop at the word character before them.
+    const d = doc('left \t right');
+    const { nextSelections } = applyDeleteWordBackwardToSelections(d, [
+      caret(0, 7),
+    ]);
+    expect(d.getText()).toBe('leftright');
+    expect(nextSelections).toEqual([caret(0, 4)]);
+  });
+
+  test('digits and underscore are word characters, so an identifier deletes whole', () => {
+    const d = doc('v = net_port2');
+    const { nextSelections } = applyDeleteWordBackwardToSelections(d, [
+      caret(0, 13),
+    ]);
+    expect(d.getText()).toBe('v = ');
+    expect(nextSelections).toEqual([caret(0, 4)]);
+  });
+
+  test("'<' and '/' share the punctuation category and delete as one run", () => {
+    const d = doc('tag</');
+    const { nextSelections } = applyDeleteWordBackwardToSelections(d, [
+      caret(0, 5),
+    ]);
+    expect(d.getText()).toBe('tag');
+    expect(nextSelections).toEqual([caret(0, 3)]);
+  });
+
+  test('a lone slash between words deletes alone, not with the word before it', () => {
+    // Punctuation is its own category: the group ends where the word
+    // characters start, so only the '/' goes.
+    const d = doc('up/down');
+    const { nextSelections } = applyDeleteWordBackwardToSelections(d, [
+      caret(0, 3),
+    ]);
+    expect(d.getText()).toBe('updown');
+    expect(nextSelections).toEqual([caret(0, 2)]);
+  });
+
+  // Intl.Segmenter's isWordLike classification varies across ICU builds
+  // (underscore joining and bare-digit word-ness differ between engines and
+  // platforms). Gate the segmenter-side pin on the runtime agreeing with the
+  // UAX #29 behavior our dev and CI environments ship, so a divergent ICU
+  // skips visibly instead of going red.
+  const segmenterJoinsIdentifier = [
+    ...new Intl.Segmenter(undefined, { granularity: 'word' }).segment(
+      'v = net_port2;'
+    ),
+  ].some((seg) => seg.segment === 'net_port2' && seg.isWordLike === true);
+
+  test.skipIf(!segmenterJoinsIdentifier)(
+    'double-click word expansion agrees the identifier is one word',
+    () => {
+      // Pierre-fe encodes word-ness twice: the delete-word regex
+      // (\p{Alphabetic}|\p{Number}|_) and Intl.Segmenter's isWordLike in
+      // expandCollapsedSelectionToWord. On CJK text those two disagree
+      // (pinned as DIVERGENCE in the CJK word-delete tests above in this
+      // file); on ASCII identifiers they agree — UAX #29 joins letters,
+      // digits, and underscore (ExtendNumLet) into a single word segment —
+      // so this pins the consistent half of the dual definition.
+      const d = doc('v = net_port2;');
+      const expected: EditorSelection = {
+        start: { line: 0, character: 4 },
+        end: { line: 0, character: 13 },
+        direction: DirectionForward,
+      };
+      expect(expandCollapsedSelectionToWord(d, caret(0, 4))).toEqual(expected);
+      expect(expandCollapsedSelectionToWord(d, caret(0, 9))).toEqual(expected);
+      expect(expandCollapsedSelectionToWord(d, caret(0, 13))).toEqual(expected);
+    }
+  );
 });

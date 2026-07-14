@@ -3,8 +3,17 @@ import { afterAll, describe, expect, mock, spyOn, test } from 'bun:test';
 import { File, type FileOptions } from '../src/components/File';
 import { DEFAULT_THEMES } from '../src/constants';
 import { Editor, type EditorOptions, type IStateStorage } from '../src/editor';
+import {
+  applyTextChangeToSelections,
+  DirectionForward,
+  DirectionNone,
+  getSelectedLineBlocks,
+  resolveIndentEdits,
+  shiftSelectionLines,
+} from '../src/editor/selection';
+import { TextDocument } from '../src/editor/textDocument';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
-import type { FileContents } from '../src/types';
+import type { EditorSelection, FileContents, TextEdit } from '../src/types';
 import { installDom, wait, waitFor } from './domHarness';
 
 afterAll(async () => {
@@ -1522,5 +1531,858 @@ describe('Editor undo/redo API', () => {
     } finally {
       cleanup();
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The suites below drive applyEdits at the TextDocument level (no DOM
+// fixture): batch ordering, selection-aware undo/redo, change records, and
+// the line-based commands composed from the document primitives.
+// ---------------------------------------------------------------------------
+
+function doc(text: string) {
+  return new TextDocument('inmemory://1', text, 'plain');
+}
+
+function edit(
+  startLine: number,
+  startCharacter: number,
+  endLine: number,
+  endCharacter: number,
+  newText: string
+): TextEdit {
+  return {
+    range: {
+      start: { line: startLine, character: startCharacter },
+      end: { line: endLine, character: endCharacter },
+    },
+    newText,
+  };
+}
+
+function caret(line: number, character: number): EditorSelection {
+  const position = { line, character };
+  return {
+    start: position,
+    end: position,
+    direction: DirectionNone,
+  } satisfies EditorSelection;
+}
+
+// A direction-less range selection; contrast with range() below, which
+// builds a forward selection.
+function select(
+  startLine: number,
+  startCharacter: number,
+  endLine: number,
+  endCharacter: number
+): EditorSelection {
+  return {
+    start: { line: startLine, character: startCharacter },
+    end: { line: endLine, character: endCharacter },
+    direction: DirectionNone,
+  };
+}
+
+function range(
+  startLine: number,
+  startCharacter: number,
+  endLine: number,
+  endCharacter: number
+): EditorSelection {
+  return {
+    start: { line: startLine, character: startCharacter },
+    end: { line: endLine, character: endCharacter },
+    direction: DirectionForward,
+  } satisfies EditorSelection;
+}
+
+// True when `text` contains a high surrogate without its low half (or vice
+// versa) — the corruption signature these tests guard against.
+function hasLoneSurrogate(text: string): boolean {
+  for (let i = 0; i < text.length; i++) {
+    const unit = text.charCodeAt(i);
+    if (unit >= 0xd800 && unit <= 0xdbff) {
+      const next = i + 1 < text.length ? text.charCodeAt(i + 1) : 0;
+      if (next >= 0xdc00 && next <= 0xdfff) {
+        i++; // well-formed pair
+        continue;
+      }
+      return true;
+    }
+    if (unit >= 0xdc00 && unit <= 0xdfff) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// Deterministic pseudo-random source (32-bit LCG) so the randomized round-trip
+// test replays the exact same edit sequence on every run.
+function makeRandom(seed: number): () => number {
+  let state = seed >>> 0;
+  return () => {
+    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+    return state / 4294967296;
+  };
+}
+
+// Mirrors the Editor's line-based indent dispatch (src/editor/editor.ts, case
+// 'indentMore'/'indentLess' at ~line 1891): resolveIndentEdits runs once per
+// selection and the resulting edits are concatenated into a single applyEdits
+// batch, with no dedupe when two selections touch the same line.
+function dispatchLineIndent(
+  d: TextDocument<unknown>,
+  selections: EditorSelection[],
+  tabSize: number,
+  outdent: boolean
+): EditorSelection[] {
+  const edits: TextEdit[] = [];
+  const nextSelections: EditorSelection[] = [];
+  for (const selection of selections) {
+    const [selectionEdits, nextSelection] = resolveIndentEdits(
+      d,
+      selection,
+      tabSize,
+      outdent
+    );
+    edits.push(...selectionEdits);
+    nextSelections.push(nextSelection);
+  }
+  d.applyEdits(edits, true, selections);
+  return nextSelections;
+}
+
+// Mirrors Editor#moveSelectedLines (src/editor/editor.ts ~line 2267):
+// getSelectedLineBlocks merges the selections into line blocks, each block is
+// rotated with its neighbor line in one edit, and every selection is remapped
+// with shiftSelectionLines — the same composition the keyboard command runs,
+// minus the DOM. The 'Editor move line commands' suite above covers the
+// single-block and separate-block cases through the real Editor; the tests
+// here add the merged/interleaved and same-line multi-caret behaviors.
+function moveLines(
+  d: TextDocument<unknown>,
+  selections: EditorSelection[],
+  direction: -1 | 1
+): EditorSelection[] {
+  const blocks = getSelectedLineBlocks(selections);
+  if (
+    blocks.length === 0 ||
+    (direction < 0 && blocks[0].startLine === 0) ||
+    (direction > 0 && blocks[blocks.length - 1].endLine >= d.lineCount - 1)
+  ) {
+    return selections;
+  }
+  const lineCount = d.lineCount;
+  const lineRangeEnd = (line: number) =>
+    line < lineCount - 1
+      ? { line: line + 1, character: 0 }
+      : { line, character: d.getLineLength(line) };
+  const getLinesText = (lines: number[], appendFinalLineBreak: boolean) => {
+    const text = lines.map((line) => d.getLineText(line)).join(d.eol);
+    return appendFinalLineBreak ? text + d.eol : text;
+  };
+  const edits: TextEdit[] = [];
+  if (direction < 0) {
+    for (const block of blocks) {
+      const previousLine = block.startLine - 1;
+      const blockLines: number[] = [];
+      for (let line = block.startLine; line <= block.endLine; line++) {
+        blockLines.push(line);
+      }
+      edits.push({
+        range: {
+          start: { line: previousLine, character: 0 },
+          end: lineRangeEnd(block.endLine),
+        },
+        newText: getLinesText(
+          [...blockLines, previousLine],
+          block.endLine < lineCount - 1
+        ),
+      });
+    }
+  } else {
+    for (let index = blocks.length - 1; index >= 0; index--) {
+      const block = blocks[index];
+      const nextLine = block.endLine + 1;
+      const blockLines: number[] = [];
+      for (let line = block.startLine; line <= block.endLine; line++) {
+        blockLines.push(line);
+      }
+      edits.push({
+        range: {
+          start: { line: block.startLine, character: 0 },
+          end: lineRangeEnd(nextLine),
+        },
+        newText: getLinesText(
+          [nextLine, ...blockLines],
+          nextLine < lineCount - 1
+        ),
+      });
+    }
+  }
+  const lastBlock = blocks[blocks.length - 1];
+  const lastLineLengthAfterMove =
+    direction > 0 && lastBlock.endLine === lineCount - 2
+      ? d.getLineLength(lastBlock.endLine)
+      : d.getLineLength(lineCount - 1);
+  const nextSelections = selections.map((selection) =>
+    shiftSelectionLines(selection, direction, lineCount, (line) =>
+      line === lineCount - 1 ? lastLineLengthAfterMove : d.getLineLength(line)
+    )
+  );
+  d.applyEdits(edits, true, selections, nextSelections, true);
+  return nextSelections;
+}
+
+// Types a lone Enter at the primary selection, the way the Editor feeds a
+// newline keystroke through applyTextChangeToSelections (which expands it via
+// expandSingleNewlineInsert to carry the current line's indentation).
+function pressEnter(d: TextDocument<unknown>, selection: EditorSelection) {
+  const start = d.offsetAt(selection.start);
+  const end = d.offsetAt(selection.end);
+  return applyTextChangeToSelections(d, [selection], {
+    start,
+    end,
+    text: '\n',
+  });
+}
+
+describe('applyEdits: surrogate pair boundaries', () => {
+  // The document starts with 📚, a two-UTF-16-unit astral character occupying
+  // characters 0 and 1 of line 0. Character 1 therefore sits strictly between
+  // the high and low surrogate — an invalid caller position that the
+  // conventional behavior auto-corrects so the pair is never split.
+
+  // KNOWN BUG: an insert position strictly inside a surrogate pair is not
+  // snapped to the pair boundary; the inserted text lands between the two
+  // units and getText() returns lone surrogates.
+  test.failing(
+    'insert strictly inside a surrogate pair snaps to before the pair',
+    () => {
+      const d = doc('📚plans\nfor the\nweekend');
+      d.applyEdits([edit(0, 1, 0, 1, 'a')]);
+      expect(hasLoneSurrogate(d.getText())).toBe(false);
+      expect(d.getLineText(0)).toBe('a📚plans');
+    }
+  );
+
+  // KNOWN BUG: a replace range starting strictly inside a surrogate pair is
+  // not widened to the pair start; the high surrogate is left behind alone.
+  test.failing(
+    'replace starting inside a surrogate pair widens to cover the whole pair',
+    () => {
+      const d = doc('📚plans\nfor the\nweekend');
+      d.applyEdits([edit(0, 1, 0, 2, 'a')]);
+      expect(hasLoneSurrogate(d.getText())).toBe(false);
+      expect(d.getLineText(0)).toBe('aplans');
+    }
+  );
+
+  // KNOWN BUG: a replace range ending strictly inside a surrogate pair is not
+  // widened to the pair end; the low surrogate is left behind alone.
+  test.failing(
+    'replace ending inside a surrogate pair widens to cover the whole pair',
+    () => {
+      const d = doc('📚plans\nfor the\nweekend');
+      d.applyEdits([edit(0, 0, 0, 1, 'a')]);
+      expect(hasLoneSurrogate(d.getText())).toBe(false);
+      expect(d.getLineText(0)).toBe('aplans');
+    }
+  );
+
+  test('replace spanning exactly the whole surrogate pair replaces it cleanly', () => {
+    const d = doc('📚plans\nfor the\nweekend');
+    d.applyEdits([edit(0, 0, 0, 2, 'a')]);
+    expect(d.getLineText(0)).toBe('aplans');
+    expect(d.getText()).toBe('aplans\nfor the\nweekend');
+  });
+});
+
+describe('applyEdits: touching edits', () => {
+  test('two zero-width inserts at the identical position apply in input order', () => {
+    const d = doc('mole');
+    d.applyEdits([edit(0, 1, 0, 1, 'a'), edit(0, 1, 0, 1, 'b')]);
+    expect(d.getText()).toBe('mabole');
+
+    // Swapping the input order swaps the output order: ordering comes from
+    // the caller's array, not from any property of the edits themselves.
+    const d2 = doc('mole');
+    d2.applyEdits([edit(0, 1, 0, 1, 'b'), edit(0, 1, 0, 1, 'a')]);
+    expect(d2.getText()).toBe('mbaole');
+  });
+});
+
+describe('applyEdits: compound multi-cursor batches and undo', () => {
+  test('undo exactly restores the original text after a compound batch of touching edits', () => {
+    // Simulates a two-cursor move-line-up: one edit deletes a line body,
+    // another deletes an adjacent line including its break, and two
+    // zero-width inserts re-create the moved lines — all ranges touching at
+    // their endpoints, applied as one history transaction.
+    const original = 'alpha\nbravo\ncharlie\n';
+    const d = doc(original);
+    d.applyEdits(
+      [
+        edit(3, 0, 3, 0, 'charlie'),
+        edit(2, 0, 2, 7, ''),
+        edit(1, 0, 2, 0, ''),
+        edit(2, 7, 2, 7, '\nbravo'),
+      ],
+      true
+    );
+    expect(d.getText()).toBe('alpha\n\nbravo\ncharlie');
+
+    expect(d.canUndo).toBe(true);
+    d.undo();
+    expect(d.getText()).toBe(original);
+
+    // The transaction stays reversible in both directions.
+    d.redo();
+    expect(d.getText()).toBe('alpha\n\nbravo\ncharlie');
+    d.undo();
+    expect(d.getText()).toBe(original);
+  });
+
+  test('undo restores a batch that replaced two equal-size selections with shorter text', () => {
+    const original = 'green apples\ngreen apples';
+    const d = doc(original);
+    // Both cursors have "apples" selected (given bottom-first, as an editor
+    // would after adding a selection above) and type the shorter "figs".
+    const selectionsBefore = [select(1, 6, 1, 12), select(0, 6, 0, 12)];
+    d.applyEdits(
+      [edit(1, 6, 1, 12, 'figs'), edit(0, 6, 0, 12, 'figs')],
+      true,
+      selectionsBefore,
+      [select(1, 10, 1, 10), select(0, 10, 0, 10)]
+    );
+    expect(d.getText()).toBe('green figs\ngreen figs');
+
+    const undone = d.undo();
+    expect(d.getText()).toBe(original);
+    expect(undone?.[1]).toEqual(selectionsBefore);
+  });
+});
+
+describe('applyEdits: astral characters and undo history', () => {
+  test('manually applied inverse edits round-trip inserts on both sides of an astral character', () => {
+    const original = 'x👁y';
+    const d = doc(original);
+
+    // Two separate applyEdits calls: one insert immediately before the
+    // surrogate pair, one immediately after it (positions in UTF-16 units).
+    d.applyEdits([edit(0, 1, 0, 1, '(')]);
+    d.applyEdits([edit(0, 4, 0, 4, ')')]);
+    expect(d.getText()).toBe('x(👁)y');
+
+    // Ranges near the pair still resolve correctly after the inserts.
+    expect(
+      d.getText({
+        start: { line: 0, character: 2 },
+        end: { line: 0, character: 4 },
+      })
+    ).toBe('👁');
+    expect(
+      d.getText({
+        start: { line: 0, character: 4 },
+        end: { line: 0, character: 5 },
+      })
+    ).toBe(')');
+
+    // The exact inverse of both inserts, applied as one batch.
+    d.applyEdits([edit(0, 1, 0, 2, ''), edit(0, 4, 0, 5, '')]);
+    expect(d.getText()).toBe(original);
+    expect(hasLoneSurrogate(d.getText())).toBe(false);
+  });
+
+  test('undo and redo round-trip a history entry whose edits touch a surrogate pair', () => {
+    // Auto-surround of the leading quote in '👁' with %: two zero-width
+    // inserts in one transaction, the second landing immediately before the
+    // surrogate pair.
+    const original = "'👁'";
+    const d = doc(original);
+    d.applyEdits([edit(0, 0, 0, 0, '%'), edit(0, 1, 0, 1, '%')], true, [
+      select(0, 0, 0, 1),
+    ]);
+    expect(d.getText()).toBe("%'%👁'");
+
+    d.undo();
+    expect(d.getText()).toBe(original);
+    expect(hasLoneSurrogate(d.getText())).toBe(false);
+
+    d.redo();
+    expect(d.getText()).toBe("%'%👁'");
+    expect(hasLoneSurrogate(d.getText())).toBe(false);
+
+    d.undo();
+    expect(d.getText()).toBe(original);
+  });
+});
+
+describe('applyEdits batch: insert at a deletion boundary', () => {
+  test('an insert listed before a delete starting at the same offset applies, keeping the insertion', () => {
+    // Zero-width insert at offset 5 plus delete of [5,7): the inserted text
+    // survives in front of the deleted span — the conventional deterministic
+    // handling of an insertion at a deletion's start boundary.
+    const d = doc('grapevines');
+    d.applyEdits([edit(0, 5, 0, 5, 'XY'), edit(0, 5, 0, 7, '')]);
+    expect(d.getText()).toBe('grapeXYnes');
+  });
+
+  // KNOWN BUG: acceptance of the batch {delete [5,7), insert at 5} depends on
+  // the caller's array order. Validation stable-sorts by start offset and
+  // rejects any pair where prev.end > next.start, so with the delete listed
+  // first the (5,7) delete stays ahead of the (5,5) insert and the same
+  // logical batch throws 'Overlapping text edits are not supported', while
+  // the insert-first order succeeds. A deterministic batch model would accept
+  // the batch regardless of input order.
+  test.failing(
+    'the same logical batch with the delete listed first behaves identically',
+    () => {
+      const d = doc('grapevines');
+      d.applyEdits([edit(0, 5, 0, 7, ''), edit(0, 5, 0, 5, 'XY')]);
+      expect(d.getText()).toBe('grapeXYnes');
+    }
+  );
+});
+
+describe('applyEdits: randomized single-edit invert round-trip', () => {
+  test('50 random history edits undo to the byte-identical original and redo to the final text', () => {
+    const insertAlphabet = 'twilight harbor\nquiet mooring\n';
+    for (const seed of [11, 29, 173]) {
+      const rand = makeRandom(seed);
+      const original = 'signal flags\nover the pier\n';
+      const d = doc(original);
+      let mirror = original;
+
+      for (let step = 0; step < 50; step++) {
+        const length = mirror.length;
+        const from = Math.floor(rand() * (length + 1));
+        const to = Math.min(length, from + Math.floor(rand() * 6));
+        let insert = '';
+        const insertLength = Math.floor(rand() * 5);
+        for (let k = 0; k < insertLength; k++) {
+          insert += insertAlphabet[Math.floor(rand() * insertAlphabet.length)];
+        }
+        if (from === to && insert === '') {
+          insert = '+'; // keep every step a real edit
+        }
+        // Each edit records its own history entry: undoBoundary=true defeats
+        // typing/backspace coalescing so the undo stack holds all 50 steps.
+        d.applyEdits(
+          [
+            {
+              range: { start: d.positionAt(from), end: d.positionAt(to) },
+              newText: insert,
+            },
+          ],
+          true,
+          undefined,
+          undefined,
+          true
+        );
+        mirror = mirror.slice(0, from) + insert + mirror.slice(to);
+        expect(d.getText()).toBe(mirror);
+      }
+
+      expect(d.version).toBe(50);
+      let undoCount = 0;
+      while (d.canUndo) {
+        d.undo();
+        undoCount++;
+      }
+      expect(undoCount).toBe(50);
+      expect(d.getText()).toBe(original);
+      expect(d.version).toBe(0);
+
+      let redoCount = 0;
+      while (d.canRedo) {
+        d.redo();
+        redoCount++;
+      }
+      expect(redoCount).toBe(50);
+      expect(d.getText()).toBe(mirror);
+      expect(d.version).toBe(50);
+    }
+  });
+});
+
+describe('applyEdits batch: changed line ranges across line-count changes', () => {
+  test('a line-adding first edit shifts the second edit into post-edit line numbers', () => {
+    // Edit 1 splits line 0 in two (+1 line); edit 2 rewrites old line 3, which
+    // is line 4 after the split. The reported ranges must be ascending and in
+    // post-edit coordinates, one range per disjoint edit.
+    const d = doc('ada\nbabbage\ncurie\ndarwin');
+    const change = d.applyEdits([
+      edit(0, 3, 0, 3, '\nhopper'),
+      edit(3, 0, 3, 6, 'lovelace'),
+    ]);
+    expect(d.getText()).toBe('ada\nhopper\nbabbage\ncurie\nlovelace');
+    expect(change).toEqual({
+      startLine: 0,
+      startCharacter: 3,
+      endCharacter: 6,
+      endLine: 4,
+      endedAtDocumentEnd: true,
+      previousLineCount: 4,
+      lineCount: 5,
+      lineDelta: 1,
+      changedLineRanges: [
+        [0, 1],
+        [4, 4],
+      ],
+      changedLineChanges: [
+        [0, 1, 1, 3, 3, false],
+        [4, 4, 0, 0, 6, true],
+      ],
+    });
+  });
+
+  test('a line-removing first edit shifts the second edit down in post-edit line numbers', () => {
+    // Edit 1 joins lines 0 and 1 (-1 line); edit 2 rewrites old line 3, which
+    // is line 2 after the join.
+    const d = doc('ada\nbabbage\ncurie\ndarwin');
+    const change = d.applyEdits([
+      edit(0, 3, 1, 0, ' '),
+      edit(3, 0, 3, 6, 'lovelace'),
+    ]);
+    expect(d.getText()).toBe('ada babbage\ncurie\nlovelace');
+    expect(change).toEqual({
+      startLine: 0,
+      startCharacter: 3,
+      endCharacter: 6,
+      endLine: 2,
+      endedAtDocumentEnd: true,
+      previousLineCount: 4,
+      lineCount: 3,
+      lineDelta: -1,
+      changedLineRanges: [
+        [0, 0],
+        [2, 2],
+      ],
+      changedLineChanges: [
+        [0, 0, -1, 3, 0, false],
+        [2, 2, 0, 0, 6, true],
+      ],
+    });
+  });
+});
+
+describe('applyEdits: no-op edits recorded in history', () => {
+  test('a zero-width empty edit bumps the version and its history entry undoes/redoes harmlessly', () => {
+    const d = doc('anchor');
+    const change = d.applyEdits([edit(0, 3, 0, 3, '')], true, [caret(0, 3)]);
+
+    // The degenerate edit still produces a change record and a version bump,
+    // but the buffer is untouched.
+    expect(change?.lineDelta).toBe(0);
+    expect(d.getText()).toBe('anchor');
+    expect(d.version).toBe(1);
+    expect(d.canUndo).toBe(true);
+
+    // Undoing the identity entry is a real history step that changes nothing.
+    const undone = d.undo();
+    expect(undone).toBeDefined();
+    expect(d.getText()).toBe('anchor');
+    expect(d.version).toBe(0);
+    expect(d.canRedo).toBe(true);
+
+    const redone = d.redo();
+    expect(redone).toBeDefined();
+    expect(d.getText()).toBe('anchor');
+    expect(d.version).toBe(1);
+    expect(d.canUndo).toBe(true);
+    expect(d.canRedo).toBe(false);
+  });
+
+  test('a no-op entry does not coalesce with real typing on either side', () => {
+    const d = doc('');
+    d.applyEdits([edit(0, 0, 0, 0, 'a')], true, [caret(0, 0)]);
+    d.applyEdits([edit(0, 1, 0, 1, '')], true, [caret(0, 1)]); // no-op
+    d.applyEdits([edit(0, 1, 0, 1, 'b')], true, [caret(0, 1)]);
+    expect(d.getText()).toBe('ab');
+
+    // Three separate undo steps: the identity entry neither merges into the
+    // preceding keystroke nor lets the following keystroke merge across it.
+    d.undo();
+    expect(d.getText()).toBe('a');
+    d.undo();
+    expect(d.getText()).toBe('a');
+    d.undo();
+    expect(d.getText()).toBe('');
+    expect(d.canUndo).toBe(false);
+
+    d.redo();
+    d.redo();
+    d.redo();
+    expect(d.getText()).toBe('ab');
+    expect(d.canRedo).toBe(false);
+  });
+});
+
+describe('applyEdits: out-of-bounds edit ranges clamp instead of throwing', () => {
+  // DIVERGENCE: a stricter contract would reject a change whose start is
+  // negative outright; pierre normalizes every edit position through
+  // normalizePosition, so a negative character (or negative line) clamps to
+  // the document start and the edit applies to the clamped range.
+  test('negative coordinates clamp to the document start', () => {
+    const d = doc('kelp');
+    d.applyEdits([edit(0, -1, 0, 1, '')]);
+    expect(d.getText()).toBe('elp'); // delete resolved as [0,1)
+
+    const d2 = doc('ab\ncd');
+    d2.applyEdits([edit(-5, -5, -5, -5, '!')]);
+    expect(d2.getText()).toBe('!ab\ncd'); // insert resolved at offset 0
+  });
+
+  // DIVERGENCE: a stricter contract would reject an end of 10 on a 4-char
+  // document; pierre clamps the end character to the line length, so the
+  // replacement absorbs exactly the real tail of the line.
+  test('an end character past the line length clamps to the line end', () => {
+    const d = doc('kelp');
+    d.applyEdits([edit(0, 2, 0, 10, 'x')]);
+    expect(d.getText()).toBe('kex'); // range resolved as [2,4)
+  });
+
+  // DIVERGENCE: a stricter contract would throw for any position beyond the
+  // document; pierre clamps the line to the last line but keeps a character
+  // that is still in range on that line — an edit addressed to line 9 lands
+  // mid-way through the final line, not at the document end.
+  test('a line beyond EOF clamps to the last line, preserving an in-range character', () => {
+    const d = doc('ab\ncd');
+    d.applyEdits([edit(9, 1, 9, 1, '!')]);
+    expect(d.getText()).toBe('ab\nc!d'); // resolved to (line 1, character 1)
+
+    // Only when the character also overshoots does the edit land at doc end.
+    const d2 = doc('ab\ncd');
+    d2.applyEdits([edit(9, 99, 9, 99, '!')]);
+    expect(d2.getText()).toBe('ab\ncd!');
+  });
+
+  // DIVERGENCE: a stricter contract would throw; pierre clamps a range end
+  // whose line overshoots to (last line, in-range character), so the
+  // replacement runs from the start position to that clamped point rather
+  // than to EOF.
+  test('a range end on a line beyond EOF clamps into the last line', () => {
+    const d = doc('ab\ncd');
+    d.applyEdits([edit(0, 1, 7, 7, 'Z')]);
+    // End (7,7) clamps to (line 1, character 2) — the document end — so the
+    // replacement covers [1, 5).
+    expect(d.getText()).toBe('aZ');
+  });
+});
+
+describe('line-based indent commands with selections sharing a line', () => {
+  // KNOWN BUG: the editor's indent dispatch concatenates each selection's
+  // resolveIndentEdits output with no shared-line dedupe, so two carets on one
+  // line emit two identical zero-length inserts at column 0. Both pass the
+  // overlap validation (equal start offsets never compare as overlapping) and
+  // the line is indented twice.
+  test.failing('two carets on one line indent that line exactly once', () => {
+    const d = doc('quartz vein');
+    const next = dispatchLineIndent(d, [caret(0, 2), caret(0, 6)], 2, false);
+    expect(d.getText()).toBe('  quartz vein');
+    expect(next).toEqual([caret(0, 4), caret(0, 8)]);
+  });
+
+  // KNOWN BUG: same missing dedupe with range selections — the line shared by
+  // both ranges receives one indent edit per selection and ends up indented
+  // twice while its neighbors indent once.
+  test.failing(
+    'two ranges sharing a line indent every line exactly once',
+    () => {
+      const d = doc('ada\nberyl\ncobalt');
+      dispatchLineIndent(d, [range(0, 1, 1, 2), range(1, 3, 2, 1)], 2, false);
+      expect(d.getText()).toBe('  ada\n  beryl\n  cobalt');
+    }
+  );
+
+  // KNOWN BUG: the outdent variant of the same composition produces two
+  // identical single-character delete edits for the shared line; unlike the
+  // zero-length inserts these DO fail overlap validation, so the whole command
+  // throws 'Overlapping text edits are not supported' and nothing is applied.
+  test.failing(
+    'two carets on one tab-indented line outdent it exactly once',
+    () => {
+      const d = doc('\tquartz vein');
+      const next = dispatchLineIndent(d, [caret(0, 3), caret(0, 7)], 2, true);
+      expect(d.getText()).toBe('quartz vein');
+      expect(next).toEqual([caret(0, 2), caret(0, 6)]);
+    }
+  );
+});
+
+describe('indentLess on tab and mixed indentation', () => {
+  // Pierre-fe has a single tabSize knob that acts as both the tab's visual
+  // width and the indent unit, and its outdent removes raw characters (one
+  // whole tab, or up to tabSize leading spaces). An alternative model
+  // separates tab size (4) from indent unit (2) and rewrites the leading
+  // whitespace by column arithmetic. Under pierre-fe's own model each outdent
+  // below removes exactly one visual unit, so this is a coherent policy
+  // difference, not corruption — the residual whitespace is just never
+  // normalized to spaces.
+
+  test('outdenting a tab-indented line removes the whole tab', () => {
+    // DIVERGENCE: the column-arithmetic model splits the tab ('\tone' ->
+    // '  one' with a 2-space unit under a 4-column tab); pierre-fe deletes the
+    // tab character itself, which at tabSize 2 is exactly one indent unit of
+    // visual width.
+    const d = doc('\tnode');
+    const [edits, next] = resolveIndentEdits(d, caret(0, 5), 2, true);
+    expect(edits).toEqual([
+      {
+        range: {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 1 },
+        },
+        newText: '',
+      },
+    ]);
+    d.applyEdits(edits);
+    expect(d.getText()).toBe('node');
+    expect(next).toEqual(caret(0, 4));
+  });
+
+  test('outdenting space-then-tab indentation trims leading spaces only', () => {
+    // DIVERGENCE: the column-arithmetic model normalizes '   \tone' to
+    // '  one' (column count minus one unit, re-written as spaces); pierre-fe
+    // deletes tabSize leading space characters and leaves the denormalized
+    // ' \t' run in place. At tabSize 2 the visual width still drops by exactly
+    // one unit (4 -> 2 columns), so the indentation is not broken, merely
+    // unnormalized.
+    const d = doc('   \tnode');
+    const [edits, next] = resolveIndentEdits(d, caret(0, 8), 2, true);
+    d.applyEdits(edits);
+    expect(d.getText()).toBe(' \tnode');
+    expect(next).toEqual(caret(0, 6));
+  });
+
+  test('outdenting spaces before a tab leaves the tab as the full indent', () => {
+    // DIVERGENCE: the column-arithmetic model rewrites '  \ttwo' to '  two';
+    // pierre-fe removes the two spaces and keeps the tab ('\tpair'), which
+    // again renders at one indent unit under its own tabSize-2 metrics.
+    const d = doc('  \tpair');
+    const [edits, next] = resolveIndentEdits(d, caret(0, 7), 2, true);
+    d.applyEdits(edits);
+    expect(d.getText()).toBe('\tpair');
+    expect(next).toEqual(caret(0, 5));
+  });
+});
+
+describe('block indent over blank and whitespace-only lines', () => {
+  // KNOWN BUG: resolveIndentEdits emits an insert at column 0 of every line
+  // the selection touches, including empty and whitespace-only lines, so a
+  // block indent injects trailing whitespace on lines the user never typed
+  // on. The conventional behavior is to skip lines with no content. Outdent
+  // strips the injected unit back off, so a full indent/outdent round trip
+  // self-heals — the damage is bounded to the indented state.
+  test.failing(
+    'block indent leaves blank and whitespace-only lines untouched',
+    () => {
+      const d = doc('alpha\n\n   \nbeta');
+      const [edits] = resolveIndentEdits(
+        d,
+        {
+          start: { line: 0, character: 0 },
+          end: { line: 3, character: 4 },
+          direction: DirectionForward,
+        },
+        2,
+        false
+      );
+      d.applyEdits(edits);
+      expect(d.getText()).toBe('  alpha\n\n   \n  beta');
+    }
+  );
+});
+
+describe('move line commands with merged and same-line multi-cursor blocks', () => {
+  test('interleaved ranges and a caret merge into one block moving up', () => {
+    // The three selections touch lines 1-2, 3, and 3-4; the merged block is
+    // lines 1-4 and must rotate above line 0 as a unit, with every selection
+    // shifted up one line at its original columns.
+    const d = doc('red\ngreen\nblue\ncyan\npink');
+    const next = moveLines(
+      d,
+      [range(1, 0, 2, 2), caret(3, 2), range(3, 3, 4, 4)],
+      -1
+    );
+    expect(d.getText()).toBe('green\nblue\ncyan\npink\nred');
+    expect(next).toEqual([range(0, 0, 1, 2), caret(2, 2), range(2, 3, 3, 4)]);
+  });
+
+  test('interleaved ranges and a caret merge into one block moving down', () => {
+    const d = doc('red\ngreen\nblue\ncyan\npink\ngray');
+    const next = moveLines(
+      d,
+      [range(1, 0, 2, 2), caret(3, 2), range(3, 3, 4, 4)],
+      1
+    );
+    expect(d.getText()).toBe('red\ngray\ngreen\nblue\ncyan\npink');
+    expect(next).toEqual([range(2, 0, 3, 2), caret(4, 2), range(4, 3, 5, 4)]);
+  });
+
+  test('multiple carets on one line all survive a move down at their columns', () => {
+    const d = doc('alpha\nbravo\ncharlie');
+    const next = moveLines(d, [caret(1, 1), caret(1, 4)], 1);
+    expect(d.getText()).toBe('alpha\ncharlie\nbravo');
+    expect(next).toEqual([caret(2, 1), caret(2, 4)]);
+  });
+
+  test('multiple carets on one line all survive a move up at their columns', () => {
+    const d = doc('alpha\nbravo\n');
+    const next = moveLines(d, [caret(1, 1), caret(1, 3), caret(1, 5)], -1);
+    expect(d.getText()).toBe('bravo\nalpha\n');
+    expect(next).toEqual([caret(0, 1), caret(0, 3), caret(0, 5)]);
+  });
+
+  test('a range ending at column 0 does not drag the line below into the move', () => {
+    // The selection ends at (3,0), so line 3 carries no selected content;
+    // getSelectedLineBlocks must exclude it and only lines 1-2 move.
+    const d = doc('ash\nbay\ncedar\ndune');
+    const next = moveLines(d, [range(1, 0, 3, 0)], -1);
+    expect(d.getText()).toBe('bay\ncedar\nash\ndune');
+    expect(next).toEqual([range(0, 0, 2, 0)]);
+  });
+});
+
+describe('Enter and indentation carry-over', () => {
+  test('Enter copies the current line leading whitespace onto the new line', () => {
+    const d = doc('  tune');
+    const { nextSelections } = pressEnter(d, caret(0, 6));
+    expect(d.getText()).toBe('  tune\n  ');
+    expect(nextSelections).toEqual([caret(1, 2)]);
+  });
+
+  test('Enter on a whitespace-only line duplicates that whitespace', () => {
+    // DIVERGENCE: a language-aware newline-and-indent command replaces a
+    // whitespace-only line with '\n', clearing the stale indentation.
+    // Pierre-fe's Enter is keep-indent semantics: expandSingleNewlineInsert
+    // copies the current line's leading whitespace unconditionally, so
+    // '    ' + Enter leaves '    \n    ' — trailing whitespace stays behind
+    // and the indent is duplicated. Judged a policy, not a bug: nothing is
+    // lost or corrupted, the result is deterministic and undoable, and
+    // clearing would require a language-aware indent pass pierre-fe
+    // deliberately does not run.
+    const d = doc('    ');
+    const { nextSelections } = pressEnter(d, caret(0, 4));
+    expect(d.getText()).toBe('    \n    ');
+    expect(nextSelections).toEqual([caret(1, 4)]);
+  });
+
+  test('Enter replacing a multi-line selection indents from the selection-start line', () => {
+    // The replaced range spans two indented lines; the inserted break must
+    // copy the indentation of the line the selection STARTS on, and the caret
+    // lands between that indent and the surviving tail text.
+    const d = doc('fn a:\n  leftgone\n  deadright');
+    const { nextSelections } = pressEnter(d, range(1, 6, 2, 6));
+    expect(d.getText()).toBe('fn a:\n  left\n  right');
+    expect(nextSelections).toEqual([caret(2, 2)]);
+  });
+
+  test('Enter after an unindented line inserts a bare break', () => {
+    const d = doc('onemore');
+    const { nextSelections } = pressEnter(d, caret(0, 3));
+    expect(d.getText()).toBe('one\nmore');
+    expect(nextSelections).toEqual([caret(1, 0)]);
   });
 });
