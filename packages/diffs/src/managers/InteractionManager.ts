@@ -16,6 +16,7 @@ import type {
 import { areSelectionPointsEqual } from '../utils/areSelectionPointsEqual';
 import { areSelectionsEqual } from '../utils/areSelectionsEqual';
 import { createGutterUtilityElement } from '../utils/createGutterUtilityElement';
+import { isGutterUtilityPath } from '../utils/isGutterUtilityPath';
 
 interface TokenCache {
   tokenElement: HTMLElement;
@@ -268,10 +269,6 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
   private editorActiveLine: number | null = null;
   private editorActiveLineSide: SelectionSide | undefined;
   private editorLineNumberOnly = false;
-  // True while an editor is attached (edit mode). The editor draws text
-  // selection, so selected lines then highlight only the gutter line numbers,
-  // never the full-line background.
-  private editorAttached = false;
   private proposedSelectedRange: SelectedLineRange | null | undefined;
   private renderedSelectionState: SelectionRenderState | undefined;
   private selectionAnchor: SelectionPoint | undefined;
@@ -346,18 +343,6 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
 
   setSelectionDirty(): void {
     this.renderedSelectionState = undefined;
-  }
-
-  // Toggle edit mode. While an editor is attached, selected lines are shown as
-  // gutter-number-only highlights (the editor renders the selected text
-  // itself), so the full-line background is suppressed.
-  setEditorAttached(attached: boolean): void {
-    if (this.editorAttached === attached) {
-      return;
-    }
-    this.editorAttached = attached;
-    this.setSelectionDirty();
-    this.renderSelection();
   }
 
   isSelectionDirty(): boolean {
@@ -1575,13 +1560,17 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
         source: 'selected-lines',
         range: this.selectedRange,
         highlightSide: this.selectedRangeHighlightSide,
-        lineNumberOnly: this.selectedRangeLineNumberOnly || this.editorAttached,
+        lineNumberOnly: this.selectedRangeLineNumberOnly,
       };
     }
     if (this.editorActiveLine != null) {
       return {
         source: 'editor-active-line',
-        range: { start: this.editorActiveLine, end: this.editorActiveLine },
+        range: {
+          start: this.editorActiveLine,
+          end: this.editorActiveLine,
+          side: this.editorActiveLineSide,
+        },
         highlightSide: this.editorActiveLineSide,
         lineNumberOnly: this.editorLineNumberOnly,
       };
@@ -1610,10 +1599,11 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
     const allSelected = this.pre.querySelectorAll('[data-selected-line]');
     for (const element of allSelected) {
       element.removeAttribute('data-selected-line');
+      element.removeAttribute('data-editor-active-line');
     }
 
     this.renderedSelectionState = renderState;
-    const { highlightSide, lineNumberOnly, range } = renderState;
+    const { highlightSide, lineNumberOnly, range, source } = renderState;
     if (range == null) {
       return;
     }
@@ -1689,6 +1679,13 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
           continue;
         }
         contentElement.setAttribute('data-selected-line', attributeValue);
+        if (source === 'editor-active-line') {
+          // Keep the editor caret's current-line styling separate from an
+          // explicit selected-lines range, which uses the normal selection bg.
+          contentElement.setAttribute('data-editor-active-line', '');
+        } else {
+          contentElement.removeAttribute('data-editor-active-line');
+        }
         if (
           gutterElement.nextSibling instanceof HTMLElement &&
           contentElement.nextSibling instanceof HTMLElement &&
@@ -2336,26 +2333,6 @@ function getLineTypeFromElement(element: HTMLElement): LineTypes | undefined {
     default:
       return undefined;
   }
-}
-
-function isGutterUtilityPath(path: (EventTarget | undefined)[]): boolean {
-  for (const element of path) {
-    if (!(element instanceof HTMLElement)) {
-      continue;
-    }
-    if (
-      element.hasAttribute('data-utility-button') ||
-      element.hasAttribute('data-gutter-utility-slot') ||
-      // Custom React/DOM utilities are slotted into the same utility surface,
-      // so treat both the assigned content and the slot node itself as
-      // utility hits.
-      element.getAttribute('slot') === 'gutter-utility-slot' ||
-      element.getAttribute('name') === 'gutter-utility-slot'
-    ) {
-      return true;
-    }
-  }
-  return false;
 }
 
 function debugLogIfEnabled(

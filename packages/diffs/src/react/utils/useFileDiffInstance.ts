@@ -200,13 +200,6 @@ function mergeFileDiffOptions<LAnnotation>({
             : options?.renderGutterUtility,
         }
       : null),
-    ...(needsEditorOptions
-      ? {
-          useTokenTransformer: true,
-          enableGutterUtility: false,
-          enableLineSelection: false,
-          lineHoverHighlight: 'disabled',
-        }
-      : null),
+    ...(needsEditorOptions ? { useTokenTransformer: true } : null),
   };
 }

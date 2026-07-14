@@ -15,9 +15,11 @@ import type {
   Position,
   Range,
   RenderRange,
+  SelectionSide,
   TextEdit,
 } from '../types';
 import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
+import { isGutterUtilityPath } from '../utils/isGutterUtilityPath';
 import {
   type EditorCommand,
   resolveEditorCommandFromKeyboardEvent,
@@ -418,25 +420,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         requirePersistedCacheKey(file);
       }
     }
-    const {
-      useTokenTransformer,
-      enableGutterUtility,
-      enableLineSelection,
-      lineHoverHighlight = 'disabled',
-      ...rest
-    } = fileInstance.options;
-    if (
-      useTokenTransformer !== true ||
-      enableGutterUtility === true ||
-      enableLineSelection === true ||
-      lineHoverHighlight !== 'disabled'
-    ) {
+    if (fileInstance.options.useTokenTransformer !== true) {
       fileInstance.setOptions({
-        ...rest,
+        ...fileInstance.options,
         useTokenTransformer: true,
-        enableGutterUtility: false,
-        enableLineSelection: false,
-        lineHoverHighlight: 'disabled',
       });
       fileInstance.rerender();
     }
@@ -1916,13 +1903,17 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           deletionsCode,
           'pointerdown',
           (e) => {
+            const path = e.composedPath();
+            if (isGutterUtilityPath(path)) {
+              return;
+            }
             // Clicking a deletion line's number selects the whole line's text
             // and dragging extends the selection across deletion lines (like a
             // click/drag on an addition line number); clicking its text lets
             // the browser place/extend the selection directly. Either way the
             // deleted-text marker reveals it and the editor drops its own
             // selection.
-            const target = e.composedPath()[0];
+            const target = path[0];
             const gutterRow =
               target instanceof HTMLElement
                 ? target.closest('[data-column-number]')
@@ -1984,8 +1975,12 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           gutterEl,
           'pointerdown',
           (e) => {
+            const path = e.composedPath();
+            if (isGutterUtilityPath(path)) {
+              return;
+            }
             const gutterRow = resolveGutterTarget(
-              e.composedPath()[0] as HTMLElement | undefined
+              path[0] as HTMLElement | undefined
             );
             // Clicking a read-only deleted line's number (unified view) selects
             // that line's text natively, since the line is not in the editor's
@@ -3404,15 +3399,13 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#updateSelections([]);
 
     // Highlight only the focus line's gutter number — the line where the click
-    // landed or the drag ended. An addition selection highlights just its caret
-    // line (getCaretPosition is the focus end), so matching that keeps the two
-    // sides consistent. #setDeletedTextSelectionActive cleared the previous
-    // selection's number above, so set this one's directly on the gutter row
-    // that lines up with the focus content row.
-    const gutterRows = [
-      ...deletionsCode.querySelectorAll('[data-gutter] > [data-column-number]'),
-    ];
-    gutterRows[focusIndex]?.setAttribute('data-selected-line', 'single');
+    // landed or the drag ended. Route it through the editor active-line state
+    // so selected lines remain independent and retain visual precedence.
+    this.#setEditorActiveLineSafe(
+      getLineNumberAttr(focusContent) ?? null,
+      true,
+      'deletions'
+    );
 
     // Record the selected deleted lines' text for the clipboard. Each deleted
     // line is its own read-only host, so window.getSelection().toString() only
@@ -3535,14 +3528,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
     if (active) {
       pre.setAttribute('data-deleted-text-selection', '');
-      // Drop any line-number highlight left over from a previous selection.
-      // #selectDeletedLines marks the deleted gutter numbers directly, and the
-      // editor only clears them when its own selection range changes — but
-      // deletion selections leave that range null, so a second deletion click
-      // would otherwise keep the first selection's numbers highlighted.
-      for (const highlighted of pre.querySelectorAll('[data-selected-line]')) {
-        highlighted.removeAttribute('data-selected-line');
-      }
+      this.#setEditorActiveLineSafe(null);
       // Reset the captured selection text. #selectDeletedLines refills it for a
       // gutter selection; a content drag leaves it empty so the copy/cut
       // handlers fall back to the native selection.
@@ -3555,14 +3541,16 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
   #setEditorActiveLineSafe(
     lineNumber: number | null,
-    lineNumberOnly = false
+    lineNumberOnly = false,
+    side: SelectionSide = 'additions'
   ): void {
     try {
       // Keep the caret decoration separate from selected lines. The component
-      // confines it to the editable additions pane, and a text selection keeps
-      // only the caret line's gutter number highlighted.
+      // confines it to the relevant diff pane, and a text selection keeps only
+      // the focus line's gutter number highlighted.
       this.#fileInstance?.setEditorActiveLine(lineNumber, {
         lineNumberOnly,
+        side,
       });
     } catch {
       // InteractionManager.renderSelection can throw while editor DOM is updating.

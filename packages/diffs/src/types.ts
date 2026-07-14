@@ -993,6 +993,7 @@ export interface DiffsComponentOptions extends BaseCodeOptions {
 
 export interface EditorActiveLineOptions {
   lineNumberOnly?: boolean;
+  side?: SelectionSide;
 }
 
 export interface DiffsBaseComponent {

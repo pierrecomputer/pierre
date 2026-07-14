@@ -544,7 +544,7 @@ export class FileDiff<
     } else {
       this.interactionManager.setEditorActiveLine(lineNumber, {
         lineNumberOnly: options?.lineNumberOnly,
-        side: 'additions',
+        side: options?.side ?? 'additions',
       });
     }
   }
@@ -1321,7 +1321,6 @@ export class FileDiff<
   ): (recycle?: boolean) => void {
     this.editor?.cleanUp();
     this.editor = editor;
-    this.interactionManager.setEditorAttached(true);
     // Edit sessions are a plain-diff concern; subclasses with their own hunk
     // semantics (merge conflicts) keep the per-edit recompute pipeline.
     if (this.type === 'file-diff') {
@@ -1335,7 +1334,6 @@ export class FileDiff<
     this.syncRenderViewToEditor();
     return (recycle?: boolean) => {
       this.editor = undefined;
-      this.interactionManager.setEditorAttached(false);
       // A recycle detach is a virtualized unmount mid-session: the session
       // continues on remount, so hunks stay session-shaped. Only a genuine
       // end runs the exit recompute.

@@ -59,11 +59,10 @@
   background-color: var(--diffs-line-bg);
   pointer-events: none;
 }
-/* Current-line highlight composited over the line's diff color so additions/
-   deletions stay tinted. Base on --diffs-computed-diff-line-bg (the raw diff
-   color, before style.css mixes selection into --diffs-line-bg) to avoid
-   double-tinting; context lines resolve it to --diffs-bg, unchanged from before. */
-[data-line][data-selected-line]::after {
+/* Editor current-line highlight composited over the line's diff color so
+   additions/deletions stay tinted. Explicit selected lines omit the active-line
+   attribute and retain the normal selection background from style.css. */
+[data-line][data-editor-active-line]::after {
   background-color: var(--diffs-computed-diff-line-bg, var(--diffs-bg));
   background-image: linear-gradient(
     var(--diffs-editor-line-highlight-bg),

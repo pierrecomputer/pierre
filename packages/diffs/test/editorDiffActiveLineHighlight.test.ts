@@ -1,10 +1,10 @@
 import { afterAll, describe, expect, test } from 'bun:test';
 
-import { FileDiff } from '../src/components/FileDiff';
+import { FileDiff, type FileDiffOptions } from '../src/components/FileDiff';
 import { DEFAULT_THEMES } from '../src/constants';
 import { Editor } from '../src/editor/editor';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
-import type { FileContents } from '../src/types';
+import type { FileContents, SelectedLineRange } from '../src/types';
 import { installDom, wait, waitFor } from './domHarness';
 
 afterAll(async () => {
@@ -97,7 +97,8 @@ interface DiffEditorFixture {
 async function createDiffEditorFixture(
   diffStyle: 'split' | 'unified',
   oldContents: string,
-  newContents: string
+  newContents: string,
+  options: Partial<FileDiffOptions<undefined>> = {}
 ): Promise<DiffEditorFixture> {
   const dom = installDom();
   const container = document.createElement('div');
@@ -107,6 +108,7 @@ async function createDiffEditorFixture(
     disableFileHeader: true,
     theme: DEFAULT_THEMES,
     diffStyle,
+    ...options,
   });
   const editor = new Editor<undefined>();
   const oldFile: FileContents = { name: 'edit.ts', contents: oldContents };
@@ -207,6 +209,114 @@ describe('editor active-line highlight on a diff', () => {
       );
       expect(highlightedGutterNumbers(additions)).toEqual([1]);
       expect(highlightedGutterNumbers(deletions)).toEqual([]);
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  test('split: a deletion gutter utility does not change editor text selection', async () => {
+    const clickedRanges: SelectedLineRange[] = [];
+    const fixture = await createDiffEditorFixture('split', OLD, NEW, {
+      enableGutterUtility: true,
+      enableLineSelection: true,
+      lineHoverHighlight: 'both',
+      onGutterUtilityClick: (range) => clickedRanges.push(range),
+    });
+    try {
+      fixture.editor.setSelections([
+        {
+          start: { line: 1, character: 0 },
+          end: { line: 1, character: 3 },
+          direction: 'forward',
+        },
+      ]);
+      const selectionBefore = fixture.editor.getState().selections;
+      const { deletions } = findCodeColumns(fixture.container);
+      const deletedGutter = deletions?.querySelector<HTMLElement>(
+        "[data-gutter] > [data-column-number][data-line-type='change-deletion']"
+      );
+      expect(deletedGutter).not.toBeNull();
+
+      deletedGutter?.dispatchEvent(
+        new PointerEvent('pointermove', {
+          bubbles: true,
+          composed: true,
+          pointerType: 'mouse',
+        })
+      );
+      await waitFor(
+        () => deletedGutter?.querySelector('[data-utility-button]') != null
+      );
+      const utility = deletedGutter?.querySelector<HTMLElement>(
+        '[data-utility-button]'
+      );
+      expect(utility).not.toBeNull();
+
+      utility?.dispatchEvent(
+        new PointerEvent('pointerdown', {
+          bubbles: true,
+          button: 0,
+          cancelable: true,
+          composed: true,
+          pointerId: 21,
+          pointerType: 'mouse',
+        })
+      );
+      utility?.dispatchEvent(
+        new PointerEvent('pointerup', {
+          bubbles: true,
+          cancelable: true,
+          composed: true,
+          pointerId: 21,
+          pointerType: 'mouse',
+        })
+      );
+
+      expect(clickedRanges).toEqual([{ start: 1, end: 1, side: 'deletions' }]);
+      expect(fixture.editor.getState().selections).toEqual(selectionBefore);
+      expect(
+        fixture.container.shadowRoot
+          ?.querySelector('pre')
+          ?.hasAttribute('data-deleted-text-selection')
+      ).toBe(false);
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  test('split: selected lines take precedence over deleted-line focus', async () => {
+    const fixture = await createDiffEditorFixture('split', OLD, NEW);
+    try {
+      fixture.fileDiff.setSelectedLines({ start: 2, end: 2 });
+      const { additions, deletions } = findCodeColumns(fixture.container);
+      expect(highlightedGutterNumbers(additions)).toEqual([2]);
+      expect(highlightedGutterNumbers(deletions)).toEqual([2]);
+      expect(highlightedLineNumbers(additions)).toEqual([2]);
+      expect(highlightedLineNumbers(deletions)).toEqual([2]);
+
+      const deletedGutter = deletions?.querySelector<HTMLElement>(
+        "[data-gutter] > [data-column-number][data-line-type='change-deletion']"
+      );
+      expect(deletedGutter).not.toBeNull();
+      deletedGutter?.dispatchEvent(
+        new PointerEvent('pointerdown', {
+          bubbles: true,
+          composed: true,
+          pointerType: 'mouse',
+        })
+      );
+
+      expect(highlightedGutterNumbers(additions)).toEqual([2]);
+      expect(highlightedGutterNumbers(deletions)).toEqual([2]);
+      expect(
+        fixture.container.shadowRoot
+          ?.querySelector('pre')
+          ?.hasAttribute('data-deleted-text-selection')
+      ).toBe(true);
+
+      fixture.fileDiff.setSelectedLines(null);
+      expect(highlightedGutterNumbers(additions)).toEqual([]);
+      expect(highlightedGutterNumbers(deletions)).toEqual([1]);
     } finally {
       await fixture.cleanup();
     }

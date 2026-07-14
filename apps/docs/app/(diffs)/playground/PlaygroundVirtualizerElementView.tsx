@@ -8,7 +8,7 @@ import type {
 } from '@pierre/diffs';
 import { Editor } from '@pierre/diffs/editor';
 import { EditProvider, FileDiff, Virtualizer } from '@pierre/diffs/react';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { ITEM_UNSAFE_CSS } from './constants';
 import { CommentForm } from './PlaygroundComments';
@@ -75,19 +75,23 @@ function ElementVirtualizerDiff({
   const [annotations, setAnnotations] = useState<
     DiffLineAnnotation<undefined>[]
   >([]);
+  const [selectedLines, setSelectedLines] = useState<SelectedLineRange | null>(
+    null
+  );
 
-  const addCommentAtLine = useCallback((range: SelectedLineRange) => {
-    const { side, start } = range;
+  const addCommentAtRange = useCallback((range: SelectedLineRange) => {
+    const side = range.endSide ?? range.side;
     if (side == null) {
       return;
     }
+    const lineNumber = range.end;
     setAnnotations((current) =>
       current.some(
         (annotation) =>
-          annotation.side === side && annotation.lineNumber === start
+          annotation.side === side && annotation.lineNumber === lineNumber
       )
         ? current
-        : [...current, { side, lineNumber: start }]
+        : [...current, { side, lineNumber }]
     );
   }, []);
 
@@ -102,25 +106,38 @@ function ElementVirtualizerDiff({
             !(annotation.side === side && annotation.lineNumber === lineNumber)
         )
       );
+      setSelectedLines(null);
     },
     []
   );
 
+  useEffect(() => {
+    if (!showAnnotations) {
+      setSelectedLines(null);
+    }
+  }, [showAnnotations]);
+
   // Match the other views' precedence: an open comment form pauses the gutter
-  // utility, and editing takes over click targets entirely.
+  // utility so another form cannot be opened beneath it.
   const hasOpenCommentForm = annotations.length > 0;
   const canUseGutterComments =
-    enableGutterComments && showAnnotations && !hasOpenCommentForm && !editing;
+    enableGutterComments && showAnnotations && !hasOpenCommentForm;
 
   const fileDiffOptions = useMemo<FileDiffOptions<undefined>>(
     () => ({
       ...options,
       stickyHeader: true,
       unsafeCSS: ITEM_UNSAFE_CSS,
+      enableLineSelection: canUseGutterComments,
       enableGutterUtility: canUseGutterComments,
-      onGutterUtilityClick: canUseGutterComments ? addCommentAtLine : undefined,
+      onLineSelectionStart: setSelectedLines,
+      onLineSelectionChange: setSelectedLines,
+      onLineSelectionEnd: setSelectedLines,
+      onGutterUtilityClick: canUseGutterComments
+        ? addCommentAtRange
+        : undefined,
     }),
-    [options, canUseGutterComments, addCommentAtLine]
+    [options, canUseGutterComments, addCommentAtRange]
   );
 
   return (
@@ -128,6 +145,7 @@ function ElementVirtualizerDiff({
       <FileDiff
         fileDiff={fileDiff}
         contentEditable={editing}
+        selectedLines={selectedLines}
         lineAnnotations={showAnnotations ? annotations : []}
         options={fileDiffOptions}
         renderHeaderMetadata={() => (

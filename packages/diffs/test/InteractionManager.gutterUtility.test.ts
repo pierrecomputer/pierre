@@ -129,6 +129,10 @@ function isSelected(row: HTMLElement): boolean {
   return row.hasAttribute('data-selected-line');
 }
 
+function isEditorActive(row: HTMLElement): boolean {
+  return row.hasAttribute('data-editor-active-line');
+}
+
 describe('InteractionManager editor active-line state', () => {
   test('keeps editor active-line writes out of selected lines and gutter utility state', () => {
     const { cleanup } = installDom();
@@ -173,10 +177,10 @@ describe('InteractionManager editor active-line state', () => {
     try {
       const { contentRows, gutterRows, pre } = createFilePre(3);
       manager.setup(pre);
-      manager.setEditorAttached(true);
 
       manager.setEditorActiveLine(2, { side: 'additions' });
       expect(isSelected(contentRows[1])).toBe(true);
+      expect(isEditorActive(contentRows[1])).toBe(true);
 
       manager.setEditorActiveLine(2, {
         lineNumberOnly: true,
@@ -184,40 +188,20 @@ describe('InteractionManager editor active-line state', () => {
       });
       expect(isSelected(gutterRows[1])).toBe(true);
       expect(isSelected(contentRows[1])).toBe(false);
+      expect(isEditorActive(contentRows[1])).toBe(false);
 
       manager.setEditorActiveLine(2, { side: 'additions' });
       expect(isSelected(contentRows[1])).toBe(true);
+      expect(isEditorActive(contentRows[1])).toBe(true);
 
       manager.setSelection({ start: 2, end: 2 }, { notify: false });
       expect(isSelected(gutterRows[1])).toBe(true);
-      expect(isSelected(contentRows[1])).toBe(false);
+      expect(isSelected(contentRows[1])).toBe(true);
+      expect(isEditorActive(contentRows[1])).toBe(false);
 
       manager.setSelection(null, { notify: false });
       expect(isSelected(contentRows[1])).toBe(true);
-    } finally {
-      manager.cleanUp();
-      cleanup();
-    }
-  });
-
-  test('changes selected-line rendering when the editor attaches', () => {
-    const { cleanup } = installDom();
-    const manager = new InteractionManager('file', {});
-    try {
-      const { contentRows, gutterRows, pre } = createFilePre(3);
-      manager.setup(pre);
-      manager.setSelection({ start: 2, end: 2 }, { notify: false });
-
-      expect(isSelected(gutterRows[1])).toBe(true);
-      expect(isSelected(contentRows[1])).toBe(true);
-
-      manager.setEditorAttached(true);
-      expect(isSelected(gutterRows[1])).toBe(true);
-      expect(isSelected(contentRows[1])).toBe(false);
-
-      manager.setEditorAttached(false);
-      expect(isSelected(gutterRows[1])).toBe(true);
-      expect(isSelected(contentRows[1])).toBe(true);
+      expect(isEditorActive(contentRows[1])).toBe(true);
     } finally {
       manager.cleanUp();
       cleanup();
