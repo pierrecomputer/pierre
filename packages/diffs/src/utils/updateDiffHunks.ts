@@ -7,6 +7,10 @@ import type {
   Hunk,
 } from '../types';
 import { cleanLastNewline } from './cleanLastNewline';
+import {
+  getHunkSideEndBoundary,
+  getHunkSideStartBoundary,
+} from './getHunkSideBoundaries';
 import { parseDiffFromFile } from './parseDiffFromFile';
 import { hasTrailingContextMismatch } from './virtualDiffLayout';
 
@@ -188,8 +192,10 @@ export function preserveTrailingEditorBlankLine(
     return;
   }
 
-  const lastHunkAdditionEnd =
-    lastHunk.additionLineIndex + lastHunk.additionCount;
+  const lastHunkAdditionEnd = getHunkSideEndBoundary(
+    lastHunk.additionStart,
+    lastHunk.additionCount
+  );
   if (lastHunkAdditionEnd !== extraAdditionLineIndex) {
     return;
   }
@@ -463,7 +469,8 @@ export function recomputeDiffRenderLineCounts(
 
   for (const hunk of diff.hunks) {
     hunk.collapsedBefore = Math.max(
-      hunk.additionStart - 1 - lastHunkAdditionEnd,
+      getHunkSideStartBoundary(hunk.additionStart, hunk.additionCount) -
+        lastHunkAdditionEnd,
       0
     );
     hunk.splitLineStart = splitTotal + hunk.collapsedBefore;
@@ -473,14 +480,17 @@ export function recomputeDiffRenderLineCounts(
 
     splitTotal += hunk.collapsedBefore + hunk.splitLineCount;
     unifiedTotal += hunk.collapsedBefore + hunk.unifiedLineCount;
-    lastHunkAdditionEnd = hunk.additionStart + hunk.additionCount - 1;
+    lastHunkAdditionEnd = getHunkSideEndBoundary(
+      hunk.additionStart,
+      hunk.additionCount
+    );
   }
 
   if (diff.hunks.length > 0) {
     const lastHunk = diff.hunks[diff.hunks.length - 1];
     const collapsedAfter = Math.max(
       diff.additionLines.length -
-        (lastHunk.additionLineIndex + lastHunk.additionCount),
+        getHunkSideEndBoundary(lastHunk.additionStart, lastHunk.additionCount),
       0
     );
     splitTotal += collapsedAfter;

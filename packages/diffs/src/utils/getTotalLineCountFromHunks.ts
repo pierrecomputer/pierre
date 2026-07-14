@@ -1,4 +1,5 @@
 import type { Hunk } from '../types';
+import { getHunkSideEndBoundary } from './getHunkSideBoundaries';
 
 export function getTotalLineCountFromHunks(hunks: Hunk[]): number {
   const lastHunk = hunks.at(-1);
@@ -6,7 +7,7 @@ export function getTotalLineCountFromHunks(hunks: Hunk[]): number {
     return 0;
   }
   return Math.max(
-    lastHunk.additionStart + lastHunk.additionCount,
-    lastHunk.deletionStart + lastHunk.deletionCount
+    getHunkSideEndBoundary(lastHunk.additionStart, lastHunk.additionCount),
+    getHunkSideEndBoundary(lastHunk.deletionStart, lastHunk.deletionCount)
   );
 }

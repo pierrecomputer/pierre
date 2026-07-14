@@ -44,6 +44,24 @@ function makeInsertedDiffItem(id: string): CodeViewItem<undefined> {
   };
 }
 
+function makeDeletedDiffItem(id: string): CodeViewItem<undefined> {
+  const oldLines = Array.from(
+    { length: 160 },
+    (_, index) => `line ${index + 1}`
+  );
+  const newLines = oldLines.toSpliced(80, 1);
+
+  return {
+    id,
+    type: 'diff',
+    fileDiff: parseDiffFromFile(
+      { name: 'src/deleted.ts', contents: oldLines.join('\n') },
+      { name: 'src/deleted.ts', contents: newLines.join('\n') },
+      { context: 0 }
+    ),
+  };
+}
+
 function getFileLineTop(lineNumber: number): number {
   return (
     DEFAULT_CODE_VIEW_FILE_METRICS.diffHeaderHeight +
@@ -253,6 +271,46 @@ describe('CodeView range scrolling', () => {
 
       expect(root.scrollTop - additionsScrollTop).toBe(
         10 * DEFAULT_CODE_VIEW_FILE_METRICS.lineHeight
+      );
+    } finally {
+      viewer.cleanUp();
+      await wait(0);
+      cleanup();
+    }
+  });
+
+  test('places a context-zero deletion between adjacent addition-side lines', async () => {
+    const { cleanup } = installDom();
+    const viewer = new CodeView({ diffStyle: 'split', expandUnchanged: true });
+    const root = createRoot({ height: ROOT_HEIGHT, width: ROOT_WIDTH });
+
+    try {
+      viewer.setup(root);
+      await renderItems(viewer, [makeDeletedDiffItem('diff:deleted')]);
+
+      viewer.scrollTo({
+        type: 'line',
+        id: 'diff:deleted',
+        lineNumber: 80,
+        side: 'additions',
+        align: 'center',
+        behavior: 'instant',
+      });
+      viewer.render(true);
+      const beforeDeletionScrollTop = root.scrollTop;
+
+      viewer.scrollTo({
+        type: 'line',
+        id: 'diff:deleted',
+        lineNumber: 81,
+        side: 'additions',
+        align: 'center',
+        behavior: 'instant',
+      });
+      viewer.render(true);
+
+      expect(root.scrollTop - beforeDeletionScrollTop).toBe(
+        2 * DEFAULT_CODE_VIEW_FILE_METRICS.lineHeight
       );
     } finally {
       viewer.cleanUp();

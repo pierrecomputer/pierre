@@ -53,9 +53,7 @@ import { createPreElement } from '../utils/createPreElement';
 import { createSeparator } from '../utils/createSeparator';
 import {
   applySessionChangedLines,
-  applySessionEditWindow,
-  findChangedLineWindow,
-  normalizeEditorLines,
+  rebuildSessionHunks,
   remapExpandedHunksForRegionChange,
   type SessionRegionChange,
 } from '../utils/editSessionHunks';
@@ -83,7 +81,6 @@ import { iterateOverDiff } from '../utils/iterateOverDiff';
 import { renderDiffWithHighlighter } from '../utils/renderDiffWithHighlighter';
 import { shouldUseTokenTransformer } from '../utils/shouldUseTokenTransformer';
 import {
-  preserveTrailingEditorBlankLine,
   recomputeDiffHunksForEdit,
   recomputeEmptyDocumentDiff,
   recomputeTopAlignedAdditionDiff,
@@ -243,11 +240,6 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   // Edit-session state: while active, hunk updates go through the frozen
   // region skeleton (editSessionHunks) instead of the full recompute.
   private editSessionActive = false;
-  // Addition lines as of the last completed hunk-update pass, used by the
-  // prefix/suffix scan in applyDocumentChange. Line-count passes write dirty
-  // line text at stale indexes into `diff.additionLines` before the document
-  // rebuild lands, so the live array can never serve as the "before" side.
-  private editSessionLines: string[] | undefined;
 
   constructor(
     public options: DiffHunksRendererOptions = { theme: DEFAULT_THEMES },
@@ -284,22 +276,15 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   /**
    * Enter edit-session mode: hunk updates preserve the current region
    * skeleton instead of recomputing hunks. Called on every editor attach,
-   * including a re-attach after recycle, which losslessly re-seeds the pass
-   * snapshot because both hunk-update paths keep `diff.additionLines`
-   * current.
+   * including a re-attach after recycle.
    */
-  public beginEditSession(diff: FileDiffMetadata | undefined): void {
+  public beginEditSession(): void {
     this.editSessionActive = true;
-    this.editSessionLines =
-      diff != null
-        ? normalizeEditorLines(diff.additionLines).slice()
-        : undefined;
   }
 
   /** Leave edit-session mode. The exit recompute is the host's concern. */
   public endEditSession(): void {
     this.editSessionActive = false;
-    this.editSessionLines = undefined;
   }
 
   public get diffCache(): FileDiffMetadata | undefined {
@@ -416,6 +401,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
     const hastLines = result.code.additionLines;
     const changedAdditionLines: number[] = [];
+    const previousAdditionLines = new Map<number, string>();
     for (const [line, tokens] of dirtyLines) {
       const prev = hastLines[line] as HASTElement | undefined;
       const prevProps = prev?.properties ?? {};
@@ -430,6 +416,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         diff.additionLines[line] = applyLineTextWithNewline(prevLine, lineText);
         if (prevText !== lineText) {
           changedAdditionLines.push(line);
+          previousAdditionLines.set(line, prevLine);
         }
       }
       hastLines[line] = {
@@ -475,16 +462,39 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         // genuine changes and are never followed by applyDocumentChange) the
         // explicit changed indexes are current.
         if (!lineCountChangeInFlight) {
-          const changes = applySessionChangedLines(
-            diff,
-            changedAdditionLines,
-            this.options.parseDiffOptions
-          );
-          this.applyExpansionRemaps(changes);
-          regionsChanged = changes.length > 0;
-          this.editSessionLines = normalizeEditorLines(
-            diff.additionLines
-          ).slice();
+          if (
+            diff.additionLines.length <= 1 &&
+            diff.additionLines.join('') === ''
+          ) {
+            Object.assign(
+              diff,
+              recomputeEmptyDocumentDiff(diff, this.options.parseDiffOptions)
+            );
+            this.markEditSessionPass(diff);
+            regionsChanged = true;
+          } else if (
+            shouldTopAlignAdditionRecompute(diff, diff.additionLines)
+          ) {
+            Object.assign(
+              diff,
+              recomputeTopAlignedAdditionDiff(
+                diff,
+                diff.additionLines,
+                this.options.parseDiffOptions
+              )
+            );
+            this.markEditSessionPass(diff);
+            regionsChanged = true;
+          } else {
+            const change = applySessionChangedLines(
+              diff,
+              changedAdditionLines,
+              this.options.parseDiffOptions,
+              previousAdditionLines
+            );
+            this.applyExpansionRemap(change);
+            regionsChanged = change != null;
+          }
         }
       } else {
         Object.assign(
@@ -503,8 +513,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     return regionsChanged;
   }
 
-  private applyExpansionRemaps(changes: SessionRegionChange[]): void {
-    for (const change of changes) {
+  private applyExpansionRemap(change: SessionRegionChange | undefined): void {
+    if (change != null) {
       this.expandedHunks = remapExpandedHunksForRegionChange(
         this.expandedHunks,
         change
@@ -569,9 +579,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     this.renderCache.isDirty = true;
   }
 
-  // Session-mode counterpart of the line-count recompute: locate the changed
-  // window with a prefix/suffix scan of the pass snapshot against the rebuilt
-  // document lines, then update only the region skeleton it covers.
+  // Session-mode counterpart of the line-count recompute: derive canonical
+  // old/current pairing and rebuild the old-side region skeleton from it.
   private applySessionDocumentChange(diff: FileDiffMetadata): void {
     const { parseDiffOptions } = this.options;
     const rawLines = diff.additionLines;
@@ -583,36 +592,16 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       this.markEditSessionPass(diff);
       return;
     }
-    const previousLines = this.editSessionLines;
-    const nextLines = normalizeEditorLines(rawLines);
-    if (previousLines == null) {
-      // No pass snapshot (the editor attached without diff data): fall back
-      // to the full recompute for this pass and start tracking from it.
-      Object.assign(diff, recomputeDiffHunksForEdit(diff, parseDiffOptions));
-      this.markEditSessionPass(diff);
-      return;
-    }
-    diff.additionLines = nextLines;
-    const window = findChangedLineWindow(previousLines, nextLines);
-    if (window != null) {
-      const change = applySessionEditWindow(diff, window, parseDiffOptions);
-      if (change != null) {
-        this.applyExpansionRemaps([change]);
-      }
-    }
-    preserveTrailingEditorBlankLine(diff, rawLines);
-    this.editSessionLines = nextLines.slice();
+    this.applyExpansionRemap(rebuildSessionHunks(diff, parseDiffOptions));
   }
 
-  // Records a session pass that replaced hunks wholesale (empty-document /
-  // top-aligned shims or a snapshotless fallback): the skeleton collapsed to
-  // the recompute result, and the pass snapshot restarts from it.
+  // Records a session pass that replaced hunks wholesale (empty-document or
+  // top-aligned shims).
   private markEditSessionPass(diff: FileDiffMetadata): void {
     if (!this.editSessionActive) {
       return;
     }
     diff.editSessionDirty = true;
-    this.editSessionLines = normalizeEditorLines(diff.additionLines).slice();
   }
 
   protected getUnifiedLineDecoration({

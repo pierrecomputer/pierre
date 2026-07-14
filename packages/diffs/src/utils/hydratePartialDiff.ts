@@ -5,6 +5,10 @@ import type {
   Hunk,
 } from '../types';
 import { cloneFileDiffMetadata } from './cloneFileDiffMetadata';
+import {
+  getHunkSideEndBoundary,
+  getHunkSideStartBoundary,
+} from './getHunkSideBoundaries';
 import { splitFileContents } from './splitFileContents';
 
 interface HydratedHunksResult {
@@ -122,7 +126,8 @@ function hydrateHunks(
     }
 
     const collapsedBefore = Math.max(
-      hunk.additionStart - 1 - lastHunkAdditionEnd,
+      getHunkSideStartBoundary(hunk.additionStart, hunk.additionCount) -
+        lastHunkAdditionEnd,
       0
     );
     hydratedHunks.push({
@@ -141,14 +146,17 @@ function hydrateHunks(
 
     splitLineCount += collapsedBefore + hunkSplitLineCount;
     unifiedLineCount += collapsedBefore + hunkUnifiedLineCount;
-    lastHunkAdditionEnd = hunk.additionStart + hunk.additionCount - 1;
+    lastHunkAdditionEnd = getHunkSideEndBoundary(
+      hunk.additionStart,
+      hunk.additionCount
+    );
   }
 
   if (hydratedHunks.length > 0) {
     const lastHunk = hydratedHunks[hydratedHunks.length - 1];
-    const lastHunkEnd = Math.max(
-      lastHunk.additionStart + lastHunk.additionCount - 1,
-      0
+    const lastHunkEnd = getHunkSideEndBoundary(
+      lastHunk.additionStart,
+      lastHunk.additionCount
     );
     const collapsedAfter = Math.max(totalAdditionLines - lastHunkEnd, 0);
     splitLineCount += collapsedAfter;

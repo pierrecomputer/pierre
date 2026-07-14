@@ -47,6 +47,10 @@ import type {
   MergeConflictRegion,
   ProcessFileConflictData,
 } from '../types';
+import {
+  getHunkSideEndBoundary,
+  getHunkSideStartBoundary,
+} from './getHunkSideBoundaries';
 
 export interface ParseMergeConflictDiffFromFileResult {
   fileDiff: FileDiffMetadata;
@@ -275,7 +279,7 @@ export function parseMergeConflictDiffFromFile(
     const lastHunk = s.hunks[s.hunks.length - 1];
     const collapsedAfter = Math.max(
       s.additionLines.length -
-        (lastHunk.additionStart + lastHunk.additionCount - 1),
+        getHunkSideEndBoundary(lastHunk.additionStart, lastHunk.additionCount),
       0
     );
     s.splitLineCount += collapsedAfter;
@@ -594,7 +598,11 @@ function finalizeActiveHunk(s: ParseState): void {
     }
   }
 
-  const collapsedBefore = Math.max(hunk.additionStart - 1 - s.lastHunkEnd, 0);
+  const collapsedBefore = Math.max(
+    getHunkSideStartBoundary(hunk.additionStart, hunk.additionCount) -
+      s.lastHunkEnd,
+    0
+  );
   const finalizedHunk: Hunk = {
     collapsedBefore,
     additionStart: hunk.additionStart,
@@ -619,7 +627,10 @@ function finalizeActiveHunk(s: ParseState): void {
   s.hunks.push(finalizedHunk);
   s.splitLineCount += collapsedBefore + hunkSplitLineCount;
   s.unifiedLineCount += collapsedBefore + hunkUnifiedLineCount;
-  s.lastHunkEnd = hunk.additionStart + hunk.additionCount - 1;
+  s.lastHunkEnd = getHunkSideEndBoundary(
+    hunk.additionStart,
+    hunk.additionCount
+  );
 }
 
 // Called when the context buffer between two changes exceeds maxContextLines*2.

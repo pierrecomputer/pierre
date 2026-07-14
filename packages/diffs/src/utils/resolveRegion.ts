@@ -4,6 +4,10 @@ import type {
   FileDiffMetadata,
   Hunk,
 } from '../types';
+import {
+  getHunkSideEndBoundary,
+  getHunkSideStartBoundary,
+} from './getHunkSideBoundaries';
 
 interface RegionResolutionTarget {
   hunkIndex: number;
@@ -81,8 +85,10 @@ export function resolveRegion(
       diff,
       resolvedDiff,
       cursor,
-      hunk.deletionLineIndex - hunk.collapsedBefore,
-      hunk.additionLineIndex - hunk.collapsedBefore,
+      getHunkSideStartBoundary(hunk.deletionStart, hunk.deletionCount) -
+        hunk.collapsedBefore,
+      getHunkSideStartBoundary(hunk.additionStart, hunk.additionCount) -
+        hunk.collapsedBefore,
       hunk.collapsedBefore,
       shouldProcessCollapsedContext
     );
@@ -185,24 +191,46 @@ export function resolveRegion(
       newHunk.noEOFCRDeletions = noEOFCR;
     }
 
+    if (newHunk.additionCount === 0) {
+      newHunk.additionStart--;
+      if (!diff.isPartial) {
+        newHunk.additionLineIndex--;
+      }
+    }
+    if (newHunk.deletionCount === 0) {
+      newHunk.deletionStart--;
+      if (!diff.isPartial) {
+        newHunk.deletionLineIndex--;
+      }
+    }
+
     resolvedDiff.hunks.push(newHunk);
   }
 
   const finalHunk = hunks.at(-1);
   if (finalHunk != null && !diff.isPartial) {
+    const finalDeletionEnd = getHunkSideEndBoundary(
+      finalHunk.deletionStart,
+      finalHunk.deletionCount
+    );
+    const finalAdditionEnd = getHunkSideEndBoundary(
+      finalHunk.additionStart,
+      finalHunk.additionCount
+    );
+    const trailingContext = Math.min(
+      deletionLines.length - finalDeletionEnd,
+      additionLines.length - finalAdditionEnd
+    );
     pushCollapsedContextLines(
       resolvedDiff,
       deletionLines,
       additionLines,
-      finalHunk.deletionLineIndex + finalHunk.deletionCount,
-      finalHunk.additionLineIndex + finalHunk.additionCount,
-      Math.min(
-        deletionLines.length -
-          (finalHunk.deletionLineIndex + finalHunk.deletionCount),
-        additionLines.length -
-          (finalHunk.additionLineIndex + finalHunk.additionCount)
-      )
+      finalDeletionEnd,
+      finalAdditionEnd,
+      trailingContext
     );
+    cursor.splitLineCount += trailingContext;
+    cursor.unifiedLineCount += trailingContext;
   }
 
   resolvedDiff.splitLineCount = cursor.splitLineCount;

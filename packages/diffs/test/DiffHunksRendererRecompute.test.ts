@@ -68,6 +68,25 @@ function makeTextDocument(lines: string[]): DiffsTextDocument {
   };
 }
 
+function pairingProjection(diff: FileDiffMetadata) {
+  return diff.hunks.flatMap((hunk) =>
+    hunk.hunkContent.flatMap((content) => {
+      if (content.type !== 'change') return [];
+      return Array.from(
+        { length: Math.max(content.deletions, content.additions) },
+        (_, offset) => [
+          offset < content.deletions
+            ? content.deletionLineIndex + offset
+            : undefined,
+          offset < content.additions
+            ? content.additionLineIndex + offset
+            : undefined,
+        ]
+      );
+    })
+  );
+}
+
 // Builds a renderer with a populated (highlighted) render cache, mirroring the
 // state the editor operates on mid-session.
 async function createPrimedRenderer(
@@ -229,7 +248,7 @@ describe('DiffHunksRenderer edit-session hunk updates', () => {
     );
     await renderer.asyncRender(diff);
     renderer.renderDiff(diff);
-    renderer.beginEditSession(diff);
+    renderer.beginEditSession();
     return { renderer, diff };
   }
 
@@ -269,10 +288,69 @@ describe('DiffHunksRenderer edit-session hunk updates', () => {
     expect(diff.hunks[1].additionLineIndex).toBe(11);
   });
 
-  // The regression guard for the same-pass contamination trap: a line-count
-  // pass tokenizes every shifted line as dirty at post-edit indexes while
-  // diff.additionLines still holds pre-edit content. Region work must wait
-  // for applyDocumentChange, which scans against the pass snapshot.
+  test('reports a row-topology change when region bounds stay fixed', async () => {
+    const renderer = new DiffHunksRenderer({
+      theme: 'github-light',
+      diffStyle: 'split',
+    });
+    const diff = parseDiffFromFile(
+      { name: 'topology.ts', contents: 'a\nb\nc\nd\n' },
+      { name: 'topology.ts', contents: 'a\na\na\nd\n' }
+    );
+    await renderer.asyncRender(diff);
+    renderer.renderDiff(diff);
+    renderer.beginEditSession();
+    const boundsBefore = {
+      additionLineIndex: diff.hunks[0].additionLineIndex,
+      additionCount: diff.hunks[0].additionCount,
+      deletionLineIndex: diff.hunks[0].deletionLineIndex,
+      deletionCount: diff.hunks[0].deletionCount,
+    };
+    const splitCountBefore = diff.hunks[0].splitLineCount;
+
+    const regionsChanged = renderer.updateRenderCache(
+      makeDirtyLines([[2, 'b']]),
+      'light'
+    );
+
+    expect(regionsChanged).toBe(true);
+    expect(diff.hunks[0]).toMatchObject(boundsBefore);
+    expect(diff.hunks[0].splitLineCount).not.toBe(splitCountBefore);
+  });
+
+  test('reports a changed split pairing when the row count stays fixed', async () => {
+    const renderer = new DiffHunksRenderer({
+      theme: 'github-light',
+      diffStyle: 'split',
+    });
+    const diff = parseDiffFromFile(
+      { name: 'pairing.ts', contents: '\nb\nb\nc\n' },
+      { name: 'pairing.ts', contents: '\n!\nb\nc\n' }
+    );
+    await renderer.asyncRender(diff);
+    renderer.renderDiff(diff);
+    renderer.beginEditSession();
+    const boundsBefore = {
+      additionLineIndex: diff.hunks[0].additionLineIndex,
+      additionCount: diff.hunks[0].additionCount,
+      deletionLineIndex: diff.hunks[0].deletionLineIndex,
+      deletionCount: diff.hunks[0].deletionCount,
+    };
+    const splitCountBefore = diff.hunks[0].splitLineCount;
+
+    const regionsChanged = renderer.updateRenderCache(
+      makeDirtyLines([[0, 'b']]),
+      'light'
+    );
+
+    expect(regionsChanged).toBe(true);
+    expect(diff.hunks[0]).toMatchObject(boundsBefore);
+    expect(diff.hunks[0].splitLineCount).toBe(splitCountBefore);
+  });
+
+  // A line-count pass tokenizes every shifted line as dirty at post-edit
+  // indexes while diff.additionLines still holds pre-edit content. Region work
+  // must wait for applyDocumentChange's authoritative document rebuild.
   test('an Enter keystroke does not disturb other regions', async () => {
     const { renderer, diff } = await createSessionRenderer();
     const secondRegionBefore = {
@@ -309,6 +387,27 @@ describe('DiffHunksRenderer edit-session hunk updates', () => {
     expect(diff.hunks[1].deletionCount).toBe(secondRegionBefore.deletionCount);
     expect(diff.hunks[1].additionCount).toBe(secondRegionBefore.additionCount);
     expect(diff.additionLines.join('')).toBe(postEditLines.join(''));
+    const full = parseDiffFromFile(
+      { name: 'session.ts', contents: SESSION_OLD.join('') },
+      { name: 'session.ts', contents: postEditLines.join('') }
+    );
+    expect(pairingProjection(diff)).toEqual(pairingProjection(full));
+  });
+
+  test('a same-line edit can rebuild after preserving the trailing editor row', async () => {
+    const { renderer, diff } = await createSessionRenderer();
+    renderer.applyDocumentChange(makeTextDocumentFromText('line 1\n'));
+    expect(diff.additionLines).toEqual(['line 1\n', '']);
+
+    expect(() =>
+      renderer.updateRenderCache(
+        makeDirtyLines([[0, 'line 1 edited']]),
+        'light'
+      )
+    ).not.toThrow();
+
+    expect(diff.additionLines).toEqual(['line 1 edited\n', '']);
+    expect(renderer.renderDiff()).toBeDefined();
   });
 
   test('a blank line pushed above an edited line keeps the pair aligned', async () => {
@@ -379,6 +478,37 @@ describe('DiffHunksRenderer edit-session hunk updates', () => {
     expect(result).toBeDefined();
     if (result == null) return;
     expect(renderer.renderFullHTML(result)).toContain('change-addition');
+  });
+
+  test('a same-line undo back to empty reapplies the empty-document shim', async () => {
+    const { renderer, diff } = await createSessionRenderer();
+    renderer.applyDocumentChange(makeTextDocument(['']));
+    renderer.updateRenderCache(makeDirtyLines([[0, 'hello']]), 'light');
+
+    const regionsChanged = renderer.updateRenderCache(
+      makeDirtyLines([[0, '']]),
+      'light'
+    );
+
+    expect(regionsChanged).toBe(true);
+    expect(diff.additionLines).toEqual(['']);
+    const result = renderer.renderDiff();
+    expect(result).toBeDefined();
+    if (result == null) return;
+    expect(renderer.renderFullHTML(result)).toContain('change-addition');
+  });
+
+  test('typing into a newline-only document rebuilds from canonical lines', async () => {
+    const { renderer, diff } = await createSessionRenderer();
+    renderer.applyDocumentChange(makeTextDocumentFromText('\n'));
+    expect(diff.additionLines).toEqual(['\n', '']);
+
+    expect(() =>
+      renderer.updateRenderCache(makeDirtyLines([[0, 'typed']]), 'light')
+    ).not.toThrow();
+
+    expect(diff.additionLines).toEqual(['typed\n', '']);
+    expect(renderer.renderDiff()).toBeDefined();
   });
 
   test('genuine session end recomputes; a zero-edit session does not', async () => {

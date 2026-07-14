@@ -1,10 +1,15 @@
 import type {
   FileDiffMetadata,
+  Hunk,
   HunkExpansionRegion,
   HunkSeparators,
   VirtualFileMetrics,
 } from '../types';
 import { getDefaultHunkSeparatorHeight } from './computeVirtualFileMetrics';
+import {
+  getHunkSideEndBoundary,
+  getHunkSideStartBoundary,
+} from './getHunkSideBoundaries';
 
 export interface ExpandedRegionResult {
   fromStart: number;
@@ -31,6 +36,14 @@ export interface GetTrailingExpandedRegionProps extends GetTrailingContextRangeS
   hunkIndex: number;
   expandedHunks: GetExpandedRegionProps['expandedHunks'];
   collapsedContextThreshold: number;
+}
+
+/** One-based new-file line range covered by a hunk, as `[start, end)`. */
+export function getHunkAdditionLineRange(hunk: Hunk): [number, number] {
+  return [
+    getHunkSideStartBoundary(hunk.additionStart, hunk.additionCount) + 1,
+    getHunkSideEndBoundary(hunk.additionStart, hunk.additionCount) + 1,
+  ];
 }
 
 export interface HunkSeparatorLayout {
@@ -116,10 +129,10 @@ export function hasTrailingContext(fileDiff: FileDiffMetadata): boolean {
 
   const additionRemaining =
     fileDiff.additionLines.length -
-    (lastHunk.additionLineIndex + lastHunk.additionCount);
+    getHunkSideEndBoundary(lastHunk.additionStart, lastHunk.additionCount);
   const deletionRemaining =
     fileDiff.deletionLines.length -
-    (lastHunk.deletionLineIndex + lastHunk.deletionCount);
+    getHunkSideEndBoundary(lastHunk.deletionStart, lastHunk.deletionCount);
 
   return additionRemaining > 0 || deletionRemaining > 0;
 }
@@ -140,10 +153,10 @@ export function hasTrailingContextMismatch(
 
   const additionRemaining =
     fileDiff.additionLines.length -
-    (lastHunk.additionLineIndex + lastHunk.additionCount);
+    getHunkSideEndBoundary(lastHunk.additionStart, lastHunk.additionCount);
   const deletionRemaining =
     fileDiff.deletionLines.length -
-    (lastHunk.deletionLineIndex + lastHunk.deletionCount);
+    getHunkSideEndBoundary(lastHunk.deletionStart, lastHunk.deletionCount);
 
   if (additionRemaining <= 0 && deletionRemaining <= 0) {
     return false;
@@ -170,10 +183,10 @@ export function getTrailingContextRangeSize({
 
   const additionRemaining =
     fileDiff.additionLines.length -
-    (lastHunk.additionLineIndex + lastHunk.additionCount);
+    getHunkSideEndBoundary(lastHunk.additionStart, lastHunk.additionCount);
   const deletionRemaining =
     fileDiff.deletionLines.length -
-    (lastHunk.deletionLineIndex + lastHunk.deletionCount);
+    getHunkSideEndBoundary(lastHunk.deletionStart, lastHunk.deletionCount);
 
   if (additionRemaining <= 0 && deletionRemaining <= 0) {
     return 0;
@@ -262,7 +275,8 @@ export function isAdditionLineRenderable({
   }
 
   for (const [hunkIndex, hunk] of fileDiff.hunks.entries()) {
-    if (lineNumber < hunk.additionStart) {
+    const [hunkStart, hunkEnd] = getHunkAdditionLineRange(hunk);
+    if (lineNumber < hunkStart) {
       // Inside the collapsed gap before this hunk: renderable only within
       // the expanded slices at the gap's edges.
       const region = getExpandedRegion({
@@ -272,14 +286,14 @@ export function isAdditionLineRenderable({
         hunkIndex,
         collapsedContextThreshold,
       });
-      const gapStart = hunk.additionStart - region.rangeSize;
+      const gapStart = hunkStart - region.rangeSize;
       return (
         region.renderAll ||
         lineNumber < gapStart + region.fromStart ||
-        lineNumber >= hunk.additionStart - region.fromEnd
+        lineNumber >= hunkStart - region.fromEnd
       );
     }
-    if (lineNumber < hunk.additionStart + hunk.additionCount) {
+    if (lineNumber < hunkEnd) {
       return true;
     }
   }
@@ -295,7 +309,7 @@ export function isAdditionLineRenderable({
     return true;
   }
   const lastHunk = fileDiff.hunks[fileDiff.hunks.length - 1];
-  const trailingStart = lastHunk.additionStart + lastHunk.additionCount;
+  const [, trailingStart] = getHunkAdditionLineRange(lastHunk);
   return (
     lineNumber < trailingStart + trailingRegion.fromStart ||
     lineNumber >= trailingStart + trailingRegion.rangeSize
@@ -330,6 +344,7 @@ export function getNearestRenderableAdditionLine({
   const ranges: Array<[start: number, end: number]> = [];
   let modeledEnd = 1;
   for (const [hunkIndex, hunk] of fileDiff.hunks.entries()) {
+    const [hunkStart, hunkEnd] = getHunkAdditionLineRange(hunk);
     const region = getExpandedRegion({
       isPartial: fileDiff.isPartial,
       rangeSize: hunk.collapsedBefore,
@@ -337,19 +352,19 @@ export function getNearestRenderableAdditionLine({
       hunkIndex,
       collapsedContextThreshold,
     });
-    const gapStart = hunk.additionStart - region.rangeSize;
+    const gapStart = hunkStart - region.rangeSize;
     if (region.renderAll) {
-      ranges.push([gapStart, hunk.additionStart]);
+      ranges.push([gapStart, hunkStart]);
     } else {
       if (region.fromStart > 0) {
         ranges.push([gapStart, gapStart + region.fromStart]);
       }
       if (region.fromEnd > 0) {
-        ranges.push([hunk.additionStart - region.fromEnd, hunk.additionStart]);
+        ranges.push([hunkStart - region.fromEnd, hunkStart]);
       }
     }
-    ranges.push([hunk.additionStart, hunk.additionStart + hunk.additionCount]);
-    modeledEnd = hunk.additionStart + hunk.additionCount;
+    ranges.push([hunkStart, hunkEnd]);
+    modeledEnd = hunkEnd;
   }
   const trailingRegion = getTrailingExpandedRegion({
     fileDiff,

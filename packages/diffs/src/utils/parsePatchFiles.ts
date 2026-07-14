@@ -17,6 +17,10 @@ import type {
 } from '../types';
 import { cleanLastNewline } from './cleanLastNewline';
 import { detachString, releaseStringDetachBuffer } from './detachString';
+import {
+  getHunkSideEndBoundary,
+  getHunkSideStartBoundary,
+} from './getHunkSideBoundaries';
 import { realignChangeContentBySimilarity } from './realignChangeContent';
 
 interface ParsedHunkHeader {
@@ -489,11 +493,15 @@ function _processFile(
     hunkData.deletionLines = deletionLines;
 
     hunkData.collapsedBefore = Math.max(
-      hunkData.additionStart - 1 - lastHunkEnd,
+      getHunkSideStartBoundary(hunkData.additionStart, hunkData.additionCount) -
+        lastHunkEnd,
       0
     );
     currentFile.hunks.push(hunkData);
-    lastHunkEnd = hunkData.additionStart + hunkData.additionCount - 1;
+    lastHunkEnd = getHunkSideEndBoundary(
+      hunkData.additionStart,
+      hunkData.additionCount
+    );
     for (const content of hunkData.hunkContent) {
       if (content.type === 'context') {
         hunkData.splitLineCount += content.lines;
@@ -537,7 +545,10 @@ function _processFile(
     currentFile.deletionLines.length > 0
   ) {
     const lastHunk = currentFile.hunks[currentFile.hunks.length - 1];
-    const lastHunkEnd = lastHunk.additionStart + lastHunk.additionCount - 1;
+    const lastHunkEnd = getHunkSideEndBoundary(
+      lastHunk.additionStart,
+      lastHunk.additionCount
+    );
     const totalFileLines = currentFile.additionLines.length;
     const collapsedAfter = Math.max(totalFileLines - lastHunkEnd, 0);
     currentFile.splitLineCount += collapsedAfter;
