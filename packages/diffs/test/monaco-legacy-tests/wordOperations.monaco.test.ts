@@ -22,6 +22,19 @@ function caret(line: number, character: number): EditorSelection {
   } satisfies EditorSelection;
 }
 
+// Word-granularity segments the runtime's ICU reports as word-like for a
+// fixture. Used to gate segmenter-side pins: isWordLike classification
+// varies across ICU builds (dictionary-based CJK segmentation especially),
+// so each pin runs only where the runtime agrees with the segmentation our
+// dev and CI environments ship, and skips visibly elsewhere.
+function wordLikeSegments(text: string): string[] {
+  return [
+    ...new Intl.Segmenter(undefined, { granularity: 'word' }).segment(text),
+  ]
+    .filter((seg) => seg.isWordLike === true)
+    .map((seg) => seg.segment);
+}
+
 // Explicit escapes so source normalization (NFC/NFD) can never change the
 // fixture: a ZWJ family sequence (7 code points, 11 UTF-16 units) and a
 // baby emoji with a Fitzpatrick skin-tone modifier (2 code points, 4 units).
@@ -51,23 +64,29 @@ describe('word delete vs word select on CJK and mixed-script runs', () => {
     expect(nextSelections).toEqual([caret(0, 0)]);
   });
 
-  test('double-click word expansion splits the same Chinese run into segments', () => {
-    // monaco-legacy: src/vs/editor/contrib/wordOperations/test/browser/wordOperations.test.ts — "cursorWordLeft - Recognize words"
-    // DIVERGENCE: vscode's default (no wordSegmenterLocales) selects the whole
-    // CJK run on double-click; pierre-fe always runs Intl.Segmenter, so the
-    // exact text deleteWordBackward treats as one word splits in two here.
-    const d = doc('你好世界');
-    expect(expandCollapsedSelectionToWord(d, caret(0, 2))).toEqual({
-      start: { line: 0, character: 0 },
-      end: { line: 0, character: 2 },
-      direction: DirectionForward,
-    });
-    expect(expandCollapsedSelectionToWord(d, caret(0, 4))).toEqual({
-      start: { line: 0, character: 2 },
-      end: { line: 0, character: 4 },
-      direction: DirectionForward,
-    });
-  });
+  const segmenterSplitsChineseRun =
+    wordLikeSegments('你好世界').join('|') === '你好|世界';
+
+  test.skipIf(!segmenterSplitsChineseRun)(
+    'double-click word expansion splits the same Chinese run into segments',
+    () => {
+      // monaco-legacy: src/vs/editor/contrib/wordOperations/test/browser/wordOperations.test.ts — "cursorWordLeft - Recognize words"
+      // DIVERGENCE: vscode's default (no wordSegmenterLocales) selects the whole
+      // CJK run on double-click; pierre-fe always runs Intl.Segmenter, so the
+      // exact text deleteWordBackward treats as one word splits in two here.
+      const d = doc('你好世界');
+      expect(expandCollapsedSelectionToWord(d, caret(0, 2))).toEqual({
+        start: { line: 0, character: 0 },
+        end: { line: 0, character: 2 },
+        direction: DirectionForward,
+      });
+      expect(expandCollapsedSelectionToWord(d, caret(0, 4))).toEqual({
+        start: { line: 0, character: 2 },
+        end: { line: 0, character: 4 },
+        direction: DirectionForward,
+      });
+    }
+  );
 
   test('delete word backward swallows a whole Japanese sentence in one stroke', () => {
     // monaco-legacy: src/vs/editor/contrib/wordOperations/test/browser/wordOperations.test.ts — "cursorWordLeft - Does not recognize words"
@@ -82,18 +101,24 @@ describe('word delete vs word select on CJK and mixed-script runs', () => {
     expect(nextSelections).toEqual([caret(0, 0)]);
   });
 
-  test('double-click word expansion segments the same Japanese sentence', () => {
-    // monaco-legacy: src/vs/editor/contrib/wordOperations/test/browser/wordOperations.test.ts — "cursorWordLeft - Recognize words"
-    // DIVERGENCE: Intl.Segmenter (dictionary-based, engine/ICU dependent)
-    // isolates 猫 as its own word here, while deleteWordBackward above erases
-    // the entire sentence as a single unit.
-    const d = doc('私は猫が好き');
-    expect(expandCollapsedSelectionToWord(d, caret(0, 3))).toEqual({
-      start: { line: 0, character: 2 },
-      end: { line: 0, character: 3 },
-      direction: DirectionForward,
-    });
-  });
+  const segmenterIsolatesTheNoun =
+    wordLikeSegments('私は猫が好き').includes('猫');
+
+  test.skipIf(!segmenterIsolatesTheNoun)(
+    'double-click word expansion segments the same Japanese sentence',
+    () => {
+      // monaco-legacy: src/vs/editor/contrib/wordOperations/test/browser/wordOperations.test.ts — "cursorWordLeft - Recognize words"
+      // DIVERGENCE: Intl.Segmenter (dictionary-based, engine/ICU dependent)
+      // isolates 猫 as its own word here, while deleteWordBackward above erases
+      // the entire sentence as a single unit.
+      const d = doc('私は猫が好き');
+      expect(expandCollapsedSelectionToWord(d, caret(0, 3))).toEqual({
+        start: { line: 0, character: 2 },
+        end: { line: 0, character: 3 },
+        direction: DirectionForward,
+      });
+    }
+  );
 
   test('delete word backward swallows a mixed Latin-Katakana run in one stroke', () => {
     // monaco-legacy: src/vs/editor/contrib/wordOperations/test/browser/wordOperations.test.ts — "cursorWordLeft - Does not recognize words"
@@ -108,23 +133,29 @@ describe('word delete vs word select on CJK and mixed-script runs', () => {
     expect(nextSelections).toEqual([caret(0, 0)]);
   });
 
-  test('double-click word expansion splits the mixed run at the script boundary', () => {
-    // monaco-legacy: src/vs/editor/contrib/wordOperations/test/browser/wordOperations.test.ts — "cursorWordLeft - Recognize words"
-    // DIVERGENCE: Intl.Segmenter breaks "helloワールド" at the Latin/Katakana
-    // boundary, so double-click selects only one script's half while
-    // deleteWordBackward above removes both in a single stroke.
-    const d = doc('helloワールド');
-    expect(expandCollapsedSelectionToWord(d, caret(0, 2))).toEqual({
-      start: { line: 0, character: 0 },
-      end: { line: 0, character: 5 },
-      direction: DirectionForward,
-    });
-    expect(expandCollapsedSelectionToWord(d, caret(0, 7))).toEqual({
-      start: { line: 0, character: 5 },
-      end: { line: 0, character: 9 },
-      direction: DirectionForward,
-    });
-  });
+  const segmenterSplitsKatakanaRun =
+    wordLikeSegments('helloワールド').join('|') === 'hello|ワールド';
+
+  test.skipIf(!segmenterSplitsKatakanaRun)(
+    'double-click word expansion splits the mixed run at the script boundary',
+    () => {
+      // monaco-legacy: src/vs/editor/contrib/wordOperations/test/browser/wordOperations.test.ts — "cursorWordLeft - Recognize words"
+      // DIVERGENCE: Intl.Segmenter breaks "helloワールド" at the Latin/Katakana
+      // boundary, so double-click selects only one script's half while
+      // deleteWordBackward above removes both in a single stroke.
+      const d = doc('helloワールド');
+      expect(expandCollapsedSelectionToWord(d, caret(0, 2))).toEqual({
+        start: { line: 0, character: 0 },
+        end: { line: 0, character: 5 },
+        direction: DirectionForward,
+      });
+      expect(expandCollapsedSelectionToWord(d, caret(0, 7))).toEqual({
+        start: { line: 0, character: 5 },
+        end: { line: 0, character: 9 },
+        direction: DirectionForward,
+      });
+    }
+  );
 
   test('delete word backward treats Latin, Han, and digits as one run', () => {
     // monaco-legacy: src/vs/editor/contrib/wordOperations/test/browser/wordOperations.test.ts — "cursorWordLeft - Does not recognize words"
@@ -143,21 +174,8 @@ describe('word delete vs word select on CJK and mixed-script runs', () => {
   // between engines and platforms). Gate the segmenter-side pin on the
   // runtime agreeing with the segmentation our dev and CI environments ship,
   // so a divergent ICU skips visibly instead of going red.
-  const segmenterSplitsMixedRun = (() => {
-    const wordLike = [
-      ...new Intl.Segmenter(undefined, { granularity: 'word' }).segment(
-        'naïve東京42'
-      ),
-    ]
-      .filter((seg) => seg.isWordLike === true)
-      .map((seg) => seg.segment);
-    return (
-      wordLike.length === 3 &&
-      wordLike[0] === 'naïve' &&
-      wordLike[1] === '東京' &&
-      wordLike[2] === '42'
-    );
-  })();
+  const segmenterSplitsMixedRun =
+    wordLikeSegments('naïve東京42').join('|') === 'naïve|東京|42';
 
   test.skipIf(!segmenterSplitsMixedRun)(
     'double-click word expansion splits Latin, Han, and digits into three words',
