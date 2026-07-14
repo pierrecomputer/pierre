@@ -1847,6 +1847,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         this.#insertBlankLine();
         break;
 
+      case 'deleteHardLineForward':
+        this.#deleteHardLineForward();
+        break;
+
       case 'toggleComment':
       case 'toggleBlockComment': {
         const selections = this.#selections;
@@ -2677,11 +2681,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       // behavior is what we match.
       case 'deleteHardLineBackward':
         this.#deleteSoftLineBackward();
-        break;
-      case 'deleteHardLineForward':
-        // TODO(@ije): Safari and Firefox does not support this input type
-        // use command instead
-        this.#deleteHardLineForward();
         break;
       case 'deleteWordBackward':
         this.#deleteWordBackward();
@@ -3822,7 +3821,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#renderSearchPanel(mode);
   }
 
-  // TODO(@ije): render search highlight
   #renderSearchPanel(mode: SearchPanelMode) {
     // cleanup the existing search panel
     this.#searchPanel?.cleanup();
