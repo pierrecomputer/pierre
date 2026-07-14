@@ -3,6 +3,8 @@ import { isMacLike, isPrimaryModifier } from './platform';
 export type EditorCommand =
   | 'indent'
   | 'outdent'
+  | 'indentLess'
+  | 'indentMore'
   | 'undo'
   | 'redo'
   | 'selectAll'
@@ -11,6 +13,12 @@ export type EditorCommand =
   | 'openSearchReplacePanel'
   | 'moveLineUp'
   | 'moveLineDown'
+  | 'copyLineUp'
+  | 'copyLineDown'
+  | 'simplifySelection'
+  | 'insertBlankLine'
+  | 'toggleComment'
+  | 'toggleBlockComment'
   | 'moveCursorToDocStart'
   | 'moveCursorToDocEnd'
   | 'expandSelectionDocStart'
@@ -29,6 +37,35 @@ export function resolveEditorCommandFromKeyboardEvent(
   const { shiftKey, altKey, key } = event;
 
   const normalizedKey = key.length === 1 ? key.toLowerCase() : key;
+
+  if (
+    !event.metaKey &&
+    !event.ctrlKey &&
+    shiftKey &&
+    altKey &&
+    (normalizedKey === 'a' || event.code === 'KeyA')
+  ) {
+    return 'toggleBlockComment';
+  }
+
+  if (!event.metaKey && !event.ctrlKey && shiftKey && altKey) {
+    if (normalizedKey === 'ArrowUp') {
+      return 'copyLineUp';
+    }
+    if (normalizedKey === 'ArrowDown') {
+      return 'copyLineDown';
+    }
+  }
+
+  if (
+    !event.metaKey &&
+    !event.ctrlKey &&
+    !shiftKey &&
+    !altKey &&
+    normalizedKey === 'Escape'
+  ) {
+    return 'simplifySelection';
+  }
 
   if (!event.metaKey && !shiftKey) {
     if (!event.ctrlKey && altKey && normalizedKey === 'ArrowUp') {
@@ -68,6 +105,22 @@ export function resolveEditorCommandFromKeyboardEvent(
 
   if (!hasPrimaryModifier) {
     return undefined;
+  }
+
+  if (!shiftKey && normalizedKey === 'Enter') {
+    return 'insertBlankLine';
+  }
+
+  if (!shiftKey && (normalizedKey === '/' || event.code === 'Slash')) {
+    return 'toggleComment';
+  }
+
+  if (!shiftKey && normalizedKey === '[') {
+    return 'indentLess';
+  }
+
+  if (!shiftKey && normalizedKey === ']') {
+    return 'indentMore';
   }
 
   if (normalizedKey === 'z') {

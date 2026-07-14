@@ -7,7 +7,9 @@
 Edit mode is a pluggable editing layer for `File`-style code surfaces. It adds
 keyboard-driven editing to an already-rendered `File` or `FileDiff` while the
 existing renderer continues to own syntax highlighting, layout, annotations, and
-virtualization. Edit mode includes:
+virtualization.
+
+Edit mode features include:
 
 - Text editing
 - Selection management, including multiple cursors
@@ -17,17 +19,29 @@ virtualization. Edit mode includes:
 - [Selection Action](#edit-mode-selection-action) (opt-in, custom UI)
 - SSR support
 - Mobile-friendly
+- Lightweight
 
-Use the `Editor` API to add editing to a rendered `File`, `FileDiff`,
-`MultiFileDiff`, or `PatchDiff`. In React, wrap the surface in `EditProvider`
-and set `contentEditable`. In vanilla JS, call `editor.edit(component)` after
-render.
+Use the `Editor` API to add editing to `File`, `FileDiff`, `MultiFileDiff`, and
+`PatchDiff`, or to individual `CodeView` items. In React, wrap standalone
+surfaces in `EditProvider` and set `contentEditable`. `CodeView` instead uses an
+item's `edit` flag and a `createEditor` factory. For standalone vanilla JS
+surfaces, call `editor.edit(component)` after render.
+
+Edit mode is not a full-fledged IDE, though you may certainly use it to create
+your own IDE-like experiences. Edit mode is purpose-built and best suited for
+editing code rendered by our Diffs library. It builds on our already powerful
+file and diff surfaces to preserve diff layout, annotations, syntax
+highlighting, SSR, and virtualization while adding editing, multiple selections,
+history, search and replace, and markers. This makes it most ideal for “review
+and correct” flows with generative code changes.
+
+### Demo
 
 To enable edit mode on a `File` instance, import `Editor` from
 `@pierre/diffs/editor`. It is intentionally separate from the core bundle so you
 can lazy-load it when editing is optional.
 
-<EditorDemo />
+<EditorDemo prerenderedFile={editorDemoFile} />
 
 ### How It Works
 
@@ -36,8 +50,10 @@ You render the surface first, then attach editing:
 
 1. **Attach** — Call `editor.edit(component)` in vanilla JS, or pass
    `contentEditable` on a React `File`, `FileDiff`, `MultiFileDiff`, or
-   `PatchDiff` wrapped in `EditProvider`. The hookup returns a dispose function
-   (vanilla) or runs automatically when `contentEditable` toggles (React).
+   `PatchDiff` wrapped in `EditProvider`. For `CodeView`, set `edit: true` on an
+   item and provide `createEditor`. The hookup returns a dispose function for a
+   standalone vanilla surface; React surfaces and `CodeView` manage it
+   automatically when editing toggles.
 2. **Edit surface** — Edit mode sets `contentEditable` on the code content
    element so mobile keyboards, paste, and native selection UI work as users
    expect. Clipboard shortcuts are handled by the browser; edit mode commands
@@ -62,18 +78,10 @@ lines remain read-only.
 
 ### React
 
-Create one `Editor` instance (typically with `useMemo`), wrap your tree in
-`EditProvider`, and set `contentEditable` on `File`, `FileDiff`,
-`MultiFileDiff`, or `PatchDiff`. The provider cleans up on unmount. Use
-`Virtualizer` for large editable files. A common single-file pattern is:
-
-```tsx
-<EditProvider editor={editor}>
-  <Virtualizer>
-    <File file={file} contentEditable />
-  </Virtualizer>
-</EditProvider>
-```
+For standalone components, create one `Editor` instance (typically with
+`useMemo`), wrap your tree in `EditProvider`, and set `contentEditable` on
+`File`, `FileDiff`, `MultiFileDiff`, or `PatchDiff`. The provider cleans up on
+unmount. Use `Virtualizer` for large editable files.
 
 <EditorComponentTabs
   fileExample={editorReactExample}
@@ -91,6 +99,28 @@ large editable files. Call `cleanUp()` when the editor is removed.
   fileExample={editorVanillaFileExample}
   fileDiffExample={editorVanillaFileDiffExample}
 />
+
+### CodeView
+
+`CodeView` manages one `Editor` per editable item, so it does not use
+`EditProvider`. Set `edit: true` on an item and pass the options from
+`createEditor` into `new Editor(options)`. Increment the item's `version`
+whenever `edit` changes.
+
+Use `onItemEditChange` to observe live changes. After the document changes,
+`onItemEditComplete` fires once with the final contents when editing is disabled
+or the item is collapsed or removed. Persist those contents to the item's
+`file`, or rebuild its `fileDiff`. Assign a fresh `cacheKey` and increment
+`version`; `CodeView` does not update item data for you.
+
+<CodeViewExampleTabs
+  reactExample={editorReactCodeViewExample}
+  vanillaExample={editorVanillaCodeViewExample}
+/>
+
+Editors retain their document and history while items move in and out of the
+virtualized window. Use `getEditor(id)` on the React ref or vanilla instance for
+APIs such as `undo()`, `applyEdits()`, or `setMarkers()`.
 
 ### Editor Options
 

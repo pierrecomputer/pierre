@@ -29,17 +29,20 @@ import {
   CUSTOM_HUNK_SEPARATORS_SWITCHER,
 } from '../docs/CustomHunkSeparators/constants';
 import {
+  EDITOR_DEMO_FILE_EXAMPLE,
   EDITOR_LAZY_FILE_EXAMPLE,
   EDITOR_MARKER_EXAMPLE,
   EDITOR_MARKER_TYPE,
   EDITOR_OPTIONS_TYPE,
   EDITOR_PUBLIC_API,
+  EDITOR_REACT_CODE_VIEW_EXAMPLE,
   EDITOR_REACT_EXAMPLE,
   EDITOR_REACT_FILE_DIFF_EXAMPLE,
   EDITOR_REACT_MULTI_FILE_DIFF_EXAMPLE,
   EDITOR_SELECTION_ACTION_CONTEXT_TYPE,
   EDITOR_SELECTION_ACTION_EXAMPLE,
   EDITOR_UNDO_REDO_EXAMPLE,
+  EDITOR_VANILLA_CODE_VIEW_EXAMPLE,
   EDITOR_VANILLA_FILE_DIFF_EXAMPLE,
   EDITOR_VANILLA_FILE_EXAMPLE,
   EDITOR_WORKER_POOL_REACT_EXAMPLE,
@@ -415,8 +418,10 @@ async function CodeViewSection() {
 
 async function EditorSection() {
   const [
+    editorDemoFile,
     editorVanillaFileExample,
     editorVanillaFileDiffExample,
+    editorVanillaCodeViewExample,
     editorLazyFileExample,
     editorOptionsType,
     editorPublicApi,
@@ -424,6 +429,7 @@ async function EditorSection() {
     editorSelectionActionExample,
     editorMarkerType,
     editorMarkerExample,
+    editorReactCodeViewExample,
     editorReactExample,
     editorReactFileDiffExample,
     editorReactMultiFileDiffExample,
@@ -431,8 +437,10 @@ async function EditorSection() {
     editorWorkerPoolReactExample,
     editorWorkerPoolVanillaExample,
   ] = await Promise.all([
+    preloadFile(EDITOR_DEMO_FILE_EXAMPLE),
     preloadFile(EDITOR_VANILLA_FILE_EXAMPLE),
     preloadFile(EDITOR_VANILLA_FILE_DIFF_EXAMPLE),
+    preloadFile(EDITOR_VANILLA_CODE_VIEW_EXAMPLE),
     preloadFile(EDITOR_LAZY_FILE_EXAMPLE),
     preloadFile(EDITOR_OPTIONS_TYPE),
     preloadFile(EDITOR_PUBLIC_API),
@@ -440,6 +448,7 @@ async function EditorSection() {
     preloadFile(EDITOR_SELECTION_ACTION_EXAMPLE),
     preloadFile(EDITOR_MARKER_TYPE),
     preloadFile(EDITOR_MARKER_EXAMPLE),
+    preloadFile(EDITOR_REACT_CODE_VIEW_EXAMPLE),
     preloadFile(EDITOR_REACT_EXAMPLE),
     preloadFile(EDITOR_REACT_FILE_DIFF_EXAMPLE),
     preloadFile(EDITOR_REACT_MULTI_FILE_DIFF_EXAMPLE),
@@ -450,8 +459,10 @@ async function EditorSection() {
   const content = await renderMDX({
     filePath: '(diffs)/docs/Editor/content.mdx',
     scope: {
+      editorDemoFile,
       editorVanillaFileExample,
       editorVanillaFileDiffExample,
+      editorVanillaCodeViewExample,
       editorLazyFileExample,
       editorOptionsType,
       editorPublicApi,
@@ -459,6 +470,7 @@ async function EditorSection() {
       editorSelectionActionExample,
       editorMarkerType,
       editorMarkerExample,
+      editorReactCodeViewExample,
       editorReactExample,
       editorReactFileDiffExample,
       editorReactMultiFileDiffExample,

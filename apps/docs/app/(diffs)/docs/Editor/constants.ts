@@ -1,3 +1,4 @@
+import type { FileOptions } from '@pierre/diffs/react';
 import type { PreloadFileOptions } from '@pierre/diffs/ssr';
 
 import { CustomScrollbarCSS } from '@/components/CustomScrollbarCSS';
@@ -7,6 +8,56 @@ const options = {
   disableFileHeader: true,
   unsafeCSS: CustomScrollbarCSS,
 } as const;
+
+// Options for the live editable demo below. They mirror the state the editor
+// enforces when it attaches in `contentEditable` mode (token transformer on;
+// gutter, line selection, and line hover off), so the server-rendered HTML
+// matches the editor's post-attach client render and hydrating from
+// `prerenderedHTML` neither flashes nor re-highlights. Mirrors
+// `(diffs)/_edit/constants.ts`.
+const editableDemoOptions: FileOptions<undefined> = {
+  theme: { dark: 'pierre-dark', light: 'pierre-light' },
+  disableFileHeader: true,
+  useTokenTransformer: true,
+  enableGutterUtility: false,
+  enableLineSelection: false,
+  lineHoverHighlight: 'disabled',
+};
+
+// The file rendered by the interactive `<EditorDemo />` on the Editor page.
+// Preloaded server-side so the surface is highlighted in the initial HTML
+// instead of flashing in after the client attaches the editor.
+export const EDITOR_DEMO_FILE_EXAMPLE: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'editable-demo.ts',
+    contents: `import { VirtualizedFile } from '@pierre/diffs';
+import { Editor } from '@pierre/diffs/editor';
+
+const fileInstance = new VirtualizedFile({
+  theme: { dark: 'pierre-dark', light: 'pierre-light' },
+});
+
+// render the file into a DOM container
+fileInstance.render({
+  file: { name: 'index.ts', contents: 'export const foo: string = "bar";\\n' },
+  containerWrapper: document.getElementById('file-container')
+});
+
+const editor = new Editor({
+  onChange(file, lineAnnotations) {
+    console.log('change', file.name, lineAnnotations);
+  },
+});
+
+// Attach the editor to the file instance
+const dispose = editor.edit(fileInstance);
+
+// Later, when the editor is no longer needed:
+dispose();
+`,
+  },
+  options: editableDemoOptions,
+};
 
 export const EDITOR_VANILLA_FILE_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
@@ -106,6 +157,78 @@ fileInstance.render({ file: newFile });
 
 // Later, when the editor is no longer needed:
 editor.cleanUp();`,
+  },
+  options,
+};
+
+export const EDITOR_VANILLA_CODE_VIEW_EXAMPLE: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'editor_vanilla_code_view.ts',
+    contents: `import { CodeView, type CodeViewItem } from '@pierre/diffs';
+import { Editor } from '@pierre/diffs/editor';
+
+const root = document.getElementById('code-view');
+const toggleButton = document.getElementById('toggle-editing');
+if (root == null || toggleButton == null) {
+  throw new Error('Expected CodeView containers to exist');
+}
+
+root.style.height = '24rem';
+root.style.overflow = 'auto';
+
+const viewer = new CodeView({
+  theme: { dark: 'pierre-dark', light: 'pierre-light' },
+  createEditor(options) {
+    return new Editor(options);
+  },
+  onItemEditComplete(item, file) {
+    if (item.type !== 'file') {
+      return;
+    }
+    const version = (item.version ?? 0) + 1;
+    viewer.updateItem({
+      ...item,
+      edit: false,
+      version,
+      file: {
+        ...item.file,
+        contents: file.contents,
+        cacheKey: \`\${item.id}:v\${version}\`,
+      },
+    });
+  },
+});
+
+viewer.setup(root);
+
+const item: CodeViewItem = {
+  id: 'example.ts',
+  type: 'file',
+  file: {
+    name: 'example.ts',
+    contents: 'export const answer = 42;',
+  },
+  edit: true,
+  version: 0,
+};
+
+viewer.setItems([item]);
+
+toggleButton.addEventListener('click', () => {
+  const current = viewer.getItem(item.id);
+  if (current == null) {
+    return;
+  }
+  viewer.updateItem({
+    ...current,
+    edit: current.edit !== true,
+    version: (current.version ?? 0) + 1,
+  });
+});
+
+window.addEventListener('beforeunload', () => {
+  viewer.cleanUp();
+});`,
   },
   options,
 };
@@ -397,6 +520,80 @@ export function EditorComponent() {
         />
       </Virtualizer>
     </EditProvider>
+  );
+}`,
+  },
+  options,
+};
+
+export const EDITOR_REACT_CODE_VIEW_EXAMPLE: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'editor_react_code_view.tsx',
+    contents: `import type { CodeViewItem, FileContents } from '@pierre/diffs';
+import { Editor } from '@pierre/diffs/editor';
+import { CodeView } from '@pierre/diffs/react';
+import { useCallback, useState } from 'react';
+
+const initialItems: CodeViewItem[] = [
+  {
+    id: 'example.ts',
+    type: 'file',
+    file: {
+      name: 'example.ts',
+      contents: 'export const answer = 42;',
+    },
+    edit: true,
+    version: 0,
+  },
+];
+
+export function EditableCodeView() {
+  const [items, setItems] = useState(initialItems);
+
+  const toggleEditing = useCallback(() => {
+    setItems((current) =>
+      current.map((item) => ({
+        ...item,
+        edit: item.edit !== true,
+        version: (item.version ?? 0) + 1,
+      }))
+    );
+  }, []);
+
+  const commitEdit = useCallback((item: CodeViewItem, file: FileContents) => {
+    setItems((current) =>
+      current.map((existing) => {
+        if (existing.id !== item.id || existing.type !== 'file') {
+          return existing;
+        }
+        const version = (existing.version ?? 0) + 1;
+        return {
+          ...existing,
+          edit: false,
+          version,
+          file: {
+            ...existing.file,
+            contents: file.contents,
+            cacheKey: \`\${existing.id}:v\${version}\`,
+          },
+        };
+      })
+    );
+  }, []);
+
+  return (
+    <>
+      <button type="button" onClick={toggleEditing}>
+        {items[0]?.edit === true ? 'Disable editing' : 'Enable editing'}
+      </button>
+
+      <CodeView
+        items={items}
+        style={{ height: '24rem', overflow: 'auto' }}
+        createEditor={(options) => new Editor(options)}
+        onItemEditComplete={commitEdit}
+      />
+    </>
   );
 }`,
   },

@@ -24,6 +24,7 @@ CodeView to avoid handling scaling yourself.
 - `scrollTo` APIs for items, line targets, and raw scroll positions.
 - Unified selection API, support for custom annotations, custom headers, and
   gutter utilities across the entire viewer.
+- Optional per-item [edit mode](#edit-mode-codeview) for files and diffs.
 - Optional non-virtualized [header and footer regions](#codeview-header-footer)
   rendered inside the scroll container — ideal for PR summary cards and approval
   bars.
@@ -48,6 +49,8 @@ immutability or deep equality checks, which can quickly become expensive.
   shown. You'll have to wire up your own custom header or utilities if you want
   to control it interactively. Remember to update `version` when this value
   changes.
+- The `edit` property enables [edit mode](#edit-mode-codeview) for an item when
+  `CodeView` has a `createEditor` factory. Update `version` when toggling it.
 - CodeView-level options such as `layout`, `itemMetrics`, `stickyHeaders`,
   `pointerEventsOnScroll`, and `smoothScrollSettings` allow you to configure the
   scroll view. All other options are shared between all files and diffs.
