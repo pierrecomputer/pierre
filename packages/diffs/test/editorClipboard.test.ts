@@ -683,13 +683,13 @@ describe('Editor clipboard events', () => {
 
       editor.setSelections([
         {
-          start: { line: 3, character: 0 },
-          end: { line: 3, character: 2 },
+          start: { line: 4, character: 0 },
+          end: { line: 4, character: 2 },
           direction: 'forward',
         },
         {
-          start: { line: 4, character: 0 },
-          end: { line: 4, character: 2 },
+          start: { line: 3, character: 0 },
+          end: { line: 3, character: 2 },
           direction: 'forward',
         },
       ]);

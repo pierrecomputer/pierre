@@ -644,7 +644,8 @@ function getNextSelectionOffsetPairAfterReplace(
 }
 
 /**
- * Applies a text replace to multiple selections.
+ * Applies document-ordered text replacements to multiple selections while
+ * preserving the input selection order for the resulting selections.
  */
 export function applyTextReplaceToSelections<LAnnotation>(
   textDocument: TextDocument<LAnnotation>,
@@ -672,7 +673,6 @@ export function applyTextReplaceToSelections<LAnnotation>(
     index: number;
     start: number;
     end: number;
-    text: string;
   }> = [];
   let isAlreadyOrdered = true;
   for (let index = 0; index < selections.length; index++) {
@@ -680,7 +680,6 @@ export function applyTextReplaceToSelections<LAnnotation>(
       index,
       start: selectionOffsets[index * 2],
       end: selectionOffsets[index * 2 + 1],
-      text: texts[index],
     };
     const previous = ordered[ordered.length - 1];
     if (
@@ -758,14 +757,15 @@ export function applyTextReplaceToSelections<LAnnotation>(
     edits = [];
     let offsetDelta = 0;
     let previousEditEnd = -1;
-    for (const entry of ordered) {
+    for (let index = 0; index < ordered.length; index++) {
+      const entry = ordered[index];
       if (entry.start < previousEditEnd) {
         throw new Error('Overlapping multi-selection edits are not supported');
       }
       previousEditEnd = entry.end;
       const newText = expandSingleNewlineInsert(
         textDocument,
-        entry.text,
+        texts[index],
         entry.start
       );
       edits.push({
@@ -841,8 +841,8 @@ function shouldAutoSurroundChar(
 }
 
 /**
- * Returns per-selection replacement text when typing a surround character over
- * non-collapsed selections, matching VS Code auto-surround behavior.
+ * Returns document-ordered replacement text when typing a surround character
+ * over non-collapsed selections, matching VS Code auto-surround behavior.
  */
 export function getAutoSurroundReplacementTexts<LAnnotation>(
   textDocument: TextDocument<LAnnotation>,
@@ -857,8 +857,12 @@ export function getAutoSurroundReplacementTexts<LAnnotation>(
   if (closeChar === undefined || !shouldAutoSurroundChar(autoSurround, char)) {
     return undefined;
   }
+  const orderedSelections = selections.slice().sort((a, b) => {
+    const startOrder = comparePosition(a.start, b.start);
+    return startOrder !== 0 ? startOrder : comparePosition(a.end, b.end);
+  });
   const replacements: string[] = [];
-  for (const selection of selections) {
+  for (const selection of orderedSelections) {
     if (isCollapsedSelection(selection)) {
       return undefined;
     }
@@ -1755,7 +1759,7 @@ function resolveClipboardRegions(
 }
 
 /**
- * Gets the text contributed by each selection in selection order, preserving
+ * Gets the text contributed by each selection in document order, preserving
  * the pairing needed to paste the values into another set of selections.
  */
 export function getSelectionClipboardTexts(
