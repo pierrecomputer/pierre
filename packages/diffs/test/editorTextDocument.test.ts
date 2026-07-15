@@ -233,12 +233,24 @@ describe('TextDocument', () => {
     expect(d.findNextNonOverlappingSubstring('foo', [[0, 3]])).toBe(4);
   });
 
-  test('eol reports the document line ending', () => {
+  test('eol reports and caches the document line ending', () => {
     expect(doc('a\nb').eol).toBe('\n');
     expect(doc('a\r\nb').eol).toBe('\r\n');
     expect(doc('a\rb').eol).toBe('\r');
     // A single-line document has no break to detect and defaults to \n.
     expect(doc('abc').eol).toBe('\n');
+
+    const d = doc('a\r\nb');
+    d.applyEdits([
+      {
+        range: {
+          start: { line: 0, character: 1 },
+          end: { line: 1, character: 0 },
+        },
+        newText: '\n',
+      },
+    ]);
+    expect(d.eol).toBe('\r\n');
   });
 
   test('normalizeEol rewrites mixed line endings to the document EOL', () => {

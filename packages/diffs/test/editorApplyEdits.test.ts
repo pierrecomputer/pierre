@@ -490,6 +490,41 @@ describe('Editor.applyEdits selection sync', () => {
     }
   });
 
+  test('remaps the caret through an insertion snapped before a surrogate pair', async () => {
+    const { cleanup, editor } = await createEditorFixture('📚 plans');
+
+    try {
+      editor.setSelections([
+        {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 0 },
+          direction: 'none',
+        },
+      ]);
+
+      editor.applyEdits([
+        {
+          range: {
+            start: { line: 0, character: 1 },
+            end: { line: 0, character: 1 },
+          },
+          newText: 'a',
+        },
+      ]);
+
+      expect(editor.getText()).toBe('a📚 plans');
+      expect(editor.getState().selections).toEqual([
+        {
+          start: { line: 0, character: 1 },
+          end: { line: 0, character: 1 },
+          direction: 0,
+        },
+      ]);
+    } finally {
+      cleanup();
+    }
+  });
+
   test('shifts both edges of a selected range and preserves direction', async () => {
     const { cleanup, editor } = await createEditorFixture(
       'alpha\nbravo\ncharlie'
@@ -1066,6 +1101,39 @@ describe('Editor move line commands', () => {
 });
 
 describe('Editor editing commands', () => {
+  test('deletes to the end of the line with macOS control+k', async () => {
+    const { cleanup, content, editor, window } =
+      await createEditorFixture('hello world\nnext');
+
+    try {
+      editor.setSelections([
+        {
+          start: { line: 0, character: 5 },
+          end: { line: 0, character: 5 },
+          direction: 'none',
+        },
+      ]);
+
+      const keydown = pressKey(window, content, {
+        key: 'k',
+        code: 'KeyK',
+        ctrlKey: true,
+      });
+
+      expect(keydown.defaultPrevented).toBe(true);
+      expect(editor.getText()).toBe('hello\nnext');
+      expect(editor.getState().selections).toEqual([
+        {
+          start: { line: 0, character: 5 },
+          end: { line: 0, character: 5 },
+          direction: 0,
+        },
+      ]);
+    } finally {
+      cleanup();
+    }
+  });
+
   test('copies selected lines and keeps the requested copy selected', async () => {
     const { cleanup, content, editor, window } = await createEditorFixture(
       'alpha\nbravo\ncharlie'
@@ -1624,32 +1692,6 @@ function makeRandom(seed: number): () => number {
   };
 }
 
-// Mirrors the Editor's line-based indent dispatch (src/editor/editor.ts, case
-// 'indentMore'/'indentLess' at ~line 1891): resolveIndentEdits runs once per
-// selection and the resulting edits are concatenated into a single applyEdits
-// batch, with no dedupe when two selections touch the same line.
-function dispatchLineIndent(
-  d: TextDocument<unknown>,
-  selections: EditorSelection[],
-  tabSize: number,
-  outdent: boolean
-): EditorSelection[] {
-  const edits: TextEdit[] = [];
-  const nextSelections: EditorSelection[] = [];
-  for (const selection of selections) {
-    const [selectionEdits, nextSelection] = resolveIndentEdits(
-      d,
-      selection,
-      tabSize,
-      outdent
-    );
-    edits.push(...selectionEdits);
-    nextSelections.push(nextSelection);
-  }
-  d.applyEdits(edits, true, selections);
-  return nextSelections;
-}
-
 // Mirrors Editor#moveSelectedLines (src/editor/editor.ts ~line 2267):
 // getSelectedLineBlocks merges the selections into line blocks, each block is
 // rotated with its neighbor line in one edit, and every selection is remapped
@@ -1751,42 +1793,41 @@ describe('applyEdits: surrogate pair boundaries', () => {
   // the high and low surrogate — an invalid caller position that the
   // conventional behavior auto-corrects so the pair is never split.
 
-  // KNOWN BUG: an insert position strictly inside a surrogate pair is not
-  // snapped to the pair boundary; the inserted text lands between the two
-  // units and getText() returns lone surrogates.
-  test.failing(
-    'insert strictly inside a surrogate pair snaps to before the pair',
-    () => {
-      const d = doc('📚plans\nfor the\nweekend');
-      d.applyEdits([edit(0, 1, 0, 1, 'a')]);
-      expect(hasLoneSurrogate(d.getText())).toBe(false);
-      expect(d.getLineText(0)).toBe('a📚plans');
-    }
-  );
+  test('insert strictly inside a surrogate pair snaps to before the pair', () => {
+    const d = doc('📚plans\nfor the\nweekend');
+    d.applyEdits([edit(0, 1, 0, 1, 'a')]);
+    expect(hasLoneSurrogate(d.getText())).toBe(false);
+    expect(d.getLineText(0)).toBe('a📚plans');
+  });
 
-  // KNOWN BUG: a replace range starting strictly inside a surrogate pair is
-  // not widened to the pair start; the high surrogate is left behind alone.
-  test.failing(
-    'replace starting inside a surrogate pair widens to cover the whole pair',
-    () => {
-      const d = doc('📚plans\nfor the\nweekend');
-      d.applyEdits([edit(0, 1, 0, 2, 'a')]);
-      expect(hasLoneSurrogate(d.getText())).toBe(false);
-      expect(d.getLineText(0)).toBe('aplans');
-    }
-  );
+  test('replace starting inside a surrogate pair widens to cover the whole pair', () => {
+    const d = doc('📚plans\nfor the\nweekend');
+    d.applyEdits([edit(0, 1, 0, 2, 'a')]);
+    expect(hasLoneSurrogate(d.getText())).toBe(false);
+    expect(d.getLineText(0)).toBe('aplans');
+  });
 
-  // KNOWN BUG: a replace range ending strictly inside a surrogate pair is not
-  // widened to the pair end; the low surrogate is left behind alone.
-  test.failing(
-    'replace ending inside a surrogate pair widens to cover the whole pair',
-    () => {
+  test('replace ending inside a surrogate pair widens to cover the whole pair', () => {
+    const d = doc('📚plans\nfor the\nweekend');
+    d.applyEdits([edit(0, 0, 0, 1, 'a')]);
+    expect(hasLoneSurrogate(d.getText())).toBe(false);
+    expect(d.getLineText(0)).toBe('aplans');
+  });
+
+  test('applyResolvedEdits normalizes surrogate-pair boundaries', () => {
+    const cases = [
+      [1, 1, 'a📚plans'],
+      [1, 2, 'aplans'],
+      [0, 1, 'aplans'],
+    ] as const;
+
+    for (const [start, end, expected] of cases) {
       const d = doc('📚plans\nfor the\nweekend');
-      d.applyEdits([edit(0, 0, 0, 1, 'a')]);
+      d.applyResolvedEdits([{ start, end, text: 'a' }]);
       expect(hasLoneSurrogate(d.getText())).toBe(false);
-      expect(d.getLineText(0)).toBe('aplans');
+      expect(d.getLineText(0)).toBe(expected);
     }
-  );
+  });
 
   test('replace spanning exactly the whole surrogate pair replaces it cleanly', () => {
     const d = doc('📚plans\nfor the\nweekend');
@@ -1925,21 +1966,11 @@ describe('applyEdits batch: insert at a deletion boundary', () => {
     expect(d.getText()).toBe('grapeXYnes');
   });
 
-  // KNOWN BUG: acceptance of the batch {delete [5,7), insert at 5} depends on
-  // the caller's array order. Validation stable-sorts by start offset and
-  // rejects any pair where prev.end > next.start, so with the delete listed
-  // first the (5,7) delete stays ahead of the (5,5) insert and the same
-  // logical batch throws 'Overlapping text edits are not supported', while
-  // the insert-first order succeeds. A deterministic batch model would accept
-  // the batch regardless of input order.
-  test.failing(
-    'the same logical batch with the delete listed first behaves identically',
-    () => {
-      const d = doc('grapevines');
-      d.applyEdits([edit(0, 5, 0, 7, ''), edit(0, 5, 0, 5, 'XY')]);
-      expect(d.getText()).toBe('grapeXYnes');
-    }
-  );
+  test('the same logical batch with the delete listed first behaves identically', () => {
+    const d = doc('grapevines');
+    d.applyEdits([edit(0, 5, 0, 7, ''), edit(0, 5, 0, 5, 'XY')]);
+    expect(d.getText()).toBe('grapeXYnes');
+  });
 });
 
 describe('applyEdits: randomized single-edit invert round-trip', () => {
@@ -2169,43 +2200,54 @@ describe('applyEdits: out-of-bounds edit ranges clamp instead of throwing', () =
 });
 
 describe('line-based indent commands with selections sharing a line', () => {
-  // KNOWN BUG: the editor's indent dispatch concatenates each selection's
-  // resolveIndentEdits output with no shared-line dedupe, so two carets on one
-  // line emit two identical zero-length inserts at column 0. Both pass the
-  // overlap validation (equal start offsets never compare as overlapping) and
-  // the line is indented twice.
-  test.failing('two carets on one line indent that line exactly once', () => {
-    const d = doc('quartz vein');
-    const next = dispatchLineIndent(d, [caret(0, 2), caret(0, 6)], 2, false);
-    expect(d.getText()).toBe('  quartz vein');
-    expect(next).toEqual([caret(0, 4), caret(0, 8)]);
+  test('two carets on one line indent that line exactly once', async () => {
+    const { cleanup, content, editor, window } =
+      await createEditorFixture('quartz vein');
+
+    try {
+      editor.setState({ selections: [caret(0, 2), caret(0, 6)] });
+
+      pressKey(window, content, { key: ']', metaKey: true });
+
+      expect(editor.getText()).toBe('  quartz vein');
+      expect(editor.getState().selections).toEqual([caret(0, 4), caret(0, 8)]);
+    } finally {
+      cleanup();
+    }
   });
 
-  // KNOWN BUG: same missing dedupe with range selections — the line shared by
-  // both ranges receives one indent edit per selection and ends up indented
-  // twice while its neighbors indent once.
-  test.failing(
-    'two ranges sharing a line indent every line exactly once',
-    () => {
-      const d = doc('ada\nberyl\ncobalt');
-      dispatchLineIndent(d, [range(0, 1, 1, 2), range(1, 3, 2, 1)], 2, false);
-      expect(d.getText()).toBe('  ada\n  beryl\n  cobalt');
-    }
-  );
+  test('two ranges sharing a line indent every line exactly once', async () => {
+    const { cleanup, content, editor, window } =
+      await createEditorFixture('ada\nberyl\ncobalt');
 
-  // KNOWN BUG: the outdent variant of the same composition produces two
-  // identical single-character delete edits for the shared line; unlike the
-  // zero-length inserts these DO fail overlap validation, so the whole command
-  // throws 'Overlapping text edits are not supported' and nothing is applied.
-  test.failing(
-    'two carets on one tab-indented line outdent it exactly once',
-    () => {
-      const d = doc('\tquartz vein');
-      const next = dispatchLineIndent(d, [caret(0, 3), caret(0, 7)], 2, true);
-      expect(d.getText()).toBe('quartz vein');
-      expect(next).toEqual([caret(0, 2), caret(0, 6)]);
+    try {
+      editor.setState({
+        selections: [range(0, 1, 1, 2), range(1, 3, 2, 1)],
+      });
+
+      pressKey(window, content, { key: ']', metaKey: true });
+
+      expect(editor.getText()).toBe('  ada\n  beryl\n  cobalt');
+    } finally {
+      cleanup();
     }
-  );
+  });
+
+  test('two carets on one tab-indented line outdent it exactly once', async () => {
+    const { cleanup, content, editor, window } =
+      await createEditorFixture('\tquartz vein');
+
+    try {
+      editor.setState({ selections: [caret(0, 3), caret(0, 7)] });
+
+      pressKey(window, content, { key: 'Tab', shiftKey: true });
+
+      expect(editor.getText()).toBe('quartz vein');
+      expect(editor.getState().selections).toEqual([caret(0, 2), caret(0, 6)]);
+    } finally {
+      cleanup();
+    }
+  });
 });
 
 describe('indentLess on tab and mixed indentation', () => {
@@ -2266,30 +2308,29 @@ describe('indentLess on tab and mixed indentation', () => {
 });
 
 describe('block indent over blank and whitespace-only lines', () => {
-  // KNOWN BUG: resolveIndentEdits emits an insert at column 0 of every line
-  // the selection touches, including empty and whitespace-only lines, so a
-  // block indent injects trailing whitespace on lines the user never typed
-  // on. The conventional behavior is to skip lines with no content. Outdent
-  // strips the injected unit back off, so a full indent/outdent round trip
-  // self-heals — the damage is bounded to the indented state.
-  test.failing(
-    'block indent leaves blank and whitespace-only lines untouched',
-    () => {
-      const d = doc('alpha\n\n   \nbeta');
-      const [edits] = resolveIndentEdits(
-        d,
-        {
-          start: { line: 0, character: 0 },
-          end: { line: 3, character: 4 },
-          direction: DirectionForward,
-        },
-        2,
-        false
-      );
-      d.applyEdits(edits);
-      expect(d.getText()).toBe('  alpha\n\n   \n  beta');
-    }
-  );
+  test('block indent and outdent leave blank lines untouched', () => {
+    const original = 'alpha\n\n   \nbeta';
+    const d = doc(original);
+    const [indentEdits, indentedSelection] = resolveIndentEdits(
+      d,
+      range(0, 0, 3, 4),
+      2,
+      false
+    );
+    d.applyEdits(indentEdits);
+    expect(d.getText()).toBe('  alpha\n\n   \n  beta');
+
+    const [outdentEdits] = resolveIndentEdits(d, indentedSelection, 2, true);
+    d.applyEdits(outdentEdits);
+    expect(d.getText()).toBe(original);
+  });
+
+  test('single-line indent still inserts whitespace on a blank line', () => {
+    const d = doc('');
+    const [edits] = resolveIndentEdits(d, caret(0, 0), 2, false);
+    d.applyEdits(edits);
+    expect(d.getText()).toBe('  ');
+  });
 });
 
 describe('move line commands with merged and same-line multi-cursor blocks', () => {
