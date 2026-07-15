@@ -203,8 +203,8 @@ export class TextDocument<LAnnotation> {
     if (edits.length === 0) {
       return;
     }
-    return this.applyResolvedEdits(
-      this.resolveEdits(edits),
+    return this.#applyResolvedEdits(
+      this.#sortAndValidateResolvedEdits(this.resolveEdits(edits)),
       updateHistory,
       selectionsBefore,
       selectionsAfter,
@@ -229,7 +229,26 @@ export class TextDocument<LAnnotation> {
     if (edits.length === 0) {
       return undefined;
     }
-    const resolvedEdits = this.#sortAndValidateResolvedEdits(edits);
+    return this.#applyResolvedEdits(
+      this.#sortAndValidateResolvedEdits(
+        edits.map((edit) => this.#normalizeResolvedEdit(edit))
+      ),
+      updateHistory,
+      selectionsBefore,
+      selectionsAfter,
+      undoBoundary
+    );
+  }
+
+  // Shared mutation path after public edit coordinates are normalized and
+  // validated. Undo and redo apply their stored inverse offsets separately.
+  #applyResolvedEdits(
+    resolvedEdits: ResolvedTextEdit[],
+    updateHistory: boolean,
+    selectionsBefore: EditorSelection[] | undefined,
+    selectionsAfter: EditorSelection[] | undefined,
+    undoBoundary: boolean
+  ): TextDocumentChange {
     if (updateHistory) {
       const entry = createEditStackEntry(
         this,
@@ -353,6 +372,17 @@ export class TextDocument<LAnnotation> {
       start = end;
       end = t;
     }
+    return this.#normalizeResolvedEdit({
+      start,
+      end,
+      text: edit.newText,
+    });
+  }
+
+  // Snaps an insertion before a pair and widens replacement boundaries
+  // outward, so every edit addresses whole UTF-16 surrogate pairs.
+  #normalizeResolvedEdit(edit: ResolvedTextEdit): ResolvedTextEdit {
+    let { start, end } = edit;
     const isInsertion = start === end;
     if (this.#isInsideSurrogatePair(start)) {
       start--;
@@ -362,7 +392,7 @@ export class TextDocument<LAnnotation> {
     } else if (this.#isInsideSurrogatePair(end)) {
       end++;
     }
-    return { start, end, text: edit.newText };
+    return { start, end, text: edit.text };
   }
 
   // A UTF-16 offset is invalid when it sits between the high and low units of

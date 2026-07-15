@@ -1810,6 +1810,21 @@ describe('applyEdits: surrogate pair boundaries', () => {
     expect(d.getLineText(0)).toBe('aplans');
   });
 
+  test('applyResolvedEdits normalizes surrogate-pair boundaries', () => {
+    const cases = [
+      [1, 1, 'a📚plans'],
+      [1, 2, 'aplans'],
+      [0, 1, 'aplans'],
+    ] as const;
+
+    for (const [start, end, expected] of cases) {
+      const d = doc('📚plans\nfor the\nweekend');
+      d.applyResolvedEdits([{ start, end, text: 'a' }]);
+      expect(hasLoneSurrogate(d.getText())).toBe(false);
+      expect(d.getLineText(0)).toBe(expected);
+    }
+  });
+
   test('replace spanning exactly the whole surrogate pair replaces it cleanly', () => {
     const d = doc('📚plans\nfor the\nweekend');
     d.applyEdits([edit(0, 0, 0, 2, 'a')]);
