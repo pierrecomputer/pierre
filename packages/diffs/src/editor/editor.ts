@@ -475,17 +475,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     const resolvedEditOffsets =
       selectionsBefore === undefined
         ? undefined
-        : edits
-            .map((edit) => {
-              const a = textDocument.offsetAt(edit.range.start);
-              const b = textDocument.offsetAt(edit.range.end);
-              return {
-                start: Math.min(a, b),
-                end: Math.max(a, b),
-                text: edit.newText,
-              };
-            })
-            .sort((a, b) => a.start - b.start);
+        : textDocument.resolveEdits(edits).sort((a, b) => a.start - b.start);
 
     const change = textDocument.applyEdits(
       edits,
