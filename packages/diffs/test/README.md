@@ -121,14 +121,6 @@ order. If you touch one of these areas, consider adding the missing coverage:
 - **Batch edit ordering sensitivity** (1) — accepting a batch containing a
   delete and an insert at the same offset depends on the caller's array order:
   delete-first throws an overlap error, insert-first succeeds.
-- **Line indent/outdent multi-selection dedupe** (3) — indent dispatch
-  concatenates per-selection edits with no shared-line dedupe, so a line under
-  two carets/ranges indents twice; the outdent variant emits two identical
-  deletes that fail overlap validation and the whole command throws.
-- **Block indent dirties blank lines** (1) — a multi-line block indent inserts
-  the indent unit on empty and whitespace-only lines inside the selection,
-  injecting trailing whitespace on lines the user never touched (outdent
-  round-trips it away, bounding the damage).
 - **History equivalence across non-history edits** (7) — edits applied with
   `updateHistory=false` are an implementation detail of how an edit reaches
   `applyEdits`, not a separate semantic class: a mixed programmatic/local

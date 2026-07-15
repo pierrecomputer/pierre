@@ -89,6 +89,7 @@ export function resolveIndentEdits(
   const { start, end } = selection;
   const edits: TextEdit[] = [];
   let newSelection: EditorSelection = { ...selection };
+  const blockIndent = start.line !== end.line;
   let endLine = end.line;
   if (start.line < end.line && end.character === 0) {
     endLine--;
@@ -96,6 +97,9 @@ export function resolveIndentEdits(
   for (let line = start.line; line <= endLine; line++) {
     const lineText = textDocument.getLineText(line);
     if (lineText === undefined) {
+      continue;
+    }
+    if (blockIndent && lineText.trim().length === 0) {
       continue;
     }
     const indentUnit = lineText.startsWith('\t') ? '\t' : ' '.repeat(tabSize);
