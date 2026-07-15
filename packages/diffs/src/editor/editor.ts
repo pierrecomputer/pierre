@@ -111,7 +111,7 @@ import {
   Metrics,
   snapTextOffsetToUnicodeBoundary,
 } from './textMeasure';
-import { EditorTokenizer, renderLineTokens } from './tokenzier';
+import { EditorTokenizer, renderLineTokens } from './tokenizer';
 import {
   addEventListener,
   clampDomOffset,
@@ -2501,7 +2501,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       return;
     }
 
-    // cancel existing background tokenzier task
+    // cancel existing background tokenizing task
     tokenizer.stopBackgroundTokenize();
 
     const t = performance.now();
