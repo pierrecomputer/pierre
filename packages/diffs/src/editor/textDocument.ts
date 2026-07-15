@@ -69,6 +69,7 @@ export class TextDocument<LAnnotation> {
   #version: number;
   #pieceTable: PieceTable;
   #editStack: EditStack<LAnnotation>;
+  #eol: string;
 
   constructor(
     uri: string,
@@ -82,6 +83,19 @@ export class TextDocument<LAnnotation> {
     this.#version = version;
     this.#pieceTable = new PieceTable(text);
     this.#editStack = editStack;
+
+    // The line ending the document uses, detected once from its first line. Lets
+    // inserted or pasted text match the rest of the file instead of leaving
+    // mixed endings behind and keeps that convention stable as the file is
+    // edited. Defaults to Unix `\n` when the initial text has no line break.
+    const firstLineBreak = this.#pieceTable.getLineText(0, true);
+    if (firstLineBreak.endsWith('\r\n')) {
+      this.#eol = '\r\n';
+    } else if (firstLineBreak.endsWith('\r')) {
+      this.#eol = '\r';
+    } else {
+      this.#eol = '\n';
+    }
   }
 
   get uri(): string {
@@ -100,22 +114,8 @@ export class TextDocument<LAnnotation> {
     return this.#pieceTable.lineCount;
   }
 
-  // The line ending the document uses, detected from its first line. Lets
-  // inserted or pasted text match the rest of the file instead of leaving
-  // mixed endings behind. Recognizes Windows `\r\n` and classic-Mac lone `\r`
-  // breaks (both of which the piece table already splits on), defaulting to
-  // Unix `\n`.
   get eol(): string {
-    if (this.lineCount > 1) {
-      const firstLineBreak = this.getLineText(0, true);
-      if (firstLineBreak.endsWith('\r\n')) {
-        return '\r\n';
-      }
-      if (firstLineBreak.endsWith('\r')) {
-        return '\r';
-      }
-    }
-    return '\n';
+    return this.#eol;
   }
 
   get canUndo(): boolean {

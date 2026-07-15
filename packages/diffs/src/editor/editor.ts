@@ -4136,7 +4136,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
             {
               start: textDocument.offsetAt(primarySelection.start),
               end: textDocument.offsetAt(primarySelection.end),
-              text: Array.isArray(text) ? text.join('\n') : text,
+              text: Array.isArray(text) ? text.join(textDocument.eol) : text,
             },
             this.#lineAnnotations,
             undefined,
