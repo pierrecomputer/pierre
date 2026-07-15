@@ -103,7 +103,7 @@ order. If you touch one of these areas, consider adding the missing coverage:
 - **IME composition deferrals** — IME/composition interaction with editing and
   undo-coalescing is deferred and not covered.
 
-## Known bugs pinned as `test.failing` (27)
+## Known bugs pinned as `test.failing` (21)
 
 - **EditStack coalescing** (3) — coalescing decisions compare a new edit against
   whatever sits on top of the undo stack purely by geometry, with no state reset
@@ -148,9 +148,3 @@ order. If you touch one of these areas, consider adding the missing coverage:
   computation can return a position strictly inside a CRLF pair (a character
   beyond the line's own length) that the inverse offset-from-position
   computation clamps away, so the round trip silently loses a column.
-- **Search-replace capture expansion with lookaround** (3) — replacement-text
-  expansion re-executes the pattern against only the matched slice, so
-  lookaround context outside the slice is lost: a lookbehind whose context sits
-  before the slice, a lookahead whose context sits after the slice, and a
-  lookahead that re-matches shorter on the slice all fall back to inserting the
-  literal (unexpanded) replacement text.

@@ -1026,7 +1026,6 @@ export function buildSearchReplacementText(
   const lineText = getLineText(position.line);
   const lineStart = offsetAt({ line: position.line, character: 0 });
   const relStart = matchStart - lineStart;
-  const matched = lineText.slice(relStart, relStart + (matchEnd - matchStart));
 
   let pattern: RegExp;
   try {
@@ -1039,9 +1038,15 @@ export function buildSearchReplacementText(
     return searchParams.replaceText;
   }
 
-  const re = new RegExp(pattern.source, pattern.flags.replace('g', ''));
-  const match = re.exec(matched);
-  if (match === null || match[0].length !== matched.length) {
+  // Re-run at the original line offset so lookaround can inspect context
+  // outside the matched range while captures still come from this exact hit.
+  pattern.lastIndex = relStart;
+  const match = pattern.exec(lineText);
+  if (
+    match === null ||
+    match.index !== relStart ||
+    match[0].length !== matchEnd - matchStart
+  ) {
     return searchParams.replaceText;
   }
   return expandReplaceString(searchParams.replaceText, match);
