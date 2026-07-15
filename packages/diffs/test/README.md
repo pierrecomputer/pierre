@@ -158,9 +158,3 @@ order. If you touch one of these areas, consider adding the missing coverage:
   before the slice, a lookahead whose context sits after the slice, and a
   lookahead that re-matches shorter on the slice all fall back to inserting the
   literal (unexpanded) replacement text.
-- **Soft-wrap vertical motion splits surrogate pairs** (2) — vertical motion
-  into a wrapped continuation row computes the landing spot as raw UTF-16 units
-  with no grapheme/surrogate snapping, so moving down into a continuation row
-  (or up across a logical-line boundary) can park the caret between the halves
-  of an astral character; a subsequent insert there splits the pair into lone
-  surrogates.
