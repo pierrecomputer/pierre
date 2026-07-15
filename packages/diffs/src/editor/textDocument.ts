@@ -204,12 +204,19 @@ export class TextDocument<LAnnotation> {
       return;
     }
     return this.applyResolvedEdits(
-      edits.map((edit) => this.#resolveEdit(edit)),
+      this.resolveEdits(edits),
       updateHistory,
       selectionsBefore,
       selectionsAfter,
       undoBoundary
     );
+  }
+
+  // Converts line/character ranges to the exact UTF-16 offsets applyEdits
+  // uses, including widening invalid boundaries so they cannot split a valid
+  // surrogate pair. Editor caret remapping uses the same resolved geometry.
+  resolveEdits(edits: readonly TextEdit[]): ResolvedTextEdit[] {
+    return edits.map((edit) => this.#resolveEdit(edit));
   }
 
   applyResolvedEdits(
@@ -346,7 +353,29 @@ export class TextDocument<LAnnotation> {
       start = end;
       end = t;
     }
+    const isInsertion = start === end;
+    if (this.#isInsideSurrogatePair(start)) {
+      start--;
+    }
+    if (isInsertion) {
+      end = start;
+    } else if (this.#isInsideSurrogatePair(end)) {
+      end++;
+    }
     return { start, end, text: edit.newText };
+  }
+
+  // A UTF-16 offset is invalid when it sits between the high and low units of
+  // one well-formed surrogate pair. Lone surrogate units remain addressable.
+  #isInsideSurrogatePair(offset: number): boolean {
+    const previous = this.#pieceTable.charAt(offset - 1).charCodeAt(0);
+    const next = this.#pieceTable.charAt(offset).charCodeAt(0);
+    return (
+      previous >= 0xd800 &&
+      previous <= 0xdbff &&
+      next >= 0xdc00 &&
+      next <= 0xdfff
+    );
   }
 
   #sortAndValidateResolvedEdits(edits: ResolvedTextEdit[]): ResolvedTextEdit[] {
