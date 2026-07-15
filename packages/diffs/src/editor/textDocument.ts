@@ -127,11 +127,15 @@ export class TextDocument<LAnnotation> {
   }
 
   positionAt(offset: number): Position {
-    return this.#pieceTable.positionAt(offset);
+    return this.normalizePosition(this.#pieceTable.positionAt(offset));
   }
 
   positionsAt(offsets: readonly number[]): Position[] {
-    return this.#pieceTable.positionsAt(offsets);
+    const positions = this.#pieceTable.positionsAt(offsets);
+    for (let i = 0; i < positions.length; i++) {
+      positions[i] = this.normalizePosition(positions[i]);
+    }
+    return positions;
   }
 
   offsetAt(position: Position): number {

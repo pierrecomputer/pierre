@@ -850,34 +850,32 @@ describe('mixed-EOL positionAt/offsetAt round trip', () => {
     expect(table.getLineLength(7)).toBe(0);
   });
 
-  // KNOWN BUG: TextDocument.positionAt delegates to the raw piece-table
-  // mapping and can return a position strictly inside a CRLF pair (character
-  // beyond getLineLength) that its own offsetAt refuses to map back —
-  // normalizePosition clamps it to the line's content end, so
-  // offsetAt(positionAt(o)) silently loses a column. The commented-out clamp
-  // tests at editorTextDocument.test.ts:150 and :169 record the intended
-  // contract (positions clamp to visible content at this layer).
-  test.failing(
-    'TextDocument.positionAt never lands between the \\r and \\n of a CRLF pair',
-    () => {
-      const d = doc(MIXED);
+  test('TextDocument position APIs never land between the \\r and \\n of a CRLF pair', () => {
+    const d = doc(MIXED);
+    const offsets = Array.from({ length: MIXED.length + 1 }, (_, i) => i);
+    const positions = d.positionsAt(offsets);
 
-      for (let offset = 0; offset <= MIXED.length; offset++) {
-        const position = d.positionAt(offset);
-        expect(position.character).toBeLessThanOrEqual(
-          d.getLineLength(position.line)
-        );
-      }
+    for (let offset = 0; offset <= MIXED.length; offset++) {
+      const position = d.positionAt(offset);
+      expect(position).toEqual(positions[offset]);
+      expect(position.character).toBeLessThanOrEqual(
+        d.getLineLength(position.line)
+      );
     }
-  );
+
+    expect(d.positionsAt([4, 14, 25])).toEqual([
+      { line: 0, character: 3 },
+      { line: 3, character: 0 },
+      { line: 7, character: 0 },
+    ]);
+  });
 
   test('TextDocument: offsetAt of positionAt is idempotent and snaps break-interior offsets to content end', () => {
     // Unlike the PieceTable layer, the TextDocument round trip is not the
-    // identity: offsets between the \r and \n of a CRLF pair snap back to the
-    // end of the line's visible content (offsetAt normalizes what positionAt
-    // emitted). The mapping settles after one application — a second round
-    // trip is a fixpoint — which is the conventional stability guarantee for
-    // line/offset conversions.
+    // identity: offsets between the \r and \n of a CRLF pair map to the end of
+    // the line's visible content. The mapping settles after one application —
+    // a second round trip is a fixpoint — which is the conventional stability
+    // guarantee for line/offset conversions.
     const d = doc(MIXED);
     const starts = oracleLineStarts(MIXED);
     const roundTrip = (offset: number) => d.offsetAt(d.positionAt(offset));

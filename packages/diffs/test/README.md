@@ -103,7 +103,7 @@ order. If you touch one of these areas, consider adding the missing coverage:
 - **IME composition deferrals** — IME/composition interaction with editing and
   undo-coalescing is deferred and not covered.
 
-## Known bugs pinned as `test.failing` (21)
+## Known bugs pinned as `test.failing` (16)
 
 - **EditStack coalescing** (3) — coalescing decisions compare a new edit against
   whatever sits on top of the undo stack purely by geometry, with no state reset
@@ -136,7 +136,3 @@ order. If you touch one of these areas, consider adding the missing coverage:
   text, the unwind that should restore recorded selections verbatim never
   reaches the original text, and a pending redo survives an untracked edit
   (instead of being cleared like any new edit) and replays at stale offsets.
-- **Position round-trip losing a column** (1) — a position-from-offset
-  computation can return a position strictly inside a CRLF pair (a character
-  beyond the line's own length) that the inverse offset-from-position
-  computation clamps away, so the round trip silently loses a column.
