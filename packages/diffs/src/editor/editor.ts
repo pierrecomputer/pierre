@@ -475,17 +475,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     const resolvedEditOffsets =
       selectionsBefore === undefined
         ? undefined
-        : edits
-            .map((edit) => {
-              const a = textDocument.offsetAt(edit.range.start);
-              const b = textDocument.offsetAt(edit.range.end);
-              return {
-                start: Math.min(a, b),
-                end: Math.max(a, b),
-                text: edit.newText,
-              };
-            })
-            .sort((a, b) => a.start - b.start);
+        : textDocument.resolveEdits(edits).sort((a, b) => a.start - b.start);
 
     const change = textDocument.applyEdits(
       edits,
@@ -607,14 +597,24 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       throw new Error('Text document is not initialized');
     }
     const resolvedSelections = selections.map<EditorSelection>((selection) => {
-      const start = textDocument.normalizePosition(selection.start);
-      const end = textDocument.normalizePosition(selection.end);
-      const direction =
+      let start = textDocument.normalizePosition(selection.start);
+      let end = textDocument.normalizePosition(selection.end);
+      let direction: EditorSelection['direction'] =
         selection.direction === 'none'
           ? DirectionNone
           : selection.direction === 'backward'
             ? DirectionBackward
             : DirectionForward;
+
+      if (comparePosition(start, end) > 0) {
+        [start, end] = [end, start];
+        if (direction !== DirectionNone) {
+          direction =
+            direction === DirectionForward
+              ? DirectionBackward
+              : DirectionForward;
+        }
+      }
       return { direction, start, end };
     });
     this.#updateSelections(resolvedSelections);
@@ -2276,6 +2276,9 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         if (this.#selections !== undefined) {
           const edits: TextEdit[] = [];
           const nextSelections: EditorSelection[] = [];
+          // Line-based indentation is resolved per selection, so overlapping
+          // line coverage must share the same leading-whitespace edit.
+          const editedLines = new Set<number>();
           // Single-line indent inserts text at each caret. When several carets
           // share a line, indentation inserted by carets to their left shifts
           // them right, so record each one here and offset its resulting
@@ -2299,7 +2302,13 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
                 this.#metrics.tabSize,
                 outdent
               );
-              edits.push(...ret[0]);
+              for (const edit of ret[0]) {
+                const line = edit.range.start.line;
+                if (!editedLines.has(line)) {
+                  editedLines.add(line);
+                  edits.push(edit);
+                }
+              }
               nextSelections.push(ret[1]);
             } else {
               const lineChar0 = textDocument.charAt({

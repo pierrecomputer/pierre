@@ -127,11 +127,15 @@ export class TextDocument<LAnnotation> {
   }
 
   positionAt(offset: number): Position {
-    return this.#pieceTable.positionAt(offset);
+    return this.normalizePosition(this.#pieceTable.positionAt(offset));
   }
 
   positionsAt(offsets: readonly number[]): Position[] {
-    return this.#pieceTable.positionsAt(offsets);
+    const positions = this.#pieceTable.positionsAt(offsets);
+    for (let i = 0; i < positions.length; i++) {
+      positions[i] = this.normalizePosition(positions[i]);
+    }
+    return positions;
   }
 
   offsetAt(position: Position): number {
@@ -203,13 +207,20 @@ export class TextDocument<LAnnotation> {
     if (edits.length === 0) {
       return;
     }
-    return this.applyResolvedEdits(
-      edits.map((edit) => this.#resolveEdit(edit)),
+    return this.#applyResolvedEdits(
+      this.#sortAndValidateResolvedEdits(this.resolveEdits(edits)),
       updateHistory,
       selectionsBefore,
       selectionsAfter,
       undoBoundary
     );
+  }
+
+  // Converts line/character ranges to the exact UTF-16 offsets applyEdits
+  // uses, including widening invalid boundaries so they cannot split a valid
+  // surrogate pair. Editor caret remapping uses the same resolved geometry.
+  resolveEdits(edits: readonly TextEdit[]): ResolvedTextEdit[] {
+    return edits.map((edit) => this.#resolveEdit(edit));
   }
 
   applyResolvedEdits(
@@ -222,7 +233,26 @@ export class TextDocument<LAnnotation> {
     if (edits.length === 0) {
       return undefined;
     }
-    const resolvedEdits = this.#sortAndValidateResolvedEdits(edits);
+    return this.#applyResolvedEdits(
+      this.#sortAndValidateResolvedEdits(
+        edits.map((edit) => this.#normalizeResolvedEdit(edit))
+      ),
+      updateHistory,
+      selectionsBefore,
+      selectionsAfter,
+      undoBoundary
+    );
+  }
+
+  // Shared mutation path after public edit coordinates are normalized and
+  // validated. Undo and redo apply their stored inverse offsets separately.
+  #applyResolvedEdits(
+    resolvedEdits: ResolvedTextEdit[],
+    updateHistory: boolean,
+    selectionsBefore: EditorSelection[] | undefined,
+    selectionsAfter: EditorSelection[] | undefined,
+    undoBoundary: boolean
+  ): TextDocumentChange {
     if (updateHistory) {
       const entry = createEditStackEntry(
         this,
@@ -346,7 +376,40 @@ export class TextDocument<LAnnotation> {
       start = end;
       end = t;
     }
-    return { start, end, text: edit.newText };
+    return this.#normalizeResolvedEdit({
+      start,
+      end,
+      text: edit.newText,
+    });
+  }
+
+  // Snaps an insertion before a pair and widens replacement boundaries
+  // outward, so every edit addresses whole UTF-16 surrogate pairs.
+  #normalizeResolvedEdit(edit: ResolvedTextEdit): ResolvedTextEdit {
+    let { start, end } = edit;
+    const isInsertion = start === end;
+    if (this.#isInsideSurrogatePair(start)) {
+      start--;
+    }
+    if (isInsertion) {
+      end = start;
+    } else if (this.#isInsideSurrogatePair(end)) {
+      end++;
+    }
+    return { start, end, text: edit.text };
+  }
+
+  // A UTF-16 offset is invalid when it sits between the high and low units of
+  // one well-formed surrogate pair. Lone surrogate units remain addressable.
+  #isInsideSurrogatePair(offset: number): boolean {
+    const previous = this.#pieceTable.charAt(offset - 1).charCodeAt(0);
+    const next = this.#pieceTable.charAt(offset).charCodeAt(0);
+    return (
+      previous >= 0xd800 &&
+      previous <= 0xdbff &&
+      next >= 0xdc00 &&
+      next <= 0xdfff
+    );
   }
 
   #sortAndValidateResolvedEdits(edits: ResolvedTextEdit[]): ResolvedTextEdit[] {

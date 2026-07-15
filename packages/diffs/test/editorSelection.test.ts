@@ -3996,40 +3996,29 @@ describe('Editor.setSelections position clamping', () => {
 });
 
 describe('Editor.setSelections with a reversed range', () => {
-  // KNOWN BUG: setSelections normalizes each position independently but never
-  // reorders the pair, so a selection whose start sits after its end is
-  // stored inverted (start 1:3 / end 0:2), violating the start <= end
-  // invariant that downstream code (offset resolution, rendering, merge)
-  // assumes. The conventional normalization of a range(3, 2) input resolves
-  // to from=2/to=3 with the backward flag; the equivalent here is swapping
-  // start/end and flipping the direction to backward, since the focus edge
-  // the caller supplied now sits first.
-  test.failing(
-    'a start-after-end selection is stored with ordered edges and backward direction',
-    async () => {
-      const { cleanup, editor } = await createEditorFixture(
-        'alpha\nbravo\ncharlie'
-      );
-      try {
-        editor.setSelections([
-          {
-            start: { line: 1, character: 3 },
-            end: { line: 0, character: 2 },
-            direction: 'forward',
-          },
-        ]);
-        expect(editor.getState().selections).toEqual([
-          {
-            start: { line: 0, character: 2 },
-            end: { line: 1, character: 3 },
-            direction: DirectionBackward,
-          },
-        ]);
-      } finally {
-        cleanup();
-      }
+  test('a start-after-end selection is stored with ordered edges and backward direction', async () => {
+    const { cleanup, editor } = await createEditorFixture(
+      'alpha\nbravo\ncharlie'
+    );
+    try {
+      editor.setSelections([
+        {
+          start: { line: 1, character: 3 },
+          end: { line: 0, character: 2 },
+          direction: 'forward',
+        },
+      ]);
+      expect(editor.getState().selections).toEqual([
+        {
+          start: { line: 0, character: 2 },
+          end: { line: 1, character: 3 },
+          direction: DirectionBackward,
+        },
+      ]);
+    } finally {
+      cleanup();
     }
-  );
+  });
 });
 
 // Splices `edits` (pre-edit offsets, sorted ascending, non-overlapping) into
