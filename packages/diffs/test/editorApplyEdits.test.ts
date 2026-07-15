@@ -648,6 +648,51 @@ describe('Editor.applyEdits selection sync', () => {
     }
   });
 
+  test('remaps live selections when history metadata is disabled', async () => {
+    const { cleanup, editor } = await createEditorFixture(
+      'alpha\nbravo\ncharlie'
+    );
+
+    try {
+      editor.setSelections([
+        {
+          start: { line: 2, character: 3 },
+          end: { line: 2, character: 3 },
+          direction: 'none',
+        },
+      ]);
+      editor.applyEdits(
+        [
+          {
+            range: {
+              start: { line: 0, character: 0 },
+              end: { line: 0, character: 0 },
+            },
+            newText: 'NEW\n',
+          },
+        ],
+        false
+      );
+
+      editor.undo();
+      expect(editor.getText()).toBe('alpha\nbravo\ncharlie');
+      expect(editor.getState().selections).toEqual([caret(2, 3)]);
+
+      editor.setSelections([
+        {
+          start: { line: 0, character: 2 },
+          end: { line: 0, character: 2 },
+          direction: 'none',
+        },
+      ]);
+      editor.redo();
+      expect(editor.getText()).toBe('NEW\nalpha\nbravo\ncharlie');
+      expect(editor.getState().selections).toEqual([caret(1, 2)]);
+    } finally {
+      cleanup();
+    }
+  });
+
   test('does not steal focus when the editor is not focused', async () => {
     const { cleanup, content, editor } = await createEditorFixture(
       'alpha\nbravo\ncharlie'

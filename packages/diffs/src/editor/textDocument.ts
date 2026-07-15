@@ -60,6 +60,15 @@ export interface TextDocumentChange {
   ][];
 }
 
+// Metadata-less replay results include the resolved edits so Editor can remap
+// its live selections without storing a snapshot on the history entry.
+type TextDocumentHistoryResult<LAnnotation> = [
+  change: TextDocumentChange,
+  selections?: EditorSelection[],
+  lineAnnotations?: DiffLineAnnotation<LAnnotation>[],
+  selectionEdits?: ResolvedTextEdit[],
+];
+
 /**
  * A vscode-languageserver-textdocument compatible text document.
  */
@@ -302,13 +311,7 @@ export class TextDocument<LAnnotation> {
     );
   }
 
-  undo():
-    | [
-        change: TextDocumentChange,
-        selections?: EditorSelection[],
-        lineAnnotations?: DiffLineAnnotation<LAnnotation>[],
-      ]
-    | undefined {
+  undo(): TextDocumentHistoryResult<LAnnotation> | undefined {
     const entry = this.#editStack.popUndoToRedo();
     if (entry === undefined) {
       return undefined;
@@ -318,20 +321,18 @@ export class TextDocument<LAnnotation> {
       return undefined;
     }
     this.#version = entry.versionBefore;
+    const selections = entry.selectionsBefore?.slice();
     return [
       change,
-      entry.selectionsBefore?.slice(),
+      selections,
       entry.lineAnnotationsBefore?.slice(),
+      selections === undefined
+        ? entry.inverseEdits.map((edit) => ({ ...edit }))
+        : undefined,
     ];
   }
 
-  redo():
-    | [
-        change: TextDocumentChange,
-        selections?: EditorSelection[],
-        lineAnnotations?: DiffLineAnnotation<LAnnotation>[],
-      ]
-    | undefined {
+  redo(): TextDocumentHistoryResult<LAnnotation> | undefined {
     const entry = this.#editStack.popRedoToUndo();
     if (entry === undefined) {
       return undefined;
@@ -341,10 +342,14 @@ export class TextDocument<LAnnotation> {
       return undefined;
     }
     this.#version = entry.versionAfter;
+    const selections = entry.selectionsAfter?.slice();
     return [
       change,
-      entry.selectionsAfter?.slice(),
+      selections,
       entry.lineAnnotationsAfter?.slice(),
+      selections === undefined
+        ? entry.forwardEdits.map((edit) => ({ ...edit }))
+        : undefined,
     ];
   }
 
