@@ -644,14 +644,16 @@ function getNextSelectionOffsetPairAfterReplace(
 }
 
 /**
- * Applies a text replace to multiple selections.
+ * Applies text replacements to multiple selections. Texts pair by selection
+ * index unless they are explicitly marked as document ordered.
  */
 export function applyTextReplaceToSelections<LAnnotation>(
   textDocument: TextDocument<LAnnotation>,
   selections: EditorSelection[],
   texts: string[],
   lineAnnotations?: DiffLineAnnotation<LAnnotation>[],
-  undoBoundary = false
+  undoBoundary = false,
+  textOrder: 'selection' | 'document' = 'selection'
 ): {
   nextSelections: EditorSelection[];
   change?: TextDocumentChange;
@@ -672,7 +674,6 @@ export function applyTextReplaceToSelections<LAnnotation>(
     index: number;
     start: number;
     end: number;
-    text: string;
   }> = [];
   let isAlreadyOrdered = true;
   for (let index = 0; index < selections.length; index++) {
@@ -680,7 +681,6 @@ export function applyTextReplaceToSelections<LAnnotation>(
       index,
       start: selectionOffsets[index * 2],
       end: selectionOffsets[index * 2 + 1],
-      text: texts[index],
     };
     const previous = ordered[ordered.length - 1];
     if (
@@ -758,14 +758,15 @@ export function applyTextReplaceToSelections<LAnnotation>(
     edits = [];
     let offsetDelta = 0;
     let previousEditEnd = -1;
-    for (const entry of ordered) {
+    for (let index = 0; index < ordered.length; index++) {
+      const entry = ordered[index];
       if (entry.start < previousEditEnd) {
         throw new Error('Overlapping multi-selection edits are not supported');
       }
       previousEditEnd = entry.end;
       const newText = expandSingleNewlineInsert(
         textDocument,
-        entry.text,
+        texts[textOrder === 'document' ? index : entry.index],
         entry.start
       );
       edits.push({
@@ -1714,6 +1715,28 @@ interface ClipboardRegion {
   end: number;
 }
 
+/** Resolves the document offset range one selection contributes to a copy. */
+function resolveClipboardRegion(
+  textDocument: TextDocument<unknown>,
+  selection: EditorSelection
+): ClipboardRegion {
+  if (isCollapsedSelection(selection)) {
+    const line = selection.start.line;
+    const start = textDocument.offsetAt({ line, character: 0 });
+    const end =
+      line < textDocument.lineCount - 1
+        ? textDocument.offsetAt({ line: line + 1, character: 0 })
+        : textDocument.offsetAt({
+            line,
+            character: textDocument.getLineLength(line),
+          });
+    return { start, end };
+  }
+  const start = textDocument.offsetAt(selection.start);
+  const end = textDocument.offsetAt(selection.end);
+  return start <= end ? { start, end } : { start: end, end: start };
+}
+
 /**
  * Resolves the document offset range each selection contributes to the
  * clipboard, ordered by position. A collapsed selection contributes its whole
@@ -1725,27 +1748,23 @@ function resolveClipboardRegions(
   selections: EditorSelection[]
 ): ClipboardRegion[] {
   return selections
-    .map((selection) => {
-      if (isCollapsedSelection(selection)) {
-        const line = selection.start.line;
-        const start = textDocument.offsetAt({ line, character: 0 });
-        const end =
-          line < textDocument.lineCount - 1
-            ? textDocument.offsetAt({ line: line + 1, character: 0 })
-            : textDocument.offsetAt({
-                line,
-                character: textDocument.getLineLength(line),
-              });
-        return { start, end };
-      }
-      const start = textDocument.offsetAt(selection.start);
-      const end = textDocument.offsetAt(selection.end);
-      return start <= end ? { start, end } : { start: end, end: start };
-    })
+    .map((selection) => resolveClipboardRegion(textDocument, selection))
     .sort((a, b) => {
       const startOrder = a.start - b.start;
       return startOrder !== 0 ? startOrder : a.end - b.end;
     });
+}
+
+/**
+ * Gets the text contributed by each selection in document order, preserving
+ * the pairing needed to paste the values into another set of selections.
+ */
+export function getSelectionClipboardTexts(
+  textDocument: TextDocument<unknown>,
+  selections: EditorSelection[]
+): string[] {
+  const regions = resolveClipboardRegions(textDocument, selections);
+  return regions.map(({ start, end }) => textDocument.getTextSlice(start, end));
 }
 
 /**

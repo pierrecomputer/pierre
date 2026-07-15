@@ -17,6 +17,7 @@ export type EditorCommand =
   | 'copyLineDown'
   | 'simplifySelection'
   | 'insertBlankLine'
+  | 'deleteHardLineForward'
   | 'toggleComment'
   | 'toggleBlockComment'
   | 'moveCursorToDocStart'
@@ -37,6 +38,19 @@ export function resolveEditorCommandFromKeyboardEvent(
   const { shiftKey, altKey, key } = event;
 
   const normalizedKey = key.length === 1 ? key.toLowerCase() : key;
+
+  // Safari and Firefox do not report macOS control+k as a beforeinput action,
+  // so resolve the native delete-to-line-end shortcut from keydown instead.
+  if (
+    isMac &&
+    event.ctrlKey &&
+    !event.metaKey &&
+    !shiftKey &&
+    !altKey &&
+    (normalizedKey === 'k' || event.code === 'KeyK')
+  ) {
+    return 'deleteHardLineForward';
+  }
 
   if (
     !event.metaKey &&

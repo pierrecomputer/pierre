@@ -1069,6 +1069,39 @@ describe('Editor move line commands', () => {
 });
 
 describe('Editor editing commands', () => {
+  test('deletes to the end of the line with macOS control+k', async () => {
+    const { cleanup, content, editor, window } =
+      await createEditorFixture('hello world\nnext');
+
+    try {
+      editor.setSelections([
+        {
+          start: { line: 0, character: 5 },
+          end: { line: 0, character: 5 },
+          direction: 'none',
+        },
+      ]);
+
+      const keydown = pressKey(window, content, {
+        key: 'k',
+        code: 'KeyK',
+        ctrlKey: true,
+      });
+
+      expect(keydown.defaultPrevented).toBe(true);
+      expect(editor.getText()).toBe('hello\nnext');
+      expect(editor.getState().selections).toEqual([
+        {
+          start: { line: 0, character: 5 },
+          end: { line: 0, character: 5 },
+          direction: 0,
+        },
+      ]);
+    } finally {
+      cleanup();
+    }
+  });
+
   test('copies selected lines and keeps the requested copy selected', async () => {
     const { cleanup, content, editor, window } = await createEditorFixture(
       'alpha\nbravo\ncharlie'

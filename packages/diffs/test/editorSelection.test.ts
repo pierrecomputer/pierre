@@ -898,6 +898,31 @@ describe('getAutoSurroundReplacementTexts', () => {
     ]);
   });
 
+  test('keeps auto-surround paired with descending selections', () => {
+    const textDocument = new TextDocument('inmemory://1', 'foo bar');
+    const selections = [
+      createSelection(0, 4, 0, 7, DirectionForward),
+      createSelection(0, 0, 0, 3, DirectionForward),
+    ];
+    const texts = getAutoSurroundReplacementTexts(
+      textDocument,
+      selections,
+      '"'
+    );
+    expect(texts).toEqual(['"bar"', '"foo"']);
+    const { nextSelections } = applyTextReplaceToSelections(
+      textDocument,
+      selections,
+      texts!
+    );
+
+    expect(textDocument.getText()).toBe('"foo" "bar"');
+    expect(nextSelections).toEqual([
+      createSelection(0, 7, 0, 10, DirectionForward),
+      createSelection(0, 1, 0, 4, DirectionForward),
+    ]);
+  });
+
   test('reselects wrapped text after auto-surround', () => {
     const textDocument = new TextDocument('inmemory://1', 'hello world');
     const selections = [createSelection(0, 0, 0, 11, DirectionForward)];
@@ -2370,6 +2395,49 @@ describe('applyTextReplaceToSelections', () => {
       createSelection(0, 2, 0, 2),
       createSelection(1, 2, 1, 2),
       createSelection(2, 2, 2, 2),
+    ]);
+  });
+
+  test('matches pasted text by document order for descending selections', () => {
+    const textDocument = new TextDocument('inmemory://1', 'x\ny\nz');
+    const selections = [
+      createSelection(2, 1, 2, 1),
+      createSelection(1, 1, 1, 1),
+      createSelection(0, 1, 0, 1),
+    ];
+    const { nextSelections } = applyTextReplaceToSelections(
+      textDocument,
+      selections,
+      ['a', 'b', 'c'],
+      undefined,
+      false,
+      'document'
+    );
+
+    expect(textDocument.getText()).toBe('xa\nyb\nzc');
+    expect(nextSelections).toEqual([
+      createSelection(2, 2, 2, 2),
+      createSelection(1, 2, 1, 2),
+      createSelection(0, 2, 0, 2),
+    ]);
+  });
+
+  test('keeps different-length replacement texts paired with unordered selections', () => {
+    const textDocument = new TextDocument('inmemory://1', 'abcdef');
+    const selections = [
+      createSelection(0, 4, 0, 6, DirectionForward),
+      createSelection(0, 0, 0, 1, DirectionForward),
+    ];
+    const { nextSelections } = applyTextReplaceToSelections(
+      textDocument,
+      selections,
+      ['Z', 'long']
+    );
+
+    expect(textDocument.getText()).toBe('longbcdZ');
+    expect(nextSelections).toEqual([
+      createSelection(0, 8, 0, 8),
+      createSelection(0, 4, 0, 4),
     ]);
   });
 

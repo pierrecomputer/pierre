@@ -82,6 +82,7 @@ import {
   getDocumentFullSelection,
   getSelectedLineBlocks,
   getSelectionAnchor,
+  getSelectionClipboardTexts,
   getSelectionText,
   isCollapsedSelection,
   isLineEditable,
@@ -116,7 +117,7 @@ import {
   Metrics,
   snapTextOffsetToUnicodeBoundary,
 } from './textMeasure';
-import { EditorTokenizer, renderLineTokens } from './tokenzier';
+import { EditorTokenizer, renderLineTokens } from './tokenizer';
 import {
   addEventListener,
   clampDomOffset,
@@ -207,7 +208,7 @@ export interface EditorOptions<LAnnotation> {
    * see https://www.electronjs.org/docs/latest/api/clipboard
    */
   clipboard?: {
-    readText: () => Promise<string> | string;
+    readText: (type?: string) => Promise<string> | string;
   };
   /** Render the selection action widget element. */
   renderSelectionAction?: (
@@ -238,6 +239,8 @@ export interface EditorOptions<LAnnotation> {
 // row per inserted line. A safety bound, not a correctness-critical value.
 const MAX_EDIT_WIDEN_WINDOW_MULTIPLE = 2;
 const SELECTION_ACTION_POPOVER_PLACEMENT_KEY = 'selection-action';
+const MULTI_SELECTION_CLIPBOARD_TYPE =
+  'application/vnd.pierre.diffs-selections+json';
 
 export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #options: EditorOptions<LAnnotation>;
@@ -1764,12 +1767,15 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         // A read-only deleted-text selection lives outside the editor's
         // document, so #getSelectionText() would be empty. Copy the selected
         // deleted text instead.
-        e.clipboardData?.setData(
-          'text',
-          this.#isDeletedTextSelectionActive()
-            ? this.#deletedTextForClipboard()
-            : this.#getSelectionText()
-        );
+        if (this.#isDeletedTextSelectionActive()) {
+          e.clipboardData?.setData('text', this.#deletedTextForClipboard());
+        } else {
+          this.#writeSelectionClipboardData(
+            e.clipboardData,
+            this.#getSelectionText(),
+            this.#getSelectionClipboardTexts()
+          );
+        }
       }),
 
       addEventListener(contentEl, 'cut', (e) => {
@@ -1779,12 +1785,16 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         e.preventDefault();
         // Deleted text is read-only and can't be removed, so a cut there copies
         // the selected deleted text (like the copy handler) without editing.
-        e.clipboardData?.setData(
-          'text',
-          this.#isDeletedTextSelectionActive()
-            ? this.#deletedTextForClipboard()
-            : this.#cutSelectionText()
-        );
+        if (this.#isDeletedTextSelectionActive()) {
+          e.clipboardData?.setData('text', this.#deletedTextForClipboard());
+        } else {
+          const selectionTexts = this.#getSelectionClipboardTexts();
+          this.#writeSelectionClipboardData(
+            e.clipboardData,
+            this.#cutSelectionText(),
+            selectionTexts
+          );
+        }
       }),
 
       addEventListener(contentEl, 'paste', (e) => {
@@ -1792,18 +1802,44 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           return;
         }
         e.preventDefault();
-        const text = e.clipboardData?.getData('text');
+        const clipboardData = e.clipboardData;
         const textDocument = this.#textDocument;
-        if (text !== undefined && textDocument !== undefined) {
-          // Rewrite clipboard line breaks to the document's EOL so a Windows
-          // clipboard (\r\n or \r) doesn't leave mixed line endings behind.
-          // TODO(@ije): Add support of multiple selections copy&paste
-          this.#replaceSelectionText(
-            textDocument.normalizeEol(text),
-            undefined,
-            true
-          );
+        if (clipboardData === null || textDocument === undefined) {
+          return;
         }
+
+        let text: string | string[] = clipboardData.getData('text');
+
+        const selectionCount = this.#selections?.length ?? 0;
+        if (selectionCount > 1) {
+          const multiSelectionText = clipboardData.getData(
+            MULTI_SELECTION_CLIPBOARD_TYPE
+          );
+          if (multiSelectionText !== undefined) {
+            try {
+              const selectionTexts = JSON.parse(multiSelectionText);
+              if (
+                Array.isArray(selectionTexts) &&
+                selectionTexts.length === selectionCount
+              ) {
+                text = selectionTexts;
+              }
+            } catch {
+              // ignore the invalid custom clipboard data
+            }
+          }
+        }
+
+        // Rewrite clipboard line breaks to the document's EOL so a Windows
+        // clipboard (\r\n or \r) doesn't leave mixed line endings behind.
+        this.#replaceSelectionText(
+          Array.isArray(text)
+            ? text.map((t) => textDocument.normalizeEol(t))
+            : textDocument.normalizeEol(text),
+          undefined,
+          true,
+          'document'
+        );
       }),
 
       addEventListener(contentEl, 'beforeinput', (e) => {
@@ -2051,13 +2087,33 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #handleCustomPasteEvent = async () => {
     const clipboard = this.#options.clipboard;
     if (clipboard !== undefined) {
-      const text = await clipboard.readText();
+      let text: string | string[] = await clipboard.readText();
+      const selectionCount = this.#selections?.length ?? 0;
+      if (selectionCount > 1) {
+        const multiSelectionText = await clipboard.readText(
+          MULTI_SELECTION_CLIPBOARD_TYPE
+        );
+        try {
+          const selectionTexts = JSON.parse(multiSelectionText);
+          if (
+            Array.isArray(selectionTexts) &&
+            selectionTexts.length === selectionCount
+          ) {
+            text = selectionTexts;
+          }
+        } catch {
+          // Invalid selection metadata falls back to the plain-text value.
+        }
+      }
       const textDocument = this.#textDocument;
       if (textDocument !== undefined) {
         this.#replaceSelectionText(
-          textDocument.normalizeEol(text),
+          Array.isArray(text)
+            ? text.map((t) => textDocument.normalizeEol(t))
+            : textDocument.normalizeEol(text),
           undefined,
-          true
+          true,
+          'document'
         );
       }
     }
@@ -2091,7 +2147,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     return undefined;
   }
 
-  // TODO(@ije): add command registry
   #runCommand(command: EditorCommand) {
     const textDocument = this.#textDocument;
     if (textDocument === undefined) {
@@ -2167,6 +2222,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
       case 'insertBlankLine':
         this.#insertBlankLine();
+        break;
+
+      case 'deleteHardLineForward':
+        this.#deleteHardLineForward();
         break;
 
       case 'toggleComment':
@@ -2774,7 +2833,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       return;
     }
 
-    // cancel existing background tokenzier task
+    // cancel existing background tokenizing task
     tokenizer.stopBackgroundTokenize();
 
     const t = performance.now();
@@ -2999,11 +3058,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       // behavior is what we match.
       case 'deleteHardLineBackward':
         this.#deleteSoftLineBackward();
-        break;
-      case 'deleteHardLineForward':
-        // TODO(@ije): Safari and Firefox does not support this input type
-        // use command instead
-        this.#deleteHardLineForward();
         break;
       case 'deleteWordBackward':
         this.#deleteWordBackward();
@@ -3836,12 +3890,13 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       const top = this.#getLineY(line) + wrapLine * lineHeight;
       // Match the corner mask to the line color behind the selection; when
       // absent (context lines) the CSS falls back to the editor base bg.
-      const cornerBg = this.#lineBackgroundColor(line);
-      const css =
-        `width:${ch}px;transform:translateX(${left}px) translateY(${top}px);` +
-        (cornerBg !== undefined
-          ? `--diffs-selection-corner-bg:${cornerBg};`
-          : '');
+      const lineElement = this.#getLineElement(line);
+      let cornerBg = 'initial';
+      if (this.#isDiff && lineElement?.dataset.lineType === 'change-addition') {
+        cornerBg =
+          getComputedStyle(lineElement).getPropertyValue('--diffs-line-bg');
+      }
+      const css = `width:${ch}px;transform:translateX(${left}px) translateY(${top}px);--diffs-selection-corner-bg:${cornerBg}`;
       const dataset = {
         selectionCorner: '',
         [radius]: '',
@@ -4144,7 +4199,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#renderSearchPanel(mode);
   }
 
-  // TODO(@ije): render search highlight
   #renderSearchPanel(mode: SearchPanelMode) {
     // cleanup the existing search panel
     this.#searchPanel?.cleanup();
@@ -4293,6 +4347,33 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     return getSelectionText(textDocument, selections);
   }
 
+  #getSelectionClipboardTexts(): string[] {
+    const textDocument = this.#textDocument;
+    const selections = this.#selections;
+    if (textDocument === undefined || selections === undefined) {
+      return [];
+    }
+    return getSelectionClipboardTexts(textDocument, selections);
+  }
+
+  /** Writes both the portable text and the selection pairing metadata. */
+  #writeSelectionClipboardData(
+    clipboardData: DataTransfer | null,
+    text: string,
+    selectionTexts: string[]
+  ): void {
+    if (clipboardData === null) {
+      return;
+    }
+    clipboardData.setData('text', text);
+    if (selectionTexts.length > 1) {
+      clipboardData.setData(
+        MULTI_SELECTION_CLIPBOARD_TYPE,
+        JSON.stringify(selectionTexts)
+      );
+    }
+  }
+
   #cutSelectionText(): string {
     const textDocument = this.#textDocument;
     const selections = this.#selections;
@@ -4362,7 +4443,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #replaceSelectionText(
     text: string | string[],
     selections = this.#selections,
-    undoBoundary = false
+    undoBoundary = false,
+    textOrder: 'selection' | 'document' = 'selection'
   ) {
     if (selections === undefined) {
       return;
@@ -4379,7 +4461,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
             selections,
             text,
             this.#lineAnnotations,
-            undoBoundary
+            undoBoundary,
+            textOrder
           )
         : applyTextChangeToSelections<LAnnotation>(
             textDocument,
@@ -4387,7 +4470,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
             {
               start: textDocument.offsetAt(primarySelection.start),
               end: textDocument.offsetAt(primarySelection.end),
-              text: Array.isArray(text) ? text.join('\n') : text,
+              text: Array.isArray(text) ? text.join(textDocument.eol) : text,
             },
             this.#lineAnnotations,
             undefined,
@@ -4687,30 +4770,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       }
     }
     return undefined;
-  }
-
-  // TODO(@ije): remove this
-  // Painted background color of a line, read from the [data-line]::after layer
-  // (the line element itself is transparent in edit mode). Returns undefined when
-  // that layer is transparent (e.g. context lines).
-  #lineBackgroundColor(line: number): string | undefined {
-    const lineElement = this.#getLineElement(line);
-    if (lineElement === undefined) {
-      return undefined;
-    }
-    // testing environment like jsdom doesn't implement the getComputedStyle API
-    if (navigator.userAgent.includes('jsdom')) {
-      return undefined;
-    }
-    const backgroundColor = getComputedStyle(
-      lineElement,
-      '::after'
-    ).backgroundColor;
-    return backgroundColor === '' ||
-      backgroundColor === 'transparent' ||
-      backgroundColor === 'rgba(0, 0, 0, 0)'
-      ? undefined
-      : backgroundColor;
   }
 
   // Returns the first and last document lines that have an editable row in the

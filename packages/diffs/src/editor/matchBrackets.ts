@@ -1,6 +1,6 @@
 import type { Position, Range } from '../types';
 import type { TextDocument } from './textDocument';
-import type { EditorTokenizer } from './tokenzier';
+import type { EditorTokenizer } from './tokenizer';
 
 const OPEN_BRACKETS = new Map([
   ['(', ')'],

@@ -87,6 +87,14 @@ describe('resolveEditorShortcutCommand', () => {
         event: { key: 'Enter', metaKey: true },
         expected: 'insertBlankLine',
       },
+      {
+        event: { key: 'k', code: 'KeyK', ctrlKey: true },
+        expected: 'deleteHardLineForward',
+      },
+      {
+        event: { key: 'Unidentified', code: 'KeyK', ctrlKey: true },
+        expected: 'deleteHardLineForward',
+      },
       { event: { key: '[', metaKey: true }, expected: 'indentLess' },
       { event: { key: ']', metaKey: true }, expected: 'indentMore' },
       { event: { key: '/', metaKey: true }, expected: 'toggleComment' },
@@ -139,6 +147,7 @@ describe('resolveEditorShortcutCommand', () => {
         event: { key: 'Enter', ctrlKey: true },
         expected: 'insertBlankLine',
       },
+      { event: { key: 'k', ctrlKey: true }, expected: undefined },
       { event: { key: '[', ctrlKey: true }, expected: 'indentLess' },
       { event: { key: ']', ctrlKey: true }, expected: 'indentMore' },
       { event: { key: '/', ctrlKey: true }, expected: 'toggleComment' },
