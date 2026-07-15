@@ -2276,6 +2276,9 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         if (this.#selections !== undefined) {
           const edits: TextEdit[] = [];
           const nextSelections: EditorSelection[] = [];
+          // Line-based indentation is resolved per selection, so overlapping
+          // line coverage must share the same leading-whitespace edit.
+          const editedLines = new Set<number>();
           // Single-line indent inserts text at each caret. When several carets
           // share a line, indentation inserted by carets to their left shifts
           // them right, so record each one here and offset its resulting
@@ -2299,7 +2302,13 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
                 this.#metrics.tabSize,
                 outdent
               );
-              edits.push(...ret[0]);
+              for (const edit of ret[0]) {
+                const line = edit.range.start.line;
+                if (!editedLines.has(line)) {
+                  editedLines.add(line);
+                  edits.push(edit);
+                }
+              }
               nextSelections.push(ret[1]);
             } else {
               const lineChar0 = textDocument.charAt({
