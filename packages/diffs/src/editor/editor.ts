@@ -597,14 +597,24 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       throw new Error('Text document is not initialized');
     }
     const resolvedSelections = selections.map<EditorSelection>((selection) => {
-      const start = textDocument.normalizePosition(selection.start);
-      const end = textDocument.normalizePosition(selection.end);
-      const direction =
+      let start = textDocument.normalizePosition(selection.start);
+      let end = textDocument.normalizePosition(selection.end);
+      let direction: EditorSelection['direction'] =
         selection.direction === 'none'
           ? DirectionNone
           : selection.direction === 'backward'
             ? DirectionBackward
             : DirectionForward;
+
+      if (comparePosition(start, end) > 0) {
+        [start, end] = [end, start];
+        if (direction !== DirectionNone) {
+          direction =
+            direction === DirectionForward
+              ? DirectionBackward
+              : DirectionForward;
+        }
+      }
       return { direction, start, end };
     });
     this.#updateSelections(resolvedSelections);

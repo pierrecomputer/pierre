@@ -148,10 +148,6 @@ order. If you touch one of these areas, consider adding the missing coverage:
   computation can return a position strictly inside a CRLF pair (a character
   beyond the line's own length) that the inverse offset-from-position
   computation clamps away, so the round trip silently loses a column.
-- **Inverted selection after normalization** (1) — setting selections normalizes
-  positions but never reorders a start-after-end pair, storing an inverted
-  selection that violates the start-before-or-equal-end invariant downstream
-  code assumes.
 - **Search-replace capture expansion with lookaround** (3) — replacement-text
   expansion re-executes the pattern against only the matched slice, so
   lookaround context outside the slice is lost: a lookbehind whose context sits
