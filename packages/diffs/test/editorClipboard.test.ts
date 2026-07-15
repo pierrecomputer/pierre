@@ -703,42 +703,43 @@ describe('Editor clipboard events', () => {
     }
   });
 
-  test('uses plain text when copied and target selection counts differ', () => {
+  test('uses plain text when metadata and selection counts differ', () => {
     const { cleanup } = installDom();
 
     const editor = new Editor<undefined>();
     const component = new TestEditableComponent({
       name: 'example.txt',
-      contents: 'one two\nthree four\n---\nAA',
+      contents: 'AA\nBB\nCC',
       lang: 'text',
     });
 
     try {
       editor.edit(component);
+      const clipboardData = new TestClipboardData('plain');
+      clipboardData.setData(
+        MULTI_SELECTION_CLIPBOARD_TYPE,
+        JSON.stringify(['one\n', 'two\n'])
+      );
       editor.setSelections([
         {
           start: { line: 0, character: 0 },
-          end: { line: 0, character: 3 },
+          end: { line: 0, character: 2 },
           direction: 'forward',
         },
         {
           start: { line: 1, character: 0 },
-          end: { line: 1, character: 5 },
+          end: { line: 1, character: 2 },
           direction: 'forward',
         },
-      ]);
-      const clipboardData = dispatchCopyData(component.contentElement);
-
-      editor.setSelections([
         {
-          start: { line: 3, character: 0 },
-          end: { line: 3, character: 2 },
+          start: { line: 2, character: 0 },
+          end: { line: 2, character: 2 },
           direction: 'forward',
         },
       ]);
       dispatchPaste(component.contentElement, clipboardData);
 
-      expect(editor.getText()).toBe('one two\nthree four\n---\none\nthree');
+      expect(editor.getText()).toBe('plain\nplain\nplain');
     } finally {
       editor.cleanUp();
       cleanup();
@@ -907,6 +908,53 @@ describe('Editor clipboard events', () => {
       expect(keydown.defaultPrevented).toBe(true);
       expect(reads).toEqual([undefined, MULTI_SELECTION_CLIPBOARD_TYPE]);
       expect(editor.getText()).toBe('one\ntwo');
+    } finally {
+      editor.cleanUp();
+      cleanup();
+    }
+  });
+
+  test('uses custom clipboard plain text when selection counts differ', async () => {
+    const { cleanup } = installDom();
+
+    const editor = new Editor<undefined>({
+      clipboard: {
+        readText: (type) =>
+          type === MULTI_SELECTION_CLIPBOARD_TYPE
+            ? JSON.stringify(['one\n', 'two\n'])
+            : 'plain',
+      },
+    });
+    const component = new TestEditableComponent({
+      name: 'example.txt',
+      contents: 'AA\nBB\nCC',
+      lang: 'text',
+    });
+
+    try {
+      editor.edit(component);
+      editor.setSelections([
+        {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 2 },
+          direction: 'forward',
+        },
+        {
+          start: { line: 1, character: 0 },
+          end: { line: 1, character: 2 },
+          direction: 'forward',
+        },
+        {
+          start: { line: 2, character: 0 },
+          end: { line: 2, character: 2 },
+          direction: 'forward',
+        },
+      ]);
+
+      dispatchPasteShortcutKeydown(component.contentElement);
+      await wait();
+
+      expect(editor.getText()).toBe('plain\nplain\nplain');
     } finally {
       editor.cleanUp();
       cleanup();

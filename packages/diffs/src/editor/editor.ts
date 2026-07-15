@@ -1488,14 +1488,18 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
         let text: string | string[] = clipboardData.getData('text');
 
-        if ((this.#selections?.length ?? 0) > 1) {
+        const selectionCount = this.#selections?.length ?? 0;
+        if (selectionCount > 1) {
           const multiSelectionText = clipboardData.getData(
             MULTI_SELECTION_CLIPBOARD_TYPE
           );
           if (multiSelectionText !== undefined) {
             try {
               const selectionTexts = JSON.parse(multiSelectionText);
-              if (Array.isArray(selectionTexts) && selectionTexts.length > 0) {
+              if (
+                Array.isArray(selectionTexts) &&
+                selectionTexts.length === selectionCount
+              ) {
                 text = selectionTexts;
               }
             } catch {
@@ -1762,13 +1766,17 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     const clipboard = this.#options.clipboard;
     if (clipboard !== undefined) {
       let text: string | string[] = await clipboard.readText();
-      if ((this.#selections?.length ?? 0) > 1) {
+      const selectionCount = this.#selections?.length ?? 0;
+      if (selectionCount > 1) {
         const multiSelectionText = await clipboard.readText(
           MULTI_SELECTION_CLIPBOARD_TYPE
         );
         try {
           const selectionTexts = JSON.parse(multiSelectionText);
-          if (Array.isArray(selectionTexts) && selectionTexts.length > 0) {
+          if (
+            Array.isArray(selectionTexts) &&
+            selectionTexts.length === selectionCount
+          ) {
             text = selectionTexts;
           }
         } catch {
