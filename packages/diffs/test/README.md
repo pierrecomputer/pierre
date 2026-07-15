@@ -103,7 +103,7 @@ order. If you touch one of these areas, consider adding the missing coverage:
 - **IME composition deferrals** — IME/composition interaction with editing and
   undo-coalescing is deferred and not covered.
 
-## Known bugs pinned as `test.failing` (15)
+## Known bugs pinned as `test.failing`
 
 - **EditStack coalescing** (3) — coalescing decisions compare a new edit against
   whatever sits on top of the undo stack purely by geometry, with no state reset
@@ -112,12 +112,6 @@ order. If you touch one of these areas, consider adding the missing coverage:
   and backspace followed by forward-delete at the same pivot coalesces into a
   single undo step instead of getting an undo stop when the delete direction
   flips.
-- **PieceTable CRLF line metadata** (5, spanning piece-table and search
-  coverage) — line-break bookkeeping goes stale when a CRLF pair is split or
-  assembled across edits (deleting exactly the `\n` of a pair, inserting between
-  the `\r` and `\n`, assembling CRLF from two separate inserts, plus a
-  CRLF-biased fuzz oracle), and the same stale metadata drives search astray
-  (shifted or missing match ranges) even though `getText()` stays correct.
 - **History equivalence across non-history edits** (7) — edits applied with
   `updateHistory=false` are an implementation detail of how an edit reaches
   `applyEdits`, not a separate semantic class: a mixed programmatic/local

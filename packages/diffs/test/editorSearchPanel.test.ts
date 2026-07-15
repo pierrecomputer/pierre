@@ -986,21 +986,12 @@ describe('search agrees with a string-model oracle under random splices', () => 
     );
   });
 
-  // KNOWN BUG: splices that split or form \r\n pairs across piece seams
-  // corrupt the piece-level line-break counts (breaks double-counted or
-  // missed — the root cause is pinned as directed repros in
-  // editorPieceTable.test.ts), so line starts drift and search reports
-  // shifted or missing ranges even though getText() stays correct. A replace
-  // driven by those ranges would edit the wrong bytes.
-  test.failing(
-    'CR/LF-biased splices keep every preset pattern on the oracle',
-    () => {
-      runSearchFuzz(
-        7,
-        'delta gap echo 12\r\nfox 345 gap\n\nhollow gap 6\r\nquiet end 78',
-        ['gap', 'e', '90', '\n', '\r', '\r\n', ' ', ''],
-        40
-      );
-    }
-  );
+  test('CR/LF-biased splices keep every preset pattern on the oracle', () => {
+    runSearchFuzz(
+      7,
+      'delta gap echo 12\r\nfox 345 gap\n\nhollow gap 6\r\nquiet end 78',
+      ['gap', 'e', '90', '\n', '\r', '\r\n', ' ', ''],
+      40
+    );
+  });
 });
