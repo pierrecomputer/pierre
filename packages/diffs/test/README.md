@@ -148,10 +148,6 @@ order. If you touch one of these areas, consider adding the missing coverage:
   text, the unwind that should restore recorded selections verbatim never
   reaches the original text, and a pending redo survives an untracked edit
   (instead of being cleared like any new edit) and replays at stale offsets.
-- **Position round-trip losing a column** (1) — a position-from-offset
-  computation can return a position strictly inside a CRLF pair (a character
-  beyond the line's own length) that the inverse offset-from-position
-  computation clamps away, so the round trip silently loses a column.
 - **Inverted selection after normalization** (1) — setting selections normalizes
   positions but never reorders a start-after-end pair, storing an inverted
   selection that violates the start-before-or-equal-end invariant downstream
