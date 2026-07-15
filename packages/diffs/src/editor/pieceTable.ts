@@ -4,6 +4,8 @@ import type { SearchParams } from './searchPanel';
 import type { ResolvedTextEdit } from './textDocument';
 
 const MAX_FIND_MATCHES = 100000;
+const LINE_FEED = 10;
+const CARRIAGE_RETURN = 13;
 // TODO(ije): use Intl.Segmenter instead of regex for word separators
 const WORD_SEPARATORS = '`~!@#$%^&*()-=+[{]}\\|;:\'",.<>/?' as const;
 
@@ -17,11 +19,20 @@ class Piece {
     public readonly offset: number,
     public readonly length: number,
     public readonly lineOffsetStart: number,
-    public readonly lineOffsetEnd: number
+    public readonly lineOffsetEnd: number,
+    public readonly hasVirtualTrailingCRBreak: boolean,
+    public readonly firstCharCode: number,
+    public readonly lastCharCode: number
   ) {}
 
+  // A slice ending between a backing-buffer CRLF needs its own lone-CR break
+  // until the tree reconnects it to a piece beginning with LF.
   get lineBreakCount(): number {
-    return this.lineOffsetEnd - this.lineOffsetStart;
+    return (
+      this.lineOffsetEnd -
+      this.lineOffsetStart +
+      (this.hasVirtualTrailingCRBreak ? 1 : 0)
+    );
   }
 }
 
@@ -58,7 +69,9 @@ class PieceNode {
   constructor(
     public piece: Piece,
     public subtreeLength: number = piece.length,
-    public subtreeLineBreakCount: number = piece.lineBreakCount
+    public subtreeLineBreakCount: number = piece.lineBreakCount,
+    public subtreeFirstCharCode: number = piece.firstCharCode,
+    public subtreeLastCharCode: number = piece.lastCharCode
   ) {}
 
   updateSubtreeLength(): void {
@@ -66,10 +79,22 @@ class PieceNode {
       (this.left?.subtreeLength ?? 0) +
       this.piece.length +
       (this.right?.subtreeLength ?? 0);
+    // Pieces count their edge characters in isolation. Collapse a CRLF only
+    // when the two characters are actually adjacent in this subtree.
     this.subtreeLineBreakCount =
       (this.left?.subtreeLineBreakCount ?? 0) +
       this.piece.lineBreakCount +
-      (this.right?.subtreeLineBreakCount ?? 0);
+      (this.right?.subtreeLineBreakCount ?? 0) -
+      (formsCRLF(this.left?.subtreeLastCharCode, this.piece.firstCharCode)
+        ? 1
+        : 0) -
+      (formsCRLF(this.piece.lastCharCode, this.right?.subtreeFirstCharCode)
+        ? 1
+        : 0);
+    this.subtreeFirstCharCode =
+      this.left?.subtreeFirstCharCode ?? this.piece.firstCharCode;
+    this.subtreeLastCharCode =
+      this.right?.subtreeLastCharCode ?? this.piece.lastCharCode;
   }
 }
 
@@ -524,17 +549,42 @@ export class PieceTable {
         continue;
       }
 
-      line += node.left?.subtreeLineBreakCount ?? 0;
+      line +=
+        (node.left?.subtreeLineBreakCount ?? 0) -
+        (formsCRLF(node.left?.subtreeLastCharCode, node.piece.firstCharCode)
+          ? 1
+          : 0);
       remaining -= leftLength;
       if (remaining <= node.piece.length) {
         const buffer = this.#bufferFor(node.piece.source);
-        line +=
-          upperBound(buffer.lineOffsets, node.piece.offset + remaining) -
-          node.piece.lineOffsetStart;
+        const lineOffsetEnd = Math.min(
+          upperBound(buffer.lineOffsets, node.piece.offset + remaining),
+          node.piece.lineOffsetEnd
+        );
+        line += lineOffsetEnd - node.piece.lineOffsetStart;
+        if (
+          remaining === node.piece.length &&
+          node.piece.hasVirtualTrailingCRBreak
+        ) {
+          line++;
+        }
+        if (
+          remaining === node.piece.length &&
+          formsCRLF(
+            node.piece.lastCharCode,
+            this.#nextNode(node)?.piece.firstCharCode
+          )
+        ) {
+          line--;
+        }
         return line;
       }
 
-      line += node.piece.lineBreakCount;
+      line +=
+        node.piece.lineBreakCount -
+        (formsCRLF(node.piece.lastCharCode, node.right?.subtreeFirstCharCode)
+          ? 1
+          : 0);
       remaining -= node.piece.length;
       node = node.right;
     }
@@ -546,10 +596,16 @@ export class PieceTable {
     let node = this.#root;
     let remaining = lineBreakIndex;
     let documentOffset = 0;
+    let followingCharCode: number | undefined;
 
     while (node !== null) {
-      const leftLineBreakCount = node.left?.subtreeLineBreakCount ?? 0;
+      const leftLineBreakCount =
+        (node.left?.subtreeLineBreakCount ?? 0) -
+        (formsCRLF(node.left?.subtreeLastCharCode, node.piece.firstCharCode)
+          ? 1
+          : 0);
       if (remaining < leftLineBreakCount) {
+        followingCharCode = node.piece.firstCharCode;
         node = node.left;
         continue;
       }
@@ -558,19 +614,34 @@ export class PieceTable {
       documentOffset += leftLength;
       remaining -= leftLineBreakCount;
 
-      if (remaining < node.piece.lineBreakCount) {
-        const bufferLineOffset = this.#bufferFor(node.piece.source).lineOffsets[
-          node.piece.lineOffsetStart + remaining
-        ];
-        return documentOffset + (bufferLineOffset - node.piece.offset);
+      const nextCharCode =
+        node.right?.subtreeFirstCharCode ?? followingCharCode;
+      const pieceLineBreakCount =
+        node.piece.lineBreakCount -
+        (formsCRLF(node.piece.lastCharCode, nextCharCode) ? 1 : 0);
+      if (remaining < pieceLineBreakCount) {
+        return (
+          documentOffset + this.#pieceLineBreakOffset(node.piece, remaining)
+        );
       }
 
       documentOffset += node.piece.length;
-      remaining -= node.piece.lineBreakCount;
+      remaining -= pieceLineBreakCount;
       node = node.right;
     }
 
     return this.#length;
+  }
+
+  #pieceLineBreakOffset(piece: Piece, lineBreakIndex: number): number {
+    const bufferLineBreakCount = piece.lineOffsetEnd - piece.lineOffsetStart;
+    if (lineBreakIndex < bufferLineBreakCount) {
+      const bufferLineOffset = this.#bufferFor(piece.source).lineOffsets[
+        piece.lineOffsetStart + lineBreakIndex
+      ];
+      return bufferLineOffset - piece.offset;
+    }
+    return piece.length;
   }
 
   #textFromPieces(): string {
@@ -610,12 +681,20 @@ export class PieceTable {
 
   #createPiece(source: number, offset: number, length: number): Piece {
     const buffer = this.#bufferFor(source);
+    const end = offset + length;
+    const lineOffsetStart = upperBound(buffer.lineOffsets, offset);
+    const lineOffsetEnd = upperBound(buffer.lineOffsets, end);
+    const lastCharCode = buffer.text.charCodeAt(end - 1);
     return new Piece(
       source,
       offset,
       length,
-      upperBound(buffer.lineOffsets, offset),
-      upperBound(buffer.lineOffsets, offset + length)
+      lineOffsetStart,
+      lineOffsetEnd,
+      lastCharCode === CARRIAGE_RETURN &&
+        buffer.lineOffsets[lineOffsetEnd - 1] !== end,
+      buffer.text.charCodeAt(offset),
+      lastCharCode
     );
   }
 
@@ -773,10 +852,8 @@ export class PieceTable {
     return right;
   }
 
-  // Appends `piece` after every node in `tree`. If the tree's last piece and
-  // `piece` point at adjacent text in the same buffer, they are merged in place
-  // (no new node) — this is what keeps sequential typing a single piece and
-  // stops the piece count from growing without bound.
+  // Appends `piece` after every node in `tree`. Compatible adjacent pieces in
+  // the same buffer are merged in place, keeping sequential typing compact.
   #appendCoalescing(tree: PieceNode | null, piece: Piece): PieceNode {
     if (tree === null) {
       return this.#createNode(piece);
@@ -906,11 +983,13 @@ function rangeOverlaps(
   return range !== undefined && range[0] < end;
 }
 
-// True when two pieces point at directly adjacent text in the same backing
-// buffer, so they can be represented as one piece.
+// CRLF seams stay explicit because separately appended buffer chunks may each
+// record a break there; the tree aggregate reconciles the document-level pair.
 function canCoalescePieces(prev: Piece, next: Piece): boolean {
   return (
-    prev.source === next.source && prev.offset + prev.length === next.offset
+    prev.source === next.source &&
+    prev.offset + prev.length === next.offset &&
+    !formsCRLF(prev.lastCharCode, next.firstCharCode)
   );
 }
 
@@ -923,8 +1002,18 @@ function coalesceTwoPieces(prev: Piece, next: Piece): Piece {
     prev.offset,
     prev.length + next.length,
     prev.lineOffsetStart,
-    next.lineOffsetEnd
+    next.lineOffsetEnd,
+    next.hasVirtualTrailingCRBreak,
+    prev.firstCharCode,
+    next.lastCharCode
   );
+}
+
+function formsCRLF(
+  leftCharCode: number | undefined,
+  rightCharCode: number | undefined
+): boolean {
+  return leftCharCode === CARRIAGE_RETURN && rightCharCode === LINE_FEED;
 }
 
 // Returns the index of the first element in the array that is greater than the target.

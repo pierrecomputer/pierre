@@ -12,10 +12,14 @@ function lineTexts(text: string): string[] {
   const lines: string[] = [];
   let start = 0;
   for (let i = 0; i < text.length; i++) {
-    if (text.charCodeAt(i) === 10) {
-      lines.push(text.slice(start, i + 1));
-      start = i + 1;
+    const charCode = text.charCodeAt(i);
+    if (charCode === 13 && text.charCodeAt(i + 1) === 10) {
+      i++;
+    } else if (charCode !== 10 && charCode !== 13) {
+      continue;
     }
+    lines.push(text.slice(start, i + 1));
+    start = i + 1;
   }
   if (start <= text.length) {
     lines.push(text.slice(start));
@@ -42,7 +46,10 @@ function positionAt(text: string, offset: number): Position {
   let lineStart = 0;
 
   for (let i = 0; i < text.length; i++) {
-    if (text.charCodeAt(i) !== 10) {
+    const charCode = text.charCodeAt(i);
+    if (charCode === 13 && text.charCodeAt(i + 1) === 10) {
+      i++;
+    } else if (charCode !== 10 && charCode !== 13) {
       continue;
     }
 
@@ -740,82 +747,56 @@ describe('PieceTable CRLF and lone-CR line breaks', () => {
     expect(table.lineCount).toBe(2);
   });
 
-  // KNOWN BUG: deleting the \n out of \r\n leaves a lone \r that the piece's
-  // buffer-based line metadata no longer counts as a break (the buffer counted
-  // \r\n as one break ending after the \n, which is now outside the piece), so
-  // lineCount collapses to 1 even though the text still has two lines.
-  test.failing(
-    'deleting exactly the \\n of a \\r\\n pair leaves a lone \\r break',
-    () => {
-      const table = new PieceTable('cat\r\ndog');
+  test('deleting exactly the \\n of a \\r\\n pair leaves a lone \\r break', () => {
+    const table = new PieceTable('cat\r\ndog');
 
-      table.delete(4, 1);
+    table.delete(4, 1);
 
-      expect(table.getText()).toBe('cat\rdog');
-      expect(table.lineCount).toBe(2);
-    }
-  );
+    expect(table.getText()).toBe('cat\rdog');
+    expect(table.lineCount).toBe(2);
+  });
 
-  // KNOWN BUG: a \r and a \n inserted separately land as distinct chunks in
-  // the add buffer, each counted as its own line break, so the \r\n pair they
-  // form in the document is double-counted and lineCount reads 3 instead of 2.
-  test.failing(
-    '\\r\\n assembled from two separate inserts counts as one break',
-    () => {
-      const table = new PieceTable('ab');
+  test('\\r\\n assembled from two separate inserts counts as one break', () => {
+    const table = new PieceTable('ab');
 
-      table.insert('\r', 1);
-      table.insert('\n', 2);
+    table.insert('\r', 1);
+    table.insert('\n', 2);
 
-      expect(table.getText()).toBe('a\r\nb');
-      expect(table.lineCount).toBe(2);
-    }
-  );
+    expect(table.getText()).toBe('a\r\nb');
+    expect(table.lineCount).toBe(2);
+  });
 
-  // KNOWN BUG: inserting between the \r and \n of an existing pair splits the
-  // piece, but the buffer's line metadata still records one break ending after
-  // the \n, so the now-lone \r is not counted and lineCount reads 2 instead of 3.
-  test.failing(
-    'inserting between \\r and \\n promotes the \\r to its own break',
-    () => {
-      const table = new PieceTable('a\r\nb');
+  test('inserting between \\r and \\n promotes the \\r to its own break', () => {
+    const table = new PieceTable('a\r\nb');
 
-      table.insert('X', 2);
+    table.insert('X', 2);
 
-      expect(table.getText()).toBe('a\rX\nb');
-      expect(table.lineCount).toBe(3);
-    }
-  );
+    expect(table.getText()).toBe('a\rX\nb');
+    expect(table.lineCount).toBe(3);
+  });
 
-  // KNOWN BUG: CRLF pairs split or formed across piece boundaries corrupt the
-  // piece-level line-break counts (see the two directed repros above), so
-  // lineCount and positionAt/offsetAt drift from the string oracle under
-  // CR/LF-biased editing even while getText() stays correct.
-  test.failing(
-    'line metadata matches a string oracle across CRLF-biased random edits',
-    () => {
-      const random = createRandom(20260713);
-      const inserts = ['\r', '\n', '\r\n', '\n\r', '\r\nq', 'j\r', 'zz', ''];
-      let text = 'aa\r\nbb\ncc\r\ndd';
-      const table = new PieceTable(text);
+  test('line metadata matches a string oracle across CRLF-biased random edits', () => {
+    const random = createRandom(20260713);
+    const inserts = ['\r', '\n', '\r\n', '\n\r', '\r\nq', 'j\r', 'zz', ''];
+    let text = 'aa\r\nbb\ncc\r\ndd';
+    const table = new PieceTable(text);
 
-      for (let i = 0; i < 200; i++) {
-        if (random() < 0.65) {
-          const insert = inserts[Math.floor(random() * inserts.length)];
-          const offset = Math.floor(random() * (text.length + 1));
-          table.insert(insert, offset);
-          text = text.slice(0, offset) + insert + text.slice(offset);
-        } else {
-          const offset = Math.floor(random() * (text.length + 1));
-          const length = Math.floor(random() * 4);
-          table.delete(offset, length);
-          text = text.slice(0, offset) + text.slice(offset + length);
-        }
-
-        expectLineMetadataToMatch(table, text);
+    for (let i = 0; i < 200; i++) {
+      if (random() < 0.65) {
+        const insert = inserts[Math.floor(random() * inserts.length)];
+        const offset = Math.floor(random() * (text.length + 1));
+        table.insert(insert, offset);
+        text = text.slice(0, offset) + insert + text.slice(offset);
+      } else {
+        const offset = Math.floor(random() * (text.length + 1));
+        const length = Math.floor(random() * 4);
+        table.delete(offset, length);
+        text = text.slice(0, offset) + text.slice(offset + length);
       }
+
+      expectLineMetadataToMatch(table, text);
     }
-  );
+  });
 });
 
 describe('mixed-EOL positionAt/offsetAt round trip', () => {
