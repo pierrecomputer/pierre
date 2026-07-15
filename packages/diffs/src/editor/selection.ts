@@ -12,7 +12,6 @@ import type {
   TextDocument,
   TextDocumentChange,
 } from './textDocument';
-import { snapTextOffsetToUnicodeBoundary } from './textMeasure';
 import {
   createSegmenter,
   endsWithLineBreak,
@@ -338,8 +337,47 @@ function moveBySoftLine(
     character:
       landedCharacter > targetLineText.length
         ? landedCharacter
-        : snapTextOffsetToUnicodeBoundary(targetLineText, landedCharacter),
+        : snapCharacterToGraphemeBoundary(targetLineText, landedCharacter),
   };
+}
+
+// Snaps a vertical landing to the end of its grapheme so edits cannot split a
+// user-visible character. Stop once the containing cluster is resolved.
+function snapCharacterToGraphemeBoundary(
+  lineText: string,
+  character: number
+): number {
+  if (character <= 0 || character >= lineText.length) {
+    return character;
+  }
+
+  const segmenter = getGraphemeSegmenter();
+  if (segmenter !== undefined) {
+    for (const segment of segmenter.segment(lineText)) {
+      if (character <= segment.index) {
+        return character;
+      }
+      const segmentEnd = segment.index + segment.segment.length;
+      if (character < segmentEnd) {
+        return segmentEnd;
+      }
+    }
+    return character;
+  }
+
+  // Degraded path for engines lacking Intl.Segmenter: preserve code points.
+  let segmentStart = 0;
+  for (const codePoint of lineText) {
+    if (character <= segmentStart) {
+      return character;
+    }
+    const segmentEnd = segmentStart + codePoint.length;
+    if (character < segmentEnd) {
+      return segmentEnd;
+    }
+    segmentStart = segmentEnd;
+  }
+  return character;
 }
 
 function getSoftLineInfo(
