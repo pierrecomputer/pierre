@@ -156,12 +156,6 @@ order. If you touch one of these areas, consider adding the missing coverage:
   positions but never reorders a start-after-end pair, storing an inverted
   selection that violates the start-before-or-equal-end invariant downstream
   code assumes.
-- **Search-replace capture expansion with lookaround** (3) — replacement-text
-  expansion re-executes the pattern against only the matched slice, so
-  lookaround context outside the slice is lost: a lookbehind whose context sits
-  before the slice, a lookahead whose context sits after the slice, and a
-  lookahead that re-matches shorter on the slice all fall back to inserting the
-  literal (unexpanded) replacement text.
 - **Soft-wrap vertical motion splits surrogate pairs** (2) — vertical motion
   into a wrapped continuation row computes the landing spot as raw UTF-16 units
   with no grapheme/surrogate snapping, so moving down into a continuation row
