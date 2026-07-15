@@ -644,15 +644,16 @@ function getNextSelectionOffsetPairAfterReplace(
 }
 
 /**
- * Applies document-ordered text replacements to multiple selections while
- * preserving the input selection order for the resulting selections.
+ * Applies text replacements to multiple selections. Texts pair by selection
+ * index unless they are explicitly marked as document ordered.
  */
 export function applyTextReplaceToSelections<LAnnotation>(
   textDocument: TextDocument<LAnnotation>,
   selections: EditorSelection[],
   texts: string[],
   lineAnnotations?: DiffLineAnnotation<LAnnotation>[],
-  undoBoundary = false
+  undoBoundary = false,
+  textOrder: 'selection' | 'document' = 'selection'
 ): {
   nextSelections: EditorSelection[];
   change?: TextDocumentChange;
@@ -765,7 +766,7 @@ export function applyTextReplaceToSelections<LAnnotation>(
       previousEditEnd = entry.end;
       const newText = expandSingleNewlineInsert(
         textDocument,
-        texts[index],
+        texts[textOrder === 'document' ? index : entry.index],
         entry.start
       );
       edits.push({
@@ -841,8 +842,8 @@ function shouldAutoSurroundChar(
 }
 
 /**
- * Returns document-ordered replacement text when typing a surround character
- * over non-collapsed selections, matching VS Code auto-surround behavior.
+ * Returns per-selection replacement text when typing a surround character over
+ * non-collapsed selections, matching VS Code auto-surround behavior.
  */
 export function getAutoSurroundReplacementTexts<LAnnotation>(
   textDocument: TextDocument<LAnnotation>,
@@ -857,12 +858,8 @@ export function getAutoSurroundReplacementTexts<LAnnotation>(
   if (closeChar === undefined || !shouldAutoSurroundChar(autoSurround, char)) {
     return undefined;
   }
-  const orderedSelections = selections.slice().sort((a, b) => {
-    const startOrder = comparePosition(a.start, b.start);
-    return startOrder !== 0 ? startOrder : comparePosition(a.end, b.end);
-  });
   const replacements: string[] = [];
-  for (const selection of orderedSelections) {
+  for (const selection of selections) {
     if (isCollapsedSelection(selection)) {
       return undefined;
     }

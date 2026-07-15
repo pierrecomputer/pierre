@@ -883,7 +883,7 @@ describe('getAutoSurroundReplacementTexts', () => {
     ]);
   });
 
-  test('applies auto-surround in document order for descending selections', () => {
+  test('keeps auto-surround paired with descending selections', () => {
     const textDocument = new TextDocument('inmemory://1', 'foo bar');
     const selections = [
       createSelection(0, 4, 0, 7, DirectionForward),
@@ -894,6 +894,7 @@ describe('getAutoSurroundReplacementTexts', () => {
       selections,
       '"'
     );
+    expect(texts).toEqual(['"bar"', '"foo"']);
     const { nextSelections } = applyTextReplaceToSelections(
       textDocument,
       selections,
@@ -2392,7 +2393,10 @@ describe('applyTextReplaceToSelections', () => {
     const { nextSelections } = applyTextReplaceToSelections(
       textDocument,
       selections,
-      ['a', 'b', 'c']
+      ['a', 'b', 'c'],
+      undefined,
+      false,
+      'document'
     );
 
     expect(textDocument.getText()).toBe('xa\nyb\nzc');
@@ -2400,6 +2404,25 @@ describe('applyTextReplaceToSelections', () => {
       createSelection(2, 2, 2, 2),
       createSelection(1, 2, 1, 2),
       createSelection(0, 2, 0, 2),
+    ]);
+  });
+
+  test('keeps different-length replacement texts paired with unordered selections', () => {
+    const textDocument = new TextDocument('inmemory://1', 'abcdef');
+    const selections = [
+      createSelection(0, 4, 0, 6, DirectionForward),
+      createSelection(0, 0, 0, 1, DirectionForward),
+    ];
+    const { nextSelections } = applyTextReplaceToSelections(
+      textDocument,
+      selections,
+      ['Z', 'long']
+    );
+
+    expect(textDocument.getText()).toBe('longbcdZ');
+    expect(nextSelections).toEqual([
+      createSelection(0, 8, 0, 8),
+      createSelection(0, 4, 0, 4),
     ]);
   });
 

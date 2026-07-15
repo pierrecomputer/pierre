@@ -1511,7 +1511,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
             ? text.map((t) => textDocument.normalizeEol(t))
             : textDocument.normalizeEol(text),
           undefined,
-          true
+          true,
+          'document'
         );
       }),
 
@@ -1781,7 +1782,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
             ? text.map((t) => textDocument.normalizeEol(t))
             : textDocument.normalizeEol(text),
           undefined,
-          true
+          true,
+          'document'
         );
       }
     }
@@ -4111,7 +4113,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #replaceSelectionText(
     text: string | string[],
     selections = this.#selections,
-    undoBoundary = false
+    undoBoundary = false,
+    textOrder: 'selection' | 'document' = 'selection'
   ) {
     if (selections === undefined) {
       return;
@@ -4128,7 +4131,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
             selections,
             text,
             this.#lineAnnotations,
-            undoBoundary
+            undoBoundary,
+            textOrder
           )
         : applyTextChangeToSelections<LAnnotation>(
             textDocument,
