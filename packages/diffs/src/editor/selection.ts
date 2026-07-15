@@ -99,7 +99,7 @@ export function resolveIndentEdits(
     if (lineText === undefined) {
       continue;
     }
-    if (!outdent && blockIndent && lineText.trim().length === 0) {
+    if (blockIndent && lineText.trim().length === 0) {
       continue;
     }
     const indentUnit = lineText.startsWith('\t') ? '\t' : ' '.repeat(tabSize);

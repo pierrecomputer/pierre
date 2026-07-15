@@ -2287,20 +2287,21 @@ describe('indentLess on tab and mixed indentation', () => {
 });
 
 describe('block indent over blank and whitespace-only lines', () => {
-  test('block indent leaves blank and whitespace-only lines untouched', () => {
-    const d = doc('alpha\n\n   \nbeta');
-    const [edits] = resolveIndentEdits(
+  test('block indent and outdent leave blank lines untouched', () => {
+    const original = 'alpha\n\n   \nbeta';
+    const d = doc(original);
+    const [indentEdits, indentedSelection] = resolveIndentEdits(
       d,
-      {
-        start: { line: 0, character: 0 },
-        end: { line: 3, character: 4 },
-        direction: DirectionForward,
-      },
+      range(0, 0, 3, 4),
       2,
       false
     );
-    d.applyEdits(edits);
+    d.applyEdits(indentEdits);
     expect(d.getText()).toBe('  alpha\n\n   \n  beta');
+
+    const [outdentEdits] = resolveIndentEdits(d, indentedSelection, 2, true);
+    d.applyEdits(outdentEdits);
+    expect(d.getText()).toBe(original);
   });
 
   test('single-line indent still inserts whitespace on a blank line', () => {
