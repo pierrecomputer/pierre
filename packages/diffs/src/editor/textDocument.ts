@@ -69,6 +69,7 @@ export class TextDocument<LAnnotation> {
   #version: number;
   #pieceTable: PieceTable;
   #editStack: EditStack<LAnnotation>;
+  #eol: string;
 
   constructor(
     uri: string,
@@ -82,6 +83,19 @@ export class TextDocument<LAnnotation> {
     this.#version = version;
     this.#pieceTable = new PieceTable(text);
     this.#editStack = editStack;
+
+    // The line ending the document uses, detected once from its first line. Lets
+    // inserted or pasted text match the rest of the file instead of leaving
+    // mixed endings behind and keeps that convention stable as the file is
+    // edited. Defaults to Unix `\n` when the initial text has no line break.
+    const firstLineBreak = this.#pieceTable.getLineText(0, true);
+    if (firstLineBreak.endsWith('\r\n')) {
+      this.#eol = '\r\n';
+    } else if (firstLineBreak.endsWith('\r')) {
+      this.#eol = '\r';
+    } else {
+      this.#eol = '\n';
+    }
   }
 
   get uri(): string {
@@ -100,22 +114,8 @@ export class TextDocument<LAnnotation> {
     return this.#pieceTable.lineCount;
   }
 
-  // The line ending the document uses, detected from its first line. Lets
-  // inserted or pasted text match the rest of the file instead of leaving
-  // mixed endings behind. Recognizes Windows `\r\n` and classic-Mac lone `\r`
-  // breaks (both of which the piece table already splits on), defaulting to
-  // Unix `\n`.
   get eol(): string {
-    if (this.lineCount > 1) {
-      const firstLineBreak = this.getLineText(0, true);
-      if (firstLineBreak.endsWith('\r\n')) {
-        return '\r\n';
-      }
-      if (firstLineBreak.endsWith('\r')) {
-        return '\r';
-      }
-    }
-    return '\n';
+    return this.#eol;
   }
 
   get canUndo(): boolean {
@@ -127,11 +127,15 @@ export class TextDocument<LAnnotation> {
   }
 
   positionAt(offset: number): Position {
-    return this.#pieceTable.positionAt(offset);
+    return this.normalizePosition(this.#pieceTable.positionAt(offset));
   }
 
   positionsAt(offsets: readonly number[]): Position[] {
-    return this.#pieceTable.positionsAt(offsets);
+    const positions = this.#pieceTable.positionsAt(offsets);
+    for (let i = 0; i < positions.length; i++) {
+      positions[i] = this.normalizePosition(positions[i]);
+    }
+    return positions;
   }
 
   offsetAt(position: Position): number {
@@ -203,13 +207,20 @@ export class TextDocument<LAnnotation> {
     if (edits.length === 0) {
       return;
     }
-    return this.applyResolvedEdits(
-      edits.map((edit) => this.#resolveEdit(edit)),
+    return this.#applyResolvedEdits(
+      this.#sortAndValidateResolvedEdits(this.resolveEdits(edits)),
       updateHistory,
       selectionsBefore,
       selectionsAfter,
       undoBoundary
     );
+  }
+
+  // Converts line/character ranges to the exact UTF-16 offsets applyEdits
+  // uses, including widening invalid boundaries so they cannot split a valid
+  // surrogate pair. Editor caret remapping uses the same resolved geometry.
+  resolveEdits(edits: readonly TextEdit[]): ResolvedTextEdit[] {
+    return edits.map((edit) => this.#resolveEdit(edit));
   }
 
   applyResolvedEdits(
@@ -222,7 +233,26 @@ export class TextDocument<LAnnotation> {
     if (edits.length === 0) {
       return undefined;
     }
-    const resolvedEdits = this.#sortAndValidateResolvedEdits(edits);
+    return this.#applyResolvedEdits(
+      this.#sortAndValidateResolvedEdits(
+        edits.map((edit) => this.#normalizeResolvedEdit(edit))
+      ),
+      updateHistory,
+      selectionsBefore,
+      selectionsAfter,
+      undoBoundary
+    );
+  }
+
+  // Shared mutation path after public edit coordinates are normalized and
+  // validated. Undo and redo apply their stored inverse offsets separately.
+  #applyResolvedEdits(
+    resolvedEdits: ResolvedTextEdit[],
+    updateHistory: boolean,
+    selectionsBefore: EditorSelection[] | undefined,
+    selectionsAfter: EditorSelection[] | undefined,
+    undoBoundary: boolean
+  ): TextDocumentChange {
     if (updateHistory) {
       const entry = createEditStackEntry(
         this,
@@ -346,11 +376,49 @@ export class TextDocument<LAnnotation> {
       start = end;
       end = t;
     }
-    return { start, end, text: edit.newText };
+    return this.#normalizeResolvedEdit({
+      start,
+      end,
+      text: edit.newText,
+    });
+  }
+
+  // Snaps an insertion before a pair and widens replacement boundaries
+  // outward, so every edit addresses whole UTF-16 surrogate pairs.
+  #normalizeResolvedEdit(edit: ResolvedTextEdit): ResolvedTextEdit {
+    let { start, end } = edit;
+    const isInsertion = start === end;
+    if (this.#isInsideSurrogatePair(start)) {
+      start--;
+    }
+    if (isInsertion) {
+      end = start;
+    } else if (this.#isInsideSurrogatePair(end)) {
+      end++;
+    }
+    return { start, end, text: edit.text };
+  }
+
+  // A UTF-16 offset is invalid when it sits between the high and low units of
+  // one well-formed surrogate pair. Lone surrogate units remain addressable.
+  #isInsideSurrogatePair(offset: number): boolean {
+    const previous = this.#pieceTable.charAt(offset - 1).charCodeAt(0);
+    const next = this.#pieceTable.charAt(offset).charCodeAt(0);
+    return (
+      previous >= 0xd800 &&
+      previous <= 0xdbff &&
+      next >= 0xdc00 &&
+      next <= 0xdfff
+    );
   }
 
   #sortAndValidateResolvedEdits(edits: ResolvedTextEdit[]): ResolvedTextEdit[] {
-    const sortedEdits = [...edits].sort((a, b) => a.start - b.start);
+    // Put zero-width edits before ranges at the same start so validation and
+    // application do not depend on the caller's batch order.
+    const sortedEdits = [...edits].sort((a, b) => {
+      const startDelta = a.start - b.start;
+      return startDelta === 0 ? a.end - b.end : startDelta;
+    });
     for (let i = 0; i < sortedEdits.length - 1; i++) {
       if (sortedEdits[i].end > sortedEdits[i + 1].start) {
         throw new Error('Overlapping text edits are not supported');

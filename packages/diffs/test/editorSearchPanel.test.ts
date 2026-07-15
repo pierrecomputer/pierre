@@ -531,47 +531,29 @@ describe('regex replace capture references', () => {
     ).toEqual(['$&-$1']);
   });
 
-  // KNOWN BUG: buildSearchReplacementText re-executes the pattern against only
-  // the matched slice; a lookbehind's context sits before the slice, so the
-  // re-execution finds nothing, falls back to the raw replaceText, and the
-  // literal "$1" is inserted into the document.
-  test.failing(
-    'lookbehind context before the match still expands its captures',
-    () => {
-      expect(
-        replacementsFor(
-          'k77',
-          searchParams('(?<=k)(\\d+)', { replaceText: 'n$1' })
-        )
-      ).toEqual(['n77']);
-    }
-  );
+  test('lookbehind context before the match still expands its captures', () => {
+    expect(
+      replacementsFor(
+        'k77',
+        searchParams('(?<=k)(\\d+)', { replaceText: 'n$1' })
+      )
+    ).toEqual(['n77']);
+  });
 
-  // KNOWN BUG: a lookahead's context sits after the matched slice, so the
-  // slice-only re-execution fails and the unexpanded replaceText is inserted.
-  test.failing(
-    'lookahead context after the match still expands its captures',
-    () => {
-      expect(
-        replacementsFor(
-          'run!',
-          searchParams('(\\w+)(?=!)', { replaceText: '<$1>' })
-        )
-      ).toEqual(['<run>']);
-    }
-  );
+  test('lookahead context after the match still expands its captures', () => {
+    expect(
+      replacementsFor(
+        'run!',
+        searchParams('(\\w+)(?=!)', { replaceText: '<$1>' })
+      )
+    ).toEqual(['<run>']);
+  });
 
-  // KNOWN BUG: on the matched slice the lookahead re-matches SHORTER than the
-  // original match (the trailing context character is part of the slice), the
-  // full-length guard rejects it, and the literal "[$&]" is inserted.
-  test.failing(
-    'a lookahead that re-matches shorter on the slice still expands',
-    () => {
-      expect(
-        replacementsFor('ooo', searchParams('o+(?=o)', { replaceText: '[$&]' }))
-      ).toEqual(['[oo]']);
-    }
-  );
+  test('a lookahead that re-matches shorter on the slice still expands', () => {
+    expect(
+      replacementsFor('ooo', searchParams('o+(?=o)', { replaceText: '[$&]' }))
+    ).toEqual(['[oo]']);
+  });
 
   test('a pattern that matches nowhere leaves the document untouched', async () => {
     const host = mountReplaceHost('gray goose');
