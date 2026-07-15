@@ -195,7 +195,7 @@ export class TextDocument<LAnnotation> {
 
   applyEdits(
     edits: TextEdit[],
-    updateHistory = false,
+    updateHistory = true,
     selectionsBefore?: EditorSelection[],
     selectionsAfter?: EditorSelection[],
     undoBoundary = false
@@ -224,7 +224,7 @@ export class TextDocument<LAnnotation> {
   // Only history replay (undo/redo) writes to the buffer without recording.
   applyResolvedEdits(
     edits: ResolvedTextEdit[],
-    updateHistory = false,
+    updateHistory = true,
     selectionsBefore?: EditorSelection[],
     selectionsAfter?: EditorSelection[],
     undoBoundary = false

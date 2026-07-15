@@ -563,7 +563,7 @@ describe('Editor.applyEdits selection sync', () => {
     }
   });
 
-  test('restores the remapped caret on redo when history is updated', async () => {
+  test('restores the remapped caret on redo with default history tracking', async () => {
     const { cleanup, content, editor, window } = await createEditorFixture(
       'alpha\nbravo\ncharlie'
     );
@@ -577,18 +577,15 @@ describe('Editor.applyEdits selection sync', () => {
         },
       ]);
 
-      editor.applyEdits(
-        [
-          {
-            range: {
-              start: { line: 0, character: 0 },
-              end: { line: 0, character: 0 },
-            },
-            newText: 'NEW\n',
+      editor.applyEdits([
+        {
+          range: {
+            start: { line: 0, character: 0 },
+            end: { line: 0, character: 0 },
           },
-        ],
-        true
-      );
+          newText: 'NEW\n',
+        },
+      ]);
 
       pressUndoRedo(window, content, false);
       expect(editor.getText()).toBe('alpha\nbravo\ncharlie');

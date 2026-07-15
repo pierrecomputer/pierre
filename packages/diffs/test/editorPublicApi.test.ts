@@ -74,7 +74,7 @@ function insertText(
   line: number,
   character: number,
   text: string,
-  updateHistory = false
+  updateHistory = true
 ): void {
   editor.applyEdits(
     [

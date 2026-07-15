@@ -449,11 +449,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
    * the same edit typed by the user would (history equivalence — see
    * TextDocument.applyResolvedEdits), so it is undoable like any other edit.
    *
-   * @param _updateHistory Deprecated: has no effect. Programmatic edits are
-   * always undoable; history is reset by rebuilding the document (and its
-   * EditStack), never by bypassing it.
+   * @param updateHistory Whether to record caller selection metadata for
+   * undo/redo restoration. Defaults to true. The text edit itself always joins
+   * the undo timeline, even when this is false.
    */
-  applyEdits(edits: TextEdit[], _updateHistory?: boolean): void {
+  applyEdits(edits: TextEdit[], updateHistory = true): void {
     const textDocument = this.#textDocument;
     if (textDocument == null) {
       throw new Error('Editor is not attached');
@@ -491,7 +491,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
             })
             .sort((a, b) => a.start - b.start);
 
-    const change = textDocument.applyEdits(edits, true, selectionsBefore);
+    const change = textDocument.applyEdits(
+      edits,
+      updateHistory,
+      selectionsBefore
+    );
     if (change === undefined) {
       return;
     }
@@ -512,7 +516,9 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         selectionOffsetsBefore,
         resolvedEditOffsets
       );
-      textDocument.setLastUndoSelectionsAfter(nextSelections);
+      if (updateHistory) {
+        textDocument.setLastUndoSelectionsAfter(nextSelections);
+      }
     }
 
     this.#applyChange(

@@ -827,7 +827,7 @@ function remoteEdit(
   endCharacter: number,
   newText: string
 ) {
-  d.applyEdits([lineEdit(startCharacter, endCharacter, newText)]);
+  d.applyEdits([lineEdit(startCharacter, endCharacter, newText)], false);
 }
 
 // Undo/redo interacting with non-history edits (updateHistory=false).

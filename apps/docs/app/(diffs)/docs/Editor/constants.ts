@@ -775,7 +775,9 @@ editor.cleanUp();
 editor.cleanUp(true);
 
 // Apply text edits to the attached document. Positions are zero-based.
-// Edits always join the undo stack, exactly like typed input.
+// Edits always join the undo stack, exactly like typed input. The optional
+// updateHistory argument defaults to true; false omits selection restoration
+// metadata but keeps the text edit undoable.
 editor.applyEdits([
   {
     range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },

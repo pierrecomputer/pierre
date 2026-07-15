@@ -1130,14 +1130,14 @@ describe('TextDocument', () => {
     expect(d.canUndo).toBe(false);
   });
 
-  // History equivalence: an edit applied without updateHistory joins the
-  // undo timeline exactly like the identical tracked call with no recorded
-  // selections would (see 'undo/redo across non-history edits' in
-  // editorEditStack.test.ts). This used to pin the old bypass model, where
-  // the default skipped the edit stack entirely.
-  test('applyEdits default records an undoable entry without selection metadata', () => {
+  // History equivalence: applyEdits defaults to recording caller metadata as
+  // well as an undoable entry. Passing updateHistory=false still joins the
+  // timeline (see 'undo/redo across non-history edits' in
+  // editorEditStack.test.ts); it only omits that metadata.
+  test('applyEdits defaults to updating history metadata', () => {
     const d = doc('a');
-    d.applyEdits([
+    const selectionsBefore = [caret(0, 1)];
+    const edits = [
       {
         range: {
           start: { line: 0, character: 1 },
@@ -1145,15 +1145,20 @@ describe('TextDocument', () => {
         },
         newText: 'b',
       },
-    ]);
+    ];
+    d.applyEdits(edits, undefined, selectionsBefore);
     expect(d.getText()).toBe('ab');
     expect(d.canUndo).toBe(true);
     const undoResult = d.undo();
     expect(d.getText()).toBe('a');
-    // No interaction metadata is recorded for the untracked call.
-    expect(undoResult?.[1]).toBeUndefined();
+    expect(undoResult?.[1]).toEqual(selectionsBefore);
     d.redo();
     expect(d.getText()).toBe('ab');
+
+    const withoutMetadata = doc('a');
+    withoutMetadata.applyEdits(edits, false, selectionsBefore);
+    expect(withoutMetadata.undo()?.[1]).toBeUndefined();
+    expect(withoutMetadata.getText()).toBe('a');
   });
 
   test('undo and redo', () => {
