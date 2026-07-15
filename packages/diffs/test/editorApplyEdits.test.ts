@@ -490,6 +490,41 @@ describe('Editor.applyEdits selection sync', () => {
     }
   });
 
+  test('remaps the caret through an insertion snapped before a surrogate pair', async () => {
+    const { cleanup, editor } = await createEditorFixture('📚 plans');
+
+    try {
+      editor.setSelections([
+        {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 0 },
+          direction: 'none',
+        },
+      ]);
+
+      editor.applyEdits([
+        {
+          range: {
+            start: { line: 0, character: 1 },
+            end: { line: 0, character: 1 },
+          },
+          newText: 'a',
+        },
+      ]);
+
+      expect(editor.getText()).toBe('a📚 plans');
+      expect(editor.getState().selections).toEqual([
+        {
+          start: { line: 0, character: 1 },
+          end: { line: 0, character: 1 },
+          direction: 0,
+        },
+      ]);
+    } finally {
+      cleanup();
+    }
+  });
+
   test('shifts both edges of a selected range and preserves direction', async () => {
     const { cleanup, editor } = await createEditorFixture(
       'alpha\nbravo\ncharlie'
@@ -1787,42 +1822,41 @@ describe('applyEdits: surrogate pair boundaries', () => {
   // the high and low surrogate — an invalid caller position that the
   // conventional behavior auto-corrects so the pair is never split.
 
-  // KNOWN BUG: an insert position strictly inside a surrogate pair is not
-  // snapped to the pair boundary; the inserted text lands between the two
-  // units and getText() returns lone surrogates.
-  test.failing(
-    'insert strictly inside a surrogate pair snaps to before the pair',
-    () => {
-      const d = doc('📚plans\nfor the\nweekend');
-      d.applyEdits([edit(0, 1, 0, 1, 'a')]);
-      expect(hasLoneSurrogate(d.getText())).toBe(false);
-      expect(d.getLineText(0)).toBe('a📚plans');
-    }
-  );
+  test('insert strictly inside a surrogate pair snaps to before the pair', () => {
+    const d = doc('📚plans\nfor the\nweekend');
+    d.applyEdits([edit(0, 1, 0, 1, 'a')]);
+    expect(hasLoneSurrogate(d.getText())).toBe(false);
+    expect(d.getLineText(0)).toBe('a📚plans');
+  });
 
-  // KNOWN BUG: a replace range starting strictly inside a surrogate pair is
-  // not widened to the pair start; the high surrogate is left behind alone.
-  test.failing(
-    'replace starting inside a surrogate pair widens to cover the whole pair',
-    () => {
-      const d = doc('📚plans\nfor the\nweekend');
-      d.applyEdits([edit(0, 1, 0, 2, 'a')]);
-      expect(hasLoneSurrogate(d.getText())).toBe(false);
-      expect(d.getLineText(0)).toBe('aplans');
-    }
-  );
+  test('replace starting inside a surrogate pair widens to cover the whole pair', () => {
+    const d = doc('📚plans\nfor the\nweekend');
+    d.applyEdits([edit(0, 1, 0, 2, 'a')]);
+    expect(hasLoneSurrogate(d.getText())).toBe(false);
+    expect(d.getLineText(0)).toBe('aplans');
+  });
 
-  // KNOWN BUG: a replace range ending strictly inside a surrogate pair is not
-  // widened to the pair end; the low surrogate is left behind alone.
-  test.failing(
-    'replace ending inside a surrogate pair widens to cover the whole pair',
-    () => {
+  test('replace ending inside a surrogate pair widens to cover the whole pair', () => {
+    const d = doc('📚plans\nfor the\nweekend');
+    d.applyEdits([edit(0, 0, 0, 1, 'a')]);
+    expect(hasLoneSurrogate(d.getText())).toBe(false);
+    expect(d.getLineText(0)).toBe('aplans');
+  });
+
+  test('applyResolvedEdits normalizes surrogate-pair boundaries', () => {
+    const cases = [
+      [1, 1, 'a📚plans'],
+      [1, 2, 'aplans'],
+      [0, 1, 'aplans'],
+    ] as const;
+
+    for (const [start, end, expected] of cases) {
       const d = doc('📚plans\nfor the\nweekend');
-      d.applyEdits([edit(0, 0, 0, 1, 'a')]);
+      d.applyResolvedEdits([{ start, end, text: 'a' }]);
       expect(hasLoneSurrogate(d.getText())).toBe(false);
-      expect(d.getLineText(0)).toBe('aplans');
+      expect(d.getLineText(0)).toBe(expected);
     }
-  );
+  });
 
   test('replace spanning exactly the whole surrogate pair replaces it cleanly', () => {
     const d = doc('📚plans\nfor the\nweekend');

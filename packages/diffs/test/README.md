@@ -103,7 +103,7 @@ order. If you touch one of these areas, consider adding the missing coverage:
 - **IME composition deferrals** — IME/composition interaction with editing and
   undo-coalescing is deferred and not covered.
 
-## Known bugs pinned as `test.failing` (30)
+## Known bugs pinned as `test.failing` (21)
 
 - **EditStack coalescing** (3) — coalescing decisions compare a new edit against
   whatever sits on top of the undo stack purely by geometry, with no state reset
@@ -112,10 +112,6 @@ order. If you touch one of these areas, consider adding the missing coverage:
   and backspace followed by forward-delete at the same pivot coalesces into a
   single undo step instead of getting an undo stop when the delete direction
   flips.
-- **Surrogate-pair edit boundaries** (3) — edit range endpoints landing strictly
-  inside a surrogate pair split the pair and corrupt the buffer instead of
-  snapping to pair boundaries; affects insert-inside-a-pair and replaces
-  starting or ending inside one.
 - **PieceTable CRLF line metadata** (5, spanning piece-table and search
   coverage) — line-break bookkeeping goes stale when a CRLF pair is split or
   assembled across edits (deleting exactly the `\n` of a pair, inserting between
@@ -152,13 +148,3 @@ order. If you touch one of these areas, consider adding the missing coverage:
   computation can return a position strictly inside a CRLF pair (a character
   beyond the line's own length) that the inverse offset-from-position
   computation clamps away, so the round trip silently loses a column.
-- **Inverted selection after normalization** (1) — setting selections normalizes
-  positions but never reorders a start-after-end pair, storing an inverted
-  selection that violates the start-before-or-equal-end invariant downstream
-  code assumes.
-- **Soft-wrap vertical motion splits surrogate pairs** (2) — vertical motion
-  into a wrapped continuation row computes the landing spot as raw UTF-16 units
-  with no grapheme/surrogate snapping, so moving down into a continuation row
-  (or up across a logical-line boundary) can park the caret between the halves
-  of an astral character; a subsequent insert there splits the pair into lone
-  surrogates.

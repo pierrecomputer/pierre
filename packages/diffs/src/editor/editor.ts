@@ -475,17 +475,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     const resolvedEditOffsets =
       selectionsBefore === undefined
         ? undefined
-        : edits
-            .map((edit) => {
-              const a = textDocument.offsetAt(edit.range.start);
-              const b = textDocument.offsetAt(edit.range.end);
-              return {
-                start: Math.min(a, b),
-                end: Math.max(a, b),
-                text: edit.newText,
-              };
-            })
-            .sort((a, b) => a.start - b.start);
+        : textDocument.resolveEdits(edits).sort((a, b) => a.start - b.start);
 
     const change = textDocument.applyEdits(
       edits,
@@ -607,14 +597,24 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       throw new Error('Text document is not initialized');
     }
     const resolvedSelections = selections.map<EditorSelection>((selection) => {
-      const start = textDocument.normalizePosition(selection.start);
-      const end = textDocument.normalizePosition(selection.end);
-      const direction =
+      let start = textDocument.normalizePosition(selection.start);
+      let end = textDocument.normalizePosition(selection.end);
+      let direction: EditorSelection['direction'] =
         selection.direction === 'none'
           ? DirectionNone
           : selection.direction === 'backward'
             ? DirectionBackward
             : DirectionForward;
+
+      if (comparePosition(start, end) > 0) {
+        [start, end] = [end, start];
+        if (direction !== DirectionNone) {
+          direction =
+            direction === DirectionForward
+              ? DirectionBackward
+              : DirectionForward;
+        }
+      }
       return { direction, start, end };
     });
     this.#updateSelections(resolvedSelections);
