@@ -572,59 +572,59 @@ describe('caret affinity at a wrap boundary', () => {
 });
 
 describe('vertical motion between wrapped rows and grapheme integrity', () => {
-  // KNOWN BUG: moveBySoftLine computes the landing spot as target-segment
-  // start + visual column in raw UTF-16 units with no grapheme/surrogate
-  // snapping, so ArrowDown here parks the caret at character 7 — between the
-  // halves of the second astral character. A subsequent insert at that caret
-  // splits the pair into lone surrogates (verified against TextDocument:
-  // inserting "x" at (0,7) leaves \ud83d x \ude00 in the buffer).
-  test.failing(
-    'ArrowDown into a continuation row never lands inside a surrogate pair',
-    async () => {
-      const astralRow = '\u{1F680}\u{1F98A}'; // 2 astral chars = 4 UTF-16 units
-      const lineText = `wxyz${astralRow}`;
-      // Visual rows: [0,4) 'wxyz' and [4,8) with both astral characters.
-      const { cleanup, content, editor, window } = await createWrapEditor(
-        lineText,
-        4
-      );
-      try {
-        setCaret(editor, 0, 3);
-        dispatchMovementKey(window, content, { key: 'ArrowDown' });
+  test('ArrowDown snaps across a Hangul jamo grapheme', async () => {
+    const lineText = 'wxyz\u1112\u1161\u11ab';
+    const { cleanup, content, editor, window } = await createWrapEditor(
+      lineText,
+      4
+    );
+    try {
+      setCaret(editor, 0, 1);
+      dispatchMovementKey(window, content, { key: 'ArrowDown' });
 
-        const { line, character } = caretState(editor);
-        expect(line).toBe(0);
-        expect(sitsInsideSurrogatePair(lineText, character)).toBe(false);
-      } finally {
-        cleanup();
-      }
+      expectCaret(editor, 0, 7);
+    } finally {
+      cleanup();
     }
-  );
+  });
 
-  // KNOWN BUG: same raw-column arithmetic on the upward path. Crossing the
-  // logical-line boundary lands on the wrapped line's last visual row at
-  // segment start + 1 = character 5, the low-surrogate half of the trailing
-  // astral character.
-  test.failing(
-    'ArrowUp across a logical-line boundary never lands inside a surrogate pair',
-    async () => {
-      const lineText = '\u{1F680}mn\u{1F98A}'; // rows: [0,4) '🚀mn', [4,6) '🦊'
-      const { cleanup, content, editor, window } = await createWrapEditor(
-        `${lineText}\nabc`,
-        4
-      );
-      try {
-        setCaret(editor, 1, 1);
-        dispatchMovementKey(window, content, { key: 'ArrowUp' });
+  test('ArrowDown into a continuation row never lands inside a surrogate pair', async () => {
+    const astralRow = '\u{1F680}\u{1F98A}'; // 2 astral chars = 4 UTF-16 units
+    const lineText = `wxyz${astralRow}`;
+    // Visual rows: [0,4) 'wxyz' and [4,8) with both astral characters.
+    const { cleanup, content, editor, window } = await createWrapEditor(
+      lineText,
+      4
+    );
+    try {
+      setCaret(editor, 0, 3);
+      dispatchMovementKey(window, content, { key: 'ArrowDown' });
 
-        const { line, character } = caretState(editor);
-        expect(line).toBe(0);
-        expect(sitsInsideSurrogatePair(lineText, character)).toBe(false);
-      } finally {
-        cleanup();
-      }
+      const { line, character } = caretState(editor);
+      expect(line).toBe(0);
+      expect(sitsInsideSurrogatePair(lineText, character)).toBe(false);
+    } finally {
+      cleanup();
     }
-  );
+  });
+
+  test('ArrowUp across a logical-line boundary never lands inside a surrogate pair', async () => {
+    const lineText = '\u{1F680}mn\u{1F98A}'; // rows: [0,4) '🚀mn', [4,6) '🦊'
+    const { cleanup, content, editor, window } = await createWrapEditor(
+      `${lineText}\nabc`,
+      4
+    );
+    try {
+      setCaret(editor, 1, 1);
+      dispatchMovementKey(window, content, { key: 'ArrowUp' });
+
+      const { line, character } = caretState(editor);
+      expect(line).toBe(0);
+      expect(sitsInsideSurrogatePair(lineText, character)).toBe(false);
+    } finally {
+      cleanup();
+    }
+  });
 
   test('ArrowUp from the line below lands on the last visual row of the wrapped line', async () => {
     // Line 0 wraps into 'the_quick_' / 'brown_fox_' / 'jumps'.

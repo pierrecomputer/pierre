@@ -103,7 +103,7 @@ order. If you touch one of these areas, consider adding the missing coverage:
 - **IME composition deferrals** — IME/composition interaction with editing and
   undo-coalescing is deferred and not covered.
 
-## Known bugs pinned as `test.failing` (30)
+## Known bugs pinned as `test.failing` (16)
 
 - **EditStack coalescing** (3) — coalescing decisions compare a new edit against
   whatever sits on top of the undo stack purely by geometry, with no state reset
@@ -112,10 +112,6 @@ order. If you touch one of these areas, consider adding the missing coverage:
   and backspace followed by forward-delete at the same pivot coalesces into a
   single undo step instead of getting an undo stop when the delete direction
   flips.
-- **Surrogate-pair edit boundaries** (3) — edit range endpoints landing strictly
-  inside a surrogate pair split the pair and corrupt the buffer instead of
-  snapping to pair boundaries; affects insert-inside-a-pair and replaces
-  starting or ending inside one.
 - **PieceTable CRLF line metadata** (5, spanning piece-table and search
   coverage) — line-break bookkeeping goes stale when a CRLF pair is split or
   assembled across edits (deleting exactly the `\n` of a pair, inserting between
@@ -125,14 +121,6 @@ order. If you touch one of these areas, consider adding the missing coverage:
 - **Batch edit ordering sensitivity** (1) — accepting a batch containing a
   delete and an insert at the same offset depends on the caller's array order:
   delete-first throws an overlap error, insert-first succeeds.
-- **Line indent/outdent multi-selection dedupe** (3) — indent dispatch
-  concatenates per-selection edits with no shared-line dedupe, so a line under
-  two carets/ranges indents twice; the outdent variant emits two identical
-  deletes that fail overlap validation and the whole command throws.
-- **Block indent dirties blank lines** (1) — a multi-line block indent inserts
-  the indent unit on empty and whitespace-only lines inside the selection,
-  injecting trailing whitespace on lines the user never touched (outdent
-  round-trips it away, bounding the damage).
 - **History equivalence across non-history edits** (7) — edits applied with
   `updateHistory=false` are an implementation detail of how an edit reaches
   `applyEdits`, not a separate semantic class: a mixed programmatic/local
@@ -148,19 +136,3 @@ order. If you touch one of these areas, consider adding the missing coverage:
   text, the unwind that should restore recorded selections verbatim never
   reaches the original text, and a pending redo survives an untracked edit
   (instead of being cleared like any new edit) and replays at stale offsets.
-- **Inverted selection after normalization** (1) — setting selections normalizes
-  positions but never reorders a start-after-end pair, storing an inverted
-  selection that violates the start-before-or-equal-end invariant downstream
-  code assumes.
-- **Search-replace capture expansion with lookaround** (3) — replacement-text
-  expansion re-executes the pattern against only the matched slice, so
-  lookaround context outside the slice is lost: a lookbehind whose context sits
-  before the slice, a lookahead whose context sits after the slice, and a
-  lookahead that re-matches shorter on the slice all fall back to inserting the
-  literal (unexpanded) replacement text.
-- **Soft-wrap vertical motion splits surrogate pairs** (2) — vertical motion
-  into a wrapped continuation row computes the landing spot as raw UTF-16 units
-  with no grapheme/surrogate snapping, so moving down into a continuation row
-  (or up across a logical-line boundary) can park the caret between the halves
-  of an astral character; a subsequent insert there splits the pair into lone
-  surrogates.
