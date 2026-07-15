@@ -122,9 +122,6 @@ order. If you touch one of these areas, consider adding the missing coverage:
   the `\r` and `\n`, assembling CRLF from two separate inserts, plus a
   CRLF-biased fuzz oracle), and the same stale metadata drives search astray
   (shifted or missing match ranges) even though `getText()` stays correct.
-- **Batch edit ordering sensitivity** (1) — accepting a batch containing a
-  delete and an insert at the same offset depends on the caller's array order:
-  delete-first throws an overlap error, insert-first succeeds.
 - **Line indent/outdent multi-selection dedupe** (3) — indent dispatch
   concatenates per-selection edits with no shared-line dedupe, so a line under
   two carets/ranges indents twice; the outdent variant emits two identical
