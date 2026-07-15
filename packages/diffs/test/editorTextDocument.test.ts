@@ -1573,54 +1573,42 @@ function insertAtMalformed(
 }
 
 describe('malformed numeric position components', () => {
-  // A stricter contract would reject non-numeric components outright;
-  // pierre-fe's normalizePosition has no finiteness guard, so NaN flows
-  // through Math.min/max into offsetAt, the resolved offset becomes NaN,
-  // and the edit range degenerates into a whole-document replace.
+  // normalizePosition sanitizes malformed components the same way it clamps
+  // out-of-range ones: NaN and -Infinity act as 0, fractions floor, and
+  // +Infinity clamps to the document/line end. An edit carrying a malformed
+  // position therefore lands at a valid clamped spot instead of resolving to
+  // a NaN offset (which used to degenerate into a whole-document replace).
 
-  test.failing(
-    'an insert with a NaN component never destroys unrelated content',
-    () => {
-      // KNOWN BUG: NaN in either component resolves to a NaN offset and the
-      // edit replaces the ENTIRE document with the inserted text.
-      for (const [line, character] of [
-        [Number.NaN, 1],
-        [0, Number.NaN],
-        [Number.NaN, Number.NaN],
-      ]) {
-        const { threw, text } = insertAtMalformed(
-          'harbor\nlantern',
-          line,
-          character
-        );
-        if (!threw) {
-          expect(text).toContain('harbor');
-          expect(text).toContain('lantern');
-        }
-      }
+  test('an insert with a NaN component never destroys unrelated content', () => {
+    // A NaN component sanitizes to 0, so the insert lands at the start of
+    // the resolved axis: [NaN, 1] keeps the intact character 1, [0, NaN] and
+    // [NaN, NaN] land at the document start.
+    for (const [line, character, expected] of [
+      [Number.NaN, 1, 'h#arbor\nlantern'],
+      [0, Number.NaN, '#harbor\nlantern'],
+      [Number.NaN, Number.NaN, '#harbor\nlantern'],
+    ] as const) {
+      const { threw, text } = insertAtMalformed(
+        'harbor\nlantern',
+        line,
+        character
+      );
+      expect(threw).toBe(false);
+      expect(text).toBe(expected);
     }
-  );
+  });
 
-  test.failing(
-    'an insert with fractional components never destroys unrelated content',
-    () => {
-      // KNOWN BUG: a fractional line (0.5) makes offsetAt return NaN via the
-      // line-offset lookup, taking the same whole-document-replace path as
-      // NaN inputs.
-      const { threw, text } = insertAtMalformed('harbor\nlantern', 0.5, 2.5);
-      if (!threw) {
-        expect(text).toContain('harbor');
-        expect(text).toContain('lantern');
-      }
-    }
-  );
+  test('an insert with fractional components floors to a valid position', () => {
+    const { threw, text } = insertAtMalformed('harbor\nlantern', 0.5, 2.5);
+    expect(threw).toBe(false);
+    // line 0.5 floors to 0, character 2.5 floors to 2.
+    expect(text).toBe('ha#rbor\nlantern');
+  });
 
   test('Infinity components clamp to a valid position without data loss', () => {
     // DIVERGENCE: a stricter contract would reject non-finite components by
-    // throwing; pierre-fe's Math.min/max clamping happens to bound Infinity
-    // to a real offset, so the insert lands at a valid spot and nothing is
-    // lost. Pinned so a future finiteness guard (which may prefer to throw)
-    // shows up here.
+    // throwing; the sanitizing clamp bounds +Infinity to the last line
+    // instead, keeping every position-taking API total.
     const { threw, text } = insertAtMalformed('harbor\nlantern', Infinity, 0);
     expect(threw).toBe(false);
     expect(text).toContain('harbor');
