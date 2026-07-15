@@ -413,7 +413,12 @@ export class TextDocument<LAnnotation> {
   }
 
   #sortAndValidateResolvedEdits(edits: ResolvedTextEdit[]): ResolvedTextEdit[] {
-    const sortedEdits = [...edits].sort((a, b) => a.start - b.start);
+    // Put zero-width edits before ranges at the same start so validation and
+    // application do not depend on the caller's batch order.
+    const sortedEdits = [...edits].sort((a, b) => {
+      const startDelta = a.start - b.start;
+      return startDelta === 0 ? a.end - b.end : startDelta;
+    });
     for (let i = 0; i < sortedEdits.length - 1; i++) {
       if (sortedEdits[i].end > sortedEdits[i + 1].start) {
         throw new Error('Overlapping text edits are not supported');

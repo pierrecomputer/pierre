@@ -1969,21 +1969,11 @@ describe('applyEdits batch: insert at a deletion boundary', () => {
     expect(d.getText()).toBe('grapeXYnes');
   });
 
-  // KNOWN BUG: acceptance of the batch {delete [5,7), insert at 5} depends on
-  // the caller's array order. Validation stable-sorts by start offset and
-  // rejects any pair where prev.end > next.start, so with the delete listed
-  // first the (5,7) delete stays ahead of the (5,5) insert and the same
-  // logical batch throws 'Overlapping text edits are not supported', while
-  // the insert-first order succeeds. A deterministic batch model would accept
-  // the batch regardless of input order.
-  test.failing(
-    'the same logical batch with the delete listed first behaves identically',
-    () => {
-      const d = doc('grapevines');
-      d.applyEdits([edit(0, 5, 0, 7, ''), edit(0, 5, 0, 5, 'XY')]);
-      expect(d.getText()).toBe('grapeXYnes');
-    }
-  );
+  test('the same logical batch with the delete listed first behaves identically', () => {
+    const d = doc('grapevines');
+    d.applyEdits([edit(0, 5, 0, 7, ''), edit(0, 5, 0, 5, 'XY')]);
+    expect(d.getText()).toBe('grapeXYnes');
+  });
 });
 
 describe('applyEdits: randomized single-edit invert round-trip', () => {

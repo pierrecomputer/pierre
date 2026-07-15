@@ -103,7 +103,7 @@ order. If you touch one of these areas, consider adding the missing coverage:
 - **IME composition deferrals** — IME/composition interaction with editing and
   undo-coalescing is deferred and not covered.
 
-## Known bugs pinned as `test.failing` (16)
+## Known bugs pinned as `test.failing` (15)
 
 - **EditStack coalescing** (3) — coalescing decisions compare a new edit against
   whatever sits on top of the undo stack purely by geometry, with no state reset
@@ -118,9 +118,6 @@ order. If you touch one of these areas, consider adding the missing coverage:
   the `\r` and `\n`, assembling CRLF from two separate inserts, plus a
   CRLF-biased fuzz oracle), and the same stale metadata drives search astray
   (shifted or missing match ranges) even though `getText()` stays correct.
-- **Batch edit ordering sensitivity** (1) — accepting a batch containing a
-  delete and an insert at the same offset depends on the caller's array order:
-  delete-first throws an overlap error, insert-first succeeds.
 - **History equivalence across non-history edits** (7) — edits applied with
   `updateHistory=false` are an implementation detail of how an edit reaches
   `applyEdits`, not a separate semantic class: a mixed programmatic/local
