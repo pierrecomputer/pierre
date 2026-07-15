@@ -775,22 +775,15 @@ editor.cleanUp();
 editor.cleanUp(true);
 
 // Apply text edits to the attached document. Positions are zero-based.
-// Pass true as the second argument to push the edits onto the undo stack.
+// Edits always join the undo stack, exactly like typed input. The optional
+// updateHistory argument defaults to true; false remaps live selections instead
+// of restoring snapshots but keeps the text edit undoable.
 editor.applyEdits([
   {
     range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
     newText: 'Hello, world!',
   },
 ]);
-editor.applyEdits(
-  [
-    {
-      range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
-      newText: 'Hello, world!',
-    },
-  ],
-  true
-);
 
 // Live FileContents for the attached document. Undefined when nothing is
 // attached.

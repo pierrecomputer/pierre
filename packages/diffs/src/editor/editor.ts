@@ -447,9 +447,16 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   }
 
   /**
-   * Apply edits to current attached file.
+   * Apply edits to current attached file. Every edit joins the undo timeline:
+   * a programmatic edit must leave the document and its history exactly as
+   * the same edit typed by the user would (history equivalence — see
+   * TextDocument.applyResolvedEdits), so it is undoable like any other edit.
+   *
+   * @param updateHistory Whether to record caller selection snapshots for
+   * exact undo/redo restoration. Defaults to true. When false, live selections
+   * are remapped during replay and the text edit still joins the undo timeline.
    */
-  applyEdits(edits: TextEdit[], updateHistory = false): void {
+  applyEdits(edits: TextEdit[], updateHistory = true): void {
     const textDocument = this.#textDocument;
     if (textDocument == null) {
       throw new Error('Editor is not attached');
@@ -2446,23 +2453,53 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         break;
 
       case 'undo':
-        if (this.#textDocument?.canUndo === true) {
-          const undoResult = this.#textDocument.undo();
-          if (undoResult !== undefined) {
-            this.#applyChange(...undoResult);
-          }
-        }
-        break;
-
       case 'redo':
-        if (this.#textDocument?.canRedo === true) {
-          const redoResult = this.#textDocument.redo();
-          if (redoResult !== undefined) {
-            this.#applyChange(...redoResult);
-          }
-        }
+        this.#applyHistoryChange(command);
         break;
     }
+  }
+
+  // Replays history and remaps live selections when the entry intentionally
+  // has no stored selection metadata.
+  #applyHistoryChange(command: 'undo' | 'redo'): void {
+    const textDocument = this.#textDocument;
+    if (textDocument === undefined) {
+      return;
+    }
+    if (
+      (command === 'undo' && !textDocument.canUndo) ||
+      (command === 'redo' && !textDocument.canRedo)
+    ) {
+      return;
+    }
+    const selections = this.#selections;
+    const selectionOffsets = selections?.map(
+      (selection) =>
+        [
+          textDocument.offsetAt(selection.start),
+          textDocument.offsetAt(selection.end),
+        ] as const
+    );
+    const result =
+      command === 'undo' ? textDocument.undo() : textDocument.redo();
+    if (result === undefined) {
+      return;
+    }
+    const [change, recordedSelections, lineAnnotations, selectionEdits] =
+      result;
+    const nextSelections =
+      recordedSelections ??
+      (selections !== undefined &&
+      selectionOffsets !== undefined &&
+      selectionEdits !== undefined
+        ? remapSelectionsAfterEdits(
+            textDocument,
+            selections,
+            selectionOffsets,
+            selectionEdits
+          )
+        : undefined);
+    this.#applyChange(change, nextSelections, lineAnnotations);
   }
 
   /** Applies one undoable command batch and records its resulting selections. */
@@ -4105,7 +4142,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         get selection(): EditorSelection {
           return getActiveSelection();
         },
-        applyEdits: (edits: TextEdit[]) => this.applyEdits(edits, true),
+        applyEdits: (edits: TextEdit[]) => this.applyEdits(edits),
         getSelectionText: () =>
           this.#textDocument?.getText(getActiveSelection()) ?? '',
         replaceSelectionText: (text: string) => {

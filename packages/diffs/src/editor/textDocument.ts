@@ -60,6 +60,15 @@ export interface TextDocumentChange {
   ][];
 }
 
+// Metadata-less replay results include the resolved edits so Editor can remap
+// its live selections without storing a snapshot on the history entry.
+type TextDocumentHistoryResult<LAnnotation> = [
+  change: TextDocumentChange,
+  selections?: EditorSelection[],
+  lineAnnotations?: DiffLineAnnotation<LAnnotation>[],
+  selectionEdits?: ResolvedTextEdit[],
+];
+
 /**
  * A vscode-languageserver-textdocument compatible text document.
  */
@@ -199,7 +208,7 @@ export class TextDocument<LAnnotation> {
 
   applyEdits(
     edits: TextEdit[],
-    updateHistory = false,
+    updateHistory = true,
     selectionsBefore?: EditorSelection[],
     selectionsAfter?: EditorSelection[],
     undoBoundary = false
@@ -225,7 +234,7 @@ export class TextDocument<LAnnotation> {
 
   applyResolvedEdits(
     edits: ResolvedTextEdit[],
-    updateHistory = false,
+    updateHistory = true,
     selectionsBefore?: EditorSelection[],
     selectionsAfter?: EditorSelection[],
     undoBoundary = false
@@ -244,8 +253,16 @@ export class TextDocument<LAnnotation> {
     );
   }
 
-  // Shared mutation path after public edit coordinates are normalized and
-  // validated. Undo and redo apply their stored inverse offsets separately.
+  // Every edit joins the undo timeline: an edit applied with
+  // `updateHistory=false` affects the edit stack exactly as the identical
+  // call with `updateHistory=true` and no selections or undo boundary would.
+  // The flag only controls whether the caller's interaction metadata is
+  // recorded on the entry; the entry itself is always pushed (clearing any
+  // pending redo) and coalesces by the normal geometry rules. This keeps a
+  // mixed tracked/untracked sequence equivalent to the all-tracked sequence —
+  // undo-to-exhaustion restores the original text, redo-to-exhaustion the
+  // final text — instead of leaving frozen entries whose offsets go stale.
+  // Only history replay (undo/redo) writes to the buffer without recording.
   #applyResolvedEdits(
     resolvedEdits: ResolvedTextEdit[],
     updateHistory: boolean,
@@ -253,35 +270,30 @@ export class TextDocument<LAnnotation> {
     selectionsAfter: EditorSelection[] | undefined,
     undoBoundary: boolean
   ): TextDocumentChange {
-    if (updateHistory) {
-      const entry = createEditStackEntry(
-        this,
-        resolvedEdits,
-        this.#version,
-        this.#version + 1,
-        selectionsBefore,
-        selectionsAfter
-      );
-      if (undoBoundary) {
-        entry.undoBoundary = true;
-      }
-      const previousEntry = this.#editStack.peekUndo();
-      const change = this.#applyResolvedEditsToBuffer(resolvedEdits);
-      this.#version++;
-      if (
-        change.lineDelta === 0 &&
-        shouldCoalesceEditStackEntry(previousEntry, entry)
-      ) {
-        this.#editStack.replaceLastUndo(
-          coalesceEditStackEntries(previousEntry!, entry)
-        );
-      } else {
-        this.#editStack.push(entry);
-      }
-      return change;
+    const entry = createEditStackEntry(
+      this,
+      resolvedEdits,
+      this.#version,
+      this.#version + 1,
+      updateHistory ? selectionsBefore : undefined,
+      updateHistory ? selectionsAfter : undefined
+    );
+    if (updateHistory && undoBoundary) {
+      entry.undoBoundary = true;
     }
+    const previousEntry = this.#editStack.peekUndo();
     const change = this.#applyResolvedEditsToBuffer(resolvedEdits);
     this.#version++;
+    if (
+      change.lineDelta === 0 &&
+      shouldCoalesceEditStackEntry(previousEntry, entry)
+    ) {
+      this.#editStack.replaceLastUndo(
+        coalesceEditStackEntries(previousEntry!, entry)
+      );
+    } else {
+      this.#editStack.push(entry);
+    }
     return change;
   }
 
@@ -299,13 +311,7 @@ export class TextDocument<LAnnotation> {
     );
   }
 
-  undo():
-    | [
-        change: TextDocumentChange,
-        selections?: EditorSelection[],
-        lineAnnotations?: DiffLineAnnotation<LAnnotation>[],
-      ]
-    | undefined {
+  undo(): TextDocumentHistoryResult<LAnnotation> | undefined {
     const entry = this.#editStack.popUndoToRedo();
     if (entry === undefined) {
       return undefined;
@@ -315,20 +321,18 @@ export class TextDocument<LAnnotation> {
       return undefined;
     }
     this.#version = entry.versionBefore;
+    const selections = entry.selectionsBefore?.slice();
     return [
       change,
-      entry.selectionsBefore?.slice(),
+      selections,
       entry.lineAnnotationsBefore?.slice(),
+      selections === undefined
+        ? entry.inverseEdits.map((edit) => ({ ...edit }))
+        : undefined,
     ];
   }
 
-  redo():
-    | [
-        change: TextDocumentChange,
-        selections?: EditorSelection[],
-        lineAnnotations?: DiffLineAnnotation<LAnnotation>[],
-      ]
-    | undefined {
+  redo(): TextDocumentHistoryResult<LAnnotation> | undefined {
     const entry = this.#editStack.popRedoToUndo();
     if (entry === undefined) {
       return undefined;
@@ -338,10 +342,14 @@ export class TextDocument<LAnnotation> {
       return undefined;
     }
     this.#version = entry.versionAfter;
+    const selections = entry.selectionsAfter?.slice();
     return [
       change,
-      entry.selectionsAfter?.slice(),
+      selections,
       entry.lineAnnotationsAfter?.slice(),
+      selections === undefined
+        ? entry.forwardEdits.map((edit) => ({ ...edit }))
+        : undefined,
     ];
   }
 

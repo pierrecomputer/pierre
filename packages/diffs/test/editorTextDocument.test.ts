@@ -1142,9 +1142,14 @@ describe('TextDocument', () => {
     expect(d.canUndo).toBe(false);
   });
 
-  test('applyEdits default does not record undo', () => {
+  // History equivalence: applyEdits defaults to recording caller metadata as
+  // well as an undoable entry. Passing updateHistory=false still joins the
+  // timeline (see 'undo/redo across non-history edits' in
+  // editorEditStack.test.ts); it only omits that metadata.
+  test('applyEdits defaults to updating history metadata', () => {
     const d = doc('a');
-    d.applyEdits([
+    const selectionsBefore = [caret(0, 1)];
+    const edits = [
       {
         range: {
           start: { line: 0, character: 1 },
@@ -1152,10 +1157,20 @@ describe('TextDocument', () => {
         },
         newText: 'b',
       },
-    ]);
+    ];
+    d.applyEdits(edits, undefined, selectionsBefore);
     expect(d.getText()).toBe('ab');
-    expect(d.canUndo).toBe(false);
-    expect(d.undo()).toBeUndefined();
+    expect(d.canUndo).toBe(true);
+    const undoResult = d.undo();
+    expect(d.getText()).toBe('a');
+    expect(undoResult?.[1]).toEqual(selectionsBefore);
+    d.redo();
+    expect(d.getText()).toBe('ab');
+
+    const withoutMetadata = doc('a');
+    withoutMetadata.applyEdits(edits, false, selectionsBefore);
+    expect(withoutMetadata.undo()?.[1]).toBeUndefined();
+    expect(withoutMetadata.getText()).toBe('a');
   });
 
   test('undo and redo', () => {

@@ -598,7 +598,7 @@ describe('Editor.applyEdits selection sync', () => {
     }
   });
 
-  test('restores the remapped caret on redo when history is updated', async () => {
+  test('restores the remapped caret on redo with default history tracking', async () => {
     const { cleanup, content, editor, window } = await createEditorFixture(
       'alpha\nbravo\ncharlie'
     );
@@ -612,18 +612,15 @@ describe('Editor.applyEdits selection sync', () => {
         },
       ]);
 
-      editor.applyEdits(
-        [
-          {
-            range: {
-              start: { line: 0, character: 0 },
-              end: { line: 0, character: 0 },
-            },
-            newText: 'NEW\n',
+      editor.applyEdits([
+        {
+          range: {
+            start: { line: 0, character: 0 },
+            end: { line: 0, character: 0 },
           },
-        ],
-        true
-      );
+          newText: 'NEW\n',
+        },
+      ]);
 
       pressUndoRedo(window, content, false);
       expect(editor.getText()).toBe('alpha\nbravo\ncharlie');
@@ -646,6 +643,51 @@ describe('Editor.applyEdits selection sync', () => {
           direction: 0,
         },
       ]);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('remaps live selections when history metadata is disabled', async () => {
+    const { cleanup, editor } = await createEditorFixture(
+      'alpha\nbravo\ncharlie'
+    );
+
+    try {
+      editor.setSelections([
+        {
+          start: { line: 2, character: 3 },
+          end: { line: 2, character: 3 },
+          direction: 'none',
+        },
+      ]);
+      editor.applyEdits(
+        [
+          {
+            range: {
+              start: { line: 0, character: 0 },
+              end: { line: 0, character: 0 },
+            },
+            newText: 'NEW\n',
+          },
+        ],
+        false
+      );
+
+      editor.undo();
+      expect(editor.getText()).toBe('alpha\nbravo\ncharlie');
+      expect(editor.getState().selections).toEqual([caret(2, 3)]);
+
+      editor.setSelections([
+        {
+          start: { line: 0, character: 2 },
+          end: { line: 0, character: 2 },
+          direction: 'none',
+        },
+      ]);
+      editor.redo();
+      expect(editor.getText()).toBe('NEW\nalpha\nbravo\ncharlie');
+      expect(editor.getState().selections).toEqual([caret(1, 2)]);
     } finally {
       cleanup();
     }

@@ -112,18 +112,3 @@ order. If you touch one of these areas, consider adding the missing coverage:
   and backspace followed by forward-delete at the same pivot coalesces into a
   single undo step instead of getting an undo stop when the delete direction
   flips.
-- **History equivalence across non-history edits** (7) — edits applied with
-  `updateHistory=false` are an implementation detail of how an edit reaches
-  `applyEdits`, not a separate semantic class: a mixed programmatic/local
-  sequence must leave history equivalent to the same sequence applied all-local,
-  so undo-to-exhaustion restores the original byte-exact text and
-  redo-to-exhaustion the final text. Today untracked edits bypass the edit stack
-  and existing entries apply at stale offsets, so exhaustion corrupts instead: a
-  stale-offset undo deletes the wrong characters, a replacement batch breaks
-  across an interleaved untracked insert, an untracked interior insert is erased
-  while tracked text is stranded, an untracked whole-document replace produces
-  spliced states that never existed on any timeline, typing coalesced around an
-  untracked insert unwinds to the untracked remainder instead of the original
-  text, the unwind that should restore recorded selections verbatim never
-  reaches the original text, and a pending redo survives an untracked edit
-  (instead of being cleared like any new edit) and replays at stale offsets.

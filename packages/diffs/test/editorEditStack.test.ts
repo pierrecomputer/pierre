@@ -818,318 +818,288 @@ function localEdit(
   );
 }
 
-// A non-history edit: updateHistory=false, exactly what Editor.applyEdits
-// defaults to for programmatic/remote changes.
+// A non-history edit: updateHistory=false, the TextDocument-level shape of a
+// programmatic/remote change. It still joins the undo timeline (history
+// equivalence), just without selection/undo-boundary metadata.
 function remoteEdit(
   d: ReturnType<typeof doc>,
   startCharacter: number,
   endCharacter: number,
   newText: string
 ) {
-  d.applyEdits([lineEdit(startCharacter, endCharacter, newText)]);
+  d.applyEdits([lineEdit(startCharacter, endCharacter, newText)], false);
 }
 
 // Undo/redo interacting with non-history edits (updateHistory=false).
 //
-// DESIGN MODEL (equivalence): applying an edit with updateHistory=false is an
-// implementation detail of how the edit reaches applyEdits (the default for
-// Editor.applyEdits — collaborative patches, programmatic fixes, etc.), not a
-// separate semantic class of edit. A mixed tracked/untracked sequence must
-// leave the document and its history in a state equivalent to the same
-// sequence applied all-tracked. The observable contract — chosen because it
-// sidesteps per-step grouping ambiguity — is exhaustion: after any edit
-// sequence, undo-to-exhaustion restores the ORIGINAL byte-exact text and
-// redo-to-exhaustion restores the FINAL text, no matter which edits skipped
-// history tracking. Where a per-step value is asserted, it is the value the
-// all-tracked reference run of the same script produces (probed with
-// undoBoundary=true per edit to defeat coalescing noise); the literals below
-// are embedded from those reference runs. The previously pinned rebasing
-// model — untracked edits survive undo while frozen history entries remap
-// around them — is rejected.
-//
-// KNOWN BUG shared by every test.failing below: untracked edits bypass the
-// edit stack entirely and existing entries are never reconciled with them, so
-// traversal strands or erases untracked text and applies inverse/forward
-// edits at stale offsets, corrupting the buffer instead of reproducing the
-// all-tracked timeline. Two passing tests in this describe pin today's
-// stopgap behavior in the geometries where it happens not to corrupt (the
-// after-the-tracked-range baseline and the stack-liveness test); they predate
-// the equivalence model and will need flipping when it lands.
+// DESIGN MODEL (equivalence, implemented in TextDocument.applyResolvedEdits):
+// applying an edit with updateHistory=false is an implementation detail of
+// how the edit reaches applyEdits (the shape of programmatic/remote changes —
+// collaborative patches, codemod fixes, etc.), not a separate semantic class
+// of edit. Every edit joins the undo timeline: an untracked edit
+// affects the edit stack exactly as the identical tracked call with no
+// selections and no undo boundary would — it gets an entry (clearing any
+// pending redo), coalesces by the normal geometry rules, and is unwound by
+// undo and replayed by redo like any other entry, never rebased around. A
+// mixed tracked/untracked sequence therefore leaves the document and its
+// history in a state equivalent to the same sequence applied all-tracked.
+// The headline contract — chosen because it sidesteps per-step grouping
+// ambiguity — is exhaustion: after any edit sequence, undo-to-exhaustion
+// restores the ORIGINAL byte-exact text and redo-to-exhaustion restores the
+// FINAL text, no matter which edits skipped history tracking. Where a
+// per-step value is asserted, it is the value the all-tracked reference run
+// of the same script produces; the literals below are embedded from those
+// reference runs. The rejected alternative — untracked edits survive undo
+// while frozen history entries remap around them (rebasing) — is pinned
+// against explicitly (the interior-insert and whole-document-replace tests).
 describe('undo/redo across non-history edits', () => {
-  // TODAY'S BEHAVIOR, not an equivalence pin: an untracked edit strictly
-  // AFTER the tracked range leaves the entry's stored offsets valid, so the
-  // single undo happens to restore exactly the tracked change without
-  // corrupting anything. Under the equivalence model even this geometry
-  // changes — the all-tracked reference unwinds the suffix first
-  // ("sour lemon", then "lemon") — so this pin documents the one arrangement
-  // where today's frozen entries stay coherent, and will need flipping when
-  // equivalence lands.
-  test('undo works when the non-history edit sits after the tracked range', () => {
+  // An untracked edit after the tracked range is its own timeline entry
+  // sitting above the tracked one (insert at 10 is not adjacent to the
+  // tracked insert's end at 5, so no coalescing), and LIFO order unwinds it
+  // first — matching the all-tracked reference "sour lemon tart" ->
+  // "sour lemon" -> "lemon". Previously this geometry pinned the old bypass
+  // model (a single undo that skipped the untracked suffix).
+  test('an untracked edit after the tracked range is its own undo step above it', () => {
     const d = doc('lemon');
     localEdit(d, 0, 0, 'sour '); // tracked: "sour lemon"
     remoteEdit(d, 10, 10, ' tart'); // remote suffix: "sour lemon tart"
+    expect(d.getText()).toBe('sour lemon tart');
     d.undo();
-    expect(d.getText()).toBe('lemon tart');
+    expect(d.getText()).toBe('sour lemon');
+    expect(d.canUndo).toBe(true);
+    expect(d.canRedo).toBe(true);
+    d.undo();
+    expect(d.getText()).toBe('lemon');
     expect(d.canUndo).toBe(false);
     expect(d.canRedo).toBe(true);
     d.redo();
+    expect(d.getText()).toBe('sour lemon');
+    d.redo();
     expect(d.getText()).toBe('sour lemon tart');
+    expect(d.canRedo).toBe(false);
   });
 
-  // KNOWN BUG: the equivalence expectation is that the two untracked inserts
-  // are part of the timeline, so exhaustion reproduces the all-tracked
-  // reference ("syncpilot?" -> "syncpilot" -> "pilot" -> "" and back).
-  // Actual today: the untracked inserts never enter history and the lone
-  // tracked entry's inverse applies at its stale offsets, deleting the
-  // untracked prefix plus part of the shifted typed text — undo-to-exhaustion
-  // yields "ilot?" and redo-to-exhaustion compounds it to "pilotilot?".
-  test.failing(
-    'a mixed tracked/untracked insert sequence unwinds and replays like the all-tracked timeline',
-    () => {
-      const d = doc('');
-      localEdit(d, 0, 0, 'pilot'); // tracked typing
-      remoteEdit(d, 0, 0, 'sync'); // untracked prefix: "syncpilot"
-      remoteEdit(d, 9, 9, '?'); // untracked suffix: "syncpilot?"
-      expect(d.getText()).toBe('syncpilot?');
+  // The two untracked inserts are part of the timeline, so exhaustion
+  // reproduces the all-tracked reference ("syncpilot?" -> "syncpilot" ->
+  // "pilot" -> "" and back); geometry blocks coalescing at both steps.
+  test('a mixed tracked/untracked insert sequence unwinds and replays like the all-tracked timeline', () => {
+    const d = doc('');
+    localEdit(d, 0, 0, 'pilot'); // tracked typing
+    remoteEdit(d, 0, 0, 'sync'); // untracked prefix: "syncpilot"
+    remoteEdit(d, 9, 9, '?'); // untracked suffix: "syncpilot?"
+    expect(d.getText()).toBe('syncpilot?');
 
-      // Undo-to-exhaustion restores the original byte-exact text...
-      undoAll(d);
-      expect(d.getText()).toBe('');
+    // Undo-to-exhaustion restores the original byte-exact text...
+    undoAll(d);
+    expect(d.getText()).toBe('');
 
-      // ...and redo-to-exhaustion restores the final text.
-      redoAll(d);
-      expect(d.getText()).toBe('syncpilot?');
+    // ...and redo-to-exhaustion restores the final text.
+    redoAll(d);
+    expect(d.getText()).toBe('syncpilot?');
+  });
+
+  // The untracked insert is one more logical step (it cannot coalesce with a
+  // three-edit batch), so exhaustion reproduces the all-tracked reference
+  // ("UV####WXYZ" -> "UVWXYZ" -> "pqr" and back) — the untracked text is
+  // unwound before the batch inverse applies, keeping its offsets valid.
+  test('a replacement batch with an interleaved untracked insert unwinds and replays like the all-tracked timeline', () => {
+    const d = doc('pqr');
+    // One tracked batch of three adjacent replacements.
+    d.applyEdits(
+      [lineEdit(0, 1, 'UV'), lineEdit(1, 2, 'WX'), lineEdit(2, 3, 'YZ')],
+      true,
+      [caretAt(0, 3)]
+    );
+    expect(d.getText()).toBe('UVWXYZ');
+
+    // Untracked insert exactly between the first and second replacements.
+    remoteEdit(d, 2, 2, '####');
+    expect(d.getText()).toBe('UV####WXYZ');
+
+    // Undo-to-exhaustion restores the original byte-exact text — the
+    // untracked insert is unwound too, exactly as if it had been tracked.
+    undoAll(d);
+    expect(d.getText()).toBe('pqr');
+
+    // Redo-to-exhaustion restores the final text.
+    redoAll(d);
+    expect(d.getText()).toBe('UV####WXYZ');
+  });
+
+  // The untracked interior insert does NOT survive undo — it is one of the
+  // undo steps like any other edit (rebasing it around the tracked entry is
+  // the rejected model), and exhaustion reproduces the all-tracked reference
+  // ("WXjYZ" -> "WXYZ" -> "" and back).
+  test('an untracked insert inside a tracked insertion unwinds and replays like the all-tracked timeline', () => {
+    const d = doc('');
+    localEdit(d, 0, 0, 'WXYZ'); // tracked insertion
+    remoteEdit(d, 2, 2, 'j'); // untracked insert in the middle of it
+    expect(d.getText()).toBe('WXjYZ');
+
+    undoAll(d);
+    expect(d.getText()).toBe('');
+
+    redoAll(d);
+    expect(d.getText()).toBe('WXjYZ');
+  });
+
+  // An untracked replace that wipes the region a tracked insertion lives in
+  // reads as one more logical step: the all-tracked reference unwinds
+  // "core" -> "oGHk" -> "ok" and replays "oGHk" -> "core", and no state along
+  // the way mixes the two texts — the strongest anti-corruption pin, since a
+  // mixture like "cGHe" never existed on any timeline.
+  test('an untracked whole-document replace over a tracked insertion unwinds and replays like the all-tracked timeline', () => {
+    const d = doc('ok');
+    localEdit(d, 1, 1, 'GH'); // tracked insert: "oGHk"
+    remoteEdit(d, 0, 4, 'core'); // untracked replace of the whole doc
+    expect(d.getText()).toBe('core');
+
+    const visited: string[] = [];
+    while (d.canUndo) {
+      d.undo();
+      visited.push(d.getText());
     }
-  );
+    expect(d.getText()).toBe('ok');
 
-  // KNOWN BUG: the equivalence expectation is that the untracked insert is
-  // one more logical step, so exhaustion reproduces the all-tracked reference
-  // ("UV####WXYZ" -> "UVWXYZ" -> "pqr" and back). Actual today: the batch
-  // entry's chained inverse offsets ignore the untracked insert that landed
-  // between its sub-edits, so undo treats the untracked text as if it were
-  // the tracked replacements — undo-to-exhaustion yields "pqrWXYZ" and
-  // redo-to-exhaustion "UVWXYZWXYZ".
-  test.failing(
-    'a replacement batch with an interleaved untracked insert unwinds and replays like the all-tracked timeline',
-    () => {
-      const d = doc('pqr');
-      // One tracked batch of three adjacent replacements.
-      d.applyEdits(
-        [lineEdit(0, 1, 'UV'), lineEdit(1, 2, 'WX'), lineEdit(2, 3, 'YZ')],
-        true,
-        [caretAt(0, 3)]
-      );
-      expect(d.getText()).toBe('UVWXYZ');
-
-      // Untracked insert exactly between the first and second replacements.
-      remoteEdit(d, 2, 2, '####');
-      expect(d.getText()).toBe('UV####WXYZ');
-
-      // Undo-to-exhaustion restores the original byte-exact text — the
-      // untracked insert is unwound too, exactly as if it had been tracked.
-      undoAll(d);
-      expect(d.getText()).toBe('pqr');
-
-      // Redo-to-exhaustion restores the final text.
-      redoAll(d);
-      expect(d.getText()).toBe('UV####WXYZ');
+    while (d.canRedo) {
+      d.redo();
+      visited.push(d.getText());
     }
-  );
+    expect(d.getText()).toBe('core');
 
-  // KNOWN BUG: under the equivalence model the untracked interior insert
-  // does NOT survive undo — it is one of the undo steps like any other edit,
-  // and exhaustion reproduces the all-tracked reference ("WXjYZ" -> "WXYZ" ->
-  // "" and back). Actual today: the tracked insertion's stale inverse [0,4)
-  // is deleted from "WXjYZ" wholesale, erasing the untracked "j" and
-  // stranding a tracked "Z" — undo-to-exhaustion yields "Z" and
-  // redo-to-exhaustion "WXYZZ".
-  test.failing(
-    'an untracked insert inside a tracked insertion unwinds and replays like the all-tracked timeline',
-    () => {
-      const d = doc('');
-      localEdit(d, 0, 0, 'WXYZ'); // tracked insertion
-      remoteEdit(d, 2, 2, 'j'); // untracked insert in the middle of it
-      expect(d.getText()).toBe('WXjYZ');
-
-      undoAll(d);
-      expect(d.getText()).toBe('');
-
-      redoAll(d);
-      expect(d.getText()).toBe('WXjYZ');
+    // Every state the traversal visits must be one the all-tracked
+    // timeline visits — no mixtures like "cGHe".
+    for (const state of visited) {
+      expect(['ok', 'oGHk', 'core']).toContain(state);
     }
-  );
+  });
 
-  // KNOWN BUG: an untracked replace that wipes the region a tracked insertion
-  // lives in must read as one more logical step: the all-tracked reference
-  // unwinds "core" -> "oGHk" -> "ok" and replays "oGHk" -> "core", and no
-  // state along the way mixes the two texts. Actual today: the frozen entry
-  // points at text that no longer exists, so undo deletes unrelated
-  // characters ("core" -> "ce") and redo splices the tracked insert into the
-  // replacement text ("cGHe") — a corruption artifact that never existed on
-  // any timeline.
-  test.failing(
-    'an untracked whole-document replace over a tracked insertion unwinds and replays like the all-tracked timeline',
-    () => {
-      const d = doc('ok');
-      localEdit(d, 1, 1, 'GH'); // tracked insert: "oGHk"
-      remoteEdit(d, 0, 4, 'core'); // untracked replace of the whole doc
-      expect(d.getText()).toBe('core');
+  // Stored selections need no remapping at all — by the time the tracked
+  // delete's entry is undone, the untracked insert has itself been unwound,
+  // so the document is back in the exact coordinate space the selections
+  // were recorded in and they restore verbatim. The all-tracked reference
+  // unwinds " worXYld" -> " world" -> "hello world" with the final undo
+  // returning carets [6, 11] unchanged.
+  test('undo exhaustion across an untracked insert restores the original text and the verbatim recorded selections', () => {
+    const d = doc('hello world');
+    // Tracked delete of the leading word, with two carets recorded.
+    d.applyEdits([lineEdit(0, 5, '')], true, [caretAt(0, 6), caretAt(0, 11)]);
+    expect(d.getText()).toBe(' world');
 
-      const visited: string[] = [];
-      while (d.canUndo) {
-        d.undo();
-        visited.push(d.getText());
-      }
-      expect(d.getText()).toBe('ok');
+    // Untracked insert; in the original coordinates this lands at offset 9,
+    // between the two stored carets.
+    remoteEdit(d, 4, 4, 'XY');
+    expect(d.getText()).toBe(' worXYld');
 
-      while (d.canRedo) {
-        d.redo();
-        visited.push(d.getText());
-      }
-      expect(d.getText()).toBe('core');
-
-      // Every state the traversal visits must be one the all-tracked
-      // timeline visits — no mixtures like "cGHe".
-      for (const state of visited) {
-        expect(['ok', 'oGHk', 'core']).toContain(state);
-      }
+    let lastUndo: ReturnType<typeof d.undo>;
+    while (d.canUndo) {
+      lastUndo = d.undo();
     }
-  );
+    expect(d.getText()).toBe('hello world');
+    // Mirrors the all-tracked reference: the final undo hands back the
+    // entry's stored selectionsBefore untouched.
+    expect(lastUndo?.[1]?.map((s) => s.start.character)).toEqual([6, 11]);
 
-  // KNOWN BUG: under the equivalence model stored selections need no
-  // remapping at all — by the time the tracked delete's entry is undone, the
-  // untracked insert has itself been unwound, so the document is back in the
-  // exact coordinate space the selections were recorded in and they restore
-  // verbatim. The all-tracked reference unwinds " worXYld" -> " world" ->
-  // "hello world" with the final undo returning carets [6, 11] unchanged.
-  // Actual today: the selections half already matches (they come back
-  // verbatim), but the text half fails — the untracked insert is never
-  // unwound, so the single undo reinserts "hello" at a stale offset and
-  // exhaustion ends at "hello worXYld" instead of "hello world".
-  test.failing(
-    'undo exhaustion across an untracked insert restores the original text and the verbatim recorded selections',
-    () => {
-      const d = doc('hello world');
-      // Tracked delete of the leading word, with two carets recorded.
-      d.applyEdits([lineEdit(0, 5, '')], true, [caretAt(0, 6), caretAt(0, 11)]);
-      expect(d.getText()).toBe(' world');
+    redoAll(d);
+    expect(d.getText()).toBe(' worXYld');
+  });
 
-      // Untracked insert; in the original coordinates this lands at offset 9,
-      // between the two stored carets.
-      remoteEdit(d, 4, 4, 'XY');
-      expect(d.getText()).toBe(' worXYld');
+  // The untracked "b" is part of the timeline like any other edit — and
+  // subject to NORMAL typing coalescing, not a forced boundary — so
+  // undo-to-exhaustion restores the original (empty) text, not an untracked
+  // remainder. The all-tracked run of this script unwinds "acb" -> "ab" -> ""
+  // and replays "" -> "ab" -> "acb" (the "b" coalesces into the "a"
+  // keystroke; "c" lands inside the merged insert and starts a new step);
+  // however the mixed run groups its steps, exhaustion must hit the same
+  // endpoints.
+  test('typing around an untracked insert unwinds to the original text, not to an untracked remainder', () => {
+    const d = doc('');
+    localEdit(d, 0, 0, 'a'); // tracked keystroke: "a"
+    remoteEdit(d, 1, 1, 'b'); // untracked: "ab"
+    localEdit(d, 1, 1, 'c'); // tracked keystroke right after the "a": "acb"
+    expect(d.getText()).toBe('acb');
 
-      let lastUndo: ReturnType<typeof d.undo>;
-      while (d.canUndo) {
-        lastUndo = d.undo();
-      }
-      expect(d.getText()).toBe('hello world');
-      // Mirrors the all-tracked reference: the final undo hands back the
-      // entry's stored selectionsBefore untouched.
-      expect(lastUndo?.[1]?.map((s) => s.start.character)).toEqual([6, 11]);
+    // Undo-to-exhaustion restores the original byte-exact text...
+    undoAll(d);
+    expect(d.getText()).toBe('');
 
-      redoAll(d);
-      expect(d.getText()).toBe(' worXYld');
-    }
-  );
+    // ...and redo-to-exhaustion restores the final text.
+    redoAll(d);
+    expect(d.getText()).toBe('acb');
+  });
 
-  // KNOWN BUG (was a passing pin under the old rebasing model, where undo
-  // "keeping the untracked text" looked correct by geometric accident):
-  // under the equivalence model the untracked "b" is part of the timeline
-  // like any other edit, so undo-to-exhaustion restores the original (empty)
-  // text — not an untracked remainder. The all-tracked run of this script
-  // unwinds "acb" -> "ab" -> "" and replays "" -> "ab" -> "acb" (the "b"
-  // coalesces into the "a" keystroke; "c" lands inside the merged insert and
-  // starts a new step); however the mixed run groups its steps, exhaustion
-  // must hit the same endpoints. Actual today: the two tracked keystrokes
-  // coalesce into one entry whose single undo leaves exactly "b", and
-  // canUndo goes false with the untracked text stranded as if it were
-  // original.
-  test.failing(
-    'typing around an untracked insert unwinds to the original text, not to an untracked remainder',
-    () => {
-      const d = doc('');
-      localEdit(d, 0, 0, 'a'); // tracked keystroke: "a"
-      remoteEdit(d, 1, 1, 'b'); // untracked: "ab"
-      localEdit(d, 1, 1, 'c'); // tracked keystroke right after the "a": "acb"
-      expect(d.getText()).toBe('acb');
-
-      // Undo-to-exhaustion restores the original byte-exact text...
-      undoAll(d);
-      expect(d.getText()).toBe('');
-
-      // ...and redo-to-exhaustion restores the final text.
-      redoAll(d);
-      expect(d.getText()).toBe('acb');
-    }
-  );
-
-  // TODAY'S BEHAVIOR, not an equivalence pin: untracked edits currently touch
-  // neither stack, so undo entries survive and a pending redo is not cleared.
-  // Geometry keeps every untracked edit after the tracked offsets so the
-  // surviving entries also APPLY cleanly today. Under the equivalence model
-  // an untracked edit is a new edit like any other — it joins the undo
-  // timeline and clears a pending redo (the failing pin below) — so this pin
-  // documents the stopgap and will need flipping when equivalence lands.
-  test('a non-history edit neither consumes undo entries nor clears the redo stack', () => {
+  // An untracked edit is a new edit like any other: it joins the undo
+  // timeline (here coalescing into the tracked keystroke by the normal
+  // insert-adjacency rule, exactly as the all-tracked reference does) and,
+  // while a redo entry is pending, pushing it clears the redo stack — the
+  // parked entry never replays anywhere. Previously pinned the old bypass
+  // model, where untracked edits touched neither stack.
+  test('a non-history edit joins the undo timeline and clears the redo stack', () => {
     const d = doc('alpha');
     localEdit(d, 5, 5, '!'); // tracked: "alpha!"
     expect(d.canUndo).toBe(true);
     expect(d.canRedo).toBe(false);
 
+    // Starts exactly where the tracked insert ends, so it coalesces into the
+    // "!" entry like continued typing would.
     remoteEdit(d, 6, 6, ' beta'); // "alpha! beta"
+    expect(d.getText()).toBe('alpha! beta');
     expect(d.canUndo).toBe(true);
     expect(d.canRedo).toBe(false);
 
+    // One coalesced step unwinds both inserts.
     d.undo();
-    expect(d.getText()).toBe('alpha beta');
+    expect(d.getText()).toBe('alpha');
     expect(d.canUndo).toBe(false);
     expect(d.canRedo).toBe(true);
 
-    // A non-history edit while a redo entry is pending keeps it alive.
-    remoteEdit(d, 10, 10, '?'); // "alpha beta?"
-    expect(d.canRedo).toBe(true);
-
-    d.redo();
-    expect(d.getText()).toBe('alpha! beta?');
+    // A non-history edit while a redo entry is pending pushes a new entry
+    // and clears the redo — the parked "! beta" entry is gone for good.
+    remoteEdit(d, 5, 5, '?'); // "alpha?"
+    expect(d.getText()).toBe('alpha?');
     expect(d.canUndo).toBe(true);
     expect(d.canRedo).toBe(false);
+
+    d.redo(); // no-op: nothing left to redo
+    expect(d.getText()).toBe('alpha?');
+    expect(d.canUndo).toBe(true);
+    expect(d.canRedo).toBe(false);
+
+    expect(undoAll(d)).toBe(1);
+    expect(d.getText()).toBe('alpha');
+    redoAll(d);
+    expect(d.getText()).toBe('alpha?');
   });
 
-  // KNOWN BUG: under the equivalence model the untracked ">> " insert is an
-  // ordinary new edit, and a new edit while a redo is pending clears the redo
-  // stack (the same rule tracked edits already follow). The all-tracked
+  // The untracked ">> " insert is an ordinary new edit, and a new edit while
+  // a redo is pending clears the redo stack (the same rule tracked edits
+  // already follow) — the parked "!" entry never replays anywhere, so its
+  // forward edit can never land at a stale offset. Matches the all-tracked
   // reference run: canRedo goes false after the ">> " edit, redo() is a
   // no-op at ">> note", undo-to-exhaustion yields "note", redo-to-exhaustion
-  // ">> note". Actual today: the pending redo entry survives the untracked
-  // edit and replays its forward edit at a stale offset, landing the "!"
-  // mid-word (">> n!ote"), and undo-to-exhaustion from there strands the
-  // untracked prefix at ">> note" instead of returning to "note".
-  test.failing(
-    'an untracked edit while a redo is pending behaves like a tracked edit and clears the redo',
-    () => {
-      const d = doc('note');
-      localEdit(d, 4, 4, '!'); // tracked: "note!"
-      d.undo();
-      expect(d.getText()).toBe('note');
-      expect(d.canRedo).toBe(true);
+  // ">> note".
+  test('an untracked edit while a redo is pending behaves like a tracked edit and clears the redo', () => {
+    const d = doc('note');
+    localEdit(d, 4, 4, '!'); // tracked: "note!"
+    d.undo();
+    expect(d.getText()).toBe('note');
+    expect(d.canRedo).toBe(true);
 
-      remoteEdit(d, 0, 0, '>> '); // untracked prefix while redo is pending
-      expect(d.getText()).toBe('>> note');
+    remoteEdit(d, 0, 0, '>> '); // untracked prefix while redo is pending
+    expect(d.getText()).toBe('>> note');
 
-      // Mirrors the all-tracked reference: pushing a new edit clears redo,
-      // so the pending "!" never replays anywhere.
-      expect(d.canRedo).toBe(false);
-      d.redo();
-      expect(d.getText()).toBe('>> note');
+    // Mirrors the all-tracked reference: pushing a new edit clears redo,
+    // so the pending "!" never replays anywhere.
+    expect(d.canRedo).toBe(false);
+    d.redo();
+    expect(d.getText()).toBe('>> note');
 
-      // Exhaustion in both directions matches the reference timeline.
-      undoAll(d);
-      expect(d.getText()).toBe('note');
-      redoAll(d);
-      expect(d.getText()).toBe('>> note');
-    }
-  );
+    // Exhaustion in both directions matches the reference timeline.
+    undoAll(d);
+    expect(d.getText()).toBe('note');
+    redoAll(d);
+    expect(d.getText()).toBe('>> note');
+  });
 });
 
 function insertEdit(
