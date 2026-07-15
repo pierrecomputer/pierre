@@ -105,13 +105,6 @@ order. If you touch one of these areas, consider adding the missing coverage:
 
 ## Known bugs pinned as `test.failing`
 
-- **EditStack coalescing** (3) — coalescing decisions compare a new edit against
-  whatever sits on top of the undo stack purely by geometry, with no state reset
-  after undo/redo: an undo can expose a stale top entry that new typing then
-  fuses into; an undo-boundary marker stops blocking merges once it is undone;
-  and backspace followed by forward-delete at the same pivot coalesces into a
-  single undo step instead of getting an undo stop when the delete direction
-  flips.
 - **Surrogate-pair edit boundaries** (3) — edit range endpoints landing strictly
   inside a surrogate pair split the pair and corrupt the buffer instead of
   snapping to pair boundaries; affects insert-inside-a-pair and replaces

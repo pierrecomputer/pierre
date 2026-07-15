@@ -28,6 +28,24 @@ export interface EditStackEntry<LAnnotation> {
    * typing and would merge into the previous keystroke.
    */
   undoBoundary?: boolean;
+  /**
+   * When `true`, an undo or redo has exposed this entry as the top of the
+   * undo stack. Traversed history is committed: a later edit must start a new
+   * undo step instead of coalescing into this entry (which would fuse fresh
+   * typing into pre-undo history and, via the redo clear, destroy the parked
+   * entries above it). Stamped by `popUndoToRedo`/`popRedoToUndo`.
+   */
+  sealed?: boolean;
+  /**
+   * Which delete key produced this pure-delete entry, when the recorded
+   * pre-edit selections were collapsed carets: 'backspace' deleted the range
+   * before each caret, 'delete' the range after it. Backspace and forward
+   * delete at the same pivot produce identical edit geometry, so the caret
+   * side is the only signal that separates a continuing delete run from a
+   * direction switch. Unset for non-delete entries and for deletes recorded
+   * without caret selections, which keep the geometry-only coalescing rules.
+   */
+  deleteDirection?: 'backspace' | 'delete';
 }
 
 /** Options for the edit stack. */
@@ -119,6 +137,7 @@ export class EditStack<LAnnotation> {
     const entry = this.#undoStack.pop();
     if (entry !== undefined) {
       this.#redoStack.push(entry);
+      this.#sealTopUndo();
       return entry;
     }
   }
@@ -128,7 +147,19 @@ export class EditStack<LAnnotation> {
     const entry = this.#redoStack.pop();
     if (entry !== undefined) {
       this.#undoStack.push(entry);
+      this.#sealTopUndo();
       return entry;
+    }
+  }
+
+  // Marks the entry an undo or redo just exposed as the top of the undo stack
+  // (after undo, the entry beneath the popped one; after redo, the re-pushed
+  // entry itself) so later edits start a new undo step instead of coalescing
+  // into traversed history.
+  #sealTopUndo(): void {
+    const topEntry = this.#undoStack[this.#undoStack.length - 1];
+    if (topEntry !== undefined) {
+      topEntry.sealed = true;
     }
   }
 }
@@ -156,7 +187,7 @@ export function createEditStackEntry<LAnnotation>(
     });
     offsetDelta += edit.text.length - (edit.end - edit.start);
   }
-  return {
+  const entry: EditStackEntry<LAnnotation> = {
     forwardEdits: forwardEdits.map((edit) => ({ ...edit })),
     inverseEdits: inverseEdits,
     versionBefore,
@@ -168,12 +199,84 @@ export function createEditStackEntry<LAnnotation>(
     lineAnnotationsBefore: lineAnnotationsBefore?.slice(),
     lineAnnotationsAfter: lineAnnotationsAfter?.slice(),
   };
+  const deleteDirection = classifyDeleteDirection(
+    textDocument,
+    forwardEdits,
+    selectionsBefore
+  );
+  if (deleteDirection !== undefined) {
+    entry.deleteDirection = deleteDirection;
+  }
+  return entry;
+}
+
+// Classifies which delete key produced a pure-delete batch from where the
+// recorded pre-edit carets sit relative to the deleted ranges: Backspace
+// deletes the range before the caret (caret at `edit.end`), forward Delete
+// the range after it (caret at `edit.start`). Both keys produce identical
+// edit geometry at the same pivot, so the caret side is the only available
+// signal. Returns `undefined` — keeping the geometry-only coalescing rules —
+// when the batch is not purely deletes, the selections are missing,
+// non-collapsed (a selection deletion has no key direction), or miscounted
+// (e.g. carets with nothing to delete recorded alongside eligible ones), or
+// the carets do not sit consistently on one edge.
+function classifyDeleteDirection<LAnnotation>(
+  textDocument: TextDocument<LAnnotation>,
+  forwardEdits: readonly ResolvedTextEdit[],
+  selectionsBefore?: EditorSelection[]
+): 'backspace' | 'delete' | undefined {
+  if (
+    selectionsBefore === undefined ||
+    selectionsBefore.length !== forwardEdits.length
+  ) {
+    return undefined;
+  }
+  for (const edit of forwardEdits) {
+    if (edit.text.length > 0 || edit.end <= edit.start) {
+      return undefined;
+    }
+  }
+  const caretOffsets: number[] = [];
+  for (const selection of selectionsBefore) {
+    if (
+      selection.start.line !== selection.end.line ||
+      selection.start.character !== selection.end.character
+    ) {
+      return undefined;
+    }
+    caretOffsets.push(textDocument.offsetAt(selection.start));
+  }
+  // `forwardEdits` is already sorted ascending; sort the carets the same way
+  // so each pairs with the range it deleted.
+  caretOffsets.sort((a, b) => a - b);
+  let atEveryEnd = true;
+  let atEveryStart = true;
+  for (let i = 0; i < forwardEdits.length; i++) {
+    atEveryEnd &&= caretOffsets[i] === forwardEdits[i].end;
+    atEveryStart &&= caretOffsets[i] === forwardEdits[i].start;
+  }
+  if (atEveryEnd) {
+    return 'backspace';
+  }
+  if (atEveryStart) {
+    return 'delete';
+  }
+  return undefined;
 }
 
 /** Determines if the change matches following modes:
  * - 'insert': simple typing
  * - 'backspace': backward delete
  * - 'delete': forward delete
+ *
+ * A previous entry that has been traversed by undo/redo (`sealed`) never
+ * accepts coalescing, and two delete entries whose key directions
+ * (`deleteDirection`) are both known and opposite never merge — a direction
+ * switch starts a new undo step. When either side's direction is unknown
+ * (untracked or programmatic edits, deletes recorded without caret
+ * selections), the geometry-only rules apply unchanged, so a caret that
+ * merely coincides with a delete edge (e.g. an outdent's leading-whitespace
+ * delete) cannot break grouping against unlabeled neighbors.
  */
 export function shouldCoalesceEditStackEntry<LAnnotation>(
   previousEntry: EditStackEntry<LAnnotation> | undefined,
@@ -181,12 +284,28 @@ export function shouldCoalesceEditStackEntry<LAnnotation>(
 ): boolean {
   if (
     previousEntry === undefined ||
+    previousEntry.sealed === true ||
     previousEntry.undoBoundary === true ||
     nextEntry.undoBoundary === true ||
     previousEntry.forwardEdits.length === 0 ||
     previousEntry.forwardEdits.length !== previousEntry.inverseEdits.length ||
     previousEntry.forwardEdits.length !== nextEntry.forwardEdits.length ||
     nextEntry.forwardEdits.length !== nextEntry.inverseEdits.length
+  ) {
+    return false;
+  }
+  // Backspace and forward Delete at the same pivot leave identical edit
+  // geometry (the pivot offset maps onto both the end of a just-deleted range
+  // and the resting spot after a Backspace), so geometry alone cannot see a
+  // direction switch. When both entries carry a known key direction and they
+  // disagree, this is a switch, not a continuing run. Requiring BOTH sides
+  // keeps a false or coincidental label (a programmatic delete whose recorded
+  // caret happens to sit on an edit edge) from blocking merges with unlabeled
+  // neighbors, which keep the geometry-only rules.
+  if (
+    previousEntry.deleteDirection !== undefined &&
+    nextEntry.deleteDirection !== undefined &&
+    previousEntry.deleteDirection !== nextEntry.deleteDirection
   ) {
     return false;
   }
@@ -237,6 +356,8 @@ export function shouldCoalesceEditStackEntry<LAnnotation>(
       nextInverse.text.length > 0;
     if (previousWasDelete && nextIsDelete) {
       if (mappedNextStart === previousForward.end) {
+        // Forward-delete-run shape (the direction-switch check above already
+        // rejected a known backspace-vs-delete conflict).
         mode ??= 'delete';
         if (mode !== 'delete') {
           return false;
@@ -249,6 +370,8 @@ export function shouldCoalesceEditStackEntry<LAnnotation>(
       ) {
         return false;
       }
+      // Backspace-run shape; the mirror of the pivot ambiguity above, covered
+      // by the same direction-switch check.
       mode ??= 'backspace';
       if (mode !== 'backspace') {
         return false;
@@ -305,7 +428,7 @@ export function coalesceEditStackEntries<LAnnotation>(
     replacedTexts.push(nextInverse.text + previousInverse.text);
   }
 
-  return {
+  const mergedEntry: EditStackEntry<LAnnotation> = {
     forwardEdits,
     inverseEdits: buildInverseEditsFromReplacedTexts(
       forwardEdits,
@@ -318,6 +441,15 @@ export function coalesceEditStackEntries<LAnnotation>(
     lineAnnotationsBefore: previousEntry.lineAnnotationsBefore?.slice(),
     lineAnnotationsAfter: nextEntry.lineAnnotationsAfter?.slice(),
   };
+  // Keep the run's key direction on the merged entry (either side may be an
+  // unclassified untracked edit) so a later opposite-direction delete still
+  // reads as a switch and starts a new undo step.
+  const deleteDirection =
+    previousEntry.deleteDirection ?? nextEntry.deleteDirection;
+  if (deleteDirection !== undefined) {
+    mergedEntry.deleteDirection = deleteDirection;
+  }
+  return mergedEntry;
 }
 
 function buildInverseEditsFromReplacedTexts(

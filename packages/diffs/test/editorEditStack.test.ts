@@ -250,6 +250,35 @@ describe('shouldCoalesceEditStackEntry', () => {
     const next = stackEntry('w', [{ start: 1, end: 1, text: 'o' }], 1, 2);
     expect(shouldCoalesceEditStackEntry(previous, next)).toBe(true);
   });
+
+  // Backspace and forward Delete at the same pivot leave identical edit
+  // geometry; only the caret side of the recorded selections separates them.
+  // A direction stop requires BOTH entries' key directions known and
+  // opposite — a lone labeled side keeps the geometry-only rules, so a
+  // caret that merely coincides with a delete edge (an outdent's
+  // leading-whitespace delete, a host-applied programmatic delete) cannot
+  // break grouping against unlabeled neighbors.
+  test('does not coalesce known-opposite delete directions at the same pivot', () => {
+    const previous = stackEntry('abc', [{ start: 1, end: 2, text: '' }], 0, 1, [
+      caret(2), // caret at the deleted range's end: backspace posture
+    ]);
+    const next = stackEntry('ac', [{ start: 1, end: 2, text: '' }], 1, 2, [
+      caret(1), // caret at the deleted range's start: forward-delete posture
+    ]);
+    expect(shouldCoalesceEditStackEntry(previous, next)).toBe(false);
+  });
+
+  test('coalesces at the pivot when only one delete direction is known', () => {
+    const unlabeled = stackEntry('abc', [{ start: 1, end: 2, text: '' }], 0, 1);
+    const backspaceNext = stackEntry(
+      'ac',
+      [{ start: 1, end: 2, text: '' }],
+      1,
+      2,
+      [caret(2)]
+    );
+    expect(shouldCoalesceEditStackEntry(unlabeled, backspaceNext)).toBe(true);
+  });
 });
 
 // --- Shared helpers for the undo/redo coalescing and history scenarios below ---
@@ -359,100 +388,127 @@ function redoAll(d: ReturnType<typeof doc>) {
   return steps;
 }
 
-// Undo/redo coalescing scenarios. The three test.failing entries here are
-// known bugs: coalescing is decided purely by comparing edit geometry against
-// whatever entry sits on top of the undo stack, with no state reset after
-// undo()/redo() and no sticky typing-mode tracking.
+// Undo/redo coalescing scenarios. Undo/redo traversal is itself a coalescing
+// boundary: every pop seals the entry it exposes as the new top of the undo
+// stack, so fresh typing after an undo or redo always starts a new undo step
+// instead of fusing into traversed history. Delete entries additionally
+// record which key produced them (backspace vs forward delete, read from the
+// caret side of the recorded selections), so a switch between two known
+// directions at the same pivot gets its own undo stop even though both keys
+// leave identical edit geometry. A lone labeled side keeps the geometry-only
+// rules, so deletes whose recorded caret merely coincides with an edit edge
+// (outdent, programmatic edits) cannot break grouping against unlabeled
+// neighbors.
 describe('EditStack coalescing across undo and redo', () => {
-  // KNOWN BUG: after undo() pops the top entry, new typing that happens to sit
-  // adjacent to the newly exposed entry coalesces into it, so one undo wipes out
-  // committed pre-undo history along with the fresh keystroke.
-  test.failing(
-    'typing after an undo never merges into pre-undo history',
-    () => {
-      const d = doc('hello\nworld');
-      typeAt(d, 0, 0, 'a'); // entry 1: "ahello\nworld"
-      typeAt(d, 1, 0, 'Z'); // entry 2 (different line, no coalesce): "ahello\nZworld"
-      d.undo(); // pops entry 2, entry 1 is now on top
-      expect(d.getText()).toBe('ahello\nworld');
+  // After undo() pops the top entry, the newly exposed entry is sealed: new
+  // typing that happens to sit adjacent to it starts a fresh undo step, so one
+  // undo removes only the new keystroke, never committed pre-undo history.
+  test('typing after an undo never merges into pre-undo history', () => {
+    const d = doc('hello\nworld');
+    typeAt(d, 0, 0, 'a'); // entry 1: "ahello\nworld"
+    typeAt(d, 1, 0, 'Z'); // entry 2 (different line, no coalesce): "ahello\nZworld"
+    d.undo(); // pops entry 2, entry 1 is now on top
+    expect(d.getText()).toBe('ahello\nworld');
 
-      typeAt(d, 0, 1, 'b'); // brand-new keystroke, adjacent to entry 1's insert
-      expect(d.getText()).toBe('abhello\nworld');
+    typeAt(d, 0, 1, 'b'); // brand-new keystroke, adjacent to entry 1's insert
+    expect(d.getText()).toBe('abhello\nworld');
 
-      // One undo must remove only the new 'b', not entry 1's 'a' with it.
-      d.undo();
-      expect(d.getText()).toBe('ahello\nworld');
+    // One undo removes only the new 'b', not entry 1's 'a' with it.
+    d.undo();
+    expect(d.getText()).toBe('ahello\nworld');
 
-      // Redo direction: the 'b' keystroke comes back on its own.
-      d.redo();
-      expect(d.getText()).toBe('abhello\nworld');
+    // Redo direction: the 'b' keystroke comes back on its own.
+    d.redo();
+    expect(d.getText()).toBe('abhello\nworld');
 
-      // The full history unwinds one keystroke at a time.
-      d.undo();
-      d.undo();
-      expect(d.getText()).toBe('hello\nworld');
-      expect(d.canUndo).toBe(false);
-    }
-  );
+    // The full history unwinds one keystroke at a time.
+    d.undo();
+    d.undo();
+    expect(d.getText()).toBe('hello\nworld');
+    expect(d.canUndo).toBe(false);
+  });
 
-  // KNOWN BUG: an undoBoundary entry blocks merging only while it sits on the
-  // undo stack; once it is undone, the entry beneath it is exposed and new
-  // typing merges straight through into it as if the boundary never existed.
-  test.failing(
-    'an undone boundary entry still shields the entry beneath it from coalescing',
-    () => {
-      const d = doc('hello');
-      typeAt(d, 0, 0, 'a'); // entry 1: "ahello"
-      typeAt(d, 0, 1, 'XYZ', true); // paste with boundary: "aXYZhello"
-      d.undo(); // pops the paste, entry 1 is on top again
-      expect(d.getText()).toBe('ahello');
+  // Undoing a boundary entry seals the entry it exposes, so the shield
+  // effectively survives the boundary's removal: new typing starts its own
+  // step instead of merging into the entry beneath the undone paste.
+  test('an undone boundary entry still shields the entry beneath it from coalescing', () => {
+    const d = doc('hello');
+    typeAt(d, 0, 0, 'a'); // entry 1: "ahello"
+    typeAt(d, 0, 1, 'XYZ', true); // paste with boundary: "aXYZhello"
+    d.undo(); // pops the paste, entry 1 is on top again
+    expect(d.getText()).toBe('ahello');
 
-      typeAt(d, 0, 1, 'b'); // ordinary keystroke adjacent to entry 1's insert
-      expect(d.getText()).toBe('abhello');
+    typeAt(d, 0, 1, 'b'); // ordinary keystroke adjacent to entry 1's insert
+    expect(d.getText()).toBe('abhello');
 
-      // One undo must remove only 'b'; 'a' predates the paste boundary.
-      d.undo();
-      expect(d.getText()).toBe('ahello');
+    // One undo removes only 'b'; 'a' predates the paste boundary.
+    d.undo();
+    expect(d.getText()).toBe('ahello');
 
-      // Redo direction: only the 'b' keystroke replays.
-      d.redo();
-      expect(d.getText()).toBe('abhello');
+    // Redo direction: only the 'b' keystroke replays.
+    d.redo();
+    expect(d.getText()).toBe('abhello');
 
-      d.undo();
-      d.undo();
-      expect(d.getText()).toBe('hello');
-      expect(d.canUndo).toBe(false);
-    }
-  );
+    d.undo();
+    d.undo();
+    expect(d.getText()).toBe('hello');
+    expect(d.canUndo).toBe(false);
+  });
 
-  // KNOWN BUG: a Backspace followed by a forward Delete at the same pivot
-  // coalesces into one undo step; the pivot offset maps ambiguously onto the end
-  // of the just-deleted range, so the pair passes the 'delete'-mode check.
-  test.failing(
-    'switching from backspace to forward delete creates a new undo stop',
-    () => {
-      const d = doc('abc');
-      backspaceAt(d, 0, 2); // removes 'b' -> "ac", caret lands at (0,1)
-      forwardDeleteAt(d, 0, 1); // removes 'c' -> "a"
-      expect(d.getText()).toBe('a');
+  // Backspace and forward Delete at the same pivot leave identical edit
+  // geometry (the pivot offset maps onto the end of the just-deleted range),
+  // so entries record which delete key produced them from the caret side of
+  // the recorded selections; a direction switch starts a new undo stop
+  // instead of continuing the run.
+  test('switching from backspace to forward delete creates a new undo stop', () => {
+    const d = doc('abc');
+    backspaceAt(d, 0, 2); // removes 'b' -> "ac", caret lands at (0,1)
+    forwardDeleteAt(d, 0, 1); // removes 'c' -> "a"
+    expect(d.getText()).toBe('a');
 
-      // First undo restores only the forward-deleted character.
-      d.undo();
-      expect(d.getText()).toBe('ac');
+    // First undo restores only the forward-deleted character.
+    d.undo();
+    expect(d.getText()).toBe('ac');
 
-      // Second undo restores the backspaced character.
-      d.undo();
-      expect(d.getText()).toBe('abc');
-      expect(d.canUndo).toBe(false);
+    // Second undo restores the backspaced character.
+    d.undo();
+    expect(d.getText()).toBe('abc');
+    expect(d.canUndo).toBe(false);
 
-      // Redo direction: the two deletes replay as separate steps.
-      d.redo();
-      expect(d.getText()).toBe('ac');
-      d.redo();
-      expect(d.getText()).toBe('a');
-      expect(d.canRedo).toBe(false);
-    }
-  );
+    // Redo direction: the two deletes replay as separate steps.
+    d.redo();
+    expect(d.getText()).toBe('ac');
+    d.redo();
+    expect(d.getText()).toBe('a');
+    expect(d.canRedo).toBe(false);
+  });
+
+  // The editor's indent dispatch records the live caret alongside outdent's
+  // leading-whitespace deletes, so an entry can carry a coincidental
+  // delete-key posture (caret exactly at the deleted range's edge) without
+  // any delete key being pressed. A lone labeled side must not break the
+  // geometry grouping: two consecutive outdents stay one undo step.
+  test('outdent-shaped deletes with a coincidental caret edge keep geometry grouping', () => {
+    const outdentEdit = {
+      range: {
+        start: { line: 0, character: 0 },
+        end: { line: 0, character: 2 },
+      },
+      newText: '',
+    };
+    const d = doc('    foo');
+    // Caret at the text start (col 4): on neither edge of [0,2) -> unlabeled.
+    d.applyEdits([outdentEdit], true, [caretAt(0, 4)], [caretAt(0, 2)]);
+    expect(d.getText()).toBe('  foo');
+    // Caret now at col 2: coincides with this delete's end (a backspace
+    // posture), but the previous entry has no known direction.
+    d.applyEdits([outdentEdit], true, [caretAt(0, 2)], [caretAt(0, 0)]);
+    expect(d.getText()).toBe('foo');
+
+    d.undo();
+    expect(d.getText()).toBe('    foo');
+    expect(d.canUndo).toBe(false);
+  });
 
   // DIVERGENCE: the conventional behavior breaks typed runs at whitespace (a
   // lone space merges with the word before it, but typing after the space
@@ -1444,10 +1500,10 @@ describe('randomized keystroke-run history oracle', () => {
   // document and checks the recorded patch in both directions, this drives
   // seeded keystroke runs through history-tracked applyEdits and checks the
   // coalesced history in both directions via exhaustion. CONSTRAINTS: this
-  // must stay a passing invariant test, so the run never undoes mid-stream
-  // (coalescing across undo/redo is the known-bug family in the "EditStack
-  // coalescing across undo and redo" describe above) and never applies
-  // history-skipping edits (the frozen-entry known bugs live in the
+  // stays a pure coalescing oracle, so the run never undoes mid-stream
+  // (traversal seals entries against further coalescing — pinned
+  // deterministically in the "EditStack coalescing across undo and redo"
+  // describe above) and never applies history-skipping edits (pinned in the
   // "undo/redo across non-history edits" describe above); undo/redo run only
   // in the final exhaustion phase.
   test('seeded keystroke runs keep per-step text fidelity and byte-exact undo/redo exhaustion', () => {
