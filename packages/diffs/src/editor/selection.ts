@@ -12,6 +12,7 @@ import type {
   TextDocument,
   TextDocumentChange,
 } from './textDocument';
+import { snapTextOffsetToUnicodeBoundary } from './textMeasure';
 import {
   createSegmenter,
   endsWithLineBreak,
@@ -326,12 +327,18 @@ function moveBySoftLine(
 
   const column = Math.max(0, character - current.start);
   const targetCharacter = target.start + column;
+  const landedCharacter =
+    target.index === target.count - 1
+      ? targetCharacter
+      : Math.min(targetCharacter, target.end);
+  const targetLineText = textDocument.getLineText(targetLine);
+  // Keep goal-column overshoots, but snap real offsets out of graphemes.
   return {
     line: targetLine,
     character:
-      target.index === target.count - 1
-        ? targetCharacter
-        : Math.min(targetCharacter, target.end),
+      landedCharacter > targetLineText.length
+        ? landedCharacter
+        : snapTextOffsetToUnicodeBoundary(targetLineText, landedCharacter),
   };
 }
 
