@@ -22,7 +22,7 @@
 //   Snapshot tests (from packages/diffs/):
 //     bun test parseMergeConflictDiffFromFile
 //
-//   Performance benchmark (checksum must match 33121550):
+//   Performance benchmark (checksum must match 31314920):
 //     moonx diffs:benchmark-parse-merge-conflict
 //
 // If you encounter a bug:
@@ -598,24 +598,33 @@ function finalizeActiveHunk(s: ParseState): void {
     }
   }
 
+  // While building, each side's start is "next line to consume" (1-based). A
+  // side that finished with zero lines must shift down to the unified `N,0`
+  // convention (start names the line the hunk applies after), which is what
+  // hunk headers, getHunkSideStartBoundary, and downstream boundary math all
+  // assume — e.g. a whole-file deletion emits `+0,0`, not `+1,0`.
+  const additionStart =
+    hunk.additionCount === 0 ? hunk.additionStart - 1 : hunk.additionStart;
+  const deletionStart =
+    hunk.deletionCount === 0 ? hunk.deletionStart - 1 : hunk.deletionStart;
+
   const collapsedBefore = Math.max(
-    getHunkSideStartBoundary(hunk.additionStart, hunk.additionCount) -
-      s.lastHunkEnd,
+    getHunkSideStartBoundary(additionStart, hunk.additionCount) - s.lastHunkEnd,
     0
   );
   const finalizedHunk: Hunk = {
     collapsedBefore,
-    additionStart: hunk.additionStart,
+    additionStart,
     additionCount: hunk.additionCount,
     additionLines: hunk.additionLines,
     additionLineIndex: hunk.additionLineIndex,
-    deletionStart: hunk.deletionStart,
+    deletionStart,
     deletionCount: hunk.deletionCount,
     deletionLines: hunk.deletionLines,
     deletionLineIndex: hunk.deletionLineIndex,
     hunkContent: hunk.hunkContent,
     hunkContext: undefined,
-    hunkSpecs: `@@ -${formatHunkRange(hunk.deletionStart, hunk.deletionCount)} +${formatHunkRange(hunk.additionStart, hunk.additionCount)} @@\n`,
+    hunkSpecs: `@@ -${formatHunkRange(deletionStart, hunk.deletionCount)} +${formatHunkRange(additionStart, hunk.additionCount)} @@\n`,
     splitLineStart: s.splitLineCount + collapsedBefore,
     splitLineCount: hunkSplitLineCount,
     unifiedLineStart: s.unifiedLineCount + collapsedBefore,
@@ -627,10 +636,7 @@ function finalizeActiveHunk(s: ParseState): void {
   s.hunks.push(finalizedHunk);
   s.splitLineCount += collapsedBefore + hunkSplitLineCount;
   s.unifiedLineCount += collapsedBefore + hunkUnifiedLineCount;
-  s.lastHunkEnd = getHunkSideEndBoundary(
-    hunk.additionStart,
-    hunk.additionCount
-  );
+  s.lastHunkEnd = getHunkSideEndBoundary(additionStart, hunk.additionCount);
 }
 
 // Called when the context buffer between two changes exceeds maxContextLines*2.
