@@ -677,6 +677,55 @@ describe('CodeView item edit mode', () => {
       );
     }
 
+    test('a region-changing render flushes deferred line state', async () => {
+      const { cleanup } = installDom();
+      const { createEditor } = createEditorHarness();
+      const viewer = new CodeView({ createEditor });
+      const edited = makeSessionDiffItem('edited');
+      if (edited.type !== 'diff') {
+        throw new Error('Expected a diff edit-session item.');
+      }
+      try {
+        viewer.setup(createRoot());
+        await renderItems(viewer, [edited]);
+
+        const rendered = viewer.getRenderedItems()[0];
+        expect(rendered).toBeDefined();
+        const hunkCount = edited.fileDiff.hunks.length;
+        rendered.instance.updateRenderCache(
+          new Map([[25, [[0, '', 'line 25 changed']]]]),
+          'light',
+          false
+        );
+        expect(edited.fileDiff.hunks).toHaveLength(hunkCount + 1);
+
+        rendered.instance.setSelectedLines({ start: 26, end: 26 });
+        rendered.instance.setEditorActiveLine(26);
+        await wait(0);
+
+        const shadowRoot = rendered.element.shadowRoot;
+        const additions = shadowRoot?.querySelector(
+          '[data-code]:not([data-deletions])'
+        );
+        const row = additions?.querySelector(
+          '[data-content] > [data-line="26"]'
+        );
+        expect(row).not.toBeNull();
+        expect(row?.hasAttribute('data-selected-line')).toBe(true);
+        expect(row?.hasAttribute('data-editor-active-line')).toBe(true);
+
+        // The completed render must also release later writes immediately.
+        rendered.instance.setSelectedLines(null);
+        rendered.instance.setEditorActiveLine(null);
+        expect(row?.hasAttribute('data-selected-line')).toBe(false);
+        expect(row?.hasAttribute('data-editor-active-line')).toBe(false);
+      } finally {
+        viewer.cleanUp();
+        await wait(0);
+        cleanup();
+      }
+    });
+
     test('session-shaped hunks survive a recycle and remount', async () => {
       const { cleanup } = installDom();
       const { editors, createEditor } = createEditorHarness();

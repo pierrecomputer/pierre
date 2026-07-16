@@ -423,6 +423,15 @@ export class VirtualizedFileDiff<
     return this.render();
   };
 
+  // Virtualized renders bypass FileDiff's queued render handler. Apply line
+  // state deferred during the refresh once managers target the rebuilt rows.
+  public override flushManagers(): void {
+    super.flushManagers();
+    if (this.lineStateRefreshPending) {
+      this.flushDeferredLineState();
+    }
+  }
+
   // Prepares this item for CodeView layout by binding the latest diff, syncing
   // its virtualized top, and returning an approximate height. This method is
   // called while downstream items are being re-positioned, so later changes

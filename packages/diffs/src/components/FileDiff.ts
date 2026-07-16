@@ -551,7 +551,7 @@ export class FileDiff<
 
   // A refresh can receive selected-lines and editor active-line writes in either
   // order. Apply the latest value from each after the rows are stable.
-  private flushDeferredLineState(): void {
+  protected flushDeferredLineState(): void {
     const {
       deferredEditorActiveLine: editorActiveLine,
       deferredSelectedLines: selectedLines,
