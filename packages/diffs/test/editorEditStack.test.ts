@@ -359,100 +359,106 @@ function redoAll(d: ReturnType<typeof doc>) {
   return steps;
 }
 
-// Undo/redo coalescing scenarios. The three test.failing entries here are
-// known bugs: coalescing is decided purely by comparing edit geometry against
-// whatever entry sits on top of the undo stack, with no state reset after
-// undo()/redo() and no sticky typing-mode tracking.
+// Undo and redo close the current coalescing group. Delete runs additionally
+// retain their input direction because a shared pivot can be geometrically
+// ambiguous after the first character is removed.
 describe('EditStack coalescing across undo and redo', () => {
-  // KNOWN BUG: after undo() pops the top entry, new typing that happens to sit
-  // adjacent to the newly exposed entry coalesces into it, so one undo wipes out
-  // committed pre-undo history along with the fresh keystroke.
-  test.failing(
-    'typing after an undo never merges into pre-undo history',
-    () => {
-      const d = doc('hello\nworld');
-      typeAt(d, 0, 0, 'a'); // entry 1: "ahello\nworld"
-      typeAt(d, 1, 0, 'Z'); // entry 2 (different line, no coalesce): "ahello\nZworld"
-      d.undo(); // pops entry 2, entry 1 is now on top
-      expect(d.getText()).toBe('ahello\nworld');
+  test('typing after an undo never merges into pre-undo history', () => {
+    const d = doc('hello\nworld');
+    typeAt(d, 0, 0, 'a'); // entry 1: "ahello\nworld"
+    typeAt(d, 1, 0, 'Z'); // entry 2 (different line, no coalesce): "ahello\nZworld"
+    d.undo(); // pops entry 2, entry 1 is now on top
+    expect(d.getText()).toBe('ahello\nworld');
 
-      typeAt(d, 0, 1, 'b'); // brand-new keystroke, adjacent to entry 1's insert
-      expect(d.getText()).toBe('abhello\nworld');
+    typeAt(d, 0, 1, 'b'); // brand-new keystroke, adjacent to entry 1's insert
+    expect(d.getText()).toBe('abhello\nworld');
 
-      // One undo must remove only the new 'b', not entry 1's 'a' with it.
-      d.undo();
-      expect(d.getText()).toBe('ahello\nworld');
+    // One undo must remove only the new 'b', not entry 1's 'a' with it.
+    d.undo();
+    expect(d.getText()).toBe('ahello\nworld');
 
-      // Redo direction: the 'b' keystroke comes back on its own.
-      d.redo();
-      expect(d.getText()).toBe('abhello\nworld');
+    // Redo direction: the 'b' keystroke comes back on its own.
+    d.redo();
+    expect(d.getText()).toBe('abhello\nworld');
 
-      // The full history unwinds one keystroke at a time.
-      d.undo();
-      d.undo();
-      expect(d.getText()).toBe('hello\nworld');
-      expect(d.canUndo).toBe(false);
-    }
-  );
+    // The full history unwinds one keystroke at a time.
+    d.undo();
+    d.undo();
+    expect(d.getText()).toBe('hello\nworld');
+    expect(d.canUndo).toBe(false);
+  });
 
-  // KNOWN BUG: an undoBoundary entry blocks merging only while it sits on the
-  // undo stack; once it is undone, the entry beneath it is exposed and new
-  // typing merges straight through into it as if the boundary never existed.
-  test.failing(
-    'an undone boundary entry still shields the entry beneath it from coalescing',
-    () => {
-      const d = doc('hello');
-      typeAt(d, 0, 0, 'a'); // entry 1: "ahello"
-      typeAt(d, 0, 1, 'XYZ', true); // paste with boundary: "aXYZhello"
-      d.undo(); // pops the paste, entry 1 is on top again
-      expect(d.getText()).toBe('ahello');
+  test('typing after a redo never merges into replayed history', () => {
+    const d = doc('hello\nworld');
+    typeAt(d, 0, 0, 'a');
+    typeAt(d, 1, 0, 'Z');
+    d.undo();
+    d.redo();
+    expect(d.getText()).toBe('ahello\nZworld');
 
-      typeAt(d, 0, 1, 'b'); // ordinary keystroke adjacent to entry 1's insert
-      expect(d.getText()).toBe('abhello');
+    typeAt(d, 1, 1, 'b');
+    d.undo();
+    expect(d.getText()).toBe('ahello\nZworld');
+  });
 
-      // One undo must remove only 'b'; 'a' predates the paste boundary.
-      d.undo();
-      expect(d.getText()).toBe('ahello');
+  test('an undone boundary entry still shields the entry beneath it from coalescing', () => {
+    const d = doc('hello');
+    typeAt(d, 0, 0, 'a'); // entry 1: "ahello"
+    typeAt(d, 0, 1, 'XYZ', true); // paste with boundary: "aXYZhello"
+    d.undo(); // pops the paste, entry 1 is on top again
+    expect(d.getText()).toBe('ahello');
 
-      // Redo direction: only the 'b' keystroke replays.
-      d.redo();
-      expect(d.getText()).toBe('abhello');
+    typeAt(d, 0, 1, 'b'); // ordinary keystroke adjacent to entry 1's insert
+    expect(d.getText()).toBe('abhello');
 
-      d.undo();
-      d.undo();
-      expect(d.getText()).toBe('hello');
-      expect(d.canUndo).toBe(false);
-    }
-  );
+    // One undo must remove only 'b'; 'a' predates the paste boundary.
+    d.undo();
+    expect(d.getText()).toBe('ahello');
 
-  // KNOWN BUG: a Backspace followed by a forward Delete at the same pivot
-  // coalesces into one undo step; the pivot offset maps ambiguously onto the end
-  // of the just-deleted range, so the pair passes the 'delete'-mode check.
-  test.failing(
-    'switching from backspace to forward delete creates a new undo stop',
-    () => {
-      const d = doc('abc');
-      backspaceAt(d, 0, 2); // removes 'b' -> "ac", caret lands at (0,1)
-      forwardDeleteAt(d, 0, 1); // removes 'c' -> "a"
-      expect(d.getText()).toBe('a');
+    // Redo direction: only the 'b' keystroke replays.
+    d.redo();
+    expect(d.getText()).toBe('abhello');
 
-      // First undo restores only the forward-deleted character.
-      d.undo();
-      expect(d.getText()).toBe('ac');
+    d.undo();
+    d.undo();
+    expect(d.getText()).toBe('hello');
+    expect(d.canUndo).toBe(false);
+  });
 
-      // Second undo restores the backspaced character.
-      d.undo();
-      expect(d.getText()).toBe('abc');
-      expect(d.canUndo).toBe(false);
+  test('switching from backspace to forward delete creates a new undo stop', () => {
+    const d = doc('abc');
+    backspaceAt(d, 0, 2); // removes 'b' -> "ac", caret lands at (0,1)
+    forwardDeleteAt(d, 0, 1); // removes 'c' -> "a"
+    expect(d.getText()).toBe('a');
 
-      // Redo direction: the two deletes replay as separate steps.
-      d.redo();
-      expect(d.getText()).toBe('ac');
-      d.redo();
-      expect(d.getText()).toBe('a');
-      expect(d.canRedo).toBe(false);
-    }
-  );
+    // First undo restores only the forward-deleted character.
+    d.undo();
+    expect(d.getText()).toBe('ac');
+
+    // Second undo restores the backspaced character.
+    d.undo();
+    expect(d.getText()).toBe('abc');
+    expect(d.canUndo).toBe(false);
+
+    // Redo direction: the two deletes replay as separate steps.
+    d.redo();
+    expect(d.getText()).toBe('ac');
+    d.redo();
+    expect(d.getText()).toBe('a');
+    expect(d.canRedo).toBe(false);
+  });
+
+  test('switching from forward delete to backspace creates a new undo stop', () => {
+    const d = doc('abc');
+    forwardDeleteAt(d, 0, 1); // removes 'b' -> "ac"
+    backspaceAt(d, 0, 1); // removes 'a' -> "c"
+    expect(d.getText()).toBe('c');
+
+    d.undo();
+    expect(d.getText()).toBe('ac');
+    d.undo();
+    expect(d.getText()).toBe('abc');
+  });
 
   // DIVERGENCE: the conventional behavior breaks typed runs at whitespace (a
   // lone space merges with the word before it, but typing after the space

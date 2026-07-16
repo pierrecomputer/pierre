@@ -75,7 +75,7 @@ import {
   expandCollapsedSelectionToWord,
   extendSelection,
   extendSelections,
-  findNexMatch,
+  findNextMatch,
   getAutoSurroundReplacementTexts,
   getCaretPosition,
   getDocumentBoundarySelection,
@@ -2185,7 +2185,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           this.#updateSelections(expanded);
           this.focus();
         } else {
-          const nextMatch = findNexMatch(textDocument, selections);
+          const nextMatch = findNextMatch(textDocument, selections);
           if (nextMatch !== undefined) {
             this.#updateSelections(nextMatch);
             const primaryMatch = nextMatch.at(-1);

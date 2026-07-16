@@ -281,7 +281,7 @@ export class TextDocument<LAnnotation> {
     if (updateHistory && undoBoundary) {
       entry.undoBoundary = true;
     }
-    const previousEntry = this.#editStack.peekUndo();
+    const previousEntry = this.#editStack.peekUndoForCoalescing();
     const change = this.#applyResolvedEditsToBuffer(resolvedEdits);
     this.#version++;
     if (
