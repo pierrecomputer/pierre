@@ -242,60 +242,78 @@ class TestEditableComponent implements DiffsEditableComponent<undefined> {
   }
 }
 
+const MULTI_SELECTION_CLIPBOARD_TYPE =
+  'application/vnd.pierre.diffs-selections+json';
+
+class TestClipboardData {
+  readonly writes: Array<[type: string, text: string]> = [];
+  readonly #data = new Map<string, string>();
+
+  constructor(text?: string) {
+    if (text !== undefined) {
+      this.#data.set('text', text);
+    }
+  }
+
+  setData(type: string, text: string): void {
+    this.writes.push([type, text]);
+    this.#data.set(type, text);
+  }
+
+  getData(type: string): string {
+    return this.#data.get(type) ?? '';
+  }
+}
+
 function dispatchCut(target: HTMLElement): Array<[type: string, text: string]> {
-  const writes: Array<[type: string, text: string]> = [];
+  const clipboardData = new TestClipboardData();
   const event = new window.Event('cut', {
     bubbles: true,
     cancelable: true,
     composed: true,
   });
   Object.defineProperty(event, 'clipboardData', {
-    value: {
-      setData(type: string, text: string) {
-        writes.push([type, text]);
-      },
-    },
+    value: clipboardData,
   });
 
   target.dispatchEvent(event);
   expect(event.defaultPrevented).toBe(true);
-  return writes;
+  return clipboardData.writes;
 }
 
 function dispatchCopy(
   target: HTMLElement
 ): Array<[type: string, text: string]> {
-  const writes: Array<[type: string, text: string]> = [];
+  return dispatchCopyData(target).writes;
+}
+
+function dispatchCopyData(target: HTMLElement): TestClipboardData {
+  const clipboardData = new TestClipboardData();
   const event = new window.Event('copy', {
     bubbles: true,
     cancelable: true,
     composed: true,
   });
   Object.defineProperty(event, 'clipboardData', {
-    value: {
-      setData(type: string, text: string) {
-        writes.push([type, text]);
-      },
-    },
+    value: clipboardData,
   });
 
   target.dispatchEvent(event);
   expect(event.defaultPrevented).toBe(true);
-  return writes;
+  return clipboardData;
 }
 
-function dispatchPaste(target: HTMLElement, text: string): void {
+function dispatchPaste(
+  target: HTMLElement,
+  data: string | TestClipboardData
+): void {
   const event = new window.Event('paste', {
     bubbles: true,
     cancelable: true,
     composed: true,
   });
   Object.defineProperty(event, 'clipboardData', {
-    value: {
-      getData(_type: string) {
-        return text;
-      },
-    },
+    value: typeof data === 'string' ? new TestClipboardData(data) : data,
   });
 
   target.dispatchEvent(event);
@@ -403,7 +421,13 @@ describe('Editor clipboard events', () => {
 
       const writes = dispatchCut(component.contentElement);
 
-      expect(writes).toEqual([['text', 'alpha\ncharlie\n']]);
+      expect(writes).toEqual([
+        ['text', 'alpha\ncharlie\n'],
+        [
+          MULTI_SELECTION_CLIPBOARD_TYPE,
+          JSON.stringify(['alpha\n', 'charlie\n']),
+        ],
+      ]);
       expect(editor.getText()).toBe('bravo\ndelta');
       expect(editor.getState().selections).toEqual([
         {
@@ -450,7 +474,10 @@ describe('Editor clipboard events', () => {
 
       const writes = dispatchCut(component.contentElement);
 
-      expect(writes).toEqual([['text', 'rav\ncharlie\n']]);
+      expect(writes).toEqual([
+        ['text', 'rav\ncharlie\n'],
+        [MULTI_SELECTION_CLIPBOARD_TYPE, JSON.stringify(['rav', 'charlie\n'])],
+      ]);
       expect(editor.getText()).toBe('alpha\nbo\ndelta');
       expect(editor.getState().selections).toEqual([
         {
@@ -497,7 +524,13 @@ describe('Editor clipboard events', () => {
 
       const writes = dispatchCut(component.contentElement);
 
-      expect(writes).toEqual([['text', 'bravo\n']]);
+      expect(writes).toEqual([
+        ['text', 'bravo\n'],
+        [
+          MULTI_SELECTION_CLIPBOARD_TYPE,
+          JSON.stringify(['bravo\n', 'bravo\n']),
+        ],
+      ]);
       expect(editor.getText()).toBe('alpha\ncharlie');
       expect(editor.getState().selections).toEqual([
         {
@@ -539,7 +572,10 @@ describe('Editor clipboard events', () => {
 
       const writes = dispatchCut(component.contentElement);
 
-      expect(writes).toEqual([['text', 'bravo\n']]);
+      expect(writes).toEqual([
+        ['text', 'bravo\n'],
+        [MULTI_SELECTION_CLIPBOARD_TYPE, JSON.stringify(['br', 'bravo\n'])],
+      ]);
       expect(editor.getText()).toBe('alpha\ncharlie');
       expect(editor.getState().selections).toEqual([
         {
@@ -608,6 +644,102 @@ describe('Editor clipboard events', () => {
       const writes = dispatchCopy(component.contentElement);
 
       expect(writes).toEqual([['text', 'charlie']]);
+    } finally {
+      editor.cleanUp();
+      cleanup();
+    }
+  });
+
+  test('pastes copied selection texts into matching selections', async () => {
+    const { cleanup } = installDom();
+
+    const editor = new Editor<undefined>();
+    const component = new TestEditableComponent({
+      name: 'example.txt',
+      contents: 'one two\nthree four\n---\nAA\nBB',
+      lang: 'text',
+    });
+
+    try {
+      editor.edit(component);
+      editor.setSelections([
+        {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 3 },
+          direction: 'forward',
+        },
+        {
+          start: { line: 1, character: 0 },
+          end: { line: 1, character: 5 },
+          direction: 'forward',
+        },
+      ]);
+
+      const clipboardData = dispatchCopyData(component.contentElement);
+      expect(clipboardData.writes).toEqual([
+        ['text', 'one\nthree'],
+        [MULTI_SELECTION_CLIPBOARD_TYPE, JSON.stringify(['one', 'three'])],
+      ]);
+
+      editor.setSelections([
+        {
+          start: { line: 4, character: 0 },
+          end: { line: 4, character: 2 },
+          direction: 'forward',
+        },
+        {
+          start: { line: 3, character: 0 },
+          end: { line: 3, character: 2 },
+          direction: 'forward',
+        },
+      ]);
+      dispatchPaste(component.contentElement, clipboardData);
+      await wait();
+
+      expect(editor.getText()).toBe('one two\nthree four\n---\none\nthree');
+    } finally {
+      editor.cleanUp();
+      cleanup();
+    }
+  });
+
+  test('uses plain text when metadata and selection counts differ', () => {
+    const { cleanup } = installDom();
+
+    const editor = new Editor<undefined>();
+    const component = new TestEditableComponent({
+      name: 'example.txt',
+      contents: 'AA\nBB\nCC',
+      lang: 'text',
+    });
+
+    try {
+      editor.edit(component);
+      const clipboardData = new TestClipboardData('plain');
+      clipboardData.setData(
+        MULTI_SELECTION_CLIPBOARD_TYPE,
+        JSON.stringify(['one\n', 'two\n'])
+      );
+      editor.setSelections([
+        {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 2 },
+          direction: 'forward',
+        },
+        {
+          start: { line: 1, character: 0 },
+          end: { line: 1, character: 2 },
+          direction: 'forward',
+        },
+        {
+          start: { line: 2, character: 0 },
+          end: { line: 2, character: 2 },
+          direction: 'forward',
+        },
+      ]);
+      dispatchPaste(component.contentElement, clipboardData);
+
+      expect(editor.getText()).toBe('plain\nplain\nplain');
     } finally {
       editor.cleanUp();
       cleanup();
@@ -729,6 +861,100 @@ describe('Editor clipboard events', () => {
       expect(keydown.defaultPrevented).toBe(true);
       expect(reads).toBe(1);
       expect(editor.getText()).toBe('alpha bravo');
+    } finally {
+      editor.cleanUp();
+      cleanup();
+    }
+  });
+
+  test('reads matching selections from a custom clipboard provider', async () => {
+    const { cleanup } = installDom();
+    const reads: Array<string | undefined> = [];
+
+    const editor = new Editor<undefined>({
+      clipboard: {
+        readText: (type) => {
+          reads.push(type);
+          return type === MULTI_SELECTION_CLIPBOARD_TYPE
+            ? JSON.stringify(['one', 'two'])
+            : 'one\ntwo';
+        },
+      },
+    });
+    const component = new TestEditableComponent({
+      name: 'example.txt',
+      contents: 'AA\nBB',
+      lang: 'text',
+    });
+
+    try {
+      editor.edit(component);
+      editor.setSelections([
+        {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 2 },
+          direction: 'forward',
+        },
+        {
+          start: { line: 1, character: 0 },
+          end: { line: 1, character: 2 },
+          direction: 'forward',
+        },
+      ]);
+
+      const keydown = dispatchPasteShortcutKeydown(component.contentElement);
+      await wait();
+
+      expect(keydown.defaultPrevented).toBe(true);
+      expect(reads).toEqual([undefined, MULTI_SELECTION_CLIPBOARD_TYPE]);
+      expect(editor.getText()).toBe('one\ntwo');
+    } finally {
+      editor.cleanUp();
+      cleanup();
+    }
+  });
+
+  test('uses custom clipboard plain text when selection counts differ', async () => {
+    const { cleanup } = installDom();
+
+    const editor = new Editor<undefined>({
+      clipboard: {
+        readText: (type) =>
+          type === MULTI_SELECTION_CLIPBOARD_TYPE
+            ? JSON.stringify(['one\n', 'two\n'])
+            : 'plain',
+      },
+    });
+    const component = new TestEditableComponent({
+      name: 'example.txt',
+      contents: 'AA\nBB\nCC',
+      lang: 'text',
+    });
+
+    try {
+      editor.edit(component);
+      editor.setSelections([
+        {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 2 },
+          direction: 'forward',
+        },
+        {
+          start: { line: 1, character: 0 },
+          end: { line: 1, character: 2 },
+          direction: 'forward',
+        },
+        {
+          start: { line: 2, character: 0 },
+          end: { line: 2, character: 2 },
+          direction: 'forward',
+        },
+      ]);
+
+      dispatchPasteShortcutKeydown(component.contentElement);
+      await wait();
+
+      expect(editor.getText()).toBe('plain\nplain\nplain');
     } finally {
       editor.cleanUp();
       cleanup();

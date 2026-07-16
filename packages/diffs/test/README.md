@@ -18,6 +18,27 @@ AGENT=1 bun test
   be a compact projection of just the behavior its test owns, small enough to
   review line by line. When a snapshot fails, read the diff — do not reflexively
   `bun test -u`.
+- `test.failing(...)` marks a **known bug**: the test encodes the _correct_
+  expected behavior and currently fails. When the bug is fixed, `bun test` will
+  report the test as unexpectedly passing — remove the `.failing` modifier then.
+  `DIVERGENCE:` comments pin places where this package intentionally (or at
+  least knowingly) behaves differently from an alternative it was compared
+  against; those tests pin _our_ behavior and document the difference — they are
+  decisions, not bugs. `KNOWN BUG:` comments accompany every `test.failing` with
+  the root cause.
+
+## Provenance
+
+A set of behavioral scenarios in this suite was derived by auditing the test
+suites of other open-source editors — microsoft/vscode @
+`86f5a62f058e3905f74a9fa65d04b2f3b533408e`, CodeMirror 6
+(`state@9c801279cb83011e6f92af778f4443406e8f1200`,
+`commands@5b9bac974f2c4af3e20b045adef949667872ecad`), and
+atom/text-buffer@`b1f093269b175ce6cc9728c7a4d50ca75bb031b6` +
+atom/superstring@`6732087fac04cd68d14e93d4f83f246879200ab5` (all MIT) — as
+behavioral rewrites with original names, fixtures, helpers, and granularity; no
+code was copied. Future derivations must use permissively-licensed sources only
+and follow the same rewrite discipline.
 
 ## Known coverage gaps (confirmed by the 2026-06 test audit)
 
@@ -51,3 +72,43 @@ order. If you touch one of these areas, consider adding the missing coverage:
   branches.
 - **DOM virtualization buffers** (`data-virtualizer-buffer`): created by
   File/FileDiff `applyBuffers` on live DOM; no test asserts them anywhere.
+- **Forward word-delete family** (delete-word-right, delete-word-start-right)
+  and **deleteInsideWord** — no equivalent commands exist yet.
+- **Line-join whitespace collapsing** — a "join lines" command that collapses
+  the whitespace at the join point is not implemented.
+- **Forward transpose at end-of-line** — transposing characters across a line
+  break in the forward direction has no implementation.
+- **CJK visual-column vertical movement** — vertical caret movement does not
+  preserve the visual column across full-width CJK characters (requires canvas
+  text-measure stubbing to test properly).
+- **Preferred line-ending override** — no setter/option lets a host force an
+  LF/CRLF policy for inserted text; line ending is a derived getter only.
+- **Range-scoped search** — search params have no range field; selection-scoped
+  find/replace is not possible today.
+- **Multi-line pattern search** — the piece-table search rejects patterns
+  containing line breaks; matching across line breaks is unsupported.
+- **Transactions, checkpoints, and retroactive change grouping** — no
+  `transact()`/nested-transaction/abort API, no checkpoint/revert-to-checkpoint
+  concept, and no public API to retroactively merge the last N history entries;
+  history grouping today is purely geometric typing-coalescing plus an
+  undo-boundary marker.
+- **Edit-tracking markers with invalidation strategies** — markers are
+  render-only today; there is no remapping of marker positions through edits
+  with configurable invalidation strategies.
+- **Soft-wrap continuation-row hanging indent** — wrapped continuation rows do
+  not support a hanging indent.
+- **Time-based undo grouping** — undo coalescing is geometry-based with no clock
+  input; a `newGroupDelay`-style time window is a policy decision, not
+  implemented.
+- **IME composition deferrals** — IME/composition interaction with editing and
+  undo-coalescing is deferred and not covered.
+
+## Known bugs pinned as `test.failing`
+
+- **EditStack coalescing** (3) — coalescing decisions compare a new edit against
+  whatever sits on top of the undo stack purely by geometry, with no state reset
+  after undo/redo: an undo can expose a stale top entry that new typing then
+  fuses into; an undo-boundary marker stops blocking merges once it is undone;
+  and backspace followed by forward-delete at the same pivot coalesces into a
+  single undo step instead of getting an undo stop when the delete direction
+  flips.

@@ -82,6 +82,7 @@ import {
   getDocumentFullSelection,
   getSelectedLineBlocks,
   getSelectionAnchor,
+  getSelectionClipboardTexts,
   getSelectionText,
   isCollapsedSelection,
   isLineEditable,
@@ -116,7 +117,7 @@ import {
   Metrics,
   snapTextOffsetToUnicodeBoundary,
 } from './textMeasure';
-import { EditorTokenizer, renderLineTokens } from './tokenzier';
+import { EditorTokenizer, renderLineTokens } from './tokenizer';
 import {
   addEventListener,
   clampDomOffset,
@@ -207,7 +208,7 @@ export interface EditorOptions<LAnnotation> {
    * see https://www.electronjs.org/docs/latest/api/clipboard
    */
   clipboard?: {
-    readText: () => Promise<string> | string;
+    readText: (type?: string) => Promise<string> | string;
   };
   /** Render the selection action widget element. */
   renderSelectionAction?: (
@@ -238,6 +239,8 @@ export interface EditorOptions<LAnnotation> {
 // row per inserted line. A safety bound, not a correctness-critical value.
 const MAX_EDIT_WIDEN_WINDOW_MULTIPLE = 2;
 const SELECTION_ACTION_POPOVER_PLACEMENT_KEY = 'selection-action';
+const MULTI_SELECTION_CLIPBOARD_TYPE =
+  'application/vnd.pierre.diffs-selections+json';
 
 export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #options: EditorOptions<LAnnotation>;
@@ -444,9 +447,16 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   }
 
   /**
-   * Apply edits to current attached file.
+   * Apply edits to current attached file. Every edit joins the undo timeline:
+   * a programmatic edit must leave the document and its history exactly as
+   * the same edit typed by the user would (history equivalence — see
+   * TextDocument.applyResolvedEdits), so it is undoable like any other edit.
+   *
+   * @param updateHistory Whether to record caller selection snapshots for
+   * exact undo/redo restoration. Defaults to true. When false, live selections
+   * are remapped during replay and the text edit still joins the undo timeline.
    */
-  applyEdits(edits: TextEdit[], updateHistory = false): void {
+  applyEdits(edits: TextEdit[], updateHistory = true): void {
     const textDocument = this.#textDocument;
     if (textDocument == null) {
       throw new Error('Editor is not attached');
@@ -472,17 +482,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     const resolvedEditOffsets =
       selectionsBefore === undefined
         ? undefined
-        : edits
-            .map((edit) => {
-              const a = textDocument.offsetAt(edit.range.start);
-              const b = textDocument.offsetAt(edit.range.end);
-              return {
-                start: Math.min(a, b),
-                end: Math.max(a, b),
-                text: edit.newText,
-              };
-            })
-            .sort((a, b) => a.start - b.start);
+        : textDocument.resolveEdits(edits).sort((a, b) => a.start - b.start);
 
     const change = textDocument.applyEdits(
       edits,
@@ -604,14 +604,24 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       throw new Error('Text document is not initialized');
     }
     const resolvedSelections = selections.map<EditorSelection>((selection) => {
-      const start = textDocument.normalizePosition(selection.start);
-      const end = textDocument.normalizePosition(selection.end);
-      const direction =
+      let start = textDocument.normalizePosition(selection.start);
+      let end = textDocument.normalizePosition(selection.end);
+      let direction: EditorSelection['direction'] =
         selection.direction === 'none'
           ? DirectionNone
           : selection.direction === 'backward'
             ? DirectionBackward
             : DirectionForward;
+
+      if (comparePosition(start, end) > 0) {
+        [start, end] = [end, start];
+        if (direction !== DirectionNone) {
+          direction =
+            direction === DirectionForward
+              ? DirectionBackward
+              : DirectionForward;
+        }
+      }
       return { direction, start, end };
     });
     this.#updateSelections(resolvedSelections);
@@ -1764,12 +1774,15 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         // A read-only deleted-text selection lives outside the editor's
         // document, so #getSelectionText() would be empty. Copy the selected
         // deleted text instead.
-        e.clipboardData?.setData(
-          'text',
-          this.#isDeletedTextSelectionActive()
-            ? this.#deletedTextForClipboard()
-            : this.#getSelectionText()
-        );
+        if (this.#isDeletedTextSelectionActive()) {
+          e.clipboardData?.setData('text', this.#deletedTextForClipboard());
+        } else {
+          this.#writeSelectionClipboardData(
+            e.clipboardData,
+            this.#getSelectionText(),
+            this.#getSelectionClipboardTexts()
+          );
+        }
       }),
 
       addEventListener(contentEl, 'cut', (e) => {
@@ -1779,12 +1792,16 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         e.preventDefault();
         // Deleted text is read-only and can't be removed, so a cut there copies
         // the selected deleted text (like the copy handler) without editing.
-        e.clipboardData?.setData(
-          'text',
-          this.#isDeletedTextSelectionActive()
-            ? this.#deletedTextForClipboard()
-            : this.#cutSelectionText()
-        );
+        if (this.#isDeletedTextSelectionActive()) {
+          e.clipboardData?.setData('text', this.#deletedTextForClipboard());
+        } else {
+          const selectionTexts = this.#getSelectionClipboardTexts();
+          this.#writeSelectionClipboardData(
+            e.clipboardData,
+            this.#cutSelectionText(),
+            selectionTexts
+          );
+        }
       }),
 
       addEventListener(contentEl, 'paste', (e) => {
@@ -1792,18 +1809,44 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           return;
         }
         e.preventDefault();
-        const text = e.clipboardData?.getData('text');
+        const clipboardData = e.clipboardData;
         const textDocument = this.#textDocument;
-        if (text !== undefined && textDocument !== undefined) {
-          // Rewrite clipboard line breaks to the document's EOL so a Windows
-          // clipboard (\r\n or \r) doesn't leave mixed line endings behind.
-          // TODO(@ije): Add support of multiple selections copy&paste
-          this.#replaceSelectionText(
-            textDocument.normalizeEol(text),
-            undefined,
-            true
-          );
+        if (clipboardData === null || textDocument === undefined) {
+          return;
         }
+
+        let text: string | string[] = clipboardData.getData('text');
+
+        const selectionCount = this.#selections?.length ?? 0;
+        if (selectionCount > 1) {
+          const multiSelectionText = clipboardData.getData(
+            MULTI_SELECTION_CLIPBOARD_TYPE
+          );
+          if (multiSelectionText !== undefined) {
+            try {
+              const selectionTexts = JSON.parse(multiSelectionText);
+              if (
+                Array.isArray(selectionTexts) &&
+                selectionTexts.length === selectionCount
+              ) {
+                text = selectionTexts;
+              }
+            } catch {
+              // ignore the invalid custom clipboard data
+            }
+          }
+        }
+
+        // Rewrite clipboard line breaks to the document's EOL so a Windows
+        // clipboard (\r\n or \r) doesn't leave mixed line endings behind.
+        this.#replaceSelectionText(
+          Array.isArray(text)
+            ? text.map((t) => textDocument.normalizeEol(t))
+            : textDocument.normalizeEol(text),
+          undefined,
+          true,
+          'document'
+        );
       }),
 
       addEventListener(contentEl, 'beforeinput', (e) => {
@@ -2051,13 +2094,33 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #handleCustomPasteEvent = async () => {
     const clipboard = this.#options.clipboard;
     if (clipboard !== undefined) {
-      const text = await clipboard.readText();
+      let text: string | string[] = await clipboard.readText();
+      const selectionCount = this.#selections?.length ?? 0;
+      if (selectionCount > 1) {
+        const multiSelectionText = await clipboard.readText(
+          MULTI_SELECTION_CLIPBOARD_TYPE
+        );
+        try {
+          const selectionTexts = JSON.parse(multiSelectionText);
+          if (
+            Array.isArray(selectionTexts) &&
+            selectionTexts.length === selectionCount
+          ) {
+            text = selectionTexts;
+          }
+        } catch {
+          // Invalid selection metadata falls back to the plain-text value.
+        }
+      }
       const textDocument = this.#textDocument;
       if (textDocument !== undefined) {
         this.#replaceSelectionText(
-          textDocument.normalizeEol(text),
+          Array.isArray(text)
+            ? text.map((t) => textDocument.normalizeEol(t))
+            : textDocument.normalizeEol(text),
           undefined,
-          true
+          true,
+          'document'
         );
       }
     }
@@ -2091,7 +2154,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     return undefined;
   }
 
-  // TODO(@ije): add command registry
   #runCommand(command: EditorCommand) {
     const textDocument = this.#textDocument;
     if (textDocument === undefined) {
@@ -2169,6 +2231,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         this.#insertBlankLine();
         break;
 
+      case 'deleteHardLineForward':
+        this.#deleteHardLineForward();
+        break;
+
       case 'toggleComment':
       case 'toggleBlockComment': {
         const selections = this.#selections;
@@ -2217,6 +2283,9 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         if (this.#selections !== undefined) {
           const edits: TextEdit[] = [];
           const nextSelections: EditorSelection[] = [];
+          // Line-based indentation is resolved per selection, so overlapping
+          // line coverage must share the same leading-whitespace edit.
+          const editedLines = new Set<number>();
           // Single-line indent inserts text at each caret. When several carets
           // share a line, indentation inserted by carets to their left shifts
           // them right, so record each one here and offset its resulting
@@ -2240,7 +2309,13 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
                 this.#metrics.tabSize,
                 outdent
               );
-              edits.push(...ret[0]);
+              for (const edit of ret[0]) {
+                const line = edit.range.start.line;
+                if (!editedLines.has(line)) {
+                  editedLines.add(line);
+                  edits.push(edit);
+                }
+              }
               nextSelections.push(ret[1]);
             } else {
               const lineChar0 = textDocument.charAt({
@@ -2378,23 +2453,53 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         break;
 
       case 'undo':
-        if (this.#textDocument?.canUndo === true) {
-          const undoResult = this.#textDocument.undo();
-          if (undoResult !== undefined) {
-            this.#applyChange(...undoResult);
-          }
-        }
-        break;
-
       case 'redo':
-        if (this.#textDocument?.canRedo === true) {
-          const redoResult = this.#textDocument.redo();
-          if (redoResult !== undefined) {
-            this.#applyChange(...redoResult);
-          }
-        }
+        this.#applyHistoryChange(command);
         break;
     }
+  }
+
+  // Replays history and remaps live selections when the entry intentionally
+  // has no stored selection metadata.
+  #applyHistoryChange(command: 'undo' | 'redo'): void {
+    const textDocument = this.#textDocument;
+    if (textDocument === undefined) {
+      return;
+    }
+    if (
+      (command === 'undo' && !textDocument.canUndo) ||
+      (command === 'redo' && !textDocument.canRedo)
+    ) {
+      return;
+    }
+    const selections = this.#selections;
+    const selectionOffsets = selections?.map(
+      (selection) =>
+        [
+          textDocument.offsetAt(selection.start),
+          textDocument.offsetAt(selection.end),
+        ] as const
+    );
+    const result =
+      command === 'undo' ? textDocument.undo() : textDocument.redo();
+    if (result === undefined) {
+      return;
+    }
+    const [change, recordedSelections, lineAnnotations, selectionEdits] =
+      result;
+    const nextSelections =
+      recordedSelections ??
+      (selections !== undefined &&
+      selectionOffsets !== undefined &&
+      selectionEdits !== undefined
+        ? remapSelectionsAfterEdits(
+            textDocument,
+            selections,
+            selectionOffsets,
+            selectionEdits
+          )
+        : undefined);
+    this.#applyChange(change, nextSelections, lineAnnotations);
   }
 
   /** Applies one undoable command batch and records its resulting selections. */
@@ -2774,7 +2879,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       return;
     }
 
-    // cancel existing background tokenzier task
+    // cancel existing background tokenizing task
     tokenizer.stopBackgroundTokenize();
 
     const t = performance.now();
@@ -2999,11 +3104,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       // behavior is what we match.
       case 'deleteHardLineBackward':
         this.#deleteSoftLineBackward();
-        break;
-      case 'deleteHardLineForward':
-        // TODO(@ije): Safari and Firefox does not support this input type
-        // use command instead
-        this.#deleteHardLineForward();
         break;
       case 'deleteWordBackward':
         this.#deleteWordBackward();
@@ -3836,12 +3936,13 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       const top = this.#getLineY(line) + wrapLine * lineHeight;
       // Match the corner mask to the line color behind the selection; when
       // absent (context lines) the CSS falls back to the editor base bg.
-      const cornerBg = this.#lineBackgroundColor(line);
-      const css =
-        `width:${ch}px;transform:translateX(${left}px) translateY(${top}px);` +
-        (cornerBg !== undefined
-          ? `--diffs-selection-corner-bg:${cornerBg};`
-          : '');
+      const lineElement = this.#getLineElement(line);
+      let cornerBg = 'initial';
+      if (this.#isDiff && lineElement?.dataset.lineType === 'change-addition') {
+        cornerBg =
+          getComputedStyle(lineElement).getPropertyValue('--diffs-line-bg');
+      }
+      const css = `width:${ch}px;transform:translateX(${left}px) translateY(${top}px);--diffs-selection-corner-bg:${cornerBg}`;
       const dataset = {
         selectionCorner: '',
         [radius]: '',
@@ -4041,7 +4142,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         get selection(): EditorSelection {
           return getActiveSelection();
         },
-        applyEdits: (edits: TextEdit[]) => this.applyEdits(edits, true),
+        applyEdits: (edits: TextEdit[]) => this.applyEdits(edits),
         getSelectionText: () =>
           this.#textDocument?.getText(getActiveSelection()) ?? '',
         replaceSelectionText: (text: string) => {
@@ -4144,7 +4245,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#renderSearchPanel(mode);
   }
 
-  // TODO(@ije): render search highlight
   #renderSearchPanel(mode: SearchPanelMode) {
     // cleanup the existing search panel
     this.#searchPanel?.cleanup();
@@ -4293,6 +4393,33 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     return getSelectionText(textDocument, selections);
   }
 
+  #getSelectionClipboardTexts(): string[] {
+    const textDocument = this.#textDocument;
+    const selections = this.#selections;
+    if (textDocument === undefined || selections === undefined) {
+      return [];
+    }
+    return getSelectionClipboardTexts(textDocument, selections);
+  }
+
+  /** Writes both the portable text and the selection pairing metadata. */
+  #writeSelectionClipboardData(
+    clipboardData: DataTransfer | null,
+    text: string,
+    selectionTexts: string[]
+  ): void {
+    if (clipboardData === null) {
+      return;
+    }
+    clipboardData.setData('text', text);
+    if (selectionTexts.length > 1) {
+      clipboardData.setData(
+        MULTI_SELECTION_CLIPBOARD_TYPE,
+        JSON.stringify(selectionTexts)
+      );
+    }
+  }
+
   #cutSelectionText(): string {
     const textDocument = this.#textDocument;
     const selections = this.#selections;
@@ -4362,7 +4489,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #replaceSelectionText(
     text: string | string[],
     selections = this.#selections,
-    undoBoundary = false
+    undoBoundary = false,
+    textOrder: 'selection' | 'document' = 'selection'
   ) {
     if (selections === undefined) {
       return;
@@ -4379,7 +4507,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
             selections,
             text,
             this.#lineAnnotations,
-            undoBoundary
+            undoBoundary,
+            textOrder
           )
         : applyTextChangeToSelections<LAnnotation>(
             textDocument,
@@ -4387,7 +4516,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
             {
               start: textDocument.offsetAt(primarySelection.start),
               end: textDocument.offsetAt(primarySelection.end),
-              text: Array.isArray(text) ? text.join('\n') : text,
+              text: Array.isArray(text) ? text.join(textDocument.eol) : text,
             },
             this.#lineAnnotations,
             undefined,
@@ -4687,30 +4816,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       }
     }
     return undefined;
-  }
-
-  // TODO(@ije): remove this
-  // Painted background color of a line, read from the [data-line]::after layer
-  // (the line element itself is transparent in edit mode). Returns undefined when
-  // that layer is transparent (e.g. context lines).
-  #lineBackgroundColor(line: number): string | undefined {
-    const lineElement = this.#getLineElement(line);
-    if (lineElement === undefined) {
-      return undefined;
-    }
-    // testing environment like jsdom doesn't implement the getComputedStyle API
-    if (navigator.userAgent.includes('jsdom')) {
-      return undefined;
-    }
-    const backgroundColor = getComputedStyle(
-      lineElement,
-      '::after'
-    ).backgroundColor;
-    return backgroundColor === '' ||
-      backgroundColor === 'transparent' ||
-      backgroundColor === 'rgba(0, 0, 0, 0)'
-      ? undefined
-      : backgroundColor;
   }
 
   // Returns the first and last document lines that have an editable row in the

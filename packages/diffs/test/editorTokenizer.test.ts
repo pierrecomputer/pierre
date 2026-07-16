@@ -5,7 +5,7 @@ import {
   TextDocument,
   type TextDocumentChange,
 } from '../src/editor/textDocument';
-import { EditorTokenizer } from '../src/editor/tokenzier';
+import { EditorTokenizer } from '../src/editor/tokenizer';
 import type { DiffsHighlighter, HighlightedToken } from '../src/types';
 
 const noopSetStyle = () => {};

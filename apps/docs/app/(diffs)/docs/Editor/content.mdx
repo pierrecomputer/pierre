@@ -210,11 +210,16 @@ while you edit. Pass an empty array to clear them.
 
 #### History
 
-The editor keeps an undo stack for user edits and for programmatic edits applied
-with `applyEdits(..., true)`. Use `editor.canUndo` and `editor.canRedo` to
-enable or disable toolbar buttons, and call `editor.undo()` or `editor.redo()`
-to step through history from code. These methods share the same stack as the
-keyboard shortcuts (<kbd>Cmd/Ctrl-Z</kbd> and <kbd>Cmd/Ctrl-Shift-Z</kbd>).
+The editor keeps a single undo stack covering user edits and programmatic edits
+alike — `applyEdits` joins the same timeline as typed input, so a mixed sequence
+undoes exactly like an all-local one. Its optional `updateHistory` argument
+defaults to `true`; passing `false` remaps live selections instead of restoring
+snapshots but keeps the text edit undoable. Use `editor.canUndo` and
+`editor.canRedo` to enable or disable toolbar buttons, and call `editor.undo()`
+or `editor.redo()` to step through history from code. These methods share the
+same stack as the keyboard shortcuts (<kbd>Cmd/Ctrl-Z</kbd> and
+
+<kbd>Cmd/Ctrl-Shift-Z</kbd>).
 
 `undo()` and `redo()` are no-ops when there is nothing to undo or redo. Both run
 through the same change path as a normal edit, so your `onChange` handler fires
