@@ -91,6 +91,10 @@ export default value;
         theme: { dark: 'pierre-dark', light: 'pierre-light' },
         themeType: 'dark',
         diffStyle: 'split',
+        enableGutterUtility: new URLSearchParams(location.search).has(
+          'gutterUtility'
+        ),
+        onGutterUtilityClick() {},
       });
 
       instance.render({ oldFile, newFile, containerWrapper: mount });

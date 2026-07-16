@@ -36,6 +36,8 @@ interface E2ETextEdit {
   newText: string;
 }
 
+type E2ELineHighlightState = 'none' | 'selected' | 'active' | 'both';
+
 // The subset of the real Editor surface the fixtures expose on `window`.
 interface E2EEditor {
   canUndo: boolean;
@@ -69,6 +71,9 @@ interface Window {
   __selectionChanges?: (E2ELineRange | null)[];
   __gutterClicks?: E2ELineRange[];
   __actionClicks?: string[];
+
+  // theme.html helper for rendering one row in each line-highlight state.
+  __setLineHighlightState?: (state: E2ELineHighlightState) => void;
 
   // Editor handle exposed by the editable fixtures.
   __editor?: E2EEditor;

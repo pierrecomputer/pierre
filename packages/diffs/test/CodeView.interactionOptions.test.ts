@@ -1,14 +1,18 @@
 import { describe, expect, test } from 'bun:test';
 
-import { CodeView } from '../src/components/CodeView';
+import {
+  CodeView,
+  type CodeViewLineSelection,
+} from '../src/components/CodeView';
 import { DEFAULT_THEMES } from '../src/constants';
-import type { CodeViewItem } from '../src/types';
+import type { CodeViewItem, SelectedLineRange } from '../src/types';
 import {
   createRoot,
   installDom,
   makeFile,
   renderItems,
   wait,
+  waitFor,
 } from './domHarness';
 
 // Differs from the shared makeFileItem: these tests use 8-line .txt fixtures
@@ -46,6 +50,21 @@ function getNumberElement(
   const number = pre.querySelector(`[data-column-number="${lineNumber}"]`);
   expect(number).toBeInstanceOf(HTMLElement);
   return number as HTMLElement;
+}
+
+function dispatchPointer(
+  target: EventTarget,
+  type: string,
+  init: PointerEventInit = {}
+): PointerEvent {
+  const event = new window.PointerEvent(type, {
+    bubbles: true,
+    cancelable: true,
+    composed: true,
+    ...init,
+  });
+  target.dispatchEvent(event);
+  return event;
 }
 
 describe('CodeView interaction option updates', () => {
@@ -194,6 +213,74 @@ describe('CodeView interaction option updates', () => {
           .getRenderedItems()[0]
           .element.querySelector('[slot="gutter-utility-slot"]')
       ).not.toBeNull();
+    } finally {
+      viewer.cleanUp();
+      await wait(0);
+      cleanup();
+    }
+  });
+
+  test('syncs gutter utility selection when ordinary line selection is disabled', async () => {
+    const { cleanup, setElementFromPoint } = installDom();
+    const clickedRanges: SelectedLineRange[] = [];
+    const selectedLinesChanges: (CodeViewLineSelection | null)[] = [];
+    const viewer = new CodeView({
+      disableFileHeader: true,
+      enableGutterUtility: true,
+      enableLineSelection: false,
+      onGutterUtilityClick: (range) => clickedRanges.push(range),
+      onSelectedLinesChange: (selection) =>
+        selectedLinesChanges.push(selection),
+      theme: DEFAULT_THEMES,
+    });
+
+    try {
+      viewer.setup(createRoot({ width: 800, height: 400 }));
+      await renderFileItem(viewer);
+
+      const pre = getRenderedPre(viewer);
+      await waitFor(() => pre.childElementCount > 0);
+      const startNumber = getNumberElement(pre, 1);
+      const endNumber = getNumberElement(pre, 2);
+      dispatchPointer(startNumber, 'pointermove', { pointerType: 'mouse' });
+      const button = startNumber.querySelector('[data-utility-button]');
+      expect(button).toBeInstanceOf(HTMLButtonElement);
+      setElementFromPoint(8, 80, endNumber);
+
+      dispatchPointer(button as HTMLButtonElement, 'pointerdown', {
+        clientX: 8,
+        clientY: 40,
+        pointerId: 21,
+        pointerType: 'mouse',
+      });
+      expect(viewer.getSelectedLines()).toEqual({
+        id: 'file',
+        range: { start: 1, end: 1 },
+      });
+
+      dispatchPointer(button as HTMLButtonElement, 'pointermove', {
+        clientX: 8,
+        clientY: 80,
+        pointerId: 21,
+        pointerType: 'mouse',
+      });
+      const draggedSelection = {
+        id: 'file',
+        range: { start: 1, end: 2 },
+      };
+      expect(viewer.getSelectedLines()).toEqual(draggedSelection);
+      expect(selectedLinesChanges.at(-1)).toEqual(draggedSelection);
+      expect(clickedRanges).toEqual([]);
+
+      dispatchPointer(button as HTMLButtonElement, 'pointerup', {
+        clientX: 8,
+        clientY: 80,
+        pointerId: 21,
+        pointerType: 'mouse',
+      });
+
+      expect(viewer.getSelectedLines()).toEqual(draggedSelection);
+      expect(clickedRanges).toEqual([{ start: 1, end: 2 }]);
     } finally {
       viewer.cleanUp();
       await wait(0);

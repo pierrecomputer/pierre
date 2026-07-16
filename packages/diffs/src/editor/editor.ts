@@ -314,13 +314,14 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #searchPanel?: SearchPanelWidget;
   #selectionAction?: SelectionActionWidget;
   #shouldIgnoreSelectionChange = false;
-  // Set by select-all, cleared on the next keydown/pointerdown. Select-all puts
-  // a non-collapsed range on the native selection so WebKit fires a delete
-  // beforeinput, but only rendered lines resolve to DOM nodes, so that native
-  // range covers just the on-screen lines while #selections spans the whole
-  // document. Without this guard a selectionchange would read the shorter
-  // native range back over #selections, and the next delete would leave the
-  // offscreen lines behind.
+  // Set when the browser's native Selection is temporarily not the source of
+  // truth for editor text selections. Select-all can only mirror rendered
+  // lines, while diff line-selection and gutter-utility gestures can move the
+  // native range without selecting editor text. Gutter gestures only enable
+  // this when an editor selection exists to preserve; otherwise refocus must
+  // remain free to seed a caret. The next direct content pointerdown or keydown
+  // clears this, and keeping it through gutter pointerup also protects against
+  // a queued selectionchange.
   #suppressNativeSelectionSync = false;
   // Whether the contenteditable holds (or is claiming) focus. Synced by
   // focus/blur listeners and set eagerly by #focus(), whose real focus() call is
@@ -1303,6 +1304,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#gutterWidthCache = undefined;
     this.#contentWidthCache = undefined;
     this.#shouldIgnoreSelectionChange = false;
+    this.#suppressNativeSelectionSync = false;
     this.#overlayElements?.forEach((el) => el.remove());
     this.#overlayElements = undefined;
     this.#selections = undefined;
@@ -1533,6 +1535,18 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #replaceSelectEventListeners(disposes: (() => void)[]): void {
     this.#selectEventDisposes?.forEach((dispose) => dispose());
     this.#selectEventDisposes = disposes;
+  }
+
+  // Normal line selection owns gutter gestures when enabled, so the editor
+  // must not also turn the same drag into a text selection.
+  #isLineSelectionEnabled(): boolean {
+    return this.#fileInstance?.options.enableLineSelection === true;
+  }
+
+  // Gutter gestures owned by diff interactions must not replace the editor's
+  // text selections through a browser-generated selectionchange.
+  #preserveEditorSelectionsForGutterGesture(): void {
+    this.#suppressNativeSelectionSync = this.#selections !== undefined;
   }
 
   #listenContentElement(contentEl: HTMLElement, gutterEl?: HTMLElement): void {
@@ -1905,6 +1919,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           (e) => {
             const path = e.composedPath();
             if (isGutterUtilityPath(path)) {
+              this.#preserveEditorSelectionsForGutterGesture();
               return;
             }
             // Clicking a deletion line's number selects the whole line's text
@@ -1918,15 +1933,20 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
               target instanceof HTMLElement
                 ? target.closest('[data-column-number]')
                 : null;
-            if (
-              gutterRow instanceof HTMLElement &&
-              this.#beginDeletionGutterSelection(
-                gutterRow,
-                deletionsCode,
-                e.pointerType === 'mouse'
-              )
-            ) {
-              return;
+            if (gutterRow instanceof HTMLElement) {
+              if (this.#isLineSelectionEnabled()) {
+                this.#preserveEditorSelectionsForGutterGesture();
+                return;
+              }
+              if (
+                this.#beginDeletionGutterSelection(
+                  gutterRow,
+                  deletionsCode,
+                  e.pointerType === 'mouse'
+                )
+              ) {
+                return;
+              }
             }
             this.#setDeletedTextSelectionActive(true);
             if (this.#selections !== undefined) {
@@ -1977,11 +1997,16 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           (e) => {
             const path = e.composedPath();
             if (isGutterUtilityPath(path)) {
+              this.#preserveEditorSelectionsForGutterGesture();
               return;
             }
             const gutterRow = resolveGutterTarget(
               path[0] as HTMLElement | undefined
             );
+            if (gutterRow !== undefined && this.#isLineSelectionEnabled()) {
+              this.#preserveEditorSelectionsForGutterGesture();
+              return;
+            }
             // Clicking a read-only deleted line's number (unified view) selects
             // that line's text natively, since the line is not in the editor's
             // document. This runs before the mouse-only gate below: a deletion
@@ -3400,7 +3425,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
     // Highlight only the focus line's gutter number — the line where the click
     // landed or the drag ended. Route it through the editor active-line state
-    // so selected lines remain independent and retain visual precedence.
+    // so selected lines and deleted-line focus remain independent.
     this.#setEditorActiveLineSafe(
       getLineNumberAttr(focusContent) ?? null,
       true,

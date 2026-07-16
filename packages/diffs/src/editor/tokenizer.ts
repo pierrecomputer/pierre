@@ -276,6 +276,13 @@ export class EditorTokenizer {
     const { colors = {} } = this.#highlighter.getTheme(themeName);
     const selectionBackground = colors['editor.selectionBackground'];
     const lineHighlightBackground = colors['editor.lineHighlightBackground'];
+    // Preserve the theme's treatment, synthesizing a cue only when it supplies
+    // neither a current-line background nor border.
+    const lineHighlightBorder =
+      colors['editor.lineHighlightBorder'] ??
+      (lineHighlightBackground == null
+        ? 'color-mix(in lab, var(--diffs-bg) 70%, var(--diffs-fg))'
+        : 'transparent');
     const cursorForeground = colors['editorCursor.foreground'];
     const findMatchBackground = colors['editor.findMatchBackground'];
     const findMatchHighlightBackground =
@@ -288,7 +295,8 @@ export class EditorTokenizer {
     const errorForeground = colors['editorError.foreground'];
     this.#setStyle(`:host {
       --diffs-editor-selection-bg: ${selectionBackground ?? 'var(--diffs-line-bg)'};
-      --diffs-editor-line-highlight-bg: ${lineHighlightBackground ?? 'var(--diffs-line-bg)'};
+      --diffs-editor-line-highlight-bg: ${lineHighlightBackground ?? 'transparent'};
+      --diffs-editor-line-highlight-border: ${lineHighlightBorder};
       --diffs-editor-match-bg: ${findMatchBackground ?? 'initial'};
       --diffs-editor-match-highlight-bg: ${findMatchHighlightBackground ?? 'initial'};
       --diffs-editor-bracket-match-bg: ${bracketMatchBackground ?? 'initial'};

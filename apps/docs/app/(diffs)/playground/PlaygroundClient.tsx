@@ -1150,7 +1150,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
       options={{
         ...prerenderedDiff.options,
         ...renderOptions,
-        enableLineSelection: canSelectLines || canUseGutterComments,
+        enableLineSelection: canSelectLines,
         enableGutterUtility: canUseGutterComments,
         onLineSelectionStart: handleLineSelectionChange,
         onLineSelectionChange: handleLineSelectionChange,

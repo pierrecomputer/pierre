@@ -2,9 +2,17 @@ import { expect, type Page, test } from '@playwright/test';
 
 const CONTENT = '[data-content]';
 
-async function openFixture(page: Page): Promise<void> {
-  await page.goto('/test/e2e/fixtures/theme.html');
+async function openFixture(
+  page: Page,
+  theme?: { name: string; type: 'dark' | 'light' }
+): Promise<void> {
+  const query =
+    theme == null
+      ? ''
+      : `?theme=${encodeURIComponent(theme.name)}&themeType=${theme.type}`;
+  await page.goto(`/test/e2e/fixtures/theme.html${query}`);
   await page.waitForFunction(() => window.__themeReady === true);
+  await page.evaluate(() => document.fonts.ready);
 }
 
 const selections = (page: Page): Promise<E2ESelection[] | undefined> =>
@@ -18,6 +26,33 @@ const tokenColor = (page: Page): Promise<string> =>
     const token = root?.querySelector('[data-content] [data-char]');
     return token != null ? getComputedStyle(token).color : '';
   });
+
+async function captureLineHighlightState(
+  page: Page,
+  state: E2ELineHighlightState
+): Promise<Buffer> {
+  await page.evaluate((nextState) => {
+    window.__setLineHighlightState?.(nextState);
+  }, state);
+
+  const row = page.locator('[data-content] > [data-line="2"]');
+  const selected = state === 'selected' || state === 'both';
+  const active = state === 'active' || state === 'both';
+  await expect
+    .poll(() =>
+      row.evaluate((element) => ({
+        active: element.hasAttribute('data-editor-active-line'),
+        selected: element.hasAttribute('data-selected-line'),
+      }))
+    )
+    .toEqual({ active, selected });
+
+  return row.screenshot({
+    animations: 'disabled',
+    caret: 'hide',
+    scale: 'css',
+  });
+}
 
 test.describe('theme switching', () => {
   test('toggling the theme changes the rendered token colors', async ({
@@ -51,4 +86,31 @@ test.describe('theme switching', () => {
     // The selection must not move when only the theme changes.
     await expect.poll(() => selections(page)).toEqual(before);
   });
+});
+
+test.describe('theme line highlights', () => {
+  const themes = [
+    { name: 'min-dark', type: 'dark' },
+    { name: 'dark-plus', type: 'dark' },
+    { name: 'github-dark', type: 'dark' },
+    { name: 'github-light', type: 'light' },
+    { name: 'nord', type: 'dark' },
+  ] as const;
+
+  for (const theme of themes) {
+    test(`${theme.name} keeps active and selected line states distinct`, async ({
+      page,
+    }) => {
+      await openFixture(page, theme);
+
+      const none = await captureLineHighlightState(page, 'none');
+      const selected = await captureLineHighlightState(page, 'selected');
+      const active = await captureLineHighlightState(page, 'active');
+      const both = await captureLineHighlightState(page, 'both');
+
+      expect(active.equals(none)).toBe(false);
+      expect(both.equals(selected)).toBe(false);
+      expect(both.equals(active)).toBe(false);
+    });
+  }
 });

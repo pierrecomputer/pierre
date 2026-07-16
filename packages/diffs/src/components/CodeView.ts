@@ -2361,10 +2361,6 @@ export class CodeView<LAnnotation = undefined> {
       >,
       key,
       (receiver) => {
-        if (this.options.enableLineSelection !== true) {
-          return undefined;
-        }
-
         const state = getItemOptionsState(
           receiver as CodeViewModeOptions<LAnnotation, TMode>
         );

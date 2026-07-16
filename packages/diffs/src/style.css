@@ -718,7 +718,10 @@
       }
     }
 
-    &:where([data-gutter-buffer], [data-column-number])[data-selected-line] {
+    &:where(
+      [data-gutter-buffer][data-selected-line],
+      [data-column-number]:is([data-selected-line], [data-editor-active-line])
+    ) {
       --mix-selection-light: 75%;
       --mix-selection-dark: 60%;
       --diffs-selection-mix-target: var(
@@ -739,7 +742,8 @@
     }
 
     &:where([data-editor-overlay]),
-    &[data-selected-line] {
+    &[data-selected-line],
+    &:where([data-column-number][data-editor-active-line]) {
       --diffs-computed-selected-line-bg: light-dark(
         color-mix(
           in lab,
@@ -756,11 +760,9 @@
     }
   }
 
-  [data-gutter-buffer],
-  [data-column-number] {
-    &[data-selected-line] {
-      color: var(--diffs-selection-number-fg);
-    }
+  [data-gutter-buffer][data-selected-line],
+  [data-column-number]:is([data-selected-line], [data-editor-active-line]) {
+    color: var(--diffs-selection-number-fg);
   }
 
   [data-no-newline] {

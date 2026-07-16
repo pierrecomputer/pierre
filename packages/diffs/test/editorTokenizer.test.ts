@@ -21,6 +21,23 @@ function createTestHighlighter(
   } as unknown as DiffsHighlighter;
 }
 
+function getThemeStyle(colors: Record<string, string>): string {
+  let style = '';
+  const tokenizer = new EditorTokenizer({
+    highlighter: createTestHighlighter({
+      getTheme: () => ({ colors }),
+    }),
+    textDocument: new TextDocument('test.txt', 'line 0', 'text'),
+    codeOptions: { theme: 'test-theme', themeType: 'dark' },
+    setStyle: (nextStyle) => {
+      style = nextStyle;
+    },
+    onDeferTokenize: () => {},
+  });
+  tokenizer.cleanUp();
+  return style;
+}
+
 describe('EditorTokenizer', () => {
   const originalWindowDescriptor = Object.getOwnPropertyDescriptor(
     globalThis,
@@ -54,6 +71,47 @@ describe('EditorTokenizer', () => {
       Object.defineProperty(globalThis, 'window', originalWindowDescriptor);
       globalThis.window.matchMedia = originalMatchMedia;
     }
+  });
+
+  test('emits independent line-highlight background and border channels', () => {
+    const borderOnlyStyle = getThemeStyle({
+      'editor.lineHighlightBorder': '#303030',
+    });
+    expect(borderOnlyStyle).toContain(
+      '--diffs-editor-line-highlight-bg: transparent;'
+    );
+    expect(borderOnlyStyle).toContain(
+      '--diffs-editor-line-highlight-border: #303030;'
+    );
+
+    const backgroundOnlyStyle = getThemeStyle({
+      'editor.lineHighlightBackground': '#2b3036',
+    });
+    expect(backgroundOnlyStyle).toContain(
+      '--diffs-editor-line-highlight-bg: #2b3036;'
+    );
+    expect(backgroundOnlyStyle).toContain(
+      '--diffs-editor-line-highlight-border: transparent;'
+    );
+
+    const combinedStyle = getThemeStyle({
+      'editor.lineHighlightBackground': '#3b4252',
+      'editor.lineHighlightBorder': '#434c5e',
+    });
+    expect(combinedStyle).toContain(
+      '--diffs-editor-line-highlight-bg: #3b4252;'
+    );
+    expect(combinedStyle).toContain(
+      '--diffs-editor-line-highlight-border: #434c5e;'
+    );
+
+    const missingStyle = getThemeStyle({});
+    expect(missingStyle).toContain(
+      '--diffs-editor-line-highlight-bg: transparent;'
+    );
+    expect(missingStyle).toContain(
+      '--diffs-editor-line-highlight-border: color-mix(in lab, var(--diffs-bg) 70%, var(--diffs-fg));'
+    );
   });
 
   test('tokenizes plain text without loading a Shiki grammar', () => {
