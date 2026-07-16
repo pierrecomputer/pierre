@@ -102,13 +102,3 @@ order. If you touch one of these areas, consider adding the missing coverage:
   implemented.
 - **IME composition deferrals** — IME/composition interaction with editing and
   undo-coalescing is deferred and not covered.
-
-## Known bugs pinned as `test.failing`
-
-- **EditStack coalescing** (3) — coalescing decisions compare a new edit against
-  whatever sits on top of the undo stack purely by geometry, with no state reset
-  after undo/redo: an undo can expose a stale top entry that new typing then
-  fuses into; an undo-boundary marker stops blocking merges once it is undone;
-  and backspace followed by forward-delete at the same pivot coalesces into a
-  single undo step instead of getting an undo stop when the delete direction
-  flips.

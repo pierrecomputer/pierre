@@ -4,6 +4,11 @@ import type { ResolvedTextEdit, TextDocument } from './textDocument';
 /** Largest number of undo or redo entries kept; oldest entries drop first once exceeded. */
 const DEFAULT_EDIT_STACK_MAX_ENTRIES = 100;
 
+const COALESCING_MODE_INSERT = 1;
+const COALESCING_MODE_BACKSPACE = 2;
+const COALESCING_MODE_DELETE = 3;
+type EditStackCoalescingMode = 1 | 2 | 3;
+
 /** An entry in the edit stack. */
 export interface EditStackEntry<LAnnotation> {
   /** Forward offset edits from the entry's base text to its final text. */
@@ -22,6 +27,8 @@ export interface EditStackEntry<LAnnotation> {
   lineAnnotationsBefore?: DiffLineAnnotation<LAnnotation>[];
   /** Line annotations after the transaction. */
   lineAnnotationsAfter?: DiffLineAnnotation<LAnnotation>[];
+  /** Input mode inferred from the edit or retained by a coalesced run. */
+  coalescingMode?: EditStackCoalescingMode;
   /**
    * When `true`, this entry is its own undo step and never merges with the
    * entry before or after it. Set for paste and cut, which otherwise look like
@@ -41,6 +48,7 @@ export class EditStack<LAnnotation> {
   #undoStack: EditStackEntry<LAnnotation>[] = [];
   #redoStack: EditStackEntry<LAnnotation>[] = [];
   #maxEntries: number;
+  #canCoalesce = false;
 
   constructor(options?: EditStackOptions) {
     this.#maxEntries = Math.max(
@@ -61,6 +69,7 @@ export class EditStack<LAnnotation> {
   clear(): void {
     this.#undoStack.length = 0;
     this.#redoStack.length = 0;
+    this.#canCoalesce = false;
   }
 
   /** Clears the redo stack. */
@@ -72,6 +81,7 @@ export class EditStack<LAnnotation> {
   push(entry: EditStackEntry<LAnnotation>): void {
     this.#undoStack.push(entry);
     this.clearRedo();
+    this.#canCoalesce = true;
     if (this.#undoStack.length > this.#maxEntries) {
       this.#undoStack.shift();
     }
@@ -104,6 +114,11 @@ export class EditStack<LAnnotation> {
     return this.#undoStack[this.#undoStack.length - 1];
   }
 
+  /** Returns the last undo entry only while its coalescing group is open. */
+  peekUndoForCoalescing(): EditStackEntry<LAnnotation> | undefined {
+    return this.#canCoalesce ? this.peekUndo() : undefined;
+  }
+
   /** Replaces the last undo entry with the given entry. */
   replaceLastUndo(entry: EditStackEntry<LAnnotation>): void {
     if (this.#undoStack.length === 0) {
@@ -112,6 +127,7 @@ export class EditStack<LAnnotation> {
     }
     this.#undoStack[this.#undoStack.length - 1] = entry;
     this.clearRedo();
+    this.#canCoalesce = true;
   }
 
   /** Moves the latest undo entry to the redo stack and returns it, or `undefined` if empty. */
@@ -119,6 +135,7 @@ export class EditStack<LAnnotation> {
     const entry = this.#undoStack.pop();
     if (entry !== undefined) {
       this.#redoStack.push(entry);
+      this.#canCoalesce = false;
       return entry;
     }
   }
@@ -128,6 +145,7 @@ export class EditStack<LAnnotation> {
     const entry = this.#redoStack.pop();
     if (entry !== undefined) {
       this.#undoStack.push(entry);
+      this.#canCoalesce = false;
       return entry;
     }
   }
@@ -145,6 +163,39 @@ export function createEditStackEntry<LAnnotation>(
 ): EditStackEntry<LAnnotation> {
   const forwardEdits = [...resolvedEdits].sort((a, b) => a.start - b.start);
   const inverseEdits: ResolvedTextEdit[] = [];
+  let coalescingMode: EditStackCoalescingMode | undefined;
+  if (selectionsBefore?.length === forwardEdits.length) {
+    const caretOffsets: number[] = [];
+    for (const selection of selectionsBefore) {
+      if (
+        selection.start.line !== selection.end.line ||
+        selection.start.character !== selection.end.character
+      ) {
+        break;
+      }
+      caretOffsets.push(textDocument.offsetAt(selection.start));
+    }
+    if (caretOffsets.length === forwardEdits.length) {
+      caretOffsets.sort((a, b) => a - b);
+      let isBackspace = true;
+      let isDelete = true;
+      for (let i = 0; i < forwardEdits.length; i++) {
+        const edit = forwardEdits[i];
+        if (edit.text.length > 0 || edit.start === edit.end) {
+          isBackspace = false;
+          isDelete = false;
+          break;
+        }
+        isBackspace &&= caretOffsets[i] === edit.end;
+        isDelete &&= caretOffsets[i] === edit.start;
+      }
+      coalescingMode = isBackspace
+        ? COALESCING_MODE_BACKSPACE
+        : isDelete
+          ? COALESCING_MODE_DELETE
+          : undefined;
+    }
+  }
   for (let i = 0, offsetDelta = 0; i < forwardEdits.length; i++) {
     const edit = forwardEdits[i];
     const replacedText = textDocument.getTextSlice(edit.start, edit.end);
@@ -167,6 +218,7 @@ export function createEditStackEntry<LAnnotation>(
     selectionsAfter: selectionsAfter?.map((selection) => ({ ...selection })),
     lineAnnotationsBefore: lineAnnotationsBefore?.slice(),
     lineAnnotationsAfter: lineAnnotationsAfter?.slice(),
+    coalescingMode,
   };
 }
 
@@ -190,7 +242,7 @@ export function shouldCoalesceEditStackEntry<LAnnotation>(
   ) {
     return false;
   }
-  let mode: 'insert' | 'backspace' | 'delete' | undefined;
+  let mode: EditStackCoalescingMode | undefined;
   for (let i = 0; i < previousEntry.forwardEdits.length; i++) {
     const previousForward = previousEntry.forwardEdits[i];
     const previousInverse = previousEntry.inverseEdits[i];
@@ -221,8 +273,14 @@ export function shouldCoalesceEditStackEntry<LAnnotation>(
       if (nextForward.start !== previousInverse.end) {
         return false;
       }
-      mode ??= 'insert';
-      if (mode !== 'insert') {
+      mode ??= COALESCING_MODE_INSERT;
+      if (
+        mode !== COALESCING_MODE_INSERT ||
+        (previousEntry.coalescingMode !== undefined &&
+          previousEntry.coalescingMode !== COALESCING_MODE_INSERT) ||
+        (nextEntry.coalescingMode !== undefined &&
+          nextEntry.coalescingMode !== COALESCING_MODE_INSERT)
+      ) {
         return false;
       }
       continue;
@@ -236,21 +294,25 @@ export function shouldCoalesceEditStackEntry<LAnnotation>(
       nextForward.end > nextForward.start &&
       nextInverse.text.length > 0;
     if (previousWasDelete && nextIsDelete) {
+      let nextMode: EditStackCoalescingMode;
       if (mappedNextStart === previousForward.end) {
-        mode ??= 'delete';
-        if (mode !== 'delete') {
-          return false;
-        }
-        continue;
-      }
-      if (
+        nextMode = COALESCING_MODE_DELETE;
+      } else if (
         mappedNextStart + (nextForward.end - nextForward.start) !==
         previousForward.start
       ) {
         return false;
+      } else {
+        nextMode = COALESCING_MODE_BACKSPACE;
       }
-      mode ??= 'backspace';
-      if (mode !== 'backspace') {
+      mode ??= nextMode;
+      if (
+        mode !== nextMode ||
+        (previousEntry.coalescingMode !== undefined &&
+          previousEntry.coalescingMode !== nextMode) ||
+        (nextEntry.coalescingMode !== undefined &&
+          nextEntry.coalescingMode !== nextMode)
+      ) {
         return false;
       }
       continue;
@@ -267,6 +329,7 @@ export function coalesceEditStackEntries<LAnnotation>(
 ): EditStackEntry<LAnnotation> {
   const forwardEdits: ResolvedTextEdit[] = [];
   const replacedTexts: string[] = [];
+  let coalescingMode: EditStackCoalescingMode | undefined;
   for (let i = 0; i < previousEntry.forwardEdits.length; i++) {
     const previousForward = previousEntry.forwardEdits[i];
     const previousInverse = previousEntry.inverseEdits[i];
@@ -278,6 +341,7 @@ export function coalesceEditStackEntries<LAnnotation>(
     );
 
     if (previousForward.text.length > 0) {
+      coalescingMode ??= COALESCING_MODE_INSERT;
       forwardEdits.push({
         start: previousForward.start,
         end: previousForward.end,
@@ -288,6 +352,7 @@ export function coalesceEditStackEntries<LAnnotation>(
     }
 
     if (mappedNextStart === previousForward.end) {
+      coalescingMode ??= COALESCING_MODE_DELETE;
       forwardEdits.push({
         start: previousForward.start,
         end: mappedNextStart + (nextForward.end - nextForward.start),
@@ -297,6 +362,7 @@ export function coalesceEditStackEntries<LAnnotation>(
       continue;
     }
 
+    coalescingMode ??= COALESCING_MODE_BACKSPACE;
     forwardEdits.push({
       start: Math.min(previousForward.start, mappedNextStart),
       end: previousForward.end,
@@ -317,6 +383,7 @@ export function coalesceEditStackEntries<LAnnotation>(
     selectionsAfter: nextEntry.selectionsAfter?.slice(),
     lineAnnotationsBefore: previousEntry.lineAnnotationsBefore?.slice(),
     lineAnnotationsAfter: nextEntry.lineAnnotationsAfter?.slice(),
+    coalescingMode,
   };
 }
 
