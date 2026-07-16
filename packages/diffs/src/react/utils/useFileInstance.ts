@@ -197,13 +197,7 @@ function mergeFileOptions<LAnnotation>({
   }
 
   if (needsEditorOptions) {
-    merged = {
-      ...merged,
-      useTokenTransformer: true,
-      enableGutterUtility: false,
-      enableLineSelection: false,
-      lineHoverHighlight: 'disabled',
-    };
+    merged = { ...merged, useTokenTransformer: true };
   }
 
   return merged;

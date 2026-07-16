@@ -21,6 +21,23 @@ function createTestHighlighter(
   } as unknown as DiffsHighlighter;
 }
 
+function getThemeStyle(colors: Record<string, string>): string {
+  let style = '';
+  const tokenizer = new EditorTokenizer({
+    highlighter: createTestHighlighter({
+      getTheme: () => ({ colors }),
+    }),
+    textDocument: new TextDocument('test.txt', 'line 0', 'text'),
+    codeOptions: { theme: 'test-theme', themeType: 'dark' },
+    setStyle: (nextStyle) => {
+      style = nextStyle;
+    },
+    onDeferTokenize: () => {},
+  });
+  tokenizer.cleanUp();
+  return style;
+}
+
 describe('EditorTokenizer', () => {
   const originalWindowDescriptor = Object.getOwnPropertyDescriptor(
     globalThis,
@@ -54,6 +71,67 @@ describe('EditorTokenizer', () => {
       Object.defineProperty(globalThis, 'window', originalWindowDescriptor);
       globalThis.window.matchMedia = originalMatchMedia;
     }
+  });
+
+  test('derives the active-line background mix and border treatment', () => {
+    const borderOnlyStyle = getThemeStyle({
+      'editor.lineHighlightBorder': '#303030',
+    });
+    expect(borderOnlyStyle).toContain(
+      '--diffs-editor-line-highlight-border: #303030;'
+    );
+    expect(borderOnlyStyle).toContain(
+      '--diffs-editor-active-line-source-mix: 100%;'
+    );
+
+    const backgroundOnlyStyle = getThemeStyle({
+      'editor.lineHighlightBackground': '#2b3036',
+    });
+    expect(backgroundOnlyStyle).toContain(
+      '--diffs-editor-line-highlight-border: transparent;'
+    );
+    expect(backgroundOnlyStyle).toContain(
+      '--diffs-editor-active-line-source-mix: 85%;'
+    );
+
+    const combinedStyle = getThemeStyle({
+      'editor.lineHighlightBackground': '#3b4252',
+      'editor.lineHighlightBorder': '#434c5e',
+    });
+    expect(combinedStyle).toContain(
+      '--diffs-editor-line-highlight-border: #434c5e;'
+    );
+    expect(combinedStyle).toContain(
+      '--diffs-editor-active-line-source-mix: 85%;'
+    );
+
+    const translucentStyle = getThemeStyle({
+      'editor.lineHighlightBackground': '#19283c8c',
+    });
+    expect(translucentStyle).toContain(
+      '--diffs-editor-line-highlight-border: transparent;'
+    );
+    expect(translucentStyle).toContain(
+      '--diffs-editor-active-line-source-mix: 85%;'
+    );
+
+    const transparentStyle = getThemeStyle({
+      'editor.lineHighlightBackground': '#00000000',
+    });
+    expect(transparentStyle).toContain(
+      '--diffs-editor-line-highlight-border: color-mix(in lab, var(--diffs-bg) 70%, var(--diffs-fg));'
+    );
+    expect(transparentStyle).toContain(
+      '--diffs-editor-active-line-source-mix: 100%;'
+    );
+
+    const missingStyle = getThemeStyle({});
+    expect(missingStyle).toContain(
+      '--diffs-editor-line-highlight-border: color-mix(in lab, var(--diffs-bg) 70%, var(--diffs-fg));'
+    );
+    expect(missingStyle).toContain(
+      '--diffs-editor-active-line-source-mix: 100%;'
+    );
   });
 
   test('tokenizes plain text without loading a Shiki grammar', () => {

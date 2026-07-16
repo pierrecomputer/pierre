@@ -59,6 +59,8 @@ class VirtualizedEditableComponent implements DiffsEditableComponent<undefined> 
 
   setSelectedLines(_range: { start: number; end: number } | null): void {}
 
+  setEditorActiveLine(_lineNumber: number | null): void {}
+
   render(): void {
     this.rerender();
   }

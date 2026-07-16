@@ -18,6 +18,7 @@ import { CommentForm } from './PlaygroundComments';
 interface PlaygroundVirtualizerViewProps {
   diffs: FileDiffMetadata[];
   options: FileDiffOptions<undefined>;
+  enableLineSelection: boolean;
   enableGutterComments: boolean;
   showAnnotations: boolean;
 }
@@ -79,6 +80,7 @@ function annotationKey(
 export function PlaygroundVirtualizerView({
   diffs,
   options,
+  enableLineSelection,
   enableGutterComments,
   showAnnotations,
 }: PlaygroundVirtualizerViewProps) {
@@ -143,6 +145,7 @@ export function PlaygroundVirtualizerView({
               existing.lineNumber === annotation.lineNumber
             )
         );
+        instance.setSelectedLines(null);
         rerenderWithAnnotations();
         unmountAnnotationRoot(annotationKey(index, annotation));
       };
@@ -153,22 +156,25 @@ export function PlaygroundVirtualizerView({
           renderHeaderMetadata: () => editToggle,
           stickyHeader: true,
           unsafeCSS: VIRTUALIZER_CUSTOM_CSS,
+          enableLineSelection: enableLineSelection && !enableGutterComments,
           enableGutterUtility: enableGutterComments && showAnnotations,
           onGutterUtilityClick: (range) => {
-            if (range.side == null) {
+            const side = range.endSide ?? range.side;
+            if (side == null) {
               return;
             }
+            const lineNumber = range.end;
             const annotations = annotationsRef.current[index];
             if (
               annotations.some(
                 (annotation) =>
-                  annotation.side === range.side &&
-                  annotation.lineNumber === range.start
+                  annotation.side === side &&
+                  annotation.lineNumber === lineNumber
               )
             ) {
               return;
             }
-            annotations.push({ side: range.side, lineNumber: range.start });
+            annotations.push({ side, lineNumber });
             rerenderWithAnnotations();
           },
           renderAnnotation: (annotation) => {
@@ -240,10 +246,11 @@ export function PlaygroundVirtualizerView({
       instance.setOptions({
         ...instance.options,
         ...options,
+        enableLineSelection: enableLineSelection && !enableGutterComments,
         enableGutterUtility: enableGutterComments && showAnnotations,
       });
     }
-  }, [options, enableGutterComments, showAnnotations]);
+  }, [options, enableLineSelection, enableGutterComments, showAnnotations]);
 
   // Annotations are demo state: turning the toggle off clears them.
   useEffect(() => {
@@ -251,6 +258,7 @@ export function PlaygroundVirtualizerView({
       return;
     }
     instancesRef.current.forEach((instance, index) => {
+      instance.setSelectedLines(null);
       const annotations = annotationsRef.current[index] ?? [];
       if (annotations.length === 0) {
         return;

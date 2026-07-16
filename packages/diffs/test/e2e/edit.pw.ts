@@ -3,8 +3,12 @@ import { expect, type Page, test } from '@playwright/test';
 const ADDITIONS = '[data-code][data-additions] [data-content]';
 const DELETIONS = '[data-code][data-deletions] [data-content]';
 
-async function openFixture(page: Page): Promise<void> {
-  await page.goto('/test/e2e/fixtures/edit.html');
+async function openFixture(
+  page: Page,
+  options: { gutterUtility?: boolean } = {}
+): Promise<void> {
+  const query = options.gutterUtility === true ? '?gutterUtility' : '';
+  await page.goto(`/test/e2e/fixtures/edit.html${query}`);
   await page.waitForFunction(() => window.__editReady === true);
 }
 
@@ -94,5 +98,83 @@ test.describe('edit mode', () => {
 
     await page.keyboard.press('ControlOrMeta+Shift+z');
     await expect(page.locator(ADDITIONS)).toContainText('Z');
+  });
+
+  test('programmatic refocus accepts the first input after a gutter gesture', async ({
+    page,
+  }) => {
+    await openFixture(page, { gutterUtility: true });
+
+    // A real deletion-gutter click creates a native read-only selection while
+    // leaving the editor without its own text selection.
+    const deletedGutter = page.locator(
+      '[data-code][data-deletions] [data-gutter] [data-column-number="2"]'
+    );
+    const deletedGutterBox = await deletedGutter.boundingBox();
+    if (deletedGutterBox == null) {
+      throw new Error('missing deleted gutter');
+    }
+    await page.mouse.click(
+      deletedGutterBox.x + 2,
+      deletedGutterBox.y + deletedGutterBox.height / 2
+    );
+
+    await expect
+      .poll(() => page.evaluate(() => window.getSelection()?.toString() ?? ''))
+      .toContain('removed');
+    await expect
+      .poll(() =>
+        page.evaluate(() => window.__editor?.getState().selections?.length ?? 0)
+      )
+      .toBe(0);
+    await expect(page.locator('pre[data-deleted-text-selection]')).toHaveCount(
+      1
+    );
+
+    // The utility gesture uses the same selection-preservation path as diff
+    // line selection, but there is no editor selection to preserve here.
+    const additionsGutter = page.locator(
+      '[data-code]:not([data-deletions]) [data-gutter] [data-column-number="2"]'
+    );
+    await additionsGutter.hover();
+    const utility = additionsGutter.locator('[data-utility-button]');
+    await expect(utility).toBeVisible();
+    await utility.click();
+    await expect(additionsGutter).toHaveAttribute(
+      'data-selected-line',
+      'single'
+    );
+
+    const before = await page.evaluate(() => window.__editor?.getText() ?? '');
+    const changesBefore = await changeCount(page);
+    await page.locator('[data-fixtures-index]').focus();
+    await page.evaluate(() => window.__editor?.focus());
+
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const root = document.querySelector('diffs-container')?.shadowRoot;
+          const content = root?.querySelector(
+            '[data-code]:not([data-deletions]) [data-content]'
+          );
+          return root?.activeElement === content;
+        })
+      )
+      .toBe(true);
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) => {
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+        })
+    );
+    await page.keyboard.type('Z');
+
+    await expect
+      .poll(() => page.evaluate(() => window.__editor?.getText() ?? ''))
+      .not.toBe(before);
+    await expect
+      .poll(() => page.evaluate(() => window.__editor?.getText() ?? ''))
+      .toContain('Z');
+    await expect.poll(() => changeCount(page)).toBeGreaterThan(changesBefore);
   });
 });

@@ -9,19 +9,13 @@ const options = {
   unsafeCSS: CustomScrollbarCSS,
 } as const;
 
-// Options for the live editable demo below. They mirror the state the editor
-// enforces when it attaches in `contentEditable` mode (token transformer on;
-// gutter, line selection, and line hover off), so the server-rendered HTML
-// matches the editor's post-attach client render and hydrating from
-// `prerenderedHTML` neither flashes nor re-highlights. Mirrors
-// `(diffs)/_edit/constants.ts`.
+// The editor requires the token transformer, so enabling it in the server
+// render keeps hydration from rerendering the surface after the editor
+// attaches. Mirrors `(diffs)/_edit/constants.ts`.
 const editableDemoOptions: FileOptions<undefined> = {
   theme: { dark: 'pierre-dark', light: 'pierre-light' },
   disableFileHeader: true,
   useTokenTransformer: true,
-  enableGutterUtility: false,
-  enableLineSelection: false,
-  lineHoverHighlight: 'disabled',
 };
 
 // The file rendered by the interactive `<EditorDemo />` on the Editor page.

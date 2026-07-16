@@ -98,6 +98,16 @@ const HUNK_SEPARATOR_OPTIONS = [
 
 type HunkSeparatorValue = (typeof HUNK_SEPARATOR_OPTIONS)[number]['value'];
 
+const LINE_HOVER_HIGHLIGHT_OPTIONS = [
+  { value: 'disabled', label: 'Disabled' },
+  { value: 'both', label: 'Line & number' },
+  { value: 'number', label: 'Number' },
+  { value: 'line', label: 'Line' },
+] as const;
+
+type LineHoverHighlight =
+  (typeof LINE_HOVER_HIGHLIGHT_OPTIONS)[number]['value'];
+
 // The editable surface is rendered read-only (Review) or attached to a live
 // editor (Edit). Markers are diagnostics shown only while editing.
 type EditorMode = 'review' | 'edit';
@@ -126,6 +136,7 @@ type SharedRenderOptions = Pick<
   | 'diffStyle'
   | 'diffIndicators'
   | 'lineDiffType'
+  | 'lineHoverHighlight'
   | 'disableBackground'
   | 'disableLineNumbers'
   | 'overflow'
@@ -147,6 +158,7 @@ const DEFAULTS = {
   darkTheme: 'pierre-dark',
   diffIndicators: 'bars',
   lineDiffType: 'word-alt',
+  lineHoverHighlight: 'disabled' as LineHoverHighlight,
   hunkSeparators: 'line-info' as HunkSeparatorValue,
   background: true,
   lineNumbers: true,
@@ -178,6 +190,8 @@ interface PlaygroundControlsContentProps {
   setDiffIndicators: (v: DiffIndicators) => void;
   lineDiffType: 'word-alt' | 'word' | 'char' | 'none';
   setLineDiffType: (v: 'word-alt' | 'word' | 'char' | 'none') => void;
+  lineHoverHighlight: LineHoverHighlight;
+  setLineHoverHighlight: (v: LineHoverHighlight) => void;
   hunkSeparators: HunkSeparatorValue;
   setHunkSeparators: (v: HunkSeparatorValue) => void;
   disableBackground: boolean;
@@ -220,6 +234,8 @@ function PlaygroundControlsContent({
   setDiffIndicators,
   lineDiffType,
   setLineDiffType,
+  lineHoverHighlight,
+  setLineHoverHighlight,
   hunkSeparators,
   setHunkSeparators,
   disableBackground,
@@ -567,6 +583,39 @@ function PlaygroundControlsContent({
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" className="justify-start px-3">
+              <IconEye />
+              Line hover:{' '}
+              {LINE_HOVER_HIGHLIGHT_OPTIONS.find(
+                (option) => option.value === lineHoverHighlight
+              )?.label ?? lineHoverHighlight}
+              <IconChevronSm className="text-muted-foreground ml-auto" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            align="start"
+            scrollSelectedIntoView
+            className={dropdownContentClassName}
+          >
+            {LINE_HOVER_HIGHLIGHT_OPTIONS.map((option) => (
+              <DropdownMenuItem
+                key={option.value}
+                onClick={() => setLineHoverHighlight(option.value)}
+                selected={lineHoverHighlight === option.value}
+              >
+                {option.label}
+                {lineHoverHighlight === option.value && (
+                  <IconCheck className="ml-auto" />
+                )}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        <div className="bg-border h-6 w-px" />
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" className="justify-start px-3">
               <IconCursor />
               {interactionModeOptions.find(
                 (opt) => opt.value === interactionMode
@@ -657,6 +706,14 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
     return null;
   };
 
+  const getLineHoverHighlightParam = (): LineHoverHighlight => {
+    const value = searchParams.get('hover');
+    return (
+      LINE_HOVER_HIGHLIGHT_OPTIONS.find((option) => option.value === value)
+        ?.value ?? DEFAULTS.lineHoverHighlight
+    );
+  };
+
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     const value = getParam('view', DEFAULTS.viewMode);
     return value === 'virtualizer' ||
@@ -693,6 +750,9 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
       | 'char'
       | 'none'
   );
+
+  const [lineHoverHighlight, setLineHoverHighlight] =
+    useState<LineHoverHighlight>(getLineHoverHighlightParam);
 
   const [hunkSeparators, setHunkSeparators] = useState<HunkSeparatorValue>(
     getParam('hunks', DEFAULTS.hunkSeparators)
@@ -761,6 +821,10 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
   const [selectedRange, setSelectedRange] = useState<SelectedLineRange | null>(
     parseLineSelection
   );
+  // Keep URL updates at gesture boundaries instead of navigating on every
+  // pointer move while the controlled selection follows a gutter drag.
+  const [committedSelectedRange, setCommittedSelectedRange] =
+    useState(selectedRange);
   const [annotations, setAnnotations] = useState<
     DiffLineAnnotation<PlaygroundAnnotationMetadata>[]
   >(prerenderedDiff.annotations ?? []);
@@ -815,6 +879,8 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
       params.set('indicators', diffIndicators);
     if (lineDiffType !== DEFAULTS.lineDiffType)
       params.set('inline', lineDiffType);
+    if (lineHoverHighlight !== DEFAULTS.lineHoverHighlight)
+      params.set('hover', lineHoverHighlight);
     if (hunkSeparators !== DEFAULTS.hunkSeparators)
       params.set('hunks', hunkSeparators);
     if (disableBackground !== !DEFAULTS.background)
@@ -835,12 +901,12 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
     if (showMarkers !== DEFAULTS.markers)
       params.set('markers', showMarkers ? '1' : '0');
 
-    if (selectedRange != null) {
-      const sideChar = selectedRange.side === 'deletions' ? 'd' : 'a';
+    if (committedSelectedRange != null) {
+      const sideChar = committedSelectedRange.side === 'deletions' ? 'd' : 'a';
       const lineValue =
-        selectedRange.start === selectedRange.end
-          ? `${selectedRange.start}${sideChar}`
-          : `${selectedRange.start}-${selectedRange.end}${sideChar}`;
+        committedSelectedRange.start === committedSelectedRange.end
+          ? `${committedSelectedRange.start}${sideChar}`
+          : `${committedSelectedRange.start}-${committedSelectedRange.end}${sideChar}`;
       params.set('line', lineValue);
     }
 
@@ -856,6 +922,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
     selectedDarkTheme,
     diffIndicators,
     lineDiffType,
+    lineHoverHighlight,
     hunkSeparators,
     disableBackground,
     disableLineNumbers,
@@ -866,7 +933,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
     showAnnotations,
     editorMode,
     showMarkers,
-    selectedRange,
+    committedSelectedRange,
   ]);
 
   useEffect(() => {
@@ -881,36 +948,46 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
     });
   }, [buildUrl]);
 
-  const handleLineSelectionEnd = useCallback(
+  const handleLineSelectionChange = useCallback(
     (range: SelectedLineRange | null) => {
       setSelectedRange(range);
     },
     []
   );
 
-  const addCommentAtLine = useCallback(
-    (side: AnnotationSide, lineNumber: number) => {
-      setAnnotations((prev) => {
-        const hasAnnotation = prev.some(
-          (ann) => ann.side === side && ann.lineNumber === lineNumber
-        );
-        if (hasAnnotation) return prev;
-
-        return [
-          ...prev,
-          {
-            side,
-            lineNumber,
-            metadata: {
-              key: `${side}-${lineNumber}`,
-              isThread: false,
-            },
-          },
-        ];
-      });
+  const handleLineSelectionEnd = useCallback(
+    (range: SelectedLineRange | null) => {
+      setSelectedRange(range);
+      setCommittedSelectedRange(range);
     },
     []
   );
+
+  const addCommentAtRange = useCallback((range: SelectedLineRange) => {
+    const side = range.endSide ?? range.side;
+    if (side == null) {
+      return;
+    }
+    const lineNumber = range.end;
+    setAnnotations((prev) => {
+      const hasAnnotation = prev.some(
+        (ann) => ann.side === side && ann.lineNumber === lineNumber
+      );
+      if (hasAnnotation) return prev;
+
+      return [
+        ...prev,
+        {
+          side,
+          lineNumber,
+          metadata: {
+            key: `${side}-${lineNumber}`,
+            isThread: false,
+          },
+        },
+      ];
+    });
+  }, []);
 
   const handleCancelComment = useCallback(
     (side: AnnotationSide | undefined, lineNumber: number) => {
@@ -920,6 +997,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
         )
       );
       setSelectedRange(null);
+      setCommittedSelectedRange(null);
     },
     []
   );
@@ -928,8 +1006,8 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
     (ann) => ann.metadata.isThread !== true
   );
 
-  // Gutter comments and line selection conflict on click targets.
-  // Give gutter comments precedence when both toggles are on.
+  // The controls expose standalone selection and comments as separate modes.
+  // Comment mode still tracks a selected range for the gutter utility gesture.
   const canUseGutterComments = enableGutterUtility && !hasOpenCommentForm;
   const canSelectLines =
     enableLineSelection && !enableGutterUtility && !hasOpenCommentForm;
@@ -969,6 +1047,8 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
     setDiffIndicators,
     lineDiffType,
     setLineDiffType,
+    lineHoverHighlight,
+    setLineHoverHighlight,
     hunkSeparators,
     setHunkSeparators,
     disableBackground,
@@ -988,7 +1068,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
     showMarkers,
     setShowMarkers,
     selectedRange,
-    setSelectedRange,
+    setSelectedRange: handleLineSelectionEnd,
     handleCopyLink,
   };
 
@@ -1010,6 +1090,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
       diffStyle,
       diffIndicators,
       lineDiffType,
+      lineHoverHighlight,
       hunkSeparators,
       disableBackground,
       disableLineNumbers,
@@ -1021,6 +1102,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
       diffStyle,
       diffIndicators,
       lineDiffType,
+      lineHoverHighlight,
       hunkSeparators,
       disableBackground,
       disableLineNumbers,
@@ -1058,29 +1140,26 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
     [renderOptions]
   );
 
-  // Editing takes over click targets, so line selection and gutter comments are
-  // disabled while in Edit mode (they only make sense in read-only Review).
   const fileDiff = (
     <FileDiff
       {...prerenderedDiff}
       className="border-border overflow-hidden rounded-lg border"
       contentEditable={contentEditable}
-      selectedLines={contentEditable ? null : selectedRange}
+      selectedLines={selectedRange}
       lineAnnotations={showAnnotations ? annotations : []}
       options={{
         ...prerenderedDiff.options,
         ...renderOptions,
-        enableLineSelection: contentEditable ? false : canSelectLines,
-        enableGutterUtility: contentEditable ? false : canUseGutterComments,
+        enableLineSelection: canSelectLines,
+        enableGutterUtility: canUseGutterComments,
+        onLineSelectionStart: handleLineSelectionChange,
+        onLineSelectionChange: handleLineSelectionChange,
         onLineSelectionEnd: handleLineSelectionEnd,
-        onGutterUtilityClick:
-          !contentEditable && canUseGutterComments
-            ? (range) => {
-                if (range.side != null) {
-                  addCommentAtLine(range.side, range.start);
-                }
-              }
-            : undefined,
+        onGutterUtilityClick: canUseGutterComments
+          ? (range) => {
+              addCommentAtRange(range);
+            }
+          : undefined,
       }}
       renderAnnotation={
         showAnnotations
@@ -1169,6 +1248,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
         <PlaygroundVirtualizerView
           diffs={VIRTUALIZER_FILE_DIFFS}
           options={renderOptions}
+          enableLineSelection={enableLineSelection}
           enableGutterComments={enableGutterUtility}
           showAnnotations={showAnnotations}
         />
@@ -1176,6 +1256,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
         <PlaygroundVirtualizerElementView
           diffs={VIRTUALIZER_FILE_DIFFS}
           options={renderOptions}
+          enableLineSelection={enableLineSelection}
           enableGutterComments={enableGutterUtility}
           showAnnotations={showAnnotations}
         />
@@ -1183,6 +1264,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
         <PlaygroundCodeView
           items={CODE_VIEW_ITEMS}
           options={codeViewOptions}
+          enableLineSelection={enableLineSelection}
           enableGutterComments={enableGutterUtility}
           showAnnotations={showAnnotations}
         />

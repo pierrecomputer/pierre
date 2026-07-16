@@ -29,6 +29,7 @@ import type {
   DiffsEditableComponent,
   DiffsEditor,
   DiffsTextDocument,
+  EditorActiveLineOptions,
   FileContents,
   HighlightedToken,
   LineAnnotation,
@@ -289,6 +290,16 @@ export class File<
     this.interactionManager.setSelection(range, options);
   }
 
+  public setEditorActiveLine(
+    lineNumber: number | null,
+    options?: EditorActiveLineOptions
+  ): void {
+    this.interactionManager.setEditorActiveLine(lineNumber, {
+      lineNumberOnly: options?.lineNumberOnly,
+      side: options?.side ?? 'additions',
+    });
+  }
+
   public flushManagers(): void {
     if (!this.managersDirty || this.pre == null) {
       this.managersDirty = false;
@@ -527,7 +538,6 @@ export class File<
   public attachEditor(editor: DiffsEditor<LAnnotation>): () => void {
     this.editor?.cleanUp();
     this.editor = editor;
-    this.interactionManager.setEditorAttached(true);
     const preparedFile =
       this.file == null ? undefined : editor.__prepareFile?.(this.file);
     if (preparedFile !== undefined && preparedFile !== this.file) {
@@ -542,7 +552,6 @@ export class File<
     }
     return () => {
       this.editor = undefined;
-      this.interactionManager.setEditorAttached(false);
     };
   }
 

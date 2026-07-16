@@ -2,18 +2,13 @@ import { DEFAULT_THEMES, type FileContents } from '@pierre/diffs';
 import type { FileOptions } from '@pierre/diffs/react';
 import type { PreloadFileOptions } from '@pierre/diffs/ssr';
 
-// Options mirror the state the editor enforces when it attaches in
-// `contentEditable` mode (token transformer on, gutter/line-selection/hover
-// off). Baking them into the SSR preload makes the server HTML identical to the
-// editor's post-attach render, so hydrating from `prerenderedHTML` doesn't
-// flash or rerender. Mirrors LiveEditor/constants.ts.
+// The editor requires the token transformer, so enabling it in the SSR preload
+// keeps hydration from rerendering the surface after the editor attaches.
+// Mirrors LiveEditor/constants.ts.
 const EDITABLE_FILE_OPTIONS: FileOptions<undefined> = {
   theme: DEFAULT_THEMES,
   themeType: 'dark',
   useTokenTransformer: true,
-  enableGutterUtility: false,
-  enableLineSelection: false,
-  lineHoverHighlight: 'disabled',
 };
 
 // Lint-marker demo source. Marker positions below are tied to these exact

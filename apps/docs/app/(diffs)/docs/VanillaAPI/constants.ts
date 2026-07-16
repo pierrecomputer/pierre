@@ -531,7 +531,8 @@ const instance = new FileDiff({
   // Fires on pointer up only:
   // - click => single-line range
   // - drag => final range at release
-  // Selection callbacks can still fire when line selection is enabled.
+  // Selection lifecycle callbacks also fire for a gutter utility gesture,
+  // even when line selection is disabled.
   // Can click a single line or apply to a drag interaction started pointer
   // down on the button
   onGutterUtilityClick(range) {
@@ -800,7 +801,8 @@ const instance = new File({
   // Fires on pointer up only:
   // - click => single-line range
   // - drag => final range at release
-  // Selection callbacks can still fire when line selection is enabled.
+  // Selection lifecycle callbacks also fire for a gutter utility gesture,
+  // even when line selection is disabled.
   // Can click a single line or apply to a drag interaction started pointer
   // down on the button
   onGutterUtilityClick(range) {

@@ -53,24 +53,46 @@ export { greeting, count };
       const editor = new Editor({});
       window.__editor = editor;
 
+      const searchParams = new URLSearchParams(window.location.search);
+      const requestedTheme = searchParams.get('theme');
+      const theme = requestedTheme ?? {
+        dark: 'pierre-dark',
+        light: 'pierre-light',
+      };
+      const themeType =
+        searchParams.get('themeType') ??
+        (requestedTheme === 'github-light' ? 'light' : 'dark');
+
       const instance = new File({
         disableFileHeader: true,
-        theme: { dark: 'pierre-dark', light: 'pierre-light' },
-        themeType: 'dark',
+        theme,
+        themeType,
         useTokenTransformer: true,
       });
       instance.render({ file, containerWrapper: mount });
       editor.edit(instance);
 
+      window.__setLineHighlightState = (state) => {
+        const selected = state === 'selected' || state === 'both';
+        const active = state === 'active' || state === 'both';
+        instance.setSelectedLines(selected ? { start: 2, end: 2 } : null, {
+          notify: false,
+        });
+        instance.setEditorActiveLine(active ? 2 : null);
+      };
+
       // Flip between the configured dark and light themes. setThemeType swaps
       // the theme CSS in place without re-rendering the content, which is what
       // lets an active selection survive the switch.
-      document
-        .querySelector('[data-toggle-theme]')
-        .addEventListener('click', () => {
+      const themeToggle = document.querySelector('[data-toggle-theme]');
+      if (requestedTheme == null) {
+        themeToggle.addEventListener('click', () => {
           const next = instance.options.themeType === 'dark' ? 'light' : 'dark';
           instance.setThemeType(next);
         });
+      } else {
+        themeToggle.hidden = true;
+      }
 
       const waitForEditable = async () => {
         const started = performance.now();

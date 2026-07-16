@@ -155,7 +155,7 @@ describe('CodeView item edit mode', () => {
     }
   });
 
-  test('serves editor-required option values while an item is edited', async () => {
+  test('only overrides the token transformer while items are edited', async () => {
     const { cleanup } = installDom();
     const { createEditor } = createEditorHarness();
     const viewer = new CodeView({
@@ -176,12 +176,12 @@ describe('CodeView item edit mode', () => {
       ]);
 
       const [renderedA, renderedB, renderedC] = viewer.getRenderedItems();
-      // Edited items read the values Editor.edit requires...
+      // Edited items force only the transformer and retain interaction options.
       for (const rendered of [renderedA, renderedB]) {
         expect(rendered.instance.options.useTokenTransformer).toBe(true);
-        expect(rendered.instance.options.enableLineSelection).toBe(false);
-        expect(rendered.instance.options.enableGutterUtility).toBe(false);
-        expect(rendered.instance.options.lineHoverHighlight).toBe('disabled');
+        expect(rendered.instance.options.enableLineSelection).toBe(true);
+        expect(rendered.instance.options.enableGutterUtility).toBe(true);
+        expect(rendered.instance.options.lineHoverHighlight).toBe('both');
       }
       if (renderedB.type !== 'diff') {
         throw new Error('expected a rendered diff item');
@@ -259,7 +259,7 @@ describe('CodeView item edit mode', () => {
     }
   });
 
-  test('entering edit mode clears the item line selection', async () => {
+  test('entering edit mode preserves the item line selection', async () => {
     const { cleanup } = installDom();
     const { createEditor } = createEditorHarness();
     const viewer = new CodeView({
@@ -278,9 +278,17 @@ describe('CodeView item edit mode', () => {
       expect(rendered.instance.options.onLineSelectionChange).toBeDefined();
 
       await applyItemUpdate(viewer, { ...item, edit: true, version: 1 });
-      expect(viewer.getSelectedLines()).toBeNull();
-      // Edited items also stop resolving selection callbacks.
-      expect(rendered.instance.options.onLineSelectionChange).toBeUndefined();
+      expect(viewer.getSelectedLines()).toEqual({
+        id: 'a',
+        range: { start: 1, end: 2 },
+      });
+      expect(rendered.instance.options.onLineSelectionChange).toBeDefined();
+
+      rendered.instance.options.onLineSelectionChange?.({ start: 2, end: 3 });
+      expect(viewer.getSelectedLines()).toEqual({
+        id: 'a',
+        range: { start: 2, end: 3 },
+      });
     } finally {
       viewer.cleanUp();
       await wait(0);
@@ -668,6 +676,55 @@ describe('CodeView item edit mode', () => {
         false
       );
     }
+
+    test('a region-changing render flushes deferred line state', async () => {
+      const { cleanup } = installDom();
+      const { createEditor } = createEditorHarness();
+      const viewer = new CodeView({ createEditor });
+      const edited = makeSessionDiffItem('edited');
+      if (edited.type !== 'diff') {
+        throw new Error('Expected a diff edit-session item.');
+      }
+      try {
+        viewer.setup(createRoot());
+        await renderItems(viewer, [edited]);
+
+        const rendered = viewer.getRenderedItems()[0];
+        expect(rendered).toBeDefined();
+        const hunkCount = edited.fileDiff.hunks.length;
+        rendered.instance.updateRenderCache(
+          new Map([[25, [[0, '', 'line 25 changed']]]]),
+          'light',
+          false
+        );
+        expect(edited.fileDiff.hunks).toHaveLength(hunkCount + 1);
+
+        rendered.instance.setSelectedLines({ start: 26, end: 26 });
+        rendered.instance.setEditorActiveLine(26);
+        await wait(0);
+
+        const shadowRoot = rendered.element.shadowRoot;
+        const additions = shadowRoot?.querySelector(
+          '[data-code]:not([data-deletions])'
+        );
+        const row = additions?.querySelector(
+          '[data-content] > [data-line="26"]'
+        );
+        expect(row).not.toBeNull();
+        expect(row?.hasAttribute('data-selected-line')).toBe(true);
+        expect(row?.hasAttribute('data-editor-active-line')).toBe(true);
+
+        // The completed render must also release later writes immediately.
+        rendered.instance.setSelectedLines(null);
+        rendered.instance.setEditorActiveLine(null);
+        expect(row?.hasAttribute('data-selected-line')).toBe(false);
+        expect(row?.hasAttribute('data-editor-active-line')).toBe(false);
+      } finally {
+        viewer.cleanUp();
+        await wait(0);
+        cleanup();
+      }
+    });
 
     test('session-shaped hunks survive a recycle and remount', async () => {
       const { cleanup } = installDom();

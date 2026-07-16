@@ -1,10 +1,11 @@
-import { afterAll, describe, expect, test } from 'bun:test';
+import { afterAll, describe, expect, spyOn, test } from 'bun:test';
 
-import { FileDiff } from '../src/components/FileDiff';
+import { FileDiff, type FileDiffOptions } from '../src/components/FileDiff';
 import { DEFAULT_THEMES } from '../src/constants';
 import { Editor } from '../src/editor/editor';
+import { DirectionForward } from '../src/editor/selection';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
-import type { FileContents } from '../src/types';
+import type { FileContents, SelectedLineRange } from '../src/types';
 import { installDom, wait, waitFor } from './domHarness';
 
 afterAll(async () => {
@@ -33,8 +34,8 @@ function findCodeColumns(container: HTMLElement): {
   return columns;
 }
 
-// The 1-based data-line numbers of the content rows in one column that carry
-// the active-line highlight (the `data-selected-line` attribute).
+// The 1-based data-line numbers of content rows in one column that carry the
+// explicit selected-lines background.
 function highlightedLineNumbers(code: HTMLElement | undefined): number[] {
   if (code == null) {
     return [];
@@ -48,14 +49,36 @@ function highlightedLineNumbers(code: HTMLElement | undefined): number[] {
     .sort((a, b) => a - b);
 }
 
-// The gutter line numbers (data-column-number) carrying the active-line
-// highlight. While text is selected only the caret line's number stays
-// highlighted; the line background gives way to the selection.
+// The gutter line numbers carrying the explicit selected-lines background.
 function highlightedGutterNumbers(code: HTMLElement | undefined): number[] {
   if (code == null) {
     return [];
   }
   return [...code.querySelectorAll('[data-column-number][data-selected-line]')]
+    .map((el) => Number(el.getAttribute('data-column-number')))
+    .sort((a, b) => a - b);
+}
+
+function editorActiveLineNumbers(code: HTMLElement | undefined): number[] {
+  if (code == null) {
+    return [];
+  }
+  return [
+    ...code.querySelectorAll(
+      '[data-content] > [data-line][data-editor-active-line]'
+    ),
+  ]
+    .map((el) => Number(el.getAttribute('data-line')))
+    .sort((a, b) => a - b);
+}
+
+function editorActiveGutterNumbers(code: HTMLElement | undefined): number[] {
+  if (code == null) {
+    return [];
+  }
+  return [
+    ...code.querySelectorAll('[data-column-number][data-editor-active-line]'),
+  ]
     .map((el) => Number(el.getAttribute('data-column-number')))
     .sort((a, b) => a - b);
 }
@@ -90,13 +113,16 @@ function dispatchCopy(
 interface DiffEditorFixture {
   container: HTMLElement;
   editor: Editor<undefined>;
+  fileDiff: FileDiff<undefined>;
+  setElementFromPoint(x: number, y: number, element: Element): void;
   cleanup(): Promise<void>;
 }
 
 async function createDiffEditorFixture(
   diffStyle: 'split' | 'unified',
   oldContents: string,
-  newContents: string
+  newContents: string,
+  options: Partial<FileDiffOptions<undefined>> = {}
 ): Promise<DiffEditorFixture> {
   const dom = installDom();
   const container = document.createElement('div');
@@ -106,6 +132,7 @@ async function createDiffEditorFixture(
     disableFileHeader: true,
     theme: DEFAULT_THEMES,
     diffStyle,
+    ...options,
   });
   const editor = new Editor<undefined>();
   const oldFile: FileContents = { name: 'edit.ts', contents: oldContents };
@@ -146,6 +173,8 @@ async function createDiffEditorFixture(
   return {
     container,
     editor,
+    fileDiff,
+    setElementFromPoint: dom.setElementFromPoint,
     async cleanup() {
       await wait(10);
       editor.cleanUp();
@@ -173,11 +202,206 @@ describe('editor active-line highlight on a diff', () => {
       ]);
 
       const { additions, deletions } = findCodeColumns(fixture.container);
-      await waitFor(() => highlightedLineNumbers(additions).length > 0);
+      await waitFor(() => editorActiveLineNumbers(additions).length > 0);
       // The changed addition line ("import x", index 0) renders as data-line 1.
-      expect(highlightedLineNumbers(additions)).toEqual([1]);
+      expect(editorActiveLineNumbers(additions)).toEqual([1]);
       // The read-only deletions column must not be highlighted.
-      expect(highlightedLineNumbers(deletions)).toEqual([]);
+      expect(editorActiveLineNumbers(deletions)).toEqual([]);
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  test('split: refresh defers editor active lines and selected lines independently', async () => {
+    const fixture = await createDiffEditorFixture('split', OLD, NEW);
+    try {
+      fixture.fileDiff.updateRenderCache(new Map(), 'light', true);
+      fixture.fileDiff.setSelectedLines({ start: 2, end: 2 });
+      fixture.fileDiff.setEditorActiveLine(1);
+
+      const { additions, deletions } = findCodeColumns(fixture.container);
+      await wait(175);
+      await waitFor(() =>
+        arraysEqual(highlightedGutterNumbers(additions), [2])
+      );
+
+      expect(highlightedGutterNumbers(additions)).toEqual([2]);
+      expect(highlightedGutterNumbers(deletions)).toEqual([2]);
+      expect(editorActiveGutterNumbers(additions)).toEqual([1]);
+      expect(editorActiveGutterNumbers(deletions)).toEqual([]);
+      expect(editorActiveLineNumbers(additions)).toEqual([1]);
+
+      fixture.fileDiff.setSelectedLines(null);
+      await waitFor(() => highlightedGutterNumbers(additions).length === 0);
+      expect(highlightedGutterNumbers(additions)).toEqual([]);
+      expect(highlightedGutterNumbers(deletions)).toEqual([]);
+      expect(editorActiveGutterNumbers(additions)).toEqual([1]);
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  test('split: a selected line and editor active line can share one row', async () => {
+    const fixture = await createDiffEditorFixture('split', OLD, NEW);
+    try {
+      fixture.fileDiff.setSelectedLines({ start: 2, end: 2 });
+      fixture.fileDiff.setEditorActiveLine(2);
+
+      const { additions, deletions } = findCodeColumns(fixture.container);
+      const additionRow = additions?.querySelector<HTMLElement>(
+        '[data-content] > [data-line="2"]'
+      );
+      const deletionRow = deletions?.querySelector<HTMLElement>(
+        '[data-content] > [data-line="2"]'
+      );
+
+      expect(additionRow?.hasAttribute('data-selected-line')).toBe(true);
+      expect(additionRow?.hasAttribute('data-editor-active-line')).toBe(true);
+      expect(deletionRow?.hasAttribute('data-selected-line')).toBe(true);
+      expect(deletionRow?.hasAttribute('data-editor-active-line')).toBe(false);
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  test('split: a deletion gutter utility does not change editor text selection', async () => {
+    const clickedRanges: SelectedLineRange[] = [];
+    const fixture = await createDiffEditorFixture('split', OLD, NEW, {
+      enableGutterUtility: true,
+      enableLineSelection: false,
+      lineHoverHighlight: 'both',
+      onGutterUtilityClick: (range) => clickedRanges.push(range),
+    });
+    let getSelectionStub: { mockRestore(): void } | undefined;
+    try {
+      // Let the editor's setup and focus frames settle before establishing the
+      // selection this gesture must preserve.
+      for (let i = 0; i < 5; i++) {
+        await wait(0);
+      }
+      const { additions, deletions } = findCodeColumns(fixture.container);
+      const content = additions?.querySelector<HTMLElement>('[data-content]');
+      const firstLine = content?.querySelector('[data-line="1"]');
+      if (content == null || firstLine == null) {
+        throw new Error('missing editor content');
+      }
+      fixture.editor.setSelections([
+        {
+          start: { line: 1, character: 0 },
+          end: { line: 1, character: 3 },
+          direction: 'forward',
+        },
+      ]);
+      content.dispatchEvent(new Event('focus'));
+      const selectionBefore = fixture.editor.getState().selections;
+      getSelectionStub = spyOn(document, 'getSelection').mockReturnValue({
+        getComposedRanges: () => [
+          {
+            startContainer: firstLine,
+            startOffset: 0,
+            endContainer: firstLine,
+            endOffset: 0,
+          },
+        ],
+      } as unknown as Selection);
+      const deletedGutter = deletions?.querySelector<HTMLElement>(
+        "[data-gutter] > [data-column-number][data-line-type='change-deletion']"
+      );
+      expect(deletedGutter).not.toBeNull();
+
+      deletedGutter?.dispatchEvent(
+        new PointerEvent('pointermove', {
+          bubbles: true,
+          composed: true,
+          pointerType: 'mouse',
+        })
+      );
+      await waitFor(
+        () => deletedGutter?.querySelector('[data-utility-button]') != null
+      );
+      const utility = deletedGutter?.querySelector<HTMLElement>(
+        '[data-utility-button]'
+      );
+      expect(utility).not.toBeNull();
+
+      utility?.dispatchEvent(
+        new PointerEvent('pointerdown', {
+          bubbles: true,
+          button: 0,
+          cancelable: true,
+          composed: true,
+          pointerId: 21,
+          pointerType: 'mouse',
+        })
+      );
+      document.dispatchEvent(new Event('selectionchange'));
+      expect(fixture.editor.getState().selections).toEqual(selectionBefore);
+
+      utility?.dispatchEvent(
+        new PointerEvent('pointerup', {
+          bubbles: true,
+          cancelable: true,
+          composed: true,
+          pointerId: 21,
+          pointerType: 'mouse',
+        })
+      );
+      // Native selection changes can arrive after pointerup, so the editor
+      // selection must remain protected until the next content interaction.
+      document.dispatchEvent(new Event('selectionchange'));
+
+      expect(clickedRanges).toEqual([{ start: 1, end: 1, side: 'deletions' }]);
+      expect(fixture.editor.getState().selections).toEqual(selectionBefore);
+      expect(editorActiveGutterNumbers(additions)).toEqual([2]);
+      expect(
+        fixture.container.shadowRoot
+          ?.querySelector('pre')
+          ?.hasAttribute('data-deleted-text-selection')
+      ).toBe(false);
+    } finally {
+      getSelectionStub?.mockRestore();
+      await fixture.cleanup();
+    }
+  });
+
+  test('split: selected lines and deleted-line focus render independently', async () => {
+    const fixture = await createDiffEditorFixture('split', OLD, NEW);
+    try {
+      fixture.fileDiff.setSelectedLines({ start: 2, end: 2 });
+      const { additions, deletions } = findCodeColumns(fixture.container);
+      expect(highlightedGutterNumbers(additions)).toEqual([2]);
+      expect(highlightedGutterNumbers(deletions)).toEqual([2]);
+      expect(editorActiveGutterNumbers(additions)).toEqual([]);
+      expect(editorActiveGutterNumbers(deletions)).toEqual([]);
+      expect(highlightedLineNumbers(additions)).toEqual([2]);
+      expect(highlightedLineNumbers(deletions)).toEqual([2]);
+
+      const deletedGutter = deletions?.querySelector<HTMLElement>(
+        "[data-gutter] > [data-column-number][data-line-type='change-deletion']"
+      );
+      expect(deletedGutter).not.toBeNull();
+      deletedGutter?.dispatchEvent(
+        new PointerEvent('pointerdown', {
+          bubbles: true,
+          composed: true,
+          pointerType: 'mouse',
+        })
+      );
+
+      expect(highlightedGutterNumbers(additions)).toEqual([2]);
+      expect(highlightedGutterNumbers(deletions)).toEqual([2]);
+      expect(editorActiveGutterNumbers(additions)).toEqual([]);
+      expect(editorActiveGutterNumbers(deletions)).toEqual([1]);
+      expect(
+        fixture.container.shadowRoot
+          ?.querySelector('pre')
+          ?.hasAttribute('data-deleted-text-selection')
+      ).toBe(true);
+
+      fixture.fileDiff.setSelectedLines(null);
+      expect(highlightedGutterNumbers(additions)).toEqual([]);
+      expect(highlightedGutterNumbers(deletions)).toEqual([]);
+      expect(editorActiveGutterNumbers(deletions)).toEqual([1]);
     } finally {
       await fixture.cleanup();
     }
@@ -195,8 +419,8 @@ describe('editor active-line highlight on a diff', () => {
       ]);
 
       const { additions, deletions } = findCodeColumns(fixture.container);
-      await waitFor(() => highlightedLineNumbers(additions).length > 0);
-      expect(highlightedLineNumbers(additions)).toEqual([1]);
+      await waitFor(() => editorActiveLineNumbers(additions).length > 0);
+      expect(editorActiveLineNumbers(additions)).toEqual([1]);
 
       // A pointerdown in the read-only deletions column hands the selection to
       // that column (painted natively), so the editor drops its additions-side
@@ -204,8 +428,8 @@ describe('editor active-line highlight on a diff', () => {
       deletions?.dispatchEvent(
         new PointerEvent('pointerdown', { bubbles: true })
       );
-      await waitFor(() => highlightedLineNumbers(additions).length === 0);
-      expect(highlightedLineNumbers(additions)).toEqual([]);
+      await waitFor(() => editorActiveLineNumbers(additions).length === 0);
+      expect(editorActiveLineNumbers(additions)).toEqual([]);
     } finally {
       await fixture.cleanup();
     }
@@ -225,14 +449,14 @@ describe('editor active-line highlight on a diff', () => {
       ]);
 
       const { additions, deletions } = findCodeColumns(fixture.container);
-      await waitFor(() => highlightedGutterNumbers(additions).length > 0);
+      await waitFor(() => editorActiveGutterNumbers(additions).length > 0);
       // No line background on either column: the selected text is the
       // line-level highlight instead.
       expect(highlightedLineNumbers(additions)).toEqual([]);
       expect(highlightedLineNumbers(deletions)).toEqual([]);
       // The caret line's gutter number stays highlighted on the additions side.
-      expect(highlightedGutterNumbers(additions)).toEqual([1]);
-      expect(highlightedGutterNumbers(deletions)).toEqual([]);
+      expect(editorActiveGutterNumbers(additions)).toEqual([1]);
+      expect(editorActiveGutterNumbers(deletions)).toEqual([]);
     } finally {
       await fixture.cleanup();
     }
@@ -252,8 +476,8 @@ describe('editor active-line highlight on a diff', () => {
       // A unified diff has a single column, so the additions-only restriction
       // must not suppress the highlight there.
       const { additions } = findCodeColumns(fixture.container);
-      await waitFor(() => highlightedLineNumbers(additions).length > 0);
-      expect(highlightedLineNumbers(additions)).toEqual([1]);
+      await waitFor(() => editorActiveLineNumbers(additions).length > 0);
+      expect(editorActiveLineNumbers(additions)).toEqual([1]);
     } finally {
       await fixture.cleanup();
     }
@@ -282,16 +506,16 @@ describe('editor active-line highlight on a diff', () => {
         },
       ]);
       const { additions } = findCodeColumns(fixture.container);
-      await waitFor(() => highlightedGutterNumbers(additions).length > 0);
-      expect(highlightedGutterNumbers(additions).length).toBeGreaterThan(0);
+      await waitFor(() => editorActiveGutterNumbers(additions).length > 0);
+      expect(editorActiveGutterNumbers(additions).length).toBeGreaterThan(0);
 
       // Pointerdown on the deleted line hands selection to that line: the
       // editor drops its own selection and the deleted-text marker turns on.
       deletedLine?.dispatchEvent(
         new PointerEvent('pointerdown', { bubbles: true, composed: true })
       );
-      await waitFor(() => highlightedGutterNumbers(additions).length === 0);
-      expect(highlightedGutterNumbers(additions)).toEqual([]);
+      await waitFor(() => editorActiveGutterNumbers(additions).length === 0);
+      expect(editorActiveGutterNumbers(additions)).toEqual([]);
       expect(pre?.hasAttribute('data-deleted-text-selection')).toBe(true);
 
       // Pointerdown back on an editable line turns the marker off, so a normal
@@ -327,8 +551,8 @@ describe('editor active-line highlight on a diff', () => {
         },
       ]);
       const { additions } = findCodeColumns(fixture.container);
-      await waitFor(() => highlightedGutterNumbers(additions).length > 0);
-      expect(highlightedGutterNumbers(additions).length).toBeGreaterThan(0);
+      await waitFor(() => editorActiveGutterNumbers(additions).length > 0);
+      expect(editorActiveGutterNumbers(additions).length).toBeGreaterThan(0);
 
       // Clicking the deleted line's gutter number hands selection to that
       // (read-only) line: the editor drops its own selection, the deleted line's
@@ -338,9 +562,10 @@ describe('editor active-line highlight on a diff', () => {
         new PointerEvent('pointerdown', { bubbles: true, composed: true })
       );
       await waitFor(
-        () => deletedGutterNumber?.hasAttribute('data-selected-line') === true
+        () =>
+          deletedGutterNumber?.hasAttribute('data-editor-active-line') === true
       );
-      expect(deletedGutterNumber?.hasAttribute('data-selected-line')).toBe(
+      expect(deletedGutterNumber?.hasAttribute('data-editor-active-line')).toBe(
         true
       );
       expect(pre?.hasAttribute('data-deleted-text-selection')).toBe(true);
@@ -370,8 +595,10 @@ describe('editor active-line highlight on a diff', () => {
       first?.dispatchEvent(
         new PointerEvent('pointerdown', { bubbles: true, composed: true })
       );
-      await waitFor(() => first?.hasAttribute('data-selected-line') === true);
-      expect(first?.hasAttribute('data-selected-line')).toBe(true);
+      await waitFor(
+        () => first?.hasAttribute('data-editor-active-line') === true
+      );
+      expect(first?.hasAttribute('data-editor-active-line')).toBe(true);
 
       // Selecting a different deleted line must drop the first one's highlight
       // rather than leave it stale. A deletion selection never changes the
@@ -380,9 +607,11 @@ describe('editor active-line highlight on a diff', () => {
       second?.dispatchEvent(
         new PointerEvent('pointerdown', { bubbles: true, composed: true })
       );
-      await waitFor(() => second?.hasAttribute('data-selected-line') === true);
-      expect(second?.hasAttribute('data-selected-line')).toBe(true);
-      expect(first?.hasAttribute('data-selected-line')).toBe(false);
+      await waitFor(
+        () => second?.hasAttribute('data-editor-active-line') === true
+      );
+      expect(second?.hasAttribute('data-editor-active-line')).toBe(true);
+      expect(first?.hasAttribute('data-editor-active-line')).toBe(false);
     } finally {
       await fixture.cleanup();
     }
@@ -416,17 +645,127 @@ describe('editor active-line highlight on a diff', () => {
       anchor?.dispatchEvent(
         new PointerEvent('pointerdown', { bubbles: true, composed: true })
       );
-      await waitFor(() => highlightedGutterNumbers(deletions).length > 0);
+      await waitFor(() => editorActiveGutterNumbers(deletions).length > 0);
       focus?.dispatchEvent(
         new MouseEvent('mousemove', { bubbles: true, composed: true })
       );
-      await waitFor(() => highlightedGutterNumbers(deletions).includes(4));
+      await waitFor(() => editorActiveGutterNumbers(deletions).includes(4));
 
       // Only the line the drag ended on is highlighted — the same as an
       // addition selection, which highlights just its caret line — not every
       // line in the dragged range.
-      expect(highlightedGutterNumbers(deletions)).toEqual([4]);
+      expect(editorActiveGutterNumbers(deletions)).toEqual([4]);
     } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  test('split: line selection owns deletion gutter drags without replacing the editor selection', async () => {
+    const selectedRanges: (SelectedLineRange | null)[] = [];
+    const fixture = await createDiffEditorFixture(
+      'split',
+      'a\nb\nc\nd\nkeep\n',
+      'keep\n',
+      {
+        enableLineSelection: true,
+        onLineSelected: (range) => selectedRanges.push(range),
+      }
+    );
+    let getSelectionStub: { mockRestore(): void } | undefined;
+    try {
+      // Let editor setup and focus frames settle before establishing the
+      // selection this gesture must preserve.
+      for (let i = 0; i < 5; i++) {
+        await wait(0);
+      }
+      const { additions, deletions } = findCodeColumns(fixture.container);
+      const content = additions?.querySelector<HTMLElement>('[data-content]');
+      const firstLine = content?.querySelector('[data-line="1"]');
+      if (content == null || firstLine == null) {
+        throw new Error('missing editor content');
+      }
+      fixture.editor.setSelections([
+        {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 2 },
+          direction: 'forward',
+        },
+      ]);
+      content.dispatchEvent(new Event('focus'));
+      const editorSelection = fixture.editor.getState().selections;
+      getSelectionStub = spyOn(document, 'getSelection').mockReturnValue({
+        getComposedRanges: () => [
+          {
+            startContainer: firstLine,
+            startOffset: 0,
+            endContainer: firstLine,
+            endOffset: 0,
+          },
+        ],
+      } as unknown as Selection);
+      const gutterRows = [
+        ...(deletions?.querySelectorAll(
+          '[data-gutter] > [data-column-number]'
+        ) ?? []),
+      ];
+      const first = gutterRows.find(
+        (row) => row.getAttribute('data-column-number') === '1'
+      );
+      const fourth = gutterRows.find(
+        (row) => row.getAttribute('data-column-number') === '4'
+      );
+      if (!(first instanceof HTMLElement) || !(fourth instanceof HTMLElement)) {
+        throw new Error('missing deletion gutter rows');
+      }
+      fixture.setElementFromPoint(8, 80, fourth);
+
+      first.dispatchEvent(
+        new PointerEvent('pointerdown', {
+          bubbles: true,
+          clientX: 8,
+          clientY: 20,
+          composed: true,
+          pointerId: 31,
+          pointerType: 'mouse',
+        })
+      );
+      document.dispatchEvent(new Event('selectionchange'));
+      expect(fixture.editor.getState().selections).toEqual(editorSelection);
+
+      fourth.dispatchEvent(
+        new PointerEvent('pointermove', {
+          bubbles: true,
+          clientX: 8,
+          clientY: 80,
+          composed: true,
+          pointerId: 31,
+          pointerType: 'mouse',
+        })
+      );
+      document.dispatchEvent(new Event('selectionchange'));
+      expect(fixture.editor.getState().selections).toEqual(editorSelection);
+
+      fourth.dispatchEvent(
+        new PointerEvent('pointerup', {
+          bubbles: true,
+          clientX: 8,
+          clientY: 80,
+          composed: true,
+          pointerId: 31,
+          pointerType: 'mouse',
+        })
+      );
+      document.dispatchEvent(new Event('selectionchange'));
+
+      expect(selectedRanges).toEqual([{ start: 1, end: 4, side: 'deletions' }]);
+      expect(fixture.editor.getState().selections).toEqual(editorSelection);
+      expect(
+        fixture.container.shadowRoot
+          ?.querySelector('pre')
+          ?.hasAttribute('data-deleted-text-selection')
+      ).toBe(false);
+    } finally {
+      getSelectionStub?.mockRestore();
       await fixture.cleanup();
     }
   });
@@ -461,17 +800,21 @@ describe('editor active-line highlight on a diff', () => {
       anchor?.dispatchEvent(
         new PointerEvent('pointerdown', { bubbles: true, composed: true })
       );
-      await waitFor(() => anchor?.hasAttribute('data-selected-line') === true);
+      await waitFor(
+        () => anchor?.hasAttribute('data-editor-active-line') === true
+      );
       focus?.dispatchEvent(
         new MouseEvent('mousemove', { bubbles: true, composed: true })
       );
-      await waitFor(() => focus?.hasAttribute('data-selected-line') === true);
+      await waitFor(
+        () => focus?.hasAttribute('data-editor-active-line') === true
+      );
 
       // Only the line the drag ended on stays highlighted (not the anchor, and
       // not every line in the range), and the deleted-text marker reveals the
       // native selection.
-      expect(focus?.hasAttribute('data-selected-line')).toBe(true);
-      expect(anchor?.hasAttribute('data-selected-line')).toBe(false);
+      expect(focus?.hasAttribute('data-editor-active-line')).toBe(true);
+      expect(anchor?.hasAttribute('data-editor-active-line')).toBe(false);
       expect(pre?.hasAttribute('data-deleted-text-selection')).toBe(true);
     } finally {
       await fixture.cleanup();
@@ -499,9 +842,10 @@ describe('editor active-line highlight on a diff', () => {
         })
       );
       await waitFor(
-        () => deletedGutterNumber?.hasAttribute('data-selected-line') === true
+        () =>
+          deletedGutterNumber?.hasAttribute('data-editor-active-line') === true
       );
-      expect(deletedGutterNumber?.hasAttribute('data-selected-line')).toBe(
+      expect(deletedGutterNumber?.hasAttribute('data-editor-active-line')).toBe(
         true
       );
       expect(pre?.hasAttribute('data-deleted-text-selection')).toBe(true);
@@ -510,13 +854,222 @@ describe('editor active-line highlight on a diff', () => {
     }
   });
 
-  test('dragging across addition line numbers highlights the line the drag ends on', async () => {
+  test('line selection owns addition gutter drags while editing', async () => {
+    const changedRanges: (SelectedLineRange | null)[] = [];
+    const selectedRanges: (SelectedLineRange | null)[] = [];
+    const fixture = await createDiffEditorFixture(
+      'split',
+      'l1\nl2\nl3\nl4\nl5\n',
+      'l1\nl2\nl3\nl4\nl5\nl6\n',
+      {
+        enableLineSelection: true,
+        onLineSelected: (range) => selectedRanges.push(range),
+        onLineSelectionChange: (range) => changedRanges.push(range),
+      }
+    );
+    let getSelectionStub: { mockRestore(): void } | undefined;
+    try {
+      // Let the editor's setup and focus frames settle before establishing the
+      // selection this gesture must preserve.
+      for (let i = 0; i < 5; i++) {
+        await wait(0);
+      }
+      const { additions } = findCodeColumns(fixture.container);
+      const content = additions?.querySelector<HTMLElement>('[data-content]');
+      const firstLine = content?.querySelector('[data-line="1"]');
+      if (content == null || firstLine == null) {
+        throw new Error('missing editor content');
+      }
+      fixture.editor.setSelections([
+        {
+          start: { line: 0, character: 1 },
+          end: { line: 0, character: 1 },
+          direction: 'none',
+        },
+      ]);
+      content.dispatchEvent(new Event('focus'));
+      const editorSelection = fixture.editor.getState().selections;
+      getSelectionStub = spyOn(document, 'getSelection').mockReturnValue({
+        getComposedRanges: () => [
+          {
+            startContainer: firstLine,
+            startOffset: 0,
+            endContainer: firstLine,
+            endOffset: 0,
+          },
+        ],
+      } as unknown as Selection);
+      const gutterRows = [
+        ...(additions?.querySelectorAll(
+          '[data-gutter] > [data-column-number]'
+        ) ?? []),
+      ];
+      const second = gutterRows.find(
+        (row) => row.getAttribute('data-column-number') === '2'
+      );
+      const fourth = gutterRows.find(
+        (row) => row.getAttribute('data-column-number') === '4'
+      );
+      if (
+        !(second instanceof HTMLElement) ||
+        !(fourth instanceof HTMLElement)
+      ) {
+        throw new Error('missing addition gutter rows');
+      }
+      fixture.setElementFromPoint(8, 80, fourth);
+
+      second.dispatchEvent(
+        new PointerEvent('pointerdown', {
+          bubbles: true,
+          clientX: 8,
+          clientY: 40,
+          composed: true,
+          pointerId: 32,
+          pointerType: 'mouse',
+        })
+      );
+      document.dispatchEvent(new Event('selectionchange'));
+      expect(fixture.editor.getState().selections).toEqual(editorSelection);
+
+      fourth.dispatchEvent(
+        new PointerEvent('pointermove', {
+          bubbles: true,
+          clientX: 8,
+          clientY: 80,
+          composed: true,
+          pointerId: 32,
+          pointerType: 'mouse',
+        })
+      );
+      document.dispatchEvent(new Event('selectionchange'));
+      const selectedRange: SelectedLineRange = {
+        start: 2,
+        end: 4,
+        side: 'additions',
+      };
+      expect(changedRanges.at(-1)).toEqual(selectedRange);
+      expect(fixture.editor.getState().selections).toEqual(editorSelection);
+      await waitFor(() =>
+        arraysEqual(highlightedLineNumbers(additions), [2, 3, 4])
+      );
+      expect(editorActiveLineNumbers(additions)).toEqual([1]);
+
+      fourth.dispatchEvent(
+        new PointerEvent('pointerup', {
+          bubbles: true,
+          clientX: 8,
+          clientY: 80,
+          composed: true,
+          pointerId: 32,
+          pointerType: 'mouse',
+        })
+      );
+      document.dispatchEvent(new Event('selectionchange'));
+
+      expect(selectedRanges).toEqual([selectedRange]);
+      expect(fixture.editor.getState().selections).toEqual(editorSelection);
+      expect(highlightedLineNumbers(additions)).toEqual([2, 3, 4]);
+      expect(editorActiveLineNumbers(additions)).toEqual([1]);
+
+      // A direct editor interaction ends the protection and allows native
+      // selection changes to update the editor again.
+      content.dispatchEvent(
+        new PointerEvent('pointerdown', {
+          bubbles: true,
+          button: 0,
+          composed: true,
+          pointerType: 'mouse',
+        })
+      );
+      document.dispatchEvent(new Event('selectionchange'));
+      expect(fixture.editor.getState().selections).toEqual([
+        {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 0 },
+          direction: 0,
+        },
+      ]);
+    } finally {
+      getSelectionStub?.mockRestore();
+      await fixture.cleanup();
+    }
+  });
+
+  test('line selection does not suppress native sync without an editor selection', async () => {
+    const fixture = await createDiffEditorFixture(
+      'split',
+      'l1\nl2\nl3\n',
+      'l1\nl2\nl3\nl4\n',
+      { enableLineSelection: true }
+    );
+    let getSelectionStub: { mockRestore(): void } | undefined;
+    try {
+      for (let i = 0; i < 5; i++) {
+        await wait(0);
+      }
+      const { additions } = findCodeColumns(fixture.container);
+      const content = additions?.querySelector<HTMLElement>('[data-content]');
+      const firstLine = content?.querySelector('[data-line="1"]');
+      const secondGutter = additions?.querySelector<HTMLElement>(
+        '[data-gutter] > [data-column-number="2"]'
+      );
+      if (content == null || firstLine == null || secondGutter == null) {
+        throw new Error('missing editor rows');
+      }
+      expect(fixture.editor.getState().selections).toBeUndefined();
+
+      getSelectionStub = spyOn(document, 'getSelection').mockReturnValue({
+        getComposedRanges: () => [
+          {
+            startContainer: firstLine,
+            startOffset: 0,
+            endContainer: firstLine,
+            endOffset: 0,
+          },
+        ],
+      } as unknown as Selection);
+
+      content.dispatchEvent(new Event('blur'));
+      secondGutter.dispatchEvent(
+        new PointerEvent('pointerdown', {
+          bubbles: true,
+          composed: true,
+          pointerId: 33,
+          pointerType: 'mouse',
+        })
+      );
+      secondGutter.dispatchEvent(
+        new PointerEvent('pointerup', {
+          bubbles: true,
+          composed: true,
+          pointerId: 33,
+          pointerType: 'mouse',
+        })
+      );
+
+      content.dispatchEvent(new Event('focus'));
+      document.dispatchEvent(new Event('selectionchange'));
+      expect(fixture.editor.getState().selections).toEqual([
+        {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 0 },
+          direction: 0,
+        },
+      ]);
+    } finally {
+      getSelectionStub?.mockRestore();
+      await fixture.cleanup();
+    }
+  });
+
+  test('editor gutter selection spans addition lines when line selection is disabled', async () => {
     // Five context lines plus one addition give several editable rows whose
     // gutter numbers a drag can span.
     const fixture = await createDiffEditorFixture(
       'split',
       'l1\nl2\nl3\nl4\nl5\n',
-      'l1\nl2\nl3\nl4\nl5\nl6\n'
+      'l1\nl2\nl3\nl4\nl5\nl6\n',
+      { enableLineSelection: false }
     );
     try {
       const { additions } = findCodeColumns(fixture.container);
@@ -537,36 +1090,43 @@ describe('editor active-line highlight on a diff', () => {
       line2?.dispatchEvent(
         new PointerEvent('pointerdown', { bubbles: true, composed: true })
       );
-      await waitFor(() => highlightedGutterNumbers(additions).length > 0);
+      await waitFor(() => editorActiveGutterNumbers(additions).length > 0);
       line4?.dispatchEvent(
         new MouseEvent('mousemove', { bubbles: true, composed: true })
       );
-      await waitFor(() => highlightedGutterNumbers(additions).includes(4));
+      await waitFor(() => editorActiveGutterNumbers(additions).includes(4));
+      expect(fixture.editor.getState().selections).toEqual([
+        {
+          start: { line: 1, character: 0 },
+          end: { line: 3, character: 2 },
+          direction: DirectionForward,
+        },
+      ]);
       document.dispatchEvent(
         new PointerEvent('pointerup', { bubbles: true, composed: true })
       );
       await waitFor(() =>
-        arraysEqual(highlightedGutterNumbers(additions), [4])
+        arraysEqual(editorActiveGutterNumbers(additions), [4])
       );
-      expect(highlightedGutterNumbers(additions)).toEqual([4]);
+      expect(editorActiveGutterNumbers(additions)).toEqual([4]);
 
       // Backward drag (line 4 -> line 2): the anchor line stays selected and the
       // focus line (2) becomes the caret, so its number is the highlighted one.
       line4?.dispatchEvent(
         new PointerEvent('pointerdown', { bubbles: true, composed: true })
       );
-      await waitFor(() => highlightedGutterNumbers(additions).includes(4));
+      await waitFor(() => editorActiveGutterNumbers(additions).includes(4));
       line2?.dispatchEvent(
         new MouseEvent('mousemove', { bubbles: true, composed: true })
       );
-      await waitFor(() => highlightedGutterNumbers(additions).includes(2));
+      await waitFor(() => editorActiveGutterNumbers(additions).includes(2));
       document.dispatchEvent(
         new PointerEvent('pointerup', { bubbles: true, composed: true })
       );
       await waitFor(() =>
-        arraysEqual(highlightedGutterNumbers(additions), [2])
+        arraysEqual(editorActiveGutterNumbers(additions), [2])
       );
-      expect(highlightedGutterNumbers(additions)).toEqual([2]);
+      expect(editorActiveGutterNumbers(additions)).toEqual([2]);
     } finally {
       await fixture.cleanup();
     }
@@ -590,7 +1150,8 @@ describe('editor active-line highlight on a diff', () => {
         new PointerEvent('pointerdown', { bubbles: true, composed: true })
       );
       await waitFor(
-        () => deletedGutterNumber?.hasAttribute('data-selected-line') === true
+        () =>
+          deletedGutterNumber?.hasAttribute('data-editor-active-line') === true
       );
 
       // The deleted row lives inside the editor's contentEl (unified view), so a
@@ -631,11 +1192,15 @@ describe('editor active-line highlight on a diff', () => {
       first?.dispatchEvent(
         new PointerEvent('pointerdown', { bubbles: true, composed: true })
       );
-      await waitFor(() => first?.hasAttribute('data-selected-line') === true);
+      await waitFor(
+        () => first?.hasAttribute('data-editor-active-line') === true
+      );
       last?.dispatchEvent(
         new MouseEvent('mousemove', { bubbles: true, composed: true })
       );
-      await waitFor(() => last?.hasAttribute('data-selected-line') === true);
+      await waitFor(
+        () => last?.hasAttribute('data-editor-active-line') === true
+      );
 
       // Each deleted line is a separate read-only host, so the browser's native
       // selection clamps to the first line; the copy must still carry every

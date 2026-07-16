@@ -321,7 +321,6 @@ export const CODE_VIEW_FILE_OPTION_KEYS = [
 
 type CodeViewFileOptionKeys = (typeof CODE_VIEW_FILE_OPTION_KEYS)[number];
 
-// FIXME(amadeus): Ideally we don't ever require this...
 // Option values Editor.edit requires before it attaches to an instance. These
 // keys are excluded from the plain pass-through loops (defineItemOption
 // properties are non-configurable and cannot be redefined) so the prototypes
@@ -330,9 +329,6 @@ type CodeViewFileOptionKeys = (typeof CODE_VIEW_FILE_OPTION_KEYS)[number];
 // instance.setOptions, which throws for CodeView-managed instances.
 const CODE_VIEW_EDIT_FORCED_OPTION_KEYS: ReadonlySet<string> = new Set([
   'useTokenTransformer',
-  'enableGutterUtility',
-  'enableLineSelection',
-  'lineHoverHighlight',
 ]);
 
 type CodeViewPassThroughOptions<LAnnotation> = Pick<
@@ -2066,12 +2062,6 @@ export class CodeView<LAnnotation = undefined> {
       this.itemEditors.set(id, record);
     }
 
-    // Editing takes over the item's pointer interactions; drop any line
-    // selection the item still holds. Silent, matching how syncSelection
-    // drops selections whose item disappeared.
-    if (this.selectedLines?.id === id) {
-      this.applySelectedLines(null, { notify: false });
-    }
     record.editor.edit(item.instance);
     this.attachedEditors.add(id);
   }
@@ -2179,22 +2169,6 @@ export class CodeView<LAnnotation = undefined> {
         ? true
         : this.options.useTokenTransformer
     );
-    defineItemOption(prototype, 'enableGutterUtility', (receiver) =>
-      this.isReceiverEdited(receiver, 'file')
-        ? false
-        : this.options.enableGutterUtility
-    );
-    defineItemOption(prototype, 'enableLineSelection', (receiver) =>
-      this.isReceiverEdited(receiver, 'file')
-        ? false
-        : this.options.enableLineSelection
-    );
-    defineItemOption(prototype, 'lineHoverHighlight', (receiver) =>
-      this.isReceiverEdited(receiver, 'file')
-        ? 'disabled'
-        : this.options.lineHoverHighlight
-    );
-
     defineItemOption(
       prototype,
       'stickyHeader',
@@ -2240,22 +2214,6 @@ export class CodeView<LAnnotation = undefined> {
         ? true
         : this.options.useTokenTransformer
     );
-    defineItemOption(prototype, 'enableGutterUtility', (receiver) =>
-      this.isReceiverEdited(receiver, 'diff')
-        ? false
-        : this.options.enableGutterUtility
-    );
-    defineItemOption(prototype, 'enableLineSelection', (receiver) =>
-      this.isReceiverEdited(receiver, 'diff')
-        ? false
-        : this.options.enableLineSelection
-    );
-    defineItemOption(prototype, 'lineHoverHighlight', (receiver) =>
-      this.isReceiverEdited(receiver, 'diff')
-        ? 'disabled'
-        : this.options.lineHoverHighlight
-    );
-
     defineItemOption(
       prototype,
       'stickyHeader',
@@ -2403,20 +2361,10 @@ export class CodeView<LAnnotation = undefined> {
       >,
       key,
       (receiver) => {
-        if (this.options.enableLineSelection !== true) {
-          return undefined;
-        }
-
         const state = getItemOptionsState(
           receiver as CodeViewModeOptions<LAnnotation, TMode>
         );
         if (state == null) {
-          return undefined;
-        }
-        // Edit mode disables line selection for the item, so its selection
-        // callbacks must resolve to undefined as well.
-        const item = this.getItemOptions(state, mode);
-        if (item != null && this.isItemInEditMode(item)) {
           return undefined;
         }
         // Selection callbacks also use the per-item lazy cache. The wrapper

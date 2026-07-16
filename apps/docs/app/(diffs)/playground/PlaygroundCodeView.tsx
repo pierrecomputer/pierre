@@ -4,6 +4,7 @@ import {
   type AnnotationSide,
   type CodeViewCreateEditorOptions,
   type CodeViewItem,
+  type CodeViewLineSelection,
   type CodeViewOptions,
   type DiffLineAnnotation,
   type FileContents,
@@ -25,6 +26,7 @@ type PlaygroundItem = CodeViewItem<PlaygroundAnnotationMetadata>;
 interface PlaygroundCodeViewProps {
   items: PlaygroundItem[];
   options: CodeViewOptions<PlaygroundAnnotationMetadata>;
+  enableLineSelection: boolean;
   enableGutterComments: boolean;
   showAnnotations: boolean;
 }
@@ -42,16 +44,18 @@ interface PlaygroundCodeViewProps {
 // persist them back into the item — file items swap contents directly, diff
 // items re-diff the edited new side against the original old side.
 //
-// Annotations ride on item data: a gutter click appends a comment-form
-// annotation to the clicked item (with a version bump), and cancelling the
-// form removes it again.
+// Annotations ride on item data: a gutter utility gesture appends a comment
+// form at its final line, and cancelling the form removes it again.
 export function PlaygroundCodeView({
   items: initialItems,
   options,
+  enableLineSelection,
   enableGutterComments,
   showAnnotations,
 }: PlaygroundCodeViewProps) {
   const [items, setItems] = useState(initialItems);
+  const [selectedLines, setSelectedLines] =
+    useState<CodeViewLineSelection | null>(null);
 
   const toggleEdit = useCallback((id: string, edit: boolean) => {
     setItems((current) =>
@@ -109,51 +113,47 @@ export function PlaygroundCodeView({
     []
   );
 
-  // Mirrors the Normal view's addCommentAtLine, but per item: the annotation
-  // is appended to the clicked item's data with a version bump.
-  const addCommentAtLine = useCallback(
+  // Mirrors the Normal view's addCommentAtRange, but stores the annotation on
+  // the CodeView item that owns the selected range.
+  const addCommentAtRange = useCallback(
     (itemId: string, range: SelectedLineRange) => {
       setItems((current) =>
         current.map((item) => {
           if (item.id !== itemId) {
             return item;
           }
+          const side = range.endSide ?? range.side;
+          const lineNumber = range.end;
           const version = (item.version ?? 0) + 1;
           const metadata: PlaygroundAnnotationMetadata = {
-            key: `${range.side ?? 'line'}-${range.start}`,
+            key: `${side ?? 'line'}-${lineNumber}`,
             isThread: false,
           };
           if (item.type === 'file') {
             const annotations = item.annotations ?? [];
-            if (annotations.some((a) => a.lineNumber === range.start)) {
+            if (annotations.some((a) => a.lineNumber === lineNumber)) {
               return item;
             }
             return {
               ...item,
-              annotations: [
-                ...annotations,
-                { lineNumber: range.start, metadata },
-              ],
+              annotations: [...annotations, { lineNumber, metadata }],
               version,
             };
           }
-          if (range.side == null) {
+          if (side == null) {
             return item;
           }
           const annotations = item.annotations ?? [];
           if (
             annotations.some(
-              (a) => a.side === range.side && a.lineNumber === range.start
+              (a) => a.side === side && a.lineNumber === lineNumber
             )
           ) {
             return item;
           }
           return {
             ...item,
-            annotations: [
-              ...annotations,
-              { side: range.side, lineNumber: range.start, metadata },
-            ],
+            annotations: [...annotations, { side, lineNumber, metadata }],
             version,
           };
         })
@@ -188,6 +188,7 @@ export function PlaygroundCodeView({
           };
         })
       );
+      setSelectedLines(null);
     },
     []
   );
@@ -198,6 +199,7 @@ export function PlaygroundCodeView({
     if (showAnnotations) {
       return;
     }
+    setSelectedLines(null);
     setItems((current) =>
       current.map((item) =>
         (item.annotations?.length ?? 0) > 0
@@ -215,6 +217,8 @@ export function PlaygroundCodeView({
         (annotation) => annotation.metadata.isThread !== true
       ) === true
   );
+  const canSelectLines =
+    enableLineSelection && !enableGutterComments && !hasOpenCommentForm;
   const canUseGutterComments =
     enableGutterComments && showAnnotations && !hasOpenCommentForm;
 
@@ -223,12 +227,13 @@ export function PlaygroundCodeView({
   >(
     () => ({
       ...options,
+      enableLineSelection: canSelectLines,
       enableGutterUtility: canUseGutterComments,
       onGutterUtilityClick: canUseGutterComments
-        ? (range, context) => addCommentAtLine(context.item.id, range)
+        ? (range, context) => addCommentAtRange(context.item.id, range)
         : undefined,
     }),
-    [options, canUseGutterComments, addCommentAtLine]
+    [options, canSelectLines, canUseGutterComments, addCommentAtRange]
   );
 
   const renderAnnotation = useStableCallback(
@@ -273,6 +278,8 @@ export function PlaygroundCodeView({
       className="border-border rounded-lg border"
       style={CODE_VIEW_STYLES}
       options={codeViewOptions}
+      selectedLines={selectedLines}
+      onSelectedLinesChange={setSelectedLines}
       createEditor={createEditor}
       onItemEditComplete={handleEditComplete}
       renderHeaderMetadata={renderHeaderMetadata}

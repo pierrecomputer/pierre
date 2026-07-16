@@ -68,10 +68,10 @@ async function createEditorFixture(
 }
 
 // The active-line highlight is the full-line background applied via the
-// data-selected-line attribute. This returns the 1-based data-line numbers of
-// the content rows currently carrying that attribute.
+// data-editor-active-line attribute. This returns the 1-based data-line
+// numbers of the content rows currently carrying that attribute.
 function highlightedLineNumbers(content: HTMLElement): number[] {
-  return [...content.querySelectorAll('[data-line][data-selected-line]')]
+  return [...content.querySelectorAll('[data-line][data-editor-active-line]')]
     .map((el) => Number(el.getAttribute('data-line')))
     .sort((a, b) => a - b);
 }
@@ -150,7 +150,7 @@ describe('editor active line highlight', () => {
       ]);
       // A non-empty selection draws no full-line highlight...
       expect(highlightedLineNumbers(content)).toEqual([]);
-      // ...and text selection is not a gutter line selection, so a consumer's
+      // ...and text selection is not a gutter line selection, so the
       // onLineSelected handler must not fire.
       expect(notifiedRanges).toEqual([]);
     } finally {

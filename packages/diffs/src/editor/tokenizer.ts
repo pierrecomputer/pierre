@@ -1,3 +1,4 @@
+import { colorUtils } from '@pierre/theming/color';
 import {
   EncodedTokenMetadata,
   type IGrammar,
@@ -275,7 +276,23 @@ export class EditorTokenizer {
     const { theme, colorMap } = this.#highlighter.setTheme(themeName);
     const { colors = {} } = this.#highlighter.getTheme(themeName);
     const selectionBackground = colors['editor.selectionBackground'];
-    const lineHighlightBackground = colors['editor.lineHighlightBackground'];
+    const themeLineHighlightBackground =
+      colors['editor.lineHighlightBackground'];
+    const lineHighlightBackground =
+      themeLineHighlightBackground != null &&
+      themeLineHighlightBackground.trim() !== '' &&
+      !colorUtils.isFullyTransparent(themeLineHighlightBackground)
+        ? themeLineHighlightBackground
+        : undefined;
+    // A usable theme background opts into the semantic active-line mix.
+    // Missing backgrounds retain the resolved row color and rely on a border.
+    const lineHighlightBorder =
+      colors['editor.lineHighlightBorder'] ??
+      (lineHighlightBackground == null
+        ? 'color-mix(in lab, var(--diffs-bg) 70%, var(--diffs-fg))'
+        : 'transparent');
+    const activeLineSourceMix =
+      lineHighlightBackground == null ? '100%' : '85%';
     const cursorForeground = colors['editorCursor.foreground'];
     const findMatchBackground = colors['editor.findMatchBackground'];
     const findMatchHighlightBackground =
@@ -288,7 +305,8 @@ export class EditorTokenizer {
     const errorForeground = colors['editorError.foreground'];
     this.#setStyle(`:host {
       --diffs-editor-selection-bg: ${selectionBackground ?? 'var(--diffs-line-bg)'};
-      --diffs-editor-line-highlight-bg: ${lineHighlightBackground ?? 'var(--diffs-line-bg)'};
+      --diffs-editor-line-highlight-border: ${lineHighlightBorder};
+      --diffs-editor-active-line-source-mix: ${activeLineSourceMix};
       --diffs-editor-match-bg: ${findMatchBackground ?? 'initial'};
       --diffs-editor-match-highlight-bg: ${findMatchHighlightBackground ?? 'initial'};
       --diffs-editor-bracket-match-bg: ${bracketMatchBackground ?? 'initial'};

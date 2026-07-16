@@ -131,19 +131,22 @@ function typeAt(
 }
 
 describe('diff editor: attach-time option normalization', () => {
-  test('the fallback setOptions preserves a host expandUnchanged option', async () => {
+  test('only enables the token transformer when attaching', async () => {
     const dom = installDom();
     const container = document.createElement('div');
     document.body.appendChild(container);
     // useTokenTransformer: false triggers Editor.edit's setOptions fallback,
-    // which replaces options wholesale — the host's own expandUnchanged must
-    // flow through it.
+    // which replaces options wholesale. Every other option must flow through
+    // unchanged.
     const fileDiff = new FileDiff<undefined>({
       disableFileHeader: true,
       theme: DEFAULT_THEMES,
       diffStyle: 'split',
       expandUnchanged: true,
       useTokenTransformer: false,
+      enableGutterUtility: true,
+      enableLineSelection: true,
+      lineHoverHighlight: 'both',
     });
     const editor = new Editor<undefined>();
     try {
@@ -158,6 +161,9 @@ describe('diff editor: attach-time option normalization', () => {
 
       expect(fileDiff.options.useTokenTransformer).toBe(true);
       expect(fileDiff.options.expandUnchanged).toBe(true);
+      expect(fileDiff.options.enableGutterUtility).toBe(true);
+      expect(fileDiff.options.enableLineSelection).toBe(true);
+      expect(fileDiff.options.lineHoverHighlight).toBe('both');
     } finally {
       await wait(10);
       editor.cleanUp();

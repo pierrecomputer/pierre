@@ -9,16 +9,11 @@ import type { GitStatus, GitStatusEntry } from '@pierre/trees';
 import { GENERATED_AUI_SESSIONS } from './mockData.generated';
 
 // Render options shared by the agent demo's SSR preload (Home.tsx) and its
-// client FileDiff (AgentUi). Beyond the visual options, these bake in the
-// exact state the editor enforces when it attaches to an editable FileDiff:
-// the token transformer on, gutter utility and line selection off, and
-// line-hover highlighting disabled. The editor only re-renders an attached
-// surface when these aren't already set, so if the prerendered markup omits
-// them (especially `useTokenTransformer`) the hydrated DOM no longer matches
-// the editor's line model — which mis-positions the caret/selection and
-// breaks editing. Sharing one constant also keeps the server and client
-// diffStyle in lockstep so the prerendered HTML always matches what the
-// client renders.
+// client FileDiff (AgentUi). The editor requires the token transformer, so
+// enabling it before hydration keeps the server markup aligned with the
+// attached editor. Sharing one constant also keeps the server and client
+// diffStyle in lockstep so the prerendered HTML always matches what the client
+// renders.
 export const AUI_DIFF_OPTIONS: DiffBasePropsReact<undefined>['options'] = {
   theme: DEFAULT_THEMES,
   themeType: 'dark',
@@ -26,9 +21,6 @@ export const AUI_DIFF_OPTIONS: DiffBasePropsReact<undefined>['options'] = {
   overflow: 'wrap',
   diffStyle: 'unified',
   useTokenTransformer: true,
-  enableGutterUtility: false,
-  enableLineSelection: false,
-  lineHoverHighlight: 'disabled',
 };
 
 // A single file the agent changed in a session. `before`/`after` are full file

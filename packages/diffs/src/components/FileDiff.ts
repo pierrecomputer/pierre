@@ -42,6 +42,7 @@ import type {
   DiffsEditableComponent,
   DiffsEditor,
   DiffsTextDocument,
+  EditorActiveLineOptions,
   ExpansionDirections,
   FileContents,
   FileDiffMetadata,
@@ -105,6 +106,16 @@ import { DiffsContainerLoaded } from './web-components';
 type LoadedPartialDiffContents = Awaited<
   ReturnType<NonNullable<BaseDiffOptions['loadDiffFiles']>>
 >;
+
+type DeferredSelectedLinesWrite = [
+  range: SelectedLineRange | null,
+  options: SelectionWriteOptions | undefined,
+];
+
+type DeferredEditorActiveLineWrite = [
+  lineNumber: number | null,
+  options: EditorActiveLineOptions | undefined,
+];
 
 function canHydrateDiff(fileDiff: FileDiffMetadata): boolean {
   return (
@@ -282,9 +293,12 @@ export class FileDiff<
 
   protected editor: DiffsEditor<LAnnotation> | undefined;
   protected refreshViewTimeout: ReturnType<typeof setTimeout> | undefined;
-  protected deferSetSelection:
-    | [SelectedLineRange | null, SelectionWriteOptions | undefined]
-    | undefined;
+  // Defer selected-line and editor active-line writes while a refresh rebuilds
+  // the diff rows. This is separate from the timeout because the refresh can
+  // escalate to a full rerender without one.
+  protected lineStateRefreshPending = false;
+  protected deferredSelectedLines: DeferredSelectedLinesWrite | undefined;
+  protected deferredEditorActiveLine: DeferredEditorActiveLineWrite | undefined;
 
   constructor(
     public options: FileDiffOptions<LAnnotation> = { theme: DEFAULT_THEMES },
@@ -514,10 +528,43 @@ export class FileDiff<
     range: SelectedLineRange | null,
     options?: SelectionWriteOptions
   ): void {
-    if (this.refreshViewTimeout != null) {
-      this.deferSetSelection = [range, options];
+    if (this.lineStateRefreshPending) {
+      this.deferredSelectedLines = [range, options];
     } else {
       this.interactionManager.setSelection(range, options);
+    }
+  }
+
+  public setEditorActiveLine(
+    lineNumber: number | null,
+    options?: EditorActiveLineOptions
+  ): void {
+    if (this.lineStateRefreshPending) {
+      this.deferredEditorActiveLine = [lineNumber, options];
+    } else {
+      this.interactionManager.setEditorActiveLine(lineNumber, {
+        lineNumberOnly: options?.lineNumberOnly,
+        side: options?.side ?? 'additions',
+      });
+    }
+  }
+
+  // A refresh can receive selected-lines and editor active-line writes in either
+  // order. Apply the latest value from each after the rows are stable.
+  protected flushDeferredLineState(): void {
+    const {
+      deferredEditorActiveLine: editorActiveLine,
+      deferredSelectedLines: selectedLines,
+    } = this;
+    this.lineStateRefreshPending = false;
+    this.deferredEditorActiveLine = undefined;
+    this.deferredSelectedLines = undefined;
+
+    if (editorActiveLine != null) {
+      this.setEditorActiveLine(...editorActiveLine);
+    }
+    if (selectedLines != null) {
+      this.interactionManager.setSelection(...selectedLines);
     }
   }
 
@@ -629,6 +676,9 @@ export class FileDiff<
       clearTimeout(this.refreshViewTimeout);
       this.refreshViewTimeout = undefined;
     }
+    this.lineStateRefreshPending = false;
+    this.deferredEditorActiveLine = undefined;
+    this.deferredSelectedLines = undefined;
   }
 
   public virtualizedSetup(): void {
@@ -1271,7 +1321,6 @@ export class FileDiff<
   ): (recycle?: boolean) => void {
     this.editor?.cleanUp();
     this.editor = editor;
-    this.interactionManager.setEditorAttached(true);
     // Edit sessions are a plain-diff concern; subclasses with their own hunk
     // semantics (merge conflicts) keep the per-edit recompute pipeline.
     if (this.type === 'file-diff') {
@@ -1285,7 +1334,6 @@ export class FileDiff<
     this.syncRenderViewToEditor();
     return (recycle?: boolean) => {
       this.editor = undefined;
-      this.interactionManager.setEditorAttached(false);
       // A recycle detach is a virtualized unmount mid-session: the session
       // continues on remount, so hunks stay session-shaped. Only a genuine
       // end runs the exit recompute.
@@ -1381,6 +1429,7 @@ export class FileDiff<
         clearTimeout(this.refreshViewTimeout);
         this.refreshViewTimeout = undefined;
       }
+      this.lineStateRefreshPending = true;
       this.escalateEditSessionRender();
       return;
     }
@@ -1388,6 +1437,7 @@ export class FileDiff<
       if (this.refreshViewTimeout != null) {
         clearTimeout(this.refreshViewTimeout);
       }
+      this.lineStateRefreshPending = true;
       this.refreshViewTimeout = setTimeout(() => {
         this.refreshViewTimeout = undefined;
         if (this.options.diffStyle === 'split') {
@@ -1395,10 +1445,7 @@ export class FileDiff<
         } else {
           this.refreshUnifiedDiffView();
         }
-        if (this.deferSetSelection != null) {
-          this.interactionManager.setSelection(...this.deferSetSelection);
-          this.deferSetSelection = undefined;
-        }
+        this.flushDeferredLineState();
       }, 150);
     }
   }
@@ -1556,6 +1603,7 @@ export class FileDiff<
 
   private handleEditSessionRender = (): void => {
     this.rerender();
+    this.flushDeferredLineState();
   };
 
   private removeRenderedCode(): void {

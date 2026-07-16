@@ -991,6 +991,11 @@ export interface DiffsComponentOptions extends BaseCodeOptions {
   lineHoverHighlight?: 'disabled' | 'both' | 'number' | 'line';
 }
 
+export interface EditorActiveLineOptions {
+  lineNumberOnly?: boolean;
+  side?: SelectionSide;
+}
+
 export interface DiffsBaseComponent {
   readonly type: 'file' | 'file-diff' | 'unresolved-file';
   readonly top?: number;
@@ -1020,6 +1025,11 @@ export interface DiffsEditableComponent<
 > extends DiffsBaseComponent {
   /** @internal Return the current file when this component renders one. */
   __getCurrentFile?: () => FileContents | undefined;
+  /** @internal Keep the editor caret decoration separate from line selection. */
+  setEditorActiveLine: (
+    lineNumber: number | null,
+    options?: EditorActiveLineOptions
+  ) => void;
   /**
    * Return the position and height of a one-based line relative to this component.
    * The host uses it to scroll to virtualized lines before their DOM nodes exist.

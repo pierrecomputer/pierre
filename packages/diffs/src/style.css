@@ -341,29 +341,23 @@
   [data-editor-overlay] {
     /* Pre-fill css variables for appropriate up-mixing */
     --diffs-computed-decoration-bg: var(--diffs-bg);
-    --diffs-computed-diff-line-bg: var(--diffs-bg);
-    --diffs-computed-selected-line-bg: var(--diffs-bg);
+    --diffs-computed-diff-line-bg: var(--diffs-computed-decoration-bg);
+    --diffs-computed-selected-line-bg: var(--diffs-computed-diff-line-bg);
+    --diffs-computed-editor-active-line-bg: var(
+      --diffs-computed-selected-line-bg
+    );
+    --diffs-computed-hovered-line-bg: var(
+      --diffs-computed-editor-active-line-bg
+    );
+
+    --diffs-hover-mix-target: var(
+      --diffs-bg-hover-override,
+      var(--diffs-mixer)
+    );
+    --diffs-line-bg: var(--diffs-computed-hovered-line-bg);
 
     color: var(--diffs-fg);
     background-color: var(--diffs-line-bg, var(--diffs-bg));
-
-    @media (pointer: fine) {
-      &:where([data-hovered]) {
-        --diffs-computed-hovered-line-bg: light-dark(
-          color-mix(
-            in lab,
-            var(--diffs-computed-selected-line-bg) 97%,
-            var(--diffs-bg-hover-override, var(--diffs-mixer))
-          ),
-          color-mix(
-            in lab,
-            var(--diffs-computed-selected-line-bg) 91%,
-            var(--diffs-bg-hover-override, var(--diffs-mixer))
-          )
-        );
-        --diffs-line-bg: var(--diffs-computed-hovered-line-bg, inherit);
-      }
-    }
   }
 
   [data-line],
@@ -382,26 +376,7 @@
         --mix-deco-dark: 78%;
       }
 
-      @media (pointer: fine) {
-        &[data-hovered]:not([data-selected-line]) {
-          --mix-deco-light: 85%;
-          --mix-deco-dark: 85%;
-        }
-
-        &[data-hovered]:not(
-            [data-selected-line]
-          )[data-decoration-bg-depth='2'] {
-          --mix-deco-light: 83%;
-          --mix-deco-dark: 83%;
-        }
-
-        &[data-hovered]:not(
-            [data-selected-line]
-          )[data-decoration-bg-depth='3'] {
-          --mix-deco-light: 81%;
-          --mix-deco-dark: 81%;
-        }
-      }
+      --diffs-hover-mix-target: var(--diffs-decoration-bg);
 
       --diffs-computed-decoration-bg: light-dark(
         color-mix(
@@ -415,12 +390,6 @@
           var(--diffs-decoration-bg)
         )
       );
-      /* Lets up-select all lines */
-      --diffs-computed-diff-line-bg: var(--diffs-computed-decoration-bg);
-      --diffs-computed-selected-line-bg: var(--diffs-computed-decoration-bg);
-
-      /* Apply the appropriately computed bg line color */
-      --diffs-line-bg: var(--diffs-computed-decoration-bg);
     }
   }
 
@@ -428,9 +397,7 @@
   [data-gutter-buffer='annotation'] {
     --diffs-annotation-bg: var(--diffs-bg-context);
     --diffs-computed-decoration-bg: var(--diffs-annotation-bg);
-    --diffs-computed-diff-line-bg: var(--diffs-annotation-bg);
-    --diffs-computed-selected-line-bg: var(--diffs-annotation-bg);
-    --diffs-line-bg: var(--diffs-annotation-bg);
+    --diffs-hover-mix-target: var(--diffs-computed-editor-active-line-bg);
   }
 
   [data-merge-conflict-actions],
@@ -440,9 +407,7 @@
   [data-merge-conflict='marker-base'],
   [data-merge-conflict='marker-separator'] {
     --diffs-computed-decoration-bg: var(--diffs-bg-context);
-    --diffs-computed-diff-line-bg: var(--diffs-bg-context);
-    --diffs-computed-selected-line-bg: var(--diffs-bg-context);
-    --diffs-line-bg: var(--diffs-bg-context);
+    --diffs-hover-mix-target: var(--diffs-computed-editor-active-line-bg);
   }
 
   [data-gutter-buffer='merge-conflict-marker-start'],
@@ -459,9 +424,7 @@
         var(--conflict-bg-current-header-override, var(--diffs-addition-base))
       )
     );
-    --diffs-computed-diff-line-bg: var(--diffs-computed-decoration-bg);
-    --diffs-computed-selected-line-bg: var(--diffs-computed-decoration-bg);
-    --diffs-line-bg: var(--diffs-computed-decoration-bg);
+    --diffs-hover-mix-target: var(--diffs-computed-editor-active-line-bg);
   }
 
   [data-gutter-buffer='merge-conflict-marker-end'],
@@ -478,17 +441,13 @@
         var(--conflict-bg-incoming-header-override, var(--diffs-modified-base))
       )
     );
-    --diffs-computed-diff-line-bg: var(--diffs-computed-decoration-bg);
-    --diffs-computed-selected-line-bg: var(--diffs-computed-decoration-bg);
-    --diffs-line-bg: var(--diffs-computed-decoration-bg);
+    --diffs-hover-mix-target: var(--diffs-computed-editor-active-line-bg);
   }
 
   [data-has-merge-conflict] [data-line-annotation],
   [data-has-merge-conflict] [data-gutter-buffer='annotation'] {
     --diffs-computed-decoration-bg: var(--diffs-bg);
-    --diffs-computed-diff-line-bg: var(--diffs-bg);
-    --diffs-computed-selected-line-bg: var(--diffs-bg);
-    --diffs-line-bg: var(--diffs-bg);
+    --diffs-hover-mix-target: var(--diffs-computed-editor-active-line-bg);
   }
 
   /* We are using where here to not affect the nesting impacts later on for
@@ -517,13 +476,7 @@
           --diffs-bg-deletion-override,
           var(--diffs-deletion-base)
         );
-
-        @media (pointer: fine) {
-          &[data-hovered] {
-            --mix-light: 80%;
-            --mix-dark: 75%;
-          }
-        }
+        --diffs-hover-mix-target: var(--diffs-diff-line-mix-target);
 
         &:where([data-gutter-buffer], [data-column-number]) {
           color: var(
@@ -549,9 +502,6 @@
             var(--diffs-diff-line-mix-target)
           )
         );
-
-        --diffs-computed-selected-line-bg: var(--diffs-computed-diff-line-bg);
-        --diffs-line-bg: var(--diffs-computed-diff-line-bg, inherit);
       }
 
       &[data-line-type='change-addition'] {
@@ -559,13 +509,7 @@
           --diffs-bg-addition-override,
           var(--diffs-addition-base)
         );
-
-        @media (pointer: fine) {
-          &[data-hovered] {
-            --mix-light: 80%;
-            --mix-dark: 70%;
-          }
-        }
+        --diffs-hover-mix-target: var(--diffs-diff-line-mix-target);
 
         &:where([data-gutter-buffer], [data-column-number]) {
           color: var(
@@ -591,9 +535,6 @@
             var(--diffs-diff-line-mix-target)
           )
         );
-
-        --diffs-computed-selected-line-bg: var(--diffs-computed-diff-line-bg);
-        --diffs-line-bg: var(--diffs-computed-diff-line-bg, inherit);
       }
 
       &[data-merge-conflict='current'] {
@@ -601,6 +542,7 @@
           --conflict-bg-current-override,
           var(--diffs-addition-base)
         );
+        --diffs-hover-mix-target: var(--diffs-diff-line-mix-target);
 
         &:where([data-gutter-buffer], [data-column-number]) {
           color: var(
@@ -614,13 +556,6 @@
           );
         }
 
-        @media (pointer: fine) {
-          &[data-hovered] {
-            --mix-light: 80%;
-            --mix-dark: 70%;
-          }
-        }
-
         --diffs-computed-diff-line-bg: light-dark(
           color-mix(
             in lab,
@@ -633,9 +568,6 @@
             var(--diffs-diff-line-mix-target)
           )
         );
-
-        --diffs-computed-selected-line-bg: var(--diffs-computed-diff-line-bg);
-        --diffs-line-bg: var(--diffs-computed-diff-line-bg, inherit);
       }
 
       &[data-merge-conflict='incoming'] {
@@ -643,6 +575,7 @@
           --conflict-bg-incoming-override,
           var(--diffs-modified-base)
         );
+        --diffs-hover-mix-target: var(--diffs-diff-line-mix-target);
 
         &:where([data-gutter-buffer], [data-column-number]) {
           color: var(--diffs-modified-base);
@@ -653,13 +586,6 @@
           );
         }
 
-        @media (pointer: fine) {
-          &[data-hovered] {
-            --mix-light: 80%;
-            --mix-dark: 70%;
-          }
-        }
-
         --diffs-computed-diff-line-bg: light-dark(
           color-mix(
             in lab,
@@ -672,9 +598,6 @@
             var(--diffs-diff-line-mix-target)
           )
         );
-
-        --diffs-computed-selected-line-bg: var(--diffs-computed-diff-line-bg);
-        --diffs-line-bg: var(--diffs-computed-diff-line-bg, inherit);
       }
     }
   }
@@ -694,6 +617,7 @@
       --diffs-bg-selection-override,
       var(--diffs-selection-base)
     );
+    --diffs-selection-emphasis-mix-target: var(--diffs-selection-mix-target);
 
     &:where([data-editor-overlay]),
     &:where(
@@ -705,37 +629,37 @@
       )[data-selected-line] {
       --mix-selection-light: 82%;
       --mix-selection-dark: 75%;
-
-      @media (pointer: fine) {
-        &[data-hovered]:not(
-            [data-merge-conflict],
-            [data-line-type='change-addition'],
-            [data-line-type='change-deletion']
-          ) {
-          --mix-selection-light: 75%;
-          --mix-selection-dark: 70%;
-        }
-      }
+      --diffs-hover-mix-target: var(--diffs-selection-mix-target);
     }
 
-    &:where([data-gutter-buffer], [data-column-number])[data-selected-line] {
+    &:where(
+      [data-gutter-buffer][data-selected-line],
+      [data-column-number]:is([data-selected-line], [data-editor-active-line])
+    ) {
       --mix-selection-light: 75%;
       --mix-selection-dark: 60%;
       --diffs-selection-mix-target: var(
         --diffs-bg-selection-number-override,
         var(--diffs-selection-base)
       );
+      --diffs-hover-mix-target: var(--diffs-selection-mix-target);
+    }
 
-      @media (pointer: fine) {
-        &[data-hovered]:not(
-            [data-merge-conflict],
-            [data-line-type='change-addition'],
-            [data-line-type='change-deletion']
-          ) {
-          --mix-selection-light: 70%;
-          --mix-selection-dark: 55%;
-        }
-      }
+    /* Keep the light-theme emphasis on a selected changed line tied to its
+     * resolved diff and selection colors. */
+    &:where([data-line][data-selected-line]):is(
+        [data-line-type='change-addition'],
+        [data-line-type='change-deletion']
+      ) {
+      --diffs-selection-emphasis-mix-target: light-dark(
+        color-mix(
+          in lab,
+          var(--diffs-diff-line-mix-target, var(--diffs-selection-mix-target))
+            var(--mix-selection-light),
+          var(--diffs-selection-mix-target)
+        ),
+        var(--diffs-selection-mix-target)
+      );
     }
 
     &:where([data-editor-overlay]),
@@ -752,15 +676,48 @@
           var(--diffs-selection-mix-target)
         )
       );
-      --diffs-line-bg: var(--diffs-computed-selected-line-bg, inherit);
     }
   }
 
-  [data-gutter-buffer],
-  [data-column-number] {
-    &[data-selected-line] {
-      color: var(--diffs-selection-number-fg);
+  /* The editor's active line sits above selection, but hover remains the final
+   * line-background treatment. */
+  [data-line][data-editor-active-line],
+  [data-column-number][data-editor-active-line] {
+    --diffs-computed-editor-active-line-bg: color-mix(
+      in lab,
+      var(--diffs-computed-selected-line-bg)
+        var(--diffs-editor-active-line-source-mix, 100%),
+      var(--diffs-selection-emphasis-mix-target)
+    );
+  }
+
+  @media (pointer: fine) {
+    [data-line][data-hovered],
+    [data-gutter-buffer][data-hovered],
+    [data-column-number][data-hovered],
+    [data-line-annotation][data-hovered],
+    [data-no-newline][data-hovered],
+    [data-merge-conflict][data-hovered],
+    [data-merge-conflict-actions][data-hovered],
+    [data-editor-overlay][data-hovered] {
+      --diffs-computed-hovered-line-bg: light-dark(
+        color-mix(
+          in lab,
+          var(--diffs-computed-editor-active-line-bg) 97%,
+          var(--diffs-hover-mix-target)
+        ),
+        color-mix(
+          in lab,
+          var(--diffs-computed-editor-active-line-bg) 91%,
+          var(--diffs-hover-mix-target)
+        )
+      );
     }
+  }
+
+  [data-gutter-buffer][data-selected-line],
+  [data-column-number]:is([data-selected-line], [data-editor-active-line]) {
+    color: var(--diffs-selection-number-fg);
   }
 
   [data-no-newline] {
