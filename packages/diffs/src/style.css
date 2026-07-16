@@ -91,10 +91,7 @@
     );
     --diffs-bg-buffer: var(
       --diffs-bg-buffer-override,
-      light-dark(
-        color-mix(in lab, var(--diffs-bg) 92%, var(--diffs-mixer)),
-        color-mix(in lab, var(--diffs-bg) 92%, var(--diffs-mixer))
-      )
+      color-mix(in lab, var(--diffs-bg) 92%, var(--diffs-mixer))
     );
     --diffs-bg-context: var(
       --diffs-bg-context-override,
@@ -121,10 +118,7 @@
     --diffs-fg: light-dark(var(--diffs-light, #000), var(--diffs-dark, #fff));
     --diffs-fg-number: var(
       --diffs-fg-number-override,
-      light-dark(
-        color-mix(in lab, var(--diffs-fg) 65%, var(--diffs-bg)),
-        color-mix(in lab, var(--diffs-fg) 65%, var(--diffs-bg))
-      )
+      color-mix(in lab, var(--diffs-fg) 65%, var(--diffs-bg))
     );
     --diffs-fg-conflict-marker: var(
       --diffs-fg-conflict-marker-override,
@@ -213,6 +207,21 @@
     color: var(--diffs-fg);
   }
 
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  button {
+    appearance: none;
+    border-style: none;
+    background-color: transparent;
+    font: inherit;
+    cursor: pointer;
+    padding: 0;
+  }
+
   /* NOTE(mdo): Some semantic HTML elements (e.g. `pre`, `code`) have default
  * user-agent styles. These must be overridden to use our custom styles. */
   pre,
@@ -233,12 +242,6 @@
 
   code {
     contain: content;
-  }
-
-  *,
-  *::before,
-  *::after {
-    box-sizing: border-box;
   }
 
   [data-icon-sprite] {
@@ -524,22 +527,6 @@
             var(--diffs-deletion-base)
           );
         }
-
-        --diffs-computed-diff-line-bg: light-dark(
-          color-mix(
-            in lab,
-            var(--diffs-computed-decoration-bg) var(--mix-light),
-            var(--diffs-diff-line-mix-target)
-          ),
-          color-mix(
-            in lab,
-            var(--diffs-computed-decoration-bg) var(--mix-dark),
-            var(--diffs-diff-line-mix-target)
-          )
-        );
-
-        --diffs-computed-selected-line-bg: var(--diffs-computed-diff-line-bg);
-        --diffs-line-bg: var(--diffs-computed-diff-line-bg, inherit);
       }
 
       &[data-line-type='change-addition'] {
@@ -566,22 +553,6 @@
             var(--diffs-addition-base)
           );
         }
-
-        --diffs-computed-diff-line-bg: light-dark(
-          color-mix(
-            in lab,
-            var(--diffs-computed-decoration-bg) var(--mix-light),
-            var(--diffs-diff-line-mix-target)
-          ),
-          color-mix(
-            in lab,
-            var(--diffs-computed-decoration-bg) var(--mix-dark),
-            var(--diffs-diff-line-mix-target)
-          )
-        );
-
-        --diffs-computed-selected-line-bg: var(--diffs-computed-diff-line-bg);
-        --diffs-line-bg: var(--diffs-computed-diff-line-bg, inherit);
       }
 
       &[data-merge-conflict='current'] {
@@ -608,22 +579,6 @@
             --mix-dark: 70%;
           }
         }
-
-        --diffs-computed-diff-line-bg: light-dark(
-          color-mix(
-            in lab,
-            var(--diffs-computed-decoration-bg) var(--mix-light),
-            var(--diffs-diff-line-mix-target)
-          ),
-          color-mix(
-            in lab,
-            var(--diffs-computed-decoration-bg) var(--mix-dark),
-            var(--diffs-diff-line-mix-target)
-          )
-        );
-
-        --diffs-computed-selected-line-bg: var(--diffs-computed-diff-line-bg);
-        --diffs-line-bg: var(--diffs-computed-diff-line-bg, inherit);
       }
 
       &[data-merge-conflict='incoming'] {
@@ -647,7 +602,12 @@
             --mix-dark: 70%;
           }
         }
+      }
 
+      &[data-line-type='change-deletion'],
+      &[data-line-type='change-addition'],
+      &[data-merge-conflict='current'],
+      &[data-merge-conflict='incoming'] {
         --diffs-computed-diff-line-bg: light-dark(
           color-mix(
             in lab,
@@ -1538,14 +1498,7 @@
   }
 
   [data-merge-conflict-action] {
-    appearance: none;
-    border: 0;
-    background: transparent;
     color: var(--diffs-fg-number);
-    font: inherit;
-    font-style: normal;
-    cursor: pointer;
-    padding: 0;
   }
 
   [data-merge-conflict-action]:hover {
@@ -1663,12 +1616,7 @@
 
   /* Sticky positioning has a composite costs, so we should _only_ pay it if we
    * need to */
-  [data-overflow='scroll'] [data-annotation-content] {
-    position: sticky;
-    width: var(--diffs-column-content-width, auto);
-    left: var(--diffs-column-number-width, 0);
-  }
-
+  [data-overflow='scroll'] [data-annotation-content],
   [data-overflow='scroll'] [data-merge-conflict-actions-content] {
     position: sticky;
     width: var(--diffs-column-content-width, auto);
@@ -1696,13 +1644,9 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    border: none;
-    appearance: none;
     width: 1lh;
     height: 1lh;
     margin-right: calc((1lh - 1ch) * -1);
-    padding: 0;
-    cursor: pointer;
     font-size: var(--diffs-font-size, 13px);
     line-height: var(--diffs-line-height, 20px);
     border-radius: 4px;
@@ -1735,8 +1679,7 @@
     background-color: var(--diffs-decoration-bar-color, transparent);
     /* overflow: clip visible; */
     box-sizing: content-box;
-    border-left: 2px solid var(--diffs-bg);
-    border-right: 2px solid var(--diffs-bg);
+    border-inline: 2px solid var(--diffs-bg);
 
     [data-decoration-bar-depth='1'] & {
       background-color: color-mix(
