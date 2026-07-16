@@ -4,7 +4,7 @@ import { File } from '../src/components/File';
 import { DEFAULT_THEMES } from '../src/constants';
 import { Editor, type IStateStorage } from '../src/editor';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
-import type { EditorState, FileContents } from '../src/types';
+import type { EditorState, FileContents, LineRange } from '../src/types';
 import { installDom, wait, waitFor } from './domHarness';
 
 afterAll(async () => {
@@ -15,6 +15,21 @@ const ORIGINAL_FILE: FileContents = {
   name: 'persisted.ts',
   contents: 'alpha\nbravo\n',
   cacheKey: 'persisted.ts',
+};
+
+const FOLDABLE_FILE: FileContents = {
+  name: 'foldable.ts',
+  contents: [
+    'function outer() {',
+    '  const before = 1;',
+    '  if (before) {',
+    '    console.log(before);',
+    '  }',
+    '  return before;',
+    '}',
+    'const after = true;',
+  ].join('\n'),
+  cacheKey: 'foldable.ts',
 };
 
 interface AttachedFile {
@@ -96,7 +111,110 @@ function savedCaret(character: number): EditorState {
   };
 }
 
+function foldToggle(
+  attached: AttachedFile,
+  oneIndexedLine: number
+): HTMLButtonElement {
+  const toggle = attached.container.shadowRoot?.querySelector(
+    `[data-column-number="${oneIndexedLine}"] [data-fold-toggle]`
+  );
+  if (!(toggle instanceof HTMLButtonElement)) {
+    throw new Error(`no fold toggle found for line ${oneIndexedLine}`);
+  }
+  return toggle;
+}
+
+function renderedLineNumbers(attached: AttachedFile): number[] {
+  return [
+    ...(attached.container.shadowRoot?.querySelectorAll<HTMLElement>(
+      '[data-content] > [data-line]'
+    ) ?? []),
+  ].map((line) => Number(line.dataset.line));
+}
+
+async function waitForFoldRanges(
+  editor: Editor<undefined>,
+  expected: LineRange[]
+): Promise<void> {
+  await waitFor(
+    () =>
+      JSON.stringify(editor.getState().foldRanges) === JSON.stringify(expected)
+  );
+  expect(editor.getState().foldRanges).toEqual(expected);
+}
+
 describe('Editor persisted state lifecycle', () => {
+  test('restores nested folds after switching files', async () => {
+    const dom = installDom();
+    const editor = new Editor<undefined>({ persistState: true });
+    let attached: AttachedFile | undefined;
+    const nestedFold = { startLine: 2, endLine: 3 };
+    const outerFold = { startLine: 0, endLine: 5 };
+
+    try {
+      attached = await attachFile(editor, { ...FOLDABLE_FILE });
+
+      foldToggle(attached, 3).click();
+      await waitForFoldRanges(editor, [nestedFold]);
+      foldToggle(attached, 1).click();
+      await waitForFoldRanges(editor, [outerFold, nestedFold]);
+
+      await renderFile(editor, attached, {
+        name: 'next.ts',
+        contents: 'next\n',
+        cacheKey: 'next.ts',
+      });
+      await renderFile(editor, attached, { ...FOLDABLE_FILE });
+
+      await waitForFoldRanges(editor, [outerFold, nestedFold]);
+      expect(renderedLineNumbers(attached)).toEqual([1, 7, 8]);
+
+      foldToggle(attached, 1).click();
+      await waitForFoldRanges(editor, [nestedFold]);
+      expect(renderedLineNumbers(attached)).toEqual([1, 2, 3, 5, 6, 7, 8]);
+    } finally {
+      editor.cleanUp();
+      attached?.file.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test('a pending async restore cannot overwrite a newer fold toggle', async () => {
+    const dom = installDom();
+    const pendingState = createDeferred<EditorState | undefined>();
+    const storage: IStateStorage = {
+      get() {
+        return pendingState.promise;
+      },
+      set() {},
+    };
+    const editor = new Editor<undefined>({
+      persistState: true,
+      persistStateStorage: storage,
+    });
+    let attached: AttachedFile | undefined;
+    const nestedFold = { startLine: 2, endLine: 3 };
+
+    try {
+      attached = await attachFile(editor, { ...FOLDABLE_FILE });
+
+      foldToggle(attached, 3).click();
+      await waitForFoldRanges(editor, [nestedFold]);
+
+      pendingState.resolve({
+        foldRanges: [{ startLine: 0, endLine: 5 }],
+      });
+      await wait(0);
+
+      expect(editor.getState().foldRanges).toEqual([nestedFold]);
+      expect(renderedLineNumbers(attached)).toEqual([1, 2, 3, 5, 6, 7, 8]);
+    } finally {
+      editor.cleanUp();
+      attached?.file.cleanUp();
+      dom.cleanup();
+    }
+  });
+
   test('an async restore survives an unchanged file rerender', async () => {
     const dom = installDom();
     const pendingState = createDeferred<EditorState | undefined>();

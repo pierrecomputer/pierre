@@ -65,6 +65,108 @@
   box-shadow: inset 0 0 0 1px var(--diffs-editor-line-highlight-border);
 }
 
+[data-code][data-editor-folding] {
+  --diffs-editor-fold-gap: 4px;
+  --diffs-editor-fold-width: 16px;
+}
+
+[data-code][data-editor-folding] [data-column-number] {
+  position: relative;
+  padding-right: calc(
+    var(--diffs-editor-fold-width) + var(--diffs-editor-fold-gap)
+  );
+}
+
+[data-file][data-disable-line-numbers]
+  [data-code][data-editor-folding]
+  [data-column-number] {
+  min-width: var(--diffs-editor-fold-width);
+  padding-right: var(--diffs-editor-fold-width);
+}
+
+[data-fold] {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: var(--diffs-editor-fold-width);
+  height: 1lh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 2;
+}
+
+[data-fold-toggle] {
+  all: unset;
+  box-sizing: border-box;
+  width: var(--diffs-editor-fold-width);
+  height: 1lh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--diffs-fg-number);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: auto;
+  transition: opacity 0.2s ease;
+}
+
+[data-fold-toggle][data-folded],
+[data-gutter]:hover [data-fold-toggle],
+[data-fold]:hover [data-fold-toggle],
+[data-fold-toggle]:focus-visible {
+  opacity: 0.5;
+}
+
+[data-fold] [data-fold-toggle]:hover,
+[data-fold] [data-fold-toggle]:focus-visible {
+  opacity: 0.75;
+}
+
+[data-fold] [data-fold-toggle]:focus-visible {
+  outline: 1px solid currentColor;
+  outline-offset: -2px;
+}
+
+[data-fold-indicator] {
+  display: inline-flex;
+  align-items: center;
+  height: 1lh;
+  margin-inline-start: 1ch;
+  vertical-align: top;
+  color: var(--diffs-fg);
+  user-select: none;
+}
+
+[data-fold-ellipsis] {
+  all: unset;
+  box-sizing: border-box;
+  width: 18px;
+  height: calc(1lh - 4px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  color: var(--diffs-fg-number);
+  background-color: color-mix(in lab, var(--diffs-fg) 8%, transparent);
+  cursor: pointer;
+  transition:
+    color 80ms ease,
+    background-color 80ms ease;
+}
+
+[data-fold-ellipsis]:hover,
+[data-fold-ellipsis]:focus-visible {
+  color: var(--diffs-fg);
+  background-color: color-mix(in lab, var(--diffs-fg) 14%, transparent);
+}
+
+[data-fold-ellipsis]:focus-visible {
+  outline: 1px solid currentColor;
+  outline-offset: 1px;
+}
+
 [data-editor-overlay] {
   display: contents;
 }

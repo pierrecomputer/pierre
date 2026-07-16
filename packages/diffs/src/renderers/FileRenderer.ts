@@ -21,6 +21,7 @@ import type {
   FileHeaderRenderMode,
   HighlightedToken,
   LineAnnotation,
+  LineRange,
   RenderedFileASTCache,
   RenderFileOptions,
   RenderFileResult,
@@ -110,6 +111,7 @@ export class FileRenderer<LAnnotation = undefined> {
   private renderCache: RenderedFileASTCache | undefined;
   private computedLang: SupportedLanguages = 'text';
   private lineAnnotations: AnnotationLineMap<LAnnotation> = {};
+  private foldRanges: LineRange[] = [];
   private lineCache: LineCache | undefined;
   private textDocumentCache = new WeakMap<FileContents, DiffsTextDocument>();
 
@@ -144,6 +146,10 @@ export class FileRenderer<LAnnotation = undefined> {
     }
   }
 
+  public setFoldRanges(ranges: LineRange[]): void {
+    this.foldRanges = ranges;
+  }
+
   public cleanUp(): void {
     this.recycle();
     this.workerManager = undefined;
@@ -154,6 +160,7 @@ export class FileRenderer<LAnnotation = undefined> {
     this.clearRenderCache();
     this.highlighter = undefined;
     this.workerManager?.cleanUpTasks(this);
+    this.foldRanges = [];
     this.lineCache = undefined;
     // The edited-document cache is only coherent alongside the render cache
     // it patched. Keeping it across a recycle would let getLineCount report
@@ -635,11 +642,35 @@ export class FileRenderer<LAnnotation = undefined> {
       rowCount++;
     }
 
+    let low = 0;
+    let high = this.foldRanges.length;
+    while (low < high) {
+      const middle = low + ((high - low) >> 1);
+      if (this.foldRanges[middle].endLine < renderRange.startingLine) {
+        low = middle + 1;
+      } else {
+        high = middle;
+      }
+    }
+    let foldedRangeIndex = low;
     for (
       let lineIndex = renderRange.startingLine;
       lineIndex < endLine;
       lineIndex++
     ) {
+      while (this.foldRanges[foldedRangeIndex]?.endLine < lineIndex) {
+        foldedRangeIndex++;
+      }
+      const foldedRange = this.foldRanges[foldedRangeIndex];
+      if (
+        foldedRange !== undefined &&
+        lineIndex >= foldedRange.startLine &&
+        lineIndex <= foldedRange.endLine
+      ) {
+        lineIndex = foldedRange.endLine;
+        continue;
+      }
+
       const lineNumber = lineIndex + 1;
 
       // Sparse array - directly indexed by lineIndex

@@ -33,6 +33,7 @@ import type {
   FileContents,
   HighlightedToken,
   LineAnnotation,
+  LineRange,
   PostRenderPhase,
   PrePropertiesConfig,
   RenderFileMetadata,
@@ -176,6 +177,7 @@ export class File<
   public file: FileContents | undefined;
   protected renderRange: RenderRange | undefined;
   protected enabled = true;
+  protected foldRanges: LineRange[] = [];
 
   protected editor: DiffsEditor<LAnnotation> | undefined;
 
@@ -212,6 +214,33 @@ export class File<
 
   public __getCurrentFile(): FileContents | undefined {
     return this.file;
+  }
+
+  public __setFoldRanges(ranges: LineRange[]): void {
+    if (!this.updateFoldRanges(ranges)) {
+      return;
+    }
+    if (this.enabled && this.file != null) {
+      this.rerender();
+    }
+  }
+
+  protected updateFoldRanges(ranges: LineRange[]): boolean {
+    if (
+      ranges.length === this.foldRanges.length &&
+      ranges.every((range, index) => {
+        const previous = this.foldRanges[index];
+        return (
+          previous?.startLine === range.startLine &&
+          previous.endLine === range.endLine
+        );
+      })
+    ) {
+      return false;
+    }
+    this.foldRanges = ranges.map((range) => ({ ...range }));
+    this.fileRenderer.setFoldRanges(this.foldRanges);
+    return true;
   }
 
   public onThemeChange(): void {
@@ -373,6 +402,7 @@ export class File<
       this.workerManager = undefined;
       this.file = undefined;
     }
+    this.foldRanges = [];
 
     this.enabled = false;
 

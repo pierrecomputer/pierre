@@ -1053,10 +1053,12 @@ const file: FileContents | undefined = editor.getFile();
 // Full document text, or '' when nothing is attached.
 const text: string = editor.getText();
 
-// Snapshot selections and scroll position for persistence or remount restore.
+// Snapshot selections, active folds, and scroll position for persistence or
+// remount restore.
 const state: EditorState = editor.getState();
 // EditorState = {
 //   selections?: EditorSelection[];
+//   foldRanges?: LineRange[]; // zero-based; standalone closers stay visible
 //   view?: { scrollLeft: number; scrollTop: number };
 // }
 

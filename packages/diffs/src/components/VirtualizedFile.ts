@@ -1,8 +1,10 @@
 import { DEFAULT_VIRTUAL_FILE_METRICS } from '../constants';
+import { LineRangeIndex } from '../editor/folding';
 import type {
   DiffsTextDocument,
   FileContents,
   LineAnnotation,
+  LineRange,
   NumericScrollLineAnchor,
   PendingCodeViewLayoutReset,
   RenderRange,
@@ -83,6 +85,7 @@ export class VirtualizedFile<
   private layoutDirty = true;
   private forceRenderOverride: true | undefined;
   private currentCollapsed: boolean | undefined;
+  private editorFoldedLineIndex = new LineRangeIndex();
 
   constructor(
     options: FileOptions<LAnnotation> | undefined,
@@ -135,6 +138,18 @@ export class VirtualizedFile<
   // If not cached and hasMetadataLine is true, adds lineHeight for the
   // metadata.
   public getLineHeight(lineIndex: number, hasMetadataLine = false): number {
+    if (this.editorFoldedLineIndex.isHidden(lineIndex)) {
+      return 0;
+    }
+    return this.getVisibleLineHeight(lineIndex, hasMetadataLine);
+  }
+
+  // Read a row height after the caller has already established that the line
+  // is visible, avoiding another folded-range lookup inside layout scans.
+  private getVisibleLineHeight(
+    lineIndex: number,
+    hasMetadataLine = false
+  ): number {
     const cached = this.cache.heights.get(lineIndex);
     if (cached != null) {
       return cached;
@@ -178,6 +193,30 @@ export class VirtualizedFile<
     }
 
     super.setThemeType(themeType);
+  }
+
+  public override __setFoldRanges(ranges: LineRange[]): void {
+    if (!this.updateFoldRanges(ranges)) {
+      return;
+    }
+
+    this.editorFoldedLineIndex = new LineRangeIndex(this.foldRanges);
+    this.forceRenderOverride = true;
+    this.invalidateEditorFoldingLayout();
+    if (this.enabled && this.file != null) {
+      this.virtualizer.instanceChanged(this, true);
+    }
+  }
+
+  // Folding only changes which rows participate in layout. Preserve measured
+  // wrap/annotation heights and rebuild the derived total and checkpoints.
+  private invalidateEditorFoldingLayout(): void {
+    this.layoutDirty = true;
+    this.cache.checkpoints.length = 0;
+    this.renderRange = undefined;
+    if (this.isSimpleMode()) {
+      this.computeApproximateSize();
+    }
   }
 
   private resetLayoutCache(recompute = false, resetRenderRange = true): void {
@@ -371,6 +410,16 @@ export class VirtualizedFile<
     top += this.cache.fileAnnotationHeight;
 
     if (overflow === 'scroll' && !this.hasLineAnnotations()) {
+      if (this.foldRanges.length > 0) {
+        const hiddenBefore =
+          this.editorFoldedLineIndex.hiddenCountBefore(clampedLineIndex);
+        return {
+          top: top + (clampedLineIndex - hiddenBefore) * lineHeight,
+          height: this.editorFoldedLineIndex.isHidden(clampedLineIndex)
+            ? 0
+            : lineHeight,
+        };
+      }
       return {
         top: top + clampedLineIndex * lineHeight,
         height: lineHeight,
@@ -380,12 +429,22 @@ export class VirtualizedFile<
     const checkpoint =
       this.getLayoutCheckpointBeforeLineIndex(clampedLineIndex);
     top = checkpoint?.top ?? top;
-    for (
-      let lineIndex = checkpoint?.lineIndex ?? 0;
-      lineIndex < clampedLineIndex;
-      lineIndex++
-    ) {
-      top += this.getLineHeight(lineIndex, false);
+    let lineIndex = checkpoint?.lineIndex ?? 0;
+    const lineAfterStartingFold =
+      this.editorFoldedLineIndex.lineAfterHiddenRange(lineIndex);
+    if (lineAfterStartingFold != null) {
+      lineIndex = Math.min(lineAfterStartingFold, clampedLineIndex);
+    }
+    let foldedRangeIndex = this.getFoldRangeIndexAtOrAfter(lineIndex);
+    while (lineIndex < clampedLineIndex) {
+      const foldedRange = this.foldRanges[foldedRangeIndex];
+      if (foldedRange != null && lineIndex >= foldedRange.startLine) {
+        lineIndex = Math.min(foldedRange.endLine + 1, clampedLineIndex);
+        foldedRangeIndex++;
+        continue;
+      }
+      top += this.getVisibleLineHeight(lineIndex);
+      lineIndex++;
     }
 
     return {
@@ -441,6 +500,50 @@ export class VirtualizedFile<
     // multiply our way to the the correct value
     if (overflow === 'scroll' && !this.hasLineAnnotations()) {
       const { lineHeight } = this.metrics;
+      if (this.foldRanges.length > 0) {
+        const firstVisibleLineIndex =
+          this.editorFoldedLineIndex.nearestVisibleLine(
+            firstRenderedLineIndex,
+            'down',
+            lastLineIndex + 1
+          );
+        const lastVisibleLineIndex =
+          this.editorFoldedLineIndex.nearestVisibleLine(
+            lastRenderedLineIndex,
+            'up',
+            lastLineIndex + 1
+          );
+        if (
+          firstVisibleLineIndex == null ||
+          lastVisibleLineIndex == null ||
+          firstVisibleLineIndex > lastVisibleLineIndex
+        ) {
+          return undefined;
+        }
+
+        const firstVisibleIndex =
+          firstVisibleLineIndex -
+          this.editorFoldedLineIndex.hiddenCountBefore(firstVisibleLineIndex);
+        const firstRenderedLineTop =
+          headerRegion + fileAnnotationHeight + firstVisibleIndex * lineHeight;
+        const deltaLineCount = Math.max(
+          Math.ceil((localViewportTop - firstRenderedLineTop) / lineHeight),
+          0
+        );
+        const visibleIndex = firstVisibleIndex + deltaLineCount;
+        const lineIndex = this.editorFoldedLineIndex.lineAtVisibleIndex(
+          visibleIndex,
+          lastLineIndex + 1
+        );
+        if (lineIndex == null || lineIndex > lastVisibleLineIndex) {
+          return undefined;
+        }
+
+        return {
+          lineNumber: lineIndex + 1,
+          top: headerRegion + fileAnnotationHeight + visibleIndex * lineHeight,
+        };
+      }
       const firstRenderedLineTop =
         headerRegion +
         (firstRenderedLineIndex === 0
@@ -467,18 +570,28 @@ export class VirtualizedFile<
       (firstRenderedLineIndex === 0
         ? fileAnnotationHeight
         : this.renderRange.bufferBefore);
-    for (
-      let lineIndex = firstRenderedLineIndex;
-      lineIndex <= lastRenderedLineIndex;
-      lineIndex++
-    ) {
+    let lineIndex = firstRenderedLineIndex;
+    const lineAfterStartingFold =
+      this.editorFoldedLineIndex.lineAfterHiddenRange(lineIndex);
+    if (lineAfterStartingFold != null) {
+      lineIndex = lineAfterStartingFold;
+    }
+    let foldedRangeIndex = this.getFoldRangeIndexAtOrAfter(lineIndex);
+    while (lineIndex <= lastRenderedLineIndex) {
+      const foldedRange = this.foldRanges[foldedRangeIndex];
+      if (foldedRange != null && lineIndex >= foldedRange.startLine) {
+        lineIndex = foldedRange.endLine + 1;
+        foldedRangeIndex++;
+        continue;
+      }
       if (top >= localViewportTop) {
         return {
           lineNumber: lineIndex + 1,
           top,
         };
       }
-      top += this.getLineHeight(lineIndex);
+      top += this.getVisibleLineHeight(lineIndex);
+      lineIndex++;
     }
 
     return undefined;
@@ -531,6 +644,7 @@ export class VirtualizedFile<
   }
 
   override cleanUp(recycle = false): void {
+    const recycledFoldedRanges = recycle ? this.foldRanges : [];
     if (this.fileContainer != null && this.isSimpleMode()) {
       this.getSimpleVirtualizer()?.disconnect(this.fileContainer);
     }
@@ -539,6 +653,12 @@ export class VirtualizedFile<
     }
     this.isSetup = false;
     super.cleanUp(recycle);
+    if (recycle && recycledFoldedRanges.length > 0) {
+      this.foldRanges = recycledFoldedRanges;
+      this.fileRenderer.setFoldRanges(recycledFoldedRanges);
+    } else {
+      this.editorFoldedLineIndex = new LineRangeIndex();
+    }
   }
 
   // Compute the approximate size of the file using cached line heights.
@@ -579,11 +699,52 @@ export class VirtualizedFile<
     this.height += this.cache.fileAnnotationHeight;
 
     if (overflow === 'scroll' && !this.hasLineAnnotations()) {
-      this.height += lineCount * lineHeight;
+      this.height +=
+        this.editorFoldedLineIndex.visibleLineCount(lineCount) * lineHeight;
     } else {
-      for (let lineIndex = 0; lineIndex < lineCount; lineIndex++) {
-        this.addLayoutCheckpoint(lineIndex, this.height);
-        this.height += this.getLineHeight(lineIndex, false);
+      const codeRegionTop = this.height;
+      const measuredHeights = [...this.cache.heights]
+        .filter(
+          ([lineIndex]) =>
+            lineIndex >= 0 &&
+            lineIndex < lineCount &&
+            !this.editorFoldedLineIndex.isHidden(lineIndex)
+        )
+        .sort(([leftLineIndex], [rightLineIndex]) => {
+          return leftLineIndex - rightLineIndex;
+        });
+      let measuredHeightDelta = 0;
+      for (const [, measuredHeight] of measuredHeights) {
+        measuredHeightDelta += measuredHeight - lineHeight;
+      }
+
+      this.height +=
+        this.editorFoldedLineIndex.visibleLineCount(lineCount) * lineHeight +
+        measuredHeightDelta;
+
+      let measuredHeightIndex = 0;
+      let measuredHeightDeltaBefore = 0;
+      for (
+        let lineIndex = 0;
+        lineIndex < lineCount;
+        lineIndex += LAYOUT_CHECKPOINT_INTERVAL
+      ) {
+        let measuredHeight = measuredHeights[measuredHeightIndex];
+        while (measuredHeight != null && measuredHeight[0] < lineIndex) {
+          measuredHeightDeltaBefore += measuredHeight[1] - lineHeight;
+          measuredHeightIndex++;
+          measuredHeight = measuredHeights[measuredHeightIndex];
+        }
+
+        const visibleLinesBefore =
+          lineIndex - this.editorFoldedLineIndex.hiddenCountBefore(lineIndex);
+        this.cache.checkpoints.push({
+          lineIndex,
+          top:
+            codeRegionTop +
+            visibleLinesBefore * lineHeight +
+            measuredHeightDeltaBefore,
+        });
       }
     }
 
@@ -767,11 +928,24 @@ export class VirtualizedFile<
     return this.virtualizer.type === 'advanced';
   }
 
-  private addLayoutCheckpoint(lineIndex: number, top: number): void {
-    if (lineIndex % LAYOUT_CHECKPOINT_INTERVAL !== 0) {
-      return;
+  // Locate the first ordered folded range that can contain or follow a raw
+  // line. Scans then advance through ranges once and jump collapsed bodies.
+  private getFoldRangeIndexAtOrAfter(lineIndex: number): number {
+    let low = 0;
+    let high = this.foldRanges.length;
+    while (low < high) {
+      const middle = low + ((high - low) >> 1);
+      const range = this.foldRanges[middle];
+      if (range == null) {
+        throw new Error('VirtualizedFile: invalid folded range index');
+      }
+      if (range.endLine < lineIndex) {
+        low = middle + 1;
+      } else {
+        high = middle;
+      }
     }
-    this.cache.checkpoints.push({ lineIndex, top });
+    return low;
   }
 
   // Find the nearest sparse layout checkpoint at or before a raw file line.
@@ -810,7 +984,8 @@ export class VirtualizedFile<
   // Render-range scans start from this checkpoint so variable-height files
   // only replay the nearby measured rows. When `hunkLineCount` is provided,
   // step backward to a hunk boundary so hooks that depend on grouped lines
-  // still see a complete hunk.
+  // still see a complete hunk. Folded files use visible-row hunk indexes, so
+  // they resume at the nearest raw checkpoint and derive the missing offset.
   private getLayoutCheckpointBeforeTop(
     top: number,
     hunkLineCount?: number
@@ -833,7 +1008,7 @@ export class VirtualizedFile<
       }
     }
 
-    if (hunkLineCount == null) {
+    if (hunkLineCount == null || this.foldRanges.length > 0) {
       return resultIndex >= 0 ? this.cache.checkpoints[resultIndex] : undefined;
     }
 
@@ -875,6 +1050,10 @@ export class VirtualizedFile<
     const { disableFileHeader = false, overflow = 'scroll' } = this.options;
     const { hunkLineCount, lineHeight } = this.metrics;
     const lineCount = this.fileRenderer.getLineCount(file);
+    const hasEditorFolds = this.foldRanges.length > 0;
+    const visibleLineCount = hasEditorFolds
+      ? this.editorFoldedLineIndex.visibleLineCount(lineCount)
+      : lineCount;
     const fileHeight = this.height;
     const headerRegion = getVirtualFileHeaderRegion(
       this.metrics,
@@ -951,21 +1130,61 @@ export class VirtualizedFile<
 
       // Calculate ideal start centered around viewport
       const idealStartHunk = centerHunk - Math.floor(totalHunks / 2);
-      const totalHunksInFile = Math.ceil(lineCount / hunkLineCount);
-      const startingLine =
+      const totalHunksInFile = Math.ceil(visibleLineCount / hunkLineCount);
+      const startingVisibleLine =
         Math.max(0, Math.min(idealStartHunk, totalHunksInFile)) * hunkLineCount;
 
-      const clampedTotalLines =
+      const clampedVisibleLines =
         idealStartHunk < 0
           ? totalLines + idealStartHunk * hunkLineCount
           : totalLines;
 
+      if (hasEditorFolds) {
+        const renderedVisibleLines = Math.max(
+          0,
+          Math.min(clampedVisibleLines, visibleLineCount - startingVisibleLine)
+        );
+        const startingLine = this.editorFoldedLineIndex.lineAtVisibleIndex(
+          startingVisibleLine,
+          lineCount
+        );
+        const finalLine =
+          renderedVisibleLines > 0
+            ? this.editorFoldedLineIndex.lineAtVisibleIndex(
+                startingVisibleLine + renderedVisibleLines - 1,
+                lineCount
+              )
+            : undefined;
+        if (startingLine == null || finalLine == null) {
+          return {
+            startingLine: 0,
+            totalLines: 0,
+            bufferBefore: 0,
+            bufferAfter: codeRowsHeight,
+          };
+        }
+        return {
+          startingLine,
+          totalLines: finalLine - startingLine + 1,
+          bufferBefore:
+            startingVisibleLine === 0
+              ? 0
+              : fileAnnotationHeight + startingVisibleLine * lineHeight,
+          bufferAfter: Math.max(
+            0,
+            (visibleLineCount - startingVisibleLine - renderedVisibleLines) *
+              lineHeight
+          ),
+        };
+      }
+
+      const startingLine = startingVisibleLine;
       const bufferBefore =
         startingLine === 0
           ? 0
           : fileAnnotationHeight + startingLine * lineHeight;
       const renderedLines = Math.min(
-        clampedTotalLines,
+        clampedVisibleLines,
         lineCount - startingLine
       );
       const bufferAfter = Math.max(
@@ -975,7 +1194,7 @@ export class VirtualizedFile<
 
       return {
         startingLine,
-        totalLines: clampedTotalLines,
+        totalLines: clampedVisibleLines,
         bufferBefore,
         bufferAfter,
       };
@@ -993,17 +1212,28 @@ export class VirtualizedFile<
     );
 
     let absoluteLineTop = fileTop + (checkpoint?.top ?? codeRegionTop);
-    let currentLine = checkpoint?.lineIndex ?? 0;
+    let currentLine = hasEditorFolds
+      ? (checkpoint?.lineIndex ?? 0) -
+        this.editorFoldedLineIndex.hiddenCountBefore(checkpoint?.lineIndex ?? 0)
+      : (checkpoint?.lineIndex ?? 0);
     let firstVisibleHunk: number | undefined;
     let centerHunk: number | undefined;
     let overflowCounter: number | undefined;
 
-    const startingLineIndex = checkpoint?.lineIndex ?? 0;
-    for (
-      let lineIndex = startingLineIndex;
-      lineIndex < lineCount;
-      lineIndex++
-    ) {
+    let lineIndex = checkpoint?.lineIndex ?? 0;
+    const lineAfterStartingFold =
+      this.editorFoldedLineIndex.lineAfterHiddenRange(lineIndex);
+    if (lineAfterStartingFold != null) {
+      lineIndex = lineAfterStartingFold;
+    }
+    let foldedRangeIndex = this.getFoldRangeIndexAtOrAfter(lineIndex);
+    while (lineIndex < lineCount) {
+      const foldedRange = this.foldRanges[foldedRangeIndex];
+      if (foldedRange != null && lineIndex >= foldedRange.startLine) {
+        lineIndex = foldedRange.endLine + 1;
+        foldedRangeIndex++;
+        continue;
+      }
       const isAtHunkBoundary = currentLine % hunkLineCount === 0;
       const currentHunk = Math.floor(currentLine / hunkLineCount);
 
@@ -1018,15 +1248,18 @@ export class VirtualizedFile<
         }
       }
 
-      const lineHeight = this.getLineHeight(lineIndex, false);
+      const visibleLineHeight = this.getVisibleLineHeight(lineIndex);
 
       // Track visible region
-      if (absoluteLineTop > top - lineHeight && absoluteLineTop < bottom) {
+      if (
+        absoluteLineTop > top - visibleLineHeight &&
+        absoluteLineTop < bottom
+      ) {
         firstVisibleHunk ??= currentHunk;
       }
 
       // Track which hunk contains the viewport center
-      if (absoluteLineTop + lineHeight > viewportCenter) {
+      if (absoluteLineTop + visibleLineHeight > viewportCenter) {
         centerHunk ??= currentHunk;
       }
 
@@ -1040,7 +1273,8 @@ export class VirtualizedFile<
       }
 
       currentLine++;
-      absoluteLineTop += lineHeight;
+      absoluteLineTop += visibleLineHeight;
+      lineIndex++;
     }
 
     // No visible lines found
@@ -1066,19 +1300,48 @@ export class VirtualizedFile<
     // startHunk back
     const maxStartHunk = Math.max(
       0,
-      Math.ceil(lineCount / hunkLineCount) - totalHunks
+      Math.ceil(visibleLineCount / hunkLineCount) - totalHunks
     );
     const startHunk = Math.max(0, Math.min(idealStartHunk, maxStartHunk));
-    const startingLine = startHunk * hunkLineCount;
+    const startingVisibleLine = startHunk * hunkLineCount;
+    const startingLine = hasEditorFolds
+      ? (this.editorFoldedLineIndex.lineAtVisibleIndex(
+          startingVisibleLine,
+          lineCount
+        ) ?? lineCount)
+      : startingVisibleLine;
 
     // If we wanted to start before 0, reduce totalLines by the clamped amount
     const clampedTotalLines =
       idealStartHunk < 0
         ? totalLines + idealStartHunk * hunkLineCount
         : totalLines;
+    let rawTotalLines = clampedTotalLines;
+    if (hasEditorFolds) {
+      const renderedVisibleLines = Math.max(
+        0,
+        Math.min(clampedTotalLines, visibleLineCount - startingVisibleLine)
+      );
+      const finalLine =
+        renderedVisibleLines > 0
+          ? this.editorFoldedLineIndex.lineAtVisibleIndex(
+              startingVisibleLine + renderedVisibleLines - 1,
+              lineCount
+            )
+          : undefined;
+      rawTotalLines = finalLine == null ? 0 : finalLine - startingLine + 1;
+    }
 
     // Use hunkOffsets array for efficient buffer calculations
-    const codeBufferBefore = hunkOffsets[startHunk] ?? 0;
+    const codeBufferBefore =
+      hunkOffsets[startHunk] ??
+      (hasEditorFolds && startingLine < lineCount
+        ? Math.max(
+            0,
+            (this.getLinePosition(startingLine + 1)?.top ?? codeRegionTop) -
+              codeRegionTop
+          )
+        : 0);
     const bufferBefore =
       startingLine === 0 ? 0 : fileAnnotationHeight + codeBufferBefore;
 
@@ -1091,7 +1354,7 @@ export class VirtualizedFile<
 
     return {
       startingLine,
-      totalLines: clampedTotalLines,
+      totalLines: rawTotalLines,
       bufferBefore,
       bufferAfter: Math.max(0, bufferAfter),
     };
