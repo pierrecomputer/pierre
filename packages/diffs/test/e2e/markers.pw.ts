@@ -3,8 +3,11 @@ import { expect, type Page, test } from '@playwright/test';
 const RANGE = '[data-marker-range]';
 const CONTENT = '[data-content]';
 
-async function openFixture(page: Page): Promise<void> {
-  await page.goto('/test/e2e/fixtures/markers.html');
+async function openFixture(
+  page: Page,
+  theme: 'dark' | 'light' = 'dark'
+): Promise<void> {
+  await page.goto(`/test/e2e/fixtures/markers.html?theme=${theme}`);
   await page.waitForFunction(() => window.__markersReady === true);
 }
 
@@ -82,10 +85,9 @@ function openScrolledMarkerNearGutter(page: Page): Promise<{
 
 // Hovers the marker whose squiggle sits under `token`, then returns the WCAG
 // contrast ratio between the popover's resolved text and background colors.
-// Guards the marker popover contrast: the severity fill is a theme
-// editorX.foreground token (often light, e.g. this fixture's blue info), so the
-// text must resolve to the editor background rather than a hardcoded color to
-// stay legible.
+// Guards the marker popover fallback in browsers without contrast-color(): the
+// severity fill is a theme editorX.foreground token, so its text candidate must
+// remain legible in both light and dark themes.
 async function popoverContrast(
   page: Page,
   token: string
@@ -159,19 +161,20 @@ test.describe('editor markers', () => {
     expect(await allWithinHost(page, '[data-marker-popover]')).toBe(true);
   });
 
-  // Regression test: the popover used to paint a hardcoded text color over the
-  // severity fill, which produced low-contrast text on themes whose severity
-  // color is light (e.g. this fixture's blue info behind white). Every severity
-  // popover must clear the WCAG AA threshold for normal text.
-  test('marker popovers keep readable contrast across severities', async ({
+  // Regression test: the fallback used the editor background for every theme,
+  // producing white text on Pierre Light's yellow warning marker. Every visible
+  // severity popover must clear WCAG AA in both configured themes.
+  test('marker popovers keep readable contrast across themes and severities', async ({
     page,
   }) => {
-    await openFixture(page);
+    for (const theme of ['dark', 'light'] as const) {
+      await openFixture(page, theme);
 
-    for (const token of ['count', 'conut', 'var']) {
-      const contrast = await popoverContrast(page, token);
-      expect(contrast).not.toBeNull();
-      expect(contrast!).toBeGreaterThanOrEqual(4.5);
+      for (const token of ['count', 'conut', 'var']) {
+        const contrast = await popoverContrast(page, token);
+        expect(contrast).not.toBeNull();
+        expect(contrast!).toBeGreaterThanOrEqual(4.5);
+      }
     }
   });
 

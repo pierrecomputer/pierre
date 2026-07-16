@@ -58,7 +58,10 @@ ${' '.repeat(80)}scrolledMarkerTarget_${'x'.repeat(180)}();
       const instance = new File({
         disableFileHeader: true,
         theme: { dark: 'pierre-dark', light: 'pierre-light' },
-        themeType: 'dark',
+        themeType:
+          new URLSearchParams(location.search).get('theme') === 'light'
+            ? 'light'
+            : 'dark',
         useTokenTransformer: true,
       });
       instance.render({ file, containerWrapper: mount });
