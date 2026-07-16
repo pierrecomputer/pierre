@@ -165,4 +165,36 @@ test.describe('selection action popover placement (edges)', () => {
     expect(await popoverShift(page)).toBe('-100%');
     expect(await popoverWithinHost(page)).toBe(true);
   });
+
+  // Selecting the whole document puts the selection's head on the last row and
+  // its other edge on the first row, so neither the preferred (below) nor the
+  // fallback (above) side has room — the vertical viewport clamp must still
+  // keep the popover within the code box rather than letting it spill out, and
+  // leave a --popover-gap inset from the clamped edge rather than sitting flush.
+  test('select-all keeps the popover within bounds with an edge gap', async ({
+    page,
+  }) => {
+    await page.locator(CONTENT).click();
+    await page.keyboard.press('ControlOrMeta+a');
+
+    await expect(page.locator(POPOVER)).toBeVisible();
+    expect(await popoverWithinHost(page)).toBe(true);
+
+    // The popover is clamped to the bottom edge here, so its bottom should sit a
+    // few px above the code box bottom (the default --popover-gap is 8px).
+    const bottomGap = await page.evaluate((sel) => {
+      const root = document.querySelector('diffs-container')?.shadowRoot;
+      const code = root?.querySelector('[data-code]');
+      const popover = root?.querySelector(sel);
+      if (code == null || popover == null) {
+        return null;
+      }
+      return (
+        code.getBoundingClientRect().bottom -
+        popover.getBoundingClientRect().bottom
+      );
+    }, POPOVER);
+    expect(bottomGap).not.toBeNull();
+    expect(bottomGap!).toBeGreaterThanOrEqual(4);
+  });
 });

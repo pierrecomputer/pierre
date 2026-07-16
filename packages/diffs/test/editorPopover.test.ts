@@ -4,6 +4,8 @@ import {
   POPOVER_FLIP_HYSTERESIS_PX,
   PopoverManager,
   type PopoverPlacementBounds,
+  type PopoverViewportBounds,
+  setPopoverPositionStyles,
 } from '../src/editor/popover';
 import { installDom } from './domHarness';
 
@@ -245,6 +247,79 @@ describe('PopoverManager.getPlacementBounds', () => {
       expect(manager.getPlacementBounds()).toBeUndefined();
     } finally {
       manager.cleanUp();
+      dom.cleanup();
+    }
+  });
+});
+
+describe('setPopoverPositionStyles', () => {
+  const VIEWPORT_BOUNDS: PopoverViewportBounds = {
+    top: 12,
+    bottom: 480,
+    left: 30,
+    right: 620,
+  };
+
+  test('writes the vertical viewport bounds so the CSS clamp can keep the popover on-screen', () => {
+    const dom = installDom();
+    try {
+      const popover = document.createElement('div');
+      setPopoverPositionStyles(popover, {
+        gutterWidth: 40,
+        placeAbove: false,
+        viewport: VIEWPORT_BOUNDS,
+        x: 100,
+        y: 500,
+      });
+
+      expect(popover.style.getPropertyValue('--popover-viewport-top')).toBe(
+        '12px'
+      );
+      expect(popover.style.getPropertyValue('--popover-viewport-bottom')).toBe(
+        '480px'
+      );
+      expect(popover.style.getPropertyValue('--popover-viewport-left')).toBe(
+        '30px'
+      );
+      expect(popover.style.getPropertyValue('--popover-viewport-right')).toBe(
+        '620px'
+      );
+    } finally {
+      dom.cleanup();
+    }
+  });
+
+  test('removes every viewport bound when no geometry is available, falling back to the CSS sentinels', () => {
+    const dom = installDom();
+    try {
+      const popover = document.createElement('div');
+      // Seed values first so the removal branch has something to clear.
+      setPopoverPositionStyles(popover, {
+        gutterWidth: 40,
+        placeAbove: true,
+        viewport: VIEWPORT_BOUNDS,
+        x: 100,
+        y: 500,
+      });
+      setPopoverPositionStyles(popover, {
+        gutterWidth: 40,
+        placeAbove: true,
+        viewport: undefined,
+        x: 100,
+        y: 500,
+      });
+
+      expect(popover.style.getPropertyValue('--popover-viewport-top')).toBe('');
+      expect(popover.style.getPropertyValue('--popover-viewport-bottom')).toBe(
+        ''
+      );
+      expect(popover.style.getPropertyValue('--popover-viewport-left')).toBe(
+        ''
+      );
+      expect(popover.style.getPropertyValue('--popover-viewport-right')).toBe(
+        ''
+      );
+    } finally {
       dom.cleanup();
     }
   });

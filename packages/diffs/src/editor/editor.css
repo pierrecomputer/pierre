@@ -162,7 +162,7 @@
 /* Markers
  *
  * Marker range applies a wavy underline. Severity attributes are used by both
- * `[data-marker-range]` and `[data-marker-popup]` alike.
+ * `[data-marker-range]` and `[data-marker-popover]` alike.
  */
 
 [data-marker-range] {
@@ -175,7 +175,7 @@
 }
 
 [data-marker-error] {
-  --diffs-marker-contrast: #fff;
+  --diffs-marker-contrast: light-dark(#fff, #000);
   --diffs-marker-bg: var(--diffs-editor-error-fg, var(--diffs-deletion-base));
 }
 [data-marker-warning] {
@@ -186,7 +186,7 @@
   );
 }
 [data-marker-info] {
-  --diffs-marker-contrast: #fff;
+  --diffs-marker-contrast: #000;
   --diffs-marker-bg: var(--diffs-editor-info-fg, var(--diffs-modified-base));
 }
 [data-marker-hint] {
@@ -230,33 +230,45 @@
   box-shadow: var(--diffs-widget-shadow);
 }
 
-/* Shared geometry for the overlay popovers (marker hover popup and
+/* Shared geometry for the overlay popovers (marker hover popover and
    selection-action popover). Both are positioned in overlay coordinate space via
    --popover-x/--popover-y (set in JS). The left edge is clamped so the popover
    never slides under the line-number gutter (--gutter-width, also set in JS) or
    outside the visible scroll viewport, and the width is capped to match. Builds
    on [data-editor-widget]. */
-[data-marker-popup],
+[data-marker-popover],
 [data-selection-action-popover] {
+  --popover-gap: var(--diffs-popover-gap, var(--diffs-gap-fallback, 8px));
   --popover-viewport-left: 0px;
   --popover-viewport-right: 100cqw;
+  /* Sentinels disable the vertical clamp until JS sets the real scrollport. */
+  --popover-viewport-top: -99999px;
+  --popover-viewport-bottom: 99999px;
   --popover-min-left: calc(
-    var(--popover-viewport-left) + var(--gutter-width, 0px) + 8px
+    var(--popover-viewport-left) + var(--gutter-width, 0px) + var(--popover-gap)
   );
   --popover-available-width: max(
     0px,
-    calc(var(--popover-viewport-right) - var(--popover-min-left) - 8px)
+    calc(
+      var(--popover-viewport-right) - var(--popover-min-left) -
+        var(--popover-gap)
+    )
   );
   max-width: min(640px, var(--popover-available-width));
   translate: clamp(
       var(--popover-min-left),
       var(--popover-x, var(--popover-min-left)),
-      calc(var(--popover-viewport-right) - 8px - 100%)
+      calc(var(--popover-viewport-right) - var(--popover-gap) - 100%)
     )
-    calc(var(--popover-y, 0px) + var(--popover-y-shift, 0px));
+    /* Clamp into the scrollport so a popover with no fitting side stays in view. */
+    clamp(
+      var(--popover-viewport-top),
+      calc(var(--popover-y, 0px) + var(--popover-y-shift, 0px)),
+      calc(var(--popover-viewport-bottom) - var(--popover-gap) - 100%)
+    );
 }
 
-[data-marker-popup] {
+[data-marker-popover] {
   --diffs-widget-bg: var(--diffs-marker-bg);
   --diffs-widget-shadow:
     0 4px 8px rgb(0 0 0 / 0.15), 0 6px 18px rgb(0 0 0 / 0.15);
@@ -264,10 +276,14 @@
   padding: 8px 12px;
   min-width: min(180px, var(--popover-available-width));
   overflow-wrap: anywhere;
-  color: var(--diffs-marker-contrast, contrast-color(#fff, #000));
+  color: var(--diffs-marker-contrast);
   white-space: normal;
   border: 0;
   pointer-events: auto;
+
+  @supports (color: contrast-color(red)) {
+    color: contrast-color(var(--diffs-marker-bg), var(--diffs-bg));
+  }
 
   [data-marker-message] {
     white-space: normal;

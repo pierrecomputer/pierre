@@ -1015,7 +1015,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#viewportWindowLines = renderRange?.totalLines;
     this.#tokenizer?.prebuildStateStack(renderRange);
 
-    this.#markerRenderer?.removePopup();
+    this.#markerRenderer?.removePopover();
 
     // re-render the existing selections, matches, and markers
     if (
@@ -1296,10 +1296,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     return (this.#popoverManager ??= new PopoverManager({
       hasActivePopover: () =>
         this.#selectionAction !== undefined ||
-        this.#markerRenderer?.isPopupVisible() === true,
+        this.#markerRenderer?.isPopoverVisible() === true,
       updateActivePopover: () => {
         this.#updateSelectionActionPopover();
-        this.#markerRenderer?.updatePopupPosition();
+        this.#markerRenderer?.updatePopoverPosition();
       },
     }));
   }
@@ -1621,7 +1621,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           }
           this.#setDeletedTextSelectionActive(false);
 
-          this.#markerRenderer?.removePopup();
+          this.#markerRenderer?.removePopover();
 
           // this is a workaround for the selection rendering glitch
           // happens when selecting content in shadow DOM on Safari
@@ -2019,7 +2019,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
               return;
             }
 
-            this.#markerRenderer?.removePopup();
+            this.#markerRenderer?.removePopover();
             const selection = this.#spanLineSelection(
               lineIndex,
               lineIndex,
@@ -2818,7 +2818,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         this.focus();
       }
     }
-    this.#markerRenderer?.removePopup();
+    this.#markerRenderer?.removePopover();
     this.#computeContentOffset(this.#contentElement!);
   };
 
@@ -2855,7 +2855,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       ) {
         this.#updateSelections(this.#selections ?? []);
       }
-      this.#markerRenderer?.removePopup();
+      this.#markerRenderer?.removePopover();
     });
   }
 

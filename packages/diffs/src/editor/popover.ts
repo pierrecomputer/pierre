@@ -362,8 +362,17 @@ export function setPopoverPositionStyles(
   if (viewport === undefined) {
     popover.style.removeProperty('--popover-viewport-left');
     popover.style.removeProperty('--popover-viewport-right');
+    popover.style.removeProperty('--popover-viewport-top');
+    popover.style.removeProperty('--popover-viewport-bottom');
     return;
   }
   popover.style.setProperty('--popover-viewport-left', viewport.left + 'px');
   popover.style.setProperty('--popover-viewport-right', viewport.right + 'px');
+  // Vertical bounds let the CSS clamp keep the popover on-screen when neither
+  // side fits (e.g. a select-all spanning the first and last rows).
+  popover.style.setProperty('--popover-viewport-top', viewport.top + 'px');
+  popover.style.setProperty(
+    '--popover-viewport-bottom',
+    viewport.bottom + 'px'
+  );
 }
