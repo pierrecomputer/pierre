@@ -1668,7 +1668,7 @@ export function shiftSelectionLines(
 /**
  * Finds the next matching word and updates the selections.
  */
-export function findNexMatch(
+export function findNextMatch(
   textDocument: TextDocument<unknown>,
   selections: EditorSelection[]
 ): EditorSelection[] | undefined {

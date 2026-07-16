@@ -20,7 +20,7 @@ import {
   expandCollapsedSelectionToWord,
   extendSelection,
   extendSelections,
-  findNexMatch,
+  findNextMatch,
   getAutoSurroundReplacementTexts,
   getCaretPosition,
   getDocumentBoundarySelection,
@@ -2662,7 +2662,7 @@ describe('expandCollapsedSelectionToWord', () => {
 describe('findNextMatch', () => {
   test('returns undefined for empty selections', () => {
     const doc = new TextDocument('inmemory://x', 'hello');
-    expect(findNexMatch(doc, [])).toBeUndefined();
+    expect(findNextMatch(doc, [])).toBeUndefined();
   });
 
   test('ignores non-collapsed selections with different text', () => {
@@ -2671,13 +2671,13 @@ describe('findNextMatch', () => {
       createSelection(0, 0, 0, 2),
       createSelection(0, 3, 0, 5),
     ];
-    expect(findNexMatch(doc, selections)).toBeUndefined();
+    expect(findNextMatch(doc, selections)).toBeUndefined();
   });
 
   test('expands a collapsed caret to the surrounding word', () => {
     const doc = new TextDocument('inmemory://x', "'foobar'");
     const caret = createSelection(0, 4, 0, 4);
-    const next = findNexMatch(doc, [caret]);
+    const next = findNextMatch(doc, [caret]);
     expect(next).toEqual([
       {
         start: { line: 0, character: 1 },
@@ -2690,7 +2690,7 @@ describe('findNextMatch', () => {
   test('adds the next matching range when one occurrence is selected', () => {
     const doc = new TextDocument('inmemory://x', 'foo x foo');
     const first = createSelection(0, 0, 0, 3);
-    const afterFirst = findNexMatch(doc, [first]);
+    const afterFirst = findNextMatch(doc, [first]);
     expect(afterFirst).toEqual([
       first,
       {
@@ -2699,13 +2699,13 @@ describe('findNextMatch', () => {
         direction: DirectionForward,
       },
     ]);
-    expect(findNexMatch(doc, afterFirst!)).toBeUndefined();
+    expect(findNextMatch(doc, afterFirst!)).toBeUndefined();
   });
 
   test('wraps to an earlier occurrence after the last match in the file', () => {
     const doc = new TextDocument('inmemory://x', 'foo bar foo');
     const secondFoo = createSelection(0, 8, 0, 11);
-    const wrapped = findNexMatch(doc, [secondFoo]);
+    const wrapped = findNextMatch(doc, [secondFoo]);
     expect(wrapped).toEqual([
       secondFoo,
       {
@@ -2721,7 +2721,7 @@ describe('findNextMatch', () => {
     const a = createSelection(0, 0, 0, 2);
     const b = createSelection(0, 3, 0, 5);
     const two = [a, b];
-    const third = findNexMatch(doc, two);
+    const third = findNextMatch(doc, two);
     expect(third?.length).toBe(3);
     expect(third?.[2]).toEqual({
       start: { line: 0, character: 6 },
@@ -3068,14 +3068,14 @@ describe('select next occurrence with touching matches', () => {
 
     // The second "abc" starts exactly where the selected one ends. It must be
     // returned as the next match, not skipped as overlapping.
-    const next = findNexMatch(d, [first]);
+    const next = findNextMatch(d, [first]);
     expect(next).toEqual([
       first,
       createSelection(0, 3, 0, 6, DirectionForward),
     ]);
 
     // Both occurrences are now held; nothing is left to add.
-    expect(findNexMatch(d, next!)).toBeUndefined();
+    expect(findNextMatch(d, next!)).toBeUndefined();
   });
 
   test('repeated next-occurrence walks through touching matches across lines', () => {
@@ -3091,13 +3091,13 @@ describe('select next occurrence with touching matches', () => {
       createSelection(2, 3, 2, 6, DirectionForward), // touching repeat on the last line
     ];
     for (const added of expected) {
-      selections = findNexMatch(d, selections!);
+      selections = findNextMatch(d, selections!);
       expect(selections![selections!.length - 1]).toEqual(added);
     }
     expect(selections!.length).toBe(5);
 
     // All five occurrences selected — the next request finds nothing new.
-    expect(findNexMatch(d, selections!)).toBeUndefined();
+    expect(findNextMatch(d, selections!)).toBeUndefined();
   });
 });
 
