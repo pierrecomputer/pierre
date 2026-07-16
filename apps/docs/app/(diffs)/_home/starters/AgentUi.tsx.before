@@ -27,10 +27,10 @@ export type ThemeType = 'light' | 'dark';
 // editor's shadow root to restore jade/red numbers for added and deleted
 // lines, while leaving the active/selected line to the editor's own styling.
 const LINE_NUMBER_COLOR_CSS = `
-[data-column-number][data-line-type='change-addition']:not([data-selected-line]):not([data-active]) {
+[data-column-number][data-line-type='change-addition']:not([data-selected-line]):not([data-editor-active-line]) {
   color: var(--diffs-addition-base);
 }
-[data-column-number][data-line-type='change-deletion']:not([data-selected-line]):not([data-active]) {
+[data-column-number][data-line-type='change-deletion']:not([data-selected-line]):not([data-editor-active-line]) {
   color: var(--diffs-deletion-base);
 }
 `;
