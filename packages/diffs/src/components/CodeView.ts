@@ -475,22 +475,29 @@ interface SpringStepResult {
   velocity: number;
 }
 
-// A vibe slopped heuristic to detect mobile safari only
-const MOBILE_SAFARI = (() => {
-  const { navigator } = globalThis;
+let forceOptimize = false;
 
-  const userAgent = navigator.userAgent;
-  const isIOS = /iP(?:hone|ad|od)/.test(userAgent);
-  const isIPadOS =
-    navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
+if (typeof window !== 'undefined') {
+  // @ts-expect-error
+  window.__OPTIMIZE = () => {
+    forceOptimize = !forceOptimize;
+    console.log('Optimized:', forceOptimize);
+  };
+}
 
-  return (
-    (isIOS || isIPadOS) &&
-    /AppleWebKit/.test(userAgent) &&
-    /Safari/.test(userAgent) &&
-    !/(CriOS|FxiOS|EdgiOS|OPiOS)/.test(userAgent)
-  );
-})();
+// A vibe slopped heuristic to detect WebKit browsers without matching
+// Chromium, which includes AppleWebKit in its user agent for compatibility.
+let IS_WEBKIT = () => {
+  return forceOptimize;
+  // const { navigator } = globalThis;
+  //
+  // const userAgent = navigator.userAgent;
+  //
+  // return (
+  //   /AppleWebKit/.test(userAgent) &&
+  //   !/(Chrome|Chromium|CriOS|Edg|EdgiOS|OPR|OPiOS)/.test(userAgent)
+  // );
+};
 
 type PendingAlignTypes = Exclude<CodeViewLineScrollTarget['align'], 'nearest'>;
 
@@ -763,16 +770,20 @@ export class CodeView<LAnnotation = undefined> {
       this.pointerEventsDisabled = true;
     }
 
-    // This is a really important fix for mobile safari; under aggressive scroll
+    // This is a really important fix for WebKit; under aggressive scroll
     // conditions we'll eventually crash/reload the page. It appears to be
     // caused by the fact that the code wrapper elements are horizontally
     // scrollable, so while aggressively scrolling, we disable scrolling. We
-    // don't want to apply this fix to good browsers since in those cases it
+    // don't want to apply this fix to other browsers since in those cases it
     // can fuck with layout in ways that aren't appropriate
-    if (MOBILE_SAFARI && !this.codeOverflowFix) {
+    if (IS_WEBKIT() && !this.codeOverflowFix) {
       this.stickyContainer.style.setProperty(
         SCROLLING_CODE_OVERFLOW_FIX_VARIABLE,
         'hidden'
+      );
+      this.stickyContainer.style.setProperty(
+        '--diffs-scrollbar-gutter-override',
+        '0px'
       );
       this.codeOverflowFix = true;
     }
@@ -794,7 +805,10 @@ export class CodeView<LAnnotation = undefined> {
     if (this.codeOverflowFix) {
       this.stickyContainer.style.setProperty(
         SCROLLING_CODE_OVERFLOW_FIX_VARIABLE,
-        'auto'
+        'scroll'
+      );
+      this.stickyContainer.style.removeProperty(
+        '--diffs-scrollbar-gutter-override'
       );
       this.codeOverflowFix = false;
     }

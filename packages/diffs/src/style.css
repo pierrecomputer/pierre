@@ -786,6 +786,7 @@
       )
     );
     scrollbar-gutter: stable;
+    overflow-anchor: none;
   }
 
   [data-diffs-scrollbar-measure] {
