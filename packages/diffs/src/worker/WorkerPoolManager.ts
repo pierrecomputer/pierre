@@ -43,6 +43,7 @@ import type {
   AllWorkerTasks,
   DiffRendererInstance,
   FileRendererInstance,
+  HighlightRequestMetadata,
   InitializeWorkerRequest,
   InitializeWorkerTask,
   RenderDiffRequest,
@@ -552,7 +553,8 @@ export class WorkerPoolManager {
 
   public highlightFileAST(
     instance: FileRendererInstance,
-    file: FileContents
+    file: FileContents,
+    metadata?: HighlightRequestMetadata
   ): void {
     const cachedResult = this.getFileResultCache(file);
     // If we've already highlighted the file or it's plain text, we should not
@@ -568,8 +570,8 @@ export class WorkerPoolManager {
     ) {
       return;
     }
-    if (!this.hasMatchingFileInstanceTask(instance, file)) {
-      this.submitTask(instance, { type: 'file', file });
+    if (!this.hasMatchingFileInstanceTask(instance, file, metadata)) {
+      this.submitTask(instance, { type: 'file', file }, metadata);
     }
   }
 
@@ -621,7 +623,8 @@ export class WorkerPoolManager {
 
   public highlightDiffAST(
     instance: DiffRendererInstance,
-    diff: FileDiffMetadata
+    diff: FileDiffMetadata,
+    metadata?: HighlightRequestMetadata
   ): void {
     const cachedResult = this.getDiffResultCache(diff);
     // If we've already highlighted the diff or it's plain text, we should not
@@ -637,8 +640,9 @@ export class WorkerPoolManager {
     ) {
       return;
     }
-    if (!this.hasMatchingDiffInstanceTask(instance, diff)) {
-      this.submitTask(instance, { type: 'diff', diff });
+    if (!this.hasMatchingDiffInstanceTask(instance, diff, metadata)) {
+      console.log('highlightDiffAST', metadata);
+      this.submitTask(instance, { type: 'diff', diff }, metadata);
     }
   }
 
@@ -757,15 +761,18 @@ export class WorkerPoolManager {
 
   private submitTask(
     instance: FileRendererInstance,
-    request: Omit<RenderFileRequest, 'id'>
+    request: Omit<RenderFileRequest, 'id'>,
+    metadata?: HighlightRequestMetadata
   ): void;
   private submitTask(
     instance: DiffRendererInstance,
-    request: Omit<RenderDiffRequest, 'id'>
+    request: Omit<RenderDiffRequest, 'id'>,
+    metadata?: HighlightRequestMetadata
   ): void;
   private submitTask(
     instance: FileRendererInstance | DiffRendererInstance,
-    request: SubmitRequest
+    request: SubmitRequest,
+    metadata?: HighlightRequestMetadata
   ): void {
     if (this.initialized === false) {
       this.queueInitialization();
@@ -798,6 +805,7 @@ export class WorkerPoolManager {
             primeCache: false,
             highlightKey,
             renderOptionsVersion,
+            metadata,
             requestStart,
           };
         case 'diff':
@@ -809,6 +817,7 @@ export class WorkerPoolManager {
             primeCache: false,
             highlightKey,
             renderOptionsVersion,
+            metadata,
             requestStart,
           };
       }
@@ -1272,7 +1281,12 @@ export class WorkerPoolManager {
   ): void {
     for (const instance of task.instances) {
       if (this.activeRequestByInstance.get(instance) === task.id) {
-        instance.onHighlightSuccess(task.request.file, result, options);
+        instance.onHighlightSuccess(
+          task.request.file,
+          result,
+          options,
+          task.metadata
+        );
       }
     }
   }
@@ -1284,7 +1298,12 @@ export class WorkerPoolManager {
   ): void {
     for (const instance of task.instances) {
       if (this.activeRequestByInstance.get(instance) === task.id) {
-        instance.onHighlightSuccess(task.request.diff, result, options);
+        instance.onHighlightSuccess(
+          task.request.diff,
+          result,
+          options,
+          task.metadata
+        );
       }
     }
   }
@@ -1292,14 +1311,15 @@ export class WorkerPoolManager {
   private notifyHighlightError(task: RenderTask, error: unknown): void {
     for (const instance of getInstances(task)) {
       if (this.activeRequestByInstance.get(instance) === task.id) {
-        instance.onHighlightError(error);
+        instance.onHighlightError(error, task.metadata);
       }
     }
   }
 
   private hasMatchingFileInstanceTask(
     instance: FileRendererInstance,
-    file: FileContents
+    file: FileContents,
+    metadata?: HighlightRequestMetadata
   ): boolean {
     for (const task of this.iterateRenderTasks()) {
       if (
@@ -1308,6 +1328,7 @@ export class WorkerPoolManager {
         task.instances.has(instance) &&
         areFilesEqual(file, task.request.file)
       ) {
+        task.metadata = metadata;
         return true;
       }
     }
@@ -1316,7 +1337,8 @@ export class WorkerPoolManager {
 
   private hasMatchingDiffInstanceTask(
     instance: DiffRendererInstance,
-    diff: FileDiffMetadata
+    diff: FileDiffMetadata,
+    metadata?: HighlightRequestMetadata
   ): boolean {
     for (const task of this.iterateRenderTasks()) {
       if (
@@ -1325,6 +1347,7 @@ export class WorkerPoolManager {
         task.instances.has(instance) &&
         areDiffTargetsEqual(task.request.diff, diff)
       ) {
+        task.metadata = metadata;
         return true;
       }
     }

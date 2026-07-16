@@ -54,7 +54,7 @@ import { iterateOverFile } from '../utils/iterateOverFile';
 import { renderFileWithHighlighter } from '../utils/renderFileWithHighlighter';
 import { shouldUseTokenTransformer } from '../utils/shouldUseTokenTransformer';
 import { splitFileContents } from '../utils/splitFileContents';
-import type { WorkerPoolManager } from '../worker';
+import type { HighlightRequestMetadata, WorkerPoolManager } from '../worker';
 
 type AnnotationLineMap<LAnnotation> = Record<
   number,
@@ -102,7 +102,7 @@ export class FileRenderer<LAnnotation = undefined> {
 
   constructor(
     public options: FileRendererOptions = { theme: DEFAULT_THEMES },
-    private onRenderUpdate?: () => unknown,
+    private onRenderUpdate?: (metadata?: HighlightRequestMetadata) => unknown,
     private workerManager?: WorkerPoolManager | undefined
   ) {
     if (workerManager?.isWorkingPool() !== true) {
@@ -227,7 +227,8 @@ export class FileRenderer<LAnnotation = undefined> {
 
   public renderFile(
     file: FileContents | undefined = this.renderCache?.file,
-    renderRange: RenderRange = DEFAULT_RENDER_RANGE
+    renderRange: RenderRange = DEFAULT_RENDER_RANGE,
+    metadata?: HighlightRequestMetadata
   ): FileRenderResult | undefined {
     if (file == null) {
       return undefined;
@@ -292,7 +293,7 @@ export class FileRenderer<LAnnotation = undefined> {
         hasContent &&
         (!this.renderCache.highlighted || forceHighlight)
       ) {
-        this.workerManager.highlightFileAST(this, file);
+        this.workerManager.highlightFileAST(this, file, metadata);
       }
     } else {
       this.computedLang = file.lang ?? getFiletypeFromFileName(file.name);
@@ -338,7 +339,13 @@ export class FileRenderer<LAnnotation = undefined> {
           if (this.renderCache != null) {
             this.renderCache.highlighted = false;
           }
-          this.onHighlightSuccess(file, result, options, !forcePlainText);
+          this.onHighlightSuccess(
+            file,
+            result,
+            options,
+            metadata,
+            !forcePlainText
+          );
         });
       }
     }
@@ -556,6 +563,7 @@ export class FileRenderer<LAnnotation = undefined> {
     file: FileContents,
     result: ThemedFileResult,
     options: RenderFileOptions,
+    metadata?: HighlightRequestMetadata,
     highlighted = true
   ): void {
     if (this.renderCache == null) {
@@ -575,7 +583,7 @@ export class FileRenderer<LAnnotation = undefined> {
     };
 
     if (triggerRenderUpdate) {
-      this.onRenderUpdate?.();
+      this.onRenderUpdate?.(metadata);
     }
   }
 

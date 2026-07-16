@@ -14,6 +14,7 @@ import type {
   MergeConflictRegion,
   MergeConflictResolution,
   PostRenderPhase,
+  RenderRange,
 } from '../types';
 import { areFilesEqual } from '../utils/areFilesEqual';
 import { areMergeConflictActionsEqual } from '../utils/areMergeConflictActionsEqual';
@@ -27,7 +28,7 @@ import {
 } from '../utils/parseMergeConflictDiffFromFile';
 import { resolveConflict as resolveConflictDiff } from '../utils/resolveConflict';
 import { splitFileContents } from '../utils/splitFileContents';
-import type { WorkerPoolManager } from '../worker';
+import type { HighlightRequestMetadata, WorkerPoolManager } from '../worker';
 import {
   FileDiff,
   type FileDiffOptions,
@@ -108,6 +109,24 @@ interface ResolveConflictReturn {
   markerRows: MergeConflictMarkerRow[];
 }
 
+interface PendingRender<LAnnotation> {
+  fileDiff: FileDiffMetadata;
+  actions: (MergeConflictDiffAction | undefined)[];
+  markerRows: MergeConflictMarkerRow[];
+  lineAnnotations: UnresolvedFileRenderProps<LAnnotation>['lineAnnotations'];
+  renderRange: RenderRange | undefined;
+  preventEmit: boolean;
+  forceRender?: boolean;
+  fileContainer?: HTMLElement;
+  containerWrapper?: HTMLElement;
+}
+
+interface ActiveMergeConflictState {
+  actions: (MergeConflictDiffAction | undefined)[];
+  markerRows: MergeConflictMarkerRow[];
+  fileDiff: FileDiffMetadata | undefined;
+}
+
 type UnresolvedFileDataCache = GetOrComputeDiffProps;
 
 let instanceId = -1;
@@ -128,6 +147,7 @@ export class UnresolvedFile<
   private markerRows: MergeConflictMarkerRow[] = [];
   private conflictActionCache: Map<string, MergeConflictActionElementCache> =
     new Map();
+  private pendingRender: PendingRender<LAnnotation> | undefined;
 
   constructor(
     public override options: UnresolvedFileOptions<LAnnotation> = {
@@ -186,7 +206,7 @@ export class UnresolvedFile<
   ): UnresolvedFileHunksRenderer<LAnnotation> {
     const renderer = new UnresolvedFileHunksRenderer<LAnnotation>(
       this.getHunksRendererOptions(options),
-      this.handleHighlightRender,
+      (metadata) => this.handleHighlightRender(metadata),
       this.workerManager
     );
     return renderer;
@@ -217,6 +237,7 @@ export class UnresolvedFile<
       markerRows: undefined,
     };
     this.conflictActions = [];
+    this.pendingRender = undefined;
     super.cleanUp();
   }
 
@@ -366,7 +387,7 @@ export class UnresolvedFile<
       return;
     }
     this.hydrateElements(fileContainer, prerenderedHTML);
-    this.setActiveMergeConflictState(source.actions, source.markerRows);
+    this.setActiveMergeConflictState(source);
     // If necessary hydration elements don't exist, we should assume a full
     // render
     if (
@@ -398,6 +419,27 @@ export class UnresolvedFile<
     this.render({ forceRender: true, renderRange: this.renderRange });
   }
 
+  protected override handleHighlightRender(
+    metadata?: HighlightRequestMetadata
+  ): void {
+    console.log('handleHighlightRender', metadata);
+    const { pendingRender } = this;
+    if (metadata != null) {
+      if (metadata === pendingRender) {
+        this.pendingRender = undefined;
+        console.log('handleHighlightRender.rendering a pre render');
+        this.renderResolvedState(pendingRender, true);
+      }
+      console.log('handleHighlightRender.throwing away a render');
+      // If we get in here, then it means we are waiting on a render that's
+      // been invalidated, so drop it
+      return;
+    }
+
+    console.log('handleHighlightRender.rendering normie render');
+    super.handleHighlightRender(metadata);
+  }
+
   override render(props: UnresolvedFileRenderProps<LAnnotation> = {}): boolean {
     const {
       file,
@@ -417,20 +459,30 @@ export class UnresolvedFile<
     if (source == null) {
       return false;
     }
-    this.setActiveMergeConflictState(source.actions, source.markerRows);
-    const didRender = super.render({
-      ...rest,
+    const nextRender: PendingRender<LAnnotation> = {
       fileDiff: source.fileDiff,
+      actions: source.actions,
+      markerRows: source.markerRows,
       lineAnnotations,
-      preventEmit: true,
-    });
-    if (didRender) {
-      this.renderMergeConflictActionSlots();
-      if (!preventEmit) {
-        this.emitPostRender();
-      }
+      renderRange: rest.renderRange,
+      preventEmit,
+      forceRender: rest.forceRender,
+      fileContainer: rest.fileContainer,
+      containerWrapper: rest.containerWrapper,
+    };
+
+    if (this.shouldDeferRender(source.fileDiff)) {
+      console.log('queing render');
+      this.queuePendingRender(nextRender);
+      return false;
     }
-    return didRender;
+
+    // if (this.pendingRender?.fileDiff === source.fileDiff) {
+    // }
+
+    console.log('linear render');
+    this.pendingRender = undefined;
+    return this.renderResolvedState(nextRender);
   }
 
   public resolveConflict(
@@ -498,37 +550,93 @@ export class UnresolvedFile<
     }
 
     this.computedCache = { file, fileDiff, actions, markerRows };
-    this.setActiveMergeConflictState(actions, markerRows);
-    // NOTE(amadeus): This is a bit jank, but helps to ensure we don't see a
-    // bunch of jittery re-renders as things resolve out.  In a more perfect
-    // world we would have a more elegant way to kick off a render to the
-    // highlighter and then resolve actions in a cleaner way, but time is short
-    // right now.  Can't let perfect be the enemy of good
-    if (this.workerManager != null) {
-      // Because we are using a workerManager, if we fire off the renderDiff
-      // call, it will eventually get back to us in a callback which will
-      // trigger a re-render
-      this.hunksRenderer.renderDiff(fileDiff);
+    const nextRender: PendingRender<LAnnotation> = {
+      fileDiff,
+      actions,
+      markerRows,
+      lineAnnotations: this.lineAnnotations,
+      renderRange: this.renderRange,
+      preventEmit: false,
+      forceRender: true,
+    };
+    if (this.shouldDeferRender(fileDiff)) {
+      console.log('resolveConflictAndRender: queued');
+      this.queuePendingRender(nextRender);
     } else {
-      this.render({ forceRender: true });
+      console.log('resolveConflictAndRender: linear');
+      this.pendingRender = undefined;
+      this.renderResolvedState(nextRender);
     }
     this.options.onMergeConflictResolve?.(file, payload);
   }
 
-  private setActiveMergeConflictState(
-    actions: (MergeConflictDiffAction | undefined)[] = this.conflictActions,
-    markerRows: MergeConflictMarkerRow[] = this.markerRows
-  ): void {
+  private shouldDeferRender(fileDiff: FileDiffMetadata): boolean {
+    return (
+      fileDiff !== this.fileDiff &&
+      this.hunksRenderer.willTriggerAsyncHighlight(fileDiff)
+    );
+  }
+
+  // The pending render payload is also the metadata passed through async
+  // highlighting so the completion callback can promote only the latest render.
+  private queuePendingRender(pendingRender: PendingRender<LAnnotation>): void {
+    this.pendingRender = pendingRender;
+    this.hunksRenderer.renderDiff(
+      pendingRender.fileDiff,
+      pendingRender.renderRange,
+      pendingRender
+    );
+  }
+
+  private renderResolvedState(
+    pendingRender: PendingRender<LAnnotation>,
+    forceRenderOverride = false
+  ): boolean {
+    const {
+      fileDiff,
+      actions,
+      markerRows,
+      lineAnnotations,
+      renderRange,
+      preventEmit,
+      forceRender = false,
+      fileContainer,
+      containerWrapper,
+    } = pendingRender;
+    this.setActiveMergeConflictState({ actions, markerRows, fileDiff });
+    const didRender = super.render({
+      fileDiff,
+      lineAnnotations,
+      renderRange,
+      forceRender: forceRenderOverride || forceRender,
+      fileContainer,
+      containerWrapper,
+      preventEmit: true,
+    });
+    if (didRender) {
+      this.renderMergeConflictActionSlots();
+      if (!preventEmit) {
+        this.emitPostRender();
+      }
+    }
+    return didRender;
+  }
+
+  private setActiveMergeConflictState({
+    actions = this.conflictActions,
+    markerRows = this.markerRows,
+    fileDiff = this.fileDiff,
+  }: ActiveMergeConflictState): void {
     this.conflictActions = actions;
     this.markerRows = markerRows;
     if (
-      this.computedCache.fileDiff != null &&
+      fileDiff != null &&
       this.hunksRenderer instanceof UnresolvedFileHunksRenderer
     ) {
       this.hunksRenderer.setConflictState(
         this.options.mergeConflictActionsType === 'none' ? [] : actions,
         markerRows,
-        this.computedCache.fileDiff
+        fileDiff
       );
     }
   }
@@ -546,6 +654,12 @@ export class UnresolvedFile<
         "UnresolvedFile.handleMergeConflictActionClick: conflictIndex and conflictAction don't match"
       );
     }
+    // NOTE(amadeus): Not sure if this will bite us or not... maybe we could
+    // take the active pending render data for this and still allow things to
+    // get triggered?  I'll need to test this ont he demo
+    if (this.pendingRender != null) {
+      return;
+    }
     const payload: MergeConflictActionPayload = {
       resolution: target.resolution,
       conflict: action.conflict,
@@ -558,7 +672,7 @@ export class UnresolvedFile<
   };
 
   private renderMergeConflictActionSlots(): void {
-    const { fileDiff } = this.computedCache;
+    const { fileDiff } = this;
     if (
       this.isContainerManaged ||
       this.fileContainer == null ||
