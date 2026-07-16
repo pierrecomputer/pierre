@@ -91,7 +91,11 @@ function openScrolledMarkerNearGutter(page: Page): Promise<{
 async function popoverContrast(
   page: Page,
   token: string
-): Promise<number | null> {
+): Promise<{
+  backgroundColor: string;
+  color: string;
+  ratio: number;
+} | null> {
   await page.locator(CONTENT).getByText(token, { exact: true }).hover();
   await expect(page.locator('[data-marker-popover]')).toBeVisible();
   return page.evaluate(() => {
@@ -122,7 +126,11 @@ async function popoverContrast(
     const bgLum = luminance(parse(cs.backgroundColor));
     const [lighter, darker] =
       textLum > bgLum ? [textLum, bgLum] : [bgLum, textLum];
-    return (lighter + 0.05) / (darker + 0.05);
+    return {
+      backgroundColor: cs.backgroundColor,
+      color: cs.color,
+      ratio: (lighter + 0.05) / (darker + 0.05),
+    };
   });
 }
 
@@ -171,9 +179,12 @@ test.describe('editor markers', () => {
       await openFixture(page, theme);
 
       for (const token of ['count', 'conut', 'var']) {
-        const contrast = await popoverContrast(page, token);
-        expect(contrast).not.toBeNull();
-        expect(contrast!).toBeGreaterThanOrEqual(4.5);
+        const sample = await popoverContrast(page, token);
+        expect(sample).not.toBeNull();
+        expect(
+          sample!.ratio,
+          `${theme} theme marker under "${token}": ${sample!.color} on ${sample!.backgroundColor}`
+        ).toBeGreaterThanOrEqual(4.5);
       }
     }
   });

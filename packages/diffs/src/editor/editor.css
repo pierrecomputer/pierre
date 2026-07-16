@@ -175,22 +175,22 @@
 }
 
 [data-marker-error] {
-  --diffs-marker-contrast: light-dark(var(--diffs-fg), var(--diffs-bg));
+  --diffs-marker-contrast: light-dark(#fff, #000);
   --diffs-marker-bg: var(--diffs-editor-error-fg, var(--diffs-deletion-base));
 }
 [data-marker-warning] {
-  --diffs-marker-contrast: light-dark(var(--diffs-fg), var(--diffs-bg));
+  --diffs-marker-contrast: #000;
   --diffs-marker-bg: var(
     --diffs-editor-warning-fg,
     light-dark(var(--diffs-warning-light), var(--diffs-warning-dark))
   );
 }
 [data-marker-info] {
-  --diffs-marker-contrast: light-dark(var(--diffs-fg), var(--diffs-bg));
+  --diffs-marker-contrast: #000;
   --diffs-marker-bg: var(--diffs-editor-info-fg, var(--diffs-modified-base));
 }
 [data-marker-hint] {
-  --diffs-marker-contrast: var(--diffs-bg);
+  --diffs-marker-contrast: light-dark(#fff, #000);
   --diffs-marker-bg: var(--diffs-editor-hint-fg, var(--diffs-fg-number));
 }
 
