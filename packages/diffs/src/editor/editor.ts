@@ -2,6 +2,7 @@ import {
   dequeueRender,
   queueRender,
 } from '../managers/UniversalRenderingManager';
+import { buildSearchReplacementText, type MatchRange } from '../search';
 import type {
   DiffLineAnnotation,
   DiffsEditableComponent,
@@ -64,11 +65,7 @@ import {
   PopoverManager,
   type PopoverPlacementBounds,
 } from './popover';
-import {
-  type MatchRange,
-  type SearchPanelMode,
-  SearchPanelWidget,
-} from './searchPanel';
+import { type SearchPanelMode, SearchPanelWidget } from './searchPanel';
 import type {
   AutoSurround,
   CursorMoveOptions,
@@ -1064,7 +1061,7 @@ export class Editor<
     const tokenizer = this.#tokenizer;
     if (tokenizer !== undefined) {
       tokenizer.pauseBackgroundTokenize();
-      requestAnimationFrame(() => {
+      queueRender(() => {
         tokenizer.resumeBackgroundTokenize();
       });
     }
@@ -5242,36 +5239,70 @@ export class Editor<
       this.#retainSearchPanelFocus = retainFocus;
     };
 
+    const buildReplacementEdit = (
+      searchParams: Parameters<typeof textDocument.search>[0],
+      matchStart: number,
+      matchEnd: number
+    ): ResolvedTextEdit => ({
+      start: matchStart,
+      end: matchEnd,
+      text: buildSearchReplacementText(
+        (offset) => textDocument.positionAt(offset),
+        (position) => textDocument.offsetAt(position),
+        (line) => textDocument.getLineText(line),
+        searchParams,
+        matchStart,
+        matchEnd
+      ),
+    });
+
+    const applyReplace = (edits: ResolvedTextEdit[]) => {
+      if (edits.length === 0) {
+        return;
+      }
+      const change = textDocument.applyEdits(
+        edits.map((edit) => ({
+          range: {
+            start: textDocument.positionAt(edit.start),
+            end: textDocument.positionAt(edit.end),
+          },
+          newText: edit.text,
+        })),
+        true,
+        this.#selections
+      );
+      if (change !== undefined) {
+        this.#applyChange(
+          change,
+          undefined,
+          this.#applyChangeToLineAnnotations(change),
+          { skipSearchRefresh: true }
+        );
+      }
+    };
+
     const searchPanel = new SearchPanelWidget({
-      textDocument,
       containerElement: preElement,
       defaultQuery,
       mode,
       initialMatch,
+      search: (searchParams) => textDocument.search(searchParams),
+      isSameMatch: ([aStart, aEnd], [bStart, bEnd]) =>
+        aStart === bStart && aEnd === bEnd,
       scrollToMatch,
-      applyReplace: (edits: ResolvedTextEdit[]) => {
-        if (edits.length === 0) {
-          return;
-        }
-        const change = textDocument.applyEdits(
-          edits.map((edit) => ({
-            range: {
-              start: textDocument.positionAt(edit.start),
-              end: textDocument.positionAt(edit.end),
-            },
-            newText: edit.text,
-          })),
-          true,
-          this.#selections
-        );
-        if (change !== undefined) {
-          this.#applyChange(
-            change,
-            undefined,
-            this.#applyChangeToLineAnnotations(change),
-            { skipSearchRefresh: true }
+      replace: {
+        replaceMatch: ([start, end], searchParams): MatchRange => {
+          const edit = buildReplacementEdit(searchParams, start, end);
+          applyReplace([edit]);
+          return [start + edit.text.length, start + edit.text.length];
+        },
+        replaceAll: (matches, searchParams) => {
+          applyReplace(
+            matches.map(([start, end]) =>
+              buildReplacementEdit(searchParams, start, end)
+            )
           );
-        }
+        },
       },
       onUpdate: (
         allMatches: MatchRange[],
