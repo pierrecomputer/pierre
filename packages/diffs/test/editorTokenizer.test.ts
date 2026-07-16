@@ -73,25 +73,25 @@ describe('EditorTokenizer', () => {
     }
   });
 
-  test('emits independent line-highlight background and border channels', () => {
+  test('derives the active-line background mix and border treatment', () => {
     const borderOnlyStyle = getThemeStyle({
       'editor.lineHighlightBorder': '#303030',
     });
     expect(borderOnlyStyle).toContain(
-      '--diffs-editor-line-highlight-bg: transparent;'
+      '--diffs-editor-line-highlight-border: #303030;'
     );
     expect(borderOnlyStyle).toContain(
-      '--diffs-editor-line-highlight-border: #303030;'
+      '--diffs-editor-active-line-source-mix: 100%;'
     );
 
     const backgroundOnlyStyle = getThemeStyle({
       'editor.lineHighlightBackground': '#2b3036',
     });
     expect(backgroundOnlyStyle).toContain(
-      '--diffs-editor-line-highlight-bg: #2b3036;'
+      '--diffs-editor-line-highlight-border: transparent;'
     );
     expect(backgroundOnlyStyle).toContain(
-      '--diffs-editor-line-highlight-border: transparent;'
+      '--diffs-editor-active-line-source-mix: 85%;'
     );
 
     const combinedStyle = getThemeStyle({
@@ -99,18 +99,38 @@ describe('EditorTokenizer', () => {
       'editor.lineHighlightBorder': '#434c5e',
     });
     expect(combinedStyle).toContain(
-      '--diffs-editor-line-highlight-bg: #3b4252;'
+      '--diffs-editor-line-highlight-border: #434c5e;'
     );
     expect(combinedStyle).toContain(
-      '--diffs-editor-line-highlight-border: #434c5e;'
+      '--diffs-editor-active-line-source-mix: 85%;'
+    );
+
+    const translucentStyle = getThemeStyle({
+      'editor.lineHighlightBackground': '#19283c8c',
+    });
+    expect(translucentStyle).toContain(
+      '--diffs-editor-line-highlight-border: transparent;'
+    );
+    expect(translucentStyle).toContain(
+      '--diffs-editor-active-line-source-mix: 85%;'
+    );
+
+    const transparentStyle = getThemeStyle({
+      'editor.lineHighlightBackground': '#00000000',
+    });
+    expect(transparentStyle).toContain(
+      '--diffs-editor-line-highlight-border: color-mix(in lab, var(--diffs-bg) 70%, var(--diffs-fg));'
+    );
+    expect(transparentStyle).toContain(
+      '--diffs-editor-active-line-source-mix: 100%;'
     );
 
     const missingStyle = getThemeStyle({});
     expect(missingStyle).toContain(
-      '--diffs-editor-line-highlight-bg: transparent;'
+      '--diffs-editor-line-highlight-border: color-mix(in lab, var(--diffs-bg) 70%, var(--diffs-fg));'
     );
     expect(missingStyle).toContain(
-      '--diffs-editor-line-highlight-border: color-mix(in lab, var(--diffs-bg) 70%, var(--diffs-fg));'
+      '--diffs-editor-active-line-source-mix: 100%;'
     );
   });
 
