@@ -18,6 +18,7 @@ const SCROLL_REGION_STYLES = { height: '70vh', overflow: 'auto' } as const;
 interface PlaygroundVirtualizerElementViewProps {
   diffs: FileDiffMetadata[];
   options: FileDiffOptions<undefined>;
+  enableLineSelection: boolean;
   enableGutterComments: boolean;
   showAnnotations: boolean;
 }
@@ -31,6 +32,7 @@ interface PlaygroundVirtualizerElementViewProps {
 export function PlaygroundVirtualizerElementView({
   diffs,
   options,
+  enableLineSelection,
   enableGutterComments,
   showAnnotations,
 }: PlaygroundVirtualizerElementViewProps) {
@@ -44,6 +46,7 @@ export function PlaygroundVirtualizerElementView({
           key={fileDiff.name}
           fileDiff={fileDiff}
           options={options}
+          enableLineSelection={enableLineSelection}
           enableGutterComments={enableGutterComments}
           showAnnotations={showAnnotations}
         />
@@ -55,6 +58,7 @@ export function PlaygroundVirtualizerElementView({
 interface ElementVirtualizerDiffProps {
   fileDiff: FileDiffMetadata;
   options: FileDiffOptions<undefined>;
+  enableLineSelection: boolean;
   enableGutterComments: boolean;
   showAnnotations: boolean;
 }
@@ -67,6 +71,7 @@ interface ElementVirtualizerDiffProps {
 function ElementVirtualizerDiff({
   fileDiff,
   options,
+  enableLineSelection,
   enableGutterComments,
   showAnnotations,
 }: ElementVirtualizerDiffProps) {
@@ -120,6 +125,8 @@ function ElementVirtualizerDiff({
   // Match the other views' precedence: an open comment form pauses the gutter
   // utility so another form cannot be opened beneath it.
   const hasOpenCommentForm = annotations.length > 0;
+  const canSelectLines =
+    enableLineSelection && !enableGutterComments && !hasOpenCommentForm;
   const canUseGutterComments =
     enableGutterComments && showAnnotations && !hasOpenCommentForm;
 
@@ -128,7 +135,7 @@ function ElementVirtualizerDiff({
       ...options,
       stickyHeader: true,
       unsafeCSS: ITEM_UNSAFE_CSS,
-      enableLineSelection: canUseGutterComments,
+      enableLineSelection: canSelectLines,
       enableGutterUtility: canUseGutterComments,
       onLineSelectionStart: setSelectedLines,
       onLineSelectionChange: setSelectedLines,
@@ -137,7 +144,7 @@ function ElementVirtualizerDiff({
         ? addCommentAtRange
         : undefined,
     }),
-    [options, canUseGutterComments, addCommentAtRange]
+    [options, canSelectLines, canUseGutterComments, addCommentAtRange]
   );
 
   return (

@@ -1248,6 +1248,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
         <PlaygroundVirtualizerView
           diffs={VIRTUALIZER_FILE_DIFFS}
           options={renderOptions}
+          enableLineSelection={enableLineSelection}
           enableGutterComments={enableGutterUtility}
           showAnnotations={showAnnotations}
         />
@@ -1255,6 +1256,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
         <PlaygroundVirtualizerElementView
           diffs={VIRTUALIZER_FILE_DIFFS}
           options={renderOptions}
+          enableLineSelection={enableLineSelection}
           enableGutterComments={enableGutterUtility}
           showAnnotations={showAnnotations}
         />
@@ -1262,6 +1264,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
         <PlaygroundCodeView
           items={CODE_VIEW_ITEMS}
           options={codeViewOptions}
+          enableLineSelection={enableLineSelection}
           enableGutterComments={enableGutterUtility}
           showAnnotations={showAnnotations}
         />

@@ -26,6 +26,7 @@ type PlaygroundItem = CodeViewItem<PlaygroundAnnotationMetadata>;
 interface PlaygroundCodeViewProps {
   items: PlaygroundItem[];
   options: CodeViewOptions<PlaygroundAnnotationMetadata>;
+  enableLineSelection: boolean;
   enableGutterComments: boolean;
   showAnnotations: boolean;
 }
@@ -48,6 +49,7 @@ interface PlaygroundCodeViewProps {
 export function PlaygroundCodeView({
   items: initialItems,
   options,
+  enableLineSelection,
   enableGutterComments,
   showAnnotations,
 }: PlaygroundCodeViewProps) {
@@ -215,6 +217,8 @@ export function PlaygroundCodeView({
         (annotation) => annotation.metadata.isThread !== true
       ) === true
   );
+  const canSelectLines =
+    enableLineSelection && !enableGutterComments && !hasOpenCommentForm;
   const canUseGutterComments =
     enableGutterComments && showAnnotations && !hasOpenCommentForm;
 
@@ -223,13 +227,13 @@ export function PlaygroundCodeView({
   >(
     () => ({
       ...options,
-      enableLineSelection: canUseGutterComments,
+      enableLineSelection: canSelectLines,
       enableGutterUtility: canUseGutterComments,
       onGutterUtilityClick: canUseGutterComments
         ? (range, context) => addCommentAtRange(context.item.id, range)
         : undefined,
     }),
-    [options, canUseGutterComments, addCommentAtRange]
+    [options, canSelectLines, canUseGutterComments, addCommentAtRange]
   );
 
   const renderAnnotation = useStableCallback(

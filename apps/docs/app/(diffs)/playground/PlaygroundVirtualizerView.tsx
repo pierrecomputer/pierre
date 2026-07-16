@@ -18,6 +18,7 @@ import { CommentForm } from './PlaygroundComments';
 interface PlaygroundVirtualizerViewProps {
   diffs: FileDiffMetadata[];
   options: FileDiffOptions<undefined>;
+  enableLineSelection: boolean;
   enableGutterComments: boolean;
   showAnnotations: boolean;
 }
@@ -79,6 +80,7 @@ function annotationKey(
 export function PlaygroundVirtualizerView({
   diffs,
   options,
+  enableLineSelection,
   enableGutterComments,
   showAnnotations,
 }: PlaygroundVirtualizerViewProps) {
@@ -154,7 +156,7 @@ export function PlaygroundVirtualizerView({
           renderHeaderMetadata: () => editToggle,
           stickyHeader: true,
           unsafeCSS: VIRTUALIZER_CUSTOM_CSS,
-          enableLineSelection: enableGutterComments && showAnnotations,
+          enableLineSelection: enableLineSelection && !enableGutterComments,
           enableGutterUtility: enableGutterComments && showAnnotations,
           onGutterUtilityClick: (range) => {
             const side = range.endSide ?? range.side;
@@ -244,11 +246,11 @@ export function PlaygroundVirtualizerView({
       instance.setOptions({
         ...instance.options,
         ...options,
-        enableLineSelection: enableGutterComments && showAnnotations,
+        enableLineSelection: enableLineSelection && !enableGutterComments,
         enableGutterUtility: enableGutterComments && showAnnotations,
       });
     }
-  }, [options, enableGutterComments, showAnnotations]);
+  }, [options, enableLineSelection, enableGutterComments, showAnnotations]);
 
   // Annotations are demo state: turning the toggle off clears them.
   useEffect(() => {
