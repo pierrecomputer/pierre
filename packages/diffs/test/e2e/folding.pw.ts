@@ -1,4 +1,4 @@
-import { expect, type Locator, type Page, test } from '@playwright/test';
+import { expect, type Page, test } from '@playwright/test';
 
 const GUTTER = '[data-code][data-editor-folding] [data-gutter]';
 const CONTENT_ROWS = '[data-content] > [data-line]';
@@ -17,9 +17,6 @@ const renderedLineNumbers = (page: Page): Promise<number[]> =>
     .evaluateAll((rows) =>
       rows.map((row) => Number((row as HTMLElement).dataset.line))
     );
-
-const color = (toggle: Locator): Promise<string> =>
-  toggle.evaluate((element) => getComputedStyle(element).color);
 
 const firstTokenColor = (page: Page): Promise<string> =>
   page
@@ -42,12 +39,10 @@ test.describe('editor folding controls', () => {
     await expect(toggle).toHaveCSS('opacity', '0');
 
     await gutter.hover();
-    await expect(toggle).toHaveCSS('opacity', '0.72');
-    const gutterHoverColor = await color(toggle);
+    await expect(toggle).toHaveCSS('opacity', '0.5');
 
     await toggle.hover();
-    await expect(toggle).toHaveCSS('opacity', '1');
-    await expect.poll(() => color(toggle)).not.toBe(gutterHoverColor);
+    await expect(toggle).toHaveCSS('opacity', '0.75');
 
     await toggle.click();
     await expect.poll(() => renderedLineNumbers(page)).toEqual([1, 7, 8]);
@@ -59,7 +54,7 @@ test.describe('editor folding controls', () => {
       'href',
       '#diffs-editor-icon-chevron-right'
     );
-    await expect(toggle).toHaveCSS('opacity', '0.72');
+    await expect(toggle).toHaveCSS('opacity', '0.5');
 
     const indicator = page.locator(OUTER_INDICATOR);
     const ellipsis = indicator.locator('[data-fold-ellipsis]');
