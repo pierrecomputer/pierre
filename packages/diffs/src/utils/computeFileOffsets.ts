@@ -1,22 +1,58 @@
 const LINE_FEED = 10; // \n
 const CARRIAGE_RETURN = 13; // \r
+const DENSE_LINE_BREAK_BLOCK_SIZE = 4;
+const DENSE_LINE_BREAK_BLOCK_SPAN = 40;
 
 /**
  * Computes line start offsets for a string.
  */
 export function computeLineOffsets(contents: string): number[] {
   const offsets: number[] = [0];
-  for (let i = 0; i < contents.length; i++) {
-    const char = contents.charCodeAt(i);
-    if (char === LINE_FEED || char === CARRIAGE_RETURN) {
-      if (
-        char === CARRIAGE_RETURN &&
-        i + 1 < contents.length &&
-        contents.charCodeAt(i + 1) === LINE_FEED
-      ) {
-        i++;
+  let carriageReturn = contents.indexOf('\r');
+  let lineFeed = contents.indexOf('\n');
+  let blockStart = 0;
+  let blockBreaks = 0;
+  while (carriageReturn !== -1 || lineFeed !== -1) {
+    let nextOffset: number;
+    if (
+      carriageReturn !== -1 &&
+      (lineFeed === -1 || carriageReturn < lineFeed)
+    ) {
+      if (lineFeed === carriageReturn + 1) {
+        nextOffset = lineFeed + 1;
+        carriageReturn = contents.indexOf('\r', nextOffset);
+        lineFeed = contents.indexOf('\n', nextOffset);
+      } else {
+        nextOffset = carriageReturn + 1;
+        carriageReturn = contents.indexOf('\r', nextOffset);
       }
-      offsets.push(i + 1);
+    } else {
+      nextOffset = lineFeed + 1;
+      lineFeed = contents.indexOf('\n', nextOffset);
+    }
+    offsets.push(nextOffset);
+
+    if (++blockBreaks === DENSE_LINE_BREAK_BLOCK_SIZE) {
+      if (nextOffset - blockStart <= DENSE_LINE_BREAK_BLOCK_SPAN) {
+        // Native searches win on source-like lines; a character scan is faster
+        // once line breaks become unusually dense.
+        for (let i = nextOffset; i < contents.length; i++) {
+          const char = contents.charCodeAt(i);
+          if (char === LINE_FEED || char === CARRIAGE_RETURN) {
+            if (
+              char === CARRIAGE_RETURN &&
+              i + 1 < contents.length &&
+              contents.charCodeAt(i + 1) === LINE_FEED
+            ) {
+              i++;
+            }
+            offsets.push(i + 1);
+          }
+        }
+        return offsets;
+      }
+      blockStart = nextOffset;
+      blockBreaks = 0;
     }
   }
   return offsets;

@@ -421,6 +421,7 @@ export class PieceTable {
     }
     const start = clamp(offset, 0, this.#length);
     this.#replaceRangeIncremental(start, start, text);
+    this.#invalidateCaches();
   }
 
   delete(offset: number, length: number): void {
@@ -433,6 +434,7 @@ export class PieceTable {
       return;
     }
     this.#replaceRangeIncremental(start, end, '');
+    this.#invalidateCaches();
   }
 
   applyEdits(edits: readonly ResolvedTextEdit[]): void {
@@ -449,6 +451,7 @@ export class PieceTable {
       const end = clamp(edit.end, start, this.#length);
       this.#replaceRangeIncremental(start, end, edit.text);
     }
+    this.#invalidateCaches();
   }
 
   positionAt(offset: number): Position {
@@ -727,18 +730,18 @@ export class PieceTable {
     );
   }
 
-  // Replaces document range [start, end) with `text` by splitting the tree at
-  // both ends, dropping the middle (the deleted span), and joining the inserted
-  // piece back in. Each split/merge touches only one root-to-leaf path, so the
-  // edit is O(log P) instead of rebuilding all P pieces. `start`/`end` must be
-  // clamped into [0, length] with start <= end.
+  // Replaces document range [start, end) with `text` by splitting at the start,
+  // dropping the deleted prefix from the remainder, and joining the inserted
+  // piece back in. Each tree operation touches only one root-to-leaf path, so
+  // the edit is O(log P) instead of rebuilding all P pieces. `start`/`end` must
+  // be clamped into [0, length] with start <= end.
   #replaceRangeIncremental(start: number, end: number, text: string): void {
     if (start === end && text.length === 0) {
       return;
     }
 
     const [left, rest] = this.#split(this.#root, start);
-    const [, right] = this.#split(rest, end - start);
+    const right = this.#dropPrefix(rest, end - start);
 
     let root: PieceNode | null;
     if (text.length > 0) {
@@ -773,6 +776,10 @@ export class PieceTable {
     this.#root = root;
     this.#length = root?.subtreeLength ?? 0;
     this.#lineCount = (root?.subtreeLineBreakCount ?? 0) + 1;
+  }
+
+  // Public mutations clear read caches once, including multi-edit batches.
+  #invalidateCaches(): void {
     this.#lastVisitedLine = null;
     this.#lastVisitedLineLength = null;
     this.#lastPosition = null;
@@ -864,6 +871,41 @@ export class PieceTable {
     leftNode.updateSubtreeLength();
     rightNode.updateSubtreeLength();
     return [leftNode, rightNode];
+  }
+
+  // Discards [0, offset), allocating only the surviving half of a cut piece.
+  #dropPrefix(node: PieceNode | null, offset: number): PieceNode | null {
+    if (node === null || offset >= node.subtreeLength) {
+      return null;
+    }
+    if (offset <= 0) {
+      return node;
+    }
+
+    const leftLength = node.left?.subtreeLength ?? 0;
+    if (offset <= leftLength) {
+      this.#setLeft(node, this.#dropPrefix(node.left, offset));
+      node.updateSubtreeLength();
+      return node;
+    }
+
+    const pieceEnd = leftLength + node.piece.length;
+    if (offset >= pieceEnd) {
+      return this.#dropPrefix(node.right, offset - pieceEnd);
+    }
+
+    const inPiece = offset - leftLength;
+    const rightNode = new PieceNode(
+      this.#createPiece(
+        node.piece.source,
+        node.piece.offset + inPiece,
+        node.piece.length - inPiece
+      )
+    );
+    rightNode.priority = node.priority;
+    this.#setRight(rightNode, node.right);
+    rightNode.updateSubtreeLength();
+    return rightNode;
   }
 
   // Joins two subtrees where every offset in `left` precedes every offset in
