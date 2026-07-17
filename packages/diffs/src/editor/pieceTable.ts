@@ -124,6 +124,9 @@ export class PieceTable {
   #lineCount = 0;
   #lastVisitedLine: [number, boolean, string] | null = null;
   #lastVisitedLineLength: [number, boolean, number] | null = null;
+  // Exact inverse of the latest positionAt lookup; edits invalidate it.
+  #lastPosition: [line: number, character: number, offset: number] | null =
+    null;
   // Seeds the treap priorities. 0x9e3779b9 is the 32-bit golden-ratio
   // constant (2^32 / phi), a well-mixed value commonly used to seed hashes
   // and PRNGs; any fixed nonzero seed works here. A fixed seed keeps the
@@ -455,10 +458,9 @@ export class PieceTable {
     }
     const line = this.#lineAtOffset(clampedOffset);
     const lineStart = line === 0 ? 0 : this.#lineBreakOffset(line - 1);
-    return {
-      line,
-      character: clampedOffset - lineStart,
-    };
+    const character = clampedOffset - lineStart;
+    this.#lastPosition = [line, character, clampedOffset];
+    return { line, character };
   }
 
   positionsAt(offsets: readonly number[]): Position[] {
@@ -483,6 +485,14 @@ export class PieceTable {
     }
     if (position.line >= this.#lineCount) {
       throw new Error(`Line index out of range: ${position.line}`);
+    }
+    const lastPosition = this.#lastPosition;
+    if (
+      lastPosition !== null &&
+      lastPosition[0] === position.line &&
+      lastPosition[1] === position.character
+    ) {
+      return lastPosition[2];
     }
     const offset = this.#getLineOffset(position.line);
     if (offset === undefined) {
@@ -765,6 +775,7 @@ export class PieceTable {
     this.#lineCount = (root?.subtreeLineBreakCount ?? 0) + 1;
     this.#lastVisitedLine = null;
     this.#lastVisitedLineLength = null;
+    this.#lastPosition = null;
   }
 
   #nextPriority(): number {

@@ -873,6 +873,25 @@ describe('mixed-EOL positionAt/offsetAt round trip', () => {
     expect(roundTrip(14)).toBe(13);
     expect(roundTrip(25)).toBe(24);
   });
+
+  test('edits invalidate the last position round trip', () => {
+    const table = new PieceTable('xxxx\nbbbb');
+    const position = table.positionAt(7);
+
+    expect(position).toEqual({ line: 1, character: 2 });
+    expect(table.offsetAt(position)).toBe(7);
+
+    table.insert('yy', 0);
+    expect(table.offsetAt(position)).toBe(9);
+    expect(table.offsetAt(table.positionAt(9))).toBe(9);
+
+    table.delete(0, 3);
+    expect(table.offsetAt(position)).toBe(6);
+    expect(table.offsetAt(table.positionAt(6))).toBe(6);
+
+    table.applyEdits([{ start: 0, end: 1, text: 'zzzz' }]);
+    expect(table.offsetAt(position)).toBe(9);
+  });
 });
 
 describe('out-of-range line and position contract', () => {
