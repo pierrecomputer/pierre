@@ -48,9 +48,18 @@ class TextBuffer {
   // elements to the lineOffsets array in the end
   append(text: string): number {
     const offset = this.text.length;
-    const appendedLineOffsets = computeLineOffsets(text);
-    for (let i = 1; i < appendedLineOffsets.length; i++) {
-      this.lineOffsets.push(offset + appendedLineOffsets[i]);
+    for (let i = 0; i < text.length; i++) {
+      const charCode = text.charCodeAt(i);
+      if (charCode !== LINE_FEED && charCode !== CARRIAGE_RETURN) {
+        continue;
+      }
+      if (
+        charCode === CARRIAGE_RETURN &&
+        text.charCodeAt(i + 1) === LINE_FEED
+      ) {
+        i++;
+      }
+      this.lineOffsets.push(offset + i + 1);
     }
     this.text += text;
     return offset;
@@ -115,6 +124,9 @@ export class PieceTable {
   #lineCount = 0;
   #lastVisitedLine: [number, boolean, string] | null = null;
   #lastVisitedLineLength: [number, boolean, number] | null = null;
+  // Exact inverse of the latest positionAt lookup; edits invalidate it.
+  #lastPosition: [line: number, character: number, offset: number] | null =
+    null;
   // Seeds the treap priorities. 0x9e3779b9 is the 32-bit golden-ratio
   // constant (2^32 / phi), a well-mixed value commonly used to seed hashes
   // and PRNGs; any fixed nonzero seed works here. A fixed seed keeps the
@@ -357,15 +369,25 @@ export class PieceTable {
     limit: number
   ): [number, number][] {
     const out: [number, number][] = [];
-    const docLength = this.#length;
-    const charAt = (offset: number) => this.charAt(offset);
+    // Search visits the whole document, so flatten it once instead of making
+    // several treap descents for every line and whole-word boundary.
+    const documentText = this.#textFromPieces();
+    const docLength = documentText.length;
+    const lineOffsets = computeLineOffsets(documentText);
 
     // Reuse the single compiled pattern across every line, resetting its
     // lastIndex before each line, instead of allocating a fresh RegExp per
     // line. The pattern is global, so lastIndex tracks progress within a line.
-    for (let line = 0; line < this.#lineCount; line++) {
-      const lineText = this.getLineText(line);
-      const lineStart = this.offsetAt({ line, character: 0 });
+    for (let line = 0; line < lineOffsets.length; line++) {
+      const lineStart = lineOffsets[line];
+      let lineEnd = lineOffsets[line + 1] ?? docLength;
+      while (
+        lineEnd > lineStart &&
+        isEOL(documentText.charCodeAt(lineEnd - 1))
+      ) {
+        lineEnd--;
+      }
+      const lineText = documentText.slice(lineStart, lineEnd);
       pattern.lastIndex = 0;
       let match: RegExpExecArray | null;
       while ((match = pattern.exec(lineText)) !== null) {
@@ -378,7 +400,7 @@ export class PieceTable {
         const docStart = lineStart + rel;
         if (
           !wholeWord ||
-          isWholeWordAtDocOffsets(docStart, fragment.length, docLength, charAt)
+          isWholeWordAtDocOffsets(documentText, docStart, fragment.length)
         ) {
           out.push([docStart, docStart + fragment.length]);
           if (out.length >= limit) {
@@ -399,6 +421,7 @@ export class PieceTable {
     }
     const start = clamp(offset, 0, this.#length);
     this.#replaceRangeIncremental(start, start, text);
+    this.#invalidateCaches();
   }
 
   delete(offset: number, length: number): void {
@@ -411,6 +434,7 @@ export class PieceTable {
       return;
     }
     this.#replaceRangeIncremental(start, end, '');
+    this.#invalidateCaches();
   }
 
   applyEdits(edits: readonly ResolvedTextEdit[]): void {
@@ -427,6 +451,7 @@ export class PieceTable {
       const end = clamp(edit.end, start, this.#length);
       this.#replaceRangeIncremental(start, end, edit.text);
     }
+    this.#invalidateCaches();
   }
 
   positionAt(offset: number): Position {
@@ -436,10 +461,9 @@ export class PieceTable {
     }
     const line = this.#lineAtOffset(clampedOffset);
     const lineStart = line === 0 ? 0 : this.#lineBreakOffset(line - 1);
-    return {
-      line,
-      character: clampedOffset - lineStart,
-    };
+    const character = clampedOffset - lineStart;
+    this.#lastPosition = [line, character, clampedOffset];
+    return { line, character };
   }
 
   positionsAt(offsets: readonly number[]): Position[] {
@@ -464,6 +488,14 @@ export class PieceTable {
     }
     if (position.line >= this.#lineCount) {
       throw new Error(`Line index out of range: ${position.line}`);
+    }
+    const lastPosition = this.#lastPosition;
+    if (
+      lastPosition !== null &&
+      lastPosition[0] === position.line &&
+      lastPosition[1] === position.character
+    ) {
+      return lastPosition[2];
     }
     const offset = this.#getLineOffset(position.line);
     if (offset === undefined) {
@@ -698,18 +730,18 @@ export class PieceTable {
     );
   }
 
-  // Replaces document range [start, end) with `text` by splitting the tree at
-  // both ends, dropping the middle (the deleted span), and joining the inserted
-  // piece back in. Each split/merge touches only one root-to-leaf path, so the
-  // edit is O(log P) instead of rebuilding all P pieces. `start`/`end` must be
-  // clamped into [0, length] with start <= end.
+  // Replaces document range [start, end) with `text` by splitting at the start,
+  // dropping the deleted prefix from the remainder, and joining the inserted
+  // piece back in. Each tree operation touches only one root-to-leaf path, so
+  // the edit is O(log P) instead of rebuilding all P pieces. `start`/`end` must
+  // be clamped into [0, length] with start <= end.
   #replaceRangeIncremental(start: number, end: number, text: string): void {
     if (start === end && text.length === 0) {
       return;
     }
 
     const [left, rest] = this.#split(this.#root, start);
-    const [, right] = this.#split(rest, end - start);
+    const right = this.#dropPrefix(rest, end - start);
 
     let root: PieceNode | null;
     if (text.length > 0) {
@@ -744,8 +776,13 @@ export class PieceTable {
     this.#root = root;
     this.#length = root?.subtreeLength ?? 0;
     this.#lineCount = (root?.subtreeLineBreakCount ?? 0) + 1;
+  }
+
+  // Public mutations clear read caches once, including multi-edit batches.
+  #invalidateCaches(): void {
     this.#lastVisitedLine = null;
     this.#lastVisitedLineLength = null;
+    this.#lastPosition = null;
   }
 
   #nextPriority(): number {
@@ -786,6 +823,12 @@ export class PieceTable {
   ): [left: PieceNode | null, right: PieceNode | null] {
     if (node === null) {
       return [null, null];
+    }
+    if (offset <= 0) {
+      return [null, node];
+    }
+    if (offset >= node.subtreeLength) {
+      return [node, null];
     }
 
     const leftLength = node.left?.subtreeLength ?? 0;
@@ -828,6 +871,41 @@ export class PieceTable {
     leftNode.updateSubtreeLength();
     rightNode.updateSubtreeLength();
     return [leftNode, rightNode];
+  }
+
+  // Discards [0, offset), allocating only the surviving half of a cut piece.
+  #dropPrefix(node: PieceNode | null, offset: number): PieceNode | null {
+    if (node === null || offset >= node.subtreeLength) {
+      return null;
+    }
+    if (offset <= 0) {
+      return node;
+    }
+
+    const leftLength = node.left?.subtreeLength ?? 0;
+    if (offset <= leftLength) {
+      this.#setLeft(node, this.#dropPrefix(node.left, offset));
+      node.updateSubtreeLength();
+      return node;
+    }
+
+    const pieceEnd = leftLength + node.piece.length;
+    if (offset >= pieceEnd) {
+      return this.#dropPrefix(node.right, offset - pieceEnd);
+    }
+
+    const inPiece = offset - leftLength;
+    const rightNode = new PieceNode(
+      this.#createPiece(
+        node.piece.source,
+        node.piece.offset + inPiece,
+        node.piece.length - inPiece
+      )
+    );
+    rightNode.priority = node.priority;
+    this.#setRight(rightNode, node.right);
+    rightNode.updateSubtreeLength();
+    return rightNode;
   }
 
   // Joins two subtrees where every offset in `left` precedes every offset in
@@ -1046,26 +1124,16 @@ function isWordSeparatorCharCode(charCode: number): boolean {
 // Checks if the given text is a whole word by checking if the
 // characters before and after are word separators.
 function isWholeWordAtDocOffsets(
+  text: string,
   docStart: number,
-  length: number,
-  docLength: number,
-  charAt: (offset: number) => string
+  length: number
 ): boolean {
   const beforeOk =
-    docStart <= 0 ||
-    isWordSeparatorCharCode(charCodeUnitAt(charAt, docStart - 1));
+    docStart <= 0 || isWordSeparatorCharCode(text.charCodeAt(docStart - 1));
   const afterOk =
-    docStart + length >= docLength ||
-    isWordSeparatorCharCode(charCodeUnitAt(charAt, docStart + length));
+    docStart + length >= text.length ||
+    isWordSeparatorCharCode(text.charCodeAt(docStart + length));
   return beforeOk && afterOk;
-}
-
-function charCodeUnitAt(
-  charAt: (offset: number) => string,
-  offset: number
-): number {
-  const unit = charAt(offset);
-  return unit.length === 0 ? 0 : unit.charCodeAt(0);
 }
 
 function compileSearchRegExp(
