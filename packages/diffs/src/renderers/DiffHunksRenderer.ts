@@ -307,11 +307,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       return Promise.resolve();
     }
     const { diff } = renderCache;
-    if (this.workerManager?.isWorkingPool() === true) {
-      if (diff.cacheKey == null) {
-        return Promise.resolve();
-      }
-      const { workerManager } = this;
+    const { workerManager } = this;
+    // The pool's diff cache is keyed by cacheKey, so a worker refresh needs
+    // one; a keyless diff uses the local highlighter fallback below instead.
+    if (workerManager?.isWorkingPool() === true && diff.cacheKey != null) {
       workerManager.evictDiffFromCache(diff.cacheKey);
       return workerManager
         .primeDiffHighlightCache(diff)
