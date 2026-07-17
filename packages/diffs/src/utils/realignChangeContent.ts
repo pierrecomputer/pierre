@@ -59,11 +59,16 @@ export function realignChangeContentBySimilarity(
  * the run's bottom — so pressing Enter at the end of a line marks a blank
  * *below* the caret as inserted while the caret's own new line renders as
  * context. Sliding up anchors the change to the content above it (the caret
- * line after an Enter) instead. Non-blank blocks never slide, so code that
- * merely ends like its neighbor (an added function before an identical `}`)
- * keeps the library's canonical position. Runs on final assembled
- * hunkContent: from the parse post-pass above and from the edit session's
- * region re-diff, so mid-session and exit renderings agree.
+ * line after an Enter) instead.
+ *
+ * The slide is all-or-nothing: it only applies when the block comes to rest
+ * directly beneath remaining in-hunk content. A slide that would consume the
+ * hunk's entire leading context was stopped by the hunk's edge — a context
+ * window cut, not the top of the blank run — and that landing spot is
+ * arbitrary, so the block keeps the library's bottom-of-run anchor (which
+ * sits against the content below the run). Non-blank blocks never slide, so
+ * code that merely ends like its neighbor (an added function before an
+ * identical `}`) keeps the library's canonical position.
  */
 export function slideBlankBoundaryBlocksUp(
   hunk: Hunk,
@@ -117,6 +122,12 @@ export function slideBlankBoundaryBlocksUp(
       slide++;
     }
     if (slide === 0) {
+      continue;
+    }
+    // Stopped by the hunk's leading edge rather than by content: the blank
+    // run extends to (and possibly beyond) the hunk's top, so there is no
+    // in-hunk line to anchor beneath. Keep the bottom-of-run position.
+    if (index === 1 && slide === previous.lines) {
       continue;
     }
 

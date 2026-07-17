@@ -345,6 +345,9 @@ describe('rebuildSessionHunks', () => {
   });
 
   test('does not slide an already-canonical blank insertion a second time', () => {
+    // The blank run outruns the diff context, so the canonical parse keeps
+    // the library's bottom-of-run anchor (a hunk-edge-capped slide does not
+    // apply); the session pass must land on the same anchor, not move it.
     const oldLines = ['first\n', ...Array(9).fill('\n'), 'last\n'];
     const initialLines = [...oldLines];
     initialLines[0] = 'changed\n';
@@ -366,8 +369,8 @@ describe('rebuildSessionHunks', () => {
           content.additions === 1
       );
     expect(insertion).toMatchObject({
-      deletionLineIndex: 6,
-      additionLineIndex: 6,
+      deletionLineIndex: 10,
+      additionLineIndex: 10,
     });
   });
 });

@@ -262,4 +262,36 @@ describe('blank-run slide canonicalization', () => {
       },
     ]);
   });
+
+  test('keeps the bottom-of-run anchor when the slide stops at a hunk edge', () => {
+    // A blank run longer than the diff context splits the change and the
+    // insert into separate hunks, with the run continuing through the
+    // collapsed gap. Sliding would consume the second hunk's entire leading
+    // context and park the insert at the hunk's top — an anchor that means
+    // nothing (it abuts a context-window cut, not the run's top). The insert
+    // keeps the library's bottom-of-run position against the content below.
+    const oldContents = 'first\n' + '\n'.repeat(9) + 'last\n';
+    const newContents = 'changed\n' + '\n'.repeat(10) + 'last\n';
+    const diff = parseDiffFromFile(
+      { name: 'blank-run.ts', contents: oldContents },
+      { name: 'blank-run.ts', contents: newContents }
+    );
+    expect(diff.hunks).toHaveLength(2);
+    expect(changeBlocks(diff)).toEqual([
+      {
+        type: 'change',
+        deletions: 1,
+        additions: 1,
+        deletionLineIndex: 0,
+        additionLineIndex: 0,
+      },
+      {
+        type: 'change',
+        deletions: 0,
+        additions: 1,
+        deletionLineIndex: 10,
+        additionLineIndex: 10,
+      },
+    ]);
+  });
 });
