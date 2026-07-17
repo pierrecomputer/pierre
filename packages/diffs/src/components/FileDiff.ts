@@ -1323,13 +1323,17 @@ export class FileDiff<
   public attachEditor(
     editor: DiffsEditor<LAnnotation>
   ): (recycle?: boolean) => void {
+    // Editing is a plain file-diff concern only. Subclasses with their own
+    // hunk semantics (UnresolvedFile) are not editable, so an editor must
+    // never attach to them.
+    if (this.type !== 'file-diff') {
+      throw new Error(
+        `FileDiff.attachEditor: cannot attach an editor to a "${this.type}" diff`
+      );
+    }
     this.editor?.cleanUp();
     this.editor = editor;
-    // Edit sessions are a plain-diff concern; subclasses with their own hunk
-    // semantics (merge conflicts) keep the per-edit recompute pipeline.
-    if (this.type === 'file-diff') {
-      this.hunksRenderer.beginEditSession();
-    }
+    this.hunksRenderer.beginEditSession();
     // The editor sync below refuses partial diffs (it needs the full file
     // contents); kick off hydration so the loaded re-render re-runs it.
     if (this.fileDiff?.isPartial === true) {

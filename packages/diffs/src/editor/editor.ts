@@ -7,6 +7,7 @@ import type {
   DiffsEditableComponent,
   DiffsEditor,
   DiffsHighlighter,
+  EditableInstance,
   EditorSelection,
   EditorState,
   FileContents,
@@ -414,6 +415,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
   }
 
+  // Small typescript hack to prevent UnresolvedFile from being editable.
+  edit<T extends DiffsEditableComponent<LAnnotation>>(
+    fileInstance: EditableInstance<T>
+  ): () => void;
   edit(fileInstance: DiffsEditableComponent<LAnnotation>): () => void {
     if (this.#options.persistState === true && fileInstance.type === 'file') {
       const file = fileInstance.__getCurrentFile?.();
