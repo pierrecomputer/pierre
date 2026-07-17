@@ -869,10 +869,26 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       renderRange
     );
     if (this.workerManager?.isWorkingPool() === true) {
+      // An already-highlighted view is waiting on a fresh highlight for the
+      // same diff. Returning no result keeps the host's current content in
+      // place instead of downgrading it to a plain AST; the pending
+      // highlight's completion will re-render. A different diff or a
+      // sub-range window still paints plain — the current content cannot
+      // serve those.
+      const highlightPending =
+        this.renderCache.result == null &&
+        this.renderCache.highlighted &&
+        !forcePlainText &&
+        !newContent &&
+        isDefaultRenderRange(renderRange);
+      if (highlightPending) {
+        this.renderCache.highlightPending = true;
+      }
       if (
-        forcePlainText ||
-        this.renderCache.result == null ||
-        (!this.renderCache.highlighted && (newContent || newRenderRange))
+        !highlightPending &&
+        (forcePlainText ||
+          this.renderCache.result == null ||
+          (!this.renderCache.highlighted && (newContent || newRenderRange)))
       ) {
         this.renderCache.diff = diff;
         this.renderCache.options = options;
@@ -1046,6 +1062,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     }
 
     const triggerRenderUpdate =
+      this.renderCache.highlightPending === true ||
       !this.renderCache.highlighted ||
       !areDiffRenderOptionsEqual(this.renderCache.options, options) ||
       !areDiffTargetsEqual(this.renderCache.diff, diff);
