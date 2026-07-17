@@ -1155,10 +1155,11 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
         onLineSelectionStart: handleLineSelectionChange,
         onLineSelectionChange: handleLineSelectionChange,
         onLineSelectionEnd: handleLineSelectionEnd,
+        // A stable reference: an inline arrow here changes identity every
+        // render, failing the instance's options equality and forcing a full
+        // re-render on every commit.
         onGutterUtilityClick: canUseGutterComments
-          ? (range) => {
-              addCommentAtRange(range);
-            }
+          ? addCommentAtRange
           : undefined,
       }}
       renderAnnotation={
