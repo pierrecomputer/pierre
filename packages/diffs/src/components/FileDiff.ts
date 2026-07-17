@@ -1063,6 +1063,7 @@ export class FileDiff<
       this.shouldSelfHealEditSession()
     ) {
       finishEditSessionForDiff(this.fileDiff, this.options.parseDiffOptions);
+      void this.hunksRenderer.refreshHighlightedResult();
     }
     if (expandUnchanged) {
       this.loadFilesIfNecessary();
@@ -1385,6 +1386,7 @@ export class FileDiff<
     this.hunksRenderer.setExpandedHunksMap(
       rebuildExpansionFromAnchors(fileDiff, anchors)
     );
+    void this.hunksRenderer.refreshHighlightedResult();
     this.escalateEditSessionRender();
     return true;
   }
