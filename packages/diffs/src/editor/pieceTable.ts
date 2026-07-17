@@ -48,9 +48,18 @@ class TextBuffer {
   // elements to the lineOffsets array in the end
   append(text: string): number {
     const offset = this.text.length;
-    const appendedLineOffsets = computeLineOffsets(text);
-    for (let i = 1; i < appendedLineOffsets.length; i++) {
-      this.lineOffsets.push(offset + appendedLineOffsets[i]);
+    for (let i = 0; i < text.length; i++) {
+      const charCode = text.charCodeAt(i);
+      if (charCode !== LINE_FEED && charCode !== CARRIAGE_RETURN) {
+        continue;
+      }
+      if (
+        charCode === CARRIAGE_RETURN &&
+        text.charCodeAt(i + 1) === LINE_FEED
+      ) {
+        i++;
+      }
+      this.lineOffsets.push(offset + i + 1);
     }
     this.text += text;
     return offset;
@@ -357,15 +366,25 @@ export class PieceTable {
     limit: number
   ): [number, number][] {
     const out: [number, number][] = [];
-    const docLength = this.#length;
-    const charAt = (offset: number) => this.charAt(offset);
+    // Search visits the whole document, so flatten it once instead of making
+    // several treap descents for every line and whole-word boundary.
+    const documentText = this.#textFromPieces();
+    const docLength = documentText.length;
+    const lineOffsets = computeLineOffsets(documentText);
 
     // Reuse the single compiled pattern across every line, resetting its
     // lastIndex before each line, instead of allocating a fresh RegExp per
     // line. The pattern is global, so lastIndex tracks progress within a line.
-    for (let line = 0; line < this.#lineCount; line++) {
-      const lineText = this.getLineText(line);
-      const lineStart = this.offsetAt({ line, character: 0 });
+    for (let line = 0; line < lineOffsets.length; line++) {
+      const lineStart = lineOffsets[line];
+      let lineEnd = lineOffsets[line + 1] ?? docLength;
+      while (
+        lineEnd > lineStart &&
+        isEOL(documentText.charCodeAt(lineEnd - 1))
+      ) {
+        lineEnd--;
+      }
+      const lineText = documentText.slice(lineStart, lineEnd);
       pattern.lastIndex = 0;
       let match: RegExpExecArray | null;
       while ((match = pattern.exec(lineText)) !== null) {
@@ -378,7 +397,7 @@ export class PieceTable {
         const docStart = lineStart + rel;
         if (
           !wholeWord ||
-          isWholeWordAtDocOffsets(docStart, fragment.length, docLength, charAt)
+          isWholeWordAtDocOffsets(documentText, docStart, fragment.length)
         ) {
           out.push([docStart, docStart + fragment.length]);
           if (out.length >= limit) {
@@ -787,6 +806,12 @@ export class PieceTable {
     if (node === null) {
       return [null, null];
     }
+    if (offset <= 0) {
+      return [null, node];
+    }
+    if (offset >= node.subtreeLength) {
+      return [node, null];
+    }
 
     const leftLength = node.left?.subtreeLength ?? 0;
     if (offset <= leftLength) {
@@ -1046,26 +1071,16 @@ function isWordSeparatorCharCode(charCode: number): boolean {
 // Checks if the given text is a whole word by checking if the
 // characters before and after are word separators.
 function isWholeWordAtDocOffsets(
+  text: string,
   docStart: number,
-  length: number,
-  docLength: number,
-  charAt: (offset: number) => string
+  length: number
 ): boolean {
   const beforeOk =
-    docStart <= 0 ||
-    isWordSeparatorCharCode(charCodeUnitAt(charAt, docStart - 1));
+    docStart <= 0 || isWordSeparatorCharCode(text.charCodeAt(docStart - 1));
   const afterOk =
-    docStart + length >= docLength ||
-    isWordSeparatorCharCode(charCodeUnitAt(charAt, docStart + length));
+    docStart + length >= text.length ||
+    isWordSeparatorCharCode(text.charCodeAt(docStart + length));
   return beforeOk && afterOk;
-}
-
-function charCodeUnitAt(
-  charAt: (offset: number) => string,
-  offset: number
-): number {
-  const unit = charAt(offset);
-  return unit.length === 0 ? 0 : unit.charCodeAt(0);
 }
 
 function compileSearchRegExp(
