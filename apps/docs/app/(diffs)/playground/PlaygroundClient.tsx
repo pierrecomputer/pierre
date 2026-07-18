@@ -1076,6 +1076,13 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
     if (mode !== 'normal') setEditorMode('review');
   }, []);
 
+  const [usePrerenderedHTML, setUsePrerenderedHTML] = useState(
+    () => viewMode === 'normal'
+  );
+  if (usePrerenderedHTML && viewMode !== 'normal') {
+    setUsePrerenderedHTML(false);
+  }
+
   const controlsContentProps = {
     viewMode,
     setViewMode: setViewModeAndResetEditor,
@@ -1187,6 +1194,9 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
   const fileDiff = (
     <FileDiff
       {...prerenderedDiff}
+      prerenderedHTML={
+        usePrerenderedHTML ? prerenderedDiff.prerenderedHTML : undefined
+      }
       className="border-border overflow-hidden rounded-lg border"
       contentEditable={contentEditable}
       selectedLines={selectedRange}
