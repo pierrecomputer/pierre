@@ -5,6 +5,7 @@ import type {
   Hunk,
   HunkExpansionRegion,
 } from '../types';
+import { getHunkSideStartBoundary } from './getHunkSideBoundaries';
 import {
   getExpandedRegion,
   getTrailingExpandedRegion,
@@ -230,6 +231,23 @@ export function iterateOverDiff({
       break;
     }
 
+    const deletionBoundary = getHunkSideStartBoundary(
+      hunk.deletionStart,
+      hunk.deletionCount
+    );
+    const additionBoundary = getHunkSideStartBoundary(
+      hunk.additionStart,
+      hunk.additionCount
+    );
+    const deletionStartIndex =
+      !diff.isPartial && hunk.deletionCount === 0
+        ? deletionBoundary
+        : hunk.deletionLineIndex;
+    const additionStartIndex =
+      !diff.isPartial && hunk.additionCount === 0
+        ? additionBoundary
+        : hunk.additionLineIndex;
+
     const leadingRegion = getExpandedRegion({
       isPartial: diff.isPartial,
       rangeSize: hunk.collapsedBefore,
@@ -285,10 +303,10 @@ export function iterateOverDiff({
       let unifiedLineIndex = hunk.unifiedLineStart - leadingRegion.rangeSize;
       let splitLineIndex = hunk.splitLineStart - leadingRegion.rangeSize;
 
-      let deletionLineIndex = hunk.deletionLineIndex - leadingRegion.rangeSize;
-      let additionLineIndex = hunk.additionLineIndex - leadingRegion.rangeSize;
-      let deletionLineNumber = hunk.deletionStart - leadingRegion.rangeSize;
-      let additionLineNumber = hunk.additionStart - leadingRegion.rangeSize;
+      let deletionLineIndex = deletionStartIndex - leadingRegion.rangeSize;
+      let additionLineIndex = additionStartIndex - leadingRegion.rangeSize;
+      let deletionLineNumber = deletionBoundary + 1 - leadingRegion.rangeSize;
+      let additionLineNumber = additionBoundary + 1 - leadingRegion.rangeSize;
 
       if (
         walkContextLines(state, leadingRegion.fromStart, diffStyle, (index) => {
@@ -321,10 +339,10 @@ export function iterateOverDiff({
       unifiedLineIndex = hunk.unifiedLineStart - leadingRegion.fromEnd;
       splitLineIndex = hunk.splitLineStart - leadingRegion.fromEnd;
 
-      deletionLineIndex = hunk.deletionLineIndex - leadingRegion.fromEnd;
-      additionLineIndex = hunk.additionLineIndex - leadingRegion.fromEnd;
-      deletionLineNumber = hunk.deletionStart - leadingRegion.fromEnd;
-      additionLineNumber = hunk.additionStart - leadingRegion.fromEnd;
+      deletionLineIndex = deletionStartIndex - leadingRegion.fromEnd;
+      additionLineIndex = additionStartIndex - leadingRegion.fromEnd;
+      deletionLineNumber = deletionBoundary + 1 - leadingRegion.fromEnd;
+      additionLineNumber = additionBoundary + 1 - leadingRegion.fromEnd;
       if (
         walkContextLines(
           state,
@@ -371,10 +389,10 @@ export function iterateOverDiff({
     let unifiedLineIndex = hunk.unifiedLineStart;
     let splitLineIndex = hunk.splitLineStart;
 
-    let deletionLineIndex = hunk.deletionLineIndex;
-    let additionLineIndex = hunk.additionLineIndex;
-    let deletionLineNumber = hunk.deletionStart;
-    let additionLineNumber = hunk.additionStart;
+    let deletionLineIndex = deletionStartIndex;
+    let additionLineIndex = additionStartIndex;
+    let deletionLineNumber = deletionBoundary + 1;
+    let additionLineNumber = additionBoundary + 1;
     const lastContent = hunk.hunkContent.at(-1);
 
     for (const content of hunk.hunkContent) {

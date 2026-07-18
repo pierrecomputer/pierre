@@ -835,6 +835,9 @@ export interface RenderedDiffASTCache {
   result: ThemedDiffResult | undefined;
   renderRange: RenderRange | undefined;
   isDirty?: boolean;
+  // A render was skipped while a highlight was in progress; its completion
+  // will trigger a re-render.
+  highlightPending?: boolean;
 }
 
 /**
@@ -1093,6 +1096,15 @@ export interface DiffsEditableComponent<
   ) => void;
 }
 
+// Narrows an editor-attachable instance to exclude UnresolvedFile, which is
+// not editable: a `type: 'unresolved-file'` instance maps to `never`, turning
+// `editor.edit(new UnresolvedFile())` into a compile error.
+export type EditableInstance<T extends { type: string }> = T extends {
+  type: 'unresolved-file';
+}
+  ? never
+  : T;
+
 export interface DiffsEditor<LAnnotation> {
   /** @internal */
   __prepareFile?(file: FileContents): FileContents;
@@ -1107,7 +1119,9 @@ export interface DiffsEditor<LAnnotation> {
       | undefined,
     renderRange: RenderRange | undefined
   ): void;
-  edit(fileInstance: DiffsEditableComponent<LAnnotation>): () => void;
+  edit<T extends DiffsEditableComponent<LAnnotation>>(
+    fileInstance: EditableInstance<T>
+  ): () => void;
   cleanUp(recycle?: boolean): void;
 }
 

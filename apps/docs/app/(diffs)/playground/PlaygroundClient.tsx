@@ -38,6 +38,7 @@ import {
 } from '@pierre/icons';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { toast } from 'sonner';
 
 import type { PlaygroundAnnotationMetadata } from './constants';
@@ -48,9 +49,25 @@ import {
   VIRTUALIZER_FILE_DIFFS,
 } from './constants';
 import { PlaygroundCodeView } from './PlaygroundCodeView';
-import { CommentForm, ExampleThread } from './PlaygroundComments';
+import {
+  CommentForm,
+  CommentThread,
+  ExampleThread,
+} from './PlaygroundComments';
 import { PlaygroundVirtualizerElementView } from './PlaygroundVirtualizerElementView';
 import { PlaygroundVirtualizerView } from './PlaygroundVirtualizerView';
+import type {
+  EditorMode,
+  HunkSeparatorValue,
+  LineHoverHighlight,
+  ViewMode,
+} from './searchParams';
+import {
+  DARK_THEMES,
+  DEFAULTS,
+  LIGHT_THEMES,
+  parsePlaygroundSearchParams,
+} from './searchParams';
 import { useTheme } from '@/components/theme-provider';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
@@ -61,26 +78,6 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Switch } from '@/components/ui/switch';
-
-const LIGHT_THEMES = [
-  'pierre-light',
-  'pierre-light-soft',
-  'catppuccin-latte',
-  'github-light',
-  'one-light',
-  'solarized-light',
-] as const;
-
-const DARK_THEMES = [
-  'pierre-dark',
-  'pierre-dark-soft',
-  'catppuccin-mocha',
-  'dracula',
-  'github-dark',
-  'one-dark-pro',
-  'tokyo-night',
-  'vitesse-dark',
-] as const;
 
 const LINE_DIFF_OPTIONS = [
   { value: 'word-alt', label: 'Word-Alt' },
@@ -96,28 +93,12 @@ const HUNK_SEPARATOR_OPTIONS = [
   { value: 'metadata', label: 'Metadata' },
 ] as const;
 
-type HunkSeparatorValue = (typeof HUNK_SEPARATOR_OPTIONS)[number]['value'];
-
 const LINE_HOVER_HIGHLIGHT_OPTIONS = [
   { value: 'disabled', label: 'Disabled' },
   { value: 'both', label: 'Line & number' },
   { value: 'number', label: 'Number' },
   { value: 'line', label: 'Line' },
 ] as const;
-
-type LineHoverHighlight =
-  (typeof LINE_HOVER_HIGHLIGHT_OPTIONS)[number]['value'];
-
-// The editable surface is rendered read-only (Review) or attached to a live
-// editor (Edit). Markers are diagnostics shown only while editing.
-type EditorMode = 'review' | 'edit';
-
-// The rendering surface the playground diff(s) are drawn with. 'normal' is the
-// single editable FileDiff; 'virtualizer' renders several diffs with window
-// scroll (vanilla Virtualizer); 'virtualizer-element' renders them with the
-// React <Virtualizer> inside its own scroll region; 'codeview' renders a mix
-// of diff/file items in CodeView's own scroller.
-type ViewMode = 'normal' | 'virtualizer' | 'virtualizer-element' | 'codeview';
 
 const VIEW_MODE_OPTIONS = [
   { value: 'normal', label: 'Normal' },
@@ -148,28 +129,6 @@ type SharedRenderOptions = Pick<
   // stay annotation-agnostic.
   hunkSeparators: HunkSeparatorValue;
 };
-
-// Default values for URL param comparison
-const DEFAULTS = {
-  viewMode: 'normal' as ViewMode,
-  diffStyle: 'split',
-  colorMode: 'system',
-  lightTheme: 'pierre-light',
-  darkTheme: 'pierre-dark',
-  diffIndicators: 'bars',
-  lineDiffType: 'word-alt',
-  lineHoverHighlight: 'disabled' as LineHoverHighlight,
-  hunkSeparators: 'line-info' as HunkSeparatorValue,
-  background: true,
-  lineNumbers: true,
-  wrap: true,
-  lineSelection: true,
-  gutterButton: true,
-  interactionMode: 'comment' as const,
-  annotations: true,
-  editorMode: 'review' as EditorMode,
-  markers: false,
-} as const;
 
 interface PlaygroundClientProps {
   prerenderedDiff: PreloadFileDiffResult<PlaygroundAnnotationMetadata>;
@@ -688,138 +647,48 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
   // in sync with the rest of the app. See `effectiveColorMode`.
   const { resolvedColorScheme } = useTheme();
 
-  const getParam = <T extends string>(key: string, defaultValue: T): T => {
-    return (searchParams.get(key) as T) ?? defaultValue;
-  };
-
-  const getBoolParam = (key: string, defaultValue: boolean): boolean => {
-    const value = searchParams.get(key);
-    if (value === null) return defaultValue;
-    return value === '1' || value === 'true';
-  };
-
-  const getLineModeParam = (): 'select' | 'comment' | 'none' | null => {
-    const value = searchParams.get('lineMode');
-    if (value === 'select' || value === 'comment' || value === 'none') {
-      return value;
-    }
-    return null;
-  };
-
-  const getLineHoverHighlightParam = (): LineHoverHighlight => {
-    const value = searchParams.get('hover');
-    return (
-      LINE_HOVER_HIGHLIGHT_OPTIONS.find((option) => option.value === value)
-        ?.value ?? DEFAULTS.lineHoverHighlight
-    );
-  };
-
-  const [viewMode, setViewMode] = useState<ViewMode>(() => {
-    const value = getParam('view', DEFAULTS.viewMode);
-    return value === 'virtualizer' ||
-      value === 'virtualizer-element' ||
-      value === 'codeview'
-      ? value
-      : 'normal';
-  });
-
-  const [diffStyle, setDiffStyle] = useState<'split' | 'unified'>(
-    getParam('layout', DEFAULTS.diffStyle) as 'split' | 'unified'
+  // One-time parse of the querystring with the same parser the server used to
+  // build the prerendered payload, so the first client render agrees with the
+  // prerendered markup.
+  const [urlState] = useState(() =>
+    parsePlaygroundSearchParams((key) => searchParams.get(key))
   );
 
-  const [colorMode, setColorMode] = useState<'system' | 'light' | 'dark'>(
-    getParam('mode', DEFAULTS.colorMode) as 'system' | 'light' | 'dark'
+  const [viewMode, setViewMode] = useState<ViewMode>(urlState.viewMode);
+  const [diffStyle, setDiffStyle] = useState(urlState.diffStyle);
+  const [colorMode, setColorMode] = useState(urlState.colorMode);
+  const [selectedLightTheme, setSelectedLightTheme] = useState(
+    urlState.lightTheme
   );
-  const [selectedLightTheme, setSelectedLightTheme] = useState<
-    (typeof LIGHT_THEMES)[number]
-  >(getParam('light', DEFAULTS.lightTheme) as (typeof LIGHT_THEMES)[number]);
-  const [selectedDarkTheme, setSelectedDarkTheme] = useState<
-    (typeof DARK_THEMES)[number]
-  >(getParam('dark', DEFAULTS.darkTheme) as (typeof DARK_THEMES)[number]);
-
-  const [diffIndicators, setDiffIndicators] = useState<DiffIndicators>(
-    getParam('indicators', DEFAULTS.diffIndicators) as DiffIndicators
+  const [selectedDarkTheme, setSelectedDarkTheme] = useState(
+    urlState.darkTheme
   );
-
-  const [lineDiffType, setLineDiffType] = useState<
-    'word-alt' | 'word' | 'char' | 'none'
-  >(
-    getParam('inline', DEFAULTS.lineDiffType) as
-      | 'word-alt'
-      | 'word'
-      | 'char'
-      | 'none'
+  const [diffIndicators, setDiffIndicators] = useState(urlState.diffIndicators);
+  const [lineDiffType, setLineDiffType] = useState(urlState.lineDiffType);
+  const [lineHoverHighlight, setLineHoverHighlight] = useState(
+    urlState.lineHoverHighlight
   );
-
-  const [lineHoverHighlight, setLineHoverHighlight] =
-    useState<LineHoverHighlight>(getLineHoverHighlightParam);
-
-  const [hunkSeparators, setHunkSeparators] = useState<HunkSeparatorValue>(
-    getParam('hunks', DEFAULTS.hunkSeparators)
-  );
-
+  const [hunkSeparators, setHunkSeparators] = useState(urlState.hunkSeparators);
   const [disableBackground, setDisableBackground] = useState(
-    !getBoolParam('bg', DEFAULTS.background)
+    urlState.disableBackground
   );
   const [disableLineNumbers, setDisableLineNumbers] = useState(
-    !getBoolParam('ln', DEFAULTS.lineNumbers)
+    urlState.disableLineNumbers
   );
-  const [overflow, setOverflow] = useState<'wrap' | 'scroll'>(
-    getBoolParam('wrap', DEFAULTS.wrap) ? 'wrap' : 'scroll'
-  );
-
-  const initialLineMode = getLineModeParam();
+  const [overflow, setOverflow] = useState(urlState.overflow);
   const [enableLineSelection, setEnableLineSelection] = useState(
-    initialLineMode === 'select'
-      ? true
-      : initialLineMode === 'comment'
-        ? false
-        : initialLineMode === 'none'
-          ? false
-          : getBoolParam('select', DEFAULTS.lineSelection)
+    urlState.enableLineSelection
   );
   const [enableGutterUtility, setEnableGutterUtility] = useState(
-    initialLineMode === 'comment'
-      ? true
-      : initialLineMode === 'select'
-        ? false
-        : initialLineMode === 'none'
-          ? false
-          : getBoolParam('gutter', DEFAULTS.gutterButton)
+    urlState.enableGutterUtility
   );
   const [showAnnotations, setShowAnnotations] = useState(
-    getBoolParam('annot', DEFAULTS.annotations)
+    urlState.showAnnotations
   );
-  // Edit mode only exists in the Normal view (other views render per-file
-  // edit controls instead), so only honor `?edit=edit` when starting there.
-  const [editorMode, setEditorMode] = useState<EditorMode>(
-    viewMode === 'normal' && getParam('edit', DEFAULTS.editorMode) === 'edit'
-      ? 'edit'
-      : 'review'
-  );
-  const [showMarkers, setShowMarkers] = useState(
-    getBoolParam('markers', DEFAULTS.markers)
-  );
-
-  // Parse selected line range from URL
-  // Format: L15a (line 15 additions), L28-35a (lines 28-35 additions), L10d (line 10 deletions)
-  const parseLineSelection = (): SelectedLineRange | null => {
-    const lineParam = searchParams.get('line');
-    if (lineParam == null) return null;
-
-    const match = lineParam.match(/^(\d+)(?:-(\d+))?([ad])$/);
-    if (match == null) return null;
-
-    const start = parseInt(match[1], 10);
-    const end = match[2] != null ? parseInt(match[2], 10) : start;
-    const side: 'additions' | 'deletions' =
-      match[3] === 'd' ? 'deletions' : 'additions';
-
-    return { start, end, side };
-  };
-
+  const [editorMode, setEditorMode] = useState<EditorMode>(urlState.editorMode);
+  const [showMarkers, setShowMarkers] = useState(urlState.showMarkers);
   const [selectedRange, setSelectedRange] = useState<SelectedLineRange | null>(
-    parseLineSelection
+    urlState.selectedRange
   );
   // Keep URL updates at gesture boundaries instead of navigating on every
   // pointer move while the controlled selection follows a gutter drag.
@@ -840,9 +709,29 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
   // The editor attaches to the diff's editable (new-file) side. Recreate it
   // when the diff layout or edit mode changes so it re-attaches to the freshly
   // relaid-out surface with a clean document instead of reusing a torn-down
-  // instance (mirrors LiveEditing's editor lifecycle).
+  // instance (mirrors LiveEditing's editor lifecycle). Edits remap annotation
+  // line numbers (an Enter above a comment shifts it down); onChange hands the
+  // remapped set back so the `lineAnnotations` prop — and the React-slotted
+  // comment content keyed by line number — follows the edit. The flushSync
+  // matters: the editor renamed the shadow-DOM annotation slots during this
+  // same keystroke, and until React commits the matching light-DOM `slot`
+  // attributes the comments project nowhere. A scheduled commit lands frames
+  // later (blank comments, collapsed rows); a synchronous one lands before
+  // this task's paint.
   // eslint-disable-next-line react-hooks/exhaustive-deps -- deps intentionally force a fresh editor; the factory takes no inputs
-  const editor = useMemo(() => new Editor({}), []);
+  const editor = useMemo(
+    () =>
+      new Editor<PlaygroundAnnotationMetadata>({
+        onChange: (_file, lineAnnotations) => {
+          if (lineAnnotations != null) {
+            flushSync(() => {
+              setAnnotations(lineAnnotations);
+            });
+          }
+        },
+      }),
+    []
+  );
 
   // Apply (or clear) the demo markers whenever the editor, mode, or toggle
   // changes. `setMarkers` throws until the editor attaches to its surface
@@ -1002,8 +891,27 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
     []
   );
 
+  // Submitting persists the form in place: the annotation keeps its position
+  // and gains the typed body, which flips its rendering to a comment thread.
+  const handleSubmitComment = useCallback(
+    (side: AnnotationSide | undefined, lineNumber: number, body: string) => {
+      setAnnotations((prev) =>
+        prev.map((ann) =>
+          ann.side === side && ann.lineNumber === lineNumber
+            ? { ...ann, metadata: { ...ann.metadata, body } }
+            : ann
+        )
+      );
+      setSelectedRange(null);
+      setCommittedSelectedRange(null);
+    },
+    []
+  );
+
+  // An open form is an annotation that is neither the seeded thread nor a
+  // submitted comment; it pauses the gutter utility so forms can't stack.
   const hasOpenCommentForm = annotations.some(
-    (ann) => ann.metadata.isThread !== true
+    (ann) => ann.metadata.isThread !== true && ann.metadata.body == null
   );
 
   // The controls expose standalone selection and comments as separate modes.
@@ -1031,6 +939,13 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
     setViewMode(mode);
     if (mode !== 'normal') setEditorMode('review');
   }, []);
+
+  const [usePrerenderedHTML, setUsePrerenderedHTML] = useState(
+    () => viewMode === 'normal'
+  );
+  if (usePrerenderedHTML && viewMode !== 'normal') {
+    setUsePrerenderedHTML(false);
+  }
 
   const controlsContentProps = {
     viewMode,
@@ -1143,6 +1058,9 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
   const fileDiff = (
     <FileDiff
       {...prerenderedDiff}
+      prerenderedHTML={
+        usePrerenderedHTML ? prerenderedDiff.prerenderedHTML : undefined
+      }
       className="border-border overflow-hidden rounded-lg border"
       contentEditable={contentEditable}
       selectedLines={selectedRange}
@@ -1155,22 +1073,35 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
         onLineSelectionStart: handleLineSelectionChange,
         onLineSelectionChange: handleLineSelectionChange,
         onLineSelectionEnd: handleLineSelectionEnd,
+        // A stable reference: an inline arrow here changes identity every
+        // render, failing the instance's options equality and forcing a full
+        // re-render on every commit.
         onGutterUtilityClick: canUseGutterComments
-          ? (range) => {
-              addCommentAtRange(range);
-            }
+          ? addCommentAtRange
           : undefined,
       }}
       renderAnnotation={
         showAnnotations
           ? (annotation) =>
               annotation.metadata.isThread === true ? (
-                <ExampleThread />
+                <ExampleThread
+                  onDelete={() =>
+                    handleCancelComment(annotation.side, annotation.lineNumber)
+                  }
+                />
+              ) : annotation.metadata.body != null ? (
+                <CommentThread
+                  body={annotation.metadata.body}
+                  onDelete={() =>
+                    handleCancelComment(annotation.side, annotation.lineNumber)
+                  }
+                />
               ) : (
                 <CommentForm
                   side={annotation.side}
                   lineNumber={annotation.lineNumber}
                   onCancel={handleCancelComment}
+                  onSubmit={handleSubmitComment}
                 />
               )
           : undefined

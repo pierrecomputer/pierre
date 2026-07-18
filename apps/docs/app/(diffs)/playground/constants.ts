@@ -5,11 +5,13 @@ import {
 } from '@pierre/diffs';
 import type { PreloadFileDiffOptions } from '@pierre/diffs/ssr';
 
+import type { PlaygroundUrlState } from './searchParams';
 import { CustomScrollbarCSS } from '@/components/CustomScrollbarCSS';
 
 export interface PlaygroundAnnotationMetadata {
   key: string;
   isThread: boolean;
+  body?: string;
 }
 
 // Multi-hunk diff: edits at top, middle (annotation on new line 25), and
@@ -148,40 +150,55 @@ export const PLAYGROUND_MARKERS = [
   },
 ];
 
-export const PLAYGROUND_DIFF: PreloadFileDiffOptions<PlaygroundAnnotationMetadata> =
+const PLAYGROUND_FILE_DIFF = parseDiffFromFile(
   {
-    fileDiff: parseDiffFromFile(
-      {
-        name: 'api/users.ts',
-        contents: OLD_USERS_CONTENT,
-      },
-      {
-        name: 'api/users.ts',
-        contents: NEW_USERS_CONTENT,
-      }
-    ),
-    // Match the client's default render (PlaygroundClient DEFAULTS): ship both
-    // light and dark themes with themeType 'system' so the prerendered shadow
-    // DOM resolves via the native CSS `light-dark()` against the pre-paint
-    // color-scheme. A single fixed theme would force one color-scheme server
-    // side and flash when the client re-resolves to the other on first paint.
+    name: 'api/users.ts',
+    contents: OLD_USERS_CONTENT,
+  },
+  {
+    name: 'api/users.ts',
+    contents: NEW_USERS_CONTENT,
+  }
+);
+
+const PLAYGROUND_ANNOTATIONS = [
+  {
+    side: 'additions',
+    lineNumber: 25,
+    metadata: {
+      key: 'additions-25',
+      isThread: true,
+    },
+  },
+] satisfies PreloadFileDiffOptions<PlaygroundAnnotationMetadata>['annotations'];
+
+// Maps the shared URL state onto the preload options, so the prerendered
+// markup matches what the client derives from the same querystring — the
+// markup paints before hydration, and a drifted option would show the
+// server's presentation until the first client repaint. `colorMode` maps to
+// themeType directly: 'system' ships both themes and resolves via the native
+// CSS `light-dark()` against the pre-paint color-scheme, so no flash when
+// the client theme controller settles.
+export function getPlaygroundPreloadOptions(
+  state: PlaygroundUrlState
+): PreloadFileDiffOptions<PlaygroundAnnotationMetadata> {
+  return {
+    fileDiff: PLAYGROUND_FILE_DIFF,
     options: {
-      theme: { dark: 'pierre-dark', light: 'pierre-light' },
-      themeType: 'system',
-      diffStyle: 'split',
+      theme: { dark: state.darkTheme, light: state.lightTheme },
+      themeType: state.colorMode,
+      diffStyle: state.diffStyle,
+      overflow: state.overflow,
+      diffIndicators: state.diffIndicators,
+      lineDiffType: state.lineDiffType,
+      hunkSeparators: state.hunkSeparators,
+      disableBackground: state.disableBackground,
+      disableLineNumbers: state.disableLineNumbers,
       unsafeCSS: CustomScrollbarCSS,
     },
-    annotations: [
-      {
-        side: 'additions',
-        lineNumber: 25,
-        metadata: {
-          key: 'additions-25',
-          isThread: true,
-        },
-      },
-    ],
+    annotations: state.showAnnotations ? PLAYGROUND_ANNOTATIONS : [],
   };
+}
 
 // -----------------------------------------------------------------------------
 // Multi-item fixtures for the Virtualizer and CodeView playground modes.

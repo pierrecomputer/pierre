@@ -286,6 +286,50 @@ function assertResolvedHunkMatchesExpected(
 }
 
 describe('diffAcceptRejectHunk', () => {
+  test('accepts a context-zero deletion without losing trailing context', () => {
+    const oldLines = Array.from(
+      { length: 7 },
+      (_, index) => `line ${index + 1}\n`
+    );
+    const newLines = oldLines.toSpliced(4, 1);
+    const diff = parseDiffFromFile(
+      { name: 'deletion.ts', contents: oldLines.join('') },
+      { name: 'deletion.ts', contents: newLines.join('') },
+      { context: 0 }
+    );
+
+    const result = diffAcceptRejectHunk(diff, 0, 'accept');
+
+    expect(result.deletionLines).toEqual(newLines);
+    expect(result.additionLines).toEqual(newLines);
+    expect(verifyFileDiffHunkValues(result)).toEqual({
+      valid: true,
+      errors: [],
+    });
+  });
+
+  test('rejects a context-zero deletion without duplicating trailing context', () => {
+    const oldLines = Array.from(
+      { length: 7 },
+      (_, index) => `line ${index + 1}\n`
+    );
+    const newLines = oldLines.toSpliced(4, 1);
+    const diff = parseDiffFromFile(
+      { name: 'deletion.ts', contents: oldLines.join('') },
+      { name: 'deletion.ts', contents: newLines.join('') },
+      { context: 0 }
+    );
+
+    const result = diffAcceptRejectHunk(diff, 0, 'reject');
+
+    expect(result.deletionLines).toEqual(oldLines);
+    expect(result.additionLines).toEqual(oldLines);
+    expect(verifyFileDiffHunkValues(result)).toEqual({
+      valid: true,
+      errors: [],
+    });
+  });
+
   test('accept keeps later hunk indices accurate after resolving a pure-addition hunk', () => {
     const diff = createFixture();
     const resolvedSnapshot = snapshotHunk(diff, 0);

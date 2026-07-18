@@ -153,6 +153,52 @@ describe('parseMergeConflictDiffFromFile', () => {
     ]);
   });
 
+  test('normalizes zero-count hunk sides for whole-file conflicts', () => {
+    // A conflict with an empty incoming side and no surrounding context
+    // produces a deletion-only hunk. Its addition side must land on the
+    // unified `N,0` convention (additionStart 0 at file start) so boundary
+    // math doesn't invent a collapsed row before the hunk.
+    const currentOnly = parseMergeConflictDiffFromFile({
+      name: 'deleted.ts',
+      contents: '<<<<<<< HEAD\nalpha\nbeta\n=======\n>>>>>>> feature\n',
+    });
+    expect(verifyHunkLineValues(currentOnly.fileDiff)).toEqual([]);
+    expect(currentOnly.fileDiff.type).toBe('deleted');
+    expect(currentOnly.fileDiff.hunks).toHaveLength(1);
+    expect(currentOnly.fileDiff.hunks[0]).toMatchObject({
+      additionStart: 0,
+      additionCount: 0,
+      deletionStart: 1,
+      deletionCount: 2,
+      collapsedBefore: 0,
+      splitLineStart: 0,
+      unifiedLineStart: 0,
+      hunkSpecs: '@@ -1,2 +0,0 @@\n',
+    });
+    expect(currentOnly.fileDiff.splitLineCount).toBe(2);
+    expect(currentOnly.fileDiff.unifiedLineCount).toBe(2);
+
+    // The mirrored case: empty current side, so the deletion side is the
+    // zero-count one (matches git's `-0,0` header for new files).
+    const incomingOnly = parseMergeConflictDiffFromFile({
+      name: 'new.ts',
+      contents: '<<<<<<< HEAD\n=======\nalpha\nbeta\n>>>>>>> feature\n',
+    });
+    expect(verifyHunkLineValues(incomingOnly.fileDiff)).toEqual([]);
+    expect(incomingOnly.fileDiff.type).toBe('new');
+    expect(incomingOnly.fileDiff.hunks).toHaveLength(1);
+    expect(incomingOnly.fileDiff.hunks[0]).toMatchObject({
+      additionStart: 1,
+      additionCount: 2,
+      deletionStart: 0,
+      deletionCount: 0,
+      collapsedBefore: 0,
+      hunkSpecs: '@@ -0,0 +1,2 @@\n',
+    });
+    expect(incomingOnly.fileDiff.splitLineCount).toBe(2);
+    expect(incomingOnly.fileDiff.unifiedLineCount).toBe(2);
+  });
+
   test('large conflict harness stays consistent across maxContextLines', () => {
     const maxContextLinesCases = [3, 10, Infinity] as const;
     const hunkRowTotals = new Map<number, number>();

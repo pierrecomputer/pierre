@@ -1,6 +1,7 @@
 'use client';
 
 import type {
+  AnnotationSide,
   DiffLineAnnotation,
   FileDiffMetadata,
   FileDiffOptions,
@@ -9,15 +10,17 @@ import type {
 import { Editor } from '@pierre/diffs/editor';
 import { EditProvider, FileDiff, Virtualizer } from '@pierre/diffs/react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { flushSync } from 'react-dom';
 
+import type { PlaygroundAnnotationMetadata } from './constants';
 import { ITEM_UNSAFE_CSS } from './constants';
-import { CommentForm } from './PlaygroundComments';
+import { CommentForm, CommentThread } from './PlaygroundComments';
 
 const SCROLL_REGION_STYLES = { height: '70vh', overflow: 'auto' } as const;
 
 interface PlaygroundVirtualizerElementViewProps {
   diffs: FileDiffMetadata[];
-  options: FileDiffOptions<undefined>;
+  options: FileDiffOptions<PlaygroundAnnotationMetadata>;
   enableLineSelection: boolean;
   enableGutterComments: boolean;
   showAnnotations: boolean;
@@ -57,7 +60,7 @@ export function PlaygroundVirtualizerElementView({
 
 interface ElementVirtualizerDiffProps {
   fileDiff: FileDiffMetadata;
-  options: FileDiffOptions<undefined>;
+  options: FileDiffOptions<PlaygroundAnnotationMetadata>;
   enableLineSelection: boolean;
   enableGutterComments: boolean;
   showAnnotations: boolean;
@@ -75,13 +78,32 @@ function ElementVirtualizerDiff({
   enableGutterComments,
   showAnnotations,
 }: ElementVirtualizerDiffProps) {
-  const editor = useMemo(() => new Editor<undefined>({}), []);
   const [editing, setEditing] = useState(false);
   const [annotations, setAnnotations] = useState<
-    DiffLineAnnotation<undefined>[]
+    DiffLineAnnotation<PlaygroundAnnotationMetadata>[]
   >([]);
   const [selectedLines, setSelectedLines] = useState<SelectedLineRange | null>(
     null
+  );
+
+  // Edits remap annotation line numbers; onChange hands the remapped set back
+  // so the `lineAnnotations` prop — and the React-slotted comment content
+  // keyed by line number — follows the edit. The flushSync matters: the
+  // editor renamed the shadow-DOM annotation slots during this same
+  // keystroke, and a scheduled commit would leave the comments projected
+  // nowhere for the frames in between.
+  const editor = useMemo(
+    () =>
+      new Editor<PlaygroundAnnotationMetadata>({
+        onChange: (_file, lineAnnotations) => {
+          if (lineAnnotations != null) {
+            flushSync(() => {
+              setAnnotations(lineAnnotations);
+            });
+          }
+        },
+      }),
+    []
   );
 
   const addCommentAtRange = useCallback((range: SelectedLineRange) => {
@@ -96,19 +118,39 @@ function ElementVirtualizerDiff({
           annotation.side === side && annotation.lineNumber === lineNumber
       )
         ? current
-        : [...current, { side, lineNumber }]
+        : [
+            ...current,
+            {
+              side,
+              lineNumber,
+              metadata: { key: `${side}-${lineNumber}`, isThread: false },
+            },
+          ]
     );
   }, []);
 
   const removeCommentAtLine = useCallback(
-    (
-      side: DiffLineAnnotation<undefined>['side'] | undefined,
-      lineNumber: number
-    ) => {
+    (side: AnnotationSide | undefined, lineNumber: number) => {
       setAnnotations((current) =>
         current.filter(
           (annotation) =>
             !(annotation.side === side && annotation.lineNumber === lineNumber)
+        )
+      );
+      setSelectedLines(null);
+    },
+    []
+  );
+
+  // Submitting persists the form in place: the annotation keeps its position
+  // and gains the typed body, which flips its rendering to a comment thread.
+  const submitCommentAtLine = useCallback(
+    (side: AnnotationSide | undefined, lineNumber: number, body: string) => {
+      setAnnotations((current) =>
+        current.map((annotation) =>
+          annotation.side === side && annotation.lineNumber === lineNumber
+            ? { ...annotation, metadata: { ...annotation.metadata, body } }
+            : annotation
         )
       );
       setSelectedLines(null);
@@ -122,15 +164,20 @@ function ElementVirtualizerDiff({
     }
   }, [showAnnotations]);
 
-  // Match the other views' precedence: an open comment form pauses the gutter
-  // utility so another form cannot be opened beneath it.
-  const hasOpenCommentForm = annotations.length > 0;
+  // Match the other views' precedence: an open comment form (no submitted
+  // body yet) pauses the gutter utility so another form cannot be opened
+  // beneath it.
+  const hasOpenCommentForm = annotations.some(
+    (annotation) => annotation.metadata.body == null
+  );
   const canSelectLines =
     enableLineSelection && !enableGutterComments && !hasOpenCommentForm;
   const canUseGutterComments =
     enableGutterComments && showAnnotations && !hasOpenCommentForm;
 
-  const fileDiffOptions = useMemo<FileDiffOptions<undefined>>(
+  const fileDiffOptions = useMemo<
+    FileDiffOptions<PlaygroundAnnotationMetadata>
+  >(
     () => ({
       ...options,
       stickyHeader: true,
@@ -166,13 +213,23 @@ function ElementVirtualizerDiff({
             Edit
           </label>
         )}
-        renderAnnotation={(annotation) => (
-          <CommentForm
-            side={annotation.side}
-            lineNumber={annotation.lineNumber}
-            onCancel={removeCommentAtLine}
-          />
-        )}
+        renderAnnotation={(annotation) =>
+          annotation.metadata.body != null ? (
+            <CommentThread
+              body={annotation.metadata.body}
+              onDelete={() =>
+                removeCommentAtLine(annotation.side, annotation.lineNumber)
+              }
+            />
+          ) : (
+            <CommentForm
+              side={annotation.side}
+              lineNumber={annotation.lineNumber}
+              onCancel={removeCommentAtLine}
+              onSubmit={submitCommentAtLine}
+            />
+          )
+        }
       />
     </EditProvider>
   );

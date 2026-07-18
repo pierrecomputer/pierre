@@ -15,9 +15,14 @@ import {
 import { Editor } from '@pierre/diffs/editor';
 import { CodeView, useStableCallback } from '@pierre/diffs/react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { flushSync } from 'react-dom';
 
 import type { PlaygroundAnnotationMetadata } from './constants';
-import { CommentForm, ExampleThread } from './PlaygroundComments';
+import {
+  CommentForm,
+  CommentThread,
+  ExampleThread,
+} from './PlaygroundComments';
 
 const CODE_VIEW_STYLES = { height: '70vh', overflow: 'auto' } as const;
 
@@ -45,7 +50,8 @@ interface PlaygroundCodeViewProps {
 // items re-diff the edited new side against the original old side.
 //
 // Annotations ride on item data: a gutter utility gesture appends a comment
-// form at its final line, and cancelling the form removes it again.
+// form at its final line, submitting persists it as a comment thread, and
+// cancelling removes it again.
 export function PlaygroundCodeView({
   items: initialItems,
   options,
@@ -66,6 +72,46 @@ export function PlaygroundCodeView({
       )
     );
   }, []);
+
+  // Edits remap annotation line numbers (an Enter above a comment shifts it
+  // down); this writes the remapped set back to the owning item, with the
+  // version bump every item-data change requires — CodeView drops
+  // same-version pushes, and its render loop re-applies `item.annotations`
+  // to the instance on every pass, so a stale item would snap the comment
+  // back to its pre-edit line. flushSync commits in the same task as the
+  // editor's shadow-slot rename (the items push is a layout effect), so the
+  // comment is never projected nowhere between frames. The identity bail
+  // keeps ordinary typing free: the editor passes the same array reference
+  // when nothing remapped.
+  const handleEditChange = useCallback(
+    (
+      item: PlaygroundItem,
+      _file: FileContents,
+      lineAnnotations?: DiffLineAnnotation<PlaygroundAnnotationMetadata>[]
+    ) => {
+      if (lineAnnotations == null) {
+        return;
+      }
+      flushSync(() => {
+        setItems((current) => {
+          const target = current.find((existing) => existing.id === item.id);
+          if (target == null || target.annotations === lineAnnotations) {
+            return current;
+          }
+          return current.map((existing) =>
+            existing.id === item.id
+              ? {
+                  ...existing,
+                  annotations: lineAnnotations,
+                  version: (existing.version ?? 0) + 1,
+                }
+              : existing
+          );
+        });
+      });
+    },
+    []
+  );
 
   // Committing a finished edit session is user-space: CodeView only ends the
   // session and reports the final contents through this lifecycle. The app
@@ -193,6 +239,48 @@ export function PlaygroundCodeView({
     []
   );
 
+  // Submitting persists the form in place: the annotation keeps its position
+  // and gains the typed body, which flips its rendering to a comment thread.
+  const submitCommentAtLine = useCallback(
+    (
+      itemId: string,
+      side: AnnotationSide | undefined,
+      lineNumber: number,
+      body: string
+    ) => {
+      setItems((current) =>
+        current.map((item) => {
+          if (item.id !== itemId) {
+            return item;
+          }
+          const version = (item.version ?? 0) + 1;
+          if (item.type === 'file') {
+            return {
+              ...item,
+              annotations: (item.annotations ?? []).map((a) =>
+                a.lineNumber === lineNumber
+                  ? { ...a, metadata: { ...a.metadata, body } }
+                  : a
+              ),
+              version,
+            };
+          }
+          return {
+            ...item,
+            annotations: (item.annotations ?? []).map((a) =>
+              a.side === side && a.lineNumber === lineNumber
+                ? { ...a, metadata: { ...a.metadata, body } }
+                : a
+            ),
+            version,
+          };
+        })
+      );
+      setSelectedLines(null);
+    },
+    []
+  );
+
   // Annotations live on item data, so hiding them is a data change: turning
   // the toggle off clears any comments that were added.
   useEffect(() => {
@@ -209,12 +297,15 @@ export function PlaygroundCodeView({
     );
   }, [showAnnotations]);
 
-  // Match the Normal view's precedence: an open comment form pauses the
-  // gutter utility so the form can't stack.
+  // Match the Normal view's precedence: an open comment form (neither a
+  // thread nor a submitted comment) pauses the gutter utility so forms can't
+  // stack.
   const hasOpenCommentForm = items.some(
     (item) =>
       item.annotations?.some(
-        (annotation) => annotation.metadata.isThread !== true
+        (annotation) =>
+          annotation.metadata.isThread !== true &&
+          annotation.metadata.body == null
       ) === true
   );
   const canSelectLines =
@@ -243,15 +334,35 @@ export function PlaygroundCodeView({
         | DiffLineAnnotation<PlaygroundAnnotationMetadata>,
       item: PlaygroundItem
     ) => {
+      const side = 'side' in annotation ? annotation.side : undefined;
       if (annotation.metadata.isThread === true) {
-        return <ExampleThread />;
+        return (
+          <ExampleThread
+            onDelete={() =>
+              removeCommentAtLine(item.id, side, annotation.lineNumber)
+            }
+          />
+        );
+      }
+      if (annotation.metadata.body != null) {
+        return (
+          <CommentThread
+            body={annotation.metadata.body}
+            onDelete={() =>
+              removeCommentAtLine(item.id, side, annotation.lineNumber)
+            }
+          />
+        );
       }
       return (
         <CommentForm
-          side={'side' in annotation ? annotation.side : undefined}
+          side={side}
           lineNumber={annotation.lineNumber}
           onCancel={(side, lineNumber) =>
             removeCommentAtLine(item.id, side, lineNumber)
+          }
+          onSubmit={(side, lineNumber, body) =>
+            submitCommentAtLine(item.id, side, lineNumber, body)
           }
         />
       );
@@ -281,6 +392,7 @@ export function PlaygroundCodeView({
       selectedLines={selectedLines}
       onSelectedLinesChange={setSelectedLines}
       createEditor={createEditor}
+      onItemEditChange={handleEditChange}
       onItemEditComplete={handleEditComplete}
       renderHeaderMetadata={renderHeaderMetadata}
       renderAnnotation={renderAnnotation}

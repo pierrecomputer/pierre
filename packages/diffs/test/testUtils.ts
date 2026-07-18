@@ -194,9 +194,11 @@ export function verifyHunkLineValues(
     }
     currentUnifiedLineTotal += hunk.collapsedBefore + hunk.unifiedLineCount;
 
-    // Verify collapsedBefore = additionStart - 1 - lastHunkAdditionEnd
+    // A zero-count range starts after additionStart instead of on it.
     const expectedCollapsedBefore = Math.max(
-      hunk.additionStart - 1 - lastHunkAdditionEnd,
+      hunk.additionStart -
+        (hunk.additionCount === 0 ? 0 : 1) -
+        lastHunkAdditionEnd,
       0
     );
     if (hunk.collapsedBefore !== expectedCollapsedBefore) {
@@ -204,7 +206,10 @@ export function verifyHunkLineValues(
         `${hunkPrefix}: collapsedBefore (${hunk.collapsedBefore}) !== expected (${expectedCollapsedBefore})`
       );
     }
-    lastHunkAdditionEnd = hunk.additionStart + hunk.additionCount - 1;
+    lastHunkAdditionEnd =
+      hunk.additionCount === 0
+        ? hunk.additionStart
+        : hunk.additionStart + hunk.additionCount - 1;
   }
 
   // Verify file-level totals
@@ -224,7 +229,9 @@ export function verifyHunkLineValues(
     // nothing) has additionStart 0 / additionCount 0, and without the clamp
     // the -1 end would invent a phantom trailing context line
     const lastHunkEnd = Math.max(
-      lastHunk.additionStart + lastHunk.additionCount - 1,
+      lastHunk.additionCount === 0
+        ? lastHunk.additionStart
+        : lastHunk.additionStart + lastHunk.additionCount - 1,
       0
     );
     const totalFileLines = file.additionLines.length;

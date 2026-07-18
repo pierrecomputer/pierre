@@ -10,14 +10,15 @@ import {
 import { Editor } from '@pierre/diffs/editor';
 import { useWorkerPool } from '@pierre/diffs/react';
 import { useEffect, useRef } from 'react';
+import { flushSync } from 'react-dom';
 import { createRoot, type Root } from 'react-dom/client';
 
 import { ITEM_UNSAFE_CSS } from './constants';
-import { CommentForm } from './PlaygroundComments';
+import { CommentForm, CommentThread } from './PlaygroundComments';
 
 interface PlaygroundVirtualizerViewProps {
   diffs: FileDiffMetadata[];
-  options: FileDiffOptions<undefined>;
+  options: FileDiffOptions<VirtualizerAnnotationMetadata>;
   enableLineSelection: boolean;
   enableGutterComments: boolean;
   showAnnotations: boolean;
@@ -53,11 +54,24 @@ const VIRTUALIZER_CUSTOM_CSS = `${ITEM_UNSAFE_CSS}
 }
 `;
 
+// Annotations carry a stable key in metadata so their React roots survive
+// edit-session remaps: line numbers move when lines are inserted above a
+// comment, but the metadata reference rides through the editor's remap
+// untouched.
+interface VirtualizerAnnotationMetadata {
+  key: string;
+  /** Submitted comment text. Present once the comment form was submitted;
+   * absent while the form is still open. */
+  body?: string;
+}
+
+type VirtualizerAnnotation = DiffLineAnnotation<VirtualizerAnnotationMetadata>;
+
 function annotationKey(
   index: number,
-  annotation: DiffLineAnnotation<undefined>
+  annotation: VirtualizerAnnotation
 ): string {
-  return `${index}:${annotation.side}:${annotation.lineNumber}`;
+  return `${index}:${annotation.metadata.key}`;
 }
 
 // The "Virtualizer (window)" mode: renders a list of full diffs through the
@@ -86,9 +100,12 @@ export function PlaygroundVirtualizerView({
 }: PlaygroundVirtualizerViewProps) {
   const pool = useWorkerPool();
   const contentRef = useRef<HTMLDivElement>(null);
-  const instancesRef = useRef<VirtualizedFileDiff[]>([]);
-  const annotationsRef = useRef<DiffLineAnnotation<undefined>[][]>([]);
+  const instancesRef = useRef<
+    VirtualizedFileDiff<VirtualizerAnnotationMetadata>[]
+  >([]);
+  const annotationsRef = useRef<VirtualizerAnnotation[][]>([]);
   const annotationRootsRef = useRef(new Map<string, Root>());
+  const annotationKeyCounterRef = useRef(0);
 
   // React forbids synchronously unmounting a root from inside its own event
   // handler (the Cancel button lives in the root being removed), so unmounts
@@ -117,7 +134,7 @@ export function PlaygroundVirtualizerView({
     virtualizer.setup(document);
 
     annotationsRef.current = diffs.map(() => []);
-    const editors: Editor<undefined>[] = [];
+    const editors: Editor<VirtualizerAnnotationMetadata>[] = [];
     const instances = diffs.map((fileDiff, index) => {
       // `diffs-container` is the library's default (registered) container
       // element. We create and append it ourselves so the virtualizer can
@@ -126,7 +143,34 @@ export function PlaygroundVirtualizerView({
       fileContainer.style.display = 'block';
       content.appendChild(fileContainer);
 
-      const editor = new Editor<undefined>({});
+      // Edits remap annotation line numbers; onChange hands the remapped set
+      // back so this view's annotation source of truth follows the edit —
+      // otherwise the next host-driven render snaps comments back to their
+      // pre-edit lines. An annotation whose line was deleted is dropped from
+      // the set; retire its orphaned React root.
+      const editor = new Editor<VirtualizerAnnotationMetadata>({
+        onChange: (_file, lineAnnotations) => {
+          if (lineAnnotations == null) {
+            return;
+          }
+          const previous = annotationsRef.current[index];
+          if (previous === lineAnnotations) {
+            return;
+          }
+          annotationsRef.current[index] = lineAnnotations;
+          const liveKeys = new Set(
+            lineAnnotations.map((annotation) =>
+              annotationKey(index, annotation)
+            )
+          );
+          for (const annotation of previous) {
+            const key = annotationKey(index, annotation);
+            if (!liveKeys.has(key)) {
+              unmountAnnotationRoot(key);
+            }
+          }
+        },
+      });
       editors.push(editor);
       const { element: editToggle, input } = createEditToggle();
 
@@ -137,67 +181,105 @@ export function PlaygroundVirtualizerView({
         });
       };
 
-      const removeAnnotation = (annotation: DiffLineAnnotation<undefined>) => {
+      const removeAnnotation = (annotation: VirtualizerAnnotation) => {
         annotationsRef.current[index] = annotationsRef.current[index].filter(
-          (existing) =>
-            !(
-              existing.side === annotation.side &&
-              existing.lineNumber === annotation.lineNumber
-            )
+          (existing) => existing.metadata.key !== annotation.metadata.key
         );
         instance.setSelectedLines(null);
         rerenderWithAnnotations();
         unmountAnnotationRoot(annotationKey(index, annotation));
       };
 
-      const instance: VirtualizedFileDiff = new VirtualizedFileDiff(
-        {
-          ...options,
-          renderHeaderMetadata: () => editToggle,
-          stickyHeader: true,
-          unsafeCSS: VIRTUALIZER_CUSTOM_CSS,
-          enableLineSelection: enableLineSelection && !enableGutterComments,
-          enableGutterUtility: enableGutterComments && showAnnotations,
-          onGutterUtilityClick: (range) => {
-            const side = range.endSide ?? range.side;
-            if (side == null) {
-              return;
-            }
-            const lineNumber = range.end;
-            const annotations = annotationsRef.current[index];
-            if (
-              annotations.some(
-                (annotation) =>
-                  annotation.side === side &&
-                  annotation.lineNumber === lineNumber
-              )
-            ) {
-              return;
-            }
-            annotations.push({ side, lineNumber });
-            rerenderWithAnnotations();
+      // Submitting persists the form in place: the annotation keeps its key
+      // and position and gains the typed body, which flips its rendering to a
+      // comment thread. The fresh metadata object fails the diff's annotation
+      // equality check, so the re-render rebuilds the wrapper and
+      // renderAnnotation swaps the root's content.
+      const submitAnnotation = (
+        annotation: VirtualizerAnnotation,
+        body: string
+      ) => {
+        annotationsRef.current[index] = annotationsRef.current[index].map(
+          (existing) =>
+            existing.metadata.key === annotation.metadata.key
+              ? { ...existing, metadata: { ...existing.metadata, body } }
+              : existing
+        );
+        instance.setSelectedLines(null);
+        rerenderWithAnnotations();
+      };
+
+      const instance: VirtualizedFileDiff<VirtualizerAnnotationMetadata> =
+        new VirtualizedFileDiff<VirtualizerAnnotationMetadata>(
+          {
+            ...options,
+            renderHeaderMetadata: () => editToggle,
+            stickyHeader: true,
+            unsafeCSS: VIRTUALIZER_CUSTOM_CSS,
+            enableLineSelection: enableLineSelection && !enableGutterComments,
+            enableGutterUtility: enableGutterComments && showAnnotations,
+            onGutterUtilityClick: (range) => {
+              const side = range.endSide ?? range.side;
+              if (side == null) {
+                return;
+              }
+              const lineNumber = range.end;
+              const annotations = annotationsRef.current[index];
+              if (
+                annotations.some(
+                  (annotation) =>
+                    annotation.side === side &&
+                    annotation.lineNumber === lineNumber
+                )
+              ) {
+                return;
+              }
+              annotations.push({
+                side,
+                lineNumber,
+                metadata: {
+                  key: `comment-${annotationKeyCounterRef.current++}`,
+                },
+              });
+              rerenderWithAnnotations();
+            },
+            renderAnnotation: (annotation) => {
+              // A remap re-renders the same annotation under the same key; the
+              // previous wrapper (and the root inside it) is being discarded by
+              // the diff, so retire that root before mounting the replacement.
+              const key = annotationKey(index, annotation);
+              unmountAnnotationRoot(key);
+              const container = document.createElement('div');
+              const root = createRoot(container);
+              annotationRootsRef.current.set(key, root);
+              // Render synchronously so the recreated comment paints in the
+              // same frame as the row that hosts it.
+              flushSync(() => {
+                root.render(
+                  annotation.metadata.body != null ? (
+                    <CommentThread
+                      body={annotation.metadata.body}
+                      onDelete={() => removeAnnotation(annotation)}
+                    />
+                  ) : (
+                    <CommentForm
+                      side={annotation.side}
+                      lineNumber={annotation.lineNumber}
+                      onCancel={() => removeAnnotation(annotation)}
+                      onSubmit={(_side, _lineNumber, body) =>
+                        submitAnnotation(annotation, body)
+                      }
+                    />
+                  )
+                );
+              });
+              return container;
+            },
           },
-          renderAnnotation: (annotation) => {
-            const container = document.createElement('div');
-            const root = createRoot(container);
-            annotationRootsRef.current.set(
-              annotationKey(index, annotation),
-              root
-            );
-            root.render(
-              <CommentForm
-                side={annotation.side}
-                lineNumber={annotation.lineNumber}
-                onCancel={() => removeAnnotation(annotation)}
-              />
-            );
-            return container;
-          },
-        },
-        virtualizer,
-        undefined,
-        pool
-      );
+          virtualizer,
+          undefined,
+          pool
+        );
 
       // Attaching the editor flips the new-file surface to contentEditable;
       // detaching restores read-only review.

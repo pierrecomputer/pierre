@@ -82,6 +82,7 @@ import {
 } from '../utils/editSessionHunks';
 import { getDiffFileInput } from '../utils/getDiffFileInput';
 import { getDiffHunksRendererOptions } from '../utils/getDiffHunksRendererOptions';
+import { getHunkSideStartBoundary } from '../utils/getHunkSideBoundaries';
 import { getLineAnnotationName } from '../utils/getLineAnnotationName';
 import { getOrCreateCodeNode } from '../utils/getOrCreateCodeNode';
 import { upsertHostThemeStyle } from '../utils/hostTheme';
@@ -96,6 +97,7 @@ import { getMeasuredScrollbarGutter } from '../utils/scrollbarGutter';
 import { setPreNodeProperties } from '../utils/setWrapperNodeProps';
 import {
   getExpandedRegion,
+  getHunkAdditionLineRange,
   getNearestRenderableAdditionLine,
   getTrailingExpandedRegion,
   isAdditionLineRenderable,
@@ -358,10 +360,12 @@ export class FileDiff<
     let targetUnifiedIndex: number | undefined;
     let targetSplitIndex: number | undefined;
     hunkIterator: for (const hunk of fileDiff.hunks) {
-      let currentLineNumber =
+      const hunkStart =
         side === 'deletions' ? hunk.deletionStart : hunk.additionStart;
       const hunkCount =
         side === 'deletions' ? hunk.deletionCount : hunk.additionCount;
+      let currentLineNumber =
+        getHunkSideStartBoundary(hunkStart, hunkCount) + 1;
       let splitIndex = hunk.splitLineStart;
       let unifiedIndex = hunk.unifiedLineStart;
 
@@ -1059,6 +1063,7 @@ export class FileDiff<
       this.shouldSelfHealEditSession()
     ) {
       finishEditSessionForDiff(this.fileDiff, this.options.parseDiffOptions);
+      void this.hunksRenderer.refreshHighlightedResult();
     }
     if (expandUnchanged) {
       this.loadFilesIfNecessary();
@@ -1319,13 +1324,17 @@ export class FileDiff<
   public attachEditor(
     editor: DiffsEditor<LAnnotation>
   ): (recycle?: boolean) => void {
+    // Editing is a plain file-diff concern only. Subclasses with their own
+    // hunk semantics (UnresolvedFile) are not editable, so an editor must
+    // never attach to them.
+    if (this.type !== 'file-diff') {
+      throw new Error(
+        `FileDiff.attachEditor: cannot attach an editor to a "${this.type}" diff`
+      );
+    }
     this.editor?.cleanUp();
     this.editor = editor;
-    // Edit sessions are a plain-diff concern; subclasses with their own hunk
-    // semantics (merge conflicts) keep the per-edit recompute pipeline.
-    if (this.type === 'file-diff') {
-      this.hunksRenderer.beginEditSession(this.fileDiffCache);
-    }
+    this.hunksRenderer.beginEditSession();
     // The editor sync below refuses partial diffs (it needs the full file
     // contents); kick off hydration so the loaded re-render re-runs it.
     if (this.fileDiff?.isPartial === true) {
@@ -1377,6 +1386,7 @@ export class FileDiff<
     this.hunksRenderer.setExpandedHunksMap(
       rebuildExpansionFromAnchors(fileDiff, anchors)
     );
+    void this.hunksRenderer.refreshHighlightedResult();
     this.escalateEditSessionRender();
     return true;
   }
@@ -1515,7 +1525,8 @@ export class FileDiff<
     const expandedHunks = this.hunksRenderer.getExpandedHunksMap();
 
     for (const [hunkIndex, hunk] of fileDiff.hunks.entries()) {
-      if (lineNumber < hunk.additionStart) {
+      const [hunkStart, hunkEnd] = getHunkAdditionLineRange(hunk);
+      if (lineNumber < hunkStart) {
         const region = getExpandedRegion({
           isPartial: fileDiff.isPartial,
           rangeSize: hunk.collapsedBefore,
@@ -1523,18 +1534,17 @@ export class FileDiff<
           hunkIndex,
           collapsedContextThreshold,
         });
-        const gapStart = hunk.additionStart - region.rangeSize;
+        const gapStart = hunkStart - region.rangeSize;
         if (
           region.renderAll ||
           lineNumber < gapStart + region.fromStart ||
-          lineNumber >= hunk.additionStart - region.fromEnd
+          lineNumber >= hunkStart - region.fromEnd
         ) {
           return false;
         }
         const fromStartDistance =
           lineNumber - (gapStart + region.fromStart) + 1;
-        const fromEndDistance =
-          hunk.additionStart - region.fromEnd - lineNumber;
+        const fromEndDistance = hunkStart - region.fromEnd - lineNumber;
         if (fromStartDistance <= fromEndDistance) {
           this.expandHunk(
             hunkIndex,
@@ -1550,7 +1560,7 @@ export class FileDiff<
         }
         return true;
       }
-      if (lineNumber < hunk.additionStart + hunk.additionCount) {
+      if (lineNumber < hunkEnd) {
         return false;
       }
     }
@@ -1566,7 +1576,7 @@ export class FileDiff<
       return false;
     }
     const lastHunk = fileDiff.hunks[fileDiff.hunks.length - 1];
-    const trailingStart = lastHunk.additionStart + lastHunk.additionCount;
+    const [, trailingStart] = getHunkAdditionLineRange(lastHunk);
     if (
       lineNumber < trailingStart + trailingRegion.fromStart ||
       lineNumber >= trailingStart + trailingRegion.rangeSize

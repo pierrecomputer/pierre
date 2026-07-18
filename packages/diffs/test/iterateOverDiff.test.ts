@@ -494,6 +494,42 @@ describe('iterateOverDiff', () => {
     ]);
   });
 
+  test('expands every new-file line around a context-zero deletion', () => {
+    const oldLines = Array.from(
+      { length: 7 },
+      (_, index) => `line ${index + 1}\n`
+    );
+    const newLines = oldLines.toSpliced(4, 1);
+    const deletionDiff = parseDiffFromFile(
+      { name: 'deletion.ts', contents: oldLines.join('') },
+      { name: 'deletion.ts', contents: newLines.join('') },
+      { context: 0 }
+    );
+
+    const additions = collectRows({
+      diff: deletionDiff,
+      diffStyle: 'split',
+      expandedHunks: true,
+    }).flatMap((row) => {
+      if (row.additionLine == null) return [];
+      return [
+        {
+          lineIndex: row.additionLine.lineIndex,
+          lineNumber: row.additionLine.lineNumber,
+          text: deletionDiff.additionLines[row.additionLine.lineIndex],
+        },
+      ];
+    });
+
+    expect(additions).toEqual(
+      newLines.map((text, lineIndex) => ({
+        lineIndex,
+        lineNumber: lineIndex + 1,
+        text,
+      }))
+    );
+  });
+
   test('windowed iteration preserves collapsedBefore and collapsedAfter separator placement', () => {
     const leadingRows = collectRows({
       diff: createWindowedSeparatorDiff([

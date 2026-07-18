@@ -813,7 +813,8 @@
   [data-diffs-header] ~ [data-diff],
   [data-diffs-header] ~ [data-file] {
     [data-code],
-    &[data-overflow='wrap'] {
+    &[data-overflow='wrap'],
+    &[data-dehydrated][data-diff-type='split'][data-overflow='scroll'] {
       padding-top: 0;
     }
   }
@@ -842,15 +843,27 @@
     background-color: var(--diffs-bg);
   }
 
-  [data-diff-type='split'][data-overflow='wrap'] {
+  /* Both split layouts that share one grid across the two columns: wrap
+   * always, and scroll while dehydrated. Scroll mode normally renders each
+   * column as its own scroll container, where paired annotation rows only get
+   * equal heights once the resize manager measures them — before hydration
+   * that measurement hasn't run, so the side hosting the annotation content
+   * would be taller and the rows below it would shift on hydration. The
+   * shared grid gives paired rows equal heights in pure CSS; the dehydrated
+   * scroll variant keeps nowrap text and clips horizontal overflow until
+   * hydration swaps in the real scroll containers. */
+  [data-diff-type='split'][data-overflow='wrap'],
+  [data-dehydrated][data-diff-type='split'][data-overflow='scroll'] {
     display: grid;
     grid-auto-flow: dense;
     grid-template-columns: repeat(2, var(--diffs-code-grid));
     padding-block: var(--diffs-gap-block, var(--diffs-gap-fallback));
 
-    [data-deletions] {
+    [data-code] {
       display: contents;
+    }
 
+    [data-deletions] {
       [data-gutter] {
         grid-column: 1;
       }
@@ -862,8 +875,6 @@
     }
 
     [data-additions] {
-      display: contents;
-
       [data-gutter] {
         grid-column: 3;
         border-left: 1px solid var(--diffs-bg);
@@ -873,6 +884,11 @@
         grid-column: 4;
       }
     }
+  }
+
+  [data-dehydrated][data-diff-type='split'][data-overflow='scroll']
+    [data-content] {
+    overflow: clip;
   }
 
   [data-overflow='scroll'] [data-gutter] {

@@ -7,10 +7,11 @@ import type {
   Hunk,
   HunkExpansionRegion,
 } from '../types';
+import { getHunkSideStartBoundary } from './getHunkSideBoundaries';
 import { parseDiffFromFile } from './parseDiffFromFile';
-import { slideBlankBoundaryBlocksUp } from './realignChangeContent';
 import {
   offsetHunkContent,
+  preserveTrailingEditorBlankLine,
   recomputeDiffHunksForEdit,
   recomputeDiffRenderLineCounts,
   recomputeHunkRenderLineCounts,
@@ -21,34 +22,26 @@ import {
   getTrailingExpandedRegion,
 } from './virtualDiffLayout';
 
-// While an editor is attached to a FileDiff, hunks are treated as a frozen
-// "region skeleton": each hunk is one region spanning its full range, regions
-// never merge/split/drop on their own, and each edit re-diffs only the region
-// it lands in. A region whose re-diff comes back empty persists as a
-// context-only hunk so its rows keep rendering. The functions here implement
-// that per-edit region math; the real hunk recompute runs once on genuine
-// session exit (finishEditSessionForDiff).
+// While an editor is attached to a FileDiff, each hunk is a persistent region
+// identified by its old-side range. Structural passes rebuild those regions
+// from one canonical old/current diff; a reverted region remains as context so
+// its rows keep rendering until the genuine session-exit recompute.
 
-/**
- * The addition-line span an edit changed, from a common prefix/suffix scan.
- * `start` is the first changed line (identical in pre/post-edit coordinates),
- * `prevEnd`/`nextEnd` are the exclusive ends in pre/post-edit lines.
- */
-export interface ChangedLineWindow {
+export interface DivergenceCore {
   start: number;
-  prevEnd: number;
-  nextEnd: number;
+  deletionEnd: number;
+  additionEnd: number;
 }
 
-/** A structural change to the region skeleton (rendered row set changed). */
-export type SessionRegionChange =
-  | {
-      type: 'merge';
-      firstIndex: number;
-      lastIndex: number;
-      previousHunkCount: number;
-    }
-  | { type: 'insert'; index: number; previousHunkCount: number };
+interface PreviousRegionSpan {
+  firstIndex: number;
+  lastIndex: number;
+}
+
+/** Maps rebuilt regions back to the previous skeleton for expansion remapping. */
+export interface SessionRegionChange {
+  regions: Array<PreviousRegionSpan | undefined>;
+}
 
 interface RegionBounds {
   additionStart: number;
@@ -56,6 +49,18 @@ interface RegionBounds {
   deletionStart: number;
   deletionEnd: number;
 }
+
+interface RegionPlan {
+  deletionStart: number;
+  deletionEnd: number;
+  blocks: ChangeContent[];
+  previousSpan: PreviousRegionSpan | undefined;
+}
+
+const deletionLineSetCache = new WeakMap<
+  FileDiffMetadata,
+  { lines: string[]; set: Set<string> }
+>();
 
 /**
  * Drops the editor document's phantom trailing empty line (a document ending
@@ -70,243 +75,223 @@ export function normalizeEditorLines(lines: string[]): string[] {
 }
 
 /**
- * Common prefix/suffix scan between the last completed pass's lines and the
- * rebuilt document lines. Returns undefined when nothing changed.
+ * Find the complete old/current divergence core. The old side is immutable
+ * during an edit session, so this result needs no prior-pass snapshot.
  */
-export function findChangedLineWindow(
-  previousLines: string[],
-  nextLines: string[]
-): ChangedLineWindow | undefined {
-  const maxStart = Math.min(previousLines.length, nextLines.length);
+export function findDivergenceCore(
+  deletionLines: string[],
+  additionLines: string[]
+): DivergenceCore | undefined {
+  const maxStart = Math.min(deletionLines.length, additionLines.length);
   let start = 0;
-  while (start < maxStart && previousLines[start] === nextLines[start]) {
+  while (start < maxStart && deletionLines[start] === additionLines[start]) {
     start++;
   }
-  let prevEnd = previousLines.length;
-  let nextEnd = nextLines.length;
+  let deletionEnd = deletionLines.length;
+  let additionEnd = additionLines.length;
   while (
-    prevEnd > start &&
-    nextEnd > start &&
-    previousLines[prevEnd - 1] === nextLines[nextEnd - 1]
+    deletionEnd > start &&
+    additionEnd > start &&
+    deletionLines[deletionEnd - 1] === additionLines[additionEnd - 1]
   ) {
-    prevEnd--;
-    nextEnd--;
+    deletionEnd--;
+    additionEnd--;
   }
-  if (start === prevEnd && start === nextEnd) {
+  if (start === deletionEnd && start === additionEnd) {
     return undefined;
   }
-  return { start, prevEnd, nextEnd };
+  return { start, deletionEnd, additionEnd };
 }
 
 /**
- * Applies one contiguous changed window to the session skeleton: regions the
- * window touches merge/grow to cover it (absorbing unchanged gap lines in
- * paired old/new correspondence), a window wholly inside a gap synthesizes a
- * new region, and regions after the window shift by the line delta. The
- * covered region is re-diffed in place. Returns the structural change when
- * the region set itself changed shape (merge/growth/synthesis).
+ * Rebuild the session skeleton as a pure function of the immutable old lines,
+ * current new lines, and old-side ranges of the previous regions. One
+ * canonical parse supplies the same change blocks that session exit will use.
  */
-export function applySessionEditWindow(
+export function rebuildSessionHunks(
   diff: FileDiffMetadata,
-  window: ChangedLineWindow,
   parseDiffOptions?: CreatePatchOptionsNonabortable
 ): SessionRegionChange | undefined {
-  const { hunks } = diff;
-  const delta = window.nextEnd - window.prevEnd;
+  const previousHunks = diff.hunks;
+  const editorAdditionLines = diff.additionLines;
+  const canonicalAdditionLines = normalizeEditorLines(editorAdditionLines);
+  const canonicalDiff =
+    canonicalAdditionLines === editorAdditionLines
+      ? diff
+      : { ...diff, additionLines: canonicalAdditionLines };
+  const blocks = parseCanonicalChangeBlocks(canonicalDiff, parseDiffOptions);
+  const plans = buildRegionPlans(
+    previousHunks,
+    blocks,
+    diff.deletionLines.length
+  );
+
+  const nextHunks = buildRegionHunks(canonicalDiff, plans);
+  diff.additionLines = canonicalAdditionLines;
+  diff.hunks = nextHunks;
   diff.editSessionDirty = true;
-
-  if (hunks.length === 0) {
-    const bounds: RegionBounds = {
-      additionStart: 0,
-      additionEnd: diff.additionLines.length,
-      deletionStart: 0,
-      deletionEnd: diff.deletionLines.length,
-    };
-    hunks.push(rediffRegion(diff, bounds, parseDiffOptions));
-    finalizeSessionHunks(diff, 0);
-    return { type: 'insert', index: 0, previousHunkCount: 0 };
-  }
-
-  // Locate the span of regions the window touches, treating windows adjacent
-  // to a region edge as touching so boundary edits grow the region instead of
-  // synthesizing a sibling next to it.
-  let firstIndex = -1;
-  let lastIndex = -1;
-  for (let index = 0; index < hunks.length; index++) {
-    const hunk = hunks[index];
-    const regionStart = hunk.additionLineIndex;
-    const regionEnd = regionStart + hunk.additionCount;
-    if (regionStart > window.prevEnd) {
-      break;
-    }
-    if (window.start <= regionEnd) {
-      if (firstIndex === -1) {
-        firstIndex = index;
-      }
-      lastIndex = index;
-    }
-  }
-
-  if (firstIndex === -1) {
-    return synthesizeRegion(diff, window, delta, parseDiffOptions);
-  }
-
-  const firstHunk = hunks[firstIndex];
-  const lastHunk = hunks[lastIndex];
-  const lastHunkEnd = lastHunk.additionLineIndex + lastHunk.additionCount;
-  const additionStart = Math.min(firstHunk.additionLineIndex, window.start);
-  const additionEndBefore = Math.max(lastHunkEnd, window.prevEnd);
-  // Gap lines are 1:1 paired with old-side lines, so growing a region into a
-  // gap absorbs the same number of deletion lines from that gap.
-  const bounds: RegionBounds = {
-    additionStart,
-    additionEnd: additionEndBefore + delta,
-    deletionStart:
-      firstHunk.deletionLineIndex -
-      (firstHunk.additionLineIndex - additionStart),
-    deletionEnd:
-      lastHunk.deletionLineIndex +
-      lastHunk.deletionCount +
-      (additionEndBefore - lastHunkEnd),
-  };
-  const regionHunk = rediffRegion(diff, bounds, parseDiffOptions);
-  if (delta !== 0) {
-    for (let index = lastIndex + 1; index < hunks.length; index++) {
-      shiftHunkAdditionCoords(hunks[index], delta);
-    }
-  }
-  const previousHunkCount = hunks.length;
-  hunks.splice(firstIndex, lastIndex - firstIndex + 1, regionHunk);
-  finalizeSessionHunks(diff, firstIndex);
-
-  const regionGrew =
-    additionStart < firstHunk.additionLineIndex ||
-    additionEndBefore > lastHunkEnd;
-  if (firstIndex === lastIndex && !regionGrew) {
+  finalizeSessionHunks(diff);
+  preserveTrailingEditorBlankLine(diff, editorAdditionLines);
+  const layoutChanged = hasRegionOrSplitLayoutChanged(
+    previousHunks,
+    diff.hunks
+  );
+  if (!layoutChanged) {
     return undefined;
   }
-  return { type: 'merge', firstIndex, lastIndex, previousHunkCount };
+  return { regions: plans.map((plan) => plan.previousSpan) };
 }
 
 /**
- * Applies a set of changed addition-line indexes from a pass with no line
- * count change: lines inside a region re-diff that region in place; lines in
- * a gap synthesize a region per gap (one window spanning that gap's changed
- * lines). Returns the structural changes, if any, for escalation/remapping.
+ * Keep a cheap content-only path when a same-line-count pass cannot alter the
+ * canonical blocks. Gap, ambiguous, or multi-region edits rebuild statelessly.
  */
 export function applySessionChangedLines(
   diff: FileDiffMetadata,
   changedAdditionLineIndexes: Iterable<number>,
-  parseDiffOptions?: CreatePatchOptionsNonabortable
-): SessionRegionChange[] {
+  parseDiffOptions?: CreatePatchOptionsNonabortable,
+  previousAdditionLines?: ReadonlyMap<number, string>
+): SessionRegionChange | undefined {
   const lines = Array.from(new Set(changedAdditionLineIndexes))
     .filter((line) => line >= 0 && line < diff.additionLines.length)
     .sort((a, b) => a - b);
   if (lines.length === 0) {
-    return [];
+    return undefined;
   }
 
   const { hunks } = diff;
-  const regionIndexes = new Set<number>();
-  // Changed lines outside every region, grouped per gap (keyed by the index
-  // of the region that follows the gap) into one [start, end) window each.
-  const gapWindows: Array<[start: number, end: number]> = [];
+  let regionIndex: number | undefined;
   let hunkIndex = 0;
-  let currentGapKey = -1;
   for (const line of lines) {
-    while (
-      hunkIndex < hunks.length &&
-      line >=
-        hunks[hunkIndex].additionLineIndex + hunks[hunkIndex].additionCount
-    ) {
+    while (hunkIndex < hunks.length) {
+      const hunk = hunks[hunkIndex];
+      const start = getHunkAdditionStart(hunk);
+      if (line < start + hunk.additionCount) break;
       hunkIndex++;
     }
     const hunk = hunks[hunkIndex];
-    if (hunk != null && line >= hunk.additionLineIndex) {
-      regionIndexes.add(hunkIndex);
-      continue;
+    const start = hunk == null ? undefined : getHunkAdditionStart(hunk);
+    if (
+      start == null ||
+      line < start ||
+      (regionIndex != null && regionIndex !== hunkIndex)
+    ) {
+      return rebuildSessionHunks(diff, parseDiffOptions);
     }
-    const lastWindow = gapWindows[gapWindows.length - 1];
-    if (currentGapKey === hunkIndex && lastWindow != null) {
-      lastWindow[1] = line + 1;
-    } else {
-      currentGapKey = hunkIndex;
-      gapWindows.push([line, line + 1]);
-    }
+    regionIndex = hunkIndex;
   }
 
-  // In-place region re-diffs first, while region indexes are still valid.
-  for (const index of regionIndexes) {
-    const hunk = hunks[index];
-    const bounds: RegionBounds = {
-      additionStart: hunk.additionLineIndex,
-      additionEnd: hunk.additionLineIndex + hunk.additionCount,
-      deletionStart: hunk.deletionLineIndex,
-      deletionEnd: hunk.deletionLineIndex + hunk.deletionCount,
-    };
-    hunks[index] = rediffRegion(diff, bounds, parseDiffOptions);
-    syncHunkNoEOFCRFromFullFile(diff, index);
-    diff.editSessionDirty = true;
+  if (regionIndex == null) {
+    return undefined;
   }
-  if (regionIndexes.size > 0) {
-    recomputeDiffRenderLineCounts(diff);
-  }
-
-  // Gap windows in descending order so earlier windows keep valid coordinates
-  // while later synthesis inserts hunks behind them.
-  const changes: SessionRegionChange[] = [];
-  for (let index = gapWindows.length - 1; index >= 0; index--) {
-    const [start, end] = gapWindows[index];
-    const change = applySessionEditWindow(
+  if (
+    canRetainCanonicalBlocks(
       diff,
-      { start, prevEnd: end, nextEnd: end },
+      lines,
+      regionIndex,
+      previousAdditionLines,
       parseDiffOptions
-    );
-    if (change != null) {
-      changes.push(change);
-    }
+    )
+  ) {
+    diff.editSessionDirty = true;
+    return undefined;
   }
-  return changes;
+  return rebuildSessionHunks(diff, parseDiffOptions);
 }
 
-/**
- * Rebuilds hunk-gap expansion keys after a structural region change so
- * expansion state stays anchored to the same gaps. Merged-away gap keys drop;
- * a synthesized region splits its gap's expansion across the two new gaps.
- * The trailing pseudo-key (old hunk count) follows the same shift.
- */
+// Existing balanced change blocks remain canonical when every edited line was
+// unmatched before and stays unmatched now: the old/new equality matrix is
+// unchanged, and similarity realignment never reorders a balanced block.
+function canRetainCanonicalBlocks(
+  diff: FileDiffMetadata,
+  changedLines: number[],
+  regionIndex: number,
+  previousAdditionLines: ReadonlyMap<number, string> | undefined,
+  parseDiffOptions: CreatePatchOptionsNonabortable | undefined
+): boolean {
+  if (
+    previousAdditionLines == null ||
+    parseDiffOptions?.ignoreWhitespace === true ||
+    parseDiffOptions?.stripTrailingCr === true
+  ) {
+    return false;
+  }
+  const deletionLineSet = getDeletionLineSet(diff);
+  const hunk = diff.hunks[regionIndex];
+  if (hunk.hunkContent.some(isPureChange)) {
+    return false;
+  }
+  for (const line of changedLines) {
+    const previousLine = previousAdditionLines.get(line);
+    const additionLine = diff.additionLines[line];
+    if (
+      previousLine == null ||
+      additionLine == null ||
+      deletionLineSet.has(previousLine) ||
+      deletionLineSet.has(additionLine)
+    ) {
+      return false;
+    }
+    let insideBalancedChange = false;
+    for (const content of hunk.hunkContent) {
+      if (
+        content.type === 'change' &&
+        content.additions === content.deletions &&
+        line >= content.additionLineIndex &&
+        line < content.additionLineIndex + content.additions
+      ) {
+        insideBalancedChange = true;
+        break;
+      }
+    }
+    if (!insideBalancedChange) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function getDeletionLineSet(diff: FileDiffMetadata): Set<string> {
+  const cached = deletionLineSetCache.get(diff);
+  if (cached?.lines === diff.deletionLines) {
+    return cached.set;
+  }
+  const set = new Set(diff.deletionLines);
+  deletionLineSetCache.set(diff, { lines: diff.deletionLines, set });
+  return set;
+}
+
+function isPureChange(
+  content: ContextContent | ChangeContent | undefined
+): boolean {
+  return (
+    content?.type === 'change' &&
+    (content.additions === 0 || content.deletions === 0)
+  );
+}
+
+/** Preserve expansion at the surviving outer edges of rebuilt old-side gaps. */
 export function remapExpandedHunksForRegionChange(
   expandedHunks: Map<number, HunkExpansionRegion>,
   change: SessionRegionChange
 ): Map<number, HunkExpansionRegion> {
   const remapped = new Map<number, HunkExpansionRegion>();
-  if (change.type === 'merge') {
-    const removed = change.lastIndex - change.firstIndex;
-    for (const [key, region] of expandedHunks) {
-      if (key <= change.firstIndex) {
-        remapped.set(key, region);
-      } else if (key > change.lastIndex) {
-        remapped.set(key - removed, region);
-      }
-      // Keys inside (firstIndex, lastIndex] were gaps the merge absorbed.
-    }
-    return remapped;
-  }
-  for (const [key, region] of expandedHunks) {
-    if (key < change.index) {
-      remapped.set(key, region);
-    } else if (key > change.index) {
-      remapped.set(key + 1, region);
-    } else {
-      // The gap this key described was split by the new region: keep its
-      // start-anchored expansion on the first half and its end-anchored
-      // expansion on the second.
-      if (region.fromStart > 0) {
-        remapped.set(key, { fromStart: region.fromStart, fromEnd: 0 });
-      }
-      if (region.fromEnd > 0) {
-        remapped.set(key + 1, { fromStart: 0, fromEnd: region.fromEnd });
-      }
+  const { regions } = change;
+  for (let key = 0; key <= regions.length; key++) {
+    const previous = regions[key - 1];
+    const next = regions[key];
+    const fromStartSource =
+      key === 0
+        ? expandedHunks.get(0)
+        : previous == null
+          ? undefined
+          : expandedHunks.get(previous.lastIndex + 1);
+    const fromEndSource =
+      next == null ? undefined : expandedHunks.get(next.firstIndex);
+    const fromStart = fromStartSource?.fromStart ?? 0;
+    const fromEnd = fromEndSource?.fromEnd ?? 0;
+    if (fromStart > 0 || fromEnd > 0) {
+      remapped.set(key, { fromStart, fromEnd });
     }
   }
   return remapped;
@@ -343,7 +328,7 @@ export function captureExpansionAnchors(
     if (region.rangeSize <= collapsedContextThreshold) {
       continue;
     }
-    const gapEnd = hunk.deletionLineIndex;
+    const gapEnd = getHunkDeletionStart(hunk);
     const gapStart = gapEnd - region.rangeSize;
     if (region.fromStart > 0) {
       anchors.push([gapStart, gapStart + region.fromStart]);
@@ -365,7 +350,7 @@ export function captureExpansionAnchors(
     trailingRegion.rangeSize > collapsedContextThreshold
   ) {
     const lastHunk = diff.hunks[diff.hunks.length - 1];
-    const gapStart = lastHunk.deletionLineIndex + lastHunk.deletionCount;
+    const gapStart = getHunkDeletionStart(lastHunk) + lastHunk.deletionCount;
     anchors.push([gapStart, gapStart + trailingRegion.fromStart]);
   }
   return anchors;
@@ -407,17 +392,14 @@ export function rebuildExpansionFromAnchors(
     }
   };
   for (const [hunkIndex, hunk] of diff.hunks.entries()) {
-    applyGap(
-      hunkIndex,
-      hunk.deletionLineIndex - Math.max(hunk.collapsedBefore, 0),
-      hunk.deletionLineIndex
-    );
+    const gapEnd = getHunkDeletionStart(hunk);
+    applyGap(hunkIndex, gapEnd - Math.max(hunk.collapsedBefore, 0), gapEnd);
   }
   const lastHunk = diff.hunks[diff.hunks.length - 1];
   if (lastHunk != null && !diff.isPartial && diff.deletionLines.length > 0) {
     applyGap(
       diff.hunks.length,
-      lastHunk.deletionLineIndex + lastHunk.deletionCount,
+      getHunkDeletionStart(lastHunk) + lastHunk.deletionCount,
       diff.deletionLines.length
     );
   }
@@ -441,181 +423,262 @@ export function finishEditSessionForDiff(
   return true;
 }
 
-// Synthesizes a region for a window that touches no existing region. When the
-// window is empty on either side (pure insert/delete inside a gap), one
-// adjacent context line is absorbed so the re-diff anchors on real content.
-function synthesizeRegion(
+// Parse the complete old/current files once with the same context policy as
+// session exit. Equal boundary lines affect Myers tie-breaking, while parsed
+// context is required for the blank-run alignment post-pass; only canonical
+// change blocks are retained. Running cursors normalize unified N,0 indexes.
+function parseCanonicalChangeBlocks(
   diff: FileDiffMetadata,
-  window: ChangedLineWindow,
-  delta: number,
   parseDiffOptions?: CreatePatchOptionsNonabortable
-): SessionRegionChange {
-  const { hunks } = diff;
-  let insertIndex = 0;
-  while (
-    insertIndex < hunks.length &&
-    hunks[insertIndex].additionLineIndex < window.start
-  ) {
-    insertIndex++;
+): ChangeContent[] {
+  if (findDivergenceCore(diff.deletionLines, diff.additionLines) == null) {
+    return [];
   }
+  const parsed = parseDiffFromFile(
+    {
+      name: diff.prevName ?? diff.name,
+      contents: diff.deletionLines.join(''),
+    },
+    {
+      name: diff.name,
+      contents: diff.additionLines.join(''),
+      lang: diff.lang,
+    },
+    parseDiffOptions
+  );
 
-  // Constant pairing offset between old and new line indexes within this gap.
-  const pairOffset =
-    insertIndex < hunks.length
-      ? hunks[insertIndex].deletionLineIndex -
-        hunks[insertIndex].additionLineIndex
-      : hunks[insertIndex - 1].deletionLineIndex +
-        hunks[insertIndex - 1].deletionCount -
-        (hunks[insertIndex - 1].additionLineIndex +
-          hunks[insertIndex - 1].additionCount);
-
-  let { start, prevEnd, nextEnd } = window;
-  if (start === prevEnd || start === nextEnd) {
-    if (start > 0) {
-      start--;
-    } else if (nextEnd < diff.additionLines.length) {
-      prevEnd++;
-      nextEnd++;
+  const blocks: ChangeContent[] = [];
+  let coveredAdditions = 0;
+  let coveredDeletions = 0;
+  for (const hunk of parsed.hunks) {
+    const contextLines =
+      hunk.additionCount > 0
+        ? hunk.additionLineIndex - coveredAdditions
+        : hunk.deletionLineIndex - coveredDeletions;
+    coveredAdditions += contextLines;
+    coveredDeletions += contextLines;
+    for (const content of hunk.hunkContent) {
+      if (content.type === 'context') {
+        coveredAdditions += content.lines;
+        coveredDeletions += content.lines;
+        continue;
+      }
+      const block = offsetHunkContent(content, 0, 0) as ChangeContent;
+      if (block.additions === 0) {
+        block.additionLineIndex = coveredAdditions;
+      }
+      if (block.deletions === 0) {
+        block.deletionLineIndex = coveredDeletions;
+      }
+      blocks.push(block);
+      coveredAdditions += block.additions;
+      coveredDeletions += block.deletions;
     }
   }
-
-  const bounds: RegionBounds = {
-    additionStart: start,
-    additionEnd: nextEnd,
-    deletionStart: start + pairOffset,
-    deletionEnd: prevEnd + pairOffset,
-  };
-  const regionHunk = rediffRegion(diff, bounds, parseDiffOptions);
-  if (delta !== 0) {
-    for (let index = insertIndex; index < hunks.length; index++) {
-      shiftHunkAdditionCoords(hunks[index], delta);
-    }
-  }
-  const previousHunkCount = hunks.length;
-  hunks.splice(insertIndex, 0, regionHunk);
-  finalizeSessionHunks(diff, insertIndex);
-  return { type: 'insert', index: insertIndex, previousHunkCount };
+  return blocks;
 }
 
-// Re-diffs a region's old/new slices with zero context, producing one Hunk
-// spanning the region's full range. Zero result hunks yield a context-only
-// hunk (region persists while the session is active); several result hunks
-// merge into one hunkContent with the identical stretches between them
-// re-expressed as context blocks.
-function rediffRegion(
-  diff: FileDiffMetadata,
-  bounds: RegionBounds,
-  parseDiffOptions?: CreatePatchOptionsNonabortable
-): Hunk {
-  const deletionSlice = diff.deletionLines.slice(
-    bounds.deletionStart,
-    bounds.deletionEnd
-  );
-  const additionSlice = diff.additionLines.slice(
-    bounds.additionStart,
-    bounds.additionEnd
-  );
-  const additionCount = additionSlice.length;
-  const deletionCount = deletionSlice.length;
+// Co-walk canonical blocks and previous old-side regions. A block touching a
+// region grows it; touching several merges them; a block wholly in a gap gets
+// its own region. Pure insertions/deletions absorb one adjacent context line
+// when available so the region stays renderable on both sides and after undo.
+function buildRegionPlans(
+  previousHunks: Hunk[],
+  blocks: ChangeContent[],
+  deletionLineCount: number
+): RegionPlan[] {
+  const previousPlans = previousHunks.map((hunk, index): RegionPlan => {
+    const deletionStart = getHunkDeletionStart(hunk);
+    return {
+      deletionStart,
+      deletionEnd: deletionStart + hunk.deletionCount,
+      blocks: [],
+      previousSpan: { firstIndex: index, lastIndex: index },
+    };
+  });
+  const plans: RegionPlan[] = [];
+  let previousIndex = 0;
 
-  const hunkContent: (ContextContent | ChangeContent)[] = [];
-  let additionChangedLines = 0;
-  let deletionChangedLines = 0;
-
-  const pushContext = (
-    lines: number,
-    additionLineIndex: number,
-    deletionLineIndex: number
-  ) => {
-    if (lines > 0) {
-      hunkContent.push({
-        type: 'context',
-        lines,
-        additionLineIndex,
-        deletionLineIndex,
-      });
+  for (const block of blocks) {
+    const blockStart = block.deletionLineIndex;
+    const blockEnd = blockStart + block.deletions;
+    while (
+      previousIndex < previousPlans.length &&
+      previousPlans[previousIndex].deletionEnd < blockStart
+    ) {
+      plans.push(previousPlans[previousIndex]);
+      previousIndex++;
     }
-  };
 
-  if (deletionSlice.join('') === additionSlice.join('')) {
-    pushContext(additionCount, bounds.additionStart, bounds.deletionStart);
-  } else {
-    const reparsed = parseDiffFromFile(
-      {
-        name: diff.prevName ?? diff.name,
-        contents: deletionSlice.join(''),
-      },
-      {
-        name: diff.name,
-        contents: additionSlice.join(''),
-        lang: diff.lang,
-      },
-      { ...parseDiffOptions, context: 0 }
-    );
-    // Walk the zero-context hunks, re-deriving the unchanged stretches
-    // between them (context is paired, so both sides advance by the same
-    // amount). The stretch length must come from a side the hunk has content
-    // on: a zero-count side's start follows the unified `N,0` convention
-    // (the line *before* the change), so its lineIndex is one short of the
-    // lines consumed ahead of the hunk.
-    let coveredAdditions = 0;
-    let coveredDeletions = 0;
-    for (const parsedHunk of reparsed.hunks) {
-      const contextLines =
-        parsedHunk.additionCount > 0
-          ? parsedHunk.additionLineIndex - coveredAdditions
-          : parsedHunk.deletionLineIndex - coveredDeletions;
-      pushContext(
-        contextLines,
-        bounds.additionStart + coveredAdditions,
-        bounds.deletionStart + coveredDeletions
-      );
-      coveredAdditions += contextLines;
-      coveredDeletions += contextLines;
-      for (const content of parsedHunk.hunkContent) {
-        // Parsed content indexes are relative to the slice; offset them into
-        // full-file coordinates. A zero-count side carries the `N,0`
-        // convention (one short of the lines consumed), so pin it to the
-        // running counter instead.
-        const offset = offsetHunkContent(
-          content,
-          bounds.additionStart,
-          bounds.deletionStart
-        );
-        if (offset.type === 'change') {
-          if (offset.additions === 0) {
-            offset.additionLineIndex = bounds.additionStart + coveredAdditions;
-          }
-          if (offset.deletions === 0) {
-            offset.deletionLineIndex = bounds.deletionStart + coveredDeletions;
-          }
+    let plan =
+      plans.length > 0 &&
+      blockTouchesRegion(blockStart, blockEnd, plans[plans.length - 1])
+        ? plans.pop()
+        : undefined;
+    while (
+      previousIndex < previousPlans.length &&
+      previousPlans[previousIndex].deletionStart <= blockEnd
+    ) {
+      plan = mergeRegionPlans(plan, previousPlans[previousIndex]);
+      previousIndex++;
+    }
+
+    if (plan == null) {
+      let deletionStart = blockStart;
+      let deletionEnd = blockEnd;
+      if (
+        (block.deletions === 0 || block.additions === 0) &&
+        deletionLineCount > block.deletions
+      ) {
+        const previousEnd = plans[plans.length - 1]?.deletionEnd ?? 0;
+        const nextStart =
+          previousPlans[previousIndex]?.deletionStart ?? deletionLineCount;
+        if (blockStart > previousEnd) {
+          deletionStart--;
+        } else if (blockEnd < nextStart) {
+          deletionEnd++;
         }
-        hunkContent.push(offset);
       }
-      additionChangedLines += parsedHunk.additionLines;
-      deletionChangedLines += parsedHunk.deletionLines;
-      coveredAdditions += parsedHunk.additionCount;
-      coveredDeletions += parsedHunk.deletionCount;
+      plan = {
+        deletionStart,
+        deletionEnd,
+        blocks: [],
+        previousSpan: undefined,
+      };
     }
-    pushContext(
-      additionCount - coveredAdditions,
-      bounds.additionStart + coveredAdditions,
-      bounds.deletionStart + coveredDeletions
+    plan.deletionStart = Math.min(plan.deletionStart, blockStart);
+    plan.deletionEnd = Math.max(plan.deletionEnd, blockEnd);
+    plan.blocks.push(block);
+    plans.push(plan);
+  }
+
+  while (previousIndex < previousPlans.length) {
+    plans.push(previousPlans[previousIndex]);
+    previousIndex++;
+  }
+  return plans;
+}
+
+function blockTouchesRegion(
+  blockStart: number,
+  blockEnd: number,
+  region: RegionPlan
+): boolean {
+  return blockStart <= region.deletionEnd && blockEnd >= region.deletionStart;
+}
+
+function mergeRegionPlans(
+  target: RegionPlan | undefined,
+  source: RegionPlan
+): RegionPlan {
+  if (target == null) {
+    return source;
+  }
+  target.deletionStart = Math.min(target.deletionStart, source.deletionStart);
+  target.deletionEnd = Math.max(target.deletionEnd, source.deletionEnd);
+  target.blocks.push(...source.blocks);
+  if (source.previousSpan != null) {
+    target.previousSpan ??= { ...source.previousSpan };
+    target.previousSpan.firstIndex = Math.min(
+      target.previousSpan.firstIndex,
+      source.previousSpan.firstIndex
+    );
+    target.previousSpan.lastIndex = Math.max(
+      target.previousSpan.lastIndex,
+      source.previousSpan.lastIndex
+    );
+  }
+  return target;
+}
+
+// One paired-context walk constructs every region's new-side range. There is
+// no downstream coordinate shifting: each boundary is derived from the
+// canonical blocks that precede it.
+function buildRegionHunks(diff: FileDiffMetadata, plans: RegionPlan[]): Hunk[] {
+  const hunks: Hunk[] = [];
+  let deletionCursor = 0;
+  let additionCursor = 0;
+  for (const plan of plans) {
+    const contextBefore = plan.deletionStart - deletionCursor;
+    if (contextBefore < 0) {
+      throw new Error('buildRegionHunks: overlapping old-side regions');
+    }
+    deletionCursor += contextBefore;
+    additionCursor += contextBefore;
+    const additionStart = additionCursor;
+    const hunkContent: Array<ContextContent | ChangeContent> = [];
+
+    for (const canonicalBlock of plan.blocks) {
+      const deletionContext = canonicalBlock.deletionLineIndex - deletionCursor;
+      const additionContext = canonicalBlock.additionLineIndex - additionCursor;
+      if (deletionContext < 0 || deletionContext !== additionContext) {
+        throw new Error('buildRegionHunks: canonical block context mismatch');
+      }
+      pushContext(hunkContent, deletionContext, additionCursor, deletionCursor);
+      deletionCursor += deletionContext;
+      additionCursor += additionContext;
+      hunkContent.push({ ...canonicalBlock });
+      deletionCursor += canonicalBlock.deletions;
+      additionCursor += canonicalBlock.additions;
+    }
+
+    const trailingContext = plan.deletionEnd - deletionCursor;
+    if (trailingContext < 0) {
+      throw new Error('buildRegionHunks: block exceeds its old-side region');
+    }
+    pushContext(hunkContent, trailingContext, additionCursor, deletionCursor);
+    deletionCursor += trailingContext;
+    additionCursor += trailingContext;
+    hunks.push(
+      createRegionHunk(
+        diff,
+        {
+          additionStart,
+          additionEnd: additionCursor,
+          deletionStart: plan.deletionStart,
+          deletionEnd: plan.deletionEnd,
+        },
+        hunkContent
+      )
     );
   }
 
+  if (
+    diff.deletionLines.length - deletionCursor !==
+    diff.additionLines.length - additionCursor
+  ) {
+    throw new Error('buildRegionHunks: trailing context mismatch');
+  }
+  return hunks;
+}
+
+function createRegionHunk(
+  diff: FileDiffMetadata,
+  bounds: RegionBounds,
+  hunkContent: Array<ContextContent | ChangeContent>
+): Hunk {
+  const additionCount = bounds.additionEnd - bounds.additionStart;
+  const deletionCount = bounds.deletionEnd - bounds.deletionStart;
+  let additionLines = 0;
+  let deletionLines = 0;
+  for (const content of hunkContent) {
+    if (content.type === 'change') {
+      additionLines += content.additions;
+      deletionLines += content.deletions;
+    }
+  }
   const hunk: Hunk = {
     collapsedBefore: 0,
-    additionStart: bounds.additionStart + 1,
+    additionStart: getUnifiedStart(bounds.additionStart, additionCount),
     additionCount,
-    additionLines: additionChangedLines,
-    additionLineIndex: bounds.additionStart,
-    deletionStart: bounds.deletionStart + 1,
+    additionLines,
+    additionLineIndex: getUnifiedLineIndex(bounds.additionStart, additionCount),
+    deletionStart: getUnifiedStart(bounds.deletionStart, deletionCount),
     deletionCount,
-    deletionLines: deletionChangedLines,
-    deletionLineIndex: bounds.deletionStart,
+    deletionLines,
+    deletionLineIndex: getUnifiedLineIndex(bounds.deletionStart, deletionCount),
     hunkContent,
-    hunkSpecs: `@@ -${bounds.deletionStart + 1},${deletionCount} +${bounds.additionStart + 1},${additionCount} @@`,
+    hunkSpecs: `@@ -${getUnifiedStart(bounds.deletionStart, deletionCount)},${deletionCount} +${getUnifiedStart(bounds.additionStart, additionCount)},${additionCount} @@`,
     splitLineStart: 0,
     splitLineCount: 0,
     unifiedLineStart: 0,
@@ -623,23 +686,116 @@ function rediffRegion(
     noEOFCRAdditions: false,
     noEOFCRDeletions: false,
   };
-  // The inner parse runs with zero context, so blank-run slides can only
-  // apply once the context blocks are reassembled here — keeping the session
-  // rendering identical to the exit parse, which slides in its own post-pass.
-  slideBlankBoundaryBlocksUp(hunk, diff);
   recomputeHunkRenderLineCounts(hunk);
   return hunk;
 }
 
-function shiftHunkAdditionCoords(hunk: Hunk, delta: number): void {
-  hunk.additionLineIndex += delta;
-  hunk.additionStart += delta;
-  for (const content of hunk.hunkContent) {
-    content.additionLineIndex += delta;
+function pushContext(
+  hunkContent: Array<ContextContent | ChangeContent>,
+  lines: number,
+  additionLineIndex: number,
+  deletionLineIndex: number
+): void {
+  if (lines > 0) {
+    hunkContent.push({
+      type: 'context',
+      lines,
+      additionLineIndex,
+      deletionLineIndex,
+    });
   }
 }
 
-function finalizeSessionHunks(diff: FileDiffMetadata, hunkIndex: number): void {
+function hasRegionOrSplitLayoutChanged(
+  previous: Hunk[],
+  next: Hunk[]
+): boolean {
+  if (previous.length !== next.length) {
+    return true;
+  }
+  for (let index = 0; index < previous.length; index++) {
+    const previousHunk = previous[index];
+    const nextHunk = next[index];
+    if (
+      getHunkDeletionStart(previousHunk) !== getHunkDeletionStart(nextHunk) ||
+      previousHunk.deletionCount !== nextHunk.deletionCount ||
+      getHunkAdditionStart(previousHunk) !== getHunkAdditionStart(nextHunk) ||
+      previousHunk.additionCount !== nextHunk.additionCount ||
+      previousHunk.splitLineCount !== nextHunk.splitLineCount ||
+      !haveSameSplitRowMapping(previousHunk, nextHunk)
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function haveSameSplitRowMapping(previous: Hunk, next: Hunk): boolean {
+  const previousRows = iterateSplitRowMapping(previous);
+  const nextRows = iterateSplitRowMapping(next);
+  while (true) {
+    const previousRow = previousRows.next();
+    const nextRow = nextRows.next();
+    if (previousRow.done === true || nextRow.done === true) {
+      return previousRow.done === nextRow.done;
+    }
+    if (
+      previousRow.value[0] !== nextRow.value[0] ||
+      previousRow.value[1] !== nextRow.value[1]
+    ) {
+      return false;
+    }
+  }
+}
+
+function* iterateSplitRowMapping(
+  hunk: Hunk
+): Generator<
+  [deletionLine: number | undefined, additionLine: number | undefined]
+> {
+  for (const content of hunk.hunkContent) {
+    if (content.type === 'context') {
+      for (let offset = 0; offset < content.lines; offset++) {
+        yield [
+          content.deletionLineIndex + offset,
+          content.additionLineIndex + offset,
+        ];
+      }
+      continue;
+    }
+    const rowCount = Math.max(content.deletions, content.additions);
+    for (let offset = 0; offset < rowCount; offset++) {
+      yield [
+        offset < content.deletions
+          ? content.deletionLineIndex + offset
+          : undefined,
+        offset < content.additions
+          ? content.additionLineIndex + offset
+          : undefined,
+      ];
+    }
+  }
+}
+
+function getHunkAdditionStart(hunk: Hunk): number {
+  return getHunkSideStartBoundary(hunk.additionStart, hunk.additionCount);
+}
+
+function getHunkDeletionStart(hunk: Hunk): number {
+  return getHunkSideStartBoundary(hunk.deletionStart, hunk.deletionCount);
+}
+
+function getUnifiedStart(lineIndex: number, count: number): number {
+  return count === 0 ? lineIndex : lineIndex + 1;
+}
+
+function getUnifiedLineIndex(lineIndex: number, count: number): number {
+  return count === 0 ? lineIndex - 1 : lineIndex;
+}
+
+function finalizeSessionHunks(diff: FileDiffMetadata): void {
   recomputeDiffRenderLineCounts(diff);
-  syncHunkNoEOFCRFromFullFile(diff, hunkIndex);
+  for (let index = 0; index < diff.hunks.length; index++) {
+    syncHunkNoEOFCRFromFullFile(diff, index);
+  }
 }
