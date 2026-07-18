@@ -36,7 +36,7 @@ jobs:
         uses: ./.github/actions/setup
 
       - name: Mount Playwright browsers
-        uses: useblacksmith/stickydisk@4c034ba57b706cf0e3b4b0ce098c2a3b1071580c # v1.4.0
+        uses: useblacksmith/stickydisk@6d373c96a74cbde0c99fedc5ea5d3a7ba66ba494 # v1.4.0
         with:
           key: ${{ github.repository }}-playwright-browsers-${{ runner.os }}
           path: ~/.cache/ms-playwright
