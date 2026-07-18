@@ -10,6 +10,7 @@ import { CustomScrollbarCSS } from '@/components/CustomScrollbarCSS';
 export interface PlaygroundAnnotationMetadata {
   key: string;
   isThread: boolean;
+  body?: string;
 }
 
 // Multi-hunk diff: edits at top, middle (annotation on new line 25), and

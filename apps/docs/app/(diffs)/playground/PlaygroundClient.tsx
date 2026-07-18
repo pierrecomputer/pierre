@@ -38,6 +38,7 @@ import {
 } from '@pierre/icons';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { toast } from 'sonner';
 
 import type { PlaygroundAnnotationMetadata } from './constants';
@@ -48,7 +49,11 @@ import {
   VIRTUALIZER_FILE_DIFFS,
 } from './constants';
 import { PlaygroundCodeView } from './PlaygroundCodeView';
-import { CommentForm, ExampleThread } from './PlaygroundComments';
+import {
+  CommentForm,
+  CommentThread,
+  ExampleThread,
+} from './PlaygroundComments';
 import { PlaygroundVirtualizerElementView } from './PlaygroundVirtualizerElementView';
 import { PlaygroundVirtualizerView } from './PlaygroundVirtualizerView';
 import { useTheme } from '@/components/theme-provider';
@@ -840,9 +845,29 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
   // The editor attaches to the diff's editable (new-file) side. Recreate it
   // when the diff layout or edit mode changes so it re-attaches to the freshly
   // relaid-out surface with a clean document instead of reusing a torn-down
-  // instance (mirrors LiveEditing's editor lifecycle).
+  // instance (mirrors LiveEditing's editor lifecycle). Edits remap annotation
+  // line numbers (an Enter above a comment shifts it down); onChange hands the
+  // remapped set back so the `lineAnnotations` prop — and the React-slotted
+  // comment content keyed by line number — follows the edit. The flushSync
+  // matters: the editor renamed the shadow-DOM annotation slots during this
+  // same keystroke, and until React commits the matching light-DOM `slot`
+  // attributes the comments project nowhere. A scheduled commit lands frames
+  // later (blank comments, collapsed rows); a synchronous one lands before
+  // this task's paint.
   // eslint-disable-next-line react-hooks/exhaustive-deps -- deps intentionally force a fresh editor; the factory takes no inputs
-  const editor = useMemo(() => new Editor({}), []);
+  const editor = useMemo(
+    () =>
+      new Editor<PlaygroundAnnotationMetadata>({
+        onChange: (_file, lineAnnotations) => {
+          if (lineAnnotations != null) {
+            flushSync(() => {
+              setAnnotations(lineAnnotations);
+            });
+          }
+        },
+      }),
+    []
+  );
 
   // Apply (or clear) the demo markers whenever the editor, mode, or toggle
   // changes. `setMarkers` throws until the editor attaches to its surface
@@ -1002,8 +1027,27 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
     []
   );
 
+  // Submitting persists the form in place: the annotation keeps its position
+  // and gains the typed body, which flips its rendering to a comment thread.
+  const handleSubmitComment = useCallback(
+    (side: AnnotationSide | undefined, lineNumber: number, body: string) => {
+      setAnnotations((prev) =>
+        prev.map((ann) =>
+          ann.side === side && ann.lineNumber === lineNumber
+            ? { ...ann, metadata: { ...ann.metadata, body } }
+            : ann
+        )
+      );
+      setSelectedRange(null);
+      setCommittedSelectedRange(null);
+    },
+    []
+  );
+
+  // An open form is an annotation that is neither the seeded thread nor a
+  // submitted comment; it pauses the gutter utility so forms can't stack.
   const hasOpenCommentForm = annotations.some(
-    (ann) => ann.metadata.isThread !== true
+    (ann) => ann.metadata.isThread !== true && ann.metadata.body == null
   );
 
   // The controls expose standalone selection and comments as separate modes.
@@ -1166,12 +1210,24 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
         showAnnotations
           ? (annotation) =>
               annotation.metadata.isThread === true ? (
-                <ExampleThread />
+                <ExampleThread
+                  onDelete={() =>
+                    handleCancelComment(annotation.side, annotation.lineNumber)
+                  }
+                />
+              ) : annotation.metadata.body != null ? (
+                <CommentThread
+                  body={annotation.metadata.body}
+                  onDelete={() =>
+                    handleCancelComment(annotation.side, annotation.lineNumber)
+                  }
+                />
               ) : (
                 <CommentForm
                   side={annotation.side}
                   lineNumber={annotation.lineNumber}
                   onCancel={handleCancelComment}
+                  onSubmit={handleSubmitComment}
                 />
               )
           : undefined
