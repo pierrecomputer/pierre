@@ -314,12 +314,32 @@ export const VANILLA_API_FILE_DIFF_PROPS: PreloadFileOptions<undefined> = {
     name: 'file_diff_props.ts',
     contents: `import {
   FileDiff,
+  type DiffLineAnnotation,
   type DiffTokenEventBaseProps,
   type FileDiffContentsLoader,
 } from '@pierre/diffs';
 
+interface ThreadMetadata {
+  threadId: string;
+}
+
+// Keep this array in application-owned storage when annotations can change.
+let lineAnnotations: DiffLineAnnotation<ThreadMetadata>[] = [
+  {
+    side: 'additions',
+    lineNumber: 0,
+    metadata: { threadId: 'file-summary' },
+  },
+  {
+    side: 'additions',
+    // One-based line number on the selected file side.
+    lineNumber: 5,
+    metadata: { threadId: 'abc' },
+  },
+];
+
 // All available options for the FileDiff class
-const instance = new FileDiff({
+const instance = new FileDiff<ThreadMetadata>({
 
   // ─────────────────────────────────────────────────────────────
   // THEMING
@@ -607,21 +627,21 @@ instance.render({
   // not omit only one side.
   oldFile: { name: 'file.ts', contents: '...' },
   newFile: { name: 'file.ts', contents: '...' },
-  lineAnnotations: [
-    { side: 'additions', lineNumber: 0, metadata: {} },
-    { side: 'additions', lineNumber: 5, metadata: {} },
-  ],
+  lineAnnotations,
   containerWrapper: document.body,
 });
 
 // Update options (full replacement, not merge)
 instance.setOptions({ ...instance.options, diffStyle: 'unified' });
+instance.rerender();
 
 // Update line annotations after initial render
-instance.setLineAnnotations([
+lineAnnotations = [
   { side: 'additions', lineNumber: 0, metadata: { threadId: 'file-summary' } },
   { side: 'additions', lineNumber: 5, metadata: { threadId: 'abc' } }
-]);
+];
+instance.setLineAnnotations(lineAnnotations);
+instance.rerender();
 
 // Programmatically control selected lines
 instance.setSelectedLines({
@@ -630,9 +650,6 @@ instance.setSelectedLines({
   side: 'additions',
   endSide: 'deletions',
 });
-
-// Force re-render (useful after changing options)
-instance.rerender();
 
 // Programmatically expand a collapsed hunk
 instance.expandHunk(0, 'down'); // hunkIndex, direction: 'up' | 'down' | 'both'
@@ -656,10 +673,28 @@ instance.cleanUp();`,
 export const VANILLA_API_FILE_PROPS: PreloadFileOptions<undefined> = {
   file: {
     name: 'file_props.ts',
-    contents: `import { File, type TokenEventBase } from '@pierre/diffs';
+    contents: `import {
+  File,
+  type LineAnnotation,
+  type TokenEventBase,
+} from '@pierre/diffs';
+
+interface CommentMetadata {
+  commentId: string;
+}
+
+// Keep this array in application-owned storage when annotations can change.
+let lineAnnotations: LineAnnotation<CommentMetadata>[] = [
+  { lineNumber: 0, metadata: { commentId: 'file-summary' } },
+  {
+    // One-based line number in the file.
+    lineNumber: 5,
+    metadata: { commentId: 'abc' },
+  },
+];
 
 // All available options for the File class
-const instance = new File({
+const instance = new File<CommentMetadata>({
 
   // ─────────────────────────────────────────────────────────────
   // THEMING
@@ -872,27 +907,24 @@ const instance = new File({
 // Render the file
 instance.render({
   file: { name: 'example.ts', contents: '...' },
-  lineAnnotations: [
-    { lineNumber: 0, metadata: {} },
-    { lineNumber: 5, metadata: {} },
-  ],
+  lineAnnotations,
   containerWrapper: document.body,
 });
 
 // Update options (full replacement, not merge)
 instance.setOptions({ ...instance.options, overflow: 'wrap' });
+instance.rerender();
 
 // Update line annotations after initial render
-instance.setLineAnnotations([
+lineAnnotations = [
   { lineNumber: 0, metadata: { commentId: 'file-summary' } },
   { lineNumber: 5, metadata: { commentId: 'abc' } }
-]);
+];
+instance.setLineAnnotations(lineAnnotations);
+instance.rerender();
 
 // Programmatically control selected lines
 instance.setSelectedLines({ start: 3, end: 8 });
-
-// Force re-render (useful after changing options)
-instance.rerender();
 
 // Change the active theme type
 instance.setThemeType('dark'); // 'dark' | 'light' | 'system'
