@@ -1,59 +1,58 @@
 ### Navigate selection, focus, and search
 
-The tree model tracks three user-facing states that matter immediately:
-selection, focus, and the visible row set. Search layers on top of that same
-model instead of introducing a separate identity system.
+The tree model tracks three user-facing states: selection, focus, and the
+visible row set. Search builds on the same model. It does not add a separate
+identity system.
 
 #### Start with the interaction state model
 
-Selection, focus, keyboard movement, and search all work in terms of canonical
-paths. If the visible tree changes because a branch collapses or search filters
-rows away, your app still reasons about the same path values.
+Selection, focus, keyboard movement, and search all use canonical paths. The
+visible tree can change when a branch collapses or when search removes rows.
+Your app still uses the same path values.
 
-That is why the public APIs return `readonly string[]` for selected paths, path
-strings for focused items, and path strings for search matches.
+For this reason, the public APIs return path-based results. Selected paths are a
+`readonly string[]`. Focused items are path strings. Search matches are path
+strings.
 
 #### Selection and focus are related but different
 
 Focus tells you where keyboard actions land. Selection tells you which rows the
-app currently treats as chosen. They often move together, but they are not
-interchangeable.
+app treats as chosen. The two often move together. But they are not the same.
 
-If you care about multi-select state in surrounding UI, read the selected paths.
-If you care about where rename, keyboard navigation, or a command will land
-next, read the focused path or item handle.
+Read the selected paths when you need the multi-select state in surrounding UI.
+Read the focused path or item handle when you need to know where a rename,
+keyboard action, or command lands next.
 
 #### Keyboard navigation follows the visible tree
 
-Keyboard movement works on the currently visible, expanded tree. Expanding or
-collapsing a branch changes which row can receive focus next. Search changes the
-same visible tree, so search also changes where keyboard movement can land.
+Keyboard movement works on the visible, expanded tree. Expand or collapse a
+branch to change which row receives focus next. Search changes the same visible
+tree. So search also changes where keyboard movement lands.
 
-That behavior is why Trees exposes focus and selection through the model instead
-of through DOM order or row indexes.
+For this reason, Trees exposes focus and selection through the model. It does
+not use DOM order or row indexes.
 
 #### Add search on top of that same state
 
-Search matches the same path-first tree data. It changes what stays visible, but
-it does not invent a second identity model. Selection and focus still refer to
-paths, even while the visible window changes around the current query.
+Search matches the same path-first tree data. It changes what stays visible. But
+it does not add a second identity model. Selection and focus still use paths.
+The visible window changes around the current query.
 
 #### Guide default: `hide-non-matches`
 
-Start with `hide-non-matches` unless you have a stronger product reason to
-preserve unrelated branches on screen. It aligns with the common "find the thing
-I want" workflow, and it keeps the visible tree close to the current search
-intent.
+Start with `hide-non-matches`. Change it only when the product needs unrelated
+branches on screen. This mode fits the common "find the thing I want" workflow.
+It keeps the visible tree close to the current search intent.
 
 Trees also supports `collapse-non-matches` and `expand-matches`. Use those modes
-when the surrounding UI needs more context, but keep `hide-non-matches` as the
-default mental model. The shared meaning of all three modes lives in
+when the surrounding UI needs more context. But keep `hide-non-matches` as the
+default mental model. The shared meaning of all three modes is in
 [Shared concepts](#shared-concepts).
 
 #### React integration notes
 
-React reads from the model through selector hooks and writes back through model
-methods.
+React reads from the model through selector hooks. React writes back through
+model methods.
 
 <DocsCodeExample {...NAVIGATE_REACT_SEARCH} />
 
@@ -61,18 +60,17 @@ Use `useFileTreeSelector(...)` when sibling UI needs a custom derived snapshot.
 
 #### Vanilla integration notes
 
-Vanilla code wires the same behavior around the class instance.
+Vanilla code connects the same behavior to the class instance.
 
 <DocsCodeExample {...NAVIGATE_VANILLA_SEARCH} />
 
-The DOM host is not the source of truth. The model is.
+The DOM host is not the source of truth. The model is the source of truth.
 
 #### What to read next
 
-- For runtime-specific lookup, jump to [React API](#react-api) or
+- For runtime-specific lookup, read [React API](#react-api) or
   [Vanilla API](#vanilla-api).
 - For shared search-mode semantics, read
   [Shared concepts](#shared-concepts-search-mode-semantics).
-- For row-level editing workflows that build on this same focus model, continue
-  with
+- For row-level editing workflows that build on this focus model, continue with
   [Rename, drag, and trigger item actions](#rename-drag-and-trigger-item-actions).

@@ -1,14 +1,14 @@
 ### React API
 
 The React entry point lives in `@pierre/trees/react`. It is a thin React
-integration layer over the same imperative model the vanilla runtime uses.
+integration layer over the same imperative model that the vanilla runtime uses.
 
 #### React model-first story
 
-Start with `useFileTree(options)`, not with a giant controlled component. The
-hook creates one stable model for the component lifetime. Later option changes
-are not a controlled reconfiguration path. Update the model through model
-methods instead.
+Start with `useFileTree(options)`. Do not build a large controlled component.
+The hook creates one stable model for the component lifetime. Later option
+changes do not reconfigure the model. Update the model through model methods
+instead.
 
 <DocsCodeExample {...REACT_API_EXAMPLE} />
 
@@ -19,14 +19,14 @@ For the shared option meanings behind that call, read
 
 `useFileTree(...)`:
 
-- accepts the shared tree options surface
-- creates the model exactly once
-- cleans the model up when the React component unmounts
+- accepts the shared tree-options surface
+- creates the model one time
+- cleans up the model when the React component unmounts
 - returns `UseFileTreeResult`, which currently exposes `model`
 
-Keep using model methods such as `resetPaths(...)`, `setComposition(...)`,
-`setGitStatus(...)`, `setIcons(...)`, and the search or mutation methods when
-the tree changes after mount.
+Use model methods when the tree changes after mount. The methods include
+`resetPaths(...)`, `setComposition(...)`, `setGitStatus(...)`, `setIcons(...)`,
+and the search or mutation methods.
 
 #### `<FileTree />`
 
@@ -48,14 +48,14 @@ Behavior notes:
 - it renders the model into the host element
 - it hydrates instead of rendering fresh when matching preloaded content is
   already present
-- it uses `id ?? preloadedData?.id` for host identity when hydration is involved
-- `header` and `renderContextMenu` layer React rendering onto the model's
+- it uses `id ?? preloadedData?.id` for host identity during hydration
+- `header` and `renderContextMenu` add React rendering onto the model
   composition surface
 
 #### Reading tree state from React
 
-React components read from the model through selector hooks and write back
-through model methods.
+React components read from the model through selector hooks. React components
+write back through model methods.
 
 Common read patterns include:
 
@@ -78,7 +78,7 @@ Common read patterns include:
 
 `useFileTreeSearch(model)`
 
-- returns the current search snapshot plus model-backed actions
+- returns the current search snapshot and the model-backed actions
 - snapshot fields: `isOpen`, `matchingPaths`, `value`
 - actions: `open(initialValue?)`, `close()`, `setValue(value)`,
   `focusNextMatch()`, `focusPreviousMatch()`
@@ -87,14 +87,14 @@ Common read patterns include:
 
 #### Writing to the model from React
 
-React writes through the same imperative model methods the vanilla runtime
+React writes through the same imperative model methods that the vanilla runtime
 exposes.
 
 Typical write paths are:
 
-- focus and selection methods on the model or item handles, including
-  `scrollToPath(...)` when you want to reveal a path without moving DOM focus
-  and optional model focus changes
+- focus and selection methods on the model or item handles. This includes
+  `scrollToPath(...)`, which reveals a path without moving DOM focus and makes
+  optional model focus changes.
 - search methods such as `setSearch(...)` and `openSearch(...)`
 - mutation methods such as `add(...)`, `remove(...)`, `move(...)`, `batch(...)`,
   and `resetPaths(...)`
@@ -109,20 +109,21 @@ React adds two high-level composition props on top of the model:
 - `renderContextMenu(item, context)` for React-rendered context menus
 
 Use them when the menu or header belongs in React. The shared meaning of the
-underlying composition options still lives in
+composition options is in
 [Shared concepts](#shared-concepts-interaction-and-editing-options).
 
 #### Mutation and subscriptions from React
 
 Use selector hooks when React UI needs reactive reads. Use
-`model.onMutation(...)` when you need semantic side effects such as persistence,
-logging, or analytics around add, remove, move, reset, or batch operations.
+`model.onMutation(...)` when you need semantic side effects. Examples are
+persistence, logging, or analytics around add, remove, move, reset, or batch
+operations.
 
 #### Hydration boundary
 
-The React runtime consumes server preload through `preloadedData` on
-`<FileTree />`. The model still comes from `useFileTree(...)`, and the client
-must use matching tree-defining options.
+The React runtime uses server preload through `preloadedData` on `<FileTree />`.
+The model still comes from `useFileTree(...)`. The client must use matching
+tree-defining options.
 
 For the preload contract, read [SSR API](#ssr-api). For workflow guidance, read
 [SSR](#ssr).
@@ -130,5 +131,5 @@ For the preload contract, read [SSR API](#ssr-api). For workflow guidance, read
 #### Appearance boundary
 
 Style the React host with normal host props such as `className` and `style`. For
-deeper lookup, use [Styling and theming](#styling-and-theming) and
+deeper lookup, read [Styling and theming](#styling-and-theming) and
 [Icons](#icons).

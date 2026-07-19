@@ -1,12 +1,11 @@
 ### Vanilla API
 
 The vanilla runtime lives at the package root, `@pierre/trees`.
-`new FileTree(...)` is both the runtime entry point and the imperative model
-surface.
+`new FileTree(...)` is the runtime entry point and the imperative model surface.
 
 #### Class-first story
 
-Start with `new FileTree(options)`, then mount the instance.
+Start with `new FileTree(options)`. Then mount the instance.
 
 <DocsCodeExample {...VANILLA_API_EXAMPLE} />
 
@@ -18,16 +17,16 @@ For shared option meanings, read
 `new FileTree(options)`:
 
 - accepts the shared options surface
-- establishes the model once
-- expects later updates through model methods instead of rebuilding option
-  objects for every render
+- creates the model one time
+- expects later updates through model methods; do not rebuild option objects for
+  every render
 
 #### Mounting and lifecycle
 
 `render(...)`
 
 - accepts `{ fileTreeContainer }` when you already own the host element
-- accepts `{ containerWrapper }` when the runtime should create and append the
+- accepts `{ containerWrapper }` when the runtime must create and append the
   host for you
 
 `hydrate({ fileTreeContainer })`
@@ -36,11 +35,11 @@ For shared option meanings, read
 
 `unmount()`
 
-- removes the mounted runtime while keeping the model available
+- removes the mounted runtime and keeps the model available
 
 `cleanUp()`
 
-- final teardown: unmount plus subscription cleanup and model destruction
+- final teardown: unmount, subscription cleanup, and model destruction
 
 `getFileTreeContainer()`
 
@@ -59,12 +58,12 @@ Common read methods are:
 - `getSearchValue()`
 - `getSearchMatchingPaths()`
 
-These reads stay path- and model-oriented. They do not ask you to infer tree
-state from DOM order.
+These reads stay path-oriented and model-oriented. They do not ask you to infer
+the tree state from DOM order.
 
 #### Item handles
 
-`getItem(path)` returns either a file handle, a directory handle, or `null`.
+`getItem(path)` returns a file handle, a directory handle, or `null`.
 
 Shared handle actions:
 
@@ -91,7 +90,7 @@ Focus and selection control:
 - item-handle selection and focus methods
 
 `scrollToPath(...)` scrolls the virtualizer without moving DOM focus. It updates
-model focus by default; pass `focus: false` to leave model focus unchanged.
+model focus by default. Pass `focus: false` to keep model focus unchanged.
 
 Search control:
 
@@ -118,12 +117,11 @@ Runtime reconfiguration helpers:
 
 #### Subscriptions and external systems
 
-Use `subscribe(listener)` when any tree change should refresh a derived
-snapshot. Use `onMutation(...)` when add, remove, move, reset, or batch intent
-matters.
+Use `subscribe(listener)` when any tree change must refresh a derived snapshot.
+Use `onMutation(...)` when add, remove, move, reset, or batch intent matters.
 
-That separation keeps model subscriptions for state reads and mutation events
-for semantic side effects.
+This separation keeps model subscriptions for state reads. It keeps mutation
+events for semantic side effects.
 
 #### Composition surface
 
@@ -133,15 +131,15 @@ The composition surface covers:
 - context-menu composition
 - runtime updates through `setComposition(...)`
 
-Use
+Read
 [Rename, drag, and trigger item actions](#rename-drag-and-trigger-item-actions)
 for workflow-level guidance.
 
 #### Hydration boundary
 
-This page only names the vanilla hydration entry point:
-`hydrate({ fileTreeContainer })`. The full server-preload-first contract lives
-in [SSR API](#ssr-api).
+This page names only the vanilla hydration entry point:
+`hydrate({ fileTreeContainer })`. The full server-preload-first contract is in
+[SSR API](#ssr-api).
 
 #### Appearance boundary
 

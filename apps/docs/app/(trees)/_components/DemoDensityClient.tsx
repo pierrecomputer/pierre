@@ -23,7 +23,7 @@ import { PRODUCTS } from '@/lib/product-config';
 
 const PRESELECTED_FILE = 'src/components/Button.tsx';
 const DENSITY_DESCRIPTION_SUFFIX =
-  " to tune the tree's proportions in one place — the keyword resolves both the row height and the spacing factor. See the ";
+  ' to tune the tree proportions in one place. The keyword sets both the row height and the spacing factor. See the ';
 
 const DENSITY_PRESETS = [
   {

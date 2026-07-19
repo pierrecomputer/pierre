@@ -113,11 +113,11 @@ export function DemoCustomIconsClient({
         title="Built-in icon sets"
         description={
           <>
-            Choose between the shipped <code>minimal</code>,{' '}
-            <code>standard</code>, and <code>complete</code> icon tiers. Each
-            tier is cumulative. Override the built-in palette with CSS variables
-            like <code>--trees-file-icon-color-javascript</code>, or fall back
-            to a fully custom sprite. See the{' '}
+            Choose the shipped <code>minimal</code>, <code>standard</code>, or{' '}
+            <code>complete</code> icon tier. Each tier is cumulative. Override
+            the built-in palette with CSS variables like{' '}
+            <code>--trees-file-icon-color-javascript</code>. Or use a fully
+            custom sprite. See the{' '}
             <a
               href={`${PRODUCTS.trees.docsPath}#icons-configuration-shape`}
               className="inline-link"

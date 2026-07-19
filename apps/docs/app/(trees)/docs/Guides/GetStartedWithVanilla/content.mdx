@@ -1,9 +1,9 @@
 ### Get started with vanilla
 
-Use the vanilla runtime when your app is not React-based, or when another
-framework will own lifecycle around an imperative tree model.
-`new FileTree(...)` creates the model, and `render(...)` or `hydrate(...)`
-attaches it to the DOM.
+Use the vanilla runtime in two cases. Use it when your app is not React-based.
+Also use it when another framework must own the lifecycle around an imperative
+tree model. `new FileTree(...)` creates the model. `render(...)` or
+`hydrate(...)` attaches the model to the DOM.
 
 #### Install `@pierre/trees`
 
@@ -11,20 +11,20 @@ attaches it to the DOM.
 
 #### Create the model with `new FileTree(...)`
 
-The class instance is both the runtime entry point and the state surface. For
-small trees, you can pass raw `paths`. For scalable trees, prefer
-`preparedInput` produced outside the UI.
+The class instance is the runtime entry point and the state surface. For small
+trees, pass raw `paths`. For scalable trees, use `preparedInput`. Create
+`preparedInput` outside the UI.
 
 <DocsCodeExample {...VANILLA_QUICKSTART_MOUNT_PROJECT_TREE} />
 
 #### Render into a host element
 
 `render({ fileTreeContainer })` mounts the model into an existing host element.
-If you want the runtime to create the host for you, use
-`render({ containerWrapper })` instead.
+Use `render({ containerWrapper })` instead when the runtime must create the host
+for you.
 
-Keep the boundary clear: the model owns tree state, and the mounted host only
-renders that state. Do not scrape the DOM to find the selected item or current
+Keep the boundary clear. The model owns the tree state. The mounted host only
+renders that state. Do not read the DOM to find the selected item or the current
 focus. Read and update those values through the model.
 
 #### Read and update tree state through the model
@@ -34,9 +34,9 @@ controls.
 
 <DocsCodeExample {...VANILLA_QUICKSTART_IMPERATIVE_USAGE} />
 
-When surrounding data changes, call explicit model methods such as
-`resetPaths(...)`, `setComposition(...)`, `setGitStatus(...)`, or
-`setIcons(...)` instead of reconstructing the model in place.
+Call explicit model methods when the surrounding data changes. The methods
+include `resetPaths(...)`, `setComposition(...)`, `setGitStatus(...)`, and
+`setIcons(...)`. Do not build the model again in place.
 
 #### Use simple `paths` input only when the tree is small
 
@@ -45,32 +45,33 @@ It is not the recommended setup for repo-scale or workspace-scale trees.
 
 #### Move to prepared input before the tree gets expensive
 
-The recommended scale path is:
+Use this recommended scale path:
 
 1. Load canonical paths outside the UI.
-2. Prepare the tree input once.
+2. Prepare the tree input one time.
 3. Construct `new FileTree({ preparedInput, ... })`.
 
-If the server or indexer already knows the final order,
-`preparePresortedFileTreeInput(...)` is the better fit because the client can
-skip extra sorting work.
+Use `preparePresortedFileTreeInput(...)` when the server or indexer already
+knows the final order. It is the better fit because the client can skip the
+extra sorting work.
 
 #### Add SSR later when server rendering matters
 
-Hydration layers on top of the same class-first runtime. The client still
-creates `new FileTree(...)`, but instead of rendering fresh markup it attaches
-that model to server-rendered tree output with `hydrate({ fileTreeContainer })`.
+Hydration builds on top of the same class-first runtime. The client still
+creates `new FileTree(...)`. But the client does not render fresh markup.
+Instead, it attaches that model to server-rendered tree output with
+`hydrate({ fileTreeContainer })`.
 
-When you need that flow, continue with [SSR](#ssr) and [SSR API](#ssr-api).
+Continue with [SSR](#ssr) and [SSR API](#ssr-api) when you need that flow.
 
 #### Advanced note: wrapping the vanilla model in another framework
 
-If you wrap the vanilla model in another framework, keep the ownership boundary
-the same:
+Keep the same ownership boundary when you wrap the vanilla model in another
+framework:
 
 - create and own the `FileTree` instance from that framework's lifecycle
 - mount or unmount around the instance
-- keep all tree reads and writes on the model itself
+- keep all tree reads and writes on the model
 
-That keeps React as the only first-class wrapper surface without changing how
-the underlying model works.
+This approach keeps React as the only first-class wrapper surface. It does not
+change how the model works.

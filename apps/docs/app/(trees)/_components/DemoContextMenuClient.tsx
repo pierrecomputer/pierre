@@ -186,11 +186,11 @@ export function DemoContextMenuClient({
             >
               <code>composition.contextMenu</code>
             </Link>{' '}
-            and the React <code>renderContextMenu</code> prop. This demo exposes
-            trigger modes for right-click, trigger button, or both, and menu
-            actions for new files, new folders, rename, and delete. This demo
-            uses Shadcn UI components for the context menu as an example. Your
-            app can use the menus that you already have.
+            and the React <code>renderContextMenu</code> prop. This demo shows
+            trigger modes for right-click, the trigger button, or both. It also
+            shows menu actions for new files, new folders, rename, and delete.
+            This demo uses Shadcn UI components for the context menu as an
+            example. Your app can use the menus that you already have.
           </>
         }
       />

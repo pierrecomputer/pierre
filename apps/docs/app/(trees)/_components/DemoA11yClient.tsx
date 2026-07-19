@@ -61,8 +61,8 @@ export function DemoA11yClient({ preloadedData }: DemoA11yClientProps) {
     <TreeExampleSection>
       <FeatureHeader
         id="a11y"
-        title="Accessible from the jump"
-        description="With built-in keyboard navigation, focus management, and ARIA roles (tree, treeitem) plus aria-level, aria-posinset, and aria-setsize attributes, Trees are immediately accessible to all users. We've designed Trees to align with WCAG 2.1 guidance."
+        title="Accessible from the start"
+        description="Trees is accessible to all users by default. It includes built-in keyboard navigation and focus management. It provides the ARIA roles tree and treeitem. It also sets the aria-level, aria-posinset, and aria-setsize attributes. We designed Trees to follow WCAG 2.1 guidance."
       />
       <ButtonGroup
         className="md:hidden"

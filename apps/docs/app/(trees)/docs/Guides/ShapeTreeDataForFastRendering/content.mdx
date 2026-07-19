@@ -1,23 +1,23 @@
 ### Shape tree data for fast rendering
 
-Shape the tree before it reaches the UI when the dataset is large enough for
-client-side preparation to matter. Trees treats prepared input as a first-class
-public concept, not as an internal optimization trick.
+Shape the tree before it reaches the UI when the dataset is large. Then
+client-side preparation is worth the effort. Trees treats prepared input as a
+first-class public concept. It is not an internal optimization trick.
 
 #### Start with server-prepared input for scalable trees
 
-`prepareFileTreeInput(...)` lets the client skip repeated tree-shaping work. The
-best place to do that preparation is usually the server, a loader, or another
-non-UI boundary that already has the full path list.
+`prepareFileTreeInput(...)` lets the client skip repeated tree-shape work. Do
+this preparation on the server, a loader, or another non-UI boundary. That
+boundary already has the full path list.
 
 <DocsCodeExample {...SHAPE_TREE_DATA_PREPARE_LOADER} />
 
-The client still works with the same path-first model. Only the expensive
-preparation step moves earlier.
+The client still uses the same path-first model. Only the expensive preparation
+step moves earlier.
 
 #### Pass `preparedInput` into the runtime
 
-Both primary runtimes consume the same prepared payload shape.
+Both primary runtimes use the same prepared payload shape.
 
 <DocsCodeExample {...SHAPE_TREE_DATA_REACT_TREE} />
 
@@ -25,45 +25,45 @@ Both primary runtimes consume the same prepared payload shape.
 
 #### Use simple `paths` input only for small trees
 
-Raw `paths` is still the right call for small demos, tests, and very small
+Raw `paths` is still the right choice for small demos, tests, and very small
 static trees.
 
 <DocsCodeExample {...SHAPE_TREE_DATA_SMALL_PATHS} />
 
-That is the easy starting path, not the scale-oriented default. When the tree
-grows, move the preparation work out of the client.
+This is the easy start path, not the scale-oriented default. Move the
+preparation work out of the client when the tree grows.
 
 #### Presorted input is the highest-performance prepared-input path
 
-If your server or indexer already knows the final order, use
-`preparePresortedFileTreeInput(...)`. That skips both the tree-shaping work and
-the extra ordering work a normal prepared input pass would still apply.
+Use `preparePresortedFileTreeInput(...)` when your server or indexer already
+knows the final order. It skips the tree-shape work. It also skips the extra
+sort work that a normal prepared-input pass applies.
 
 <DocsCodeExample {...SHAPE_TREE_DATA_PRESORTED} />
 
-Use this when the backend, build step, or cached index already owns the sort
-order. Do not reimplement default ordering manually in the client just to reach
-the presorted path.
+Use this path when the backend, build step, or cached index already owns the
+sort order. Do not write the default order again in the client only to reach the
+presorted path.
 
 #### Prepare on the server, render on the client
 
-The recommended split is simple:
+Use this simple split:
 
 1. Load canonical paths outside the UI.
-2. Prepare the input once.
+2. Prepare the input one time.
 3. Pass `preparedInput` into React, vanilla, or SSR hydration.
 
-That reduces client CPU work, makes startup cost more predictable, and lets the
-same prepared payload feed every runtime.
+This split reduces client CPU work. It makes the startup cost more predictable.
+It also lets the same prepared payload feed every runtime.
 
 #### Keep client-side sorting and preparation secondary
 
-Sometimes data only exists in the browser, or custom ordering must run there.
-Trees supports that, but it is the exception path. Start with prepared input
-when the app can move work out of the UI, and treat client-side shaping as a
-fallback.
+Sometimes the data exists only in the browser. Sometimes custom order must run
+there. Trees supports both cases, but they are the exception path. Start with
+prepared input when the app can move the work out of the UI. Use client-side
+shaping only as a fallback.
 
-For the shared contract behind these inputs, see
-[Shared concepts](#shared-concepts). For the scale-oriented version of the same
+To learn the shared contract behind these inputs, read
+[Shared concepts](#shared-concepts). For the scale-oriented version of this
 guidance, continue with
 [Handle large trees efficiently](#handle-large-trees-efficiently).

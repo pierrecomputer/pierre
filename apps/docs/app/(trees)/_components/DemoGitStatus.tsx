@@ -149,8 +149,8 @@ export function DemoGitStatus({ preloadedData }: DemoGitStatusProps) {
             </Link>{' '}
             option to show status badges for added, modified, deleted, renamed,
             untracked, and ignored files. Ignored items inherit their styling
-            without rendering an indicator while folders with changed
-            descendants get a dot indicator automatically.
+            and show no indicator. Folders with changed descendants get a dot
+            indicator automatically.
           </>
         }
       />

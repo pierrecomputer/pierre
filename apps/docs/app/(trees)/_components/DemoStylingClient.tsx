@@ -195,14 +195,14 @@ export function DemoStylingClient({
         title="Style with CSS variables"
         description={
           <>
-            {'Modify CSS custom properties via the '}
+            {'Modify the CSS custom properties through the '}
             <code>style</code>
             {
-              ' prop to override UI and theme colors. For example, below are three examples—custom light, dark, and Synthwave '
+              ' prop. This overrides the UI and theme colors. Below are three examples: custom light, dark, and Synthwave '
             }
             &apos;84
             {
-              '—that override our default values and the CSS we use to style the tree. See the '
+              '. Each example overrides our default values and the CSS that styles the tree. See the '
             }
             <Link
               href={`${PRODUCTS.trees.docsPath}#styling-and-theming`}

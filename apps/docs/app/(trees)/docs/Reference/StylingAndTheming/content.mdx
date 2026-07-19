@@ -9,15 +9,14 @@ Host styling comes first.
 
 - React: use normal host `className` and `style` props on
   `<FileTree model={...} />`
-- Vanilla: style the mounted host returned by `getFileTreeContainer()`
+- Vanilla: style the mounted host that `getFileTreeContainer()` returns
 
 Host styles own width, height, borders, background, and panel placement. CSS
-variables control the UI rendered inside that host.
+variables control the UI inside that host.
 
 #### CSS custom property families
 
-The tree styling surface is organized around variable families rather than one
-flat list.
+The tree styling surface uses variable families, not one flat list.
 
 Core families include:
 
@@ -32,16 +31,16 @@ Core families include:
 Trees resolves styling in this order:
 
 1. explicit override variables such as `--trees-*-override`
-2. `--trees-theme-*` variables supplied by theme helpers
+2. `--trees-theme-*` variables from theme helpers
 3. library defaults
 
-That means `themeToTreeStyles(...)` fills the middle layer, and direct overrides
-still win.
+So `themeToTreeStyles(...)` fills the middle layer. Direct overrides still win.
 
 #### `themeToTreeStyles(...)`
 
 `themeToTreeStyles(theme)` maps a VS Code or Shiki-style theme object into host
-styles plus the `--trees-theme-*` variables the tree already understands.
+styles. It also maps the theme to the `--trees-theme-*` variables that the tree
+understands.
 
 Input shape:
 
@@ -62,26 +61,26 @@ Git-status colors. Explicit overrides can still replace any derived token later.
 
 React:
 
-- styling stays on the host element through normal `className` and `style` props
-- there is no separate React-only styling API beyond shared tree options
+- keep styling on the host element through normal `className` and `style` props
+- there is no separate React-only styling API beyond the shared tree options
 
 Vanilla:
 
-- apply styles through the host or container you already own
+- apply styles through the host or container that you already own
 - `getFileTreeContainer()` is the handoff back to application styling code
 
 #### `unsafeCSS` escape hatch
 
 `unsafeCSS` is the secondary path. Use it only when the supported host and
-variable surfaces cannot express the needed customization.
+variable surfaces cannot express the customization.
 
 Reference topics:
 
-- option name and public package surface
+- the option name and public package surface
 - shadow-root CSS injection at a high level
-- warning that this is the exception path, not the default styling story
+- a warning that this is the exception path, not the default styling story
 
-Keep it narrow. Do not turn it into a raw stylesheet-asset strategy.
+Keep it narrow. Do not make it a raw stylesheet-asset strategy.
 
 #### Related pages
 

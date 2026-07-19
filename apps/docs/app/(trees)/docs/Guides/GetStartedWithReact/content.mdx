@@ -1,77 +1,75 @@
 ### Get started with React
 
-Use the React entry point when your surrounding UI already lives in React. The
-hook creates one stable tree model, and the component mounts that model into the
-host element.
+Use the React entry point when your UI is already in React. The hook creates one
+stable tree model. The component mounts that model into the host element.
 
 #### Install `@pierre/trees`
 
-Use the package root for the vanilla runtime, and the `/react` entry point for
+Use the package root for the vanilla runtime. Use the `/react` entry point for
 the React wrapper.
 
 <DocsCodeExample {...REACT_QUICKSTART_INSTALL} />
 
 #### Create the model with `useFileTree(...)`
 
-`useFileTree(...)` from `@pierre/trees/react` creates the model exactly once for
-the component lifetime. Later option changes are not a controlled update path.
-If the tree data or runtime behavior changes after mount, update the model
-through methods such as `resetPaths(...)`, `setComposition(...)`,
-`setGitStatus(...)`, or `setIcons(...)`.
+`useFileTree(...)` from `@pierre/trees/react` creates the model one time for the
+component lifetime. Later option changes do not update the model. Update the
+model through methods when the tree data or runtime behavior changes after
+mount. The methods include `resetPaths(...)`, `setComposition(...)`,
+`setGitStatus(...)`, and `setIcons(...)`.
 
-For small trees, you can pass raw `paths`. For scalable trees, prefer
-`preparedInput` produced on the server or another non-UI boundary.
+For small trees, pass raw `paths`. For scalable trees, use `preparedInput`.
+Create `preparedInput` on the server or another non-UI boundary.
 
 <DocsCodeExample {...REACT_QUICKSTART_PROJECT_TREE} />
 
-If you are still deciding how to shape that input, read
-[Shape tree data for fast rendering](#shape-tree-data-for-fast-rendering) after
-this quickstart.
+Read [Shape tree data for fast rendering](#shape-tree-data-for-fast-rendering)
+after this quickstart if you must still decide how to shape that input.
 
 #### Render with `<FileTree model={model} />`
 
 `<FileTree />` is a thin React wrapper over the model. It mounts the tree into
-the host element, forwards normal host props such as `className` and `style`,
-and hydrates existing server output when you pass `preloadedData` later.
+the host element. It forwards normal host props such as `className` and `style`.
+It also hydrates existing server output when you pass `preloadedData` later.
 
-Keep the mental model simple: the model owns the tree state, and the React
-component renders it.
+Keep the mental model simple. The model owns the tree state. The React component
+renders it.
 
 #### Read and update tree state through the model
 
-React code reads snapshots from the model through selector hooks, and writes
-back through model methods.
+React code reads snapshots from the model through selector hooks. React code
+writes back through model methods.
 
 <DocsCodeExample {...REACT_QUICKSTART_SEARCHABLE_TREE} />
 
 Use `useFileTreeSelector(model, selector, equality?)` when sibling UI needs a
-custom derived snapshot without rerendering on unrelated tree changes. For the
-shared interaction vocabulary, read
+custom derived snapshot. This hook does not rerender on unrelated tree changes.
+For the shared interaction terms, read
 [Navigate selection, focus, and search](#navigate-selection-focus-and-search)
 and [React API](#react-api).
 
 #### Use simple `paths` input only when the tree is small
 
 Raw `paths` is the low-ceremony path for demos, tests, and very small static
-trees. It is not the scalable default. Once the tree becomes expensive to shape
-or sort on the client, move that work out of the UI.
+trees. It is not the scalable default. Move the shape or sort work out of the UI
+when the tree becomes expensive on the client.
 
 #### Move to prepared input before the tree gets expensive
 
-The recommended scale path is:
+Use this recommended scale path:
 
 1. Load canonical paths on the server or another non-UI boundary.
-2. Prepare the tree input once.
+2. Prepare the tree input one time.
 3. Pass `preparedInput` into `useFileTree(...)`.
 
-If the server already knows the final order,
-`preparePresortedFileTreeInput(...)` is the highest-performance prepared-input
-variant because the client can skip both shaping and extra sorting work.
+Use `preparePresortedFileTreeInput(...)` when the server already knows the final
+order. It is the highest-performance prepared-input variant. The client can skip
+both the shaping work and the extra sorting work.
 
 #### Add SSR later when first paint matters
 
-Hydration layers on top of the same model-first React story. The client still
-calls `useFileTree(...)`, and the React wrapper still renders the same model.
-The only difference is that the tree starts from preloaded server output.
+Hydration builds on top of the same model-first React story. The client still
+calls `useFileTree(...)`. The React wrapper still renders the same model. The
+one difference is that the tree starts from preloaded server output.
 
-When you need that flow, continue with [SSR](#ssr) and [SSR API](#ssr-api).
+Continue with [SSR](#ssr) and [SSR API](#ssr-api) when you need that flow.

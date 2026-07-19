@@ -86,12 +86,11 @@ export function DemoDragDropClient({ preloadedData }: DemoDragDropClientProps) {
         title="Drag and drop"
         description={
           <>
-            Move files and folders by dragging them onto other folders,
-            flattened folders, or the root with <code>dragAndDrop: true</code>.
-            Drop targets open automatically when you hover, and dragging is
-            disabled while search is active. Pass a <code>canDrag</code>{' '}
-            callback to prevent specific paths from being dragged. Learn more in
-            the{' '}
+            Set <code>dragAndDrop: true</code> to move files and folders. Drag
+            them onto other folders, flattened folders, or the root. Drop
+            targets open automatically when you hover. The tree disables
+            dragging while search is active. Pass a <code>canDrag</code>{' '}
+            callback to lock specific paths. Learn more in the{' '}
             <Link
               href={`${PRODUCTS.trees.docsPath}#rename-drag-and-trigger-item-actions-move-items-with-drag-and-drop`}
               className="inline-link"

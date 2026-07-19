@@ -45,12 +45,12 @@ export function DemoVirtualizationClient({
         title="Always virtualized"
         description={
           <>
-            Trees with tens of thousands of items render instantly with built-in
-            and automatic virtualization. Only visible rows are mounted. The
-            tree below contains{' '}
+            Built-in, automatic virtualization renders trees with tens of
+            thousands of items instantly. The tree mounts only the visible rows.
+            The tree below contains{' '}
             <strong>{FILE_COUNT_FORMATTER.format(paths.length)} files</strong>{' '}
-            with every folder expanded. Shown with <code>stickyFolders</code>{' '}
-            enabled.
+            with every folder expanded. This demo enables{' '}
+            <code>stickyFolders</code>.
           </>
         }
       />

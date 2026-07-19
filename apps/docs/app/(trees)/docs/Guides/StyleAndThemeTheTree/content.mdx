@@ -1,9 +1,9 @@
 ### Style and theme the tree
 
-Start with the host element, then move inward. Host styles control the outer
-panel. CSS variables control most tree-internal appearance.
+Start with the host element. Then move inward. Host styles control the outer
+panel. CSS variables control most of the tree appearance.
 `themeToTreeStyles(...)` maps an editor-like theme into the same variable
-system. `unsafeCSS` is the escape hatch when the supported surfaces do not reach
+system. `unsafeCSS` is the escape hatch when the supported surfaces cannot reach
 a narrow case.
 
 #### Start with host styling
@@ -15,53 +15,52 @@ In React, pass normal host props to `<FileTree model={...} />`.
 
 <DocsCodeExample {...STYLE_THEME_HOST_STYLING} />
 
-In vanilla, style the mounted host element you already own. After mount,
-`getFileTreeContainer()` gives you that element back when runtime code needs to
-update it.
+In vanilla, style the mounted host element that you already own. After mount,
+`getFileTreeContainer()` returns that element when runtime code must update it.
 
 #### Use CSS variables for most visual changes
 
-CSS variables are the main public styling surface inside the shadow root. Reach
-for them before custom CSS injection.
+CSS variables are the main public styling surface inside the shadow root. Use
+them before you inject custom CSS.
 
 <DocsCodeExample {...STYLE_THEME_CSS_VARIABLES} />
 
-That approach keeps the normal fallback chain intact:
+This approach keeps the normal fallback chain in place:
 
 1. explicit override variables
 2. `--trees-theme-*` variables from theme helpers
 3. library defaults
 
-For the token families behind those variables, see
+For the token families behind those variables, read
 [Styling and theming](#styling-and-theming).
 
 #### Match an editor palette with `themeToTreeStyles(...)`
 
 Use `themeToTreeStyles(...)` when your app already has a VS Code or Shiki-style
-theme object. It maps that theme to host styles plus the `--trees-theme-*`
-variables the tree already understands.
+theme object. It maps that theme to host styles. It also maps the theme to the
+`--trees-theme-*` variables that the tree understands.
 
 <DocsCodeExample {...STYLE_THEME_TO_TREE_STYLES} />
 
-That gives you matching panel colors, selection colors, search-field colors, and
-Git-status colors without rebuilding the theme system by hand.
+This helper gives you matching panel colors, selection colors, search-field
+colors, and Git-status colors. You do not rebuild the theme system by hand.
 
 #### Set density with `density`
 
-Pass `density` to `useFileTree` (or `preloadFileTree`, or the vanilla `FileTree`
-constructor) to bundle row height and spacing into one option. The keyword form
-(`'compact'`, `'default'`, `'relaxed'`) resolves both at once; a numeric form
-keeps the default row height and supplies a custom spacing factor. Every runtime
-— vanilla CSR, vanilla SSR, React CSR, and React SSR — paints
-`--trees-item-height` and `--trees-density-override` onto the host from the
-resolved density so the virtualized and painted row heights stay aligned.
-Caller-set inline values on the host still win, so you can override either
-variable directly when you need a one-off. Set `itemHeight` only when you need a
-row height that doesn't match a preset.
+Pass `density` to `useFileTree`, `preloadFileTree`, or the vanilla `FileTree`
+constructor. This option sets row height and spacing together. The keyword form
+(`'compact'`, `'default'`, `'relaxed'`) sets both values at once. The numeric
+form keeps the default row height and sets a custom spacing factor. Every
+runtime paints `--trees-item-height` and `--trees-density-override` onto the
+host from the resolved density. The runtimes are vanilla CSR, vanilla SSR, React
+CSR, and React SSR. This step keeps the virtualized row height and the painted
+row height aligned. Caller-set inline values on the host still win. So you can
+override either variable directly for a one-off. Set `itemHeight` only when you
+need a row height that does not match a preset.
 
-The keyword presets are exported as `FILE_TREE_DENSITY_PRESETS` so SSR helpers
-like `initialVisibleRowCount` can divide by the preset's row height without
-hard-coding it.
+The keyword presets are exported as `FILE_TREE_DENSITY_PRESETS`. So SSR helpers
+such as `initialVisibleRowCount` can divide by the preset row height. They do
+not hard-code it.
 
 #### Choose the right styling layer
 
@@ -69,20 +68,20 @@ Use:
 
 - host styles for layout and panel framing
 - CSS variables for product-specific appearance changes inside the tree
-- `themeToTreeStyles(...)` when the tree should inherit an editor palette
+- `themeToTreeStyles(...)` when the tree must inherit an editor palette
 - `getFileTreeContainer()` in vanilla when runtime code needs the mounted host
   element
 
-Layer explicit overrides on top when the imported theme is close but not final.
+Add explicit overrides on top when the imported theme is close but not final.
 
 #### `unsafeCSS` is the escape hatch
 
-`unsafeCSS` is for the cases the supported host and variable surfaces cannot
+Use `unsafeCSS` for cases that the supported host and variable surfaces cannot
 express. Keep it small, local, and secondary.
 
 <DocsCodeExample {...STYLE_THEME_UNSAFE_CSS} />
 
-Do not start here, and do not rebuild the whole visual system from raw
-selectors. If you need a broad lookup of the supported styling surfaces, read
+Do not start here. Do not rebuild the whole visual system from raw selectors.
+For a broad lookup of the supported styling surfaces, read
 [Styling and theming](#styling-and-theming). For icon-specific appearance
 changes, continue with [Customize icons](#customize-icons).

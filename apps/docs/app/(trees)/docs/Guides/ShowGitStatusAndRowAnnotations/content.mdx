@@ -1,13 +1,12 @@
 ### Show Git status and row annotations
 
-Use built-in `gitStatus` when the signal is Git-like. Reach for
-`renderRowDecoration` when the row needs product-specific metadata that is not
-Git state.
+Use built-in `gitStatus` when the signal is Git-like. Use `renderRowDecoration`
+when the row needs product-specific metadata that is not Git state.
 
 #### Start with built-in `gitStatus`
 
 `gitStatus` is the default row-signal path. It attaches statuses to canonical
-paths, and folders can reflect changed descendants automatically.
+paths. Folders can reflect changed descendants automatically.
 
 Trees supports these built-in statuses:
 
@@ -20,23 +19,23 @@ Trees supports these built-in statuses:
 
 <DocsCodeExample {...GIT_STATUS_BASIC} />
 
-That is the shortest path when the row signal already matches Git semantics.
+This is the shortest path when the row signal already matches Git semantics.
 
 #### Know when `gitStatus` is enough
 
-Use `gitStatus` when the meaning is actually Git-like. Do not invent fake Git
-state just to get a badge on screen. Let Trees own the built-in status lane, and
-let the styling system control how those signals look.
+Use `gitStatus` only when the meaning is Git-like. Do not invent fake Git state
+only to show a badge. Let Trees own the built-in status lane. Let the styling
+system control how those signals look.
 
 #### Update status sets over time
 
-When the surrounding app changes commits, branches, comparison views, or status
-visibility, replace the current status data explicitly.
+Replace the current status data directly when the surrounding app changes.
+Examples are new commits, branches, comparison views, or status visibility.
 
 <DocsCodeExample {...GIT_STATUS_SET} />
 
-That keeps the runtime truthful without promising a filesystem watcher or a
-repo-sync framework.
+This step keeps the runtime accurate. It does not promise a filesystem watcher
+or a repo-sync framework.
 
 #### Add custom row annotations with `renderRowDecoration`
 
@@ -45,7 +44,7 @@ Use `renderRowDecoration` when the row needs metadata that is not Git-like.
 <DocsCodeExample {...GIT_STATUS_ROW_DECORATION} />
 
 Good fits include generated-file markers, remote-storage indicators, validation
-markers, or short secondary labels.
+markers, and short secondary labels.
 
 #### Choose between the two paths
 
@@ -53,18 +52,17 @@ Use:
 
 - `gitStatus` when the meaning is Git-like
 - `renderRowDecoration` for everything else
-- both together when a row needs Git state plus one extra product-specific
-  signal
+- both together when a row needs Git state and one extra product-specific signal
 
-Keep annotations short and glanceable. If a decoration affects user decisions,
-give it accessible text or a tooltip.
+Keep annotations short and easy to read. Give a decoration accessible text or a
+tooltip when it affects user decisions.
 
 #### Keep styling separate from annotation meaning
 
-Git-status colors and decoration visuals should stay in the same appearance
-system as the rest of the tree. Use styling and theming controls for color, not
-a second annotation-specific theme layer.
+Keep Git-status colors and decoration visuals in the same appearance system as
+the rest of the tree. Use the styling and theming controls for color. Do not add
+a second theme layer for annotations.
 
-For that part of the API, see
+For that part of the API, read
 [Style and theme the tree](#style-and-theme-the-tree) and
 [Styling and theming](#styling-and-theming).

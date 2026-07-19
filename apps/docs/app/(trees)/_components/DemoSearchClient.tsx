@@ -59,7 +59,8 @@ const SEARCH_MODE_DEMOS: readonly SearchModeDemo[] = [
     viewportHeight: TREE_NEW_VIEWPORT_HEIGHTS.searchCollapseNonMatches,
   },
   {
-    description: 'Keeps all items visible and expand folders with matches',
+    description:
+      'Keeps all items visible and expands folders that have matches',
     id: 'file-tree-search-demo-expand-matches',
     icon: <IconFolderOpen />,
     mode: 'expand-matches',
@@ -130,7 +131,7 @@ export function DemoSearchClient({ preloadedDataById }: DemoSearchClientProps) {
         title="Search and filter by name"
         description={
           <>
-            Filter the tree by typing in the search field. Search across file
+            Type in the search field to filter the tree. Search across file
             paths and names. Trees includes three{' '}
             <Link
               href={`${PRODUCTS.trees.docsPath}#shared-concepts-search-mode-semantics`}
@@ -138,8 +139,9 @@ export function DemoSearchClient({ preloadedDataById }: DemoSearchClientProps) {
             >
               <code>fileTreeSearchMode</code>
             </Link>{' '}
-            options to control how non-matching items are shown. All three demos
-            below start with search prepopulated to show the different modes.
+            options that control how the tree shows non-matching items. The
+            three demos below start with search filled in. They show the
+            different modes.
           </>
         }
       />

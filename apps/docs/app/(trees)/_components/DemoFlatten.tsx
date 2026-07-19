@@ -93,9 +93,9 @@ export function DemoFlatten({ preloadedData }: DemoFlattenProps) {
         title="Flatten empty directories"
         description={
           <>
-            Enable the <code>flattenEmptyDirectories</code> boolean option in{' '}
-            tree options to collapse single-child folder chains into one row for
-            a more compact tree.{' '}
+            Enable the <code>flattenEmptyDirectories</code> boolean option in
+            the tree options. It collapses single-child folder chains into one
+            row. The result is a more compact tree.{' '}
             <Link
               href={`${PRODUCTS.trees.docsPath}#shared-concepts-tree-shape-options`}
               className="inline-link"

@@ -6,7 +6,7 @@ server-to-client handoff contract.
 #### Server-preload-first contract
 
 Start with the server step, not the client step. Call `preloadFileTree(options)`
-on the server, then pass the returned value forward as one opaque handoff
+on the server. Then pass the returned value forward as one opaque handoff
 object.
 
 <DocsCodeExample {...SSR_API_EXAMPLE} />
@@ -22,50 +22,49 @@ a different public data model.
 - pre-renders the tree for first paint
 - returns an opaque SSR payload
 
-The current exported payload type name is `FileTreeSsrPayload`, but the
-docs-facing rule stays the same: pass it through unchanged.
+The current exported payload type name is `FileTreeSsrPayload`. But the
+docs-facing rule stays the same. Pass it through unchanged.
 
 #### `serializeFileTreeSsrPayload(...)`
 
-`serializeFileTreeSsrPayload(payload, mode?)` turns the preloaded payload back
-into a full host-markup string.
+`serializeFileTreeSsrPayload(payload, mode?)` turns the preloaded payload into a
+full host-markup string.
 
-Use it when your server integration needs a serialized HTML string instead of
-passing the payload through a framework-specific render boundary. The payload
-still stays opaque at the docs level.
+Use it when your server integration needs a serialized HTML string. This avoids
+a framework-specific render boundary. The payload still stays opaque at the docs
+level.
 
 #### Opaque payload framing
 
-Treat the preload result as a handoff object, not as a field-by-field
-integration surface.
+Treat the preload result as a handoff object. Do not treat it as a
+field-by-field integration surface.
 
-Docs can name the runtime touchpoints that consume it:
+Docs can name the runtime touchpoints that use it:
 
 - React passes the payload as `preloadedData`
 - Vanilla hydrates the server-rendered tree already in the page with
   `hydrate({ fileTreeContainer })`
 
-Do not center raw payload fields as the public story.
+Do not make the raw payload fields the public story.
 
 #### Handoff rules
 
-Server and client must agree on the same tree-defining options.
+The server and the client must use the same tree-defining options.
 
 Match:
 
 - the same path source (`paths`, prepared input, or presorted prepared input)
 - the same `id` discipline
-- the same expansion and search-affecting options when they change the initial
-  rendered tree
-- the same appearance-affecting options when they change initial markup or icon
-  output
+- the same expansion and search options when they change the initial rendered
+  tree
+- the same appearance options when they change the initial markup or icon output
 
-Mismatches are not a supported partial merge. They produce hydration mismatch or
-incorrect first state.
+A mismatch is not a supported partial merge. It produces a hydration mismatch or
+an incorrect first state.
 
 #### Prepared input and hydration
 
-Hydration works with raw `paths` or prepared input, but the recommended scale
+Hydration works with raw `paths` or prepared input. But the recommended scale
 path is server-prepared input with matching client consumption.
 
 For the shared input model behind that rule, read
@@ -73,16 +72,16 @@ For the shared input model behind that rule, read
 
 #### React handoff
 
-React still creates the model with `useFileTree(...)`, then passes the payload
-to `<FileTree model={model} preloadedData={payload} />`.
+React still creates the model with `useFileTree(...)`. Then it passes the
+payload to `<FileTree model={model} preloadedData={payload} />`.
 
 For the full runtime surface, read [React API](#react-api). For the workflow
 guide, read [SSR](#ssr).
 
 #### Vanilla handoff
 
-Vanilla emits the server-rendered tree into the page first, creates
-`new FileTree(options)` on the client, then calls
+Vanilla emits the server-rendered tree into the page first. Then it creates
+`new FileTree(options)` on the client. Then it calls
 `fileTree.hydrate({ fileTreeContainer })` against the existing host.
 
 For the full runtime surface, read [Vanilla API](#vanilla-api). For the workflow
@@ -90,6 +89,5 @@ guide, read [SSR](#ssr).
 
 #### Advanced note boundary
 
-If you mention declarative shadow DOM or hydration warnings, keep that note
-short and secondary. This page owns the public handoff contract, not DOM
-internals.
+Keep any note about declarative shadow DOM or hydration warnings short and
+secondary. This page owns the public handoff contract, not the DOM internals.

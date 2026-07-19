@@ -2,12 +2,13 @@
 
 <Notice variant="warning" icon={<IconFlagFill />}>
   **Trees is in beta.** Start from the public React, vanilla, and SSR entry
-  points on this page. Expect polish and small API shifts between beta releases.
+  points on this page. Expect refinements and small API changes between beta
+  releases.
 </Notice>
 
-**Trees** keeps one path-first model across React, vanilla, and SSR hydration.
-Selection, focus, search, rename, drag and drop, Git status, and row annotations
-all work in terms of canonical paths.
+**Trees** uses one path-first model. The model works the same across React,
+vanilla, and SSR hydration. Selection, focus, search, rename, drag and drop, Git
+status, and row annotations all use canonical paths.
 
 <OverviewFileTree
   paths={OVERVIEW_PATHS}
@@ -16,6 +17,6 @@ all work in terms of canonical paths.
   preloadedData={overviewPreloadedData}
 />
 
-These docs stay guide-first. Pick your runtime, shape tree data before it
-reaches the UI, and then add search, item actions, styling, icons, row signals,
-or SSR as needed.
+These docs are guide-first. First, select your runtime. Next, shape the tree
+data before it reaches the UI. Then add search, item actions, styling, icons,
+row signals, or SSR when you need them.

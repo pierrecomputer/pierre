@@ -118,13 +118,13 @@ export function DemoThemingClient({
         title="Use Shiki themes"
         description={
           <>
-            The same Shiki themes used by{' '}
+            The same Shiki themes from{' '}
             <Link href="../" className="inline-link">
               <code>@pierre/diffs</code>
             </Link>{' '}
-            can style the <code>FileTree</code>. Sidebar and Git decoration
-            colors come from your choice of themes. Pick a theme and switch
-            light/dark to see the tree update live. See the{' '}
+            can style the <code>FileTree</code>. The theme you choose sets the
+            sidebar and Git decoration colors. Pick a theme. Switch between
+            light and dark. The tree updates live. See the{' '}
             <Link
               href={`${PRODUCTS.trees.docsPath}#styling-and-theming`}
               className="inline-link"

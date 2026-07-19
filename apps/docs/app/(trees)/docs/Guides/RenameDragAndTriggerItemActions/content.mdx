@@ -1,8 +1,8 @@
 ### Rename, drag, and trigger item actions
 
-This guide covers the main row-level editing workflows: rename first, drag and
-drop second, and optional command surfaces such as context menus after that.
-Every callback stays path-first.
+This guide covers the main row-level editing workflows. Rename comes first. Drag
+and drop comes second. Optional command surfaces, such as context menus, come
+last. Every callback stays path-first.
 
 #### Start with direct row actions
 
@@ -12,28 +12,28 @@ The core row workflows are:
 2. drag and drop
 3. optional context-menu commands
 
-Teach those flows before you reach for a generic mutation inventory. Users care
-about which path moved, which path was renamed, and which row stays focused
-next.
+Learn these flows before you use a generic mutation inventory. Users care about
+three things. They care about which path moved. They care about which path
+changed its name. They care about which row stays focused next.
 
 #### Rename items in place
 
-Enable `renaming` when users should be able to rename rows inline. The common
-policy hooks are:
+Enable `renaming` when users must rename rows inline. The common policy hooks
+are:
 
 - `canRename(item)` to block protected files or folders
-- `onRename(event)` to react to the final path change
-- `onError(error)` to surface invalid rename attempts
+- `onRename(event)` to respond to the final path change
+- `onError(error)` to show invalid rename attempts
 
-The rename event reports the source path, the destination path, and whether the
-renamed item was a folder.
+The rename event reports three values. It reports the source path. It reports
+the destination path. It reports whether the item was a folder.
 
 <DocsCodeExample {...RENAME_DRAG_RENAME} />
 
 #### Move items with drag and drop
 
-Enable `dragAndDrop` when users should move files or folders directly in the
-tree. The practical hooks are:
+Enable `dragAndDrop` when users must move files or folders directly in the tree.
+The practical hooks are:
 
 - `canDrag(paths)` to lock specific paths
 - `canDrop(event)` to reject invalid destinations
@@ -42,59 +42,58 @@ tree. The practical hooks are:
 
 <DocsCodeExample {...RENAME_DRAG_DRAG_AND_DROP} />
 
-Drop callbacks report dragged paths plus the resolved target shape. They do not
-ask you to reverse-engineer DOM rows.
+Drop callbacks report the dragged paths and the resolved target shape. They do
+not ask you to find the DOM rows yourself.
 
 #### Combine rename and drag safely
 
-A common editable project tree enables both `renaming` and `dragAndDrop`, then
-adds policy guards for protected paths.
+A common editable project tree enables both `renaming` and `dragAndDrop`. Then
+it adds policy guards for protected paths.
 
 Typical rules include:
 
 - block rename for root config files such as `package.json`
 - reject drops into generated directories such as `dist/`
-- surface rename and drop failures outside the tree instead of failing silently
+- show rename and drop failures outside the tree; do not fail silently
 
 #### Add a context menu as an optional command surface
 
 Context menus are secondary command surfaces over the same model. Keep rename
-and drag available without requiring the menu.
+and drag available. Do not require the menu.
 
-In React, the wrapper can render menu content for you:
+In React, the wrapper can render the menu content for you:
 
 <DocsCodeExample {...RENAME_DRAG_CONTEXT_MENU} />
 
-In vanilla, use `composition.contextMenu.render` when you want to provide the
-menu element directly from the runtime config.
+In vanilla, use `composition.contextMenu.render` to supply the menu element
+directly from the runtime config.
 
 #### Lock window scroll while a menu is open
 
-While a context menu is open, the tree blocks scrolling inside its own pane so
-the menu cannot drift away from its row. It cannot reach the scroll containers
-your page owns: a portaled menu is anchored to a viewport point, so if the
-window keeps scrolling, the menu disconnects from the row it was opened for.
-Lock window scroll for the menu's lifetime and release it when the menu closes:
+The tree blocks scrolling inside its own pane while a context menu is open. This
+keeps the menu on its row. But the tree cannot reach the scroll containers that
+your page owns. A portaled menu attaches to a point in the viewport. So the menu
+disconnects from its row when the window scrolls. Lock the window scroll for the
+menu's lifetime. Release the lock when the menu closes:
 
 <DocsCodeExample {...RENAME_DRAG_SCROLL_LOCK} />
 
-Menu primitives with a modal mode (Radix, and libraries built on it such as
-shadcn/ui) already do this when the menu is rendered as modal. Apply the manual
-lock when you render a non-modal menu, as the docs demos on this site do.
+Some menu primitives have a modal mode. Radix and libraries built on it, such as
+shadcn/ui, lock scroll for you when the menu is modal. Apply the manual lock for
+a non-modal menu. The docs demos on this site apply this manual lock.
 
 #### Keep keyboard and focus behavior predictable
 
-The focused row is the anchor for rename and keyboard-invoked commands. Opening
-and closing a menu should restore focus predictably, and keyboard users should
-still be able to reach the main actions without relying on pointer-only
-gestures.
+The focused row is the anchor for rename and keyboard commands. Restore focus in
+a predictable way when a menu opens and closes. Keyboard users must reach the
+main actions without pointer-only gestures.
 
 #### The tree owns the interaction surface. Your app owns persistence.
 
-Trees emits path-based rename and drop events. Your app decides whether to
-persist those changes to a server, local state, or another boundary. Keep that
-separation clear.
+Trees emits path-based rename and drop events. Your app decides whether to save
+those changes. It can save them to a server, local state, or another boundary.
+Keep this separation clear.
 
-If you need the shared vocabulary behind those events, read
+To learn the shared terms behind those events, read
 [Shared concepts](#shared-concepts-mutation-vocabulary). For runtime lookup,
-jump to [React API](#react-api) or [Vanilla API](#vanilla-api).
+read [React API](#react-api) or [Vanilla API](#vanilla-api).
