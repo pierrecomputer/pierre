@@ -23,7 +23,7 @@ import { useVirtualizer } from '../Virtualizer';
 import { WorkerPoolContext } from '../WorkerPoolContext';
 import { useStableCallback } from './useStableCallback';
 
-const useIsometricEffect =
+const useIsomorphicLayoutEffect =
   typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
 interface UseFileDiffInstanceProps<LAnnotation> {
@@ -118,7 +118,7 @@ export function useFileDiffInstance<LAnnotation>({
     }
   });
 
-  useIsometricEffect(() => {
+  useIsomorphicLayoutEffect(() => {
     const { current: instance } = instanceRef;
     if (instance == null) return;
     const newOptions = mergeFileDiffOptions({
@@ -141,7 +141,7 @@ export function useFileDiffInstance<LAnnotation>({
     }
   });
 
-  useIsometricEffect(() => {
+  useIsomorphicLayoutEffect(() => {
     if (edit && instanceRef.current != null) {
       if (createEditor === undefined) {
         throw new Error('FileDiff: EditContext is not attached');

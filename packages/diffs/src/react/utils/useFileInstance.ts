@@ -23,7 +23,7 @@ import { useVirtualizer } from '../Virtualizer';
 import { WorkerPoolContext } from '../WorkerPoolContext';
 import { useStableCallback } from './useStableCallback';
 
-const useIsometricEffect =
+const useIsomorphicLayoutEffect =
   typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
 interface UseFileInstanceProps<LAnnotation> {
@@ -120,7 +120,7 @@ export function useFileInstance<LAnnotation>({
     }
   });
 
-  useIsometricEffect(() => {
+  useIsomorphicLayoutEffect(() => {
     if (instanceRef.current == null) return;
     const newOptions = mergeFileOptions({
       controlledSelection,
@@ -141,7 +141,7 @@ export function useFileInstance<LAnnotation>({
     }
   });
 
-  useIsometricEffect(() => {
+  useIsomorphicLayoutEffect(() => {
     if (edit && instanceRef.current != null) {
       if (createEditor === undefined) {
         throw new Error('File: EditContext is not attached');

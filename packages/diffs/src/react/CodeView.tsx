@@ -42,7 +42,7 @@ import { renderFileChildren } from './utils/renderFileChildren';
 import { useStableCallback } from './utils/useStableCallback';
 import { WorkerPoolContext } from './WorkerPoolContext';
 
-const useIsometricEffect =
+const useIsomorphicLayoutEffect =
   typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
 type CodeViewGutterUtilityGetter =
@@ -388,13 +388,13 @@ function CodeViewInner<LAnnotation = undefined>(
       hasCodeViewFooter,
     ]);
 
-  useIsometricEffect(() => {
+  useIsomorphicLayoutEffect(() => {
     return onScroll != null
       ? cachedDataRef.current.instance?.subscribeToScroll(onScroll)
       : undefined;
   });
 
-  useIsometricEffect(() => {
+  useIsomorphicLayoutEffect(() => {
     const {
       instance,
       controlled: prevControlled,
