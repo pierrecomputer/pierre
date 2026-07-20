@@ -3943,7 +3943,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       // absent (context lines) the CSS falls back to the editor base bg.
       const lineElement = this.#getLineElement(line);
       let cornerBg = 'initial';
-      if (this.#isDiff && lineElement?.dataset.lineType === 'change-addition') {
+      if (
+        lineElement !== undefined &&
+        (lineElement.dataset.lineType === 'change-addition' ||
+          lineElement.dataset.selectedLine !== undefined)
+      ) {
         cornerBg =
           getComputedStyle(lineElement).getPropertyValue('--diffs-line-bg');
       }
