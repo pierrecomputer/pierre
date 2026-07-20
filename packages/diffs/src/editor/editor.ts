@@ -4705,7 +4705,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         }
       }
     }
-    if (this.#isWrap) {
+    // Wrap offsets persist while overflow is 'scroll' (the mode can toggle
+    // back before any width/font/document invalidation runs), so edits must
+    // invalidate them in every mode, not just while wrap is on. The size
+    // guard keeps edits free when nothing was ever measured.
+    if (this.#wrapLineOffsetsCache.size > 0) {
       // Lines outside the edited ranges keep both their text and their
       // numbering when no renumbering happened anywhere, so only the rewritten
       // lines need new wrap measurements. A net-zero lineDelta alone is not

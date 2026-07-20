@@ -195,6 +195,7 @@ async function createWrapEditor(
   cleanup(): void;
   content: HTMLElement;
   editor: Editor<undefined>;
+  file: File<undefined>;
   fileContainer: HTMLElement;
   rangeMeasurements(): number;
   window: EditorTestWindow;
@@ -228,6 +229,7 @@ async function createWrapEditor(
     },
     content,
     editor,
+    file,
     fileContainer,
     rangeMeasurements: wrapMeasurement.rangeMeasurements,
     window: dom.window as unknown as EditorTestWindow,
@@ -561,6 +563,41 @@ describe('wrap measurement cost and cache retention', () => {
       setCaret(editor, 1, 5);
       expect(caretXY(fileContainer)).toEqual({ x: colX(5), y: 0 });
       expect(rangeMeasurements()).toBe(measurementsAfterEdit);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('an edit made while overflow is scroll still invalidates wrap offsets', async () => {
+    const { cleanup, editor, file, fileContainer, rangeMeasurements } =
+      await createWrapEditor(`${'a'.repeat(20)}\nnext`, 10);
+    try {
+      // Prime line 0's wrap offsets in wrap mode.
+      setCaret(editor, 0, 15);
+      expect(caretXY(fileContainer)).toEqual({ x: colX(5), y: ROW_H });
+
+      // Toggle to scroll, edit line 0, toggle back. The wrap cache survives
+      // the whole round trip, and the edit runs while wrap is off — skipping
+      // invalidation here would leave offsets measured for the old text.
+      file.setOptions({ ...file.options, overflow: 'scroll' });
+      editor.applyEdits([
+        {
+          range: {
+            start: { line: 0, character: 0 },
+            end: { line: 0, character: 0 },
+          },
+          newText: 'x',
+        },
+      ]);
+      await wait(0);
+      file.setOptions({ ...file.options, overflow: 'wrap' });
+
+      // Back in wrap mode, the edited line must be re-measured rather than
+      // served from offsets that predate the edit.
+      const beforeReturn = rangeMeasurements();
+      setCaret(editor, 0, 15);
+      expect(caretXY(fileContainer)).toEqual({ x: colX(5), y: ROW_H });
+      expect(rangeMeasurements()).toBeGreaterThan(beforeReturn);
     } finally {
       cleanup();
     }
