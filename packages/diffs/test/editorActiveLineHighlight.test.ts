@@ -5,7 +5,11 @@ import { DEFAULT_THEMES } from '../src/constants';
 import { Editor } from '../src/editor/editor';
 import { DirectionForward } from '../src/editor/selection';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
-import type { FileContents, SelectedLineRange } from '../src/types';
+import type {
+  EditorSelection,
+  FileContents,
+  SelectedLineRange,
+} from '../src/types';
 import { installDom, wait } from './domHarness';
 
 afterAll(async () => {
@@ -34,6 +38,7 @@ interface EditorFixture {
   cleanup(): void;
   content: HTMLElement;
   editor: Editor<undefined>;
+  setElementFromPoint(x: number, y: number, element: Element): void;
 }
 
 async function createEditorFixture(
@@ -65,6 +70,7 @@ async function createEditorFixture(
     },
     content,
     editor,
+    setElementFromPoint: dom.setElementFromPoint,
   };
 }
 
@@ -75,6 +81,27 @@ function highlightedLineNumbers(content: HTMLElement): number[] {
   return [...content.querySelectorAll('[data-line][data-editor-active-line]')]
     .map((el) => Number(el.getAttribute('data-line')))
     .sort((a, b) => a - b);
+}
+
+function dispatchPointer(
+  target: EventTarget,
+  type: string,
+  pointerType: string,
+  pointerId = 0,
+  clientX = 0,
+  clientY = 0
+): void {
+  target.dispatchEvent(
+    new PointerEvent(type, {
+      bubbles: true,
+      cancelable: true,
+      composed: true,
+      clientX,
+      clientY,
+      pointerId,
+      pointerType,
+    })
+  );
 }
 
 describe('editor active line highlight', () => {
@@ -182,23 +209,9 @@ describe('editor active line highlight', () => {
         throw new Error('missing gutter rows');
       }
 
-      second.dispatchEvent(
-        new PointerEvent('pointerdown', {
-          bubbles: true,
-          composed: true,
-          pointerType: 'mouse',
-        })
-      );
-      fourth.dispatchEvent(
-        new MouseEvent('mousemove', { bubbles: true, composed: true })
-      );
-      document.dispatchEvent(
-        new PointerEvent('pointerup', {
-          bubbles: true,
-          composed: true,
-          pointerType: 'mouse',
-        })
-      );
+      dispatchPointer(second, 'pointerdown', 'mouse');
+      dispatchPointer(fourth, 'pointermove', 'mouse');
+      dispatchPointer(document, 'pointerup', 'mouse');
 
       expect(editor.getState().selections).toEqual([
         {
@@ -214,4 +227,66 @@ describe('editor active line highlight', () => {
       cleanup();
     }
   });
+
+  test.each([
+    { pointerId: 7, pointerType: 'touch' },
+    { pointerId: 8, pointerType: 'pen' },
+  ])(
+    'editor owns $pointerType gutter drags when line selection is enabled',
+    async ({ pointerId, pointerType }) => {
+      const changedRanges: (SelectedLineRange | null)[] = [];
+      const selectedRanges: (SelectedLineRange | null)[] = [];
+      const { cleanup, content, editor, setElementFromPoint } =
+        await createEditorFixture('alpha\nbravo\ncharlie\ndelta', {
+          enableLineSelection: true,
+          onLineSelected: (range) => selectedRanges.push(range),
+          onLineSelectionChange: (range) => changedRanges.push(range),
+        });
+      try {
+        const code = content.closest('[data-code]');
+        const second = code?.querySelector<HTMLElement>(
+          '[data-gutter] > [data-column-number="2"]'
+        );
+        const fourth = code?.querySelector<HTMLElement>(
+          '[data-gutter] > [data-column-number="4"]'
+        );
+        if (second == null || fourth == null) {
+          throw new Error('missing gutter rows');
+        }
+
+        dispatchPointer(second, 'pointerdown', pointerType, pointerId);
+        setElementFromPoint(8, 80, fourth);
+        dispatchPointer(second, 'pointermove', pointerType, pointerId, 8, 80);
+        dispatchPointer(document, 'pointerup', pointerType, pointerId);
+
+        const selection: EditorSelection = {
+          start: { line: 1, character: 0 },
+          end: { line: 3, character: 5 },
+          direction: DirectionForward,
+        };
+        expect(editor.getState().selections).toEqual([selection]);
+        expect(changedRanges).toEqual([]);
+        expect(selectedRanges).toEqual([]);
+        expect(code?.querySelector('[data-selected-line]')).toBeNull();
+
+        dispatchPointer(second, 'pointermove', pointerType, pointerId, 8, 80);
+        expect(editor.getState().selections).toEqual([selection]);
+
+        dispatchPointer(second, 'pointerdown', pointerType, pointerId);
+        dispatchPointer(document, 'pointercancel', pointerType, pointerId);
+        dispatchPointer(second, 'pointermove', pointerType, pointerId, 8, 80);
+        expect(editor.getState().selections).toEqual([
+          {
+            start: { line: 1, character: 0 },
+            end: { line: 1, character: 5 },
+            direction: DirectionForward,
+          },
+        ]);
+        expect(changedRanges).toEqual([]);
+        expect(selectedRanges).toEqual([]);
+      } finally {
+        cleanup();
+      }
+    }
+  );
 });

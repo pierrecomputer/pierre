@@ -798,9 +798,8 @@ describe('editor active-line highlight on a diff', () => {
       );
       expect(deletedGutterNumber).not.toBeNull();
 
-      // A touch tap selects the deleted line the same as a mouse click. The
-      // mouse-only gate guards the editable gutter drag (which would strand
-      // listener state on touch), not a deletion tap, which registers nothing.
+      // A touch tap selects the deleted line through the native read-only path,
+      // which does not need transient drag state.
       deletedGutterNumber?.dispatchEvent(
         new PointerEvent('pointerdown', {
           bubbles: true,
@@ -862,9 +861,10 @@ describe('editor active-line highlight on a diff', () => {
         })
       );
       fourth.dispatchEvent(
-        new MouseEvent('mousemove', {
+        new PointerEvent('pointermove', {
           bubbles: true,
           composed: true,
+          pointerType: 'mouse',
         })
       );
       document.dispatchEvent(
@@ -922,7 +922,11 @@ describe('editor active-line highlight on a diff', () => {
       );
       await waitFor(() => editorActiveGutterNumbers(additions).length > 0);
       line4?.dispatchEvent(
-        new MouseEvent('mousemove', { bubbles: true, composed: true })
+        new PointerEvent('pointermove', {
+          bubbles: true,
+          composed: true,
+          pointerType: 'mouse',
+        })
       );
       await waitFor(() => editorActiveGutterNumbers(additions).includes(4));
       expect(fixture.editor.getState().selections).toEqual([
@@ -947,7 +951,11 @@ describe('editor active-line highlight on a diff', () => {
       );
       await waitFor(() => editorActiveGutterNumbers(additions).includes(4));
       line2?.dispatchEvent(
-        new MouseEvent('mousemove', { bubbles: true, composed: true })
+        new PointerEvent('pointermove', {
+          bubbles: true,
+          composed: true,
+          pointerType: 'mouse',
+        })
       );
       await waitFor(() => editorActiveGutterNumbers(additions).includes(2));
       document.dispatchEvent(

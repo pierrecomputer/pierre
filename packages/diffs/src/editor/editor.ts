@@ -330,7 +330,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   // editors, without regressing a same-tick setSelections-then-applyEdits flow.
   #contentHasFocus = false;
   #isComposing = false;
-  #isGutterMouseDown = false;
+  #gutterPointerId?: number;
   #isContentMouseDown = false;
   #shiftKeyPressed = false;
   #selectionStart: EditorSelection | undefined;
@@ -647,7 +647,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       getGutterWidth: () => this.#getGutterWidth(),
       getCharX: (line, character) => this.#getCharX(line, character),
       getLineY: (line) => this.#getLineY(line),
-      isMouseDown: () => this.#isContentMouseDown || this.#isGutterMouseDown,
+      isMouseDown: () =>
+        this.#isContentMouseDown || this.#gutterPointerId !== undefined,
     });
     this.#markerRenderer.setMarkers(markers, textDocument);
     if (this.#contentElement !== undefined) {
@@ -705,6 +706,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#editorEventDisposes = undefined;
     this.#selectEventDisposes?.forEach((dispose) => dispose());
     this.#selectEventDisposes = undefined;
+    this.#gutterPointerId = undefined;
     this.#detach?.(recycle);
     this.#detach = undefined;
 
@@ -1477,32 +1479,26 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         document,
         'pointerup',
         (e) => {
-          if (e.pointerType !== 'mouse') {
+          const gutterPointerId = this.#gutterPointerId;
+          if (
+            (gutterPointerId !== undefined &&
+              e.pointerId !== gutterPointerId) ||
+            (gutterPointerId === undefined && e.pointerType !== 'mouse')
+          ) {
             return;
           }
 
-          this.#selectEventDisposes?.forEach((dispose) => dispose());
-          this.#selectEventDisposes = undefined;
+          this.#finishPointerSelection(gutterPointerId !== undefined);
+        },
+        { passive: true }
+      ),
 
-          if (this.#isGutterMouseDown) {
-            this.#isGutterMouseDown = false;
-            this.#focus();
-          }
-          this.#shouldIgnoreSelectionChange = false;
-          this.#isContentMouseDown = false;
-          this.#shiftKeyPressed = false;
-          this.#selectionStart = undefined;
-          this.#reservedSelections = undefined;
-          // The popover is suppressed while the mouse is down so it doesn't
-          // flicker under the cursor mid-drag. Now that the drag has ended,
-          // re-run the overlay pass so a settled ranged selection reveals it.
-          if (
-            this.#options.enabledSelectionAction === true &&
-            this.#selections !== undefined &&
-            this.#selections.length > 0 &&
-            !isCollapsedSelection(this.#selections.at(-1)!)
-          ) {
-            this.#updateSelections(this.#selections);
+      addEventListener(
+        document,
+        'pointercancel',
+        (e) => {
+          if (e.pointerId === this.#gutterPointerId) {
+            this.#finishPointerSelection(false);
           }
         },
         { passive: true }
@@ -1542,6 +1538,32 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #replaceSelectEventListeners(disposes: (() => void)[]): void {
     this.#selectEventDisposes?.forEach((dispose) => dispose());
     this.#selectEventDisposes = disposes;
+  }
+
+  // Clears transient listeners and selection state after a completed or
+  // canceled pointer gesture.
+  #finishPointerSelection(focusGutter: boolean): void {
+    this.#selectEventDisposes?.forEach((dispose) => dispose());
+    this.#selectEventDisposes = undefined;
+    this.#gutterPointerId = undefined;
+    if (focusGutter) {
+      this.#focus();
+    }
+    this.#shouldIgnoreSelectionChange = false;
+    this.#isContentMouseDown = false;
+    this.#shiftKeyPressed = false;
+    this.#selectionStart = undefined;
+    this.#reservedSelections = undefined;
+    // The popover is suppressed while the pointer is down so it doesn't
+    // flicker mid-drag. Re-run the overlay pass for the settled selection.
+    if (
+      this.#options.enabledSelectionAction === true &&
+      this.#selections !== undefined &&
+      this.#selections.length > 0 &&
+      !isCollapsedSelection(this.#selections.at(-1)!)
+    ) {
+      this.#updateSelections(this.#selections);
+    }
   }
 
   // Gutter utility gestures owned by diff interactions must not replace the
@@ -2002,9 +2024,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
             );
             // Clicking a read-only deleted line's number (unified view) selects
             // that line's text natively, since the line is not in the editor's
-            // document. This runs before the mouse-only gate below: a deletion
-            // tap registers no drag state to strand, so it works on touch too,
-            // matching the split deletions column.
+            // document. Touch and pen taps select one line without registering
+            // drag state; mouse pointers can extend the native selection.
             if (gutterRow?.dataset.lineType === 'change-deletion') {
               const code = gutterRow.closest('[data-code]');
               if (code != null) {
@@ -2017,12 +2038,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
               return;
             }
 
-            // Editable gutter drag-selection is mouse-only: the global pointerup
-            // that clears #isGutterMouseDown and disposes the mousemove listener
-            // bails for non-mouse pointers, so reacting to a touch/pen tap here
-            // would strand that state and leak the listener. Mirror the content
-            // pointerdown guard.
-            if (e.pointerType !== 'mouse') {
+            if (this.#gutterPointerId !== undefined) {
               return;
             }
 
@@ -2038,7 +2054,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
               lineIndex,
               textDocument
             );
-            this.#isGutterMouseDown = true;
+            this.#gutterPointerId = e.pointerId;
             this.#selectionStart = selection;
             this.#updateSelections([selection]);
             // Span the native selection across the clicked line and focus
@@ -2051,15 +2067,32 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
             this.#replaceSelectEventListeners([
               addEventListener(
                 document,
-                'mousemove',
+                'pointermove',
                 (e) => {
-                  if (!this.#isGutterMouseDown) {
+                  if (e.pointerId !== this.#gutterPointerId) {
                     return;
+                  }
+                  let eventTarget: EventTarget | null | undefined =
+                    e.composedPath()[0];
+                  if (e.pointerType !== 'mouse') {
+                    const root = gutterEl.getRootNode() as Node & {
+                      elementFromPoint?: (
+                        x: number,
+                        y: number
+                      ) => Element | null;
+                    };
+                    eventTarget = (
+                      typeof root.elementFromPoint === 'function'
+                        ? root.elementFromPoint.bind(root)
+                        : document.elementFromPoint.bind(document)
+                    )(e.clientX, e.clientY);
                   }
                   const textDocument = this.#textDocument;
                   const lineIndex = resolveEditableLine(
                     resolveGutterTarget(
-                      e.composedPath()[0] as HTMLElement | undefined,
+                      eventTarget instanceof HTMLElement
+                        ? eventTarget
+                        : undefined,
                       true
                     )
                   );
@@ -3480,7 +3513,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
     this.#selectDeletedLines(anchorContent, anchorContent, code);
     // The document pointerup disposes this listener; it must not set
-    // #isGutterMouseDown, whose pointerup focuses the editor and would collapse
+    // #gutterPointerId, whose pointerup focuses the editor and would collapse
     // the native deletion selection.
     if (isMouse) {
       this.#replaceSelectEventListeners([
