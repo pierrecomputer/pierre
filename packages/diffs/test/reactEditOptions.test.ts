@@ -103,6 +103,47 @@ function installReactActEnvironment(): () => void {
   };
 }
 
+interface AnimationFrameController {
+  flush(): void;
+  pendingCount(): number;
+  restore(): void;
+}
+
+// Holds frame callbacks so a test can end an edit session after attachment
+// synchronization but before the deferred onAttach notification runs.
+function holdAnimationFrames(): AnimationFrameController {
+  const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
+  const originalCancelAnimationFrame = globalThis.cancelAnimationFrame;
+  const callbacks = new Map<number, FrameRequestCallback>();
+  let nextFrameId = 0;
+
+  globalThis.requestAnimationFrame = (callback: FrameRequestCallback) => {
+    const frameId = ++nextFrameId;
+    callbacks.set(frameId, callback);
+    return frameId;
+  };
+  globalThis.cancelAnimationFrame = (frameId: number) => {
+    callbacks.delete(frameId);
+  };
+
+  return {
+    flush() {
+      const pendingCallbacks = [...callbacks.values()];
+      callbacks.clear();
+      for (const callback of pendingCallbacks) {
+        callback(performance.now());
+      }
+    },
+    pendingCount() {
+      return callbacks.size;
+    },
+    restore() {
+      globalThis.requestAnimationFrame = originalRequestAnimationFrame;
+      globalThis.cancelAnimationFrame = originalCancelAnimationFrame;
+    },
+  };
+}
+
 async function unmountRoot(root: Root | undefined): Promise<void> {
   if (root == null) {
     return;
@@ -143,21 +184,25 @@ function insertAtStart(editor: Editor<undefined>, newText: string): void {
 type ReactEditableSurface = 'File' | 'FileDiff';
 
 function createEditableSurfaceElement(
-  surface: ReactEditableSurface
+  surface: ReactEditableSurface,
+  edit = true,
+  editOptions?: EditorOptions<undefined>
 ): ReactElement {
   const oldFile = { name: 'edit.ts', contents: 'const value = 1;\n' };
   const options = { disableFileHeader: true, theme: DEFAULT_THEMES };
   if (surface === 'File') {
     return createElement(ReactFileComponent, {
       disableWorkerPool: true,
-      edit: true,
+      edit,
+      editOptions,
       file: oldFile,
       options,
     });
   }
   return createElement(ReactFileDiffComponent, {
     disableWorkerPool: true,
-    edit: true,
+    edit,
+    editOptions,
     fileDiff: parseDiffFromFile(oldFile, {
       name: 'edit.ts',
       contents: 'const value = 2;\n',
@@ -597,6 +642,7 @@ describe('React editor factory lifecycle', () => {
       document.body.appendChild(container);
       const attachmentError = new Error(`${surface} attachment failed`);
       const editors: AttachmentFailingEditor[] = [];
+      const onAttach = mock((_editor: Editor<undefined>) => {});
       let root: Root | undefined;
       const factory = (options: EditorOptions<undefined>) => {
         const editor = new AttachmentFailingEditor(options, attachmentError);
@@ -611,12 +657,14 @@ describe('React editor factory lifecycle', () => {
           createElement(
             EditProviderComponent,
             { createEditor: factory },
-            createEditableSurfaceElement(surface)
+            createEditableSurfaceElement(surface, true, { onAttach })
           )
         );
         expect(renderError).toBe(attachmentError);
         expect(editors).toHaveLength(1);
         expect(editors[0]?.cleanUpCount).toBe(1);
+        await wait(0);
+        expect(onAttach).not.toHaveBeenCalled();
 
         await unmountRoot(root);
         root = undefined;
@@ -629,12 +677,72 @@ describe('React editor factory lifecycle', () => {
     });
   }
 
+  for (const surface of ['File', 'FileDiff'] as const) {
+    for (const termination of ['edit-off', 'unmount'] as const) {
+      test(`${surface} cancels onAttach on ${termination} before the frame`, async () => {
+        const { cleanup } = installDom();
+        const cleanupActEnvironment = installReactActEnvironment();
+        const frames = holdAnimationFrames();
+        const container = document.createElement('div');
+        document.body.appendChild(container);
+        const editors: TrackedEditor[] = [];
+        const onAttach = mock((_editor: Editor<undefined>) => {});
+        const factory = (options: EditorOptions<undefined>) => {
+          const editor = new TrackedEditor(options);
+          editors.push(editor);
+          return editor;
+        };
+        const renderSurface = (edit: boolean) =>
+          createElement(
+            EditProviderComponent,
+            { createEditor: factory },
+            createEditableSurfaceElement(surface, edit, { onAttach })
+          );
+        let root: Root | undefined;
+
+        try {
+          root = createReactRoot(container);
+          await act(async () => {
+            root!.render(renderSurface(true));
+            await wait(0);
+          });
+          await waitFor(() => editors[0]?.getFile() !== undefined);
+
+          expect(editors).toHaveLength(1);
+          expect(editors[0]?.getFile()).toBeDefined();
+          expect(onAttach).not.toHaveBeenCalled();
+          expect(frames.pendingCount()).toBeGreaterThan(0);
+
+          if (termination === 'edit-off') {
+            await act(async () => {
+              root!.render(renderSurface(false));
+              await wait(0);
+            });
+          } else {
+            await unmountRoot(root);
+            root = undefined;
+          }
+
+          expect(() => frames.flush()).not.toThrow();
+          expect(onAttach).not.toHaveBeenCalled();
+          expect(editors[0]?.cleanUpCount).toBeGreaterThan(0);
+        } finally {
+          await unmountRoot(root);
+          frames.restore();
+          cleanupActEnvironment();
+          cleanup();
+        }
+      });
+    }
+  }
+
   test('cleans StrictMode and virtualized edit passes without leaks', async () => {
     const { cleanup } = installDom();
     const cleanupActEnvironment = installReactActEnvironment();
     const container = document.createElement('div');
     document.body.appendChild(container);
     const editors: TrackedEditor[] = [];
+    const onAttach = mock((_editor: Editor<undefined>) => {});
     let root: Root | undefined;
     const factory = (options: EditorOptions<undefined>) => {
       const editor = new TrackedEditor(options);
@@ -663,6 +771,7 @@ describe('React editor factory lifecycle', () => {
                   createElement(ReactFileComponent, {
                     disableWorkerPool: true,
                     edit: true,
+                    editOptions: { onAttach },
                     file: oldFile,
                     options: {
                       disableFileHeader: true,
@@ -672,6 +781,7 @@ describe('React editor factory lifecycle', () => {
                   createElement(ReactFileDiffComponent, {
                     disableWorkerPool: true,
                     edit: true,
+                    editOptions: { onAttach },
                     fileDiff: parseDiffFromFile(oldFile, newFile),
                     options: {
                       disableFileHeader: true,
@@ -686,17 +796,26 @@ describe('React editor factory lifecycle', () => {
         await wait(20);
       });
 
+      await waitFor(() => onAttach.mock.calls.length >= 2);
+      await wait(0);
+      const activeEditors = editors.filter(
+        (editor) => editor.cleanUpCount === 0
+      );
       expect(editors.length).toBeGreaterThanOrEqual(4);
-      expect(
-        editors.slice(0, -2).every((editor) => editor.cleanUpCount > 0)
-      ).toBe(true);
-      expect(
-        editors.slice(-2).every((editor) => editor.cleanUpCount === 0)
-      ).toBe(true);
+      expect(editors.filter((editor) => editor.cleanUpCount > 0)).toHaveLength(
+        editors.length - 2
+      );
+      expect(activeEditors).toHaveLength(2);
+      expect(onAttach).toHaveBeenCalledTimes(2);
+      expect(new Set(onAttach.mock.calls.map(([editor]) => editor))).toEqual(
+        new Set(activeEditors)
+      );
 
       await unmountRoot(root);
       root = undefined;
       expect(editors.every((editor) => editor.cleanUpCount > 0)).toBe(true);
+      await wait(0);
+      expect(onAttach).toHaveBeenCalledTimes(2);
     } finally {
       await unmountRoot(root);
       cleanupActEnvironment();
