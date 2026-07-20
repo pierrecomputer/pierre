@@ -1,8 +1,9 @@
-import { afterAll, describe, expect, test } from 'bun:test';
+import { afterAll, describe, expect, spyOn, test } from 'bun:test';
 
 import { FileDiff } from '../src/components/FileDiff';
 import { DEFAULT_THEMES } from '../src/constants';
 import { Editor } from '../src/editor/editor';
+import { PieceTable } from '../src/editor/pieceTable';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
 import { installDom, wait } from './domHarness';
 
@@ -198,6 +199,63 @@ describe('diff editor: collapsed regions during edit', () => {
       // paired rows), which caret geometry relies on.
       const gutter = findAdditionGutter(container);
       expect(gutter?.childElementCount).toBe(content?.childElementCount);
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  test('resolves search positions only for rendered sides of collapsed gaps', async () => {
+    const fixture = await createCollapsedEditFixture();
+    const { container, editor } = fixture;
+    try {
+      editor.setOptions({ matchBrackets: false });
+      editor.setSelections([
+        {
+          start: { line: 9, character: 0 },
+          end: { line: 9, character: 4 },
+          direction: 'forward',
+        },
+      ]);
+      const content = findAdditionContent(container);
+      expect(content).not.toBeUndefined();
+      content!.dispatchEvent(
+        new window.KeyboardEvent('keydown', {
+          bubbles: true,
+          cancelable: true,
+          code: 'KeyF',
+          composed: true,
+          key: 'f',
+          metaKey: true,
+        })
+      );
+      await wait(0);
+      const input = container.shadowRoot?.querySelector<HTMLInputElement>(
+        '[data-search-panel] input[data-search]'
+      );
+      expect(input).not.toBeNull();
+      input!.value = 'line';
+      input!.dispatchEvent(new window.Event('input', { bubbles: true }));
+
+      const visibleMatchCount =
+        container.shadowRoot?.querySelectorAll('[data-match-range]').length ??
+        0;
+      expect(visibleMatchCount).toBeGreaterThan(0);
+      expect(visibleMatchCount).toBeLessThan(60);
+
+      const positionAt = spyOn(PieceTable.prototype, 'positionAt');
+      try {
+        editor.setSelections([
+          {
+            start: { line: 9, character: 0 },
+            end: { line: 9, character: 0 },
+            direction: 'none',
+          },
+        ]);
+
+        expect(positionAt).toHaveBeenCalledTimes(visibleMatchCount * 2);
+      } finally {
+        positionAt.mockRestore();
+      }
     } finally {
       await fixture.cleanup();
     }
