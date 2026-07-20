@@ -182,15 +182,27 @@ function insertAtStart(editor: Editor<undefined>, newText: string): void {
 }
 
 type ReactEditableSurface = 'File' | 'FileDiff';
+type ReactEditableSurfaceInstance =
+  | FileInstance<undefined>
+  | FileDiffInstance<undefined>;
 
 function createEditableSurfaceElement(
   surface: ReactEditableSurface,
   edit = true,
-  editOptions?: EditorOptions<undefined>
+  editOptions?: EditorOptions<undefined>,
+  onInstance?: (instance: ReactEditableSurfaceInstance) => void
 ): ReactElement {
   const oldFile = { name: 'edit.ts', contents: 'const value = 1;\n' };
-  const options = { disableFileHeader: true, theme: DEFAULT_THEMES };
   if (surface === 'File') {
+    const options: FileOptions<undefined> = {
+      disableFileHeader: true,
+      theme: DEFAULT_THEMES,
+      onPostRender(_node, instance, phase) {
+        if (phase !== 'unmount') {
+          onInstance?.(instance);
+        }
+      },
+    };
     return createElement(ReactFileComponent, {
       disableWorkerPool: true,
       edit,
@@ -199,6 +211,15 @@ function createEditableSurfaceElement(
       options,
     });
   }
+  const options: FileDiffOptions<undefined> = {
+    disableFileHeader: true,
+    theme: DEFAULT_THEMES,
+    onPostRender(_node, instance, phase) {
+      if (phase !== 'unmount') {
+        onInstance?.(instance);
+      }
+    },
+  };
   return createElement(ReactFileDiffComponent, {
     disableWorkerPool: true,
     edit,
@@ -306,199 +327,182 @@ describe('React edit option normalization', () => {
 });
 
 describe('React editor factory lifecycle', () => {
-  test('creates editors only for edit sessions and preserves the surface', async () => {
-    const { cleanup } = installDom();
-    const cleanupActEnvironment = installReactActEnvironment();
-    const container = document.createElement('div');
-    document.body.appendChild(container);
-    const editors: TrackedEditor[] = [];
-    let instance: FileInstance<undefined> | undefined;
-    let root: Root | undefined;
-    const firstOnChange = mock((_file: FileContents) => {});
-    const secondOnChange = mock((_file: FileContents) => {});
-    const firstFactory = mock((options: EditorOptions<undefined>) => {
-      const editor = new TrackedEditor(options);
-      editors.push(editor);
-      return editor;
-    });
-    const secondFactory = mock((options: EditorOptions<undefined>) => {
-      const editor = new TrackedEditor(options);
-      editors.push(editor);
-      return editor;
-    });
-    const file = { name: 'edit.ts', contents: 'const value = 1;\n' };
-    const options: FileOptions<undefined> = {
-      disableFileHeader: true,
-      theme: DEFAULT_THEMES,
-      onPostRender(_node, current, phase) {
-        if (phase !== 'unmount') {
-          instance = current;
-        }
-      },
-    };
-    const render = async (
-      edit: boolean,
-      factory: CreateEditor<undefined>,
-      onChange: NonNullable<EditorOptions<undefined>['onChange']>
-    ) => {
-      await act(async () => {
-        root!.render(
-          createElement(
-            EditProviderComponent,
-            { createEditor: factory },
-            createElement(ReactFileComponent, {
-              disableWorkerPool: true,
-              edit,
-              editOptions: { onChange },
-              file,
-              options,
-            })
-          )
-        );
-        await wait(10);
+  for (const surface of ['File', 'FileDiff'] as const) {
+    test(`${surface} creates editors only for edit sessions and preserves the surface`, async () => {
+      const { cleanup } = installDom();
+      const cleanupActEnvironment = installReactActEnvironment();
+      const container = document.createElement('div');
+      document.body.appendChild(container);
+      const editors: TrackedEditor[] = [];
+      let instance: ReactEditableSurfaceInstance | undefined;
+      let root: Root | undefined;
+      const firstOnChange = mock((_file: FileContents) => {});
+      const secondOnChange = mock((_file: FileContents) => {});
+      const firstFactory = mock((options: EditorOptions<undefined>) => {
+        const editor = new TrackedEditor(options);
+        editors.push(editor);
+        return editor;
       });
-    };
-
-    try {
-      root = createReactRoot(container);
-      await render(false, firstFactory, firstOnChange);
-      const host = container.firstElementChild;
-      const initialInstance = instance;
-      expect(host).not.toBeNull();
-      expect(initialInstance).toBeDefined();
-      expect(editors).toHaveLength(0);
-      expect(firstFactory).not.toHaveBeenCalled();
-
-      await render(true, firstFactory, firstOnChange);
-      expect(editors).toHaveLength(1);
-      expect(firstFactory).toHaveBeenCalledTimes(1);
-      expect(firstFactory.mock.calls[0]?.[0].onChange).toBe(firstOnChange);
-      expect(editors[0]?.cleanUpCount).toBe(0);
-      expect(container.firstElementChild).toBe(host);
-      expect(instance).toBe(initialInstance);
-
-      await render(true, secondFactory, secondOnChange);
-      expect(editors).toHaveLength(1);
-      expect(firstFactory).toHaveBeenCalledTimes(1);
-      expect(secondFactory).not.toHaveBeenCalled();
-      insertAtStart(editors[0], '/* first session */');
-      expect(firstOnChange).toHaveBeenCalledTimes(1);
-      expect(secondOnChange).not.toHaveBeenCalled();
-
-      await render(false, secondFactory, secondOnChange);
-      expect(editors[0]?.cleanUpCount).toBe(1);
-      expect(container.firstElementChild).toBe(host);
-      expect(instance).toBe(initialInstance);
-
-      await render(true, secondFactory, secondOnChange);
-      expect(editors).toHaveLength(2);
-      expect(editors[1]).not.toBe(editors[0]);
-      expect(firstFactory).toHaveBeenCalledTimes(1);
-      expect(secondFactory).toHaveBeenCalledTimes(1);
-      expect(secondFactory.mock.calls[0]?.[0].onChange).toBe(secondOnChange);
-      expect(editors[1]?.cleanUpCount).toBe(0);
-      expect(container.firstElementChild).toBe(host);
-      expect(instance).toBe(initialInstance);
-      insertAtStart(editors[1], '/* second session */');
-      expect(firstOnChange).toHaveBeenCalledTimes(1);
-      expect(secondOnChange).toHaveBeenCalledTimes(1);
-
-      await unmountRoot(root);
-      root = undefined;
-      expect(editors[1]?.cleanUpCount).toBeGreaterThan(0);
-    } finally {
-      await unmountRoot(root);
-      cleanupActEnvironment();
-      cleanup();
-    }
-  });
-
-  test('gives every editable surface independent options and editors', async () => {
-    const { cleanup } = installDom();
-    const cleanupActEnvironment = installReactActEnvironment();
-    const container = document.createElement('div');
-    document.body.appendChild(container);
-    const editors: TrackedEditor[] = [];
-    const receivedOptions: EditorOptions<undefined>[] = [];
-    const editorByOptions = new Map<EditorOptions<undefined>, TrackedEditor>();
-    let root: Root | undefined;
-    const callbacks = Array.from({ length: 4 }, () =>
-      mock((_file: FileContents) => {})
-    );
-    const factory = (options: EditorOptions<undefined>) => {
-      receivedOptions.push(options);
-      const editor = new TrackedEditor(options);
-      editors.push(editor);
-      editorByOptions.set(options, editor);
-      return editor;
-    };
-    const oldFile = { name: 'edit.ts', contents: 'const value = 1;\n' };
-    const newFile = { name: 'edit.ts', contents: 'const value = 2;\n' };
-    const fileDiff = parseDiffFromFile(oldFile, newFile);
-    const sharedProps = {
-      disableWorkerPool: true,
-      edit: true,
-      options: { disableFileHeader: true, theme: DEFAULT_THEMES },
-    };
-    const editOptions = callbacks.map((onChange) => ({ onChange }));
-
-    try {
-      root = createReactRoot(container);
-      await act(async () => {
-        root!.render(
-          createElement(
-            EditProviderComponent,
-            { createEditor: factory },
+      const secondFactory = mock((options: EditorOptions<undefined>) => {
+        const editor = new TrackedEditor(options);
+        editors.push(editor);
+        return editor;
+      });
+      const render = async (
+        edit: boolean,
+        factory: CreateEditor<undefined>,
+        onChange: NonNullable<EditorOptions<undefined>['onChange']>
+      ) => {
+        await act(async () => {
+          root!.render(
             createElement(
-              'div',
-              null,
-              createElement(ReactFileComponent, {
-                ...sharedProps,
-                editOptions: editOptions[0],
-                file: newFile,
-              }),
-              createElement(ReactFileDiffComponent, {
-                ...sharedProps,
-                editOptions: editOptions[1],
-                fileDiff,
-              }),
-              createElement(MultiFileDiffComponent, {
-                ...sharedProps,
-                editOptions: editOptions[2],
-                newFile,
-                oldFile,
-              }),
-              createElement(PatchDiffComponent, {
-                ...sharedProps,
-                editOptions: editOptions[3],
-                patch:
-                  '--- a/edit.ts\n+++ b/edit.ts\n@@ -1 +1 @@\n-const value = 1;\n+const value = 2;\n',
-              })
+              EditProviderComponent,
+              { createEditor: factory },
+              createEditableSurfaceElement(
+                surface,
+                edit,
+                { onChange },
+                (current) => {
+                  instance = current;
+                }
+              )
             )
-          )
-        );
-        await wait(20);
+          );
+          await wait(10);
+        });
+      };
+
+      try {
+        root = createReactRoot(container);
+        await render(false, firstFactory, firstOnChange);
+        const host = container.firstElementChild;
+        const initialInstance = instance;
+        expect(host).not.toBeNull();
+        expect(initialInstance).toBeDefined();
+        expect(editors).toHaveLength(0);
+        expect(firstFactory).not.toHaveBeenCalled();
+
+        await render(true, firstFactory, firstOnChange);
+        expect(editors).toHaveLength(1);
+        expect(firstFactory).toHaveBeenCalledTimes(1);
+        expect(firstFactory.mock.calls[0]?.[0].onChange).toBe(firstOnChange);
+        expect(editors[0]?.cleanUpCount).toBe(0);
+        expect(container.firstElementChild).toBe(host);
+        expect(instance).toBe(initialInstance);
+
+        await render(true, secondFactory, secondOnChange);
+        expect(editors).toHaveLength(1);
+        expect(firstFactory).toHaveBeenCalledTimes(1);
+        expect(secondFactory).not.toHaveBeenCalled();
+        insertAtStart(editors[0], '/* first session */');
+        expect(firstOnChange).toHaveBeenCalledTimes(1);
+        expect(secondOnChange).not.toHaveBeenCalled();
+
+        await render(false, secondFactory, secondOnChange);
+        expect(editors[0]?.cleanUpCount).toBe(1);
+        expect(container.firstElementChild).toBe(host);
+        expect(instance).toBe(initialInstance);
+
+        await render(true, secondFactory, secondOnChange);
+        expect(editors).toHaveLength(2);
+        expect(editors[1]).not.toBe(editors[0]);
+        expect(firstFactory).toHaveBeenCalledTimes(1);
+        expect(secondFactory).toHaveBeenCalledTimes(1);
+        expect(secondFactory.mock.calls[0]?.[0].onChange).toBe(secondOnChange);
+        expect(editors[1]?.cleanUpCount).toBe(0);
+        expect(container.firstElementChild).toBe(host);
+        expect(instance).toBe(initialInstance);
+        insertAtStart(editors[1], '/* second session */');
+        expect(firstOnChange).toHaveBeenCalledTimes(1);
+        expect(secondOnChange).toHaveBeenCalledTimes(1);
+
+        await unmountRoot(root);
+        root = undefined;
+        expect(editors[1]?.cleanUpCount).toBeGreaterThan(0);
+      } finally {
+        await unmountRoot(root);
+        cleanupActEnvironment();
+        cleanup();
+      }
+    });
+  }
+
+  for (const wrapper of ['MultiFileDiff', 'PatchDiff'] as const) {
+    test(`${wrapper} forwards edit options to its FileDiff instance`, async () => {
+      const { cleanup } = installDom();
+      const cleanupActEnvironment = installReactActEnvironment();
+      const container = document.createElement('div');
+      document.body.appendChild(container);
+      const editors: TrackedEditor[] = [];
+      const onChange = mock((_file: FileContents) => {});
+      let root: Root | undefined;
+      const factory = mock((options: EditorOptions<undefined>) => {
+        const editor = new TrackedEditor(options);
+        editors.push(editor);
+        return editor;
       });
+      const oldFile = { name: 'edit.ts', contents: 'const value = 1;\n' };
+      const newFile = { name: 'edit.ts', contents: 'const value = 2;\n' };
+      const sharedProps = {
+        disableWorkerPool: true,
+        edit: true,
+        editOptions: { onChange },
+        options: {
+          disableFileHeader: true,
+          theme: DEFAULT_THEMES,
+          ...(wrapper === 'PatchDiff'
+            ? {
+                loadDiffFiles: () => Promise.resolve({ newFile, oldFile }),
+              }
+            : null),
+        },
+      };
+      const surface =
+        wrapper === 'MultiFileDiff'
+          ? createElement(MultiFileDiffComponent, {
+              ...sharedProps,
+              newFile,
+              oldFile,
+            })
+          : createElement(PatchDiffComponent, {
+              ...sharedProps,
+              patch:
+                '--- a/edit.ts\n+++ b/edit.ts\n@@ -1 +1 @@\n-const value = 1;\n+const value = 2;\n',
+            });
 
-      expect(editors).toHaveLength(4);
-      expect(new Set(editors).size).toBe(4);
-      expect(receivedOptions.map((options) => options.onChange)).toEqual(
-        callbacks
-      );
-      const surfaceEditors = editOptions.map((options) =>
-        editorByOptions.get(options)
-      );
-      expect(surfaceEditors.every(Boolean)).toBe(true);
+      try {
+        root = createReactRoot(container);
+        await act(async () => {
+          root!.render(
+            createElement(
+              EditProviderComponent,
+              { createEditor: factory },
+              surface
+            )
+          );
+          await wait(20);
+        });
+        await waitFor(() => editors[0]?.getFile() !== undefined);
 
-      await unmountRoot(root);
-      root = undefined;
-      expect(editors.every((editor) => editor.cleanUpCount > 0)).toBe(true);
-    } finally {
-      await unmountRoot(root);
-      cleanupActEnvironment();
-      cleanup();
-    }
-  });
+        expect(editors).toHaveLength(1);
+        expect(factory).toHaveBeenCalledTimes(1);
+        expect(factory.mock.calls[0]?.[0].onChange).toBe(onChange);
+        insertAtStart(editors[0], '/* wrapper */');
+        expect(onChange).toHaveBeenCalledTimes(1);
+        expect(onChange.mock.calls[0]?.[0].contents).toBe(
+          '/* wrapper */const value = 2;\n'
+        );
+
+        await unmountRoot(root);
+        root = undefined;
+        expect(editors[0]?.cleanUpCount).toBeGreaterThan(0);
+      } finally {
+        await unmountRoot(root);
+        cleanupActEnvironment();
+        cleanup();
+      }
+    });
+  }
 
   test('keeps simultaneous sibling callbacks isolated', async () => {
     const { cleanup } = installDom();
@@ -508,14 +512,23 @@ describe('React editor factory lifecycle', () => {
     const callbacks = Array.from({ length: 2 }, () =>
       mock((_file: FileContents) => {})
     );
+    const siblingEditors: (TrackedEditor | undefined)[] = [
+      undefined,
+      undefined,
+    ];
     const editOptions: EditorOptions<undefined>[] = callbacks.map(
-      (onChange) => ({ onChange })
+      (onChange, index) => ({
+        onAttach(editor) {
+          siblingEditors[index] = editor as TrackedEditor;
+        },
+        onChange,
+      })
     );
-    const editorByOptions = new Map<EditorOptions<undefined>, TrackedEditor>();
+    const editors: TrackedEditor[] = [];
     let root: Root | undefined;
     const factory = (options: EditorOptions<undefined>) => {
       const editor = new TrackedEditor(options);
-      editorByOptions.set(options, editor);
+      editors.push(editor);
       return editor;
     };
     const oldFile = { name: 'edit.ts', contents: 'const value = 1;\n' };
@@ -557,26 +570,42 @@ describe('React editor factory lifecycle', () => {
         await wait(20);
       });
 
-      const siblingEditors = editOptions.map((options) =>
-        editorByOptions.get(options)
-      );
       await waitFor(() =>
         siblingEditors.every((editor) => editor?.getFile() !== undefined)
       );
+      expect(editors).toHaveLength(2);
       expect(siblingEditors.every(Boolean)).toBe(true);
       expect(
         siblingEditors.every((editor) => editor?.getFile() !== undefined)
       ).toBe(true);
       expect(new Set(siblingEditors).size).toBe(2);
+      expect(siblingEditors.every((editor) => editors.includes(editor!))).toBe(
+        true
+      );
 
-      for (const [index, editor] of siblingEditors.entries()) {
-        const marker = `/* sibling ${index} */`;
-        insertAtStart(editor!, marker);
-        expect(callbacks[index]).toHaveBeenCalledTimes(1);
-        expect(callbacks[index]?.mock.calls[0]?.[0].contents).toStartWith(
-          marker
+      const callbackCounts = () =>
+        callbacks.map((callback) => callback.mock.calls.length);
+      const callbackContents = () =>
+        callbacks.map((callback) =>
+          callback.mock.calls.map(([file]) => file.contents)
         );
-      }
+
+      expect(callbackCounts()).toEqual([0, 0]);
+      expect(callbackContents()).toEqual([[], []]);
+
+      insertAtStart(siblingEditors[0]!, '/* sibling 0 */');
+      expect(callbackCounts()).toEqual([1, 0]);
+      expect(callbackContents()).toEqual([
+        ['/* sibling 0 */const value = 2;\n'],
+        [],
+      ]);
+
+      insertAtStart(siblingEditors[1]!, '/* sibling 1 */');
+      expect(callbackCounts()).toEqual([1, 1]);
+      expect(callbackContents()).toEqual([
+        ['/* sibling 0 */const value = 2;\n'],
+        ['/* sibling 1 */const value = 2;\n'],
+      ]);
 
       await unmountRoot(root);
       root = undefined;
