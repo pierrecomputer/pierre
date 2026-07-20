@@ -17,6 +17,7 @@ import {
 } from 'react';
 import { createPortal, flushSync } from 'react-dom';
 
+import type { EditorOptions } from '../editor';
 import {
   areOptionsEqual,
   CodeView as CodeViewClass,
@@ -35,20 +36,31 @@ import {
   type LineAnnotation,
 } from '../index';
 import { areManagedSnapshotsEqual } from '../utils/areManagedSnapshotsEqual';
+import { useCreateEditor } from './EditContext';
 import { renderDiffChildren } from './utils/renderDiffChildren';
 import { renderFileChildren } from './utils/renderFileChildren';
 import { useStableCallback } from './utils/useStableCallback';
 import { WorkerPoolContext } from './WorkerPoolContext';
 
-const useIsometricEffect =
+const useIsomorphicLayoutEffect =
   typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
 type CodeViewGutterUtilityGetter =
   | (() => GetHoveredLineResult<'file'> | undefined)
   | (() => GetHoveredLineResult<'diff'> | undefined);
 
+export type CodeViewReactOptions<LAnnotation = undefined> = Omit<
+  CodeViewOptions<LAnnotation>,
+  'controlledSelection' | 'createEditor' | 'onSelectedLinesChange'
+>;
+
 interface CodeViewBaseProps<LAnnotation> {
-  options?: CodeViewOptions<LAnnotation>;
+  options?: CodeViewReactOptions<LAnnotation>;
+  /**
+   * Creation-time options passed to the nearest EditProvider factory.
+   * CodeView supplies its item-specific change callback.
+   */
+  editOptions?: Omit<EditorOptions<LAnnotation>, 'onChange'>;
   className?: string;
   style?: CSSProperties;
   containerRef?: Ref<HTMLDivElement>;
@@ -62,15 +74,6 @@ interface CodeViewBaseProps<LAnnotation> {
   /** Render a non-virtualized node at the very end of the scroll content, after
    * the last item. Always rendered; scrolls with the content. */
   renderCodeViewFooter?(): ReactNode;
-  /**
-   * Enables editing for items with `edit: true`. Pass the given options into
-   * the editor constructor — `new Editor(options)` from `@pierre/diffs/editor`
-   * — so document changes route to `onItemEditChange` and
-   * `onItemEditComplete`. CodeView owns the returned editor's lifecycle.
-   */
-  createEditor?(
-    options: CodeViewCreateEditorOptions<LAnnotation>
-  ): DiffsEditor<LAnnotation> | undefined;
   /** Called with the owning item on every edited-document change. */
   onItemEditChange?(
     item: CodeViewItem<LAnnotation>,
@@ -181,8 +184,8 @@ function CodeViewInner<LAnnotation = undefined>(
   const {
     className,
     containerRef,
-    createEditor,
     disableWorkerPool = false,
+    editOptions,
     initialItems,
     items: controlledItems,
     onItemEditChange,
@@ -202,6 +205,7 @@ function CodeViewInner<LAnnotation = undefined>(
     style,
   } = props;
   const controlled = controlledItems !== undefined;
+  const contextCreateEditor = useCreateEditor<LAnnotation>();
   const poolManager = useContext(WorkerPoolContext);
   const cachedDataRef = useRef<CachedDataRef<LAnnotation>>(
     createDefaultCache<LAnnotation>(controlled)
@@ -225,11 +229,27 @@ function CodeViewInner<LAnnotation = undefined>(
   );
   const controlledSelection = selectedLines !== undefined;
 
-  // Stable identities for the editor callbacks so inline props don't churn
-  // managedOptions (a changed options object forces a full item re-render).
-  const stableCreateEditor = useStableCallback(
-    (editorOptions: CodeViewCreateEditorOptions<LAnnotation>) =>
-      createEditor?.(editorOptions)
+  // Keep the adapter stable so provider and edit-option changes affect the next
+  // item edit session without forcing CodeView to reconcile active editors.
+  const createEditor = useStableCallback(
+    (
+      options: CodeViewCreateEditorOptions<LAnnotation>
+    ): DiffsEditor<LAnnotation> => {
+      if (contextCreateEditor == null) {
+        throw new Error('CodeView: EditContext is not attached');
+      }
+
+      const editor = contextCreateEditor({
+        ...editOptions,
+        ...options,
+      });
+      if (editor == null) {
+        throw new Error(
+          'CodeView: EditProvider.createEditor must return an editor instance'
+        );
+      }
+      return editor;
+    }
   );
   const emitItemEditChange = useStableCallback(
     (
@@ -261,27 +281,27 @@ function CodeViewInner<LAnnotation = undefined>(
         onSelectedLinesChange:
           onSelectedLinesChange != null ? emitSelectedLinesChange : undefined,
         controlledSelection,
-        createEditor: createEditor != null ? stableCreateEditor : undefined,
+        createEditor: contextCreateEditor != null ? createEditor : undefined,
         onItemEditChange:
           onItemEditChange != null ? emitItemEditChange : undefined,
         onItemEditComplete:
           onItemEditComplete != null ? emitItemEditComplete : undefined,
       }),
     [
-      options,
-      hasCustomHeader,
-      hasGutterRenderer,
-      hasCodeViewHeader,
-      hasCodeViewFooter,
-      onSelectedLinesChange,
-      emitSelectedLinesChange,
+      contextCreateEditor,
       controlledSelection,
       createEditor,
-      stableCreateEditor,
-      onItemEditChange,
       emitItemEditChange,
-      onItemEditComplete,
       emitItemEditComplete,
+      emitSelectedLinesChange,
+      hasCodeViewFooter,
+      hasCodeViewHeader,
+      hasCustomHeader,
+      hasGutterRenderer,
+      onItemEditChange,
+      onItemEditComplete,
+      onSelectedLinesChange,
+      options,
     ]
   );
 
@@ -368,13 +388,13 @@ function CodeViewInner<LAnnotation = undefined>(
       hasCodeViewFooter,
     ]);
 
-  useIsometricEffect(() => {
+  useIsomorphicLayoutEffect(() => {
     return onScroll != null
       ? cachedDataRef.current.instance?.subscribeToScroll(onScroll)
       : undefined;
   });
 
-  useIsometricEffect(() => {
+  useIsomorphicLayoutEffect(() => {
     const {
       instance,
       controlled: prevControlled,
@@ -676,7 +696,7 @@ function createSlotContentStore<
 }
 
 interface CreateManagedCodeViewOptionsProps<LAnnotation> {
-  options: CodeViewOptions<LAnnotation> | undefined;
+  options: CodeViewReactOptions<LAnnotation> | undefined;
   hasCustomHeader: boolean;
   hasGutterRenderer: boolean;
   hasCodeViewHeader: boolean;
@@ -699,34 +719,21 @@ function createManagedCodeViewOptions<LAnnotation>({
   createEditor,
   onItemEditChange,
   onItemEditComplete,
-}: CreateManagedCodeViewOptionsProps<LAnnotation>):
-  | CodeViewOptions<LAnnotation>
-  | undefined {
-  if (
-    !hasCustomHeader &&
-    !hasGutterRenderer &&
-    !hasCodeViewHeader &&
-    !hasCodeViewFooter &&
-    onSelectedLinesChange == null &&
-    !controlledSelection &&
-    createEditor == null &&
-    onItemEditChange == null &&
-    onItemEditComplete == null
-  ) {
-    return options ?? {};
-  }
-  options = { ...options, controlledSelection, onSelectedLinesChange };
+}: CreateManagedCodeViewOptionsProps<LAnnotation>): CodeViewOptions<LAnnotation> {
+  const managedOptions: CodeViewOptions<LAnnotation> = {
+    ...options,
+    controlledSelection,
+    onSelectedLinesChange,
+    createEditor,
+  };
 
   // Prop-level editor callbacks win over their options-object counterparts,
   // but an absent prop must not clobber a value provided via `options`.
-  if (createEditor != null) {
-    options.createEditor = createEditor;
-  }
   if (onItemEditChange != null) {
-    options.onItemEditChange = onItemEditChange;
+    managedOptions.onItemEditChange = onItemEditChange;
   }
   if (onItemEditComplete != null) {
-    options.onItemEditComplete = onItemEditComplete;
+    managedOptions.onItemEditComplete = onItemEditComplete;
   }
 
   // The imperative CodeView adapters use this callback's presence to
@@ -734,27 +741,27 @@ function createManagedCodeViewOptions<LAnnotation>({
   // provide the actual header content, so this placeholder
   // intentionally returns nothing.
   if (hasCustomHeader) {
-    options.renderCustomHeader = noopRender;
+    managedOptions.renderCustomHeader = noopRender;
   }
 
   // The imperative CodeView adapters use this callback's presence to
   // create the custom gutter utility slot. React portals provide the
   // actual content, so this placeholder intentionally returns nothing.
   if (hasGutterRenderer) {
-    options.renderGutterUtility = noopRender;
+    managedOptions.renderGutterUtility = noopRender;
   }
 
   // The imperative CodeView adapters use these callbacks' presence to create the
   // header/footer host elements. React portals the actual content into them (via
   // the slot snapshot), so these placeholders intentionally return nothing.
   if (hasCodeViewHeader) {
-    options.renderCodeViewHeader = noopRender;
+    managedOptions.renderCodeViewHeader = noopRender;
   }
   if (hasCodeViewFooter) {
-    options.renderCodeViewFooter = noopRender;
+    managedOptions.renderCodeViewFooter = noopRender;
   }
 
-  return options;
+  return managedOptions;
 }
 
 interface RenderCodeViewItemChildrenProps<LAnnotation> {

@@ -2,14 +2,18 @@
 
 import type {
   AnnotationSide,
-  CodeViewOptions,
   DiffIndicators,
   DiffLineAnnotation,
   FileDiffOptions,
   SelectedLineRange,
 } from '@pierre/diffs';
-import { Editor } from '@pierre/diffs/editor';
-import { EditProvider, FileDiff, useWorkerPool } from '@pierre/diffs/react';
+import type { Editor, EditorOptions } from '@pierre/diffs/editor';
+import {
+  type CodeViewReactOptions,
+  FileDiff,
+  useStableCallback,
+  useWorkerPool,
+} from '@pierre/diffs/react';
 import type { PreloadFileDiffResult } from '@pierre/diffs/ssr';
 import {
   IconCheck,
@@ -37,7 +41,7 @@ import {
   IconXSquircle,
 } from '@pierre/icons';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { toast } from 'sonner';
 
@@ -57,9 +61,9 @@ import {
 import { PlaygroundVirtualizerElementView } from './PlaygroundVirtualizerElementView';
 import { PlaygroundVirtualizerView } from './PlaygroundVirtualizerView';
 import type {
-  EditorMode,
   HunkSeparatorValue,
   LineHoverHighlight,
+  Mode,
   ViewMode,
 } from './searchParams';
 import {
@@ -106,6 +110,9 @@ const VIEW_MODE_OPTIONS = [
   { value: 'virtualizer-element', label: 'Virtualizer (el)' },
   { value: 'codeview', label: 'CodeView' },
 ] as const;
+
+const EMPTY_ANNOTATIONS: DiffLineAnnotation<PlaygroundAnnotationMetadata>[] =
+  [];
 
 // Pure rendering options shared by all three view modes. These keys don't depend
 // on the annotation metadata generic, so a single annotation-agnostic type keeps
@@ -165,8 +172,8 @@ interface PlaygroundControlsContentProps {
   setEnableGutterUtility: (v: boolean) => void;
   showAnnotations: boolean;
   setShowAnnotations: (v: boolean) => void;
-  editorMode: EditorMode;
-  setEditorMode: (v: EditorMode) => void;
+  mode: Mode;
+  setMode: (v: Mode) => void;
   showMarkers: boolean;
   setShowMarkers: (v: boolean) => void;
   selectedRange: SelectedLineRange | null;
@@ -209,8 +216,8 @@ function PlaygroundControlsContent({
   setEnableGutterUtility,
   showAnnotations,
   setShowAnnotations,
-  editorMode,
-  setEditorMode,
+  mode,
+  setMode,
   showMarkers,
   setShowMarkers,
   selectedRange,
@@ -291,17 +298,17 @@ function PlaygroundControlsContent({
         </ButtonGroup>
 
         {/*
-          The single global Edit toggle only makes sense for the one-file Normal
-          view. Virtualizer/CodeView show a per-file edit control in each header
-          instead (Virtualizer today; CodeView is read-only for now).
+          The single global Edit toggle only makes sense for the one-file
+          Normal view. Virtualizer/CodeView show a per-file edit control in
+          each header instead.
         */}
         {viewMode === 'normal' && (
           <>
             <div className="bg-border h-6 w-px" />
 
             <ButtonGroup
-              value={editorMode}
-              onValueChange={(value) => setEditorMode(value as EditorMode)}
+              value={mode}
+              onValueChange={(value) => setMode(value as Mode)}
               aria-label="Editor mode"
               size="icon"
             >
@@ -490,7 +497,7 @@ function PlaygroundControlsContent({
           onCheckedChange={setShowAnnotations}
         />
 
-        {/* Markers come from the global editor, which only exists in Normal. */}
+        {/* Markers use the Normal view's active edit-session editor. */}
         {viewMode === 'normal' && (
           <ToggleButton
             icon={<IconCiWarning />}
@@ -498,9 +505,9 @@ function PlaygroundControlsContent({
             checked={showMarkers}
             onCheckedChange={setShowMarkers}
             // Markers require an attached editor, so they only apply in Edit mode.
-            disabled={editorMode !== 'edit'}
+            disabled={mode !== 'edit'}
             title={
-              editorMode !== 'edit'
+              mode !== 'edit'
                 ? 'Switch to Edit mode to show lint markers'
                 : undefined
             }
@@ -685,7 +692,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
   const [showAnnotations, setShowAnnotations] = useState(
     urlState.showAnnotations
   );
-  const [editorMode, setEditorMode] = useState<EditorMode>(urlState.editorMode);
+  const [mode, setMode] = useState<Mode>(urlState.mode);
   const [showMarkers, setShowMarkers] = useState(urlState.showMarkers);
   const [selectedRange, setSelectedRange] = useState<SelectedLineRange | null>(
     urlState.selectedRange
@@ -704,44 +711,47 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
       ? 'select'
       : 'none';
 
-  const contentEditable = editorMode === 'edit';
+  const edit = mode === 'edit';
 
-  // The editor attaches to the diff's editable (new-file) side. Recreate it
-  // when the diff layout or edit mode changes so it re-attaches to the freshly
-  // relaid-out surface with a clean document instead of reusing a torn-down
-  // instance (mirrors LiveEditing's editor lifecycle). Edits remap annotation
-  // line numbers (an Enter above a comment shifts it down); onChange hands the
-  // remapped set back so the `lineAnnotations` prop — and the React-slotted
-  // comment content keyed by line number — follows the edit. The flushSync
-  // matters: the editor renamed the shadow-DOM annotation slots during this
-  // same keystroke, and until React commits the matching light-DOM `slot`
-  // attributes the comments project nowhere. A scheduled commit lands frames
-  // later (blank comments, collapsed rows); a synchronous one lands before
-  // this task's paint.
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- deps intentionally force a fresh editor; the factory takes no inputs
-  const editor = useMemo(
-    () =>
-      new Editor<PlaygroundAnnotationMetadata>({
-        onChange: (_file, lineAnnotations) => {
-          if (lineAnnotations != null) {
-            flushSync(() => {
-              setAnnotations(lineAnnotations);
-            });
-          }
-        },
-      }),
+  // Edits remap annotation line numbers (an Enter above a comment shifts it
+  // down); onChange hands the remapped set back so the `lineAnnotations` prop
+  // — and the React-slotted comment content keyed by line number — follows the
+  // edit. The flushSync matters: the editor renamed the shadow-DOM annotation
+  // slots during this same keystroke, and until React commits the matching
+  // light-DOM `slot` attributes the comments project nowhere. A scheduled
+  // commit lands frames later (blank comments, collapsed rows); a synchronous
+  // one lands before this task's paint.
+  const editorRef = useRef<Editor<PlaygroundAnnotationMetadata> | null>(null);
+  const editOptions = useMemo<EditorOptions<PlaygroundAnnotationMetadata>>(
+    () => ({
+      onAttach(editor: Editor<PlaygroundAnnotationMetadata>) {
+        editorRef.current = editor;
+      },
+      onChange: (_file, lineAnnotations) => {
+        if (lineAnnotations != null) {
+          flushSync(() => {
+            setAnnotations(lineAnnotations);
+          });
+        }
+      },
+    }),
     []
   );
 
-  // Apply (or clear) the demo markers whenever the editor, mode, or toggle
-  // changes. `setMarkers` throws until the editor attaches to its surface
-  // (async), so retry each frame until the call sticks (mirrors MarkerDemo).
+  // Apply (or clear) the demo markers whenever the normal view enters an edit
+  // session or the toggle changes. onAttach supplies the session editor after
+  // attachment completes, so retry until the ref receives it.
   useEffect(() => {
-    if (!contentEditable) {
+    if (!edit || viewMode !== 'normal') {
       return;
     }
     let frame = 0;
     const apply = () => {
+      const editor = editorRef.current;
+      if (editor == null) {
+        frame = requestAnimationFrame(apply);
+        return;
+      }
       try {
         editor.setMarkers(showMarkers ? PLAYGROUND_MARKERS : []);
       } catch {
@@ -750,7 +760,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
     };
     apply();
     return () => cancelAnimationFrame(frame);
-  }, [editor, contentEditable, showMarkers]);
+  }, [edit, showMarkers, viewMode]);
 
   // Build URL with current config
   const buildUrl = useCallback(() => {
@@ -786,7 +796,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
       params.set('gutter', enableGutterUtility ? '1' : '0');
     if (showAnnotations !== DEFAULTS.annotations)
       params.set('annot', showAnnotations ? '1' : '0');
-    if (editorMode !== DEFAULTS.editorMode) params.set('edit', editorMode);
+    if (mode !== DEFAULTS.mode) params.set('edit', mode);
     if (showMarkers !== DEFAULTS.markers)
       params.set('markers', showMarkers ? '1' : '0');
 
@@ -820,7 +830,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
     enableLineSelection,
     enableGutterUtility,
     showAnnotations,
-    editorMode,
+    mode,
     showMarkers,
     committedSelectedRange,
   ]);
@@ -932,12 +942,11 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
     return () => document.body.classList.remove('overflow-hidden');
   }, [isControlsOpen]);
 
-  // Leaving the Normal view drops back to Review: the global Edit toggle only
-  // exists there, and a stale 'edit' would keep `contentEditable` true with no
-  // mounted editor to attach to, so the marker effect would retry forever.
+  // Editing is controlled only in Normal view. Virtualizer and CodeView own
+  // per-surface controls, so return Normal to Review when switching views.
   const setViewModeAndResetEditor = useCallback((mode: ViewMode) => {
     setViewMode(mode);
-    if (mode !== 'normal') setEditorMode('review');
+    if (mode !== 'normal') setMode('review');
   }, []);
 
   const [usePrerenderedHTML, setUsePrerenderedHTML] = useState(
@@ -978,8 +987,8 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
     setEnableGutterUtility,
     showAnnotations,
     setShowAnnotations,
-    editorMode,
-    setEditorMode,
+    mode,
+    setMode,
     showMarkers,
     setShowMarkers,
     selectedRange,
@@ -1044,7 +1053,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
   // CodeView adds its own layout/sticky-header options on top of the shared
   // rendering options; its scrollbar styling mirrors the Normal view's.
   const codeViewOptions = useMemo<
-    CodeViewOptions<PlaygroundAnnotationMetadata>
+    CodeViewReactOptions<PlaygroundAnnotationMetadata>
   >(
     () => ({
       ...renderOptions,
@@ -1055,6 +1064,59 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
     [renderOptions]
   );
 
+  const renderAnnotation = useStableCallback(
+    (annotation: DiffLineAnnotation<PlaygroundAnnotationMetadata>) => {
+      return annotation.metadata.isThread === true ? (
+        <ExampleThread
+          onDelete={() =>
+            handleCancelComment(annotation.side, annotation.lineNumber)
+          }
+        />
+      ) : annotation.metadata.body != null ? (
+        <CommentThread
+          body={annotation.metadata.body}
+          onDelete={() =>
+            handleCancelComment(annotation.side, annotation.lineNumber)
+          }
+        />
+      ) : (
+        <CommentForm
+          side={annotation.side}
+          lineNumber={annotation.lineNumber}
+          onCancel={handleCancelComment}
+          onSubmit={handleSubmitComment}
+        />
+      );
+    }
+  );
+
+  const options = useMemo(
+    () => ({
+      ...prerenderedDiff.options,
+      ...renderOptions,
+      enableLineSelection: canSelectLines,
+      enableGutterUtility: canUseGutterComments,
+      onLineSelectionStart: handleLineSelectionChange,
+      onLineSelectionChange: handleLineSelectionChange,
+      onLineSelectionEnd: handleLineSelectionEnd,
+      // A stable reference: an inline arrow here changes identity every
+      // render, failing the instance's options equality and forcing a full
+      // re-render on every commit.
+      onGutterUtilityClick: canUseGutterComments
+        ? addCommentAtRange
+        : undefined,
+    }),
+    [
+      addCommentAtRange,
+      canSelectLines,
+      canUseGutterComments,
+      handleLineSelectionChange,
+      handleLineSelectionEnd,
+      prerenderedDiff.options,
+      renderOptions,
+    ]
+  );
+
   const fileDiff = (
     <FileDiff
       {...prerenderedDiff}
@@ -1062,50 +1124,12 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
         usePrerenderedHTML ? prerenderedDiff.prerenderedHTML : undefined
       }
       className="border-border overflow-hidden rounded-lg border"
-      contentEditable={contentEditable}
+      edit={edit}
+      editOptions={editOptions}
       selectedLines={selectedRange}
-      lineAnnotations={showAnnotations ? annotations : []}
-      options={{
-        ...prerenderedDiff.options,
-        ...renderOptions,
-        enableLineSelection: canSelectLines,
-        enableGutterUtility: canUseGutterComments,
-        onLineSelectionStart: handleLineSelectionChange,
-        onLineSelectionChange: handleLineSelectionChange,
-        onLineSelectionEnd: handleLineSelectionEnd,
-        // A stable reference: an inline arrow here changes identity every
-        // render, failing the instance's options equality and forcing a full
-        // re-render on every commit.
-        onGutterUtilityClick: canUseGutterComments
-          ? addCommentAtRange
-          : undefined,
-      }}
-      renderAnnotation={
-        showAnnotations
-          ? (annotation) =>
-              annotation.metadata.isThread === true ? (
-                <ExampleThread
-                  onDelete={() =>
-                    handleCancelComment(annotation.side, annotation.lineNumber)
-                  }
-                />
-              ) : annotation.metadata.body != null ? (
-                <CommentThread
-                  body={annotation.metadata.body}
-                  onDelete={() =>
-                    handleCancelComment(annotation.side, annotation.lineNumber)
-                  }
-                />
-              ) : (
-                <CommentForm
-                  side={annotation.side}
-                  lineNumber={annotation.lineNumber}
-                  onCancel={handleCancelComment}
-                  onSubmit={handleSubmitComment}
-                />
-              )
-          : undefined
-      }
+      lineAnnotations={showAnnotations ? annotations : EMPTY_ANNOTATIONS}
+      options={options}
+      renderAnnotation={showAnnotations ? renderAnnotation : undefined}
     />
   );
 
@@ -1164,17 +1188,8 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
           </div>
         </div>
       </div>
-
-      {/*
-        Normal view keeps EditProvider mounted in both Review and Edit so
-        toggling modes only flips `contentEditable` (the editor attaches lazily
-        when that turns true). Conditionally wrapping would change the child
-        component type and remount FileDiff, which recreates the shadow root and
-        re-injects the dark SSR HTML for a frame — the light->dark flash we're
-        avoiding here. Mirrors the LiveEditing demo.
-      */}
       {viewMode === 'normal' ? (
-        <EditProvider editor={editor}>{fileDiff}</EditProvider>
+        fileDiff
       ) : viewMode === 'virtualizer' ? (
         <PlaygroundVirtualizerView
           diffs={VIRTUALIZER_FILE_DIFFS}

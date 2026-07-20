@@ -551,10 +551,10 @@ export interface CodeViewOptions<LAnnotation>
   ): void;
   /**
    * Called once when an item's edit session ends — edit turned off, item
-   * removed (including a controlled `setItems([])` that empties the list),
-   * item collapsed, or `createEditor` unset — with the final contents from
-   * the session's last document change. Not called when the session produced
-   * no changes, nor on a direct `reset()`/`cleanUp()` teardown.
+   * removed (including a controlled `setItems([])` that empties the list), or
+   * item collapsed — with the final contents from the session's last document
+   * change. Not called when the session produced no changes, nor on a direct
+   * `reset()`/`cleanUp()` teardown.
    *
    * Committing is user-space: CodeView never writes item data itself. The
    * recommended handler makes one combined item write (`updateItem` with a
@@ -602,6 +602,18 @@ interface ScrollToAnimation {
 interface SpringStepResult {
   position: number;
   velocity: number;
+}
+
+function assertEditorFactory<LAnnotation>(
+  createEditor: CodeViewOptions<LAnnotation>['createEditor']
+): asserts createEditor is NonNullable<
+  CodeViewOptions<LAnnotation>['createEditor']
+> {
+  if (createEditor == null) {
+    throw new Error(
+      'CodeView: createEditor is required for items with edit: true'
+    );
+  }
 }
 
 // A vibe slopped heuristic to detect mobile safari only
@@ -1990,15 +2002,9 @@ export class CodeView<LAnnotation = undefined> {
     item.instance.setSelectedLines(this.selectedLines.range, { notify: false });
   }
 
-  // An item is editable only when the app can supply editors and the item is
-  // flagged for editing while expanded. Collapsing an edited item suspends
-  // editing until it expands again.
+  // Collapsing an edited item suspends editing until it expands again.
   private isItemInEditMode(item: CodeViewContextItem<LAnnotation>): boolean {
-    return (
-      this.options.createEditor != null &&
-      item.item.edit === true &&
-      item.item.collapsed !== true
-    );
+    return item.item.edit === true && item.item.collapsed !== true;
   }
 
   // True when the receiving item options belong to an item currently in edit
@@ -2029,7 +2035,6 @@ export class CodeView<LAnnotation = undefined> {
     const { id } = item.item;
     const { createEditor } = this.options;
     if (
-      createEditor == null ||
       item.element == null ||
       this.attachedEditors.has(id) ||
       !this.isItemInEditMode(item)
@@ -2038,39 +2043,54 @@ export class CodeView<LAnnotation = undefined> {
     }
 
     let record = this.itemEditors.get(id);
-    if (record == null) {
-      // The onChange closure resolves the owning item through the record
-      // state's current id (not the id captured here) so updateItemId
-      // renames keep it pointed at the right item. It also reads the change
-      // callback off this.options at invocation time so later setOptions
-      // swaps aren't stranded on the callback captured at creation.
-      const state: CodeViewItemEditorState<LAnnotation> = { id };
-      const editor = createEditor({
-        onChange: (file, lineAnnotations) => {
-          const latest = this.idToItem.get(state.id);
-          if (latest == null) {
-            return;
-          }
-          state.lastChange = { item: latest.item, file, lineAnnotations };
-          this.options.onItemEditChange?.(latest.item, file, lineAnnotations);
-        },
-      });
-      if (editor == null) {
-        return;
+    let createdEditor = false;
+    try {
+      if (record == null) {
+        assertEditorFactory(createEditor);
+        // The onChange closure resolves the owning item through the record
+        // state's current id (not the id captured here) so updateItemId
+        // renames keep it pointed at the right item. It also reads the change
+        // callback off this.options at invocation time so later setOptions
+        // swaps aren't stranded on the callback captured at creation.
+        const state: CodeViewItemEditorState<LAnnotation> = { id };
+        const editor = createEditor({
+          onChange: (file, lineAnnotations) => {
+            const latest = this.idToItem.get(state.id);
+            if (latest == null) {
+              return;
+            }
+            state.lastChange = { item: latest.item, file, lineAnnotations };
+            this.options.onItemEditChange?.(latest.item, file, lineAnnotations);
+          },
+        });
+        if (editor == null) {
+          return;
+        }
+        record = { editor, state };
+        this.itemEditors.set(id, record);
+        createdEditor = true;
       }
-      record = { editor, state };
-      this.itemEditors.set(id, record);
-    }
 
-    record.editor.edit(item.instance);
-    this.attachedEditors.add(id);
+      record.editor.edit(item.instance);
+      this.attachedEditors.add(id);
+    } catch (error) {
+      if (createdEditor && record != null) {
+        this.itemEditors.delete(id);
+        record.editor.cleanUp();
+      }
+      // A render-time factory or attachment error aborts the frame before its
+      // range is committed, so release this item immediately instead of
+      // leaving an untracked async render behind.
+      this.releaseRenderedItem(item);
+      throw error;
+    }
   }
 
   /**
    * Drop editors for items that can no longer be edited: removed, edit turned
-   * off, collapsed, or the createEditor option was unset. Attachment happens
-   * in the render loop via attachItemEditor, so this only reconciles editors
-   * CodeView is already holding.
+   * off, or collapsed. Attachment happens in the render loop via
+   * attachItemEditor, so this only reconciles editors CodeView is already
+   * holding.
    */
   private syncItemEditors(): void {
     if (this.itemEditors.size === 0) {

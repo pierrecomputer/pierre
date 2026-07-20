@@ -30,8 +30,17 @@ The React API exposes six main components:
   reactAPIUnresolvedFile={reactAPIUnresolvedFile}
 />
 
-See [Edit mode → React](#edit-mode-react) for attaching `Editor` via
-`EditProvider` and `contentEditable`.
+For editing, mount one stable `EditProvider` high in the tree. Standalone
+surfaces use `edit` and `editOptions`; `CodeView` uses item `edit` flags and its
+own `editOptions`. Each active surface or item receives an independent editor.
+`UnresolvedFile` is not editable. See [Edit mode → React](#edit-mode-react) and
+[CodeView → Editing](#codeview-editing) for lifecycle and callback details.
+
+Keep non-primitive props stable across renders. Define static files, diffs,
+options, styles, and factories at module scope; when they depend on component
+state or props, use `useMemo` for objects and arrays and `useCallback` for
+functions. This applies to `options`, `editOptions`, annotations, and render
+callbacks as well as `file` and `fileDiff`.
 
 `UnresolvedFile` is intentionally uncontrolled in React. Treat `file` as initial
 input and remount (for example, with a changing `key`) when you want to reset.

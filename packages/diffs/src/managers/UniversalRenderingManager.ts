@@ -10,8 +10,7 @@ export function queueRender(callback: Callback): void {
 }
 
 export function dequeueRender(callback: Callback): void {
-  callbacks.delete(callback);
-  if (callbacks.size === 0 && frameId != null) {
+  if (callbacks.delete(callback) && callbacks.size === 0 && frameId != null) {
     cancelAnimationFrame(frameId);
     frameId = null;
   }

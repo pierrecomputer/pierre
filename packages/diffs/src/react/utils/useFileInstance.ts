@@ -8,6 +8,7 @@ import {
 
 import { File, type FileOptions } from '../../components/File';
 import { VirtualizedFile } from '../../components/VirtualizedFile';
+import type { EditorOptions } from '../../editor';
 import type { GetHoveredLineResult } from '../../managers/InteractionManager';
 import type {
   FileContents,
@@ -17,17 +18,18 @@ import type {
 } from '../../types';
 import { areOptionsEqual } from '../../utils/areOptionsEqual';
 import { noopRender } from '../constants';
-import { useEditor } from '../EditContext';
+import { useCreateEditor } from '../EditContext';
 import { useVirtualizer } from '../Virtualizer';
 import { WorkerPoolContext } from '../WorkerPoolContext';
 import { useStableCallback } from './useStableCallback';
 
-const useIsometricEffect =
+const useIsomorphicLayoutEffect =
   typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
 interface UseFileInstanceProps<LAnnotation> {
   file: FileContents;
   options: FileOptions<LAnnotation> | undefined;
+  editOptions: EditorOptions<LAnnotation> | undefined;
   lineAnnotations: LineAnnotation<LAnnotation>[] | undefined;
   selectedLines: SelectedLineRange | null | undefined;
   prerenderedHTML: string | undefined;
@@ -35,7 +37,7 @@ interface UseFileInstanceProps<LAnnotation> {
   hasGutterRenderUtility: boolean;
   hasCustomHeader: boolean;
   disableWorkerPool: boolean;
-  contentEditable: boolean;
+  edit: boolean;
   onChange?: (
     file: FileContents,
     lineAnnotations?: LineAnnotation<LAnnotation>[]
@@ -50,6 +52,7 @@ interface UseFileInstanceReturn {
 export function useFileInstance<LAnnotation>({
   file,
   options,
+  editOptions,
   lineAnnotations,
   selectedLines,
   prerenderedHTML,
@@ -57,12 +60,12 @@ export function useFileInstance<LAnnotation>({
   hasGutterRenderUtility,
   hasCustomHeader,
   disableWorkerPool,
-  contentEditable,
+  edit,
 }: UseFileInstanceProps<LAnnotation>): UseFileInstanceReturn {
   const simpleVirtualizer = useVirtualizer();
   const controlledSelection = selectedLines !== undefined;
   const poolManager = useContext(WorkerPoolContext);
-  const editor = useEditor<LAnnotation>();
+  const createEditor = useCreateEditor<LAnnotation>();
   const instanceRef = useRef<
     File<LAnnotation> | VirtualizedFile<LAnnotation> | null
   >(null);
@@ -77,9 +80,9 @@ export function useFileInstance<LAnnotation>({
         instanceRef.current = new VirtualizedFile(
           mergeFileOptions({
             controlledSelection,
-            contentEditable,
+            edit,
             hasCustomHeader,
-            hasEditor: editor !== undefined,
+            hasEditor: createEditor !== undefined,
             hasGutterRenderUtility,
             options,
           }),
@@ -92,9 +95,9 @@ export function useFileInstance<LAnnotation>({
         instanceRef.current = new File(
           mergeFileOptions({
             controlledSelection,
-            contentEditable,
+            edit,
             hasCustomHeader,
-            hasEditor: editor !== undefined,
+            hasEditor: createEditor !== undefined,
             hasGutterRenderUtility,
             options,
           }),
@@ -117,13 +120,13 @@ export function useFileInstance<LAnnotation>({
     }
   });
 
-  useIsometricEffect(() => {
+  useIsomorphicLayoutEffect(() => {
     if (instanceRef.current == null) return;
     const newOptions = mergeFileOptions({
       controlledSelection,
-      contentEditable,
+      edit,
       hasCustomHeader,
-      hasEditor: editor !== undefined,
+      hasEditor: createEditor !== undefined,
       hasGutterRenderUtility,
       options,
     });
@@ -138,15 +141,26 @@ export function useFileInstance<LAnnotation>({
     }
   });
 
-  useIsometricEffect(() => {
-    if (contentEditable && instanceRef.current != null) {
-      if (editor === undefined) {
-        throw new Error('File: Editor is not attached');
+  useIsomorphicLayoutEffect(() => {
+    if (edit && instanceRef.current != null) {
+      if (createEditor === undefined) {
+        throw new Error('File: EditContext is not attached');
       }
-      return editor.edit(instanceRef.current);
+      const editor = createEditor(editOptions ?? {});
+      if (editor == null) {
+        throw new Error(
+          'File: EditProvider.createEditor must return an editor instance'
+        );
+      }
+      try {
+        return editor.edit(instanceRef.current);
+      } catch (error) {
+        editor.cleanUp();
+        throw error;
+      }
     }
     return undefined;
-  }, [contentEditable, editor]);
+  }, [edit]);
 
   const getHoveredLine = useCallback(():
     | GetHoveredLineResult<'file'>
@@ -159,7 +173,7 @@ export function useFileInstance<LAnnotation>({
 interface MergeFileOptionsProps<LAnnotation> {
   options: FileOptions<LAnnotation> | undefined;
   controlledSelection: boolean;
-  contentEditable: boolean;
+  edit: boolean;
   hasEditor: boolean;
   hasGutterRenderUtility: boolean;
   hasCustomHeader: boolean;
@@ -168,16 +182,16 @@ interface MergeFileOptionsProps<LAnnotation> {
 function mergeFileOptions<LAnnotation>({
   options,
   controlledSelection,
-  contentEditable,
+  edit,
   hasCustomHeader,
   hasEditor,
   hasGutterRenderUtility,
 }: MergeFileOptionsProps<LAnnotation>): FileOptions<LAnnotation> | undefined {
-  const needsEditorOptions = contentEditable && hasEditor;
+  const needsEditorOverrides = edit && hasEditor;
   const needsReactOverrides =
     controlledSelection || hasGutterRenderUtility || hasCustomHeader;
 
-  if (!needsReactOverrides && !needsEditorOptions) {
+  if (!needsReactOverrides && !needsEditorOverrides) {
     return options;
   }
 
@@ -196,7 +210,7 @@ function mergeFileOptions<LAnnotation>({
     };
   }
 
-  if (needsEditorOptions) {
+  if (needsEditorOverrides) {
     merged = { ...merged, useTokenTransformer: true };
   }
 

@@ -361,41 +361,57 @@ editor.setMarkers([]);`,
 export const EDITOR_UNDO_REDO_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
     name: 'editor_undo_redo.tsx',
-    contents: `import { Editor } from '@pierre/diffs/editor';
+    contents: `import type { FileContents } from '@pierre/diffs';
+import { Editor, type EditorOptions } from '@pierre/diffs/editor';
 import { EditProvider, File } from '@pierre/diffs/react';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
+
+const file: FileContents = {
+  name: 'example.ts',
+  contents: 'export const x = 1;',
+};
+
+function createEditor(options: EditorOptions<undefined>) {
+  return new Editor(options);
+}
 
 export function EditorWithHistoryToolbar() {
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
 
-  const editor = useMemo(
-    () =>
-      new Editor({
-        onChange() {
-          // Undo and redo run through the same change path as edits, so refresh
-          // toolbar state from \`onChange\` rather than only after button clicks.
-          setCanUndo(editor.canUndo);
-          setCanRedo(editor.canRedo);
-        },
-      }),
+  const editorRef = useRef<Editor<undefined> | null>(null);
+  const editOptions = useMemo<EditorOptions<undefined>>(
+    () => ({
+      onAttach(editor) {
+        editorRef.current = editor;
+      },
+      onChange() {
+        // Undo and redo run through the same change path as edits, so refresh
+        // toolbar state from \`onChange\` rather than only after button clicks.
+        setCanUndo(editorRef.current?.canUndo ?? false);
+        setCanRedo(editorRef.current?.canRedo ?? false);
+      },
+    }),
     []
   );
 
+  // This example is self-contained. Apps should usually mount EditProvider near
+  // the root so its factory is available to every editable File, diff, and
+  // CodeView.
   return (
-    <EditProvider editor={editor}>
+    <EditProvider createEditor={createEditor}>
       <div className="toolbar">
-        <button type="button" disabled={!canUndo} onClick={() => editor.undo()}>
+        <button type="button" disabled={!canUndo} onClick={() => editorRef.current?.undo()}>
           Undo
         </button>
-        <button type="button" disabled={!canRedo} onClick={() => editor.redo()}>
+        <button type="button" disabled={!canRedo} onClick={() => editorRef.current?.redo()}>
           Redo
         </button>
       </div>
-
       <File
-        file={{ name: 'example.ts', contents: 'export const x = 1;' }}
-        contentEditable
+        file={file}
+        edit
+        editOptions={editOptions}
       />
     </EditProvider>
   );
@@ -407,8 +423,8 @@ export function EditorWithHistoryToolbar() {
 export const EDITOR_REACT_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
     name: 'editor_react.tsx',
-    contents: `import type { FileContents } from '@pierre/diffs';
-import { Editor } from '@pierre/diffs/editor';
+    contents: `import type { FileContents, FileOptions } from '@pierre/diffs';
+import { Editor, type EditorOptions } from '@pierre/diffs/editor';
 import { EditProvider, File, Virtualizer } from '@pierre/diffs/react';
 import { useMemo, useState } from 'react';
 
@@ -421,37 +437,46 @@ const file: FileContents = {
 export { greet };\`,
 };
 
+const fileOptions: FileOptions<undefined> = {
+  theme: { dark: 'pierre-dark', light: 'pierre-light' },
+};
+
+const virtualizerStyle = {
+  maxHeight: '16rem',
+  overflow: 'auto',
+  borderRadius: '0.5rem',
+} as const;
+
+function createEditor(options: EditorOptions<undefined>) {
+  return new Editor(options);
+}
+
 export function EditorComponent() {
   const [editable, setEditable] = useState(true);
-  const editor = useMemo(
-    () =>
-      new Editor({
-        onChange(file, lineAnnotations) {
-          console.log('change', file.name, lineAnnotations);
-        },
-      }),
+  const editOptions = useMemo<EditorOptions<undefined>>(
+    () => ({
+      onChange(file, lineAnnotations) {
+        console.log('change', file.name, lineAnnotations);
+      },
+    }),
     []
   );
 
+  // This example is self-contained. Apps should usually mount EditProvider near
+  // the root so its factory is available to every editable File, diff, and
+  // CodeView.
   return (
-    <EditProvider editor={editor}>
+    <EditProvider createEditor={createEditor}>
       <button type="button" onClick={() => setEditable((value) => !value)}>
         {editable ? 'Disable editing' : 'Enable editing'}
       </button>
 
-      <Virtualizer
-        style={{
-          maxHeight: '16rem',
-          overflow: 'auto',
-          borderRadius: '0.5rem',
-        }}
-      >
+      <Virtualizer style={virtualizerStyle}>
         <File
           file={file}
-          options={{
-            theme: { dark: 'pierre-dark', light: 'pierre-light' },
-          }}
-          contentEditable={editable}
+          options={fileOptions}
+          edit={editable}
+          editOptions={editOptions}
         />
       </Virtualizer>
     </EditProvider>
@@ -464,12 +489,15 @@ export function EditorComponent() {
 export const EDITOR_REACT_FILE_DIFF_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
     name: 'editor_react_file_diff.tsx',
-    contents: `import { Editor } from '@pierre/diffs/editor';
-import {
+    contents: `import {
+  parseDiffFromFile,
   type FileDiffMetadata,
+  type FileDiffOptions,
+} from '@pierre/diffs';
+import { Editor, type EditorOptions } from '@pierre/diffs/editor';
+import {
   EditProvider,
   FileDiff,
-  parseDiffFromFile,
   Virtualizer,
 } from '@pierre/diffs/react';
 import { useMemo, useState } from 'react';
@@ -480,37 +508,45 @@ const fileDiff: FileDiffMetadata = parseDiffFromFile(
   { name: 'example.ts', contents: 'console.warn("Updated message")' }
 );
 
+const fileDiffOptions: FileDiffOptions<undefined> = {
+  theme: { dark: 'pierre-dark', light: 'pierre-light' },
+};
+
+const virtualizerStyle = {
+  maxHeight: '16rem',
+  overflow: 'auto',
+  borderRadius: '0.5rem',
+} as const;
+
+function createEditor(options: EditorOptions<undefined>) {
+  return new Editor(options);
+}
+
 export function EditorComponent() {
   const [editable, setEditable] = useState(true);
-  const editor = useMemo(
-    () =>
-      new Editor({
-        onChange(file, lineAnnotations) {
-          console.log('change', file.name, lineAnnotations);
-        },
-      }),
+  const editOptions = useMemo<EditorOptions<undefined>>(
+    () => ({
+      onChange(file, lineAnnotations) {
+        console.log('change', file.name, lineAnnotations);
+      },
+    }),
     []
   );
 
+  // This example is self-contained. Apps should usually mount EditProvider near
+  // the root so its factory is available to every editable File, diff, and
+  // CodeView.
   return (
-    <EditProvider editor={editor}>
+    <EditProvider createEditor={createEditor}>
       <button type="button" onClick={() => setEditable((value) => !value)}>
         {editable ? 'Disable editing' : 'Enable editing'}
       </button>
-
-      <Virtualizer
-        style={{
-          maxHeight: '16rem',
-          overflow: 'auto',
-          borderRadius: '0.5rem',
-        }}
-      >
+      <Virtualizer style={virtualizerStyle}>
         <FileDiff
           fileDiff={fileDiff}
-          options={{
-            theme: { dark: 'pierre-dark', light: 'pierre-light' },
-          }}
-          contentEditable={editable}
+          options={fileDiffOptions}
+          edit={editable}
+          editOptions={editOptions}
         />
       </Virtualizer>
     </EditProvider>
@@ -523,9 +559,12 @@ export function EditorComponent() {
 export const EDITOR_REACT_CODE_VIEW_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
     name: 'editor_react_code_view.tsx',
-    contents: `import type { CodeViewItem, FileContents } from '@pierre/diffs';
-import { Editor } from '@pierre/diffs/editor';
-import { CodeView } from '@pierre/diffs/react';
+    contents: `import type {
+  CodeViewItem,
+  FileContents,
+} from '@pierre/diffs';
+import { Editor, type EditorOptions } from '@pierre/diffs/editor';
+import { CodeView, EditProvider } from '@pierre/diffs/react';
 import { useCallback, useState } from 'react';
 
 const initialItems: CodeViewItem[] = [
@@ -540,6 +579,12 @@ const initialItems: CodeViewItem[] = [
     version: 0,
   },
 ];
+
+const codeViewStyle = { height: '24rem', overflow: 'auto' } as const;
+
+function createEditor(options: EditorOptions<undefined>) {
+  return new Editor(options);
+}
 
 export function EditableCodeView() {
   const [items, setItems] = useState(initialItems);
@@ -575,19 +620,20 @@ export function EditableCodeView() {
     );
   }, []);
 
+  // This example is self-contained. Apps should usually mount EditProvider near
+  // the root so its factory is available to every editable File, diff, and
+  // CodeView.
   return (
-    <>
+    <EditProvider createEditor={createEditor}>
       <button type="button" onClick={toggleEditing}>
         {items[0]?.edit === true ? 'Disable editing' : 'Enable editing'}
       </button>
-
       <CodeView
         items={items}
-        style={{ height: '24rem', overflow: 'auto' }}
-        createEditor={(options) => new Editor(options)}
+        style={codeViewStyle}
         onItemEditComplete={commitEdit}
       />
-    </>
+    </EditProvider>
   );
 }`,
   },
@@ -631,7 +677,8 @@ export const EDITOR_WORKER_POOL_REACT_EXAMPLE: PreloadFileOptions<undefined> = {
     name: 'editor_worker_pool_react.tsx',
     contents: `'use client';
 
-import { Editor } from '@pierre/diffs/editor';
+import type { FileContents } from '@pierre/diffs';
+import { Editor, type EditorOptions } from '@pierre/diffs/editor';
 import {
   EditProvider,
   File,
@@ -639,22 +686,32 @@ import {
 } from '@pierre/diffs/react';
 import { workerFactory } from '@/utils/workerFactory';
 
-const editor = new Editor();
+const file: FileContents = {
+  name: 'example.ts',
+  contents: 'export const x = 1;',
+};
+
+const poolOptions = { workerFactory };
+const highlighterOptions = {
+  theme: { dark: 'pierre-dark', light: 'pierre-light' },
+  useTokenTransformer: true,
+} as const;
+
+function createEditor(options: EditorOptions<undefined>) {
+  return new Editor(options);
+}
 
 export function EditorWithWorkerPool() {
+  // This example is self-contained. Apps should usually mount EditProvider near
+  // the root so its factory is available to every editable File, diff, and
+  // CodeView.
   return (
     <WorkerPoolContextProvider
-      poolOptions={{ workerFactory }}
-      highlighterOptions={{
-        theme: { dark: 'pierre-dark', light: 'pierre-light' },
-        useTokenTransformer: true,
-      }}
+      poolOptions={poolOptions}
+      highlighterOptions={highlighterOptions}
     >
-      <EditProvider editor={editor}>
-        <File
-          file={{ name: 'example.ts', contents: 'export const x = 1;' }}
-          contentEditable
-        />
+      <EditProvider createEditor={createEditor}>
+        <File file={file} edit />
       </EditProvider>
     </WorkerPoolContextProvider>
   );
@@ -840,8 +897,11 @@ export const EDITOR_REACT_MULTI_FILE_DIFF_EXAMPLE: PreloadFileOptions<undefined>
   {
     file: {
       name: 'editor_react_multi_file_diff.tsx',
-      contents: `import type { FileContents } from '@pierre/diffs';
-import { Editor } from '@pierre/diffs/editor';
+      contents: `import type {
+  FileContents,
+  FileDiffOptions,
+} from '@pierre/diffs';
+import { Editor, type EditorOptions } from '@pierre/diffs/editor';
 import {
   EditProvider,
   MultiFileDiff,
@@ -849,8 +909,8 @@ import {
 } from '@pierre/diffs/react';
 import { useMemo, useState } from 'react';
 
-// Keep file objects stable (useState/useMemo) to avoid re-renders.
-// The component uses reference equality for change detection.
+// Keep file objects stable: define static inputs at module scope, or use
+// useState/useMemo when they depend on component values.
 const oldFile: FileContents = {
   name: 'example.ts',
   contents: 'console.log("Hello world")',
@@ -861,39 +921,46 @@ const newFile: FileContents = {
   contents: 'console.warn("Updated message")',
 };
 
+const fileDiffOptions: FileDiffOptions<undefined> = {
+  theme: { dark: 'pierre-dark', light: 'pierre-light' },
+};
+
+const virtualizerStyle = {
+  maxHeight: '16rem',
+  overflow: 'auto',
+  borderRadius: '0.5rem',
+} as const;
+
+function createEditor(options: EditorOptions<undefined>) {
+  return new Editor(options);
+}
 
 export function EditorComponent() {
   const [editable, setEditable] = useState(true);
-  const editor = useMemo(
-    () =>
-      new Editor({
-        onChange(file, lineAnnotations) {
-          console.log('change', file.name, lineAnnotations);
-        },
-      }),
+  const editOptions = useMemo<EditorOptions<undefined>>(
+    () => ({
+      onChange(file, lineAnnotations) {
+        console.log('change', file.name, lineAnnotations);
+      },
+    }),
     []
   );
 
+  // This example is self-contained. Apps should usually mount EditProvider near
+  // the root so its factory is available to every editable File, diff, and
+  // CodeView.
   return (
-    <EditProvider editor={editor}>
+    <EditProvider createEditor={createEditor}>
       <button type="button" onClick={() => setEditable((value) => !value)}>
         {editable ? 'Disable editing' : 'Enable editing'}
       </button>
-
-      <Virtualizer
-        style={{
-          maxHeight: '16rem',
-          overflow: 'auto',
-          borderRadius: '0.5rem',
-        }}
-      >
+      <Virtualizer style={virtualizerStyle}>
         <MultiFileDiff
           oldFile={oldFile}
           newFile={newFile}
-          options={{
-            theme: { dark: 'pierre-dark', light: 'pierre-light' },
-          }}
-          contentEditable={editable}
+          options={fileDiffOptions}
+          edit={editable}
+          editOptions={editOptions}
         />
       </Virtualizer>
     </EditProvider>

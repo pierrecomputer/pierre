@@ -58,7 +58,7 @@ export type ViewMode = (typeof VIEW_MODES)[number];
 
 // The editable surface is rendered read-only (Review) or attached to a live
 // editor (Edit). Markers are diagnostics shown only while editing.
-export type EditorMode = 'review' | 'edit';
+export type Mode = 'review' | 'edit';
 
 export type HunkSeparatorValue = (typeof HUNK_SEPARATOR_VALUES)[number];
 export type LineHoverHighlight = (typeof LINE_HOVER_HIGHLIGHTS)[number];
@@ -82,7 +82,7 @@ export const DEFAULTS = {
   gutterButton: true,
   interactionMode: 'comment' as const,
   annotations: true,
-  editorMode: 'review' as EditorMode,
+  mode: 'review' as Mode,
   markers: false,
 } as const;
 
@@ -102,7 +102,7 @@ export interface PlaygroundUrlState {
   enableLineSelection: boolean;
   enableGutterUtility: boolean;
   showAnnotations: boolean;
-  editorMode: EditorMode;
+  mode: Mode;
   showMarkers: boolean;
   selectedRange: SelectedLineRange | null;
 }
@@ -181,8 +181,7 @@ export function parsePlaygroundSearchParams(
     showAnnotations: pickBool(get('annot'), DEFAULTS.annotations),
     // Edit mode only exists in the Normal view (other views render per-file
     // edit controls instead), so only honor `?edit=edit` when starting there.
-    editorMode:
-      viewMode === 'normal' && get('edit') === 'edit' ? 'edit' : 'review',
+    mode: viewMode === 'normal' && get('edit') === 'edit' ? 'edit' : 'review',
     showMarkers: pickBool(get('markers'), DEFAULTS.markers),
     selectedRange: parseLineSelection(get('line')),
   };

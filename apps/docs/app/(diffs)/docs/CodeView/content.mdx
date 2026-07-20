@@ -50,7 +50,8 @@ immutability or deep equality checks, which can quickly become expensive.
   to control it interactively. Remember to update `version` when this value
   changes.
 - The `edit` property enables [edit mode](#edit-mode-codeview) for an item when
-  `CodeView` has a `createEditor` factory. Update `version` when toggling it.
+  React `CodeView` has an `EditProvider`, or vanilla `CodeView` has a
+  `createEditor` option. Update `version` when toggling it.
 - CodeView-level options such as `layout`, `itemMetrics`, `stickyHeaders`,
   `pointerEventsOnScroll`, and `smoothScrollSettings` allow you to configure the
   scroll view. All other options are shared between all files and diffs.
@@ -60,6 +61,26 @@ immutability or deep equality checks, which can quickly become expensive.
   context. Hydration updates the existing `fileDiff` object in place, so keep
   its identity stable when the hydrated metadata should persist across later
   renders.
+
+### Editing
+
+React `CodeView` gets its editor factory from the nearest `EditProvider`; unlike
+vanilla `CodeView`, it does not accept `createEditor` directly or inside
+`options`. Keep the provider mounted, set `edit: true` on the items that should
+be editable, and pass creation-time item-editor behavior through `editOptions`.
+`onItemEditChange` reports live contents with the owning item. If a session
+produces a change, `onItemEditComplete` reports its latest contents when editing
+is disabled or the item is collapsed or removed. Direct reset, cleanup, and
+viewer unmount are silent.
+
+Each edited item receives an independent editor whose history survives
+virtualization. Changes to the provider factory or `editOptions` do not disturb
+active sessions; their latest values apply the next time an item enters edit
+mode.
+
+For vanilla `CodeView`, keep using `CodeViewOptions.createEditor`. It exposes
+the same item-aware callbacks, and CodeView owns each returned editor's
+lifecycle.
 
 ### Padding &amp; Gap
 

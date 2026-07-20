@@ -1,7 +1,7 @@
 'use client';
 
-import { Editor } from '@pierre/diffs/editor';
-import { EditProvider, File } from '@pierre/diffs/react';
+import type { Editor } from '@pierre/diffs/editor';
+import { File } from '@pierre/diffs/react';
 import type { PreloadedFileResult } from '@pierre/diffs/ssr';
 import { useEffect, useMemo, useRef } from 'react';
 
@@ -34,7 +34,7 @@ function detectMac(): boolean {
 // Opening an empty panel scrolls nothing.
 export function FindDemo({ prerenderedFile }: FindDemoProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
-  const editor = useMemo(() => new Editor({}), []);
+  const editorRef = useRef<Editor<undefined> | null>(null);
 
   useEffect(() => {
     const wrapper = wrapperRef.current;
@@ -59,7 +59,7 @@ export function FindDemo({ prerenderedFile }: FindDemoProps) {
       if (content == null) {
         return;
       }
-      editor.setSelections([
+      editorRef.current?.setSelections([
         {
           start: { line: 0, character: 5 },
           end: { line: 0, character: 5 },
@@ -118,17 +118,25 @@ export function FindDemo({ prerenderedFile }: FindDemoProps) {
         window.clearTimeout(timer);
       }
     };
-  }, [editor]);
+  }, []);
+
+  const editOptions = useMemo(
+    () => ({
+      onAttach(editor: Editor<undefined>) {
+        editorRef.current = editor;
+      },
+    }),
+    []
+  );
 
   return (
     <div className="not-prose" ref={wrapperRef}>
-      <EditProvider editor={editor}>
-        <File
-          {...prerenderedFile}
-          className="diff-container max-h-[420px] overflow-auto"
-          contentEditable
-        />
-      </EditProvider>
+      <File
+        {...prerenderedFile}
+        className="diff-container max-h-[420px] overflow-auto"
+        edit
+        editOptions={editOptions}
+      />
     </div>
   );
 }

@@ -557,9 +557,9 @@ export type CodeViewFileItem<T = undefined> = {
   version?: number;
   collapsed?: boolean;
   /**
-   * Put this item into edit mode. Requires the CodeView `createEditor` option;
-   * ignored while `collapsed` is true. Make sure you bump the version when
-   * also changing the value.
+   * Put this item into edit mode. Requires `EditProvider` in React or the
+   * CodeView `createEditor` option in vanilla; ignored while `collapsed` is
+   * true. Make sure you bump the version when also changing the value.
    */
   edit?: boolean;
 };
@@ -572,9 +572,9 @@ export type CodeViewDiffItem<T = undefined> = {
   version?: number;
   collapsed?: boolean;
   /**
-   * Put this item into edit mode. Requires the CodeView `createEditor` option;
-   * ignored while `collapsed` is true. Make sure you bump the version when
-   * also changing the value.
+   * Put this item into edit mode. Requires `EditProvider` in React or the
+   * CodeView `createEditor` option in vanilla; ignored while `collapsed` is
+   * true. Make sure you bump the version when also changing the value.
    */
   edit?: boolean;
 };

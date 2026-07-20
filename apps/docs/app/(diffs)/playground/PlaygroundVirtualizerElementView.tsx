@@ -7,8 +7,8 @@ import type {
   FileDiffOptions,
   SelectedLineRange,
 } from '@pierre/diffs';
-import { Editor } from '@pierre/diffs/editor';
-import { EditProvider, FileDiff, Virtualizer } from '@pierre/diffs/react';
+import type { EditorOptions } from '@pierre/diffs/editor';
+import { FileDiff, useStableCallback, Virtualizer } from '@pierre/diffs/react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { flushSync } from 'react-dom';
 
@@ -66,11 +66,13 @@ interface ElementVirtualizerDiffProps {
   showAnnotations: boolean;
 }
 
-// One diff in the element-scroll list. Each file is its own state island: a
-// dedicated Editor (one editor binds to one instance, so per-file editing
-// needs per-file editors/providers), its own edit toggle, and its own
-// annotation list — all through the first-class React FileDiff props, the
-// same way the Normal view is wired.
+const EMPTY_ANNOTATIONS: DiffLineAnnotation<PlaygroundAnnotationMetadata>[] =
+  [];
+
+// One diff in the element-scroll list. Each surface is its own state island
+// with an edit toggle, edit options, and annotations. The app-level
+// EditProvider creates an independent editor when that surface enters edit
+// mode.
 function ElementVirtualizerDiff({
   fileDiff,
   options,
@@ -92,17 +94,16 @@ function ElementVirtualizerDiff({
   // editor renamed the shadow-DOM annotation slots during this same
   // keystroke, and a scheduled commit would leave the comments projected
   // nowhere for the frames in between.
-  const editor = useMemo(
-    () =>
-      new Editor<PlaygroundAnnotationMetadata>({
-        onChange: (_file, lineAnnotations) => {
-          if (lineAnnotations != null) {
-            flushSync(() => {
-              setAnnotations(lineAnnotations);
-            });
-          }
-        },
-      }),
+  const editOptions = useMemo<EditorOptions<PlaygroundAnnotationMetadata>>(
+    () => ({
+      onChange(_file, lineAnnotations) {
+        if (lineAnnotations != null) {
+          flushSync(() => {
+            setAnnotations(lineAnnotations);
+          });
+        }
+      },
+    }),
     []
   );
 
@@ -194,43 +195,50 @@ function ElementVirtualizerDiff({
     [options, canSelectLines, canUseGutterComments, addCommentAtRange]
   );
 
+  const renderAnnotation = useStableCallback(
+    (annotation: DiffLineAnnotation<PlaygroundAnnotationMetadata>) => {
+      return annotation.metadata.body != null ? (
+        <CommentThread
+          body={annotation.metadata.body}
+          onDelete={() =>
+            removeCommentAtLine(annotation.side, annotation.lineNumber)
+          }
+        />
+      ) : (
+        <CommentForm
+          side={annotation.side}
+          lineNumber={annotation.lineNumber}
+          onCancel={removeCommentAtLine}
+          onSubmit={submitCommentAtLine}
+        />
+      );
+    }
+  );
+
+  const renderHeaderMetadata = useStableCallback(() => {
+    return (
+      <label className="flex cursor-pointer items-center gap-[4px] text-xs select-none">
+        <input
+          type="checkbox"
+          className="cursor-pointer"
+          checked={editing}
+          onChange={(event) => setEditing(event.target.checked)}
+        />
+        Edit
+      </label>
+    );
+  });
+
   return (
-    <EditProvider editor={editor}>
-      <FileDiff
-        fileDiff={fileDiff}
-        contentEditable={editing}
-        selectedLines={selectedLines}
-        lineAnnotations={showAnnotations ? annotations : []}
-        options={fileDiffOptions}
-        renderHeaderMetadata={() => (
-          <label className="flex cursor-pointer items-center gap-[4px] text-xs select-none">
-            <input
-              type="checkbox"
-              className="cursor-pointer"
-              checked={editing}
-              onChange={(event) => setEditing(event.target.checked)}
-            />
-            Edit
-          </label>
-        )}
-        renderAnnotation={(annotation) =>
-          annotation.metadata.body != null ? (
-            <CommentThread
-              body={annotation.metadata.body}
-              onDelete={() =>
-                removeCommentAtLine(annotation.side, annotation.lineNumber)
-              }
-            />
-          ) : (
-            <CommentForm
-              side={annotation.side}
-              lineNumber={annotation.lineNumber}
-              onCancel={removeCommentAtLine}
-              onSubmit={submitCommentAtLine}
-            />
-          )
-        }
-      />
-    </EditProvider>
+    <FileDiff
+      fileDiff={fileDiff}
+      edit={editing}
+      selectedLines={selectedLines}
+      lineAnnotations={showAnnotations ? annotations : EMPTY_ANNOTATIONS}
+      options={fileDiffOptions}
+      editOptions={editOptions}
+      renderHeaderMetadata={renderHeaderMetadata}
+      renderAnnotation={renderAnnotation}
+    />
   );
 }

@@ -36,7 +36,11 @@ interface StubEditor extends DiffsEditor<undefined> {
 // Recording stand-in for the Editor class. It attaches to the instance like
 // the real editor does (so virtualization release reaches editor.cleanUp via
 // the instance) but performs no document or DOM work.
-function createEditorHarness() {
+function createEditorHarness({
+  attachmentError,
+}: {
+  attachmentError?: Error;
+} = {}) {
   const editors: StubEditor[] = [];
   const createEditor = (
     options: CodeViewCreateEditorOptions<undefined>
@@ -50,6 +54,9 @@ function createEditorHarness() {
       edit(instance) {
         editor.edits.push(instance);
         detach = instance.attachEditor(editor);
+        if (attachmentError != null) {
+          throw attachmentError;
+        }
         return () => editor.cleanUp();
       },
       cleanUp(recycle = false) {
@@ -86,6 +93,20 @@ function makeEditFileItem(
   };
 }
 
+function makeTextEditFileItem(
+  id: string,
+  edit = true,
+  lineCount = 20
+): CodeViewItem<undefined> {
+  return {
+    id,
+    type: 'file',
+    file: { ...makeFile(`${id}.txt`, lineCount), lang: 'text' },
+    version: 0,
+    edit,
+  };
+}
+
 function makeEditDiffItem(id: string, edit = true): CodeViewItem<undefined> {
   return {
     id,
@@ -110,7 +131,130 @@ async function applyItemUpdate(
   await wait(0);
 }
 
+async function expectMissingEditorFactoryOnRender(
+  prepare: (viewer: CodeView) => void
+): Promise<void> {
+  const { cleanup } = installDom();
+  const viewer = new CodeView();
+  try {
+    viewer.setup(createRoot());
+    prepare(viewer);
+    expect(() => viewer.render(true)).toThrow(
+      'CodeView: createEditor is required for items with edit: true'
+    );
+  } finally {
+    await wait(0);
+    viewer.cleanUp();
+    cleanup();
+  }
+}
+
 describe('CodeView item edit mode', () => {
+  test('validates the factory only when a rendered item needs an editor', async () => {
+    await expectMissingEditorFactoryOnRender((viewer) => {
+      const initial = makeTextEditFileItem('initial', true, 2);
+      expect(() => viewer.setItems([initial])).not.toThrow();
+      expect(viewer.getItem(initial.id)).toBe(initial);
+    });
+
+    await expectMissingEditorFactoryOnRender((viewer) => {
+      const existing = makeTextEditFileItem('existing', false, 2);
+      viewer.setItems([existing]);
+      viewer.render(true);
+      const controlled = makeTextEditFileItem('controlled', true, 2);
+      expect(() =>
+        viewer.setItems([{ ...existing, version: 1 }, controlled])
+      ).not.toThrow();
+      expect(viewer.getItem(controlled.id)).toBe(controlled);
+    });
+
+    await expectMissingEditorFactoryOnRender((viewer) => {
+      const addedReadOnly = makeTextEditFileItem('added-read-only', false, 2);
+      const addedEdited = makeTextEditFileItem('added-edited', true, 2);
+      expect(() => viewer.addItems([addedReadOnly, addedEdited])).not.toThrow();
+      expect(viewer.getItem(addedReadOnly.id)).toBe(addedReadOnly);
+      expect(viewer.getItem(addedEdited.id)).toBe(addedEdited);
+    });
+
+    await expectMissingEditorFactoryOnRender((viewer) => {
+      const existing = makeTextEditFileItem('existing', false, 2);
+      viewer.setItems([existing]);
+      viewer.render(true);
+      const updated = { ...existing, edit: true, version: 1 };
+      expect(viewer.updateItem(updated)).toBe(true);
+      expect(viewer.getItem(existing.id)).toBe(updated);
+    });
+  });
+
+  test('does not validate an offscreen edited item until it is rendered', async () => {
+    const { cleanup } = installDom();
+    const viewer = new CodeView();
+    const edited = makeTextEditFileItem('edited', true, 30);
+    const items = [
+      ...Array.from({ length: 39 }, (_, index) =>
+        makeTextEditFileItem(`read-only-${index}`, false, 30)
+      ),
+      edited,
+    ];
+
+    try {
+      viewer.setup(createRoot({ height: 200 }));
+      viewer.setItems(items);
+
+      expect(() => viewer.render(true)).not.toThrow();
+      expect(
+        viewer.getRenderedItems().some((item) => item.id === edited.id)
+      ).toBe(false);
+
+      viewer.scrollTo({
+        type: 'item',
+        id: edited.id,
+        align: 'start',
+        behavior: 'instant',
+      });
+      expect(() => viewer.render(true)).toThrow(
+        'CodeView: createEditor is required for items with edit: true'
+      );
+    } finally {
+      await wait(0);
+      viewer.cleanUp();
+      cleanup();
+    }
+  });
+
+  test('uses the factory only when creating an edit session', async () => {
+    const { cleanup } = installDom();
+    const { editors, createEditor } = createEditorHarness();
+    const viewer = new CodeView({ createEditor });
+    const active = makeTextEditFileItem('active');
+
+    try {
+      viewer.setup(createRoot());
+      await renderItems(viewer, [active]);
+      const editor = editors[0];
+
+      viewer.setOptions({});
+      viewer.render(true);
+      expect(viewer.getEditor(active.id)).toBe(editor);
+      expect(editor.fullCleanUps).toBe(0);
+
+      const readOnly = { ...active, edit: false, version: 1 };
+      await applyItemUpdate(viewer, readOnly);
+      expect(editor.fullCleanUps).toBe(1);
+
+      expect(viewer.updateItem({ ...readOnly, edit: true, version: 2 })).toBe(
+        true
+      );
+      expect(() => viewer.render(true)).toThrow(
+        'CodeView: createEditor is required for items with edit: true'
+      );
+    } finally {
+      await wait(0);
+      viewer.cleanUp();
+      cleanup();
+    }
+  });
+
   test('attaches factory editors to edit-mode items on mount', async () => {
     const { cleanup } = installDom();
     const { editors, createEditor } = createEditorHarness();
@@ -129,6 +273,28 @@ describe('CodeView item edit mode', () => {
       expect(editors[0].edits).toEqual([renderedA!.instance]);
       expect(viewer.getEditor('a')).toBe(editors[0]);
       expect(viewer.getEditor('b')).toBeUndefined();
+    } finally {
+      viewer.cleanUp();
+      await wait(0);
+      cleanup();
+    }
+  });
+
+  test('cleans a newly created editor when attachment fails', async () => {
+    const { cleanup } = installDom();
+    const attachmentError = new Error('attachment failed');
+    const { editors, createEditor } = createEditorHarness({
+      attachmentError,
+    });
+    const viewer = new CodeView({ createEditor });
+    try {
+      viewer.setup(createRoot());
+      viewer.setItems([makeEditFileItem('a')]);
+
+      expect(() => viewer.render(true)).toThrow(attachmentError);
+      expect(editors).toHaveLength(1);
+      expect(editors[0].fullCleanUps).toBe(1);
+      expect(viewer.getEditor('a')).toBeUndefined();
     } finally {
       viewer.cleanUp();
       await wait(0);

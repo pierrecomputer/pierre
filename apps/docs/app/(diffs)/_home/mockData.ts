@@ -89,6 +89,7 @@ export const AUI_FULL_TREE_PATHS: string[] = [
   'apps/docs/app/(diffs)/layout.tsx',
   'apps/docs/app/globals.css',
   'apps/docs/app/layout.tsx',
+  'apps/docs/components/AppEditProvider.tsx',
   'apps/docs/components/Footer.tsx',
   'apps/docs/components/Header.tsx',
   'apps/docs/components/ui/button-group.tsx',

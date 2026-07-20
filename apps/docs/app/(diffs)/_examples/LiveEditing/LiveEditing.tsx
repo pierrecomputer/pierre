@@ -1,8 +1,8 @@
 'use client';
 
 import { cloneFileDiffMetadata } from '@pierre/diffs';
-import { Editor } from '@pierre/diffs/editor';
-import { EditProvider, File, FileDiff } from '@pierre/diffs/react';
+import type { EditorOptions } from '@pierre/diffs/editor';
+import { File, FileDiff } from '@pierre/diffs/react';
 import type {
   PreloadedFileResult,
   PreloadFileDiffResult,
@@ -13,7 +13,7 @@ import {
   IconPencil,
   IconRefresh,
 } from '@pierre/icons';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 
 import { LIVE_EDITOR_NEW_FILE } from '../LiveEditor/constants';
 import { FeatureHeader } from '@/components/FeatureHeader';
@@ -54,8 +54,8 @@ export function LiveEditing({
   const [diffLayout, setDiffLayout] = useState<DiffLayout>(
     prerenderedDiff.options?.diffStyle === 'split' ? 'split' : 'unified'
   );
-  // Bumping this value remounts the editable surface, which is how Reset works
-  // (see `handleReset`).
+  // Bumping this value remounts the editable surface from pristine input.
+  // Reset and surface changes use it as a deliberate new-session boundary.
   const [resetKey, setResetKey] = useState(0);
   // Editing a FileDiff updates the diff metadata it renders from so the live
   // hunks stay in sync. Keep an untouched baseline and hand FileDiff a fresh
@@ -72,73 +72,43 @@ export function LiveEditing({
     }),
     [pristineFileDiff, resetKey]
   );
-  // Edits emit through the editor's debounced `onChange`. After a remount (reset
-  // or a control change) a change scheduled just before can still fire ~500ms
-  // later carrying the pre-remount (edited) contents, which would flip
-  // `hasEdits` back on. We drop any `onChange` inside a short window after a
-  // remount so a late straggler can't re-enable the button.
-  const ignoreChangesUntilRef = useRef(0);
 
-  const editor = useMemo(
-    () =>
-      new Editor({
-        // `onChange` is debounced internally, so we derive "edited" state by
-        // comparing the live contents to the original rather than latching a
-        // boolean. The editable surface of a diff is its new-file (additions)
-        // side, so we compare against that for both surfaces.
-        onChange(file) {
-          if (Date.now() < ignoreChangesUntilRef.current) {
-            return;
-          }
-          setHasEdits(file.contents !== LIVE_EDITOR_NEW_FILE.contents);
-        },
-      }),
-    // A single editor for the demo's lifetime: it re-attaches when the surface
-    // remounts (file<->diff) and re-syncs when review/edit mode or diff layout
-    // changes, so recreating it on every control change is unnecessary.
+  const editOptions = useMemo<EditorOptions<undefined>>(
+    () => ({
+      // Both surfaces synchronously report the current new-file contents.
+      onChange(file) {
+        setHasEdits(file.contents !== LIVE_EDITOR_NEW_FILE.contents);
+      },
+    }),
     []
   );
 
-  // Clear edited state and ignore the late `onChange` straggler whenever the
-  // surface remounts. Used by Reset and by control changes that recreate the
-  // editor (surface/layout), which rebuild from the original contents.
-  const resetEditedState = useCallback(() => {
+  // Reset and surface switches deliberately discard the current edit session.
+  // The new key also rebuilds mutable FileDiff metadata from its pristine copy.
+  const resetEditableSurface = useCallback(() => {
     setHasEdits(false);
-    ignoreChangesUntilRef.current = Date.now() + 600;
-  }, []);
-
-  // Reset by remounting the editable surface. Bumping `resetKey` unmounts the
-  // current File/FileDiff — whose teardown runs the editor's detach
-  // (`editor.cleanUp()`), dropping the edited TextDocument and undo history —
-  // and mounts a fresh one that re-hydrates the original prerendered HTML and
-  // re-attaches the editor with a clean document.
-  const handleReset = useCallback(() => {
     setResetKey((key) => key + 1);
-    resetEditedState();
-  }, [resetEditedState]);
+  }, []);
 
   const handleSurfaceChange = useCallback(
     (value: Surface) => {
       setSurface(value);
-      resetEditedState();
+      resetEditableSurface();
     },
-    [resetEditedState]
+    [resetEditableSurface]
   );
 
-  const handleDiffLayoutChange = useCallback(
-    (value: DiffLayout) => {
-      setDiffLayout(value);
-      resetEditedState();
-    },
-    [resetEditedState]
-  );
+  // Layout is only a view option, so changing it keeps the current edit session.
+  const handleDiffLayoutChange = useCallback((value: DiffLayout) => {
+    setDiffLayout(value);
+  }, []);
 
   // The Reset button lives in the surface header for both File and FileDiff
   // views, so it's defined once and reused by each `renderHeaderMetadata`.
   const renderResetButton = useCallback(
     () => (
       <button
-        onClick={handleReset}
+        onClick={resetEditableSurface}
         disabled={!hasEdits}
         title="Revert to the original contents"
         className={cn(
@@ -152,11 +122,11 @@ export function LiveEditing({
         Reset
       </button>
     ),
-    [handleReset, hasEdits]
+    [hasEdits, resetEditableSurface]
   );
 
   const headerMetadata = mode === 'edit' ? renderResetButton : undefined;
-  const contentEditable = mode === 'edit';
+  const edit = mode === 'edit';
 
   return (
     <div className="space-y-5">
@@ -231,31 +201,31 @@ export function LiveEditing({
       </div>
 
       <div>
-        <EditProvider editor={editor}>
-          {surface === 'file' ? (
-            <File
-              key={resetKey}
-              {...prerenderedFile}
-              file={{
-                ...prerenderedFile.file,
-                cacheKey: prerenderedFile.file.name + resetKey,
-              }}
-              className="diff-container"
-              renderHeaderMetadata={headerMetadata}
-              contentEditable={contentEditable}
-            />
-          ) : (
-            <FileDiff
-              key={resetKey}
-              {...prerenderedDiff}
-              fileDiff={liveFileDiff}
-              options={{ ...prerenderedDiff.options, diffStyle: diffLayout }}
-              className="diff-container"
-              renderHeaderMetadata={headerMetadata}
-              contentEditable={contentEditable}
-            />
-          )}
-        </EditProvider>
+        {surface === 'file' ? (
+          <File
+            key={resetKey}
+            {...prerenderedFile}
+            file={{
+              ...prerenderedFile.file,
+              cacheKey: prerenderedFile.file.name + resetKey,
+            }}
+            className="diff-container"
+            renderHeaderMetadata={headerMetadata}
+            edit={edit}
+            editOptions={editOptions}
+          />
+        ) : (
+          <FileDiff
+            key={resetKey}
+            {...prerenderedDiff}
+            fileDiff={liveFileDiff}
+            options={{ ...prerenderedDiff.options, diffStyle: diffLayout }}
+            className="diff-container"
+            renderHeaderMetadata={headerMetadata}
+            edit={edit}
+            editOptions={editOptions}
+          />
+        )}
       </div>
     </div>
   );

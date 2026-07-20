@@ -22,10 +22,10 @@ Edit mode features include:
 - Lightweight
 
 Use the `Editor` API to add editing to `File`, `FileDiff`, `MultiFileDiff`, and
-`PatchDiff`, or to individual `CodeView` items. In React, wrap standalone
-surfaces in `EditProvider` and set `contentEditable`. `CodeView` instead uses an
-item's `edit` flag and a `createEditor` factory. For standalone vanilla JS
-surfaces, call `editor.edit(component)` after render.
+`PatchDiff`, or to individual `CodeView` items. In React, wrap editable surfaces
+in `EditProvider`, then set a standalone surface's `edit` prop or a `CodeView`
+item's `edit` flag. In vanilla JS, call `editor.edit(component)` after rendering
+a standalone surface, or give `CodeView` its own `createEditor` option.
 
 Edit mode is not a full-fledged IDE, though you may certainly use it to create
 your own IDE-like experiences. Edit mode is purpose-built and best suited for
@@ -48,10 +48,11 @@ can lazy-load it when editing is optional.
 Edit mode does not replace `File`, `FileDiff`, or their virtualized variants.
 You render the surface first, then attach editing:
 
-1. **Attach** — Call `editor.edit(component)` in vanilla JS, or pass
-   `contentEditable` on a React `File`, `FileDiff`, `MultiFileDiff`, or
-   `PatchDiff` wrapped in `EditProvider`. For `CodeView`, set `edit: true` on an
-   item and provide `createEditor`. The hookup returns a dispose function for a
+1. **Attach** — Call `editor.edit(component)` in vanilla JS, or pass `edit` on a
+   React `File`, `FileDiff`, `MultiFileDiff`, or `PatchDiff` wrapped in
+   `EditProvider`. For React `CodeView`, use the same provider and set
+   `edit: true` on an item. Vanilla `CodeView` instead takes
+   `CodeViewOptions.createEditor`. The hookup returns a dispose function for a
    standalone vanilla surface; React surfaces and `CodeView` manage it
    automatically when editing toggles.
 2. **Edit surface** — Edit mode sets `contentEditable` on the code content
@@ -76,10 +77,56 @@ deleted lines and annotation lines remain read-only.
 
 ### React
 
-For standalone components, create one `Editor` instance (typically with
-`useMemo`), wrap your tree in `EditProvider`, and set `contentEditable` on
-`File`, `FileDiff`, `MultiFileDiff`, or `PatchDiff`. The provider cleans up on
-unmount. Use `Virtualizer` for large editable files.
+Give a permanently mounted `EditProvider` a stable `createEditor` factory, then
+toggle only the standalone surface's `edit` prop or a `CodeView` item's `edit`
+flag. The provider does not own an editor instance. Each editable `File`,
+`FileDiff`, `MultiFileDiff`, or `PatchDiff` surface and each editable `CodeView`
+item creates its own editor when an edit session starts. Standalone surface DOM
+and imperative file/diff instances stay mounted across the toggle.
+
+Pass creation-time callbacks and behavior through the surface's `editOptions`. A
+provider can add shared defaults by spreading them before the surface options,
+so the surface wins. Keep factories and object props stable: define static
+values at module scope, or use `useCallback` for factories and callbacks and
+`useMemo` for `options` and `editOptions` when they depend on component values.
+
+```tsx
+const createEditor = useCallback<CreateEditor<undefined>>(
+  (surfaceOptions) =>
+    new Editor({
+      ...sharedEditorDefaults,
+      ...surfaceOptions,
+    }),
+  []
+);
+
+const editOptions = useMemo<EditorOptions<undefined>>(
+  () => ({
+    onChange: handleChange,
+    onAttach(editor) {
+      editorRef.current = editor;
+    },
+  }),
+  [handleChange]
+);
+
+// This example is self-contained. Apps should usually mount EditProvider near
+// the root so its factory is available to every editable File, diff, and
+// CodeView.
+return (
+  <EditProvider createEditor={createEditor}>
+    <File file={file} edit={editing} editOptions={editOptions} />
+  </EditProvider>
+);
+```
+
+Changes to `createEditor` or `editOptions` do not disturb an active edit
+session. Their latest values apply the next time `edit` transitions from false
+to true. Re-entering edit mode creates a fresh editor with fresh history and
+state. Sibling editable surfaces receive independent editors and callbacks; use
+`onAttach` with your own ref when controls need imperative APIs such as history,
+selections, markers, save, or search. Use `Virtualizer` for large editable
+files.
 
 <EditorComponentTabs
   fileExample={editorReactExample}
@@ -100,16 +147,22 @@ large editable files. Call `cleanUp()` when the editor is removed.
 
 ### CodeView
 
-`CodeView` manages one `Editor` per editable item, so it does not use
-`EditProvider`. Set `edit: true` on an item and pass the options from
-`createEditor` into `new Editor(options)`. Increment the item's `version`
-whenever `edit` changes.
+`CodeView` manages one `Editor` per editable item. In React, wrap it in the same
+app-level `EditProvider` used by other editable surfaces, set `edit: true` on an
+item, and pass creation-time item-editor behavior through the `CodeView`
+`editOptions` prop. In vanilla JS, pass `createEditor` in `CodeViewOptions`
+instead. Increment the item's `version` whenever `edit` changes.
 
-Use `onItemEditChange` to observe live changes. After the document changes,
-`onItemEditComplete` fires once with the final contents when editing is disabled
-or the item is collapsed or removed. Persist those contents to the item's
-`file`, or rebuild its `fileDiff`. Assign a fresh `cacheKey` and increment
-`version`; `CodeView` does not update item data for you.
+`CodeView` uses item-aware callbacks instead of `editOptions.onChange`.
+`onItemEditChange` receives the owning item with each live change.
+`onItemEditComplete` receives the item and latest contents when a changed
+session ends because editing is disabled or the item is collapsed or removed.
+Sessions with no changes do not emit it. Resetting, cleaning up, or unmounting
+the viewer is silent teardown.
+
+Persist edited contents to the item's `file`, or rebuild its `fileDiff`. Assign
+a fresh `cacheKey` and increment `version`; `CodeView` does not update item data
+for you.
 
 <CodeViewExampleTabs
   reactExample={editorReactCodeViewExample}
@@ -117,8 +170,12 @@ or the item is collapsed or removed. Persist those contents to the item's
 />
 
 Editors retain their document and history while items move in and out of the
-virtualized window. Use `getEditor(id)` on the React ref or vanilla instance for
-APIs such as `undo()`, `applyEdits()`, or `setMarkers()`.
+virtualized window.
+
+`editOptions` and provider-factory changes are creation-time inputs: active item
+sessions keep their current editor, while the latest values apply to the next
+item that enters edit mode. Simultaneously edited items always receive
+independent editor instances.
 
 ### Editor Options
 
