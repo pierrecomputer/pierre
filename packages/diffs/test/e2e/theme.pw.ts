@@ -249,6 +249,57 @@ test.describe('theme line highlights', () => {
     expect(both.painted).not.toEqual(selected.painted);
   });
 
+  test('rounded selection corners match a selected line background', async ({
+    page,
+  }) => {
+    await openFixture(page, { name: 'pierre-light', type: 'light' });
+    await setLineHighlightState(page, 'selected');
+    await page.evaluate(() => {
+      window.__editor?.setSelections([
+        {
+          start: { line: 0, character: 10 },
+          end: { line: 2, character: 10 },
+          direction: 'forward',
+        },
+      ]);
+    });
+    await expect(page.locator('[data-selection-corner]')).not.toHaveCount(0);
+
+    const colors = await page.evaluate(() => {
+      const root = document.querySelector('diffs-container')?.shadowRoot;
+      const row = root?.querySelector<HTMLElement>(
+        '[data-content] > [data-line="2"]'
+      );
+      const corner = [
+        ...(root?.querySelectorAll<HTMLElement>('[data-selection-corner]') ??
+          []),
+      ].find(
+        (element) =>
+          Math.abs(
+            element.getBoundingClientRect().top -
+              (row?.getBoundingClientRect().top ?? Number.NaN)
+          ) < 0.5
+      );
+      if (row == null || corner == null) {
+        throw new Error('Missing selected row corner.');
+      }
+
+      const probe = document.createElement('span');
+      probe.style.backgroundColor = 'var(--diffs-bg)';
+      row.append(probe);
+      const base = getComputedStyle(probe).backgroundColor;
+      probe.remove();
+      return {
+        base,
+        corner: getComputedStyle(corner).backgroundColor,
+        line: getComputedStyle(row, '::after').backgroundColor,
+      };
+    });
+
+    expect(colors.line).not.toBe(colors.base);
+    expect(colors.corner).toBe(colors.line);
+  });
+
   test('a missing active background preserves the resolved line color', async ({
     page,
   }) => {
