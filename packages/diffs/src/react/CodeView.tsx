@@ -51,7 +51,7 @@ type CodeViewGutterUtilityGetter =
 
 export type CodeViewReactOptions<LAnnotation = undefined> = Omit<
   CodeViewOptions<LAnnotation>,
-  'createEditor'
+  'controlledSelection' | 'createEditor' | 'onSelectedLinesChange'
 >;
 
 interface CodeViewBaseProps<LAnnotation> {

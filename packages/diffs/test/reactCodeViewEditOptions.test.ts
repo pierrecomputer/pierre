@@ -11,6 +11,7 @@ import {
 } from 'react';
 import { createRoot as createReactRoot, type Root } from 'react-dom/client';
 
+import type { CodeViewLineSelection } from '../src/components/CodeView';
 import { DEFAULT_THEMES } from '../src/constants';
 import type { EditorOptions } from '../src/editor/editor';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
@@ -51,6 +52,15 @@ const CODE_VIEW_OPTIONS = {
   theme: DEFAULT_THEMES,
 } as const;
 const CODE_VIEW_STYLE = { height: 800, overflow: 'auto' } as const;
+type ReactManagedCodeViewOptionKey = Extract<
+  keyof CodeViewReactOptions<undefined>,
+  'controlledSelection' | 'createEditor' | 'onSelectedLinesChange'
+>;
+const REACT_MANAGED_CODE_VIEW_OPTIONS_ARE_OMITTED: [
+  ReactManagedCodeViewOptionKey,
+] extends [never]
+  ? true
+  : false = true;
 
 interface TrackedCodeViewEditor extends DiffsEditor<undefined> {
   options: EditorOptions<undefined>;
@@ -636,6 +646,116 @@ describe('React CodeView editor factory', () => {
       await unmountRoot(root);
       root = undefined;
       expect(editors.every((editor) => editor.fullCleanUps > 0)).toBe(true);
+    } finally {
+      await unmountRoot(root);
+      cleanupActEnvironment();
+      cleanup();
+    }
+  });
+});
+
+describe('React CodeView selection', () => {
+  test('keeps selection controlled by props with a provider mounted', async () => {
+    const { cleanup } = installCodeViewDom();
+    const cleanupActEnvironment = installReactActEnvironment();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const handle = createRef<CodeViewHandle<undefined>>();
+    const { createEditor, editors } = createEditorHarness();
+    const items = [makeFileItem('a')];
+    const initialSelection = {
+      id: 'a',
+      range: { start: 1, end: 1 },
+    };
+    const nextSelection = {
+      id: 'a',
+      range: { start: 2, end: 3 },
+    };
+    const onSelectedLinesChange = mock(
+      (_selection: CodeViewLineSelection | null) => {}
+    );
+    let root: Root | undefined;
+
+    const render = async (selectedLines: typeof initialSelection) => {
+      await renderRoot(
+        root!,
+        withProvider(
+          createEditor,
+          createCodeViewElement({
+            items,
+            onSelectedLinesChange,
+            ref: handle,
+            selectedLines,
+          })
+        )
+      );
+    };
+
+    try {
+      root = createReactRoot(container);
+      await render(initialSelection);
+
+      expect(REACT_MANAGED_CODE_VIEW_OPTIONS_ARE_OMITTED).toBe(true);
+      expect(editors).toHaveLength(0);
+      expect(handle.current?.getSelectedLines()).toEqual(initialSelection);
+
+      const renderedItem = handle.current?.getInstance()?.getRenderedItems()[0];
+      expect(renderedItem).toBeDefined();
+      renderedItem?.instance.options.onLineSelectionChange?.(
+        nextSelection.range
+      );
+
+      expect(onSelectedLinesChange).toHaveBeenLastCalledWith(nextSelection);
+      expect(handle.current?.getSelectedLines()).toEqual(initialSelection);
+
+      await render(nextSelection);
+      expect(handle.current?.getSelectedLines()).toEqual(nextSelection);
+    } finally {
+      await unmountRoot(root);
+      cleanupActEnvironment();
+      cleanup();
+    }
+  });
+
+  test('overwrites untyped selection options in uncontrolled mode', async () => {
+    const { cleanup } = installCodeViewDom();
+    const cleanupActEnvironment = installReactActEnvironment();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const handle = createRef<CodeViewHandle<undefined>>();
+    const bypassOnSelectedLinesChange = mock(
+      (_selection: CodeViewLineSelection | null) => {}
+    );
+    const optionsWithSelection = {
+      ...CODE_VIEW_OPTIONS,
+      controlledSelection: true,
+      onSelectedLinesChange: bypassOnSelectedLinesChange,
+    } as CodeViewReactOptions<undefined>;
+    const expectedSelection = {
+      id: 'a',
+      range: { start: 2, end: 3 },
+    };
+    let root: Root | undefined;
+
+    try {
+      root = createReactRoot(container);
+      await renderRoot(
+        root,
+        createCodeViewElement({
+          initialItems: [makeFileItem('a')],
+          options: optionsWithSelection,
+          ref: handle,
+        })
+      );
+
+      const renderedItem = handle.current?.getInstance()?.getRenderedItems()[0];
+      expect(renderedItem).toBeDefined();
+      renderedItem?.instance.options.onLineSelectionChange?.(
+        expectedSelection.range
+      );
+
+      expect(handle.current?.getSelectedLines()).toEqual(expectedSelection);
+      expect(bypassOnSelectedLinesChange).not.toHaveBeenCalled();
     } finally {
       await unmountRoot(root);
       cleanupActEnvironment();
