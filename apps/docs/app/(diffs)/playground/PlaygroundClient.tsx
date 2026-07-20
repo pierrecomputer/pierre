@@ -298,9 +298,9 @@ function PlaygroundControlsContent({
         </ButtonGroup>
 
         {/*
-          The single global Edit toggle only makes sense for the one-file Normal
-          view. Virtualizer/CodeView show a per-file edit control in each header
-          instead (Virtualizer today; CodeView is read-only for now).
+          The single global Edit toggle only makes sense for the one-file
+          Normal view. Virtualizer/CodeView show a per-file edit control in
+          each header instead.
         */}
         {viewMode === 'normal' && (
           <>
@@ -497,7 +497,7 @@ function PlaygroundControlsContent({
           onCheckedChange={setShowAnnotations}
         />
 
-        {/* Markers come from the global editor, which only exists in Normal. */}
+        {/* Markers use the Normal view's active edit-session editor. */}
         {viewMode === 'normal' && (
           <ToggleButton
             icon={<IconCiWarning />}
@@ -739,8 +739,8 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
   );
 
   // Apply (or clear) the demo markers whenever the normal view enters an edit
-  // session or the toggle changes. onAttach runs on the next animation frame,
-  // so retry until the ref receives the new session's editor.
+  // session or the toggle changes. onAttach supplies the session editor after
+  // attachment completes, so retry until the ref receives it.
   useEffect(() => {
     if (!edit || viewMode !== 'normal') {
       return;
@@ -942,9 +942,8 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
     return () => document.body.classList.remove('overflow-hidden');
   }, [isControlsOpen]);
 
-  // Leaving the Normal view drops back to Review: the global Edit toggle only
-  // exists there, and a stale edit session would leave no mounted surface for
-  // the editor to attach to, so the marker effect would retry forever.
+  // Editing is controlled only in Normal view. Virtualizer and CodeView own
+  // per-surface controls, so return Normal to Review when switching views.
   const setViewModeAndResetEditor = useCallback((mode: ViewMode) => {
     setViewMode(mode);
     if (mode !== 'normal') setMode('review');

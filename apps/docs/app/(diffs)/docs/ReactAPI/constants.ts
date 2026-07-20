@@ -11,53 +11,74 @@ const options = {
 export const REACT_API_POST_RENDER_LIFECYCLE: PreloadFileOptions<undefined> = {
   file: {
     name: 'post_render_lifecycle.tsx',
-    contents: `import { FileDiff } from '@pierre/diffs/react';
+    contents: `import type {
+  FileDiffMetadata,
+  FileDiffOptions,
+} from '@pierre/diffs';
+import { FileDiff } from '@pierre/diffs/react';
+import { useMemo } from 'react';
 
 const cleanupByNode = new WeakMap<HTMLElement, () => void>();
 
-<FileDiff
-  fileDiff={fileDiff}
-  options={{
-    onPostRender(node, _instance, phase) {
-      if (phase === 'mount') {
-        const selectionRoot = node.shadowRoot ?? node;
+export function DiffWithRenderLifecycle({
+  fileDiff,
+}: {
+  fileDiff: FileDiffMetadata;
+}) {
+  const fileDiffOptions = useMemo<FileDiffOptions<undefined>>(
+    () => ({
+      onPostRender(node, _instance, phase) {
+        if (phase === 'mount') {
+          const selectionRoot = node.shadowRoot ?? node;
 
-        const handleSelectStart = () => {
-          console.log('selection started in diff');
-        };
+          const handleSelectStart = () => {
+            console.log('selection started in diff');
+          };
 
-        const handleSelectionChange = () => {
-          const selection = document.getSelection();
-          if (selection == null || selection.isCollapsed) {
-            return;
-          }
+          const handleSelectionChange = () => {
+            const selection = document.getSelection();
+            if (selection == null || selection.isCollapsed) {
+              return;
+            }
 
-          if (
-            !containsSelectionNode(selectionRoot, selection.anchorNode) &&
-            !containsSelectionNode(selectionRoot, selection.focusNode)
-          ) {
-            return;
-          }
+            if (
+              !containsSelectionNode(selectionRoot, selection.anchorNode) &&
+              !containsSelectionNode(selectionRoot, selection.focusNode)
+            ) {
+              return;
+            }
 
-          console.log('selected text', selection.toString());
-        };
+            console.log('selected text', selection.toString());
+          };
 
-        selectionRoot.addEventListener('selectstart', handleSelectStart);
-        document.addEventListener('selectionchange', handleSelectionChange);
-        cleanupByNode.set(node, () => {
-          selectionRoot.removeEventListener('selectstart', handleSelectStart);
-          document.removeEventListener('selectionchange', handleSelectionChange);
-        });
-        return;
-      }
+          selectionRoot.addEventListener('selectstart', handleSelectStart);
+          document.addEventListener('selectionchange', handleSelectionChange);
+          cleanupByNode.set(node, () => {
+            selectionRoot.removeEventListener('selectstart', handleSelectStart);
+            document.removeEventListener(
+              'selectionchange',
+              handleSelectionChange
+            );
+          });
+          return;
+        }
 
-      if (phase === 'unmount') {
-        cleanupByNode.get(node)?.();
-        cleanupByNode.delete(node);
-      }
-    },
-  }}
-/>
+        if (phase === 'unmount') {
+          cleanupByNode.get(node)?.();
+          cleanupByNode.delete(node);
+        }
+      },
+    }),
+    []
+  );
+
+  return (
+    <FileDiff
+      fileDiff={fileDiff}
+      options={fileDiffOptions}
+    />
+  );
+}
 
 function containsSelectionNode(root: Node, node: Node | null) {
   return node != null && root.contains(node);
@@ -85,6 +106,7 @@ import { MultiFileDiff } from '@pierre/diffs/react';
 
 <MultiFileDiff
   {...}
+  // You should generally memoize options inside your component with useMemo.
   options={{
     theme: { dark: 'pierre-dark', light: 'pierre-light' },
     diffStyle: 'split',
@@ -334,31 +356,37 @@ export const REACT_API_LOAD_DIFF_FILES: PreloadFileOptions<undefined> = {
   file: {
     name: 'load_diff_files.tsx',
     contents: `import {
-  FileDiff,
-  type FileDiffLoadedFiles,
   parsePatchFiles,
-} from '@pierre/diffs/react';
+  type FileDiffLoadedFiles,
+  type FileDiffOptions,
+} from '@pierre/diffs';
+import { FileDiff } from '@pierre/diffs/react';
+import { useMemo } from 'react';
 
-const [patch] = parsePatchFiles(patchText, 'pull-42');
-const fileDiff = patch.files[0];
+declare const patchText: string;
 
-function ReviewDiff() {
-  return (
-    <FileDiff
-      fileDiff={fileDiff}
-      options={{
-        async loadDiffFiles(fileDiff): Promise<FileDiffLoadedFiles> {
-          const response = await fetch(
-            '/api/files?path=' + encodeURIComponent(fileDiff.name)
-          );
-          // Return { oldFile, newFile }, or { oldFile: null, newFile }
-          // for pure renames.
-          // Include cacheKey values that change with revision or content.
-          return response.json();
-        },
-      }}
-    />
+const fileDiff = parsePatchFiles(patchText, 'pull-42')[0]?.files[0];
+if (fileDiff == null) {
+  throw new Error('The patch does not contain a file diff');
+}
+
+export function ReviewDiff() {
+  const fileDiffOptions = useMemo<FileDiffOptions<undefined>>(
+    () => ({
+      async loadDiffFiles(fileDiff): Promise<FileDiffLoadedFiles> {
+        const response = await fetch(
+          '/api/files?path=' + encodeURIComponent(fileDiff.name)
+        );
+        // Return { oldFile, newFile }, or { oldFile: null, newFile }
+        // for pure renames.
+        // Include cacheKey values that change with revision or content.
+        return response.json();
+      },
+    }),
+    []
   );
+
+  return <FileDiff fileDiff={fileDiff} options={fileDiffOptions} />;
 }`,
   },
   options,
@@ -515,16 +543,18 @@ interface ThreadMetadata {
 export const REACT_API_MULTI_FILE_DIFF: PreloadFileOptions<undefined> = {
   file: {
     name: 'multi_file_diff.tsx',
-    contents: `import {
-  type FileContents,
-  MultiFileDiff,
-} from '@pierre/diffs/react';
+    contents: `import type {
+  FileContents,
+  FileDiffOptions,
+} from '@pierre/diffs';
+import { MultiFileDiff } from '@pierre/diffs/react';
+import { useMemo } from 'react';
 
 // MultiFileDiff compares file contents directly.
 // Use this when you have the old and/or new file contents.
 
-// Keep file objects stable (useState/useMemo) to avoid re-renders.
-// The component uses reference equality for change detection.
+// Keep file objects stable: define static inputs at module scope, or use
+// useState/useMemo when they depend on component values.
 const oldFile: FileContents = {
   name: 'example.ts',
   contents: 'console.log("Hello world")',
@@ -536,6 +566,14 @@ const newFile: FileContents = {
 };
 
 export function MyDiff() {
+  const fileDiffOptions = useMemo<FileDiffOptions<undefined>>(
+    () => ({
+      theme: { dark: 'pierre-dark', light: 'pierre-light' },
+      diffStyle: 'split',
+    }),
+    []
+  );
+
   return (
     <MultiFileDiff
       // Required: pass FileContents for existing sides.
@@ -544,10 +582,7 @@ export function MyDiff() {
       oldFile={oldFile}
       newFile={newFile}
 
-      options={{
-        theme: { dark: 'pierre-dark', light: 'pierre-light' },
-        diffStyle: 'split',
-      }}
+      options={fileDiffOptions}
 
       // See "Shared Props" tabs for all available props:
       // lineAnnotations, renderAnnotation, renderHeaderPrefix,
@@ -563,7 +598,9 @@ export function MyDiff() {
 export const REACT_API_PATCH_DIFF: PreloadFileOptions<undefined> = {
   file: {
     name: 'patch_diff.tsx',
-    contents: `import { PatchDiff } from '@pierre/diffs/react';
+    contents: `import type { FileDiffOptions } from '@pierre/diffs';
+import { PatchDiff } from '@pierre/diffs/react';
+import { useMemo } from 'react';
 
 // PatchDiff renders from a unified diff/patch string.
 // Use this when you have patch content (e.g., from git or GitHub).
@@ -577,15 +614,20 @@ const patch = \`diff --git a/example.ts b/example.ts
 \`;
 
 export function MyPatchDiff() {
+  const fileDiffOptions = useMemo<FileDiffOptions<undefined>>(
+    () => ({
+      theme: { dark: 'pierre-dark', light: 'pierre-light' },
+      diffStyle: 'unified', // patches often look better unified
+    }),
+    []
+  );
+
   return (
     <PatchDiff
       // Required: the patch/diff string
       patch={patch}
 
-      options={{
-        theme: { dark: 'pierre-dark', light: 'pierre-light' },
-        diffStyle: 'unified', // patches often look better unified
-      }}
+      options={fileDiffOptions}
 
       // See "Shared Props" tabs for all available props:
       // lineAnnotations, renderAnnotation, renderHeaderPrefix,
@@ -602,10 +644,12 @@ export const REACT_API_FILE_DIFF: PreloadFileOptions<undefined> = {
   file: {
     name: 'file_diff.tsx',
     contents: `import {
-  type FileDiffMetadata,
-  FileDiff,
   parseDiffFromFile,
-} from '@pierre/diffs/react';
+  type FileDiffMetadata,
+  type FileDiffOptions,
+} from '@pierre/diffs';
+import { FileDiff } from '@pierre/diffs/react';
+import { useMemo } from 'react';
 
 // FileDiff takes a pre-parsed FileDiffMetadata object.
 // Use this when:
@@ -620,15 +664,20 @@ const fileDiff: FileDiffMetadata = parseDiffFromFile(
 );
 
 export function MyFileDiff() {
+  const fileDiffOptions = useMemo<FileDiffOptions<undefined>>(
+    () => ({
+      theme: { dark: 'pierre-dark', light: 'pierre-light' },
+      diffStyle: 'split',
+    }),
+    []
+  );
+
   return (
     <FileDiff
       // Required: pre-parsed FileDiffMetadata
       fileDiff={fileDiff}
 
-      options={{
-        theme: { dark: 'pierre-dark', light: 'pierre-light' },
-        diffStyle: 'split',
-      }}
+      options={fileDiffOptions}
 
       // See "Shared Props" tabs for all available props:
       // lineAnnotations, renderAnnotation, renderHeaderPrefix,
@@ -644,18 +693,19 @@ export function MyFileDiff() {
 export const REACT_API_FILE: PreloadFileOptions<undefined> = {
   file: {
     name: 'file.tsx',
-    contents: `import {
-  type FileContents,
-  type LineAnnotation,
-  File,
-} from '@pierre/diffs/react';
+    contents: `import type {
+  FileContents,
+  FileOptions,
+} from '@pierre/diffs';
+import { File } from '@pierre/diffs/react';
+import { useMemo } from 'react';
 
 // The File component renders a single code file with syntax highlighting.
 // Unlike the diff components, it doesn't show any changes - just the file
 // contents with optional line annotations.
 
-// Keep file objects stable (useState/useMemo) to avoid re-renders.
-// The component uses reference equality for change detection.
+// Keep file objects stable: define static inputs at module scope, or use
+// useState/useMemo when they depend on component values.
 const file: FileContents = {
   name: 'example.ts',
   contents: \`function greet(name: string) {
@@ -666,14 +716,19 @@ export { greet };\`,
 };
 
 export function CodeFile() {
+  const fileOptions = useMemo<FileOptions<undefined>>(
+    () => ({
+      theme: { dark: 'pierre-dark', light: 'pierre-light' },
+    }),
+    []
+  );
+
   return (
     <File
       // Required: the file to display
       file={file}
 
-      options={{
-        theme: { dark: 'pierre-dark', light: 'pierre-light' },
-      }}
+      options={fileOptions}
 
       // The File component supports similar props to the diff components:
       // lineAnnotations, renderAnnotation, renderHeaderPrefix,
@@ -698,12 +753,12 @@ export function CodeFile() {
 export const REACT_API_UNRESOLVED_FILE: PreloadFileOptions<undefined> = {
   file: {
     name: 'unresolved_file.tsx',
-    contents: `import type {
-  PostRenderPhase,
-  UnresolvedFile as UnresolvedFileClass,
-} from '@pierre/diffs';
-import { UnresolvedFile, type FileContents } from '@pierre/diffs/react';
-import { useState } from 'react';
+    contents: `import {
+  UnresolvedFile,
+  type FileContents,
+  type UnresolvedFileReactOptions,
+} from '@pierre/diffs/react';
+import { useMemo, useState } from 'react';
 
 // UnresolvedFile renders Git-style merge conflict markers.
 // React UnresolvedFile is intentionally uncontrolled:
@@ -724,6 +779,23 @@ const initialFile: FileContents = {
 
 export function MergeConflictPreview() {
   const [instanceKey, setInstanceKey] = useState(0);
+  const unresolvedFileOptions = useMemo<
+    UnresolvedFileReactOptions<undefined>
+  >(
+    () => ({
+      theme: { dark: 'pierre-dark', light: 'pierre-light' },
+      diffIndicators: 'none',
+      onPostRender(node, _instance, phase) {
+        if (phase === 'unmount') {
+          return;
+        }
+
+        const codeLines = node.shadowRoot?.querySelectorAll('[data-line]');
+        console.log('rendered line count', codeLines?.length ?? 0);
+      },
+    }),
+    []
+  );
 
   return (
     <>
@@ -731,24 +803,7 @@ export function MergeConflictPreview() {
       <UnresolvedFile
         key={instanceKey}
         file={initialFile}
-        options={{
-          theme: { dark: 'pierre-dark', light: 'pierre-light' },
-          diffIndicators: 'none',
-          onPostRender(
-            node: HTMLElement,
-            instance: UnresolvedFileClass,
-            phase: PostRenderPhase
-          ) {
-            if (phase === 'unmount') {
-              return;
-            }
-
-            const codeLines = node.shadowRoot?.querySelectorAll(
-              '[data-line]'
-            );
-            console.log('rendered line count', codeLines?.length ?? 0);
-          },
-        }}
+        options={unresolvedFileOptions}
       />
     </>
   );
@@ -764,55 +819,62 @@ export const REACT_API_CODE_VIEW: PreloadFileOptions<undefined> = {
   parseDiffFromFile,
   type CodeViewItem,
 } from '@pierre/diffs';
-import { CodeView } from '@pierre/diffs/react';
+import {
+  CodeView,
+  type CodeViewReactOptions,
+} from '@pierre/diffs/react';
 import { useMemo } from 'react';
 
 const oldAppFile = {
   name: 'src/app.ts',
-  contents: 'export function greet() {\n  return "hello";\n}',
+  contents: 'export function greet() {\\n  return "hello";\\n}',
 };
 
 const newAppFile = {
   name: 'src/app.ts',
   contents:
-    'export function greet(name: string) {\n  return "hello " + name;\n}',
+    'export function greet(name: string) {\\n  return "hello " + name;\\n}',
 };
 
 const readmeFile = {
   name: 'README.md',
-  contents: '# Docs\n\nThis file is rendered inline with the diff list.',
+  contents: '# Docs\\n\\nThis file is rendered inline with the diff list.',
 };
 
+// Pass \`items\` when React owns the full item list. Use \`initialItems\` plus a
+// ref instead when item updates should be imperative; omit both item props to
+// start empty and append later.
+const items: CodeViewItem[] = [
+  {
+    id: 'diff:src/app.ts',
+    type: 'diff',
+    fileDiff: parseDiffFromFile(oldAppFile, newAppFile),
+    annotations: [{ side: 'additions', lineNumber: 2 }],
+  },
+  {
+    id: 'file:README.md',
+    type: 'file',
+    file: readmeFile,
+  },
+];
+
+const codeViewStyle = { height: 600, overflow: 'auto' } as const;
+
 export function ReviewSurface() {
-  // Pass \`items\` when React owns the full item list. Use \`initialItems\` plus a
-  // ref instead when item updates should be imperative; omit both item props to
-  // start empty and append later.
-  const items = useMemo<CodeViewItem[]>(
-    () => [
-      {
-        id: 'diff:src/app.ts',
-        type: 'diff',
-        fileDiff: parseDiffFromFile(oldAppFile, newAppFile),
-        annotations: [{ side: 'additions', lineNumber: 2 }],
-      },
-      {
-        id: 'file:README.md',
-        type: 'file',
-        file: readmeFile,
-      },
-    ],
+  const codeViewOptions = useMemo<CodeViewReactOptions<undefined>>(
+    () => ({
+      theme: { dark: 'pierre-dark', light: 'pierre-light' },
+      stickyHeaders: true,
+      layout: { paddingTop: 16, paddingBottom: 16, gap: 12 },
+    }),
     []
   );
 
   return (
     <CodeView
       items={items}
-      style={{ height: 600, overflow: 'auto' }}
-      options={{
-        theme: { dark: 'pierre-dark', light: 'pierre-light' },
-        stickyHeaders: true,
-        layout: { paddingTop: 16, paddingBottom: 16, gap: 12 },
-      }}
+      style={codeViewStyle}
+      options={codeViewOptions}
     />
   );
 }`,
@@ -837,6 +899,7 @@ import { File } from '@pierre/diffs/react';
 
 <File
   {...}
+  // You should generally memoize options inside your component with useMemo.
   options={{
     theme: { dark: 'pierre-dark', light: 'pierre-light' },
     // ... see below for all available options

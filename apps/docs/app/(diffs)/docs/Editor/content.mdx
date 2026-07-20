@@ -155,11 +155,14 @@ instead. Increment the item's `version` whenever `edit` changes.
 
 `CodeView` uses item-aware callbacks instead of `editOptions.onChange`.
 `onItemEditChange` receives the owning item with each live change.
-`onItemEditComplete` also receives the item and fires once with the final
-contents when editing is disabled or the item is collapsed or removed. Persist
-those contents to the item's `file`, or rebuild its `fileDiff`. Assign a fresh
-`cacheKey` and increment `version`; `CodeView` does not update item data for
-you.
+`onItemEditComplete` receives the item and latest contents when a changed
+session ends because editing is disabled or the item is collapsed or removed.
+Sessions with no changes do not emit it. Resetting, cleaning up, or unmounting
+the viewer is silent teardown.
+
+Persist edited contents to the item's `file`, or rebuild its `fileDiff`. Assign
+a fresh `cacheKey` and increment `version`; `CodeView` does not update item data
+for you.
 
 <CodeViewExampleTabs
   reactExample={editorReactCodeViewExample}
@@ -167,8 +170,7 @@ you.
 />
 
 Editors retain their document and history while items move in and out of the
-virtualized window. Use `getEditor(id)` on the React ref or vanilla instance for
-APIs such as `undo()`, `applyEdits()`, or `setMarkers()`.
+virtualized window.
 
 `editOptions` and provider-factory changes are creation-time inputs: active item
 sessions keep their current editor, while the latest values apply to the next

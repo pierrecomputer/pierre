@@ -941,14 +941,13 @@ export function AgentUi({
   // can be surfaced in the Changes panel as modified files; reverting an edit
   // back to the original drops the path again (see recordEditedStats).
   const [editedPlaceholders, setEditedPlaceholders] = useState<string[]>([]);
-  // Mirror of the latest edits so the editor's onChange (recreated per file) can
-  // rebuild a placeholder's Changes entry without depending on edit state.
+  // Mirror the latest edits so the stable editor callback can rebuild a
+  // placeholder's Changes entry without depending on edit state.
   const editedPlaceholdersRef = useRef(editedPlaceholders);
   editedPlaceholdersRef.current = editedPlaceholders;
 
   // Snippets sent from the selection action's "Add to chat" land here as
-  // composer attachments. The editor is recreated per file, but routing the add
-  // through a ref keeps the latest setter without depending on that lifecycle.
+  // composer attachments.
   const [snippets, setSnippets] = useState<AuiSnippet[]>([]);
   const snippetIdRef = useRef(0);
   const addSnippet = useCallback((text: string, source: AuiSnippetSource) => {
@@ -968,15 +967,13 @@ export function AgentUi({
       },
     ]);
   }, []);
-  const addSnippetRef = useRef(addSnippet);
-  addSnippetRef.current = addSnippet;
   const removeSnippet = useCallback((id: number) => {
     setSnippets((prev) => prev.filter((snippet) => snippet.id !== id));
   }, []);
 
   // Recomputes a file's +/- totals from its live edits. Routed through a ref so
-  // the per-file editor (recreated on `activePath`) can call the latest version
-  // without listing `session` as a dependency.
+  // the stable edit options can call the latest version without listing
+  // `session` as a dependency.
   const recordEditedStats = useCallback(
     (target: string, contents: string) => {
       const changed = liveSession.changedFiles.find(
@@ -1032,8 +1029,8 @@ export function AgentUi({
   // Persisted in-editor edits keyed by path, so switching files keeps the
   // agent's tweaked output.
   const editsRef = useRef<Map<string, string>>(new Map());
-  // The editor's debounced onChange fires without a path argument, so we track
-  // the live target here.
+  // The stable onChange callback has no path argument, so track its live target
+  // here.
   const activeTargetRef = useRef<string | null>(null);
   useEffect(() => {
     activeTargetRef.current = activePath;
@@ -1084,7 +1081,7 @@ export function AgentUi({
         addToChat.addEventListener('click', () => {
           const target = activeTargetRef.current;
           if (target != null) {
-            addSnippetRef.current(selectionAction.getSelectionText(), {
+            addSnippet(selectionAction.getSelectionText(), {
               path: target,
               selection: selectionAction.selection,
             });
@@ -1119,7 +1116,7 @@ export function AgentUi({
       },
       __debug: true,
     }),
-    []
+    [addSnippet]
   );
 
   const openFile = useCallback((path: string) => {
@@ -1136,8 +1133,8 @@ export function AgentUi({
   );
 
   // When the active path isn't a changed/added file (e.g. browsing the root
-  // README or any other explorer file), open it read-only with placeholder
-  // contents instead of a diff, so the surface is never blank.
+  // README or another explorer file), open editable placeholder contents
+  // instead of a diff so the surface is never blank.
   const placeholderContents = useMemo<string | null>(
     () =>
       activePath != null && activeFile == null
@@ -1186,13 +1183,10 @@ export function AgentUi({
     }
   }, [activePath]);
 
-  // The FileDiff surface and its host scroll container (`.aui-surface-wrap`) are
-  // reused across file switches — only the `fileDiff` prop changes — so without
-  // this the previous file's scroll offset carries over to the next file. Reset
-  // to the top whenever the active file changes. A layout effect resets after
-  // the new diff is laid out but before paint, so there's no flash of the new
-  // file at the old offset. Editing a file doesn't change `activePath`, so this
-  // never disturbs the scroll position mid-edit.
+  // `key={activePath}` remounts the FileDiff or File surface for each file while
+  // `.aui-surface-wrap` remains mounted and retains its scroll offset. Reset the
+  // outer host after the new surface is laid out but before paint. Editing a
+  // file does not change `activePath`, so this never disturbs a session.
   useIsomorphicLayoutEffect(() => {
     const wrap = surfaceWrapRef.current;
     if (wrap != null) {
@@ -1287,9 +1281,9 @@ export function AgentUi({
               />
             ) : placeholderContents != null && activePath != null ? (
               // Editable view for explorer files that aren't part of the change
-              // set (e.g. the root README or a generated stub). It picks up the
-              // shared editor from context via `edit`, and seeds from
-              // any persisted edit so tweaks survive switching files and back.
+              // set (e.g. the root README or a generated stub). The app-level
+              // provider creates an independent editor for this keyed surface.
+              // Caller-owned `editsRef` seeds its contents when revisited.
               // Highlighted on the main thread since this File is mounted
               // dynamically outside the editable surface's worker pool.
               <File

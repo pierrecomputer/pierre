@@ -69,11 +69,10 @@ interface ElementVirtualizerDiffProps {
 const EMPTY_ANNOTATIONS: DiffLineAnnotation<PlaygroundAnnotationMetadata>[] =
   [];
 
-// One diff in the element-scroll list. Each file is its own state island: a
-// dedicated Editor (one editor binds to one instance, so per-file editing
-// needs per-file editors/providers), its own edit toggle, and its own
-// annotation list — all through the first-class React FileDiff props, the
-// same way the Normal view is wired.
+// One diff in the element-scroll list. Each surface is its own state island
+// with an edit toggle, edit options, and annotations. The app-level
+// EditProvider creates an independent editor when that surface enters edit
+// mode.
 function ElementVirtualizerDiff({
   fileDiff,
   options,

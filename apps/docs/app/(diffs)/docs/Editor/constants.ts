@@ -379,7 +379,7 @@ export function EditorWithHistoryToolbar() {
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
 
-  const editorRef = useRef<Editor | null>(null);
+  const editorRef = useRef<Editor<undefined> | null>(null);
   const editOptions = useMemo<EditorOptions<undefined>>(
     () => ({
       onAttach(editor) {
@@ -909,8 +909,8 @@ import {
 } from '@pierre/diffs/react';
 import { useMemo, useState } from 'react';
 
-// Keep file objects stable (useState/useMemo) to avoid re-renders.
-// The component uses reference equality for change detection.
+// Keep file objects stable: define static inputs at module scope, or use
+// useState/useMemo when they depend on component values.
 const oldFile: FileContents = {
   name: 'example.ts',
   contents: 'console.log("Hello world")',
