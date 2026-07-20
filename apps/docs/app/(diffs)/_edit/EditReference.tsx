@@ -88,8 +88,9 @@ const CAPABILITY_GROUPS: ReferenceGroup[] = [
         description: (
           <>
             Edit virtualized <code>CodeView</code> instances with{' '}
-            <code>edit: true</code>. Your <code>createEditor</code> function
-            creates the editor instance on demand, and editors persist as files
+            <code>edit: true</code>. React uses the nearest{' '}
+            <code>EditProvider</code>; vanilla uses{' '}
+            <code>CodeViewOptions.createEditor</code>. Editors persist as files
             scroll in and out.
           </>
         ),

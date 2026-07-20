@@ -2,18 +2,19 @@
 
 import {
   type AnnotationSide,
-  type CodeViewCreateEditorOptions,
   type CodeViewItem,
   type CodeViewLineSelection,
-  type CodeViewOptions,
   type DiffLineAnnotation,
   type FileContents,
   type LineAnnotation,
   parseDiffFromFile,
   type SelectedLineRange,
 } from '@pierre/diffs';
-import { Editor } from '@pierre/diffs/editor';
-import { CodeView, useStableCallback } from '@pierre/diffs/react';
+import {
+  CodeView,
+  type CodeViewReactOptions,
+  useStableCallback,
+} from '@pierre/diffs/react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { flushSync } from 'react-dom';
 
@@ -30,7 +31,7 @@ type PlaygroundItem = CodeViewItem<PlaygroundAnnotationMetadata>;
 
 interface PlaygroundCodeViewProps {
   items: PlaygroundItem[];
-  options: CodeViewOptions<PlaygroundAnnotationMetadata>;
+  options: CodeViewReactOptions<PlaygroundAnnotationMetadata>;
   enableLineSelection: boolean;
   enableGutterComments: boolean;
   showAnnotations: boolean;
@@ -42,9 +43,9 @@ interface PlaygroundCodeViewProps {
 //
 // This view also demos first-class item editing: each header carries an Edit
 // checkbox that flips the item's `edit` flag (any number of items can be in
-// edit mode at once). CodeView creates one Editor per edited item through
-// `createEditor` and keeps it attached across virtualization scroll-out, so
-// unsaved edits and undo history survive scrolling. When a session ends
+// edit mode at once). CodeView creates one Editor per edited item through the
+// app-level EditProvider and keeps it attached across virtualization
+// scroll-out, so unsaved edits and undo history survive scrolling. When a session ends
 // (checkbox off), `onItemEditComplete` hands us the final contents and we
 // persist them back into the item — file items swap contents directly, diff
 // items re-diff the edited new side against the original old side.
@@ -314,7 +315,7 @@ export function PlaygroundCodeView({
     enableGutterComments && showAnnotations && !hasOpenCommentForm;
 
   const codeViewOptions = useMemo<
-    CodeViewOptions<PlaygroundAnnotationMetadata>
+    CodeViewReactOptions<PlaygroundAnnotationMetadata>
   >(
     () => ({
       ...options,
@@ -391,17 +392,10 @@ export function PlaygroundCodeView({
       options={codeViewOptions}
       selectedLines={selectedLines}
       onSelectedLinesChange={setSelectedLines}
-      createEditor={createEditor}
       onItemEditChange={handleEditChange}
       onItemEditComplete={handleEditComplete}
       renderHeaderMetadata={renderHeaderMetadata}
       renderAnnotation={renderAnnotation}
     />
   );
-}
-
-function createEditor(
-  editorOptions: CodeViewCreateEditorOptions<PlaygroundAnnotationMetadata>
-) {
-  return new Editor(editorOptions);
 }

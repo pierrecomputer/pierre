@@ -2,26 +2,39 @@
 'use client';
 
 import type { Context, PropsWithChildren } from 'react';
-import { createContext, useContext, useEffect } from 'react';
+import { createContext, useContext } from 'react';
 
-import type { Editor } from '../editor';
+import type { EditorOptions } from '../editor';
+import type { DiffsEditor } from '../types';
+import { useStableCallback } from './utils/useStableCallback';
 
-export const EditContext: Context<Editor<any> | undefined> = createContext<
-  Editor<any> | undefined
->(undefined);
+/** Creates an Editor. Components manage the instance lifecycle. */
+export type CreateEditor<LAnnotation> = (
+  options: EditorOptions<LAnnotation>
+) => DiffsEditor<LAnnotation>;
 
-export function EditProvider({
-  children,
-  editor,
-}: PropsWithChildren<{ editor: Editor<any> }>): React.JSX.Element {
-  useEffect(() => {
-    return () => {
-      editor.cleanUp();
-    };
-  }, [editor]);
-  return <EditContext.Provider value={editor}>{children}</EditContext.Provider>;
+export interface EditProviderProps<LAnnotation> {
+  /** Combines shared defaults with the supplied per-surface options. */
+  createEditor: CreateEditor<LAnnotation>;
 }
 
-export function useEditor<LAnnotation>(): Editor<LAnnotation> | undefined {
+export const EditContext: Context<CreateEditor<any> | undefined> =
+  createContext<CreateEditor<any> | undefined>(undefined);
+
+export function EditProvider<LAnnotation>({
+  children,
+  createEditor,
+}: PropsWithChildren<EditProviderProps<LAnnotation>>): React.JSX.Element {
+  const stableCreateEditor = useStableCallback(createEditor);
+  return (
+    <EditContext.Provider value={stableCreateEditor}>
+      {children}
+    </EditContext.Provider>
+  );
+}
+
+export function useCreateEditor<LAnnotation>():
+  | CreateEditor<LAnnotation>
+  | undefined {
   return useContext(EditContext);
 }

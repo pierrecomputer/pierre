@@ -36,7 +36,11 @@ interface StubEditor extends DiffsEditor<undefined> {
 // Recording stand-in for the Editor class. It attaches to the instance like
 // the real editor does (so virtualization release reaches editor.cleanUp via
 // the instance) but performs no document or DOM work.
-function createEditorHarness() {
+function createEditorHarness({
+  attachmentError,
+}: {
+  attachmentError?: Error;
+} = {}) {
   const editors: StubEditor[] = [];
   const createEditor = (
     options: CodeViewCreateEditorOptions<undefined>
@@ -50,6 +54,9 @@ function createEditorHarness() {
       edit(instance) {
         editor.edits.push(instance);
         detach = instance.attachEditor(editor);
+        if (attachmentError != null) {
+          throw attachmentError;
+        }
         return () => editor.cleanUp();
       },
       cleanUp(recycle = false) {
@@ -129,6 +136,28 @@ describe('CodeView item edit mode', () => {
       expect(editors[0].edits).toEqual([renderedA!.instance]);
       expect(viewer.getEditor('a')).toBe(editors[0]);
       expect(viewer.getEditor('b')).toBeUndefined();
+    } finally {
+      viewer.cleanUp();
+      await wait(0);
+      cleanup();
+    }
+  });
+
+  test('cleans a newly created editor when attachment fails', async () => {
+    const { cleanup } = installDom();
+    const attachmentError = new Error('attachment failed');
+    const { editors, createEditor } = createEditorHarness({
+      attachmentError,
+    });
+    const viewer = new CodeView({ createEditor });
+    try {
+      viewer.setup(createRoot());
+      viewer.setItems([makeEditFileItem('a')]);
+
+      expect(() => viewer.render(true)).toThrow(attachmentError);
+      expect(editors).toHaveLength(1);
+      expect(editors[0].fullCleanUps).toBe(1);
+      expect(viewer.getEditor('a')).toBeUndefined();
     } finally {
       viewer.cleanUp();
       await wait(0);

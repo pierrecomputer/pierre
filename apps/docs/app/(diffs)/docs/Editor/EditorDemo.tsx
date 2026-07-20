@@ -1,7 +1,6 @@
 'use client';
 
-import { Editor } from '@pierre/diffs/editor';
-import { EditProvider, File } from '@pierre/diffs/react';
+import { File } from '@pierre/diffs/react';
 import type { PreloadedFileResult } from '@pierre/diffs/ssr';
 import { useMemo, useState } from 'react';
 
@@ -15,17 +14,14 @@ interface EditorDemoProps {
 
 export function EditorDemo({ prerenderedFile }: EditorDemoProps) {
   const [changeCount, setChangeCount] = useState(0);
-
-  const editor = useMemo(
-    () =>
-      new Editor({
-        onChange() {
-          setChangeCount((count) => count + 1);
-        },
-      }),
+  const editOptions = useMemo(
+    () => ({
+      onChange() {
+        setChangeCount((count) => count + 1);
+      },
+    }),
     []
   );
-
   return (
     <div className="not-prose bg-card overflow-hidden rounded-lg border">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
@@ -39,13 +35,12 @@ export function EditorDemo({ prerenderedFile }: EditorDemoProps) {
           Changes: {changeCount}
         </div>
       </div>
-      <EditProvider editor={editor}>
-        <File
-          {...prerenderedFile}
-          className="max-h-[480px] overflow-auto rounded-none border-0"
-          contentEditable
-        />
-      </EditProvider>
+      <File
+        {...prerenderedFile}
+        className="max-h-[480px] overflow-auto rounded-none border-0"
+        edit
+        editOptions={editOptions}
+      />
     </div>
   );
 }

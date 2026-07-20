@@ -14,12 +14,12 @@ export interface FileDiffProps<
 > extends DiffBasePropsReact<LAnnotation> {
   fileDiff: FileDiffMetadata;
   disableWorkerPool?: boolean;
-  contentEditable?: boolean;
 }
 
 export function FileDiff<LAnnotation = undefined>({
   fileDiff,
   options,
+  editOptions,
   metrics,
   lineAnnotations,
   selectedLines,
@@ -33,11 +33,12 @@ export function FileDiff<LAnnotation = undefined>({
   renderHeaderMetadata,
   renderGutterUtility,
   disableWorkerPool = false,
-  contentEditable = false,
+  edit = false,
 }: FileDiffProps<LAnnotation>): React.JSX.Element {
   const { ref, getHoveredLine } = useFileDiffInstance({
     fileDiff,
     options,
+    editOptions,
     metrics,
     lineAnnotations,
     selectedLines,
@@ -45,7 +46,7 @@ export function FileDiff<LAnnotation = undefined>({
     hasGutterRenderUtility: renderGutterUtility != null,
     hasCustomHeader: renderCustomHeader != null,
     disableWorkerPool,
-    contentEditable,
+    edit,
   });
   const children = renderDiffChildren({
     fileDiff,

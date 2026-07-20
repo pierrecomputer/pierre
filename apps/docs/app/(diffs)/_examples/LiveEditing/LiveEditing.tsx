@@ -1,8 +1,8 @@
 'use client';
 
 import { cloneFileDiffMetadata } from '@pierre/diffs';
-import { Editor } from '@pierre/diffs/editor';
-import { EditProvider, File, FileDiff } from '@pierre/diffs/react';
+import type { EditorOptions } from '@pierre/diffs/editor';
+import { File, FileDiff } from '@pierre/diffs/react';
 import type {
   PreloadedFileResult,
   PreloadFileDiffResult,
@@ -79,23 +79,19 @@ export function LiveEditing({
   // remount so a late straggler can't re-enable the button.
   const ignoreChangesUntilRef = useRef(0);
 
-  const editor = useMemo(
-    () =>
-      new Editor({
-        // `onChange` is debounced internally, so we derive "edited" state by
-        // comparing the live contents to the original rather than latching a
-        // boolean. The editable surface of a diff is its new-file (additions)
-        // side, so we compare against that for both surfaces.
-        onChange(file) {
-          if (Date.now() < ignoreChangesUntilRef.current) {
-            return;
-          }
-          setHasEdits(file.contents !== LIVE_EDITOR_NEW_FILE.contents);
-        },
-      }),
-    // A single editor for the demo's lifetime: it re-attaches when the surface
-    // remounts (file<->diff) and re-syncs when review/edit mode or diff layout
-    // changes, so recreating it on every control change is unnecessary.
+  const editOptions = useMemo<EditorOptions<undefined>>(
+    () => ({
+      // `onChange` is debounced internally, so we derive "edited" state by
+      // comparing the live contents to the original rather than latching a
+      // boolean. The editable surface of a diff is its new-file (additions)
+      // side, so we compare against that for both surfaces.
+      onChange(file) {
+        if (Date.now() < ignoreChangesUntilRef.current) {
+          return;
+        }
+        setHasEdits(file.contents !== LIVE_EDITOR_NEW_FILE.contents);
+      },
+    }),
     []
   );
 
@@ -156,7 +152,7 @@ export function LiveEditing({
   );
 
   const headerMetadata = mode === 'edit' ? renderResetButton : undefined;
-  const contentEditable = mode === 'edit';
+  const edit = mode === 'edit';
 
   return (
     <div className="space-y-5">
@@ -231,31 +227,31 @@ export function LiveEditing({
       </div>
 
       <div>
-        <EditProvider editor={editor}>
-          {surface === 'file' ? (
-            <File
-              key={resetKey}
-              {...prerenderedFile}
-              file={{
-                ...prerenderedFile.file,
-                cacheKey: prerenderedFile.file.name + resetKey,
-              }}
-              className="diff-container"
-              renderHeaderMetadata={headerMetadata}
-              contentEditable={contentEditable}
-            />
-          ) : (
-            <FileDiff
-              key={resetKey}
-              {...prerenderedDiff}
-              fileDiff={liveFileDiff}
-              options={{ ...prerenderedDiff.options, diffStyle: diffLayout }}
-              className="diff-container"
-              renderHeaderMetadata={headerMetadata}
-              contentEditable={contentEditable}
-            />
-          )}
-        </EditProvider>
+        {surface === 'file' ? (
+          <File
+            key={resetKey}
+            {...prerenderedFile}
+            file={{
+              ...prerenderedFile.file,
+              cacheKey: prerenderedFile.file.name + resetKey,
+            }}
+            className="diff-container"
+            renderHeaderMetadata={headerMetadata}
+            edit={edit}
+            editOptions={editOptions}
+          />
+        ) : (
+          <FileDiff
+            key={resetKey}
+            {...prerenderedDiff}
+            fileDiff={liveFileDiff}
+            options={{ ...prerenderedDiff.options, diffStyle: diffLayout }}
+            className="diff-container"
+            renderHeaderMetadata={headerMetadata}
+            edit={edit}
+            editOptions={editOptions}
+          />
+        )}
       </div>
     </div>
   );

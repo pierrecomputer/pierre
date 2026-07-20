@@ -2038,32 +2038,46 @@ export class CodeView<LAnnotation = undefined> {
     }
 
     let record = this.itemEditors.get(id);
-    if (record == null) {
-      // The onChange closure resolves the owning item through the record
-      // state's current id (not the id captured here) so updateItemId
-      // renames keep it pointed at the right item. It also reads the change
-      // callback off this.options at invocation time so later setOptions
-      // swaps aren't stranded on the callback captured at creation.
-      const state: CodeViewItemEditorState<LAnnotation> = { id };
-      const editor = createEditor({
-        onChange: (file, lineAnnotations) => {
-          const latest = this.idToItem.get(state.id);
-          if (latest == null) {
-            return;
-          }
-          state.lastChange = { item: latest.item, file, lineAnnotations };
-          this.options.onItemEditChange?.(latest.item, file, lineAnnotations);
-        },
-      });
-      if (editor == null) {
-        return;
+    let createdEditor = false;
+    try {
+      if (record == null) {
+        // The onChange closure resolves the owning item through the record
+        // state's current id (not the id captured here) so updateItemId
+        // renames keep it pointed at the right item. It also reads the change
+        // callback off this.options at invocation time so later setOptions
+        // swaps aren't stranded on the callback captured at creation.
+        const state: CodeViewItemEditorState<LAnnotation> = { id };
+        const editor = createEditor({
+          onChange: (file, lineAnnotations) => {
+            const latest = this.idToItem.get(state.id);
+            if (latest == null) {
+              return;
+            }
+            state.lastChange = { item: latest.item, file, lineAnnotations };
+            this.options.onItemEditChange?.(latest.item, file, lineAnnotations);
+          },
+        });
+        if (editor == null) {
+          return;
+        }
+        record = { editor, state };
+        this.itemEditors.set(id, record);
+        createdEditor = true;
       }
-      record = { editor, state };
-      this.itemEditors.set(id, record);
-    }
 
-    record.editor.edit(item.instance);
-    this.attachedEditors.add(id);
+      record.editor.edit(item.instance);
+      this.attachedEditors.add(id);
+    } catch (error) {
+      if (createdEditor && record != null) {
+        this.itemEditors.delete(id);
+        record.editor.cleanUp();
+      }
+      // A render-time factory or attachment error aborts the frame before its
+      // range is committed, so release this item immediately instead of
+      // leaving an untracked async render behind.
+      this.releaseRenderedItem(item);
+      throw error;
+    }
   }
 
   /**

@@ -1,8 +1,8 @@
 'use client';
 
 import { DEFAULT_THEMES, type FileDiffMetadata } from '@pierre/diffs';
-import { Editor } from '@pierre/diffs/editor';
-import { EditProvider, File, FileDiff } from '@pierre/diffs/react';
+import type { EditorOptions } from '@pierre/diffs/editor';
+import { File, FileDiff } from '@pierre/diffs/react';
 import {
   IconArrow,
   IconChevronSm,
@@ -1065,70 +1065,60 @@ export function AgentUi({
     [liveSession, editedPlaceholderFiles]
   );
 
-  // The FileDiff is never remounted per file (no `key`), so switching files just
-  // swaps the `fileDiff` prop and re-renders in place, preserving the server
-  // `prerenderedHTML` (which SSR injects only on mount).
-  //
-  // The editor, however, IS recreated per file (`activePath` in the deps). The
-  // library rebuilds the editor's TextDocument only when the `editor` reference
-  // changes, not when `fileDiff` changes, so a stable editor would keep the
-  // first file's document while the surface shows another file — mis-positioning
-  // the caret and breaking edits.
-  const editor = useMemo(
-    () =>
-      new Editor({
-        enabledSelectionAction: true,
-        renderSelectionAction(selectionAction) {
-          const container = document.createElement('div');
-          container.style.cssText = 'display: flex; gap: 4px;';
+  const editOptions = useMemo<EditorOptions<undefined>>(
+    () => ({
+      enabledSelectionAction: true,
+      renderSelectionAction(selectionAction) {
+        const container = document.createElement('div');
+        container.style.cssText = 'display: flex; gap: 4px;';
 
-          const addToChat = document.createElement('button');
-          addToChat.type = 'button';
-          addToChat.style.cssText = SELECTION_PRIMARY_BUTTON_STYLE;
-          addToChat.innerHTML = `${ICON_COMMENT_FILL_SVG} Add to chat`;
-          // Suppress the default mousedown so clicking the action doesn't blur
-          // the editor and collapse the selection we're about to read.
-          addToChat.addEventListener('mousedown', (event) =>
-            event.preventDefault()
-          );
-          addToChat.addEventListener('click', () => {
-            const target = activeTargetRef.current;
-            if (target != null) {
-              addSnippetRef.current(selectionAction.getSelectionText(), {
-                path: target,
-                selection: selectionAction.selection,
-              });
-            }
-            selectionAction.close();
-          });
-
-          const copy = document.createElement('button');
-          copy.type = 'button';
-          copy.textContent = 'Copy';
-          copy.style.cssText = SELECTION_SECONDARY_BUTTON_STYLE;
-          copy.addEventListener('mousedown', (event) => event.preventDefault());
-          copy.addEventListener('click', () => {
-            void navigator.clipboard?.writeText(
-              selectionAction.getSelectionText()
-            );
-            selectionAction.close();
-          });
-
-          container.append(addToChat, copy);
-          return container;
-        },
-        onChange(file) {
+        const addToChat = document.createElement('button');
+        addToChat.type = 'button';
+        addToChat.style.cssText = SELECTION_PRIMARY_BUTTON_STYLE;
+        addToChat.innerHTML = `${ICON_COMMENT_FILL_SVG} Add to chat`;
+        // Suppress the default mousedown so clicking the action doesn't blur
+        // the editor and collapse the selection we're about to read.
+        addToChat.addEventListener('mousedown', (event) =>
+          event.preventDefault()
+        );
+        addToChat.addEventListener('click', () => {
           const target = activeTargetRef.current;
-          if (target == null) {
-            return;
+          if (target != null) {
+            addSnippetRef.current(selectionAction.getSelectionText(), {
+              path: target,
+              selection: selectionAction.selection,
+            });
           }
-          editsRef.current.set(target, file.contents);
-          // Recompute the edited file's diff against its original snapshot so the
-          // Changes tree's +/- totals reflect the live edits.
-          recordEditedStatsRef.current(target, file.contents);
-        },
-        __debug: true,
-      }),
+          selectionAction.close();
+        });
+
+        const copy = document.createElement('button');
+        copy.type = 'button';
+        copy.textContent = 'Copy';
+        copy.style.cssText = SELECTION_SECONDARY_BUTTON_STYLE;
+        copy.addEventListener('mousedown', (event) => event.preventDefault());
+        copy.addEventListener('click', () => {
+          void navigator.clipboard?.writeText(
+            selectionAction.getSelectionText()
+          );
+          selectionAction.close();
+        });
+
+        container.append(addToChat, copy);
+        return container;
+      },
+      onChange(file) {
+        const target = activeTargetRef.current;
+        if (target == null) {
+          return;
+        }
+        editsRef.current.set(target, file.contents);
+        // Recompute the edited file's diff against its original snapshot so the
+        // Changes tree's +/- totals reflect the live edits.
+        recordEditedStatsRef.current(target, file.contents);
+      },
+      __debug: true,
+    }),
     []
   );
 
@@ -1217,209 +1207,210 @@ export function AgentUi({
     // carrying `view-transition-name: aui-window`, so the manually-driven View
     // Transition (see navigateWithViewTransition) morphs the same element's
     // size/position/corner-radius between routes instead of cutting.
-    <EditProvider editor={editor}>
-      <div
-        className="aui"
-        data-theme-type="dark"
-        data-embedded="true"
-        data-variant={variant}
-      >
-        <div className="aui-body">
-          {variant === 'fullscreen' && (
-            <aside className="aui-files">
-              {/* Window controls take the slot the "Explorer" title used to
+    <div
+      className="aui"
+      data-theme-type="dark"
+      data-embedded="true"
+      data-variant={variant}
+    >
+      <div className="aui-body">
+        {variant === 'fullscreen' && (
+          <aside className="aui-files">
+            {/* Window controls take the slot the "Explorer" title used to
                     occupy; the file actions push to the right. */}
-              <div className="aui-files-toolbar">
-                <WindowControls
-                  variant={variant}
-                  onEnterFullscreen={enterFullscreen}
-                  onExitFullscreen={exitFullscreen}
-                />
-                {filesModel != null && (
-                  <FilesToolbar
-                    model={filesModel}
-                    onNewFile={handleNewFile}
-                    onNewFolder={handleNewFolder}
-                  />
-                )}
-              </div>
-              <FilesTree
-                session={session}
-                activePath={activePath}
-                onModelReady={handleFilesModelReady}
-                onSelect={openFile}
+            <div className="aui-files-toolbar">
+              <WindowControls
+                variant={variant}
+                onEnterFullscreen={enterFullscreen}
+                onExitFullscreen={exitFullscreen}
               />
-            </aside>
-          )}
-          <section className="aui-center">
-            <header className="aui-center-header">
-              {/* The windowed card has no left sidebar, so its window controls
-                    sit just left of the breadcrumb. */}
-              {variant === 'windowed' && (
-                <WindowControls
-                  variant={variant}
-                  onEnterFullscreen={enterFullscreen}
-                  onExitFullscreen={exitFullscreen}
-                  onPrefetch={prefetchFullscreen}
+              {filesModel != null && (
+                <FilesToolbar
+                  model={filesModel}
+                  onNewFile={handleNewFile}
+                  onNewFolder={handleNewFolder}
                 />
               )}
-              <nav className="aui-breadcrumb" aria-label="File path">
-                {breadcrumbSegments.length > 0 ? (
-                  breadcrumbSegments.map((segment, index) => (
-                    <span
-                      // Path segments are positional; index keys are stable here.
-                      key={`${segment}-${String(index)}`}
-                      className="aui-crumb"
-                      data-leaf={
-                        index === breadcrumbSegments.length - 1
-                          ? 'true'
-                          : undefined
-                      }
-                    >
-                      {segment}
-                    </span>
-                  ))
-                ) : (
-                  <span className="aui-crumb">No file selected</span>
-                )}
-              </nav>
-            </header>
-
-            <div className="aui-surface-wrap" ref={surfaceWrapRef}>
-              {activeFile != null && fileDiff != null ? (
-                <FileDiff
-                  fileDiff={fileDiff}
-                  className="aui-surface"
-                  options={{ ...AUI_DIFF_OPTIONS, theme }}
-                  prerenderedHTML={activePrerenderedHTML}
-                  contentEditable
-                />
-              ) : placeholderContents != null && activePath != null ? (
-                // Editable view for explorer files that aren't part of the change
-                // set (e.g. the root README or a generated stub). It picks up the
-                // shared editor from context via `contentEditable`, and seeds from
-                // any persisted edit so tweaks survive switching files and back.
-                // Highlighted on the main thread since this File is mounted
-                // dynamically outside the editable surface's worker pool.
-                <File
-                  key={activePath}
-                  file={{
-                    name: activePath,
-                    contents:
-                      editsRef.current.get(activePath) ?? placeholderContents,
-                  }}
-                  className="aui-surface"
-                  options={{
-                    theme,
-                    themeType: 'dark',
-                    disableFileHeader: true,
-                    overflow: 'wrap',
-                  }}
-                  disableWorkerPool
-                  contentEditable
-                />
-              ) : (
-                <div className="aui-empty">Select a file to review.</div>
-              )}
             </div>
-
-            <div className="aui-composer">
-              {snippets.length > 0 && (
-                <ul className="aui-composer-attachments">
-                  {snippets.map((snippet) => (
-                    <li key={snippet.id} className="aui-attachment">
-                      <div className="aui-attachment-header">
-                        <IconFileCode aria-hidden="true" />
-                        <span className="aui-attachment-file">
-                          {snippet.fileName}
-                        </span>
-                        <span className="aui-attachment-lines">
-                          {formatSelectionLineLabel(snippet)}
-                        </span>
-                      </div>
-                      <File
-                        file={{
-                          name: snippet.fileName,
-                          contents: snippet.text,
-                        }}
-                        options={{
-                          theme,
-                          themeType: 'dark',
-                          disableFileHeader: true,
-                          disableLineNumbers: true,
-                        }}
-                        // The page's shared worker pool is wired up for the
-                        // editable editor surface; a dynamically mounted
-                        // read-only File isn't highlighted through it, so
-                        // highlight on the main thread.
-                        disableWorkerPool
-                        className="aui-attachment-code"
-                        style={SNIPPET_STYLE}
-                      />
-                      <button
-                        type="button"
-                        className="aui-attachment-remove"
-                        aria-label="Remove snippet"
-                        onClick={() => {
-                          removeSnippet(snippet.id);
-                        }}
-                      >
-                        <IconX />
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              <textarea
-                className="aui-composer-input"
-                placeholder="Ask for changes, @mention files, or run commands…"
-                rows={2}
-                disabled
-              />
-              <div className="aui-composer-toolbar">
-                <button type="button" className="aui-composer-select" disabled>
-                  <IconSparkle className="opacity-50" />
-                  Agent
-                  <IconChevronSm className="opacity-50" />
-                </button>
-                <button type="button" className="aui-composer-select" disabled>
-                  Pierre 1
-                  <IconChevronSm className="opacity-50" />
-                </button>
-                <button
-                  type="button"
-                  className="aui-composer-send ml-auto"
-                  aria-label="Send"
-                  disabled
-                >
-                  <IconArrow className="rotate-[90deg]" />
-                </button>
-              </div>
-            </div>
-          </section>
-
-          <aside className="aui-changes">
-            <div className="aui-changes-tabs" role="tablist">
-              <button type="button" role="tab" disabled>
-                All files
-              </button>
-              <button type="button" role="tab" aria-selected="true">
-                Changes
-                <span className="aui-changes-count">{changedCount}</span>
-              </button>
-              <button type="button" role="tab" disabled>
-                Checks
-              </button>
-            </div>
-            <ChangesTree
-              session={changesSession}
+            <FilesTree
+              session={session}
               activePath={activePath}
-              statsByPath={liveStats}
+              onModelReady={handleFilesModelReady}
               onSelect={openFile}
             />
           </aside>
-        </div>
+        )}
+        <section className="aui-center">
+          <header className="aui-center-header">
+            {/* The windowed card has no left sidebar, so its window controls
+             * sit just left of the breadcrumb. */}
+            {variant === 'windowed' && (
+              <WindowControls
+                variant={variant}
+                onEnterFullscreen={enterFullscreen}
+                onExitFullscreen={exitFullscreen}
+                onPrefetch={prefetchFullscreen}
+              />
+            )}
+            <nav className="aui-breadcrumb" aria-label="File path">
+              {breadcrumbSegments.length > 0 ? (
+                breadcrumbSegments.map((segment, index) => (
+                  <span
+                    // Path segments are positional; index keys are stable here.
+                    key={`${segment}-${String(index)}`}
+                    className="aui-crumb"
+                    data-leaf={
+                      index === breadcrumbSegments.length - 1
+                        ? 'true'
+                        : undefined
+                    }
+                  >
+                    {segment}
+                  </span>
+                ))
+              ) : (
+                <span className="aui-crumb">No file selected</span>
+              )}
+            </nav>
+          </header>
+
+          <div className="aui-surface-wrap" ref={surfaceWrapRef}>
+            {activeFile != null && fileDiff != null ? (
+              <FileDiff
+                key={activePath}
+                fileDiff={fileDiff}
+                className="aui-surface"
+                options={{ ...AUI_DIFF_OPTIONS, theme }}
+                prerenderedHTML={activePrerenderedHTML}
+                edit
+                editOptions={editOptions}
+              />
+            ) : placeholderContents != null && activePath != null ? (
+              // Editable view for explorer files that aren't part of the change
+              // set (e.g. the root README or a generated stub). It picks up the
+              // shared editor from context via `edit`, and seeds from
+              // any persisted edit so tweaks survive switching files and back.
+              // Highlighted on the main thread since this File is mounted
+              // dynamically outside the editable surface's worker pool.
+              <File
+                key={activePath}
+                file={{
+                  name: activePath,
+                  contents:
+                    editsRef.current.get(activePath) ?? placeholderContents,
+                }}
+                className="aui-surface"
+                options={{
+                  theme,
+                  themeType: 'dark',
+                  disableFileHeader: true,
+                  overflow: 'wrap',
+                }}
+                disableWorkerPool
+                edit
+                editOptions={editOptions}
+              />
+            ) : (
+              <div className="aui-empty">Select a file to review.</div>
+            )}
+          </div>
+
+          <div className="aui-composer">
+            {snippets.length > 0 && (
+              <ul className="aui-composer-attachments">
+                {snippets.map((snippet) => (
+                  <li key={snippet.id} className="aui-attachment">
+                    <div className="aui-attachment-header">
+                      <IconFileCode aria-hidden="true" />
+                      <span className="aui-attachment-file">
+                        {snippet.fileName}
+                      </span>
+                      <span className="aui-attachment-lines">
+                        {formatSelectionLineLabel(snippet)}
+                      </span>
+                    </div>
+                    <File
+                      file={{
+                        name: snippet.fileName,
+                        contents: snippet.text,
+                      }}
+                      options={{
+                        theme,
+                        themeType: 'dark',
+                        disableFileHeader: true,
+                        disableLineNumbers: true,
+                      }}
+                      // The page's shared worker pool is wired up for the
+                      // editable editor surface; a dynamically mounted
+                      // read-only File isn't highlighted through it, so
+                      // highlight on the main thread.
+                      disableWorkerPool
+                      className="aui-attachment-code"
+                      style={SNIPPET_STYLE}
+                    />
+                    <button
+                      type="button"
+                      className="aui-attachment-remove"
+                      aria-label="Remove snippet"
+                      onClick={() => {
+                        removeSnippet(snippet.id);
+                      }}
+                    >
+                      <IconX />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <textarea
+              className="aui-composer-input"
+              placeholder="Ask for changes, @mention files, or run commands…"
+              rows={2}
+              disabled
+            />
+            <div className="aui-composer-toolbar">
+              <button type="button" className="aui-composer-select" disabled>
+                <IconSparkle className="opacity-50" />
+                Agent
+                <IconChevronSm className="opacity-50" />
+              </button>
+              <button type="button" className="aui-composer-select" disabled>
+                Pierre 1
+                <IconChevronSm className="opacity-50" />
+              </button>
+              <button
+                type="button"
+                className="aui-composer-send ml-auto"
+                aria-label="Send"
+                disabled
+              >
+                <IconArrow className="rotate-[90deg]" />
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <aside className="aui-changes">
+          <div className="aui-changes-tabs" role="tablist">
+            <button type="button" role="tab" disabled>
+              All files
+            </button>
+            <button type="button" role="tab" aria-selected="true">
+              Changes
+              <span className="aui-changes-count">{changedCount}</span>
+            </button>
+            <button type="button" role="tab" disabled>
+              Checks
+            </button>
+          </div>
+          <ChangesTree
+            session={changesSession}
+            activePath={activePath}
+            statsByPath={liveStats}
+            onSelect={openFile}
+          />
+        </aside>
       </div>
-    </EditProvider>
+    </div>
   );
 }
