@@ -1,8 +1,9 @@
-import { afterAll, describe, expect, test } from 'bun:test';
+import { afterAll, describe, expect, spyOn, test } from 'bun:test';
 
 import { File } from '../src/components/File';
 import { DEFAULT_THEMES } from '../src/constants';
 import { Editor } from '../src/editor/editor';
+import { DirectionForward } from '../src/editor/selection';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
 import type { FileContents, RenderRange } from '../src/types';
 import { installDom, wait } from './domHarness';
@@ -300,6 +301,41 @@ describe('Editor edits at the bottom of a virtualized window', () => {
       const rendered = renderedLineNumbers(content);
       expect(Math.max(...rendered)).toBeLessThanOrEqual(150);
     } finally {
+      cleanup();
+    }
+  });
+});
+
+describe('Editor selections in a virtualized window', () => {
+  test('limits a document-spanning selection to the rendered lines', async () => {
+    const range = makeRange(4900, 7);
+    const { cleanup, content, editor, fileContainer } =
+      await createWindowedEditor(10_000, range);
+    editor.setOptions({ roundedSelection: false });
+
+    const querySelector = spyOn(content, 'querySelector');
+    try {
+      editor.setState({
+        selections: [
+          {
+            start: { line: 0, character: 0 },
+            end: { line: 9999, character: 10 },
+            direction: DirectionForward,
+          },
+        ],
+        view: { scrollLeft: 0, scrollTop: 0 },
+      });
+
+      expect(
+        querySelector.mock.calls
+          .map(([selector]) => /^\[data-line="(\d+)"\]/.exec(selector)?.[1])
+          .filter((line) => line !== undefined)
+      ).toEqual(['10000']);
+      expect(
+        fileContainer.shadowRoot?.querySelectorAll('[data-selection-range]')
+      ).toHaveLength(range.totalLines);
+    } finally {
+      querySelector.mockRestore();
       cleanup();
     }
   });
