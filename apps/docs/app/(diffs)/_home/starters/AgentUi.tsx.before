@@ -189,8 +189,8 @@ export function AgentUi({
   // Persisted in-editor edits keyed by path, so switching files keeps the
   // agent's tweaked output.
   const editsRef = useRef<Map<string, string>>(new Map());
-  // The editor's debounced onChange fires without a path argument, so we track
-  // the live target here.
+  // The stable onChange callback has no path argument, so track its live target
+  // here.
   const activeTargetRef = useRef<string | null>(null);
   useEffect(() => {
     activeTargetRef.current = activePath;
