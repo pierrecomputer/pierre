@@ -76,7 +76,11 @@ export default value;
       // Every onChange payload is recorded so tests can assert the editor emits
       // the updated file contents rather than inspecting the DOM alone.
       const events = [];
+      const selectionChanges = [];
       window.__editorEvents = events;
+      window.__selectionChanges = selectionChanges;
+
+      const searchParams = new URLSearchParams(location.search);
 
       const editor = new Editor({
         onChange(file) {
@@ -91,10 +95,15 @@ export default value;
         theme: { dark: 'pierre-dark', light: 'pierre-light' },
         themeType: 'dark',
         diffStyle: 'split',
-        enableGutterUtility: new URLSearchParams(location.search).has(
-          'gutterUtility'
-        ),
+        enableGutterUtility: searchParams.has('gutterUtility'),
+        enableLineSelection: searchParams.has('lineSelection'),
         onGutterUtilityClick() {},
+        onLineSelectionChange(range) {
+          selectionChanges.push(range);
+        },
+        onLineSelected(range) {
+          selectionChanges.push(range);
+        },
       });
 
       instance.render({ oldFile, newFile, containerWrapper: mount });

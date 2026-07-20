@@ -270,6 +270,7 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
 
   private hasPointerListeners = false;
   private hasDocumentPointerListeners = false;
+  private hasEditorAttached = false;
 
   private selectedRange: SelectedLineRange | null = null;
   private selectedRangeHighlightSide: SelectionSide | undefined;
@@ -292,6 +293,21 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
 
   setOptions(options: InteractionManagerOptions<TMode>): void {
     this.options = options;
+  }
+
+  // An attached editor owns ordinary line-number selection gestures. Other
+  // host interactions, including gutter utilities, remain active.
+  setEditorAttached(attached: boolean): void {
+    this.hasEditorAttached = attached;
+    const { mode } = this.pointerSession;
+    if (
+      attached &&
+      (mode === 'selecting' || mode === 'pendingSingleLineUnselect')
+    ) {
+      this.clearPointerSession();
+      this.detachDocumentPointerListeners();
+      this.selectionAnchor = undefined;
+    }
   }
 
   cleanUp(): void {
@@ -806,7 +822,7 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
 
   private startLineSelectionFromPointerDown(event: PointerEvent): void {
     const { enableLineSelection = false } = this.options;
-    if (!enableLineSelection) {
+    if (!enableLineSelection || this.hasEditorAttached) {
       return;
     }
 

@@ -1334,6 +1334,7 @@ export class FileDiff<
     }
     this.editor?.cleanUp();
     this.editor = editor;
+    this.interactionManager.setEditorAttached(true);
     this.hunksRenderer.beginEditSession();
     // The editor sync below refuses partial diffs (it needs the full file
     // contents); kick off hydration so the loaded re-render re-runs it.
@@ -1343,6 +1344,7 @@ export class FileDiff<
     this.syncRenderViewToEditor();
     return (recycle?: boolean) => {
       this.editor = undefined;
+      this.interactionManager.setEditorAttached(false);
       // A recycle detach is a virtualized unmount mid-session: the session
       // continues on remount, so hunks stay session-shaped. Only a genuine
       // end runs the exit recompute.

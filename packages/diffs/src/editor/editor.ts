@@ -426,6 +426,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         requirePersistedCacheKey(file);
       }
     }
+    // force `useTokenTransformer` to true to ensure the `data-char` attr is
+    // added to the token elements, that is used for rendering the selection ranges
     if (fileInstance.options.useTokenTransformer !== true) {
       fileInstance.setOptions({
         ...fileInstance.options,
@@ -1542,14 +1544,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#selectEventDisposes = disposes;
   }
 
-  // Normal line selection owns gutter gestures when enabled, so the editor
-  // must not also turn the same drag into a text selection.
-  #isLineSelectionEnabled(): boolean {
-    return this.#fileInstance?.options.enableLineSelection === true;
-  }
-
-  // Gutter gestures owned by diff interactions must not replace the editor's
-  // text selections through a browser-generated selectionchange.
+  // Gutter utility gestures owned by diff interactions must not replace the
+  // editor's text selections through a browser-generated selectionchange.
   #preserveEditorSelectionsForGutterGesture(): void {
     this.#suppressNativeSelectionSync = this.#selections !== undefined;
   }
@@ -1939,10 +1935,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
                 ? target.closest('[data-column-number]')
                 : null;
             if (gutterRow instanceof HTMLElement) {
-              if (this.#isLineSelectionEnabled()) {
-                this.#preserveEditorSelectionsForGutterGesture();
-                return;
-              }
               if (
                 this.#beginDeletionGutterSelection(
                   gutterRow,
@@ -2008,10 +2000,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
             const gutterRow = resolveGutterTarget(
               path[0] as HTMLElement | undefined
             );
-            if (gutterRow !== undefined && this.#isLineSelectionEnabled()) {
-              this.#preserveEditorSelectionsForGutterGesture();
-              return;
-            }
             // Clicking a read-only deleted line's number (unified view) selects
             // that line's text natively, since the line is not in the editor's
             // document. This runs before the mouse-only gate below: a deletion
@@ -3941,11 +3929,14 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       const top = this.#getLineY(line) + wrapLine * lineHeight;
       // Match the corner mask to the line color behind the selection; when
       // absent (context lines) the CSS falls back to the editor base bg.
-      const lineElement = this.#getLineElement(line);
+      const lineEl = this.#getLineElement(line);
       let cornerBg = 'initial';
-      if (this.#isDiff && lineElement?.dataset.lineType === 'change-addition') {
-        cornerBg =
-          getComputedStyle(lineElement).getPropertyValue('--diffs-line-bg');
+      if (
+        lineEl !== undefined &&
+        (lineEl.dataset.lineType === 'change-addition' ||
+          lineEl.dataset.selectedLine !== undefined)
+      ) {
+        cornerBg = getComputedStyle(lineEl).getPropertyValue('--diffs-line-bg');
       }
       const css = `width:${ch}px;transform:translateX(${left}px) translateY(${top}px);--diffs-selection-corner-bg:${cornerBg}`;
       const dataset = {

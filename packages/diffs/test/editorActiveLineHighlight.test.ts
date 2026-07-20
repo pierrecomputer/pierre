@@ -3,6 +3,7 @@ import { afterAll, describe, expect, test } from 'bun:test';
 import { File, type FileOptions } from '../src/components/File';
 import { DEFAULT_THEMES } from '../src/constants';
 import { Editor } from '../src/editor/editor';
+import { DirectionForward } from '../src/editor/selection';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
 import type { FileContents, SelectedLineRange } from '../src/types';
 import { installDom, wait } from './domHarness';
@@ -153,6 +154,62 @@ describe('editor active line highlight', () => {
       // ...and text selection is not a gutter line selection, so the
       // onLineSelected handler must not fire.
       expect(notifiedRanges).toEqual([]);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('editor owns gutter drags when line selection is enabled', async () => {
+    const changedRanges: (SelectedLineRange | null)[] = [];
+    const selectedRanges: (SelectedLineRange | null)[] = [];
+    const { cleanup, content, editor } = await createEditorFixture(
+      'alpha\nbravo\ncharlie\ndelta',
+      {
+        enableLineSelection: true,
+        onLineSelected: (range) => selectedRanges.push(range),
+        onLineSelectionChange: (range) => changedRanges.push(range),
+      }
+    );
+    try {
+      const code = content.closest('[data-code]');
+      const second = code?.querySelector<HTMLElement>(
+        '[data-gutter] > [data-column-number="2"]'
+      );
+      const fourth = code?.querySelector<HTMLElement>(
+        '[data-gutter] > [data-column-number="4"]'
+      );
+      if (second == null || fourth == null) {
+        throw new Error('missing gutter rows');
+      }
+
+      second.dispatchEvent(
+        new PointerEvent('pointerdown', {
+          bubbles: true,
+          composed: true,
+          pointerType: 'mouse',
+        })
+      );
+      fourth.dispatchEvent(
+        new MouseEvent('mousemove', { bubbles: true, composed: true })
+      );
+      document.dispatchEvent(
+        new PointerEvent('pointerup', {
+          bubbles: true,
+          composed: true,
+          pointerType: 'mouse',
+        })
+      );
+
+      expect(editor.getState().selections).toEqual([
+        {
+          start: { line: 1, character: 0 },
+          end: { line: 3, character: 5 },
+          direction: DirectionForward,
+        },
+      ]);
+      expect(changedRanges).toEqual([]);
+      expect(selectedRanges).toEqual([]);
+      expect(code?.querySelector('[data-selected-line]')).toBeNull();
     } finally {
       cleanup();
     }

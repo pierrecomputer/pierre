@@ -2,13 +2,21 @@ import { expect, type Page, test } from '@playwright/test';
 
 const ADDITIONS = '[data-code][data-additions] [data-content]';
 const DELETIONS = '[data-code][data-deletions] [data-content]';
+const ADDITIONS_GUTTER = '[data-code][data-additions] [data-gutter]';
 
 async function openFixture(
   page: Page,
-  options: { gutterUtility?: boolean } = {}
+  options: { gutterUtility?: boolean; lineSelection?: boolean } = {}
 ): Promise<void> {
-  const query = options.gutterUtility === true ? '?gutterUtility' : '';
-  await page.goto(`/test/e2e/fixtures/edit.html${query}`);
+  const query = [
+    options.gutterUtility === true ? 'gutterUtility' : '',
+    options.lineSelection === true ? 'lineSelection' : '',
+  ]
+    .filter(Boolean)
+    .join('&');
+  await page.goto(
+    `/test/e2e/fixtures/edit.html${query === '' ? '' : `?${query}`}`
+  );
   await page.waitForFunction(() => window.__editReady === true);
 }
 
@@ -100,10 +108,51 @@ test.describe('edit mode', () => {
     await expect(page.locator(ADDITIONS)).toContainText('Z');
   });
 
+  test('editor owns gutter selection when line selection is enabled', async ({
+    page,
+  }) => {
+    await openFixture(page, { lineSelection: true });
+
+    const from = await page
+      .locator(`${ADDITIONS_GUTTER} [data-column-number="1"]`)
+      .boundingBox();
+    const to = await page
+      .locator(`${ADDITIONS_GUTTER} [data-column-number="3"]`)
+      .boundingBox();
+    if (from == null || to == null) {
+      throw new Error('missing additions gutter rows');
+    }
+
+    await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, {
+      steps: 5,
+    });
+    await page.mouse.up();
+
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const selection = window.__editor?.getState().selections?.at(-1);
+          return selection == null
+            ? null
+            : { start: selection.start, end: selection.end };
+        })
+      )
+      .toEqual({
+        start: { line: 0, character: 0 },
+        end: { line: 2, character: 21 },
+      });
+    await expect(page.locator('[data-selected-line]')).toHaveCount(0);
+    expect(await page.evaluate(() => window.__selectionChanges ?? [])).toEqual(
+      []
+    );
+  });
+
   test('programmatic refocus accepts the first input after a gutter gesture', async ({
     page,
   }) => {
-    await openFixture(page, { gutterUtility: true });
+    await openFixture(page, { gutterUtility: true, lineSelection: true });
 
     // A real deletion-gutter click creates a native read-only selection while
     // leaving the editor without its own text selection.
@@ -129,6 +178,10 @@ test.describe('edit mode', () => {
       .toBe(0);
     await expect(page.locator('pre[data-deleted-text-selection]')).toHaveCount(
       1
+    );
+    await expect(page.locator('[data-selected-line]')).toHaveCount(0);
+    expect(await page.evaluate(() => window.__selectionChanges ?? [])).toEqual(
+      []
     );
 
     // The utility gesture uses the same selection-preservation path as diff
