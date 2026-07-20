@@ -281,7 +281,7 @@ describe('React CodeView editor factory', () => {
       );
       expect(missingProviderError).toBeInstanceOf(Error);
       expect((missingProviderError as Error).message).toBe(
-        'CodeView: EditContext is not attached'
+        'CodeView: createEditor is required for items with edit: true'
       );
       expect(bypassFactory).not.toHaveBeenCalled();
     } finally {
