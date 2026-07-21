@@ -393,9 +393,10 @@ where editing is rare.
 Selection Action is an opt-in edit mode feature for showing custom UI alongside
 the current selection—useful for quick transforms, refactor prompts, or other
 selection-scoped tools. Set `enabledSelectionAction: true` and return your UI
-from `renderSelectionAction`; a floating popover holding your UI appears
-automatically, anchored to the active selection. The popover can hold any number
-of actions.
+from `renderSelectionAction`; a floating popover holding your UI appears after
+the user creates a ranged selection. Programmatic `setSelections` and `setState`
+calls update the selection without opening the popover. The popover can hold any
+number of actions.
 
 <DocsCodeExample {...editorSelectionActionExample} />
 

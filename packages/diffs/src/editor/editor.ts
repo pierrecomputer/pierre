@@ -208,8 +208,8 @@ export interface EditorOptions<LAnnotation> {
   /** Per-language comment tokens used by the comment commands. */
   languageCommentConfig?: LanguageConfigMap;
   /**
-   * Show a floating selection action popover anchored to the active selection,
-   * default is disabled.
+   * Show a floating selection action popover after a user-created selection,
+   * default is disabled. Programmatic selection updates do not open it.
    */
   enabledSelectionAction?: boolean;
   /**
@@ -336,6 +336,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #markerRenderer?: MarkerRenderer;
   #searchPanel?: SearchPanelWidget;
   #selectionAction?: SelectionActionWidget;
+  // Programmatic ranges stay passive until the user interacts with the editor.
+  #canMountSelectionAction = true;
   #shouldIgnoreSelectionChange = false;
   // Set when the browser's native Selection is temporarily not the source of
   // truth for editor text selections. Select-all can only mirror rendered
@@ -594,6 +596,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     if (this.#fileInstance === undefined || this.#textDocument === undefined) {
       throw new Error('Editor is not attached');
     }
+    this.#canMountSelectionAction = false;
     this.#updateSelections(selections ?? []);
     // When a saved view is present, honor its scroll offsets exactly. Scrolling
     // the caret into view afterward would overwrite them whenever the caret
@@ -640,6 +643,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       }
       return { direction, start, end };
     });
+    this.#canMountSelectionAction = false;
     this.#updateSelections(resolvedSelections);
     const primarySelection = resolvedSelections.at(-1);
     if (primarySelection !== undefined) {
@@ -1365,6 +1369,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#searchPanel = undefined;
     this.#selectionAction?.cleanup();
     this.#selectionAction = undefined;
+    this.#canMountSelectionAction = true;
   }
 
   #invalidateOnAttach(): void {
@@ -1688,6 +1693,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         contentEl,
         'pointerdown',
         (e) => {
+          this.#canMountSelectionAction = true;
           // Any pointer press — mouse, touch, or pen — moves off the select-all
           // selection, so let selectionchange sync #selections from the new
           // native selection again. This must run before the mouse-only guard
@@ -1780,6 +1786,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         if (!targetIsContentElement(e)) {
           return;
         }
+        this.#canMountSelectionAction = true;
         // A keystroke is the user acting on the select-all selection (deleting,
         // typing, moving); let selectionchange sync #selections again.
         this.#suppressNativeSelectionSync = false;
@@ -2130,6 +2137,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
               return;
             }
 
+            this.#canMountSelectionAction = true;
             this.#markerRenderer?.removePopover();
             const selection = this.#spanLineSelection(
               lineIndex,
@@ -4295,6 +4303,9 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
 
     if (this.#selectionAction === undefined) {
+      if (!this.#canMountSelectionAction) {
+        return;
+      }
       const getActiveSelection = (): EditorSelection =>
         this.#selections?.at(-1) ?? primarySelection;
       const selectionActionElement = renderSelectionAction({

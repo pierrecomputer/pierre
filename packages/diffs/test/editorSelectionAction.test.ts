@@ -4,10 +4,14 @@ import { File } from '../src/components/File';
 import { DEFAULT_THEMES } from '../src/constants';
 import { Editor, type EditorOptions } from '../src/editor/editor';
 import { PopoverManager } from '../src/editor/popover';
-import { DirectionBackward, getCaretPosition } from '../src/editor/selection';
+import {
+  DirectionBackward,
+  DirectionForward,
+  getCaretPosition,
+} from '../src/editor/selection';
 import type { SelectionActionContext } from '../src/editor/selectionAction';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
-import type { FileContents, RenderRange } from '../src/types';
+import type { EditorSelection, FileContents, RenderRange } from '../src/types';
 import { installDom, wait } from './domHarness';
 
 afterAll(async () => {
@@ -99,6 +103,17 @@ function findSelectionActionPopover(content: HTMLElement): HTMLElement {
   return popover;
 }
 
+// setSelections supplies deterministic ranges in jsdom; the pointer gesture
+// marks them as user-created so selection-action tests exercise the mount path.
+function settleSelectionAction(content: HTMLElement): void {
+  content.dispatchEvent(
+    new PointerEvent('pointerdown', { button: 0, pointerType: 'mouse' })
+  );
+  document.dispatchEvent(
+    new PointerEvent('pointerup', { button: 0, pointerType: 'mouse' })
+  );
+}
+
 describe('Editor selection action', () => {
   // The popover element is created once when the selection settles and kept open
   // across selection changes, so its handlers must read the current primary
@@ -127,6 +142,7 @@ describe('Editor selection action', () => {
           direction: 'forward',
         },
       ]);
+      settleSelectionAction(content);
 
       // The selection grows on the same line; the popover stays open.
       editor.setSelections([
@@ -173,6 +189,7 @@ describe('Editor selection action', () => {
           direction: 'backward',
         },
       ]);
+      settleSelectionAction(content);
 
       // The selection grows backward on the same line; the popover stays open.
       editor.setSelections([
@@ -217,6 +234,7 @@ describe('Editor selection action', () => {
           direction: 'backward',
         },
       ]);
+      settleSelectionAction(content);
 
       const popover = findSelectionActionPopover(content);
       expect(popover.style.getPropertyValue('--popover-y-shift').trim()).toBe(
@@ -248,6 +266,7 @@ describe('Editor selection action', () => {
           direction: 'forward',
         },
       ]);
+      settleSelectionAction(content);
 
       const popover = findSelectionActionPopover(content);
       expect(popover.style.getPropertyValue('--popover-y-shift').trim()).toBe(
@@ -280,6 +299,7 @@ describe('Editor selection action', () => {
           direction: 'backward',
         },
       ]);
+      settleSelectionAction(content);
 
       const popover = findSelectionActionPopover(content);
       expect(popover.style.getPropertyValue('--popover-y-shift').trim()).toBe(
@@ -312,6 +332,7 @@ describe('Editor selection action', () => {
           direction: 'forward',
         },
       ]);
+      settleSelectionAction(content);
 
       const popover = findSelectionActionPopover(content);
       expect(popover.style.getPropertyValue('--popover-y-shift').trim()).toBe(
@@ -438,6 +459,7 @@ describe('Editor selection action', () => {
           direction: 'backward',
         },
       ]);
+      settleSelectionAction(content);
 
       // Sanity check the fallback candidate's row actually differs from the
       // head's, so the assertion below isn't vacuously true.
@@ -571,6 +593,7 @@ describe('Editor selection action', () => {
           direction: 'backward',
         },
       ]);
+      settleSelectionAction(content);
 
       const popover = findSelectionActionPopover(content);
       // The initial 20px height fits above the head row: top is 10px inside
@@ -639,6 +662,7 @@ describe('Editor selection action', () => {
           direction: 'backward',
         },
       ]);
+      settleSelectionAction(content);
 
       const popover = findSelectionActionPopover(content);
       // Preferred (head-anchored, placed above) must win: the fallback's
@@ -820,6 +844,7 @@ describe('Editor selection action', () => {
           direction: 'forward',
         },
       ]);
+      settleSelectionAction(content);
       expect(() => findSelectionActionPopover(content)).not.toThrow();
 
       editor.setSelections([
@@ -960,6 +985,75 @@ describe('Editor selection action', () => {
     });
   });
 
+  test('setSelections does not mount a selection action', async () => {
+    let renderCount = 0;
+    const { cleanup, editor, content } = await createSelectionActionFixture(
+      'hello world',
+      {
+        enabledSelectionAction: true,
+        renderSelectionAction() {
+          renderCount++;
+          return document.createElement('div');
+        },
+      }
+    );
+
+    try {
+      const start = { line: 0, character: 0 };
+      const end = { line: 0, character: 5 };
+      editor.setSelections([{ start, end, direction: 'forward' }]);
+      editor.setMarkers([]);
+      await wait(0);
+
+      expect(editor.getState().selections).toEqual([
+        { start, end, direction: DirectionForward },
+      ]);
+      expect(renderCount).toBe(0);
+      expect(
+        (content.getRootNode() as ShadowRoot).querySelector(
+          '[data-selection-action-popover]'
+        )
+      ).toBeNull();
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('setState does not mount a selection action', async () => {
+    let renderCount = 0;
+    const { cleanup, editor, content } = await createSelectionActionFixture(
+      'hello world',
+      {
+        enabledSelectionAction: true,
+        renderSelectionAction() {
+          renderCount++;
+          return document.createElement('div');
+        },
+      }
+    );
+
+    try {
+      const selection: EditorSelection = {
+        start: { line: 0, character: 0 },
+        end: { line: 0, character: 5 },
+        direction: DirectionForward,
+      };
+      editor.setState({ selections: [selection] });
+      editor.setMarkers([]);
+      await wait(0);
+
+      expect(editor.getState().selections).toEqual([selection]);
+      expect(renderCount).toBe(0);
+      expect(
+        (content.getRootNode() as ShadowRoot).querySelector(
+          '[data-selection-action-popover]'
+        )
+      ).toBeNull();
+    } finally {
+      cleanup();
+    }
+  });
+
   // Without `enabledSelectionAction`, a ranged selection renders nothing and the
   // consumer's callback is never invoked.
   test('renders no popover when the feature is disabled', async () => {
@@ -982,6 +1076,7 @@ describe('Editor selection action', () => {
           direction: 'forward',
         },
       ]);
+      settleSelectionAction(content);
       const root = content.getRootNode() as ShadowRoot;
       expect(root.querySelector('[data-selection-action-popover]')).toBeNull();
       expect(rendered).toBe(false);
