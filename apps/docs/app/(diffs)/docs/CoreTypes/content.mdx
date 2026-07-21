@@ -1,7 +1,7 @@
 ## Core Types
 
-Before diving into the components, it's helpful to understand the two core data
-structures used throughout the library.
+Before diving into the components, it's helpful to understand the core file,
+diff, and annotation data structures used throughout the library.
 
 ### FileContents
 
@@ -51,6 +51,30 @@ hydrated segment as a fallback.
 [`parsePatchFiles`](#utilities-parsepatchfiles) (from a patch string).
 
 <DocsCodeExample {...fileDiffMetadataType} />
+
+### LineAnnotation and DiffLineAnnotation
+
+`LineAnnotation<T>` places content on a file line and contains `lineNumber` plus
+typed `metadata`. Metadata is required when `T` is a concrete type and omitted
+when `T` is `undefined`. `DiffLineAnnotation<T>` adds
+`side: 'additions' | 'deletions'` to select a file side. Line coordinates are
+one-based on the selected file side, not row positions in the rendered diff. Use
+`lineNumber: 0` for a file-level annotation above the first file line or, in a
+diff, above the first hunk or row on that side.
+
+Callbacks shared by file and diff surfaces use
+`LineAnnotation[] | DiffLineAnnotation[]`. Use `isFileAnnotationCollection` or
+`isDiffAnnotationCollection` to narrow the collection before reading
+shape-specific fields. For individual annotation unions, use `isFileAnnotation`
+or `isDiffAnnotation`.
+
+Store a stable, position-independent application ID in metadata when an
+annotation owns drafts or other interactive state. For annotations that survive
+an edit, edit mode preserves metadata while remapping line coordinates. For the
+controlled update pattern and exact remapping rules, see
+[Editing with line annotations](#edit-mode-editing-with-line-annotations).
+
+<DocsCodeExample {...lineAnnotationTypes} />
 
 ### Creating Diffs
 

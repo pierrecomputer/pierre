@@ -31,7 +31,7 @@ import type { UnresolvedFileReactOptions } from '../UnresolvedFile';
 import { WorkerPoolContext } from '../WorkerPoolContext';
 import { useStableCallback } from './useStableCallback';
 
-const useIsometricEffect =
+const useIsomorphicLayoutEffect =
   typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
 interface UseUnresolvedFileInstanceProps<LAnnotation> {
@@ -137,7 +137,7 @@ export function useUnresolvedFileInstance<LAnnotation>({
     }
   });
 
-  useIsometricEffect(() => {
+  useIsomorphicLayoutEffect(() => {
     if (instanceRef.current == null) return;
     const instance = instanceRef.current;
     const newOptions = mergeUnresolvedOptions({

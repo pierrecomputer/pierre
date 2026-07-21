@@ -13,6 +13,7 @@ import type {
   FileContents,
   FileDiffMetadata,
   HighlightedToken,
+  LineAnnotation,
   Position,
   Range,
   RenderRange,
@@ -176,6 +177,12 @@ function isPromise<T>(value: T | Promise<T>): value is Promise<T> {
   );
 }
 
+interface EditorAttachState {
+  generation: number;
+  callback: (() => void) | undefined;
+  delivered: boolean;
+}
+
 export interface EditorOptions<LAnnotation> {
   /** The maximum number of entries to keep in the undo stack. */
   historyMaxEntries?: number;
@@ -225,7 +232,9 @@ export interface EditorOptions<LAnnotation> {
   /** Callback when the editor document changes. */
   onChange?: (
     file: FileContents,
-    lineAnnotations?: DiffLineAnnotation<LAnnotation>[]
+    lineAnnotations?:
+      | LineAnnotation<LAnnotation>[]
+      | DiffLineAnnotation<LAnnotation>[]
   ) => void;
   /** Callback when the editor gains focus. */
   onFocus?: () => void;
@@ -241,6 +250,12 @@ export interface EditorOptions<LAnnotation> {
 // larger inserts fall back to the bounded buffer-only path instead of building a
 // row per inserted line. A safety bound, not a correctness-critical value.
 const MAX_EDIT_WIDEN_WINDOW_MULTIPLE = 2;
+
+// Wrap offsets persist across render-range syncs (see #resetCache), so
+// scrolling through a very large file could otherwise accumulate an entry per
+// line. Past this many lines the cache resets and refills lazily for whatever
+// is measured next. A memory bound, not a correctness-critical value.
+const MAX_WRAP_OFFSETS_CACHE_LINES = 10_000;
 const SELECTION_ACTION_POPOVER_PLACEMENT_KEY = 'selection-action';
 const MULTI_SELECTION_CLIPBOARD_TYPE =
   'application/vnd.pierre.diffs-selections+json';
@@ -270,6 +285,13 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #globalEventDisposes?: (() => void)[];
   #selectEventDisposes?: (() => void)[];
   #detach?: (recycle?: boolean) => void;
+  // onAttach is deferred until the synchronized document and DOM are usable.
+  // Track the state so cleanup cannot notify an editor from an ended session.
+  #attachState: EditorAttachState = {
+    generation: 0,
+    callback: undefined,
+    delivered: false,
+  };
 
   // cache
   #contentOffset?: { left: number; top: number };
@@ -426,6 +448,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         requirePersistedCacheKey(file);
       }
     }
+    this.#invalidateOnAttach();
     if (fileInstance.options.useTokenTransformer !== true) {
       fileInstance.setOptions({
         ...fileInstance.options,
@@ -673,10 +696,17 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   }
 
   cleanUp(recycle = false): void {
+    this.#invalidateOnAttach();
+    if (!recycle) {
+      this.#attachState.delivered = false;
+    }
+    const hadFileInstance = this.#fileInstance != null;
     const shouldRestoreState = this.#isStatePersistenceEnabled;
     this.#stateRestoreGeneration++;
     this.#persistCurrentState();
-    this.#restoreStateOnNextSync = shouldRestoreState;
+    if (hadFileInstance) {
+      this.#restoreStateOnNextSync = shouldRestoreState;
+    }
     dequeueRender(this.#handleCustomPasteEvent);
     // The tokenizer is destroyed in both modes: it holds highlighter/worker
     // resources and writes into the (removed below) theme style element.
@@ -743,6 +773,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
 
     this.#resetState();
+    this.#fileInstance = undefined;
   }
 
   /** @internal Capture outgoing state and substitute cached text before render. */
@@ -792,6 +823,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     lineAnnotations: DiffLineAnnotation<LAnnotation>[] | undefined,
     renderRange: RenderRange | undefined
   ) => {
+    const fileInstance = this.#fileInstance;
+    if (fileInstance == null) {
+      return;
+    }
     const shadowRoot = fileContainer.shadowRoot;
     if (shadowRoot == null) {
       console.error('[editor] Could not find the shadow root.');
@@ -861,6 +896,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       | undefined;
 
     if (shouldRebuildDocument) {
+      this.#invalidateOnAttach();
       let contents = '';
       if ('contents' in fileOrDiff) {
         contents = fileOrDiff.contents;
@@ -891,10 +927,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#tokenizer?.cleanUp();
       this.#tokenizer = undefined;
       this.#resetState();
+      // Wrap offsets survive #resetCache, so a document swap on a reused
+      // content element must drop the previous document's measurements here.
+      this.#wrapLineOffsetsCache.clear();
       this.#selections = this.#initSelections;
-      requestAnimationFrame(() => {
-        this.#options.onAttach?.(this, this.#fileInstance!);
-      });
       if (this.#textDocument !== undefined && this.#options.__debug === true) {
         console.log(
           '[diffs/editor] text document rebuilt from',
@@ -1063,6 +1099,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         persistedStateTarget.textDocument
       );
     }
+
+    this.#scheduleOnAttach(fileInstance);
   };
 
   get #isStatePersistenceEnabled(): boolean {
@@ -1297,9 +1335,15 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }));
   }
 
+  // Drop the DOM-geometry caches (memoized row elements, measured line Ys,
+  // last caret x). Wrap offsets are intentionally NOT cleared here: they
+  // depend only on line text, font metrics, and content width — not on the
+  // rendered rows — so they stay valid across render-range syncs and row
+  // rebuilds. The sites where those inputs actually change (text edits in
+  // #applyChange, width changes in #handleLayoutResize, font remeasure,
+  // document swaps, cleanUp) invalidate the wrap cache themselves.
   #resetCache(): void {
     this.#lineYCache.clear();
-    this.#wrapLineOffsetsCache.clear();
     this.#lineElementsCache.clear();
     this.#lastAccessedCharX = undefined;
   }
@@ -1321,6 +1365,48 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#searchPanel = undefined;
     this.#selectionAction?.cleanup();
     this.#selectionAction = undefined;
+  }
+
+  #invalidateOnAttach(): void {
+    const attachState = this.#attachState;
+    attachState.generation++;
+    if (attachState.callback != null) {
+      dequeueRender(attachState.callback);
+      attachState.callback = undefined;
+    }
+  }
+
+  // A recycled attachment remains the same edit session. If its first
+  // notification was canceled, the next live synchronization reschedules it;
+  // once delivered, later recycled mounts stay silent.
+  #scheduleOnAttach(fileInstance: DiffsEditableComponent<LAnnotation>): void {
+    const attachState = this.#attachState;
+    const textDocument = this.#textDocument;
+    if (
+      attachState.delivered ||
+      attachState.callback != null ||
+      textDocument == null
+    ) {
+      return;
+    }
+    const { generation } = attachState;
+    const callback = () => {
+      if (attachState.callback !== callback) {
+        return;
+      }
+      attachState.callback = undefined;
+      if (
+        generation !== attachState.generation ||
+        this.#fileInstance !== fileInstance ||
+        this.#textDocument !== textDocument
+      ) {
+        return;
+      }
+      attachState.delivered = true;
+      this.#options.onAttach?.(this, fileInstance);
+    };
+    attachState.callback = callback;
+    queueRender(callback);
   }
 
   #initialize(): void {
@@ -2425,14 +2511,16 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         // whole document. #suppressNativeSelectionSync then stops the resulting
         // selectionchange from reading that shorter range back over #selections
         // before the delete runs.
-        const renderedLines = this.#getRenderedEditableLineRange();
-        if (renderedLines !== undefined) {
+        const renderedLineRanges = this.#getRenderedEditableLineRanges();
+        const firstRenderedLine = renderedLineRanges[0]?.[0];
+        const lastRenderedLine = renderedLineRanges.at(-1)?.[1];
+        if (firstRenderedLine !== undefined && lastRenderedLine !== undefined) {
           this.#suppressNativeSelectionSync = true;
           this.#setWindowSelection({
-            start: { line: renderedLines.first, character: 0 },
+            start: { line: firstRenderedLine, character: 0 },
             end: {
-              line: renderedLines.last,
-              character: textDocument.getLineLength(renderedLines.last),
+              line: lastRenderedLine,
+              character: textDocument.getLineLength(lastRenderedLine),
             },
             direction: DirectionForward,
           });
@@ -2829,9 +2917,14 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     // web font finished loading) while this same content element survived, so
     // discard memoized non-ASCII text widths and let them re-measure.
     this.#metrics.clearTextWidthCache();
-    if (contentWidthChanged && (this.#isWrap || lineAnnotations > 0)) {
-      this.#lineYCache.clear();
+    if (contentWidthChanged) {
+      // Wrap points depend on the content width, so cached offsets go stale
+      // even while wrap is off — the mode can be toggled back on before the
+      // next width change.
       this.#wrapLineOffsetsCache.clear();
+      if (this.#isWrap || lineAnnotations > 0) {
+        this.#lineYCache.clear();
+      }
     }
     if (
       this.#selections !== undefined ||
@@ -2873,6 +2966,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#gutterWidthCache = undefined;
       this.#contentWidthCache = undefined;
       this.#resetCache();
+      // The loaded font changes glyph widths, which moves every wrap point.
+      this.#wrapLineOffsetsCache.clear();
       if (
         this.#selections !== undefined ||
         this.#matches !== undefined ||
@@ -3679,6 +3774,15 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
     const textDocument = this.#textDocument;
     if (this.#matches !== undefined && textDocument !== undefined) {
+      const matches = this.#matches;
+      const renderRange = this.#renderRange;
+      const shouldCullMatches =
+        (renderRange !== undefined &&
+          Number.isFinite(renderRange.totalLines)) ||
+        (this.#isDiff && this.#fileInstance?.options.expandUnchanged !== true);
+      const renderedLineRanges = shouldCullMatches
+        ? this.#getRenderedEditableLineRanges()
+        : undefined;
       const primarySelection = this.#selections?.at(-1);
       const primaryStartOffset =
         primarySelection !== undefined
@@ -3688,19 +3792,59 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         primarySelection !== undefined
           ? textDocument.offsetAt(primarySelection.end)
           : -1;
-      for (const [startOffset, endOffset] of this.#matches) {
-        const range: Range = {
-          start: textDocument.positionAt(startOffset),
-          end: textDocument.positionAt(endOffset),
-        };
-        const isFocused =
-          primaryStartOffset === startOffset && primaryEndOffset === endOffset;
-        this.#renderSelection(
-          renderCtx,
-          'match',
-          range,
-          isFocused ? 'focus' : undefined
-        );
+      let firstMatchIndex = 0;
+      const rangeCount = renderedLineRanges?.length ?? 1;
+      for (let rangeIndex = 0; rangeIndex < rangeCount; rangeIndex++) {
+        let visibleEndOffset = Infinity;
+        const lineRange = renderedLineRanges?.[rangeIndex];
+        if (lineRange !== undefined) {
+          const [firstLine, lastLine] = lineRange;
+          const visibleStartOffset = textDocument.offsetAt({
+            line: firstLine,
+            character: 0,
+          });
+          const endLine = lastLine + 1;
+          visibleEndOffset =
+            endLine < textDocument.lineCount
+              ? textDocument.offsetAt({ line: endLine, character: 0 })
+              : textDocument.offsetAt({
+                  line: endLine - 1,
+                  character: textDocument.getLineLength(endLine - 1),
+                });
+
+          // Matches are sorted and non-overlapping, so narrow the rendered
+          // offset window before resolving any match positions through the treap.
+          let low = firstMatchIndex;
+          let high = matches.length;
+          while (low < high) {
+            const middle = low + Math.floor((high - low) / 2);
+            if (matches[middle][1] <= visibleStartOffset) {
+              low = middle + 1;
+            } else {
+              high = middle;
+            }
+          }
+          firstMatchIndex = low;
+        }
+        for (; firstMatchIndex < matches.length; firstMatchIndex++) {
+          const [startOffset, endOffset] = matches[firstMatchIndex];
+          if (startOffset >= visibleEndOffset) {
+            break;
+          }
+          const range: Range = {
+            start: textDocument.positionAt(startOffset),
+            end: textDocument.positionAt(endOffset),
+          };
+          const isFocused =
+            primaryStartOffset === startOffset &&
+            primaryEndOffset === endOffset;
+          this.#renderSelection(
+            renderCtx,
+            'match',
+            range,
+            isFocused ? 'focus' : undefined
+          );
+        }
       }
     }
 
@@ -3950,7 +4094,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       // absent (context lines) the CSS falls back to the editor base bg.
       const lineElement = this.#getLineElement(line);
       let cornerBg = 'initial';
-      if (this.#isDiff && lineElement?.dataset.lineType === 'change-addition') {
+      if (
+        lineElement !== undefined &&
+        (lineElement.dataset.lineType === 'change-addition' ||
+          lineElement.dataset.selectedLine !== undefined)
+      ) {
         cornerBg =
           getComputedStyle(lineElement).getPropertyValue('--diffs-line-bg');
       }
@@ -4690,10 +4838,38 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         }
       }
     }
-    if (this.#isWrap) {
-      for (const line of this.#wrapLineOffsetsCache.keys()) {
-        if (line >= change.startLine) {
-          this.#wrapLineOffsetsCache.delete(line);
+    // Wrap offsets persist while overflow is 'scroll' (the mode can toggle
+    // back before any width/font/document invalidation runs), so edits must
+    // invalidate them in every mode, not just while wrap is on. The size
+    // guard keeps edits free when nothing was ever measured.
+    if (this.#wrapLineOffsetsCache.size > 0) {
+      // Lines outside the edited ranges keep both their text and their
+      // numbering when no renumbering happened anywhere, so only the rewritten
+      // lines need new wrap measurements. A net-zero lineDelta alone is not
+      // enough: a multi-edit batch can cancel out (one edit removes a line,
+      // another adds one) while still renumbering the lines between the edits.
+      // It is sufficient when the batch coalesced into a single range (any
+      // renumbered lines sit inside that range), or when every individual edit
+      // kept the line count.
+      const keepsLineNumbers =
+        change.lineDelta === 0 &&
+        (change.changedLineRanges.length === 1 ||
+          change.changedLineChanges?.every(
+            ([, , editLineDelta]) => editLineDelta === 0
+          ) === true);
+      if (keepsLineNumbers) {
+        for (const [rangeStart, rangeEnd] of change.changedLineRanges) {
+          for (let line = rangeStart; line <= rangeEnd; line++) {
+            this.#wrapLineOffsetsCache.delete(line);
+          }
+        }
+      } else {
+        // Renumbering invalidates every cached entry from startLine onward:
+        // its keyed line no longer holds the text that was measured.
+        for (const line of this.#wrapLineOffsetsCache.keys()) {
+          if (line >= change.startLine) {
+            this.#wrapLineOffsetsCache.delete(line);
+          }
         }
       }
     }
@@ -4830,18 +5006,14 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     return undefined;
   }
 
-  // Returns the first and last document lines that have an editable row in the
-  // current (virtualized) render window, or undefined when none are rendered.
-  // Used by select-all to anchor a native selection: only rendered lines
-  // resolve to DOM nodes, so the native range must stay within what is on
-  // screen even though the document selection spans the whole file.
-  #getRenderedEditableLineRange(): { first: number; last: number } | undefined {
+  // Returns contiguous document-line ranges that have editable rows in the
+  // current render window. Collapsed diff sections create gaps between ranges.
+  #getRenderedEditableLineRanges(): [first: number, last: number][] {
     const contentElement = this.#contentElement;
     if (contentElement === undefined) {
-      return undefined;
+      return [];
     }
-    let first: number | undefined;
-    let last: number | undefined;
+    const ranges: [first: number, last: number][] = [];
     for (const child of contentElement.children) {
       const el = child as HTMLElement;
       const lineType = el.dataset.lineType;
@@ -4854,16 +5026,14 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         continue;
       }
       const line = lineNumber - 1;
-      if (first === undefined || line < first) {
-        first = line;
-      }
-      if (last === undefined || line > last) {
-        last = line;
+      const current = ranges.at(-1);
+      if (current !== undefined && line <= current[1] + 1) {
+        current[1] = Math.max(current[1], line);
+      } else {
+        ranges.push([line, line]);
       }
     }
-    return first === undefined || last === undefined
-      ? undefined
-      : { first, last };
+    return ranges;
   }
 
   #getLineElement(line: number): HTMLElement | undefined {
@@ -4872,14 +5042,23 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       return lineElement ?? undefined;
     }
 
+    const renderRange = this.#renderRange;
+    if (
+      renderRange !== undefined &&
+      (line < renderRange.startingLine ||
+        line >= renderRange.startingLine + renderRange.totalLines)
+    ) {
+      return undefined;
+    }
+
     const contentElement = this.#contentElement;
     if (contentElement === undefined) {
       return undefined;
     }
 
     // check if the line is within the render range (fast)
-    if (this.#renderRange !== undefined) {
-      const { startingLine } = this.#renderRange;
+    if (renderRange !== undefined) {
+      const { startingLine } = renderRange;
       const { children } = contentElement;
       for (let i = line - startingLine; i <= children.length; i++) {
         const child = children[i] as HTMLElement | undefined;
@@ -5071,6 +5250,9 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     if (cachedOffsets !== undefined) {
       return cachedOffsets;
     }
+    if (this.#wrapLineOffsetsCache.size >= MAX_WRAP_OFFSETS_CACHE_LINES) {
+      this.#wrapLineOffsetsCache.clear();
+    }
 
     const lineText = this.#textDocument?.getLineText(line);
     if (lineText === undefined || lineText.length === 0) {
@@ -5109,34 +5291,53 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       const wrapLineStartLeft =
         div.getBoundingClientRect().left + this.#metrics.ch;
 
-      let previousOffset = 0;
-      let lastTop = Number.NEGATIVE_INFINITY;
+      // Measurement steps through grapheme clusters when the text needs
+      // Unicode-aware boundaries, single UTF-16 units otherwise. Grapheme
+      // `index` spans [graphemeStart(index), graphemeStart(index + 1)).
+      const graphemeCount =
+        unicodeOffsets === undefined
+          ? lineText.length
+          : unicodeOffsets.length - 1;
+      const graphemeStart = (index: number): number =>
+        unicodeOffsets === undefined ? index : unicodeOffsets[index];
+      const measureGrapheme = (index: number): DOMRect => {
+        range.setStart(textNode, graphemeStart(index));
+        range.setEnd(textNode, graphemeStart(index + 1));
+        return range.getBoundingClientRect();
+      };
 
-      for (let i = 0, offsetIndex = 0; i < lineText.length; ) {
-        const nextOffset =
-          unicodeOffsets === undefined
-            ? i + 1
-            : unicodeOffsets[offsetIndex + 1];
-        range.setStart(textNode, i);
-        range.setEnd(textNode, nextOffset);
-
-        // A new visual line starts whenever the character's top edge moves
-        // below the previous character's top edge.
-        const { left, top } = range.getBoundingClientRect();
-        if (top > lastTop) {
-          // Safari can report the first range on a wrapped visual line as
-          // starting one character past the visual line start. Use the previous
-          // offset so segment-local caret math begins at the actual wrap point.
-          const startsPastLineStart =
-            isSafari() &&
-            starts.length > 0 &&
-            left - wrapLineStartLeft > this.#metrics.ch / 2;
-          starts.push(startsPastLineStart ? previousOffset : i);
-          lastTop = top;
+      // A new visual line starts whenever a grapheme's top edge moves below
+      // the previous grapheme's top edge. Line breaking assigns graphemes to
+      // visual lines in logical order, so tops are non-decreasing with the
+      // text offset and each wrap point can be located by binary-searching for
+      // the first grapheme below the current visual line — O(wraps * log n)
+      // rect measurements instead of one per character.
+      starts.push(0);
+      let lastTop = measureGrapheme(0).top;
+      let searchStart = 1;
+      while (searchStart < graphemeCount) {
+        let low = searchStart;
+        let high = graphemeCount;
+        while (low < high) {
+          const mid = (low + high) >> 1;
+          if (measureGrapheme(mid).top > lastTop) {
+            high = mid;
+          } else {
+            low = mid + 1;
+          }
         }
-        previousOffset = i;
-        i = nextOffset;
-        offsetIndex++;
+        if (low >= graphemeCount) {
+          break;
+        }
+        const { left, top } = measureGrapheme(low);
+        // Safari can report the first range on a wrapped visual line as
+        // starting one character past the visual line start. Use the previous
+        // grapheme so segment-local caret math begins at the actual wrap point.
+        const startsPastLineStart =
+          isSafari() && left - wrapLineStartLeft > this.#metrics.ch / 2;
+        starts.push(graphemeStart(startsPastLineStart ? low - 1 : low));
+        lastTop = top;
+        searchStart = low + 1;
       }
 
       const offsets = new Uint32Array(starts.length + 1);

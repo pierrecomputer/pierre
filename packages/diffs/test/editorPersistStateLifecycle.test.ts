@@ -415,7 +415,7 @@ describe('Editor persisted state lifecycle', () => {
     }
   });
 
-  test('recycle cleanup restores state without rebuilding the document', async () => {
+  test('repeated recycle cleanup preserves state restoration', async () => {
     const dom = installDom();
     const editor = new Editor<undefined>({ persistState: true });
     let first: AttachedFile | undefined;
@@ -431,6 +431,9 @@ describe('Editor persisted state lifecycle', () => {
         },
       ]);
 
+      editor.cleanUp(true);
+      // A repeated teardown has no attached instance, but must not erase the
+      // state-restoration request captured by the first cleanup.
       editor.cleanUp(true);
       first.file.cleanUp(true);
       first = undefined;

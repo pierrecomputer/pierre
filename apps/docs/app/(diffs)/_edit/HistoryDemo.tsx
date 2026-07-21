@@ -6,8 +6,8 @@ import {
   getHighlighterIfLoaded,
   preloadHighlighter,
 } from '@pierre/diffs';
-import { Editor } from '@pierre/diffs/editor';
-import { EditProvider, File } from '@pierre/diffs/react';
+import type { Editor, EditorOptions } from '@pierre/diffs/editor';
+import { File } from '@pierre/diffs/react';
 import type { PreloadedFileResult } from '@pierre/diffs/ssr';
 import {
   IconApproved,
@@ -133,22 +133,25 @@ export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
   // mapping to the undo stack in that state, so we surface an off-track UI and a
   // Reset rather than letting the step count freeze at a stale value.
   const [diverged, setDiverged] = useState(false);
-  const editor = useMemo(
-    () =>
-      new Editor<undefined>({
-        onChange: (file) => {
-          const index = snapshotIndexFor(file.contents);
-          if (index >= 0) {
-            setApplied(index);
-            setDiverged(false);
-          } else {
-            setDiverged(true);
-          }
-          if (!isAutoSeedingRef.current && index !== 0) {
-            userEditedBeforeSeedRef.current = true;
-          }
-        },
-      }),
+  const editorRef = useRef<Editor<undefined> | null>(null);
+  const editOptions = useMemo<EditorOptions<undefined>>(
+    () => ({
+      onAttach(editor: Editor<undefined>) {
+        editorRef.current = editor;
+      },
+      onChange: (file) => {
+        const index = snapshotIndexFor(file.contents);
+        if (index >= 0) {
+          setApplied(index);
+          setDiverged(false);
+        } else {
+          setDiverged(true);
+        }
+        if (!isAutoSeedingRef.current && index !== 0) {
+          userEditedBeforeSeedRef.current = true;
+        }
+      },
+    }),
     []
   );
 
@@ -212,33 +215,30 @@ export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
   // Apply a single edit by locating its `find` anchor in that step's snapshot
   // (the document text right before the edit) and replacing it. The editor's
   // `onChange` advances the step count once the edit lands.
-  const applyEdit = useCallback(
-    (content: HTMLElement, index: number) => {
-      const edit = HISTORY_DEMO_EDITS[index];
-      const text = SNAPSHOTS[index];
-      const at = text.indexOf(edit.find);
-      if (at < 0) {
-        return;
-      }
-      editor.setSelections([
-        {
-          start: offsetToPosition(text, at),
-          end: offsetToPosition(text, at + edit.find.length),
-          direction: 'forward',
-        },
-      ]);
-      content.dispatchEvent(
-        new InputEvent('beforeinput', {
-          inputType: 'insertText',
-          data: edit.replace,
-          bubbles: true,
-          cancelable: true,
-          composed: true,
-        })
-      );
-    },
-    [editor]
-  );
+  const applyEdit = useCallback((content: HTMLElement, index: number) => {
+    const edit = HISTORY_DEMO_EDITS[index];
+    const text = SNAPSHOTS[index];
+    const at = text.indexOf(edit.find);
+    if (at < 0) {
+      return;
+    }
+    editorRef.current?.setSelections([
+      {
+        start: offsetToPosition(text, at),
+        end: offsetToPosition(text, at + edit.find.length),
+        direction: 'forward',
+      },
+    ]);
+    content.dispatchEvent(
+      new InputEvent('beforeinput', {
+        inputType: 'insertText',
+        data: edit.replace,
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+      })
+    );
+  }, []);
 
   // Apply every edit in one synchronous pass to build the full undo stack. Each
   // `setSelections` scrolls the caret into view, which would yank the page down
@@ -254,7 +254,7 @@ export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
         for (let index = 0; index < TOTAL_EDITS; index++) {
           applyEdit(content, index);
         }
-        editor.setSelections([
+        editorRef.current?.setSelections([
           {
             start: { line: 0, character: 0 },
             end: { line: 0, character: 0 },
@@ -266,14 +266,14 @@ export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
         isAutoSeedingRef.current = false;
       }
     },
-    [applyEdit, editor]
+    [applyEdit]
   );
 
   // Build the undo stack once the demo is on screen so the surface arrives
   // already fully refactored with history intact. We defer until visible
   // because seeding scrolls the caret into view and would yank the page down
-  // to this below-the-fold demo on first load. We poll until the content
-  // element has attached AND the editor's grammar is ready, because seeding an
+  // to this below-the-fold demo on first load. We poll until the content and
+  // session editor have attached AND the grammar is ready, because seeding an
   // edit before the editor can tokenize throws ("Grammar not loaded") inside
   // the editor.
   useEffect(() => {
@@ -292,7 +292,7 @@ export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
       }
       attempts += 1;
       const content = getContent();
-      if (content != null && isLanguageReady()) {
+      if (content != null && editorRef.current != null && isLanguageReady()) {
         if (userEditedBeforeSeedRef.current) {
           return;
         }
@@ -390,13 +390,13 @@ export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
     }
     preserveScroll(() => {
       let guard = 0;
-      while (editor.canUndo && guard < 1000) {
-        editor.undo();
+      while (editorRef.current?.canUndo === true && guard < 1000) {
+        editorRef.current.undo();
         guard += 1;
       }
       seedAll(content);
     });
-  }, [editor, getContent, preserveScroll, seedAll]);
+  }, [getContent, preserveScroll, seedAll]);
 
   const canUndo = !diverged && applied > 0;
   const canRedo = !diverged && applied < TOTAL_EDITS;
@@ -456,13 +456,12 @@ export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
 
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:gap-8">
         <div className="min-w-0 flex-1">
-          <EditProvider editor={editor}>
-            <File
-              {...prerenderedFile}
-              className="diff-container"
-              contentEditable
-            />
-          </EditProvider>
+          <File
+            {...prerenderedFile}
+            className="diff-container"
+            edit
+            editOptions={editOptions}
+          />
         </div>
 
         <div className="flex w-full shrink-0 flex-col gap-3 lg:w-72">

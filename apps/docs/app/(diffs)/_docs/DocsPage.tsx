@@ -21,6 +21,7 @@ import {
 import {
   FILE_CONTENTS_TYPE,
   FILE_DIFF_METADATA_TYPE,
+  LINE_ANNOTATION_TYPES,
   PARSE_DIFF_FROM_FILE_EXAMPLE,
   PARSE_PATCH_FILES_EXAMPLE,
 } from '../docs/CoreTypes/constants';
@@ -237,11 +238,13 @@ async function CoreTypesSection() {
   const [
     fileContentsType,
     fileDiffMetadataType,
+    lineAnnotationTypes,
     parseDiffFromFileExample,
     parsePatchFilesExample,
   ] = await Promise.all([
     preloadFile(FILE_CONTENTS_TYPE),
     preloadFile(FILE_DIFF_METADATA_TYPE),
+    preloadFile(LINE_ANNOTATION_TYPES),
     preloadFile(PARSE_DIFF_FROM_FILE_EXAMPLE),
     preloadFile(PARSE_PATCH_FILES_EXAMPLE),
   ]);
@@ -250,6 +253,7 @@ async function CoreTypesSection() {
     scope: {
       fileContentsType,
       fileDiffMetadataType,
+      lineAnnotationTypes,
       parseDiffFromFileExample,
       parsePatchFilesExample,
     },

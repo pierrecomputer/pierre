@@ -1,6 +1,7 @@
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, mock, test } from 'bun:test';
 
 import { Editor } from '../src/editor/editor';
+import { queueRender } from '../src/managers/UniversalRenderingManager';
 import type {
   DiffLineAnnotation,
   DiffsEditableComponent,
@@ -11,7 +12,7 @@ import type {
   HighlightedToken,
   RenderRange,
 } from '../src/types';
-import { installDom } from './domHarness';
+import { installDom, wait } from './domHarness';
 
 function createTestHighlighter(): DiffsHighlighter {
   return {
@@ -184,6 +185,172 @@ function insertAtStart(editor: Editor<undefined>, text: string): void {
   );
 }
 
+describe('Editor onAttach lifecycle', () => {
+  test('ignores pending notifications and late syncs after full cleanup', async () => {
+    const dom = installDom();
+    const onAttach = mock(
+      (
+        _editor: Editor<undefined>,
+        _component: DiffsEditableComponent<undefined>
+      ) => {}
+    );
+    const editor = new Editor<undefined>({ onAttach });
+    const component = new TestEditableComponent(createFile());
+    try {
+      editor.edit(component);
+      editor.cleanUp();
+      component.cleanUp();
+
+      await wait(0);
+      expect(onAttach).not.toHaveBeenCalled();
+
+      editor.__syncRenderView(
+        createTestHighlighter(),
+        component.fileContainer,
+        createFile(),
+        undefined,
+        undefined
+      );
+      await wait(0);
+
+      expect(onAttach).not.toHaveBeenCalled();
+      expect(editor.getFile()).toBeUndefined();
+    } finally {
+      editor.cleanUp();
+      component.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test('reschedules a canceled recycle notification without duplicates', async () => {
+    const dom = installDom();
+    let onAttachCompleted = 0;
+    const onAttach = mock(
+      (
+        attachedEditor: Editor<undefined>,
+        _component: DiffsEditableComponent<undefined>
+      ) => {
+        attachedEditor.setMarkers([]);
+        onAttachCompleted++;
+      }
+    );
+    const editor = new Editor<undefined>({ onAttach });
+    const first = new TestEditableComponent(createFile());
+    let second: TestEditableComponent | undefined;
+    let third: TestEditableComponent | undefined;
+    try {
+      editor.edit(first);
+      editor.cleanUp(true);
+      first.cleanUp();
+
+      await wait(0);
+      expect(onAttach).not.toHaveBeenCalled();
+
+      second = new TestEditableComponent(createFile());
+      editor.edit(second);
+      second.rerender();
+      second.rerender();
+      await wait(0);
+
+      expect(onAttach).toHaveBeenCalledTimes(1);
+      expect(onAttachCompleted).toBe(1);
+      expect(onAttach.mock.calls[0]?.[1]).toBe(second);
+
+      editor.cleanUp(true);
+      second.cleanUp();
+      third = new TestEditableComponent(createFile());
+      editor.edit(third);
+      await wait(0);
+
+      expect(onAttach).toHaveBeenCalledTimes(1);
+      expect(onAttachCompleted).toBe(1);
+    } finally {
+      editor.cleanUp();
+      first.cleanUp();
+      second?.cleanUp();
+      third?.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test('ignores a stale callback already copied into the render pass', async () => {
+    const dom = installDom();
+    let onAttachCompleted = 0;
+    const onAttach = mock(
+      (
+        attachedEditor: Editor<undefined>,
+        _component: DiffsEditableComponent<undefined>
+      ) => {
+        attachedEditor.setMarkers([]);
+        onAttachCompleted++;
+      }
+    );
+    const editor = new Editor<undefined>({ onAttach });
+    const first = new TestEditableComponent(createFile());
+    let second: TestEditableComponent | undefined;
+    let replacementStarted = false;
+    try {
+      queueRender(() => {
+        editor.cleanUp();
+        first.cleanUp();
+        second = new TestEditableComponent(createFile());
+        editor.edit(second);
+        replacementStarted = true;
+      });
+      editor.edit(first);
+
+      await wait(0);
+      expect(replacementStarted).toBe(true);
+      expect(onAttach).not.toHaveBeenCalled();
+      if (second === undefined) {
+        throw new Error('replacement attachment did not start');
+      }
+
+      await wait(0);
+      expect(onAttach).toHaveBeenCalledTimes(1);
+      expect(onAttachCompleted).toBe(1);
+      expect(onAttach.mock.calls[0]?.[1]).toBe(second);
+    } finally {
+      editor.cleanUp();
+      first.cleanUp();
+      second?.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test('notifies once for each session separated by full cleanup', async () => {
+    const dom = installDom();
+    const onAttach = mock(
+      (
+        _editor: Editor<undefined>,
+        _component: DiffsEditableComponent<undefined>
+      ) => {}
+    );
+    const editor = new Editor<undefined>({ onAttach });
+    const first = new TestEditableComponent(createFile());
+    let second: TestEditableComponent | undefined;
+    try {
+      editor.edit(first);
+      await wait(0);
+      expect(onAttach).toHaveBeenCalledTimes(1);
+
+      editor.cleanUp();
+      first.cleanUp();
+      second = new TestEditableComponent(createFile());
+      editor.edit(second);
+      await wait(0);
+
+      expect(onAttach).toHaveBeenCalledTimes(2);
+      expect(onAttach.mock.calls[1]?.[1]).toBe(second);
+    } finally {
+      editor.cleanUp();
+      first.cleanUp();
+      second?.cleanUp();
+      dom.cleanup();
+    }
+  });
+});
+
 describe('Editor recycle cleanUp', () => {
   test('recycle keeps document and undo history across re-attach', () => {
     const dom = installDom();
@@ -269,12 +436,20 @@ describe('Editor recycle cleanUp', () => {
     }
   });
 
-  test('recycle re-attach to a different file rebuilds the document', () => {
+  test('recycle re-attach to a different file rebuilds without re-notifying', async () => {
     const dom = installDom();
     try {
-      const editor = new Editor<undefined>();
+      const onAttach = mock(
+        (
+          _editor: Editor<undefined>,
+          _component: DiffsEditableComponent<undefined>
+        ) => {}
+      );
+      const editor = new Editor<undefined>({ onAttach });
       const first = new TestEditableComponent(createFile());
       editor.edit(first);
+      await wait(0);
+      expect(onAttach).toHaveBeenCalledTimes(1);
       insertAtStart(editor, 'X');
 
       editor.cleanUp(true);
@@ -288,7 +463,9 @@ describe('Editor recycle cleanUp', () => {
         lang: 'text',
       });
       editor.edit(other);
+      await wait(0);
       expect(other.contentElement.textContent).toBe('zulu');
+      expect(onAttach).toHaveBeenCalledTimes(1);
 
       editor.cleanUp();
     } finally {

@@ -1,8 +1,8 @@
 'use client';
 
 import { DEFAULT_THEMES } from '@pierre/diffs';
-import { Editor } from '@pierre/diffs/editor';
-import { EditProvider, File } from '@pierre/diffs/react';
+import type { EditorOptions } from '@pierre/diffs/editor';
+import { File } from '@pierre/diffs/react';
 import type { PreloadedFileResult } from '@pierre/diffs/ssr';
 import {
   IconArrow,
@@ -124,46 +124,45 @@ export function SelectionDemo({ prerenderedFile }: SelectionDemoProps) {
   const addSnippetRef = useRef(addSnippet);
   addSnippetRef.current = addSnippet;
 
-  const editor = useMemo(
-    () =>
-      new Editor<undefined>({
-        enabledSelectionAction: true,
-        renderSelectionAction(selectionAction) {
-          const container = document.createElement('div');
-          container.style.cssText = 'display: flex; gap: 4px;';
+  const editOptions = useMemo<EditorOptions<undefined>>(
+    () => ({
+      enabledSelectionAction: true,
+      renderSelectionAction(selectionAction) {
+        const container = document.createElement('div');
+        container.style.cssText = 'display: flex; gap: 4px;';
 
-          const addToChat = document.createElement('button');
-          addToChat.type = 'button';
-          addToChat.style.cssText = PRIMARY_BUTTON_STYLE;
-          addToChat.innerHTML = `${ICON_COMMENT_FILL_SVG} Add to chat`;
-          // Suppress the default mousedown so clicking the action doesn't blur
-          // the editor and collapse the selection we're about to read.
-          addToChat.addEventListener('mousedown', (event) =>
-            event.preventDefault()
+        const addToChat = document.createElement('button');
+        addToChat.type = 'button';
+        addToChat.style.cssText = PRIMARY_BUTTON_STYLE;
+        addToChat.innerHTML = `${ICON_COMMENT_FILL_SVG} Add to chat`;
+        // Suppress the default mousedown so clicking the action doesn't blur
+        // the editor and collapse the selection we're about to read.
+        addToChat.addEventListener('mousedown', (event) =>
+          event.preventDefault()
+        );
+        addToChat.addEventListener('click', () => {
+          addSnippetRef.current(selectionAction.getSelectionText(), {
+            selection: selectionAction.selection,
+          });
+          selectionAction.close();
+        });
+
+        const copy = document.createElement('button');
+        copy.type = 'button';
+        copy.textContent = 'Copy';
+        copy.style.cssText = SECONDARY_BUTTON_STYLE;
+        copy.addEventListener('mousedown', (event) => event.preventDefault());
+        copy.addEventListener('click', () => {
+          void navigator.clipboard?.writeText(
+            selectionAction.getSelectionText()
           );
-          addToChat.addEventListener('click', () => {
-            addSnippetRef.current(selectionAction.getSelectionText(), {
-              selection: selectionAction.selection,
-            });
-            selectionAction.close();
-          });
+          selectionAction.close();
+        });
 
-          const copy = document.createElement('button');
-          copy.type = 'button';
-          copy.textContent = 'Copy';
-          copy.style.cssText = SECONDARY_BUTTON_STYLE;
-          copy.addEventListener('mousedown', (event) => event.preventDefault());
-          copy.addEventListener('click', () => {
-            void navigator.clipboard?.writeText(
-              selectionAction.getSelectionText()
-            );
-            selectionAction.close();
-          });
-
-          container.append(addToChat, copy);
-          return container;
-        },
-      }),
+        container.append(addToChat, copy);
+        return container;
+      },
+    }),
     []
   );
 
@@ -171,9 +170,12 @@ export function SelectionDemo({ prerenderedFile }: SelectionDemoProps) {
 
   return (
     <div className="not-prose grid grid-cols-[minmax(0,1fr)] gap-4 md:grid-cols-[minmax(0,1fr)_20rem]">
-      <EditProvider editor={editor}>
-        <File {...prerenderedFile} className="diff-container" contentEditable />
-      </EditProvider>
+      <File
+        {...prerenderedFile}
+        className="diff-container"
+        edit
+        editOptions={editOptions}
+      />
 
       {/* The wrapper takes its height from the editor column (its only in-flow
           sibling); the aside fills it absolutely at md+ so a long snippet list

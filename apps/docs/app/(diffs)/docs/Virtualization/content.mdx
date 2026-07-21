@@ -76,3 +76,9 @@ In vanilla JS, create a `Virtualizer` instance and pass it into
 - Use `resizeDebugging` with the `Virtualizer` temporarily when tuning metrics,
   and to confirm everything is working properly. Don't forget to disable it in
   production.
+- Edit mode's annotation feedback contract is unchanged on virtualized surfaces:
+  replace the current collection from `onChange` or `onItemEditChange` before a
+  later render. A virtualized surface may recreate rendered annotation content
+  as it leaves and re-enters the rendered window, so keep interactive annotation
+  state outside that content. See
+  [Editing with line annotations](#edit-mode-editing-with-line-annotations).
