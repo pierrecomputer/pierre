@@ -4,6 +4,7 @@ import { File } from '../src/components/File';
 import { DEFAULT_THEMES } from '../src/constants';
 import { Editor } from '../src/editor/editor';
 import { PieceTable } from '../src/editor/pieceTable';
+import { DirectionForward } from '../src/editor/selection';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
 import type { FileContents, RenderRange } from '../src/types';
 import { installDom, wait } from './domHarness';
@@ -300,6 +301,36 @@ describe('Editor edits at the bottom of a virtualized window', () => {
       // unrendered gap; the offscreen edit is left for the next scroll.
       const rendered = renderedLineNumbers(content);
       expect(Math.max(...rendered)).toBeLessThanOrEqual(150);
+    } finally {
+      cleanup();
+    }
+  });
+});
+
+describe('Editor selections in a virtualized window', () => {
+  test('limits a document-spanning selection to the rendered lines', async () => {
+    const range = makeRange(4900, 7);
+    const { cleanup, editor, fileContainer } = await createWindowedEditor(
+      10_000,
+      range
+    );
+    editor.setOptions({ roundedSelection: false });
+
+    try {
+      editor.setState({
+        selections: [
+          {
+            start: { line: 0, character: 0 },
+            end: { line: 9999, character: 10 },
+            direction: DirectionForward,
+          },
+        ],
+        view: { scrollLeft: 0, scrollTop: 0 },
+      });
+
+      expect(
+        fileContainer.shadowRoot?.querySelectorAll('[data-selection-range]')
+      ).toHaveLength(range.totalLines);
     } finally {
       cleanup();
     }

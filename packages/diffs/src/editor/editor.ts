@@ -3881,7 +3881,14 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
 
     const { start, end } = range;
-    for (let line = start.line; line <= end.line; line++) {
+    let firstLine = start.line;
+    let endLine = end.line + 1;
+    if (this.#renderRange !== undefined) {
+      const { startingLine, totalLines } = this.#renderRange;
+      firstLine = Math.max(firstLine, startingLine);
+      endLine = Math.min(endLine, startingLine + totalLines);
+    }
+    for (let line = firstLine; line < endLine; line++) {
       if (!this.#isLineVisible(line)) {
         continue;
       }
