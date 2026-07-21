@@ -1,6 +1,7 @@
 {
   "name": "@pierre/js",
   "private": true,
+  "license": "apache-2.0",
   "type": "module",
   "dependencies": {
     "@pierre/vscode-icons": "catalog:"
