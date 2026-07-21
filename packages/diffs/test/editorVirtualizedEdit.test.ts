@@ -3,6 +3,7 @@ import { afterAll, describe, expect, spyOn, test } from 'bun:test';
 import { File } from '../src/components/File';
 import { DEFAULT_THEMES } from '../src/constants';
 import { Editor } from '../src/editor/editor';
+import { PieceTable } from '../src/editor/pieceTable';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
 import type { FileContents, RenderRange } from '../src/types';
 import { installDom, wait } from './domHarness';
@@ -299,6 +300,51 @@ describe('Editor edits at the bottom of a virtualized window', () => {
       // unrendered gap; the offscreen edit is left for the next scroll.
       const rendered = renderedLineNumbers(content);
       expect(Math.max(...rendered)).toBeLessThanOrEqual(150);
+    } finally {
+      cleanup();
+    }
+  });
+});
+
+describe('Editor search matches in a virtualized window', () => {
+  test('resolves positions only for matches in the rendered window', async () => {
+    const range = makeRange(900, 7);
+    const { cleanup, content, editor, fileContainer } =
+      await createWindowedEditor(2000, range);
+    try {
+      content.dispatchEvent(
+        new window.KeyboardEvent('keydown', {
+          bubbles: true,
+          cancelable: true,
+          code: 'KeyF',
+          composed: true,
+          key: 'f',
+          metaKey: true,
+        })
+      );
+      await wait(0);
+      const input = fileContainer.shadowRoot?.querySelector<HTMLInputElement>(
+        '[data-search-panel] input[data-search]'
+      );
+      expect(input).not.toBeNull();
+      input!.value = 'line';
+      input!.dispatchEvent(new window.Event('input', { bubbles: true }));
+
+      editor.setOptions({ matchBrackets: false });
+      const positionAt = spyOn(PieceTable.prototype, 'positionAt');
+      try {
+        editor.setSelections([collapsedCaret(903)]);
+
+        // There is one match per document line. A repaint resolves only both
+        // endpoints of the seven rendered matches, not all 2,000 matches.
+        expect(positionAt).toHaveBeenCalledTimes(range.totalLines * 2);
+        expect(
+          fileContainer.shadowRoot?.querySelectorAll('[data-match-range]')
+            .length
+        ).toBe(range.totalLines);
+      } finally {
+        positionAt.mockRestore();
+      }
     } finally {
       cleanup();
     }

@@ -2511,14 +2511,16 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         // whole document. #suppressNativeSelectionSync then stops the resulting
         // selectionchange from reading that shorter range back over #selections
         // before the delete runs.
-        const renderedLines = this.#getRenderedEditableLineRange();
-        if (renderedLines !== undefined) {
+        const renderedLineRanges = this.#getRenderedEditableLineRanges();
+        const firstRenderedLine = renderedLineRanges[0]?.[0];
+        const lastRenderedLine = renderedLineRanges.at(-1)?.[1];
+        if (firstRenderedLine !== undefined && lastRenderedLine !== undefined) {
           this.#suppressNativeSelectionSync = true;
           this.#setWindowSelection({
-            start: { line: renderedLines.first, character: 0 },
+            start: { line: firstRenderedLine, character: 0 },
             end: {
-              line: renderedLines.last,
-              character: textDocument.getLineLength(renderedLines.last),
+              line: lastRenderedLine,
+              character: textDocument.getLineLength(lastRenderedLine),
             },
             direction: DirectionForward,
           });
@@ -3772,6 +3774,15 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
     const textDocument = this.#textDocument;
     if (this.#matches !== undefined && textDocument !== undefined) {
+      const matches = this.#matches;
+      const renderRange = this.#renderRange;
+      const shouldCullMatches =
+        (renderRange !== undefined &&
+          Number.isFinite(renderRange.totalLines)) ||
+        (this.#isDiff && this.#fileInstance?.options.expandUnchanged !== true);
+      const renderedLineRanges = shouldCullMatches
+        ? this.#getRenderedEditableLineRanges()
+        : undefined;
       const primarySelection = this.#selections?.at(-1);
       const primaryStartOffset =
         primarySelection !== undefined
@@ -3781,19 +3792,59 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         primarySelection !== undefined
           ? textDocument.offsetAt(primarySelection.end)
           : -1;
-      for (const [startOffset, endOffset] of this.#matches) {
-        const range: Range = {
-          start: textDocument.positionAt(startOffset),
-          end: textDocument.positionAt(endOffset),
-        };
-        const isFocused =
-          primaryStartOffset === startOffset && primaryEndOffset === endOffset;
-        this.#renderSelection(
-          renderCtx,
-          'match',
-          range,
-          isFocused ? 'focus' : undefined
-        );
+      let firstMatchIndex = 0;
+      const rangeCount = renderedLineRanges?.length ?? 1;
+      for (let rangeIndex = 0; rangeIndex < rangeCount; rangeIndex++) {
+        let visibleEndOffset = Infinity;
+        const lineRange = renderedLineRanges?.[rangeIndex];
+        if (lineRange !== undefined) {
+          const [firstLine, lastLine] = lineRange;
+          const visibleStartOffset = textDocument.offsetAt({
+            line: firstLine,
+            character: 0,
+          });
+          const endLine = lastLine + 1;
+          visibleEndOffset =
+            endLine < textDocument.lineCount
+              ? textDocument.offsetAt({ line: endLine, character: 0 })
+              : textDocument.offsetAt({
+                  line: endLine - 1,
+                  character: textDocument.getLineLength(endLine - 1),
+                });
+
+          // Matches are sorted and non-overlapping, so narrow the rendered
+          // offset window before resolving any match positions through the treap.
+          let low = firstMatchIndex;
+          let high = matches.length;
+          while (low < high) {
+            const middle = low + Math.floor((high - low) / 2);
+            if (matches[middle][1] <= visibleStartOffset) {
+              low = middle + 1;
+            } else {
+              high = middle;
+            }
+          }
+          firstMatchIndex = low;
+        }
+        for (; firstMatchIndex < matches.length; firstMatchIndex++) {
+          const [startOffset, endOffset] = matches[firstMatchIndex];
+          if (startOffset >= visibleEndOffset) {
+            break;
+          }
+          const range: Range = {
+            start: textDocument.positionAt(startOffset),
+            end: textDocument.positionAt(endOffset),
+          };
+          const isFocused =
+            primaryStartOffset === startOffset &&
+            primaryEndOffset === endOffset;
+          this.#renderSelection(
+            renderCtx,
+            'match',
+            range,
+            isFocused ? 'focus' : undefined
+          );
+        }
       }
     }
 
@@ -4948,18 +4999,14 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     return undefined;
   }
 
-  // Returns the first and last document lines that have an editable row in the
-  // current (virtualized) render window, or undefined when none are rendered.
-  // Used by select-all to anchor a native selection: only rendered lines
-  // resolve to DOM nodes, so the native range must stay within what is on
-  // screen even though the document selection spans the whole file.
-  #getRenderedEditableLineRange(): { first: number; last: number } | undefined {
+  // Returns contiguous document-line ranges that have editable rows in the
+  // current render window. Collapsed diff sections create gaps between ranges.
+  #getRenderedEditableLineRanges(): [first: number, last: number][] {
     const contentElement = this.#contentElement;
     if (contentElement === undefined) {
-      return undefined;
+      return [];
     }
-    let first: number | undefined;
-    let last: number | undefined;
+    const ranges: [first: number, last: number][] = [];
     for (const child of contentElement.children) {
       const el = child as HTMLElement;
       const lineType = el.dataset.lineType;
@@ -4972,16 +5019,14 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         continue;
       }
       const line = lineNumber - 1;
-      if (first === undefined || line < first) {
-        first = line;
-      }
-      if (last === undefined || line > last) {
-        last = line;
+      const current = ranges.at(-1);
+      if (current !== undefined && line <= current[1] + 1) {
+        current[1] = Math.max(current[1], line);
+      } else {
+        ranges.push([line, line]);
       }
     }
-    return first === undefined || last === undefined
-      ? undefined
-      : { first, last };
+    return ranges;
   }
 
   #getLineElement(line: number): HTMLElement | undefined {
