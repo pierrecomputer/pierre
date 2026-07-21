@@ -250,6 +250,12 @@ export interface EditorOptions<LAnnotation> {
 // larger inserts fall back to the bounded buffer-only path instead of building a
 // row per inserted line. A safety bound, not a correctness-critical value.
 const MAX_EDIT_WIDEN_WINDOW_MULTIPLE = 2;
+
+// Wrap offsets persist across render-range syncs (see #resetCache), so
+// scrolling through a very large file could otherwise accumulate an entry per
+// line. Past this many lines the cache resets and refills lazily for whatever
+// is measured next. A memory bound, not a correctness-critical value.
+const MAX_WRAP_OFFSETS_CACHE_LINES = 10_000;
 const SELECTION_ACTION_POPOVER_PLACEMENT_KEY = 'selection-action';
 const MULTI_SELECTION_CLIPBOARD_TYPE =
   'application/vnd.pierre.diffs-selections+json';
@@ -921,6 +927,9 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#tokenizer?.cleanUp();
       this.#tokenizer = undefined;
       this.#resetState();
+      // Wrap offsets survive #resetCache, so a document swap on a reused
+      // content element must drop the previous document's measurements here.
+      this.#wrapLineOffsetsCache.clear();
       this.#selections = this.#initSelections;
       if (this.#textDocument !== undefined && this.#options.__debug === true) {
         console.log(
@@ -1326,9 +1335,15 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }));
   }
 
+  // Drop the DOM-geometry caches (memoized row elements, measured line Ys,
+  // last caret x). Wrap offsets are intentionally NOT cleared here: they
+  // depend only on line text, font metrics, and content width — not on the
+  // rendered rows — so they stay valid across render-range syncs and row
+  // rebuilds. The sites where those inputs actually change (text edits in
+  // #applyChange, width changes in #handleLayoutResize, font remeasure,
+  // document swaps, cleanUp) invalidate the wrap cache themselves.
   #resetCache(): void {
     this.#lineYCache.clear();
-    this.#wrapLineOffsetsCache.clear();
     this.#lineElementsCache.clear();
     this.#lastAccessedCharX = undefined;
   }
@@ -2900,9 +2915,14 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     // web font finished loading) while this same content element survived, so
     // discard memoized non-ASCII text widths and let them re-measure.
     this.#metrics.clearTextWidthCache();
-    if (contentWidthChanged && (this.#isWrap || lineAnnotations > 0)) {
-      this.#lineYCache.clear();
+    if (contentWidthChanged) {
+      // Wrap points depend on the content width, so cached offsets go stale
+      // even while wrap is off — the mode can be toggled back on before the
+      // next width change.
       this.#wrapLineOffsetsCache.clear();
+      if (this.#isWrap || lineAnnotations > 0) {
+        this.#lineYCache.clear();
+      }
     }
     if (
       this.#selections !== undefined ||
@@ -2944,6 +2964,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#gutterWidthCache = undefined;
       this.#contentWidthCache = undefined;
       this.#resetCache();
+      // The loaded font changes glyph widths, which moves every wrap point.
+      this.#wrapLineOffsetsCache.clear();
       if (
         this.#selections !== undefined ||
         this.#matches !== undefined ||
@@ -4758,10 +4780,38 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         }
       }
     }
-    if (this.#isWrap) {
-      for (const line of this.#wrapLineOffsetsCache.keys()) {
-        if (line >= change.startLine) {
-          this.#wrapLineOffsetsCache.delete(line);
+    // Wrap offsets persist while overflow is 'scroll' (the mode can toggle
+    // back before any width/font/document invalidation runs), so edits must
+    // invalidate them in every mode, not just while wrap is on. The size
+    // guard keeps edits free when nothing was ever measured.
+    if (this.#wrapLineOffsetsCache.size > 0) {
+      // Lines outside the edited ranges keep both their text and their
+      // numbering when no renumbering happened anywhere, so only the rewritten
+      // lines need new wrap measurements. A net-zero lineDelta alone is not
+      // enough: a multi-edit batch can cancel out (one edit removes a line,
+      // another adds one) while still renumbering the lines between the edits.
+      // It is sufficient when the batch coalesced into a single range (any
+      // renumbered lines sit inside that range), or when every individual edit
+      // kept the line count.
+      const keepsLineNumbers =
+        change.lineDelta === 0 &&
+        (change.changedLineRanges.length === 1 ||
+          change.changedLineChanges?.every(
+            ([, , editLineDelta]) => editLineDelta === 0
+          ) === true);
+      if (keepsLineNumbers) {
+        for (const [rangeStart, rangeEnd] of change.changedLineRanges) {
+          for (let line = rangeStart; line <= rangeEnd; line++) {
+            this.#wrapLineOffsetsCache.delete(line);
+          }
+        }
+      } else {
+        // Renumbering invalidates every cached entry from startLine onward:
+        // its keyed line no longer holds the text that was measured.
+        for (const line of this.#wrapLineOffsetsCache.keys()) {
+          if (line >= change.startLine) {
+            this.#wrapLineOffsetsCache.delete(line);
+          }
         }
       }
     }
@@ -5148,6 +5198,9 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     if (cachedOffsets !== undefined) {
       return cachedOffsets;
     }
+    if (this.#wrapLineOffsetsCache.size >= MAX_WRAP_OFFSETS_CACHE_LINES) {
+      this.#wrapLineOffsetsCache.clear();
+    }
 
     const lineText = this.#textDocument?.getLineText(line);
     if (lineText === undefined || lineText.length === 0) {
@@ -5186,34 +5239,53 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       const wrapLineStartLeft =
         div.getBoundingClientRect().left + this.#metrics.ch;
 
-      let previousOffset = 0;
-      let lastTop = Number.NEGATIVE_INFINITY;
+      // Measurement steps through grapheme clusters when the text needs
+      // Unicode-aware boundaries, single UTF-16 units otherwise. Grapheme
+      // `index` spans [graphemeStart(index), graphemeStart(index + 1)).
+      const graphemeCount =
+        unicodeOffsets === undefined
+          ? lineText.length
+          : unicodeOffsets.length - 1;
+      const graphemeStart = (index: number): number =>
+        unicodeOffsets === undefined ? index : unicodeOffsets[index];
+      const measureGrapheme = (index: number): DOMRect => {
+        range.setStart(textNode, graphemeStart(index));
+        range.setEnd(textNode, graphemeStart(index + 1));
+        return range.getBoundingClientRect();
+      };
 
-      for (let i = 0, offsetIndex = 0; i < lineText.length; ) {
-        const nextOffset =
-          unicodeOffsets === undefined
-            ? i + 1
-            : unicodeOffsets[offsetIndex + 1];
-        range.setStart(textNode, i);
-        range.setEnd(textNode, nextOffset);
-
-        // A new visual line starts whenever the character's top edge moves
-        // below the previous character's top edge.
-        const { left, top } = range.getBoundingClientRect();
-        if (top > lastTop) {
-          // Safari can report the first range on a wrapped visual line as
-          // starting one character past the visual line start. Use the previous
-          // offset so segment-local caret math begins at the actual wrap point.
-          const startsPastLineStart =
-            isSafari() &&
-            starts.length > 0 &&
-            left - wrapLineStartLeft > this.#metrics.ch / 2;
-          starts.push(startsPastLineStart ? previousOffset : i);
-          lastTop = top;
+      // A new visual line starts whenever a grapheme's top edge moves below
+      // the previous grapheme's top edge. Line breaking assigns graphemes to
+      // visual lines in logical order, so tops are non-decreasing with the
+      // text offset and each wrap point can be located by binary-searching for
+      // the first grapheme below the current visual line — O(wraps * log n)
+      // rect measurements instead of one per character.
+      starts.push(0);
+      let lastTop = measureGrapheme(0).top;
+      let searchStart = 1;
+      while (searchStart < graphemeCount) {
+        let low = searchStart;
+        let high = graphemeCount;
+        while (low < high) {
+          const mid = (low + high) >> 1;
+          if (measureGrapheme(mid).top > lastTop) {
+            high = mid;
+          } else {
+            low = mid + 1;
+          }
         }
-        previousOffset = i;
-        i = nextOffset;
-        offsetIndex++;
+        if (low >= graphemeCount) {
+          break;
+        }
+        const { left, top } = measureGrapheme(low);
+        // Safari can report the first range on a wrapped visual line as
+        // starting one character past the visual line start. Use the previous
+        // grapheme so segment-local caret math begins at the actual wrap point.
+        const startsPastLineStart =
+          isSafari() && left - wrapLineStartLeft > this.#metrics.ch / 2;
+        starts.push(graphemeStart(startsPastLineStart ? low - 1 : low));
+        lastTop = top;
+        searchStart = low + 1;
       }
 
       const offsets = new Uint32Array(starts.length + 1);

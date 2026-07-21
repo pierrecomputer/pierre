@@ -114,7 +114,12 @@ function restorePrototypeProperty(
 // #wrapLineText detects visual row starts by checking when a Range's top moves
 // downward. jsdom does not measure ranges, so this harness reports a new top
 // every `columns` UTF-16 offsets, making wrap offsets deterministic.
-function installWrapMeasurement(columns: number): { restore(): void } {
+// rangeMeasurements() exposes how many Range rects were taken so tests can
+// assert measurement cost and cache retention.
+function installWrapMeasurement(columns: number): {
+  rangeMeasurements(): number;
+  restore(): void;
+} {
   const rangeProto = Object.getPrototypeOf(document.createRange()) as object;
   const elementProto = HTMLElement.prototype;
   const originalRangeRect = Object.getOwnPropertyDescriptor(
@@ -126,9 +131,11 @@ function installWrapMeasurement(columns: number): { restore(): void } {
     'getBoundingClientRect'
   );
 
+  let rangeMeasurements = 0;
   Object.defineProperty(rangeProto, 'getBoundingClientRect', {
     configurable: true,
     value(this: Range): DOMRect {
+      rangeMeasurements++;
       const offset = this.startOffset;
       return rect((offset % columns) * 8, Math.floor(offset / columns) * ROW);
     },
@@ -141,6 +148,9 @@ function installWrapMeasurement(columns: number): { restore(): void } {
   });
 
   return {
+    rangeMeasurements(): number {
+      return rangeMeasurements;
+    },
     restore(): void {
       restorePrototypeProperty(
         rangeProto,
@@ -185,7 +195,9 @@ async function createWrapEditor(
   cleanup(): void;
   content: HTMLElement;
   editor: Editor<undefined>;
+  file: File<undefined>;
   fileContainer: HTMLElement;
+  rangeMeasurements(): number;
   window: EditorTestWindow;
 }> {
   const dom = installDom();
@@ -217,7 +229,9 @@ async function createWrapEditor(
     },
     content,
     editor,
+    file,
     fileContainer,
+    rangeMeasurements: wrapMeasurement.rangeMeasurements,
     window: dom.window as unknown as EditorTestWindow,
   };
 }
@@ -490,6 +504,102 @@ describe('editor wrap caret position', () => {
       editor.cleanUp();
       file.cleanUp();
       dom.cleanup();
+    }
+  });
+});
+
+describe('wrap measurement cost and cache retention', () => {
+  test('wrap points on a long line are found without measuring every character', async () => {
+    // 1000 chars at 100 columns = 10 visual rows. The per-character
+    // measurement loop this guards against took one Range rect per UTF-16
+    // unit per measurement pass; binary-searching each wrap point needs
+    // ~rows * log2(chars) rects, far under one per character even across
+    // several passes.
+    const LINE = 'x'.repeat(1000);
+    const { cleanup, editor, fileContainer, rangeMeasurements } =
+      await createWrapEditor(`${LINE}\nnext`, 100);
+    try {
+      setCaret(editor, 0, 950);
+      // Row 9, segment-relative column 50 — proves the measured wrap offsets
+      // are still correct.
+      expect(caretXY(fileContainer)).toEqual({ x: colX(50), y: 9 * ROW_H });
+      expect(rangeMeasurements()).toBeLessThan(LINE.length / 2);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('an edit that keeps the line count preserves wrap offsets of untouched lines', async () => {
+    const { cleanup, editor, fileContainer, rangeMeasurements } =
+      await createWrapEditor(`${'a'.repeat(20)}\n${'b'.repeat(20)}`, 10);
+    try {
+      // Prime line 1's wrap offsets: character 15 sits on its second visual
+      // row (the line element itself reports offsetTop 0 under jsdom).
+      setCaret(editor, 1, 15);
+      expect(caretXY(fileContainer)).toEqual({ x: colX(5), y: ROW_H });
+
+      // Park the caret on line 0 so the edit below only renders against line
+      // 0 — line 1's cached offsets are not re-primed as a side effect of the
+      // edit's own caret paint, which would mask stale-cache invalidation.
+      setCaret(editor, 0, 0);
+
+      // Grow line 0 without changing the line count. Only line 0's wrap
+      // offsets are invalidated; line 1 keeps both its number and its text.
+      editor.applyEdits([
+        {
+          range: {
+            start: { line: 0, character: 0 },
+            end: { line: 0, character: 0 },
+          },
+          newText: 'x',
+        },
+      ]);
+      await wait(0);
+      const measurementsAfterEdit = rangeMeasurements();
+
+      // Moving the caret within line 1 must be served from the cache — before
+      // range-scoped invalidation, the edit dropped every line at or after
+      // line 0 and this re-measured line 1 from scratch.
+      setCaret(editor, 1, 5);
+      expect(caretXY(fileContainer)).toEqual({ x: colX(5), y: 0 });
+      expect(rangeMeasurements()).toBe(measurementsAfterEdit);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('an edit made while overflow is scroll still invalidates wrap offsets', async () => {
+    const { cleanup, editor, file, fileContainer, rangeMeasurements } =
+      await createWrapEditor(`${'a'.repeat(20)}\nnext`, 10);
+    try {
+      // Prime line 0's wrap offsets in wrap mode.
+      setCaret(editor, 0, 15);
+      expect(caretXY(fileContainer)).toEqual({ x: colX(5), y: ROW_H });
+
+      // Toggle to scroll, edit line 0, toggle back. The wrap cache survives
+      // the whole round trip, and the edit runs while wrap is off — skipping
+      // invalidation here would leave offsets measured for the old text.
+      file.setOptions({ ...file.options, overflow: 'scroll' });
+      editor.applyEdits([
+        {
+          range: {
+            start: { line: 0, character: 0 },
+            end: { line: 0, character: 0 },
+          },
+          newText: 'x',
+        },
+      ]);
+      await wait(0);
+      file.setOptions({ ...file.options, overflow: 'wrap' });
+
+      // Back in wrap mode, the edited line must be re-measured rather than
+      // served from offsets that predate the edit.
+      const beforeReturn = rangeMeasurements();
+      setCaret(editor, 0, 15);
+      expect(caretXY(fileContainer)).toEqual({ x: colX(5), y: ROW_H });
+      expect(rangeMeasurements()).toBeGreaterThan(beforeReturn);
+    } finally {
+      cleanup();
     }
   });
 });
