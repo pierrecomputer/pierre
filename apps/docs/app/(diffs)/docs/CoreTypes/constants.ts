@@ -139,6 +139,40 @@ interface ChangeContent {
   options,
 };
 
+export const LINE_ANNOTATION_TYPES: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'line_annotations.ts',
+    contents: `import type {
+  DiffLineAnnotation,
+  LineAnnotation,
+} from '@pierre/diffs';
+
+interface ThreadMetadata {
+  // Position-independent identity for application-owned state.
+  id: string;
+}
+
+const fileAnnotations: LineAnnotation<ThreadMetadata>[] = [
+  { lineNumber: 0, metadata: { id: 'file-summary' } },
+  { lineNumber: 5, metadata: { id: 'line-five-review' } },
+];
+
+const diffAnnotations: DiffLineAnnotation<ThreadMetadata>[] = [
+  {
+    side: 'additions',
+    lineNumber: 12,
+    metadata: { id: 'new-line-review' },
+  },
+  {
+    side: 'deletions',
+    lineNumber: 9,
+    metadata: { id: 'old-line-review' },
+  },
+];`,
+  },
+  options,
+};
+
 export const PARSE_DIFF_FROM_FILE_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
     name: 'parseDiffFromFile.ts',

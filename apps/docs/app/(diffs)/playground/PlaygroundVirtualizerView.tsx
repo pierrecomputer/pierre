@@ -4,6 +4,7 @@ import {
   type DiffLineAnnotation,
   type FileDiffMetadata,
   type FileDiffOptions,
+  isDiffAnnotationCollection,
   VirtualizedFileDiff,
   Virtualizer,
 } from '@pierre/diffs';
@@ -150,7 +151,10 @@ export function PlaygroundVirtualizerView({
       // the set; retire its orphaned React root.
       const editor = new Editor<VirtualizerAnnotationMetadata>({
         onChange: (_file, lineAnnotations) => {
-          if (lineAnnotations == null) {
+          if (
+            lineAnnotations == null ||
+            !isDiffAnnotationCollection(lineAnnotations)
+          ) {
             return;
           }
           const previous = annotationsRef.current[index];

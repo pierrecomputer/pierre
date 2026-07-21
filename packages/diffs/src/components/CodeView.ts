@@ -31,6 +31,7 @@ import type {
   DiffsEditor,
   FileContents,
   HunkSeparators,
+  LineAnnotation,
   PendingCodeViewLayoutReset,
   SelectedLineRange,
   SelectionSide,
@@ -438,7 +439,10 @@ interface CodeViewItemEditChange<LAnnotation> {
   // session ends because the item was removed from the CodeView.
   item: CodeViewItem<LAnnotation>;
   file: FileContents;
-  lineAnnotations: DiffLineAnnotation<LAnnotation>[] | undefined;
+  lineAnnotations:
+    | LineAnnotation<LAnnotation>[]
+    | DiffLineAnnotation<LAnnotation>[]
+    | undefined;
 }
 
 // Mutable per-editor state shared with the CodeView-built onChange closure.
@@ -547,7 +551,9 @@ export interface CodeViewOptions<LAnnotation>
   onItemEditChange?(
     item: CodeViewItem<LAnnotation>,
     file: FileContents,
-    lineAnnotations?: DiffLineAnnotation<LAnnotation>[]
+    lineAnnotations?:
+      | LineAnnotation<LAnnotation>[]
+      | DiffLineAnnotation<LAnnotation>[]
   ): void;
   /**
    * Called once when an item's edit session ends — edit turned off, item
@@ -565,7 +571,9 @@ export interface CodeViewOptions<LAnnotation>
   onItemEditComplete?(
     item: CodeViewItem<LAnnotation>,
     file: FileContents,
-    lineAnnotations?: DiffLineAnnotation<LAnnotation>[]
+    lineAnnotations?:
+      | LineAnnotation<LAnnotation>[]
+      | DiffLineAnnotation<LAnnotation>[]
   ): void;
 
   /** Render a non-virtualized element at the very start of the scroll content,

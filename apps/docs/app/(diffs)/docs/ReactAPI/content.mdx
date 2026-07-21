@@ -75,6 +75,12 @@ common set of props for configuration, annotations, and styling. The `File`
 component has similar props, but uses `LineAnnotation` instead of
 `DiffLineAnnotation` (no `side` property).
 
+When one of these components is attached to an `Editor`, keep its annotations in
+application-owned state and replace them with the current collection emitted by
+`Editor.onChange`. See
+[Editing with line annotations](#edit-mode-editing-with-line-annotations) for
+the React `flushSync` pattern and annotation-content lifetime guidance.
+
 `CodeView` reuses many of the same option names internally, but it has its own
 controlled `items` mode, imperative mode with optional `initialItems`, viewer
 ref, and mixed-item render props. See [CodeView](#codeview) for the dedicated

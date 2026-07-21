@@ -10,6 +10,7 @@ import type {
   DiffsEditor,
   FileContents,
   HighlightedToken,
+  LineAnnotation,
 } from '../src/types';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import {
@@ -29,7 +30,9 @@ interface StubEditor extends DiffsEditor<undefined> {
   /** The CodeView-built onChange handed to the factory. */
   emitChange(
     file: FileContents,
-    lineAnnotations?: DiffLineAnnotation<undefined>[]
+    lineAnnotations?:
+      | LineAnnotation<undefined>[]
+      | DiffLineAnnotation<undefined>[]
   ): void;
 }
 
@@ -799,6 +802,55 @@ describe('CodeView item edit mode', () => {
 
       editors[0].emitChange({ name: 'a.ts', contents: 'edited' });
       expect(changes).toEqual([['a', 'edited']]);
+    } finally {
+      viewer.cleanUp();
+      await wait(0);
+      cleanup();
+    }
+  });
+
+  test('forwards file and diff annotation collections by reference', async () => {
+    const { cleanup } = installDom();
+    const { editors, createEditor } = createEditorHarness();
+    const changes: Array<{
+      item: CodeViewItem<undefined>;
+      lineAnnotations:
+        | LineAnnotation<undefined>[]
+        | DiffLineAnnotation<undefined>[]
+        | undefined;
+    }> = [];
+    const viewer = new CodeView({
+      createEditor,
+      onItemEditChange(item, _file, lineAnnotations) {
+        changes.push({ item, lineAnnotations });
+      },
+    });
+    try {
+      viewer.setup(createRoot());
+      await renderItems(viewer, [
+        makeEditFileItem('file'),
+        makeEditDiffItem('diff'),
+      ]);
+
+      const fileAnnotations: LineAnnotation<undefined>[] = [{ lineNumber: 2 }];
+      const diffAnnotations: DiffLineAnnotation<undefined>[] = [
+        { side: 'additions', lineNumber: 2 },
+      ];
+      editors[0].emitChange(makeFile('file.ts'), fileAnnotations);
+      editors[1].emitChange(
+        { name: 'diff.txt', contents: 'one\n' },
+        diffAnnotations
+      );
+
+      expect(changes.length).toBe(2);
+      expect(changes[0].item.type).toBe('file');
+      expect(changes[0].item.id).toBe('file');
+      // The delivered collection is the exact array the editor reported, so
+      // consumers can bail on reference equality for unaffected edits.
+      expect(changes[0].lineAnnotations).toBe(fileAnnotations);
+      expect(changes[1].item.type).toBe('diff');
+      expect(changes[1].item.id).toBe('diff');
+      expect(changes[1].lineAnnotations).toBe(diffAnnotations);
     } finally {
       viewer.cleanUp();
       await wait(0);

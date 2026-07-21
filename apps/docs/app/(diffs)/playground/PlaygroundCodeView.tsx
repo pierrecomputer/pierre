@@ -6,6 +6,8 @@ import {
   type CodeViewLineSelection,
   type DiffLineAnnotation,
   type FileContents,
+  isDiffAnnotationCollection,
+  isFileAnnotationCollection,
   type LineAnnotation,
   parseDiffFromFile,
   type SelectedLineRange,
@@ -88,7 +90,9 @@ export function PlaygroundCodeView({
     (
       item: PlaygroundItem,
       _file: FileContents,
-      lineAnnotations?: DiffLineAnnotation<PlaygroundAnnotationMetadata>[]
+      lineAnnotations?:
+        | LineAnnotation<PlaygroundAnnotationMetadata>[]
+        | DiffLineAnnotation<PlaygroundAnnotationMetadata>[]
     ) => {
       if (lineAnnotations == null) {
         return;
@@ -99,15 +103,30 @@ export function PlaygroundCodeView({
           if (target == null || target.annotations === lineAnnotations) {
             return current;
           }
-          return current.map((existing) =>
-            existing.id === item.id
-              ? {
-                  ...existing,
-                  annotations: lineAnnotations,
-                  version: (existing.version ?? 0) + 1,
-                }
-              : existing
-          );
+          return current.map((existing) => {
+            if (existing.id !== item.id || existing.type !== item.type) {
+              return existing;
+            }
+            const version = (existing.version ?? 0) + 1;
+            if (existing.type === 'file') {
+              if (!isFileAnnotationCollection(lineAnnotations)) {
+                return existing;
+              }
+              return {
+                ...existing,
+                annotations: lineAnnotations,
+                version,
+              };
+            }
+            if (!isDiffAnnotationCollection(lineAnnotations)) {
+              return existing;
+            }
+            return {
+              ...existing,
+              annotations: lineAnnotations,
+              version,
+            };
+          });
         });
       });
     },

@@ -1235,6 +1235,8 @@ export interface DiffsTextDocument {
 export interface CodeViewCreateEditorOptions<LAnnotation> {
   onChange: (
     file: FileContents,
-    lineAnnotations?: DiffLineAnnotation<LAnnotation>[]
+    lineAnnotations?:
+      | LineAnnotation<LAnnotation>[]
+      | DiffLineAnnotation<LAnnotation>[]
   ) => void;
 }

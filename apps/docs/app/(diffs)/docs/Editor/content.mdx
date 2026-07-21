@@ -75,6 +75,80 @@ expand buttons keep working. The diff layout is preserved, so a `FileDiff` or
 `MultiFileDiff` stays in whatever view it was rendered in; in unified diffs,
 deleted lines and annotation lines remain read-only.
 
+### Editing with line annotations
+
+Applications own the annotation collection passed to a `File`, `FileDiff`, or
+other editable surface. When an edit affects annotation coordinates, the editor
+remaps them and passes the complete current collection to `onChange` alongside
+the edited file. This collection is authoritative when present; it is not a
+delta. Replace your application-owned collection with it before a later render
+can reapply stale coordinates.
+
+The editor preserves the existing array reference for ordinary same-line edits
+and other edits that do not affect any annotation. When a structural edit
+touches, moves, or removes an annotation, it returns a new array. Check that
+identity before publishing state so ordinary typing does not cause unnecessary
+annotation renders.
+
+Remapping follows these rules:
+
+- A `LineAnnotation`, or a `DiffLineAnnotation` on the `additions` side, follows
+  structural edits in the editable file. Inserting lines above it moves it down;
+  deleting earlier lines moves it up.
+- A `DiffLineAnnotation` on the `deletions` side stays attached to the read-only
+  old-file side and is not remapped.
+- `lineNumber: 0` remains a file-level annotation and is not remapped.
+- Deleting only an annotated line's text leaves an annotated blank line. To
+  remove a non-final line and its annotation, delete from its start through the
+  start of the next line, consuming its trailing line break. To remove a final
+  line that has a preceding line, delete from the end of the preceding line
+  through EOF, consuming the preceding line break. A one-line document always
+  retains one blank line.
+- Deleting only the line break before an annotated line while retaining its text
+  merges that text into the previous line and moves the annotation to the merged
+  line.
+- Undo and redo use the same `onChange` path, restoring or removing annotations
+  with the corresponding document state.
+
+For annotations that survive, remapping changes only their coordinates. Metadata
+is preserved, so give each interactive annotation a stable, position-independent
+ID in `metadata` and key application-owned drafts or UI state by that ID.
+
+The shared `onChange` callback accepts either annotation shape: standalone
+`File` surfaces emit `LineAnnotation[]`, while diff surfaces emit
+`DiffLineAnnotation[]`. Narrow the collection before reading the diff-only
+`side` property. Use `isFileAnnotationCollection` or
+`isDiffAnnotationCollection` when the surface type is not already known.
+
+In React, synchronously publish a changed annotation array with `flushSync` so
+the annotation placement updates with the edited content before paint. Do not
+wrap every `onChange` update in `flushSync`: bail out when the emitted array is
+the same object.
+
+<Notice variant="warning" icon={<IconCiWarningFill />}>
+  React may recreate annotation content when annotations are removed, restored,
+  or reordered, or when a `CodeView` item leaves the virtualized window.
+  `flushSync` keeps the placement update visually atomic, but it does not
+  preserve component-local state. Keep drafts and other interactive state in
+  application-owned state keyed by a stable annotation metadata ID. We intend to
+  preserve annotation node identity in a future release, so current remounting
+  behavior is not a long-term API contract.
+</Notice>
+
+In vanilla JS, replace the annotation collection in your external variable or
+store before updating the surface. When the emitted array changes, schedule the
+same render function used for the initial surface after `onChange` returns,
+passing the edited file and replacement annotations. For `CodeView`, pass the
+collection to `updateItem` with a `version` increment. In every case, updating
+the source of truth prevents a later render from restoring stale line numbers.
+
+Use one `Editor` per concurrently editable standalone surface. `CodeView`
+instead creates and manages one editor per editable item. See the
+[playground](/playground) for the complete interaction: submit a line
+annotation, enable editing, insert a line above it, remove its logical line,
+then use undo and redo. The playground controls demonstrate the integration;
+they are not additional public editor options.
+
 ### React
 
 Give a permanently mounted `EditProvider` a stable `createEditor` factory, then
@@ -126,7 +200,7 @@ to true. Re-entering edit mode creates a fresh editor with fresh history and
 state. Sibling editable surfaces receive independent editors and callbacks; use
 `onAttach` with your own ref when controls need imperative APIs such as history,
 selections, markers, save, or search. Use `Virtualizer` for large editable
-files.
+files. The `FileDiff` tab below shows the controlled annotation feedback loop.
 
 <EditorComponentTabs
   fileExample={editorReactExample}
@@ -138,7 +212,9 @@ files.
 
 Render with `File` or `FileDiff` first, then attach the editor with
 `editor.edit(component)`. Use `VirtualizedFile` and `VirtualizedFileDiff` for
-large editable files. Call `cleanUp()` when the editor is removed.
+large editable files. Keep any emitted annotation collection in your external
+source of truth before a later render. Call `cleanUp()` when the editor is
+removed. The `FileDiff` tab below includes this synchronization.
 
 <EditorComponentTabs
   fileExample={editorVanillaFileExample}
@@ -154,11 +230,13 @@ item, and pass creation-time item-editor behavior through the `CodeView`
 instead. Increment the item's `version` whenever `edit` changes.
 
 `CodeView` uses item-aware callbacks instead of `editOptions.onChange`.
-`onItemEditChange` receives the owning item with each live change.
-`onItemEditComplete` receives the item and latest contents when a changed
-session ends because editing is disabled or the item is collapsed or removed.
-Sessions with no changes do not emit it. Resetting, cleaning up, or unmounting
-the viewer is silent teardown.
+`onItemEditChange` receives the owning item with each live change: replace that
+item's annotations whenever the emitted array changes, and increment its
+`version`. This live update keeps annotation coordinates synchronized throughout
+the edit session. `onItemEditComplete` receives the item and latest contents
+when a changed session ends because editing is disabled or the item is collapsed
+or removed. Sessions with no changes do not emit it. Resetting, cleaning up, or
+unmounting the viewer is silent teardown.
 
 Persist edited contents to the item's `file`, or rebuild its `fileDiff`. Assign
 a fresh `cacheKey` and increment `version`; `CodeView` does not update item data

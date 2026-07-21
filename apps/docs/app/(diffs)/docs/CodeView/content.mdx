@@ -158,6 +158,33 @@ through React would be expensive. In imperative mode, omit `items`, optionally
 seed the viewer with `initialItems`, and use the `CodeViewHandle` to add new
 items or update existing ones.
 
+### Editing Item Annotations
+
+When an editable item has annotations, `onItemEditChange` receives the owning
+item, its edited `FileContents`, and the complete current annotation collection.
+For a diff item, those contents represent the editable new-file side. When the
+emitted annotation array is a different object, replace `item.annotations` and
+increment the item's `version`. `CodeView` does not write either value for you.
+
+The callback annotation type is `LineAnnotation[] | DiffLineAnnotation[]`: file
+items emit the side-less shape and diff items emit annotations with a `side`.
+Use `isFileAnnotationCollection` or `isDiffAnnotationCollection` to narrow it
+before reading shape-specific fields.
+
+When React owns the `CodeView` item list through `items`, publish a new `items`
+array containing the updated item inside `flushSync` so annotation placement
+updates with the edited content before paint. When `CodeView` owns the list in
+React's imperative mode, call `updateItem` through the component ref; in vanilla
+JS, call `updateItem` on the `CodeView` instance. Skip the update when the
+emitted array is the same object as the item's current annotations, since
+ordinary same-line typing reuses that array.
+
+Keep `onItemEditComplete` focused on committing the final `file` contents or
+rebuilding `fileDiff` with a fresh `cacheKey`. Live annotations should already
+be synchronized through `onItemEditChange`. See
+[Editing with line annotations](#edit-mode-editing-with-line-annotations) for
+remapping rules, stable metadata IDs, and annotation-content lifetime guidance.
+
 ### Usage Notes
 
 - In React, pass `items` for controlled item ownership.

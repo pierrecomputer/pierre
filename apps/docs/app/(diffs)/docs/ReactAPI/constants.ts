@@ -401,11 +401,30 @@ export const REACT_API_SHARED_DIFF_RENDER_PROPS: PreloadFileOptions<undefined> =
 // ============================================================
 // These props are shared by MultiFileDiff, PatchDiff, and FileDiff.
 
-import { MultiFileDiff } from '@pierre/diffs/react';
+import {
+  type DiffLineAnnotation,
+  MultiFileDiff,
+} from '@pierre/diffs/react';
 
 interface ThreadMetadata {
   threadId: string;
 }
+
+// This is static read-only data. In edit mode, initialize state with this array
+// and replace that state when Editor.onChange emits a different collection.
+const lineAnnotations: DiffLineAnnotation<ThreadMetadata>[] = [
+  {
+    side: 'additions',
+    lineNumber: 0,
+    metadata: { threadId: 'file-summary' },
+  },
+  {
+    side: 'additions',
+    // One-based line number on the selected file side.
+    lineNumber: 16,
+    metadata: { threadId: 'abc123' },
+  },
+];
 
 <MultiFileDiff<ThreadMetadata>
   {...}
@@ -415,23 +434,12 @@ interface ThreadMetadata {
   // ─────────────────────────────────────────────────────────────
 
   // Array of annotations to display on specific lines.
-  // Keep annotation arrays stable (useState/useMemo) to avoid re-renders.
+  // Keep the same array reference until the annotations change.
   // Annotation metadata can be typed any way you'd like.
   // Multiple annotations can target the same side/line.
   // Use lineNumber: 0 for a file-level annotation rendered above the first
   // hunk separator or diff row.
-  lineAnnotations={[
-    {
-      side: 'additions',
-      lineNumber: 0,
-      metadata: { threadId: 'file-summary' },
-    },
-    {
-      side: 'additions', // or 'deletions'
-      lineNumber: 16,    // visual line number in the diff
-      metadata: { threadId: 'abc123' },
-    },
-  ]}
+  lineAnnotations={lineAnnotations}
 
   // Render function for each annotation. Despite the diff being
   // rendered in shadow DOM, annotations use slots so you can use
@@ -1081,11 +1089,25 @@ export const REACT_API_SHARED_FILE_RENDER_PROPS: PreloadFileOptions<undefined> =
 // ============================================================
 // These props are available on the File component.
 
-import { File } from '@pierre/diffs/react';
+import { File, type LineAnnotation } from '@pierre/diffs/react';
 
 interface CommentMetadata {
   commentId: string;
 }
+
+// This is static read-only data. In edit mode, initialize state with this array
+// and replace that state when Editor.onChange emits a different collection.
+const lineAnnotations: LineAnnotation<CommentMetadata>[] = [
+  {
+    lineNumber: 0,
+    metadata: { commentId: 'file-summary' },
+  },
+  {
+    // One-based line number in the file.
+    lineNumber: 5,
+    metadata: { commentId: 'comment-123' },
+  },
+];
 
 <File<CommentMetadata>
   {...}
@@ -1095,7 +1117,7 @@ interface CommentMetadata {
   // ─────────────────────────────────────────────────────────────
 
   // Array of annotations to display on specific lines.
-  // Keep annotation arrays stable (useState/useMemo) to avoid re-renders.
+  // Keep the same array reference until the annotations change.
   // Annotation metadata can be typed any way you'd like.
   // Multiple annotations can target the same line.
   //
@@ -1103,16 +1125,7 @@ interface CommentMetadata {
   // has no 'side' property since there's only one column.
   // Use lineNumber: 0 for a file-level annotation rendered above the
   // first file line.
-  lineAnnotations={[
-    {
-      lineNumber: 0,
-      metadata: { commentId: 'file-summary' },
-    },
-    {
-      lineNumber: 5,    // visual line number in the file
-      metadata: { commentId: 'comment-123' },
-    },
-  ]}
+  lineAnnotations={lineAnnotations}
 
   // Render function for each annotation. Despite the file being
   // rendered in shadow DOM, annotations use slots so you can use

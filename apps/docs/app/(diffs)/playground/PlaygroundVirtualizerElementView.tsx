@@ -1,11 +1,12 @@
 'use client';
 
-import type {
-  AnnotationSide,
-  DiffLineAnnotation,
-  FileDiffMetadata,
-  FileDiffOptions,
-  SelectedLineRange,
+import {
+  type AnnotationSide,
+  type DiffLineAnnotation,
+  type FileDiffMetadata,
+  type FileDiffOptions,
+  isDiffAnnotationCollection,
+  type SelectedLineRange,
 } from '@pierre/diffs';
 import type { EditorOptions } from '@pierre/diffs/editor';
 import { FileDiff, useStableCallback, Virtualizer } from '@pierre/diffs/react';
@@ -97,7 +98,10 @@ function ElementVirtualizerDiff({
   const editOptions = useMemo<EditorOptions<PlaygroundAnnotationMetadata>>(
     () => ({
       onChange(_file, lineAnnotations) {
-        if (lineAnnotations != null) {
+        if (
+          lineAnnotations != null &&
+          isDiffAnnotationCollection(lineAnnotations)
+        ) {
           flushSync(() => {
             setAnnotations(lineAnnotations);
           });

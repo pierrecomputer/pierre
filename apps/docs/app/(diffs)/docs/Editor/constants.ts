@@ -105,49 +105,88 @@ export const EDITOR_VANILLA_FILE_DIFF_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
     name: 'editor_vanilla_file_diff.ts',
     contents: `import {
+  isDiffAnnotationCollection,
+  type DiffLineAnnotation,
   Virtualizer,
   VirtualizedFileDiff,
   type FileContents,
 } from '@pierre/diffs';
 import { Editor } from '@pierre/diffs/editor';
 
+interface ThreadMetadata {
+  id: string;
+}
+
 const root = document.getElementById('diff-scroll-root');
 const content = document.getElementById('diff-scroll-content');
 if (root == null || content == null) {
   throw new Error('Expected virtualized diff containers to exist');
 }
+const contentWrapper = content;
 
 const oldFile: FileContents = {
   name: 'example.ts',
   contents: 'export function greet(name: string) {\\n  return name;\\n}',
 };
 
-const newFile: FileContents = {
+let newFile: FileContents = {
   ...oldFile,
   contents:
     'export function greet(name: string) {\\n  return "Hello, " + name;\\n}',
 };
 
-const virtualizer = new Virtualizer();
-virtualizer.setup(root, content);
+let lineAnnotations: DiffLineAnnotation<ThreadMetadata>[] = [
+  {
+    side: 'additions',
+    lineNumber: 2,
+    metadata: { id: 'greeting-review' },
+  },
+];
 
-const fileDiffInstance = new VirtualizedFileDiff(
-  { theme: { dark: 'pierre-dark', light: 'pierre-light' } },
+const virtualizer = new Virtualizer();
+virtualizer.setup(root, contentWrapper);
+
+const fileDiffInstance = new VirtualizedFileDiff<ThreadMetadata>(
+  {
+    theme: { dark: 'pierre-dark', light: 'pierre-light' },
+    renderAnnotation(annotation) {
+      const element = document.createElement('div');
+      element.textContent = 'Thread ' + annotation.metadata.id;
+      return element;
+    },
+  },
   virtualizer
 );
-fileDiffInstance.render({ oldFile, newFile, containerWrapper: content });
 
-const editor = new Editor({
-  onChange(file, lineAnnotations) {
-    console.log('change', file.name, lineAnnotations);
+function renderFromApplicationState() {
+  fileDiffInstance.render({
+    oldFile,
+    newFile,
+    lineAnnotations,
+    containerWrapper: contentWrapper,
+  });
+}
+
+renderFromApplicationState();
+
+const editor = new Editor<ThreadMetadata>({
+  onChange(file, nextAnnotations) {
+    // Preserve application-owned fields and replace only the edited contents.
+    newFile = { ...newFile, contents: file.contents };
+
+    // Replace application state first, then redraw after onChange returns.
+    if (
+      nextAnnotations != null &&
+      isDiffAnnotationCollection(nextAnnotations) &&
+      nextAnnotations !== lineAnnotations
+    ) {
+      lineAnnotations = nextAnnotations;
+      queueMicrotask(renderFromApplicationState);
+    }
   },
 });
 
 editor.edit(fileDiffInstance);
-
-// Update the file, editor retains to work with the new file
-const newFile: FileContents = { ... }
-fileInstance.render({ file: newFile });
 
 // Later, when the editor is no longer needed:
 editor.cleanUp();`,
@@ -158,8 +197,26 @@ editor.cleanUp();`,
 export const EDITOR_VANILLA_CODE_VIEW_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
     name: 'editor_vanilla_code_view.ts',
-    contents: `import { CodeView, type CodeViewItem } from '@pierre/diffs';
+    contents: `import {
+  CodeView,
+  isDiffAnnotationCollection,
+  parseDiffFromFile,
+  type CodeViewItem,
+} from '@pierre/diffs';
 import { Editor } from '@pierre/diffs/editor';
+
+interface ThreadMetadata {
+  id: string;
+}
+
+const oldFile = {
+  name: 'example.ts',
+  contents: 'export const answer = 41;',
+};
+const newFile = {
+  name: 'example.ts',
+  contents: 'export const answer = 42;',
+};
 
 const root = document.getElementById('code-view');
 const toggleButton = document.getElementById('toggle-editing');
@@ -170,38 +227,68 @@ if (root == null || toggleButton == null) {
 root.style.height = '24rem';
 root.style.overflow = 'auto';
 
-const viewer = new CodeView({
+const viewer = new CodeView<ThreadMetadata>({
   theme: { dark: 'pierre-dark', light: 'pierre-light' },
   createEditor(options) {
     return new Editor(options);
   },
-  onItemEditComplete(item, file) {
-    if (item.type !== 'file') {
+  onItemEditChange(item, _file, nextAnnotations) {
+    if (
+      item.type !== 'diff' ||
+      nextAnnotations == null ||
+      !isDiffAnnotationCollection(nextAnnotations) ||
+      item.annotations === nextAnnotations
+    ) {
       return;
     }
-    const version = (item.version ?? 0) + 1;
+
+    const current = viewer.getItem(item.id);
+    if (current?.type !== 'diff') {
+      return;
+    }
     viewer.updateItem({
-      ...item,
+      ...current,
+      annotations: nextAnnotations,
+      version: (current.version ?? 0) + 1,
+    });
+  },
+  onItemEditComplete(item, file) {
+    const current = viewer.getItem(item.id);
+    if (current?.type !== 'diff') {
+      return;
+    }
+    const version = (current.version ?? 0) + 1;
+    const cacheKey = current.id + ':v' + version;
+    viewer.updateItem({
+      ...current,
       edit: false,
       version,
-      file: {
-        ...item.file,
-        contents: file.contents,
-        cacheKey: \`\${item.id}:v\${version}\`,
+      fileDiff: {
+        ...parseDiffFromFile(oldFile, { ...file, cacheKey }),
+        cacheKey,
       },
     });
+  },
+  renderAnnotation(annotation) {
+    const element = document.createElement('div');
+    element.textContent = 'Thread ' + annotation.metadata.id;
+    return element;
   },
 });
 
 viewer.setup(root);
 
-const item: CodeViewItem = {
+const item: CodeViewItem<ThreadMetadata> = {
   id: 'example.ts',
-  type: 'file',
-  file: {
-    name: 'example.ts',
-    contents: 'export const answer = 42;',
-  },
+  type: 'diff',
+  fileDiff: parseDiffFromFile(oldFile, newFile),
+  annotations: [
+    {
+      side: 'additions',
+      lineNumber: 1,
+      metadata: { id: 'answer-review' },
+    },
+  ],
   edit: true,
   version: 0,
 };
@@ -490,7 +577,9 @@ export const EDITOR_REACT_FILE_DIFF_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
     name: 'editor_react_file_diff.tsx',
     contents: `import {
+  isDiffAnnotationCollection,
   parseDiffFromFile,
+  type DiffLineAnnotation,
   type FileDiffMetadata,
   type FileDiffOptions,
 } from '@pierre/diffs';
@@ -500,7 +589,20 @@ import {
   FileDiff,
   Virtualizer,
 } from '@pierre/diffs/react';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
+
+interface ThreadMetadata {
+  id: string;
+}
+
+const initialAnnotations: DiffLineAnnotation<ThreadMetadata>[] = [
+  {
+    side: 'additions',
+    lineNumber: 1,
+    metadata: { id: 'updated-message-review' },
+  },
+];
 
 // FileDiff takes a pre-parsed FileDiffMetadata object.
 const fileDiff: FileDiffMetadata = parseDiffFromFile(
@@ -508,7 +610,7 @@ const fileDiff: FileDiffMetadata = parseDiffFromFile(
   { name: 'example.ts', contents: 'console.warn("Updated message")' }
 );
 
-const fileDiffOptions: FileDiffOptions<undefined> = {
+const fileDiffOptions: FileDiffOptions<ThreadMetadata> = {
   theme: { dark: 'pierre-dark', light: 'pierre-light' },
 };
 
@@ -518,16 +620,30 @@ const virtualizerStyle = {
   borderRadius: '0.5rem',
 } as const;
 
-function createEditor(options: EditorOptions<undefined>) {
+function createEditor(options: EditorOptions<ThreadMetadata>) {
   return new Editor(options);
 }
 
 export function EditorComponent() {
   const [editable, setEditable] = useState(true);
-  const editOptions = useMemo<EditorOptions<undefined>>(
+  const [annotations, setAnnotations] = useState(initialAnnotations);
+  const annotationsRef = useRef(initialAnnotations);
+  // Key interaction state by stable metadata rather than line coordinates.
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const editOptions = useMemo<EditorOptions<ThreadMetadata>>(
     () => ({
-      onChange(file, lineAnnotations) {
-        console.log('change', file.name, lineAnnotations);
+      onChange(_file, nextAnnotations) {
+        if (
+          nextAnnotations == null ||
+          !isDiffAnnotationCollection(nextAnnotations) ||
+          nextAnnotations === annotationsRef.current
+        ) {
+          return;
+        }
+
+        annotationsRef.current = nextAnnotations;
+        // Publish remapped annotations before the browser paints the edit.
+        flushSync(() => setAnnotations(nextAnnotations));
       },
     }),
     []
@@ -541,12 +657,29 @@ export function EditorComponent() {
       <button type="button" onClick={() => setEditable((value) => !value)}>
         {editable ? 'Disable editing' : 'Enable editing'}
       </button>
+
       <Virtualizer style={virtualizerStyle}>
-        <FileDiff
+        <FileDiff<ThreadMetadata>
           fileDiff={fileDiff}
+          lineAnnotations={annotations}
           options={fileDiffOptions}
           edit={editable}
           editOptions={editOptions}
+          renderAnnotation={(annotation) => {
+            const id = annotation.metadata.id;
+            return (
+              <textarea
+                aria-label="Review draft"
+                value={drafts[id] ?? ''}
+                onChange={(event) =>
+                  setDrafts((current) => ({
+                    ...current,
+                    [id]: event.target.value,
+                  }))
+                }
+              />
+            );
+          }}
         />
       </Virtualizer>
     </EditProvider>
@@ -559,22 +692,44 @@ export function EditorComponent() {
 export const EDITOR_REACT_CODE_VIEW_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
     name: 'editor_react_code_view.tsx',
-    contents: `import type {
-  CodeViewItem,
-  FileContents,
+    contents: `import {
+  isDiffAnnotationCollection,
+  parseDiffFromFile,
+  type CodeViewItem,
+  type DiffLineAnnotation,
+  type FileContents,
+  type LineAnnotation,
 } from '@pierre/diffs';
 import { Editor, type EditorOptions } from '@pierre/diffs/editor';
 import { CodeView, EditProvider } from '@pierre/diffs/react';
 import { useCallback, useState } from 'react';
+import { flushSync } from 'react-dom';
 
-const initialItems: CodeViewItem[] = [
+interface ThreadMetadata {
+  id: string;
+}
+
+const oldFile = {
+  name: 'example.ts',
+  contents: 'export const answer = 41;',
+};
+const newFile = {
+  name: 'example.ts',
+  contents: 'export const answer = 42;',
+};
+
+const initialItems: CodeViewItem<ThreadMetadata>[] = [
   {
     id: 'example.ts',
-    type: 'file',
-    file: {
-      name: 'example.ts',
-      contents: 'export const answer = 42;',
-    },
+    type: 'diff',
+    fileDiff: parseDiffFromFile(oldFile, newFile),
+    annotations: [
+      {
+        side: 'additions',
+        lineNumber: 1,
+        metadata: { id: 'answer-review' },
+      },
+    ],
     edit: true,
     version: 0,
   },
@@ -582,7 +737,7 @@ const initialItems: CodeViewItem[] = [
 
 const codeViewStyle = { height: '24rem', overflow: 'auto' } as const;
 
-function createEditor(options: EditorOptions<undefined>) {
+function createEditor(options: EditorOptions<ThreadMetadata>) {
   return new Editor(options);
 }
 
@@ -599,26 +754,63 @@ export function EditableCodeView() {
     );
   }, []);
 
-  const commitEdit = useCallback((item: CodeViewItem, file: FileContents) => {
-    setItems((current) =>
-      current.map((existing) => {
-        if (existing.id !== item.id || existing.type !== 'file') {
-          return existing;
-        }
-        const version = (existing.version ?? 0) + 1;
-        return {
-          ...existing,
-          edit: false,
-          version,
-          file: {
-            ...existing.file,
-            contents: file.contents,
-            cacheKey: \`\${existing.id}:v\${version}\`,
-          },
-        };
-      })
-    );
-  }, []);
+  const syncAnnotations = useCallback(
+    (
+      item: CodeViewItem<ThreadMetadata>,
+      _file: FileContents,
+      nextAnnotations?:
+        | LineAnnotation<ThreadMetadata>[]
+        | DiffLineAnnotation<ThreadMetadata>[]
+    ) => {
+      if (
+        item.type !== 'diff' ||
+        nextAnnotations == null ||
+        !isDiffAnnotationCollection(nextAnnotations) ||
+        item.annotations === nextAnnotations
+      ) {
+        return;
+      }
+
+      flushSync(() => {
+        setItems((current) =>
+          current.map((existing) =>
+            existing.id === item.id && existing.type === 'diff'
+              ? {
+                  ...existing,
+                  annotations: nextAnnotations,
+                  version: (existing.version ?? 0) + 1,
+                }
+              : existing
+          )
+        );
+      });
+    },
+    []
+  );
+
+  const commitEdit = useCallback(
+    (item: CodeViewItem<ThreadMetadata>, file: FileContents) => {
+      setItems((current) =>
+        current.map((existing) => {
+          if (existing.id !== item.id || existing.type !== 'diff') {
+            return existing;
+          }
+          const version = (existing.version ?? 0) + 1;
+          const cacheKey = existing.id + ':v' + version;
+          return {
+            ...existing,
+            edit: false,
+            version,
+            fileDiff: {
+              ...parseDiffFromFile(oldFile, { ...file, cacheKey }),
+              cacheKey,
+            },
+          };
+        })
+      );
+    },
+    []
+  );
 
   // This example is self-contained. Apps should usually mount EditProvider near
   // the root so its factory is available to every editable File, diff, and
@@ -631,7 +823,11 @@ export function EditableCodeView() {
       <CodeView
         items={items}
         style={codeViewStyle}
+        onItemEditChange={syncAnnotations}
         onItemEditComplete={commitEdit}
+        renderAnnotation={(annotation) => (
+          <div>Thread {annotation.metadata.id}</div>
+        )}
       />
     </EditProvider>
   );
@@ -727,6 +923,7 @@ export const EDITOR_OPTIONS_TYPE: PreloadFileOptions<undefined> = {
   DiffLineAnnotation,
   DiffsEditableComponent,
   FileContents,
+  LineAnnotation,
 } from '@pierre/diffs';
 import { Editor, type IStateStorage } from '@pierre/diffs/editor';
 
@@ -774,10 +971,15 @@ interface EditorOptions<LAnnotation> {
     fileInstance: DiffsEditableComponent<LAnnotation>
   ) => void;
 
-  // Fires after each edit. file.contents reflects the live document.
+  // Fires after each edit. file.contents reflects the live document. When
+  // present, lineAnnotations is the complete current collection, not a delta;
+  // replace the application-owned source with it. Unaffected edits reuse the
+  // existing array reference.
   onChange?: (
     file: FileContents,
-    lineAnnotations?: DiffLineAnnotation<LAnnotation>[]
+    lineAnnotations?:
+      | LineAnnotation<LAnnotation>[]
+      | DiffLineAnnotation<LAnnotation>[]
   ) => void;
 
   // Fires when the editable content area gains focus (tab, click, or editor.focus()).
@@ -793,26 +995,33 @@ interface EditorOptions<LAnnotation> {
 export const EDITOR_PUBLIC_API: PreloadFileOptions<undefined> = {
   file: {
     name: 'editor_public_api.ts',
-    contents: `import type {
-  EditorState,
-  FileContents,
+    contents: `import {
+  File,
+  type EditorState,
+  type FileContents,
 } from '@pierre/diffs';
 import { Editor } from '@pierre/diffs/editor';
 
 // Editor
 // Most methods require an attached surface via edit().
 
-const editor = new Editor();
+const fileInstance = new File();
+fileInstance.render({
+  file: { name: 'example.ts', contents: '...' },
+  containerWrapper: document.body,
+});
 
-// attach to a rendered File, FileDiff, or virtualized variant.
-const dispose = editor.edit(fileInstance);
+const editor = new Editor();
 
 // Merge partial options at runtime. Existing fields are preserved.
 // onChange and similar handlers read from the latest options on each call;
 // pass onFocus/onBlur before edit() attaches, or set them in the constructor.
 editor.setOptions({
   onChange(file, lineAnnotations) {
-    console.log('change', file.name, lineAnnotations);
+    // Save file in application state.
+    if (lineAnnotations != null) {
+      // Replace the application-owned annotation collection.
+    }
   },
 });
 

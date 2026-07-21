@@ -129,6 +129,73 @@ describe('applyDocumentChangeToLineAnnotations', () => {
     ]);
   });
 
+  test('keeps a final-line annotation when only its text is deleted', () => {
+    const textDocument = new TextDocument('inmemory://1', 'one\ntwo\nthree');
+    const annotations: DiffLineAnnotation<string>[] = [
+      { side: 'additions', lineNumber: 3, metadata: 'three' },
+    ];
+
+    const change = textDocument.applyEdits([
+      {
+        range: {
+          start: { line: 2, character: 0 },
+          end: { line: 2, character: 5 },
+        },
+        newText: '',
+      },
+    ]);
+
+    expect(textDocument.getText()).toBe('one\ntwo\n');
+    expect(
+      applyDocumentChangeToLineAnnotations(change!, annotations)
+    ).toBeUndefined();
+  });
+
+  test('keeps an only-line annotation when all document text is deleted', () => {
+    const textDocument = new TextDocument('inmemory://1', 'only');
+    const annotations: DiffLineAnnotation<string>[] = [
+      { side: 'additions', lineNumber: 1, metadata: 'only' },
+    ];
+
+    const change = textDocument.applyEdits([
+      {
+        range: {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 4 },
+        },
+        newText: '',
+      },
+    ]);
+
+    expect(textDocument.getText()).toBe('');
+    expect(
+      applyDocumentChangeToLineAnnotations(change!, annotations)
+    ).toBeUndefined();
+  });
+
+  test('drops a final-line annotation when its preceding line break is removed through EOF', () => {
+    const textDocument = new TextDocument('inmemory://1', 'one\ntwo\nthree');
+    const annotations: DiffLineAnnotation<string>[] = [
+      { side: 'additions', lineNumber: 2, metadata: 'two' },
+      { side: 'additions', lineNumber: 3, metadata: 'three' },
+    ];
+
+    const change = textDocument.applyEdits([
+      {
+        range: {
+          start: { line: 1, character: 3 },
+          end: { line: 2, character: 5 },
+        },
+        newText: '',
+      },
+    ]);
+
+    expect(textDocument.getText()).toBe('one\ntwo');
+    expect(applyDocumentChangeToLineAnnotations(change!, annotations)).toEqual([
+      { side: 'additions', lineNumber: 2, metadata: 'two' },
+    ]);
+  });
+
   test('does not borrow EOF from a later insertion when remapping deleted lines', () => {
     const textDocument = new TextDocument('inmemory://1', 'l0\nl1\nl2\nl3');
     const annotations: DiffLineAnnotation<string>[] = [
