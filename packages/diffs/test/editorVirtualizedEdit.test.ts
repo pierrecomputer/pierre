@@ -1,4 +1,4 @@
-import { afterAll, describe, expect, test } from 'bun:test';
+import { afterAll, describe, expect, spyOn, test } from 'bun:test';
 
 import { File } from '../src/components/File';
 import { DEFAULT_THEMES } from '../src/constants';
@@ -300,6 +300,34 @@ describe('Editor edits at the bottom of a virtualized window', () => {
       const rendered = renderedLineNumbers(content);
       expect(Math.max(...rendered)).toBeLessThanOrEqual(150);
     } finally {
+      cleanup();
+    }
+  });
+});
+
+describe('Editor virtualized line lookup', () => {
+  test('does not scan the content subtree for offscreen selected lines', async () => {
+    const { cleanup, content, editor } = await createWindowedEditor(
+      300,
+      makeRange(100, 50)
+    );
+    const querySelector = spyOn(content, 'querySelector');
+    try {
+      editor.setSelections([
+        {
+          start: { line: 0, character: 0 },
+          end: { line: 299, character: 0 },
+          direction: 'forward',
+        },
+      ]);
+
+      const lineQueries = querySelector.mock.calls.filter(
+        ([selector]) =>
+          typeof selector === 'string' && selector.startsWith('[data-line=')
+      );
+      expect(lineQueries).toHaveLength(0);
+    } finally {
+      querySelector.mockRestore();
       cleanup();
     }
   });

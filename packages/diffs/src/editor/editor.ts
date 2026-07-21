@@ -4937,14 +4937,23 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       return lineElement ?? undefined;
     }
 
+    const renderRange = this.#renderRange;
+    if (
+      renderRange !== undefined &&
+      (line < renderRange.startingLine ||
+        line >= renderRange.startingLine + renderRange.totalLines)
+    ) {
+      return undefined;
+    }
+
     const contentElement = this.#contentElement;
     if (contentElement === undefined) {
       return undefined;
     }
 
     // check if the line is within the render range (fast)
-    if (this.#renderRange !== undefined) {
-      const { startingLine } = this.#renderRange;
+    if (renderRange !== undefined) {
+      const { startingLine } = renderRange;
       const { children } = contentElement;
       for (let i = line - startingLine; i <= children.length; i++) {
         const child = children[i] as HTMLElement | undefined;
