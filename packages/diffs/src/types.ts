@@ -1047,6 +1047,10 @@ export interface DiffsEditableComponent<
    */
   getScrollContainer?: () => HTMLElement | undefined;
   /**
+   * Return the viewport that bounds visible editor rows.
+   */
+  getEditorViewport?: () => HTMLElement | Document | undefined;
+  /**
    * Whether the given one-based new-file line currently has (or will have on
    * scroll) a rendered row. False only for lines hidden inside a collapsed
    * unchanged region. Components without collapsible regions leave this

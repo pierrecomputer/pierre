@@ -245,10 +245,12 @@ export interface EditorOptions<LAnnotation> {
 }
 
 export interface EditorFocusOptions extends FocusOptions {
-  /** One-based document line number to place the caret on. */
-  lineNumber?: number;
+  /** One-based document line number or first editable line with a visible top. */
+  lineNumber?: number | 'first-visible';
   /** Zero-based character offset for a numeric line. Defaults to 0. */
   character?: number;
+  /** Non-negative CSS pixels below the viewport or sticky header. */
+  offset?: number;
 }
 
 // Cap on how far an edit may widen the virtualized render window, as a multiple
@@ -691,14 +693,22 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   focus(options?: EditorFocusOptions): void {
     const preventScroll = options?.preventScroll ?? false;
     const lineNumber = options?.lineNumber;
-    if (typeof lineNumber === 'number') {
+    if (lineNumber === 'first-visible' || typeof lineNumber === 'number') {
       const textDocument = this.#textDocument;
-      if (textDocument === undefined || this.#fileInstance === undefined) {
+      if (textDocument == null || this.#fileInstance == null) {
+        return;
+      }
+      const targetLineNumber =
+        lineNumber === 'first-visible'
+          ? this.#getFirstVisibleLineNumber(options?.offset)
+          : lineNumber;
+      if (targetLineNumber == null) {
         return;
       }
       const position = textDocument.normalizePosition({
-        line: lineNumber - 1,
-        character: options?.character ?? 0,
+        line: targetLineNumber - 1,
+        character:
+          lineNumber === 'first-visible' ? 0 : (options?.character ?? 0),
       });
       this.#focusAtPosition(position, preventScroll);
       return;
@@ -3280,6 +3290,68 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     } else {
       this.#contentElement?.focus({ preventScroll });
     }
+  }
+
+  #getFirstVisibleLineNumber(offset = 0): number | undefined {
+    const contentElement = this.#contentElement;
+    const fileContainer = this.#fileContainer;
+    const viewport = this.#fileInstance?.getEditorViewport?.();
+    if (
+      this.#textDocument == null ||
+      contentElement == null ||
+      fileContainer == null ||
+      viewport == null
+    ) {
+      return undefined;
+    }
+
+    let viewportTop: number;
+    let viewportBottom: number;
+    if (viewport instanceof HTMLElement) {
+      const viewportRect = viewport.getBoundingClientRect();
+      viewportTop = viewportRect.top;
+      viewportBottom = viewportRect.bottom;
+    } else {
+      const viewportWindow = viewport.defaultView;
+      if (viewportWindow == null) {
+        return undefined;
+      }
+      viewportTop = 0;
+      viewportBottom = viewportWindow.innerHeight;
+    }
+
+    const stickyHeader = fileContainer.shadowRoot?.querySelector<HTMLElement>(
+      '[data-diffs-header][data-sticky]'
+    );
+    if (stickyHeader != null) {
+      viewportTop = Math.max(
+        viewportTop,
+        stickyHeader.getBoundingClientRect().bottom
+      );
+    }
+    if (Number.isFinite(offset)) {
+      viewportTop += Math.max(0, offset);
+    }
+    if (viewportBottom <= viewportTop) {
+      return undefined;
+    }
+
+    for (const child of contentElement.children) {
+      const row = child as HTMLElement;
+      const lineNumber = getLineNumberAttr(row);
+      const lineType = row.dataset.lineType;
+      if (lineNumber == null || lineType == null || !isLineEditable(lineType)) {
+        continue;
+      }
+      const rowRect = row.getBoundingClientRect();
+      if (rowRect.bottom <= rowRect.top) {
+        continue;
+      }
+      if (rowRect.top >= viewportTop && rowRect.top < viewportBottom) {
+        return lineNumber;
+      }
+    }
+    return undefined;
   }
 
   #focusAtPosition(position: Position, preventScroll: boolean): void {
