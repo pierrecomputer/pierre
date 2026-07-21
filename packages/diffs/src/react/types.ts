@@ -2,6 +2,7 @@ import { type CSSProperties, type ReactNode } from 'react';
 
 import type { FileOptions } from '../components/File';
 import type { FileDiffOptions } from '../components/FileDiff';
+import type { EditorOptions } from '../editor';
 import type { GetHoveredLineResult } from '../managers/InteractionManager';
 import type {
   DiffLineAnnotation,
@@ -14,6 +15,10 @@ import type {
 
 export interface DiffBasePropsReact<LAnnotation> {
   options?: FileDiffOptions<LAnnotation>;
+  /** Whether this surface has an active edit session. */
+  edit?: boolean;
+  /** Creation-time options passed to the nearest EditProvider factory. */
+  editOptions?: EditorOptions<LAnnotation>;
   metrics?: VirtualFileMetrics;
   lineAnnotations?: DiffLineAnnotation<LAnnotation>[];
   selectedLines?: SelectedLineRange | null;
@@ -33,6 +38,10 @@ export interface DiffBasePropsReact<LAnnotation> {
 export interface FileProps<LAnnotation> {
   file: FileContents;
   options?: FileOptions<LAnnotation>;
+  /** Whether this surface has an active edit session. */
+  edit?: boolean;
+  /** Creation-time options passed to the nearest EditProvider factory. */
+  editOptions?: EditorOptions<LAnnotation>;
   metrics?: VirtualFileMetrics;
   lineAnnotations?: LineAnnotation<LAnnotation>[];
   selectedLines?: SelectedLineRange | null;
@@ -48,5 +57,4 @@ export interface FileProps<LAnnotation> {
   style?: CSSProperties;
   prerenderedHTML?: string;
   disableWorkerPool?: boolean;
-  contentEditable?: boolean;
 }

@@ -1,8 +1,8 @@
 'use client';
 
 import type { FileContents, FileOptions } from '@pierre/diffs';
-import { Editor } from '@pierre/diffs/editor';
-import { EditProvider, File, Virtualizer } from '@pierre/diffs/react';
+import type { Editor, EditorOptions } from '@pierre/diffs/editor';
+import { File, Virtualizer } from '@pierre/diffs/react';
 import {
   IconFilePlus,
   IconFolderPlus,
@@ -55,6 +55,10 @@ const DEFAULT_MIN_EXPLORER_WIDTH = 180;
 const DEFAULT_MAX_EXPLORER_WIDTH = 600;
 const DEFAULT_NEW_FILE_NAME = 'untitled';
 const DEFAULT_NEW_FOLDER_NAME = 'untitled';
+const FILE_STYLE = {
+  flex: '1 1 auto',
+  minWidth: '100%',
+};
 
 export type TreeAppTheme = 'light' | 'dark';
 
@@ -202,8 +206,8 @@ export interface TreeAppProps<LAnnotation = unknown> {
   // preloadedDataById pattern already used by tree demos. Both the prerendered
   // HTML map and the file options may be scoped per theme so the active File
   // picks up the right syntax-highlight colors when the theme toggles. Give
-  // files unique, rename-stable cacheKeys so persisted editor state follows
-  // moves; without one, TreeApp uses the current path.
+  // files unique, rename-stable cacheKeys so render caches follow moves;
+  // without one, TreeApp uses the current path.
   files?: Readonly<Record<string, FileContents>>;
   prerenderedHTMLByPath?: TreeAppThemeValue<Readonly<Record<string, string>>>;
   fileOptions?: TreeAppThemeValue<FileOptions<LAnnotation>>;
@@ -1200,19 +1204,17 @@ export function TreeApp<LAnnotation = unknown>({
   unsavedPathsRef.current = unsavedPaths;
   const containerRef = useRef<HTMLDivElement | null>(null);
 
-  // Keep the change handler fresh without recreating the Editor. The
-  // shared instance must stay stable across tab/theme switches so EditProvider
-  // does not clean it up between remounts of the keyed File.
   const handleEditorChangeRef = useRef<(file: FileContents) => void>(() => {});
-  const editor = useMemo(
-    () =>
-      new Editor<LAnnotation>({
-        persistState: true,
-        persistStateStorage: 'inMemory',
-        onChange(file) {
-          handleEditorChangeRef.current(file);
-        },
-      }),
+  const editorRef = useRef<Editor<LAnnotation> | null>(null);
+  const editOptions = useMemo<EditorOptions<LAnnotation>>(
+    () => ({
+      onAttach(editor: Editor<LAnnotation>) {
+        editorRef.current = editor;
+      },
+      onChange(file) {
+        handleEditorChangeRef.current(file);
+      },
+    }),
     []
   );
 
@@ -1301,7 +1303,10 @@ export function TreeApp<LAnnotation = unknown>({
 
     let file: FileContents | undefined;
     try {
-      file = editor.getFile() ?? editedFilesByPath[path] ?? files?.[path];
+      file =
+        editorRef.current?.getFile() ??
+        editedFilesByPath[path] ??
+        files?.[path];
     } catch {
       file = editedFilesByPath[path] ?? files?.[path];
     }
@@ -1332,7 +1337,7 @@ export function TreeApp<LAnnotation = unknown>({
     }
     onSave?.(path, snapshot);
     return true;
-  }, [editedFilesByPath, editor, files, onSave]);
+  }, [editedFilesByPath, files, onSave]);
 
   useEffect(() => {
     const acknowledgedPaths = new Set<string>();
@@ -1875,36 +1880,31 @@ export function TreeApp<LAnnotation = unknown>({
             >
               {/* Key File by path+theme so prerendered HTML (theme-specific
                   syntax colors) remounts cleanly when the toggle flips.
-                  Keep EditProvider stable so the shared Editor is not cleaned
-                  up between tab/theme switches. Editor persistence restores
-                  the cached document and view state. */}
-              <EditProvider editor={editor}>
-                <Virtualizer
-                  className="relative min-h-0 min-w-0 flex-1 overflow-auto"
-                  style={{ overflow: 'auto' }}
-                  contentStyle={{
-                    display: 'flex',
-                    minHeight: '100%',
-                    width: '100%',
-                  }}
-                >
-                  {activeEditorFile == null ? (
-                    (renderEmpty?.() ?? <DefaultEmpty theme={theme} />)
-                  ) : (
-                    <File
-                      key={`${activePath ?? 'empty'}:${theme}`}
-                      style={{
-                        flex: '1 1 auto',
-                        minWidth: '100%',
-                      }}
-                      file={activeEditorFile}
-                      options={fileOptions}
-                      prerenderedHTML={activePrerenderedHTML}
-                      contentEditable
-                    />
-                  )}
-                </Virtualizer>
-              </EditProvider>
+                  TreeApp's edited buffer map restores unsaved contents when
+                  each keyed surface starts a new edit session. */}
+              <Virtualizer
+                className="relative min-h-0 min-w-0 flex-1 overflow-auto"
+                style={{ overflow: 'auto' }}
+                contentStyle={{
+                  display: 'flex',
+                  minHeight: '100%',
+                  width: '100%',
+                }}
+              >
+                {activeEditorFile == null ? (
+                  (renderEmpty?.() ?? <DefaultEmpty theme={theme} />)
+                ) : (
+                  <File
+                    key={`${activePath ?? 'empty'}:${theme}`}
+                    style={FILE_STYLE}
+                    file={activeEditorFile}
+                    options={fileOptions}
+                    prerenderedHTML={activePrerenderedHTML}
+                    edit
+                    editOptions={editOptions}
+                  />
+                )}
+              </Virtualizer>
             </div>
           </div>
         </section>

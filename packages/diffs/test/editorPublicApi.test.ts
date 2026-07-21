@@ -5,7 +5,7 @@ import { DEFAULT_THEMES } from '../src/constants';
 import { Editor, type EditorOptions } from '../src/editor/editor';
 import type { Marker } from '../src/editor/marker';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
-import type { FileContents } from '../src/types';
+import type { DiffsEditableComponent, FileContents } from '../src/types';
 import { installDom, wait } from './domHarness';
 
 afterAll(async () => {
@@ -34,6 +34,7 @@ interface EditorFixture {
   cleanup(): void;
   content: HTMLElement;
   editor: Editor<undefined>;
+  file: File<undefined>;
 }
 
 // Mounts a real File-backed editor, mirroring the harness the applyEdits and
@@ -66,6 +67,7 @@ async function createEditorFixture(
     },
     content,
     editor,
+    file,
   };
 }
 
@@ -182,14 +184,26 @@ describe('Editor.setOptions', () => {
 
 describe('Editor focus lifecycle', () => {
   test('fires onAttach when the editor attaches to a file', async () => {
-    const onAttach = mock((_editor: Editor<undefined>) => {});
-    const { cleanup, editor } = await createEditorFixture('alpha\nbravo', {
-      onAttach,
-    });
+    let onAttachCompleted = false;
+    const onAttach = mock(
+      (
+        attachedEditor: Editor<undefined>,
+        _file: DiffsEditableComponent<undefined>
+      ) => {
+        attachedEditor.setMarkers([]);
+        onAttachCompleted = true;
+      }
+    );
+    const { cleanup, editor, file } = await createEditorFixture(
+      'alpha\nbravo',
+      { onAttach }
+    );
     try {
       await wait(0);
       expect(onAttach).toHaveBeenCalledTimes(1);
+      expect(onAttachCompleted).toBe(true);
       expect(onAttach.mock.calls[0]?.[0]).toBe(editor);
+      expect(onAttach.mock.calls[0]?.[1]).toBe(file);
     } finally {
       cleanup();
     }

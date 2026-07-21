@@ -1,8 +1,8 @@
 'use client';
 
 import { DEFAULT_THEMES } from '@pierre/diffs';
-import { Editor } from '@pierre/diffs/editor';
-import { EditProvider, FileDiff } from '@pierre/diffs/react';
+import type { EditorOptions } from '@pierre/diffs/editor';
+import { FileDiff } from '@pierre/diffs/react';
 import { IconArrow, IconChevronSm, IconSparkle } from '@pierre/icons';
 import { FileTree, type FileTreeRowDecoration } from '@pierre/trees';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -170,7 +170,10 @@ export interface AgentUiProps {
 
 // The demo is always dark: the snapshot is prerendered dark and matching it
 // avoids theme flashing, so there is no light/dark toggle.
-export function AgentUi({ theme = DEFAULT_THEMES, prerenderedDiffs }: AgentUiProps) {
+export function AgentUi({
+  theme = DEFAULT_THEMES,
+  prerenderedDiffs,
+}: AgentUiProps) {
   const session = AUI_SESSIONS[0];
 
   const [activePath, setActivePath] = useState<string | null>(
@@ -180,38 +183,37 @@ export function AgentUi({ theme = DEFAULT_THEMES, prerenderedDiffs }: AgentUiPro
   // Persisted in-editor edits keyed by path, so switching files keeps the
   // agent's tweaked output.
   const editsRef = useRef<Map<string, string>>(new Map());
-  // The editor's debounced onChange fires without a path argument, so we track
-  // the live target here.
+  // The stable onChange callback has no path argument, so track its live target
+  // here.
   const activeTargetRef = useRef<string | null>(null);
   useEffect(() => {
     activeTargetRef.current = activePath;
   }, [activePath]);
 
-  const editor = useMemo(
-    () =>
-      new Editor({
-        enabledSelectionAction: true,
-        renderSelectionAction({ close, getSelectionText, replaceSelectionText }) {
-          const container = document.createElement('div');
-          const button = document.createElement('button');
-          container.className = 'aui-selection-action';
-          button.type = 'button';
-          button.textContent = 'Wrap selection in TODO()';
-          button.addEventListener('click', () => {
-            replaceSelectionText(`TODO(${getSelectionText()})`);
-            close();
-          });
-          container.append(button);
-          return container;
-        },
-        onChange(file) {
-          const target = activeTargetRef.current;
-          if (target == null) {
-            return;
-          }
-          editsRef.current.set(target, file.contents);
-        },
-      }),
+  const editOptions = useMemo<EditorOptions<undefined>>(
+    () => ({
+      enabledSelectionAction: true,
+      renderSelectionAction({ close, getSelectionText, replaceSelectionText }) {
+        const container = document.createElement('div');
+        const button = document.createElement('button');
+        container.className = 'aui-selection-action';
+        button.type = 'button';
+        button.textContent = 'Wrap selection in TODO()';
+        button.addEventListener('click', () => {
+          replaceSelectionText(`TODO(${getSelectionText()})`);
+          close();
+        });
+        container.append(button);
+        return container;
+      },
+      onChange(file) {
+        const target = activeTargetRef.current;
+        if (target == null) {
+          return;
+        }
+        editsRef.current.set(target, file.contents);
+      },
+    }),
     []
   );
 
@@ -271,105 +273,102 @@ export function AgentUi({ theme = DEFAULT_THEMES, prerenderedDiffs }: AgentUiPro
   }, [activePath]);
 
   return (
-    <EditProvider editor={editor}>
-      <div className="aui" data-theme-type="dark" data-embedded="true">
-        <div className="aui-body">
-          <section className="aui-center">
-            <header className="aui-center-header">
-              <nav className="aui-breadcrumb" aria-label="File path">
-                {breadcrumbSegments.length > 0 ? (
-                  breadcrumbSegments.map((segment, index) => (
-                    <span
-                      // Path segments are positional; index keys are stable here.
-                      key={`${segment}-${String(index)}`}
-                      className="aui-crumb"
-                      data-leaf={
-                        index === breadcrumbSegments.length - 1
-                          ? 'true'
-                          : undefined
-                      }
-                    >
-                      {segment}
-                    </span>
-                  ))
-                ) : (
-                  <span className="aui-crumb">No file selected</span>
-                )}
-              </nav>
-            </header>
-
-            <div className="aui-surface-wrap" ref={surfaceWrapRef}>
-              {activeFile != null && fileDiff != null ? (
-                <FileDiff
-                  key={activePath}
-                  fileDiff={fileDiff}
-                  className="aui-surface"
-                  options={{
-                    theme,
-                    themeType: 'dark',
-                    disableFileHeader: true,
-                    overflow: 'wrap',
-                    diffStyle: 'unified',
-                  }}
-                  prerenderedHTML={activePrerenderedHTML}
-                  contentEditable
-                />
+    <div className="aui" data-theme-type="dark" data-embedded="true">
+      <div className="aui-body">
+        <section className="aui-center">
+          <header className="aui-center-header">
+            <nav className="aui-breadcrumb" aria-label="File path">
+              {breadcrumbSegments.length > 0 ? (
+                breadcrumbSegments.map((segment, index) => (
+                  <span
+                    // Path segments are positional; index keys are stable here.
+                    key={`${segment}-${String(index)}`}
+                    className="aui-crumb"
+                    data-leaf={
+                      index === breadcrumbSegments.length - 1
+                        ? 'true'
+                        : undefined
+                    }
+                  >
+                    {segment}
+                  </span>
+                ))
               ) : (
-                <div className="aui-empty">
-                  Select a changed file to review.
-                </div>
+                <span className="aui-crumb">No file selected</span>
               )}
-            </div>
+            </nav>
+          </header>
 
-            <div className="aui-composer">
-              <textarea
-                className="aui-composer-input"
-                placeholder="Ask for changes, @mention files, or run commands…"
-                rows={2}
-                disabled
+          <div className="aui-surface-wrap" ref={surfaceWrapRef}>
+            {activeFile != null && fileDiff != null ? (
+              <FileDiff
+                key={activePath}
+                fileDiff={fileDiff}
+                className="aui-surface"
+                options={{
+                  theme,
+                  themeType: 'dark',
+                  disableFileHeader: true,
+                  overflow: 'wrap',
+                  diffStyle: 'unified',
+                }}
+                prerenderedHTML={activePrerenderedHTML}
+                edit
+                editOptions={editOptions}
               />
-              <div className="aui-composer-toolbar">
-                <button type="button" className="aui-composer-select" disabled>
-                  <IconSparkle className="opacity-50" />
-                  Agent
-                  <IconChevronSm className="opacity-50" />
-                </button>
-                <button type="button" className="aui-composer-select" disabled>
-                  Pierre 1
-                  <IconChevronSm className="opacity-50" />
-                </button>
-                <button
-                  type="button"
-                  className="aui-composer-send ml-auto"
-                  aria-label="Send"
-                  disabled
-                >
-                  <IconArrow className="rotate-[90deg]" />
-                </button>
-              </div>
-            </div>
-          </section>
+            ) : (
+              <div className="aui-empty">Select a changed file to review.</div>
+            )}
+          </div>
 
-          <aside className="aui-changes">
-            <div className="aui-changes-tabs" role="tablist">
-              <button type="button" role="tab" disabled>
-                All files
+          <div className="aui-composer">
+            <textarea
+              className="aui-composer-input"
+              placeholder="Ask for changes, @mention files, or run commands…"
+              rows={2}
+              disabled
+            />
+            <div className="aui-composer-toolbar">
+              <button type="button" className="aui-composer-select" disabled>
+                <IconSparkle className="opacity-50" />
+                Agent
+                <IconChevronSm className="opacity-50" />
               </button>
-              <button type="button" role="tab" aria-selected="true">
-                Changes
+              <button type="button" className="aui-composer-select" disabled>
+                Pierre 1
+                <IconChevronSm className="opacity-50" />
               </button>
-              <button type="button" role="tab" disabled>
-                Checks
+              <button
+                type="button"
+                className="aui-composer-send ml-auto"
+                aria-label="Send"
+                disabled
+              >
+                <IconArrow className="rotate-[90deg]" />
               </button>
             </div>
-            <ChangesTree
-              session={session}
-              activePath={activePath}
-              onSelect={openFile}
-            />
-          </aside>
-        </div>
+          </div>
+        </section>
+
+        <aside className="aui-changes">
+          <div className="aui-changes-tabs" role="tablist">
+            <button type="button" role="tab" disabled>
+              All files
+            </button>
+            <button type="button" role="tab" aria-selected="true">
+              Changes
+            </button>
+            <button type="button" role="tab" disabled>
+              Checks
+            </button>
+          </div>
+          <ChangesTree
+            session={session}
+            activePath={activePath}
+            onSelect={openFile}
+          />
+        </aside>
       </div>
-    </EditProvider>
+    </div>
   );
 }

@@ -40,6 +40,12 @@ Both `FileDiff` and `File` accept an options object in their constructor. The
 `File` component has similar options, but excludes diff-specific settings and
 uses `LineAnnotation` instead of `DiffLineAnnotation` (no `side` property).
 
+When one of these components is attached to an `Editor`, keep its annotations in
+an external variable or store and replace them with the current collection
+emitted by `Editor.onChange`. See
+[Editing with line annotations](#edit-mode-editing-with-line-annotations) for
+the synchronization pattern and remapping rules.
+
 When rendering direct file contents with `FileDiff.render`, pass `FileContents`
 for each existing side. Use `oldFile: null` for a new file, or `newFile: null`
 for a deleted file.

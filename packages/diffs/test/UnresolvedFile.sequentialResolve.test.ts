@@ -68,8 +68,8 @@ function mountControlledUnresolvedFile(file: FileContents) {
       actions: result.actions,
       markerRows: result.markerRows,
     };
-    // Mirrors the hook's useIsometricEffect: push current state into the
-    // instance after every state change.
+    // Mirrors the hook's useIsomorphicLayoutEffect: push current state into
+    // the instance after every state change.
     inst.render({
       fileDiff: state.fileDiff,
       actions: state.actions,

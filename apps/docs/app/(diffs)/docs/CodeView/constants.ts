@@ -17,7 +17,7 @@ export const CODE_VIEW_ITEM_TYPE_EXAMPLE: PreloadFileOptions<undefined> = {
   file: FileContents;
   annotations?: LineAnnotation<T>[];
   collapsed?: boolean;
-  // Enables per-item edit mode when CodeView has a createEditor factory.
+  // Enables per-item edit mode when editing is configured.
   edit?: boolean;
   // Any time a value changes on an item, you must increment the version. This
   // is an intentional escape hatch to avoid potentially expensive deep object
@@ -31,7 +31,7 @@ type CodeViewDiffItem<T = undefined> = {
   fileDiff: FileDiffMetadata;
   annotations?: DiffLineAnnotation<T>[];
   collapsed?: boolean;
-  // Enables per-item edit mode when CodeView has a createEditor factory.
+  // Enables per-item edit mode when editing is configured.
   edit?: boolean;
   // Any time a value changes on an item, you must increment the version. This
   // is an intentional escape hatch to avoid potentially expensive deep object

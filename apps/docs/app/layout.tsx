@@ -11,6 +11,7 @@ import {
 import localFont from 'next/font/local';
 
 import './globals.css';
+import { AppEditProvider } from '@/components/AppEditProvider';
 import { PreloadHighlighter } from '@/components/PreloadHighlighter';
 import { ScrollbarGutterVariables } from '@/components/ScrollbarGutterVariables';
 import { ThemeProvider } from '@/components/theme-provider';
@@ -232,7 +233,7 @@ export default function RootLayout({
       <body className={SITE}>
         <ScrollbarGutterVariables />
         <ThemeProvider attribute="class">
-          {children}
+          <AppEditProvider>{children}</AppEditProvider>
           <Toaster />
           <div
             id="dark-mode-portal-container"

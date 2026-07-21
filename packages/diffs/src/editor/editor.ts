@@ -13,6 +13,7 @@ import type {
   FileContents,
   FileDiffMetadata,
   HighlightedToken,
+  LineAnnotation,
   Position,
   Range,
   RenderRange,
@@ -176,6 +177,12 @@ function isPromise<T>(value: T | Promise<T>): value is Promise<T> {
   );
 }
 
+interface EditorAttachState {
+  generation: number;
+  callback: (() => void) | undefined;
+  delivered: boolean;
+}
+
 export interface EditorOptions<LAnnotation> {
   /** The maximum number of entries to keep in the undo stack. */
   historyMaxEntries?: number;
@@ -225,7 +232,9 @@ export interface EditorOptions<LAnnotation> {
   /** Callback when the editor document changes. */
   onChange?: (
     file: FileContents,
-    lineAnnotations?: DiffLineAnnotation<LAnnotation>[]
+    lineAnnotations?:
+      | LineAnnotation<LAnnotation>[]
+      | DiffLineAnnotation<LAnnotation>[]
   ) => void;
   /** Callback when the editor gains focus. */
   onFocus?: () => void;
@@ -270,6 +279,13 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #globalEventDisposes?: (() => void)[];
   #selectEventDisposes?: (() => void)[];
   #detach?: (recycle?: boolean) => void;
+  // onAttach is deferred until the synchronized document and DOM are usable.
+  // Track the state so cleanup cannot notify an editor from an ended session.
+  #attachState: EditorAttachState = {
+    generation: 0,
+    callback: undefined,
+    delivered: false,
+  };
 
   // cache
   #contentOffset?: { left: number; top: number };
@@ -426,6 +442,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         requirePersistedCacheKey(file);
       }
     }
+    this.#invalidateOnAttach();
     if (fileInstance.options.useTokenTransformer !== true) {
       fileInstance.setOptions({
         ...fileInstance.options,
@@ -673,10 +690,17 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   }
 
   cleanUp(recycle = false): void {
+    this.#invalidateOnAttach();
+    if (!recycle) {
+      this.#attachState.delivered = false;
+    }
+    const hadFileInstance = this.#fileInstance != null;
     const shouldRestoreState = this.#isStatePersistenceEnabled;
     this.#stateRestoreGeneration++;
     this.#persistCurrentState();
-    this.#restoreStateOnNextSync = shouldRestoreState;
+    if (hadFileInstance) {
+      this.#restoreStateOnNextSync = shouldRestoreState;
+    }
     dequeueRender(this.#handleCustomPasteEvent);
     // The tokenizer is destroyed in both modes: it holds highlighter/worker
     // resources and writes into the (removed below) theme style element.
@@ -743,6 +767,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
 
     this.#resetState();
+    this.#fileInstance = undefined;
   }
 
   /** @internal Capture outgoing state and substitute cached text before render. */
@@ -792,6 +817,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     lineAnnotations: DiffLineAnnotation<LAnnotation>[] | undefined,
     renderRange: RenderRange | undefined
   ) => {
+    const fileInstance = this.#fileInstance;
+    if (fileInstance == null) {
+      return;
+    }
     const shadowRoot = fileContainer.shadowRoot;
     if (shadowRoot == null) {
       console.error('[editor] Could not find the shadow root.');
@@ -861,6 +890,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       | undefined;
 
     if (shouldRebuildDocument) {
+      this.#invalidateOnAttach();
       let contents = '';
       if ('contents' in fileOrDiff) {
         contents = fileOrDiff.contents;
@@ -892,9 +922,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#tokenizer = undefined;
       this.#resetState();
       this.#selections = this.#initSelections;
-      requestAnimationFrame(() => {
-        this.#options.onAttach?.(this, this.#fileInstance!);
-      });
       if (this.#textDocument !== undefined && this.#options.__debug === true) {
         console.log(
           '[diffs/editor] text document rebuilt from',
@@ -1063,6 +1090,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         persistedStateTarget.textDocument
       );
     }
+
+    this.#scheduleOnAttach(fileInstance);
   };
 
   get #isStatePersistenceEnabled(): boolean {
@@ -1321,6 +1350,48 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#searchPanel = undefined;
     this.#selectionAction?.cleanup();
     this.#selectionAction = undefined;
+  }
+
+  #invalidateOnAttach(): void {
+    const attachState = this.#attachState;
+    attachState.generation++;
+    if (attachState.callback != null) {
+      dequeueRender(attachState.callback);
+      attachState.callback = undefined;
+    }
+  }
+
+  // A recycled attachment remains the same edit session. If its first
+  // notification was canceled, the next live synchronization reschedules it;
+  // once delivered, later recycled mounts stay silent.
+  #scheduleOnAttach(fileInstance: DiffsEditableComponent<LAnnotation>): void {
+    const attachState = this.#attachState;
+    const textDocument = this.#textDocument;
+    if (
+      attachState.delivered ||
+      attachState.callback != null ||
+      textDocument == null
+    ) {
+      return;
+    }
+    const { generation } = attachState;
+    const callback = () => {
+      if (attachState.callback !== callback) {
+        return;
+      }
+      attachState.callback = undefined;
+      if (
+        generation !== attachState.generation ||
+        this.#fileInstance !== fileInstance ||
+        this.#textDocument !== textDocument
+      ) {
+        return;
+      }
+      attachState.delivered = true;
+      this.#options.onAttach?.(this, fileInstance);
+    };
+    attachState.callback = callback;
+    queueRender(callback);
   }
 
   #initialize(): void {
@@ -3994,7 +4065,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       // absent (context lines) the CSS falls back to the editor base bg.
       const lineElement = this.#getLineElement(line);
       let cornerBg = 'initial';
-      if (this.#isDiff && lineElement?.dataset.lineType === 'change-addition') {
+      if (
+        lineElement !== undefined &&
+        (lineElement.dataset.lineType === 'change-addition' ||
+          lineElement.dataset.selectedLine !== undefined)
+      ) {
         cornerBg =
           getComputedStyle(lineElement).getPropertyValue('--diffs-line-bg');
       }
@@ -4910,14 +4985,23 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       return lineElement ?? undefined;
     }
 
+    const renderRange = this.#renderRange;
+    if (
+      renderRange !== undefined &&
+      (line < renderRange.startingLine ||
+        line >= renderRange.startingLine + renderRange.totalLines)
+    ) {
+      return undefined;
+    }
+
     const contentElement = this.#contentElement;
     if (contentElement === undefined) {
       return undefined;
     }
 
     // check if the line is within the render range (fast)
-    if (this.#renderRange !== undefined) {
-      const { startingLine } = this.#renderRange;
+    if (renderRange !== undefined) {
+      const { startingLine } = renderRange;
       const { children } = contentElement;
       for (let i = line - startingLine; i <= children.length; i++) {
         const child = children[i] as HTMLElement | undefined;

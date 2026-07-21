@@ -350,3 +350,31 @@ describe('Editor search matches in a virtualized window', () => {
     }
   });
 });
+
+describe('Editor virtualized line lookup', () => {
+  test('does not scan the content subtree for offscreen selected lines', async () => {
+    const { cleanup, content, editor } = await createWindowedEditor(
+      300,
+      makeRange(100, 50)
+    );
+    const querySelector = spyOn(content, 'querySelector');
+    try {
+      editor.setSelections([
+        {
+          start: { line: 0, character: 0 },
+          end: { line: 299, character: 0 },
+          direction: 'forward',
+        },
+      ]);
+
+      const lineQueries = querySelector.mock.calls.filter(
+        ([selector]) =>
+          typeof selector === 'string' && selector.startsWith('[data-line=')
+      );
+      expect(lineQueries).toHaveLength(0);
+    } finally {
+      querySelector.mockRestore();
+      cleanup();
+    }
+  });
+});

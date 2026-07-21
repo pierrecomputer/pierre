@@ -16,7 +16,6 @@ interface MultiFileDiffBaseProps<
   LAnnotation,
 > extends DiffBasePropsReact<LAnnotation> {
   disableWorkerPool?: boolean;
-  contentEditable?: boolean;
 }
 
 export type MultiFileDiffProps<LAnnotation> =
@@ -26,6 +25,7 @@ export function MultiFileDiff<LAnnotation = undefined>({
   oldFile,
   newFile,
   options,
+  editOptions,
   metrics,
   lineAnnotations,
   selectedLines,
@@ -39,7 +39,7 @@ export function MultiFileDiff<LAnnotation = undefined>({
   renderHeaderMetadata,
   renderGutterUtility,
   disableWorkerPool = false,
-  contentEditable = false,
+  edit = false,
 }: MultiFileDiffProps<LAnnotation>): React.JSX.Element {
   const fileDiff = useMemo(() => {
     return parseDiffFromFile(oldFile, newFile, options?.parseDiffOptions);
@@ -47,6 +47,7 @@ export function MultiFileDiff<LAnnotation = undefined>({
   const { ref, getHoveredLine } = useFileDiffInstance({
     fileDiff,
     options,
+    editOptions,
     metrics,
     lineAnnotations,
     selectedLines,
@@ -54,7 +55,7 @@ export function MultiFileDiff<LAnnotation = undefined>({
     hasGutterRenderUtility: renderGutterUtility != null,
     hasCustomHeader: renderCustomHeader != null,
     disableWorkerPool,
-    contentEditable,
+    edit,
   });
   const children = renderDiffChildren({
     fileDiff,
