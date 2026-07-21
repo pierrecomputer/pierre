@@ -62,6 +62,12 @@ one-based on the selected file side, not row positions in the rendered diff. Use
 `lineNumber: 0` for a file-level annotation above the first file line or, in a
 diff, above the first hunk or row on that side.
 
+Callbacks shared by file and diff surfaces use
+`LineAnnotation[] | DiffLineAnnotation[]`. Use `isFileAnnotationCollection` or
+`isDiffAnnotationCollection` to narrow the collection before reading
+shape-specific fields. For individual annotation unions, use `isFileAnnotation`
+or `isDiffAnnotation`.
+
 Store a stable, position-independent application ID in metadata when an
 annotation owns drafts or other interactive state. For annotations that survive
 an edit, edit mode preserves metadata while remapping line coordinates. For the

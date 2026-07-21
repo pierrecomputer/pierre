@@ -1,11 +1,12 @@
 'use client';
 
-import type {
-  AnnotationSide,
-  DiffIndicators,
-  DiffLineAnnotation,
-  FileDiffOptions,
-  SelectedLineRange,
+import {
+  type AnnotationSide,
+  type DiffIndicators,
+  type DiffLineAnnotation,
+  type FileDiffOptions,
+  isDiffAnnotationCollection,
+  type SelectedLineRange,
 } from '@pierre/diffs';
 import type { Editor, EditorOptions } from '@pierre/diffs/editor';
 import {
@@ -728,7 +729,10 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
         editorRef.current = editor;
       },
       onChange: (_file, lineAnnotations) => {
-        if (lineAnnotations != null) {
+        if (
+          lineAnnotations != null &&
+          isDiffAnnotationCollection(lineAnnotations)
+        ) {
           flushSync(() => {
             setAnnotations(lineAnnotations);
           });

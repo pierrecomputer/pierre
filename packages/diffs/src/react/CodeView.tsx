@@ -78,7 +78,9 @@ interface CodeViewBaseProps<LAnnotation> {
   onItemEditChange?(
     item: CodeViewItem<LAnnotation>,
     file: FileContents,
-    lineAnnotations?: DiffLineAnnotation<LAnnotation>[]
+    lineAnnotations?:
+      | LineAnnotation<LAnnotation>[]
+      | DiffLineAnnotation<LAnnotation>[]
   ): void;
   /**
    * Called once with the final contents when an item's edit session ends
@@ -90,7 +92,9 @@ interface CodeViewBaseProps<LAnnotation> {
   onItemEditComplete?(
     item: CodeViewItem<LAnnotation>,
     file: FileContents,
-    lineAnnotations?: DiffLineAnnotation<LAnnotation>[]
+    lineAnnotations?:
+      | LineAnnotation<LAnnotation>[]
+      | DiffLineAnnotation<LAnnotation>[]
   ): void;
   renderCustomHeader?(item: CodeViewItem<LAnnotation>): ReactNode;
   renderHeaderPrefix?(item: CodeViewItem<LAnnotation>): ReactNode;
@@ -255,7 +259,9 @@ function CodeViewInner<LAnnotation = undefined>(
     (
       item: CodeViewItem<LAnnotation>,
       file: FileContents,
-      lineAnnotations?: DiffLineAnnotation<LAnnotation>[]
+      lineAnnotations?:
+        | LineAnnotation<LAnnotation>[]
+        | DiffLineAnnotation<LAnnotation>[]
     ) => {
       onItemEditChange?.(item, file, lineAnnotations);
     }
@@ -264,7 +270,9 @@ function CodeViewInner<LAnnotation = undefined>(
     (
       item: CodeViewItem<LAnnotation>,
       file: FileContents,
-      lineAnnotations?: DiffLineAnnotation<LAnnotation>[]
+      lineAnnotations?:
+        | LineAnnotation<LAnnotation>[]
+        | DiffLineAnnotation<LAnnotation>[]
     ) => {
       onItemEditComplete?.(item, file, lineAnnotations);
     }

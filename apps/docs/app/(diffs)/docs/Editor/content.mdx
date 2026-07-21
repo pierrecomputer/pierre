@@ -114,6 +114,12 @@ For annotations that survive, remapping changes only their coordinates. Metadata
 is preserved, so give each interactive annotation a stable, position-independent
 ID in `metadata` and key application-owned drafts or UI state by that ID.
 
+The shared `onChange` callback accepts either annotation shape: standalone
+`File` surfaces emit `LineAnnotation[]`, while diff surfaces emit
+`DiffLineAnnotation[]`. Narrow the collection before reading the diff-only
+`side` property. Use `isFileAnnotationCollection` or
+`isDiffAnnotationCollection` when the surface type is not already known.
+
 In React, synchronously publish a changed annotation array with `flushSync` so
 the annotation placement updates with the edited content before paint. Do not
 wrap every `onChange` update in `flushSync`: bail out when the emitted array is

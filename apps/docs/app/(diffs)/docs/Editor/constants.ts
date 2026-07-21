@@ -194,6 +194,7 @@ export const EDITOR_VANILLA_CODE_VIEW_EXAMPLE: PreloadFileOptions<undefined> = {
     name: 'editor_vanilla_code_view.ts',
     contents: `import {
   CodeView,
+  isDiffAnnotationCollection,
   parseDiffFromFile,
   type CodeViewItem,
 } from '@pierre/diffs';
@@ -230,6 +231,7 @@ const viewer = new CodeView<ThreadMetadata>({
     if (
       item.type !== 'diff' ||
       nextAnnotations == null ||
+      !isDiffAnnotationCollection(nextAnnotations) ||
       item.annotations === nextAnnotations
     ) {
       return;
@@ -684,10 +686,12 @@ export const EDITOR_REACT_CODE_VIEW_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
     name: 'editor_react_code_view.tsx',
     contents: `import {
+  isDiffAnnotationCollection,
   parseDiffFromFile,
   type CodeViewItem,
   type DiffLineAnnotation,
   type FileContents,
+  type LineAnnotation,
 } from '@pierre/diffs';
 import { Editor, type EditorOptions } from '@pierre/diffs/editor';
 import { CodeView, EditProvider } from '@pierre/diffs/react';
@@ -747,11 +751,14 @@ export function EditableCodeView() {
     (
       item: CodeViewItem<ThreadMetadata>,
       _file: FileContents,
-      nextAnnotations?: DiffLineAnnotation<ThreadMetadata>[]
+      nextAnnotations?:
+        | LineAnnotation<ThreadMetadata>[]
+        | DiffLineAnnotation<ThreadMetadata>[]
     ) => {
       if (
         item.type !== 'diff' ||
         nextAnnotations == null ||
+        !isDiffAnnotationCollection(nextAnnotations) ||
         item.annotations === nextAnnotations
       ) {
         return;
@@ -909,6 +916,7 @@ export const EDITOR_OPTIONS_TYPE: PreloadFileOptions<undefined> = {
   DiffLineAnnotation,
   DiffsEditableComponent,
   FileContents,
+  LineAnnotation,
 } from '@pierre/diffs';
 import { Editor, type IStateStorage } from '@pierre/diffs/editor';
 
@@ -962,7 +970,9 @@ interface EditorOptions<LAnnotation> {
   // existing array reference.
   onChange?: (
     file: FileContents,
-    lineAnnotations?: DiffLineAnnotation<LAnnotation>[]
+    lineAnnotations?:
+      | LineAnnotation<LAnnotation>[]
+      | DiffLineAnnotation<LAnnotation>[]
   ) => void;
 
   // Fires when the editable content area gains focus (tab, click, or editor.focus()).

@@ -166,6 +166,11 @@ For a diff item, those contents represent the editable new-file side. When the
 emitted annotation array is a different object, replace `item.annotations` and
 increment the item's `version`. `CodeView` does not write either value for you.
 
+The callback annotation type is `LineAnnotation[] | DiffLineAnnotation[]`: file
+items emit the side-less shape and diff items emit annotations with a `side`.
+Use `isFileAnnotationCollection` or `isDiffAnnotationCollection` to narrow it
+before reading shape-specific fields.
+
 When React owns the `CodeView` item list through `items`, publish a new `items`
 array containing the updated item inside `flushSync` so annotation placement
 updates with the edited content before paint. When `CodeView` owns the list in

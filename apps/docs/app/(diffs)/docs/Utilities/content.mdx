@@ -5,6 +5,15 @@
   framework or rendering approach.
 </Notice>
 
+### Annotation type guards [toc-ignore]
+
+Use `isDiffAnnotation` and `isFileAnnotation` to tell diff annotations from file
+annotations. Use `isDiffAnnotationCollection` and `isFileAnnotationCollection`
+for arrays.
+
+Both collection helpers return `true` for an empty array. Use the current file
+or diff context if that distinction matters.
+
 ### diffAcceptRejectHunk [toc-ignore]
 
 Programmatically accept or reject individual hunks (or specific change blocks

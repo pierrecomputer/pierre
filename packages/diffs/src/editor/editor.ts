@@ -13,6 +13,7 @@ import type {
   FileContents,
   FileDiffMetadata,
   HighlightedToken,
+  LineAnnotation,
   Position,
   Range,
   RenderRange,
@@ -231,7 +232,9 @@ export interface EditorOptions<LAnnotation> {
   /** Callback when the editor document changes. */
   onChange?: (
     file: FileContents,
-    lineAnnotations?: DiffLineAnnotation<LAnnotation>[]
+    lineAnnotations?:
+      | LineAnnotation<LAnnotation>[]
+      | DiffLineAnnotation<LAnnotation>[]
   ) => void;
   /** Callback when the editor gains focus. */
   onFocus?: () => void;
