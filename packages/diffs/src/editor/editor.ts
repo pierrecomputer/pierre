@@ -244,6 +244,13 @@ export interface EditorOptions<LAnnotation> {
   __debug?: boolean;
 }
 
+export interface EditorFocusOptions extends FocusOptions {
+  /** One-based document line number to place the caret on. */
+  lineNumber?: number;
+  /** Zero-based character offset for a numeric line. Defaults to 0. */
+  character?: number;
+}
+
 // Cap on how far an edit may widen the virtualized render window, as a multiple
 // of the bounded window the virtualizer last synced (~viewport + 2*hunkLineCount).
 // Edits within this many lines of the window bottom widen so their caret renders;
@@ -681,8 +688,21 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#updateSelections(this.#selections ?? []);
   }
 
-  focus(options?: FocusOptions): void {
+  focus(options?: EditorFocusOptions): void {
     const preventScroll = options?.preventScroll ?? false;
+    const lineNumber = options?.lineNumber;
+    if (typeof lineNumber === 'number') {
+      const textDocument = this.#textDocument;
+      if (textDocument === undefined || this.#fileInstance === undefined) {
+        return;
+      }
+      const position = textDocument.normalizePosition({
+        line: lineNumber - 1,
+        character: options?.character ?? 0,
+      });
+      this.#focusAtPosition(position, preventScroll);
+      return;
+    }
     const primarySelection = this.#selections?.at(-1);
     if (primarySelection !== undefined) {
       const pos =
@@ -3259,6 +3279,22 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       });
     } else {
       this.#contentElement?.focus({ preventScroll });
+    }
+  }
+
+  #focusAtPosition(position: Position, preventScroll: boolean): void {
+    const selection: EditorSelection = {
+      start: position,
+      end: position,
+      direction: DirectionNone,
+    };
+    this.#canMountSelectionAction = false;
+    this.#updateSelections([selection]);
+    this.#revealLineIfCollapsed(position.line);
+    if (preventScroll) {
+      this.#focus(position, true);
+    } else {
+      this.#scrollToPrimaryCaret();
     }
   }
 

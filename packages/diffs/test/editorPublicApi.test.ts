@@ -2,7 +2,11 @@ import { afterAll, describe, expect, mock, spyOn, test } from 'bun:test';
 
 import { File } from '../src/components/File';
 import { DEFAULT_THEMES } from '../src/constants';
-import { Editor, type EditorOptions } from '../src/editor/editor';
+import {
+  Editor,
+  type EditorFocusOptions,
+  type EditorOptions,
+} from '../src/editor/editor';
 import type { Marker } from '../src/editor/marker';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
 import type { DiffsEditableComponent, FileContents } from '../src/types';
@@ -273,6 +277,75 @@ describe('Editor focus lifecycle', () => {
       expect(focusSpy).toHaveBeenLastCalledWith({ preventScroll: false });
     } finally {
       cleanup();
+    }
+  });
+
+  test('focus() targets and normalizes a one-based document line', async () => {
+    const { cleanup, editor } = await createEditorFixture(
+      'alpha\nbravo\ncharlie'
+    );
+    try {
+      const firstTarget: EditorFocusOptions = {
+        lineNumber: 2,
+        preventScroll: true,
+      };
+      editor.focus(firstTarget);
+      expect(editor.getState().selections).toEqual([
+        {
+          start: { line: 1, character: 0 },
+          end: { line: 1, character: 0 },
+          direction: 0,
+        },
+      ]);
+
+      editor.focus({ lineNumber: 99, character: 99, preventScroll: true });
+      expect(editor.getState().selections).toEqual([
+        {
+          start: { line: 2, character: 7 },
+          end: { line: 2, character: 7 },
+          direction: 0,
+        },
+      ]);
+
+      editor.focus({
+        lineNumber: Number.NaN,
+        character: Number.NaN,
+        preventScroll: true,
+      });
+      expect(editor.getState().selections).toEqual([
+        {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 0 },
+          direction: 0,
+        },
+      ]);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('targeted focus honors preventScroll', async () => {
+    const { cleanup, editor } = await createEditorFixture('alpha\nbravo');
+    const scrollIntoView = spyOn(HTMLElement.prototype, 'scrollIntoView');
+    try {
+      editor.focus({ lineNumber: 2, preventScroll: true });
+      expect(scrollIntoView).not.toHaveBeenCalled();
+
+      editor.focus({ lineNumber: 1 });
+      expect(scrollIntoView).toHaveBeenCalledTimes(1);
+    } finally {
+      scrollIntoView.mockRestore();
+      cleanup();
+    }
+  });
+
+  test('targeted focus before attachment is a no-op', () => {
+    const editor = new Editor<undefined>();
+    try {
+      editor.focus({ lineNumber: 2 });
+      expect(editor.getState().selections).toBeUndefined();
+    } finally {
+      editor.cleanUp();
     }
   });
 });
