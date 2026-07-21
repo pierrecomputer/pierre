@@ -105,6 +105,7 @@ export const EDITOR_VANILLA_FILE_DIFF_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
     name: 'editor_vanilla_file_diff.ts',
     contents: `import {
+  isDiffAnnotationCollection,
   type DiffLineAnnotation,
   Virtualizer,
   VirtualizedFileDiff,
@@ -174,7 +175,11 @@ const editor = new Editor<ThreadMetadata>({
     newFile = { ...newFile, contents: file.contents };
 
     // Replace application state first, then redraw after onChange returns.
-    if (nextAnnotations != null && nextAnnotations !== lineAnnotations) {
+    if (
+      nextAnnotations != null &&
+      isDiffAnnotationCollection(nextAnnotations) &&
+      nextAnnotations !== lineAnnotations
+    ) {
       lineAnnotations = nextAnnotations;
       queueMicrotask(renderFromApplicationState);
     }
@@ -572,6 +577,7 @@ export const EDITOR_REACT_FILE_DIFF_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
     name: 'editor_react_file_diff.tsx',
     contents: `import {
+  isDiffAnnotationCollection,
   parseDiffFromFile,
   type DiffLineAnnotation,
   type FileDiffMetadata,
@@ -629,6 +635,7 @@ export function EditorComponent() {
       onChange(_file, nextAnnotations) {
         if (
           nextAnnotations == null ||
+          !isDiffAnnotationCollection(nextAnnotations) ||
           nextAnnotations === annotationsRef.current
         ) {
           return;
