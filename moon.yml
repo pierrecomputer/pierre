@@ -106,6 +106,24 @@ tasks:
     options:
       runInCI: 'always'
 
+  # Guards the repo-wide Apache 2.0 license: every workspace package (and the
+  # repo root) must declare "license": "apache-2.0" and ship an Apache 2.0
+  # LICENSE file. No graph edges, so it stays runInCI: 'always' (see the header
+  # note) and CI invokes it as its own step.
+  check-licenses:
+    command: 'bun --silent scripts/check-licenses.ts'
+    inputs:
+      - 'scripts/check-licenses.ts'
+      - '**/package.json'
+      - '**/LICENSE'
+      - '**/LICENSE.md'
+      - '!**/node_modules/**'
+      - '!**/dist/**'
+      - '!**/.next/**'
+      - '!**/.source/**'
+    options:
+      runInCI: 'always'
+
   # Regenerates the committed icon sprite module from @pierre/icons sources,
   # then formats just the generated file. Not targeted by any CI lane.
   icons:

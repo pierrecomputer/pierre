@@ -79,6 +79,10 @@ jobs:
         run: >-
           moon run root:format-check
 
+      - name: Check licenses
+        run: >-
+          moon run root:check-licenses
+
       - name: Run affected tasks
         run: >-
           moon ci --include-relations --summary detailed :build demo:build

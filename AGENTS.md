@@ -40,6 +40,21 @@ themselves, unset the var: `CI= pnpm publish --dry-run`.
 - Preserve trailing newlines at the end of files.
 - Setup steps for a fresh clone live in `CONTRIBUTING.md`.
 
+## Licensing
+
+Every package in this repo is licensed under Apache 2.0. When adding a new
+package under `packages/*` or `apps/*`:
+
+- Set `"license": "apache-2.0"` in its `package.json`.
+- Add an Apache 2.0 `LICENSE.md` at the package root — copy one from an existing
+  package (e.g. `packages/trees/LICENSE.md`).
+
+Vendored third-party code keeps its original license; record that attribution in
+a `NOTICE.md` next to the package rather than changing its LICENSE.
+
+`moon run root:check-licenses` enforces both requirements and runs in CI on
+every PR.
+
 ## Skills
 
 Domain-specific context and conventions live in `.agents/skills/`. Before
