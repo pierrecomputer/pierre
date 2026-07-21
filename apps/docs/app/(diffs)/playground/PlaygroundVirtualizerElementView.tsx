@@ -220,7 +220,13 @@ function ElementVirtualizerDiff({
     }
   );
 
-  const renderHeaderMetadata = useStableCallback(() => {
+  // Must NOT be a stable callback: FileDiff invokes renderHeaderMetadata
+  // synchronously during render, but useStableCallback only refreshes its inner
+  // ref in a commit-phase insertion effect. Reading `editing` (render-phase
+  // state) through a stable wrapper would render the button one toggle behind —
+  // the header would reflect the previous `editing` value. A per-`editing`
+  // useCallback hands renderDiffChildren the current closure each toggle.
+  const renderHeaderMetadata = useCallback(() => {
     return (
       <button
         type="button"
@@ -237,7 +243,7 @@ function ElementVirtualizerDiff({
         <span className="playground-edit-toggle-label-off">Edit</span>
       </button>
     );
-  });
+  }, [editing]);
 
   return (
     <FileDiff
