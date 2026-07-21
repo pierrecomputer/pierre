@@ -25,4 +25,4 @@ Then select the theme via the theme selector (`Cmd+K Cmd+T` or `Ctrl+K Ctrl+T`).
 
 ## License
 
-MIT
+Apache-2.0

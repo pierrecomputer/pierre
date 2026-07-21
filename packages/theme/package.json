@@ -16,7 +16,7 @@
   "bugs": {
     "url": "https://github.com/pierrecomputer/pierre/issues"
   },
-  "license": "MIT",
+  "license": "apache-2.0",
   "author": "Pierre Computer <support@pierre.co>",
   "repository": {
     "type": "git",
@@ -29,6 +29,7 @@
     "themes",
     "icon.png",
     "LICENSE",
+    "NOTICE.md",
     "README.md"
   ],
   "sideEffects": false,
