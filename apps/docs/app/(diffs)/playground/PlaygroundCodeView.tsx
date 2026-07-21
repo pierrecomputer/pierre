@@ -17,6 +17,7 @@ import {
   type CodeViewReactOptions,
   useStableCallback,
 } from '@pierre/diffs/react';
+import { IconCheckboxFill, IconSquircleLg } from '@pierre/icons';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { flushSync } from 'react-dom';
 
@@ -390,16 +391,30 @@ export function PlaygroundCodeView({
   );
 
   const renderHeaderMetadata = useStableCallback((item: PlaygroundItem) => {
+    const isEditing = item.edit === true;
     return (
-      <label className="flex cursor-pointer items-center gap-[4px] text-xs select-none">
-        <input
-          type="checkbox"
-          className="cursor-pointer"
-          checked={item.edit === true}
-          onChange={(event) => toggleEdit(item.id, event.target.checked)}
-        />
-        Edit
-      </label>
+      <button
+        type="button"
+        onClick={() => toggleEdit(item.id, !isEditing)}
+        aria-pressed={isEditing}
+        className={`-mr-[8px] flex cursor-pointer items-center gap-1 rounded-sm border py-1 pr-2 pl-1.5 text-xs transition ${
+          isEditing
+            ? 'border-blue-400/50 bg-blue-500/25 text-blue-600'
+            : 'border bg-transparent text-neutral-500 hover:border-neutral-300 hover:bg-neutral-100 hover:text-neutral-700'
+        }`}
+      >
+        {isEditing ? (
+          <>
+            <IconCheckboxFill size={12} />
+            Editing
+          </>
+        ) : (
+          <>
+            <IconSquircleLg size={12} className="opacity-50" />
+            Edit
+          </>
+        )}
+      </button>
     );
   });
 

@@ -25,28 +25,29 @@ interface PlaygroundVirtualizerViewProps {
   showAnnotations: boolean;
 }
 
-// Builds the per-file "Edit" checkbox rendered into a diff header's metadata
-// slot. The header lives in the diff's shadow root (outside app CSS), so the
-// control is styled inline. Returns the label element plus its input so the
-// caller can wire the change handler once the diff instance exists.
-function createEditToggle(): { element: HTMLElement; input: HTMLInputElement } {
-  const label = document.createElement('label');
-  label.style.display = 'inline-flex';
-  label.style.alignItems = 'center';
-  label.style.gap = '4px';
-  label.style.cursor = 'pointer';
-  label.style.fontSize = '12px';
-  label.style.userSelect = 'none';
+// Both edit-toggle state icons, inlined as SVG markup. @pierre/icons ships
+// React components (used by the CodeView and React-Virtualizer toggles), but
+// this vanilla view builds DOM directly, so the same two glyphs
+// (IconCheckboxFill / IconSquircleLg) are inlined here. The shared
+// `.playground-edit-toggle` styles show whichever matches `aria-pressed`.
+const EDIT_TOGGLE_ICON_ON = `<svg class="playground-edit-toggle-icon-on" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path fill-rule="evenodd" clip-rule="evenodd" d="M8 0C1.412 0 0 1.412 0 8s1.412 8 8 8 8-1.412 8-8-1.412-8-8-8m4.08 5.975a.75.75 0 0 0-1.16-.95L6.943 9.884 5.03 7.97a.75.75 0 0 0-1.06 1.06l2.5 2.5a.75.75 0 0 0 1.11-.055z"/></svg>`;
+const EDIT_TOGGLE_ICON_OFF = `<svg class="playground-edit-toggle-icon-off" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path fill-rule="evenodd" clip-rule="evenodd" d="M1.788 4.296C1.588 5.194 1.5 6.387 1.5 8s.088 2.806.288 3.704c.196.88.478 1.381.802 1.706s.826.607 1.706.802c.898.2 2.091.288 3.704.288s2.806-.088 3.704-.288c.88-.195 1.381-.478 1.706-.802s.607-.826.802-1.706c.2-.898.288-2.091.288-3.704s-.088-2.806-.288-3.704c-.195-.88-.478-1.381-.802-1.706s-.826-.606-1.706-.802C10.806 1.588 9.613 1.5 8 1.5s-2.806.088-3.704.288c-.88.196-1.381.478-1.706.802s-.606.826-.802 1.706M0 8c0-6.588 1.412-8 8-8s8 1.412 8 8-1.412 8-8 8-8-1.412-8-8"/></svg>`;
 
-  const input = document.createElement('input');
-  input.type = 'checkbox';
-  input.style.cursor = 'pointer';
-
-  const text = document.createElement('span');
-  text.textContent = 'Edit';
-
-  label.append(input, text);
-  return { element: label, input };
+// Builds the per-file "Edit" toggle rendered into a diff header's metadata
+// slot. Slotted content is a light-DOM child of the diffs container, so the
+// app stylesheet reaches it: styling lives in the shared
+// `.playground-edit-toggle` class (globals.css), matching the CodeView and
+// React-Virtualizer toggles. Both state icons and both labels ("Edit" /
+// "Editing") are always present; CSS shows the pair matching `aria-pressed`,
+// so the caller only flips the attribute (and wires edit/cleanup) once the diff
+// instance exists.
+function createEditToggle(): HTMLButtonElement {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'playground-edit-toggle';
+  button.setAttribute('aria-pressed', 'false');
+  button.innerHTML = `${EDIT_TOGGLE_ICON_ON}${EDIT_TOGGLE_ICON_OFF}<span class="playground-edit-toggle-label-on">Editing</span><span class="playground-edit-toggle-label-off">Edit</span>`;
+  return button;
 }
 
 const VIRTUALIZER_CUSTOM_CSS = `${ITEM_UNSAFE_CSS}
@@ -176,7 +177,7 @@ export function PlaygroundVirtualizerView({
         },
       });
       editors.push(editor);
-      const { element: editToggle, input } = createEditToggle();
+      const editToggle = createEditToggle();
 
       const rerenderWithAnnotations = () => {
         instance.render({
@@ -286,9 +287,12 @@ export function PlaygroundVirtualizerView({
         );
 
       // Attaching the editor flips the new-file surface to contentEditable;
-      // detaching restores read-only review.
-      input.addEventListener('change', () => {
-        if (input.checked) {
+      // detaching restores read-only review. The button tracks its own state on
+      // `aria-pressed` (which also drives the shared toggle styles).
+      editToggle.addEventListener('click', () => {
+        const editing = editToggle.getAttribute('aria-pressed') !== 'true';
+        editToggle.setAttribute('aria-pressed', editing ? 'true' : 'false');
+        if (editing) {
           editor.edit(instance);
         } else {
           editor.cleanUp();

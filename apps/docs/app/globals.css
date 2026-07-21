@@ -264,6 +264,41 @@
   @apply overflow-hidden rounded-lg border border-transparent dark:border-neutral-800;
 }
 
+/* Per-file "Edit" toggle shared by the playground React Virtualizer and vanilla
+   Virtualizer views, matching the CodeView view's toggle. The vanilla view
+   renders it into a diff header's metadata slot; slotted content lives in the
+   light DOM, so this app stylesheet reaches it. Active state is driven by
+   `aria-pressed`; both state icons and both labels ("Edit" / "Editing") are
+   always present and CSS shows the matching pair, so the vanilla toggle only
+   has to flip the attribute. */
+.playground-edit-toggle {
+  @apply -mr-[8px] flex cursor-pointer items-center gap-1 rounded-sm border py-1 pr-2 pl-1.5 text-xs transition;
+  @apply bg-transparent text-neutral-500;
+}
+.playground-edit-toggle:hover:not([aria-pressed='true']) {
+  @apply border-neutral-300 bg-neutral-100 text-neutral-700;
+}
+.playground-edit-toggle[aria-pressed='true'] {
+  @apply border-blue-400/50 bg-blue-500/25 text-blue-600;
+}
+.playground-edit-toggle-icon-off {
+  @apply block opacity-50;
+}
+.playground-edit-toggle-icon-on,
+.playground-edit-toggle-label-on {
+  @apply hidden;
+}
+.playground-edit-toggle[aria-pressed='true'] .playground-edit-toggle-icon-off,
+.playground-edit-toggle[aria-pressed='true'] .playground-edit-toggle-label-off {
+  @apply hidden;
+}
+.playground-edit-toggle[aria-pressed='true'] .playground-edit-toggle-icon-on {
+  @apply block;
+}
+.playground-edit-toggle[aria-pressed='true'] .playground-edit-toggle-label-on {
+  @apply inline;
+}
+
 .cv-scrollbar {
   --cv-scrollbar-thumb-bg: light-dark(
     color-mix(in lab, var(--background) 85%, black),
