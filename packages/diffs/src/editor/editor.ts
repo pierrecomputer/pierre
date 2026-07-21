@@ -1336,12 +1336,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   }
 
   // Drop the DOM-geometry caches (memoized row elements, measured line Ys,
-  // last caret x). Wrap offsets are intentionally NOT cleared here: they
-  // depend only on line text, font metrics, and content width — not on the
-  // rendered rows — so they stay valid across render-range syncs and row
-  // rebuilds. The sites where those inputs actually change (text edits in
-  // #applyChange, width changes in #handleLayoutResize, font remeasure,
-  // document swaps, cleanUp) invalidate the wrap cache themselves.
+  // last caret x).
   #resetCache(): void {
     this.#lineYCache.clear();
     this.#lineElementsCache.clear();
@@ -3158,16 +3153,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       );
     }
 
-    // A diff re-renders its rows in place after the edits above: a unified diff
-    // rebuilds its content column on every edit (FileDiff.refreshDiffView swaps
-    // the column's innerHTML), and any diff rebuilds on a line-count change
-    // (applyDocumentChange -> full render). That detaches the line elements this
-    // editor memoized for caret/selection geometry (#lineYCache,
-    // #lastAccessedLineElement), so a detached row would measure offsetTop 0 and
-    // the caret would render at the top - the following #scrollToPrimaryCaret
-    // then scrolls the viewport there. Drop the geometry caches so the overlay
-    // re-measures against the freshly rebuilt rows and the caret stays put.
-    if (this.#isDiff && (this.#diffSyle === 'unified' || didLineCountChange)) {
+    // A line-count change can remove cached rows, while a unified diff rebuilds
+    // its content column on every edit. Either can detach the line elements
+    // memoized for caret/selection geometry, making offsetTop read as 0 and
+    // scrolling the caret to the top. Re-measure against the current rows.
+    if (didLineCountChange || (this.#isDiff && this.#diffSyle === 'unified')) {
       this.#resetCache();
     }
 

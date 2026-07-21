@@ -114,6 +114,68 @@ async function createWindowedEditor(
 }
 
 describe('Editor edits at the bottom of a virtualized window', () => {
+  test('keeps the last-line caret anchored after Enter, Delete, Enter', async () => {
+    const { cleanup, content, editor, fileContainer } =
+      await createWindowedEditor(1_000, makeRange(950, 50));
+    try {
+      Object.defineProperty(window.HTMLElement.prototype, 'offsetTop', {
+        configurable: true,
+        get(this: HTMLElement) {
+          const line = Number(this.dataset.line);
+          return this.isConnected && line > 0 ? line * 20 : 0;
+        },
+      });
+
+      editor.setSelections([
+        {
+          start: { line: 999, character: 9 },
+          end: { line: 999, character: 9 },
+          direction: 'none',
+        },
+      ]);
+      content.dispatchEvent(
+        new window.InputEvent('beforeinput', {
+          bubbles: true,
+          cancelable: true,
+          composed: true,
+          inputType: 'insertParagraph',
+        })
+      );
+      await wait(0);
+      const firstCaretTransform =
+        fileContainer.shadowRoot?.querySelector<HTMLElement>('[data-caret]')
+          ?.style.transform;
+      expect(firstCaretTransform).toBeDefined();
+
+      content.dispatchEvent(
+        new window.InputEvent('beforeinput', {
+          bubbles: true,
+          cancelable: true,
+          composed: true,
+          inputType: 'deleteContentBackward',
+        })
+      );
+      await wait(0);
+      content.dispatchEvent(
+        new window.InputEvent('beforeinput', {
+          bubbles: true,
+          cancelable: true,
+          composed: true,
+          inputType: 'insertParagraph',
+        })
+      );
+      await wait(0);
+
+      expect(editor.getState().selections?.at(-1)?.start.line).toBe(1_000);
+      expect(
+        fileContainer.shadowRoot?.querySelector<HTMLElement>('[data-caret]')
+          ?.style.transform
+      ).toBe(firstCaretTransform);
+    } finally {
+      cleanup();
+    }
+  });
+
   // A run of Enter presses at the window's bottom edge must keep rendering each
   // new line. The editor widens its render range when the caret reaches the
   // last rendered line; if that widened range is not persisted, the next edit
