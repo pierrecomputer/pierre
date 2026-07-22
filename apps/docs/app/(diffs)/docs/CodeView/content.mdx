@@ -82,6 +82,44 @@ For vanilla `CodeView`, keep using `CodeViewOptions.createEditor`. It exposes
 the same item-aware callbacks, and CodeView owns each returned editor's
 lifecycle.
 
+#### Autofocus on Attach
+
+Autofocus is opt-in per edit session. In React, pass a stable `editOptions`
+object whose `onAttach` callback targets the first editable row with a visible
+top edge:
+
+```tsx
+const editOptions: EditorOptions<ThreadMetadata> = {
+  onAttach(editor) {
+    editor.focus({ lineNumber: 'first-visible', preventScroll: true });
+  },
+};
+
+<CodeView items={items} editOptions={editOptions} />;
+```
+
+For vanilla `CodeView`, add the callback while constructing each item editor:
+
+```ts
+const viewer = new CodeView({
+  createEditor(options) {
+    return new Editor({
+      ...options,
+      onAttach(editor) {
+        editor.focus({ lineNumber: 'first-visible', preventScroll: true });
+      },
+    });
+  },
+});
+```
+
+`preventScroll: true` preserves the viewer's scroll position. `CodeView` keeps
+the editor alive while an item is recycled, so the callback does not steal focus
+again when that item re-enters the virtualized window. If several items start an
+autofocusing edit session together, the last callback to run owns focus. See
+[Autofocus on Attach](#edit-mode-autofocus-on-attach) for explicit line targets,
+viewport fallback, offsets, and selection-state behavior.
+
 ### Padding &amp; Gap
 
 For controlling layout inside and between items in `CodeView`, you can use the

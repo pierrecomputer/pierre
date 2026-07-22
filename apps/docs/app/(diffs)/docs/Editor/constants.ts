@@ -230,7 +230,12 @@ root.style.overflow = 'auto';
 const viewer = new CodeView<ThreadMetadata>({
   theme: { dark: 'pierre-dark', light: 'pierre-light' },
   createEditor(options) {
-    return new Editor(options);
+    return new Editor({
+      ...options,
+      onAttach(editor) {
+        editor.focus({ lineNumber: 'first-visible', preventScroll: true });
+      },
+    });
   },
   onItemEditChange(item, _file, nextAnnotations) {
     if (
@@ -737,6 +742,12 @@ const initialItems: CodeViewItem<ThreadMetadata>[] = [
 
 const codeViewStyle = { height: '24rem', overflow: 'auto' } as const;
 
+const editOptions: EditorOptions<ThreadMetadata> = {
+  onAttach(editor) {
+    editor.focus({ lineNumber: 'first-visible', preventScroll: true });
+  },
+};
+
 function createEditor(options: EditorOptions<ThreadMetadata>) {
   return new Editor(options);
 }
@@ -823,6 +834,7 @@ export function EditableCodeView() {
       <CodeView
         items={items}
         style={codeViewStyle}
+        editOptions={editOptions}
         onItemEditChange={syncAnnotations}
         onItemEditComplete={commitEdit}
         renderAnnotation={(annotation) => (
@@ -1001,7 +1013,7 @@ export const EDITOR_PUBLIC_API: PreloadFileOptions<undefined> = {
   type EditorState,
   type FileContents,
 } from '@pierre/diffs';
-import { Editor } from '@pierre/diffs/editor';
+import { Editor, type EditorFocusOptions } from '@pierre/diffs/editor';
 
 // Editor
 // Most methods require an attached surface via edit().
@@ -1089,6 +1101,18 @@ editor.setMarkers([]);
 // Blur removes focus from the content area.
 editor.focus();
 editor.focus({ preventScroll: true });
+
+// Numeric line numbers are one-based; character offsets are zero-based.
+editor.focus({ lineNumber: 13, character: 4 });
+
+// Target the first editable row whose top is visible. offset adds a
+// non-negative CSS-pixel inset below the viewport or sticky file header.
+const focusOptions: EditorFocusOptions = {
+  lineNumber: 'first-visible',
+  offset: 8,
+  preventScroll: true,
+};
+editor.focus(focusOptions);
 editor.blur();
 
 // Whether there is an edit to undo or redo.

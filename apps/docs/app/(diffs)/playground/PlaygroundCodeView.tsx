@@ -12,6 +12,7 @@ import {
   parseDiffFromFile,
   type SelectedLineRange,
 } from '@pierre/diffs';
+import type { EditorOptions } from '@pierre/diffs/editor';
 import {
   CodeView,
   type CodeViewReactOptions,
@@ -31,6 +32,12 @@ import {
 const CODE_VIEW_STYLES = { height: '70vh', overflow: 'auto' } as const;
 
 type PlaygroundItem = CodeViewItem<PlaygroundAnnotationMetadata>;
+
+const CODE_VIEW_EDIT_OPTIONS: EditorOptions<PlaygroundAnnotationMetadata> = {
+  onAttach(editor) {
+    editor.focus({ lineNumber: 'first-visible', preventScroll: true });
+  },
+};
 
 interface PlaygroundCodeViewProps {
   items: PlaygroundItem[];
@@ -420,6 +427,7 @@ export function PlaygroundCodeView({
 
   return (
     <CodeView
+      editOptions={CODE_VIEW_EDIT_OPTIONS}
       items={items}
       className="border-border rounded-lg border"
       style={CODE_VIEW_STYLES}

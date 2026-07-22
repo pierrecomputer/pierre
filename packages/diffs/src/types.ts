@@ -1047,7 +1047,8 @@ export interface DiffsEditableComponent<
    */
   getScrollContainer?: () => HTMLElement | undefined;
   /**
-   * Return the viewport that bounds visible editor rows.
+   * Return an explicit viewport that bounds visible editor rows. Components
+   * without one fall back to their nearest scrollable ancestor or document.
    */
   getEditorViewport?: () => HTMLElement | Document | undefined;
   /**

@@ -98,6 +98,9 @@ function ElementVirtualizerDiff({
   // nowhere for the frames in between.
   const editOptions = useMemo<EditorOptions<PlaygroundAnnotationMetadata>>(
     () => ({
+      onAttach(editor) {
+        editor.focus({ lineNumber: 'first-visible', preventScroll: true });
+      },
       onChange(_file, lineAnnotations) {
         if (
           lineAnnotations != null &&

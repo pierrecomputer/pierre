@@ -1104,6 +1104,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     } else if (
       this.#selections !== undefined &&
       this.#selections.length > 0 &&
+      this.#contentHasFocus &&
       !this.#retainSearchPanelFocus
     ) {
       this.focus({ preventScroll: true });
@@ -1429,6 +1430,17 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         generation !== attachState.generation ||
         this.#fileInstance !== fileInstance ||
         this.#textDocument !== textDocument
+      ) {
+        return;
+      }
+      const contentElement = this.#contentElement;
+      const shadowRoot = this.#fileContainer?.shadowRoot;
+      // A host rerender queued ahead of this callback may have replaced the
+      // editable DOM while its asynchronous editor sync is still pending.
+      if (
+        contentElement == null ||
+        shadowRoot == null ||
+        !shadowRoot.contains(contentElement)
       ) {
         return;
       }
@@ -2965,7 +2977,9 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#markerRenderer !== undefined
     ) {
       this.#updateSelections(this.#selections ?? []);
-      if (this.#selections !== undefined) {
+      // Virtualized row swaps can resize a blurred editor. Repaint its overlays
+      // without letting that layout work reclaim DOM focus.
+      if (this.#selections !== undefined && this.#contentHasFocus) {
         this.focus();
       }
     }
@@ -3295,15 +3309,16 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #getFirstVisibleLineNumber(offset = 0): number | undefined {
     const contentElement = this.#contentElement;
     const fileContainer = this.#fileContainer;
-    const viewport = this.#fileInstance?.getEditorViewport?.();
     if (
       this.#textDocument == null ||
       contentElement == null ||
-      fileContainer == null ||
-      viewport == null
+      fileContainer == null
     ) {
       return undefined;
     }
+    const viewport =
+      this.#fileInstance?.getEditorViewport?.() ??
+      this.#getDefaultEditorViewport(fileContainer);
 
     let viewportTop: number;
     let viewportBottom: number;
@@ -3352,6 +3367,32 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       }
     }
     return undefined;
+  }
+
+  // Non-virtualized surfaces inherit visibility from their nearest vertical
+  // scrollport; page-scrolling surfaces use the owning document.
+  #getDefaultEditorViewport(
+    fileContainer: HTMLElement
+  ): HTMLElement | Document {
+    const ownerDocument = fileContainer.ownerDocument;
+    let element = fileContainer.parentElement;
+    while (
+      element != null &&
+      element !== ownerDocument.body &&
+      element !== ownerDocument.documentElement
+    ) {
+      const overflowY =
+        element.ownerDocument.defaultView?.getComputedStyle(element).overflowY;
+      if (
+        overflowY === 'auto' ||
+        overflowY === 'scroll' ||
+        overflowY === 'overlay'
+      ) {
+        return element;
+      }
+      element = element.parentElement;
+    }
+    return ownerDocument;
   }
 
   #focusAtPosition(position: Position, preventScroll: boolean): void {

@@ -151,6 +151,12 @@ export function PlaygroundVirtualizerView({
       // pre-edit lines. An annotation whose line was deleted is dropped from
       // the set; retire its orphaned React root.
       const editor = new Editor<VirtualizerAnnotationMetadata>({
+        onAttach(attachedEditor) {
+          attachedEditor.focus({
+            lineNumber: 'first-visible',
+            preventScroll: true,
+          });
+        },
         onChange: (_file, lineAnnotations) => {
           if (
             lineAnnotations == null ||

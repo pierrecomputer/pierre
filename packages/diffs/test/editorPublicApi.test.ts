@@ -461,12 +461,11 @@ describe('Editor focus lifecycle', () => {
     }
   });
 
-  test('first-visible focus uses document viewport bounds', async () => {
-    const { cleanup, content, editor, file } = await createEditorFixture(
+  test('first-visible focus falls back to document viewport bounds', async () => {
+    const { cleanup, content, editor } = await createEditorFixture(
       'alpha\nbravo\ncharlie'
     );
     try {
-      setEditorViewport(file, document);
       Object.defineProperty(window, 'innerHeight', {
         configurable: true,
         value: 50,
@@ -476,6 +475,34 @@ describe('Editor focus lifecycle', () => {
       setRect(rows[0], -1, 19);
       setRect(rows[1], 19, 39);
       setRect(rows[2], 39, 59);
+
+      editor.focus({ lineNumber: 'first-visible', preventScroll: true });
+      expect(editor.getState().selections?.[0]?.start).toEqual({
+        line: 1,
+        character: 0,
+      });
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('first-visible focus falls back to the nearest scrollable ancestor', async () => {
+    const { cleanup, content, editor } = await createEditorFixture(
+      'alpha\nbravo\ncharlie'
+    );
+    try {
+      const fileContainer = (content.getRootNode() as ShadowRoot)
+        .host as HTMLElement;
+      const viewport = document.createElement('div');
+      viewport.style.overflowY = 'auto';
+      document.body.appendChild(viewport);
+      viewport.appendChild(fileContainer);
+      setRect(viewport, 10, 50);
+
+      const rows = getLineRows(content);
+      setRect(rows[0], 0, 20);
+      setRect(rows[1], 20, 40);
+      setRect(rows[2], 40, 60);
 
       editor.focus({ lineNumber: 'first-visible', preventScroll: true });
       expect(editor.getState().selections?.[0]?.start).toEqual({

@@ -255,6 +255,60 @@ sessions keep their current editor, while the latest values apply to the next
 item that enters edit mode. Simultaneously edited items always receive
 independent editor instances.
 
+### Autofocus on Attach
+
+Use `onAttach` to opt into initial caret placement. At this point the text
+document and editable DOM are ready. In React, pass a stable `editOptions`
+object to any editable surface, including `CodeView`:
+
+```tsx
+const editOptions = useMemo<EditorOptions<undefined>>(
+  () => ({
+    onAttach(editor) {
+      editor.focus({ lineNumber: 'first-visible', preventScroll: true });
+    },
+  }),
+  []
+);
+
+return <CodeView items={items} editOptions={editOptions} />;
+```
+
+Vanilla `CodeView` can add the same behavior in its editor factory:
+
+```ts
+const viewer = new CodeView({
+  createEditor(options) {
+    return new Editor({
+      ...options,
+      onAttach(editor) {
+        editor.focus({ lineNumber: 'first-visible', preventScroll: true });
+      },
+    });
+  },
+});
+```
+
+`'first-visible'` selects the first editable row whose top falls inside the
+usable viewport and places the caret at character zero. If no editable row top
+is visible, the call does nothing. Set `offset` to a non-negative number of CSS
+pixels to move the usable top below the viewport if needed. With
+`preventScroll: true`, the focus request does not change the vertical scroll
+position.
+
+You can also target a specific document position:
+
+```ts
+editor.focus({ lineNumber: 13, character: 4 });
+```
+
+Numeric `lineNumber` values are one-based, while `character` values are
+zero-based. Numeric targeting works on every attached editor. Any targeted focus
+replaces the current selection, so use either this initial placement or restored
+selection/view state as the owner of the edit session's starting position, not
+both. `CodeView` retains an editor while its item is recycled, so `onAttach` is
+not repeated for virtualized remounts in the same edit session.
+
 ### Editor Options
 
 Pass these when constructing `new Editor({ ... })`, or update them later with
