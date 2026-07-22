@@ -77,6 +77,8 @@ interface Window {
 
   // Editor handle exposed by the editable fixtures.
   __editor?: E2EEditor;
+  __forceEditorFullRender?: () => void;
+  __moveEditorContainer?: () => void;
 
   // edit-collapsed.html helpers: rendered new-file line numbers in the
   // editable column, and the primary caret's zero-based line.

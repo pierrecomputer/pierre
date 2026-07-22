@@ -57,6 +57,7 @@ describe('VirtualizedFile persisted layout', () => {
         prepareCalls++;
         return cachedFile;
       },
+      __captureFocusForDOMReplacement() {},
       __postponeBgTokenizeToNextFrame() {},
       __syncRenderView() {},
       edit() {

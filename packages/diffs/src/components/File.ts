@@ -1476,6 +1476,9 @@ export class File<
       previousContainer ??
       document.createElement(DIFFS_TAG_NAME);
     const containerChanged = previousContainer !== nextContainer;
+    if (previousContainer != null && containerChanged) {
+      this.editor?.__captureFocusForDOMReplacement();
+    }
     if (containerChanged) {
       this.emitPostRender(true);
     }
@@ -1555,6 +1558,7 @@ export class File<
     // If we have a new parent container for the pre element, lets go ahead and
     // move it into the new container
     else if (this.pre.parentNode !== shadowRoot) {
+      this.editor?.__captureFocusForDOMReplacement();
       container.shadowRoot?.appendChild(this.pre);
       this.appliedPreAttributes = undefined;
     }

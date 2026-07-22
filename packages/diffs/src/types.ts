@@ -1114,6 +1114,8 @@ export interface DiffsEditor<LAnnotation> {
   /** @internal */
   __prepareFile?(file: FileContents): FileContents;
   __postponeBgTokenizeToNextFrame(): void;
+  /** @internal Capture focus intent before replacing the editable view. */
+  __captureFocusForDOMReplacement(): void;
   __syncRenderView(
     highlighter: DiffsHighlighter,
     fileContainer: HTMLElement,

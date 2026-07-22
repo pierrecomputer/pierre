@@ -103,6 +103,7 @@ function createTrackedEditor(
       detach?.(recycle);
       detach = undefined;
     },
+    __captureFocusForDOMReplacement() {},
     __postponeBgTokenizeToNextFrame() {},
     __syncRenderView() {},
   };

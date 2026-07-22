@@ -73,6 +73,7 @@ function createEditorHarness({
         detach?.(recycle);
         detach = undefined;
       },
+      __captureFocusForDOMReplacement() {},
       __postponeBgTokenizeToNextFrame() {},
       __syncRenderView() {},
     };

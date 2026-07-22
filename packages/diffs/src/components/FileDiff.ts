@@ -1862,6 +1862,9 @@ export class FileDiff<
       previousContainer ??
       document.createElement(DIFFS_TAG_NAME);
     const containerChanged = previousContainer !== nextContainer;
+    if (previousContainer != null && containerChanged) {
+      this.editor?.__captureFocusForDOMReplacement();
+    }
     if (containerChanged) {
       this.emitPostRender(true);
     }
@@ -1943,6 +1946,7 @@ export class FileDiff<
     // If we have a new parent container for the pre element, lets go ahead and
     // move it into the new container
     else if (this.pre.parentNode !== shadowRoot) {
+      this.editor?.__captureFocusForDOMReplacement();
       shadowRoot.appendChild(this.pre);
       this.appliedPreAttributes = undefined;
     }
@@ -2212,6 +2216,7 @@ export class FileDiff<
     const unifiedAST = this.hunksRenderer.renderCodeAST('unified', result);
     const deletionsAST = this.hunksRenderer.renderCodeAST('deletions', result);
     const additionsAST = this.hunksRenderer.renderCodeAST('additions', result);
+    this.editor?.__captureFocusForDOMReplacement();
     if (unifiedAST != null) {
       shouldReplace =
         this.codeUnified == null ||

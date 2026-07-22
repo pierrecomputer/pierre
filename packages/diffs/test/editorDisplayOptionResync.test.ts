@@ -1,4 +1,4 @@
-import { afterAll, describe, expect, test } from 'bun:test';
+import { afterAll, describe, expect, spyOn, test } from 'bun:test';
 
 import { FileDiff } from '../src/components/FileDiff';
 import { DEFAULT_THEMES } from '../src/constants';
@@ -147,6 +147,41 @@ function typeAt(
 }
 
 describe('diff editor: display-option toggle mid-edit', () => {
+  test('keeps focus when replacement does not emit blur', async () => {
+    const fixture = await createFixture('alpha\nbravo\n', 'alpha\nCHANGED\n');
+    const { container, editor } = fixture;
+    const focusTargets: HTMLElement[] = [];
+    const focusSpy = spyOn(HTMLElement.prototype, 'focus').mockImplementation(
+      function (this: HTMLElement) {
+        focusTargets.push(this);
+        this.dispatchEvent(new Event('focus'));
+      }
+    );
+
+    try {
+      const content = findAdditionContent(container);
+      if (content == null) {
+        throw new Error('missing editable additions content');
+      }
+
+      editor.focus({ lineNumber: 1, preventScroll: true });
+      await wait(10);
+      expect(focusTargets.at(-1) === content).toBe(true);
+
+      // Firefox and WebKit can remove the focused shadow subtree without a
+      // blur event, so replacement detection must preserve the focus intent.
+      await fixture.toggleDisplayOption();
+
+      const replacement = findAdditionContent(container);
+      expect(replacement == null).toBe(false);
+      expect(replacement === content).toBe(false);
+      expect(focusTargets.at(-1) === replacement).toBe(true);
+    } finally {
+      focusSpy.mockRestore();
+      await fixture.cleanup();
+    }
+  });
+
   test('keeps the edited line text visible when a display option is toggled', async () => {
     // old/new differ so the additions column (the editor's target) renders; the
     // edit targets line 0 ("alpha"), an unchanged context line — the "rename a
