@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { CodeView } from '../src/components/CodeView';
 import { DEFAULT_CODE_VIEW_LAYOUT } from '../src/constants';
+import { Editor } from '../src/editor/editor';
 import type { CodeViewItem, FileContents } from '../src/types';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import {
@@ -11,6 +12,7 @@ import {
   makeFileItem,
   renderItems,
   wait,
+  waitFor,
 } from './domHarness';
 
 const ROOT_HEIGHT = 800;
@@ -100,6 +102,60 @@ function makeReplacementDiffItem(
     id,
     type: 'diff',
     fileDiff: parseDiffFromFile(oldFile, newFile),
+  };
+}
+
+function makeEditedFileItem(id: string): CodeViewItem<undefined> {
+  return {
+    id,
+    type: 'file',
+    file: {
+      ...makeFile(`${id}.txt`, 1),
+      cacheKey: id,
+      lang: 'text',
+    },
+    edit: true,
+  };
+}
+
+async function renderRebasedEditedItem(
+  viewer: CodeView<undefined>
+): Promise<{ code: HTMLElement; editor: Editor<undefined> }> {
+  const editedIndex = 12;
+  const edited = makeEditedFileItem('edited');
+  const items = Array.from({ length: 40 }, (_, index) =>
+    index === editedIndex ? edited : makeFileItem(`file:${index}`, 1)
+  );
+  await renderItems(viewer, items);
+
+  viewer.scrollTo({
+    type: 'item',
+    id: edited.id,
+    align: 'start',
+    behavior: 'instant',
+  });
+  viewer.render(true);
+  await waitFor(() => {
+    const rendered = viewer
+      .getRenderedItems()
+      .find((item) => item.id === edited.id);
+    return (
+      viewer.getEditor(edited.id) !== undefined &&
+      rendered?.element.shadowRoot?.querySelector('[data-code]') instanceof
+        HTMLElement
+    );
+  });
+
+  const rendered = viewer
+    .getRenderedItems()
+    .find((item) => item.id === edited.id);
+  const code = rendered?.element.shadowRoot?.querySelector('[data-code]');
+  const editor = viewer.getEditor(edited.id);
+  expect(code).toBeInstanceOf(HTMLElement);
+  expect(editor).toBeInstanceOf(Editor);
+  return {
+    code: code as HTMLElement,
+    editor: editor as Editor<undefined>,
   };
 }
 
@@ -199,6 +255,67 @@ describe('CodeView scroll anchoring', () => {
       expect(
         viewer.getRenderedItems().some((item) => item.id === 'file:39')
       ).toBe(true);
+    } finally {
+      viewer.cleanUp();
+      await wait(0);
+      cleanup();
+    }
+  });
+
+  test('captures logical editor state after the DOM scroll position rebases', async () => {
+    const { cleanup } = installDom();
+    const viewer = new CodeView<undefined>({
+      createEditor: (options) => new Editor<undefined>({ ...options }),
+      layout: {
+        ...DEFAULT_CODE_VIEW_LAYOUT,
+        gap: 1_000_000,
+      },
+    });
+    const root = createClampingRoot();
+
+    try {
+      viewer.setup(root);
+      const { code, editor } = await renderRebasedEditedItem(viewer);
+      const logicalScrollTop = viewer.getScrollTop();
+      code.scrollLeft = 73;
+
+      expect(logicalScrollTop).toBeGreaterThan(SCROLL_REBASE_THRESHOLD);
+      expect(root.scrollTop).not.toBe(logicalScrollTop);
+      expect(editor.getState().view).toEqual({
+        scrollLeft: 73,
+        scrollTop: logicalScrollTop,
+      });
+    } finally {
+      viewer.cleanUp();
+      await wait(0);
+      cleanup();
+    }
+  });
+
+  test('restores explicit editor state through CodeView logical scrolling', async () => {
+    const { cleanup } = installDom();
+    const viewer = new CodeView<undefined>({
+      createEditor: (options) => new Editor<undefined>({ ...options }),
+      layout: {
+        ...DEFAULT_CODE_VIEW_LAYOUT,
+        gap: 1_000_000,
+      },
+    });
+    const root = createClampingRoot();
+
+    try {
+      viewer.setup(root);
+      const { editor } = await renderRebasedEditedItem(viewer);
+      const initialScrollTop = viewer.getScrollTop();
+      const restoredScrollTop = initialScrollTop - 100_000;
+
+      editor.setState({
+        view: { scrollLeft: 41, scrollTop: restoredScrollTop },
+      });
+      viewer.render(true);
+
+      expect(viewer.getScrollTop()).toBe(restoredScrollTop);
+      expect(root.scrollTop).not.toBe(restoredScrollTop);
     } finally {
       viewer.cleanUp();
       await wait(0);

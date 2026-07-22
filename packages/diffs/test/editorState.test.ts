@@ -6,6 +6,7 @@ import type {
   DiffsEditableComponent,
   DiffsEditor,
   DiffsHighlighter,
+  EditorState,
   FileContents,
   HighlightedToken,
   RenderRange,
@@ -34,11 +35,10 @@ class TestEditableComponent implements DiffsEditableComponent<undefined> {
   #editor?: DiffsEditor<undefined>;
   #lineAnnotations?: DiffLineAnnotation<undefined>[];
   #renderRange?: RenderRange;
+  capturedView: EditorState['view'];
+  restoredViews: NonNullable<EditorState['view']>[] = [];
 
-  constructor(
-    readonly scrollContainer: HTMLElement,
-    private file: FileContents
-  ) {
+  constructor(private file: FileContents) {
     this.#renderShadowDom();
   }
 
@@ -50,8 +50,13 @@ class TestEditableComponent implements DiffsEditableComponent<undefined> {
 
   setEditorActiveLine(_lineNumber: number | null): void {}
 
-  getScrollContainer(): HTMLElement {
-    return this.scrollContainer;
+  captureEditorViewState(): EditorState['view'] {
+    return this.capturedView == null ? undefined : { ...this.capturedView };
+  }
+
+  restoreEditorViewState(view: NonNullable<EditorState['view']>): void {
+    this.capturedView = { ...view };
+    this.restoredViews.push({ ...view });
   }
 
   render({
@@ -138,48 +143,44 @@ class TestEditableComponent implements DiffsEditableComponent<undefined> {
 }
 
 describe('Editor state', () => {
-  test('setState restores the saved scroll position', () => {
+  test('getState captures view state from the editable component', () => {
     const dom = installDom();
-    const scrollContainer = document.createElement('div');
-    document.body.appendChild(scrollContainer);
-
-    const scrollCalls: ScrollToOptions[] = [];
-    scrollContainer.scrollTo = (
-      options?: ScrollToOptions | number,
-      y?: number
-    ) => {
-      const left =
-        typeof options === 'number'
-          ? options
-          : (options?.left ?? scrollContainer.scrollLeft);
-      const top =
-        typeof options === 'number'
-          ? (y ?? scrollContainer.scrollTop)
-          : (options?.top ?? scrollContainer.scrollTop);
-      scrollContainer.scrollLeft = left;
-      scrollContainer.scrollTop = top;
-      scrollCalls.push({ left, top });
-    };
-
     const editor = new Editor<undefined>();
-    const component = new TestEditableComponent(scrollContainer, {
+    const component = new TestEditableComponent({
       name: 'state.ts',
       contents: 'alpha\nbravo',
     });
 
     try {
       editor.edit(component);
-      scrollContainer.scrollLeft = 24;
-      scrollContainer.scrollTop = 128;
-      const state = editor.getState();
+      component.capturedView = { scrollLeft: 24, scrollTop: 128 };
 
-      scrollContainer.scrollLeft = 0;
-      scrollContainer.scrollTop = 0;
-      editor.setState(state);
+      expect(editor.getState().view).toEqual({
+        scrollLeft: 24,
+        scrollTop: 128,
+      });
+    } finally {
+      editor.cleanUp();
+      component.cleanUp();
+      dom.cleanup();
+    }
+  });
 
-      expect(scrollContainer.scrollLeft).toBe(24);
-      expect(scrollContainer.scrollTop).toBe(128);
-      expect(scrollCalls).toEqual([{ left: 24, top: 128 }]);
+  test('setState restores view state through the editable component', () => {
+    const dom = installDom();
+    const editor = new Editor<undefined>();
+    const component = new TestEditableComponent({
+      name: 'state.ts',
+      contents: 'alpha\nbravo',
+    });
+
+    try {
+      editor.edit(component);
+      editor.setState({ view: { scrollLeft: 24, scrollTop: 128 } });
+
+      expect(component.restoredViews).toEqual([
+        { scrollLeft: 24, scrollTop: 128 },
+      ]);
     } finally {
       editor.cleanUp();
       component.cleanUp();
@@ -189,38 +190,18 @@ describe('Editor state', () => {
 
   // A remount restore often carries both a viewport and a caret that sits
   // outside that viewport. The saved view must win; scrolling the caret into
-  // view would overwrite scrollTop/scrollLeft. jsdom's scrollIntoView is a
-  // no-op, so stub it to mutate the scroll container the way a real browser
-  // would when bringing an offscreen caret into view.
+  // view would overwrite it. jsdom's scrollIntoView is a no-op, so record any
+  // attempt to reveal the caret after restoring the component-owned view.
   test('setState keeps the saved view when the caret is outside it', () => {
     const dom = installDom();
-    const scrollContainer = document.createElement('div');
-    document.body.appendChild(scrollContainer);
-
-    scrollContainer.scrollTo = (
-      options?: ScrollToOptions | number,
-      y?: number
-    ) => {
-      const left =
-        typeof options === 'number'
-          ? options
-          : (options?.left ?? scrollContainer.scrollLeft);
-      const top =
-        typeof options === 'number'
-          ? (y ?? scrollContainer.scrollTop)
-          : (options?.top ?? scrollContainer.scrollTop);
-      scrollContainer.scrollLeft = left;
-      scrollContainer.scrollTop = top;
-    };
-
+    let scrollIntoViewCalls = 0;
     const originalScrollIntoView = Element.prototype.scrollIntoView;
     Element.prototype.scrollIntoView = function scrollIntoView() {
-      scrollContainer.scrollTop = 999;
-      scrollContainer.scrollLeft = 999;
+      scrollIntoViewCalls++;
     };
 
     const editor = new Editor<undefined>();
-    const component = new TestEditableComponent(scrollContainer, {
+    const component = new TestEditableComponent({
       name: 'state.ts',
       contents: 'alpha\nbravo\ncharlie\ndelta\necho\nfoxtrot\n',
     });
@@ -238,8 +219,10 @@ describe('Editor state', () => {
         view: { scrollLeft: 12, scrollTop: 40 },
       });
 
-      expect(scrollContainer.scrollLeft).toBe(12);
-      expect(scrollContainer.scrollTop).toBe(40);
+      expect(component.restoredViews).toEqual([
+        { scrollLeft: 12, scrollTop: 40 },
+      ]);
+      expect(scrollIntoViewCalls).toBe(0);
       expect(editor.getState().selections).toEqual([
         {
           start: { line: 5, character: 0 },
