@@ -793,6 +793,7 @@ export interface ForceFilePlainTextOptions {
   totalLines?: number;
   // Pre-split lines for caching in windowing scenarios
   lines?: string[];
+  hiddenLineRanges?: readonly LineRange[];
 }
 
 export interface RenderFileOptions {

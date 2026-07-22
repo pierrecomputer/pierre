@@ -1,13 +1,18 @@
-import { describe, expect, test } from 'bun:test';
+import { afterAll, describe, expect, test } from 'bun:test';
 
 import { VirtualizedFile } from '../src/components/VirtualizedFile';
-import { DEFAULT_VIRTUAL_FILE_METRICS } from '../src/constants';
+import { DEFAULT_THEMES, DEFAULT_VIRTUAL_FILE_METRICS } from '../src/constants';
+import {
+  disposeHighlighter,
+  getSharedHighlighter,
+} from '../src/highlighter/shared_highlighter';
 import type {
   FileContents,
   RenderRange,
   RenderWindow,
   VirtualFileMetrics,
 } from '../src/types';
+import { WorkerPoolManager } from '../src/worker/WorkerPoolManager';
 
 const metrics: VirtualFileMetrics = {
   ...DEFAULT_VIRTUAL_FILE_METRICS,
@@ -26,6 +31,13 @@ interface InspectableVirtualizedFile {
   editorFoldedLineIndex: {
     isHidden(lineIndex: number): boolean;
   };
+  fileRenderer: {
+    renderCache?: { result?: { code: unknown[] } };
+    renderFile(
+      file: FileContents,
+      renderRange: RenderRange
+    ): { rowCount: number } | undefined;
+  };
   renderRange: RenderRange | undefined;
   computeApproximateSize(force?: boolean): void;
   computeRenderRangeFromWindow(
@@ -34,6 +46,10 @@ interface InspectableVirtualizedFile {
     window: RenderWindow
   ): RenderRange;
 }
+
+afterAll(async () => {
+  await disposeHighlighter();
+});
 
 function inspect(instance: VirtualizedFile): InspectableVirtualizedFile {
   return instance as unknown as InspectableVirtualizedFile;
@@ -160,13 +176,31 @@ describe('VirtualizedFile editor folding', () => {
     expect(instance.getVirtualizedHeight()).toBe(211);
   });
 
-  test('jumps large folded bodies in variable-height layout scans', () => {
+  test('jumps large folded bodies in layout and plain render windows', async () => {
     const lineCount = 20_000;
     const file = createFile(lineCount);
+    const renderOptions = {
+      theme: DEFAULT_THEMES,
+      useTokenTransformer: false,
+      tokenizeMaxLineLength: 1_000,
+    };
+    const workerManager = {
+      highlighter: await getSharedHighlighter({
+        themes: Object.values(DEFAULT_THEMES),
+        langs: ['text'],
+      }),
+      renderOptions,
+      getPlainFileAST: WorkerPoolManager.prototype.getPlainFileAST,
+      getFileRenderOptions: () => renderOptions,
+      getFileResultCache: () => undefined,
+      isWorkingPool: () => true,
+      subscribeToThemeChanges() {},
+    } as unknown as WorkerPoolManager;
     const instance = new VirtualizedFile(
-      { overflow: 'wrap' },
+      { overflow: 'wrap', tokenizeMaxLength: 1 },
       createVirtualizer([]),
-      metrics
+      metrics,
+      workerManager
     );
     instance.prepareCodeViewItem(file, 0);
     instance.__setFoldRanges([{ startLine: 1, endLine: 19_990 }]);
@@ -197,8 +231,25 @@ describe('VirtualizedFile editor folding', () => {
       top: 40,
       bottom: 60,
     });
-    expect(range.startingLine).toBe(0);
+    expect(range).toEqual({
+      startingLine: 0,
+      totalLines: 19_996,
+      bufferBefore: 0,
+      bufferAfter: 40,
+    });
     expect(hiddenChecks).toBeLessThan(10);
+
+    const result = layout.fileRenderer.renderFile(file, range);
+    const code = layout.fileRenderer.renderCache?.result?.code;
+    expect(result?.rowCount).toBe(6);
+    expect(Object.keys(code ?? [])).toEqual([
+      '0',
+      '19991',
+      '19992',
+      '19993',
+      '19994',
+      '19995',
+    ]);
 
     hiddenChecks = 0;
     layout.renderRange = {
@@ -212,5 +263,12 @@ describe('VirtualizedFile editor folding', () => {
       top: 50,
     });
     expect(hiddenChecks).toBe(0);
+
+    instance.__setFoldRanges([]);
+    const unfoldedResult = layout.fileRenderer.renderFile(file, range);
+    const unfoldedCode = layout.fileRenderer.renderCache?.result?.code;
+    expect(unfoldedResult?.rowCount).toBe(19_996);
+    expect(unfoldedCode?.[1]).toBeDefined();
+    expect(unfoldedCode?.[19_995]).toBeDefined();
   });
 });

@@ -148,6 +148,10 @@ export class FileRenderer<LAnnotation = undefined> {
 
   public setFoldRanges(ranges: LineRange[]): void {
     this.foldRanges = ranges;
+    if (this.renderCache?.highlighted === false) {
+      this.renderCache.result = undefined;
+      this.renderCache.renderRange = undefined;
+    }
   }
 
   public cleanUp(): void {
@@ -491,7 +495,8 @@ export class FileRenderer<LAnnotation = undefined> {
             file,
             renderRange.startingLine,
             renderRange.totalLines,
-            lines
+            lines,
+            this.foldRanges
           );
         }
         this.renderCache.renderRange = renderRange;
@@ -521,20 +526,23 @@ export class FileRenderer<LAnnotation = undefined> {
         hasThemes &&
         (forceHighlight ||
           forcePlainText ||
+          (!this.renderCache.highlighted && newRenderRange) ||
           (!this.renderCache.highlighted && canHighlight) ||
           this.renderCache.result == null)
       ) {
+        const renderedPlainText = forcePlainText || !hasLangs;
         const { result, options } = this.renderFileWithHighlighter(
           file,
           this.highlighter,
-          forcePlainText || !hasLangs
+          renderedPlainText,
+          renderedPlainText ? renderRange : undefined
         );
         this.renderCache = {
           file,
           options,
           highlighted: canHighlight,
           result,
-          renderRange: undefined,
+          renderRange: renderedPlainText ? renderRange : undefined,
         };
       }
 
@@ -542,14 +550,22 @@ export class FileRenderer<LAnnotation = undefined> {
       // process which will involve initializing the highlighter with new themes
       // and languages
       if (!hasThemes || (!forcePlainText && !hasLangs)) {
-        void this.asyncHighlight(file).then(({ result, options }) => {
-          // In this case we need to force a re-render, so we can do that by
-          // reaching into renderCache
-          if (this.renderCache != null) {
-            this.renderCache.highlighted = false;
+        void this.asyncHighlight(file, renderRange).then(
+          ({ result, options }) => {
+            // In this case we need to force a re-render, so we can do that by
+            // reaching into renderCache
+            if (this.renderCache != null) {
+              this.renderCache.highlighted = false;
+            }
+            this.onHighlightSuccess(
+              file,
+              result,
+              options,
+              !forcePlainText,
+              renderRange
+            );
           }
-          this.onHighlightSuccess(file, result, options, !forcePlainText);
-        });
+        );
       }
     }
 
@@ -566,16 +582,19 @@ export class FileRenderer<LAnnotation = undefined> {
     file: FileContents,
     renderRange: RenderRange = DEFAULT_RENDER_RANGE
   ): Promise<FileRenderResult> {
-    const { result } = await this.asyncHighlight(file);
+    const { result } = await this.asyncHighlight(file, renderRange);
     return this.processFileResult(file, renderRange, result);
   }
 
-  private async asyncHighlight(file: FileContents): Promise<RenderFileResult> {
+  private async asyncHighlight(
+    file: FileContents,
+    renderRange?: RenderRange
+  ): Promise<RenderFileResult> {
     const lines = this.getOrCreateLineCache(file);
-    const forcePlainText = isFileMassive(
-      lines.length,
-      this.getTokenizeMaxLength()
-    );
+    const forcePlainText =
+      file.contents.length === 0 ||
+      isFilePlainText(file) ||
+      isFileMassive(lines.length, this.getTokenizeMaxLength());
     this.computedLang = forcePlainText
       ? 'text'
       : (file.lang ?? getFiletypeFromFileName(file.name));
@@ -593,18 +612,24 @@ export class FileRenderer<LAnnotation = undefined> {
     return this.renderFileWithHighlighter(
       file,
       this.highlighter,
-      forcePlainText
+      forcePlainText,
+      forcePlainText ? renderRange : undefined
     );
   }
 
   private renderFileWithHighlighter(
     file: FileContents,
     highlighter: DiffsHighlighter,
-    forcePlainText = false
+    forcePlainText = false,
+    renderRange?: RenderRange
   ): RenderFileResult {
     const { options } = this.getRenderOptions(file);
     const result = renderFileWithHighlighter(file, highlighter, options, {
       forcePlainText,
+      startingLine: renderRange?.startingLine,
+      totalLines: renderRange?.totalLines,
+      lines: renderRange == null ? undefined : this.getOrCreateLineCache(file),
+      hiddenLineRanges: renderRange == null ? undefined : this.foldRanges,
     });
     return { result, options };
   }
@@ -792,7 +817,8 @@ export class FileRenderer<LAnnotation = undefined> {
     file: FileContents,
     result: ThemedFileResult,
     options: RenderFileOptions,
-    highlighted = true
+    highlighted = true,
+    renderRange?: RenderRange
   ): void {
     if (this.renderCache == null) {
       return;
@@ -807,7 +833,7 @@ export class FileRenderer<LAnnotation = undefined> {
       options,
       highlighted,
       result,
-      renderRange: undefined,
+      renderRange: highlighted ? undefined : renderRange,
     };
 
     if (triggerRenderUpdate) {
