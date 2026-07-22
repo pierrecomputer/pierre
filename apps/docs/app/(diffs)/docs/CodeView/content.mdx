@@ -116,7 +116,9 @@ const viewer = new CodeView({
 `preventScroll: true` preserves the viewer's scroll position. `CodeView` keeps
 the editor alive while an item is recycled, so the callback does not steal focus
 again when that item re-enters the virtualized window. If several items start an
-autofocusing edit session together, the last callback to run owns focus.
+autofocusing edit session together, the last callback to run owns focus. See
+[Autofocus on Attach](#edit-mode-autofocus-on-attach) for explicit line targets,
+viewport fallback, offsets, and selection-state behavior.
 
 ### Padding &amp; Gap
 
