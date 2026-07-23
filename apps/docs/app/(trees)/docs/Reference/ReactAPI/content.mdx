@@ -95,6 +95,10 @@ Typical write paths are:
 - focus and selection methods on the model or item handles. This includes
   `scrollToPath(...)`, which reveals a path without moving DOM focus and makes
   optional model focus changes.
+- visible-tree traversal through `focusFirstItem()`, `focusLastItem()`,
+  `focusNextItem()`, `focusPreviousItem()`, and `focusParentItem()`.
+- visible row inspection through `getFocusedIndex()`, `getVisibleCount()`, and
+  `getVisibleRows(start, end)` when surrounding UI needs custom navigation.
 - search methods such as `setSearch(...)` and `openSearch(...)`
 - mutation methods such as `add(...)`, `remove(...)`, `move(...)`, `batch(...)`,
   and `resetPaths(...)`
