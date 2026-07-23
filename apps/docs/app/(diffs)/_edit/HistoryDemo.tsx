@@ -134,7 +134,7 @@ export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
   // Reset rather than letting the step count freeze at a stale value.
   const [diverged, setDiverged] = useState(false);
   const editorRef = useRef<Editor<undefined> | null>(null);
-  const editOptions = useMemo<EditorOptions<undefined>>(
+  const editorOptions = useMemo<EditorOptions<undefined>>(
     () => ({
       onAttach(editor: Editor<undefined>) {
         editorRef.current = editor;
@@ -460,7 +460,7 @@ export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
             {...prerenderedFile}
             className="diff-container"
             edit
-            editOptions={editOptions}
+            editorOptions={editorOptions}
           />
         </div>
 

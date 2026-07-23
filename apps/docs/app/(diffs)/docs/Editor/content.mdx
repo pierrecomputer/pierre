@@ -158,11 +158,12 @@ flag. The provider does not own an editor instance. Each editable `File`,
 item creates its own editor when an edit session starts. Standalone surface DOM
 and imperative file/diff instances stay mounted across the toggle.
 
-Pass creation-time callbacks and behavior through the surface's `editOptions`. A
-provider can add shared defaults by spreading them before the surface options,
+Pass creation-time callbacks and behavior through the surface's `editorOptions`.
+A provider can add shared defaults by spreading them before the surface options,
 so the surface wins. Keep factories and object props stable: define static
 values at module scope, or use `useCallback` for factories and callbacks and
-`useMemo` for `options` and `editOptions` when they depend on component values.
+`useMemo` for `options` and `editorOptions` when they depend on component
+values.
 
 ```tsx
 const createEditor = useCallback<CreateEditor<undefined>>(
@@ -174,7 +175,7 @@ const createEditor = useCallback<CreateEditor<undefined>>(
   []
 );
 
-const editOptions = useMemo<EditorOptions<undefined>>(
+const editorOptions = useMemo<EditorOptions<undefined>>(
   () => ({
     onChange: handleChange,
     onAttach(editor) {
@@ -189,12 +190,12 @@ const editOptions = useMemo<EditorOptions<undefined>>(
 // CodeView.
 return (
   <EditProvider createEditor={createEditor}>
-    <File file={file} edit={editing} editOptions={editOptions} />
+    <File file={file} edit={editing} editorOptions={editorOptions} />
   </EditProvider>
 );
 ```
 
-Changes to `createEditor` or `editOptions` do not disturb an active edit
+Changes to `createEditor` or `editorOptions` do not disturb an active edit
 session. Their latest values apply the next time `edit` transitions from false
 to true. Re-entering edit mode creates a fresh editor with fresh history and
 state. Sibling editable surfaces receive independent editors and callbacks; use
@@ -226,10 +227,10 @@ removed. The `FileDiff` tab below includes this synchronization.
 `CodeView` manages one `Editor` per editable item. In React, wrap it in the same
 app-level `EditProvider` used by other editable surfaces, set `edit: true` on an
 item, and pass creation-time item-editor behavior through the `CodeView`
-`editOptions` prop. In vanilla JS, pass `createEditor` in `CodeViewOptions`
+`editorOptions` prop. In vanilla JS, pass `createEditor` in `CodeViewOptions`
 instead. Increment the item's `version` whenever `edit` changes.
 
-`CodeView` uses item-aware callbacks instead of `editOptions.onChange`.
+`CodeView` uses item-aware callbacks instead of `editorOptions.onChange`.
 `onItemEditChange` receives the owning item with each live change: replace that
 item's annotations whenever the emitted array changes, and increment its
 `version`. This live update keeps annotation coordinates synchronized throughout
@@ -250,19 +251,19 @@ for you.
 Editors retain their document and history while items move in and out of the
 virtualized window.
 
-`editOptions` and provider-factory changes are creation-time inputs: active item
-sessions keep their current editor, while the latest values apply to the next
-item that enters edit mode. Simultaneously edited items always receive
+`editorOptions` and provider-factory changes are creation-time inputs: active
+item sessions keep their current editor, while the latest values apply to the
+next item that enters edit mode. Simultaneously edited items always receive
 independent editor instances.
 
 ### Autofocus on Attach
 
 Use `onAttach` to opt into initial caret placement. At this point the text
-document and editable DOM are ready. In React, pass a stable `editOptions`
+document and editable DOM are ready. In React, pass a stable `editorOptions`
 object to any editable surface, including `CodeView`:
 
 ```tsx
-const editOptions = useMemo<EditorOptions<undefined>>(
+const editorOptions = useMemo<EditorOptions<undefined>>(
   () => ({
     onAttach(editor) {
       editor.focus({ lineNumber: 'first-visible', preventScroll: true });
@@ -271,7 +272,7 @@ const editOptions = useMemo<EditorOptions<undefined>>(
   []
 );
 
-return <CodeView items={items} editOptions={editOptions} />;
+return <CodeView items={items} editorOptions={editorOptions} />;
 ```
 
 Vanilla `CodeView` can add the same behavior in its editor factory:

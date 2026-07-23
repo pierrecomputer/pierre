@@ -73,7 +73,7 @@ export function LiveEditing({
     [pristineFileDiff, resetKey]
   );
 
-  const editOptions = useMemo<EditorOptions<undefined>>(
+  const editorOptions = useMemo<EditorOptions<undefined>>(
     () => ({
       // Both surfaces synchronously report the current new-file contents.
       onChange(file) {
@@ -212,7 +212,7 @@ export function LiveEditing({
             className="diff-container"
             renderHeaderMetadata={headerMetadata}
             edit={edit}
-            editOptions={editOptions}
+            editorOptions={editorOptions}
           />
         ) : (
           <FileDiff
@@ -223,7 +223,7 @@ export function LiveEditing({
             className="diff-container"
             renderHeaderMetadata={headerMetadata}
             edit={edit}
-            editOptions={editOptions}
+            editorOptions={editorOptions}
           />
         )}
       </div>

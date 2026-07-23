@@ -120,7 +120,7 @@ export function FindDemo({ prerenderedFile }: FindDemoProps) {
     };
   }, []);
 
-  const editOptions = useMemo(
+  const editorOptions = useMemo(
     () => ({
       onAttach(editor: Editor<undefined>) {
         editorRef.current = editor;
@@ -135,7 +135,7 @@ export function FindDemo({ prerenderedFile }: FindDemoProps) {
         {...prerenderedFile}
         className="diff-container max-h-[420px] overflow-auto"
         edit
-        editOptions={editOptions}
+        editorOptions={editorOptions}
       />
     </div>
   );

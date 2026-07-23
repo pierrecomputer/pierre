@@ -472,7 +472,7 @@ export function EditorWithHistoryToolbar() {
   const [canRedo, setCanRedo] = useState(false);
 
   const editorRef = useRef<Editor<undefined> | null>(null);
-  const editOptions = useMemo<EditorOptions<undefined>>(
+  const editorOptions = useMemo<EditorOptions<undefined>>(
     () => ({
       onAttach(editor) {
         editorRef.current = editor;
@@ -503,7 +503,7 @@ export function EditorWithHistoryToolbar() {
       <File
         file={file}
         edit
-        editOptions={editOptions}
+        editorOptions={editorOptions}
       />
     </EditProvider>
   );
@@ -545,7 +545,7 @@ function createEditor(options: EditorOptions<undefined>) {
 
 export function EditorComponent() {
   const [editable, setEditable] = useState(true);
-  const editOptions = useMemo<EditorOptions<undefined>>(
+  const editorOptions = useMemo<EditorOptions<undefined>>(
     () => ({
       onChange(file, lineAnnotations) {
         console.log('change', file.name, lineAnnotations);
@@ -568,7 +568,7 @@ export function EditorComponent() {
           file={file}
           options={fileOptions}
           edit={editable}
-          editOptions={editOptions}
+          editorOptions={editorOptions}
         />
       </Virtualizer>
     </EditProvider>
@@ -635,7 +635,7 @@ export function EditorComponent() {
   const annotationsRef = useRef(initialAnnotations);
   // Key interaction state by stable metadata rather than line coordinates.
   const [drafts, setDrafts] = useState<Record<string, string>>({});
-  const editOptions = useMemo<EditorOptions<ThreadMetadata>>(
+  const editorOptions = useMemo<EditorOptions<ThreadMetadata>>(
     () => ({
       onChange(_file, nextAnnotations) {
         if (
@@ -669,7 +669,7 @@ export function EditorComponent() {
           lineAnnotations={annotations}
           options={fileDiffOptions}
           edit={editable}
-          editOptions={editOptions}
+          editorOptions={editorOptions}
           renderAnnotation={(annotation) => {
             const id = annotation.metadata.id;
             return (
@@ -742,7 +742,7 @@ const initialItems: CodeViewItem<ThreadMetadata>[] = [
 
 const codeViewStyle = { height: '24rem', overflow: 'auto' } as const;
 
-const editOptions: EditorOptions<ThreadMetadata> = {
+const editorOptions: EditorOptions<ThreadMetadata> = {
   onAttach(editor) {
     editor.focus({ lineNumber: 'first-visible', preventScroll: true });
   },
@@ -834,7 +834,7 @@ export function EditableCodeView() {
       <CodeView
         items={items}
         style={codeViewStyle}
-        editOptions={editOptions}
+        editorOptions={editorOptions}
         onItemEditChange={syncAnnotations}
         onItemEditComplete={commitEdit}
         renderAnnotation={(annotation) => (
@@ -1171,7 +1171,7 @@ function createEditor(options: EditorOptions<undefined>) {
 
 export function EditorComponent() {
   const [editable, setEditable] = useState(true);
-  const editOptions = useMemo<EditorOptions<undefined>>(
+  const editorOptions = useMemo<EditorOptions<undefined>>(
     () => ({
       onChange(file, lineAnnotations) {
         console.log('change', file.name, lineAnnotations);
@@ -1194,7 +1194,7 @@ export function EditorComponent() {
           newFile={newFile}
           options={fileDiffOptions}
           edit={editable}
-          editOptions={editOptions}
+          editorOptions={editorOptions}
         />
       </Virtualizer>
     </EditProvider>

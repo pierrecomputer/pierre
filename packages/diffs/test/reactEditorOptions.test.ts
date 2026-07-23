@@ -189,7 +189,7 @@ type ReactEditableSurfaceInstance =
 function createEditableSurfaceElement(
   surface: ReactEditableSurface,
   edit = true,
-  editOptions?: EditorOptions<undefined>,
+  editorOptions?: EditorOptions<undefined>,
   onInstance?: (instance: ReactEditableSurfaceInstance) => void
 ): ReactElement {
   const oldFile = { name: 'edit.ts', contents: 'const value = 1;\n' };
@@ -206,7 +206,7 @@ function createEditableSurfaceElement(
     return createElement(ReactFileComponent, {
       disableWorkerPool: true,
       edit,
-      editOptions,
+      editorOptions,
       file: oldFile,
       options,
     });
@@ -223,7 +223,7 @@ function createEditableSurfaceElement(
   return createElement(ReactFileDiffComponent, {
     disableWorkerPool: true,
     edit,
-    editOptions,
+    editorOptions,
     fileDiff: parseDiffFromFile(oldFile, {
       name: 'edit.ts',
       contents: 'const value = 2;\n',
@@ -232,7 +232,7 @@ function createEditableSurfaceElement(
   });
 }
 
-describe('React edit option normalization', () => {
+describe('React Edit surface option normalization', () => {
   test('File enables the token transformer while editing', async () => {
     const { cleanup } = installDom();
     const cleanupActEnvironment = installReactActEnvironment();
@@ -428,7 +428,7 @@ describe('React editor factory lifecycle', () => {
   }
 
   for (const wrapper of ['MultiFileDiff', 'PatchDiff'] as const) {
-    test(`${wrapper} forwards edit options to its FileDiff instance`, async () => {
+    test(`${wrapper} forwards editor options to its FileDiff instance`, async () => {
       const { cleanup } = installDom();
       const cleanupActEnvironment = installReactActEnvironment();
       const container = document.createElement('div');
@@ -446,7 +446,7 @@ describe('React editor factory lifecycle', () => {
       const sharedProps = {
         disableWorkerPool: true,
         edit: true,
-        editOptions: { onChange },
+        editorOptions: { onChange },
         options: {
           disableFileHeader: true,
           theme: DEFAULT_THEMES,
@@ -516,7 +516,7 @@ describe('React editor factory lifecycle', () => {
       undefined,
       undefined,
     ];
-    const editOptions: EditorOptions<undefined>[] = callbacks.map(
+    const editorOptions: EditorOptions<undefined>[] = callbacks.map(
       (onChange, index) => ({
         onAttach(editor) {
           siblingEditors[index] = editor as TrackedEditor;
@@ -547,7 +547,7 @@ describe('React editor factory lifecycle', () => {
               createElement(ReactFileComponent, {
                 disableWorkerPool: true,
                 edit: true,
-                editOptions: editOptions[0],
+                editorOptions: editorOptions[0],
                 file: newFile,
                 options: {
                   disableFileHeader: true,
@@ -557,7 +557,7 @@ describe('React editor factory lifecycle', () => {
               createElement(ReactFileDiffComponent, {
                 disableWorkerPool: true,
                 edit: true,
-                editOptions: editOptions[1],
+                editorOptions: editorOptions[1],
                 fileDiff: parseDiffFromFile(oldFile, newFile),
                 options: {
                   disableFileHeader: true,
@@ -800,7 +800,7 @@ describe('React editor factory lifecycle', () => {
                   createElement(ReactFileComponent, {
                     disableWorkerPool: true,
                     edit: true,
-                    editOptions: { onAttach },
+                    editorOptions: { onAttach },
                     file: oldFile,
                     options: {
                       disableFileHeader: true,
@@ -810,7 +810,7 @@ describe('React editor factory lifecycle', () => {
                   createElement(ReactFileDiffComponent, {
                     disableWorkerPool: true,
                     edit: true,
-                    editOptions: { onAttach },
+                    editorOptions: { onAttach },
                     fileDiff: parseDiffFromFile(oldFile, newFile),
                     options: {
                       disableFileHeader: true,

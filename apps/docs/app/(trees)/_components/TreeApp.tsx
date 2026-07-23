@@ -1206,7 +1206,7 @@ export function TreeApp<LAnnotation = unknown>({
 
   const handleEditorChangeRef = useRef<(file: FileContents) => void>(() => {});
   const editorRef = useRef<Editor<LAnnotation> | null>(null);
-  const editOptions = useMemo<EditorOptions<LAnnotation>>(
+  const editorOptions = useMemo<EditorOptions<LAnnotation>>(
     () => ({
       onAttach(editor: Editor<LAnnotation>) {
         editorRef.current = editor;
@@ -1901,7 +1901,7 @@ export function TreeApp<LAnnotation = unknown>({
                     options={fileOptions}
                     prerenderedHTML={activePrerenderedHTML}
                     edit
-                    editOptions={editOptions}
+                    editorOptions={editorOptions}
                   />
                 )}
               </Virtualizer>

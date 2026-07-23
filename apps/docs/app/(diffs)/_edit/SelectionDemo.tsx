@@ -124,7 +124,7 @@ export function SelectionDemo({ prerenderedFile }: SelectionDemoProps) {
   const addSnippetRef = useRef(addSnippet);
   addSnippetRef.current = addSnippet;
 
-  const editOptions = useMemo<EditorOptions<undefined>>(
+  const editorOptions = useMemo<EditorOptions<undefined>>(
     () => ({
       enabledSelectionAction: true,
       renderSelectionAction(selectionAction) {
@@ -174,7 +174,7 @@ export function SelectionDemo({ prerenderedFile }: SelectionDemoProps) {
         {...prerenderedFile}
         className="diff-container"
         edit
-        editOptions={editOptions}
+        editorOptions={editorOptions}
       />
 
       {/* The wrapper takes its height from the editor column (its only in-flow

@@ -331,7 +331,7 @@ describe('React CodeView editor factory', () => {
     }
   });
 
-  test('merges edit options and isolates simultaneous item callbacks', async () => {
+  test('merges editor options and isolates simultaneous item callbacks', async () => {
     const { cleanup } = installCodeViewDom();
     const cleanupActEnvironment = installReactActEnvironment();
     const container = document.createElement('div');
@@ -342,7 +342,7 @@ describe('React CodeView editor factory', () => {
     const onItemEditChange = mock(
       (_item: CodeViewItem<undefined>, _file: FileContents) => {}
     );
-    const editOptions: EditorOptions<undefined> = {
+    const editorOptions: EditorOptions<undefined> = {
       // A loosely typed caller can still carry onChange at runtime. CodeView's
       // item router must overwrite it before invoking the provider factory.
       historyMaxEntries: 17,
@@ -359,7 +359,7 @@ describe('React CodeView editor factory', () => {
         withProvider(
           createEditor,
           createCodeViewElement({
-            editOptions,
+            editorOptions,
             items: [makeFileItem('a', { edit: true }), makeDiffItem('b', true)],
             onItemEditChange,
           })
@@ -393,7 +393,7 @@ describe('React CodeView editor factory', () => {
     }
   });
 
-  test('uses replacement factories and edit options only for later sessions', async () => {
+  test('uses replacement factories and editor options only for later sessions', async () => {
     const { cleanup } = installCodeViewDom();
     const cleanupActEnvironment = installReactActEnvironment();
     const container = document.createElement('div');
@@ -413,7 +413,7 @@ describe('React CodeView editor factory', () => {
         withProvider(
           createEditor,
           createCodeViewElement({
-            editOptions: { historyMaxEntries },
+            editorOptions: { historyMaxEntries },
             items: [item],
           })
         )

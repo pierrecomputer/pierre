@@ -723,7 +723,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
   // commit lands frames later (blank comments, collapsed rows); a synchronous
   // one lands before this task's paint.
   const editorRef = useRef<Editor<PlaygroundAnnotationMetadata> | null>(null);
-  const editOptions = useMemo<EditorOptions<PlaygroundAnnotationMetadata>>(
+  const editorOptions = useMemo<EditorOptions<PlaygroundAnnotationMetadata>>(
     () => ({
       onAttach(editor: Editor<PlaygroundAnnotationMetadata>) {
         editorRef.current = editor;
@@ -1130,7 +1130,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
       }
       className="border-border overflow-hidden rounded-lg border"
       edit={edit}
-      editOptions={editOptions}
+      editorOptions={editorOptions}
       selectedLines={selectedRange}
       lineAnnotations={showAnnotations ? annotations : EMPTY_ANNOTATIONS}
       options={options}

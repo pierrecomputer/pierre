@@ -14,7 +14,7 @@ interface EditorDemoProps {
 
 export function EditorDemo({ prerenderedFile }: EditorDemoProps) {
   const [changeCount, setChangeCount] = useState(0);
-  const editOptions = useMemo(
+  const editorOptions = useMemo(
     () => ({
       onChange() {
         setChangeCount((count) => count + 1);
@@ -39,7 +39,7 @@ export function EditorDemo({ prerenderedFile }: EditorDemoProps) {
         {...prerenderedFile}
         className="max-h-[480px] overflow-auto rounded-none border-0"
         edit
-        editOptions={editOptions}
+        editorOptions={editorOptions}
       />
     </div>
   );

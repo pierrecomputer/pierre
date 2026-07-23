@@ -196,7 +196,7 @@ export function AgentUi({
     activeTargetRef.current = activePath;
   }, [activePath]);
 
-  const editOptions = useMemo<EditorOptions<undefined>>(
+  const editorOptions = useMemo<EditorOptions<undefined>>(
     () => ({
       enabledSelectionAction: true,
       renderSelectionAction({ close, getSelectionText, replaceSelectionText }) {
@@ -325,7 +325,7 @@ export function AgentUi({
                 }}
                 prerenderedHTML={activePrerenderedHTML}
                 edit
-                editOptions={editOptions}
+                editorOptions={editorOptions}
               />
             ) : (
               <div className="aui-empty">Select a changed file to review.</div>

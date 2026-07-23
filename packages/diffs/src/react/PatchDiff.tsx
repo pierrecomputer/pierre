@@ -20,7 +20,7 @@ export interface PatchDiffProps<
 export function PatchDiff<LAnnotation = undefined>({
   patch,
   options,
-  editOptions,
+  editorOptions,
   metrics,
   lineAnnotations,
   selectedLines,
@@ -40,7 +40,7 @@ export function PatchDiff<LAnnotation = undefined>({
   const { ref, getHoveredLine } = useFileDiffInstance({
     fileDiff,
     options,
-    editOptions,
+    editorOptions,
     metrics,
     lineAnnotations,
     selectedLines,

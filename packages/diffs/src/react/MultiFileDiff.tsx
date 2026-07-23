@@ -25,7 +25,7 @@ export function MultiFileDiff<LAnnotation = undefined>({
   oldFile,
   newFile,
   options,
-  editOptions,
+  editorOptions,
   metrics,
   lineAnnotations,
   selectedLines,
@@ -47,7 +47,7 @@ export function MultiFileDiff<LAnnotation = undefined>({
   const { ref, getHoveredLine } = useFileDiffInstance({
     fileDiff,
     options,
-    editOptions,
+    editorOptions,
     metrics,
     lineAnnotations,
     selectedLines,

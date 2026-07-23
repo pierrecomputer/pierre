@@ -72,7 +72,7 @@ const EMPTY_ANNOTATIONS: DiffLineAnnotation<PlaygroundAnnotationMetadata>[] =
   [];
 
 // One diff in the element-scroll list. Each surface is its own state island
-// with an edit toggle, edit options, and annotations. The app-level
+// with an edit toggle, editor options, and annotations. The app-level
 // EditProvider creates an independent editor when that surface enters edit
 // mode.
 function ElementVirtualizerDiff({
@@ -96,7 +96,7 @@ function ElementVirtualizerDiff({
   // editor renamed the shadow-DOM annotation slots during this same
   // keystroke, and a scheduled commit would leave the comments projected
   // nowhere for the frames in between.
-  const editOptions = useMemo<EditorOptions<PlaygroundAnnotationMetadata>>(
+  const editorOptions = useMemo<EditorOptions<PlaygroundAnnotationMetadata>>(
     () => ({
       onAttach(editor) {
         editor.focus({ lineNumber: 'first-visible', preventScroll: true });
@@ -255,7 +255,7 @@ function ElementVirtualizerDiff({
       selectedLines={selectedLines}
       lineAnnotations={showAnnotations ? annotations : EMPTY_ANNOTATIONS}
       options={fileDiffOptions}
-      editOptions={editOptions}
+      editorOptions={editorOptions}
       renderHeaderMetadata={renderHeaderMetadata}
       renderAnnotation={renderAnnotation}
     />

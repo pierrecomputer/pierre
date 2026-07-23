@@ -29,7 +29,7 @@ const useIsomorphicLayoutEffect =
 interface UseFileDiffInstanceProps<LAnnotation> {
   fileDiff: FileDiffMetadata;
   options: FileDiffOptions<LAnnotation> | undefined;
-  editOptions: EditorOptions<LAnnotation> | undefined;
+  editorOptions: EditorOptions<LAnnotation> | undefined;
   lineAnnotations: DiffLineAnnotation<LAnnotation>[] | undefined;
   selectedLines: SelectedLineRange | null | undefined;
   prerenderedHTML: string | undefined;
@@ -48,7 +48,7 @@ interface UseFileDiffInstanceReturn {
 export function useFileDiffInstance<LAnnotation>({
   fileDiff,
   options,
-  editOptions,
+  editorOptions,
   lineAnnotations,
   selectedLines,
   prerenderedHTML,
@@ -146,7 +146,7 @@ export function useFileDiffInstance<LAnnotation>({
       if (createEditor === undefined) {
         throw new Error('FileDiff: EditContext is not attached');
       }
-      const editor = createEditor(editOptions ?? {});
+      const editor = createEditor(editorOptions ?? {});
       if (editor == null) {
         throw new Error(
           'FileDiff: EditProvider.createEditor must return an editor instance'
