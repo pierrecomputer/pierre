@@ -52,6 +52,9 @@ Common read methods are:
 - `getItem(path)`
 - `getFocusedItem()`
 - `getFocusedPath()`
+- `getFocusedIndex()`
+- `getVisibleCount()`
+- `getVisibleRows(start, end)`
 - `getSelectedPaths()`
 - `getComposition()`
 - `isSearchOpen()`
@@ -85,12 +88,19 @@ Focus and selection control:
 
 - `focusPath(path)`
 - `focusNearestPath(path | null)`
+- `focusFirstItem()` / `focusLastItem()`
+- `focusNextItem()` / `focusPreviousItem()`
+- `focusParentItem()`
 - `scrollToPath(path, { offset: 'top' | 'center' | 'nearest', focus?: boolean })`
 - `startRenaming(path?)`
 - item-handle selection and focus methods
 
 `scrollToPath(...)` scrolls the virtualizer without moving DOM focus. It updates
 model focus by default. Pass `focus: false` to keep model focus unchanged.
+
+The traversal methods follow the current visible tree, including its active
+expansion and search state. `getVisibleRows(start, end)` uses inclusive row
+indexes and returns path-first row metadata for building custom navigation.
 
 Search control:
 
