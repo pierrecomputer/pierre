@@ -943,7 +943,7 @@ interface EditorOptions<LAnnotation> {
   // Max undo stack entries
   historyMaxEntries?: number;
 
-  // Preserve each File's document and editor state between renders.
+  // Preserve each File's document and item-local editor state between renders.
   // Requires every editable file to provide a unique, stable cacheKey.
   // Default: false.
   persistState?: boolean;
@@ -1065,14 +1065,14 @@ const file: FileContents | undefined = editor.getFile();
 // Full document text, or '' when nothing is attached.
 const text: string = editor.getText();
 
-// Snapshot selections and scroll position for persistence or remount restore.
+// Snapshot selections and horizontal code position for explicit restoration.
 const state: EditorState = editor.getState();
 // EditorState = {
 //   selections?: EditorSelection[];
-//   view?: { scrollLeft: number; scrollTop: number };
+//   view?: { scrollLeft: number };
 // }
 
-// Restore selections and scroll after re-rendering the underlying component.
+// Restore selections and horizontal code position after re-rendering.
 editor.setState(state);
 
 // Replace all cursors and ranges programmatically. Positions are zero-based;

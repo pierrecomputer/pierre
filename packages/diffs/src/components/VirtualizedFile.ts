@@ -394,15 +394,6 @@ export class VirtualizedFile<
     };
   }
 
-  public getScrollContainer(): HTMLElement | undefined {
-    const root = this.getSimpleVirtualizer()?.getRoot();
-    return root instanceof HTMLElement ? root : root?.documentElement;
-  }
-
-  public __getVirtualizer(): Virtualizer | CodeView<LAnnotation> {
-    return this.virtualizer;
-  }
-
   public getEditorViewport(): HTMLElement | Document | undefined {
     return this.virtualizer.type === 'simple'
       ? this.virtualizer.getRoot()

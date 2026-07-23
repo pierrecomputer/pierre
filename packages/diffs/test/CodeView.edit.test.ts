@@ -530,7 +530,7 @@ describe('CodeView item edit mode', () => {
     }
   });
 
-  test('recycle restores item-local horizontal state without restoring the shared CodeView scroll position', async () => {
+  test('recycle restores persisted item-local state without moving CodeView', async () => {
     const { cleanup } = installDom();
     const editors: Editor<undefined>[] = [];
     const viewer = new CodeView<undefined>({
@@ -606,13 +606,19 @@ describe('CodeView item edit mode', () => {
           HTMLElement
         );
       });
-      await wait(10);
-
       const remounted = viewer
         .getRenderedItems()
         .find((item) => item.id === edited.id);
       const remountedCode =
         remounted?.element.shadowRoot?.querySelector('[data-code]');
+      await waitFor(() => {
+        const selection = editor.getState().selections?.[0];
+        return (
+          selection?.start.line === 2 &&
+          selection.start.character === 3 &&
+          (remountedCode as HTMLElement | undefined)?.scrollLeft === 64
+        );
+      });
       expect(editors).toHaveLength(1);
       expect(viewer.getEditor(edited.id)).toBe(editor);
       expect(editor.getState().selections).toEqual([

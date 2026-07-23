@@ -187,7 +187,7 @@ export interface EditorOptions<LAnnotation> {
   /** The maximum number of entries to keep in the undo stack. */
   historyMaxEntries?: number;
   /**
-   * Preserve each file's document and editor state when switching files.
+   * Preserve each file's document and item-local editor state when switching files.
    * Every editable file must provide a unique, stable `cacheKey`.
    */
   persistState?: boolean;
@@ -593,16 +593,12 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
   getState(): EditorState {
     const fileInstance = this.#fileInstance;
-    const virtualizer = fileInstance?.__getVirtualizer?.();
     return {
       selections: this.#selections,
       view:
         fileInstance != null
           ? {
               scrollLeft: fileInstance.getCodeScrollLeft(),
-              ...(virtualizer != null
-                ? { scrollTop: virtualizer.getScrollTop() }
-                : null),
             }
           : undefined,
     };
@@ -619,21 +615,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     // sits outside that viewport (e.g. TreeApp remount restore).
     if (view != null) {
       this.#fileInstance.setCodeScrollLeft(view.scrollLeft);
-      const virtualizer = this.#fileInstance.__getVirtualizer?.();
-      if (virtualizer != null && view.scrollTop != null) {
-        if (virtualizer.type === 'simple') {
-          virtualizer.scrollTo({
-            top: view.scrollTop,
-            behavior: 'instant',
-          });
-        } else {
-          virtualizer.scrollTo({
-            type: 'position',
-            position: view.scrollTop,
-            behavior: 'instant',
-          });
-        }
-      }
       return;
     }
     this.#scrollToPrimaryCaret();
@@ -1235,8 +1216,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       if (
         textDocument.version === pendingRestore.documentVersion &&
         this.#selections === pendingRestore.selections &&
-        state.view?.scrollLeft === pendingRestore.view?.scrollLeft &&
-        state.view?.scrollTop === pendingRestore.view?.scrollTop
+        state.view?.scrollLeft === pendingRestore.view?.scrollLeft
       ) {
         return;
       }
@@ -1307,7 +1287,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         textDocument.version !== documentVersion ||
         this.#selections !== selections ||
         currentView?.scrollLeft !== view?.scrollLeft ||
-        currentView?.scrollTop !== view?.scrollTop ||
         this.#fileInfo === undefined ||
         requirePersistedCacheKey(this.#fileInfo) !== cacheKey
       ) {

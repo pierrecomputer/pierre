@@ -1,12 +1,13 @@
 import { describe, expect, test } from 'bun:test';
 
-import type { Virtualizer } from '../src/components/Virtualizer';
 import { Editor } from '../src/editor/editor';
+import type { IStateStorage } from '../src/editor/stateStorage';
 import type {
   DiffLineAnnotation,
   DiffsEditableComponent,
   DiffsEditor,
   DiffsHighlighter,
+  EditorState,
   FileContents,
   HighlightedToken,
   RenderRange,
@@ -36,24 +37,9 @@ class TestEditableComponent implements DiffsEditableComponent<undefined> {
   #lineAnnotations?: DiffLineAnnotation<undefined>[];
   #renderRange?: RenderRange;
   codeScrollLeft = 0;
-  virtualizerScrollTop = 0;
   restoredCodeScrollLefts: number[] = [];
-  restoredVirtualizerScrollPositions: unknown[] = [];
-  readonly virtualizer = {
-    type: 'simple',
-    getScrollTop: () => this.virtualizerScrollTop,
-    scrollTo: (target: unknown) => {
-      this.restoredVirtualizerScrollPositions.push(target);
-    },
-  } as unknown as Virtualizer;
 
-  readonly __getVirtualizer: (() => Virtualizer) | undefined;
-
-  constructor(
-    private file: FileContents,
-    virtualized = true
-  ) {
-    this.__getVirtualizer = virtualized ? () => this.virtualizer : undefined;
+  constructor(private file: FileContents) {
     this.#renderShadowDom();
   }
 
@@ -158,37 +144,13 @@ class TestEditableComponent implements DiffsEditableComponent<undefined> {
 }
 
 describe('Editor state', () => {
-  test('getState composes horizontal and vertical scroll owners', () => {
+  test('getState captures horizontal state from the code scroller', () => {
     const dom = installDom();
     const editor = new Editor<undefined>();
     const component = new TestEditableComponent({
       name: 'state.ts',
       contents: 'alpha\nbravo',
     });
-
-    try {
-      editor.edit(component);
-      component.codeScrollLeft = 24;
-      component.virtualizerScrollTop = 128;
-
-      expect(editor.getState().view).toEqual({
-        scrollLeft: 24,
-        scrollTop: 128,
-      });
-    } finally {
-      editor.cleanUp();
-      component.cleanUp();
-      dom.cleanup();
-    }
-  });
-
-  test('getState omits vertical state for a non-virtualized component', () => {
-    const dom = installDom();
-    const editor = new Editor<undefined>();
-    const component = new TestEditableComponent(
-      { name: 'state.ts', contents: 'alpha\nbravo' },
-      false
-    );
 
     try {
       editor.edit(component);
@@ -212,12 +174,9 @@ describe('Editor state', () => {
 
     try {
       editor.edit(component);
-      editor.setState({ view: { scrollLeft: 24, scrollTop: 128 } });
+      editor.setState({ view: { scrollLeft: 24 } });
 
       expect(component.restoredCodeScrollLefts).toEqual([24]);
-      expect(component.restoredVirtualizerScrollPositions).toEqual([
-        { top: 128, behavior: 'instant' },
-      ]);
     } finally {
       editor.cleanUp();
       component.cleanUp();
@@ -225,20 +184,33 @@ describe('Editor state', () => {
     }
   });
 
-  test('setState restores horizontal state without an optional vertical position', () => {
+  test('automatic persistence stores horizontal state', () => {
     const dom = installDom();
-    const editor = new Editor<undefined>();
+    let storedState: EditorState | undefined;
+    const storage: IStateStorage = {
+      get() {
+        return undefined;
+      },
+      set(_cacheKey, state) {
+        storedState = state;
+      },
+    };
+    const editor = new Editor<undefined>({
+      persistState: true,
+      persistStateStorage: storage,
+    });
     const component = new TestEditableComponent({
       name: 'state.ts',
       contents: 'alpha\nbravo',
+      cacheKey: 'state.ts',
     });
 
     try {
       editor.edit(component);
-      editor.setState({ view: { scrollLeft: 24 } });
+      component.codeScrollLeft = 24;
+      editor.cleanUp();
 
-      expect(component.restoredCodeScrollLefts).toEqual([24]);
-      expect(component.restoredVirtualizerScrollPositions).toEqual([]);
+      expect(storedState?.view).toEqual({ scrollLeft: 24 });
     } finally {
       editor.cleanUp();
       component.cleanUp();
@@ -274,13 +246,10 @@ describe('Editor state', () => {
             direction: 0,
           },
         ],
-        view: { scrollLeft: 12, scrollTop: 40 },
+        view: { scrollLeft: 12 },
       });
 
       expect(component.restoredCodeScrollLefts).toEqual([12]);
-      expect(component.restoredVirtualizerScrollPositions).toEqual([
-        { top: 40, behavior: 'instant' },
-      ]);
       expect(scrollIntoViewCalls).toBe(0);
       expect(editor.getState().selections).toEqual([
         {

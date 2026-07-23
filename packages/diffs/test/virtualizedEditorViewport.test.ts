@@ -14,7 +14,6 @@ function createSimpleVirtualizer(root: HTMLElement) {
     connect() {},
     disconnect() {},
     getRoot: () => root,
-    getScrollTop: () => 0,
     getWindowSpecs: () => ({ top: 0, bottom: 800 }),
     getOffsetInScrollContainer: () => 0,
     instanceChanged(instance: { onRender(dirty: boolean): boolean }) {
@@ -23,7 +22,6 @@ function createSimpleVirtualizer(root: HTMLElement) {
     isInstanceVisible: () => true,
     markDOMDirty() {},
     requestHeightReconcile() {},
-    scrollTo() {},
   } as never;
 }
 
@@ -95,8 +93,6 @@ describe('virtualized editor viewport', () => {
     try {
       expect(file.getEditorViewport()).toBe(root);
       expect(fileDiff.getEditorViewport()).toBe(root);
-      expect(file.__getVirtualizer()).toBe(virtualizer);
-      expect(fileDiff.__getVirtualizer()).toBe(virtualizer);
     } finally {
       file.cleanUp();
       fileDiff.cleanUp();
@@ -117,8 +113,6 @@ describe('virtualized editor viewport', () => {
     try {
       expect(file.getEditorViewport()).toBe(root);
       expect(fileDiff.getEditorViewport()).toBe(root);
-      expect(file.__getVirtualizer()).toBe(codeView);
-      expect(fileDiff.__getVirtualizer()).toBe(codeView);
     } finally {
       file.cleanUp();
       fileDiff.cleanUp();
