@@ -22,4 +22,21 @@ test.describe('line annotations', () => {
     await expect(content).toBeVisible();
     await expect(content).toHaveText('note on line 2');
   });
+
+  test('annotation content wraps in the default scroll overflow mode', async ({
+    page,
+  }) => {
+    await openFixture(page);
+
+    // Annotations contain prose, so the content must wrap in every overflow
+    // mode. Slotted light-DOM content inherits `white-space` from the
+    // shadow-DOM `[data-annotation-content]` parent. So that parent must set
+    // `white-space: normal`, even in the default `scroll` overflow where code
+    // lines stay `pre`. Before the fix, the parent inherited `pre` and long
+    // annotation text did not wrap.
+    const whiteSpace = await page
+      .locator('[data-annotation-content]')
+      .evaluate((el) => getComputedStyle(el).whiteSpace);
+    expect(whiteSpace).toBe('normal');
+  });
 });

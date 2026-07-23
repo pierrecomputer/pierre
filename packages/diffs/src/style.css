@@ -1398,9 +1398,15 @@
   }
 
   [data-overflow='wrap'] {
-    [data-line],
-    [data-annotation-content] {
+    [data-line] {
       white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    /* Annotations wrap in every overflow mode (see the base
+     * [data-annotation-content] rule). In wrap mode, also break long words so
+     * they do not overflow the wrapped column. */
+    [data-annotation-content] {
       word-break: break-word;
     }
   }
@@ -1647,6 +1653,12 @@
     z-index: 2;
     min-width: 0;
     isolation: isolate;
+    /* Annotations contain prose, not code. The text must wrap in every
+     * overflow mode. Slotted annotation content inherits this white-space
+     * value. In scroll mode without this rule, the text inherits
+     * `white-space: pre` from the `pre` element. Then long text does not
+     * wrap. */
+    white-space: normal;
   }
 
   /* Sticky positioning has a composite costs, so we should _only_ pay it if we
