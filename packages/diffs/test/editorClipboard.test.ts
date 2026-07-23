@@ -143,6 +143,12 @@ class TestEditableComponent implements DiffsEditableComponent<undefined> {
 
   setEditorActiveLine(_lineNumber: number | null): void {}
 
+  getCodeScrollLeft(): number {
+    return 0;
+  }
+
+  setCodeScrollLeft(): void {}
+
   render({
     file,
     lineAnnotations,

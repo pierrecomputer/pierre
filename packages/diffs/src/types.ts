@@ -13,6 +13,9 @@ import type {
   ThemeRegistrationResolved,
 } from 'shiki';
 
+import type { CodeView } from './components/CodeView';
+import type { Virtualizer } from './components/Virtualizer';
+
 export type { CreatePatchOptionsNonabortable };
 
 export type CodeViewScrollBehavior = 'instant' | 'smooth' | 'smooth-auto';
@@ -1033,6 +1036,12 @@ export interface DiffsEditableComponent<
     lineNumber: number | null,
     options?: EditorActiveLineOptions
   ) => void;
+  /** Return the horizontal code scroll position (`scrollLeft`). */
+  getCodeScrollLeft: () => number;
+  /** Set the horizontal code scroll position (`scrollLeft`). */
+  setCodeScrollLeft: (position: number) => void;
+  /** @internal Return the owner of logical vertical scrolling, when present. */
+  __getVirtualizer?: () => Virtualizer | CodeView<LAnnotation>;
   /**
    * Return the position and height of a one-based line relative to this component.
    * The host uses it to scroll to virtualized lines before their DOM nodes exist.

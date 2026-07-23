@@ -1,12 +1,12 @@
 import { describe, expect, test } from 'bun:test';
 
+import type { Virtualizer } from '../src/components/Virtualizer';
 import { Editor } from '../src/editor/editor';
 import type {
   DiffLineAnnotation,
   DiffsEditableComponent,
   DiffsEditor,
   DiffsHighlighter,
-  EditorState,
   FileContents,
   HighlightedToken,
   RenderRange,
@@ -35,8 +35,17 @@ class TestEditableComponent implements DiffsEditableComponent<undefined> {
   #editor?: DiffsEditor<undefined>;
   #lineAnnotations?: DiffLineAnnotation<undefined>[];
   #renderRange?: RenderRange;
-  capturedView: EditorState['view'];
-  restoredViews: NonNullable<EditorState['view']>[] = [];
+  codeScrollPosition = 0;
+  virtualizerScrollTop = 0;
+  restoredCodeScrollPositions: number[] = [];
+  restoredVirtualizerScrollPositions: unknown[] = [];
+  readonly virtualizer = {
+    type: 'simple',
+    getScrollTop: () => this.virtualizerScrollTop,
+    scrollTo: (target: unknown) => {
+      this.restoredVirtualizerScrollPositions.push(target);
+    },
+  } as unknown as Virtualizer;
 
   constructor(private file: FileContents) {
     this.#renderShadowDom();
@@ -50,13 +59,17 @@ class TestEditableComponent implements DiffsEditableComponent<undefined> {
 
   setEditorActiveLine(_lineNumber: number | null): void {}
 
-  captureEditorViewState(): EditorState['view'] {
-    return this.capturedView == null ? undefined : { ...this.capturedView };
+  getCodeScrollLeft(): number {
+    return this.codeScrollPosition;
   }
 
-  restoreEditorViewState(view: NonNullable<EditorState['view']>): void {
-    this.capturedView = { ...view };
-    this.restoredViews.push({ ...view });
+  setCodeScrollLeft(position: number): void {
+    this.codeScrollPosition = position;
+    this.restoredCodeScrollPositions.push(position);
+  }
+
+  __getVirtualizer(): Virtualizer {
+    return this.virtualizer;
   }
 
   render({
@@ -153,7 +166,8 @@ describe('Editor state', () => {
 
     try {
       editor.edit(component);
-      component.capturedView = { scrollLeft: 24, scrollTop: 128 };
+      component.codeScrollPosition = 24;
+      component.virtualizerScrollTop = 128;
 
       expect(editor.getState().view).toEqual({
         scrollLeft: 24,
@@ -178,8 +192,9 @@ describe('Editor state', () => {
       editor.edit(component);
       editor.setState({ view: { scrollLeft: 24, scrollTop: 128 } });
 
-      expect(component.restoredViews).toEqual([
-        { scrollLeft: 24, scrollTop: 128 },
+      expect(component.restoredCodeScrollPositions).toEqual([24]);
+      expect(component.restoredVirtualizerScrollPositions).toEqual([
+        { top: 128, behavior: 'instant' },
       ]);
     } finally {
       editor.cleanUp();
@@ -219,8 +234,9 @@ describe('Editor state', () => {
         view: { scrollLeft: 12, scrollTop: 40 },
       });
 
-      expect(component.restoredViews).toEqual([
-        { scrollLeft: 12, scrollTop: 40 },
+      expect(component.restoredCodeScrollPositions).toEqual([12]);
+      expect(component.restoredVirtualizerScrollPositions).toEqual([
+        { top: 40, behavior: 'instant' },
       ]);
       expect(scrollIntoViewCalls).toBe(0);
       expect(editor.getState().selections).toEqual([
