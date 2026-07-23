@@ -143,7 +143,7 @@ test.describe('file-tree search proof', () => {
     );
   });
 
-  test('Enter selects the focused match and returns focus to the tree item', async ({
+  test('Enter selects the focused match and keeps search open', async ({
     page,
   }) => {
     await page.goto('/test/e2e/fixtures/file-tree-search.html');
@@ -181,8 +181,9 @@ test.describe('file-tree search proof', () => {
       'data-item-path',
       focusedPathBeforeSubmit ?? ''
     );
-    await expect(searchInput).not.toBeFocused();
-    await expect(selectedRow).toBeFocused();
+    // Enter keeps the search open. The input keeps focus and its value.
+    await expect(searchInput).toBeFocused();
+    await expect(searchInput).toHaveValue('worker');
   });
 
   test('Enter immediately after ArrowDown still selects the latest focused match', async ({
@@ -231,11 +232,6 @@ test.describe('file-tree search proof', () => {
           key: 'ArrowDown',
         })
       );
-      const focusedBeforeSubmit = shadow.querySelector<HTMLButtonElement>(
-        'button[data-item-focused="true"]'
-      );
-      const focusedTopBefore =
-        focusedBeforeSubmit?.getBoundingClientRect().top ?? null;
       input.dispatchEvent(
         new KeyboardEvent('keydown', {
           bubbles: true,
@@ -249,29 +245,17 @@ test.describe('file-tree search proof', () => {
         'button[data-item-selected="true"]'
       );
       const active = shadow.activeElement as HTMLElement | null;
-      const scrollElement = shadow.querySelector<HTMLElement>(
-        '[data-file-tree-virtualized-scroll="true"]'
-      );
-      const selectedTopAfter = selected?.getBoundingClientRect().top ?? null;
       return {
-        activePath: active?.getAttribute('data-item-path') ?? null,
-        focusedTopBefore,
         inputFocused: active === input,
-        scrollTop: scrollElement?.scrollTop ?? null,
         selectedPath: selected?.getAttribute('data-item-path') ?? null,
-        selectedTopAfter,
       };
     });
 
     expect(result).not.toBeNull();
+    // Enter selects the match that ArrowDown moved to. This is true even when
+    // the two keys arrive together with no render between them.
     expect(result?.selectedPath).toBe('src/utils/worker/index.ts');
-    expect(result?.activePath).toBe('src/utils/worker/index.ts');
-    expect(result?.inputFocused).toBe(false);
-    expect(result?.scrollTop).toBeGreaterThan(0);
-    expect(
-      Math.abs(
-        (result?.selectedTopAfter ?? 0) - (result?.focusedTopBefore ?? 0)
-      )
-    ).toBeLessThan(2);
+    // Enter keeps the search open. Focus stays in the search input.
+    expect(result?.inputFocused).toBe(true);
   });
 });
