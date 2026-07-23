@@ -157,7 +157,7 @@ export class FileRenderer<LAnnotation = undefined> {
     this.lineCache = undefined;
     // The edited-document cache is only coherent alongside the render cache
     // it patched. Keeping it across a recycle would let getLineCount report
-    // editor-session line counts (keyed by the long-lived file object) against
+    // edit-session line counts (keyed by the long-lived file object) against
     // a result rebuilt from the file's own contents, which processFileResult
     // treats as a missing-line error.
     this.textDocumentCache = new WeakMap();

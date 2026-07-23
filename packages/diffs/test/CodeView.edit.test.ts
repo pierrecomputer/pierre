@@ -797,7 +797,7 @@ describe('CodeView item edit mode', () => {
   test('user-space onItemEditComplete handler commits a finished session', async () => {
     const { cleanup } = installDom();
     // Committing is a user-space concern: CodeView never writes item data
-    // itself, it only ends the editor session and reports the final contents.
+    // itself, it only ends the edit session and reports the final contents.
     // This handler models the recommended app shape — one combined item write
     // carrying the new file (with a fresh cacheKey, since the contents
     // changed) and `edit: false`.

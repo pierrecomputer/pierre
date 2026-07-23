@@ -131,7 +131,6 @@ function canHydrateDiff(fileDiff: FileDiffMetadata): boolean {
 export interface FileDiffRenderBaseProps<LAnnotation> {
   fileDiff?: FileDiffMetadata;
   deferManagers?: boolean;
-  didEdit?: boolean;
   forceRender?: boolean;
   preventEmit?: boolean;
   fileContainer?: HTMLElement;

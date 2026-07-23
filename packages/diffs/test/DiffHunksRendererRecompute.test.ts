@@ -222,7 +222,7 @@ describe('DiffHunksRenderer content-edit recompute split', () => {
   });
 });
 
-// While an editor session is active, hunk updates preserve the current region
+// While an edit session is active, hunk updates preserve the current region
 // skeleton: regions never merge/split/drop on their own, a reverted region
 // persists as a context-only hunk, and the real recompute runs once on
 // genuine session end.

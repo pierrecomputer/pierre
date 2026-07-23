@@ -55,7 +55,7 @@ function stackEntry(
   );
 }
 
-describe('EditHistory', () => {
+describe('EditStack', () => {
   test('push stores cloned selections and pop methods move entries between stacks', () => {
     const editStack = new EditStack();
     const selectionBefore = [caret(0), caret(1)];
