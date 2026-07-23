@@ -41,7 +41,7 @@ To enable edit mode on a `File` instance, import `Editor` from
 `@pierre/diffs/edit`. It is intentionally separate from the core bundle so you
 can lazy-load it when editing is optional.
 
-<EditorDemo prerenderedFile={editorDemoFile} />
+<EditDemo prerenderedFile={editDemoFile} />
 
 ### How It Works
 
@@ -203,10 +203,10 @@ state. Sibling editable surfaces receive independent editors and callbacks; use
 selections, markers, save, or search. Use `Virtualizer` for large editable
 files. The `FileDiff` tab below shows the controlled annotation feedback loop.
 
-<EditorComponentTabs
-  fileExample={editorReactExample}
-  fileDiffExample={editorReactFileDiffExample}
-  multiFileDiffExample={editorReactMultiFileDiffExample}
+<EditComponentTabs
+  fileExample={editReactExample}
+  fileDiffExample={editReactFileDiffExample}
+  multiFileDiffExample={editReactMultiFileDiffExample}
 />
 
 ### Vanilla JS
@@ -217,9 +217,9 @@ large editable files. Keep any emitted annotation collection in your external
 source of truth before a later render. Call `cleanUp()` when the editor is
 removed. The `FileDiff` tab below includes this synchronization.
 
-<EditorComponentTabs
-  fileExample={editorVanillaFileExample}
-  fileDiffExample={editorVanillaFileDiffExample}
+<EditComponentTabs
+  fileExample={editVanillaFileExample}
+  fileDiffExample={editVanillaFileDiffExample}
 />
 
 ### CodeView
@@ -244,8 +244,8 @@ a fresh `cacheKey` and increment `version`; `CodeView` does not update item data
 for you.
 
 <CodeViewExampleTabs
-  reactExample={editorReactCodeViewExample}
-  vanillaExample={editorVanillaCodeViewExample}
+  reactExample={editReactCodeViewExample}
+  vanillaExample={editVanillaCodeViewExample}
 />
 
 Editors retain their document and history while items move in and out of the
@@ -385,13 +385,13 @@ are useful for surfacing linter or language-server output alongside live edits.
 Each marker is positioned with zero-based `start` and `end` positions and a
 `severity` that drives its color and popover styling:
 
-<DocsCodeExample {...editorMarkerType} />
+<DocsCodeExample {...editMarkerType} />
 
 Call `editor.setMarkers(markers)` after the editor has attached to a surface
 (calling it before attaching throws). Inlining the array lets TypeScript check
 the `severity` literals against the `Marker` type without importing it.
 
-<DocsCodeExample {...editorMarkerExample} />
+<DocsCodeExample {...editMarkerExample} />
 
 Markers re-anchor as the document changes, so they stay attached to their text
 while you edit. Pass an empty array to clear them.
@@ -416,7 +416,7 @@ and you can re-read `canUndo` / `canRedo` to keep UI state in sync.
 Limit the stack size with `historyMaxEntries` in
 [Editor Options](#edit-mode-editor-options) (default: 100).
 
-<DocsCodeExample {...editorUndoRedoExample} />
+<DocsCodeExample {...editUndoRedoExample} />
 
 ### Using Worker Pool
 
@@ -429,9 +429,9 @@ vanilla JS, pass the pool as the second argument to `File` or `FileDiff`. In
 React, wrap your tree in `WorkerPoolContextProvider`. Then attach the editor as
 usual.
 
-<EditorWorkerPoolTabs
-  vanillaExample={editorWorkerPoolVanillaExample}
-  reactExample={editorWorkerPoolReactExample}
+<EditWorkerPoolTabs
+  vanillaExample={editWorkerPoolVanillaExample}
+  reactExample={editWorkerPoolReactExample}
 />
 
 ### Lazy Loading
@@ -441,7 +441,7 @@ it only when the user enters edit mode. That keeps the initial page bundle
 smaller and can improve LCP (Largest Contentful Paint) on pages where editing is
 rare.
 
-<DocsCodeExample {...editorLazyFileExample} />
+<DocsCodeExample {...editLazyFileExample} />
 
 ### Selection Action
 
@@ -453,14 +453,14 @@ the user creates a ranged selection. Programmatic `setSelections` and `setState`
 calls update the selection without opening the popover. The popover can hold any
 number of actions.
 
-<DocsCodeExample {...editorSelectionActionExample} />
+<DocsCodeExample {...editSelectionActionExample} />
 
 `renderSelectionAction` runs when the popover opens. Its context includes the
 active `selection`, the editable `textDocument`, helpers to read or modify the
 selection (`getSelectionText`, `replaceSelectionText`, `applyEdits`), and
 `close` to dismiss the popover:
 
-<DocsCodeExample {...editorSelectionActionContextType} />
+<DocsCodeExample {...editSelectionActionContextType} />
 
 ### Keyboard Shortcuts
 

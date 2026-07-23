@@ -31,7 +31,7 @@ interface HeadingItem {
 
 // Read a heading's label without the permalink anchor or any Beta badge that a
 // React-managed heading may render, so the sidebar shows clean text (e.g.
-// "Editor" rather than "EditorBeta") and can mirror the badge separately.
+// "Edit mode" rather than "Edit modeBeta") and can mirror the badge separately.
 function getHeadingLabel(element: HTMLElement): string {
   let text = '';
   for (const node of element.childNodes) {

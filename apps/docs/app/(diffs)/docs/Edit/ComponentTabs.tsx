@@ -8,26 +8,26 @@ import { DocsCodeExample } from '@/components/docs/DocsCodeExample';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 import { Notice } from '@/components/ui/notice';
 
-type EditorComponentMode = 'file' | 'file-diff' | 'multi-file-diff';
+type EditComponentMode = 'file' | 'file-diff' | 'multi-file-diff';
 
-interface EditorComponentTabsProps {
+interface EditComponentTabsProps {
   fileExample: PreloadedFileResult<undefined>;
   fileDiffExample: PreloadedFileResult<undefined>;
   multiFileDiffExample?: PreloadedFileResult<undefined>;
 }
 
-export function EditorComponentTabs({
+export function EditComponentTabs({
   fileExample,
   fileDiffExample,
   multiFileDiffExample,
-}: EditorComponentTabsProps) {
-  const [mode, setMode] = useState<EditorComponentMode>('file');
+}: EditComponentTabsProps) {
+  const [mode, setMode] = useState<EditComponentMode>('file');
 
   return (
     <>
       <ButtonGroup
         value={mode}
-        onValueChange={(value) => setMode(value as EditorComponentMode)}
+        onValueChange={(value) => setMode(value as EditComponentMode)}
         className="no-scrollbar max-w-full overflow-x-auto md:overflow-visible"
       >
         <ButtonGroupItem value="file">File</ButtonGroupItem>

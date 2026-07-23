@@ -310,7 +310,7 @@ function PlaygroundControlsContent({
             <ButtonGroup
               value={mode}
               onValueChange={(value) => setMode(value as Mode)}
-              aria-label="Editor mode"
+              aria-label="Edit mode"
               size="icon"
             >
               <ButtonGroupItem value="review">

@@ -6,24 +6,24 @@ import { useState } from 'react';
 import { DocsCodeExample } from '@/components/docs/DocsCodeExample';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 
-type EditorWorkerPoolMode = 'vanilla' | 'react';
+type EditWorkerPoolMode = 'vanilla' | 'react';
 
-interface EditorWorkerPoolTabsProps {
+interface EditWorkerPoolTabsProps {
   vanillaExample: PreloadedFileResult<undefined>;
   reactExample: PreloadedFileResult<undefined>;
 }
 
-export function EditorWorkerPoolTabs({
+export function EditWorkerPoolTabs({
   vanillaExample,
   reactExample,
-}: EditorWorkerPoolTabsProps) {
-  const [mode, setMode] = useState<EditorWorkerPoolMode>('vanilla');
+}: EditWorkerPoolTabsProps) {
+  const [mode, setMode] = useState<EditWorkerPoolMode>('vanilla');
 
   return (
     <>
       <ButtonGroup
         value={mode}
-        onValueChange={(value) => setMode(value as EditorWorkerPoolMode)}
+        onValueChange={(value) => setMode(value as EditWorkerPoolMode)}
       >
         <ButtonGroupItem value="vanilla">Vanilla JS</ButtonGroupItem>
         <ButtonGroupItem value="react">React</ButtonGroupItem>

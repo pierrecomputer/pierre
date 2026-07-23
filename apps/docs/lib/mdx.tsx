@@ -16,9 +16,9 @@ import remarkGfm from 'remark-gfm';
 
 import { CustomHunkSeparators } from '../app/(diffs)/_examples/CustomHunkSeparators/CustomHunkSeparators';
 import { CodeViewExampleTabs } from '../app/(diffs)/docs/CodeView/ExampleTabs';
-import { EditorComponentTabs } from '../app/(diffs)/docs/Editor/ComponentTabs';
-import { EditorDemo } from '../app/(diffs)/docs/Editor/EditorDemo';
-import { EditorWorkerPoolTabs } from '../app/(diffs)/docs/Editor/WorkerPoolTabs';
+import { EditComponentTabs } from '../app/(diffs)/docs/Edit/ComponentTabs';
+import { EditDemo } from '../app/(diffs)/docs/Edit/EditDemo';
+import { EditWorkerPoolTabs } from '../app/(diffs)/docs/Edit/WorkerPoolTabs';
 import { PackageManagerTabs } from '../app/(diffs)/docs/Installation/PackageManagerTabs';
 import { CodeToggle } from '../app/(diffs)/docs/Overview/CodeToggle';
 import {
@@ -90,9 +90,9 @@ const defaultComponents = {
   IconFlagFill,
   DocsCodeExample,
   CodeViewExampleTabs,
-  EditorComponentTabs,
-  EditorDemo,
-  EditorWorkerPoolTabs,
+  EditComponentTabs,
+  EditDemo,
+  EditWorkerPoolTabs,
   CustomHunkSeparators,
   OverviewFileTree,
   MultiFileDiff,

@@ -18,10 +18,10 @@ const editableDemoOptions: FileOptions<undefined> = {
   useTokenTransformer: true,
 };
 
-// The file rendered by the interactive `<EditorDemo />` on the Editor page.
+// The file rendered by the interactive `<EditDemo />` on the Edit page.
 // Preloaded server-side so the surface is highlighted in the initial HTML
 // instead of flashing in after the client attaches the editor.
-export const EDITOR_DEMO_FILE_EXAMPLE: PreloadFileOptions<undefined> = {
+export const EDIT_DEMO_FILE_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
     name: 'editable-demo.ts',
     contents: `import { VirtualizedFile } from '@pierre/diffs';
@@ -53,7 +53,7 @@ dispose();
   options: editableDemoOptions,
 };
 
-export const EDITOR_VANILLA_FILE_EXAMPLE: PreloadFileOptions<undefined> = {
+export const EDIT_VANILLA_FILE_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
     name: 'editor_vanilla_file.ts',
     contents: `import {
@@ -101,7 +101,7 @@ editor.cleanUp();`,
   options,
 };
 
-export const EDITOR_VANILLA_FILE_DIFF_EXAMPLE: PreloadFileOptions<undefined> = {
+export const EDIT_VANILLA_FILE_DIFF_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
     name: 'editor_vanilla_file_diff.ts',
     contents: `import {
@@ -194,7 +194,7 @@ editor.cleanUp();`,
   options,
 };
 
-export const EDITOR_VANILLA_CODE_VIEW_EXAMPLE: PreloadFileOptions<undefined> = {
+export const EDIT_VANILLA_CODE_VIEW_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
     name: 'editor_vanilla_code_view.ts',
     contents: `import {
@@ -319,7 +319,7 @@ window.addEventListener('beforeunload', () => {
   options,
 };
 
-export const EDITOR_LAZY_FILE_EXAMPLE: PreloadFileOptions<undefined> = {
+export const EDIT_LAZY_FILE_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
     name: 'editor_lazy_file.ts',
     contents: `import type { VirtualizedFile } from '@pierre/diffs';
@@ -344,7 +344,7 @@ button.addEventListener('click', () => {
   options,
 };
 
-export const EDITOR_SELECTION_ACTION_EXAMPLE: PreloadFileOptions<undefined> = {
+export const EDIT_SELECTION_ACTION_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
     name: 'editor_selection_action.ts',
     contents: `import { Editor } from '@pierre/diffs/edit';
@@ -371,7 +371,7 @@ const editor = new Editor({
   options,
 };
 
-export const EDITOR_SELECTION_ACTION_CONTEXT_TYPE: PreloadFileOptions<undefined> =
+export const EDIT_SELECTION_ACTION_CONTEXT_TYPE: PreloadFileOptions<undefined> =
   {
     file: {
       name: 'selection_action_context.ts',
@@ -393,7 +393,7 @@ export const EDITOR_SELECTION_ACTION_CONTEXT_TYPE: PreloadFileOptions<undefined>
     options,
   };
 
-export const EDITOR_MARKER_TYPE: PreloadFileOptions<undefined> = {
+export const EDIT_MARKER_TYPE: PreloadFileOptions<undefined> = {
   file: {
     name: 'marker.ts',
     contents: `type MarkerSeverity = 'error' | 'warning' | 'info' | 'hint';
@@ -416,7 +416,7 @@ interface Marker {
   options,
 };
 
-export const EDITOR_MARKER_EXAMPLE: PreloadFileOptions<undefined> = {
+export const EDIT_MARKER_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
     name: 'editor_markers.ts',
     contents: `import { Editor } from '@pierre/diffs/edit';
@@ -450,7 +450,7 @@ editor.setMarkers([]);`,
   options,
 };
 
-export const EDITOR_UNDO_REDO_EXAMPLE: PreloadFileOptions<undefined> = {
+export const EDIT_UNDO_REDO_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
     name: 'editor_undo_redo.tsx',
     contents: `import type { FileContents } from '@pierre/diffs';
@@ -467,7 +467,7 @@ function createEditor(options: EditorOptions<undefined>) {
   return new Editor(options);
 }
 
-export function EditorWithHistoryToolbar() {
+export function EditableFileWithHistoryToolbar() {
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
 
@@ -512,7 +512,7 @@ export function EditorWithHistoryToolbar() {
   options,
 };
 
-export const EDITOR_REACT_EXAMPLE: PreloadFileOptions<undefined> = {
+export const EDIT_REACT_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
     name: 'editor_react.tsx',
     contents: `import type { FileContents, FileOptions } from '@pierre/diffs';
@@ -543,7 +543,7 @@ function createEditor(options: EditorOptions<undefined>) {
   return new Editor(options);
 }
 
-export function EditorComponent() {
+export function EditableFile() {
   const [editable, setEditable] = useState(true);
   const editorOptions = useMemo<EditorOptions<undefined>>(
     () => ({
@@ -578,7 +578,7 @@ export function EditorComponent() {
   options,
 };
 
-export const EDITOR_REACT_FILE_DIFF_EXAMPLE: PreloadFileOptions<undefined> = {
+export const EDIT_REACT_FILE_DIFF_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
     name: 'editor_react_file_diff.tsx',
     contents: `import {
@@ -629,7 +629,7 @@ function createEditor(options: EditorOptions<ThreadMetadata>) {
   return new Editor(options);
 }
 
-export function EditorComponent() {
+export function EditableFileDiff() {
   const [editable, setEditable] = useState(true);
   const [annotations, setAnnotations] = useState(initialAnnotations);
   const annotationsRef = useRef(initialAnnotations);
@@ -694,7 +694,7 @@ export function EditorComponent() {
   options,
 };
 
-export const EDITOR_REACT_CODE_VIEW_EXAMPLE: PreloadFileOptions<undefined> = {
+export const EDIT_REACT_CODE_VIEW_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
     name: 'editor_react_code_view.tsx',
     contents: `import {
@@ -848,11 +848,10 @@ export function EditableCodeView() {
   options,
 };
 
-export const EDITOR_WORKER_POOL_VANILLA_EXAMPLE: PreloadFileOptions<undefined> =
-  {
-    file: {
-      name: 'editor_worker_pool_vanilla.ts',
-      contents: `import { File } from '@pierre/diffs';
+export const EDIT_WORKER_POOL_VANILLA_EXAMPLE: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'editor_worker_pool_vanilla.ts',
+    contents: `import { File } from '@pierre/diffs';
 import { Editor } from '@pierre/diffs/edit';
 import { getOrCreateWorkerPoolSingleton } from '@pierre/diffs/worker';
 import { workerFactory } from './utils/workerFactory';
@@ -876,11 +875,11 @@ fileInstance.render({
 
 const editor = new Editor();
 editor.edit(fileInstance);`,
-    },
-    options,
-  };
+  },
+  options,
+};
 
-export const EDITOR_WORKER_POOL_REACT_EXAMPLE: PreloadFileOptions<undefined> = {
+export const EDIT_WORKER_POOL_REACT_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
     name: 'editor_worker_pool_react.tsx',
     contents: `'use client';
@@ -909,7 +908,7 @@ function createEditor(options: EditorOptions<undefined>) {
   return new Editor(options);
 }
 
-export function EditorWithWorkerPool() {
+export function EditableFileWithWorkerPool() {
   // This example is self-contained. Apps should usually mount EditProvider near
   // the root so its factory is available to every editable File, diff, and
   // CodeView.
@@ -1127,7 +1126,7 @@ editor.redo();
   options,
 };
 
-export const EDITOR_REACT_MULTI_FILE_DIFF_EXAMPLE: PreloadFileOptions<undefined> =
+export const EDIT_REACT_MULTI_FILE_DIFF_EXAMPLE: PreloadFileOptions<undefined> =
   {
     file: {
       name: 'editor_react_multi_file_diff.tsx',
@@ -1169,7 +1168,7 @@ function createEditor(options: EditorOptions<undefined>) {
   return new Editor(options);
 }
 
-export function EditorComponent() {
+export function EditableMultiFileDiff() {
   const [editable, setEditable] = useState(true);
   const editorOptions = useMemo<EditorOptions<undefined>>(
     () => ({

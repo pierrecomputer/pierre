@@ -3,7 +3,7 @@
 import { File } from '@pierre/diffs/react';
 import type { PreloadedFileResult } from '@pierre/diffs/ssr';
 
-import { EDITOR_SHORTCUT_GROUPS, type EditorShortcutGroup } from './constants';
+import { EDIT_SHORTCUT_GROUPS, type EditShortcutGroup } from './constants';
 import { ShortcutKeys } from '@/components/Shortcut';
 
 interface EditShortcutsProps {
@@ -14,7 +14,7 @@ interface EditShortcutsProps {
 
 // The keyboard-shortcut reference: a live editor showing the data that drives
 // the table (left) next to the table itself (right). Both read from
-// EDITOR_SHORTCUT_GROUPS, so the snippet and the rendered keys stay in lockstep.
+// EDIT_SHORTCUT_GROUPS, so the snippet and the rendered keys stay in lockstep.
 // The platform modifier (Cmd on macOS/iOS, Ctrl elsewhere) is resolved
 // client-side by `ShortcutKeys`.
 export function EditShortcuts({ prerenderedFile }: EditShortcutsProps) {
@@ -33,7 +33,7 @@ export function EditShortcuts({ prerenderedFile }: EditShortcutsProps) {
             </tr>
           </thead>
           <tbody>
-            {EDITOR_SHORTCUT_GROUPS.map((group) => (
+            {EDIT_SHORTCUT_GROUPS.map((group) => (
               <GroupRows key={group.label} group={group} />
             ))}
           </tbody>
@@ -43,7 +43,7 @@ export function EditShortcuts({ prerenderedFile }: EditShortcutsProps) {
   );
 }
 
-function GroupRows({ group }: { group: EditorShortcutGroup }) {
+function GroupRows({ group }: { group: EditShortcutGroup }) {
   return (
     <>
       <tr className="bg-muted/30 border-b">

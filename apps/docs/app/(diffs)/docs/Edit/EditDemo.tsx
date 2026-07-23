@@ -4,7 +4,7 @@ import { File } from '@pierre/diffs/react';
 import type { PreloadedFileResult } from '@pierre/diffs/ssr';
 import { useMemo, useState } from 'react';
 
-interface EditorDemoProps {
+interface EditDemoProps {
   // Server-preloaded, already-highlighted file. Spreading it into <File> ships
   // the highlighted surface in the initial SSR HTML and hydrates from it, so
   // the demo paints instantly instead of flashing in after the client attaches
@@ -12,7 +12,7 @@ interface EditorDemoProps {
   prerenderedFile: PreloadedFileResult<undefined>;
 }
 
-export function EditorDemo({ prerenderedFile }: EditorDemoProps) {
+export function EditDemo({ prerenderedFile }: EditDemoProps) {
   const [changeCount, setChangeCount] = useState(0);
   const editorOptions = useMemo(
     () => ({
