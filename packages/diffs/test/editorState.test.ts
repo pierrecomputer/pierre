@@ -35,9 +35,9 @@ class TestEditableComponent implements DiffsEditableComponent<undefined> {
   #editor?: DiffsEditor<undefined>;
   #lineAnnotations?: DiffLineAnnotation<undefined>[];
   #renderRange?: RenderRange;
-  codeScrollPosition = 0;
+  codeScrollLeft = 0;
   virtualizerScrollTop = 0;
-  restoredCodeScrollPositions: number[] = [];
+  restoredCodeScrollLefts: number[] = [];
   restoredVirtualizerScrollPositions: unknown[] = [];
   readonly virtualizer = {
     type: 'simple',
@@ -47,7 +47,13 @@ class TestEditableComponent implements DiffsEditableComponent<undefined> {
     },
   } as unknown as Virtualizer;
 
-  constructor(private file: FileContents) {
+  readonly __getVirtualizer: (() => Virtualizer) | undefined;
+
+  constructor(
+    private file: FileContents,
+    virtualized = true
+  ) {
+    this.__getVirtualizer = virtualized ? () => this.virtualizer : undefined;
     this.#renderShadowDom();
   }
 
@@ -60,16 +66,12 @@ class TestEditableComponent implements DiffsEditableComponent<undefined> {
   setEditorActiveLine(_lineNumber: number | null): void {}
 
   getCodeScrollLeft(): number {
-    return this.codeScrollPosition;
+    return this.codeScrollLeft;
   }
 
   setCodeScrollLeft(position: number): void {
-    this.codeScrollPosition = position;
-    this.restoredCodeScrollPositions.push(position);
-  }
-
-  __getVirtualizer(): Virtualizer {
-    return this.virtualizer;
+    this.codeScrollLeft = position;
+    this.restoredCodeScrollLefts.push(position);
   }
 
   render({
@@ -156,7 +158,7 @@ class TestEditableComponent implements DiffsEditableComponent<undefined> {
 }
 
 describe('Editor state', () => {
-  test('getState captures view state from the editable component', () => {
+  test('getState composes horizontal and vertical scroll owners', () => {
     const dom = installDom();
     const editor = new Editor<undefined>();
     const component = new TestEditableComponent({
@@ -166,13 +168,33 @@ describe('Editor state', () => {
 
     try {
       editor.edit(component);
-      component.codeScrollPosition = 24;
+      component.codeScrollLeft = 24;
       component.virtualizerScrollTop = 128;
 
       expect(editor.getState().view).toEqual({
         scrollLeft: 24,
         scrollTop: 128,
       });
+    } finally {
+      editor.cleanUp();
+      component.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test('getState omits vertical state for a non-virtualized component', () => {
+    const dom = installDom();
+    const editor = new Editor<undefined>();
+    const component = new TestEditableComponent(
+      { name: 'state.ts', contents: 'alpha\nbravo' },
+      false
+    );
+
+    try {
+      editor.edit(component);
+      component.codeScrollLeft = 24;
+
+      expect(editor.getState().view).toEqual({ scrollLeft: 24 });
     } finally {
       editor.cleanUp();
       component.cleanUp();
@@ -192,7 +214,7 @@ describe('Editor state', () => {
       editor.edit(component);
       editor.setState({ view: { scrollLeft: 24, scrollTop: 128 } });
 
-      expect(component.restoredCodeScrollPositions).toEqual([24]);
+      expect(component.restoredCodeScrollLefts).toEqual([24]);
       expect(component.restoredVirtualizerScrollPositions).toEqual([
         { top: 128, behavior: 'instant' },
       ]);
@@ -203,10 +225,31 @@ describe('Editor state', () => {
     }
   });
 
+  test('setState restores horizontal state without an optional vertical position', () => {
+    const dom = installDom();
+    const editor = new Editor<undefined>();
+    const component = new TestEditableComponent({
+      name: 'state.ts',
+      contents: 'alpha\nbravo',
+    });
+
+    try {
+      editor.edit(component);
+      editor.setState({ view: { scrollLeft: 24 } });
+
+      expect(component.restoredCodeScrollLefts).toEqual([24]);
+      expect(component.restoredVirtualizerScrollPositions).toEqual([]);
+    } finally {
+      editor.cleanUp();
+      component.cleanUp();
+      dom.cleanup();
+    }
+  });
+
   // A remount restore often carries both a viewport and a caret that sits
   // outside that viewport. The saved view must win; scrolling the caret into
   // view would overwrite it. jsdom's scrollIntoView is a no-op, so record any
-  // attempt to reveal the caret after restoring the component-owned view.
+  // attempt to reveal the caret after restoring the saved logical view.
   test('setState keeps the saved view when the caret is outside it', () => {
     const dom = installDom();
     let scrollIntoViewCalls = 0;
@@ -234,7 +277,7 @@ describe('Editor state', () => {
         view: { scrollLeft: 12, scrollTop: 40 },
       });
 
-      expect(component.restoredCodeScrollPositions).toEqual([12]);
+      expect(component.restoredCodeScrollLefts).toEqual([12]);
       expect(component.restoredVirtualizerScrollPositions).toEqual([
         { top: 40, behavior: 'instant' },
       ]);

@@ -1226,12 +1226,14 @@ export interface EditorSelection extends Range {
   direction: SelectionDirection;
 }
 
+export interface EditorViewState {
+  scrollLeft: number;
+  scrollTop?: number;
+}
+
 export interface EditorState {
   selections?: EditorSelection[];
-  view?: {
-    scrollLeft: number;
-    scrollTop: number;
-  };
+  view?: EditorViewState;
 }
 
 export interface DiffsTextDocument {

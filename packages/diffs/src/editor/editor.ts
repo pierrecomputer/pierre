@@ -592,14 +592,17 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   }
 
   getState(): EditorState {
-    const scrollContainer = this.#fileInstance?.getScrollContainer?.();
+    const fileInstance = this.#fileInstance;
+    const virtualizer = fileInstance?.__getVirtualizer?.();
     return {
       selections: this.#selections,
       view:
-        scrollContainer !== undefined
+        fileInstance != null
           ? {
-              scrollLeft: scrollContainer.scrollLeft,
-              scrollTop: scrollContainer.scrollTop,
+              scrollLeft: fileInstance.getCodeScrollLeft(),
+              ...(virtualizer != null
+                ? { scrollTop: virtualizer.getScrollTop() }
+                : null),
             }
           : undefined,
     };
@@ -614,14 +617,22 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     // When a saved view is present, honor its scroll offsets exactly. Scrolling
     // the caret into view afterward would overwrite them whenever the caret
     // sits outside that viewport (e.g. TreeApp remount restore).
-    if (view !== undefined) {
-      const scrollContainer = this.#fileInstance.getScrollContainer?.();
-      if (scrollContainer !== undefined) {
-        scrollContainer.scrollTo({
-          left: view.scrollLeft,
-          top: view.scrollTop,
-          behavior: 'instant',
-        });
+    if (view != null) {
+      this.#fileInstance.setCodeScrollLeft(view.scrollLeft);
+      const virtualizer = this.#fileInstance.__getVirtualizer?.();
+      if (virtualizer != null && view.scrollTop != null) {
+        if (virtualizer.type === 'simple') {
+          virtualizer.scrollTo({
+            top: view.scrollTop,
+            behavior: 'instant',
+          });
+        } else {
+          virtualizer.scrollTo({
+            type: 'position',
+            position: view.scrollTop,
+            behavior: 'instant',
+          });
+        }
       }
       return;
     }
