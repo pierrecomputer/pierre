@@ -2,7 +2,7 @@ import { afterAll, describe, expect, mock, spyOn, test } from 'bun:test';
 
 import { File, type FileOptions } from '../src/components/File';
 import { DEFAULT_THEMES } from '../src/constants';
-import { Editor, type EditorOptions, type IStateStorage } from '../src/editor';
+import { Editor, type EditorOptions, type IStateStorage } from '../src/edit';
 import {
   applyTextChangeToSelections,
   DirectionForward,

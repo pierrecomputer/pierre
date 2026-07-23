@@ -1235,7 +1235,7 @@ export interface DiffsTextDocument {
 
 /**
  * Options CodeView passes to its `createEditor` factory. A structural subset
- * of `EditorOptions` from `@pierre/diffs/editor`, so factories can spread
+ * of `EditorOptions` from `@pierre/diffs/edit`, so factories can spread
  * them straight into the constructor — `new Editor({ ...options })` — and
  * layer any editor configuration of their own on top. Forwarding `onChange`
  * is what lets CodeView resolve document changes back to the owning item and

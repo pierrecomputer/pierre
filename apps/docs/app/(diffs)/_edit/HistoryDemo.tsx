@@ -6,7 +6,7 @@ import {
   getHighlighterIfLoaded,
   preloadHighlighter,
 } from '@pierre/diffs';
-import type { Editor, EditorOptions } from '@pierre/diffs/editor';
+import type { Editor, EditorOptions } from '@pierre/diffs/edit';
 import { File } from '@pierre/diffs/react';
 import type { PreloadedFileResult } from '@pierre/diffs/ssr';
 import {

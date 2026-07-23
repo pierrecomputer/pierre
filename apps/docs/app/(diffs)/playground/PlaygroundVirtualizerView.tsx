@@ -8,7 +8,7 @@ import {
   VirtualizedFileDiff,
   Virtualizer,
 } from '@pierre/diffs';
-import { Editor } from '@pierre/diffs/editor';
+import { Editor } from '@pierre/diffs/edit';
 import { useWorkerPool } from '@pierre/diffs/react';
 import { useEffect, useRef } from 'react';
 import { flushSync } from 'react-dom';

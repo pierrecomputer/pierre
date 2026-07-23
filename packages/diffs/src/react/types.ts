@@ -2,7 +2,7 @@ import { type CSSProperties, type ReactNode } from 'react';
 
 import type { FileOptions } from '../components/File';
 import type { FileDiffOptions } from '../components/FileDiff';
-import type { EditorOptions } from '../editor';
+import type { EditorOptions } from '../edit';
 import type { GetHoveredLineResult } from '../managers/InteractionManager';
 import type {
   DiffLineAnnotation,

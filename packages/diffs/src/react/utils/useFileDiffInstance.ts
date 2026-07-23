@@ -8,7 +8,7 @@ import {
 
 import { FileDiff, type FileDiffOptions } from '../../components/FileDiff';
 import { VirtualizedFileDiff } from '../../components/VirtualizedFileDiff';
-import type { EditorOptions } from '../../editor';
+import type { EditorOptions } from '../../edit';
 import type { GetHoveredLineResult } from '../../managers/InteractionManager';
 import type {
   DiffLineAnnotation,

@@ -1,6 +1,6 @@
 'use client';
 
-import { Editor, type EditorOptions } from '@pierre/diffs/editor';
+import { Editor, type EditorOptions } from '@pierre/diffs/edit';
 import { EditProvider } from '@pierre/diffs/react';
 import type { ReactNode } from 'react';
 

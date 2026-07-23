@@ -12,7 +12,7 @@ import {
   parseDiffFromFile,
   type SelectedLineRange,
 } from '@pierre/diffs';
-import type { EditorOptions } from '@pierre/diffs/editor';
+import type { EditorOptions } from '@pierre/diffs/edit';
 import {
   CodeView,
   type CodeViewReactOptions,

@@ -1,7 +1,7 @@
 'use client';
 
 import type { FileContents, FileOptions } from '@pierre/diffs';
-import type { Editor, EditorOptions } from '@pierre/diffs/editor';
+import type { Editor, EditorOptions } from '@pierre/diffs/edit';
 import { File, Virtualizer } from '@pierre/diffs/react';
 import {
   IconFilePlus,

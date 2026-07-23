@@ -1,6 +1,6 @@
 'use client';
 
-import type { Editor } from '@pierre/diffs/editor';
+import type { Editor } from '@pierre/diffs/edit';
 import { File } from '@pierre/diffs/react';
 import type { PreloadedFileResult } from '@pierre/diffs/ssr';
 import { useEffect, useMemo, useRef } from 'react';

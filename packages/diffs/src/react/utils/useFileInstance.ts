@@ -8,7 +8,7 @@ import {
 
 import { File, type FileOptions } from '../../components/File';
 import { VirtualizedFile } from '../../components/VirtualizedFile';
-import type { EditorOptions } from '../../editor';
+import type { EditorOptions } from '../../edit';
 import type { GetHoveredLineResult } from '../../managers/InteractionManager';
 import type {
   FileContents,

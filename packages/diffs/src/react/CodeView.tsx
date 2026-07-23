@@ -17,7 +17,7 @@ import {
 } from 'react';
 import { createPortal, flushSync } from 'react-dom';
 
-import type { EditorOptions } from '../editor';
+import type { EditorOptions } from '../edit';
 import {
   areOptionsEqual,
   CodeView as CodeViewClass,

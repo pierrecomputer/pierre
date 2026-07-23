@@ -16,6 +16,9 @@
       "*": [
         "dist/*"
       ],
+      "edit": [
+        "dist/edit/index.d.ts"
+      ],
       "react": [
         "dist/react/index.d.ts"
       ],
@@ -32,9 +35,9 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
-    "./editor": {
-      "types": "./dist/editor/index.d.ts",
-      "import": "./dist/editor/index.js"
+    "./edit": {
+      "types": "./dist/edit/index.d.ts",
+      "import": "./dist/edit/index.js"
     },
     "./react": {
       "types": "./dist/react/index.d.ts",

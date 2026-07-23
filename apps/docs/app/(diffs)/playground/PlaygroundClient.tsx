@@ -8,7 +8,7 @@ import {
   isDiffAnnotationCollection,
   type SelectedLineRange,
 } from '@pierre/diffs';
-import type { Editor, EditorOptions } from '@pierre/diffs/editor';
+import type { Editor, EditorOptions } from '@pierre/diffs/edit';
 import {
   type CodeViewReactOptions,
   FileDiff,

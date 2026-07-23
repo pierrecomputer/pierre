@@ -4,7 +4,7 @@
 import type { Context, PropsWithChildren } from 'react';
 import { createContext, useContext } from 'react';
 
-import type { EditorOptions } from '../editor';
+import type { EditorOptions } from '../edit';
 import type { DiffsEditor } from '../types';
 import { useStableCallback } from './utils/useStableCallback';
 

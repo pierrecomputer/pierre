@@ -25,7 +25,7 @@ export const EDITOR_DEMO_FILE_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
     name: 'editable-demo.ts',
     contents: `import { VirtualizedFile } from '@pierre/diffs';
-import { Editor } from '@pierre/diffs/editor';
+import { Editor } from '@pierre/diffs/edit';
 
 const fileInstance = new VirtualizedFile({
   theme: { dark: 'pierre-dark', light: 'pierre-light' },
@@ -61,7 +61,7 @@ export const EDITOR_VANILLA_FILE_EXAMPLE: PreloadFileOptions<undefined> = {
   VirtualizedFile,
   type FileContents,
 } from '@pierre/diffs';
-import { Editor } from '@pierre/diffs/editor';
+import { Editor } from '@pierre/diffs/edit';
 
 const root = document.getElementById('file-scroll-root');
 const content = document.getElementById('file-scroll-content');
@@ -111,7 +111,7 @@ export const EDITOR_VANILLA_FILE_DIFF_EXAMPLE: PreloadFileOptions<undefined> = {
   VirtualizedFileDiff,
   type FileContents,
 } from '@pierre/diffs';
-import { Editor } from '@pierre/diffs/editor';
+import { Editor } from '@pierre/diffs/edit';
 
 interface ThreadMetadata {
   id: string;
@@ -203,7 +203,7 @@ export const EDITOR_VANILLA_CODE_VIEW_EXAMPLE: PreloadFileOptions<undefined> = {
   parseDiffFromFile,
   type CodeViewItem,
 } from '@pierre/diffs';
-import { Editor } from '@pierre/diffs/editor';
+import { Editor } from '@pierre/diffs/edit';
 
 interface ThreadMetadata {
   id: string;
@@ -327,7 +327,7 @@ export const EDITOR_LAZY_FILE_EXAMPLE: PreloadFileOptions<undefined> = {
 const button = document.getElementById('edit-button');
 
 async function edit(fileInstance: VirtualizedFile): Promise<() => void> {
-  const { Editor } = await import('@pierre/diffs/editor');
+  const { Editor } = await import('@pierre/diffs/edit');
   const editor = new Editor({
     onChange(file, lineAnnotations) {
       console.log('change', file.name, lineAnnotations);
@@ -347,7 +347,7 @@ button.addEventListener('click', () => {
 export const EDITOR_SELECTION_ACTION_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
     name: 'editor_selection_action.ts',
-    contents: `import { Editor } from '@pierre/diffs/editor';
+    contents: `import { Editor } from '@pierre/diffs/edit';
 
 const editor = new Editor({
   enabledSelectionAction: true,
@@ -419,7 +419,7 @@ interface Marker {
 export const EDITOR_MARKER_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
     name: 'editor_markers.ts',
-    contents: `import { Editor } from '@pierre/diffs/editor';
+    contents: `import { Editor } from '@pierre/diffs/edit';
 
 const editor = new Editor();
 editor.edit(fileInstance);
@@ -454,7 +454,7 @@ export const EDITOR_UNDO_REDO_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
     name: 'editor_undo_redo.tsx',
     contents: `import type { FileContents } from '@pierre/diffs';
-import { Editor, type EditorOptions } from '@pierre/diffs/editor';
+import { Editor, type EditorOptions } from '@pierre/diffs/edit';
 import { EditProvider, File } from '@pierre/diffs/react';
 import { useMemo, useRef, useState } from 'react';
 
@@ -516,7 +516,7 @@ export const EDITOR_REACT_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
     name: 'editor_react.tsx',
     contents: `import type { FileContents, FileOptions } from '@pierre/diffs';
-import { Editor, type EditorOptions } from '@pierre/diffs/editor';
+import { Editor, type EditorOptions } from '@pierre/diffs/edit';
 import { EditProvider, File, Virtualizer } from '@pierre/diffs/react';
 import { useMemo, useState } from 'react';
 
@@ -588,7 +588,7 @@ export const EDITOR_REACT_FILE_DIFF_EXAMPLE: PreloadFileOptions<undefined> = {
   type FileDiffMetadata,
   type FileDiffOptions,
 } from '@pierre/diffs';
-import { Editor, type EditorOptions } from '@pierre/diffs/editor';
+import { Editor, type EditorOptions } from '@pierre/diffs/edit';
 import {
   EditProvider,
   FileDiff,
@@ -705,7 +705,7 @@ export const EDITOR_REACT_CODE_VIEW_EXAMPLE: PreloadFileOptions<undefined> = {
   type FileContents,
   type LineAnnotation,
 } from '@pierre/diffs';
-import { Editor, type EditorOptions } from '@pierre/diffs/editor';
+import { Editor, type EditorOptions } from '@pierre/diffs/edit';
 import { CodeView, EditProvider } from '@pierre/diffs/react';
 import { useCallback, useState } from 'react';
 import { flushSync } from 'react-dom';
@@ -853,7 +853,7 @@ export const EDITOR_WORKER_POOL_VANILLA_EXAMPLE: PreloadFileOptions<undefined> =
     file: {
       name: 'editor_worker_pool_vanilla.ts',
       contents: `import { File } from '@pierre/diffs';
-import { Editor } from '@pierre/diffs/editor';
+import { Editor } from '@pierre/diffs/edit';
 import { getOrCreateWorkerPoolSingleton } from '@pierre/diffs/worker';
 import { workerFactory } from './utils/workerFactory';
 
@@ -886,7 +886,7 @@ export const EDITOR_WORKER_POOL_REACT_EXAMPLE: PreloadFileOptions<undefined> = {
     contents: `'use client';
 
 import type { FileContents } from '@pierre/diffs';
-import { Editor, type EditorOptions } from '@pierre/diffs/editor';
+import { Editor, type EditorOptions } from '@pierre/diffs/edit';
 import {
   EditProvider,
   File,
@@ -937,7 +937,7 @@ export const EDITOR_OPTIONS_TYPE: PreloadFileOptions<undefined> = {
   FileContents,
   LineAnnotation,
 } from '@pierre/diffs';
-import { Editor, type IStateStorage } from '@pierre/diffs/editor';
+import { Editor, type IStateStorage } from '@pierre/diffs/edit';
 
 interface EditorOptions<LAnnotation> {
   // Max undo stack entries
@@ -1013,7 +1013,7 @@ export const EDITOR_PUBLIC_API: PreloadFileOptions<undefined> = {
   type EditorState,
   type FileContents,
 } from '@pierre/diffs';
-import { Editor, type EditorFocusOptions } from '@pierre/diffs/editor';
+import { Editor, type EditorFocusOptions } from '@pierre/diffs/edit';
 
 // Editor
 // Most methods require an attached surface via edit().
@@ -1135,7 +1135,7 @@ export const EDITOR_REACT_MULTI_FILE_DIFF_EXAMPLE: PreloadFileOptions<undefined>
   FileContents,
   FileDiffOptions,
 } from '@pierre/diffs';
-import { Editor, type EditorOptions } from '@pierre/diffs/editor';
+import { Editor, type EditorOptions } from '@pierre/diffs/edit';
 import {
   EditProvider,
   MultiFileDiff,

@@ -8,7 +8,7 @@ import {
   isDiffAnnotationCollection,
   type SelectedLineRange,
 } from '@pierre/diffs';
-import type { EditorOptions } from '@pierre/diffs/editor';
+import type { EditorOptions } from '@pierre/diffs/edit';
 import { FileDiff, useStableCallback, Virtualizer } from '@pierre/diffs/react';
 import { IconCheckboxFill, IconSquircleLg } from '@pierre/icons';
 import { useCallback, useEffect, useMemo, useState } from 'react';

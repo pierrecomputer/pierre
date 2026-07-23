@@ -38,7 +38,7 @@ and correct” flows with generative code changes.
 ### Demo
 
 To enable edit mode on a `File` instance, import `Editor` from
-`@pierre/diffs/editor`. It is intentionally separate from the core bundle so you
+`@pierre/diffs/edit`. It is intentionally separate from the core bundle so you
 can lazy-load it when editing is optional.
 
 <EditorDemo prerenderedFile={editorDemoFile} />
@@ -333,7 +333,7 @@ contents should start a fresh document.
 
 ```ts
 import type { EditorState, FileContents } from '@pierre/diffs';
-import { Editor, type IStateStorage } from '@pierre/diffs/editor';
+import { Editor, type IStateStorage } from '@pierre/diffs/edit';
 
 const editor = new Editor({
   persistState: true,
@@ -435,10 +435,10 @@ usual.
 
 ### Lazy Loading
 
-Because `@pierre/diffs/editor` is a standalone entry point, you can
-dynamic-import it only when the user enters edit mode. That keeps the initial
-page bundle smaller and can improve LCP (Largest Contentful Paint) on pages
-where editing is rare.
+Because `@pierre/diffs/edit` is a standalone entry point, you can dynamic-import
+it only when the user enters edit mode. That keeps the initial page bundle
+smaller and can improve LCP (Largest Contentful Paint) on pages where editing is
+rare.
 
 <DocsCodeExample {...editorLazyFileExample} />
 

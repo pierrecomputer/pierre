@@ -1,7 +1,7 @@
 'use client';
 
 import { cloneFileDiffMetadata } from '@pierre/diffs';
-import type { EditorOptions } from '@pierre/diffs/editor';
+import type { EditorOptions } from '@pierre/diffs/edit';
 import { File, FileDiff } from '@pierre/diffs/react';
 import type {
   PreloadedFileResult,
