@@ -4,6 +4,8 @@ import type { Metadata } from 'next';
 import {
   CARET_DEMO_FILE_EXAMPLE,
   DEFAULT_KEYMAP_FILE_EXAMPLE,
+  EDIT_PREDICTION_FILE_DIFF_EXAMPLE,
+  EDIT_PREDICTION_FILE_EXAMPLE,
   FIND_DEMO_FILE_EXAMPLE,
   HISTORY_DEMO_FILE_EXAMPLE,
   MARKER_DEMO_FILE_EXAMPLE,
@@ -27,8 +29,9 @@ export const metadata: Metadata = pageMetadata({
 });
 
 // Server-renders every edit demo so they all paint highlighted on first load
-// and hydrate cleanly (no flash): the "Live editing" File component, and the
-// lint-marker, find-in-file, undo-history, shortcuts, and selection files.
+// and hydrate cleanly (no flash): the "Live editing" File surface, and the
+// edit-prediction, lint-marker, find-in-file, undo-history, shortcuts, and
+// selection surfaces.
 export default async function EditRoute() {
   const [
     liveEditingFile,

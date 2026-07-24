@@ -27,6 +27,14 @@ import {
   resolveFindAgainShortcut,
 } from './command';
 import editorCSS from './editor.css?inline';
+import {
+  buildEditPredictionRequest,
+  type EditPredictionHistoryRecord,
+  type EditPredictProvider,
+  type EditPredictResponse,
+  matchesEditPredictionPattern,
+  recordEditPrediction,
+} from './editPrediction';
 import { EditStack } from './editStack';
 import {
   cloneEditorViewState,
@@ -145,6 +153,13 @@ import {
   lookupScrollContainer,
   round,
 } from './utils';
+
+export type {
+  EditPredictContext,
+  EditPredictProvider,
+  EditPredictRequest,
+  EditPredictResponse,
+} from './editPrediction';
 
 // ShadowRoot.getSelection is a non-standard Blink/WebKit method (predates the
 // spec'd Selection.getComposedRanges) and is missing from the DOM lib types.
@@ -296,10 +311,38 @@ export interface EditorOptions<EType extends EditorType, LAnnotation, Caret> {
   /** Per-language comment tokens used by the comment commands. */
   languageCommentConfig?: LanguageConfigMap;
   /**
-   * Show a floating selection action popover after a user-created selection,
-   * default is disabled. Programmatic selection updates do not open it.
+   * Show a floating selection action popover after a user-created selection.
+   * Defaults to disabled. Programmatic selection updates do not open it.
    */
   enabledSelectionAction?: boolean;
+  /**
+   * Configuration for inline edit prediction.
+   */
+  editPrediction?: {
+    /**
+     * The edit prediction mode.
+     * - 'eager': predictions appear inline when the user types.
+     * - 'subtle': predictions only appear inline when holding the `Alt` key.
+     * @default 'eager'
+     */
+    mode?: 'eager' | 'subtle';
+    /**
+     * The edit prediction provider.
+     */
+    provider: EditPredictProvider;
+    /**
+     * Glob or regular-expression patterns for files to include in prediction.
+     * String patterns support `?`, segment-local `*`, and cross-segment `**`.
+     * An empty array matches no files.
+     */
+    include?: readonly (string | RegExp)[];
+    /**
+     * Glob or regular-expression patterns for files to exclude from prediction.
+     * String patterns support `?`, segment-local `*`, and cross-segment `**`.
+     * Exclusions take precedence over inclusions.
+     */
+    exclude?: readonly (string | RegExp)[];
+  };
   /**
    * Custom clipboard provider.
    * Highly recommended to use native clipboard API if you are building an electron app.
@@ -364,9 +407,21 @@ const MAX_EDIT_WIDEN_WINDOW_MULTIPLE = 2;
 // line. Past this many lines the cache resets and refills lazily for whatever
 // is measured next. A memory bound, not a correctness-critical value.
 const MAX_WRAP_OFFSETS_CACHE_LINES = 10_000;
+const EDIT_PREDICTION_DEBOUNCE_MS = 300;
+const MAX_EDIT_PREDICTION_RESPONSE_EDITS = 256;
+const MAX_EDIT_PREDICTION_RESPONSE_BYTES = 128 * 1024;
+const editPredictionTextEncoder = new TextEncoder();
 const SELECTION_ACTION_POPOVER_PLACEMENT_KEY = 'selection-action';
 const MULTI_SELECTION_CLIPBOARD_TYPE =
   'application/vnd.pierre.diffs-selections+json';
+type OverlayRangeType =
+  | 'selection'
+  | 'match'
+  | 'marker'
+  | 'bracketMatch'
+  | 'caretHighlight'
+  | 'editPredictionDeletion'
+  | 'editPredictionReplacement';
 
 export class Editor<
   EType extends EditorType = EditorType,
@@ -495,7 +550,21 @@ export class Editor<
   #retainSearchPanelFocus = false;
   #fontRemeasureScheduled = false;
   #themeSelectionRefreshFrame?: number;
-
+  #editPredictionTimer?: ReturnType<typeof setTimeout>;
+  #editPredictionAbortController?: AbortController;
+  #editPredictionGeneration = 0;
+  #editPredictionAltPressed = false;
+  #editPrediction?: {
+    document: TextDocument<EType, LAnnotation>;
+    version: number;
+    cursorOffset: number;
+    rendered: boolean;
+    response: EditPredictResponse;
+  };
+  #editPredictionHistory: EditPredictionHistoryRecord[] = [];
+  #editPredictionHistoryText?: string;
+  #pendingEditPredictionHistorySource?: 'user' | 'prediction';
+  #editPredictionSpacers = new Map<HTMLElement, number>();
   #onDeferTokenize = (
     lines: Map<number, Array<HighlightedToken>>,
     themeType: 'light' | 'dark'
@@ -555,6 +624,7 @@ export class Editor<
 
   setOptions(options: EditorOptions<EType, LAnnotation, Caret>): void {
     const previousRenderCaret = this.#options.renderCaret;
+    const previousEditPrediction = this.#options.editPrediction;
     this.#options = {
       ...this.#options,
       ...options,
@@ -563,6 +633,13 @@ export class Editor<
       this.#caretElements?.forEach((element) => element.remove());
       this.#caretElements = undefined;
       this.#renderCarets();
+    }
+    if (previousEditPrediction !== this.#options.editPrediction) {
+      this.#cancelEditPrediction(true);
+      this.#editPredictionHistory = [];
+      this.#editPredictionHistoryText = undefined;
+      this.#pendingEditPredictionHistorySource = undefined;
+      this.#scheduleEditPrediction();
     }
   }
 
@@ -1031,6 +1108,13 @@ export class Editor<
   cleanUp(reason: 'discard' | 'recycle' | 'complete' = 'discard'): void {
     const fileInstance = this.#fileInstance;
     const recycle = reason === 'recycle';
+    this.#cancelEditPrediction(true);
+    this.#editPredictionAltPressed = false;
+    if (!recycle) {
+      this.#editPredictionHistory = [];
+      this.#editPredictionHistoryText = undefined;
+      this.#pendingEditPredictionHistorySource = undefined;
+    }
     const editSession = this.#editSession;
     if (fileInstance != null && editSession != null) {
       const discardDiffState = !this.#checkpointEditSessionState();
@@ -1401,6 +1485,7 @@ export class Editor<
     }
 
     if (this.#contentElement !== contentEl) {
+      this.#contentElement?.style.removeProperty('padding-block-end');
       this.#gutterElement = gutterEl;
       this.#contentElement = extend(contentEl, {
         contentEditable: 'true',
@@ -1935,15 +2020,18 @@ export class Editor<
           // available in newer browsers. When it is missing (older browsers,
           // embedded WebViews, and the pinned CI Chromium), fall back to the
           // older Blink/WebKit-specific ShadowRoot.getSelection(), which still
-          // reports the range inside the shadow tree. Only bail when neither API
-          // yields a range, so a click can still seed the caret rather than
-          // leaving the surface unusable.
-          const composedRange =
-            typeof selectionRaw.getComposedRanges === 'function'
-              ? selectionRaw.getComposedRanges({
-                  shadowRoots: [shadowRoot],
-                })?.[0]
-              : getShadowRootRange(shadowRoot);
+          // reports the range inside the shadow tree. Normalize that live Range
+          // to a StaticRange so it matches the getComposedRanges return shape.
+          // Only bail when neither API yields a range, so a click can still seed
+          // the caret rather than leaving the surface unusable.
+          let composedRange: StaticRange | undefined;
+          if (typeof selectionRaw.getComposedRanges === 'function') {
+            composedRange = selectionRaw.getComposedRanges({
+              shadowRoots: [shadowRoot],
+            })?.[0];
+          } else {
+            composedRange = getShadowRootRange(shadowRoot);
+          }
           if (
             composedRange === undefined ||
             !this.#rangeBelongsToEditor(composedRange)
@@ -2035,6 +2123,13 @@ export class Editor<
         (e) => {
           if (e.key === 'Shift') {
             this.#selectionStart = this.#selections?.at(-1);
+          } else if (
+            e.key === 'Alt' &&
+            this.#contentHasFocus &&
+            !this.#editPredictionAltPressed
+          ) {
+            this.#editPredictionAltPressed = true;
+            this.#updateSelections(this.#selections ?? []);
           }
         },
         { passive: true }
@@ -2046,6 +2141,21 @@ export class Editor<
         (e) => {
           if (e.key === 'Shift') {
             this.#selectionStart = undefined;
+          } else if (e.key === 'Alt' && this.#editPredictionAltPressed) {
+            this.#editPredictionAltPressed = false;
+            this.#updateSelections(this.#selections ?? []);
+          }
+        },
+        { passive: true }
+      ),
+
+      addEventListener(
+        window,
+        'blur',
+        () => {
+          if (this.#editPredictionAltPressed) {
+            this.#editPredictionAltPressed = false;
+            this.#updateSelections(this.#selections ?? []);
           }
         },
         { passive: true }
@@ -2275,6 +2385,24 @@ export class Editor<
           return;
         }
 
+        if (
+          e.key === 'Tab' &&
+          !e.shiftKey &&
+          !e.ctrlKey &&
+          !e.metaKey &&
+          !e.isComposing &&
+          !this.#isComposing &&
+          (!e.altKey || this.#options.editPrediction?.mode === 'subtle') &&
+          this.#acceptEditPrediction(
+            this.#options.editPrediction?.mode !== 'subtle' ||
+              this.#editPredictionAltPressed ||
+              e.altKey
+          )
+        ) {
+          e.preventDefault();
+          return;
+        }
+
         const command = resolveEditorCommandFromKeyboardEvent(
           e,
           this.#options.keymap
@@ -2448,6 +2576,7 @@ export class Editor<
           return;
         }
         if (e.inputType === 'insertCompositionText') {
+          this.#cancelEditPrediction(true);
           return;
         }
         e.preventDefault();
@@ -2469,6 +2598,7 @@ export class Editor<
           if (!targetIsContentElement(e)) {
             return;
           }
+          this.#cancelEditPrediction(true);
           this.#isComposing = true;
           this.#shouldIgnoreSelectionChange = true;
         },
@@ -4489,8 +4619,599 @@ export class Editor<
     return true;
   }
 
+  #removeRenderedEditPrediction(): void {
+    this.#contentElement?.style.removeProperty('padding-block-end');
+    for (const [key, element] of this.#overlayElements ?? []) {
+      if (key.startsWith('editPrediction')) {
+        element.remove();
+        this.#overlayElements?.delete(key);
+      }
+    }
+  }
+
+  // Reserve numberless grid space for ghost continuation lines without adding
+  // rows that could be mistaken for document content by the editor.
+  #syncEditPredictionSpacers(): void {
+    const nextSpacers = new Map<HTMLElement, number>();
+    const prediction = this.#editPrediction;
+    const textDocument = this.#editSession?.document;
+    const contentElement = this.#contentElement;
+    if (
+      prediction !== undefined &&
+      prediction.document === textDocument &&
+      prediction.version === textDocument?.version &&
+      contentElement !== undefined &&
+      (this.#options.editPrediction?.mode !== 'subtle' ||
+        this.#editPredictionAltPressed)
+    ) {
+      const continuationLines = new Map<number, number>();
+      for (const edit of prediction.response.edits) {
+        if (
+          edit.newText.length === 0 ||
+          !this.#isLineVisible(edit.range.start.line)
+        ) {
+          continue;
+        }
+        let count = 0;
+        for (let index = 0; index < edit.newText.length; index++) {
+          const char = edit.newText.charCodeAt(index);
+          if (char === 10) {
+            count++;
+          } else if (char === 13) {
+            count++;
+            if (edit.newText.charCodeAt(index + 1) === 10) {
+              index++;
+            }
+          }
+        }
+        if (count > (continuationLines.get(edit.range.start.line) ?? 0)) {
+          continuationLines.set(edit.range.start.line, count);
+        }
+      }
+
+      if (continuationLines.size > 0) {
+        let rowIndexes: Map<Element, number> | undefined;
+        const startingLine = this.#renderRange?.startingLine ?? 0;
+        for (const [line, count] of continuationLines) {
+          const lineElement = this.#getLineElement(line);
+          if (lineElement === undefined) {
+            continue;
+          }
+          let rowIndex = line - startingLine;
+          if (contentElement.children[rowIndex] !== lineElement) {
+            if (rowIndexes === undefined) {
+              rowIndexes = new Map();
+              for (
+                let index = 0;
+                index < contentElement.children.length;
+                index++
+              ) {
+                rowIndexes.set(contentElement.children[index], index);
+              }
+            }
+            rowIndex = rowIndexes.get(lineElement) ?? -1;
+          }
+          if (rowIndex < 0) {
+            continue;
+          }
+          nextSpacers.set(lineElement, count);
+          const gutterRow = this.#gutterElement?.children[rowIndex];
+          if (gutterRow instanceof HTMLElement) {
+            nextSpacers.set(gutterRow, count);
+          }
+        }
+      }
+    }
+
+    let changed = false;
+    for (const [element, count] of this.#editPredictionSpacers) {
+      if (nextSpacers.get(element) === count) {
+        continue;
+      }
+      delete element.dataset.editPredictionSpacer;
+      element.style.removeProperty('--diffs-edit-prediction-spacer-height');
+      changed = true;
+    }
+    for (const [element, count] of nextSpacers) {
+      if (this.#editPredictionSpacers.get(element) === count) {
+        continue;
+      }
+      element.dataset.editPredictionSpacer = '';
+      element.style.setProperty(
+        '--diffs-edit-prediction-spacer-height',
+        `${count}lh`
+      );
+      changed = true;
+    }
+    this.#editPredictionSpacers = nextSpacers;
+    if (changed) {
+      this.#resetCache();
+    }
+  }
+
+  #cancelEditPrediction(removeRendered: boolean): void {
+    if (this.#editPredictionTimer !== undefined) {
+      clearTimeout(this.#editPredictionTimer);
+      this.#editPredictionTimer = undefined;
+    }
+    this.#editPredictionAbortController?.abort();
+    this.#editPredictionAbortController = undefined;
+    this.#editPredictionGeneration++;
+    this.#editPrediction = undefined;
+    this.#contentElement?.style.removeProperty('padding-block-end');
+    this.#syncEditPredictionSpacers();
+    if (removeRendered) {
+      this.#removeRenderedEditPrediction();
+    }
+  }
+
+  #scheduleEditPrediction(): void {
+    this.#cancelEditPrediction(true);
+    const selection = this.#selections?.[0];
+    if (
+      this.#options.editPrediction === undefined ||
+      this.#editSession?.document === undefined ||
+      this.#editSession?.fileInfo === undefined ||
+      this.#selections?.length !== 1 ||
+      selection === undefined ||
+      !isCollapsedSelection(selection)
+    ) {
+      return;
+    }
+
+    const document = this.#editSession?.document;
+    const cursorOffset = document.offsetAt(getCaretPosition(selection));
+    this.#editPredictionTimer = setTimeout(() => {
+      this.#editPredictionTimer = undefined;
+      const options = this.#options.editPrediction;
+      const currentSelection = this.#selections?.[0];
+      const path = this.#editSession?.fileInfo?.name;
+      if (
+        options === undefined ||
+        path === undefined ||
+        this.#editSession?.document !== document ||
+        this.#selections?.length !== 1 ||
+        currentSelection === undefined ||
+        !isCollapsedSelection(currentSelection) ||
+        document.offsetAt(getCaretPosition(currentSelection)) !== cursorOffset
+      ) {
+        return;
+      }
+
+      const normalizedPath = path.replaceAll('\\', '/');
+      if (
+        (options.include !== undefined &&
+          !options.include.some((pattern) =>
+            matchesEditPredictionPattern(normalizedPath, pattern)
+          )) ||
+        options.exclude?.some((pattern) =>
+          matchesEditPredictionPattern(normalizedPath, pattern)
+        ) === true
+      ) {
+        return;
+      }
+
+      this.#recordEditPredictionHistory(
+        this.#pendingEditPredictionHistorySource ?? 'user'
+      );
+      const request = buildEditPredictionRequest(
+        path,
+        document.version,
+        document.getText(),
+        cursorOffset,
+        this.#editPredictionHistory
+      );
+      if (request === undefined) {
+        return;
+      }
+      const excerptStartOffset = document.offsetAt({
+        line: request.excerptStartLine,
+        character: 0,
+      });
+      const editableStart = excerptStartOffset + request.editableRange.start;
+      const editableEnd = excerptStartOffset + request.editableRange.end;
+      const controller = new AbortController();
+      const generation = ++this.#editPredictionGeneration;
+      this.#editPredictionAbortController = controller;
+
+      let prediction: Promise<EditPredictResponse>;
+      try {
+        prediction = options.provider.predict(request, {
+          signal: controller.signal,
+        });
+      } catch {
+        this.#editPredictionAbortController = undefined;
+        return;
+      }
+
+      void Promise.resolve(prediction)
+        .then((response) => {
+          const selection = this.#selections?.[0];
+          if (
+            controller.signal.aborted ||
+            generation !== this.#editPredictionGeneration ||
+            this.#editPredictionAbortController !== controller ||
+            this.#editSession?.document !== document ||
+            document.version !== request.version ||
+            this.#selections?.length !== 1 ||
+            selection === undefined ||
+            !isCollapsedSelection(selection) ||
+            document.offsetAt(getCaretPosition(selection)) !== cursorOffset
+          ) {
+            return;
+          }
+
+          if (
+            response == null ||
+            !Array.isArray(response.edits) ||
+            response.edits.length === 0 ||
+            response.edits.length > MAX_EDIT_PREDICTION_RESPONSE_EDITS ||
+            response.newCursor == null
+          ) {
+            return;
+          }
+          const resolvedEdits: ResolvedTextEdit[] = [];
+          let responseBytes = 0;
+          for (const edit of response.edits) {
+            if (
+              edit == null ||
+              typeof edit.newText !== 'string' ||
+              !isValidEditPredictionPosition(document, edit.range?.start) ||
+              !isValidEditPredictionPosition(document, edit.range?.end) ||
+              comparePosition(edit.range.start, edit.range.end) > 0
+            ) {
+              return;
+            }
+            responseBytes += editPredictionTextEncoder.encode(
+              edit.newText
+            ).byteLength;
+            if (responseBytes > MAX_EDIT_PREDICTION_RESPONSE_BYTES) {
+              return;
+            }
+            const start = document.offsetAt(edit.range.start);
+            const end = document.offsetAt(edit.range.end);
+            const resolvedEdit = document.resolveEdits([edit])[0];
+            if (resolvedEdit.start !== start || resolvedEdit.end !== end) {
+              return;
+            }
+            resolvedEdits.push(resolvedEdit);
+          }
+          resolvedEdits.sort((left, right) => {
+            const startDelta = left.start - right.start;
+            return startDelta === 0 ? left.end - right.end : startDelta;
+          });
+          for (let index = 0; index < resolvedEdits.length; index++) {
+            const edit = resolvedEdits[index];
+            if (
+              edit.start < editableStart ||
+              edit.end > editableEnd ||
+              (index > 0 && resolvedEdits[index - 1].end > edit.start)
+            ) {
+              return;
+            }
+          }
+          const edits = resolvedEdits.filter(
+            (edit) => edit.text !== document.getTextSlice(edit.start, edit.end)
+          );
+          if (edits.length === 0) {
+            return;
+          }
+
+          const firstEditPosition = document.positionAt(edits[0].start);
+          const lastEditPosition = document.positionAt(edits.at(-1)!.end);
+          const affectedStart = document.offsetAt({
+            line: firstEditPosition.line,
+            character: 0,
+          });
+          const affectedEnd = document.offsetAt({
+            line: lastEditPosition.line,
+            character: document.getLineLength(lastEditPosition.line),
+          });
+          const predictedParts: string[] = [];
+          let consumed = affectedStart;
+          for (const edit of edits) {
+            predictedParts.push(
+              document.getTextSlice(consumed, edit.start),
+              edit.text
+            );
+            consumed = edit.end;
+          }
+          predictedParts.push(document.getTextSlice(consumed, affectedEnd));
+          const predictedLines = predictedParts.join('').split(/\r\n|\r|\n/);
+          const affectedEndLine =
+            firstEditPosition.line + predictedLines.length - 1;
+          const lineDelta =
+            predictedLines.length -
+            (lastEditPosition.line - firstEditPosition.line + 1);
+          const newCursor = response.newCursor;
+          if (
+            !Number.isInteger(newCursor.line) ||
+            !Number.isInteger(newCursor.character) ||
+            newCursor.line < 0 ||
+            newCursor.character < 0
+          ) {
+            return;
+          }
+          if (
+            newCursor.line >= firstEditPosition.line &&
+            newCursor.line <= affectedEndLine
+          ) {
+            const line =
+              predictedLines[newCursor.line - firstEditPosition.line];
+            if (
+              newCursor.character > line.length ||
+              splitsSurrogatePair(line, newCursor.character)
+            ) {
+              return;
+            }
+          } else {
+            const originalLine =
+              newCursor.line < firstEditPosition.line
+                ? newCursor.line
+                : newCursor.line - lineDelta;
+            if (
+              originalLine < 0 ||
+              originalLine >= document.lineCount ||
+              newCursor.character > document.getLineLength(originalLine)
+            ) {
+              return;
+            }
+            const originalOffset = document.offsetAt({
+              line: originalLine,
+              character: newCursor.character,
+            });
+            if (
+              splitsSurrogatePair(
+                document.charAt(originalOffset - 1) +
+                  document.charAt(originalOffset),
+                1
+              )
+            ) {
+              return;
+            }
+          }
+
+          this.#editPrediction = {
+            document,
+            version: request.version,
+            cursorOffset,
+            rendered: false,
+            response: {
+              edits: edits.map((edit) => ({
+                range: {
+                  start: document.positionAt(edit.start),
+                  end: document.positionAt(edit.end),
+                },
+                newText: edit.text,
+              })),
+              newCursor: { ...newCursor },
+            },
+          };
+          this.#updateSelections(this.#selections);
+        })
+        .catch(() => {})
+        .finally(() => {
+          if (this.#editPredictionAbortController === controller) {
+            this.#editPredictionAbortController = undefined;
+          }
+        });
+    }, EDIT_PREDICTION_DEBOUNCE_MS);
+  }
+
+  #recordEditPredictionHistory(source: 'user' | 'prediction'): void {
+    const textDocument = this.#editSession?.document;
+    const path = this.#editSession?.fileInfo?.name;
+    if (
+      this.#options.editPrediction === undefined ||
+      textDocument === undefined ||
+      path === undefined
+    ) {
+      return;
+    }
+    const text = textDocument.getText();
+    const previousText = this.#editPredictionHistoryText;
+    this.#editPredictionHistoryText = text;
+    this.#pendingEditPredictionHistorySource = undefined;
+    if (previousText === undefined || previousText === text) {
+      return;
+    }
+    this.#editPredictionHistory = recordEditPrediction(
+      this.#editPredictionHistory,
+      path,
+      previousText,
+      text,
+      source
+    );
+  }
+
+  #acceptEditPrediction(visible: boolean): boolean {
+    const prediction = this.#editPrediction;
+    const textDocument = this.#editSession?.document;
+    const selection = this.#selections?.[0];
+    if (
+      !visible ||
+      prediction === undefined ||
+      !prediction.rendered ||
+      textDocument === undefined ||
+      prediction.document !== textDocument ||
+      prediction.version !== textDocument.version ||
+      this.#selections?.length !== 1 ||
+      selection === undefined ||
+      !isCollapsedSelection(selection) ||
+      textDocument.offsetAt(getCaretPosition(selection)) !==
+        prediction.cursorOffset
+    ) {
+      return false;
+    }
+
+    const { edits, newCursor } = prediction.response;
+    this.#cancelEditPrediction(true);
+    const change = textDocument.applyEdits(
+      edits.map((edit) => ({
+        range: {
+          start: { ...edit.range.start },
+          end: { ...edit.range.end },
+        },
+        newText: edit.newText,
+      })),
+      true,
+      this.#selections,
+      undefined,
+      true
+    );
+    if (change === undefined) {
+      this.#scheduleEditPrediction();
+      return false;
+    }
+
+    const cursor = textDocument.normalizePosition(newCursor);
+    const nextSelections: EditorSelection[] = [
+      { start: cursor, end: cursor, direction: DirectionNone },
+    ];
+    textDocument.setLastUndoSelectionsAfter(nextSelections);
+    this.#applyChange(
+      change,
+      nextSelections,
+      this.#applyChangeToLineAnnotations(change),
+      { editSource: 'prediction' }
+    );
+    return true;
+  }
+
+  #renderEditPrediction(renderCtx: {
+    fragment: DocumentFragment;
+    elements: Map<string, HTMLElement>;
+  }): void {
+    const prediction = this.#editPrediction;
+    const textDocument = this.#editSession?.document;
+    const contentElement = this.#contentElement;
+    contentElement?.style.removeProperty('padding-block-end');
+    if (prediction !== undefined) {
+      prediction.rendered = false;
+    }
+    if (
+      prediction === undefined ||
+      prediction.document !== textDocument ||
+      prediction.version !== textDocument?.version ||
+      (this.#options.editPrediction?.mode === 'subtle' &&
+        !this.#editPredictionAltPressed)
+    ) {
+      return;
+    }
+
+    for (
+      let editIndex = 0;
+      editIndex < prediction.response.edits.length;
+      editIndex++
+    ) {
+      const edit = prediction.response.edits[editIndex];
+      const { start, end } = edit.range;
+      const isDeletion = edit.newText.length === 0;
+      const isReplacement = comparePosition(start, end) !== 0;
+      if (isReplacement) {
+        const elementCount = renderCtx.elements.size;
+        this.#renderSelection(
+          renderCtx,
+          isDeletion ? 'editPredictionDeletion' : 'editPredictionReplacement',
+          { start, end }
+        );
+        prediction.rendered ||= renderCtx.elements.size > elementCount;
+      }
+
+      if (isDeletion || !this.#isLineVisible(start.line)) {
+        continue;
+      }
+
+      const [anchorLeft, anchorWrapLine] = this.#getCharX(
+        start.line,
+        start.character
+      );
+      const lineLeft = this.#getCharX(start.line, 0)[0];
+      const anchorTop =
+        this.#getLineY(start.line) + anchorWrapLine * this.#metrics.lineHeight;
+      const key = `editPrediction-${editIndex}`;
+      let element = this.#overlayElements?.get(key);
+      if (element !== undefined) {
+        this.#overlayElements?.delete(key);
+        element.replaceChildren();
+      } else {
+        element = h(
+          'span',
+          {
+            ariaHidden: 'true',
+            contentEditable: 'false',
+            dataset: 'editPrediction',
+          },
+          renderCtx.fragment
+        );
+      }
+      if (isReplacement) {
+        element.dataset.replacement = '';
+        const lineElement = this.#getLineElement(start.line);
+        if (lineElement !== undefined) {
+          element.style.setProperty(
+            '--diffs-edit-prediction-bg',
+            getComputedStyle(lineElement).getPropertyValue('--diffs-line-bg')
+          );
+        }
+      } else {
+        delete element.dataset.replacement;
+        element.style.removeProperty('--diffs-edit-prediction-bg');
+      }
+      if (this.#isWrap) {
+        element.dataset.wrap = '';
+        element.style.width = `calc(100cqw - ${lineLeft}px)`;
+      } else {
+        delete element.dataset.wrap;
+        element.style.width = 'max-content';
+      }
+      const lines = edit.newText.split(/\r\n|\r|\n/);
+      for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+        const line = h(
+          'span',
+          {
+            dataset:
+              lines[lineIndex].length === 0
+                ? ['editPredictionLine', 'empty']
+                : 'editPredictionLine',
+            textContent:
+              lines[lineIndex].length === 0 ? '\u200b' : lines[lineIndex],
+          },
+          element
+        );
+        if (lineIndex === 0 && anchorLeft !== lineLeft) {
+          line.style.paddingInlineStart = `${anchorLeft - lineLeft}px`;
+        }
+      }
+      element.style.transform = `translateX(${lineLeft}px) translateY(${anchorTop}px)`;
+      renderCtx.elements.set(key, element);
+      prediction.rendered = true;
+    }
+  }
+
   #updateSelections(selections: EditorSelection[]) {
     this.__postponeBgTokenizeToNextFrame();
+
+    const previousSelections = this.#selections;
+    let selectionsChanged = previousSelections?.length !== selections.length;
+    if (!selectionsChanged && previousSelections !== undefined) {
+      for (let i = 0; i < selections.length; i++) {
+        const previous = previousSelections[i];
+        const next = selections[i];
+        if (
+          previous.direction !== next.direction ||
+          comparePosition(previous.start, next.start) !== 0 ||
+          comparePosition(previous.end, next.end) !== 0
+        ) {
+          selectionsChanged = true;
+          break;
+        }
+      }
+    }
+    if (selectionsChanged) {
+      this.#cancelEditPrediction(true);
+    }
+    this.#syncEditPredictionSpacers();
 
     this.#primaryCaretElement = undefined;
     this.#setEditorActiveLineSafe(null);
@@ -4505,6 +5226,9 @@ export class Editor<
       this.#overlayElements?.clear();
       this.#selectionAction?.cleanup();
       this.#selectionAction = undefined;
+      if (selectionsChanged) {
+        this.#scheduleEditPrediction();
+      }
       return;
     }
 
@@ -4641,12 +5365,42 @@ export class Editor<
       }
     }
 
+    this.#renderEditPrediction(renderCtx);
+
     this.#overlayElement?.appendChild(fragment);
     this.#overlayElements?.forEach((el) => el.remove());
     this.#overlayElements?.clear();
     this.#overlayElements = renderCtx.elements;
+    let predictionBottom: number | undefined;
+    for (const element of renderCtx.elements.values()) {
+      if (element.dataset.editPrediction !== undefined) {
+        const bottom = element.getBoundingClientRect().bottom;
+        predictionBottom =
+          predictionBottom === undefined
+            ? bottom
+            : Math.max(predictionBottom, bottom);
+      }
+    }
+    const contentElement =
+      predictionBottom === undefined ? undefined : this.#contentElement;
+    const codeElement = contentElement?.parentElement;
+    if (
+      predictionBottom !== undefined &&
+      contentElement !== undefined &&
+      codeElement != null
+    ) {
+      const codeRect = codeElement.getBoundingClientRect();
+      if (codeRect.height > 0 && predictionBottom > codeRect.bottom) {
+        contentElement.style.paddingBlockEnd = `${Math.ceil(
+          predictionBottom - codeRect.bottom
+        )}px`;
+      }
+    }
 
     this.#updateSelectionActionPopover();
+    if (selectionsChanged) {
+      this.#scheduleEditPrediction();
+    }
   }
 
   // Render externally owned cursors independently from local selections so
@@ -4729,7 +5483,7 @@ export class Editor<
       fragment: DocumentFragment;
       elements: Map<string, HTMLElement>;
     },
-    type: 'selection' | 'match' | 'marker' | 'bracketMatch' | 'caretHighlight',
+    type: OverlayRangeType,
     range: Range,
     extraDataset?: string,
     connectedCaret?: Position
@@ -4838,7 +5592,7 @@ export class Editor<
     startChar: number,
     endChar: number,
     isLastLine: boolean,
-    type: 'selection' | 'match' | 'marker' | 'bracketMatch' | 'caretHighlight',
+    type: OverlayRangeType,
     extraDataset?: string,
     connectedCaret?: Position
   ) {
@@ -4945,7 +5699,7 @@ export class Editor<
         width: number;
       };
     },
-    type: 'selection' | 'match' | 'marker' | 'bracketMatch' | 'caretHighlight',
+    type: OverlayRangeType,
     line: number,
     wrapLine: number,
     left: number,
@@ -5118,6 +5872,17 @@ export class Editor<
 
     rangeEl.style.width = `${width}px`;
     rangeEl.style.transform = `translateX(${left}px) translateY(${y}px)`;
+    if (type === 'editPredictionReplacement') {
+      const lineElement = this.#getLineElement(line);
+      if (lineElement !== undefined) {
+        rangeEl.style.setProperty(
+          '--diffs-edit-prediction-bg',
+          getComputedStyle(lineElement).getPropertyValue('--diffs-line-bg')
+        );
+      }
+    } else {
+      rangeEl.style.removeProperty('--diffs-edit-prediction-bg');
+    }
     if (rounded) {
       addRadiusStyle(rangeEl);
     }
@@ -5732,7 +6497,11 @@ export class Editor<
     change: TextDocumentChange,
     newSelections?: EditorSelection[],
     newLineAnnotations?: EditorLineAnnotation<EType, LAnnotation>[],
-    options?: { skipSearchRefresh?: boolean; skipFocus?: boolean }
+    options?: {
+      skipSearchRefresh?: boolean;
+      skipFocus?: boolean;
+      editSource?: 'user' | 'prediction';
+    }
   ) {
     const textDocument = this.#editSession?.document;
     if (textDocument !== undefined && this.#carets !== undefined) {
@@ -5882,6 +6651,13 @@ export class Editor<
     }
 
     this.#checkpointEditSessionState();
+
+    if (options?.editSource === 'prediction') {
+      this.#recordEditPredictionHistory('prediction');
+    } else {
+      this.#pendingEditPredictionHistorySource = 'user';
+    }
+    this.#scheduleEditPrediction();
 
     // Publish the change only after the host renderer agrees with the new
     // document. Consumers may synchronously render the returned annotations,
@@ -6409,4 +7185,32 @@ function getEditSession<EType extends EditorType, LAnnotation, Caret>({
   return (
     type === 'file' ? { type: 'file' } : { type: 'file-diff' }
   ) as ManagedEditSession<EType, LAnnotation>;
+}
+
+function isValidEditPredictionPosition<EType extends EditorType, LAnnotation>(
+  document: TextDocument<EType, LAnnotation>,
+  position: Position | undefined
+): position is Position {
+  return (
+    position !== undefined &&
+    Number.isInteger(position.line) &&
+    Number.isInteger(position.character) &&
+    position.line >= 0 &&
+    position.line < document.lineCount &&
+    position.character >= 0 &&
+    position.character <= document.getLineLength(position.line)
+  );
+}
+
+function splitsSurrogatePair(text: string, offset: number): boolean {
+  const previous = text.charCodeAt(offset - 1);
+  const next = text.charCodeAt(offset);
+  return (
+    offset > 0 &&
+    offset < text.length &&
+    previous >= 0xd800 &&
+    previous <= 0xdbff &&
+    next >= 0xdc00 &&
+    next <= 0xdfff
+  );
 }

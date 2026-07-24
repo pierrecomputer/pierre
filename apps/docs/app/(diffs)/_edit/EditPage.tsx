@@ -73,6 +73,27 @@ export function EditPage({
 
             <div className="space-y-5">
               <FeatureHeader
+                id="tab-tab-tab"
+                title="Tab Tab Tab"
+                description={
+                  <>
+                    Pause after typing or moving the cursor to preview an edit
+                    prediction, then press <code>Tab</code> to accept it. This
+                    demo connects the service-agnostic <code>predict()</code>
+                    API to Codestral built by Mistral AI—to try, first connect
+                    GitHub, then continue with Mistral. Switch between{' '}
+                    <code>File</code> and <code>FileDiff</code>.
+                  </>
+                }
+              />
+              <EditPredictionDemo
+                prerenderedFile={editPredictionFile}
+                prerenderedDiff={editPredictionDiff}
+              />
+            </div>
+
+            <div className="space-y-5">
+              <FeatureHeader
                 id="selection-action"
                 title="Selection actions"
                 description={

@@ -1,4 +1,8 @@
-import { DEFAULT_THEMES, type FileContents } from '@pierre/diffs';
+import {
+  DEFAULT_THEMES,
+  type FileContents,
+  parseDiffFromFile,
+} from '@pierre/diffs';
 import type {
   EditorCaret,
   EditorCommand,
