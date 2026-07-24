@@ -6,6 +6,7 @@ import type {
 import { WorkerPoolContext } from '../_components/WorkerPoolContext';
 import { LiveEditing } from '../_examples/LiveEditing/LiveEditing';
 import { EditHero } from './EditHero';
+import { EditPredictionDemo } from './EditPredictionDemo';
 import { EditReference } from './EditReference';
 import { EditShortcuts } from './EditShortcuts';
 import { FindDemo } from './FindDemo';
@@ -21,6 +22,8 @@ import { PierreCompanySection } from '@/components/PierreCompanySection';
 interface EditPageProps {
   liveEditingFile: PreloadedFileResult<undefined>;
   liveEditingDiff: PreloadFileDiffResult<undefined>;
+  editPredictionFile: PreloadedFileResult<undefined>;
+  editPredictionDiff: PreloadFileDiffResult<undefined>;
   markerFile: PreloadedFileResult<undefined>;
   findFile: PreloadedFileResult<undefined>;
   historyFile: PreloadedFileResult<undefined>;
@@ -31,6 +34,8 @@ interface EditPageProps {
 export function EditPage({
   liveEditingFile,
   liveEditingDiff,
+  editPredictionFile,
+  editPredictionDiff,
   markerFile,
   findFile,
   historyFile,
@@ -49,6 +54,26 @@ export function EditPage({
             prerenderedFile={liveEditingFile}
             prerenderedDiff={liveEditingDiff}
           />
+
+          <div className="space-y-5">
+            <FeatureHeader
+              id="tab-tab-tab"
+              title="Tab Tab Tab"
+              description={
+                <>
+                  Pause after typing or moving the cursor to preview an edit
+                  prediction, then press <code>Tab</code> to accept it. This
+                  demo connects the service-agnostic <code>predict()</code> API
+                  to Codestral. Switch between <code>File</code> and{' '}
+                  <code>FileDiff</code>.
+                </>
+              }
+            />
+            <EditPredictionDemo
+              prerenderedFile={editPredictionFile}
+              prerenderedDiff={editPredictionDiff}
+            />
+          </div>
 
           <div className="space-y-5">
             <FeatureHeader
