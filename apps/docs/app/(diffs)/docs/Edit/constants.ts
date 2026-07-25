@@ -312,6 +312,45 @@ const editor = new Editor('file', {
   options,
 };
 
+export const EDIT_PREDICTION_EXAMPLE: PreloadFileOptions<undefined, undefined> =
+  {
+    file: {
+      name: 'editor_edit_prediction.ts',
+      contents: `import type {
+  EditorOptions,
+  EditPredictProvider,
+  EditPredictResponse,
+} from '@pierre/diffs/edit';
+
+const provider: EditPredictProvider = {
+  async predict(request, { signal }) {
+    // This server endpoint belongs to your application.
+    const response = await fetch('/api/edit-prediction', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+      signal,
+    });
+
+    if (!response.ok) {
+      throw new Error('Edit prediction failed');
+    }
+    return (await response.json()) as EditPredictResponse;
+  },
+};
+
+export const editorOptions = {
+  editPrediction: {
+    provider,
+    mode: 'eager',
+    include: ['**/*.ts', '**/*.tsx'],
+    exclude: ['**/*.test.ts', '**/generated/**'],
+  },
+} satisfies EditorOptions<'file', undefined, undefined>;`,
+    },
+    options,
+  };
+
 export const EDIT_SELECTION_ACTION_CONTEXT_TYPE: PreloadFileOptions<
   undefined,
   undefined
@@ -1091,6 +1130,7 @@ import {
   type EditorCaret,
   type EditorChangeEvent,
   type EditorType,
+  type EditPredictProvider,
   type EditorEditCompleteEvent,
   type EditorInitialState,
   type EditorKeymap,
@@ -1133,6 +1173,18 @@ interface EditorOptions<EType extends EditorType, LAnnotation, Caret> {
   // Show the floating Selection Action popover after a user selection.
   // Programmatic setSelections/setViewState calls do not open it.
   enabledSelectionAction?: boolean;
+
+  // Inline edit prediction. The app supplies the model/service implementation.
+  editPrediction?: {
+    // 'eager' displays predictions immediately; 'subtle' reveals them on Alt.
+    // Default: 'eager'.
+    mode?: 'eager' | 'subtle';
+    provider: EditPredictProvider;
+    // String globs or regular expressions matched against the file path.
+    include?: readonly (string | RegExp)[];
+    // Exclusions take precedence over inclusions.
+    exclude?: readonly (string | RegExp)[];
+  };
 
   // Custom clipboard provider. Recommended in Electron apps — use the native
   // clipboard API: https://www.electronjs.org/docs/latest/api/clipboard

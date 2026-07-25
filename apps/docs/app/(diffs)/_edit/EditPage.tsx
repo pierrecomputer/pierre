@@ -8,6 +8,7 @@ import { LiveEditing } from '../_examples/LiveEditing/LiveEditing';
 import { CaretDemo } from './CaretDemo';
 import type { CursorCaretMetadata } from './constants';
 import { EditHero } from './EditHero';
+import { EditPredictionDemo } from './EditPredictionDemo';
 import { EditReference } from './EditReference';
 import { FindDemo } from './FindDemo';
 import { HistoryDemo } from './HistoryDemo';
@@ -23,6 +24,8 @@ import { PierreCompanySection } from '@/components/PierreCompanySection';
 interface EditPageProps {
   liveEditingFile: PreloadedFileResult<undefined, undefined>;
   liveEditingDiff: PreloadFileDiffResult<undefined, undefined>;
+  editPredictionFile: PreloadedFileResult<undefined, undefined>;
+  editPredictionDiff: PreloadFileDiffResult<undefined, undefined>;
   markerFile: PreloadedFileResult<undefined, undefined>;
   findFile: PreloadedFileResult<undefined, undefined>;
   historyFile: PreloadedFileResult<undefined, undefined>;
@@ -34,6 +37,8 @@ interface EditPageProps {
 export function EditPage({
   liveEditingFile,
   liveEditingDiff,
+  editPredictionFile,
+  editPredictionDiff,
   markerFile,
   findFile,
   historyFile,

@@ -43,7 +43,9 @@ export function EditPredictionDemo({
   prerenderedFile,
   prerenderedDiff,
 }: EditPredictionDemoProps) {
-  const editorRef = useRef<Editor<EditorType, undefined, undefined> | null>(null);
+  const editorRef = useRef<Editor<EditorType, undefined, undefined> | null>(
+    null
+  );
   const predictionEnabledRef = useRef(false);
   const [attached, setAttached] = useState(false);
   const [hasEdits, setHasEdits] = useState(false);
@@ -102,14 +104,16 @@ export function EditPredictionDemo({
     () => ({ provider, mode, include: INCLUDE, exclude: EXCLUDE }),
     [mode, provider]
   );
-  const editorOptions = useMemo<EditorOptions<EditorType, undefined, undefined>>(
+  const editorOptions = useMemo<
+    EditorOptions<EditorType, undefined, undefined>
+  >(
     () => ({
       editPrediction,
       onAttach(editor) {
         editorRef.current = editor;
         setAttached(true);
       },
-      onChange(file) {
+      onChange({ file }) {
         setHasEdits(file.contents !== EDIT_PREDICTION_NEW_FILE.contents);
         if (predictionEnabledRef.current) {
           setStatus('waiting');
