@@ -344,6 +344,44 @@ button.addEventListener('click', () => {
   options,
 };
 
+export const EDIT_PREDICTION_EXAMPLE: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'editor_edit_prediction.ts',
+    contents: `import type {
+  EditorOptions,
+  EditPredictProvider,
+  EditPredictResponse,
+} from '@pierre/diffs/edit';
+
+const provider: EditPredictProvider = {
+  async predict(request, { signal }) {
+    // This server endpoint belongs to your application.
+    const response = await fetch('/api/edit-prediction', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+      signal,
+    });
+
+    if (!response.ok) {
+      throw new Error('Edit prediction failed');
+    }
+    return (await response.json()) as EditPredictResponse;
+  },
+};
+
+export const editorOptions = {
+  editPrediction: {
+    provider,
+    mode: 'eager',
+    include: ['**/*.ts', '**/*.tsx'],
+    exclude: ['**/*.test.ts', '**/generated/**'],
+  },
+} satisfies EditorOptions<undefined>;`,
+  },
+  options,
+};
+
 export const EDIT_SELECTION_ACTION_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
     name: 'editor_selection_action.ts',
@@ -936,7 +974,11 @@ export const EDITOR_OPTIONS_TYPE: PreloadFileOptions<undefined> = {
   FileContents,
   LineAnnotation,
 } from '@pierre/diffs';
-import { Editor, type IStateStorage } from '@pierre/diffs/edit';
+import {
+  Editor,
+  type EditPredictProvider,
+  type IStateStorage,
+} from '@pierre/diffs/edit';
 
 interface EditorOptions<LAnnotation> {
   // Max undo stack entries
@@ -966,6 +1008,18 @@ interface EditorOptions<LAnnotation> {
   // Show the floating Selection Action popover after a user selection.
   // Programmatic setSelections/setState calls do not open it (default: false).
   enabledSelectionAction?: boolean;
+
+  // Inline edit prediction. The app supplies the model/service implementation.
+  editPrediction?: {
+    // 'eager' displays predictions immediately; 'subtle' reveals them on Alt.
+    // Default: 'eager'.
+    mode?: 'eager' | 'subtle';
+    provider: EditPredictProvider;
+    // String globs or regular expressions matched against the file path.
+    include?: readonly (string | RegExp)[];
+    // Exclusions take precedence over inclusions.
+    exclude?: readonly (string | RegExp)[];
+  };
 
   // Custom clipboard provider.
   // Highly recommended to use native clipboard API if you are building an electron app.

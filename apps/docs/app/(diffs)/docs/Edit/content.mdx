@@ -16,6 +16,7 @@ Edit mode features include:
 - Automatic indentation
 - History (undo and redo)
 - Find-in-file search and replace
+- [Edit Prediction](#edit-mode-edit-prediction) (opt-in, custom provider)
 - [Selection Action](#edit-mode-selection-action) (opt-in, custom UI)
 - SSR support
 - Mobile-friendly
@@ -369,6 +370,57 @@ implementation. It defaults to `'inMemory'`. Text documents and undo history
 remain scoped to the `Editor` instance; IndexedDB and custom storage persist
 only serializable item-local editor state.
 
+### Edit Prediction
+
+Edit prediction is opt-in and model agnostic. Provide a `predict()` function
+through `editorOptions.editPrediction`; the editor builds a bounded request,
+validates the response, renders it as ghost text, and applies it when the user
+presses <kbd>Tab</kbd>. Your application owns the prediction logic and may call
+any local or remote service. Keep model credentials in that service rather than
+shipping them to the browser.
+
+The same options work with editable `File` and `FileDiff` surfaces, including
+their virtualized variants. In React, pass them through `editorOptions`. In
+vanilla JS, pass them to `new Editor(editorOptions)`.
+
+<DocsCodeExample {...editPredictionExample} />
+
+[Try the live demo](/edit#tab-tab-tab).
+
+The editor schedules `predict()` 300 ms after typing or moving to a single,
+collapsed caret. Each new document or cursor change clears the current
+prediction, cancels the pending debounce, and aborts in-progress work through
+`context.signal`. Forward that signal to `fetch()` or any other cancellable
+model call. Responses for an old document version or cursor position are ignored
+even if the provider does not stop promptly.
+
+`mode` defaults to `'eager'`, which displays a ready prediction immediately.
+`'subtle'` still runs prediction after the debounce, but hides the ghost text
+until the user holds <kbd>Alt</kbd>. Pressing <kbd>Tab</kbd> accepts a visible
+prediction and moves the caret to the response's `newCursor`; otherwise Tab
+keeps its normal indentation behavior. Multiline predictions render continuation
+text as numberless ghost rows, preserving the document's real line numbers.
+
+Use `include` and `exclude` to filter the file path passed to the surface. Both
+accept strings or regular expressions. String patterns match the whole
+slash-normalized path and support `?`, segment-local `*`, and cross-segment
+`**`. Omitting `include` enables every path, while `include: []` disables
+prediction for every path. Exclusions always take precedence.
+
+`EditPredictRequest` contains the file `path`, document `version`, detected
+`eol`, a bounded `excerptText`, and bounded chronological `editHistory`. Its
+`excerptStartLine` is a zero-based document line; `cursorOffsetInExcerpt` and
+the half-open `editableRange` are UTF-16 offsets relative to the excerpt.
+History entries contain a unified `diff` and a `source` of either `'user'` or
+`'prediction'`.
+
+Return an `EditPredictResponse` whose non-overlapping `edits` use absolute,
+zero-based document positions and stay within the request's editable window.
+`newCursor` is also absolute and refers to the post-edit document. Use a
+collapsed range to insert, an empty `newText` to delete, or a non-empty range
+and `newText` to replace. Return `edits: []` with a valid `newCursor` when there
+is no suggestion.
+
 ### API Reference
 
 These methods are available on an `Editor` instance. Attach it to a rendered
@@ -470,7 +522,9 @@ and <kbd>End</kbd> keys; on macOS, the modifier with ↑ and ↓ arrows works to
 
 | Action                       | Shortcut                                                                      |
 | ---------------------------- | ----------------------------------------------------------------------------- |
-| Indent line or selection     | <Shortcut meta={false}>Tab</Shortcut>                                         |
+| Accept an eager prediction   | <Shortcut meta={false}>Tab</Shortcut>                                         |
+| Accept a subtle prediction   | <Shortcut meta={false} modifiers={['Alt']}>Tab</Shortcut>                     |
+| Indent line or selection     | <Shortcut meta={false}>Tab</Shortcut> (no visible prediction)                 |
 | Outdent line or selection    | <Shortcut meta={false} modifiers={['Shift']}>Tab</Shortcut>                   |
 | Move selected line(s) up     | <Shortcut meta={false} modifiers={['Alt']}>↑</Shortcut>                       |
 | Move selected line(s) down   | <Shortcut meta={false} modifiers={['Alt']}>↓</Shortcut>                       |
