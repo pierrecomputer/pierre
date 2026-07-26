@@ -356,7 +356,7 @@ export const EDIT_PREDICTION_EXAMPLE: PreloadFileOptions<undefined> = {
 const provider: EditPredictProvider = {
   async predict(request, { signal }) {
     // This server endpoint belongs to your application.
-    const response = await fetch('/api/edit-prediction', {
+    const response = await fetch('/edit/predict', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(request),

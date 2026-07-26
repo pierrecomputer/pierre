@@ -4,6 +4,8 @@ import type {
 } from '@pierre/diffs/edit';
 import { z } from 'zod';
 
+import { isGithubAuthenticated } from '../_auth/github';
+
 const CACHE_CONTROL = 'no-store';
 const CODESTRAL_FIM_URL = 'https://api.mistral.ai/v1/fim/completions';
 const MAX_HISTORY_BYTES = 6144;
@@ -51,6 +53,10 @@ export async function POST(request: Request): Promise<Response> {
     process.env.NEXT_PUBLIC_SITE !== 'diffs'
   ) {
     return createErrorResponse('Not found.', 404);
+  }
+
+  if (!isGithubAuthenticated(request)) {
+    return createErrorResponse('GitHub sign-in required.', 401);
   }
 
   const apiKey = process.env.MISTRAL_API_KEY?.trim();
