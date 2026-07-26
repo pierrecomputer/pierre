@@ -13,7 +13,7 @@ import type {
   PreloadedFileResult,
   PreloadFileDiffResult,
 } from '@pierre/diffs/ssr';
-import { IconCursor, IconRefresh } from '@pierre/icons';
+import { IconRefresh } from '@pierre/icons';
 import { useCallback, useMemo, useRef, useState } from 'react';
 
 import { EDIT_PREDICTION_NEW_FILE } from './constants';
@@ -37,7 +37,18 @@ type PredictionStatus =
 
 const INCLUDE = ['**/*.ts'] as const;
 const EXCLUDE = ['**/*.test.ts'] as const;
-const CURSOR_ANCHOR = 'return items.';
+const statusTextMap = {
+  idle: 'Idle',
+  waiting: 'Waiting...',
+  predicting: 'Predicting...',
+  ready: (
+    <>
+      Prediction ready — hold <kbd>Alt</kbd> and press <kbd>Tab</kbd> to accept.
+    </>
+  ),
+  empty: 'No suggestion returned. Keep editing to try again.',
+  error: 'Prediction unavailable. Check the demo service and try again.',
+};
 
 export function EditPredictionDemo({
   prerenderedFile,
@@ -48,6 +59,7 @@ export function EditPredictionDemo({
   );
   const predictionEnabledRef = useRef(false);
   const [attached, setAttached] = useState(false);
+  const [authenticating, setAuthenticating] = useState(false);
   const [hasEdits, setHasEdits] = useState(false);
   const [mode, setMode] = useState<PredictionMode>('eager');
   const [predictionEnabled, setPredictionEnabled] = useState(false);
@@ -75,12 +87,16 @@ export function EditPredictionDemo({
 
         setStatus('predicting');
         try {
-          const response = await fetch('/api/edit-prediction', {
+          const response = await fetch('/edit/predict', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(request),
             signal,
           });
+          if (response.status === 401) {
+            window.location.assign('/edit/auth');
+            throw new Error('GitHub sign-in required');
+          }
           if (!response.ok) {
             throw new Error('Edit prediction request failed');
           }
@@ -150,12 +166,13 @@ export function EditPredictionDemo({
     if (editor == null) {
       return;
     }
+    const anchor = 'return items.';
     const lines = editor.getText().split(/\r\n|\r|\n/);
-    const line = lines.findIndex((text) => text.includes(CURSOR_ANCHOR));
+    const line = lines.findIndex((text) => text.includes(anchor));
     if (line < 0) {
       return;
     }
-    const character = lines[line].indexOf(CURSOR_ANCHOR) + CURSOR_ANCHOR.length;
+    const character = lines[line].indexOf(anchor) + anchor.length;
     predictionEnabledRef.current = true;
     setPredictionEnabled(true);
     setStatus('waiting');
@@ -169,6 +186,29 @@ export function EditPredictionDemo({
     ]);
     editor.focus({ preventScroll: true });
   }, [editPrediction]);
+
+  const tryCodestral = useCallback(async () => {
+    setAuthenticating(true);
+    try {
+      const response = await fetch('/edit/auth', {
+        method: 'HEAD',
+        cache: 'no-store',
+      });
+      if (response.status === 401) {
+        window.location.assign('/edit/auth');
+        return;
+      }
+      if (!response.ok) {
+        setStatus('error');
+        return;
+      }
+      placeCursor();
+    } catch {
+      setStatus('error');
+    } finally {
+      setAuthenticating(false);
+    }
+  }, [placeCursor]);
 
   const handleModeChange = useCallback(
     (value: PredictionMode) => {
@@ -191,21 +231,11 @@ export function EditPredictionDemo({
     [reset]
   );
 
-  const statusText = !predictionEnabled
-    ? 'No API request sent. Try Codestral to begin.'
-    : status === 'waiting'
-      ? 'Waiting 300 ms before predicting…'
-      : status === 'predicting'
-        ? 'Predicting…'
-        : status === 'ready'
-          ? mode === 'subtle'
-            ? 'Prediction ready — hold Alt and press Tab to accept.'
-            : 'Prediction ready — press Tab to accept.'
-          : status === 'empty'
-            ? 'No suggestion returned. Keep editing to try again.'
-            : status === 'error'
-              ? 'Prediction unavailable. Check the demo service and try again.'
-              : 'Try Codestral to begin.';
+  const statusText = authenticating
+    ? 'Checking GitHub sign-in…'
+    : !predictionEnabled
+      ? null
+      : statusTextMap[status];
 
   return (
     <div className="not-prose">
@@ -228,10 +258,6 @@ export function EditPredictionDemo({
           <ButtonGroupItem value="subtle">Subtle</ButtonGroupItem>
         </ButtonGroup>
 
-        <Button variant="outline" onClick={placeCursor} disabled={!attached}>
-          <IconCursor />
-          Try Codestral
-        </Button>
         <Button
           variant="outline"
           onClick={reset}
@@ -241,13 +267,115 @@ export function EditPredictionDemo({
           Reset
         </Button>
 
-        <span
-          className="text-muted-foreground basis-full text-xs md:ml-auto md:basis-auto"
-          role="status"
-          aria-live="polite"
-        >
-          {statusText}
-        </span>
+        <div className="ml-auto flex basis-full items-center justify-end gap-3 md:basis-auto">
+          {statusText !== null && (
+            <span
+              className="text-muted-foreground text-xs"
+              role="status"
+              aria-live="polite"
+            >
+              {statusText}
+            </span>
+          )}
+          {!predictionEnabled && (
+            <Button
+              variant="outline"
+              onClick={() => void tryCodestral()}
+              disabled={!attached || authenticating}
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="text-white-default h-3 w-auto"
+                width="47.6"
+                height="34"
+                viewBox="0 0 212.121 151.515"
+                shapeRendering="crispEdges"
+              >
+                <rect
+                  x="30.303001"
+                  y="0"
+                  width="30.302999"
+                  height="30.302999"
+                  fill="#FFAF01"
+                  id="rect1"
+                ></rect>
+                <rect
+                  x="151.515"
+                  y="0"
+                  width="30.302999"
+                  height="30.302999"
+                  fill="#FFAF01"
+                  id="rect2"
+                ></rect>
+                <rect
+                  x="30.303001"
+                  y="30.303001"
+                  width="60.605999"
+                  height="30.302999"
+                  fill="#FF8204"
+                  id="rect3"
+                ></rect>
+                <rect
+                  x="121.21201"
+                  y="30.303001"
+                  width="60.605999"
+                  height="30.302999"
+                  fill="#FF8204"
+                  id="rect4"
+                ></rect>
+                <rect
+                  x="30.303001"
+                  y="60.606003"
+                  width="151.515"
+                  height="30.302999"
+                  fill="#FA500F"
+                  id="rect5"
+                ></rect>
+                <rect
+                  x="30.303001"
+                  y="90.908997"
+                  width="30.302999"
+                  height="30.302999"
+                  fill="#E51300"
+                  id="rect6"
+                ></rect>
+                <rect
+                  x="90.908997"
+                  y="90.908997"
+                  width="30.302999"
+                  height="30.302999"
+                  fill="#E51300"
+                  id="rect7"
+                ></rect>
+                <rect
+                  x="151.515"
+                  y="90.908997"
+                  width="30.302999"
+                  height="30.302999"
+                  fill="#E51300"
+                  id="rect8"
+                ></rect>
+                <rect
+                  x="0"
+                  y="121.21201"
+                  width="90.908997"
+                  height="30.302999"
+                  fill="#C4001D"
+                  id="rect9"
+                ></rect>
+                <rect
+                  x="121.21201"
+                  y="121.21201"
+                  width="90.908997"
+                  height="30.302999"
+                  fill="#C4001D"
+                  id="rect10"
+                ></rect>
+              </svg>
+              Continue with Codestral
+            </Button>
+          )}
+        </div>
       </div>
 
       {surface === 'file' ? (
