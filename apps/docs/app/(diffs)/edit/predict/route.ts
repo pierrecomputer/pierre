@@ -2,12 +2,14 @@ import type {
   EditPredictRequest,
   EditPredictResponse,
 } from '@pierre/diffs/edit';
+import { checkRateLimit } from '@vercel/firewall';
 import { z } from 'zod';
 
-import { isGithubAuthenticated } from '../_auth/github';
+import { getAuthenticatedGithubUserId } from '../_auth/github';
 
 const CACHE_CONTROL = 'no-store';
 const CODESTRAL_FIM_URL = 'https://api.mistral.ai/v1/fim/completions';
+const EDIT_PREDICT_RATE_LIMIT_ID = 'edit-predict';
 const MAX_HISTORY_ENTRY_BYTES = 6144;
 const MAX_OUTPUT_BYTES = 32 * 1024;
 const MAX_REQUEST_BYTES = 128 * 1024;
@@ -56,7 +58,8 @@ export async function POST(request: Request): Promise<Response> {
     return createErrorResponse('Not found.', 404);
   }
 
-  if (!isGithubAuthenticated(request)) {
+  const githubUserId = getAuthenticatedGithubUserId(request);
+  if (githubUserId === undefined) {
     return createErrorResponse('GitHub sign-in required.', 401);
   }
 
@@ -111,6 +114,32 @@ export async function POST(request: Request): Promise<Response> {
     )
   ) {
     return createErrorResponse('Invalid edit prediction request.', 400);
+  }
+
+  if (process.env.NODE_ENV !== 'development') {
+    try {
+      const { error, rateLimited } = await checkRateLimit(
+        EDIT_PREDICT_RATE_LIMIT_ID,
+        {
+          request,
+          rateLimitKey: githubUserId,
+        }
+      );
+      if (rateLimited) {
+        return createErrorResponse('Edit prediction rate limit exceeded.', 429);
+      }
+      if (error !== undefined) {
+        return createErrorResponse(
+          'Edit prediction rate limiter is unavailable.',
+          503
+        );
+      }
+    } catch {
+      return createErrorResponse(
+        'Edit prediction rate limiter is unavailable.',
+        503
+      );
+    }
   }
 
   const upstreamSignal = AbortSignal.any([
