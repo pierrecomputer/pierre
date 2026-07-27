@@ -21,6 +21,12 @@ tasks:
       cache: false
       runInCI: 'always'
 
+  benchmark-editor-piece-table:
+    command: 'bun scripts/benchmarkEditorPieceTable.ts'
+    options:
+      cache: false
+      runInCI: 'always'
+
   benchmark-editor-tokenizer:
     command: 'bun scripts/benchmarkEditorTokenizer.ts'
     options:
