@@ -1,4 +1,4 @@
-import { afterAll, describe, expect, spyOn, test } from 'bun:test';
+import { afterAll, describe, expect, jest, spyOn, test } from 'bun:test';
 
 import { File } from '../src/components/File';
 import { FileDiff } from '../src/components/FileDiff';
@@ -21,6 +21,7 @@ afterAll(async () => {
 });
 
 const FILE_NAME = 'src/edit.ts';
+const EDIT_PREDICTION_DEBOUNCE_MS = 300;
 const PREDICT_TIMEOUT = 2_000;
 
 type Surface = 'File' | 'FileDiff';
@@ -224,12 +225,14 @@ describe('Editor edit prediction', () => {
     });
 
     try {
+      jest.useFakeTimers();
       setCaret(fixture.editor, 0, 3);
       dispatchTextInput(fixture.content, 'X');
 
-      await wait(250);
+      jest.advanceTimersByTime(EDIT_PREDICTION_DEBOUNCE_MS - 1);
       expect(calls).toHaveLength(0);
-      await expectCallCount(calls, 1);
+      jest.advanceTimersByTime(1);
+      expect(calls).toHaveLength(1);
 
       expect(calls[0].request).toMatchObject({
         cursorOffsetInExcerpt: 4,
@@ -242,6 +245,7 @@ describe('Editor edit prediction', () => {
       });
       expect(calls[0].context.signal.aborted).toBe(false);
     } finally {
+      jest.useRealTimers();
       await fixture.cleanup();
     }
   });
@@ -415,19 +419,22 @@ describe('Editor edit prediction', () => {
     });
 
     try {
+      jest.useFakeTimers();
       setCaret(fixture.editor, 0, 0);
       const event = dispatchKey(fixture.content, 'ArrowRight');
       expect(event.defaultPrevented).toBe(true);
 
-      await wait(250);
+      jest.advanceTimersByTime(EDIT_PREDICTION_DEBOUNCE_MS - 1);
       expect(calls).toHaveLength(0);
-      await expectCallCount(calls, 1);
+      jest.advanceTimersByTime(1);
+      expect(calls).toHaveLength(1);
       expect(calls[0].request).toMatchObject({
         cursorOffsetInExcerpt: 1,
         excerptText: 'abc',
         version: 0,
       });
     } finally {
+      jest.useRealTimers();
       await fixture.cleanup();
     }
   });
@@ -773,7 +780,7 @@ describe('Editor edit prediction', () => {
         timeout: PREDICT_TIMEOUT,
       });
 
-      expect(fixture.content.style.paddingBlockEnd).not.toBe('');
+      expect(fixture.content.style.paddingBlockEnd).toBe('20px');
 
       dispatchKey(fixture.content, 'ArrowLeft');
       expect(fixture.content.style.paddingBlockEnd).toBe('');
@@ -864,6 +871,77 @@ describe('Editor edit prediction', () => {
 
       expect(fixture.editor.getText()).toBe('abcd');
       expect(predictionElements(fixture.container)).toHaveLength(0);
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  test('rejects a prediction range that splits a surrogate pair', async () => {
+    const calls: PredictionCall[] = [];
+    const provider: EditPredictProvider = {
+      predict(request, context) {
+        calls.push({ context, request });
+        return Promise.resolve({
+          edits: [
+            {
+              range: {
+                start: { line: 0, character: 1 },
+                end: { line: 0, character: 1 },
+              },
+              newText: '!',
+            },
+          ],
+          newCursor: { line: 0, character: 3 },
+        });
+      },
+    };
+    const fixture = await createPredictionFixture({
+      contents: '😀x',
+      editorOptions: { editPrediction: { provider } },
+    });
+
+    try {
+      setCaret(fixture.editor, 0, 3);
+      await expectCallCount(calls, 1);
+      await wait(0);
+      expect(predictionElements(fixture.container)).toHaveLength(0);
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  test('Escape discards a prediction without changing the document', async () => {
+    const provider: EditPredictProvider = {
+      predict() {
+        return Promise.resolve({
+          edits: [
+            {
+              range: {
+                start: { line: 0, character: 1 },
+                end: { line: 0, character: 1 },
+              },
+              newText: '!',
+            },
+          ],
+          newCursor: { line: 0, character: 2 },
+        });
+      },
+    };
+    const fixture = await createPredictionFixture({
+      contents: 'a',
+      editorOptions: { editPrediction: { provider } },
+    });
+
+    try {
+      setCaret(fixture.editor, 0, 1);
+      await waitFor(() => hasVisiblePrediction(fixture.container), {
+        timeout: PREDICT_TIMEOUT,
+      });
+
+      const escape = dispatchKey(fixture.content, 'Escape');
+      expect(escape.defaultPrevented).toBe(true);
+      expect(predictionElements(fixture.container)).toHaveLength(0);
+      expect(fixture.editor.getText()).toBe('a');
     } finally {
       await fixture.cleanup();
     }
@@ -1101,6 +1179,45 @@ describe('Editor edit prediction', () => {
     }
   });
 
+  test('accepts a subtle prediction with Alt+Tab', async () => {
+    const provider: EditPredictProvider = {
+      predict() {
+        return Promise.resolve({
+          edits: [
+            {
+              range: {
+                start: { line: 0, character: 1 },
+                end: { line: 0, character: 1 },
+              },
+              newText: '!',
+            },
+          ],
+          newCursor: { line: 0, character: 2 },
+        });
+      },
+    };
+    const fixture = await createPredictionFixture({
+      contents: 'a',
+      editorOptions: {
+        editPrediction: { mode: 'subtle', provider },
+      },
+    });
+
+    try {
+      setCaret(fixture.editor, 0, 1);
+      dispatchKey(fixture.content, 'Alt', { altKey: true });
+      await waitFor(() => hasVisiblePrediction(fixture.container), {
+        timeout: PREDICT_TIMEOUT,
+      });
+
+      const tab = dispatchKey(fixture.content, 'Tab', { altKey: true });
+      expect(tab.defaultPrevented).toBe(true);
+      expect(fixture.editor.getText()).toBe('a!');
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
   const filterCases: Array<{
     allowed: boolean;
     name: string;
@@ -1163,23 +1280,21 @@ describe('Editor edit prediction', () => {
       });
 
       try {
+        jest.useFakeTimers();
         setCaret(fixture.editor, 0, 1);
         dispatchTextInput(fixture.content, 'b');
-        if (allowed) {
-          await expectCallCount(calls, 1);
-        } else {
-          await wait(340);
-          expect(calls).toHaveLength(0);
-        }
+        jest.advanceTimersByTime(EDIT_PREDICTION_DEBOUNCE_MS);
+        expect(calls).toHaveLength(allowed ? 1 : 0);
       } finally {
+        jest.useRealTimers();
         await fixture.cleanup();
       }
     });
   }
 
-  test('reuses a global regular-expression include', async () => {
+  test('reuses a frozen global regular-expression include', async () => {
     const calls: PredictionCall[] = [];
-    const include = /\.ts$/g;
+    const include = Object.freeze(/\.ts$/g);
     const provider: EditPredictProvider = {
       predict(request, context) {
         calls.push({ context, request });

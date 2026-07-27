@@ -41,13 +41,20 @@ const statusTextMap = {
   idle: 'Idle',
   waiting: 'Waiting...',
   predicting: 'Predicting...',
-  ready: (
+  empty: 'No suggestion returned. Keep editing to try again.',
+  error: 'Prediction unavailable. Check the demo service and try again.',
+};
+const readyStatusText = {
+  eager: (
+    <>
+      Prediction ready — press <kbd>Tab</kbd> to accept.
+    </>
+  ),
+  subtle: (
     <>
       Prediction ready — hold <kbd>Alt</kbd> and press <kbd>Tab</kbd> to accept.
     </>
   ),
-  empty: 'No suggestion returned. Keep editing to try again.',
-  error: 'Prediction unavailable. Check the demo service and try again.',
 };
 
 export function EditPredictionDemo({
@@ -233,9 +240,13 @@ export function EditPredictionDemo({
 
   const statusText = authenticating
     ? 'Checking GitHub sign-in…'
-    : !predictionEnabled
-      ? null
-      : statusTextMap[status];
+    : status === 'error'
+      ? statusTextMap.error
+      : !predictionEnabled
+        ? null
+        : status === 'ready'
+          ? readyStatusText[mode]
+          : statusTextMap[status];
 
   return (
     <div className="not-prose">
@@ -285,6 +296,7 @@ export function EditPredictionDemo({
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
+                aria-hidden="true"
                 className="text-white-default h-3 w-auto"
                 width="47.6"
                 height="34"
@@ -297,7 +309,6 @@ export function EditPredictionDemo({
                   width="30.302999"
                   height="30.302999"
                   fill="#FFAF01"
-                  id="rect1"
                 ></rect>
                 <rect
                   x="151.515"
@@ -305,7 +316,6 @@ export function EditPredictionDemo({
                   width="30.302999"
                   height="30.302999"
                   fill="#FFAF01"
-                  id="rect2"
                 ></rect>
                 <rect
                   x="30.303001"
@@ -313,7 +323,6 @@ export function EditPredictionDemo({
                   width="60.605999"
                   height="30.302999"
                   fill="#FF8204"
-                  id="rect3"
                 ></rect>
                 <rect
                   x="121.21201"
@@ -321,7 +330,6 @@ export function EditPredictionDemo({
                   width="60.605999"
                   height="30.302999"
                   fill="#FF8204"
-                  id="rect4"
                 ></rect>
                 <rect
                   x="30.303001"
@@ -329,7 +337,6 @@ export function EditPredictionDemo({
                   width="151.515"
                   height="30.302999"
                   fill="#FA500F"
-                  id="rect5"
                 ></rect>
                 <rect
                   x="30.303001"
@@ -337,7 +344,6 @@ export function EditPredictionDemo({
                   width="30.302999"
                   height="30.302999"
                   fill="#E51300"
-                  id="rect6"
                 ></rect>
                 <rect
                   x="90.908997"
@@ -345,7 +351,6 @@ export function EditPredictionDemo({
                   width="30.302999"
                   height="30.302999"
                   fill="#E51300"
-                  id="rect7"
                 ></rect>
                 <rect
                   x="151.515"
@@ -353,7 +358,6 @@ export function EditPredictionDemo({
                   width="30.302999"
                   height="30.302999"
                   fill="#E51300"
-                  id="rect8"
                 ></rect>
                 <rect
                   x="0"
@@ -361,7 +365,6 @@ export function EditPredictionDemo({
                   width="90.908997"
                   height="30.302999"
                   fill="#C4001D"
-                  id="rect9"
                 ></rect>
                 <rect
                   x="121.21201"
@@ -369,7 +372,6 @@ export function EditPredictionDemo({
                   width="90.908997"
                   height="30.302999"
                   fill="#C4001D"
-                  id="rect10"
                 ></rect>
               </svg>
               Continue with Codestral
