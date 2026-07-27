@@ -583,9 +583,15 @@ export class File<
 
   public updateRenderCache(
     dirtyLines: Map<number, Array<HighlightedToken>>,
-    themeType: 'dark' | 'light'
+    themeType: 'dark' | 'light',
+    _shouldRefreshView?: boolean,
+    lineCountChangeInFlight = false
   ): void {
-    this.fileRenderer.updateRenderCache(dirtyLines, themeType);
+    this.fileRenderer.updateRenderCache(
+      dirtyLines,
+      themeType,
+      lineCountChangeInFlight
+    );
   }
 
   public render(props: FileRenderProps<LAnnotation>): boolean {
