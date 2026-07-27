@@ -53,6 +53,31 @@ export interface TextDocumentChange {
   ][];
 }
 
+export interface TextDocumentChangeTransaction {
+  /** Edits applied to the document state before this change. */
+  readonly appliedEdits: readonly ResolvedTextEdit[];
+  /** Edits that restore the document state before this change. */
+  readonly inverseEdits: readonly ResolvedTextEdit[];
+}
+
+const transactions = new WeakMap<
+  TextDocumentChange,
+  TextDocumentChangeTransaction
+>();
+
+export function getTextDocumentChangeTransaction(
+  change: TextDocumentChange
+): TextDocumentChangeTransaction | undefined {
+  return transactions.get(change);
+}
+
+function setTextDocumentChangeTransaction(
+  change: TextDocumentChange,
+  transaction: TextDocumentChangeTransaction
+): void {
+  transactions.set(change, transaction);
+}
+
 // Metadata-less replay results include the resolved edits so Editor can remap
 // its live selections without storing a snapshot on the history entry.
 type TextDocumentHistoryResult<EType extends EditorType, LAnnotation> = [
@@ -304,6 +329,10 @@ export class TextDocument<
     } else {
       this.#editStack.push(entry);
     }
+    setTextDocumentChangeTransaction(change, {
+      appliedEdits: entry.forwardEdits,
+      inverseEdits: entry.inverseEdits,
+    });
     return change;
   }
 
@@ -330,6 +359,10 @@ export class TextDocument<
     if (change === undefined) {
       return undefined;
     }
+    setTextDocumentChangeTransaction(change, {
+      appliedEdits: entry.inverseEdits,
+      inverseEdits: entry.forwardEdits,
+    });
     this.#version = entry.versionBefore;
     const selections = entry.selectionsBefore?.slice();
     return [
@@ -351,6 +384,10 @@ export class TextDocument<
     if (change === undefined) {
       return undefined;
     }
+    setTextDocumentChangeTransaction(change, {
+      appliedEdits: entry.forwardEdits,
+      inverseEdits: entry.inverseEdits,
+    });
     this.#version = entry.versionAfter;
     const selections = entry.selectionsAfter?.slice();
     return [
