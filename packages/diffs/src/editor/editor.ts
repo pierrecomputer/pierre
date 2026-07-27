@@ -421,6 +421,7 @@ type OverlayRangeType =
   | 'bracketMatch'
   | 'caretHighlight'
   | 'editPredictionDeletion'
+  | 'editPredictionInsertion'
   | 'editPredictionReplacement';
 
 export class Editor<
@@ -579,6 +580,15 @@ export class Editor<
       this.#renderRange !== undefined &&
       this.#renderRange.totalLines !== Infinity
     ) {
+      const predictionLines =
+        this.#editPrediction === undefined
+          ? undefined
+          : new Set(
+              this.#editPrediction.response.edits.map(
+                (edit) => edit.range.start.line
+              )
+            );
+      let refreshPrediction = false;
       const { startingLine, totalLines } = this.#renderRange;
       const endLine = Math.min(
         startingLine + totalLines,
@@ -589,8 +599,12 @@ export class Editor<
           const lineElement = this.#getLineElement(line);
           if (lineElement !== undefined) {
             lineElement.replaceChildren(...renderLineTokens(tokens));
+            refreshPrediction ||= predictionLines?.has(line) === true;
           }
         }
+      }
+      if (refreshPrediction && this.#selections !== undefined) {
+        this.#updateSelections(this.#selections);
       }
     }
   };
@@ -5099,6 +5113,7 @@ export class Editor<
       return;
     }
 
+    const isWrap = this.#isWrap;
     for (
       let editIndex = 0;
       editIndex < prediction.response.edits.length;
@@ -5108,6 +5123,8 @@ export class Editor<
       const { start, end } = edit.range;
       const isDeletion = edit.newText.length === 0;
       const isReplacement = comparePosition(start, end) !== 0;
+      const lineLength = textDocument.getLineLength(start.line);
+      const isMidLineInsertion = !isReplacement && start.character < lineLength;
       if (isReplacement) {
         const elementCount = renderCtx.elements.size;
         this.#renderSelection(
@@ -5116,6 +5133,12 @@ export class Editor<
           { start, end }
         );
         prediction.rendered ||= renderCtx.elements.size > elementCount;
+      } else if (isMidLineInsertion) {
+        // Hide the in-flow suffix so ghost text never collides with it.
+        this.#renderSelection(renderCtx, 'editPredictionInsertion', {
+          start,
+          end: { line: start.line, character: lineLength },
+        });
       }
 
       if (isDeletion || !this.#isLineVisible(start.line)) {
@@ -5158,7 +5181,7 @@ export class Editor<
         delete element.dataset.replacement;
         element.style.removeProperty('--diffs-edit-prediction-bg');
       }
-      if (this.#isWrap) {
+      if (isWrap) {
         element.dataset.wrap = '';
         element.style.width = `calc(100cqw - ${lineLeft}px)`;
       } else {
@@ -5166,19 +5189,63 @@ export class Editor<
         element.style.width = 'max-content';
       }
       const lines = edit.newText.split(/\r\n|\r|\n/);
+      // Redraw the suffix only when other edits or wrapping cannot relocate it.
+      let insertionSuffix: Node | undefined;
+      if (
+        isMidLineInsertion &&
+        !isWrap &&
+        prediction.response.edits[editIndex - 1]?.range.end.line !==
+          start.line &&
+        prediction.response.edits[editIndex + 1]?.range.start.line !==
+          start.line
+      ) {
+        const sourceLine = this.#getLineElement(start.line);
+        if (sourceLine === undefined) {
+          insertionSuffix = document.createTextNode(
+            textDocument.getLineText(start.line).slice(start.character)
+          );
+        } else {
+          const [suffixNode, suffixOffset] = getSelectionAnchor(
+            sourceLine,
+            start.character
+          );
+          const suffixRange = document.createRange();
+          suffixRange.selectNodeContents(sourceLine);
+          suffixRange.setStart(
+            suffixNode,
+            clampDomOffset(suffixNode, suffixOffset)
+          );
+          insertionSuffix = suffixRange.cloneContents();
+          if (insertionSuffix.firstChild?.textContent === '') {
+            insertionSuffix.firstChild.remove();
+          }
+        }
+      }
       for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+        const lineText = lines[lineIndex];
+        const suffix =
+          lineIndex === lines.length - 1 ? insertionSuffix : undefined;
+        const isEmpty = lineText.length === 0 && suffix === undefined;
         const line = h(
           'span',
           {
-            dataset:
-              lines[lineIndex].length === 0
-                ? ['editPredictionLine', 'empty']
-                : 'editPredictionLine',
-            textContent:
-              lines[lineIndex].length === 0 ? '\u200b' : lines[lineIndex],
+            dataset: isEmpty
+              ? ['editPredictionLine', 'empty']
+              : 'editPredictionLine',
+            textContent: isEmpty ? '\u200b' : lineText,
           },
           element
         );
+        if (suffix !== undefined) {
+          const suffixElement = h(
+            'span',
+            {
+              dataset: 'editPredictionSuffix',
+            },
+            line
+          );
+          suffixElement.append(suffix);
+        }
         if (lineIndex === 0 && anchorLeft !== lineLeft) {
           line.style.paddingInlineStart = `${anchorLeft - lineLeft}px`;
         }
@@ -5872,7 +5939,10 @@ export class Editor<
 
     rangeEl.style.width = `${width}px`;
     rangeEl.style.transform = `translateX(${left}px) translateY(${y}px)`;
-    if (type === 'editPredictionReplacement') {
+    if (
+      type === 'editPredictionInsertion' ||
+      type === 'editPredictionReplacement'
+    ) {
       const lineElement = this.#getLineElement(line);
       if (lineElement !== undefined) {
         rangeEl.style.setProperty(

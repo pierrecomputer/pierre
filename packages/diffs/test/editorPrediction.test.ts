@@ -440,6 +440,106 @@ describe('Editor edit prediction', () => {
       }
     });
 
+    test(`${surface} masks and preserves the suffix for a mid-line insertion`, async () => {
+      const contents = 'function value(items: CartItem[]): number {';
+      const insertion = ', discount?: number';
+      const character = 'function value(items: CartItem[]'.length;
+      const provider: EditPredictProvider = {
+        predict() {
+          return Promise.resolve({
+            edits: [
+              {
+                range: {
+                  start: { line: 0, character },
+                  end: { line: 0, character },
+                },
+                newText: insertion,
+              },
+            ],
+            newCursor: { line: 0, character: character + insertion.length },
+          });
+        },
+      };
+      const fixture = await createPredictionFixture({
+        contents,
+        editorOptions: { editPrediction: { provider } },
+        surface,
+      });
+
+      try {
+        const sourceLine =
+          fixture.content.querySelector<HTMLElement>('[data-line="1"]');
+        await waitFor(
+          () =>
+            Array.from(sourceLine?.children ?? []).some(
+              (token) =>
+                Number((token as HTMLElement).dataset.char) >= character
+            ),
+          { timeout: PREDICT_TIMEOUT }
+        );
+        const sourceSuffixTokens = Array.from(sourceLine?.children ?? [])
+          .map((token) => token as HTMLElement)
+          .flatMap((token) => {
+            const text = token.textContent ?? '';
+            const start = Number(token.dataset.char);
+            return start + text.length <= character
+              ? []
+              : [
+                  {
+                    text: text.slice(Math.max(0, character - start)),
+                    dark: token.style.getPropertyValue('--diffs-token-dark'),
+                    light: token.style.getPropertyValue('--diffs-token-light'),
+                  },
+                ];
+          });
+        expect(
+          sourceSuffixTokens.some(
+            ({ dark, light }) => dark !== '' && light !== ''
+          )
+        ).toBe(true);
+
+        setCaret(fixture.editor, 0, character);
+        await waitFor(() => predictionElements(fixture.container).length > 0, {
+          timeout: PREDICT_TIMEOUT,
+        });
+
+        const prediction = predictionElements(fixture.container)[0];
+        expect(prediction.dataset.replacement).toBeUndefined();
+        expect(
+          fixture.container.shadowRoot?.querySelector(
+            '[data-edit-prediction-insertion-range]'
+          )
+        ).not.toBeNull();
+        expect(
+          prediction.querySelector('[data-edit-prediction-suffix]')?.textContent
+        ).toBe('): number {');
+        expect(
+          Array.from(
+            prediction.querySelector('[data-edit-prediction-suffix]')
+              ?.children ?? []
+          ).map((token) => ({
+            text: token.textContent,
+            dark: (token as HTMLElement).style.getPropertyValue(
+              '--diffs-token-dark'
+            ),
+            light: (token as HTMLElement).style.getPropertyValue(
+              '--diffs-token-light'
+            ),
+          }))
+        ).toEqual(sourceSuffixTokens);
+        expect(
+          prediction.querySelector('[data-edit-prediction-line]')?.textContent
+        ).toBe(', discount?: number): number {');
+
+        expect(dispatchKey(fixture.content, 'Tab').defaultPrevented).toBe(true);
+        expect(fixture.editor.getText()).toBe(
+          'function value(items: CartItem[], discount?: number): number {'
+        );
+      } finally {
+        await fixture.cleanup();
+      }
+    });
+
     test(`${surface} reserves numberless rows for multiline ghost text`, async () => {
       const contents = 'const value = 1;\nnext();\nend();';
       const provider: EditPredictProvider = {
