@@ -376,11 +376,46 @@ export class FileRenderer<LAnnotation = undefined> {
     if (result == null) {
       return undefined;
     }
-    if (result.code.length !== textDocument.lineCount) {
-      result.code.length = Math.min(result.code.length, textDocument.lineCount);
-      for (let i = result.code.length; i < textDocument.lineCount; i++) {
-        // prefill lines with plain text content
-        result.code.push({
+    // Structural edits renumber cached HAST rows. Keep the unchanged prefix
+    // and suffix, and plain-fill only the window that still needs tokenizing.
+    const previousLines =
+      this.lineCache != null && isLineCacheForFile(this.lineCache, file)
+        ? this.lineCache.lines
+        : linesFromFileContents(file.contents);
+    const nextLines = linesFromFileContents(textDocument.getText());
+    if (previousLines.length !== nextLines.length) {
+      const maxShared = Math.min(previousLines.length, nextLines.length);
+      let prefix = 0;
+      while (
+        prefix < maxShared &&
+        previousLines[prefix] === nextLines[prefix]
+      ) {
+        prefix++;
+      }
+      let suffix = 0;
+      while (
+        suffix < maxShared - prefix &&
+        previousLines[previousLines.length - 1 - suffix] ===
+          nextLines[nextLines.length - 1 - suffix]
+      ) {
+        suffix++;
+      }
+
+      const previousCode = result.code;
+      result.code = new Array(nextLines.length);
+      for (let i = 0; i < prefix; i++) {
+        result.code[i] = previousCode[i];
+      }
+      for (let i = 0; i < suffix; i++) {
+        result.code[nextLines.length - 1 - i] =
+          previousCode[previousLines.length - 1 - i];
+      }
+      // Tokenized rows beyond the old EOF already use post-edit indexes.
+      for (let i = previousLines.length; i < nextLines.length; i++) {
+        result.code[i] ??= previousCode[i];
+      }
+      for (let i = prefix; i < nextLines.length - suffix; i++) {
+        result.code[i] ??= {
           type: 'element',
           tagName: 'div',
           properties: {
@@ -403,7 +438,14 @@ export class FileRenderer<LAnnotation = undefined> {
               ],
             },
           ],
-        });
+        };
+      }
+      for (let i = 0; i < result.code.length; i++) {
+        const line = result.code[i];
+        if (line?.type === 'element') {
+          line.properties['data-line'] = i + 1;
+          line.properties['data-line-index'] = i;
+        }
       }
       this.renderCache.isDirty = true;
     }
@@ -414,7 +456,7 @@ export class FileRenderer<LAnnotation = undefined> {
       cacheKey: file.cacheKey,
       file,
       sourceContents: file.contents,
-      lines: linesFromFileContents(textDocument.getText()),
+      lines: nextLines,
     };
     this.textDocumentCache.set(file, textDocument);
   }
