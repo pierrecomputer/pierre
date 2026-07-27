@@ -627,6 +627,60 @@ describe('Editor edit prediction', () => {
       }
     });
 
+    test(`${surface} composes multiple same-line insertions in the preview`, async () => {
+      const contents = 'alpha value gamma';
+      const firstCharacter = 'alpha '.length;
+      const secondCharacter = 'alpha value '.length;
+      const provider: EditPredictProvider = {
+        predict() {
+          return Promise.resolve({
+            edits: [
+              {
+                range: {
+                  start: { line: 0, character: firstCharacter },
+                  end: { line: 0, character: firstCharacter },
+                },
+                newText: 'one ',
+              },
+              {
+                range: {
+                  start: { line: 0, character: secondCharacter },
+                  end: { line: 0, character: secondCharacter },
+                },
+                newText: 'two ',
+              },
+            ],
+            newCursor: { line: 0, character: 25 },
+          });
+        },
+      };
+      const fixture = await createPredictionFixture({
+        contents,
+        editorOptions: { editPrediction: { provider } },
+        surface,
+      });
+
+      try {
+        setCaret(fixture.editor, 0, firstCharacter);
+        await waitFor(() => predictionElements(fixture.container).length > 0, {
+          timeout: PREDICT_TIMEOUT,
+        });
+
+        const predictions = predictionElements(fixture.container);
+        expect(predictions).toHaveLength(1);
+        expect(
+          predictions[0].querySelector('[data-edit-prediction-line]')
+            ?.textContent
+        ).toBe('one value two gamma');
+        expect(fixture.editor.getText()).toBe(contents);
+
+        expect(dispatchKey(fixture.content, 'Tab').defaultPrevented).toBe(true);
+        expect(fixture.editor.getText()).toBe('alpha one value two gamma');
+      } finally {
+        await fixture.cleanup();
+      }
+    });
+
     test(`${surface} reserves numberless rows for multiline ghost text`, async () => {
       const contents = 'const value = 1;\nnext();\nend();';
       const provider: EditPredictProvider = {

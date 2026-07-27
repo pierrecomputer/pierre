@@ -138,6 +138,7 @@ import {
   extend,
   getLineNumberAttr,
   h,
+  isPromise,
   round,
 } from './utils';
 
@@ -265,6 +266,7 @@ const editPredictionTextEncoder = new TextEncoder();
 const SELECTION_ACTION_POPOVER_PLACEMENT_KEY = 'selection-action';
 const MULTI_SELECTION_CLIPBOARD_TYPE =
   'application/vnd.pierre.diffs-selections+json';
+
 type OverlayRangeType =
   | 'selection'
   | 'match'
@@ -389,6 +391,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     cursorOffset: number;
     rendered: boolean;
     response: EditPredictResponse;
+    renderEdits: readonly TextEdit[];
   };
   #editPredictionHistory: EditPredictionHistoryRecord[] = [];
   #editPredictionSpacers = new Map<HTMLElement, number>();
@@ -415,7 +418,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         this.#editPrediction === undefined
           ? undefined
           : new Set(
-              this.#editPrediction.response.edits.map(
+              this.#editPrediction.renderEdits.map(
                 (edit) => edit.range.start.line
               )
             );
@@ -1292,11 +1295,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     } catch {
       return;
     }
-    if (!(result instanceof Promise)) {
+    if (!isPromise(result)) {
       return;
     }
 
-    this.#trackStateWrite(cacheKey, result);
+    this.#trackStateWrite(cacheKey, Promise.resolve(result));
   }
 
   #trackStateWrite(cacheKey: string, result: Promise<void>): void {
@@ -1340,8 +1343,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       } catch {
         return;
       }
-      if (result instanceof Promise) {
-        return result.then(applyState).catch(() => {});
+      if (isPromise(result)) {
+        return Promise.resolve(result)
+          .then(applyState)
+          .catch(() => {});
       } else {
         try {
           applyState(result);
@@ -1352,14 +1357,15 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     const pendingWrite = this.#pendingStateWrites.get(cacheKey);
     const result =
       pendingWrite === undefined ? readState() : pendingWrite.then(readState);
-    if (result instanceof Promise) {
+    if (isPromise(result)) {
+      const completion = Promise.resolve(result).catch(() => {});
       const pendingRestore = {
         cacheKey,
         textDocument,
         documentVersion,
         selections,
         view,
-        completion: result.catch(() => {}),
+        completion,
       };
       this.#pendingStateRestore = pendingRestore;
       void pendingRestore.completion.finally(() => {
@@ -4145,7 +4151,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         this.#editPredictionAltPressed)
     ) {
       const continuationLines = new Map<number, number>();
-      for (const edit of prediction.response.edits) {
+      for (const edit of prediction.renderEdits) {
         if (
           edit.newText.length === 0 ||
           !this.#isLineVisible(edit.range.start.line)
@@ -4479,21 +4485,70 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
             }
           }
 
+          const responseEdits = edits.map((edit) => ({
+            range: {
+              start: document.positionAt(edit.start),
+              end: document.positionAt(edit.end),
+            },
+            newText: edit.text,
+          }));
+          // One overlay owns each source line so masked suffixes are redrawn as
+          // the exact post-edit text.
+          const renderEdits: TextEdit[] = [];
+          for (let index = 0; index < responseEdits.length; index++) {
+            const edit = responseEdits[index];
+            const line = edit.range.start.line;
+            let groupEnd = index;
+            while (
+              responseEdits[groupEnd].range.end.line === line &&
+              responseEdits[groupEnd + 1]?.range.start.line === line &&
+              responseEdits[groupEnd + 1]?.range.end.line === line
+            ) {
+              groupEnd++;
+            }
+            if (groupEnd === index) {
+              // Cross-line edits cannot share their boundary line with another
+              // preview overlay.
+              if (renderEdits.at(-1)?.range.end.line === line) {
+                return;
+              }
+              renderEdits.push(edit);
+              continue;
+            }
+
+            const lineText = document.getLineText(line);
+            let character = edit.range.start.character;
+            let newText = '';
+            for (
+              let sameLineIndex = index;
+              sameLineIndex <= groupEnd;
+              sameLineIndex++
+            ) {
+              const sameLineEdit = responseEdits[sameLineIndex];
+              newText +=
+                lineText.slice(character, sameLineEdit.range.start.character) +
+                sameLineEdit.newText;
+              character = sameLineEdit.range.end.character;
+            }
+            renderEdits.push({
+              range: {
+                start: { ...edit.range.start },
+                end: { line, character: lineText.length },
+              },
+              newText: newText + lineText.slice(character),
+            });
+            index = groupEnd;
+          }
           this.#editPrediction = {
             document,
             version: request.version,
             cursorOffset,
             rendered: false,
             response: {
-              edits: edits.map((edit) => ({
-                range: {
-                  start: document.positionAt(edit.start),
-                  end: document.positionAt(edit.end),
-                },
-                newText: edit.text,
-              })),
+              edits: responseEdits,
               newCursor: { ...newCursor },
             },
+            renderEdits,
           };
           this.#updateSelections(this.#selections);
         })
@@ -4608,10 +4663,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     const isWrap = this.#isWrap;
     for (
       let editIndex = 0;
-      editIndex < prediction.response.edits.length;
+      editIndex < prediction.renderEdits.length;
       editIndex++
     ) {
-      const edit = prediction.response.edits[editIndex];
+      const edit = prediction.renderEdits[editIndex];
       const { start, end } = edit.range;
       const isDeletion = edit.newText.length === 0;
       const isReplacement = comparePosition(start, end) !== 0;
@@ -4681,16 +4736,9 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         element.style.width = 'max-content';
       }
       const lines = edit.newText.split(/\r\n|\r|\n/);
-      // Redraw the suffix only when other edits or wrapping cannot relocate it.
+      // Redraw the suffix when wrapping cannot relocate it.
       let insertionSuffix: Node | undefined;
-      if (
-        isMidLineInsertion &&
-        !isWrap &&
-        prediction.response.edits[editIndex - 1]?.range.end.line !==
-          start.line &&
-        prediction.response.edits[editIndex + 1]?.range.start.line !==
-          start.line
-      ) {
+      if (isMidLineInsertion && !isWrap) {
         const sourceLine = this.#getLineElement(start.line);
         if (sourceLine === undefined) {
           insertionSuffix = document.createTextNode(

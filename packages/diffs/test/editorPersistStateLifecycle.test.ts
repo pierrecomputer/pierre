@@ -35,6 +35,15 @@ function createDeferred<T>(): Deferred<T> {
   return { promise, resolve };
 }
 
+function foreignPromise<T>(promise: Promise<T>): Promise<T> {
+  return {
+    [Symbol.toStringTag]: 'Promise',
+    then: promise.then.bind(promise),
+    catch: promise.catch.bind(promise),
+    finally: promise.finally.bind(promise),
+  } as Promise<T>;
+}
+
 async function attachFile(
   editor: Editor<undefined>,
   fileContents: FileContents
@@ -130,6 +139,35 @@ describe('Editor persisted state lifecycle', () => {
       expect(gets).toEqual(['persisted.ts']);
       expect(sets).toEqual([]);
       expect(editor.getState().selections).toEqual(savedCaret(3).selections);
+    } finally {
+      editor.cleanUp();
+      attached?.file.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test('restores state from a foreign Promise', async () => {
+    const dom = installDom();
+    const state = savedCaret(3);
+    const storage: IStateStorage = {
+      get() {
+        return foreignPromise(Promise.resolve(state));
+      },
+      set() {},
+    };
+    const editor = new Editor<undefined>({
+      persistState: true,
+      persistStateStorage: storage,
+    });
+    let attached: AttachedFile | undefined;
+
+    try {
+      attached = await attachFile(editor, { ...ORIGINAL_FILE });
+      await waitFor(
+        () => editor.getState().selections?.[0]?.start.character === 3
+      );
+
+      expect(editor.getState().selections).toEqual(state.selections);
     } finally {
       editor.cleanUp();
       attached?.file.cleanUp();
@@ -256,9 +294,11 @@ describe('Editor persisted state lifecycle', () => {
           throw new Error('unexpected persisted.ts write');
         }
         writes.push(state);
-        return gate.promise.then(() => {
-          states.set(cacheKey, state);
-        });
+        return foreignPromise(
+          gate.promise.then(() => {
+            states.set(cacheKey, state);
+          })
+        );
       },
     };
     const editor = new Editor<undefined>({

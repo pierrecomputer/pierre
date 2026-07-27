@@ -75,11 +75,13 @@ export function createGithubSessionCookie(
   );
 }
 
-export function isGithubAuthenticated(request: Request): boolean {
+export function getAuthenticatedGithubUserId(
+  request: Request
+): string | undefined {
   const config = getGithubOAuthConfig();
   const session = getAuthCookie(request, GITHUB_SESSION_COOKIE);
   if (config === undefined || session === undefined) {
-    return false;
+    return;
   }
   const [userId, expiresAt, signature, ...extra] = session.split('.');
   if (
@@ -89,10 +91,14 @@ export function isGithubAuthenticated(request: Request): boolean {
     signature === undefined ||
     Number(expiresAt) <= Math.floor(Date.now() / 1000)
   ) {
-    return false;
+    return;
   }
   const expected = createHmac('sha256', config.clientSecret)
     .update(`${userId}.${expiresAt}`)
     .digest('base64url');
-  return authValuesMatch(signature, expected);
+  return authValuesMatch(signature, expected) ? userId : undefined;
+}
+
+export function isGithubAuthenticated(request: Request): boolean {
+  return getAuthenticatedGithubUserId(request) !== undefined;
 }
