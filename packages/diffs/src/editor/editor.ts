@@ -119,6 +119,7 @@ import {
   type PersistStateStorage,
 } from './stateStorage';
 import {
+  getTextDocumentChangeTransaction,
   type ResolvedTextEdit,
   TextDocument,
   type TextDocumentChange,
@@ -389,8 +390,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     response: EditPredictResponse;
   };
   #editPredictionHistory: EditPredictionHistoryRecord[] = [];
-  #editPredictionHistoryText?: string;
-  #pendingEditPredictionHistorySource?: 'user' | 'prediction';
   #editPredictionSpacers = new Map<HTMLElement, number>();
   // onAttach is deferred until the synchronized document and DOM are usable.
   // Track the state so cleanup cannot notify an editor from an ended session.
@@ -479,11 +478,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     if (this.#options.editPrediction !== previousEditPrediction) {
       this.#cancelEditPrediction(true);
       this.#editPredictionHistory = [];
-      this.#editPredictionHistoryText =
-        this.#options.editPrediction === undefined
-          ? undefined
-          : this.#textDocument?.getText();
-      this.#pendingEditPredictionHistorySource = undefined;
       this.#scheduleEditPrediction();
     }
   }
@@ -770,8 +764,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#editPredictionAltPressed = false;
     if (!recycle) {
       this.#editPredictionHistory = [];
-      this.#editPredictionHistoryText = undefined;
-      this.#pendingEditPredictionHistorySource = undefined;
     }
     if (!recycle) {
       this.#attachState.delivered = false;
@@ -1012,11 +1004,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#fileInfo = { name, lang, cacheKey };
       this.#textDocument = textDocument;
       this.#editPredictionHistory = [];
-      this.#editPredictionHistoryText =
-        this.#options.editPrediction === undefined
-          ? undefined
-          : textDocument.getText();
-      this.#pendingEditPredictionHistorySource = undefined;
       if (persistedCacheKey !== undefined) {
         this.#textDocumentCache.set(persistedCacheKey, textDocument);
         persistedStateTarget = {
@@ -4251,6 +4238,23 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
   }
 
+  #includesEditPredictionPath(path: string): boolean {
+    const options = this.#options.editPrediction;
+    if (options === undefined) {
+      return false;
+    }
+    const normalizedPath = path.replaceAll('\\', '/');
+    return (
+      (options.include === undefined ||
+        options.include.some((pattern) =>
+          matchesEditPredictionPattern(normalizedPath, pattern)
+        )) &&
+      options.exclude?.some((pattern) =>
+        matchesEditPredictionPattern(normalizedPath, pattern)
+      ) !== true
+    );
+  }
+
   #scheduleEditPrediction(): void {
     this.#cancelEditPrediction(true);
     const selection = this.#selections?.[0];
@@ -4284,26 +4288,13 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         return;
       }
 
-      const normalizedPath = path.replaceAll('\\', '/');
-      if (
-        (options.include !== undefined &&
-          !options.include.some((pattern) =>
-            matchesEditPredictionPattern(normalizedPath, pattern)
-          )) ||
-        options.exclude?.some((pattern) =>
-          matchesEditPredictionPattern(normalizedPath, pattern)
-        ) === true
-      ) {
+      if (!this.#includesEditPredictionPath(path)) {
         return;
       }
 
-      this.#recordEditPredictionHistory(
-        this.#pendingEditPredictionHistorySource ?? 'user'
-      );
       const request = buildEditPredictionRequest(
         path,
-        document.version,
-        document.getText(),
+        document,
         cursorOffset,
         this.#editPredictionHistory
       );
@@ -4504,28 +4495,26 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }, EDIT_PREDICTION_DEBOUNCE_MS);
   }
 
-  #recordEditPredictionHistory(source: 'user' | 'prediction'): void {
+  #recordEditPredictionHistory(
+    change: TextDocumentChange,
+    source: 'user' | 'prediction'
+  ): void {
     const textDocument = this.#textDocument;
     const path = this.#fileInfo?.name;
+    const transaction = getTextDocumentChangeTransaction(change);
     if (
-      this.#options.editPrediction === undefined ||
       textDocument === undefined ||
-      path === undefined
+      path === undefined ||
+      transaction === undefined ||
+      !this.#includesEditPredictionPath(path)
     ) {
-      return;
-    }
-    const text = textDocument.getText();
-    const previousText = this.#editPredictionHistoryText;
-    this.#editPredictionHistoryText = text;
-    this.#pendingEditPredictionHistorySource = undefined;
-    if (previousText === undefined || previousText === text) {
       return;
     }
     this.#editPredictionHistory = recordEditPrediction(
       this.#editPredictionHistory,
       path,
-      previousText,
-      text,
+      textDocument,
+      transaction,
       source
     );
   }
@@ -5935,11 +5924,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       editSource?: 'user' | 'prediction';
     }
   ) {
-    if (options?.editSource === 'prediction') {
-      this.#recordEditPredictionHistory('prediction');
-    } else {
-      this.#pendingEditPredictionHistorySource = 'user';
-    }
+    this.#recordEditPredictionHistory(change, options?.editSource ?? 'user');
     this.#scheduleEditPrediction();
 
     const fileRef = this.getFile();

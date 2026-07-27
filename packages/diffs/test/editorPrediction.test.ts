@@ -1,4 +1,4 @@
-import { afterAll, describe, expect, test } from 'bun:test';
+import { afterAll, describe, expect, spyOn, test } from 'bun:test';
 
 import { File } from '../src/components/File';
 import { FileDiff } from '../src/components/FileDiff';
@@ -11,6 +11,7 @@ import {
   type EditPredictRequest,
   type EditPredictResponse,
 } from '../src/editor/editor';
+import { TextDocument } from '../src/editor/textDocument';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
 import { installDom, wait, waitFor } from './domHarness';
 
@@ -241,6 +242,34 @@ describe('Editor edit prediction', () => {
     }
   });
 
+  test('uses the document EOL when the excerpt has no line break', async () => {
+    const calls: PredictionCall[] = [];
+    const provider: EditPredictProvider = {
+      predict(request, context) {
+        calls.push({ context, request });
+        return Promise.resolve({
+          edits: [],
+          newCursor: { line: 1, character: 1 },
+        });
+      },
+    };
+    const fixture = await createPredictionFixture({
+      contents: `${'界'.repeat(2_000)}\r\nshort`,
+      editorOptions: { editPrediction: { provider } },
+    });
+
+    try {
+      setCaret(fixture.editor, 1, 0);
+      dispatchKey(fixture.content, 'ArrowRight');
+      await expectCallCount(calls, 1);
+
+      expect(calls[0].request.excerptText).toBe('short');
+      expect(calls[0].request.eol).toBe('\r\n');
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
   test('bounds editable and context ranges around the cursor', async () => {
     const calls: PredictionCall[] = [];
     const contents = Array.from(
@@ -280,6 +309,52 @@ describe('Editor edit prediction', () => {
         request.editableRange.end
       );
     } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  test('does not materialize the full document for prediction requests or history', async () => {
+    const calls: PredictionCall[] = [];
+    const provider: EditPredictProvider = {
+      predict(request, context) {
+        calls.push({ context, request });
+        return Promise.resolve({
+          edits: [],
+          newCursor: { line: 60, character: 7 },
+        });
+      },
+    };
+    const fixture = await createPredictionFixture({
+      contents: Array.from(
+        { length: 120 },
+        (_, line) => `const value${line} = ${line};`
+      ).join('\n'),
+      editorOptions: {},
+    });
+    const getText = spyOn(TextDocument.prototype, 'getText');
+    try {
+      fixture.editor.setOptions({ editPrediction: { provider } });
+      setCaret(fixture.editor, 60, 5);
+      fixture.editor.applyEdits([
+        {
+          range: {
+            start: { line: 60, character: 5 },
+            end: { line: 60, character: 5 },
+          },
+          newText: 'X',
+        },
+      ]);
+      await expectCallCount(calls, 1);
+
+      expect(
+        getText.mock.calls.filter(([range]) => range === undefined)
+      ).toHaveLength(0);
+      expect(calls[0].request.editHistory[0]?.diff).toContain(
+        '+constX value60 = 60;'
+      );
+      expect(calls[0].request.excerptStartLine).toBeGreaterThan(0);
+    } finally {
+      getText.mockRestore();
       await fixture.cleanup();
     }
   });
@@ -428,6 +503,15 @@ describe('Editor edit prediction', () => {
 
         await expectCallCount(calls, 2);
         expect(calls[1].request.editHistory.at(-1)?.source).toBe('prediction');
+        expect(calls[1].request.editHistory.at(-1)?.diff).toContain(
+          '-const value = 1'
+        );
+        expect(calls[1].request.editHistory.at(-1)?.diff).toContain(
+          '+const answer = 1;'
+        );
+        expect(calls[1].request.editHistory.at(-1)?.diff).toContain(
+          '+console.log(answer);'
+        );
 
         fixture.editor.undo();
         expect(fixture.editor.getText()).toBe(typedText);
@@ -916,6 +1000,41 @@ describe('Editor edit prediction', () => {
           'user',
         ]
       );
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  test('removes an immediately undone user edit and records its redo', async () => {
+    const calls: PredictionCall[] = [];
+    const provider: EditPredictProvider = {
+      predict(request, context) {
+        calls.push({ context, request });
+        return Promise.resolve({
+          edits: [],
+          newCursor: { line: 0, character: 2 },
+        });
+      },
+    };
+    const fixture = await createPredictionFixture({
+      contents: 'x',
+      editorOptions: { editPrediction: { provider } },
+    });
+
+    try {
+      setCaret(fixture.editor, 0, 1);
+      dispatchTextInput(fixture.content, 'a');
+      await expectCallCount(calls, 1);
+      expect(calls[0].request.editHistory[0]?.diff).toContain('+xa');
+
+      fixture.editor.undo();
+      await expectCallCount(calls, 2);
+      expect(calls[1].request.editHistory).toHaveLength(0);
+
+      fixture.editor.redo();
+      await expectCallCount(calls, 3);
+      expect(calls[2].request.editHistory).toHaveLength(1);
+      expect(calls[2].request.editHistory[0]?.diff).toContain('+xa');
     } finally {
       await fixture.cleanup();
     }
