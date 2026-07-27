@@ -1058,6 +1058,133 @@ interface EditorOptions<LAnnotation> {
   options,
 };
 
+export const EDIT_PERSIST_STATE_EXAMPLE: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'editor_persist_state.ts',
+    contents: `import type { EditorState, FileContents } from '@pierre/diffs';
+import { Editor, type IStateStorage } from '@pierre/diffs/edit';
+
+const editor = new Editor({
+  persistState: true,
+  persistStateStorage: 'inMemory',
+});
+
+const file: FileContents = {
+  name: 'src/example.ts',
+  contents: 'export const value = 1;',
+  cacheKey: 'workspace-file-1',
+};
+
+// Custom storage may be synchronous or asynchronous.
+const states = new Map<string, EditorState>();
+const customStorage: IStateStorage = {
+  get(cacheKey) {
+    return states.get(cacheKey);
+  },
+  set(cacheKey, state) {
+    states.set(cacheKey, state);
+  },
+};
+
+const editorWithCustomStorage = new Editor({
+  persistState: true,
+  persistStateStorage: customStorage,
+});`,
+  },
+  options,
+};
+
+export const EDIT_REACT_PROVIDER_EXAMPLE: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'editor_react_provider.tsx',
+    contents: `import { useCallback, useMemo } from 'react';
+import { Editor, type EditorOptions } from '@pierre/diffs/edit';
+import {
+  EditProvider,
+  File,
+  type CreateEditor,
+} from '@pierre/diffs/react';
+
+const createEditor = useCallback<CreateEditor<undefined>>(
+  (surfaceOptions) =>
+    new Editor({
+      ...sharedEditorDefaults,
+      ...surfaceOptions,
+    }),
+  []
+);
+
+const editorOptions = useMemo<EditorOptions<undefined>>(
+  () => ({
+    onChange: handleChange,
+    onAttach(editor) {
+      editorRef.current = editor;
+    },
+  }),
+  [handleChange]
+);
+
+// This example is self-contained. Apps should usually mount EditProvider near
+// the root so its factory is available to every editable File, diff, and
+// CodeView.
+return (
+  <EditProvider createEditor={createEditor}>
+    <File file={file} edit={editing} editorOptions={editorOptions} />
+  </EditProvider>
+);`,
+  },
+  options,
+};
+
+export const EDIT_AUTOFOCUS_REACT_EXAMPLE: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'editor_autofocus_react.tsx',
+    contents: `import { useMemo } from 'react';
+import type { EditorOptions } from '@pierre/diffs/edit';
+import { CodeView } from '@pierre/diffs/react';
+
+const editorOptions = useMemo<EditorOptions<undefined>>(
+  () => ({
+    onAttach(editor) {
+      editor.focus({ lineNumber: 'first-visible', preventScroll: true });
+    },
+  }),
+  []
+);
+
+return <CodeView items={items} editorOptions={editorOptions} />;`,
+  },
+  options,
+};
+
+export const EDIT_AUTOFOCUS_VANILLA_EXAMPLE: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'editor_autofocus_vanilla.ts',
+    contents: `import { CodeView } from '@pierre/diffs';
+import { Editor } from '@pierre/diffs/edit';
+
+const viewer = new CodeView({
+  createEditor(options) {
+    return new Editor({
+      ...options,
+      onAttach(editor) {
+        editor.focus({ lineNumber: 'first-visible', preventScroll: true });
+      },
+    });
+  },
+});`,
+  },
+  options,
+};
+
+export const EDIT_FOCUS_POSITION_EXAMPLE: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'editor_focus_position.ts',
+    contents: `editor.focus({ lineNumber: 13, character: 4 });`,
+  },
+  options,
+};
+
 export const EDITOR_PUBLIC_API: PreloadFileOptions<undefined> = {
   file: {
     name: 'editor_public_api.ts',
