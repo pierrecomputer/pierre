@@ -74,6 +74,7 @@
 [data-match-range],
 [data-bracket-match-range],
 [data-edit-prediction-deletion-range],
+[data-edit-prediction-insertion-range],
 [data-edit-prediction-replacement-range],
 [data-marker-range] {
   position: absolute;
@@ -102,8 +103,12 @@
   white-space: pre;
 }
 [data-edit-prediction][data-replacement] [data-edit-prediction-line],
+[data-edit-prediction-insertion-range],
 [data-edit-prediction-replacement-range] {
   background-color: var(--diffs-edit-prediction-bg, var(--diffs-bg));
+}
+[data-edit-prediction-suffix] {
+  color: var(--diffs-fg);
 }
 [data-edit-prediction][data-wrap] [data-edit-prediction-line] {
   max-width: 100%;
@@ -133,6 +138,9 @@
       calc(50% + 0.5px),
     transparent calc(50% + 0.5px)
   );
+}
+[data-edit-prediction-insertion-range] {
+  z-index: 0;
 }
 [data-edit-prediction-replacement-range] {
   z-index: 1;
