@@ -681,6 +681,60 @@ describe('Editor edit prediction', () => {
       }
     });
 
+    test(`${surface} previews edits sharing a cross-line boundary`, async () => {
+      const contents = 'abc\ndef value';
+      const provider: EditPredictProvider = {
+        predict() {
+          return Promise.resolve({
+            edits: [
+              {
+                range: {
+                  start: { line: 0, character: 2 },
+                  end: { line: 1, character: 0 },
+                },
+                newText: 'C',
+              },
+              {
+                range: {
+                  start: { line: 1, character: 1 },
+                  end: { line: 1, character: 2 },
+                },
+                newText: 'E',
+              },
+            ],
+            newCursor: { line: 0, character: 5 },
+          });
+        },
+      };
+      const fixture = await createPredictionFixture({
+        contents,
+        editorOptions: { editPrediction: { provider } },
+        surface,
+      });
+
+      try {
+        setCaret(fixture.editor, 0, 2);
+        await waitFor(
+          () => predictionElements(fixture.container).length === 1,
+          {
+            timeout: PREDICT_TIMEOUT,
+          }
+        );
+
+        expect(
+          predictionElements(fixture.container).map(
+            (prediction) => prediction.textContent
+          )
+        ).toEqual(['CdEf value']);
+        expect(fixture.editor.getText()).toBe(contents);
+
+        expect(dispatchKey(fixture.content, 'Tab').defaultPrevented).toBe(true);
+        expect(fixture.editor.getText()).toBe('abCdEf value');
+      } finally {
+        await fixture.cleanup();
+      }
+    });
+
     test(`${surface} reserves numberless rows for multiline ghost text`, async () => {
       const contents = 'const value = 1;\nnext();\nend();';
       const provider: EditPredictProvider = {

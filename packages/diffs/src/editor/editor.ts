@@ -4497,45 +4497,44 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           const renderEdits: TextEdit[] = [];
           for (let index = 0; index < responseEdits.length; index++) {
             const edit = responseEdits[index];
-            const line = edit.range.start.line;
             let groupEnd = index;
+            let groupEndLine = edit.range.end.line;
             while (
-              responseEdits[groupEnd].range.end.line === line &&
-              responseEdits[groupEnd + 1]?.range.start.line === line &&
-              responseEdits[groupEnd + 1]?.range.end.line === line
+              responseEdits[groupEnd + 1]?.range.start.line === groupEndLine
             ) {
               groupEnd++;
+              groupEndLine = responseEdits[groupEnd].range.end.line;
             }
             if (groupEnd === index) {
-              // Cross-line edits cannot share their boundary line with another
-              // preview overlay.
-              if (renderEdits.at(-1)?.range.end.line === line) {
-                return;
-              }
               renderEdits.push(edit);
               continue;
             }
 
-            const lineText = document.getLineText(line);
-            let character = edit.range.start.character;
-            let newText = '';
-            for (
-              let sameLineIndex = index;
-              sameLineIndex <= groupEnd;
-              sameLineIndex++
-            ) {
-              const sameLineEdit = responseEdits[sameLineIndex];
-              newText +=
-                lineText.slice(character, sameLineEdit.range.start.character) +
-                sameLineEdit.newText;
-              character = sameLineEdit.range.end.character;
+            const groupEndCharacter = document.getLineLength(groupEndLine);
+            const renderEnd = document.offsetAt({
+              line: groupEndLine,
+              character: groupEndCharacter,
+            });
+            const newText: string[] = [];
+            let consumed = edits[index].start;
+            for (let groupIndex = index; groupIndex <= groupEnd; groupIndex++) {
+              const groupEdit = edits[groupIndex];
+              newText.push(
+                document.getTextSlice(consumed, groupEdit.start),
+                groupEdit.text
+              );
+              consumed = groupEdit.end;
             }
+            newText.push(document.getTextSlice(consumed, renderEnd));
             renderEdits.push({
               range: {
                 start: { ...edit.range.start },
-                end: { line, character: lineText.length },
+                end: {
+                  line: groupEndLine,
+                  character: groupEndCharacter,
+                },
               },
-              newText: newText + lineText.slice(character),
+              newText: newText.join(''),
             });
             index = groupEnd;
           }
