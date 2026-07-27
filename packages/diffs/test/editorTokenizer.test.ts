@@ -1074,7 +1074,7 @@ describe('EditorTokenizer', () => {
     }
   });
 
-  test('prebuilds state only from queued messages and detaches when complete', () => {
+  test('queues state prebuilds and resumes them after foreground work', () => {
     const originalAddEventListener = globalThis.addEventListener;
     const originalRemoveEventListener = globalThis.removeEventListener;
     const originalPostMessage = globalThis.postMessage;
@@ -1113,26 +1113,37 @@ describe('EditorTokenizer', () => {
       value: () => (now += 2),
     });
 
+    const states = new Map<string, StateStack>();
     const grammar = {
-      tokenizeLine2(lineText: string, ruleStack: StateStack) {
+      tokenizeLine2(lineText: string) {
+        let nextState = states.get(lineText);
+        if (nextState === undefined) {
+          nextState = {
+            equals(other: StateStack | null) {
+              return other === nextState;
+            },
+          } as unknown as StateStack;
+          states.set(lineText, nextState);
+        }
         tokenizeLineCount++;
         return {
           tokens: new Uint32Array([0, 0]),
-          ruleStack,
+          ruleStack: nextState,
           stoppedEarly: false,
           lineText,
         };
       },
     } as unknown as IGrammar;
+    const textDocument = new TextDocument(
+      'test.ts',
+      Array.from({ length: 100 }, (_, line) => `line ${line}`).join('\n'),
+      'typescript'
+    );
     const tokenizer = new EditorTokenizer({
       highlighter: createTestHighlighter({
         getLanguage: () => grammar,
       }),
-      textDocument: new TextDocument(
-        'test.ts',
-        ['line 0', 'line 1', 'line 2', 'line 3'].join('\n'),
-        'typescript'
-      ),
+      textDocument,
       codeOptions: { theme: 'test-theme', themeType: 'dark' },
       setStyle: noopSetStyle,
       onDeferTokenize: () => {},
@@ -1169,6 +1180,48 @@ describe('EditorTokenizer', () => {
 
       tokenizer.getStringCommentRegexpRangesInLine(3);
       expect(tokenizeLineCount).toBe(4);
+
+      const change = textDocument.applyEdits([
+        {
+          range: {
+            start: { line: 0, character: 0 },
+            end: { line: 0, character: 6 },
+          },
+          newText: 'LINE 0',
+        },
+      ])!;
+      tokenizeLineCount = 0;
+      postedMessages.length = 0;
+      tokenizer.tokenize(change, {
+        startingLine: 0,
+        totalLines: 1,
+        bufferBefore: 0,
+        bufferAfter: 0,
+      });
+      expect(postedMessages).toHaveLength(1);
+
+      tokenizer.prebuildStateStack({
+        startingLine: 99,
+        totalLines: 1,
+        bufferBefore: 0,
+        bufferAfter: 0,
+      });
+      expect(postedMessages).toHaveLength(1);
+
+      messageIndex = 0;
+      while (messageIndex < postedMessages.length) {
+        const event = { data: postedMessages[messageIndex++] } as MessageEvent;
+        for (const listener of [...messageListeners]) {
+          listener(event);
+        }
+      }
+
+      expect(tokenizeLineCount).toBeGreaterThan(2);
+      expect(messageListeners.size).toBe(0);
+
+      const completedTokenizeLineCount = tokenizeLineCount;
+      tokenizer.getStringCommentRegexpRangesInLine(99);
+      expect(tokenizeLineCount).toBe(completedTokenizeLineCount);
     } finally {
       tokenizer.cleanUp();
       globalThis.addEventListener = originalAddEventListener;

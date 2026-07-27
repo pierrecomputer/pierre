@@ -70,6 +70,7 @@ export class EditorTokenizer {
   #backgroundJobId: number = 0;
   #tokenizerId = ++nextTokenizerId;
   #backgroundPrebuildEndLine = -1;
+  #pendingPrebuildEndLine = -1;
   #backgroundChangedLineRanges: readonly [number, number][] | undefined;
   #backgroundChangedRangeIndex: number = 0;
   #bracketIgnoredRanges: ([number, number][] | null | undefined)[] = [];
@@ -569,6 +570,7 @@ export class EditorTokenizer {
   }
 
   stopBackgroundTokenize(): void {
+    this.#pendingPrebuildEndLine = -1;
     if (this.#isStopped) {
       return;
     }
@@ -676,6 +678,12 @@ export class EditorTokenizer {
     this.#isStopped = false;
     this.#isPaused = false;
     this.#lastLine = startLine;
+    if (this.#backgroundPrebuildEndLine >= 0) {
+      this.#pendingPrebuildEndLine = Math.max(
+        this.#pendingPrebuildEndLine,
+        this.#backgroundPrebuildEndLine
+      );
+    }
     this.#backgroundPrebuildEndLine = -1;
     this.#backgroundChangedLineRanges = changedLineRanges;
     this.#backgroundChangedRangeIndex = changedRangeIndex;
@@ -687,12 +695,17 @@ export class EditorTokenizer {
     if (this.#grammar === undefined || this.#stateStack.length > endLine) {
       return;
     }
-    // Keep an active state-only job and extend it when a later viewport needs
-    // more state. A foreground edit job remains authoritative.
+    // Extend an active prebuild, or retain the target until the foreground
+    // edit job reconverges and releases the state cache.
     if (!this.#isStopped) {
       if (this.#backgroundPrebuildEndLine >= 0) {
         this.#backgroundPrebuildEndLine = Math.max(
           this.#backgroundPrebuildEndLine,
+          endLine
+        );
+      } else {
+        this.#pendingPrebuildEndLine = Math.max(
+          this.#pendingPrebuildEndLine,
           endLine
         );
       }
@@ -704,6 +717,7 @@ export class EditorTokenizer {
     this.#isPaused = false;
     this.#lastLine = this.#stateStack.length - 1;
     this.#backgroundPrebuildEndLine = endLine;
+    this.#pendingPrebuildEndLine = -1;
     this.#backgroundChangedLineRanges = undefined;
     this.#backgroundChangedRangeIndex = 0;
     this.#attachMessageListener();
@@ -961,7 +975,11 @@ export class EditorTokenizer {
     }
 
     if (settled || line >= totalLines) {
+      const pendingPrebuildEndLine = this.#pendingPrebuildEndLine;
       this.stopBackgroundTokenize();
+      if (pendingPrebuildEndLine >= 0) {
+        this.#scheduleStatePrebuild(pendingPrebuildEndLine);
+      }
       return;
     }
 
