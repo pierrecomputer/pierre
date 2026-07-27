@@ -12,13 +12,14 @@ import type {
 // The editor requires the token transformer, so enabling it in the SSR preload
 // keeps hydration from rerendering the surface after the editor attaches.
 // Mirrors LiveEditing/constants.ts.
-const EDITABLE_FILE_OPTIONS: FileOptions<undefined> = {
+const EDITABLE_OPTIONS = {
   theme: DEFAULT_THEMES,
   themeType: 'dark',
   useTokenTransformer: true,
-};
+} as const;
+const EDITABLE_FILE_OPTIONS: FileOptions<undefined> = EDITABLE_OPTIONS;
 
-export const EDIT_PREDICTION_OLD_FILE: FileContents = {
+const EDIT_PREDICTION_OLD_FILE: FileContents = {
   name: 'cart.ts',
   contents: `// cart calculator
 
@@ -445,10 +446,8 @@ export const EDIT_PREDICTION_FILE_DIFF_EXAMPLE: PreloadFileDiffOptions<undefined
       EDIT_PREDICTION_NEW_FILE
     ),
     options: {
-      theme: DEFAULT_THEMES,
-      themeType: 'dark',
+      ...EDITABLE_OPTIONS,
       diffStyle: 'unified',
-      useTokenTransformer: true,
     },
   };
 

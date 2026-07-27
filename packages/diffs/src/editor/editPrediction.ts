@@ -1,8 +1,6 @@
 import type { Position, TextEdit } from '../types';
-import type {
-  ResolvedTextEdit,
-  TextDocumentChangeTransaction,
-} from './textDocument';
+import type { ResolvedTextEdit } from './textDocument';
+import type { TextDocumentChangeTransaction } from './textDocumentChangeTransaction';
 
 export interface EditPredictRequest {
   /** Current file name/path as supplied to the File or FileDiff component. */
@@ -82,15 +80,9 @@ interface EditPredictionHistoryFragment {
 interface EditPredictionTransactionFragment {
   readonly beforeText: string;
   readonly afterText: string;
-  readonly beforeStart: number;
-  readonly beforeEnd: number;
-  readonly afterStart: number;
-  readonly afterEnd: number;
+  readonly startOffset: number;
   readonly startLine: number;
-  readonly beforeChangedStartLine: number;
-  readonly beforeChangedEndLine: number;
-  readonly afterChangedStartLine: number;
-  readonly afterChangedEndLine: number;
+  readonly bounds: LineDiffBounds;
 }
 
 interface LineDiffBounds {
@@ -213,8 +205,7 @@ function formatEditHunk(
   path: string,
   oldText: string,
   newText: string,
-  oldLineOffset = 0,
-  newLineOffset = oldLineOffset
+  lineOffset = 0
 ): { readonly hunk: string; readonly bounds: LineDiffBounds } | undefined {
   if (oldText === newText) {
     return;
@@ -245,8 +236,7 @@ function formatEditHunk(
     return;
   }
 
-  const oldStart = Math.max(0, bounds.prefixLines - DIFF_CONTEXT_LINES);
-  const newStart = Math.max(0, bounds.prefixLines - DIFF_CONTEXT_LINES);
+  const start = Math.max(0, bounds.prefixLines - DIFF_CONTEXT_LINES);
   const oldEnd = Math.min(
     bounds.oldLineCount,
     oldChangedEnd + DIFF_CONTEXT_LINES
@@ -255,18 +245,17 @@ function formatEditHunk(
     bounds.newLineCount,
     newChangedEnd + DIFF_CONTEXT_LINES
   );
-  const oldCount = oldEnd - oldStart;
-  const newCount = newEnd - newStart;
-  const oldLine = oldStart + oldLineOffset;
-  const newLine = newStart + newLineOffset;
+  const oldCount = oldEnd - start;
+  const newCount = newEnd - start;
+  const line = start + lineOffset;
   const output = [
     `--- a/${path}`,
     `+++ b/${path}`,
-    `@@ -${oldCount === 0 ? oldLine : oldLine + 1},${oldCount} +${
-      newCount === 0 ? newLine : newLine + 1
+    `@@ -${oldCount === 0 ? line : line + 1},${oldCount} +${
+      newCount === 0 ? line : line + 1
     },${newCount} @@`,
   ];
-  for (let line = oldStart; line < bounds.prefixLines; line++) {
+  for (let line = start; line < bounds.prefixLines; line++) {
     output.push(
       ` ${oldText.slice(oldStarts[line], lineEnd(oldText, oldStarts, line))}`
     );
@@ -375,16 +364,9 @@ function captureEditPredictionTransaction(
     return {
       beforeText,
       afterText,
-      beforeStart: afterStart,
-      beforeEnd: afterStart + beforeText.length,
-      afterStart,
-      afterEnd,
+      startOffset: afterStart,
       startLine,
-      beforeChangedStartLine: startLine + bounds.prefixLines,
-      beforeChangedEndLine:
-        startLine + bounds.oldLineCount - bounds.suffixLines,
-      afterChangedStartLine: startLine + bounds.prefixLines,
-      afterChangedEndLine: startLine + bounds.newLineCount - bounds.suffixLines,
+      bounds,
     };
   }
   return undefined;
@@ -410,12 +392,17 @@ export function recordEditPrediction(
   if (fragment.beforeText === fragment.afterText) {
     return kept;
   }
+  const changedStartLine = fragment.startLine + fragment.bounds.prefixLines;
+  const beforeChangedEndLine =
+    fragment.startLine +
+    fragment.bounds.oldLineCount -
+    fragment.bounds.suffixLines;
   const last = kept.at(-1);
   const gap =
-    last !== undefined && fragment.beforeChangedStartLine > last.end
-      ? fragment.beforeChangedStartLine - last.end
-      : last !== undefined && last.start > fragment.beforeChangedEndLine
-        ? last.start - fragment.beforeChangedEndLine
+    last !== undefined && changedStartLine > last.end
+      ? changedStartLine - last.end
+      : last !== undefined && last.start > beforeChangedEndLine
+        ? last.start - beforeChangedEndLine
         : 0;
   const canMerge =
     last !== undefined &&
@@ -427,8 +414,9 @@ export function recordEditPrediction(
 
   if (canMerge) {
     const previous = last.fragment;
-    const overlapStart = Math.max(previous.currentStart, fragment.beforeStart);
-    const overlapEnd = Math.min(previous.currentEnd, fragment.beforeEnd);
+    const beforeEnd = fragment.startOffset + fragment.beforeText.length;
+    const overlapStart = Math.max(previous.currentStart, fragment.startOffset);
+    const overlapEnd = Math.min(previous.currentEnd, beforeEnd);
     if (
       overlapStart <= overlapEnd &&
       previous.currentText.slice(
@@ -436,20 +424,20 @@ export function recordEditPrediction(
         overlapEnd - previous.currentStart
       ) ===
         fragment.beforeText.slice(
-          overlapStart - fragment.beforeStart,
-          overlapEnd - fragment.beforeStart
+          overlapStart - fragment.startOffset,
+          overlapEnd - fragment.startOffset
         )
     ) {
-      const unionStart = Math.min(previous.currentStart, fragment.beforeStart);
+      const unionStart = Math.min(previous.currentStart, fragment.startOffset);
       const currentText =
-        previous.currentStart <= fragment.beforeStart
+        previous.currentStart <= fragment.startOffset
           ? previous.currentText +
             fragment.beforeText.slice(
-              Math.max(0, previous.currentEnd - fragment.beforeStart)
+              Math.max(0, previous.currentEnd - fragment.startOffset)
             )
           : fragment.beforeText +
             previous.currentText.slice(
-              Math.max(0, fragment.beforeEnd - previous.currentStart)
+              Math.max(0, beforeEnd - previous.currentStart)
             );
       const prefix = currentText.slice(0, previous.currentStart - unionStart);
       const suffix = currentText.slice(previous.currentEnd - unionStart);
@@ -460,7 +448,7 @@ export function recordEditPrediction(
         transaction.appliedEdits
       );
       const startLine =
-        previous.currentStart <= fragment.beforeStart
+        previous.currentStart <= fragment.startOffset
           ? previous.startLine
           : fragment.startLine;
       if (
@@ -516,15 +504,18 @@ export function recordEditPrediction(
   kept.push({
     path,
     hunk: formatted.hunk,
-    start: fragment.afterChangedStartLine,
-    end: fragment.afterChangedEndLine,
+    start: changedStartLine,
+    end:
+      fragment.startLine +
+      fragment.bounds.newLineCount -
+      fragment.bounds.suffixLines,
     at,
     source,
     fragment: {
       baseText: fragment.beforeText,
       currentText: fragment.afterText,
-      currentStart: fragment.afterStart,
-      currentEnd: fragment.afterEnd,
+      currentStart: fragment.startOffset,
+      currentEnd: fragment.startOffset + fragment.afterText.length,
       startLine: fragment.startLine,
     },
   });
@@ -536,44 +527,24 @@ function expandLinewise(
   costForLine: (line: number) => number,
   first: number,
   last: number,
-  remaining: number,
-  preferBefore: boolean
+  remaining: number
 ): { first: number; last: number } {
   while (remaining > 0 && (first > 0 || last < lineCount - 1)) {
     let expanded = false;
-    if (preferBefore) {
-      if (first > 0) {
-        const cost = costForLine(first - 1);
-        if (cost <= remaining) {
-          first--;
-          remaining -= cost;
-          expanded = true;
-        }
+    if (first > 0) {
+      const cost = costForLine(first - 1);
+      if (cost <= remaining) {
+        first--;
+        remaining -= cost;
+        expanded = true;
       }
-      if (last < lineCount - 1) {
-        const cost = costForLine(last + 1);
-        if (cost <= remaining) {
-          last++;
-          remaining -= cost;
-          expanded = true;
-        }
-      }
-    } else {
-      if (last < lineCount - 1) {
-        const cost = costForLine(last + 1);
-        if (cost <= remaining) {
-          last++;
-          remaining -= cost;
-          expanded = true;
-        }
-      }
-      if (first > 0) {
-        const cost = costForLine(first - 1);
-        if (cost <= remaining) {
-          first--;
-          remaining -= cost;
-          expanded = true;
-        }
+    }
+    if (last < lineCount - 1) {
+      const cost = costForLine(last + 1);
+      if (cost <= remaining) {
+        last++;
+        remaining -= cost;
+        expanded = true;
       }
     }
     if (!expanded) {
@@ -666,8 +637,7 @@ export function buildEditPredictionRequest(
     costForLine,
     editableFirst,
     editableLast,
-    remaining,
-    true
+    remaining
   ));
 
   let contextFirst = editableFirst;
@@ -677,8 +647,7 @@ export function buildEditPredictionRequest(
     costForLine,
     contextFirst,
     contextLast,
-    CONTEXT_TOKENS,
-    true
+    CONTEXT_TOKENS
   ));
   let editableTokens = 0;
   for (let line = editableFirst; line <= editableLast; line++) {
@@ -737,12 +706,8 @@ export function matchesEditPredictionPattern(
   path: string,
   pattern: string | RegExp
 ): boolean {
-  if (pattern instanceof RegExp) {
-    const lastIndex = pattern.lastIndex;
-    pattern.lastIndex = 0;
-    const matches = pattern.test(path);
-    pattern.lastIndex = lastIndex;
-    return matches;
+  if (typeof pattern !== 'string') {
+    return new RegExp(pattern.source, pattern.flags).test(path);
   }
 
   pattern = pattern.replaceAll('\\', '/');

@@ -20,6 +20,7 @@ import type {
   SelectionSide,
   TextEdit,
 } from '../types';
+import { countLineBreaks } from '../utils/computeFileOffsets';
 import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
 import { isGutterUtilityPath } from '../utils/isGutterUtilityPath';
 import {
@@ -119,11 +120,11 @@ import {
   type PersistStateStorage,
 } from './stateStorage';
 import {
-  getTextDocumentChangeTransaction,
   type ResolvedTextEdit,
   TextDocument,
   type TextDocumentChange,
 } from './textDocument';
+import { getTextDocumentChangeTransaction } from './textDocumentChangeTransaction';
 import {
   getExpandedAsciiTextColumns,
   getUnicodeMeasurementOffsets,
@@ -1951,6 +1952,13 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       addEventListener(contentEl, 'keydown', (e) => {
         if (e.key === 'Escape') {
           e.preventDefault();
+          if (
+            this.#editPredictionTimer !== undefined ||
+            this.#editPredictionAbortController !== undefined ||
+            this.#editPrediction !== undefined
+          ) {
+            this.#cancelEditPrediction(true);
+          }
           this.#searchPanel?.close();
           this.#searchPanel = undefined;
           this.#retainSearchPanelFocus = false;
@@ -4113,7 +4121,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   }
 
   #removeRenderedEditPrediction(): void {
-    this.#contentElement?.style.removeProperty('padding-block-end');
     for (const [key, element] of this.#overlayElements ?? []) {
       if (key.startsWith('editPrediction')) {
         element.remove();
@@ -4145,18 +4152,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         ) {
           continue;
         }
-        let count = 0;
-        for (let index = 0; index < edit.newText.length; index++) {
-          const char = edit.newText.charCodeAt(index);
-          if (char === 10) {
-            count++;
-          } else if (char === 13) {
-            count++;
-            if (edit.newText.charCodeAt(index + 1) === 10) {
-              index++;
-            }
-          }
-        }
+        const count = countLineBreaks(edit.newText);
         if (count > (continuationLines.get(edit.range.start.line) ?? 0)) {
           continuationLines.set(edit.range.start.line, count);
         }
@@ -4255,8 +4251,15 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     );
   }
 
-  #scheduleEditPrediction(): void {
-    this.#cancelEditPrediction(true);
+  #scheduleEditPrediction(alreadyCancelled = false): void {
+    if (
+      !alreadyCancelled ||
+      this.#editPredictionTimer !== undefined ||
+      this.#editPredictionAbortController !== undefined ||
+      this.#editPrediction !== undefined
+    ) {
+      this.#cancelEditPrediction(true);
+    }
     const selection = this.#selections?.[0];
     if (
       this.#options.editPrediction === undefined ||
@@ -4367,11 +4370,19 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
             }
             const start = document.offsetAt(edit.range.start);
             const end = document.offsetAt(edit.range.end);
-            const resolvedEdit = document.resolveEdits([edit])[0];
-            if (resolvedEdit.start !== start || resolvedEdit.end !== end) {
+            if (
+              splitsSurrogatePair(
+                document.charAt(start - 1) + document.charAt(start),
+                1
+              ) ||
+              splitsSurrogatePair(
+                document.charAt(end - 1) + document.charAt(end),
+                1
+              )
+            ) {
               return;
             }
-            resolvedEdits.push(resolvedEdit);
+            resolvedEdits.push({ start, end, text: edit.newText });
           }
           resolvedEdits.sort((left, right) => {
             const startDelta = left.start - right.start;
@@ -4737,7 +4748,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
   }
 
-  #updateSelections(selections: EditorSelection[]) {
+  #updateSelections(
+    selections: EditorSelection[],
+    updateEditPrediction = true
+  ) {
     this.__postponeBgTokenizeToNextFrame();
 
     const previousSelections = this.#selections;
@@ -4756,7 +4770,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         }
       }
     }
-    if (selectionsChanged) {
+    if (selectionsChanged && updateEditPrediction) {
       this.#cancelEditPrediction(true);
     }
     this.#syncEditPredictionSpacers();
@@ -4774,7 +4788,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#overlayElements?.clear();
       this.#selectionAction?.cleanup();
       this.#selectionAction = undefined;
-      if (selectionsChanged) {
+      if (selectionsChanged && updateEditPrediction) {
         this.#scheduleEditPrediction();
       }
       return;
@@ -4946,7 +4960,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
 
     this.#updateSelectionActionPopover();
-    if (selectionsChanged) {
+    if (selectionsChanged && updateEditPrediction) {
       this.#scheduleEditPrediction();
     }
   }
@@ -5924,8 +5938,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       editSource?: 'user' | 'prediction';
     }
   ) {
-    this.#recordEditPredictionHistory(change, options?.editSource ?? 'user');
-    this.#scheduleEditPrediction();
+    const editPredictionWasEnabled = this.#options.editPrediction !== undefined;
+    if (editPredictionWasEnabled) {
+      this.#cancelEditPrediction(true);
+      this.#recordEditPredictionHistory(change, options?.editSource ?? 'user');
+    }
 
     const fileRef = this.getFile();
     const onChange = this.#options.onChange;
@@ -6068,7 +6085,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       // stays in sync. When skipFocus is set (a programmatic edit on an editor
       // that is not focused) we stop here: focusing or scrolling would pull the
       // caret and viewport toward an editor the user is not interacting with.
-      this.#updateSelections(newSelections);
+      this.#updateSelections(newSelections, false);
 
       // focus to update the native window selection, and scroll to the caret
       // to mock the 'contenteditable' behavior
@@ -6091,6 +6108,9 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         }
         this.focus({ preventScroll: true });
       }
+    }
+    if (this.#options.editPrediction !== undefined) {
+      this.#scheduleEditPrediction(editPredictionWasEnabled);
     }
   }
 

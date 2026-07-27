@@ -20,16 +20,15 @@ const GITHUB_HEADERS = {
   'User-Agent': 'Pierre-Diffs',
   'X-GitHub-Api-Version': GITHUB_API_VERSION,
 };
+const IS_DIFFS_SITE = (process.env.NEXT_PUBLIC_SITE ?? 'diffs') === 'diffs';
 const STATE_MAX_AGE = 60 * 10;
+const TOKEN_REVOCATION_TIMEOUT_MS = 5_000;
 
 export const runtime = 'nodejs';
 
 export function HEAD(request: Request): Response {
   const headers = { 'Cache-Control': CACHE_CONTROL };
-  if (
-    process.env.NEXT_PUBLIC_SITE !== undefined &&
-    process.env.NEXT_PUBLIC_SITE !== 'diffs'
-  ) {
+  if (!IS_DIFFS_SITE) {
     return new Response(null, { status: 404, headers });
   }
   if (getGithubOAuthConfig() === undefined) {
@@ -42,15 +41,12 @@ export function HEAD(request: Request): Response {
 }
 
 export async function GET(request: Request): Promise<Response> {
-  if (new URL(request.url).searchParams.has('callback')) {
-    return finishGithubOAuth(request);
+  if (!IS_DIFFS_SITE) {
+    return new Response('Not found.', { status: 404 });
   }
 
-  if (
-    process.env.NEXT_PUBLIC_SITE !== undefined &&
-    process.env.NEXT_PUBLIC_SITE !== 'diffs'
-  ) {
-    return new Response('Not found.', { status: 404 });
+  if (new URL(request.url).searchParams.has('callback')) {
+    return finishGithubOAuth(request);
   }
 
   const config = getGithubOAuthConfig();
@@ -86,13 +82,6 @@ export async function GET(request: Request): Promise<Response> {
 }
 
 async function finishGithubOAuth(request: Request): Promise<Response> {
-  if (
-    process.env.NEXT_PUBLIC_SITE !== undefined &&
-    process.env.NEXT_PUBLIC_SITE !== 'diffs'
-  ) {
-    return new Response('Not found.', { status: 404 });
-  }
-
   const config = getGithubOAuthConfig();
   if (config === undefined) {
     return authError(request, 'GitHub sign-in is not configured.', 503);
@@ -158,71 +147,80 @@ async function finishGithubOAuth(request: Request): Promise<Response> {
     return authError(request, 'GitHub rejected the authorization code.', 502);
   }
 
-  let userResponse: Response;
   try {
-    userResponse = await fetch('https://api.github.com/user', {
-      cache: 'no-store',
-      headers: {
-        ...GITHUB_HEADERS,
-        Authorization: `Bearer ${accessToken}`,
-      },
-      signal: request.signal,
-    });
-  } catch {
-    return authError(request, 'Could not validate the GitHub user.', 502);
-  }
-
-  let userJSON: unknown;
-  try {
-    userJSON = await userResponse.json();
-  } catch {
-    return authError(request, 'GitHub returned an invalid user.', 502);
-  }
-  const user =
-    userJSON !== null && typeof userJSON === 'object'
-      ? (userJSON as { id?: unknown; login?: unknown })
-      : undefined;
-  if (
-    !userResponse.ok ||
-    !Number.isSafeInteger(user?.id) ||
-    Number(user?.id) <= 0 ||
-    typeof user?.login !== 'string' ||
-    user.login.length === 0
-  ) {
-    return authError(request, 'Could not validate the GitHub user.', 502);
-  }
-
-  try {
-    await fetch(
-      `https://api.github.com/applications/${encodeURIComponent(config.clientId)}/token`,
-      {
-        method: 'DELETE',
+    let userResponse: Response;
+    try {
+      userResponse = await fetch('https://api.github.com/user', {
         cache: 'no-store',
         headers: {
           ...GITHUB_HEADERS,
-          Authorization: `Basic ${Buffer.from(`${config.clientId}:${config.clientSecret}`).toString('base64')}`,
-          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
         },
-        body: JSON.stringify({ access_token: accessToken }),
         signal: request.signal,
-      }
-    );
-  } catch {}
+      });
+    } catch {
+      return authError(request, 'Could not validate the GitHub user.', 502);
+    }
 
-  const sessionCookie = createGithubSessionCookie(request, Number(user.id));
-  if (sessionCookie === undefined) {
-    return authError(request, 'GitHub sign-in is not configured.', 503);
+    let userJSON: unknown;
+    try {
+      userJSON = await userResponse.json();
+    } catch {
+      return authError(request, 'GitHub returned an invalid user.', 502);
+    }
+    const user =
+      userJSON !== null && typeof userJSON === 'object'
+        ? (userJSON as { id?: unknown })
+        : undefined;
+    const userId = user?.id;
+    if (
+      !userResponse.ok ||
+      typeof userId !== 'number' ||
+      !Number.isSafeInteger(userId) ||
+      userId <= 0
+    ) {
+      return authError(request, 'Could not validate the GitHub user.', 502);
+    }
+
+    const sessionCookie = createGithubSessionCookie(request, userId);
+    if (sessionCookie === undefined) {
+      return authError(request, 'GitHub sign-in is not configured.', 503);
+    }
+    const headers = new Headers({
+      'Cache-Control': CACHE_CONTROL,
+      Location: new URL(GITHUB_AUTH_FALLBACK, request.url).toString(),
+    });
+    headers.append(
+      'Set-Cookie',
+      serializeAuthCookie(request, GITHUB_OAUTH_STATE_COOKIE, '', 0, AUTH_PATH)
+    );
+    headers.append('Set-Cookie', sessionCookie);
+    return new Response(null, { status: 302, headers });
+  } finally {
+    try {
+      const revokeResponse = await fetch(
+        `https://api.github.com/applications/${encodeURIComponent(config.clientId)}/token`,
+        {
+          method: 'DELETE',
+          cache: 'no-store',
+          headers: {
+            ...GITHUB_HEADERS,
+            Authorization: `Basic ${Buffer.from(`${config.clientId}:${config.clientSecret}`).toString('base64')}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ access_token: accessToken }),
+          signal: AbortSignal.timeout(TOKEN_REVOCATION_TIMEOUT_MS),
+        }
+      );
+      if (!revokeResponse.ok) {
+        console.warn(
+          `GitHub OAuth token revocation failed with status ${String(revokeResponse.status)}.`
+        );
+      }
+    } catch {
+      console.warn('GitHub OAuth token revocation failed.');
+    }
   }
-  const headers = new Headers({
-    'Cache-Control': CACHE_CONTROL,
-    Location: new URL(GITHUB_AUTH_FALLBACK, request.url).toString(),
-  });
-  headers.append(
-    'Set-Cookie',
-    serializeAuthCookie(request, GITHUB_OAUTH_STATE_COOKIE, '', 0, AUTH_PATH)
-  );
-  headers.append('Set-Cookie', sessionCookie);
-  return new Response(null, { status: 302, headers });
 }
 
 function authError(

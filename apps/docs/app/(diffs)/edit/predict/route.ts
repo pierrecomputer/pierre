@@ -8,10 +8,11 @@ import { isGithubAuthenticated } from '../_auth/github';
 
 const CACHE_CONTROL = 'no-store';
 const CODESTRAL_FIM_URL = 'https://api.mistral.ai/v1/fim/completions';
-const MAX_HISTORY_BYTES = 6144;
+const MAX_HISTORY_ENTRY_BYTES = 6144;
 const MAX_OUTPUT_BYTES = 32 * 1024;
 const MAX_REQUEST_BYTES = 128 * 1024;
 const MAX_UPSTREAM_BYTES = 64 * 1024;
+const MISTRAL_TIMEOUT_MS = 15_000;
 const textEncoder = new TextEncoder();
 
 const requestSchema = z
@@ -105,12 +106,17 @@ export async function POST(request: Request): Promise<Response> {
     splitsTextUnit(excerptText, cursorOffsetInExcerpt) ||
     splitsTextUnit(excerptText, editableRange.end) ||
     input.editHistory.some(
-      ({ diff }) => textEncoder.encode(diff).byteLength > MAX_HISTORY_BYTES
+      ({ diff }) =>
+        textEncoder.encode(diff).byteLength > MAX_HISTORY_ENTRY_BYTES
     )
   ) {
     return createErrorResponse('Invalid edit prediction request.', 400);
   }
 
+  const upstreamSignal = AbortSignal.any([
+    request.signal,
+    AbortSignal.timeout(MISTRAL_TIMEOUT_MS),
+  ]);
   let upstream: Response;
   try {
     upstream = await fetch(CODESTRAL_FIM_URL, {
@@ -129,14 +135,17 @@ export async function POST(request: Request): Promise<Response> {
         temperature: 0,
         stream: false,
       }),
-      signal: request.signal,
+      signal: upstreamSignal,
     });
   } catch {
+    if (request.signal.aborted) {
+      return createErrorResponse('Edit prediction was cancelled.', 499);
+    }
     return createErrorResponse(
-      request.signal.aborted
-        ? 'Edit prediction was cancelled.'
+      upstreamSignal.aborted
+        ? 'Edit prediction service timed out.'
         : 'Edit prediction service is unavailable.',
-      request.signal.aborted ? 499 : 502
+      upstreamSignal.aborted ? 504 : 502
     );
   }
 
@@ -153,7 +162,15 @@ export async function POST(request: Request): Promise<Response> {
   try {
     upstreamText = await readTextWithinLimit(upstream.body, MAX_UPSTREAM_BYTES);
   } catch {
-    return createErrorResponse('Invalid edit prediction response.', 502);
+    if (request.signal.aborted) {
+      return createErrorResponse('Edit prediction was cancelled.', 499);
+    }
+    return createErrorResponse(
+      upstreamSignal.aborted
+        ? 'Edit prediction service timed out.'
+        : 'Invalid edit prediction response.',
+      upstreamSignal.aborted ? 504 : 502
+    );
   }
   if (upstreamText === undefined) {
     return createErrorResponse('Edit prediction response is too large.', 502);

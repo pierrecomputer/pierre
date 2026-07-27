@@ -63,9 +63,11 @@ export function EditPage({
                 <>
                   Pause after typing or moving the cursor to preview an edit
                   prediction, then press <kbd>Tab</kbd> to accept the
-                  suggestion. This demo connects the service-agnostic{' '}
-                  <code>predict()</code> API to Codestral built by Mistral AI.
-                  Switch between <code>File</code> and <code>FileDiff</code>.
+                  suggestion—or hold <kbd>Alt</kbd> while pressing{' '}
+                  <kbd>Tab</kbd> in subtle mode. This demo connects the
+                  service-agnostic <code>predict()</code> API to Codestral built
+                  by Mistral AI. Switch between <code>File</code> and{' '}
+                  <code>FileDiff</code>.
                 </>
               }
             />

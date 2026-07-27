@@ -14,6 +14,7 @@ import {
 } from './editStack';
 import { PieceTable } from './pieceTable';
 import type { SearchParams } from './searchPanel';
+import { setTextDocumentChangeTransaction } from './textDocumentChangeTransaction';
 
 export type { Position, Range, TextEdit } from '../types';
 
@@ -58,31 +59,6 @@ export interface TextDocumentChange {
     endCharacter?: number,
     endedAtDocumentEnd?: boolean,
   ][];
-}
-
-export interface TextDocumentChangeTransaction {
-  /** Edits applied to the document state before this change. */
-  readonly appliedEdits: readonly ResolvedTextEdit[];
-  /** Edits that restore the document state before this change. */
-  readonly inverseEdits: readonly ResolvedTextEdit[];
-}
-
-const transactions = new WeakMap<
-  TextDocumentChange,
-  TextDocumentChangeTransaction
->();
-
-export function getTextDocumentChangeTransaction(
-  change: TextDocumentChange
-): TextDocumentChangeTransaction | undefined {
-  return transactions.get(change);
-}
-
-function setTextDocumentChangeTransaction(
-  change: TextDocumentChange,
-  transaction: TextDocumentChangeTransaction
-): void {
-  transactions.set(change, transaction);
 }
 
 // Metadata-less replay results include the resolved edits so Editor can remap

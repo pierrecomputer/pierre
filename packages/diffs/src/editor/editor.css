@@ -122,20 +122,17 @@
   margin-block-end: var(--diffs-edit-prediction-spacer-height);
 }
 [data-edit-prediction-deletion-range] {
+  --diffs-edit-prediction-deletion-color: var(
+    --diffs-editor-edit-prediction-deletion-fg,
+    color-mix(in lab, var(--diffs-deletion-base) 70%, transparent)
+  );
+
   z-index: 1;
   background: linear-gradient(
     to bottom,
     transparent calc(50% - 0.5px),
-    var(
-        --diffs-editor-edit-prediction-deletion-fg,
-        color-mix(in lab, var(--diffs-deletion-base) 70%, transparent)
-      )
-      calc(50% - 0.5px),
-    var(
-        --diffs-editor-edit-prediction-deletion-fg,
-        color-mix(in lab, var(--diffs-deletion-base) 70%, transparent)
-      )
-      calc(50% + 0.5px),
+    var(--diffs-edit-prediction-deletion-color) calc(50% - 0.5px),
+    var(--diffs-edit-prediction-deletion-color) calc(50% + 0.5px),
     transparent calc(50% + 0.5px)
   );
 }
