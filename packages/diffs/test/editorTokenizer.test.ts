@@ -1886,11 +1886,9 @@ describe('EditorTokenizer', () => {
     }
   });
 
-  // Apps often force a scheme via page CSS/classes while the OS media query
-  // differs. syncTheme must use the same computed color-scheme source as the
-  // MutationObserver; otherwise a render sync flips tokens back to the OS
-  // preference and edited lines render the wrong theme colors.
-  test('syncTheme resolves system theme from host color-scheme, not OS media query', () => {
+  // Apps can force one scheme via page CSS/classes or advertise support for
+  // both. syncTheme must only use the OS preference in the latter case.
+  test('syncTheme resolves forced and preferred system themes', () => {
     const originalMatchMedia = globalThis.window.matchMedia;
     const originalGetComputedStyle = Reflect.get(
       globalThis,
@@ -1901,6 +1899,8 @@ describe('EditorTokenizer', () => {
       globalThis,
       'MutationObserver'
     );
+    let colorScheme = 'dark';
+    let prefersDark = false;
 
     globalThis.window.matchMedia = (() =>
       ({
@@ -1908,7 +1908,9 @@ describe('EditorTokenizer', () => {
         addListener: () => {},
         dispatchEvent: () => false,
         // OS prefers light, but the host document forces dark.
-        matches: false,
+        get matches() {
+          return prefersDark;
+        },
         media: '(prefers-color-scheme: dark)',
         onchange: null,
         removeEventListener: () => {},
@@ -1923,7 +1925,7 @@ describe('EditorTokenizer', () => {
       'getComputedStyle',
       (() =>
         ({
-          colorScheme: 'dark',
+          colorScheme,
         }) as CSSStyleDeclaration) as typeof getComputedStyle
     );
     Reflect.set(
@@ -1942,7 +1944,7 @@ describe('EditorTokenizer', () => {
       const grammar = {
         tokenizeLine2(lineText: string, ruleStack: StateStack) {
           return {
-            tokens: new Uint32Array([0, 0]),
+            tokens: new Uint32Array([0, 1 << 15]),
             ruleStack,
             stoppedEarly: false,
             lineText,
@@ -1954,6 +1956,9 @@ describe('EditorTokenizer', () => {
       const tokenizer = new EditorTokenizer({
         highlighter: createTestHighlighter({
           getLanguage: () => grammar,
+          setTheme: (theme: string) => ({
+            colorMap: ['', theme === 'dark-theme' ? '#dark' : '#light'],
+          }),
         }),
         textDocument,
         codeOptions: {
@@ -1969,6 +1974,25 @@ describe('EditorTokenizer', () => {
       // A later render sync must not flip back to the OS light preference.
       tokenizer.syncTheme({ theme: dualThemes, themeType: 'system' });
       expect(tokenizer.themeType).toBe('dark');
+
+      // A dual declaration advertises support rather than forcing light.
+      // Let the dark OS preference choose the active token color.
+      colorScheme = 'light dark';
+      prefersDark = true;
+      tokenizer.syncTheme({ theme: dualThemes, themeType: 'system' });
+      const dirtyLines = tokenizer.tokenize({
+        startLine: 0,
+        startCharacter: 0,
+        endCharacter: 0,
+        endLine: 0,
+        endedAtDocumentEnd: false,
+        previousLineCount: textDocument.lineCount,
+        lineCount: textDocument.lineCount,
+        lineDelta: 0,
+        changedLineRanges: [[0, 0]],
+      });
+      expect(tokenizer.themeType).toBe('dark');
+      expect(dirtyLines.get(0)?.[0]?.[1]).toBe('#dark');
 
       tokenizer.cleanUp();
     } finally {

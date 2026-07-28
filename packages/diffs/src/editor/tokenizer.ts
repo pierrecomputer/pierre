@@ -245,11 +245,8 @@ export class EditorTokenizer {
     this.#onThemeChange?.();
   }
 
-  // Resolve `themeType: 'system'` the same way the MutationObserver does: from
-  // the host document's computed `color-scheme`. Apps often force a scheme via
-  // page CSS/classes while the OS `prefers-color-scheme` media query differs;
-  // using matchMedia here would flip tokens back to the OS preference on every
-  // render sync and fight the observer.
+  // Respect an explicit host color-scheme override. When the computed value
+  // advertises support for both schemes, let the OS preference choose one.
   #resolveSystemThemeType(): 'light' | 'dark' {
     try {
       if (
@@ -257,9 +254,16 @@ export class EditorTokenizer {
         typeof getComputedStyle === 'function' &&
         document.body != null
       ) {
-        return getComputedStyle(document.body).colorScheme === 'dark'
-          ? 'dark'
-          : 'light';
+        const colorSchemes = getComputedStyle(document.body).colorScheme.split(
+          /\s+/
+        );
+        const supportsDark = colorSchemes.includes('dark');
+        const supportsLight = colorSchemes.includes('light');
+        // A single host-forced scheme wins. `light dark` only declares support
+        // for both schemes, so the media query still selects the active one.
+        if (supportsDark !== supportsLight) {
+          return supportsDark ? 'dark' : 'light';
+        }
       }
     } catch {
       // jsdom and similar harnesses may lack getComputedStyle or throw; fall
