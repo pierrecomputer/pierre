@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, mock, spyOn, test } from 'bun:test';
 
 import { CodeView } from '../src/components/CodeView';
+import { DEFAULT_THEMES } from '../src/constants';
+import type { RenderDiffOptions, RenderFileOptions } from '../src/types';
 import type { WorkerPoolManager, WorkerStats } from '../src/worker';
 import { createRoot, installDom, makeFileItem, wait } from './domHarness';
 
@@ -62,6 +64,24 @@ class FakeWorkerPoolManager {
 
   public getFileResultCache(): undefined {
     return undefined;
+  }
+
+  // The real manager reports its configured render options regardless of
+  // pool health; renderers read the local-fallback theme from here.
+  public getFileRenderOptions(): RenderFileOptions {
+    return {
+      theme: DEFAULT_THEMES,
+      useTokenTransformer: false,
+      tokenizeMaxLineLength: 1000,
+    };
+  }
+
+  public getDiffRenderOptions(): RenderDiffOptions {
+    return {
+      ...this.getFileRenderOptions(),
+      lineDiffType: 'word-alt',
+      maxLineDiffLength: 1000,
+    };
   }
 
   public markInitialized(): void {

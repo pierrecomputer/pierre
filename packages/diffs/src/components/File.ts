@@ -547,6 +547,7 @@ export class File<
   public attachEditor(editor: DiffsEditor<LAnnotation>): () => void {
     this.editor?.cleanUp();
     this.editor = editor;
+    this.fileRenderer.beginEditSession();
     const preparedFile =
       this.file == null ? undefined : editor.__prepareFile?.(this.file);
     if (preparedFile !== undefined && preparedFile !== this.file) {
@@ -561,6 +562,7 @@ export class File<
     }
     return () => {
       this.editor = undefined;
+      this.fileRenderer.endEditSession();
     };
   }
 

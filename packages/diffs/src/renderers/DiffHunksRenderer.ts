@@ -238,7 +238,11 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   private renderCache: RenderedDiffASTCache | undefined;
 
   // Edit-session state: while active, hunk updates go through the frozen
-  // region skeleton (editSessionHunks) instead of the full recompute.
+  // region skeleton (editSessionHunks) instead of the full recompute, and
+  // rendering stays on the main thread with editor-compatible token markup —
+  // the editor's caret/selection mapping needs the token transformer, and
+  // the pool's global options are not guaranteed to produce it. The pool
+  // keeps serving every surface without a session.
   private editSessionActive = false;
 
   constructor(
@@ -275,8 +279,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
   /**
    * Enter edit-session mode: hunk updates preserve the current region
-   * skeleton instead of recomputing hunks. Called on every editor attach,
-   * including a re-attach after recycle.
+   * skeleton instead of recomputing hunks, and rendering happens locally
+   * with the token transformer forced on (worker-pool requests/results are
+   * suspended for this renderer). Called on every editor attach, including
+   * a re-attach after recycle.
    */
   public beginEditSession(): void {
     this.editSessionActive = true;
@@ -310,7 +316,11 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     const { workerManager } = this;
     // The pool's diff cache is keyed by cacheKey, so a worker refresh needs
     // one; a keyless diff uses the local highlighter fallback below instead.
-    if (workerManager?.isWorkingPool() === true && diff.cacheKey != null) {
+    if (
+      !this.editSessionActive &&
+      workerManager?.isWorkingPool() === true &&
+      diff.cacheKey != null
+    ) {
       workerManager.evictDiffFromCache(diff.cacheKey);
       return workerManager
         .primeDiffHighlightCache(diff)
@@ -765,7 +775,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
   public async initializeHighlighter(): Promise<DiffsHighlighter> {
     this.highlighter = await getSharedHighlighter(
-      getHighlighterOptions(this.computedLang, this.options)
+      getHighlighterOptions(this.computedLang, {
+        theme: this.getLocalHighlightTheme(),
+        preferredHighlighter: this.options.preferredHighlighter,
+      })
     );
     return this.highlighter;
   }
@@ -788,7 +801,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       result: massiveDiff ? undefined : cache?.result,
       renderRange: undefined,
     };
-    if (this.workerManager?.isWorkingPool() === true) {
+    if (
+      !this.editSessionActive &&
+      this.workerManager?.isWorkingPool() === true
+    ) {
       if (this.renderCache.result == null && !massiveDiff) {
         // We should only kick off a preload of the AST if we have a WorkerPool
         this.workerManager.highlightDiffAST(this, this.diff);
@@ -801,16 +817,33 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     }
   }
 
+  private getLocalHighlightTheme(): RenderDiffOptions['theme'] {
+    return (
+      this.workerManager?.getDiffRenderOptions().theme ??
+      this.options.theme ??
+      DEFAULT_THEMES
+    );
+  }
+
   private getRenderOptions(diff: FileDiffMetadata): GetRenderOptionsReturn {
     const options: RenderDiffOptions = (() => {
       if (this.workerManager?.isWorkingPool() === true) {
-        return this.workerManager.getDiffRenderOptions();
+        const poolOptions = this.workerManager.getDiffRenderOptions();
+        // Active edit sessions require `useTokenTransformer: true`
+        if (
+          this.editSessionActive &&
+          poolOptions.useTokenTransformer !== true
+        ) {
+          return { ...poolOptions, useTokenTransformer: true };
+        }
+        return poolOptions;
       }
       const { theme, tokenizeMaxLineLength, lineDiffType, maxLineDiffLength } =
         this.getOptionsWithDefaults();
       return {
         theme,
-        useTokenTransformer: shouldUseTokenTransformer(this.options),
+        useTokenTransformer:
+          this.editSessionActive || shouldUseTokenTransformer(this.options),
         tokenizeMaxLineLength,
         lineDiffType,
         maxLineDiffLength,
@@ -868,7 +901,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       this.renderCache.renderRange,
       renderRange
     );
-    if (this.workerManager?.isWorkingPool() === true) {
+    if (
+      !this.editSessionActive &&
+      this.workerManager?.isWorkingPool() === true
+    ) {
       // An already-highlighted view is waiting on a fresh highlight for the
       // same diff. Returning no result keeps the host's current content in
       // place instead of downgrading it to a plain AST; the pending
@@ -968,7 +1004,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           if (this.renderCache != null) {
             this.renderCache.highlighted = false;
           }
-          this.onHighlightSuccess(diff, result, options, !forcePlainText);
+          this.applyHighlightResult(diff, result, options, !forcePlainText);
         });
       }
     }
@@ -1017,7 +1053,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       : (diff.lang ?? getFiletypeFromFileName(diff.name));
     const hasThemes =
       this.highlighter != null &&
-      areThemesAttached(this.options.theme ?? DEFAULT_THEMES);
+      areThemesAttached(this.getLocalHighlightTheme());
     const hasLangs =
       forcePlainText ||
       (this.highlighter != null && areLanguagesAttached(this.computedLang));
@@ -1054,6 +1090,18 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     options: RenderDiffOptions,
     highlighted = true
   ): void {
+    if (this.editSessionActive) {
+      return;
+    }
+    this.applyHighlightResult(diff, result, options, highlighted);
+  }
+
+  private applyHighlightResult(
+    diff: FileDiffMetadata,
+    result: ThemedDiffResult,
+    options: RenderDiffOptions,
+    highlighted = true
+  ): void {
     // NOTE(amadeus): This is a bad assumption, and I should figure out
     // something better... If renderCache was blown away, we can assume we've
     // run cleanUp()
@@ -1083,6 +1131,9 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     diff: FileDiffMetadata,
     options: RenderDiffOptions
   ): RenderDiffResult | undefined {
+    if (this.editSessionActive) {
+      return undefined;
+    }
     const cache = this.workerManager?.getDiffResultCache(diff);
     if (cache == null || !areDiffRenderOptionsEqual(options, cache.options)) {
       return undefined;
