@@ -1094,11 +1094,12 @@ export interface DiffsEditableComponent<
     options?: {
       /**
        * Whether to refresh the diffs view.
+       * Deferred background-tokenize passes always pass false.
        */
       shouldRefreshDiffsView?: boolean;
       /**
        * Whether the line count has changed in flight.
-       * true only during an edit pass whose line count changed,
+       * True only during an edit pass whose line count changed,
        * deferred background-tokenize passes always pass false.
        */
       lineCountChangeInFlight?: boolean;
