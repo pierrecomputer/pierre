@@ -1088,16 +1088,21 @@ export interface DiffsEditableComponent<
     newLineAnnotations?: DiffLineAnnotation<LAnnotation>[],
     shouldUpdateBuffer?: boolean
   ) => void;
-  /**
-   * `lineCountChangeInFlight` is true only during an edit pass whose line
-   * count changed, where an authoritative `applyDocumentChange` follows in
-   * the same pass; deferred background-tokenize passes always pass false.
-   */
   updateRenderCache: (
     lines: Map<number, Array<HighlightedToken>>,
     themeType: 'dark' | 'light',
-    shouldRefreshView: boolean,
-    lineCountChangeInFlight?: boolean
+    options?: {
+      /**
+       * Whether to refresh the diffs view.
+       */
+      shouldRefreshDiffsView?: boolean;
+      /**
+       * Whether the line count has changed in flight.
+       * true only during an edit pass whose line count changed,
+       * deferred background-tokenize passes always pass false.
+       */
+      lineCountChangeInFlight?: boolean;
+    }
   ) => void;
 }
 

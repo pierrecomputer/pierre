@@ -215,7 +215,9 @@ describe('editor active-line highlight on a diff', () => {
   test('split: refresh defers editor active lines and selected lines independently', async () => {
     const fixture = await createDiffEditorFixture('split', OLD, NEW);
     try {
-      fixture.fileDiff.updateRenderCache(new Map(), 'light', true);
+      fixture.fileDiff.updateRenderCache(new Map(), 'light', {
+        shouldRefreshDiffsView: true,
+      });
       fixture.fileDiff.setSelectedLines({ start: 2, end: 2 });
       fixture.fileDiff.setEditorActiveLine(1);
 

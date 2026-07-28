@@ -584,13 +584,14 @@ export class File<
   public updateRenderCache(
     dirtyLines: Map<number, Array<HighlightedToken>>,
     themeType: 'dark' | 'light',
-    _shouldRefreshView?: boolean,
-    lineCountChangeInFlight = false
+    options?: {
+      lineCountChangeInFlight?: boolean;
+    }
   ): void {
     this.fileRenderer.updateRenderCache(
       dirtyLines,
       themeType,
-      lineCountChangeInFlight
+      options?.lineCountChangeInFlight
     );
   }
 

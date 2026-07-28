@@ -724,7 +724,7 @@ describe('CodeView item edit mode', () => {
       // after a keystroke.
       const edited = viewer.getRenderedItems()[0];
       const tokens: HighlightedToken[] = [[0, '', 'edited marker line']];
-      edited.instance.updateRenderCache(new Map([[0, tokens]]), 'light', false);
+      edited.instance.updateRenderCache(new Map([[0, tokens]]), 'light');
 
       // Scroll the edited item out (recycle) and back in. The recycle joins
       // the session-synced line cache back into the item's file, so the
@@ -998,11 +998,7 @@ describe('CodeView item edit mode', () => {
         .find((entry) => entry.id === item.id);
       expect(rendered).toBeDefined();
       const tokens: HighlightedToken[] = [[0, '', 'line 10']];
-      rendered!.instance.updateRenderCache(
-        new Map([[10, tokens]]),
-        'light',
-        false
-      );
+      rendered!.instance.updateRenderCache(new Map([[10, tokens]]), 'light');
     }
 
     test('a region-changing render flushes deferred line state', async () => {
@@ -1022,8 +1018,7 @@ describe('CodeView item edit mode', () => {
         const hunkCount = edited.fileDiff.hunks.length;
         rendered.instance.updateRenderCache(
           new Map([[25, [[0, '', 'line 25 changed']]]]),
-          'light',
-          false
+          'light'
         );
         expect(edited.fileDiff.hunks).toHaveLength(hunkCount + 1);
 

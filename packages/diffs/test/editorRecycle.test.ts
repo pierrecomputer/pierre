@@ -136,8 +136,7 @@ class TestEditableComponent implements DiffsEditableComponent<undefined> {
 
   updateRenderCache(
     _lines: Map<number, Array<HighlightedToken>>,
-    _themeType: 'dark' | 'light',
-    _shouldRefreshView: boolean
+    _themeType: 'dark' | 'light'
   ): void {}
 
   #syncRenderView(): void {

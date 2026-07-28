@@ -392,7 +392,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     lines: Map<number, Array<HighlightedToken>>,
     themeType: 'light' | 'dark'
   ) => {
-    this.#fileInstance?.updateRenderCache(lines, themeType, false, false);
+    this.#fileInstance?.updateRenderCache(lines, themeType);
     // update the view if the render range is updated by scrolling
     // and the deferred tokenized lines inside the render range
     if (
@@ -3252,12 +3252,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       }
     }
 
-    fileInstance.updateRenderCache(
-      dirtyLines,
-      tokenizer.themeType,
-      !didLineCountChange,
-      didLineCountChange
-    );
+    fileInstance.updateRenderCache(dirtyLines, tokenizer.themeType, {
+      shouldRefreshDiffsView: this.#isDiff && !didLineCountChange,
+      lineCountChangeInFlight: didLineCountChange,
+    });
     if (didLineCountChange) {
       // Line-count change: recompute hunks from the full document and re-render.
       fileInstance.applyDocumentChange(

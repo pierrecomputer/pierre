@@ -1439,9 +1439,12 @@ export class FileDiff<
   public updateRenderCache(
     dirtyLines: Map<number, Array<HighlightedToken>>,
     themeType: 'dark' | 'light',
-    shouldRefreshView: boolean,
-    lineCountChangeInFlight = false
+    options: {
+      shouldRefreshDiffsView?: boolean;
+      lineCountChangeInFlight?: boolean;
+    } = {}
   ): void {
+    const { shouldRefreshDiffsView, lineCountChangeInFlight } = options;
     const regionsChanged = this.hunksRenderer.updateRenderCache(
       dirtyLines,
       themeType,
@@ -1462,7 +1465,7 @@ export class FileDiff<
       this.escalateEditSessionRender();
       return;
     }
-    if (shouldRefreshView) {
+    if (shouldRefreshDiffsView === true) {
       if (this.refreshViewTimeout != null) {
         clearTimeout(this.refreshViewTimeout);
       }
