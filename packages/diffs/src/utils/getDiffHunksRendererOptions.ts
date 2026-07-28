@@ -1,5 +1,6 @@
 import type { FileDiffOptions } from '../components/FileDiff';
 import type { DiffHunksRendererOptions } from '../renderers/DiffHunksRenderer';
+import { shouldUseTokenTransformer } from './shouldUseTokenTransformer';
 
 // Build the renderer option snapshot with direct property reads. CodeView item
 // options may inherit prototype getters, so object spread can miss values.
@@ -16,7 +17,7 @@ export function getDiffHunksRendererOptions<LAnnotation>(
     stickyHeader: options?.stickyHeader,
     preferredHighlighter: options?.preferredHighlighter,
     useCSSClasses: options?.useCSSClasses,
-    useTokenTransformer: options?.useTokenTransformer,
+    useTokenTransformer: shouldUseTokenTransformer<'diff'>(options),
     tokenizeMaxLineLength: options?.tokenizeMaxLineLength,
     tokenizeMaxLength: options?.tokenizeMaxLength,
     diffStyle: options?.diffStyle,

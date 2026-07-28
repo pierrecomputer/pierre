@@ -464,13 +464,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       }
     }
     this.#invalidateOnAttach();
-    if (fileInstance.options.useTokenTransformer !== true) {
-      fileInstance.setOptions({
-        ...fileInstance.options,
-        useTokenTransformer: true,
-      });
-      fileInstance.rerender();
-    }
     this.#fileInstance = fileInstance;
     this.#initialize();
     this.#detach = fileInstance.attachEditor(this);

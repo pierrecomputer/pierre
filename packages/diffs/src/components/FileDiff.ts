@@ -1359,7 +1359,14 @@ export class FileDiff<
     if (this.fileDiff?.isPartial === true) {
       this.loadFilesIfNecessary();
     }
-    this.syncRenderViewToEditor();
+    if (this.hunksRenderer.editorRenderReady()) {
+      this.syncRenderViewToEditor();
+    } else {
+      // The current markup is missing the editor's token metadata, or its
+      // highlight is still pending: render through the session, which also
+      // syncs the render view once it paints.
+      this.rerender();
+    }
     return (recycle?: boolean) => {
       this.editor = undefined;
       // A recycle detach is a virtualized unmount mid-session: the session

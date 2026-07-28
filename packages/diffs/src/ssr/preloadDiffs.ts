@@ -25,6 +25,7 @@ import { getDiffFileInput } from '../utils/getDiffFileInput';
 import { getSingularPatch } from '../utils/getSingularPatch';
 import { parseDiffFromFile } from '../utils/parseDiffFromFile';
 import { parseMergeConflictDiffFromFile } from '../utils/parseMergeConflictDiffFromFile';
+import { shouldUseTokenTransformer } from '../utils/shouldUseTokenTransformer';
 import { renderHTML } from './renderHTML';
 
 interface PreloadDiffBaseOptions<LAnnotation> {
@@ -274,6 +275,9 @@ function getHunksRendererOptions<LAnnotation>(
 ): DiffHunksRendererOptions {
   return {
     ...options,
+    // Match the client's option snapshot: token callbacks imply the
+    // transformer, so server markup hydrates into identical client renders.
+    useTokenTransformer: shouldUseTokenTransformer<'diff'>(options),
     headerRenderMode:
       options?.renderCustomHeader != null ? 'custom' : 'default',
     hunkSeparators:

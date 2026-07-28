@@ -5,7 +5,7 @@ import { DEFAULT_THEMES } from '../src/constants';
 import { Editor } from '../src/editor/editor';
 import { PieceTable } from '../src/editor/pieceTable';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
-import { installDom, wait } from './domHarness';
+import { installDom, wait, waitFor } from './domHarness';
 
 afterAll(async () => {
   await disposeHighlighter();
@@ -131,14 +131,14 @@ function typeAt(
   );
 }
 
-describe('diff editor: attach-time option normalization', () => {
-  test('only enables the token transformer when attaching', async () => {
+describe('diff editor: attach-time markup normalization', () => {
+  test('renders editor token markup without mutating component options', async () => {
     const dom = installDom();
     const container = document.createElement('div');
     document.body.appendChild(container);
-    // useTokenTransformer: false triggers Editor.edit's setOptions fallback,
-    // which replaces options wholesale. Every other option must flow through
-    // unchanged.
+    // useTokenTransformer: false means the attach-time session render must
+    // supply the editor's token markup; public options stay untouched.
+    let updates = 0;
     const fileDiff = new FileDiff<undefined>({
       disableFileHeader: true,
       theme: DEFAULT_THEMES,
@@ -148,6 +148,9 @@ describe('diff editor: attach-time option normalization', () => {
       enableGutterUtility: true,
       enableLineSelection: true,
       lineHoverHighlight: 'both',
+      onPostRender: (_node, _instance, phase) => {
+        if (phase === 'update') updates++;
+      },
     });
     const editor = new Editor<undefined>();
     try {
@@ -157,10 +160,29 @@ describe('diff editor: attach-time option normalization', () => {
         fileContainer: container,
         forceRender: true,
       });
-      editor.edit(fileDiff);
-      await wait(10);
+      // Let the initial (non-transformer) highlight settle so the attach
+      // render below is the only render left to count. Styled token spans
+      // only exist once the async highlight has painted.
+      await waitFor(
+        () =>
+          (container.shadowRoot?.querySelectorAll('[data-content] span[style]')
+            .length ?? 0) > 0,
+        { timeout: 4000 }
+      );
+      const updatesBefore = updates;
 
-      expect(fileDiff.options.useTokenTransformer).toBe(true);
+      editor.edit(fileDiff);
+      await waitFor(
+        () =>
+          (container.shadowRoot?.querySelectorAll('[data-char]').length ?? 0) >
+          0,
+        { timeout: 4000 }
+      );
+
+      // Exactly one logical re-render: the attach-time session render (the
+      // loaded highlighter re-highlights synchronously within it).
+      expect(updates - updatesBefore).toBe(1);
+      expect(fileDiff.options.useTokenTransformer).toBe(false);
       expect(fileDiff.options.expandUnchanged).toBe(true);
       expect(fileDiff.options.enableGutterUtility).toBe(true);
       expect(fileDiff.options.enableLineSelection).toBe(true);

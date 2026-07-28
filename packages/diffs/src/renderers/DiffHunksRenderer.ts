@@ -79,7 +79,6 @@ import { isDiffPlainText } from '../utils/isDiffPlainText';
 import type { DiffLineMetadata } from '../utils/iterateOverDiff';
 import { iterateOverDiff } from '../utils/iterateOverDiff';
 import { renderDiffWithHighlighter } from '../utils/renderDiffWithHighlighter';
-import { shouldUseTokenTransformer } from '../utils/shouldUseTokenTransformer';
 import {
   recomputeDiffHunksForEdit,
   recomputeEmptyDocumentDiff,
@@ -291,6 +290,17 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   /** Leave edit-session mode. The exit recompute is the host's concern. */
   public endEditSession(): void {
     this.editSessionActive = false;
+  }
+
+  /**
+   * Ensures that the DOM is compatible with editor render updates
+   */
+  public editorRenderReady(): boolean {
+    return (
+      this.renderCache?.options.useTokenTransformer === true &&
+      this.renderCache.highlighted &&
+      this.renderCache.result != null
+    );
   }
 
   /**
@@ -843,7 +853,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       return {
         theme,
         useTokenTransformer:
-          this.editSessionActive || shouldUseTokenTransformer(this.options),
+          this.editSessionActive || this.options.useTokenTransformer === true,
         tokenizeMaxLineLength,
         lineDiffType,
         maxLineDiffLength,

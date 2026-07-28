@@ -229,6 +229,10 @@ describe('Editor onAttach lifecycle', () => {
       onContentFocus: (content) => focusTargets.push(content),
     });
     try {
+      // A queued host rerender (theme change, async highlight, hydration)
+      // replaces the shadow DOM while the attach sync is still pending;
+      // onAttach must wait for the replacement to synchronize.
+      component.rerender();
       editor.edit(component);
       await wait(20);
 

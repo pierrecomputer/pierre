@@ -557,8 +557,13 @@ export class File<
         preventEmit: true,
         renderRange: this.renderRange,
       });
-    } else {
+    } else if (this.fileRenderer.editorRenderReady()) {
       this.syncRenderViewToEditor();
+    } else {
+      // The current markup is missing the editor's token metadata, or its
+      // highlight is still pending: render through the session, which also
+      // syncs the render view once it paints.
+      this.rerender();
     }
     return () => {
       this.editor = undefined;

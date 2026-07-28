@@ -55,7 +55,6 @@ import {
 } from '../utils/includesFileAnnotations';
 import { isFilePlainText } from '../utils/isFilePlainText';
 import { renderFileWithHighlighter } from '../utils/renderFileWithHighlighter';
-import { shouldUseTokenTransformer } from '../utils/shouldUseTokenTransformer';
 import type { WorkerPoolManager } from '../worker';
 
 type AnnotationLineMap<LAnnotation> = Record<
@@ -171,6 +170,17 @@ export class FileRenderer<LAnnotation = undefined> {
   /** Leave edit-session mode. Rendering returns to the pool when one works. */
   public endEditSession(): void {
     this.editSessionActive = false;
+  }
+
+  /**
+   * Ensures that the DOM is compatible with editor render updates
+   */
+  public editorRenderReady(): boolean {
+    return (
+      this.renderCache?.options.useTokenTransformer === true &&
+      this.renderCache.highlighted &&
+      this.renderCache.result != null
+    );
   }
 
   public recycle(): void {
@@ -303,7 +313,7 @@ export class FileRenderer<LAnnotation = undefined> {
       return {
         theme: this.getLocalHighlightTheme(),
         useTokenTransformer:
-          this.editSessionActive || shouldUseTokenTransformer(this.options),
+          this.editSessionActive || this.options.useTokenTransformer === true,
         tokenizeMaxLineLength,
       };
     })();
