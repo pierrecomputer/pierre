@@ -24,6 +24,11 @@ const GITHUB_PULL_TAB_PATH_PATTERN =
 
 const CACHED_BLOBS = new Map<string, string>([
   [
+    '/oven-sh/bun/pull/30412',
+    'https://diffshub.pierrecdn.com/patches/30412.diff',
+  ],
+  // Preserve the CSS benchmark route across its base and test SHAs.
+  [
     '/nodejs/oven-sh/bun/pull/30412',
     'https://diffshub.pierrecdn.com/patches/30412.diff',
   ],
