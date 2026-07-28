@@ -326,7 +326,7 @@ describe('CodeView item edit mode', () => {
     }
   });
 
-  test('only overrides the token transformer while items are edited', async () => {
+  test('edited items keep pass-through options untouched', async () => {
     const { cleanup } = installDom();
     const { createEditor } = createEditorHarness();
     const viewer = new CodeView({
@@ -347,9 +347,10 @@ describe('CodeView item edit mode', () => {
       ]);
 
       const [renderedA, renderedB, renderedC] = viewer.getRenderedItems();
-      // Edited items force only the transformer and retain interaction options.
+      // Edited items keep the pass-through options untouched; the edit
+      // session supplies token markup without rewriting them.
       for (const rendered of [renderedA, renderedB]) {
-        expect(rendered.instance.options.useTokenTransformer).toBe(true);
+        expect(rendered.instance.options.useTokenTransformer).toBe(false);
         expect(rendered.instance.options.enableLineSelection).toBe(true);
         expect(rendered.instance.options.enableGutterUtility).toBe(true);
         expect(rendered.instance.options.lineHoverHighlight).toBe('both');
@@ -357,8 +358,8 @@ describe('CodeView item edit mode', () => {
       if (renderedB.type !== 'diff') {
         throw new Error('expected a rendered diff item');
       }
-      // expandUnchanged is not edit-forced: collapsed unchanged regions stay
-      // collapsed during editing, so the item serves the pass-through value.
+      // Collapsed unchanged regions stay collapsed during editing; the item
+      // serves the pass-through value.
       expect(renderedB.instance.options.expandUnchanged).toBe(false);
       // ...while non-edited siblings keep the parent options.
       expect(renderedC.instance.options.useTokenTransformer).toBe(false);

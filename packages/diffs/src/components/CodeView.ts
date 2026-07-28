@@ -322,16 +322,6 @@ export const CODE_VIEW_FILE_OPTION_KEYS = [
 
 type CodeViewFileOptionKeys = (typeof CODE_VIEW_FILE_OPTION_KEYS)[number];
 
-// Option values Editor.edit requires before it attaches to an instance. These
-// keys are excluded from the plain pass-through loops (defineItemOption
-// properties are non-configurable and cannot be redefined) so the prototypes
-// can define edit-aware getters that serve the editor-required value while an
-// item is in edit mode. Without this, Editor.edit would fall back to
-// instance.setOptions, which throws for CodeView-managed instances.
-const CODE_VIEW_EDIT_FORCED_OPTION_KEYS: ReadonlySet<string> = new Set([
-  'useTokenTransformer',
-]);
-
 type CodeViewPassThroughOptions<LAnnotation> = Pick<
   FileDiffOptions<LAnnotation>,
   CodeViewDiffOptionKeys
@@ -2015,21 +2005,6 @@ export class CodeView<LAnnotation = undefined> {
     return item.item.edit === true && item.item.collapsed !== true;
   }
 
-  // True when the receiving item options belong to an item currently in edit
-  // mode. The edit-forced option getters use this to serve editor-required
-  // values (see CODE_VIEW_EDIT_FORCED_OPTION_KEYS).
-  private isReceiverEdited<TMode extends CodeViewMode>(
-    receiver: CodeViewModeOptions<LAnnotation, TMode>,
-    mode: TMode
-  ): boolean {
-    const state = getItemOptionsState(receiver);
-    if (state == null) {
-      return false;
-    }
-    const item = this.getItemOptions(state, mode);
-    return item != null && this.isItemInEditMode(item);
-  }
-
   /**
    * Attach (or lazily create) the editor for a mounted edit-mode item. Called
    * from the render loop so every mounted item passes through it: fresh
@@ -2179,9 +2154,6 @@ export class CodeView<LAnnotation = undefined> {
     const prototype = {} as FileOptions<LAnnotation>;
 
     for (const key of CODE_VIEW_FILE_OPTION_KEYS) {
-      if (CODE_VIEW_EDIT_FORCED_OPTION_KEYS.has(key)) {
-        continue;
-      }
       defineItemOption<FileOptions<LAnnotation>, CodeViewFileOptionKeys>(
         prototype,
         key,
@@ -2189,14 +2161,8 @@ export class CodeView<LAnnotation = undefined> {
       );
     }
 
-    // Edit-forced options: while the item is in edit mode these serve the
-    // values Editor.edit requires so it never falls back to
-    // instance.setOptions (which throws for CodeView-managed instances).
-    defineItemOption(prototype, 'useTokenTransformer', (receiver) =>
-      this.isReceiverEdited(receiver, 'file')
-        ? true
-        : this.options.useTokenTransformer
-    );
+    // Mapped options: served from CodeView-level names or per-item state
+    // that the plain pass-through loop cannot express.
     defineItemOption(
       prototype,
       'stickyHeader',
@@ -2224,9 +2190,6 @@ export class CodeView<LAnnotation = undefined> {
     const prototype = {} as FileDiffOptions<LAnnotation>;
 
     for (const key of CODE_VIEW_DIFF_OPTION_KEYS) {
-      if (CODE_VIEW_EDIT_FORCED_OPTION_KEYS.has(key)) {
-        continue;
-      }
       defineItemOption<FileDiffOptions<LAnnotation>, CodeViewDiffOptionKeys>(
         prototype,
         key,
@@ -2234,14 +2197,8 @@ export class CodeView<LAnnotation = undefined> {
       );
     }
 
-    // Edit-forced options: while the item is in edit mode these serve the
-    // values Editor.edit requires so it never falls back to
-    // instance.setOptions (which throws for CodeView-managed instances).
-    defineItemOption(prototype, 'useTokenTransformer', (receiver) =>
-      this.isReceiverEdited(receiver, 'diff')
-        ? true
-        : this.options.useTokenTransformer
-    );
+    // Mapped options: served from CodeView-level names or per-item state
+    // that the plain pass-through loop cannot express.
     defineItemOption(
       prototype,
       'stickyHeader',

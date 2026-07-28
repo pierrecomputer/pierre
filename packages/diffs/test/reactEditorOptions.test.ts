@@ -1,4 +1,4 @@
-import { afterAll, describe, expect, mock, test } from 'bun:test';
+import { afterAll, describe, expect, mock, spyOn, test } from 'bun:test';
 import {
   act,
   type ComponentType,
@@ -232,14 +232,26 @@ function createEditableSurfaceElement(
   });
 }
 
-describe('React Edit surface option normalization', () => {
-  test('File enables the token transformer while editing', async () => {
+// Custom elements isolate rendered markup behind a shadow root; find it
+// under the React container for markup assertions.
+function shadowHTML(container: HTMLElement): string {
+  for (const el of Array.from(container.querySelectorAll('*'))) {
+    if (el.shadowRoot != null) {
+      return el.shadowRoot.innerHTML;
+    }
+  }
+  return '';
+}
+
+describe('React edit surfaces', () => {
+  test('File renders editor token markup without mutating options', async () => {
     const { cleanup } = installDom();
     const cleanupActEnvironment = installReactActEnvironment();
     const container = document.createElement('div');
     document.body.appendChild(container);
     let instance: FileInstance<undefined> | undefined;
     let root: Root | undefined;
+    let updates = 0;
     const options: FileOptions<undefined> = {
       disableFileHeader: true,
       theme: DEFAULT_THEMES,
@@ -247,6 +259,9 @@ describe('React Edit surface option normalization', () => {
       onPostRender(_node, current, phase) {
         if (phase !== 'unmount') {
           instance = current;
+        }
+        if (phase === 'update') {
+          updates++;
         }
       },
     };
@@ -269,7 +284,17 @@ describe('React Edit surface option normalization', () => {
       });
 
       expect(instance).toBeDefined();
-      expect(instance!.options.useTokenTransformer).toBe(true);
+      // The attach-time session render supplies the token markup; public
+      // options are never rewritten for the editor.
+      await waitFor(() => shadowHTML(container).includes('data-char'), {
+        timeout: 4000,
+      });
+      // waitFor times out silently; this is the real assertion.
+      expect(shadowHTML(container)).toContain('data-char');
+      expect(instance!.options.useTokenTransformer).toBe(false);
+      // Mounting straight into edit renders once without a session and again
+      // at editor attach — the accepted pre-paint cost of mount-into-edit.
+      expect(updates).toBeGreaterThanOrEqual(1);
     } finally {
       await unmountRoot(root);
       cleanupActEnvironment();
@@ -277,7 +302,7 @@ describe('React Edit surface option normalization', () => {
     }
   });
 
-  test('FileDiff enables the token transformer while editing', async () => {
+  test('FileDiff renders editor token markup without mutating options', async () => {
     const { cleanup } = installDom();
     const cleanupActEnvironment = installReactActEnvironment();
     const container = document.createElement('div');
@@ -317,8 +342,63 @@ describe('React Edit surface option normalization', () => {
       });
 
       expect(instance).toBeDefined();
-      expect(instance!.options.useTokenTransformer).toBe(true);
+      // The attach-time session render supplies the token markup; public
+      // options are never rewritten for the editor.
+      await waitFor(() => shadowHTML(container).includes('data-char'), {
+        timeout: 4000,
+      });
+      // waitFor times out silently; this is the real assertion.
+      expect(shadowHTML(container)).toContain('data-char');
+      expect(instance!.options.useTokenTransformer).toBe(false);
     } finally {
+      await unmountRoot(root);
+      cleanupActEnvironment();
+      cleanup();
+    }
+  });
+
+  test('an unchanged commit does not force-render an optionless edit surface', async () => {
+    const { cleanup } = installDom();
+    const cleanupActEnvironment = installReactActEnvironment();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const renderSpy = spyOn(FileInstance.prototype, 'render');
+    let root: Root | undefined;
+    const file = { name: 'edit.ts', contents: 'const value = 1;\n' };
+    // A fresh element per commit: rendering an identical element reference
+    // makes React bail out entirely, which would skip the layout effects
+    // this test exists to observe.
+    const makeElement = () =>
+      createElement(
+        EditProviderComponent,
+        { createEditor },
+        createElement(ReactFileComponent, {
+          disableWorkerPool: true,
+          edit: true,
+          file,
+        })
+      );
+    try {
+      root = createReactRoot(container);
+      await act(async () => {
+        root!.render(makeElement());
+        await wait(10);
+      });
+      await wait(50);
+      const forcedRenders = () =>
+        renderSpy.mock.calls.filter((call) => call[0]?.forceRender === true)
+          .length;
+      const forcedBefore = forcedRenders();
+
+      // With no options prop the merged options are undefined every commit;
+      // that must compare clean instead of force-rendering the edited file.
+      await act(async () => {
+        root!.render(makeElement());
+        await wait(10);
+      });
+      expect(forcedRenders()).toBe(forcedBefore);
+    } finally {
+      renderSpy.mockRestore();
       await unmountRoot(root);
       cleanupActEnvironment();
       cleanup();
