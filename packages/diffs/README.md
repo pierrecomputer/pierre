@@ -27,6 +27,15 @@ JavaScript and React components.
 pnpm add @pierre/diffs
 ```
 
+## Agent skill
+
+Install the agent skill for this package with the
+[Skills CLI](https://skills.sh/docs/cli):
+
+```bash
+npx skills add pierrecomputer/pierre --skill diffs
+```
+
 ## Development
 
 We use pnpm for workspace package management and Bun for tests.

@@ -21,6 +21,18 @@ tasks:
       cache: false
       runInCI: 'always'
 
+  benchmark-editor-piece-table:
+    command: 'bun scripts/benchmarkEditorPieceTable.ts'
+    options:
+      cache: false
+      runInCI: 'always'
+
+  benchmark-editor-tokenizer:
+    command: 'bun scripts/benchmarkEditorTokenizer.ts'
+    options:
+      cache: false
+      runInCI: 'always'
+
   # Browser E2E for shadow-DOM rendering and contentEditable edit mode, which
   # the jsdom unit suite cannot exercise. Mirrors the trees E2E setup: a Vite
   # fixture server serves the built dist and Playwright drives real Chromium.

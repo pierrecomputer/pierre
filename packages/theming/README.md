@@ -68,6 +68,15 @@ pnpm add @pierre/theming
 Add the optional peers only for the entries you use, e.g., `react` for `/react`,
 and `@pierre/theme`, `@shikijs/themes`, and `shiki` for `/themes`.
 
+## Agent skill
+
+Install the agent skill for this package with the
+[Skills CLI](https://skills.sh/docs/cli):
+
+```bash
+npx skills add pierrecomputer/pierre --skill theming
+```
+
 ## Collections and catalogs
 
 The core entry exports two closely-related composition primitives:
