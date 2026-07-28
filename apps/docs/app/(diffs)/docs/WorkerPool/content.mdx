@@ -135,6 +135,13 @@ move highlighting work off the main thread, but they do not reduce the extra DOM
 size created by token metadata. For token callback behavior and performance
 tradeoffs, see [Token Hooks](#token-hooks).
 
+[Edit mode](#edit-mode) needs no pool configuration: a file being edited renders
+on the main thread with the token metadata the editor needs, while the pool
+keeps rendering every other file. Enabling `useTokenTransformer: true` on the
+pool is an optional optimization for edit-heavy apps — pool markup is then
+already editor-compatible, so entering edit mode skips a one-time re-render of
+that file.
+
 If you need to control which Shiki engine is used, set `preferredHighlighter`
 when initializing the pool (`'shiki-js'` by default, `'shiki-wasm'` optional).
 

@@ -9,8 +9,8 @@ const options = {
   unsafeCSS: CustomScrollbarCSS,
 } as const;
 
-// The editor requires the token transformer, so enabling it in the server
-// render keeps hydration from rerendering the surface after the editor
+// Enabling the token transformer in the server render keeps the markup
+// editor-ready, so hydration does not rerender the surface when the editor
 // attaches. Mirrors `(diffs)/_edit/constants.ts`.
 const editableDemoOptions: FileOptions<undefined> = {
   theme: { dark: 'pierre-dark', light: 'pierre-light' },
@@ -860,6 +860,8 @@ const workerPool = getOrCreateWorkerPoolSingleton({
   poolOptions: { workerFactory },
   highlighterOptions: {
     theme: { dark: 'pierre-dark', light: 'pierre-light' },
+    // Optional: pool markup is then already editor-compatible, so entering
+    // edit mode skips a one-time re-render of the file.
     useTokenTransformer: true,
   },
 });
@@ -901,6 +903,8 @@ const file: FileContents = {
 const poolOptions = { workerFactory };
 const highlighterOptions = {
   theme: { dark: 'pierre-dark', light: 'pierre-light' },
+  // Optional: pool markup is then already editor-compatible, so entering
+  // edit mode skips a one-time re-render of the file.
   useTokenTransformer: true,
 } as const;
 
