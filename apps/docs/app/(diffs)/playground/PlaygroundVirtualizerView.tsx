@@ -3,8 +3,8 @@
 import {
   type DiffLineAnnotation,
   type FileDiffMetadata,
-  type FileDiffOptions,
   isDiffAnnotationCollection,
+  VirtualizedFile,
   VirtualizedFileDiff,
   Virtualizer,
 } from '@pierre/diffs';
@@ -14,12 +14,13 @@ import { useEffect, useRef } from 'react';
 import { flushSync } from 'react-dom';
 import { createRoot, type Root } from 'react-dom/client';
 
-import { ITEM_UNSAFE_CSS } from './constants';
+import { ITEM_UNSAFE_CSS, LONG_README_FILE } from './constants';
+import type { SharedRenderOptions } from './PlaygroundClient';
 import { CommentForm, CommentThread } from './PlaygroundComments';
 
 interface PlaygroundVirtualizerViewProps {
   diffs: FileDiffMetadata[];
-  options: FileDiffOptions<VirtualizerAnnotationMetadata>;
+  options: SharedRenderOptions;
   enableLineSelection: boolean;
   enableGutterComments: boolean;
   showAnnotations: boolean;
@@ -105,6 +106,7 @@ export function PlaygroundVirtualizerView({
   const instancesRef = useRef<
     VirtualizedFileDiff<VirtualizerAnnotationMetadata>[]
   >([]);
+  const fileInstanceRef = useRef<VirtualizedFile | null>(null);
   const annotationsRef = useRef<VirtualizerAnnotation[][]>([]);
   const annotationRootsRef = useRef(new Map<string, Root>());
   const annotationKeyCounterRef = useRef(0);
@@ -134,6 +136,49 @@ export function PlaygroundVirtualizerView({
     const virtualizer = new Virtualizer();
     // Passing `document` makes the page/window the scroll container.
     virtualizer.setup(document);
+
+    // The long README plain file leads the window-scroll list (as in
+    // CodeView), driven by the vanilla VirtualizedFile. It carries the same
+    // header Edit toggle as the diffs below; no comment wiring, since the
+    // demo file has no annotations. Its container is appended first so it
+    // sits above the diffs in the page flow.
+    const readmeContainer = document.createElement('diffs-container');
+    readmeContainer.style.display = 'block';
+    content.appendChild(readmeContainer);
+    const readmeEditor = new Editor<undefined>({
+      onAttach(attachedEditor) {
+        attachedEditor.focus({
+          lineNumber: 'first-visible',
+          preventScroll: true,
+        });
+      },
+    });
+    const readmeToggle = createEditToggle();
+    const fileInstance = new VirtualizedFile(
+      {
+        ...options,
+        renderHeaderMetadata: () => readmeToggle,
+        stickyHeader: true,
+        unsafeCSS: VIRTUALIZER_CUSTOM_CSS,
+      },
+      virtualizer,
+      undefined,
+      pool
+    );
+    readmeToggle.addEventListener('click', () => {
+      const editing = readmeToggle.getAttribute('aria-pressed') !== 'true';
+      readmeToggle.setAttribute('aria-pressed', editing ? 'true' : 'false');
+      if (editing) {
+        readmeEditor.edit(fileInstance);
+      } else {
+        readmeEditor.cleanUp();
+      }
+    });
+    fileInstance.render({
+      file: LONG_README_FILE,
+      fileContainer: readmeContainer,
+    });
+    fileInstanceRef.current = fileInstance;
 
     annotationsRef.current = diffs.map(() => []);
     const editors: Editor<VirtualizerAnnotationMetadata>[] = [];
@@ -319,6 +364,9 @@ export function PlaygroundVirtualizerView({
       for (const instance of instances) {
         instance.cleanUp();
       }
+      readmeEditor.cleanUp();
+      fileInstance.cleanUp();
+      fileInstanceRef.current = null;
       for (const root of annotationRoots.values()) {
         setTimeout(() => root.unmount(), 0);
       }
@@ -344,6 +392,13 @@ export function PlaygroundVirtualizerView({
         ...options,
         enableLineSelection: enableLineSelection && !enableGutterComments,
         enableGutterUtility: enableGutterComments && showAnnotations,
+      });
+    }
+    const fileInstance = fileInstanceRef.current;
+    if (fileInstance != null) {
+      fileInstance.setOptions({
+        ...fileInstance.options,
+        ...options,
       });
     }
   }, [options, enableLineSelection, enableGutterComments, showAnnotations]);

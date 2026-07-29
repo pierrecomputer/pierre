@@ -1,5 +1,6 @@
 import {
   type CodeViewItem,
+  type FileContents,
   type FileDiffMetadata,
   parseDiffFromFile,
 } from '@pierre/diffs';
@@ -275,11 +276,19 @@ const user = await getUser('123');
 \`\`\`
 `;
 
-// The plain-file CodeView items ship the README repeated 10x so the file
-// surfaces are long enough to scroll on their own. Only the file items use
-// this — the diff fixtures keep their authored sizes (one long fixture plus
-// the shorter variants).
+// The plain-file items ship the README repeated 10x so the file surfaces are
+// long enough to scroll on their own. Only the file items use this — the diff
+// fixtures keep their authored sizes (one long fixture plus the shorter
+// variants).
 const LONG_README_CONTENT = NEW_README_CONTENT.repeat(10);
+
+// The long README as a ready-made plain file: leads the CodeView items and
+// both Virtualizer lists. FileContents is never mutated by the library, so
+// one shared instance is fine across surfaces.
+export const LONG_README_FILE: FileContents = {
+  name: 'README.md',
+  contents: LONG_README_CONTENT,
+};
 
 // Nested markup with meaningful indentation, for exercising edit-mode diff
 // alignment: wrapping/unwrapping containers, pushing lines around with
@@ -569,11 +578,16 @@ export const VIRTUALIZER_FILE_DIFFS: FileDiffMetadata[] = [
   ).flat(),
 ];
 
-// Items rendered in the CodeView mode: the long single-file diff leads (as in
-// the Virtualizer list), then each variant contributes two diffs and a plain
-// file so the demo shows both item types scrolling within CodeView's own
-// scroll container.
+// Items rendered in the CodeView mode: the long README file item leads,
+// followed by the long single-file diff (as in the Virtualizer list), then
+// each variant contributes two diffs and a plain file so the demo shows both
+// item types scrolling within CodeView's own scroll container.
 export const CODE_VIEW_ITEMS: CodeViewItem<PlaygroundAnnotationMetadata>[] = [
+  {
+    id: 'file:README.md',
+    type: 'file',
+    file: LONG_README_FILE,
+  },
   {
     id: `diff:${LONG_FIXTURE_NAME}`,
     type: 'diff',
@@ -583,6 +597,18 @@ export const CODE_VIEW_ITEMS: CodeViewItem<PlaygroundAnnotationMetadata>[] = [
     { length: DIFF_VARIANT_COUNT },
     (_, index): CodeViewItem<PlaygroundAnnotationMetadata>[] => {
       const readmeName = variantName('README.md', index);
+      // Variant 0's README file is hoisted to the head of the list above, so
+      // only the later variants emit a file item here.
+      const readmeItems: CodeViewItem<PlaygroundAnnotationMetadata>[] =
+        index === 0
+          ? []
+          : [
+              {
+                id: `file:${readmeName}`,
+                type: 'file',
+                file: { name: readmeName, contents: LONG_README_CONTENT },
+              },
+            ];
       return [
         {
           id: `diff:${variantName(USERS_BASE.name, index)}`,
@@ -594,11 +620,7 @@ export const CODE_VIEW_ITEMS: CodeViewItem<PlaygroundAnnotationMetadata>[] = [
           type: 'diff',
           fileDiff: variantDiff(MARKUP_BASE, index),
         },
-        {
-          id: `file:${readmeName}`,
-          type: 'file',
-          file: { name: readmeName, contents: LONG_README_CONTENT },
-        },
+        ...readmeItems,
         {
           id: `diff:${variantName(STYLES_BASE.name, index)}`,
           type: 'diff',

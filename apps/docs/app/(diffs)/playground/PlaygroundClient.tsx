@@ -119,8 +119,10 @@ const EMPTY_ANNOTATIONS: DiffLineAnnotation<PlaygroundAnnotationMetadata>[] =
 // on the annotation metadata generic, so a single annotation-agnostic type keeps
 // them assignable to FileDiff, VirtualizedFileDiff, and CodeView alike (spreading
 // a `<undefined>`-typed options object into an annotated FileDiff would otherwise
-// widen its annotation callbacks to `undefined`).
-type SharedRenderOptions = Pick<
+// widen its annotation callbacks to `undefined`). The Virtualizer views take
+// this as their options prop: it carries no callback keys, so it also spreads
+// cleanly into the plain-file FileOptions their README surface uses.
+export type SharedRenderOptions = Pick<
   FileDiffOptions<undefined>,
   | 'diffStyle'
   | 'diffIndicators'
