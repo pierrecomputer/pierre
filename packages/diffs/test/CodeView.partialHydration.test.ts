@@ -8,6 +8,7 @@ import type {
   FileContents,
   FileDiffMetadata,
 } from '../src/types';
+import { linesToArray } from '../src/utils/diffLines';
 import { parsePatchFiles } from '../src/utils/parsePatchFiles';
 import {
   createRoot,
@@ -114,13 +115,13 @@ describe('CodeView partial hydration', () => {
       expect(hydratedItem.fileDiff).toBe(partial);
       expect(renderedItem.instance.fileDiff).toBe(partial);
       expect(partial.isPartial).toBe(false);
-      expect(partial.deletionLines).toEqual([
+      expect(linesToArray(partial.deletionLines)).toEqual([
         'keep 1\n',
         'old value\n',
         'keep 3\n',
         'keep 4\n',
       ]);
-      expect(partial.additionLines).toEqual([
+      expect(linesToArray(partial.additionLines)).toEqual([
         'keep 1\n',
         'new value\n',
         'keep 3\n',

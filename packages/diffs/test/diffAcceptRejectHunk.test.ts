@@ -6,6 +6,7 @@ import type {
   FileDiffMetadata,
 } from '../src/types';
 import { diffAcceptRejectHunk } from '../src/utils/diffAcceptRejectHunk';
+import { type DiffLines, linesToArray } from '../src/utils/diffLines';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import { parseMergeConflictDiffFromFile } from '../src/utils/parseMergeConflictDiffFromFile';
 import { parsePatchFiles } from '../src/utils/parsePatchFiles';
@@ -29,6 +30,11 @@ type BlockSnapshot = ContextBlockSnapshot | ChangeBlockSnapshot;
 
 interface HunkSnapshot {
   blocks: BlockSnapshot[];
+}
+
+// Read a sub-range of one side's lines as a plain string[] for comparison.
+function sliceLines(lines: DiffLines, start: number, end: number): string[] {
+  return linesToArray(lines).slice(start, end);
 }
 
 // Create one realistic parsed diff with several hunk shapes. The tests use
@@ -133,7 +139,8 @@ function snapshotBlock(
   if (content.type === 'context') {
     return {
       type: 'context',
-      lines: diff.additionLines.slice(
+      lines: sliceLines(
+        diff.additionLines,
         content.additionLineIndex,
         content.additionLineIndex + content.lines
       ),
@@ -142,11 +149,13 @@ function snapshotBlock(
 
   return {
     type: 'change',
-    deletionLines: diff.deletionLines.slice(
+    deletionLines: sliceLines(
+      diff.deletionLines,
       content.deletionLineIndex,
       content.deletionLineIndex + content.deletions
     ),
-    additionLines: diff.additionLines.slice(
+    additionLines: sliceLines(
+      diff.additionLines,
       content.additionLineIndex,
       content.additionLineIndex + content.additions
     ),
@@ -208,13 +217,15 @@ function assertUnresolvedHunkMatchesSnapshot(
       }
 
       expect(
-        diff.deletionLines.slice(
+        sliceLines(
+          diff.deletionLines,
           content.deletionLineIndex,
           content.deletionLineIndex + content.lines
         )
       ).toEqual(expectedBlock.lines);
       expect(
-        diff.additionLines.slice(
+        sliceLines(
+          diff.additionLines,
           content.additionLineIndex,
           content.additionLineIndex + content.lines
         )
@@ -228,13 +239,15 @@ function assertUnresolvedHunkMatchesSnapshot(
     }
 
     expect(
-      diff.deletionLines.slice(
+      sliceLines(
+        diff.deletionLines,
         content.deletionLineIndex,
         content.deletionLineIndex + content.deletions
       )
     ).toEqual(expectedBlock.deletionLines);
     expect(
-      diff.additionLines.slice(
+      sliceLines(
+        diff.additionLines,
         content.additionLineIndex,
         content.additionLineIndex + content.additions
       )
@@ -268,13 +281,15 @@ function assertResolvedHunkMatchesExpected(
     )
   ).toBe(expectedLines.length);
   expect(
-    diff.deletionLines.slice(
+    sliceLines(
+      diff.deletionLines,
       hunk.deletionLineIndex,
       hunk.deletionLineIndex + expectedLines.length
     )
   ).toEqual(expectedLines);
   expect(
-    diff.additionLines.slice(
+    sliceLines(
+      diff.additionLines,
       hunk.additionLineIndex,
       hunk.additionLineIndex + expectedLines.length
     )
@@ -300,8 +315,8 @@ describe('diffAcceptRejectHunk', () => {
 
     const result = diffAcceptRejectHunk(diff, 0, 'accept');
 
-    expect(result.deletionLines).toEqual(newLines);
-    expect(result.additionLines).toEqual(newLines);
+    expect(linesToArray(result.deletionLines)).toEqual(newLines);
+    expect(linesToArray(result.additionLines)).toEqual(newLines);
     expect(verifyFileDiffHunkValues(result)).toEqual({
       valid: true,
       errors: [],
@@ -322,8 +337,8 @@ describe('diffAcceptRejectHunk', () => {
 
     const result = diffAcceptRejectHunk(diff, 0, 'reject');
 
-    expect(result.deletionLines).toEqual(oldLines);
-    expect(result.additionLines).toEqual(oldLines);
+    expect(linesToArray(result.deletionLines)).toEqual(oldLines);
+    expect(linesToArray(result.additionLines)).toEqual(oldLines);
     expect(verifyFileDiffHunkValues(result)).toEqual({
       valid: true,
       errors: [],
@@ -486,8 +501,12 @@ describe('diffAcceptRejectHunk', () => {
     const [hunk] = result.hunks;
 
     expect(result.isPartial).toBe(true);
-    expect(result.deletionLines).toEqual(getResolvedLines(snapshot, 'accept'));
-    expect(result.additionLines).toEqual(getResolvedLines(snapshot, 'accept'));
+    expect(linesToArray(result.deletionLines)).toEqual(
+      getResolvedLines(snapshot, 'accept')
+    );
+    expect(linesToArray(result.additionLines)).toEqual(
+      getResolvedLines(snapshot, 'accept')
+    );
     expect(hunk?.collapsedBefore).toBe(5);
     expect(hunk?.additionStart).toBe(6);
     expect(hunk?.deletionStart).toBe(6);
@@ -575,8 +594,8 @@ describe('diffAcceptRejectHunk', () => {
 
     expect(hunk?.noEOFCRAdditions).toBe(true);
     expect(hunk?.noEOFCRDeletions).toBe(true);
-    expect(result.deletionLines).toEqual(expectedLines);
-    expect(result.additionLines).toEqual(expectedLines);
+    expect(linesToArray(result.deletionLines)).toEqual(expectedLines);
+    expect(linesToArray(result.additionLines)).toEqual(expectedLines);
   });
 
   test('resolveConflict strips merge conflict separators from a resolved region', () => {
@@ -610,12 +629,12 @@ describe('diffAcceptRejectHunk', () => {
         0
       )
     ).toBe(3);
-    expect(result.deletionLines).toEqual([
+    expect(linesToArray(result.deletionLines)).toEqual([
       'before\n',
       'const value = 2;\n',
       'after\n',
     ]);
-    expect(result.additionLines).toEqual([
+    expect(linesToArray(result.additionLines)).toEqual([
       'before\n',
       'const value = 2;\n',
       'after\n',
@@ -645,14 +664,14 @@ describe('diffAcceptRejectHunk', () => {
 
     const result = resolveConflict(fileDiff, actions[0]!, 'current');
 
-    expect(result.deletionLines).toEqual([
+    expect(linesToArray(result.deletionLines)).toEqual([
       'start\n',
       'ours one\n',
       'middle\n',
       'ours two\n',
       'end\n',
     ]);
-    expect(result.additionLines).toEqual([
+    expect(linesToArray(result.additionLines)).toEqual([
       'start\n',
       'ours one\n',
       'middle\n',

@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import type { FileDiffMetadata } from '../src/types';
+import { lineAt } from '../src/utils/diffLines';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 
 // parseDiffFromFile pairs change-block lines by similarity: the diff library
@@ -155,7 +156,7 @@ describe('parseDiffFromFile change-block realignment', () => {
         expect(block.additionLineIndex - block.deletionLineIndex).toBe(2);
       }
     }
-    expect(diff.additionLines[4]).toBe('// note\n');
+    expect(lineAt(diff.additionLines, 4)).toBe('// note\n');
   });
 });
 

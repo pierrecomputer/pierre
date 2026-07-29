@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 
+import { linesToArray } from '../src/utils/diffLines';
 import { parseMergeConflictDiffFromFile } from '../src/utils/parseMergeConflictDiffFromFile';
 import { splitFileContents } from '../src/utils/splitFileContents';
 import { hunkDigest, verifyHunkLineValues } from './testUtils';
@@ -42,10 +43,10 @@ describe('parseMergeConflictDiffFromFile', () => {
     expect(incomingFile.contents).not.toContain('>>>>>>> feature\n');
     expect(incomingFile.contents).not.toContain('const ttl = 12;\n');
 
-    expect(fileDiff.deletionLines).toEqual(
+    expect(linesToArray(fileDiff.deletionLines)).toEqual(
       splitFileContents(currentFile.contents)
     );
-    expect(fileDiff.additionLines).toEqual(
+    expect(linesToArray(fileDiff.additionLines)).toEqual(
       splitFileContents(incomingFile.contents)
     );
 
@@ -214,10 +215,10 @@ describe('parseMergeConflictDiffFromFile', () => {
       expect(verifyHunkLineValues(fileDiff)).toEqual([]);
 
       // The diff sides are exactly the conflict-free current/incoming texts
-      expect(fileDiff.deletionLines).toEqual(
+      expect(linesToArray(fileDiff.deletionLines)).toEqual(
         splitFileContents(currentFile.contents)
       );
-      expect(fileDiff.additionLines).toEqual(
+      expect(linesToArray(fileDiff.additionLines)).toEqual(
         splitFileContents(incomingFile.contents)
       );
       expect(currentFile.contents).not.toMatch(/^<{7} /m);

@@ -7,6 +7,13 @@ import type {
   Hunk,
   HunkExpansionRegion,
 } from '../types';
+import {
+  type DiffLines,
+  joinLines,
+  lineAt,
+  linesToArray,
+  plainLines,
+} from './diffLines';
 import { getHunkSideStartBoundary } from './getHunkSideBoundaries';
 import { parseDiffFromFile } from './parseDiffFromFile';
 import {
@@ -59,7 +66,7 @@ interface RegionPlan {
 
 const deletionLineSetCache = new WeakMap<
   FileDiffMetadata,
-  { lines: string[]; set: Set<string> }
+  { lines: DiffLines; set: Set<string> }
 >();
 
 /**
@@ -67,9 +74,11 @@ const deletionLineSetCache = new WeakMap<
  * in a newline exposes one extra empty line the parsed diff never contains)
  * so session line arrays compare like parse-derived ones.
  */
-export function normalizeEditorLines(lines: string[]): string[] {
-  if (lines.length > 1 && lines[lines.length - 1] === '') {
-    return lines.slice(0, -1);
+// Returns `lines` itself when nothing is trimmed, so callers can keep using an
+// identity check to tell whether the editor lines were already canonical.
+export function normalizeEditorLines(lines: DiffLines): DiffLines {
+  if (lines.length > 1 && lineAt(lines, lines.length - 1) === '') {
+    return plainLines(linesToArray(lines).slice(0, -1));
   }
   return lines;
 }
@@ -79,12 +88,15 @@ export function normalizeEditorLines(lines: string[]): string[] {
  * during an edit session, so this result needs no prior-pass snapshot.
  */
 export function findDivergenceCore(
-  deletionLines: string[],
-  additionLines: string[]
+  deletionLines: DiffLines,
+  additionLines: DiffLines
 ): DivergenceCore | undefined {
   const maxStart = Math.min(deletionLines.length, additionLines.length);
   let start = 0;
-  while (start < maxStart && deletionLines[start] === additionLines[start]) {
+  while (
+    start < maxStart &&
+    lineAt(deletionLines, start) === lineAt(additionLines, start)
+  ) {
     start++;
   }
   let deletionEnd = deletionLines.length;
@@ -92,7 +104,8 @@ export function findDivergenceCore(
   while (
     deletionEnd > start &&
     additionEnd > start &&
-    deletionLines[deletionEnd - 1] === additionLines[additionEnd - 1]
+    lineAt(deletionLines, deletionEnd - 1) ===
+      lineAt(additionLines, additionEnd - 1)
   ) {
     deletionEnd--;
     additionEnd--;
@@ -223,7 +236,7 @@ function canRetainCanonicalBlocks(
   }
   for (const line of changedLines) {
     const previousLine = previousAdditionLines.get(line);
-    const additionLine = diff.additionLines[line];
+    const additionLine = lineAt(diff.additionLines, line);
     if (
       previousLine == null ||
       additionLine == null ||
@@ -256,7 +269,7 @@ function getDeletionLineSet(diff: FileDiffMetadata): Set<string> {
   if (cached?.lines === diff.deletionLines) {
     return cached.set;
   }
-  const set = new Set(diff.deletionLines);
+  const set = new Set(linesToArray(diff.deletionLines));
   deletionLineSetCache.set(diff, { lines: diff.deletionLines, set });
   return set;
 }
@@ -437,11 +450,11 @@ function parseCanonicalChangeBlocks(
   const parsed = parseDiffFromFile(
     {
       name: diff.prevName ?? diff.name,
-      contents: diff.deletionLines.join(''),
+      contents: joinLines(diff.deletionLines),
     },
     {
       name: diff.name,
-      contents: diff.additionLines.join(''),
+      contents: joinLines(diff.additionLines),
       lang: diff.lang,
     },
     parseDiffOptions

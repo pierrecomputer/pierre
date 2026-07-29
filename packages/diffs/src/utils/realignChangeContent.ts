@@ -4,6 +4,7 @@ import type {
   FileDiffMetadata,
   Hunk,
 } from '../types';
+import { lineAt } from './diffLines';
 
 // The diff library emits one change block per replaced run, ordering every
 // deleted line before every added line. Renderers pair a block's lines
@@ -95,13 +96,13 @@ export function slideBlankBoundaryBlocksUp(
     // Sliding through identical lines is only well-defined when the block is
     // a uniform run; require every block line to equal the first one, and
     // that line to be blank.
-    const unit = lines[blockStart] ?? '';
+    const unit = lineAt(lines, blockStart) ?? '';
     if (unit.trim() !== '') {
       continue;
     }
     let uniform = true;
     for (let offset = 1; offset < blockLength; offset++) {
-      if (lines[blockStart + offset] !== unit) {
+      if (lineAt(lines, blockStart + offset) !== unit) {
         uniform = false;
         break;
       }
@@ -115,9 +116,10 @@ export function slideBlankBoundaryBlocksUp(
     let slide = 0;
     while (
       slide < previous.lines &&
-      diff.additionLines[
+      lineAt(
+        diff.additionLines,
         previous.additionLineIndex + previous.lines - 1 - slide
-      ] === unit
+      ) === unit
     ) {
       slide++;
     }
@@ -181,13 +183,17 @@ function realignChangeBlock(
   const strippedDeletions: string[] = [];
   for (let line = 0; line < deletions; line++) {
     strippedDeletions.push(
-      stripWhitespace(diff.deletionLines[deletionLineIndex + line] ?? '')
+      stripWhitespace(
+        lineAt(diff.deletionLines, deletionLineIndex + line) ?? ''
+      )
     );
   }
   const strippedAdditions: string[] = [];
   for (let line = 0; line < additions; line++) {
     strippedAdditions.push(
-      stripWhitespace(diff.additionLines[additionLineIndex + line] ?? '')
+      stripWhitespace(
+        lineAt(diff.additionLines, additionLineIndex + line) ?? ''
+      )
     );
   }
 

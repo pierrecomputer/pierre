@@ -5,6 +5,7 @@ import type {
   Hunk,
 } from '../types';
 import { cloneFileDiffMetadata } from './cloneFileDiffMetadata';
+import { plainLines } from './diffLines';
 import {
   getHunkSideEndBoundary,
   getHunkSideStartBoundary,
@@ -44,8 +45,10 @@ export function hydratePartialDiff(
       requireMissingOldFile(targetFileDiff, files);
       const lines = splitFileContents(newFile.contents);
       targetFileDiff.isPartial = false;
-      targetFileDiff.deletionLines = lines;
-      targetFileDiff.additionLines = lines;
+      // Both sides keep sharing one underlying array, as they did before the
+      // sides became `DiffLines`
+      targetFileDiff.deletionLines = plainLines(lines);
+      targetFileDiff.additionLines = plainLines(lines);
       setHydratedCacheKey(targetFileDiff, null, newFile);
       return targetFileDiff;
     }
@@ -71,8 +74,8 @@ function hydrateTwoSidedFileDiff(
   fileDiff.splitLineCount = splitLineCount;
   fileDiff.unifiedLineCount = unifiedLineCount;
   fileDiff.isPartial = false;
-  fileDiff.deletionLines = deletionLines;
-  fileDiff.additionLines = additionLines;
+  fileDiff.deletionLines = plainLines(deletionLines);
+  fileDiff.additionLines = plainLines(additionLines);
   setHydratedCacheKey(fileDiff, oldFile, newFile);
   return fileDiff;
 }

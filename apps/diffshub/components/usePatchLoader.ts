@@ -4,7 +4,9 @@ import {
   areSelectionsEqual,
   type CodeViewItem,
   type CodeViewLineSelection,
-  processFile,
+  getStreamedPatchMetadata,
+  processFileBytes,
+  streamGitPatchFiles,
 } from '@pierre/diffs';
 import { type CodeViewHandle, useStableCallback } from '@pierre/diffs/react';
 import {
@@ -32,10 +34,6 @@ import {
   formatDiffsHubLineHash,
   parseDiffsHubLineHash,
 } from '@/lib/lineHash';
-import {
-  getStreamedPatchMetadata,
-  streamGitPatchFiles,
-} from '@/lib/streamGitPatchFiles';
 import type {
   CommentMetadata,
   DiffsHubCommentFileByItemId,
@@ -404,12 +402,12 @@ export function usePatchLoader({
 
           publishTreeSource();
         };
-        const appendStreamedFile = async (fileText: string) => {
+        const appendStreamedFile = async (fileBytes: Uint8Array) => {
           if (!hasReceivedFirstStreamedFile) {
             hasReceivedFirstStreamedFile = true;
           }
 
-          const patchMetadata = getStreamedPatchMetadata(fileText);
+          const patchMetadata = getStreamedPatchMetadata(fileBytes);
           if (patchMetadata != null) {
             streamTreePathPrefix = getPatchTreePathPrefix(
               patchMetadata,
@@ -417,7 +415,7 @@ export function usePatchLoader({
             );
           }
 
-          const fileDiff = processFile(fileText, {
+          const fileDiff = processFileBytes(fileBytes, {
             cacheKey: `${cacheKeyPrefix}-0-${accumulator.fileIndex}`,
             isGitDiff: true,
           });

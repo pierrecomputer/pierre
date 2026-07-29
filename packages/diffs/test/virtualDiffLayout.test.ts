@@ -6,6 +6,7 @@ import type {
   HunkSeparators,
   VirtualFileMetrics,
 } from '../src/types';
+import { type DiffLines, plainLines } from '../src/utils/diffLines';
 import {
   getExpandedRegion,
   getLeadingHunkSeparatorLayout,
@@ -297,6 +298,8 @@ function createTrailingDiff(trailingLineCount: number): FileDiffMetadata {
   };
 }
 
-function createLines(count: number): string[] {
-  return Array.from({ length: count }, (_, index) => `line ${index}\n`);
+function createLines(count: number): DiffLines {
+  return plainLines(
+    Array.from({ length: count }, (_, index) => `line ${index}\n`)
+  );
 }

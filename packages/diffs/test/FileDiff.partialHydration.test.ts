@@ -14,7 +14,7 @@ import type {
 } from '../src/types';
 import type { WorkerPoolManager } from '../src/worker';
 import { installDom, wait } from './domHarness';
-import { assertDefined } from './testUtils';
+import { assertDefined, linesOf } from './testUtils';
 
 afterAll(async () => {
   await disposeHighlighter();
@@ -322,13 +322,13 @@ describe('FileDiff partial hydration', () => {
 
       expect(instance.fileDiff).toBe(partial);
       expect(instance.fileDiff?.isPartial).toBe(false);
-      expect(instance.fileDiff?.additionLines).toEqual([
+      expect(linesOf(instance.fileDiff?.additionLines)).toEqual([
         'keep 1\n',
         'new value\n',
         'keep 3\n',
         'keep 4\n',
       ]);
-      expect(instance.fileDiff?.deletionLines).toEqual([
+      expect(linesOf(instance.fileDiff?.deletionLines)).toEqual([
         'keep 1\n',
         'old value\n',
         'keep 3\n',
@@ -697,7 +697,7 @@ describe('FileDiff partial hydration', () => {
       expect(instance.fileDiff).toBe(nextDiff);
       expect(instance.fileDiff?.name).toBe('second.txt');
       expect(instance.fileDiff?.isPartial).toBe(false);
-      expect(instance.fileDiff?.additionLines).toEqual(['after\n']);
+      expect(linesOf(instance.fileDiff?.additionLines)).toEqual(['after\n']);
     } finally {
       instance?.cleanUp();
       cleanup();
@@ -891,7 +891,7 @@ describe('FileDiff partial hydration', () => {
       expect(instance.fileDiff).toBe(nextDiff);
       expect(instance.fileDiff?.name).toBe('second.ts');
       expect(instance.fileDiff?.isPartial).toBe(false);
-      expect(instance.fileDiff?.additionLines).toEqual([
+      expect(linesOf(instance.fileDiff?.additionLines)).toEqual([
         'const value = "after";\n',
       ]);
     } finally {
@@ -930,8 +930,14 @@ describe('FileDiff partial hydration', () => {
 
       expect(instance.fileDiff?.type).toBe('rename-pure');
       expect(instance.fileDiff?.isPartial).toBe(false);
-      expect(instance.fileDiff?.additionLines).toEqual(['alpha\n', 'beta\n']);
-      expect(instance.fileDiff?.deletionLines).toEqual(['alpha\n', 'beta\n']);
+      expect(linesOf(instance.fileDiff?.additionLines)).toEqual([
+        'alpha\n',
+        'beta\n',
+      ]);
+      expect(linesOf(instance.fileDiff?.deletionLines)).toEqual([
+        'alpha\n',
+        'beta\n',
+      ]);
     } finally {
       instance?.cleanUp();
       cleanup();
@@ -980,7 +986,7 @@ describe('FileDiff partial hydration', () => {
 
       expect(instance.fileDiff).toBe(partial);
       expect(instance.fileDiff?.isPartial).toBe(false);
-      expect(instance.fileDiff?.additionLines).toEqual([
+      expect(linesOf(instance.fileDiff?.additionLines)).toEqual([
         'keep 1\n',
         'new value\n',
         'keep 3\n',

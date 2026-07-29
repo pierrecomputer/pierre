@@ -8,6 +8,7 @@ import {
 import { TextDocument } from '../src/editor/textDocument';
 import type { FileDiffMetadata, HighlightedToken } from '../src/types';
 import type { DiffsTextDocument } from '../src/types';
+import { joinLines, lineAt, linesToArray } from '../src/utils/diffLines';
 import { finishEditSessionForDiff } from '../src/utils/editSessionHunks';
 import { iterateOverDiff } from '../src/utils/iterateOverDiff';
 import {
@@ -211,14 +212,14 @@ describe('DiffHunksRenderer content-edit recompute split', () => {
     expect(rendered).toBeDefined();
     if (rendered == null) return;
 
-    expect(rendered.additionLines).toEqual([
+    expect(linesToArray(rendered.additionLines)).toEqual([
       'function greet(name) {\n',
       '  console.log(\n',
       'msg);\n',
       '  return msg;\n',
       '}\n',
     ]);
-    expect(rendered.additionLines.join('')).toBe(EDITED_LINES.join('\n'));
+    expect(joinLines(rendered.additionLines)).toBe(EDITED_LINES.join('\n'));
   });
 });
 
@@ -296,7 +297,8 @@ describe('DiffHunksRenderer edit-session hunk updates', () => {
     const mismatches = rows.filter(
       (row) =>
         row.lineNumber != null &&
-        row.text !== diff.additionLines[row.lineNumber - 1].replace(/\n$/, '')
+        row.text !==
+          lineAt(diff.additionLines, row.lineNumber - 1).replace(/\n$/, '')
     );
     expect(mismatches.map((row) => `#${row.lineNumber}: ${row.text}`)).toEqual(
       []
@@ -497,7 +499,7 @@ describe('DiffHunksRenderer edit-session hunk updates', () => {
     );
     expect(diff.hunks[1].deletionCount).toBe(secondRegionBefore.deletionCount);
     expect(diff.hunks[1].additionCount).toBe(secondRegionBefore.additionCount);
-    expect(diff.additionLines.join('')).toBe(postEditLines.join(''));
+    expect(joinLines(diff.additionLines)).toBe(postEditLines.join(''));
     const full = parseDiffFromFile(
       { name: 'session.ts', contents: SESSION_OLD.join('') },
       { name: 'session.ts', contents: postEditLines.join('') }
@@ -508,7 +510,7 @@ describe('DiffHunksRenderer edit-session hunk updates', () => {
   test('a same-line edit can rebuild after preserving the trailing editor row', async () => {
     const { renderer, diff } = await createSessionRenderer();
     renderer.applyDocumentChange(makeTextDocumentFromText('line 1\n'));
-    expect(diff.additionLines).toEqual(['line 1\n', '']);
+    expect(linesToArray(diff.additionLines)).toEqual(['line 1\n', '']);
 
     expect(() =>
       renderer.updateRenderCache(
@@ -517,7 +519,7 @@ describe('DiffHunksRenderer edit-session hunk updates', () => {
       )
     ).not.toThrow();
 
-    expect(diff.additionLines).toEqual(['line 1 edited\n', '']);
+    expect(linesToArray(diff.additionLines)).toEqual(['line 1 edited\n', '']);
     expect(renderer.renderDiff()).toBeDefined();
   });
 
@@ -584,7 +586,7 @@ describe('DiffHunksRenderer edit-session hunk updates', () => {
     const { renderer, diff } = await createSessionRenderer();
     renderer.applyDocumentChange(makeTextDocument(['']));
 
-    expect(diff.additionLines).toEqual(['']);
+    expect(linesToArray(diff.additionLines)).toEqual(['']);
     const result = renderer.renderDiff();
     expect(result).toBeDefined();
     if (result == null) return;
@@ -602,7 +604,7 @@ describe('DiffHunksRenderer edit-session hunk updates', () => {
     );
 
     expect(regionsChanged).toBe(true);
-    expect(diff.additionLines).toEqual(['']);
+    expect(linesToArray(diff.additionLines)).toEqual(['']);
     const result = renderer.renderDiff();
     expect(result).toBeDefined();
     if (result == null) return;
@@ -612,13 +614,13 @@ describe('DiffHunksRenderer edit-session hunk updates', () => {
   test('typing into a newline-only document rebuilds from canonical lines', async () => {
     const { renderer, diff } = await createSessionRenderer();
     renderer.applyDocumentChange(makeTextDocumentFromText('\n'));
-    expect(diff.additionLines).toEqual(['\n', '']);
+    expect(linesToArray(diff.additionLines)).toEqual(['\n', '']);
 
     expect(() =>
       renderer.updateRenderCache(makeDirtyLines([[0, 'typed']]), 'light')
     ).not.toThrow();
 
-    expect(diff.additionLines).toEqual(['typed\n', '']);
+    expect(linesToArray(diff.additionLines)).toEqual(['typed\n', '']);
     expect(renderer.renderDiff()).toBeDefined();
   });
 
@@ -681,7 +683,7 @@ describe('DiffHunksRenderer.applyDocumentChange empty document', () => {
       if (diff == null) return;
 
       // One empty line, not zero — this is the regression guard.
-      expect(diff.additionLines).toEqual(['']);
+      expect(linesToArray(diff.additionLines)).toEqual(['']);
       // The old content is still the deletion side.
       expect(diff.deletionLines.length).toBeGreaterThan(0);
 
@@ -859,7 +861,7 @@ describe('DiffHunksRenderer.applyDocumentChange empty document', () => {
       const rendered = renderer.diffCache;
       expect(rendered).toBeDefined();
       if (rendered == null) return;
-      expect(rendered.additionLines).toEqual(['\n', '']);
+      expect(linesToArray(rendered.additionLines)).toEqual(['\n', '']);
 
       const additionSplitLines: number[] = [];
       iterateOverDiff({
@@ -894,9 +896,9 @@ describe('DiffHunksRenderer.applyDocumentChange empty document', () => {
       const rendered = renderer.diffCache;
       expect(rendered).toBeDefined();
       if (rendered == null) return;
-      expect(rendered.additionLines).toEqual(['']);
+      expect(linesToArray(rendered.additionLines)).toEqual(['']);
       // The blank old line is still recorded as the deletion side.
-      expect(rendered.deletionLines.join('')).toBe('\n');
+      expect(joinLines(rendered.deletionLines)).toBe('\n');
       // At least one hunk, so iterateOverDiff has a row to emit.
       expect(rendered.hunks.length).toBeGreaterThanOrEqual(1);
 

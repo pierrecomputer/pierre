@@ -21,6 +21,7 @@ import type { Virtualizer } from '../src/components/Virtualizer';
 import { DEFAULT_VIRTUAL_FILE_METRICS } from '../src/constants';
 import type { FileContents, FileDiffMetadata } from '../src/types';
 import { linesFromFileContents } from '../src/utils/computeFileOffsets';
+import { EMPTY_DIFF_LINES } from '../src/utils/diffLines';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import { assertDefined } from './testUtils';
 
@@ -257,8 +258,8 @@ const fileDiff: FileDiffMetadata = {
   splitLineCount: 0,
   unifiedLineCount: 0,
   isPartial: false,
-  deletionLines: [],
-  additionLines: [],
+  deletionLines: EMPTY_DIFF_LINES,
+  additionLines: EMPTY_DIFF_LINES,
 };
 
 describe('collapsed hydration', () => {

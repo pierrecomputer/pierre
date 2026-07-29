@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import type { FileContents } from '../src/types';
+import { linesToArray } from '../src/utils/diffLines';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import { splitFileContents } from '../src/utils/splitFileContents';
 import { fileNew, fileOld } from './mocks';
@@ -127,8 +128,10 @@ describe('parseDiffFromFile', () => {
     expect(result.prevName).toBeUndefined();
     expect(result.lang).toBe('typescript');
     expect(result.isPartial).toBe(false);
-    expect(result.deletionLines).toEqual([]);
-    expect(result.additionLines).toEqual(splitFileContents(newFile.contents));
+    expect(linesToArray(result.deletionLines)).toEqual([]);
+    expect(linesToArray(result.additionLines)).toEqual(
+      splitFileContents(newFile.contents)
+    );
     expect(result.cacheKey).toBe('created-cache');
     expect(verifyHunkLineValues(result)).toEqual([]);
   });
@@ -148,8 +151,10 @@ describe('parseDiffFromFile', () => {
     expect(result.prevName).toBeUndefined();
     expect(result.lang).toBe('typescript');
     expect(result.isPartial).toBe(false);
-    expect(result.deletionLines).toEqual(splitFileContents(oldFile.contents));
-    expect(result.additionLines).toEqual([]);
+    expect(linesToArray(result.deletionLines)).toEqual(
+      splitFileContents(oldFile.contents)
+    );
+    expect(linesToArray(result.additionLines)).toEqual([]);
     expect(result.cacheKey).toBe('deleted-cache');
     expect(verifyHunkLineValues(result)).toEqual([]);
   });

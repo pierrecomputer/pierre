@@ -5,8 +5,9 @@ import { disposeHighlighter, parseDiffFromFile, parsePatchFiles } from '../src';
 import { VirtualizedFileDiff } from '../src/components/VirtualizedFileDiff';
 import type { Virtualizer } from '../src/components/Virtualizer';
 import type { FileContents, FileDiffMetadata } from '../src/types';
+import { linesToArray } from '../src/utils/diffLines';
 import { installDom, wait } from './domHarness';
-import { assertDefined } from './testUtils';
+import { assertDefined, linesOf } from './testUtils';
 
 afterAll(async () => {
   await disposeHighlighter();
@@ -192,13 +193,13 @@ describe('VirtualizedFileDiff partial hydration', () => {
 
       expect(instance.fileDiff).toBe(partial);
       expect(instance.fileDiff?.isPartial).toBe(false);
-      expect(instance.fileDiff?.additionLines).toEqual([
+      expect(linesOf(instance.fileDiff?.additionLines)).toEqual([
         'keep 1\n',
         'new value\n',
         'keep 3\n',
         'keep 4\n',
       ]);
-      expect(instance.fileDiff?.deletionLines).toEqual([
+      expect(linesOf(instance.fileDiff?.deletionLines)).toEqual([
         'keep 1\n',
         'old value\n',
         'keep 3\n',
@@ -303,7 +304,7 @@ describe('VirtualizedFileDiff partial hydration', () => {
       expect(instance.fileDiff).toBe(nextDiff);
       expect(instance.fileDiff?.name).toBe('second.txt');
       expect(instance.fileDiff?.isPartial).toBe(false);
-      expect(instance.fileDiff?.additionLines).toEqual(['after\n']);
+      expect(linesOf(instance.fileDiff?.additionLines)).toEqual(['after\n']);
       expect(virtualizerState.instanceChangedCalls).toEqual([
         { layoutDirty: true },
       ]);
@@ -420,7 +421,9 @@ describe('VirtualizedFileDiff partial hydration', () => {
 
       expect(partial.isPartial).toBe(true);
       expect(instance.fileDiff).toBe(partial);
-      expect(instance.fileDiff?.additionLines).toEqual(['new value\n']);
+      expect(linesOf(instance.fileDiff?.additionLines)).toEqual([
+        'new value\n',
+      ]);
       expect(virtualizerState.instanceChangedCalls).toEqual([
         { layoutDirty: true },
         { layoutDirty: true },
@@ -431,7 +434,7 @@ describe('VirtualizedFileDiff partial hydration', () => {
       assertDefined(nextDiff, 'expected next diff');
       expect(nextDiff).not.toBe(partial);
       expect(nextDiff.isPartial).toBe(false);
-      expect(nextDiff.additionLines).toEqual([
+      expect(linesToArray(nextDiff.additionLines)).toEqual([
         'keep 1\n',
         'new value\n',
         'keep 3\n',
@@ -480,8 +483,14 @@ describe('VirtualizedFileDiff partial hydration', () => {
 
       expect(instance.fileDiff?.type).toBe('rename-pure');
       expect(instance.fileDiff?.isPartial).toBe(false);
-      expect(instance.fileDiff?.additionLines).toEqual(['alpha\n', 'beta\n']);
-      expect(instance.fileDiff?.deletionLines).toEqual(['alpha\n', 'beta\n']);
+      expect(linesOf(instance.fileDiff?.additionLines)).toEqual([
+        'alpha\n',
+        'beta\n',
+      ]);
+      expect(linesOf(instance.fileDiff?.deletionLines)).toEqual([
+        'alpha\n',
+        'beta\n',
+      ]);
       expect(virtualizerState.instanceChangedCalls.at(-1)).toEqual({
         layoutDirty: true,
       });

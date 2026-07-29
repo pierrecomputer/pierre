@@ -8,6 +8,13 @@ import type {
 } from '../types';
 import { cleanLastNewline } from './cleanLastNewline';
 import {
+  type DiffLines,
+  joinLineRange,
+  joinLines,
+  lineAt,
+  plainLines,
+} from './diffLines';
+import {
   getHunkSideEndBoundary,
   getHunkSideStartBoundary,
 } from './getHunkSideBoundaries';
@@ -32,11 +39,11 @@ export function recomputeDiffHunks(
   const recomputed = parseDiffFromFile(
     {
       name: diff.prevName ?? diff.name,
-      contents: diff.deletionLines.join(''),
+      contents: joinLines(diff.deletionLines),
     },
     {
       name: diff.name,
-      contents: diff.additionLines.join(''),
+      contents: joinLines(diff.additionLines),
       lang: diff.lang,
     },
     parseDiffOptions
@@ -72,9 +79,9 @@ function buildTopAlignedAdditionSentinel(
   return sentinel;
 }
 
-function hasOnlyBlankAdditionContents(additionLines: string[]): boolean {
-  for (const line of additionLines) {
-    if (line.trim().length > 0) {
+function hasOnlyBlankAdditionContents(additionLines: DiffLines): boolean {
+  for (let index = 0; index < additionLines.length; index++) {
+    if (lineAt(additionLines, index).trim().length > 0) {
       return false;
     }
   }
@@ -86,7 +93,7 @@ function hasOnlyBlankAdditionContents(additionLines: string[]): boolean {
 // render the first editable row deep in split view instead of at the top.
 export function shouldTopAlignAdditionRecompute(
   diff: FileDiffMetadata,
-  additionLines: string[]
+  additionLines: DiffLines
 ): boolean {
   return (
     additionLines.length > 0 &&
@@ -100,10 +107,10 @@ export function shouldTopAlignAdditionRecompute(
 // preserved so the editor document stays the source of truth.
 export function recomputeTopAlignedAdditionDiff(
   diff: FileDiffMetadata,
-  additionLines: string[],
+  additionLines: DiffLines,
   parseDiffOptions?: CreatePatchOptionsNonabortable
 ): FullDiffHunkUpdate {
-  const deletionContents = diff.deletionLines.join('');
+  const deletionContents = joinLines(diff.deletionLines);
   const additionSentinel = buildTopAlignedAdditionSentinel(
     additionLines.length,
     deletionContents
@@ -140,7 +147,11 @@ export function recomputeEmptyDocumentDiff(
   diff: FileDiffMetadata,
   parseDiffOptions?: CreatePatchOptionsNonabortable
 ): FullDiffHunkUpdate {
-  return recomputeTopAlignedAdditionDiff(diff, [''], parseDiffOptions);
+  return recomputeTopAlignedAdditionDiff(
+    diff,
+    plainLines(['']),
+    parseDiffOptions
+  );
 }
 
 /** Rebuilds diff hunks after an edit, top-aligning sparse addition sides when needed. */
@@ -164,8 +175,11 @@ export function recomputeDiffHunksForEdit(
   return recomputed;
 }
 
-function hasTrailingEditorBlankLine(additionLines: string[]): boolean {
-  return additionLines.length > 1 && additionLines.at(-1) === '';
+function hasTrailingEditorBlankLine(additionLines: DiffLines): boolean {
+  return (
+    additionLines.length > 1 &&
+    lineAt(additionLines, additionLines.length - 1) === ''
+  );
 }
 
 // Re-adds the editor's phantom trailing empty line (a document ending in a
@@ -176,7 +190,7 @@ export function preserveTrailingEditorBlankLine(
     FullDiffHunkUpdate,
     'hunks' | 'additionLines' | 'splitLineCount' | 'unifiedLineCount'
   >,
-  additionLines: string[]
+  additionLines: DiffLines
 ): void {
   if (!hasTrailingEditorBlankLine(additionLines)) {
     return;
@@ -246,8 +260,8 @@ export function updateDiffHunks(
     });
   }
   for (const line of changedLines) {
-    const additionLine = diff.additionLines[line];
-    const deletionLine = diff.deletionLines[line];
+    const additionLine = lineAt(diff.additionLines, line);
+    const deletionLine = lineAt(diff.deletionLines, line);
     if (additionLine == null || deletionLine == null) {
       return applyHunkUpdateResult(
         diff,
@@ -344,11 +358,13 @@ function reparseHunkRegion(
     return false;
   }
 
-  const deletionSlice = diff.deletionLines.slice(
+  const deletionSlice = joinLineRange(
+    diff.deletionLines,
     hunk.deletionLineIndex,
     hunk.deletionLineIndex + hunk.deletionCount
   );
-  const additionSlice = diff.additionLines.slice(
+  const additionSlice = joinLineRange(
+    diff.additionLines,
     hunk.additionLineIndex,
     hunk.additionLineIndex + hunk.additionCount
   );
@@ -356,11 +372,11 @@ function reparseHunkRegion(
   const reparsed = parseDiffFromFile(
     {
       name: diff.prevName ?? diff.name,
-      contents: deletionSlice.join(''),
+      contents: deletionSlice,
     },
     {
       name: diff.name,
-      contents: additionSlice.join(''),
+      contents: additionSlice,
       lang: diff.lang,
     },
     { ...parseDiffOptions, context: 0 }
@@ -392,8 +408,14 @@ export function syncHunkNoEOFCRFromFullFile(
     return;
   }
 
-  const lastAdditionLine = diff.additionLines.at(-1);
-  const lastDeletionLine = diff.deletionLines.at(-1);
+  const lastAdditionLine = lineAt(
+    diff.additionLines,
+    diff.additionLines.length - 1
+  );
+  const lastDeletionLine = lineAt(
+    diff.deletionLines,
+    diff.deletionLines.length - 1
+  );
   hunk.noEOFCRAdditions =
     lastAdditionLine != null &&
     lastAdditionLine !== '' &&

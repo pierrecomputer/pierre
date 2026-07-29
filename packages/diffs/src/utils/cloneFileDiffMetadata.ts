@@ -1,4 +1,5 @@
 import type { FileDiffMetadata } from '../types';
+import { cloneLines } from './diffLines';
 
 export function cloneFileDiffMetadata(
   fileDiff: FileDiffMetadata
@@ -9,7 +10,7 @@ export function cloneFileDiffMetadata(
       ...hunk,
       hunkContent: hunk.hunkContent.map((content) => ({ ...content })),
     })),
-    deletionLines: [...fileDiff.deletionLines],
-    additionLines: [...fileDiff.additionLines],
+    deletionLines: cloneLines(fileDiff.deletionLines),
+    additionLines: cloneLines(fileDiff.additionLines),
   };
 }

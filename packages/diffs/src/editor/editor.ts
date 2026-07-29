@@ -20,6 +20,7 @@ import type {
   SelectionSide,
   TextEdit,
 } from '../types';
+import { joinLines } from '../utils/diffLines';
 import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
 import { isGutterUtilityPath } from '../utils/isGutterUtilityPath';
 import {
@@ -944,7 +945,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       if ('contents' in fileOrDiff) {
         contents = fileOrDiff.contents;
       } else {
-        contents = fileOrDiff.additionLines.join('');
+        contents = joinLines(fileOrDiff.additionLines);
       }
       const editStack = new EditStack<LAnnotation>({
         maxEntries: this.#options.historyMaxEntries,

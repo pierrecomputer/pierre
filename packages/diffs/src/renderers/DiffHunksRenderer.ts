@@ -52,6 +52,13 @@ import { createNoNewlineElement } from '../utils/createNoNewlineElement';
 import { createPreElement } from '../utils/createPreElement';
 import { createSeparator } from '../utils/createSeparator';
 import {
+  type DiffLines,
+  joinLines,
+  lineAt,
+  mutableLines,
+  plainLines,
+} from '../utils/diffLines';
+import {
   applySessionChangedLines,
   rebuildSessionHunks,
   remapExpandedHunksForRegionChange,
@@ -491,18 +498,25 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     const hastLines = result.code.additionLines;
     const changedAdditionLines: number[] = [];
     const previousAdditionLines = new Map<number, string>();
+    // Line edits land in the plain-string form of the side; an arena side is
+    // decoded once on the first edit and stays plain from then on
+    const additionLines = mutableLines(diff.additionLines);
+    diff.additionLines = additionLines;
     for (const [line, tokens] of dirtyLines) {
       const prev = hastLines[line] as HASTElement | undefined;
       const prevProps = prev?.properties ?? {};
       const lineText = tokens.map((a) => a[2]).join('');
-      const canSyncDiffLine = line < diff.additionLines.length;
-      const prevLine = canSyncDiffLine ? (diff.additionLines[line] ?? '') : '';
+      const canSyncDiffLine = line < additionLines.length;
+      const prevLine = canSyncDiffLine ? (additionLines.lines[line] ?? '') : '';
       const prevText = cleanLastNewline(prevLine);
       // The host text document can expose one extra trailing empty line when
       // the file ends with a newline. Deferred tokenization must not grow
       // additionLines from that mismatch or hunk trailing context desyncs.
       if (canSyncDiffLine) {
-        diff.additionLines[line] = applyLineTextWithNewline(prevLine, lineText);
+        additionLines.lines[line] = applyLineTextWithNewline(
+          prevLine,
+          lineText
+        );
         if (prevText !== lineText) {
           changedAdditionLines.push(line);
           previousAdditionLines.set(line, prevLine);
@@ -553,7 +567,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         if (!lineCountChangeInFlight) {
           if (
             diff.additionLines.length <= 1 &&
-            diff.additionLines.join('') === ''
+            joinLines(diff.additionLines) === ''
           ) {
             Object.assign(
               diff,
@@ -630,13 +644,16 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     // entire text. This preserves blank documents and the final editable empty
     // row after a trailing line break.
     const { additionLines: previousAdditionLines } = diff;
-    diff.additionLines = getEditorDocumentLines(
+    const nextAdditionLines = getEditorDocumentLines(
       textDocument,
       previousAdditionLines
     );
+    // The editor stays on the plain-string form while it is editing; only a
+    // parse builds the byte arena
+    diff.additionLines = plainLines(nextAdditionLines);
     result.code.additionLines = realignAdditionHastLines(
       previousAdditionLines,
-      diff.additionLines,
+      nextAdditionLines,
       result.code.additionLines,
       textDocument
     );
@@ -644,7 +661,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     // to a diff with no editable rows and leave the attached host with no
     // line element for its caret (the additions column vanishes in split;
     // unified shows only deletions). Keep one empty editable line instead.
-    if (diff.additionLines.length <= 1 && diff.additionLines.join('') === '') {
+    if (
+      diff.additionLines.length <= 1 &&
+      joinLines(diff.additionLines) === ''
+    ) {
       Object.assign(
         diff,
         recomputeEmptyDocumentDiff(diff, this.options.parseDiffOptions)
@@ -2260,21 +2280,28 @@ function withContentProperties(
 // line's stale tokens once they become visible. Entries outside the changed
 // window keep their highlighted content; entries inside it become plain-text
 // elements that the editor re-tokenizes on its next background pass.
+// `previousLines` is the side as the last parse or edit left it, so it may
+// still be in the byte-arena form; the prefix/suffix scans stop at the first
+// difference, so reading them through `lineAt` decodes only a line or two
+// rather than the whole side.
 function realignAdditionHastLines(
-  previousLines: string[],
+  previousLines: DiffLines,
   nextLines: string[],
   hastLines: ElementContent[],
   textDocument: DiffsTextDocument
 ): ElementContent[] {
   const maxShared = Math.min(previousLines.length, nextLines.length);
   let prefix = 0;
-  while (prefix < maxShared && previousLines[prefix] === nextLines[prefix]) {
+  while (
+    prefix < maxShared &&
+    lineAt(previousLines, prefix) === nextLines[prefix]
+  ) {
     prefix++;
   }
   let suffix = 0;
   while (
     suffix < maxShared - prefix &&
-    previousLines[previousLines.length - 1 - suffix] ===
+    lineAt(previousLines, previousLines.length - 1 - suffix) ===
       nextLines[nextLines.length - 1 - suffix]
   ) {
     suffix++;
@@ -2331,7 +2358,7 @@ function createPlainAdditionLineElement(
 
 function getEditorDocumentLines(
   textDocument: DiffsTextDocument,
-  previousLines: string[]
+  previousLines: DiffLines
 ): string[] {
   const lines: string[] = [];
   const fallbackLineBreak = getFallbackLineBreak(previousLines);
@@ -2350,8 +2377,9 @@ function hasLineBreakSuffix(line: string): boolean {
   return line.endsWith('\n') || line.endsWith('\r');
 }
 
-function getFallbackLineBreak(lines: string[]): string {
-  for (const line of lines) {
+function getFallbackLineBreak(lines: DiffLines): string {
+  for (let index = 0; index < lines.length; index++) {
+    const line = lineAt(lines, index);
     if (line.endsWith('\r\n')) {
       return '\r\n';
     }

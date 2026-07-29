@@ -2,6 +2,12 @@ import { describe, expect, test } from 'bun:test';
 
 import type { FileDiffMetadata, Hunk } from '../src/types';
 import { cleanLastNewline } from '../src/utils/cleanLastNewline';
+import {
+  joinLines,
+  lineAt,
+  linesToArray,
+  plainLines,
+} from '../src/utils/diffLines';
 import { iterateOverDiff } from '../src/utils/iterateOverDiff';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import {
@@ -68,7 +74,7 @@ function findAdditionLineIndex(
   diff: FileDiffMetadata,
   lineText: string
 ): number {
-  const line = diff.additionLines.findIndex(
+  const line = linesToArray(diff.additionLines).findIndex(
     (value) => cleanLastNewline(value) === lineText
   );
   if (line < 0) {
@@ -95,19 +101,22 @@ function setAdditionLineText(
   line: number,
   lineText: string
 ): void {
-  const prevLine = diff.additionLines[line];
+  // Edit through the plain form and hand the side back, like the editor does
+  const lines = linesToArray(diff.additionLines);
+  const prevLine = lines[line];
   if (prevLine == null) {
     throw new Error(`Missing addition line ${line}`);
   }
   if (prevLine.endsWith('\r\n')) {
-    diff.additionLines[line] = `${lineText}\r\n`;
+    lines[line] = `${lineText}\r\n`;
   } else if (prevLine.endsWith('\n')) {
-    diff.additionLines[line] = `${lineText}\n`;
+    lines[line] = `${lineText}\n`;
   } else if (prevLine.endsWith('\r')) {
-    diff.additionLines[line] = `${lineText}\r`;
+    lines[line] = `${lineText}\r`;
   } else {
-    diff.additionLines[line] = lineText;
+    lines[line] = lineText;
   }
+  diff.additionLines = plainLines(lines);
 }
 
 function cloneDiff(diff: FileDiffMetadata): FileDiffMetadata {
@@ -194,7 +203,7 @@ describe('updateDiffHunks', () => {
     const diff = runUpdateDiffHunksEdit(base, line, 'line 10 replace newer');
 
     expect(diff.hunks[hunkIndex]).toEqual(hunkBefore);
-    expect(cleanLastNewline(diff.additionLines[line])).toBe(
+    expect(cleanLastNewline(lineAt(diff.additionLines, line))).toBe(
       'line 10 replace newer'
     );
   });
@@ -209,11 +218,11 @@ describe('updateDiffHunks', () => {
     const fromParse = parseDiffFromFile(
       {
         name: diff.prevName ?? diff.name,
-        contents: diff.deletionLines.join(''),
+        contents: joinLines(diff.deletionLines),
       },
       {
         name: diff.name,
-        contents: diff.additionLines.join(''),
+        contents: joinLines(diff.additionLines),
         lang: diff.lang,
       },
       PARSE_OPTIONS
@@ -241,7 +250,7 @@ describe('updateDiffHunks', () => {
     );
 
     expect(diff.hunks[hunkIndex]).toEqual(hunkBefore);
-    expect(cleanLastNewline(diff.additionLines[line])).toBe(
+    expect(cleanLastNewline(lineAt(diff.additionLines, line))).toBe(
       'line 10 replace newer'
     );
   });
@@ -268,7 +277,7 @@ describe('updateDiffHunks', () => {
 
     // Simulate deferred tokenization growing additionLines for an editor-only
     // trailing line without updating hunk metadata.
-    diff.additionLines.push('');
+    diff.additionLines = plainLines([...linesToArray(diff.additionLines), '']);
 
     expect(hasTrailingContextMismatch(diff)).toBe(true);
 
@@ -292,11 +301,11 @@ describe('updateDiffHunks', () => {
     // Mirrors edit mode after deleting all but one matching line in a longer
     // file and pressing Enter: the editor has a final logical empty line that
     // patch-style splitting would normally drop.
-    diff.additionLines = ['kept\n', ''];
+    diff.additionLines = plainLines(['kept\n', '']);
 
     const recomputed = recomputeDiffHunksForEdit(diff, { context: 3 });
 
-    expect(recomputed.additionLines).toEqual(['kept\n', '']);
+    expect(linesToArray(recomputed.additionLines)).toEqual(['kept\n', '']);
     expect(recomputed.splitLineCount).toBe(3);
     expect(recomputed.unifiedLineCount).toBe(4);
     expect(recomputed.hunks[0]?.hunkContent).toEqual([
@@ -356,11 +365,11 @@ describe('updateDiffHunks', () => {
     // Mirrors select-all, type "a", then press Enter: the editor has a second
     // logical row for the trailing blank line before tokenization sees content
     // on that row.
-    diff.additionLines = ['a\n', ''];
+    diff.additionLines = plainLines(['a\n', '']);
 
     const recomputed = recomputeDiffHunksForEdit(diff, { context: 3 });
 
-    expect(recomputed.additionLines).toEqual(['a\n', '']);
+    expect(linesToArray(recomputed.additionLines)).toEqual(['a\n', '']);
     expect(recomputed.splitLineCount).toBe(4);
     expect(recomputed.unifiedLineCount).toBe(6);
     expect(recomputed.hunks[0]?.hunkContent).toEqual([
@@ -410,11 +419,11 @@ describe('updateDiffHunks', () => {
 
     // The editor exposes the final logical empty row for a file ending in a
     // newline. That row belongs to document state, not to diff hunk metadata.
-    diff.additionLines = ['line 1\n', 'add me\n', 'line 3\n', ''];
+    diff.additionLines = plainLines(['line 1\n', 'add me\n', 'line 3\n', '']);
 
     const recomputed = recomputeDiffHunksForEdit(diff, { context: 3 });
 
-    expect(recomputed.additionLines).toEqual([
+    expect(linesToArray(recomputed.additionLines)).toEqual([
       'line 1\n',
       'add me\n',
       'line 3\n',

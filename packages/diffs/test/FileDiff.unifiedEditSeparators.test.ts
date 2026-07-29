@@ -2,6 +2,7 @@ import { afterAll, describe, expect, test } from 'bun:test';
 
 import { disposeHighlighter, FileDiff, parseDiffFromFile } from '../src';
 import type { DiffsTextDocument } from '../src/types';
+import { linesToArray } from '../src/utils/diffLines';
 import { installDom } from './domHarness';
 
 const twoHunkFileLineCount = 140;
@@ -91,7 +92,9 @@ describe('FileDiff unified edit separators', () => {
 
       expect(countSeparatorSlots(fileContainer)).toBeGreaterThan(0);
 
-      instance.applyDocumentChange(makeTextDocument(fileDiff.deletionLines));
+      instance.applyDocumentChange(
+        makeTextDocument(linesToArray(fileDiff.deletionLines))
+      );
 
       expect(countSeparatorSlots(fileContainer)).toBe(0);
     } finally {

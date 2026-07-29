@@ -13,6 +13,12 @@ import type {
   RenderWindow,
   VirtualFileMetrics,
 } from '../src/types';
+import {
+  EMPTY_DIFF_LINES,
+  finishLines,
+  linesToArray,
+  plainLines,
+} from '../src/utils/diffLines';
 import { iterateOverDiff } from '../src/utils/iterateOverDiff';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import { recomputeDiffHunks } from '../src/utils/updateDiffHunks';
@@ -157,8 +163,8 @@ function createHugeSingleBlockDiff(lineCount: number): FileDiffMetadata {
     splitLineCount: lineCount,
     unifiedLineCount: lineCount,
     isPartial: true,
-    deletionLines: [],
-    additionLines: [],
+    deletionLines: finishLines([]),
+    additionLines: finishLines([]),
   };
 }
 
@@ -171,8 +177,8 @@ function createNoHunkDiff(): FileDiffMetadata {
     splitLineCount: 0,
     unifiedLineCount: 0,
     isPartial: false,
-    deletionLines: [],
-    additionLines: [],
+    deletionLines: EMPTY_DIFF_LINES,
+    additionLines: EMPTY_DIFF_LINES,
   };
 }
 
@@ -968,11 +974,11 @@ describe('VirtualizedFileDiff estimated height cache', () => {
       fileDiff.additionLines.length
     );
 
-    const edited = [...fileDiff.additionLines];
+    const edited = linesToArray(fileDiff.additionLines);
     for (let index = 0; index < 10; index++) {
       edited.push(`new line ${index}\n`);
     }
-    fileDiff = { ...fileDiff, additionLines: edited };
+    fileDiff = { ...fileDiff, additionLines: plainLines(edited) };
     Object.assign(fileDiff, recomputeDiffHunks(fileDiff));
     inspect(instance).cache.totalLines = fileDiff.additionLines.length - 10;
 

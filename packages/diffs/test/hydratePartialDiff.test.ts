@@ -6,6 +6,7 @@ import type {
   FileDiffLoadedFiles,
   FileDiffMetadata,
 } from '../src/types';
+import { linesToArray } from '../src/utils/diffLines';
 import { hydratePartialDiff } from '../src/utils/hydratePartialDiff';
 import { parsePatchFiles } from '../src/utils/parsePatchFiles';
 import { splitFileContents } from '../src/utils/splitFileContents';
@@ -143,8 +144,8 @@ describe('hydratePartialDiff', () => {
     expect(hydrated.prevObjectId).toBe('1111111');
     expect(hydrated.newObjectId).toBe('2222222');
     expect(hydrated.cacheKey).toBe('partial-cache:hydrated');
-    expect(hydrated.additionLines).toEqual(newFileLines);
-    expect(hydrated.deletionLines).toEqual(oldFileLines);
+    expect(linesToArray(hydrated.additionLines)).toEqual(newFileLines);
+    expect(linesToArray(hydrated.deletionLines)).toEqual(oldFileLines);
     expect(hydrated.hunks.map((hunk) => hunk.hunkSpecs)).toEqual(
       partialHunkSpecs
     );
@@ -239,19 +240,19 @@ describe('hydratePartialDiff', () => {
 
     expect(hydrated).not.toBe(partial);
     expect(hydrated.isPartial).toBe(false);
-    expect(hydrated.additionLines).toEqual([
+    expect(linesToArray(hydrated.additionLines)).toEqual([
       'keep 1\n',
       'new value\n',
       'keep 3\n',
     ]);
-    expect(hydrated.deletionLines).toEqual([
+    expect(linesToArray(hydrated.deletionLines)).toEqual([
       'keep 1\n',
       'old value\n',
       'keep 3\n',
     ]);
     expect(partial.isPartial).toBe(true);
-    expect(partial.additionLines).toEqual(['new value\n']);
-    expect(partial.deletionLines).toEqual(['old value\n']);
+    expect(linesToArray(partial.additionLines)).toEqual(['new value\n']);
+    expect(linesToArray(partial.deletionLines)).toEqual(['old value\n']);
   });
 
   test('falls back to a hydrated cache segment when loaded files are unkeyed', () => {
@@ -332,8 +333,8 @@ describe('hydratePartialDiff', () => {
     expect(hydrated.prevName).toBe(oldFile.name);
     expect(hydrated.name).toBe(newFile.name);
     expect(hydrated.isPartial).toBe(false);
-    expect(hydrated.additionLines).toEqual(newFileLines);
-    expect(hydrated.deletionLines).toEqual(oldFileLines);
+    expect(linesToArray(hydrated.additionLines)).toEqual(newFileLines);
+    expect(linesToArray(hydrated.deletionLines)).toEqual(oldFileLines);
     expect(verifyHunkLineValues(hydrated)).toEqual([]);
   });
 
@@ -405,8 +406,8 @@ describe('hydratePartialDiff', () => {
     expect(hydrated.hunks).toEqual([]);
     expect(hydrated.splitLineCount).toBe(0);
     expect(hydrated.unifiedLineCount).toBe(0);
-    expect(hydrated.additionLines).toEqual(newFileLines);
-    expect(hydrated.deletionLines).toEqual(newFileLines);
+    expect(linesToArray(hydrated.additionLines)).toEqual(newFileLines);
+    expect(linesToArray(hydrated.deletionLines)).toEqual(newFileLines);
     expect(hydrated.cacheKey).toBe('partial-rename-cache:hydrated');
   });
 });

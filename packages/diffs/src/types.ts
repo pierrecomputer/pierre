@@ -13,6 +13,8 @@ import type {
   ThemeRegistrationResolved,
 } from 'shiki';
 
+import type { DiffLines } from './utils/diffLines';
+
 export type { CreatePatchOptionsNonabortable };
 
 export type CodeViewScrollBehavior = 'instant' | 'smooth' | 'smooth-auto';
@@ -335,21 +337,21 @@ export interface FileDiffMetadata {
   isPartial: boolean;
 
   /**
-   * Array of lines from previous version of the file. If `isPartial` is false,
-   * it means that `deletionLines` can be considered the entire contents of the
-   * old version of the file.  Otherwise `deletionLines` will just be an array
-   * of all the content processed from the `context` and `deletion` lines of
-   * the patch.
+   * Lines from the previous version of the file. If `isPartial` is false, this
+   * can be considered the entire contents of the old version of the file.
+   * Otherwise it is all the content processed from the `context` and `deletion`
+   * lines of the patch. Read a line with `lineAt(deletionLines, i)` and the line
+   * count with `deletionLines.length` (see {@link DiffLines}).
    */
-  deletionLines: string[];
+  deletionLines: DiffLines;
   /**
-   * Array of lines from new version of the file. If `isPartial` is false, it
-   * means that `additionLines` can be considered the entire contents of the
-   * new version of the file.  Otherwise `additionLines` will just be an array
-   * of all the content processed from the `context` and `addition` lines of
-   * the patch.
+   * Lines from the new version of the file. If `isPartial` is false, this can be
+   * considered the entire contents of the new version of the file. Otherwise it
+   * is all the content processed from the `context` and `addition` lines of the
+   * patch. Read a line with `lineAt(additionLines, i)` and the line count with
+   * `additionLines.length` (see {@link DiffLines}).
    */
-  additionLines: string[];
+  additionLines: DiffLines;
   /**
    * Set while an attached editor's session-scoped hunk updates have reshaped
    * `hunks` away from a plain recompute (regions stay frozen during an edit

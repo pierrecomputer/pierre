@@ -3,6 +3,12 @@ import type { CreatePatchOptionsNonabortable } from 'diff';
 
 import type { FileDiffMetadata, HunkExpansionRegion } from '../src/types';
 import {
+  joinLines,
+  lineAt,
+  linesToArray,
+  plainLines,
+} from '../src/utils/diffLines';
+import {
   applySessionChangedLines,
   captureExpansionAnchors,
   findDivergenceCore,
@@ -16,6 +22,28 @@ import { iterateOverDiff } from '../src/utils/iterateOverDiff';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import { getTrailingContextRangeSize } from '../src/utils/virtualDiffLayout';
 import { verifyFileDiffHunkValues } from './testUtils';
+
+// These fixtures stand in for an attached editor, which only ever edits the
+// addition side through its plain-string form. Read the side out, apply the
+// edit, and hand it back as a plain `DiffLines` the way the renderer does.
+function editAdditionLines(
+  diff: FileDiffMetadata,
+  edit: (lines: string[]) => void
+): void {
+  const lines = linesToArray(diff.additionLines);
+  edit(lines);
+  diff.additionLines = plainLines(lines);
+}
+
+function setAdditionLine(
+  diff: FileDiffMetadata,
+  index: number,
+  text: string
+): void {
+  editAdditionLines(diff, (lines) => {
+    lines[index] = text;
+  });
+}
 
 function makeLines(
   count: number,
@@ -87,12 +115,12 @@ function pairingProjection(diff: FileDiffMetadata) {
           deletionText:
             deletionIndex == null
               ? undefined
-              : diff.deletionLines[deletionIndex],
+              : lineAt(diff.deletionLines, deletionIndex),
           additionIndex,
           additionText:
             additionIndex == null
               ? undefined
-              : diff.additionLines[additionIndex],
+              : lineAt(diff.additionLines, additionIndex),
         });
       }
     }
@@ -105,8 +133,15 @@ function expectPairingParity(
   parseDiffOptions?: CreatePatchOptionsNonabortable
 ): void {
   const expected = parseDiffFromFile(
-    { name: diff.prevName ?? diff.name, contents: diff.deletionLines.join('') },
-    { name: diff.name, contents: diff.additionLines.join(''), lang: diff.lang },
+    {
+      name: diff.prevName ?? diff.name,
+      contents: joinLines(diff.deletionLines),
+    },
+    {
+      name: diff.name,
+      contents: joinLines(diff.additionLines),
+      lang: diff.lang,
+    },
     parseDiffOptions
   );
   expect(pairingProjection(diff)).toEqual(pairingProjection(expected));
@@ -114,24 +149,32 @@ function expectPairingParity(
 }
 
 describe('normalizeEditorLines', () => {
+  const normalized = (lines: string[]) =>
+    linesToArray(normalizeEditorLines(plainLines(lines)));
+
   test('drops only the phantom trailing empty line', () => {
-    expect(normalizeEditorLines(['a\n', 'b\n', ''])).toEqual(['a\n', 'b\n']);
-    expect(normalizeEditorLines(['a\n', 'b'])).toEqual(['a\n', 'b']);
-    expect(normalizeEditorLines([''])).toEqual(['']);
+    expect(normalized(['a\n', 'b\n', ''])).toEqual(['a\n', 'b\n']);
+    expect(normalized(['a\n', 'b'])).toEqual(['a\n', 'b']);
+    expect(normalized([''])).toEqual(['']);
   });
 });
 
 describe('findDivergenceCore', () => {
+  const divergence = (deletions: string[], additions: string[]) =>
+    findDivergenceCore(plainLines(deletions), plainLines(additions));
+
   test('finds replacement, insertion, and the identical case', () => {
-    expect(
-      findDivergenceCore(['a\n', 'b\n', 'c\n'], ['a\n', 'x\n', 'c\n'])
-    ).toEqual({ start: 1, deletionEnd: 2, additionEnd: 2 });
-    expect(findDivergenceCore(['a\n', 'c\n'], ['a\n', 'b\n', 'c\n'])).toEqual({
+    expect(divergence(['a\n', 'b\n', 'c\n'], ['a\n', 'x\n', 'c\n'])).toEqual({
+      start: 1,
+      deletionEnd: 2,
+      additionEnd: 2,
+    });
+    expect(divergence(['a\n', 'c\n'], ['a\n', 'b\n', 'c\n'])).toEqual({
       start: 1,
       deletionEnd: 1,
       additionEnd: 2,
     });
-    expect(findDivergenceCore(['a\n'], ['a\n'])).toBeUndefined();
+    expect(divergence(['a\n'], ['a\n'])).toBeUndefined();
   });
 });
 
@@ -139,7 +182,7 @@ describe('rebuildSessionHunks', () => {
   test('derives downstream coordinates without moving old-side boundaries', () => {
     const diff = makeDiff();
     const before = oldBounds(diff);
-    diff.additionLines.splice(3, 0, 'inserted\n');
+    editAdditionLines(diff, (lines) => lines.splice(3, 0, 'inserted\n'));
 
     const change = rebuildSessionHunks(diff);
 
@@ -157,7 +200,7 @@ describe('rebuildSessionHunks', () => {
     const diff = makeDiff();
     const before = hunkBounds(diff);
     const rowsBefore = countRenderedRows(diff);
-    diff.additionLines[2] = 'l3\n';
+    setAdditionLine(diff, 2, 'l3\n');
 
     expect(rebuildSessionHunks(diff)).toBeUndefined();
 
@@ -177,8 +220,8 @@ describe('rebuildSessionHunks', () => {
   test('synthesizes separate regions for separate canonical blocks in one gap', () => {
     const diff = makeDiff();
     const before = oldBounds(diff);
-    diff.additionLines[10] = 'replaced a\n';
-    diff.additionLines[13] = 'replaced b\n';
+    setAdditionLine(diff, 10, 'replaced a\n');
+    setAdditionLine(diff, 13, 'replaced b\n');
 
     const change = rebuildSessionHunks(diff);
 
@@ -199,7 +242,9 @@ describe('rebuildSessionHunks', () => {
   test('merges regions only when a canonical block crosses their gap', () => {
     const diff = makeDiff();
     const before = oldBounds(diff);
-    diff.additionLines.splice(5, 16, 'one bridge\n', 'two bridge\n');
+    editAdditionLines(diff, (lines) =>
+      lines.splice(5, 16, 'one bridge\n', 'two bridge\n')
+    );
 
     const change = rebuildSessionHunks(diff);
 
@@ -238,15 +283,15 @@ describe('rebuildSessionHunks', () => {
       { name: 'repeated.tsx', contents: initialContents }
     );
 
-    diff.additionLines.splice(4, 0, '</div>\n');
+    editAdditionLines(diff, (lines) => lines.splice(4, 0, '</div>\n'));
     rebuildSessionHunks(diff);
     expectPairingParity(diff);
 
-    diff.additionLines.splice(6, 1);
+    editAdditionLines(diff, (lines) => lines.splice(6, 1));
     rebuildSessionHunks(diff);
     expectPairingParity(diff);
 
-    diff.additionLines[3] = '</article>\n';
+    setAdditionLine(diff, 3, '</article>\n');
     rebuildSessionHunks(diff);
     expectPairingParity(diff);
   });
@@ -275,7 +320,7 @@ describe('rebuildSessionHunks', () => {
       { name: 'boundary.ts', contents: oldLines.join('') },
       { name: 'boundary.ts', contents: initialLines.join('') }
     );
-    diff.additionLines.splice(1, 0, 'y\n');
+    editAdditionLines(diff, (lines) => lines.splice(1, 0, 'y\n'));
 
     rebuildSessionHunks(diff);
 
@@ -289,7 +334,7 @@ describe('rebuildSessionHunks', () => {
       { name: 't.ts', contents: oldContents },
       { name: 't.ts', contents: newContents }
     );
-    diff.additionLines.splice(3, 0, '\n');
+    editAdditionLines(diff, (lines) => lines.splice(3, 0, '\n'));
 
     rebuildSessionHunks(diff);
 
@@ -302,7 +347,7 @@ describe('rebuildSessionHunks', () => {
       { name: 'plain.ts', contents },
       { name: 'plain.ts', contents }
     );
-    diff.additionLines.splice(4, 0, 'inserted\n');
+    editAdditionLines(diff, (lines) => lines.splice(4, 0, 'inserted\n'));
 
     expect(rebuildSessionHunks(diff)).toBeDefined();
 
@@ -314,7 +359,7 @@ describe('rebuildSessionHunks', () => {
 
   test('anchors a pure trailing deletion so the session hunk stays renderable', () => {
     const diff = makeDiff();
-    diff.additionLines.splice(29, 1);
+    editAdditionLines(diff, (lines) => lines.splice(29, 1));
 
     rebuildSessionHunks(diff);
 
@@ -330,9 +375,9 @@ describe('rebuildSessionHunks', () => {
 
   test('keeps trailing context valid when a persisted region becomes deletion-only', () => {
     const diff = makeDiff();
-    diff.additionLines[27] = 'temporary region\n';
+    setAdditionLine(diff, 27, 'temporary region\n');
     rebuildSessionHunks(diff);
-    diff.additionLines.splice(27, 1);
+    editAdditionLines(diff, (lines) => lines.splice(27, 1));
 
     rebuildSessionHunks(diff);
 
@@ -355,7 +400,7 @@ describe('rebuildSessionHunks', () => {
       { name: 'blank-run.ts', contents: oldLines.join('') },
       { name: 'blank-run.ts', contents: initialLines.join('') }
     );
-    diff.additionLines.splice(1, 0, '\n');
+    editAdditionLines(diff, (lines) => lines.splice(1, 0, '\n'));
 
     rebuildSessionHunks(diff);
 
@@ -382,8 +427,8 @@ describe('applySessionChangedLines', () => {
     const firstBefore = diff.hunks[0];
     const secondBefore = diff.hunks[1];
     const boundsBefore = oldBounds(diff);
-    const previousLine = diff.additionLines[2];
-    diff.additionLines[2] = 'retyped 3\n';
+    const previousLine = lineAt(diff.additionLines, 2);
+    setAdditionLine(diff, 2, 'retyped 3\n');
 
     const change = applySessionChangedLines(
       diff,
@@ -402,7 +447,7 @@ describe('applySessionChangedLines', () => {
 
   test('routes a gap edit through the structural rebuild', () => {
     const diff = makeDiff();
-    diff.additionLines[11] = 'replaced in gap\n';
+    setAdditionLine(diff, 11, 'replaced in gap\n');
 
     const change = applySessionChangedLines(diff, [11]);
 
@@ -414,8 +459,8 @@ describe('applySessionChangedLines', () => {
 
   test('routes edits in several regions through one rebuild without merging them', () => {
     const diff = makeDiff();
-    diff.additionLines[2] = 'retyped 3\n';
-    diff.additionLines[19] = 'retyped 20\n';
+    setAdditionLine(diff, 2, 'retyped 3\n');
+    setAdditionLine(diff, 19, 'retyped 20\n');
 
     const change = applySessionChangedLines(diff, [2, 19]);
 
@@ -453,7 +498,7 @@ describe('applySessionChangedLines', () => {
       { name: 'edge.ts', contents: oldLines.join('') },
       { name: 'edge.ts', contents: initialLines.join('') }
     );
-    diff.additionLines[6] = 'x!\n';
+    setAdditionLine(diff, 6, 'x!\n');
 
     applySessionChangedLines(diff, [6]);
 
@@ -469,7 +514,7 @@ describe('applySessionChangedLines', () => {
       { name: 'blank-edge.ts', contents: initialLines.join('') }
     );
     const hunksBefore = diff.hunks;
-    diff.additionLines[1] = '\n';
+    setAdditionLine(diff, 1, '\n');
 
     applySessionChangedLines(diff, [1]);
 
@@ -484,8 +529,8 @@ describe('applySessionChangedLines', () => {
       { name: 'context-zero.ts', contents: 'a\n' },
       parseDiffOptions
     );
-    const previousLine = diff.additionLines[0];
-    diff.additionLines[0] = '\n';
+    const previousLine = lineAt(diff.additionLines, 0);
+    setAdditionLine(diff, 0, '\n');
 
     applySessionChangedLines(
       diff,
@@ -503,8 +548,8 @@ describe('applySessionChangedLines', () => {
       { name: 'realigned.ts', contents: 'junk\ntarget!\n' }
     );
     const hunksBefore = diff.hunks;
-    const previousLine = diff.additionLines[1];
-    diff.additionLines[1] = 'other\n';
+    const previousLine = lineAt(diff.additionLines, 1);
+    setAdditionLine(diff, 1, 'other\n');
 
     applySessionChangedLines(
       diff,
@@ -526,8 +571,8 @@ describe('applySessionChangedLines', () => {
       }
     );
     const hunksBefore = diff.hunks;
-    const previousLine = diff.additionLines[3];
-    diff.additionLines[3] = 'other\n';
+    const previousLine = lineAt(diff.additionLines, 3);
+    setAdditionLine(diff, 3, 'other\n');
 
     applySessionChangedLines(
       diff,
@@ -623,7 +668,7 @@ describe('expansion anchors across the exit recompute', () => {
       [1, { fromStart: 2, fromEnd: 3 }],
     ]);
     const anchors = captureExpansionAnchors(diff, expandedHunks, THRESHOLD);
-    diff.additionLines.splice(3, 0, 'inserted\n');
+    editAdditionLines(diff, (lines) => lines.splice(3, 0, 'inserted\n'));
     rebuildSessionHunks(diff);
     finishEditSessionForDiff(diff);
 
@@ -639,7 +684,7 @@ describe('expansion anchors across the exit recompute', () => {
       [1, { fromStart: 2, fromEnd: 3 }],
     ]);
     const anchors = captureExpansionAnchors(diff, expandedHunks, THRESHOLD);
-    diff.additionLines[2] = 'l3\n';
+    setAdditionLine(diff, 2, 'l3\n');
     rebuildSessionHunks(diff);
     finishEditSessionForDiff(diff);
 
@@ -655,7 +700,7 @@ describe('expansion anchors across the exit recompute', () => {
       [diff.hunks.length, { fromStart: 4, fromEnd: 0 }],
     ]);
     const anchors = captureExpansionAnchors(diff, expandedHunks, THRESHOLD);
-    diff.additionLines[2] = 'changed differently\n';
+    setAdditionLine(diff, 2, 'changed differently\n');
     rebuildSessionHunks(diff);
     finishEditSessionForDiff(diff);
 
@@ -668,9 +713,9 @@ describe('expansion anchors across the exit recompute', () => {
 describe('finishEditSessionForDiff', () => {
   test('a dirty session recomputes to the plain edit pipeline result', () => {
     const diff = makeDiff();
-    diff.additionLines[2] = 'l3\n';
+    setAdditionLine(diff, 2, 'l3\n');
     rebuildSessionHunks(diff);
-    diff.additionLines[11] = 'gap edit\n';
+    setAdditionLine(diff, 11, 'gap edit\n');
     applySessionChangedLines(diff, [11]);
     expect(diff.hunks).toHaveLength(3);
 
@@ -678,8 +723,8 @@ describe('finishEditSessionForDiff', () => {
     expect(diff.editSessionDirty).toBeUndefined();
 
     const expected = parseDiffFromFile(
-      { name: 'a.ts', contents: diff.deletionLines.join('') },
-      { name: 'a.ts', contents: diff.additionLines.join('') }
+      { name: 'a.ts', contents: joinLines(diff.deletionLines) },
+      { name: 'a.ts', contents: joinLines(diff.additionLines) }
     );
     expect(diff.hunks).toEqual(expected.hunks);
     expect(diff.splitLineCount).toBe(expected.splitLineCount);
