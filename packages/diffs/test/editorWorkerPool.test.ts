@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { afterAll, beforeAll, describe, expect, spyOn, test } from 'bun:test';
 import type { ElementContent } from 'hast';
 import { toHtml } from 'hast-util-to-html';
 
@@ -925,6 +925,42 @@ describe('editor attach entry', () => {
       instance.cleanUp();
     } finally {
       dom.cleanup();
+    }
+  });
+});
+
+describe('local highlighter engine', () => {
+  // The shared highlighter keeps the engine selected by its first caller, so
+  // a local initialization on a pool-backed surface must consult the pool's
+  // configured engine instead of seeding the singleton from component
+  // defaults.
+  test('local highlighter initialization consults the pool engine preference', async () => {
+    const { manager } = await createInitializedManager({
+      theme: 'pierre-dark',
+    });
+    try {
+      const preferred = spyOn(manager, 'getPreferredHighlighter');
+      const fileRenderer = new FileRenderer(
+        { theme: 'pierre-dark' },
+        undefined,
+        manager
+      );
+      await fileRenderer.initializeHighlighter();
+      expect(preferred).toHaveBeenCalled();
+      fileRenderer.cleanUp();
+
+      preferred.mockClear();
+      const diffRenderer = new DiffHunksRenderer(
+        { theme: 'pierre-dark' },
+        undefined,
+        manager
+      );
+      await diffRenderer.initializeHighlighter();
+      expect(preferred).toHaveBeenCalled();
+      diffRenderer.cleanUp();
+      preferred.mockRestore();
+    } finally {
+      manager.terminate();
     }
   });
 });

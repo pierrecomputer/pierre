@@ -787,7 +787,9 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     this.highlighter = await getSharedHighlighter(
       getHighlighterOptions(this.computedLang, {
         theme: this.getLocalHighlightTheme(),
-        preferredHighlighter: this.options.preferredHighlighter,
+        preferredHighlighter:
+          this.workerManager?.getPreferredHighlighter() ??
+          this.options.preferredHighlighter,
       })
     );
     return this.highlighter;
