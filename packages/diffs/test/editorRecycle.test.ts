@@ -496,6 +496,33 @@ describe('Editor recycle cleanUp', () => {
     }
   });
 
+  test('a blur during the deferred attach-focus frame cancels the stale focus', async () => {
+    const dom = installDom();
+    const restoredFocus = mock((_options?: FocusOptions) => {});
+    const onAttach = mock((attachedEditor: Editor<undefined>) => {
+      // The positional focus defers its real focus() call to a rAF. A blur
+      // plus a host rerender landing in that gap must cancel the stale
+      // frame instead of pulling focus into the replaced content.
+      attachedEditor.focus({ lineNumber: 2, preventScroll: true });
+      component.contentElement.dispatchEvent(new Event('blur'));
+      component.rerender();
+      component.contentElement.focus = restoredFocus;
+    });
+    const editor = new Editor<undefined>({ onAttach });
+    const component = new TestEditableComponent(createFile());
+    try {
+      editor.edit(component);
+      await wait(20);
+
+      expect(onAttach).toHaveBeenCalledTimes(1);
+      expect(restoredFocus).not.toHaveBeenCalled();
+    } finally {
+      editor.cleanUp();
+      component.cleanUp();
+      dom.cleanup();
+    }
+  });
+
   test('recycled re-attach recreates a tokenizer so edits still paint', () => {
     const dom = installDom();
     try {

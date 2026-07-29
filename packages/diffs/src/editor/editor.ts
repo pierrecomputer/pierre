@@ -3351,7 +3351,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       // call focus in a request animation frame to prevent conflict with
       // the `setBaseAndExtent` method
       queueRender(() => {
-        if (shouldFocus?.() === false) {
+        // #contentHasFocus was marked eagerly above; a blur (or cleanup) in
+        // the deferred gap cedes focus, and this stale frame must not pull
+        // it back into the current — possibly replaced — content.
+        if (shouldFocus?.() === false || !this.#contentHasFocus) {
           this.#shouldIgnoreSelectionChange = false;
           return;
         }
