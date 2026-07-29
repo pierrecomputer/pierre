@@ -639,21 +639,20 @@ export class VirtualizedFile<
     newLineAnnotations?: LineAnnotation<LAnnotation>[],
     shouldUpdateBuffer = false
   ): void {
-    const previousRenderRange = this.renderRange;
-
+    const { renderRange: previousRenderRange } = this;
     super.applyDocumentChange(textDocument, newLineAnnotations);
-
-    // reset the layout cache
     this.getSimpleVirtualizer()?.markDOMDirty();
     this.resetLayoutCache(this.isSimpleMode(), false);
 
-    // Update the buffers caused by the line-count change to ensure the host
-    // scrolls to the correct position before re-rendering
-    if (
+    if (!this.isSimpleMode()) {
+      this.computeApproximateSize(true);
+    } else if (
       shouldUpdateBuffer &&
       previousRenderRange !== undefined &&
       this.file !== undefined
     ) {
+      // Update the buffers caused by the line-count change to ensure the host
+      // scrolls to the correct position before re-rendering.
       const windowSpecs = this.virtualizer.getWindowSpecs();
       const renderRange = this.computeRenderRangeFromWindow(
         this.file,
@@ -664,6 +663,9 @@ export class VirtualizedFile<
         this.updateBuffers(renderRange);
       }
     }
+
+    this.forceRenderOverride = true;
+    this.virtualizer.instanceChanged(this, true);
   }
 
   protected override renderPreparedFile({
