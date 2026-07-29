@@ -275,6 +275,12 @@ const user = await getUser('123');
 \`\`\`
 `;
 
+// The plain-file CodeView items ship the README repeated 10x so the file
+// surfaces are long enough to scroll on their own. Only the file items use
+// this — the diff fixtures keep their authored sizes (one long fixture plus
+// the shorter variants).
+const LONG_README_CONTENT = NEW_README_CONTENT.repeat(10);
+
 // Nested markup with meaningful indentation, for exercising edit-mode diff
 // alignment: wrapping/unwrapping containers, pushing lines around with
 // Enter, and re-indenting all reshape change blocks whose lines differ only
@@ -591,7 +597,7 @@ export const CODE_VIEW_ITEMS: CodeViewItem<PlaygroundAnnotationMetadata>[] = [
         {
           id: `file:${readmeName}`,
           type: 'file',
-          file: { name: readmeName, contents: NEW_README_CONTENT },
+          file: { name: readmeName, contents: LONG_README_CONTENT },
         },
         {
           id: `diff:${variantName(STYLES_BASE.name, index)}`,
