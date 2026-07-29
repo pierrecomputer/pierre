@@ -2253,6 +2253,19 @@ function withContentProperties(
   };
 }
 
+// Number of entries in a split-line array that hold document content. A
+// document ending in a line break is represented two ways during a session:
+// the parsed-diff shape (`splitFileContents`) has no entry for the empty line
+// that final break implies, while the editor-document shape
+// (`getEditorDocumentLines`) exposes it as a trailing `''` entry. Only that
+// representational tail is ever `''` — every other entry keeps its line break
+// or is the raw final line — so trimming it yields comparable content lines.
+function contentLineCount(lines: string[]): number {
+  return lines.length > 0 && lines[lines.length - 1] === ''
+    ? lines.length - 1
+    : lines.length;
+}
+
 // Realigns the cached per-line addition HAST array with an edited document.
 // Cached entries are looked up by line index, so a line inserted or removed
 // mid-document must shift the surviving entries to their new indexes —
@@ -2260,13 +2273,21 @@ function withContentProperties(
 // line's stale tokens once they become visible. Entries outside the changed
 // window keep their highlighted content; entries inside it become plain-text
 // elements that the editor re-tokenizes on its next background pass.
+//
+// The bottom-up scan runs over content lines only: a session's first
+// line-count edit still has `previousLines` in the parsed-diff shape while
+// `nextLines` is editor-shaped, and comparing the raw tails would mismatch on
+// the representational trailing `''`, zero out the suffix, and plain-fill
+// every line below the tokenizer's render window.
 function realignAdditionHastLines(
   previousLines: string[],
   nextLines: string[],
   hastLines: ElementContent[],
   textDocument: DiffsTextDocument
 ): ElementContent[] {
-  const maxShared = Math.min(previousLines.length, nextLines.length);
+  const previousContentLength = contentLineCount(previousLines);
+  const nextContentLength = contentLineCount(nextLines);
+  const maxShared = Math.min(previousContentLength, nextContentLength);
   let prefix = 0;
   while (prefix < maxShared && previousLines[prefix] === nextLines[prefix]) {
     prefix++;
@@ -2274,8 +2295,8 @@ function realignAdditionHastLines(
   let suffix = 0;
   while (
     suffix < maxShared - prefix &&
-    previousLines[previousLines.length - 1 - suffix] ===
-      nextLines[nextLines.length - 1 - suffix]
+    previousLines[previousContentLength - 1 - suffix] ===
+      nextLines[nextContentLength - 1 - suffix]
   ) {
     suffix++;
   }
@@ -2285,15 +2306,22 @@ function realignAdditionHastLines(
     realigned[index] = hastLines[index];
   }
   for (let offset = 0; offset < suffix; offset++) {
-    realigned[nextLines.length - 1 - offset] =
-      hastLines[previousLines.length - 1 - offset];
+    realigned[nextContentLength - 1 - offset] =
+      hastLines[previousContentLength - 1 - offset];
+  }
+  // A trailing empty entry present on both sides keeps its cached row.
+  if (
+    previousContentLength < previousLines.length &&
+    nextContentLength < nextLines.length
+  ) {
+    realigned[nextLines.length - 1] = hastLines[previousLines.length - 1];
   }
   // Deferred tokenization can write entries past the previous line count;
   // those were produced with post-edit indexes and are already in place.
   for (let index = previousLines.length; index < nextLines.length; index++) {
     realigned[index] ??= hastLines[index];
   }
-  for (let index = prefix; index < nextLines.length - suffix; index++) {
+  for (let index = prefix; index < nextLines.length; index++) {
     realigned[index] ??= createPlainAdditionLineElement(index, textDocument);
   }
   return realigned;
