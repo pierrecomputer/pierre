@@ -1258,6 +1258,7 @@ export class VirtualizedFileDiff<
     } else {
       this.top ??= this.getVirtualizedTop();
       if (targetChanged) {
+        this.getSimpleVirtualizer()?.markDOMDirty();
         this.computeApproximateSize(false, nextFileDiff);
       }
     }

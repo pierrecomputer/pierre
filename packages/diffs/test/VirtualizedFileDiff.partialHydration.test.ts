@@ -48,6 +48,7 @@ function createVirtualizer(visible = true): {
     instanceChanged(_instance: unknown, layoutDirty: boolean) {
       instanceChangedCalls.push({ layoutDirty });
     },
+    markDOMDirty() {},
     requestHeightReconcile() {},
     isInstanceVisible() {
       return visible;

@@ -885,13 +885,13 @@ export class File<
   private cleanChildNodes() {
     this.resizeManager.cleanUp();
     this.interactionManager.cleanUp();
+    this.clearAuxiliaryNodes();
 
     this.bufferAfter?.remove();
     this.bufferBefore?.remove();
     this.code?.remove();
     this.errorWrapper?.remove();
     this.headerElement?.remove();
-    this.gutterUtilityContent?.remove();
     this.headerPrefix?.remove();
     this.headerFilenameSuffix?.remove();
     this.headerMetadata?.remove();
@@ -906,7 +906,6 @@ export class File<
     this.code = undefined;
     this.errorWrapper = undefined;
     this.headerElement = undefined;
-    this.gutterUtilityContent = undefined;
     this.headerPrefix = undefined;
     this.headerFilenameSuffix = undefined;
     this.headerMetadata = undefined;
