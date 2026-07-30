@@ -1092,6 +1092,7 @@ export class File<
     this.applyPreNodeAttributes(pre, result);
     this.code = getOrCreateCodeNode({ code: this.code });
     const codeAst = this.fileRenderer.renderCodeAST(result);
+    this.editor?.__captureFocusForDOMReplacement();
     if (this.code.childElementCount >= 2) {
       for (let i = 0; i < 2; i++) {
         const domEl = this.code.children[i] as HTMLElement;

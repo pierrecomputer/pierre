@@ -1,5 +1,6 @@
 import { afterAll, describe, expect, spyOn, test } from 'bun:test';
 
+import { File } from '../src/components/File';
 import { FileDiff } from '../src/components/FileDiff';
 import { DEFAULT_THEMES } from '../src/constants';
 import { Editor } from '../src/editor/editor';
@@ -399,6 +400,82 @@ async function waitForEditable(container: HTMLElement): Promise<void> {
     await wait(0);
   }
 }
+
+describe('file editor: theme toggle mid-edit', () => {
+  // The plain-file twin of "keeps focus when replacement does not emit blur":
+  // File.applyFullRender rewrites the code columns' innerHTML, which destroys
+  // the DOM focus state without a blur event. The render must capture focus
+  // intent before the rewrite so __syncRenderView restores it — the same
+  // capture FileDiff.applyHunksToDOM performs. Focus arrives here without a
+  // caret (tab/pointer focus), so the selection-based fallback cannot restore
+  // it and only the captured request can.
+  test('restores focus when a theme toggle forces a full render', async () => {
+    const dom = installDom();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const file = new File<undefined>({
+      disableFileHeader: true,
+      theme: DEFAULT_THEMES,
+      themeType: 'light',
+    });
+    const fileContents: FileContents = {
+      name: 'edit.ts',
+      contents: 'alpha\nbravo\n',
+    };
+    const editor = new Editor<undefined>();
+    file.render({
+      file: fileContents,
+      fileContainer: container,
+      forceRender: true,
+    });
+    editor.edit(file);
+    await waitFor(() => {
+      const content = findAdditionContent(container);
+      return content?.contentEditable === 'true';
+    });
+
+    const focusTargets: HTMLElement[] = [];
+    const focusSpy = spyOn(HTMLElement.prototype, 'focus').mockImplementation(
+      function (this: HTMLElement) {
+        focusTargets.push(this);
+        this.dispatchEvent(new Event('focus'));
+      }
+    );
+
+    try {
+      const content = findAdditionContent(container);
+      if (content == null) {
+        throw new Error('missing editable file content');
+      }
+      content.focus();
+      await wait(10);
+      expect(focusTargets.at(-1) === content).toBe(true);
+      const focusCallsBeforeToggle = focusTargets.length;
+
+      file.setOptions({ ...file.options, themeType: 'dark' });
+      file.render({
+        file: fileContents,
+        fileContainer: container,
+        forceRender: true,
+      });
+      // The theme swap re-highlights asynchronously before the full render
+      // applies; wait for the editor to re-claim focus rather than for a
+      // fixed number of turns.
+      await waitFor(() => focusTargets.length > focusCallsBeforeToggle);
+
+      expect(focusTargets.length).toBeGreaterThan(focusCallsBeforeToggle);
+      const replacement = findAdditionContent(container);
+      expect(replacement == null).toBe(false);
+      expect(focusTargets.at(-1) === replacement).toBe(true);
+    } finally {
+      focusSpy.mockRestore();
+      await wait(10);
+      editor.cleanUp();
+      file.cleanUp();
+      dom.cleanup();
+    }
+  });
+});
 
 describe('diff editor: detach then re-attach', () => {
   // Mirrors the demo's Edit-mode toggle and surface switch: turning editing off
