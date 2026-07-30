@@ -705,6 +705,93 @@ describe('CodeView item edit mode', () => {
     }
   });
 
+  test('a mid-session document change reconciles the file item layout', async () => {
+    const { cleanup } = installDom();
+    const { createEditor } = createEditorHarness();
+    const viewer = new CodeView({ createEditor });
+    const items: CodeViewItem<undefined>[] = [
+      makeEditFileItem('edited', true, 200),
+      makeEditFileItem('below', false, 10),
+    ];
+    try {
+      const root = createRoot();
+      viewer.setup(root);
+      await renderItems(viewer, items);
+      const heightBefore = viewer.getScrollHeight();
+      const belowTopBefore = viewer.getTopForItem('below');
+      if (belowTopBefore == null) {
+        throw new Error('Expected a layout top for the below item.');
+      }
+      expect(
+        viewer.getRenderedItems().some((rendered) => rendered.id === 'below')
+      ).toBe(false);
+
+      const edited = viewer.getRenderedItems()[0];
+      edited.instance.applyDocumentChange({
+        lineCount: 1,
+        getLineText: () => 'only line',
+        getText: () => 'only line',
+      });
+      await wait(0);
+
+      expect(viewer.getScrollHeight()).toBeLessThan(heightBefore);
+      expect(viewer.getTopForItem('below')).toBeLessThan(belowTopBefore);
+      // The shrunken item frees the window, so the next item mounts.
+      expect(
+        viewer.getRenderedItems().some((rendered) => rendered.id === 'below')
+      ).toBe(true);
+    } finally {
+      viewer.cleanUp();
+      await wait(0);
+      cleanup();
+    }
+  });
+
+  test('a mid-session document change reconciles a diff item that scrolls out', async () => {
+    const { cleanup } = installDom();
+    const { createEditor } = createEditorHarness();
+    const viewer = new CodeView({ createEditor });
+    const items: CodeViewItem<undefined>[] = [
+      makeEditDiffItem('edited', true),
+      ...Array.from({ length: 5 }, (_, index) =>
+        makeEditFileItem(`file-${index}`, false, 100)
+      ),
+    ];
+    try {
+      const root = createRoot();
+      viewer.setup(root);
+      await renderItems(viewer, items);
+      const heightBefore = viewer.getScrollHeight();
+
+      const lineCount = 40;
+      const documentText = Array.from(
+        { length: lineCount },
+        (_, i) => `edited ${i}`
+      ).join('\n');
+      const edited = viewer.getRenderedItems()[0];
+      edited.instance.applyDocumentChange({
+        lineCount,
+        getLineText: (lineNumber: number) => `edited ${lineNumber}`,
+        getText: () => documentText,
+      });
+      // Scroll the edited item out before any render pass reconciles it: the
+      // released item's cached layout height must still pick up the change.
+      root.scrollTop = 10_000;
+      dispatchScroll(root);
+      viewer.render(true);
+      await wait(0);
+
+      expect(
+        viewer.getRenderedItems().some((rendered) => rendered.id === 'edited')
+      ).toBe(false);
+      expect(viewer.getScrollHeight()).toBeGreaterThan(heightBefore);
+    } finally {
+      viewer.cleanUp();
+      await wait(0);
+      cleanup();
+    }
+  });
+
   test('remounts an edited file with the session text after a recycle', async () => {
     const { cleanup } = installDom();
     const { createEditor } = createEditorHarness();
