@@ -353,6 +353,7 @@ export class File<
     }
     this.clearAuxiliaryNodes();
     this.pre = undefined;
+    this.code = undefined;
     this.bufferBefore?.remove();
     this.bufferBefore = undefined;
     this.bufferAfter?.remove();
@@ -370,6 +371,7 @@ export class File<
     }
     this.errorWrapper?.remove();
     this.errorWrapper = undefined;
+    this.spriteSVG = undefined;
     this.themeCSSStyle = undefined;
     this.appliedThemeCSS = undefined;
     this.hasAdoptedThemeCSS = false;
@@ -377,7 +379,6 @@ export class File<
     this.appliedUnsafeCSS = undefined;
     this.placeHolder?.remove();
     this.placeHolder = undefined;
-    this.unsafeCSSStyle = undefined;
 
     if (recycle) {
       this.fileRenderer.recycle();

@@ -616,6 +616,7 @@ export class VirtualizedFile<
     if (this.isAdvancedMode() || this.fileContainer == null) {
       return;
     }
+    this.renderRange = undefined;
     if (visible && !this.isVisible) {
       this.top = this.getVirtualizedTop();
       this.isVisible = true;

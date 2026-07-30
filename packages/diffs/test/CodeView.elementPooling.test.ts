@@ -288,6 +288,68 @@ describe('CodeView element pooling', () => {
     }
   });
 
+  // A recycled File instance must drop its sprite SVG ref. Pooled shells keep
+  // their sprite for the next occupant to adopt; a stale ref makes
+  // adoptReusableShellElements skip the new shell's own sprite, and
+  // ensureSpriteSVG then reparents the stale sprite out of whichever live
+  // item's shadow root currently holds it — blanking that item's icons.
+  test('recycled instances do not steal sprite SVGs from live shells', async () => {
+    const { cleanup } = installDom();
+    const viewer = new CodeView({});
+    const root = createRoot({ height: 120 });
+    // At default metrics (20px lines, 44px header): one is ~2052px, the
+    // 10-line two is ~252px — small enough to sit fully inside every render
+    // window below, so its renders early-return once mounted (like any live
+    // fully-visible item) and it never re-adopts its sprite. three pads the
+    // scroll range.
+    const items = [
+      makeFileItem('file:one', 'first sprite content', 100),
+      makeFileItem('file:two', 'second sprite content', 10),
+      makeFileItem('file:three', 'third sprite content', 100),
+    ];
+    const getSpriteCount = (element: HTMLElement): number =>
+      element.shadowRoot?.querySelectorAll('svg[data-icon-sprite]').length ?? 0;
+
+    try {
+      viewer.setup(root);
+      await renderItems(viewer, items);
+
+      let renderedItems = viewer.getRenderedItems();
+      expect(renderedItems.map((item) => item.id)).toEqual(['file:one']);
+      const firstElement = renderedItems[0].element;
+      expect(getSpriteCount(firstElement)).toBe(1);
+
+      // Jump past one: the fit-perfectly pass releases one (its shell and
+      // sprite go to the pool, and the instance is recycled) and mounts two
+      // into that shell, adopting the pooled sprite. The follow-up fill pass
+      // then remounts one into a brand-new empty shell. If one's recycled
+      // instance kept its sprite ref, ensureSpriteSVG reparents that sprite
+      // between the two live shadow roots instead of creating a new one,
+      // and whichever shell rendered first is left without any sprite.
+      root.scrollTop = 2_116;
+      dispatchScroll(root);
+      viewer.render(true);
+      await waitFor(() => viewer.getRenderedItems().length === 3);
+      await wait(0);
+
+      renderedItems = viewer.getRenderedItems();
+      expect(renderedItems.map((item) => item.id)).toEqual([
+        'file:one',
+        'file:two',
+        'file:three',
+      ]);
+      expect(renderedItems[1].element).toBe(firstElement);
+      expect(renderedItems[0].element).not.toBe(firstElement);
+      expect(getSpriteCount(renderedItems[0].element)).toBe(1);
+      expect(getSpriteCount(renderedItems[1].element)).toBe(1);
+      expect(getSpriteCount(renderedItems[2].element)).toBe(1);
+    } finally {
+      viewer.cleanUp();
+      await wait(0);
+      cleanup();
+    }
+  });
+
   test('waits for managed slot children to clear before reusing a shell', async () => {
     const { cleanup } = installDom();
     const viewer = new CodeView({ disableFileHeader: true }, undefined, true);
