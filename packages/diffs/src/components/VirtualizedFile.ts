@@ -317,12 +317,13 @@ export class VirtualizedFile<
     lineAnnotations?: LineAnnotation<LAnnotation>[]
   ): number {
     const annotationsChanged = this.syncLineAnnotations(lineAnnotations);
-    const unkeyedContentsChanged =
+    const targetChanged =
+      !areFilesEqual(this.file, file) ||
       this.fileRenderer.hasUnkeyedFileContentsChanged(file);
     let shouldResetLayoutCache =
       reset?.resetFileLayoutCache === true ||
-      annotationsChanged ||
-      unkeyedContentsChanged;
+      targetChanged ||
+      annotationsChanged;
     if (reset?.metrics != null) {
       this.metrics = reset.metrics;
       shouldResetLayoutCache = true;
