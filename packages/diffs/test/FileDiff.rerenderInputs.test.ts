@@ -1,0 +1,74 @@
+import { afterAll, expect, test } from 'bun:test';
+
+import { disposeHighlighter, FileDiff } from '../src';
+import { installDom, wait } from './domHarness';
+
+afterAll(async () => {
+  await disposeHighlighter();
+});
+
+// Waits until the first rendered row keeps the same DOM node across several
+// consecutive samples, so late async highlight rerenders (which rebuild rows)
+// cannot race the identity assertions below.
+async function waitForStableRow(
+  fileContainer: HTMLElement
+): Promise<Element | null> {
+  let row: Element | null = null;
+  let stableSamples = 0;
+  for (let attempt = 0; attempt < 80; attempt++) {
+    const current =
+      fileContainer.shadowRoot?.querySelector('[data-line="1"]') ?? null;
+    if (current != null && current === row) {
+      stableSamples++;
+      if (stableSamples >= 4) {
+        return current;
+      }
+    } else {
+      row = current;
+      stableSamples = 0;
+    }
+    await wait(25);
+  }
+  return row;
+}
+
+// FileDiff.render stored deletionFile/additionFile from the render input even
+// when none was passed. Internal rerenders (highlight completions, hunk
+// expansion) pass no input, so they wiped the stored pair, and every later
+// host render on the oldFile/newFile API saw filesDidChange — defeating the
+// early-return with a full Myers reparse and DOM rebuild each time.
+// File.rerender re-passes its stored file, so the file twin never had this.
+test('a host render after an internal rerender takes the early-return path', async () => {
+  const { cleanup } = installDom();
+  let instance: FileDiff<undefined> | undefined;
+  try {
+    const oldFile = { name: 'x.ts', contents: 'alpha\nbravo\ncharlie\n' };
+    const newFile = { name: 'x.ts', contents: 'alpha\nBRAVO\ncharlie\n' };
+    const fileContainer = document.createElement('div');
+    document.body.appendChild(fileContainer);
+    instance = new FileDiff<undefined>({
+      disableFileHeader: true,
+      diffStyle: 'split',
+    });
+
+    instance.render({ oldFile, newFile, fileContainer });
+    await waitForStableRow(fileContainer);
+
+    // An internal input-less rerender — what every worker highlight
+    // completion and hunk expansion triggers.
+    instance.rerender();
+    const rowBefore = await waitForStableRow(fileContainer);
+    expect(rowBefore != null).toBe(true);
+
+    // Host render re-passing the same file objects (the documented
+    // oldFile/newFile API shape): same inputs, no force, no theme or
+    // annotation change. It must early-return and leave the DOM untouched.
+    instance.render({ oldFile, newFile, fileContainer });
+    const rowAfter =
+      fileContainer.shadowRoot?.querySelector('[data-line="1"]') ?? null;
+    expect(rowAfter === rowBefore).toBe(true);
+  } finally {
+    instance?.cleanUp();
+    cleanup();
+  }
+});

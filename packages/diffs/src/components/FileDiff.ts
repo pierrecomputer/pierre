@@ -1055,8 +1055,17 @@ export class FileDiff<
 
     const { renderRange: previousRenderRange } = this;
     this.renderRange = nextRenderRange;
-    this.deletionFile = oldFile;
-    this.additionFile = newFile;
+    // Store files only when this render actually carried a file input:
+    // internal rerenders pass none, and wiping the pair here would defeat the
+    // oldFile/newFile early-return on every later host render. An explicit
+    // fileDiff input supersedes a previously parsed pair, so clear it then.
+    if (hasFileInput) {
+      this.deletionFile = oldFile;
+      this.additionFile = newFile;
+    } else if (fileDiff != null) {
+      this.deletionFile = undefined;
+      this.additionFile = undefined;
+    }
 
     if (fileDiff != null) {
       this.fileDiff = fileDiff;
