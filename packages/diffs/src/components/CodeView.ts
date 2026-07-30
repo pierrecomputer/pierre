@@ -1706,8 +1706,9 @@ export class CodeView<LAnnotation = undefined> {
     }
   }
 
-  private capturePendingLayoutAnchor(): void {
+  public capturePendingLayoutAnchor(): void {
     if (
+      this.pendingLayoutAnchor != null ||
       this.root == null ||
       this.items.length === 0 ||
       this.pendingScrollTarget != null

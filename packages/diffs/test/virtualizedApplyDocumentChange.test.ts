@@ -11,6 +11,7 @@ function createStubVirtualizer(type: 'simple' | 'advanced') {
   return {
     type,
     config: {},
+    capturePendingLayoutAnchor() {},
     connect() {},
     disconnect() {},
     getWindowSpecs() {

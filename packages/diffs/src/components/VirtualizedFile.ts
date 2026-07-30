@@ -640,6 +640,10 @@ export class VirtualizedFile<
     shouldUpdateBuffer = false
   ): void {
     const { renderRange: previousRenderRange } = this;
+    // Capture the scroll anchor before the synchronous document swap and
+    // layout-cache wipe below; the host's next frame resolves it against the
+    // new geometry so on-screen rows do not shift.
+    this.getAdvancedVirtualizer()?.capturePendingLayoutAnchor();
     super.applyDocumentChange(textDocument, newLineAnnotations);
     this.getSimpleVirtualizer()?.markDOMDirty();
     this.resetLayoutCache(this.isSimpleMode(), false);
@@ -864,6 +868,10 @@ export class VirtualizedFile<
 
   private getSimpleVirtualizer(): Virtualizer | undefined {
     return this.virtualizer.type === 'simple' ? this.virtualizer : undefined;
+  }
+
+  private getAdvancedVirtualizer(): CodeView<LAnnotation> | undefined {
+    return this.virtualizer.type === 'advanced' ? this.virtualizer : undefined;
   }
 
   private isResizeDebuggingEnabled(): boolean {
