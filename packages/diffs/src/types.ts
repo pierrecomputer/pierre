@@ -17,6 +17,27 @@ export type { CreatePatchOptionsNonabortable };
 
 export type CodeViewScrollBehavior = 'instant' | 'smooth' | 'smooth-auto';
 
+/** One externally highlighted token. */
+export interface ExternalHighlightedToken {
+  /** Token text. Lines exclude their trailing newline characters. */
+  readonly content: string;
+  /** Space-separated CSS classes applied to the rendered token span. */
+  readonly className?: string;
+}
+
+/** Externally highlighted tokens for one source line. */
+export type ExternalHighlightedLine = readonly ExternalHighlightedToken[];
+
+/** Externally highlighted input for a complete file. */
+export interface ExternalHighlightedFile {
+  /** Highlighted lines in source order. */
+  readonly lines: readonly ExternalHighlightedLine[];
+  /** Theme variables for the file chrome and diff colors. */
+  readonly themeStyles?: string;
+  /** Theme mode used by `themeStyles`. */
+  readonly baseThemeType?: 'light' | 'dark';
+}
+
 /**
  * Represents a file's contents for generating diffs via `parseDiffFromFile` or
  * for when rendering a file directly using the File components
@@ -268,6 +289,18 @@ export interface Hunk {
   noEOFCRAdditions: boolean;
 }
 
+/** Externally highlighted tokens for both sides of a file diff. */
+export interface ExternalHighlightedDiff {
+  /** Tokens for the previous file contents. */
+  readonly deletions: ExternalHighlightedFile;
+  /** Tokens for the new file contents. */
+  readonly additions: ExternalHighlightedFile;
+  /** Theme variables for the diff chrome and diff colors. */
+  readonly themeStyles?: string;
+  /** Theme mode used by `themeStyles`. */
+  readonly baseThemeType?: 'light' | 'dark';
+}
+
 /**
  * Metadata and content for a single file's diff.  Think of this as a JSON
  * compatible representation of a diff for a single file.
@@ -360,6 +393,8 @@ export interface FileDiffMetadata {
    * @internal
    */
   editSessionDirty?: boolean;
+  /** Externally highlighted tokens rendered instead of invoking Shiki. */
+  highlighted?: ExternalHighlightedDiff;
   /**
    * This unique key is only used for Worker Pools to avoid subsequent requests
    * to highlight if we've already highlighted the diff.  Please note that if
@@ -825,15 +860,23 @@ export interface RenderedFileASTCache {
   options: RenderFileOptions;
   result: ThemedFileResult | undefined;
   renderRange: RenderRange | undefined;
+  /** Caller-provided highlighted token object used to build the result. */
+  externalHighlighted?: ExternalHighlightedFile;
   isDirty?: boolean;
 }
 
 export interface RenderedDiffASTCache {
   diff: FileDiffMetadata;
   highlighted: boolean;
+  /** Caller-provided highlighted token object used to build the result. */
+  highlightedInput?: ExternalHighlightedDiff;
   options: RenderDiffOptions;
   result: ThemedDiffResult | undefined;
   renderRange: RenderRange | undefined;
+  /** Context threshold used to map externally highlighted diff rows. */
+  collapsedContextThreshold?: number;
+  /** Expansion map used to render caller-highlighted diff rows. */
+  expandedHunks?: Map<number, HunkExpansionRegion> | true;
   isDirty?: boolean;
   // A render was skipped while a highlight was in progress; its completion
   // will trigger a re-render.

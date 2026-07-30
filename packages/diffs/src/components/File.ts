@@ -30,6 +30,7 @@ import type {
   DiffsEditor,
   DiffsTextDocument,
   EditorActiveLineOptions,
+  ExternalHighlightedFile,
   FileContents,
   HighlightedToken,
   LineAnnotation,
@@ -68,7 +69,10 @@ import { DiffsContainerLoaded } from './web-components';
 const EMPTY_STRINGS: string[] = [''];
 
 export interface FileRenderProps<LAnnotation> {
+  /** Source file to render. */
   file: FileContents;
+  /** External highlighted tokens rendered instead of invoking Shiki. */
+  highlighted?: ExternalHighlightedFile;
   fileContainer?: HTMLElement;
   containerWrapper?: HTMLElement;
   deferManagers?: boolean;
@@ -125,6 +129,7 @@ interface ColumnElements {
 
 interface HydrationSetup<LAnnotation> {
   file: FileContents;
+  highlighted: ExternalHighlightedFile | undefined;
   lineAnnotations: LineAnnotation<LAnnotation>[] | undefined;
 }
 
@@ -174,6 +179,8 @@ export class File<
   protected managersDirty = false;
 
   public file: FileContents | undefined;
+  /** External highlighted input currently associated with `file`. */
+  public highlighted: ExternalHighlightedFile | undefined;
   protected renderRange: RenderRange | undefined;
   protected enabled = true;
 
@@ -205,6 +212,7 @@ export class File<
     if (!this.enabled || this.file == null) return;
     this.render({
       file: this.file,
+      highlighted: this.highlighted,
       forceRender: true,
       renderRange: this.renderRange,
     });
@@ -385,6 +393,7 @@ export class File<
       this.fileRenderer.cleanUp();
       this.workerManager = undefined;
       this.file = undefined;
+      this.highlighted = undefined;
     }
     this.enabled = false;
   }
@@ -400,6 +409,7 @@ export class File<
       prerenderedHTML,
       preventEmit = false,
       file,
+      highlighted,
       lineAnnotations,
     } = props;
     if (!this.enabled) {
@@ -425,7 +435,7 @@ export class File<
     }
     // Otherwise orchestrate our setup.
     else {
-      this.hydrationSetup({ file, lineAnnotations });
+      this.hydrationSetup({ file, highlighted, lineAnnotations });
     }
     if (!preventEmit) {
       this.emitPostRender();
@@ -486,16 +496,18 @@ export class File<
 
   protected hydrationSetup({
     file,
+    highlighted,
     lineAnnotations,
   }: HydrationSetup<LAnnotation>): void {
     this.lineAnnotations = lineAnnotations ?? this.lineAnnotations;
     this.file = file;
+    this.highlighted = highlighted;
     this.fileRenderer.setOptions(getFileRendererOptions(this.options));
     this.syncInteractionOptions();
     if (this.pre == null) {
       return;
     }
-    this.fileRenderer.hydrate(file);
+    this.fileRenderer.hydrate(file, highlighted);
     this.renderAnnotations();
     this.renderGutterUtility();
     this.injectUnsafeCSS();
@@ -553,6 +565,7 @@ export class File<
     if (preparedFile !== undefined && preparedFile !== this.file) {
       this.renderPreparedFile({
         file: preparedFile,
+        highlighted: this.highlighted,
         forceRender: true,
         preventEmit: true,
         renderRange: this.renderRange,
@@ -619,6 +632,7 @@ export class File<
   // virtualized subclass overrides this phase so layout uses the same file.
   protected renderPreparedFile({
     file,
+    highlighted,
     fileContainer,
     forceRender = false,
     preventEmit = false,
@@ -643,11 +657,13 @@ export class File<
     const didFileChange =
       !areFilesEqual(this.file, file) ||
       this.fileRenderer.hasUnkeyedFileContentsChanged(file);
+    const didHighlightedChange = this.highlighted !== highlighted;
     if (
       !collapsed &&
       !forceRender &&
       areRenderRangesEqual(nextRenderRange, this.renderRange) &&
       !didFileChange &&
+      !didHighlightedChange &&
       !annotationsChanged &&
       !themeChanged
     ) {
@@ -659,6 +675,7 @@ export class File<
       this.cachedHeaderHTML = undefined;
     }
     this.file = file;
+    this.highlighted = highlighted;
     this.fileRenderer.setOptions(getFileRendererOptions(this.options));
     this.syncInteractionOptions();
     if (lineAnnotations != null) {
@@ -691,7 +708,8 @@ export class File<
       try {
         const fileResult = this.fileRenderer.renderFile(
           file,
-          EMPTY_RENDER_RANGE
+          EMPTY_RENDER_RANGE,
+          highlighted
         );
         if (fileResult != null) {
           this.applyThemeState(
@@ -726,11 +744,15 @@ export class File<
         !this.canPartiallyRender(
           forceRender,
           annotationsChanged,
-          didFileChange || themeChanged
+          didFileChange || didHighlightedChange || themeChanged
         ) ||
         !this.applyPartialRender(previousRenderRange, nextRenderRange)
       ) {
-        const fileResult = this.fileRenderer.renderFile(file, nextRenderRange);
+        const fileResult = this.fileRenderer.renderFile(
+          file,
+          nextRenderRange,
+          highlighted
+        );
         if (fileResult == null) {
           if (this.workerManager?.isInitialized() === false) {
             void this.workerManager.initialize().then(() => this.rerender());
@@ -865,6 +887,7 @@ export class File<
     const { file, workerManager } = this;
     if (
       file == null ||
+      this.highlighted != null ||
       file.cacheKey == null ||
       workerManager == null ||
       isFilePlainText(file)
@@ -1153,12 +1176,16 @@ export class File<
       if (totalLines <= 0) {
         return undefined;
       }
-      return this.fileRenderer.renderFile(file, {
-        startingLine,
-        totalLines,
-        bufferBefore: 0,
-        bufferAfter: 0,
-      });
+      return this.fileRenderer.renderFile(
+        file,
+        {
+          startingLine,
+          totalLines,
+          bufferBefore: 0,
+          bufferAfter: 0,
+        },
+        this.highlighted
+      );
     };
 
     const prependResult =

@@ -78,6 +78,7 @@ import { isDefaultRenderRange } from '../utils/isDefaultRenderRange';
 import { isDiffPlainText } from '../utils/isDiffPlainText';
 import type { DiffLineMetadata } from '../utils/iterateOverDiff';
 import { iterateOverDiff } from '../utils/iterateOverDiff';
+import { renderDiffWithHighlightedTokens } from '../utils/renderDiffWithHighlightedTokens';
 import { renderDiffWithHighlighter } from '../utils/renderDiffWithHighlighter';
 import {
   recomputeDiffHunksForEdit,
@@ -425,7 +426,11 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     // mid-edit-session even though the dirty cache carries live edits: both
     // session hunk-update paths keep diff.additionLines current every pass,
     // so the rebuilt AST reproduces the live document.
-    if (this.renderCache?.highlighted !== true) {
+    // Caller-highlighted rows depend on expansion state just like plain rows.
+    if (
+      this.renderCache?.highlighted !== true ||
+      this.renderCache.highlightedInput != null
+    ) {
       this.clearRenderCache();
     }
     this.expandedHunks.set(index, region);
@@ -443,6 +448,9 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   public setExpandedHunksMap(
     expandedHunks: Map<number, HunkExpansionRegion>
   ): void {
+    if (this.renderCache?.highlightedInput != null) {
+      this.clearRenderCache();
+    }
     this.expandedHunks = expandedHunks;
   }
 
@@ -802,18 +810,29 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     this.diff = diff;
     const { options } = this.getRenderOptions(diff);
     const massiveDiff = isDiffMassive(diff, this.getTokenizeMaxLength());
-    let cache = this.workerManager?.getDiffResultCache(diff);
+    let cache =
+      diff.highlighted == null
+        ? this.workerManager?.getDiffResultCache(diff)
+        : undefined;
     if (cache != null && !areDiffRenderOptionsEqual(options, cache.options)) {
       cache = undefined;
     }
     this.renderCache ??= {
       diff,
-      highlighted: !massiveDiff && !isDiffPlainText(diff),
+      highlighted:
+        diff.highlighted != null || (!massiveDiff && !isDiffPlainText(diff)),
       options,
-      result: massiveDiff ? undefined : cache?.result,
+      result:
+        diff.highlighted != null
+          ? undefined
+          : massiveDiff
+            ? undefined
+            : cache?.result,
       renderRange: undefined,
     };
-    if (
+    if (diff.highlighted != null) {
+      this.workerManager?.cleanUpTasks(this);
+    } else if (
       !this.editSessionActive &&
       this.workerManager?.isWorkingPool() === true
     ) {
@@ -885,7 +904,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     const { expandUnchanged, collapsedContextThreshold } =
       this.getOptionsWithDefaults();
     let { options, forceHighlight } = this.getRenderOptions(diff);
-    const cache = this.getMatchingWorkerResultCache(diff, options);
+    const cache =
+      diff.highlighted == null
+        ? this.getMatchingWorkerResultCache(diff, options)
+        : undefined;
     if (cache != null && !this.hasHighlightedRenderCache(diff, options)) {
       this.renderCache = {
         diff,
@@ -913,6 +935,54 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       this.renderCache.renderRange,
       renderRange
     );
+    if (diff.highlighted == null && this.renderCache.highlightedInput != null) {
+      this.renderCache = {
+        diff,
+        highlighted: false,
+        options,
+        result: undefined,
+        renderRange: undefined,
+      };
+      forceHighlight = true;
+    }
+    if (diff.highlighted != null) {
+      const externalInputChanged =
+        diff.highlighted !== this.renderCache.highlightedInput;
+      const externalThresholdChanged =
+        collapsedContextThreshold !==
+        this.renderCache.collapsedContextThreshold;
+      const expandedHunks = expandUnchanged ? true : this.expandedHunks;
+      const externalExpansionChanged =
+        expandedHunks !== this.renderCache.expandedHunks;
+      const externalResult =
+        newContent ||
+        newRenderRange ||
+        externalInputChanged ||
+        externalThresholdChanged ||
+        externalExpansionChanged ||
+        forceHighlight ||
+        this.renderCache.result == null
+          ? renderDiffWithHighlightedTokens(
+              diff,
+              diff.highlighted,
+              options.useTokenTransformer,
+              renderRange,
+              expandedHunks,
+              collapsedContextThreshold
+            )
+          : this.renderCache.result;
+      this.renderCache = {
+        diff,
+        highlighted: true,
+        highlightedInput: diff.highlighted,
+        collapsedContextThreshold,
+        expandedHunks,
+        options,
+        result: externalResult,
+        renderRange,
+      };
+      return this.processDiffResult(diff, renderRange, externalResult);
+    }
     if (
       !this.editSessionActive &&
       this.workerManager?.isWorkingPool() === true
@@ -1033,6 +1103,20 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     diff: FileDiffMetadata,
     renderRange: RenderRange = DEFAULT_RENDER_RANGE
   ): Promise<HunksRenderResult> {
+    if (diff.highlighted != null) {
+      const { options } = this.getRenderOptions(diff);
+      const { collapsedContextThreshold, expandUnchanged } =
+        this.getOptionsWithDefaults();
+      const result = renderDiffWithHighlightedTokens(
+        diff,
+        diff.highlighted,
+        options.useTokenTransformer,
+        renderRange,
+        expandUnchanged ? true : this.expandedHunks,
+        collapsedContextThreshold
+      );
+      return this.processDiffResult(diff, renderRange, result);
+    }
     const { result } = await this.asyncHighlight(diff);
     return this.processDiffResult(diff, renderRange, result);
   }
@@ -1102,7 +1186,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     options: RenderDiffOptions,
     highlighted = true
   ): void {
-    if (this.editSessionActive) {
+    if (this.editSessionActive || this.renderCache?.highlightedInput != null) {
       return;
     }
     this.applyHighlightResult(diff, result, options, highlighted);

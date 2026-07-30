@@ -17,6 +17,7 @@ import type {
   BaseCodeOptions,
   DiffsHighlighter,
   DiffsTextDocument,
+  ExternalHighlightedFile,
   FileContents,
   FileHeaderRenderMode,
   HighlightedToken,
@@ -54,6 +55,7 @@ import {
   shouldRenderFileAnnotations,
 } from '../utils/includesFileAnnotations';
 import { isFilePlainText } from '../utils/isFilePlainText';
+import { renderFileWithHighlightedTokens } from '../utils/renderFileWithHighlightedTokens';
 import { renderFileWithHighlighter } from '../utils/renderFileWithHighlighter';
 import type { WorkerPoolManager } from '../worker';
 
@@ -62,6 +64,9 @@ type AnnotationLineMap<LAnnotation> = Record<
   LineAnnotation<LAnnotation>[] | undefined
 >;
 
+type FileRenderCache = RenderedFileASTCache & {
+  externalHighlighted?: ExternalHighlightedFile;
+};
 interface GetRenderOptionsReturn {
   options: RenderFileOptions;
   forceHighlight: boolean;
@@ -106,7 +111,7 @@ export class FileRenderer<LAnnotation = undefined> {
   readonly __id: string = `file-renderer:${++instanceId}`;
 
   private highlighter: DiffsHighlighter | undefined;
-  private renderCache: RenderedFileASTCache | undefined;
+  private renderCache: FileRenderCache | undefined;
   private computedLang: SupportedLanguages = 'text';
   private lineAnnotations: AnnotationLineMap<LAnnotation> = {};
   private lineCache: LineCache | undefined;
@@ -253,26 +258,41 @@ export class FileRenderer<LAnnotation = undefined> {
     }
   }
 
-  public hydrate(file: FileContents): void {
+  public hydrate(
+    file: FileContents,
+    highlighted?: ExternalHighlightedFile
+  ): void {
     const { options } = this.getRenderOptions(file);
     const lines = this.getOrCreateLineCache(file);
     const massiveFile = isFileMassive(
       lines.length,
       this.getTokenizeMaxLength()
     );
-    let cache = this.workerManager?.getFileResultCache(file);
+    let cache =
+      highlighted == null
+        ? this.workerManager?.getFileResultCache(file)
+        : undefined;
     if (cache != null && !areFileRenderOptionsEqual(options, cache.options)) {
       cache = undefined;
     }
     this.renderCache ??= {
       file,
+      externalHighlighted: highlighted,
       options,
-      highlighted: !massiveFile && !isFilePlainText(file),
-      result: massiveFile ? undefined : cache?.result,
+      highlighted:
+        highlighted != null || (!massiveFile && !isFilePlainText(file)),
+      result:
+        highlighted != null
+          ? undefined
+          : massiveFile
+            ? undefined
+            : cache?.result,
       // FIXME(amadeus): Add support for renderRanges
       renderRange: undefined,
     };
-    if (
+    if (highlighted != null) {
+      this.workerManager?.cleanUpTasks(this);
+    } else if (
       !this.editSessionActive &&
       this.workerManager?.isWorkingPool() === true
     ) {
@@ -533,7 +553,8 @@ export class FileRenderer<LAnnotation = undefined> {
 
   public renderFile(
     file: FileContents | undefined = this.renderCache?.file,
-    renderRange: RenderRange = DEFAULT_RENDER_RANGE
+    renderRange: RenderRange = DEFAULT_RENDER_RANGE,
+    highlighted?: ExternalHighlightedFile
   ): FileRenderResult | undefined {
     if (file == null) {
       return undefined;
@@ -560,10 +581,14 @@ export class FileRenderer<LAnnotation = undefined> {
     ) {
       this.clearRenderCache();
     }
-    const cache = this.getMatchingWorkerResultCache(file, options);
+    const cache =
+      highlighted == null
+        ? this.getMatchingWorkerResultCache(file, options)
+        : undefined;
     if (cache != null && !this.hasHighlightedRenderCache(file, options)) {
       this.renderCache = {
         file,
+        externalHighlighted: undefined,
         highlighted: true,
         renderRange: undefined,
         ...cache,
@@ -572,6 +597,7 @@ export class FileRenderer<LAnnotation = undefined> {
     }
     this.renderCache ??= {
       file,
+      externalHighlighted: highlighted,
       highlighted: false,
       options,
       result: undefined,
@@ -588,7 +614,39 @@ export class FileRenderer<LAnnotation = undefined> {
       this.renderCache.renderRange,
       renderRange
     );
-    if (
+    if (highlighted == null && this.renderCache.externalHighlighted != null) {
+      this.renderCache = {
+        file,
+        externalHighlighted: undefined,
+        highlighted: false,
+        options,
+        result: undefined,
+        renderRange: undefined,
+      };
+    }
+    if (highlighted != null) {
+      if (
+        forceHighlight ||
+        !this.hasHighlightedRenderCache(file, options, highlighted) ||
+        newRenderRange
+      ) {
+        this.workerManager?.cleanUpTasks(this);
+        this.renderCache = {
+          file,
+          externalHighlighted: highlighted,
+          highlighted: true,
+          options,
+          result: renderFileWithHighlightedTokens(
+            file,
+            lines,
+            highlighted,
+            options.useTokenTransformer,
+            renderRange
+          ),
+          renderRange,
+        };
+      }
+    } else if (
       !this.editSessionActive &&
       this.workerManager?.isWorkingPool() === true
     ) {
@@ -599,6 +657,7 @@ export class FileRenderer<LAnnotation = undefined> {
         (!this.renderCache.highlighted && (newContent || newRenderRange))
       ) {
         this.renderCache.file = file;
+        this.renderCache.externalHighlighted = undefined;
         this.renderCache.options = options;
         this.renderCache.highlighted = false;
         if (
@@ -651,6 +710,7 @@ export class FileRenderer<LAnnotation = undefined> {
         );
         this.renderCache = {
           file,
+          externalHighlighted: undefined,
           options,
           highlighted: canHighlight,
           result,
@@ -684,9 +744,21 @@ export class FileRenderer<LAnnotation = undefined> {
 
   async asyncRender(
     file: FileContents,
-    renderRange: RenderRange = DEFAULT_RENDER_RANGE
+    renderRange: RenderRange = DEFAULT_RENDER_RANGE,
+    highlighted?: ExternalHighlightedFile
   ): Promise<FileRenderResult> {
-    const { result } = await this.asyncHighlight(file);
+    if (highlighted == null) {
+      const { result } = await this.asyncHighlight(file);
+      return this.processFileResult(file, renderRange, result);
+    }
+    const { options } = this.getRenderOptions(file);
+    const result = renderFileWithHighlightedTokens(
+      file,
+      this.getOrCreateLineCache(file),
+      highlighted,
+      options.useTokenTransformer,
+      renderRange
+    );
     return this.processFileResult(file, renderRange, result);
   }
 
@@ -895,7 +967,10 @@ export class FileRenderer<LAnnotation = undefined> {
     options: RenderFileOptions,
     highlighted = true
   ): void {
-    if (this.editSessionActive) {
+    if (
+      this.editSessionActive ||
+      this.renderCache?.externalHighlighted != null
+    ) {
       return;
     }
     this.applyHighlightResult(file, result, options, highlighted);
@@ -917,6 +992,7 @@ export class FileRenderer<LAnnotation = undefined> {
 
     this.renderCache = {
       file,
+      externalHighlighted: undefined,
       options,
       highlighted,
       result,
@@ -944,12 +1020,14 @@ export class FileRenderer<LAnnotation = undefined> {
 
   private hasHighlightedRenderCache(
     file: FileContents,
-    options: RenderFileOptions
+    options: RenderFileOptions,
+    highlighted?: ExternalHighlightedFile
   ): boolean {
     const { renderCache } = this;
     return (
       renderCache?.result != null &&
       renderCache.highlighted &&
+      renderCache.externalHighlighted === highlighted &&
       areFilesEqual(file, renderCache.file) &&
       areFileRenderOptionsEqual(options, renderCache.options)
     );

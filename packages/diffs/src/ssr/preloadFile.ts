@@ -1,6 +1,10 @@
 import type { FileOptions } from '../components/File';
 import { FileRenderer } from '../renderers/FileRenderer';
-import type { FileContents, LineAnnotation } from '../types';
+import type {
+  ExternalHighlightedFile,
+  FileContents,
+  LineAnnotation,
+} from '../types';
 import {
   createStyleElement,
   createThemeStyleElement,
@@ -13,12 +17,14 @@ export type PreloadFileOptions<LAnnotation> = {
   file: FileContents;
   options?: FileOptions<LAnnotation>;
   annotations?: LineAnnotation<LAnnotation>[];
+  highlighted?: ExternalHighlightedFile;
 };
 
 export interface PreloadedFileResult<LAnnotation> {
   file: FileContents;
   options?: FileOptions<LAnnotation>;
   annotations?: LineAnnotation<LAnnotation>[];
+  highlighted?: ExternalHighlightedFile;
   prerenderedHTML: string;
 }
 
@@ -26,6 +32,7 @@ export async function preloadFile<LAnnotation = undefined>({
   file,
   options,
   annotations,
+  highlighted,
 }: PreloadFileOptions<LAnnotation>): Promise<PreloadedFileResult<LAnnotation>> {
   const fileRenderer = new FileRenderer<LAnnotation>({
     ...options,
@@ -41,7 +48,11 @@ export async function preloadFile<LAnnotation = undefined>({
     fileRenderer.setLineAnnotations(annotations);
   }
 
-  const fileResult = await fileRenderer.asyncRender(file);
+  const fileResult = await fileRenderer.asyncRender(
+    file,
+    undefined,
+    highlighted
+  );
   const children = [createStyleElement(fileResult.css, true)];
 
   children.push(
@@ -68,6 +79,7 @@ export async function preloadFile<LAnnotation = undefined>({
     file,
     options,
     annotations,
+    highlighted,
     prerenderedHTML: renderHTML(children),
   };
 }
