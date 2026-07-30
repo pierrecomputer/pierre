@@ -544,7 +544,13 @@ export class VirtualizedFile<
 
   // Compute the approximate size of the file using cached line heights.
   // Uses lineHeight for lines without cached measurements.
-  private computeApproximateSize(force = false): void {
+  // The reason we refer to this as `approximate size` is because heights my
+  // dynamically change for a number of reasons so we can never be fully sure
+  // if the height is 100% accurate
+  private computeApproximateSize(
+    force = false,
+    file: FileContents | undefined = this.file
+  ): void {
     const shouldValidateSize = this.isResizeDebuggingEnabled();
     if (!force && !this.layoutDirty && !shouldValidateSize) {
       return;
@@ -553,7 +559,7 @@ export class VirtualizedFile<
     const isFirstCompute = this.height === 0;
     this.height = 0;
     this.cache.checkpoints = [];
-    if (this.file == null) {
+    if (file == null) {
       this.layoutDirty = false;
       return;
     }
@@ -564,7 +570,7 @@ export class VirtualizedFile<
       overflow = 'scroll',
     } = this.options;
     const { lineHeight } = this.metrics;
-    const lineCount = this.fileRenderer.getLineCount(this.file);
+    const lineCount = this.fileRenderer.getLineCount(file);
     const headerRegion = getVirtualFileHeaderRegion(
       this.metrics,
       disableFileHeader
@@ -598,7 +604,7 @@ export class VirtualizedFile<
         console.log(
           'VirtualizedFile.computeApproximateSize: computed height doesnt match',
           {
-            name: this.file.name,
+            name: file.name,
             elementHeight: rect.height,
             computedHeight: this.height,
           }
@@ -691,11 +697,9 @@ export class VirtualizedFile<
       this.resetLayoutCache();
     }
 
-    this.file = file;
-
     fileContainer = this.getOrCreateFileContainerNode(fileContainer);
 
-    if (this.file == null) {
+    if (file == null) {
       console.error(
         'VirtualizedFile.render: attempting to virtually render when we dont have file'
       );
@@ -703,7 +707,7 @@ export class VirtualizedFile<
     }
 
     if (!isSetup) {
-      this.computeApproximateSize();
+      this.computeApproximateSize(false, file);
       const virtualizer = this.getSimpleVirtualizer();
       this.top ??= this.getVirtualizedTop();
       if (this.isAdvancedMode()) {
@@ -725,27 +729,42 @@ export class VirtualizedFile<
       this.top ??= this.getVirtualizedTop();
       if (didFileChange && this.isSimpleMode()) {
         this.getSimpleVirtualizer()?.markDOMDirty();
-        this.resetLayoutCache(true);
+        this.resetLayoutCache(false);
+        this.computeApproximateSize(false, file);
       }
     }
 
-    if (!this.isVisible && this.isSimpleMode()) {
+    // A hidden live instance receiving a changed file falls through to the
+    // full render below so the base's change detection (header cache, stored
+    // file) still runs; the placeholder path only serves unchanged data.
+    if (
+      !this.isVisible &&
+      this.isSimpleMode() &&
+      (!didFileChange || !isSetup)
+    ) {
+      this.file = file;
+      if (didFileChange) {
+        this.cachedHeaderHTML = undefined;
+      }
       return this.renderPlaceholder(this.height);
     }
 
     const windowSpecs = this.virtualizer.getWindowSpecs();
     const fileTop = this.top ?? 0;
     const renderRange = this.computeRenderRangeFromWindow(
-      this.file,
+      file,
       fileTop,
       windowSpecs
     );
     const rendered = super.renderPreparedFile({
-      file: this.file,
+      file,
       fileContainer,
       renderRange,
       lineAnnotations,
-      forceRender: (forceRenderOverride ?? forceRender) || annotationsChanged,
+      forceRender:
+        (forceRenderOverride ?? forceRender) ||
+        annotationsChanged ||
+        didFileChange,
       ...props,
     });
     // Renders can be driven from outside the virtualizer (host/React render
