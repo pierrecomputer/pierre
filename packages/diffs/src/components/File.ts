@@ -866,24 +866,31 @@ export class File<
     return true;
   }
 
-  public primeHighlightCache(): void {
-    const { file, workerManager } = this;
+  public async primeHighlightCache(
+    file: FileContents | undefined = this.file
+  ): Promise<void> {
+    const { workerManager } = this;
     if (
       file == null ||
-      file.cacheKey == null ||
       workerManager == null ||
+      !workerManager.isWorkingPool() ||
+      file.cacheKey == null ||
       isFilePlainText(file)
     ) {
       return;
     }
+    const tokenizeMaxLength =
+      this.options.tokenizeMaxLength ?? DEFAULT_TOKENIZE_MAX_LENGTH;
     const lines = this.fileRenderer.getOrCreateLineCache(file);
-    if (
-      lines.length >
-      (this.options.tokenizeMaxLength ?? DEFAULT_TOKENIZE_MAX_LENGTH)
-    ) {
+    if (lines.length > tokenizeMaxLength) {
       return;
     }
-    void workerManager.primeFileHighlightCache(file).catch(() => undefined);
+
+    await workerManager
+      .primeFileHighlightCache(file)
+      .catch((error: unknown) => {
+        console.error(error);
+      });
   }
 
   private cleanChildNodes() {
