@@ -78,15 +78,18 @@ function createTrackedEditor(
   attachmentError?: Error
 ): TrackedCodeViewEditor {
   let detach: ((recycle?: boolean) => void) | undefined;
-  const editor: TrackedCodeViewEditor = {
+  const editor = {
     options,
     edits: [],
     fullCleanUps: 0,
     recycleCleanUps: 0,
-    emitChange(file, lineAnnotations) {
-      options.onChange?.(file, lineAnnotations);
+    emitChange(
+      file: FileContents,
+      lineAnnotations?: DiffLineAnnotation<undefined>[]
+    ) {
+      options.onChange?.({ changes: [], file, lineAnnotations });
     },
-    edit(instance) {
+    edit(instance: DiffsEditableComponent<undefined>) {
       editor.edits.push(instance);
       detach = instance.attachEditor(editor);
       if (attachmentError != null) {
@@ -106,7 +109,7 @@ function createTrackedEditor(
     __captureFocusForDOMReplacement() {},
     __postponeBgTokenizeToNextFrame() {},
     __syncRenderView() {},
-  };
+  } as unknown as TrackedCodeViewEditor;
   return editor;
 }
 
@@ -337,7 +340,7 @@ describe('React CodeView editor factory', () => {
     const container = document.createElement('div');
     document.body.appendChild(container);
     const { createEditor, editors, receivedOptions } = createEditorHarness();
-    const attemptedOnChange = mock((_file: FileContents) => {});
+    const attemptedOnChange = mock(() => {});
     const onAttach = mock(() => {});
     const onItemEditChange = mock(
       (_item: CodeViewItem<undefined>, _file: FileContents) => {}

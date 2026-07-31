@@ -181,6 +181,7 @@ describe('EditorTokenizer', () => {
           previousLineCount: textDocument.lineCount,
           lineCount: textDocument.lineCount,
           lineDelta: 0,
+          changes: [],
           changedLineRanges: [[0, 19]],
         },
         renderRange
@@ -230,6 +231,7 @@ describe('EditorTokenizer', () => {
       previousLineCount: textDocument.lineCount,
       lineCount: textDocument.lineCount,
       lineDelta: 0,
+      changes: [],
       changedLineRanges: [[0, 0]],
     };
 
@@ -311,6 +313,7 @@ describe('EditorTokenizer', () => {
         previousLineCount: textDocument.lineCount,
         lineCount: textDocument.lineCount,
         lineDelta: 0,
+        changes: [],
         changedLineRanges: [[0, 0]],
       });
       return tokenizer;
@@ -379,6 +382,7 @@ describe('EditorTokenizer', () => {
           previousLineCount: textDocument.lineCount,
           lineCount: textDocument.lineCount,
           lineDelta: 1,
+          changes: [],
           changedLineRanges: [[0, 999]],
         },
         renderRange
@@ -454,6 +458,7 @@ describe('EditorTokenizer', () => {
         previousLineCount: textDocument.lineCount,
         lineCount: textDocument.lineCount,
         lineDelta: 0,
+        changes: [],
         changedLineRanges: [[0, 109]],
       },
       renderRange
@@ -539,6 +544,7 @@ describe('EditorTokenizer', () => {
           previousLineCount: textDocument.lineCount,
           lineCount: textDocument.lineCount,
           lineDelta: 0,
+          changes: [],
           changedLineRanges: [[0, textDocument.lineCount - 1]],
         },
         { startingLine: 0, totalLines: 150, bufferBefore: 0, bufferAfter: 0 }
@@ -647,6 +653,7 @@ describe('EditorTokenizer', () => {
           previousLineCount: textDocument.lineCount,
           lineCount: textDocument.lineCount,
           lineDelta: 0,
+          changes: [],
           changedLineRanges: [[0, 19]],
         },
         renderRange
@@ -747,6 +754,7 @@ describe('EditorTokenizer', () => {
           previousLineCount: textDocument.lineCount,
           lineCount: textDocument.lineCount,
           lineDelta: 0,
+          changes: [],
           changedLineRanges: [[0, textDocument.lineCount - 1]],
         },
         {
@@ -847,6 +855,7 @@ describe('EditorTokenizer', () => {
           previousLineCount: textDocument.lineCount,
           lineCount: textDocument.lineCount,
           lineDelta: 0,
+          changes: [],
           changedLineRanges: [[0, textDocument.lineCount - 1]],
         },
         { startingLine: 0, totalLines: 150, bufferBefore: 0, bufferAfter: 0 }
@@ -955,6 +964,7 @@ describe('EditorTokenizer', () => {
           previousLineCount: textDocument.lineCount,
           lineCount: textDocument.lineCount,
           lineDelta: 0,
+          changes: [],
           changedLineRanges: [[0, 0]],
         },
         { startingLine: 0, totalLines: 1, bufferBefore: 0, bufferAfter: 0 }
@@ -1042,6 +1052,7 @@ describe('EditorTokenizer', () => {
             previousLineCount: textDocument.lineCount,
             lineCount: textDocument.lineCount,
             lineDelta: 0,
+            changes: [],
             changedLineRanges: [[0, 0]],
           },
           {
@@ -1276,6 +1287,7 @@ describe('EditorTokenizer', () => {
         previousLineCount: textDocument.lineCount,
         lineCount: textDocument.lineCount,
         lineDelta: 0,
+        changes: [],
         changedLineRanges: [[0, 0]],
       },
       { startingLine: 100, totalLines: 10, bufferBefore: 0, bufferAfter: 0 }
@@ -1366,6 +1378,7 @@ describe('EditorTokenizer', () => {
         previousLineCount: textDocument.lineCount,
         lineCount: textDocument.lineCount,
         lineDelta: 0,
+        changes: [],
         changedLineRanges: [[0, 0]],
       };
       const renderRange = {
@@ -1457,6 +1470,7 @@ describe('EditorTokenizer', () => {
         previousLineCount: textDocument.lineCount,
         lineCount: textDocument.lineCount,
         lineDelta: 0,
+        changes: [],
         changedLineRanges: [[0, 0]],
       };
       const renderRange = {
@@ -1547,6 +1561,7 @@ describe('EditorTokenizer', () => {
           previousLineCount: textDocument.lineCount,
           lineCount: textDocument.lineCount,
           lineDelta: 0,
+          changes: [],
           changedLineRanges: [[0, 0]],
         },
         { startingLine: 0, totalLines: 1, bufferBefore: 0, bufferAfter: 0 }
@@ -1604,6 +1619,7 @@ describe('EditorTokenizer', () => {
         previousLineCount: textDocument.lineCount,
         lineCount: textDocument.lineCount,
         lineDelta: 1,
+        changes: [],
         changedLineRanges: [[0, 799]],
       },
       { startingLine: 0, totalLines: 800, bufferBefore: 0, bufferAfter: 0 }
@@ -1717,6 +1733,7 @@ describe('EditorTokenizer', () => {
           previousLineCount: textDocument.lineCount,
           lineCount: textDocument.lineCount,
           lineDelta: 0,
+          changes: [],
           changedLineRanges: [[0, textDocument.lineCount - 1]],
         },
         {
@@ -1785,6 +1802,7 @@ describe('EditorTokenizer', () => {
           previousLineCount: lineCount,
           lineCount,
           lineDelta: 0,
+          changes: [],
           changedLineRanges: [[9, lineCount - 1]],
         },
         {
@@ -1989,6 +2007,7 @@ describe('EditorTokenizer', () => {
         previousLineCount: textDocument.lineCount,
         lineCount: textDocument.lineCount,
         lineDelta: 0,
+        changes: [],
         changedLineRanges: [[0, 0]],
       });
       expect(tokenizer.themeType).toBe('dark');
@@ -2211,6 +2230,7 @@ describe('EditorTokenizer', () => {
         previousLineCount: textDocument.lineCount,
         lineCount: textDocument.lineCount,
         lineDelta: 0,
+        changes: [],
         changedLineRanges: [[2, 2]],
       });
 

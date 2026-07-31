@@ -64,8 +64,9 @@ You render the surface first, then attach editing:
    another cursor without clearing existing ones.
 4. **Updates** — Keystrokes update an internal `TextDocument`, then changed
    lines are re-highlighted through the same tokenizer pipeline as read-only
-   mode. Your `onChange` handler receives updated `FileContents` (and line
-   annotations when present).
+   mode. Your `onChange` handler receives an event with normalized text
+   `changes`, updated `FileContents` in `file`, and `lineAnnotations` when
+   present.
 
 When attaching, edit mode turns on the token transformer and triggers a
 re-render if necessary. Collapsed unchanged regions stay collapsed: arrow keys
@@ -79,10 +80,10 @@ deleted lines and annotation lines remain read-only.
 
 Applications own the annotation collection passed to a `File`, `FileDiff`, or
 other editable surface. When an edit affects annotation coordinates, the editor
-remaps them and passes the complete current collection to `onChange` alongside
-the edited file. This collection is authoritative when present; it is not a
-delta. Replace your application-owned collection with it before a later render
-can reapply stale coordinates.
+remaps them and passes the complete current collection as `onChange`'s
+`lineAnnotations` alongside the edited `file`. This collection is authoritative
+when present; it is not a delta. Replace your application-owned collection with
+it before a later render can reapply stale coordinates.
 
 The editor preserves the existing array reference for ordinary same-line edits
 and other edits that do not affect any annotation. When a structural edit
@@ -114,9 +115,9 @@ For annotations that survive, remapping changes only their coordinates. Metadata
 is preserved, so give each interactive annotation a stable, position-independent
 ID in `metadata` and key application-owned drafts or UI state by that ID.
 
-The shared `onChange` callback accepts either annotation shape: standalone
-`File` surfaces emit `LineAnnotation[]`, while diff surfaces emit
-`DiffLineAnnotation[]`. Narrow the collection before reading the diff-only
+The shared `onChange` event accepts either annotation shape: standalone `File`
+surfaces emit `LineAnnotation[]`, while diff surfaces emit
+`DiffLineAnnotation[]`. Narrow `lineAnnotations` before reading the diff-only
 `side` property. Use `isFileAnnotationCollection` or
 `isDiffAnnotationCollection` when the surface type is not already known.
 
@@ -178,7 +179,7 @@ const createEditor = useCallback<CreateEditor<undefined>>(
 const editorOptions = useMemo<EditorOptions<undefined>>(
   () => ({
     onChange: handleChange,
-    onAttach(editor) {
+    onAttach({ editor }) {
       editorRef.current = editor;
     },
   }),
@@ -258,14 +259,15 @@ independent editor instances.
 
 ### Autofocus on Attach
 
-Use `onAttach` to opt into initial caret placement. At this point the text
-document and editable DOM are ready. In React, pass a stable `editorOptions`
-object to any editable surface, including `CodeView`:
+Use `onAttach` to opt into initial caret placement. Its event provides the
+attached `editor` and `fileInstance`; at this point the text document and
+editable DOM are ready. In React, pass a stable `editorOptions` object to any
+editable surface, including `CodeView`:
 
 ```tsx
 const editorOptions = useMemo<EditorOptions<undefined>>(
   () => ({
-    onAttach(editor) {
+    onAttach({ editor }) {
       editor.focus({ lineNumber: 'first-visible', preventScroll: true });
     },
   }),
@@ -282,7 +284,7 @@ const viewer = new CodeView({
   createEditor(options) {
     return new Editor({
       ...options,
-      onAttach(editor) {
+      onAttach({ editor }) {
         editor.focus({ lineNumber: 'first-visible', preventScroll: true });
       },
     });

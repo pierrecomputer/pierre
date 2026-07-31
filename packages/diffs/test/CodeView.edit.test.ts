@@ -50,12 +50,19 @@ function createEditorHarness({
     options: CodeViewCreateEditorOptions<undefined>
   ): StubEditor => {
     let detach: ((recycle?: boolean) => void) | undefined;
-    const editor: StubEditor = {
+    const editor = {
       edits: [],
       fullCleanUps: 0,
       recycleCleanUps: 0,
-      emitChange: options.onChange,
-      edit(instance) {
+      emitChange(
+        file: FileContents,
+        lineAnnotations?:
+          | LineAnnotation<undefined>[]
+          | DiffLineAnnotation<undefined>[]
+      ) {
+        options.onChange({ changes: [], file, lineAnnotations });
+      },
+      edit(instance: DiffsEditableComponent<undefined>) {
         editor.edits.push(instance);
         detach = instance.attachEditor(editor);
         if (attachmentError != null) {
@@ -77,7 +84,7 @@ function createEditorHarness({
       __captureFocusForDOMReplacement() {},
       __postponeBgTokenizeToNextFrame() {},
       __syncRenderView() {},
-    };
+    } as unknown as StubEditor;
     editors.push(editor);
     return editor;
   };

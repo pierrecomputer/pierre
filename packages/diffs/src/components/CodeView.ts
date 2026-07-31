@@ -2038,7 +2038,7 @@ export class CodeView<LAnnotation = undefined> {
         // swaps aren't stranded on the callback captured at creation.
         const state: CodeViewItemEditorState<LAnnotation> = { id };
         const editor = createEditor({
-          onChange: (file, lineAnnotations) => {
+          onChange: ({ file, lineAnnotations }) => {
             const latest = this.idToItem.get(state.id);
             if (latest == null) {
               return;

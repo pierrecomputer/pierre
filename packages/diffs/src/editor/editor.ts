@@ -8,15 +8,17 @@ import type {
   DiffsEditor,
   DiffsHighlighter,
   EditableInstance,
+  EditorAttachEvent,
+  EditorChangeEvent,
   EditorSelection,
   EditorState,
   FileContents,
   FileDiffMetadata,
   HighlightedToken,
-  LineAnnotation,
   Position,
   Range,
   RenderRange,
+  ResolvedTextEdit,
   SelectionSide,
   TextEdit,
 } from '../types';
@@ -110,11 +112,7 @@ import {
   type IStateStorage,
   type PersistStateStorage,
 } from './stateStorage';
-import {
-  type ResolvedTextEdit,
-  TextDocument,
-  type TextDocumentChange,
-} from './textDocument';
+import { TextDocument, type TextDocumentChange } from './textDocument';
 import {
   getExpandedAsciiTextColumns,
   getUnicodeMeasurementOffsets,
@@ -225,17 +223,9 @@ export interface EditorOptions<LAnnotation> {
     context: SelectionActionContext<LAnnotation>
   ) => HTMLElement;
   /** Callback when the editor is attached to a file. */
-  onAttach?: (
-    editor: Editor<LAnnotation>,
-    fileInstance: DiffsEditableComponent<LAnnotation>
-  ) => void;
+  onAttach?: (event: EditorAttachEvent<LAnnotation>) => void;
   /** Callback when the editor document changes. */
-  onChange?: (
-    file: FileContents,
-    lineAnnotations?:
-      | LineAnnotation<LAnnotation>[]
-      | DiffLineAnnotation<LAnnotation>[]
-  ) => void;
+  onChange?: (event: EditorChangeEvent<LAnnotation>) => void;
   /** Callback when the editor gains focus. */
   onFocus?: () => void;
   /** Callback when the editor loses focus. */
@@ -1457,7 +1447,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         return;
       }
       attachState.delivered = true;
-      this.#options.onAttach?.(this, fileInstance);
+      this.#options.onAttach?.({ editor: this, fileInstance });
     };
     attachState.callback = callback;
     queueRender(callback);
@@ -5127,7 +5117,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     const fileRef = this.getFile();
     const onChange = this.#options.onChange;
     if (fileRef !== undefined && onChange !== undefined) {
-      onChange(fileRef, newLineAnnotations ?? this.#lineAnnotations);
+      onChange({
+        changes: change.changes,
+        file: fileRef,
+        lineAnnotations: newLineAnnotations ?? this.#lineAnnotations,
+      });
     }
 
     // Invalidate layout caches touched by the edit. Clear cached line Y

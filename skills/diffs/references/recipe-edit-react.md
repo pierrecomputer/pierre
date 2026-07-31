@@ -16,8 +16,8 @@ Set `edit` on `File`, `FileDiff`, `MultiFileDiff`, or `PatchDiff`. Pass editor
 behavior through `editOptions`.
 
 ```tsx
-import type { FileContents, FileDiffOptions } from '@pierre/diffs';
-import { Editor, type EditorOptions } from '@pierre/diffs/editor';
+import type { DiffsEditor, FileContents, FileDiffOptions } from '@pierre/diffs';
+import { Editor, type EditorOptions } from '@pierre/diffs/edit';
 import { EditProvider, MultiFileDiff, Virtualizer } from '@pierre/diffs/react';
 import { useMemo, useRef, useState } from 'react';
 
@@ -42,13 +42,13 @@ export function EditableDiff() {
   const [edit, setEdit] = useState(false);
   const [newFile, setNewFile] = useState(initialNewFile);
   const draftRef = useRef(newFile);
-  const editorRef = useRef<Editor<undefined> | null>(null);
+  const editorRef = useRef<DiffsEditor<undefined> | null>(null);
   const editOptions = useMemo<EditorOptions<undefined>>(
     () => ({
-      onAttach(editor) {
+      onAttach({ editor }) {
         editorRef.current = editor;
       },
-      onChange(file) {
+      onChange({ file }) {
         draftRef.current = file;
         saveDraft(file);
       },

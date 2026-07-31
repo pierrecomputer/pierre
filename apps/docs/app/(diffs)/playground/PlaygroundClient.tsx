@@ -4,11 +4,12 @@ import {
   type AnnotationSide,
   type DiffIndicators,
   type DiffLineAnnotation,
+  type DiffsEditor,
   type FileDiffOptions,
   isDiffAnnotationCollection,
   type SelectedLineRange,
 } from '@pierre/diffs';
-import type { Editor, EditorOptions } from '@pierre/diffs/edit';
+import type { EditorOptions } from '@pierre/diffs/edit';
 import {
   type CodeViewReactOptions,
   FileDiff,
@@ -724,14 +725,16 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
   // light-DOM `slot` attributes the comments project nowhere. A scheduled
   // commit lands frames later (blank comments, collapsed rows); a synchronous
   // one lands before this task's paint.
-  const editorRef = useRef<Editor<PlaygroundAnnotationMetadata> | null>(null);
+  const editorRef = useRef<DiffsEditor<PlaygroundAnnotationMetadata> | null>(
+    null
+  );
   const editorOptions = useMemo<EditorOptions<PlaygroundAnnotationMetadata>>(
     () => ({
-      onAttach(editor: Editor<PlaygroundAnnotationMetadata>) {
+      onAttach({ editor }) {
         editorRef.current = editor;
         editor.focus({ lineNumber: 'first-visible', preventScroll: true });
       },
-      onChange: (_file, lineAnnotations) => {
+      onChange: ({ lineAnnotations }) => {
         if (
           lineAnnotations != null &&
           isDiffAnnotationCollection(lineAnnotations)

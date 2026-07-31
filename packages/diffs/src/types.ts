@@ -1116,12 +1116,56 @@ export type EditableInstance<T extends { type: string }> = T extends {
   ? never
   : T;
 
+/** Public editor contract used by editable surfaces and attachment events. */
 export interface DiffsEditor<LAnnotation> {
-  /** @internal */
+  /** Merge options into the editor's current configuration. */
+  setOptions(
+    options: import('./editor/editor').EditorOptions<LAnnotation>
+  ): void;
+  /** Attach to an editable surface and return its detach function. */
+  edit<T extends DiffsEditableComponent<LAnnotation>>(
+    fileInstance: EditableInstance<T>
+  ): () => void;
+  /** Apply text edits to the attached document. */
+  applyEdits(edits: TextEdit[], updateHistory?: boolean): void;
+  /** Whether an edit is available to undo. */
+  readonly canUndo: boolean;
+  /** Whether an undone edit is available to redo. */
+  readonly canRedo: boolean;
+  /** Undo the latest edit, if one exists. */
+  undo(): void;
+  /** Redo the latest undone edit, if one exists. */
+  redo(): void;
+  /** Get the attached file with its current contents. */
+  getFile(): FileContents | undefined;
+  /** Get the current document text, or an empty string when detached. */
+  getText(): string;
+  /** Get the current selections and view state. */
+  getState(): EditorState;
+  /** Restore selections and view state. */
+  setState(state: EditorState): void;
+  /** Replace the current directed selections. */
+  setSelections(
+    selections: (Range & {
+      direction: 'none' | 'backward' | 'forward';
+    })[]
+  ): void;
+  /** Replace diagnostic markers; pass an empty array to clear them. */
+  setMarkers(markers: import('./editor/marker').Marker[]): void;
+  /** Focus the editor, optionally at a document position. */
+  focus(options?: import('./editor/editor').EditorFocusOptions): void;
+  /** Remove focus from the editor. */
+  blur(): void;
+  /** Release editor resources, optionally retaining recyclable session state. */
+  cleanUp(recycle?: boolean): void;
+
+  /** @internal Capture outgoing state and substitute cached text before render. */
   __prepareFile?(file: FileContents): FileContents;
+  /** @internal Pause background tokenization until the next animation frame. */
   __postponeBgTokenizeToNextFrame(): void;
   /** @internal Capture focus intent before replacing the editable view. */
   __captureFocusForDOMReplacement(): void;
+  /** @internal Synchronize the editor with the latest rendered surface. */
   __syncRenderView(
     highlighter: DiffsHighlighter,
     fileContainer: HTMLElement,
@@ -1132,10 +1176,12 @@ export interface DiffsEditor<LAnnotation> {
       | undefined,
     renderRange: RenderRange | undefined
   ): void;
-  edit<T extends DiffsEditableComponent<LAnnotation>>(
-    fileInstance: EditableInstance<T>
-  ): () => void;
-  cleanUp(recycle?: boolean): void;
+}
+
+/** The editor and editable surface provided after attachment completes. */
+export interface EditorAttachEvent<LAnnotation> {
+  editor: DiffsEditor<LAnnotation>;
+  fileInstance: DiffsEditableComponent<LAnnotation>;
 }
 
 /**
@@ -1211,6 +1257,31 @@ export interface TextEdit {
   readonly newText: string;
 }
 
+/** Different with `TextEdit`, the range has been resolved to offsets. */
+export interface ResolvedTextEdit {
+  /** The start offset of the text change. */
+  readonly start: number;
+  /** The end offset of the text change. */
+  readonly end: number;
+  /** The string to be inserted. For delete operations use an empty string. */
+  readonly text: string;
+}
+
+/** A normalized text change reported by the editor. */
+export interface EditorChange extends ResolvedTextEdit {
+  /** The replaced range in the document before the change. */
+  range: Range;
+}
+
+/** The document state and normalized edits reported after an editor change. */
+export interface EditorChangeEvent<LAnnotation> {
+  changes: EditorChange[];
+  file: FileContents;
+  lineAnnotations?:
+    | LineAnnotation<LAnnotation>[]
+    | DiffLineAnnotation<LAnnotation>[];
+}
+
 /**
  * The direction of a selection.
  * -1: backward
@@ -1248,10 +1319,5 @@ export interface DiffsTextDocument {
  * emit them through its own `onItemEditChange` option.
  */
 export interface CodeViewCreateEditorOptions<LAnnotation> {
-  onChange: (
-    file: FileContents,
-    lineAnnotations?:
-      | LineAnnotation<LAnnotation>[]
-      | DiffLineAnnotation<LAnnotation>[]
-  ) => void;
+  onChange: (event: EditorChangeEvent<LAnnotation>) => void;
 }

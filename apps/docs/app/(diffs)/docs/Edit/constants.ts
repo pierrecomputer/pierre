@@ -38,7 +38,7 @@ fileInstance.render({
 });
 
 const editor = new Editor({
-  onChange(file, lineAnnotations) {
+  onChange({ file, lineAnnotations }) {
     console.log('change', file.name, lineAnnotations);
   },
 });
@@ -84,7 +84,7 @@ const fileInstance = new VirtualizedFile(
 fileInstance.render({ file, containerWrapper: content });
 
 const editor = new Editor({
-  onChange(file, lineAnnotations) {
+  onChange({ file, lineAnnotations }) {
     console.log('change', file.name, lineAnnotations);
   },
 });
@@ -170,7 +170,7 @@ function renderFromApplicationState() {
 renderFromApplicationState();
 
 const editor = new Editor<ThreadMetadata>({
-  onChange(file, nextAnnotations) {
+  onChange({ file, lineAnnotations: nextAnnotations }) {
     // Preserve application-owned fields and replace only the edited contents.
     newFile = { ...newFile, contents: file.contents };
 
@@ -232,7 +232,7 @@ const viewer = new CodeView<ThreadMetadata>({
   createEditor(options) {
     return new Editor({
       ...options,
-      onAttach(editor) {
+      onAttach({ editor }) {
         editor.focus({ lineNumber: 'first-visible', preventScroll: true });
       },
     });
@@ -329,7 +329,7 @@ const button = document.getElementById('edit-button');
 async function edit(fileInstance: VirtualizedFile): Promise<() => void> {
   const { Editor } = await import('@pierre/diffs/edit');
   const editor = new Editor({
-    onChange(file, lineAnnotations) {
+    onChange({ file, lineAnnotations }) {
       console.log('change', file.name, lineAnnotations);
     },
   });
@@ -453,7 +453,7 @@ editor.setMarkers([]);`,
 export const EDIT_UNDO_REDO_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
     name: 'editor_undo_redo.tsx',
-    contents: `import type { FileContents } from '@pierre/diffs';
+    contents: `import type { DiffsEditor, FileContents } from '@pierre/diffs';
 import { Editor, type EditorOptions } from '@pierre/diffs/edit';
 import { EditProvider, File } from '@pierre/diffs/react';
 import { useMemo, useRef, useState } from 'react';
@@ -471,10 +471,10 @@ export function EditableFileWithHistoryToolbar() {
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
 
-  const editorRef = useRef<Editor<undefined> | null>(null);
+  const editorRef = useRef<DiffsEditor<undefined> | null>(null);
   const editorOptions = useMemo<EditorOptions<undefined>>(
     () => ({
-      onAttach(editor) {
+      onAttach({ editor }) {
         editorRef.current = editor;
       },
       onChange() {
@@ -547,7 +547,7 @@ export function EditableFile() {
   const [editable, setEditable] = useState(true);
   const editorOptions = useMemo<EditorOptions<undefined>>(
     () => ({
-      onChange(file, lineAnnotations) {
+      onChange({ file, lineAnnotations }) {
         console.log('change', file.name, lineAnnotations);
       },
     }),
@@ -637,7 +637,7 @@ export function EditableFileDiff() {
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const editorOptions = useMemo<EditorOptions<ThreadMetadata>>(
     () => ({
-      onChange(_file, nextAnnotations) {
+      onChange({ lineAnnotations: nextAnnotations }) {
         if (
           nextAnnotations == null ||
           !isDiffAnnotationCollection(nextAnnotations) ||
@@ -743,7 +743,7 @@ const initialItems: CodeViewItem<ThreadMetadata>[] = [
 const codeViewStyle = { height: '24rem', overflow: 'auto' } as const;
 
 const editorOptions: EditorOptions<ThreadMetadata> = {
-  onAttach(editor) {
+  onAttach({ editor }) {
     editor.focus({ lineNumber: 'first-visible', preventScroll: true });
   },
 };
@@ -935,12 +935,10 @@ export const EDITOR_OPTIONS_TYPE: PreloadFileOptions<undefined> = {
   file: {
     name: 'editor_options_type.ts',
     contents: `import type {
-  DiffLineAnnotation,
-  DiffsEditableComponent,
-  FileContents,
-  LineAnnotation,
+  EditorAttachEvent,
+  EditorChangeEvent,
 } from '@pierre/diffs';
-import { Editor, type IStateStorage } from '@pierre/diffs/edit';
+import type { IStateStorage } from '@pierre/diffs/edit';
 
 interface EditorOptions<LAnnotation> {
   // Max undo stack entries
@@ -982,21 +980,13 @@ interface EditorOptions<LAnnotation> {
   renderSelectionAction?: (context) => HTMLElement;
 
   // Fires after attach when the text document is ready
-  onAttach?: (
-    editor: Editor<LAnnotation>,
-    fileInstance: DiffsEditableComponent<LAnnotation>
-  ) => void;
+  onAttach?: (event: EditorAttachEvent<LAnnotation>) => void;
 
   // Fires after each edit. file.contents reflects the live document. When
   // present, lineAnnotations is the complete current collection, not a delta;
   // replace the application-owned source with it. Unaffected edits reuse the
   // existing array reference.
-  onChange?: (
-    file: FileContents,
-    lineAnnotations?:
-      | LineAnnotation<LAnnotation>[]
-      | DiffLineAnnotation<LAnnotation>[]
-  ) => void;
+  onChange?: (event: EditorChangeEvent<LAnnotation>) => void;
 
   // Fires when the editable content area gains focus (tab, click, or editor.focus()).
   onFocus?: () => void;
@@ -1033,7 +1023,7 @@ const editor = new Editor();
 // onChange and similar handlers read from the latest options on each call;
 // pass onFocus/onBlur before edit() attaches, or set them in the constructor.
 editor.setOptions({
-  onChange(file, lineAnnotations) {
+  onChange({ file, lineAnnotations }) {
     // Save file in application state.
     if (lineAnnotations != null) {
       // Replace the application-owned annotation collection.
@@ -1176,7 +1166,7 @@ export function EditableMultiFileDiff() {
   const [editable, setEditable] = useState(true);
   const editorOptions = useMemo<EditorOptions<undefined>>(
     () => ({
-      onChange(file, lineAnnotations) {
+      onChange({ file, lineAnnotations }) {
         console.log('change', file.name, lineAnnotations);
       },
     }),

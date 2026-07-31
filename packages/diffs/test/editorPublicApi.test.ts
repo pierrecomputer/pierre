@@ -10,12 +10,24 @@ import {
 } from '../src/editor/editor';
 import type { Marker } from '../src/editor/marker';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
-import type { DiffsEditableComponent, FileContents } from '../src/types';
+import type {
+  DiffsEditableComponent,
+  DiffsEditor,
+  EditorAttachEvent,
+  FileContents,
+} from '../src/types';
 import { installDom, wait } from './domHarness';
 
 afterAll(async () => {
   await disposeHighlighter();
 });
+
+const DIFFS_EDITOR_HAS_ALL_PUBLIC_MEMBERS: Exclude<
+  keyof Editor<undefined>,
+  keyof DiffsEditor<undefined>
+> extends never
+  ? true
+  : false = true;
 
 async function waitForEditableContent(
   container: HTMLElement
@@ -268,13 +280,14 @@ describe('Editor.setOptions', () => {
 });
 
 describe('Editor focus lifecycle', () => {
+  test('DiffsEditor includes every public Editor member', () => {
+    expect(DIFFS_EDITOR_HAS_ALL_PUBLIC_MEMBERS).toBe(true);
+  });
+
   test('fires onAttach when the editor attaches to a file', async () => {
     let onAttachCompleted = false;
     const onAttach = mock(
-      (
-        attachedEditor: Editor<undefined>,
-        _file: DiffsEditableComponent<undefined>
-      ) => {
+      ({ editor: attachedEditor }: EditorAttachEvent<undefined>) => {
         attachedEditor.setMarkers([]);
         onAttachCompleted = true;
       }
@@ -287,8 +300,10 @@ describe('Editor focus lifecycle', () => {
       await wait(0);
       expect(onAttach).toHaveBeenCalledTimes(1);
       expect(onAttachCompleted).toBe(true);
-      expect(onAttach.mock.calls[0]?.[0]).toBe(editor);
-      expect(onAttach.mock.calls[0]?.[1]).toBe(file);
+      expect(onAttach.mock.calls[0]?.[0]).toEqual({
+        editor,
+        fileInstance: file,
+      });
     } finally {
       cleanup();
     }

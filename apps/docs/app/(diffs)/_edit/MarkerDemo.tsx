@@ -17,7 +17,7 @@ interface MarkerDemoProps {
 export function MarkerDemo({ prerenderedFile }: MarkerDemoProps) {
   const editorOptions = useMemo<EditorOptions<undefined>>(
     () => ({
-      onAttach(editor) {
+      onAttach({ editor }) {
         editor.setMarkers(MARKER_DEMO_MARKERS);
       },
     }),

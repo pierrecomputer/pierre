@@ -1,8 +1,9 @@
+import type { ResolvedTextEdit } from '../types';
 import { resolveFindAgainShortcut } from './command';
 import { buildSearchReplacementText } from './pieceTable';
 import { isPrimaryModifier } from './platform';
 import { getEditorIconSvg, type SVGSpriteNames } from './sprite';
-import type { ResolvedTextEdit, TextDocument } from './textDocument';
+import type { TextDocument } from './textDocument';
 import { h } from './utils';
 
 export type MatchRange = [startOffset: number, endOffset: number];

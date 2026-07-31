@@ -2,11 +2,12 @@
 
 import {
   DEFAULT_THEMES,
+  type DiffsEditor,
   getFiletypeFromFileName,
   getHighlighterIfLoaded,
   preloadHighlighter,
 } from '@pierre/diffs';
-import type { Editor, EditorOptions } from '@pierre/diffs/edit';
+import type { EditorOptions } from '@pierre/diffs/edit';
 import { File } from '@pierre/diffs/react';
 import type { PreloadedFileResult } from '@pierre/diffs/ssr';
 import {
@@ -133,13 +134,13 @@ export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
   // mapping to the undo stack in that state, so we surface an off-track UI and a
   // Reset rather than letting the step count freeze at a stale value.
   const [diverged, setDiverged] = useState(false);
-  const editorRef = useRef<Editor<undefined> | null>(null);
+  const editorRef = useRef<DiffsEditor<undefined> | null>(null);
   const editorOptions = useMemo<EditorOptions<undefined>>(
     () => ({
-      onAttach(editor: Editor<undefined>) {
+      onAttach({ editor }) {
         editorRef.current = editor;
       },
-      onChange: (file) => {
+      onChange: ({ file }) => {
         const index = snapshotIndexFor(file.contents);
         if (index >= 0) {
           setApplied(index);

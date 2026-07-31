@@ -147,7 +147,7 @@ describe('virtualized editor viewport', () => {
         cleanUp() {
           recyclePosition = file.getCodeScrollLeft();
         },
-      } as DiffsEditor<undefined>);
+      } as unknown as DiffsEditor<undefined>);
       code.scrollLeft = 62;
       file.cleanUp(true);
       expect(recyclePosition).toBe(62);
@@ -220,7 +220,7 @@ describe('virtualized editor viewport', () => {
         cleanUp() {
           recyclePosition = fileDiff.getCodeScrollLeft();
         },
-      } as DiffsEditor<undefined>);
+      } as unknown as DiffsEditor<undefined>);
       code.deletions!.scrollLeft = 64;
       fileDiff.cleanUp(true);
       expect(recyclePosition).toBe(64);

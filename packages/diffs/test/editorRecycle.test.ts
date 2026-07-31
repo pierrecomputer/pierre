@@ -8,6 +8,7 @@ import type {
   DiffsEditor,
   DiffsHighlighter,
   DiffsTextDocument,
+  EditorAttachEvent,
   FileContents,
   HighlightedToken,
   RenderRange,
@@ -220,9 +221,11 @@ describe('Editor onAttach lifecycle', () => {
   test('waits for a queued host rerender to synchronize before notifying', async () => {
     const dom = installDom();
     const focusTargets: HTMLElement[] = [];
-    const onAttach = mock((attachedEditor: Editor<undefined>) => {
-      attachedEditor.focus({ preventScroll: true });
-    });
+    const onAttach = mock(
+      ({ editor: attachedEditor }: EditorAttachEvent<undefined>) => {
+        attachedEditor.focus({ preventScroll: true });
+      }
+    );
     const editor = new Editor<undefined>({ onAttach });
     const component = new TestEditableComponent(createFile(), {
       queueRerender: true,
@@ -248,12 +251,7 @@ describe('Editor onAttach lifecycle', () => {
 
   test('ignores pending notifications and late syncs after full cleanup', async () => {
     const dom = installDom();
-    const onAttach = mock(
-      (
-        _editor: Editor<undefined>,
-        _component: DiffsEditableComponent<undefined>
-      ) => {}
-    );
+    const onAttach = mock((_event: EditorAttachEvent<undefined>) => {});
     const editor = new Editor<undefined>({ onAttach });
     const component = new TestEditableComponent(createFile());
     try {
@@ -286,10 +284,7 @@ describe('Editor onAttach lifecycle', () => {
     const dom = installDom();
     let onAttachCompleted = 0;
     const onAttach = mock(
-      (
-        attachedEditor: Editor<undefined>,
-        _component: DiffsEditableComponent<undefined>
-      ) => {
+      ({ editor: attachedEditor }: EditorAttachEvent<undefined>) => {
         attachedEditor.setMarkers([]);
         onAttachCompleted++;
       }
@@ -314,7 +309,7 @@ describe('Editor onAttach lifecycle', () => {
 
       expect(onAttach).toHaveBeenCalledTimes(1);
       expect(onAttachCompleted).toBe(1);
-      expect(onAttach.mock.calls[0]?.[1]).toBe(second);
+      expect(onAttach.mock.calls[0]?.[0].fileInstance).toBe(second);
 
       editor.cleanUp(true);
       second.cleanUp();
@@ -337,10 +332,7 @@ describe('Editor onAttach lifecycle', () => {
     const dom = installDom();
     let onAttachCompleted = 0;
     const onAttach = mock(
-      (
-        attachedEditor: Editor<undefined>,
-        _component: DiffsEditableComponent<undefined>
-      ) => {
+      ({ editor: attachedEditor }: EditorAttachEvent<undefined>) => {
         attachedEditor.setMarkers([]);
         onAttachCompleted++;
       }
@@ -369,7 +361,7 @@ describe('Editor onAttach lifecycle', () => {
       await wait(0);
       expect(onAttach).toHaveBeenCalledTimes(1);
       expect(onAttachCompleted).toBe(1);
-      expect(onAttach.mock.calls[0]?.[1]).toBe(second);
+      expect(onAttach.mock.calls[0]?.[0].fileInstance).toBe(second);
     } finally {
       editor.cleanUp();
       first.cleanUp();
@@ -380,12 +372,7 @@ describe('Editor onAttach lifecycle', () => {
 
   test('notifies once for each session separated by full cleanup', async () => {
     const dom = installDom();
-    const onAttach = mock(
-      (
-        _editor: Editor<undefined>,
-        _component: DiffsEditableComponent<undefined>
-      ) => {}
-    );
+    const onAttach = mock((_event: EditorAttachEvent<undefined>) => {});
     const editor = new Editor<undefined>({ onAttach });
     const first = new TestEditableComponent(createFile());
     let second: TestEditableComponent | undefined;
@@ -401,7 +388,7 @@ describe('Editor onAttach lifecycle', () => {
       await wait(0);
 
       expect(onAttach).toHaveBeenCalledTimes(2);
-      expect(onAttach.mock.calls[1]?.[1]).toBe(second);
+      expect(onAttach.mock.calls[1]?.[0].fileInstance).toBe(second);
     } finally {
       editor.cleanUp();
       first.cleanUp();
@@ -444,9 +431,11 @@ describe('Editor recycle cleanUp', () => {
 
   test('an empty virtualized window preserves selections without restoring focus', async () => {
     const dom = installDom();
-    const onAttach = mock((attachedEditor: Editor<undefined>) => {
-      attachedEditor.focus({ lineNumber: 2, preventScroll: true });
-    });
+    const onAttach = mock(
+      ({ editor: attachedEditor }: EditorAttachEvent<undefined>) => {
+        attachedEditor.focus({ lineNumber: 2, preventScroll: true });
+      }
+    );
     const editor = new Editor<undefined>({ onAttach });
     const component = new TestEditableComponent(createFile());
     try {
@@ -499,15 +488,17 @@ describe('Editor recycle cleanUp', () => {
   test('a blur during the deferred attach-focus frame cancels the stale focus', async () => {
     const dom = installDom();
     const restoredFocus = mock((_options?: FocusOptions) => {});
-    const onAttach = mock((attachedEditor: Editor<undefined>) => {
-      // The positional focus defers its real focus() call to a rAF. A blur
-      // plus a host rerender landing in that gap must cancel the stale
-      // frame instead of pulling focus into the replaced content.
-      attachedEditor.focus({ lineNumber: 2, preventScroll: true });
-      component.contentElement.dispatchEvent(new Event('blur'));
-      component.rerender();
-      component.contentElement.focus = restoredFocus;
-    });
+    const onAttach = mock(
+      ({ editor: attachedEditor }: EditorAttachEvent<undefined>) => {
+        // The positional focus defers its real focus() call to a rAF. A blur
+        // plus a host rerender landing in that gap must cancel the stale
+        // frame instead of pulling focus into the replaced content.
+        attachedEditor.focus({ lineNumber: 2, preventScroll: true });
+        component.contentElement.dispatchEvent(new Event('blur'));
+        component.rerender();
+        component.contentElement.focus = restoredFocus;
+      }
+    );
     const editor = new Editor<undefined>({ onAttach });
     const component = new TestEditableComponent(createFile());
     try {
@@ -580,12 +571,7 @@ describe('Editor recycle cleanUp', () => {
   test('recycle re-attach to a different file rebuilds without re-notifying', async () => {
     const dom = installDom();
     try {
-      const onAttach = mock(
-        (
-          _editor: Editor<undefined>,
-          _component: DiffsEditableComponent<undefined>
-        ) => {}
-      );
+      const onAttach = mock((_event: EditorAttachEvent<undefined>) => {});
       const editor = new Editor<undefined>({ onAttach });
       const first = new TestEditableComponent(createFile());
       editor.edit(first);

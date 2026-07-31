@@ -52,7 +52,7 @@ describe('VirtualizedFile persisted layout', () => {
       contents: 'one\ntwo\nthree\nfour',
     };
     let prepareCalls = 0;
-    const editor: DiffsEditor<undefined> = {
+    const editor = {
       __prepareFile() {
         prepareCalls++;
         return cachedFile;
@@ -64,7 +64,7 @@ describe('VirtualizedFile persisted layout', () => {
         return () => {};
       },
       cleanUp() {},
-    };
+    } as unknown as DiffsEditor<undefined>;
     const instance = new VirtualizedFile({}, virtualizer, metrics);
     const detach = instance.attachEditor(editor);
 
