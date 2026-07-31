@@ -305,17 +305,17 @@ export const DEFAULT_EDITOR_KEYMAP: EditorKeymap = [
     },
   },
   {
-    platform: 'windows',
-    bindings: {
-      'ctrl+y': 'redo',
-    },
-  },
-  {
     platform: 'linux',
     bindings: {
       'ctrl+y': 'redo',
       'ctrl+alt+p': 'moveLineUp',
       'ctrl+alt+n': 'moveLineDown',
+    },
+  },
+  {
+    platform: 'windows',
+    bindings: {
+      'ctrl+y': 'redo',
     },
   },
 ];

@@ -39,8 +39,8 @@ interface ShortcutGroup {
 
 const PLATFORM_LABELS: Record<EditorPlatform, string> = {
   mac: 'macOS',
-  windows: 'Windows',
   linux: 'Linux',
+  windows: 'Windows',
 };
 
 const MODIFIER_LABELS: Record<KeyboardModifier, string> = {
