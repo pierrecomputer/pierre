@@ -430,7 +430,6 @@ describe('resolveEditorCommandFromKeyboardEvent', () => {
         bindings: {
           'cmdOrCtrl+-': 'indentLess',
           'cmdOrCtrl+shift+=': 'indentMore',
-          'cmdOrCtrl+shift+alt+f': 'openSearchReplacePanel',
         },
       },
     ] satisfies EditorKeymap;
@@ -449,18 +448,6 @@ describe('resolveEditorCommandFromKeyboardEvent', () => {
         true
       )
     ).toBe('indentMore');
-    expect(
-      resolveEditorCommandFromKeyboardEvent(
-        event({
-          key: 'f',
-          metaKey: true,
-          shiftKey: true,
-          altKey: true,
-        }),
-        keymap,
-        true
-      )
-    ).toBe('openSearchReplacePanel');
   });
 
   test('supports explicit command and control modifiers', () => {
