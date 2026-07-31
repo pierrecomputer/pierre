@@ -4650,7 +4650,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     const popoverHeight = this.#selectionAction.height;
     const candidateGeometry = (
       candidate: typeof preferred
-    ): PopoverPlacementBounds & { left: number; anchorTop: number } => {
+    ): PopoverPlacementBounds & {
+      left: number;
+      anchorTop: number;
+      rowTop: number;
+    } => {
       const [left, candidateWrapLine] = this.#getCharX(
         candidate.anchor.line,
         candidate.anchor.character
@@ -4659,20 +4663,21 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         this.#getLineY(candidate.anchor.line) + candidateWrapLine * lineHeight;
       const anchorTop = candidate.placeAbove ? rowTop : rowTop + lineHeight;
       const top = candidate.placeAbove ? anchorTop - popoverHeight : anchorTop;
-      return { top, bottom: top + popoverHeight, left, anchorTop };
+      return { top, bottom: top + popoverHeight, left, anchorTop, rowTop };
     };
     const preferredGeometry = candidateGeometry(preferred);
-    const fallbackGeometry = candidateGeometry(fallback);
 
     const lineCount = textDocument.lineCount;
     const atDocumentEdge = isBackward
       ? head.line < POPOVER_BOUNDARY_LINES
       : head.line >= lineCount - POPOVER_BOUNDARY_LINES;
-    const canUseFallback = this.#isLineVisible(fallback.anchor.line);
+    const fallbackGeometry = this.#isLineVisible(fallback.anchor.line)
+      ? candidateGeometry(fallback)
+      : undefined;
     const popoverManager = this.#getPopoverManager();
     const viewport = popoverManager.getPlacementBounds();
     const useFallback =
-      canUseFallback &&
+      fallbackGeometry !== undefined &&
       popoverManager.choosePlacement({
         preferred: preferredGeometry,
         fallback: fallbackGeometry,
@@ -4681,22 +4686,40 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         atDocumentEdge,
         placementKey: SELECTION_ACTION_POPOVER_PLACEMENT_KEY,
       }) === 'fallback';
-    if (!canUseFallback) {
+    if (fallbackGeometry === undefined) {
       popoverManager.setPlacement(
         'preferred',
         SELECTION_ACTION_POPOVER_PLACEMENT_KEY
       );
     }
     const { placeAbove } = useFallback ? fallback : preferred;
-    const { left, anchorTop } = useFallback
-      ? fallbackGeometry
-      : preferredGeometry;
+    const { left, anchorTop } =
+      useFallback && fallbackGeometry !== undefined
+        ? fallbackGeometry
+        : preferredGeometry;
+    // An endpoint outside the virtualized window extends past the viewport
+    // rather than making a selection that crosses it look offscreen.
+    const selectionTop = isBackward
+      ? preferredGeometry.rowTop
+      : (fallbackGeometry?.rowTop ?? -Infinity);
+    const selectionBottom =
+      (isBackward
+        ? (fallbackGeometry?.rowTop ?? Infinity)
+        : preferredGeometry.rowTop) +
+      (primarySelection.end.line > primarySelection.start.line &&
+      primarySelection.end.character === 0
+        ? 0
+        : lineHeight);
+    const isSelectionVisible =
+      viewport === undefined ||
+      (selectionBottom > viewport.top && selectionTop < viewport.bottom);
 
     this.#selectionAction.reposition(
       left,
       anchorTop,
       this.#getGutterWidth(),
       placeAbove,
+      isSelectionVisible,
       viewport
     );
   }

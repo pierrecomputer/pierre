@@ -57,6 +57,27 @@ test.describe('selection action popover', () => {
     expect(await popoverWithinHost(page)).toBe(true);
   });
 
+  test('hides while the selection is offscreen', async ({ page }) => {
+    await openFixture(page);
+    await selectWord(page);
+
+    const popover = page.locator(POPOVER);
+    await expect(popover).toBeVisible();
+    await page.evaluate(() => {
+      const selection = document
+        .querySelector('diffs-container')
+        ?.shadowRoot?.querySelector('[data-selection-range]');
+      if (selection == null) {
+        throw new Error('selection range was not rendered');
+      }
+      window.scrollBy(0, selection.getBoundingClientRect().bottom + 1);
+    });
+    await expect(popover).toHaveCSS('visibility', 'hidden');
+
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await expect(popover).toBeVisible();
+  });
+
   test('clicking the action receives the selected text', async ({ page }) => {
     await openFixture(page);
     await selectWord(page);
