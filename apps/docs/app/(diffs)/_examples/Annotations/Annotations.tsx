@@ -182,7 +182,6 @@ function CommentForm({
         <div
           className="max-w-[95%] sm:max-w-[70%]"
           style={{
-            whiteSpace: 'normal',
             margin: 20,
             fontFamily: 'Geist',
           }}
@@ -230,7 +229,6 @@ function Thread() {
     <div
       className="max-w-[95%] sm:max-w-[70%]"
       style={{
-        whiteSpace: 'normal',
         margin: 20,
         fontFamily: 'Geist',
       }}

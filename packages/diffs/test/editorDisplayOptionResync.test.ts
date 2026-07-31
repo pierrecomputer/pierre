@@ -1,12 +1,13 @@
-import { afterAll, describe, expect, test } from 'bun:test';
+import { afterAll, describe, expect, spyOn, test } from 'bun:test';
 
+import { File } from '../src/components/File';
 import { FileDiff } from '../src/components/FileDiff';
 import { DEFAULT_THEMES } from '../src/constants';
 import { Editor } from '../src/editor/editor';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
 import type { DiffsHighlighter, FileContents } from '../src/types';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
-import { installDom, wait } from './domHarness';
+import { installDom, wait, waitFor } from './domHarness';
 
 afterAll(async () => {
   await disposeHighlighter();
@@ -96,19 +97,21 @@ async function createFixture(
   });
   editor.edit(fileDiff);
 
-  for (let attempt = 0; attempt < 40; attempt++) {
+  // Deadline-based: the first fixture in a file pays the shared highlighter's
+  // cold start, which can outlast any fixed number of macrotask turns on a
+  // slow runner. The editor assigns the contentEditable property, which jsdom
+  // does not reflect to the attribute, so poll the property.
+  await waitFor(() => {
     const content = findAdditionContent(container);
-    if (content != null && content.getAttribute('contenteditable') === 'true') {
-      break;
-    }
-    await wait(0);
-  }
+    return content?.contentEditable === 'true';
+  });
 
   return {
     container,
     editor,
     fileDiff,
     async toggleDisplayOption() {
+      const previousContent = findAdditionContent(container);
       fileDiff.setOptions({
         ...fileDiff.options,
         disableLineNumbers: !(fileDiff.options.disableLineNumbers ?? false),
@@ -119,8 +122,18 @@ async function createFixture(
         fileContainer: container,
         forceRender: true,
       });
-      // Let syncRenderViewToEditor's highlighter promise resolve.
-      await wait(10);
+      // The forced re-render replaces the additions column and re-syncs the
+      // editor through an async highlighter pass; wait for the replacement
+      // instead of a fixed sleep.
+      await waitFor(() => {
+        const content = findAdditionContent(container);
+        return (
+          content != null &&
+          content !== previousContent &&
+          content.contentEditable === 'true'
+        );
+      });
+      await wait(0);
     },
     async cleanup() {
       await wait(10);
@@ -147,6 +160,50 @@ function typeAt(
 }
 
 describe('diff editor: display-option toggle mid-edit', () => {
+  test('keeps focus when replacement does not emit blur', async () => {
+    const fixture = await createFixture('alpha\nbravo\n', 'alpha\nCHANGED\n');
+    const { container, editor } = fixture;
+    const focusTargets: HTMLElement[] = [];
+    const focusSpy = spyOn(HTMLElement.prototype, 'focus').mockImplementation(
+      function (this: HTMLElement) {
+        focusTargets.push(this);
+        this.dispatchEvent(new Event('focus'));
+      }
+    );
+
+    try {
+      editor.focus({ lineNumber: 1, preventScroll: true });
+      // Focus can be deferred while the editor settles its first highlight
+      // pass, and a deferred background pass may replace the additions column
+      // once more before it lands — wait for focus to land on the current
+      // column, then capture that element as the pre-toggle baseline.
+      await waitFor(() => {
+        const current = findAdditionContent(container);
+        return current != null && focusTargets.at(-1) === current;
+      });
+      const content = findAdditionContent(container);
+      if (content == null) {
+        throw new Error('missing editable additions content');
+      }
+      expect(focusTargets.at(-1) === content).toBe(true);
+
+      // Firefox and WebKit can remove the focused shadow subtree without a
+      // blur event, so replacement detection must preserve the focus intent.
+      await fixture.toggleDisplayOption();
+
+      const replacement = findAdditionContent(container);
+      expect(replacement == null).toBe(false);
+      expect(replacement === content).toBe(false);
+      // Focus restoration can trail the replacement by a deferred focus
+      // retry; wait for it to settle before asserting the final target.
+      await waitFor(() => focusTargets.at(-1) === replacement);
+      expect(focusTargets.at(-1) === replacement).toBe(true);
+    } finally {
+      focusSpy.mockRestore();
+      await fixture.cleanup();
+    }
+  });
+
   test('keeps the edited line text visible when a display option is toggled', async () => {
     // old/new differ so the additions column (the editor's target) renders; the
     // edit targets line 0 ("alpha"), an unchanged context line — the "rename a
@@ -343,6 +400,82 @@ async function waitForEditable(container: HTMLElement): Promise<void> {
     await wait(0);
   }
 }
+
+describe('file editor: theme toggle mid-edit', () => {
+  // The plain-file twin of "keeps focus when replacement does not emit blur":
+  // File.applyFullRender rewrites the code columns' innerHTML, which destroys
+  // the DOM focus state without a blur event. The render must capture focus
+  // intent before the rewrite so __syncRenderView restores it — the same
+  // capture FileDiff.applyHunksToDOM performs. Focus arrives here without a
+  // caret (tab/pointer focus), so the selection-based fallback cannot restore
+  // it and only the captured request can.
+  test('restores focus when a theme toggle forces a full render', async () => {
+    const dom = installDom();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const file = new File<undefined>({
+      disableFileHeader: true,
+      theme: DEFAULT_THEMES,
+      themeType: 'light',
+    });
+    const fileContents: FileContents = {
+      name: 'edit.ts',
+      contents: 'alpha\nbravo\n',
+    };
+    const editor = new Editor<undefined>();
+    file.render({
+      file: fileContents,
+      fileContainer: container,
+      forceRender: true,
+    });
+    editor.edit(file);
+    await waitFor(() => {
+      const content = findAdditionContent(container);
+      return content?.contentEditable === 'true';
+    });
+
+    const focusTargets: HTMLElement[] = [];
+    const focusSpy = spyOn(HTMLElement.prototype, 'focus').mockImplementation(
+      function (this: HTMLElement) {
+        focusTargets.push(this);
+        this.dispatchEvent(new Event('focus'));
+      }
+    );
+
+    try {
+      const content = findAdditionContent(container);
+      if (content == null) {
+        throw new Error('missing editable file content');
+      }
+      content.focus();
+      await wait(10);
+      expect(focusTargets.at(-1) === content).toBe(true);
+      const focusCallsBeforeToggle = focusTargets.length;
+
+      file.setOptions({ ...file.options, themeType: 'dark' });
+      file.render({
+        file: fileContents,
+        fileContainer: container,
+        forceRender: true,
+      });
+      // The theme swap re-highlights asynchronously before the full render
+      // applies; wait for the editor to re-claim focus rather than for a
+      // fixed number of turns.
+      await waitFor(() => focusTargets.length > focusCallsBeforeToggle);
+
+      expect(focusTargets.length).toBeGreaterThan(focusCallsBeforeToggle);
+      const replacement = findAdditionContent(container);
+      expect(replacement == null).toBe(false);
+      expect(focusTargets.at(-1) === replacement).toBe(true);
+    } finally {
+      focusSpy.mockRestore();
+      await wait(10);
+      editor.cleanUp();
+      file.cleanUp();
+      dom.cleanup();
+    }
+  });
+});
 
 describe('diff editor: detach then re-attach', () => {
   // Mirrors the demo's Edit-mode toggle and surface switch: turning editing off

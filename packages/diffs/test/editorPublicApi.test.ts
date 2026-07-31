@@ -1,8 +1,13 @@
 import { afterAll, describe, expect, mock, spyOn, test } from 'bun:test';
 
 import { File } from '../src/components/File';
+import { FileDiff } from '../src/components/FileDiff';
 import { DEFAULT_THEMES } from '../src/constants';
-import { Editor, type EditorOptions } from '../src/editor/editor';
+import {
+  Editor,
+  type EditorFocusOptions,
+  type EditorOptions,
+} from '../src/editor/editor';
 import type { Marker } from '../src/editor/marker';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
 import type { DiffsEditableComponent, FileContents } from '../src/types';
@@ -16,12 +21,15 @@ async function waitForEditableContent(
   container: HTMLElement
 ): Promise<HTMLElement> {
   for (let attempt = 0; attempt < 20; attempt++) {
-    const content = container.shadowRoot?.querySelector('[data-content]');
-    if (
-      content instanceof HTMLElement &&
-      (content.contentEditable === 'true' ||
-        content.getAttribute('contenteditable') === 'true')
-    ) {
+    const content = Array.from(
+      container.shadowRoot?.querySelectorAll<HTMLElement>('[data-content]') ??
+        []
+    ).find(
+      (element) =>
+        element.contentEditable === 'true' ||
+        element.getAttribute('contenteditable') === 'true'
+    );
+    if (content != null) {
       return content;
     }
     await wait(0);
@@ -35,6 +43,14 @@ interface EditorFixture {
   content: HTMLElement;
   editor: Editor<undefined>;
   file: File<undefined>;
+}
+
+interface DiffEditorFixture {
+  cleanup(): void;
+  container: HTMLElement;
+  content: HTMLElement;
+  editor: Editor<undefined>;
+  fileDiff: FileDiff<undefined>;
 }
 
 // Mounts a real File-backed editor, mirroring the harness the applyEdits and
@@ -69,6 +85,75 @@ async function createEditorFixture(
     editor,
     file,
   };
+}
+
+async function createDiffEditorFixture(
+  diffStyle: 'split' | 'unified'
+): Promise<DiffEditorFixture> {
+  const dom = installDom();
+  const container = document.createElement('div');
+  document.body.appendChild(container);
+
+  const fileDiff = new FileDiff<undefined>({
+    disableFileHeader: true,
+    diffStyle,
+    theme: DEFAULT_THEMES,
+  });
+  const editor = new Editor<undefined>();
+  fileDiff.render({
+    oldFile: { name: 'edits.ts', contents: 'alpha\nold\ncharlie' },
+    newFile: { name: 'edits.ts', contents: 'alpha\nnew\ncharlie' },
+    fileContainer: container,
+    forceRender: true,
+  });
+  editor.edit(fileDiff);
+
+  const content = await waitForEditableContent(container);
+  return {
+    cleanup() {
+      editor.cleanUp();
+      fileDiff.cleanUp();
+      dom.cleanup();
+    },
+    container,
+    content,
+    editor,
+    fileDiff,
+  };
+}
+
+function setEditorViewport(
+  file: DiffsEditableComponent<undefined>,
+  viewport: HTMLElement | Document
+): void {
+  file.getEditorViewport = () => viewport;
+}
+
+function setRect(element: Element, top: number, bottom: number): void {
+  Object.defineProperty(element, 'getBoundingClientRect', {
+    configurable: true,
+    value: () =>
+      ({
+        bottom,
+        height: bottom - top,
+        left: 0,
+        right: 100,
+        top,
+        width: 100,
+        x: 0,
+        y: top,
+        toJSON() {
+          return {};
+        },
+      }) as DOMRect,
+  });
+}
+
+function getLineRows(content: HTMLElement): HTMLElement[] {
+  return Array.from(content.children).filter(
+    (child): child is HTMLElement =>
+      child instanceof HTMLElement && child.dataset.line != null
+  );
 }
 
 function insertText(
@@ -271,6 +356,306 @@ describe('Editor focus lifecycle', () => {
       expect(focusSpy).not.toHaveBeenCalled();
       await wait(0);
       expect(focusSpy).toHaveBeenLastCalledWith({ preventScroll: false });
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('focus() targets and normalizes a one-based document line', async () => {
+    const { cleanup, editor } = await createEditorFixture(
+      'alpha\nbravo\ncharlie'
+    );
+    try {
+      const firstTarget: EditorFocusOptions = {
+        lineNumber: 2,
+        preventScroll: true,
+      };
+      editor.focus(firstTarget);
+      expect(editor.getState().selections).toEqual([
+        {
+          start: { line: 1, character: 0 },
+          end: { line: 1, character: 0 },
+          direction: 0,
+        },
+      ]);
+
+      editor.focus({ lineNumber: 99, character: 99, preventScroll: true });
+      expect(editor.getState().selections).toEqual([
+        {
+          start: { line: 2, character: 7 },
+          end: { line: 2, character: 7 },
+          direction: 0,
+        },
+      ]);
+
+      editor.focus({
+        lineNumber: Number.NaN,
+        character: Number.NaN,
+        preventScroll: true,
+      });
+      expect(editor.getState().selections).toEqual([
+        {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 0 },
+          direction: 0,
+        },
+      ]);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('targeted focus honors preventScroll', async () => {
+    const { cleanup, editor } = await createEditorFixture('alpha\nbravo');
+    const scrollIntoView = spyOn(HTMLElement.prototype, 'scrollIntoView');
+    try {
+      editor.focus({ lineNumber: 2, preventScroll: true });
+      expect(scrollIntoView).not.toHaveBeenCalled();
+
+      editor.focus({ lineNumber: 1 });
+      expect(scrollIntoView).toHaveBeenCalledTimes(1);
+    } finally {
+      scrollIntoView.mockRestore();
+      cleanup();
+    }
+  });
+
+  test('targeted focus before attachment is a no-op', () => {
+    const editor = new Editor<undefined>();
+    try {
+      editor.focus({ lineNumber: 2 });
+      expect(editor.getState().selections).toBeUndefined();
+    } finally {
+      editor.cleanUp();
+    }
+  });
+
+  test('first-visible focus targets the first row whose top is in an element viewport', async () => {
+    const { cleanup, content, editor, file } = await createEditorFixture(
+      'alpha\nbravo\ncharlie'
+    );
+    try {
+      const viewport = document.createElement('div');
+      setEditorViewport(file, viewport);
+      setRect(viewport, 10, 50);
+
+      const rows = getLineRows(content);
+      setRect(rows[0], 0, 20);
+      setRect(rows[1], 40, 60);
+      setRect(rows[2], 60, 80);
+
+      editor.focus({
+        lineNumber: 'first-visible',
+        character: 4,
+        preventScroll: true,
+      });
+      expect(editor.getState().selections).toEqual([
+        {
+          start: { line: 1, character: 0 },
+          end: { line: 1, character: 0 },
+          direction: 0,
+        },
+      ]);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('first-visible focus falls back to document viewport bounds', async () => {
+    const { cleanup, content, editor } = await createEditorFixture(
+      'alpha\nbravo\ncharlie'
+    );
+    try {
+      Object.defineProperty(window, 'innerHeight', {
+        configurable: true,
+        value: 50,
+      });
+
+      const rows = getLineRows(content);
+      setRect(rows[0], -1, 19);
+      setRect(rows[1], 19, 39);
+      setRect(rows[2], 39, 59);
+
+      editor.focus({ lineNumber: 'first-visible', preventScroll: true });
+      expect(editor.getState().selections?.[0]?.start).toEqual({
+        line: 1,
+        character: 0,
+      });
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('first-visible focus falls back to the nearest scrollable ancestor', async () => {
+    const { cleanup, content, editor } = await createEditorFixture(
+      'alpha\nbravo\ncharlie'
+    );
+    try {
+      const fileContainer = (content.getRootNode() as ShadowRoot)
+        .host as HTMLElement;
+      const viewport = document.createElement('div');
+      viewport.style.overflowY = 'auto';
+      document.body.appendChild(viewport);
+      viewport.appendChild(fileContainer);
+      setRect(viewport, 10, 50);
+
+      const rows = getLineRows(content);
+      setRect(rows[0], 0, 20);
+      setRect(rows[1], 20, 40);
+      setRect(rows[2], 40, 60);
+
+      editor.focus({ lineNumber: 'first-visible', preventScroll: true });
+      expect(editor.getState().selections?.[0]?.start).toEqual({
+        line: 1,
+        character: 0,
+      });
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('first-visible focus applies a top offset after sticky headers', async () => {
+    const { cleanup, content, editor, file } = await createEditorFixture(
+      'alpha\nbravo\ncharlie'
+    );
+    try {
+      const viewport = document.createElement('div');
+      setEditorViewport(file, viewport);
+      setRect(viewport, 0, 60);
+
+      const shadowRoot = content.getRootNode() as ShadowRoot;
+      const header = document.createElement('div');
+      header.dataset.diffsHeader = 'file';
+      header.dataset.sticky = '';
+      setRect(header, 0, 20);
+      shadowRoot.prepend(header);
+
+      for (const lineType of [
+        'annotation',
+        'separator',
+        'buffer',
+        'change-deletion',
+      ]) {
+        const row = document.createElement('div');
+        row.dataset.line = '99';
+        row.dataset.lineType = lineType;
+        setRect(row, 35, 40);
+        content.prepend(row);
+      }
+
+      const rows = getLineRows(content).filter(
+        (row) => row.dataset.line !== '99'
+      );
+      setRect(rows[0], 10, 20);
+      setRect(rows[1], 25, 35);
+      setRect(rows[2], 35, 45);
+
+      editor.focus({
+        lineNumber: 'first-visible',
+        preventScroll: true,
+        offset: 10,
+      });
+      expect(editor.getState().selections?.[0]?.start.line).toBe(2);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('first-visible focus preserves focus and selection without a visible row top', async () => {
+    const { cleanup, content, editor, file } = await createEditorFixture(
+      'alpha\nbravo\ncharlie'
+    );
+    try {
+      editor.focus({ lineNumber: 2, preventScroll: true });
+      await wait(0);
+      const selections = editor.getState().selections;
+      const button = document.createElement('button');
+      document.body.appendChild(button);
+      button.focus();
+
+      editor.focus({ lineNumber: 'first-visible', preventScroll: true });
+      expect(editor.getState().selections).toEqual(selections);
+      expect(document.activeElement).toBe(button);
+
+      const viewport = document.createElement('div');
+      setEditorViewport(file, viewport);
+      setRect(viewport, 0, 10);
+      const rows = getLineRows(content);
+      setRect(rows[0], -5, 5);
+      setRect(rows[1], 10, 20);
+      setRect(rows[2], 15, 25);
+
+      editor.focus({ lineNumber: 'first-visible', preventScroll: true });
+      expect(editor.getState().selections).toEqual(selections);
+      expect(document.activeElement).toBe(button);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('first-visible focus skips unified deletion rows', async () => {
+    const { cleanup, content, editor, fileDiff } =
+      await createDiffEditorFixture('unified');
+    try {
+      const viewport = document.createElement('div');
+      setEditorViewport(fileDiff, viewport);
+      setRect(viewport, 0, 60);
+
+      const rows = getLineRows(content);
+      for (const row of rows) {
+        setRect(row, 100, 120);
+      }
+      const deletion = rows.find(
+        (row) => row.dataset.lineType === 'change-deletion'
+      );
+      const addition = rows.find(
+        (row) => row.dataset.lineType === 'change-addition'
+      );
+      const trailingContext = rows.find(
+        (row) => row.dataset.line === '3' && row.dataset.lineType === 'context'
+      );
+      expect(deletion).toBeDefined();
+      expect(addition).toBeDefined();
+      expect(trailingContext).toBeDefined();
+      setRect(deletion!, 10, 30);
+      setRect(addition!, -5, 15);
+      setRect(trailingContext!, 30, 50);
+
+      editor.focus({ lineNumber: 'first-visible', preventScroll: true });
+      expect(editor.getState().selections?.[0]?.start.line).toBe(2);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('first-visible focus scans the additions column in split diffs', async () => {
+    const { cleanup, container, content, editor, fileDiff } =
+      await createDiffEditorFixture('split');
+    try {
+      const viewport = document.createElement('div');
+      setEditorViewport(fileDiff, viewport);
+      setRect(viewport, 0, 60);
+
+      const deletionContent = container.shadowRoot?.querySelector<HTMLElement>(
+        '[data-code][data-deletions] [data-content]'
+      );
+      expect(deletionContent).toBeDefined();
+      for (const row of getLineRows(deletionContent!)) {
+        setRect(row, 10, 30);
+      }
+
+      const additionRows = getLineRows(content);
+      for (const row of additionRows) {
+        setRect(row, 100, 120);
+      }
+      const target = additionRows.find(
+        (row) => row.dataset.line === '3' && row.dataset.lineType === 'context'
+      );
+      expect(target).toBeDefined();
+      setRect(target!, 30, 50);
+
+      editor.focus({ lineNumber: 'first-visible', preventScroll: true });
+      expect(editor.getState().selections?.[0]?.start.line).toBe(2);
     } finally {
       cleanup();
     }

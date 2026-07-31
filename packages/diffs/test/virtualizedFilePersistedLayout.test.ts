@@ -35,6 +35,7 @@ const virtualizer = {
     return false;
   },
   markDOMDirty() {},
+  requestHeightReconcile() {},
 } as never;
 
 const codeView = { type: 'advanced' } as never;
@@ -57,6 +58,7 @@ describe('VirtualizedFile persisted layout', () => {
         prepareCalls++;
         return cachedFile;
       },
+      __captureFocusForDOMReplacement() {},
       __postponeBgTokenizeToNextFrame() {},
       __syncRenderView() {},
       edit() {

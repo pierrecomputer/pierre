@@ -5,24 +5,31 @@ import {
   type DiffLineAnnotation,
   type FileDiffMetadata,
   type FileDiffOptions,
+  type FileOptions,
   isDiffAnnotationCollection,
   type SelectedLineRange,
 } from '@pierre/diffs';
-import type { EditorOptions } from '@pierre/diffs/editor';
-import { FileDiff, useStableCallback, Virtualizer } from '@pierre/diffs/react';
+import type { EditorOptions } from '@pierre/diffs/edit';
+import {
+  File,
+  FileDiff,
+  useStableCallback,
+  Virtualizer,
+} from '@pierre/diffs/react';
 import { IconCheckboxFill, IconSquircleLg } from '@pierre/icons';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { flushSync } from 'react-dom';
 
 import type { PlaygroundAnnotationMetadata } from './constants';
-import { ITEM_UNSAFE_CSS } from './constants';
+import { ITEM_UNSAFE_CSS, LONG_README_FILE } from './constants';
+import type { SharedRenderOptions } from './PlaygroundClient';
 import { CommentForm, CommentThread } from './PlaygroundComments';
 
 const SCROLL_REGION_STYLES = { height: '70vh', overflow: 'auto' } as const;
 
 interface PlaygroundVirtualizerElementViewProps {
   diffs: FileDiffMetadata[];
-  options: FileDiffOptions<PlaygroundAnnotationMetadata>;
+  options: SharedRenderOptions;
   enableLineSelection: boolean;
   enableGutterComments: boolean;
   showAnnotations: boolean;
@@ -33,7 +40,8 @@ interface PlaygroundVirtualizerElementViewProps {
 // fixed-height scroll region, in contrast to the window-scroll variant that
 // drives the vanilla Virtualizer against `document`. Any React <FileDiff>
 // nested under <Virtualizer> auto-virtualizes through context; no imperative
-// wiring is needed.
+// wiring is needed. The long README plain file leads the list (as in
+// CodeView), rendered through <File>, which virtualizes the same way.
 export function PlaygroundVirtualizerElementView({
   diffs,
   options,
@@ -46,6 +54,7 @@ export function PlaygroundVirtualizerElementView({
       className="border-border rounded-lg border"
       style={SCROLL_REGION_STYLES}
     >
+      <ElementVirtualizerFile options={options} />
       {diffs.map((fileDiff) => (
         <ElementVirtualizerDiff
           key={fileDiff.name}
@@ -57,6 +66,59 @@ export function PlaygroundVirtualizerElementView({
         />
       ))}
     </Virtualizer>
+  );
+}
+
+const FILE_EDITOR_OPTIONS: EditorOptions<undefined> = {
+  onAttach(editor) {
+    editor.focus({ lineNumber: 'first-visible', preventScroll: true });
+  },
+};
+
+// The long README plain-file surface leading the list. Carries the same
+// header Edit toggle as the diffs (the app-level EditProvider creates its
+// editor); no comment wiring, since the demo file has no annotations.
+function ElementVirtualizerFile({ options }: { options: SharedRenderOptions }) {
+  const [editing, setEditing] = useState(false);
+
+  const fileOptions = useMemo<FileOptions<undefined>>(
+    () => ({
+      ...options,
+      stickyHeader: true,
+      unsafeCSS: ITEM_UNSAFE_CSS,
+    }),
+    [options]
+  );
+
+  // Must NOT be a stable callback — see ElementVirtualizerDiff's
+  // renderHeaderMetadata for why a per-`editing` useCallback is required.
+  const renderHeaderMetadata = useCallback(() => {
+    return (
+      <button
+        type="button"
+        onClick={() => setEditing((current) => !current)}
+        aria-pressed={editing}
+        className="playground-edit-toggle"
+      >
+        <IconCheckboxFill
+          size={12}
+          className="playground-edit-toggle-icon-on"
+        />
+        <IconSquircleLg size={12} className="playground-edit-toggle-icon-off" />
+        <span className="playground-edit-toggle-label-on">Editing</span>
+        <span className="playground-edit-toggle-label-off">Edit</span>
+      </button>
+    );
+  }, [editing]);
+
+  return (
+    <File
+      file={LONG_README_FILE}
+      edit={editing}
+      options={fileOptions}
+      editorOptions={FILE_EDITOR_OPTIONS}
+      renderHeaderMetadata={renderHeaderMetadata}
+    />
   );
 }
 
@@ -72,7 +134,7 @@ const EMPTY_ANNOTATIONS: DiffLineAnnotation<PlaygroundAnnotationMetadata>[] =
   [];
 
 // One diff in the element-scroll list. Each surface is its own state island
-// with an edit toggle, edit options, and annotations. The app-level
+// with an edit toggle, editor options, and annotations. The app-level
 // EditProvider creates an independent editor when that surface enters edit
 // mode.
 function ElementVirtualizerDiff({
@@ -96,8 +158,11 @@ function ElementVirtualizerDiff({
   // editor renamed the shadow-DOM annotation slots during this same
   // keystroke, and a scheduled commit would leave the comments projected
   // nowhere for the frames in between.
-  const editOptions = useMemo<EditorOptions<PlaygroundAnnotationMetadata>>(
+  const editorOptions = useMemo<EditorOptions<PlaygroundAnnotationMetadata>>(
     () => ({
+      onAttach(editor) {
+        editor.focus({ lineNumber: 'first-visible', preventScroll: true });
+      },
       onChange(_file, lineAnnotations) {
         if (
           lineAnnotations != null &&
@@ -252,7 +317,7 @@ function ElementVirtualizerDiff({
       selectedLines={selectedLines}
       lineAnnotations={showAnnotations ? annotations : EMPTY_ANNOTATIONS}
       options={fileDiffOptions}
-      editOptions={editOptions}
+      editorOptions={editorOptions}
       renderHeaderMetadata={renderHeaderMetadata}
       renderAnnotation={renderAnnotation}
     />

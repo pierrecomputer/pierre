@@ -3,15 +3,12 @@ import type {
   EditorSelection,
   Position,
   Range,
+  ResolvedTextEdit,
   SelectionDirection,
   TextEdit,
 } from '../types';
 import { applyDocumentChangeToLineAnnotations } from './lineAnnotations';
-import type {
-  ResolvedTextEdit,
-  TextDocument,
-  TextDocumentChange,
-} from './textDocument';
+import type { TextDocument, TextDocumentChange } from './textDocument';
 import {
   createSegmenter,
   endsWithLineBreak,

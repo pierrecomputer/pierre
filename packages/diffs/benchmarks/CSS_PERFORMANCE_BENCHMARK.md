@@ -192,7 +192,7 @@ virtualized scrolling but stable before tracing starts.
 Default route:
 
 ```text
-/nodejs/oven-sh/bun/pull/30412
+/oven-sh/bun/pull/30412
 ```
 
 Before recording, wait until all of these are true:

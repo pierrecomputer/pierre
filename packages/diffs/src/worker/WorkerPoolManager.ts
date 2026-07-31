@@ -276,6 +276,10 @@ export class WorkerPoolManager {
     }
   }
 
+  public getPreferredHighlighter(): HighlighterTypes {
+    return this.preferredHighlighter;
+  }
+
   public getFileRenderOptions(): RenderFileOptions {
     const { tokenizeMaxLineLength, theme, useTokenTransformer } =
       this.renderOptions;

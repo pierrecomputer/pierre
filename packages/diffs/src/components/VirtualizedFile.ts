@@ -17,6 +17,7 @@ import { areFilesEqual } from '../utils/areFilesEqual';
 import { areObjectsEqual } from '../utils/areObjectsEqual';
 import { areOptionsEqual } from '../utils/areOptionsEqual';
 import {
+  computeVirtualFileMetrics,
   getVirtualFileHeaderRegion,
   getVirtualFilePaddingBottom,
 } from '../utils/computeVirtualFileMetrics';
@@ -97,12 +98,16 @@ export class VirtualizedFile<
     super(options, workerManager, isContainerManaged);
   }
 
-  public setMetrics(metrics: VirtualFileMetrics, force = false): void {
-    if (!force && areObjectsEqual(this.metrics, metrics)) {
+  public setMetrics(
+    metrics?: Partial<VirtualFileMetrics>,
+    force = false
+  ): void {
+    const nextMetrics = computeVirtualFileMetrics(metrics);
+    if (!force && areObjectsEqual(this.metrics, nextMetrics)) {
       return;
     }
 
-    this.metrics = metrics;
+    this.metrics = nextMetrics;
     this.resetLayoutCache();
   }
 
@@ -356,12 +361,13 @@ export class VirtualizedFile<
     lineAnnotations?: LineAnnotation<LAnnotation>[]
   ): number {
     const annotationsChanged = this.syncLineAnnotations(lineAnnotations);
-    const unkeyedContentsChanged =
+    const targetChanged =
+      !areFilesEqual(this.file, file) ||
       this.fileRenderer.hasUnkeyedFileContentsChanged(file);
     let shouldResetLayoutCache =
       reset?.resetFileLayoutCache === true ||
-      annotationsChanged ||
-      unkeyedContentsChanged;
+      targetChanged ||
+      annotationsChanged;
     if (reset?.metrics != null) {
       this.metrics = reset.metrics;
       shouldResetLayoutCache = true;
@@ -453,9 +459,10 @@ export class VirtualizedFile<
     };
   }
 
-  public getScrollContainer(): HTMLElement | undefined {
-    const root = this.getSimpleVirtualizer()?.getRoot();
-    return root instanceof HTMLElement ? root : root?.documentElement;
+  public getEditorViewport(): HTMLElement | Document | undefined {
+    return this.virtualizer.type === 'simple'
+      ? this.virtualizer.getRoot()
+      : this.virtualizer.getContainerElement();
   }
 
   public getNumericScrollAnchor(
@@ -663,7 +670,13 @@ export class VirtualizedFile<
 
   // Compute the approximate size of the file using cached line heights.
   // Uses lineHeight for lines without cached measurements.
-  private computeApproximateSize(force = false): void {
+  // The reason we refer to this as `approximate size` is because heights my
+  // dynamically change for a number of reasons so we can never be fully sure
+  // if the height is 100% accurate
+  private computeApproximateSize(
+    force = false,
+    file: FileContents | undefined = this.file
+  ): void {
     const shouldValidateSize = this.isResizeDebuggingEnabled();
     if (!force && !this.layoutDirty && !shouldValidateSize) {
       return;
@@ -672,7 +685,7 @@ export class VirtualizedFile<
     const isFirstCompute = this.height === 0;
     this.height = 0;
     this.cache.checkpoints = [];
-    if (this.file == null) {
+    if (file == null) {
       this.layoutDirty = false;
       return;
     }
@@ -683,7 +696,7 @@ export class VirtualizedFile<
       overflow = 'scroll',
     } = this.options;
     const { lineHeight } = this.metrics;
-    const lineCount = this.fileRenderer.getLineCount(this.file);
+    const lineCount = this.fileRenderer.getLineCount(file);
     const headerRegion = getVirtualFileHeaderRegion(
       this.metrics,
       disableFileHeader
@@ -758,7 +771,7 @@ export class VirtualizedFile<
         console.log(
           'VirtualizedFile.computeApproximateSize: computed height doesnt match',
           {
-            name: this.file.name,
+            name: file.name,
             elementHeight: rect.height,
             computedHeight: this.height,
           }
@@ -776,6 +789,7 @@ export class VirtualizedFile<
     if (this.isAdvancedMode() || this.fileContainer == null) {
       return;
     }
+    this.renderRange = undefined;
     if (visible && !this.isVisible) {
       this.top = this.getVirtualizedTop();
       this.isVisible = true;
@@ -799,21 +813,24 @@ export class VirtualizedFile<
     newLineAnnotations?: LineAnnotation<LAnnotation>[],
     shouldUpdateBuffer = false
   ): void {
-    const previousRenderRange = this.renderRange;
-
+    const { renderRange: previousRenderRange } = this;
+    // Capture the scroll anchor before the synchronous document swap and
+    // layout-cache wipe below; the host's next frame resolves it against the
+    // new geometry so on-screen rows do not shift.
+    this.getAdvancedVirtualizer()?.capturePendingLayoutAnchor();
     super.applyDocumentChange(textDocument, newLineAnnotations);
-
-    // reset the layout cache
     this.getSimpleVirtualizer()?.markDOMDirty();
     this.resetLayoutCache(this.isSimpleMode(), false);
 
-    // Update the buffers caused by the line-count change to ensure the host
-    // scrolls to the correct position before re-rendering
-    if (
+    if (!this.isSimpleMode()) {
+      this.computeApproximateSize(true);
+    } else if (
       shouldUpdateBuffer &&
       previousRenderRange !== undefined &&
       this.file !== undefined
     ) {
+      // Update the buffers caused by the line-count change to ensure the host
+      // scrolls to the correct position before re-rendering.
       const windowSpecs = this.virtualizer.getWindowSpecs();
       const renderRange = this.computeRenderRangeFromWindow(
         this.file,
@@ -824,6 +841,9 @@ export class VirtualizedFile<
         this.updateBuffers(renderRange);
       }
     }
+
+    this.forceRenderOverride = true;
+    this.virtualizer.instanceChanged(this, true);
   }
 
   protected override renderPreparedFile({
@@ -844,11 +864,9 @@ export class VirtualizedFile<
       this.resetLayoutCache();
     }
 
-    this.file = file;
-
     fileContainer = this.getOrCreateFileContainerNode(fileContainer);
 
-    if (this.file == null) {
+    if (file == null) {
       console.error(
         'VirtualizedFile.render: attempting to virtually render when we dont have file'
       );
@@ -856,7 +874,7 @@ export class VirtualizedFile<
     }
 
     if (!isSetup) {
-      this.computeApproximateSize();
+      this.computeApproximateSize(false, file);
       const virtualizer = this.getSimpleVirtualizer();
       this.top ??= this.getVirtualizedTop();
       if (this.isAdvancedMode()) {
@@ -878,27 +896,42 @@ export class VirtualizedFile<
       this.top ??= this.getVirtualizedTop();
       if (didFileChange && this.isSimpleMode()) {
         this.getSimpleVirtualizer()?.markDOMDirty();
-        this.resetLayoutCache(true);
+        this.resetLayoutCache(false);
+        this.computeApproximateSize(false, file);
       }
     }
 
-    if (!this.isVisible && this.isSimpleMode()) {
+    // A hidden live instance receiving a changed file falls through to the
+    // full render below so the base's change detection (header cache, stored
+    // file) still runs; the placeholder path only serves unchanged data.
+    if (
+      !this.isVisible &&
+      this.isSimpleMode() &&
+      (!didFileChange || !isSetup)
+    ) {
+      this.file = file;
+      if (didFileChange) {
+        this.cachedHeaderHTML = undefined;
+      }
       return this.renderPlaceholder(this.height);
     }
 
     const windowSpecs = this.virtualizer.getWindowSpecs();
     const fileTop = this.top ?? 0;
     const renderRange = this.computeRenderRangeFromWindow(
-      this.file,
+      file,
       fileTop,
       windowSpecs
     );
     const rendered = super.renderPreparedFile({
-      file: this.file,
+      file,
       fileContainer,
       renderRange,
       lineAnnotations,
-      forceRender: (forceRenderOverride ?? forceRender) || annotationsChanged,
+      forceRender:
+        (forceRenderOverride ?? forceRender) ||
+        annotationsChanged ||
+        didFileChange,
       ...props,
     });
     // Renders can be driven from outside the virtualizer (host/React render
@@ -1038,6 +1071,10 @@ export class VirtualizedFile<
     return this.virtualizer.type === 'simple' ? this.virtualizer : undefined;
   }
 
+  private getAdvancedVirtualizer(): CodeView<LAnnotation> | undefined {
+    return this.virtualizer.type === 'advanced' ? this.virtualizer : undefined;
+  }
+
   private isResizeDebuggingEnabled(): boolean {
     return this.getSimpleVirtualizer()?.config.resizeDebugging ?? false;
   }
@@ -1101,7 +1138,7 @@ export class VirtualizedFile<
     );
     const totalLines =
       Math.ceil(estimatedTargetLines / hunkLineCount) * hunkLineCount +
-      hunkLineCount * 2;
+      hunkLineCount;
     const totalHunks = totalLines / hunkLineCount;
     const viewportCenter = (top + bottom) / 2;
     // Simple case: overflow scroll with no annotations - pure math!

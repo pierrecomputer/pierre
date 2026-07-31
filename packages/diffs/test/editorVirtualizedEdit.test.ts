@@ -387,7 +387,7 @@ describe('Editor selections in a virtualized window', () => {
             direction: DirectionForward,
           },
         ],
-        view: { scrollLeft: 0, scrollTop: 0 },
+        view: { scrollLeft: 0 },
       });
 
       expect(

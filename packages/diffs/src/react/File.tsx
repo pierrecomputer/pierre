@@ -14,7 +14,7 @@ export function File<LAnnotation = undefined>({
   lineAnnotations,
   selectedLines,
   options,
-  editOptions,
+  editorOptions,
   metrics,
   className,
   style,
@@ -31,7 +31,7 @@ export function File<LAnnotation = undefined>({
   const { ref, getHoveredLine } = useFileInstance({
     file,
     options,
-    editOptions,
+    editorOptions,
     metrics,
     lineAnnotations,
     selectedLines,

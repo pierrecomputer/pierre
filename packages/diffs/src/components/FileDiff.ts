@@ -36,6 +36,7 @@ import {
 import { SVGSpriteSheet } from '../sprite';
 import type {
   AppliedThemeStyleCache,
+  BaseCodeOptions,
   BaseDiffOptions,
   CustomPreProperties,
   DiffLineAnnotation,
@@ -131,7 +132,6 @@ function canHydrateDiff(fileDiff: FileDiffMetadata): boolean {
 export interface FileDiffRenderBaseProps<LAnnotation> {
   fileDiff?: FileDiffMetadata;
   deferManagers?: boolean;
-  didEdit?: boolean;
   forceRender?: boolean;
   preventEmit?: boolean;
   fileContainer?: HTMLElement;
@@ -609,9 +609,36 @@ export class FileDiff<
     );
   }
 
+  public getCodeScrollLeft(): number {
+    return Math.max(
+      this.codeUnified?.scrollLeft ?? 0,
+      this.codeDeletions?.scrollLeft ?? 0,
+      this.codeAdditions?.scrollLeft ?? 0
+    );
+  }
+
+  public setCodeScrollLeft(position: number): void {
+    if (this.codeUnified != null) {
+      this.codeUnified.scrollLeft = position;
+    }
+    if (this.codeAdditions != null) {
+      this.codeAdditions.scrollLeft = position;
+    }
+    if (this.codeDeletions != null) {
+      this.codeDeletions.scrollLeft = position;
+    }
+  }
+
+  public __getEffectiveCodeOptions(): BaseCodeOptions {
+    return { ...this.options, ...this.hunksRenderer.getEffectiveCodeOptions() };
+  }
+
   public cleanUp(recycle: boolean = false): void {
     dequeueRender(this.handleEditSessionRender);
     this.emitPostRender(true);
+    // Persist editor state while the code scrollers still exist.
+    this.editor?.cleanUp(recycle);
+    this.editor = undefined;
     this.resizeManager.cleanUp();
     this.interactionManager.cleanUp();
     this.scrollSyncManager.cleanUp();
@@ -672,10 +699,6 @@ export class FileDiff<
       this.additionFile = undefined;
     }
 
-    this.enabled = false;
-
-    this.editor?.cleanUp(recycle);
-    this.editor = undefined;
     if (this.refreshViewTimeout != null) {
       clearTimeout(this.refreshViewTimeout);
       this.refreshViewTimeout = undefined;
@@ -683,6 +706,7 @@ export class FileDiff<
     this.lineStateRefreshPending = false;
     this.deferredEditorActiveLine = undefined;
     this.deferredSelectedLines = undefined;
+    this.enabled = false;
   }
 
   public virtualizedSetup(): void {
@@ -1036,8 +1060,17 @@ export class FileDiff<
 
     const { renderRange: previousRenderRange } = this;
     this.renderRange = nextRenderRange;
-    this.deletionFile = oldFile;
-    this.additionFile = newFile;
+    // Store files only when this render actually carried a file input:
+    // internal rerenders pass none, and wiping the pair here would defeat the
+    // oldFile/newFile early-return on every later host render. An explicit
+    // fileDiff input supersedes a previously parsed pair, so clear it then.
+    if (hasFileInput) {
+      this.deletionFile = oldFile;
+      this.additionFile = newFile;
+    } else if (fileDiff != null) {
+      this.deletionFile = undefined;
+      this.additionFile = undefined;
+    }
 
     if (fileDiff != null) {
       this.fileDiff = fileDiff;
@@ -1340,7 +1373,14 @@ export class FileDiff<
     if (this.fileDiff?.isPartial === true) {
       this.loadFilesIfNecessary();
     }
-    this.syncRenderViewToEditor();
+    if (this.hunksRenderer.editorRenderReady()) {
+      this.syncRenderViewToEditor();
+    } else {
+      // The current markup is missing the editor's token metadata, or its
+      // highlight is still pending: render through the session, which also
+      // syncs the render view once it paints.
+      this.rerender();
+    }
     return (recycle?: boolean) => {
       this.editor = undefined;
       // A recycle detach is a virtualized unmount mid-session: the session
@@ -1420,9 +1460,12 @@ export class FileDiff<
   public updateRenderCache(
     dirtyLines: Map<number, Array<HighlightedToken>>,
     themeType: 'dark' | 'light',
-    shouldRefreshView: boolean,
-    lineCountChangeInFlight = false
+    options: {
+      shouldRefreshDiffsView?: boolean;
+      lineCountChangeInFlight?: boolean;
+    } = {}
   ): void {
+    const { shouldRefreshDiffsView, lineCountChangeInFlight } = options;
     const regionsChanged = this.hunksRenderer.updateRenderCache(
       dirtyLines,
       themeType,
@@ -1443,7 +1486,7 @@ export class FileDiff<
       this.escalateEditSessionRender();
       return;
     }
-    if (shouldRefreshView) {
+    if (shouldRefreshDiffsView === true) {
       if (this.refreshViewTimeout != null) {
         clearTimeout(this.refreshViewTimeout);
       }
@@ -1862,6 +1905,9 @@ export class FileDiff<
       previousContainer ??
       document.createElement(DIFFS_TAG_NAME);
     const containerChanged = previousContainer !== nextContainer;
+    if (previousContainer != null && containerChanged) {
+      this.editor?.__captureFocusForDOMReplacement();
+    }
     if (containerChanged) {
       this.emitPostRender(true);
     }
@@ -1943,6 +1989,7 @@ export class FileDiff<
     // If we have a new parent container for the pre element, lets go ahead and
     // move it into the new container
     else if (this.pre.parentNode !== shadowRoot) {
+      this.editor?.__captureFocusForDOMReplacement();
       shadowRoot.appendChild(this.pre);
       this.appliedPreAttributes = undefined;
     }
@@ -2212,6 +2259,7 @@ export class FileDiff<
     const unifiedAST = this.hunksRenderer.renderCodeAST('unified', result);
     const deletionsAST = this.hunksRenderer.renderCodeAST('deletions', result);
     const additionsAST = this.hunksRenderer.renderCodeAST('additions', result);
+    this.editor?.__captureFocusForDOMReplacement();
     if (unifiedAST != null) {
       shouldReplace =
         this.codeUnified == null ||
@@ -2357,11 +2405,13 @@ export class FileDiff<
       diffStyle,
     });
     if (trimResult < 0) {
-      throw new Error('applyPartialRender: failed to trim to overlap');
+      throw new Error('FileDiff.applyPartialRender: failed to trim to overlap');
     }
 
     if (this.lastRowCount < trimResult) {
-      throw new Error('applyPartialRender: trimmed beyond DOM row count');
+      throw new Error(
+        'FileDiff.applyPartialRender: trimmed beyond DOM row count'
+      );
     }
 
     let rowCount = this.lastRowCount - trimResult;

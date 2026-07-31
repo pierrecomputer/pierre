@@ -258,6 +258,7 @@ export class FileTreeController
   #renamingPath: string | null = null;
   #renamingValue = '';
   #removeRenamingPathIfCanceled = false;
+  #searchCollapsedOverrides = new Set<string>();
   #searchMatchPathSet = new Set<string>();
   #searchMatchingPaths: readonly string[] = [];
   #searchMode: FileTreeSearchMode;
@@ -697,6 +698,17 @@ export class FileTreeController
     const directoryPath = this.resolveMountedDirectoryPathFromInput(path);
     if (directoryPath == null) {
       return;
+    }
+
+    // During a search, record when the user collapses a matched directory so
+    // the search keeps it collapsed. A second toggle of the same directory
+    // clears the override and returns the directory to the search default.
+    if (this.#searchValue != null && this.#searchValue.length > 0) {
+      if (this.#searchCollapsedOverrides.has(directoryPath)) {
+        this.#searchCollapsedOverrides.delete(directoryPath);
+      } else if (this.#store.isExpanded(directoryPath)) {
+        this.#searchCollapsedOverrides.add(directoryPath);
+      }
     }
 
     this.#toggleDirectory(directoryPath);
@@ -1716,7 +1728,6 @@ export class FileTreeController
 
   #syncSearchVisibilityState(): void {
     if (this.#searchValue == null || this.#searchValue.length === 0) {
-      this.#searchMatchingPaths = [];
       this.#searchVisibleIndices = null;
       this.#searchVisiblePaths = null;
       this.#searchVisibleIndexByPath = null;
@@ -1725,10 +1736,6 @@ export class FileTreeController
     }
 
     const currentVisiblePaths = this.#projectionPaths;
-    this.#searchMatchingPaths = currentVisiblePaths.filter((path) =>
-      this.#searchMatchPathSet.has(path)
-    );
-
     if (
       this.#searchMode !== 'hide-non-matches' ||
       this.#searchMatchPathSet.size === 0
@@ -1743,8 +1750,9 @@ export class FileTreeController
     const visibleIndices: number[] = [];
     const visiblePaths: string[] = [];
     const visibleIndexByPath = new Map<string, number>();
+    const searchVisiblePathSet = this.#searchVisiblePathSet;
     for (const [index, path] of currentVisiblePaths.entries()) {
-      if (this.#searchVisiblePathSet?.has(path) !== true) {
+      if (searchVisiblePathSet?.has(path) !== true) {
         continue;
       }
 
@@ -1822,14 +1830,18 @@ export class FileTreeController
     this.#searchValue = normalizedValue;
 
     if (normalizedValue == null) {
+      this.#searchCollapsedOverrides.clear();
       this.#restoreSearchExpandedPaths(true);
       this.#searchPreviousExpandedPaths = null;
       this.#searchMatchPathSet.clear();
+      this.#searchMatchingPaths = [];
       this.#searchVisiblePathSet = null;
       this.#rebuildVisibleProjection(this.#focusedPath, true);
     } else if (normalizedValue.length === 0) {
+      this.#searchCollapsedOverrides.clear();
       this.#restoreSearchExpandedPaths(false);
       this.#searchMatchPathSet.clear();
+      this.#searchMatchingPaths = [];
       this.#searchVisiblePathSet = null;
       this.#rebuildVisibleProjection(this.#focusedPath, true);
     } else {
@@ -1846,9 +1858,11 @@ export class FileTreeController
   #refreshActiveSearchState(): string | null {
     if (this.#searchValue == null || this.#searchValue.length === 0) {
       this.#searchMatchPathSet.clear();
+      this.#searchMatchingPaths = [];
       return this.#focusedPath;
     }
 
+    this.#pruneStaleSearchCollapsedOverrides();
     const searchValue = this.#searchValue;
     const listedPaths = this.#getListedPaths();
     const listedPathsLowerCase = this.#getListedPathsLowerCase();
@@ -1888,6 +1902,7 @@ export class FileTreeController
     }
 
     this.#searchMatchPathSet = matchingPathSet;
+    this.#searchMatchingPaths = matchingPaths;
     const searchVisiblePathSet =
       this.#searchMode === 'hide-non-matches' && matchingPaths.length > 0
         ? new Set<string>()
@@ -1908,6 +1923,19 @@ export class FileTreeController
       for (const ancestorPath of getAncestorDirectoryPaths(matchingPath)) {
         expandedPaths.add(ancestorPath);
         if (searchVisiblePathSet != null) {
+          searchVisiblePathSet.add(ancestorPath);
+        }
+      }
+    }
+
+    // For each directory the user collapsed during the search, remove it from
+    // the expanded set. Keep the directory and its ancestors visible, so the
+    // user can expand it again.
+    for (const collapsedPath of this.#searchCollapsedOverrides) {
+      expandedPaths.delete(collapsedPath);
+      if (searchVisiblePathSet != null) {
+        searchVisiblePathSet.add(collapsedPath);
+        for (const ancestorPath of getAncestorDirectoryPaths(collapsedPath)) {
           searchVisiblePathSet.add(ancestorPath);
         }
       }
@@ -2056,12 +2084,62 @@ export class FileTreeController
     this.#rebuildVisibleProjection(this.#focusedPath, true);
   }
 
+  // Each collapsed-directory override is a directory path. Drop any override
+  // when its directory no longer exists or is no longer a directory. A stale
+  // entry must not affect a later search.
+  #pruneStaleSearchCollapsedOverrides(): void {
+    if (this.#searchCollapsedOverrides.size === 0) {
+      return;
+    }
+
+    for (const collapsedPath of [...this.#searchCollapsedOverrides]) {
+      if (
+        this.resolveMountedDirectoryPathFromInput(collapsedPath) !==
+        collapsedPath
+      ) {
+        this.#searchCollapsedOverrides.delete(collapsedPath);
+      }
+    }
+  }
+
+  // A tree mutation can rename or move the directories that the overrides use.
+  // Remap each collapsed path through the mutation. Keep only the paths that
+  // still resolve to a live directory.
+  #remapSearchCollapsedOverridesThroughMutation(
+    event: Extract<
+      PathStoreEvent,
+      { operation: 'add' | 'remove' | 'move' | 'batch' }
+    >
+  ): void {
+    if (this.#searchCollapsedOverrides.size === 0) {
+      return;
+    }
+
+    const nextOverrides = new Set<string>();
+    for (const collapsedPath of this.#searchCollapsedOverrides) {
+      const remappedPath = remapPathThroughMutation(collapsedPath, event);
+      if (remappedPath == null) {
+        continue;
+      }
+
+      const canonicalPath = this.#store.getPathInfo(remappedPath)?.path ?? null;
+      if (canonicalPath == null || !canonicalPath.endsWith('/')) {
+        continue;
+      }
+
+      nextOverrides.add(canonicalPath);
+    }
+
+    this.#searchCollapsedOverrides = nextOverrides;
+  }
+
   #applyMutationState(
     event: Extract<
       PathStoreEvent,
       { operation: 'add' | 'remove' | 'move' | 'batch' }
     >
   ): string | null {
+    this.#remapSearchCollapsedOverridesThroughMutation(event);
     const nextRenamingPath = remapPathThroughMutation(
       this.#renamingPath,
       event
@@ -2119,12 +2197,22 @@ export class FileTreeController
       const focusPathCandidate = isPathMutationEvent(event)
         ? this.#applyMutationState(event)
         : this.#focusedPath;
-      const searchFocusCandidate =
-        this.#searchValue != null && this.#searchValue.length > 0
-          ? this.#refreshActiveSearchState()
-          : this.#searchValue === ''
+      // Keep the current focus if it is still a visible search row after the
+      // mutation. If it is not, use the refreshed best match. This keeps the
+      // focus on a row the user revealed and prevents an unwanted focus move.
+      let searchFocusCandidate: string | null;
+      if (this.#searchValue != null && this.#searchValue.length > 0) {
+        const refreshedSearchFocusCandidate = this.#refreshActiveSearchState();
+        searchFocusCandidate =
+          this.#focusedPath != null &&
+          this.#searchVisiblePathSet?.has(this.#focusedPath) === true
             ? this.#focusedPath
-            : focusPathCandidate;
+            : refreshedSearchFocusCandidate;
+      } else if (this.#searchValue === '') {
+        searchFocusCandidate = this.#focusedPath;
+      } else {
+        searchFocusCandidate = focusPathCandidate;
+      }
       const shouldBuildFullProjection =
         this.#searchValue != null ||
         (event.operation !== 'expand' && event.operation !== 'collapse');

@@ -17,6 +17,7 @@ import type { TextDocument, TextDocumentChange } from './textDocument';
 import { addEventListener, debounce, h } from './utils';
 
 const TOKENIZE_TIME_LIMIT = 500;
+let nextTokenizerId = 0;
 
 export interface EditorTokenizerProps {
   highlighter: DiffsHighlighter;
@@ -59,13 +60,20 @@ export class EditorTokenizer {
   // state
   #stateStack: StateStack[] = [INITIAL]; // cached state stack by line index
   #comparisonStateStack: StateStack[] = [];
+  #comparisonStateStackStart = 0;
+  #comparisonLineChanges: NonNullable<
+    TextDocumentChange['changedLineChanges']
+  > = [];
   #lastLine: number = -1;
   #isStopped: boolean = true;
   #isPaused: boolean = false;
   #backgroundJobId: number = 0;
+  #tokenizerId = ++nextTokenizerId;
+  #backgroundPrebuildEndLine = -1;
+  #pendingPrebuildEndLine = -1;
   #backgroundChangedLineRanges: readonly [number, number][] | undefined;
   #backgroundChangedRangeIndex: number = 0;
-  #bracketIgnoredRanges: Map<number, [number, number][] | null> = new Map();
+  #bracketIgnoredRanges: ([number, number][] | null | undefined)[] = [];
   #isMessageListenerAttached: boolean = false;
 
   #prebuildStateStack = debounce(async (renderRange?: RenderRange) => {
@@ -92,23 +100,29 @@ export class EditorTokenizer {
       );
     }
     this.#ensureActiveTheme();
-    this.#buildStateStack(endLine);
+    this.#scheduleStatePrebuild(endLine);
   }, 500);
 
   #onMessage = ({ data }: MessageEvent<unknown>) => {
     if (typeof data !== 'object' || data === null) {
       return;
     }
-    const { type, jobId } = data as {
+    const { type, tokenizerId, jobId } = data as {
       type?: unknown;
+      tokenizerId?: unknown;
       jobId?: unknown;
     };
     if (
       type === 'tokenize' &&
+      tokenizerId === this.#tokenizerId &&
       typeof jobId === 'number' &&
       jobId === this.#backgroundJobId
     ) {
-      this.#backgroundTokenize(jobId);
+      if (this.#backgroundPrebuildEndLine >= 0) {
+        this.#backgroundPrebuild(jobId);
+      } else {
+        this.#backgroundTokenize(jobId);
+      }
     }
   };
 
@@ -130,13 +144,13 @@ export class EditorTokenizer {
     if (this.#grammar === undefined) {
       return null;
     }
-    if (!this.#bracketIgnoredRanges.has(lineIndex)) {
+    if (this.#bracketIgnoredRanges[lineIndex] === undefined) {
       this.#buildStateStack(lineIndex);
       const state = this.#stateStack[lineIndex] ?? INITIAL;
       const result = this.#tokenizeLineAt(lineIndex, state);
       this.#stateStack[lineIndex + 1] = result.state;
     }
-    return this.#bracketIgnoredRanges.get(lineIndex) ?? null;
+    return this.#bracketIgnoredRanges[lineIndex] ?? null;
   }
 
   constructor({
@@ -206,17 +220,22 @@ export class EditorTokenizer {
     this.#colorMap = [];
     this.#setTheme(
       typeof theme === 'string' ? theme : theme[themeType],
-      themeType
+      typeof theme === 'string' ? undefined : themeType
     );
   }
 
   // By default, diffs components support dual themes, but the tokenizer only renders
   // the preferred theme. When the theme type is changed, the tokenizer will re-tokenize the document.
   #emitThemeChange(themeName: string, themeType: 'light' | 'dark') {
+    if (themeName === this.#themeName && themeType === this.#themeType) {
+      return;
+    }
     this.#setTheme(themeName, themeType);
     this.stopBackgroundTokenize();
     this.#stateStack = [INITIAL];
     this.#comparisonStateStack = [];
+    this.#comparisonStateStackStart = 0;
+    this.#comparisonLineChanges = [];
     if (this.#grammar !== undefined && this.#textDocument.lineCount > 0) {
       this.#scheduleBackgroundTokenize(0);
     }
@@ -226,11 +245,8 @@ export class EditorTokenizer {
     this.#onThemeChange?.();
   }
 
-  // Resolve `themeType: 'system'` the same way the MutationObserver does: from
-  // the host document's computed `color-scheme`. Apps often force a scheme via
-  // page CSS/classes while the OS `prefers-color-scheme` media query differs;
-  // using matchMedia here would flip tokens back to the OS preference on every
-  // render sync and fight the observer.
+  // Respect an explicit host color-scheme override. When the computed value
+  // advertises support for both schemes, let the OS preference choose one.
   #resolveSystemThemeType(): 'light' | 'dark' {
     try {
       if (
@@ -238,9 +254,16 @@ export class EditorTokenizer {
         typeof getComputedStyle === 'function' &&
         document.body != null
       ) {
-        return getComputedStyle(document.body).colorScheme === 'dark'
-          ? 'dark'
-          : 'light';
+        const colorSchemes = getComputedStyle(document.body).colorScheme.split(
+          /\s+/
+        );
+        const supportsDark = colorSchemes.includes('dark');
+        const supportsLight = colorSchemes.includes('light');
+        // A single host-forced scheme wins. `light dark` only declares support
+        // for both schemes, so the media query still selects the active one.
+        if (supportsDark !== supportsLight) {
+          return supportsDark ? 'dark' : 'light';
+        }
       }
     } catch {
       // jsdom and similar harnesses may lack getComputedStyle or throw; fall
@@ -259,10 +282,19 @@ export class EditorTokenizer {
   // `theme` option changes that those observers don't see.
   syncTheme(codeOptions: BaseCodeOptions): void {
     const { themeType = 'system', theme = DEFAULT_THEMES } = codeOptions;
+    // A single pinned theme does not follow the themeType option or system
+    // scheme flips; its own classification stays authoritative.
+    if (typeof theme === 'string') {
+      const pinnedThemeType = this.#highlighter.getTheme(theme).type;
+      if (theme === this.#themeName && pinnedThemeType === this.#themeType) {
+        return;
+      }
+      this.#emitThemeChange(theme, pinnedThemeType);
+      return;
+    }
     const nextThemeType =
       themeType === 'system' ? this.#resolveSystemThemeType() : themeType;
-    const nextThemeName =
-      typeof theme === 'string' ? theme : theme[nextThemeType];
+    const nextThemeName = theme[nextThemeType];
     if (
       nextThemeType === this.#themeType &&
       nextThemeName === this.#themeName
@@ -364,11 +396,10 @@ export class EditorTokenizer {
 
     if (this.#matchBrackets) {
       // Clear ignored token ranges for lines invalidated by the edit.
-      for (const line of this.#bracketIgnoredRanges.keys()) {
-        if (line >= change.startLine) {
-          this.#bracketIgnoredRanges.delete(line);
-        }
-      }
+      this.#bracketIgnoredRanges.length = Math.min(
+        this.#bracketIgnoredRanges.length,
+        change.startLine
+      );
     }
 
     const { lineCount } = this.#textDocument;
@@ -386,7 +417,10 @@ export class EditorTokenizer {
       change.lineDelta > 0 &&
       dirtyStart < renderRangeEndLine &&
       change.endLine >= renderRangeEndLine;
-    const canReuseCachedStates = change.lineDelta === 0;
+    const canReuseCachedStates =
+      change.lineDelta === 0 &&
+      (change.changedLineChanges?.every(([, , lineDelta]) => lineDelta === 0) ??
+        true);
     const canCacheTokenizedStates =
       canReuseCachedStates ||
       renderRange === undefined ||
@@ -394,6 +428,8 @@ export class EditorTokenizer {
     const changedLineRanges: readonly [number, number][] =
       change.changedLineRanges ?? [[dirtyStart, change.endLine]];
     this.#comparisonStateStack = [];
+    this.#comparisonStateStackStart = 0;
+    this.#comparisonLineChanges = [];
     let offscreenSyncEnd = -1;
     if (dirtyStart < viewStart) {
       for (const [rangeStart, rangeEnd] of changedLineRanges) {
@@ -547,15 +583,19 @@ export class EditorTokenizer {
   }
 
   stopBackgroundTokenize(): void {
+    this.#pendingPrebuildEndLine = -1;
     if (this.#isStopped) {
       return;
     }
     this.#isStopped = true;
     this.#isPaused = false;
     this.#lastLine = -1;
+    this.#backgroundPrebuildEndLine = -1;
     this.#backgroundChangedLineRanges = undefined;
     this.#backgroundChangedRangeIndex = 0;
     this.#comparisonStateStack = [];
+    this.#comparisonStateStackStart = 0;
+    this.#comparisonLineChanges = [];
     this.#detachMessageListener();
   }
 
@@ -621,7 +661,11 @@ export class EditorTokenizer {
 
   #postTokenizeMessage(jobId: number): void {
     // use `postMessage` instead of `setTimeout(fn, 0)` to avoid 4ms delay
-    globalThis.postMessage({ type: 'tokenize', jobId });
+    globalThis.postMessage({
+      type: 'tokenize',
+      tokenizerId: this.#tokenizerId,
+      jobId,
+    });
   }
 
   #scheduleBackgroundTokenize(
@@ -647,8 +691,48 @@ export class EditorTokenizer {
     this.#isStopped = false;
     this.#isPaused = false;
     this.#lastLine = startLine;
+    if (this.#backgroundPrebuildEndLine >= 0) {
+      this.#pendingPrebuildEndLine = Math.max(
+        this.#pendingPrebuildEndLine,
+        this.#backgroundPrebuildEndLine
+      );
+    }
+    this.#backgroundPrebuildEndLine = -1;
     this.#backgroundChangedLineRanges = changedLineRanges;
     this.#backgroundChangedRangeIndex = changedRangeIndex;
+    this.#attachMessageListener();
+    this.#postTokenizeMessage(jobId);
+  }
+
+  #scheduleStatePrebuild(endLine: number): void {
+    if (this.#grammar === undefined || this.#stateStack.length > endLine) {
+      return;
+    }
+    // Extend an active prebuild, or retain the target until the foreground
+    // edit job reconverges and releases the state cache.
+    if (!this.#isStopped) {
+      if (this.#backgroundPrebuildEndLine >= 0) {
+        this.#backgroundPrebuildEndLine = Math.max(
+          this.#backgroundPrebuildEndLine,
+          endLine
+        );
+      } else {
+        this.#pendingPrebuildEndLine = Math.max(
+          this.#pendingPrebuildEndLine,
+          endLine
+        );
+      }
+      return;
+    }
+
+    const jobId = ++this.#backgroundJobId;
+    this.#isStopped = false;
+    this.#isPaused = false;
+    this.#lastLine = this.#stateStack.length - 1;
+    this.#backgroundPrebuildEndLine = endLine;
+    this.#pendingPrebuildEndLine = -1;
+    this.#backgroundChangedLineRanges = undefined;
+    this.#backgroundChangedRangeIndex = 0;
     this.#attachMessageListener();
     this.#postTokenizeMessage(jobId);
   }
@@ -693,88 +777,70 @@ export class EditorTokenizer {
     ranges: [number, number][] | null
   ): void {
     if (this.#matchBrackets) {
-      this.#bracketIgnoredRanges.set(line, ranges);
+      this.#bracketIgnoredRanges[line] = ranges;
     }
   }
 
-  // Preserve old end states as comparison-only sentinels. They let background
-  // tokenization stop when grammar state reconverges without letting foreground
-  // tokenization seed from stale pre-edit states.
+  // Preserve old end states as comparison-only sentinels, copying whichever
+  // side of the edit is smaller. Index shifts are resolved lazily on lookup.
   #shiftComparisonStateStack(change: TextDocumentChange): void {
     const lineChanges =
       change.changedLineChanges ??
       ([[change.startLine, change.endLine, change.lineDelta]] as const);
-    const comparisonStateStack = this.#stateStack.slice();
-
-    for (const [startLine, endLine, lineDelta] of lineChanges) {
-      if (lineDelta === 0) {
-        continue;
-      }
-
-      const insertedLineSpan = endLine - startLine;
-      const oldLineSpan = insertedLineSpan - lineDelta;
-      const sourceStart = startLine + oldLineSpan + 1;
-      const targetStart = startLine + insertedLineSpan + 1;
-      const originalLength = comparisonStateStack.length;
-
-      if (lineDelta > 0) {
-        for (let line = originalLength - 1; line >= sourceStart; line--) {
-          const targetLine = line + lineDelta;
-          if (line in comparisonStateStack) {
-            comparisonStateStack[targetLine] = comparisonStateStack[line];
-          } else {
-            Reflect.deleteProperty(comparisonStateStack, targetLine);
-          }
-        }
-      } else {
-        for (let line = sourceStart; line < originalLength; line++) {
-          const targetLine = line + lineDelta;
-          if (line in comparisonStateStack) {
-            comparisonStateStack[targetLine] = comparisonStateStack[line];
-          } else {
-            Reflect.deleteProperty(comparisonStateStack, targetLine);
-          }
-        }
-        comparisonStateStack.length = Math.max(
-          Math.min(originalLength, startLine + 1),
-          originalLength + lineDelta
-        );
-      }
-
-      for (let line = startLine + 1; line < targetStart; line++) {
-        Reflect.deleteProperty(comparisonStateStack, line);
-      }
+    const comparisonStart = change.startLine + 1;
+    const comparisonLength = this.#stateStack.length - comparisonStart;
+    if (comparisonStart <= comparisonLength) {
+      this.#comparisonStateStack = this.#stateStack;
+      this.#comparisonStateStackStart = 0;
+      this.#stateStack = this.#stateStack.slice(0, comparisonStart);
+    } else {
+      this.#comparisonStateStackStart = comparisonStart;
+      this.#comparisonStateStack = this.#stateStack.slice(comparisonStart);
+      this.#stateStack.length = Math.min(
+        this.#stateStack.length,
+        comparisonStart
+      );
     }
-
-    this.#stateStack.length = Math.min(
-      this.#stateStack.length,
-      change.startLine + 1
-    );
-    comparisonStateStack.length = Math.min(
-      comparisonStateStack.length,
-      this.#textDocument.lineCount + 1
-    );
-    for (let line = 0; line <= change.startLine; line++) {
-      Reflect.deleteProperty(comparisonStateStack, line);
-    }
-    this.#comparisonStateStack = comparisonStateStack;
+    this.#comparisonLineChanges = lineChanges;
   }
 
   #getPreviousEndState(line: number): StateStack | undefined {
-    return this.#comparisonStateStack[line] ?? this.#stateStack[line];
+    let previousLine = line;
+    for (
+      let index = this.#comparisonLineChanges.length - 1;
+      index >= 0;
+      index--
+    ) {
+      const [startLine, endLine, lineDelta] =
+        this.#comparisonLineChanges[index];
+      if (lineDelta === 0) {
+        continue;
+      }
+      if (previousLine > endLine) {
+        previousLine -= lineDelta;
+      } else if (previousLine > startLine) {
+        return this.#stateStack[line];
+      }
+    }
+    return (
+      this.#comparisonStateStack[
+        previousLine - this.#comparisonStateStackStart
+      ] ?? this.#stateStack[line]
+    );
   }
 
-  #buildStateStack(endAt: number) {
+  #buildStateStack(endAt: number, timeBudget?: number): boolean {
     const boundedEndAt = Math.min(
       Math.max(0, endAt),
       this.#textDocument.lineCount
     );
     if (this.#stateStack.length > boundedEndAt || this.#grammar === undefined) {
-      return;
+      return true;
     }
+    const startedAt = timeBudget === undefined ? 0 : performance.now();
     let line = this.#stateStack.length - 1;
     let state = this.#stateStack[line] ?? INITIAL;
-    for (; line < boundedEndAt; line++) {
+    while (line < boundedEndAt) {
       this.#stateStack[line] = state;
       const lineText = this.#textDocument.getLineText(line);
       if (
@@ -788,15 +854,49 @@ export class EditorTokenizer {
           lineText,
           state,
           TOKENIZE_TIME_LIMIT,
-          this.#matchBrackets
+          this.#matchBrackets,
+          false
         );
         this.#cacheBracketIgnoredRanges(line, result.bracketIgnoredRanges);
         state = result.ruleStack;
       } else {
         this.#cacheBracketIgnoredRanges(line, null);
       }
+      line++;
+      this.#stateStack[line] = state;
+      if (
+        timeBudget !== undefined &&
+        performance.now() - startedAt > timeBudget
+      ) {
+        break;
+      }
     }
-    this.#stateStack[line] = state;
+    return line >= boundedEndAt;
+  }
+
+  #backgroundPrebuild(jobId: number): void {
+    if (
+      this.#isStopped ||
+      this.#isPaused ||
+      this.#grammar === undefined ||
+      jobId !== this.#backgroundJobId
+    ) {
+      return;
+    }
+
+    this.#ensureActiveTheme();
+    // State prebuilds intentionally omit rendered tokens and yield between
+    // short chunks so a deep viewport does not monopolize the main thread.
+    const complete = this.#buildStateStack(this.#backgroundPrebuildEndLine, 1);
+    if (this.#isStopped || this.#isPaused || jobId !== this.#backgroundJobId) {
+      return;
+    }
+    if (complete) {
+      this.stopBackgroundTokenize();
+      return;
+    }
+    this.#lastLine = this.#stateStack.length - 1;
+    this.#postTokenizeMessage(jobId);
   }
 
   #backgroundTokenize(jobId: number) {
@@ -888,7 +988,11 @@ export class EditorTokenizer {
     }
 
     if (settled || line >= totalLines) {
+      const pendingPrebuildEndLine = this.#pendingPrebuildEndLine;
       this.stopBackgroundTokenize();
+      if (pendingPrebuildEndLine >= 0) {
+        this.#scheduleStatePrebuild(pendingPrebuildEndLine);
+      }
       return;
     }
 
@@ -904,7 +1008,8 @@ function tokenizeLine(
   lineText: string,
   stateStack: StateStack,
   timeLimit?: number,
-  collectBracketIgnoredRanges = true
+  collectBracketIgnoredRanges = true,
+  resolveTokens = true
 ): {
   ruleStack: StateStack;
   resolvedTokens: Array<HighlightedToken>;
@@ -920,6 +1025,13 @@ function tokenizeLine(
   const tokensLength = rawTokens.length / 2;
   const resolvedTokens: Array<HighlightedToken> = [];
   const bracketIgnoredRanges: [number, number][] = [];
+  if (!resolveTokens && !collectBracketIgnoredRanges) {
+    return {
+      ruleStack: result.ruleStack,
+      resolvedTokens,
+      bracketIgnoredRanges,
+    };
+  }
   for (let j = 0; j < tokensLength; j++) {
     const offset = rawTokens[2 * j];
     const nextOffset =
@@ -929,9 +1041,14 @@ function tokenizeLine(
       continue;
     }
     const metadata = rawTokens[2 * j + 1];
-    const fg = EncodedTokenMetadata.getForeground(metadata);
-    const tokenText = lineText.slice(offset, nextOffset);
-    resolvedTokens.push([offset, colorMap[fg], tokenText]);
+    if (resolveTokens) {
+      const fg = EncodedTokenMetadata.getForeground(metadata);
+      resolvedTokens.push([
+        offset,
+        colorMap[fg],
+        lineText.slice(offset, nextOffset),
+      ]);
+    }
     if (
       collectBracketIgnoredRanges &&
       EncodedTokenMetadata.getTokenType(metadata) > 0

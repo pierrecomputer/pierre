@@ -2,7 +2,7 @@ import { afterAll, describe, expect, test } from 'bun:test';
 
 import { File } from '../src/components/File';
 import { DEFAULT_THEMES } from '../src/constants';
-import { Editor, type IStateStorage } from '../src/editor';
+import { Editor, type IStateStorage } from '../src/edit';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
 import type { EditorState, FileContents, LineRange } from '../src/types';
 import { installDom, wait, waitFor } from './domHarness';

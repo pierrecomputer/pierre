@@ -24,7 +24,7 @@ const GITHUB_PULL_TAB_PATH_PATTERN =
 
 const CACHED_BLOBS = new Map<string, string>([
   [
-    '/nodejs/oven-sh/bun/pull/30412',
+    '/oven-sh/bun/pull/30412',
     'https://diffshub.pierrecdn.com/patches/30412.diff',
   ],
   [

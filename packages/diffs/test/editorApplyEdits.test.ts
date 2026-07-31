@@ -2,7 +2,7 @@ import { afterAll, describe, expect, mock, spyOn, test } from 'bun:test';
 
 import { File, type FileOptions } from '../src/components/File';
 import { DEFAULT_THEMES } from '../src/constants';
-import { Editor, type EditorOptions, type IStateStorage } from '../src/editor';
+import { Editor, type EditorOptions, type IStateStorage } from '../src/edit';
 import {
   applyTextChangeToSelections,
   DirectionForward,
@@ -376,6 +376,69 @@ describe('Editor persisted file state', () => {
 });
 
 describe('Editor.applyEdits selection sync', () => {
+  test('reports normalized changes against the pre-edit document', async () => {
+    const onChange = mock(
+      (
+        ..._args: Parameters<NonNullable<EditorOptions<undefined>['onChange']>>
+      ) => {}
+    );
+    const { cleanup, editor } = await createEditorFixture(
+      'alpha\nbravo\ncharlie',
+      { onChange }
+    );
+
+    try {
+      editor.applyEdits([
+        {
+          range: {
+            start: { line: 0, character: 2 },
+            end: { line: 1, character: 2 },
+          },
+          newText: 'X',
+        },
+        {
+          range: {
+            start: { line: 2, character: 0 },
+            end: { line: 2, character: 7 },
+          },
+          newText: 'C',
+        },
+      ]);
+
+      expect(onChange).toHaveBeenCalledTimes(1);
+      const [file, lineAnnotations, event] = onChange.mock.calls[0] ?? [];
+      expect(event?.changes).toEqual([
+        {
+          text: 'X',
+          range: {
+            start: { line: 0, character: 2 },
+            end: { line: 1, character: 2 },
+          },
+          start: 2,
+          end: 8,
+        },
+        {
+          text: 'C',
+          range: {
+            start: { line: 2, character: 0 },
+            end: { line: 2, character: 7 },
+          },
+          start: 12,
+          end: 19,
+        },
+      ]);
+      expect(file).toMatchObject({
+        name: 'edits.ts',
+        contents: 'alXavo\nC',
+      });
+      expect(lineAnnotations).toEqual([]);
+      expect(event?.file).toBe(file);
+      expect(event?.lineAnnotations).toBe(lineAnnotations);
+    } finally {
+      cleanup();
+    }
+  });
+
   test('keeps inserted file lines coherent when switching files', async () => {
     const { cleanup, editor, file, fileContainer, fileContents } =
       await createEditorFixture('alpha\nbravo\n', undefined, {
@@ -1621,23 +1684,36 @@ describe('Editor undo/redo API', () => {
     }
   });
 
-  test('undo notifies the onChange callback', async () => {
-    let changeCount = 0;
+  test('undo reports the inverse change', async () => {
+    const onChange = mock(
+      (
+        ..._args: Parameters<NonNullable<EditorOptions<undefined>['onChange']>>
+      ) => {}
+    );
     const { cleanup, editor } = await createEditorFixture('alpha', {
-      onChange() {
-        changeCount++;
-      },
+      onChange,
     });
 
     try {
       editor.applyEdits(insertBang, true);
-      const countAfterEdit = changeCount;
-
       editor.undo();
 
-      // Undo runs through the same change path as an edit, so consumers are
-      // notified and can re-read canUndo/canRedo to update their UI.
-      expect(changeCount).toBe(countAfterEdit + 1);
+      expect(onChange).toHaveBeenCalledTimes(2);
+      const [file, lineAnnotations, event] = onChange.mock.calls[1] ?? [];
+      expect(event?.changes).toEqual([
+        {
+          text: '',
+          range: {
+            start: { line: 0, character: 5 },
+            end: { line: 0, character: 6 },
+          },
+          start: 5,
+          end: 6,
+        },
+      ]);
+      expect(file?.contents).toBe('alpha');
+      expect(event?.file).toBe(file);
+      expect(event?.lineAnnotations).toBe(lineAnnotations);
     } finally {
       cleanup();
     }
@@ -2091,6 +2167,26 @@ describe('applyEdits batch: changed line ranges across line-count changes', () =
     ]);
     expect(d.getText()).toBe('ada\nhopper\nbabbage\ncurie\nlovelace');
     expect(change).toEqual({
+      changes: [
+        {
+          text: '\nhopper',
+          range: {
+            start: { line: 0, character: 3 },
+            end: { line: 0, character: 3 },
+          },
+          start: 3,
+          end: 3,
+        },
+        {
+          text: 'lovelace',
+          range: {
+            start: { line: 3, character: 0 },
+            end: { line: 3, character: 6 },
+          },
+          start: 18,
+          end: 24,
+        },
+      ],
       startLine: 0,
       startCharacter: 3,
       endCharacter: 6,
@@ -2120,6 +2216,26 @@ describe('applyEdits batch: changed line ranges across line-count changes', () =
     ]);
     expect(d.getText()).toBe('ada babbage\ncurie\nlovelace');
     expect(change).toEqual({
+      changes: [
+        {
+          text: ' ',
+          range: {
+            start: { line: 0, character: 3 },
+            end: { line: 1, character: 0 },
+          },
+          start: 3,
+          end: 4,
+        },
+        {
+          text: 'lovelace',
+          range: {
+            start: { line: 3, character: 0 },
+            end: { line: 3, character: 6 },
+          },
+          start: 18,
+          end: 24,
+        },
+      ],
       startLine: 0,
       startCharacter: 3,
       endCharacter: 6,

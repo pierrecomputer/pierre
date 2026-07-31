@@ -22,7 +22,7 @@ import {
   VirtualizedFileDiff,
   Virtualizer,
 } from '@pierre/diffs';
-import { Editor } from '@pierre/diffs/editor';
+import { Editor } from '@pierre/diffs/edit';
 import type { WorkerPoolManager } from '@pierre/diffs/worker';
 import {
   IconCiFailedOctagonFill,

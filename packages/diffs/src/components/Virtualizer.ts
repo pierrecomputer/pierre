@@ -35,6 +35,11 @@ export interface VirtualizerConfig {
   resizeDebugging: boolean;
 }
 
+export interface VirtualizerScrollOptions {
+  top: number;
+  behavior?: ScrollBehavior;
+}
+
 const DEFAULT_VIRTUALIZER_CONFIG: VirtualizerConfig = {
   overscrollSize: DEFAULT_OVERSCROLL_SIZE,
   intersectionObserverMargin: INTERSECTION_OBSERVER_MARGIN,
@@ -260,6 +265,9 @@ export class Virtualizer {
     this.scrollTop = 0;
     this.height = 0;
     this.scrollHeight = 0;
+    this.scrollDirty = true;
+    this.heightDirty = true;
+    this.scrollHeightDirty = true;
   }
 
   getOffsetInScrollContainer(element: HTMLElement): number {
@@ -342,18 +350,6 @@ export class Virtualizer {
       return;
     }
     const wrapperDirty = this.heightDirty || this.scrollHeightDirty;
-    if (
-      !this.scrollDirty &&
-      !this.scrollHeightDirty &&
-      !this.heightDirty &&
-      this.renderedObservers === this.observers.size &&
-      !this.visibleInstancesDirty &&
-      this.instancesChanged.size === 0 &&
-      this.reconcileQueue.size === 0
-    ) {
-      // NOTE(amadeus): Is this a safe assumption/optimization?
-      return;
-    }
     let instancesHaveChanged = this.instancesChanged.size > 0;
 
     // If we got an emitted update from a bunch of instances, we should skip
@@ -620,7 +616,8 @@ export class Virtualizer {
     // );
   };
 
-  private getScrollTop() {
+  /** Return the logical vertical position for the scroll container */
+  public getScrollTop(): number {
     if (!this.scrollDirty) {
       return this.scrollTop;
     }
@@ -637,12 +634,33 @@ export class Virtualizer {
 
     // Lets always make sure to clamp scroll position cases of
     // over/bounce scroll
-    scrollTop = Math.max(
+    scrollTop = this.clampScrollTop(scrollTop);
+    this.scrollTop = scrollTop;
+    return scrollTop;
+  }
+
+  /** Scroll to a logical vertical position and queue the normal render pass. */
+  public scrollTo({ top, behavior = 'auto' }: VirtualizerScrollOptions): void {
+    const { root } = this;
+    if (root == null) {
+      return;
+    }
+
+    const scrollTop = this.clampScrollTop(top);
+    if (root instanceof Document) {
+      window.scrollTo({ top: scrollTop, behavior });
+    } else {
+      root.scrollTo({ top: scrollTop, behavior });
+    }
+    this.scrollDirty = true;
+    queueRender(this.computeRenderRangeAndEmit);
+  }
+
+  private clampScrollTop(scrollTop: number): number {
+    return Math.max(
       0,
       Math.min(scrollTop, this.getScrollHeight() - this.getHeight())
     );
-    this.scrollTop = scrollTop;
-    return scrollTop;
   }
 
   private getScrollHeight() {

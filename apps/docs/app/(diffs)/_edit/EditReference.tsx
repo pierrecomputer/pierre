@@ -160,7 +160,7 @@ const CAPABILITY_GROUPS: ReferenceGroup[] = [
         term: 'Lazy-loadable',
         description: (
           <>
-            Standalone <code>@pierre/diffs/editor</code> entry point—import it
+            Standalone <code>@pierre/diffs/edit</code> entry point—import it
             only when editing begins.
           </>
         ),

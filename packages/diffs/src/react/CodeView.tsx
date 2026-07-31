@@ -17,7 +17,7 @@ import {
 } from 'react';
 import { createPortal, flushSync } from 'react-dom';
 
-import type { EditorOptions } from '../editor';
+import type { EditorOptions } from '../edit';
 import {
   areOptionsEqual,
   CodeView as CodeViewClass,
@@ -60,7 +60,7 @@ interface CodeViewBaseProps<LAnnotation> {
    * Creation-time options passed to the nearest EditProvider factory.
    * CodeView supplies its item-specific change callback.
    */
-  editOptions?: Omit<EditorOptions<LAnnotation>, 'onChange'>;
+  editorOptions?: Omit<EditorOptions<LAnnotation>, 'onChange'>;
   className?: string;
   style?: CSSProperties;
   containerRef?: Ref<HTMLDivElement>;
@@ -189,7 +189,7 @@ function CodeViewInner<LAnnotation = undefined>(
     className,
     containerRef,
     disableWorkerPool = false,
-    editOptions,
+    editorOptions,
     initialItems,
     items: controlledItems,
     onItemEditChange,
@@ -233,8 +233,8 @@ function CodeViewInner<LAnnotation = undefined>(
   );
   const controlledSelection = selectedLines !== undefined;
 
-  // Keep the adapter stable so provider and edit-option changes affect the next
-  // item edit session without forcing CodeView to reconcile active editors.
+  // Keep the adapter stable so provider and editor-option changes affect the
+  // next item edit session without forcing CodeView to reconcile active editors.
   const createEditor = useStableCallback(
     (
       options: CodeViewCreateEditorOptions<LAnnotation>
@@ -244,7 +244,7 @@ function CodeViewInner<LAnnotation = undefined>(
       }
 
       const editor = contextCreateEditor({
-        ...editOptions,
+        ...editorOptions,
         ...options,
       });
       if (editor == null) {

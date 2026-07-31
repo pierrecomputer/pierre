@@ -59,7 +59,7 @@ function expectShortcuts(platform: string, cases: ShortcutCase[]): void {
   });
 }
 
-describe('resolveEditorShortcutCommand', () => {
+describe('resolveEditorCommandFromKeyboardEvent', () => {
   test('uses command shortcuts on macOS', () => {
     expectShortcuts('MacIntel', [
       { event: { key: 'z', metaKey: true }, expected: 'undo' },

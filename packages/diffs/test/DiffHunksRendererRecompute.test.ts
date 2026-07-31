@@ -222,7 +222,7 @@ describe('DiffHunksRenderer content-edit recompute split', () => {
   });
 });
 
-// While an editor session is active, hunk updates preserve the current region
+// While an edit session is active, hunk updates preserve the current region
 // skeleton: regions never merge/split/drop on their own, a reverted region
 // persists as a context-only hunk, and the real recompute runs once on
 // genuine session end.
@@ -361,6 +361,84 @@ describe('DiffHunksRenderer edit-session hunk updates', () => {
       'changed',
       trailing,
     ]);
+  });
+
+  test('a bounded-window line-count edit keeps highlighted rows below the window', async () => {
+    // Virtualized surfaces tokenize only the visible render window on a
+    // structural edit; rows below it rely on realignAdditionHastLines
+    // shifting their cached highlighted entries into place. The session's
+    // first line-count edit compares parsed-diff-shaped additionLines (no
+    // trailing empty entry) against the editor-shaped document (which gains
+    // one when the file ends in a line break) — the bottom-up scan must not
+    // mismatch on that representational tail, or every row below the window
+    // is plain-filled and stays unhighlighted for the rest of the session.
+    const lineText = (n: number) => `const value${n} = ${n};`;
+    const totalLines = 30;
+    const oldLines = Array.from({ length: totalLines }, (_, index) =>
+      lineText(index + 1)
+    );
+    const newLines = [...oldLines];
+    newLines[0] = 'const changed = 0;';
+    const renderer = new DiffHunksRenderer({
+      theme: 'github-light',
+      diffStyle: 'split',
+    });
+    // Full-context parse so every line renders as a row (no collapsed
+    // context), mirroring the playground's fully expanded long diff.
+    const diff = parseDiffFromFile(
+      { name: 'window.ts', contents: oldLines.join('\n') + '\n' },
+      { name: 'window.ts', contents: newLines.join('\n') + '\n' },
+      { context: totalLines }
+    );
+    await renderer.asyncRender(diff);
+    renderer.renderDiff(diff);
+    renderer.beginEditSession();
+
+    const styledRowTexts = (result: ReturnType<typeof renderer.renderDiff>) =>
+      collectAllElements(result?.additionsContentAST ?? [])
+        .filter(
+          (node) =>
+            node.properties?.['data-line'] != null &&
+            JSON.stringify(node).includes('color:')
+        )
+        .map((node) => hastTextContent(node).replace(/\n$/, ''));
+    expect(styledRowTexts(renderer.renderDiff(diff))).toContain(
+      lineText(totalLines)
+    );
+
+    // Delete new-file lines 2-3: every following line shifts up two indexes.
+    const editedLines = [...newLines];
+    editedLines.splice(1, 2);
+    // The foreground tokenize pass covers a [0, 10) render window and writes
+    // post-edit contents at post-edit indexes before the realign runs.
+    const windowEnd = 10;
+    renderer.updateRenderCache(
+      makeDirtyLines(
+        editedLines
+          .slice(1, windowEnd)
+          .map((text, offset): [number, string] => [1 + offset, text])
+      ),
+      'light',
+      true
+    );
+    renderer.applyDocumentChange(
+      makeTextDocumentFromText(editedLines.join('\n') + '\n')
+    );
+
+    let styled = styledRowTexts(renderer.renderDiff(diff));
+    expect(styled).toContain(lineText(windowEnd + 5));
+    expect(styled).toContain(lineText(totalLines));
+
+    // A later structural edit realigns editor-shaped lines on both sides;
+    // rows below the edit must keep riding their shifted cache entries.
+    editedLines.splice(1, 1);
+    renderer.applyDocumentChange(
+      makeTextDocumentFromText(editedLines.join('\n') + '\n')
+    );
+
+    styled = styledRowTexts(renderer.renderDiff(diff));
+    expect(styled).toContain(lineText(windowEnd + 5));
+    expect(styled).toContain(lineText(totalLines));
   });
 
   test('reverting a hunk keeps it as a context-only region', async () => {

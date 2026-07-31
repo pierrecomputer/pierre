@@ -175,3 +175,53 @@ describe('UnresolvedFile sequential conflict resolution', () => {
     }
   });
 });
+
+describe('UnresolvedFile token callbacks', () => {
+  test('token callbacks alone produce data-char markup', async () => {
+    const { cleanup } = installDom();
+    const fileContainer = document.createElement('div');
+    document.body.appendChild(fileContainer);
+    const state = parseMergeConflictDiffFromFile(TWO_CONFLICT_FILE);
+    // No explicit useTokenTransformer: the unresolved option builder must
+    // resolve the callback implication itself (it spreads options wholesale
+    // instead of using the File/FileDiff snapshots).
+    const instance = new UnresolvedFile(
+      {
+        theme: DEFAULT_THEMES,
+        mergeConflictActionsType: 'default',
+        onMergeConflictAction: () => undefined,
+        onTokenClick: () => undefined,
+      },
+      undefined,
+      true
+    );
+    try {
+      instance.hydrate({
+        fileDiff: state.fileDiff,
+        actions: state.actions,
+        markerRows: state.markerRows,
+        fileContainer,
+      });
+      instance.render({
+        fileDiff: state.fileDiff,
+        actions: state.actions,
+        markerRows: state.markerRows,
+      });
+      const dataCharCount = () =>
+        (fileContainer.shadowRoot ?? fileContainer).querySelectorAll(
+          '[data-char]'
+        ).length;
+      const deadline = Date.now() + 4000;
+      while (dataCharCount() === 0 && Date.now() < deadline) {
+        await wait(10);
+      }
+      expect(dataCharCount()).toBeGreaterThan(0);
+    } finally {
+      instance.cleanUp();
+      document.body.innerHTML = '';
+      await wait(0);
+      cleanup();
+      await disposeHighlighter();
+    }
+  });
+});

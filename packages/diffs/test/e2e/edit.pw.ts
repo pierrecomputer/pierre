@@ -18,6 +18,12 @@ const canRedo = (page: Page): Promise<boolean> =>
   page.evaluate(() => window.__editor?.canRedo ?? false);
 const changeCount = (page: Page): Promise<number> =>
   page.evaluate(() => window.__editorEvents?.length ?? 0);
+const editorHasFocus = (page: Page): Promise<boolean> =>
+  page.evaluate((selector) => {
+    const root = document.querySelector('diffs-container')?.shadowRoot;
+    const content = root?.querySelector(selector);
+    return root?.activeElement === content;
+  }, ADDITIONS);
 
 // Real user path: a plain click into the editable additions column places the
 // caret, then typing flows through the genuine keyboard -> beforeinput ->
@@ -28,6 +34,77 @@ const changeCount = (page: Page): Promise<number> =>
 // caret unseeded and every keystroke was silently dropped.
 async function clickIntoAdditions(page: Page): Promise<void> {
   await page.locator(ADDITIONS).click();
+}
+
+async function moveFocusDuringFullRender(
+  page: Page,
+  target: 'background' | 'external-link' | 'host',
+  timing: 'replacement' | 'after-sync'
+): Promise<void> {
+  await page.evaluate(
+    ({ selector, target, timing }) =>
+      new Promise<void>((resolve, reject) => {
+        const host = document.querySelector('diffs-container');
+        const root = host?.shadowRoot;
+        const content = root?.querySelector(selector);
+        const code = content?.parentElement;
+        const externalLink = document.querySelector('[data-fixtures-index]');
+        const focusTarget =
+          target === 'host'
+            ? host
+            : target === 'background'
+              ? document.body
+              : externalLink;
+        if (
+          !(host instanceof HTMLElement) ||
+          !(code instanceof HTMLElement) ||
+          !(focusTarget instanceof HTMLElement)
+        ) {
+          reject(new Error('missing editor or external focus target'));
+          return;
+        }
+        if (target === 'host') {
+          host.tabIndex = -1;
+        }
+        const observer = new MutationObserver(() => {
+          const replacement = root?.querySelector(selector);
+          if (
+            replacement === content ||
+            (timing === 'after-sync' &&
+              replacement?.getAttribute('contenteditable') !== 'true')
+          ) {
+            return;
+          }
+          observer.disconnect();
+          if (target === 'background') {
+            focusTarget.dispatchEvent(
+              new PointerEvent('pointerdown', {
+                bubbles: true,
+                composed: true,
+              })
+            );
+          } else {
+            focusTarget.focus();
+            if (
+              target === 'host' &&
+              (document.activeElement !== host || root?.activeElement != null)
+            ) {
+              reject(new Error('host did not receive focus'));
+              return;
+            }
+          }
+          resolve();
+        });
+        observer.observe(code, {
+          attributes: true,
+          attributeFilter: ['contenteditable'],
+          childList: true,
+          subtree: true,
+        });
+        window.__forceEditorFullRender?.();
+      }),
+    { selector: ADDITIONS, target, timing }
+  );
 }
 
 test.describe('edit mode', () => {
@@ -82,6 +159,176 @@ test.describe('edit mode', () => {
     await expect(page.locator(ADDITIONS)).toContainText('Z');
     await expect.poll(() => changeCount(page)).toBeGreaterThan(0);
     await expect.poll(() => canUndo(page)).toBe(true);
+  });
+
+  test('focused editor survives a full render and accepts input', async ({
+    page,
+  }) => {
+    await openFixture(page);
+
+    const additions = page.locator(ADDITIONS);
+    await additions.click();
+    await expect.poll(() => editorHasFocus(page)).toBe(true);
+    const previousContent = await additions.elementHandle();
+    if (previousContent == null) {
+      throw new Error('missing additions content');
+    }
+
+    await page.evaluate(() => window.__forceEditorFullRender?.());
+
+    await expect
+      .poll(() =>
+        additions.evaluate(
+          (content, previous) => content !== previous,
+          previousContent
+        )
+      )
+      .toBe(true);
+    await expect.poll(() => editorHasFocus(page)).toBe(true);
+    await page.keyboard.type('Z');
+    await expect(additions).toContainText('Z');
+  });
+
+  test('focused editor survives overlapping full renders', async ({ page }) => {
+    await openFixture(page);
+
+    const additions = page.locator(ADDITIONS);
+    await additions.click();
+    await page.evaluate(
+      (selector) =>
+        new Promise<void>((resolve, reject) => {
+          const root = document.querySelector('diffs-container')?.shadowRoot;
+          const content = root?.querySelector(selector);
+          const code = content?.parentElement;
+          if (!(code instanceof HTMLElement)) {
+            reject(new Error('missing editor content'));
+            return;
+          }
+          const observer = new MutationObserver(() => {
+            const replacement = root?.querySelector(selector);
+            if (
+              replacement === content ||
+              replacement?.getAttribute('contenteditable') !== 'true'
+            ) {
+              return;
+            }
+            observer.disconnect();
+            window.__forceEditorFullRender?.();
+            resolve();
+          });
+          observer.observe(code, {
+            attributes: true,
+            attributeFilter: ['contenteditable'],
+            childList: true,
+            subtree: true,
+          });
+          window.__forceEditorFullRender?.();
+        }),
+      ADDITIONS
+    );
+
+    await expect.poll(() => editorHasFocus(page)).toBe(true);
+    await page.keyboard.type('Z');
+    await expect(additions).toContainText('Z');
+  });
+
+  test('focused editor without a selection survives a full render', async ({
+    page,
+  }) => {
+    await openFixture(page);
+
+    await page.evaluate(() => {
+      window.__editor?.setSelections([]);
+      window.__editor?.focus();
+    });
+    await expect.poll(() => editorHasFocus(page)).toBe(true);
+
+    await page.evaluate(() => window.__forceEditorFullRender?.());
+
+    await expect.poll(() => editorHasFocus(page)).toBe(true);
+  });
+
+  test('focused editor survives moving to a new container', async ({
+    page,
+  }) => {
+    await openFixture(page);
+
+    const additions = page.locator(ADDITIONS);
+    await additions.click();
+    await page.evaluate(() => window.__moveEditorContainer?.());
+
+    await expect.poll(() => editorHasFocus(page)).toBe(true);
+    await page.keyboard.type('Z');
+    await expect(additions).toContainText('Z');
+  });
+
+  test('full render does not reclaim focus moved during replacement', async ({
+    page,
+  }) => {
+    await openFixture(page);
+
+    await clickIntoAdditions(page);
+    const fixturesLink = page.locator('[data-fixtures-index]');
+    await moveFocusDuringFullRender(page, 'external-link', 'replacement');
+
+    await expect(fixturesLink).toBeFocused();
+  });
+
+  test('full render does not reclaim focus after a background press', async ({
+    page,
+  }) => {
+    await openFixture(page);
+
+    await clickIntoAdditions(page);
+    await moveFocusDuringFullRender(page, 'background', 'replacement');
+
+    await expect.poll(() => editorHasFocus(page)).toBe(false);
+  });
+
+  test('stopped background press that starts a full render does not restore focus', async ({
+    page,
+  }) => {
+    await openFixture(page);
+
+    await clickIntoAdditions(page);
+    await page.evaluate(() => {
+      document.body.addEventListener(
+        'pointerdown',
+        (event) => {
+          window.__forceEditorFullRender?.();
+          event.stopPropagation();
+        },
+        { once: true }
+      );
+      document.body.dispatchEvent(
+        new PointerEvent('pointerdown', { bubbles: true, composed: true })
+      );
+    });
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) => {
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+        })
+    );
+
+    await expect.poll(() => editorHasFocus(page)).toBe(false);
+  });
+
+  test('full render does not reclaim focus moved to its host', async ({
+    page,
+  }) => {
+    await openFixture(page);
+
+    await clickIntoAdditions(page);
+    await moveFocusDuringFullRender(page, 'host', 'after-sync');
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) => {
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+        })
+    );
+
+    await expect.poll(() => editorHasFocus(page)).toBe(false);
   });
 
   test('undo and redo round-trip a typed edit', async ({ page }) => {

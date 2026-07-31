@@ -45,6 +45,15 @@ Usage:
 
 ```
 
+## Agent skill
+
+Install the agent skill for this package with the
+[Skills CLI](https://skills.sh/docs/cli):
+
+```bash
+npx skills add pierrecomputer/pierre --skill theme
+```
+
 Contributing:
 
 - Development, build, and testing: [CONTRIBUTING.md](CONTRIBUTING.md)

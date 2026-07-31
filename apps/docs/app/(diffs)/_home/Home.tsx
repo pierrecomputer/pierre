@@ -47,7 +47,7 @@ export default function Home() {
         <Hero productId={PRODUCT_ID} />
         <HeadingAnchors />
         <section className="space-y-12 pb-8">
-          <EditorSection />
+          <EditSection />
           <SplitUnifiedSection />
           <DiffStylesSection />
           <MergeConflictSection />
@@ -74,7 +74,7 @@ export default function Home() {
 // Server-renders the embedded editor demo's diffs. We pick the live AUI
 // session and prerender each changed file's diff with the demo's default dark
 // theme so the card paints highlighted on first load and hydrates cleanly.
-async function EditorSection() {
+async function EditSection() {
   return (
     <AgentDemoSection prerenderedDiffs={await preloadAuiPrerenderedDiffs()} />
   );

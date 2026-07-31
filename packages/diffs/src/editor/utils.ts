@@ -68,7 +68,7 @@ export function addEventListener(
   options?: AddEventListenerOptions
 ) {
   el.addEventListener(event, listener, options);
-  return () => el.removeEventListener(event, listener);
+  return () => el.removeEventListener(event, listener, options);
 }
 
 export function getLineNumberAttr(

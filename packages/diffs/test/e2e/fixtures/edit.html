@@ -49,7 +49,7 @@
 
     <script type="module">
       import { FileDiff } from '/dist/index.js';
-      import { Editor } from '/dist/editor/index.js';
+      import { Editor } from '/dist/edit/index.js';
 
       const mount = document.querySelector('[data-diff-mount]');
       const log = document.querySelector('[data-editor-log]');
@@ -99,6 +99,32 @@ export default value;
 
       instance.render({ oldFile, newFile, containerWrapper: mount });
       editor.edit(instance);
+      window.__forceEditorFullRender = () => {
+        instance.setOptions({
+          ...instance.options,
+          disableLineNumbers: !(instance.options.disableLineNumbers ?? false),
+        });
+        instance.render({ oldFile, newFile, forceRender: true });
+      };
+      window.__moveEditorContainer = () => {
+        const previousContainer = mount.querySelector('diffs-container');
+        const nextContainer = document.createElement('diffs-container');
+        instance.setOptions({
+          ...instance.options,
+          onPostRender(container, _, phase) {
+            if (phase === 'unmount' && container === previousContainer) {
+              container.remove();
+            }
+          },
+        });
+        mount.appendChild(nextContainer);
+        instance.render({
+          oldFile,
+          newFile,
+          fileContainer: nextContainer,
+          forceRender: true,
+        });
+      };
 
       const findAdditionsContent = () => {
         const host = mount.querySelector('diffs-container');

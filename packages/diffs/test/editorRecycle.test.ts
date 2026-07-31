@@ -18,9 +18,9 @@ function createTestHighlighter(): DiffsHighlighter {
   return {
     getLanguage: () => undefined,
     getLoadedLanguages: () => [],
-    getTheme: () => ({ colors: {} }),
+    getTheme: () => ({ type: 'light', colors: {} }),
     loadLanguage: async () => {},
-    setTheme: () => ({ colorMap: [''] }),
+    setTheme: () => ({ theme: { type: 'light' }, colorMap: [''] }),
   } as unknown as DiffsHighlighter;
 }
 
@@ -37,9 +37,22 @@ class TestEditableComponent implements DiffsEditableComponent<undefined> {
   #file: FileContents;
   #lineAnnotations?: DiffLineAnnotation<undefined>[];
   #renderRange?: RenderRange;
+  #queueRerender: boolean;
+  #onContentFocus?: (content: HTMLElement) => void;
 
-  constructor(file: FileContents) {
+  constructor(
+    file: FileContents,
+    {
+      queueRerender = false,
+      onContentFocus,
+    }: {
+      queueRerender?: boolean;
+      onContentFocus?: (content: HTMLElement) => void;
+    } = {}
+  ) {
     this.#file = file;
+    this.#queueRerender = queueRerender;
+    this.#onContentFocus = onContentFocus;
     this.#renderShadowDom();
   }
 
@@ -62,6 +75,16 @@ class TestEditableComponent implements DiffsEditableComponent<undefined> {
 
   setEditorActiveLine(_lineNumber: number | null): void {}
 
+  __getEffectiveCodeOptions(): DiffsEditableComponent<undefined>['options'] {
+    return this.options;
+  }
+
+  getCodeScrollLeft(): number {
+    return 0;
+  }
+
+  setCodeScrollLeft(): void {}
+
   render({
     file,
     lineAnnotations,
@@ -81,6 +104,13 @@ class TestEditableComponent implements DiffsEditableComponent<undefined> {
   }
 
   rerender(): void {
+    if (this.#queueRerender) {
+      queueRender(() => {
+        this.#renderShadowDom();
+        void Promise.resolve().then(() => this.#syncRenderView());
+      });
+      return;
+    }
     this.#renderShadowDom();
     this.#syncRenderView();
   }
@@ -110,8 +140,7 @@ class TestEditableComponent implements DiffsEditableComponent<undefined> {
 
   updateRenderCache(
     _lines: Map<number, Array<HighlightedToken>>,
-    _themeType: 'dark' | 'light',
-    _shouldRefreshView: boolean
+    _themeType: 'dark' | 'light'
   ): void {}
 
   #syncRenderView(): void {
@@ -129,6 +158,9 @@ class TestEditableComponent implements DiffsEditableComponent<undefined> {
       this.fileContainer.shadowRoot ??
       this.fileContainer.attachShadow({ mode: 'open' });
     shadowRoot.replaceChildren();
+    if (this.#renderRange?.totalLines === 0) {
+      return;
+    }
 
     const code = document.createElement('div');
     code.dataset.code = '';
@@ -138,6 +170,9 @@ class TestEditableComponent implements DiffsEditableComponent<undefined> {
 
     const content = document.createElement('div');
     content.dataset.content = '';
+    if (this.#onContentFocus !== undefined) {
+      content.focus = () => this.#onContentFocus?.(content);
+    }
 
     const lines = this.#file.contents.split('\n');
     for (const [index, line] of lines.entries()) {
@@ -186,6 +221,35 @@ function insertAtStart(editor: Editor<undefined>, text: string): void {
 }
 
 describe('Editor onAttach lifecycle', () => {
+  test('waits for a queued host rerender to synchronize before notifying', async () => {
+    const dom = installDom();
+    const focusTargets: HTMLElement[] = [];
+    const onAttach = mock((attachedEditor: Editor<undefined>) => {
+      attachedEditor.focus({ preventScroll: true });
+    });
+    const editor = new Editor<undefined>({ onAttach });
+    const component = new TestEditableComponent(createFile(), {
+      queueRerender: true,
+      onContentFocus: (content) => focusTargets.push(content),
+    });
+    try {
+      // A queued host rerender (theme change, async highlight, hydration)
+      // replaces the shadow DOM while the attach sync is still pending;
+      // onAttach must wait for the replacement to synchronize.
+      component.rerender();
+      editor.edit(component);
+      await wait(20);
+
+      expect(onAttach).toHaveBeenCalledTimes(1);
+      expect(focusTargets).toHaveLength(1);
+      expect(focusTargets[0] === component.contentElement).toBe(true);
+    } finally {
+      editor.cleanUp();
+      component.cleanUp();
+      dom.cleanup();
+    }
+  });
+
   test('ignores pending notifications and late syncs after full cleanup', async () => {
     const dom = installDom();
     const onAttach = mock(
@@ -378,6 +442,87 @@ describe('Editor recycle cleanUp', () => {
 
       editor.cleanUp();
     } finally {
+      dom.cleanup();
+    }
+  });
+
+  test('an empty virtualized window preserves selections without restoring focus', async () => {
+    const dom = installDom();
+    const onAttach = mock((attachedEditor: Editor<undefined>) => {
+      attachedEditor.focus({ lineNumber: 2, preventScroll: true });
+    });
+    const editor = new Editor<undefined>({ onAttach });
+    const component = new TestEditableComponent(createFile());
+    try {
+      editor.edit(component);
+      await wait(20);
+
+      expect(onAttach).toHaveBeenCalledTimes(1);
+      expect(editor.getState().selections?.[0]?.start.line).toBe(1);
+
+      component.contentElement.dispatchEvent(new Event('blur'));
+      component.render({
+        renderRange: {
+          startingLine: 0,
+          totalLines: 0,
+          bufferBefore: 0,
+          bufferAfter: 60,
+        },
+      });
+
+      component.render({
+        renderRange: {
+          startingLine: 0,
+          totalLines: 3,
+          bufferBefore: 0,
+          bufferAfter: 0,
+        },
+      });
+      const restoredFocus = mock((_options?: FocusOptions) => {});
+      component.contentElement.focus = restoredFocus;
+      await wait(20);
+
+      expect(restoredFocus).not.toHaveBeenCalled();
+      Object.defineProperty(component.contentElement, 'offsetWidth', {
+        configurable: true,
+        value: 100,
+      });
+      dom.triggerResizeObserver(component.contentElement);
+      await wait(20);
+
+      expect(restoredFocus).not.toHaveBeenCalled();
+      expect(onAttach).toHaveBeenCalledTimes(1);
+      expect(editor.getState().selections?.[0]?.start.line).toBe(1);
+    } finally {
+      editor.cleanUp();
+      component.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test('a blur during the deferred attach-focus frame cancels the stale focus', async () => {
+    const dom = installDom();
+    const restoredFocus = mock((_options?: FocusOptions) => {});
+    const onAttach = mock((attachedEditor: Editor<undefined>) => {
+      // The positional focus defers its real focus() call to a rAF. A blur
+      // plus a host rerender landing in that gap must cancel the stale
+      // frame instead of pulling focus into the replaced content.
+      attachedEditor.focus({ lineNumber: 2, preventScroll: true });
+      component.contentElement.dispatchEvent(new Event('blur'));
+      component.rerender();
+      component.contentElement.focus = restoredFocus;
+    });
+    const editor = new Editor<undefined>({ onAttach });
+    const component = new TestEditableComponent(createFile());
+    try {
+      editor.edit(component);
+      await wait(20);
+
+      expect(onAttach).toHaveBeenCalledTimes(1);
+      expect(restoredFocus).not.toHaveBeenCalled();
+    } finally {
+      editor.cleanUp();
+      component.cleanUp();
       dom.cleanup();
     }
   });

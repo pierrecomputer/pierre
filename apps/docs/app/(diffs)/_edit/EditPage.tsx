@@ -19,8 +19,8 @@ import { Header } from '@/components/Header';
 import { PierreCompanySection } from '@/components/PierreCompanySection';
 
 interface EditPageProps {
-  liveEditorFile: PreloadedFileResult<undefined>;
-  liveDiffEditorDiff: PreloadFileDiffResult<undefined>;
+  liveEditingFile: PreloadedFileResult<undefined>;
+  liveEditingDiff: PreloadFileDiffResult<undefined>;
   markerFile: PreloadedFileResult<undefined>;
   findFile: PreloadedFileResult<undefined>;
   historyFile: PreloadedFileResult<undefined>;
@@ -29,8 +29,8 @@ interface EditPageProps {
 }
 
 export function EditPage({
-  liveEditorFile,
-  liveDiffEditorDiff,
+  liveEditingFile,
+  liveEditingDiff,
   markerFile,
   findFile,
   historyFile,
@@ -46,8 +46,8 @@ export function EditPage({
 
         <section className="space-y-16 pb-8">
           <LiveEditing
-            prerenderedFile={liveEditorFile}
-            prerenderedDiff={liveDiffEditorDiff}
+            prerenderedFile={liveEditingFile}
+            prerenderedDiff={liveEditingDiff}
           />
 
           <div className="space-y-5">

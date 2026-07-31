@@ -41,11 +41,11 @@ import {
 } from '../src/editor/selection';
 import { DirectionBackward } from '../src/editor/selection';
 import { TextDocument } from '../src/editor/textDocument';
-import type { ResolvedTextEdit } from '../src/editor/textDocument';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
 import type {
   EditorSelection,
   FileContents,
+  ResolvedTextEdit,
   SelectionDirection,
 } from '../src/types';
 import { installDom, wait } from './domHarness';

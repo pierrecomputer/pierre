@@ -1,6 +1,6 @@
 'use client';
 
-import type { EditorOptions } from '@pierre/diffs/editor';
+import type { EditorOptions } from '@pierre/diffs/edit';
 import { File } from '@pierre/diffs/react';
 import type { PreloadedFileResult } from '@pierre/diffs/ssr';
 import { useMemo } from 'react';
@@ -15,7 +15,7 @@ interface MarkerDemoProps {
 // Demo of the editor's lint markers, applied imperatively via `editor.setMarkers`
 // (the same call a real linter integration would make) and shown by default.
 export function MarkerDemo({ prerenderedFile }: MarkerDemoProps) {
-  const editOptions = useMemo<EditorOptions<undefined>>(
+  const editorOptions = useMemo<EditorOptions<undefined>>(
     () => ({
       onAttach(editor) {
         editor.setMarkers(MARKER_DEMO_MARKERS);
@@ -30,7 +30,7 @@ export function MarkerDemo({ prerenderedFile }: MarkerDemoProps) {
         {...prerenderedFile}
         className="diff-container"
         edit
-        editOptions={editOptions}
+        editorOptions={editorOptions}
       />
     </div>
   );

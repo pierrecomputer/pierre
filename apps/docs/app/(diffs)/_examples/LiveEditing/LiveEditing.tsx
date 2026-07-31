@@ -1,7 +1,7 @@
 'use client';
 
 import { cloneFileDiffMetadata } from '@pierre/diffs';
-import type { EditorOptions } from '@pierre/diffs/editor';
+import type { EditorOptions } from '@pierre/diffs/edit';
 import { File, FileDiff } from '@pierre/diffs/react';
 import type {
   PreloadedFileResult,
@@ -15,7 +15,7 @@ import {
 } from '@pierre/icons';
 import { useCallback, useMemo, useState } from 'react';
 
-import { LIVE_EDITOR_NEW_FILE } from '../LiveEditor/constants';
+import { LIVE_EDITING_NEW_FILE } from './constants';
 import { FeatureHeader } from '@/components/FeatureHeader';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
@@ -35,7 +35,7 @@ type Surface = 'file' | 'diff';
 
 // Review renders the surface read-only (how diffs renders by default); Edit
 // attaches the editor and makes it editable in place.
-type EditorMode = 'review' | 'edit';
+type EditMode = 'review' | 'edit';
 
 // Layout the diff renders in. Only applies to the FileDiff surface.
 type DiffLayout = 'unified' | 'split';
@@ -48,7 +48,7 @@ export function LiveEditing({
   const [surface, setSurface] = useState<Surface>('file');
   // Default to Edit so the editor is live on first paint; the toggle drops back
   // to a read-only Review of the same surface.
-  const [mode, setMode] = useState<EditorMode>('edit');
+  const [mode, setMode] = useState<EditMode>('edit');
   // Default to the layout the diff was prerendered in (unified) so the first
   // paint hydrates without a flash; toggling re-renders the surface client-side.
   const [diffLayout, setDiffLayout] = useState<DiffLayout>(
@@ -73,11 +73,11 @@ export function LiveEditing({
     [pristineFileDiff, resetKey]
   );
 
-  const editOptions = useMemo<EditorOptions<undefined>>(
+  const editorOptions = useMemo<EditorOptions<undefined>>(
     () => ({
       // Both surfaces synchronously report the current new-file contents.
       onChange(file) {
-        setHasEdits(file.contents !== LIVE_EDITOR_NEW_FILE.contents);
+        setHasEdits(file.contents !== LIVE_EDITING_NEW_FILE.contents);
       },
     }),
     []
@@ -131,16 +131,16 @@ export function LiveEditing({
   return (
     <div className="space-y-5">
       <FeatureHeader
-        id="editor"
+        id="edit"
         title="Live editing"
         description={
           <>
-            Editor mode (experimental) makes any code surface—<code>File</code>{' '}
-            or <code>FileDiff</code>—editable in place. Toggle between a
-            read-only <strong>Review</strong> and a live <strong>Edit</strong>,
-            switch the surface between a file and a diff, and render the diff
-            unified or side-by-side split. Start typing in the code below and it
-            updates as you edit.
+            Edit mode (experimental) makes any code surface—<code>File</code> or{' '}
+            <code>FileDiff</code>—editable in place. Toggle between a read-only{' '}
+            <strong>Review</strong> and a live <strong>Edit</strong>, switch the
+            surface between a file and a diff, and render the diff unified or
+            side-by-side split. Start typing in the code below and it updates as
+            you edit.
           </>
         }
       />
@@ -212,7 +212,7 @@ export function LiveEditing({
             className="diff-container"
             renderHeaderMetadata={headerMetadata}
             edit={edit}
-            editOptions={editOptions}
+            editorOptions={editorOptions}
           />
         ) : (
           <FileDiff
@@ -223,7 +223,7 @@ export function LiveEditing({
             className="diff-container"
             renderHeaderMetadata={headerMetadata}
             edit={edit}
-            editOptions={editOptions}
+            editorOptions={editorOptions}
           />
         )}
       </div>

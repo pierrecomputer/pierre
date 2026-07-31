@@ -1,11 +1,13 @@
 import { describe, expect, test } from 'bun:test';
 
 import { Editor } from '../src/editor/editor';
+import type { IStateStorage } from '../src/editor/stateStorage';
 import type {
   DiffLineAnnotation,
   DiffsEditableComponent,
   DiffsEditor,
   DiffsHighlighter,
+  EditorState,
   FileContents,
   HighlightedToken,
   RenderRange,
@@ -16,9 +18,9 @@ function createTestHighlighter(): DiffsHighlighter {
   return {
     getLanguage: () => undefined,
     getLoadedLanguages: () => [],
-    getTheme: () => ({ colors: {} }),
+    getTheme: () => ({ type: 'light', colors: {} }),
     loadLanguage: async () => {},
-    setTheme: () => ({ colorMap: [''] }),
+    setTheme: () => ({ theme: { type: 'light' }, colorMap: [''] }),
   } as unknown as DiffsHighlighter;
 }
 
@@ -34,11 +36,10 @@ class TestEditableComponent implements DiffsEditableComponent<undefined> {
   #editor?: DiffsEditor<undefined>;
   #lineAnnotations?: DiffLineAnnotation<undefined>[];
   #renderRange?: RenderRange;
+  codeScrollLeft = 0;
+  restoredCodeScrollLefts: number[] = [];
 
-  constructor(
-    readonly scrollContainer: HTMLElement,
-    private file: FileContents
-  ) {
+  constructor(private file: FileContents) {
     this.#renderShadowDom();
   }
 
@@ -50,8 +51,17 @@ class TestEditableComponent implements DiffsEditableComponent<undefined> {
 
   setEditorActiveLine(_lineNumber: number | null): void {}
 
-  getScrollContainer(): HTMLElement {
-    return this.scrollContainer;
+  __getEffectiveCodeOptions(): DiffsEditableComponent<undefined>['options'] {
+    return this.options;
+  }
+
+  getCodeScrollLeft(): number {
+    return this.codeScrollLeft;
+  }
+
+  setCodeScrollLeft(position: number): void {
+    this.codeScrollLeft = position;
+    this.restoredCodeScrollLefts.push(position);
   }
 
   render({
@@ -98,8 +108,7 @@ class TestEditableComponent implements DiffsEditableComponent<undefined> {
 
   updateRenderCache(
     _lines: Map<number, Array<HighlightedToken>>,
-    _themeType: 'dark' | 'light',
-    _shouldRefreshView: boolean
+    _themeType: 'dark' | 'light'
   ): void {}
 
   #syncRenderView(): void {
@@ -138,48 +147,73 @@ class TestEditableComponent implements DiffsEditableComponent<undefined> {
 }
 
 describe('Editor state', () => {
-  test('setState restores the saved scroll position', () => {
+  test('getState captures horizontal state from the code scroller', () => {
     const dom = installDom();
-    const scrollContainer = document.createElement('div');
-    document.body.appendChild(scrollContainer);
-
-    const scrollCalls: ScrollToOptions[] = [];
-    scrollContainer.scrollTo = (
-      options?: ScrollToOptions | number,
-      y?: number
-    ) => {
-      const left =
-        typeof options === 'number'
-          ? options
-          : (options?.left ?? scrollContainer.scrollLeft);
-      const top =
-        typeof options === 'number'
-          ? (y ?? scrollContainer.scrollTop)
-          : (options?.top ?? scrollContainer.scrollTop);
-      scrollContainer.scrollLeft = left;
-      scrollContainer.scrollTop = top;
-      scrollCalls.push({ left, top });
-    };
-
     const editor = new Editor<undefined>();
-    const component = new TestEditableComponent(scrollContainer, {
+    const component = new TestEditableComponent({
       name: 'state.ts',
       contents: 'alpha\nbravo',
     });
 
     try {
       editor.edit(component);
-      scrollContainer.scrollLeft = 24;
-      scrollContainer.scrollTop = 128;
-      const state = editor.getState();
+      component.codeScrollLeft = 24;
 
-      scrollContainer.scrollLeft = 0;
-      scrollContainer.scrollTop = 0;
-      editor.setState(state);
+      expect(editor.getState().view).toEqual({ scrollLeft: 24 });
+    } finally {
+      editor.cleanUp();
+      component.cleanUp();
+      dom.cleanup();
+    }
+  });
 
-      expect(scrollContainer.scrollLeft).toBe(24);
-      expect(scrollContainer.scrollTop).toBe(128);
-      expect(scrollCalls).toEqual([{ left: 24, top: 128 }]);
+  test('setState restores view state through the editable component', () => {
+    const dom = installDom();
+    const editor = new Editor<undefined>();
+    const component = new TestEditableComponent({
+      name: 'state.ts',
+      contents: 'alpha\nbravo',
+    });
+
+    try {
+      editor.edit(component);
+      editor.setState({ view: { scrollLeft: 24 } });
+
+      expect(component.restoredCodeScrollLefts).toEqual([24]);
+    } finally {
+      editor.cleanUp();
+      component.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test('automatic persistence stores horizontal state', () => {
+    const dom = installDom();
+    let storedState: EditorState | undefined;
+    const storage: IStateStorage = {
+      get() {
+        return undefined;
+      },
+      set(_cacheKey, state) {
+        storedState = state;
+      },
+    };
+    const editor = new Editor<undefined>({
+      persistState: true,
+      persistStateStorage: storage,
+    });
+    const component = new TestEditableComponent({
+      name: 'state.ts',
+      contents: 'alpha\nbravo',
+      cacheKey: 'state.ts',
+    });
+
+    try {
+      editor.edit(component);
+      component.codeScrollLeft = 24;
+      editor.cleanUp();
+
+      expect(storedState?.view).toEqual({ scrollLeft: 24 });
     } finally {
       editor.cleanUp();
       component.cleanUp();
@@ -189,38 +223,18 @@ describe('Editor state', () => {
 
   // A remount restore often carries both a viewport and a caret that sits
   // outside that viewport. The saved view must win; scrolling the caret into
-  // view would overwrite scrollTop/scrollLeft. jsdom's scrollIntoView is a
-  // no-op, so stub it to mutate the scroll container the way a real browser
-  // would when bringing an offscreen caret into view.
+  // view would overwrite it. jsdom's scrollIntoView is a no-op, so record any
+  // attempt to reveal the caret after restoring the saved logical view.
   test('setState keeps the saved view when the caret is outside it', () => {
     const dom = installDom();
-    const scrollContainer = document.createElement('div');
-    document.body.appendChild(scrollContainer);
-
-    scrollContainer.scrollTo = (
-      options?: ScrollToOptions | number,
-      y?: number
-    ) => {
-      const left =
-        typeof options === 'number'
-          ? options
-          : (options?.left ?? scrollContainer.scrollLeft);
-      const top =
-        typeof options === 'number'
-          ? (y ?? scrollContainer.scrollTop)
-          : (options?.top ?? scrollContainer.scrollTop);
-      scrollContainer.scrollLeft = left;
-      scrollContainer.scrollTop = top;
-    };
-
+    let scrollIntoViewCalls = 0;
     const originalScrollIntoView = Element.prototype.scrollIntoView;
     Element.prototype.scrollIntoView = function scrollIntoView() {
-      scrollContainer.scrollTop = 999;
-      scrollContainer.scrollLeft = 999;
+      scrollIntoViewCalls++;
     };
 
     const editor = new Editor<undefined>();
-    const component = new TestEditableComponent(scrollContainer, {
+    const component = new TestEditableComponent({
       name: 'state.ts',
       contents: 'alpha\nbravo\ncharlie\ndelta\necho\nfoxtrot\n',
     });
@@ -235,11 +249,11 @@ describe('Editor state', () => {
             direction: 0,
           },
         ],
-        view: { scrollLeft: 12, scrollTop: 40 },
+        view: { scrollLeft: 12 },
       });
 
-      expect(scrollContainer.scrollLeft).toBe(12);
-      expect(scrollContainer.scrollTop).toBe(40);
+      expect(component.restoredCodeScrollLefts).toEqual([12]);
+      expect(scrollIntoViewCalls).toBe(0);
       expect(editor.getState().selections).toEqual([
         {
           start: { line: 5, character: 0 },

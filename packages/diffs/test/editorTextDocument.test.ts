@@ -90,6 +90,17 @@ describe('TextDocument', () => {
     expect(d.lineCount).toBe(1);
     expect(d.getLineText(0)).toBe('');
     expect(change).toEqual({
+      changes: [
+        {
+          text: '',
+          range: {
+            start: { line: 0, character: 0 },
+            end: { line: 1, character: 5 },
+          },
+          start: 0,
+          end: 11,
+        },
+      ],
       startLine: 0,
       startCharacter: 0,
       endCharacter: 5,
@@ -308,6 +319,17 @@ describe('TextDocument', () => {
     ]);
     expect(d.getText()).toBe('hello you');
     expect(change).toEqual({
+      changes: [
+        {
+          text: 'you',
+          range: {
+            start: { line: 0, character: 6 },
+            end: { line: 0, character: 11 },
+          },
+          start: 6,
+          end: 11,
+        },
+      ],
       startLine: 0,
       startCharacter: 6,
       endCharacter: 11,
@@ -371,6 +393,17 @@ describe('TextDocument', () => {
     expect(d.getText()).toBe('a\nB\nc');
     expect(d.lineCount).toBe(3);
     expect(change).toEqual({
+      changes: [
+        {
+          text: 'B',
+          range: {
+            start: { line: 1, character: 0 },
+            end: { line: 1, character: 1 },
+          },
+          start: 2,
+          end: 3,
+        },
+      ],
       startLine: 1,
       startCharacter: 0,
       endCharacter: 1,
@@ -397,6 +430,17 @@ describe('TextDocument', () => {
     ]);
     expect(d.getText()).toBe('a\nb');
     expect(change).toEqual({
+      changes: [
+        {
+          text: '\nb',
+          range: {
+            start: { line: 0, character: 1 },
+            end: { line: 0, character: 1 },
+          },
+          start: 1,
+          end: 1,
+        },
+      ],
       startLine: 0,
       startCharacter: 1,
       endCharacter: 1,
@@ -423,6 +467,17 @@ describe('TextDocument', () => {
     ]);
     expect(d.getText()).toBe('ac');
     expect(change).toEqual({
+      changes: [
+        {
+          text: '',
+          range: {
+            start: { line: 0, character: 1 },
+            end: { line: 2, character: 0 },
+          },
+          start: 1,
+          end: 4,
+        },
+      ],
       startLine: 0,
       startCharacter: 1,
       endCharacter: 0,
@@ -464,6 +519,17 @@ describe('TextDocument', () => {
     expect(d.getText()).toBe('a\rb');
     expect(d.lineCount).toBe(2);
     expect(change).toEqual({
+      changes: [
+        {
+          text: '\rb',
+          range: {
+            start: { line: 0, character: 1 },
+            end: { line: 0, character: 1 },
+          },
+          start: 1,
+          end: 1,
+        },
+      ],
       startLine: 0,
       startCharacter: 1,
       endCharacter: 1,
@@ -491,6 +557,17 @@ describe('TextDocument', () => {
     expect(d.getText()).toBe('hello\rworld\rfoo');
     expect(d.lineCount).toBe(3);
     expect(change).toEqual({
+      changes: [
+        {
+          text: '\rworld\rfoo',
+          range: {
+            start: { line: 0, character: 5 },
+            end: { line: 0, character: 5 },
+          },
+          start: 5,
+          end: 5,
+        },
+      ],
       startLine: 0,
       startCharacter: 5,
       endCharacter: 5,
@@ -1195,6 +1272,17 @@ describe('TextDocument', () => {
     const undoResult = d.undo();
     expect(d.getText()).toBe('a');
     expect(undoResult?.[0]).toEqual({
+      changes: [
+        {
+          text: '',
+          range: {
+            start: { line: 0, character: 1 },
+            end: { line: 0, character: 2 },
+          },
+          start: 1,
+          end: 2,
+        },
+      ],
       startLine: 0,
       startCharacter: 1,
       endCharacter: 2,
@@ -1212,6 +1300,17 @@ describe('TextDocument', () => {
     const redoResult = d.redo();
     expect(d.getText()).toBe('ab');
     expect(redoResult?.[0]).toEqual({
+      changes: [
+        {
+          text: 'b',
+          range: {
+            start: { line: 0, character: 1 },
+            end: { line: 0, character: 1 },
+          },
+          start: 1,
+          end: 1,
+        },
+      ],
       startLine: 0,
       startCharacter: 1,
       endCharacter: 1,

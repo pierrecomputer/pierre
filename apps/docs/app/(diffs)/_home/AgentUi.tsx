@@ -1,7 +1,7 @@
 'use client';
 
 import { DEFAULT_THEMES, type FileDiffMetadata } from '@pierre/diffs';
-import type { EditorOptions } from '@pierre/diffs/editor';
+import type { EditorOptions } from '@pierre/diffs/edit';
 import { File, FileDiff } from '@pierre/diffs/react';
 import {
   IconArrow,
@@ -972,7 +972,7 @@ export function AgentUi({
   }, []);
 
   // Recomputes a file's +/- totals from its live edits. Routed through a ref so
-  // the stable edit options can call the latest version without listing
+  // the stable editor options can call the latest version without listing
   // `session` as a dependency.
   const recordEditedStats = useCallback(
     (target: string, contents: string) => {
@@ -1062,7 +1062,7 @@ export function AgentUi({
     [liveSession, editedPlaceholderFiles]
   );
 
-  const editOptions = useMemo<EditorOptions<undefined>>(
+  const editorOptions = useMemo<EditorOptions<undefined>>(
     () => ({
       enabledSelectionAction: true,
       renderSelectionAction(selectionAction) {
@@ -1277,7 +1277,7 @@ export function AgentUi({
                 options={{ ...AUI_DIFF_OPTIONS, theme }}
                 prerenderedHTML={activePrerenderedHTML}
                 edit
-                editOptions={editOptions}
+                editorOptions={editorOptions}
               />
             ) : placeholderContents != null && activePath != null ? (
               // Editable view for explorer files that aren't part of the change
@@ -1302,7 +1302,7 @@ export function AgentUi({
                 }}
                 disableWorkerPool
                 edit
-                editOptions={editOptions}
+                editorOptions={editorOptions}
               />
             ) : (
               <div className="aui-empty">Select a file to review.</div>

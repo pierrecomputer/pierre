@@ -28,7 +28,7 @@ export type FileTreeRowClickPlanInput = {
 export function computeFileTreeRowClickPlan(
   input: FileTreeRowClickPlanInput
 ): FileTreeRowClickPlan {
-  const { event, mode, isSearchOpen, isDirectory } = input;
+  const { event, mode, isDirectory } = input;
   const additive = event.ctrlKey || event.metaKey;
   const hasModifier = event.shiftKey || additive;
 
@@ -41,7 +41,10 @@ export function computeFileTreeRowClickPlan(
   // Sticky rows are aria-hidden mirrors of in-flow rows, so every sticky click
   // must hand off to the canonical row even when modifiers suppress toggling.
   return {
-    closeSearch: isSearchOpen,
+    // A row click does not close an open search. The user can then refine the
+    // search and select results. Keep this field on the plan. It gives the
+    // close decision one place to change later.
+    closeSearch: false,
     revealCanonical: mode === 'sticky',
     selection,
     toggleDirectory: !hasModifier && isDirectory,

@@ -8,7 +8,7 @@ import {
 
 import { FileDiff, type FileDiffOptions } from '../../components/FileDiff';
 import { VirtualizedFileDiff } from '../../components/VirtualizedFileDiff';
-import type { EditorOptions } from '../../editor';
+import type { EditorOptions } from '../../edit';
 import type { GetHoveredLineResult } from '../../managers/InteractionManager';
 import type {
   DiffLineAnnotation,
@@ -29,7 +29,7 @@ const useIsomorphicLayoutEffect =
 interface UseFileDiffInstanceProps<LAnnotation> {
   fileDiff: FileDiffMetadata;
   options: FileDiffOptions<LAnnotation> | undefined;
-  editOptions: EditorOptions<LAnnotation> | undefined;
+  editorOptions: EditorOptions<LAnnotation> | undefined;
   lineAnnotations: DiffLineAnnotation<LAnnotation>[] | undefined;
   selectedLines: SelectedLineRange | null | undefined;
   prerenderedHTML: string | undefined;
@@ -48,7 +48,7 @@ interface UseFileDiffInstanceReturn {
 export function useFileDiffInstance<LAnnotation>({
   fileDiff,
   options,
-  editOptions,
+  editorOptions,
   lineAnnotations,
   selectedLines,
   prerenderedHTML,
@@ -76,9 +76,7 @@ export function useFileDiffInstance<LAnnotation>({
         instanceRef.current = new VirtualizedFileDiff(
           mergeFileDiffOptions({
             controlledSelection,
-            edit,
             hasCustomHeader,
-            hasEditor: createEditor !== undefined,
             hasGutterRenderUtility,
             options,
           }),
@@ -91,9 +89,7 @@ export function useFileDiffInstance<LAnnotation>({
         instanceRef.current = new FileDiff(
           mergeFileDiffOptions({
             controlledSelection,
-            edit,
             hasCustomHeader,
-            hasEditor: createEditor !== undefined,
             hasGutterRenderUtility,
             options,
           }),
@@ -123,13 +119,16 @@ export function useFileDiffInstance<LAnnotation>({
     if (instance == null) return;
     const newOptions = mergeFileDiffOptions({
       controlledSelection,
-      edit,
       hasCustomHeader,
-      hasEditor: createEditor !== undefined,
       hasGutterRenderUtility,
       options,
     });
-    const forceRender = !areOptionsEqual(instance.options, newOptions);
+    // setOptions(undefined) is a no-op, so an undefined merge result never
+    // requires a forced render — comparing it against the instance's
+    // constructor-default options would force a full render on every commit.
+    const forceRender =
+      newOptions !== undefined &&
+      !areOptionsEqual(instance.options, newOptions);
     instance.setOptions(newOptions);
     void instance.render({
       forceRender,
@@ -146,7 +145,7 @@ export function useFileDiffInstance<LAnnotation>({
       if (createEditor === undefined) {
         throw new Error('FileDiff: EditContext is not attached');
       }
-      const editor = createEditor(editOptions ?? {});
+      const editor = createEditor(editorOptions ?? {});
       if (editor == null) {
         throw new Error(
           'FileDiff: EditProvider.createEditor must return an editor instance'
@@ -176,8 +175,6 @@ export function useFileDiffInstance<LAnnotation>({
 
 interface MergeFileDiffOptionsProps<LAnnotation> {
   controlledSelection: boolean;
-  edit: boolean;
-  hasEditor: boolean;
   hasCustomHeader: boolean;
   hasGutterRenderUtility: boolean;
   options: FileDiffOptions<LAnnotation> | undefined;
@@ -186,34 +183,26 @@ interface MergeFileDiffOptionsProps<LAnnotation> {
 function mergeFileDiffOptions<LAnnotation>({
   options,
   controlledSelection,
-  edit,
   hasCustomHeader,
-  hasEditor,
   hasGutterRenderUtility,
 }: MergeFileDiffOptionsProps<LAnnotation>):
   | FileDiffOptions<LAnnotation>
   | undefined {
-  const needsEditorOverrides = edit && hasEditor;
   const needsReactOverrides =
     controlledSelection || hasGutterRenderUtility || hasCustomHeader;
 
-  if (!needsReactOverrides && !needsEditorOverrides) {
+  if (!needsReactOverrides) {
     return options;
   }
 
   return {
     ...options,
-    ...(needsReactOverrides
-      ? {
-          controlledSelection,
-          renderCustomHeader: hasCustomHeader
-            ? noopRender
-            : options?.renderCustomHeader,
-          renderGutterUtility: hasGutterRenderUtility
-            ? noopRender
-            : options?.renderGutterUtility,
-        }
-      : null),
-    ...(needsEditorOverrides ? { useTokenTransformer: true } : null),
+    controlledSelection,
+    renderCustomHeader: hasCustomHeader
+      ? noopRender
+      : options?.renderCustomHeader,
+    renderGutterUtility: hasGutterRenderUtility
+      ? noopRender
+      : options?.renderGutterUtility,
   };
 }

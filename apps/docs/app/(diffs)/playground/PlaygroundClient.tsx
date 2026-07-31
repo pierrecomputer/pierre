@@ -8,7 +8,7 @@ import {
   isDiffAnnotationCollection,
   type SelectedLineRange,
 } from '@pierre/diffs';
-import type { Editor, EditorOptions } from '@pierre/diffs/editor';
+import type { Editor, EditorOptions } from '@pierre/diffs/edit';
 import {
   type CodeViewReactOptions,
   FileDiff,
@@ -119,8 +119,10 @@ const EMPTY_ANNOTATIONS: DiffLineAnnotation<PlaygroundAnnotationMetadata>[] =
 // on the annotation metadata generic, so a single annotation-agnostic type keeps
 // them assignable to FileDiff, VirtualizedFileDiff, and CodeView alike (spreading
 // a `<undefined>`-typed options object into an annotated FileDiff would otherwise
-// widen its annotation callbacks to `undefined`).
-type SharedRenderOptions = Pick<
+// widen its annotation callbacks to `undefined`). The Virtualizer views take
+// this as their options prop: it carries no callback keys, so it also spreads
+// cleanly into the plain-file FileOptions their README surface uses.
+export type SharedRenderOptions = Pick<
   FileDiffOptions<undefined>,
   | 'diffStyle'
   | 'diffIndicators'
@@ -310,7 +312,7 @@ function PlaygroundControlsContent({
             <ButtonGroup
               value={mode}
               onValueChange={(value) => setMode(value as Mode)}
-              aria-label="Editor mode"
+              aria-label="Edit mode"
               size="icon"
             >
               <ButtonGroupItem value="review">
@@ -723,10 +725,11 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
   // commit lands frames later (blank comments, collapsed rows); a synchronous
   // one lands before this task's paint.
   const editorRef = useRef<Editor<PlaygroundAnnotationMetadata> | null>(null);
-  const editOptions = useMemo<EditorOptions<PlaygroundAnnotationMetadata>>(
+  const editorOptions = useMemo<EditorOptions<PlaygroundAnnotationMetadata>>(
     () => ({
-      onAttach(editor: Editor<PlaygroundAnnotationMetadata>) {
+      onAttach(editor) {
         editorRef.current = editor;
+        editor.focus({ lineNumber: 'first-visible', preventScroll: true });
       },
       onChange: (_file, lineAnnotations) => {
         if (
@@ -1129,7 +1132,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
       }
       className="border-border overflow-hidden rounded-lg border"
       edit={edit}
-      editOptions={editOptions}
+      editorOptions={editorOptions}
       selectedLines={selectedRange}
       lineAnnotations={showAnnotations ? annotations : EMPTY_ANNOTATIONS}
       options={options}

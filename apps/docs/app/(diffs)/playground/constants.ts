@@ -1,5 +1,6 @@
 import {
   type CodeViewItem,
+  type FileContents,
   type FileDiffMetadata,
   parseDiffFromFile,
 } from '@pierre/diffs';
@@ -275,6 +276,20 @@ const user = await getUser('123');
 \`\`\`
 `;
 
+// The plain-file items ship the README repeated 10x so the file surfaces are
+// long enough to scroll on their own. Only the file items use this — the diff
+// fixtures keep their authored sizes (one long fixture plus the shorter
+// variants).
+const LONG_README_CONTENT = NEW_README_CONTENT.repeat(10);
+
+// The long README as a ready-made plain file: leads the CodeView items and
+// both Virtualizer lists. FileContents is never mutated by the library, so
+// one shared instance is fine across surfaces.
+export const LONG_README_FILE: FileContents = {
+  name: 'README.md',
+  contents: LONG_README_CONTENT,
+};
+
 // Nested markup with meaningful indentation, for exercising edit-mode diff
 // alignment: wrapping/unwrapping containers, pushing lines around with
 // Enter, and re-indenting all reshape change blocks whose lines differ only
@@ -402,20 +417,198 @@ function variantDiff(base: BaseDiff, index: number): FileDiffMetadata {
   );
 }
 
-// Diffs rendered as a list in the Virtualizer (window/body scroll) mode.
-export const VIRTUALIZER_FILE_DIFFS: FileDiffMetadata[] = Array.from(
-  { length: DIFF_VARIANT_COUNT },
-  (_, index) => BASE_DIFFS.map((base) => variantDiff(base, index))
-).flat();
+// -----------------------------------------------------------------------------
+// Long single-file fixture
+//
+// One diff tall enough to scroll through on its own: a generated "resource
+// registry" module with a get/list helper pair per table. Edits land in every
+// pair, so the rendered diff stays fully expanded (no collapsed unchanged
+// regions) and runs 600+ rows top to bottom.
+// -----------------------------------------------------------------------------
 
-// Items rendered in the CodeView mode: each variant contributes two diffs and a
-// plain file so the demo shows both item types scrolling within CodeView's own
-// scroll container.
-export const CODE_VIEW_ITEMS: CodeViewItem<PlaygroundAnnotationMetadata>[] =
-  Array.from(
+const LONG_FIXTURE_NAME = 'api/resources.ts';
+
+// Each table yields a ~14-line (old) / ~18-line (new) helper pair; 30 tables
+// keep the generated file past 500 lines. Every name pluralizes with a bare
+// `s`, which is how the table accessor and list-helper names are derived.
+const LONG_FIXTURE_TABLES = [
+  'account',
+  'project',
+  'repo',
+  'commit',
+  'issue',
+  'comment',
+  'label',
+  'milestone',
+  'review',
+  'deployment',
+  'webhook',
+  'token',
+  'session',
+  'team',
+  'invite',
+  'notification',
+  'tag',
+  'release',
+  'artifact',
+  'pipeline',
+  'job',
+  'runner',
+  'secret',
+  'environment',
+  'alert',
+  'dashboard',
+  'report',
+  'audit',
+  'changelog',
+  'snapshot',
+];
+
+// Builds the old/new contents of the long fixture. The new side rewrites each
+// helper pair — `get*` gains a missing-record throw (and drops `| null`),
+// `list*` gains a default limit and an `orderBy` — so a change lands at least
+// every ~6 lines. With the widened diff context in `longFixtureDiff`, that
+// density keeps the whole file in a single hunk with every line visible.
+function buildLongFixtureContents(): {
+  oldContents: string;
+  newContents: string;
+} {
+  const oldLines: string[] = [
+    '/**',
+    ' * Resource registry – CRUD helpers for every synced table.',
+    ' * @module api/resources',
+    ' */',
+    '',
+    "import { db } from './database';",
+    '',
+    'export interface Resource {',
+    '  id: string;',
+    '  createdAt: Date;',
+    '}',
+    '',
+  ];
+  const newLines: string[] = [
+    '/**',
+    ' * Resource registry – CRUD helpers for every synced table.',
+    ' * @module api/resources',
+    ' */',
+    '',
+    "import { db } from './database';",
+    "import { NotFoundError } from './errors';",
+    '',
+    'export interface Resource {',
+    '  id: string;',
+    '  createdAt: Date;',
+    '  updatedAt: Date;',
+    '}',
+    '',
+  ];
+
+  LONG_FIXTURE_TABLES.forEach((table, index) => {
+    const single = table.charAt(0).toUpperCase() + table.slice(1);
+    const plural = `${table}s`;
+    const defaultLimit = 20 + (index % 4) * 10;
+
+    oldLines.push(
+      `/** CRUD helpers for the \`${plural}\` table. */`,
+      `export async function get${single}(id: string): Promise<Resource | null> {`,
+      `  const record = await db.${plural}.findUnique({`,
+      '    where: { id },',
+      '  });',
+      '  return record;',
+      '}',
+      '',
+      `export async function list${single}s(limit: number): Promise<Resource[]> {`,
+      `  return db.${plural}.findMany({`,
+      '    take: limit,',
+      '  });',
+      '}',
+      ''
+    );
+    newLines.push(
+      `/** CRUD helpers for the \`${plural}\` table. */`,
+      `export async function get${single}(id: string): Promise<Resource> {`,
+      `  const record = await db.${plural}.findUnique({`,
+      '    where: { id },',
+      '  });',
+      '  if (record === null) {',
+      `    throw new NotFoundError('${table}', id);`,
+      '  }',
+      '  return record;',
+      '}',
+      '',
+      `export async function list${single}s(limit = ${defaultLimit}): Promise<Resource[]> {`,
+      `  return db.${plural}.findMany({`,
+      '    take: limit,',
+      "    orderBy: { createdAt: 'desc' },",
+      '  });',
+      '}',
+      ''
+    );
+  });
+
+  return {
+    oldContents: oldLines.join('\n'),
+    newContents: newLines.join('\n'),
+  };
+}
+
+const LONG_FIXTURE_CONTENTS = buildLongFixtureContents();
+
+// Fresh parse per call so each surface (Virtualizer list, CodeView items) gets
+// its own FileDiffMetadata instance, matching how `variantDiff` builds the
+// replicated fixtures. `context: 8` widens jsdiff's default of 4 so the added
+// import near the top keeps line 1 inside the first hunk instead of leaving a
+// two-line collapsed region above it.
+function longFixtureDiff(): FileDiffMetadata {
+  return parseDiffFromFile(
+    { name: LONG_FIXTURE_NAME, contents: LONG_FIXTURE_CONTENTS.oldContents },
+    { name: LONG_FIXTURE_NAME, contents: LONG_FIXTURE_CONTENTS.newContents },
+    { context: 8 }
+  );
+}
+
+// Diffs rendered as a list in the Virtualizer (window/body scroll) mode. The
+// long single-file fixture leads so scroll-heavy behavior inside one file is
+// reachable without paging through the shorter variants first.
+export const VIRTUALIZER_FILE_DIFFS: FileDiffMetadata[] = [
+  longFixtureDiff(),
+  ...Array.from({ length: DIFF_VARIANT_COUNT }, (_, index) =>
+    BASE_DIFFS.map((base) => variantDiff(base, index))
+  ).flat(),
+];
+
+// Items rendered in the CodeView mode: the long README file item leads,
+// followed by the long single-file diff (as in the Virtualizer list), then
+// each variant contributes two diffs and a plain file so the demo shows both
+// item types scrolling within CodeView's own scroll container.
+export const CODE_VIEW_ITEMS: CodeViewItem<PlaygroundAnnotationMetadata>[] = [
+  {
+    id: 'file:README.md',
+    type: 'file',
+    file: LONG_README_FILE,
+  },
+  {
+    id: `diff:${LONG_FIXTURE_NAME}`,
+    type: 'diff',
+    fileDiff: longFixtureDiff(),
+  },
+  ...Array.from(
     { length: DIFF_VARIANT_COUNT },
     (_, index): CodeViewItem<PlaygroundAnnotationMetadata>[] => {
       const readmeName = variantName('README.md', index);
+      // Variant 0's README file is hoisted to the head of the list above, so
+      // only the later variants emit a file item here.
+      const readmeItems: CodeViewItem<PlaygroundAnnotationMetadata>[] =
+        index === 0
+          ? []
+          : [
+              {
+                id: `file:${readmeName}`,
+                type: 'file',
+                file: { name: readmeName, contents: LONG_README_CONTENT },
+              },
+            ];
       return [
         {
           id: `diff:${variantName(USERS_BASE.name, index)}`,
@@ -427,11 +620,7 @@ export const CODE_VIEW_ITEMS: CodeViewItem<PlaygroundAnnotationMetadata>[] =
           type: 'diff',
           fileDiff: variantDiff(MARKUP_BASE, index),
         },
-        {
-          id: `file:${readmeName}`,
-          type: 'file',
-          file: { name: readmeName, contents: NEW_README_CONTENT },
-        },
+        ...readmeItems,
         {
           id: `diff:${variantName(STYLES_BASE.name, index)}`,
           type: 'diff',
@@ -439,7 +628,8 @@ export const CODE_VIEW_ITEMS: CodeViewItem<PlaygroundAnnotationMetadata>[] =
         },
       ];
     }
-  ).flat();
+  ).flat(),
+];
 
 export const ITEM_UNSAFE_CSS = `${CustomScrollbarCSS}
 [data-diffs-header] {
