@@ -330,17 +330,23 @@ Ranges use zero-based line and character positions.
 #### Persisting file state
 
 State persistence is disabled by default. Set `persistState: true` to preserve
-an editable `File`'s text document, undo history, selections, and horizontal
-code scroll position when the attached file renders a different file and later
-returns. This currently applies to `File` and `VirtualizedFile` surfaces; diff
-surfaces do not use the persistence cache.
+an editable surface's text document, undo history, and selections when the
+attached surface renders a different file and later returns. It applies to every
+editable surface: `File`, `FileDiff`, and their virtualized variants. Persisting
+the viewport scroll position (`scrollTop` and `scrollLeft`) additionally
+requires a virtualized surface: inside a `Virtualizer` the whole scroll viewport
+is saved (and resets to the origin when a cache key has no stored state yet),
+while `CodeView` items keep only their item-local horizontal code scroll.
+Standalone surfaces do not persist scroll offsets.
 
 Every editable file must provide an explicit, non-empty `file.cacheKey` while
 `persistState` is enabled. The editor throws if it encounters an unkeyed file;
-it does not fall back to `file.name`. Cache keys must be unique and stable
-within the persistence storage namespace. Reuse the same key when a rename or
-move should resume the same editing session; change it when new incoming
-contents should start a fresh document.
+it does not fall back to `file.name`. Diff surfaces are keyed by
+`fileDiff.cacheKey`; a diff without one falls back to a key derived from its
+file names. Cache keys must be unique and stable within the persistence storage
+namespace. Reuse the same key when a rename or move should resume the same
+editing session; change it when new incoming contents should start a fresh
+document.
 
 ```ts
 import type { EditorState, FileContents } from '@pierre/diffs';

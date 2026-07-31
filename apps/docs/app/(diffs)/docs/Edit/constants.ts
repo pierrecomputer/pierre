@@ -1092,14 +1092,14 @@ const file: FileContents | undefined = editor.getFile();
 // Full document text, or '' when nothing is attached.
 const text: string = editor.getText();
 
-// Snapshot selections and horizontal code position for explicit restoration.
+// Snapshot selections and viewport scroll position for explicit restoration.
 const state: EditorState = editor.getState();
 // EditorState = {
 //   selections?: EditorSelection[];
-//   view?: { scrollLeft: number };
+//   view?: { scrollTop: number; scrollLeft: number };
 // }
 
-// Restore selections and horizontal code position after re-rendering.
+// Restore selections and viewport scroll position after re-rendering.
 editor.setState(state);
 
 // Replace all cursors and ranges programmatically. Positions are zero-based;
