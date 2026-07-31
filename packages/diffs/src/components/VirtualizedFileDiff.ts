@@ -1321,7 +1321,7 @@ export class VirtualizedFileDiff<
     return this.virtualizer.type === 'advanced';
   }
 
-  private getVirtualizedTop(): number | undefined {
+  private getVirtualizedTop(): number {
     if (this.virtualizer.type === 'advanced') {
       return this.virtualizer.getLocalTopForInstance(this);
     }

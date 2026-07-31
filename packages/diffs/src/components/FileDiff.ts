@@ -2405,11 +2405,13 @@ export class FileDiff<
       diffStyle,
     });
     if (trimResult < 0) {
-      throw new Error('applyPartialRender: failed to trim to overlap');
+      throw new Error('FileDiff.applyPartialRender: failed to trim to overlap');
     }
 
     if (this.lastRowCount < trimResult) {
-      throw new Error('applyPartialRender: trimmed beyond DOM row count');
+      throw new Error(
+        'FileDiff.applyPartialRender: trimmed beyond DOM row count'
+      );
     }
 
     let rowCount = this.lastRowCount - trimResult;

@@ -756,12 +756,14 @@ export class File<
 
       this.applyBuffers(pre, nextRenderRange);
       this.injectUnsafeCSS();
+      this.renderAnnotations();
+      this.renderGutterUtility();
+
       this.managersDirty = true;
       if (!deferManagers) {
         this.flushManagers();
       }
-      this.renderAnnotations();
-      this.renderGutterUtility();
+
       if (this.editor != null) {
         this.syncRenderViewToEditor();
       }
@@ -1153,7 +1155,7 @@ export class File<
       !this.trimDOMToOverlap(columns.gutter, overlapStart, overlapEnd) ||
       !this.trimDOMToOverlap(columns.content, overlapStart, overlapEnd)
     ) {
-      return false;
+      throw new Error('File.applyPartialRender: failed to trim to overlap');
     }
 
     let { length: rowCount } = columns.content.children;

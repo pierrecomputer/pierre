@@ -15,6 +15,7 @@ import { areFilesEqual } from '../utils/areFilesEqual';
 import { areObjectsEqual } from '../utils/areObjectsEqual';
 import { areOptionsEqual } from '../utils/areOptionsEqual';
 import {
+  computeVirtualFileMetrics,
   getVirtualFileHeaderRegion,
   getVirtualFilePaddingBottom,
 } from '../utils/computeVirtualFileMetrics';
@@ -94,12 +95,16 @@ export class VirtualizedFile<
     super(options, workerManager, isContainerManaged);
   }
 
-  public setMetrics(metrics: VirtualFileMetrics, force = false): void {
-    if (!force && areObjectsEqual(this.metrics, metrics)) {
+  public setMetrics(
+    metrics?: Partial<VirtualFileMetrics>,
+    force = false
+  ): void {
+    const nextMetrics = computeVirtualFileMetrics(metrics);
+    if (!force && areObjectsEqual(this.metrics, nextMetrics)) {
       return;
     }
 
-    this.metrics = metrics;
+    this.metrics = nextMetrics;
     this.resetLayoutCache();
   }
 
@@ -954,7 +959,7 @@ export class VirtualizedFile<
     );
     const totalLines =
       Math.ceil(estimatedTargetLines / hunkLineCount) * hunkLineCount +
-      hunkLineCount * 2;
+      hunkLineCount;
     const totalHunks = totalLines / hunkLineCount;
     const viewportCenter = (top + bottom) / 2;
     // Simple case: overflow scroll with no annotations - pure math!
