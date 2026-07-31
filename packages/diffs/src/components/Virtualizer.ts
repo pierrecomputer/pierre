@@ -37,6 +37,7 @@ export interface VirtualizerConfig {
 
 export interface VirtualizerScrollOptions {
   top: number;
+  left?: number;
   behavior?: ScrollBehavior;
 }
 
@@ -639,18 +640,33 @@ export class Virtualizer {
     return scrollTop;
   }
 
-  /** Scroll to a logical vertical position and queue the normal render pass. */
-  public scrollTo({ top, behavior = 'auto' }: VirtualizerScrollOptions): void {
+  public getScrollLeft(): number {
+    if (this.root instanceof Document) {
+      return window.scrollX;
+    }
+    return this.root?.scrollLeft ?? 0;
+  }
+
+  /** Scroll to a logical position and queue the normal render pass. */
+  public scrollTo({
+    top,
+    left,
+    behavior = 'auto',
+  }: VirtualizerScrollOptions): void {
     const { root } = this;
     if (root == null) {
       return;
     }
 
     const scrollTop = this.clampScrollTop(top);
+    const position: ScrollToOptions = { top: scrollTop, behavior };
+    if (left !== undefined) {
+      position.left = left;
+    }
     if (root instanceof Document) {
-      window.scrollTo({ top: scrollTop, behavior });
+      window.scrollTo(position);
     } else {
-      root.scrollTo({ top: scrollTop, behavior });
+      root.scrollTo(position);
     }
     this.scrollDirty = true;
     queueRender(this.computeRenderRangeAndEmit);

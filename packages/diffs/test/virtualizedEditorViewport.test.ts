@@ -2,12 +2,13 @@ import { describe, expect, test } from 'bun:test';
 
 import { VirtualizedFile } from '../src/components/VirtualizedFile';
 import { VirtualizedFileDiff } from '../src/components/VirtualizedFileDiff';
-import { DEFAULT_THEMES } from '../src/constants';
-import type { DiffsEditor } from '../src/types';
-import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
-import { installDom, waitFor } from './domHarness';
+import { installDom } from './domHarness';
 
-function createSimpleVirtualizer(root: HTMLElement) {
+function createSimpleVirtualizer(
+  root: HTMLElement,
+  scrollTop = 0,
+  scrollLeft = 0
+) {
   return {
     type: 'simple',
     config: {},
@@ -16,67 +17,19 @@ function createSimpleVirtualizer(root: HTMLElement) {
     getRoot: () => root,
     getWindowSpecs: () => ({ top: 0, bottom: 800 }),
     getOffsetInScrollContainer: () => 0,
+    getScrollLeft: () => scrollLeft,
+    getScrollTop: () => scrollTop,
     instanceChanged(instance: { onRender(dirty: boolean): boolean }) {
       instance.onRender(true);
     },
     isInstanceVisible: () => true,
     markDOMDirty() {},
     requestHeightReconcile() {},
+    scrollTo(options: { top: number; left: number }) {
+      scrollLeft = options.left;
+      scrollTop = options.top;
+    },
   } as never;
-}
-
-async function renderFile(
-  file: VirtualizedFile<undefined>,
-  root: HTMLElement
-): Promise<HTMLElement> {
-  const fileContainer = document.createElement('div');
-  root.appendChild(fileContainer);
-  file.render({
-    file: { name: 'state.txt', contents: 'alpha\nbravo\n', lang: 'text' },
-    fileContainer,
-    forceRender: true,
-  });
-  await waitFor(
-    () =>
-      fileContainer.shadowRoot?.querySelector('[data-code]') instanceof
-      HTMLElement
-  );
-  const code = fileContainer.shadowRoot?.querySelector('[data-code]');
-  expect(code).toBeInstanceOf(HTMLElement);
-  return code as HTMLElement;
-}
-
-async function renderFileDiff(
-  fileDiff: VirtualizedFileDiff<undefined>,
-  root: HTMLElement
-): Promise<{ additions: HTMLElement; deletions?: HTMLElement }> {
-  const fileContainer = document.createElement('div');
-  root.appendChild(fileContainer);
-  fileDiff.render({
-    fileDiff: parseDiffFromFile(
-      { name: 'state.txt', contents: 'alpha\nbravo\n', lang: 'text' },
-      { name: 'state.txt', contents: 'alpha\ncharlie\n', lang: 'text' }
-    ),
-    fileContainer,
-    forceRender: true,
-  });
-  await waitFor(
-    () =>
-      fileContainer.shadowRoot?.querySelector(
-        '[data-code]:not([data-deletions])'
-      ) instanceof HTMLElement
-  );
-  const additions = fileContainer.shadowRoot?.querySelector(
-    '[data-code]:not([data-deletions])'
-  );
-  const deletions = fileContainer.shadowRoot?.querySelector(
-    '[data-code][data-deletions]'
-  );
-  expect(additions).toBeInstanceOf(HTMLElement);
-  return {
-    additions: additions as HTMLElement,
-    deletions: deletions instanceof HTMLElement ? deletions : undefined,
-  };
 }
 
 describe('virtualized editor viewport', () => {
@@ -120,111 +73,48 @@ describe('virtualized editor viewport', () => {
     }
   });
 
-  test('reads and restores File horizontal state from the code scroller', async () => {
+  test('reads and restores viewport state only for the simple Virtualizer', () => {
     const dom = installDom();
     const root = document.createElement('div');
-    root.scrollLeft = 900;
-    const virtualizer = createSimpleVirtualizer(root);
-    const file = new VirtualizedFile(
-      { disableFileHeader: true, theme: DEFAULT_THEMES },
-      virtualizer
-    );
+    const virtualizer = createSimpleVirtualizer(root, 128, 32);
+    const file = new VirtualizedFile({}, virtualizer);
+    const fileDiff = new VirtualizedFileDiff({}, virtualizer);
 
     try {
-      const code = await renderFile(file, root);
-      code.scrollLeft = 60;
+      expect(file.getViewportScroll()).toEqual({ top: 128, left: 32 });
+      expect(fileDiff.getViewportScroll()).toEqual({ top: 128, left: 32 });
 
-      expect(file.getCodeScrollLeft()).toBe(60);
-      file.setCodeScrollLeft(61);
-      expect(code.scrollLeft).toBe(61);
-
-      let recyclePosition: number | undefined;
-      file.attachEditor({
-        __captureFocusForDOMReplacement() {},
-        __postponeBgTokenizeToNextFrame() {},
-        __syncRenderView() {},
-        edit: () => () => {},
-        cleanUp() {
-          recyclePosition = file.getCodeScrollLeft();
-        },
-      } as DiffsEditor<undefined>);
-      code.scrollLeft = 62;
-      file.cleanUp(true);
-      expect(recyclePosition).toBe(62);
+      fileDiff.setViewportScroll({ top: 256, left: 64 });
+      expect(file.getViewportScroll()).toEqual({ top: 256, left: 64 });
     } finally {
       file.cleanUp();
+      fileDiff.cleanUp();
       dom.cleanup();
     }
   });
 
-  for (const diffStyle of ['unified', 'split'] as const) {
-    test(`reads ${diffStyle} FileDiff horizontal state from active code columns`, async () => {
-      const dom = installDom();
-      const root = document.createElement('div');
-      root.scrollLeft = 900;
-      const virtualizer = createSimpleVirtualizer(root);
-      const fileDiff = new VirtualizedFileDiff(
-        {
-          diffStyle,
-          disableFileHeader: true,
-          theme: DEFAULT_THEMES,
-        },
-        virtualizer
-      );
-
-      try {
-        const code = await renderFileDiff(fileDiff, root);
-        code.additions.scrollLeft = 40;
-        if (code.deletions !== undefined) {
-          code.deletions.scrollLeft = 60;
-        }
-
-        expect(fileDiff.getCodeScrollLeft()).toBe(
-          diffStyle === 'split' ? 60 : 40
-        );
-      } finally {
-        fileDiff.cleanUp();
-        dom.cleanup();
-      }
-    });
-  }
-
-  test('restores split FileDiff horizontal state to both code columns', async () => {
+  test('ignores vertical viewport state for CodeView', () => {
     const dom = installDom();
-    const root = document.createElement('div');
-    const virtualizer = createSimpleVirtualizer(root);
-    const fileDiff = new VirtualizedFileDiff(
-      {
-        diffStyle: 'split',
-        disableFileHeader: true,
-        theme: DEFAULT_THEMES,
+    let scrollCalls = 0;
+    const codeView = {
+      type: 'advanced',
+      getScrollTop: () => 128,
+      scrollTo: () => {
+        scrollCalls++;
       },
-      virtualizer
-    );
+    } as never;
+    const file = new VirtualizedFile({}, codeView);
+    const fileDiff = new VirtualizedFileDiff({}, codeView);
 
     try {
-      const code = await renderFileDiff(fileDiff, root);
-      expect(code.deletions).toBeDefined();
+      expect(file.getViewportScroll()).toEqual({ top: 0, left: 0 });
+      expect(fileDiff.getViewportScroll()).toEqual({ top: 0, left: 0 });
 
-      fileDiff.setCodeScrollLeft(60);
-
-      expect(code.additions.scrollLeft).toBe(60);
-      expect(code.deletions?.scrollLeft).toBe(60);
-
-      let recyclePosition: number | undefined;
-      fileDiff.attachEditor({
-        __captureFocusForDOMReplacement() {},
-        __postponeBgTokenizeToNextFrame() {},
-        __syncRenderView() {},
-        edit: () => () => {},
-        cleanUp() {
-          recyclePosition = fileDiff.getCodeScrollLeft();
-        },
-      } as DiffsEditor<undefined>);
-      code.deletions!.scrollLeft = 64;
-      fileDiff.cleanUp(true);
-      expect(recyclePosition).toBe(64);
+      file.setViewportScroll({ top: 256, left: 64 });
+      fileDiff.setViewportScroll({ top: 256, left: 64 });
+      expect(scrollCalls).toBe(0);
     } finally {
+      file.cleanUp();
       fileDiff.cleanUp();
       dom.cleanup();
     }

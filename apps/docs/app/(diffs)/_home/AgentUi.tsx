@@ -1,8 +1,8 @@
 'use client';
 
 import { DEFAULT_THEMES, type FileDiffMetadata } from '@pierre/diffs';
-import type { EditorOptions } from '@pierre/diffs/edit';
-import { File, FileDiff } from '@pierre/diffs/react';
+import { Editor, type EditorOptions } from '@pierre/diffs/edit';
+import { EditProvider, File, FileDiff, Virtualizer } from '@pierre/diffs/react';
 import {
   IconArrow,
   IconChevronSm,
@@ -21,7 +21,6 @@ import {
   type CSSProperties,
   useCallback,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -41,11 +40,6 @@ import {
   getSessionGitStatus,
   getSessionPaths,
 } from './mockData';
-// Runs as a layout effect in the browser (so DOM reads/writes land before the
-// next paint) but falls back to useEffect during SSR, where useLayoutEffect
-// would warn. The demo is server-rendered, so the fallback matters.
-const useIsomorphicLayoutEffect =
-  typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
 // Added/removed line totals for a single file's diff.
 interface DiffStats {
@@ -1114,9 +1108,18 @@ export function AgentUi({
         // Changes tree's +/- totals reflect the live edits.
         recordEditedStatsRef.current(target, file.contents);
       },
+      persistState: true,
       __debug: true,
     }),
     [addSnippet]
+  );
+  const editor = useMemo(() => new Editor<undefined>(), []);
+  const createEditor = useCallback(
+    (options: EditorOptions<undefined>) => {
+      editor.setOptions(options);
+      return editor;
+    },
+    [editor]
   );
 
   const openFile = useCallback((path: string) => {
@@ -1167,30 +1170,19 @@ export function AgentUi({
   // Re-adopt the jade/red line-number override whenever the diff surface is
   // rebuilt (each file switch remounts the diffs-container with a fresh shadow
   // root).
-  const surfaceWrapRef = useRef<HTMLDivElement | null>(null);
+  const surfaceHostRef = useRef<HTMLElement | null>(null);
   useEffect(() => {
     const sheet = getLineNumberColorSheet();
     if (sheet == null) {
       return;
     }
-    const container = surfaceWrapRef.current?.querySelector('.aui-surface');
+    const container = surfaceHostRef.current?.querySelector('.aui-surface');
     const shadowRoot = container?.shadowRoot;
     if (shadowRoot == null) {
       return;
     }
     if (!shadowRoot.adoptedStyleSheets.includes(sheet)) {
       shadowRoot.adoptedStyleSheets = [...shadowRoot.adoptedStyleSheets, sheet];
-    }
-  }, [activePath]);
-
-  // `key={activePath}` remounts the FileDiff or File surface for each file while
-  // `.aui-surface-wrap` remains mounted and retains its scroll offset. Reset the
-  // outer host after the new surface is laid out but before paint. Editing a
-  // file does not change `activePath`, so this never disturbs a session.
-  useIsomorphicLayoutEffect(() => {
-    const wrap = surfaceWrapRef.current;
-    if (wrap != null) {
-      wrap.scrollTop = 0;
     }
   }, [activePath]);
 
@@ -1234,7 +1226,7 @@ export function AgentUi({
             />
           </aside>
         )}
-        <section className="aui-center">
+        <section className="aui-center" ref={surfaceHostRef}>
           <header className="aui-center-header">
             {/* The windowed card has no left sidebar, so its window controls
              * sit just left of the breadcrumb. */}
@@ -1268,46 +1260,49 @@ export function AgentUi({
             </nav>
           </header>
 
-          <div className="aui-surface-wrap" ref={surfaceWrapRef}>
-            {activeFile != null && fileDiff != null ? (
-              <FileDiff
-                key={activePath}
-                fileDiff={fileDiff}
-                className="aui-surface"
-                options={{ ...AUI_DIFF_OPTIONS, theme }}
-                prerenderedHTML={activePrerenderedHTML}
-                edit
-                editorOptions={editorOptions}
-              />
-            ) : placeholderContents != null && activePath != null ? (
-              // Editable view for explorer files that aren't part of the change
-              // set (e.g. the root README or a generated stub). The app-level
-              // provider creates an independent editor for this keyed surface.
-              // Caller-owned `editsRef` seeds its contents when revisited.
-              // Highlighted on the main thread since this File is mounted
-              // dynamically outside the editable surface's worker pool.
-              <File
-                key={activePath}
-                file={{
-                  name: activePath,
-                  contents:
-                    editsRef.current.get(activePath) ?? placeholderContents,
-                }}
-                className="aui-surface"
-                options={{
-                  theme,
-                  themeType: 'dark',
-                  disableFileHeader: true,
-                  overflow: 'wrap',
-                }}
-                disableWorkerPool
-                edit
-                editorOptions={editorOptions}
-              />
-            ) : (
-              <div className="aui-empty">Select a file to review.</div>
-            )}
-          </div>
+          <EditProvider createEditor={createEditor}>
+            <Virtualizer className="aui-surface-wrap">
+              {activeFile != null && fileDiff != null ? (
+                <FileDiff
+                  key={activePath}
+                  fileDiff={fileDiff}
+                  className="aui-surface"
+                  options={{ ...AUI_DIFF_OPTIONS, theme }}
+                  prerenderedHTML={activePrerenderedHTML}
+                  edit
+                  editorOptions={editorOptions}
+                />
+              ) : placeholderContents != null && activePath != null ? (
+                // Editable view for explorer files that aren't part of the
+                // change set (e.g. the root README or a generated stub). The
+                // local provider reuses one editor so path-keyed File state
+                // survives keyed surface remounts. Highlighted on the main
+                // thread since this File is mounted dynamically outside the
+                // editable surface's worker pool.
+                <File
+                  key={activePath}
+                  file={{
+                    name: activePath,
+                    contents:
+                      editsRef.current.get(activePath) ?? placeholderContents,
+                    cacheKey: activePath,
+                  }}
+                  className="aui-surface"
+                  options={{
+                    theme,
+                    themeType: 'dark',
+                    disableFileHeader: true,
+                    overflow: 'wrap',
+                  }}
+                  disableWorkerPool
+                  edit
+                  editorOptions={editorOptions}
+                />
+              ) : (
+                <div className="aui-empty">Select a file to review.</div>
+              )}
+            </Virtualizer>
+          </EditProvider>
 
           <div className="aui-composer">
             {snippets.length > 0 && (

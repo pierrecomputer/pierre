@@ -147,11 +147,11 @@ class TestEditableComponent implements DiffsEditableComponent<undefined> {
     return this.options;
   }
 
-  getCodeScrollLeft(): number {
-    return 0;
+  getViewportScroll(): undefined {
+    return undefined;
   }
 
-  setCodeScrollLeft(): void {}
+  setViewportScroll(): void {}
 
   render({
     file,

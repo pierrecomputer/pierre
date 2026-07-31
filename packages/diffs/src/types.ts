@@ -1038,10 +1038,10 @@ export interface DiffsEditableComponent<
     lineNumber: number | null,
     options?: EditorActiveLineOptions
   ) => void;
-  /** Return the horizontal code scroll position (`scrollLeft`). */
-  getCodeScrollLeft: () => number;
-  /** Set the horizontal code scroll position (`scrollLeft`). */
-  setCodeScrollLeft: (position: number) => void;
+  /** Return the scroll position owned by this editable viewport, if present. */
+  getViewportScroll: () => { top: number; left: number } | undefined;
+  /** Restore the scroll position owned by this editable viewport. */
+  setViewportScroll: (position: { top: number; left: number }) => void;
   /**
    * Return the position and height of a one-based line relative to this component.
    * The host uses it to scroll to virtualized lines before their DOM nodes exist.
@@ -1254,7 +1254,7 @@ export interface EditorSelection extends Range {
 }
 
 export interface EditorViewState {
-  /** Horizontal position owned by the current editable code scroller. */
+  scrollTop: number;
   scrollLeft: number;
 }
 

@@ -14,16 +14,25 @@ describe('Virtualizer scroll state', () => {
       value: 5_000,
     });
     root.scrollTop = 1_200;
+    root.scrollLeft = 320;
     const scrollCalls: ScrollToOptions[] = [];
     root.scrollTo = (options?: ScrollToOptions | number, y?: number) => {
       const top =
         typeof options === 'number'
           ? (y ?? root.scrollTop)
           : (options?.top ?? root.scrollTop);
+      const left =
+        typeof options === 'number'
+          ? root.scrollLeft
+          : (options?.left ?? root.scrollLeft);
       root.scrollTop = top;
+      root.scrollLeft = left;
       scrollCalls.push({
         behavior: typeof options === 'number' ? undefined : options?.behavior,
         top,
+        ...(typeof options !== 'number' && options?.left !== undefined
+          ? { left }
+          : {}),
       });
     };
     const virtualizer = new Virtualizer();
@@ -32,11 +41,14 @@ describe('Virtualizer scroll state', () => {
       virtualizer.setup(root, content);
       await wait(0);
       expect(virtualizer.getScrollTop()).toBe(1_200);
+      expect(virtualizer.getScrollLeft()).toBe(320);
 
-      virtualizer.scrollTo({ top: 2_500, behavior: 'instant' });
+      virtualizer.scrollTo({ top: 2_500, left: 640, behavior: 'instant' });
       expect(virtualizer.getScrollTop()).toBe(2_500);
+      expect(virtualizer.getScrollLeft()).toBe(640);
       expect(scrollCalls.at(-1)).toEqual({
         behavior: 'instant',
+        left: 640,
         top: 2_500,
       });
       await wait(0);
@@ -72,16 +84,27 @@ describe('Virtualizer scroll state', () => {
       configurable: true,
       get: () => scrollY,
     });
+    let scrollX = 320;
+    Object.defineProperty(dom.window, 'scrollX', {
+      configurable: true,
+      get: () => scrollX,
+    });
     const scrollCalls: ScrollToOptions[] = [];
     dom.window.scrollTo = (options?: ScrollToOptions | number, y?: number) => {
       const top =
         typeof options === 'number'
           ? (y ?? scrollY)
           : (options?.top ?? scrollY);
+      const left =
+        typeof options === 'number' ? scrollX : (options?.left ?? scrollX);
       scrollY = top;
+      scrollX = left;
       scrollCalls.push({
         behavior: typeof options === 'number' ? undefined : options?.behavior,
         top,
+        ...(typeof options !== 'number' && options?.left !== undefined
+          ? { left }
+          : {}),
       });
     };
     const virtualizer = new Virtualizer();
@@ -90,11 +113,14 @@ describe('Virtualizer scroll state', () => {
       virtualizer.setup(document);
       await wait(0);
       expect(virtualizer.getScrollTop()).toBe(1_200);
+      expect(virtualizer.getScrollLeft()).toBe(320);
 
-      virtualizer.scrollTo({ top: 2_500, behavior: 'instant' });
+      virtualizer.scrollTo({ top: 2_500, left: 640, behavior: 'instant' });
       expect(virtualizer.getScrollTop()).toBe(2_500);
+      expect(virtualizer.getScrollLeft()).toBe(640);
       expect(scrollCalls.at(-1)).toEqual({
         behavior: 'instant',
+        left: 640,
         top: 2_500,
       });
       await wait(0);

@@ -406,6 +406,27 @@ export class VirtualizedFile<
       : this.virtualizer.getContainerElement();
   }
 
+  public override getViewportScroll():
+    | { top: number; left: number }
+    | undefined {
+    const virtualizer = this.getSimpleVirtualizer();
+    return virtualizer != null
+      ? { top: virtualizer.getScrollTop(), left: virtualizer.getScrollLeft() }
+      : super.getViewportScroll();
+  }
+
+  public override setViewportScroll(position: {
+    top: number;
+    left: number;
+  }): void {
+    const virtualizer = this.getSimpleVirtualizer();
+    if (virtualizer != null) {
+      virtualizer.scrollTo({ top: position.top, left: position.left });
+    } else {
+      super.setViewportScroll(position);
+    }
+  }
+
   public getNumericScrollAnchor(
     localViewportTop: number
   ): NumericScrollLineAnchor | undefined {

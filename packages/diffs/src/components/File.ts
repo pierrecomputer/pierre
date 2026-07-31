@@ -300,13 +300,13 @@ export class File<
     });
   }
 
-  public getCodeScrollLeft(): number {
-    return this.code?.scrollLeft ?? 0;
+  public getViewportScroll(): { top: number; left: number } | undefined {
+    return { top: 0, left: this.code?.scrollLeft ?? 0 };
   }
 
-  public setCodeScrollLeft(position: number): void {
+  public setViewportScroll(position: { top: number; left: number }): void {
     if (this.code != null) {
-      this.code.scrollLeft = position;
+      this.code.scrollLeft = position.left;
     }
   }
 

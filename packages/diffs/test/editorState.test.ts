@@ -36,8 +36,8 @@ class TestEditableComponent implements DiffsEditableComponent<undefined> {
   #editor?: DiffsEditor<undefined>;
   #lineAnnotations?: DiffLineAnnotation<undefined>[];
   #renderRange?: RenderRange;
-  codeScrollLeft = 0;
-  restoredCodeScrollLefts: number[] = [];
+  viewportScroll: { top: number; left: number } | undefined;
+  restoredViewportScrolls: { top: number; left: number }[] = [];
 
   constructor(private file: FileContents) {
     this.#renderShadowDom();
@@ -55,13 +55,13 @@ class TestEditableComponent implements DiffsEditableComponent<undefined> {
     return this.options;
   }
 
-  getCodeScrollLeft(): number {
-    return this.codeScrollLeft;
+  getViewportScroll(): { top: number; left: number } | undefined {
+    return this.viewportScroll;
   }
 
-  setCodeScrollLeft(position: number): void {
-    this.codeScrollLeft = position;
-    this.restoredCodeScrollLefts.push(position);
+  setViewportScroll(position: { top: number; left: number }): void {
+    this.viewportScroll = position;
+    this.restoredViewportScrolls.push(position);
   }
 
   render({
@@ -147,7 +147,7 @@ class TestEditableComponent implements DiffsEditableComponent<undefined> {
 }
 
 describe('Editor state', () => {
-  test('getState captures horizontal state from the code scroller', () => {
+  test('getState captures viewport scroll state', () => {
     const dom = installDom();
     const editor = new Editor<undefined>();
     const component = new TestEditableComponent({
@@ -157,9 +157,12 @@ describe('Editor state', () => {
 
     try {
       editor.edit(component);
-      component.codeScrollLeft = 24;
+      component.viewportScroll = { top: 128, left: 24 };
 
-      expect(editor.getState().view).toEqual({ scrollLeft: 24 });
+      expect(editor.getState().view).toEqual({
+        scrollTop: 128,
+        scrollLeft: 24,
+      });
     } finally {
       editor.cleanUp();
       component.cleanUp();
@@ -177,9 +180,38 @@ describe('Editor state', () => {
 
     try {
       editor.edit(component);
-      editor.setState({ view: { scrollLeft: 24 } });
+      editor.setState({ view: { scrollLeft: 24, scrollTop: 128 } });
 
-      expect(component.restoredCodeScrollLefts).toEqual([24]);
+      expect(component.restoredViewportScrolls).toEqual([
+        { top: 128, left: 24 },
+      ]);
+    } finally {
+      editor.cleanUp();
+      component.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test('missing persisted state resets view scroll offsets', () => {
+    const dom = installDom();
+    const editor = new Editor<undefined>({
+      persistState: true,
+      persistStateStorage: {
+        get: () => undefined,
+        set() {},
+      },
+    });
+    const component = new TestEditableComponent({
+      name: 'state.ts',
+      contents: 'alpha\nbravo',
+      cacheKey: 'state.ts',
+    });
+    component.viewportScroll = { top: 128, left: 24 };
+
+    try {
+      editor.edit(component);
+
+      expect(component.restoredViewportScrolls).toEqual([{ top: 0, left: 0 }]);
     } finally {
       editor.cleanUp();
       component.cleanUp();
@@ -210,10 +242,10 @@ describe('Editor state', () => {
 
     try {
       editor.edit(component);
-      component.codeScrollLeft = 24;
+      component.viewportScroll = { top: 128, left: 24 };
       editor.cleanUp();
 
-      expect(storedState?.view).toEqual({ scrollLeft: 24 });
+      expect(storedState?.view).toEqual({ scrollLeft: 24, scrollTop: 128 });
     } finally {
       editor.cleanUp();
       component.cleanUp();
@@ -249,10 +281,12 @@ describe('Editor state', () => {
             direction: 0,
           },
         ],
-        view: { scrollLeft: 12 },
+        view: { scrollTop: 40, scrollLeft: 12 },
       });
 
-      expect(component.restoredCodeScrollLefts).toEqual([12]);
+      expect(component.restoredViewportScrolls).toEqual([
+        { top: 40, left: 12 },
+      ]);
       expect(scrollIntoViewCalls).toBe(0);
       expect(editor.getState().selections).toEqual([
         {

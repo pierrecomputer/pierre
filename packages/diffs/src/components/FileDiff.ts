@@ -609,23 +609,26 @@ export class FileDiff<
     );
   }
 
-  public getCodeScrollLeft(): number {
-    return Math.max(
-      this.codeUnified?.scrollLeft ?? 0,
-      this.codeDeletions?.scrollLeft ?? 0,
-      this.codeAdditions?.scrollLeft ?? 0
-    );
+  public getViewportScroll(): { top: number; left: number } | undefined {
+    return {
+      top: 0,
+      left: Math.max(
+        this.codeUnified?.scrollLeft ?? 0,
+        this.codeDeletions?.scrollLeft ?? 0,
+        this.codeAdditions?.scrollLeft ?? 0
+      ),
+    };
   }
 
-  public setCodeScrollLeft(position: number): void {
+  public setViewportScroll(position: { top: number; left: number }): void {
     if (this.codeUnified != null) {
-      this.codeUnified.scrollLeft = position;
+      this.codeUnified.scrollLeft = position.left;
     }
     if (this.codeAdditions != null) {
-      this.codeAdditions.scrollLeft = position;
+      this.codeAdditions.scrollLeft = position.left;
     }
     if (this.codeDeletions != null) {
-      this.codeDeletions.scrollLeft = position;
+      this.codeDeletions.scrollLeft = position.left;
     }
   }
 

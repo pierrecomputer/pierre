@@ -585,13 +585,14 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   }
 
   getState(): EditorState {
-    const fileInstance = this.#fileInstance;
+    const scroll = this.#fileInstance?.getViewportScroll();
     return {
       selections: this.#selections,
       view:
-        fileInstance != null
+        scroll !== undefined
           ? {
-              scrollLeft: fileInstance.getCodeScrollLeft(),
+              scrollLeft: scroll.left,
+              scrollTop: scroll.top,
             }
           : undefined,
     };
@@ -607,7 +608,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     // the caret into view afterward would overwrite them whenever the caret
     // sits outside that viewport (e.g. TreeApp remount restore).
     if (view != null) {
-      this.#fileInstance.setCodeScrollLeft(view.scrollLeft);
+      this.#fileInstance.setViewportScroll({
+        top: view.scrollTop,
+        left: view.scrollLeft,
+      });
       return;
     }
     this.#scrollToPrimaryCaret();
@@ -727,7 +731,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#attachState.delivered = false;
     }
     const hadFileInstance = this.#fileInstance != null;
-    const shouldRestoreState = this.#isStatePersistenceEnabled;
+    const shouldRestoreState = this.#options.persistState === true;
     this.#stateRestoreGeneration++;
     this.#persistCurrentState();
     if (hadFileInstance) {
@@ -930,9 +934,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#fileInfo.name !== fileOrDiff.name ||
       this.#fileInfo.lang !== fileOrDiff.lang ||
       this.#fileInfo.cacheKey !== fileOrDiff.cacheKey;
-    const persistedCacheKey = this.#isStatePersistenceEnabled
-      ? requirePersistedCacheKey(fileOrDiff)
-      : undefined;
+    const persistedCacheKey =
+      this.#options.persistState === true
+        ? requirePersistedCacheKey(fileOrDiff)
+        : undefined;
 
     let persistedStateTarget:
       | { cacheKey: string; textDocument: TextDocument<LAnnotation> }
@@ -1154,12 +1159,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#scheduleOnAttach(fileInstance);
   };
 
-  get #isStatePersistenceEnabled(): boolean {
-    return (
-      this.#options.persistState === true && this.#fileInstance?.type === 'file'
-    );
-  }
-
   #getCachedTextDocument(
     file: FileContents | FileDiffMetadata,
     cacheKey: string
@@ -1170,13 +1169,13 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   }
 
   #getStateStorage(): IStateStorage {
-    const option = this.#options.persistStateStorage ?? 'inMemory';
+    const stateStorage = this.#options.persistStateStorage ?? 'inMemory';
     if (
       this.#stateStorage === undefined ||
-      this.#stateStorageOption !== option
+      this.#stateStorageOption !== stateStorage
     ) {
-      this.#stateStorage = createStateStorage(option);
-      this.#stateStorageOption = option;
+      this.#stateStorage = createStateStorage(stateStorage);
+      this.#stateStorageOption = stateStorage;
     }
     return this.#stateStorage;
   }
@@ -1185,7 +1184,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     const fileInfo = this.#fileInfo;
     const textDocument = this.#textDocument;
     if (
-      !this.#isStatePersistenceEnabled ||
+      this.#options.persistState !== true ||
+      this.#fileInstance === undefined ||
       fileInfo === undefined ||
       textDocument === undefined
     ) {
@@ -1211,7 +1211,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       if (
         textDocument.version === pendingRestore.documentVersion &&
         this.#selections === pendingRestore.selections &&
-        state.view?.scrollLeft === pendingRestore.view?.scrollLeft
+        state.view?.scrollLeft === pendingRestore.view?.scrollLeft &&
+        state.view?.scrollTop === pendingRestore.view?.scrollTop
       ) {
         return;
       }
@@ -1276,15 +1277,19 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     const applyState = (state: EditorState | undefined): void => {
       const currentView = this.getState().view;
       if (
-        state === undefined ||
         generation !== this.#stateRestoreGeneration ||
         this.#textDocument !== textDocument ||
         textDocument.version !== documentVersion ||
         this.#selections !== selections ||
         currentView?.scrollLeft !== view?.scrollLeft ||
+        currentView?.scrollTop !== view?.scrollTop ||
         this.#fileInfo === undefined ||
         requirePersistedCacheKey(this.#fileInfo) !== cacheKey
       ) {
+        return;
+      }
+      if (state === undefined) {
+        this.#fileInstance?.setViewportScroll({ top: 0, left: 0 });
         return;
       }
       this.setState(cloneEditorState(state));
