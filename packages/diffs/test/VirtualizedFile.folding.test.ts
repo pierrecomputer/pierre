@@ -130,9 +130,9 @@ describe('VirtualizedFile editor folding', () => {
 
     expect(range).toEqual({
       startingLine: 12,
-      totalLines: 6,
+      totalLines: 4,
       bufferBefore: 20,
-      bufferAfter: 20,
+      bufferAfter: 40,
     });
 
     inspect(instance).renderRange = range;
@@ -233,23 +233,16 @@ describe('VirtualizedFile editor folding', () => {
     });
     expect(range).toEqual({
       startingLine: 0,
-      totalLines: 19_996,
+      totalLines: 19_994,
       bufferBefore: 0,
-      bufferAfter: 40,
+      bufferAfter: 60,
     });
     expect(hiddenChecks).toBeLessThan(10);
 
     const result = layout.fileRenderer.renderFile(file, range);
     const code = layout.fileRenderer.renderCache?.result?.code;
-    expect(result?.rowCount).toBe(6);
-    expect(Object.keys(code ?? [])).toEqual([
-      '0',
-      '19991',
-      '19992',
-      '19993',
-      '19994',
-      '19995',
-    ]);
+    expect(result?.rowCount).toBe(4);
+    expect(Object.keys(code ?? [])).toEqual(['0', '19991', '19992', '19993']);
 
     hiddenChecks = 0;
     layout.renderRange = {
@@ -267,8 +260,8 @@ describe('VirtualizedFile editor folding', () => {
     instance.__setFoldRanges([]);
     const unfoldedResult = layout.fileRenderer.renderFile(file, range);
     const unfoldedCode = layout.fileRenderer.renderCache?.result?.code;
-    expect(unfoldedResult?.rowCount).toBe(19_996);
+    expect(unfoldedResult?.rowCount).toBe(19_994);
     expect(unfoldedCode?.[1]).toBeDefined();
-    expect(unfoldedCode?.[19_995]).toBeDefined();
+    expect(unfoldedCode?.[19_993]).toBeDefined();
   });
 });

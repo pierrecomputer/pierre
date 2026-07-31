@@ -225,7 +225,9 @@ export class FileRenderer<LAnnotation = undefined> {
     ) {
       return;
     }
-    renderCache.file.contents = lineCache.lines.join('');
+    const contents = lineCache.lines.join('');
+    renderCache.file.contents = contents;
+    lineCache.sourceContents = contents;
   }
 
   // Unkeyed files use object identity, so compare the retained source text to
@@ -700,7 +702,7 @@ export class FileRenderer<LAnnotation = undefined> {
             if (this.renderCache != null) {
               this.renderCache.highlighted = false;
             }
-            this.onHighlightSuccess(
+            this.applyHighlightResult(
               file,
               result,
               options,
