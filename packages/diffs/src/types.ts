@@ -1116,56 +1116,12 @@ export type EditableInstance<T extends { type: string }> = T extends {
   ? never
   : T;
 
-/** Public editor contract used by editable surfaces and attachment events. */
 export interface DiffsEditor<LAnnotation> {
-  /** Merge options into the editor's current configuration. */
-  setOptions(
-    options: import('./editor/editor').EditorOptions<LAnnotation>
-  ): void;
-  /** Attach to an editable surface and return its detach function. */
-  edit<T extends DiffsEditableComponent<LAnnotation>>(
-    fileInstance: EditableInstance<T>
-  ): () => void;
-  /** Apply text edits to the attached document. */
-  applyEdits(edits: TextEdit[], updateHistory?: boolean): void;
-  /** Whether an edit is available to undo. */
-  readonly canUndo: boolean;
-  /** Whether an undone edit is available to redo. */
-  readonly canRedo: boolean;
-  /** Undo the latest edit, if one exists. */
-  undo(): void;
-  /** Redo the latest undone edit, if one exists. */
-  redo(): void;
-  /** Get the attached file with its current contents. */
-  getFile(): FileContents | undefined;
-  /** Get the current document text, or an empty string when detached. */
-  getText(): string;
-  /** Get the current selections and view state. */
-  getState(): EditorState;
-  /** Restore selections and view state. */
-  setState(state: EditorState): void;
-  /** Replace the current directed selections. */
-  setSelections(
-    selections: (Range & {
-      direction: 'none' | 'backward' | 'forward';
-    })[]
-  ): void;
-  /** Replace diagnostic markers; pass an empty array to clear them. */
-  setMarkers(markers: import('./editor/marker').Marker[]): void;
-  /** Focus the editor, optionally at a document position. */
-  focus(options?: import('./editor/editor').EditorFocusOptions): void;
-  /** Remove focus from the editor. */
-  blur(): void;
-  /** Release editor resources, optionally retaining recyclable session state. */
-  cleanUp(recycle?: boolean): void;
-
-  /** @internal Capture outgoing state and substitute cached text before render. */
+  /** @internal */
   __prepareFile?(file: FileContents): FileContents;
-  /** @internal Pause background tokenization until the next animation frame. */
   __postponeBgTokenizeToNextFrame(): void;
   /** @internal Capture focus intent before replacing the editable view. */
   __captureFocusForDOMReplacement(): void;
-  /** @internal Synchronize the editor with the latest rendered surface. */
   __syncRenderView(
     highlighter: DiffsHighlighter,
     fileContainer: HTMLElement,
@@ -1176,6 +1132,10 @@ export interface DiffsEditor<LAnnotation> {
       | undefined,
     renderRange: RenderRange | undefined
   ): void;
+  edit<T extends DiffsEditableComponent<LAnnotation>>(
+    fileInstance: EditableInstance<T>
+  ): () => void;
+  cleanUp(recycle?: boolean): void;
 }
 
 /**

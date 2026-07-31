@@ -1,7 +1,6 @@
 'use client';
 
-import type { DiffsEditor } from '@pierre/diffs';
-import type { EditorOptions } from '@pierre/diffs/edit';
+import type { Editor, EditorOptions } from '@pierre/diffs/edit';
 import { File } from '@pierre/diffs/react';
 import type { PreloadedFileResult } from '@pierre/diffs/ssr';
 import { useEffect, useMemo, useRef } from 'react';
@@ -35,7 +34,7 @@ function detectMac(): boolean {
 // Opening an empty panel scrolls nothing.
 export function FindDemo({ prerenderedFile }: FindDemoProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
-  const editorRef = useRef<DiffsEditor<undefined> | null>(null);
+  const editorRef = useRef<Editor<undefined> | null>(null);
 
   useEffect(() => {
     const wrapper = wrapperRef.current;

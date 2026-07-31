@@ -453,7 +453,7 @@ editor.setMarkers([]);`,
 export const EDIT_UNDO_REDO_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
     name: 'editor_undo_redo.tsx',
-    contents: `import type { DiffsEditor, FileContents } from '@pierre/diffs';
+    contents: `import type { FileContents } from '@pierre/diffs';
 import { Editor, type EditorOptions } from '@pierre/diffs/edit';
 import { EditProvider, File } from '@pierre/diffs/react';
 import { useMemo, useRef, useState } from 'react';
@@ -471,7 +471,7 @@ export function EditableFileWithHistoryToolbar() {
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
 
-  const editorRef = useRef<DiffsEditor<undefined> | null>(null);
+  const editorRef = useRef<Editor<undefined> | null>(null);
   const editorOptions = useMemo<EditorOptions<undefined>>(
     () => ({
       onAttach(editor) {

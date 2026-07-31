@@ -11,7 +11,6 @@ member of its classes.
 | `EditorChange`        | Type  | Describes one normalized editor change.                   |
 | `EditorChangeEvent`   | Type  | Provides normalized edits and current document state.     |
 | `EditorOptions`       | Type  | Configures history, state, selections, and callbacks.     |
-| `DiffsEditor`         | Type  | Describes the complete public editor contract.            |
 | `TextDocument`        | Class | Stores text, positions, edits, search, and undo history.  |
 | `TextDocumentChange`  | Type  | Describes the lines and characters changed by an edit.    |
 | `IStateStorage`       | Type  | Defines asynchronous or synchronous editor state storage. |

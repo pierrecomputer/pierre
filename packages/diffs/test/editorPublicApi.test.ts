@@ -10,23 +10,12 @@ import {
 } from '../src/editor/editor';
 import type { Marker } from '../src/editor/marker';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
-import type {
-  DiffsEditableComponent,
-  DiffsEditor,
-  FileContents,
-} from '../src/types';
+import type { DiffsEditableComponent, FileContents } from '../src/types';
 import { installDom, wait } from './domHarness';
 
 afterAll(async () => {
   await disposeHighlighter();
 });
-
-const DIFFS_EDITOR_HAS_ALL_PUBLIC_MEMBERS: Exclude<
-  keyof Editor<undefined>,
-  keyof DiffsEditor<undefined>
-> extends never
-  ? true
-  : false = true;
 
 async function waitForEditableContent(
   container: HTMLElement
@@ -279,10 +268,6 @@ describe('Editor.setOptions', () => {
 });
 
 describe('Editor focus lifecycle', () => {
-  test('DiffsEditor includes every public Editor member', () => {
-    expect(DIFFS_EDITOR_HAS_ALL_PUBLIC_MEMBERS).toBe(true);
-  });
-
   test('fires onAttach when the editor attaches to a file', async () => {
     let onAttachCompleted = false;
     const onAttach = mock(
