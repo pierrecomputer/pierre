@@ -35,6 +35,7 @@ const virtualizer = {
     return false;
   },
   markDOMDirty() {},
+  requestHeightReconcile() {},
 } as never;
 
 const codeView = { type: 'advanced' } as never;
