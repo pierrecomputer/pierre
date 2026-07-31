@@ -296,6 +296,22 @@ export class FileRenderer<LAnnotation = undefined> {
     );
   }
 
+  public getEditorCodeOptions(): Pick<
+    BaseCodeOptions,
+    'theme' | 'tokenizeMaxLineLength'
+  > {
+    const poolOptions =
+      this.workerManager?.isWorkingPool() === true
+        ? this.workerManager.getFileRenderOptions()
+        : undefined;
+    return {
+      theme: this.getLocalHighlightTheme(),
+      tokenizeMaxLineLength:
+        poolOptions?.tokenizeMaxLineLength ??
+        this.options.tokenizeMaxLineLength,
+    };
+  }
+
   private getRenderOptions(file: FileContents): GetRenderOptionsReturn {
     const options: RenderFileOptions = (() => {
       if (this.workerManager?.isWorkingPool() === true) {

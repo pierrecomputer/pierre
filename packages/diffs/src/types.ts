@@ -1028,6 +1028,13 @@ export interface DiffsEditableComponent<
 > extends DiffsBaseComponent {
   /** @internal Return the current file when this component renders one. */
   __getCurrentFile?: () => FileContents | undefined;
+  /**
+   * @internal Code options with worker-pool overrides applied: the theme the
+   * shared highlighter is actually loaded with and the pool's tokenize limit.
+   * The editor's tokenizer reads these instead of the raw component options,
+   * which can name themes the highlighter never loaded.
+   */
+  __getEditorCodeOptions(): BaseCodeOptions;
   /** @internal Keep the editor caret decoration separate from line selection. */
   setEditorActiveLine: (
     lineNumber: number | null,

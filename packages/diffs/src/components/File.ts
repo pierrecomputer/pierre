@@ -310,6 +310,10 @@ export class File<
     }
   }
 
+  public __getEditorCodeOptions(): BaseCodeOptions {
+    return { ...this.options, ...this.fileRenderer.getEditorCodeOptions() };
+  }
+
   public flushManagers(): void {
     if (!this.managersDirty || this.pre == null) {
       this.managersDirty = false;

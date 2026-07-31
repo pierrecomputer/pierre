@@ -36,6 +36,7 @@ import {
 import { SVGSpriteSheet } from '../sprite';
 import type {
   AppliedThemeStyleCache,
+  BaseCodeOptions,
   BaseDiffOptions,
   CustomPreProperties,
   DiffLineAnnotation,
@@ -626,6 +627,10 @@ export class FileDiff<
     if (this.codeDeletions != null) {
       this.codeDeletions.scrollLeft = position;
     }
+  }
+
+  public __getEditorCodeOptions(): BaseCodeOptions {
+    return { ...this.options, ...this.hunksRenderer.getEditorCodeOptions() };
   }
 
   public cleanUp(recycle: boolean = false): void {

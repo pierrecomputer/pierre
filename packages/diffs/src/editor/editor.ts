@@ -1004,7 +1004,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#tokenizer = new EditorTokenizer({
         highlighter,
         textDocument,
-        codeOptions: this.#fileInstance?.options ?? {},
+        codeOptions: this.#fileInstance?.__getEditorCodeOptions() ?? {},
         matchBrackets: this.#options.matchBrackets,
         onDeferTokenize: this.#onDeferTokenize,
         onThemeChange: () => this.#scheduleThemeSelectionRefresh(),
@@ -1080,7 +1080,9 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     // re-renders, so a host-driven theme swap (theme picker, light/dark toggle)
     // wouldn't otherwise reach it. Re-apply the surface's current theme on every
     // sync so the editor's line-highlight/token colors track the active theme.
-    this.#tokenizer?.syncTheme(this.#fileInstance?.options ?? {});
+    this.#tokenizer?.syncTheme(
+      this.#fileInstance?.__getEditorCodeOptions() ?? {}
+    );
 
     this.#lineAnnotations = lineAnnotations;
     this.#renderRange = renderRange;
