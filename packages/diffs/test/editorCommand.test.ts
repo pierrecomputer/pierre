@@ -422,13 +422,15 @@ describe('resolveEditorCommandFromKeyboardEvent', () => {
         true
       )
     ).toBe('undo');
-    expect(
-      resolveEditorCommandFromKeyboardEvent(
-        event({ key: 'z', ctrlKey: true }),
-        keymap,
-        false
-      )
-    ).toBe('redo');
+    withPlatform('Win32', () => {
+      expect(
+        resolveEditorCommandFromKeyboardEvent(
+          event({ key: 'z', ctrlKey: true }),
+          keymap,
+          false
+        )
+      ).toBe('redo');
+    });
     expect(
       resolveEditorCommandFromKeyboardEvent(
         event({ key: 'a', metaKey: true }),
