@@ -318,6 +318,15 @@ Pass these when constructing `new Editor({ ... })`, or update them later with
 
 <DocsCodeExample {...editorOptionsType} />
 
+#### `onChange`
+
+The third argument is an `EditorChangeEvent`. Its `changes` array contains every
+normalized edit in the change:
+
+<DocsCodeExample {...editOnChangeExample} />
+
+Ranges use zero-based line and character positions.
+
 #### Persisting file state
 
 State persistence is disabled by default. Set `persistState: true` to preserve
