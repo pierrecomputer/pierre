@@ -60,7 +60,7 @@ function createEditorHarness({
           | LineAnnotation<undefined>[]
           | DiffLineAnnotation<undefined>[]
       ) {
-        options.onChange({ changes: [], file, lineAnnotations });
+        options.onChange(file, lineAnnotations, []);
       },
       edit(instance: DiffsEditableComponent<undefined>) {
         editor.edits.push(instance);

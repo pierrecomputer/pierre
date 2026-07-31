@@ -1273,15 +1273,6 @@ export interface EditorChange extends ResolvedTextEdit {
   range: Range;
 }
 
-/** The document state and normalized edits reported after an editor change. */
-export interface EditorChangeEvent<LAnnotation> {
-  changes: EditorChange[];
-  file: FileContents;
-  lineAnnotations?:
-    | LineAnnotation<LAnnotation>[]
-    | DiffLineAnnotation<LAnnotation>[];
-}
-
 /**
  * The direction of a selection.
  * -1: backward
@@ -1319,5 +1310,11 @@ export interface DiffsTextDocument {
  * emit them through its own `onItemEditChange` option.
  */
 export interface CodeViewCreateEditorOptions<LAnnotation> {
-  onChange: (event: EditorChangeEvent<LAnnotation>) => void;
+  onChange: (
+    file: FileContents,
+    lineAnnotations?:
+      | LineAnnotation<LAnnotation>[]
+      | DiffLineAnnotation<LAnnotation>[],
+    changes?: EditorChange[]
+  ) => void;
 }

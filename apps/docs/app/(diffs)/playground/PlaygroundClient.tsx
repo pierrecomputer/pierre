@@ -734,7 +734,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
         editorRef.current = editor;
         editor.focus({ lineNumber: 'first-visible', preventScroll: true });
       },
-      onChange: ({ lineAnnotations }) => {
+      onChange: (_file, lineAnnotations) => {
         if (
           lineAnnotations != null &&
           isDiffAnnotationCollection(lineAnnotations)

@@ -140,7 +140,7 @@ export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
       onAttach({ editor }) {
         editorRef.current = editor;
       },
-      onChange: ({ file }) => {
+      onChange: (file) => {
         const index = snapshotIndexFor(file.contents);
         if (index >= 0) {
           setApplied(index);

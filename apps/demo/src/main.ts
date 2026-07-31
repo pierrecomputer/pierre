@@ -977,7 +977,7 @@ if (renderFileButton != null) {
         div.appendChild(button);
         return div;
       },
-      onChange: ({ file, lineAnnotations }) => {
+      onChange: (file, lineAnnotations) => {
         console.log('change', file, lineAnnotations);
       },
       onAttach: ({ editor }) => {

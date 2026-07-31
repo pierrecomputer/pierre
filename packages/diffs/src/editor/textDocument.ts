@@ -317,7 +317,9 @@ export class TextDocument<LAnnotation> {
       change,
       selections,
       entry.lineAnnotationsBefore?.slice(),
-      selections === undefined ? [...entry.inverseEdits] : undefined,
+      selections === undefined
+        ? entry.inverseEdits.map((edit) => ({ ...edit }))
+        : undefined,
     ];
   }
 
@@ -336,7 +338,9 @@ export class TextDocument<LAnnotation> {
       change,
       selections,
       entry.lineAnnotationsAfter?.slice(),
-      selections === undefined ? [...entry.forwardEdits] : undefined,
+      selections === undefined
+        ? entry.forwardEdits.map((edit) => ({ ...edit }))
+        : undefined,
     ];
   }
 

@@ -1104,7 +1104,7 @@ export function AgentUi({
         container.append(addToChat, copy);
         return container;
       },
-      onChange({ file }) {
+      onChange(file) {
         const target = activeTargetRef.current;
         if (target == null) {
           return;

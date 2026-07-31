@@ -64,7 +64,7 @@ function render() {
 render();
 
 const editor = new Editor<ThreadMetadata>({
-  onChange({ file, lineAnnotations: nextAnnotations }) {
+  onChange(file, nextAnnotations) {
     newFile = { ...newFile, contents: file.contents };
     saveDraft(newFile);
 

@@ -87,7 +87,7 @@ function createTrackedEditor(
       file: FileContents,
       lineAnnotations?: DiffLineAnnotation<undefined>[]
     ) {
-      options.onChange?.({ changes: [], file, lineAnnotations });
+      options.onChange?.(file, lineAnnotations, []);
     },
     edit(instance: DiffsEditableComponent<undefined>) {
       editor.edits.push(instance);

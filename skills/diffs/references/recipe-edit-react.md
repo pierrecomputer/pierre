@@ -48,7 +48,7 @@ export function EditableDiff() {
       onAttach({ editor }) {
         editorRef.current = editor;
       },
-      onChange({ file }) {
+      onChange(file) {
         draftRef.current = file;
         saveDraft(file);
       },

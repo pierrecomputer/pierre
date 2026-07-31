@@ -13,12 +13,7 @@ import {
 } from '../src/editor/selection';
 import { TextDocument } from '../src/editor/textDocument';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
-import type {
-  EditorChangeEvent,
-  EditorSelection,
-  FileContents,
-  TextEdit,
-} from '../src/types';
+import type { EditorSelection, FileContents, TextEdit } from '../src/types';
 import { installDom, wait, waitFor } from './domHarness';
 
 afterAll(async () => {
@@ -382,7 +377,11 @@ describe('Editor persisted file state', () => {
 
 describe('Editor.applyEdits selection sync', () => {
   test('reports normalized changes against the pre-edit document', async () => {
-    const onChange = mock((_event: EditorChangeEvent<undefined>) => {});
+    const onChange = mock(
+      (
+        ..._args: Parameters<NonNullable<EditorOptions<undefined>['onChange']>>
+      ) => {}
+    );
     const { cleanup, editor } = await createEditorFixture(
       'alpha\nbravo\ncharlie',
       { onChange }
@@ -407,8 +406,7 @@ describe('Editor.applyEdits selection sync', () => {
       ]);
 
       expect(onChange).toHaveBeenCalledTimes(1);
-      const event = onChange.mock.calls[0]?.[0];
-      expect(event?.changes).toEqual([
+      expect(onChange.mock.calls[0]?.[2]).toEqual([
         {
           text: 'X',
           range: {
@@ -428,11 +426,11 @@ describe('Editor.applyEdits selection sync', () => {
           end: 19,
         },
       ]);
-      expect(event?.file).toMatchObject({
+      expect(onChange.mock.calls[0]?.[0]).toMatchObject({
         name: 'edits.ts',
         contents: 'alXavo\nC',
       });
-      expect(event?.lineAnnotations).toEqual([]);
+      expect(onChange.mock.calls[0]?.[1]).toEqual([]);
     } finally {
       cleanup();
     }
@@ -1684,7 +1682,11 @@ describe('Editor undo/redo API', () => {
   });
 
   test('undo reports the inverse change', async () => {
-    const onChange = mock((_event: EditorChangeEvent<undefined>) => {});
+    const onChange = mock(
+      (
+        ..._args: Parameters<NonNullable<EditorOptions<undefined>['onChange']>>
+      ) => {}
+    );
     const { cleanup, editor } = await createEditorFixture('alpha', {
       onChange,
     });
@@ -1694,7 +1696,7 @@ describe('Editor undo/redo API', () => {
       editor.undo();
 
       expect(onChange).toHaveBeenCalledTimes(2);
-      expect(onChange.mock.calls[1]?.[0].changes).toEqual([
+      expect(onChange.mock.calls[1]?.[2]).toEqual([
         {
           text: '',
           range: {
@@ -1705,7 +1707,7 @@ describe('Editor undo/redo API', () => {
           end: 6,
         },
       ]);
-      expect(onChange.mock.calls[1]?.[0].file.contents).toBe('alpha');
+      expect(onChange.mock.calls[1]?.[0].contents).toBe('alpha');
     } finally {
       cleanup();
     }

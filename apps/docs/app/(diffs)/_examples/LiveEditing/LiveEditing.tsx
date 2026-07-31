@@ -76,7 +76,7 @@ export function LiveEditing({
   const editorOptions = useMemo<EditorOptions<undefined>>(
     () => ({
       // Both surfaces synchronously report the current new-file contents.
-      onChange({ file }) {
+      onChange(file) {
         setHasEdits(file.contents !== LIVE_EDITING_NEW_FILE.contents);
       },
     }),

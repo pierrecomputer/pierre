@@ -9,12 +9,13 @@ import type {
   DiffsHighlighter,
   EditableInstance,
   EditorAttachEvent,
-  EditorChangeEvent,
+  EditorChange,
   EditorSelection,
   EditorState,
   FileContents,
   FileDiffMetadata,
   HighlightedToken,
+  LineAnnotation,
   Position,
   Range,
   RenderRange,
@@ -225,7 +226,13 @@ export interface EditorOptions<LAnnotation> {
   /** Callback when the editor is attached to a file. */
   onAttach?: (event: EditorAttachEvent<LAnnotation>) => void;
   /** Callback when the editor document changes. */
-  onChange?: (event: EditorChangeEvent<LAnnotation>) => void;
+  onChange?: (
+    file: FileContents,
+    lineAnnotations?:
+      | LineAnnotation<LAnnotation>[]
+      | DiffLineAnnotation<LAnnotation>[],
+    changes?: EditorChange[]
+  ) => void;
   /** Callback when the editor gains focus. */
   onFocus?: () => void;
   /** Callback when the editor loses focus. */
@@ -5117,11 +5124,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     const fileRef = this.getFile();
     const onChange = this.#options.onChange;
     if (fileRef !== undefined && onChange !== undefined) {
-      onChange({
-        changes: change.changes,
-        file: fileRef,
-        lineAnnotations: newLineAnnotations ?? this.#lineAnnotations,
-      });
+      onChange(
+        fileRef,
+        newLineAnnotations ?? this.#lineAnnotations,
+        change.changes
+      );
     }
 
     // Invalidate layout caches touched by the edit. Clear cached line Y

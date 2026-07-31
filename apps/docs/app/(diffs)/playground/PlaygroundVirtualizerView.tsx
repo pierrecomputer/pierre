@@ -202,7 +202,7 @@ export function PlaygroundVirtualizerView({
             preventScroll: true,
           });
         },
-        onChange: ({ lineAnnotations }) => {
+        onChange: (_file, lineAnnotations) => {
           if (
             lineAnnotations == null ||
             !isDiffAnnotationCollection(lineAnnotations)
