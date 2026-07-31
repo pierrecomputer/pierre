@@ -629,8 +629,8 @@ export class FileDiff<
     }
   }
 
-  public __getEditorCodeOptions(): BaseCodeOptions {
-    return { ...this.options, ...this.hunksRenderer.getEditorCodeOptions() };
+  public __getEffectiveCodeOptions(): BaseCodeOptions {
+    return { ...this.options, ...this.hunksRenderer.getEffectiveCodeOptions() };
   }
 
   public cleanUp(recycle: boolean = false): void {

@@ -75,7 +75,7 @@ class TestEditableComponent implements DiffsEditableComponent<undefined> {
 
   setEditorActiveLine(_lineNumber: number | null): void {}
 
-  __getEditorCodeOptions(): DiffsEditableComponent<undefined>['options'] {
+  __getEffectiveCodeOptions(): DiffsEditableComponent<undefined>['options'] {
     return this.options;
   }
 

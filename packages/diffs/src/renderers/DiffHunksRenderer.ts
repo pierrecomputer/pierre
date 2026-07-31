@@ -838,7 +838,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     );
   }
 
-  public getEditorCodeOptions(): Pick<
+  public getEffectiveCodeOptions(): Pick<
     BaseCodeOptions,
     'theme' | 'tokenizeMaxLineLength'
   > {

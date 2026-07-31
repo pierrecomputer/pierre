@@ -296,7 +296,7 @@ export class FileRenderer<LAnnotation = undefined> {
     );
   }
 
-  public getEditorCodeOptions(): Pick<
+  public getEffectiveCodeOptions(): Pick<
     BaseCodeOptions,
     'theme' | 'tokenizeMaxLineLength'
   > {

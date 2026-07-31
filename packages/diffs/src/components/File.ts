@@ -310,8 +310,8 @@ export class File<
     }
   }
 
-  public __getEditorCodeOptions(): BaseCodeOptions {
-    return { ...this.options, ...this.fileRenderer.getEditorCodeOptions() };
+  public __getEffectiveCodeOptions(): BaseCodeOptions {
+    return { ...this.options, ...this.fileRenderer.getEffectiveCodeOptions() };
   }
 
   public flushManagers(): void {
