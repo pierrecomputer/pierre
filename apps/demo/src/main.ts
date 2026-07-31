@@ -398,7 +398,7 @@ function renderDiff(parsedPatches: ParsedPatch[], manager?: WorkerPoolManager) {
     let hunkIndex = 0;
     for (const fileDiff of parsedPatch.files) {
       const editor = new Editor<LineCommentMetadata>({
-        onAttach: ({ editor }) => {
+        onAttach: (editor) => {
           editor.setSelections([
             {
               start: {
@@ -980,7 +980,7 @@ if (renderFileButton != null) {
       onChange: (file, lineAnnotations) => {
         console.log('change', file, lineAnnotations);
       },
-      onAttach: ({ editor }) => {
+      onAttach: (editor) => {
         const { selections } = editor.getState();
         if (selections === undefined || selections.length === 0) {
           editor.setSelections([

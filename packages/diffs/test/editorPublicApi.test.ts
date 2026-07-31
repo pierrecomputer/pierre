@@ -13,7 +13,6 @@ import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
 import type {
   DiffsEditableComponent,
   DiffsEditor,
-  EditorAttachEvent,
   FileContents,
 } from '../src/types';
 import { installDom, wait } from './domHarness';
@@ -287,7 +286,10 @@ describe('Editor focus lifecycle', () => {
   test('fires onAttach when the editor attaches to a file', async () => {
     let onAttachCompleted = false;
     const onAttach = mock(
-      ({ editor: attachedEditor }: EditorAttachEvent<undefined>) => {
+      (
+        attachedEditor: Editor<undefined>,
+        _file: DiffsEditableComponent<undefined>
+      ) => {
         attachedEditor.setMarkers([]);
         onAttachCompleted = true;
       }
@@ -300,10 +302,8 @@ describe('Editor focus lifecycle', () => {
       await wait(0);
       expect(onAttach).toHaveBeenCalledTimes(1);
       expect(onAttachCompleted).toBe(true);
-      expect(onAttach.mock.calls[0]?.[0]).toEqual({
-        editor,
-        fileInstance: file,
-      });
+      expect(onAttach.mock.calls[0]?.[0]).toBe(editor);
+      expect(onAttach.mock.calls[0]?.[1]).toBe(file);
     } finally {
       cleanup();
     }

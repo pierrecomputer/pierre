@@ -1178,12 +1178,6 @@ export interface DiffsEditor<LAnnotation> {
   ): void;
 }
 
-/** The editor and editable surface provided after attachment completes. */
-export interface EditorAttachEvent<LAnnotation> {
-  editor: DiffsEditor<LAnnotation>;
-  fileInstance: DiffsEditableComponent<LAnnotation>;
-}
-
 /**
  * Position in a text document expressed as zero-based line and character offset.
  * The offsets are based on a UTF-16 string representation. So a string of the form
@@ -1273,6 +1267,15 @@ export interface EditorChange extends ResolvedTextEdit {
   range: Range;
 }
 
+/** The document state and normalized edits reported after an editor change. */
+export interface EditorChangeEvent<LAnnotation> {
+  changes: EditorChange[];
+  file: FileContents;
+  lineAnnotations?:
+    | LineAnnotation<LAnnotation>[]
+    | DiffLineAnnotation<LAnnotation>[];
+}
+
 /**
  * The direction of a selection.
  * -1: backward
@@ -1312,9 +1315,10 @@ export interface DiffsTextDocument {
 export interface CodeViewCreateEditorOptions<LAnnotation> {
   onChange: (
     file: FileContents,
-    lineAnnotations?:
+    lineAnnotations:
       | LineAnnotation<LAnnotation>[]
-      | DiffLineAnnotation<LAnnotation>[],
-    changes?: EditorChange[]
+      | DiffLineAnnotation<LAnnotation>[]
+      | undefined,
+    event: EditorChangeEvent<LAnnotation>
   ) => void;
 }

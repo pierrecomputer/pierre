@@ -730,7 +730,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
   );
   const editorOptions = useMemo<EditorOptions<PlaygroundAnnotationMetadata>>(
     () => ({
-      onAttach({ editor }) {
+      onAttach(editor) {
         editorRef.current = editor;
         editor.focus({ lineNumber: 'first-visible', preventScroll: true });
       },

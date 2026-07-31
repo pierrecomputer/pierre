@@ -232,7 +232,7 @@ const viewer = new CodeView<ThreadMetadata>({
   createEditor(options) {
     return new Editor({
       ...options,
-      onAttach({ editor }) {
+      onAttach(editor) {
         editor.focus({ lineNumber: 'first-visible', preventScroll: true });
       },
     });
@@ -474,7 +474,7 @@ export function EditableFileWithHistoryToolbar() {
   const editorRef = useRef<DiffsEditor<undefined> | null>(null);
   const editorOptions = useMemo<EditorOptions<undefined>>(
     () => ({
-      onAttach({ editor }) {
+      onAttach(editor) {
         editorRef.current = editor;
       },
       onChange() {
@@ -743,7 +743,7 @@ const initialItems: CodeViewItem<ThreadMetadata>[] = [
 const codeViewStyle = { height: '24rem', overflow: 'auto' } as const;
 
 const editorOptions: EditorOptions<ThreadMetadata> = {
-  onAttach({ editor }) {
+  onAttach(editor) {
     editor.focus({ lineNumber: 'first-visible', preventScroll: true });
   },
 };
@@ -936,12 +936,12 @@ export const EDITOR_OPTIONS_TYPE: PreloadFileOptions<undefined> = {
     name: 'editor_options_type.ts',
     contents: `import type {
   DiffLineAnnotation,
-  EditorAttachEvent,
-  EditorChange,
+  DiffsEditableComponent,
+  EditorChangeEvent,
   FileContents,
   LineAnnotation,
 } from '@pierre/diffs';
-import type { IStateStorage } from '@pierre/diffs/edit';
+import { Editor, type IStateStorage } from '@pierre/diffs/edit';
 
 interface EditorOptions<LAnnotation> {
   // Max undo stack entries
@@ -983,7 +983,10 @@ interface EditorOptions<LAnnotation> {
   renderSelectionAction?: (context) => HTMLElement;
 
   // Fires after attach when the text document is ready
-  onAttach?: (event: EditorAttachEvent<LAnnotation>) => void;
+  onAttach?: (
+    editor: Editor<LAnnotation>,
+    fileInstance: DiffsEditableComponent<LAnnotation>
+  ) => void;
 
   // Fires after each edit. file.contents reflects the live document. When
   // present, lineAnnotations is the complete current collection, not a delta;
@@ -991,10 +994,11 @@ interface EditorOptions<LAnnotation> {
   // existing array reference.
   onChange?: (
     file: FileContents,
-    lineAnnotations?:
+    lineAnnotations:
       | LineAnnotation<LAnnotation>[]
-      | DiffLineAnnotation<LAnnotation>[],
-    changes?: EditorChange[]
+      | DiffLineAnnotation<LAnnotation>[]
+      | undefined,
+    event: EditorChangeEvent<LAnnotation>
   ) => void;
 
   // Fires when the editable content area gains focus (tab, click, or editor.focus()).

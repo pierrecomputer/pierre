@@ -137,7 +137,7 @@ export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
   const editorRef = useRef<DiffsEditor<undefined> | null>(null);
   const editorOptions = useMemo<EditorOptions<undefined>>(
     () => ({
-      onAttach({ editor }) {
+      onAttach(editor) {
         editorRef.current = editor;
       },
       onChange: (file) => {

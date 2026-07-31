@@ -4,4 +4,4 @@ export type {
   PersistStateStorage,
 } from '../editor/stateStorage';
 export * from '../editor/textDocument';
-export type { DiffsEditor, EditorAttachEvent, EditorChange } from '../types';
+export type { DiffsEditor, EditorChange, EditorChangeEvent } from '../types';

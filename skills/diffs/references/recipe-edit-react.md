@@ -45,7 +45,7 @@ export function EditableDiff() {
   const editorRef = useRef<DiffsEditor<undefined> | null>(null);
   const editOptions = useMemo<EditorOptions<undefined>>(
     () => ({
-      onAttach({ editor }) {
+      onAttach(editor) {
         editorRef.current = editor;
       },
       onChange(file) {

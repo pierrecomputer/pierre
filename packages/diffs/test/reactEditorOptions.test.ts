@@ -36,7 +36,6 @@ import { type FileDiffProps as ReactFileDiffProps } from '../src/react/FileDiff'
 import type {
   DiffsEditableComponent,
   EditableInstance,
-  EditorAttachEvent,
   FileContents,
 } from '../src/types';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
@@ -599,7 +598,7 @@ describe('React editor factory lifecycle', () => {
     ];
     const editorOptions: EditorOptions<undefined>[] = callbacks.map(
       (onChange, index) => ({
-        onAttach({ editor }) {
+        onAttach(editor) {
           siblingEditors[index] = editor as TrackedEditor;
         },
         onChange,
@@ -752,7 +751,7 @@ describe('React editor factory lifecycle', () => {
       document.body.appendChild(container);
       const attachmentError = new Error(`${surface} attachment failed`);
       const editors: AttachmentFailingEditor[] = [];
-      const onAttach = mock((_event: EditorAttachEvent<undefined>) => {});
+      const onAttach = mock((_editor: Editor<undefined>) => {});
       let root: Root | undefined;
       const factory = (options: EditorOptions<undefined>) => {
         const editor = new AttachmentFailingEditor(options, attachmentError);
@@ -796,7 +795,7 @@ describe('React editor factory lifecycle', () => {
         const container = document.createElement('div');
         document.body.appendChild(container);
         const editors: TrackedEditor[] = [];
-        const onAttach = mock((_event: EditorAttachEvent<undefined>) => {});
+        const onAttach = mock((_editor: Editor<undefined>) => {});
         const factory = (options: EditorOptions<undefined>) => {
           const editor = new TrackedEditor(options);
           editors.push(editor);
@@ -852,7 +851,7 @@ describe('React editor factory lifecycle', () => {
     const container = document.createElement('div');
     document.body.appendChild(container);
     const editors: TrackedEditor[] = [];
-    const onAttach = mock((_event: EditorAttachEvent<undefined>) => {});
+    const onAttach = mock((_editor: Editor<undefined>) => {});
     let root: Root | undefined;
     const factory = (options: EditorOptions<undefined>) => {
       const editor = new TrackedEditor(options);
@@ -917,9 +916,9 @@ describe('React editor factory lifecycle', () => {
       );
       expect(activeEditors).toHaveLength(2);
       expect(onAttach).toHaveBeenCalledTimes(2);
-      expect(
-        new Set(onAttach.mock.calls.map(([event]) => event.editor))
-      ).toEqual(new Set(activeEditors));
+      expect(new Set(onAttach.mock.calls.map(([editor]) => editor))).toEqual(
+        new Set(activeEditors)
+      );
 
       await unmountRoot(root);
       root = undefined;

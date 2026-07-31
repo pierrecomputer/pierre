@@ -90,7 +90,7 @@ top edge:
 
 ```tsx
 const editorOptions: EditorOptions<ThreadMetadata> = {
-  onAttach({ editor }) {
+  onAttach(editor) {
     editor.focus({ lineNumber: 'first-visible', preventScroll: true });
   },
 };
@@ -105,7 +105,7 @@ const viewer = new CodeView({
   createEditor(options) {
     return new Editor({
       ...options,
-      onAttach({ editor }) {
+      onAttach(editor) {
         editor.focus({ lineNumber: 'first-visible', preventScroll: true });
       },
     });

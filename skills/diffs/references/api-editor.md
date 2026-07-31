@@ -8,13 +8,12 @@ member of its classes.
 | Export                | Kind  | Purpose                                                   |
 | --------------------- | ----- | --------------------------------------------------------- |
 | `Editor`              | Class | Adds text editing to a `File` or `FileDiff` instance.     |
-| `EditorAttachEvent`   | Type  | Provides the attached editor and editable surface.        |
 | `EditorChange`        | Type  | Describes one normalized editor change.                   |
+| `EditorChangeEvent`   | Type  | Provides normalized edits and current document state.     |
 | `EditorOptions`       | Type  | Configures history, state, selections, and callbacks.     |
 | `DiffsEditor`         | Type  | Describes the complete public editor contract.            |
 | `TextDocument`        | Class | Stores text, positions, edits, search, and undo history.  |
 | `TextDocumentChange`  | Type  | Describes the lines and characters changed by an edit.    |
-| `ResolvedTextEdit`    | Type  | Describes an edit with absolute offsets.                  |
 | `IStateStorage`       | Type  | Defines asynchronous or synchronous editor state storage. |
 | `PersistStateStorage` | Type  | Selects memory, IndexedDB, or custom state storage.       |
 | `Position`            | Type  | Identifies a zero-based line and character.               |
@@ -35,8 +34,8 @@ member of its classes.
 | `enabledSelectionAction` | Enables the selection action surface.                    |
 | `clipboard`              | Supplies a text clipboard reader.                        |
 | `renderSelectionAction`  | Produces the selection action element.                   |
-| `onAttach`               | Receives an editor attachment event.                     |
-| `onChange`               | Receives file state, annotations, and normalized edits.  |
+| `onAttach`               | Receives the editor and attached surface.                |
+| `onChange`               | Receives file state, annotations, and a change event.    |
 | `onFocus`                | Runs after the editor gains focus.                       |
 | `onBlur`                 | Runs after the editor loses focus.                       |
 

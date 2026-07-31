@@ -123,7 +123,7 @@ export function FindDemo({ prerenderedFile }: FindDemoProps) {
 
   const editorOptions = useMemo<EditorOptions<undefined>>(
     () => ({
-      onAttach({ editor }) {
+      onAttach(editor) {
         editorRef.current = editor;
       },
     }),

@@ -70,7 +70,7 @@ export function PlaygroundVirtualizerElementView({
 }
 
 const FILE_EDITOR_OPTIONS: EditorOptions<undefined> = {
-  onAttach({ editor }) {
+  onAttach(editor) {
     editor.focus({ lineNumber: 'first-visible', preventScroll: true });
   },
 };
@@ -160,7 +160,7 @@ function ElementVirtualizerDiff({
   // nowhere for the frames in between.
   const editorOptions = useMemo<EditorOptions<PlaygroundAnnotationMetadata>>(
     () => ({
-      onAttach({ editor }) {
+      onAttach(editor) {
         editor.focus({ lineNumber: 'first-visible', preventScroll: true });
       },
       onChange(_file, lineAnnotations) {

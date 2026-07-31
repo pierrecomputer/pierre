@@ -34,7 +34,7 @@ const CODE_VIEW_STYLES = { height: '70vh', overflow: 'auto' } as const;
 type PlaygroundItem = CodeViewItem<PlaygroundAnnotationMetadata>;
 
 const CODE_VIEW_EDITOR_OPTIONS: EditorOptions<PlaygroundAnnotationMetadata> = {
-  onAttach({ editor }) {
+  onAttach(editor) {
     editor.focus({ lineNumber: 'first-visible', preventScroll: true });
   },
 };

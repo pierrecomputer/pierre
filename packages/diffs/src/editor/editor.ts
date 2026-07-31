@@ -8,8 +8,7 @@ import type {
   DiffsEditor,
   DiffsHighlighter,
   EditableInstance,
-  EditorAttachEvent,
-  EditorChange,
+  EditorChangeEvent,
   EditorSelection,
   EditorState,
   FileContents,
@@ -224,14 +223,18 @@ export interface EditorOptions<LAnnotation> {
     context: SelectionActionContext<LAnnotation>
   ) => HTMLElement;
   /** Callback when the editor is attached to a file. */
-  onAttach?: (event: EditorAttachEvent<LAnnotation>) => void;
+  onAttach?: (
+    editor: Editor<LAnnotation>,
+    fileInstance: DiffsEditableComponent<LAnnotation>
+  ) => void;
   /** Callback when the editor document changes. */
   onChange?: (
     file: FileContents,
-    lineAnnotations?:
+    lineAnnotations:
       | LineAnnotation<LAnnotation>[]
-      | DiffLineAnnotation<LAnnotation>[],
-    changes?: EditorChange[]
+      | DiffLineAnnotation<LAnnotation>[]
+      | undefined,
+    event: EditorChangeEvent<LAnnotation>
   ) => void;
   /** Callback when the editor gains focus. */
   onFocus?: () => void;
@@ -1454,7 +1457,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         return;
       }
       attachState.delivered = true;
-      this.#options.onAttach?.({ editor: this, fileInstance });
+      this.#options.onAttach?.(this, fileInstance);
     };
     attachState.callback = callback;
     queueRender(callback);
@@ -5124,11 +5127,12 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     const fileRef = this.getFile();
     const onChange = this.#options.onChange;
     if (fileRef !== undefined && onChange !== undefined) {
-      onChange(
-        fileRef,
-        newLineAnnotations ?? this.#lineAnnotations,
-        change.changes
-      );
+      const lineAnnotations = newLineAnnotations ?? this.#lineAnnotations;
+      onChange(fileRef, lineAnnotations, {
+        changes: change.changes,
+        file: fileRef,
+        lineAnnotations,
+      });
     }
 
     // Invalidate layout caches touched by the edit. Clear cached line Y
