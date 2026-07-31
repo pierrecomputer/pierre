@@ -1,9 +1,9 @@
 import { JSDOM } from 'jsdom';
 
 import type { CodeView } from '../src/components/CodeView';
-import { resetPlatformDetection } from '../src/utils/platform';
 import { clearRenderQueue } from '../src/managers/UniversalRenderingManager';
 import type { CodeViewItem, FileContents } from '../src/types';
+import { resetPlatformDetection } from '../src/utils/platform';
 
 export interface InstallDomNavigatorOptions {
   maxTouchPoints?: number;

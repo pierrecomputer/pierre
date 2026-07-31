@@ -792,6 +792,12 @@ export class VirtualizedFile<
     return this.isAdvancedMode() || super.shouldDisableVirtualizationBuffers();
   }
 
+  // This WebKit dom manipulation scroll fix is not applicable in virtualized
+  // environments, so we avoid the performance hit even on Webkit
+  protected override shouldGuardRebuildScroll(): boolean {
+    return false;
+  }
+
   private isSimpleMode(): boolean {
     return this.virtualizer.type === 'simple';
   }

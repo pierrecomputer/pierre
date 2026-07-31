@@ -86,6 +86,7 @@ import { getDiffHunksRendererOptions } from '../utils/getDiffHunksRendererOption
 import { getHunkSideStartBoundary } from '../utils/getHunkSideBoundaries';
 import { getLineAnnotationName } from '../utils/getLineAnnotationName';
 import { getOrCreateCodeNode } from '../utils/getOrCreateCodeNode';
+import { guardWebKitScrollDuringRebuild } from '../utils/guardWebKitScrollDuringRebuild';
 import { upsertHostThemeStyle } from '../utils/hostTheme';
 import { hydratePartialDiff } from '../utils/hydratePartialDiff';
 import { isDefaultRenderRange } from '../utils/isDefaultRenderRange';
@@ -93,6 +94,7 @@ import { isDiffPlainText } from '../utils/isDiffPlainText';
 import { isStyleNode } from '../utils/isStyleNode';
 import { iterateOverDiff } from '../utils/iterateOverDiff';
 import { parseDiffFromFile } from '../utils/parseDiffFromFile';
+import { isSafari } from '../utils/platform';
 import { prerenderHTMLIfNecessary } from '../utils/prerenderHTMLIfNecessary';
 import { getMeasuredScrollbarGutter } from '../utils/scrollbarGutter';
 import { setPreNodeProperties } from '../utils/setWrapperNodeProps';
@@ -2242,7 +2244,28 @@ export class FileDiff<
     );
   }
 
+  // A boolean check to ensure that edit mode in WebKit doesn't cause potential
+  // scroll jumps to due bugs with WebKit. The workarounds have performance
+  // implications so we avoid running the workarounds on browsers or scenarios
+  // where they are not applicable
+  protected shouldGuardRebuildScroll(): boolean {
+    return this.editor != null && isSafari();
+  }
+
   private applyHunksToDOM(
+    pre: HTMLPreElement,
+    result: HunksRenderResult
+  ): void {
+    if (this.shouldGuardRebuildScroll()) {
+      guardWebKitScrollDuringRebuild(pre, () =>
+        this.replaceCodeColumns(pre, result)
+      );
+    } else {
+      this.replaceCodeColumns(pre, result);
+    }
+  }
+
+  private replaceCodeColumns(
     pre: HTMLPreElement,
     result: HunksRenderResult
   ): void {
@@ -2610,18 +2633,25 @@ export class FileDiff<
     const ast = this.hunksRenderer.renderCodeAST('unified', hunksResult);
     const gutterChildren = getElementChildren(ast?.[0]);
     const contentChildren = getElementChildren(ast?.[1]);
-    for (const [el, astChildren] of [
-      [columns.gutter, gutterChildren],
-      [columns.content, contentChildren],
-    ] as const) {
-      if (astChildren != null) {
-        el.innerHTML = toHtml(astChildren);
+    const applyColumns = () => {
+      for (const [el, astChildren] of [
+        [columns.gutter, gutterChildren],
+        [columns.content, contentChildren],
+      ] as const) {
+        if (astChildren != null) {
+          el.innerHTML = toHtml(astChildren);
+        }
       }
-    }
 
-    if (hunksResult.rowCount !== this.lastRowCount) {
-      this.applyRowSpan('unified', columns, hunksResult.rowCount);
-      this.lastRowCount = hunksResult.rowCount;
+      if (hunksResult.rowCount !== this.lastRowCount) {
+        this.applyRowSpan('unified', columns, hunksResult.rowCount);
+        this.lastRowCount = hunksResult.rowCount;
+      }
+    };
+    if (this.shouldGuardRebuildScroll()) {
+      guardWebKitScrollDuringRebuild(this.pre, applyColumns);
+    } else {
+      applyColumns();
     }
     this.renderSeparators(hunksResult.hunkData);
 
