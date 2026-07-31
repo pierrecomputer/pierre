@@ -1640,6 +1640,34 @@ describe('Editor undo/redo API', () => {
     }
   });
 
+  test('uses the editor keymap before falling back to the default map', async () => {
+    const { cleanup, content, editor, window } = await createEditorFixture(
+      'alpha',
+      {
+        keymap: [{ bindings: { ArrowUp: 'undo' } }],
+      }
+    );
+
+    try {
+      editor.applyEdits(insertBang, true);
+
+      const defaultUndo = pressKey(window, content, {
+        key: 'z',
+        metaKey: true,
+      });
+      expect(defaultUndo.defaultPrevented).toBe(true);
+      expect(editor.getText()).toBe('alpha');
+
+      editor.applyEdits(insertBang, true);
+
+      const customUndo = pressKey(window, content, { key: 'ArrowUp' });
+      expect(customUndo.defaultPrevented).toBe(true);
+      expect(editor.getText()).toBe('alpha');
+    } finally {
+      cleanup();
+    }
+  });
+
   test('undo and redo do nothing when there is no history', async () => {
     const { cleanup, editor } = await createEditorFixture('alpha');
 

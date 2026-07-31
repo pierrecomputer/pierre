@@ -941,11 +941,18 @@ export const EDITOR_OPTIONS_TYPE: PreloadFileOptions<undefined> = {
   FileContents,
   LineAnnotation,
 } from '@pierre/diffs';
-import { Editor, type IStateStorage } from '@pierre/diffs/edit';
+import {
+  Editor,
+  type EditorKeymap,
+  type IStateStorage,
+} from '@pierre/diffs/edit';
 
 interface EditorOptions<LAnnotation> {
   // Max undo stack entries
   historyMaxEntries?: number;
+
+  // Custom keymap checked before the default map.
+  keymap?: EditorKeymap;
 
   // Preserve each File's document and item-local editor state between renders.
   // Requires every editable file to provide a unique, stable cacheKey.

@@ -1,4 +1,5 @@
 import { DEFAULT_THEMES, type FileContents } from '@pierre/diffs';
+import type { EditorCommand, EditorKeymap } from '@pierre/diffs/edit';
 import type { FileOptions } from '@pierre/diffs/react';
 import type { PreloadFileOptions } from '@pierre/diffs/ssr';
 
@@ -236,151 +237,92 @@ export const HISTORY_DEMO_EDITS: readonly HistoryDemoEdit[] = [
   },
 ];
 
-// Keyboard-shortcut reference data. This is the single source of truth for the
-// shortcuts section: the table renders by mapping over these groups, and the
-// editor demo beside it shows this same data serialized back to source (see
-// `serializeShortcutGroups`)—so the code on the left literally describes the
-// table on the right.
-export interface EditShortcut {
-  // Interchangeable main keys, shown joined by `/` (e.g. ['Home', 'End'] reads
-  // as "Home / End"). A single entry renders as one key.
-  keys: readonly string[];
-  action: string;
-  // Held modifier keys (e.g. ['Shift']) shown ahead of `keys` with no `/`, so
-  // they read as pressed together rather than as alternatives.
-  modifiers?: readonly string[];
-  // When true, the row leads with the platform modifier: Cmd on macOS, Ctrl
-  // elsewhere. Resolved client-side so one list reads correctly on every OS.
-  mod?: boolean;
-}
+export const EDITOR_COMMAND_LABELS = {
+  indent: 'Indent line or selection',
+  outdent: 'Outdent line or selection',
+  indentLess: 'Decrease indentation',
+  indentMore: 'Increase indentation',
+  undo: 'Undo',
+  redo: 'Redo',
+  selectAll: 'Select all',
+  findNextMatch: 'Find next match of the selection',
+  openSearchPanel: 'Open search',
+  openSearchReplacePanel: 'Open search and replace',
+  moveLineUp: 'Move selected line(s) up',
+  moveLineDown: 'Move selected line(s) down',
+  copyLineUp: 'Copy selected line(s) up',
+  copyLineDown: 'Copy selected line(s) down',
+  simplifySelection: 'Collapse to a single cursor',
+  insertBlankLine: 'Insert a blank line',
+  deleteHardLineForward: 'Delete to the end of the line',
+  toggleComment: 'Toggle line comment',
+  toggleBlockComment: 'Toggle block comment',
+  moveCursorToDocStart: 'Move cursor to document start',
+  moveCursorToDocEnd: 'Move cursor to document end',
+  expandSelectionDocStart: 'Extend selection to document start',
+  expandSelectionDocEnd: 'Extend selection to document end',
+} satisfies Record<EditorCommand, string>;
 
-export interface EditShortcutGroup {
-  label: string;
-  shortcuts: readonly EditShortcut[];
-}
-
-export const EDIT_SHORTCUT_GROUPS: readonly EditShortcutGroup[] = [
+// Docs-local mirror of the private default keymap in editor/command.ts. The
+// searchable list and editable JSON both derive from this exact value.
+export const DEFAULT_EDITOR_KEYMAP: EditorKeymap = [
   {
-    label: 'Editing',
-    shortcuts: [
-      { keys: ['Tab'], action: 'Indent line or selection' },
-      {
-        keys: ['Tab'],
-        modifiers: ['Shift'],
-        action: 'Outdent line or selection',
-      },
-      {
-        keys: ['↑'],
-        modifiers: ['Alt'],
-        action: 'Move selected line(s) up',
-      },
-      {
-        keys: ['↓'],
-        modifiers: ['Alt'],
-        action: 'Move selected line(s) down',
-      },
-      {
-        keys: ['P'],
-        modifiers: ['Alt', 'Ctrl'],
-        action: 'Move selected line(s) up (macOS/Linux)',
-      },
-      {
-        keys: ['N'],
-        modifiers: ['Alt', 'Ctrl'],
-        action: 'Move selected line(s) down (macOS/Linux)',
-      },
-      { keys: ['X'], action: 'Cut', mod: true },
-      { keys: ['C'], action: 'Copy', mod: true },
-      { keys: ['V'], action: 'Paste', mod: true },
-    ],
+    bindings: {
+      Tab: 'indent',
+      'shift+Tab': 'outdent',
+      'cmdOrCtrl+[': 'indentLess',
+      'cmdOrCtrl+]': 'indentMore',
+      'cmdOrCtrl+z': 'undo',
+      'cmdOrCtrl+shift+z': 'redo',
+      'cmdOrCtrl+a': 'selectAll',
+      'cmdOrCtrl+d': 'findNextMatch',
+      'cmdOrCtrl+f': 'openSearchPanel',
+      'cmdOrCtrl+alt+f': 'openSearchReplacePanel',
+      'alt+ArrowUp': 'moveLineUp',
+      'alt+ArrowDown': 'moveLineDown',
+      'shift+alt+ArrowUp': 'copyLineUp',
+      'shift+alt+ArrowDown': 'copyLineDown',
+      Escape: 'simplifySelection',
+      'cmdOrCtrl+Enter': 'insertBlankLine',
+      'cmdOrCtrl+/': 'toggleComment',
+      'shift+alt+a': 'toggleBlockComment',
+      'cmdOrCtrl+Home': 'moveCursorToDocStart',
+      'cmdOrCtrl+End': 'moveCursorToDocEnd',
+      'cmdOrCtrl+shift+Home': 'expandSelectionDocStart',
+      'cmdOrCtrl+shift+End': 'expandSelectionDocEnd',
+    },
   },
   {
-    label: 'Selection & cursor',
-    shortcuts: [
-      { keys: ['←', '→', '↑', '↓'], action: 'Move the cursor' },
-      {
-        keys: ['←', '→', '↑', '↓'],
-        modifiers: ['Shift'],
-        action: 'Extend the selection',
-      },
-      { keys: ['←', '→'], action: 'Jump to line start / end', mod: true },
-      {
-        keys: ['Home', 'End'],
-        action: 'Jump to document start / end',
-        mod: true,
-      },
-      { keys: ['A'], action: 'Select all', mod: true },
-      { keys: ['Esc'], action: 'Collapse to a single cursor' },
-    ],
+    platform: 'mac',
+    bindings: {
+      'ctrl+k': 'deleteHardLineForward',
+      'ctrl+alt+p': 'moveLineUp',
+      'ctrl+alt+n': 'moveLineDown',
+      'cmd+ArrowUp': 'moveCursorToDocStart',
+      'cmd+ArrowDown': 'moveCursorToDocEnd',
+      'cmd+shift+ArrowUp': 'expandSelectionDocStart',
+      'cmd+shift+ArrowDown': 'expandSelectionDocEnd',
+    },
   },
   {
-    label: 'History',
-    shortcuts: [
-      { keys: ['Z'], action: 'Undo', mod: true },
-      { keys: ['Z'], modifiers: ['Shift'], action: 'Redo', mod: true },
-    ],
+    platform: 'windows',
+    bindings: {
+      'ctrl+y': 'redo',
+    },
   },
   {
-    label: 'Find',
-    shortcuts: [
-      { keys: ['F'], action: 'Open the search panel', mod: true },
-      { keys: ['D'], action: 'Find next match of the selection', mod: true },
-      { keys: ['G'], action: 'Next match', mod: true },
-      {
-        keys: ['G'],
-        modifiers: ['Shift'],
-        action: 'Previous match',
-        mod: true,
-      },
-      { keys: ['Enter'], action: 'Next match (in search panel)' },
-      { keys: ['Esc'], action: 'Close the search panel' },
-    ],
-  },
-  {
-    label: 'Multiple cursors',
-    shortcuts: [
-      { keys: ['Click'], action: 'Add a cursor at the click', mod: true },
-    ],
+    platform: 'linux',
+    bindings: {
+      'ctrl+y': 'redo',
+      'ctrl+alt+p': 'moveLineUp',
+      'ctrl+alt+n': 'moveLineDown',
+    },
   },
 ];
 
-// Serialize the shortcut groups back to a readable `const shortcuts = [...]`
-// source string. The editor demo renders this, so editing the data above keeps
-// the on-screen code snippet and the rendered table perfectly in sync.
-export function serializeShortcutGroups(
-  groups: readonly EditShortcutGroup[]
-): string {
-  const lines: string[] = [
-    '// The data behind the table on the right—this very page maps over it.',
-    "// Editing here won't rebuild the table, but go ahead: the surface is live.",
-    '// `keys` are alternatives (joined by /); `modifiers` are held together.',
-    '// `mod` adds the platform key: Cmd on macOS, Ctrl everywhere else.',
-    'export const shortcuts = [',
-  ];
-  const literal = (values: readonly string[]) =>
-    values.map((value) => `'${value}'`).join(', ');
-  for (const group of groups) {
-    lines.push(`  // ${group.label}`);
-    for (const { keys, action, modifiers, mod } of group.shortcuts) {
-      const parts = [`keys: [${literal(keys)}]`, `action: '${action}'`];
-      if (modifiers != null) {
-        parts.push(`modifiers: [${literal(modifiers)}]`);
-      }
-      if (mod === true) {
-        parts.push('mod: true');
-      }
-      lines.push(`  { ${parts.join(', ')} },`);
-    }
-  }
-  lines.push('];');
-  return `${lines.join('\n')}\n`;
-}
-
-// The meta "code that built the table" surface. Its contents are generated from
-// EDIT_SHORTCUT_GROUPS so the snippet can never drift from the rendered table.
-export const SHORTCUTS_DEMO_FILE: FileContents = {
-  name: 'shortcuts.ts',
-  contents: serializeShortcutGroups(EDIT_SHORTCUT_GROUPS),
+export const DEFAULT_KEYMAP_FILE: FileContents = {
+  name: 'keymap.json',
+  contents: `${JSON.stringify(DEFAULT_EDITOR_KEYMAP, null, 2)}\n`,
 };
 
 // Server-side preload inputs. Spreading the resolved results into <File> ships
@@ -401,9 +343,9 @@ export const HISTORY_DEMO_FILE_EXAMPLE: PreloadFileOptions<undefined> = {
   options: EDITABLE_FILE_OPTIONS,
 };
 
-export const SHORTCUTS_DEMO_FILE_EXAMPLE: PreloadFileOptions<undefined> = {
-  file: SHORTCUTS_DEMO_FILE,
-  options: EDITABLE_FILE_OPTIONS,
+export const DEFAULT_KEYMAP_FILE_EXAMPLE: PreloadFileOptions<undefined> = {
+  file: DEFAULT_KEYMAP_FILE,
+  options: { ...EDITABLE_FILE_OPTIONS, disableFileHeader: true },
 };
 
 export const SELECTION_DEMO_FILE_EXAMPLE: PreloadFileOptions<undefined> = {

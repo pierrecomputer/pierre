@@ -1,3 +1,10 @@
+export {
+  type EditorCommand,
+  type EditorKeymap,
+  type EditorShortcut,
+  type KeyboardKey,
+  type KeyboardModifier,
+} from '../editor/command';
 export * from '../editor/editor';
 export type {
   IStateStorage,

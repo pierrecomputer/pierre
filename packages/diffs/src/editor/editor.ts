@@ -26,6 +26,7 @@ import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
 import { isGutterUtilityPath } from '../utils/isGutterUtilityPath';
 import {
   type EditorCommand,
+  type EditorKeymap,
   resolveEditorCommandFromKeyboardEvent,
   resolveFindAgainShortcut,
 } from './command';
@@ -184,6 +185,8 @@ interface EditorAttachState {
 export interface EditorOptions<LAnnotation> {
   /** The maximum number of entries to keep in the undo stack. */
   historyMaxEntries?: number;
+  /** Custom keymap groups checked before defaults; later groups take precedence. */
+  keymap?: EditorKeymap;
   /**
    * Preserve each file's document and item-local editor state when switching files.
    * Every editable file must provide a unique, stable `cacheKey`.
@@ -1867,16 +1870,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       ),
 
       addEventListener(contentEl, 'keydown', (e) => {
-        if (e.key === 'Escape') {
-          e.preventDefault();
-          this.#searchPanel?.close();
-          this.#searchPanel = undefined;
-          this.#retainSearchPanelFocus = false;
-          this.#selectionAction?.cleanup();
-          this.#selectionAction = undefined;
-          this.#runCommand('simplifySelection');
-          return;
-        }
         if (!targetIsContentElement(e)) {
           return;
         }
@@ -1884,6 +1877,23 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         // A keystroke is the user acting on the select-all selection (deleting,
         // typing, moving); let selectionchange sync #selections again.
         this.#suppressNativeSelectionSync = false;
+
+        const command = resolveEditorCommandFromKeyboardEvent(
+          e,
+          this.#options.keymap
+        );
+        if (command !== undefined) {
+          e.preventDefault();
+          if (command === 'simplifySelection') {
+            this.#searchPanel?.close();
+            this.#searchPanel = undefined;
+            this.#retainSearchPanelFocus = false;
+            this.#selectionAction?.cleanup();
+            this.#selectionAction = undefined;
+          }
+          this.#runCommand(command);
+          return;
+        }
 
         // handle the cursor move events manually for multiple selections and virtual viewport
         const mvShortcut = isMoveCursorShortcut(e);
@@ -1950,12 +1960,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
             this.#searchPanel.navigate(findAgain === 'previous');
             return;
           }
-        }
-
-        const command = resolveEditorCommandFromKeyboardEvent(e);
-        if (command !== undefined) {
-          e.preventDefault();
-          this.#runCommand(command);
         }
       }),
 

@@ -14,6 +14,7 @@ import { join } from 'node:path';
 import type { ComponentPropsWithoutRef } from 'react';
 import remarkGfm from 'remark-gfm';
 
+import { KeyboardShortcuts } from '../app/(diffs)/_edit/KeyboardShortcuts';
 import { CustomHunkSeparators } from '../app/(diffs)/_examples/CustomHunkSeparators/CustomHunkSeparators';
 import { CodeViewExampleTabs } from '../app/(diffs)/docs/CodeView/ExampleTabs';
 import { EditComponentTabs } from '../app/(diffs)/docs/Edit/ComponentTabs';
@@ -93,6 +94,7 @@ const defaultComponents = {
   EditComponentTabs,
   EditDemo,
   EditWorkerPoolTabs,
+  KeyboardShortcuts,
   CustomHunkSeparators,
   OverviewFileTree,
   MultiFileDiff,

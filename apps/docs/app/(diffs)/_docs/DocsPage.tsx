@@ -6,6 +6,7 @@ import {
 } from '@pierre/diffs/ssr';
 import type { Metadata } from 'next';
 
+import { DEFAULT_KEYMAP_FILE_EXAMPLE } from '../_edit/constants';
 import { MERGE_CONFLICT_EXAMPLE } from '../_examples/MergeConflict/constants';
 import { MergeConflict } from '../_examples/MergeConflict/MergeConflict';
 import {
@@ -424,6 +425,7 @@ async function CodeViewSection() {
 async function EditSection() {
   const [
     editDemoFile,
+    keymapFile,
     editVanillaFileExample,
     editVanillaFileDiffExample,
     editVanillaCodeViewExample,
@@ -444,6 +446,7 @@ async function EditSection() {
     editWorkerPoolVanillaExample,
   ] = await Promise.all([
     preloadFile(EDIT_DEMO_FILE_EXAMPLE),
+    preloadFile(DEFAULT_KEYMAP_FILE_EXAMPLE),
     preloadFile(EDIT_VANILLA_FILE_EXAMPLE),
     preloadFile(EDIT_VANILLA_FILE_DIFF_EXAMPLE),
     preloadFile(EDIT_VANILLA_CODE_VIEW_EXAMPLE),
@@ -467,6 +470,7 @@ async function EditSection() {
     filePath: '(diffs)/docs/Edit/content.mdx',
     scope: {
       editDemoFile,
+      keymapFile,
       editVanillaFileExample,
       editVanillaFileDiffExample,
       editVanillaCodeViewExample,
