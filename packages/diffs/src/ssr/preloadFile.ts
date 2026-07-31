@@ -6,6 +6,7 @@ import {
   createThemeStyleElement,
 } from '../utils/createStyleElement';
 import { wrapThemeCSS } from '../utils/cssWrappers';
+import { shouldUseTokenTransformer } from '../utils/shouldUseTokenTransformer';
 import { renderHTML } from './renderHTML';
 
 export type PreloadFileOptions<LAnnotation> = {
@@ -28,6 +29,9 @@ export async function preloadFile<LAnnotation = undefined>({
 }: PreloadFileOptions<LAnnotation>): Promise<PreloadedFileResult<LAnnotation>> {
   const fileRenderer = new FileRenderer<LAnnotation>({
     ...options,
+    // Match the client's option snapshot: token callbacks imply the
+    // transformer, so server markup hydrates into identical client renders.
+    useTokenTransformer: shouldUseTokenTransformer(options),
     headerRenderMode:
       options?.renderCustomHeader != null ? 'custom' : 'default',
   });

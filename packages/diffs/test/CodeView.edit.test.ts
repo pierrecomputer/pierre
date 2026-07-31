@@ -326,7 +326,7 @@ describe('CodeView item edit mode', () => {
     }
   });
 
-  test('only overrides the token transformer while items are edited', async () => {
+  test('edited items keep pass-through options untouched', async () => {
     const { cleanup } = installDom();
     const { createEditor } = createEditorHarness();
     const viewer = new CodeView({
@@ -347,9 +347,10 @@ describe('CodeView item edit mode', () => {
       ]);
 
       const [renderedA, renderedB, renderedC] = viewer.getRenderedItems();
-      // Edited items force only the transformer and retain interaction options.
+      // Edited items keep the pass-through options untouched; the edit
+      // session supplies token markup without rewriting them.
       for (const rendered of [renderedA, renderedB]) {
-        expect(rendered.instance.options.useTokenTransformer).toBe(true);
+        expect(rendered.instance.options.useTokenTransformer).toBe(false);
         expect(rendered.instance.options.enableLineSelection).toBe(true);
         expect(rendered.instance.options.enableGutterUtility).toBe(true);
         expect(rendered.instance.options.lineHoverHighlight).toBe('both');
@@ -357,8 +358,8 @@ describe('CodeView item edit mode', () => {
       if (renderedB.type !== 'diff') {
         throw new Error('expected a rendered diff item');
       }
-      // expandUnchanged is not edit-forced: collapsed unchanged regions stay
-      // collapsed during editing, so the item serves the pass-through value.
+      // Collapsed unchanged regions stay collapsed during editing; the item
+      // serves the pass-through value.
       expect(renderedB.instance.options.expandUnchanged).toBe(false);
       // ...while non-edited siblings keep the parent options.
       expect(renderedC.instance.options.useTokenTransformer).toBe(false);
@@ -704,6 +705,93 @@ describe('CodeView item edit mode', () => {
     }
   });
 
+  test('a mid-session document change reconciles the file item layout', async () => {
+    const { cleanup } = installDom();
+    const { createEditor } = createEditorHarness();
+    const viewer = new CodeView({ createEditor });
+    const items: CodeViewItem<undefined>[] = [
+      makeEditFileItem('edited', true, 200),
+      makeEditFileItem('below', false, 10),
+    ];
+    try {
+      const root = createRoot();
+      viewer.setup(root);
+      await renderItems(viewer, items);
+      const heightBefore = viewer.getScrollHeight();
+      const belowTopBefore = viewer.getTopForItem('below');
+      if (belowTopBefore == null) {
+        throw new Error('Expected a layout top for the below item.');
+      }
+      expect(
+        viewer.getRenderedItems().some((rendered) => rendered.id === 'below')
+      ).toBe(false);
+
+      const edited = viewer.getRenderedItems()[0];
+      edited.instance.applyDocumentChange({
+        lineCount: 1,
+        getLineText: () => 'only line',
+        getText: () => 'only line',
+      });
+      await wait(0);
+
+      expect(viewer.getScrollHeight()).toBeLessThan(heightBefore);
+      expect(viewer.getTopForItem('below')).toBeLessThan(belowTopBefore);
+      // The shrunken item frees the window, so the next item mounts.
+      expect(
+        viewer.getRenderedItems().some((rendered) => rendered.id === 'below')
+      ).toBe(true);
+    } finally {
+      viewer.cleanUp();
+      await wait(0);
+      cleanup();
+    }
+  });
+
+  test('a mid-session document change reconciles a diff item that scrolls out', async () => {
+    const { cleanup } = installDom();
+    const { createEditor } = createEditorHarness();
+    const viewer = new CodeView({ createEditor });
+    const items: CodeViewItem<undefined>[] = [
+      makeEditDiffItem('edited', true),
+      ...Array.from({ length: 5 }, (_, index) =>
+        makeEditFileItem(`file-${index}`, false, 100)
+      ),
+    ];
+    try {
+      const root = createRoot();
+      viewer.setup(root);
+      await renderItems(viewer, items);
+      const heightBefore = viewer.getScrollHeight();
+
+      const lineCount = 40;
+      const documentText = Array.from(
+        { length: lineCount },
+        (_, i) => `edited ${i}`
+      ).join('\n');
+      const edited = viewer.getRenderedItems()[0];
+      edited.instance.applyDocumentChange({
+        lineCount,
+        getLineText: (lineNumber: number) => `edited ${lineNumber}`,
+        getText: () => documentText,
+      });
+      // Scroll the edited item out before any render pass reconciles it: the
+      // released item's cached layout height must still pick up the change.
+      root.scrollTop = 10_000;
+      dispatchScroll(root);
+      viewer.render(true);
+      await wait(0);
+
+      expect(
+        viewer.getRenderedItems().some((rendered) => rendered.id === 'edited')
+      ).toBe(false);
+      expect(viewer.getScrollHeight()).toBeGreaterThan(heightBefore);
+    } finally {
+      viewer.cleanUp();
+      await wait(0);
+      cleanup();
+    }
+  });
+
   test('remounts an edited file with the session text after a recycle', async () => {
     const { cleanup } = installDom();
     const { createEditor } = createEditorHarness();
@@ -724,7 +812,7 @@ describe('CodeView item edit mode', () => {
       // after a keystroke.
       const edited = viewer.getRenderedItems()[0];
       const tokens: HighlightedToken[] = [[0, '', 'edited marker line']];
-      edited.instance.updateRenderCache(new Map([[0, tokens]]), 'light', false);
+      edited.instance.updateRenderCache(new Map([[0, tokens]]), 'light');
 
       // Scroll the edited item out (recycle) and back in. The recycle joins
       // the session-synced line cache back into the item's file, so the
@@ -998,11 +1086,7 @@ describe('CodeView item edit mode', () => {
         .find((entry) => entry.id === item.id);
       expect(rendered).toBeDefined();
       const tokens: HighlightedToken[] = [[0, '', 'line 10']];
-      rendered!.instance.updateRenderCache(
-        new Map([[10, tokens]]),
-        'light',
-        false
-      );
+      rendered!.instance.updateRenderCache(new Map([[10, tokens]]), 'light');
     }
 
     test('a region-changing render flushes deferred line state', async () => {
@@ -1022,8 +1106,7 @@ describe('CodeView item edit mode', () => {
         const hunkCount = edited.fileDiff.hunks.length;
         rendered.instance.updateRenderCache(
           new Map([[25, [[0, '', 'line 25 changed']]]]),
-          'light',
-          false
+          'light'
         );
         expect(edited.fileDiff.hunks).toHaveLength(hunkCount + 1);
 

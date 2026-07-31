@@ -433,9 +433,16 @@ selection (`getSelectionText`, `replaceSelectionText`, `applyEdits`), and
 
 ### Using Worker Pool
 
-When you offload syntax highlighting to a worker pool, edit mode still needs the
-token transformer pipeline to re-highlight lines as you type. Set
-`useTokenTransformer: true` on the pool's `highlighterOptions`.
+Edit mode works with a worker pool out of the box: a file being edited renders
+on the main thread with the token metadata the editor needs, while the pool
+keeps rendering every other file on the page. Keystroke re-highlighting always
+runs on the main thread, with or without a pool.
+
+Setting `useTokenTransformer: true` on the pool's `highlighterOptions` is an
+optional optimization for edit-heavy apps: pool-rendered markup is then already
+editor-compatible, so entering edit mode skips a one-time re-render of that
+file. It costs larger DOM for every rendered file, which is why it is off by
+default.
 
 See [Worker Pool](#worker-pool) for worker factory setup and pool options. In
 vanilla JS, pass the pool as the second argument to `File` or `FileDiff`. In

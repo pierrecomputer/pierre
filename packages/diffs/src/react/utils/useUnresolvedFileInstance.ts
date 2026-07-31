@@ -148,7 +148,12 @@ export function useUnresolvedFileInstance<LAnnotation>({
       onMergeConflictAction,
       options,
     });
-    const forceRender = !areOptionsEqual(instance.options, newOptions);
+    // setOptions(undefined) is a no-op, so an undefined merge result never
+    // requires a forced render — comparing it against the instance's
+    // constructor-default options would force a full render on every commit.
+    const forceRender =
+      newOptions !== undefined &&
+      !areOptionsEqual(instance.options, newOptions);
     instance.setOptions(newOptions);
     void instance.render({
       fileDiff,

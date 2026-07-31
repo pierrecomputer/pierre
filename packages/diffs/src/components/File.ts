@@ -547,6 +547,7 @@ export class File<
   public attachEditor(editor: DiffsEditor<LAnnotation>): () => void {
     this.editor?.cleanUp();
     this.editor = editor;
+    this.fileRenderer.beginEditSession();
     const preparedFile =
       this.file == null ? undefined : editor.__prepareFile?.(this.file);
     if (preparedFile !== undefined && preparedFile !== this.file) {
@@ -556,11 +557,17 @@ export class File<
         preventEmit: true,
         renderRange: this.renderRange,
       });
-    } else {
+    } else if (this.fileRenderer.editorRenderReady()) {
       this.syncRenderViewToEditor();
+    } else {
+      // The current markup is missing the editor's token metadata, or its
+      // highlight is still pending: render through the session, which also
+      // syncs the render view once it paints.
+      this.rerender();
     }
     return () => {
       this.editor = undefined;
+      this.fileRenderer.endEditSession();
     };
   }
 
@@ -583,9 +590,16 @@ export class File<
 
   public updateRenderCache(
     dirtyLines: Map<number, Array<HighlightedToken>>,
-    themeType: 'dark' | 'light'
+    themeType: 'dark' | 'light',
+    options?: {
+      lineCountChangeInFlight?: boolean;
+    }
   ): void {
-    this.fileRenderer.updateRenderCache(dirtyLines, themeType);
+    this.fileRenderer.updateRenderCache(
+      dirtyLines,
+      themeType,
+      options?.lineCountChangeInFlight
+    );
   }
 
   public render(props: FileRenderProps<LAnnotation>): boolean {

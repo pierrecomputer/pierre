@@ -26,17 +26,23 @@ Shared behavior:
 - Whitespace-only tokens are excluded unless
   `enableTokenInteractionsOnWhitespace` is `true`.
 - `tokenElement` is usually the simplest way to apply temporary hover styles.
+- Attaching any token callback enables token metadata automatically for locally
+  rendered components — the markup the callbacks need to fire.
 - Set `useTokenTransformer: true` when you want token wrappers or experimental
   selectors like `data-char` without token callbacks.
 - Enabling token metadata increases DOM size because more token wrappers and
   attributes are preserved. On large files or many mounted diffs, this can have
   a noticeable performance cost.
 - If you are using a [Worker Pool](#worker-pool), set
-  `useTokenTransformer: true` on `WorkerPoolManager`. Worker pools can move
+  `useTokenTransformer: true` on `WorkerPoolManager` — pool-rendered surfaces
+  follow the pool's options, not component callbacks. Worker pools can move
   highlighting work off the main thread, but they do not reduce the extra DOM
   size created by token metadata.
-- If you are using [SSR](#ssr) don't forget to set `useTokenTransformer: true`
-  on your preload option configs
+- [SSR](#ssr) preloads honor token callbacks the same way the client does; set
+  `useTokenTransformer: true` on your preload option configs only when you want
+  token markup without callbacks.
+- [Edit mode](#edit-mode) enables token metadata automatically for the file
+  being edited; nothing needs to be configured.
 
 <TokenHookTabs
   reactExample={reactTokenHooks}

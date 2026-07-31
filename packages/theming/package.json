@@ -1,6 +1,6 @@
 {
   "name": "@pierre/theming",
-  "version": "0.0.2",
+  "version": "1.0.0",
   "license": "apache-2.0",
   "files": [
     "dist",

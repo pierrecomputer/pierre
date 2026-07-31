@@ -1,6 +1,6 @@
 {
   "name": "@pierre/diffs",
-  "version": "1.3.0-beta.11",
+  "version": "1.3.0-rc.4",
   "license": "apache-2.0",
   "files": [
     "dist",
@@ -62,7 +62,7 @@
   },
   "publishConfig": {
     "access": "public",
-    "tag": "beta"
+    "tag": "rc"
   },
   "scripts": {
     "prepublishOnly": "moon run diffs:prepublish"

@@ -639,21 +639,24 @@ export class VirtualizedFile<
     newLineAnnotations?: LineAnnotation<LAnnotation>[],
     shouldUpdateBuffer = false
   ): void {
-    const previousRenderRange = this.renderRange;
-
+    const { renderRange: previousRenderRange } = this;
+    // Capture the scroll anchor before the synchronous document swap and
+    // layout-cache wipe below; the host's next frame resolves it against the
+    // new geometry so on-screen rows do not shift.
+    this.getAdvancedVirtualizer()?.capturePendingLayoutAnchor();
     super.applyDocumentChange(textDocument, newLineAnnotations);
-
-    // reset the layout cache
     this.getSimpleVirtualizer()?.markDOMDirty();
     this.resetLayoutCache(this.isSimpleMode(), false);
 
-    // Update the buffers caused by the line-count change to ensure the host
-    // scrolls to the correct position before re-rendering
-    if (
+    if (!this.isSimpleMode()) {
+      this.computeApproximateSize(true);
+    } else if (
       shouldUpdateBuffer &&
       previousRenderRange !== undefined &&
       this.file !== undefined
     ) {
+      // Update the buffers caused by the line-count change to ensure the host
+      // scrolls to the correct position before re-rendering.
       const windowSpecs = this.virtualizer.getWindowSpecs();
       const renderRange = this.computeRenderRangeFromWindow(
         this.file,
@@ -664,6 +667,9 @@ export class VirtualizedFile<
         this.updateBuffers(renderRange);
       }
     }
+
+    this.forceRenderOverride = true;
+    this.virtualizer.instanceChanged(this, true);
   }
 
   protected override renderPreparedFile({
@@ -862,6 +868,10 @@ export class VirtualizedFile<
 
   private getSimpleVirtualizer(): Virtualizer | undefined {
     return this.virtualizer.type === 'simple' ? this.virtualizer : undefined;
+  }
+
+  private getAdvancedVirtualizer(): CodeView<LAnnotation> | undefined {
+    return this.virtualizer.type === 'advanced' ? this.virtualizer : undefined;
   }
 
   private isResizeDebuggingEnabled(): boolean {

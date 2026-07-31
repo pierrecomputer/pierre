@@ -1,5 +1,6 @@
 import type { FileOptions } from '../components/File';
 import type { FileRendererOptions } from '../renderers/FileRenderer';
+import { shouldUseTokenTransformer } from './shouldUseTokenTransformer';
 
 // Build the renderer option snapshot with direct property reads. CodeView item
 // options may inherit prototype getters, so object spread can miss values.
@@ -17,7 +18,7 @@ export function getFileRendererOptions<LAnnotation>(
     stickyHeader: options?.stickyHeader,
     preferredHighlighter: options?.preferredHighlighter,
     useCSSClasses: options?.useCSSClasses,
-    useTokenTransformer: options?.useTokenTransformer,
+    useTokenTransformer: shouldUseTokenTransformer(options),
     tokenizeMaxLineLength: options?.tokenizeMaxLineLength,
     tokenizeMaxLength: options?.tokenizeMaxLength,
     unsafeCSS: options?.unsafeCSS,

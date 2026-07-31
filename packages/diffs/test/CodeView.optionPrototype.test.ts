@@ -43,8 +43,8 @@ describe('CodeView item option prototypes', () => {
 
       // Every declared pass-through key must resolve to an enumerable
       // accessor on its prototype — whether the plain loops define it or a
-      // hand-written getter does (e.g. the edit-forced options). A key that
-      // is skipped from the loops without a replacement getter fails here.
+      // hand-written getter does. A key that is skipped from the loops
+      // without a replacement getter fails here.
       const fileKeys = Object.keys(fileOptionsPrototype);
       for (const key of CODE_VIEW_FILE_OPTION_KEYS) {
         expect(fileKeys).toContain(key);

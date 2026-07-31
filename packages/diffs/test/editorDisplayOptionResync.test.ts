@@ -6,7 +6,7 @@ import { Editor } from '../src/editor/editor';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
 import type { DiffsHighlighter, FileContents } from '../src/types';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
-import { installDom, wait } from './domHarness';
+import { installDom, wait, waitFor } from './domHarness';
 
 afterAll(async () => {
   await disposeHighlighter();
@@ -96,19 +96,21 @@ async function createFixture(
   });
   editor.edit(fileDiff);
 
-  for (let attempt = 0; attempt < 40; attempt++) {
+  // Deadline-based: the first fixture in a file pays the shared highlighter's
+  // cold start, which can outlast any fixed number of macrotask turns on a
+  // slow runner. The editor assigns the contentEditable property, which jsdom
+  // does not reflect to the attribute, so poll the property.
+  await waitFor(() => {
     const content = findAdditionContent(container);
-    if (content != null && content.getAttribute('contenteditable') === 'true') {
-      break;
-    }
-    await wait(0);
-  }
+    return content?.contentEditable === 'true';
+  });
 
   return {
     container,
     editor,
     fileDiff,
     async toggleDisplayOption() {
+      const previousContent = findAdditionContent(container);
       fileDiff.setOptions({
         ...fileDiff.options,
         disableLineNumbers: !(fileDiff.options.disableLineNumbers ?? false),
@@ -119,8 +121,18 @@ async function createFixture(
         fileContainer: container,
         forceRender: true,
       });
-      // Let syncRenderViewToEditor's highlighter promise resolve.
-      await wait(10);
+      // The forced re-render replaces the additions column and re-syncs the
+      // editor through an async highlighter pass; wait for the replacement
+      // instead of a fixed sleep.
+      await waitFor(() => {
+        const content = findAdditionContent(container);
+        return (
+          content != null &&
+          content !== previousContent &&
+          content.contentEditable === 'true'
+        );
+      });
+      await wait(0);
     },
     async cleanup() {
       await wait(10);
@@ -159,13 +171,19 @@ describe('diff editor: display-option toggle mid-edit', () => {
     );
 
     try {
+      editor.focus({ lineNumber: 1, preventScroll: true });
+      // Focus can be deferred while the editor settles its first highlight
+      // pass, and a deferred background pass may replace the additions column
+      // once more before it lands — wait for focus to land on the current
+      // column, then capture that element as the pre-toggle baseline.
+      await waitFor(() => {
+        const current = findAdditionContent(container);
+        return current != null && focusTargets.at(-1) === current;
+      });
       const content = findAdditionContent(container);
       if (content == null) {
         throw new Error('missing editable additions content');
       }
-
-      editor.focus({ lineNumber: 1, preventScroll: true });
-      await wait(10);
       expect(focusTargets.at(-1) === content).toBe(true);
 
       // Firefox and WebKit can remove the focused shadow subtree without a
@@ -175,6 +193,9 @@ describe('diff editor: display-option toggle mid-edit', () => {
       const replacement = findAdditionContent(container);
       expect(replacement == null).toBe(false);
       expect(replacement === content).toBe(false);
+      // Focus restoration can trail the replacement by a deferred focus
+      // retry; wait for it to settle before asserting the final target.
+      await waitFor(() => focusTargets.at(-1) === replacement);
       expect(focusTargets.at(-1) === replacement).toBe(true);
     } finally {
       focusSpy.mockRestore();
