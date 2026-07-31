@@ -14,6 +14,7 @@ import {
   THEME_CSS_ATTRIBUTE,
   UNSAFE_CSS_ATTRIBUTE,
 } from '../constants';
+import { isSafari } from '../editor/platform';
 import {
   type GetHoveredLineResult,
   type GetLineIndexUtility,
@@ -2613,12 +2614,31 @@ export class FileDiff<
     const ast = this.hunksRenderer.renderCodeAST('unified', hunksResult);
     const gutterChildren = getElementChildren(ast?.[0]);
     const contentChildren = getElementChildren(ast?.[1]);
+
+    // Replacing both column subtrees within a single layout pass makes WebKit
+    // scroll the viewport on its own during that layout: while typing in a
+    // unified diff with collapsed regions, Safari yanked the editor toward the
+    // top of the render window on every debounced refresh. Forcing a layout
+    // after each column replacement keeps the passes separated, which
+    // empirically suppresses that scroll entirely; the snapshot below is a
+    // second line of defense that puts the viewport back if a WebKit build
+    // still moves it. Both are scoped to Safari so other engines never pay
+    // the extra layout nor risk clobbering a concurrent user scroll.
+    const restoreViewportScroll = isSafari();
+    const viewportScroll = restoreViewportScroll
+      ? this.getViewportScroll()
+      : undefined;
+
     for (const [el, astChildren] of [
       [columns.gutter, gutterChildren],
       [columns.content, contentChildren],
     ] as const) {
       if (astChildren != null) {
         el.innerHTML = toHtml(astChildren);
+        if (restoreViewportScroll) {
+          // force a layout(reflow)
+          void el.offsetHeight;
+        }
       }
     }
 
@@ -2633,6 +2653,21 @@ export class FileDiff<
 
     // sync the render view to the editor
     this.syncRenderViewToEditor();
+
+    if (viewportScroll != null) {
+      // WebKit's scroll happens at the first layout after this task, so check
+      // from a frame callback: reading the scroll position forces that layout,
+      // making any jump observable (and restorable) before paint.
+      requestAnimationFrame(() => {
+        const current = this.getViewportScroll();
+        if (current != null && current.top !== viewportScroll.top) {
+          this.setViewportScroll({
+            top: viewportScroll.top,
+            left: current.left,
+          });
+        }
+      });
+    }
   }
 
   private renderPartialColumn(
