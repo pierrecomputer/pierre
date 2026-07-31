@@ -113,8 +113,8 @@ type EditorPlatform = (typeof editorPlatforms)[number];
 /** Later groups take precedence when bindings overlap. */
 export type EditorKeymap = ReadonlyArray<{
   /** Undefined applies on every platform. */
-  platform?: EditorPlatform;
-  bindings: Readonly<Partial<Record<EditorShortcut, EditorCommand>>>;
+  readonly platform?: EditorPlatform;
+  readonly bindings: Readonly<Partial<Record<EditorShortcut, EditorCommand>>>;
 }>;
 
 type CompiledEditorKeymap = Record<
@@ -206,8 +206,8 @@ function getCompiledEditorKeymap(keymap: EditorKeymap): CompiledEditorKeymap {
     // Compile once so keydown resolves by modifier mask and key without
     // scanning or splitting every configured shortcut.
     for (const entry of keymap) {
-      for (const shortcut in entry.bindings) {
-        const command = entry.bindings[shortcut as EditorShortcut];
+      for (const shortcut of Object.keys(entry.bindings) as EditorShortcut[]) {
+        const command = entry.bindings[shortcut];
         if (command === undefined) {
           continue;
         }

@@ -393,6 +393,20 @@ describe('resolveEditorCommandFromKeyboardEvent', () => {
     ).toBe('redo');
   });
 
+  test('ignores inherited bindings', () => {
+    const bindings = Object.create({
+      'ctrl+u': 'undo',
+    }) as EditorKeymap[number]['bindings'];
+
+    expect(
+      resolveEditorCommandFromKeyboardEvent(
+        event({ key: 'u', ctrlKey: true }),
+        [{ bindings }],
+        false
+      )
+    ).toBeUndefined();
+  });
+
   test('falls back when no custom group matches the platform', () => {
     const keymap = [
       {
@@ -424,7 +438,7 @@ describe('resolveEditorCommandFromKeyboardEvent', () => {
     ).toBe('selectAll');
   });
 
-  test('supports punctuation and three modifiers', () => {
+  test('supports punctuation keys', () => {
     const keymap = [
       {
         bindings: {

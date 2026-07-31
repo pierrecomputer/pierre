@@ -320,7 +320,7 @@ export const DEFAULT_EDITOR_KEYMAP: EditorKeymap = [
   },
 ];
 
-export const DEFAULT_KEYMAP_FILE: FileContents = {
+const DEFAULT_KEYMAP_FILE: FileContents = {
   name: 'keymap.json',
   contents: `${JSON.stringify(DEFAULT_EDITOR_KEYMAP, null, 2)}\n`,
 };

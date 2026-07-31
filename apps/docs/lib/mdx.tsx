@@ -36,7 +36,6 @@ import {
 import { OverviewFileTree } from '../app/(trees)/docs/Overview/OverviewFileTree';
 import { BetaBadge } from '../components/BetaBadge';
 import { DocsCodeExample } from '../components/docs/DocsCodeExample';
-import { Shortcut } from '../components/Shortcut';
 import rehypeHierarchicalSlug from './rehype-hierarchical-slug';
 import remarkTocIgnore from './remark-toc-ignore';
 import { Button } from '@/components/ui/button';
@@ -83,7 +82,6 @@ const defaultComponents = {
   Link,
   Button,
   Notice,
-  Shortcut,
   IconArrowRight,
   IconCiWarningFill,
   IconInfoFill,
