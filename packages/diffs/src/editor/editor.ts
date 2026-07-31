@@ -1896,7 +1896,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         ) {
           const cursorMoveOptions: CursorMoveOptions = {
             getSoftLineOffsets: this.#isWrap
-              ? (line) => this.#wrapLineText(line)
+              ? (line) => this.#wrapLineTextOrWholeLine(line)
               : undefined,
             resolveRenderableLine: this.#resolveRenderableLine,
           };
@@ -4276,7 +4276,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     type: 'selection' | 'match' | 'marker' | 'bracketMatch',
     extraDataset?: string
   ) {
-    const wrapOffsets = this.#wrapLineText(line);
+    const wrapOffsets = this.#wrapLineTextOrWholeLine(line);
     const segmentCount = wrapOffsets.length - 1;
     // offsetLeft is the x of the content's left edge in overlay coordinates.
     // In a split diff with wrapping the content element is a grid item shifted
@@ -5031,7 +5031,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
     const getSoftLineStart = this.#isWrap
       ? (line: number, character: number) => {
-          const wrapOffsets = this.#wrapLineText(line);
+          const wrapOffsets = this.#wrapLineTextOrWholeLine(line);
           for (let w = 0; w + 1 < wrapOffsets.length; w++) {
             const segmentStart = wrapOffsets[w];
             const segmentEnd = wrapOffsets[w + 1];
@@ -5517,6 +5517,15 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         2 * this.#metrics.ch + this.#metrics.measureTextWidth(lineText);
       if (textWidth > contentWidth) {
         const wrapOffsets = this.#wrapLineText(line);
+        // undefined means the wrap offsets could not be measured — the
+        // content element is detached or has no layout (see #wrapLineText).
+        // Fall back to an unwrapped position, and return before the
+        // #lastAccessedCharX write below so nothing derived from the
+        // unmeasurable DOM gets memoized; the next call re-measures against
+        // live layout.
+        if (wrapOffsets == null) {
+          return [left + (this.#activeContentOffset?.left ?? 0), 0];
+        }
         for (let w = 0; w + 1 < wrapOffsets.length; w++) {
           const segmentStart = wrapOffsets[w];
           const segmentEnd = wrapOffsets[w + 1];
@@ -5557,7 +5566,17 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
   // Compute how a logical line of text is broken into visual lines when line
   // wrapping is enabled.
-  #wrapLineText(line: number): Uint32Array {
+  //
+  // Returns undefined when the offsets cannot be measured: measurement works
+  // by appending a hidden probe to #contentElement, so a detached or
+  // zero-width content element (both occur while a session re-render replaces
+  // the code columns) would report "never wraps" for any line. That result is
+  // never returned or cached — a cached wrong answer would keep placing
+  // carets at unwrapped positions until an unrelated edit evicted it. Callers
+  // that need best-effort segmentation use #wrapLineTextOrWholeLine;
+  // #getCharX propagates the undefined so its own memoization is skipped
+  // too.
+  #wrapLineText(line: number): Uint32Array | undefined {
     const cachedOffsets = this.#wrapLineOffsetsCache.get(line);
     if (cachedOffsets !== undefined) {
       return cachedOffsets;
@@ -5571,6 +5590,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       const offsets = new Uint32Array([0]);
       this.#wrapLineOffsetsCache.set(line, offsets);
       return offsets;
+    }
+
+    const contentElement = this.#contentElement;
+    if (contentElement == null || !contentElement.isConnected) {
+      return undefined;
     }
 
     const div = h(
@@ -5592,16 +5616,19 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         },
         textContent: lineText,
       },
-      this.#contentElement
+      contentElement
     );
     const textNode = div.firstChild as Text;
     const range = document.createRange();
     const starts: number[] = [];
 
     try {
+      const divRect = div.getBoundingClientRect();
+      if (divRect.width === 0) {
+        return undefined;
+      }
       const unicodeOffsets = getUnicodeMeasurementOffsets(lineText);
-      const wrapLineStartLeft =
-        div.getBoundingClientRect().left + this.#metrics.ch;
+      const wrapLineStartLeft = divRect.left + this.#metrics.ch;
 
       // Measurement steps through grapheme clusters when the text needs
       // Unicode-aware boundaries, single UTF-16 units otherwise. Grapheme
@@ -5662,6 +5689,19 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     } finally {
       div.remove();
     }
+  }
+
+  // #wrapLineText for callers that need usable offsets even when measurement
+  // is impossible (undefined): treats the line as one unwrapped segment.
+  // Safe because the fallback is never cached — once the content element is
+  // measurable again, the same call returns real offsets.
+  #wrapLineTextOrWholeLine(line: number): Uint32Array {
+    const offsets = this.#wrapLineText(line);
+    if (offsets !== undefined) {
+      return offsets;
+    }
+    const length = this.#textDocument?.getLineText(line)?.length ?? 0;
+    return Uint32Array.of(0, length);
   }
 
   // check if the web selection belongs to editor
