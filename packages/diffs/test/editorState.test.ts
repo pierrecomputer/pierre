@@ -18,9 +18,9 @@ function createTestHighlighter(): DiffsHighlighter {
   return {
     getLanguage: () => undefined,
     getLoadedLanguages: () => [],
-    getTheme: () => ({ colors: {} }),
+    getTheme: () => ({ type: 'light', colors: {} }),
     loadLanguage: async () => {},
-    setTheme: () => ({ colorMap: [''] }),
+    setTheme: () => ({ theme: { type: 'light' }, colorMap: [''] }),
   } as unknown as DiffsHighlighter;
 }
 

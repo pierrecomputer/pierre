@@ -220,7 +220,7 @@ export class EditorTokenizer {
     this.#colorMap = [];
     this.#setTheme(
       typeof theme === 'string' ? theme : theme[themeType],
-      themeType
+      typeof theme === 'string' ? undefined : themeType
     );
   }
 
@@ -282,10 +282,19 @@ export class EditorTokenizer {
   // `theme` option changes that those observers don't see.
   syncTheme(codeOptions: BaseCodeOptions): void {
     const { themeType = 'system', theme = DEFAULT_THEMES } = codeOptions;
+    // A single pinned theme does not follow the themeType option or system
+    // scheme flips; its own classification stays authoritative.
+    if (typeof theme === 'string') {
+      const pinnedThemeType = this.#highlighter.getTheme(theme).type;
+      if (theme === this.#themeName && pinnedThemeType === this.#themeType) {
+        return;
+      }
+      this.#emitThemeChange(theme, pinnedThemeType);
+      return;
+    }
     const nextThemeType =
       themeType === 'system' ? this.#resolveSystemThemeType() : themeType;
-    const nextThemeName =
-      typeof theme === 'string' ? theme : theme[nextThemeType];
+    const nextThemeName = theme[nextThemeType];
     if (
       nextThemeType === this.#themeType &&
       nextThemeName === this.#themeName
