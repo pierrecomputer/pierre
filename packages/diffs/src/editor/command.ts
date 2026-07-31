@@ -107,18 +107,15 @@ export type EditorShortcut =
   | `${KeyboardModifier}+${KeyboardKey}`
   | `${KeyboardModifier}+${KeyboardModifier}+${KeyboardKey}`;
 
-const editorPlatforms = ['mac', 'windows', 'linux'] as const;
-type EditorPlatform = (typeof editorPlatforms)[number];
-
 /** Later groups take precedence when bindings overlap. */
 export type EditorKeymap = ReadonlyArray<{
   /** Undefined applies on every platform. */
-  readonly platform?: EditorPlatform;
+  readonly platform?: 'mac' | 'windows' | 'linux';
   readonly bindings: Readonly<Partial<Record<EditorShortcut, EditorCommand>>>;
 }>;
 
 type CompiledEditorKeymap = Record<
-  EditorPlatform,
+  'mac' | 'windows' | 'linux',
   Map<number, Map<KeyboardKey, EditorCommand>>
 >;
 
@@ -179,6 +176,8 @@ const defaultKeymap = [
   },
 ] satisfies EditorKeymap;
 
+const compiledDefaultKeymap = getCompiledEditorKeymap(defaultKeymap);
+
 const keyboardCodeKeys: Partial<Record<string, KeyboardKey>> = {
   Backquote: '`',
   Minus: '-',
@@ -214,7 +213,7 @@ function getCompiledEditorKeymap(keymap: EditorKeymap): CompiledEditorKeymap {
         const parts = shortcut.split('+');
         const shortcutKey = parts.pop() as KeyboardKey;
 
-        for (const platform of editorPlatforms) {
+        for (const platform of ['mac', 'windows', 'linux'] as const) {
           if (entry.platform !== undefined && entry.platform !== platform) {
             continue;
           }
@@ -245,8 +244,6 @@ function getCompiledEditorKeymap(keymap: EditorKeymap): CompiledEditorKeymap {
   }
   return compiledKeymap;
 }
-
-const compiledDefaultKeymap = getCompiledEditorKeymap(defaultKeymap);
 
 export function resolveEditorCommandFromKeyboardEvent(
   event: KeyboardEvent,

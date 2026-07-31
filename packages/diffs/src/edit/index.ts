@@ -1,9 +1,9 @@
-export {
-  type EditorCommand,
-  type EditorKeymap,
-  type EditorShortcut,
-  type KeyboardKey,
-  type KeyboardModifier,
+export type {
+  EditorCommand,
+  EditorKeymap,
+  EditorShortcut,
+  KeyboardKey,
+  KeyboardModifier,
 } from '../editor/command';
 export * from '../editor/editor';
 export type {
