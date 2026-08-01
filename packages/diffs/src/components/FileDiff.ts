@@ -2265,6 +2265,38 @@ export class FileDiff<
     }
   }
 
+  // Renders a code column's AST into an existing elements without replacing
+  // the gutter and content parents. Identity matters in edit mode: the content
+  // element is the focused contenteditable, and replacing it ends the
+  // browser's editing session — focus tears down and restores, and iOS
+  // answers every session restart with an animated caret reveal.
+  //
+  // Returns false when the element has no column pair yet (initial render,
+  // or a diff-style switch built a fresh element); the caller then assigns
+  // the full innerHTML.
+  private applyCodeColumnsInPlace(
+    code: HTMLElement,
+    ast: ElementContent[],
+    rowCount: number
+  ): boolean {
+    const columns = this.getColumnPair(code);
+    if (columns == null) {
+      return false;
+    }
+    const gutterChildren = getElementChildren(ast[0]);
+    const contentChildren = getElementChildren(ast[1]);
+    if (gutterChildren == null || contentChildren == null) {
+      return false;
+    }
+    columns.gutter.innerHTML = toHtml(gutterChildren);
+    columns.content.innerHTML = toHtml(contentChildren);
+    if (rowCount !== this.lastRowCount) {
+      columns.gutter.style.setProperty('grid-row', `span ${rowCount}`);
+      columns.content.style.setProperty('grid-row', `span ${rowCount}`);
+    }
+    return true;
+  }
+
   private replaceCodeColumns(
     pre: HTMLPreElement,
     result: HunksRenderResult
@@ -2301,8 +2333,16 @@ export class FileDiff<
         rowSpan,
         containerSize,
       });
-      this.codeUnified.innerHTML =
-        this.hunksRenderer.renderPartialHTML(unifiedAST);
+      if (
+        !this.applyCodeColumnsInPlace(
+          this.codeUnified,
+          unifiedAST,
+          result.rowCount
+        )
+      ) {
+        this.codeUnified.innerHTML =
+          this.hunksRenderer.renderPartialHTML(unifiedAST);
+      }
       codeElements.push(this.codeUnified);
     } else if (deletionsAST != null || additionsAST != null) {
       if (deletionsAST != null) {
@@ -2318,8 +2358,16 @@ export class FileDiff<
           rowSpan,
           containerSize,
         });
-        this.codeDeletions.innerHTML =
-          this.hunksRenderer.renderPartialHTML(deletionsAST);
+        if (
+          !this.applyCodeColumnsInPlace(
+            this.codeDeletions,
+            deletionsAST,
+            result.rowCount
+          )
+        ) {
+          this.codeDeletions.innerHTML =
+            this.hunksRenderer.renderPartialHTML(deletionsAST);
+        }
         codeElements.push(this.codeDeletions);
       } else {
         // If we have no deletion column, lets clean it up if it exists
@@ -2343,8 +2391,16 @@ export class FileDiff<
           rowSpan,
           containerSize,
         });
-        this.codeAdditions.innerHTML =
-          this.hunksRenderer.renderPartialHTML(additionsAST);
+        if (
+          !this.applyCodeColumnsInPlace(
+            this.codeAdditions,
+            additionsAST,
+            result.rowCount
+          )
+        ) {
+          this.codeAdditions.innerHTML =
+            this.hunksRenderer.renderPartialHTML(additionsAST);
+        }
         codeElements.push(this.codeAdditions);
       } else {
         // If we have no addition column, lets clean it up if it exists
@@ -3012,6 +3068,25 @@ export class FileDiff<
     element.style.setProperty('min-height', `calc(${size} * 1lh)`);
   }
 
+  private getColumnPair(
+    code: HTMLElement | undefined
+  ): ColumnElements | undefined {
+    if (code == null) {
+      return undefined;
+    }
+    const gutter = code.children[0];
+    const content = code.children[1];
+    if (
+      !(gutter instanceof HTMLElement) ||
+      !(content instanceof HTMLElement) ||
+      gutter.dataset.gutter == null ||
+      content.dataset.content == null
+    ) {
+      return undefined;
+    }
+    return { gutter, content };
+  }
+
   private getCodeColumns(
     diffStyle: 'split' | 'unified',
     codeUnified: HTMLElement | undefined,
@@ -3021,30 +3096,11 @@ export class FileDiff<
     | [ColumnElements | undefined, ColumnElements | undefined]
     | ColumnElements
     | undefined {
-    function getColumns(
-      code: HTMLElement | undefined
-    ): ColumnElements | undefined {
-      if (code == null) {
-        return undefined;
-      }
-      const gutter = code.children[0];
-      const content = code.children[1];
-      if (
-        !(gutter instanceof HTMLElement) ||
-        !(content instanceof HTMLElement) ||
-        gutter.dataset.gutter == null ||
-        content.dataset.content == null
-      ) {
-        return undefined;
-      }
-      return { gutter, content };
-    }
-
     if (diffStyle === 'unified') {
-      return getColumns(codeUnified);
+      return this.getColumnPair(codeUnified);
     } else {
-      const deletions = getColumns(codeDeletions);
-      const additions = getColumns(codeAdditions);
+      const deletions = this.getColumnPair(codeDeletions);
+      const additions = this.getColumnPair(codeAdditions);
       return deletions != null || additions != null
         ? [deletions, additions]
         : undefined;
