@@ -21,8 +21,9 @@ themselves, unset the var: `CI= pnpm publish --dry-run`.
 
 - Tool versions (bun, pnpm, node, moon, gh) are pinned in `.prototools` and
   managed by [proto](https://moonrepo.dev/docs/proto); run `proto use` if a tool
-  is missing or a pin changed. Never install toolchain versions globally; bump
-  pins only in `.prototools`.
+  is missing or a pin changed. Never install toolchain versions globally. Bump
+  pins only in `.prototools`, then run `moon run root:check-tool-pins` to find
+  every file that repeats the version.
 - [moon](https://moonrepo.dev/docs) is the task runner; `package.json` scripts
   are npm lifecycle hooks only.
 

@@ -14,11 +14,13 @@ description:
   managed by [proto](https://moonrepo.dev/docs/proto); its shims put the pinned
   versions on PATH inside the repo. `proto use` installs everything after a pin
   changes.
-- Bump a tool by editing `.prototools` only — never install tools globally or
-  pin versions elsewhere. moon's version is additionally enforced by
-  `versionConstraint` in `.moon/workspace.yml` and mirrored as the
-  `@moonrepo/cli` catalog entry (for Vercel builders without proto); keep all
-  three in sync.
+- `.prototools` is the only file to edit to change a tool version. Never install
+  tools globally. A few places cannot use proto and must repeat a version. After
+  a pin change, run `moon run root:check-tool-pins`. It names every file that
+  still disagrees, and CI runs it on every pull request.
+- Never delete the `@moonrepo/cli` dependency to remove a duplicate version. It
+  is how moon reaches Vercel. Vercel build containers have no proto, so each
+  app's `vercel.json` prefixes PATH with `node_modules/.bin` and calls `moon`.
 - CI and local shells resolve the same toolchain: CI installs it with
   `moonrepo/setup-toolchain`, which runs `proto install` against the same
   `.prototools`.
