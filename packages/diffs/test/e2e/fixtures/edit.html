@@ -99,6 +99,18 @@ export default value;
 
       instance.render({ oldFile, newFile, containerWrapper: mount });
       editor.edit(instance);
+      // Counts completed editor re-syncs. A full render keeps the editable
+      // element in place, so specs can't detect completion by watching for a
+      // replacement element — they await this counter instead. By the time it
+      // increments, the render has landed and the editor's focus/selection
+      // restore has been invoked.
+      window.__syncCount = 0;
+      const originalSyncRenderView = editor.__syncRenderView;
+      editor.__syncRenderView = (...args) => {
+        const result = originalSyncRenderView.apply(editor, args);
+        window.__syncCount += 1;
+        return result;
+      };
       window.__forceEditorFullRender = () => {
         instance.setOptions({
           ...instance.options,
