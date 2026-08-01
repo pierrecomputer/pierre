@@ -16,8 +16,8 @@ inheritedBy:
 tasks:
   # Publishes must use the pnpm version pinned in .prototools so lockfile and
   # package-manager behavior match CI. The script reads the pin itself.
-  assert-pnpm-version:
-    command: 'bun $workspaceRoot/scripts/assert-pnpm-version.ts'
+  check-pnpm-binary:
+    command: 'bun $workspaceRoot/scripts/check-pnpm-binary.ts'
     options:
       cache: false
       internal: true
@@ -28,7 +28,7 @@ tasks:
   prepublish:
     command: 'noop'
     deps:
-      - 'assert-pnpm-version'
+      - 'check-pnpm-binary'
       - 'build'
     options:
       cache: false

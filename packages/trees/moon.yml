@@ -130,7 +130,7 @@ tasks:
       internal: true
       runInCI: 'skip'
 
-  # Appends to the publishable tag's guard chain (assert-pnpm-version, build).
+  # Appends to the publishable tag's guard chain (check-pnpm-binary, build).
   prepublish:
     deps:
       - 'assert-safe-publish'

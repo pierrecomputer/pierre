@@ -12,8 +12,8 @@ in the monorepo. Tasks (build/dev/test/lint) are run by moon —
   enabled, worktree-aware (exposed as `root:chrome`).
 - `load-worktree-env.mjs` — `.env.worktree` loader for configs that run outside
   a moon task (Next/Playwright configs).
-- `build-sprite.js`, `assert-pnpm-version.ts` — codegen/publish helpers behind
-  the `root:icons` task and the publishable packages' `prepublish` chain.
+- `build-sprite.js`, `check-pnpm-binary.ts` — codegen/publish helpers behind the
+  `root:icons` task and the publishable packages' `prepublish` chain.
 
 The rest of this document explains `wt` in detail and walks through the most
 common workflows.
