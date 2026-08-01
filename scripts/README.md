@@ -13,11 +13,12 @@ in the monorepo. Tasks (build/dev/test/lint) are run by moon —
 - `load-worktree-env.mjs` — `.env.worktree` loader for configs that run outside
   a moon task (Next/Playwright configs).
 - `build-sprite.js` — codegen behind the `root:icons` task.
-- Two scripts guard the tool versions that `.prototools` pins. They differ in
+- Two scripts guard the versions this repo states more than once. They differ in
   what they read:
-  - `check-tool-pins.ts` compares **files**: every version repeated outside
-    `.prototools` (`versionConstraint`, the `@moonrepo/cli` catalog entry,
-    `packageManager`, `.node-version`, `engines.node`). The
+  - `check-tool-pins.ts` compares **files**. Six of them repeat a `.prototools`
+    version (`versionConstraint`, the `@moonrepo/cli` and `@types/bun` catalog
+    entries, `packageManager`, `.node-version`, `engines.node`), and one repeats
+    a catalog version (the `playwright@<version>` argument in `ci.yml`). The
     `root:check-tool-pins` task runs it, and CI runs that task on every pull
     request.
   - `check-pnpm-binary.ts` tests the **binary**: the pnpm that is on PATH right

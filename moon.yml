@@ -124,12 +124,11 @@ tasks:
     options:
       runInCI: 'always'
 
-  # Compares each tool version that a file repeats with the pin in .prototools:
-  # versionConstraint, the @moonrepo/cli catalog entry, packageManager,
-  # .node-version, and engines.node. It catches moon drift. CI runs the proto
-  # moon and never the npm moon, so a stale @moonrepo/cli passes CI. No graph
-  # edges, so it stays runInCI: 'always' (see the header note) and CI runs it as
-  # its own step.
+  # Compares each version that this repo states twice with its one source. The
+  # source is .prototools for a proto tool, and the pnpm-workspace.yaml catalog
+  # for an npm package. It catches moon drift. CI runs the proto moon and never
+  # the npm moon, so a stale @moonrepo/cli passes CI. No graph edges, so it stays
+  # runInCI: 'always' (see the header note) and CI runs it as its own step.
   check-tool-pins:
     command: 'bun --silent scripts/check-tool-pins.ts'
     inputs:
@@ -138,6 +137,7 @@ tasks:
       - '.prototools'
       - '.node-version'
       - '.moon/workspace.yml'
+      - '.github/workflows/ci.yml'
       - 'pnpm-workspace.yaml'
       - 'package.json'
     options:
