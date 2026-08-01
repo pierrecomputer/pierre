@@ -124,6 +124,25 @@ tasks:
     options:
       runInCI: 'always'
 
+  # Compares each tool version that a file repeats with the pin in .prototools:
+  # versionConstraint, the @moonrepo/cli catalog entry, packageManager,
+  # .node-version, and engines.node. It catches moon drift. CI runs the proto
+  # moon and never the npm moon, so a stale @moonrepo/cli passes CI. No graph
+  # edges, so it stays runInCI: 'always' (see the header note) and CI runs it as
+  # its own step.
+  check-tool-pins:
+    command: 'bun --silent scripts/check-tool-pins.ts'
+    inputs:
+      - 'scripts/check-tool-pins.ts'
+      - 'scripts/prototools.ts'
+      - '.prototools'
+      - '.node-version'
+      - '.moon/workspace.yml'
+      - 'pnpm-workspace.yaml'
+      - 'package.json'
+    options:
+      runInCI: 'always'
+
   # Regenerates the committed icon sprite module from @pierre/icons sources,
   # then formats just the generated file. Not targeted by any CI lane.
   icons:

@@ -6,6 +6,9 @@ $schema: 'https://moonrepo.dev/schemas/toolchains.json'
 javascript:
   packageManager: 'pnpm'
 
+# Do not set `version` here. The node version comes from .prototools.
+# `syncVersionManagerConfig` needs an explicit `version`, so moon cannot write
+# .node-version. The root:check-tool-pins task compares the two files instead.
 node: {}
 
 pnpm:

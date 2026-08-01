@@ -83,6 +83,10 @@ jobs:
         run: >-
           moon run root:check-licenses
 
+      - name: Check toolchain pins
+        run: >-
+          moon run root:check-tool-pins
+
       - name: Run affected tasks
         run: >-
           moon ci --include-relations --summary detailed :build demo:build

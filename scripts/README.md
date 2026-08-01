@@ -12,8 +12,18 @@ in the monorepo. Tasks (build/dev/test/lint) are run by moon —
   enabled, worktree-aware (exposed as `root:chrome`).
 - `load-worktree-env.mjs` — `.env.worktree` loader for configs that run outside
   a moon task (Next/Playwright configs).
-- `build-sprite.js`, `check-pnpm-binary.ts` — codegen/publish helpers behind the
-  `root:icons` task and the publishable packages' `prepublish` chain.
+- `build-sprite.js` — codegen behind the `root:icons` task.
+- Two scripts guard the tool versions that `.prototools` pins. They differ in
+  what they read:
+  - `check-tool-pins.ts` compares **files**: every version repeated outside
+    `.prototools` (`versionConstraint`, the `@moonrepo/cli` catalog entry,
+    `packageManager`, `.node-version`, `engines.node`). The
+    `root:check-tool-pins` task runs it, and CI runs that task on every pull
+    request.
+  - `check-pnpm-binary.ts` tests the **binary**: the pnpm that is on PATH right
+    now. It runs in the publishable packages' `prepublish` chain, where a wrong
+    pnpm would publish a mismatched package.
+  - `prototools.ts` reads the pins. It is imported, not run.
 
 The rest of this document explains `wt` in detail and walks through the most
 common workflows.
