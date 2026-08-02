@@ -30,6 +30,14 @@ import { pinnedVersion, repoRoot } from './prototools';
  * - the `playwright@<version>` argument in `.github/workflows/ci.yml` — the
  *   browser that CI installs must match `@playwright/test`.
  *
+ * One file must repeat no version at all:
+ *
+ * - `.moon/toolchains.yml` — moon reads each version from `.prototools` through
+ *   `versionFromPrototools`. A `version` here is a second pin that no comparison
+ *   above can catch, because moon then runs on it and every copy stays
+ *   consistent with every other copy. So check this file for absence, never for
+ *   a value.
+ *
  * moon drift is the reason for this script. CI runs the proto moon and never the
  * npm moon. So a stale `@moonrepo/cli` passes CI, then fails the Vercel deploy
  * after merge. This script moves that failure to the pull request.
@@ -73,6 +81,31 @@ function catalogVersion(packageName: string): string | null {
     'pnpm-workspace.yaml',
     new RegExp(`^\\s*'${escaped}':\\s*'([^']+)'`, 'm')
   );
+}
+
+// Each toolchain block of .moon/toolchains.yml that pins a `version`. The file
+// must pin none, so this reports presence and never compares a value. A pin that
+// agrees with .prototools is the silent case: moon runs on it, every copy stays
+// consistent, and no comparison has anything to fail on.
+function toolchainVersionPins(): string[] {
+  const blocks = new Set<string>();
+  let block = '';
+  for (const line of read('.moon/toolchains.yml').split('\n')) {
+    // A top-level key starts a toolchain block. $schema is not one.
+    const top = /^([\w-]+):(.*)$/.exec(line);
+    if (top !== null) {
+      block = top[1];
+      // The inline form, `node: { version: '24.11.0' }`.
+      if (/\bversion:/.test(top[2])) {
+        blocks.add(block);
+      }
+      continue;
+    }
+    if (/^\s+version:\s*\S/.test(line)) {
+      blocks.add(block);
+    }
+  }
+  return [...blocks];
 }
 
 // A field of the root package.json, or null when absent or not a string.
@@ -169,6 +202,14 @@ if (playwrightCatalog === null) {
     matchIn('.github/workflows/ci.yml', /playwright@([\w.-]+)/),
     playwrightCatalog,
     `run pnpm dlx playwright@${playwrightCatalog} install`
+  );
+}
+
+for (const block of toolchainVersionPins()) {
+  problems.push(
+    `.moon/toolchains.yml pins a version under ${block}.\n` +
+      '      Fix: delete it. moon reads each version from .prototools. Pin the ' +
+      'tool there instead.'
   );
 }
 

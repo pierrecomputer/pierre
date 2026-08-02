@@ -126,7 +126,8 @@ tasks:
 
   # Compares each version that this repo states twice with its one source. The
   # source is .prototools for a proto tool, and the pnpm-workspace.yaml catalog
-  # for an npm package. It catches moon drift. CI runs the proto moon and never
+  # for an npm package. It also rejects a version pin in .moon/toolchains.yml,
+  # which must hold none. It catches moon drift. CI runs the proto moon and never
   # the npm moon, so a stale @moonrepo/cli passes CI. No graph edges, so it stays
   # runInCI: 'always' (see the header note) and CI runs it as its own step.
   check-tool-pins:
@@ -137,6 +138,7 @@ tasks:
       - '.prototools'
       - '.node-version'
       - '.moon/workspace.yml'
+      - '.moon/toolchains.yml'
       - '.github/workflows/ci.yml'
       - 'pnpm-workspace.yaml'
       - 'package.json'
