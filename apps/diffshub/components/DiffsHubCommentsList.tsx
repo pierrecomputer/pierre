@@ -146,14 +146,18 @@ export const DiffsHubCommentsList = memo(function DiffsHubCommentsList({
                   handleRowClick(event, () => onSelectComment?.(comment))
                 }
               >
-                <CommentAuthorAvatar seed={comment.author} className="size-5" />
-                <div className="flex flex-col items-start gap-0.5 select-text">
-                  <div className="text-muted-foreground flex gap-1">
+                <CommentAuthorAvatar
+                  seed={comment.author}
+                  avatarUrl={comment.avatarUrl}
+                  className="size-5"
+                />
+                <div className="flex min-w-0 flex-1 flex-col items-start gap-0.5 select-text">
+                  <div className="text-muted-foreground w-full break-words">
                     {comment.author} commented on{' '}
                     <span
                       className={cn(
                         getCommentLineClassName(comment.side, comment.lineType),
-                        'font-medium'
+                        'font-medium whitespace-nowrap'
                       )}
                     >
                       {getCommentLineLabel(
@@ -163,7 +167,7 @@ export const DiffsHubCommentsList = memo(function DiffsHubCommentsList({
                       )}
                     </span>
                   </div>
-                  <p className="text-foreground w-full break-words whitespace-pre-wrap">
+                  <p className="text-foreground line-clamp-2 w-full break-words whitespace-pre-wrap">
                     {comment.message}
                   </p>
                 </div>

@@ -41,17 +41,6 @@ export type DiffsHubCommentFileByItemId = ReadonlyMap<
 // render "Line N" without a misleading + / - sigil for context lines.
 export type CommentLineType = 'change' | 'context';
 
-export interface DiffsHubSavedCommentEvent {
-  author: string;
-  itemId: string;
-  key: string;
-  lineNumber: number;
-  lineType: CommentLineType;
-  message: string;
-  range: SelectedLineRange;
-  side: AnnotationSide;
-}
-
 export interface DiffsHubDeletedCommentEvent {
   itemId: string;
   key: string;
@@ -59,6 +48,7 @@ export interface DiffsHubDeletedCommentEvent {
 
 export interface DiffsHubSavedCommentEntry {
   author: string;
+  avatarUrl?: string;
   itemId: string;
   key: string;
   lineNumber: number;
