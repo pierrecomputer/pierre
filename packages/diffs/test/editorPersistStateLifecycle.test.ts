@@ -567,6 +567,88 @@ describe('Editor persisted state lifecycle', () => {
     }
   });
 
+  // A user scroll while an async read is in flight is signalled by its input
+  // event (wheel/touch/pointer press); the late restore must leave the
+  // user's vertical position alone while still applying selections.
+  test('a user scroll during an async read wins over the restored scrollTop', async () => {
+    const dom = installDom();
+    const pendingState = createDeferred<EditorState | undefined>();
+    const gets: string[] = [];
+    const storage: IStateStorage = {
+      get(cacheKey) {
+        gets.push(cacheKey);
+        return pendingState.promise;
+      },
+      set() {},
+    };
+    const editor = new Editor<undefined>({
+      persistState: true,
+      persistStateStorage: storage,
+    });
+    let attached: (AttachedFile & { viewport: HTMLElement }) | undefined;
+
+    try {
+      attached = attachFileInScrolledViewport(editor, { ...ORIGINAL_FILE });
+      const { viewport } = attached;
+      await waitFor(() => gets.length === 1);
+
+      viewport.dispatchEvent(new Event('wheel'));
+      viewport.scrollTop = 77;
+      pendingState.resolve({
+        ...savedCaret(3),
+        view: { scrollLeft: 0, scrollTop: 25 },
+      });
+      await waitFor(
+        () => editor.getState().selections?.[0]?.start.character === 3
+      );
+      expect(editor.getState().selections).toEqual(savedCaret(3).selections);
+      expect(viewport.scrollTop).toBe(77);
+    } finally {
+      editor.cleanUp();
+      attached?.file.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  // The counterpart: scrollTop moved by layout work alone (no input event —
+  // height reconciliation, clamping) must not block the async restore.
+  test('a layout-driven scroll change does not block the async scrollTop restore', async () => {
+    const dom = installDom();
+    const pendingState = createDeferred<EditorState | undefined>();
+    const gets: string[] = [];
+    const storage: IStateStorage = {
+      get(cacheKey) {
+        gets.push(cacheKey);
+        return pendingState.promise;
+      },
+      set() {},
+    };
+    const editor = new Editor<undefined>({
+      persistState: true,
+      persistStateStorage: storage,
+    });
+    let attached: (AttachedFile & { viewport: HTMLElement }) | undefined;
+
+    try {
+      attached = attachFileInScrolledViewport(editor, { ...ORIGINAL_FILE });
+      const { viewport } = attached;
+      await waitFor(() => gets.length === 1);
+
+      viewport.scrollTop = 5;
+      pendingState.resolve({
+        ...savedCaret(3),
+        view: { scrollLeft: 0, scrollTop: 25 },
+      });
+      await waitFor(() => viewport.scrollTop === 25);
+      expect(viewport.scrollTop).toBe(25);
+      expect(editor.getState().selections).toEqual(savedCaret(3).selections);
+    } finally {
+      editor.cleanUp();
+      attached?.file.cleanUp();
+      dom.cleanup();
+    }
+  });
+
   // Diffs persist only their serializable state, keyed by the cacheKey
   // parseDiffFromFile derives from the file pair. A first attach has no
   // record (reset to 0,0); a later fresh editor + fresh FileDiff for the same

@@ -183,6 +183,11 @@ interface EditorAttachState {
   delivered: boolean;
 }
 
+interface ViewportInputWatch {
+  userScrolled(): boolean;
+  dispose(): void;
+}
+
 export interface EditorOptions<LAnnotation> {
   /** The maximum number of entries to keep in the undo stack. */
   historyMaxEntries?: number;
@@ -1290,12 +1295,13 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     const documentVersion = textDocument.version;
     const selections = this.#selections;
     const view = this.getState().view;
+    let inputWatch: ViewportInputWatch | undefined;
     const applyState = (state: EditorState | undefined): void => {
       const currentView = this.getState().view;
       // scrollTop is deliberately not part of this staleness check: the
       // surface can legitimately adjust vertical scroll while an async read
       // is in flight (height reconciliation, clamping), and that must not
-      // block the restore.
+      // block the restore. User scrolls are detected by `inputWatch` instead.
       if (
         generation !== this.#stateRestoreGeneration ||
         this.#textDocument !== textDocument ||
@@ -1307,16 +1313,25 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       ) {
         return;
       }
+      // Once the user engages the viewport, the vertical position is theirs:
+      // neither the first-open reset nor a stored scrollTop may move it.
+      const userScrolled = inputWatch?.userScrolled() === true;
       if (state === undefined) {
         // No stored record for this cacheKey — the file is opened for the
         // first time. Start the code scroller and the viewport at the top
         // instead of inheriting whatever offset the previous file left in a
         // viewport that stays mounted across switches.
         this.#fileInstance?.setCodeScrollLeft(0);
-        this.#setViewportScrollTop(0);
+        if (!userScrolled) {
+          this.#setViewportScrollTop(0);
+        }
         return;
       }
-      this.setState(cloneEditorState(state));
+      const restored = cloneEditorState(state);
+      if (userScrolled && restored.view !== undefined) {
+        restored.view = { scrollLeft: restored.view.scrollLeft };
+      }
+      this.setState(restored);
     };
     const readState = (): void | Promise<void> => {
       let result: EditorState | undefined | Promise<EditorState | undefined>;
@@ -1338,6 +1353,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     const result =
       pendingWrite === undefined ? readState() : pendingWrite.then(readState);
     if (isPromise(result)) {
+      inputWatch = this.#watchViewportUserInput();
       const pendingRestore = {
         cacheKey,
         textDocument,
@@ -1348,11 +1364,37 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       };
       this.#pendingStateRestore = pendingRestore;
       void pendingRestore.completion.finally(() => {
+        inputWatch?.dispose();
         if (this.#pendingStateRestore === pendingRestore) {
           this.#pendingStateRestore = undefined;
         }
       });
     }
+  }
+
+  #watchViewportUserInput(): ViewportInputWatch | undefined {
+    const viewport = this.#getScrollViewport();
+    if (!(viewport instanceof HTMLElement)) {
+      return undefined;
+    }
+    let scrolled = false;
+    const eventTypes = ['wheel', 'touchstart', 'mousedown'] as const;
+    const dispose = (): void => {
+      for (const type of eventTypes) {
+        viewport.removeEventListener(type, onInput, { capture: true });
+      }
+    };
+    const onInput = (): void => {
+      scrolled = true;
+      dispose();
+    };
+    for (const type of eventTypes) {
+      viewport.addEventListener(type, onInput, {
+        capture: true,
+        passive: true,
+      });
+    }
+    return { userScrolled: () => scrolled, dispose };
   }
 
   // Whether a zero-based document line has (or will have on scroll) a
