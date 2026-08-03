@@ -2,25 +2,33 @@
 
 import { useSyncExternalStore } from 'react';
 
-const GITHUB_TOKEN_STORAGE_KEY = 'diffshub.github.token';
+import {
+  GITHUB_TOKEN_STORAGE_KEY,
+  type GitHubTokenCapability,
+  isSameStoredGitHubAuth,
+  parseStoredGitHubAuth,
+  serializeStoredGitHubAuth,
+  type StoredGitHubAuth,
+} from '@/lib/githubTokenStorage';
 
 export interface GitHubTokenState {
+  capability: GitHubTokenCapability;
   clearToken(): void;
   hasToken: boolean;
-  setToken(token: string): void;
-  token: string;
+  setToken(token: string, capability: GitHubTokenCapability): void;
+  token: string | undefined;
   tokenVersion: number;
 }
 
-// The token as every subscriber sees it. `tokenVersion` increments on each
+// The auth as every subscriber sees it. `tokenVersion` increments on each
 // write so loaders can re-run when the token changes, including a write of the
 // same string.
 interface TokenSnapshot {
-  token: string;
+  auth: StoredGitHubAuth | undefined;
   tokenVersion: number;
 }
 
-const SERVER_SNAPSHOT: TokenSnapshot = { token: '', tokenVersion: 0 };
+const SERVER_SNAPSHOT: TokenSnapshot = { auth: undefined, tokenVersion: 0 };
 
 // Module-level store for the optional user-provided GitHub token. Every
 // `useGitHubToken` instance subscribes here, so the home form and the review UI
@@ -33,8 +41,8 @@ const listeners = new Set<() => void>();
 
 function getSnapshot(): TokenSnapshot {
   if (snapshot == null) {
-    const token = readStoredToken();
-    snapshot = { token, tokenVersion: token === '' ? 0 : 1 };
+    const auth = readStoredAuth();
+    snapshot = { auth, tokenVersion: auth == null ? 0 : 1 };
   }
   return snapshot;
 }
@@ -44,54 +52,91 @@ function getServerSnapshot(): TokenSnapshot {
 }
 
 function subscribe(listener: () => void): () => void {
+  if (listeners.size === 0) {
+    window.addEventListener('storage', handleStorage);
+  }
   listeners.add(listener);
   return () => {
     listeners.delete(listener);
+    if (listeners.size === 0) {
+      window.removeEventListener('storage', handleStorage);
+    }
   };
 }
 
-function setToken(nextToken: string): void {
-  const token = nextToken.trim();
-  snapshot = { token, tokenVersion: getSnapshot().tokenVersion + 1 };
-  writeStoredToken(token);
+// Applies changes from other tabs without writing them back to storage.
+function handleStorage(event: StorageEvent): void {
+  if (event.key == null || event.key === GITHUB_TOKEN_STORAGE_KEY) {
+    const auth = readStoredAuth();
+    if (!isSameStoredGitHubAuth(getSnapshot().auth, auth)) {
+      updateAuth(auth);
+    }
+  }
+}
+
+function updateAuth(auth: StoredGitHubAuth | undefined): void {
+  snapshot = { auth, tokenVersion: getSnapshot().tokenVersion + 1 };
   for (const listener of listeners) {
     listener();
   }
 }
 
+function setToken(
+  nextToken: string,
+  nextCapability: GitHubTokenCapability
+): void {
+  const token = nextToken.trim();
+  const auth =
+    token === ''
+      ? undefined
+      : {
+          capability: nextCapability,
+          savedAt: new Date().toISOString(),
+          token,
+        };
+  updateAuth(auth);
+  writeStoredAuth(auth);
+}
+
 function clearToken(): void {
-  setToken('');
+  setToken('', 'read');
 }
 
 export function useGitHubToken(): GitHubTokenState {
-  const { token, tokenVersion } = useSyncExternalStore(
+  const { auth, tokenVersion } = useSyncExternalStore(
     subscribe,
     getSnapshot,
     getServerSnapshot
   );
   return {
+    capability: auth?.capability ?? 'read',
     clearToken,
-    hasToken: token !== '',
+    hasToken: auth != null,
     setToken,
-    token,
+    token: auth?.token,
     tokenVersion,
   };
 }
 
-function readStoredToken(): string {
+function readStoredAuth(): StoredGitHubAuth | undefined {
   try {
-    return globalThis.localStorage?.getItem(GITHUB_TOKEN_STORAGE_KEY) ?? '';
+    return parseStoredGitHubAuth(
+      globalThis.localStorage?.getItem(GITHUB_TOKEN_STORAGE_KEY) ?? null
+    );
   } catch {
-    return '';
+    return undefined;
   }
 }
 
-function writeStoredToken(token: string): void {
+function writeStoredAuth(auth: StoredGitHubAuth | undefined): void {
   try {
-    if (token === '') {
+    if (auth == null) {
       globalThis.localStorage?.removeItem(GITHUB_TOKEN_STORAGE_KEY);
     } else {
-      globalThis.localStorage?.setItem(GITHUB_TOKEN_STORAGE_KEY, token);
+      globalThis.localStorage?.setItem(
+        GITHUB_TOKEN_STORAGE_KEY,
+        serializeStoredGitHubAuth(auth)
+      );
     }
   } catch {
     // Browsers can disable storage; in-memory state still works for the page.
