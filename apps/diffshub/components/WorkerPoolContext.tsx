@@ -6,7 +6,10 @@ import {
   WorkerPoolContextProvider,
   type WorkerPoolOptions,
 } from '@pierre/diffs/react';
-import type { ReactNode } from 'react';
+import { type ReactNode, useState } from 'react';
+
+import { themeController } from '@/components/themeController';
+import { diffThemeProps } from '@/lib/theme/diffThemeProps';
 
 import { getPreferredHighlighter } from '@/lib/getPreferredHighlighter';
 
@@ -49,9 +52,6 @@ const PoolOptions: WorkerPoolOptions = {
 };
 
 const HighlighterOptions: WorkerInitializationRenderOptions = {
-  // diffshub used to override the default pair with the soft pierre themes;
-  // now that the canonical default IS the non-soft pair (shared via theming),
-  // every site initializes the pool with the same defaults.
   theme: DEFAULT_THEMES,
   langs: [
     'cpp',
@@ -68,6 +68,19 @@ const HighlighterOptions: WorkerInitializationRenderOptions = {
   preferredHighlighter: getPreferredHighlighter(),
 };
 
+function createInitialHighlighterOptions(): WorkerInitializationRenderOptions {
+  const { darkThemeName, lightThemeName, resolvedColorScheme } =
+    themeController.getState();
+  return {
+    ...HighlighterOptions,
+    theme: diffThemeProps({
+      colorScheme: resolvedColorScheme,
+      darkThemeName,
+      lightThemeName,
+    }).theme,
+  };
+}
+
 interface WorkerPoolProps {
   children: ReactNode;
   highlighterOptions?: WorkerInitializationRenderOptions;
@@ -76,13 +89,14 @@ interface WorkerPoolProps {
 
 export function WorkerPoolContext({
   children,
-  highlighterOptions = HighlighterOptions,
+  highlighterOptions,
   poolOptions = PoolOptions,
 }: WorkerPoolProps) {
+  const [initialHighlighterOptions] = useState(createInitialHighlighterOptions);
   return (
     <WorkerPoolContextProvider
       poolOptions={poolOptions}
-      highlighterOptions={highlighterOptions}
+      highlighterOptions={highlighterOptions ?? initialHighlighterOptions}
     >
       {children}
     </WorkerPoolContextProvider>
