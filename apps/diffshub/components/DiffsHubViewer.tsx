@@ -32,7 +32,7 @@ import { diffshubChromeMapping } from '@/lib/theme/diffshubChromeMapping';
 import type {
   CommentMetadata,
   DiffsHubDeletedCommentEvent,
-  DiffsHubSavedCommentEvent,
+  DiffsHubSavedCommentEntry,
 } from '@/lib/types';
 
 function getNextItemVersion(item: CodeViewItem<CommentMetadata>): number {
@@ -66,7 +66,7 @@ interface DiffsHubViewerProps {
   className?: string;
   diffStyle: 'split' | 'unified';
   onCommentDeleted(comment: DiffsHubDeletedCommentEvent): void;
-  onCommentSaved(comment: DiffsHubSavedCommentEvent): void;
+  onCommentSaved(comment: DiffsHubSavedCommentEntry): void;
   overflow: 'wrap' | 'scroll';
   showBackgrounds: boolean;
   diffIndicators: DiffIndicators;

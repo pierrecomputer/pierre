@@ -18,6 +18,7 @@ import { DiffsHubSidebar } from './DiffsHubSidebar';
 import { DiffsHubStatusPanel } from './DiffsHubStatusPanel';
 import { DiffsHubViewer } from './DiffsHubViewer';
 import { ThemeSourceProvider } from './ThemeSourceProvider';
+import { useGitHubComments } from './useGitHubComments';
 import { useGitHubToken } from './useGitHubToken';
 import { usePatchLoader } from './usePatchLoader';
 import { useThemeCycle } from './useThemeCycle';
@@ -33,7 +34,6 @@ import type {
   CommentMetadata,
   DiffsHubDeletedCommentEvent,
   DiffsHubSavedCommentEntry,
-  DiffsHubSavedCommentEvent,
 } from '@/lib/types';
 import { upsertSavedCommentSidebarEntry } from '@/lib/upsertSavedCommentSidebarEntry';
 
@@ -173,6 +173,20 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
     path,
     viewerRef,
   });
+  // Real GitHub comments for the viewed source, fed into the same sidebar
+  // sections local demo comments use. Fetches in parallel with the patch and
+  // applies once the viewer is ready.
+  useGitHubComments({
+    commentFileByItemId,
+    domain,
+    getToken: getGitHubToken,
+    loadState,
+    path,
+    setCommentSections,
+    tokenVersion: githubTokenVersion,
+    treeSource,
+    viewerRef,
+  });
 
   useEffect(() => {
     const mediaQuery = window.matchMedia('(max-width: 767px)');
@@ -213,7 +227,7 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
     applyCollapseModeToLoaded(next);
   }, [applyCollapseModeToLoaded, collapseMode]);
   const handleCommentSaved = useCallback(
-    (comment: DiffsHubSavedCommentEvent) => {
+    (comment: DiffsHubSavedCommentEntry) => {
       setCommentSections((prev) =>
         upsertSavedCommentSidebarEntry(prev, commentFileByItemId, comment)
       );
