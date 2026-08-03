@@ -1204,6 +1204,33 @@ describe('CodeView item edit mode', () => {
       }
     });
 
+    test('finalizes session hunks when removing the only item', async () => {
+      const { cleanup } = installDom();
+      const { createEditor } = createEditorHarness();
+      const viewer = new CodeView({ createEditor });
+      const edited = makeSessionDiffItem('edited');
+      if (edited.type !== 'diff') {
+        throw new Error('Expected a diff edit-session item.');
+      }
+      try {
+        viewer.setup(createRoot());
+        await renderItems(viewer, [edited]);
+
+        revertLineTen(edited, viewer);
+        expect(edited.fileDiff.hunks).toHaveLength(2);
+        expect(edited.fileDiff.editSessionDirty).toBe(true);
+
+        expect(viewer.removeItem(edited.id)).toBe(true);
+
+        expect(edited.fileDiff.editSessionDirty).toBeUndefined();
+        expect(edited.fileDiff.hunks).toHaveLength(1);
+      } finally {
+        viewer.cleanUp();
+        await wait(0);
+        cleanup();
+      }
+    });
+
     test('ending a session reconciles the item layout height', async () => {
       const { cleanup } = installDom();
       const { createEditor } = createEditorHarness();

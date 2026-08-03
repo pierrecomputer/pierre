@@ -1583,7 +1583,13 @@ export class CodeView<LAnnotation = undefined> {
       // reset()/cleanUp() calls stay silent — those are teardowns, not item
       // data updates.
       const completions: CodeViewItemEditChange<LAnnotation>[] = [];
-      for (const record of this.itemEditors.values()) {
+      for (const [id, record] of this.itemEditors) {
+        const item = this.idToItem.get(id);
+        record.editor.cleanUp();
+        if (item?.type === 'diff') {
+          item.instance.completeEditSession();
+          finishEditSessionForDiff(item.item.fileDiff);
+        }
         const { lastChange } = record.state;
         if (lastChange != null) {
           completions.push(lastChange);
