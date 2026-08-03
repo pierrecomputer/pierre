@@ -907,17 +907,14 @@ describe('React editor factory lifecycle', () => {
 
       await waitFor(() => onAttach.mock.calls.length >= 2);
       await wait(0);
-      const activeEditors = editors.filter(
-        (editor) => editor.cleanUpCount === 0
-      );
-      expect(editors.length).toBeGreaterThanOrEqual(4);
-      expect(editors.filter((editor) => editor.cleanUpCount > 0)).toHaveLength(
-        editors.length - 2
-      );
-      expect(activeEditors).toHaveLength(2);
+      // The provider caches editors by options-object identity, so
+      // StrictMode's simulated destroy/re-create pass reuses each surface's
+      // editor instead of leaking a second one: exactly one editor per
+      // surface, cleaned up by the destroy pass and re-attached after it.
+      expect(editors).toHaveLength(2);
       expect(onAttach).toHaveBeenCalledTimes(2);
       expect(new Set(onAttach.mock.calls.map(([editor]) => editor))).toEqual(
-        new Set(activeEditors)
+        new Set(editors)
       );
 
       await unmountRoot(root);

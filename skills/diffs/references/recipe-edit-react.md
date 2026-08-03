@@ -2,7 +2,9 @@
 
 Mount one stable `EditProvider` above the editable surfaces. The provider
 supplies an editor factory. Each active surface or `CodeView` item owns a
-separate editor instance.
+separate editor instance, cached by `editorOptions` object identity — an edit
+session restarting with the same options object reuses its editor, and
+simultaneously editable surfaces need distinct options objects.
 
 Alternatively pass `sharedEditor` (an `Editor` instance) instead of
 `createEditor`: every surface under the provider then attaches the same editor,

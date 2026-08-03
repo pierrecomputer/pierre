@@ -77,11 +77,13 @@ standalone surface's `edit` prop or a `CodeView` item's `edit` flag. Standalone
 surface DOM and imperative file/diff instances stay mounted across the toggle.
 The provider supplies editors in one of two modes:
 
-- **`createEditor`** — a factory called whenever a surface starts an edit
-  session. Each editable `File`, `FileDiff`, `MultiFileDiff`, or `PatchDiff`
-  surface and each editable `CodeView` item gets its own editor, so state stays
-  isolated: sibling surfaces have independent history, selections, and
-  callbacks, and re-entering edit mode starts fresh.
+- **`createEditor`** — a factory called when a surface starts an edit session.
+  Each editable `File`, `FileDiff`, `MultiFileDiff`, or `PatchDiff` surface and
+  each editable `CodeView` item gets its own editor, so state stays isolated:
+  sibling surfaces have independent history, selections, and callbacks. Created
+  editors are cached by `editorOptions` object identity — re-entering edit mode
+  with the same options object reuses the surface's editor; pass a new object to
+  start fresh.
 - **`sharedEditor`** — one `Editor` instance handed to every surface under the
   provider, exactly as you constructed it. This is the mode for IDE-like UIs
   that edit one file at a time across many files, normally combined with

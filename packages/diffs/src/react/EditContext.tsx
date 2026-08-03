@@ -2,7 +2,7 @@
 'use client';
 
 import type { Context, PropsWithChildren } from 'react';
-import { createContext, useContext } from 'react';
+import { createContext, useContext, useRef } from 'react';
 
 import type { EditorOptions } from '../edit';
 import type { DiffsEditor } from '../types';
@@ -16,8 +16,11 @@ export type CreateEditor<LAnnotation> = (
 export interface EditProviderProps<LAnnotation> {
   /**
    * Creates an editor for each editable surface. Combines shared defaults
-   * with the supplied per-surface options. Ignored when `sharedEditor` is
-   * provided.
+   * with the supplied per-surface options. Created editors are cached by
+   * options-object identity: an edit session restarting with the same
+   * `editorOptions` object reuses its editor (pass a new object to start
+   * fresh), and surfaces that are editable at the same time must receive
+   * distinct options objects. Ignored when `sharedEditor` is provided.
    */
   createEditor?: CreateEditor<LAnnotation>;
   /**
@@ -40,6 +43,15 @@ export function EditProvider<LAnnotation>({
   createEditor,
   sharedEditor,
 }: PropsWithChildren<EditProviderProps<LAnnotation>>): React.JSX.Element {
+  // Editors cached by options-object identity: an edit session that restarts
+  // with the same `editorOptions` (StrictMode's double effect pass, an
+  // edit-mode toggle, a surface remount) reuses its editor instead of
+  // creating a new one — which also lets the editor's `persistState` caches
+  // survive between sessions. A new options object still creates a fresh
+  // editor, and the WeakMap drops each entry with its options object.
+  const editorCache = useRef(
+    new WeakMap<EditorOptions<LAnnotation>, DiffsEditor<LAnnotation>>()
+  );
   const stableCreateEditor = useStableCallback(
     (options: EditorOptions<LAnnotation>): DiffsEditor<LAnnotation> => {
       if (sharedEditor != null) {
@@ -51,7 +63,13 @@ export function EditProvider<LAnnotation>({
           'EditProvider: either `sharedEditor` or `createEditor` is required'
         );
       }
-      return createEditor(options);
+      const cached = editorCache.current.get(options);
+      if (cached != null) {
+        return cached;
+      }
+      const editor = createEditor(options);
+      editorCache.current.set(options, editor);
+      return editor;
     }
   );
   return (
