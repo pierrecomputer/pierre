@@ -2535,6 +2535,18 @@ export class CodeView<LAnnotation = undefined> {
       return;
     }
 
+    // Capture the scroll anchor against the outgoing items/layout before
+    // reassigning this.items below. Otherwise the next render's
+    // getScrollAnchor() reads renderState.firstIndex/lastIndex against
+    // already-reindexed items through stale top/height metrics, which is
+    // exactly wrong for removals and reorders. This must stay below the
+    // early return above: capturing unconditionally at the top of the
+    // method would strand a pending anchor on the instance after a
+    // no-op reconcile, since render() (which consumes/clears it) never
+    // runs when nothing changed, and some later unrelated render would
+    // then "correct" scroll against that stale anchor.
+    this.capturePendingLayoutAnchor();
+
     this.items = nextItems;
     this.idToItem = nextIdToItem;
     this.instanceToItem = nextInstanceToItem;
