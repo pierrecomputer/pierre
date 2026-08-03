@@ -651,6 +651,11 @@ type PendingScrollTarget =
   | PendingRangeTarget
   | PendingItemTarget;
 
+type CodeViewItemMap<LAnnotation> = Map<
+  string,
+  CodeViewContextItem<LAnnotation>
+>;
+
 export class CodeView<LAnnotation = undefined> {
   static __STOP = false;
   static __lastScrollPosition = 0;
@@ -662,7 +667,7 @@ export class CodeView<LAnnotation = undefined> {
     resizeDebugging: false,
   };
   private items: CodeViewContextItem<LAnnotation>[] = [];
-  private idToItem: Map<string, CodeViewContextItem<LAnnotation>> = new Map();
+  private idToItem: CodeViewItemMap<LAnnotation> = new Map();
   private selectedLines: CodeViewLineSelection | null = null;
   // One editor per edit-mode item, created lazily via options.createEditor.
   // Entries survive virtualization unmounts so a remounted item re-attaches
@@ -1706,9 +1711,10 @@ export class CodeView<LAnnotation = undefined> {
     }
   }
 
-  public capturePendingLayoutAnchor(): void {
+  public capturePendingLayoutAnchor(
+    nextItems: Readonly<CodeViewItemMap<LAnnotation>> = this.idToItem
+  ): void {
     if (
-      this.pendingLayoutAnchor != null ||
       this.root == null ||
       this.items.length === 0 ||
       this.pendingScrollTarget != null
@@ -1716,7 +1722,10 @@ export class CodeView<LAnnotation = undefined> {
       return;
     }
 
-    this.pendingLayoutAnchor = this.getScrollAnchor(this.getScrollTop());
+    this.pendingLayoutAnchor = this.getScrollAnchor(
+      this.getScrollTop(),
+      nextItems
+    );
   }
 
   public render(immediate = false): void {
@@ -2521,6 +2530,15 @@ export class CodeView<LAnnotation = undefined> {
       nextInstanceToItem.set(item.instance, item);
     }
 
+    if (firstDirtyIndex == null) {
+      if (removedItems.size === 0) {
+        return;
+      }
+      firstDirtyIndex = Math.max(nextItems.length - 1, 0);
+    }
+
+    this.capturePendingLayoutAnchor(nextIdToItem);
+
     for (let index = 0; index < previousItems.length; index++) {
       const removedItem = previousItems[index];
       if (removedItem == null || !removedItems.has(removedItem)) {
@@ -2530,22 +2548,6 @@ export class CodeView<LAnnotation = undefined> {
       const dirtyIndex = Math.max(nextItems.length - 1, 0);
       firstDirtyIndex = Math.min(firstDirtyIndex ?? dirtyIndex, dirtyIndex);
     }
-
-    if (firstDirtyIndex == null) {
-      return;
-    }
-
-    // Capture the scroll anchor against the outgoing items/layout before
-    // reassigning this.items below. Otherwise the next render's
-    // getScrollAnchor() reads renderState.firstIndex/lastIndex against
-    // already-reindexed items through stale top/height metrics, which is
-    // exactly wrong for removals and reorders. This must stay below the
-    // early return above: capturing unconditionally at the top of the
-    // method would strand a pending anchor on the instance after a
-    // no-op reconcile, since render() (which consumes/clears it) never
-    // runs when nothing changed, and some later unrelated render would
-    // then "correct" scroll against that stale anchor.
-    this.capturePendingLayoutAnchor();
 
     this.items = nextItems;
     this.idToItem = nextIdToItem;
@@ -3641,10 +3643,25 @@ export class CodeView<LAnnotation = undefined> {
    * A scroll anchor represents the first fully visible element (in other
    * words, the first file or first line who's top is fully in the viewport).
    */
-  private getScrollAnchor(scrollTop: number): ScrollAnchor | undefined {
-    // If we already have a pendingLayoutAnchor, let's use that.
-    if (this.pendingLayoutAnchor != null) {
-      return this.pendingLayoutAnchor;
+  private getScrollAnchor(
+    scrollTop: number,
+    availableItems: ReadonlyMap<string, CodeViewContextItem<LAnnotation>> = this
+      .idToItem
+  ): ScrollAnchor | undefined {
+    let skippedItem: CodeViewContextItem<LAnnotation> | undefined;
+
+    const { pendingLayoutAnchor } = this;
+    if (pendingLayoutAnchor != null) {
+      const pendingItem = this.idToItem.get(pendingLayoutAnchor.id);
+      if (
+        pendingItem != null &&
+        availableItems.get(pendingLayoutAnchor.id) === pendingItem
+      ) {
+        return pendingLayoutAnchor;
+      }
+      if (pendingItem != null) {
+        skippedItem = pendingItem;
+      }
     }
 
     // We shouldn't scroll anchor when at the top, this way if a custom header
@@ -3683,6 +3700,12 @@ export class CodeView<LAnnotation = undefined> {
         break;
       }
 
+      const itemIsAvailable = availableItems.get(item.item.id) === item;
+      if (!itemIsAvailable) {
+        skippedItem ??= item;
+        continue;
+      }
+
       if (absoluteItemTop >= scrollTop) {
         return {
           type: 'item',
@@ -3707,6 +3730,28 @@ export class CodeView<LAnnotation = undefined> {
           side: lineAnchor.side,
           viewportOffset: absoluteLineTop - scrollTop,
         };
+      }
+    }
+
+    // If we couldn't find an anchored item and we have a skipped item, lets
+    // attempt to anchor to the top of the item that came after it
+    if (skippedItem != null) {
+      for (
+        let index = skippedItem.index + 1;
+        index < this.items.length;
+        index++
+      ) {
+        const candidate = this.items[index];
+        if (
+          candidate != null &&
+          availableItems.get(candidate.item.id) === candidate
+        ) {
+          return {
+            type: 'item',
+            id: candidate.item.id,
+            viewportOffset: 0,
+          };
+        }
       }
     }
 
