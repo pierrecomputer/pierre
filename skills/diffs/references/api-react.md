@@ -15,7 +15,7 @@ entry also re-exports every type in [Shared types](api-types.md).
 | `CodeView`                  | Component | Renders a virtualized list of files and diffs.            |
 | `Virtualizer`               | Component | Provides simple viewport virtualization.                  |
 | `useVirtualizer`            | Hook      | Gets the nearest simple `Virtualizer` instance.           |
-| `EditProvider`              | Component | Supplies an editor factory to editable surfaces.          |
+| `EditProvider`              | Component | Supplies an editor factory or one shared editor.          |
 | `useCreateEditor`           | Hook      | Gets the nearest editor factory.                          |
 | `WorkerPoolContextProvider` | Component | Creates and supplies a worker pool.                       |
 | `useWorkerPool`             | Hook      | Gets the nearest worker pool.                             |
@@ -41,7 +41,7 @@ entry also re-exports every type in [Shared types](api-types.md).
 | `CodeViewReactOptions`              | Defines the React-safe `CodeView` option set.                     |
 | `CodeViewHandle`                    | Defines imperative list, selection, scroll, and editor controls.  |
 | `CreateEditor`                      | Defines the editor factory.                                       |
-| `EditProviderProps`                 | Defines `EditProvider` props.                                     |
+| `EditProviderProps`                 | Defines `EditProvider` props: `createEditor`, `sharedEditor`.     |
 | `MergeConflictActionsTypeOption`    | Selects no actions, default actions, or a custom action renderer. |
 | `RenderMergeConflictActionContext`  | Supplies conflict resolution to a custom action renderer.         |
 | `RenderMergeConflictActions`        | Defines a custom conflict action renderer.                        |

@@ -393,6 +393,73 @@ export const EDIT_SELECTION_ACTION_CONTEXT_TYPE: PreloadFileOptions<undefined> =
     options,
   };
 
+export const EDIT_PERSIST_STATE_EXAMPLE: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'editor_persist_state.ts',
+    contents: `import type { FileContents } from '@pierre/diffs';
+import { Editor } from '@pierre/diffs/edit';
+
+// Unique, stable cacheKeys identify each file's cached document and its
+// stored editor state.
+const fileA: FileContents = {
+  name: 'a.ts',
+  contents: 'export const a = 1;',
+  cacheKey: 'a.ts',
+};
+const fileB: FileContents = {
+  name: 'b.ts',
+  contents: 'export const b = 2;',
+  cacheKey: 'b.ts',
+};
+
+// \`fileInstance\` is a rendered File — see the Vanilla JS section above.
+const editor = new Editor({ persistState: true });
+editor.edit(fileInstance);
+fileInstance.render({ file: fileA });
+
+// ...the user edits, selects, and scrolls fileA...
+
+// Switching files caches fileA's document (contents + undo history) on the
+// editor and writes its selections and scroll offsets to the state storage.
+// fileB has no record yet, so its surface starts scrolled to the top.
+fileInstance.render({ file: fileB });
+
+// Switching back renders fileA's edited contents — even though the original
+// \`contents\` string is passed again — and restores its selections, scroll
+// position, and undo history.
+fileInstance.render({ file: fileA });`,
+  },
+  options,
+};
+
+export const EDIT_PERSIST_STATE_REACT_EXAMPLE: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'editor_persist_state_react.tsx',
+    contents: `import type { FileContents } from '@pierre/diffs';
+import { Editor } from '@pierre/diffs/edit';
+import { EditProvider, File } from '@pierre/diffs/react';
+import { useState } from 'react';
+
+// One editor for every surface under the provider. Its cached documents and
+// default 'inMemory' state store live on the instance, so sharing it is what
+// lets per-file contents, selections, and scroll survive surface remounts.
+// Surface \`editorOptions\` props are ignored with \`sharedEditor\` — pass
+// options to the constructor instead.
+export function PersistedEditor({ file }: { file: FileContents }) {
+  const [sharedEditor] = useState(
+    () => new Editor<undefined>({ persistState: true })
+  );
+
+  return (
+    <EditProvider sharedEditor={sharedEditor}>
+      <File key={file.cacheKey} file={file} edit />
+    </EditProvider>
+  );
+}`,
+  },
+  options,
+};
+
 export const EDIT_MARKER_TYPE: PreloadFileOptions<undefined> = {
   file: {
     name: 'marker.ts',
@@ -474,6 +541,7 @@ export function EditableFileWithHistoryToolbar() {
   const editorRef = useRef<Editor<undefined> | null>(null);
   const editorOptions = useMemo<EditorOptions<undefined>>(
     () => ({
+      historyMaxEntries: 100,
       onAttach(editor) {
         editorRef.current = editor;
       },
@@ -487,9 +555,6 @@ export function EditableFileWithHistoryToolbar() {
     []
   );
 
-  // This example is self-contained. Apps should usually mount EditProvider near
-  // the root so its factory is available to every editable File, diff, and
-  // CodeView.
   return (
     <EditProvider createEditor={createEditor}>
       <div className="toolbar">
@@ -508,6 +573,55 @@ export function EditableFileWithHistoryToolbar() {
     </EditProvider>
   );
 }`,
+  },
+  options,
+};
+
+export const EDIT_REACT_CREATE_EDITOR_EXAMPLE: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'editor_react_create_editor.tsx',
+    contents: `const createEditor = useCallback<CreateEditor<undefined>>(
+  (surfaceOptions) =>
+    new Editor({
+      ...defaultEditorOptions,
+      ...surfaceOptions,
+    }),
+  []
+);
+
+const editorOptions = useMemo<EditorOptions<undefined>>(
+  () => ({
+    onChange: handleChange,
+    onAttach(editor) {
+      editorRef.current = editor;
+    },
+  }),
+  [handleChange]
+);
+
+// Mount EditProvider near the root so its editors are available to every
+// editable File, diff, and CodeView.
+return (
+  <EditProvider createEditor={createEditor}>
+    <File file={file} edit={editing} editorOptions={editorOptions} />
+  </EditProvider>
+);`,
+  },
+  options,
+};
+
+export const EDIT_REACT_SHARED_EDITOR_EXAMPLE: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'editor_react_shared_editor.tsx',
+    contents: `const [sharedEditor] = useState(
+  () => new Editor<undefined>({ persistState: true, onChange: handleChange })
+);
+
+return (
+  <EditProvider sharedEditor={sharedEditor}>
+    <File key={activeFile.cacheKey} file={activeFile} edit />
+  </EditProvider>
+);`,
   },
   options,
 };
@@ -1018,6 +1132,48 @@ interface EditorOptions<LAnnotation> {
   options,
 };
 
+export const EDIT_ON_ATTACH_REACT_EXAMPLE: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'editor_on_attach_react.tsx',
+    contents: `const editorOptions = useMemo<EditorOptions<undefined>>(
+  () => ({
+    onAttach(editor) {
+      editor.focus({ lineNumber: 'first-visible', preventScroll: true });
+    },
+  }),
+  []
+);
+
+return <CodeView items={items} editorOptions={editorOptions} />;`,
+  },
+  options,
+};
+
+export const EDIT_ON_ATTACH_VANILLA_EXAMPLE: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'editor_on_attach_vanilla.ts',
+    contents: `const viewer = new CodeView({
+  createEditor(options) {
+    return new Editor({
+      ...options,
+      onAttach(editor) {
+        editor.focus({ lineNumber: 'first-visible', preventScroll: true });
+      },
+    });
+  },
+});`,
+  },
+  options,
+};
+
+export const EDIT_FOCUS_POSITION_EXAMPLE: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'editor_focus_position.ts',
+    contents: `editor.focus({ lineNumber: 13, character: 4 });`,
+  },
+  options,
+};
+
 export const EDIT_ON_CHANGE_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
     name: 'editor_on_change.ts',
@@ -1099,14 +1255,14 @@ const file: FileContents | undefined = editor.getFile();
 // Full document text, or '' when nothing is attached.
 const text: string = editor.getText();
 
-// Snapshot selections and horizontal code position for explicit restoration.
+// Snapshot selections and scroll positions for explicit restoration:
 const state: EditorState = editor.getState();
 // EditorState = {
 //   selections?: EditorSelection[];
-//   view?: { scrollLeft: number };
+//   view?: { scrollLeft: number; scrollTop?: number };
 // }
 
-// Restore selections and horizontal code position after re-rendering.
+// Restore selections and scroll positions after re-rendering.
 editor.setState(state);
 
 // Replace all cursors and ranges programmatically. Positions are zero-based;

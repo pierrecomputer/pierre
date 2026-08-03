@@ -4,6 +4,16 @@ Mount one stable `EditProvider` above the editable surfaces. The provider
 supplies an editor factory. Each active surface or `CodeView` item owns a
 separate editor instance.
 
+Alternatively pass `sharedEditor` (an `Editor` instance) instead of
+`createEditor`: every surface under the provider then attaches the same editor,
+exactly as its owner configured it. The surfaces' `editorOptions` props are
+ignored — pass options to the shared editor's constructor instead. Instance
+state — such as `persistState` records and their default `inMemory` storage —
+then survives surface remounts, so per-file selections and scroll positions
+restore across file switches. Use it only where one surface is editable at a
+time; simultaneously editable surfaces need per-surface editors from
+`createEditor`. When both props are set, `sharedEditor` wins.
+
 ## Contents
 
 - [Edit a standalone file or diff](#edit-a-standalone-file-or-diff)
