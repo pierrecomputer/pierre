@@ -931,4 +931,50 @@ describe('React editor factory lifecycle', () => {
       cleanup();
     }
   });
+
+  test('EditProvider hands surfaces the sharedEditor as configured, ignoring createEditor and surface editorOptions', async () => {
+    const { cleanup } = installDom();
+    const cleanupActEnvironment = installReactActEnvironment();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    // The shared editor is used exactly as constructed: its own onAttach must
+    // fire, while the surface's editorOptions (including its onAttach) are
+    // ignored entirely.
+    let attachedEditor: Editor<undefined> | undefined;
+    const sharedEditor = new Editor<undefined>({
+      onAttach(editor) {
+        attachedEditor = editor;
+      },
+    });
+    const factory = mock((options: EditorOptions<undefined>) => {
+      return new Editor<undefined>(options);
+    });
+    const surfaceOnAttach = mock((_editor: Editor<undefined>) => {});
+    let root: Root | undefined;
+
+    try {
+      root = createReactRoot(container);
+      await act(async () => {
+        root!.render(
+          createElement(
+            EditProviderComponent,
+            { createEditor: factory, sharedEditor },
+            createEditableSurfaceElement('File', true, {
+              onAttach: surfaceOnAttach,
+            })
+          )
+        );
+        await wait(10);
+      });
+      await waitFor(() => attachedEditor !== undefined);
+
+      expect(attachedEditor).toBe(sharedEditor);
+      expect(factory).not.toHaveBeenCalled();
+      expect(surfaceOnAttach).not.toHaveBeenCalled();
+    } finally {
+      await unmountRoot(root);
+      cleanupActEnvironment();
+      cleanup();
+    }
+  });
 });
