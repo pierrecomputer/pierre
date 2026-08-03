@@ -93,11 +93,25 @@ For visual proofing, `moonx theme:preview --ignore-ci-checks` writes
 `preview/*.html`: the palette scales, the Display-P3 conversions, and a
 normal-vs-simulated CVD proof sheet.
 
+## Figma variables
+
+`theme:build` also writes `figma/`, a Figma-importable copy of the same colors
+in DTCG token format (`src/createFigmaTokens.ts`). `figma/primitives.json` holds
+every palette step, and each `figma/semantic/*.json` is one theme variant that
+aliases those primitives — Figma turns each of those files into a mode. Commit
+the regenerated files alongside `themes/*.json`; see the README for the import
+steps.
+
+Semantic tokens are matched back to primitives by hex, so a role value that is
+not in any palette scale fails the build. That is deliberate: it catches roles
+drifting away from the palette. If a role genuinely needs a standalone literal,
+add its hex to `UNALIASED_ROLE_COLORS`.
+
 ## Scripts
 
 | Script                                        | Description                                                                                             |
 | --------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `moonx theme:build`                           | Builds the theme `.json` files in `./themes` and ESM modules in `./dist`                                |
+| `moonx theme:build`                           | Builds the theme `.json` files in `./themes`, Figma variables in `./figma`, and ESM modules in `./dist` |
 | `moonx theme:test`                            | Runs validation tests + the CVD accessibility gate after build                                          |
 | `moonx theme:preview --ignore-ci-checks`      | Writes preview HTML files from `src/previews` into `preview/`                                           |
 | `moonx theme:package-vsix --ignore-ci-checks` | Temporarily applies the VSIX package name/README shim, then writes the `.vsix` file at the project root |

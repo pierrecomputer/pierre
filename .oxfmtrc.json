@@ -46,6 +46,7 @@
     "apps/docs/next-env.d.ts",
     "packages/theme/themes/*.json",
     "packages/theme/zed/themes/*.json",
+    "packages/theme/figma/**/*.json",
     "packages/tree-test-data/*-files.json",
     "*.patch",
     "README"

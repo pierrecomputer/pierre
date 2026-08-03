@@ -1,0 +1,1106 @@
+{
+  "bg": {
+    "editor": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          1,
+          1,
+          1
+        ],
+        "alpha": 1,
+        "hex": "#ffffff"
+      }
+    },
+    "window": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.960784,
+          0.960784,
+          0.960784
+        ],
+        "alpha": 1,
+        "hex": "#f5f5f5"
+      },
+      "$extensions": {
+        "com.figma.aliasData": {
+          "targetVariableSetName": "Pierre Primitives",
+          "targetVariableName": "neutral/060"
+        }
+      }
+    },
+    "inset": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.929412,
+          0.929412,
+          0.929412
+        ],
+        "alpha": 1,
+        "hex": "#ededed"
+      },
+      "$extensions": {
+        "com.figma.aliasData": {
+          "targetVariableSetName": "Pierre Primitives",
+          "targetVariableName": "neutral/080"
+        }
+      }
+    },
+    "elevated": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.968627,
+          0.968627,
+          0.968627
+        ],
+        "alpha": 1,
+        "hex": "#f7f7f7"
+      },
+      "$extensions": {
+        "com.figma.aliasData": {
+          "targetVariableSetName": "Pierre Primitives",
+          "targetVariableName": "neutral/040"
+        }
+      }
+    }
+  },
+  "fg": {
+    "base": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.039216,
+          0.039216,
+          0.039216
+        ],
+        "alpha": 1,
+        "hex": "#0a0a0a"
+      },
+      "$extensions": {
+        "com.figma.aliasData": {
+          "targetVariableSetName": "Pierre Primitives",
+          "targetVariableName": "neutral/1040"
+        }
+      }
+    },
+    "fg1": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.25098,
+          0.25098,
+          0.25098
+        ],
+        "alpha": 1,
+        "hex": "#404040"
+      },
+      "$extensions": {
+        "com.figma.aliasData": {
+          "targetVariableSetName": "Pierre Primitives",
+          "targetVariableName": "neutral/900"
+        }
+      }
+    },
+    "fg2": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.321569,
+          0.321569,
+          0.321569
+        ],
+        "alpha": 1,
+        "hex": "#525252"
+      },
+      "$extensions": {
+        "com.figma.aliasData": {
+          "targetVariableSetName": "Pierre Primitives",
+          "targetVariableName": "neutral/800"
+        }
+      }
+    },
+    "fg3": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.45098,
+          0.45098,
+          0.45098
+        ],
+        "alpha": 1,
+        "hex": "#737373"
+      },
+      "$extensions": {
+        "com.figma.aliasData": {
+          "targetVariableSetName": "Pierre Primitives",
+          "targetVariableName": "neutral/600"
+        }
+      }
+    },
+    "fg4": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.541176,
+          0.541176,
+          0.541176
+        ],
+        "alpha": 1,
+        "hex": "#8a8a8a"
+      },
+      "$extensions": {
+        "com.figma.aliasData": {
+          "targetVariableSetName": "Pierre Primitives",
+          "targetVariableName": "neutral/500"
+        }
+      }
+    }
+  },
+  "border": {
+    "window": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.898039,
+          0.898039,
+          0.898039
+        ],
+        "alpha": 1,
+        "hex": "#e5e5e5"
+      },
+      "$extensions": {
+        "com.figma.aliasData": {
+          "targetVariableSetName": "Pierre Primitives",
+          "targetVariableName": "neutral/100"
+        }
+      }
+    },
+    "editor": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.831373,
+          0.831373,
+          0.831373
+        ],
+        "alpha": 1,
+        "hex": "#d4d4d4"
+      },
+      "$extensions": {
+        "com.figma.aliasData": {
+          "targetVariableSetName": "Pierre Primitives",
+          "targetVariableName": "neutral/200"
+        }
+      }
+    },
+    "indentGuide": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.898039,
+          0.898039,
+          0.898039
+        ],
+        "alpha": 1,
+        "hex": "#e5e5e5"
+      },
+      "$extensions": {
+        "com.figma.aliasData": {
+          "targetVariableSetName": "Pierre Primitives",
+          "targetVariableName": "neutral/100"
+        }
+      }
+    },
+    "indentGuideActive": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.831373,
+          0.831373,
+          0.831373
+        ],
+        "alpha": 1,
+        "hex": "#d4d4d4"
+      },
+      "$extensions": {
+        "com.figma.aliasData": {
+          "targetVariableSetName": "Pierre Primitives",
+          "targetVariableName": "neutral/200"
+        }
+      }
+    },
+    "inset": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.831373,
+          0.831373,
+          0.831373
+        ],
+        "alpha": 1,
+        "hex": "#d4d4d4"
+      },
+      "$extensions": {
+        "com.figma.aliasData": {
+          "targetVariableSetName": "Pierre Primitives",
+          "targetVariableName": "neutral/200"
+        }
+      }
+    },
+    "elevated": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.898039,
+          0.898039,
+          0.898039
+        ],
+        "alpha": 1,
+        "hex": "#e5e5e5"
+      },
+      "$extensions": {
+        "com.figma.aliasData": {
+          "targetVariableSetName": "Pierre Primitives",
+          "targetVariableName": "neutral/100"
+        }
+      }
+    }
+  },
+  "accent": {
+    "primary": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0,
+          0.623529,
+          1
+        ],
+        "alpha": 1,
+        "hex": "#009fff"
+      },
+      "$extensions": {
+        "com.figma.aliasData": {
+          "targetVariableSetName": "Pierre Primitives",
+          "targetVariableName": "blue/500"
+        }
+      }
+    },
+    "link": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0,
+          0.623529,
+          1
+        ],
+        "alpha": 1,
+        "hex": "#009fff"
+      },
+      "$extensions": {
+        "com.figma.aliasData": {
+          "targetVariableSetName": "Pierre Primitives",
+          "targetVariableName": "blue/500"
+        }
+      }
+    },
+    "subtle": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.87451,
+          0.921569,
+          1
+        ],
+        "alpha": 1,
+        "hex": "#dfebff"
+      },
+      "$extensions": {
+        "com.figma.aliasData": {
+          "targetVariableSetName": "Pierre Primitives",
+          "targetVariableName": "blue/100"
+        }
+      }
+    },
+    "contrastOnAccent": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          1,
+          1,
+          1
+        ],
+        "alpha": 1,
+        "hex": "#ffffff"
+      }
+    }
+  },
+  "states": {
+    "success": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.129412,
+          0.423529,
+          0.670588
+        ],
+        "alpha": 1,
+        "hex": "#216cab"
+      },
+      "$extensions": {
+        "com.figma.aliasData": {
+          "targetVariableSetName": "Pierre Primitives",
+          "targetVariableName": "blue/700"
+        }
+      }
+    },
+    "danger": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.67451,
+          0.376471,
+          0.137255
+        ],
+        "alpha": 1,
+        "hex": "#ac6023"
+      },
+      "$extensions": {
+        "com.figma.aliasData": {
+          "targetVariableSetName": "Pierre Primitives",
+          "targetVariableName": "orange/700"
+        }
+      }
+    },
+    "warn": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          1,
+          0.792157,
+          0
+        ],
+        "alpha": 1,
+        "hex": "#ffca00"
+      },
+      "$extensions": {
+        "com.figma.aliasData": {
+          "targetVariableSetName": "Pierre Primitives",
+          "targetVariableName": "yellow/500"
+        }
+      }
+    },
+    "info": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.129412,
+          0.509804,
+          0.631373
+        ],
+        "alpha": 1,
+        "hex": "#2182a1"
+      },
+      "$extensions": {
+        "com.figma.aliasData": {
+          "targetVariableSetName": "Pierre Primitives",
+          "targetVariableName": "cyan/700"
+        }
+      }
+    },
+    "merge": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.345098,
+          0.156863,
+          0.486275
+        ],
+        "alpha": 1,
+        "hex": "#58287c"
+      },
+      "$extensions": {
+        "com.figma.aliasData": {
+          "targetVariableSetName": "Pierre Primitives",
+          "targetVariableName": "violet/800"
+        }
+      }
+    }
+  },
+  "syntax": {
+    "comment": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.45098,
+          0.45098,
+          0.45098
+        ],
+        "alpha": 1,
+        "hex": "#737373"
+      },
+      "$extensions": {
+        "com.figma.aliasData": {
+          "targetVariableSetName": "Pierre Primitives",
+          "targetVariableName": "neutral/600"
+        }
+      }
+    },
+    "string": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.129412,
+          0.333333,
+          0.517647
+        ],
+        "alpha": 1,
+        "hex": "#215584"
+      },
+      "$extensions": {
+        "com.figma.aliasData": {
+          "targetVariableSetName": "Pierre Primitives",
+          "targetVariableName": "blue/800"
+        }
+      }
+    },
+    "number": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.129412,
+          0.509804,
+          0.631373
+        ],
+        "alpha": 1,
+        "hex": "#2182a1"
+      },
+      "$extensions": {
+        "com.figma.aliasData": {
+          "targetVariableSetName": "Pierre Primitives",
+          "targetVariableName": "cyan/700"
+        }
+      }
+    },
+    "keyword": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.533333,
+          0.211765,
+          0.780392
+        ],
+        "alpha": 1,
+        "hex": "#8836c7"
+      },
+      "$extensions": {
+        "com.figma.aliasData": {
+          "targetVariableSetName": "Pierre Primitives",
+          "targetVariableName": "violet/600"
+        }
+      }
+    },
+    "regexp": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.129412,
+          0.509804,
+          0.631373
+        ],
+        "alpha": 1,
+        "hex": "#2182a1"
+      },
+      "$extensions": {
+        "com.figma.aliasData": {
+          "targetVariableSetName": "Pierre Primitives",
+          "targetVariableName": "cyan/700"
+        }
+      }
+    },
+    "func": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.341176,
+          0.192157,
+          0.654902
+        ],
+        "alpha": 1,
+        "hex": "#5731a7"
+      },
+      "$extensions": {
+        "com.figma.aliasData": {
+          "targetVariableSetName": "Pierre Primitives",
+          "targetVariableName": "indigo/700"
+        }
+      }
+    },
+    "type": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.65098,
+          0.192157,
+          0.745098
+        ],
+        "alpha": 1,
+        "hex": "#a631be"
+      },
+      "$extensions": {
+        "com.figma.aliasData": {
+          "targetVariableSetName": "Pierre Primitives",
+          "targetVariableName": "purple/600"
+        }
+      }
+    },
+    "variable": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.67451,
+          0.376471,
+          0.137255
+        ],
+        "alpha": 1,
+        "hex": "#ac6023"
+      },
+      "$extensions": {
+        "com.figma.aliasData": {
+          "targetVariableSetName": "Pierre Primitives",
+          "targetVariableName": "orange/700"
+        }
+      }
+    },
+    "operator": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.129412,
+          0.509804,
+          0.631373
+        ],
+        "alpha": 1,
+        "hex": "#2182a1"
+      },
+      "$extensions": {
+        "com.figma.aliasData": {
+          "targetVariableSetName": "Pierre Primitives",
+          "targetVariableName": "cyan/700"
+        }
+      }
+    },
+    "punctuation": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.388235,
+          0.388235,
+          0.388235
+        ],
+        "alpha": 1,
+        "hex": "#636363"
+      },
+      "$extensions": {
+        "com.figma.aliasData": {
+          "targetVariableSetName": "Pierre Primitives",
+          "targetVariableName": "neutral/700"
+        }
+      }
+    },
+    "constant": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.67451,
+          0.454902,
+          0.113725
+        ],
+        "alpha": 1,
+        "hex": "#ac741d"
+      },
+      "$extensions": {
+        "com.figma.aliasData": {
+          "targetVariableSetName": "Pierre Primitives",
+          "targetVariableName": "amber/700"
+        }
+      }
+    },
+    "parameter": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.388235,
+          0.388235,
+          0.388235
+        ],
+        "alpha": 1,
+        "hex": "#636363"
+      },
+      "$extensions": {
+        "com.figma.aliasData": {
+          "targetVariableSetName": "Pierre Primitives",
+          "targetVariableName": "neutral/700"
+        }
+      }
+    },
+    "namespace": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.67451,
+          0.454902,
+          0.113725
+        ],
+        "alpha": 1,
+        "hex": "#ac741d"
+      },
+      "$extensions": {
+        "com.figma.aliasData": {
+          "targetVariableSetName": "Pierre Primitives",
+          "targetVariableName": "amber/700"
+        }
+      }
+    },
+    "decorator": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.129412,
+          0.423529,
+          0.670588
+        ],
+        "alpha": 1,
+        "hex": "#216cab"
+      },
+      "$extensions": {
+        "com.figma.aliasData": {
+          "targetVariableSetName": "Pierre Primitives",
+          "targetVariableName": "blue/700"
+        }
+      }
+    },
+    "escape": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.117647,
+          0.521569,
+          0.556863
+        ],
+        "alpha": 1,
+        "hex": "#1e858e"
+      },
+      "$extensions": {
+        "com.figma.aliasData": {
+          "targetVariableSetName": "Pierre Primitives",
+          "targetVariableName": "teal/700"
+        }
+      }
+    },
+    "invalid": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.039216,
+          0.039216,
+          0.039216
+        ],
+        "alpha": 1,
+        "hex": "#0a0a0a"
+      },
+      "$extensions": {
+        "com.figma.aliasData": {
+          "targetVariableSetName": "Pierre Primitives",
+          "targetVariableName": "neutral/1040"
+        }
+      }
+    },
+    "tag": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.67451,
+          0.376471,
+          0.137255
+        ],
+        "alpha": 1,
+        "hex": "#ac6023"
+      },
+      "$extensions": {
+        "com.figma.aliasData": {
+          "targetVariableSetName": "Pierre Primitives",
+          "targetVariableName": "orange/700"
+        }
+      }
+    },
+    "attribute": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.67451,
+          0.454902,
+          0.113725
+        ],
+        "alpha": 1,
+        "hex": "#ac741d"
+      },
+      "$extensions": {
+        "com.figma.aliasData": {
+          "targetVariableSetName": "Pierre Primitives",
+          "targetVariableName": "amber/700"
+        }
+      }
+    }
+  },
+  "ansi": {
+    "black": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.113725,
+          0.113725,
+          0.113725
+        ],
+        "alpha": 1,
+        "hex": "#1d1d1d"
+      },
+      "$extensions": {
+        "com.figma.aliasData": {
+          "targetVariableSetName": "Pierre Primitives",
+          "targetVariableName": "neutral/980"
+        }
+      }
+    },
+    "red": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.67451,
+          0.376471,
+          0.137255
+        ],
+        "alpha": 1,
+        "hex": "#ac6023"
+      },
+      "$extensions": {
+        "com.figma.aliasData": {
+          "targetVariableSetName": "Pierre Primitives",
+          "targetVariableName": "orange/700"
+        }
+      }
+    },
+    "green": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.129412,
+          0.423529,
+          0.670588
+        ],
+        "alpha": 1,
+        "hex": "#216cab"
+      },
+      "$extensions": {
+        "com.figma.aliasData": {
+          "targetVariableSetName": "Pierre Primitives",
+          "targetVariableName": "blue/700"
+        }
+      }
+    },
+    "yellow": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          1,
+          0.792157,
+          0
+        ],
+        "alpha": 1,
+        "hex": "#ffca00"
+      },
+      "$extensions": {
+        "com.figma.aliasData": {
+          "targetVariableSetName": "Pierre Primitives",
+          "targetVariableName": "yellow/500"
+        }
+      }
+    },
+    "blue": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.101961,
+          0.521569,
+          0.831373
+        ],
+        "alpha": 1,
+        "hex": "#1a85d4"
+      },
+      "$extensions": {
+        "com.figma.aliasData": {
+          "targetVariableSetName": "Pierre Primitives",
+          "targetVariableName": "blue/600"
+        }
+      }
+    },
+    "magenta": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.533333,
+          0.211765,
+          0.780392
+        ],
+        "alpha": 1,
+        "hex": "#8836c7"
+      },
+      "$extensions": {
+        "com.figma.aliasData": {
+          "targetVariableSetName": "Pierre Primitives",
+          "targetVariableName": "violet/600"
+        }
+      }
+    },
+    "cyan": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.129412,
+          0.509804,
+          0.631373
+        ],
+        "alpha": 1,
+        "hex": "#2182a1"
+      },
+      "$extensions": {
+        "com.figma.aliasData": {
+          "targetVariableSetName": "Pierre Primitives",
+          "targetVariableName": "cyan/700"
+        }
+      }
+    },
+    "white": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.737255,
+          0.737255,
+          0.737255
+        ],
+        "alpha": 1,
+        "hex": "#bcbcbc"
+      },
+      "$extensions": {
+        "com.figma.aliasData": {
+          "targetVariableSetName": "Pierre Primitives",
+          "targetVariableName": "neutral/300"
+        }
+      }
+    },
+    "brightBlack": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.113725,
+          0.113725,
+          0.113725
+        ],
+        "alpha": 1,
+        "hex": "#1d1d1d"
+      },
+      "$extensions": {
+        "com.figma.aliasData": {
+          "targetVariableSetName": "Pierre Primitives",
+          "targetVariableName": "neutral/980"
+        }
+      }
+    },
+    "brightRed": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.831373,
+          0.462745,
+          0.156863
+        ],
+        "alpha": 1,
+        "hex": "#d47628"
+      },
+      "$extensions": {
+        "com.figma.aliasData": {
+          "targetVariableSetName": "Pierre Primitives",
+          "targetVariableName": "orange/600"
+        }
+      }
+    },
+    "brightGreen": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.101961,
+          0.521569,
+          0.831373
+        ],
+        "alpha": 1,
+        "hex": "#1a85d4"
+      },
+      "$extensions": {
+        "com.figma.aliasData": {
+          "targetVariableSetName": "Pierre Primitives",
+          "targetVariableName": "blue/600"
+        }
+      }
+    },
+    "brightYellow": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          1,
+          0.792157,
+          0
+        ],
+        "alpha": 1,
+        "hex": "#ffca00"
+      },
+      "$extensions": {
+        "com.figma.aliasData": {
+          "targetVariableSetName": "Pierre Primitives",
+          "targetVariableName": "yellow/500"
+        }
+      }
+    },
+    "brightBlue": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0,
+          0.623529,
+          1
+        ],
+        "alpha": 1,
+        "hex": "#009fff"
+      },
+      "$extensions": {
+        "com.figma.aliasData": {
+          "targetVariableSetName": "Pierre Primitives",
+          "targetVariableName": "blue/500"
+        }
+      }
+    },
+    "brightMagenta": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.631373,
+          0.235294,
+          0.933333
+        ],
+        "alpha": 1,
+        "hex": "#a13cee"
+      },
+      "$extensions": {
+        "com.figma.aliasData": {
+          "targetVariableSetName": "Pierre Primitives",
+          "targetVariableName": "violet/500"
+        }
+      }
+    },
+    "brightCyan": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.109804,
+          0.631373,
+          0.780392
+        ],
+        "alpha": 1,
+        "hex": "#1ca1c7"
+      },
+      "$extensions": {
+        "com.figma.aliasData": {
+          "targetVariableSetName": "Pierre Primitives",
+          "targetVariableName": "cyan/600"
+        }
+      }
+    },
+    "brightWhite": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.737255,
+          0.737255,
+          0.737255
+        ],
+        "alpha": 1,
+        "hex": "#bcbcbc"
+      },
+      "$extensions": {
+        "com.figma.aliasData": {
+          "targetVariableSetName": "Pierre Primitives",
+          "targetVariableName": "neutral/300"
+        }
+      }
+    }
+  }
+}
