@@ -1558,6 +1558,23 @@ export class CodeView<LAnnotation = undefined> {
     this.syncItemEditors();
   }
 
+  public removeItem(itemId: string): boolean {
+    const item = this.idToItem.get(itemId);
+    if (item == null) {
+      console.error(`CodeView.removeItem: unknown item id "${itemId}"`);
+      return false;
+    }
+
+    const nextItems: CodeViewItem<LAnnotation>[] = [];
+    for (const current of this.items) {
+      if (current !== item) {
+        nextItems.push(current.item);
+      }
+    }
+    this.setItems(nextItems);
+    return true;
+  }
+
   public setItems(items: readonly CodeViewItem<LAnnotation>[]): void {
     if (items.length === 0) {
       // An empty controlled list removes every item, so end active edit

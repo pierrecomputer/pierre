@@ -36,8 +36,8 @@ regardless of scale, so its data model does not depend on traditional
 immutability or deep equality checks, which can quickly become expensive.
 
 - Every item needs a stable unique `id`. That id is how `scrollTo`, line
-  selection, `getItem`, `updateItem`, and reconciliation find the correct
-  records.
+  selection, `getItem`, `removeItem`, `updateItem`, and reconciliation find the
+  correct records.
 - Items are either `{ type: 'file', file }` or `{ type: 'diff', fileDiff }`.
 - If you keep the same item id but change its content or annotations, you must
   increment the `version` so `CodeView` can make an efficient targeted updates
@@ -187,14 +187,14 @@ do not switch between them without remounting with a new `key`.
 | Mode       | Use                                                | Item prop               | Item updates                                                                                      |
 | ---------- | -------------------------------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------- |
 | Controlled | React state owns the complete item list            | `items`                 | Publish a new `items` array. Append-only changes are optimized; other changes reconcile the list. |
-| Imperative | The viewer instance owns the item list after mount | optional `initialItems` | Use the ref APIs: `addItems`, `getItem`, and `updateItem`.                                        |
+| Imperative | The viewer instance owns the item list after mount | optional `initialItems` | Use the ref APIs: `addItems`, `getItem`, `removeItem`, and `updateItem`.                          |
 
 Use controlled mode when item data already lives naturally in React state and
 the list is small enough that mutating arrays or items is cheap. Use imperative
 mode for very large or streaming surfaces where routing every item update
 through React would be expensive. In imperative mode, omit `items`, optionally
 seed the viewer with `initialItems`, and use the `CodeViewHandle` to add new
-items or update existing ones.
+items, remove items, or update existing ones.
 
 ### Editing Item Annotations
 
@@ -229,12 +229,13 @@ remapping rules, stable metadata IDs, and annotation-content lifetime guidance.
 - In React, pass `initialItems` instead of `items` for imperative item
   ownership. `initialItems` seeds the viewer once; later item changes should go
   through the ref.
-- In React, `addItems` and `updateItem` require imperative item ownership and
-  throw if the viewer is controlled with `items`.
+- In React, `addItems`, `removeItem`, and `updateItem` require imperative item
+  ownership and throw if the viewer is controlled with `items`.
 - In React, use `selectedLines` and `onSelectedLinesChange` when selection needs
   to live in component state.
 - In React, use the ref for `scrollTo`, `setSelectedLines`, `getSelectedLines`,
-  `clearSelectedLines`, `getItem`, `updateItem`, `addItems`, and `getInstance`.
+  `clearSelectedLines`, `getItem`, `updateItem`, `addItems`, `removeItem`, and
+  `getInstance`.
 - `renderCustomHeader`, `renderHeaderPrefix`, `renderHeaderFilenameSuffix`,
   `renderHeaderMetadata`, `renderAnnotation`, and `renderGutterUtility` receive
   the whole `CodeViewItem`, which makes it easy to branch on `item.type`.
@@ -242,7 +243,8 @@ remapping rules, stable metadata IDs, and annotation-content lifetime guidance.
   update over time.
 - In Vanilla JS, call `setup(root)` once with the scrollable container.
 - In Vanilla JS, use `setItems`, `addItem`, or `addItems` to populate the
-  viewer, and `getItem` / `updateItem` for item-level imperative changes.
+  viewer, and `getItem`, `removeItem`, or `updateItem` for item-level imperative
+  changes.
 - Shared callbacks receive the normal file/diff payload plus a `context`
   argument containing the current viewer item and instance.
 - `onPostRender` receives `(node, instance, phase, context)`. Its `unmount`
