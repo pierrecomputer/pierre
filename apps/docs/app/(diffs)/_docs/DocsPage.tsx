@@ -31,7 +31,6 @@ import {
   CUSTOM_HUNK_SEPARATORS_SWITCHER,
 } from '../docs/CustomHunkSeparators/constants';
 import {
-  EDIT_DEMO_FILE_EXAMPLE,
   EDIT_FOCUS_POSITION_EXAMPLE,
   EDIT_LAZY_FILE_EXAMPLE,
   EDIT_MARKER_EXAMPLE,
@@ -431,7 +430,6 @@ async function CodeViewSection() {
 
 async function EditSection() {
   const [
-    editDemoFile,
     keymapFile,
     editVanillaFileExample,
     editVanillaFileDiffExample,
@@ -459,7 +457,6 @@ async function EditSection() {
     editWorkerPoolReactExample,
     editWorkerPoolVanillaExample,
   ] = await Promise.all([
-    preloadFile(EDIT_DEMO_FILE_EXAMPLE),
     preloadFile(DEFAULT_KEYMAP_FILE_EXAMPLE),
     preloadFile(EDIT_VANILLA_FILE_EXAMPLE),
     preloadFile(EDIT_VANILLA_FILE_DIFF_EXAMPLE),
@@ -490,7 +487,6 @@ async function EditSection() {
   const content = await renderMDX({
     filePath: '(diffs)/docs/Edit/content.mdx',
     scope: {
-      editDemoFile,
       keymapFile,
       editVanillaFileExample,
       editVanillaFileDiffExample,

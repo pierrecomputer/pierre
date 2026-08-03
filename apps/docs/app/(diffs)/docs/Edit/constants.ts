@@ -1,4 +1,3 @@
-import type { FileOptions } from '@pierre/diffs/react';
 import type { PreloadFileOptions } from '@pierre/diffs/ssr';
 
 import { CustomScrollbarCSS } from '@/components/CustomScrollbarCSS';
@@ -8,50 +7,6 @@ const options = {
   disableFileHeader: true,
   unsafeCSS: CustomScrollbarCSS,
 } as const;
-
-// Enabling the token transformer in the server render keeps the markup
-// editor-ready, so hydration does not rerender the surface when the editor
-// attaches. Mirrors `(diffs)/_edit/constants.ts`.
-const editableDemoOptions: FileOptions<undefined> = {
-  theme: { dark: 'pierre-dark', light: 'pierre-light' },
-  disableFileHeader: true,
-  useTokenTransformer: true,
-};
-
-// The file rendered by the interactive `<EditDemo />` on the Edit page.
-// Preloaded server-side so the surface is highlighted in the initial HTML
-// instead of flashing in after the client attaches the editor.
-export const EDIT_DEMO_FILE_EXAMPLE: PreloadFileOptions<undefined> = {
-  file: {
-    name: 'editable-demo.ts',
-    contents: `import { VirtualizedFile } from '@pierre/diffs';
-import { Editor } from '@pierre/diffs/edit';
-
-const fileInstance = new VirtualizedFile({
-  theme: { dark: 'pierre-dark', light: 'pierre-light' },
-});
-
-// render the file into a DOM container
-fileInstance.render({
-  file: { name: 'index.ts', contents: 'export const foo: string = "bar";\\n' },
-  containerWrapper: document.getElementById('file-container')
-});
-
-const editor = new Editor({
-  onChange(file, lineAnnotations) {
-    console.log('change', file.name, lineAnnotations);
-  },
-});
-
-// Attach the editor to the file instance
-const dispose = editor.edit(fileInstance);
-
-// Later, when the editor is no longer needed:
-dispose();
-`,
-  },
-  options: editableDemoOptions,
-};
 
 export const EDIT_VANILLA_FILE_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
@@ -446,12 +401,13 @@ import { useState } from 'react';
 // Surface \`editorOptions\` props are ignored with \`sharedEditor\` — pass
 // options to the constructor instead.
 export function PersistedEditor({ file }: { file: FileContents }) {
-  const [sharedEditor] = useState(
-    () => new Editor<undefined>({ persistState: true })
+  const editor = useMemo(
+    () => new Editor<undefined>({ persistState: true }),
+    []
   );
 
   return (
-    <EditProvider sharedEditor={sharedEditor}>
+    <EditProvider sharedEditor={editor}>
       <File file={file} edit />
     </EditProvider>
   );
@@ -613,12 +569,13 @@ return (
 export const EDIT_REACT_SHARED_EDITOR_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
     name: 'editor_react_shared_editor.tsx',
-    contents: `const [sharedEditor] = useState(
-  () => new Editor<undefined>({ persistState: true, onChange: handleChange })
+    contents: `const editor = useMemo(
+  () => new Editor<undefined>({ persistState: true, onChange: handleChange }),
+  [handleChange]
 );
 
 return (
-  <EditProvider sharedEditor={sharedEditor}>
+  <EditProvider sharedEditor={editor}>
     <File file={activeFile} edit />
   </EditProvider>
 );`,
