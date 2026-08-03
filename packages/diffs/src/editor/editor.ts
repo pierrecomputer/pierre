@@ -127,6 +127,7 @@ import {
   extend,
   getLineNumberAttr,
   h,
+  lookupScrollContainer,
   round,
 } from './utils';
 
@@ -595,6 +596,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         fileInstance != null
           ? {
               scrollLeft: fileInstance.getCodeScrollLeft(),
+              scrollTop: this.#getViewportScrollTop(),
             }
           : undefined,
     };
@@ -611,6 +613,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     // sits outside that viewport (e.g. TreeApp remount restore).
     if (view != null) {
       this.#fileInstance.setCodeScrollLeft(view.scrollLeft);
+      // Records persisted before scrollTop existed lack it: leave the
+      // viewport where it is rather than guessing.
+      if (view.scrollTop !== undefined) {
+        this.#setViewportScrollTop(view.scrollTop);
+      }
       return;
     }
     this.#scrollToPrimaryCaret();
@@ -730,7 +737,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#attachState.delivered = false;
     }
     const hadFileInstance = this.#fileInstance != null;
-    const shouldRestoreState = this.#isStatePersistenceEnabled;
+    const shouldRestoreState = this.#options.persistState === true;
     this.#stateRestoreGeneration++;
     this.#persistCurrentState();
     if (hadFileInstance) {
@@ -933,9 +940,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#fileInfo.name !== fileOrDiff.name ||
       this.#fileInfo.lang !== fileOrDiff.lang ||
       this.#fileInfo.cacheKey !== fileOrDiff.cacheKey;
-    const persistedCacheKey = this.#isStatePersistenceEnabled
-      ? requirePersistedCacheKey(fileOrDiff)
-      : undefined;
+    const persistedCacheKey =
+      this.#options.persistState === true
+        ? requirePersistedCacheKey(fileOrDiff)
+        : undefined;
 
     let persistedStateTarget:
       | { cacheKey: string; textDocument: TextDocument<LAnnotation> }
@@ -1157,12 +1165,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#scheduleOnAttach(fileInstance);
   };
 
-  get #isStatePersistenceEnabled(): boolean {
-    return (
-      this.#options.persistState === true && this.#fileInstance?.type === 'file'
-    );
-  }
-
   #getCachedTextDocument(
     file: FileContents | FileDiffMetadata,
     cacheKey: string
@@ -1188,7 +1190,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     const fileInfo = this.#fileInfo;
     const textDocument = this.#textDocument;
     if (
-      !this.#isStatePersistenceEnabled ||
+      this.#options.persistState !== true ||
+      // Requires an attached instance: a repeated cleanUp still holds the
+      // retained fileInfo but must not write (empty) state over the record
+      // the first cleanUp persisted.
+      this.#fileInstance === undefined ||
       fileInfo === undefined ||
       textDocument === undefined
     ) {
@@ -1214,7 +1220,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       if (
         textDocument.version === pendingRestore.documentVersion &&
         this.#selections === pendingRestore.selections &&
-        state.view?.scrollLeft === pendingRestore.view?.scrollLeft
+        state.view?.scrollLeft === pendingRestore.view?.scrollLeft &&
+        state.view?.scrollTop === pendingRestore.view?.scrollTop
       ) {
         return;
       }
@@ -1278,8 +1285,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     const view = this.getState().view;
     const applyState = (state: EditorState | undefined): void => {
       const currentView = this.getState().view;
+      // scrollTop is deliberately not part of this staleness check: the
+      // surface can legitimately adjust vertical scroll while an async read
+      // is in flight (height reconciliation, clamping), and that must not
+      // block the restore.
       if (
-        state === undefined ||
         generation !== this.#stateRestoreGeneration ||
         this.#textDocument !== textDocument ||
         textDocument.version !== documentVersion ||
@@ -1288,6 +1298,15 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         this.#fileInfo === undefined ||
         requirePersistedCacheKey(this.#fileInfo) !== cacheKey
       ) {
+        return;
+      }
+      if (state === undefined) {
+        // No stored record for this cacheKey — the file is opened for the
+        // first time. Start the code scroller and the viewport at the top
+        // instead of inheriting whatever offset the previous file left in a
+        // viewport that stays mounted across switches.
+        this.#fileInstance?.setCodeScrollLeft(0);
+        this.#setViewportScrollTop(0);
         return;
       }
       this.setState(cloneEditorState(state));
@@ -1466,6 +1485,37 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     };
     attachState.callback = callback;
     queueRender(callback);
+  }
+
+  // Get the editor's scrolling viewport, return undefined if the Virtualizer
+  // is not present.`
+  #getScrollViewport(): HTMLElement | Document | undefined {
+    const viewport = this.#fileInstance?.getEditorViewport?.();
+    if (viewport !== undefined) {
+      return viewport;
+    }
+    const fileContainer = this.#fileContainer;
+    if (this.#fileInstance == null || fileContainer == null) {
+      return undefined;
+    }
+    return lookupScrollContainer(fileContainer);
+  }
+
+  #getViewportScrollTop(): number {
+    const viewport = this.#getScrollViewport();
+    if (viewport instanceof HTMLElement) {
+      return viewport.scrollTop;
+    }
+    return viewport?.defaultView?.scrollY ?? 0;
+  }
+
+  #setViewportScrollTop(scrollTop: number): void {
+    const viewport = this.#getScrollViewport();
+    if (viewport instanceof HTMLElement) {
+      viewport.scrollTop = scrollTop;
+    } else if (viewport instanceof Document) {
+      viewport.defaultView?.scrollTo({ top: scrollTop });
+    }
   }
 
   #initialize(): void {
@@ -3468,9 +3518,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     ) {
       return undefined;
     }
-    const viewport =
-      this.#fileInstance?.getEditorViewport?.() ??
-      this.#getDefaultEditorViewport(fileContainer);
+
+    const viewport = this.#getScrollViewport();
+    if (viewport === undefined) {
+      return undefined;
+    }
 
     let viewportTop: number;
     let viewportBottom: number;
@@ -3479,12 +3531,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       viewportTop = viewportRect.top;
       viewportBottom = viewportRect.bottom;
     } else {
-      const viewportWindow = viewport.defaultView;
-      if (viewportWindow == null) {
-        return undefined;
-      }
       viewportTop = 0;
-      viewportBottom = viewportWindow.innerHeight;
+      viewportBottom = viewport.defaultView?.innerHeight ?? 0;
     }
 
     const stickyHeader = fileContainer.shadowRoot?.querySelector<HTMLElement>(
@@ -3519,32 +3567,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       }
     }
     return undefined;
-  }
-
-  // Non-virtualized surfaces inherit visibility from their nearest vertical
-  // scrollport; page-scrolling surfaces use the owning document.
-  #getDefaultEditorViewport(
-    fileContainer: HTMLElement
-  ): HTMLElement | Document {
-    const ownerDocument = fileContainer.ownerDocument;
-    let element = fileContainer.parentElement;
-    while (
-      element != null &&
-      element !== ownerDocument.body &&
-      element !== ownerDocument.documentElement
-    ) {
-      const overflowY =
-        element.ownerDocument.defaultView?.getComputedStyle(element).overflowY;
-      if (
-        overflowY === 'auto' ||
-        overflowY === 'scroll' ||
-        overflowY === 'overlay'
-      ) {
-        return element;
-      }
-      element = element.parentElement;
-    }
-    return ownerDocument;
   }
 
   #focusAtPosition(position: Position, preventScroll: boolean): void {
