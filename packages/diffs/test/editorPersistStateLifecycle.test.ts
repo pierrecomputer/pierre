@@ -1,6 +1,7 @@
 import { afterAll, describe, expect, test } from 'bun:test';
 
 import { File } from '../src/components/File';
+import { FileDiff } from '../src/components/FileDiff';
 import { DEFAULT_THEMES } from '../src/constants';
 import { Editor, type IStateStorage } from '../src/edit';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
@@ -445,6 +446,253 @@ describe('Editor persisted state lifecycle', () => {
       editor.cleanUp();
       first?.file.cleanUp();
       second?.file.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  // Renders a file inside a scrollable wrapper (the editor's default viewport
+  // is its nearest overflow-y:auto ancestor) so the restore path's scroll
+  // behavior is observable. The wrapper starts scrolled away from 0,0 as if a
+  // previously open file had left an offset behind.
+  function attachFileInScrolledViewport(
+    editor: Editor<undefined>,
+    fileContents: FileContents
+  ): AttachedFile & { viewport: HTMLElement } {
+    const viewport = document.createElement('div');
+    viewport.style.overflowY = 'auto';
+    document.body.appendChild(viewport);
+    const container = document.createElement('div');
+    viewport.appendChild(container);
+    viewport.scrollTop = 40;
+    viewport.scrollLeft = 8;
+
+    const file = new File<undefined>({
+      disableErrorHandling: true,
+      disableFileHeader: true,
+      theme: DEFAULT_THEMES,
+    });
+    file.render({
+      file: fileContents,
+      fileContainer: container,
+      forceRender: true,
+    });
+    editor.edit(file);
+    return { container, file, viewport };
+  }
+
+  test('a missing state record resets the viewport scroll to 0,0', async () => {
+    const dom = installDom();
+    const storage: IStateStorage = {
+      get: () => undefined,
+      set() {},
+    };
+    const editor = new Editor<undefined>({
+      persistState: true,
+      persistStateStorage: storage,
+    });
+    let attached: (AttachedFile & { viewport: HTMLElement }) | undefined;
+
+    try {
+      attached = attachFileInScrolledViewport(editor, {
+        ...ORIGINAL_FILE,
+      });
+      const { viewport } = attached;
+      // The reset targets the viewport's vertical position (and the code
+      // scroller's own horizontal offset); the viewport's scrollLeft is left
+      // to the host.
+      await waitFor(() => viewport.scrollTop === 0);
+    } finally {
+      editor.cleanUp();
+      attached?.file.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test('a record with scrollTop restores the viewport position', async () => {
+    const dom = installDom();
+    const storage: IStateStorage = {
+      get: () => ({ ...savedCaret(3), view: { scrollLeft: 0, scrollTop: 25 } }),
+      set() {},
+    };
+    const editor = new Editor<undefined>({
+      persistState: true,
+      persistStateStorage: storage,
+    });
+    let attached: (AttachedFile & { viewport: HTMLElement }) | undefined;
+
+    try {
+      attached = attachFileInScrolledViewport(editor, {
+        ...ORIGINAL_FILE,
+      });
+      const { viewport } = attached;
+      await waitFor(() => viewport.scrollTop === 25);
+    } finally {
+      editor.cleanUp();
+      attached?.file.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  // The shared-editor pattern (e.g. an EditProvider handing every keyed
+  // surface the same Editor): the outgoing surface's cleanUp persists its
+  // record into the editor's per-instance storage, and re-attaching a new
+  // surface for the same cacheKey restores it — including the viewport's
+  // vertical position.
+  test('a reused editor restores viewport scrollTop across surface remounts', async () => {
+    const dom = installDom();
+    const editor = new Editor<undefined>({ persistState: true });
+    let attached: (AttachedFile & { viewport: HTMLElement }) | undefined;
+    let reattached: (AttachedFile & { viewport: HTMLElement }) | undefined;
+
+    try {
+      attached = attachFileInScrolledViewport(editor, {
+        ...ORIGINAL_FILE,
+      });
+      // First visit has no record: the viewport resets to 0. Then the user
+      // scrolls, and leaving the file persists that position.
+      await waitFor(() => attached!.viewport.scrollTop === 0);
+      attached.viewport.scrollTop = 33;
+      editor.cleanUp();
+      attached.file.cleanUp();
+
+      reattached = attachFileInScrolledViewport(editor, {
+        ...ORIGINAL_FILE,
+      });
+      await waitFor(() => reattached!.viewport.scrollTop === 33);
+    } finally {
+      editor.cleanUp();
+      attached?.file.cleanUp();
+      reattached?.file.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  // Diffs persist only their serializable state, keyed by the cacheKey
+  // parseDiffFromFile derives from the file pair. A first attach has no
+  // record (reset to 0,0); a later fresh editor + fresh FileDiff for the same
+  // pair restores the persisted viewport position.
+  test('with persistState, a diff resets on first attach and restores on revisit', async () => {
+    const dom = installDom();
+    const editor = new Editor<undefined>({ persistState: true });
+    const viewport = document.createElement('div');
+    viewport.style.overflowY = 'auto';
+    document.body.appendChild(viewport);
+    const container = document.createElement('div');
+    viewport.appendChild(container);
+    viewport.scrollTop = 40;
+    viewport.scrollLeft = 8;
+
+    const oldFile: FileContents = { name: 'diffed.ts', contents: 'alpha\n' };
+    const newFile: FileContents = {
+      name: 'diffed.ts',
+      contents: 'alpha\nbravo\n',
+    };
+    const fileDiff = new FileDiff<undefined>({
+      disableErrorHandling: true,
+      disableFileHeader: true,
+      theme: DEFAULT_THEMES,
+    });
+    const revisitDiff = new FileDiff<undefined>({
+      disableErrorHandling: true,
+      disableFileHeader: true,
+      theme: DEFAULT_THEMES,
+    });
+    try {
+      fileDiff.render({
+        oldFile,
+        newFile,
+        fileContainer: container,
+        forceRender: true,
+      });
+      editor.edit(fileDiff);
+      await waitFor(() => viewport.scrollTop === 0);
+
+      // Scroll the diff, tear the surface down, and revisit the same pair on
+      // a fresh component with the same editor — its record must restore the
+      // position.
+      viewport.scrollTop = 27;
+      editor.cleanUp();
+      fileDiff.cleanUp();
+      container.innerHTML = '';
+      viewport.scrollTop = 5;
+
+      revisitDiff.render({
+        oldFile,
+        newFile,
+        fileContainer: container,
+        forceRender: true,
+      });
+      editor.edit(revisitDiff);
+      await waitFor(() => viewport.scrollTop === 27);
+    } finally {
+      editor.cleanUp();
+      fileDiff.cleanUp();
+      revisitDiff.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test('without persistState, attaching a diff leaves the viewport alone', async () => {
+    const dom = installDom();
+    const editor = new Editor<undefined>();
+    const viewport = document.createElement('div');
+    viewport.style.overflowY = 'auto';
+    document.body.appendChild(viewport);
+    const container = document.createElement('div');
+    viewport.appendChild(container);
+    viewport.scrollTop = 40;
+
+    const fileDiff = new FileDiff<undefined>({
+      disableErrorHandling: true,
+      disableFileHeader: true,
+      theme: DEFAULT_THEMES,
+    });
+    try {
+      fileDiff.render({
+        oldFile: { name: 'diffed.ts', contents: 'alpha\n' },
+        newFile: { name: 'diffed.ts', contents: 'alpha\nbravo\n' },
+        fileContainer: container,
+        forceRender: true,
+      });
+      editor.edit(fileDiff);
+      // Attach work settles asynchronously; give it time to (incorrectly)
+      // move the viewport before asserting it stayed put.
+      await wait(50);
+      expect(viewport.scrollTop).toBe(40);
+    } finally {
+      editor.cleanUp();
+      fileDiff.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test('a record without scrollTop leaves the viewport scroll alone', async () => {
+    const dom = installDom();
+    const storage: IStateStorage = {
+      // A record persisted before scrollTop existed: setState still honors
+      // scrollLeft exactly but must not move the viewport vertically.
+      get: () => ({ ...savedCaret(3), view: { scrollLeft: 0 } }),
+      set() {},
+    };
+    const editor = new Editor<undefined>({
+      persistState: true,
+      persistStateStorage: storage,
+    });
+    let attached: (AttachedFile & { viewport: HTMLElement }) | undefined;
+
+    try {
+      attached = attachFileInScrolledViewport(editor, {
+        ...ORIGINAL_FILE,
+      });
+      const { viewport } = attached;
+      await waitFor(
+        () => editor.getState().selections?.[0]?.start.character === 3
+      );
+      expect(viewport.scrollTop).toBe(40);
+      expect(viewport.scrollLeft).toBe(8);
+    } finally {
+      editor.cleanUp();
+      attached?.file.cleanUp();
       dom.cleanup();
     }
   });

@@ -159,7 +159,7 @@ describe('Editor state', () => {
       editor.edit(component);
       component.codeScrollLeft = 24;
 
-      expect(editor.getState().view).toEqual({ scrollLeft: 24 });
+      expect(editor.getState().view).toEqual({ scrollLeft: 24, scrollTop: 0 });
     } finally {
       editor.cleanUp();
       component.cleanUp();
@@ -213,7 +213,7 @@ describe('Editor state', () => {
       component.codeScrollLeft = 24;
       editor.cleanUp();
 
-      expect(storedState?.view).toEqual({ scrollLeft: 24 });
+      expect(storedState?.view).toEqual({ scrollLeft: 24, scrollTop: 0 });
     } finally {
       editor.cleanUp();
       component.cleanUp();
