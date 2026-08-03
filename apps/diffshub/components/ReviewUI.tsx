@@ -67,6 +67,7 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
   const [diffIndicators, setDiffIndicators] = useState<DiffIndicators>('bars');
   const [lineNumbers, setLineNumbers] = useState(true);
   const {
+    capability: githubTokenCapability,
     clearToken: clearGitHubToken,
     hasToken: hasGitHubToken,
     setToken: setGitHubToken,
@@ -278,6 +279,7 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
         fileTreeOverlayOpen={fileTreeOverlayOpen}
         fileTreeAvailable={treeSource != null}
         githubTokenActive={hasGitHubToken}
+        githubTokenCapability={githubTokenCapability}
         onClearGitHubToken={clearGitHubToken}
         onSaveGitHubToken={setGitHubToken}
         onToggleCollapseMode={handleToggleCollapseMode}

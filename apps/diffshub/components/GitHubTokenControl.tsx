@@ -4,40 +4,53 @@ import { IconBrandGithub } from '@pierre/icons';
 import { type FormEvent, memo, useState } from 'react';
 
 import { Button } from '@/components/Button';
+import { ButtonGroup, ButtonGroupItem } from '@/components/ButtonGroup';
 import { Input } from '@/components/Input';
 import { cn } from '@/lib/cn';
+import type { GitHubTokenCapability } from '@/lib/githubTokenStorage';
 
 export const CREATE_TOKEN_URL =
   'https://github.com/settings/personal-access-tokens/new?name=DiffsHub%20Private%20Repo%20Read%20Access&description=Read+private+PRs+and+expand+collapsed+hunks&expires_in=90&contents=read&pull_requests=read&issues=read';
+
+export const CREATE_WRITE_TOKEN_URL =
+  'https://github.com/settings/personal-access-tokens/new?name=DiffsHub%20GitHub%20Access&description=Read+private+PRs+and+post+review+comments&expires_in=90&contents=read&pull_requests=write&issues=write';
 
 export const CLASSIC_TOKEN_URL =
   'https://github.com/settings/tokens/new?description=DiffsHub%20Private%20Repo%20Read%20Access&scopes=repo&default_expires_at=90';
 
 interface GitHubTokenControlProps {
   active: boolean;
+  capability: GitHubTokenCapability;
   className?: string;
   onClear(): void;
-  onSave(token: string): void;
+  onSave(token: string, capability: GitHubTokenCapability): void;
   title?: string;
 }
 
 export const GitHubTokenControl = memo(function GitHubTokenControl({
   active,
+  capability,
   className,
   onClear,
   onSave,
   title = 'GitHub Token',
 }: GitHubTokenControlProps) {
   const [draftToken, setDraftToken] = useState('');
+  const [draftCapability, setDraftCapability] =
+    useState<GitHubTokenCapability>('read-write');
   const canSave = draftToken.trim() !== '';
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!canSave) {
       return;
     }
-    onSave(draftToken);
+    onSave(draftToken, draftCapability);
     setDraftToken('');
   };
+  const createTokenUrl =
+    draftCapability === 'read-write'
+      ? CREATE_WRITE_TOKEN_URL
+      : CREATE_TOKEN_URL;
 
   return (
     <section className={cn('px-2 py-1.5', className)} aria-label={title}>
@@ -52,13 +65,19 @@ export const GitHubTokenControl = memo(function GitHubTokenControl({
               : 'text-muted-foreground border-current/20'
           )}
         >
-          {active ? 'Active' : 'Optional'}
+          {active
+            ? capability === 'read-write'
+              ? 'Active · Write'
+              : 'Active'
+            : 'Optional'}
         </span>
       </div>
       {active ? (
         <>
           <p className="text-muted-foreground mt-1 max-w-124 text-[13px] text-pretty">
-            Using your PAT from localStorage. Clear it to create a new one.
+            {capability === 'read-write'
+              ? 'Using your PAT from localStorage. It can read private diffs and post comments. Clear it to create a new one.'
+              : 'Using your read-only PAT from localStorage. Clear it and save a token with write access to post comments.'}
           </p>
           <div className="mt-2 flex items-center gap-2">
             <Button
@@ -79,13 +98,16 @@ export const GitHubTokenControl = memo(function GitHubTokenControl({
           <p className="text-muted-foreground mt-1 max-w-124 text-[13px] text-pretty">
             <a
               className="inline-link"
-              href={CREATE_TOKEN_URL}
+              href={createTokenUrl}
               target="_blank"
               rel="noreferrer noopener"
             >
               Create a fine-grained PAT
             </a>{' '}
-            on GitHub to view private diffs, or{' '}
+            on GitHub
+            {draftCapability === 'read-write'
+              ? ' to view private diffs and post PR comments, or '
+              : ' to view private diffs, or '}
             <a
               className="inline-link"
               href={CLASSIC_TOKEN_URL}
@@ -96,6 +118,23 @@ export const GitHubTokenControl = memo(function GitHubTokenControl({
             </a>{' '}
             with repo scope. Saved only in localStorage.
           </p>
+          <div className="mt-2 flex items-center gap-2 text-[13px]">
+            <span className="text-muted-foreground">Permissions</span>
+            <ButtonGroup
+              size="sm"
+              value={draftCapability}
+              onValueChange={(value) =>
+                setDraftCapability(value === 'read' ? 'read' : 'read-write')
+              }
+            >
+              <ButtonGroupItem value="read" title="Read only">
+                Read only
+              </ButtonGroupItem>
+              <ButtonGroupItem value="read-write" title="Read and comment">
+                Read + comment
+              </ButtonGroupItem>
+            </ButtonGroup>
+          </div>
           <form className="mt-2 flex gap-1.5" onSubmit={handleSubmit}>
             <Input
               className="bg-background flex-1"
