@@ -966,8 +966,15 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         persistedCacheKey !== undefined
           ? this.#getCachedTextDocument(fileOrDiff, persistedCacheKey)
           : undefined;
+      // A File render substitutes cached text before painting (see
+      // __prepareFile), so its DOM always matches a reused document.
+      const reusableTextDocument =
+        fileInstance.type === 'file' ||
+        cachedTextDocument?.getText() === contents
+          ? cachedTextDocument
+          : undefined;
       const textDocument =
-        cachedTextDocument ??
+        reusableTextDocument ??
         new TextDocument(fileOrDiff.name, contents, languageId, 0, editStack);
       this.#fileInfo = { name, lang, cacheKey };
       this.#textDocument = textDocument;

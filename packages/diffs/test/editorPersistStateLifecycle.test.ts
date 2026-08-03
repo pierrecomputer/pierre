@@ -632,6 +632,75 @@ describe('Editor persisted state lifecycle', () => {
     }
   });
 
+  // A FileDiff renders straight from the host's metadata (no __prepareFile
+  // substitution like File), so a host that re-parses pristine metadata after
+  // edits — same derived cacheKey, original content — must get a document
+  // built from that metadata, not the edited cached one, or the rendered rows
+  // and the editing document would diverge.
+  test('a re-parsed pristine diff does not adopt the edited cached document', async () => {
+    const dom = installDom();
+    const editor = new Editor<undefined>({ persistState: true });
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const oldFile: FileContents = {
+      name: 'diffed-reparse.ts',
+      contents: 'alpha\n',
+    };
+    const newFile: FileContents = {
+      name: 'diffed-reparse.ts',
+      contents: 'alpha\nbravo\n',
+    };
+    const first = new FileDiff<undefined>({
+      disableErrorHandling: true,
+      disableFileHeader: true,
+      theme: DEFAULT_THEMES,
+    });
+    const second = new FileDiff<undefined>({
+      disableErrorHandling: true,
+      disableFileHeader: true,
+      theme: DEFAULT_THEMES,
+    });
+    try {
+      first.render({
+        oldFile,
+        newFile,
+        fileContainer: container,
+        forceRender: true,
+      });
+      editor.edit(first);
+      await waitFor(() => editor.getText() === 'alpha\nbravo\n');
+      editor.applyEdits([
+        {
+          range: {
+            start: { line: 0, character: 0 },
+            end: { line: 0, character: 0 },
+          },
+          newText: 'edited ',
+        },
+      ]);
+      expect(editor.getText()).toBe('edited alpha\nbravo\n');
+      editor.cleanUp();
+      first.cleanUp();
+      container.innerHTML = '';
+
+      second.render({
+        oldFile,
+        newFile,
+        fileContainer: container,
+        forceRender: true,
+      });
+      editor.edit(second);
+      // waitFor times out silently; the expect below is the real assertion.
+      await waitFor(() => editor.getText() === 'alpha\nbravo\n');
+      expect(editor.getText()).toBe('alpha\nbravo\n');
+    } finally {
+      editor.cleanUp();
+      first.cleanUp();
+      second.cleanUp();
+      dom.cleanup();
+    }
+  });
+
   test('without persistState, attaching a diff leaves the viewport alone', async () => {
     const dom = installDom();
     const editor = new Editor<undefined>();
