@@ -25,6 +25,10 @@ import { buildAnnotationThemeStyle } from '@/lib/annotationThemeStyle';
 import { classifyCommentLineType } from '@/lib/classifyCommentLineType';
 import { cn } from '@/lib/cn';
 import { CODE_VIEW_CUSTOM_CSS, CODE_VIEW_LAYOUT } from '@/lib/constants';
+import type {
+  GitHubCommentUser,
+  GitHubCommentWire,
+} from '@/lib/githubComments';
 import { isDiffItem } from '@/lib/isDiffItem';
 import { isDraftAnnotation } from '@/lib/isDraftAnnotation';
 import { isDraftMetadata } from '@/lib/isDraftMetadata';
@@ -34,6 +38,8 @@ import { diffshubChromeMapping } from '@/lib/theme/diffshubChromeMapping';
 import type {
   CommentMetadata,
   DiffsHubDeletedCommentEvent,
+  DiffsHubPostDraftRequest,
+  DiffsHubPostReplyRequest,
   DiffsHubSavedCommentEntry,
 } from '@/lib/types';
 
@@ -67,8 +73,12 @@ interface ActiveDraftComment {
 interface DiffsHubViewerProps {
   className?: string;
   diffStyle: 'split' | 'unified';
+  draftAuthor?: GitHubCommentUser;
+  draftHint?: string;
   onCommentDeleted(comment: DiffsHubDeletedCommentEvent): void;
   onCommentSaved(comment: DiffsHubSavedCommentEntry): void;
+  postComment?(request: DiffsHubPostDraftRequest): Promise<GitHubCommentWire>;
+  postReply?(request: DiffsHubPostReplyRequest): Promise<void>;
   overflow: 'wrap' | 'scroll';
   showBackgrounds: boolean;
   diffIndicators: DiffIndicators;
@@ -85,8 +95,12 @@ interface DiffsHubViewerProps {
 export const DiffsHubViewer = memo(function DiffsHubViewer({
   className,
   diffStyle,
+  draftAuthor,
+  draftHint,
   onCommentDeleted,
   onCommentSaved,
+  postComment,
+  postReply,
   overflow,
   showBackgrounds,
   diffIndicators,
@@ -271,6 +285,95 @@ export const DiffsHubViewer = memo(function DiffsHubViewer({
         return;
       }
 
+      if (postComment != null) {
+        const { range } = draftAnnotation.metadata;
+        const setDraftPending = (pending: boolean) => {
+          updateViewerDiffItem(viewer, itemId, (item) => {
+            if (item.annotations == null) {
+              return false;
+            }
+            item.annotations = item.annotations.map((annotation) =>
+              annotation.metadata.key === key && isDraftAnnotation(annotation)
+                ? {
+                    ...annotation,
+                    metadata: {
+                      ...annotation.metadata,
+                      message: trimmedMessage,
+                      pending,
+                    },
+                  }
+                : annotation
+            );
+            return true;
+          });
+        };
+
+        setDraftPending(true);
+        postComment({
+          itemId,
+          key,
+          lineNumber: draftAnnotation.lineNumber,
+          message: trimmedMessage,
+          range,
+          side: draftAnnotation.side,
+        })
+          .then((wire) => {
+            const githubKey = `gh-${wire.id}`;
+            const updatedItem = updateViewerDiffItem(viewer, itemId, (item) => {
+              if (item.annotations == null) {
+                return false;
+              }
+              item.annotations = item.annotations.map((annotation) =>
+                annotation.metadata.key === key
+                  ? {
+                      side: draftAnnotation.side,
+                      lineNumber: draftAnnotation.lineNumber,
+                      metadata: {
+                        kind: 'github',
+                        key: githubKey,
+                        range,
+                        thread: { root: wire, replies: [] },
+                      },
+                    }
+                  : annotation
+              );
+              return true;
+            });
+            if (updatedItem == null) {
+              return;
+            }
+            const { current: activeDraft } = activeDraftRef;
+            if (activeDraft?.itemId === itemId && activeDraft.key === key) {
+              activeDraftRef.current = null;
+            }
+            setSelectedLines(null);
+            onLineLinkChange(null);
+            onCommentSaved({
+              author: wire.user.login,
+              avatarUrl: wire.user.avatarUrl,
+              itemId,
+              key: githubKey,
+              lineNumber: draftAnnotation.lineNumber,
+              lineType: classifyCommentLineType(
+                updatedItem.fileDiff,
+                draftAnnotation.side,
+                draftAnnotation.lineNumber
+              ),
+              message: wire.body,
+              range,
+              replyCount: 0,
+              side: draftAnnotation.side,
+              thread: { root: wire, replies: [] },
+            });
+          })
+          .catch(() => {
+            // The caller already surfaced the error (toast); keep the draft
+            // with its text so the user can retry or cancel.
+            setDraftPending(false);
+          });
+        return;
+      }
+
       const updatedItem = updateViewerDiffItem(viewer, itemId, (item) => {
         if (item.annotations == null) {
           return false;
@@ -383,6 +486,8 @@ export const DiffsHubViewer = memo(function DiffsHubViewer({
         return (
           <DraftAnnotation
             annotation={annotation}
+            githubAuthor={draftAuthor}
+            hint={draftHint}
             itemId={item.id}
             onCancel={handleRemoveComment}
             onSave={handleSaveDraftComment}
@@ -391,10 +496,18 @@ export const DiffsHubViewer = memo(function DiffsHubViewer({
       }
 
       if (isGitHubAnnotation(annotation)) {
+        const { key } = annotation.metadata;
         return (
           <GitHubAnnotation
             annotation={annotation}
             itemId={item.id}
+            replyAuthor={draftAuthor}
+            onPostReply={
+              postReply == null
+                ? undefined
+                : (rootCommentId, body) =>
+                    postReply({ body, itemId: item.id, key, rootCommentId })
+            }
             onToggleSelection={handleToggleCommentSelection}
           />
         );

@@ -22,6 +22,9 @@ export interface DraftCommentMetadata {
   kind: 'draft';
   key: string;
   message: string;
+  // True while the draft is being posted to GitHub; the form disables itself
+  // until the post settles.
+  pending?: boolean;
   range: SelectedLineRange;
 }
 
@@ -55,6 +58,24 @@ export type DiffsHubCommentFileByItemId = ReadonlyMap<
 // an unchanged context line shown in the diff. Tracked so the sidebar can
 // render "Line N" without a misleading + / - sigil for context lines.
 export type CommentLineType = 'change' | 'context';
+
+// Payloads for the viewer→app posting callbacks: a finished draft to publish
+// as a new GitHub review comment, and a reply to an existing thread.
+export interface DiffsHubPostDraftRequest {
+  itemId: string;
+  key: string;
+  lineNumber: number;
+  message: string;
+  range: SelectedLineRange;
+  side: AnnotationSide;
+}
+
+export interface DiffsHubPostReplyRequest {
+  body: string;
+  itemId: string;
+  key: string;
+  rootCommentId: number;
+}
 
 export interface DiffsHubDeletedCommentEvent {
   itemId: string;

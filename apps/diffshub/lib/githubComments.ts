@@ -6,13 +6,14 @@ import type { AnnotationSide } from '@pierre/diffs';
 
 export type GitHubCommentSide = 'LEFT' | 'RIGHT';
 
-export interface GitHubCommentAuthor {
+// GitHub's user objects use `login` for the @-handle; deleted accounts are
+// normalized to 'ghost', mirroring GitHub's own rendering.
+export interface GitHubCommentUser {
   avatarUrl?: string;
   login: string;
 }
 
 export interface GitHubCommentWire {
-  author: GitHubCommentAuthor;
   body: string;
   createdAt?: string;
   htmlUrl?: string;
@@ -29,6 +30,7 @@ export interface GitHubCommentWire {
   startLine?: number;
   startSide?: GitHubCommentSide;
   subjectType: 'file' | 'line';
+  user: GitHubCommentUser;
 }
 
 export interface GitHubCommentsPayload {
@@ -44,12 +46,56 @@ export interface GitHubCommentThread {
   root: GitHubCommentWire;
 }
 
+// Body of a POST /api/github-comments request: either a new review comment
+// anchored to a line (or line range) of the pull's head diff, or a reply to
+// an existing thread. The pull request itself is addressed by the `path`
+// query parameter, like the GET.
+export type PostGitHubCommentRequest =
+  | { kind: 'reply'; body: string; commentId: number }
+  | {
+      kind: 'comment';
+      body: string;
+      commitId: string;
+      filePath: string;
+      line: number;
+      side: GitHubCommentSide;
+      startLine?: number;
+      startSide?: GitHubCommentSide;
+    };
+
 // GitHub anchors review comments to the LEFT (old) or RIGHT (new) version of
 // a file; the diff viewer calls the same columns deletions/additions.
 export function mapGitHubCommentSide(
   side: GitHubCommentSide | undefined
 ): AnnotationSide {
   return side === 'LEFT' ? 'deletions' : 'additions';
+}
+
+export function mapAnnotationSideToGitHub(
+  side: AnnotationSide
+): GitHubCommentSide {
+  return side === 'deletions' ? 'LEFT' : 'RIGHT';
+}
+
+// Guards the wire-comment fields client code dereferences. Payloads come from
+// our own same-origin route, so this intentionally checks only what is used
+// rather than re-validating every property the server already normalized.
+export function isGitHubCommentWire(
+  value: unknown
+): value is GitHubCommentWire {
+  if (typeof value !== 'object' || value == null) {
+    return false;
+  }
+  const record = value as Record<string, unknown>;
+  const user = record.user as Record<string, unknown> | undefined;
+  return (
+    typeof record.id === 'number' &&
+    typeof record.path === 'string' &&
+    typeof record.body === 'string' &&
+    typeof user === 'object' &&
+    user != null &&
+    typeof user.login === 'string'
+  );
 }
 
 // Groups a flat comment list into threads. GitHub returns review comments in

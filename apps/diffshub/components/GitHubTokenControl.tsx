@@ -24,6 +24,11 @@ interface GitHubTokenControlProps {
   className?: string;
   onClear(): void;
   onSave(token: string, capability: GitHubTokenCapability): void;
+  // Owner (user or org) of the repo being viewed. Appended to the
+  // fine-grained creation link as target_name so GitHub preselects the right
+  // resource owner — a fine-grained PAT can only write to repos under its
+  // resource owner, so for org repos the org must be selected there.
+  resourceOwner?: string;
   title?: string;
 }
 
@@ -33,6 +38,7 @@ export const GitHubTokenControl = memo(function GitHubTokenControl({
   className,
   onClear,
   onSave,
+  resourceOwner,
   title = 'GitHub Token',
 }: GitHubTokenControlProps) {
   const [draftToken, setDraftToken] = useState('');
@@ -47,10 +53,14 @@ export const GitHubTokenControl = memo(function GitHubTokenControl({
     onSave(draftToken, draftCapability);
     setDraftToken('');
   };
-  const createTokenUrl =
+  const baseCreateTokenUrl =
     draftCapability === 'read-write'
       ? CREATE_WRITE_TOKEN_URL
       : CREATE_TOKEN_URL;
+  const createTokenUrl =
+    resourceOwner == null
+      ? baseCreateTokenUrl
+      : `${baseCreateTokenUrl}&target_name=${encodeURIComponent(resourceOwner)}`;
 
   return (
     <section className={cn('px-2 py-1.5', className)} aria-label={title}>
@@ -95,7 +105,26 @@ export const GitHubTokenControl = memo(function GitHubTokenControl({
         </>
       ) : (
         <>
-          <p className="text-muted-foreground mt-1 max-w-124 text-[13px] text-pretty">
+          <ButtonGroup
+            className="mt-2 flex w-full max-w-124"
+            size="sm"
+            value={draftCapability}
+            onValueChange={(value) =>
+              setDraftCapability(value === 'read' ? 'read' : 'read-write')
+            }
+          >
+            <ButtonGroupItem className="flex-1" value="read" title="Read only">
+              Read only
+            </ButtonGroupItem>
+            <ButtonGroupItem
+              className="flex-1"
+              value="read-write"
+              title="Read and comment"
+            >
+              Read + comment
+            </ButtonGroupItem>
+          </ButtonGroup>
+          <p className="text-muted-foreground mt-2 max-w-124 text-[13px] text-pretty">
             <a
               className="inline-link"
               href={createTokenUrl}
@@ -118,23 +147,15 @@ export const GitHubTokenControl = memo(function GitHubTokenControl({
             </a>{' '}
             with repo scope. Saved only in localStorage.
           </p>
-          <div className="mt-2 flex items-center gap-2 text-[13px]">
-            <span className="text-muted-foreground">Permissions</span>
-            <ButtonGroup
-              size="sm"
-              value={draftCapability}
-              onValueChange={(value) =>
-                setDraftCapability(value === 'read' ? 'read' : 'read-write')
-              }
-            >
-              <ButtonGroupItem value="read" title="Read only">
-                Read only
-              </ButtonGroupItem>
-              <ButtonGroupItem value="read-write" title="Read and comment">
-                Read + comment
-              </ButtonGroupItem>
-            </ButtonGroup>
-          </div>
+          {draftCapability === 'read-write' && (
+            <p className="text-muted-foreground mt-1 max-w-124 text-[12px] text-pretty">
+              A fine-grained PAT only writes to repos under its{' '}
+              <strong>Resource owner</strong> — for an org repo, pick the org
+              there (even as an admin), and set{' '}
+              <strong>Repository access</strong> to include the repo. For repos
+              you can't select, use a classic token with repo scope.
+            </p>
+          )}
           <form className="mt-2 flex gap-1.5" onSubmit={handleSubmit}>
             <Input
               className="bg-background flex-1"

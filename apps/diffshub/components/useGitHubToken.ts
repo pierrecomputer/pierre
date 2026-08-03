@@ -63,8 +63,10 @@ export function useGitHubToken(): GitHubTokenState {
   const savedAt = auth?.savedAt;
 
   // tokenVersion is the cache-busting signal loaders key their effects on.
-  // Bump it whenever the effective auth changes, but skip the initial mount so
+  // Bump it whenever the token itself changes, skipping the initial mount so
   // an empty hydrate keeps version 0 and does not re-trigger the first load.
+  // Capability is deliberately not a dependency: it only gates UI (posting),
+  // so a capability-only change must not force every loader to refetch.
   const hasHydratedRef = useRef(false);
   useEffect(() => {
     if (!hasHydratedRef.current) {
@@ -72,7 +74,7 @@ export function useGitHubToken(): GitHubTokenState {
       return;
     }
     setTokenVersion((version) => version + 1);
-  }, [capability, savedAt, token]);
+  }, [savedAt, token]);
 
   // Updates local state and persists the new auth; writeStoredAuth also
   // broadcasts the change to the other mounted hook instances (and other tabs
