@@ -15,8 +15,8 @@ import { classifyCommentLineType } from '@/lib/classifyCommentLineType';
 import {
   type GitHubCommentsPayload,
   type GitHubCommentThread,
-  type GitHubCommentWire,
   groupGitHubCommentThreads,
+  isGitHubCommentWire,
   mapGitHubCommentSide,
 } from '@/lib/githubComments';
 import type {
@@ -210,8 +210,8 @@ function mapGitHubThreads(
     const key = `gh-${root.id}`;
     const side = mapGitHubCommentSide(root.side);
     const shared = {
-      author: root.author.login,
-      avatarUrl: root.author.avatarUrl,
+      author: root.user.login,
+      avatarUrl: root.user.avatarUrl,
       itemId,
       key,
       message: root.body,
@@ -361,24 +361,10 @@ function normalizeCommentsPayload(data: unknown): GitHubCommentsPayload {
     throw new Error('DiffsHub GitHub comments response was malformed.');
   }
   return {
-    comments: data.comments.filter(isWireComment),
+    comments: data.comments.filter(isGitHubCommentWire),
     headSha: typeof data.headSha === 'string' ? data.headSha : undefined,
     truncated: data.truncated === true,
   };
-}
-
-// The payload comes from our own same-origin route, so this only guards the
-// fields the mapping above dereferences rather than re-validating every
-// property the server already normalized.
-function isWireComment(value: unknown): value is GitHubCommentWire {
-  return (
-    isRecord(value) &&
-    typeof value.id === 'number' &&
-    typeof value.path === 'string' &&
-    typeof value.body === 'string' &&
-    isRecord(value.author) &&
-    typeof value.author.login === 'string'
-  );
 }
 
 function createCommentsRequestInit(

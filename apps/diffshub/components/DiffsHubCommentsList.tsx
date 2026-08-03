@@ -14,6 +14,9 @@ import type {
 } from '@/lib/types';
 
 interface DiffsHubCommentsListProps {
+  // Whether saved drafts post to the pull request on GitHub; only changes
+  // the empty-state copy.
+  canPostToGitHub?: boolean;
   commentSections: readonly DiffsHubSavedCommentItem[];
   onSelectComment?(comment: DiffsHubSavedCommentEntry): void;
   onSelectItem?(itemId: string): void;
@@ -81,6 +84,7 @@ function handleRowClick(
 }
 
 export const DiffsHubCommentsList = memo(function DiffsHubCommentsList({
+  canPostToGitHub,
   commentSections,
   onSelectComment,
   onSelectItem,
@@ -112,7 +116,10 @@ export const DiffsHubCommentsList = memo(function DiffsHubCommentsList({
             <span className="light:text-white light:bg-[rgb(0,159,255)] inline-flex h-[20px] w-[20px] items-center justify-center rounded-[4px] align-top dark:bg-[rgb(0,159,255)] dark:text-black">
               <IconPlus />
             </span>{' '}
-            button to add fake code comments.
+            button to{' '}
+            {canPostToGitHub === true
+              ? 'comment on this pull request.'
+              : 'add fake code comments.'}
           </p>
         </div>
       </div>

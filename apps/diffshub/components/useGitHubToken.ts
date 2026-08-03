@@ -68,14 +68,23 @@ function subscribe(listener: () => void): () => void {
 function handleStorage(event: StorageEvent): void {
   if (event.key == null || event.key === GITHUB_TOKEN_STORAGE_KEY) {
     const auth = readStoredAuth();
-    if (!isSameStoredGitHubAuth(getSnapshot().auth, auth)) {
-      updateAuth(auth);
+    const previous = getSnapshot();
+    if (!isSameStoredGitHubAuth(previous.auth, auth)) {
+      // Capability only gates posting UI; changing it alone must not refetch.
+      const tokenChanged =
+        previous.auth?.token !== auth?.token ||
+        previous.auth?.savedAt !== auth?.savedAt;
+      updateAuth(auth, previous.tokenVersion + (tokenChanged ? 1 : 0));
     }
   }
 }
 
-function updateAuth(auth: StoredGitHubAuth | undefined): void {
-  snapshot = { auth, tokenVersion: getSnapshot().tokenVersion + 1 };
+// Publishes auth and its loader version together to all mounted consumers.
+function updateAuth(
+  auth: StoredGitHubAuth | undefined,
+  tokenVersion: number
+): void {
+  snapshot = { auth, tokenVersion };
   for (const listener of listeners) {
     listener();
   }
@@ -94,7 +103,7 @@ function setToken(
           savedAt: new Date().toISOString(),
           token,
         };
-  updateAuth(auth);
+  updateAuth(auth, getSnapshot().tokenVersion + 1);
   writeStoredAuth(auth);
 }
 

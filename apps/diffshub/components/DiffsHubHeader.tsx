@@ -64,6 +64,7 @@ interface HeaderProps {
   diffStyle: 'split' | 'unified';
   fileTreeAvailable: boolean;
   fileTreeOverlayOpen: boolean;
+  githubRepoOwner?: string;
   githubTokenActive: boolean;
   githubTokenCapability: GitHubTokenCapability;
   initialUrl: string;
@@ -94,6 +95,7 @@ export const DiffsHubHeader = memo(function DiffsHubHeader({
   diffStyle,
   fileTreeAvailable,
   fileTreeOverlayOpen,
+  githubRepoOwner,
   githubTokenActive,
   githubTokenCapability,
   initialUrl,
@@ -256,6 +258,7 @@ export const DiffsHubHeader = memo(function DiffsHubHeader({
                   capability={githubTokenCapability}
                   onClear={onClearGitHubToken}
                   onSave={onSaveGitHubToken}
+                  resourceOwner={githubRepoOwner}
                 />
                 <div className="bg-border/70 my-2 h-px" />
                 <DropdownMenuItem

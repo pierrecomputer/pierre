@@ -10,12 +10,12 @@ interface UseGitHubDiffFileLoaderOptions {
   domain?: string;
   hasGitHubToken: boolean;
   path: string;
-  token: string;
+  token: string | undefined;
   tokenVersion: number;
 }
 
 interface UseGitHubDiffFileLoaderResult {
-  getGitHubToken(): string;
+  getGitHubToken(): string | undefined;
   loadDiffFiles: FileDiffContentsLoader | undefined;
 }
 
