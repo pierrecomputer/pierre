@@ -1,11 +1,13 @@
 'use client';
 
+import type { DiffLineAnnotation } from '@pierre/diffs';
 import type { CodeViewHandle } from '@pierre/diffs/react';
 import {
   type Dispatch,
   type RefObject,
   type SetStateAction,
   useEffect,
+  useRef,
   useState,
 } from 'react';
 
@@ -45,13 +47,23 @@ interface UseGitHubCommentsResult {
   payload: GitHubCommentsPayload | undefined;
 }
 
+// One thread mapped onto the rendered diff: the sidebar row plus, when the
+// thread anchors to a visible line or a whole file, the inline annotation.
+interface MappedGitHubThreadView {
+  annotationsByItemId: ReadonlyMap<
+    string,
+    DiffLineAnnotation<CommentMetadata>[]
+  >;
+  sections: DiffsHubSavedCommentItem[];
+}
+
 // Loads the GitHub comments for the viewed source through the same-origin
-// /api/github-comments proxy and feeds the anchorable threads into the
-// comments sidebar. Fetching starts immediately, but applying waits until the
-// patch loader reports 'ready' — items stream in incrementally and item ids
-// can be renamed mid-stream, so anchoring against a half-built view is
-// unsafe. A comments failure never blocks the diff itself; the error is only
-// surfaced through the returned state.
+// /api/github-comments proxy, renders each thread as an inline annotation,
+// and feeds the sidebar's comments list. Fetching starts immediately, but
+// applying waits until the patch loader reports 'ready' — items stream in
+// incrementally and item ids can be renamed mid-stream, so anchoring against
+// a half-built view is unsafe. A comments failure never blocks the diff
+// itself; the error is only surfaced through the returned state.
 export function useGitHubComments({
   commentFileByItemId,
   domain,
@@ -65,6 +77,10 @@ export function useGitHubComments({
 }: UseGitHubCommentsOptions): UseGitHubCommentsResult {
   const [payload, setPayload] = useState<GitHubCommentsPayload>();
   const [commentsError, setCommentsError] = useState<string>();
+  // Item ids that currently carry GitHub annotations, so a re-apply (e.g.
+  // after a token change refetch) can clear annotations from items whose
+  // threads disappeared.
+  const annotatedItemIdsRef = useRef<ReadonlySet<string>>(new Set());
 
   useEffect(() => {
     setPayload(undefined);
@@ -110,14 +126,22 @@ export function useGitHubComments({
     if (payload == null || loadState !== 'ready' || treeSource == null) {
       return;
     }
-    const githubSections = buildGitHubCommentSections(
+    const viewer = viewerRef.current;
+    const { annotationsByItemId, sections } = mapGitHubThreads(
       groupGitHubCommentThreads(payload.comments),
       treeSource.pathToItemId,
       commentFileByItemId,
-      viewerRef.current
+      viewer
     );
+    if (viewer != null) {
+      annotatedItemIdsRef.current = applyGitHubAnnotations(
+        viewer,
+        annotationsByItemId,
+        annotatedItemIdsRef.current
+      );
+    }
     setCommentSections((previous) =>
-      restoreLocalEntries(githubSections, previous, commentFileByItemId)
+      restoreLocalEntries(sections, previous, commentFileByItemId)
     );
   }, [
     commentFileByItemId,
@@ -131,63 +155,127 @@ export function useGitHubComments({
   return { commentsError, payload };
 }
 
-// Converts GitHub comment threads into the sidebar's per-file sections. One
-// entry represents a whole thread, anchored where its root comment is.
-// Threads that cannot be anchored are skipped for now: outdated comments (no
-// current line), file-level comments, and comments on files that are not part
-// of the rendered diff get their own UI in a later phase.
-function buildGitHubCommentSections(
+// Converts GitHub comment threads into inline annotations plus the sidebar's
+// per-file sections. One entry/annotation represents a whole thread, anchored
+// where its root comment is:
+// - current-line threads render inline and select their range on click;
+// - file-level threads render as a lineNumber-0 annotation above the file;
+// - outdated threads (no line in the head diff) are sidebar-only;
+// - threads on files outside the rendered diff are dropped entirely.
+function mapGitHubThreads(
   threads: readonly GitHubCommentThread[],
   pathToItemId: ReadonlyMap<string, string>,
   commentFileByItemId: DiffsHubCommentFileByItemId | null,
   viewer: CodeViewHandle<CommentMetadata> | null
-): DiffsHubSavedCommentItem[] {
+): MappedGitHubThreadView {
   interface SectionAccumulator {
     comments: DiffsHubSavedCommentEntry[];
     file: DiffsHubCommentSidebarFile;
   }
   const sectionsByItemId = new Map<string, SectionAccumulator>();
+  const annotationsByItemId = new Map<
+    string,
+    DiffLineAnnotation<CommentMetadata>[]
+  >();
+
+  const pushEntry = (itemId: string, entry: DiffsHubSavedCommentEntry) => {
+    const section = sectionsByItemId.get(itemId);
+    if (section != null) {
+      section.comments.push(entry);
+    }
+  };
+  const pushAnnotation = (
+    itemId: string,
+    annotation: DiffLineAnnotation<CommentMetadata>
+  ) => {
+    const annotations = annotationsByItemId.get(itemId);
+    if (annotations == null) {
+      annotationsByItemId.set(itemId, [annotation]);
+    } else {
+      annotations.push(annotation);
+    }
+  };
+
   for (const thread of threads) {
     const { root } = thread;
-    if (root.line == null || root.subjectType === 'file') {
-      continue;
-    }
     const itemId = pathToItemId.get(root.path);
     const file = itemId == null ? null : commentFileByItemId?.get(itemId);
     if (itemId == null || file == null) {
       continue;
     }
+    if (!sectionsByItemId.has(itemId)) {
+      sectionsByItemId.set(itemId, { comments: [], file });
+    }
+
+    const key = `gh-${root.id}`;
     const side = mapGitHubCommentSide(root.side);
-    const item = viewer?.getItem(itemId);
-    const entry: DiffsHubSavedCommentEntry = {
+    const shared = {
       author: root.author.login,
       avatarUrl: root.author.avatarUrl,
       itemId,
-      key: `gh-${root.id}`,
+      key,
+      message: root.body,
+      replyCount: thread.replies.length,
+      side,
+      thread,
+    };
+
+    if (root.subjectType === 'file') {
+      pushEntry(itemId, {
+        ...shared,
+        anchor: 'file',
+        lineNumber: 0,
+        lineType: 'context',
+        range: { start: 0, end: 0 },
+      });
+      pushAnnotation(itemId, {
+        side,
+        lineNumber: 0,
+        metadata: { kind: 'github', key, thread },
+      });
+      continue;
+    }
+
+    if (root.line == null) {
+      const lineNumber = root.originalLine ?? 0;
+      pushEntry(itemId, {
+        ...shared,
+        anchor: 'outdated',
+        lineNumber,
+        lineType: 'context',
+        range: { start: lineNumber, end: lineNumber },
+      });
+      continue;
+    }
+
+    const range = {
+      start: root.startLine ?? root.line,
+      side: mapGitHubCommentSide(root.startSide ?? root.side),
+      end: root.line,
+      endSide: side,
+    };
+    const item = viewer?.getItem(itemId);
+    pushEntry(itemId, {
+      ...shared,
       lineNumber: root.line,
       lineType:
         item?.type === 'diff'
           ? classifyCommentLineType(item.fileDiff, side, root.line)
           : 'change',
-      message: root.body,
-      range: {
-        start: root.startLine ?? root.line,
-        side: mapGitHubCommentSide(root.startSide ?? root.side),
-        end: root.line,
-        endSide: side,
-      },
+      range,
+    });
+    pushAnnotation(itemId, {
       side,
-    };
-    const section = sectionsByItemId.get(itemId);
-    if (section == null) {
-      sectionsByItemId.set(itemId, { comments: [entry], file });
-    } else {
-      section.comments.push(entry);
-    }
+      lineNumber: root.line,
+      metadata: { kind: 'github', key, range, thread },
+    });
   }
 
   const sections: DiffsHubSavedCommentItem[] = [];
   for (const [itemId, { comments, file }] of sectionsByItemId) {
+    if (comments.length === 0) {
+      continue;
+    }
     comments.sort((a, b) => a.lineNumber - b.lineNumber);
     sections.push({
       comments,
@@ -197,7 +285,54 @@ function buildGitHubCommentSections(
     });
   }
   sections.sort((a, b) => a.fileOrder - b.fileOrder);
-  return sections;
+  return { annotationsByItemId, sections };
+}
+
+// Replaces the GitHub-derived annotations on viewer items with the freshly
+// mapped set, leaving local draft/saved annotations untouched. Items that had
+// GitHub annotations in the previous apply but not in this one are cleared.
+// Returns the item ids that now carry GitHub annotations.
+function applyGitHubAnnotations(
+  viewer: CodeViewHandle<CommentMetadata>,
+  annotationsByItemId: ReadonlyMap<
+    string,
+    DiffLineAnnotation<CommentMetadata>[]
+  >,
+  previouslyAnnotatedItemIds: ReadonlySet<string>
+): ReadonlySet<string> {
+  for (const [itemId, annotations] of annotationsByItemId) {
+    setGitHubAnnotationsOnItem(viewer, itemId, annotations);
+  }
+  for (const itemId of previouslyAnnotatedItemIds) {
+    if (!annotationsByItemId.has(itemId)) {
+      setGitHubAnnotationsOnItem(viewer, itemId, undefined);
+    }
+  }
+  return new Set(annotationsByItemId.keys());
+}
+
+function setGitHubAnnotationsOnItem(
+  viewer: CodeViewHandle<CommentMetadata>,
+  itemId: string,
+  annotations: readonly DiffLineAnnotation<CommentMetadata>[] | undefined
+): void {
+  const item = viewer.getItem(itemId);
+  if (item == null || item.type !== 'diff') {
+    return;
+  }
+  const localAnnotations = (item.annotations ?? []).filter(
+    (annotation) => annotation.metadata.kind !== 'github'
+  );
+  const nextAnnotations =
+    annotations == null
+      ? localAnnotations
+      : [...localAnnotations, ...annotations];
+  if (nextAnnotations.length === 0 && (item.annotations?.length ?? 0) === 0) {
+    return;
+  }
+  item.annotations = nextAnnotations;
+  item.version = typeof item.version === 'number' ? item.version + 1 : 1;
+  viewer.updateItem(item);
 }
 
 // Re-applies locally created comments on top of freshly mapped GitHub
@@ -233,7 +368,7 @@ function normalizeCommentsPayload(data: unknown): GitHubCommentsPayload {
 }
 
 // The payload comes from our own same-origin route, so this only guards the
-// fields the mapping below dereferences rather than re-validating every
+// fields the mapping above dereferences rather than re-validating every
 // property the server already normalized.
 function isWireComment(value: unknown): value is GitHubCommentWire {
   return (

@@ -1,6 +1,8 @@
 import type { AnnotationSide, SelectedLineRange } from '@pierre/diffs';
 import type { FileTreeGitStatusPatch, GitStatusEntry } from '@pierre/trees';
 
+import type { GitHubCommentThread } from './githubComments';
+
 export type ViewerLoadState =
   | 'fetching'
   | 'streaming'
@@ -23,7 +25,21 @@ export interface DraftCommentMetadata {
   range: SelectedLineRange;
 }
 
-export type CommentMetadata = SavedCommentMetadata | DraftCommentMetadata;
+// A real GitHub comment thread rendered inline. One annotation carries the
+// whole thread (root plus replies), anchored where the root comment is.
+export interface GitHubCommentMetadata {
+  kind: 'github';
+  key: string;
+  // Selection range for the anchored lines; absent for file-level threads,
+  // which have no line to select.
+  range?: SelectedLineRange;
+  thread: GitHubCommentThread;
+}
+
+export type CommentMetadata =
+  | SavedCommentMetadata
+  | DraftCommentMetadata
+  | GitHubCommentMetadata;
 
 export interface DiffsHubCommentSidebarFile {
   fileOrder: number;
@@ -46,6 +62,12 @@ export interface DiffsHubDeletedCommentEvent {
 }
 
 export interface DiffsHubSavedCommentEntry {
+  // How the comment attaches to the diff. Absent means a normal line anchor;
+  // 'file' is a file-level comment; 'outdated' is a GitHub comment whose line
+  // no longer exists in the current head diff (lineNumber then holds the
+  // original line, or 0 when unknown). Non-line anchors navigate to the file
+  // instead of selecting lines.
+  anchor?: 'file' | 'outdated';
   author: string;
   avatarUrl?: string;
   itemId: string;
@@ -54,7 +76,9 @@ export interface DiffsHubSavedCommentEntry {
   lineType: CommentLineType;
   message: string;
   range: SelectedLineRange;
+  replyCount?: number;
   side: AnnotationSide;
+  thread?: GitHubCommentThread;
 }
 
 export interface DiffsHubSavedCommentItem {

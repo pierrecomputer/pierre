@@ -251,6 +251,17 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
   const handleSelectComment = useCallback(
     (comment: DiffsHubSavedCommentEntry) => {
       setFileTreeOverlayOpen(false);
+      // File-level and outdated comments have no selectable lines in the
+      // current diff; jump to the file instead.
+      if (comment.anchor != null) {
+        viewerRef.current?.scrollTo({
+          type: 'item',
+          id: comment.itemId,
+          align: 'start',
+          behavior: 'smooth-auto',
+        });
+        return;
+      }
       viewerRef.current?.setSelectedLines({
         id: comment.itemId,
         range: comment.range,

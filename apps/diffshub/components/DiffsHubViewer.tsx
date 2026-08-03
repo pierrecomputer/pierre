@@ -16,7 +16,8 @@ import { IconChevronSm } from '@pierre/icons';
 import { memo, type RefObject, useMemo, useRef, useState } from 'react';
 
 import { DraftAnnotation } from './DraftAnnotation';
-import { ExampleAnnotation } from './ExampleAnnotation';
+import { GitHubAnnotation } from './GitHubAnnotation';
+import { LocalCommentAnnotation } from './LocalCommentAnnotation';
 import { ThemedCodeView } from './ThemedCodeView';
 import { useChromeThemeProps } from './useChromeThemeProps';
 import type { AvatarName } from '@/lib/annotation';
@@ -27,6 +28,7 @@ import { CODE_VIEW_CUSTOM_CSS, CODE_VIEW_LAYOUT } from '@/lib/constants';
 import { isDiffItem } from '@/lib/isDiffItem';
 import { isDraftAnnotation } from '@/lib/isDraftAnnotation';
 import { isDraftMetadata } from '@/lib/isDraftMetadata';
+import { isGitHubAnnotation } from '@/lib/isGitHubAnnotation';
 import { isSavedAnnotation } from '@/lib/isSavedAnnotation';
 import { diffshubChromeMapping } from '@/lib/theme/diffshubChromeMapping';
 import type {
@@ -388,12 +390,22 @@ export const DiffsHubViewer = memo(function DiffsHubViewer({
         );
       }
 
+      if (isGitHubAnnotation(annotation)) {
+        return (
+          <GitHubAnnotation
+            annotation={annotation}
+            itemId={item.id}
+            onToggleSelection={handleToggleCommentSelection}
+          />
+        );
+      }
+
       if (!isSavedAnnotation(annotation)) {
         return null;
       }
 
       return (
-        <ExampleAnnotation
+        <LocalCommentAnnotation
           annotation={annotation}
           itemId={item.id}
           onDelete={handleRemoveComment}
