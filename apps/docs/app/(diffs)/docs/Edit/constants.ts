@@ -452,7 +452,7 @@ export function PersistedEditor({ file }: { file: FileContents }) {
 
   return (
     <EditProvider sharedEditor={sharedEditor}>
-      <File key={file.cacheKey} file={file} edit />
+      <File file={file} edit />
     </EditProvider>
   );
 }`,
@@ -619,7 +619,7 @@ export const EDIT_REACT_SHARED_EDITOR_EXAMPLE: PreloadFileOptions<undefined> = {
 
 return (
   <EditProvider sharedEditor={sharedEditor}>
-    <File key={activeFile.cacheKey} file={activeFile} edit />
+    <File file={activeFile} edit />
   </EditProvider>
 );`,
   },
