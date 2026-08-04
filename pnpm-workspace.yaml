@@ -44,6 +44,7 @@ minimumReleaseAgeExclude:
 
 catalog:
   '@arethetypeswrong/core': '0.18.2'
+  '@figma/plugin-typings': '1.131.0'
   '@icons-pack/react-simple-icons': '13.8.0'
   '@moonrepo/cli': '2.3.3'
   '@octokit/app': '16.1.1'
@@ -70,6 +71,7 @@ catalog:
   '@radix-ui/react-use-controllable-state': '1.2.2'
   '@shikijs/core': '4.2.0'
   '@shikijs/engine-javascript': '4.2.0'
+  '@shikijs/langs': '4.2.0'
   '@shikijs/themes': '4.2.0'
   '@shikijs/transformers': '4.2.0'
   '@tailwindcss/postcss': '4.1.13'
@@ -133,11 +135,13 @@ catalog:
   'typescript': '6.0.3'
   'unist-util-visit': '5.0.0'
   'vite': '8.1.0'
+  'vite-plugin-singlefile': '2.3.3'
   'zod': '4.1.11'
 
 overrides:
   '@shikijs/core': 'catalog:'
   '@shikijs/engine-javascript': 'catalog:'
+  '@shikijs/langs': 'catalog:'
   '@shikijs/themes': 'catalog:'
   '@shikijs/transformers': 'catalog:'
   '@types/react': 'catalog:'

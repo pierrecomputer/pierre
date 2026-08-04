@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.options.json",
+  "include": ["src/**/*.ts", "test/**/*.ts", "vite.config.*.ts"],
+  "exclude": ["node_modules", "dist"],
+  "compilerOptions": {
+    "allowJs": false,
+    "checkJs": false,
+    "composite": false,
+    "noEmit": true,
+    "emitDeclarationOnly": false,
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": ["bun", "@figma/plugin-typings"],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true
+  }
+}

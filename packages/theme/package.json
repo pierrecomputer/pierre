@@ -26,6 +26,7 @@
   "publisher": "pierrecomputer",
   "files": [
     "dist",
+    "figma",
     "themes",
     "icon.png",
     "LICENSE",
@@ -89,7 +90,8 @@
       "import": "./dist/pierre-dark-vibrant.mjs",
       "default": "./dist/pierre-dark-vibrant.mjs"
     },
-    "./themes/*": "./themes/*"
+    "./themes/*": "./themes/*",
+    "./figma/*": "./figma/*"
   },
   "publishConfig": {
     "access": "public"
