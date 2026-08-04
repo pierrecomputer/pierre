@@ -475,7 +475,7 @@ describe('diffAcceptRejectHunk', () => {
 
     const result = diffAcceptRejectHunk(diff, 0, 'both');
 
-    expect(result.cacheKey).toBe('old-key:new-key:b-0:0-0');
+    expect(result.cacheKey).toBe('diff:old-key:new-key:b-0:0-0');
   });
 
   test('accept resolves a partial patch without materializing omitted context', () => {
@@ -560,7 +560,7 @@ describe('diffAcceptRejectHunk', () => {
       changeIndex: 1,
     });
 
-    expect(result.cacheKey).toBe('old-key:new-key:a-2:1-1');
+    expect(result.cacheKey).toBe('diff:old-key:new-key:a-2:1-1');
   });
 
   test('both should inherit noEOFCR from additions', () => {

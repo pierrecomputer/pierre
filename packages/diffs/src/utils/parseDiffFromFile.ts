@@ -9,7 +9,7 @@ const MISSING_FILE_NAME = '/dev/null';
  * Parses a diff from two file contents objects.
  *
  * If both `oldFile` and `newFile` have a `cacheKey`, the resulting diff will
- * automatically get a combined cache key in the format `oldKey:newKey`.
+ * automatically get a combined cache key in the format `diff:oldKey:newKey`.
  */
 export function parseDiffFromFile(
   oldFile: FileContents | null,
@@ -39,13 +39,9 @@ export function parseDiffFromFile(
     cacheKey: (() => {
       const oldCacheKey = oldFile?.cacheKey;
       const newCacheKey = newFile?.cacheKey;
-      if (oldCacheKey != null && newCacheKey != null) {
-        return oldCacheKey + ':' + newCacheKey;
-      }
-      if (oldCacheKey != null || newCacheKey != null) {
-        return `diff:${oldCacheKey ?? newCacheKey}`;
-      }
-      return undefined;
+      return oldCacheKey != null && newCacheKey != null
+        ? `diff:${oldCacheKey}:${newCacheKey}`
+        : undefined;
     })(),
     oldFile: resolvedOldFile,
     newFile: resolvedNewFile,

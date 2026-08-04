@@ -100,7 +100,41 @@ describe('parseDiffFromFile', () => {
       }
     );
 
-    expect(result.cacheKey).toBe('old-cache:new-cache');
+    expect(result.cacheKey).toBe('diff:old-cache:new-cache');
+  });
+
+  test('leaves cacheKey unset when either side of a two-sided diff is unkeyed', () => {
+    const keyedOldFile: FileContents = {
+      name: 'test.txt',
+      contents: 'old\n',
+      cacheKey: 'old-cache',
+    };
+    const keyedNewFile: FileContents = {
+      name: 'test.txt',
+      contents: 'new\n',
+      cacheKey: 'new-cache',
+    };
+
+    const keyedOldResults = [
+      parseDiffFromFile(keyedOldFile, {
+        name: 'test.txt',
+        contents: 'first unkeyed version\n',
+      }),
+      parseDiffFromFile(keyedOldFile, {
+        name: 'test.txt',
+        contents: 'second unkeyed version\n',
+      }),
+    ];
+    const keyedNewResult = parseDiffFromFile(
+      { name: 'test.txt', contents: 'unkeyed old version\n' },
+      keyedNewFile
+    );
+
+    expect(keyedOldResults.map((result) => result.cacheKey)).toEqual([
+      undefined,
+      undefined,
+    ]);
+    expect(keyedNewResult.cacheKey).toBeUndefined();
   });
 
   test('leaves cacheKey unset when file cacheKeys are omitted', () => {
@@ -129,7 +163,7 @@ describe('parseDiffFromFile', () => {
     expect(result.isPartial).toBe(false);
     expect(result.deletionLines).toEqual([]);
     expect(result.additionLines).toEqual(splitFileContents(newFile.contents));
-    expect(result.cacheKey).toBe('diff:created-cache');
+    expect(result.cacheKey).toBeUndefined();
     expect(verifyHunkLineValues(result)).toEqual([]);
   });
 
@@ -150,7 +184,7 @@ describe('parseDiffFromFile', () => {
     expect(result.isPartial).toBe(false);
     expect(result.deletionLines).toEqual(splitFileContents(oldFile.contents));
     expect(result.additionLines).toEqual([]);
-    expect(result.cacheKey).toBe('diff:deleted-cache');
+    expect(result.cacheKey).toBeUndefined();
     expect(verifyHunkLineValues(result)).toEqual([]);
   });
 
@@ -160,8 +194,13 @@ describe('parseDiffFromFile', () => {
       contents: '',
     };
 
-    expect(parseDiffFromFile(null, emptyFile).type).toBe('new');
-    expect(parseDiffFromFile(emptyFile, null).type).toBe('deleted');
+    const added = parseDiffFromFile(null, emptyFile);
+    const deleted = parseDiffFromFile(emptyFile, null);
+
+    expect(added.type).toBe('new');
+    expect(added.cacheKey).toBeUndefined();
+    expect(deleted.type).toBe('deleted');
+    expect(deleted.cacheKey).toBeUndefined();
   });
 
   test('throws when both file sides are missing', () => {
