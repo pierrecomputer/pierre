@@ -1208,7 +1208,7 @@ export function TreeApp<LAnnotation = unknown>({
   const editorRef = useRef<Editor<LAnnotation> | null>(null);
   const editorOptions = useMemo<EditorOptions<LAnnotation>>(
     () => ({
-      onAttach(editor: Editor<LAnnotation>) {
+      onAttach(editor) {
         editorRef.current = editor;
       },
       onChange(file) {

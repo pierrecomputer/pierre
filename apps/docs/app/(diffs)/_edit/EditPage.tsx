@@ -8,9 +8,9 @@ import { LiveEditing } from '../_examples/LiveEditing/LiveEditing';
 import { EditHero } from './EditHero';
 import { EditPredictionDemo } from './EditPredictionDemo';
 import { EditReference } from './EditReference';
-import { EditShortcuts } from './EditShortcuts';
 import { FindDemo } from './FindDemo';
 import { HistoryDemo } from './HistoryDemo';
+import { KeyboardShortcuts } from './KeyboardShortcuts';
 import { MarkerDemo } from './MarkerDemo';
 import { SelectionDemo } from './SelectionDemo';
 import { HeadingAnchors } from '@/components/docs/HeadingAnchors';
@@ -27,7 +27,7 @@ interface EditPageProps {
   markerFile: PreloadedFileResult<undefined>;
   findFile: PreloadedFileResult<undefined>;
   historyFile: PreloadedFileResult<undefined>;
-  shortcutsFile: PreloadedFileResult<undefined>;
+  keymapFile: PreloadedFileResult<undefined>;
   selectionFile: PreloadedFileResult<undefined>;
 }
 
@@ -39,7 +39,7 @@ export function EditPage({
   markerFile,
   findFile,
   historyFile,
-  shortcutsFile,
+  keymapFile,
   selectionFile,
 }: EditPageProps) {
   return (
@@ -155,17 +155,14 @@ export function EditPage({
               title="Keyboard shortcuts"
               description={
                 <>
-                  Edit mode ships with all the additional shortcuts your users
-                  will need out of the box. Use the example <code>File</code>{' '}
-                  below to try the shortcuts you see in the table, including
-                  moving selected lines with <code>Alt-↑</code> /{' '}
-                  <code>Alt-↓</code> or <code>Alt-Ctrl-P</code> /{' '}
-                  <code>Alt-Ctrl-N</code> on macOS and Linux. Editing the
-                  example <code>File</code> will not update the table.
+                  Browse every default key binding and search by shortcut,
+                  action, or command. Switch to the editable JSON view to
+                  explore the <code>keymap</code> format used to customize
+                  editor commands.
                 </>
               }
             />
-            <EditShortcuts prerenderedFile={shortcutsFile} />
+            <KeyboardShortcuts prerenderedFile={keymapFile} />
           </div>
 
           <EditReference />

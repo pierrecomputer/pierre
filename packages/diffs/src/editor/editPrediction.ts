@@ -1,5 +1,4 @@
-import type { Position, TextEdit } from '../types';
-import type { ResolvedTextEdit } from './textDocument';
+import type { Position, ResolvedTextEdit, TextEdit } from '../types';
 import type { TextDocumentChangeTransaction } from './textDocumentChangeTransaction';
 
 export interface EditPredictRequest {

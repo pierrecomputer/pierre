@@ -29,7 +29,7 @@ Install `react` and `react-dom` when the app uses the React entry.
 | Renderers, managers, DOM helpers, comparisons, and constants | [Low-level rendering API](references/api-rendering.md) |
 | Shared data, option, render, selection, and editor types     | [Shared types](references/api-types.md)                |
 | `@pierre/diffs/react`                                        | [React API](references/api-react.md)                   |
-| `@pierre/diffs/editor`                                       | [Editor API](references/api-editor.md)                 |
+| `@pierre/diffs/edit`                                         | [Editor API](references/api-editor.md)                 |
 | `@pierre/diffs/ssr`                                          | [SSR API](references/api-ssr.md)                       |
 | `@pierre/diffs/worker` and worker scripts                    | [Worker API](references/api-worker.md)                 |
 

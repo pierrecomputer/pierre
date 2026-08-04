@@ -1,6 +1,6 @@
 'use client';
 
-import type { Editor } from '@pierre/diffs/edit';
+import type { Editor, EditorOptions } from '@pierre/diffs/edit';
 import { File } from '@pierre/diffs/react';
 import type { PreloadedFileResult } from '@pierre/diffs/ssr';
 import { useEffect, useMemo, useRef } from 'react';
@@ -120,9 +120,9 @@ export function FindDemo({ prerenderedFile }: FindDemoProps) {
     };
   }, []);
 
-  const editorOptions = useMemo(
+  const editorOptions = useMemo<EditorOptions<undefined>>(
     () => ({
-      onAttach(editor: Editor<undefined>) {
+      onAttach(editor) {
         editorRef.current = editor;
       },
     }),

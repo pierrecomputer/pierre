@@ -151,7 +151,7 @@ button.aui-dot.is-zoom:hover {
 
 .aui-body {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 380px;
+  grid-template-columns: minmax(0, 1fr) 340px;
   min-height: 0;
 }
 
@@ -433,6 +433,7 @@ button.aui-dot.is-zoom:hover {
   min-height: 0;
   overflow: auto;
   padding-top: 6px;
+  --trees-padding-inline-override: 6px;
 }
 
 /* --- Fullscreen variant (/edit/live) ------------------------------------- */

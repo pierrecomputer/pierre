@@ -975,18 +975,23 @@ export const EDITOR_OPTIONS_TYPE: PreloadFileOptions<undefined> = {
     contents: `import type {
   DiffLineAnnotation,
   DiffsEditableComponent,
+  EditorChangeEvent,
   FileContents,
   LineAnnotation,
 } from '@pierre/diffs';
 import {
   Editor,
   type EditPredictProvider,
+  type EditorKeymap,
   type IStateStorage,
 } from '@pierre/diffs/edit';
 
 interface EditorOptions<LAnnotation> {
   // Max undo stack entries
   historyMaxEntries?: number;
+
+  // Custom keymap checked before the default map.
+  keymap?: EditorKeymap;
 
   // Preserve each File's document and item-local editor state between renders.
   // Requires every editable file to provide a unique, stable cacheKey.
@@ -1047,9 +1052,11 @@ interface EditorOptions<LAnnotation> {
   // existing array reference.
   onChange?: (
     file: FileContents,
-    lineAnnotations?:
+    lineAnnotations:
       | LineAnnotation<LAnnotation>[]
       | DiffLineAnnotation<LAnnotation>[]
+      | undefined,
+    event: EditorChangeEvent<LAnnotation>
   ) => void;
 
   // Fires when the editable content area gains focus (tab, click, or editor.focus()).
@@ -1174,6 +1181,27 @@ const viewer = new CodeView({
       onAttach(editor) {
         editor.focus({ lineNumber: 'first-visible', preventScroll: true });
       },
+    });
+  },
+});`,
+  },
+  options,
+};
+
+export const EDIT_ON_CHANGE_EXAMPLE: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'editor_on_change.ts',
+    contents: `import { Editor } from '@pierre/diffs/edit';
+
+new Editor({
+  onChange: (file, lineAnnotations, event) => {
+    // \`event.changes\` is an array containing all edits.
+    const changes = event.changes;
+
+    changes.forEach((change) => {
+      console.log('Text inserted/replaced:', change.text);
+      console.log('Range of the edit:', change.range); // { start: { line, character }, end: { line, character } }
+      console.log('Offset of the change:', change.start, change.end);
     });
   },
 });`,

@@ -314,6 +314,34 @@ describe('diff editor: collapsed regions during edit', () => {
     }
   });
 
+  test('a line-count edit rebuilds columns without replacing the content element', async () => {
+    const fixture = await createCollapsedEditFixture();
+    const { container, editor } = fixture;
+    try {
+      const contentBefore = findAdditionContent(container);
+      const gutterBefore = findAdditionGutter(container);
+      expect(contentBefore).toBeDefined();
+      const rowsBefore = contentBefore!.children.length;
+
+      // Enter at the end of the first hunk's changed line (index 9) — a
+      // line-count change, which rebuilds both columns wholesale.
+      typeAt(editor, 9, 'line 10 changed'.length, '\n');
+      await waitFor(
+        () =>
+          (findAdditionContent(container)?.children.length ?? 0) > rowsBefore
+      );
+
+      // The rebuild ran (a row was added) on the same column elements: the
+      // contenteditable keeps its identity, so the browser's editing session
+      // is never torn down and refocused (iOS answers a session restart with
+      // an animated caret reveal).
+      expect(findAdditionContent(container)).toBe(contentBefore);
+      expect(findAdditionGutter(container)).toBe(gutterBefore);
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
   test('clicking a separator expand button mid-edit reveals rows and keeps edits', async () => {
     const fixture = await createCollapsedEditFixture();
     const { container, editor } = fixture;

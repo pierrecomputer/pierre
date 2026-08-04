@@ -8,6 +8,7 @@ import type {
   DiffsEditor,
   DiffsHighlighter,
   EditableInstance,
+  EditorChangeEvent,
   EditorSelection,
   EditorState,
   FileContents,
@@ -17,6 +18,7 @@ import type {
   Position,
   Range,
   RenderRange,
+  ResolvedTextEdit,
   SelectionSide,
   TextEdit,
 } from '../types';
@@ -25,6 +27,7 @@ import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
 import { isGutterUtilityPath } from '../utils/isGutterUtilityPath';
 import {
   type EditorCommand,
+  type EditorKeymap,
   resolveEditorCommandFromKeyboardEvent,
   resolveFindAgainShortcut,
 } from './command';
@@ -119,11 +122,7 @@ import {
   type IStateStorage,
   type PersistStateStorage,
 } from './stateStorage';
-import {
-  type ResolvedTextEdit,
-  TextDocument,
-  type TextDocumentChange,
-} from './textDocument';
+import { TextDocument, type TextDocumentChange } from './textDocument';
 import { getTextDocumentChangeTransaction } from './textDocumentChangeTransaction';
 import {
   getExpandedAsciiTextColumns,
@@ -152,6 +151,8 @@ export type {
 export interface EditorOptions<LAnnotation> {
   /** The maximum number of entries to keep in the undo stack. */
   historyMaxEntries?: number;
+  /** Custom keymap groups checked before defaults; later groups take precedence. */
+  keymap?: EditorKeymap;
   /**
    * Preserve each file's document and item-local editor state when switching files.
    * Every editable file must provide a unique, stable `cacheKey`.
@@ -226,9 +227,11 @@ export interface EditorOptions<LAnnotation> {
   /** Callback when the editor document changes. */
   onChange?: (
     file: FileContents,
-    lineAnnotations?:
+    lineAnnotations:
       | LineAnnotation<LAnnotation>[]
       | DiffLineAnnotation<LAnnotation>[]
+      | undefined,
+    event: EditorChangeEvent<LAnnotation>
   ) => void;
   /** Callback when the editor gains focus. */
   onFocus?: () => void;
@@ -1045,7 +1048,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#tokenizer = new EditorTokenizer({
         highlighter,
         textDocument,
-        codeOptions: this.#fileInstance?.options ?? {},
+        codeOptions: this.#fileInstance?.__getEffectiveCodeOptions() ?? {},
         matchBrackets: this.#options.matchBrackets,
         onDeferTokenize: this.#onDeferTokenize,
         onThemeChange: () => this.#scheduleThemeSelectionRefresh(),
@@ -1122,7 +1125,9 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     // re-renders, so a host-driven theme swap (theme picker, light/dark toggle)
     // wouldn't otherwise reach it. Re-apply the surface's current theme on every
     // sync so the editor's line-highlight/token colors track the active theme.
-    this.#tokenizer?.syncTheme(this.#fileInstance?.options ?? {});
+    this.#tokenizer?.syncTheme(
+      this.#fileInstance?.__getEffectiveCodeOptions() ?? {}
+    );
 
     this.#lineAnnotations = lineAnnotations;
     this.#renderRange = renderRange;
@@ -1949,23 +1954,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       ),
 
       addEventListener(contentEl, 'keydown', (e) => {
-        if (e.key === 'Escape') {
-          e.preventDefault();
-          if (
-            this.#editPredictionTimer !== undefined ||
-            this.#editPredictionAbortController !== undefined ||
-            this.#editPrediction !== undefined
-          ) {
-            this.#cancelEditPrediction(true);
-          }
-          this.#searchPanel?.close();
-          this.#searchPanel = undefined;
-          this.#retainSearchPanelFocus = false;
-          this.#selectionAction?.cleanup();
-          this.#selectionAction = undefined;
-          this.#runCommand('simplifySelection');
-          return;
-        }
         if (!targetIsContentElement(e)) {
           return;
         }
@@ -1992,6 +1980,30 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           return;
         }
 
+        const command = resolveEditorCommandFromKeyboardEvent(
+          e,
+          this.#options.keymap
+        );
+        if (command !== undefined) {
+          e.preventDefault();
+          if (command === 'simplifySelection') {
+            if (
+              this.#editPredictionTimer !== undefined ||
+              this.#editPredictionAbortController !== undefined ||
+              this.#editPrediction !== undefined
+            ) {
+              this.#cancelEditPrediction(true);
+            }
+            this.#searchPanel?.close();
+            this.#searchPanel = undefined;
+            this.#retainSearchPanelFocus = false;
+            this.#selectionAction?.cleanup();
+            this.#selectionAction = undefined;
+          }
+          this.#runCommand(command);
+          return;
+        }
+
         // handle the cursor move events manually for multiple selections and virtual viewport
         const mvShortcut = isMoveCursorShortcut(e);
         const textDocument = this.#textDocument;
@@ -2003,7 +2015,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         ) {
           const cursorMoveOptions: CursorMoveOptions = {
             getSoftLineOffsets: this.#isWrap
-              ? (line) => this.#wrapLineText(line)
+              ? (line) => this.#wrapLineTextOrWholeLine(line)
               : undefined,
             resolveRenderableLine: this.#resolveRenderableLine,
           };
@@ -2057,12 +2069,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
             this.#searchPanel.navigate(findAgain === 'previous');
             return;
           }
-        }
-
-        const command = resolveEditorCommandFromKeyboardEvent(e);
-        if (command !== undefined) {
-          e.preventDefault();
-          this.#runCommand(command);
         }
       }),
 
@@ -5111,7 +5117,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     type: OverlayRangeType,
     extraDataset?: string
   ) {
-    const wrapOffsets = this.#wrapLineText(line);
+    const wrapOffsets = this.#wrapLineTextOrWholeLine(line);
     const segmentCount = wrapOffsets.length - 1;
     // offsetLeft is the x of the content's left edge in overlay coordinates.
     // In a split diff with wrapping the content element is a grid item shifted
@@ -5499,7 +5505,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     const popoverHeight = this.#selectionAction.height;
     const candidateGeometry = (
       candidate: typeof preferred
-    ): PopoverPlacementBounds & { left: number; anchorTop: number } => {
+    ): PopoverPlacementBounds & {
+      left: number;
+      anchorTop: number;
+      rowTop: number;
+    } => {
       const [left, candidateWrapLine] = this.#getCharX(
         candidate.anchor.line,
         candidate.anchor.character
@@ -5508,20 +5518,21 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         this.#getLineY(candidate.anchor.line) + candidateWrapLine * lineHeight;
       const anchorTop = candidate.placeAbove ? rowTop : rowTop + lineHeight;
       const top = candidate.placeAbove ? anchorTop - popoverHeight : anchorTop;
-      return { top, bottom: top + popoverHeight, left, anchorTop };
+      return { top, bottom: top + popoverHeight, left, anchorTop, rowTop };
     };
     const preferredGeometry = candidateGeometry(preferred);
-    const fallbackGeometry = candidateGeometry(fallback);
 
     const lineCount = textDocument.lineCount;
     const atDocumentEdge = isBackward
       ? head.line < POPOVER_BOUNDARY_LINES
       : head.line >= lineCount - POPOVER_BOUNDARY_LINES;
-    const canUseFallback = this.#isLineVisible(fallback.anchor.line);
+    const fallbackGeometry = this.#isLineVisible(fallback.anchor.line)
+      ? candidateGeometry(fallback)
+      : undefined;
     const popoverManager = this.#getPopoverManager();
     const viewport = popoverManager.getPlacementBounds();
     const useFallback =
-      canUseFallback &&
+      fallbackGeometry !== undefined &&
       popoverManager.choosePlacement({
         preferred: preferredGeometry,
         fallback: fallbackGeometry,
@@ -5530,22 +5541,40 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         atDocumentEdge,
         placementKey: SELECTION_ACTION_POPOVER_PLACEMENT_KEY,
       }) === 'fallback';
-    if (!canUseFallback) {
+    if (fallbackGeometry === undefined) {
       popoverManager.setPlacement(
         'preferred',
         SELECTION_ACTION_POPOVER_PLACEMENT_KEY
       );
     }
     const { placeAbove } = useFallback ? fallback : preferred;
-    const { left, anchorTop } = useFallback
-      ? fallbackGeometry
-      : preferredGeometry;
+    const { left, anchorTop } =
+      useFallback && fallbackGeometry !== undefined
+        ? fallbackGeometry
+        : preferredGeometry;
+    // An endpoint outside the virtualized window extends past the viewport
+    // rather than making a selection that crosses it look offscreen.
+    const selectionTop = isBackward
+      ? preferredGeometry.rowTop
+      : (fallbackGeometry?.rowTop ?? -Infinity);
+    const selectionBottom =
+      (isBackward
+        ? (fallbackGeometry?.rowTop ?? Infinity)
+        : preferredGeometry.rowTop) +
+      (primarySelection.end.line > primarySelection.start.line &&
+      primarySelection.end.character === 0
+        ? 0
+        : lineHeight);
+    const isSelectionVisible =
+      viewport === undefined ||
+      (selectionBottom > viewport.top && selectionTop < viewport.bottom);
 
     this.#selectionAction.reposition(
       left,
       anchorTop,
       this.#getGutterWidth(),
       placeAbove,
+      isSelectionVisible,
       viewport
     );
   }
@@ -5880,7 +5909,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
     const getSoftLineStart = this.#isWrap
       ? (line: number, character: number) => {
-          const wrapOffsets = this.#wrapLineText(line);
+          const wrapOffsets = this.#wrapLineTextOrWholeLine(line);
           for (let w = 0; w + 1 < wrapOffsets.length; w++) {
             const segmentStart = wrapOffsets[w];
             const segmentEnd = wrapOffsets[w + 1];
@@ -5988,7 +6017,12 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     const fileRef = this.getFile();
     const onChange = this.#options.onChange;
     if (fileRef !== undefined && onChange !== undefined) {
-      onChange(fileRef, newLineAnnotations ?? this.#lineAnnotations);
+      const lineAnnotations = newLineAnnotations ?? this.#lineAnnotations;
+      onChange(fileRef, lineAnnotations, {
+        changes: change.changes,
+        file: fileRef,
+        lineAnnotations,
+      });
     }
 
     // Invalidate layout caches touched by the edit. Clear cached line Y
@@ -6374,6 +6408,15 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         2 * this.#metrics.ch + this.#metrics.measureTextWidth(lineText);
       if (textWidth > contentWidth) {
         const wrapOffsets = this.#wrapLineText(line);
+        // undefined means the wrap offsets could not be measured — the
+        // content element is detached or has no layout (see #wrapLineText).
+        // Fall back to an unwrapped position, and return before the
+        // #lastAccessedCharX write below so nothing derived from the
+        // unmeasurable DOM gets memoized; the next call re-measures against
+        // live layout.
+        if (wrapOffsets == null) {
+          return [left + (this.#activeContentOffset?.left ?? 0), 0];
+        }
         for (let w = 0; w + 1 < wrapOffsets.length; w++) {
           const segmentStart = wrapOffsets[w];
           const segmentEnd = wrapOffsets[w + 1];
@@ -6414,7 +6457,17 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
   // Compute how a logical line of text is broken into visual lines when line
   // wrapping is enabled.
-  #wrapLineText(line: number): Uint32Array {
+  //
+  // Returns undefined when the offsets cannot be measured: measurement works
+  // by appending a hidden probe to #contentElement, so a detached or
+  // zero-width content element (both occur while a session re-render replaces
+  // the code columns) would report "never wraps" for any line. That result is
+  // never returned or cached — a cached wrong answer would keep placing
+  // carets at unwrapped positions until an unrelated edit evicted it. Callers
+  // that need best-effort segmentation use #wrapLineTextOrWholeLine;
+  // #getCharX propagates the undefined so its own memoization is skipped
+  // too.
+  #wrapLineText(line: number): Uint32Array | undefined {
     const cachedOffsets = this.#wrapLineOffsetsCache.get(line);
     if (cachedOffsets !== undefined) {
       return cachedOffsets;
@@ -6428,6 +6481,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       const offsets = new Uint32Array([0]);
       this.#wrapLineOffsetsCache.set(line, offsets);
       return offsets;
+    }
+
+    const contentElement = this.#contentElement;
+    if (contentElement == null || !contentElement.isConnected) {
+      return undefined;
     }
 
     const div = h(
@@ -6449,16 +6507,19 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         },
         textContent: lineText,
       },
-      this.#contentElement
+      contentElement
     );
     const textNode = div.firstChild as Text;
     const range = document.createRange();
     const starts: number[] = [];
 
     try {
+      const divRect = div.getBoundingClientRect();
+      if (divRect.width === 0) {
+        return undefined;
+      }
       const unicodeOffsets = getUnicodeMeasurementOffsets(lineText);
-      const wrapLineStartLeft =
-        div.getBoundingClientRect().left + this.#metrics.ch;
+      const wrapLineStartLeft = divRect.left + this.#metrics.ch;
 
       // Measurement steps through grapheme clusters when the text needs
       // Unicode-aware boundaries, single UTF-16 units otherwise. Grapheme
@@ -6519,6 +6580,19 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     } finally {
       div.remove();
     }
+  }
+
+  // #wrapLineText for callers that need usable offsets even when measurement
+  // is impossible (undefined): treats the line as one unwrapped segment.
+  // Safe because the fallback is never cached — once the content element is
+  // measurable again, the same call returns real offsets.
+  #wrapLineTextOrWholeLine(line: number): Uint32Array {
+    const offsets = this.#wrapLineText(line);
+    if (offsets !== undefined) {
+      return offsets;
+    }
+    const length = this.#textDocument?.getLineText(line)?.length ?? 0;
+    return Uint32Array.of(0, length);
   }
 
   // check if the web selection belongs to editor

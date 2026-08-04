@@ -1258,6 +1258,7 @@ export class VirtualizedFileDiff<
     } else {
       this.top ??= this.getVirtualizedTop();
       if (targetChanged) {
+        this.getSimpleVirtualizer()?.markDOMDirty();
         this.computeApproximateSize(false, nextFileDiff);
       }
     }
@@ -1312,6 +1313,12 @@ export class VirtualizedFileDiff<
     return this.isAdvancedMode() || super.shouldDisableVirtualizationBuffers();
   }
 
+  // This WebKit dom manipulation scroll fix is not applicable in virtualized
+  // environments, so we avoid the performance hit even on Webkit
+  protected override shouldGuardRebuildScroll(): boolean {
+    return false;
+  }
+
   private isSimpleMode(): boolean {
     return this.virtualizer.type === 'simple';
   }
@@ -1320,7 +1327,7 @@ export class VirtualizedFileDiff<
     return this.virtualizer.type === 'advanced';
   }
 
-  private getVirtualizedTop(): number | undefined {
+  private getVirtualizedTop(): number {
     if (this.virtualizer.type === 'advanced') {
       return this.virtualizer.getLocalTopForInstance(this);
     }

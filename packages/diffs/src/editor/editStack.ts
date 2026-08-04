@@ -1,5 +1,9 @@
-import type { DiffLineAnnotation, EditorSelection } from '../types';
-import type { ResolvedTextEdit, TextDocument } from './textDocument';
+import type {
+  DiffLineAnnotation,
+  EditorSelection,
+  ResolvedTextEdit,
+} from '../types';
+import type { TextDocument } from './textDocument';
 
 /** Largest number of undo or redo entries kept; oldest entries drop first once exceeded. */
 const DEFAULT_EDIT_STACK_MAX_ENTRIES = 100;

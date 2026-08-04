@@ -1,9 +1,9 @@
 import { JSDOM } from 'jsdom';
 
 import type { CodeView } from '../src/components/CodeView';
-import { resetPlatformDetectionForTests } from '../src/editor/platform';
 import { clearRenderQueue } from '../src/managers/UniversalRenderingManager';
 import type { CodeViewItem, FileContents } from '../src/types';
+import { resetPlatformDetection } from '../src/utils/platform';
 
 export interface InstallDomNavigatorOptions {
   maxTouchPoints?: number;
@@ -264,7 +264,7 @@ export function installDom(options: InstallDomOptions = {}): DomHandle {
   // Platform detection memoizes on first call; reset it so it re-runs against
   // the navigator just installed above rather than a value an earlier test
   // cached under a different platform.
-  resetPlatformDetectionForTests();
+  resetPlatformDetection();
 
   return {
     window: dom.window,

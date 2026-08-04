@@ -99,9 +99,9 @@ function createTestHighlighter(): DiffsHighlighter {
   return {
     getLanguage: () => undefined,
     getLoadedLanguages: () => [],
-    getTheme: () => ({ colors: {} }),
+    getTheme: () => ({ type: 'light', colors: {} }),
     loadLanguage: async () => {},
-    setTheme: () => ({ colorMap: [''] }),
+    setTheme: () => ({ theme: { type: 'light' }, colorMap: [''] }),
   } as unknown as DiffsHighlighter;
 }
 
@@ -142,6 +142,10 @@ class TestEditableComponent implements DiffsEditableComponent<undefined> {
   setSelectedLines(_range: { start: number; end: number } | null): void {}
 
   setEditorActiveLine(_lineNumber: number | null): void {}
+
+  __getEffectiveCodeOptions(): DiffsEditableComponent<undefined>['options'] {
+    return this.options;
+  }
 
   getCodeScrollLeft(): number {
     return 0;

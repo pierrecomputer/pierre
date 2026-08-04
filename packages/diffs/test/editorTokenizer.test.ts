@@ -15,8 +15,8 @@ function createTestHighlighter(
 ): DiffsHighlighter {
   return {
     getLoadedLanguages: () => ['typescript'],
-    getTheme: () => ({ colors: {} }),
-    setTheme: () => ({ colorMap: [''] }),
+    getTheme: () => ({ type: 'dark', colors: {} }),
+    setTheme: () => ({ theme: { type: 'dark' }, colorMap: [''] }),
     ...overrides,
   } as unknown as DiffsHighlighter;
 }
@@ -25,7 +25,7 @@ function getThemeStyle(colors: Record<string, string>): string {
   let style = '';
   const tokenizer = new EditorTokenizer({
     highlighter: createTestHighlighter({
-      getTheme: () => ({ colors }),
+      getTheme: () => ({ type: 'dark', colors }),
     }),
     textDocument: new TextDocument('test.txt', 'line 0', 'text'),
     codeOptions: { theme: 'test-theme', themeType: 'dark' },
@@ -71,6 +71,27 @@ describe('EditorTokenizer', () => {
       Object.defineProperty(globalThis, 'window', originalWindowDescriptor);
       globalThis.window.matchMedia = originalMatchMedia;
     }
+  });
+
+  // A single pinned theme carries its own light/dark classification; the
+  // themeType option (or a system flip) must not relabel it. A wrong label
+  // flows through updateRenderCache into the render cache's baseThemeType
+  // and flips the surface's effective scheme after the first edit.
+  test('a single pinned theme keeps its own light/dark type', () => {
+    const tokenizer = new EditorTokenizer({
+      highlighter: createTestHighlighter(),
+      textDocument: new TextDocument('test.txt', 'line 0', 'text'),
+      codeOptions: { theme: 'test-theme', themeType: 'light' },
+      setStyle: noopSetStyle,
+      onDeferTokenize: () => {},
+    });
+    // The stub highlighter classifies every theme as dark.
+    expect(tokenizer.themeType).toBe('dark');
+
+    // A sync carrying a conflicting themeType option must not relabel.
+    tokenizer.syncTheme({ theme: 'test-theme', themeType: 'light' });
+    expect(tokenizer.themeType).toBe('dark');
+    tokenizer.cleanUp();
   });
 
   test('derives the active-line background mix and border treatment', () => {
@@ -181,6 +202,7 @@ describe('EditorTokenizer', () => {
           previousLineCount: textDocument.lineCount,
           lineCount: textDocument.lineCount,
           lineDelta: 0,
+          changes: [],
           changedLineRanges: [[0, 19]],
         },
         renderRange
@@ -230,6 +252,7 @@ describe('EditorTokenizer', () => {
       previousLineCount: textDocument.lineCount,
       lineCount: textDocument.lineCount,
       lineDelta: 0,
+      changes: [],
       changedLineRanges: [[0, 0]],
     };
 
@@ -311,6 +334,7 @@ describe('EditorTokenizer', () => {
         previousLineCount: textDocument.lineCount,
         lineCount: textDocument.lineCount,
         lineDelta: 0,
+        changes: [],
         changedLineRanges: [[0, 0]],
       });
       return tokenizer;
@@ -379,6 +403,7 @@ describe('EditorTokenizer', () => {
           previousLineCount: textDocument.lineCount,
           lineCount: textDocument.lineCount,
           lineDelta: 1,
+          changes: [],
           changedLineRanges: [[0, 999]],
         },
         renderRange
@@ -454,6 +479,7 @@ describe('EditorTokenizer', () => {
         previousLineCount: textDocument.lineCount,
         lineCount: textDocument.lineCount,
         lineDelta: 0,
+        changes: [],
         changedLineRanges: [[0, 109]],
       },
       renderRange
@@ -519,7 +545,10 @@ describe('EditorTokenizer', () => {
       const tokenizer = new EditorTokenizer({
         highlighter: createTestHighlighter({
           getLanguage: () => grammar,
-          setTheme: () => ({ colorMap: ['#code', '#comment'] }),
+          setTheme: () => ({
+            theme: { type: 'dark' },
+            colorMap: ['#code', '#comment'],
+          }),
         }),
         textDocument,
         codeOptions: { theme: 'test-theme', themeType: 'dark' },
@@ -539,6 +568,7 @@ describe('EditorTokenizer', () => {
           previousLineCount: textDocument.lineCount,
           lineCount: textDocument.lineCount,
           lineDelta: 0,
+          changes: [],
           changedLineRanges: [[0, textDocument.lineCount - 1]],
         },
         { startingLine: 0, totalLines: 150, bufferBefore: 0, bufferAfter: 0 }
@@ -647,6 +677,7 @@ describe('EditorTokenizer', () => {
           previousLineCount: textDocument.lineCount,
           lineCount: textDocument.lineCount,
           lineDelta: 0,
+          changes: [],
           changedLineRanges: [[0, 19]],
         },
         renderRange
@@ -747,6 +778,7 @@ describe('EditorTokenizer', () => {
           previousLineCount: textDocument.lineCount,
           lineCount: textDocument.lineCount,
           lineDelta: 0,
+          changes: [],
           changedLineRanges: [[0, textDocument.lineCount - 1]],
         },
         {
@@ -829,7 +861,10 @@ describe('EditorTokenizer', () => {
       const tokenizer = new EditorTokenizer({
         highlighter: createTestHighlighter({
           getLanguage: () => grammar,
-          setTheme: () => ({ colorMap: ['#code', '#comment'] }),
+          setTheme: () => ({
+            theme: { type: 'dark' },
+            colorMap: ['#code', '#comment'],
+          }),
         }),
         textDocument,
         codeOptions: { theme: 'test-theme', themeType: 'dark' },
@@ -847,6 +882,7 @@ describe('EditorTokenizer', () => {
           previousLineCount: textDocument.lineCount,
           lineCount: textDocument.lineCount,
           lineDelta: 0,
+          changes: [],
           changedLineRanges: [[0, textDocument.lineCount - 1]],
         },
         { startingLine: 0, totalLines: 150, bufferBefore: 0, bufferAfter: 0 }
@@ -955,6 +991,7 @@ describe('EditorTokenizer', () => {
           previousLineCount: textDocument.lineCount,
           lineCount: textDocument.lineCount,
           lineDelta: 0,
+          changes: [],
           changedLineRanges: [[0, 0]],
         },
         { startingLine: 0, totalLines: 1, bufferBefore: 0, bufferAfter: 0 }
@@ -1042,6 +1079,7 @@ describe('EditorTokenizer', () => {
             previousLineCount: textDocument.lineCount,
             lineCount: textDocument.lineCount,
             lineDelta: 0,
+            changes: [],
             changedLineRanges: [[0, 0]],
           },
           {
@@ -1276,6 +1314,7 @@ describe('EditorTokenizer', () => {
         previousLineCount: textDocument.lineCount,
         lineCount: textDocument.lineCount,
         lineDelta: 0,
+        changes: [],
         changedLineRanges: [[0, 0]],
       },
       { startingLine: 100, totalLines: 10, bufferBefore: 0, bufferAfter: 0 }
@@ -1366,6 +1405,7 @@ describe('EditorTokenizer', () => {
         previousLineCount: textDocument.lineCount,
         lineCount: textDocument.lineCount,
         lineDelta: 0,
+        changes: [],
         changedLineRanges: [[0, 0]],
       };
       const renderRange = {
@@ -1457,6 +1497,7 @@ describe('EditorTokenizer', () => {
         previousLineCount: textDocument.lineCount,
         lineCount: textDocument.lineCount,
         lineDelta: 0,
+        changes: [],
         changedLineRanges: [[0, 0]],
       };
       const renderRange = {
@@ -1547,6 +1588,7 @@ describe('EditorTokenizer', () => {
           previousLineCount: textDocument.lineCount,
           lineCount: textDocument.lineCount,
           lineDelta: 0,
+          changes: [],
           changedLineRanges: [[0, 0]],
         },
         { startingLine: 0, totalLines: 1, bufferBefore: 0, bufferAfter: 0 }
@@ -1604,6 +1646,7 @@ describe('EditorTokenizer', () => {
         previousLineCount: textDocument.lineCount,
         lineCount: textDocument.lineCount,
         lineDelta: 1,
+        changes: [],
         changedLineRanges: [[0, 799]],
       },
       { startingLine: 0, totalLines: 800, bufferBefore: 0, bufferAfter: 0 }
@@ -1717,6 +1760,7 @@ describe('EditorTokenizer', () => {
           previousLineCount: textDocument.lineCount,
           lineCount: textDocument.lineCount,
           lineDelta: 0,
+          changes: [],
           changedLineRanges: [[0, textDocument.lineCount - 1]],
         },
         {
@@ -1785,6 +1829,7 @@ describe('EditorTokenizer', () => {
           previousLineCount: lineCount,
           lineCount,
           lineDelta: 0,
+          changes: [],
           changedLineRanges: [[9, lineCount - 1]],
         },
         {
@@ -1989,6 +2034,7 @@ describe('EditorTokenizer', () => {
         previousLineCount: textDocument.lineCount,
         lineCount: textDocument.lineCount,
         lineDelta: 0,
+        changes: [],
         changedLineRanges: [[0, 0]],
       });
       expect(tokenizer.themeType).toBe('dark');
@@ -2211,6 +2257,7 @@ describe('EditorTokenizer', () => {
         previousLineCount: textDocument.lineCount,
         lineCount: textDocument.lineCount,
         lineDelta: 0,
+        changes: [],
         changedLineRanges: [[2, 2]],
       });
 

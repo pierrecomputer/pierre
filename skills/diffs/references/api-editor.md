@@ -1,6 +1,6 @@
 # Editor API
 
-This reference lists every export from `@pierre/diffs/editor` and every public
+This reference lists every export from `@pierre/diffs/edit` and every public
 member of its classes.
 
 ## Exports
@@ -8,10 +8,11 @@ member of its classes.
 | Export                | Kind  | Purpose                                                   |
 | --------------------- | ----- | --------------------------------------------------------- |
 | `Editor`              | Class | Adds text editing to a `File` or `FileDiff` instance.     |
+| `EditorChange`        | Type  | Describes one normalized editor change.                   |
+| `EditorChangeEvent`   | Type  | Provides normalized edits and current document state.     |
 | `EditorOptions`       | Type  | Configures history, state, selections, and callbacks.     |
 | `TextDocument`        | Class | Stores text, positions, edits, search, and undo history.  |
 | `TextDocumentChange`  | Type  | Describes the lines and characters changed by an edit.    |
-| `ResolvedTextEdit`    | Type  | Describes an edit with absolute offsets.                  |
 | `IStateStorage`       | Type  | Defines asynchronous or synchronous editor state storage. |
 | `PersistStateStorage` | Type  | Selects memory, IndexedDB, or custom state storage.       |
 | `Position`            | Type  | Identifies a zero-based line and character.               |
@@ -33,7 +34,7 @@ member of its classes.
 | `clipboard`              | Supplies a text clipboard reader.                        |
 | `renderSelectionAction`  | Produces the selection action element.                   |
 | `onAttach`               | Receives the editor and attached surface.                |
-| `onChange`               | Receives changed file contents and line annotations.     |
+| `onChange`               | Receives file state, annotations, and a change event.    |
 | `onFocus`                | Runs after the editor gains focus.                       |
 | `onBlur`                 | Runs after the editor loses focus.                       |
 

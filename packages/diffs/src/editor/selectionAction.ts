@@ -62,14 +62,17 @@ export class SelectionActionWidget {
    * @param top - The top position of the selection action widget.
    * @param gutterWidth - The width of the gutter.
    * @param placeAbove - Whether the selection action widget should be placed above the anchor.
+   * @param visible - Whether the selection intersects the viewport.
    */
   reposition(
     left: number,
     top: number,
     gutterWidth: number,
     placeAbove: boolean,
+    visible: boolean,
     viewport?: PopoverViewportBounds
   ): void {
+    this.#root.style.visibility = visible ? '' : 'hidden';
     setPopoverPositionStyles(this.#root, {
       gutterWidth,
       placeAbove,

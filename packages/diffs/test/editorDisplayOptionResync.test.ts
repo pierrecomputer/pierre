@@ -1,5 +1,6 @@
 import { afterAll, describe, expect, spyOn, test } from 'bun:test';
 
+import { File } from '../src/components/File';
 import { FileDiff } from '../src/components/FileDiff';
 import { DEFAULT_THEMES } from '../src/constants';
 import { Editor } from '../src/editor/editor';
@@ -64,10 +65,16 @@ interface DisplayOptionFixture {
   // Toggles a display option and forces a re-render, exactly as the React bridge
   // does on any display-option change: setOptions(newOptions) then a forced
   // re-render. The bug report's headline trigger is the word-wrap toggle, but
-  // every display option (theme, diff style, line numbers, wrap) shares the same
-  // forced-render path; line numbers is used here because wrap measurement needs
-  // browser layout APIs jsdom lacks.
+  // display options (theme, line numbers, wrap) share the same forced-render
+  // path; line numbers is used here because wrap measurement needs browser
+  // layout APIs jsdom lacks. Display re-renders rebuild the columns in place,
+  // so the editable content element keeps its identity.
   toggleDisplayOption(): Promise<void>;
+  // Switches between split and unified rendering mid-edit. Unlike display
+  // options, a diff-style switch builds a fresh code element for the target
+  // style, so the editable content element is genuinely replaced — the case
+  // the replacement-focus test exercises.
+  toggleDiffStyle(): Promise<void>;
   cleanup(): Promise<void>;
 }
 
@@ -110,10 +117,12 @@ async function createFixture(
     editor,
     fileDiff,
     async toggleDisplayOption() {
-      const previousContent = findAdditionContent(container);
+      const disableLineNumbers = !(
+        fileDiff.options.disableLineNumbers ?? false
+      );
       fileDiff.setOptions({
         ...fileDiff.options,
-        disableLineNumbers: !(fileDiff.options.disableLineNumbers ?? false),
+        disableLineNumbers,
       });
       fileDiff.render({
         oldFile,
@@ -121,9 +130,34 @@ async function createFixture(
         fileContainer: container,
         forceRender: true,
       });
-      // The forced re-render replaces the additions column and re-syncs the
-      // editor through an async highlighter pass; wait for the replacement
+      // The forced re-render rebuilds the columns in place (the content
+      // element is retained) and re-syncs the editor through an async
+      // highlighter pass; wait for the option to land on the pre element
       // instead of a fixed sleep.
+      await waitFor(() => {
+        const pre = container.shadowRoot?.querySelector('pre');
+        return (
+          (pre?.hasAttribute('data-disable-line-numbers') ?? false) ===
+          disableLineNumbers
+        );
+      });
+      await wait(0);
+    },
+    async toggleDiffStyle() {
+      const previousContent = findAdditionContent(container);
+      fileDiff.setOptions({
+        ...fileDiff.options,
+        diffStyle: fileDiff.options.diffStyle === 'split' ? 'unified' : 'split',
+      });
+      fileDiff.render({
+        oldFile,
+        newFile,
+        fileContainer: container,
+        forceRender: true,
+      });
+      // The style switch builds a fresh code element, replacing the editable
+      // content; wait for the replacement to be re-marked editable by the
+      // async editor re-sync.
       await waitFor(() => {
         const content = findAdditionContent(container);
         return (
@@ -188,7 +222,9 @@ describe('diff editor: display-option toggle mid-edit', () => {
 
       // Firefox and WebKit can remove the focused shadow subtree without a
       // blur event, so replacement detection must preserve the focus intent.
-      await fixture.toggleDisplayOption();
+      // A diff-style switch is used because it genuinely replaces the
+      // editable element; display-option re-renders keep it in place.
+      await fixture.toggleDiffStyle();
 
       const replacement = findAdditionContent(container);
       expect(replacement == null).toBe(false);
@@ -399,6 +435,82 @@ async function waitForEditable(container: HTMLElement): Promise<void> {
     await wait(0);
   }
 }
+
+describe('file editor: theme toggle mid-edit', () => {
+  // The plain-file twin of "keeps focus when replacement does not emit blur":
+  // File.applyFullRender rewrites the code columns' innerHTML, which destroys
+  // the DOM focus state without a blur event. The render must capture focus
+  // intent before the rewrite so __syncRenderView restores it — the same
+  // capture FileDiff.applyHunksToDOM performs. Focus arrives here without a
+  // caret (tab/pointer focus), so the selection-based fallback cannot restore
+  // it and only the captured request can.
+  test('restores focus when a theme toggle forces a full render', async () => {
+    const dom = installDom();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const file = new File<undefined>({
+      disableFileHeader: true,
+      theme: DEFAULT_THEMES,
+      themeType: 'light',
+    });
+    const fileContents: FileContents = {
+      name: 'edit.ts',
+      contents: 'alpha\nbravo\n',
+    };
+    const editor = new Editor<undefined>();
+    file.render({
+      file: fileContents,
+      fileContainer: container,
+      forceRender: true,
+    });
+    editor.edit(file);
+    await waitFor(() => {
+      const content = findAdditionContent(container);
+      return content?.contentEditable === 'true';
+    });
+
+    const focusTargets: HTMLElement[] = [];
+    const focusSpy = spyOn(HTMLElement.prototype, 'focus').mockImplementation(
+      function (this: HTMLElement) {
+        focusTargets.push(this);
+        this.dispatchEvent(new Event('focus'));
+      }
+    );
+
+    try {
+      const content = findAdditionContent(container);
+      if (content == null) {
+        throw new Error('missing editable file content');
+      }
+      content.focus();
+      await wait(10);
+      expect(focusTargets.at(-1) === content).toBe(true);
+      const focusCallsBeforeToggle = focusTargets.length;
+
+      file.setOptions({ ...file.options, themeType: 'dark' });
+      file.render({
+        file: fileContents,
+        fileContainer: container,
+        forceRender: true,
+      });
+      // The theme swap re-highlights asynchronously before the full render
+      // applies; wait for the editor to re-claim focus rather than for a
+      // fixed number of turns.
+      await waitFor(() => focusTargets.length > focusCallsBeforeToggle);
+
+      expect(focusTargets.length).toBeGreaterThan(focusCallsBeforeToggle);
+      const replacement = findAdditionContent(container);
+      expect(replacement == null).toBe(false);
+      expect(focusTargets.at(-1) === replacement).toBe(true);
+    } finally {
+      focusSpy.mockRestore();
+      await wait(10);
+      editor.cleanUp();
+      file.cleanUp();
+      dom.cleanup();
+    }
+  });
+});
 
 describe('diff editor: detach then re-attach', () => {
   // Mirrors the demo's Edit-mode toggle and surface switch: turning editing off

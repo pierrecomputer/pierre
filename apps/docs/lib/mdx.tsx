@@ -14,6 +14,7 @@ import { join } from 'node:path';
 import type { ComponentPropsWithoutRef } from 'react';
 import remarkGfm from 'remark-gfm';
 
+import { KeyboardShortcuts } from '../app/(diffs)/_edit/KeyboardShortcuts';
 import { CustomHunkSeparators } from '../app/(diffs)/_examples/CustomHunkSeparators/CustomHunkSeparators';
 import { CodeViewExampleTabs } from '../app/(diffs)/docs/CodeView/ExampleTabs';
 import { EditComponentTabs } from '../app/(diffs)/docs/Edit/ComponentTabs';
@@ -35,7 +36,6 @@ import {
 import { OverviewFileTree } from '../app/(trees)/docs/Overview/OverviewFileTree';
 import { BetaBadge } from '../components/BetaBadge';
 import { DocsCodeExample } from '../components/docs/DocsCodeExample';
-import { Shortcut } from '../components/Shortcut';
 import rehypeHierarchicalSlug from './rehype-hierarchical-slug';
 import remarkTocIgnore from './remark-toc-ignore';
 import { Button } from '@/components/ui/button';
@@ -82,7 +82,6 @@ const defaultComponents = {
   Link,
   Button,
   Notice,
-  Shortcut,
   IconArrowRight,
   IconCiWarningFill,
   IconInfoFill,
@@ -93,6 +92,7 @@ const defaultComponents = {
   EditComponentTabs,
   EditDemo,
   EditWorkerPoolTabs,
+  KeyboardShortcuts,
   CustomHunkSeparators,
   OverviewFileTree,
   MultiFileDiff,

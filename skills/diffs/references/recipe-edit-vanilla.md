@@ -17,7 +17,7 @@ import {
   type DiffLineAnnotation,
   type FileContents,
 } from '@pierre/diffs';
-import { Editor } from '@pierre/diffs/editor';
+import { Editor } from '@pierre/diffs/edit';
 
 interface ThreadMetadata {
   id: string;
@@ -96,8 +96,8 @@ before a later render can apply old coordinates. Use stable metadata IDs for
 application state that belongs to an annotation.
 
 Use `VirtualizedFile` or `VirtualizedFileDiff` with a `Virtualizer` for a large
-standalone surface. Load `@pierre/diffs/editor` with `import()` when edit mode
-is optional and the initial bundle must omit the editor.
+standalone surface. Load `@pierre/diffs/edit` with `import()` when edit mode is
+optional and the initial bundle must omit the editor.
 
 ## Edit `CodeView` items
 
@@ -105,7 +105,7 @@ Pass a factory through `CodeViewOptions.createEditor`:
 
 ```ts
 import { CodeView } from '@pierre/diffs';
-import { Editor } from '@pierre/diffs/editor';
+import { Editor } from '@pierre/diffs/edit';
 
 export function mountEditableCodeView(root: HTMLElement) {
   const viewer = new CodeView({

@@ -100,6 +100,15 @@ class FakeWorkerPoolManager {
     }
   }
 
+  public markWaiting(): void {
+    this.initialized = false;
+    this.failed = false;
+    const stats = this.getStats();
+    for (const callback of Array.from(this.statSubscribers)) {
+      callback(stats);
+    }
+  }
+
   // Mirror WorkerPoolManager's init-failure state: it reverts to 'waiting' with
   // workersFailed: true rather than ever reaching 'initialized'.
   public markFailed(): void {
@@ -222,6 +231,11 @@ describe('CodeView worker pool readiness', () => {
 
     try {
       viewer.setup(createRoot({ height: 1000 }));
+      // The empty mount already kicked initialization; model terminate()
+      // discarding that startup so the pool sits idle in 'waiting' again by
+      // the time the items render.
+      workerManager.markWaiting();
+      const initializeCallsAfterSetup = workerManager.initializeCallCount;
       viewer.setItems([makeFileItem('file:waiting-pool', 3)]);
 
       viewer.render(true);
@@ -229,7 +243,9 @@ describe('CodeView worker pool readiness', () => {
 
       // Rendering must kick initialization rather than block forever, which
       // then drives the pool to 'initialized' and lets the item render.
-      expect(workerManager.initializeCallCount).toBeGreaterThan(0);
+      expect(workerManager.initializeCallCount).toBeGreaterThan(
+        initializeCallsAfterSetup
+      );
       expect(viewer.getRenderedItems().map((item) => item.id)).toEqual([
         'file:waiting-pool',
       ]);
@@ -265,6 +281,56 @@ describe('CodeView worker pool readiness', () => {
       ]);
       expect(workerManager.statSubscriberCount).toBe(0);
       expect(consoleError).not.toHaveBeenCalled();
+    } finally {
+      viewer.cleanUp();
+      await wait(0);
+      cleanup();
+    }
+  });
+
+  test('an empty mount kicks initialization for a waiting pool', async () => {
+    const { cleanup } = installDom();
+    const workerManager = new FakeWorkerPoolManager();
+    const viewer = new CodeView(
+      { disableFileHeader: true },
+      workerManager.asWorkerPoolManager()
+    );
+
+    try {
+      viewer.setup(createRoot({ height: 1000 }));
+
+      // Mount renders through the same readiness gate as everything else, so
+      // even an empty viewer starts pool initialization immediately instead
+      // of deferring startup latency to the first non-empty render.
+      expect(workerManager.initializeCallCount).toBe(1);
+      expect(workerManager.statSubscriberCount).toBe(1);
+
+      workerManager.markInitialized();
+      expect(workerManager.statSubscriberCount).toBe(0);
+    } finally {
+      viewer.cleanUp();
+      await wait(0);
+      cleanup();
+    }
+  });
+
+  test('an empty mount does not re-initialize a failed pool', async () => {
+    const { cleanup } = installDom();
+    const workerManager = new FakeWorkerPoolManager();
+    workerManager.markFailed();
+    const viewer = new CodeView(
+      { disableFileHeader: true },
+      workerManager.asWorkerPoolManager()
+    );
+
+    try {
+      viewer.setup(createRoot({ height: 1000 }));
+
+      // Pool failure is sticky: the readiness gate treats a failed pool as
+      // ready (renderers fall back to synchronous highlighting), so mounting
+      // must not restart it.
+      expect(workerManager.initializeCallCount).toBe(0);
+      expect(workerManager.statSubscriberCount).toBe(0);
     } finally {
       viewer.cleanUp();
       await wait(0);

@@ -1,4 +1,5 @@
-import type { ResolvedTextEdit, TextDocumentChange } from './textDocument';
+import type { ResolvedTextEdit } from '../types';
+import type { TextDocumentChange } from './textDocument';
 
 // Keeps prediction-only edit metadata off the public TextDocumentChange shape.
 export interface TextDocumentChangeTransaction {

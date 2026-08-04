@@ -36,6 +36,7 @@ import {
 import { SVGSpriteSheet } from '../sprite';
 import type {
   AppliedThemeStyleCache,
+  BaseCodeOptions,
   BaseDiffOptions,
   CustomPreProperties,
   DiffLineAnnotation,
@@ -85,6 +86,7 @@ import { getDiffHunksRendererOptions } from '../utils/getDiffHunksRendererOption
 import { getHunkSideStartBoundary } from '../utils/getHunkSideBoundaries';
 import { getLineAnnotationName } from '../utils/getLineAnnotationName';
 import { getOrCreateCodeNode } from '../utils/getOrCreateCodeNode';
+import { guardWebKitScrollDuringRebuild } from '../utils/guardWebKitScrollDuringRebuild';
 import { upsertHostThemeStyle } from '../utils/hostTheme';
 import { hydratePartialDiff } from '../utils/hydratePartialDiff';
 import { isDefaultRenderRange } from '../utils/isDefaultRenderRange';
@@ -92,6 +94,7 @@ import { isDiffPlainText } from '../utils/isDiffPlainText';
 import { isStyleNode } from '../utils/isStyleNode';
 import { iterateOverDiff } from '../utils/iterateOverDiff';
 import { parseDiffFromFile } from '../utils/parseDiffFromFile';
+import { isSafari } from '../utils/platform';
 import { prerenderHTMLIfNecessary } from '../utils/prerenderHTMLIfNecessary';
 import { getMeasuredScrollbarGutter } from '../utils/scrollbarGutter';
 import { setPreNodeProperties } from '../utils/setWrapperNodeProps';
@@ -628,6 +631,10 @@ export class FileDiff<
     }
   }
 
+  public __getEffectiveCodeOptions(): BaseCodeOptions {
+    return { ...this.options, ...this.hunksRenderer.getEffectiveCodeOptions() };
+  }
+
   public cleanUp(recycle: boolean = false): void {
     dequeueRender(this.handleEditSessionRender);
     this.emitPostRender(true);
@@ -1055,8 +1062,17 @@ export class FileDiff<
 
     const { renderRange: previousRenderRange } = this;
     this.renderRange = nextRenderRange;
-    this.deletionFile = oldFile;
-    this.additionFile = newFile;
+    // Store files only when this render actually carried a file input:
+    // internal rerenders pass none, and wiping the pair here would defeat the
+    // oldFile/newFile early-return on every later host render. An explicit
+    // fileDiff input supersedes a previously parsed pair, so clear it then.
+    if (hasFileInput) {
+      this.deletionFile = oldFile;
+      this.additionFile = newFile;
+    } else if (fileDiff != null) {
+      this.deletionFile = undefined;
+      this.additionFile = undefined;
+    }
 
     if (fileDiff != null) {
       this.fileDiff = fileDiff;
@@ -2228,7 +2244,60 @@ export class FileDiff<
     );
   }
 
+  // A boolean check to ensure that edit mode in WebKit doesn't cause potential
+  // scroll jumps to due bugs with WebKit. The workarounds have performance
+  // implications so we avoid running the workarounds on browsers or scenarios
+  // where they are not applicable
+  protected shouldGuardRebuildScroll(): boolean {
+    return this.editor != null && isSafari();
+  }
+
   private applyHunksToDOM(
+    pre: HTMLPreElement,
+    result: HunksRenderResult
+  ): void {
+    if (this.shouldGuardRebuildScroll()) {
+      guardWebKitScrollDuringRebuild(pre, () =>
+        this.replaceCodeColumns(pre, result)
+      );
+    } else {
+      this.replaceCodeColumns(pre, result);
+    }
+  }
+
+  // Renders a code column's AST into an existing elements without replacing
+  // the gutter and content parents. Identity matters in edit mode: the content
+  // element is the focused contenteditable, and replacing it ends the
+  // browser's editing session — focus tears down and restores, and iOS
+  // answers every session restart with an animated caret reveal.
+  //
+  // Returns false when the element has no column pair yet (initial render,
+  // or a diff-style switch built a fresh element); the caller then assigns
+  // the full innerHTML.
+  private applyCodeColumnsInPlace(
+    code: HTMLElement,
+    ast: ElementContent[],
+    rowCount: number
+  ): boolean {
+    const columns = this.getColumnPair(code);
+    if (columns == null) {
+      return false;
+    }
+    const gutterChildren = getElementChildren(ast[0]);
+    const contentChildren = getElementChildren(ast[1]);
+    if (gutterChildren == null || contentChildren == null) {
+      return false;
+    }
+    columns.gutter.innerHTML = toHtml(gutterChildren);
+    columns.content.innerHTML = toHtml(contentChildren);
+    if (rowCount !== this.lastRowCount) {
+      columns.gutter.style.setProperty('grid-row', `span ${rowCount}`);
+      columns.content.style.setProperty('grid-row', `span ${rowCount}`);
+    }
+    return true;
+  }
+
+  private replaceCodeColumns(
     pre: HTMLPreElement,
     result: HunksRenderResult
   ): void {
@@ -2264,8 +2333,16 @@ export class FileDiff<
         rowSpan,
         containerSize,
       });
-      this.codeUnified.innerHTML =
-        this.hunksRenderer.renderPartialHTML(unifiedAST);
+      if (
+        !this.applyCodeColumnsInPlace(
+          this.codeUnified,
+          unifiedAST,
+          result.rowCount
+        )
+      ) {
+        this.codeUnified.innerHTML =
+          this.hunksRenderer.renderPartialHTML(unifiedAST);
+      }
       codeElements.push(this.codeUnified);
     } else if (deletionsAST != null || additionsAST != null) {
       if (deletionsAST != null) {
@@ -2281,8 +2358,16 @@ export class FileDiff<
           rowSpan,
           containerSize,
         });
-        this.codeDeletions.innerHTML =
-          this.hunksRenderer.renderPartialHTML(deletionsAST);
+        if (
+          !this.applyCodeColumnsInPlace(
+            this.codeDeletions,
+            deletionsAST,
+            result.rowCount
+          )
+        ) {
+          this.codeDeletions.innerHTML =
+            this.hunksRenderer.renderPartialHTML(deletionsAST);
+        }
         codeElements.push(this.codeDeletions);
       } else {
         // If we have no deletion column, lets clean it up if it exists
@@ -2306,8 +2391,16 @@ export class FileDiff<
           rowSpan,
           containerSize,
         });
-        this.codeAdditions.innerHTML =
-          this.hunksRenderer.renderPartialHTML(additionsAST);
+        if (
+          !this.applyCodeColumnsInPlace(
+            this.codeAdditions,
+            additionsAST,
+            result.rowCount
+          )
+        ) {
+          this.codeAdditions.innerHTML =
+            this.hunksRenderer.renderPartialHTML(additionsAST);
+        }
         codeElements.push(this.codeAdditions);
       } else {
         // If we have no addition column, lets clean it up if it exists
@@ -2391,11 +2484,13 @@ export class FileDiff<
       diffStyle,
     });
     if (trimResult < 0) {
-      throw new Error('applyPartialRender: failed to trim to overlap');
+      throw new Error('FileDiff.applyPartialRender: failed to trim to overlap');
     }
 
     if (this.lastRowCount < trimResult) {
-      throw new Error('applyPartialRender: trimmed beyond DOM row count');
+      throw new Error(
+        'FileDiff.applyPartialRender: trimmed beyond DOM row count'
+      );
     }
 
     let rowCount = this.lastRowCount - trimResult;
@@ -2594,18 +2689,25 @@ export class FileDiff<
     const ast = this.hunksRenderer.renderCodeAST('unified', hunksResult);
     const gutterChildren = getElementChildren(ast?.[0]);
     const contentChildren = getElementChildren(ast?.[1]);
-    for (const [el, astChildren] of [
-      [columns.gutter, gutterChildren],
-      [columns.content, contentChildren],
-    ] as const) {
-      if (astChildren != null) {
-        el.innerHTML = toHtml(astChildren);
+    const applyColumns = () => {
+      for (const [el, astChildren] of [
+        [columns.gutter, gutterChildren],
+        [columns.content, contentChildren],
+      ] as const) {
+        if (astChildren != null) {
+          el.innerHTML = toHtml(astChildren);
+        }
       }
-    }
 
-    if (hunksResult.rowCount !== this.lastRowCount) {
-      this.applyRowSpan('unified', columns, hunksResult.rowCount);
-      this.lastRowCount = hunksResult.rowCount;
+      if (hunksResult.rowCount !== this.lastRowCount) {
+        this.applyRowSpan('unified', columns, hunksResult.rowCount);
+        this.lastRowCount = hunksResult.rowCount;
+      }
+    };
+    if (this.shouldGuardRebuildScroll()) {
+      guardWebKitScrollDuringRebuild(this.pre, applyColumns);
+    } else {
+      applyColumns();
     }
     this.renderSeparators(hunksResult.hunkData);
 
@@ -2966,6 +3068,25 @@ export class FileDiff<
     element.style.setProperty('min-height', `calc(${size} * 1lh)`);
   }
 
+  private getColumnPair(
+    code: HTMLElement | undefined
+  ): ColumnElements | undefined {
+    if (code == null) {
+      return undefined;
+    }
+    const gutter = code.children[0];
+    const content = code.children[1];
+    if (
+      !(gutter instanceof HTMLElement) ||
+      !(content instanceof HTMLElement) ||
+      gutter.dataset.gutter == null ||
+      content.dataset.content == null
+    ) {
+      return undefined;
+    }
+    return { gutter, content };
+  }
+
   private getCodeColumns(
     diffStyle: 'split' | 'unified',
     codeUnified: HTMLElement | undefined,
@@ -2975,30 +3096,11 @@ export class FileDiff<
     | [ColumnElements | undefined, ColumnElements | undefined]
     | ColumnElements
     | undefined {
-    function getColumns(
-      code: HTMLElement | undefined
-    ): ColumnElements | undefined {
-      if (code == null) {
-        return undefined;
-      }
-      const gutter = code.children[0];
-      const content = code.children[1];
-      if (
-        !(gutter instanceof HTMLElement) ||
-        !(content instanceof HTMLElement) ||
-        gutter.dataset.gutter == null ||
-        content.dataset.content == null
-      ) {
-        return undefined;
-      }
-      return { gutter, content };
-    }
-
     if (diffStyle === 'unified') {
-      return getColumns(codeUnified);
+      return this.getColumnPair(codeUnified);
     } else {
-      const deletions = getColumns(codeDeletions);
-      const additions = getColumns(codeAdditions);
+      const deletions = this.getColumnPair(codeDeletions);
+      const additions = this.getColumnPair(codeAdditions);
       return deletions != null || additions != null
         ? [deletions, additions]
         : undefined;

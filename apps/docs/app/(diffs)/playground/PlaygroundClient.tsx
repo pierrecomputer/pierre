@@ -727,7 +727,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
   const editorRef = useRef<Editor<PlaygroundAnnotationMetadata> | null>(null);
   const editorOptions = useMemo<EditorOptions<PlaygroundAnnotationMetadata>>(
     () => ({
-      onAttach(editor: Editor<PlaygroundAnnotationMetadata>) {
+      onAttach(editor) {
         editorRef.current = editor;
         editor.focus({ lineNumber: 'first-visible', preventScroll: true });
       },

@@ -17,6 +17,7 @@ import { areThemesAttached } from '../highlighter/themes/areThemesAttached';
 import type {
   AnnotationLineMap,
   AnnotationSpan,
+  BaseCodeOptions,
   BaseDiffOptions,
   BaseDiffOptionsWithDefaults,
   CodeColumnType,
@@ -835,6 +836,22 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       this.options.theme ??
       DEFAULT_THEMES
     );
+  }
+
+  public getEffectiveCodeOptions(): Pick<
+    BaseCodeOptions,
+    'theme' | 'tokenizeMaxLineLength'
+  > {
+    const poolOptions =
+      this.workerManager?.isWorkingPool() === true
+        ? this.workerManager.getDiffRenderOptions()
+        : undefined;
+    return {
+      theme: this.getLocalHighlightTheme(),
+      tokenizeMaxLineLength:
+        poolOptions?.tokenizeMaxLineLength ??
+        this.options.tokenizeMaxLineLength,
+    };
   }
 
   private getRenderOptions(diff: FileDiffMetadata): GetRenderOptionsReturn {

@@ -1,8 +1,10 @@
 import type {
   DiffLineAnnotation,
+  EditorChange,
   EditorSelection,
   Position,
   Range,
+  ResolvedTextEdit,
   TextEdit,
 } from '../types';
 import { countLineBreaks } from '../utils/computeFileOffsets';
@@ -18,20 +20,9 @@ import { setTextDocumentChangeTransaction } from './textDocumentChangeTransactio
 
 export type { Position, Range, TextEdit } from '../types';
 
-/** Different with `TextEdit`, the range has been resolved to offsets. */
-export interface ResolvedTextEdit {
-  /** The start offset of the text change. */
-  readonly start: number;
-  /** The end offset of the text change. */
-  readonly end: number;
-  /**
-   * The string to be inserted. For delete operations use an
-   * empty string.
-   */
-  readonly text: string;
-}
-
 export interface TextDocumentChange {
+  /** The edits that were applied to the text document. */
+  readonly changes: EditorChange[];
   /** First line whose rendered content or tokenizer state may have changed. */
   readonly startLine: number;
   /** Character on the first changed line where the edit began. */
@@ -466,6 +457,13 @@ export class TextDocument<LAnnotation> {
     this.#pieceTable.applyEdits(edits);
     const lineCount = this.#pieceTable.lineCount;
     const change: TextDocumentChange = {
+      changes: edits.map((edit, index) => ({
+        ...edit,
+        range: {
+          start: editPositions[index * 2],
+          end: editPositions[index * 2 + 1],
+        },
+      })),
       startLine: changedLineRange.startLine,
       startCharacter: startPosition.character,
       endCharacter: endPosition.character,

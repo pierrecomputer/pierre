@@ -17,7 +17,7 @@ behavior through `editOptions`.
 
 ```tsx
 import type { FileContents, FileDiffOptions } from '@pierre/diffs';
-import { Editor, type EditorOptions } from '@pierre/diffs/editor';
+import { Editor, type EditorOptions } from '@pierre/diffs/edit';
 import { EditProvider, MultiFileDiff, Virtualizer } from '@pierre/diffs/react';
 import { useMemo, useRef, useState } from 'react';
 

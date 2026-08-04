@@ -6,6 +6,7 @@ import {
 } from '@pierre/diffs/ssr';
 import type { Metadata } from 'next';
 
+import { DEFAULT_KEYMAP_FILE_EXAMPLE } from '../_edit/constants';
 import { MERGE_CONFLICT_EXAMPLE } from '../_examples/MergeConflict/constants';
 import { MergeConflict } from '../_examples/MergeConflict/MergeConflict';
 import {
@@ -37,6 +38,7 @@ import {
   EDIT_LAZY_FILE_EXAMPLE,
   EDIT_MARKER_EXAMPLE,
   EDIT_MARKER_TYPE,
+  EDIT_ON_CHANGE_EXAMPLE,
   EDIT_PERSIST_STATE_EXAMPLE,
   EDIT_PREDICTION_EXAMPLE,
   EDIT_REACT_CODE_VIEW_EXAMPLE,
@@ -432,6 +434,7 @@ async function EditSection() {
     editAutofocusVanillaExample,
     editDemoFile,
     editFocusPositionExample,
+    keymapFile,
     editVanillaFileExample,
     editVanillaFileDiffExample,
     editVanillaCodeViewExample,
@@ -439,6 +442,7 @@ async function EditSection() {
     editPersistStateExample,
     editPredictionExample,
     editorOptionsType,
+    editOnChangeExample,
     editorPublicApi,
     editSelectionActionContextType,
     editSelectionActionExample,
@@ -457,6 +461,7 @@ async function EditSection() {
     preloadFile(EDIT_AUTOFOCUS_VANILLA_EXAMPLE),
     preloadFile(EDIT_DEMO_FILE_EXAMPLE),
     preloadFile(EDIT_FOCUS_POSITION_EXAMPLE),
+    preloadFile(DEFAULT_KEYMAP_FILE_EXAMPLE),
     preloadFile(EDIT_VANILLA_FILE_EXAMPLE),
     preloadFile(EDIT_VANILLA_FILE_DIFF_EXAMPLE),
     preloadFile(EDIT_VANILLA_CODE_VIEW_EXAMPLE),
@@ -464,6 +469,7 @@ async function EditSection() {
     preloadFile(EDIT_PERSIST_STATE_EXAMPLE),
     preloadFile(EDIT_PREDICTION_EXAMPLE),
     preloadFile(EDITOR_OPTIONS_TYPE),
+    preloadFile(EDIT_ON_CHANGE_EXAMPLE),
     preloadFile(EDITOR_PUBLIC_API),
     preloadFile(EDIT_SELECTION_ACTION_CONTEXT_TYPE),
     preloadFile(EDIT_SELECTION_ACTION_EXAMPLE),
@@ -485,6 +491,7 @@ async function EditSection() {
       editAutofocusVanillaExample,
       editDemoFile,
       editFocusPositionExample,
+      keymapFile,
       editVanillaFileExample,
       editVanillaFileDiffExample,
       editVanillaCodeViewExample,
@@ -492,6 +499,7 @@ async function EditSection() {
       editPersistStateExample,
       editPredictionExample,
       editorOptionsType,
+      editOnChangeExample,
       editorPublicApi,
       editSelectionActionContextType,
       editSelectionActionExample,

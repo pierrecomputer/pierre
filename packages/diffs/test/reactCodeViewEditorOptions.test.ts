@@ -78,15 +78,22 @@ function createTrackedEditor(
   attachmentError?: Error
 ): TrackedCodeViewEditor {
   let detach: ((recycle?: boolean) => void) | undefined;
-  const editor: TrackedCodeViewEditor = {
+  const editor = {
     options,
     edits: [],
     fullCleanUps: 0,
     recycleCleanUps: 0,
-    emitChange(file, lineAnnotations) {
-      options.onChange?.(file, lineAnnotations);
+    emitChange(
+      file: FileContents,
+      lineAnnotations?: DiffLineAnnotation<undefined>[]
+    ) {
+      options.onChange?.(file, lineAnnotations, {
+        changes: [],
+        file,
+        lineAnnotations,
+      });
     },
-    edit(instance) {
+    edit(instance: DiffsEditableComponent<undefined>) {
       editor.edits.push(instance);
       detach = instance.attachEditor(editor);
       if (attachmentError != null) {
@@ -106,7 +113,7 @@ function createTrackedEditor(
     __captureFocusForDOMReplacement() {},
     __postponeBgTokenizeToNextFrame() {},
     __syncRenderView() {},
-  };
+  } as unknown as TrackedCodeViewEditor;
   return editor;
 }
 
@@ -337,7 +344,7 @@ describe('React CodeView editor factory', () => {
     const container = document.createElement('div');
     document.body.appendChild(container);
     const { createEditor, editors, receivedOptions } = createEditorHarness();
-    const attemptedOnChange = mock((_file: FileContents) => {});
+    const attemptedOnChange = mock(() => {});
     const onAttach = mock(() => {});
     const onItemEditChange = mock(
       (_item: CodeViewItem<undefined>, _file: FileContents) => {}
@@ -653,6 +660,60 @@ describe('React CodeView editor factory', () => {
 
       expect(editors).toHaveLength(1);
       expect(handle.current?.getEditor('edited')).toBe(editors[0]);
+    } finally {
+      await unmountRoot(root);
+      cleanupActEnvironment();
+      cleanup();
+    }
+  });
+
+  test('removes initial items through the imperative handle', async () => {
+    const { cleanup } = installCodeViewDom();
+    const cleanupActEnvironment = installReactActEnvironment();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const handle = createRef<CodeViewHandle<undefined>>();
+    let root: Root | undefined;
+
+    try {
+      root = createReactRoot(container);
+      await renderRoot(
+        root,
+        createCodeViewElement({
+          initialItems: [makeFileItem('first'), makeFileItem('last')],
+          ref: handle,
+        })
+      );
+
+      expect(handle.current?.removeItem('first')).toBe(true);
+      expect(handle.current?.getItem('first')).toBeUndefined();
+      expect(handle.current?.getItem('last')).toBeDefined();
+    } finally {
+      await unmountRoot(root);
+      cleanupActEnvironment();
+      cleanup();
+    }
+  });
+
+  test('rejects imperative item removal in controlled mode', async () => {
+    const { cleanup } = installCodeViewDom();
+    const cleanupActEnvironment = installReactActEnvironment();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const handle = createRef<CodeViewHandle<undefined>>();
+    let root: Root | undefined;
+
+    try {
+      root = createReactRoot(container);
+      await renderRoot(
+        root,
+        createCodeViewElement({ items: [makeFileItem('a')], ref: handle })
+      );
+
+      expect(() => handle.current?.removeItem('a')).toThrow(
+        'CodeView.removeItem cannot be used when CodeView is controlled. Use initialItems for imperative item updates.'
+      );
+      expect(handle.current?.getItem('a')).toBeDefined();
     } finally {
       await unmountRoot(root);
       cleanupActEnvironment();

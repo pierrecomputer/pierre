@@ -136,7 +136,7 @@ export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
   const editorRef = useRef<Editor<undefined> | null>(null);
   const editorOptions = useMemo<EditorOptions<undefined>>(
     () => ({
-      onAttach(editor: Editor<undefined>) {
+      onAttach(editor) {
         editorRef.current = editor;
       },
       onChange: (file) => {
