@@ -232,9 +232,15 @@ describe('CodeView scroll anchoring', () => {
       expect((container as HTMLElement).style.height).toBe(
         `${SCROLL_REBASE_CONTAINER_HEIGHT}px`
       );
+      const stickyOffset = (container as HTMLElement).firstElementChild;
+      expect(stickyOffset).toBeInstanceOf(HTMLElement);
+      expect((stickyOffset as HTMLElement).style.height).not.toBe('');
 
-      viewer.setItems([]);
-      expect((container as HTMLElement).style.height).toBe('');
+      await renderItems(viewer, []);
+      expect((container as HTMLElement).style.height).toBe('0px');
+      // An emptied viewer sheds the sticky spacer height along with its
+      // items; a stale spacer would keep phantom space in the container.
+      expect((stickyOffset as HTMLElement).style.height).toBe('');
 
       await renderItems(viewer, secondItems);
 

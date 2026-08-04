@@ -1,6 +1,10 @@
 import { describe, expect, test } from 'bun:test';
 
-import { CodeView } from '../src/components/CodeView';
+import {
+  CodeView,
+  type CodeViewCoordinator,
+  type CodeViewSlotSnapshot,
+} from '../src/components/CodeView';
 import { Editor } from '../src/editor/editor';
 import type {
   CodeViewCreateEditorOptions,
@@ -1231,6 +1235,49 @@ describe('CodeView item edit mode', () => {
       }
     });
 
+    test('finalizes the last-change snapshot after a version update', async () => {
+      const { cleanup } = installDom();
+      const { editors, createEditor } = createEditorHarness();
+      const completions: CodeViewItem<undefined>[] = [];
+      const viewer = new CodeView({
+        createEditor,
+        onItemEditComplete(item) {
+          completions.push(item);
+        },
+      });
+      const edited = makeSessionDiffItem('edited');
+      const replacement = makeSessionDiffItem('edited');
+      replacement.version = 1;
+      const kept = makeEditFileItem('kept', false);
+      if (edited.type !== 'diff') {
+        throw new Error('Expected a diff edit-session item.');
+      }
+      try {
+        viewer.setup(createRoot());
+        await renderItems(viewer, [edited, kept]);
+
+        revertLineTen(edited, viewer);
+        editors[0].emitChange({ name: 'edited.txt', contents: 'changed' });
+        await renderItems(viewer, [replacement, kept]);
+
+        // The version bump reuses the item record, so the editor and its
+        // session survive the update: no new editor, no completion yet.
+        expect(editors).toHaveLength(1);
+        expect(completions).toHaveLength(0);
+
+        expect(viewer.removeItem(edited.id)).toBe(true);
+
+        expect(completions).toHaveLength(1);
+        expect(completions[0]).toBe(edited);
+        expect(edited.fileDiff.editSessionDirty).toBeUndefined();
+        expect(edited.fileDiff.hunks).toHaveLength(1);
+      } finally {
+        viewer.cleanUp();
+        await wait(0);
+        cleanup();
+      }
+    });
+
     test('ending a session reconciles the item layout height', async () => {
       const { cleanup } = installDom();
       const { createEditor } = createEditorHarness();
@@ -1417,24 +1464,47 @@ describe('CodeView item edit mode', () => {
       const { cleanup } = installDom();
       const { editors, createEditor } = createEditorHarness();
       const completions: Array<{ id: string; contents: string }> = [];
+      const snapshots: Array<CodeViewSlotSnapshot<undefined> | undefined> = [];
+      const replacement = makeEditFileItem('a', false);
+      const onItemEditComplete = (
+        item: CodeViewItem<undefined>,
+        file: FileContents
+      ) => {
+        completions.push({ id: item.id, contents: file.contents });
+        viewer.addItems([replacement]);
+      };
       const viewer = new CodeView({
         createEditor,
-        onItemEditComplete(item, file) {
-          completions.push({ id: item.id, contents: file.contents });
-        },
+        onItemEditComplete,
       });
+      const coordinator: CodeViewCoordinator<undefined> = {
+        hasAnnotationRenderer: false,
+        hasGutterRenderer: false,
+        hasHeaderRenderers: true,
+        onSnapshotChange(snapshot) {
+          snapshots.push(snapshot);
+        },
+      };
       try {
+        viewer.setSlotCoordinator(coordinator);
         viewer.setup(createRoot());
         await renderItems(viewer, [makeEditFileItem('a')]);
+        const initialElement = viewer.getRenderedItems()[0]?.element;
 
         // setItems([]) is a removal like any other controlled update, so the
-        // session completes with its last-change snapshot even though the
-        // internal path is a full reset.
+        // session completes with its last-change snapshot.
         editors[0].emitChange({ name: 'a.ts', contents: 'unsaved' });
         await renderItems(viewer, []);
 
         expect(completions).toEqual([{ id: 'a', contents: 'unsaved' }]);
         expect(editors[0].fullCleanUps).toBeGreaterThanOrEqual(1);
+        expect(viewer.getItem(replacement.id)).toBe(replacement);
+        const renderedReplacement = viewer.getRenderedItems()[0];
+        expect(renderedReplacement?.element).toBe(initialElement);
+        expect(snapshots).toHaveLength(2);
+        expect(snapshots[1]?.items?.[0]?.instance).toBe(
+          renderedReplacement?.instance
+        );
       } finally {
         viewer.cleanUp();
         await wait(0);
