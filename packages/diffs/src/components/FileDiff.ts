@@ -1000,14 +1000,6 @@ export class FileDiff<
       );
     }
 
-    // use the file name as the cache key if it is not set
-    if (fileDiff != null && fileDiff.cacheKey === undefined) {
-      fileDiff.cacheKey =
-        fileDiff.prevName != null
-          ? fileDiff.prevName + ':' + fileDiff.name
-          : fileDiff.name;
-    }
-
     // postpone background tokenizing to next frame for avoiding UI freeze
     // during render
     this.editor?.__postponeBgTokenizeToNextFrame();
@@ -1024,6 +1016,18 @@ export class FileDiff<
       hasFileInput &&
       (!areOptionalFilesEqual(oldFile, this.deletionFile) ||
         !areOptionalFilesEqual(newFile, this.additionFile));
+    const { fileDiffCache: sessionDiff } = this;
+    if (
+      fileDiff != null &&
+      this.editor != null &&
+      sessionDiff?.editSessionDirty === true &&
+      fileDiff.cacheKey === sessionDiff.cacheKey
+    ) {
+      // Host rerenders may rebuild metadata from stale props while the editor
+      // owns newer contents. Keep the dirty session authoritative without
+      // manufacturing a cache identity for unkeyed diffs.
+      fileDiff = sessionDiff;
+    }
     let diffDidChange = fileDiff != null && fileDiff !== this.fileDiff;
     const annotationsChanged =
       lineAnnotations != null &&

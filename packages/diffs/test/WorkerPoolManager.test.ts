@@ -65,6 +65,52 @@ describe('WorkerPoolManager lifecycle', () => {
 });
 
 describe('WorkerPoolManager cache priming', () => {
+  test('does not read or populate the shared cache for an unkeyed diff', async () => {
+    const { manager, worker } = await createInitializedManager();
+    const successes: FileDiffMetadata[] = [];
+    const instance: DiffRendererInstance = {
+      __id: 'unkeyed-diff-renderer',
+      onHighlightSuccess(diff) {
+        successes.push(diff);
+      },
+      onHighlightError(error) {
+        throw error;
+      },
+    };
+    const diff = parseDiffFromFile(
+      { name: 'file.ts', contents: 'const value = "old";\n' },
+      { name: 'file.ts', contents: 'const value = "new";\n' }
+    );
+    const sentinel = {
+      result: {
+        code: { additionLines: [], deletionLines: [] },
+        themeStyles: 'sentinel',
+        baseThemeType: undefined,
+      },
+      options: manager.getDiffRenderOptions(),
+    };
+
+    try {
+      expect(diff.cacheKey).toBeUndefined();
+      manager.inspectCaches().diffCache.set(diff.name, sentinel);
+      expect(manager.getDiffResultCache(diff)).toBeUndefined();
+
+      manager.highlightDiffAST(instance, diff);
+      const request = await worker.waitForDiffRequest();
+      expect(request.diff.cacheKey).toBeUndefined();
+
+      respondToDiffRequest(manager, worker, request);
+
+      expect(successes).toEqual([diff]);
+      expect(manager.inspectCaches().diffCache.size).toBe(1);
+      expect(manager.inspectCaches().diffCache.get(diff.name)).toBe(sentinel);
+      expect(manager.getDiffResultCache(diff)).toBeUndefined();
+    } finally {
+      manager.cleanUpTasks(instance);
+      manager.terminate();
+    }
+  });
+
   test('primeDiffHighlightCache resolves after a successful response populates the diff cache', async () => {
     const { manager, worker } = await createInitializedManager();
     try {

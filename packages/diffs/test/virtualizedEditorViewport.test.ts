@@ -80,6 +80,60 @@ async function renderFileDiff(
 }
 
 describe('virtualized editor viewport', () => {
+  test('renders fresh parsed contents without deriving a filename cache key', async () => {
+    const dom = installDom();
+    const root = document.createElement('div');
+    const virtualizer = createSimpleVirtualizer(root);
+    const fileContainer = document.createElement('div');
+    root.appendChild(fileContainer);
+    const fileDiff = new VirtualizedFileDiff(
+      {
+        diffStyle: 'unified',
+        disableFileHeader: true,
+        theme: DEFAULT_THEMES,
+      },
+      virtualizer
+    );
+    const firstDiff = parseDiffFromFile(
+      { name: 'same.txt', contents: 'base\n', lang: 'text' },
+      { name: 'same.txt', contents: 'first marker\n', lang: 'text' }
+    );
+    const secondDiff = parseDiffFromFile(
+      { name: 'same.txt', contents: 'base\n', lang: 'text' },
+      { name: 'same.txt', contents: 'second marker\n', lang: 'text' }
+    );
+
+    try {
+      expect(firstDiff.cacheKey).toBeUndefined();
+      expect(secondDiff.cacheKey).toBeUndefined();
+
+      fileDiff.render({ fileDiff: firstDiff, fileContainer });
+      await waitFor(
+        () =>
+          fileContainer.shadowRoot?.textContent?.includes('first marker') ===
+          true
+      );
+      expect(fileContainer.shadowRoot?.textContent).toContain('first marker');
+
+      fileDiff.render({ fileDiff: secondDiff, fileContainer });
+      await waitFor(
+        () =>
+          fileContainer.shadowRoot?.textContent?.includes('second marker') ===
+          true
+      );
+
+      expect(fileContainer.shadowRoot?.textContent).toContain('second marker');
+      expect(fileContainer.shadowRoot?.textContent).not.toContain(
+        'first marker'
+      );
+      expect(firstDiff.cacheKey).toBeUndefined();
+      expect(secondDiff.cacheKey).toBeUndefined();
+    } finally {
+      fileDiff.cleanUp();
+      dom.cleanup();
+    }
+  });
+
   test('uses the simple Virtualizer root', () => {
     const dom = installDom();
     const root = document.createElement('div');

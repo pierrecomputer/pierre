@@ -1,7 +1,7 @@
 import { afterAll, expect, test } from 'bun:test';
 
-import { disposeHighlighter, FileDiff } from '../src';
-import { installDom, wait } from './domHarness';
+import { disposeHighlighter, FileDiff, parseDiffFromFile } from '../src';
+import { installDom, wait, waitFor } from './domHarness';
 
 afterAll(async () => {
   await disposeHighlighter();
@@ -67,6 +67,51 @@ test('a host render after an internal rerender takes the early-return path', asy
     const rowAfter =
       fileContainer.shadowRoot?.querySelector('[data-line="1"]') ?? null;
     expect(rowAfter === rowBefore).toBe(true);
+  } finally {
+    instance?.cleanUp();
+    cleanup();
+  }
+});
+
+test('parsed unkeyed diffs with the same filename render fresh contents', async () => {
+  const { cleanup } = installDom();
+  let instance: FileDiff<undefined> | undefined;
+  try {
+    const firstDiff = parseDiffFromFile(
+      { name: 'same.ts', contents: 'const base = 0;\n' },
+      { name: 'same.ts', contents: 'const firstMarker = 1;\n' }
+    );
+    const secondDiff = parseDiffFromFile(
+      { name: 'same.ts', contents: 'const base = 0;\n' },
+      { name: 'same.ts', contents: 'const secondMarker = 2;\n' }
+    );
+    const fileContainer = document.createElement('div');
+    document.body.appendChild(fileContainer);
+    instance = new FileDiff<undefined>({
+      disableFileHeader: true,
+      diffStyle: 'unified',
+    });
+
+    expect(firstDiff.cacheKey).toBeUndefined();
+    expect(secondDiff.cacheKey).toBeUndefined();
+
+    instance.render({ fileDiff: firstDiff, fileContainer });
+    await waitFor(
+      () =>
+        fileContainer.shadowRoot?.textContent?.includes('firstMarker') === true
+    );
+    expect(fileContainer.shadowRoot?.textContent).toContain('firstMarker');
+
+    instance.render({ fileDiff: secondDiff, fileContainer });
+    await waitFor(
+      () =>
+        fileContainer.shadowRoot?.textContent?.includes('secondMarker') === true
+    );
+
+    expect(fileContainer.shadowRoot?.textContent).toContain('secondMarker');
+    expect(fileContainer.shadowRoot?.textContent).not.toContain('firstMarker');
+    expect(firstDiff.cacheKey).toBeUndefined();
+    expect(secondDiff.cacheKey).toBeUndefined();
   } finally {
     instance?.cleanUp();
     cleanup();
