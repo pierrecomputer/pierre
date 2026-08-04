@@ -1,6 +1,9 @@
 import { describe, expect, spyOn, test } from 'bun:test';
 
-import { CodeView } from '../src/components/CodeView';
+import {
+  CodeView,
+  type CodeViewLineSelection,
+} from '../src/components/CodeView';
 import {
   createRoot,
   installDom,
@@ -29,6 +32,43 @@ describe('CodeView.removeItem', () => {
         'first',
         'last',
       ]);
+    } finally {
+      viewer.cleanUp();
+      await wait(0);
+      cleanup();
+    }
+  });
+
+  test('emits a null selection change when removing the selected item', async () => {
+    const { cleanup } = installDom();
+    const changes: (CodeViewLineSelection | null)[] = [];
+    const viewer = new CodeView({
+      onSelectedLinesChange(selection) {
+        changes.push(selection);
+      },
+    });
+    try {
+      viewer.setup(createRoot());
+      await renderItems(viewer, [
+        makeFileItem('kept', 5),
+        makeFileItem('selected', 5),
+      ]);
+      viewer.setSelectedLines(
+        { id: 'selected', range: { start: 2, end: 3 } },
+        { notify: false }
+      );
+
+      // Removing an unrelated item leaves the selection alone and stays
+      // silent.
+      expect(viewer.removeItem('kept')).toBe(true);
+      expect(changes).toEqual([]);
+      expect(viewer.getSelectedLines()?.id).toBe('selected');
+
+      // Removing the selected item clears it and tells the consumer, so
+      // controlled selection state can't write the dead selection back.
+      expect(viewer.removeItem('selected')).toBe(true);
+      expect(changes).toEqual([null]);
+      expect(viewer.getSelectedLines()).toBeNull();
     } finally {
       viewer.cleanUp();
       await wait(0);

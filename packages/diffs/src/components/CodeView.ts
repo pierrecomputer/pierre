@@ -1503,8 +1503,8 @@ export class CodeView<LAnnotation = undefined> {
     this.markItemLayoutDirty(item);
     this.scrollDirty = true;
     this.render();
-    this.syncSelection();
     this.syncItemEditors();
+    this.syncSelection();
     return true;
   }
 
@@ -1554,8 +1554,8 @@ export class CodeView<LAnnotation = undefined> {
 
   public addItems(inputs: readonly CodeViewItem<LAnnotation>[]): void {
     this.appendItemsInternal(inputs);
-    this.syncSelection();
     this.syncItemEditors();
+    this.syncSelection();
   }
 
   public removeItem(itemId: string): boolean {
@@ -1582,8 +1582,8 @@ export class CodeView<LAnnotation = undefined> {
     } else if (!this.tryAppendItems(items)) {
       removedItemsById = this.reconcileItems(items);
     }
-    this.syncSelection();
     this.syncItemEditors(removedItemsById);
+    this.syncSelection();
   }
 
   /**
@@ -2003,6 +2003,7 @@ export class CodeView<LAnnotation = undefined> {
     const item = this.idToItem.get(this.selectedLines.id);
     if (item == null) {
       this.selectedLines = null;
+      this.options.onSelectedLinesChange?.(null);
       return;
     }
 
