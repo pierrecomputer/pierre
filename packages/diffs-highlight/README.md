@@ -35,9 +35,12 @@ the semantic collection with one mode per variant.
 
 ## Usage
 
-1. Select a single text layer containing code.
+1. Select one or more text layers containing code. Non-text layers and empty
+   text layers in the selection are ignored rather than rejected.
 2. Run **Plugins > Development > Diffs Highlight**.
 3. Pick the language, confirm the variable collection, and press **Highlight**.
+   Every selected layer is tokenized as that one language, so group a
+   multi-layer run by language.
 4. Switch that collection's mode on the layer (or its parent frame) to move the
    sample between Light, Dark, Soft, and the CVD variants.
 
@@ -45,9 +48,11 @@ Every language Shiki bundles is offered — 235 of them, listed alphabetically b
 display name, so the select relies on type-ahead. The picker opens on
 TypeScript.
 
-The status line reports what happened: how many ranges were bound, any colors
-that matched no Pierre role, and any variable names missing from the collection
-you picked (usually the sign of a partial import, or the wrong collection).
+The status line reports what happened: how many ranges were bound and across how
+many layers, any colors that matched no Pierre role, and any variable names
+missing from the collection you picked (usually the sign of a partial import, or
+the wrong collection). A layer edited between tokenizing and binding is skipped
+and named, rather than costing you the rest of the selection.
 
 ## How a color becomes a variable
 

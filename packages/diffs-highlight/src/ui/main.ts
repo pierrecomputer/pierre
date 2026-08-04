@@ -1,15 +1,15 @@
 /**
  * The UI realm's controls. It never touches the document: it receives the
- * selected layer's text from the sandbox, hands it to Shiki (see highlight.ts),
- * and sends the resulting character ranges back for binding.
+ * selected layers' text from the sandbox, hands each one to Shiki (see
+ * highlight.ts), and sends the resulting character ranges back for binding.
  */
 import type { HighlighterCore } from '@shikijs/core';
 
-import type { MapTokensResult } from '../shared/mapTokens';
 import type {
   CollectionSummary,
+  LayerBindings,
   SandboxMessage,
-  SelectionSummary,
+  SelectionLayer,
   UiMessage,
 } from '../shared/messages';
 import {
@@ -25,7 +25,7 @@ function requireElement<T extends HTMLElement>(id: string): T {
 }
 
 const elements = {
-  target: requireElement<HTMLParagraphElement>('target'),
+  notice: requireElement<HTMLParagraphElement>('notice'),
   language: requireElement<HTMLSelectElement>('language'),
   collection: requireElement<HTMLSelectElement>('collection'),
   status: requireElement<HTMLParagraphElement>('status'),
@@ -37,9 +37,11 @@ const elements = {
 const DEFAULT_LANGUAGE = 'typescript';
 
 let collections: CollectionSummary[] = [];
-let selection: SelectionSummary | null = null;
-/** Kept from the last run so the sandbox's report can be summarized with it. */
-let lastMapping: MapTokensResult | null = null;
+let layers: SelectionLayer[] = [];
+
+/** Totals from the last run, kept so the sandbox's report can cite them. */
+let lastRun: { unmatchedRanges: number; unmatchedColors: string[] } | null =
+  null;
 
 /**
  * Created at startup, with no grammars registered yet — the picked language's
@@ -78,6 +80,17 @@ function fillLanguages(): void {
 }
 
 /**
+ * How a collection reads in the picker. The mode count is only worth showing
+ * when there is more than one: a single-mode collection is fully described by
+ * its name, and listing every mode of an eight-mode collection would overflow
+ * the control.
+ */
+function collectionLabel(collection: CollectionSummary): string {
+  if (collection.modeNames.length < 2) return collection.name;
+  return `${collection.name} (${String(collection.modeNames.length)} modes)`;
+}
+
+/**
  * Rebuilds the collection picker, keeping the user's choice if that collection
  * still exists and otherwise defaulting to the collection holding the most
  * `syntax/*` variables — the semantic collection, whatever it was named at
@@ -90,7 +103,7 @@ function fillCollections(): void {
   for (const collection of collections) {
     const option = document.createElement('option');
     option.value = collection.id;
-    option.textContent = `${collection.name} (${collection.modeNames.join(', ')})`;
+    option.textContent = collectionLabel(collection);
     elements.collection.append(option);
   }
 
@@ -120,16 +133,20 @@ function render(issue: string | null): void {
   );
 
   elements.collection.disabled = collections.length === 0;
-  elements.apply.disabled = selection === null || collections.length === 0;
+  elements.apply.disabled = layers.length === 0 || collections.length === 0;
+  // The count lives on the button rather than in a separate line of text, so a
+  // multi-layer run is legible right where it is about to be triggered.
+  elements.apply.textContent =
+    layers.length > 1
+      ? `Highlight ${String(layers.length)} layers`
+      : 'Highlight';
 
-  if (selection !== null) {
-    elements.target.textContent = `Selected: ${selection.nodeName}`;
-    elements.target.dataset.issue = 'false';
-  } else {
-    elements.target.textContent =
-      issue ?? 'Select a text layer containing code.';
-    elements.target.dataset.issue = 'true';
-  }
+  // Shown only when there is nothing to work on; a usable selection needs no
+  // narration.
+  const notice =
+    layers.length > 0 ? null : (issue ?? 'Select one or more text layers.');
+  elements.notice.textContent = notice ?? '';
+  elements.notice.hidden = notice === null;
 
   if (collections.length === 0) {
     setStatus(
@@ -141,44 +158,71 @@ function render(issue: string | null): void {
       'No collection has syntax/* variables. Import packages/theme/figma/semantic into this file.',
       'error'
     );
-  } else if (lastMapping === null) {
+  } else if (lastRun === null) {
     // Clears an environment warning that no longer holds, without wiping the
     // summary from a run that already happened.
     setStatus('');
   }
 }
 
-/** Tokenizes the selected layer and asks the sandbox to bind the result. */
+/**
+ * Tokenizes every selected layer and asks the sandbox to bind the results.
+ *
+ * All layers are tokenized as the one language the picker names, which is the
+ * point of allowing a multi-layer selection: several samples of the same
+ * language get highlighted in one go. Layers are handled one after another
+ * because they share a highlighter, and only the first pass has to register the
+ * grammar.
+ */
 async function apply(): Promise<void> {
-  const target = selection;
+  const targets = layers;
   const collectionId = elements.collection.value;
-  if (target === null || collectionId === '') return;
+  if (targets.length === 0 || collectionId === '') return;
 
   elements.apply.disabled = true;
   setStatus('Tokenizing…');
 
   try {
     const highlighter = await highlighterReady;
-    const mapping = await highlightToBindings(
-      highlighter,
-      target.characters,
-      elements.language.value
-    );
-    lastMapping = mapping;
+    const lang = elements.language.value;
 
-    if (mapping.bindings.length === 0) {
+    const payload: LayerBindings[] = [];
+    const unmatchedColors = new Set<string>();
+    let unmatchedRanges = 0;
+    let totalRanges = 0;
+
+    for (const layer of targets) {
+      const mapping = await highlightToBindings(
+        highlighter,
+        layer.characters,
+        lang
+      );
+
+      unmatchedRanges += mapping.unmatchedRanges;
+      for (const color of mapping.unmatchedColors) unmatchedColors.add(color);
+      if (mapping.bindings.length === 0) continue;
+
+      totalRanges += mapping.bindings.length;
+      payload.push({
+        nodeId: layer.nodeId,
+        nodeName: layer.nodeName,
+        bindings: mapping.bindings,
+      });
+    }
+
+    lastRun = {
+      unmatchedRanges,
+      unmatchedColors: [...unmatchedColors].sort(),
+    };
+
+    if (payload.length === 0) {
       setStatus('Nothing to bind: no token matched a Pierre role.', 'error');
       elements.apply.disabled = false;
       return;
     }
 
-    setStatus(`Binding ${String(mapping.bindings.length)} ranges…`);
-    post({
-      type: 'apply',
-      nodeId: target.nodeId,
-      collectionId,
-      bindings: mapping.bindings,
-    });
+    setStatus(`Binding ${String(totalRanges)} ranges…`);
+    post({ type: 'apply', collectionId, layers: payload });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     setStatus(`Highlighting failed: ${message}`, 'error');
@@ -186,37 +230,48 @@ async function apply(): Promise<void> {
   }
 }
 
-function summarize(boundRanges: number, missingVariableNames: string[]): void {
-  const lines = [`Bound ${String(boundRanges)} ranges.`];
+function summarize(
+  applied: Extract<SandboxMessage, { type: 'applied' }>
+): void {
+  const lines = [
+    applied.boundLayers > 1
+      ? `Bound ${String(applied.boundRanges)} ranges across ${String(applied.boundLayers)} layers.`
+      : `Bound ${String(applied.boundRanges)} ranges.`,
+  ];
 
-  if (lastMapping !== null && lastMapping.unmatchedRanges > 0) {
+  if (lastRun !== null && lastRun.unmatchedRanges > 0) {
     lines.push(
-      `Left ${String(lastMapping.unmatchedRanges)} ranges alone (colors with no Pierre role: ${lastMapping.unmatchedColors.join(', ')}).`
+      `Left ${String(lastRun.unmatchedRanges)} ranges alone (colors with no Pierre role: ${lastRun.unmatchedColors.join(', ')}).`
     );
   }
-  if (missingVariableNames.length > 0) {
+  if (applied.missingVariableNames.length > 0) {
     lines.push(
-      `Missing from the chosen collection: ${missingVariableNames.join(', ')}.`
+      `Missing from the chosen collection: ${applied.missingVariableNames.join(', ')}.`
+    );
+  }
+  if (applied.skippedLayers.length > 0) {
+    const noun = applied.skippedLayers.length === 1 ? 'layer' : 'layers';
+    lines.push(
+      `Skipped ${String(applied.skippedLayers.length)} ${noun} (${applied.skippedLayers.join('; ')}).`
     );
   }
 
-  setStatus(
-    lines.join('\n'),
-    missingVariableNames.length > 0 ? 'error' : 'info'
-  );
+  const wentWrong =
+    applied.missingVariableNames.length > 0 || applied.skippedLayers.length > 0;
+  setStatus(lines.join('\n'), wentWrong ? 'error' : 'info');
 }
 
 function handleMessage(message: SandboxMessage): void {
   switch (message.type) {
     case 'state':
       collections = message.collections;
-      selection = message.selection;
+      layers = message.layers;
       fillCollections();
       render(message.issue);
       return;
     case 'applied':
       elements.apply.disabled = false;
-      summarize(message.boundRanges, message.missingVariableNames);
+      summarize(message);
       return;
     case 'error':
       elements.apply.disabled = false;

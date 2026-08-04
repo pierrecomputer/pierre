@@ -1,12 +1,13 @@
 /**
  * The sandbox realm. It owns the `figma` API — selection, variables, fonts — and
- * does no tokenizing: it hands the selected layer's text to the UI and applies
+ * does no tokenizing: it hands the selected layers' text to the UI and applies
  * the character ranges the UI sends back.
  */
 import type {
   CollectionSummary,
+  LayerBindings,
   SandboxMessage,
-  SelectionSummary,
+  SelectionLayer,
   TokenBinding,
   UiMessage,
 } from '../shared/messages';
@@ -28,41 +29,48 @@ function postError(error: unknown): void {
 }
 
 /**
- * Describes the current selection for the UI, or explains why it cannot be
- * used. Only a single non-empty text layer is workable.
+ * Describes the selected text layers for the UI, or explains why there is
+ * nothing to work on.
+ *
+ * Any number of text layers can be selected at once. Non-text layers and empty
+ * text layers are filtered out rather than rejected, so a selection that sweeps
+ * up a frame or a stray rectangle alongside the code still works.
  */
 function readSelection(): {
-  selection: SelectionSummary | null;
+  layers: SelectionLayer[];
   issue: string | null;
 } {
   const nodes = figma.currentPage.selection;
-
   if (nodes.length === 0) {
-    return { selection: null, issue: 'Select a text layer containing code.' };
-  }
-  if (nodes.length > 1) {
-    return { selection: null, issue: 'Select a single text layer.' };
+    return { layers: [], issue: 'Select one or more text layers.' };
   }
 
-  const node = nodes[0];
-  if (node === undefined || node.type !== 'TEXT') {
-    return {
-      selection: null,
-      issue: 'The selected layer is not a text layer.',
-    };
-  }
-  if (node.characters.length === 0) {
-    return { selection: null, issue: 'The selected text layer is empty.' };
+  const textNodes = nodes.filter(
+    (node): node is TextNode => node.type === 'TEXT'
+  );
+  if (textNodes.length === 0) {
+    return { layers: [], issue: 'The selection has no text layers.' };
   }
 
-  return {
-    selection: {
+  const layers = textNodes
+    .filter((node) => node.characters.length > 0)
+    .map((node) => ({
       nodeId: node.id,
       nodeName: node.name,
       characters: node.characters,
-    },
-    issue: null,
-  };
+    }));
+
+  if (layers.length === 0) {
+    return {
+      layers: [],
+      issue:
+        textNodes.length === 1
+          ? 'The selected text layer is empty.'
+          : 'The selected text layers are empty.',
+    };
+  }
+
+  return { layers, issue: null };
 }
 
 /**
@@ -93,11 +101,11 @@ async function readCollections(): Promise<CollectionSummary[]> {
 }
 
 async function sendState(): Promise<void> {
-  const { selection, issue } = readSelection();
+  const { layers, issue } = readSelection();
   post({
     type: 'state',
     collections: await readCollections(),
-    selection,
+    layers,
     issue,
   });
 }
@@ -150,34 +158,36 @@ function bindRange(
   ]);
 }
 
-async function applyBindings(
-  request: Extract<UiMessage, { type: 'apply' }>
-): Promise<void> {
-  const node = await figma.getNodeByIdAsync(request.nodeId);
+/**
+ * Applies one layer's ranges, or returns why it was skipped.
+ *
+ * A layer is skipped rather than failing the whole run, so one stale layer in a
+ * multi-layer selection does not cost the user the others.
+ */
+async function applyToLayer(
+  layer: LayerBindings,
+  variables: Map<string, Variable>,
+  missingVariableNames: Set<string>
+): Promise<{ boundRanges: number } | { skipped: string }> {
+  const node = await figma.getNodeByIdAsync(layer.nodeId);
   if (node === null || node.type !== 'TEXT') {
-    post({ type: 'error', message: 'That text layer no longer exists.' });
-    return;
+    return { skipped: `${layer.nodeName}: no longer exists` };
   }
 
   // Bindings are ordered, so the last one's end is the highest offset needed.
   // Checking it once catches a layer edited between tokenizing and applying,
   // which would otherwise make every out-of-bounds range throw.
-  const lastBinding = request.bindings[request.bindings.length - 1];
+  const lastBinding = layer.bindings[layer.bindings.length - 1];
   if (lastBinding !== undefined && lastBinding.end > node.characters.length) {
-    post({
-      type: 'error',
-      message: 'The text changed since it was tokenized. Run it again.',
-    });
-    return;
+    return {
+      skipped: `${layer.nodeName}: text changed since it was tokenized`,
+    };
   }
 
-  const variables = await readVariablesByName(request.collectionId);
   await loadFonts(node);
 
-  const missingVariableNames = new Set<string>();
   let boundRanges = 0;
-
-  for (const binding of request.bindings) {
+  for (const binding of layer.bindings) {
     const variable = variables.get(binding.variableName);
     if (variable === undefined) {
       missingVariableNames.add(binding.variableName);
@@ -187,10 +197,34 @@ async function applyBindings(
     boundRanges += 1;
   }
 
+  return { boundRanges };
+}
+
+async function applyBindings(
+  request: Extract<UiMessage, { type: 'apply' }>
+): Promise<void> {
+  const variables = await readVariablesByName(request.collectionId);
+  const missingVariableNames = new Set<string>();
+  const skippedLayers: string[] = [];
+  let boundRanges = 0;
+  let boundLayers = 0;
+
+  for (const layer of request.layers) {
+    const result = await applyToLayer(layer, variables, missingVariableNames);
+    if ('skipped' in result) {
+      skippedLayers.push(result.skipped);
+      continue;
+    }
+    boundRanges += result.boundRanges;
+    boundLayers += 1;
+  }
+
   post({
     type: 'applied',
     boundRanges,
+    boundLayers,
     missingVariableNames: [...missingVariableNames].sort(),
+    skippedLayers,
   });
 }
 

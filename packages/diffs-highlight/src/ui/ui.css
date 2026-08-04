@@ -31,13 +31,11 @@ body {
   padding: 16px;
 }
 
-.target {
+/* Only rendered when there is nothing to highlight, so it reads as guidance
+   rather than an error. */
+.notice {
   margin: 0;
   color: var(--figma-color-text-secondary, #5b5b5b);
-}
-
-.target[data-issue='true'] {
-  color: var(--figma-color-text-danger, #b3261e);
 }
 
 .field {
@@ -50,20 +48,68 @@ label {
   font-weight: 600;
 }
 
-select {
+.select {
+  position: relative;
+  display: flex;
+}
+
+/*
+ * `appearance: none` drops the platform chevron, which Chrome pins hard against
+ * the control's right edge, in favor of the one drawn in `.select::after` at a
+ * deliberate inset. The right padding is what keeps a long option label from
+ * running underneath that chevron.
+ */
+.select select {
   width: 100%;
   height: 32px;
-  padding: 0 8px;
+  padding: 0 34px 0 10px;
   font-family: inherit;
   font-size: inherit;
   color: var(--figma-color-text, #1e1e1e);
+  appearance: none;
   background: var(--figma-color-bg-secondary, #f5f5f5);
   border: 1px solid var(--figma-color-border, #e6e6e6);
   border-radius: 6px;
 }
 
-select:disabled {
+.select select:hover:not(:disabled) {
+  border-color: var(--figma-color-border-strong, #b3b3b3);
+}
+
+.select select:focus-visible {
+  border-color: var(--figma-color-border-selected, #0d99ff);
+  outline: 1px solid var(--figma-color-border-selected, #0d99ff);
+  outline-offset: -2px;
+}
+
+.select select:disabled {
   color: var(--figma-color-text-disabled, #b3b3b3);
+}
+
+/*
+ * Drawn as a mask filled with `currentColor` rather than a background image, so
+ * the chevron follows the panel's text color in both Figma themes instead of
+ * being baked to one value.
+ */
+.select::after {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  width: 10px;
+  height: 6px;
+  content: '';
+  background-color: currentcolor;
+  opacity: 0.65;
+  transform: translateY(-50%);
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23000' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  mask-repeat: no-repeat;
+  mask-position: center;
+  mask-size: 10px 6px;
+  pointer-events: none;
+}
+
+.select:has(select:disabled)::after {
+  opacity: 0.3;
 }
 
 .status {
