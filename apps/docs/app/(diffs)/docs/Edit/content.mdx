@@ -26,24 +26,24 @@ Edit mode features include:
 Use the `Editor` API to add editing to `File`, `FileDiff`, `MultiFileDiff`, and
 `PatchDiff`, or to individual `CodeView` items. In React, wrap editable surfaces
 in `EditProvider`, then set a standalone surface's `edit` prop or a `CodeView`
-item's `edit` flag. In vanilla JS, call `editor.edit(component)` after rendering
-a standalone surface, or give `CodeView` its own `createEditor` option.
+item's `edit` flag. In vanilla JS, call `editor.edit(fileInstance)` after
+rendering a standalone surface, or give `CodeView` its own `createEditor`
+option.
 
-Edit mode is not a full-fledged IDE, though you may certainly use it to create
-your own IDE-like experiences. Edit mode is purpose-built and best suited for
-editing code rendered by our Diffs library. It builds on our already powerful
-file and diff surfaces to preserve diff layout, annotations, syntax
-highlighting, SSR, and virtualization while adding editing, multiple selections,
-history, search and replace, and markers. This makes it most ideal for “review
-and correct” flows with generative code changes.
+Edit mode is not a full-fledged IDE, though you can build IDE-like experiences
+on top of it. It is purpose-built for code rendered by this library: the
+existing file and diff surfaces keep their diff layout, annotations, syntax
+highlighting, SSR, and virtualization, and edit mode adds editing, multiple
+selections, history, search and replace, and markers. That focus makes it a
+natural fit for “review and correct” flows with generative code changes.
 
 ### How It Works
 
 Edit mode does not replace `File`, `FileDiff`, or their virtualized variants.
 You render the surface first, then attach editing:
 
-1. **Attach** — Call `editor.edit(component)` in vanilla JS, or pass `edit` on a
-   React `File`, `FileDiff`, `MultiFileDiff`, or `PatchDiff` wrapped in
+1. **Attach** — Call `editor.edit(fileInstance)` in vanilla JS, or pass `edit`
+   on a React `File`, `FileDiff`, `MultiFileDiff`, or `PatchDiff` wrapped in
    `EditProvider`. For React `CodeView`, use the same provider and set
    `edit: true` on an item. Vanilla `CodeView` instead takes
    `CodeViewOptions.createEditor`. The hookup returns a dispose function for a
@@ -75,33 +75,24 @@ deleted lines and annotation lines remain read-only.
 Wrap editable surfaces in a permanently mounted `EditProvider`, then toggle the
 standalone surface's `edit` prop or a `CodeView` item's `edit` flag. Standalone
 surface DOM and imperative file/diff instances stay mounted across the toggle.
-The provider supplies editors in one of two modes:
+The provider's `createEditor` factory gives each editable surface or `CodeView`
+item its own `Editor`, cached by `editorOptions` object identity: an edit
+session that restarts with the same options object reuses its editor, and
+surfaces editable at the same time need distinct options objects.
 
-- **`createEditor`** — a factory called when a surface starts an edit session.
-  Each editable `File`, `FileDiff`, `MultiFileDiff`, or `PatchDiff` surface and
-  each editable `CodeView` item gets its own editor, so state stays isolated:
-  sibling surfaces have independent history, selections, and callbacks. Created
-  editors are cached by `editorOptions` object identity — re-entering edit mode
-  with the same options object reuses the surface's editor; pass a new object to
-  start fresh.
-- **`sharedEditor`** — one `Editor` instance handed to every surface under the
-  provider, exactly as you constructed it. This is the mode for IDE-like UIs
-  that edit one file at a time across many files, normally combined with
-  `persistState` so each file's contents, history, selections, and scroll
-  position survive switches — see
-  [Persisting Editor State](#edit-mode-persisting-editor-state). When both props
-  are set, `sharedEditor` wins.
-
-With `createEditor`, pass creation-time callbacks and behavior through the
-surface's `editorOptions`; the factory can spread shared defaults before the
-surface options so the surface wins. Keep factories and object props stable:
-define static values at module scope, or use `useCallback` and `useMemo` when
-they depend on component values.
+Pass creation-time callbacks and behavior through the surface's `editorOptions`;
+the factory can spread shared defaults before the surface options so the surface
+wins. Keep factories and object props stable: define static values at module
+scope, or use `useCallback` and `useMemo` when they depend on component values.
 
 <DocsCodeExample {...editReactCreateEditorExample} />
 
-With `sharedEditor`, the surfaces' `editorOptions` props are ignored — configure
-the editor at construction and reuse the instance:
+Because editors are cached by options identity, passing one stable
+`editorOptions` object to every surface shares one `Editor` across them. This is
+the pattern for IDE-like UIs that edit one file at a time across many files,
+normally combined with `persistState` so each file's contents, history,
+selections, and scroll position survive switches — see
+[Persisting Editor State](#edit-mode-persisting-editor-state):
 
 <DocsCodeExample {...editReactSharedEditorExample} />
 
@@ -171,8 +162,8 @@ Applications own the annotation collection passed to a `File`, `FileDiff`, or
 other editable surface. When an edit affects annotation coordinates, the editor
 remaps them and passes the complete current collection as `onChange`'s second
 argument alongside the edited file. This collection is authoritative when
-present; it is not a delta. Replace your application-owned collection with it
-before a later render can reapply stale coordinates.
+present; it is not a delta. Replace your application-owned collection with it;
+otherwise a later render reapplies stale coordinates.
 
 The editor preserves the existing array reference for ordinary same-line edits
 and other edits that do not affect any annotation. When a structural edit
@@ -242,7 +233,7 @@ they are not additional public editor options.
 ### Selection Action
 
 Selection Action is an opt-in edit mode feature for showing custom UI alongside
-the current selection—useful for quick transforms, refactor prompts, or other
+the current selection — useful for quick transforms, refactor prompts, or other
 selection-scoped tools. Set `enabledSelectionAction: true` and return your UI
 from `renderSelectionAction`; a floating popover holding your UI appears after
 the user creates a ranged selection. Programmatic `setSelections` and `setState`
@@ -278,7 +269,8 @@ Two layers persist:
 - **Editor state.** Selections and scroll positions — the code scroller's
   `scrollLeft` and the surrounding viewport's `scrollTop` — are written to
   `persistStateStorage` when the editor detaches or switches files, and restored
-  on the next attach with the same `cacheKey`.
+  on the next attach with the same `cacheKey`. If the user scrolls before an
+  async restore lands, the restore leaves the viewport alone.
 
 A file with no stored record yet — its first open — starts scrolled to the top
 instead of inheriting whatever offset the previous file left behind in a shared
@@ -294,17 +286,18 @@ text documents always stay on the editor instance regardless of the storage
 choice, so persisting content across file switches means reusing one editor
 rather than creating one per file.
 
-In React, hand that one editor to every surface with the `EditProvider`
-`sharedEditor` prop. The surfaces' `editorOptions` props are ignored in this
-mode — configure the editor at construction:
+In React, reuse one editor by passing the same `editorOptions` object to every
+surface — `EditProvider` caches editors by options identity, so a stable object
+yields one instance across file switches:
 
 <DocsCodeExample {...editPersistStateReactExample} />
 
 ### Markers
 
-Markers add inline diagnostics—errors, warnings, and other annotations—to the
-editable surface, with a hover popover that shows each marker's message. They
-are useful for surfacing linter or language-server output alongside live edits.
+Markers add inline diagnostics — errors, warnings, and other annotations — to
+the editable surface, with a hover popover that shows each marker's message.
+They are useful for surfacing linter or language-server output alongside live
+edits.
 
 Each marker is positioned with zero-based `start` and `end` positions and a
 `severity` that drives its color and popover styling:

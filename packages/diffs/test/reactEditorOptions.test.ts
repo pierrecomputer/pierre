@@ -929,23 +929,21 @@ describe('React editor factory lifecycle', () => {
     }
   });
 
-  test('EditProvider hands surfaces the sharedEditor as configured, ignoring createEditor and surface editorOptions', async () => {
+  test('a factory returning an owner-constructed editor shares it as configured, ignoring surface editorOptions', async () => {
     const { cleanup } = installDom();
     const cleanupActEnvironment = installReactActEnvironment();
     const container = document.createElement('div');
     document.body.appendChild(container);
-    // The shared editor is used exactly as constructed: its own onAttach must
-    // fire, while the surface's editorOptions (including its onAttach) are
-    // ignored entirely.
+    // The owner-constructed editor is used exactly as constructed: its own
+    // onAttach must fire, while the surface's editorOptions (including its
+    // onAttach) only reach the factory, which discards them.
     let attachedEditor: Editor<undefined> | undefined;
     const sharedEditor = new Editor<undefined>({
       onAttach(editor) {
         attachedEditor = editor;
       },
     });
-    const factory = mock((options: EditorOptions<undefined>) => {
-      return new Editor<undefined>(options);
-    });
+    const factory = mock((_options: EditorOptions<undefined>) => sharedEditor);
     const surfaceOnAttach = mock((_editor: Editor<undefined>) => {});
     let root: Root | undefined;
 
@@ -955,7 +953,7 @@ describe('React editor factory lifecycle', () => {
         root!.render(
           createElement(
             EditProviderComponent,
-            { createEditor: factory, sharedEditor },
+            { createEditor: factory },
             createEditableSurfaceElement('File', true, {
               onAttach: surfaceOnAttach,
             })
@@ -966,7 +964,7 @@ describe('React editor factory lifecycle', () => {
       await waitFor(() => attachedEditor !== undefined);
 
       expect(attachedEditor).toBe(sharedEditor);
-      expect(factory).not.toHaveBeenCalled();
+      expect(factory).toHaveBeenCalled();
       expect(surfaceOnAttach).not.toHaveBeenCalled();
     } finally {
       await unmountRoot(root);

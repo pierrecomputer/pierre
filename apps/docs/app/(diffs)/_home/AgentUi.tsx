@@ -1,8 +1,8 @@
 'use client';
 
 import { DEFAULT_THEMES, type FileDiffMetadata } from '@pierre/diffs';
-import { Editor } from '@pierre/diffs/edit';
-import { EditProvider, File, FileDiff, Virtualizer } from '@pierre/diffs/react';
+import type { EditorOptions } from '@pierre/diffs/edit';
+import { File, FileDiff, Virtualizer } from '@pierre/diffs/react';
 import {
   IconArrow,
   IconChevronSm,
@@ -1023,62 +1023,61 @@ export function AgentUi({
     [liveSession, editedPlaceholderFiles]
   );
 
-  const sharedEditor = useMemo<Editor<undefined>>(
-    () =>
-      new Editor<undefined>({
-        persistState: true,
-        enabledSelectionAction: true,
-        renderSelectionAction(selectionAction) {
-          const container = document.createElement('div');
-          container.style.cssText = 'display: flex; gap: 4px;';
+  const editorOptions = useMemo<EditorOptions<undefined>>(
+    () => ({
+      persistState: true,
+      enabledSelectionAction: true,
+      renderSelectionAction(selectionAction) {
+        const container = document.createElement('div');
+        container.style.cssText = 'display: flex; gap: 4px;';
 
-          const addToChat = document.createElement('button');
-          addToChat.type = 'button';
-          addToChat.style.cssText = SELECTION_PRIMARY_BUTTON_STYLE;
-          addToChat.innerHTML = `${ICON_COMMENT_FILL_SVG} Add to chat`;
-          // Suppress the default mousedown so clicking the action doesn't blur
-          // the editor and collapse the selection we're about to read.
-          addToChat.addEventListener('mousedown', (event) =>
-            event.preventDefault()
-          );
-          addToChat.addEventListener('click', () => {
-            const target = activeTargetRef.current;
-            if (target != null) {
-              addSnippet(selectionAction.getSelectionText(), {
-                path: target,
-                selection: selectionAction.selection,
-              });
-            }
-            selectionAction.close();
-          });
-
-          const copy = document.createElement('button');
-          copy.type = 'button';
-          copy.textContent = 'Copy';
-          copy.style.cssText = SELECTION_SECONDARY_BUTTON_STYLE;
-          copy.addEventListener('mousedown', (event) => event.preventDefault());
-          copy.addEventListener('click', () => {
-            void navigator.clipboard?.writeText(
-              selectionAction.getSelectionText()
-            );
-            selectionAction.close();
-          });
-
-          container.append(addToChat, copy);
-          return container;
-        },
-        onChange(file) {
+        const addToChat = document.createElement('button');
+        addToChat.type = 'button';
+        addToChat.style.cssText = SELECTION_PRIMARY_BUTTON_STYLE;
+        addToChat.innerHTML = `${ICON_COMMENT_FILL_SVG} Add to chat`;
+        // Suppress the default mousedown so clicking the action doesn't blur
+        // the editor and collapse the selection we're about to read.
+        addToChat.addEventListener('mousedown', (event) =>
+          event.preventDefault()
+        );
+        addToChat.addEventListener('click', () => {
           const target = activeTargetRef.current;
-          if (target == null) {
-            return;
+          if (target != null) {
+            addSnippet(selectionAction.getSelectionText(), {
+              path: target,
+              selection: selectionAction.selection,
+            });
           }
-          editedPathsRef.current.add(target);
-          // Recompute the edited file's diff against its original snapshot so the
-          // Changes tree's +/- totals reflect the live edits.
-          recordEditedStatsRef.current(target, file.contents);
-        },
-        __debug: true,
-      }),
+          selectionAction.close();
+        });
+
+        const copy = document.createElement('button');
+        copy.type = 'button';
+        copy.textContent = 'Copy';
+        copy.style.cssText = SELECTION_SECONDARY_BUTTON_STYLE;
+        copy.addEventListener('mousedown', (event) => event.preventDefault());
+        copy.addEventListener('click', () => {
+          void navigator.clipboard?.writeText(
+            selectionAction.getSelectionText()
+          );
+          selectionAction.close();
+        });
+
+        container.append(addToChat, copy);
+        return container;
+      },
+      onChange(file) {
+        const target = activeTargetRef.current;
+        if (target == null) {
+          return;
+        }
+        editedPathsRef.current.add(target);
+        // Recompute the edited file's diff against its original snapshot so the
+        // Changes tree's +/- totals reflect the live edits.
+        recordEditedStatsRef.current(target, file.contents);
+      },
+      __debug: true,
+    }),
     [addSnippet]
   );
 
@@ -1204,55 +1203,55 @@ export function AgentUi({
             </nav>
           </header>
 
-          <EditProvider sharedEditor={sharedEditor}>
-            <Virtualizer
-              className="aui-surface-wrap"
-              contentStyle={{
-                display: 'flex',
-                minHeight: '100%',
-                width: '100%',
-              }}
-            >
-              {activeFile != null && fileDiff != null ? (
-                <FileDiff
-                  key={activePath}
-                  fileDiff={fileDiff}
-                  className="aui-surface"
-                  options={{ ...AUI_DIFF_OPTIONS, theme }}
-                  prerenderedHTML={activePrerenderedHTML}
-                  edit
-                />
-              ) : placeholderContents != null && activePath != null ? (
-                // Editable view for explorer files that aren't part of the change
-                // set (e.g. the root README or a generated stub). Always mounts
-                // with the pristine placeholder contents: `cacheKey` is required
-                // by the shared editor's `persistState`, whose per-file document
-                // cache substitutes any previously edited contents (and their
-                // undo history) when the surface re-attaches.
-                // Highlighted on the main thread since this File is mounted
-                // dynamically outside the editable surface's worker pool.
-                <File
-                  key={activePath}
-                  file={{
-                    name: activePath,
-                    cacheKey: activePath,
-                    contents: placeholderContents,
-                  }}
-                  className="aui-surface"
-                  options={{
-                    theme,
-                    themeType: 'dark',
-                    disableFileHeader: true,
-                    overflow: 'wrap',
-                  }}
-                  disableWorkerPool
-                  edit
-                />
-              ) : (
-                <div className="aui-empty">Select a file to review.</div>
-              )}
-            </Virtualizer>
-          </EditProvider>
+          <Virtualizer
+            className="aui-surface-wrap"
+            contentStyle={{
+              display: 'flex',
+              minHeight: '100%',
+              width: '100%',
+            }}
+          >
+            {activeFile != null && fileDiff != null ? (
+              <FileDiff
+                key={activePath}
+                fileDiff={fileDiff}
+                className="aui-surface"
+                options={{ ...AUI_DIFF_OPTIONS, theme }}
+                prerenderedHTML={activePrerenderedHTML}
+                edit
+                editorOptions={editorOptions}
+              />
+            ) : placeholderContents != null && activePath != null ? (
+              // Editable view for explorer files that aren't part of the change
+              // set (e.g. the root README or a generated stub). Always mounts
+              // with the pristine placeholder contents: `cacheKey` is required
+              // by the shared editor's `persistState`, whose per-file document
+              // cache substitutes any previously edited contents (and their
+              // undo history) when the surface re-attaches.
+              // Highlighted on the main thread since this File is mounted
+              // dynamically outside the editable surface's worker pool.
+              <File
+                key={activePath}
+                file={{
+                  name: activePath,
+                  cacheKey: activePath,
+                  contents: placeholderContents,
+                }}
+                className="aui-surface"
+                options={{
+                  theme,
+                  themeType: 'dark',
+                  disableFileHeader: true,
+                  overflow: 'wrap',
+                }}
+                disableWorkerPool
+                edit
+                editorOptions={editorOptions}
+              />
+            ) : (
+              <div className="aui-empty">Select a file to review.</div>
+            )}
+          </Virtualizer>
 
           <div className="aui-composer">
             {snippets.length > 0 && (

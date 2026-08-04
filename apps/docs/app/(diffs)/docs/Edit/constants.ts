@@ -391,24 +391,28 @@ export const EDIT_PERSIST_STATE_REACT_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
     name: 'editor_persist_state_react.tsx',
     contents: `import type { FileContents } from '@pierre/diffs';
-import { Editor } from '@pierre/diffs/edit';
-import { EditProvider, File } from '@pierre/diffs/react';
-import { useState } from 'react';
+import { Editor, type EditorOptions } from '@pierre/diffs/edit';
+import { type CreateEditor, EditProvider, File } from '@pierre/diffs/react';
+import { useCallback, useMemo } from 'react';
 
-// One editor for every surface under the provider. Its cached documents and
-// default 'inMemory' state store live on the instance, so sharing it is what
-// lets per-file contents, selections, and scroll survive surface remounts.
-// Surface \`editorOptions\` props are ignored with \`sharedEditor\` — pass
-// options to the constructor instead.
+// Editors are cached by \`editorOptions\` object identity, so the stable
+// options object below hands every file rendered here the same editor. Its
+// cached documents and default 'inMemory' state store live on that instance,
+// which is what lets per-file contents, selections, and scroll survive
+// surface remounts.
 export function PersistedEditor({ file }: { file: FileContents }) {
-  const editor = useMemo(
-    () => new Editor<undefined>({ persistState: true }),
+  const createEditor = useCallback<CreateEditor<undefined>>(
+    (options) => new Editor(options),
+    []
+  );
+  const editorOptions = useMemo<EditorOptions<undefined>>(
+    () => ({ persistState: true }),
     []
   );
 
   return (
-    <EditProvider sharedEditor={editor}>
-      <File file={file} edit />
+    <EditProvider createEditor={createEditor}>
+      <File file={file} edit editorOptions={editorOptions} />
     </EditProvider>
   );
 }`,
@@ -569,14 +573,14 @@ return (
 export const EDIT_REACT_SHARED_EDITOR_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
     name: 'editor_react_shared_editor.tsx',
-    contents: `const editor = useMemo(
-  () => new Editor<undefined>({ persistState: true, onChange: handleChange }),
+    contents: `const editorOptions = useMemo<EditorOptions<undefined>>(
+  () => ({ persistState: true, onChange: handleChange }),
   [handleChange]
 );
 
 return (
-  <EditProvider sharedEditor={editor}>
-    <File file={activeFile} edit />
+  <EditProvider createEditor={createEditor}>
+    <File file={activeFile} edit editorOptions={editorOptions} />
   </EditProvider>
 );`,
   },
@@ -1046,15 +1050,22 @@ interface EditorOptions<LAnnotation> {
   // (default: 'default' — both quotes and brackets)
   autoSurround?: 'default' | 'never' | 'brackets' | 'quotes' | 'languageDefined';
 
+  // Per-language comment tokens for the toggle-comment commands, merged over
+  // the built-in defaults ('//' and '/* */'). A null lineComment disables
+  // line comments for that language.
+  languageCommentConfig?: Record<
+    string,
+    { lineComment?: string | null; blockComment?: readonly [string, string] }
+  >;
+
   // Show the floating Selection Action popover after a user selection.
   // Programmatic setSelections/setState calls do not open it (default: false).
   enabledSelectionAction?: boolean;
 
-  // Custom clipboard provider.
-  // Highly recommended to use native clipboard API if you are building an electron app.
-  // see https://www.electronjs.org/docs/latest/api/clipboard
+  // Custom clipboard provider. Recommended in Electron apps — use the native
+  // clipboard API: https://www.electronjs.org/docs/latest/api/clipboard
   clipboard?: {
-    readText: () => Promise<string> | string;
+    readText: (type?: string) => Promise<string> | string;
   };
 
   // Custom Selection Action UI. See Selection Action docs for context shape.

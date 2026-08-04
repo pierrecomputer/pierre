@@ -6,15 +6,12 @@ separate editor instance, cached by `editorOptions` object identity — an edit
 session restarting with the same options object reuses its editor, and
 simultaneously editable surfaces need distinct options objects.
 
-Alternatively pass `sharedEditor` (an `Editor` instance) instead of
-`createEditor`: every surface under the provider then attaches the same editor,
-exactly as its owner configured it. The surfaces' `editorOptions` props are
-ignored — pass options to the shared editor's constructor instead. Instance
+To share one editor across surfaces, pass the same `editorOptions` object to
+each of them: the cache then hands every surface the same instance. Instance
 state — such as `persistState` records and their default `inMemory` storage —
-then survives surface remounts, so per-file selections and scroll positions
-restore across file switches. Use it only where one surface is editable at a
-time; simultaneously editable surfaces need per-surface editors from
-`createEditor`. When both props are set, `sharedEditor` wins.
+survives surface remounts, so per-file selections and scroll positions restore
+across file switches. Share an options object only where one surface is editable
+at a time; simultaneously editable surfaces need distinct options objects.
 
 ## Contents
 
