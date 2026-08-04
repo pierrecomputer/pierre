@@ -583,6 +583,7 @@ export interface CodeViewOptions<LAnnotation>
 }
 
 const DEFAULT_SCROLL_INTERACTION_RESTORE_DELAY_MS = 120;
+const SUB_PIXEL_TOLERANCE = 1;
 const SCROLLING_CODE_OVERFLOW_FIX_VARIABLE = '--diffs-overflow-override';
 const SCROLL_REBASE_CONTAINER_HEIGHT = 12_000_000;
 const SCROLL_REBASE_TRIGGER_TOP = 1_000_000;
@@ -898,9 +899,7 @@ export class CodeView<LAnnotation = undefined> {
     }
 
     const actualHeight = this.stickyContainer.getBoundingClientRect().height;
-    // Tolerate sub-pixel rounding from summing many flex children; real
-    // discrepancies are whole rows (or larger) tall.
-    if (Math.abs(actualHeight - stickyHeight) < 1) {
+    if (Math.abs(actualHeight - stickyHeight) < SUB_PIXEL_TOLERANCE) {
       return;
     }
 
@@ -3548,14 +3547,16 @@ export class CodeView<LAnnotation = undefined> {
   };
 
   private handleResize = (entries: ResizeObserverEntry[]) => {
+    let shouldRender = false;
     for (const entry of entries) {
       // If the sticky container resizes (could be from a render, which it will
       // probably ignore) or if an annotation or line wrap triggers a resize
       if (entry.target === this.stickyContainer) {
         const blockSize = entry.borderBoxSize[0].blockSize;
-        // If the height of the sticky container was already known, there's
-        // nothing for us to do
-        if (blockSize !== this.renderState.stickyHeight) {
+        if (
+          Math.abs(blockSize - this.renderState.stickyHeight) >=
+          SUB_PIXEL_TOLERANCE
+        ) {
           // If content resizes above the viewport, we want to be sure that it
           // doesn't cause things to jump within the viewport
           const currentScrollTop = this.getScrollTop();
@@ -3588,6 +3589,7 @@ export class CodeView<LAnnotation = undefined> {
             this.pendingScrollTarget = undefined;
             this.scrollAnimation = undefined;
           }
+          shouldRender = true;
         }
       }
       // A header/footer host resized after mount (async content, fonts, a React
@@ -3631,15 +3633,22 @@ export class CodeView<LAnnotation = undefined> {
             this.pendingScrollTarget = undefined;
             this.scrollAnimation = undefined;
           }
-          this.render();
+          shouldRender = true;
         }
       }
       // Root element resize (element-mode only)
       else {
         this.scrollDirty = true;
         this.heightDirty = true;
-        this.render();
+        shouldRender = true;
       }
+    }
+
+    // If the DOM changed in an unexpected way, we should kick
+    // off a synchronous render immediately because it will
+    // ensure no visual jitter if we need to scroll fix
+    if (shouldRender) {
+      this.render(true);
     }
   };
 
