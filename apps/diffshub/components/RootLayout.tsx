@@ -1,3 +1,5 @@
+import { Analytics } from '@vercel/analytics/next';
+import { SpeedInsights } from '@vercel/speed-insights/next';
 import { Geist } from 'next/font/google';
 import localFont from 'next/font/local';
 import type { ReactNode } from 'react';
@@ -97,6 +99,8 @@ export function RootLayout({
           </ThemeProvider>
         </WorkerPoolContext>
         <PreloadHighlighter />
+        <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   );

@@ -26,6 +26,8 @@
     "@radix-ui/react-tooltip": "catalog:",
     "@radix-ui/react-use-controllable-state": "catalog:",
     "@shikijs/transformers": "catalog:",
+    "@vercel/analytics": "catalog:",
+    "@vercel/speed-insights": "catalog:",
     "@vscode/web-custom-data": "catalog:",
     "babel-plugin-react-compiler": "catalog:",
     "class-variance-authority": "catalog:",

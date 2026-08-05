@@ -1,3 +1,5 @@
+import { Analytics } from '@vercel/analytics/next';
+import { SpeedInsights } from '@vercel/speed-insights/next';
 // sort-imports-ignore
 import type { Metadata, Viewport } from 'next';
 import {
@@ -247,6 +249,8 @@ export default function RootLayout({
           ></div>
         </ThemeProvider>
         <PreloadHighlighter />
+        <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   );
