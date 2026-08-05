@@ -1,6 +1,7 @@
 import { afterAll, expect, test } from 'bun:test';
 
 import { disposeHighlighter, FileDiff, parseDiffFromFile } from '../src';
+import type { DiffsEditor, FileDiffMetadata } from '../src/types';
 import { installDom, wait, waitFor } from './domHarness';
 
 afterAll(async () => {
@@ -30,6 +31,23 @@ async function waitForStableRow(
     await wait(25);
   }
   return row;
+}
+
+function createEditorStub(): DiffsEditor<undefined> {
+  return {
+    cleanUp() {},
+    edit: () => () => {},
+    __captureFocusForDOMReplacement() {},
+    __postponeBgTokenizeToNextFrame() {},
+    __syncRenderView() {},
+  };
+}
+
+function createDiff(name: string, marker: string): FileDiffMetadata {
+  return parseDiffFromFile(
+    { name, contents: 'const base = 0;\n' },
+    { name, contents: `const ${marker} = 1;\n` }
+  );
 }
 
 // FileDiff.render stored deletionFile/additionFile from the render input even
@@ -114,6 +132,75 @@ test('parsed unkeyed diffs with the same filename render fresh contents', async 
     expect(secondDiff.cacheKey).toBeUndefined();
   } finally {
     instance?.cleanUp();
+    cleanup();
+  }
+});
+
+for (const targetChange of ['name', 'prevName', 'lang'] as const) {
+  test(`a dirty unkeyed session does not swallow a diff with a different ${targetChange}`, async () => {
+    const { cleanup } = installDom();
+    const firstDiff = createDiff('same.ts', 'firstMarker');
+    const secondDiff = createDiff('same.ts', 'secondMarker');
+    if (targetChange === 'name') {
+      secondDiff.name = 'other.ts';
+    } else if (targetChange === 'prevName') {
+      firstDiff.prevName = 'first-old.ts';
+      secondDiff.prevName = 'second-old.ts';
+    } else {
+      firstDiff.lang = 'typescript';
+      secondDiff.lang = 'javascript';
+    }
+    const fileContainer = document.createElement('div');
+    document.body.appendChild(fileContainer);
+    const instance = new FileDiff<undefined>({ disableFileHeader: true });
+
+    try {
+      instance.render({ fileDiff: firstDiff, fileContainer });
+      await waitForStableRow(fileContainer);
+      const detach = instance.attachEditor(createEditorStub());
+      firstDiff.editSessionDirty = true;
+
+      instance.render({
+        fileDiff: secondDiff,
+        fileContainer,
+        forceRender: true,
+      });
+      await waitForStableRow(fileContainer);
+
+      expect(instance.fileDiff).toBe(secondDiff);
+      detach();
+    } finally {
+      instance.cleanUp();
+      cleanup();
+    }
+  });
+}
+
+test('a dirty unkeyed session remains authoritative for the same target', async () => {
+  const { cleanup } = installDom();
+  const firstDiff = createDiff('same.ts', 'firstMarker');
+  const secondDiff = createDiff('same.ts', 'secondMarker');
+  const fileContainer = document.createElement('div');
+  document.body.appendChild(fileContainer);
+  const instance = new FileDiff<undefined>({ disableFileHeader: true });
+
+  try {
+    instance.render({ fileDiff: firstDiff, fileContainer });
+    await waitForStableRow(fileContainer);
+    const detach = instance.attachEditor(createEditorStub());
+    firstDiff.editSessionDirty = true;
+
+    instance.render({
+      fileDiff: secondDiff,
+      fileContainer,
+      forceRender: true,
+    });
+    await waitForStableRow(fileContainer);
+
+    expect(instance.fileDiff).toBe(firstDiff);
+    detach();
+  } finally {
+    instance.cleanUp();
     cleanup();
   }
 });

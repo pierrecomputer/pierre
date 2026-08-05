@@ -1021,11 +1021,16 @@ export class FileDiff<
       fileDiff != null &&
       this.editor != null &&
       sessionDiff?.editSessionDirty === true &&
-      fileDiff.cacheKey === sessionDiff.cacheKey
+      fileDiff.cacheKey === sessionDiff.cacheKey &&
+      fileDiff.name === sessionDiff.name &&
+      fileDiff.lang === sessionDiff.lang &&
+      (fileDiff.cacheKey !== undefined ||
+        fileDiff.prevName === sessionDiff.prevName)
     ) {
-      // Host rerenders may rebuild metadata from stale props while the editor
-      // owns newer contents. Keep the dirty session authoritative without
-      // manufacturing a cache identity for unkeyed diffs.
+      // Preserve dirty metadata only for the same editor target. Unkeyed diffs
+      // also compare the previous path because no cache key distinguishes it.
+      // This is a temporary workaround for edit vs render content change
+      // hardening
       fileDiff = sessionDiff;
     }
     let diffDidChange = fileDiff != null && fileDiff !== this.fileDiff;

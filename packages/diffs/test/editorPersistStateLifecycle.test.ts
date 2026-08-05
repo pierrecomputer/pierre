@@ -664,10 +664,15 @@ describe('Editor persisted state lifecycle', () => {
     viewport.scrollTop = 40;
     viewport.scrollLeft = 8;
 
-    const oldFile: FileContents = { name: 'diffed.ts', contents: 'alpha\n' };
+    const oldFile: FileContents = {
+      name: 'diffed.ts',
+      contents: 'alpha\n',
+      cacheKey: 'diffed:old',
+    };
     const newFile: FileContents = {
       name: 'diffed.ts',
       contents: 'alpha\nbravo\n',
+      cacheKey: 'diffed:new',
     };
     const fileDiff = new FileDiff<undefined>({
       disableErrorHandling: true,
@@ -727,10 +732,12 @@ describe('Editor persisted state lifecycle', () => {
     const oldFile: FileContents = {
       name: 'diffed-reparse.ts',
       contents: 'alpha\n',
+      cacheKey: 'diffed-reparse:old',
     };
     const newFile: FileContents = {
       name: 'diffed-reparse.ts',
       contents: 'alpha\nbravo\n',
+      cacheKey: 'diffed-reparse:new',
     };
     const first = new FileDiff<undefined>({
       disableErrorHandling: true,
