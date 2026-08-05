@@ -434,7 +434,7 @@ describe('EditorTokenizer', () => {
     }
   });
 
-  test('settles line inserts against shifted states for rerendering hosts', () => {
+  test('settles only net line-count changes for rerendering hosts', () => {
     let tokenizeLineCount = 0;
     const grammar = {
       tokenizeLine2(lineText: string, ruleStack: StateStack) {
@@ -514,6 +514,32 @@ describe('EditorTokenizer', () => {
 
     expect([...editedLines.keys()]).toEqual([80]);
     expect(tokenizeLineCount).toBe(1);
+
+    const netZeroChange = textDocument.applyEdits([
+      {
+        range: {
+          start: { line: 10, character: 0 },
+          end: { line: 10, character: 0 },
+        },
+        newText: 'inserted\n',
+      },
+      {
+        range: {
+          start: { line: 20, character: textDocument.getLineText(20).length },
+          end: { line: 21, character: 0 },
+        },
+        newText: '',
+      },
+    ])!;
+    expect(netZeroChange.lineDelta).toBe(0);
+    expect(
+      netZeroChange.changedLineChanges?.map((change) => change[2])
+    ).toEqual([1, -1]);
+
+    const netZeroLines = tokenizer.tokenize(netZeroChange, renderRange, true);
+    expect([...netZeroLines.keys()]).toEqual(
+      Array.from({ length: 90 }, (_, index) => index + 10)
+    );
     tokenizer.cleanUp();
   });
 

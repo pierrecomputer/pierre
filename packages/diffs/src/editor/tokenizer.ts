@@ -423,7 +423,7 @@ export class EditorTokenizer {
       (change.changedLineChanges?.every(([, , lineDelta]) => lineDelta === 0) ??
         true);
     const canReuseShiftedStates =
-      hostRealignsRows && !canReuseCachedStates && dirtyStart >= startingLine;
+      hostRealignsRows && change.lineDelta !== 0 && dirtyStart >= startingLine;
     const canCacheTokenizedStates =
       canReuseCachedStates ||
       renderRange === undefined ||
