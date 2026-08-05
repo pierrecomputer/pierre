@@ -3111,7 +3111,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     tokenizer.stopBackgroundTokenize();
 
     const t = performance.now();
-    const dirtyLines = tokenizer.tokenize(change, renderRange);
+    const dirtyLines = tokenizer.tokenize(change, renderRange, !this.#isDiff);
     const t2 = performance.now();
 
     if (dirtyLines.size > 0) {
