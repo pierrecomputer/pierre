@@ -205,15 +205,17 @@ export interface TreeAppProps<LAnnotation = unknown> {
   // Editor side: files keyed by their tree path. Mirrors the
   // preloadedDataById pattern already used by tree demos. Both the prerendered
   // HTML map and the file options may be scoped per theme so the active File
-  // picks up the right syntax-highlight colors when the theme toggles. Give
-  // files unique, rename-stable cacheKeys so render caches follow moves;
-  // without one, TreeApp uses the current path.
+  // picks up the right syntax-highlight colors when the theme toggles. Omitted
+  // cacheKeys disable shared render caching. A supplied key must change when
+  // file contents or other render-affecting identity changes; TreeApp never
+  // derives one from the file path.
   files?: Readonly<Record<string, FileContents>>;
   prerenderedHTMLByPath?: TreeAppThemeValue<Readonly<Record<string, string>>>;
   fileOptions?: TreeAppThemeValue<FileOptions<LAnnotation>>;
   // Fired on Cmd/Ctrl+S after TreeApp clears the tab's unsaved indicator.
   // Hosts that own the `files` map should update it here so the next edit
-  // cycle compares against the saved contents.
+  // cycle compares against the saved contents, advancing any explicit
+  // cacheKey according to the host's versioning scheme.
   onSave?: (path: string, file: FileContents) => void;
 
   // Light/dark theming. TreeApp owns the state by default; callers can observe
@@ -1661,14 +1663,14 @@ export function TreeApp<LAnnotation = unknown>({
     activePath != null && usesLocalFile
       ? (editedFilesByPath[activePath] ?? activeHostFile)
       : activeHostFile;
-  // File names are commonly only basenames, so use the unique tree path as
-  // the persistence identity unless the caller supplied a stable cache key.
+  // Keep unkeyed caller files isolated from edit-session mutation without
+  // inventing a shared renderer-cache identity.
   const activeEditorFile = useMemo(
     () =>
-      activeFile == null || activePath == null || activeFile.cacheKey != null
+      activeFile == null || activeFile.cacheKey != null
         ? activeFile
-        : { ...activeFile, cacheKey: activePath },
-    [activeFile, activePath]
+        : { ...activeFile },
+    [activeFile]
   );
   // Skip stale prerendered HTML while the editor is showing local contents.
   const activePrerenderedHTML =
