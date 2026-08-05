@@ -463,7 +463,9 @@ export class Editor<
     if (previousRenderDecoration !== nextOptions.renderDecoration) {
       this.#decorationElements?.forEach((element) => element.remove());
       this.#decorationElements = undefined;
-      this.#renderDecorations();
+      if (this.#decorations !== undefined) {
+        this.#renderDecorations(this.#decorations);
+      }
     }
     if (this.#options.persistState !== true) {
       this.#textDocumentCache.clear();
@@ -733,7 +735,9 @@ export class Editor<
               offset: textDocument.offsetAt(position),
             };
           });
-    this.#renderDecorations();
+    if (this.#decorations !== undefined) {
+      this.#renderDecorations(this.#decorations);
+    }
   }
 
   focus(options?: EditorFocusOptions): void {
@@ -1171,7 +1175,11 @@ export class Editor<
     ) {
       this.#updateSelections(this.#selections ?? []);
     }
-    this.#renderDecorations();
+
+    // re-render the existing decorations
+    if (this.#decorations !== undefined) {
+      this.#renderDecorations(this.#decorations);
+    }
 
     if (
       this.#initSelections !== undefined &&
@@ -3195,9 +3203,11 @@ export class Editor<
         this.focus();
       }
     }
+    if (this.#decorations !== undefined) {
+      this.#renderDecorations(this.#decorations);
+    }
     this.#markerRenderer?.removePopover();
     this.#computeContentOffset(this.#contentElement!);
-    this.#renderDecorations();
   };
 
   // A custom monospace web font can finish loading after the editor first
@@ -3235,7 +3245,9 @@ export class Editor<
       ) {
         this.#updateSelections(this.#selections ?? []);
       }
-      this.#renderDecorations();
+      if (this.#decorations !== undefined) {
+        this.#renderDecorations(this.#decorations);
+      }
       this.#markerRenderer?.removePopover();
     });
   }
@@ -3429,7 +3441,9 @@ export class Editor<
       this.#lineAnnotations = newLineAnnotations;
       renderLineAnnotations(newLineAnnotations, contentEl, gutterEl);
     }
-    this.#renderDecorations();
+    if (this.#decorations !== undefined) {
+      this.#renderDecorations(this.#decorations);
+    }
 
     if (this.#options.__debug === true) {
       console.log(
@@ -4116,56 +4130,6 @@ export class Editor<
     }
   }
 
-  // Mount visible custom decorations outside contenteditable and keep the
-  // consumer's element untouched inside a library-owned position anchor.
-  #renderDecorations(): void {
-    const decorations = this.#decorations;
-    const renderDecoration = this.#options.renderDecoration;
-    const overlayElement = this.#overlayElement;
-    if (
-      decorations === undefined ||
-      renderDecoration === undefined ||
-      overlayElement === undefined
-    ) {
-      this.#decorationElements?.forEach((element) => element.remove());
-      this.#decorationElements = undefined;
-      return;
-    }
-
-    const elements = (this.#decorationElements ??= new Map());
-    for (const [trackedDecoration, element] of elements) {
-      if (!this.#isLineVisible(trackedDecoration.decoration.position.line)) {
-        element.remove();
-        elements.delete(trackedDecoration);
-      }
-    }
-
-    const fragment = document.createDocumentFragment();
-    for (const trackedDecoration of decorations) {
-      const { decoration } = trackedDecoration;
-      const { line, character } = decoration.position;
-      if (!this.#isLineVisible(line)) {
-        continue;
-      }
-      const [left, wrapLine] = this.#getCharX(line, character);
-      const top = this.#getLineY(line) + wrapLine * this.#metrics.lineHeight;
-      let element = elements.get(trackedDecoration);
-      if (element === undefined) {
-        element = h(
-          'div',
-          {
-            dataset: 'editorDecoration',
-            children: [renderDecoration(decoration)],
-          },
-          fragment
-        );
-        elements.set(trackedDecoration, element);
-      }
-      element.style.transform = `translateX(${left}px) translateY(${top}px)`;
-    }
-    overlayElement.appendChild(fragment);
-  }
-
   // Re-render the selection overlay after a theme swap so rounded corner masks
   // recompute their `--diffs-selection-corner-bg`. Those masks capture the
   // resolved line-background color when the selection is drawn; a light/dark or
@@ -4479,7 +4443,7 @@ export class Editor<
         continue;
       }
 
-      const segmentStartWidth = this.#segmentTextWidth(
+      const segmentStartWidth = this.#metrics.segmentTextWidth(
         lineText,
         segmentStart,
         wrapStartChar
@@ -4499,7 +4463,11 @@ export class Editor<
       const segmentWidth =
         wrapStartChar === wrapEndChar
           ? paddingEnd
-          : this.#segmentTextWidth(lineText, segmentStart, wrapEndChar) -
+          : this.#metrics.segmentTextWidth(
+              lineText,
+              segmentStart,
+              wrapEndChar
+            ) -
             segmentStartWidth +
             paddingEnd;
 
@@ -4513,27 +4481,6 @@ export class Editor<
         extraDataset
       );
     }
-  }
-
-  // Pixel width of the text from a wrapped segment's start up to a character,
-  // relative to the segment's left edge. Tabs advance from the segment start,
-  // which sits on a tab stop, so tab stops line up with the rendered text.
-  #segmentTextWidth(
-    lineText: string,
-    segmentStart: number,
-    character: number
-  ): number {
-    if (character <= segmentStart) {
-      return 0;
-    }
-    const segmentText = lineText.slice(segmentStart, character);
-    const asciiColumns = getExpandedAsciiTextColumns(
-      segmentText,
-      this.#metrics.tabSize
-    );
-    return asciiColumns !== -1
-      ? asciiColumns * this.#metrics.ch
-      : this.#metrics.measureTextWidth(segmentText);
   }
 
   // Render one selection block for a single visual line.
@@ -4747,6 +4694,53 @@ export class Editor<
       caretEl.style.scrollMargin = this.#getScrollMargin();
       this.#primaryCaretElement = caretEl;
     }
+  }
+
+  #renderDecorations(decorations: TrackedDecoration<LDecoration>[]): void {
+    const renderDecoration = this.#options.renderDecoration;
+    const overlayElement = this.#overlayElement;
+    if (
+      decorations === undefined ||
+      renderDecoration === undefined ||
+      overlayElement === undefined
+    ) {
+      this.#decorationElements?.forEach((element) => element.remove());
+      this.#decorationElements = undefined;
+      return;
+    }
+
+    const elements = (this.#decorationElements ??= new Map());
+    for (const [trackedDecoration, element] of elements) {
+      if (!this.#isLineVisible(trackedDecoration.decoration.position.line)) {
+        element.remove();
+        elements.delete(trackedDecoration);
+      }
+    }
+
+    const fragment = document.createDocumentFragment();
+    for (const trackedDecoration of decorations) {
+      const { decoration } = trackedDecoration;
+      const { line, character } = decoration.position;
+      if (!this.#isLineVisible(line)) {
+        continue;
+      }
+      const [left, wrapLine] = this.#getCharX(line, character);
+      const top = this.#getLineY(line) + wrapLine * this.#metrics.lineHeight;
+      let element = elements.get(trackedDecoration);
+      if (element === undefined) {
+        element = h(
+          'div',
+          {
+            dataset: 'editorDecoration',
+            children: [renderDecoration(decoration)],
+          },
+          fragment
+        );
+        elements.set(trackedDecoration, element);
+      }
+      element.style.transform = `translateX(${left}px) translateY(${top}px)`;
+    }
+    overlayElement.appendChild(fragment);
   }
 
   #updateSelectionActionPopover(): void {
