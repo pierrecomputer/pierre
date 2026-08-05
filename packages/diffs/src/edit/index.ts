@@ -2,8 +2,6 @@ export type {
   EditorCommand,
   EditorKeymap,
   EditorShortcut,
-  KeyboardKey,
-  KeyboardModifier,
 } from '../editor/command';
 export * from '../editor/editor';
 export type {
@@ -11,4 +9,8 @@ export type {
   PersistStateStorage,
 } from '../editor/stateStorage';
 export * from '../editor/textDocument';
-export type { EditorChange, EditorChangeEvent } from '../types';
+export type {
+  EditorChange,
+  EditorChangeEvent,
+  EditorDecoration,
+} from '../types';

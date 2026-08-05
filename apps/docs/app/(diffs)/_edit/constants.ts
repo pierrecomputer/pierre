@@ -1,4 +1,8 @@
-import { DEFAULT_THEMES, type FileContents } from '@pierre/diffs';
+import {
+  DEFAULT_THEMES,
+  type EditorDecoration,
+  type FileContents,
+} from '@pierre/diffs';
 import type { EditorCommand, EditorKeymap } from '@pierre/diffs/edit';
 import type { FileOptions } from '@pierre/diffs/react';
 import type { PreloadFileOptions } from '@pierre/diffs/ssr';
@@ -11,6 +15,37 @@ const EDITABLE_FILE_OPTIONS: FileOptions<undefined> = {
   themeType: 'dark',
   useTokenTransformer: true,
 };
+
+export interface CursorDecorationMetadata {
+  name: string;
+  color: string;
+}
+
+export const DECORATION_DEMO_FILE: FileContents = {
+  name: 'review.ts',
+  contents: `type Review = {
+  author: string
+  approved: boolean
+}
+
+export function summarize(review: Review) {
+  const status = review.approved ? 'approved' : 'needs review'
+  return \`\${review.author}: \${status}\`
+}
+`,
+};
+
+export const DECORATION_DEMO_DECORATIONS: EditorDecoration<CursorDecorationMetadata>[] =
+  [
+    {
+      position: { line: 5, character: 26 },
+      metadata: { name: 'Amadeus', color: '#7c3aed' },
+    },
+    {
+      position: { line: 7, character: 18 },
+      metadata: { name: 'Mark', color: '#c2410c' },
+    },
+  ];
 
 // Lint-marker demo source. Marker positions below are tied to these exact
 // lines, so keep the two in sync if the contents change.
@@ -330,6 +365,11 @@ const DEFAULT_KEYMAP_FILE: FileContents = {
 // instead of flashing in after client highlighting.
 export const MARKER_DEMO_FILE_EXAMPLE: PreloadFileOptions<undefined> = {
   file: MARKER_DEMO_FILE,
+  options: EDITABLE_FILE_OPTIONS,
+};
+
+export const DECORATION_DEMO_FILE_EXAMPLE: PreloadFileOptions<undefined> = {
+  file: DECORATION_DEMO_FILE,
   options: EDITABLE_FILE_OPTIONS,
 };
 

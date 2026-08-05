@@ -1253,6 +1253,11 @@ export interface EditorSelection extends Range {
   direction: SelectionDirection;
 }
 
+export interface EditorDecoration<T> {
+  position: Position;
+  metadata: T;
+}
+
 export interface EditorViewState {
   /** Horizontal position owned by the current editable code scroller. */
   scrollLeft: number;

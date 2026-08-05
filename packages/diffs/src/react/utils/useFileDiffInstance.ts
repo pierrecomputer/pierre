@@ -26,10 +26,10 @@ import { useStableCallback } from './useStableCallback';
 const useIsomorphicLayoutEffect =
   typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
-interface UseFileDiffInstanceProps<LAnnotation> {
+interface UseFileDiffInstanceProps<LAnnotation, LDecoration> {
   fileDiff: FileDiffMetadata;
   options: FileDiffOptions<LAnnotation> | undefined;
-  editorOptions: EditorOptions<LAnnotation> | undefined;
+  editorOptions: EditorOptions<LAnnotation, LDecoration> | undefined;
   lineAnnotations: DiffLineAnnotation<LAnnotation>[] | undefined;
   selectedLines: SelectedLineRange | null | undefined;
   prerenderedHTML: string | undefined;
@@ -45,7 +45,7 @@ interface UseFileDiffInstanceReturn {
   getHoveredLine(): GetHoveredLineResult<'diff'> | undefined;
 }
 
-export function useFileDiffInstance<LAnnotation>({
+export function useFileDiffInstance<LAnnotation, LDecoration>({
   fileDiff,
   options,
   editorOptions,
@@ -57,11 +57,14 @@ export function useFileDiffInstance<LAnnotation>({
   hasCustomHeader,
   disableWorkerPool,
   edit,
-}: UseFileDiffInstanceProps<LAnnotation>): UseFileDiffInstanceReturn {
+}: UseFileDiffInstanceProps<
+  LAnnotation,
+  LDecoration
+>): UseFileDiffInstanceReturn {
   const simpleVirtualizer = useVirtualizer();
   const controlledSelection = selectedLines !== undefined;
   const poolManager = useContext(WorkerPoolContext);
-  const createEditor = useCreateEditor<LAnnotation>();
+  const createEditor = useCreateEditor<LAnnotation, LDecoration>();
   const instanceRef = useRef<
     FileDiff<LAnnotation> | VirtualizedFileDiff<LAnnotation> | null
   >(null);

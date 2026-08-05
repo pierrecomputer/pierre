@@ -54,13 +54,13 @@ export type CodeViewReactOptions<LAnnotation = undefined> = Omit<
   'controlledSelection' | 'createEditor' | 'onSelectedLinesChange'
 >;
 
-interface CodeViewBaseProps<LAnnotation> {
+interface CodeViewBaseProps<LAnnotation, LDecoration = undefined> {
   options?: CodeViewReactOptions<LAnnotation>;
   /**
    * Creation-time options passed to the nearest EditProvider factory.
    * CodeView supplies its item-specific change callback.
    */
-  editorOptions?: Omit<EditorOptions<LAnnotation>, 'onChange'>;
+  editorOptions?: Omit<EditorOptions<LAnnotation, LDecoration>, 'onChange'>;
   className?: string;
   style?: CSSProperties;
   containerRef?: Ref<HTMLDivElement>;
@@ -112,23 +112,25 @@ interface CodeViewBaseProps<LAnnotation> {
 
 export interface ControlledCodeViewProps<
   LAnnotation,
-> extends CodeViewBaseProps<LAnnotation> {
+  LDecoration = undefined,
+> extends CodeViewBaseProps<LAnnotation, LDecoration> {
   items: readonly CodeViewItem<LAnnotation>[];
   initialItems?: never;
 }
 
 export interface UncontrolledCodeViewProps<
   LAnnotation,
-> extends CodeViewBaseProps<LAnnotation> {
+  LDecoration = undefined,
+> extends CodeViewBaseProps<LAnnotation, LDecoration> {
   // Seeds the imperative CodeView instance once. Later item changes should go
   // through the ref API instead of being reconciled from React props.
   initialItems?: readonly CodeViewItem<LAnnotation>[];
   items?: never;
 }
 
-export type CodeViewProps<LAnnotation = undefined> =
-  | ControlledCodeViewProps<LAnnotation>
-  | UncontrolledCodeViewProps<LAnnotation>;
+export type CodeViewProps<LAnnotation = undefined, LDecoration = undefined> =
+  | ControlledCodeViewProps<LAnnotation, LDecoration>
+  | UncontrolledCodeViewProps<LAnnotation, LDecoration>;
 
 export interface CodeViewHandle<LAnnotation> {
   addItems(items: readonly CodeViewItem<LAnnotation>[]): void;
@@ -144,8 +146,8 @@ export interface CodeViewHandle<LAnnotation> {
   getInstance(): CodeViewClass<LAnnotation> | undefined;
 }
 
-type CodeViewComponent = <LAnnotation = undefined>(
-  props: CodeViewProps<LAnnotation> & {
+type CodeViewComponent = <LAnnotation = undefined, LDecoration = undefined>(
+  props: CodeViewProps<LAnnotation, LDecoration> & {
     ref?: React.Ref<CodeViewHandle<LAnnotation>>;
   }
 ) => React.JSX.Element;
@@ -182,8 +184,8 @@ function createDefaultCache<LAnnotation>(
   };
 }
 
-function CodeViewInner<LAnnotation = undefined>(
-  props: CodeViewProps<LAnnotation>,
+function CodeViewInner<LAnnotation = undefined, LDecoration = undefined>(
+  props: CodeViewProps<LAnnotation, LDecoration>,
   ref: React.ForwardedRef<CodeViewHandle<LAnnotation>>
 ): React.JSX.Element {
   const {
@@ -210,7 +212,7 @@ function CodeViewInner<LAnnotation = undefined>(
     style,
   } = props;
   const controlled = controlledItems !== undefined;
-  const contextCreateEditor = useCreateEditor<LAnnotation>();
+  const contextCreateEditor = useCreateEditor<LAnnotation, LDecoration>();
   const poolManager = useContext(WorkerPoolContext);
   const cachedDataRef = useRef<CachedDataRef<LAnnotation>>(
     createDefaultCache<LAnnotation>(controlled)

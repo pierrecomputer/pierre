@@ -26,10 +26,10 @@ import { useStableCallback } from './useStableCallback';
 const useIsomorphicLayoutEffect =
   typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
-interface UseFileInstanceProps<LAnnotation> {
+interface UseFileInstanceProps<LAnnotation, LDecoration> {
   file: FileContents;
   options: FileOptions<LAnnotation> | undefined;
-  editorOptions: EditorOptions<LAnnotation> | undefined;
+  editorOptions: EditorOptions<LAnnotation, LDecoration> | undefined;
   lineAnnotations: LineAnnotation<LAnnotation>[] | undefined;
   selectedLines: SelectedLineRange | null | undefined;
   prerenderedHTML: string | undefined;
@@ -49,7 +49,7 @@ interface UseFileInstanceReturn {
   getHoveredLine(): GetHoveredLineResult<'file'> | undefined;
 }
 
-export function useFileInstance<LAnnotation>({
+export function useFileInstance<LAnnotation, LDecoration>({
   file,
   options,
   editorOptions,
@@ -61,11 +61,11 @@ export function useFileInstance<LAnnotation>({
   hasCustomHeader,
   disableWorkerPool,
   edit,
-}: UseFileInstanceProps<LAnnotation>): UseFileInstanceReturn {
+}: UseFileInstanceProps<LAnnotation, LDecoration>): UseFileInstanceReturn {
   const simpleVirtualizer = useVirtualizer();
   const controlledSelection = selectedLines !== undefined;
   const poolManager = useContext(WorkerPoolContext);
-  const createEditor = useCreateEditor<LAnnotation>();
+  const createEditor = useCreateEditor<LAnnotation, LDecoration>();
   const instanceRef = useRef<
     File<LAnnotation> | VirtualizedFile<LAnnotation> | null
   >(null);

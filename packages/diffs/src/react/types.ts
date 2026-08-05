@@ -13,12 +13,12 @@ import type {
   VirtualFileMetrics,
 } from '../types';
 
-export interface DiffBasePropsReact<LAnnotation> {
+export interface DiffBasePropsReact<LAnnotation, LDecoration = undefined> {
   options?: FileDiffOptions<LAnnotation>;
   /** Whether this surface has an active edit session. */
   edit?: boolean;
   /** Creation-time options passed to the nearest EditProvider factory. */
-  editorOptions?: EditorOptions<LAnnotation>;
+  editorOptions?: EditorOptions<LAnnotation, LDecoration>;
   metrics?: VirtualFileMetrics;
   lineAnnotations?: DiffLineAnnotation<LAnnotation>[];
   selectedLines?: SelectedLineRange | null;
@@ -35,13 +35,13 @@ export interface DiffBasePropsReact<LAnnotation> {
   prerenderedHTML?: string;
 }
 
-export interface FileProps<LAnnotation> {
+export interface FileProps<LAnnotation, LDecoration = undefined> {
   file: FileContents;
   options?: FileOptions<LAnnotation>;
   /** Whether this surface has an active edit session. */
   edit?: boolean;
   /** Creation-time options passed to the nearest EditProvider factory. */
-  editorOptions?: EditorOptions<LAnnotation>;
+  editorOptions?: EditorOptions<LAnnotation, LDecoration>;
   metrics?: VirtualFileMetrics;
   lineAnnotations?: LineAnnotation<LAnnotation>[];
   selectedLines?: SelectedLineRange | null;

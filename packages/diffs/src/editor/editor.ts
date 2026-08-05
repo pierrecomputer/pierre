@@ -9,6 +9,7 @@ import type {
   DiffsHighlighter,
   EditableInstance,
   EditorChangeEvent,
+  EditorDecoration,
   EditorSelection,
   EditorState,
   FileContents,
@@ -96,6 +97,7 @@ import {
   mapCursorMove,
   mapSelectionShift,
   mergeOverlappingSelections,
+  remapOffsetThroughEdits,
   remapSelectionsAfterEdits,
   resolveIndentEdits,
   resolveSelectionCut,
@@ -188,7 +190,12 @@ interface ViewportInputWatch {
   dispose(): void;
 }
 
-export interface EditorOptions<LAnnotation> {
+interface TrackedDecoration<T> {
+  decoration: EditorDecoration<T>;
+  offset: number;
+}
+
+export interface EditorOptions<LAnnotation, LDecoration = undefined> {
   /** The maximum number of entries to keep in the undo stack. */
   historyMaxEntries?: number;
   /** Custom keymap groups checked before defaults; later groups take precedence. */
@@ -231,9 +238,11 @@ export interface EditorOptions<LAnnotation> {
   renderSelectionAction?: (
     context: SelectionActionContext<LAnnotation>
   ) => HTMLElement;
+  /** Render a decoration. */
+  renderDecoration?: (decoration: EditorDecoration<LDecoration>) => HTMLElement;
   /** Callback when the editor is attached to a file. */
   onAttach?: (
-    editor: Editor<LAnnotation>,
+    editor: Editor<LAnnotation, LDecoration>,
     fileInstance: DiffsEditableComponent<LAnnotation>
   ) => void;
   /** Callback when the editor document changes. */
@@ -278,8 +287,11 @@ const SELECTION_ACTION_POPOVER_PLACEMENT_KEY = 'selection-action';
 const MULTI_SELECTION_CLIPBOARD_TYPE =
   'application/vnd.pierre.diffs-selections+json';
 
-export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
-  #options: EditorOptions<LAnnotation>;
+export class Editor<
+  LAnnotation,
+  LDecoration = undefined,
+> implements DiffsEditor<LAnnotation> {
+  #options: EditorOptions<LAnnotation, LDecoration>;
   #metrics = new Metrics();
   #tokenizer?: EditorTokenizer;
   #popoverManager?: PopoverManager;
@@ -335,6 +347,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #contentElement?: HTMLElement;
   #overlayElement?: HTMLElement;
   #overlayElements?: Map<string, HTMLElement>;
+  #decorationElements?: Map<TrackedDecoration<LDecoration>, HTMLElement>;
   #primaryCaretElement?: HTMLElement;
   #resizeObserver?: ResizeObserver;
 
@@ -352,6 +365,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   // windows, where no cap is needed.
   #viewportWindowLines?: number;
   #markerRenderer?: MarkerRenderer;
+  #decorations?: TrackedDecoration<LDecoration>[];
   #searchPanel?: SearchPanelWidget;
   #selectionAction?: SelectionActionWidget;
   // Programmatic ranges stay passive until the user interacts with the editor.
@@ -424,11 +438,12 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
   };
 
-  constructor(options: EditorOptions<LAnnotation> = {}) {
+  constructor(options: EditorOptions<LAnnotation, LDecoration> = {}) {
     this.#options = options;
   }
 
-  setOptions(options: EditorOptions<LAnnotation>): void {
+  setOptions(options: EditorOptions<LAnnotation, LDecoration>): void {
+    const previousRenderDecoration = this.#options.renderDecoration;
     const previousStorageOption =
       this.#options.persistStateStorage ?? 'inMemory';
     const nextOptions = {
@@ -445,6 +460,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       }
     }
     this.#options = nextOptions;
+    if (previousRenderDecoration !== nextOptions.renderDecoration) {
+      this.#decorationElements?.forEach((element) => element.remove());
+      this.#decorationElements = undefined;
+      this.#renderDecorations();
+    }
     if (this.#options.persistState !== true) {
       this.#textDocumentCache.clear();
       this.#stateRestoreGeneration++;
@@ -694,6 +714,28 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#updateSelections(this.#selections ?? []);
   }
 
+  setDecorations(decorations: EditorDecoration<LDecoration>[]): void {
+    const textDocument = this.#textDocument;
+    if (textDocument === undefined) {
+      return;
+    }
+    this.#decorationElements?.forEach((element) => element.remove());
+    this.#decorationElements = undefined;
+    this.#decorations =
+      decorations.length === 0
+        ? undefined
+        : decorations.map((decoration) => {
+            const position = textDocument.normalizePosition(
+              decoration.position
+            );
+            return {
+              decoration: { ...decoration, position },
+              offset: textDocument.offsetAt(position),
+            };
+          });
+    this.#renderDecorations();
+  }
+
   focus(options?: EditorFocusOptions): void {
     const preventScroll = options?.preventScroll ?? false;
     const lineNumber = options?.lineNumber;
@@ -814,7 +856,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#themeSelectionRefreshFrame = undefined;
     }
 
-    this.#resetState();
+    this.#resetState(recycle);
     this.#fileInstance = undefined;
   }
 
@@ -1129,6 +1171,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     ) {
       this.#updateSelections(this.#selections ?? []);
     }
+    this.#renderDecorations();
 
     if (
       this.#initSelections !== undefined &&
@@ -1467,7 +1510,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#lastAccessedCharX = undefined;
   }
 
-  #resetState(): void {
+  #resetState(preserveDecorations = false): void {
     this.#setEditorActiveLineSafe(null);
     this.#gutterWidthCache = undefined;
     this.#contentWidthCache = undefined;
@@ -1475,6 +1518,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#suppressNativeSelectionSync = false;
     this.#overlayElements?.forEach((el) => el.remove());
     this.#overlayElements = undefined;
+    this.#decorationElements?.forEach((element) => element.remove());
+    this.#decorationElements = undefined;
+    if (!preserveDecorations) {
+      this.#decorations = undefined;
+    }
     this.#selections = undefined;
     this.#reservedSelections = undefined;
     this.#scrollingToLine = undefined;
@@ -3149,6 +3197,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
     this.#markerRenderer?.removePopover();
     this.#computeContentOffset(this.#contentElement!);
+    this.#renderDecorations();
   };
 
   // A custom monospace web font can finish loading after the editor first
@@ -3186,6 +3235,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       ) {
         this.#updateSelections(this.#selections ?? []);
       }
+      this.#renderDecorations();
       this.#markerRenderer?.removePopover();
     });
   }
@@ -3379,6 +3429,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#lineAnnotations = newLineAnnotations;
       renderLineAnnotations(newLineAnnotations, contentEl, gutterEl);
     }
+    this.#renderDecorations();
 
     if (this.#options.__debug === true) {
       console.log(
@@ -4063,6 +4114,56 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     } catch {
       // InteractionManager.renderSelection can throw while editor DOM is updating.
     }
+  }
+
+  // Mount visible custom decorations outside contenteditable and keep the
+  // consumer's element untouched inside a library-owned position anchor.
+  #renderDecorations(): void {
+    const decorations = this.#decorations;
+    const renderDecoration = this.#options.renderDecoration;
+    const overlayElement = this.#overlayElement;
+    if (
+      decorations === undefined ||
+      renderDecoration === undefined ||
+      overlayElement === undefined
+    ) {
+      this.#decorationElements?.forEach((element) => element.remove());
+      this.#decorationElements = undefined;
+      return;
+    }
+
+    const elements = (this.#decorationElements ??= new Map());
+    for (const [trackedDecoration, element] of elements) {
+      if (!this.#isLineVisible(trackedDecoration.decoration.position.line)) {
+        element.remove();
+        elements.delete(trackedDecoration);
+      }
+    }
+
+    const fragment = document.createDocumentFragment();
+    for (const trackedDecoration of decorations) {
+      const { decoration } = trackedDecoration;
+      const { line, character } = decoration.position;
+      if (!this.#isLineVisible(line)) {
+        continue;
+      }
+      const [left, wrapLine] = this.#getCharX(line, character);
+      const top = this.#getLineY(line) + wrapLine * this.#metrics.lineHeight;
+      let element = elements.get(trackedDecoration);
+      if (element === undefined) {
+        element = h(
+          'div',
+          {
+            dataset: 'editorDecoration',
+            children: [renderDecoration(decoration)],
+          },
+          fragment
+        );
+        elements.set(trackedDecoration, element);
+      }
+      element.style.transform = `translateX(${left}px) translateY(${top}px)`;
+    }
+    overlayElement.appendChild(fragment);
   }
 
   // Re-render the selection overlay after a theme swap so rounded corner masks
@@ -5228,6 +5329,21 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     newLineAnnotations?: DiffLineAnnotation<LAnnotation>[],
     options?: { skipSearchRefresh?: boolean; skipFocus?: boolean }
   ) {
+    const textDocument = this.#textDocument;
+    if (textDocument !== undefined && this.#decorations !== undefined) {
+      // Remap before onChange so decorations replaced by that callback are not
+      // shifted through the same edit a second time.
+      for (const trackedDecoration of this.#decorations) {
+        trackedDecoration.offset = remapOffsetThroughEdits(
+          trackedDecoration.offset,
+          change.changes
+        );
+        trackedDecoration.decoration.position = textDocument.positionAt(
+          trackedDecoration.offset
+        );
+      }
+    }
+
     const fileRef = this.getFile();
     const onChange = this.#options.onChange;
     if (fileRef !== undefined && onChange !== undefined) {

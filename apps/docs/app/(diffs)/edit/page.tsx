@@ -2,6 +2,7 @@ import { preloadFile, preloadFileDiff } from '@pierre/diffs/ssr';
 import type { Metadata } from 'next';
 
 import {
+  DECORATION_DEMO_FILE_EXAMPLE,
   DEFAULT_KEYMAP_FILE_EXAMPLE,
   FIND_DEMO_FILE_EXAMPLE,
   HISTORY_DEMO_FILE_EXAMPLE,
@@ -16,7 +17,7 @@ import {
 
 const editTitle = 'Pierre Diffs — now with edit';
 const editDescription =
-  'A lightweight, SSR, mobile-friendly editable file and diff layer for @pierre/diffs. Edit files and diffs in place with selection management, multiple cursors, undo history, find/replace, and lint markers.';
+  'A lightweight, SSR, mobile-friendly editable file and diff layer for @pierre/diffs. Edit files and diffs in place with selection management, multiple cursors, virtual cursors, undo history, find/replace, and lint markers.';
 
 export const metadata: Metadata = {
   title: editTitle,
@@ -34,7 +35,7 @@ export const metadata: Metadata = {
 
 // Server-renders every edit demo so they all paint highlighted on first load
 // and hydrate cleanly (no flash): the "Live editing" File surface, and the
-// lint-marker, find-in-file, undo-history, shortcuts, and selection files.
+// lint-marker, find-in-file, undo-history, shortcuts, selection, and decoration files.
 export default async function EditRoute() {
   const [
     liveEditingFile,
@@ -44,6 +45,7 @@ export default async function EditRoute() {
     historyFile,
     keymapFile,
     selectionFile,
+    decorationFile,
   ] = await Promise.all([
     preloadFile(LIVE_EDITING_FILE_EXAMPLE),
     preloadFileDiff(LIVE_EDITING_FILE_DIFF_EXAMPLE),
@@ -52,6 +54,7 @@ export default async function EditRoute() {
     preloadFile(HISTORY_DEMO_FILE_EXAMPLE),
     preloadFile(DEFAULT_KEYMAP_FILE_EXAMPLE),
     preloadFile(SELECTION_DEMO_FILE_EXAMPLE),
+    preloadFile(DECORATION_DEMO_FILE_EXAMPLE),
   ]);
 
   return (
@@ -63,6 +66,7 @@ export default async function EditRoute() {
       historyFile={historyFile}
       keymapFile={keymapFile}
       selectionFile={selectionFile}
+      decorationFile={decorationFile}
     />
   );
 }

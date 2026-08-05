@@ -5,6 +5,7 @@ import type {
 
 import { WorkerPoolContext } from '../_components/WorkerPoolContext';
 import { LiveEditing } from '../_examples/LiveEditing/LiveEditing';
+import { DecorationDemo } from './DecorationDemo';
 import { EditHero } from './EditHero';
 import { EditReference } from './EditReference';
 import { FindDemo } from './FindDemo';
@@ -26,6 +27,7 @@ interface EditPageProps {
   historyFile: PreloadedFileResult<undefined>;
   keymapFile: PreloadedFileResult<undefined>;
   selectionFile: PreloadedFileResult<undefined>;
+  decorationFile: PreloadedFileResult<undefined>;
 }
 
 export function EditPage({
@@ -36,6 +38,7 @@ export function EditPage({
   historyFile,
   keymapFile,
   selectionFile,
+  decorationFile,
 }: EditPageProps) {
   return (
     <WorkerPoolContext>
@@ -66,6 +69,24 @@ export function EditPage({
               }
             />
             <SelectionDemo prerenderedFile={selectionFile} />
+          </div>
+
+          <div className="space-y-5">
+            <FeatureHeader
+              id="decorations"
+              title="Decorations"
+              description={
+                <>
+                  Use <code>editor.setDecorations()</code> to anchor arbitrary
+                  UI to document positions. Supply typed metadata and map it to
+                  DOM with <code>renderDecoration()</code>—here, custom
+                  decorations render collaborators' cursors. Type or press{' '}
+                  <code>Enter</code> before either cursor to see it follow the
+                  surrounding code.
+                </>
+              }
+            />
+            <DecorationDemo prerenderedFile={decorationFile} />
           </div>
 
           <div className="space-y-5">

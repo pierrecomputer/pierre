@@ -4,9 +4,9 @@ import { Editor, type EditorOptions } from '@pierre/diffs/edit';
 import { EditProvider } from '@pierre/diffs/react';
 import type { ReactNode } from 'react';
 
-function createEditor<LAnnotation>(
-  options: EditorOptions<LAnnotation>
-): Editor<LAnnotation> {
+function createEditor<LAnnotation, LDecoration>(
+  options: EditorOptions<LAnnotation, LDecoration>
+): Editor<LAnnotation, LDecoration> {
   return new Editor(options);
 }
 
