@@ -997,9 +997,13 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       // content element must drop the previous document's measurements here.
       this.#wrapLineOffsetsCache.clear();
       this.#selections = this.#initSelections;
-      if (this.#textDocument !== undefined && this.#options.__debug === true) {
+      if (this.#options.__debug === true) {
+        // A reused document keeps its undo history; only the fallback path
+        // actually rebuilds one from the host's contents.
         console.log(
-          '[diffs/editor] text document rebuilt from',
+          reusableTextDocument !== undefined
+            ? '[diffs/editor] cached text document reused for'
+            : '[diffs/editor] text document rebuilt from',
           fileOrDiff.name
         );
       }

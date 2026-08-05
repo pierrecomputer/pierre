@@ -989,6 +989,10 @@ export function AgentUi({
   useEffect(() => {
     activeTargetRef.current = activePath;
   }, [activePath]);
+  // The path the editor was last attached to, so onAttach can tell a file
+  // switch (refocus the editor) from the initial mount (leave page focus
+  // alone).
+  const lastAttachedPathRef = useRef<string | null>(null);
 
   // Edited placeholder files listed in the Changes panel as "modified". The
   // entries carry zero snapshot counts because the tree's row decoration
@@ -1065,6 +1069,22 @@ export function AgentUi({
 
         container.append(addToChat, copy);
         return container;
+      },
+      onAttach(editor) {
+        // Selecting a file leaves keyboard focus in the tree, so undo/redo
+        // shortcuts would silently go nowhere until the user clicks back into
+        // the code — reading as a lost edit history even though the
+        // persist-state document cache restored it. When a file switch lands,
+        // hand focus to the editor; preventScroll keeps the restored viewport
+        // position. The initial auto-opened file must not steal page focus.
+        const target = activeTargetRef.current;
+        if (
+          lastAttachedPathRef.current !== null &&
+          lastAttachedPathRef.current !== target
+        ) {
+          editor.focus({ preventScroll: true });
+        }
+        lastAttachedPathRef.current = target;
       },
       onChange(file) {
         const target = activeTargetRef.current;
