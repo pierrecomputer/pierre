@@ -4,7 +4,6 @@ import type {
   EditorCommand,
   EditorKeymap,
   EditorShortcut,
-  KeyboardModifier,
 } from '@pierre/diffs/edit';
 import { File } from '@pierre/diffs/react';
 import type { PreloadedFileResult } from '@pierre/diffs/ssr';
@@ -21,6 +20,10 @@ interface KeyboardShortcutsProps {
 }
 
 type EditorPlatform = NonNullable<EditorKeymap[number]['platform']>;
+type ShortcutModifier<T> = T extends `${infer Modifier}+${string}`
+  ? Modifier
+  : never;
+type KeyboardModifier = ShortcutModifier<EditorShortcut>;
 
 interface ShortcutRow {
   shortcut: EditorShortcut;

@@ -72,7 +72,8 @@
 [data-selection-range],
 [data-match-range],
 [data-bracket-match-range],
-[data-marker-range] {
+[data-marker-range],
+[data-editor-decoration] {
   position: absolute;
   top: 0;
   left: 0;

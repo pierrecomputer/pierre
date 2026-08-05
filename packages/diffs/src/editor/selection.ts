@@ -1384,7 +1384,7 @@ export function createSelectionFromAnchorAndFocusOffsets(
  * the caret past it; an offset strictly before an edit is only shifted by the
  * net length change of the edits that precede it.
  */
-function remapOffsetThroughEdits(
+export function remapOffsetThroughEdits(
   offset: number,
   edits: readonly ResolvedTextEdit[]
 ): number {
