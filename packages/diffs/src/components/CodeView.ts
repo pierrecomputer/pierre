@@ -80,7 +80,7 @@ function getSlotItems<LAnnotation>(
   const slotSnapshot: CodeViewRenderedItem<LAnnotation>[] = [];
 
   for (const renderedItem of renderedItems) {
-    if (hasAnnotations(renderedItem.item)) {
+    if (hasAnnotationsAlt(renderedItem.item)) {
       slotSnapshot.push(renderedItem);
     }
   }
@@ -4258,6 +4258,8 @@ function syncRenderedItemOrder(
   }
 }
 
-function hasAnnotations<LAnnotation>(item: CodeViewItem<LAnnotation>): boolean {
+function hasAnnotationsAlt<LAnnotation>(
+  item: CodeViewItem<LAnnotation>
+): boolean {
   return (item.annotations?.length ?? 0) > 0;
 }
