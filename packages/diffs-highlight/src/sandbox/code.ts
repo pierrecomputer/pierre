@@ -2,6 +2,10 @@
  * The sandbox realm. It owns the `figma` API — selection, variables, fonts — and
  * does no tokenizing: it hands the selected layers' text to the UI and applies
  * the character ranges the UI sends back.
+ *
+ * Variables can come from this file or from a library enabled for it. The two
+ * are reached through different APIs and only the local ones are bindable as
+ * they are, which is what `resolveVariables` reconciles.
  */
 import type {
   CollectionSummary,
@@ -74,12 +78,12 @@ function readSelection(): {
 }
 
 /**
- * Lists every local collection with its modes, plus how many `syntax/*`
- * variables it holds. The semantic collection's name is chosen by whoever
- * imported the tokens, so that count is what lets the UI preselect the right
- * one instead of guessing from the name.
+ * Lists every collection defined in this file, with its modes and how many
+ * `syntax/*` variables it holds. The semantic collection's name is chosen by
+ * whoever imported the tokens, so that count is what lets the UI preselect the
+ * right one instead of guessing from the name.
  */
-async function readCollections(): Promise<CollectionSummary[]> {
+async function readLocalCollections(): Promise<CollectionSummary[]> {
   const [collections, variables] = await Promise.all([
     figma.variables.getLocalVariableCollectionsAsync(),
     figma.variables.getLocalVariablesAsync('COLOR'),
@@ -94,23 +98,101 @@ async function readCollections(): Promise<CollectionSummary[]> {
 
   return collections.map((collection) => ({
     id: collection.id,
+    source: 'local' as const,
     name: collection.name,
     modeNames: collection.modes.map((mode) => mode.name),
     syntaxVariableCount: syntaxCounts.get(collection.id) ?? 0,
   }));
 }
 
+/**
+ * Collections published by the libraries enabled for this file, cached for as
+ * long as the plugin stays open.
+ *
+ * Caching matters because reading them is not cheap: the `syntax/*` count is
+ * only available by listing each collection's variables, so this costs a request
+ * per collection, and `sendState` runs on every selection change. Nothing can go
+ * stale in the meantime, since enabling a library happens in Figma's own UI,
+ * which the plugin cannot do and cannot miss.
+ */
+let libraryCollectionsCache: {
+  collections: CollectionSummary[];
+  issue: string | null;
+} | null = null;
+
+async function readLibraryCollections(): Promise<{
+  collections: CollectionSummary[];
+  issue: string | null;
+}> {
+  if (libraryCollectionsCache !== null) return libraryCollectionsCache;
+
+  // Feature-detected rather than assumed: the whole API is absent unless the
+  // manifest asks for the `teamlibrary` permission.
+  const teamLibrary: TeamLibraryAPI | undefined = figma.teamLibrary;
+  if (teamLibrary === undefined) {
+    libraryCollectionsCache = {
+      collections: [],
+      issue:
+        'Library variables are unavailable: the plugin is missing the teamlibrary permission.',
+    };
+    return libraryCollectionsCache;
+  }
+
+  try {
+    const published =
+      await teamLibrary.getAvailableLibraryVariableCollectionsAsync();
+
+    const collections = await Promise.all(
+      published.map(async (collection): Promise<CollectionSummary> => {
+        const variables =
+          await teamLibrary.getVariablesInLibraryCollectionAsync(
+            collection.key
+          );
+        return {
+          id: collection.key,
+          source: 'library' as const,
+          name: collection.name,
+          libraryName: collection.libraryName,
+          modeNames: [],
+          syntaxVariableCount: variables.filter(
+            (variable) =>
+              variable.resolvedType === 'COLOR' &&
+              variable.name.startsWith(SYNTAX_PREFIX)
+          ).length,
+        };
+      })
+    );
+
+    libraryCollectionsCache = { collections, issue: null };
+  } catch (error) {
+    // Reading rejects when the user cannot see one of the enabled libraries, so
+    // the local collections are still worth offering.
+    libraryCollectionsCache = {
+      collections: [],
+      issue: `Could not read library variables: ${error instanceof Error ? error.message : String(error)}`,
+    };
+  }
+
+  return libraryCollectionsCache;
+}
+
 async function sendState(): Promise<void> {
   const { layers, issue } = readSelection();
+  const [local, library] = await Promise.all([
+    readLocalCollections(),
+    readLibraryCollections(),
+  ]);
+
   post({
     type: 'state',
-    collections: await readCollections(),
+    collections: [...local, ...library.collections],
     layers,
     issue,
+    libraryIssue: library.issue,
   });
 }
 
-/** Color variables of one collection, keyed by their full name. */
+/** Color variables of one local collection, keyed by their full name. */
 async function readVariablesByName(
   collectionId: string
 ): Promise<Map<string, Variable>> {
@@ -122,6 +204,63 @@ async function readVariablesByName(
     }
   }
   return byName;
+}
+
+/**
+ * Resolves every role name a run needs into a variable that can be bound.
+ *
+ * Names are gathered across all layers and resolved once each, which is what
+ * makes a library collection affordable: a library's variables are not bindable
+ * until they have been imported into this file, and that is one request apiece,
+ * so a long sample still imports only the dozen or so roles it actually uses.
+ * Importing is also what links the file to the library, so the variables show up
+ * in the file afterwards and keep updating with it.
+ */
+async function resolveVariables(
+  request: Extract<UiMessage, { type: 'apply' }>
+): Promise<Map<string, Variable>> {
+  const names = new Set<string>();
+  for (const layer of request.layers) {
+    for (const binding of layer.bindings) names.add(binding.variableName);
+  }
+
+  if (request.collectionSource === 'local') {
+    const byName = await readVariablesByName(request.collectionId);
+    const used = new Map<string, Variable>();
+    for (const name of names) {
+      const variable = byName.get(name);
+      if (variable !== undefined) used.set(name, variable);
+    }
+    return used;
+  }
+
+  const published =
+    await figma.teamLibrary.getVariablesInLibraryCollectionAsync(
+      request.collectionId
+    );
+  const keysByName = new Map<string, string>();
+  for (const variable of published) {
+    if (variable.resolvedType === 'COLOR') {
+      keysByName.set(variable.name, variable.key);
+    }
+  }
+
+  const imported = await Promise.all(
+    [...names].map(async (name) => {
+      const key = keysByName.get(name);
+      if (key === undefined) return null;
+      return [
+        name,
+        await figma.variables.importVariableByKeyAsync(key),
+      ] as const;
+    })
+  );
+
+  return new Map(
+    imported.filter(
+      (entry): entry is NonNullable<typeof entry> => entry !== null
+    )
+  );
 }
 
 /** `setRangeFills` throws unless every font in the layer is loaded first. */
@@ -203,7 +342,7 @@ async function applyToLayer(
 async function applyBindings(
   request: Extract<UiMessage, { type: 'apply' }>
 ): Promise<void> {
-  const variables = await readVariablesByName(request.collectionId);
+  const variables = await resolveVariables(request);
   const missingVariableNames = new Set<string>();
   const skippedLayers: string[] = [];
   let boundRanges = 0;

@@ -83,7 +83,8 @@ function fillLanguages(): void {
  * How a collection reads in the picker. The mode count is only worth showing
  * when there is more than one: a single-mode collection is fully described by
  * its name, and listing every mode of an eight-mode collection would overflow
- * the control.
+ * the control. Library collections never report a count, since Figma's library
+ * API does not expose their modes.
  */
 function collectionLabel(collection: CollectionSummary): string {
   if (collection.modeNames.length < 2) return collection.name;
@@ -95,16 +96,44 @@ function collectionLabel(collection: CollectionSummary): string {
  * still exists and otherwise defaulting to the collection holding the most
  * `syntax/*` variables — the semantic collection, whatever it was named at
  * import time.
+ *
+ * Once a library is in play the options are grouped by where they come from,
+ * because a library collection and a local one can easily share a name and the
+ * two behave differently when bound.
  */
 function fillCollections(): void {
   const previous = elements.collection.value;
   elements.collection.replaceChildren();
 
+  const grouped = collections.some(
+    (collection) => collection.source === 'library'
+  );
+  const groups = new Map<string, HTMLOptGroupElement>();
+  const groupFor = (label: string): HTMLOptGroupElement => {
+    const existing = groups.get(label);
+    if (existing !== undefined) return existing;
+
+    const group = document.createElement('optgroup');
+    group.label = label;
+    groups.set(label, group);
+    elements.collection.append(group);
+    return group;
+  };
+
   for (const collection of collections) {
     const option = document.createElement('option');
     option.value = collection.id;
     option.textContent = collectionLabel(collection);
-    elements.collection.append(option);
+
+    if (!grouped) {
+      elements.collection.append(option);
+      continue;
+    }
+    groupFor(
+      collection.source === 'library'
+        ? (collection.libraryName ?? 'Library')
+        : 'This file'
+    ).append(option);
   }
 
   const stillPresent = collections.some(
@@ -127,7 +156,7 @@ function fillCollections(): void {
   if (best !== undefined) elements.collection.value = best.id;
 }
 
-function render(issue: string | null): void {
+function render(issue: string | null, libraryIssue: string | null): void {
   const hasSyntaxVariables = collections.some(
     (collection) => collection.syntaxVariableCount > 0
   );
@@ -148,16 +177,17 @@ function render(issue: string | null): void {
   elements.notice.textContent = notice ?? '';
   elements.notice.hidden = notice === null;
 
-  if (collections.length === 0) {
-    setStatus(
-      'This file has no local variable collections. Import the Pierre tokens first.',
-      'error'
-    );
-  } else if (!hasSyntaxVariables) {
-    setStatus(
-      'No collection has syntax/* variables. Import packages/theme/figma/semantic into this file.',
-      'error'
-    );
+  // A library that could not be read is worth saying out loud even when local
+  // collections are usable, since it explains an absence the user is looking at.
+  const warning =
+    collections.length === 0
+      ? 'No variable collections are available. Import the Pierre tokens, or enable the library that publishes them.'
+      : hasSyntaxVariables
+        ? libraryIssue
+        : 'No collection has syntax/* variables. Import packages/theme/figma/semantic, or enable the library that publishes it.';
+
+  if (warning !== null) {
+    setStatus(warning, 'error');
   } else if (lastRun === null) {
     // Clears an environment warning that no longer holds, without wiping the
     // summary from a run that already happened.
@@ -176,8 +206,10 @@ function render(issue: string | null): void {
  */
 async function apply(): Promise<void> {
   const targets = layers;
-  const collectionId = elements.collection.value;
-  if (targets.length === 0 || collectionId === '') return;
+  const collection = collections.find(
+    (candidate) => candidate.id === elements.collection.value
+  );
+  if (targets.length === 0 || collection === undefined) return;
 
   elements.apply.disabled = true;
   setStatus('Tokenizing…');
@@ -222,7 +254,12 @@ async function apply(): Promise<void> {
     }
 
     setStatus(`Binding ${String(totalRanges)} ranges…`);
-    post({ type: 'apply', collectionId, layers: payload });
+    post({
+      type: 'apply',
+      collectionId: collection.id,
+      collectionSource: collection.source,
+      layers: payload,
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     setStatus(`Highlighting failed: ${message}`, 'error');
@@ -267,7 +304,7 @@ function handleMessage(message: SandboxMessage): void {
       collections = message.collections;
       layers = message.layers;
       fillCollections();
-      render(message.issue);
+      render(message.issue, message.libraryIssue);
       return;
     case 'applied':
       elements.apply.disabled = false;

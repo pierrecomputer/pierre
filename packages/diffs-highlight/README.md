@@ -29,9 +29,11 @@ moonx diffs-highlight:build
 Then in Figma desktop: **Plugins > Development > Import plugin from manifest**,
 and select `packages/diffs-highlight/manifest.json`.
 
-The variables have to exist in the file you run it on. Import them from
-[`@pierre/theme`](../theme/README.md) first — the primitives collection, then
-the semantic collection with one mode per variant.
+The variables have to be reachable from the file you run it on, either way
+described in [Where the variables come from](#where-the-variables-come-from):
+imported into the file from [`@pierre/theme`](../theme/README.md) — the
+primitives collection, then the semantic collection with one mode per variant —
+or published by a library that the file has enabled.
 
 ## Usage
 
@@ -53,6 +55,34 @@ many layers, any colors that matched no Pierre role, and any variable names
 missing from the collection you picked (usually the sign of a partial import, or
 the wrong collection). A layer edited between tokenizing and binding is skipped
 and named, rather than costing you the rest of the selection.
+
+## Where the variables come from
+
+The picker offers collections from two places, grouped by source once both are
+present:
+
+- **This file** — collections defined locally, from importing the token JSON
+  into it.
+- **A library** — collections published by any library the file has enabled,
+  listed under the library's name.
+
+A library has to be enabled through Figma's own UI (**Assets > Libraries**, or
+the file's library settings). The plugin cannot enable one, and Figma's API only
+reports libraries that are already enabled, so a library that is not showing up
+is almost always one that is not enabled for this file.
+
+Library variables are not bindable as they are — they have to be imported into
+the file by key first. The plugin does that on demand when you press
+**Highlight**, for the roles that run actually uses rather than the whole
+collection, which is also what links the file to the library so the variables
+keep updating with it. Reaching them at all needs
+`"permissions": ["teamlibrary"]` in `manifest.json`; without it the API is
+absent entirely, and the status line says so instead of silently listing
+nothing.
+
+Since a library collection does not report its modes through the API, those
+options carry no mode count. Modes still work when you switch them on the layer;
+they just cannot be counted up front.
 
 ## How a color becomes a variable
 

@@ -5,6 +5,7 @@
   "ui": "dist/ui.html",
   "editorType": ["figma"],
   "documentAccess": "dynamic-page",
+  "permissions": ["teamlibrary"],
   "networkAccess": {
     "allowedDomains": ["none"]
   }

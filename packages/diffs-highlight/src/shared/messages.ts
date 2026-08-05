@@ -16,11 +16,26 @@ export interface TokenBinding {
   variableName: string;
 }
 
-/** A local variable collection the user can target, as offered in the picker. */
+/**
+ * Where a collection's variables live, which decides how they are reached: a
+ * local collection's variables can be bound as they are, while a library's have
+ * to be imported into the file by key first.
+ */
+export type CollectionSource = 'local' | 'library';
+
+/** A variable collection the user can target, as offered in the picker. */
 export interface CollectionSummary {
+  /** Local collection id, or the library collection key. */
   id: string;
+  source: CollectionSource;
   name: string;
-  /** Mode names, so the UI can tell a multi-mode collection from a single one. */
+  /** The library publishing it, when `source` is `library`. */
+  libraryName?: string;
+  /**
+   * Mode names, so the UI can tell a multi-mode collection from a single one.
+   * Always empty for a library collection: Figma's library API does not report
+   * a published collection's modes.
+   */
   modeNames: string[];
   /** How many of the collection's variables are named `syntax/*`. */
   syntaxVariableCount: number;
@@ -52,6 +67,11 @@ export type SandboxMessage =
       collections: CollectionSummary[];
       layers: SelectionLayer[];
       issue: string | null;
+      /**
+       * Why no library collections are listed, when reading them failed rather
+       * than there being none to list.
+       */
+      libraryIssue: string | null;
     }
   | {
       type: 'applied';
@@ -70,5 +90,10 @@ export type SandboxMessage =
   | { type: 'error'; message: string };
 
 export type UiMessage =
-  | { type: 'apply'; collectionId: string; layers: LayerBindings[] }
+  | {
+      type: 'apply';
+      collectionId: string;
+      collectionSource: CollectionSource;
+      layers: LayerBindings[];
+    }
   | { type: 'cancel' };
