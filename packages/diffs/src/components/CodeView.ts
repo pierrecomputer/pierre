@@ -57,6 +57,37 @@ import { VirtualizedFile } from './VirtualizedFile';
 import { VirtualizedFileDiff } from './VirtualizedFileDiff';
 import type { VirtualizerConfig } from './Virtualizer';
 
+function getSlotItems<LAnnotation>(
+  renderedItems: CodeViewRenderedItem<LAnnotation>[],
+  {
+    hasHeaderRenderers,
+    hasAnnotationRenderer,
+    hasGutterRenderer,
+  }: CodeViewCoordinator<LAnnotation>
+): CodeViewRenderedItem<LAnnotation>[] | undefined {
+  if (renderedItems.length === 0) {
+    return undefined;
+  }
+
+  if (hasHeaderRenderers || hasGutterRenderer) {
+    return renderedItems;
+  }
+
+  if (!hasAnnotationRenderer) {
+    return undefined;
+  }
+
+  const slotSnapshot: CodeViewRenderedItem<LAnnotation>[] = [];
+
+  for (const renderedItem of renderedItems) {
+    if (hasAnnotations(renderedItem.item)) {
+      slotSnapshot.push(renderedItem);
+    }
+  }
+
+  return slotSnapshot.length > 0 ? slotSnapshot : undefined;
+}
+
 // When re-rendering content of the virtualizer, it's important that we
 // maintain a visual anchor, usually this is the first fully visible element,
 // whether it's an Item (a file or diff header), or a specific line.  If the
@@ -4211,8 +4242,8 @@ function renderItem<LAnnotation>(
  * before rendering updates.
  */
 function syncRenderedItemOrder(
-  container: HTMLElement,
   element: HTMLElement,
+  container: HTMLElement,
   prevElement: HTMLElement | undefined
 ): void {
   if (prevElement == null) {
@@ -4229,35 +4260,4 @@ function syncRenderedItemOrder(
 
 function hasAnnotations<LAnnotation>(item: CodeViewItem<LAnnotation>): boolean {
   return (item.annotations?.length ?? 0) > 0;
-}
-
-function getSlotItems<LAnnotation>(
-  renderedItems: CodeViewRenderedItem<LAnnotation>[],
-  {
-    hasHeaderRenderers,
-    hasAnnotationRenderer,
-    hasGutterRenderer,
-  }: CodeViewCoordinator<LAnnotation>
-): CodeViewRenderedItem<LAnnotation>[] | undefined {
-  if (renderedItems.length === 0) {
-    return undefined;
-  }
-
-  if (hasHeaderRenderers || hasGutterRenderer) {
-    return renderedItems;
-  }
-
-  if (!hasAnnotationRenderer) {
-    return undefined;
-  }
-
-  const slotSnapshot: CodeViewRenderedItem<LAnnotation>[] = [];
-
-  for (const renderedItem of renderedItems) {
-    if (hasAnnotations(renderedItem.item)) {
-      slotSnapshot.push(renderedItem);
-    }
-  }
-
-  return slotSnapshot.length > 0 ? slotSnapshot : undefined;
 }
