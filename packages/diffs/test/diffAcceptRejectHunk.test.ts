@@ -5,6 +5,7 @@ import type {
   ContextContent,
   FileDiffMetadata,
 } from '../src/types';
+import { composeCacheKey } from '../src/utils/composeCacheKey';
 import { diffAcceptRejectHunk } from '../src/utils/diffAcceptRejectHunk';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import { parseMergeConflictDiffFromFile } from '../src/utils/parseMergeConflictDiffFromFile';
@@ -475,7 +476,9 @@ describe('diffAcceptRejectHunk', () => {
 
     const result = diffAcceptRejectHunk(diff, 0, 'both');
 
-    expect(result.cacheKey).toBe('diff:old-key:new-key:b-0:0-0');
+    expect(result.cacheKey).toBe(
+      `${composeCacheKey('diff', 'old-key', 'new-key')}:b-0:0-0`
+    );
   });
 
   test('accept resolves a partial patch without materializing omitted context', () => {
@@ -560,7 +563,9 @@ describe('diffAcceptRejectHunk', () => {
       changeIndex: 1,
     });
 
-    expect(result.cacheKey).toBe('diff:old-key:new-key:a-2:1-1');
+    expect(result.cacheKey).toBe(
+      `${composeCacheKey('diff', 'old-key', 'new-key')}:a-2:1-1`
+    );
   });
 
   test('both should inherit noEOFCR from additions', () => {

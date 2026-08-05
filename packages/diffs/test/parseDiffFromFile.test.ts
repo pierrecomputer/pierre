@@ -100,7 +100,29 @@ describe('parseDiffFromFile', () => {
       }
     );
 
-    expect(result.cacheKey).toBe('diff:old-cache:new-cache');
+    expect(result.cacheKey).toBe('ck1:["diff","old-cache","new-cache"]');
+  });
+
+  test('encodes caller cache key segments without delimiter collisions', () => {
+    const parseWithKeys = (oldCacheKey: string, newCacheKey: string) =>
+      parseDiffFromFile(
+        {
+          name: 'test.txt',
+          contents: 'old\n',
+          cacheKey: oldCacheKey,
+        },
+        {
+          name: 'test.txt',
+          contents: 'new\n',
+          cacheKey: newCacheKey,
+        }
+      ).cacheKey;
+
+    const firstKey = parseWithKeys('a:b', 'c');
+    const secondKey = parseWithKeys('a', 'b:c');
+
+    expect(firstKey).not.toBe(secondKey);
+    expect(parseWithKeys('a:b', 'c')).toBe(firstKey);
   });
 
   test('leaves cacheKey unset when either side of a two-sided diff is unkeyed', () => {

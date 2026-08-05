@@ -2,8 +2,13 @@ import { afterAll, describe, expect, spyOn, test } from 'bun:test';
 
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
 import { DiffHunksRenderer } from '../src/renderers/DiffHunksRenderer';
+import { composeCacheKey } from '../src/utils/composeCacheKey';
 import { getTotalLineCountFromHunks } from '../src/utils/getTotalLineCountFromHunks';
-import { parsePatchFiles, processFile } from '../src/utils/parsePatchFiles';
+import {
+  parsePatchFiles,
+  processFile,
+  processPatch,
+} from '../src/utils/parsePatchFiles';
 import {
   diffPatch,
   finalBlankLinePatch,
@@ -39,12 +44,76 @@ const validIssue1094Patch = issue1094Patch.replace(
   '@@ -1,4 +1,4 @@'
 );
 
+function createFilePatch(name: string): string {
+  return [
+    `diff --git a/${name} b/${name}\n`,
+    'index 1111111..2222222 100644\n',
+    `--- a/${name}\n`,
+    `+++ b/${name}\n`,
+    '@@ -1 +1 @@\n',
+    '-old\n',
+    '+new\n',
+  ].join('');
+}
+
 describe('parsePatchFiles', () => {
   const result = parsePatchFiles(diffPatch);
   test('should parse diff.patch and match its digest snapshot', () => {
     // Per-file hunk geometry of the whole 400KB patch; line-level accuracy
     // is covered by the invariant and render-count tests below
     expect(patchDigest(result)).toMatchSnapshot('git pr patch digest');
+  });
+
+  test('generates deterministic keys from patch and file indexes', () => {
+    const prefix = 'prefix-0:1';
+    const firstPatch = `${createFilePatch('one.txt')}${createFilePatch('two.txt')}`;
+    const patchFile = [
+      'From aaaaa first patch\n',
+      firstPatch,
+      'From bbbbb second patch\n',
+      createFilePatch('three.txt'),
+      createFilePatch('four.txt'),
+    ].join('');
+    const getKeys = () =>
+      parsePatchFiles(patchFile, prefix, true).map((patch) =>
+        patch.files.map((file) => file.cacheKey)
+      );
+    const expectedKeys = [
+      [
+        composeCacheKey('patch-file', prefix, '0', '0'),
+        composeCacheKey('patch-file', prefix, '0', '1'),
+      ],
+      [
+        composeCacheKey('patch-file', prefix, '1', '0'),
+        composeCacheKey('patch-file', prefix, '1', '1'),
+      ],
+    ];
+
+    const keys = getKeys();
+    expect(keys).toEqual(expectedKeys);
+    expect(new Set(keys.flat()).size).toBe(4);
+    expect(getKeys()).toEqual(keys);
+
+    const directPrefix = `${prefix}-0`;
+    const directKeys = processPatch(firstPatch, directPrefix, true).files.map(
+      (file) => file.cacheKey
+    );
+    expect(directKeys).toEqual([
+      composeCacheKey('patch-file', directPrefix, '0'),
+      composeCacheKey('patch-file', directPrefix, '1'),
+    ]);
+    expect(new Set([...keys.flat(), ...directKeys]).size).toBe(6);
+  });
+
+  test('keeps a direct processFile cache key authoritative', () => {
+    const cacheKey = 'caller:key-0-0:hydrated';
+    const file = processFile(createFilePatch('direct.txt'), {
+      cacheKey,
+      isGitDiff: true,
+      throwOnError: true,
+    });
+
+    expect(file?.cacheKey).toBe(cacheKey);
   });
 
   test('patches with a final blank line should have a \\n added', () => {
