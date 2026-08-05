@@ -142,6 +142,25 @@ export class Metrics {
     return round(width);
   }
 
+  /**
+   * Pixel width from a wrapped segment's start up to a character. Tabs advance
+   * from the segment start so their stops line up with the rendered text.
+   */
+  segmentTextWidth(
+    lineText: string,
+    segmentStart: number,
+    character: number
+  ): number {
+    if (character <= segmentStart) {
+      return 0;
+    }
+    const segmentText = lineText.slice(segmentStart, character);
+    const asciiColumns = getExpandedAsciiTextColumns(segmentText, this.tabSize);
+    return asciiColumns !== -1
+      ? asciiColumns * this.ch
+      : this.measureTextWidth(segmentText);
+  }
+
   #measureTextWidthWithoutTabs(text: string): number {
     if (needsDomTextMeasurement(text)) {
       return this.domMeasureTextWidth(text);

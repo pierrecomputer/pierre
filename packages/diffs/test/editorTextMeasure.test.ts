@@ -269,6 +269,17 @@ describe('Metrics.measureTextWidth (tab stops)', () => {
       cleanup();
     }
   });
+
+  test('measures text relative to a wrapped segment start', () => {
+    const { cleanup, metrics } = installTabMetrics();
+    try {
+      expect(metrics.segmentTextWidth('prefixabcx\t', 6, 9)).toBe(30);
+      expect(metrics.segmentTextWidth('prefixabcx\t', 6, 11)).toBe(80);
+      expect(metrics.segmentTextWidth('prefix', 6, 6)).toBe(0);
+    } finally {
+      cleanup();
+    }
+  });
 });
 
 describe('Metrics.remeasureCharacterWidth', () => {
