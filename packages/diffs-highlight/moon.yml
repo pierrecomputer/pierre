@@ -1,0 +1,37 @@
+$schema: 'https://moonrepo.dev/schemas/project.json'
+
+# A Figma plugin, not an npm package, so there is no `publishable` tag and no
+# tsdown build: the two Vite passes emit exactly the two files manifest.json
+# points at (dist/code.js for the sandbox, dist/ui.html for the iframe).
+language: 'typescript'
+layer: 'application'
+
+tasks:
+  # Two passes because the realms need different output shapes: the sandbox is a
+  # bare IIFE with no DOM, the UI is one HTML file with its JS and CSS inlined.
+  build:
+    script:
+      'vite build --config vite.config.code.ts && vite build --config
+      vite.config.ui.ts'
+    deps:
+      - '^:build'
+    inputs:
+      - 'src/**/*'
+      - 'ui.html'
+      - 'vite.config.*.ts'
+      - 'tsconfig.json'
+    outputs:
+      - 'dist'
+
+  # Both realms watched in parallel; `wait` keeps the task alive until both
+  # exit. Figma still needs the plugin re-run to pick up a rebuild.
+  dev:
+    script:
+      'vite build --config vite.config.code.ts --watch & vite build --config
+      vite.config.ui.ts --watch & wait'
+    deps:
+      - '^:build'
+    options:
+      cache: false
+      persistent: true
+      runInCI: 'skip'

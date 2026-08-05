@@ -107,6 +107,13 @@ not in any palette scale fails the build. That is deliberate: it catches roles
 drifting away from the palette. If a role genuinely needs a standalone literal,
 add its hex to `UNALIASED_ROLE_COLORS`.
 
+One consumer reads these files directly rather than importing them into Figma:
+the [Diffs Highlight](../diffs-highlight/README.md) plugin builds its
+color-to-role lookup from `figma/semantic/dark.json`, using the hexes and
+variable names side by side. Renaming a role group or changing a `dark` value
+changes what that plugin binds, so run `moonx diffs-highlight:test` when either
+moves.
+
 ## Scripts
 
 | Script                                        | Description                                                                                             |

@@ -56,6 +56,9 @@ Usage:
 
   The Vibrant variants are not exported: Figma imports sRGB and HSL only.
 
+  To syntax highlight code in a Figma text layer with these variables, see
+  the Diffs Highlight plugin in packages/diffs-highlight
+
 ```
 
 ## Agent skill

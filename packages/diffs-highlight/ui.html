@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Diffs Highlight</title>
+    <link rel="stylesheet" href="./src/ui/ui.css" />
+  </head>
+  <body>
+    <main class="panel">
+      <p class="notice" id="notice" hidden></p>
+
+      <div class="field">
+        <label for="language">Language</label>
+        <div class="select">
+          <select id="language"></select>
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="collection">Variable collection</label>
+        <div class="select">
+          <select id="collection"></select>
+        </div>
+      </div>
+
+      <p class="status" id="status"></p>
+
+      <div class="actions">
+        <button class="secondary" id="cancel" type="button">Close</button>
+        <button class="primary" id="apply" type="button" disabled>
+          Highlight
+        </button>
+      </div>
+    </main>
+
+    <script type="module" src="./src/ui/main.ts"></script>
+  </body>
+</html>

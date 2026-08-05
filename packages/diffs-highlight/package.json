@@ -1,0 +1,28 @@
+{
+  "name": "@pierre/diffs-highlight",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Diffs Highlight, a Figma plugin that binds Pierre syntax variables to code in text layers",
+  "license": "apache-2.0",
+  "author": "Pierre Computer <support@pierre.co>",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/pierrecomputer/pierre.git",
+    "directory": "packages/diffs-highlight"
+  },
+  "type": "module",
+  "dependencies": {
+    "@pierre/theme": "workspace:*",
+    "@shikijs/core": "catalog:",
+    "@shikijs/engine-javascript": "catalog:",
+    "@shikijs/langs": "catalog:",
+    "shiki": "catalog:"
+  },
+  "devDependencies": {
+    "@figma/plugin-typings": "catalog:",
+    "@types/bun": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vite-plugin-singlefile": "catalog:"
+  }
+}
