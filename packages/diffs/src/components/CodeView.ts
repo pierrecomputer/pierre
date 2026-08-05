@@ -69,7 +69,7 @@ interface ItemAnchor {
   viewportOffset: number;
 }
 
-interface LineAnchor {
+interface LineAnchorAlt {
   type: 'line';
   id: string;
   lineNumber: number;
@@ -77,7 +77,7 @@ interface LineAnchor {
   viewportOffset: number;
 }
 
-type ScrollAnchor = ItemAnchor | LineAnchor;
+type ScrollAnchor = ItemAnchor | LineAnchorAlt;
 
 interface LineScrollPosition {
   top: number;
