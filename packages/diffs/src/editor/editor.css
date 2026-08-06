@@ -275,8 +275,14 @@
   border: 0;
   pointer-events: auto;
 
+  /* `contrast-color()` returns black or white against the severity fill. A
+     theme can set that fill through `editorWarning.foreground` and the similar
+     tokens, so a fixed text color can fail.
+     Pass one argument only. Two arguments make the declaration invalid at
+     computed-value time: `color` then inherits the editor foreground and
+     ignores the `--diffs-marker-contrast` declaration above. */
   @supports (color: contrast-color(red)) {
-    color: contrast-color(var(--diffs-marker-bg), var(--diffs-bg));
+    color: contrast-color(var(--diffs-marker-bg));
   }
 
   [data-marker-message] {

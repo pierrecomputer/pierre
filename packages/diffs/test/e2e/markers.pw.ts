@@ -87,7 +87,9 @@ function openScrolledMarkerNearGutter(page: Page): Promise<{
 // contrast ratio between the popover's resolved text and background colors.
 // Guards the marker popover fallback in browsers without contrast-color(): the
 // severity fill is a theme editorX.foreground token, so its text candidate must
-// remain legible in both light and dark themes.
+// remain legible in both light and dark themes. Playwright bundles an old
+// Chromium without contrast-color(), so this test measures the fallback branch
+// only. cssContrastColorArity.test.ts covers the `@supports` branch.
 async function popoverContrast(
   page: Page,
   token: string
