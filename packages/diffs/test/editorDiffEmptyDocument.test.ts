@@ -56,6 +56,7 @@ function countEditableLineEls(content: HTMLElement): number {
 interface DiffEditorFixture {
   container: HTMLElement;
   editor: Editor<undefined>;
+  fileDiff: FileDiff<undefined>;
   cleanup(): Promise<void>;
 }
 
@@ -96,6 +97,7 @@ async function createDiffEditorFixture(
   return {
     container,
     editor,
+    fileDiff,
     async cleanup() {
       // Drain any pending highlighter/sync callbacks before tearing down the DOM
       // so a late re-attach does not run against a destroyed document.
@@ -138,6 +140,13 @@ describe('diff editor: empty document', () => {
             (child) => (child as HTMLElement).dataset.line === '1'
           )
         ).toBe(true);
+        const editableLine = [...content.children].find((child) => {
+          const el = child as HTMLElement;
+          return (
+            el.dataset.line === '1' && el.dataset.lineType !== 'change-deletion'
+          );
+        }) as HTMLElement | undefined;
+        expect(editableLine?.dataset.lineIndex).toBe('1,0');
 
         editor.setSelections([
           {
@@ -149,6 +158,36 @@ describe('diff editor: empty document', () => {
         expect(
           container.shadowRoot?.querySelector('[data-caret]') != null
         ).toBe(true);
+      } finally {
+        await fixture.cleanup();
+      }
+    });
+
+    test(`restores the zero-line diff after an attach-only session (${diffStyle})`, async () => {
+      const fixture = await createDiffEditorFixture(
+        diffStyle,
+        'removed 1\nremoved 2\n',
+        ''
+      );
+
+      try {
+        expect(fixture.fileDiff.fileDiff?.additionLines).toEqual(['']);
+
+        fixture.editor.cleanUp();
+        for (let attempt = 0; attempt < 40; attempt++) {
+          const content = findAdditionContent(fixture.container);
+          if (
+            fixture.fileDiff.fileDiff?.additionLines.length === 0 &&
+            (content == null || countEditableLineEls(content) === 0)
+          ) {
+            break;
+          }
+          await wait(0);
+        }
+
+        expect(fixture.fileDiff.fileDiff?.additionLines).toEqual([]);
+        const content = findAdditionContent(fixture.container);
+        expect(content == null ? 0 : countEditableLineEls(content)).toBe(0);
       } finally {
         await fixture.cleanup();
       }

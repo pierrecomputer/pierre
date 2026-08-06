@@ -12,6 +12,7 @@ import { parseDiffFromFile } from './parseDiffFromFile';
 import {
   offsetHunkContent,
   preserveTrailingEditorBlankLine,
+  recomputeDiffHunks,
   recomputeDiffHunksForEdit,
   recomputeDiffRenderLineCounts,
   recomputeHunkRenderLineCounts,
@@ -419,7 +420,13 @@ export function finishEditSessionForDiff(
     return false;
   }
   diff.editSessionDirty = undefined;
-  Object.assign(diff, recomputeDiffHunksForEdit(diff, parseDiffOptions));
+  // The empty editor row only hosts a caret; it is not file content after exit.
+  Object.assign(
+    diff,
+    diff.additionLines.length <= 1 && diff.additionLines.join('') === ''
+      ? recomputeDiffHunks(diff, parseDiffOptions)
+      : recomputeDiffHunksForEdit(diff, parseDiffOptions)
+  );
   return true;
 }
 

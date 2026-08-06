@@ -1126,7 +1126,27 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       diff.additionLines[0] === '' &&
       result.code.additionLines[0] == null
     ) {
-      result.code.additionLines[0] = createPlainAdditionLineElement(0, '');
+      let fallbackLine: DiffLineMetadata | undefined;
+      iterateOverDiff({
+        diff,
+        diffStyle: 'both',
+        expandedHunks: forcePlainText ? true : undefined,
+        collapsedContextThreshold,
+        callback: ({ additionLine }) => {
+          if (additionLine?.lineIndex !== 0) return;
+          fallbackLine = additionLine;
+          return true;
+        },
+      });
+      if (fallbackLine == null) {
+        throw new Error('DiffHunksRenderer: missing empty addition line');
+      }
+      result.code.additionLines[0] = createPlainAdditionLineElement(
+        0,
+        '',
+        fallbackLine.unifiedLineIndex,
+        fallbackLine.splitLineIndex
+      );
     }
     return { result, options };
   }
@@ -2367,14 +2387,16 @@ function realignAdditionHastLines(
 
 function createPlainAdditionLineElement(
   lineIndex: number,
-  lineText: string
+  lineText: string,
+  unifiedLineIndex = lineIndex,
+  splitLineIndex = lineIndex
 ): HASTElement {
   return {
     type: 'element',
     tagName: 'div',
     properties: {
       'data-line': lineIndex + 1,
-      'data-line-index': `${lineIndex},${lineIndex}`,
+      'data-line-index': `${unifiedLineIndex},${splitLineIndex}`,
       'data-line-type': 'context',
     },
     children: [
