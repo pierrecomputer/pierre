@@ -31,6 +31,7 @@ import {
   CUSTOM_HUNK_SEPARATORS_SWITCHER,
 } from '../docs/CustomHunkSeparators/constants';
 import {
+  EDIT_DECORATION_EXAMPLE,
   EDIT_FOCUS_POSITION_EXAMPLE,
   EDIT_LAZY_FILE_EXAMPLE,
   EDIT_MARKER_EXAMPLE,
@@ -445,6 +446,7 @@ async function EditSection() {
     editSelectionActionExample,
     editPersistStateExample,
     editPersistStateReactExample,
+    editDecorationExample,
     editMarkerType,
     editMarkerExample,
     editReactCreateEditorExample,
@@ -472,6 +474,7 @@ async function EditSection() {
     preloadFile(EDIT_SELECTION_ACTION_EXAMPLE),
     preloadFile(EDIT_PERSIST_STATE_EXAMPLE),
     preloadFile(EDIT_PERSIST_STATE_REACT_EXAMPLE),
+    preloadFile(EDIT_DECORATION_EXAMPLE),
     preloadFile(EDIT_MARKER_TYPE),
     preloadFile(EDIT_MARKER_EXAMPLE),
     preloadFile(EDIT_REACT_CREATE_EDITOR_EXAMPLE),
@@ -502,6 +505,7 @@ async function EditSection() {
       editSelectionActionExample,
       editPersistStateExample,
       editPersistStateReactExample,
+      editDecorationExample,
       editMarkerType,
       editMarkerExample,
       editReactCreateEditorExample,

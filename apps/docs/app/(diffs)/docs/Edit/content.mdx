@@ -18,7 +18,7 @@ Edit mode features include:
 - History (undo and redo)
 - Find-in-file search and replace
 - [Selection Action](#edit-mode-selection-action) (opt-in, custom UI)
-- Markers (inline diagnostics)
+- Markers (inline diagnostics) and custom decorations
 - SSR support
 - Mobile-friendly
 - Lightweight
@@ -34,8 +34,9 @@ Edit mode is not a full-fledged IDE, though you can build IDE-like experiences
 on top of it. It is purpose-built for code rendered by this library: the
 existing file and diff surfaces keep their diff layout, annotations, syntax
 highlighting, SSR, and virtualization, and edit mode adds editing, multiple
-selections, history, search and replace, and markers. That focus makes it a
-natural fit for “review and correct” flows with generative code changes.
+selections, history, search and replace, markers, and custom decorations. That
+focus makes it a natural fit for “review and correct” flows with generative code
+changes.
 
 ### How It Works
 
@@ -99,9 +100,9 @@ selections, and scroll position survive switches — see
 Changes to `createEditor` or `editorOptions` do not disturb an active edit
 session; their latest values apply the next time `edit` transitions from false
 to true. Use `onAttach` with your own ref when controls need imperative APIs
-such as history, selections, markers, save, or search. Use `Virtualizer` for
-large editable files. The `FileDiff` tab below shows the controlled annotation
-feedback loop.
+such as history, selections, markers, decorations, save, or search. Use
+`Virtualizer` for large editable files. The `FileDiff` tab below shows the
+controlled annotation feedback loop.
 
 <EditComponentTabs
   fileExample={editReactExample}
@@ -292,7 +293,7 @@ yields one instance across file switches:
 
 <DocsCodeExample {...editPersistStateReactExample} />
 
-### Markers
+### Markers & Decorations
 
 Markers add inline diagnostics — errors, warnings, and other annotations — to
 the editable surface, with a hover popover that shows each marker's message.
@@ -312,6 +313,18 @@ the `severity` literals against the `Marker` type without importing it.
 
 Markers re-anchor as the document changes, so they stay attached to their text
 while you edit. Pass an empty array to clear them.
+
+Decorations anchor arbitrary UI to a zero-based document `position`. Supply
+typed `metadata` with each decoration, then map it to an `HTMLElement` with the
+`renderDecoration` editor option. The editor owns positioning while your
+renderer owns the returned element.
+
+<DocsCodeExample {...editDecorationExample} />
+
+Call `editor.setDecorations(decorations)` after the editor has attached. Like
+markers, decorations re-anchor as the document changes. Each call replaces the
+complete decoration set; pass an empty array to clear it. The second generic on
+`Editor` and `EditorOptions` controls the metadata type.
 
 ### History
 

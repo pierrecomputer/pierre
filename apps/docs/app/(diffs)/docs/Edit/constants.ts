@@ -477,6 +477,41 @@ editor.setMarkers([]);`,
   options,
 };
 
+export const EDIT_DECORATION_EXAMPLE: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'editor_decorations.ts',
+    contents: `import { Editor } from '@pierre/diffs/edit';
+
+interface CursorMetadata {
+  name: string;
+  color: string;
+}
+
+const editor = new Editor<undefined, CursorMetadata>({
+  renderDecoration({ metadata }) {
+    const cursor = document.createElement('span');
+    cursor.ariaLabel = \`\${metadata.name}'s cursor\`;
+    cursor.style.cssText = \`display:block;width:2px;height:1lh;background:\${metadata.color}\`;
+    return cursor;
+  },
+  onAttach(editor) {
+    editor.setDecorations([
+      {
+        position: { line: 5, character: 26 },
+        metadata: { name: 'Ada', color: '#7c3aed' },
+      },
+    ]);
+  },
+});
+
+editor.edit(fileInstance);
+
+// Each call replaces every decoration. Pass an empty array to clear them.
+editor.setDecorations([]);`,
+  },
+  options,
+};
+
 export const EDIT_UNDO_REDO_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
     name: 'editor_undo_redo.tsx',
@@ -1018,11 +1053,12 @@ export const EDITOR_OPTIONS_TYPE: PreloadFileOptions<undefined> = {
 } from '@pierre/diffs';
 import {
   Editor,
+  type EditorDecoration,
   type EditorKeymap,
   type IStateStorage,
 } from '@pierre/diffs/edit';
 
-interface EditorOptions<LAnnotation> {
+interface EditorOptions<LAnnotation, LDecoration = undefined> {
   // Max undo stack entries
   historyMaxEntries?: number;
 
@@ -1071,9 +1107,14 @@ interface EditorOptions<LAnnotation> {
   // Custom Selection Action UI. See Selection Action docs for context shape.
   renderSelectionAction?: (context) => HTMLElement;
 
+  // Render custom UI anchored to an EditorDecoration's document position.
+  renderDecoration?: (
+    decoration: EditorDecoration<LDecoration>
+  ) => HTMLElement;
+
   // Fires after attach when the text document is ready
   onAttach?: (
-    editor: Editor<LAnnotation>,
+    editor: Editor<LAnnotation, LDecoration>,
     fileInstance: DiffsEditableComponent<LAnnotation>
   ) => void;
 
@@ -1173,6 +1214,10 @@ export const EDITOR_PUBLIC_API: PreloadFileOptions<undefined> = {
 } from '@pierre/diffs';
 import { Editor, type EditorFocusOptions } from '@pierre/diffs/edit';
 
+interface DecorationMetadata {
+  label: string;
+}
+
 // Editor
 // Most methods require an attached surface via edit().
 
@@ -1182,7 +1227,13 @@ fileInstance.render({
   containerWrapper: document.body,
 });
 
-const editor = new Editor();
+const editor = new Editor<undefined, DecorationMetadata>({
+  renderDecoration({ metadata }) {
+    const element = document.createElement('span');
+    element.textContent = metadata.label;
+    return element;
+  },
+});
 
 // Merge partial options at runtime. Existing fields are preserved.
 // onChange and similar handlers read from the latest options on each call;
@@ -1254,6 +1305,16 @@ editor.setMarkers([
   },
 ]);
 editor.setMarkers([]);
+
+// Anchor custom DOM to zero-based document positions. Each call replaces the
+// complete decoration set; pass [] to clear. Call after attaching.
+editor.setDecorations([
+  {
+    position: { line: 1, character: 2 },
+    metadata: { label: 'Ada' },
+  },
+]);
+editor.setDecorations([]);
 
 // Focus the editable content. preventScroll skips scrolling the caret into view.
 // Blur removes focus from the content area.
