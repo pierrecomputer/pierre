@@ -122,8 +122,38 @@ function replaceAll(editor: Editor<undefined>, newText: string): void {
   );
 }
 
-describe('diff editor: select-all then delete', () => {
+describe('diff editor: empty document', () => {
   for (const diffStyle of ['split', 'unified'] as const) {
+    test(`renders line 1 and a caret when the new file starts empty (${diffStyle})`, async () => {
+      const fixture = await createDiffEditorFixture(diffStyle, 'removed\n', '');
+      const { editor, container } = fixture;
+
+      try {
+        const content = findAdditionContent(container);
+        expect(content).toBeDefined();
+        if (content == null) return;
+        expect(countEditableLineEls(content)).toBe(1);
+        expect(
+          [...content.children].some(
+            (child) => (child as HTMLElement).dataset.line === '1'
+          )
+        ).toBe(true);
+
+        editor.setSelections([
+          {
+            start: { line: 0, character: 0 },
+            end: { line: 0, character: 0 },
+            direction: 'none',
+          },
+        ]);
+        expect(
+          container.shadowRoot?.querySelector('[data-caret]') != null
+        ).toBe(true);
+      } finally {
+        await fixture.cleanup();
+      }
+    });
+
     test(`keeps an editable line, accepts typing, and undoes (${diffStyle})`, async () => {
       const fixture = await createDiffEditorFixture(
         diffStyle,

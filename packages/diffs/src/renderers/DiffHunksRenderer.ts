@@ -281,11 +281,21 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
    * Enter edit-session mode: hunk updates preserve the current region
    * skeleton instead of recomputing hunks, and rendering happens locally
    * with the token transformer forced on (worker-pool requests/results are
-   * suspended for this renderer). Called on every editor attach, including
-   * a re-attach after recycle.
+   * suspended for this renderer). An empty additions document gets one row so
+   * the editor has a line for its caret. Called on every editor attach,
+   * including a re-attach after recycle.
    */
   public beginEditSession(): void {
     this.editSessionActive = true;
+    const diff = this.diffCache;
+    if (diff != null && !diff.isPartial && diff.additionLines.length === 0) {
+      Object.assign(
+        diff,
+        recomputeEmptyDocumentDiff(diff, this.options.parseDiffOptions)
+      );
+      this.markEditSessionPass(diff);
+      this.clearRenderCache();
+    }
   }
 
   /** Leave edit-session mode. The exit recompute is the host's concern. */
@@ -652,7 +662,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       );
       result.code.additionLines[0] = createPlainAdditionLineElement(
         0,
-        textDocument
+        textDocument.getLineText(0)
       );
       this.markEditSessionPass(diff);
     } else if (this.editSessionActive) {
@@ -1110,6 +1120,14 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       expandedHunks: forcePlainText ? true : undefined,
       collapsedContextThreshold,
     });
+    if (
+      this.editSessionActive &&
+      diff.additionLines.length === 1 &&
+      diff.additionLines[0] === '' &&
+      result.code.additionLines[0] == null
+    ) {
+      result.code.additionLines[0] = createPlainAdditionLineElement(0, '');
+    }
     return { result, options };
   }
 
@@ -2339,14 +2357,17 @@ function realignAdditionHastLines(
     realigned[index] ??= hastLines[index];
   }
   for (let index = prefix; index < nextLines.length; index++) {
-    realigned[index] ??= createPlainAdditionLineElement(index, textDocument);
+    realigned[index] ??= createPlainAdditionLineElement(
+      index,
+      textDocument.getLineText(index)
+    );
   }
   return realigned;
 }
 
 function createPlainAdditionLineElement(
   lineIndex: number,
-  textDocument: DiffsTextDocument
+  lineText: string
 ): HASTElement {
   return {
     type: 'element',
@@ -2366,7 +2387,7 @@ function createPlainAdditionLineElement(
         children: [
           {
             type: 'text',
-            value: textDocument.getLineText(lineIndex),
+            value: lineText,
           },
         ],
       },
