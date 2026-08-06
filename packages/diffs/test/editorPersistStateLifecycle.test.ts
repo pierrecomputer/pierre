@@ -98,6 +98,31 @@ function savedCaret(character: number): EditorState {
 }
 
 describe('Editor persisted state lifecycle', () => {
+  test('an attached render still validates the persistState cache key', async () => {
+    const dom = installDom();
+    const editor = new Editor<undefined>({ persistState: true });
+    let attached: AttachedFile | undefined;
+
+    try {
+      attached = await attachFile(editor, { ...ORIGINAL_FILE });
+      const current = attached;
+
+      expect(() =>
+        current.file.render({
+          file: { name: 'unkeyed.ts', contents: 'updated\n' },
+          fileContainer: current.container,
+          forceRender: true,
+        })
+      ).toThrow(
+        'Editor persistState requires a non-empty file.cacheKey for "unkeyed.ts".'
+      );
+    } finally {
+      editor.cleanUp();
+      attached?.file.cleanUp();
+      dom.cleanup();
+    }
+  });
+
   test('an async restore survives an unchanged file rerender', async () => {
     const dom = installDom();
     const pendingState = createDeferred<EditorState | undefined>();
@@ -719,11 +744,11 @@ describe('Editor persisted state lifecycle', () => {
     }
   });
 
-  // A FileDiff renders straight from the host's metadata (no __prepareFile
-  // substitution like File), so a host that re-parses pristine metadata after
-  // edits — same derived cacheKey, original content — must get a document
-  // built from that metadata, not the edited cached one, or the rendered rows
-  // and the editing document would diverge.
+  // A FileDiff renders straight from the host's metadata (no
+  // __restoreCachedFile substitution like File), so a host that re-parses
+  // pristine metadata after edits — same derived cacheKey, original content —
+  // must get a document built from that metadata, not the edited cached one,
+  // or the rendered rows and the editing document would diverge.
   test('a re-parsed pristine diff does not adopt the edited cached document', async () => {
     const dom = installDom();
     const editor = new Editor<undefined>({ persistState: true });

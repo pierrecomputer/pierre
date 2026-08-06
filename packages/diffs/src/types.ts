@@ -1122,8 +1122,10 @@ export type EditableInstance<T extends { type: string }> = T extends {
   : T;
 
 export interface DiffsEditor<LAnnotation> {
-  /** @internal */
-  __prepareFile?(file: FileContents): FileContents;
+  /** @internal Persist the active File when key, name, or language changes. */
+  __persistFileState?(file: FileContents): string | undefined;
+  /** @internal Return the File with cached document contents restored. */
+  __restoreCachedFile?(file: FileContents): FileContents;
   __postponeBgTokenizeToNextFrame(): void;
   /** @internal Capture focus intent before replacing the editable view. */
   __captureFocusForDOMReplacement(): void;

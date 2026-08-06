@@ -180,6 +180,10 @@ export class File<
   protected enabled = true;
 
   protected editor: DiffsEditor<LAnnotation> | undefined;
+  // When an editor attaches before the first file render, defer persisted
+  // document restoration to that render. Clearing this afterward keeps later
+  // host renders authoritative instead of replacing them with cached content.
+  private deferPersistedRestore = false;
 
   constructor(
     public options: FileOptions<LAnnotation> = { theme: DEFAULT_THEMES },
@@ -555,8 +559,9 @@ export class File<
     this.editor?.cleanUp();
     this.editor = editor;
     this.fileRenderer.beginEditSession();
+    this.deferPersistedRestore = this.file == null;
     const preparedFile =
-      this.file == null ? undefined : editor.__prepareFile?.(this.file);
+      this.file != null ? editor.__restoreCachedFile?.(this.file) : undefined;
     if (preparedFile !== undefined && preparedFile !== this.file) {
       this.renderPreparedFile({
         file: preparedFile,
@@ -573,6 +578,7 @@ export class File<
       this.rerender();
     }
     return () => {
+      this.deferPersistedRestore = false;
       this.editor = undefined;
       this.fileRenderer.endEditSession();
     };
@@ -616,14 +622,20 @@ export class File<
       );
     }
 
-    const file = this.editor?.__prepareFile?.(props.file) ?? props.file;
+    let { file } = props;
+    if (this.deferPersistedRestore) {
+      file = this.editor?.__restoreCachedFile?.(file) ?? file;
+      this.deferPersistedRestore = false;
+    } else {
+      this.editor?.__persistFileState?.(file);
+    }
     return this.renderPreparedFile(
       file === props.file ? props : { ...props, file }
     );
   }
 
-  // Renders a file whose persisted document has already been restored. The
-  // virtualized subclass overrides this phase so layout uses the same file.
+  // Attachment-only restoration may replace the file before this shared phase;
+  // ordinary attached renders reach it with the host's supplied file unchanged.
   protected renderPreparedFile({
     file,
     fileContainer,

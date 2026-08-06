@@ -41,7 +41,7 @@ const virtualizer = {
 const codeView = { type: 'advanced' } as never;
 
 describe('VirtualizedFile persisted layout', () => {
-  test('prepares cached contents before computing approximate height', () => {
+  test('restores cached contents before computing approximate height', () => {
     const dom = installDom();
     const originalFile: FileContents = {
       name: 'file.ts',
@@ -52,10 +52,10 @@ describe('VirtualizedFile persisted layout', () => {
       ...originalFile,
       contents: 'one\ntwo\nthree\nfour',
     };
-    let prepareCalls = 0;
+    let restoreCalls = 0;
     const editor: DiffsEditor<undefined> = {
-      __prepareFile() {
-        prepareCalls++;
+      __restoreCachedFile() {
+        restoreCalls++;
         return cachedFile;
       },
       __captureFocusForDOMReplacement() {},
@@ -75,7 +75,7 @@ describe('VirtualizedFile persisted layout', () => {
         fileContainer: document.createElement('div'),
       });
 
-      expect(prepareCalls).toBe(1);
+      expect(restoreCalls).toBe(1);
       expect(instance.file?.contents).toBe(cachedFile.contents);
       expect(instance.getVirtualizedHeight()).toBe(
         getVirtualFileHeaderRegion(metrics, false) +
@@ -84,6 +84,61 @@ describe('VirtualizedFile persisted layout', () => {
       );
     } finally {
       detach();
+      instance.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test('does not restore cached contents over an attached host render', () => {
+    const dom = installDom();
+    const originalFile: FileContents = {
+      name: 'file.ts',
+      contents: 'original',
+      cacheKey: 'file',
+    };
+    const cachedFile: FileContents = {
+      ...originalFile,
+      contents: 'cached edit',
+    };
+    const externalFile: FileContents = {
+      ...originalFile,
+      contents: 'external update',
+    };
+    const filesPassedToPersist: FileContents[] = [];
+    let restoreCalls = 0;
+    const editor: DiffsEditor<undefined> = {
+      __persistFileState(file) {
+        filesPassedToPersist.push(file);
+        return file.cacheKey;
+      },
+      __restoreCachedFile() {
+        restoreCalls++;
+        return cachedFile;
+      },
+      __captureFocusForDOMReplacement() {},
+      __postponeBgTokenizeToNextFrame() {},
+      __syncRenderView() {},
+      edit() {
+        return () => {};
+      },
+      cleanUp() {},
+    };
+    const instance = new VirtualizedFile({}, virtualizer, metrics);
+    const fileContainer = document.createElement('div');
+    let detach: (() => void) | undefined;
+
+    try {
+      instance.render({ file: originalFile, fileContainer });
+      detach = instance.attachEditor(editor);
+      expect(restoreCalls).toBe(1);
+      expect(instance.file).toBe(cachedFile);
+
+      instance.render({ file: externalFile, fileContainer });
+      expect(restoreCalls).toBe(1);
+      expect(filesPassedToPersist).toEqual([externalFile]);
+      expect(instance.file).toBe(externalFile);
+    } finally {
+      detach?.();
       instance.cleanUp();
       dom.cleanup();
     }

@@ -827,10 +827,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#fileInstance = undefined;
   }
 
-  /** @internal Capture outgoing state and substitute cached text before render. */
-  __prepareFile(file: FileContents): FileContents {
+  /** @internal Persist the active File when key, name, or language changes. */
+  __persistFileState(file: FileContents): string | undefined {
     if (this.#options.persistState !== true) {
-      return file;
+      return undefined;
     }
 
     const cacheKey = requirePersistedCacheKey(file);
@@ -845,6 +845,16 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#stateRestoreGeneration++;
       this.#persistCurrentState();
     }
+    return cacheKey;
+  }
+
+  /** @internal Return the File with cached document contents restored. */
+  __restoreCachedFile(file: FileContents): FileContents {
+    const cacheKey = this.__persistFileState(file);
+    if (cacheKey === undefined) {
+      return file;
+    }
+
     const textDocument = this.#getCachedTextDocument(file, cacheKey);
     if (
       textDocument === undefined ||
@@ -980,8 +990,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         persistedCacheKey !== undefined
           ? this.#getCachedTextDocument(fileOrDiff, persistedCacheKey)
           : undefined;
-      // A File render substitutes cached text before painting (see
-      // __prepareFile), so its DOM always matches a reused document.
+      // A File attachment restores cached text before painting (see
+      // __restoreCachedFile), so its DOM always matches a reused document.
       const reusableTextDocument =
         fileInstance.type === 'file' ||
         cachedTextDocument?.getText() === contents
