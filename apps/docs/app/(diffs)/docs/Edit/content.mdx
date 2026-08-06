@@ -19,6 +19,7 @@ Edit mode features include:
 - Find-in-file search and replace
 - [Selection Action](#edit-mode-selection-action) (opt-in, custom UI)
 - Markers (inline diagnostics) and custom decorations
+- Decorations (arbitrary UI)
 - SSR support
 - Mobile-friendly
 - Lightweight
@@ -293,7 +294,7 @@ yields one instance across file switches:
 
 <DocsCodeExample {...editPersistStateReactExample} />
 
-### Markers & Decorations
+### Markers
 
 Markers add inline diagnostics — errors, warnings, and other annotations — to
 the editable surface, with a hover popover that shows each marker's message.
@@ -312,6 +313,9 @@ the `severity` literals against the `Marker` type without importing it.
 <DocsCodeExample {...editMarkerExample} />
 
 Markers re-anchor as the document changes, so they stay attached to their text
+
+### Decorations
+
 while you edit. Pass an empty array to clear them.
 
 Decorations anchor arbitrary UI to a zero-based document `position`. Supply
