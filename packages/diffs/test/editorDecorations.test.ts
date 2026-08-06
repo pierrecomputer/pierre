@@ -420,25 +420,17 @@ describe('Editor decorations', () => {
   });
 
   test('tracks multiline edits through undo and redo', async () => {
+    let renderedDecoration: EditorDecoration<DecorationMetadata> | undefined;
     const renderDecoration = mock(
-      (decoration: EditorDecoration<DecorationMetadata>) =>
-        decorationElement(decoration.metadata.id)
+      (decoration: EditorDecoration<DecorationMetadata>) => {
+        renderedDecoration = decoration;
+        return decorationElement(decoration.metadata.id);
+      }
     );
-    const { cleanup, editor, fileContainer } = await createEditorFixture(
+    const { cleanup, editor } = await createEditorFixture(
       'zero\none\ntwo\nthree',
       { renderDecoration }
     );
-    const offsetTopDescriptor = Object.getOwnPropertyDescriptor(
-      HTMLElement.prototype,
-      'offsetTop'
-    );
-    Object.defineProperty(HTMLElement.prototype, 'offsetTop', {
-      configurable: true,
-      get(this: HTMLElement): number {
-        const lineNumber = Number(this.dataset.line);
-        return lineNumber > 0 ? (lineNumber - 1) * 20 : 0;
-      },
-    });
 
     try {
       editor.setDecorations([
@@ -447,9 +439,10 @@ describe('Editor decorations', () => {
           metadata: { id: 'ada' },
         },
       ]);
-      const original = getDecorationTransform(
-        getDecorationAnchor(fileContainer, 'ada')
-      );
+      expect(renderedDecoration?.position).toEqual({
+        line: 2,
+        character: 2,
+      });
 
       editor.applyEdits([
         {
@@ -460,20 +453,21 @@ describe('Editor decorations', () => {
           newText: 'new-a\nnew-b\n',
         },
       ]);
-      const inserted = getDecorationTransform(
-        getDecorationAnchor(fileContainer, 'ada')
-      );
-      expect(inserted.y - original.y).toBe(40);
-      expect(inserted.x).toBe(original.x);
+      expect(renderedDecoration?.position).toEqual({
+        line: 4,
+        character: 2,
+      });
 
       editor.undo();
-      expect(
-        getDecorationTransform(getDecorationAnchor(fileContainer, 'ada'))
-      ).toEqual(original);
+      expect(renderedDecoration?.position).toEqual({
+        line: 2,
+        character: 2,
+      });
       editor.redo();
-      expect(
-        getDecorationTransform(getDecorationAnchor(fileContainer, 'ada'))
-      ).toEqual(inserted);
+      expect(renderedDecoration?.position).toEqual({
+        line: 4,
+        character: 2,
+      });
 
       editor.applyEdits([
         {
@@ -485,19 +479,11 @@ describe('Editor decorations', () => {
         },
       ]);
       expect(editor.getText()).toBe('zero\none\ntwo\nthree');
-      expect(
-        getDecorationTransform(getDecorationAnchor(fileContainer, 'ada'))
-      ).toEqual(original);
+      expect(renderedDecoration?.position).toEqual({
+        line: 2,
+        character: 2,
+      });
     } finally {
-      if (offsetTopDescriptor === undefined) {
-        Reflect.deleteProperty(HTMLElement.prototype, 'offsetTop');
-      } else {
-        Object.defineProperty(
-          HTMLElement.prototype,
-          'offsetTop',
-          offsetTopDescriptor
-        );
-      }
       cleanup();
     }
   });
