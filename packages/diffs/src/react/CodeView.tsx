@@ -133,6 +133,7 @@ export type CodeViewProps<LAnnotation = undefined> =
 export interface CodeViewHandle<LAnnotation> {
   addItems(items: readonly CodeViewItem<LAnnotation>[]): void;
   getItem(id: string): CodeViewItem<LAnnotation> | undefined;
+  removeItem(id: string): boolean;
   updateItem(item: CodeViewItem<LAnnotation>): boolean;
   updateItemId(oldId: string, newId: string): boolean;
   scrollTo(target: CodeViewScrollTarget): void;
@@ -513,6 +514,19 @@ function CodeViewInner<LAnnotation = undefined>(
         } else {
           return instance.getItem(id);
         }
+      },
+      removeItem(id) {
+        const { controlled, instance } = cachedDataRef.current;
+        assertUncontrolledCodeViewAction(controlled, 'removeItem');
+        if (instance == null) {
+          console.error(
+            'CodeView.removeItem: no valid instance to remove item from',
+            id
+          );
+          return false;
+        }
+
+        return instance.removeItem(id);
       },
       updateItem(item) {
         const { controlled, instance } = cachedDataRef.current;

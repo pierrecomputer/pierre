@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import {
   type EditorCommand,
+  type EditorKeymap,
   resolveEditorCommandFromKeyboardEvent,
   resolveFindAgainShortcut,
 } from '../src/editor/command';
@@ -53,7 +54,11 @@ function expectShortcuts(platform: string, cases: ShortcutCase[]): void {
   withPlatform(platform, () => {
     for (const { event: shortcutEvent, expected } of cases) {
       expect(
-        resolveEditorCommandFromKeyboardEvent(event(shortcutEvent), isMac)
+        resolveEditorCommandFromKeyboardEvent(
+          event(shortcutEvent),
+          undefined,
+          isMac
+        )
       ).toBe(expected);
     }
   });
@@ -183,6 +188,13 @@ describe('resolveEditorCommandFromKeyboardEvent', () => {
         expected: 'moveLineDown',
       },
     ]);
+    expectShortcuts('Win32', [
+      { event: { key: 'y', ctrlKey: true }, expected: 'redo' },
+      {
+        event: { key: 'p', altKey: true, ctrlKey: true },
+        expected: undefined,
+      },
+    ]);
   });
 
   test('ignores modified alt shortcuts and unsupported navigation', () => {
@@ -197,6 +209,10 @@ describe('resolveEditorCommandFromKeyboardEvent', () => {
         expected: undefined,
       },
       { event: { key: 'z', ctrlKey: true, altKey: true }, expected: undefined },
+      {
+        event: { key: 'f', ctrlKey: true, shiftKey: true },
+        expected: undefined,
+      },
     ]);
     expectShortcuts('MacIntel', [
       {
@@ -205,6 +221,10 @@ describe('resolveEditorCommandFromKeyboardEvent', () => {
       },
       {
         event: { key: 'ArrowDown', metaKey: true, altKey: true },
+        expected: undefined,
+      },
+      {
+        event: { key: 'f', metaKey: true, shiftKey: true },
         expected: undefined,
       },
     ]);
@@ -277,6 +297,206 @@ describe('resolveEditorCommandFromKeyboardEvent', () => {
         expected: 'expandSelectionDocEnd',
       },
     ]);
+  });
+
+  test('uses a custom keymap before falling back to the default map', () => {
+    const keymap = [
+      {
+        bindings: {
+          'cmdOrCtrl+u': 'undo',
+          'shift+cmdOrCtrl+u': 'redo',
+          'cmdOrCtrl+z': 'redo',
+          Space: 'simplifySelection',
+          'ctrl+k': 'deleteHardLineForward',
+        },
+      },
+    ] satisfies EditorKeymap;
+
+    expect(
+      resolveEditorCommandFromKeyboardEvent(
+        event({ key: 'u', metaKey: true }),
+        keymap,
+        true
+      )
+    ).toBe('undo');
+    expect(
+      resolveEditorCommandFromKeyboardEvent(
+        event({ key: 'u', metaKey: true, shiftKey: true }),
+        keymap,
+        true
+      )
+    ).toBe('redo');
+    expect(
+      resolveEditorCommandFromKeyboardEvent(
+        event({ key: 'z', metaKey: true }),
+        keymap,
+        true
+      )
+    ).toBe('redo');
+    expect(
+      resolveEditorCommandFromKeyboardEvent(
+        event({ key: 'u', ctrlKey: true }),
+        keymap,
+        false
+      )
+    ).toBe('undo');
+    expect(
+      resolveEditorCommandFromKeyboardEvent(
+        event({ key: 'y', ctrlKey: true }),
+        keymap,
+        false
+      )
+    ).toBe('redo');
+    expect(
+      resolveEditorCommandFromKeyboardEvent(event({ key: ' ' }), keymap, false)
+    ).toBe('simplifySelection');
+    expect(
+      resolveEditorCommandFromKeyboardEvent(
+        event({ key: 'k', ctrlKey: true }),
+        keymap,
+        false
+      )
+    ).toBe('deleteHardLineForward');
+    expect(
+      resolveEditorCommandFromKeyboardEvent(
+        event({ key: 'constructor' }),
+        keymap,
+        false
+      )
+    ).toBeUndefined();
+  });
+
+  test('honors custom keymap platforms and later group precedence', () => {
+    const keymap = [
+      {
+        bindings: { 'ctrl+k': 'redo' },
+      },
+      {
+        platform: 'mac',
+        bindings: { 'ctrl+k': 'undo' },
+      },
+    ] satisfies EditorKeymap;
+
+    expect(
+      resolveEditorCommandFromKeyboardEvent(
+        event({ key: 'k', ctrlKey: true }),
+        keymap,
+        true
+      )
+    ).toBe('undo');
+    expect(
+      resolveEditorCommandFromKeyboardEvent(
+        event({ key: 'k', ctrlKey: true }),
+        keymap,
+        false
+      )
+    ).toBe('redo');
+  });
+
+  test('ignores inherited bindings', () => {
+    const bindings = Object.create({
+      'ctrl+u': 'undo',
+    }) as EditorKeymap[number]['bindings'];
+
+    expect(
+      resolveEditorCommandFromKeyboardEvent(
+        event({ key: 'u', ctrlKey: true }),
+        [{ bindings }],
+        false
+      )
+    ).toBeUndefined();
+  });
+
+  test('falls back when no custom group matches the platform', () => {
+    const keymap = [
+      {
+        platform: 'windows',
+        bindings: { 'ctrl+z': 'redo' },
+      },
+    ] satisfies EditorKeymap;
+
+    expect(
+      resolveEditorCommandFromKeyboardEvent(
+        event({ key: 'z', metaKey: true }),
+        keymap,
+        true
+      )
+    ).toBe('undo');
+    withPlatform('Win32', () => {
+      expect(
+        resolveEditorCommandFromKeyboardEvent(
+          event({ key: 'z', ctrlKey: true }),
+          keymap,
+          false
+        )
+      ).toBe('redo');
+    });
+    expect(
+      resolveEditorCommandFromKeyboardEvent(
+        event({ key: 'a', metaKey: true }),
+        [],
+        true
+      )
+    ).toBe('selectAll');
+  });
+
+  test('supports punctuation keys', () => {
+    const keymap = [
+      {
+        bindings: {
+          'cmdOrCtrl+-': 'indentLess',
+          'cmdOrCtrl+shift+=': 'indentMore',
+        },
+      },
+    ] satisfies EditorKeymap;
+
+    expect(
+      resolveEditorCommandFromKeyboardEvent(
+        event({ key: 'Unidentified', code: 'Minus', metaKey: true }),
+        keymap,
+        true
+      )
+    ).toBe('indentLess');
+    expect(
+      resolveEditorCommandFromKeyboardEvent(
+        event({ key: '+', code: 'Equal', metaKey: true, shiftKey: true }),
+        keymap,
+        true
+      )
+    ).toBe('indentMore');
+  });
+
+  test('supports explicit command and control modifiers', () => {
+    const keymap = [
+      {
+        bindings: {
+          'cmd+b': 'selectAll',
+          'ctrl+e': 'findNextMatch',
+        },
+      },
+    ] satisfies EditorKeymap;
+
+    expect(
+      resolveEditorCommandFromKeyboardEvent(
+        event({ key: 'b', metaKey: true }),
+        keymap,
+        false
+      )
+    ).toBe('selectAll');
+    expect(
+      resolveEditorCommandFromKeyboardEvent(
+        event({ key: 'b', ctrlKey: true }),
+        keymap,
+        false
+      )
+    ).toBeUndefined();
+    expect(
+      resolveEditorCommandFromKeyboardEvent(
+        event({ key: 'e', ctrlKey: true }),
+        keymap,
+        true
+      )
+    ).toBe('findNextMatch');
   });
 });
 

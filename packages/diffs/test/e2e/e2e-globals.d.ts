@@ -81,6 +81,7 @@ interface Window {
   __setFoldingTheme?: () => void;
   __forceEditorFullRender?: () => void;
   __moveEditorContainer?: () => void;
+  __syncCount?: number;
 
   // edit-collapsed.html helpers: rendered new-file line numbers in the
   // editable column, and the primary caret's zero-based line.

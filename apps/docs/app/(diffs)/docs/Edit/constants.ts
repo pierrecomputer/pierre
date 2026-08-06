@@ -1,4 +1,3 @@
-import type { FileOptions } from '@pierre/diffs/react';
 import type { PreloadFileOptions } from '@pierre/diffs/ssr';
 
 import { CustomScrollbarCSS } from '@/components/CustomScrollbarCSS';
@@ -8,50 +7,6 @@ const options = {
   disableFileHeader: true,
   unsafeCSS: CustomScrollbarCSS,
 } as const;
-
-// Enabling the token transformer in the server render keeps the markup
-// editor-ready, so hydration does not rerender the surface when the editor
-// attaches. Mirrors `(diffs)/_edit/constants.ts`.
-const editableDemoOptions: FileOptions<undefined> = {
-  theme: { dark: 'pierre-dark', light: 'pierre-light' },
-  disableFileHeader: true,
-  useTokenTransformer: true,
-};
-
-// The file rendered by the interactive `<EditDemo />` on the Edit page.
-// Preloaded server-side so the surface is highlighted in the initial HTML
-// instead of flashing in after the client attaches the editor.
-export const EDIT_DEMO_FILE_EXAMPLE: PreloadFileOptions<undefined> = {
-  file: {
-    name: 'editable-demo.ts',
-    contents: `import { VirtualizedFile } from '@pierre/diffs';
-import { Editor } from '@pierre/diffs/edit';
-
-const fileInstance = new VirtualizedFile({
-  theme: { dark: 'pierre-dark', light: 'pierre-light' },
-});
-
-// render the file into a DOM container
-fileInstance.render({
-  file: { name: 'index.ts', contents: 'export const foo: string = "bar";\\n' },
-  containerWrapper: document.getElementById('file-container')
-});
-
-const editor = new Editor({
-  onChange(file, lineAnnotations) {
-    console.log('change', file.name, lineAnnotations);
-  },
-});
-
-// Attach the editor to the file instance
-const dispose = editor.edit(fileInstance);
-
-// Later, when the editor is no longer needed:
-dispose();
-`,
-  },
-  options: editableDemoOptions,
-};
 
 export const EDIT_VANILLA_FILE_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
@@ -393,6 +348,78 @@ export const EDIT_SELECTION_ACTION_CONTEXT_TYPE: PreloadFileOptions<undefined> =
     options,
   };
 
+export const EDIT_PERSIST_STATE_EXAMPLE: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'editor_persist_state.ts',
+    contents: `import type { FileContents } from '@pierre/diffs';
+import { Editor } from '@pierre/diffs/edit';
+
+// Unique, stable cacheKeys identify each file's cached document and its
+// stored editor state.
+const fileA: FileContents = {
+  name: 'a.ts',
+  contents: 'export const a = 1;',
+  cacheKey: 'a.ts',
+};
+const fileB: FileContents = {
+  name: 'b.ts',
+  contents: 'export const b = 2;',
+  cacheKey: 'b.ts',
+};
+
+// \`fileInstance\` is a rendered File — see the Vanilla JS section above.
+const editor = new Editor({ persistState: true });
+editor.edit(fileInstance);
+fileInstance.render({ file: fileA });
+
+// ...the user edits, selects, and scrolls fileA...
+
+// Switching files caches fileA's document (contents + undo history) on the
+// editor and writes its selections and scroll offsets to the state storage.
+// fileB has no record yet, so its surface starts scrolled to the top.
+fileInstance.render({ file: fileB });
+
+// Switching back renders fileA's edited contents — even though the original
+// \`contents\` string is passed again — and restores its selections, scroll
+// position, and undo history.
+fileInstance.render({ file: fileA });`,
+  },
+  options,
+};
+
+export const EDIT_PERSIST_STATE_REACT_EXAMPLE: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'editor_persist_state_react.tsx',
+    contents: `import type { FileContents } from '@pierre/diffs';
+import { Editor, type EditorOptions } from '@pierre/diffs/edit';
+import { type CreateEditor, EditProvider, File } from '@pierre/diffs/react';
+import { useCallback, useMemo } from 'react';
+
+// Editors are cached by \`editorOptions\` object identity, so the stable
+// options object below hands every file rendered here the same editor. Its
+// cached documents and default 'inMemory' state store live on that instance,
+// which is what lets per-file contents, selections, and scroll survive
+// surface remounts.
+export function PersistedEditor({ file }: { file: FileContents }) {
+  const createEditor = useCallback<CreateEditor<undefined>>(
+    (options) => new Editor(options),
+    []
+  );
+  const editorOptions = useMemo<EditorOptions<undefined>>(
+    () => ({ persistState: true }),
+    []
+  );
+
+  return (
+    <EditProvider createEditor={createEditor}>
+      <File file={file} edit editorOptions={editorOptions} />
+    </EditProvider>
+  );
+}`,
+  },
+  options,
+};
+
 export const EDIT_MARKER_TYPE: PreloadFileOptions<undefined> = {
   file: {
     name: 'marker.ts',
@@ -474,6 +501,7 @@ export function EditableFileWithHistoryToolbar() {
   const editorRef = useRef<Editor<undefined> | null>(null);
   const editorOptions = useMemo<EditorOptions<undefined>>(
     () => ({
+      historyMaxEntries: 100,
       onAttach(editor) {
         editorRef.current = editor;
       },
@@ -487,9 +515,6 @@ export function EditableFileWithHistoryToolbar() {
     []
   );
 
-  // This example is self-contained. Apps should usually mount EditProvider near
-  // the root so its factory is available to every editable File, diff, and
-  // CodeView.
   return (
     <EditProvider createEditor={createEditor}>
       <div className="toolbar">
@@ -508,6 +533,56 @@ export function EditableFileWithHistoryToolbar() {
     </EditProvider>
   );
 }`,
+  },
+  options,
+};
+
+export const EDIT_REACT_CREATE_EDITOR_EXAMPLE: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'editor_react_create_editor.tsx',
+    contents: `const createEditor = useCallback<CreateEditor<undefined>>(
+  (surfaceOptions) =>
+    new Editor({
+      ...defaultEditorOptions,
+      ...surfaceOptions,
+    }),
+  []
+);
+
+const editorOptions = useMemo<EditorOptions<undefined>>(
+  () => ({
+    onChange: handleChange,
+    onAttach(editor) {
+      editorRef.current = editor;
+    },
+  }),
+  [handleChange]
+);
+
+// Mount EditProvider near the root so its editors are available to every
+// editable File, diff, and CodeView.
+return (
+  <EditProvider createEditor={createEditor}>
+    <File file={file} edit={editing} editorOptions={editorOptions} />
+  </EditProvider>
+);`,
+  },
+  options,
+};
+
+export const EDIT_REACT_SHARED_EDITOR_EXAMPLE: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'editor_react_shared_editor.tsx',
+    contents: `const editorOptions = useMemo<EditorOptions<undefined>>(
+  () => ({ persistState: true, onChange: handleChange }),
+  [handleChange]
+);
+
+return (
+  <EditProvider createEditor={createEditor}>
+    <File file={activeFile} edit editorOptions={editorOptions} />
+  </EditProvider>
+);`,
   },
   options,
 };
@@ -941,11 +1016,18 @@ export const EDITOR_OPTIONS_TYPE: PreloadFileOptions<undefined> = {
   FileContents,
   LineAnnotation,
 } from '@pierre/diffs';
-import { Editor, type IStateStorage } from '@pierre/diffs/edit';
+import {
+  Editor,
+  type EditorKeymap,
+  type IStateStorage,
+} from '@pierre/diffs/edit';
 
 interface EditorOptions<LAnnotation> {
   // Max undo stack entries
   historyMaxEntries?: number;
+
+  // Custom keymap checked before the default map.
+  keymap?: EditorKeymap;
 
   // Preserve each File's document and item-local editor state between renders.
   // Requires every editable file to provide a unique, stable cacheKey.
@@ -968,15 +1050,22 @@ interface EditorOptions<LAnnotation> {
   // (default: 'default' — both quotes and brackets)
   autoSurround?: 'default' | 'never' | 'brackets' | 'quotes' | 'languageDefined';
 
+  // Per-language comment tokens for the toggle-comment commands, merged over
+  // the built-in defaults ('//' and '/* */'). A null lineComment disables
+  // line comments for that language.
+  languageCommentConfig?: Record<
+    string,
+    { lineComment?: string | null; blockComment?: readonly [string, string] }
+  >;
+
   // Show the floating Selection Action popover after a user selection.
   // Programmatic setSelections/setState calls do not open it (default: false).
   enabledSelectionAction?: boolean;
 
-  // Custom clipboard provider.
-  // Highly recommended to use native clipboard API if you are building an electron app.
-  // see https://www.electronjs.org/docs/latest/api/clipboard
+  // Custom clipboard provider. Recommended in Electron apps — use the native
+  // clipboard API: https://www.electronjs.org/docs/latest/api/clipboard
   clipboard?: {
-    readText: () => Promise<string> | string;
+    readText: (type?: string) => Promise<string> | string;
   };
 
   // Custom Selection Action UI. See Selection Action docs for context shape.
@@ -1007,6 +1096,48 @@ interface EditorOptions<LAnnotation> {
   // Fires when the editable content area loses focus.
   onBlur?: () => void;
 }`,
+  },
+  options,
+};
+
+export const EDIT_ON_ATTACH_REACT_EXAMPLE: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'editor_on_attach_react.tsx',
+    contents: `const editorOptions = useMemo<EditorOptions<undefined>>(
+  () => ({
+    onAttach(editor) {
+      editor.focus({ lineNumber: 'first-visible', preventScroll: true });
+    },
+  }),
+  []
+);
+
+return <CodeView items={items} editorOptions={editorOptions} />;`,
+  },
+  options,
+};
+
+export const EDIT_ON_ATTACH_VANILLA_EXAMPLE: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'editor_on_attach_vanilla.ts',
+    contents: `const viewer = new CodeView({
+  createEditor(options) {
+    return new Editor({
+      ...options,
+      onAttach(editor) {
+        editor.focus({ lineNumber: 'first-visible', preventScroll: true });
+      },
+    });
+  },
+});`,
+  },
+  options,
+};
+
+export const EDIT_FOCUS_POSITION_EXAMPLE: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'editor_focus_position.ts',
+    contents: `editor.focus({ lineNumber: 13, character: 4 });`,
   },
   options,
 };
@@ -1092,16 +1223,16 @@ const file: FileContents | undefined = editor.getFile();
 // Full document text, or '' when nothing is attached.
 const text: string = editor.getText();
 
-// Snapshot selections, active folds, and horizontal code position for
+// Snapshot selections, active folds, and scroll positions for
 // persistence or remount restore.
 const state: EditorState = editor.getState();
 // EditorState = {
 //   selections?: EditorSelection[];
 //   foldRanges?: LineRange[]; // zero-based; standalone closers stay visible
-//   view?: { scrollLeft: number; scrollTop: number };
+//   view?: { scrollLeft: number; scrollTop?: number };
 // }
 
-// Restore selections, folds, and horizontal code position after re-rendering.
+// Restore selections, folds, and scroll positions after re-rendering.
 editor.setState(state);
 
 // Replace all cursors and ranges programmatically. Positions are zero-based;

@@ -381,7 +381,8 @@ export class EditorTokenizer {
   // the state stack map for the given render range.
   tokenize(
     change: TextDocumentChange,
-    renderRange?: RenderRange
+    renderRange?: RenderRange,
+    hostRealignsRows = false
   ): Map<number, Array<HighlightedToken>> {
     this.#ensureGrammar();
     this.#ensureActiveTheme();
@@ -421,6 +422,8 @@ export class EditorTokenizer {
       change.lineDelta === 0 &&
       (change.changedLineChanges?.every(([, , lineDelta]) => lineDelta === 0) ??
         true);
+    const canReuseShiftedStates =
+      hostRealignsRows && change.lineDelta !== 0 && dirtyStart >= startingLine;
     const canCacheTokenizedStates =
       canReuseCachedStates ||
       renderRange === undefined ||
@@ -492,7 +495,9 @@ export class EditorTokenizer {
     for (; line < renderRangeEndLine; ) {
       const previousNextState = canReuseCachedStates
         ? this.#stateStack[line + 1]
-        : undefined;
+        : canReuseShiftedStates
+          ? this.#getPreviousEndState(line + 1)
+          : undefined;
       if (canCacheTokenizedStates) {
         this.#stateStack[line] = state;
       }
@@ -514,7 +519,7 @@ export class EditorTokenizer {
       }
       settled =
         line >= currentChangedRangeEnd &&
-        canReuseCachedStates &&
+        (canReuseCachedStates || canReuseShiftedStates) &&
         previousNextState !== undefined &&
         state.equals(previousNextState);
       if (settled) {
@@ -528,12 +533,26 @@ export class EditorTokenizer {
           backgroundChangedRangeIndex = changedRangeIndex;
           break;
         }
-        if (this.#stateStack[nextRange[0]] === undefined) {
+        let nextState: StateStack | undefined = this.#stateStack[nextRange[0]];
+        if (canReuseShiftedStates) {
+          for (
+            let stateLine = line + 2;
+            stateLine <= nextRange[0];
+            stateLine++
+          ) {
+            nextState = this.#getPreviousEndState(stateLine);
+            if (nextState === undefined) {
+              break;
+            }
+            this.#stateStack[stateLine] = nextState;
+          }
+        }
+        if (nextState === undefined) {
           currentChangedRangeEnd = nextRange[1];
           line++;
         } else {
           line = nextRange[0];
-          state = this.#stateStack[line] ?? state;
+          state = nextState;
           currentChangedRangeEnd = nextRange[1];
         }
         settled = false;
@@ -548,6 +567,19 @@ export class EditorTokenizer {
       } else {
         this.#stateStack[line] = state;
       }
+    }
+
+    if (settled && canReuseShiftedStates && backgroundStartLine === undefined) {
+      for (let stateLine = line + 2; stateLine <= lineCount; stateLine++) {
+        const previousState = this.#getPreviousEndState(stateLine);
+        if (previousState === undefined) {
+          break;
+        }
+        this.#stateStack[stateLine] = previousState;
+      }
+      this.#comparisonStateStack = [];
+      this.#comparisonStateStackStart = 0;
+      this.#comparisonLineChanges = [];
     }
 
     if (offscreenDirtyLines !== undefined && offscreenDirtyLines.size > 0) {

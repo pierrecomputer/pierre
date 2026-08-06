@@ -144,3 +144,30 @@ export function getGraphemeSegmenter(): Intl.Segmenter | undefined {
   }
   return graphemeSegmenter;
 }
+
+// lookup the scroll container for the given element
+export function lookupScrollContainer(
+  element: HTMLElement
+): HTMLElement | Document {
+  const ownerDocument = element.ownerDocument;
+  let parentElement = element.parentElement;
+  while (
+    parentElement != null &&
+    parentElement !== ownerDocument.body &&
+    parentElement !== ownerDocument.documentElement
+  ) {
+    const overflowY =
+      parentElement.ownerDocument.defaultView?.getComputedStyle(
+        parentElement
+      ).overflowY;
+    if (
+      overflowY === 'auto' ||
+      overflowY === 'scroll' ||
+      overflowY === 'overlay'
+    ) {
+      return parentElement;
+    }
+    parentElement = parentElement.parentElement;
+  }
+  return ownerDocument;
+}

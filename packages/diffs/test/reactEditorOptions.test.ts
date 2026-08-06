@@ -907,17 +907,14 @@ describe('React editor factory lifecycle', () => {
 
       await waitFor(() => onAttach.mock.calls.length >= 2);
       await wait(0);
-      const activeEditors = editors.filter(
-        (editor) => editor.cleanUpCount === 0
-      );
-      expect(editors.length).toBeGreaterThanOrEqual(4);
-      expect(editors.filter((editor) => editor.cleanUpCount > 0)).toHaveLength(
-        editors.length - 2
-      );
-      expect(activeEditors).toHaveLength(2);
+      // The provider caches editors by options-object identity, so
+      // StrictMode's simulated destroy/re-create pass reuses each surface's
+      // editor instead of leaking a second one: exactly one editor per
+      // surface, cleaned up by the destroy pass and re-attached after it.
+      expect(editors).toHaveLength(2);
       expect(onAttach).toHaveBeenCalledTimes(2);
       expect(new Set(onAttach.mock.calls.map(([editor]) => editor))).toEqual(
-        new Set(activeEditors)
+        new Set(editors)
       );
 
       await unmountRoot(root);
@@ -925,6 +922,50 @@ describe('React editor factory lifecycle', () => {
       expect(editors.every((editor) => editor.cleanUpCount > 0)).toBe(true);
       await wait(0);
       expect(onAttach).toHaveBeenCalledTimes(2);
+    } finally {
+      await unmountRoot(root);
+      cleanupActEnvironment();
+      cleanup();
+    }
+  });
+
+  test('a factory returning an owner-constructed editor shares it as configured, ignoring surface editorOptions', async () => {
+    const { cleanup } = installDom();
+    const cleanupActEnvironment = installReactActEnvironment();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    // The owner-constructed editor is used exactly as constructed: its own
+    // onAttach must fire, while the surface's editorOptions (including its
+    // onAttach) only reach the factory, which discards them.
+    let attachedEditor: Editor<undefined> | undefined;
+    const sharedEditor = new Editor<undefined>({
+      onAttach(editor) {
+        attachedEditor = editor;
+      },
+    });
+    const factory = mock((_options: EditorOptions<undefined>) => sharedEditor);
+    const surfaceOnAttach = mock((_editor: Editor<undefined>) => {});
+    let root: Root | undefined;
+
+    try {
+      root = createReactRoot(container);
+      await act(async () => {
+        root!.render(
+          createElement(
+            EditProviderComponent,
+            { createEditor: factory },
+            createEditableSurfaceElement('File', true, {
+              onAttach: surfaceOnAttach,
+            })
+          )
+        );
+        await wait(10);
+      });
+      await waitFor(() => attachedEditor !== undefined);
+
+      expect(attachedEditor).toBe(sharedEditor);
+      expect(factory).toHaveBeenCalled();
+      expect(surfaceOnAttach).not.toHaveBeenCalled();
     } finally {
       await unmountRoot(root);
       cleanupActEnvironment();

@@ -1262,6 +1262,8 @@ export interface EditorSelection extends Range {
 export interface EditorViewState {
   /** Horizontal position owned by the current editable code scroller. */
   scrollLeft: number;
+  /** Vertical position of the editor viewport. */
+  scrollTop?: number;
 }
 
 export interface EditorState {

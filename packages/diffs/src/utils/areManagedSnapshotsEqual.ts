@@ -39,6 +39,7 @@ function areRenderedItemsEqual<LAnnotation>(
       previousItem.id !== nextItem.id ||
       previousItem.type !== nextItem.type ||
       previousItem.element !== nextItem.element ||
+      previousItem.instance !== nextItem.instance ||
       previousItem.version !== nextItem.version
     ) {
       return false;

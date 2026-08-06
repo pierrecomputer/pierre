@@ -84,10 +84,10 @@ function openScrolledMarkerNearGutter(page: Page): Promise<{
 }
 
 // Hovers the marker whose squiggle sits under `token`, then returns the WCAG
-// contrast ratio between the popover's resolved text and background colors.
-// Guards the marker popover fallback in browsers without contrast-color(): the
-// severity fill is a theme editorX.foreground token, so its text candidate must
-// remain legible in both light and dark themes.
+// contrast ratio between the popover's resolved text and background colors, plus
+// whether this browser took the contrast-color() path or the static fallback.
+// The severity fill is a theme editorX.foreground token, so the text must remain
+// legible in both light and dark themes on either path.
 async function popoverContrast(
   page: Page,
   token: string
@@ -95,6 +95,7 @@ async function popoverContrast(
   backgroundColor: string;
   color: string;
   ratio: number;
+  supportsContrastColor: boolean;
 } | null> {
   await page.locator(CONTENT).getByText(token, { exact: true }).hover();
   await expect(page.locator('[data-marker-popover]')).toBeVisible();
@@ -130,6 +131,7 @@ async function popoverContrast(
       backgroundColor: cs.backgroundColor,
       color: cs.color,
       ratio: (lighter + 0.05) / (darker + 0.05),
+      supportsContrastColor: CSS.supports('color', 'contrast-color(red)'),
     };
   });
 }
@@ -185,6 +187,16 @@ test.describe('editor markers', () => {
           sample!.ratio,
           `${theme} theme marker under "${token}": ${sample!.color} on ${sample!.backgroundColor}`
         ).toBeGreaterThanOrEqual(4.5);
+
+        // contrast-color() always resolves to pure black or white, so any other
+        // value means the declaration was invalid and `color` fell back to the
+        // inherited editor foreground.
+        if (sample!.supportsContrastColor) {
+          expect(
+            ['rgb(0, 0, 0)', 'rgb(255, 255, 255)'],
+            `${theme} theme marker under "${token}" resolved contrast-color() to ${sample!.color}`
+          ).toContain(sample!.color);
+        }
       }
     }
   });

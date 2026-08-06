@@ -378,7 +378,7 @@
   pointer-events: auto;
 
   @supports (color: contrast-color(red)) {
-    color: contrast-color(var(--diffs-marker-bg), var(--diffs-bg));
+    color: contrast-color(var(--diffs-marker-bg, var(--diffs-bg)));
   }
 
   [data-marker-message] {

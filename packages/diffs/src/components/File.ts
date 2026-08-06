@@ -57,9 +57,11 @@ import {
 import { getFileRendererOptions } from '../utils/getFileRendererOptions';
 import { getLineAnnotationName } from '../utils/getLineAnnotationName';
 import { getOrCreateCodeNode } from '../utils/getOrCreateCodeNode';
+import { guardWebKitScrollDuringRebuild } from '../utils/guardWebKitScrollDuringRebuild';
 import { upsertHostThemeStyle } from '../utils/hostTheme';
 import { isFilePlainText } from '../utils/isFilePlainText';
 import { isStyleNode } from '../utils/isStyleNode';
+import { isSafari } from '../utils/platform';
 import { prerenderHTMLIfNecessary } from '../utils/prerenderHTMLIfNecessary';
 import { getMeasuredScrollbarGutter } from '../utils/scrollbarGutter';
 import { setPreNodeProperties } from '../utils/setWrapperNodeProps';
@@ -1130,24 +1132,39 @@ export class File<
     );
   }
 
+  // A boolean check to ensure that edit mode in WebKit doesn't cause potential
+  // scroll jumps to due bugs with WebKit. The workarounds have performance
+  // implications so we avoid running the workarounds on browsers or scenarios
+  // where they are not applicable
+  protected shouldGuardRebuildScroll(): boolean {
+    return this.editor != null && isSafari();
+  }
+
   private applyFullRender(result: FileRenderResult, pre: HTMLPreElement): void {
     this.cleanupErrorWrapper();
     this.applyPreNodeAttributes(pre, result);
-    this.code = getOrCreateCodeNode({ code: this.code });
+    const code = (this.code = getOrCreateCodeNode({ code: this.code }));
     const codeAst = this.fileRenderer.renderCodeAST(result);
     this.editor?.__captureFocusForDOMReplacement();
-    if (this.code.childElementCount >= 2) {
-      for (let i = 0; i < 2; i++) {
-        const domEl = this.code.children[i] as HTMLElement;
-        const astEl = codeAst[i] as HASTElement;
-        domEl.innerHTML = toHtml(astEl.children);
-        domEl.style.cssText = astEl.properties.style as string;
+    const applyColumns = () => {
+      if (code.childElementCount >= 2) {
+        for (let i = 0; i < 2; i++) {
+          const domEl = code.children[i] as HTMLElement;
+          const astEl = codeAst[i] as HASTElement;
+          domEl.innerHTML = toHtml(astEl.children);
+          domEl.style.cssText = astEl.properties.style as string;
+        }
+      } else {
+        code.innerHTML = toHtml(codeAst);
       }
+      if (!pre.contains(code)) {
+        pre.replaceChildren(code);
+      }
+    };
+    if (this.shouldGuardRebuildScroll()) {
+      guardWebKitScrollDuringRebuild(pre, applyColumns);
     } else {
-      this.code.innerHTML = toHtml(codeAst);
-    }
-    if (!pre.contains(this.code)) {
-      pre.replaceChildren(this.code);
+      applyColumns();
     }
     this.lastRowCount = result.rowCount;
   }

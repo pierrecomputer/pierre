@@ -434,6 +434,115 @@ describe('EditorTokenizer', () => {
     }
   });
 
+  test('settles only net line-count changes for rerendering hosts', () => {
+    let tokenizeLineCount = 0;
+    const grammar = {
+      tokenizeLine2(lineText: string, ruleStack: StateStack) {
+        tokenizeLineCount++;
+        return {
+          tokens: new Uint32Array([0, 0]),
+          ruleStack,
+          stoppedEarly: false,
+          lineText,
+        };
+      },
+    } as unknown as IGrammar;
+    const textDocument = new TextDocument(
+      'test.ts',
+      Array.from({ length: 200 }, (_, i) => `line ${i}`).join('\n'),
+      'typescript'
+    );
+    const tokenizer = new EditorTokenizer({
+      highlighter: createTestHighlighter({
+        getLanguage: () => grammar,
+      }),
+      textDocument,
+      codeOptions: { theme: 'test-theme', themeType: 'dark' },
+      setStyle: noopSetStyle,
+      onDeferTokenize: () => {},
+    });
+    const renderRange = {
+      startingLine: 0,
+      totalLines: 100,
+      bufferBefore: 0,
+      bufferAfter: 0,
+    };
+
+    tokenizer.tokenize(
+      {
+        startLine: 0,
+        startCharacter: 0,
+        endCharacter: 0,
+        endLine: 199,
+        endedAtDocumentEnd: false,
+        previousLineCount: textDocument.lineCount,
+        lineCount: textDocument.lineCount,
+        lineDelta: 0,
+        changes: [],
+        changedLineRanges: [[0, 199]],
+      },
+      renderRange
+    );
+    tokenizer.stopBackgroundTokenize();
+    tokenizeLineCount = 0;
+
+    const insertLine = textDocument.applyEdits([
+      {
+        range: {
+          start: { line: 50, character: 0 },
+          end: { line: 50, character: 0 },
+        },
+        newText: '\n',
+      },
+    ])!;
+    const insertedLines = tokenizer.tokenize(insertLine, renderRange, true);
+
+    expect([...insertedLines.keys()]).toEqual([50, 51]);
+    expect(tokenizeLineCount).toBe(1);
+    tokenizeLineCount = 0;
+
+    const editLowerLine = textDocument.applyEdits([
+      {
+        range: {
+          start: { line: 80, character: 0 },
+          end: { line: 80, character: 0 },
+        },
+        newText: 'changed ',
+      },
+    ])!;
+    const editedLines = tokenizer.tokenize(editLowerLine, renderRange, true);
+
+    expect([...editedLines.keys()]).toEqual([80]);
+    expect(tokenizeLineCount).toBe(1);
+
+    const netZeroChange = textDocument.applyEdits([
+      {
+        range: {
+          start: { line: 10, character: 0 },
+          end: { line: 10, character: 0 },
+        },
+        newText: 'inserted\n',
+      },
+      {
+        range: {
+          start: { line: 20, character: textDocument.getLineText(20).length },
+          end: { line: 21, character: 0 },
+        },
+        newText: '',
+      },
+    ])!;
+    expect(netZeroChange.lineDelta).toBe(0);
+    expect(
+      netZeroChange.changedLineChanges?.map((change) => change[2])
+    ).toEqual([1, -1]);
+
+    const netZeroLines = tokenizer.tokenize(netZeroChange, renderRange, true);
+    expect([...netZeroLines.keys()]).toEqual(
+      Array.from({ length: 90 }, (_, index) => index + 10)
+    );
+    tokenizer.cleanUp();
+  });
+
   test('flushes offscreen line 0 when select-all delete shrinks the document', () => {
     const grammar = {
       tokenizeLine2(lineText: string, ruleStack: StateStack) {

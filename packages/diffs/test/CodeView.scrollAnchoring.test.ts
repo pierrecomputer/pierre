@@ -5,6 +5,7 @@ import { DEFAULT_CODE_VIEW_LAYOUT } from '../src/constants';
 import type { CodeViewItem, FileContents } from '../src/types';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import {
+  createRoot,
   dispatchScroll,
   installDom,
   makeFile,
@@ -231,9 +232,15 @@ describe('CodeView scroll anchoring', () => {
       expect((container as HTMLElement).style.height).toBe(
         `${SCROLL_REBASE_CONTAINER_HEIGHT}px`
       );
+      const stickyOffset = (container as HTMLElement).firstElementChild;
+      expect(stickyOffset).toBeInstanceOf(HTMLElement);
+      expect((stickyOffset as HTMLElement).style.height).not.toBe('');
 
-      viewer.setItems([]);
-      expect((container as HTMLElement).style.height).toBe('');
+      await renderItems(viewer, []);
+      expect((container as HTMLElement).style.height).toBe('0px');
+      // An emptied viewer sheds the sticky spacer height along with its
+      // items; a stale spacer would keep phantom space in the container.
+      expect((stickyOffset as HTMLElement).style.height).toBe('');
 
       await renderItems(viewer, secondItems);
 
@@ -244,6 +251,181 @@ describe('CodeView scroll anchoring', () => {
       expect(getRootMaxScrollTop(root)).toBeGreaterThan(
         SCROLL_REBASE_THRESHOLD
       );
+    } finally {
+      viewer.cleanUp();
+      await wait(0);
+      cleanup();
+    }
+  });
+
+  test('keeps a rendered item anchored when reconcileItems removes earlier items', async () => {
+    const { cleanup } = installDom();
+    const viewer = new CodeView();
+    const root = createRoot({ height: ROOT_HEIGHT });
+    const items = Array.from({ length: 60 }, (_, index) =>
+      makeFileItem(`file:${index}`, 5 + ((index * 7) % 15))
+    );
+    const anchorId = 'file:30';
+
+    try {
+      viewer.setup(root);
+      await renderItems(viewer, items);
+
+      viewer.scrollTo({
+        type: 'item',
+        id: anchorId,
+        align: 'start',
+        behavior: 'instant',
+      });
+      viewer.render(true);
+      await wait(0);
+
+      const anchorTopBeforeRemoval = viewer.getTopForItem(anchorId) ?? 0;
+      const scrollTopBeforeRemoval = viewer.getScrollTop();
+
+      // Remove several earlier items in one call, well outside the current
+      // render window but still shifting the index (and therefore the top
+      // offset) of every item at or after them, including the anchor. A
+      // single removal isn't enough here, even giving the removed item a
+      // very different height from its neighbors: the stale scan is off by
+      // exactly one slot, which almost always still resolves to the very
+      // next real item, and that item's own recomputed shift is identical
+      // regardless of what was removed, so the error cancels out. Only a
+      // shift big enough to carry the stale, off-by-N read past the old
+      // viewport/overscan bounds makes the search fail outright, which is
+      // what removing 10 items in one call reliably does.
+      const removedIds = new Set(
+        Array.from({ length: 10 }, (_, index) => `file:${index}`)
+      );
+      viewer.setItems(items.filter((item) => !removedIds.has(item.id)));
+      viewer.render(true);
+      await wait(0);
+
+      const anchorTopAfterRemoval = viewer.getTopForItem(anchorId) ?? 0;
+      const scrollTopAfterRemoval = viewer.getScrollTop();
+
+      // The anchor shifted up by the removed items' combined height. A
+      // correct anchor keeps it fixed in the viewport, so the scroll
+      // position must shift by the same delta. Without capturing the anchor
+      // before the reindex, the anchor scan instead finds nothing (it reads
+      // stale, not-yet-relaid-out positions through the new index mapping)
+      // and scrollTop is left stuck at its old value.
+      const anchorShift = anchorTopBeforeRemoval - anchorTopAfterRemoval;
+      expect(anchorShift).toBeGreaterThan(0);
+      expect(scrollTopBeforeRemoval - scrollTopAfterRemoval).toBe(anchorShift);
+    } finally {
+      viewer.cleanUp();
+      await wait(0);
+      cleanup();
+    }
+  });
+
+  test('anchors the next item at the top when reconcileItems removes the only visible anchor', async () => {
+    const { cleanup } = installDom();
+    const viewer = new CodeView();
+    const root = createRoot({ height: ROOT_HEIGHT });
+    const removedId = 'diff:removed-anchor';
+    const nextId = 'file:after-anchor';
+    const items: CodeViewItem[] = [
+      makeFileItem('file:before-anchor', 120),
+      makeReplacementDiffItem(removedId, 240),
+      makeFileItem(nextId, 80),
+      ...Array.from({ length: 8 }, (_, index) =>
+        makeFileItem(`file:trailing-${index}`, 80)
+      ),
+    ];
+
+    try {
+      viewer.setup(root);
+      await renderItems(viewer, items);
+
+      viewer.scrollTo({
+        type: 'line',
+        id: removedId,
+        lineNumber: 80,
+        side: 'additions',
+        align: 'start',
+        behavior: 'instant',
+      });
+      viewer.render(true);
+      await wait(0);
+
+      // Keep the successor outside the old render window so reconciliation
+      // has to anchor its item header at the top instead of finding a visible
+      // survivor.
+      expect(viewer.getRenderedItems().some((item) => item.id === nextId)).toBe(
+        false
+      );
+
+      viewer.setItems(items.filter((item) => item.id !== removedId));
+      viewer.render(true);
+      await wait(0);
+
+      const nextTop = viewer.getTopForItem(nextId);
+      if (nextTop == null) {
+        throw new Error('expected the promoted successor');
+      }
+      expect(nextTop - viewer.getScrollTop()).toBe(0);
+    } finally {
+      viewer.cleanUp();
+      await wait(0);
+      cleanup();
+    }
+  });
+
+  test('skips a removed line anchor for a visible surviving item', async () => {
+    const { cleanup } = installDom();
+    const viewer = new CodeView();
+    const root = createRoot({ height: ROOT_HEIGHT });
+    const removedId = 'diff:visible-removed-anchor';
+    const nextId = 'file:visible-after-anchor';
+    const items: CodeViewItem[] = [
+      makeFileItem('file:visible-before-anchor', 100),
+      makeReplacementDiffItem(removedId, 12),
+      makeFileItem(nextId, 40),
+      makeFileItem('file:visible-trailing', 100),
+    ];
+
+    try {
+      viewer.setup(root);
+      await renderItems(viewer, items);
+
+      viewer.scrollTo({
+        type: 'line',
+        id: removedId,
+        lineNumber: 4,
+        side: 'additions',
+        align: 'start',
+        behavior: 'instant',
+      });
+      viewer.render(true);
+      await wait(0);
+
+      expect(viewer.getRenderedItems().some((item) => item.id === nextId)).toBe(
+        true
+      );
+      const nextTopBeforeRemoval = viewer.getTopForItem(nextId);
+      if (nextTopBeforeRemoval == null) {
+        throw new Error('expected the visible successor');
+      }
+      const nextViewportOffset =
+        DEFAULT_CODE_VIEW_LAYOUT.paddingTop +
+        nextTopBeforeRemoval -
+        viewer.getScrollTop();
+
+      viewer.setItems(items.filter((item) => item.id !== removedId));
+      viewer.render(true);
+      await wait(0);
+
+      const nextTopAfterRemoval = viewer.getTopForItem(nextId);
+      if (nextTopAfterRemoval == null) {
+        throw new Error('expected the surviving item');
+      }
+      expect(
+        DEFAULT_CODE_VIEW_LAYOUT.paddingTop +
+          nextTopAfterRemoval -
+          viewer.getScrollTop()
+      ).toBe(nextViewportOffset);
     } finally {
       viewer.cleanUp();
       await wait(0);

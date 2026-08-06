@@ -27,6 +27,7 @@ import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
 import { isGutterUtilityPath } from '../utils/isGutterUtilityPath';
 import {
   type EditorCommand,
+  type EditorKeymap,
   resolveEditorCommandFromKeyboardEvent,
   resolveFindAgainShortcut,
 } from './command';
@@ -133,6 +134,7 @@ import {
   extend,
   getLineNumberAttr,
   h,
+  lookupScrollContainer,
   round,
 } from './utils';
 
@@ -188,9 +190,16 @@ interface EditorAttachState {
   delivered: boolean;
 }
 
+interface ViewportInputWatch {
+  userScrolled(): boolean;
+  dispose(): void;
+}
+
 export interface EditorOptions<LAnnotation> {
   /** The maximum number of entries to keep in the undo stack. */
   historyMaxEntries?: number;
+  /** Custom keymap groups checked before defaults; later groups take precedence. */
+  keymap?: EditorKeymap;
   /**
    * Preserve each file's document and item-local editor state when switching files.
    * Every editable file must provide a unique, stable `cacheKey`.
@@ -640,6 +649,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         fileInstance != null
           ? {
               scrollLeft: fileInstance.getCodeScrollLeft(),
+              scrollTop: this.#getViewportScrollTop(),
             }
           : undefined,
     };
@@ -661,6 +671,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     // sits outside that viewport (e.g. TreeApp remount restore).
     if (view != null) {
       this.#fileInstance.setCodeScrollLeft(view.scrollLeft);
+      // Records persisted before scrollTop existed lack it: leave the
+      // viewport where it is rather than guessing.
+      if (view.scrollTop !== undefined) {
+        this.#setViewportScrollTop(view.scrollTop);
+      }
       return;
     }
     this.#scrollToPrimaryCaret();
@@ -781,7 +796,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
     const fileInstance = this.#fileInstance;
     const hadFileInstance = fileInstance != null;
-    const shouldRestoreState = this.#isStatePersistenceEnabled;
+    const shouldRestoreState = this.#options.persistState === true;
     this.#stateRestoreGeneration++;
     this.#persistCurrentState();
     if (hadFileInstance) {
@@ -997,9 +1012,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#fileInfo.name !== fileOrDiff.name ||
       this.#fileInfo.lang !== fileOrDiff.lang ||
       this.#fileInfo.cacheKey !== fileOrDiff.cacheKey;
-    const persistedCacheKey = this.#isStatePersistenceEnabled
-      ? requirePersistedCacheKey(fileOrDiff)
-      : undefined;
+    const persistedCacheKey =
+      this.#options.persistState === true
+        ? requirePersistedCacheKey(fileOrDiff)
+        : undefined;
 
     let persistedStateTarget:
       | { cacheKey: string; textDocument: TextDocument<LAnnotation> }
@@ -1022,8 +1038,15 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         persistedCacheKey !== undefined
           ? this.#getCachedTextDocument(fileOrDiff, persistedCacheKey)
           : undefined;
+      // A File render substitutes cached text before painting (see
+      // __prepareFile), so its DOM always matches a reused document.
+      const reusableTextDocument =
+        fileInstance.type === 'file' ||
+        cachedTextDocument?.getText() === contents
+          ? cachedTextDocument
+          : undefined;
       const textDocument =
-        cachedTextDocument ??
+        reusableTextDocument ??
         new TextDocument(fileOrDiff.name, contents, languageId, 0, editStack);
       this.#fileInfo = { name, lang, cacheKey };
       this.#textDocument = textDocument;
@@ -1042,9 +1065,13 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       // content element must drop the previous document's measurements here.
       this.#wrapLineOffsetsCache.clear();
       this.#selections = this.#initSelections;
-      if (this.#textDocument !== undefined && this.#options.__debug === true) {
+      if (this.#options.__debug === true) {
+        // A reused document keeps its undo history; only the fallback path
+        // actually rebuilds one from the host's contents.
         console.log(
-          '[diffs/editor] text document rebuilt from',
+          reusableTextDocument !== undefined
+            ? '[diffs/editor] cached text document reused for'
+            : '[diffs/editor] text document rebuilt from',
           fileOrDiff.name
         );
       }
@@ -1225,12 +1252,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#scheduleOnAttach(fileInstance);
   };
 
-  get #isStatePersistenceEnabled(): boolean {
-    return (
-      this.#options.persistState === true && this.#fileInstance?.type === 'file'
-    );
-  }
-
   #getCachedTextDocument(
     file: FileContents | FileDiffMetadata,
     cacheKey: string
@@ -1256,7 +1277,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     const fileInfo = this.#fileInfo;
     const textDocument = this.#textDocument;
     if (
-      !this.#isStatePersistenceEnabled ||
+      this.#options.persistState !== true ||
+      // Requires an attached instance: a repeated cleanUp still holds the
+      // retained fileInfo but must not write (empty) state over the record
+      // the first cleanUp persisted.
+      this.#fileInstance === undefined ||
       fileInfo === undefined ||
       textDocument === undefined
     ) {
@@ -1283,7 +1308,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         textDocument.version === pendingRestore.documentVersion &&
         this.#foldStateVersion === pendingRestore.foldStateVersion &&
         this.#selections === pendingRestore.selections &&
-        state.view?.scrollLeft === pendingRestore.view?.scrollLeft
+        state.view?.scrollLeft === pendingRestore.view?.scrollLeft &&
+        state.view?.scrollTop === pendingRestore.view?.scrollTop
       ) {
         return;
       }
@@ -1346,10 +1372,14 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     const foldStateVersion = this.#foldStateVersion;
     const selections = this.#selections;
     const view = this.getState().view;
+    let inputWatch: ViewportInputWatch | undefined;
     const applyState = (state: EditorState | undefined): void => {
       const currentView = this.getState().view;
+      // scrollTop is deliberately not part of this staleness check: the
+      // surface can legitimately adjust vertical scroll while an async read
+      // is in flight (height reconciliation, clamping), and that must not
+      // block the restore. User scrolls are detected by `inputWatch` instead.
       if (
-        state === undefined ||
         generation !== this.#stateRestoreGeneration ||
         this.#textDocument !== textDocument ||
         textDocument.version !== documentVersion ||
@@ -1361,7 +1391,25 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       ) {
         return;
       }
-      this.setState(cloneEditorState(state));
+      // Once the user engages the viewport, the vertical position is theirs:
+      // neither the first-open reset nor a stored scrollTop may move it.
+      const userScrolled = inputWatch?.userScrolled() === true;
+      if (state === undefined) {
+        // No stored record for this cacheKey — the file is opened for the
+        // first time. Start the code scroller and the viewport at the top
+        // instead of inheriting whatever offset the previous file left in a
+        // viewport that stays mounted across switches.
+        this.#fileInstance?.setCodeScrollLeft(0);
+        if (!userScrolled) {
+          this.#setViewportScrollTop(0);
+        }
+        return;
+      }
+      const restored = cloneEditorState(state);
+      if (userScrolled && restored.view !== undefined) {
+        restored.view = { scrollLeft: restored.view.scrollLeft };
+      }
+      this.setState(restored);
     };
     const readState = (): void | Promise<void> => {
       let result: EditorState | undefined | Promise<EditorState | undefined>;
@@ -1383,6 +1431,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     const result =
       pendingWrite === undefined ? readState() : pendingWrite.then(readState);
     if (isPromise(result)) {
+      inputWatch = this.#watchViewportUserInput();
       const pendingRestore = {
         cacheKey,
         textDocument,
@@ -1394,6 +1443,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       };
       this.#pendingStateRestore = pendingRestore;
       void pendingRestore.completion.finally(() => {
+        inputWatch?.dispose();
         if (this.#pendingStateRestore === pendingRestore) {
           this.#pendingStateRestore = undefined;
         }
@@ -2042,6 +2092,31 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
   }
 
+  #watchViewportUserInput(): ViewportInputWatch | undefined {
+    const viewport = this.#getScrollViewport();
+    if (!(viewport instanceof HTMLElement)) {
+      return undefined;
+    }
+    let scrolled = false;
+    const eventTypes = ['wheel', 'touchstart', 'mousedown'] as const;
+    const dispose = (): void => {
+      for (const type of eventTypes) {
+        viewport.removeEventListener(type, onInput, { capture: true });
+      }
+    };
+    const onInput = (): void => {
+      scrolled = true;
+      dispose();
+    };
+    for (const type of eventTypes) {
+      viewport.addEventListener(type, onInput, {
+        capture: true,
+        passive: true,
+      });
+    }
+    return { userScrolled: () => scrolled, dispose };
+  }
+
   // Whether a zero-based document line has (or will have on scroll) a rendered
   // row. File folds and collapsed diff regions share this visibility gate.
   #isLineRenderable(line: number): boolean {
@@ -2211,6 +2286,37 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     };
     attachState.callback = callback;
     queueRender(callback);
+  }
+
+  // Get the editor's scrolling viewport, return undefined if the Virtualizer
+  // is not present.`
+  #getScrollViewport(): HTMLElement | Document | undefined {
+    const viewport = this.#fileInstance?.getEditorViewport?.();
+    if (viewport !== undefined) {
+      return viewport;
+    }
+    const fileContainer = this.#fileContainer;
+    if (this.#fileInstance == null || fileContainer == null) {
+      return undefined;
+    }
+    return lookupScrollContainer(fileContainer);
+  }
+
+  #getViewportScrollTop(): number {
+    const viewport = this.#getScrollViewport();
+    if (viewport instanceof HTMLElement) {
+      return viewport.scrollTop;
+    }
+    return viewport?.defaultView?.scrollY ?? 0;
+  }
+
+  #setViewportScrollTop(scrollTop: number): void {
+    const viewport = this.#getScrollViewport();
+    if (viewport instanceof HTMLElement) {
+      viewport.scrollTop = scrollTop;
+    } else if (viewport instanceof Document) {
+      viewport.defaultView?.scrollTo({ top: scrollTop });
+    }
   }
 
   #initialize(): void {
@@ -2615,16 +2721,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       ),
 
       addEventListener(contentEl, 'keydown', (e) => {
-        if (e.key === 'Escape') {
-          e.preventDefault();
-          this.#searchPanel?.close();
-          this.#searchPanel = undefined;
-          this.#retainSearchPanelFocus = false;
-          this.#selectionAction?.cleanup();
-          this.#selectionAction = undefined;
-          this.#runCommand('simplifySelection');
-          return;
-        }
         if (!targetIsContentElement(e)) {
           return;
         }
@@ -2632,6 +2728,23 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         // A keystroke is the user acting on the select-all selection (deleting,
         // typing, moving); let selectionchange sync #selections again.
         this.#suppressNativeSelectionSync = false;
+
+        const command = resolveEditorCommandFromKeyboardEvent(
+          e,
+          this.#options.keymap
+        );
+        if (command !== undefined) {
+          e.preventDefault();
+          if (command === 'simplifySelection') {
+            this.#searchPanel?.close();
+            this.#searchPanel = undefined;
+            this.#retainSearchPanelFocus = false;
+            this.#selectionAction?.cleanup();
+            this.#selectionAction = undefined;
+          }
+          this.#runCommand(command);
+          return;
+        }
 
         // handle the cursor move events manually for multiple selections and virtual viewport
         const mvShortcut = isMoveCursorShortcut(e);
@@ -2644,7 +2757,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         ) {
           const cursorMoveOptions: CursorMoveOptions = {
             getSoftLineOffsets: this.#isWrap
-              ? (line) => this.#wrapLineText(line)
+              ? (line) => this.#wrapLineTextOrWholeLine(line)
               : undefined,
             resolveRenderableLine: this.#resolveRenderableLine,
           };
@@ -2698,12 +2811,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
             this.#searchPanel.navigate(findAgain === 'previous');
             return;
           }
-        }
-
-        const command = resolveEditorCommandFromKeyboardEvent(e);
-        if (command !== undefined) {
-          e.preventDefault();
-          this.#runCommand(command);
         }
       }),
 
@@ -3885,7 +3992,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     tokenizer.stopBackgroundTokenize();
 
     const t = performance.now();
-    const dirtyLines = tokenizer.tokenize(change, renderRange);
+    const dirtyLines = tokenizer.tokenize(change, renderRange, !this.#isDiff);
     const t2 = performance.now();
 
     if (dirtyLines.size > 0) {
@@ -4242,9 +4349,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     ) {
       return undefined;
     }
-    const viewport =
-      this.#fileInstance?.getEditorViewport?.() ??
-      this.#getDefaultEditorViewport(fileContainer);
+
+    const viewport = this.#getScrollViewport();
+    if (viewport === undefined) {
+      return undefined;
+    }
 
     let viewportTop: number;
     let viewportBottom: number;
@@ -4253,12 +4362,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       viewportTop = viewportRect.top;
       viewportBottom = viewportRect.bottom;
     } else {
-      const viewportWindow = viewport.defaultView;
-      if (viewportWindow == null) {
-        return undefined;
-      }
       viewportTop = 0;
-      viewportBottom = viewportWindow.innerHeight;
+      viewportBottom = viewport.defaultView?.innerHeight ?? 0;
     }
 
     const stickyHeader = fileContainer.shadowRoot?.querySelector<HTMLElement>(
@@ -4293,32 +4398,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       }
     }
     return undefined;
-  }
-
-  // Non-virtualized surfaces inherit visibility from their nearest vertical
-  // scrollport; page-scrolling surfaces use the owning document.
-  #getDefaultEditorViewport(
-    fileContainer: HTMLElement
-  ): HTMLElement | Document {
-    const ownerDocument = fileContainer.ownerDocument;
-    let element = fileContainer.parentElement;
-    while (
-      element != null &&
-      element !== ownerDocument.body &&
-      element !== ownerDocument.documentElement
-    ) {
-      const overflowY =
-        element.ownerDocument.defaultView?.getComputedStyle(element).overflowY;
-      if (
-        overflowY === 'auto' ||
-        overflowY === 'scroll' ||
-        overflowY === 'overlay'
-      ) {
-        return element;
-      }
-      element = element.parentElement;
-    }
-    return ownerDocument;
   }
 
   #focusAtPosition(position: Position, preventScroll: boolean): void {
@@ -5054,7 +5133,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     type: 'selection' | 'match' | 'marker' | 'bracketMatch',
     extraDataset?: string
   ) {
-    const wrapOffsets = this.#wrapLineText(line);
+    const wrapOffsets = this.#wrapLineTextOrWholeLine(line);
     const segmentCount = wrapOffsets.length - 1;
     // offsetLeft is the x of the content's left edge in overlay coordinates.
     // In a split diff with wrapping the content element is a grid item shifted
@@ -5428,7 +5507,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     const popoverHeight = this.#selectionAction.height;
     const candidateGeometry = (
       candidate: typeof preferred
-    ): PopoverPlacementBounds & { left: number; anchorTop: number } => {
+    ): PopoverPlacementBounds & {
+      left: number;
+      anchorTop: number;
+      rowTop: number;
+    } => {
       const [left, candidateWrapLine] = this.#getCharX(
         candidate.anchor.line,
         candidate.anchor.character
@@ -5437,20 +5520,21 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         this.#getLineY(candidate.anchor.line) + candidateWrapLine * lineHeight;
       const anchorTop = candidate.placeAbove ? rowTop : rowTop + lineHeight;
       const top = candidate.placeAbove ? anchorTop - popoverHeight : anchorTop;
-      return { top, bottom: top + popoverHeight, left, anchorTop };
+      return { top, bottom: top + popoverHeight, left, anchorTop, rowTop };
     };
     const preferredGeometry = candidateGeometry(preferred);
-    const fallbackGeometry = candidateGeometry(fallback);
 
     const lineCount = textDocument.lineCount;
     const atDocumentEdge = isBackward
       ? head.line < POPOVER_BOUNDARY_LINES
       : head.line >= lineCount - POPOVER_BOUNDARY_LINES;
-    const canUseFallback = this.#isLineVisible(fallback.anchor.line);
+    const fallbackGeometry = this.#isLineVisible(fallback.anchor.line)
+      ? candidateGeometry(fallback)
+      : undefined;
     const popoverManager = this.#getPopoverManager();
     const viewport = popoverManager.getPlacementBounds();
     const useFallback =
-      canUseFallback &&
+      fallbackGeometry !== undefined &&
       popoverManager.choosePlacement({
         preferred: preferredGeometry,
         fallback: fallbackGeometry,
@@ -5459,22 +5543,40 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         atDocumentEdge,
         placementKey: SELECTION_ACTION_POPOVER_PLACEMENT_KEY,
       }) === 'fallback';
-    if (!canUseFallback) {
+    if (fallbackGeometry === undefined) {
       popoverManager.setPlacement(
         'preferred',
         SELECTION_ACTION_POPOVER_PLACEMENT_KEY
       );
     }
     const { placeAbove } = useFallback ? fallback : preferred;
-    const { left, anchorTop } = useFallback
-      ? fallbackGeometry
-      : preferredGeometry;
+    const { left, anchorTop } =
+      useFallback && fallbackGeometry !== undefined
+        ? fallbackGeometry
+        : preferredGeometry;
+    // An endpoint outside the virtualized window extends past the viewport
+    // rather than making a selection that crosses it look offscreen.
+    const selectionTop = isBackward
+      ? preferredGeometry.rowTop
+      : (fallbackGeometry?.rowTop ?? -Infinity);
+    const selectionBottom =
+      (isBackward
+        ? (fallbackGeometry?.rowTop ?? Infinity)
+        : preferredGeometry.rowTop) +
+      (primarySelection.end.line > primarySelection.start.line &&
+      primarySelection.end.character === 0
+        ? 0
+        : lineHeight);
+    const isSelectionVisible =
+      viewport === undefined ||
+      (selectionBottom > viewport.top && selectionTop < viewport.bottom);
 
     this.#selectionAction.reposition(
       left,
       anchorTop,
       this.#getGutterWidth(),
       placeAbove,
+      isSelectionVisible,
       viewport
     );
   }
@@ -5809,7 +5911,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
     const getSoftLineStart = this.#isWrap
       ? (line: number, character: number) => {
-          const wrapOffsets = this.#wrapLineText(line);
+          const wrapOffsets = this.#wrapLineTextOrWholeLine(line);
           for (let w = 0; w + 1 < wrapOffsets.length; w++) {
             const segmentStart = wrapOffsets[w];
             const segmentEnd = wrapOffsets[w + 1];
@@ -6301,6 +6403,15 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         2 * this.#metrics.ch + this.#metrics.measureTextWidth(lineText);
       if (textWidth > contentWidth) {
         const wrapOffsets = this.#wrapLineText(line);
+        // undefined means the wrap offsets could not be measured — the
+        // content element is detached or has no layout (see #wrapLineText).
+        // Fall back to an unwrapped position, and return before the
+        // #lastAccessedCharX write below so nothing derived from the
+        // unmeasurable DOM gets memoized; the next call re-measures against
+        // live layout.
+        if (wrapOffsets == null) {
+          return [left + (this.#activeContentOffset?.left ?? 0), 0];
+        }
         for (let w = 0; w + 1 < wrapOffsets.length; w++) {
           const segmentStart = wrapOffsets[w];
           const segmentEnd = wrapOffsets[w + 1];
@@ -6341,7 +6452,17 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
   // Compute how a logical line of text is broken into visual lines when line
   // wrapping is enabled.
-  #wrapLineText(line: number): Uint32Array {
+  //
+  // Returns undefined when the offsets cannot be measured: measurement works
+  // by appending a hidden probe to #contentElement, so a detached or
+  // zero-width content element (both occur while a session re-render replaces
+  // the code columns) would report "never wraps" for any line. That result is
+  // never returned or cached — a cached wrong answer would keep placing
+  // carets at unwrapped positions until an unrelated edit evicted it. Callers
+  // that need best-effort segmentation use #wrapLineTextOrWholeLine;
+  // #getCharX propagates the undefined so its own memoization is skipped
+  // too.
+  #wrapLineText(line: number): Uint32Array | undefined {
     const cachedOffsets = this.#wrapLineOffsetsCache.get(line);
     if (cachedOffsets !== undefined) {
       return cachedOffsets;
@@ -6355,6 +6476,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       const offsets = new Uint32Array([0]);
       this.#wrapLineOffsetsCache.set(line, offsets);
       return offsets;
+    }
+
+    const contentElement = this.#contentElement;
+    if (contentElement == null || !contentElement.isConnected) {
+      return undefined;
     }
 
     const div = h(
@@ -6376,16 +6502,19 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         },
         textContent: lineText,
       },
-      this.#contentElement
+      contentElement
     );
     const textNode = div.firstChild as Text;
     const range = document.createRange();
     const starts: number[] = [];
 
     try {
+      const divRect = div.getBoundingClientRect();
+      if (divRect.width === 0) {
+        return undefined;
+      }
       const unicodeOffsets = getUnicodeMeasurementOffsets(lineText);
-      const wrapLineStartLeft =
-        div.getBoundingClientRect().left + this.#metrics.ch;
+      const wrapLineStartLeft = divRect.left + this.#metrics.ch;
 
       // Measurement steps through grapheme clusters when the text needs
       // Unicode-aware boundaries, single UTF-16 units otherwise. Grapheme
@@ -6446,6 +6575,19 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     } finally {
       div.remove();
     }
+  }
+
+  // #wrapLineText for callers that need usable offsets even when measurement
+  // is impossible (undefined): treats the line as one unwrapped segment.
+  // Safe because the fallback is never cached — once the content element is
+  // measurable again, the same call returns real offsets.
+  #wrapLineTextOrWholeLine(line: number): Uint32Array {
+    const offsets = this.#wrapLineText(line);
+    if (offsets !== undefined) {
+      return offsets;
+    }
+    const length = this.#textDocument?.getLineText(line)?.length ?? 0;
+    return Uint32Array.of(0, length);
   }
 
   // check if the web selection belongs to editor

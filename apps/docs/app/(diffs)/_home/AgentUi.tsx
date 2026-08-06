@@ -2,7 +2,7 @@
 
 import { DEFAULT_THEMES, type FileDiffMetadata } from '@pierre/diffs';
 import type { EditorOptions } from '@pierre/diffs/edit';
-import { File, FileDiff } from '@pierre/diffs/react';
+import { File, FileDiff, Virtualizer } from '@pierre/diffs/react';
 import {
   IconArrow,
   IconChevronSm,
@@ -21,7 +21,6 @@ import {
   type CSSProperties,
   useCallback,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -41,12 +40,6 @@ import {
   getSessionGitStatus,
   getSessionPaths,
 } from './mockData';
-// Runs as a layout effect in the browser (so DOM reads/writes land before the
-// next paint) but falls back to useEffect during SSR, where useLayoutEffect
-// would warn. The demo is server-rendered, so the fallback matters.
-const useIsomorphicLayoutEffect =
-  typeof window === 'undefined' ? useEffect : useLayoutEffect;
-
 // Added/removed line totals for a single file's diff.
 interface DiffStats {
   additions: number;
@@ -64,33 +57,6 @@ function countDiffStats(diff: FileDiffMetadata): DiffStats {
     deletions += hunk.deletionLines;
   }
   return { additions, deletions };
-}
-
-// The editor's stylesheet flattens every line number to one neutral colour
-// (`--diffs-editor-line-number-fg`) and is injected as an unlayered <style>,
-// so it overrides the library's per-line colouring (which lives in @layer
-// base). We adopt this extra, higher-specificity unlayered sheet into the
-// editor's shadow root to restore jade/red numbers for added and deleted
-// lines, while leaving the active/selected line to the editor's own styling.
-const LINE_NUMBER_COLOR_CSS = `
-[data-column-number][data-line-type='change-addition']:not([data-selected-line]):not([data-editor-active-line]) {
-  color: var(--diffs-addition-base);
-}
-[data-column-number][data-line-type='change-deletion']:not([data-selected-line]):not([data-editor-active-line]) {
-  color: var(--diffs-deletion-base);
-}
-`;
-
-let lineNumberColorSheet: CSSStyleSheet | null = null;
-function getLineNumberColorSheet(): CSSStyleSheet | null {
-  if (typeof CSSStyleSheet === 'undefined') {
-    return null;
-  }
-  if (lineNumberColorSheet == null) {
-    lineNumberColorSheet = new CSSStyleSheet();
-    lineNumberColorSheet.replaceSync(LINE_NUMBER_COLOR_CSS);
-  }
-  return lineNumberColorSheet;
 }
 
 // `renderSelectionAction` returns a plain DOM node, not React, and renders into
@@ -450,28 +416,6 @@ function makeAddedFile(path: string): AuiChangedFile {
     additions: countLines(contents),
     deletions: 0,
   };
-}
-
-// A placeholder file (one outside the agent's change set) that the user edited,
-// modeled as a "modified" change diffing the original placeholder contents
-// against the live edits. This surfaces it in the Changes panel with tracked
-// +/- counts even though it was never part of the original session.
-function makeEditedPlaceholder(path: string, after: string): AuiChangedFile {
-  const before = getPlaceholderContents(path);
-  const stats = countDiffStats(
-    getFileDiff(
-      {
-        path,
-        status: 'modified',
-        before,
-        after: before,
-        additions: 0,
-        deletions: 0,
-      },
-      after
-    )
-  );
-  return { path, status: 'modified', before, after, ...stats };
 }
 
 // Toolbar above the file explorer: New file, New folder, and the search toggle.
@@ -1026,27 +970,48 @@ export function AgentUi({
   const recordEditedStatsRef = useRef(recordEditedStats);
   recordEditedStatsRef.current = recordEditedStats;
 
-  // Persisted in-editor edits keyed by path, so switching files keeps the
-  // agent's tweaked output.
-  const editsRef = useRef<Map<string, string>>(new Map());
+  // One FileDiffMetadata per changed file, parsed on first visit and reused
+  // on every revisit. Edit sessions write edits back into the metadata (the
+  // library treats the host's metadata as the diff's content owner and
+  // self-heals session-shaped metadata on re-render), so reusing the object
+  // is what keeps a diff's edited content across file switches — the editor's
+  // persist-state API covers only selections and scroll for diffs.
+  // Placeholder File surfaces need no equivalent: with `persistState` on the
+  // shared editor, the per-cacheKey document cache restores their edited
+  // contents (and undo history) on re-attach.
+  const diffsRef = useRef<Map<string, FileDiffMetadata>>(new Map());
+  // Paths the user has edited. Only consulted to stop an edited file from
+  // hydrating out of its prerendered (pristine) server HTML on revisit.
+  const editedPathsRef = useRef<Set<string>>(new Set());
   // The stable onChange callback has no path argument, so track its live target
   // here.
   const activeTargetRef = useRef<string | null>(null);
   useEffect(() => {
     activeTargetRef.current = activePath;
   }, [activePath]);
+  // The path the editor was last attached to, so onAttach can tell a file
+  // switch (refocus the editor) from the initial mount (leave page focus
+  // alone).
+  const lastAttachedPathRef = useRef<string | null>(null);
 
-  // Edited placeholder files modeled as "modified" changes from their live
-  // edits. Recomputed when the tracked set changes (each edit also refreshes the
-  // displayed counts via `liveStats`, so the row decoration stays current).
+  // Edited placeholder files listed in the Changes panel as "modified". The
+  // entries carry zero snapshot counts because the tree's row decoration
+  // always finds live counts in `liveStats` for tracked placeholders; the
+  // edited contents themselves live in the shared editor's persist-state
+  // document cache, not here.
   const editedPlaceholderFiles = useMemo<AuiChangedFile[]>(
     () =>
-      editedPlaceholders.map((path) =>
-        makeEditedPlaceholder(
+      editedPlaceholders.map((path) => {
+        const before = getPlaceholderContents(path);
+        return {
           path,
-          editsRef.current.get(path) ?? getPlaceholderContents(path)
-        )
-      ),
+          status: 'modified' as const,
+          before,
+          after: before,
+          additions: 0,
+          deletions: 0,
+        };
+      }),
     [editedPlaceholders]
   );
 
@@ -1064,6 +1029,7 @@ export function AgentUi({
 
   const editorOptions = useMemo<EditorOptions<undefined>>(
     () => ({
+      persistState: true,
       enabledSelectionAction: true,
       renderSelectionAction(selectionAction) {
         const container = document.createElement('div');
@@ -1104,12 +1070,28 @@ export function AgentUi({
         container.append(addToChat, copy);
         return container;
       },
+      onAttach(editor) {
+        // Selecting a file leaves keyboard focus in the tree, so undo/redo
+        // shortcuts would silently go nowhere until the user clicks back into
+        // the code — reading as a lost edit history even though the
+        // persist-state document cache restored it. When a file switch lands,
+        // hand focus to the editor; preventScroll keeps the restored viewport
+        // position. The initial auto-opened file must not steal page focus.
+        const target = activeTargetRef.current;
+        if (
+          lastAttachedPathRef.current !== null &&
+          lastAttachedPathRef.current !== target
+        ) {
+          editor.focus({ preventScroll: true });
+        }
+        lastAttachedPathRef.current = target;
+      },
       onChange(file) {
         const target = activeTargetRef.current;
         if (target == null) {
           return;
         }
-        editsRef.current.set(target, file.contents);
+        editedPathsRef.current.add(target);
         // Recompute the edited file's diff against its original snapshot so the
         // Changes tree's +/- totals reflect the live edits.
         recordEditedStatsRef.current(target, file.contents);
@@ -1143,56 +1125,29 @@ export function AgentUi({
     [activePath, activeFile]
   );
 
-  const editKey = activeFile?.path ?? '';
-
-  // Rebuild the diff surface whenever the active file changes, substituting any
-  // persisted edits for the snapshot's `after`.
-  const fileDiff = useMemo(
-    () =>
-      activeFile != null
-        ? getFileDiff(activeFile, editsRef.current.get(editKey))
-        : null,
-    [activeFile, editKey]
-  );
+  // The active file's diff metadata: parsed once on first visit, then reused
+  // from the cache so revisits render the content the last edit session wrote
+  // back into it.
+  const fileDiff = useMemo(() => {
+    if (activeFile == null) {
+      return null;
+    }
+    let diff = diffsRef.current.get(activeFile.path);
+    if (diff == null) {
+      diff = getFileDiff(activeFile);
+      diffsRef.current.set(activeFile.path, diff);
+    }
+    return diff;
+  }, [activeFile]);
 
   // Server-rendered, already-highlighted HTML for the active diff. Only safe
   // when the file is unedited so the markup matches `fileDiff`.
   const activePrerenderedHTML =
-    activePath != null && editsRef.current.get(editKey) == null
+    activePath != null && !editedPathsRef.current.has(activePath)
       ? prerenderedDiffs?.[activePath]
       : undefined;
 
   const breadcrumbSegments = activePath != null ? activePath.split('/') : [];
-
-  // Re-adopt the jade/red line-number override whenever the diff surface is
-  // rebuilt (each file switch remounts the diffs-container with a fresh shadow
-  // root).
-  const surfaceWrapRef = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    const sheet = getLineNumberColorSheet();
-    if (sheet == null) {
-      return;
-    }
-    const container = surfaceWrapRef.current?.querySelector('.aui-surface');
-    const shadowRoot = container?.shadowRoot;
-    if (shadowRoot == null) {
-      return;
-    }
-    if (!shadowRoot.adoptedStyleSheets.includes(sheet)) {
-      shadowRoot.adoptedStyleSheets = [...shadowRoot.adoptedStyleSheets, sheet];
-    }
-  }, [activePath]);
-
-  // `key={activePath}` remounts the FileDiff or File surface for each file while
-  // `.aui-surface-wrap` remains mounted and retains its scroll offset. Reset the
-  // outer host after the new surface is laid out but before paint. Editing a
-  // file does not change `activePath`, so this never disturbs a session.
-  useIsomorphicLayoutEffect(() => {
-    const wrap = surfaceWrapRef.current;
-    if (wrap != null) {
-      wrap.scrollTop = 0;
-    }
-  }, [activePath]);
 
   const changedCount = changesSession.changedFiles.length;
 
@@ -1268,7 +1223,14 @@ export function AgentUi({
             </nav>
           </header>
 
-          <div className="aui-surface-wrap" ref={surfaceWrapRef}>
+          <Virtualizer
+            className="aui-surface-wrap"
+            contentStyle={{
+              display: 'flex',
+              minHeight: '100%',
+              width: '100%',
+            }}
+          >
             {activeFile != null && fileDiff != null ? (
               <FileDiff
                 key={activePath}
@@ -1281,17 +1243,19 @@ export function AgentUi({
               />
             ) : placeholderContents != null && activePath != null ? (
               // Editable view for explorer files that aren't part of the change
-              // set (e.g. the root README or a generated stub). The app-level
-              // provider creates an independent editor for this keyed surface.
-              // Caller-owned `editsRef` seeds its contents when revisited.
+              // set (e.g. the root README or a generated stub). Always mounts
+              // with the pristine placeholder contents: `cacheKey` is required
+              // by the shared editor's `persistState`, whose per-file document
+              // cache substitutes any previously edited contents (and their
+              // undo history) when the surface re-attaches.
               // Highlighted on the main thread since this File is mounted
               // dynamically outside the editable surface's worker pool.
               <File
                 key={activePath}
                 file={{
                   name: activePath,
-                  contents:
-                    editsRef.current.get(activePath) ?? placeholderContents,
+                  cacheKey: activePath,
+                  contents: placeholderContents,
                 }}
                 className="aui-surface"
                 options={{
@@ -1307,7 +1271,7 @@ export function AgentUi({
             ) : (
               <div className="aui-empty">Select a file to review.</div>
             )}
-          </div>
+          </Virtualizer>
 
           <div className="aui-composer">
             {snippets.length > 0 && (

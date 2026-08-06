@@ -237,7 +237,8 @@ function createTokenizer(
 
 function primeTokenizer(
   tokenizer: EditorTokenizer,
-  textDocument: TextDocument<unknown>
+  textDocument: TextDocument<unknown>,
+  renderRange?: RenderRange
 ): void {
   const lineCount = textDocument.lineCount;
   tokenizer.tokenize(
@@ -252,7 +253,7 @@ function primeTokenizer(
       lineDelta: 0,
       changedLineRanges: [[0, lineCount - 1]],
     },
-    {
+    renderRange ?? {
       startingLine: 0,
       totalLines: lineCount,
       bufferBefore: 0,
@@ -319,8 +320,70 @@ function createBenchmarkCases(
     bufferBefore: 0,
     bufferAfter: 0,
   };
+  const visibleRange: RenderRange = {
+    startingLine: 0,
+    totalLines: Math.min(100, config.lines),
+    bufferBefore: 0,
+    bufferAfter: 0,
+  };
+  const createVisibleNewlineCase = (
+    hostRealignsRows: boolean
+  ): BenchmarkCase => ({
+    name: hostRealignsRows
+      ? 'visible-newline-shifted'
+      : 'visible-newline-dense',
+    description: hostRealignsRows
+      ? 'Insert a newline and settle against shifted grammar state for a host that realigns rows.'
+      : 'Insert a newline and tokenize the full visible range for a host that cannot realign rows.',
+    run() {
+      resetMessages();
+      const counters = { grammarCalls: 0, setThemeCalls: 0 };
+      const textDocument = new TextDocument(
+        'visible-newline.ts',
+        sourceText,
+        'typescript'
+      );
+      const tokenizer = createTokenizer(textDocument, counters, {
+        matchBrackets: false,
+      });
+      primeTokenizer(tokenizer, textDocument, visibleRange);
+      tokenizer.stopBackgroundTokenize();
+      const change = textDocument.applyEdits([
+        {
+          range: {
+            start: { line: 0, character: 0 },
+            end: { line: 0, character: 0 },
+          },
+          newText: 'inserted\n',
+        },
+      ]);
+      if (change === undefined) {
+        throw new Error('Expected the newline edit to change the document');
+      }
+      counters.grammarCalls = 0;
+      postedMessages.length = 0;
+      collectGarbage();
+      const started = performance.now();
+      const dirtyLines = tokenizer.tokenize(
+        change,
+        visibleRange,
+        hostRealignsRows
+      );
+      const elapsedMs = performance.now() - started;
+      const operations = {
+        visibleLines: visibleRange.totalLines,
+        grammarCalls: counters.grammarCalls,
+        dirtyLines: dirtyLines.size,
+        backgroundMessages: postedMessages.length,
+      };
+      tokenizer.cleanUp();
+      return { elapsedMs, operations };
+    },
+  });
 
   return [
+    createVisibleNewlineCase(false),
+    createVisibleNewlineCase(true),
     {
       name: 'unbounded-structural-edit',
       description:

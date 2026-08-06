@@ -36,10 +36,16 @@ async function clickIntoAdditions(page: Page): Promise<void> {
   await page.locator(ADDITIONS).click();
 }
 
+// Moves focus away from the editor at a controlled point inside a full
+// render, then lets the caller assert the editor does not reclaim it. A full
+// render keeps the editable element in place, so the two hook points are:
+// 'rebuild' — the column children were just swapped (the editor's deferred
+// focus/selection restore has not run yet) — and 'after-sync' — the editor
+// re-sync (which invokes the restore) has completed.
 async function moveFocusDuringFullRender(
   page: Page,
   target: 'background' | 'external-link' | 'host',
-  timing: 'replacement' | 'after-sync'
+  timing: 'rebuild' | 'after-sync'
 ): Promise<void> {
   await page.evaluate(
     ({ selector, target, timing }) =>
@@ -47,7 +53,6 @@ async function moveFocusDuringFullRender(
         const host = document.querySelector('diffs-container');
         const root = host?.shadowRoot;
         const content = root?.querySelector(selector);
-        const code = content?.parentElement;
         const externalLink = document.querySelector('[data-fixtures-index]');
         const focusTarget =
           target === 'host'
@@ -57,7 +62,7 @@ async function moveFocusDuringFullRender(
               : externalLink;
         if (
           !(host instanceof HTMLElement) ||
-          !(code instanceof HTMLElement) ||
+          !(content instanceof HTMLElement) ||
           !(focusTarget instanceof HTMLElement)
         ) {
           reject(new Error('missing editor or external focus target'));
@@ -66,16 +71,7 @@ async function moveFocusDuringFullRender(
         if (target === 'host') {
           host.tabIndex = -1;
         }
-        const observer = new MutationObserver(() => {
-          const replacement = root?.querySelector(selector);
-          if (
-            replacement === content ||
-            (timing === 'after-sync' &&
-              replacement?.getAttribute('contenteditable') !== 'true')
-          ) {
-            return;
-          }
-          observer.disconnect();
+        const moveFocus = () => {
           if (target === 'background') {
             focusTarget.dispatchEvent(
               new PointerEvent('pointerdown', {
@@ -83,6 +79,11 @@ async function moveFocusDuringFullRender(
                 composed: true,
               })
             );
+            // A synthetic pointerdown carries no default focus change; a real
+            // background press blurs the editor, so blur explicitly to match.
+            if (root?.activeElement instanceof HTMLElement) {
+              root.activeElement.blur();
+            }
           } else {
             focusTarget.focus();
             if (
@@ -94,10 +95,25 @@ async function moveFocusDuringFullRender(
             }
           }
           resolve();
+        };
+        if (timing === 'after-sync') {
+          const syncsBefore = window.__syncCount ?? 0;
+          const poll = () => {
+            if ((window.__syncCount ?? 0) > syncsBefore) {
+              moveFocus();
+              return;
+            }
+            requestAnimationFrame(poll);
+          };
+          window.__forceEditorFullRender?.();
+          poll();
+          return;
+        }
+        const observer = new MutationObserver(() => {
+          observer.disconnect();
+          moveFocus();
         });
-        observer.observe(code, {
-          attributes: true,
-          attributeFilter: ['contenteditable'],
+        observer.observe(content, {
           childList: true,
           subtree: true,
         });
@@ -105,6 +121,15 @@ async function moveFocusDuringFullRender(
       }),
     { selector: ADDITIONS, target, timing }
   );
+}
+
+// Kicks off a full render and resolves once the editor has re-synced to it.
+async function runFullRender(page: Page): Promise<void> {
+  const syncsBefore = await page.evaluate(() => window.__syncCount ?? 0);
+  await page.evaluate(() => window.__forceEditorFullRender?.());
+  await expect
+    .poll(() => page.evaluate(() => window.__syncCount ?? 0))
+    .toBeGreaterThan(syncsBefore);
 }
 
 test.describe('edit mode', () => {
@@ -174,16 +199,16 @@ test.describe('edit mode', () => {
       throw new Error('missing additions content');
     }
 
-    await page.evaluate(() => window.__forceEditorFullRender?.());
+    await runFullRender(page);
 
-    await expect
-      .poll(() =>
-        additions.evaluate(
-          (content, previous) => content !== previous,
-          previousContent
-        )
+    // The full render rebuilds the columns on the same editable element, so
+    // focus never leaves it and typing keeps flowing.
+    expect(
+      await additions.evaluate(
+        (content, previous) => content === previous,
+        previousContent
       )
-      .toBe(true);
+    ).toBe(true);
     await expect.poll(() => editorHasFocus(page)).toBe(true);
     await page.keyboard.type('Z');
     await expect(additions).toContainText('Z');
@@ -194,31 +219,23 @@ test.describe('edit mode', () => {
 
     const additions = page.locator(ADDITIONS);
     await additions.click();
+    // Start a second full render the moment the first one swaps the column
+    // children, so the second render races the first one's editor re-sync.
     await page.evaluate(
       (selector) =>
         new Promise<void>((resolve, reject) => {
           const root = document.querySelector('diffs-container')?.shadowRoot;
           const content = root?.querySelector(selector);
-          const code = content?.parentElement;
-          if (!(code instanceof HTMLElement)) {
+          if (!(content instanceof HTMLElement)) {
             reject(new Error('missing editor content'));
             return;
           }
           const observer = new MutationObserver(() => {
-            const replacement = root?.querySelector(selector);
-            if (
-              replacement === content ||
-              replacement?.getAttribute('contenteditable') !== 'true'
-            ) {
-              return;
-            }
             observer.disconnect();
             window.__forceEditorFullRender?.();
             resolve();
           });
-          observer.observe(code, {
-            attributes: true,
-            attributeFilter: ['contenteditable'],
+          observer.observe(content, {
             childList: true,
             subtree: true,
           });
@@ -232,7 +249,7 @@ test.describe('edit mode', () => {
     await expect(additions).toContainText('Z');
   });
 
-  test('focused editor without a selection survives a full render', async ({
+  test('focused editor without a selection survives a container move', async ({
     page,
   }) => {
     await openFixture(page);
@@ -243,7 +260,10 @@ test.describe('edit mode', () => {
     });
     await expect.poll(() => editorHasFocus(page)).toBe(true);
 
-    await page.evaluate(() => window.__forceEditorFullRender?.());
+    // A container move genuinely replaces the editable element (a full render
+    // rebuilds it in place), so focus restoration must work even with no
+    // selection to anchor the caret.
+    await page.evaluate(() => window.__moveEditorContainer?.());
 
     await expect.poll(() => editorHasFocus(page)).toBe(true);
   });
@@ -262,14 +282,14 @@ test.describe('edit mode', () => {
     await expect(additions).toContainText('Z');
   });
 
-  test('full render does not reclaim focus moved during replacement', async ({
+  test('full render does not reclaim focus moved during the rebuild', async ({
     page,
   }) => {
     await openFixture(page);
 
     await clickIntoAdditions(page);
     const fixturesLink = page.locator('[data-fixtures-index]');
-    await moveFocusDuringFullRender(page, 'external-link', 'replacement');
+    await moveFocusDuringFullRender(page, 'external-link', 'rebuild');
 
     await expect(fixturesLink).toBeFocused();
   });
@@ -280,12 +300,12 @@ test.describe('edit mode', () => {
     await openFixture(page);
 
     await clickIntoAdditions(page);
-    await moveFocusDuringFullRender(page, 'background', 'replacement');
+    await moveFocusDuringFullRender(page, 'background', 'rebuild');
 
     await expect.poll(() => editorHasFocus(page)).toBe(false);
   });
 
-  test('stopped background press that starts a full render does not restore focus', async ({
+  test('stopped background press that starts a full render leaves focus in place', async ({
     page,
   }) => {
     await openFixture(page);
@@ -311,7 +331,12 @@ test.describe('edit mode', () => {
         })
     );
 
-    await expect.poll(() => editorHasFocus(page)).toBe(false);
+    // The press never moved focus (its default was stopped) and the render
+    // keeps the editable element, so focus stays exactly where it was — the
+    // canceled restore must neither blur the editor nor steal focus back.
+    await expect.poll(() => editorHasFocus(page)).toBe(true);
+    await page.keyboard.type('Z');
+    await expect(page.locator(ADDITIONS)).toContainText('Z');
   });
 
   test('full render does not reclaim focus moved to its host', async ({
@@ -321,6 +346,7 @@ test.describe('edit mode', () => {
 
     await clickIntoAdditions(page);
     await moveFocusDuringFullRender(page, 'host', 'after-sync');
+
     await page.evaluate(
       () =>
         new Promise<void>((resolve) => {
