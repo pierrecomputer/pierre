@@ -757,7 +757,6 @@
           var(--diffs-scrollbar-gutter)
       )
     );
-    scrollbar-gutter: stable;
   }
 
   [data-diffs-scrollbar-measure] {
