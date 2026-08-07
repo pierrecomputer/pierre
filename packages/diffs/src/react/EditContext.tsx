@@ -2,7 +2,7 @@
 'use client';
 
 import type { Context, PropsWithChildren } from 'react';
-import { createContext, useContext } from 'react';
+import { createContext, useContext, useRef } from 'react';
 
 import type { EditorOptions } from '../edit';
 import type { DiffsEditor } from '../types';
@@ -25,7 +25,22 @@ export function EditProvider<LAnnotation>({
   children,
   createEditor,
 }: PropsWithChildren<EditProviderProps<LAnnotation>>): React.JSX.Element {
-  const stableCreateEditor = useStableCallback(createEditor);
+  // Editors cached by options-object identity: an edit session that restarts
+  // with the same `editorOptions`
+  const editorCacheRef = useRef(
+    new WeakMap<EditorOptions<LAnnotation>, DiffsEditor<LAnnotation>>()
+  );
+  const stableCreateEditor = useStableCallback(
+    (options: EditorOptions<LAnnotation>): DiffsEditor<LAnnotation> => {
+      const cached = editorCacheRef.current.get(options);
+      if (cached != null) {
+        return cached;
+      }
+      const editor = createEditor(options);
+      editorCacheRef.current.set(options, editor);
+      return editor;
+    }
+  );
   return (
     <EditContext.Provider value={stableCreateEditor}>
       {children}

@@ -2,7 +2,16 @@
 
 Mount one stable `EditProvider` above the editable surfaces. The provider
 supplies an editor factory. Each active surface or `CodeView` item owns a
-separate editor instance.
+separate editor instance, cached by `editorOptions` object identity — an edit
+session restarting with the same options object reuses its editor, and
+simultaneously editable surfaces need distinct options objects.
+
+To share one editor across surfaces, pass the same `editorOptions` object to
+each of them: the cache then hands every surface the same instance. Instance
+state — such as `persistState` records and their default `inMemory` storage —
+survives surface remounts, so per-file selections and scroll positions restore
+across file switches. Share an options object only where one surface is editable
+at a time; simultaneously editable surfaces need distinct options objects.
 
 ## Contents
 

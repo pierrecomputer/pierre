@@ -18,7 +18,6 @@ import { KeyboardShortcuts } from '../app/(diffs)/_edit/KeyboardShortcuts';
 import { CustomHunkSeparators } from '../app/(diffs)/_examples/CustomHunkSeparators/CustomHunkSeparators';
 import { CodeViewExampleTabs } from '../app/(diffs)/docs/CodeView/ExampleTabs';
 import { EditComponentTabs } from '../app/(diffs)/docs/Edit/ComponentTabs';
-import { EditDemo } from '../app/(diffs)/docs/Edit/EditDemo';
 import { EditWorkerPoolTabs } from '../app/(diffs)/docs/Edit/WorkerPoolTabs';
 import { PackageManagerTabs } from '../app/(diffs)/docs/Installation/PackageManagerTabs';
 import { CodeToggle } from '../app/(diffs)/docs/Overview/CodeToggle';
@@ -90,7 +89,6 @@ const defaultComponents = {
   DocsCodeExample,
   CodeViewExampleTabs,
   EditComponentTabs,
-  EditDemo,
   EditWorkerPoolTabs,
   KeyboardShortcuts,
   CustomHunkSeparators,

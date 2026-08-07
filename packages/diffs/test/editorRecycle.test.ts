@@ -12,7 +12,7 @@ import type {
   HighlightedToken,
   RenderRange,
 } from '../src/types';
-import { installDom, wait } from './domHarness';
+import { installDom, wait, waitFor } from './domHarness';
 
 function createTestHighlighter(): DiffsHighlighter {
   return {
@@ -238,7 +238,7 @@ describe('Editor onAttach lifecycle', () => {
       // onAttach must wait for the replacement to synchronize.
       component.rerender();
       editor.edit(component);
-      await wait(20);
+      await waitFor(() => onAttach.mock.calls.length === 1);
 
       expect(onAttach).toHaveBeenCalledTimes(1);
       expect(focusTargets).toHaveLength(1);

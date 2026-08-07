@@ -201,15 +201,22 @@ button.aui-dot.is-zoom:hover {
   overscroll-behavior: contain;
 }
 
+/* The surface and the empty state are now single children of the Virtualizer's
+   row-flex content element (see VIRTUALIZER_CONTENT_STYLE in AgentUi.tsx):
+   flex-grow fills the scroller's width, and the default align-items: stretch
+   fills its height (which is why .aui-empty must not set height: 100% — a
+   definite height would opt it out of stretching). */
 .aui-surface {
   display: block;
+  flex: 1 1 auto;
+  min-width: 100%;
 }
 
 .aui-empty {
   display: flex;
+  flex: 1 1 auto;
   align-items: center;
   justify-content: center;
-  height: 100%;
   color: var(--ide-fg-muted);
 }
 
