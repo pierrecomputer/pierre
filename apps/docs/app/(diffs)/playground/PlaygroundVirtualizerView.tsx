@@ -8,7 +8,7 @@ import {
   VirtualizedFileDiff,
   Virtualizer,
 } from '@pierre/diffs';
-import { Editor } from '@pierre/diffs/edit';
+import { Editor, type EditorOptions } from '@pierre/diffs/edit';
 import { useWorkerPool } from '@pierre/diffs/react';
 import { useEffect, useRef } from 'react';
 import { flushSync } from 'react-dom';
@@ -24,6 +24,8 @@ interface PlaygroundVirtualizerViewProps {
   enableLineSelection: boolean;
   enableGutterComments: boolean;
   showAnnotations: boolean;
+  editPrediction: NonNullable<EditorOptions<undefined>['editPrediction']>;
+  onEditingChange: (editing: boolean) => void;
 }
 
 // Both edit-toggle state icons, inlined as SVG markup. @pierre/icons ships
@@ -100,6 +102,8 @@ export function PlaygroundVirtualizerView({
   enableLineSelection,
   enableGutterComments,
   showAnnotations,
+  editPrediction,
+  onEditingChange,
 }: PlaygroundVirtualizerViewProps) {
   const pool = useWorkerPool();
   const contentRef = useRef<HTMLDivElement>(null);
@@ -134,6 +138,16 @@ export function PlaygroundVirtualizerView({
     }
 
     const virtualizer = new Virtualizer();
+    const editingToggles = new Set<HTMLButtonElement>();
+    const setToggleEditing = (toggle: HTMLButtonElement, editing: boolean) => {
+      toggle.setAttribute('aria-pressed', editing ? 'true' : 'false');
+      if (editing) {
+        editingToggles.add(toggle);
+      } else {
+        editingToggles.delete(toggle);
+      }
+      onEditingChange(editingToggles.size > 0);
+    };
     // Passing `document` makes the page/window the scroll container.
     virtualizer.setup(document);
 
@@ -146,6 +160,7 @@ export function PlaygroundVirtualizerView({
     readmeContainer.style.display = 'block';
     content.appendChild(readmeContainer);
     const readmeEditor = new Editor<undefined>({
+      editPrediction,
       onAttach(attachedEditor) {
         attachedEditor.focus({
           lineNumber: 'first-visible',
@@ -167,7 +182,7 @@ export function PlaygroundVirtualizerView({
     );
     readmeToggle.addEventListener('click', () => {
       const editing = readmeToggle.getAttribute('aria-pressed') !== 'true';
-      readmeToggle.setAttribute('aria-pressed', editing ? 'true' : 'false');
+      setToggleEditing(readmeToggle, editing);
       if (editing) {
         readmeEditor.edit(fileInstance);
       } else {
@@ -196,6 +211,7 @@ export function PlaygroundVirtualizerView({
       // pre-edit lines. An annotation whose line was deleted is dropped from
       // the set; retire its orphaned React root.
       const editor = new Editor<VirtualizerAnnotationMetadata>({
+        editPrediction,
         onAttach(attachedEditor) {
           attachedEditor.focus({
             lineNumber: 'first-visible',
@@ -342,7 +358,7 @@ export function PlaygroundVirtualizerView({
       // `aria-pressed` (which also drives the shared toggle styles).
       editToggle.addEventListener('click', () => {
         const editing = editToggle.getAttribute('aria-pressed') !== 'true';
-        editToggle.setAttribute('aria-pressed', editing ? 'true' : 'false');
+        setToggleEditing(editToggle, editing);
         if (editing) {
           editor.edit(instance);
         } else {
@@ -375,11 +391,12 @@ export function PlaygroundVirtualizerView({
       annotationsRef.current = [];
       virtualizer.cleanUp();
       content.replaceChildren();
+      onEditingChange(false);
     };
     // Option changes are applied imperatively in the effect below rather than by
     // rebuilding the whole virtualizer.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [diffs, pool]);
+  }, [diffs, editPrediction, onEditingChange, pool]);
 
   // Apply live option changes to the existing instances. Spreading over
   // `instance.options` preserves each file's per-instance callbacks (edit

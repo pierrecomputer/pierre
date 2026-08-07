@@ -82,6 +82,7 @@ export const DEFAULTS = {
   gutterButton: true,
   interactionMode: 'comment' as const,
   annotations: true,
+  editPrediction: false,
   mode: 'review' as Mode,
   markers: false,
 } as const;
@@ -102,6 +103,7 @@ export interface PlaygroundUrlState {
   enableLineSelection: boolean;
   enableGutterUtility: boolean;
   showAnnotations: boolean;
+  editPrediction: boolean;
   mode: Mode;
   showMarkers: boolean;
   selectedRange: SelectedLineRange | null;
@@ -179,6 +181,7 @@ export function parsePlaygroundSearchParams(
     enableLineSelection,
     enableGutterUtility,
     showAnnotations: pickBool(get('annot'), DEFAULTS.annotations),
+    editPrediction: pickBool(get('predict'), DEFAULTS.editPrediction),
     // Edit mode only exists in the Normal view (other views render per-file
     // edit controls instead), so only honor `?edit=edit` when starting there.
     mode: viewMode === 'normal' && get('edit') === 'edit' ? 'edit' : 'review',

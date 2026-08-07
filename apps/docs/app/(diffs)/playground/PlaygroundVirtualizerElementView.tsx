@@ -17,7 +17,7 @@ import {
   Virtualizer,
 } from '@pierre/diffs/react';
 import { IconCheckboxFill, IconSquircleLg } from '@pierre/icons';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 
 import type { PlaygroundAnnotationMetadata } from './constants';
@@ -33,6 +33,8 @@ interface PlaygroundVirtualizerElementViewProps {
   enableLineSelection: boolean;
   enableGutterComments: boolean;
   showAnnotations: boolean;
+  editPrediction: NonNullable<EditorOptions<undefined>['editPrediction']>;
+  onEditingChange: (editing: boolean) => void;
 }
 
 // Renders the diff list through the React <Virtualizer> wrapper, which always
@@ -48,13 +50,41 @@ export function PlaygroundVirtualizerElementView({
   enableLineSelection,
   enableGutterComments,
   showAnnotations,
+  editPrediction,
+  onEditingChange,
 }: PlaygroundVirtualizerElementViewProps) {
+  const editingItemsRef = useRef(new Set<string>());
+  const handleEditingChange = useCallback(
+    (id: string, editing: boolean) => {
+      if (editing) {
+        editingItemsRef.current.add(id);
+      } else {
+        editingItemsRef.current.delete(id);
+      }
+      onEditingChange(editingItemsRef.current.size > 0);
+    },
+    [onEditingChange]
+  );
+
+  useEffect(
+    () => () => {
+      onEditingChange(false);
+    },
+    [onEditingChange]
+  );
+
   return (
     <Virtualizer
       className="border-border rounded-lg border"
       style={SCROLL_REGION_STYLES}
     >
-      <ElementVirtualizerFile options={options} />
+      <ElementVirtualizerFile
+        options={options}
+        editPrediction={editPrediction}
+        onEditingChange={(editing) =>
+          handleEditingChange('long-readme', editing)
+        }
+      />
       {diffs.map((fileDiff) => (
         <ElementVirtualizerDiff
           key={fileDiff.name}
@@ -63,23 +93,38 @@ export function PlaygroundVirtualizerElementView({
           enableLineSelection={enableLineSelection}
           enableGutterComments={enableGutterComments}
           showAnnotations={showAnnotations}
+          editPrediction={editPrediction}
+          onEditingChange={(editing) =>
+            handleEditingChange(fileDiff.name, editing)
+          }
         />
       ))}
     </Virtualizer>
   );
 }
 
-const FILE_EDITOR_OPTIONS: EditorOptions<undefined> = {
-  onAttach(editor) {
-    editor.focus({ lineNumber: 'first-visible', preventScroll: true });
-  },
-};
-
 // The long README plain-file surface leading the list. Carries the same
 // header Edit toggle as the diffs (the app-level EditProvider creates its
 // editor); no comment wiring, since the demo file has no annotations.
-function ElementVirtualizerFile({ options }: { options: SharedRenderOptions }) {
+function ElementVirtualizerFile({
+  options,
+  editPrediction,
+  onEditingChange,
+}: {
+  options: SharedRenderOptions;
+  editPrediction: NonNullable<EditorOptions<undefined>['editPrediction']>;
+  onEditingChange: (editing: boolean) => void;
+}) {
   const [editing, setEditing] = useState(false);
+  const editorOptions = useMemo<EditorOptions<undefined>>(
+    () => ({
+      editPrediction,
+      onAttach(editor) {
+        editor.focus({ lineNumber: 'first-visible', preventScroll: true });
+      },
+    }),
+    [editPrediction]
+  );
 
   const fileOptions = useMemo<FileOptions<undefined>>(
     () => ({
@@ -96,7 +141,10 @@ function ElementVirtualizerFile({ options }: { options: SharedRenderOptions }) {
     return (
       <button
         type="button"
-        onClick={() => setEditing((current) => !current)}
+        onClick={() => {
+          setEditing(!editing);
+          onEditingChange(!editing);
+        }}
         aria-pressed={editing}
         className="playground-edit-toggle"
       >
@@ -109,14 +157,14 @@ function ElementVirtualizerFile({ options }: { options: SharedRenderOptions }) {
         <span className="playground-edit-toggle-label-off">Edit</span>
       </button>
     );
-  }, [editing]);
+  }, [editing, onEditingChange]);
 
   return (
     <File
       file={LONG_README_FILE}
       edit={editing}
       options={fileOptions}
-      editorOptions={FILE_EDITOR_OPTIONS}
+      editorOptions={editorOptions}
       renderHeaderMetadata={renderHeaderMetadata}
     />
   );
@@ -128,6 +176,8 @@ interface ElementVirtualizerDiffProps {
   enableLineSelection: boolean;
   enableGutterComments: boolean;
   showAnnotations: boolean;
+  editPrediction: NonNullable<EditorOptions<undefined>['editPrediction']>;
+  onEditingChange: (editing: boolean) => void;
 }
 
 const EMPTY_ANNOTATIONS: DiffLineAnnotation<PlaygroundAnnotationMetadata>[] =
@@ -143,6 +193,8 @@ function ElementVirtualizerDiff({
   enableLineSelection,
   enableGutterComments,
   showAnnotations,
+  editPrediction,
+  onEditingChange,
 }: ElementVirtualizerDiffProps) {
   const [editing, setEditing] = useState(false);
   const [annotations, setAnnotations] = useState<
@@ -160,6 +212,7 @@ function ElementVirtualizerDiff({
   // nowhere for the frames in between.
   const editorOptions = useMemo<EditorOptions<PlaygroundAnnotationMetadata>>(
     () => ({
+      editPrediction,
       onAttach(editor) {
         editor.focus({ lineNumber: 'first-visible', preventScroll: true });
       },
@@ -174,7 +227,7 @@ function ElementVirtualizerDiff({
         }
       },
     }),
-    []
+    [editPrediction]
   );
 
   const addCommentAtRange = useCallback((range: SelectedLineRange) => {
@@ -295,7 +348,10 @@ function ElementVirtualizerDiff({
     return (
       <button
         type="button"
-        onClick={() => setEditing((current) => !current)}
+        onClick={() => {
+          setEditing(!editing);
+          onEditingChange(!editing);
+        }}
         aria-pressed={editing}
         className="playground-edit-toggle"
       >
@@ -308,7 +364,7 @@ function ElementVirtualizerDiff({
         <span className="playground-edit-toggle-label-off">Edit</span>
       </button>
     );
-  }, [editing]);
+  }, [editing, onEditingChange]);
 
   return (
     <FileDiff

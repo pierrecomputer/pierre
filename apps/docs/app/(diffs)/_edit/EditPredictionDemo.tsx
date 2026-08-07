@@ -15,6 +15,7 @@ import type {
 import { IconRefresh } from '@pierre/icons';
 import { useCallback, useMemo, useRef, useState } from 'react';
 
+import { CodestralIcon } from './CodestralIcon';
 import { EDIT_PREDICTION_NEW_FILE } from './constants';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
@@ -289,86 +290,7 @@ export function EditPredictionDemo({
               onClick={() => void tryCodestral()}
               disabled={!attached || authenticating}
             >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                aria-hidden="true"
-                className="text-white-default h-3 w-auto"
-                width="47.6"
-                height="34"
-                viewBox="0 0 212.121 151.515"
-                shapeRendering="crispEdges"
-              >
-                <rect
-                  x="30.303001"
-                  y="0"
-                  width="30.302999"
-                  height="30.302999"
-                  fill="#FFAF01"
-                ></rect>
-                <rect
-                  x="151.515"
-                  y="0"
-                  width="30.302999"
-                  height="30.302999"
-                  fill="#FFAF01"
-                ></rect>
-                <rect
-                  x="30.303001"
-                  y="30.303001"
-                  width="60.605999"
-                  height="30.302999"
-                  fill="#FF8204"
-                ></rect>
-                <rect
-                  x="121.21201"
-                  y="30.303001"
-                  width="60.605999"
-                  height="30.302999"
-                  fill="#FF8204"
-                ></rect>
-                <rect
-                  x="30.303001"
-                  y="60.606003"
-                  width="151.515"
-                  height="30.302999"
-                  fill="#FA500F"
-                ></rect>
-                <rect
-                  x="30.303001"
-                  y="90.908997"
-                  width="30.302999"
-                  height="30.302999"
-                  fill="#E51300"
-                ></rect>
-                <rect
-                  x="90.908997"
-                  y="90.908997"
-                  width="30.302999"
-                  height="30.302999"
-                  fill="#E51300"
-                ></rect>
-                <rect
-                  x="151.515"
-                  y="90.908997"
-                  width="30.302999"
-                  height="30.302999"
-                  fill="#E51300"
-                ></rect>
-                <rect
-                  x="0"
-                  y="121.21201"
-                  width="90.908997"
-                  height="30.302999"
-                  fill="#C4001D"
-                ></rect>
-                <rect
-                  x="121.21201"
-                  y="121.21201"
-                  width="90.908997"
-                  height="30.302999"
-                  fill="#C4001D"
-                ></rect>
-              </svg>
+              <CodestralIcon />
               Continue with Codestral
             </Button>
           )}

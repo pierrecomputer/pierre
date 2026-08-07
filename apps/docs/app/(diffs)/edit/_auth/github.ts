@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
 export const GITHUB_AUTH_FALLBACK = '/edit#tab-tab-tab';
+export const GITHUB_AUTH_RETURN_COOKIE = 'pierre_github_auth_return';
 export const GITHUB_OAUTH_STATE_COOKIE = 'pierre_github_oauth_state';
 
 const GITHUB_SESSION_COOKIE = 'pierre_github_session';
@@ -101,4 +102,25 @@ export function getAuthenticatedGithubUserId(
 
 export function isGithubAuthenticated(request: Request): boolean {
   return getAuthenticatedGithubUserId(request) !== undefined;
+}
+
+export function normalizeGithubAuthReturnTo(
+  value: string | undefined,
+  requestUrl: string
+): string {
+  if (value === undefined || !value.startsWith('/') || value.startsWith('//')) {
+    return GITHUB_AUTH_FALLBACK;
+  }
+  try {
+    const url = new URL(value, requestUrl);
+    if (
+      url.origin !== new URL(requestUrl).origin ||
+      (url.pathname !== '/edit' && url.pathname !== '/playground')
+    ) {
+      return GITHUB_AUTH_FALLBACK;
+    }
+    return `${url.pathname}${url.search}${url.hash}`;
+  } catch {
+    return GITHUB_AUTH_FALLBACK;
+  }
 }

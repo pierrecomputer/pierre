@@ -8,7 +8,12 @@ import {
   isDiffAnnotationCollection,
   type SelectedLineRange,
 } from '@pierre/diffs';
-import type { Editor, EditorOptions } from '@pierre/diffs/edit';
+import type {
+  Editor,
+  EditorOptions,
+  EditPredictProvider,
+  EditPredictResponse,
+} from '@pierre/diffs/edit';
 import {
   type CodeViewReactOptions,
   FileDiff,
@@ -37,6 +42,7 @@ import {
   IconListOrdered,
   IconParagraph,
   IconPencil,
+  IconSparkle,
   IconSymbolDiffstat,
   IconWordWrap,
   IconXSquircle,
@@ -46,6 +52,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { toast } from 'sonner';
 
+import { CodestralIcon } from '../_edit/CodestralIcon';
 import type { PlaygroundAnnotationMetadata } from './constants';
 import {
   CODE_VIEW_ITEMS,
@@ -115,6 +122,23 @@ const VIEW_MODE_OPTIONS = [
 const EMPTY_ANNOTATIONS: DiffLineAnnotation<PlaygroundAnnotationMetadata>[] =
   [];
 
+type PredictionStatus =
+  | 'idle'
+  | 'waiting'
+  | 'predicting'
+  | 'ready'
+  | 'empty'
+  | 'error';
+
+const PREDICTION_STATUS_TEXT: Record<PredictionStatus, string> = {
+  idle: '',
+  waiting: 'Codestral ready.',
+  predicting: 'Predicting…',
+  ready: 'Prediction ready — press Tab to accept.',
+  empty: 'No suggestion returned. Keep editing to try again.',
+  error: 'Prediction unavailable. Check the demo service and try again.',
+};
+
 // Pure rendering options shared by all three view modes. These keys don't depend
 // on the annotation metadata generic, so a single annotation-agnostic type keeps
 // them assignable to FileDiff, VirtualizedFileDiff, and CodeView alike (spreading
@@ -175,6 +199,9 @@ interface PlaygroundControlsContentProps {
   setEnableGutterUtility: (v: boolean) => void;
   showAnnotations: boolean;
   setShowAnnotations: (v: boolean) => void;
+  editPredictionEnabled: boolean;
+  setEditPredictionEnabled: (v: boolean) => void;
+  editPredictionDisabled: boolean;
   mode: Mode;
   setMode: (v: Mode) => void;
   showMarkers: boolean;
@@ -219,6 +246,9 @@ function PlaygroundControlsContent({
   setEnableGutterUtility,
   showAnnotations,
   setShowAnnotations,
+  editPredictionEnabled,
+  setEditPredictionEnabled,
+  editPredictionDisabled,
   mode,
   setMode,
   showMarkers,
@@ -500,6 +530,19 @@ function PlaygroundControlsContent({
           onCheckedChange={setShowAnnotations}
         />
 
+        <ToggleButton
+          icon={<IconSparkle />}
+          label="Edit prediction"
+          checked={editPredictionEnabled}
+          onCheckedChange={setEditPredictionEnabled}
+          disabled={editPredictionDisabled}
+          title={
+            editPredictionDisabled
+              ? 'Start editing a file to enable edit prediction'
+              : undefined
+          }
+        />
+
         {/* Markers use the Normal view's active edit-session editor. */}
         {viewMode === 'normal' && (
           <ToggleButton
@@ -697,6 +740,18 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
   );
   const [mode, setMode] = useState<Mode>(urlState.mode);
   const [showMarkers, setShowMarkers] = useState(urlState.showMarkers);
+  const initialEditPredictionEnabled =
+    urlState.editPrediction && urlState.mode === 'edit';
+  const editPredictionEnabledRef = useRef(initialEditPredictionEnabled);
+  const [editPredictionEnabled, setEditPredictionEnabled] = useState(
+    initialEditPredictionEnabled
+  );
+  const [hasActiveChildEditor, setHasActiveChildEditor] = useState(false);
+  const codestralEnabledRef = useRef(false);
+  const [authenticating, setAuthenticating] = useState(false);
+  const [codestralEnabled, setCodestralEnabled] = useState(false);
+  const [predictionStatus, setPredictionStatus] =
+    useState<PredictionStatus>('idle');
   const [selectedRange, setSelectedRange] = useState<SelectedLineRange | null>(
     urlState.selectedRange
   );
@@ -715,6 +770,133 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
       : 'none';
 
   const edit = mode === 'edit';
+  const editable = viewMode === 'normal' ? edit : hasActiveChildEditor;
+
+  const disableEditPrediction = useCallback(() => {
+    editPredictionEnabledRef.current = false;
+    setEditPredictionEnabled(false);
+  }, []);
+
+  const handleModeChange = useCallback(
+    (nextMode: Mode) => {
+      setMode(nextMode);
+      if (nextMode !== 'edit') {
+        disableEditPrediction();
+      }
+    },
+    [disableEditPrediction]
+  );
+
+  const handleChildEditingChange = useCallback(
+    (editing: boolean) => {
+      setHasActiveChildEditor(editing);
+      if (!editing) {
+        disableEditPrediction();
+      }
+    },
+    [disableEditPrediction]
+  );
+
+  const handleEditPredictionEnabledChange = useCallback(
+    (enabled: boolean) => {
+      editPredictionEnabledRef.current = enabled;
+      setEditPredictionEnabled(enabled);
+      if (enabled && codestralEnabled) {
+        setPredictionStatus('waiting');
+      }
+    },
+    [codestralEnabled]
+  );
+
+  const redirectToGithubAuth = useCallback(() => {
+    const returnTo = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    window.location.assign(
+      `/edit/auth?returnTo=${encodeURIComponent(returnTo)}`
+    );
+  }, []);
+
+  const predictionProvider = useMemo<EditPredictProvider>(
+    () => ({
+      async predict(request, { signal }) {
+        if (!editPredictionEnabledRef.current || !codestralEnabledRef.current) {
+          const prefix = request.excerptText.slice(
+            0,
+            request.cursorOffsetInExcerpt
+          );
+          const lines = prefix.split(request.eol);
+          return {
+            edits: [],
+            newCursor: {
+              line: request.excerptStartLine + lines.length - 1,
+              character: lines.at(-1)?.length ?? 0,
+            },
+          };
+        }
+
+        setPredictionStatus('predicting');
+        try {
+          const response = await fetch('/edit/predict', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(request),
+            signal,
+          });
+          if (response.status === 401) {
+            redirectToGithubAuth();
+            throw new Error('GitHub sign-in required');
+          }
+          if (!response.ok) {
+            throw new Error('Edit prediction request failed');
+          }
+          const prediction = (await response.json()) as EditPredictResponse;
+          if (!signal.aborted) {
+            setPredictionStatus(
+              prediction.edits.length === 0 ? 'empty' : 'ready'
+            );
+          }
+          return prediction;
+        } catch (error) {
+          if (!signal.aborted) {
+            setPredictionStatus('error');
+          }
+          throw error;
+        }
+      },
+    }),
+    [redirectToGithubAuth]
+  );
+  const editPrediction = useMemo(
+    () => ({ mode: 'eager' as const, provider: predictionProvider }),
+    [predictionProvider]
+  );
+
+  const tryCodestral = useCallback(async () => {
+    setAuthenticating(true);
+    try {
+      const response = await fetch('/edit/auth', {
+        method: 'HEAD',
+        cache: 'no-store',
+      });
+      if (response.status === 401) {
+        redirectToGithubAuth();
+        return;
+      }
+      if (!response.ok) {
+        setPredictionStatus('error');
+        return;
+      }
+      codestralEnabledRef.current = true;
+      setCodestralEnabled(true);
+      setPredictionStatus('waiting');
+    } catch {
+      setPredictionStatus('error');
+    } finally {
+      setAuthenticating(false);
+    }
+  }, [redirectToGithubAuth]);
+  const predictionStatusText = authenticating
+    ? 'Checking GitHub sign-in…'
+    : PREDICTION_STATUS_TEXT[predictionStatus];
 
   // Edits remap annotation line numbers (an Enter above a comment shifts it
   // down); onChange hands the remapped set back so the `lineAnnotations` prop
@@ -727,6 +909,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
   const editorRef = useRef<Editor<PlaygroundAnnotationMetadata> | null>(null);
   const editorOptions = useMemo<EditorOptions<PlaygroundAnnotationMetadata>>(
     () => ({
+      editPrediction,
       onAttach(editor) {
         editorRef.current = editor;
         editor.focus({ lineNumber: 'first-visible', preventScroll: true });
@@ -742,7 +925,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
         }
       },
     }),
-    []
+    [editPrediction]
   );
 
   // Apply (or clear) the demo markers whenever the normal view enters an edit
@@ -803,6 +986,8 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
       params.set('gutter', enableGutterUtility ? '1' : '0');
     if (showAnnotations !== DEFAULTS.annotations)
       params.set('annot', showAnnotations ? '1' : '0');
+    if (editPredictionEnabled !== DEFAULTS.editPrediction)
+      params.set('predict', editPredictionEnabled ? '1' : '0');
     if (mode !== DEFAULTS.mode) params.set('edit', mode);
     if (showMarkers !== DEFAULTS.markers)
       params.set('markers', showMarkers ? '1' : '0');
@@ -837,6 +1022,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
     enableLineSelection,
     enableGutterUtility,
     showAnnotations,
+    editPredictionEnabled,
     mode,
     showMarkers,
     committedSelectedRange,
@@ -951,10 +1137,15 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
 
   // Editing is controlled only in Normal view. Virtualizer and CodeView own
   // per-surface controls, so return Normal to Review when switching views.
-  const setViewModeAndResetEditor = useCallback((mode: ViewMode) => {
-    setViewMode(mode);
-    if (mode !== 'normal') setMode('review');
-  }, []);
+  const setViewModeAndResetEditor = useCallback(
+    (mode: ViewMode) => {
+      setViewMode(mode);
+      setHasActiveChildEditor(false);
+      disableEditPrediction();
+      if (mode !== 'normal') setMode('review');
+    },
+    [disableEditPrediction]
+  );
 
   const [usePrerenderedHTML, setUsePrerenderedHTML] = useState(
     () => viewMode === 'normal'
@@ -994,8 +1185,11 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
     setEnableGutterUtility,
     showAnnotations,
     setShowAnnotations,
+    editPredictionEnabled,
+    setEditPredictionEnabled: handleEditPredictionEnabledChange,
+    editPredictionDisabled: !editable,
     mode,
-    setMode,
+    setMode: handleModeChange,
     showMarkers,
     setShowMarkers,
     selectedRange,
@@ -1195,6 +1389,35 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
           </div>
         </div>
       </div>
+      {editPredictionEnabled && (
+        <div className="flex flex-wrap items-center gap-3">
+          <p className="text-muted-foreground text-xs">
+            Enable Codestral, then edit a file and type to preview a prediction.
+            Press <kbd>Tab</kbd> to accept it.
+          </p>
+          <div className="ml-auto flex items-center gap-3">
+            {(authenticating || predictionStatus !== 'idle') && (
+              <span
+                className="text-muted-foreground text-xs"
+                role="status"
+                aria-live="polite"
+              >
+                {predictionStatusText}
+              </span>
+            )}
+            {!codestralEnabled && (
+              <Button
+                variant="outline"
+                onClick={() => void tryCodestral()}
+                disabled={authenticating}
+              >
+                <CodestralIcon />
+                Continue with Codestral
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
       {viewMode === 'normal' ? (
         fileDiff
       ) : viewMode === 'virtualizer' ? (
@@ -1204,6 +1427,8 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
           enableLineSelection={enableLineSelection}
           enableGutterComments={enableGutterUtility}
           showAnnotations={showAnnotations}
+          editPrediction={editPrediction}
+          onEditingChange={handleChildEditingChange}
         />
       ) : viewMode === 'virtualizer-element' ? (
         <PlaygroundVirtualizerElementView
@@ -1212,6 +1437,8 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
           enableLineSelection={enableLineSelection}
           enableGutterComments={enableGutterUtility}
           showAnnotations={showAnnotations}
+          editPrediction={editPrediction}
+          onEditingChange={handleChildEditingChange}
         />
       ) : (
         <PlaygroundCodeView
@@ -1220,6 +1447,8 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
           enableLineSelection={enableLineSelection}
           enableGutterComments={enableGutterUtility}
           showAnnotations={showAnnotations}
+          editPrediction={editPrediction}
+          onEditingChange={handleChildEditingChange}
         />
       )}
     </div>

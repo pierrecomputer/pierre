@@ -5,9 +5,10 @@ import {
   createGithubSessionCookie,
   getAuthCookie,
   getGithubOAuthConfig,
-  GITHUB_AUTH_FALLBACK,
+  GITHUB_AUTH_RETURN_COOKIE,
   GITHUB_OAUTH_STATE_COOKIE,
   isGithubAuthenticated,
+  normalizeGithubAuthReturnTo,
   serializeAuthCookie,
 } from '../_auth/github';
 
@@ -45,9 +46,15 @@ export async function GET(request: Request): Promise<Response> {
     return new Response('Not found.', { status: 404 });
   }
 
-  if (new URL(request.url).searchParams.has('callback')) {
+  const requestUrl = new URL(request.url);
+  if (requestUrl.searchParams.has('callback')) {
     return finishGithubOAuth(request);
   }
+
+  const returnTo = normalizeGithubAuthReturnTo(
+    requestUrl.searchParams.get('returnTo') ?? undefined,
+    request.url
+  );
 
   const config = getGithubOAuthConfig();
   if (config === undefined) {
@@ -55,7 +62,7 @@ export async function GET(request: Request): Promise<Response> {
   }
 
   if (isGithubAuthenticated(request)) {
-    return Response.redirect(new URL(GITHUB_AUTH_FALLBACK, request.url), 302);
+    return Response.redirect(new URL(returnTo, request.url), 302);
   }
 
   const state = randomBytes(32).toString('base64url');
@@ -65,20 +72,31 @@ export async function GET(request: Request): Promise<Response> {
   authorizeUrl.searchParams.set('redirect_uri', callbackUrl.toString());
   authorizeUrl.searchParams.set('state', state);
 
-  return new Response(null, {
-    status: 302,
-    headers: {
-      'Cache-Control': CACHE_CONTROL,
-      Location: authorizeUrl.toString(),
-      'Set-Cookie': serializeAuthCookie(
-        request,
-        GITHUB_OAUTH_STATE_COOKIE,
-        state,
-        STATE_MAX_AGE,
-        AUTH_PATH
-      ),
-    },
+  const headers = new Headers({
+    'Cache-Control': CACHE_CONTROL,
+    Location: authorizeUrl.toString(),
   });
+  headers.append(
+    'Set-Cookie',
+    serializeAuthCookie(
+      request,
+      GITHUB_OAUTH_STATE_COOKIE,
+      state,
+      STATE_MAX_AGE,
+      AUTH_PATH
+    )
+  );
+  headers.append(
+    'Set-Cookie',
+    serializeAuthCookie(
+      request,
+      GITHUB_AUTH_RETURN_COOKIE,
+      returnTo,
+      STATE_MAX_AGE,
+      AUTH_PATH
+    )
+  );
+  return new Response(null, { status: 302, headers });
 }
 
 async function finishGithubOAuth(request: Request): Promise<Response> {
@@ -88,6 +106,10 @@ async function finishGithubOAuth(request: Request): Promise<Response> {
   }
 
   const requestUrl = new URL(request.url);
+  const returnTo = normalizeGithubAuthReturnTo(
+    getAuthCookie(request, GITHUB_AUTH_RETURN_COOKIE),
+    request.url
+  );
   const state = requestUrl.searchParams.get('state');
   const expectedState = getAuthCookie(request, GITHUB_OAUTH_STATE_COOKIE);
   if (
@@ -188,12 +210,9 @@ async function finishGithubOAuth(request: Request): Promise<Response> {
     }
     const headers = new Headers({
       'Cache-Control': CACHE_CONTROL,
-      Location: new URL(GITHUB_AUTH_FALLBACK, request.url).toString(),
+      Location: new URL(returnTo, request.url).toString(),
     });
-    headers.append(
-      'Set-Cookie',
-      serializeAuthCookie(request, GITHUB_OAUTH_STATE_COOKIE, '', 0, AUTH_PATH)
-    );
+    clearGithubOAuthCookies(request, headers);
     headers.append('Set-Cookie', sessionCookie);
     return new Response(null, { status: 302, headers });
   } finally {
@@ -228,17 +247,21 @@ function authError(
   message: string,
   status: number
 ): Response {
+  const headers = new Headers({ 'Cache-Control': CACHE_CONTROL });
+  clearGithubOAuthCookies(request, headers);
   return new Response(message, {
     status,
-    headers: {
-      'Cache-Control': CACHE_CONTROL,
-      'Set-Cookie': serializeAuthCookie(
-        request,
-        GITHUB_OAUTH_STATE_COOKIE,
-        '',
-        0,
-        AUTH_PATH
-      ),
-    },
+    headers,
   });
+}
+
+function clearGithubOAuthCookies(request: Request, headers: Headers): void {
+  headers.append(
+    'Set-Cookie',
+    serializeAuthCookie(request, GITHUB_OAUTH_STATE_COOKIE, '', 0, AUTH_PATH)
+  );
+  headers.append(
+    'Set-Cookie',
+    serializeAuthCookie(request, GITHUB_AUTH_RETURN_COOKIE, '', 0, AUTH_PATH)
+  );
 }
