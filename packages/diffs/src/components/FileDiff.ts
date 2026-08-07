@@ -285,6 +285,7 @@ export class FileDiff<
   protected deletionFile?: FileContents | null;
   protected additionFile?: FileContents | null;
   public fileDiff: FileDiffMetadata | undefined;
+  private editSessionDiff: FileDiffMetadata | undefined;
   protected renderRange: RenderRange | undefined;
   protected pendingFiles: PendingFileLoad | undefined;
   protected appliedPreAttributes: PrePropertiesConfig | undefined;
@@ -352,9 +353,9 @@ export class FileDiff<
     lineNumber: number,
     side: SelectionSide = 'additions'
   ) => {
-    // use the fileDiff from the hunksRenderer if it exists, it maybe updated
-    // by the host
-    const fileDiff = this.fileDiffCache;
+    // Use the current diff so line indexes match what the component displays,
+    // including changes made during an active edit session.
+    const fileDiff = this.getCurrentDiff();
     if (fileDiff == null) {
       return undefined;
     }
@@ -697,6 +698,7 @@ export class FileDiff<
       this.workerManager = undefined;
       // Clean up the data
       this.fileDiff = undefined;
+      this.editSessionDiff = undefined;
       this.deletionFile = undefined;
       this.additionFile = undefined;
     }
@@ -1016,22 +1018,21 @@ export class FileDiff<
       hasFileInput &&
       (!areOptionalFilesEqual(oldFile, this.deletionFile) ||
         !areOptionalFilesEqual(newFile, this.additionFile));
-    const { fileDiffCache: sessionDiff } = this;
+    const currentDiff = this.getCurrentDiff();
     if (
       fileDiff != null &&
       this.editor != null &&
-      sessionDiff?.editSessionDirty === true &&
-      fileDiff.cacheKey === sessionDiff.cacheKey &&
-      fileDiff.name === sessionDiff.name &&
-      fileDiff.lang === sessionDiff.lang &&
-      (fileDiff.cacheKey !== undefined ||
-        fileDiff.prevName === sessionDiff.prevName)
+      currentDiff?.editSessionDirty === true &&
+      fileDiff.cacheKey === currentDiff.cacheKey &&
+      fileDiff.name === currentDiff.name &&
+      fileDiff.lang === currentDiff.lang &&
+      (fileDiff.cacheKey != null || fileDiff.prevName === currentDiff.prevName)
     ) {
       // Preserve dirty metadata only for the same editor target. Unkeyed diffs
       // also compare the previous path because no cache key distinguishes it.
       // This is a temporary workaround for edit vs render content change
       // hardening
-      fileDiff = sessionDiff;
+      fileDiff = currentDiff;
     }
     let diffDidChange = fileDiff != null && fileDiff !== this.fileDiff;
     const annotationsChanged =
@@ -1279,14 +1280,16 @@ export class FileDiff<
     onPostRender?.(fileContainer, this, phase);
   }
 
-  protected get fileDiffCache(): FileDiffMetadata | undefined {
-    return this.hunksRenderer.diffCache ?? this.fileDiff;
+  protected getCurrentDiff(): FileDiffMetadata | undefined {
+    return (
+      this.editSessionDiff ?? this.hunksRenderer.diffCache ?? this.fileDiff
+    );
   }
 
   private syncRenderViewToEditor(): void {
     const editor = this.editor;
     const fileContainer = this.fileContainer;
-    const fileDiff = this.fileDiffCache;
+    const fileDiff = this.getCurrentDiff();
     const lineAnnotations = this.lineAnnotations;
     const renderRange = this.computeEditorRenderRange(this.renderRange);
     if (
@@ -1300,7 +1303,7 @@ export class FileDiff<
           !this.enabled ||
           this.editor !== editor ||
           this.fileContainer !== fileContainer ||
-          this.fileDiffCache !== fileDiff
+          this.getCurrentDiff() !== fileDiff
         ) {
           return;
         }
@@ -1324,7 +1327,7 @@ export class FileDiff<
   private computeEditorRenderRange(
     renderRange: RenderRange | undefined
   ): RenderRange | undefined {
-    const fileDiff = this.fileDiffCache;
+    const fileDiff = this.getCurrentDiff();
     if (
       renderRange == null ||
       fileDiff == null ||
@@ -1422,7 +1425,7 @@ export class FileDiff<
    * ran.
    */
   public completeEditSession(): boolean {
-    const fileDiff = this.fileDiffCache;
+    const fileDiff = this.getCurrentDiff();
     if (fileDiff == null || fileDiff.editSessionDirty !== true) {
       return false;
     }
@@ -1518,7 +1521,7 @@ export class FileDiff<
   // (or will have on scroll) a rendered row under the current expansion
   // state. See isAdditionLineRenderable.
   public isLineRenderable(lineNumber: number): boolean {
-    const fileDiff = this.fileDiffCache;
+    const fileDiff = this.getCurrentDiff();
     if (fileDiff == null) {
       return true;
     }
@@ -1542,7 +1545,7 @@ export class FileDiff<
     lineNumber: number,
     direction: 'up' | 'down'
   ): number | undefined {
-    const fileDiff = this.fileDiffCache;
+    const fileDiff = this.getCurrentDiff();
     if (fileDiff == null) {
       return lineNumber;
     }
@@ -1567,7 +1570,7 @@ export class FileDiff<
   // Routed through expandHunk so subclass expansion flows (CodeView's
   // deferred pendingExpansions) apply.
   public revealLine(lineNumber: number): boolean {
-    const fileDiff = this.fileDiffCache;
+    const fileDiff = this.getCurrentDiff();
     const {
       expandUnchanged = false,
       collapsedContextThreshold = DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,

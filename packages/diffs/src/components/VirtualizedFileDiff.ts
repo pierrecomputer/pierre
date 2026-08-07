@@ -916,7 +916,7 @@ export class VirtualizedFileDiff<
       return true;
     }
     const { pendingExpansions } = this;
-    const fileDiff = this.fileDiffCache;
+    const fileDiff = this.getCurrentDiff();
     if (
       pendingExpansions == null ||
       pendingExpansions.length === 0 ||
