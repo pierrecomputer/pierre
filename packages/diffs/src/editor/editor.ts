@@ -1,4 +1,10 @@
 import {
+  computeIndentFoldingRanges,
+  isFoldingClosingDelimiter,
+  LineRangeIndex,
+  mergeHiddenLineRanges,
+} from '../managers/FoldManager';
+import {
   dequeueRender,
   queueRender,
 } from '../managers/UniversalRenderingManager';
@@ -23,6 +29,11 @@ import type {
   SelectionSide,
   TextEdit,
 } from '../types';
+import {
+  FOLD_ELLIPSIS_ICON_SIZE,
+  FOLD_TOGGLE_ICON_SIZE,
+  getFoldIconSvg,
+} from '../utils/foldControls';
 import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
 import { isGutterUtilityPath } from '../utils/isGutterUtilityPath';
 import {
@@ -33,12 +44,6 @@ import {
 } from './command';
 import editorCSS from './editor.css?inline';
 import { EditStack } from './editStack';
-import {
-  computeIndentFoldingRanges,
-  isFoldingClosingDelimiter,
-  LineRangeIndex,
-  mergeHiddenLineRanges,
-} from './folding';
 import {
   type LanguageConfigMap,
   resolveBlockCommentEdits,
@@ -113,7 +118,7 @@ import {
   type SelectionActionContext,
   SelectionActionWidget,
 } from './selectionAction';
-import { createSpriteElement, getEditorIconSvg } from './sprite';
+import { createSpriteElement } from './sprite';
 import {
   cloneEditorState,
   createStateStorage,
@@ -214,8 +219,6 @@ export interface EditorOptions<LAnnotation> {
   roundedSelection?: boolean;
   /** Highlight matching brackets near the caret, default is true. */
   matchBrackets?: boolean;
-  /** Show code-fold controls for attached file components, default is true. */
-  folding?: boolean;
   /**
    * Controls auto-surround when typing quotes or brackets over a selection.
    * Default is `"default"` (both quotes and brackets).
@@ -419,11 +422,15 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #syncedFoldRangeHost?: DiffsEditableComponent<LAnnotation>;
   #syncedFoldRangeVersion = -1;
   #syncedFoldingEnabled?: boolean;
+  // Cached `folding` option from the attached host component; refreshed on
+  // attach, on every render-view sync, and via __hostOptionsChanged.
+  #hostFoldingEnabled = false;
   #foldRangeDocument?: TextDocument<LAnnotation>;
   #foldRangeVersion = -1;
   #renderViewGeneration = 0;
   #pendingFoldFocus?: { line: number; generation: number };
   #hasFoldIndicators = false;
+  #initializedFoldButtons = new WeakSet<HTMLButtonElement>();
 
   #onDeferTokenize = (
     lines: Map<number, Array<HighlightedToken>>,
@@ -457,7 +464,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   }
 
   setOptions(options: EditorOptions<LAnnotation>): void {
-    const wasFoldingRequested = this.#options.folding !== false;
     const previousStorageOption =
       this.#options.persistStateStorage ?? 'inMemory';
     const nextOptions = {
@@ -488,9 +494,15 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#stateStorageOption = undefined;
       this.#pendingStateWrites.clear();
     }
-    if (wasFoldingRequested !== (this.#options.folding !== false)) {
-      this.#handleFoldingOptionChange();
-    }
+  }
+
+  /**
+   * @internal Called by the host component after its options change. The
+   * `folding` option lives on the host (`BaseCodeOptions`), so this is how an
+   * option flip reaches an already-attached editor without a host re-render.
+   */
+  __hostOptionsChanged(): void {
+    this.#refreshHostFoldingOption();
   }
 
   // Small typescript hack to prevent UnresolvedFile from being editable.
@@ -505,8 +517,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       }
     }
     this.#invalidateOnAttach();
+    this.#hostFoldingEnabled =
+      fileInstance.type === 'file' &&
+      fileInstance.__getEffectiveCodeOptions().folding !== false;
     if (
-      fileInstance.type !== 'file' ||
+      !this.#hostFoldingEnabled ||
       fileInstance.__setFoldRanges === undefined
     ) {
       this.#resetFoldingState();
@@ -840,6 +855,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#syncedFoldRangeHost = undefined;
     this.#syncedFoldRangeVersion = -1;
     this.#syncedFoldingEnabled = undefined;
+    this.#hostFoldingEnabled = false;
 
     // cache
     this.#gutterWidthCache = undefined;
@@ -1169,6 +1185,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       }
     }
 
+    this.#refreshHostFoldingOption();
     this.#refreshFoldingRanges();
     this.#syncFoldedRangesToHost();
     this.#renderFoldingControls();
@@ -1453,10 +1470,27 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
   get #isFoldingEnabled(): boolean {
     return (
-      this.#options.folding !== false &&
+      this.#hostFoldingEnabled &&
       this.#fileInstance?.type === 'file' &&
       this.#fileInstance.__setFoldRanges !== undefined
     );
+  }
+
+  // Re-read the host's `folding` option and rebuild or clear the fold state
+  // when it flipped. Host option changes always re-render the host, which
+  // lands in #syncRenderView, so polling there plus the explicit
+  // __hostOptionsChanged hook covers both render-driven and direct flips.
+  #refreshHostFoldingOption(): void {
+    const fileInstance = this.#fileInstance;
+    if (fileInstance?.type !== 'file') {
+      return;
+    }
+    const enabled = fileInstance.__getEffectiveCodeOptions().folding !== false;
+    if (this.#hostFoldingEnabled === enabled) {
+      return;
+    }
+    this.#hostFoldingEnabled = enabled;
+    this.#handleFoldingOptionChange();
   }
 
   #resetFoldingState(): void {
@@ -1604,7 +1638,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   }
 
   #removeFoldingControls(): void {
-    this.#codeElement?.removeAttribute('data-editor-folding');
+    this.#codeElement?.removeAttribute('data-folding');
     this.#gutterElement
       ?.querySelectorAll('[data-fold]')
       .forEach((element) => element.remove());
@@ -1616,7 +1650,14 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
   }
 
+  // Attach toggle listeners once per button. Buttons can be adopted from
+  // read-only fold markup the file renderer emitted before the editor
+  // attached, so creation and initialization are tracked separately.
   #initializeFoldButton(button: HTMLButtonElement): void {
+    if (this.#initializedFoldButtons.has(button)) {
+      return;
+    }
+    this.#initializedFoldButtons.add(button);
     button.addEventListener('pointerdown', (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -1654,7 +1695,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       return;
     }
 
-    codeElement.setAttribute('data-editor-folding', '');
+    codeElement.setAttribute('data-folding', '');
     const foldedLineElements = new Map<number, HTMLElement>();
     if (this.#foldedStartLines.size === 0) {
       if (this.#hasFoldIndicators) {
@@ -1725,8 +1766,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           zone
         );
         buttonCreated = true;
-        this.#initializeFoldButton(button);
       }
+      this.#initializeFoldButton(button);
 
       const wasFolded = button.dataset.folded !== undefined;
       button.ariaExpanded = folded ? 'false' : 'true';
@@ -1734,9 +1775,9 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       button.title = folded ? 'Unfold' : 'Fold';
       button.toggleAttribute('data-folded', folded);
       if (buttonCreated || wasFolded !== folded) {
-        button.innerHTML = getEditorIconSvg(
+        button.innerHTML = getFoldIconSvg(
           folded ? 'chevron-right' : 'chevron-down',
-          14
+          FOLD_TOGGLE_ICON_SIZE
         );
       }
 
@@ -1774,11 +1815,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         ellipsis = h('button', {
           dataset: 'foldEllipsis',
           type: 'button',
-          innerHTML: getEditorIconSvg('ellipsis', 12),
+          innerHTML: getFoldIconSvg('ellipsis', FOLD_ELLIPSIS_ICON_SIZE),
         });
         indicator.prepend(ellipsis);
-        this.#initializeFoldButton(ellipsis);
       }
+      this.#initializeFoldButton(ellipsis);
       ellipsis.ariaLabel = `Unfold line ${lineIndex + 1}`;
       ellipsis.title = 'Unfold';
     }

@@ -432,6 +432,13 @@ export interface BaseCodeOptions {
   disableFileHeader?: boolean;
   disableVirtualizationBuffers?: boolean;
   stickyHeader?: boolean;
+  /**
+   * Show code-fold controls on file components, default is true. Read-only
+   * File components manage their own fold state; an attached editor takes
+   * over folding for the edit session. FileDiff components do not support
+   * folding and ignore this option.
+   */
+  folding?: boolean;
 
   // Shiki config options, ignored if you're using a WorkerPoolManager
   preferredHighlighter?: HighlighterTypes;
@@ -477,7 +484,12 @@ export interface BaseDiffOptions extends BaseCodeOptions {
 export type BaseDiffOptionsWithDefaults = Required<
   Omit<
     BaseDiffOptions,
-    'unsafeCSS' | 'preferredHighlighter' | 'parseDiffOptions' | 'loadDiffFiles'
+    | 'unsafeCSS'
+    | 'preferredHighlighter'
+    | 'parseDiffOptions'
+    | 'loadDiffFiles'
+    // Diff components do not support folding.
+    | 'folding'
   >
 >;
 
@@ -1130,6 +1142,12 @@ export type EditableInstance<T extends { type: string }> = T extends {
 export interface DiffsEditor<LAnnotation> {
   /** @internal */
   __prepareFile?(file: FileContents): FileContents;
+  /**
+   * @internal Notify the editor that the host component's options changed.
+   * The editor reads shared code options (e.g. `folding`) from its host, so
+   * hosts call this after an options swap that does not re-render.
+   */
+  __hostOptionsChanged?(): void;
   __postponeBgTokenizeToNextFrame(): void;
   /** @internal Capture focus intent before replacing the editable view. */
   __captureFocusForDOMReplacement(): void;

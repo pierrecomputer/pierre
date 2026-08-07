@@ -1,6 +1,6 @@
 import { afterAll, describe, expect, test } from 'bun:test';
 
-import { File } from '../src/components/File';
+import { File, type FileOptions } from '../src/components/File';
 import { FileDiff } from '../src/components/FileDiff';
 import { DEFAULT_THEMES } from '../src/constants';
 import { Editor, type EditorOptions } from '../src/editor/editor';
@@ -47,10 +47,17 @@ async function waitForEditableContent(container: HTMLElement): Promise<void> {
   expect(hasEditableContent()).toBe(true);
 }
 
-async function createFileEditorFixture(
-  editorOptions?: EditorOptions<undefined>,
-  contents = FOLDABLE_CONTENTS
-): Promise<FileEditorFixture> {
+interface FileEditorFixtureProps {
+  editorOptions?: EditorOptions<undefined>;
+  fileOptions?: Partial<FileOptions<undefined>>;
+  contents?: string;
+}
+
+async function createFileEditorFixture({
+  editorOptions,
+  fileOptions,
+  contents = FOLDABLE_CONTENTS,
+}: FileEditorFixtureProps = {}): Promise<FileEditorFixture> {
   const dom = installDom();
   const container = document.createElement('div');
   document.body.appendChild(container);
@@ -58,6 +65,7 @@ async function createFileEditorFixture(
   const file = new File<undefined>({
     disableFileHeader: true,
     theme: DEFAULT_THEMES,
+    ...fileOptions,
   });
   const editor = new Editor<undefined>(editorOptions);
   const fileContents: FileContents = {
@@ -189,16 +197,12 @@ describe('editor folding on File', () => {
       const foldZone = firstGutterRow.querySelector(':scope > [data-fold]');
       const initialToggle = foldToggle(container, 1);
 
-      expect(shadow.querySelector('[data-code][data-editor-folding]')).not.toBe(
-        null
-      );
+      expect(shadow.querySelector('[data-code][data-folding]')).not.toBe(null);
       expect(foldZone?.parentElement).toBe(firstGutterRow);
       expect(firstGutterRow.closest('[data-gutter]')).not.toBe(null);
       expect(foldZone?.contains(initialToggle)).toBe(true);
       expect(initialToggle.getAttribute('aria-expanded')).toBe('true');
-      expect(foldIconHref(initialToggle)).toBe(
-        '#diffs-editor-icon-chevron-down'
-      );
+      expect(foldIconHref(initialToggle)).toBe('#diffs-icon-fold-chevron-down');
 
       initialToggle.focus();
       initialToggle.click();
@@ -208,16 +212,14 @@ describe('editor folding on File', () => {
       expect(shadow.activeElement).toBe(foldedToggle);
       expect(foldedToggle.hasAttribute('data-folded')).toBe(true);
       expect(foldedToggle.getAttribute('aria-expanded')).toBe('false');
-      expect(foldIconHref(foldedToggle)).toBe(
-        '#diffs-editor-icon-chevron-right'
-      );
+      expect(foldIconHref(foldedToggle)).toBe('#diffs-icon-fold-chevron-right');
 
       const indicator = foldIndicator(container, 1);
       const ellipsis = foldEllipsis(container, 1);
       expect(indicator.parentElement?.dataset.line).toBe('1');
       expect(indicator.getAttribute('contenteditable')).toBe('false');
       expect(ellipsis.ariaLabel).toBe('Unfold line 1');
-      expect(foldIconHref(ellipsis)).toBe('#diffs-editor-icon-ellipsis');
+      expect(foldIconHref(ellipsis)).toBe('#diffs-icon-fold-ellipsis');
       expect(indicator.dataset.foldEndText).toBeUndefined();
       expect(indicator.children.length).toBe(1);
       expect(indicator.firstElementChild).toBe(ellipsis);
@@ -231,22 +233,20 @@ describe('editor folding on File', () => {
       expect(shadow.activeElement).toBe(unfoldedToggle);
       expect(unfoldedToggle.hasAttribute('data-folded')).toBe(false);
       expect(foldIconHref(unfoldedToggle)).toBe(
-        '#diffs-editor-icon-chevron-down'
+        '#diffs-icon-fold-chevron-down'
       );
     } finally {
       cleanup();
     }
   });
 
-  test('can be disabled at construction', async () => {
+  test('can be disabled through the file options', async () => {
     const { cleanup, container } = await createFileEditorFixture({
-      folding: false,
+      fileOptions: { folding: false },
     });
     try {
       const shadow = shadowRoot(container);
-      expect(shadow.querySelector('[data-code][data-editor-folding]')).toBe(
-        null
-      );
+      expect(shadow.querySelector('[data-code][data-folding]')).toBe(null);
       expect(shadow.querySelector('[data-fold]')).toBe(null);
       expect(shadow.querySelector('[data-fold-toggle]')).toBe(null);
       expect(renderedLineNumbers(container)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
@@ -256,23 +256,26 @@ describe('editor folding on File', () => {
   });
 
   test('responds to folding option changes at runtime', async () => {
-    const { cleanup, container, editor } = await createFileEditorFixture({
-      folding: false,
+    const { cleanup, container, file } = await createFileEditorFixture({
+      fileOptions: { folding: false },
     });
+    const setFolding = (folding: boolean): void => {
+      file.setOptions({ ...file.options, folding });
+    };
     try {
-      editor.setOptions({ folding: true });
+      setFolding(true);
       await waitFor(() => foldToggle(container, 1) != null);
 
       foldToggle(container, 1).click();
       await waitForLines(container, [1, 7, 8]);
 
-      editor.setOptions({ folding: false });
+      setFolding(false);
       await waitForLines(container, [1, 2, 3, 4, 5, 6, 7, 8]);
       expect(shadowRoot(container).querySelector('[data-fold-toggle]')).toBe(
         null
       );
 
-      editor.setOptions({ folding: true });
+      setFolding(true);
       expect(foldToggle(container, 1)).toBeInstanceOf(HTMLButtonElement);
     } finally {
       cleanup();
@@ -293,9 +296,7 @@ describe('editor folding on File', () => {
 
       const nestedToggle = foldToggle(container, 3);
       expect(nestedToggle.hasAttribute('data-folded')).toBe(true);
-      expect(foldIconHref(nestedToggle)).toBe(
-        '#diffs-editor-icon-chevron-right'
-      );
+      expect(foldIconHref(nestedToggle)).toBe('#diffs-icon-fold-chevron-right');
 
       nestedToggle.click();
       await waitForLines(container, [1, 2, 3, 4, 5, 6, 7, 8]);
@@ -413,10 +414,9 @@ describe('editor folding on File', () => {
       'removeMe();',
       'keepMe();',
     ].join('\n');
-    const { cleanup, container, editor } = await createFileEditorFixture(
-      undefined,
-      contents
-    );
+    const { cleanup, container, editor } = await createFileEditorFixture({
+      contents,
+    });
     try {
       foldToggle(container, 5).click();
       await waitForLines(container, [1, 2, 3, 4, 5, 7, 8, 9]);
@@ -442,7 +442,7 @@ describe('editor folding on File', () => {
       const shiftedToggle = foldToggle(container, 6);
       expect(shiftedToggle.hasAttribute('data-folded')).toBe(true);
       expect(foldIconHref(shiftedToggle)).toBe(
-        '#diffs-editor-icon-chevron-right'
+        '#diffs-icon-fold-chevron-right'
       );
     } finally {
       cleanup();
@@ -475,7 +475,7 @@ describe('editor folding on File', () => {
       const shiftedToggle = foldToggle(container, 2);
       expect(shiftedToggle.hasAttribute('data-folded')).toBe(true);
       expect(foldIconHref(shiftedToggle)).toBe(
-        '#diffs-editor-icon-chevron-right'
+        '#diffs-icon-fold-chevron-right'
       );
       expect(foldRangesDuringChange).toEqual([{ startLine: 1, endLine: 6 }]);
       expect(editor.getState().foldRanges).toEqual([
@@ -487,10 +487,9 @@ describe('editor folding on File', () => {
   });
 
   test('shifts a fold when whole lines are deleted before its header', async () => {
-    const { cleanup, container, editor } = await createFileEditorFixture(
-      undefined,
-      `removeMe();\n${FOLDABLE_CONTENTS}`
-    );
+    const { cleanup, container, editor } = await createFileEditorFixture({
+      contents: `removeMe();\n${FOLDABLE_CONTENTS}`,
+    });
     try {
       foldToggle(container, 2).click();
       await waitForLines(container, [1, 2, 8, 9]);
@@ -549,10 +548,9 @@ describe('editor folding on File', () => {
   });
 
   test('recomputes a fold when its closing delimiter gains a suffix', async () => {
-    const { cleanup, container, editor } = await createFileEditorFixture(
-      undefined,
-      ['section {', '  child', '', '}', 'after'].join('\n')
-    );
+    const { cleanup, container, editor } = await createFileEditorFixture({
+      contents: ['section {', '  child', '', '}', 'after'].join('\n'),
+    });
     try {
       foldToggle(container, 1).click();
       await waitForLines(container, [1, 4, 5]);
@@ -606,8 +604,9 @@ describe('editor folding on FileDiff', () => {
       disableFileHeader: true,
       diffStyle: 'split',
       theme: DEFAULT_THEMES,
+      folding: true,
     });
-    const editor = new Editor<undefined>({ folding: true });
+    const editor = new Editor<undefined>();
     const oldFile: FileContents = {
       name: 'foldable.ts',
       contents: FOLDABLE_CONTENTS,
@@ -631,14 +630,8 @@ describe('editor folding on FileDiff', () => {
       await waitForEditableContent(container);
 
       const shadow = shadowRoot(container);
-      expect(shadow.querySelector('[data-code][data-editor-folding]')).toBe(
-        null
-      );
+      expect(shadow.querySelector('[data-code][data-folding]')).toBe(null);
       expect(shadow.querySelector('[data-fold]')).toBe(null);
-      expect(shadow.querySelector('[data-fold-toggle]')).toBe(null);
-
-      editor.setOptions({ folding: false });
-      editor.setOptions({ folding: true });
       expect(shadow.querySelector('[data-fold-toggle]')).toBe(null);
     } finally {
       await wait(10);

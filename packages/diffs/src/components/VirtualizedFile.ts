@@ -1,5 +1,5 @@
 import { DEFAULT_VIRTUAL_FILE_METRICS } from '../constants';
-import { LineRangeIndex } from '../editor/folding';
+import { LineRangeIndex } from '../managers/FoldManager';
 import type {
   DiffsTextDocument,
   FileContents,
@@ -200,17 +200,24 @@ export class VirtualizedFile<
     super.setThemeType(themeType);
   }
 
-  public override __setFoldRanges(ranges: LineRange[]): void {
-    if (!this.updateFoldRanges(ranges)) {
-      return;
+  protected override updateFoldRanges(ranges: LineRange[]): boolean {
+    if (!super.updateFoldRanges(ranges)) {
+      return false;
     }
-
     this.editorFoldedLineIndex = new LineRangeIndex(this.foldRanges);
+    return true;
+  }
+
+  protected override applyFoldRanges(ranges: LineRange[]): boolean {
+    if (!this.updateFoldRanges(ranges)) {
+      return false;
+    }
     this.forceRenderOverride = true;
     this.invalidateEditorFoldingLayout();
     if (this.enabled && this.file != null) {
       this.virtualizer.instanceChanged(this, true);
     }
+    return true;
   }
 
   // Folding only changes which rows participate in layout. Preserve measured
@@ -377,6 +384,16 @@ export class VirtualizedFile<
     if (this.currentCollapsed !== collapsed) {
       this.currentCollapsed = collapsed;
       shouldResetLayoutCache = true;
+    }
+
+    // CodeView flips options globally without calling setOptions on items, so
+    // catch a disabled folding option here and unfold before layout runs.
+    if (this.options.folding === false && this.foldManager.hasFolds()) {
+      this.foldManager.reset();
+      if (this.updateFoldRanges([])) {
+        this.forceRenderOverride = true;
+        shouldResetLayoutCache = true;
+      }
     }
 
     if (shouldResetLayoutCache) {

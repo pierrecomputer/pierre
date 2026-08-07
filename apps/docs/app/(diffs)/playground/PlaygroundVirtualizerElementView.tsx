@@ -21,7 +21,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { flushSync } from 'react-dom';
 
 import type { PlaygroundAnnotationMetadata } from './constants';
-import { ITEM_UNSAFE_CSS, LONG_README_FILE } from './constants';
+import { ITEM_UNSAFE_CSS, LONG_CODE_FILE } from './constants';
 import type { SharedRenderOptions } from './PlaygroundClient';
 import { CommentForm, CommentThread } from './PlaygroundComments';
 
@@ -40,7 +40,7 @@ interface PlaygroundVirtualizerElementViewProps {
 // fixed-height scroll region, in contrast to the window-scroll variant that
 // drives the vanilla Virtualizer against `document`. Any React <FileDiff>
 // nested under <Virtualizer> auto-virtualizes through context; no imperative
-// wiring is needed. The long README plain file leads the list (as in
+// wiring is needed. The long foldable plain file leads the list (as in
 // CodeView), rendered through <File>, which virtualizes the same way.
 export function PlaygroundVirtualizerElementView({
   diffs,
@@ -75,7 +75,7 @@ const FILE_EDITOR_OPTIONS: EditorOptions<undefined> = {
   },
 };
 
-// The long README plain-file surface leading the list. Carries the same
+// The long foldable plain-file surface leading the list. Carries the same
 // header Edit toggle as the diffs (the app-level EditProvider creates its
 // editor); no comment wiring, since the demo file has no annotations.
 function ElementVirtualizerFile({ options }: { options: SharedRenderOptions }) {
@@ -113,7 +113,7 @@ function ElementVirtualizerFile({ options }: { options: SharedRenderOptions }) {
 
   return (
     <File
-      file={LONG_README_FILE}
+      file={LONG_CODE_FILE}
       edit={editing}
       options={fileOptions}
       editorOptions={FILE_EDITOR_OPTIONS}

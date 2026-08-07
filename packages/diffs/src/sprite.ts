@@ -8,6 +8,9 @@ export type SVGSpriteNames =
   | 'diffs-icon-expand'
   | 'diffs-icon-expand-all'
   | 'diffs-icon-file-code'
+  | 'diffs-icon-fold-chevron-down'
+  | 'diffs-icon-fold-chevron-right'
+  | 'diffs-icon-fold-ellipsis'
   | 'diffs-icon-plus'
   | 'diffs-icon-symbol-added'
   | 'diffs-icon-symbol-deleted'
@@ -44,6 +47,15 @@ export const SVGSpriteSheet = `<svg data-icon-sprite aria-hidden="true" width="0
   </symbol>
   <symbol id="diffs-icon-file-code" viewBox="0 0 16 16">
     <path d="M10.75 0c.199 0 .39.08.53.22l3.5 3.5c.14.14.22.331.22.53v9A2.75 2.75 0 0 1 12.25 16h-8.5A2.75 2.75 0 0 1 1 13.25V2.75A2.75 2.75 0 0 1 3.75 0zm-7 1.5c-.69 0-1.25.56-1.25 1.25v10.5c0 .69.56 1.25 1.25 1.25h8.5c.69 0 1.25-.56 1.25-1.25V5h-1.25A2.25 2.25 0 0 1 10 2.75V1.5z"/><path d="M7.248 6.19a.75.75 0 0 1 .063 1.058L5.753 9l1.558 1.752a.75.75 0 0 1-1.122.996l-2-2.25a.75.75 0 0 1 0-.996l2-2.25a.75.75 0 0 1 1.06-.063M8.69 7.248a.75.75 0 1 1 1.12-.996l2 2.25a.75.75 0 0 1 0 .996l-2 2.25a.75.75 0 1 1-1.12-.996L10.245 9z"/>
+  </symbol>
+  <symbol id="diffs-icon-fold-chevron-down" viewBox="0 0 20 20">
+    <path d="M3.5 7.5L10 14L16.5 7.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+  </symbol>
+  <symbol id="diffs-icon-fold-chevron-right" viewBox="0 0 20 20">
+    <path d="M7.5 16.5L14 10L7.5 3.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+  </symbol>
+  <symbol id="diffs-icon-fold-ellipsis" viewBox="0 0 20 20">
+    <g fill="currentColor"><circle cx="10" cy="10" r="1.5" stroke-width="0"></circle><circle cx="16.5" cy="10" r="1.5" stroke-width="0"></circle><circle cx="3.5" cy="10" r="1.5" stroke-width="0"></circle></g>
   </symbol>
   <symbol id="diffs-icon-plus" viewBox="0 0 16 16">
     <path d="M8 3a.75.75 0 0 1 .75.75v3.5h3.5a.75.75 0 0 1 0 1.5h-3.5v3.5a.75.75 0 0 1-1.5 0v-3.5h-3.5a.75.75 0 0 1 0-1.5h3.5v-3.5A.75.75 0 0 1 8 3"/>

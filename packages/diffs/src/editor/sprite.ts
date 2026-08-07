@@ -2,10 +2,7 @@ export type SVGSpriteNames =
   | 'arrow-down'
   | 'arrow-up'
   | 'case'
-  | 'chevron-down'
-  | 'chevron-right'
   | 'close'
-  | 'ellipsis'
   | 'regex'
   | 'whole-word'
   | 'replace'
@@ -44,15 +41,6 @@ export const SVGSpriteSheet = `<svg data-icon-sprite aria-hidden="true" width="0
   </symbol>
   <symbol id="diffs-editor-icon-replace-all" viewBox="0 0 16 16">
     <path fill="currentColor" fill-rule="evenodd" clip-rule="evenodd" d="M10.7197 0.21967C11.0126 -0.0732233 11.4874 -0.0732233 11.7803 0.21967L14.7803 3.21967C15.0732 3.51256 15.0732 3.98744 14.7803 4.28033L11.7803 7.28033C11.4874 7.57322 11.0126 7.57322 10.7197 7.28033C10.4268 6.98744 10.4268 6.51256 10.7197 6.21967L12.4393 4.5H4.25C3.2835 4.5 2.5 5.2835 2.5 6.25V6.875C2.5 7.28921 2.16421 7.625 1.75 7.625C1.33579 7.625 1 7.28921 1 6.875V6.25C1 4.45507 2.45508 3 4.25 3H12.4393L10.7197 1.28033C10.4268 0.987437 10.4268 0.512563 10.7197 0.21967ZM5.28033 8.71967C5.57322 9.01256 5.57322 9.48744 5.28033 9.78033L3.56066 11.5H11.75C12.7165 11.5 13.5 10.7165 13.5 9.75V9.125C13.5 8.71079 13.8358 8.375 14.25 8.375C14.6642 8.375 15 8.71079 15 9.125V9.75C15 11.5449 13.5449 13 11.75 13H3.56066L5.28033 14.7197C5.57322 15.0126 5.57322 15.4874 5.28033 15.7803C4.98744 16.0732 4.51256 16.0732 4.21967 15.7803L1.21967 12.7803C0.926777 12.4874 0.926777 12.0126 1.21967 11.7197L4.21967 8.71967C4.51256 8.42678 4.98744 8.42678 5.28033 8.71967Z"></path>
-  </symbol>
-  <symbol id="diffs-editor-icon-chevron-down" viewBox="0 0 20 20">
-    <path d="M3.5 7.5L10 14L16.5 7.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
-  </symbol>
-  <symbol id="diffs-editor-icon-chevron-right" viewBox="0 0 20 20">
-    <path d="M7.5 16.5L14 10L7.5 3.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
-  </symbol>
-  <symbol id="diffs-editor-icon-ellipsis" viewBox="0 0 20 20">
-    <g fill="currentColor"><circle cx="10" cy="10" r="1.5" stroke-width="0"></circle><circle cx="16.5" cy="10" r="1.5" stroke-width="0"></circle><circle cx="3.5" cy="10" r="1.5" stroke-width="0"></circle></g>
   </symbol>
 </svg>`;
 

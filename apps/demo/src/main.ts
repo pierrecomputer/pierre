@@ -1064,6 +1064,8 @@ if (renderFileButton != null) {
       overflow: wrap ? 'wrap' : 'scroll',
       theme: DEMO_THEME,
       themeType: getThemeType(),
+      // Folding starts disabled in the demo; the header toggle enables it.
+      folding: false,
       renderAnnotation,
       ...(RENDER_FILENAME_SUFFIX
         ? {
@@ -1098,6 +1100,22 @@ if (renderFileButton != null) {
             }
           }
         );
+        // Folding lives on the shared code options, so this flip reaches
+        // whichever side currently owns folding: the read-only file or an
+        // attached editor.
+        const foldingToggle = createToggle(
+          'Folding',
+          instance?.options.folding === true,
+          (checked) => {
+            instance?.setOptions({
+              ...instance.options,
+              folding: checked,
+            });
+            if (!VIRTUALIZE) {
+              void instance.rerender();
+            }
+          }
+        );
         editShortcutCallback = (): boolean | void => {
           if (!isEditing) {
             editableToggle.querySelector('input')?.click();
@@ -1107,7 +1125,7 @@ if (renderFileButton != null) {
         const div = document.createElement('div');
         div.style.display = 'flex';
         div.style.gap = '8px';
-        div.append(collapsedToggle, editableToggle);
+        div.append(collapsedToggle, editableToggle, foldingToggle);
         return div;
       },
 

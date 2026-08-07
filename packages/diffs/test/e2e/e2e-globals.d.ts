@@ -72,6 +72,7 @@ interface Window {
   __selectionChanges?: (E2ELineRange | null)[];
   __gutterClicks?: E2ELineRange[];
   __actionClicks?: string[];
+  __lineNumberClicks?: number[];
 
   // theme.html helper for rendering one row in each line-highlight state.
   __setLineHighlightState?: (state: E2ELineHighlightState) => void;

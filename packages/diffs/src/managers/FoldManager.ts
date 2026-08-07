@@ -1,7 +1,15 @@
 import type { LineRange } from '../types';
-import type { TextDocument } from './textDocument';
 
 const CLOSING_DELIMITER_ONLY = /^[}\])]+[;,]?$/;
+
+/**
+ * The minimal line access folding needs; structurally satisfied by the
+ * editor's TextDocument and by adapters over a split-line cache.
+ */
+export interface FoldableLineSource {
+  lineCount: number;
+  getLineText(lineNumber: number): string;
+}
 
 /**
  * Stores hidden ranges as numeric arrays with prefix counts so visibility and
@@ -179,7 +187,7 @@ export function isFoldingClosingDelimiter(text: string): boolean {
  * and standalone closing delimiters are left visible.
  */
 export function computeIndentFoldingRanges(
-  textDocument: Pick<TextDocument<unknown>, 'lineCount' | 'getLineText'>,
+  textDocument: FoldableLineSource,
   tabSize = 2
 ): LineRange[] {
   const integerTabSize = Math.trunc(tabSize);
@@ -291,4 +299,181 @@ function upperBound(values: readonly number[], target: number): number {
     }
   }
   return low;
+}
+
+// Indentation fold candidates derived from a split-line cache, keyed by the
+// lines array identity so edits and file swaps invalidate the cache naturally.
+interface FoldableRangeCache {
+  lines: readonly string[];
+  ranges: LineRange[];
+  rangesByStart: Map<number, LineRange>;
+}
+
+export interface FoldManagerCallbacks {
+  /**
+   * Whether fold interception is currently active. Read-only File components
+   * return false while an editor session owns folding or the `folding`
+   * option is off.
+   */
+  isEnabled(): boolean;
+  /**
+   * A fold toggle or folded-block ellipsis was activated for the zero-based
+   * header line. `restoreFocus` is true for keyboard activations, asking the
+   * host to move focus back to the re-rendered toggle.
+   */
+  onToggleFold(startLine: number, restoreFocus: boolean): void;
+}
+
+/**
+ * Owns interactive code-fold state for read-only file components: the
+ * indentation fold candidates for the current contents, which fold headers
+ * the user has collapsed, and the capture-phase listeners that intercept
+ * clicks on rendered fold controls before line-selection handlers see them.
+ * An attached editor bypasses this manager entirely and drives fold state
+ * through its own document.
+ */
+export class FoldManager {
+  private foldedStarts = new Set<number>();
+  private cache: FoldableRangeCache | undefined;
+  private pre: HTMLElement | undefined;
+
+  constructor(private callbacks?: FoldManagerCallbacks) {}
+
+  get foldedStartLines(): ReadonlySet<number> {
+    return this.foldedStarts;
+  }
+
+  isFolded(startLine: number): boolean {
+    return this.foldedStarts.has(startLine);
+  }
+
+  hasFolds(): boolean {
+    return this.foldedStarts.size > 0;
+  }
+
+  /** Indentation fold candidates for `lines`, cached per lines identity. */
+  getFoldableRanges(lines: readonly string[]): LineRange[] {
+    return this.getRangeCache(lines).ranges;
+  }
+
+  /** Fold candidates for `lines` keyed by their zero-based header line. */
+  getFoldableRangesByStart(lines: readonly string[]): Map<number, LineRange> {
+    return this.getRangeCache(lines).rangesByStart;
+  }
+
+  private getRangeCache(lines: readonly string[]): FoldableRangeCache {
+    if (this.cache?.lines !== lines) {
+      const ranges = computeIndentFoldingRanges({
+        lineCount: lines.length,
+        getLineText: (line) => lines[line] ?? '',
+      });
+      this.cache = {
+        lines,
+        ranges,
+        rangesByStart: new Map(ranges.map((range) => [range.startLine, range])),
+      };
+    }
+    return this.cache;
+  }
+
+  /** Toggle a fold header; returns false when the line is not foldable. */
+  toggleFold(startLine: number, lines: readonly string[]): boolean {
+    if (!this.getFoldableRangesByStart(lines).has(startLine)) {
+      return false;
+    }
+    if (!this.foldedStarts.delete(startLine)) {
+      this.foldedStarts.add(startLine);
+    }
+    return true;
+  }
+
+  /**
+   * Hidden line ranges derived from the collapsed folds, after dropping folds
+   * whose header is no longer foldable in the current contents.
+   */
+  getHiddenLineRanges(lines: readonly string[]): LineRange[] {
+    if (this.foldedStarts.size === 0) {
+      return [];
+    }
+    const { ranges, rangesByStart } = this.getRangeCache(lines);
+    for (const startLine of this.foldedStarts) {
+      if (!rangesByStart.has(startLine)) {
+        this.foldedStarts.delete(startLine);
+      }
+    }
+    return mergeHiddenLineRanges(ranges, this.foldedStarts);
+  }
+
+  /** Clear all collapsed folds; returns whether anything was folded. */
+  reset(): boolean {
+    if (this.foldedStarts.size === 0) {
+      return false;
+    }
+    this.foldedStarts.clear();
+    return true;
+  }
+
+  /**
+   * Listen for fold-control activation on the rendered code. Capture phase so
+   * a handled toggle press never reaches the line-selection listeners the
+   * InteractionManager attaches to the same element.
+   */
+  setup(pre: HTMLElement): void {
+    if (this.pre === pre) {
+      return;
+    }
+    this.cleanUp();
+    this.pre = pre;
+    pre.addEventListener('click', this.handleClick, true);
+    pre.addEventListener('pointerdown', this.handlePointerDown, true);
+  }
+
+  /** Detach listeners. Fold state is kept; use reset() to clear it. */
+  cleanUp(): void {
+    this.pre?.removeEventListener('click', this.handleClick, true);
+    this.pre?.removeEventListener('pointerdown', this.handlePointerDown, true);
+    this.pre = undefined;
+  }
+
+  private handlePointerDown = (event: Event): void => {
+    if (
+      this.callbacks?.isEnabled() !== true ||
+      foldButtonFromEvent(event) == null
+    ) {
+      return;
+    }
+    // Match editor fold buttons: no focus-on-press and no selection drag.
+    event.preventDefault();
+    event.stopPropagation();
+  };
+
+  private handleClick = (event: Event): void => {
+    const callbacks = this.callbacks;
+    if (callbacks?.isEnabled() !== true) {
+      return;
+    }
+    const button = foldButtonFromEvent(event);
+    if (button == null) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    const lineIndex = Number(
+      button.closest<HTMLElement>('[data-line-index]')?.dataset.lineIndex
+    );
+    if (Number.isInteger(lineIndex)) {
+      const restoreFocus = event instanceof MouseEvent && event.detail === 0;
+      callbacks.onToggleFold(lineIndex, restoreFocus);
+    }
+  };
+}
+
+function foldButtonFromEvent(event: Event): HTMLElement | null {
+  const target = event.target;
+  if (!(target instanceof Element)) {
+    return null;
+  }
+  return target.closest<HTMLElement>(
+    '[data-fold-toggle], [data-fold-ellipsis]'
+  );
 }

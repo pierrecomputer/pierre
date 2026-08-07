@@ -16,6 +16,7 @@ export function getFileRendererOptions<LAnnotation>(
     disableFileHeader: options?.disableFileHeader,
     disableVirtualizationBuffers: options?.disableVirtualizationBuffers,
     stickyHeader: options?.stickyHeader,
+    folding: options?.folding,
     preferredHighlighter: options?.preferredHighlighter,
     useCSSClasses: options?.useCSSClasses,
     useTokenTransformer: shouldUseTokenTransformer(options),

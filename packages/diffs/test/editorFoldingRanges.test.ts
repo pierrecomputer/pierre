@@ -1,11 +1,11 @@
 import { describe, expect, test } from 'bun:test';
 
+import { TextDocument } from '../src/editor/textDocument';
 import {
   computeIndentFoldingRanges,
   LineRangeIndex,
   mergeHiddenLineRanges,
-} from '../src/editor/folding';
-import { TextDocument } from '../src/editor/textDocument';
+} from '../src/managers/FoldManager';
 
 function document(text: string) {
   return new TextDocument('inmemory://folding', text);
