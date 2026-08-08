@@ -4,7 +4,7 @@ import { createTwoFilesPatch } from 'diff';
 import { disposeHighlighter, parseDiffFromFile, parsePatchFiles } from '../src';
 import { VirtualizedFileDiff } from '../src/components/VirtualizedFileDiff';
 import type { Virtualizer } from '../src/components/Virtualizer';
-import type { FileContents, FileDiffMetadata } from '../src/types';
+import type { DiffsEditor, FileContents, FileDiffMetadata } from '../src/types';
 import { installDom, wait } from './domHarness';
 import { assertDefined } from './testUtils';
 
@@ -13,9 +13,27 @@ afterAll(async () => {
 });
 
 class TestVirtualizedFileDiff extends VirtualizedFileDiff<undefined> {
+  getCurrentDiffForTest() {
+    return this.getCurrentDiff();
+  }
+
   getExpandedHunkForTest(index: number) {
     return this.hunksRenderer.getExpandedHunk(index);
   }
+
+  getPendingFileLoadPromiseForTest() {
+    return this.pendingFiles?.promise;
+  }
+}
+
+function createEditorStub(): DiffsEditor<undefined> {
+  return {
+    cleanUp() {},
+    edit: () => () => {},
+    __captureFocusForDOMReplacement() {},
+    __postponeBgTokenizeToNextFrame() {},
+    __syncRenderView() {},
+  };
 }
 
 function createDeferred<T>(): {
@@ -399,7 +417,7 @@ describe('VirtualizedFileDiff partial hydration', () => {
     }
   });
 
-  test('stages a hydrated clone for CodeView until layout changes are consumed', async () => {
+  test('commits staged CodeView hydration at the layout-consumption boundary', async () => {
     let instance: TestVirtualizedFileDiff | undefined;
     try {
       const { oldFile, newFile, partial } = createPartialChange('partial.ts');
@@ -427,23 +445,117 @@ describe('VirtualizedFileDiff partial hydration', () => {
         { layoutDirty: true },
       ]);
 
-      const nextDiff = instance.consumeCodeViewLayoutChanges(partial);
+      instance.consumeCodeViewLayoutChanges(partial);
 
-      assertDefined(nextDiff, 'expected next diff');
-      expect(nextDiff).not.toBe(partial);
-      expect(nextDiff.isPartial).toBe(false);
-      expect(nextDiff.additionLines).toEqual([
+      expect(instance.fileDiff).toBe(partial);
+      expect(partial.isPartial).toBe(false);
+      expect(partial.additionLines).toEqual([
         'keep 1\n',
         'new value\n',
         'keep 3\n',
         'keep 4\n',
       ]);
+      instance.prepareCodeViewItem(partial, 0);
       expect(instance.fileDiff).toBe(partial);
-      instance.prepareCodeViewItem(nextDiff, 0);
-      expect(instance.fileDiff).toBe(nextDiff);
-      expect(partial.isPartial).toBe(true);
     } finally {
       instance?.cleanUp();
+    }
+  });
+
+  test('advanced edit hydration survives recycling before layout consumption', async () => {
+    const { oldFile, newFile, partial } = createPartialChange('advanced.ts');
+    partial.cacheKey = 'external:advanced-partial';
+    const deferred = createDeferred<{
+      oldFile: FileContents;
+      newFile: FileContents;
+    }>();
+    const virtualizerState = createAdvancedVirtualizer();
+    const instance = new TestVirtualizedFileDiff(
+      {
+        disableFileHeader: true,
+        loadDiffFiles: () => deferred.promise,
+      },
+      virtualizerState.virtualizer
+    );
+    let detach: (() => void) | undefined;
+
+    try {
+      instance.prepareCodeViewItem(partial, 0);
+      const editor = createEditorStub();
+      detach = instance.attachEditor(editor);
+      const loadPromise = instance.getPendingFileLoadPromiseForTest();
+      assertDefined(loadPromise, 'expected edit hydration to be pending');
+
+      deferred.resolve({ oldFile, newFile });
+      await loadPromise;
+
+      expect(partial.isPartial).toBe(true);
+      expect(instance.getCurrentDiffForTest()).toBe(partial);
+
+      instance.cleanUp(true);
+      detach = undefined;
+      instance.consumeCodeViewLayoutChanges(partial);
+
+      expect(instance.getCurrentDiffForTest()).toBe(partial);
+      expect(partial.isPartial).toBe(false);
+
+      instance.virtualizedSetup();
+      instance.prepareCodeViewItem(partial, 0);
+      detach = instance.attachEditor(editor);
+
+      const sessionDiff = instance.getCurrentDiffForTest();
+      expect(instance.fileDiff).toBe(partial);
+      expect(partial.isPartial).toBe(false);
+      expect(partial.cacheKey).toBe('external:advanced-partial:hydrated');
+      expect(sessionDiff).not.toBe(partial);
+      expect(sessionDiff?.cacheKey).toBeUndefined();
+      expect(sessionDiff?.additionLines).toBe(partial.additionLines);
+      expect(sessionDiff?.deletionLines).toBe(partial.deletionLines);
+      expect(sessionDiff?.hunks).toBe(partial.hunks);
+    } finally {
+      detach?.();
+      instance.cleanUp();
+    }
+  });
+
+  test('simple edit hydration creates its session from the hydrated base', async () => {
+    const { oldFile, newFile, partial } = createPartialChange('simple.ts');
+    partial.cacheKey = 'external:simple-partial';
+    const deferred = createDeferred<{
+      oldFile: FileContents;
+      newFile: FileContents;
+    }>();
+    const virtualizerState = createVirtualizer();
+    const instance = new TestVirtualizedFileDiff(
+      {
+        disableFileHeader: true,
+        loadDiffFiles: () => deferred.promise,
+      },
+      virtualizerState.virtualizer
+    );
+    let detach: (() => void) | undefined;
+
+    try {
+      instance.prepareCodeViewItem(partial, 0);
+      detach = instance.attachEditor(createEditorStub());
+      const loadPromise = instance.getPendingFileLoadPromiseForTest();
+      assertDefined(loadPromise, 'expected edit hydration to be pending');
+
+      deferred.resolve({ oldFile, newFile });
+      await loadPromise;
+
+      const sessionDiff = instance.getCurrentDiffForTest();
+      expect(instance.fileDiff).toBe(partial);
+      expect(partial.isPartial).toBe(false);
+      expect(partial.cacheKey).toBe('external:simple-partial:hydrated');
+      expect(sessionDiff).not.toBe(partial);
+      expect(sessionDiff?.cacheKey).toBeUndefined();
+      expect(sessionDiff?.additionLines).toBe(partial.additionLines);
+      expect(sessionDiff?.deletionLines).toBe(partial.deletionLines);
+      expect(sessionDiff?.hunks).toBe(partial.hunks);
+    } finally {
+      detach?.();
+      instance.cleanUp();
     }
   });
 

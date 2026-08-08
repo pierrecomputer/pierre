@@ -271,9 +271,6 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     this.additionAnnotations = {};
     this.deletionAnnotations = {};
     this.workerManager?.cleanUpTasks(this);
-    // Session hunks and the metadata dirty marker survive recycle in the
-    // shared FileDiffMetadata; the renderer-local state re-seeds on the next
-    // attach (beginEditSession).
     this.endEditSession();
   }
 
@@ -281,19 +278,30 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
    * Enter edit-session mode: hunk updates preserve the current region
    * skeleton instead of recomputing hunks, and rendering happens locally
    * with the token transformer forced on (worker-pool requests/results are
-   * suspended for this renderer). An empty additions document gets one row so
-   * the editor has a line for its caret. Called on every editor attach,
-   * including a re-attach after recycle.
+   * suspended for this renderer). The current session diff is reinstalled
+   * after renderer-cache resets so mutation paths cannot reach external data.
+   * An empty additions document gets one row for the editor's caret.
    */
-  public beginEditSession(): void {
+  public beginEditSession(diff?: FileDiffMetadata): void {
     this.editSessionActive = true;
-    const diff = this.diffCache;
-    if (diff != null && !diff.isPartial && diff.additionLines.length === 0) {
+    if (diff != null) {
+      this.diff = diff;
+      if (this.renderCache != null) {
+        this.renderCache.diff = diff;
+      }
+    }
+
+    const currentDiff = diff ?? this.diffCache;
+    if (
+      currentDiff != null &&
+      !currentDiff.isPartial &&
+      currentDiff.additionLines.length === 0
+    ) {
       Object.assign(
-        diff,
-        recomputeEmptyDocumentDiff(diff, this.options.parseDiffOptions)
+        currentDiff,
+        recomputeEmptyDocumentDiff(currentDiff, this.options.parseDiffOptions)
       );
-      this.markEditSessionPass(diff);
+      this.markEditSessionPass(currentDiff);
       this.clearRenderCache();
     }
   }

@@ -847,9 +847,11 @@ export class VirtualizedFileDiff<
     } else {
       hydratePartialDiff('merge', expectedDiff, files);
       this.setHydratedState(files);
-      await awaitWithTimeout(() => this.primeHighlightCache(expectedDiff));
-      if (!this.enabled || this.fileDiff !== expectedDiff) {
-        return;
+      if (!this.startHydratedEditSession(expectedDiff)) {
+        await awaitWithTimeout(() => this.primeHighlightCache(expectedDiff));
+        if (!this.enabled || this.fileDiff !== expectedDiff) {
+          return;
+        }
       }
       this.resetLayoutCache({ includeEstimatedHeights: true });
       this.computeApproximateSize();
@@ -860,9 +862,9 @@ export class VirtualizedFileDiff<
 
   public consumeCodeViewLayoutChanges(
     expectedFileDiff: FileDiffMetadata
-  ): FileDiffMetadata | undefined {
+  ): void {
     let hasLayoutChange = false;
-    let nextDiff: FileDiffMetadata | undefined;
+    let didHydrate = false;
     const { pendingExpansions, pendingHydratedDiff } = this;
 
     if (pendingExpansions != null) {
@@ -880,20 +882,20 @@ export class VirtualizedFileDiff<
     if (pendingHydratedDiff != null) {
       this.pendingHydratedDiff = undefined;
       if (pendingHydratedDiff.expectedDiff === expectedFileDiff) {
+        Object.assign(expectedFileDiff, pendingHydratedDiff.nextDiff);
         this.setHydratedState(pendingHydratedDiff.files);
-        nextDiff = pendingHydratedDiff.nextDiff;
+        this.startHydratedEditSession(expectedFileDiff);
+        didHydrate = true;
       }
     }
 
-    if (nextDiff != null) {
+    if (didHydrate) {
       this.forceRenderOverride = true;
       this.resetLayoutCache({ includeEstimatedHeights: true });
     } else if (hasLayoutChange) {
       this.forceRenderOverride = true;
       this.invalidateDerivedLayoutCache(true);
     }
-
-    return nextDiff;
   }
 
   protected override loadFilesIfNecessary(): void {

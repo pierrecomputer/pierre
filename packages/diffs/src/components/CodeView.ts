@@ -4015,16 +4015,7 @@ export class CodeView<LAnnotation = undefined> {
       }
       item.top = runningTop;
       if (item.type === 'diff') {
-        const fileDiff = item.instance.consumeCodeViewLayoutChanges(
-          item.item.fileDiff
-        );
-        if (fileDiff != null) {
-          // Hydration is staged on a clone so layout only changes during this
-          // render pass, then copied back to preserve the caller's diff
-          // identity which matches the rest of the architecture of how we
-          // handle partial hydration
-          Object.assign(item.item.fileDiff, fileDiff);
-        }
+        item.instance.consumeCodeViewLayoutChanges(item.item.fileDiff);
         item.height = item.instance.prepareCodeViewItem(
           item.item.fileDiff,
           runningTop,
