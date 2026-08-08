@@ -39,6 +39,9 @@ async function waitForEditableContent(
 }
 
 interface EditorTestWindow extends Window {
+  InputEvent: {
+    new (type: string, eventInitDict?: InputEventInit): InputEvent;
+  };
   KeyboardEvent: {
     new (type: string, eventInitDict?: KeyboardEventInit): KeyboardEvent;
   };
@@ -1209,6 +1212,46 @@ describe('Editor move line commands', () => {
 });
 
 describe('Editor editing commands', () => {
+  test('keeps following rows rendered after Enter without a virtualizer', async () => {
+    const { cleanup, content, editor, window } = await createEditorFixture(
+      'alpha\nbravo\ncharlie'
+    );
+
+    try {
+      // Seed cached grammar states, as they are after initial tokenization, so
+      // Enter can stop tokenizing when the unchanged syntax state reconverges.
+      editor.applyEdits([
+        {
+          range: {
+            start: { line: 0, character: 0 },
+            end: { line: 0, character: 5 },
+          },
+          newText: 'ALPHA',
+        },
+      ]);
+      editor.setState({ selections: [caret(1, 3)] });
+      content.dispatchEvent(
+        new window.InputEvent('beforeinput', {
+          bubbles: true,
+          cancelable: true,
+          composed: true,
+          inputType: 'insertParagraph',
+        })
+      );
+
+      expect(editor.getText()).toBe('ALPHA\nbra\nvo\ncharlie');
+      expect(
+        Array.from(
+          content.querySelectorAll<HTMLElement>('[data-line]'),
+          (row) => row.textContent
+        )
+      ).toEqual(['ALPHA', 'bra', 'vo', 'charlie']);
+      expect(editor.getState().selections).toEqual([caret(2, 0)]);
+    } finally {
+      cleanup();
+    }
+  });
+
   test('deletes to the end of the line with macOS control+k', async () => {
     const { cleanup, content, editor, window } =
       await createEditorFixture('hello world\nnext');
