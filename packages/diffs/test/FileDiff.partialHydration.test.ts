@@ -483,6 +483,7 @@ describe('FileDiff partial hydration', () => {
       );
       expect(hydratedSession.deletionLines).toEqual(['alpha\n', 'beta\n']);
       expect(hydratedSession.deletionLines).toBe(partial.deletionLines);
+      expect(instance.fileDiff).toBe(partial);
       expect(partial.additionLines).toBe(partial.deletionLines);
       expect(partial).toEqual(hydratedBaseBefore);
     } finally {

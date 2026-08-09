@@ -1,7 +1,7 @@
 import { afterAll, describe, expect, test } from 'bun:test';
 
 import { disposeHighlighter, FileDiff, parseDiffFromFile } from '../src';
-import type { DiffsTextDocument } from '../src/types';
+import type { DiffsEditor, DiffsTextDocument } from '../src/types';
 import { installDom } from './domHarness';
 
 const twoHunkFileLineCount = 140;
@@ -45,6 +45,16 @@ function makeTextDocument(lines: string[]): DiffsTextDocument {
   };
 }
 
+function createEditorStub(): DiffsEditor<string> {
+  return {
+    cleanUp() {},
+    edit: () => () => {},
+    __captureFocusForDOMReplacement() {},
+    __postponeBgTokenizeToNextFrame() {},
+    __syncRenderView() {},
+  };
+}
+
 async function waitForRenderedCode(container: HTMLElement): Promise<void> {
   for (let attempt = 0; attempt < 50; attempt++) {
     if (container.shadowRoot?.querySelector('code') != null) {
@@ -66,6 +76,7 @@ describe('FileDiff unified edit separators', () => {
 
   test('applyDocumentChange refreshes function hunk separators', async () => {
     const { cleanup } = installDom();
+    let detach: (() => void) | undefined;
     let instance: FileDiff<string> | undefined;
     try {
       const fileDiff = createTwoHunkDiff();
@@ -88,6 +99,7 @@ describe('FileDiff unified edit separators', () => {
         deferManagers: true,
       });
       await waitForRenderedCode(fileContainer);
+      detach = instance.attachEditor(createEditorStub());
 
       expect(countSeparatorSlots(fileContainer)).toBeGreaterThan(0);
 
@@ -95,6 +107,7 @@ describe('FileDiff unified edit separators', () => {
 
       expect(countSeparatorSlots(fileContainer)).toBe(0);
     } finally {
+      detach?.();
       instance?.cleanUp();
       cleanup();
     }

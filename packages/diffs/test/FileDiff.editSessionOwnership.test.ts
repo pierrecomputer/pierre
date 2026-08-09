@@ -1,9 +1,11 @@
 import { afterAll, describe, expect, test } from 'bun:test';
 
 import { disposeHighlighter, FileDiff, parseDiffFromFile } from '../src';
+import { Editor } from '../src/editor/editor';
 import type {
   DiffsEditor,
   DiffsTextDocument,
+  FileContents,
   FileDiffMetadata,
   HighlightedToken,
 } from '../src/types';
@@ -46,6 +48,31 @@ function createExternalDiff(): FileDiffMetadata {
   return fileDiff;
 }
 
+function captureExternalDiffState(fileDiff: FileDiffMetadata) {
+  return {
+    value: structuredClone(fileDiff),
+    additionLines: fileDiff.additionLines,
+    deletionLines: fileDiff.deletionLines,
+    hunks: fileDiff.hunks,
+    hunkItems: [...fileDiff.hunks],
+  };
+}
+
+function expectExternalDiffUnchanged(
+  instance: TestFileDiff,
+  externalDiff: FileDiffMetadata,
+  before: ReturnType<typeof captureExternalDiffState>
+): void {
+  expect(instance.fileDiff).toBe(externalDiff);
+  expect(externalDiff.additionLines).toBe(before.additionLines);
+  expect(externalDiff.deletionLines).toBe(before.deletionLines);
+  expect(externalDiff.hunks).toBe(before.hunks);
+  for (const [index, hunk] of before.hunkItems.entries()) {
+    expect(externalDiff.hunks[index]).toBe(hunk);
+  }
+  expect(externalDiff).toEqual(before.value);
+}
+
 function makeDirtyLines(
   edits: ReadonlyArray<[number, string]>
 ): Map<number, HighlightedToken[]> {
@@ -65,7 +92,7 @@ function makeTextDocument(lines: string[]): DiffsTextDocument {
 
 async function createAttachedFixture(): Promise<{
   cleanup(): void;
-  detach(): void;
+  detach(recycle?: boolean): void;
   externalDiff: FileDiffMetadata;
   instance: TestFileDiff;
 }> {
@@ -113,6 +140,45 @@ async function createAttachedFixture(): Promise<{
 }
 
 describe('FileDiff edit-session ownership', () => {
+  test('mutation entry points reject writes without an edit session', () => {
+    const dom = installDom();
+    const fileContainer = document.createElement('div');
+    document.body.appendChild(fileContainer);
+    const externalDiff = createExternalDiff();
+    const externalBefore = captureExternalDiffState(externalDiff);
+    const instance = new TestFileDiff({
+      disableErrorHandling: true,
+      disableFileHeader: true,
+    });
+
+    try {
+      instance.render({
+        fileDiff: externalDiff,
+        fileContainer,
+        forceRender: true,
+      });
+
+      expect(() =>
+        instance.updateRenderCache(
+          makeDirtyLines([[1, 'edited value']]),
+          'light'
+        )
+      ).toThrow('FileDiff.updateRenderCache: requires an active edit session');
+      expect(() =>
+        instance.applyDocumentChange(
+          makeTextDocument(['alpha\n', 'inserted\n', 'new value\n', 'omega\n'])
+        )
+      ).toThrow(
+        'FileDiff.applyDocumentChange: requires an active edit session'
+      );
+
+      expectExternalDiffUnchanged(instance, externalDiff, externalBefore);
+    } finally {
+      instance.cleanUp();
+      dom.cleanup();
+    }
+  });
+
   test('attach creates a private keyless shallow session diff', async () => {
     const fixture = await createAttachedFixture();
     const { detach, externalDiff, instance } = fixture;
@@ -137,7 +203,7 @@ describe('FileDiff edit-session ownership', () => {
   test('a same-line edit copies addition lines and keeps hunks shared', async () => {
     const fixture = await createAttachedFixture();
     const { detach, externalDiff, instance } = fixture;
-    const externalBefore = structuredClone(externalDiff);
+    const externalBefore = captureExternalDiffState(externalDiff);
     try {
       const sessionBefore = instance.getCurrentDiffForTest();
       expect(sessionBefore).toBeDefined();
@@ -159,7 +225,7 @@ describe('FileDiff edit-session ownership', () => {
       expect(sessionAfter?.hunks[0]).toBe(externalDiff.hunks[0]);
       expect(sessionAfter?.editSessionDirty).toBe(true);
       expect(instance.getRendererDiffForTest()).toBe(sessionAfter);
-      expect(externalDiff).toEqual(externalBefore);
+      expectExternalDiffUnchanged(instance, externalDiff, externalBefore);
     } finally {
       detach();
       fixture.cleanup();
@@ -169,7 +235,7 @@ describe('FileDiff edit-session ownership', () => {
   test('a structural edit rebuilds an owned hunk graph', async () => {
     const fixture = await createAttachedFixture();
     const { detach, externalDiff, instance } = fixture;
-    const externalBefore = structuredClone(externalDiff);
+    const externalBefore = captureExternalDiffState(externalDiff);
     try {
       const sessionBefore = instance.getCurrentDiffForTest();
       expect(sessionBefore).toBeDefined();
@@ -190,10 +256,84 @@ describe('FileDiff edit-session ownership', () => {
       expect(sessionAfter?.hunks).not.toBe(externalDiff.hunks);
       expect(sessionAfter?.hunks[0]).not.toBe(externalDiff.hunks[0]);
       expect(sessionAfter?.cacheKey).toBeUndefined();
-      expect(externalDiff).toEqual(externalBefore);
+      expectExternalDiffUnchanged(instance, externalDiff, externalBefore);
     } finally {
       detach();
       fixture.cleanup();
+    }
+  });
+
+  test('recycling clears renderer state without writing edits to the external diff', async () => {
+    const fixture = await createAttachedFixture();
+    const { detach, externalDiff, instance } = fixture;
+    const externalBefore = captureExternalDiffState(externalDiff);
+    try {
+      instance.updateRenderCache(
+        makeDirtyLines([[1, 'edited value']]),
+        'light'
+      );
+      const sessionDiff = instance.getCurrentDiffForTest();
+      expect(sessionDiff).toBeDefined();
+      expect(sessionDiff?.additionLines[1]).toBe('edited value\n');
+
+      detach(true);
+      instance.cleanUp(true);
+
+      expect(instance.getCurrentDiffForTest()).toBe(sessionDiff);
+      expect(instance.getRendererDiffForTest()).toBeUndefined();
+      expectExternalDiffUnchanged(instance, externalDiff, externalBefore);
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('real editor changes emit an edited keyless file without changing the external diff', async () => {
+    const dom = installDom();
+    const fileContainer = document.createElement('div');
+    document.body.appendChild(fileContainer);
+    const externalDiff = createExternalDiff();
+    const externalBefore = captureExternalDiffState(externalDiff);
+    const changedFiles: FileContents[] = [];
+    const instance = new TestFileDiff({
+      disableErrorHandling: true,
+      disableFileHeader: true,
+    });
+    const editor = new Editor<undefined>({
+      onChange: (file) => changedFiles.push(file),
+    });
+
+    try {
+      instance.render({
+        fileDiff: externalDiff,
+        fileContainer,
+        forceRender: true,
+      });
+      editor.edit(instance);
+
+      await waitFor(() => editor.getText() === 'alpha\nnew value\nomega\n', {
+        timeout: 4_000,
+      });
+      editor.applyEdits([
+        {
+          range: {
+            start: { line: 1, character: 0 },
+            end: { line: 1, character: 9 },
+          },
+          newText: 'edited value',
+        },
+      ]);
+
+      expect(changedFiles).toHaveLength(1);
+      expect(changedFiles[0]).toEqual({
+        name: 'session.ts',
+        contents: 'alpha\nedited value\nomega\n',
+      });
+      expect(changedFiles[0]?.cacheKey).toBeUndefined();
+      expectExternalDiffUnchanged(instance, externalDiff, externalBefore);
+    } finally {
+      editor.cleanUp();
+      instance.cleanUp();
+      dom.cleanup();
     }
   });
 });

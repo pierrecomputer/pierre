@@ -1497,19 +1497,15 @@ export class FileDiff<
     textDocument: DiffsTextDocument,
     newLineAnnotations?: DiffLineAnnotation<LAnnotation>[]
   ): void {
+    const { editSessionDiff } = this;
+    if (editSessionDiff == null) {
+      throw new Error(
+        'FileDiff.applyDocumentChange: requires an active edit session'
+      );
+    }
     this.detachAdditionLines();
-    if (this.editSessionDiff != null) {
-      this.hunksRenderer.beginEditSession(this.editSessionDiff);
-    }
+    this.hunksRenderer.beginEditSession(editSessionDiff);
     this.hunksRenderer.applyDocumentChange(textDocument);
-    const fileDiff = this.hunksRenderer.diffCache;
-    if (fileDiff != null && fileDiff !== this.editSessionDiff) {
-      const cacheKey = this.fileDiff?.cacheKey;
-      if (cacheKey != null && fileDiff.cacheKey == null) {
-        fileDiff.cacheKey = cacheKey;
-      }
-      this.fileDiff = fileDiff;
-    }
     if (
       newLineAnnotations !== undefined &&
       newLineAnnotations !== this.lineAnnotations
@@ -1530,10 +1526,14 @@ export class FileDiff<
       lineCountChangeInFlight?: boolean;
     } = {}
   ): void {
-    this.detachAdditionLines();
-    if (this.editSessionDiff != null) {
-      this.hunksRenderer.beginEditSession(this.editSessionDiff);
+    const { editSessionDiff } = this;
+    if (editSessionDiff == null) {
+      throw new Error(
+        'FileDiff.updateRenderCache: requires an active edit session'
+      );
     }
+    this.detachAdditionLines();
+    this.hunksRenderer.beginEditSession(editSessionDiff);
     const { shouldRefreshDiffsView, lineCountChangeInFlight } = options;
     const regionsChanged = this.hunksRenderer.updateRenderCache(
       dirtyLines,
