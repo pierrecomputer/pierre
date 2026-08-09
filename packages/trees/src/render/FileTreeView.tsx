@@ -88,9 +88,11 @@ function formatFlattenedSegments(
   }
 
   return flattenedSegmentsTruncation === 'end' ? (
-    <MiddleTruncate minimumLength={5}>
-      {segments.map((segment) => segment.name).join(' / ')}
-    </MiddleTruncate>
+    (renameInput ?? (
+      <MiddleTruncate minimumLength={5}>
+        {segments.map((segment) => segment.name).join(' / ')}
+      </MiddleTruncate>
+    ))
   ) : (
     <span data-item-flattened-subitems>
       {segments.map((segment, index) => {

@@ -233,8 +233,8 @@ export class FileTree
       searchFakeFocus,
       stickyFolders,
       unsafeCSS,
-      flattenedSegmentsTruncation,
       initialVisibleRowCount,
+      flattenedSegmentsTruncation,
       ...controllerOptions
     } = options;
     this.#composition = composition;
@@ -253,8 +253,8 @@ export class FileTree
       itemHeight: this.#density.itemHeight,
       overscan,
       stickyFolders,
-      initialVisibleRowCount,
       flattenedSegmentsTruncation,
+      initialVisibleRowCount,
     };
     this.#controller = new FileTreeController({
       ...controllerOptions,
@@ -886,6 +886,7 @@ export function preloadFileTree(options: FileTreeOptions): FileTreeSsrPayload {
     searchFakeFocus,
     stickyFolders,
     unsafeCSS,
+    flattenedSegmentsTruncation,
     initialVisibleRowCount,
     ...controllerOptions
   } = options;
@@ -934,6 +935,7 @@ export function preloadFileTree(options: FileTreeOptions): FileTreeSsrPayload {
       searchEnabled: search === true,
       searchFakeFocus: searchFakeFocus === true,
       stickyFolders,
+      flattenedSegmentsTruncation,
       initialViewportHeight,
     })
   );
