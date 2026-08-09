@@ -148,6 +148,7 @@ class TestEditableComponent implements DiffsEditableComponent<undefined> {
       createTestHighlighter(),
       this.fileContainer,
       this.#file,
+      this.#file.cacheKey,
       this.#lineAnnotations,
       this.#renderRange
     );
@@ -268,10 +269,12 @@ describe('Editor onAttach lifecycle', () => {
       await wait(0);
       expect(onAttach).not.toHaveBeenCalled();
 
+      const file = createFile();
       editor.__syncRenderView(
         createTestHighlighter(),
         component.fileContainer,
-        createFile(),
+        file,
+        file.cacheKey,
         undefined,
         undefined
       );

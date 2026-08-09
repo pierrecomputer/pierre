@@ -116,6 +116,7 @@ class TestEditableComponent implements DiffsEditableComponent<undefined> {
       createTestHighlighter(),
       this.fileContainer,
       this.file,
+      this.file.cacheKey,
       this.#lineAnnotations,
       this.#renderRange
     );

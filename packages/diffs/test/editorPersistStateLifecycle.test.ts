@@ -7,6 +7,7 @@ import { Editor, type IStateStorage } from '../src/edit';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
 import type { EditorState, FileContents } from '../src/types';
 import { installDom, wait, waitFor } from './domHarness';
+import { createDeferred } from './testUtils';
 
 afterAll(async () => {
   await disposeHighlighter();
@@ -21,19 +22,6 @@ const ORIGINAL_FILE: FileContents = {
 interface AttachedFile {
   container: HTMLElement;
   file: File<undefined>;
-}
-
-interface Deferred<T> {
-  promise: Promise<T>;
-  resolve(value: T): void;
-}
-
-function createDeferred<T>(): Deferred<T> {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>((resolvePromise) => {
-    resolve = resolvePromise;
-  });
-  return { promise, resolve };
 }
 
 async function attachFile(

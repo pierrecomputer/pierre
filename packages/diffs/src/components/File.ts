@@ -548,6 +548,7 @@ export class File<
           highlighter,
           fileContainer,
           file,
+          file.cacheKey,
           lineAnnotations,
           renderRange
         );

@@ -7,8 +7,7 @@ export function areDiffTargetsEqual(
   diffA: FileDiffMetadata | undefined,
   diffB: FileDiffMetadata | undefined
 ): boolean {
-  return (
-    diffA === diffB ||
-    (diffA?.cacheKey != null && diffA.cacheKey === diffB?.cacheKey)
-  );
+  return diffA?.cacheKey != null || diffB?.cacheKey != null
+    ? diffA?.cacheKey === diffB?.cacheKey
+    : diffA === diffB;
 }

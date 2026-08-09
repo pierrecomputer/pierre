@@ -351,6 +351,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   // state
   #fileInstance?: DiffsEditableComponent<LAnnotation>;
   #fileInfo?: Omit<FileContents, 'contents' | 'header'>;
+  #externalCacheKey?: string;
   #lineAnnotations?: DiffLineAnnotation<LAnnotation>[];
   #textDocument?: TextDocument<LAnnotation>;
   #renderRange?: RenderRange;
@@ -767,15 +768,16 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#tokenizer = undefined;
 
     // A full cleanUp (Edit-mode off, surface switch, unmount) drops the parsed
-    // document and its file identity so the next edit() rebuilds from the
-    // host's current contents. A recycle cleanUp — a virtualized host
-    // temporarily unmounting — keeps them, along with the undo history living
-    // inside the document, so a later edit() against the same
-    // name/lang/cacheKey resumes the session via __syncRenderView's
-    // reused-document path.
+    // document, render-model metadata, and external cache identity so the next
+    // edit() rebuilds from the host's current contents. A recycle cleanUp — a
+    // virtualized host temporarily unmounting — keeps them, along with the undo
+    // history living inside the document, so a later edit() against the same
+    // name/lang/external cache key resumes through __syncRenderView's reused-
+    // document path.
     if (!recycle) {
       this.#textDocument = undefined;
       this.#fileInfo = undefined;
+      this.#externalCacheKey = undefined;
     }
 
     // dispse event listeners
@@ -838,7 +840,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     const languageId = file.lang ?? getFiletypeFromFileName(file.name);
     if (
       fileInfo !== undefined &&
-      (requirePersistedCacheKey(fileInfo) !== cacheKey ||
+      (this.#externalCacheKey !== cacheKey ||
         fileInfo.name !== file.name ||
         this.#textDocument?.languageId !== languageId)
     ) {
@@ -896,6 +898,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     highlighter: DiffsHighlighter,
     fileContainer: HTMLElement,
     fileOrDiff: FileContents | FileDiffMetadata,
+    externalCacheKey: string | undefined,
     lineAnnotations: DiffLineAnnotation<LAnnotation>[] | undefined,
     renderRange: RenderRange | undefined
   ) => {
@@ -952,21 +955,21 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
 
     // Whether this sync replaces the document with a freshly parsed one (a new
-    // file, language, or cache key) versus reusing the existing one. A reused
-    // document matches the DOM the host just rebuilt: renderers persist edit
-    // sessions into the host's own data (DiffHunksRenderer keeps
-    // `diff.additionLines` in sync per edit; FileRenderer writes the session
-    // contents back into the file on recycle), so an unchanged
-    // name/lang/cacheKey re-attach renders the same text the document holds.
+    // file, language, or external cache key) versus reusing the existing one.
+    // The render model may be a private keyless edit-session value, so its
+    // cacheKey cannot also identify the external persistence target.
     const shouldRebuildDocument =
       this.#textDocument === undefined ||
       this.#fileInfo === undefined ||
       this.#fileInfo.name !== fileOrDiff.name ||
       this.#fileInfo.lang !== fileOrDiff.lang ||
-      this.#fileInfo.cacheKey !== fileOrDiff.cacheKey;
+      this.#externalCacheKey !== externalCacheKey;
     const persistedCacheKey =
       this.#options.persistState === true
-        ? requirePersistedCacheKey(fileOrDiff)
+        ? requirePersistedCacheKey({
+            name: fileOrDiff.name,
+            cacheKey: externalCacheKey,
+          })
         : undefined;
 
     let persistedStateTarget:
@@ -1001,6 +1004,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         reusableTextDocument ??
         new TextDocument(fileOrDiff.name, contents, languageId, 0, editStack);
       this.#fileInfo = { name, lang, cacheKey };
+      this.#externalCacheKey = externalCacheKey;
       this.#textDocument = textDocument;
       if (persistedCacheKey !== undefined) {
         this.#textDocumentCache.set(persistedCacheKey, textDocument);
@@ -1044,7 +1048,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     // right after a fresh document build above, or on the first sync after a
     // recycle cleanUp re-attached a retained document. Tying it to the
     // document (rather than the rebuild) is what keeps a re-attach with an
-    // unchanged cacheKey — which skips the rebuild — able to paint edits.
+    // unchanged external cache key — which skips the rebuild — able to paint
+    // edits.
     const textDocument = this.#textDocument;
     if (this.#tokenizer == null && textDocument != null) {
       this.#tokenizer = new EditorTokenizer({
@@ -1236,7 +1241,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       return;
     }
 
-    const cacheKey = requirePersistedCacheKey(fileInfo);
+    const cacheKey = requirePersistedCacheKey({
+      name: fileInfo.name,
+      cacheKey: this.#externalCacheKey,
+    });
     this.#textDocumentCache.set(cacheKey, textDocument);
 
     let storage: IStateStorage;
@@ -1332,7 +1340,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         this.#selections !== selections ||
         currentView?.scrollLeft !== view?.scrollLeft ||
         this.#fileInfo === undefined ||
-        requirePersistedCacheKey(this.#fileInfo) !== cacheKey
+        this.#externalCacheKey !== cacheKey
       ) {
         return;
       }

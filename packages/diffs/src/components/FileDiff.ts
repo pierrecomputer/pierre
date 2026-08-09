@@ -1011,7 +1011,7 @@ export class FileDiff<
     }
     const editSessionDiff = createEditSessionDiff(expectedDiff);
     this.editSessionDiff = editSessionDiff;
-    this.hunksRenderer.beginEditSession(editSessionDiff);
+    this.hunksRenderer.beginEditSession(editSessionDiff, expectedDiff);
     return true;
   }
 
@@ -1348,6 +1348,7 @@ export class FileDiff<
           highlighter,
           fileContainer,
           fileDiff,
+          this.fileDiff?.cacheKey,
           lineAnnotations,
           renderRange
         );
@@ -1418,14 +1419,16 @@ export class FileDiff<
     }
     this.editor?.cleanUp();
     this.editor = editor;
-    if (
+    const externalDiff =
       this.editSessionDiff == null &&
       this.fileDiff != null &&
       !this.fileDiff.isPartial
-    ) {
-      this.editSessionDiff = createEditSessionDiff(this.fileDiff);
+        ? this.fileDiff
+        : undefined;
+    if (externalDiff != null) {
+      this.editSessionDiff = createEditSessionDiff(externalDiff);
     }
-    this.hunksRenderer.beginEditSession(this.editSessionDiff);
+    this.hunksRenderer.beginEditSession(this.editSessionDiff, externalDiff);
     // The editor sync below refuses partial diffs (it needs the full file
     // contents); kick off hydration so the loaded re-render re-runs it.
     if (this.fileDiff?.isPartial === true) {

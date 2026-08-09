@@ -1133,6 +1133,7 @@ export interface DiffsEditor<LAnnotation> {
     highlighter: DiffsHighlighter,
     fileContainer: HTMLElement,
     fileOrDiff: FileContents | FileDiffMetadata,
+    externalCacheKey: string | undefined,
     lineAnnotations:
       | LineAnnotation<LAnnotation>[]
       | DiffLineAnnotation<LAnnotation>[]

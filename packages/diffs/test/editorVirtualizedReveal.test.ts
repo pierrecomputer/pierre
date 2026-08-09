@@ -108,6 +108,7 @@ class VirtualizedEditableComponent implements DiffsEditableComponent<undefined> 
       createTestHighlighter(),
       this.fileContainer,
       this.#file,
+      this.#file.cacheKey,
       undefined,
       {
         // Render only line 3 so the selected line 2 remains virtualized.

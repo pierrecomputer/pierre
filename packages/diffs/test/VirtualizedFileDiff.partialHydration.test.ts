@@ -6,7 +6,7 @@ import { VirtualizedFileDiff } from '../src/components/VirtualizedFileDiff';
 import type { Virtualizer } from '../src/components/Virtualizer';
 import type { DiffsEditor, FileContents, FileDiffMetadata } from '../src/types';
 import { installDom, wait } from './domHarness';
-import { assertDefined } from './testUtils';
+import { assertDefined, createDeferred } from './testUtils';
 
 afterAll(async () => {
   await disposeHighlighter();
@@ -34,17 +34,6 @@ function createEditorStub(): DiffsEditor<undefined> {
     __postponeBgTokenizeToNextFrame() {},
     __syncRenderView() {},
   };
-}
-
-function createDeferred<T>(): {
-  promise: Promise<T>;
-  resolve(value: T): void;
-} {
-  let resolve: (value: T) => void = () => {};
-  const promise = new Promise<T>((promiseResolve) => {
-    resolve = promiseResolve;
-  });
-  return { promise, resolve };
 }
 
 function createVirtualizer(visible = true): {
