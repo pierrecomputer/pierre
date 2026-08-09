@@ -94,6 +94,7 @@ async function createAttachedFixture(): Promise<{
   cleanup(): void;
   detach(recycle?: boolean): void;
   externalDiff: FileDiffMetadata;
+  fileContainer: HTMLElement;
   instance: TestFileDiff;
 }> {
   const dom = installDom();
@@ -135,6 +136,7 @@ async function createAttachedFixture(): Promise<{
     },
     detach,
     externalDiff,
+    fileContainer,
     instance,
   };
 }
@@ -256,6 +258,150 @@ describe('FileDiff edit-session ownership', () => {
       expect(sessionAfter?.hunks).not.toBe(externalDiff.hunks);
       expect(sessionAfter?.hunks[0]).not.toBe(externalDiff.hunks[0]);
       expect(sessionAfter?.cacheKey).toBeUndefined();
+      expectExternalDiffUnchanged(instance, externalDiff, externalBefore);
+    } finally {
+      detach();
+      fixture.cleanup();
+    }
+  });
+
+  for (const [triggerName, triggerRender] of [
+    [
+      'an internal rerender',
+      ({ instance }: Awaited<ReturnType<typeof createAttachedFixture>>) =>
+        instance.rerender(),
+    ],
+    [
+      'a theme-cache rerender',
+      ({ instance }: Awaited<ReturnType<typeof createAttachedFixture>>) =>
+        instance.onThemeChange(),
+    ],
+    [
+      'an overlapping viewport rerender',
+      ({
+        externalDiff,
+        fileContainer,
+        instance,
+      }: Awaited<ReturnType<typeof createAttachedFixture>>) => {
+        instance.render({
+          fileDiff: externalDiff,
+          fileContainer,
+          forceRender: true,
+          renderRange: {
+            startingLine: 0,
+            totalLines: 2,
+            bufferBefore: 0,
+            bufferAfter: 0,
+          },
+        });
+        instance.render({
+          fileDiff: externalDiff,
+          fileContainer,
+          renderRange: {
+            startingLine: 1,
+            totalLines: 2,
+            bufferBefore: 0,
+            bufferAfter: 0,
+          },
+        });
+      },
+    ],
+    [
+      'an option-change rerender',
+      ({ instance }: Awaited<ReturnType<typeof createAttachedFixture>>) => {
+        instance.setOptions({
+          ...instance.options,
+          diffStyle: 'unified',
+        });
+        instance.rerender();
+      },
+    ],
+  ] as const) {
+    test(`${triggerName} renders from the private session`, async () => {
+      const fixture = await createAttachedFixture();
+      const { detach, externalDiff, instance } = fixture;
+      const externalBefore = captureExternalDiffState(externalDiff);
+      try {
+        instance.updateRenderCache(
+          makeDirtyLines([[1, 'edited value']]),
+          'light'
+        );
+        const sessionDiff = instance.getCurrentDiffForTest();
+        expect(sessionDiff).toBeDefined();
+        expect(sessionDiff).not.toBe(externalDiff);
+
+        triggerRender(fixture);
+
+        expect(instance.getCurrentDiffForTest()).toBe(sessionDiff);
+        expect(instance.getRendererDiffForTest()).toBe(sessionDiff);
+        expect(sessionDiff?.additionLines[1]).toBe('edited value\n');
+        expectExternalDiffUnchanged(instance, externalDiff, externalBefore);
+      } finally {
+        detach();
+        fixture.cleanup();
+      }
+    });
+  }
+
+  test('a same-key external object renders from the private session', async () => {
+    const fixture = await createAttachedFixture();
+    const { detach, externalDiff, fileContainer, instance } = fixture;
+    const externalBefore = captureExternalDiffState(externalDiff);
+    const equivalentExternalDiff = structuredClone(externalDiff);
+    const equivalentBefore = structuredClone(equivalentExternalDiff);
+    try {
+      const sessionDiff = instance.getCurrentDiffForTest();
+      expect(sessionDiff).toBeDefined();
+
+      instance.render({
+        fileDiff: equivalentExternalDiff,
+        fileContainer,
+        forceRender: true,
+      });
+
+      expect(instance.fileDiff).toBe(externalDiff);
+      expect(instance.getCurrentDiffForTest()).toBe(sessionDiff);
+      expect(instance.getRendererDiffForTest()).toBe(sessionDiff);
+
+      instance.updateRenderCache(
+        makeDirtyLines([[1, 'edited value']]),
+        'light'
+      );
+
+      expect(sessionDiff?.additionLines[1]).toBe('edited value\n');
+      expect(externalDiff).toEqual(externalBefore.value);
+      expect(equivalentExternalDiff).toEqual(equivalentBefore);
+    } finally {
+      detach();
+      fixture.cleanup();
+    }
+  });
+
+  test('new annotations render over the private session contents', async () => {
+    const fixture = await createAttachedFixture();
+    const { detach, externalDiff, fileContainer, instance } = fixture;
+    const externalBefore = captureExternalDiffState(externalDiff);
+    try {
+      instance.updateRenderCache(
+        makeDirtyLines([[1, 'edited value']]),
+        'light'
+      );
+      const sessionDiff = instance.getCurrentDiffForTest();
+      expect(sessionDiff).toBeDefined();
+
+      instance.render({
+        fileDiff: externalDiff,
+        fileContainer,
+        lineAnnotations: [{ side: 'additions', lineNumber: 2 }],
+      });
+
+      expect(instance.getRendererDiffForTest()).toBe(sessionDiff);
+      expect(fileContainer.shadowRoot?.textContent).toContain('edited value');
+      expect(
+        fileContainer.shadowRoot?.querySelector(
+          'slot[name="annotation-additions-2"]'
+        )
+      ).not.toBeNull();
       expectExternalDiffUnchanged(instance, externalDiff, externalBefore);
     } finally {
       detach();

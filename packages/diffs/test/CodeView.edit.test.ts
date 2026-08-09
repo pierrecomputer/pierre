@@ -13,6 +13,7 @@ import type {
   DiffsEditableComponent,
   DiffsEditor,
   FileContents,
+  FileDiffMetadata,
   HighlightedToken,
   LineAnnotation,
 } from '../src/types';
@@ -97,6 +98,18 @@ function createEditorHarness({
     return editor;
   };
   return { editors, createEditor };
+}
+
+function getEditSessionDiff(instance: unknown): FileDiffMetadata | undefined {
+  return (instance as { editSessionDiff?: FileDiffMetadata }).editSessionDiff;
+}
+
+function getRendererDiff(instance: unknown): FileDiffMetadata | undefined {
+  return (
+    instance as {
+      hunksRenderer?: { diffCache?: FileDiffMetadata };
+    }
+  ).hunksRenderer?.diffCache;
 }
 
 function makeEditFileItem(
@@ -1118,12 +1131,14 @@ describe('CodeView item edit mode', () => {
 
         const rendered = viewer.getRenderedItems()[0];
         expect(rendered).toBeDefined();
-        const hunkCount = edited.fileDiff.hunks.length;
+        const externalBefore = structuredClone(edited.fileDiff);
+        const externalHunks = edited.fileDiff.hunks;
         rendered.instance.updateRenderCache(
           new Map([[25, [[0, '', 'line 25 changed']]]]),
           'light'
         );
-        expect(edited.fileDiff.hunks).toHaveLength(hunkCount + 1);
+        expect(edited.fileDiff).toEqual(externalBefore);
+        expect(edited.fileDiff.hunks).toBe(externalHunks);
 
         rendered.instance.setSelectedLines({ start: 26, end: 26 });
         rendered.instance.setEditorActiveLine(26);
@@ -1157,6 +1172,9 @@ describe('CodeView item edit mode', () => {
       const { editors, createEditor } = createEditorHarness();
       const viewer = new CodeView({ createEditor });
       const edited = makeSessionDiffItem('edited');
+      if (edited.type !== 'diff') {
+        throw new Error('Expected a diff edit-session item.');
+      }
       const items: CodeViewItem<undefined>[] = [
         edited,
         ...Array.from({ length: 39 }, (_, index) =>
@@ -1169,15 +1187,18 @@ describe('CodeView item edit mode', () => {
         await renderItems(viewer, items);
         await wait(10);
 
+        const rendered = viewer.getRenderedItems()[0];
+        const externalBefore = structuredClone(edited.fileDiff);
+        const externalHunks = edited.fileDiff.hunks;
+
         // Revert one hunk mid-session: it persists as a context-only region.
         revertLineTen(edited, viewer);
-        expect(edited.type === 'diff' && edited.fileDiff.hunks.length).toBe(2);
-        expect(
-          edited.type === 'diff' && edited.fileDiff.hunks[0].hunkContent[0].type
-        ).toBe('context');
-        expect(edited.type === 'diff' && edited.fileDiff.editSessionDirty).toBe(
-          true
-        );
+        const sessionDiff = getEditSessionDiff(rendered.instance);
+        expect(sessionDiff?.hunks).toHaveLength(2);
+        expect(sessionDiff?.hunks[0].hunkContent[0].type).toBe('context');
+        expect(sessionDiff?.editSessionDirty).toBe(true);
+        expect(edited.fileDiff).toEqual(externalBefore);
+        expect(edited.fileDiff.hunks).toBe(externalHunks);
 
         // Scroll out (recycle): no exit recompute may run.
         root.scrollTop = 30_000;
@@ -1185,10 +1206,10 @@ describe('CodeView item edit mode', () => {
         viewer.render(true);
         await wait(0);
         expect(editors[0].recycleCleanUps).toBe(1);
-        expect(edited.type === 'diff' && edited.fileDiff.hunks.length).toBe(2);
-        expect(edited.type === 'diff' && edited.fileDiff.editSessionDirty).toBe(
-          true
-        );
+        expect(getEditSessionDiff(rendered.instance)).toBe(sessionDiff);
+        expect(sessionDiff?.hunks).toHaveLength(2);
+        expect(sessionDiff?.editSessionDirty).toBe(true);
+        expect(edited.fileDiff).toEqual(externalBefore);
 
         // Scroll back: the same editor re-attaches and the session-shaped
         // hunks are still in place.
@@ -1197,10 +1218,15 @@ describe('CodeView item edit mode', () => {
         viewer.render(true);
         await wait(0);
         expect(editors[0].edits.length).toBe(2);
-        expect(edited.type === 'diff' && edited.fileDiff.hunks.length).toBe(2);
-        expect(
-          edited.type === 'diff' && edited.fileDiff.hunks[0].hunkContent[0].type
-        ).toBe('context');
+        const remounted = viewer
+          .getRenderedItems()
+          .find((entry) => entry.id === edited.id);
+        expect(remounted).toBeDefined();
+        expect(getEditSessionDiff(remounted?.instance)).toBe(sessionDiff);
+        expect(getRendererDiff(remounted?.instance)).toBe(sessionDiff);
+        expect(sessionDiff?.hunks).toHaveLength(2);
+        expect(sessionDiff?.hunks[0].hunkContent[0].type).toBe('context');
+        expect(edited.fileDiff).toEqual(externalBefore);
       } finally {
         viewer.cleanUp();
         await wait(0);

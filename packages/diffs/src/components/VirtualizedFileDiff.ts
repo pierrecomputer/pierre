@@ -194,7 +194,7 @@ export class VirtualizedFileDiff<
   }
 
   private hasFileAnnotations(
-    fileDiff: FileDiffMetadata | undefined = this.fileDiff
+    fileDiff: FileDiffMetadata | undefined = this.getCurrentDiff()
   ): boolean {
     if (fileDiff == null || !includesFileAnnotations(this.lineAnnotations)) {
       return false;
@@ -323,7 +323,8 @@ export class VirtualizedFileDiff<
   public reconcileHeights(): boolean {
     let hasHeightChange = false;
     const { overflow = 'scroll' } = this.options;
-    if (this.fileContainer == null || this.fileDiff == null) {
+    const fileDiff = this.getCurrentDiff();
+    if (this.fileContainer == null || fileDiff == null) {
       if (this.height !== 0) {
         hasHeightChange = true;
       }
@@ -348,7 +349,7 @@ export class VirtualizedFileDiff<
         ? [this.codeDeletions, this.codeAdditions]
         : [this.codeUnified];
 
-    const hasFileAnnotations = this.hasFileAnnotations(this.fileDiff);
+    const hasFileAnnotations = this.hasFileAnnotations(fileDiff);
     if (
       this.renderRange != null &&
       hasFileAnnotations &&
@@ -480,7 +481,9 @@ export class VirtualizedFileDiff<
     if (shouldResetLayoutCache) {
       this.resetLayoutCache({ includeEstimatedHeights });
     }
-    this.fileDiff = fileDiff;
+    if (targetChanged) {
+      this.fileDiff = fileDiff;
+    }
     this.top = top;
     this.computeApproximateSize();
     return this.height;
@@ -490,7 +493,8 @@ export class VirtualizedFileDiff<
     lineNumber: number,
     side: SelectionSide = 'additions'
   ): { top: number; height: number } | undefined {
-    if (this.fileDiff == null || lineNumber < 1) {
+    const fileDiff = this.getCurrentDiff();
+    if (fileDiff == null || lineNumber < 1) {
       return undefined;
     }
 
@@ -523,7 +527,7 @@ export class VirtualizedFileDiff<
 
     let position: { top: number; height: number } | undefined;
     iterateOverDiff({
-      diff: this.fileDiff,
+      diff: fileDiff,
       diffStyle,
       startingLine: checkpoint?.renderedLineIndex ?? 0,
       expandedHunks: expandUnchanged
@@ -621,7 +625,8 @@ export class VirtualizedFileDiff<
   public getNumericScrollAnchor(
     localViewportTop: number
   ): NumericScrollLineAnchor | undefined {
-    if (this.fileDiff == null) {
+    const fileDiff = this.getCurrentDiff();
+    if (fileDiff == null) {
       return undefined;
     }
 
@@ -650,7 +655,7 @@ export class VirtualizedFileDiff<
     // need to figure out how to anchor on different regions, or utilize
     // renderRange to shortcut this for us somehow
     iterateOverDiff({
-      diff: this.fileDiff,
+      diff: fileDiff,
       diffStyle,
       startingLine: checkpoint?.renderedLineIndex ?? 0,
       expandedHunks: expandUnchanged
@@ -737,7 +742,8 @@ export class VirtualizedFileDiff<
   public getAdvancedStickySpecs(
     windowSpecs?: RenderWindow
   ): StickySpecs | undefined {
-    if (this.top == null || this.fileDiff == null) {
+    const fileDiff = this.getCurrentDiff();
+    if (this.top == null || fileDiff == null) {
       return undefined;
     }
     if (this.options.collapsed === true) {
@@ -745,11 +751,7 @@ export class VirtualizedFileDiff<
     }
     const renderRange =
       windowSpecs != null
-        ? this.computeRenderRangeFromWindow(
-            this.fileDiff,
-            this.top,
-            windowSpecs
-          )
+        ? this.computeRenderRangeFromWindow(fileDiff, this.top, windowSpecs)
         : this.renderRange;
     if (renderRange == null) {
       return undefined;
@@ -1039,18 +1041,19 @@ export class VirtualizedFileDiff<
       resetRenderRange: false,
     });
 
+    const fileDiff = this.getCurrentDiff();
     if (!this.isSimpleMode()) {
       this.computeApproximateSize(true);
     } else if (
       shouldUpdateBuffer &&
-      previousRenderRange !== undefined &&
-      this.fileDiff !== undefined
+      previousRenderRange != null &&
+      fileDiff != null
     ) {
       // Update the buffers caused by the line-count change to ensure the host
       // scrolls to the correct position before re-rendering.
       const windowSpecs = this.virtualizer.getWindowSpecs();
       const renderRange = this.computeRenderRangeFromWindow(
-        this.fileDiff,
+        fileDiff,
         this.top ?? 0,
         windowSpecs
       );
@@ -1070,7 +1073,7 @@ export class VirtualizedFileDiff<
   // if the height is 100% accurate
   private computeApproximateSize(
     force = false,
-    fileDiff: FileDiffMetadata | undefined = this.fileDiff
+    fileDiff: FileDiffMetadata | undefined = this.getCurrentDiff()
   ): void {
     const shouldValidateSize = this.isResizeDebuggingEnabled();
     if (!force && !this.layoutDirty && !shouldValidateSize) {
@@ -1109,7 +1112,7 @@ export class VirtualizedFileDiff<
   }
 
   private getActiveEstimatedHeight(
-    fileDiff: FileDiffMetadata | undefined = this.fileDiff
+    fileDiff: FileDiffMetadata | undefined = this.getCurrentDiff()
   ): number {
     this.ensureEstimatedDiffHeights(fileDiff);
     const estimatedHeight =
@@ -1125,7 +1128,7 @@ export class VirtualizedFileDiff<
   }
 
   private ensureEstimatedDiffHeights(
-    fileDiff: FileDiffMetadata | undefined = this.fileDiff
+    fileDiff: FileDiffMetadata | undefined = this.getCurrentDiff()
   ): void {
     if (fileDiff == null) {
       this.cache.estimatedSplitHeight = undefined;
@@ -1162,7 +1165,7 @@ export class VirtualizedFileDiff<
   }
 
   private validateComputedHeight(
-    fileDiff: FileDiffMetadata | undefined = this.fileDiff
+    fileDiff: FileDiffMetadata | undefined = this.getCurrentDiff()
   ): void {
     if (this.fileContainer == null || fileDiff == null) {
       return;
@@ -1221,10 +1224,9 @@ export class VirtualizedFileDiff<
     if (annotationsChanged) {
       this.resetLayoutCache({ includeEstimatedHeights: false });
     }
-    const diffInputChanged = fileDiff != null && fileDiff !== this.fileDiff;
     const targetChanged =
       nextFileDiff != null && !areDiffTargetsEqual(this.fileDiff, nextFileDiff);
-    const dataChanged = diffInputChanged || filesDidChange;
+    const dataChanged = targetChanged || filesDidChange;
     if (targetChanged) {
       this.resetLayoutCache({ includeEstimatedHeights: true });
     }
@@ -1237,9 +1239,10 @@ export class VirtualizedFileDiff<
       );
       return false;
     }
+    const currentDiff = this.getCurrentDiff(nextFileDiff) ?? nextFileDiff;
 
     if (!isSetup) {
-      this.computeApproximateSize(false, nextFileDiff);
+      this.computeApproximateSize(false, currentDiff);
       const virtualizer = this.getSimpleVirtualizer();
       this.top ??= this.getVirtualizedTop();
       if (this.isAdvancedMode()) {
@@ -1261,12 +1264,14 @@ export class VirtualizedFileDiff<
       this.top ??= this.getVirtualizedTop();
       if (targetChanged) {
         this.getSimpleVirtualizer()?.markDOMDirty();
-        this.computeApproximateSize(false, nextFileDiff);
+        this.computeApproximateSize(false, currentDiff);
       }
     }
 
     if (!this.isVisible && this.isSimpleMode() && (!dataChanged || !isSetup)) {
-      this.fileDiff = nextFileDiff;
+      if (targetChanged) {
+        this.fileDiff = nextFileDiff;
+      }
       if (fileInput != null) {
         this.deletionFile = oldFile;
         this.additionFile = newFile;
@@ -1280,7 +1285,7 @@ export class VirtualizedFileDiff<
     const windowSpecs = this.virtualizer.getWindowSpecs();
     const fileTop = this.top ?? 0;
     const renderRange = this.computeRenderRangeFromWindow(
-      nextFileDiff,
+      currentDiff,
       fileTop,
       windowSpecs
     );
@@ -1359,7 +1364,7 @@ export class VirtualizedFileDiff<
   }
 
   private approximateLayoutCheckpoints(
-    fileDiff: FileDiffMetadata | undefined = this.fileDiff
+    fileDiff: FileDiffMetadata | undefined = this.getCurrentDiff()
   ): void {
     if (
       (!this.layoutDirty && this.cache.checkpoints.length > 0) ||

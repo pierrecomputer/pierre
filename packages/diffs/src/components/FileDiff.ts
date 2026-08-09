@@ -62,6 +62,7 @@ import type {
   ThemeTypes,
 } from '../types';
 import { areDiffLineAnnotationsEqual } from '../utils/areDiffLineAnnotationsEqual';
+import { areDiffTargetsEqual } from '../utils/areDiffTargetsEqual';
 import { areFilesEqual } from '../utils/areFilesEqual';
 import { areHunkDataEqual } from '../utils/areHunkDataEqual';
 import { arePrePropertiesEqual } from '../utils/arePrePropertiesEqual';
@@ -230,6 +231,7 @@ interface TrimColumnsToOverlapProps {
 }
 
 interface ApplyPartialRenderProps {
+  fileDiff: FileDiffMetadata;
   previousRenderRange: RenderRange | undefined;
   renderRange: RenderRange | undefined;
 }
@@ -1058,23 +1060,8 @@ export class FileDiff<
       hasFileInput &&
       (!areOptionalFilesEqual(oldFile, this.deletionFile) ||
         !areOptionalFilesEqual(newFile, this.additionFile));
-    const currentDiff = this.getCurrentDiff();
-    if (
-      fileDiff != null &&
-      this.editor != null &&
-      currentDiff?.editSessionDirty === true &&
-      fileDiff.cacheKey === currentDiff.cacheKey &&
-      fileDiff.name === currentDiff.name &&
-      fileDiff.lang === currentDiff.lang &&
-      (fileDiff.cacheKey != null || fileDiff.prevName === currentDiff.prevName)
-    ) {
-      // Preserve dirty metadata only for the same editor target. Unkeyed diffs
-      // also compare the previous path because no cache key distinguishes it.
-      // This is a temporary workaround for edit vs render content change
-      // hardening
-      fileDiff = currentDiff;
-    }
-    let diffDidChange = fileDiff != null && fileDiff !== this.fileDiff;
+    let diffDidChange =
+      fileDiff != null && !areDiffTargetsEqual(fileDiff, this.fileDiff);
     const annotationsChanged =
       lineAnnotations != null &&
       (lineAnnotations.length > 0 || this.lineAnnotations.length > 0)
@@ -1089,7 +1076,7 @@ export class FileDiff<
       !themeChanged &&
       // If using the fileDiff API, lets check to see if they are equal to
       // avoid doing work
-      ((fileDiff != null && fileDiff === this.fileDiff) ||
+      ((fileDiff != null && !diffDidChange) ||
         // If using the oldFile/newFile API then lets check to see if they are
         // equal
         (fileDiff == null && !filesDidChange))
@@ -1124,7 +1111,7 @@ export class FileDiff<
       this.additionFile = undefined;
     }
 
-    if (fileDiff != null) {
+    if (fileDiff != null && diffDidChange) {
       this.fileDiff = fileDiff;
     } else if (nextParsedFileDiff != null) {
       diffDidChange = true;
@@ -1137,17 +1124,18 @@ export class FileDiff<
     if (lineAnnotations != null) {
       this.setLineAnnotations(lineAnnotations);
     }
-    if (this.fileDiff == null) {
+    const currentDiff = this.getCurrentDiff();
+    if (currentDiff == null) {
       return false;
     }
     // Backstop for sessions that ended without their exit hook running (e.g.
     // session-shaped metadata reused after a host teardown): restore
     // recompute-shaped hunks before rendering.
     if (
-      this.fileDiff.editSessionDirty === true &&
+      currentDiff.editSessionDirty === true &&
       this.shouldSelfHealEditSession()
     ) {
-      finishEditSessionForDiff(this.fileDiff, this.options.parseDiffOptions);
+      finishEditSessionForDiff(currentDiff, this.options.parseDiffOptions);
       void this.hunksRenderer.refreshHighlightedResult();
     }
     if (expandUnchanged) {
@@ -1182,7 +1170,7 @@ export class FileDiff<
 
       try {
         const hunksResult = this.hunksRenderer.renderDiff(
-          this.fileDiff,
+          currentDiff,
           EMPTY_RENDER_RANGE
         );
         if (hunksResult != null) {
@@ -1194,7 +1182,11 @@ export class FileDiff<
           );
         }
         if (hunksResult?.headerElement != null) {
-          this.applyHeaderToDOM(hunksResult.headerElement, fileContainer);
+          this.applyHeaderToDOM(
+            hunksResult.headerElement,
+            fileContainer,
+            currentDiff
+          );
         }
         this.renderSeparators([]);
         this.injectUnsafeCSS();
@@ -1224,6 +1216,7 @@ export class FileDiff<
           filesDidChange || diffDidChange || themeChanged
         ) &&
         this.applyPartialRender({
+          fileDiff: currentDiff,
           previousRenderRange,
           renderRange: nextRenderRange,
         });
@@ -1231,7 +1224,7 @@ export class FileDiff<
       // If we were unable to partially render, perform a full render
       if (!didPartiallyRender) {
         const hunksResult = this.hunksRenderer.renderDiff(
-          this.fileDiff,
+          currentDiff,
           nextRenderRange
         );
         if (hunksResult == null) {
@@ -1251,7 +1244,11 @@ export class FileDiff<
         );
 
         if (hunksResult.headerElement != null) {
-          this.applyHeaderToDOM(hunksResult.headerElement, fileContainer);
+          this.applyHeaderToDOM(
+            hunksResult.headerElement,
+            fileContainer,
+            currentDiff
+          );
         }
         if (
           hunksResult.additionsContentAST != null ||
@@ -1320,10 +1317,10 @@ export class FileDiff<
     onPostRender?.(fileContainer, this, phase);
   }
 
-  protected getCurrentDiff(): FileDiffMetadata | undefined {
-    return (
-      this.editSessionDiff ?? this.hunksRenderer.diffCache ?? this.fileDiff
-    );
+  protected getCurrentDiff(
+    fileDiff: FileDiffMetadata | undefined = this.fileDiff
+  ): FileDiffMetadata | undefined {
+    return this.editSessionDiff ?? fileDiff;
   }
 
   private syncRenderViewToEditor(): void {
@@ -2100,13 +2097,18 @@ export class FileDiff<
 
   private applyHeaderToDOM(
     headerAST: HASTElement,
-    container: HTMLElement
+    container: HTMLElement,
+    fileDiff: FileDiffMetadata
   ): void {
     this.cleanupErrorWrapper();
     this.placeHolder?.remove();
     this.placeHolder = undefined;
-    const { fileDiff } = this;
-    const headerHTML = this.cachedHeaderHTML ?? toHtml(headerAST);
+    // Session metadata changes in place, so an HTML cache created from the
+    // external baseline cannot describe the current edit-session header.
+    const headerHTML =
+      fileDiff === this.editSessionDiff
+        ? toHtml(headerAST)
+        : (this.cachedHeaderHTML ?? toHtml(headerAST));
     this.cachedHeaderHTML = headerHTML;
     if (headerHTML !== this.lastRenderedHeaderHTML) {
       const tempDiv = document.createElement('div');
@@ -2124,7 +2126,7 @@ export class FileDiff<
       this.lastRenderedHeaderHTML = headerHTML;
     }
 
-    if (this.isContainerManaged || fileDiff == null) {
+    if (this.isContainerManaged) {
       return;
     }
 
@@ -2506,6 +2508,7 @@ export class FileDiff<
   }
 
   private applyPartialRender({
+    fileDiff,
     previousRenderRange,
     renderRange,
   }: ApplyPartialRenderProps): boolean {
@@ -2576,10 +2579,10 @@ export class FileDiff<
       startingLine: number,
       totalLines: number
     ): HunksRenderResult | undefined => {
-      if (totalLines <= 0 || this.fileDiff == null) {
+      if (totalLines <= 0) {
         return undefined;
       }
-      return this.hunksRenderer.renderDiff(this.fileDiff, {
+      return this.hunksRenderer.renderDiff(fileDiff, {
         startingLine,
         totalLines,
         bufferBefore: 0,
@@ -2678,12 +2681,13 @@ export class FileDiff<
   // fast refresh diff view via updating the `data-line-type` after an edit.
   // only for split view.
   private refreshSplitDiffView(): void {
-    if (this.options.diffStyle !== 'split') {
+    const fileDiff = this.getCurrentDiff();
+    if (this.options.diffStyle !== 'split' || fileDiff == null) {
       return;
     }
 
     const hunksResult = this.hunksRenderer.renderDiff(
-      this.fileDiff,
+      fileDiff,
       this.renderRange
     );
     if (hunksResult == null) {
@@ -2742,12 +2746,13 @@ export class FileDiff<
   // full diff view re-rendering
   // only for unified view.
   private refreshUnifiedDiffView(): void {
-    if (this.options.diffStyle !== 'unified') {
+    const fileDiff = this.getCurrentDiff();
+    if (this.options.diffStyle !== 'unified' || fileDiff == null) {
       return;
     }
 
     const hunksResult = this.hunksRenderer.renderDiff(
-      this.fileDiff,
+      fileDiff,
       this.renderRange
     );
     if (hunksResult == null) {

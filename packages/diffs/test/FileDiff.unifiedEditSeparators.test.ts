@@ -74,7 +74,7 @@ describe('FileDiff unified edit separators', () => {
     await disposeHighlighter();
   });
 
-  test('applyDocumentChange refreshes function hunk separators', async () => {
+  test('applyDocumentChange refreshes function hunk separators from the session diff', async () => {
     const { cleanup } = installDom();
     let detach: (() => void) | undefined;
     let instance: FileDiff<string> | undefined;
@@ -101,11 +101,17 @@ describe('FileDiff unified edit separators', () => {
       await waitForRenderedCode(fileContainer);
       detach = instance.attachEditor(createEditorStub());
 
-      expect(countSeparatorSlots(fileContainer)).toBeGreaterThan(0);
+      const initialSeparatorCount = countSeparatorSlots(fileContainer);
+      expect(initialSeparatorCount).toBeGreaterThan(0);
 
-      instance.applyDocumentChange(makeTextDocument(fileDiff.deletionLines));
+      const sessionLines = [...fileDiff.additionLines];
+      sessionLines[69] = 'changed-70\n';
+      instance.applyDocumentChange(makeTextDocument(sessionLines));
 
-      expect(countSeparatorSlots(fileContainer)).toBe(0);
+      expect(countSeparatorSlots(fileContainer)).toBeGreaterThan(
+        initialSeparatorCount
+      );
+      expect(fileDiff.additionLines[69]).toBe('70\n');
     } finally {
       detach?.();
       instance?.cleanUp();

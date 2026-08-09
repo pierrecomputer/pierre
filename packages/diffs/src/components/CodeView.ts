@@ -2015,13 +2015,13 @@ export class CodeView<LAnnotation = undefined> {
   }
 
   /**
-   * Attach (or lazily create) the editor for a mounted edit-mode item. Called
+   * Lazily create and attach the editor for a mounted edit-mode item. Called
    * from the render loop so every mounted item passes through it: fresh
    * mounts, remounts after virtualization released the item, and items whose
    * edit flag was just turned on. Editors persist across unmounts, so a
    * remounted item re-attaches its existing editor and resumes the retained
-   * document; the renderers keep the host's file/diff data in sync with the
-   * session so the remount paints the edited text.
+   * document; the instance retains its private session model so the remount
+   * paints the edited text without changing the host input.
    */
   private attachItemEditor(item: CodeViewContextItem<LAnnotation>): void {
     const { id } = item.item;

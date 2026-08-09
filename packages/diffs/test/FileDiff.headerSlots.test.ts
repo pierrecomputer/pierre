@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import { FileDiff, parseDiffFromFile } from '../src';
+import type { DiffsEditor, DiffsTextDocument } from '../src/types';
 import { installDom, wait } from './domHarness';
 
 const fileDiff = parseDiffFromFile(
@@ -12,6 +13,27 @@ function createSlotContent(text: string): HTMLElement {
   const element = document.createElement('span');
   element.textContent = text;
   return element;
+}
+
+function createEditorStub(): DiffsEditor<undefined> {
+  return {
+    cleanUp() {},
+    edit: () => () => {},
+    __captureFocusForDOMReplacement() {},
+    __postponeBgTokenizeToNextFrame() {},
+    __syncRenderView() {},
+  };
+}
+
+function makeTextDocument(lines: string[]): DiffsTextDocument {
+  return {
+    lineCount: lines.length,
+    getText: () => lines.join(''),
+    getLineText: (lineNumber: number, includeLineBreak = false) => {
+      const line = lines[lineNumber] ?? '';
+      return includeLineBreak ? line : line.replace(/\r?\n$/, '');
+    },
+  };
 }
 
 async function waitForSlotText(
@@ -31,7 +53,56 @@ async function waitForSlotText(
   );
 }
 
+async function waitForHeaderCount(
+  container: HTMLElement,
+  selector: string,
+  expected: string
+): Promise<void> {
+  for (let attempt = 0; attempt < 50; attempt++) {
+    if (
+      container.shadowRoot?.querySelector(selector)?.textContent === expected
+    ) {
+      return;
+    }
+    await wait(10);
+  }
+  expect(container.shadowRoot?.querySelector(selector)?.textContent).toBe(
+    expected
+  );
+}
+
 describe('FileDiff header slots', () => {
+  test('updates default header counts from the private session', async () => {
+    const { cleanup } = installDom();
+    const externalDiff = parseDiffFromFile(
+      { name: 'session.txt', contents: 'old\n' },
+      { name: 'session.txt', contents: 'new\n' }
+    );
+    const externalAdditionLines = externalDiff.additionLines;
+    const fileContainer = document.createElement('div');
+    const instance = new FileDiff({
+      collapsed: true,
+      disableErrorHandling: true,
+    });
+    let detach: (() => void) | undefined;
+
+    try {
+      instance.render({ fileDiff: externalDiff, fileContainer });
+      await waitForHeaderCount(fileContainer, '[data-additions-count]', '+1');
+
+      detach = instance.attachEditor(createEditorStub());
+      instance.applyDocumentChange(makeTextDocument(['new\n', 'extra\n']));
+
+      await waitForHeaderCount(fileContainer, '[data-additions-count]', '+2');
+      expect(externalDiff.additionLines).toBe(externalAdditionLines);
+      expect(externalDiff.additionLines).toEqual(['new\n']);
+    } finally {
+      detach?.();
+      instance.cleanUp();
+      cleanup();
+    }
+  });
+
   test('renders, updates, and removes the filename suffix slot', async () => {
     const { cleanup } = installDom();
     const fileContainer = document.createElement('div');

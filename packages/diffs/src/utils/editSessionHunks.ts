@@ -419,7 +419,7 @@ export function finishEditSessionForDiff(
   if (diff.editSessionDirty !== true) {
     return false;
   }
-  diff.editSessionDirty = undefined;
+  delete diff.editSessionDirty;
   // The empty editor row only hosts a caret; it is not file content after exit.
   Object.assign(
     diff,

@@ -603,4 +603,43 @@ describe('VirtualizedFileDiff partial hydration', () => {
       cleanup();
     }
   });
+
+  test('same-key wrappers preserve the original edit-session baseline', () => {
+    const { cleanup } = installDom();
+    const externalDiff = parseDiffFromFile(
+      { name: 'same-key.txt', contents: 'old\n' },
+      { name: 'same-key.txt', contents: 'new\n' }
+    );
+    externalDiff.cacheKey = 'external:same-key';
+    const equivalentDiff = structuredClone(externalDiff);
+    const fileContainer = document.createElement('div');
+    const virtualizerState = createVirtualizer(false);
+    const instance = new TestVirtualizedFileDiff(
+      { disableFileHeader: true },
+      virtualizerState.virtualizer
+    );
+    let detach: (() => void) | undefined;
+
+    try {
+      instance.render({ fileContainer, fileDiff: externalDiff });
+      detach = instance.attachEditor(createEditorStub());
+      const sessionDiff = instance.getCurrentDiffForTest();
+
+      instance.prepareCodeViewItem(equivalentDiff, 0);
+      instance.render({
+        fileContainer,
+        fileDiff: equivalentDiff,
+        forceRender: true,
+      });
+
+      expect(instance.fileDiff).toBe(externalDiff);
+      expect(sessionDiff).not.toBe(externalDiff);
+      expect(instance.getCurrentDiffForTest()).toBe(sessionDiff);
+      expect(sessionDiff?.additionLines).toBe(externalDiff.additionLines);
+    } finally {
+      detach?.();
+      instance.cleanUp();
+      cleanup();
+    }
+  });
 });
