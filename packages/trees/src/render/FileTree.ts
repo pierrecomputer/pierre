@@ -190,7 +190,11 @@ export class FileTree
   readonly #density: FileTreeDensityPreset;
   readonly #viewOptions: Pick<
     FileTreeOptions,
-    'initialVisibleRowCount' | 'itemHeight' | 'overscan' | 'stickyFolders'
+    | 'initialVisibleRowCount'
+    | 'itemHeight'
+    | 'overscan'
+    | 'stickyFolders'
+    | 'flattenedSegmentsTruncation'
   >;
   #fileTreeContainer: HTMLElement | undefined;
   #gitStatusState: FileTreeGitStatusState | null;
@@ -229,6 +233,7 @@ export class FileTree
       searchFakeFocus,
       stickyFolders,
       unsafeCSS,
+      flattenedSegmentsTruncation,
       initialVisibleRowCount,
       ...controllerOptions
     } = options;
@@ -249,6 +254,7 @@ export class FileTree
       overscan,
       stickyFolders,
       initialVisibleRowCount,
+      flattenedSegmentsTruncation,
     };
     this.#controller = new FileTreeController({
       ...controllerOptions,
@@ -561,6 +567,7 @@ export class FileTree
     itemHeight?: number;
     overscan?: number;
     stickyFolders?: boolean;
+    flattenedSegmentsTruncation?: 'per-segment' | 'end';
   } {
     return {
       initialViewportHeight: resolveInitialViewportHeight({
@@ -570,6 +577,8 @@ export class FileTree
       itemHeight: this.#viewOptions.itemHeight,
       overscan: this.#viewOptions.overscan,
       stickyFolders: this.#viewOptions.stickyFolders,
+      flattenedSegmentsTruncation:
+        this.#viewOptions.flattenedSegmentsTruncation,
     };
   }
 

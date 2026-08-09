@@ -78,7 +78,8 @@ import {
 function formatFlattenedSegments(
   row: FileTreeVisibleRow,
   renameInput: JSX.Element | null = null,
-  dragTargetFlattenedSegmentPath: string | null = null
+  dragTargetFlattenedSegmentPath: string | null = null,
+  flattenedSegmentsTruncation: 'per-segment' | 'end' = 'per-segment'
 ): JSX.Element | string {
   'use no memo';
   const segments = row.flattenedSegments;
@@ -86,7 +87,11 @@ function formatFlattenedSegments(
     return renameInput ?? row.name;
   }
 
-  return (
+  return flattenedSegmentsTruncation === 'end' ? (
+    <MiddleTruncate minimumLength={5}>
+      {segments.map((segment) => segment.name).join(' / ')}
+    </MiddleTruncate>
+  ) : (
     <span data-item-flattened-subitems>
       {segments.map((segment, index) => {
         const isLast = index === segments.length - 1;
@@ -848,6 +853,7 @@ function renderFileTreeRowContent(
     gitLaneActive = false,
     renameInput = null,
     showDecorativeActionAffordance = false,
+    flattenedSegmentsTruncation = 'per-segment',
   }: {
     actionLaneEnabled?: boolean;
     customDecoration?: FileTreeRowDecoration | null;
@@ -857,6 +863,7 @@ function renderFileTreeRowContent(
     gitLaneActive?: boolean;
     renameInput?: JSX.Element | null;
     showDecorativeActionAffordance?: boolean;
+    flattenedSegmentsTruncation?: 'per-segment' | 'end';
   } = {}
 ): JSX.Element {
   const targetPath = getFileTreeRowPath(row);
@@ -886,7 +893,8 @@ function renderFileTreeRowContent(
           ? formatFlattenedSegments(
               row,
               renameInput,
-              dragTargetFlattenedSegmentPath
+              dragTargetFlattenedSegmentPath,
+              flattenedSegmentsTruncation
             )
           : (renameInput ?? (
               <MiddleTruncate minimumLength={5} split="extension">
@@ -929,6 +937,7 @@ type FileTreeRenderedRowMode = FileTreeRowClickMode;
 // with a different `registerButton` target.
 type FileTreeRenderRowFrame = {
   controller: FileTreeController;
+  flattenedSegmentsTruncation: 'per-segment' | 'end';
   renameView: ReturnType<FileTreeController[typeof FILE_TREE_RENAME_VIEW]>;
   visualFocusPath: string | null;
   contextHoverPath: string | null;
@@ -999,6 +1008,7 @@ function renderStyledRow(
 ): JSX.Element {
   const {
     controller,
+    flattenedSegmentsTruncation,
     renameView,
     visualFocusPath,
     contextHoverPath,
@@ -1077,6 +1087,7 @@ function renderStyledRow(
     customDecoration,
     decorationLaneEnabled,
     dragTargetFlattenedSegmentPath: dragTarget?.flattenedSegmentPath ?? null,
+    flattenedSegmentsTruncation,
     gitDecoration,
     gitLaneActive,
     renameInput,
@@ -1239,6 +1250,7 @@ export function FileTreeView({
   searchFakeFocus = false,
   slotHost,
   stickyFolders = false,
+  flattenedSegmentsTruncation = 'per-segment',
   initialViewportHeight = FILE_TREE_DEFAULT_VIEWPORT_HEIGHT,
 }: FileTreeViewProps): JSX.Element {
   'use no memo';
@@ -3636,6 +3648,7 @@ export function FileTreeView({
     contextMenuRightClickEnabled,
     contextMenuTriggerMode,
     controller,
+    flattenedSegmentsTruncation,
     directoriesWithGitChanges,
     dragAndDropEnabled,
     draggedPathSet,
