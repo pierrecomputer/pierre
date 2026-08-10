@@ -348,6 +348,71 @@ describe('EditorTokenizer', () => {
     );
   });
 
+  test('keeps downstream bracket ranges after tokenizer state reconverges', () => {
+    const stringTokenMetadata = 2 << 8;
+    let tokenizeLineCount = 0;
+    const grammar = {
+      tokenizeLine2(lineText: string, ruleStack: StateStack) {
+        tokenizeLineCount++;
+        return {
+          tokens: new Uint32Array([0, stringTokenMetadata]),
+          ruleStack,
+          stoppedEarly: false,
+          lineText,
+        };
+      },
+    } as unknown as IGrammar;
+    const textDocument = new TextDocument(
+      'test.ts',
+      ['first[', 'second[', 'third['].join('\n'),
+      'typescript'
+    );
+    const tokenizer = new EditorTokenizer({
+      highlighter: createTestHighlighter({ getLanguage: () => grammar }),
+      textDocument,
+      codeOptions: { theme: 'test-theme', themeType: 'dark' },
+      setStyle: noopSetStyle,
+      onDeferTokenize: () => {},
+    });
+    tokenizer.tokenize(
+      {
+        startLine: 0,
+        startCharacter: 0,
+        endCharacter: 0,
+        endLine: 2,
+        endedAtDocumentEnd: false,
+        previousLineCount: 3,
+        lineCount: 3,
+        lineDelta: 0,
+        changes: [],
+        changedLineRanges: [[0, 2]],
+      },
+      { startingLine: 0, totalLines: 3, bufferBefore: 0, bufferAfter: 0 }
+    );
+
+    const change = textDocument.applyEdits([
+      {
+        range: {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 1 },
+        },
+        newText: 'F',
+      },
+    ])!;
+    tokenizeLineCount = 0;
+    tokenizer.tokenize(change, {
+      startingLine: 0,
+      totalLines: 1,
+      bufferBefore: 0,
+      bufferAfter: 0,
+    });
+
+    expect(tokenizeLineCount).toBe(1);
+    expect(tokenizer.getStringCommentRegexpRangesInLine(2)).toEqual([[0, 6]]);
+    expect(tokenizeLineCount).toBe(1);
+    tokenizer.cleanUp();
+  });
+
   test('limits foreground tokenization to the render range after prepending lines', () => {
     const originalAddEventListener = globalThis.addEventListener;
     const originalPostMessage = globalThis.postMessage;

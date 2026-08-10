@@ -395,14 +395,6 @@ export class EditorTokenizer {
       );
     }
 
-    if (this.#matchBrackets) {
-      // Clear ignored token ranges for lines invalidated by the edit.
-      this.#bracketIgnoredRanges.length = Math.min(
-        this.#bracketIgnoredRanges.length,
-        change.startLine
-      );
-    }
-
     const { lineCount } = this.#textDocument;
     const { startingLine = 0, totalLines = Infinity } = renderRange ?? {};
     const renderRangeEndLine =
@@ -422,6 +414,15 @@ export class EditorTokenizer {
       change.lineDelta === 0 &&
       (change.changedLineChanges?.every(([, , lineDelta]) => lineDelta === 0) ??
         true);
+    if (this.#matchBrackets && !canReuseCachedStates) {
+      // Structural edits shift cache indexes, so only the untouched prefix is
+      // safe. Same-line edits overwrite every range they re-tokenize and can
+      // retain the untouched suffix once grammar state reconverges.
+      this.#bracketIgnoredRanges.length = Math.min(
+        this.#bracketIgnoredRanges.length,
+        change.startLine
+      );
+    }
     const canReuseShiftedStates =
       hostRealignsRows && change.lineDelta !== 0 && dirtyStart >= startingLine;
     const canCacheTokenizedStates =
@@ -587,6 +588,12 @@ export class EditorTokenizer {
     }
 
     if (backgroundStartLine !== undefined) {
+      if (this.#matchBrackets && canReuseCachedStates) {
+        this.#bracketIgnoredRanges.length = Math.min(
+          this.#bracketIgnoredRanges.length,
+          backgroundStartLine
+        );
+      }
       this.#scheduleBackgroundTokenize(
         backgroundStartLine,
         changedLineRanges,
@@ -599,6 +606,12 @@ export class EditorTokenizer {
           : dirtyStart < viewStart && !canReuseCachedStates
             ? dirtyStart
             : line;
+      if (this.#matchBrackets && canReuseCachedStates) {
+        this.#bracketIgnoredRanges.length = Math.min(
+          this.#bracketIgnoredRanges.length,
+          backgroundLine
+        );
+      }
       this.#scheduleBackgroundTokenize(
         backgroundLine,
         changedLineRanges,
