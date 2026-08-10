@@ -42,7 +42,7 @@ const CAPABILITY_GROUPS: ReferenceGroup[] = [
       {
         term: 'Multiple cursors',
         description:
-          'Cmd/Ctrl-click adds carets, while Alt/Option-drag starts a fresh set of column-aligned cursors; one edit applies to every selection.',
+          'Cmd/Ctrl-click adds carets; Alt/Option-drag starts a fresh column selection; edits apply to every range and overlaps merge.',
       },
       {
         term: 'Smart indentation',

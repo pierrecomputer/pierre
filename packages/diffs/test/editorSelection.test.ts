@@ -4024,9 +4024,17 @@ describe('Editor Alt-drag column selection', () => {
       document.dispatchEvent(new Event('selectionchange'));
       expect(editor.getState().selections).toEqual(selections);
 
+      // Cancellation tears down both native-selection and pointer tracking.
       document.dispatchEvent(
-        new PointerEvent('pointerup', { pointerType: 'mouse' })
+        new PointerEvent('pointercancel', { pointerType: 'mouse' })
       );
+      document.dispatchEvent(
+        new PointerEvent('pointermove', {
+          clientX: 116,
+          pointerType: 'mouse',
+        })
+      );
+      nativeRange = rangeTo(1, 0);
       document.dispatchEvent(new Event('selectionchange'));
       expect(editor.getState().selections).toEqual(selections);
     } finally {

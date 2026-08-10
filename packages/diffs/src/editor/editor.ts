@@ -194,7 +194,7 @@ interface AltColumnDrag {
   clientX: number;
   startScrollLeft: number;
   focusLine?: number;
-  focusCharacter?: number;
+  renderedGoal?: Position;
 }
 
 export interface EditorOptions<LAnnotation> {
@@ -782,8 +782,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#globalEventDisposes = undefined;
     this.#editorEventDisposes?.forEach((dispose) => dispose());
     this.#editorEventDisposes = undefined;
-    this.#selectEventDisposes?.forEach((dispose) => dispose());
-    this.#selectEventDisposes = undefined;
     this.#detach?.(recycle);
     this.#detach = undefined;
 
@@ -1481,13 +1479,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#setEditorActiveLineSafe(null);
     this.#gutterWidthCache = undefined;
     this.#contentWidthCache = undefined;
-    this.#shouldIgnoreSelectionChange = false;
+    this.#resetSelectionGesture();
     this.#suppressNativeSelectionSync = false;
     this.#overlayElements?.forEach((el) => el.remove());
     this.#overlayElements = undefined;
     this.#selections = undefined;
-    this.#reservedSelections = undefined;
-    this.#altColumnDrag = undefined;
     this.#scrollingToLine = undefined;
     this.#markerRenderer?.cleanup();
     this.#markerRenderer = undefined;
@@ -1627,6 +1623,29 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#contentHasFocus = false;
       this.#shouldIgnoreSelectionChange = false;
     };
+    const finishMouseSelection = (event: PointerEvent) => {
+      if (event.pointerType !== 'mouse') {
+        return;
+      }
+
+      const refocusEditor = this.#isGutterMouseDown;
+      this.#resetSelectionGesture();
+      if (refocusEditor) {
+        this.#focus();
+      }
+
+      // The popover is suppressed while the mouse is down so it doesn't
+      // flicker under the cursor mid-drag. Once settled, re-run the overlay
+      // pass so a ranged selection reveals it.
+      if (
+        this.#options.enabledSelectionAction === true &&
+        this.#selections !== undefined &&
+        this.#selections.length > 0 &&
+        !isCollapsedSelection(this.#selections.at(-1)!)
+      ) {
+        this.#updateSelections(this.#selections);
+      }
+    };
     this.#globalEventDisposes = [
       addEventListener(
         document,
@@ -1756,7 +1775,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
           if (this.#altColumnDrag !== undefined) {
             this.#altColumnDrag.focusLine = getCaretPosition(selection).line;
-            if (this.#updateAltColumnSelections(true)) {
+            if (this.#updateAltColumnSelections()) {
               return;
             }
           }
@@ -1776,41 +1795,12 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         { passive: true }
       ),
 
-      addEventListener(
-        document,
-        'pointerup',
-        (e) => {
-          if (e.pointerType !== 'mouse') {
-            return;
-          }
-
-          this.#selectEventDisposes?.forEach((dispose) => dispose());
-          this.#selectEventDisposes = undefined;
-
-          if (this.#isGutterMouseDown) {
-            this.#isGutterMouseDown = false;
-            this.#focus();
-          }
-          this.#shouldIgnoreSelectionChange = false;
-          this.#isContentMouseDown = false;
-          this.#altColumnDrag = undefined;
-          this.#shiftKeyPressed = false;
-          this.#selectionStart = undefined;
-          this.#reservedSelections = undefined;
-          // The popover is suppressed while the mouse is down so it doesn't
-          // flicker under the cursor mid-drag. Now that the drag has ended,
-          // re-run the overlay pass so a settled ranged selection reveals it.
-          if (
-            this.#options.enabledSelectionAction === true &&
-            this.#selections !== undefined &&
-            this.#selections.length > 0 &&
-            !isCollapsedSelection(this.#selections.at(-1)!)
-          ) {
-            this.#updateSelections(this.#selections);
-          }
-        },
-        { passive: true }
-      ),
+      addEventListener(document, 'pointerup', finishMouseSelection, {
+        passive: true,
+      }),
+      addEventListener(document, 'pointercancel', finishMouseSelection, {
+        passive: true,
+      }),
 
       addEventListener(
         document,
@@ -1834,6 +1824,21 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         { passive: true }
       ),
     ];
+  }
+
+  // End any in-flight text or gutter selection and release its document-level
+  // listeners. Pointer completion, cancellation, and editor resets share this
+  // path so none can strand gesture state.
+  #resetSelectionGesture(): void {
+    this.#selectEventDisposes?.forEach((dispose) => dispose());
+    this.#selectEventDisposes = undefined;
+    this.#shouldIgnoreSelectionChange = false;
+    this.#isGutterMouseDown = false;
+    this.#isContentMouseDown = false;
+    this.#altColumnDrag = undefined;
+    this.#shiftKeyPressed = false;
+    this.#selectionStart = undefined;
+    this.#reservedSelections = undefined;
   }
 
   // Swaps in a new batch of transient "select" listeners — gutter drag
@@ -1998,7 +2003,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
                     return;
                   }
                   drag.clientX = moveEvent.clientX;
-                  this.#updateAltColumnSelections(false);
+                  this.#updateAltColumnSelections();
                 },
                 { capture: true, passive: true }
               )
@@ -4153,7 +4158,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
   // Keep the drag's horizontal goal in pointer space so a native caret that
   // briefly clamps to a short line cannot move every generated selection.
-  #updateAltColumnSelections(force: boolean): boolean {
+  #updateAltColumnSelections(): boolean {
     const drag = this.#altColumnDrag;
     const selectionStart = this.#selectionStart;
     const textDocument = this.#textDocument;
@@ -4179,13 +4184,17 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         ? -Math.round(-characterDeltaRaw)
         : Math.round(characterDeltaRaw);
     const focusCharacter = Math.max(0, anchor.character + characterDelta);
-    if (!force && focusCharacter === drag.focusCharacter) {
+    const goal = { line: drag.focusLine, character: focusCharacter };
+    if (
+      drag.renderedGoal !== undefined &&
+      comparePosition(drag.renderedGoal, goal) === 0
+    ) {
       return true;
     }
-    drag.focusCharacter = focusCharacter;
+    drag.renderedGoal = goal;
 
     const selections: EditorSelection[] = [];
-    const step = drag.focusLine < anchor.line ? -1 : 1;
+    const step = goal.line < anchor.line ? -1 : 1;
     for (let line = anchor.line; ; line += step) {
       if (this.#isLineRenderable(line)) {
         const lineLength = textDocument.getLineLength(line);
@@ -4208,7 +4217,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
                 : DirectionBackward,
         });
       }
-      if (line === drag.focusLine) {
+      if (line === goal.line) {
         break;
       }
     }

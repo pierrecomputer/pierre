@@ -72,9 +72,9 @@ test.describe('multi-cursor and indentation', () => {
       let recording = false;
       Reflect.set(window, '__altDragSelectionHistory', history);
       element.addEventListener('pointerdown', (event) => {
-        if (event instanceof PointerEvent && event.altKey) {
+        recording = event instanceof PointerEvent && event.altKey;
+        if (recording) {
           history.length = 0;
-          recording = true;
         }
       });
       document.addEventListener('selectionchange', () => {
@@ -106,13 +106,12 @@ test.describe('multi-cursor and indentation', () => {
         }
         return target.getBoundingClientRect();
       };
-      const start = rect('[data-line="2"]');
       const short = rect('[data-line="3"]');
       const empty = rect('[data-line="4"]');
       const token = rect('[data-line="2"] [data-char="18"]');
       return {
         x: token.left + token.width / 2,
-        startY: start.top + start.height / 2,
+        startY: token.top + token.height / 2,
         shortY: short.top + short.height / 2,
         emptyY: empty.top + empty.height / 2,
       };
@@ -123,22 +122,10 @@ test.describe('multi-cursor and indentation', () => {
     await page.mouse.move(points.x, points.shortY, { steps: 4 });
 
     await expect
-      .poll(() =>
-        page.evaluate(() => {
-          const selections = window.__editor?.getState().selections;
-          return (
-            selections?.length === 2 &&
-            selections[0].start.line === 1 &&
-            selections[0].start.character > 16 &&
-            selections[0].end.character === selections[0].start.character &&
-            selections[1].start.line === 2 &&
-            selections[1].start.character === 16 &&
-            selections[1].end.character === 16
-          );
-        })
-      )
-      .toBe(true);
+      .poll(async () => (await selectionTuples(page))?.length)
+      .toBe(2);
     const anchor = (await selectionTuples(page))?.[0]?.[1] ?? -1;
+    expect(anchor).toBeGreaterThan(16);
 
     await page.mouse.move(points.x, points.emptyY, { steps: 4 });
     const selections = [
