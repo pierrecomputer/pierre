@@ -3934,9 +3934,9 @@ async function createEditorFixture(contents: string): Promise<EditorFixture> {
 }
 
 describe('Editor Alt-drag column selection', () => {
-  test('clears existing selections and clamps each crossed line independently', async () => {
+  test('normalizes short, empty, and Unicode lines independently', async () => {
     const { cleanup, content, editor } = await createEditorFixture(
-      'keep\nalpha\nx\n\nbravo'
+      'keep\nalpha\nx\na😀\nae\u0301\n\u1112\u1161\u11ab\n\nbravo'
     );
     const originalGetSelection = document.getSelection.bind(document);
     let nativeRange: StaticRange;
@@ -3968,7 +3968,15 @@ describe('Editor Alt-drag column selection', () => {
         );
       };
 
-      const selections = [caret(1, 2), caret(2, 1), caret(3, 0), caret(4, 2)];
+      const selections = [
+        caret(1, 2),
+        caret(2, 1),
+        caret(3, 3),
+        caret(4, 3),
+        caret(5, 3),
+        caret(6, 0),
+        caret(7, 2),
+      ];
 
       nativeRange = rangeTo(1, 2);
       document.getSelection = (() => ({
@@ -3994,6 +4002,18 @@ describe('Editor Alt-drag column selection', () => {
       document.dispatchEvent(new Event('selectionchange'));
       expect(editor.getState().selections).toEqual(selections.slice(0, 3));
 
+      nativeRange = rangeTo(4, 0);
+      document.dispatchEvent(new Event('selectionchange'));
+      expect(editor.getState().selections).toEqual(selections.slice(0, 4));
+
+      nativeRange = rangeTo(5, 0);
+      document.dispatchEvent(new Event('selectionchange'));
+      expect(editor.getState().selections).toEqual(selections.slice(0, 5));
+
+      nativeRange = rangeTo(6, 0);
+      document.dispatchEvent(new Event('selectionchange'));
+      expect(editor.getState().selections).toEqual(selections.slice(0, 6));
+
       // An empty focus line may not produce another native selectionchange, so
       // pointer movement must update the rectangle on its own.
       document.dispatchEvent(
@@ -4005,7 +4025,10 @@ describe('Editor Alt-drag column selection', () => {
       expect(editor.getState().selections).toEqual([
         createSelection(1, 2, 1, 4, DirectionForward),
         caret(2, 1),
-        caret(3, 0),
+        caret(3, 3),
+        caret(4, 3),
+        caret(5, 3),
+        caret(6, 0),
       ]);
 
       document.dispatchEvent(
@@ -4014,13 +4037,13 @@ describe('Editor Alt-drag column selection', () => {
           pointerType: 'mouse',
         })
       );
-      expect(editor.getState().selections).toEqual(selections.slice(0, 3));
+      expect(editor.getState().selections).toEqual(selections.slice(0, 6));
 
-      nativeRange = rangeTo(4, 0);
+      nativeRange = rangeTo(7, 0);
       document.dispatchEvent(new Event('selectionchange'));
       expect(editor.getState().selections).toEqual(selections);
 
-      nativeRange = rangeTo(4, 2);
+      nativeRange = rangeTo(7, 2);
       document.dispatchEvent(new Event('selectionchange'));
       expect(editor.getState().selections).toEqual(selections);
 

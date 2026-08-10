@@ -342,9 +342,9 @@ function moveBySoftLine(
   };
 }
 
-// Snaps a vertical landing to the end of its grapheme so edits cannot split a
-// user-visible character. Stop once the containing cluster is resolved.
-function snapCharacterToGraphemeBoundary(
+// Snaps an editable position to the end of its grapheme so edits cannot split
+// a user-visible character. Stop once the containing cluster is resolved.
+export function snapCharacterToGraphemeBoundary(
   lineText: string,
   character: number
 ): number {

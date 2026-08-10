@@ -101,6 +101,7 @@ import {
   resolveSelectionCut,
   selectionIntersects,
   shiftSelectionLines,
+  snapCharacterToGraphemeBoundary,
 } from './selection';
 import {
   type SelectionActionContext,
@@ -4197,9 +4198,18 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     const step = goal.line < anchor.line ? -1 : 1;
     for (let line = anchor.line; ; line += step) {
       if (this.#isLineRenderable(line)) {
-        const lineLength = textDocument.getLineLength(line);
-        const anchorCharacter = Math.min(anchor.character, lineLength);
-        const lineFocusCharacter = Math.min(focusCharacter, lineLength);
+        // Projected UTF-16 offsets must not split a grapheme on this line.
+        const lineText = textDocument.getLineText(line);
+        const anchorOffset = Math.min(anchor.character, lineText.length);
+        const focusOffset = Math.min(focusCharacter, lineText.length);
+        const anchorCharacter = snapCharacterToGraphemeBoundary(
+          lineText,
+          anchorOffset
+        );
+        const lineFocusCharacter =
+          focusOffset === anchorOffset
+            ? anchorCharacter
+            : snapCharacterToGraphemeBoundary(lineText, focusOffset);
         selections.push({
           start: {
             line,
