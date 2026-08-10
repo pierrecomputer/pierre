@@ -10,6 +10,18 @@ async function openFixture(page: Page): Promise<void> {
 const contents = (page: Page): Promise<string> =>
   page.evaluate(() => window.__editor?.getText() ?? '');
 
+const selectionTuples = (page: Page): Promise<number[][] | undefined> =>
+  page.evaluate(() =>
+    window.__editor
+      ?.getState()
+      .selections?.map((selection) => [
+        selection.start.line,
+        selection.start.character,
+        selection.end.line,
+        selection.end.character,
+      ])
+  );
+
 test.describe('multi-cursor and indentation', () => {
   // Adding a caret with a modifier-click can't be simulated in the pinned
   // headless Chromium: selectionchange fires before pointerdown there, so the
@@ -46,6 +58,109 @@ test.describe('multi-cursor and indentation', () => {
     await expect
       .poll(async () => (await contents(page)).split('Z').length - 1)
       .toBe(2);
+  });
+
+  test('Alt-drag keeps its goal column across short and empty lines', async ({
+    page,
+  }) => {
+    await openFixture(page);
+
+    const content = page.locator(CONTENT);
+    await content.click();
+    await content.evaluate((element) => {
+      const history: number[][][] = [];
+      let recording = false;
+      Reflect.set(window, '__altDragSelectionHistory', history);
+      element.addEventListener('pointerdown', (event) => {
+        if (event instanceof PointerEvent && event.altKey) {
+          history.length = 0;
+          recording = true;
+        }
+      });
+      document.addEventListener('selectionchange', () => {
+        if (!recording) {
+          return;
+        }
+        const selections = window.__editor
+          ?.getState()
+          .selections?.map((selection) => [
+            selection.start.line,
+            selection.start.character,
+            selection.end.line,
+            selection.end.character,
+          ]);
+        if (selections !== undefined) {
+          history.push(selections);
+        }
+      });
+      document.addEventListener('pointerup', () => {
+        recording = false;
+      });
+    });
+
+    const points = await content.evaluate((element) => {
+      const rect = (selector: string): DOMRect => {
+        const target = element.querySelector(selector);
+        if (target == null) {
+          throw new Error(`column selection target missing: ${selector}`);
+        }
+        return target.getBoundingClientRect();
+      };
+      const start = rect('[data-line="2"]');
+      const short = rect('[data-line="3"]');
+      const empty = rect('[data-line="4"]');
+      const token = rect('[data-line="2"] [data-char="18"]');
+      return {
+        x: token.left + token.width / 2,
+        startY: start.top + start.height / 2,
+        shortY: short.top + short.height / 2,
+        emptyY: empty.top + empty.height / 2,
+      };
+    });
+    await page.keyboard.down('Alt');
+    await page.mouse.move(points.x, points.startY);
+    await page.mouse.down();
+    await page.mouse.move(points.x, points.shortY, { steps: 4 });
+
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const selections = window.__editor?.getState().selections;
+          return (
+            selections?.length === 2 &&
+            selections[0].start.line === 1 &&
+            selections[0].start.character > 16 &&
+            selections[0].end.character === selections[0].start.character &&
+            selections[1].start.line === 2 &&
+            selections[1].start.character === 16 &&
+            selections[1].end.character === 16
+          );
+        })
+      )
+      .toBe(true);
+    const anchor = (await selectionTuples(page))?.[0]?.[1] ?? -1;
+
+    await page.mouse.move(points.x, points.emptyY, { steps: 4 });
+    const selections = [
+      [1, anchor, 1, anchor],
+      [2, 16, 2, 16],
+      [3, 0, 3, 0],
+    ];
+    await expect.poll(() => selectionTuples(page)).toEqual(selections);
+
+    await page.mouse.up();
+    await page.keyboard.up('Alt');
+
+    await expect.poll(() => selectionTuples(page)).toEqual(selections);
+
+    const history = await page.evaluate(
+      () => Reflect.get(window, '__altDragSelectionHistory') as number[][][]
+    );
+    expect(history.some((snapshot) => snapshot.length === 2)).toBe(true);
+    expect(history.some((snapshot) => snapshot.length === 3)).toBe(true);
+    for (const snapshot of history) {
+      expect(snapshot).toEqual(selections.slice(0, snapshot.length));
+    }
   });
 
   test('Tab indents selected lines and Shift+Tab outdents them', async ({

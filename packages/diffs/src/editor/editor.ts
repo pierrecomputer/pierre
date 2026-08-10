@@ -188,6 +188,15 @@ interface ViewportInputWatch {
   dispose(): void;
 }
 
+interface AltColumnDrag {
+  pointerId: number;
+  startClientX: number;
+  clientX: number;
+  startScrollLeft: number;
+  focusLine?: number;
+  focusCharacter?: number;
+}
+
 export interface EditorOptions<LAnnotation> {
   /** The maximum number of entries to keep in the undo stack. */
   historyMaxEntries?: number;
@@ -378,6 +387,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #isComposing = false;
   #isGutterMouseDown = false;
   #isContentMouseDown = false;
+  #altColumnDrag?: AltColumnDrag;
   #shiftKeyPressed = false;
   #selectionStart: EditorSelection | undefined;
   // The full text of a read-only deleted-line selection built from the gutter,
@@ -1477,6 +1487,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#overlayElements = undefined;
     this.#selections = undefined;
     this.#reservedSelections = undefined;
+    this.#altColumnDrag = undefined;
     this.#scrollingToLine = undefined;
     this.#markerRenderer?.cleanup();
     this.#markerRenderer = undefined;
@@ -1743,6 +1754,13 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
             }
           }
 
+          if (this.#altColumnDrag !== undefined) {
+            this.#altColumnDrag.focusLine = getCaretPosition(selection).line;
+            if (this.#updateAltColumnSelections(true)) {
+              return;
+            }
+          }
+
           if (this.#reservedSelections !== undefined) {
             this.#updateSelections([
               ...this.#reservedSelections.filter(
@@ -1775,6 +1793,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           }
           this.#shouldIgnoreSelectionChange = false;
           this.#isContentMouseDown = false;
+          this.#altColumnDrag = undefined;
           this.#shiftKeyPressed = false;
           this.#selectionStart = undefined;
           this.#reservedSelections = undefined;
@@ -1905,6 +1924,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           if (e.pointerType !== 'mouse') {
             return;
           }
+          this.#altColumnDrag = undefined;
 
           // A click on a read-only deleted line (unified view) selects it
           // natively. Hand the selection to the deleted text and drop the
@@ -1923,6 +1943,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
           // this is a workaround for the selection rendering glitch
           // happens when selecting content in shadow DOM on Safari
+          const selectEventDisposes: (() => void)[] = [];
           if (
             isSafari() &&
             this.#lineAnnotations !== undefined &&
@@ -1942,16 +1963,52 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
                 }),
               ])
               .flat();
-            this.#replaceSelectEventListeners(annotationDisposes);
+            selectEventDisposes.push(...annotationDisposes);
           }
 
           this.#isContentMouseDown = true;
+          const isAltColumnDrag =
+            e.button === 0 &&
+            e.altKey &&
+            !e.ctrlKey &&
+            !e.metaKey &&
+            !e.shiftKey;
           this.#selectionStart = undefined;
-          if (e.button === 0 && isPrimaryModifier(e)) {
+          if (isAltColumnDrag) {
+            this.#altColumnDrag = {
+              pointerId: e.pointerId,
+              startClientX: e.clientX,
+              clientX: e.clientX,
+              startScrollLeft: contentEl.parentElement?.scrollLeft ?? 0,
+            };
+            this.#reservedSelections = undefined;
+            this.#selections = undefined;
+            this.#updateSelections([]);
+            selectEventDisposes.push(
+              addEventListener(
+                document,
+                'pointermove',
+                (moveEvent) => {
+                  const drag = this.#altColumnDrag;
+                  if (
+                    drag === undefined ||
+                    moveEvent.pointerType !== 'mouse' ||
+                    moveEvent.pointerId !== drag.pointerId
+                  ) {
+                    return;
+                  }
+                  drag.clientX = moveEvent.clientX;
+                  this.#updateAltColumnSelections(false);
+                },
+                { capture: true, passive: true }
+              )
+            );
+          } else if (e.button === 0 && isPrimaryModifier(e)) {
             this.#reservedSelections = this.#selections?.map((selection) => ({
               ...selection,
             }));
           }
+          this.#replaceSelectEventListeners(selectEventDisposes);
           if (e.shiftKey) {
             const primarySelection = this.#selections?.at(-1);
             if (primarySelection !== undefined) {
@@ -4092,6 +4149,71 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         this.#updateSelections(this.#selections ?? []);
       }
     });
+  }
+
+  // Keep the drag's horizontal goal in pointer space so a native caret that
+  // briefly clamps to a short line cannot move every generated selection.
+  #updateAltColumnSelections(force: boolean): boolean {
+    const drag = this.#altColumnDrag;
+    const selectionStart = this.#selectionStart;
+    const textDocument = this.#textDocument;
+    if (
+      drag === undefined ||
+      drag.focusLine === undefined ||
+      selectionStart === undefined ||
+      textDocument === undefined
+    ) {
+      return false;
+    }
+
+    const anchor =
+      selectionStart.direction === DirectionBackward
+        ? selectionStart.end
+        : selectionStart.start;
+    const scrollLeft = this.#contentElement?.parentElement?.scrollLeft ?? 0;
+    const characterDeltaRaw =
+      (drag.clientX - drag.startClientX + scrollLeft - drag.startScrollLeft) /
+      this.#metrics.ch;
+    const characterDelta =
+      characterDeltaRaw < 0
+        ? -Math.round(-characterDeltaRaw)
+        : Math.round(characterDeltaRaw);
+    const focusCharacter = Math.max(0, anchor.character + characterDelta);
+    if (!force && focusCharacter === drag.focusCharacter) {
+      return true;
+    }
+    drag.focusCharacter = focusCharacter;
+
+    const selections: EditorSelection[] = [];
+    const step = drag.focusLine < anchor.line ? -1 : 1;
+    for (let line = anchor.line; ; line += step) {
+      if (this.#isLineRenderable(line)) {
+        const lineLength = textDocument.getLineLength(line);
+        const anchorCharacter = Math.min(anchor.character, lineLength);
+        const lineFocusCharacter = Math.min(focusCharacter, lineLength);
+        selections.push({
+          start: {
+            line,
+            character: Math.min(anchorCharacter, lineFocusCharacter),
+          },
+          end: {
+            line,
+            character: Math.max(anchorCharacter, lineFocusCharacter),
+          },
+          direction:
+            anchorCharacter === lineFocusCharacter
+              ? DirectionNone
+              : anchorCharacter < lineFocusCharacter
+                ? DirectionForward
+                : DirectionBackward,
+        });
+      }
+      if (line === drag.focusLine) {
+        break;
+      }
+    }
+    this.#updateSelections(selections);
+    return true;
   }
 
   #updateSelections(selections: EditorSelection[]) {

@@ -3902,6 +3902,7 @@ async function waitForEditableContent(
 
 interface EditorFixture {
   cleanup(): void;
+  content: HTMLElement;
   editor: Editor<undefined>;
 }
 
@@ -3919,7 +3920,7 @@ async function createEditorFixture(contents: string): Promise<EditorFixture> {
 
   file.render({ file: initialFile, fileContainer, forceRender: true });
   editor.edit(file);
-  await waitForEditableContent(fileContainer);
+  const content = await waitForEditableContent(fileContainer);
 
   return {
     cleanup() {
@@ -3927,9 +3928,113 @@ async function createEditorFixture(contents: string): Promise<EditorFixture> {
       file.cleanUp();
       dom.cleanup();
     },
+    content,
     editor,
   };
 }
+
+describe('Editor Alt-drag column selection', () => {
+  test('clears existing selections and clamps each crossed line independently', async () => {
+    const { cleanup, content, editor } = await createEditorFixture(
+      'keep\nalpha\nx\n\nbravo'
+    );
+    const originalGetSelection = document.getSelection.bind(document);
+    let nativeRange: StaticRange;
+
+    try {
+      content.dispatchEvent(new Event('focus'));
+      editor.setSelections([
+        {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 1 },
+          direction: 'forward',
+        },
+      ]);
+      await wait(0);
+      await wait(0);
+
+      const lines = [...content.querySelectorAll<HTMLElement>('[data-line]')];
+      const [startContainer, startOffset] = getSelectionAnchor(lines[1], 2);
+      const rangeTo = (endLine: number, endCharacter: number): StaticRange => {
+        const [endContainer, endOffset] = getSelectionAnchor(
+          lines[endLine],
+          endCharacter
+        );
+        return composedRange(
+          startContainer,
+          startOffset,
+          endContainer,
+          endOffset
+        );
+      };
+
+      const selections = [caret(1, 2), caret(2, 1), caret(3, 0), caret(4, 2)];
+
+      nativeRange = rangeTo(1, 2);
+      document.getSelection = (() => ({
+        getComposedRanges: () => [nativeRange],
+      })) as unknown as typeof document.getSelection;
+      content.dispatchEvent(
+        new PointerEvent('pointerdown', {
+          altKey: true,
+          bubbles: true,
+          button: 0,
+          clientX: 100,
+          pointerType: 'mouse',
+        })
+      );
+      expect(editor.getState().selections).toBeUndefined();
+      document.dispatchEvent(new Event('selectionchange'));
+
+      nativeRange = rangeTo(2, 1);
+      document.dispatchEvent(new Event('selectionchange'));
+      expect(editor.getState().selections).toEqual(selections.slice(0, 2));
+
+      nativeRange = rangeTo(3, 0);
+      document.dispatchEvent(new Event('selectionchange'));
+      expect(editor.getState().selections).toEqual(selections.slice(0, 3));
+
+      // An empty focus line may not produce another native selectionchange, so
+      // pointer movement must update the rectangle on its own.
+      document.dispatchEvent(
+        new PointerEvent('pointermove', {
+          clientX: 116,
+          pointerType: 'mouse',
+        })
+      );
+      expect(editor.getState().selections).toEqual([
+        createSelection(1, 2, 1, 4, DirectionForward),
+        caret(2, 1),
+        caret(3, 0),
+      ]);
+
+      document.dispatchEvent(
+        new PointerEvent('pointermove', {
+          clientX: 100,
+          pointerType: 'mouse',
+        })
+      );
+      expect(editor.getState().selections).toEqual(selections.slice(0, 3));
+
+      nativeRange = rangeTo(4, 0);
+      document.dispatchEvent(new Event('selectionchange'));
+      expect(editor.getState().selections).toEqual(selections);
+
+      nativeRange = rangeTo(4, 2);
+      document.dispatchEvent(new Event('selectionchange'));
+      expect(editor.getState().selections).toEqual(selections);
+
+      document.dispatchEvent(
+        new PointerEvent('pointerup', { pointerType: 'mouse' })
+      );
+      document.dispatchEvent(new Event('selectionchange'));
+      expect(editor.getState().selections).toEqual(selections);
+    } finally {
+      document.getSelection = originalGetSelection;
+      cleanup();
+    }
+  });
+});
 
 describe('Editor.setSelections position clamping', () => {
   test('positions past a line length or past the last line clamp instead of throwing', async () => {
