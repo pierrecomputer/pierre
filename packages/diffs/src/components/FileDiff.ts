@@ -145,6 +145,11 @@ interface PendingEditSessionReplacement {
   prevExternalCacheKey: string | undefined;
 }
 
+interface PendingPersistedDocumentRestore {
+  editSessionDiff: FileDiffMetadata;
+  previousContents: string;
+}
+
 function canHydrateDiff(fileDiff: FileDiffMetadata): boolean {
   return (
     fileDiff.isPartial &&
@@ -349,6 +354,9 @@ export class FileDiff<
   private editSessionDiff: FileDiffMetadata | undefined;
   private pendingEditSessionReplacement:
     | PendingEditSessionReplacement
+    | undefined;
+  private pendingPersistedDocumentRestore:
+    | PendingPersistedDocumentRestore
     | undefined;
   protected renderedDiff: FileDiffMetadata | undefined;
   protected renderRange: RenderRange | undefined;
@@ -785,6 +793,7 @@ export class FileDiff<
       this.fileDiff = undefined;
       this.editSessionDiff = undefined;
       this.pendingEditSessionReplacement = undefined;
+      this.pendingPersistedDocumentRestore = undefined;
       this.renderedDiff = undefined;
       this.deletionFile = undefined;
       this.additionFile = undefined;
@@ -1114,6 +1123,7 @@ export class FileDiff<
 
     this.fileDiff = incomingExternalDiff;
     this.pendingEditSessionReplacement = undefined;
+    this.pendingPersistedDocumentRestore = undefined;
     if (editSessionDiff != null) {
       this.pendingEditSessionReplacement = {
         incomingExternalDiff,
@@ -1164,6 +1174,12 @@ export class FileDiff<
       this.hunksRenderer.setExpandedHunksMap(
         rebuildExpansionFromAnchors(editSessionDiff, anchors)
       );
+      this.pendingPersistedDocumentRestore = {
+        editSessionDiff,
+        previousContents: externalDiff.additionLines.join(''),
+      };
+    } else {
+      this.pendingPersistedDocumentRestore = undefined;
     }
 
     this.editSessionDiff = editSessionDiff;
@@ -1533,8 +1549,16 @@ export class FileDiff<
           replacement != null && !externalDocument
             ? replacement.prevExternalCacheKey
             : this.fileDiff?.cacheKey;
+        const pendingRestore = this.pendingPersistedDocumentRestore;
+        const restoredDocument =
+          pendingRestore?.editSessionDiff === fileDiff
+            ? pendingRestore.previousContents
+            : undefined;
         if (externalDocument) {
           this.pendingEditSessionReplacement = undefined;
+        }
+        if (restoredDocument != null) {
+          this.pendingPersistedDocumentRestore = undefined;
         }
         editor.__syncRenderView({
           highlighter,
@@ -1545,6 +1569,7 @@ export class FileDiff<
           renderRange,
           externalDocument,
           resetHistory,
+          restoredDocument,
         });
       });
     }

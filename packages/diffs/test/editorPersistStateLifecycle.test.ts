@@ -5,7 +5,12 @@ import { FileDiff } from '../src/components/FileDiff';
 import { DEFAULT_THEMES } from '../src/constants';
 import { Editor, type IStateStorage } from '../src/edit';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
-import type { EditorState, FileContents, FileDiffMetadata } from '../src/types';
+import type {
+  EditorChange,
+  EditorState,
+  FileContents,
+  FileDiffMetadata,
+} from '../src/types';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import { installDom, wait, waitFor } from './domHarness';
 import { createDeferred } from './testUtils';
@@ -805,7 +810,21 @@ describe('Editor persisted state lifecycle', () => {
 
   test('a fresh FileDiff restores cached text into its private edit model', async () => {
     const dom = installDom();
-    const editor = new Editor<undefined>({ persistState: true });
+    const changes: Array<{
+      cacheKey: string | undefined;
+      changes: EditorChange[];
+      contents: string;
+    }> = [];
+    const editor = new Editor<undefined>({
+      persistState: true,
+      onChange(file, _lineAnnotations, event) {
+        changes.push({
+          cacheKey: file.cacheKey,
+          changes: event.changes,
+          contents: file.contents,
+        });
+      },
+    });
     const container = document.createElement('div');
     document.body.appendChild(container);
     const oldFile: FileContents = {
@@ -851,9 +870,13 @@ describe('Editor persisted state lifecycle', () => {
         },
       ]);
       expect(editor.getText()).toBe('edited alpha\nbravo\n');
+      expect(changes.map((change) => change.contents)).toEqual([
+        'edited alpha\nbravo\n',
+      ]);
       editor.cleanUp();
       first.cleanUp();
       container.innerHTML = '';
+      changes.length = 0;
 
       second.render({
         fileDiff: externalDiff,
@@ -865,7 +888,8 @@ describe('Editor persisted state lifecycle', () => {
         () =>
           editor.getText() === 'edited alpha\nbravo\n' &&
           container.shadowRoot?.querySelector('[data-content] [data-line="1"]')
-            ?.textContent === 'edited alpha'
+            ?.textContent === 'edited alpha' &&
+          changes.length === 1
       );
 
       const restoredDiff = second.getLatestDiffForTest();
@@ -882,6 +906,105 @@ describe('Editor persisted state lifecycle', () => {
       expect(externalDiff.deletionLines).toBe(externalDeletionLines);
       expect(externalDiff.hunks).toBe(externalHunks);
       expect(externalDiff).toEqual(externalBefore);
+      expect(editor.canUndo).toBe(true);
+      expect(editor.canRedo).toBe(false);
+      expect(changes).toEqual([
+        {
+          cacheKey: undefined,
+          changes: [
+            {
+              start: 0,
+              end: 'alpha\nbravo\n'.length,
+              text: 'edited alpha\nbravo\n',
+              range: {
+                start: { line: 0, character: 0 },
+                end: { line: 2, character: 0 },
+              },
+            },
+          ],
+          contents: 'edited alpha\nbravo\n',
+        },
+      ]);
+
+      editor.undo();
+      expect(editor.getText()).toBe('alpha\nbravo\n');
+      expect(editor.canUndo).toBe(false);
+      expect(editor.canRedo).toBe(true);
+      editor.redo();
+      expect(editor.getText()).toBe('edited alpha\nbravo\n');
+      expect(changes.map((change) => change.contents)).toEqual([
+        'edited alpha\nbravo\n',
+        'alpha\nbravo\n',
+        'edited alpha\nbravo\n',
+      ]);
+      expect(externalDiff).toEqual(externalBefore);
+    } finally {
+      editor.cleanUp();
+      first.cleanUp();
+      second.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test('restoring an identical cached FileDiff does not emit a change', async () => {
+    const dom = installDom();
+    const changes: string[] = [];
+    const editor = new Editor<undefined>({
+      persistState: true,
+      onChange: (file) => changes.push(file.contents),
+    });
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const externalDiff = parseDiffFromFile(
+      {
+        name: 'identical.ts',
+        contents: 'before\n',
+        cacheKey: 'identical:old',
+      },
+      {
+        name: 'identical.ts',
+        contents: 'after\n',
+        cacheKey: 'identical:new',
+      }
+    );
+    const first = new FileDiff<undefined>({
+      disableErrorHandling: true,
+      disableFileHeader: true,
+      theme: DEFAULT_THEMES,
+    });
+    const second = new FileDiff<undefined>({
+      disableErrorHandling: true,
+      disableFileHeader: true,
+      theme: DEFAULT_THEMES,
+    });
+
+    try {
+      first.render({
+        fileDiff: externalDiff,
+        fileContainer: container,
+        forceRender: true,
+      });
+      editor.edit(first);
+      await waitFor(() => editor.getText() === 'after\n');
+      editor.cleanUp();
+      first.cleanUp();
+      container.innerHTML = '';
+
+      second.render({
+        fileDiff: externalDiff,
+        fileContainer: container,
+        forceRender: true,
+      });
+      editor.edit(second);
+      await waitFor(
+        () =>
+          editor.getText() === 'after\n' &&
+          container.shadowRoot
+            ?.querySelector('[data-content]')
+            ?.getAttribute('contenteditable') === 'true'
+      );
+
+      expect(changes).toEqual([]);
     } finally {
       editor.cleanUp();
       first.cleanUp();

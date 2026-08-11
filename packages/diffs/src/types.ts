@@ -1141,6 +1141,11 @@ export interface SyncDiffRenderViewProps<
   lineAnnotations: DiffLineAnnotation<LAnnotation>[] | undefined;
   /** Treat the supplied contents as an externally provided document update. */
   externalDocument?: boolean;
+  /**
+   * The private diff was initialized from a persisted document. The previous
+   * external contents are used only to report that restored document change.
+   */
+  restoredDocument?: string;
 }
 
 export type SyncRenderViewProps<LAnnotation> =

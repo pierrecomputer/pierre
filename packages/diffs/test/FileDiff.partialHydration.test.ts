@@ -13,9 +13,10 @@ import type {
   FileDiffLoadedFiles,
   FileDiffMetadata,
   HighlightedToken,
+  SyncRenderViewProps,
 } from '../src/types';
 import type { WorkerPoolManager } from '../src/worker';
-import { installDom, wait } from './domHarness';
+import { installDom, wait, waitFor } from './domHarness';
 import { assertDefined, createDeferred } from './testUtils';
 
 afterAll(async () => {
@@ -369,6 +370,9 @@ describe('FileDiff partial hydration', () => {
       disableFileHeader: true,
       loadDiffFiles: () => deferred.promise,
     });
+    const syncedViews: SyncRenderViewProps<undefined>[] = [];
+    const editor = createEditorStub(cachedContents);
+    editor.__syncRenderView = (props) => syncedViews.push(props);
     let detach: (() => void) | undefined;
 
     try {
@@ -377,7 +381,7 @@ describe('FileDiff partial hydration', () => {
         fileContainer,
         forceRender: true,
       });
-      detach = instance.attachEditor(createEditorStub(cachedContents));
+      detach = instance.attachEditor(editor);
 
       const loadPromise = instance.getPendingFileLoadPromiseForTest();
       expect(loadPromise).toBeDefined();
@@ -396,6 +400,21 @@ describe('FileDiff partial hydration', () => {
       expect(partial.additionLines.join('')).toBe(newFile.contents);
       expect(partial.deletionLines.join('')).toBe(oldFile.contents);
       expect(partial.editSessionDirty).not.toBe(true);
+      await waitFor(() =>
+        syncedViews.some(
+          (view) => 'fileDiff' in view && view.restoredDocument !== undefined
+        )
+      );
+      expect(
+        syncedViews.filter(
+          (view) => 'fileDiff' in view && view.restoredDocument !== undefined
+        )
+      ).toEqual([
+        expect.objectContaining({
+          fileDiff: restoredDiff,
+          restoredDocument: newFile.contents,
+        }),
+      ]);
     } finally {
       detach?.();
       instance.cleanUp();

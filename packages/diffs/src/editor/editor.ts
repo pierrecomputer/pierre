@@ -21,6 +21,7 @@ import type {
   SelectionSide,
   TextEdit,
 } from '../types';
+import { computeLineOffsets } from '../utils/computeFileOffsets';
 import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
 import { isGutterUtilityPath } from '../utils/isGutterUtilityPath';
 import {
@@ -166,6 +167,27 @@ function requirePersistedCacheKey(
     );
   }
   return file.cacheKey;
+}
+
+/** Describe replacing the complete document from its previous text. */
+function createFullDocumentChange(
+  previousContents: string,
+  contents: string
+): EditorChange {
+  const lineOffsets = computeLineOffsets(previousContents);
+  const lastLineOffset = lineOffsets[lineOffsets.length - 1] ?? 0;
+  return {
+    start: 0,
+    end: previousContents.length,
+    text: contents,
+    range: {
+      start: { line: 0, character: 0 },
+      end: {
+        line: lineOffsets.length - 1,
+        character: previousContents.length - lastLineOffset,
+      },
+    },
+  };
 }
 
 function isPromise<T>(value: T | Promise<T>): value is Promise<T> {
@@ -932,6 +954,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     const fileOrDiff = isDiff ? renderView.fileDiff : renderView.file;
     const lineAnnotations = renderView.lineAnnotations;
     const externalDocument = isDiff && renderView.externalDocument === true;
+    const restoredDocument = isDiff ? renderView.restoredDocument : undefined;
     const fileInstance = this.#fileInstance;
     if (fileInstance == null) {
       return;
@@ -991,24 +1014,14 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         ? fileOrDiff.contents
         : fileOrDiff.additionLines.join('');
     const previousTextDocument = this.#textDocument;
-    const externalChanges =
+    const documentChanges =
       externalDocument &&
       previousTextDocument !== undefined &&
       previousTextDocument.getText() !== contents
-        ? [
-            {
-              start: 0,
-              end: previousTextDocument.getText().length,
-              text: contents,
-              range: {
-                start: { line: 0, character: 0 },
-                end: previousTextDocument.positionAt(
-                  previousTextDocument.getText().length
-                ),
-              },
-            },
-          ]
-        : undefined;
+        ? [createFullDocumentChange(previousTextDocument.getText(), contents)]
+        : restoredDocument != null && restoredDocument !== contents
+          ? [createFullDocumentChange(restoredDocument, contents)]
+          : undefined;
 
     // File renders retain their existing cache-key-driven lifecycle. FileDiff
     // replacements provide the compatibility decision explicitly because a
@@ -1290,8 +1303,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       );
     }
 
-    if (externalChanges != null) {
-      this.#emitChange(externalChanges, lineAnnotations);
+    if (documentChanges != null) {
+      this.#emitChange(documentChanges, lineAnnotations);
     }
 
     this.#scheduleOnAttach(fileInstance);
