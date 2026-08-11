@@ -54,11 +54,12 @@ class TestFileDiff extends FileDiff<undefined> {
   }
 }
 
-function createEditorStub(): DiffsEditor<undefined> {
+function createEditorStub(cachedContents?: string): DiffsEditor<undefined> {
   return {
     cleanUp() {},
     edit: () => () => {},
     __captureFocusForDOMReplacement() {},
+    __getCachedDocumentContents: () => cachedContents,
     __postponeBgTokenizeToNextFrame() {},
     __syncRenderView() {},
   };
@@ -342,6 +343,59 @@ describe('FileDiff partial hydration', () => {
       expect(hydratedSession?.hunks).toBe(partial.hunks);
       expect(hydratedSession?.additionLines.join('')).toBe(newFile.contents);
       expect(hydratedSession?.deletionLines.join('')).toBe(oldFile.contents);
+    } finally {
+      detach?.();
+      instance.cleanUp();
+      cleanup();
+    }
+  });
+
+  test('a hydrated diff starts its private edit model from cached contents', async () => {
+    const { cleanup } = installDom();
+    const { oldFile, newFile, partial } = createPartialChange('persisted.ts');
+    partial.cacheKey = 'external:persisted-partial';
+    const cachedContents = [
+      'local start\n',
+      'keep 1\n',
+      'new value\n',
+      'keep 3\n',
+      'keep 4\n',
+    ].join('');
+    const deferred = createDeferred<FileDiffLoadedFiles>();
+    const fileContainer = document.createElement('div');
+    document.body.appendChild(fileContainer);
+    const instance = new TestFileDiff({
+      disableErrorHandling: true,
+      disableFileHeader: true,
+      loadDiffFiles: () => deferred.promise,
+    });
+    let detach: (() => void) | undefined;
+
+    try {
+      instance.render({
+        fileDiff: partial,
+        fileContainer,
+        forceRender: true,
+      });
+      detach = instance.attachEditor(createEditorStub(cachedContents));
+
+      const loadPromise = instance.getPendingFileLoadPromiseForTest();
+      expect(loadPromise).toBeDefined();
+      deferred.resolve({ oldFile, newFile });
+      await loadPromise;
+
+      const restoredDiff = instance.getLatestDiffForTest();
+      expect(restoredDiff).toBeDefined();
+      expect(restoredDiff).not.toBe(partial);
+      expect(restoredDiff?.cacheKey).toBeUndefined();
+      expect(restoredDiff?.additionLines.join('')).toBe(cachedContents);
+      expect(restoredDiff?.additionLines).not.toBe(partial.additionLines);
+      expect(restoredDiff?.deletionLines).toBe(partial.deletionLines);
+      expect(restoredDiff?.hunks).not.toBe(partial.hunks);
+      expect(restoredDiff?.editSessionDirty).toBe(true);
+      expect(partial.additionLines.join('')).toBe(newFile.contents);
+      expect(partial.deletionLines.join('')).toBe(oldFile.contents);
+      expect(partial.editSessionDirty).not.toBe(true);
     } finally {
       detach?.();
       instance.cleanUp();

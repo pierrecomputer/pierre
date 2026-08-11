@@ -81,6 +81,7 @@ import {
   captureExpansionAnchors,
   finishEditSessionForDiff,
   rebuildExpansionFromAnchors,
+  rebuildSessionHunks,
 } from '../utils/editSessionHunks';
 import { getDiffFileInput } from '../utils/getDiffFileInput';
 import { getDiffHunksRendererOptions } from '../utils/getDiffHunksRendererOptions';
@@ -100,6 +101,7 @@ import { isSafari } from '../utils/platform';
 import { prerenderHTMLIfNecessary } from '../utils/prerenderHTMLIfNecessary';
 import { getMeasuredScrollbarGutter } from '../utils/scrollbarGutter';
 import { setPreNodeProperties } from '../utils/setWrapperNodeProps';
+import { splitFileContents } from '../utils/splitFileContents';
 import {
   getExpandedRegion,
   getHunkAdditionLineRange,
@@ -1083,12 +1085,11 @@ export class FileDiff<
       this.installExternalEditSession(expectedDiff);
       return true;
     }
-    if (this.editor == null || this.editSessionDiff != null) {
+    const { editor } = this;
+    if (editor == null || this.editSessionDiff != null) {
       return false;
     }
-    const editSessionDiff = createEditSessionDiff(expectedDiff);
-    this.editSessionDiff = editSessionDiff;
-    this.hunksRenderer.beginEditSession(editSessionDiff, expectedDiff);
+    this.createInitialEditSession(editor, expectedDiff);
     return true;
   }
 
@@ -1132,6 +1133,44 @@ export class FileDiff<
     const sessionDiff = createEditSessionDiff(externalDiff);
     this.editSessionDiff = sessionDiff;
     this.hunksRenderer.beginEditSession(sessionDiff, externalDiff);
+  }
+
+  /**
+   * Create the first private editable diff for an editor attachment. When a
+   * persisted document has different text, rebuild the private diff from that
+   * text so the restored editor document and rendered rows start in sync.
+   */
+  private createInitialEditSession(
+    editor: DiffsEditor<LAnnotation>,
+    externalDiff: FileDiffMetadata
+  ): void {
+    const editSessionDiff = createEditSessionDiff(externalDiff);
+    const cachedContents = editor.__getCachedDocumentContents?.(externalDiff);
+    const restoredPersistedContents =
+      cachedContents != null &&
+      cachedContents !== externalDiff.additionLines.join('');
+
+    if (restoredPersistedContents) {
+      const {
+        collapsedContextThreshold = DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
+      } = this.options;
+      const anchors = captureExpansionAnchors(
+        externalDiff,
+        this.hunksRenderer.getExpandedHunksMap(),
+        collapsedContextThreshold
+      );
+      editSessionDiff.additionLines = splitFileContents(cachedContents);
+      rebuildSessionHunks(editSessionDiff, this.options.parseDiffOptions);
+      this.hunksRenderer.setExpandedHunksMap(
+        rebuildExpansionFromAnchors(editSessionDiff, anchors)
+      );
+    }
+
+    this.editSessionDiff = editSessionDiff;
+    this.hunksRenderer.beginEditSession(
+      editSessionDiff,
+      restoredPersistedContents ? undefined : externalDiff
+    );
   }
 
   protected setHydratedState(files: LoadedPartialDiffContents): void {
@@ -1590,9 +1629,10 @@ export class FileDiff<
         ? this.fileDiff
         : undefined;
     if (externalDiff != null) {
-      this.editSessionDiff = createEditSessionDiff(externalDiff);
+      this.createInitialEditSession(editor, externalDiff);
+    } else {
+      this.hunksRenderer.beginEditSession(this.editSessionDiff);
     }
-    this.hunksRenderer.beginEditSession(this.editSessionDiff, externalDiff);
     // The editor sync below refuses partial diffs (it needs the full file
     // contents); kick off hydration so the loaded re-render re-runs it.
     if (this.fileDiff?.isPartial === true) {

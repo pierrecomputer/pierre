@@ -5,7 +5,8 @@ import { FileDiff } from '../src/components/FileDiff';
 import { DEFAULT_THEMES } from '../src/constants';
 import { Editor, type IStateStorage } from '../src/edit';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
-import type { EditorState, FileContents } from '../src/types';
+import type { EditorState, FileContents, FileDiffMetadata } from '../src/types';
+import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import { installDom, wait, waitFor } from './domHarness';
 import { createDeferred } from './testUtils';
 
@@ -22,6 +23,12 @@ const ORIGINAL_FILE: FileContents = {
 interface AttachedFile {
   container: HTMLElement;
   file: File<undefined>;
+}
+
+class TestFileDiff extends FileDiff<undefined> {
+  getLatestDiffForTest(): FileDiffMetadata | undefined {
+    return this.getLatestDiff();
+  }
 }
 
 async function attachFile(
@@ -796,12 +803,7 @@ describe('Editor persisted state lifecycle', () => {
     }
   });
 
-  // A FileDiff renders straight from the host's metadata (no
-  // __restoreCachedFile substitution like File), so a host that re-parses
-  // pristine metadata after edits — same derived cacheKey, original content —
-  // must get a document built from that metadata, not the edited cached one,
-  // or the rendered rows and the editing document would diverge.
-  test('a re-parsed pristine diff does not adopt the edited cached document', async () => {
+  test('a fresh FileDiff restores cached text into its private edit model', async () => {
     const dom = installDom();
     const editor = new Editor<undefined>({ persistState: true });
     const container = document.createElement('div');
@@ -816,20 +818,24 @@ describe('Editor persisted state lifecycle', () => {
       contents: 'alpha\nbravo\n',
       cacheKey: 'diffed-reparse:new',
     };
-    const first = new FileDiff<undefined>({
+    const externalDiff = parseDiffFromFile(oldFile, newFile);
+    const externalBefore = structuredClone(externalDiff);
+    const externalAdditionLines = externalDiff.additionLines;
+    const externalDeletionLines = externalDiff.deletionLines;
+    const externalHunks = externalDiff.hunks;
+    const first = new TestFileDiff({
       disableErrorHandling: true,
       disableFileHeader: true,
       theme: DEFAULT_THEMES,
     });
-    const second = new FileDiff<undefined>({
+    const second = new TestFileDiff({
       disableErrorHandling: true,
       disableFileHeader: true,
       theme: DEFAULT_THEMES,
     });
     try {
       first.render({
-        oldFile,
-        newFile,
+        fileDiff: externalDiff,
         fileContainer: container,
         forceRender: true,
       });
@@ -850,15 +856,32 @@ describe('Editor persisted state lifecycle', () => {
       container.innerHTML = '';
 
       second.render({
-        oldFile,
-        newFile,
+        fileDiff: externalDiff,
         fileContainer: container,
         forceRender: true,
       });
       editor.edit(second);
-      // waitFor times out silently; the expect below is the real assertion.
-      await waitFor(() => editor.getText() === 'alpha\nbravo\n');
-      expect(editor.getText()).toBe('alpha\nbravo\n');
+      await waitFor(
+        () =>
+          editor.getText() === 'edited alpha\nbravo\n' &&
+          container.shadowRoot?.querySelector('[data-content] [data-line="1"]')
+            ?.textContent === 'edited alpha'
+      );
+
+      const restoredDiff = second.getLatestDiffForTest();
+      expect(restoredDiff).toBeDefined();
+      expect(restoredDiff).not.toBe(externalDiff);
+      expect(restoredDiff?.cacheKey).toBeUndefined();
+      expect(restoredDiff?.additionLines.join('')).toBe(
+        'edited alpha\nbravo\n'
+      );
+      expect(restoredDiff?.additionLines).not.toBe(externalAdditionLines);
+      expect(restoredDiff?.deletionLines).toBe(externalDeletionLines);
+      expect(restoredDiff?.hunks).not.toBe(externalHunks);
+      expect(externalDiff.additionLines).toBe(externalAdditionLines);
+      expect(externalDiff.deletionLines).toBe(externalDeletionLines);
+      expect(externalDiff.hunks).toBe(externalHunks);
+      expect(externalDiff).toEqual(externalBefore);
     } finally {
       editor.cleanUp();
       first.cleanUp();
