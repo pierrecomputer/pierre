@@ -126,6 +126,17 @@ export class TextDocument<LAnnotation> {
     return this.#editStack.canRedo;
   }
 
+  /** Create an independent document with the same text and history. */
+  clone(): TextDocument<LAnnotation> {
+    return new TextDocument(
+      this.#uri,
+      this.getText(),
+      this.#languageId,
+      this.#version,
+      this.#editStack.clone()
+    );
+  }
+
   positionAt(offset: number): Position {
     return this.normalizePosition(this.#pieceTable.positionAt(offset));
   }

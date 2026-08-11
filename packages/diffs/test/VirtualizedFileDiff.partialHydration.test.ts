@@ -505,6 +505,68 @@ describe('VirtualizedFileDiff partial hydration', () => {
     }
   });
 
+  test('advanced replacement hydration keeps the previous session until layout consumes it', async () => {
+    const initial = parseDiffFromFile(
+      {
+        name: 'replacement.ts',
+        contents: 'keep 1\nold value\nkeep 3\nkeep 4\n',
+      },
+      {
+        name: 'replacement.ts',
+        contents: 'keep 1\nfirst value\nkeep 3\nkeep 4\n',
+      }
+    );
+    initial.cacheKey = 'external:replacement-v1';
+    const { oldFile, newFile, partial } = createPartialChange('replacement.ts');
+    partial.cacheKey = 'external:replacement-partial';
+    const deferred = createDeferred<{
+      oldFile: FileContents;
+      newFile: FileContents;
+    }>();
+    const virtualizerState = createAdvancedVirtualizer();
+    const instance = new TestVirtualizedFileDiff(
+      {
+        disableFileHeader: true,
+        loadDiffFiles: () => deferred.promise,
+      },
+      virtualizerState.virtualizer
+    );
+    let detach: (() => void) | undefined;
+
+    try {
+      instance.updateCodeViewLayout(initial, 0);
+      detach = instance.attachEditor(createEditorStub());
+      const previousSession = instance.getLatestDiffForTest();
+      expect(previousSession).not.toBe(initial);
+
+      instance.updateCodeViewLayout(partial, 0);
+      const loadPromise = instance.getPendingFileLoadPromiseForTest();
+      assertDefined(
+        loadPromise,
+        'expected replacement hydration to be pending'
+      );
+      expect(instance.fileDiff).toBe(partial);
+      expect(instance.getLatestDiffForTest()).toBe(previousSession);
+
+      deferred.resolve({ oldFile, newFile });
+      await loadPromise;
+      expect(partial.isPartial).toBe(true);
+      expect(instance.getLatestDiffForTest()).toBe(previousSession);
+
+      instance.updateCodeViewLayout(partial, 0);
+      const nextSession = instance.getLatestDiffForTest();
+      expect(partial.isPartial).toBe(false);
+      expect(nextSession).not.toBe(previousSession);
+      expect(nextSession).not.toBe(partial);
+      expect(nextSession?.cacheKey).toBeUndefined();
+      expect(nextSession?.additionLines).toBe(partial.additionLines);
+      expect(nextSession?.deletionLines).toBe(partial.deletionLines);
+    } finally {
+      detach?.();
+      instance.cleanUp();
+    }
+  });
+
   test('simple edit hydration creates its session from the hydrated base', async () => {
     const { oldFile, newFile, partial } = createPartialChange('simple.ts');
     partial.cacheKey = 'external:simple-partial';

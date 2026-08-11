@@ -544,14 +544,14 @@ export class File<
         ) {
           return;
         }
-        editor.__syncRenderView(
+        editor.__syncRenderView({
           highlighter,
           fileContainer,
           file,
-          file.cacheKey,
+          externalCacheKey: file.cacheKey,
           lineAnnotations,
-          renderRange
-        );
+          renderRange,
+        });
       });
     }
   }

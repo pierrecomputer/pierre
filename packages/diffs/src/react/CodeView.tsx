@@ -74,7 +74,10 @@ interface CodeViewBaseProps<LAnnotation> {
   /** Render a non-virtualized node at the very end of the scroll content, after
    * the last item. Always rendered; scrolls with the content. */
   renderCodeViewFooter?(): ReactNode;
-  /** Called with the owning item on every edited-document change. */
+  /**
+   * Called with the owning item on every document change. Do not feed it
+   * directly back into the controlled item, which can create update loops.
+   */
   onItemEditChange?(
     item: CodeViewItem<LAnnotation>,
     file: FileContents,

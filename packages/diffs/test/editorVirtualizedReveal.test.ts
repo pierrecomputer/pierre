@@ -104,20 +104,20 @@ class VirtualizedEditableComponent implements DiffsEditableComponent<undefined> 
   ): void {}
 
   #syncRenderView(): void {
-    this.#editor?.__syncRenderView(
-      createTestHighlighter(),
-      this.fileContainer,
-      this.#file,
-      this.#file.cacheKey,
-      undefined,
-      {
+    this.#editor?.__syncRenderView({
+      highlighter: createTestHighlighter(),
+      fileContainer: this.fileContainer,
+      file: this.#file,
+      externalCacheKey: this.#file.cacheKey,
+      lineAnnotations: undefined,
+      renderRange: {
         // Render only line 3 so the selected line 2 remains virtualized.
         startingLine: 2,
         totalLines: 1,
         bufferBefore: 0,
         bufferAfter: 0,
-      }
-    );
+      },
+    });
   }
 
   #renderShadowDom(): void {

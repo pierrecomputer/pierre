@@ -69,6 +69,15 @@ export class EditStack<LAnnotation> {
     return this.#redoStack.length > 0;
   }
 
+  /** Create an independent copy of this undo and redo timeline. */
+  clone(): EditStack<LAnnotation> {
+    const clone = new EditStack<LAnnotation>({ maxEntries: this.#maxEntries });
+    clone.#undoStack = this.#undoStack.map(cloneEditStackEntry);
+    clone.#redoStack = this.#redoStack.map(cloneEditStackEntry);
+    clone.#canCoalesce = this.#canCoalesce;
+    return clone;
+  }
+
   /** Clears both the undo and redo stacks. */
   clear(): void {
     this.#undoStack.length = 0;
@@ -153,6 +162,28 @@ export class EditStack<LAnnotation> {
       return entry;
     }
   }
+}
+
+function cloneEditStackEntry<LAnnotation>(
+  entry: EditStackEntry<LAnnotation>
+): EditStackEntry<LAnnotation> {
+  return {
+    ...entry,
+    forwardEdits: entry.forwardEdits.map((edit) => ({ ...edit })),
+    inverseEdits: entry.inverseEdits.map((edit) => ({ ...edit })),
+    selectionsBefore: entry.selectionsBefore?.map(cloneSelection),
+    selectionsAfter: entry.selectionsAfter?.map(cloneSelection),
+    lineAnnotationsBefore: entry.lineAnnotationsBefore?.slice(),
+    lineAnnotationsAfter: entry.lineAnnotationsAfter?.slice(),
+  };
+}
+
+function cloneSelection(selection: EditorSelection): EditorSelection {
+  return {
+    ...selection,
+    start: { ...selection.start },
+    end: { ...selection.end },
+  };
 }
 
 export function createEditStackEntry<LAnnotation>(

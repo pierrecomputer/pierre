@@ -535,8 +535,10 @@ export interface CodeViewOptions<LAnnotation>
     options: CodeViewCreateEditorOptions<LAnnotation>
   ): DiffsEditor<LAnnotation> | undefined;
   /**
-   * Called when an edited item's document changes, with the owning item
-   * resolved by CodeView.
+   * Called whenever the edited document changes, from internal (edit) changes
+   * or external (CodeViewItem) changes.
+   *
+   * Do not feed these changes back into item state until the editing is done.
    */
   onItemEditChange?(
     item: CodeViewItem<LAnnotation>,

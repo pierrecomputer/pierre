@@ -205,14 +205,14 @@ class TestEditableComponent implements DiffsEditableComponent<undefined> {
   ): void {}
 
   #syncRenderView(): void {
-    this.#editor?.__syncRenderView(
-      createTestHighlighter(),
-      this.fileContainer,
-      this.#file,
-      this.#file.cacheKey,
-      this.#lineAnnotations,
-      this.#renderRange
-    );
+    this.#editor?.__syncRenderView({
+      highlighter: createTestHighlighter(),
+      fileContainer: this.fileContainer,
+      file: this.#file,
+      externalCacheKey: this.#file.cacheKey,
+      lineAnnotations: this.#lineAnnotations,
+      renderRange: this.#renderRange,
+    });
   }
 
   #renderShadowDom(): void {

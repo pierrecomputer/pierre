@@ -1118,6 +1118,35 @@ export type EditableInstance<T extends { type: string }> = T extends {
   ? never
   : T;
 
+interface SyncRenderViewBaseProps {
+  highlighter: DiffsHighlighter;
+  fileContainer: HTMLElement;
+  externalCacheKey: string | undefined;
+  renderRange: RenderRange | undefined;
+  /** Start fresh history instead of retaining or extending the current history. */
+  resetHistory?: boolean;
+}
+
+export interface SyncFileRenderViewProps<
+  LAnnotation,
+> extends SyncRenderViewBaseProps {
+  file: FileContents;
+  lineAnnotations: LineAnnotation<LAnnotation>[] | undefined;
+}
+
+export interface SyncDiffRenderViewProps<
+  LAnnotation,
+> extends SyncRenderViewBaseProps {
+  fileDiff: FileDiffMetadata;
+  lineAnnotations: DiffLineAnnotation<LAnnotation>[] | undefined;
+  /** Treat the supplied contents as an externally provided document update. */
+  externalDocument?: boolean;
+}
+
+export type SyncRenderViewProps<LAnnotation> =
+  | SyncFileRenderViewProps<LAnnotation>
+  | SyncDiffRenderViewProps<LAnnotation>;
+
 export interface DiffsEditor<LAnnotation> {
   /** @internal Persist the active File when key, name, or language changes. */
   __persistFileState?(file: FileContents): string | undefined;
@@ -1126,17 +1155,7 @@ export interface DiffsEditor<LAnnotation> {
   __postponeBgTokenizeToNextFrame(): void;
   /** @internal Capture focus intent before replacing the editable view. */
   __captureFocusForDOMReplacement(): void;
-  __syncRenderView(
-    highlighter: DiffsHighlighter,
-    fileContainer: HTMLElement,
-    fileOrDiff: FileContents | FileDiffMetadata,
-    externalCacheKey: string | undefined,
-    lineAnnotations:
-      | LineAnnotation<LAnnotation>[]
-      | DiffLineAnnotation<LAnnotation>[]
-      | undefined,
-    renderRange: RenderRange | undefined
-  ): void;
+  __syncRenderView(props: SyncRenderViewProps<LAnnotation>): void;
   edit<T extends DiffsEditableComponent<LAnnotation>>(
     fileInstance: EditableInstance<T>
   ): () => void;

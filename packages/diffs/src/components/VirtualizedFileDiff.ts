@@ -489,13 +489,13 @@ export class VirtualizedFileDiff<
       }
     }
 
+    const diffChanged = this.updateExternalDiff(fileDiff);
     const {
       pendingRenderDiff,
       layoutDiffChanged,
       renderedDiffChanged,
       annotationsChanged,
     } = this.updatePendingRender(fileDiff, lineAnnotations);
-    const diffChanged = !areDiffTargetsEqual(this.fileDiff, fileDiff);
     if (
       !this.forceRenderOverride &&
       (diffChanged || renderedDiffChanged || annotationsChanged)
@@ -530,10 +530,6 @@ export class VirtualizedFileDiff<
       this.resetLayoutCache({ includeEstimatedHeights: resetEstimatedHeights });
     } else if (resetEstimatedHeights) {
       this.invalidateDerivedLayoutCache(true);
-    }
-
-    if (diffChanged) {
-      this.fileDiff = fileDiff;
     }
 
     this.top = top;
@@ -1273,6 +1269,9 @@ export class VirtualizedFileDiff<
       );
       return false;
     }
+    if (targetChanged) {
+      this.updateExternalDiff(nextFileDiff);
+    }
 
     const {
       pendingRenderDiff,
@@ -1331,9 +1330,6 @@ export class VirtualizedFileDiff<
     }
 
     if (!this.isVisible && this.isSimpleMode() && (!dataChanged || !isSetup)) {
-      if (targetChanged) {
-        this.fileDiff = nextFileDiff;
-      }
       if (fileInput != null) {
         this.deletionFile = oldFile;
         this.additionFile = newFile;

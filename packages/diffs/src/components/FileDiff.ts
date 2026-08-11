@@ -84,6 +84,7 @@ import {
 } from '../utils/editSessionHunks';
 import { getDiffFileInput } from '../utils/getDiffFileInput';
 import { getDiffHunksRendererOptions } from '../utils/getDiffHunksRendererOptions';
+import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
 import { getHunkSideStartBoundary } from '../utils/getHunkSideBoundaries';
 import { getLineAnnotationName } from '../utils/getLineAnnotationName';
 import { getOrCreateCodeNode } from '../utils/getOrCreateCodeNode';
@@ -123,6 +124,25 @@ type DeferredEditorActiveLineWrite = [
   options: EditorActiveLineOptions | undefined,
 ];
 
+interface PendingEditSessionReplacement {
+  /**
+   * The new caller-owned diff supplied to FileDiff.
+   * It may remain partial until its file contents finish loading.
+   */
+  incomingExternalDiff: FileDiffMetadata;
+  /**
+   * The private editable diff that was active before the new external diff
+   * arrived. It remains active while a partial replacement is loading and is
+   * compared with the completed replacement to determine history compatibility.
+   */
+  editSessionDiff: FileDiffMetadata;
+  /**
+   * The cache key associated with the current editable diff.
+   * The editor continues using it until the replacement is ready.
+   */
+  prevExternalCacheKey: string | undefined;
+}
+
 function canHydrateDiff(fileDiff: FileDiffMetadata): boolean {
   return (
     fileDiff.isPartial &&
@@ -138,6 +158,29 @@ function createEditSessionDiff(fileDiff: FileDiffMetadata): FileDiffMetadata {
   const editSessionDiff = { ...fileDiff };
   delete editSessionDiff.cacheKey;
   return editSessionDiff;
+}
+
+function shouldResetUndoState(
+  prevDiff: FileDiffMetadata,
+  nextDiff: FileDiffMetadata
+): boolean {
+  if (prevDiff.isPartial || nextDiff.isPartial) {
+    throw new Error(
+      'FileDiff.shouldResetEditorForExternalDiff: diffs must be fully hydrated'
+    );
+  }
+  const prevLanguage = prevDiff.lang ?? getFiletypeFromFileName(prevDiff.name);
+  const nextLanguage = nextDiff.lang ?? getFiletypeFromFileName(nextDiff.name);
+  if (
+    prevDiff.name !== nextDiff.name ||
+    prevLanguage !== nextLanguage ||
+    prevDiff.deletionLines.length !== nextDiff.deletionLines.length
+  ) {
+    return true;
+  }
+  return prevDiff.deletionLines.some(
+    (line, index) => line !== nextDiff.deletionLines[index]
+  );
 }
 
 export interface FileDiffRenderBaseProps<LAnnotation> {
@@ -302,6 +345,9 @@ export class FileDiff<
   protected additionFile?: FileContents | null;
   public fileDiff: FileDiffMetadata | undefined;
   private editSessionDiff: FileDiffMetadata | undefined;
+  private pendingEditSessionReplacement:
+    | PendingEditSessionReplacement
+    | undefined;
   protected renderedDiff: FileDiffMetadata | undefined;
   protected renderRange: RenderRange | undefined;
   protected pendingFiles: PendingFileLoad | undefined;
@@ -736,6 +782,7 @@ export class FileDiff<
       // Clean up the data
       this.fileDiff = undefined;
       this.editSessionDiff = undefined;
+      this.pendingEditSessionReplacement = undefined;
       this.renderedDiff = undefined;
       this.deletionFile = undefined;
       this.additionFile = undefined;
@@ -1028,17 +1075,63 @@ export class FileDiff<
         'FileDiff.startHydratedEditSession: diffs cannot be partial for editing'
       );
     }
-    if (
-      this.editor == null ||
-      this.editSessionDiff != null ||
-      this.fileDiff !== expectedDiff
-    ) {
+    if (this.fileDiff !== expectedDiff) {
+      return false;
+    }
+    const replacement = this.pendingEditSessionReplacement;
+    if (replacement?.incomingExternalDiff === expectedDiff) {
+      this.installExternalEditSession(expectedDiff);
+      return true;
+    }
+    if (this.editor == null || this.editSessionDiff != null) {
       return false;
     }
     const editSessionDiff = createEditSessionDiff(expectedDiff);
     this.editSessionDiff = editSessionDiff;
     this.hunksRenderer.beginEditSession(editSessionDiff, expectedDiff);
     return true;
+  }
+
+  // Store a new caller-owned baseline and, when editing, retain the previous
+  // session only until a partial replacement is hydrated. Full replacements
+  // can install their new private session immediately.
+  protected updateExternalDiff(
+    incomingExternalDiff: FileDiffMetadata
+  ): boolean {
+    if (areDiffTargetsEqual(this.fileDiff, incomingExternalDiff)) {
+      return false;
+    }
+
+    const {
+      fileDiff: prevFileDiff,
+      pendingEditSessionReplacement: pendingReplacement,
+    } = this;
+    const editSessionDiff =
+      pendingReplacement?.editSessionDiff ?? this.editSessionDiff;
+    const prevExternalCacheKey =
+      pendingReplacement?.prevExternalCacheKey ?? prevFileDiff?.cacheKey;
+
+    this.fileDiff = incomingExternalDiff;
+    this.pendingEditSessionReplacement = undefined;
+    if (editSessionDiff != null) {
+      this.pendingEditSessionReplacement = {
+        incomingExternalDiff,
+        editSessionDiff,
+        prevExternalCacheKey,
+      };
+      if (incomingExternalDiff.isPartial) {
+        this.loadFilesIfNecessary();
+      } else {
+        this.installExternalEditSession(incomingExternalDiff);
+      }
+    }
+    return true;
+  }
+
+  private installExternalEditSession(externalDiff: FileDiffMetadata): void {
+    const sessionDiff = createEditSessionDiff(externalDiff);
+    this.editSessionDiff = sessionDiff;
+    this.hunksRenderer.beginEditSession(sessionDiff, externalDiff);
   }
 
   protected setHydratedState(files: LoadedPartialDiffContents): void {
@@ -1138,10 +1231,10 @@ export class FileDiff<
     }
 
     if (fileDiff != null && diffDidChange) {
-      this.fileDiff = fileDiff;
+      this.updateExternalDiff(fileDiff);
     } else if (nextParsedFileDiff != null) {
       diffDidChange = true;
-      this.fileDiff = nextParsedFileDiff;
+      this.updateExternalDiff(nextParsedFileDiff);
     }
     if (diffDidChange) {
       this.clearReusableHeader();
@@ -1386,14 +1479,34 @@ export class FileDiff<
         ) {
           return;
         }
-        editor.__syncRenderView(
+        const { pendingEditSessionReplacement: replacement } = this;
+        const externalDocument =
+          replacement != null &&
+          replacement.incomingExternalDiff === this.fileDiff &&
+          replacement.editSessionDiff !== fileDiff;
+        const resetHistory = externalDocument
+          ? shouldResetUndoState(
+              replacement.editSessionDiff,
+              replacement.incomingExternalDiff
+            )
+          : false;
+        const externalCacheKey =
+          replacement != null && !externalDocument
+            ? replacement.prevExternalCacheKey
+            : this.fileDiff?.cacheKey;
+        if (externalDocument) {
+          this.pendingEditSessionReplacement = undefined;
+        }
+        editor.__syncRenderView({
           highlighter,
           fileContainer,
           fileDiff,
-          this.fileDiff?.cacheKey,
+          externalCacheKey,
           lineAnnotations,
-          renderRange
-        );
+          renderRange,
+          externalDocument,
+          resetHistory,
+        });
       });
     }
   }
@@ -1461,6 +1574,15 @@ export class FileDiff<
     }
     this.editor?.cleanUp();
     this.editor = editor;
+    const pendingReplacement = this.pendingEditSessionReplacement;
+    if (
+      pendingReplacement != null &&
+      pendingReplacement.incomingExternalDiff === this.fileDiff &&
+      !pendingReplacement.incomingExternalDiff.isPartial &&
+      this.editSessionDiff === pendingReplacement.editSessionDiff
+    ) {
+      this.installExternalEditSession(pendingReplacement.incomingExternalDiff);
+    }
     const externalDiff =
       this.editSessionDiff == null &&
       this.fileDiff != null &&

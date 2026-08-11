@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { createTwoFilesPatch } from 'diff';
 
 import {
   CodeView,
@@ -13,11 +14,13 @@ import type {
   DiffsEditableComponent,
   DiffsEditor,
   FileContents,
+  FileDiffLoadedFiles,
   FileDiffMetadata,
   HighlightedToken,
   LineAnnotation,
 } from '../src/types';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
+import { parsePatchFiles } from '../src/utils/parsePatchFiles';
 import {
   createRoot,
   dispatchScroll,
@@ -1028,6 +1031,268 @@ describe('CodeView item edit mode', () => {
 
       editors[0].emitChange({ name: 'a.ts', contents: 'edited' });
       expect(changes).toEqual([['a', 'edited']]);
+    } finally {
+      viewer.cleanUp();
+      await wait(0);
+      cleanup();
+    }
+  });
+
+  test('an edited diff emits a change when it accepts a compatible item update', async () => {
+    const { cleanup } = installDom();
+    const editors: Editor<undefined>[] = [];
+    const changes: string[] = [];
+    const initial = makeEditDiffItem('active');
+    if (initial.type !== 'diff') {
+      throw new Error('Expected a diff item.');
+    }
+    initial.fileDiff.cacheKey = 'active:v1';
+    const viewer = new CodeView<undefined>({
+      createEditor(options) {
+        const editor = new Editor<undefined>(options);
+        editors.push(editor);
+        return editor;
+      },
+      onItemEditChange(_item, file) {
+        changes.push(file.contents);
+      },
+    });
+
+    try {
+      viewer.setup(createRoot());
+      await renderItems(viewer, [initial]);
+      await waitFor(
+        () => editors[0]?.getText() === 'one\ntwo changed\nthree\n'
+      );
+      const editor = editors[0];
+
+      editor.applyEdits([
+        {
+          range: {
+            start: { line: 1, character: 0 },
+            end: { line: 1, character: 'two changed'.length },
+          },
+          newText: 'local value',
+        },
+      ]);
+      expect(changes).toEqual(['one\nlocal value\nthree\n']);
+
+      const replacement: CodeViewItem<undefined> = {
+        ...initial,
+        fileDiff: parseDiffFromFile(
+          { name: 'active.txt', contents: 'one\ntwo\nthree\n' },
+          { name: 'active.txt', contents: 'one\nexternal value\nthree\n' }
+        ),
+        version: 1,
+      };
+      replacement.fileDiff.cacheKey = 'active:v2';
+      await applyItemUpdate(viewer, replacement);
+      await waitFor(() => editor.getText() === 'one\nexternal value\nthree\n', {
+        timeout: 4_000,
+      });
+
+      expect(viewer.getEditor('active')).toBe(editor);
+      expect(editors).toHaveLength(1);
+      expect(changes).toEqual([
+        'one\nlocal value\nthree\n',
+        'one\nexternal value\nthree\n',
+      ]);
+      expect(
+        viewer.getRenderedItems()[0]?.element.shadowRoot?.textContent
+      ).toContain('external value');
+
+      editor.undo();
+      expect(editor.getText()).toBe('one\nlocal value\nthree\n');
+      expect(changes).toEqual([
+        'one\nlocal value\nthree\n',
+        'one\nexternal value\nthree\n',
+        'one\nlocal value\nthree\n',
+      ]);
+    } finally {
+      viewer.cleanUp();
+      await wait(0);
+      cleanup();
+    }
+  });
+
+  test('an edited diff accepts an external update received while recycled', async () => {
+    const { cleanup } = installDom();
+    const editors: Editor<undefined>[] = [];
+    const changes: string[] = [];
+    const initial = makeEditDiffItem('active');
+    if (initial.type !== 'diff') {
+      throw new Error('Expected a diff item.');
+    }
+    initial.fileDiff.cacheKey = 'active:v1';
+    const items = [
+      initial,
+      ...Array.from({ length: 39 }, (_, index) =>
+        makeEditFileItem(`file-${index}`, false, 30)
+      ),
+    ];
+    const viewer = new CodeView<undefined>({
+      createEditor(options) {
+        const editor = new Editor<undefined>(options);
+        editors.push(editor);
+        return editor;
+      },
+      onItemEditChange(_item, file) {
+        changes.push(file.contents);
+      },
+    });
+
+    try {
+      const root = createRoot();
+      viewer.setup(root);
+      await renderItems(viewer, items);
+      await waitFor(
+        () => editors[0]?.getText() === 'one\ntwo changed\nthree\n'
+      );
+      const editor = editors[0];
+      editor.applyEdits([
+        {
+          range: {
+            start: { line: 1, character: 0 },
+            end: { line: 1, character: 'two changed'.length },
+          },
+          newText: 'local value',
+        },
+      ]);
+
+      const rendered = viewer.getRenderedItems()[0];
+      const previousSession = getEditSessionDiff(rendered.instance);
+      root.scrollTop = 30_000;
+      dispatchScroll(root);
+      viewer.render(true);
+      await wait(0);
+      expect(
+        viewer.getRenderedItems().some((item) => item.id === initial.id)
+      ).toBe(false);
+
+      const replacement: CodeViewItem<undefined> = {
+        ...initial,
+        fileDiff: parseDiffFromFile(
+          { name: 'active.txt', contents: 'one\ntwo\nthree\n' },
+          { name: 'active.txt', contents: 'one\nexternal value\nthree\n' }
+        ),
+        version: 1,
+      };
+      replacement.fileDiff.cacheKey = 'active:v2';
+      await applyItemUpdate(viewer, replacement);
+
+      const replacementSession = getEditSessionDiff(rendered.instance);
+      expect(replacementSession).not.toBe(previousSession);
+      expect(replacementSession?.additionLines.join('')).toBe(
+        'one\nexternal value\nthree\n'
+      );
+      expect(changes).toEqual(['one\nlocal value\nthree\n']);
+
+      root.scrollTop = 0;
+      dispatchScroll(root);
+      viewer.render(true);
+      await waitFor(() => editor.getText() === 'one\nexternal value\nthree\n', {
+        timeout: 4_000,
+      });
+
+      expect(viewer.getEditor('active')).toBe(editor);
+      expect(editors).toHaveLength(1);
+      expect(changes).toEqual([
+        'one\nlocal value\nthree\n',
+        'one\nexternal value\nthree\n',
+      ]);
+      editor.undo();
+      expect(editor.getText()).toBe('one\nlocal value\nthree\n');
+    } finally {
+      viewer.cleanUp();
+      await wait(0);
+      cleanup();
+    }
+  });
+
+  test('an edited diff hydrates an external update received while recycled', async () => {
+    const { cleanup } = installDom();
+    const editors: Editor<undefined>[] = [];
+    const loadedFiles: FileDiffLoadedFiles = {
+      oldFile: { name: 'active.txt', contents: 'one\ntwo\nthree\n' },
+      newFile: {
+        name: 'active.txt',
+        contents: 'one\nexternal value\nthree\n',
+      },
+    };
+    const initial = makeEditDiffItem('active');
+    if (initial.type !== 'diff') {
+      throw new Error('Expected a diff item.');
+    }
+    initial.fileDiff.cacheKey = 'active:v1';
+    const viewer = new CodeView<undefined>({
+      createEditor(options) {
+        const editor = new Editor<undefined>(options);
+        editors.push(editor);
+        return editor;
+      },
+      loadDiffFiles: () => Promise.resolve(loadedFiles),
+    });
+
+    try {
+      const root = createRoot();
+      viewer.setup(root);
+      await renderItems(viewer, [
+        initial,
+        ...Array.from({ length: 39 }, (_, index) =>
+          makeEditFileItem(`file-${index}`, false, 30)
+        ),
+      ]);
+      await waitFor(
+        () => editors[0]?.getText() === 'one\ntwo changed\nthree\n'
+      );
+      const editor = editors[0];
+      editor.applyEdits([
+        {
+          range: {
+            start: { line: 1, character: 0 },
+            end: { line: 1, character: 'two changed'.length },
+          },
+          newText: 'local value',
+        },
+      ]);
+
+      root.scrollTop = 30_000;
+      dispatchScroll(root);
+      viewer.render(true);
+      await wait(0);
+      expect(
+        viewer.getRenderedItems().some((item) => item.id === initial.id)
+      ).toBe(false);
+
+      const patch = createTwoFilesPatch(
+        'active.txt',
+        'active.txt',
+        loadedFiles.oldFile.contents,
+        loadedFiles.newFile.contents
+      );
+      const partial = parsePatchFiles(patch, 'partial', true)[0]?.files[0];
+      if (partial == null) {
+        throw new Error('Expected a partial diff.');
+      }
+      partial.cacheKey = 'active:v2';
+      await applyItemUpdate(viewer, {
+        ...initial,
+        fileDiff: partial,
+        version: 1,
+      });
+
+      root.scrollTop = 0;
+      dispatchScroll(root);
+      viewer.render(true);
+      await waitFor(() => editor.getText() === 'one\nexternal value\nthree\n', {
+        timeout: 4_000,
+      });
+
+      expect(partial.isPartial).toBe(false);
+      expect(viewer.getEditor('active')).toBe(editor);
+      expect(editors).toHaveLength(1);
+      editor.undo();
+      expect(editor.getText()).toBe('one\nlocal value\nthree\n');
     } finally {
       viewer.cleanUp();
       await wait(0);

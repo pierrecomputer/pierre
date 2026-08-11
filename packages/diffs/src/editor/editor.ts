@@ -6,8 +6,8 @@ import type {
   DiffLineAnnotation,
   DiffsEditableComponent,
   DiffsEditor,
-  DiffsHighlighter,
   EditableInstance,
+  EditorChange,
   EditorChangeEvent,
   EditorSelection,
   EditorState,
@@ -246,7 +246,11 @@ export interface EditorOptions<LAnnotation> {
     editor: Editor<LAnnotation>,
     fileInstance: DiffsEditableComponent<LAnnotation>
   ) => void;
-  /** Callback when the editor document changes. */
+  /**
+   * Called whenever the editor document changes. Treat this as a document
+   * notification; do not feed the changes back into the editor or you will
+   * create loops.
+   */
   onChange?: (
     file: FileContents,
     lineAnnotations:
@@ -351,7 +355,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   // state
   #fileInstance?: DiffsEditableComponent<LAnnotation>;
   #fileInfo?: Omit<FileContents, 'contents' | 'header'>;
+  // FIXME(amadeus): This should be removed when we remove persistState
   #externalCacheKey?: string;
+  // FIXME(amadeus): We need this support both types. I think in an ideal
+  // world, this instance becomes specific to the type of editor that it
+  // is... and we can manage this without `as` ing thing
   #lineAnnotations?: DiffLineAnnotation<LAnnotation>[];
   #textDocument?: TextDocument<LAnnotation>;
   #renderRange?: RenderRange;
@@ -894,14 +902,18 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   }
 
   /** @internal */
-  __syncRenderView: DiffsEditor<LAnnotation>['__syncRenderView'] = (
-    highlighter: DiffsHighlighter,
-    fileContainer: HTMLElement,
-    fileOrDiff: FileContents | FileDiffMetadata,
-    externalCacheKey: string | undefined,
-    lineAnnotations: DiffLineAnnotation<LAnnotation>[] | undefined,
-    renderRange: RenderRange | undefined
-  ) => {
+  __syncRenderView: DiffsEditor<LAnnotation>['__syncRenderView'] = ({
+    highlighter,
+    fileContainer,
+    externalCacheKey,
+    renderRange,
+    resetHistory = false,
+    ...renderView
+  }) => {
+    const isDiff = 'fileDiff' in renderView;
+    const fileOrDiff = isDiff ? renderView.fileDiff : renderView.file;
+    const lineAnnotations = renderView.lineAnnotations;
+    const externalDocument = isDiff && renderView.externalDocument === true;
     const fileInstance = this.#fileInstance;
     if (fileInstance == null) {
       return;
@@ -954,16 +966,42 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       }
     }
 
-    // Whether this sync replaces the document with a freshly parsed one (a new
-    // file, language, or external cache key) versus reusing the existing one.
-    // The render model may be a private keyless edit-session value, so its
-    // cacheKey cannot also identify the external persistence target.
+    const languageId =
+      fileOrDiff.lang ?? getFiletypeFromFileName(fileOrDiff.name);
+    const contents =
+      'contents' in fileOrDiff
+        ? fileOrDiff.contents
+        : fileOrDiff.additionLines.join('');
+    const previousTextDocument = this.#textDocument;
+    const externalChanges =
+      externalDocument &&
+      previousTextDocument !== undefined &&
+      previousTextDocument.getText() !== contents
+        ? [
+            {
+              start: 0,
+              end: previousTextDocument.getText().length,
+              text: contents,
+              range: {
+                start: { line: 0, character: 0 },
+                end: previousTextDocument.positionAt(
+                  previousTextDocument.getText().length
+                ),
+              },
+            },
+          ]
+        : undefined;
+
+    // File renders retain their existing cache-key-driven lifecycle. FileDiff
+    // replacements provide the compatibility decision explicitly because a
+    // cache-key transition alone is not a document reset boundary.
     const shouldRebuildDocument =
       this.#textDocument === undefined ||
       this.#fileInfo === undefined ||
       this.#fileInfo.name !== fileOrDiff.name ||
-      this.#fileInfo.lang !== fileOrDiff.lang ||
-      this.#externalCacheKey !== externalCacheKey;
+      this.#textDocument.languageId !== languageId ||
+      resetHistory ||
+      (!externalDocument && this.#externalCacheKey !== externalCacheKey);
     const persistedCacheKey =
       this.#options.persistState === true
         ? requirePersistedCacheKey({
@@ -976,21 +1014,35 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       | { cacheKey: string; textDocument: TextDocument<LAnnotation> }
       | undefined;
 
+    if (externalDocument) {
+      this.#stateRestoreGeneration++;
+      this.#restoreStateOnNextSync = false;
+      this.#persistCurrentState();
+      if (
+        !shouldRebuildDocument &&
+        this.#options.persistState === true &&
+        this.#textDocument !== undefined &&
+        this.#fileInfo !== undefined
+      ) {
+        const previousCacheKey = requirePersistedCacheKey({
+          name: this.#fileInfo.name,
+          cacheKey: this.#externalCacheKey,
+        });
+        this.#textDocumentCache.set(
+          previousCacheKey,
+          this.#textDocument.clone()
+        );
+      }
+    }
+
     if (shouldRebuildDocument) {
       this.#invalidateOnAttach();
-      let contents = '';
-      if ('contents' in fileOrDiff) {
-        contents = fileOrDiff.contents;
-      } else {
-        contents = fileOrDiff.additionLines.join('');
-      }
       const editStack = new EditStack<LAnnotation>({
         maxEntries: this.#options.historyMaxEntries,
       });
       const { name, lang, cacheKey } = fileOrDiff;
-      const languageId = lang ?? getFiletypeFromFileName(fileOrDiff.name);
       const cachedTextDocument =
-        persistedCacheKey !== undefined
+        !externalDocument && persistedCacheKey !== undefined
           ? this.#getCachedTextDocument(fileOrDiff, persistedCacheKey)
           : undefined;
       // A File attachment restores cached text before painting (see
@@ -1008,10 +1060,12 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#textDocument = textDocument;
       if (persistedCacheKey !== undefined) {
         this.#textDocumentCache.set(persistedCacheKey, textDocument);
-        persistedStateTarget = {
-          cacheKey: persistedCacheKey,
-          textDocument,
-        };
+        if (!externalDocument) {
+          persistedStateTarget = {
+            cacheKey: persistedCacheKey,
+            textDocument,
+          };
+        }
       }
       this.#tokenizer?.cleanUp();
       this.#tokenizer = undefined;
@@ -1030,10 +1084,22 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           fileOrDiff.name
         );
       }
+    } else if (isDiff && externalDocument) {
+      this.#applyExternalDocumentReplacement(
+        contents,
+        renderView.lineAnnotations
+      );
+      const { name, lang, cacheKey } = fileOrDiff;
+      this.#fileInfo = { name, lang, cacheKey };
+      this.#externalCacheKey = externalCacheKey;
+      if (persistedCacheKey !== undefined && this.#textDocument !== undefined) {
+        this.#textDocumentCache.set(persistedCacheKey, this.#textDocument);
+      }
     }
 
     if (
       persistedStateTarget === undefined &&
+      !externalDocument &&
       this.#restoreStateOnNextSync &&
       persistedCacheKey !== undefined &&
       this.#textDocument !== undefined
@@ -1135,7 +1201,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#fileInstance?.__getEffectiveCodeOptions() ?? {}
     );
 
-    this.#lineAnnotations = lineAnnotations;
+    this.#lineAnnotations = isDiff
+      ? renderView.lineAnnotations
+      : (renderView.lineAnnotations as
+          | DiffLineAnnotation<LAnnotation>[]
+          | undefined);
     this.#renderRange = renderRange;
     // Remember the bounded window the virtualizer just synced so #applyChange
     // can clamp any edit-time widening against it. Refreshed on every scroll;
@@ -1202,8 +1272,76 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       );
     }
 
+    if (externalChanges != null) {
+      this.#emitChange(externalChanges, lineAnnotations);
+    }
+
     this.#scheduleOnAttach(fileInstance);
   };
+
+  // The host component has already rendered these external contents. Update
+  // only the editor document and history so the same replacement is not
+  // applied twice. __syncRenderView emits the resulting onChange notification
+  // afterward.
+  #applyExternalDocumentReplacement(
+    contents: string,
+    lineAnnotations: DiffLineAnnotation<LAnnotation>[] | undefined
+  ): void {
+    const textDocument = this.#textDocument;
+    if (textDocument == null || textDocument.getText() === contents) {
+      return;
+    }
+
+    const selections = this.#selections;
+    const selectionOffsets = selections?.map(
+      (selection) =>
+        [
+          textDocument.offsetAt(selection.start),
+          textDocument.offsetAt(selection.end),
+        ] as const
+    );
+    const replacement = {
+      start: 0,
+      end: textDocument.getText().length,
+      text: contents,
+    };
+    const change = textDocument.applyResolvedEdits(
+      [replacement],
+      true,
+      selections,
+      undefined,
+      true
+    );
+    if (change == null) {
+      return;
+    }
+
+    if (selections != null && selectionOffsets != null) {
+      const nextSelections = remapSelectionsAfterEdits(
+        textDocument,
+        selections,
+        selectionOffsets,
+        [replacement]
+      );
+      textDocument.setLastUndoSelectionsAfter(nextSelections);
+      this.#selections = nextSelections;
+    }
+    if (this.#lineAnnotations != null || lineAnnotations != null) {
+      textDocument.setLastUndoLineAnnotations(
+        this.#lineAnnotations ?? [],
+        lineAnnotations ?? []
+      );
+    }
+
+    this.#tokenizer?.cleanUp();
+    this.#tokenizer = undefined;
+    this.#resetCache();
+    this.#wrapLineOffsetsCache.clear();
+    this.#markerRenderer?.removePopover();
+    if (this.#searchPanel !== undefined && this.#matches !== undefined) {
+      this.#searchPanel.updateMatches({ syncSelection: false });
+    }
+  }
 
   #getCachedTextDocument(
     file: FileContents | FileDiffMetadata,
@@ -5396,16 +5534,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     newLineAnnotations?: DiffLineAnnotation<LAnnotation>[],
     options?: { skipSearchRefresh?: boolean; skipFocus?: boolean }
   ) {
-    const fileRef = this.getFile();
-    const onChange = this.#options.onChange;
-    if (fileRef !== undefined && onChange !== undefined) {
-      const lineAnnotations = newLineAnnotations ?? this.#lineAnnotations;
-      onChange(fileRef, lineAnnotations, {
-        changes: change.changes,
-        file: fileRef,
-        lineAnnotations,
-      });
-    }
+    this.#emitChange(
+      change.changes,
+      newLineAnnotations ?? this.#lineAnnotations
+    );
 
     // Invalidate layout caches touched by the edit. Clear cached line Y
     // positions from startLine onward when either:
@@ -5566,6 +5698,21 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         this.focus({ preventScroll: true });
       }
     }
+  }
+
+  #emitChange(
+    changes: EditorChange[],
+    lineAnnotations:
+      | LineAnnotation<LAnnotation>[]
+      | DiffLineAnnotation<LAnnotation>[]
+      | undefined
+  ): void {
+    const file = this.getFile();
+    const onChange = this.#options.onChange;
+    if (file === undefined || onChange === undefined) {
+      return;
+    }
+    onChange(file, lineAnnotations, { changes, file, lineAnnotations });
   }
 
   #applyChangeToLineAnnotations(
