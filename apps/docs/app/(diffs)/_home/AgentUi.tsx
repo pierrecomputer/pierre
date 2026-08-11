@@ -2,7 +2,12 @@
 
 import { DEFAULT_THEMES, type FileDiffMetadata } from '@pierre/diffs';
 import type { EditorOptions } from '@pierre/diffs/edit';
-import { File, FileDiff, Virtualizer } from '@pierre/diffs/react';
+import {
+  File,
+  FileDiff,
+  useWorkerPool,
+  Virtualizer,
+} from '@pierre/diffs/react';
 import {
   IconArrow,
   IconChevronSm,
@@ -677,6 +682,7 @@ export function AgentUi({
 }: AgentUiProps) {
   const session = AUI_SESSIONS[0];
   const router = useRouter();
+  const workerPool = useWorkerPool();
 
   // Expands the windowed card into the fullscreen route, morphing the shared
   // `.aui` element via the View Transition.
@@ -970,16 +976,20 @@ export function AgentUi({
   const recordEditedStatsRef = useRef(recordEditedStats);
   recordEditedStatsRef.current = recordEditedStats;
 
-  // One FileDiffMetadata per changed file, parsed on first visit and reused
-  // on every revisit. Edit sessions write edits back into the metadata (the
-  // library treats the host's metadata as the diff's content owner and
-  // self-heals session-shaped metadata on re-render), so reusing the object
-  // is what keeps a diff's edited content across file switches — the editor's
-  // persist-state API covers only selections and scroll for diffs.
-  // Placeholder File surfaces need no equivalent: with `persistState` on the
-  // shared editor, the per-cacheKey document cache restores their edited
-  // contents (and undo history) on re-attach.
-  const diffsRef = useRef<Map<string, FileDiffMetadata>>(new Map());
+  // One external diff baseline per changed file, created up front for worker
+  // priming and reused on every visit so its cache identity remains stable.
+  // The shared editor's per-cacheKey document cache restores edited contents
+  // and undo history when a file is revisited.
+  const [diffs] = useState<Map<string, FileDiffMetadata>>(() => {
+    const diffs = new Map<string, FileDiffMetadata>();
+    for (const file of session.changedFiles) {
+      const diff = getFileDiff(file);
+      diffs.set(file.path, diff);
+      void workerPool?.primeDiffHighlightCache(diff);
+    }
+    return diffs;
+  });
+
   // Paths the user has edited. Only consulted to stop an edited file from
   // hydrating out of its prerendered (pristine) server HTML on revisit.
   const editedPathsRef = useRef<Set<string>>(new Set());
@@ -1113,6 +1123,7 @@ export function AgentUi({
         : null,
     [liveSession, activePath]
   );
+  const fileDiff = activeFile != null ? diffs.get(activeFile.path) : undefined;
 
   // When the active path isn't a changed/added file (e.g. browsing the root
   // README or another explorer file), open editable placeholder contents
@@ -1124,21 +1135,6 @@ export function AgentUi({
         : null,
     [activePath, activeFile]
   );
-
-  // The active file's diff metadata: parsed once on first visit, then reused
-  // from the cache so revisits render the content the last edit session wrote
-  // back into it.
-  const fileDiff = useMemo(() => {
-    if (activeFile == null) {
-      return null;
-    }
-    let diff = diffsRef.current.get(activeFile.path);
-    if (diff == null) {
-      diff = getFileDiff(activeFile);
-      diffsRef.current.set(activeFile.path, diff);
-    }
-    return diff;
-  }, [activeFile]);
 
   // Server-rendered, already-highlighted HTML for the active diff. Only safe
   // when the file is unedited so the markup matches `fileDiff`.
