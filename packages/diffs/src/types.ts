@@ -1150,6 +1150,10 @@ export type SyncRenderViewProps<LAnnotation> =
 export interface DiffsEditor<LAnnotation> {
   /** @internal Persist the active File when key, name, or language changes. */
   __persistFileState?(file: FileContents): string | undefined;
+  /** @internal Return cached text for the same persisted document identity. */
+  __getCachedDocumentContents?(
+    file: Pick<FileContents, 'cacheKey' | 'lang' | 'name'>
+  ): string | undefined;
   /** @internal Return the File with cached document contents restored. */
   __restoreCachedFile?(file: FileContents): FileContents;
   __postponeBgTokenizeToNextFrame(): void;

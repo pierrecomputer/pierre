@@ -379,6 +379,70 @@ describe('Editor persisted state lifecycle', () => {
     }
   });
 
+  test('cached document contents require the same persisted identity', async () => {
+    const dom = installDom();
+    const editor = new Editor<undefined>({ persistState: true });
+    const editorWithoutPersistence = new Editor<undefined>();
+    let attached: AttachedFile | undefined;
+
+    try {
+      attached = await attachFile(editor, { ...ORIGINAL_FILE });
+      editor.applyEdits([
+        {
+          range: {
+            start: { line: 0, character: 0 },
+            end: { line: 0, character: 0 },
+          },
+          newText: 'X',
+        },
+      ]);
+      editor.cleanUp();
+
+      expect(
+        editor.__getCachedDocumentContents({
+          name: ORIGINAL_FILE.name,
+          cacheKey: ORIGINAL_FILE.cacheKey,
+        })
+      ).toBe('Xalpha\nbravo\n');
+      expect(
+        editor.__getCachedDocumentContents({
+          name: ORIGINAL_FILE.name,
+          cacheKey: ORIGINAL_FILE.cacheKey,
+        })
+      ).toBe('Xalpha\nbravo\n');
+      expect(
+        editor.__getCachedDocumentContents({
+          name: ORIGINAL_FILE.name,
+          cacheKey: 'another-document',
+        })
+      ).toBeUndefined();
+      expect(
+        editor.__getCachedDocumentContents({
+          name: 'renamed.ts',
+          cacheKey: ORIGINAL_FILE.cacheKey,
+        })
+      ).toBeUndefined();
+      expect(
+        editor.__getCachedDocumentContents({
+          name: ORIGINAL_FILE.name,
+          lang: 'css',
+          cacheKey: ORIGINAL_FILE.cacheKey,
+        })
+      ).toBeUndefined();
+      expect(
+        editorWithoutPersistence.__getCachedDocumentContents({
+          name: ORIGINAL_FILE.name,
+          cacheKey: ORIGINAL_FILE.cacheKey,
+        })
+      ).toBeUndefined();
+    } finally {
+      editor.cleanUp();
+      editorWithoutPersistence.cleanUp();
+      attached?.file.cleanUp();
+      dom.cleanup();
+    }
+  });
+
   test('a rename with the same cache key keeps text, state, and history', async () => {
     const dom = installDom();
     const editor = new Editor<undefined>({ persistState: true });

@@ -12,7 +12,6 @@ import type {
   EditorSelection,
   EditorState,
   FileContents,
-  FileDiffMetadata,
   HighlightedToken,
   LineAnnotation,
   Position,
@@ -858,6 +857,25 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     return cacheKey;
   }
 
+  /** @internal Return cached text only when it belongs to the same document. */
+  __getCachedDocumentContents(
+    file: Pick<FileContents, 'cacheKey' | 'lang' | 'name'>
+  ): string | undefined {
+    if (this.#options.persistState !== true) {
+      return undefined;
+    }
+
+    const cacheKey = requirePersistedCacheKey(file);
+    const textDocument = this.#getCachedTextDocument(file, cacheKey);
+    if (
+      textDocument == null ||
+      textDocument.uri !== new URL(file.name, 'file://').toString()
+    ) {
+      return undefined;
+    }
+    return textDocument.getText();
+  }
+
   /** @internal Return the File with cached document contents restored. */
   __restoreCachedFile(file: FileContents): FileContents {
     const cacheKey = this.__persistFileState(file);
@@ -1344,7 +1362,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   }
 
   #getCachedTextDocument(
-    file: FileContents | FileDiffMetadata,
+    file: Pick<FileContents, 'lang' | 'name'>,
     cacheKey: string
   ): TextDocument<LAnnotation> | undefined {
     const textDocument = this.#textDocumentCache.get(cacheKey);
