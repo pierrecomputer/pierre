@@ -835,9 +835,6 @@ export interface RenderedDiffASTCache {
   result: ThemedDiffResult | undefined;
   renderRange: RenderRange | undefined;
   isDirty?: boolean;
-  // A render was skipped while a highlight was in progress; its completion
-  // will trigger a re-render.
-  highlightPending?: boolean;
 }
 
 /**

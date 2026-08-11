@@ -4015,15 +4015,14 @@ export class CodeView<LAnnotation = undefined> {
       }
       item.top = runningTop;
       if (item.type === 'diff') {
-        item.instance.consumeCodeViewLayoutChanges(item.item.fileDiff);
-        item.height = item.instance.prepareCodeViewItem(
+        item.height = item.instance.updateCodeViewLayout(
           item.item.fileDiff,
           runningTop,
           reset,
           item.item.annotations ?? []
         );
       } else {
-        item.height = item.instance.prepareCodeViewItem(
+        item.height = item.instance.updateCodeViewLayout(
           item.item.file,
           runningTop,
           reset,
@@ -4066,14 +4065,14 @@ function prepareItemInstance<LAnnotation>(
 ): number {
   item.instance.cleanUp(true);
   if (item.type === 'diff') {
-    return item.instance.prepareCodeViewItem(
+    return item.instance.updateCodeViewLayout(
       item.item.fileDiff,
       item.top,
       undefined,
       item.item.annotations ?? []
     );
   } else {
-    return item.instance.prepareCodeViewItem(
+    return item.instance.updateCodeViewLayout(
       item.item.file,
       item.top,
       undefined,

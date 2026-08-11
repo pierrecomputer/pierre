@@ -183,12 +183,12 @@ describe('VirtualizedFile persisted layout', () => {
     const headerHeight = getVirtualFileHeaderRegion(metrics, false);
     const paddingBottom = getVirtualFilePaddingBottom(metrics);
 
-    expect(instance.prepareCodeViewItem(file, 0)).toBe(
+    expect(instance.updateCodeViewLayout(file, 0)).toBe(
       headerHeight + metrics.lineHeight + paddingBottom
     );
 
     file.contents = 'one\ntwo\nthree';
-    expect(instance.prepareCodeViewItem(file, 0)).toBe(
+    expect(instance.updateCodeViewLayout(file, 0)).toBe(
       headerHeight + 3 * metrics.lineHeight + paddingBottom
     );
   });

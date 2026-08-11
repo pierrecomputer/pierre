@@ -110,6 +110,17 @@ interface GetRenderOptionsReturn {
   forceHighlight: boolean;
 }
 
+interface PendingHighlightResult extends RenderDiffResult {
+  diff: FileDiffMetadata;
+  highlighted: boolean;
+}
+
+interface DiffRenderCache extends RenderedDiffASTCache {
+  // hydrate() describes DOM that already exists, even when no reusable AST
+  // was available for that server-rendered content.
+  hydrated?: boolean;
+}
+
 interface PushSeparatorProps {
   hunkIndex: number;
   collapsedLines: number | 'unknown';
@@ -203,6 +214,7 @@ export interface SplitInjectedRowPlacement {
 }
 
 export interface HunksRenderResult {
+  fileDiff: FileDiffMetadata;
   unifiedGutterAST: ElementContent[] | undefined;
   unifiedContentAST: ElementContent[] | undefined;
   deletionsGutterAST: ElementContent[] | undefined;
@@ -238,7 +250,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   private additionAnnotations: AnnotationLineMap<LAnnotation> = {};
 
   private computedLang: SupportedLanguages = 'text';
-  private renderCache: RenderedDiffASTCache | undefined;
+  private renderCache: DiffRenderCache | undefined;
+  // Completed background work waits here until the next render can update its
+  // DOM and layout together.
+  private pendingHighlightResult: PendingHighlightResult | undefined;
 
   // Edit-session state: while active, hunk updates go through the frozen
   // region skeleton (editSessionHunks) instead of the full recompute, and
@@ -292,6 +307,9 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   ): void {
     const { editSessionActive: wasAlreadyActive, renderCache } = this;
     this.editSessionActive = true;
+    if (!wasAlreadyActive) {
+      this.pendingHighlightResult = undefined;
+    }
     if (diff != null) {
       this.diff = diff;
     }
@@ -323,45 +341,45 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       return;
     }
     const { options } = this.getRenderOptions(diff);
+    const cacheBelongsToSession = renderCache.diff === diff;
+    const cacheBelongsToExternal =
+      externalDiff != null &&
+      areDiffTargetsEqual(renderCache.diff, externalDiff);
     const { result } = renderCache;
     if (
       !renderCache.highlighted ||
       result == null ||
-      !areDiffRenderOptionsEqual(renderCache.options, options)
+      !areDiffRenderOptionsEqual(renderCache.options, options) ||
+      (!cacheBelongsToSession && !cacheBelongsToExternal)
     ) {
       this.clearRenderCache();
       return;
     }
-    if (renderCache.diff === diff) {
+    if (cacheBelongsToSession) {
       return;
     }
-    if (
-      externalDiff != null &&
-      areDiffTargetsEqual(renderCache.diff, externalDiff)
-    ) {
-      // Edit paths replace addition entries and their containing array,
-      // but only read the existing HAST nodes and deletion entries.
-      this.renderCache = {
-        diff,
-        options,
-        highlighted: true,
-        result: {
-          ...result,
-          code: {
-            ...result.code,
-            additionLines: [...result.code.additionLines],
-          },
+
+    // Edit paths replace addition entries and their containing array,
+    // but only read the existing HAST nodes and deletion entries.
+    this.renderCache = {
+      diff,
+      options,
+      highlighted: true,
+      result: {
+        ...result,
+        code: {
+          ...result.code,
+          additionLines: [...result.code.additionLines],
         },
-        renderRange: renderCache.renderRange,
-      };
-    } else {
-      this.clearRenderCache();
-    }
+      },
+      renderRange: renderCache.renderRange,
+    };
   }
 
   /** Leave edit-session mode. The exit recompute is the host's concern. */
   public endEditSession(): void {
     this.editSessionActive = false;
+    this.pendingHighlightResult = undefined;
   }
 
   /**
@@ -376,14 +394,13 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   }
 
   /**
-   * Re-highlights the current diff in the background and swaps the fresh
-   * result in (with a re-render) once it completes. Needed after an edit
-   * session's exit recompute: session passes plain-fill shifted lines in the
-   * cached result, and the recompute mutates the keyless session diff in place,
-   * so object identity alone would otherwise treat the stale highlight as
-   * current forever. The current result — content-correct,
-   * mostly highlighted — keeps rendering until the fresh one lands, so no
-   * interim paint drops highlighting.
+   * Re-highlights the current diff in the background and stages the fresh
+   * result for the next render. Needed after an edit session's exit recompute:
+   * session passes plain-fill shifted lines in the cached result, and the
+   * recompute mutates the keyless session diff in place, so object identity
+   * alone would otherwise treat the stale highlight as current forever. The
+   * current result — content-correct, mostly highlighted — keeps rendering
+   * until the fresh one is promoted, so no interim paint drops highlighting.
    */
   public refreshHighlightedResult(): Promise<void> {
     const { diff, renderCache, workerManager } = this;
@@ -419,9 +436,9 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       .catch((error: unknown) => this.onHighlightError(error));
   }
 
-  // Installs a freshly highlighted result for the same diff, unless the
-  // renderer moved on while the highlight ran (new diff, options change, or
-  // a new edit session whose passes the fresh result wouldn't reflect).
+  // Holds a freshly highlighted result for the next render transaction, unless
+  // the renderer moved on while the highlight ran (new diff, options change,
+  // or a new edit session whose passes the fresh result wouldn't reflect).
   private applyRefreshedResult(
     diff: FileDiffMetadata,
     fresh: RenderDiffResult | undefined
@@ -441,12 +458,11 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     if (!areDiffRenderOptionsEqual(options, fresh.options)) {
       return;
     }
-    this.renderCache = {
+    this.pendingHighlightResult = {
       diff: currentDiff,
       options: fresh.options,
       highlighted: true,
       result: fresh.result,
-      renderRange: undefined,
     };
     this.onRenderUpdate?.();
   }
@@ -457,6 +473,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
   public clearRenderCache(): void {
     this.renderCache = undefined;
+    this.pendingHighlightResult = undefined;
   }
 
   public setOptions(options: DiffHunksRendererOptions): void {
@@ -873,6 +890,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     }
     this.renderCache ??= {
       diff,
+      hydrated: true,
       highlighted: !massiveDiff && !isDiffPlainText(diff),
       options,
       result: massiveDiff ? undefined : cache?.result,
@@ -956,24 +974,87 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     return { options, forceHighlight: false };
   }
 
+  /**
+   * Returns the diff that the next synchronous render can commit without
+   * changing the renderer's current diff or render cache. Components use this
+   * to prepare state that must match the following DOM render.
+   */
+  public getDiffForNextRender(diff: FileDiffMetadata): FileDiffMetadata {
+    const { options } = this.getRenderOptions(diff);
+    if (this.getReadyRenderResult(diff, options) != null) {
+      return diff;
+    }
+
+    if (this.renderCache == null) {
+      return diff;
+    }
+    if (areDiffTargetsEqual(this.renderCache.diff, diff)) {
+      return this.renderCache.diff;
+    }
+
+    const hasContent =
+      diff.additionLines.length > 0 || diff.deletionLines.length > 0;
+    const forcePlainText =
+      !hasContent ||
+      isDiffPlainText(diff) ||
+      isDiffMassive(diff, this.getTokenizeMaxLength());
+    return this.canRenderDiff(diff, options, forcePlainText)
+      ? diff
+      : this.renderCache.diff;
+  }
+
+  private canRenderDiff(
+    diff: FileDiffMetadata,
+    options: RenderDiffOptions,
+    forcePlainText: boolean
+  ): boolean {
+    const { renderCache } = this;
+    if (renderCache == null || areDiffTargetsEqual(renderCache.diff, diff)) {
+      return true;
+    }
+    if (forcePlainText) {
+      return (
+        (renderCache.result == null && renderCache.hydrated !== true) ||
+        this.workerManager?.isWorkingPool() === true ||
+        (this.highlighter != null && areThemesAttached(options.theme))
+      );
+    }
+    // Hydration has highlighted DOM without a local AST. It is still active
+    // rendered content and must remain visible while a non-plain replacement
+    // is prepared.
+    if (renderCache.result == null && renderCache.hydrated !== true) {
+      return true;
+    }
+
+    if (
+      !this.editSessionActive &&
+      this.workerManager?.isWorkingPool() === true
+    ) {
+      return !renderCache.highlighted;
+    }
+
+    return this.highlighter != null && areThemesAttached(options.theme);
+  }
+
   public renderDiff(
     diff: FileDiffMetadata | undefined = this.diff,
     renderRange: RenderRange = DEFAULT_RENDER_RANGE
   ): HunksRenderResult | undefined {
+    this.diff = diff;
     if (diff == null) {
+      this.pendingHighlightResult = undefined;
       return undefined;
     }
-    this.diff = diff;
     const { expandUnchanged, collapsedContextThreshold } =
       this.getOptionsWithDefaults();
     let { options, forceHighlight } = this.getRenderOptions(diff);
-    const cache = this.getMatchingWorkerResultCache(diff, options);
-    if (cache != null && !this.hasHighlightedRenderCache(diff, options)) {
+    const readyResult = this.getReadyRenderResult(diff, options);
+    this.pendingHighlightResult = undefined;
+    if (readyResult != null) {
       this.renderCache = {
+        ...readyResult,
         diff,
-        highlighted: true,
         renderRange: undefined,
-        ...cache,
       };
       forceHighlight = false;
     }
@@ -990,6 +1071,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       !hasContent ||
       isDiffPlainText(diff) ||
       isDiffMassive(diff, this.getTokenizeMaxLength());
+    const canRenderDiff = this.canRenderDiff(diff, options, forcePlainText);
     const newContent = !areDiffTargetsEqual(diff, this.renderCache.diff);
     const newRenderRange = !areRenderRangesEqual(
       this.renderCache.renderRange,
@@ -999,20 +1081,17 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       !this.editSessionActive &&
       this.workerManager?.isWorkingPool() === true
     ) {
-      // Keep completed highlighted content visible while its replacement is
-      // prepared. `highlightPending` covers the narrower case where the cache
-      // has no result, so the host must retain its existing DOM instead.
-      const highlightPending =
+      // Hydration has highlighted DOM but no local AST. Keep that DOM until
+      // its corresponding worker result is ready.
+      const preserveHydratedContent =
         this.renderCache.result == null &&
         this.renderCache.highlighted &&
         !forcePlainText &&
         !newContent &&
         isDefaultRenderRange(renderRange);
-      if (highlightPending) {
-        this.renderCache.highlightPending = true;
-      }
       if (
-        !highlightPending &&
+        canRenderDiff &&
+        !preserveHydratedContent &&
         (forcePlainText ||
           this.renderCache.result == null ||
           (!this.renderCache.highlighted && (newContent || newRenderRange)))
@@ -1064,6 +1143,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       // the correct language, then we can render plain text and after kick off
       // an async job to get the highlighted AST
       if (
+        canRenderDiff &&
         this.highlighter != null &&
         hasThemes &&
         (forceHighlight ||
@@ -1230,22 +1310,22 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       return;
     }
 
-    const triggerRenderUpdate =
-      renderCache.highlightPending === true ||
+    const triggerRender =
+      renderCache.result == null ||
       !renderCache.highlighted ||
       !areDiffRenderOptionsEqual(renderCache.options, options) ||
       !areDiffTargetsEqual(renderCache.diff, currentDiff);
+    if (!triggerRender) {
+      return;
+    }
 
-    this.renderCache = {
+    this.pendingHighlightResult = {
       diff: currentDiff,
       options,
       highlighted,
       result,
-      renderRange: undefined,
     };
-    if (triggerRenderUpdate) {
-      this.onRenderUpdate?.();
-    }
+    this.onRenderUpdate?.();
   }
 
   private getMatchingWorkerResultCache(
@@ -1260,6 +1340,31 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       return undefined;
     }
     return cache;
+  }
+
+  // Returns completed background work that can replace the rendered AST on
+  // the next render. Reading it does not promote or discard pending work.
+  private getReadyRenderResult(
+    diff: FileDiffMetadata,
+    options: RenderDiffOptions
+  ): PendingHighlightResult | undefined {
+    const { pendingHighlightResult } = this;
+    if (
+      pendingHighlightResult != null &&
+      areDiffTargetsEqual(pendingHighlightResult.diff, diff) &&
+      areDiffRenderOptionsEqual(pendingHighlightResult.options, options)
+    ) {
+      return pendingHighlightResult;
+    }
+
+    const workerCache = this.getMatchingWorkerResultCache(diff, options);
+    // Return nothing when the worker has not finished, or when this diff is
+    // already rendered with matching highlighted markup. In both cases the
+    // current render cache should remain unchanged.
+    if (workerCache == null || this.hasHighlightedRenderCache(diff, options)) {
+      return undefined;
+    }
+    return { diff, highlighted: true, ...workerCache };
   }
 
   private hasHighlightedRenderCache(
@@ -1813,6 +1918,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     );
 
     return {
+      fileDiff,
       unifiedGutterAST:
         unified && hasContent ? context.unifiedGutterAST.children : undefined,
       unifiedContentAST,

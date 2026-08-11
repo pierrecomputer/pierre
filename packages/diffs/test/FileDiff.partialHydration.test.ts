@@ -23,8 +23,8 @@ afterAll(async () => {
 });
 
 class TestFileDiff extends FileDiff<undefined> {
-  getCurrentDiffForTest() {
-    return this.getCurrentDiff();
+  getLatestDiffForTest() {
+    return this.getLatestDiff();
   }
 
   getRendererDiffForTest() {
@@ -318,7 +318,7 @@ describe('FileDiff partial hydration', () => {
       });
       detach = instance.attachEditor(createEditorStub());
 
-      const partialSession = instance.getCurrentDiffForTest();
+      const partialSession = instance.getLatestDiffForTest();
       expect(partialSession).toBeDefined();
       // Partial inputs remain external-only until the complete files arrive;
       // session ownership begins with the fully hydrated value.
@@ -329,7 +329,7 @@ describe('FileDiff partial hydration', () => {
       deferred.resolve({ oldFile, newFile });
       await loadPromise;
 
-      const hydratedSession = instance.getCurrentDiffForTest();
+      const hydratedSession = instance.getLatestDiffForTest();
       expect(hydratedSession).toBeDefined();
       expect(hydratedSession).not.toBe(partial);
       expect(instance.fileDiff).toBe(partial);
@@ -393,7 +393,7 @@ describe('FileDiff partial hydration', () => {
       deferred.resolve({ oldFile, newFile });
       await loadPromise;
 
-      const hydratedSession = instance.getCurrentDiffForTest();
+      const hydratedSession = instance.getLatestDiffForTest();
       expect(hydratedSession).toBeDefined();
       expect(hydratedSession).not.toBe(partial);
       expect(instance.fileDiff).toBe(partial);
@@ -445,7 +445,7 @@ describe('FileDiff partial hydration', () => {
       deferred.resolve({ oldFile: null, newFile });
       await loadPromise;
 
-      const hydratedSession = instance.getCurrentDiffForTest();
+      const hydratedSession = instance.getLatestDiffForTest();
       expect(hydratedSession).toBeDefined();
       if (hydratedSession == null) return;
       expect(hydratedSession).not.toBe(partial);

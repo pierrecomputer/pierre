@@ -13,8 +13,8 @@ afterAll(async () => {
 });
 
 class TestVirtualizedFileDiff extends VirtualizedFileDiff<undefined> {
-  getCurrentDiffForTest() {
-    return this.getCurrentDiff();
+  getLatestDiffForTest() {
+    return this.getLatestDiff();
   }
 
   getExpandedHunkForTest(index: number) {
@@ -179,7 +179,7 @@ describe('VirtualizedFileDiff partial hydration', () => {
         virtualizerState.virtualizer
       );
 
-      instance.prepareCodeViewItem(partial, 0);
+      instance.updateCodeViewLayout(partial, 0);
       instance.expandHunk(0, 'down', 1);
       instance.expandHunk(0, 'up', 1);
 
@@ -250,7 +250,7 @@ describe('VirtualizedFileDiff partial hydration', () => {
         virtualizerState.virtualizer
       );
 
-      instance.prepareCodeViewItem(partial, 0);
+      instance.updateCodeViewLayout(partial, 0);
       instance.expandHunk(partial.hunks.length, 'up', 1);
       instance.expandHunk(partial.hunks.length, 'up', 1);
 
@@ -301,9 +301,9 @@ describe('VirtualizedFileDiff partial hydration', () => {
         virtualizerState.virtualizer
       );
 
-      instance.prepareCodeViewItem(partial, 0);
+      instance.updateCodeViewLayout(partial, 0);
       instance.expandHunk(0, 'down', 1);
-      instance.prepareCodeViewItem(nextDiff, 0);
+      instance.updateCodeViewLayout(nextDiff, 0);
 
       deferred.resolve({ oldFile, newFile });
       await wait(10);
@@ -366,9 +366,9 @@ describe('VirtualizedFileDiff partial hydration', () => {
         virtualizerState.virtualizer
       );
 
-      instance.prepareCodeViewItem(fullDiff, 0);
+      instance.updateCodeViewLayout(fullDiff, 0);
 
-      const height = instance.prepareCodeViewItem(partial, 0);
+      const height = instance.updateCodeViewLayout(partial, 0);
 
       expect(typeof height).toBe('number');
       expect(instance.fileDiff).toBe(partial);
@@ -389,10 +389,9 @@ describe('VirtualizedFileDiff partial hydration', () => {
         virtualizerState.virtualizer
       );
 
-      instance.prepareCodeViewItem(firstChange.partial, 0);
+      instance.updateCodeViewLayout(firstChange.partial, 0);
       instance.expandHunk(0, 'down', 1);
-      instance.prepareCodeViewItem(secondChange.partial, 0);
-      instance.consumeCodeViewLayoutChanges(secondChange.partial);
+      instance.updateCodeViewLayout(secondChange.partial, 0);
 
       expect(instance.getExpandedHunkForTest(0)).toEqual({
         fromStart: 0,
@@ -421,7 +420,7 @@ describe('VirtualizedFileDiff partial hydration', () => {
         virtualizerState.virtualizer
       );
 
-      instance.prepareCodeViewItem(partial, 0);
+      instance.updateCodeViewLayout(partial, 0);
       instance.expandHunk(0, 'down', 1);
       deferred.resolve(loadedContents);
       await wait(10);
@@ -434,7 +433,7 @@ describe('VirtualizedFileDiff partial hydration', () => {
         { layoutDirty: true },
       ]);
 
-      instance.consumeCodeViewLayoutChanges(partial);
+      instance.updateCodeViewLayout(partial, 0);
 
       expect(instance.fileDiff).toBe(partial);
       expect(partial.isPartial).toBe(false);
@@ -444,7 +443,6 @@ describe('VirtualizedFileDiff partial hydration', () => {
         'keep 3\n',
         'keep 4\n',
       ]);
-      instance.prepareCodeViewItem(partial, 0);
       expect(instance.fileDiff).toBe(partial);
     } finally {
       instance?.cleanUp();
@@ -469,7 +467,7 @@ describe('VirtualizedFileDiff partial hydration', () => {
     let detach: (() => void) | undefined;
 
     try {
-      instance.prepareCodeViewItem(partial, 0);
+      instance.updateCodeViewLayout(partial, 0);
       const editor = createEditorStub();
       detach = instance.attachEditor(editor);
       const loadPromise = instance.getPendingFileLoadPromiseForTest();
@@ -479,20 +477,20 @@ describe('VirtualizedFileDiff partial hydration', () => {
       await loadPromise;
 
       expect(partial.isPartial).toBe(true);
-      expect(instance.getCurrentDiffForTest()).toBe(partial);
+      expect(instance.getLatestDiffForTest()).toBe(partial);
 
       instance.cleanUp(true);
       detach = undefined;
-      instance.consumeCodeViewLayoutChanges(partial);
+      instance.updateCodeViewLayout(partial, 0);
 
-      expect(instance.getCurrentDiffForTest()).toBe(partial);
+      expect(instance.getLatestDiffForTest()).toBe(partial);
       expect(partial.isPartial).toBe(false);
 
       instance.virtualizedSetup();
-      instance.prepareCodeViewItem(partial, 0);
+      instance.updateCodeViewLayout(partial, 0);
       detach = instance.attachEditor(editor);
 
-      const sessionDiff = instance.getCurrentDiffForTest();
+      const sessionDiff = instance.getLatestDiffForTest();
       expect(instance.fileDiff).toBe(partial);
       expect(partial.isPartial).toBe(false);
       expect(partial.cacheKey).toBe('external:advanced-partial:hydrated');
@@ -525,7 +523,7 @@ describe('VirtualizedFileDiff partial hydration', () => {
     let detach: (() => void) | undefined;
 
     try {
-      instance.prepareCodeViewItem(partial, 0);
+      instance.updateCodeViewLayout(partial, 0);
       detach = instance.attachEditor(createEditorStub());
       const loadPromise = instance.getPendingFileLoadPromiseForTest();
       assertDefined(loadPromise, 'expected edit hydration to be pending');
@@ -533,7 +531,7 @@ describe('VirtualizedFileDiff partial hydration', () => {
       deferred.resolve({ oldFile, newFile });
       await loadPromise;
 
-      const sessionDiff = instance.getCurrentDiffForTest();
+      const sessionDiff = instance.getLatestDiffForTest();
       expect(instance.fileDiff).toBe(partial);
       expect(partial.isPartial).toBe(false);
       expect(partial.cacheKey).toBe('external:simple-partial:hydrated');
@@ -612,9 +610,9 @@ describe('VirtualizedFileDiff partial hydration', () => {
     try {
       instance.render({ fileContainer, fileDiff: externalDiff });
       detach = instance.attachEditor(createEditorStub());
-      const sessionDiff = instance.getCurrentDiffForTest();
+      const sessionDiff = instance.getLatestDiffForTest();
 
-      instance.prepareCodeViewItem(equivalentDiff, 0);
+      instance.updateCodeViewLayout(equivalentDiff, 0);
       instance.render({
         fileContainer,
         fileDiff: equivalentDiff,
@@ -623,7 +621,7 @@ describe('VirtualizedFileDiff partial hydration', () => {
 
       expect(instance.fileDiff).toBe(externalDiff);
       expect(sessionDiff).not.toBe(externalDiff);
-      expect(instance.getCurrentDiffForTest()).toBe(sessionDiff);
+      expect(instance.getLatestDiffForTest()).toBe(sessionDiff);
       expect(sessionDiff?.additionLines).toBe(externalDiff.additionLines);
     } finally {
       detach?.();

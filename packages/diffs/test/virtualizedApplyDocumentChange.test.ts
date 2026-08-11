@@ -74,7 +74,7 @@ describe('applyDocumentChange buffer updates', () => {
       {},
       createStubVirtualizer('advanced')
     );
-    advancedInstance.prepareCodeViewItem(makeFile(50), 0);
+    advancedInstance.updateCodeViewLayout(makeFile(50), 0);
     advancedInstance.seedRenderRange(seeded);
     advancedInstance.applyDocumentChange(makeDocument(1), undefined, true);
     expect(advancedInstance.bufferUpdates).toBe(0);
@@ -83,7 +83,7 @@ describe('applyDocumentChange buffer updates', () => {
       {},
       createStubVirtualizer('simple')
     );
-    simpleInstance.prepareCodeViewItem(makeFile(50), 0);
+    simpleInstance.updateCodeViewLayout(makeFile(50), 0);
     simpleInstance.seedRenderRange(seeded);
     simpleInstance.applyDocumentChange(makeDocument(1), undefined, true);
     expect(simpleInstance.bufferUpdates).toBe(1);
