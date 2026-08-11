@@ -175,7 +175,15 @@ export function getFileDiff(
   nextAfter?: string
 ): FileDiffMetadata {
   return parseDiffFromFile(
-    { name: file.path, contents: file.before },
-    { name: file.path, contents: nextAfter ?? file.after }
+    {
+      name: file.path,
+      contents: file.before,
+      cacheKey: `${file.path}:before`,
+    },
+    {
+      name: file.path,
+      contents: nextAfter ?? file.after,
+      cacheKey: `${file.path}:after`,
+    }
   );
 }
