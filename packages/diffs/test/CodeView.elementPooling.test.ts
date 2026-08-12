@@ -319,6 +319,11 @@ describe('CodeView element pooling', () => {
       const firstElement = renderedItems[0].element;
       expect(getSpriteCount(firstElement)).toBe(1);
 
+      // Commit the initial height correction before testing the large-jump
+      // recycle path below.
+      viewer.render(true);
+      await wait(0);
+
       // Jump past one: the fit-perfectly pass releases one (its shell and
       // sprite go to the pool, and the instance is recycled) and mounts two
       // into that shell, adopting the pooled sprite. The follow-up fill pass

@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { afterAll, beforeAll, describe, expect, spyOn, test } from 'bun:test';
 
 import { CodeView } from '../src/components/CodeView';
 import {
@@ -108,6 +108,66 @@ function getRenderedFileForTest(instance: object): FileContents | undefined {
 }
 
 describe('CodeView worker rendering', () => {
+  test('ignores a worker result after its collapsed file is removed', async () => {
+    const { cleanup } = installDom();
+    const { manager, worker } = await createInitializedManager({
+      theme: 'pierre-dark',
+    });
+    const viewer = new CodeView(
+      {
+        theme: 'pierre-dark',
+      },
+      manager
+    );
+    const file: FileContents = {
+      name: 'removed.ts',
+      contents: 'const removed = true;\n',
+      cacheKey: 'removed:file',
+    };
+    const item: CodeViewItem = {
+      id: 'file:removed',
+      type: 'file',
+      file,
+      collapsed: true,
+    };
+    const instanceChanged = spyOn(viewer, 'instanceChanged');
+
+    try {
+      viewer.setup(createRoot());
+      viewer.setItems([item]);
+      viewer.render(true);
+
+      const request = await withTimeout(worker.waitForFileRequest());
+      viewer.setItems([]);
+      viewer.render(true);
+      instanceChanged.mockClear();
+
+      const renderOptions = manager.getFileRenderOptions();
+      worker.respond({
+        type: 'success',
+        requestType: 'file',
+        id: request.id,
+        result: renderFileWithHighlighter(
+          file,
+          sharedHighlighter,
+          renderOptions
+        ),
+        options: renderOptions,
+        sentAt: Date.now(),
+      });
+      await wait(0);
+
+      expect(viewer.getRenderedItems()).toEqual([]);
+      expect(instanceChanged).not.toHaveBeenCalled();
+    } finally {
+      instanceChanged.mockRestore();
+      viewer.cleanUp();
+      manager.terminate();
+      await wait(0);
+      cleanup();
+    }
+  });
+
   test('keeps layout matched to the displayed diff while its replacement is highlighted', async () => {
     const { cleanup } = installDom();
     const { manager, worker } = await createInitializedManager({
