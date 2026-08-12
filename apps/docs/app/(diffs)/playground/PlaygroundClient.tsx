@@ -5,12 +5,16 @@ import {
   type DiffIndicators,
   type DiffLineAnnotation,
   type FileDiffOptions,
+  type FileOptions,
   isDiffAnnotationCollection,
+  isFileAnnotationCollection,
+  type LineAnnotation,
   type SelectedLineRange,
 } from '@pierre/diffs';
 import type { Editor, EditorOptions } from '@pierre/diffs/edit';
 import {
   type CodeViewReactOptions,
+  File,
   FileDiff,
   useStableCallback,
   useWorkerPool,
@@ -50,6 +54,7 @@ import type { PlaygroundAnnotationMetadata } from './constants';
 import {
   CODE_VIEW_ITEMS,
   ITEM_UNSAFE_CSS,
+  PLAYGROUND_FILE,
   PLAYGROUND_MARKERS,
   VIRTUALIZER_FILE_DIFFS,
 } from './constants';
@@ -106,7 +111,8 @@ const LINE_HOVER_HIGHLIGHT_OPTIONS = [
 ] as const;
 
 const VIEW_MODE_OPTIONS = [
-  { value: 'normal', label: 'Normal' },
+  { value: 'diff', label: 'Diff' },
+  { value: 'file', label: 'File' },
   { value: 'virtualizer', label: 'Virtualizer (win)' },
   { value: 'virtualizer-element', label: 'Virtualizer (el)' },
   { value: 'codeview', label: 'CodeView' },
@@ -114,6 +120,12 @@ const VIEW_MODE_OPTIONS = [
 
 const EMPTY_ANNOTATIONS: DiffLineAnnotation<PlaygroundAnnotationMetadata>[] =
   [];
+const EMPTY_FILE_ANNOTATIONS: LineAnnotation<PlaygroundAnnotationMetadata>[] =
+  [];
+
+function isDirectView(viewMode: ViewMode): boolean {
+  return viewMode === 'diff' || viewMode === 'file';
+}
 
 // Pure rendering options shared by all three view modes. These keys don't depend
 // on the annotation metadata generic, so a single annotation-agnostic type keeps
@@ -301,11 +313,10 @@ function PlaygroundControlsContent({
         </ButtonGroup>
 
         {/*
-          The single global Edit toggle only makes sense for the one-file
-          Normal view. Virtualizer/CodeView show a per-file edit control in
-          each header instead.
+          The direct File and FileDiff views share one global Edit toggle.
+          Virtualizer/CodeView show a per-file edit control in each header.
         */}
-        {viewMode === 'normal' && (
+        {isDirectView(viewMode) && (
           <>
             <div className="bg-border h-6 w-px" />
 
@@ -500,8 +511,8 @@ function PlaygroundControlsContent({
           onCheckedChange={setShowAnnotations}
         />
 
-        {/* Markers use the Normal view's active edit-session editor. */}
-        {viewMode === 'normal' && (
+        {/* Markers use the direct view's active edit-session editor. */}
+        {isDirectView(viewMode) && (
           <ToggleButton
             icon={<IconCiWarning />}
             label="Markers"
@@ -707,6 +718,9 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
   const [annotations, setAnnotations] = useState<
     DiffLineAnnotation<PlaygroundAnnotationMetadata>[]
   >(prerenderedDiff.annotations ?? []);
+  const [fileAnnotations, setFileAnnotations] = useState<
+    LineAnnotation<PlaygroundAnnotationMetadata>[]
+  >([]);
 
   const interactionMode: 'select' | 'comment' | 'none' = enableGutterUtility
     ? 'comment'
@@ -717,13 +731,9 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
   const edit = mode === 'edit';
 
   // Edits remap annotation line numbers (an Enter above a comment shifts it
-  // down); onChange hands the remapped set back so the `lineAnnotations` prop
-  // — and the React-slotted comment content keyed by line number — follows the
-  // edit. The flushSync matters: the editor renamed the shadow-DOM annotation
-  // slots during this same keystroke, and until React commits the matching
-  // light-DOM `slot` attributes the comments project nowhere. A scheduled
-  // commit lands frames later (blank comments, collapsed rows); a synchronous
-  // one lands before this task's paint.
+  // down); onChange writes the remapped collection back to the matching direct
+  // view. flushSync keeps React's light-DOM annotation slots synchronized with
+  // the shadow-DOM slot names the editor updates during the same keystroke.
   const editorRef = useRef<Editor<PlaygroundAnnotationMetadata> | null>(null);
   const editorOptions = useMemo<EditorOptions<PlaygroundAnnotationMetadata>>(
     () => ({
@@ -732,24 +742,26 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
         editor.focus({ lineNumber: 'first-visible', preventScroll: true });
       },
       onChange: (_file, lineAnnotations) => {
-        if (
-          lineAnnotations != null &&
-          isDiffAnnotationCollection(lineAnnotations)
-        ) {
-          flushSync(() => {
-            setAnnotations(lineAnnotations);
-          });
+        if (lineAnnotations == null) {
+          return;
         }
+        flushSync(() => {
+          if (isDiffAnnotationCollection(lineAnnotations)) {
+            setAnnotations(lineAnnotations);
+          } else if (isFileAnnotationCollection(lineAnnotations)) {
+            setFileAnnotations(lineAnnotations);
+          }
+        });
       },
     }),
     []
   );
 
-  // Apply (or clear) the demo markers whenever the normal view enters an edit
+  // Apply (or clear) the demo markers whenever a direct view enters an edit
   // session or the toggle changes. onAttach supplies the session editor after
   // attachment completes, so retry until the ref receives it.
   useEffect(() => {
-    if (!edit || viewMode !== 'normal') {
+    if (!edit || !isDirectView(viewMode)) {
       return;
     }
     let frame = 0;
@@ -895,12 +907,38 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
     });
   }, []);
 
+  const addFileCommentAtRange = useCallback((range: SelectedLineRange) => {
+    const lineNumber = range.end;
+    setFileAnnotations((current) =>
+      current.some((annotation) => annotation.lineNumber === lineNumber)
+        ? current
+        : [
+            ...current,
+            {
+              lineNumber,
+              metadata: { key: `line-${lineNumber}`, isThread: false },
+            },
+          ]
+    );
+  }, []);
+
   const handleCancelComment = useCallback(
     (side: AnnotationSide | undefined, lineNumber: number) => {
       setAnnotations((prev) =>
         prev.filter(
           (ann) => !(ann.side === side && ann.lineNumber === lineNumber)
         )
+      );
+      setSelectedRange(null);
+      setCommittedSelectedRange(null);
+    },
+    []
+  );
+
+  const handleCancelFileComment = useCallback(
+    (_side: AnnotationSide | undefined, lineNumber: number) => {
+      setFileAnnotations((current) =>
+        current.filter((annotation) => annotation.lineNumber !== lineNumber)
       );
       setSelectedRange(null);
       setCommittedSelectedRange(null);
@@ -925,10 +963,28 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
     []
   );
 
+  const handleSubmitFileComment = useCallback(
+    (_side: AnnotationSide | undefined, lineNumber: number, body: string) => {
+      setFileAnnotations((current) =>
+        current.map((annotation) =>
+          annotation.lineNumber === lineNumber
+            ? { ...annotation, metadata: { ...annotation.metadata, body } }
+            : annotation
+        )
+      );
+      setSelectedRange(null);
+      setCommittedSelectedRange(null);
+    },
+    []
+  );
+
   // An open form is an annotation that is neither the seeded thread nor a
   // submitted comment; it pauses the gutter utility so forms can't stack.
-  const hasOpenCommentForm = annotations.some(
-    (ann) => ann.metadata.isThread !== true && ann.metadata.body == null
+  const hasOpenCommentForm = (
+    viewMode === 'file' ? fileAnnotations : annotations
+  ).some(
+    (annotation) =>
+      annotation.metadata.isThread !== true && annotation.metadata.body == null
   );
 
   // The controls expose standalone selection and comments as separate modes.
@@ -949,17 +1005,17 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
     return () => document.body.classList.remove('overflow-hidden');
   }, [isControlsOpen]);
 
-  // Editing is controlled only in Normal view. Virtualizer and CodeView own
-  // per-surface controls, so return Normal to Review when switching views.
+  // The direct File and FileDiff views share the global edit control.
+  // Virtualizer and CodeView own per-surface controls instead.
   const setViewModeAndResetEditor = useCallback((mode: ViewMode) => {
     setViewMode(mode);
-    if (mode !== 'normal') setMode('review');
+    if (!isDirectView(mode)) setMode('review');
   }, []);
 
   const [usePrerenderedHTML, setUsePrerenderedHTML] = useState(
-    () => viewMode === 'normal'
+    () => viewMode === 'diff'
   );
-  if (usePrerenderedHTML && viewMode !== 'normal') {
+  if (usePrerenderedHTML && viewMode !== 'diff') {
     setUsePrerenderedHTML(false);
   }
 
@@ -1014,7 +1070,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
   const effectiveColorMode =
     colorMode === 'system' ? (resolvedColorScheme ?? 'system') : colorMode;
 
-  // Pure rendering options shared by all three view modes. Interaction and
+  // Pure rendering options shared by every view mode. Interaction and
   // edit-specific options are layered on per surface below.
   const renderOptions = useMemo<SharedRenderOptions>(
     () => ({
@@ -1058,7 +1114,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
   }, [workerPool, renderOptions.theme, renderOptions.lineDiffType]);
 
   // CodeView adds its own layout/sticky-header options on top of the shared
-  // rendering options; its scrollbar styling mirrors the Normal view's.
+  // rendering options; its scrollbar styling mirrors the direct views.
   const codeViewOptions = useMemo<
     CodeViewReactOptions<PlaygroundAnnotationMetadata>
   >(
@@ -1071,7 +1127,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
     [renderOptions]
   );
 
-  const renderAnnotation = useStableCallback(
+  const renderDiffAnnotation = useStableCallback(
     (annotation: DiffLineAnnotation<PlaygroundAnnotationMetadata>) => {
       return annotation.metadata.isThread === true ? (
         <ExampleThread
@@ -1097,7 +1153,27 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
     }
   );
 
-  const options = useMemo(
+  const renderFileAnnotation = useStableCallback(
+    (annotation: LineAnnotation<PlaygroundAnnotationMetadata>) => {
+      return annotation.metadata.body != null ? (
+        <CommentThread
+          body={annotation.metadata.body}
+          onDelete={() =>
+            handleCancelFileComment(undefined, annotation.lineNumber)
+          }
+        />
+      ) : (
+        <CommentForm
+          side={undefined}
+          lineNumber={annotation.lineNumber}
+          onCancel={handleCancelFileComment}
+          onSubmit={handleSubmitFileComment}
+        />
+      );
+    }
+  );
+
+  const fileDiffOptions = useMemo(
     () => ({
       ...prerenderedDiff.options,
       ...renderOptions,
@@ -1124,6 +1200,29 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
     ]
   );
 
+  const fileOptions = useMemo<FileOptions<PlaygroundAnnotationMetadata>>(
+    () => ({
+      ...renderOptions,
+      unsafeCSS: ITEM_UNSAFE_CSS,
+      enableLineSelection: canSelectLines,
+      enableGutterUtility: canUseGutterComments,
+      onLineSelectionStart: handleLineSelectionChange,
+      onLineSelectionChange: handleLineSelectionChange,
+      onLineSelectionEnd: handleLineSelectionEnd,
+      onGutterUtilityClick: canUseGutterComments
+        ? addFileCommentAtRange
+        : undefined,
+    }),
+    [
+      addFileCommentAtRange,
+      canSelectLines,
+      canUseGutterComments,
+      handleLineSelectionChange,
+      handleLineSelectionEnd,
+      renderOptions,
+    ]
+  );
+
   const fileDiff = (
     <FileDiff
       {...prerenderedDiff}
@@ -1135,8 +1234,23 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
       editorOptions={editorOptions}
       selectedLines={selectedRange}
       lineAnnotations={showAnnotations ? annotations : EMPTY_ANNOTATIONS}
-      options={options}
-      renderAnnotation={showAnnotations ? renderAnnotation : undefined}
+      options={fileDiffOptions}
+      renderAnnotation={showAnnotations ? renderDiffAnnotation : undefined}
+    />
+  );
+
+  const file = (
+    <File
+      file={PLAYGROUND_FILE}
+      className="border-border overflow-hidden rounded-lg border"
+      edit={edit}
+      editorOptions={editorOptions}
+      selectedLines={selectedRange}
+      lineAnnotations={
+        showAnnotations ? fileAnnotations : EMPTY_FILE_ANNOTATIONS
+      }
+      options={fileOptions}
+      renderAnnotation={showAnnotations ? renderFileAnnotation : undefined}
     />
   );
 
@@ -1195,8 +1309,10 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
           </div>
         </div>
       </div>
-      {viewMode === 'normal' ? (
+      {viewMode === 'diff' ? (
         fileDiff
+      ) : viewMode === 'file' ? (
+        file
       ) : viewMode === 'virtualizer' ? (
         <PlaygroundVirtualizerView
           diffs={VIRTUALIZER_FILE_DIFFS}

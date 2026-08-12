@@ -151,15 +151,17 @@ export const PLAYGROUND_MARKERS = [
   },
 ];
 
+export const PLAYGROUND_FILE: FileContents = {
+  name: 'api/users.ts',
+  contents: NEW_USERS_CONTENT,
+};
+
 const PLAYGROUND_FILE_DIFF = parseDiffFromFile(
   {
     name: 'api/users.ts',
     contents: OLD_USERS_CONTENT,
   },
-  {
-    name: 'api/users.ts',
-    contents: NEW_USERS_CONTENT,
-  }
+  PLAYGROUND_FILE
 );
 
 const PLAYGROUND_ANNOTATIONS = [

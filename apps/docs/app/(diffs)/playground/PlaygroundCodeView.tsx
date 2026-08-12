@@ -187,7 +187,7 @@ export function PlaygroundCodeView({
     []
   );
 
-  // Mirrors the Normal view's addCommentAtRange, but stores the annotation on
+  // Mirrors the direct Diff view's addCommentAtRange, but stores the annotation on
   // the CodeView item that owns the selected range.
   const addCommentAtRange = useCallback(
     (itemId: string, range: SelectedLineRange) => {
@@ -325,7 +325,7 @@ export function PlaygroundCodeView({
     );
   }, [showAnnotations]);
 
-  // Match the Normal view's precedence: an open comment form (neither a
+  // Match the direct views' precedence: an open comment form (neither a
   // thread nor a submitted comment) pauses the gutter utility so forms can't
   // stack.
   const hasOpenCommentForm = items.some(

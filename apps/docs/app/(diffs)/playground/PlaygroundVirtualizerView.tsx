@@ -4,6 +4,8 @@ import {
   type DiffLineAnnotation,
   type FileDiffMetadata,
   isDiffAnnotationCollection,
+  isFileAnnotationCollection,
+  type LineAnnotation,
   VirtualizedFile,
   VirtualizedFileDiff,
   Virtualizer,
@@ -69,6 +71,7 @@ interface VirtualizerAnnotationMetadata {
 }
 
 type VirtualizerAnnotation = DiffLineAnnotation<VirtualizerAnnotationMetadata>;
+type VirtualizerFileAnnotation = LineAnnotation<VirtualizerAnnotationMetadata>;
 
 function annotationKey(
   index: number,
@@ -77,9 +80,13 @@ function annotationKey(
   return `${index}:${annotation.metadata.key}`;
 }
 
+function fileAnnotationKey(annotation: VirtualizerFileAnnotation): string {
+  return `file:${annotation.metadata.key}`;
+}
+
 // The "Virtualizer (window)" mode: renders a list of full diffs through the
 // vanilla Virtualizer using the document/window as the scroll container, so
-// the list flows in the page (like the Normal view) rather than scrolling
+// the list flows in the page (like the direct views) rather than scrolling
 // inside its own box. The React <Virtualizer> wrapper always scrolls inside
 // its own element — that variant is demoed by
 // PlaygroundVirtualizerElementView — so this view drives the imperative API
@@ -106,7 +113,9 @@ export function PlaygroundVirtualizerView({
   const instancesRef = useRef<
     VirtualizedFileDiff<VirtualizerAnnotationMetadata>[]
   >([]);
-  const fileInstanceRef = useRef<VirtualizedFile | null>(null);
+  const fileInstanceRef =
+    useRef<VirtualizedFile<VirtualizerAnnotationMetadata> | null>(null);
+  const fileAnnotationsRef = useRef<VirtualizerFileAnnotation[]>([]);
   const annotationsRef = useRef<VirtualizerAnnotation[][]>([]);
   const annotationRootsRef = useRef(new Map<string, Root>());
   const annotationKeyCounterRef = useRef(0);
@@ -139,27 +148,119 @@ export function PlaygroundVirtualizerView({
 
     // The long README plain file leads the window-scroll list (as in
     // CodeView), driven by the vanilla VirtualizedFile. It carries the same
-    // header Edit toggle as the diffs below; no comment wiring, since the
-    // demo file has no annotations. Its container is appended first so it
-    // sits above the diffs in the page flow.
+    // header Edit toggle and line interactions as the diffs below. Its
+    // container is appended first so it sits above the diffs in the page flow.
     const readmeContainer = document.createElement('diffs-container');
     readmeContainer.style.display = 'block';
     content.appendChild(readmeContainer);
-    const readmeEditor = new Editor<undefined>({
+    fileAnnotationsRef.current = [];
+    const readmeEditor = new Editor<VirtualizerAnnotationMetadata>({
       onAttach(attachedEditor) {
         attachedEditor.focus({
           lineNumber: 'first-visible',
           preventScroll: true,
         });
       },
+      onChange: (_file, lineAnnotations) => {
+        if (
+          lineAnnotations == null ||
+          !isFileAnnotationCollection(lineAnnotations)
+        ) {
+          return;
+        }
+        const previous = fileAnnotationsRef.current;
+        if (previous === lineAnnotations) {
+          return;
+        }
+        fileAnnotationsRef.current = lineAnnotations;
+        const liveKeys = new Set(lineAnnotations.map(fileAnnotationKey));
+        for (const annotation of previous) {
+          const key = fileAnnotationKey(annotation);
+          if (!liveKeys.has(key)) {
+            unmountAnnotationRoot(key);
+          }
+        }
+      },
     });
     const readmeToggle = createEditToggle();
-    const fileInstance = new VirtualizedFile(
+    const rerenderReadmeWithAnnotations = () => {
+      fileInstance.render({
+        file: LONG_README_FILE,
+        lineAnnotations: [...fileAnnotationsRef.current],
+      });
+    };
+    const removeReadmeAnnotation = (annotation: VirtualizerFileAnnotation) => {
+      fileAnnotationsRef.current = fileAnnotationsRef.current.filter(
+        (existing) => existing.metadata.key !== annotation.metadata.key
+      );
+      fileInstance.setSelectedLines(null);
+      rerenderReadmeWithAnnotations();
+      unmountAnnotationRoot(fileAnnotationKey(annotation));
+    };
+    const submitReadmeAnnotation = (
+      annotation: VirtualizerFileAnnotation,
+      body: string
+    ) => {
+      fileAnnotationsRef.current = fileAnnotationsRef.current.map((existing) =>
+        existing.metadata.key === annotation.metadata.key
+          ? { ...existing, metadata: { ...existing.metadata, body } }
+          : existing
+      );
+      fileInstance.setSelectedLines(null);
+      rerenderReadmeWithAnnotations();
+    };
+    const fileInstance = new VirtualizedFile<VirtualizerAnnotationMetadata>(
       {
         ...options,
         renderHeaderMetadata: () => readmeToggle,
         stickyHeader: true,
         unsafeCSS: VIRTUALIZER_CUSTOM_CSS,
+        enableLineSelection: enableLineSelection && !enableGutterComments,
+        enableGutterUtility: enableGutterComments && showAnnotations,
+        onGutterUtilityClick: (range) => {
+          const lineNumber = range.end;
+          if (
+            fileAnnotationsRef.current.some(
+              (annotation) => annotation.lineNumber === lineNumber
+            )
+          ) {
+            return;
+          }
+          fileAnnotationsRef.current.push({
+            lineNumber,
+            metadata: {
+              key: `comment-${annotationKeyCounterRef.current++}`,
+            },
+          });
+          rerenderReadmeWithAnnotations();
+        },
+        renderAnnotation: (annotation) => {
+          const key = fileAnnotationKey(annotation);
+          unmountAnnotationRoot(key);
+          const container = document.createElement('div');
+          const root = createRoot(container);
+          annotationRootsRef.current.set(key, root);
+          flushSync(() => {
+            root.render(
+              annotation.metadata.body != null ? (
+                <CommentThread
+                  body={annotation.metadata.body}
+                  onDelete={() => removeReadmeAnnotation(annotation)}
+                />
+              ) : (
+                <CommentForm
+                  side={undefined}
+                  lineNumber={annotation.lineNumber}
+                  onCancel={() => removeReadmeAnnotation(annotation)}
+                  onSubmit={(_side, _lineNumber, body) =>
+                    submitReadmeAnnotation(annotation, body)
+                  }
+                />
+              )
+            );
+          });
+          return container;
+        },
       },
       virtualizer,
       undefined,
@@ -177,6 +278,7 @@ export function PlaygroundVirtualizerView({
     fileInstance.render({
       file: LONG_README_FILE,
       fileContainer: readmeContainer,
+      lineAnnotations: fileAnnotationsRef.current,
     });
     fileInstanceRef.current = fileInstance;
 
@@ -373,6 +475,7 @@ export function PlaygroundVirtualizerView({
       annotationRoots.clear();
       instancesRef.current = [];
       annotationsRef.current = [];
+      fileAnnotationsRef.current = [];
       virtualizer.cleanUp();
       content.replaceChildren();
     };
@@ -399,6 +502,8 @@ export function PlaygroundVirtualizerView({
       fileInstance.setOptions({
         ...fileInstance.options,
         ...options,
+        enableLineSelection: enableLineSelection && !enableGutterComments,
+        enableGutterUtility: enableGutterComments && showAnnotations,
       });
     }
   }, [options, enableLineSelection, enableGutterComments, showAnnotations]);
@@ -407,6 +512,15 @@ export function PlaygroundVirtualizerView({
   useEffect(() => {
     if (showAnnotations) {
       return;
+    }
+    const fileInstance = fileInstanceRef.current;
+    if (fileInstance != null) {
+      fileInstance.setSelectedLines(null);
+      for (const annotation of fileAnnotationsRef.current) {
+        unmountAnnotationRoot(fileAnnotationKey(annotation));
+      }
+      fileAnnotationsRef.current = [];
+      fileInstance.render({ file: LONG_README_FILE, lineAnnotations: [] });
     }
     instancesRef.current.forEach((instance, index) => {
       instance.setSelectedLines(null);

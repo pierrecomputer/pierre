@@ -7,6 +7,8 @@ import {
   type FileDiffOptions,
   type FileOptions,
   isDiffAnnotationCollection,
+  isFileAnnotationCollection,
+  type LineAnnotation,
   type SelectedLineRange,
 } from '@pierre/diffs';
 import type { EditorOptions } from '@pierre/diffs/edit';
@@ -54,7 +56,12 @@ export function PlaygroundVirtualizerElementView({
       className="border-border rounded-lg border"
       style={SCROLL_REGION_STYLES}
     >
-      <ElementVirtualizerFile options={options} />
+      <ElementVirtualizerFile
+        options={options}
+        enableLineSelection={enableLineSelection}
+        enableGutterComments={enableGutterComments}
+        showAnnotations={showAnnotations}
+      />
       {diffs.map((fileDiff) => (
         <ElementVirtualizerDiff
           key={fileDiff.name}
@@ -69,25 +76,137 @@ export function PlaygroundVirtualizerElementView({
   );
 }
 
-const FILE_EDITOR_OPTIONS: EditorOptions<undefined> = {
-  onAttach(editor) {
-    editor.focus({ lineNumber: 'first-visible', preventScroll: true });
-  },
-};
+interface ElementVirtualizerFileProps {
+  options: SharedRenderOptions;
+  enableLineSelection: boolean;
+  enableGutterComments: boolean;
+  showAnnotations: boolean;
+}
 
-// The long README plain-file surface leading the list. Carries the same
-// header Edit toggle as the diffs (the app-level EditProvider creates its
-// editor); no comment wiring, since the demo file has no annotations.
-function ElementVirtualizerFile({ options }: { options: SharedRenderOptions }) {
+const EMPTY_FILE_ANNOTATIONS: LineAnnotation<PlaygroundAnnotationMetadata>[] =
+  [];
+
+// The long README plain-file surface leading the list. It owns the same edit,
+// line-selection, and gutter-comment behavior as each diff below it.
+function ElementVirtualizerFile({
+  options,
+  enableLineSelection,
+  enableGutterComments,
+  showAnnotations,
+}: ElementVirtualizerFileProps) {
   const [editing, setEditing] = useState(false);
+  const [annotations, setAnnotations] = useState<
+    LineAnnotation<PlaygroundAnnotationMetadata>[]
+  >([]);
+  const [selectedLines, setSelectedLines] = useState<SelectedLineRange | null>(
+    null
+  );
 
-  const fileOptions = useMemo<FileOptions<undefined>>(
+  const editorOptions = useMemo<EditorOptions<PlaygroundAnnotationMetadata>>(
+    () => ({
+      onAttach(editor) {
+        editor.focus({ lineNumber: 'first-visible', preventScroll: true });
+      },
+      onChange(_file, lineAnnotations) {
+        if (
+          lineAnnotations != null &&
+          isFileAnnotationCollection(lineAnnotations)
+        ) {
+          flushSync(() => {
+            setAnnotations(lineAnnotations);
+          });
+        }
+      },
+    }),
+    []
+  );
+
+  const addCommentAtRange = useCallback((range: SelectedLineRange) => {
+    const lineNumber = range.end;
+    setAnnotations((current) =>
+      current.some((annotation) => annotation.lineNumber === lineNumber)
+        ? current
+        : [
+            ...current,
+            {
+              lineNumber,
+              metadata: { key: `line-${lineNumber}`, isThread: false },
+            },
+          ]
+    );
+  }, []);
+
+  const removeCommentAtLine = useCallback(
+    (_side: AnnotationSide | undefined, lineNumber: number) => {
+      setAnnotations((current) =>
+        current.filter((annotation) => annotation.lineNumber !== lineNumber)
+      );
+      setSelectedLines(null);
+    },
+    []
+  );
+
+  const submitCommentAtLine = useCallback(
+    (_side: AnnotationSide | undefined, lineNumber: number, body: string) => {
+      setAnnotations((current) =>
+        current.map((annotation) =>
+          annotation.lineNumber === lineNumber
+            ? { ...annotation, metadata: { ...annotation.metadata, body } }
+            : annotation
+        )
+      );
+      setSelectedLines(null);
+    },
+    []
+  );
+
+  useEffect(() => {
+    if (!showAnnotations) {
+      setSelectedLines(null);
+    }
+  }, [showAnnotations]);
+
+  const hasOpenCommentForm = annotations.some(
+    (annotation) => annotation.metadata.body == null
+  );
+  const canSelectLines =
+    enableLineSelection && !enableGutterComments && !hasOpenCommentForm;
+  const canUseGutterComments =
+    enableGutterComments && showAnnotations && !hasOpenCommentForm;
+
+  const fileOptions = useMemo<FileOptions<PlaygroundAnnotationMetadata>>(
     () => ({
       ...options,
       stickyHeader: true,
       unsafeCSS: ITEM_UNSAFE_CSS,
+      enableLineSelection: canSelectLines,
+      enableGutterUtility: canUseGutterComments,
+      onLineSelectionStart: setSelectedLines,
+      onLineSelectionChange: setSelectedLines,
+      onLineSelectionEnd: setSelectedLines,
+      onGutterUtilityClick: canUseGutterComments
+        ? addCommentAtRange
+        : undefined,
     }),
-    [options]
+    [options, canSelectLines, canUseGutterComments, addCommentAtRange]
+  );
+
+  const renderAnnotation = useStableCallback(
+    (annotation: LineAnnotation<PlaygroundAnnotationMetadata>) => {
+      return annotation.metadata.body != null ? (
+        <CommentThread
+          body={annotation.metadata.body}
+          onDelete={() => removeCommentAtLine(undefined, annotation.lineNumber)}
+        />
+      ) : (
+        <CommentForm
+          side={undefined}
+          lineNumber={annotation.lineNumber}
+          onCancel={removeCommentAtLine}
+          onSubmit={submitCommentAtLine}
+        />
+      );
+    }
   );
 
   // Must NOT be a stable callback — see ElementVirtualizerDiff's
@@ -115,9 +234,12 @@ function ElementVirtualizerFile({ options }: { options: SharedRenderOptions }) {
     <File
       file={LONG_README_FILE}
       edit={editing}
+      selectedLines={selectedLines}
+      lineAnnotations={showAnnotations ? annotations : EMPTY_FILE_ANNOTATIONS}
       options={fileOptions}
-      editorOptions={FILE_EDITOR_OPTIONS}
+      editorOptions={editorOptions}
       renderHeaderMetadata={renderHeaderMetadata}
+      renderAnnotation={renderAnnotation}
     />
   );
 }
