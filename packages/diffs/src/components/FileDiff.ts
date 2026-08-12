@@ -1131,6 +1131,8 @@ export class FileDiff<
       } else {
         this.installExternalEditSession(incomingExternalDiff);
       }
+    } else if (this.editor != null && !incomingExternalDiff.isPartial) {
+      this.createInitialEditSession(this.editor, incomingExternalDiff);
     }
     return true;
   }
