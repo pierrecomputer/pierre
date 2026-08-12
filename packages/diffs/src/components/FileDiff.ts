@@ -1358,9 +1358,7 @@ export class FileDiff<
           );
         }
         this.renderSeparators([]);
-        if (hunksResult != null) {
-          this.renderedDiff = hunksResult.fileDiff;
-        }
+        this.renderedDiff = hunksResult?.fileDiff ?? latestDiff;
         this.injectUnsafeCSS();
       } catch (error: unknown) {
         if (disableErrorHandling) {

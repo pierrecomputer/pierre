@@ -874,9 +874,7 @@ export class File<
             fileResult.file
           );
         }
-        if (fileResult != null) {
-          this.renderedFile = fileResult.file;
-        }
+        this.renderedFile = fileResult?.file ?? latestFile;
         this.injectUnsafeCSS();
       } catch (error: unknown) {
         if (disableErrorHandling) {

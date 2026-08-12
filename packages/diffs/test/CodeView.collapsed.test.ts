@@ -1,7 +1,12 @@
 import { describe, expect, test } from 'bun:test';
 
 import { CodeView } from '../src/components/CodeView';
-import type { CodeViewItem } from '../src/types';
+import type {
+  CodeViewDiffItem,
+  CodeViewItem,
+  FileContents,
+  FileDiffMetadata,
+} from '../src/types';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import {
   createRoot,
@@ -15,8 +20,8 @@ import {
 function makeDiffItem(
   id: string,
   collapsed?: boolean
-): CodeViewItem<undefined> {
-  const item: CodeViewItem<undefined> = {
+): CodeViewDiffItem<undefined> {
+  const item: CodeViewDiffItem<undefined> = {
     id,
     type: 'diff',
     fileDiff: parseDiffFromFile(
@@ -40,17 +45,26 @@ function hasRenderedCode(item: { element: HTMLElement }): boolean {
   return item.element.shadowRoot?.querySelector('pre') != null;
 }
 
+function getRenderedFile(instance: object): FileContents | undefined {
+  return Reflect.get(instance, 'renderedFile') as FileContents | undefined;
+}
+
+function getRenderedDiff(instance: object): FileDiffMetadata | undefined {
+  return Reflect.get(instance, 'renderedDiff') as FileDiffMetadata | undefined;
+}
+
 describe('CodeView item collapsed state', () => {
   test('mounts mixed initially collapsed and expanded items', async () => {
     const { cleanup } = installDom();
     const viewer = new CodeView();
+    const collapsedFileContents = makeFile('collapsed.txt');
     try {
       viewer.setup(createRoot());
       await renderItems(viewer, [
         {
           id: 'file:collapsed.txt',
           type: 'file',
-          file: makeFile('collapsed.txt'),
+          file: collapsedFileContents,
           collapsed: true,
         },
         makeDiffItem('diff:expanded.txt'),
@@ -68,6 +82,28 @@ describe('CodeView item collapsed state', () => {
       expect(expandedDiff).toBeDefined();
       expect(hasRenderedCode(collapsedFile!)).toBe(false);
       expect(hasRenderedCode(expandedDiff!)).toBe(true);
+      expect(getRenderedFile(collapsedFile!.instance)).toBe(
+        collapsedFileContents
+      );
+    } finally {
+      viewer.cleanUp();
+      await wait(0);
+      cleanup();
+    }
+  });
+
+  test('mounts an initially collapsed diff', async () => {
+    const { cleanup } = installDom();
+    const viewer = new CodeView();
+    const item = makeDiffItem('diff:collapsed.txt', true);
+    try {
+      viewer.setup(createRoot());
+      await renderItems(viewer, [item]);
+
+      const renderedItem = viewer.getRenderedItems()[0];
+      expect(renderedItem).toBeDefined();
+      expect(hasRenderedCode(renderedItem)).toBe(false);
+      expect(getRenderedDiff(renderedItem.instance)).toBe(item.fileDiff);
     } finally {
       viewer.cleanUp();
       await wait(0);
@@ -98,6 +134,7 @@ describe('CodeView item collapsed state', () => {
       const collapsedItem = viewer.getRenderedItems()[0];
       expect(collapsedItem).toBeDefined();
       expect(hasRenderedCode(collapsedItem)).toBe(false);
+      expect(getRenderedFile(collapsedItem.instance)).toBe(item.file);
       expect(collapsedItem.instance.getVirtualizedHeight()).toBeLessThan(
         expandedHeight
       );
