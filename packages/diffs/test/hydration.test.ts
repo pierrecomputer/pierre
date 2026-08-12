@@ -194,6 +194,8 @@ function createVirtualizer() {
       return { top: 0, bottom: 0 };
     },
     instanceChanged() {},
+    markDOMDirty() {},
+    requestHeightReconcile() {},
     isInstanceVisible() {
       return false;
     },

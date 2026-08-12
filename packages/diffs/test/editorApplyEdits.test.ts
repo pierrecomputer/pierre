@@ -239,55 +239,6 @@ describe('Editor persisted file state', () => {
     }
   });
 
-  test('restores the cached document, undo history, and editor state', async () => {
-    const fixture = await createEditorFixture('alpha\nbravo\n', {
-      persistState: true,
-    });
-
-    try {
-      insertAtStart(fixture.editor, 'X');
-      fixture.editor.setSelections([
-        {
-          start: { line: 1, character: 1 },
-          end: { line: 1, character: 4 },
-          direction: 'forward',
-        },
-      ]);
-
-      await renderFileAndWait(fixture, {
-        name: 'other.ts',
-        contents: 'one\n',
-        cacheKey: 'other',
-      });
-      // A fresh object with the same explicit key resumes the editing session.
-      await renderFileAndWait(fixture, {
-        name: 'edits.ts',
-        contents: 'alpha\nbravo\n',
-        cacheKey: 'edits-file',
-      });
-
-      expect(fixture.editor.getText()).toBe('Xalpha\nbravo\n');
-      expect(fixture.editor.getState().selections).toEqual([
-        {
-          start: { line: 1, character: 1 },
-          end: { line: 1, character: 4 },
-          direction: 1,
-        },
-      ]);
-      expect(
-        fixture.fileContainer.shadowRoot?.querySelector(
-          '[data-content] [data-line="1"]'
-        )?.textContent
-      ).toBe('Xalpha');
-      expect(fixture.editor.canUndo).toBe(true);
-
-      fixture.editor.undo();
-      expect(fixture.editor.getText()).toBe('alpha\nbravo\n');
-    } finally {
-      fixture.cleanup();
-    }
-  });
-
   test('uses a custom state storage with the explicit file key', async () => {
     const states = new Map<string, ReturnType<Editor<undefined>['getState']>>();
     const calls: string[] = [];

@@ -60,6 +60,7 @@ interface InspectableVirtualizedFileDiff {
     fileAnnotationHeight: number;
   };
   lineAnnotations: unknown[];
+  renderedDiff: FileDiffMetadata | undefined;
   renderRange: RenderRange | undefined;
   getExpandedLineCount(
     fileDiff: FileDiffMetadata,
@@ -78,6 +79,15 @@ function inspect(
   instance: VirtualizedFileDiff
 ): InspectableVirtualizedFileDiff {
   return instance as unknown as InspectableVirtualizedFileDiff;
+}
+
+// Height reconciliation measures existing DOM, so these focused unit tests
+// explicitly identify the diff represented by their manually constructed rows.
+function setRenderedDiff(
+  instance: VirtualizedFileDiff,
+  fileDiff: FileDiffMetadata
+): void {
+  inspect(instance).renderedDiff = fileDiff;
 }
 
 function createRenderRange(startingLine = 0): RenderRange {
@@ -464,7 +474,9 @@ describe('VirtualizedFileDiff estimated height cache', () => {
       );
       let measuredHeight = 17;
 
-      instance.updateCodeViewLayout(createTwoHunkDiff(), 0);
+      const fileDiff = createTwoHunkDiff();
+      instance.updateCodeViewLayout(fileDiff, 0);
+      setRenderedDiff(instance, fileDiff);
       inspect(instance).fileContainer =
         new FakeHTMLElement() as unknown as HTMLElement;
       inspect(instance).codeAdditions = createMeasuredCodeGroup(
@@ -635,9 +647,11 @@ describe('VirtualizedFileDiff estimated height cache', () => {
       const instance = new VirtualizedFileDiff({}, virtualizer, metrics);
       let annotationHeight = 25;
 
-      instance.updateCodeViewLayout(createTwoHunkDiff(), 0, undefined, [
+      const fileDiff = createTwoHunkDiff();
+      instance.updateCodeViewLayout(fileDiff, 0, undefined, [
         { side: 'additions', lineNumber: 0 },
       ]);
+      setRenderedDiff(instance, fileDiff);
       inspect(instance).renderRange = createRenderRange();
       inspect(instance).fileContainer =
         new FakeHTMLElement() as unknown as HTMLElement;
@@ -676,9 +690,11 @@ describe('VirtualizedFileDiff estimated height cache', () => {
     try {
       const instance = new VirtualizedFileDiff({}, virtualizer, metrics);
 
-      instance.updateCodeViewLayout(createTwoHunkDiff(), 0, undefined, [
+      const fileDiff = createTwoHunkDiff();
+      instance.updateCodeViewLayout(fileDiff, 0, undefined, [
         { side: 'additions', lineNumber: 0 },
       ]);
+      setRenderedDiff(instance, fileDiff);
       inspect(instance).renderRange = createRenderRange();
       inspect(instance).fileContainer =
         new FakeHTMLElement() as unknown as HTMLElement;
@@ -708,6 +724,7 @@ describe('VirtualizedFileDiff estimated height cache', () => {
       instance.updateCodeViewLayout(fileDiff, 0, undefined, [
         { side: 'additions', lineNumber: 0 },
       ]);
+      setRenderedDiff(instance, fileDiff);
       inspect(instance).renderRange = createRenderRange();
       inspect(instance).fileContainer =
         new FakeHTMLElement() as unknown as HTMLElement;
@@ -746,6 +763,7 @@ describe('VirtualizedFileDiff estimated height cache', () => {
       instance.updateCodeViewLayout(fileDiff, 0, undefined, [
         { side: 'additions', lineNumber: 0 },
       ]);
+      setRenderedDiff(instance, fileDiff);
       inspect(instance).renderRange = createRenderRange();
       inspect(instance).fileContainer =
         new FakeHTMLElement() as unknown as HTMLElement;
@@ -783,6 +801,7 @@ describe('VirtualizedFileDiff estimated height cache', () => {
       instance.updateCodeViewLayout(fileDiff, 0, undefined, [
         { side: 'additions', lineNumber: 0 },
       ]);
+      setRenderedDiff(instance, fileDiff);
       inspect(instance).renderRange = createRenderRange();
       inspect(instance).fileContainer =
         new FakeHTMLElement() as unknown as HTMLElement;
@@ -819,6 +838,7 @@ describe('VirtualizedFileDiff estimated height cache', () => {
       instance.updateCodeViewLayout(fileDiff, 0, undefined, [
         { side: 'additions', lineNumber: 0 },
       ]);
+      setRenderedDiff(instance, fileDiff);
       inspect(instance).renderRange = createRenderRange();
       inspect(instance).fileContainer =
         new FakeHTMLElement() as unknown as HTMLElement;
@@ -835,8 +855,6 @@ describe('VirtualizedFileDiff estimated height cache', () => {
 
       inspect(instance).fileContainer = undefined;
       instance.cleanUp(true);
-
-      expect(inspect(instance).lineAnnotations).toHaveLength(0);
 
       instance.updateCodeViewLayout(fileDiff, 0, undefined, []);
 

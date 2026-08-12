@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { VirtualizedFile } from '../src/components/VirtualizedFile';
 import type {
+  DiffsEditor,
   DiffsTextDocument,
   FileContents,
   RenderRange,
@@ -49,6 +50,16 @@ function makeFile(lineCount: number): FileContents {
   return { name: 'a.txt', contents: makeContents(lineCount), lang: 'text' };
 }
 
+function createEditorStub(): DiffsEditor<undefined> {
+  return {
+    cleanUp() {},
+    edit: () => () => {},
+    __captureFocusForDOMReplacement() {},
+    __postponeBgTokenizeToNextFrame() {},
+    __syncRenderView() {},
+  };
+}
+
 class BufferRecordingFile extends VirtualizedFile<undefined> {
   public bufferUpdates = 0;
 
@@ -59,6 +70,17 @@ class BufferRecordingFile extends VirtualizedFile<undefined> {
   protected override updateBuffers(): void {
     this.bufferUpdates += 1;
   }
+}
+
+// The buffer update runs after a content edit against the file represented by
+// the existing DOM. These tests do not build DOM, so establish that ownership
+// explicitly after attaching the private edit session.
+function setRenderedEditSession(instance: BufferRecordingFile): void {
+  const state = instance as unknown as {
+    editSessionFile: FileContents | undefined;
+    renderedFile: FileContents | undefined;
+  };
+  state.renderedFile = state.editSessionFile;
 }
 
 describe('applyDocumentChange buffer updates', () => {
@@ -75,17 +97,26 @@ describe('applyDocumentChange buffer updates', () => {
       createStubVirtualizer('advanced')
     );
     advancedInstance.updateCodeViewLayout(makeFile(50), 0);
+    const detachAdvancedEditor =
+      advancedInstance.attachEditor(createEditorStub());
+    setRenderedEditSession(advancedInstance);
     advancedInstance.seedRenderRange(seeded);
     advancedInstance.applyDocumentChange(makeDocument(1), undefined, true);
     expect(advancedInstance.bufferUpdates).toBe(0);
+    detachAdvancedEditor();
+    advancedInstance.cleanUp();
 
     const simpleInstance = new BufferRecordingFile(
       {},
       createStubVirtualizer('simple')
     );
     simpleInstance.updateCodeViewLayout(makeFile(50), 0);
+    const detachSimpleEditor = simpleInstance.attachEditor(createEditorStub());
+    setRenderedEditSession(simpleInstance);
     simpleInstance.seedRenderRange(seeded);
     simpleInstance.applyDocumentChange(makeDocument(1), undefined, true);
     expect(simpleInstance.bufferUpdates).toBe(1);
+    detachSimpleEditor();
+    simpleInstance.cleanUp();
   });
 });

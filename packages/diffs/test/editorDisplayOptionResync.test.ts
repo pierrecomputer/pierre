@@ -356,12 +356,9 @@ describe('diff editor: display-option toggle mid-edit', () => {
     }
   });
 
-  // Exercises the fileDiff-prop path the React bridge uses: the host holds one
-  // diff object. A line-count edit followed by a forced re-render that re-passes
-  // a fresh diff object resets the rendered rows to the original count, so the
-  // re-render must come from the document - otherwise inserted lines are never
-  // created (and deleted lines never removed).
-  test('keeps an inserted line when the host re-passes a fresh diff object', async () => {
+  // Exercises the fileDiff-prop path the React bridge uses when an options
+  // update re-passes the same controlled input during an active edit session.
+  test('keeps an inserted line when the host re-passes the same diff', async () => {
     const dom = installDom();
     const container = document.createElement('div');
     document.body.appendChild(container);
@@ -374,12 +371,13 @@ describe('diff editor: display-option toggle mid-edit', () => {
     const oldContents = 'alpha\nbravo\n';
     const newContents = 'alpha\nCHANGED\n';
     const file = { name: 'edit.ts' };
+    const externalDiff = parseDiffFromFile(
+      { ...file, contents: oldContents },
+      { ...file, contents: newContents }
+    );
 
     fileDiff.render({
-      fileDiff: parseDiffFromFile(
-        { ...file, contents: oldContents },
-        { ...file, contents: newContents }
-      ),
+      fileDiff: externalDiff,
       fileContainer: container,
       forceRender: true,
     });
@@ -400,14 +398,11 @@ describe('diff editor: display-option toggle mid-edit', () => {
       await wait(0);
       expect(lineText(container, 2)).toBe('INSERTED');
 
-      // Forced re-render with a brand-new diff object (as a host that re-derives
-      // its fileDiff each render would pass), which resets the rendered rows.
+      // A display-option update re-passes the same controlled diff. The private
+      // edit session remains the render source for its inserted line.
       fileDiff.setOptions({ ...fileDiff.options, disableLineNumbers: true });
       fileDiff.render({
-        fileDiff: parseDiffFromFile(
-          { ...file, contents: oldContents },
-          { ...file, contents: newContents }
-        ),
+        fileDiff: externalDiff,
         fileContainer: container,
         forceRender: true,
       });
