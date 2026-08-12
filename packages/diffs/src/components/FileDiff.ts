@@ -173,9 +173,12 @@ function shouldResetUndoState(
   }
   const prevLanguage = prevDiff.lang ?? getFiletypeFromFileName(prevDiff.name);
   const nextLanguage = nextDiff.lang ?? getFiletypeFromFileName(nextDiff.name);
+  const prevHasOldFile = prevDiff.type !== 'new';
+  const nextHasOldFile = nextDiff.type !== 'new';
   if (
     prevDiff.name !== nextDiff.name ||
     prevLanguage !== nextLanguage ||
+    prevHasOldFile !== nextHasOldFile ||
     prevDiff.deletionLines.length !== nextDiff.deletionLines.length
   ) {
     return true;

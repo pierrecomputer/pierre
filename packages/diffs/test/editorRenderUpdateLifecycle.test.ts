@@ -34,12 +34,14 @@ function createDiff({
   oldContents = 'base\n',
   newContents,
   lang,
+  type,
 }: {
   cacheKey?: string;
   name?: string;
   oldContents?: string;
   newContents: string;
   lang?: SupportedLanguages;
+  type?: FileDiffMetadata['type'];
 }): FileDiffMetadata {
   const diff = parseDiffFromFile(
     { name, contents: oldContents },
@@ -47,11 +49,14 @@ function createDiff({
   );
   diff.cacheKey = cacheKey;
   diff.lang = lang;
+  diff.type = type ?? diff.type;
   return diff;
 }
 
 async function createFixture(options?: {
   initialCacheKey?: string | null;
+  initialOldContents?: string;
+  initialType?: FileDiffMetadata['type'];
   loadDiffFiles?: (fileDiff: FileDiffMetadata) => Promise<FileDiffLoadedFiles>;
   onChange?: (contents: string) => void;
   persistState?: boolean;
@@ -64,7 +69,9 @@ async function createFixture(options?: {
       options?.initialCacheKey === null
         ? undefined
         : (options?.initialCacheKey ?? 'session:v1'),
+    oldContents: options?.initialOldContents ?? 'base\n',
     newContents: 'alpha\n',
+    type: options?.initialType,
   });
   const instance = new TestFileDiff({
     disableErrorHandling: true,
@@ -306,6 +313,70 @@ describe('external FileDiff updates during editing', () => {
       expect(fixture.editor.canUndo).toBe(false);
       expect(fixture.editor.canRedo).toBe(false);
       expect(changes).toEqual(['bravo\n', 'charlie\n']);
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  for (const [name, initialType, replacementType] of [
+    ['a new diff becomes a change with an empty old side', 'new', 'change'],
+    ['a change with an empty old side becomes a new diff', 'change', 'new'],
+  ] as const) {
+    test(`${name} and starts fresh history`, async () => {
+      const changes: string[] = [];
+      const fixture = await createFixture({
+        initialOldContents: '',
+        initialType,
+        onChange: (contents) => changes.push(contents),
+      });
+      const replacement = createDiff({
+        cacheKey: 'session:v2',
+        oldContents: '',
+        newContents: 'charlie\n',
+        type: replacementType,
+      });
+
+      try {
+        expect(fixture.initialDiff.deletionLines).toEqual([]);
+        expect(replacement.deletionLines).toEqual([]);
+        expect(fixture.initialDiff.type).toBe(initialType);
+        expect(replacement.type).toBe(replacementType);
+
+        replaceDocument(fixture.editor, 'bravo\n');
+        expect(fixture.instance.getSessionDiff()?.type).toBe(
+          fixture.initialDiff.type
+        );
+        await renderReplacement(fixture, replacement, 'charlie\n');
+
+        expect(fixture.editor.canUndo).toBe(false);
+        expect(fixture.editor.canRedo).toBe(false);
+        expect(changes).toEqual(['bravo\n', 'charlie\n']);
+      } finally {
+        fixture.cleanup();
+      }
+    });
+  }
+
+  test('two new-file diff updates retain compatible history', async () => {
+    const fixture = await createFixture({
+      initialOldContents: '',
+      initialType: 'new',
+    });
+    const replacement = createDiff({
+      cacheKey: 'session:v2',
+      oldContents: '',
+      newContents: 'charlie\n',
+      type: 'new',
+    });
+
+    try {
+      replaceDocument(fixture.editor, 'bravo\n');
+      await renderReplacement(fixture, replacement, 'charlie\n');
+
+      fixture.editor.undo();
+      expect(fixture.editor.getText()).toBe('bravo\n');
+      fixture.editor.undo();
+      expect(fixture.editor.getText()).toBe('alpha\n');
     } finally {
       fixture.cleanup();
     }
