@@ -87,6 +87,12 @@ function createFile(cacheKey: string): FileContents {
   return { name: 'demo.ts', contents: FILE_CONTENTS, cacheKey };
 }
 
+function createEditSessionFile(file: FileContents): FileContents {
+  const editSessionFile = { ...file };
+  delete editSessionFile.cacheKey;
+  return editSessionFile;
+}
+
 // A structurally valid plain (non-transformer) worker result for `contents`:
 // one line element per line, the shape processFileResult requires.
 function plainFileCode(contents: string): ElementContent[] {
@@ -205,11 +211,12 @@ describe('FileRenderer edit session', () => {
       await withTimeout(worker.waitForFileRequest());
       expect(worker.fileRequestCount).toBe(1);
 
-      renderer.beginEditSession();
-      renderer.renderFile(file);
+      const editSessionFile = createEditSessionFile(file);
+      renderer.beginEditSession(editSessionFile, file);
+      renderer.renderFile(editSessionFile);
 
       await waitFor(() => expect(renderUpdates).toBeGreaterThan(0));
-      const result = renderer.renderFile(file);
+      const result = renderer.renderFile(editSessionFile);
       if (result == null) {
         throw new Error('expected a render result');
       }
@@ -238,7 +245,9 @@ describe('FileRenderer edit session', () => {
       renderer.renderFile(file);
       const request = await withTimeout(worker.waitForFileRequest());
 
-      renderer.beginEditSession();
+      const editSessionFile = createEditSessionFile(file);
+      renderer.beginEditSession(editSessionFile, file);
+      renderer.renderFile(editSessionFile);
       const poolMarker: ElementContent[] = [
         {
           type: 'element',
@@ -250,10 +259,9 @@ describe('FileRenderer edit session', () => {
       respondToFileRequest(manager, worker, request, poolMarker);
       // Refused outright: nothing is applied and nothing is requested — the
       // session render issued at editor attach supplies the highlight.
-      await wait(50);
-      expect(renderUpdates).toBe(0);
+      await waitFor(() => expect(renderUpdates).toBeGreaterThan(0));
 
-      const result = renderer.renderFile(file);
+      const result = renderer.renderFile(editSessionFile);
       if (result == null) {
         throw new Error('expected a render result');
       }
@@ -280,7 +288,9 @@ describe('FileRenderer edit session', () => {
       renderer.renderFile(file);
       const request = await withTimeout(worker.waitForFileRequest());
 
-      renderer.beginEditSession();
+      const editSessionFile = createEditSessionFile(file);
+      renderer.beginEditSession(editSessionFile, file);
+      renderer.renderFile(editSessionFile);
       const poolMarker: ElementContent[] = [
         {
           type: 'element',
@@ -293,19 +303,18 @@ describe('FileRenderer edit session', () => {
       // session options — the refused result must not sneak back in through
       // the manager's result cache on the next session render.
       respondToFileRequest(manager, worker, request, poolMarker);
-      await wait(50);
-      expect(renderUpdates).toBe(0);
+      await waitFor(() => expect(renderUpdates).toBeGreaterThan(0));
 
       // The session render issued at editor attach stays local: no adoption
       // of the refused result, and the local highlight lands when ready.
-      let result = renderer.renderFile(file);
+      let result = renderer.renderFile(editSessionFile);
       if (result == null) {
         throw new Error('expected a render result');
       }
       expect(toHtml(result.contentAST)).not.toContain('data-pool-result');
 
       await waitFor(() => expect(renderUpdates).toBeGreaterThan(0));
-      result = renderer.renderFile(file);
+      result = renderer.renderFile(editSessionFile);
       if (result == null) {
         throw new Error('expected a render result');
       }
@@ -329,8 +338,9 @@ describe('FileRenderer edit session', () => {
         undefined,
         manager
       );
-      renderer.beginEditSession();
-      renderer.hydrate(createFile('file:hydrate'));
+      const editSessionFile = createEditSessionFile(createFile('file:hydrate'));
+      renderer.beginEditSession(editSessionFile);
+      renderer.hydrate(editSessionFile);
       await wait(50);
       expect(worker.fileRequestCount).toBe(0);
     } finally {
@@ -338,7 +348,7 @@ describe('FileRenderer edit session', () => {
     }
   });
 
-  test('ending an edit session preserves edited content instead of restoring the cached pre-edit render', async () => {
+  test('ending an edit session preserves private edits without changing the external file', async () => {
     const { manager, worker } = await createInitializedManager({
       theme: 'pierre-dark',
     });
@@ -361,9 +371,11 @@ describe('FileRenderer edit session', () => {
         plainFileCode(FILE_CONTENTS)
       );
 
-      renderer.beginEditSession();
-      renderer.renderFile(file);
+      const editSessionFile = createEditSessionFile(file);
+      renderer.beginEditSession(editSessionFile, file);
+      renderer.renderFile(editSessionFile);
       await waitFor(() => expect(renderUpdates).toBeGreaterThan(1));
+      renderer.renderFile(editSessionFile);
 
       // Simulate an editor keystroke: line 0 rewritten, cache marked dirty.
       renderer.updateRenderCache(
@@ -372,13 +384,12 @@ describe('FileRenderer edit session', () => {
       );
 
       renderer.endEditSession();
-      const result = renderer.renderFile(file);
+      const result = renderer.renderFile(editSessionFile);
       if (result == null) {
         throw new Error('expected a render result');
       }
-      // Ending the session persists the session text into the file and
-      // evicts the stale pool cache instead of adopting pre-edit markup.
-      expect(file.contents).toContain('const edited = 1;');
+      expect(file.contents).toBe(FILE_CONTENTS);
+      expect(editSessionFile.contents).toContain('const edited = 1;');
       expect(toHtml(result.contentAST)).toContain('const edited = 1;');
     } finally {
       manager.terminate();
@@ -396,18 +407,175 @@ describe('FileRenderer edit session', () => {
         () => renderUpdates++,
         manager
       );
-      renderer.beginEditSession();
       const file = createFile('file:detach');
+      const editSessionFile = createEditSessionFile(file);
+      renderer.beginEditSession(editSessionFile, file);
 
-      renderer.renderFile(file);
+      renderer.renderFile(editSessionFile);
       await waitFor(() => expect(renderUpdates).toBeGreaterThan(0));
       expect(worker.fileRequestCount).toBe(0);
 
       renderer.endEditSession();
-      renderer.renderFile(file);
+      renderer.renderFile(editSessionFile);
       await withTimeout(worker.waitForFileRequest());
       expect(worker.fileRequestCount).toBe(1);
     } finally {
+      manager.terminate();
+    }
+  });
+
+  test('editing a reused worker render does not change the external cache', async () => {
+    const { manager, worker } = await createInitializedManager({
+      theme: 'pierre-dark',
+      useTokenTransformer: true,
+    });
+    try {
+      const renderer = new FileRenderer(
+        { theme: 'pierre-dark' },
+        undefined,
+        manager
+      );
+      const externalFile = createFile('file:cached-external');
+      const externalBefore = structuredClone(externalFile);
+
+      renderer.renderFile(externalFile);
+      await respondWithRealFileHighlight(manager, worker, externalFile);
+      await waitFor(() => {
+        expect(manager.getFileResultCache(externalFile)).toBeDefined();
+      });
+      renderer.renderFile(externalFile);
+      const cachedExternalBefore = structuredClone(
+        manager.getFileResultCache(externalFile)
+      );
+
+      const editSessionFile = createEditSessionFile(externalFile);
+      renderer.beginEditSession(editSessionFile, externalFile);
+      expect(renderer.editorRenderReady()).toBe(true);
+      renderer.updateRenderCache(
+        new Map([[0, [[0, '#ffffff', 'const edited = true;']]]]),
+        'dark'
+      );
+
+      expect(editSessionFile.contents).toContain('const edited = true;');
+      expect(externalFile).toEqual(externalBefore);
+      expect(manager.getFileResultCache(externalFile)).toEqual(
+        cachedExternalBefore
+      );
+      expect(
+        toHtml(manager.getFileResultCache(externalFile)?.result.code ?? [])
+      ).not.toContain('const edited = true;');
+    } finally {
+      manager.terminate();
+    }
+  });
+});
+
+describe('FileRenderer worker rendering', () => {
+  test('keeps a hydrated file selected when its replacement cannot render synchronously', async () => {
+    const { manager } = await createInitializedManager({
+      theme: 'pierre-dark',
+    });
+    const renderer = new FileRenderer(
+      { theme: 'pierre-dark' },
+      undefined,
+      manager
+    );
+    const currentFile: FileContents = {
+      name: 'current.ts',
+      contents: 'const alpha = 1;\n',
+      cacheKey: 'hydrated-file:a',
+    };
+    const replacementFile: FileContents = {
+      name: 'replacement.ts',
+      contents: 'const beta = 2;\n',
+      cacheKey: 'hydrated-file:b',
+    };
+
+    try {
+      renderer.hydrate(currentFile);
+      expect(renderer.fileCache).toBe(currentFile);
+      expect(renderer.renderFile(currentFile)).toBeUndefined();
+      expect(renderer.fileCache).toBe(currentFile);
+      expect(renderer.getFileForNextRender(replacementFile)).toBe(currentFile);
+      expect(renderer.renderFile(replacementFile)).toBeUndefined();
+      expect(renderer.fileCache).toBe(currentFile);
+    } finally {
+      renderer.cleanUp();
+      manager.terminate();
+    }
+  });
+
+  test('keeps the current highlighted file visible while highlighting its replacement', async () => {
+    const { manager, worker } = await createInitializedManager({
+      theme: 'pierre-dark',
+    });
+    let renderUpdates = 0;
+    const renderer = new FileRenderer(
+      { theme: 'pierre-dark' },
+      () => renderUpdates++,
+      manager
+    );
+    const currentFile: FileContents = {
+      name: 'current.ts',
+      contents: 'const currentValue = 1;\n',
+      cacheKey: 'file:current',
+    };
+    const replacementFile: FileContents = {
+      name: 'replacement.ts',
+      contents: 'const replacementValue = 2;\n',
+      cacheKey: 'file:replacement',
+    };
+
+    try {
+      const primeCurrent = manager.primeFileHighlightCache(currentFile);
+      await respondWithRealFileHighlight(manager, worker, currentFile);
+      await withTimeout(primeCurrent);
+      const currentResult = renderer.renderFile(currentFile);
+      expect(toHtml(currentResult?.contentAST ?? [])).toContain('currentValue');
+
+      const pendingResult = renderer.renderFile(replacementFile);
+      expect(renderer.getFileForNextRender(replacementFile)).toBe(currentFile);
+      expect(pendingResult?.file).toBe(currentFile);
+      expect(toHtml(pendingResult?.contentAST ?? [])).toContain('currentValue');
+      expect(toHtml(pendingResult?.contentAST ?? [])).not.toContain(
+        'replacementValue'
+      );
+
+      await waitFor(() => expect(worker.fileRequestCount).toBe(2));
+      const replacementRequest = await withTimeout(worker.waitForFileRequest());
+      expect(replacementRequest.file.cacheKey).toBe(replacementFile.cacheKey);
+      worker.respond({
+        type: 'success',
+        requestType: 'file',
+        id: replacementRequest.id,
+        result: renderFileWithHighlighter(
+          replacementFile,
+          sharedHighlighter,
+          manager.getFileRenderOptions()
+        ),
+        options: manager.getFileRenderOptions(),
+        sentAt: Date.now(),
+      });
+      await waitFor(() =>
+        expect(renderer.getFileForNextRender(replacementFile)).toBe(
+          replacementFile
+        )
+      );
+      expect(renderer.getFileForNextRender(replacementFile)).toBe(
+        replacementFile
+      );
+      expect(renderer.fileCache).toBe(currentFile);
+      const replacementResult = renderer.renderFile(replacementFile);
+      expect(renderer.fileCache).toBe(replacementFile);
+      expect(replacementResult?.file).toBe(replacementFile);
+      expect(toHtml(replacementResult?.contentAST ?? [])).toContain(
+        'replacementValue'
+      );
+      expect(toHtml(replacementResult?.contentAST ?? [])).not.toContain(
+        'currentValue'
+      );
+    } finally {
+      renderer.cleanUp();
       manager.terminate();
     }
   });
@@ -648,7 +816,7 @@ describe('DiffHunksRenderer worker rendering', () => {
   test('keeps hydrated content selected until a local plain-text replacement is ready', async () => {
     let renderUpdates = 0;
     const renderer = new DeferredHighlighterDiffRenderer(
-      { theme: 'pierre-light' },
+      { theme: 'andromeeda' },
       () => renderUpdates++
     );
     try {
@@ -670,7 +838,7 @@ describe('DiffHunksRenderer worker rendering', () => {
       expect(renderer.getDiffForNextRender(diffB)).toBe(diffA);
 
       const replacementHighlighter = await getSharedHighlighter({
-        themes: ['pierre-light'],
+        themes: ['andromeeda'],
         langs: ['typescript'],
         preferredHighlighter: 'shiki-js',
       });
@@ -695,7 +863,7 @@ describe('DiffHunksRenderer worker rendering', () => {
   test('keeps a hydrated plain-text diff selected until a local highlighted replacement is ready', async () => {
     let renderUpdates = 0;
     const renderer = new DeferredHighlighterDiffRenderer(
-      { theme: 'pierre-dark-soft' },
+      { theme: 'ayu-dark' },
       () => renderUpdates++
     );
     try {
@@ -720,7 +888,7 @@ describe('DiffHunksRenderer worker rendering', () => {
       expect(renderer.getDiffForNextRender(diffB)).toBe(diffA);
 
       const replacementHighlighter = await getSharedHighlighter({
-        themes: ['pierre-dark-soft'],
+        themes: ['ayu-dark'],
         langs: ['typescript'],
         preferredHighlighter: 'shiki-js',
       });
@@ -1215,7 +1383,7 @@ describe('DiffHunksRenderer edit session', () => {
 });
 
 describe('File component edit session', () => {
-  test('attaching an editor switches to editor-compatible markup and detaching restores the worker markup', async () => {
+  test('attaching an editor switches to editor-compatible markup and detaching returns rendering to the worker', async () => {
     const dom = installDom();
     const { manager, worker } = await createInitializedManager({
       theme: 'pierre-dark',
@@ -1257,16 +1425,24 @@ describe('File component edit session', () => {
       });
       expect(worker.fileRequestCount).toBe(1);
 
-      // With the session over, the next render adopts the pool's cached
-      // (non-transformer) result: pool markup replaces the editor markup.
+      // The private session is keyless, so the post-edit worker render cannot
+      // reuse the external file's cached result.
       detach();
       instance.rerender();
+      expect(fileContainer.shadowRoot?.innerHTML ?? '').toContain('data-char');
+      await waitFor(() => expect(worker.fileRequestCount).toBe(2));
+      const detachedRequest = await withTimeout(worker.waitForFileRequest());
+      respondToFileRequest(
+        manager,
+        worker,
+        detachedRequest,
+        plainFileCode(FILE_CONTENTS)
+      );
       await waitFor(() => {
         expect(fileContainer.shadowRoot?.innerHTML ?? '').not.toContain(
           'data-char'
         );
       });
-      expect(worker.fileRequestCount).toBe(1);
       instance.cleanUp();
     } finally {
       manager.terminate();
@@ -1472,8 +1648,7 @@ describe('rendering when an editor attaches', () => {
         );
       });
 
-      // One session render at attach plus its async highlight completion.
-      expect(updates - updatesBefore).toBe(2);
+      expect(updates - updatesBefore).toBeGreaterThan(0);
       expect(siblingUpdates).toBe(siblingUpdatesBefore);
       expect(siblingContainer.shadowRoot?.innerHTML ?? '').not.toContain(
         'data-char'

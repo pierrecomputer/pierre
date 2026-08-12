@@ -128,11 +128,6 @@ type DeferredEditorActiveLineWrite = [
 
 interface PendingEditSessionReplacement {
   /**
-   * The new caller-owned diff supplied to FileDiff.
-   * It may remain partial until its file contents finish loading.
-   */
-  incomingExternalDiff: FileDiffMetadata;
-  /**
    * The private editable diff that was active before the new external diff
    * arrived. It remains active while a partial replacement is loading and is
    * compared with the completed replacement to determine history compatibility.
@@ -1089,8 +1084,7 @@ export class FileDiff<
     if (this.fileDiff !== expectedDiff) {
       return false;
     }
-    const replacement = this.pendingEditSessionReplacement;
-    if (replacement?.incomingExternalDiff === expectedDiff) {
+    if (this.pendingEditSessionReplacement != null) {
       this.installExternalEditSession(expectedDiff);
       return true;
     }
@@ -1126,7 +1120,6 @@ export class FileDiff<
     this.pendingPersistedDocumentRestore = undefined;
     if (editSessionDiff != null) {
       this.pendingEditSessionReplacement = {
-        incomingExternalDiff,
         editSessionDiff,
         prevExternalCacheKey,
       };
@@ -1207,9 +1200,6 @@ export class FileDiff<
     renderRange,
     ...fileInputProps
   }: FileDiffRenderProps<LAnnotation>): boolean {
-    const fileInput = getDiffFileInput(fileInputProps, 'FileDiff.render');
-    const oldFile = fileInput?.oldFile;
-    const newFile = fileInput?.newFile;
     if (!this.enabled) {
       // NOTE(amadeus): May need to be a silent failure? Making it loud for now
       // to better understand it
@@ -1217,6 +1207,10 @@ export class FileDiff<
         'FileDiff.render: attempting to call render after cleaned up'
       );
     }
+
+    const fileInput = getDiffFileInput(fileInputProps, 'FileDiff.render');
+    const oldFile = fileInput?.oldFile;
+    const newFile = fileInput?.newFile;
 
     // postpone background tokenizing to next frame for avoiding UI freeze
     // during render
@@ -1514,65 +1508,62 @@ export class FileDiff<
   }
 
   private syncRenderViewToEditor(): void {
-    const editor = this.editor;
-    const fileContainer = this.fileContainer;
-    const fileDiff = this.getLatestDiff();
-    const lineAnnotations = this.lineAnnotations;
+    const { editor, fileContainer, lineAnnotations } = this;
     const renderRange = this.computeEditorRenderRange(this.renderRange);
+    const fileDiff = this.getLatestDiff();
     if (
-      editor != null &&
-      fileContainer != null &&
-      fileDiff != null &&
-      !fileDiff.isPartial
+      editor == null ||
+      fileContainer == null ||
+      fileDiff == null ||
+      fileDiff.isPartial
     ) {
-      void this.hunksRenderer.initializeHighlighter().then((highlighter) => {
-        if (
-          !this.enabled ||
-          this.editor !== editor ||
-          this.fileContainer !== fileContainer ||
-          this.getLatestDiff() !== fileDiff
-        ) {
-          return;
-        }
-        const { pendingEditSessionReplacement: replacement } = this;
-        const externalDocument =
-          replacement != null &&
-          replacement.incomingExternalDiff === this.fileDiff &&
-          replacement.editSessionDiff !== fileDiff;
-        const resetHistory = externalDocument
-          ? shouldResetUndoState(
-              replacement.editSessionDiff,
-              replacement.incomingExternalDiff
-            )
-          : false;
-        const externalCacheKey =
-          replacement != null && !externalDocument
-            ? replacement.prevExternalCacheKey
-            : this.fileDiff?.cacheKey;
-        const pendingRestore = this.pendingPersistedDocumentRestore;
-        const restoredDocument =
-          pendingRestore?.editSessionDiff === fileDiff
-            ? pendingRestore.previousContents
-            : undefined;
-        if (externalDocument) {
-          this.pendingEditSessionReplacement = undefined;
-        }
-        if (restoredDocument != null) {
-          this.pendingPersistedDocumentRestore = undefined;
-        }
-        editor.__syncRenderView({
-          highlighter,
-          fileContainer,
-          fileDiff,
-          externalCacheKey,
-          lineAnnotations,
-          renderRange,
-          externalDocument,
-          resetHistory,
-          restoredDocument,
-        });
-      });
+      return;
     }
+    void this.hunksRenderer.initializeHighlighter().then((highlighter) => {
+      if (
+        !this.enabled ||
+        this.editor !== editor ||
+        this.fileContainer !== fileContainer ||
+        this.getLatestDiff() !== fileDiff
+      ) {
+        return;
+      }
+      const { pendingEditSessionReplacement: replacement } = this;
+      const externalDiff = this.fileDiff;
+      const externalDocument =
+        replacement != null &&
+        externalDiff != null &&
+        replacement.editSessionDiff !== fileDiff;
+      const resetHistory = externalDocument
+        ? shouldResetUndoState(replacement.editSessionDiff, externalDiff)
+        : false;
+      const externalCacheKey =
+        replacement != null && !externalDocument
+          ? replacement.prevExternalCacheKey
+          : this.fileDiff?.cacheKey;
+      const pendingRestore = this.pendingPersistedDocumentRestore;
+      const restoredDocument =
+        pendingRestore?.editSessionDiff === fileDiff
+          ? pendingRestore.previousContents
+          : undefined;
+      if (externalDocument) {
+        this.pendingEditSessionReplacement = undefined;
+      }
+      if (restoredDocument != null) {
+        this.pendingPersistedDocumentRestore = undefined;
+      }
+      editor.__syncRenderView({
+        highlighter,
+        fileContainer,
+        fileDiff,
+        externalCacheKey,
+        lineAnnotations,
+        renderRange,
+        externalDocument,
+        resetHistory,
+        restoredDocument,
+      });
+    });
   }
 
   // The stored render range is in rendered-row units for the windowed AST
@@ -1638,23 +1629,26 @@ export class FileDiff<
     }
     this.editor?.cleanUp();
     this.editor = editor;
-    const pendingReplacement = this.pendingEditSessionReplacement;
+    const {
+      fileDiff: externalDiff,
+      pendingEditSessionReplacement: pendingReplacement,
+    } = this;
     if (
       pendingReplacement != null &&
-      pendingReplacement.incomingExternalDiff === this.fileDiff &&
-      !pendingReplacement.incomingExternalDiff.isPartial &&
+      externalDiff != null &&
+      !externalDiff.isPartial &&
       this.editSessionDiff === pendingReplacement.editSessionDiff
     ) {
-      this.installExternalEditSession(pendingReplacement.incomingExternalDiff);
+      this.installExternalEditSession(externalDiff);
     }
-    const externalDiff =
+    const initialExternalDiff =
       this.editSessionDiff == null &&
-      this.fileDiff != null &&
-      !this.fileDiff.isPartial
-        ? this.fileDiff
+      externalDiff != null &&
+      !externalDiff.isPartial
+        ? externalDiff
         : undefined;
-    if (externalDiff != null) {
-      this.createInitialEditSession(editor, externalDiff);
+    if (initialExternalDiff != null) {
+      this.createInitialEditSession(editor, initialExternalDiff);
     } else {
       this.hunksRenderer.beginEditSession(this.editSessionDiff);
     }
@@ -1681,12 +1675,12 @@ export class FileDiff<
       // syncs the render view once it paints.
       this.rerender();
     }
-    return (recycle?: boolean) => {
+    return (recycle: boolean = false) => {
       this.editor = undefined;
       // A recycle detach is a virtualized unmount mid-session: the session
       // continues on remount, so hunks stay session-shaped. Only a genuine
       // end runs the exit recompute.
-      if (recycle !== true) {
+      if (!recycle) {
         this.finishEditSession();
       }
     };

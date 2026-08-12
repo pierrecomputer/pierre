@@ -107,6 +107,10 @@ function getEditSessionDiff(instance: unknown): FileDiffMetadata | undefined {
   return (instance as { editSessionDiff?: FileDiffMetadata }).editSessionDiff;
 }
 
+function getEditSessionFile(instance: unknown): FileContents | undefined {
+  return (instance as { editSessionFile?: FileContents }).editSessionFile;
+}
+
 function getRendererDiff(instance: unknown): FileDiffMetadata | undefined {
   return (
     instance as {
@@ -700,12 +704,9 @@ describe('CodeView item edit mode', () => {
         getText: () => documentText,
       });
 
-      // Scroll the edited item out (recycle) and back in. The recycle
-      // persists the session document into the item's file (diff parity via
-      // FileRenderer.syncEditedContentsToFile), so the remount renders the
-      // grown 40-line contents instead of the pre-edit 30 lines — and no
-      // longer throws "FileRenderer.processFileResult: Line doesnt exist"
-      // from a retained document line count disagreeing with the render.
+      // Scroll the edited item out (recycle) and back in. The private session
+      // survives the renderer cache reset, so the remount renders its grown
+      // document without changing the caller-owned item.
       root.scrollTop = 20_000;
       dispatchScroll(root);
       viewer.render(true);
@@ -718,6 +719,9 @@ describe('CodeView item edit mode', () => {
 
       const remounted = viewer.getRenderedItems()[0];
       expect(remounted.id).toBe('edited');
+      if (remounted.type !== 'file') {
+        throw new Error('Expected the edited file to remount');
+      }
       // Render errors are caught and rendered as an error wrapper instead of
       // propagating, so assert on the rendered result: no error panel, and
       // the session's 40 lines rendered.
@@ -726,7 +730,10 @@ describe('CodeView item edit mode', () => {
       expect(shadowRoot?.querySelectorAll('[data-line]').length).toBe(
         lineCount
       );
-      expect(items[0].type === 'file' && items[0].file.contents).toBe(
+      expect(getEditSessionFile(remounted.instance)?.contents).toBe(
+        documentText
+      );
+      expect(items[0].type === 'file' && items[0].file.contents).not.toBe(
         documentText
       );
     } finally {
@@ -845,9 +852,8 @@ describe('CodeView item edit mode', () => {
       const tokens: HighlightedToken[] = [[0, '', 'edited marker line']];
       edited.instance.updateRenderCache(new Map([[0, tokens]]), 'light');
 
-      // Scroll the edited item out (recycle) and back in. The recycle joins
-      // the session-synced line cache back into the item's file, so the
-      // remount paints the edited text instead of the pre-edit contents.
+      // Scroll the edited item out (recycle) and back in. The private session
+      // remains authoritative after the renderer cache is discarded.
       root.scrollTop = 20_000;
       dispatchScroll(root);
       viewer.render(true);
@@ -860,14 +866,21 @@ describe('CodeView item edit mode', () => {
 
       const remounted = viewer.getRenderedItems()[0];
       expect(remounted.id).toBe('edited');
+      if (remounted.type !== 'file') {
+        throw new Error('Expected the edited file to remount');
+      }
       const shadowRoot = remounted.element.shadowRoot;
       expect(shadowRoot?.querySelector('[data-error-wrapper]')).toBeNull();
       expect(shadowRoot?.textContent).toContain('edited marker line');
-      // The remaining lines are untouched and the item's file object now
-      // carries the session text.
+      // The remaining lines are untouched and the caller-owned item is not.
       const file = items[0].type === 'file' ? items[0].file : undefined;
-      expect(file?.contents.startsWith('edited marker line\n')).toBe(true);
-      expect(file?.contents).toContain('line 2');
+      expect(getEditSessionFile(remounted.instance)?.contents).toStartWith(
+        'edited marker line\n'
+      );
+      expect(getEditSessionFile(remounted.instance)?.contents).toContain(
+        'line 2'
+      );
+      expect(file?.contents.startsWith('edited marker line\n')).toBe(false);
     } finally {
       viewer.cleanUp();
       await wait(0);
@@ -1202,6 +1215,98 @@ describe('CodeView item edit mode', () => {
       ]);
       editor.undo();
       expect(editor.getText()).toBe('one\nlocal value\nthree\n');
+    } finally {
+      viewer.cleanUp();
+      await wait(0);
+      cleanup();
+    }
+  });
+
+  test('an edited file accepts an external update received while recycled', async () => {
+    const { cleanup } = installDom();
+    const editors: Editor<undefined>[] = [];
+    const changes: string[] = [];
+    const initial = makeEditFileItem('active');
+    if (initial.type !== 'file') {
+      throw new Error('Expected a file item.');
+    }
+    initial.file.cacheKey = 'active:v1';
+    const items = [
+      initial,
+      ...Array.from({ length: 39 }, (_, index) =>
+        makeEditFileItem(`file-${index}`, false, 30)
+      ),
+    ];
+    const viewer = new CodeView<undefined>({
+      createEditor(options) {
+        const editor = new Editor<undefined>(options);
+        editors.push(editor);
+        return editor;
+      },
+      onItemEditChange(_item, file) {
+        changes.push(file.contents);
+      },
+    });
+    const localContents = 'local value\n';
+    const externalContents = 'external value\n';
+
+    try {
+      const root = createRoot();
+      viewer.setup(root);
+      await renderItems(viewer, items);
+      await waitFor(() => editors[0]?.getText() === initial.file.contents);
+      const editor = editors[0];
+      editor.applyEdits([
+        {
+          range: {
+            start: { line: 0, character: 0 },
+            end: {
+              line: Number.MAX_SAFE_INTEGER,
+              character: Number.MAX_SAFE_INTEGER,
+            },
+          },
+          newText: localContents,
+        },
+      ]);
+
+      const rendered = viewer.getRenderedItems()[0];
+      const previousSession = getEditSessionFile(rendered.instance);
+      root.scrollTop = 30_000;
+      dispatchScroll(root);
+      viewer.render(true);
+      await wait(0);
+      expect(
+        viewer.getRenderedItems().some((item) => item.id === initial.id)
+      ).toBe(false);
+
+      const replacement: CodeViewItem<undefined> = {
+        ...initial,
+        file: {
+          ...initial.file,
+          contents: externalContents,
+          cacheKey: 'active:v2',
+        },
+        version: 1,
+      };
+      await applyItemUpdate(viewer, replacement);
+
+      const replacementSession = getEditSessionFile(rendered.instance);
+      expect(replacementSession).not.toBe(previousSession);
+      expect(replacementSession?.contents).toBe(externalContents);
+      expect(changes).toEqual([localContents]);
+
+      root.scrollTop = 0;
+      dispatchScroll(root);
+      viewer.render(true);
+      await waitFor(() => editor.getText() === externalContents, {
+        timeout: 4_000,
+      });
+
+      expect(viewer.getEditor('active')).toBe(editor);
+      expect(editors).toHaveLength(1);
+      expect(changes).toEqual([localContents, externalContents]);
+      editor.undo();
+      expect(editor.getText()).toBe(localContents);
     } finally {
       viewer.cleanUp();
       await wait(0);

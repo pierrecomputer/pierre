@@ -1301,12 +1301,12 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     if (
       currentDiff == null ||
       renderCache == null ||
-      !areDiffTargetsEqual(currentDiff, diff)
+      !areDiffTargetsEqual(currentDiff, diff) ||
+      !areDiffRenderOptionsEqual(
+        options,
+        this.getRenderOptions(currentDiff).options
+      )
     ) {
-      return;
-    }
-    const { options: currentOptions } = this.getRenderOptions(currentDiff);
-    if (!areDiffRenderOptionsEqual(currentOptions, options)) {
       return;
     }
 

@@ -8,10 +8,12 @@ import {
 import type {
   CodeViewItem,
   DiffsHighlighter,
+  FileContents,
   FileDiffMetadata,
 } from '../src/types';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import { renderDiffWithHighlighter } from '../src/utils/renderDiffWithHighlighter';
+import { renderFileWithHighlighter } from '../src/utils/renderFileWithHighlighter';
 import {
   createRoot,
   dispatchScroll,
@@ -99,6 +101,10 @@ function getRenderedDiffForTest(
   instance: object
 ): FileDiffMetadata | undefined {
   return Reflect.get(instance, 'renderedDiff') as FileDiffMetadata | undefined;
+}
+
+function getRenderedFileForTest(instance: object): FileContents | undefined {
+  return Reflect.get(instance, 'renderedFile') as FileContents | undefined;
 }
 
 describe('CodeView worker rendering', () => {
@@ -335,6 +341,140 @@ describe('CodeView worker rendering', () => {
       expect(followerTopWithTallDiff).toBeGreaterThan(followerTopWithShortDiff);
       expect(followerTopWithTallDiff - viewer.getScrollTop()).toBe(
         followerOffsetBefore
+      );
+    } finally {
+      viewer.cleanUp();
+      manager.terminate();
+      await wait(0);
+      cleanup();
+    }
+  });
+
+  test('keeps file layout matched to the displayed file while its replacement is highlighted', async () => {
+    const { cleanup } = installDom();
+    const { manager, worker } = await createInitializedManager({
+      theme: 'pierre-dark',
+    });
+    const viewer = new CodeView(
+      {
+        disableFileHeader: true,
+        stickyHeaders: false,
+        theme: 'pierre-dark',
+      },
+      manager
+    );
+    const shortFile: FileContents = {
+      name: 'short.ts',
+      contents: 'const shortValue = 1;\n',
+      cacheKey: 'file-layout:short',
+    };
+    const tallFile: FileContents = {
+      name: 'tall.ts',
+      contents:
+        Array.from(
+          { length: 120 },
+          (_, index) => `const tallValue${index + 1} = ${index + 1};`
+        ).join('\n') + '\n',
+      cacheKey: 'file-layout:tall',
+    };
+    const shortItem: CodeViewItem = {
+      id: 'file:pending',
+      type: 'file',
+      file: shortFile,
+      version: 0,
+    };
+    const tallItem: CodeViewItem = {
+      ...shortItem,
+      file: tallFile,
+      version: 1,
+    };
+    const follower: CodeViewItem = {
+      id: 'file:pending-follower',
+      type: 'file',
+      file: {
+        name: 'follower.txt',
+        lang: 'text',
+        contents: 'follower\n',
+      },
+    };
+
+    try {
+      const root = createRoot({ height: 120 });
+      viewer.setup(root);
+      viewer.setItems([shortItem, follower]);
+      viewer.render(true);
+
+      const shortRequest = await withTimeout(worker.waitForFileRequest());
+      const renderOptions = manager.getFileRenderOptions();
+      worker.respond({
+        type: 'success',
+        requestType: 'file',
+        id: shortRequest.id,
+        result: renderFileWithHighlighter(
+          shortFile,
+          sharedHighlighter,
+          renderOptions
+        ),
+        options: renderOptions,
+        sentAt: Date.now(),
+      });
+      viewer.render(true);
+      await waitFor(
+        () =>
+          getRenderedText(viewer, shortItem.id)?.includes('shortValue') === true
+      );
+
+      const shortScrollHeight = viewer.getScrollHeight();
+      const followerTopWithShortFile = getItemTop(viewer, follower.id);
+      viewer.setItems([tallItem, follower]);
+      viewer.render();
+
+      await waitFor(() => worker.fileRequestCount === 2);
+      const tallRequest = await withTimeout(worker.waitForFileRequest());
+      expect(getRenderedText(viewer, shortItem.id)).toContain('shortValue');
+      expect(getRenderedText(viewer, shortItem.id)).not.toContain(
+        'tallValue120'
+      );
+      expect(viewer.getScrollHeight()).toBe(shortScrollHeight);
+      expect(getItemTop(viewer, follower.id)).toBe(followerTopWithShortFile);
+      const pendingItem = viewer
+        .getRenderedItems()
+        .find((item) => item.id === shortItem.id);
+      expect(pendingItem?.type).toBe('file');
+      if (pendingItem?.type !== 'file') {
+        throw new Error('Expected the file item to remain rendered');
+      }
+      expect(getRenderedFileForTest(pendingItem.instance)).toBe(shortFile);
+
+      worker.respond({
+        type: 'success',
+        requestType: 'file',
+        id: tallRequest.id,
+        result: renderFileWithHighlighter(
+          tallFile,
+          sharedHighlighter,
+          renderOptions
+        ),
+        options: renderOptions,
+        sentAt: Date.now(),
+      });
+      await waitFor(
+        () =>
+          getRenderedText(viewer, shortItem.id)?.includes('tallValue120') ===
+          true
+      );
+
+      const replacementItem = viewer
+        .getRenderedItems()
+        .find((item) => item.id === shortItem.id);
+      expect(replacementItem?.type).toBe('file');
+      if (replacementItem?.type !== 'file') {
+        throw new Error('Expected the replacement file to be rendered');
+      }
+      expect(getRenderedFileForTest(replacementItem.instance)).toBe(tallFile);
+      expect(viewer.getScrollHeight()).toBeGreaterThan(shortScrollHeight);
+      expect(getItemTop(viewer, follower.id)).toBeGreaterThan(
+        followerTopWithShortFile
       );
     } finally {
       viewer.cleanUp();

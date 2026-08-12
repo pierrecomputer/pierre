@@ -40,7 +40,7 @@ import type {
   SelectedLineRange,
   ThemeTypes,
 } from '../types';
-import { areFilesEqual } from '../utils/areFilesEqual';
+import { areFileTargetsEqual } from '../utils/areFileTargetsEqual';
 import { areLineAnnotationsEqual } from '../utils/areLineAnnotationsEqual';
 import { arePrePropertiesEqual } from '../utils/arePrePropertiesEqual';
 import { areRenderRangesEqual } from '../utils/areRenderRangesEqual';
@@ -54,6 +54,7 @@ import {
   wrapUnsafeCSS,
 } from '../utils/cssWrappers';
 import { getFileRendererOptions } from '../utils/getFileRendererOptions';
+import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
 import { getLineAnnotationName } from '../utils/getLineAnnotationName';
 import { getOrCreateCodeNode } from '../utils/getOrCreateCodeNode';
 import { guardWebKitScrollDuringRebuild } from '../utils/guardWebKitScrollDuringRebuild';
@@ -130,6 +131,43 @@ interface HydrationSetup<LAnnotation> {
   lineAnnotations: LineAnnotation<LAnnotation>[] | undefined;
 }
 
+interface PendingEditSessionReplacement {
+  /**
+   * The private editable file that was active before the new external file
+   * arrived. It is compared with the final replacement to determine whether
+   * the editor can preserve its history.
+   */
+  editSessionFile: FileContents;
+  /**
+   * The cache key associated with the current editable file. The editor keeps
+   * using it until the replacement is rendered and ready to synchronize.
+   */
+  prevExternalCacheKey: string | undefined;
+}
+
+interface PendingPersistedDocumentRestore {
+  editSessionFile: FileContents;
+  previousContents: string;
+}
+
+function createEditSessionFile(file: FileContents): FileContents {
+  const editSessionFile = { ...file };
+  delete editSessionFile.cacheKey;
+  return editSessionFile;
+}
+
+function shouldResetUndoState(
+  previousFile: FileContents,
+  nextFile: FileContents
+): boolean {
+  const previousLanguage =
+    previousFile.lang ?? getFiletypeFromFileName(previousFile.name);
+  const nextLanguage = nextFile.lang ?? getFiletypeFromFileName(nextFile.name);
+  return (
+    previousFile.name !== nextFile.name || previousLanguage !== nextLanguage
+  );
+}
+
 let instanceId = -1;
 
 export class File<
@@ -176,14 +214,18 @@ export class File<
   protected managersDirty = false;
 
   public file: FileContents | undefined;
+  private editSessionFile: FileContents | undefined;
+  private pendingEditSessionReplacement:
+    | PendingEditSessionReplacement
+    | undefined;
+  private pendingPersistedDocumentRestore:
+    | PendingPersistedDocumentRestore
+    | undefined;
+  protected renderedFile: FileContents | undefined;
   protected renderRange: RenderRange | undefined;
   protected enabled = true;
 
   protected editor: DiffsEditor<LAnnotation> | undefined;
-  // When an editor attaches before the first file render, defer persisted
-  // document restoration to that render. Clearing this afterward keeps later
-  // host renders authoritative instead of replacing them with cached content.
-  private deferPersistedRestore = false;
 
   constructor(
     public options: FileOptions<LAnnotation> = { theme: DEFAULT_THEMES },
@@ -216,8 +258,87 @@ export class File<
     });
   }
 
-  public __getCurrentFile(): FileContents | undefined {
-    return this.file;
+  // Return the newest file this component intends to display. Once editing
+  // starts, the private edit-session file owns that state.
+  protected getLatestFile(
+    file: FileContents | undefined = this.file
+  ): FileContents | undefined {
+    return this.editSessionFile ?? file;
+  }
+
+  // Return the file that produced the DOM currently owned by this instance.
+  protected getRenderedFile(): FileContents | undefined {
+    return this.renderedFile;
+  }
+
+  protected updateExternalFile(incomingFile: FileContents): boolean {
+    if (areFileTargetsEqual(this.file, incomingFile)) {
+      return false;
+    }
+
+    const {
+      file: previousExternalFile,
+      pendingEditSessionReplacement: pendingReplacement,
+    } = this;
+    const previousEditSessionFile =
+      pendingReplacement?.editSessionFile ?? this.editSessionFile;
+    const prevExternalCacheKey =
+      pendingReplacement?.prevExternalCacheKey ??
+      previousExternalFile?.cacheKey;
+
+    this.file = incomingFile;
+    this.pendingEditSessionReplacement = undefined;
+    this.pendingPersistedDocumentRestore = undefined;
+
+    if (previousEditSessionFile != null) {
+      this.pendingEditSessionReplacement = {
+        editSessionFile: previousEditSessionFile,
+        prevExternalCacheKey,
+      };
+      this.installExternalEditSession(incomingFile);
+    } else if (this.editor != null) {
+      this.createInitialEditSession(this.editor, incomingFile);
+    } else {
+      this.editSessionFile = undefined;
+    }
+    return true;
+  }
+
+  private installExternalEditSession(externalFile: FileContents): void {
+    const editSessionFile = createEditSessionFile(externalFile);
+    this.editSessionFile = editSessionFile;
+    this.fileRenderer.beginEditSession(editSessionFile, externalFile);
+  }
+
+  /**
+   * Create the first private editable file for an editor attachment. When a
+   * persisted document has different text, initialize the private file with
+   * that text so the restored editor document and rendered rows start in sync.
+   */
+  private createInitialEditSession(
+    editor: DiffsEditor<LAnnotation>,
+    externalFile: FileContents
+  ): void {
+    const editSessionFile = createEditSessionFile(externalFile);
+    const cachedContents = editor.__getCachedDocumentContents?.(externalFile);
+    const restoredPersistedContents =
+      cachedContents != null && cachedContents !== externalFile.contents;
+
+    if (restoredPersistedContents) {
+      editSessionFile.contents = cachedContents;
+      this.pendingPersistedDocumentRestore = {
+        editSessionFile,
+        previousContents: externalFile.contents,
+      };
+    } else {
+      this.pendingPersistedDocumentRestore = undefined;
+    }
+
+    this.editSessionFile = editSessionFile;
+    this.fileRenderer.beginEditSession(
+      editSessionFile,
+      restoredPersistedContents ? undefined : externalFile
+    );
   }
 
   public onThemeChange(): void {
@@ -396,6 +517,10 @@ export class File<
       this.fileRenderer.cleanUp();
       this.workerManager = undefined;
       this.file = undefined;
+      this.editSessionFile = undefined;
+      this.pendingEditSessionReplacement = undefined;
+      this.pendingPersistedDocumentRestore = undefined;
+      this.renderedFile = undefined;
     }
     this.enabled = false;
   }
@@ -507,6 +632,7 @@ export class File<
       return;
     }
     this.fileRenderer.hydrate(file);
+    this.renderedFile = file;
     this.renderAnnotations();
     this.renderGutterUtility();
     this.injectUnsafeCSS();
@@ -515,7 +641,7 @@ export class File<
   }
 
   public getOrCreateLineCache(
-    file: FileContents | undefined = this.file
+    file: FileContents | undefined = this.getLatestFile()
   ): string[] {
     return file != null
       ? this.fileRenderer.getOrCreateLineCache(file)
@@ -529,48 +655,70 @@ export class File<
   }
 
   private syncRenderViewToEditor(): void {
-    const editor = this.editor;
-    const fileContainer = this.fileContainer;
-    const file = this.file;
-    const lineAnnotations = this.lineAnnotations;
-    const renderRange = this.renderRange;
-    if (editor != null && fileContainer != null && file != null) {
-      void this.fileRenderer.initializeHighlighter().then((highlighter) => {
-        if (
-          !this.enabled ||
-          this.editor !== editor ||
-          this.fileContainer !== fileContainer ||
-          this.file !== file
-        ) {
-          return;
-        }
-        editor.__syncRenderView({
-          highlighter,
-          fileContainer,
-          file,
-          externalCacheKey: file.cacheKey,
-          lineAnnotations,
-          renderRange,
-        });
-      });
+    const { editor, fileContainer, lineAnnotations, renderRange } = this;
+    const file = this.getLatestFile();
+    if (editor == null || fileContainer == null || file == null) {
+      return;
     }
+    void this.fileRenderer.initializeHighlighter().then((highlighter) => {
+      if (
+        !this.enabled ||
+        this.editor !== editor ||
+        this.fileContainer !== fileContainer ||
+        this.getLatestFile() !== file
+      ) {
+        return;
+      }
+      const { pendingEditSessionReplacement: replacement } = this;
+      const externalFile = this.file;
+      const externalDocument =
+        replacement != null &&
+        externalFile != null &&
+        replacement.editSessionFile !== file;
+      const resetHistory = externalDocument
+        ? shouldResetUndoState(replacement.editSessionFile, externalFile)
+        : false;
+      const externalCacheKey =
+        replacement != null && !externalDocument
+          ? replacement.prevExternalCacheKey
+          : externalFile?.cacheKey;
+      const pendingRestore = this.pendingPersistedDocumentRestore;
+      const restoredDocument =
+        pendingRestore?.editSessionFile === file
+          ? pendingRestore.previousContents
+          : undefined;
+      if (externalDocument) {
+        this.pendingEditSessionReplacement = undefined;
+      }
+      if (restoredDocument != null) {
+        this.pendingPersistedDocumentRestore = undefined;
+      }
+      editor.__syncRenderView({
+        highlighter,
+        fileContainer,
+        file,
+        externalCacheKey,
+        lineAnnotations,
+        renderRange,
+        externalDocument,
+        resetHistory,
+        restoredDocument,
+      });
+    });
   }
 
   public attachEditor(editor: DiffsEditor<LAnnotation>): () => void {
     this.editor?.cleanUp();
     this.editor = editor;
-    this.fileRenderer.beginEditSession();
-    this.deferPersistedRestore = this.file == null;
-    const preparedFile =
-      this.file != null ? editor.__restoreCachedFile?.(this.file) : undefined;
-    if (preparedFile !== undefined && preparedFile !== this.file) {
-      this.renderPreparedFile({
-        file: preparedFile,
-        forceRender: true,
-        preventEmit: true,
-        renderRange: this.renderRange,
-      });
-    } else if (this.fileRenderer.editorRenderReady()) {
+    if (this.editSessionFile == null && this.file != null) {
+      this.createInitialEditSession(editor, this.file);
+    } else {
+      this.fileRenderer.beginEditSession(this.editSessionFile);
+    }
+    if (this.fileRenderer.editorRenderReady()) {
+      if (this.fileRenderer.fileCache === this.editSessionFile) {
+        this.renderedFile = this.editSessionFile;
+      }
       this.syncRenderViewToEditor();
     } else {
       // The current markup is missing the editor's token metadata, or its
@@ -579,7 +727,6 @@ export class File<
       this.rerender();
     }
     return () => {
-      this.deferPersistedRestore = false;
       this.editor = undefined;
       this.fileRenderer.endEditSession();
     };
@@ -590,11 +737,17 @@ export class File<
     textDocument: DiffsTextDocument,
     newLineAnnotations?: LineAnnotation<LAnnotation>[]
   ): void {
+    const editSessionFile = this.editSessionFile;
+    if (editSessionFile == null) {
+      throw new Error(
+        'File.applyDocumentChange: requires an active edit session'
+      );
+    }
+    this.fileRenderer.beginEditSession(editSessionFile);
     this.fileRenderer.applyDocumentChange(textDocument);
     if (
       newLineAnnotations != null &&
-      newLineAnnotations !== this.lineAnnotations &&
-      this.file != null
+      newLineAnnotations !== this.lineAnnotations
     ) {
       this.setLineAnnotations(newLineAnnotations);
       this.fileRenderer.setLineAnnotations(this.lineAnnotations);
@@ -609,6 +762,13 @@ export class File<
       lineCountChangeInFlight?: boolean;
     }
   ): void {
+    const { editSessionFile } = this;
+    if (editSessionFile == null) {
+      throw new Error(
+        'File.updateRenderCache: requires an active edit session'
+      );
+    }
+    this.fileRenderer.beginEditSession(editSessionFile);
     this.fileRenderer.updateRenderCache(
       dirtyLines,
       themeType,
@@ -616,28 +776,7 @@ export class File<
     );
   }
 
-  public render(props: FileRenderProps<LAnnotation>): boolean {
-    if (!this.enabled) {
-      throw new Error(
-        'File.render: attempting to call render after cleaned up'
-      );
-    }
-
-    let { file } = props;
-    if (this.deferPersistedRestore) {
-      file = this.editor?.__restoreCachedFile?.(file) ?? file;
-      this.deferPersistedRestore = false;
-    } else {
-      this.editor?.__persistFileState?.(file);
-    }
-    return this.renderPreparedFile(
-      file === props.file ? props : { ...props, file }
-    );
-  }
-
-  // Attachment-only restoration may replace the file before this shared phase;
-  // ordinary attached renders reach it with the host's supplied file unchanged.
-  protected renderPreparedFile({
+  public render({
     file,
     fileContainer,
     forceRender = false,
@@ -647,6 +786,12 @@ export class File<
     lineAnnotations,
     renderRange,
   }: FileRenderProps<LAnnotation>): boolean {
+    if (!this.enabled) {
+      throw new Error(
+        'File.render: attempting to call render after cleaned up'
+      );
+    }
+
     // postpone background tokenizing to next frame for avoiding UI freeze
     // during render
     this.editor?.__postponeBgTokenizeToNextFrame();
@@ -660,9 +805,11 @@ export class File<
       (lineAnnotations.length > 0 || this.lineAnnotations.length > 0)
         ? lineAnnotations !== this.lineAnnotations
         : false;
-    const didFileChange =
-      !areFilesEqual(this.file, file) ||
-      this.fileRenderer.hasUnkeyedFileContentsChanged(file);
+    const didFileChange = !areFileTargetsEqual(this.file, file);
+    if (didFileChange) {
+      this.updateExternalFile(file);
+    }
+    const latestFile = this.getLatestFile(file) ?? file;
     if (
       !collapsed &&
       !forceRender &&
@@ -678,7 +825,6 @@ export class File<
     if (didFileChange) {
       this.cachedHeaderHTML = undefined;
     }
-    this.file = file;
     this.fileRenderer.setOptions(getFileRendererOptions(this.options));
     this.syncInteractionOptions();
     if (lineAnnotations != null) {
@@ -710,7 +856,7 @@ export class File<
 
       try {
         const fileResult = this.fileRenderer.renderFile(
-          file,
+          latestFile,
           EMPTY_RENDER_RANGE
         );
         if (fileResult != null) {
@@ -722,7 +868,14 @@ export class File<
           );
         }
         if (fileResult?.headerAST != null) {
-          this.applyHeaderToDOM(fileResult.headerAST, fileContainer);
+          this.applyHeaderToDOM(
+            fileResult.headerAST,
+            fileContainer,
+            fileResult.file
+          );
+        }
+        if (fileResult != null) {
+          this.renderedFile = fileResult.file;
         }
         this.injectUnsafeCSS();
       } catch (error: unknown) {
@@ -746,11 +899,20 @@ export class File<
         !this.canPartiallyRender(
           forceRender,
           annotationsChanged,
-          didFileChange || themeChanged
+          didFileChange ||
+            themeChanged ||
+            !areFileTargetsEqual(this.renderedFile, latestFile)
         ) ||
-        !this.applyPartialRender(previousRenderRange, nextRenderRange)
+        !this.applyPartialRender(
+          latestFile,
+          previousRenderRange,
+          nextRenderRange
+        )
       ) {
-        const fileResult = this.fileRenderer.renderFile(file, nextRenderRange);
+        const fileResult = this.fileRenderer.renderFile(
+          latestFile,
+          nextRenderRange
+        );
         if (fileResult == null) {
           if (this.workerManager?.isInitialized() === false) {
             void this.workerManager.initialize().then(() => this.rerender());
@@ -764,9 +926,14 @@ export class File<
           fileResult.baseThemeType
         );
         if (fileResult.headerAST != null) {
-          this.applyHeaderToDOM(fileResult.headerAST, fileContainer);
+          this.applyHeaderToDOM(
+            fileResult.headerAST,
+            fileContainer,
+            fileResult.file
+          );
         }
         this.applyFullRender(fileResult, pre);
+        this.renderedFile = fileResult.file;
       }
 
       this.applyBuffers(pre, nextRenderRange);
@@ -1152,15 +1319,16 @@ export class File<
   }
 
   private applyPartialRender(
+    file: FileContents,
     previousRenderRange: RenderRange | undefined,
     renderRange: RenderRange | undefined
   ): boolean {
     if (previousRenderRange == null || renderRange == null) {
       return false;
     }
-    const { file, code } = this;
+    const { code } = this;
     const columns = code != null ? this.getColumns(code) : undefined;
-    if (file == null || code == null || columns == null) {
+    if (code == null || columns == null) {
       return false;
     }
 
@@ -1410,10 +1578,9 @@ export class File<
 
   private applyHeaderToDOM(
     headerAST: HASTElement,
-    container: HTMLElement
+    container: HTMLElement,
+    file: FileContents
   ): void {
-    const { file } = this;
-    if (file == null) return;
     this.cleanupErrorWrapper();
     this.placeHolder?.remove();
     this.placeHolder = undefined;

@@ -1023,8 +1023,6 @@ export interface DiffsBaseComponent {
 export interface DiffsEditableComponent<
   LAnnotation,
 > extends DiffsBaseComponent {
-  /** @internal Return the current file when this component renders one. */
-  __getCurrentFile?: () => FileContents | undefined;
   /**
    * @internal Code options with worker-pool overrides applied: the theme the
    * shared highlighter is actually loaded with and the pool's tokenize limit.
@@ -1132,6 +1130,10 @@ export interface SyncFileRenderViewProps<
 > extends SyncRenderViewBaseProps {
   file: FileContents;
   lineAnnotations: LineAnnotation<LAnnotation>[] | undefined;
+  /** Treat the supplied contents as an externally provided document update. */
+  externalDocument?: boolean;
+  /** The external contents replaced by a restored persisted document. */
+  restoredDocument?: string;
 }
 
 export interface SyncDiffRenderViewProps<
@@ -1153,14 +1155,10 @@ export type SyncRenderViewProps<LAnnotation> =
   | SyncDiffRenderViewProps<LAnnotation>;
 
 export interface DiffsEditor<LAnnotation> {
-  /** @internal Persist the active File when key, name, or language changes. */
-  __persistFileState?(file: FileContents): string | undefined;
   /** @internal Return cached text for the same persisted document identity. */
   __getCachedDocumentContents?(
     file: Pick<FileContents, 'cacheKey' | 'lang' | 'name'>
   ): string | undefined;
-  /** @internal Return the File with cached document contents restored. */
-  __restoreCachedFile?(file: FileContents): FileContents;
   __postponeBgTokenizeToNextFrame(): void;
   /** @internal Capture focus intent before replacing the editable view. */
   __captureFocusForDOMReplacement(): void;
