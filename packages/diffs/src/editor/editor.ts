@@ -3597,9 +3597,14 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#resetCache();
     }
 
-    if (newLineAnnotations !== undefined) {
+    if (newLineAnnotations != null) {
       this.#lineAnnotations = newLineAnnotations;
-      renderLineAnnotations(newLineAnnotations, contentEl, gutterEl);
+      // A structural FileDiff edit rebuilds both columns and their paired
+      // annotation rows together. Re-inserting those rows independently by
+      // line number would break their visual alignment in split view.
+      if (!this.#isDiff || !didLineCountChange) {
+        renderLineAnnotations(newLineAnnotations, contentEl, gutterEl);
+      }
     }
 
     if (this.#options.__debug === true) {
