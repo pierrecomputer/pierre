@@ -5533,11 +5533,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     newLineAnnotations?: DiffLineAnnotation<LAnnotation>[],
     options?: { skipSearchRefresh?: boolean; skipFocus?: boolean }
   ) {
-    this.#emitChange(
-      change.changes,
-      newLineAnnotations ?? this.#lineAnnotations
-    );
-
     // Invalidate layout caches touched by the edit. Clear cached line Y
     // positions from startLine onward when either:
     // - the line count changed (inserts/deletes renumber every later line), or
@@ -5659,6 +5654,14 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       }
     }
     this.#rerender(change, newLineAnnotations, renderRange, shouldUpdateBuffer);
+
+    // Publish the change only after the host renderer agrees with the new
+    // document. Consumers may synchronously render the returned annotations,
+    // which must not observe the previous line structure.
+    this.#emitChange(
+      change.changes,
+      newLineAnnotations ?? this.#lineAnnotations
+    );
 
     if (
       options?.skipSearchRefresh !== true &&

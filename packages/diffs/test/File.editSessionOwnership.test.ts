@@ -1,8 +1,8 @@
 import { afterAll, describe, expect, test } from 'bun:test';
 
-import { disposeHighlighter, File } from '../src';
+import { disposeHighlighter, File, isFileAnnotationCollection } from '../src';
 import { Editor } from '../src/editor/editor';
-import type { FileContents } from '../src/types';
+import type { FileContents, LineAnnotation } from '../src/types';
 import { installDom, waitFor } from './domHarness';
 
 afterAll(async () => {
@@ -29,7 +29,13 @@ const EXTERNAL_FILE: FileContents = {
   cacheKey: 'external:file-v1',
 };
 
-async function createFixture(options?: { onChange?(contents: string): void }) {
+async function createFixture(options?: {
+  lineAnnotations?: LineAnnotation<undefined>[];
+  onChange?(
+    contents: string,
+    lineAnnotations: LineAnnotation<undefined>[] | undefined
+  ): void;
+}) {
   const dom = installDom();
   const fileContainer = document.createElement('div');
   document.body.appendChild(fileContainer);
@@ -39,10 +45,22 @@ async function createFixture(options?: { onChange?(contents: string): void }) {
     disableFileHeader: true,
   });
   const editor = new Editor<undefined>({
-    onChange: (file) => options?.onChange?.(file.contents),
+    onChange(file, lineAnnotations) {
+      options?.onChange?.(
+        file.contents,
+        lineAnnotations == null || isFileAnnotationCollection(lineAnnotations)
+          ? lineAnnotations
+          : undefined
+      );
+    },
   });
 
-  instance.render({ file: externalFile, fileContainer, forceRender: true });
+  instance.render({
+    file: externalFile,
+    fileContainer,
+    forceRender: true,
+    lineAnnotations: options?.lineAnnotations,
+  });
   editor.edit(instance);
   await waitFor(() => editor.getText() === externalFile.contents, {
     timeout: 4_000,
@@ -159,6 +177,52 @@ describe('editing a File without changing its input', () => {
         fixture.instance.getLatestFileForTest()
       );
       expect(fixture.externalFile).toEqual(externalBefore);
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('synchronously rendering moved annotations observes the edited document', async () => {
+    let contents = EXTERNAL_FILE.contents;
+    let lineAnnotations: LineAnnotation<undefined>[] = [
+      { lineNumber: 2, metadata: undefined },
+    ];
+    const fixture = await createFixture({
+      lineAnnotations,
+      onChange(nextContents, nextLineAnnotations) {
+        contents = nextContents;
+        lineAnnotations = nextLineAnnotations ?? [];
+        fixture.instance.render({
+          file: fixture.externalFile,
+          fileContainer: fixture.fileContainer,
+          forceRender: true,
+          lineAnnotations,
+        });
+      },
+    });
+
+    try {
+      fixture.editor.applyEdits([
+        {
+          range: {
+            start: { line: 0, character: 0 },
+            end: { line: 0, character: 0 },
+          },
+          newText: '\n\n',
+        },
+      ]);
+
+      expect(lineAnnotations).toEqual([{ lineNumber: 4, metadata: undefined }]);
+      expect(contents).toBe('\n\nalpha\nbravo\n');
+      expect(fixture.editor.getText()).toBe('\n\nalpha\nbravo\n');
+      expect(
+        fixture.fileContainer.shadowRoot?.querySelector('[data-line="4"]')
+      ).not.toBeNull();
+      expect(
+        fixture.fileContainer.shadowRoot?.querySelector(
+          '[data-line-annotation]'
+        )
+      ).not.toBeNull();
     } finally {
       fixture.cleanup();
     }
