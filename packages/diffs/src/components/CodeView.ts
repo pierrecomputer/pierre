@@ -3449,6 +3449,7 @@ export class CodeView<LAnnotation = undefined> {
     this.syncContainerHeight();
     const stickyBounds = this.getStickyBounds(windowSpecs);
     if (stickyBounds == null) {
+      this.stickyOffset.style.height = `${this.getPagedLayoutTop(windowSpecs.top)}px`;
       return;
     }
     this.applyStickyPositioning(stickyBounds);
