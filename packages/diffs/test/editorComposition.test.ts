@@ -166,6 +166,14 @@ function findReplaceInput(panel: HTMLElement): HTMLInputElement {
   return input;
 }
 
+function findSearchInput(panel: HTMLElement): HTMLInputElement {
+  const input = panel.querySelector<HTMLInputElement>('input[data-search]');
+  if (input == null) {
+    throw new Error('search input was not rendered');
+  }
+  return input;
+}
+
 function updateInputValue(input: HTMLInputElement, value: string): void {
   input.value = value;
   input.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
@@ -238,6 +246,37 @@ describe('Editor composition input', () => {
       );
 
       expect(editor.getText()).toBe('line 1');
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('leaves the caret alone for a composing ArrowDown', async () => {
+    const { cleanup, content, editor, window } = await createEditorFixture({
+      contents: 'alpha\nbeta',
+      selections: [
+        {
+          start: { line: 0, character: 2 },
+          end: { line: 0, character: 2 },
+          direction: 'none',
+        },
+      ],
+    });
+
+    try {
+      const event = dispatchKeydown(window, content, {
+        key: 'ArrowDown',
+        isComposing: true,
+      });
+
+      expect(event.defaultPrevented).toBe(false);
+      expect(editor.getState().selections).toEqual([
+        {
+          start: { line: 0, character: 2 },
+          end: { line: 0, character: 2 },
+          direction: DirectionNone,
+        },
+      ]);
     } finally {
       cleanup();
     }
@@ -386,6 +425,70 @@ describe('Editor keyboard editing', () => {
       expect(event.defaultPrevented).toBe(false);
       expect(panel.isConnected).toBe(true);
       expect(editor.getText()).toBe('alpha beta');
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('lets composing Enter commit IME text in the search input', async () => {
+    const { cleanup, content, window } = await createEditorFixture({
+      contents: 'alpha beta',
+    });
+
+    try {
+      const panel = await openSearchReplacePanel({ content, window });
+      const searchInput = findSearchInput(panel);
+      updateInputValue(searchInput, 'beta');
+
+      const event = dispatchKeydown(window, searchInput, {
+        key: 'Enter',
+        isComposing: true,
+      });
+
+      expect(event.defaultPrevented).toBe(false);
+      expect(panel.isConnected).toBe(true);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('keeps the panel open when Escape cancels a composition', async () => {
+    const { cleanup, content, window } = await createEditorFixture({
+      contents: 'alpha beta',
+    });
+
+    try {
+      const panel = await openSearchReplacePanel({ content, window });
+      const searchInput = findSearchInput(panel);
+
+      const event = dispatchKeydown(window, searchInput, {
+        key: 'Escape',
+        keyCode: 229,
+      });
+
+      expect(event.defaultPrevented).toBe(false);
+      expect(panel.isConnected).toBe(true);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('keeps the panel open when Escape cancels a replace input composition', async () => {
+    const { cleanup, content, window } = await createEditorFixture({
+      contents: 'alpha beta',
+    });
+
+    try {
+      const panel = await openSearchReplacePanel({ content, window });
+      const replaceInput = findReplaceInput(panel);
+
+      const event = dispatchKeydown(window, replaceInput, {
+        key: 'Escape',
+        keyCode: 229,
+      });
+
+      expect(event.defaultPrevented).toBe(false);
+      expect(panel.isConnected).toBe(true);
     } finally {
       cleanup();
     }
