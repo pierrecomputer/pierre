@@ -306,6 +306,9 @@ export class SearchPanelWidget {
         updateMatches();
       },
       onkeydown: (e: KeyboardEvent) => {
+        if (e.isComposing) {
+          return;
+        }
         const findAgain = resolveFindAgainShortcut(e);
         if (e.key === 'Escape') {
           e.preventDefault();
