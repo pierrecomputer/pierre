@@ -1981,6 +1981,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         // typing, moving); let selectionchange sync #selections again.
         this.#suppressNativeSelectionSync = false;
 
+        // keyCode 229 opens the composition, before compositionstart fires.
+        if (e.isComposing || e.keyCode === 229) {
+          return;
+        }
+
         const command = resolveEditorCommandFromKeyboardEvent(
           e,
           this.#options.keymap
