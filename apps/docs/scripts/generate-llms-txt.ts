@@ -45,6 +45,7 @@ const ROOT = join(import.meta.dir, '..');
 const DIFFS_SECTIONS = [
   'Overview',
   'Installation',
+  'BuildWithAgents',
   'CoreTypes',
   'ReactAPI',
   'VanillaAPI',
@@ -62,6 +63,7 @@ const DIFFS_SECTIONS = [
 
 const TREES_SECTIONS = [
   'Overview',
+  'BuildWithAgents',
   'Guides/ChooseYourIntegration',
   'Guides/GetStartedWithReact',
   'Guides/GetStartedWithVanilla',
@@ -85,6 +87,8 @@ const SECTION_DESCRIPTIONS: Record<string, Record<string, string>> = {
   diffs: {
     Overview: 'What diffs is, architecture, and getting started',
     Installation: 'Package installation and entry points',
+    BuildWithAgents:
+      'The diffs agent skill, a paste-ready prompt for agents without skill support, and the plain-text docs',
     CoreTypes:
       'FileContents, FileDiffMetadata, and creating diffs from files or patches',
     ReactAPI:
@@ -111,6 +115,8 @@ const SECTION_DESCRIPTIONS: Record<string, Record<string, string>> = {
   trees: {
     Overview:
       'What trees is, the path-first model, and the React, vanilla, and SSR entry points',
+    BuildWithAgents:
+      'The trees agent skill, a paste-ready prompt for agents without skill support, and the plain-text docs',
     'Guides/ChooseYourIntegration':
       'Choosing between React and vanilla, with the shared path-first model',
     'Guides/GetStartedWithReact':

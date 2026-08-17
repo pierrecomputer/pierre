@@ -4,6 +4,10 @@ import { preloadFileTree } from '@pierre/trees/ssr';
 import type { Metadata } from 'next';
 import { Fragment } from 'react';
 
+import {
+  AGENT_PROMPT,
+  AGENT_SKILL_INSTALL,
+} from '../docs/BuildWithAgents/constants';
 import * as chooseYourIntegrationConstants from '../docs/Guides/ChooseYourIntegration/constants';
 import * as customizeIconsConstants from '../docs/Guides/CustomizeIcons/constants';
 import * as getStartedWithReactConstants from '../docs/Guides/GetStartedWithReact/constants';
@@ -16,7 +20,6 @@ import * as showGitStatusAndRowAnnotationsConstants from '../docs/Guides/ShowGit
 import * as ssrGuideConstants from '../docs/Guides/SSR/constants';
 import * as styleAndThemeTheTreeConstants from '../docs/Guides/StyleAndThemeTheTree/constants';
 import {
-  AGENT_SKILL_INSTALL,
   OVERVIEW_INITIAL_EXPANDED_PATHS,
   OVERVIEW_OPTIONS,
   OVERVIEW_PATHS,
@@ -135,6 +138,7 @@ export default function TreesDocsPage() {
         <div className="min-w-0 space-y-10">
           <HeadingAnchors />
           <OverviewSection />
+          <BuildWithAgentsSection />
           <DocsSectionGroup
             id="guides"
             title="Guides"
@@ -158,19 +162,29 @@ async function OverviewSection() {
     paths: OVERVIEW_PATHS,
     initialExpandedPaths: OVERVIEW_INITIAL_EXPANDED_PATHS,
   });
-  const agentSkillInstall = await preloadFile(AGENT_SKILL_INSTALL);
   const content = await renderMDX({
     filePath: '(trees)/docs/Overview/content.mdx',
     scope: {
       OVERVIEW_INITIAL_EXPANDED_PATHS,
       OVERVIEW_OPTIONS,
       OVERVIEW_PATHS,
-      agentSkillInstall,
       overviewPreloadedData: {
         id: ssrPayload.id,
         shadowHtml: ssrPayload.shadowHtml,
       },
     },
+  });
+  return <ProseWrapper>{content}</ProseWrapper>;
+}
+
+async function BuildWithAgentsSection() {
+  const [agentSkillInstall, agentPrompt] = await Promise.all([
+    preloadFile(AGENT_SKILL_INSTALL),
+    preloadFile(AGENT_PROMPT),
+  ]);
+  const content = await renderMDX({
+    filePath: '(trees)/docs/BuildWithAgents/content.mdx',
+    scope: { agentSkillInstall, agentPrompt },
   });
   return <ProseWrapper>{content}</ProseWrapper>;
 }

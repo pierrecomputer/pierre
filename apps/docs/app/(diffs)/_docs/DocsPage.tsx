@@ -10,6 +10,10 @@ import { DEFAULT_KEYMAP_FILE_EXAMPLE } from '../_edit/constants';
 import { MERGE_CONFLICT_EXAMPLE } from '../_examples/MergeConflict/constants';
 import { MergeConflict } from '../_examples/MergeConflict/MergeConflict';
 import {
+  AGENT_PROMPT,
+  AGENT_SKILL_INSTALL,
+} from '../docs/BuildWithAgents/constants';
+import {
   CODE_VIEW_HEADER_FOOTER_REACT_EXAMPLE,
   CODE_VIEW_HEADER_FOOTER_VANILLA_EXAMPLE,
   CODE_VIEW_ITEM_METRICS_OPTIONS_EXAMPLE,
@@ -58,7 +62,6 @@ import {
   EDITOR_PUBLIC_API,
 } from '../docs/Edit/constants';
 import {
-  AGENT_SKILL_INSTALL,
   INSTALLATION_EXAMPLES,
   PACKAGE_MANAGERS,
 } from '../docs/Installation/constants';
@@ -193,6 +196,7 @@ export default function DocsPage() {
           <OverviewSection />
           <MergeConflictDemoSection />
           <InstallationSection />
+          <BuildWithAgentsSection />
           <CoreTypesSection />
           <ReactAPISection />
           <VanillaAPISection />
@@ -228,19 +232,28 @@ async function MergeConflictDemoSection() {
 }
 
 async function InstallationSection() {
-  const [installationExampleEntries, agentSkillInstall] = await Promise.all([
-    Promise.all(
-      PACKAGE_MANAGERS.map(async (pm) => [
-        pm,
-        await preloadFile(INSTALLATION_EXAMPLES[pm]),
-      ])
-    ),
-    preloadFile(AGENT_SKILL_INSTALL),
-  ]);
+  const installationExampleEntries = await Promise.all(
+    PACKAGE_MANAGERS.map(async (pm) => [
+      pm,
+      await preloadFile(INSTALLATION_EXAMPLES[pm]),
+    ])
+  );
   const installationExamples = Object.fromEntries(installationExampleEntries);
   const content = await renderMDX({
     filePath: '(diffs)/docs/Installation/content.mdx',
-    scope: { installationExamples, agentSkillInstall },
+    scope: { installationExamples },
+  });
+  return <ProseWrapper>{content}</ProseWrapper>;
+}
+
+async function BuildWithAgentsSection() {
+  const [agentSkillInstall, agentPrompt] = await Promise.all([
+    preloadFile(AGENT_SKILL_INSTALL),
+    preloadFile(AGENT_PROMPT),
+  ]);
+  const content = await renderMDX({
+    filePath: '(diffs)/docs/BuildWithAgents/content.mdx',
+    scope: { agentSkillInstall, agentPrompt },
   });
   return <ProseWrapper>{content}</ProseWrapper>;
 }

@@ -17,16 +17,3 @@ The package provides several entry points for different use cases:
 | `@pierre/diffs/edit`   | Low-level [edit mode](#edit-mode) `Editor` for attaching editing to rendered file and diff surfaces |
 | `@pierre/diffs/ssr`    | [Server-side rendering utilities](#ssr) for pre-rendering diffs with syntax highlighting            |
 | `@pierre/diffs/worker` | [Worker pool utilities](#worker-pool) for offloading syntax highlighting to background threads      |
-
-### Agent skill [toc-ignore]
-
-If you build with a coding agent, install the
-[`diffs` agent skill](https://www.skills.sh/pierrecomputer/pierre/diffs). It
-gives the agent the full `@pierre/diffs` API reference and task recipes, and
-works with Claude Code, Cursor, Codex, and other agents that read the
-[`SKILL.md` standard](https://agentskills.io):
-
-<DocsCodeExample {...agentSkillInstall} />
-
-Agents can also read these docs as plain text at [llms.txt](/llms.txt) and
-[llms-full.txt](/llms-full.txt).
