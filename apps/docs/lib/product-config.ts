@@ -12,6 +12,8 @@ export interface ProductConfig {
   packageName: string;
   installCommand: string;
   githubUrl: string;
+  skillUrl: string;
+  skillInstallCommand: string;
 }
 
 const siteProduct = process.env.NEXT_PUBLIC_SITE ?? 'diffs';
@@ -32,6 +34,8 @@ export const PRODUCTS: Record<ProductId, ProductConfig> = {
     packageName: '@pierre/diffs',
     installCommand: 'pnpm add @pierre/diffs',
     githubUrl: 'https://github.com/pierrecomputer/pierre',
+    skillUrl: 'https://www.skills.sh/pierrecomputer/pierre/diffs',
+    skillInstallCommand: 'npx skills add pierrecomputer/pierre --skill diffs',
   },
   trees: {
     id: 'trees',
@@ -46,6 +50,8 @@ export const PRODUCTS: Record<ProductId, ProductConfig> = {
     packageName: '@pierre/trees',
     installCommand: 'pnpm add @pierre/trees',
     githubUrl: 'https://github.com/pierrecomputer/pierre',
+    skillUrl: 'https://www.skills.sh/pierrecomputer/pierre/trees',
+    skillInstallCommand: 'npx skills add pierrecomputer/pierre --skill trees',
   },
 };
 
@@ -71,6 +77,23 @@ export function getExternalUrl(productId: ProductId): string {
 
 export function getProductConfig(productId: ProductId): ProductConfig {
   return PRODUCTS[productId];
+}
+
+/** Prompt behind the hero's agent button, for pasting into a coding agent. */
+export function getAgentPrompt(productId: ProductId): string {
+  const product = PRODUCTS[productId];
+  const siteUrl = EXTERNAL_URLS[productId];
+
+  return [
+    `Set up ${product.packageName} in this project.`,
+    '',
+    'Install its agent skill first so you have the full API reference:',
+    product.skillInstallCommand,
+    '',
+    `Then follow that skill to add ${product.packageName}.`,
+    `Docs: ${siteUrl}${product.docsPath}`,
+    `Full reference for LLMs: ${siteUrl}/llms-full.txt`,
+  ].join('\n');
 }
 
 /**
