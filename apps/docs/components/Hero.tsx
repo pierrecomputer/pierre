@@ -1,17 +1,14 @@
 'use client';
 
-import { IconBook, IconCheck, IconCopyFill } from '@pierre/icons';
+import { IconBook } from '@pierre/icons';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import diffsPackageJson from '../../../packages/diffs/package.json';
 import treesPackageJson from '../../../packages/trees/package.json';
+import { AgentSkillMenu } from '@/components/AgentSkillMenu';
+import { COPY_FEEDBACK_MS, CopyStateIcon } from '@/components/CopyStateIcon';
 import { Button } from '@/components/ui/button';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
 import { getProductConfig, type ProductId } from '@/lib/product-config';
 
 export interface HeroProps {
@@ -20,6 +17,9 @@ export interface HeroProps {
 
 export function Hero({ productId }: HeroProps) {
   const [copied, setCopied] = useState(false);
+  const resetTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined
+  );
   const product = getProductConfig(productId);
   // Diffshub has no published package, so there's no version line to render.
   // Diffs and Trees each ship their own package; pick the matching one.
@@ -30,16 +30,28 @@ export function Hero({ productId }: HeroProps) {
         ? treesPackageJson
         : null;
   const hasInstallCommand = product.installCommand !== '';
+  const hasAgentSkill = product.skillInstallCommand !== '';
 
   const copyToClipboard = async () => {
     try {
       await navigator.clipboard.writeText(product.installCommand);
+      clearTimeout(resetTimeoutRef.current);
       setCopied(true);
-      setTimeout(() => setCopied(false), 5000);
+      resetTimeoutRef.current = setTimeout(
+        () => setCopied(false),
+        COPY_FEEDBACK_MS
+      );
     } catch (err) {
       console.error('Failed to copy to clipboard', err);
     }
   };
+
+  useEffect(
+    () => () => {
+      clearTimeout(resetTimeoutRef.current);
+    },
+    []
+  );
 
   return (
     <section className="flex max-w-3xl flex-col gap-3 pt-20 pb-10 md:pb-20 lg:max-w-4xl">
@@ -71,30 +83,20 @@ export function Hero({ productId }: HeroProps) {
       </p>
 
       {hasInstallCommand && (
-        <div className="flex flex-col gap-3 min-[460px]:flex-row min-[460px]:items-center">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                onClick={() => void copyToClipboard()}
-                className="inline-flex items-center gap-4 rounded-lg bg-neutral-900 px-5 py-3 font-mono text-sm tracking-tight text-white transition-colors hover:bg-neutral-800 md:text-base dark:border dark:border-white/20 dark:bg-black dark:hover:border-white/30"
-              >
-                <div className="size-4 min-[460px]:hidden" />
-                <span className="mx-auto text-[95%] min-[460px]:mx-0">
-                  {product.installCommand}
-                </span>
-                {copied ? <IconCheck /> : <IconCopyFill />}
-              </button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>{'Copy to clipboard'}</p>
-            </TooltipContent>
-          </Tooltip>
+        <div className="flex flex-col gap-3 min-[460px]:flex-row min-[460px]:flex-wrap min-[460px]:items-center">
           <Button
-            variant="secondary"
-            asChild
+            onClick={() => void copyToClipboard()}
             size="xl"
-            className="h-11 rounded-lg px-5 text-sm md:h-12 md:text-base"
+            className="group px-5 font-mono tracking-tight"
           >
+            <div className="size-4 min-[460px]:hidden" />
+            <span className="mx-auto min-[460px]:mx-0">
+              {product.installCommand}
+            </span>
+            <CopyStateIcon copied={copied} />
+          </Button>
+          {hasAgentSkill && <AgentSkillMenu productId={productId} />}
+          <Button variant="secondary" asChild size="xl">
             <Link href={product.docsPath}>
               <IconBook />
               Documentation
