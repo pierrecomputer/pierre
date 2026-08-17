@@ -278,7 +278,7 @@ export class SearchPanelWidget {
         searchParams.replaceText = (e.target as HTMLInputElement).value;
       },
       onkeydown: (e: KeyboardEvent) => {
-        if (e.isComposing) {
+        if (e.isComposing || e.keyCode === 229) {
           return;
         }
         const findAgain = resolveFindAgainShortcut(e);
@@ -306,7 +306,7 @@ export class SearchPanelWidget {
         updateMatches();
       },
       onkeydown: (e: KeyboardEvent) => {
-        if (e.isComposing) {
+        if (e.isComposing || e.keyCode === 229) {
           return;
         }
         const findAgain = resolveFindAgainShortcut(e);
