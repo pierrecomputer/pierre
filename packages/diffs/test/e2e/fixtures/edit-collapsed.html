@@ -63,7 +63,7 @@
       window.__editorEvents = events;
 
       const editor = new Editor({
-        onChange(file) {
+        onChange({ file }) {
           events.push(file.contents);
         },
       });

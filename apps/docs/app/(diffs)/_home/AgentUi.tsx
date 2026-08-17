@@ -1096,7 +1096,7 @@ export function AgentUi({
         }
         lastAttachedPathRef.current = target;
       },
-      onChange(file) {
+      onChange({ file }) {
         const target = activeTargetRef.current;
         if (target == null) {
           return;

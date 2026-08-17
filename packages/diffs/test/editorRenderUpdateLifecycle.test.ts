@@ -80,7 +80,7 @@ async function createFixture(options?: {
   });
   const editor = new Editor<undefined>({
     persistState: options?.persistState,
-    onChange: (file) => options?.onChange?.(file.contents),
+    onChange: (event) => options?.onChange?.(event.file.contents),
   });
 
   instance.render({

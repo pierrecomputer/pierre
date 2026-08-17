@@ -107,7 +107,7 @@ function ElementVirtualizerFile({
       onAttach(editor) {
         editor.focus({ lineNumber: 'first-visible', preventScroll: true });
       },
-      onChange(_file, lineAnnotations) {
+      onChange({ lineAnnotations }) {
         if (
           lineAnnotations != null &&
           isFileAnnotationCollection(lineAnnotations)
@@ -285,7 +285,7 @@ function ElementVirtualizerDiff({
       onAttach(editor) {
         editor.focus({ lineNumber: 'first-visible', preventScroll: true });
       },
-      onChange(_file, lineAnnotations) {
+      onChange({ lineAnnotations }) {
         if (
           lineAnnotations != null &&
           isDiffAnnotationCollection(lineAnnotations)

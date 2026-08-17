@@ -29,6 +29,7 @@ import type {
   CodeViewScrollTarget,
   DiffLineAnnotation,
   DiffsEditor,
+  EditorChangeEvent,
   FileContents,
   HunkSeparators,
   LineAnnotation,
@@ -535,17 +536,15 @@ export interface CodeViewOptions<LAnnotation>
     options: CodeViewCreateEditorOptions<LAnnotation>
   ): DiffsEditor<LAnnotation> | undefined;
   /**
-   * Called whenever the edited document changes, from internal (edit) changes
-   * or external (CodeViewItem) changes.
+   * Called with the editor's `EditorChangeEvent` and the owning item whenever
+   * the edited document changes, from internal (edit) changes or external
+   * (CodeViewItem) changes.
    *
-   * Do not feed these changes back into item state until the editing is done.
+   * Do not feed these changes back into item state.
    */
   onItemEditChange?(
-    item: CodeViewItem<LAnnotation>,
-    file: FileContents,
-    lineAnnotations?:
-      | LineAnnotation<LAnnotation>[]
-      | DiffLineAnnotation<LAnnotation>[]
+    event: EditorChangeEvent<LAnnotation>,
+    item: CodeViewItem<LAnnotation>
   ): void;
   /**
    * Called once when an item's edit session ends — edit turned off, item
@@ -2048,13 +2047,17 @@ export class CodeView<LAnnotation = undefined> {
         // swaps aren't stranded on the callback captured at creation.
         const state: CodeViewItemEditorState<LAnnotation> = { id };
         const editor = createEditor({
-          onChange: (file, lineAnnotations) => {
+          onChange: (event) => {
             const latest = this.idToItem.get(state.id);
             if (latest == null) {
               return;
             }
-            state.lastChange = { item: latest.item, file, lineAnnotations };
-            this.options.onItemEditChange?.(latest.item, file, lineAnnotations);
+            state.lastChange = {
+              item: latest.item,
+              file: event.file,
+              lineAnnotations: event.lineAnnotations,
+            };
+            this.options.onItemEditChange?.(event, latest.item);
           },
         });
         if (editor == null) {

@@ -1,13 +1,17 @@
 'use client';
 
-import { type FileOptions } from '../components/File';
+import {
+  type FileEditCompleteEvent,
+  type FileEditCompleteHandler,
+  type FileOptions,
+} from '../components/File';
 import { DIFFS_TAG_NAME } from '../constants';
 import type { FileProps } from './types';
 import { renderFileChildren } from './utils/renderFileChildren';
 import { templateRender } from './utils/templateRender';
 import { useFileInstance } from './utils/useFileInstance';
 
-export type { FileOptions };
+export type { FileEditCompleteEvent, FileEditCompleteHandler, FileOptions };
 
 export function File<LAnnotation = undefined>({
   file,
@@ -27,6 +31,7 @@ export function File<LAnnotation = undefined>({
   renderGutterUtility,
   disableWorkerPool = false,
   edit = false,
+  onEditComplete,
 }: FileProps<LAnnotation>): React.JSX.Element {
   const { ref, getHoveredLine } = useFileInstance({
     file,
@@ -40,6 +45,7 @@ export function File<LAnnotation = undefined>({
     hasCustomHeader: renderCustomHeader != null,
     disableWorkerPool,
     edit,
+    onEditComplete,
   });
   const children = renderFileChildren({
     file,

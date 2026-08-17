@@ -321,7 +321,7 @@ describe('Editor.applyEdits selection sync', () => {
       ]);
 
       expect(onChange).toHaveBeenCalledTimes(1);
-      const [file, lineAnnotations, event] = onChange.mock.calls[0] ?? [];
+      const [event] = onChange.mock.calls[0] ?? [];
       expect(event?.changes).toEqual([
         {
           text: 'X',
@@ -342,13 +342,11 @@ describe('Editor.applyEdits selection sync', () => {
           end: 19,
         },
       ]);
-      expect(file).toMatchObject({
+      expect(event?.file).toMatchObject({
         name: 'edits.ts',
         contents: 'alXavo\nC',
       });
-      expect(lineAnnotations).toEqual([]);
-      expect(event?.file).toBe(file);
-      expect(event?.lineAnnotations).toBe(lineAnnotations);
+      expect(event?.lineAnnotations).toEqual([]);
     } finally {
       cleanup();
     }
@@ -1686,7 +1684,7 @@ describe('Editor undo/redo API', () => {
       editor.undo();
 
       expect(onChange).toHaveBeenCalledTimes(2);
-      const [file, lineAnnotations, event] = onChange.mock.calls[1] ?? [];
+      const [event] = onChange.mock.calls[1] ?? [];
       expect(event?.changes).toEqual([
         {
           text: '',
@@ -1698,9 +1696,7 @@ describe('Editor undo/redo API', () => {
           end: 6,
         },
       ]);
-      expect(file?.contents).toBe('alpha');
-      expect(event?.file).toBe(file);
-      expect(event?.lineAnnotations).toBe(lineAnnotations);
+      expect(event?.file.contents).toBe('alpha');
     } finally {
       cleanup();
     }

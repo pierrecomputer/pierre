@@ -89,6 +89,30 @@ export interface FileHydrateProps<LAnnotation> extends Omit<
   prerenderedHTML?: string;
 }
 
+/**
+ * `onEditComplete` event argument when an edit session ends with changed
+ * contents.
+ *
+ * `file` is the detached, keyless FileContents offered for ownership transfer.
+ *
+ * `originalFile` is the last `file` provided to the component externally, and
+ * returning that will undo any changes in `file`.
+ */
+export interface FileEditCompleteEvent<LAnnotation> {
+  file: FileContents;
+  originalFile: FileContents;
+  lineAnnotations: LineAnnotation<LAnnotation>[] | undefined;
+}
+
+/**
+ * Decides a completed edit synchronously: return the event's `file` (mutated
+ * in place as needed, e.g. with a fresh `cacheKey`) to accept it, or `null`
+ * (or the exact `originalFile`) to revert. Any other return throws.
+ */
+export type FileEditCompleteHandler<LAnnotation> = (
+  event: FileEditCompleteEvent<LAnnotation>
+) => FileContents | null;
+
 export interface FileOptions<LAnnotation>
   extends BaseCodeOptions, InteractionManagerBaseOptions<'file'> {
   disableFileHeader?: boolean;
@@ -114,6 +138,14 @@ export interface FileOptions<LAnnotation>
     instance: File<LAnnotation>,
     phase: PostRenderPhase
   ): unknown;
+
+  /**
+   * Fired when `edit` toggles false or a component unmounts. Only called if
+   * there are content changes resolving in a new file. If no callback is
+   * provided, then the component will always revert back to the last `file`
+   * passed into the component
+   */
+  onEditComplete?: FileEditCompleteHandler<LAnnotation>;
 }
 
 interface AnnotationElementCache<LAnnotation> {

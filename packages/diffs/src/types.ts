@@ -1077,8 +1077,8 @@ export interface DiffsEditableComponent<
   /**
    * Attach an editor to this component. The returned detach closure receives
    * `recycle: true` when the editor is only being released by a virtualized
-   * unmount (the session continues on remount) and no argument/false on a
-   * genuine session end.
+   * unmount (the session continues on remount) and no argument/false when the
+   * session ends.
    */
   attachEditor: (
     editor: DiffsEditor<LAnnotation>
@@ -1306,12 +1306,5 @@ export interface DiffsTextDocument {
  * emit them through its own `onItemEditChange` option.
  */
 export interface CodeViewCreateEditorOptions<LAnnotation> {
-  onChange: (
-    file: FileContents,
-    lineAnnotations:
-      | LineAnnotation<LAnnotation>[]
-      | DiffLineAnnotation<LAnnotation>[]
-      | undefined,
-    event: EditorChangeEvent<LAnnotation>
-  ) => void;
+  onChange: (event: EditorChangeEvent<LAnnotation>) => void;
 }

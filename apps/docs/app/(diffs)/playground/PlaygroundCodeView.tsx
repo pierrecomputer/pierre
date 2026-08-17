@@ -12,7 +12,7 @@ import {
   parseDiffFromFile,
   type SelectedLineRange,
 } from '@pierre/diffs';
-import type { EditorOptions } from '@pierre/diffs/edit';
+import type { EditorChangeEvent, EditorOptions } from '@pierre/diffs/edit';
 import {
   CodeView,
   type CodeViewReactOptions,
@@ -96,12 +96,10 @@ export function PlaygroundCodeView({
   // when nothing remapped.
   const handleEditChange = useCallback(
     (
-      item: PlaygroundItem,
-      _file: FileContents,
-      lineAnnotations?:
-        | LineAnnotation<PlaygroundAnnotationMetadata>[]
-        | DiffLineAnnotation<PlaygroundAnnotationMetadata>[]
+      event: EditorChangeEvent<PlaygroundAnnotationMetadata>,
+      item: PlaygroundItem
     ) => {
+      const { lineAnnotations } = event;
       if (lineAnnotations == null) {
         return;
       }

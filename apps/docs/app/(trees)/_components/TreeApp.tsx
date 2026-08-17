@@ -1213,7 +1213,7 @@ export function TreeApp<LAnnotation = unknown>({
       onAttach(editor) {
         editorRef.current = editor;
       },
-      onChange(file) {
+      onChange({ file }) {
         handleEditorChangeRef.current(file);
       },
     }),

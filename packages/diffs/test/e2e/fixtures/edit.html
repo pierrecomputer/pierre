@@ -100,7 +100,7 @@ export default value;
       window.__editorEvents = events;
 
       const editor = new Editor({
-        onChange(file) {
+        onChange({ file }) {
           events.push(file.contents);
           log.textContent = `changes: ${events.length}`;
         },

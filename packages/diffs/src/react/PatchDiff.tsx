@@ -35,6 +35,7 @@ export function PatchDiff<LAnnotation = undefined>({
   renderGutterUtility,
   disableWorkerPool = false,
   edit = false,
+  onEditComplete,
 }: PatchDiffProps<LAnnotation>): React.JSX.Element {
   const fileDiff = usePatch(patch);
   const { ref, getHoveredLine } = useFileDiffInstance({
@@ -49,6 +50,7 @@ export function PatchDiff<LAnnotation = undefined>({
     hasCustomHeader: renderCustomHeader != null,
     disableWorkerPool,
     edit,
+    onEditComplete,
   });
   const children = renderDiffChildren({
     fileDiff,

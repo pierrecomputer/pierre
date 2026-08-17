@@ -26,7 +26,7 @@ import {
 // While an editor is attached to a FileDiff, each hunk is a persistent region
 // identified by its old-side range. Structural passes rebuild those regions
 // from one canonical old/current diff; a reverted region remains as context so
-// its rows keep rendering until the genuine session-exit recompute.
+// its rows keep rendering until the session-exit recompute.
 
 export interface DivergenceCore {
   start: number;

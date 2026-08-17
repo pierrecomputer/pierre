@@ -1,7 +1,10 @@
 import { type CSSProperties, type ReactNode } from 'react';
 
-import type { FileOptions } from '../components/File';
-import type { FileDiffOptions } from '../components/FileDiff';
+import type { FileEditCompleteHandler, FileOptions } from '../components/File';
+import type {
+  FileDiffEditCompleteHandler,
+  FileDiffOptions,
+} from '../components/FileDiff';
 import type { EditorOptions } from '../edit';
 import type { GetHoveredLineResult } from '../managers/InteractionManager';
 import type {
@@ -19,6 +22,12 @@ export interface DiffBasePropsReact<LAnnotation> {
   edit?: boolean;
   /** Creation-time options passed to the nearest EditProvider factory. */
   editorOptions?: EditorOptions<LAnnotation>;
+  /**
+   * Fired when `edit` toggles false or the component unmounts with content
+   * changes. Return the event's `fileDiff` to accept the edit or `null` to
+   * revert.
+   */
+  onEditComplete?: FileDiffEditCompleteHandler<LAnnotation>;
   metrics?: VirtualFileMetrics;
   lineAnnotations?: DiffLineAnnotation<LAnnotation>[];
   selectedLines?: SelectedLineRange | null;
@@ -42,6 +51,12 @@ export interface FileProps<LAnnotation> {
   edit?: boolean;
   /** Creation-time options passed to the nearest EditProvider factory. */
   editorOptions?: EditorOptions<LAnnotation>;
+  /**
+   * Fired when `edit` toggles false or the component unmounts with content
+   * changes. Return the event's `file` to accept the edit or `null` to
+   * revert.
+   */
+  onEditComplete?: FileEditCompleteHandler<LAnnotation>;
   metrics?: VirtualFileMetrics;
   lineAnnotations?: LineAnnotation<LAnnotation>[];
   selectedLines?: SelectedLineRange | null;

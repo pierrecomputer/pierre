@@ -161,7 +161,7 @@ export function PlaygroundVirtualizerView({
           preventScroll: true,
         });
       },
-      onChange: (_file, lineAnnotations) => {
+      onChange: ({ lineAnnotations }) => {
         if (
           lineAnnotations == null ||
           !isFileAnnotationCollection(lineAnnotations)
@@ -304,7 +304,7 @@ export function PlaygroundVirtualizerView({
             preventScroll: true,
           });
         },
-        onChange: (_file, lineAnnotations) => {
+        onChange: ({ lineAnnotations }) => {
           if (
             lineAnnotations == null ||
             !isDiffAnnotationCollection(lineAnnotations)

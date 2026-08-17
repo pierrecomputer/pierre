@@ -68,11 +68,7 @@ function createEditorHarness({
           | LineAnnotation<undefined>[]
           | DiffLineAnnotation<undefined>[]
       ) {
-        options.onChange(file, lineAnnotations, {
-          changes: [],
-          file,
-          lineAnnotations,
-        });
+        options.onChange({ changes: [], file, lineAnnotations });
       },
       edit(instance: DiffsEditableComponent<undefined>) {
         editor.edits.push(instance);
@@ -1007,7 +1003,7 @@ describe('CodeView item edit mode', () => {
     const changes: string[] = [];
     const viewer = new CodeView({
       createEditor,
-      onItemEditChange(item) {
+      onItemEditChange(_event, item) {
         changes.push(item.id);
       },
     });
@@ -1034,8 +1030,8 @@ describe('CodeView item edit mode', () => {
     const changes: Array<[string, string]> = [];
     const viewer = new CodeView({
       createEditor,
-      onItemEditChange(item, file) {
-        changes.push([item.id, file.contents]);
+      onItemEditChange(event, item) {
+        changes.push([item.id, event.file.contents]);
       },
     });
     try {
@@ -1066,8 +1062,8 @@ describe('CodeView item edit mode', () => {
         editors.push(editor);
         return editor;
       },
-      onItemEditChange(_item, file) {
-        changes.push(file.contents);
+      onItemEditChange(event) {
+        changes.push(event.file.contents);
       },
     });
 
@@ -1149,8 +1145,8 @@ describe('CodeView item edit mode', () => {
         editors.push(editor);
         return editor;
       },
-      onItemEditChange(_item, file) {
-        changes.push(file.contents);
+      onItemEditChange(event) {
+        changes.push(event.file.contents);
       },
     });
 
@@ -1243,8 +1239,8 @@ describe('CodeView item edit mode', () => {
         editors.push(editor);
         return editor;
       },
-      onItemEditChange(_item, file) {
-        changes.push(file.contents);
+      onItemEditChange(event) {
+        changes.push(event.file.contents);
       },
     });
     const localContents = 'local value\n';
@@ -1417,8 +1413,8 @@ describe('CodeView item edit mode', () => {
     }> = [];
     const viewer = new CodeView({
       createEditor,
-      onItemEditChange(item, _file, lineAnnotations) {
-        changes.push({ item, lineAnnotations });
+      onItemEditChange(event, item) {
+        changes.push({ item, lineAnnotations: event.lineAnnotations });
       },
     });
     try {

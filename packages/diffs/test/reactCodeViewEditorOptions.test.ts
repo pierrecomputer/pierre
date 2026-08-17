@@ -29,6 +29,7 @@ import type {
   DiffLineAnnotation,
   DiffsEditableComponent,
   DiffsEditor,
+  EditorChangeEvent,
   FileContents,
 } from '../src/types';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
@@ -87,11 +88,7 @@ function createTrackedEditor(
       file: FileContents,
       lineAnnotations?: DiffLineAnnotation<undefined>[]
     ) {
-      options.onChange?.(file, lineAnnotations, {
-        changes: [],
-        file,
-        lineAnnotations,
-      });
+      options.onChange?.({ changes: [], file, lineAnnotations });
     },
     edit(instance: DiffsEditableComponent<undefined>) {
       editor.edits.push(instance);
@@ -347,7 +344,10 @@ describe('React CodeView editor factory', () => {
     const attemptedOnChange = mock(() => {});
     const onAttach = mock(() => {});
     const onItemEditChange = mock(
-      (_item: CodeViewItem<undefined>, _file: FileContents) => {}
+      (
+        _event: EditorChangeEvent<undefined>,
+        _item: CodeViewItem<undefined>
+      ) => {}
     );
     const editorOptions: EditorOptions<undefined> = {
       // A loosely typed caller can still carry onChange at runtime. CodeView's
@@ -389,10 +389,14 @@ describe('React CodeView editor factory', () => {
 
       expect(attemptedOnChange).not.toHaveBeenCalled();
       expect(onItemEditChange).toHaveBeenCalledTimes(2);
-      expect(onItemEditChange.mock.calls[0]?.[0].id).toBe('a');
-      expect(onItemEditChange.mock.calls[0]?.[1].contents).toBe('edited a');
-      expect(onItemEditChange.mock.calls[1]?.[0].id).toBe('b');
-      expect(onItemEditChange.mock.calls[1]?.[1].contents).toBe('edited b');
+      expect(onItemEditChange.mock.calls[0]?.[1].id).toBe('a');
+      expect(onItemEditChange.mock.calls[0]?.[0].file.contents).toBe(
+        'edited a'
+      );
+      expect(onItemEditChange.mock.calls[1]?.[1].id).toBe('b');
+      expect(onItemEditChange.mock.calls[1]?.[0].file.contents).toBe(
+        'edited b'
+      );
     } finally {
       await unmountRoot(root);
       cleanupActEnvironment();

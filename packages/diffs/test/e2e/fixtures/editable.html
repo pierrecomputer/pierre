@@ -55,8 +55,8 @@ const baz = foo;
       window.__editorEvents = events;
 
       const editor = new Editor({
-        onChange(next) {
-          events.push(next.contents);
+        onChange({ file }) {
+          events.push(file.contents);
         },
       });
       window.__editor = editor;

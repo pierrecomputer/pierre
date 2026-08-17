@@ -45,7 +45,7 @@ async function createFixture(options?: {
     disableFileHeader: true,
   });
   const editor = new Editor<undefined>({
-    onChange(file, lineAnnotations) {
+    onChange({ file, lineAnnotations }) {
       options?.onChange?.(
         file.contents,
         lineAnnotations == null || isFileAnnotationCollection(lineAnnotations)

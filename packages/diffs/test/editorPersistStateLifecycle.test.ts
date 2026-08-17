@@ -791,11 +791,11 @@ describe('Editor persisted state lifecycle', () => {
     }> = [];
     const editor = new Editor<undefined>({
       persistState: true,
-      onChange(file, _lineAnnotations, event) {
+      onChange(event) {
         changes.push({
-          cacheKey: file.cacheKey,
+          cacheKey: event.file.cacheKey,
           changes: event.changes,
-          contents: file.contents,
+          contents: event.file.contents,
         });
       },
     });
@@ -925,7 +925,7 @@ describe('Editor persisted state lifecycle', () => {
     const changes: string[] = [];
     const editor = new Editor<undefined>({
       persistState: true,
-      onChange: (file) => changes.push(file.contents),
+      onChange: (event) => changes.push(event.file.contents),
     });
     const container = document.createElement('div');
     document.body.appendChild(container);
@@ -992,7 +992,7 @@ describe('Editor persisted state lifecycle', () => {
     const changes: string[] = [];
     const editor = new Editor<undefined>({
       persistState: true,
-      onChange: (file) => changes.push(file.contents),
+      onChange: (event) => changes.push(event.file.contents),
     });
     const container = document.createElement('div');
     document.body.appendChild(container);

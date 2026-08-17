@@ -268,18 +268,11 @@ export interface EditorOptions<LAnnotation> {
     fileInstance: DiffsEditableComponent<LAnnotation>
   ) => void;
   /**
-   * Called whenever the editor document changes. Treat this as a document
-   * notification; do not feed the changes back into the editor or you will
-   * create loops.
+   * Called with an `EditorChangeEvent` whenever the editor document changes.
+   * Treat this as a document notification; do not feed the changes back into
+   * the editor or you will create loops.
    */
-  onChange?: (
-    file: FileContents,
-    lineAnnotations:
-      | LineAnnotation<LAnnotation>[]
-      | DiffLineAnnotation<LAnnotation>[]
-      | undefined,
-    event: EditorChangeEvent<LAnnotation>
-  ) => void;
+  onChange?: (event: EditorChangeEvent<LAnnotation>) => void;
   /** Callback when the editor gains focus. */
   onFocus?: () => void;
   /** Callback when the editor loses focus. */
@@ -5714,7 +5707,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     if (file === undefined || onChange === undefined) {
       return;
     }
-    onChange(file, lineAnnotations, { changes, file, lineAnnotations });
+    onChange({ changes, file, lineAnnotations });
   }
 
   #applyChangeToLineAnnotations(

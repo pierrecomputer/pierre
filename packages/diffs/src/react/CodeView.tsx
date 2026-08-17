@@ -17,7 +17,7 @@ import {
 } from 'react';
 import { createPortal, flushSync } from 'react-dom';
 
-import type { EditorOptions } from '../edit';
+import type { EditorChangeEvent, EditorOptions } from '../edit';
 import {
   areOptionsEqual,
   CodeView as CodeViewClass,
@@ -75,15 +75,13 @@ interface CodeViewBaseProps<LAnnotation> {
    * the last item. Always rendered; scrolls with the content. */
   renderCodeViewFooter?(): ReactNode;
   /**
-   * Called with the owning item on every document change. Do not feed it
-   * directly back into the controlled item, which can create update loops.
+   * Called with the editor's `EditorChangeEvent` and the owning item on every
+   * document change. Do not feed it directly back into the controlled item,
+   * which can create update loops.
    */
   onItemEditChange?(
-    item: CodeViewItem<LAnnotation>,
-    file: FileContents,
-    lineAnnotations?:
-      | LineAnnotation<LAnnotation>[]
-      | DiffLineAnnotation<LAnnotation>[]
+    event: EditorChangeEvent<LAnnotation>,
+    item: CodeViewItem<LAnnotation>
   ): void;
   /**
    * Called once with the final contents when an item's edit session ends
@@ -261,13 +259,10 @@ function CodeViewInner<LAnnotation = undefined>(
   );
   const emitItemEditChange = useStableCallback(
     (
-      item: CodeViewItem<LAnnotation>,
-      file: FileContents,
-      lineAnnotations?:
-        | LineAnnotation<LAnnotation>[]
-        | DiffLineAnnotation<LAnnotation>[]
+      event: EditorChangeEvent<LAnnotation>,
+      item: CodeViewItem<LAnnotation>
     ) => {
-      onItemEditChange?.(item, file, lineAnnotations);
+      onItemEditChange?.(event, item);
     }
   );
   const emitItemEditComplete = useStableCallback(

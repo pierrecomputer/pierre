@@ -445,7 +445,7 @@ describe('FileDiff edit-session ownership', () => {
       disableFileHeader: true,
     });
     const editor = new Editor<undefined>({
-      onChange: (file) => changedFiles.push(file),
+      onChange: (event) => changedFiles.push(event.file),
     });
 
     try {

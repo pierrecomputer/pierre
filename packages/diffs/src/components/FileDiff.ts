@@ -213,6 +213,37 @@ export type FileDiffHydrationProps<LAnnotation> = Omit<
 
 export type FileDiffType = 'file-diff' | 'unresolved-file';
 
+/**
+ * `onEditComplete` event argument when an edit session ends with a changed
+ * diff.
+ *
+ * `fileDiff` is a detached, keyless, and fully re-computed diff offered for
+ * ownership transfer.
+ *
+ * `originalFileDiff` is the last `fileDiff` provided to the component
+ * externally, and returning that will undo any changes in `fileDiff`.
+ *
+ * `oldFile`/`newFile` are detached FileContent representations of the
+ * completed diff for updating file-pair or patch inputs; `null` marks the
+ * missing side of a new file. (deleted files are impossible to edit)
+ */
+export interface FileDiffEditCompleteEvent<LAnnotation> {
+  fileDiff: FileDiffMetadata;
+  originalFileDiff: FileDiffMetadata;
+  oldFile: FileContents | null;
+  newFile: FileContents | null;
+  lineAnnotations: DiffLineAnnotation<LAnnotation>[] | undefined;
+}
+
+/**
+ * Decides a completed edit synchronously: return the event's `fileDiff`
+ * (mutated in place as needed, e.g. with a fresh `cacheKey`) to accept it, or
+ * `null` (or the exact `originalFileDiff`) to revert. Any other return throws.
+ */
+export type FileDiffEditCompleteHandler<LAnnotation> = (
+  event: FileDiffEditCompleteEvent<LAnnotation>
+) => FileDiffMetadata | null;
+
 export interface FileDiffOptions<LAnnotation>
   extends
     Omit<BaseDiffOptions, 'hunkSeparators'>,
@@ -249,6 +280,14 @@ export interface FileDiffOptions<LAnnotation>
     instance: FileDiff<LAnnotation>,
     phase: PostRenderPhase
   ): unknown;
+
+  /**
+   * Fired when `edit` toggles false or a component unmounts. Only called if
+   * there are content changes resolving in a new diff. If no callback is
+   * provided, then the component will always revert back to the last
+   * `fileDiff` or `oldFile`/`newFiles` passed into the component
+   */
+  onEditComplete?: FileDiffEditCompleteHandler<LAnnotation>;
 }
 
 interface AnnotationElementCache<LAnnotation> {
@@ -1681,22 +1720,22 @@ export class FileDiff<
     return (recycle: boolean = false) => {
       this.editor = undefined;
       // A recycle detach is a virtualized unmount mid-session: the session
-      // continues on remount, so hunks stay session-shaped. Only a genuine
-      // end runs the exit recompute.
+      // continues on remount, so hunks stay session-shaped. Only a
+      // non-recycle detach runs the exit recompute.
       if (!recycle) {
         this.finishEditSession();
       }
     };
   }
 
-  // Genuine session exit for the live detach path.
+  // Session exit for the live detach path.
   private finishEditSession(): void {
     this.hunksRenderer.endEditSession();
     this.completeEditSession();
   }
 
   /**
-   * Run the genuine session-end recompute: restore recompute-shaped hunks (a
+   * Run the session-end recompute: restore recompute-shaped hunks (a
    * context-only region collapses away, boundaries re-derive), preserve
    * expansion state best-effort via old-side anchors, and repaint through
    * the session render path — which also invalidates virtualized layout,
