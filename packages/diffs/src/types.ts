@@ -432,6 +432,13 @@ export interface BaseCodeOptions {
   disableFileHeader?: boolean;
   disableVirtualizationBuffers?: boolean;
   stickyHeader?: boolean;
+  /**
+   * Show code-fold controls on file components, default is true. Read-only
+   * File components manage their own fold state; an attached editor takes
+   * over folding for the edit session. FileDiff components do not support
+   * folding and ignore this option.
+   */
+  folding?: boolean;
 
   // Shiki config options, ignored if you're using a WorkerPoolManager
   preferredHighlighter?: HighlighterTypes;
@@ -477,7 +484,12 @@ export interface BaseDiffOptions extends BaseCodeOptions {
 export type BaseDiffOptionsWithDefaults = Required<
   Omit<
     BaseDiffOptions,
-    'unsafeCSS' | 'preferredHighlighter' | 'parseDiffOptions' | 'loadDiffFiles'
+    | 'unsafeCSS'
+    | 'preferredHighlighter'
+    | 'parseDiffOptions'
+    | 'loadDiffFiles'
+    // Diff components do not support folding.
+    | 'folding'
   >
 >;
 
@@ -793,6 +805,7 @@ export interface ForceFilePlainTextOptions {
   totalLines?: number;
   // Pre-split lines for caching in windowing scenarios
   lines?: string[];
+  hiddenLineRanges?: readonly LineRange[];
 }
 
 export interface RenderFileOptions {
@@ -1043,6 +1056,11 @@ export interface DiffsEditableComponent<
   /** Set the horizontal code scroll position (`scrollLeft`). */
   setCodeScrollLeft: (position: number) => void;
   /**
+   * @internal Hide inclusive zero-based document-line ranges while an editor
+   * fold is active. FileDiff intentionally leaves this unimplemented.
+   */
+  __setFoldRanges?: (ranges: LineRange[]) => void;
+  /**
    * Return the position and height of a one-based line relative to this component.
    * The host uses it to scroll to virtualized lines before their DOM nodes exist.
    * A zero height means the line is not currently renderable.
@@ -1124,6 +1142,12 @@ export type EditableInstance<T extends { type: string }> = T extends {
 export interface DiffsEditor<LAnnotation> {
   /** @internal */
   __prepareFile?(file: FileContents): FileContents;
+  /**
+   * @internal Notify the editor that the host component's options changed.
+   * The editor reads shared code options (e.g. `folding`) from its host, so
+   * hosts call this after an options swap that does not re-render.
+   */
+  __hostOptionsChanged?(): void;
   __postponeBgTokenizeToNextFrame(): void;
   /** @internal Capture focus intent before replacing the editable view. */
   __captureFocusForDOMReplacement(): void;
@@ -1262,6 +1286,11 @@ export interface EditorViewState {
 
 export interface EditorState {
   selections?: EditorSelection[];
+  /**
+   * Active indentation folds. Lines are zero-based; `endLine` is the last
+   * collapsed body line. A standalone closing delimiter remains visible.
+   */
+  foldRanges?: LineRange[];
   view?: EditorViewState;
 }
 
@@ -1269,6 +1298,11 @@ export interface DiffsTextDocument {
   readonly lineCount: number;
   getLineText: (lineNumber: number, includeLineBreak?: boolean) => string;
   getText: () => string;
+}
+
+export interface LineRange {
+  readonly startLine: number;
+  readonly endLine: number;
 }
 
 /**

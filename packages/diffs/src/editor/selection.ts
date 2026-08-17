@@ -2406,6 +2406,20 @@ function boundaryToPosition(node: Node, offset: number): Position | null {
     return null;
   }
 
+  let foldIndicator = host;
+  while (
+    foldIndicator !== null &&
+    foldIndicator.dataset.foldIndicator === undefined
+  ) {
+    foldIndicator = foldIndicator.parentElement;
+  }
+  if (foldIndicator != null) {
+    const character = parseInt(foldIndicator.dataset.foldCharacter ?? '', 10);
+    if (!Number.isNaN(character)) {
+      return { line, character };
+    }
+  }
+
   if (node.nodeType === 3) {
     if (node.parentElement === null) {
       return null;
@@ -2634,6 +2648,10 @@ function getLineChildEnd(
   const el = child as HTMLElement;
   if (el.tagName !== 'SPAN' && el.tagName !== 'BR') {
     return 0;
+  }
+  if (el.dataset.foldIndicator !== undefined) {
+    const character = parseInt(el.dataset.foldCharacter ?? '', 10);
+    return Number.isNaN(character) ? 0 : character;
   }
   const base = getCharacterIndex(el);
   if (base !== undefined) {

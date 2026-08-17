@@ -14,7 +14,7 @@ import { useEffect, useRef } from 'react';
 import { flushSync } from 'react-dom';
 import { createRoot, type Root } from 'react-dom/client';
 
-import { ITEM_UNSAFE_CSS, LONG_README_FILE } from './constants';
+import { ITEM_UNSAFE_CSS, LONG_CODE_FILE } from './constants';
 import type { SharedRenderOptions } from './PlaygroundClient';
 import { CommentForm, CommentThread } from './PlaygroundComments';
 
@@ -137,7 +137,7 @@ export function PlaygroundVirtualizerView({
     // Passing `document` makes the page/window the scroll container.
     virtualizer.setup(document);
 
-    // The long README plain file leads the window-scroll list (as in
+    // The long foldable plain file leads the window-scroll list (as in
     // CodeView), driven by the vanilla VirtualizedFile. It carries the same
     // header Edit toggle as the diffs below; no comment wiring, since the
     // demo file has no annotations. Its container is appended first so it
@@ -175,7 +175,7 @@ export function PlaygroundVirtualizerView({
       }
     });
     fileInstance.render({
-      file: LONG_README_FILE,
+      file: LONG_CODE_FILE,
       fileContainer: readmeContainer,
     });
     fileInstanceRef.current = fileInstance;

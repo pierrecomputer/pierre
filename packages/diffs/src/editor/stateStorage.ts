@@ -18,6 +18,7 @@ export function cloneEditorState(state: EditorState): EditorState {
       end: { ...selection.end },
       direction: selection.direction,
     })),
+    foldRanges: state.foldRanges?.map((range) => ({ ...range })),
     view: state.view === undefined ? undefined : { ...state.view },
   };
 }

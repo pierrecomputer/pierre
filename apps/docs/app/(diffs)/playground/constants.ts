@@ -555,6 +555,15 @@ function buildLongFixtureContents(): {
 
 const LONG_FIXTURE_CONTENTS = buildLongFixtureContents();
 
+// The long generated TypeScript module as a ready-made plain file. Unlike the
+// flat-markdown README it is deeply indented, so the file surfaces that lead
+// the Virtualizer lists (and the CodeView item below) have blocks the
+// read-only fold controls can actually collapse.
+export const LONG_CODE_FILE: FileContents = {
+  name: LONG_FIXTURE_NAME,
+  contents: LONG_FIXTURE_CONTENTS.newContents,
+};
+
 // Fresh parse per call so each surface (Virtualizer list, CodeView items) gets
 // its own FileDiffMetadata instance, matching how `variantDiff` builds the
 // replicated fixtures. `context: 8` widens jsdiff's default of 4 so the added
@@ -578,11 +587,17 @@ export const VIRTUALIZER_FILE_DIFFS: FileDiffMetadata[] = [
   ).flat(),
 ];
 
-// Items rendered in the CodeView mode: the long README file item leads,
-// followed by the long single-file diff (as in the Virtualizer list), then
-// each variant contributes two diffs and a plain file so the demo shows both
-// item types scrolling within CodeView's own scroll container.
+// Items rendered in the CodeView mode: the long foldable TypeScript file
+// leads (as in the Virtualizer lists), followed by the long README file item
+// and the long single-file diff, then each variant contributes two diffs and
+// a plain file so the demo shows both item types scrolling within CodeView's
+// own scroll container.
 export const CODE_VIEW_ITEMS: CodeViewItem<PlaygroundAnnotationMetadata>[] = [
+  {
+    id: `file:${LONG_FIXTURE_NAME}`,
+    type: 'file',
+    file: LONG_CODE_FILE,
+  },
   {
     id: 'file:README.md',
     type: 'file',

@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>diffs editor-folding fixture</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 16px;
+        font-family: system-ui, sans-serif;
+      }
+      [data-diff-mount] {
+        max-width: 900px;
+      }
+    </style>
+  </head>
+  <body>
+    <a
+      data-fixtures-index
+      href="/test/e2e/fixtures/index.html"
+      style="
+        display: inline-block;
+        margin-bottom: 16px;
+        font-family: system-ui, sans-serif;
+        font-size: 14px;
+        font-weight: 600;
+        color: #0b62d6;
+        text-decoration: none;
+      "
+      >&larr; All fixtures</a
+    >
+    <div data-diff-mount></div>
+
+    <script type="module">
+      import { File } from '/dist/index.js';
+      import { Editor } from '/dist/edit/index.js';
+
+      const mount = document.querySelector('[data-diff-mount]');
+      if (!(mount instanceof HTMLElement)) {
+        throw new Error('Missing folding fixture mount.');
+      }
+
+      const file = {
+        name: 'foldable.ts',
+        contents: `function outer() {
+  const before = 1;
+  if (before) {
+    console.log(before);
+  }
+  return before;
+}
+const after = true;`,
+      };
+
+      const instance = new File({
+        disableFileHeader: true,
+        theme: { dark: 'pierre-dark', light: 'pierre-light' },
+        themeType: 'dark',
+        useTokenTransformer: true,
+      });
+      const editor = new Editor();
+
+      instance.render({ file, containerWrapper: mount });
+      editor.edit(instance);
+      window.__setFoldingTheme = () => instance.setThemeType('light');
+
+      const waitForFolding = async () => {
+        const started = performance.now();
+        while (true) {
+          const host = mount.querySelector('diffs-container');
+          const shadow = host?.shadowRoot;
+          const content = shadow?.querySelector('[data-content]');
+          const toggle = shadow?.querySelector(
+            '[data-column-number="1"] [data-fold-toggle]'
+          );
+          if (
+            content?.getAttribute('contenteditable') === 'true' &&
+            toggle != null
+          ) {
+            return;
+          }
+          if (performance.now() - started > 5000) {
+            throw new Error('Timed out waiting for editor folding controls.');
+          }
+          await new Promise((resolve) => requestAnimationFrame(resolve));
+        }
+      };
+
+      await waitForFolding();
+      window.__foldingReady = true;
+    </script>
+  </body>
+</html>

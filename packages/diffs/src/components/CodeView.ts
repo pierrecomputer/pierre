@@ -272,6 +272,7 @@ export const CODE_VIEW_DIFF_OPTION_KEYS = [
   'themeType',
   'disableFileHeader',
   'disableVirtualizationBuffers',
+  'folding',
   'preferredHighlighter',
   'useCSSClasses',
   'useTokenTransformer',
@@ -305,6 +306,7 @@ export const CODE_VIEW_FILE_OPTION_KEYS = [
   'themeType',
   'disableFileHeader',
   'disableVirtualizationBuffers',
+  'folding',
   'preferredHighlighter',
   'useCSSClasses',
   'useTokenTransformer',
@@ -4118,6 +4120,8 @@ function hasItemLayoutOptionChanged<LAnnotation>(
     (previousOptions.disableFileHeader ?? false) !==
       (nextOptions.disableFileHeader ?? false) ||
     previousOptions.unsafeCSS !== nextOptions.unsafeCSS ||
+    // Disabling folding unfolds items, changing their heights.
+    (previousOptions.folding ?? true) !== (nextOptions.folding ?? true) ||
     (previousOptions.diffStyle ?? 'split') !==
       (nextOptions.diffStyle ?? 'split') ||
     (previousOptions.diffIndicators ?? 'bars') !==

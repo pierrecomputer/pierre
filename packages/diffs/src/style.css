@@ -307,6 +307,126 @@
     }
   }
 
+  /* Code folding controls. `data-folding` is set on the code element whenever
+   * fold controls are active — by the read-only file renderer or by an
+   * attached editor — and reserves gutter space for the toggle zone. */
+  [data-code][data-folding] {
+    --diffs-fold-gap: 4px;
+    --diffs-fold-width: 16px;
+  }
+
+  [data-code][data-folding] [data-column-number] {
+    position: relative;
+    padding-right: calc(var(--diffs-fold-width) + var(--diffs-fold-gap));
+  }
+
+  [data-file][data-disable-line-numbers]
+    [data-code][data-folding]
+    [data-column-number] {
+    min-width: var(--diffs-fold-width);
+    padding-right: var(--diffs-fold-width);
+  }
+
+  /* The hover gutter utility also anchors to the cell's right edge; with fold
+   * controls active it yields that corner and sits left of the fold zone so
+   * both stay clickable. */
+  [data-code][data-folding] [data-gutter-utility-slot] {
+    right: calc(var(--diffs-fold-width) + var(--diffs-fold-gap));
+  }
+
+  /* Without line numbers the utility is left-anchored (see the
+   * data-disable-line-numbers block); undo the fold offset for that combo. */
+  [data-file][data-disable-line-numbers]
+    [data-code][data-folding]
+    [data-gutter-utility-slot] {
+    right: unset;
+  }
+
+  [data-fold] {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: var(--diffs-fold-width);
+    height: 1lh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    z-index: 2;
+  }
+
+  [data-fold-toggle] {
+    all: unset;
+    box-sizing: border-box;
+    width: var(--diffs-fold-width);
+    height: 1lh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--diffs-fg-number);
+    cursor: pointer;
+    opacity: 0;
+    pointer-events: auto;
+    transition: opacity 0.2s ease;
+  }
+
+  [data-fold-toggle][data-folded],
+  [data-gutter]:hover [data-fold-toggle],
+  [data-fold]:hover [data-fold-toggle],
+  [data-fold-toggle]:focus-visible {
+    opacity: 0.5;
+  }
+
+  [data-fold] [data-fold-toggle]:hover,
+  [data-fold] [data-fold-toggle]:focus-visible {
+    opacity: 0.75;
+  }
+
+  [data-fold] [data-fold-toggle]:focus-visible {
+    outline: 1px solid currentColor;
+    outline-offset: -2px;
+  }
+
+  /* Two attribute selectors so the indicator's color beats the token-color
+   * rule ([data-line] span) sharing this layer. */
+  [data-line] [data-fold-indicator] {
+    display: inline-flex;
+    align-items: center;
+    height: 1lh;
+    margin-inline-start: 1ch;
+    vertical-align: top;
+    color: var(--diffs-fg);
+    user-select: none;
+  }
+
+  [data-fold-ellipsis] {
+    all: unset;
+    box-sizing: border-box;
+    width: 18px;
+    height: calc(1lh - 4px);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    color: var(--diffs-fg-number);
+    background-color: color-mix(in lab, var(--diffs-fg) 8%, transparent);
+    cursor: pointer;
+    transition:
+      color 80ms ease,
+      background-color 80ms ease;
+  }
+
+  [data-fold-ellipsis]:hover,
+  [data-fold-ellipsis]:focus-visible {
+    color: var(--diffs-fg);
+    background-color: color-mix(in lab, var(--diffs-fg) 14%, transparent);
+  }
+
+  [data-fold-ellipsis]:focus-visible {
+    outline: 1px solid currentColor;
+    outline-offset: 1px;
+  }
+
   [data-line] span {
     color: light-dark(
       var(--diffs-token-light, var(--diffs-light)),
