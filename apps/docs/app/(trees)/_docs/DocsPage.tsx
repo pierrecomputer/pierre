@@ -1,5 +1,5 @@
 import '@/app/prose.css';
-import type { PreloadFileOptions } from '@pierre/diffs/ssr';
+import { preloadFile, type PreloadFileOptions } from '@pierre/diffs/ssr';
 import { preloadFileTree } from '@pierre/trees/ssr';
 import type { Metadata } from 'next';
 import { Fragment } from 'react';
@@ -16,6 +16,7 @@ import * as showGitStatusAndRowAnnotationsConstants from '../docs/Guides/ShowGit
 import * as ssrGuideConstants from '../docs/Guides/SSR/constants';
 import * as styleAndThemeTheTreeConstants from '../docs/Guides/StyleAndThemeTheTree/constants';
 import {
+  AGENT_SKILL_INSTALL,
   OVERVIEW_INITIAL_EXPANDED_PATHS,
   OVERVIEW_OPTIONS,
   OVERVIEW_PATHS,
@@ -157,12 +158,14 @@ async function OverviewSection() {
     paths: OVERVIEW_PATHS,
     initialExpandedPaths: OVERVIEW_INITIAL_EXPANDED_PATHS,
   });
+  const agentSkillInstall = await preloadFile(AGENT_SKILL_INSTALL);
   const content = await renderMDX({
     filePath: '(trees)/docs/Overview/content.mdx',
     scope: {
       OVERVIEW_INITIAL_EXPANDED_PATHS,
       OVERVIEW_OPTIONS,
       OVERVIEW_PATHS,
+      agentSkillInstall,
       overviewPreloadedData: {
         id: ssrPayload.id,
         shadowHtml: ssrPayload.shadowHtml,

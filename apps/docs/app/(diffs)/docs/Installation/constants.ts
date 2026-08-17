@@ -1,6 +1,8 @@
 import type { PreloadFileOptions } from '@pierre/diffs/ssr';
 
 import { CustomScrollbarCSS } from '@/components/CustomScrollbarCSS';
+import { docsCodeSnippet } from '@/lib/docsCodeSnippet';
+import { PRODUCTS } from '@/lib/product-config';
 
 export const PACKAGE_MANAGERS = ['pnpm', 'npm', 'bun', 'yarn'] as const;
 export type PackageManager = (typeof PACKAGE_MANAGERS)[number];
@@ -31,3 +33,8 @@ export const INSTALLATION_EXAMPLES: Record<
     },
   ])
 ) as Record<PackageManager, PreloadFileOptions<undefined>>;
+
+export const AGENT_SKILL_INSTALL = docsCodeSnippet(
+  'agent-skill.sh',
+  PRODUCTS.diffs.skillInstallCommand
+);

@@ -1,5 +1,8 @@
 import type { FileTreeOptions } from '@pierre/trees';
 
+import { docsCodeSnippet } from '@/lib/docsCodeSnippet';
+import { PRODUCTS } from '@/lib/product-config';
+
 export type OverviewFileTreeOptions = Omit<
   FileTreeOptions,
   'paths' | 'preparedInput' | 'initialExpandedPaths'
@@ -28,3 +31,8 @@ export const OVERVIEW_INITIAL_EXPANDED_PATHS: string[] = [
 export const OVERVIEW_OPTIONS: OverviewFileTreeOptions = {
   id: OVERVIEW_TREE_ID,
 };
+
+export const AGENT_SKILL_INSTALL = docsCodeSnippet(
+  'agent-skill.sh',
+  PRODUCTS.trees.skillInstallCommand
+);

@@ -58,6 +58,7 @@ import {
   EDITOR_PUBLIC_API,
 } from '../docs/Edit/constants';
 import {
+  AGENT_SKILL_INSTALL,
   INSTALLATION_EXAMPLES,
   PACKAGE_MANAGERS,
 } from '../docs/Installation/constants';
@@ -227,17 +228,19 @@ async function MergeConflictDemoSection() {
 }
 
 async function InstallationSection() {
-  const installationExamples = Object.fromEntries(
-    await Promise.all(
+  const [installationExampleEntries, agentSkillInstall] = await Promise.all([
+    Promise.all(
       PACKAGE_MANAGERS.map(async (pm) => [
         pm,
         await preloadFile(INSTALLATION_EXAMPLES[pm]),
       ])
-    )
-  );
+    ),
+    preloadFile(AGENT_SKILL_INSTALL),
+  ]);
+  const installationExamples = Object.fromEntries(installationExampleEntries);
   const content = await renderMDX({
     filePath: '(diffs)/docs/Installation/content.mdx',
-    scope: { installationExamples },
+    scope: { installationExamples, agentSkillInstall },
   });
   return <ProseWrapper>{content}</ProseWrapper>;
 }
