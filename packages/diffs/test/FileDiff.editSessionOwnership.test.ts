@@ -5,6 +5,7 @@ import { Editor } from '../src/editor/editor';
 import type {
   DiffsEditor,
   DiffsTextDocument,
+  EditorChangeEvent,
   FileContents,
   FileDiffMetadata,
   HighlightedToken,
@@ -475,6 +476,58 @@ describe('FileDiff edit-session ownership', () => {
         contents: 'alpha\nedited value\nomega\n',
       });
       expect(changedFiles[0]?.cacheKey).toBeUndefined();
+      expectExternalDiffUnchanged(instance, externalDiff, externalBefore);
+    } finally {
+      editor.cleanUp();
+      instance.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test('component onEditChange receives the exact event the editor emits', async () => {
+    const dom = installDom();
+    const fileContainer = document.createElement('div');
+    document.body.appendChild(fileContainer);
+    const externalDiff = createExternalDiff();
+    const externalBefore = captureExternalDiffState(externalDiff);
+    const editorEvents: EditorChangeEvent<undefined>[] = [];
+    const componentEvents: EditorChangeEvent<undefined>[] = [];
+    const instance = new TestFileDiff({
+      disableErrorHandling: true,
+      disableFileHeader: true,
+      onEditChange: (event) => componentEvents.push(event),
+    });
+    const editor = new Editor<undefined>({
+      onChange: (event) => editorEvents.push(event),
+    });
+
+    try {
+      instance.render({
+        fileDiff: externalDiff,
+        fileContainer,
+        forceRender: true,
+      });
+      editor.edit(instance);
+
+      await waitFor(() => editor.getText() === 'alpha\nnew value\nomega\n', {
+        timeout: 4_000,
+      });
+      editor.applyEdits([
+        {
+          range: {
+            start: { line: 1, character: 0 },
+            end: { line: 1, character: 9 },
+          },
+          newText: 'edited value',
+        },
+      ]);
+
+      expect(editorEvents).toHaveLength(1);
+      expect(componentEvents).toHaveLength(1);
+      expect(componentEvents[0]).toBe(editorEvents[0]);
+      expect(componentEvents[0]?.file.contents).toBe(
+        'alpha\nedited value\nomega\n'
+      );
       expectExternalDiffUnchanged(instance, externalDiff, externalBefore);
     } finally {
       editor.cleanUp();

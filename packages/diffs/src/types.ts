@@ -1083,6 +1083,12 @@ export interface DiffsEditableComponent<
   attachEditor: (
     editor: DiffsEditor<LAnnotation>
   ) => (recycle?: boolean) => void;
+  /**
+   * Deliver `EditorChangeEvent` to the component's owner. The attached
+   * editor calls this with the same event object it reports through its own
+   * `onChange`; the component forwards it to its `onEditChange` option.
+   */
+  emitEditChange: (event: EditorChangeEvent<LAnnotation>) => void;
   applyDocumentChange: (
     textDocument: DiffsTextDocument,
     newLineAnnotations?: DiffLineAnnotation<LAnnotation>[],

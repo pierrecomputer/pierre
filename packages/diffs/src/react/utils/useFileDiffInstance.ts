@@ -13,7 +13,7 @@ import {
   type FileDiffOptions,
 } from '../../components/FileDiff';
 import { VirtualizedFileDiff } from '../../components/VirtualizedFileDiff';
-import type { EditorOptions } from '../../edit';
+import type { EditorChangeEvent, EditorOptions } from '../../edit';
 import type { GetHoveredLineResult } from '../../managers/InteractionManager';
 import type {
   DiffLineAnnotation,
@@ -43,6 +43,7 @@ interface UseFileDiffInstanceProps<LAnnotation> {
   hasCustomHeader: boolean;
   disableWorkerPool: boolean;
   edit: boolean;
+  onEditChange?(event: EditorChangeEvent<LAnnotation>): void;
   onEditComplete: FileDiffEditCompleteHandler<LAnnotation> | undefined;
 }
 
@@ -63,14 +64,17 @@ export function useFileDiffInstance<LAnnotation>({
   hasCustomHeader,
   disableWorkerPool,
   edit,
+  onEditChange: _onEditChange,
   onEditComplete: _onEditComplete,
 }: UseFileDiffInstanceProps<LAnnotation>): UseFileDiffInstanceReturn {
   const simpleVirtualizer = useVirtualizer();
   const controlledSelection = selectedLines !== undefined;
   const poolManager = useContext(WorkerPoolContext);
   const createEditor = useCreateEditor<LAnnotation>();
-  // Keep one stable completion identity across renders while always invoking
-  // the latest prop; installed into options only while the prop exists.
+  const handleOnEditChange = useStableCallback(
+    (event: EditorChangeEvent<LAnnotation>) => _onEditChange?.(event)
+  );
+  const onEditChange = _onEditChange != null ? handleOnEditChange : undefined;
   const handleOnEditComplete = useStableCallback(
     (event: FileDiffEditCompleteEvent<LAnnotation>) =>
       _onEditComplete?.(event) ?? null
@@ -93,6 +97,7 @@ export function useFileDiffInstance<LAnnotation>({
             controlledSelection,
             hasCustomHeader,
             hasGutterRenderUtility,
+            onEditChange,
             onEditComplete,
             options,
           }),
@@ -107,6 +112,7 @@ export function useFileDiffInstance<LAnnotation>({
             controlledSelection,
             hasCustomHeader,
             hasGutterRenderUtility,
+            onEditChange,
             onEditComplete,
             options,
           }),
@@ -138,6 +144,7 @@ export function useFileDiffInstance<LAnnotation>({
       controlledSelection,
       hasCustomHeader,
       hasGutterRenderUtility,
+      onEditChange,
       onEditComplete,
       options,
     });
@@ -195,6 +202,7 @@ interface MergeFileDiffOptionsProps<LAnnotation> {
   controlledSelection: boolean;
   hasCustomHeader: boolean;
   hasGutterRenderUtility: boolean;
+  onEditChange?(event: EditorChangeEvent<LAnnotation>): void;
   onEditComplete: FileDiffEditCompleteHandler<LAnnotation> | undefined;
   options: FileDiffOptions<LAnnotation> | undefined;
 }
@@ -204,6 +212,7 @@ function mergeFileDiffOptions<LAnnotation>({
   controlledSelection,
   hasCustomHeader,
   hasGutterRenderUtility,
+  onEditChange,
   onEditComplete,
 }: MergeFileDiffOptionsProps<LAnnotation>):
   | FileDiffOptions<LAnnotation>
@@ -212,6 +221,7 @@ function mergeFileDiffOptions<LAnnotation>({
     controlledSelection ||
     hasGutterRenderUtility ||
     hasCustomHeader ||
+    onEditChange != null ||
     onEditComplete != null;
 
   if (!needsReactOverrides) {
@@ -227,6 +237,7 @@ function mergeFileDiffOptions<LAnnotation>({
     renderGutterUtility: hasGutterRenderUtility
       ? noopRender
       : options?.renderGutterUtility,
+    onEditChange,
     onEditComplete,
   };
 }

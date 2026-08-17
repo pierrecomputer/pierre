@@ -1,7 +1,11 @@
 'use client';
 
 import type { FileContents, FileOptions } from '@pierre/diffs';
-import type { Editor, EditorOptions } from '@pierre/diffs/edit';
+import type {
+  Editor,
+  EditorChangeEvent,
+  EditorOptions,
+} from '@pierre/diffs/edit';
 import { File, Virtualizer } from '@pierre/diffs/react';
 import {
   IconFilePlus,
@@ -1213,10 +1217,14 @@ export function TreeApp<LAnnotation = unknown>({
       onAttach(editor) {
         editorRef.current = editor;
       },
-      onChange({ file }) {
-        handleEditorChangeRef.current(file);
-      },
     }),
+    []
+  );
+
+  const handleEditChange = useCallback(
+    (event: EditorChangeEvent<LAnnotation>) => {
+      handleEditorChangeRef.current(event.file);
+    },
     []
   );
 
@@ -1904,6 +1912,7 @@ export function TreeApp<LAnnotation = unknown>({
                     prerenderedHTML={activePrerenderedHTML}
                     edit
                     editorOptions={editorOptions}
+                    onEditChange={handleEditChange}
                   />
                 )}
               </Virtualizer>

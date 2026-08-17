@@ -31,6 +31,7 @@ export function File<LAnnotation = undefined>({
   renderGutterUtility,
   disableWorkerPool = false,
   edit = false,
+  onEditChange,
   onEditComplete,
 }: FileProps<LAnnotation>): React.JSX.Element {
   const { ref, getHoveredLine } = useFileInstance({
@@ -45,6 +46,7 @@ export function File<LAnnotation = undefined>({
     hasCustomHeader: renderCustomHeader != null,
     disableWorkerPool,
     edit,
+    onEditChange,
     onEditComplete,
   });
   const children = renderFileChildren({

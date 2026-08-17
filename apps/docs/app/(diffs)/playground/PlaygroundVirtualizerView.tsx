@@ -161,26 +161,6 @@ export function PlaygroundVirtualizerView({
           preventScroll: true,
         });
       },
-      onChange: ({ lineAnnotations }) => {
-        if (
-          lineAnnotations == null ||
-          !isFileAnnotationCollection(lineAnnotations)
-        ) {
-          return;
-        }
-        const previous = fileAnnotationsRef.current;
-        if (previous === lineAnnotations) {
-          return;
-        }
-        fileAnnotationsRef.current = lineAnnotations;
-        const liveKeys = new Set(lineAnnotations.map(fileAnnotationKey));
-        for (const annotation of previous) {
-          const key = fileAnnotationKey(annotation);
-          if (!liveKeys.has(key)) {
-            unmountAnnotationRoot(key);
-          }
-        }
-      },
     });
     const readmeToggle = createEditToggle();
     const rerenderReadmeWithAnnotations = () => {
@@ -217,6 +197,26 @@ export function PlaygroundVirtualizerView({
         unsafeCSS: VIRTUALIZER_CUSTOM_CSS,
         enableLineSelection: enableLineSelection && !enableGutterComments,
         enableGutterUtility: enableGutterComments && showAnnotations,
+        onEditChange: ({ lineAnnotations }) => {
+          if (
+            lineAnnotations == null ||
+            !isFileAnnotationCollection(lineAnnotations)
+          ) {
+            return;
+          }
+          const previous = fileAnnotationsRef.current;
+          if (previous === lineAnnotations) {
+            return;
+          }
+          fileAnnotationsRef.current = lineAnnotations;
+          const liveKeys = new Set(lineAnnotations.map(fileAnnotationKey));
+          for (const annotation of previous) {
+            const key = fileAnnotationKey(annotation);
+            if (!liveKeys.has(key)) {
+              unmountAnnotationRoot(key);
+            }
+          }
+        },
         onGutterUtilityClick: (range) => {
           const lineNumber = range.end;
           if (
@@ -292,41 +292,12 @@ export function PlaygroundVirtualizerView({
       fileContainer.style.display = 'block';
       content.appendChild(fileContainer);
 
-      // Edits remap annotation line numbers; onChange hands the remapped set
-      // back so this view's annotation source of truth follows the edit —
-      // otherwise the next host-driven render snaps comments back to their
-      // pre-edit lines. An annotation whose line was deleted is dropped from
-      // the set; retire its orphaned React root.
       const editor = new Editor<VirtualizerAnnotationMetadata>({
         onAttach(attachedEditor) {
           attachedEditor.focus({
             lineNumber: 'first-visible',
             preventScroll: true,
           });
-        },
-        onChange: ({ lineAnnotations }) => {
-          if (
-            lineAnnotations == null ||
-            !isDiffAnnotationCollection(lineAnnotations)
-          ) {
-            return;
-          }
-          const previous = annotationsRef.current[index];
-          if (previous === lineAnnotations) {
-            return;
-          }
-          annotationsRef.current[index] = lineAnnotations;
-          const liveKeys = new Set(
-            lineAnnotations.map((annotation) =>
-              annotationKey(index, annotation)
-            )
-          );
-          for (const annotation of previous) {
-            const key = annotationKey(index, annotation);
-            if (!liveKeys.has(key)) {
-              unmountAnnotationRoot(key);
-            }
-          }
         },
       });
       editors.push(editor);
@@ -376,6 +347,36 @@ export function PlaygroundVirtualizerView({
             unsafeCSS: VIRTUALIZER_CUSTOM_CSS,
             enableLineSelection: enableLineSelection && !enableGutterComments,
             enableGutterUtility: enableGutterComments && showAnnotations,
+            // Edits remap annotation line numbers; onEditChange hands the
+            // remapped set back so this view's annotation source of truth
+            // follows the edit — otherwise the next host-driven render snaps
+            // comments back to their pre-edit lines. An annotation whose line
+            // was deleted is dropped from the set; retire its orphaned React
+            // root.
+            onEditChange: ({ lineAnnotations }) => {
+              if (
+                lineAnnotations == null ||
+                !isDiffAnnotationCollection(lineAnnotations)
+              ) {
+                return;
+              }
+              const previous = annotationsRef.current[index];
+              if (previous === lineAnnotations) {
+                return;
+              }
+              annotationsRef.current[index] = lineAnnotations;
+              const liveKeys = new Set(
+                lineAnnotations.map((annotation) =>
+                  annotationKey(index, annotation)
+                )
+              );
+              for (const annotation of previous) {
+                const key = annotationKey(index, annotation);
+                if (!liveKeys.has(key)) {
+                  unmountAnnotationRoot(key);
+                }
+              }
+            },
             onGutterUtilityClick: (range) => {
               const side = range.endSide ?? range.side;
               if (side == null) {

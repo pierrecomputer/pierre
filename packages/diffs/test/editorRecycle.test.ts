@@ -119,6 +119,8 @@ class TestEditableComponent implements DiffsEditableComponent<undefined> {
     this.#editor = undefined;
   }
 
+  emitEditChange(): void {}
+
   attachEditor(editor: DiffsEditor<undefined>): () => void {
     this.#editor = editor;
     this.#syncRenderView();

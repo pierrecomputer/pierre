@@ -11,7 +11,7 @@ import {
   type LineAnnotation,
   type SelectedLineRange,
 } from '@pierre/diffs';
-import type { EditorOptions } from '@pierre/diffs/edit';
+import type { EditorChangeEvent, EditorOptions } from '@pierre/diffs/edit';
 import {
   File,
   FileDiff,
@@ -107,17 +107,21 @@ function ElementVirtualizerFile({
       onAttach(editor) {
         editor.focus({ lineNumber: 'first-visible', preventScroll: true });
       },
-      onChange({ lineAnnotations }) {
-        if (
-          lineAnnotations != null &&
-          isFileAnnotationCollection(lineAnnotations)
-        ) {
-          flushSync(() => {
-            setAnnotations(lineAnnotations);
-          });
-        }
-      },
     }),
+    []
+  );
+
+  const handleEditChange = useCallback(
+    ({ lineAnnotations }: EditorChangeEvent<PlaygroundAnnotationMetadata>) => {
+      if (
+        lineAnnotations != null &&
+        isFileAnnotationCollection(lineAnnotations)
+      ) {
+        flushSync(() => {
+          setAnnotations(lineAnnotations);
+        });
+      }
+    },
     []
   );
 
@@ -238,6 +242,7 @@ function ElementVirtualizerFile({
       lineAnnotations={showAnnotations ? annotations : EMPTY_FILE_ANNOTATIONS}
       options={fileOptions}
       editorOptions={editorOptions}
+      onEditChange={handleEditChange}
       renderHeaderMetadata={renderHeaderMetadata}
       renderAnnotation={renderAnnotation}
     />
@@ -274,7 +279,8 @@ function ElementVirtualizerDiff({
     null
   );
 
-  // Edits remap annotation line numbers; onChange hands the remapped set back
+  // Edits remap annotation line numbers; onEditChange hands the remapped set
+  // back
   // so the `lineAnnotations` prop — and the React-slotted comment content
   // keyed by line number — follows the edit. The flushSync matters: the
   // editor renamed the shadow-DOM annotation slots during this same
@@ -285,17 +291,21 @@ function ElementVirtualizerDiff({
       onAttach(editor) {
         editor.focus({ lineNumber: 'first-visible', preventScroll: true });
       },
-      onChange({ lineAnnotations }) {
-        if (
-          lineAnnotations != null &&
-          isDiffAnnotationCollection(lineAnnotations)
-        ) {
-          flushSync(() => {
-            setAnnotations(lineAnnotations);
-          });
-        }
-      },
     }),
+    []
+  );
+
+  const handleEditChange = useCallback(
+    ({ lineAnnotations }: EditorChangeEvent<PlaygroundAnnotationMetadata>) => {
+      if (
+        lineAnnotations != null &&
+        isDiffAnnotationCollection(lineAnnotations)
+      ) {
+        flushSync(() => {
+          setAnnotations(lineAnnotations);
+        });
+      }
+    },
     []
   );
 
@@ -440,6 +450,7 @@ function ElementVirtualizerDiff({
       lineAnnotations={showAnnotations ? annotations : EMPTY_ANNOTATIONS}
       options={fileDiffOptions}
       editorOptions={editorOptions}
+      onEditChange={handleEditChange}
       renderHeaderMetadata={renderHeaderMetadata}
       renderAnnotation={renderAnnotation}
     />

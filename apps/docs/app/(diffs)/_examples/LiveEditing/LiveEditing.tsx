@@ -1,7 +1,7 @@
 'use client';
 
 import { cloneFileDiffMetadata } from '@pierre/diffs';
-import type { EditorOptions } from '@pierre/diffs/edit';
+import type { EditorChangeEvent } from '@pierre/diffs/edit';
 import { File, FileDiff } from '@pierre/diffs/react';
 import type {
   PreloadedFileResult,
@@ -73,13 +73,11 @@ export function LiveEditing({
     [pristineFileDiff, resetKey]
   );
 
-  const editorOptions = useMemo<EditorOptions<undefined>>(
-    () => ({
-      // Both surfaces synchronously report the current new-file contents.
-      onChange({ file }) {
-        setHasEdits(file.contents !== LIVE_EDITING_NEW_FILE.contents);
-      },
-    }),
+  // Both surfaces synchronously report the current new-file contents.
+  const handleEditChange = useCallback(
+    (event: EditorChangeEvent<undefined>) => {
+      setHasEdits(event.file.contents !== LIVE_EDITING_NEW_FILE.contents);
+    },
     []
   );
 
@@ -212,7 +210,7 @@ export function LiveEditing({
             className="diff-container"
             renderHeaderMetadata={headerMetadata}
             edit={edit}
-            editorOptions={editorOptions}
+            onEditChange={handleEditChange}
           />
         ) : (
           <FileDiff
@@ -223,7 +221,7 @@ export function LiveEditing({
             className="diff-container"
             renderHeaderMetadata={headerMetadata}
             edit={edit}
-            editorOptions={editorOptions}
+            onEditChange={handleEditChange}
           />
         )}
       </div>

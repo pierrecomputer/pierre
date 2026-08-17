@@ -99,15 +99,14 @@ export default value;
       const events = [];
       window.__editorEvents = events;
 
-      const editor = new Editor({
-        onChange({ file }) {
-          events.push(file.contents);
-          log.textContent = `changes: ${events.length}`;
-        },
-      });
+      const editor = new Editor({});
       window.__editor = editor;
 
       const instance = new FileDiff({
+        onEditChange({ file }) {
+          events.push(file.contents);
+          log.textContent = `changes: ${events.length}`;
+        },
         disableFileHeader: true,
         theme: { dark: 'pierre-dark', light: 'pierre-light' },
         themeType: 'dark',

@@ -2,7 +2,11 @@ import { afterAll, describe, expect, test } from 'bun:test';
 
 import { disposeHighlighter, File, isFileAnnotationCollection } from '../src';
 import { Editor } from '../src/editor/editor';
-import type { FileContents, LineAnnotation } from '../src/types';
+import type {
+  EditorChangeEvent,
+  FileContents,
+  LineAnnotation,
+} from '../src/types';
 import { installDom, waitFor } from './domHarness';
 
 afterAll(async () => {
@@ -361,6 +365,112 @@ describe('editing a File without changing its input', () => {
       } finally {
         fixture.cleanup();
       }
+    }
+  });
+});
+
+describe('component onEditChange', () => {
+  test('receives the exact event the editor emits, alongside editor onChange', async () => {
+    const dom = installDom();
+    const fileContainer = document.createElement('div');
+    document.body.appendChild(fileContainer);
+    const externalFile = { ...EXTERNAL_FILE };
+    const editorEvents: EditorChangeEvent<undefined>[] = [];
+    const componentEvents: EditorChangeEvent<undefined>[] = [];
+    const instance = new TestFile({
+      disableErrorHandling: true,
+      disableFileHeader: true,
+      onEditChange: (event) => componentEvents.push(event),
+    });
+    const editor = new Editor<undefined>({
+      onChange: (event) => editorEvents.push(event),
+    });
+    try {
+      instance.render({ file: externalFile, fileContainer, forceRender: true });
+      editor.edit(instance);
+      await waitFor(() => editor.getText() === externalFile.contents, {
+        timeout: 4_000,
+      });
+      replaceDocument(editor, 'edited\n');
+      expect(editorEvents).toHaveLength(1);
+      expect(componentEvents).toHaveLength(1);
+      expect(componentEvents[0]).toBe(editorEvents[0]);
+      expect(componentEvents[0]?.file.contents).toBe('edited\n');
+    } finally {
+      editor.cleanUp();
+      instance.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test('fires without an editor onChange and setOptions swaps the live handler', async () => {
+    const dom = installDom();
+    const fileContainer = document.createElement('div');
+    document.body.appendChild(fileContainer);
+    const externalFile = { ...EXTERNAL_FILE };
+    const firstEvents: EditorChangeEvent<undefined>[] = [];
+    const secondEvents: EditorChangeEvent<undefined>[] = [];
+    const instance = new TestFile({
+      disableErrorHandling: true,
+      disableFileHeader: true,
+      onEditChange: (event) => firstEvents.push(event),
+    });
+    const editor = new Editor<undefined>({});
+    try {
+      instance.render({ file: externalFile, fileContainer, forceRender: true });
+      editor.edit(instance);
+      await waitFor(() => editor.getText() === externalFile.contents, {
+        timeout: 4_000,
+      });
+      replaceDocument(editor, 'first\n');
+      expect(firstEvents).toHaveLength(1);
+      instance.setOptions({
+        disableErrorHandling: true,
+        disableFileHeader: true,
+        onEditChange: (event) => secondEvents.push(event),
+      });
+      replaceDocument(editor, 'second\n');
+      expect(firstEvents).toHaveLength(1);
+      expect(secondEvents).toHaveLength(1);
+      expect(secondEvents[0]?.file.contents).toBe('second\n');
+    } finally {
+      editor.cleanUp();
+      instance.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test('a recycle detach and reattach keeps the resumed session reporting', async () => {
+    const dom = installDom();
+    const fileContainer = document.createElement('div');
+    document.body.appendChild(fileContainer);
+    const externalFile = { ...EXTERNAL_FILE };
+    const events: EditorChangeEvent<undefined>[] = [];
+    const instance = new TestFile({
+      disableErrorHandling: true,
+      disableFileHeader: true,
+      onEditChange: (event) => events.push(event),
+    });
+    const editor = new Editor<undefined>({});
+    try {
+      instance.render({ file: externalFile, fileContainer, forceRender: true });
+      editor.edit(instance);
+      await waitFor(() => editor.getText() === externalFile.contents, {
+        timeout: 4_000,
+      });
+      replaceDocument(editor, 'first\n');
+      expect(events).toHaveLength(1);
+
+      editor.cleanUp(true);
+      editor.edit(instance);
+      await waitFor(() => editor.getText() === 'first\n', { timeout: 4_000 });
+      replaceDocument(editor, 'second\n');
+      expect(events).toHaveLength(2);
+      expect(events[1]?.file.contents).toBe('second\n');
+    } finally {
+      editor.cleanUp();
+      instance.cleanUp();
+      dom.cleanup();
     }
   });
 });

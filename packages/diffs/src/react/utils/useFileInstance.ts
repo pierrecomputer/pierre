@@ -13,7 +13,7 @@ import {
   type FileOptions,
 } from '../../components/File';
 import { VirtualizedFile } from '../../components/VirtualizedFile';
-import type { EditorOptions } from '../../edit';
+import type { EditorChangeEvent, EditorOptions } from '../../edit';
 import type { GetHoveredLineResult } from '../../managers/InteractionManager';
 import type {
   FileContents,
@@ -43,6 +43,7 @@ interface UseFileInstanceProps<LAnnotation> {
   hasCustomHeader: boolean;
   disableWorkerPool: boolean;
   edit: boolean;
+  onEditChange?(event: EditorChangeEvent<LAnnotation>): void;
   onEditComplete: FileEditCompleteHandler<LAnnotation> | undefined;
 }
 
@@ -63,14 +64,17 @@ export function useFileInstance<LAnnotation>({
   hasCustomHeader,
   disableWorkerPool,
   edit,
+  onEditChange: _onEditChange,
   onEditComplete: _onEditComplete,
 }: UseFileInstanceProps<LAnnotation>): UseFileInstanceReturn {
   const simpleVirtualizer = useVirtualizer();
   const controlledSelection = selectedLines !== undefined;
   const poolManager = useContext(WorkerPoolContext);
   const createEditor = useCreateEditor<LAnnotation>();
-  // Keep one stable completion identity across renders while always invoking
-  // the latest prop; installed into options only while the prop exists.
+  const handleOnEditChange = useStableCallback(
+    (event: EditorChangeEvent<LAnnotation>) => _onEditChange?.(event)
+  );
+  const onEditChange = _onEditChange != null ? handleOnEditChange : undefined;
   const handleOnEditComplete = useStableCallback(
     (event: FileEditCompleteEvent<LAnnotation>) =>
       _onEditComplete?.(event) ?? null
@@ -93,6 +97,7 @@ export function useFileInstance<LAnnotation>({
             controlledSelection,
             hasCustomHeader,
             hasGutterRenderUtility,
+            onEditChange,
             onEditComplete,
             options,
           }),
@@ -107,6 +112,7 @@ export function useFileInstance<LAnnotation>({
             controlledSelection,
             hasCustomHeader,
             hasGutterRenderUtility,
+            onEditChange,
             onEditComplete,
             options,
           }),
@@ -135,6 +141,7 @@ export function useFileInstance<LAnnotation>({
       controlledSelection,
       hasCustomHeader,
       hasGutterRenderUtility,
+      onEditChange,
       onEditComplete,
       options,
     });
@@ -185,6 +192,7 @@ interface MergeFileOptionsProps<LAnnotation> {
   controlledSelection: boolean;
   hasGutterRenderUtility: boolean;
   hasCustomHeader: boolean;
+  onEditChange?(event: EditorChangeEvent<LAnnotation>): void;
   onEditComplete: FileEditCompleteHandler<LAnnotation> | undefined;
 }
 
@@ -193,12 +201,14 @@ function mergeFileOptions<LAnnotation>({
   controlledSelection,
   hasCustomHeader,
   hasGutterRenderUtility,
+  onEditChange,
   onEditComplete,
 }: MergeFileOptionsProps<LAnnotation>): FileOptions<LAnnotation> | undefined {
   const needsReactOverrides =
     controlledSelection ||
     hasGutterRenderUtility ||
     hasCustomHeader ||
+    onEditChange != null ||
     onEditComplete != null;
 
   if (!needsReactOverrides) {
@@ -214,6 +224,7 @@ function mergeFileOptions<LAnnotation>({
     renderGutterUtility: hasGutterRenderUtility
       ? noopRender
       : options?.renderGutterUtility,
+    onEditChange,
     onEditComplete,
   };
 }

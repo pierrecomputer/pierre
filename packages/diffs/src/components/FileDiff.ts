@@ -44,6 +44,7 @@ import type {
   DiffsEditor,
   DiffsTextDocument,
   EditorActiveLineOptions,
+  EditorChangeEvent,
   ExpansionDirections,
   FileContents,
   FileDiffMetadata,
@@ -280,6 +281,14 @@ export interface FileDiffOptions<LAnnotation>
     instance: FileDiff<LAnnotation>,
     phase: PostRenderPhase
   ): unknown;
+
+  /**
+   * Fired for every document change of an active edit session on this
+   * component, with the same `EditorChangeEvent` the editor reports through
+   * its own `onChange`. Do not feed the event's file back into the component
+   * while the session is active.
+   */
+  onEditChange?: (event: EditorChangeEvent<LAnnotation>) => void;
 
   /**
    * Fired when `edit` toggles false or a component unmounts. Only called if
@@ -1656,6 +1665,11 @@ export class FileDiff<
       startingLine: firstLineNumber - 1,
       totalLines: lastLineNumber - firstLineNumber + 1,
     };
+  }
+
+  public emitEditChange(event: EditorChangeEvent<LAnnotation>): void {
+    const { onEditChange } = this.options;
+    onEditChange?.(event);
   }
 
   public attachEditor(

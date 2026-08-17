@@ -6,7 +6,11 @@ import {
   getHighlighterIfLoaded,
   preloadHighlighter,
 } from '@pierre/diffs';
-import type { Editor, EditorOptions } from '@pierre/diffs/edit';
+import type {
+  Editor,
+  EditorChangeEvent,
+  EditorOptions,
+} from '@pierre/diffs/edit';
 import { File } from '@pierre/diffs/react';
 import type { PreloadedFileResult } from '@pierre/diffs/ssr';
 import {
@@ -118,7 +122,7 @@ export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
   const isMacRef = useRef(false);
 
   // True while `seedAll` is replaying edits programmatically, so its intermediate
-  // `onChange` callbacks are not mistaken for user input.
+  // `onEditChange` callbacks are not mistaken for user input.
   const isAutoSeedingRef = useRef(false);
   // Set when the visitor edits before the deferred auto-seed finishes; blocks
   // `waitForReady` from calling `seedAll` on a document that is no longer the
@@ -126,7 +130,7 @@ export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
   const userEditedBeforeSeedRef = useRef(false);
 
   // Number of edits currently applied, derived from the editor's live text on
-  // every `onChange` (undo, redo, controls, or keyboard) so it always matches.
+  // every `onEditChange` (undo, redo, controls, or keyboard) so it always matches.
   const [applied, setApplied] = useState(0);
   // True once the document no longer matches any seeded snapshot, i.e. the user
   // typed their own edit. The guided step controls and the right-hand list stop
@@ -139,19 +143,23 @@ export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
       onAttach(editor) {
         editorRef.current = editor;
       },
-      onChange: ({ file }) => {
-        const index = snapshotIndexFor(file.contents);
-        if (index >= 0) {
-          setApplied(index);
-          setDiverged(false);
-        } else {
-          setDiverged(true);
-        }
-        if (!isAutoSeedingRef.current && index !== 0) {
-          userEditedBeforeSeedRef.current = true;
-        }
-      },
     }),
+    []
+  );
+
+  const handleEditChange = useCallback(
+    (event: EditorChangeEvent<undefined>) => {
+      const index = snapshotIndexFor(event.file.contents);
+      if (index >= 0) {
+        setApplied(index);
+        setDiverged(false);
+      } else {
+        setDiverged(true);
+      }
+      if (!isAutoSeedingRef.current && index !== 0) {
+        userEditedBeforeSeedRef.current = true;
+      }
+    },
     []
   );
 
@@ -188,7 +196,7 @@ export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
   );
 
   // Fire the editor's real undo (Cmd/Ctrl-Z) or redo (adds Shift) shortcut on
-  // the content element. The editor applies the change and its `onChange`
+  // the content element. The editor applies the change and its `onEditChange`
   // updates the step count, so the controls and the keyboard share one path.
   const dispatchHistoryKey = useCallback(
     (content: HTMLElement, redo: boolean) => {
@@ -214,7 +222,7 @@ export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
 
   // Apply a single edit by locating its `find` anchor in that step's snapshot
   // (the document text right before the edit) and replacing it. The editor's
-  // `onChange` advances the step count once the edit lands.
+  // `onEditChange` advances the step count once the edit lands.
   const applyEdit = useCallback((content: HTMLElement, index: number) => {
     const edit = HISTORY_DEMO_EDITS[index];
     const text = SNAPSHOTS[index];
@@ -461,6 +469,7 @@ export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
             className="diff-container"
             edit
             editorOptions={editorOptions}
+            onEditChange={handleEditChange}
           />
         </div>
 

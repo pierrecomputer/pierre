@@ -1,7 +1,7 @@
 'use client';
 
 import { DEFAULT_THEMES, type FileDiffMetadata } from '@pierre/diffs';
-import type { EditorOptions } from '@pierre/diffs/edit';
+import type { EditorChangeEvent, EditorOptions } from '@pierre/diffs/edit';
 import {
   File,
   FileDiff,
@@ -1096,19 +1096,23 @@ export function AgentUi({
         }
         lastAttachedPathRef.current = target;
       },
-      onChange({ file }) {
-        const target = activeTargetRef.current;
-        if (target == null) {
-          return;
-        }
-        editedPathsRef.current.add(target);
-        // Recompute the edited file's diff against its original snapshot so the
-        // Changes tree's +/- totals reflect the live edits.
-        recordEditedStatsRef.current(target, file.contents);
-      },
       __debug: true,
     }),
     [addSnippet]
+  );
+
+  const handleEditChange = useCallback(
+    (event: EditorChangeEvent<undefined>) => {
+      const target = activeTargetRef.current;
+      if (target == null) {
+        return;
+      }
+      editedPathsRef.current.add(target);
+      // Recompute the edited file's diff against its original snapshot so the
+      // Changes tree's +/- totals reflect the live edits.
+      recordEditedStatsRef.current(target, event.file.contents);
+    },
+    []
   );
 
   const openFile = useCallback((path: string) => {
@@ -1236,6 +1240,7 @@ export function AgentUi({
                 prerenderedHTML={activePrerenderedHTML}
                 edit
                 editorOptions={editorOptions}
+                onEditChange={handleEditChange}
               />
             ) : placeholderContents != null && activePath != null ? (
               // Editable view for explorer files that aren't part of the change
@@ -1263,6 +1268,7 @@ export function AgentUi({
                 disableWorkerPool
                 edit
                 editorOptions={editorOptions}
+                onEditChange={handleEditChange}
               />
             ) : (
               <div className="aui-empty">Select a file to review.</div>

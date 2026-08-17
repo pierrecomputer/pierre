@@ -507,6 +507,97 @@ describe('React editor factory lifecycle', () => {
     });
   }
 
+  for (const surface of ['File', 'FileDiff'] as const) {
+    test(`${surface} onEditChange prop receives editor change events and swaps mid-session`, async () => {
+      const { cleanup } = installDom();
+      const cleanupActEnvironment = installReactActEnvironment();
+      const container = document.createElement('div');
+      document.body.appendChild(container);
+      const editors: TrackedEditor[] = [];
+      const factory = (options: EditorOptions<undefined>) => {
+        const editor = new TrackedEditor(options);
+        editors.push(editor);
+        return editor;
+      };
+      const editorOnChange = mock((_event: EditorChangeEvent<undefined>) => {});
+      const firstOnEditChange = mock(
+        (_event: EditorChangeEvent<undefined>) => {}
+      );
+      const secondOnEditChange = mock(
+        (_event: EditorChangeEvent<undefined>) => {}
+      );
+      // Stable inputs across renders (real callers memoize their diff), so a
+      // re-render only swaps the onEditChange prop instead of also delivering
+      // a compatible external update over the edited session.
+      const oldFile = { name: 'edit.ts', contents: 'const value = 1;\n' };
+      const pristineDiff = parseDiffFromFile(oldFile, {
+        name: 'edit.ts',
+        contents: 'const value = 2;\n',
+      });
+      const surfaceOptions = {
+        disableFileHeader: true,
+        theme: DEFAULT_THEMES,
+      };
+      const makeSurface = (
+        onEditChange: (event: EditorChangeEvent<undefined>) => void
+      ): ReactElement =>
+        surface === 'File'
+          ? createElement(ReactFileComponent, {
+              disableWorkerPool: true,
+              edit: true,
+              editorOptions: { onChange: editorOnChange },
+              file: oldFile,
+              onEditChange,
+              options: surfaceOptions,
+            })
+          : createElement(ReactFileDiffComponent, {
+              disableWorkerPool: true,
+              edit: true,
+              editorOptions: { onChange: editorOnChange },
+              fileDiff: pristineDiff,
+              onEditChange,
+              options: surfaceOptions,
+            });
+      let root: Root | undefined;
+      const render = async (
+        onEditChange: (event: EditorChangeEvent<undefined>) => void
+      ) => {
+        await act(async () => {
+          root!.render(
+            createElement(
+              EditProviderComponent,
+              { createEditor: factory },
+              makeSurface(onEditChange)
+            )
+          );
+          await wait(10);
+        });
+      };
+
+      try {
+        root = createReactRoot(container);
+        await render(firstOnEditChange);
+        await waitFor(() => editors[0]?.getFile() !== undefined);
+        insertAtStart(editors[0], '/* one */');
+        expect(editorOnChange).toHaveBeenCalledTimes(1);
+        expect(firstOnEditChange).toHaveBeenCalledTimes(1);
+        expect(firstOnEditChange.mock.calls[0]?.[0]).toBe(
+          editorOnChange.mock.calls[0]?.[0]
+        );
+
+        await render(secondOnEditChange);
+        expect(editors).toHaveLength(1);
+        insertAtStart(editors[0], '/* two */');
+        expect(firstOnEditChange).toHaveBeenCalledTimes(1);
+        expect(secondOnEditChange).toHaveBeenCalledTimes(1);
+      } finally {
+        await unmountRoot(root);
+        cleanupActEnvironment();
+        cleanup();
+      }
+    });
+  }
+
   for (const wrapper of ['MultiFileDiff', 'PatchDiff'] as const) {
     test(`${wrapper} forwards editor options to its FileDiff instance`, async () => {
       const { cleanup } = installDom();

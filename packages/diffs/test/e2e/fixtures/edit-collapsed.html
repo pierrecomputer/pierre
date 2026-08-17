@@ -62,14 +62,13 @@
       const events = [];
       window.__editorEvents = events;
 
-      const editor = new Editor({
-        onChange({ file }) {
-          events.push(file.contents);
-        },
-      });
+      const editor = new Editor({});
       window.__editor = editor;
 
       const instance = new FileDiff({
+        onEditChange({ file }) {
+          events.push(file.contents);
+        },
         disableFileHeader: true,
         theme: { dark: 'pierre-dark', light: 'pierre-light' },
         themeType: 'dark',

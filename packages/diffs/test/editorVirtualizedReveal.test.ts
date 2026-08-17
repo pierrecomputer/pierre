@@ -85,6 +85,8 @@ class VirtualizedEditableComponent implements DiffsEditableComponent<undefined> 
     this.fileContainer.remove();
   }
 
+  emitEditChange(): void {}
+
   attachEditor(editor: DiffsEditor<undefined>): () => void {
     this.#editor = editor;
     this.#syncRenderView();

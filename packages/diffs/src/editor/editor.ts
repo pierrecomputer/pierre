@@ -5704,10 +5704,16 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   ): void {
     const file = this.getFile();
     const onChange = this.#options.onChange;
-    if (file === undefined || onChange === undefined) {
+    if (file == null) {
       return;
     }
-    onChange({ changes, file, lineAnnotations });
+    const event: EditorChangeEvent<LAnnotation> = {
+      changes,
+      file,
+      lineAnnotations,
+    };
+    onChange?.(event);
+    this.#fileInstance?.emitEditChange(event);
   }
 
   #applyChangeToLineAnnotations(

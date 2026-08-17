@@ -11,7 +11,11 @@ import {
   type LineAnnotation,
   type SelectedLineRange,
 } from '@pierre/diffs';
-import type { Editor, EditorOptions } from '@pierre/diffs/edit';
+import type {
+  Editor,
+  EditorChangeEvent,
+  EditorOptions,
+} from '@pierre/diffs/edit';
 import {
   type CodeViewReactOptions,
   File,
@@ -731,9 +735,10 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
   const edit = mode === 'edit';
 
   // Edits remap annotation line numbers (an Enter above a comment shifts it
-  // down); onChange writes the remapped collection back to the matching direct
-  // view. flushSync keeps React's light-DOM annotation slots synchronized with
-  // the shadow-DOM slot names the editor updates during the same keystroke.
+  // down); onEditChange writes the remapped collection back to the matching
+  // direct view. flushSync keeps React's light-DOM annotation slots
+  // synchronized with the shadow-DOM slot names the editor updates during the
+  // same keystroke.
   const editorRef = useRef<Editor<PlaygroundAnnotationMetadata> | null>(null);
   const editorOptions = useMemo<EditorOptions<PlaygroundAnnotationMetadata>>(
     () => ({
@@ -741,19 +746,23 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
         editorRef.current = editor;
         editor.focus({ lineNumber: 'first-visible', preventScroll: true });
       },
-      onChange: ({ lineAnnotations }) => {
-        if (lineAnnotations == null) {
-          return;
-        }
-        flushSync(() => {
-          if (isDiffAnnotationCollection(lineAnnotations)) {
-            setAnnotations(lineAnnotations);
-          } else if (isFileAnnotationCollection(lineAnnotations)) {
-            setFileAnnotations(lineAnnotations);
-          }
-        });
-      },
     }),
+    []
+  );
+
+  const handleEditChange = useCallback(
+    ({ lineAnnotations }: EditorChangeEvent<PlaygroundAnnotationMetadata>) => {
+      if (lineAnnotations == null) {
+        return;
+      }
+      flushSync(() => {
+        if (isDiffAnnotationCollection(lineAnnotations)) {
+          setAnnotations(lineAnnotations);
+        } else if (isFileAnnotationCollection(lineAnnotations)) {
+          setFileAnnotations(lineAnnotations);
+        }
+      });
+    },
     []
   );
 
@@ -1232,6 +1241,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
       className="border-border overflow-hidden rounded-lg border"
       edit={edit}
       editorOptions={editorOptions}
+      onEditChange={handleEditChange}
       selectedLines={selectedRange}
       lineAnnotations={showAnnotations ? annotations : EMPTY_ANNOTATIONS}
       options={fileDiffOptions}
@@ -1245,6 +1255,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
       className="border-border overflow-hidden rounded-lg border"
       edit={edit}
       editorOptions={editorOptions}
+      onEditChange={handleEditChange}
       selectedLines={selectedRange}
       lineAnnotations={
         showAnnotations ? fileAnnotations : EMPTY_FILE_ANNOTATIONS
