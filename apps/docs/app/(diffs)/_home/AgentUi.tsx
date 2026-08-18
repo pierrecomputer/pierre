@@ -1323,6 +1323,7 @@ export function AgentUi({
             <textarea
               className="aui-composer-input"
               placeholder="Ask for changes, @mention files, or run commands…"
+              aria-label="Ask for changes, @mention files, or run commands"
               rows={2}
               disabled
             />

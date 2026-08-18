@@ -35,8 +35,9 @@ export function ArbitraryFiles({ prerenderedDiff }: ArbitraryFilesProps) {
 
       <div className="flex flex-col gap-4">
         <div className="relative">
-          <FileLabel>before.css</FileLabel>
+          <FileLabel htmlFor="arbitrary-before">before.css</FileLabel>
           <FileTextarea
+            id="arbitrary-before"
             value={oldFile.contents}
             onChange={(e) => {
               setOldFile({ ...oldFile, contents: e.target.value });
@@ -44,8 +45,9 @@ export function ArbitraryFiles({ prerenderedDiff }: ArbitraryFilesProps) {
           />
         </div>
         <div className="relative">
-          <FileLabel>after.css</FileLabel>
+          <FileLabel htmlFor="arbitrary-after">after.css</FileLabel>
           <FileTextarea
+            id="arbitrary-after"
             value={newFile.contents}
             onChange={(e) => {
               setNewFile({ ...newFile, contents: e.target.value });
@@ -65,26 +67,37 @@ export function ArbitraryFiles({ prerenderedDiff }: ArbitraryFilesProps) {
 
 interface FileLabelProps {
   children: React.ReactNode;
+  htmlFor: string;
 }
 
 // Local components to avoid class name duplication
-function FileLabel({ children }: FileLabelProps) {
+function FileLabel({ children, htmlFor }: FileLabelProps) {
   return (
-    <label className="text-muted-foreground bg-muted absolute top-[1px] left-[1px] block rounded-lg px-3 py-2 text-xs font-medium uppercase select-none">
+    <label
+      htmlFor={htmlFor}
+      className="text-muted-foreground bg-muted absolute top-[1px] left-[1px] block rounded-lg px-3 py-2 text-xs font-medium uppercase select-none"
+    >
       {children}
     </label>
   );
 }
 
 interface FileTextareaProps {
+  id: string;
   value: string;
   onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
   className?: string;
 }
 
-function FileTextarea({ value, onChange, className = '' }: FileTextareaProps) {
+function FileTextarea({
+  id,
+  value,
+  onChange,
+  className = '',
+}: FileTextareaProps) {
   return (
     <textarea
+      id={id}
       value={value}
       onChange={onChange}
       className={`bg-muted field-sizing-content min-h-40 w-full resize-none rounded-lg border px-4 pt-10 font-mono text-sm ${className}`}

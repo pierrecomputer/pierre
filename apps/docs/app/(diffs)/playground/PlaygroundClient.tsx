@@ -82,7 +82,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Switch } from '@/components/ui/switch';
+import { ToggleSwitch } from '@/components/ui/toggle-switch';
 
 const LINE_DIFF_OPTIONS = [
   { value: 'word-alt', label: 'Word-Alt' },
@@ -1242,25 +1242,13 @@ function ToggleButton({
   title?: string;
 }) {
   return (
-    <div className="gridstack" title={title}>
-      <Button
-        variant="outline"
-        className="justify-between gap-3 pr-11 pl-3"
-        disabled={disabled}
-        onClick={() => onCheckedChange(!checked)}
-      >
-        <div className="flex items-center gap-2">
-          {icon}
-          {label}
-        </div>
-      </Button>
-      <Switch
-        checked={checked}
-        onCheckedChange={onCheckedChange}
-        disabled={disabled}
-        onClick={(e) => e.stopPropagation()}
-        className="pointer-events-none mr-3 place-self-center justify-self-end"
-      />
-    </div>
+    <ToggleSwitch
+      icon={icon}
+      label={label}
+      checked={checked}
+      onCheckedChange={onCheckedChange}
+      disabled={disabled}
+      title={title}
+    />
   );
 }

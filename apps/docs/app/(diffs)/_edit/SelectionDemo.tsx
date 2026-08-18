@@ -253,6 +253,7 @@ export function SelectionDemo({ prerenderedFile }: SelectionDemoProps) {
             <textarea
               className="min-h-10 w-full resize-none bg-transparent px-1 text-[13px] leading-normal text-white placeholder:text-neutral-500 focus:outline-none"
               placeholder="Ask for changes…"
+              aria-label="Ask for changes"
               rows={2}
               disabled
             />

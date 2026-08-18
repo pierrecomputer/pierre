@@ -98,6 +98,8 @@ export function LineSelection({ prerenderedDiff }: LineSelectionProps) {
             }}
             className="aspect-square px-0"
             disabled={selectedRange == null}
+            title="Clear selection"
+            aria-label="Clear selection"
           >
             <IconXSquircle className="text-muted-foreground" />
           </Button>
