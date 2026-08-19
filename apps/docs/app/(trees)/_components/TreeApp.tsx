@@ -1222,7 +1222,7 @@ export function TreeApp<LAnnotation = unknown>({
   );
 
   const handleEditChange = useCallback(
-    (event: EditorChangeEvent<LAnnotation>) => {
+    (event: EditorChangeEvent<LAnnotation, 'file'>) => {
       handleEditorChangeRef.current(event.file);
     },
     []

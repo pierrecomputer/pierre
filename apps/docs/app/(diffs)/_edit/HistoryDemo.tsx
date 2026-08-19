@@ -148,7 +148,7 @@ export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
   );
 
   const handleEditChange = useCallback(
-    (event: EditorChangeEvent<undefined>) => {
+    (event: EditorChangeEvent<undefined, 'file'>) => {
       const index = snapshotIndexFor(event.file.contents);
       if (index >= 0) {
         setApplied(index);

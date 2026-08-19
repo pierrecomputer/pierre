@@ -180,13 +180,23 @@ export class VirtualizedFileDiff<
   ): boolean {
     if (
       lineAnnotations == null ||
-      lineAnnotations === this.lineAnnotations ||
-      (lineAnnotations.length === 0 && this.lineAnnotations.length === 0)
+      !this.isNewAnnotations(lineAnnotations) ||
+      (lineAnnotations.length === 0 && this.getLatestAnnotations().length === 0)
     ) {
       return false;
     }
     super.setLineAnnotations(lineAnnotations);
     return true;
+  }
+
+  protected override syncEditSessionAnnotationsFromEditor(
+    lineAnnotations: DiffLineAnnotation<LAnnotation>[]
+  ): boolean {
+    if (super.syncEditSessionAnnotationsFromEditor(lineAnnotations)) {
+      this.resetLayoutCache({ includeEstimatedHeights: false });
+      return true;
+    }
+    return false;
   }
 
   private setFileAnnotationHeight(nextHeight: number): boolean {
@@ -201,7 +211,7 @@ export class VirtualizedFileDiff<
   }
 
   private hasFileAnnotations(fileDiff: FileDiffMetadata): boolean {
-    const { lineAnnotations } = this;
+    const lineAnnotations = this.getLatestAnnotations();
     if (!includesFileAnnotations(lineAnnotations)) {
       return false;
     }
@@ -338,7 +348,7 @@ export class VirtualizedFileDiff<
       return hasHeightChange;
     }
     this.top = this.getVirtualizedTop();
-    const { lineAnnotations } = this;
+    const lineAnnotations = this.getLatestAnnotations();
     // NOTE(amadeus): We can probably be a lot smarter about this, and we
     // should be thinking about ways to improve this
     // If the file has no annotations and we are using the scroll variant, then
@@ -489,7 +499,7 @@ export class VirtualizedFileDiff<
       }
     }
 
-    const diffChanged = this.updateExternalDiff(fileDiff);
+    const diffChanged = this.updateExternalDiff(fileDiff, lineAnnotations);
     const {
       pendingRenderDiff,
       layoutDiffChanged,
@@ -1270,7 +1280,7 @@ export class VirtualizedFileDiff<
       return false;
     }
     if (targetChanged) {
-      this.updateExternalDiff(nextFileDiff);
+      this.updateExternalDiff(nextFileDiff, lineAnnotations);
     }
 
     const {

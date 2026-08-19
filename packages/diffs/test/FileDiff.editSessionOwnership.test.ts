@@ -3,6 +3,7 @@ import { afterAll, describe, expect, test } from 'bun:test';
 import { disposeHighlighter, FileDiff, parseDiffFromFile } from '../src';
 import { Editor } from '../src/editor/editor';
 import type {
+  DiffLineAnnotation,
   DiffsEditor,
   DiffsTextDocument,
   EditorChangeEvent,
@@ -27,6 +28,14 @@ class TestFileDiff extends FileDiff<undefined> {
 
   isEditorRenderReadyForTest(): boolean {
     return this.hunksRenderer.editorRenderReady();
+  }
+
+  getExternalAnnotationsForTest(): DiffLineAnnotation<undefined>[] {
+    return this.lineAnnotations;
+  }
+
+  getLatestAnnotationsForTest(): DiffLineAnnotation<undefined>[] {
+    return this.getLatestAnnotations();
   }
 }
 
@@ -490,8 +499,8 @@ describe('FileDiff edit-session ownership', () => {
     document.body.appendChild(fileContainer);
     const externalDiff = createExternalDiff();
     const externalBefore = captureExternalDiffState(externalDiff);
-    const editorEvents: EditorChangeEvent<undefined>[] = [];
-    const componentEvents: EditorChangeEvent<undefined>[] = [];
+    const editorEvents: EditorChangeEvent<undefined, 'file' | 'diff'>[] = [];
+    const componentEvents: EditorChangeEvent<undefined, 'diff'>[] = [];
     const instance = new TestFileDiff({
       disableErrorHandling: true,
       disableFileHeader: true,
@@ -528,6 +537,76 @@ describe('FileDiff edit-session ownership', () => {
       expect(componentEvents[0]?.file.contents).toBe(
         'alpha\nedited value\nomega\n'
       );
+      expectExternalDiffUnchanged(instance, externalDiff, externalBefore);
+    } finally {
+      editor.cleanUp();
+      instance.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test('session-owned annotations keep frozen names while the external collection stays put', async () => {
+    const dom = installDom();
+    const fileContainer = document.createElement('div');
+    document.body.appendChild(fileContainer);
+    const externalDiff = createExternalDiff();
+    const externalBefore = captureExternalDiffState(externalDiff);
+    const externalAnnotations: DiffLineAnnotation<undefined>[] = [
+      { side: 'additions', lineNumber: 2 },
+    ];
+    const instance = new TestFileDiff({
+      disableErrorHandling: true,
+      disableFileHeader: true,
+    });
+    const editor = new Editor<undefined>({});
+
+    try {
+      instance.render({
+        fileDiff: externalDiff,
+        fileContainer,
+        forceRender: true,
+        lineAnnotations: externalAnnotations,
+      });
+      editor.edit(instance);
+
+      await waitFor(() => editor.getText() === 'alpha\nnew value\nomega\n', {
+        timeout: 4_000,
+      });
+      // Insert a line above the annotated one: the session collection remaps
+      // while the caller collection and the frozen slot name stay put.
+      editor.applyEdits([
+        {
+          range: {
+            start: { line: 0, character: 0 },
+            end: { line: 0, character: 0 },
+          },
+          newText: 'inserted\n',
+        },
+      ]);
+
+      const latest = instance.getLatestAnnotationsForTest();
+      expect(latest).toEqual([{ side: 'additions', lineNumber: 3 }]);
+      expect(instance.getExternalAnnotationsForTest()).toBe(
+        externalAnnotations
+      );
+      expect(externalAnnotations).toEqual([
+        { side: 'additions', lineNumber: 2 },
+      ]);
+      const moved = latest.at(0);
+      if (moved == null) {
+        throw new Error('Expected the remapped annotation to survive');
+      }
+      expect(instance.getAnnotationSlotName(moved)).toBe(
+        'annotation-additions-2'
+      );
+      await waitFor(() => {
+        const names = Array.from(
+          fileContainer.shadowRoot?.querySelectorAll(
+            '[data-line-annotation] slot'
+          ) ?? []
+        ).map((slot) => slot.getAttribute('name'));
+        return names.includes('annotation-additions-2');
+      });
       expectExternalDiffUnchanged(instance, externalDiff, externalBefore);
     } finally {
       editor.cleanUp();

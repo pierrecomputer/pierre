@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import {
   applyDocumentChangeToLineAnnotations,
+  getLineAnnotationSource,
   renderLineAnnotations,
 } from '../src/editor/lineAnnotations';
 import { TextDocument } from '../src/editor/textDocument';
@@ -404,6 +405,48 @@ describe('applyDocumentChangeToLineAnnotations', () => {
       { side: 'additions', lineNumber: 3, metadata: 'two' },
       { side: 'additions', lineNumber: 4, metadata: 'four' },
     ]);
+  });
+});
+
+describe('getLineAnnotationSource', () => {
+  test('resolves remap clones of clones back to the original annotation', () => {
+    const original: DiffLineAnnotation<string> = {
+      side: 'additions',
+      lineNumber: 1,
+      metadata: 'origin',
+    };
+    const insertPad = [
+      {
+        range: {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 0 },
+        },
+        newText: 'pad\n',
+      },
+    ];
+    const textDocument = new TextDocument('inmemory://1', 'one\ntwo');
+
+    const firstChange = textDocument.applyEdits(insertPad);
+    const firstPass = applyDocumentChangeToLineAnnotations(firstChange!, [
+      original,
+    ]);
+    const firstClone = firstPass?.at(0);
+    if (firstClone == null || firstClone === original) {
+      throw new Error('Expected the first remap to clone the annotation');
+    }
+
+    const secondChange = textDocument.applyEdits(insertPad);
+    const secondPass = applyDocumentChangeToLineAnnotations(secondChange!, [
+      firstClone,
+    ]);
+    const secondClone = secondPass?.at(0);
+    if (secondClone == null || secondClone === firstClone) {
+      throw new Error('Expected the second remap to clone again');
+    }
+
+    expect(getLineAnnotationSource(original)).toBe(original);
+    expect(getLineAnnotationSource(firstClone)).toBe(original);
+    expect(getLineAnnotationSource(secondClone)).toBe(original);
   });
 });
 

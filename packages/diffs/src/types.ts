@@ -1088,7 +1088,18 @@ export interface DiffsEditableComponent<
    * editor calls this with the same event object it reports through its own
    * `onChange`; the component forwards it to its `onEditChange` option.
    */
-  emitEditChange: (event: EditorChangeEvent<LAnnotation>) => void;
+  emitEditChange(event: EditorChangeEvent<LAnnotation, 'file' | 'diff'>): void;
+  /**
+   * Resolve the shadow-DOM slot name for one of this component's line
+   * annotations. While an edit session is active, the name each annotation
+   * carried when it entered the session is kept even as its line number is
+   * remapped, so slotted light-DOM content stays projected without the owner
+   * re-rendering it. Outside a session this is the plain position-derived
+   * name.
+   */
+  getAnnotationSlotName: (
+    annotation: LineAnnotation<LAnnotation> | DiffLineAnnotation<LAnnotation>
+  ) => string;
   applyDocumentChange: (
     textDocument: DiffsTextDocument,
     newLineAnnotations?: DiffLineAnnotation<LAnnotation>[],
@@ -1265,12 +1276,12 @@ export interface EditorChange extends ResolvedTextEdit {
 }
 
 /** The document state and normalized edits reported after an editor change. */
-export interface EditorChangeEvent<LAnnotation> {
+export interface EditorChangeEvent<LAnnotation, TMode extends 'file' | 'diff'> {
   changes: EditorChange[];
   file: FileContents;
-  lineAnnotations?:
-    | LineAnnotation<LAnnotation>[]
-    | DiffLineAnnotation<LAnnotation>[];
+  lineAnnotations?: TMode extends 'file'
+    ? LineAnnotation<LAnnotation>[]
+    : DiffLineAnnotation<LAnnotation>[];
 }
 
 /**
@@ -1312,5 +1323,5 @@ export interface DiffsTextDocument {
  * emit them through its own `onItemEditChange` option.
  */
 export interface CodeViewCreateEditorOptions<LAnnotation> {
-  onChange: (event: EditorChangeEvent<LAnnotation>) => void;
+  onChange(event: EditorChangeEvent<LAnnotation, 'file' | 'diff'>): void;
 }

@@ -345,7 +345,7 @@ describe('React CodeView editor factory', () => {
     const onAttach = mock(() => {});
     const onItemEditChange = mock(
       (
-        _event: EditorChangeEvent<undefined>,
+        _event: EditorChangeEvent<undefined, 'file' | 'diff'>,
         _item: CodeViewItem<undefined>
       ) => {}
     );

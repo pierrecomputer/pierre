@@ -1439,6 +1439,21 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
   private pathFromAnnotationSlot(
     element: Element
   ): (EventTarget | undefined)[] | undefined {
+    // Don't trust the slot name for the line number: during an edit session
+    // an annotation keeps its original name while edits move it to other
+    // lines, so a name like "annotation-20" can point at a line the
+    // annotation left long ago. The code row directly above the annotation
+    // row always reflects where it sits now, so read the line from there and
+    // parse the name only as a fallback.
+    const annotationRow = annotationRowFromSlot(element);
+    const annotatedLine = annotationRow?.previousElementSibling;
+    if (
+      annotatedLine instanceof HTMLElement &&
+      (annotatedLine.hasAttribute('data-line') ||
+        annotatedLine.hasAttribute('data-column-number'))
+    ) {
+      return getElementPath(annotatedLine);
+    }
     const point = selectionPointFromAnnotationSlotName(
       getAnnotationSlotName(element)
     );
@@ -2350,6 +2365,20 @@ function closestSelectableRow(element: Element): HTMLElement | undefined {
       previousRow.hasAttribute('data-column-number'))
     ? previousRow
     : undefined;
+}
+
+// Resolve the shadow annotation row an event target projects into, from
+// either slotted light-DOM content or the slot element itself.
+function annotationRowFromSlot(element: Element): HTMLElement | undefined {
+  const slotted = element.closest('[slot^="annotation-"]');
+  const slot =
+    slotted instanceof HTMLElement && slotted.assignedSlot != null
+      ? slotted.assignedSlot
+      : element.tagName === 'SLOT'
+        ? element
+        : undefined;
+  const row = slot?.closest('[data-line-annotation]');
+  return row instanceof HTMLElement ? row : undefined;
 }
 
 function getAnnotationSlotName(element: Element): string | undefined {

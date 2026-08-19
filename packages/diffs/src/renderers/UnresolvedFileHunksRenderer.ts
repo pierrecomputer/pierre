@@ -2,6 +2,7 @@ import type { Element as HASTElement, Properties } from 'hast';
 
 import { DEFAULT_RENDER_RANGE, DEFAULT_THEMES } from '../constants';
 import type {
+  DiffLineAnnotation,
   FileDiffMetadata,
   MergeConflictMarkerRow,
   MergeConflictResolution,
@@ -82,10 +83,13 @@ export class UnresolvedFileHunksRenderer<
     options: UnresolvedFileHunksRendererOptions = {
       theme: DEFAULT_THEMES,
     },
+    annotationSlotName?: (
+      annotation: DiffLineAnnotation<LAnnotation>
+    ) => string,
     onRenderUpdate?: () => unknown,
     workerManager?: WorkerPoolManager | undefined
   ) {
-    super(undefined, onRenderUpdate, workerManager);
+    super(undefined, annotationSlotName, onRenderUpdate, workerManager);
     this.options = options;
   }
 

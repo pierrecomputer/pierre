@@ -51,7 +51,6 @@ import {
 } from '@pierre/icons';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { flushSync } from 'react-dom';
 import { toast } from 'sonner';
 
 import type { PlaygroundAnnotationMetadata } from './constants';
@@ -735,10 +734,9 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
   const edit = mode === 'edit';
 
   // Edits remap annotation line numbers (an Enter above a comment shifts it
-  // down); onEditChange writes the remapped collection back to the matching
-  // direct view. flushSync keeps React's light-DOM annotation slots
-  // synchronized with the shadow-DOM slot names the editor updates during the
-  // same keystroke.
+  // down); onEditChange keeps this state tracking the live collection so the
+  // add/remove flows below operate on current positions. The components own
+  // annotation rendering during a session, so no synchronous flush is needed.
   const editorRef = useRef<Editor<PlaygroundAnnotationMetadata> | null>(null);
   const editorOptions = useMemo<EditorOptions<PlaygroundAnnotationMetadata>>(
     () => ({
@@ -751,17 +749,17 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
   );
 
   const handleEditChange = useCallback(
-    ({ lineAnnotations }: EditorChangeEvent<PlaygroundAnnotationMetadata>) => {
+    ({
+      lineAnnotations,
+    }: EditorChangeEvent<PlaygroundAnnotationMetadata, 'file' | 'diff'>) => {
       if (lineAnnotations == null) {
         return;
       }
-      flushSync(() => {
-        if (isDiffAnnotationCollection(lineAnnotations)) {
-          setAnnotations(lineAnnotations);
-        } else if (isFileAnnotationCollection(lineAnnotations)) {
-          setFileAnnotations(lineAnnotations);
-        }
-      });
+      if (isDiffAnnotationCollection(lineAnnotations)) {
+        setAnnotations(lineAnnotations);
+      } else if (isFileAnnotationCollection(lineAnnotations)) {
+        setFileAnnotations(lineAnnotations);
+      }
     },
     []
   );

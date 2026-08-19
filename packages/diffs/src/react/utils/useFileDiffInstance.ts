@@ -22,6 +22,7 @@ import type {
   VirtualFileMetrics,
 } from '../../types';
 import { areOptionsEqual } from '../../utils/areOptionsEqual';
+import { getLineAnnotationName } from '../../utils/getLineAnnotationName';
 import { noopRender } from '../constants';
 import { useCreateEditor } from '../EditContext';
 import { useVirtualizer } from '../Virtualizer';
@@ -43,13 +44,14 @@ interface UseFileDiffInstanceProps<LAnnotation> {
   hasCustomHeader: boolean;
   disableWorkerPool: boolean;
   edit: boolean;
-  onEditChange?(event: EditorChangeEvent<LAnnotation>): void;
+  onEditChange?(event: EditorChangeEvent<LAnnotation, 'diff'>): void;
   onEditComplete: FileDiffEditCompleteHandler<LAnnotation> | undefined;
 }
 
-interface UseFileDiffInstanceReturn {
+interface UseFileDiffInstanceReturn<LAnnotation> {
   ref(node: HTMLElement | null): void;
   getHoveredLine(): GetHoveredLineResult<'diff'> | undefined;
+  getAnnotationSlotName(annotation: DiffLineAnnotation<LAnnotation>): string;
 }
 
 export function useFileDiffInstance<LAnnotation>({
@@ -66,13 +68,13 @@ export function useFileDiffInstance<LAnnotation>({
   edit,
   onEditChange: _onEditChange,
   onEditComplete: _onEditComplete,
-}: UseFileDiffInstanceProps<LAnnotation>): UseFileDiffInstanceReturn {
+}: UseFileDiffInstanceProps<LAnnotation>): UseFileDiffInstanceReturn<LAnnotation> {
   const simpleVirtualizer = useVirtualizer();
   const controlledSelection = selectedLines !== undefined;
   const poolManager = useContext(WorkerPoolContext);
   const createEditor = useCreateEditor<LAnnotation>();
   const handleOnEditChange = useStableCallback(
-    (event: EditorChangeEvent<LAnnotation>) => _onEditChange?.(event)
+    (event: EditorChangeEvent<LAnnotation, 'diff'>) => _onEditChange?.(event)
   );
   const onEditChange = _onEditChange != null ? handleOnEditChange : undefined;
   const handleOnEditComplete = useStableCallback(
@@ -191,10 +193,17 @@ export function useFileDiffInstance<LAnnotation>({
     | undefined => {
     return instanceRef.current?.getHoveredLine();
   }, []);
+  const getAnnotationSlotName = useCallback(
+    (annotation: DiffLineAnnotation<LAnnotation>): string =>
+      instanceRef.current?.getAnnotationSlotName(annotation) ??
+      getLineAnnotationName(annotation),
+    []
+  );
 
   return {
     ref,
     getHoveredLine,
+    getAnnotationSlotName,
   };
 }
 
@@ -202,7 +211,7 @@ interface MergeFileDiffOptionsProps<LAnnotation> {
   controlledSelection: boolean;
   hasCustomHeader: boolean;
   hasGutterRenderUtility: boolean;
-  onEditChange?(event: EditorChangeEvent<LAnnotation>): void;
+  onEditChange?(event: EditorChangeEvent<LAnnotation, 'diff'>): void;
   onEditComplete: FileDiffEditCompleteHandler<LAnnotation> | undefined;
   options: FileDiffOptions<LAnnotation> | undefined;
 }

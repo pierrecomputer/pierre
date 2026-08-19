@@ -25,6 +25,14 @@ class TestFile extends File<undefined> {
   getRendererFileForTest(): FileContents | undefined {
     return this.fileRenderer.fileCache;
   }
+
+  getExternalAnnotationsForTest(): LineAnnotation<undefined>[] {
+    return this.lineAnnotations;
+  }
+
+  getLatestAnnotationsForTest(): LineAnnotation<undefined>[] {
+    return this.getLatestAnnotations();
+  }
 }
 
 const EXTERNAL_FILE: FileContents = {
@@ -375,8 +383,8 @@ describe('component onEditChange', () => {
     const fileContainer = document.createElement('div');
     document.body.appendChild(fileContainer);
     const externalFile = { ...EXTERNAL_FILE };
-    const editorEvents: EditorChangeEvent<undefined>[] = [];
-    const componentEvents: EditorChangeEvent<undefined>[] = [];
+    const editorEvents: EditorChangeEvent<undefined, 'file' | 'diff'>[] = [];
+    const componentEvents: EditorChangeEvent<undefined, 'file'>[] = [];
     const instance = new TestFile({
       disableErrorHandling: true,
       disableFileHeader: true,
@@ -408,8 +416,8 @@ describe('component onEditChange', () => {
     const fileContainer = document.createElement('div');
     document.body.appendChild(fileContainer);
     const externalFile = { ...EXTERNAL_FILE };
-    const firstEvents: EditorChangeEvent<undefined>[] = [];
-    const secondEvents: EditorChangeEvent<undefined>[] = [];
+    const firstEvents: EditorChangeEvent<undefined, 'file'>[] = [];
+    const secondEvents: EditorChangeEvent<undefined, 'file'>[] = [];
     const instance = new TestFile({
       disableErrorHandling: true,
       disableFileHeader: true,
@@ -445,7 +453,7 @@ describe('component onEditChange', () => {
     const fileContainer = document.createElement('div');
     document.body.appendChild(fileContainer);
     const externalFile = { ...EXTERNAL_FILE };
-    const events: EditorChangeEvent<undefined>[] = [];
+    const events: EditorChangeEvent<undefined, 'file'>[] = [];
     const instance = new TestFile({
       disableErrorHandling: true,
       disableFileHeader: true,
@@ -471,6 +479,316 @@ describe('component onEditChange', () => {
       editor.cleanUp();
       instance.cleanUp();
       dom.cleanup();
+    }
+  });
+});
+
+describe('session-owned line annotations', () => {
+  async function createAnnotatedFixture() {
+    const dom = installDom();
+    const fileContainer = document.createElement('div');
+    document.body.appendChild(fileContainer);
+    const externalFile = { ...EXTERNAL_FILE };
+    const externalAnnotations: LineAnnotation<undefined>[] = [
+      { lineNumber: 2 },
+    ];
+    const events: EditorChangeEvent<undefined, 'file'>[] = [];
+    const instance = new TestFile({
+      disableErrorHandling: true,
+      disableFileHeader: true,
+      onEditChange: (event) => events.push(event),
+    });
+    const editor = new Editor<undefined>({});
+    instance.render({
+      file: externalFile,
+      fileContainer,
+      forceRender: true,
+      lineAnnotations: externalAnnotations,
+    });
+    editor.edit(instance);
+    await waitFor(() => editor.getText() === externalFile.contents, {
+      timeout: 4_000,
+    });
+    return {
+      dom,
+      editor,
+      events,
+      externalAnnotations,
+      externalFile,
+      fileContainer,
+      instance,
+      cleanup() {
+        editor.cleanUp();
+        instance.cleanUp();
+        dom.cleanup();
+      },
+    };
+  }
+
+  function insertLineAtStart(editor: Editor<undefined>): void {
+    editor.applyEdits([
+      {
+        range: {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 0 },
+        },
+        newText: 'inserted\n',
+      },
+    ]);
+  }
+
+  // Read the rendered annotation row: the slot it exposes and the data-line of
+  // the code row it sits under.
+  function annotationRowInfo(fileContainer: HTMLElement): {
+    slotName: string | undefined;
+    dataLine: string | undefined;
+  } {
+    const row = fileContainer.shadowRoot?.querySelector(
+      '[data-line-annotation]'
+    );
+    const slotName = row?.querySelector('slot')?.getAttribute('name');
+    const line = row?.previousElementSibling;
+    return {
+      slotName: slotName ?? undefined,
+      dataLine: line instanceof HTMLElement ? line.dataset.line : undefined,
+    };
+  }
+
+  test('a remap moves only the private session collection', async () => {
+    const fixture = await createAnnotatedFixture();
+    try {
+      const { editor, events, externalAnnotations, instance } = fixture;
+      insertLineAtStart(editor);
+
+      const latest = instance.getLatestAnnotationsForTest();
+      expect(latest).not.toBe(externalAnnotations);
+      expect(latest).toEqual([{ lineNumber: 3 }]);
+      expect(instance.getExternalAnnotationsForTest()).toBe(
+        externalAnnotations
+      );
+      expect(externalAnnotations).toEqual([{ lineNumber: 2 }]);
+      expect(events.at(-1)?.lineAnnotations).toBe(latest);
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('a stale caller collection re-render does not move annotations', async () => {
+    const fixture = await createAnnotatedFixture();
+    try {
+      const { editor, externalAnnotations, externalFile, fileContainer } =
+        fixture;
+      insertLineAtStart(editor);
+      const latest = fixture.instance.getLatestAnnotationsForTest();
+
+      fixture.instance.render({
+        file: externalFile,
+        fileContainer,
+        forceRender: true,
+        lineAnnotations: externalAnnotations,
+      });
+
+      expect(fixture.instance.getLatestAnnotationsForTest()).toBe(latest);
+      expect(annotationRowInfo(fileContainer).dataLine).toBe('3');
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('frozen slot names keep projection while annotation rows move', async () => {
+    const fixture = await createAnnotatedFixture();
+    try {
+      const { editor, fileContainer, instance } = fixture;
+      const before = annotationRowInfo(fileContainer);
+      expect(before.slotName).toBe('annotation-2');
+      expect(before.dataLine).toBe('2');
+
+      insertLineAtStart(editor);
+
+      const after = annotationRowInfo(fileContainer);
+      expect(after.slotName).toBe('annotation-2');
+      expect(after.dataLine).toBe('3');
+      const moved = instance.getLatestAnnotationsForTest().at(0);
+      if (moved == null) {
+        throw new Error('Expected the remapped annotation to survive');
+      }
+      expect(moved.lineNumber).toBe(3);
+      expect(instance.getAnnotationSlotName(moved)).toBe('annotation-2');
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('an annotation-only write mid-session lands in session space', async () => {
+    const fixture = await createAnnotatedFixture();
+    try {
+      const { editor, externalAnnotations, externalFile, fileContainer } =
+        fixture;
+      insertLineAtStart(editor);
+
+      const written: LineAnnotation<undefined>[] = [{ lineNumber: 1 }];
+      fixture.instance.render({
+        file: externalFile,
+        fileContainer,
+        forceRender: true,
+        lineAnnotations: written,
+      });
+
+      expect(fixture.instance.getLatestAnnotationsForTest()).toBe(written);
+      expect(fixture.instance.getExternalAnnotationsForTest()).toBe(
+        externalAnnotations
+      );
+      const single = written.at(0);
+      if (single == null) {
+        throw new Error('Expected the written annotation to exist');
+      }
+      expect(fixture.instance.getAnnotationSlotName(single)).toBe(
+        'annotation-1'
+      );
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('an external replacement with annotations rebaselines both collections', async () => {
+    const fixture = await createAnnotatedFixture();
+    try {
+      const { fileContainer, instance } = fixture;
+      insertLineAtStart(fixture.editor);
+      const moved = instance.getLatestAnnotationsForTest().at(0);
+      if (moved == null) {
+        throw new Error('Expected the remapped annotation to survive');
+      }
+
+      const replacementFile: FileContents = {
+        name: EXTERNAL_FILE.name,
+        contents: 'delta\nepsilon\nzeta\n',
+        cacheKey: 'external:file-v2',
+      };
+      const replacementAnnotations: LineAnnotation<undefined>[] = [
+        moved,
+        { lineNumber: 1 },
+      ];
+      instance.render({
+        file: replacementFile,
+        fileContainer,
+        forceRender: true,
+        lineAnnotations: replacementAnnotations,
+      });
+
+      expect(instance.getExternalAnnotationsForTest()).toBe(
+        replacementAnnotations
+      );
+      expect(instance.getLatestAnnotationsForTest()).toBe(
+        replacementAnnotations
+      );
+      // A surviving annotation keeps the name the outgoing session resolved
+      // for it — light-DOM content committed under that name stays projected
+      // — while the new annotation freezes at its arrival position.
+      expect(instance.getAnnotationSlotName(moved)).toBe('annotation-2');
+      const added = replacementAnnotations.at(1);
+      if (added == null) {
+        throw new Error('Expected the added annotation to exist');
+      }
+      expect(instance.getAnnotationSlotName(added)).toBe('annotation-1');
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('deleting an annotated line drops it from the session collection only', async () => {
+    const fixture = await createAnnotatedFixture();
+    try {
+      const { editor, externalAnnotations, instance } = fixture;
+      editor.applyEdits([
+        {
+          range: {
+            start: { line: 1, character: 0 },
+            end: { line: 2, character: 0 },
+          },
+          newText: '',
+        },
+      ]);
+
+      expect(instance.getLatestAnnotationsForTest()).toEqual([]);
+      expect(externalAnnotations).toEqual([{ lineNumber: 2 }]);
+      expect(instance.getExternalAnnotationsForTest()).toBe(
+        externalAnnotations
+      );
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  // Edits that move or drop annotations record the collection on both sides
+  // of the edit, so history replays annotations together with the text.
+  test('undo restores an annotation dropped with its deleted line and redo drops it again', async () => {
+    const fixture = await createAnnotatedFixture();
+    try {
+      const { editor, externalFile, instance } = fixture;
+      editor.applyEdits([
+        {
+          range: {
+            start: { line: 1, character: 0 },
+            end: { line: 2, character: 0 },
+          },
+          newText: '',
+        },
+      ]);
+      expect(instance.getLatestAnnotationsForTest()).toEqual([]);
+
+      editor.undo();
+      expect(editor.getText()).toBe(externalFile.contents);
+      const restored = instance.getLatestAnnotationsForTest().at(0);
+      if (restored == null) {
+        throw new Error('Expected undo to restore the dropped annotation');
+      }
+      expect(restored.lineNumber).toBe(2);
+      // The restored collection holds the session's own annotation objects,
+      // so the frozen slot name still resolves and slotted content stays
+      // projected across the round trip.
+      expect(instance.getAnnotationSlotName(restored)).toBe('annotation-2');
+
+      editor.redo();
+      expect(instance.getLatestAnnotationsForTest()).toEqual([]);
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  // Caller writes are not history entries: undoing an edit replays the
+  // collection recorded at that edit, which predates the write. Annotations
+  // written mid-session disappear when history rewinds past their write
+  // point, and redo replays the edit's own collection without them.
+  test('undoing a pre-write edit discards a caller-written annotation', async () => {
+    const fixture = await createAnnotatedFixture();
+    try {
+      const { editor, externalFile, fileContainer, instance } = fixture;
+      insertLineAtStart(editor);
+      const live = instance.getLatestAnnotationsForTest();
+      expect(live).toEqual([{ lineNumber: 3 }]);
+
+      const written: LineAnnotation<undefined>[] = [...live, { lineNumber: 1 }];
+      instance.render({
+        file: externalFile,
+        fileContainer,
+        forceRender: true,
+        lineAnnotations: written,
+      });
+      expect(instance.getLatestAnnotationsForTest()).toBe(written);
+
+      editor.undo();
+      expect(editor.getText()).toBe(externalFile.contents);
+      expect(instance.getLatestAnnotationsForTest()).toEqual([
+        { lineNumber: 2 },
+      ]);
+
+      editor.redo();
+      expect(instance.getLatestAnnotationsForTest()).toEqual([
+        { lineNumber: 3 },
+      ]);
+    } finally {
+      fixture.cleanup();
     }
   });
 });

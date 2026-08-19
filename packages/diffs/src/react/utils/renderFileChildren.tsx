@@ -7,7 +7,7 @@ import {
   HEADER_PREFIX_SLOT_ID,
 } from '../../constants';
 import type { GetHoveredLineResult } from '../../managers/InteractionManager';
-import type { FileContents } from '../../types';
+import type { FileContents, LineAnnotation } from '../../types';
 import { getLineAnnotationName } from '../../utils/getLineAnnotationName';
 import { GutterUtilitySlotStyles } from '../constants';
 import type { FileProps } from '../types';
@@ -22,6 +22,7 @@ interface RenderFileChildrenProps<LAnnotation> {
   lineAnnotations: FileProps<LAnnotation>['lineAnnotations'];
   renderGutterUtility: FileProps<LAnnotation>['renderGutterUtility'];
   getHoveredLine(): GetHoveredLineResult<'file'> | undefined;
+  getAnnotationSlotName?(annotation: LineAnnotation<LAnnotation>): string;
 }
 
 export function renderFileChildren<LAnnotation>({
@@ -34,6 +35,7 @@ export function renderFileChildren<LAnnotation>({
   lineAnnotations,
   renderGutterUtility,
   getHoveredLine,
+  getAnnotationSlotName = getLineAnnotationName,
 }: RenderFileChildrenProps<LAnnotation>): ReactNode {
   const customHeader = renderCustomHeader?.(file);
   const prefix = renderHeaderPrefix?.(file);
@@ -56,7 +58,7 @@ export function renderFileChildren<LAnnotation>({
       )}
       {renderAnnotation != null &&
         lineAnnotations?.map((annotation, index) => (
-          <div key={index} slot={getLineAnnotationName(annotation)}>
+          <div key={index} slot={getAnnotationSlotName(annotation)}>
             {renderAnnotation(annotation)}
           </div>
         ))}

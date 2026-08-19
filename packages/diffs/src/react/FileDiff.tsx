@@ -45,7 +45,7 @@ export function FileDiff<LAnnotation = undefined>({
   onEditChange,
   onEditComplete,
 }: FileDiffProps<LAnnotation>): React.JSX.Element {
-  const { ref, getHoveredLine } = useFileDiffInstance({
+  const { ref, getHoveredLine, getAnnotationSlotName } = useFileDiffInstance({
     fileDiff,
     options,
     editorOptions,
@@ -70,6 +70,7 @@ export function FileDiff<LAnnotation = undefined>({
     renderGutterUtility,
     lineAnnotations,
     getHoveredLine,
+    getAnnotationSlotName,
   });
   return (
     <DIFFS_TAG_NAME ref={ref} className={className} style={style}>

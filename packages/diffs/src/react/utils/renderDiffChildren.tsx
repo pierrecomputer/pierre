@@ -7,7 +7,7 @@ import {
   HEADER_PREFIX_SLOT_ID,
 } from '../../constants';
 import type { GetHoveredLineResult } from '../../managers/InteractionManager';
-import type { FileDiffMetadata } from '../../types';
+import type { DiffLineAnnotation, FileDiffMetadata } from '../../types';
 import { getLineAnnotationName } from '../../utils/getLineAnnotationName';
 import { getMergeConflictActionSlotName } from '../../utils/getMergeConflictActionSlotName';
 import {
@@ -33,6 +33,7 @@ interface RenderDiffChildrenProps<LAnnotation, T> {
   lineAnnotations: DiffBasePropsReact<LAnnotation>['lineAnnotations'];
   getHoveredLine(): GetHoveredLineResult<'diff'> | undefined;
   getInstance?(): T | undefined;
+  getAnnotationSlotName?(annotation: DiffLineAnnotation<LAnnotation>): string;
 }
 
 export function renderDiffChildren<LAnnotation, T>({
@@ -48,6 +49,7 @@ export function renderDiffChildren<LAnnotation, T>({
   lineAnnotations,
   getHoveredLine,
   getInstance,
+  getAnnotationSlotName = getLineAnnotationName,
 }: RenderDiffChildrenProps<LAnnotation, T>): ReactNode {
   const customHeader = renderCustomHeader?.(fileDiff);
   const prefix = renderHeaderPrefix?.(fileDiff);
@@ -70,7 +72,7 @@ export function renderDiffChildren<LAnnotation, T>({
       )}
       {renderAnnotation != null &&
         lineAnnotations?.map((annotation, index) => (
-          <div key={index} slot={getLineAnnotationName(annotation)}>
+          <div key={index} slot={getAnnotationSlotName(annotation)}>
             {renderAnnotation(annotation)}
           </div>
         ))}

@@ -272,7 +272,7 @@ export interface EditorOptions<LAnnotation> {
    * Treat this as a document notification; do not feed the changes back into
    * the editor or you will create loops.
    */
-  onChange?: (event: EditorChangeEvent<LAnnotation>) => void;
+  onChange?: (event: EditorChangeEvent<LAnnotation, 'file' | 'diff'>) => void;
   /** Callback when the editor gains focus. */
   onFocus?: () => void;
   /** Callback when the editor loses focus. */
@@ -3596,7 +3596,12 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       // annotation rows together. Re-inserting those rows independently by
       // line number would break their visual alignment in split view.
       if (!this.#isDiff || !didLineCountChange) {
-        renderLineAnnotations(newLineAnnotations, contentEl, gutterEl);
+        renderLineAnnotations(
+          newLineAnnotations,
+          contentEl,
+          gutterEl,
+          fileInstance.getAnnotationSlotName
+        );
       }
     }
 
@@ -5707,7 +5712,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     if (file == null) {
       return;
     }
-    const event: EditorChangeEvent<LAnnotation> = {
+    const event: EditorChangeEvent<LAnnotation, 'file' | 'diff'> = {
       changes,
       file,
       lineAnnotations,

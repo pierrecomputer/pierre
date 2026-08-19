@@ -96,7 +96,7 @@ export function PlaygroundCodeView({
   // when nothing remapped.
   const handleEditChange = useCallback(
     (
-      event: EditorChangeEvent<PlaygroundAnnotationMetadata>,
+      event: EditorChangeEvent<PlaygroundAnnotationMetadata, 'file' | 'diff'>,
       item: PlaygroundItem
     ) => {
       const { lineAnnotations } = event;

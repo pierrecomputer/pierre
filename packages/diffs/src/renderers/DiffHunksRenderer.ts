@@ -268,6 +268,9 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
   constructor(
     public options: DiffHunksRendererOptions = { theme: DEFAULT_THEMES },
+    private annotationSlotName: (
+      annotation: DiffLineAnnotation<LAnnotation>
+    ) => string = getLineAnnotationName,
     private onRenderUpdate?: () => unknown,
     private workerManager?: WorkerPoolManager | undefined
   ) {
@@ -2086,11 +2089,11 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
     const deletionAnnotationNames =
       fileDiff.type !== 'new'
-        ? getAnnotationNames(getFileAnnotations(this.deletionAnnotations))
+        ? this.getAnnotationNames(getFileAnnotations(this.deletionAnnotations))
         : [];
     const additionAnnotationNames =
       fileDiff.type !== 'deleted'
-        ? getAnnotationNames(getFileAnnotations(this.additionAnnotations))
+        ? this.getAnnotationNames(getFileAnnotations(this.additionAnnotations))
         : [];
     if (
       deletionAnnotationNames.length === 0 &&
@@ -2171,7 +2174,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     };
     if (deletionLineNumber != null) {
       for (const anno of this.deletionAnnotations[deletionLineNumber] ?? []) {
-        deletionSpan.annotations.push(getLineAnnotationName(anno));
+        deletionSpan.annotations.push(this.annotationSlotName(anno));
       }
     }
     const additionSpan: AnnotationSpan = {
@@ -2183,7 +2186,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     if (additionLineNumber != null) {
       for (const anno of this.additionAnnotations[additionLineNumber] ?? []) {
         (type === 'unified' ? deletionSpan : additionSpan).annotations.push(
-          getLineAnnotationName(anno)
+          this.annotationSlotName(anno)
         );
       }
     }
@@ -2202,6 +2205,15 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     return { deletionSpan, additionSpan };
   }
 
+  private getAnnotationNames(
+    annotations: DiffLineAnnotation<LAnnotation>[] | undefined
+  ): string[] {
+    return (
+      annotations?.map((annotation) => this.annotationSlotName(annotation)) ??
+      []
+    );
+  }
+
   private renderHeader(diff: FileDiffMetadata): HASTElement {
     const { headerRenderMode, stickyHeader } = this.getOptionsWithDefaults();
     return createFileHeaderElement({
@@ -2210,14 +2222,6 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       stickyHeader,
     });
   }
-}
-
-function getAnnotationNames<LAnnotation>(
-  annotations: DiffLineAnnotation<LAnnotation>[] | undefined
-): string[] {
-  return (
-    annotations?.map((annotation) => getLineAnnotationName(annotation)) ?? []
-  );
 }
 
 // Use the platform's English plural rules to pick "line" vs "lines" so a

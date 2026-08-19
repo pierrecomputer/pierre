@@ -148,6 +148,9 @@ export class FileRenderer<LAnnotation = undefined> {
 
   constructor(
     public options: FileRendererOptions = { theme: DEFAULT_THEMES },
+    private annotationSlotName: (
+      annotation: LineAnnotation<LAnnotation>
+    ) => string = getLineAnnotationName,
     private onRenderUpdate?: () => unknown,
     private workerManager?: WorkerPoolManager | undefined
   ) {
@@ -872,7 +875,7 @@ export class FileRenderer<LAnnotation = undefined> {
           hunkIndex: FILE_ANNOTATION_HUNK_INDEX,
           lineIndex: FILE_ANNOTATION_LINE_INDEX,
           annotations: fileLevelAnnotations.map((annotation) =>
-            getLineAnnotationName(annotation)
+            this.annotationSlotName(annotation)
           ),
         })
       );
@@ -915,7 +918,7 @@ export class FileRenderer<LAnnotation = undefined> {
             hunkIndex: 0,
             lineIndex: lineNumber,
             annotations: annotations.map((annotation) =>
-              getLineAnnotationName(annotation)
+              this.annotationSlotName(annotation)
             ),
           })
         );

@@ -22,6 +22,7 @@ import type {
   VirtualFileMetrics,
 } from '../../types';
 import { areOptionsEqual } from '../../utils/areOptionsEqual';
+import { getLineAnnotationName } from '../../utils/getLineAnnotationName';
 import { noopRender } from '../constants';
 import { useCreateEditor } from '../EditContext';
 import { useVirtualizer } from '../Virtualizer';
@@ -43,13 +44,14 @@ interface UseFileInstanceProps<LAnnotation> {
   hasCustomHeader: boolean;
   disableWorkerPool: boolean;
   edit: boolean;
-  onEditChange?(event: EditorChangeEvent<LAnnotation>): void;
+  onEditChange?(event: EditorChangeEvent<LAnnotation, 'file'>): void;
   onEditComplete: FileEditCompleteHandler<LAnnotation> | undefined;
 }
 
-interface UseFileInstanceReturn {
+interface UseFileInstanceReturn<LAnnotation> {
   ref(node: HTMLElement | null): void;
   getHoveredLine(): GetHoveredLineResult<'file'> | undefined;
+  getAnnotationSlotName(annotation: LineAnnotation<LAnnotation>): string;
 }
 
 export function useFileInstance<LAnnotation>({
@@ -66,13 +68,13 @@ export function useFileInstance<LAnnotation>({
   edit,
   onEditChange: _onEditChange,
   onEditComplete: _onEditComplete,
-}: UseFileInstanceProps<LAnnotation>): UseFileInstanceReturn {
+}: UseFileInstanceProps<LAnnotation>): UseFileInstanceReturn<LAnnotation> {
   const simpleVirtualizer = useVirtualizer();
   const controlledSelection = selectedLines !== undefined;
   const poolManager = useContext(WorkerPoolContext);
   const createEditor = useCreateEditor<LAnnotation>();
   const handleOnEditChange = useStableCallback(
-    (event: EditorChangeEvent<LAnnotation>) => _onEditChange?.(event)
+    (event: EditorChangeEvent<LAnnotation, 'file'>) => _onEditChange?.(event)
   );
   const onEditChange = _onEditChange != null ? handleOnEditChange : undefined;
   const handleOnEditComplete = useStableCallback(
@@ -184,7 +186,13 @@ export function useFileInstance<LAnnotation>({
     | undefined => {
     return instanceRef.current?.getHoveredLine();
   }, []);
-  return { ref, getHoveredLine };
+  const getAnnotationSlotName = useCallback(
+    (annotation: LineAnnotation<LAnnotation>): string =>
+      instanceRef.current?.getAnnotationSlotName(annotation) ??
+      getLineAnnotationName(annotation),
+    []
+  );
+  return { ref, getHoveredLine, getAnnotationSlotName };
 }
 
 interface MergeFileOptionsProps<LAnnotation> {
@@ -192,7 +200,7 @@ interface MergeFileOptionsProps<LAnnotation> {
   controlledSelection: boolean;
   hasGutterRenderUtility: boolean;
   hasCustomHeader: boolean;
-  onEditChange?(event: EditorChangeEvent<LAnnotation>): void;
+  onEditChange?(event: EditorChangeEvent<LAnnotation, 'file'>): void;
   onEditComplete: FileEditCompleteHandler<LAnnotation> | undefined;
 }
 

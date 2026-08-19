@@ -32,7 +32,7 @@ export interface DiffBasePropsReact<LAnnotation> {
    * cannot edit the contents of the old file. You are not getting back an
    * update `fileDiff` during this edit session.
    */
-  onEditChange?(event: EditorChangeEvent<LAnnotation>): void;
+  onEditChange?(event: EditorChangeEvent<LAnnotation, 'diff'>): void;
   /**
    * Fired when `edit` toggles false or the component unmounts with content
    * changes. Return the event's `fileDiff` to accept the edit or `null` to
@@ -67,7 +67,7 @@ export interface FileProps<LAnnotation> {
    * `EditorChangeEvent` the editor reports through its own `onChange`. Don't
    * feed this data back into the component.
    */
-  onEditChange?: (event: EditorChangeEvent<LAnnotation>) => void;
+  onEditChange?(event: EditorChangeEvent<LAnnotation, 'file'>): void;
   /**
    * Fired when `edit` toggles false or the component unmounts with content
    * changes. Return the event's `file` to accept the edit or `null` to

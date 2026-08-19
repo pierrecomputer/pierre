@@ -6,8 +6,6 @@ import {
   type FileDiffMetadata,
   type FileDiffOptions,
   type FileOptions,
-  isDiffAnnotationCollection,
-  isFileAnnotationCollection,
   type LineAnnotation,
   type SelectedLineRange,
 } from '@pierre/diffs';
@@ -20,7 +18,6 @@ import {
 } from '@pierre/diffs/react';
 import { IconCheckboxFill, IconSquircleLg } from '@pierre/icons';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { flushSync } from 'react-dom';
 
 import type { PlaygroundAnnotationMetadata } from './constants';
 import { ITEM_UNSAFE_CSS, LONG_README_FILE } from './constants';
@@ -112,14 +109,11 @@ function ElementVirtualizerFile({
   );
 
   const handleEditChange = useCallback(
-    ({ lineAnnotations }: EditorChangeEvent<PlaygroundAnnotationMetadata>) => {
-      if (
-        lineAnnotations != null &&
-        isFileAnnotationCollection(lineAnnotations)
-      ) {
-        flushSync(() => {
-          setAnnotations(lineAnnotations);
-        });
+    ({
+      lineAnnotations,
+    }: EditorChangeEvent<PlaygroundAnnotationMetadata, 'file'>) => {
+      if (lineAnnotations != null) {
+        setAnnotations(lineAnnotations);
       }
     },
     []
@@ -279,13 +273,10 @@ function ElementVirtualizerDiff({
     null
   );
 
-  // Edits remap annotation line numbers; onEditChange hands the remapped set
-  // back
-  // so the `lineAnnotations` prop — and the React-slotted comment content
-  // keyed by line number — follows the edit. The flushSync matters: the
-  // editor renamed the shadow-DOM annotation slots during this same
-  // keystroke, and a scheduled commit would leave the comments projected
-  // nowhere for the frames in between.
+  // Edits remap annotation line numbers; onEditChange keeps this state
+  // tracking the live collection so the add/remove flows below operate on
+  // current positions. The component owns annotation rendering during a
+  // session, so no synchronous flush is needed.
   const editorOptions = useMemo<EditorOptions<PlaygroundAnnotationMetadata>>(
     () => ({
       onAttach(editor) {
@@ -296,14 +287,11 @@ function ElementVirtualizerDiff({
   );
 
   const handleEditChange = useCallback(
-    ({ lineAnnotations }: EditorChangeEvent<PlaygroundAnnotationMetadata>) => {
-      if (
-        lineAnnotations != null &&
-        isDiffAnnotationCollection(lineAnnotations)
-      ) {
-        flushSync(() => {
-          setAnnotations(lineAnnotations);
-        });
+    ({
+      lineAnnotations,
+    }: EditorChangeEvent<PlaygroundAnnotationMetadata, 'diff'>) => {
+      if (lineAnnotations != null) {
+        setAnnotations(lineAnnotations);
       }
     },
     []

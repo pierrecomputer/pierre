@@ -543,7 +543,7 @@ export interface CodeViewOptions<LAnnotation>
    * Do not feed these changes back into item state.
    */
   onItemEditChange?(
-    event: EditorChangeEvent<LAnnotation>,
+    event: EditorChangeEvent<LAnnotation, 'file' | 'diff'>,
     item: CodeViewItem<LAnnotation>
   ): void;
   /**

@@ -15,6 +15,7 @@ import type {
   HighlightedToken,
   RenderRange,
 } from '../src/types';
+import { getLineAnnotationName } from '../src/utils/getLineAnnotationName';
 import { installDom, wait } from './domHarness';
 
 afterAll(async () => {
@@ -181,6 +182,8 @@ class TestEditableComponent implements DiffsEditableComponent<undefined> {
   }
 
   emitEditChange(): void {}
+
+  getAnnotationSlotName = getLineAnnotationName;
 
   attachEditor(editor: DiffsEditor<undefined>): () => void {
     this.#editor = editor;

@@ -75,7 +75,7 @@ export function LiveEditing({
 
   // Both surfaces synchronously report the current new-file contents.
   const handleEditChange = useCallback(
-    (event: EditorChangeEvent<undefined>) => {
+    (event: EditorChangeEvent<undefined, 'file' | 'diff'>) => {
       setHasEdits(event.file.contents !== LIVE_EDITING_NEW_FILE.contents);
     },
     []

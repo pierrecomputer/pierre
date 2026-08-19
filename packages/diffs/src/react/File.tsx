@@ -34,7 +34,7 @@ export function File<LAnnotation = undefined>({
   onEditChange,
   onEditComplete,
 }: FileProps<LAnnotation>): React.JSX.Element {
-  const { ref, getHoveredLine } = useFileInstance({
+  const { ref, getHoveredLine, getAnnotationSlotName } = useFileInstance({
     file,
     options,
     editorOptions,
@@ -59,6 +59,7 @@ export function File<LAnnotation = undefined>({
     renderGutterUtility,
     lineAnnotations,
     getHoveredLine,
+    getAnnotationSlotName,
   });
   return (
     <DIFFS_TAG_NAME ref={ref} className={className} style={style}>

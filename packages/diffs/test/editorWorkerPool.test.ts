@@ -202,6 +202,7 @@ describe('FileRenderer edit session', () => {
       let renderUpdates = 0;
       const renderer = new FileRenderer(
         { theme: 'pierre-dark' },
+        undefined,
         () => renderUpdates++,
         manager
       );
@@ -237,6 +238,7 @@ describe('FileRenderer edit session', () => {
       let renderUpdates = 0;
       const renderer = new FileRenderer(
         { theme: 'pierre-dark' },
+        undefined,
         () => renderUpdates++,
         manager
       );
@@ -280,6 +282,7 @@ describe('FileRenderer edit session', () => {
       let renderUpdates = 0;
       const renderer = new FileRenderer(
         { theme: 'pierre-dark' },
+        undefined,
         () => renderUpdates++,
         manager
       );
@@ -336,6 +339,7 @@ describe('FileRenderer edit session', () => {
       const renderer = new FileRenderer(
         { theme: 'pierre-dark' },
         undefined,
+        undefined,
         manager
       );
       const editSessionFile = createEditSessionFile(createFile('file:hydrate'));
@@ -356,6 +360,7 @@ describe('FileRenderer edit session', () => {
       let renderUpdates = 0;
       const renderer = new FileRenderer(
         { theme: 'pierre-dark' },
+        undefined,
         () => renderUpdates++,
         manager
       );
@@ -404,6 +409,7 @@ describe('FileRenderer edit session', () => {
       let renderUpdates = 0;
       const renderer = new FileRenderer(
         { theme: 'pierre-dark' },
+        undefined,
         () => renderUpdates++,
         manager
       );
@@ -432,6 +438,7 @@ describe('FileRenderer edit session', () => {
     try {
       const renderer = new FileRenderer(
         { theme: 'pierre-dark' },
+        undefined,
         undefined,
         manager
       );
@@ -478,6 +485,7 @@ describe('FileRenderer worker rendering', () => {
     const renderer = new FileRenderer(
       { theme: 'pierre-dark' },
       undefined,
+      undefined,
       manager
     );
     const currentFile: FileContents = {
@@ -512,6 +520,7 @@ describe('FileRenderer worker rendering', () => {
     let renderUpdates = 0;
     const renderer = new FileRenderer(
       { theme: 'pierre-dark' },
+      undefined,
       () => renderUpdates++,
       manager
     );
@@ -589,6 +598,7 @@ describe('DiffHunksRenderer worker rendering', () => {
     let renderUpdates = 0;
     const renderer = new DiffHunksRenderer(
       { theme: 'pierre-dark' },
+      undefined,
       () => renderUpdates++,
       manager
     );
@@ -631,6 +641,7 @@ describe('DiffHunksRenderer worker rendering', () => {
     let renderUpdates = 0;
     const renderer = new DiffHunksRenderer(
       { theme: 'pierre-dark' },
+      undefined,
       () => renderUpdates++,
       manager
     );
@@ -740,6 +751,7 @@ describe('DiffHunksRenderer worker rendering', () => {
     const renderer = new DiffHunksRenderer(
       { theme: 'pierre-dark' },
       undefined,
+      undefined,
       manager
     );
     try {
@@ -780,6 +792,7 @@ describe('DiffHunksRenderer worker rendering', () => {
     const renderer = new DiffHunksRenderer(
       { theme: 'pierre-dark' },
       undefined,
+      undefined,
       manager
     );
     try {
@@ -817,6 +830,7 @@ describe('DiffHunksRenderer worker rendering', () => {
     let renderUpdates = 0;
     const renderer = new DeferredHighlighterDiffRenderer(
       { theme: 'andromeeda' },
+      undefined,
       () => renderUpdates++
     );
     try {
@@ -864,6 +878,7 @@ describe('DiffHunksRenderer worker rendering', () => {
     let renderUpdates = 0;
     const renderer = new DeferredHighlighterDiffRenderer(
       { theme: 'ayu-dark' },
+      undefined,
       () => renderUpdates++
     );
     try {
@@ -914,6 +929,7 @@ describe('DiffHunksRenderer worker rendering', () => {
     let renderUpdates = 0;
     const renderer = new DeferredHighlighterDiffRenderer(
       { theme: 'pierre-dark' },
+      undefined,
       () => renderUpdates++
     );
     try {
@@ -965,6 +981,7 @@ describe('DiffHunksRenderer edit session', () => {
       let renderUpdates = 0;
       const renderer = new DiffHunksRenderer(
         { theme: 'pierre-dark' },
+        undefined,
         () => renderUpdates++,
         manager
       );
@@ -1024,6 +1041,7 @@ describe('DiffHunksRenderer edit session', () => {
       let renderUpdates = 0;
       const renderer = new DiffHunksRenderer(
         { theme: 'pierre-dark' },
+        undefined,
         () => renderUpdates++,
         manager
       );
@@ -1062,6 +1080,7 @@ describe('DiffHunksRenderer edit session', () => {
       let renderUpdates = 0;
       const renderer = new DiffHunksRenderer(
         { theme: 'pierre-dark' },
+        undefined,
         () => renderUpdates++,
         manager
       );
@@ -1134,6 +1153,7 @@ describe('DiffHunksRenderer edit session', () => {
     let renderUpdates = 0;
     const renderer = new DiffHunksRenderer(
       { theme: 'pierre-dark' },
+      undefined,
       () => renderUpdates++,
       manager
     );
@@ -1181,6 +1201,7 @@ describe('DiffHunksRenderer edit session', () => {
       let renderUpdates = 0;
       const renderer = new DiffHunksRenderer(
         { theme: 'pierre-dark' },
+        undefined,
         () => renderUpdates++,
         manager
       );
@@ -1243,6 +1264,7 @@ describe('DiffHunksRenderer edit session', () => {
       let renderUpdates = 0;
       const renderer = new DiffHunksRenderer(
         { theme: 'pierre-dark' },
+        undefined,
         () => renderUpdates++,
         manager
       );
@@ -1920,6 +1942,7 @@ describe('local highlighter engine', () => {
       const fileRenderer = new FileRenderer(
         { theme: 'pierre-dark' },
         undefined,
+        undefined,
         manager
       );
       await fileRenderer.initializeHighlighter();
@@ -1929,6 +1952,7 @@ describe('local highlighter engine', () => {
       preferred.mockClear();
       const diffRenderer = new DiffHunksRenderer(
         { theme: 'pierre-dark' },
+        undefined,
         undefined,
         manager
       );

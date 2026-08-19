@@ -125,10 +125,13 @@ export class VirtualizedFile<
   private syncLineAnnotations(
     lineAnnotations: LineAnnotation<LAnnotation>[] | undefined
   ): boolean {
-    if (lineAnnotations == null || lineAnnotations === this.lineAnnotations) {
+    if (lineAnnotations == null || !this.isNewAnnotations(lineAnnotations)) {
       return false;
     }
-    if (lineAnnotations.length === 0 && this.lineAnnotations.length === 0) {
+    if (
+      lineAnnotations.length === 0 &&
+      this.getLatestAnnotations().length === 0
+    ) {
       return false;
     }
 
@@ -136,8 +139,18 @@ export class VirtualizedFile<
     return true;
   }
 
+  protected override syncEditSessionAnnotationsFromEditor(
+    lineAnnotations: LineAnnotation<LAnnotation>[]
+  ): boolean {
+    if (super.syncEditSessionAnnotationsFromEditor(lineAnnotations)) {
+      this.resetLayoutCache();
+      return true;
+    }
+    return false;
+  }
+
   private hasLineAnnotations(): boolean {
-    return this.lineAnnotations.some(
+    return this.getLatestAnnotations().some(
       (annotation) => annotation.lineNumber > FILE_ANNOTATION_LINE_NUMBER
     );
   }
@@ -228,7 +241,7 @@ export class VirtualizedFile<
     // we can probably skip everything
     if (
       overflow === 'scroll' &&
-      this.lineAnnotations.length === 0 &&
+      this.getLatestAnnotations().length === 0 &&
       !this.isResizeDebuggingEnabled()
     ) {
       return hasHeightChange;
@@ -243,7 +256,9 @@ export class VirtualizedFile<
       return hasHeightChange;
     }
 
-    const hasFileAnnotations = includesFileAnnotations(this.lineAnnotations);
+    const hasFileAnnotations = includesFileAnnotations(
+      this.getLatestAnnotations()
+    );
     if (
       this.renderRange != null &&
       hasFileAnnotations &&
@@ -327,7 +342,7 @@ export class VirtualizedFile<
   ): number {
     const targetChanged = !areFileTargetsEqual(this.file, file);
     if (targetChanged) {
-      this.updateExternalFile(file);
+      this.updateExternalFile(file, lineAnnotations);
     }
     const {
       pendingRenderFile,
@@ -736,7 +751,7 @@ export class VirtualizedFile<
   }: FileRenderProps<LAnnotation>): boolean {
     const didFileChange = !areFileTargetsEqual(this.file, file);
     if (didFileChange) {
-      this.updateExternalFile(file);
+      this.updateExternalFile(file, lineAnnotations);
       this.cachedHeaderHTML = undefined;
     }
     const {
@@ -1020,7 +1035,9 @@ export class VirtualizedFile<
       0,
       fileHeight - headerRegion - fileAnnotationHeight - paddingBottom
     );
-    const hasFileAnnotations = includesFileAnnotations(this.lineAnnotations);
+    const hasFileAnnotations = includesFileAnnotations(
+      this.getLatestAnnotations()
+    );
     const fileAnnotationTop = fileTop + headerRegion;
     const measuredFileAnnotationVisible =
       fileAnnotationHeight > 0 &&

@@ -416,8 +416,12 @@ describe('React editor factory lifecycle', () => {
       const editors: TrackedEditor[] = [];
       let instance: ReactEditableSurfaceInstance | undefined;
       let root: Root | undefined;
-      const firstOnChange = mock((_event: EditorChangeEvent<undefined>) => {});
-      const secondOnChange = mock((_event: EditorChangeEvent<undefined>) => {});
+      const firstOnChange = mock(
+        (_event: EditorChangeEvent<undefined, 'file' | 'diff'>) => {}
+      );
+      const secondOnChange = mock(
+        (_event: EditorChangeEvent<undefined, 'file' | 'diff'>) => {}
+      );
       const firstFactory = mock((options: EditorOptions<undefined>) => {
         const editor = new TrackedEditor(options);
         editors.push(editor);
@@ -519,12 +523,14 @@ describe('React editor factory lifecycle', () => {
         editors.push(editor);
         return editor;
       };
-      const editorOnChange = mock((_event: EditorChangeEvent<undefined>) => {});
+      const editorOnChange = mock(
+        (_event: EditorChangeEvent<undefined, 'file' | 'diff'>) => {}
+      );
       const firstOnEditChange = mock(
-        (_event: EditorChangeEvent<undefined>) => {}
+        (_event: EditorChangeEvent<undefined, 'file' | 'diff'>) => {}
       );
       const secondOnEditChange = mock(
-        (_event: EditorChangeEvent<undefined>) => {}
+        (_event: EditorChangeEvent<undefined, 'file' | 'diff'>) => {}
       );
       // Stable inputs across renders (real callers memoize their diff), so a
       // re-render only swaps the onEditChange prop instead of also delivering
@@ -539,7 +545,9 @@ describe('React editor factory lifecycle', () => {
         theme: DEFAULT_THEMES,
       };
       const makeSurface = (
-        onEditChange: (event: EditorChangeEvent<undefined>) => void
+        onEditChange: (
+          event: EditorChangeEvent<undefined, 'file' | 'diff'>
+        ) => void
       ): ReactElement =>
         surface === 'File'
           ? createElement(ReactFileComponent, {
@@ -560,7 +568,9 @@ describe('React editor factory lifecycle', () => {
             });
       let root: Root | undefined;
       const render = async (
-        onEditChange: (event: EditorChangeEvent<undefined>) => void
+        onEditChange: (
+          event: EditorChangeEvent<undefined, 'file' | 'diff'>
+        ) => void
       ) => {
         await act(async () => {
           root!.render(
@@ -598,6 +608,86 @@ describe('React editor factory lifecycle', () => {
     });
   }
 
+  test('File annotation slots stay projected through a remap without prop feedback', async () => {
+    const { cleanup } = installDom();
+    const cleanupActEnvironment = installReactActEnvironment();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const editors: TrackedEditor[] = [];
+    const factory = (options: EditorOptions<undefined>) => {
+      const editor = new TrackedEditor(options);
+      editors.push(editor);
+      return editor;
+    };
+    const lineAnnotations = [{ lineNumber: 2 }];
+    let root: Root | undefined;
+
+    try {
+      root = createReactRoot(container);
+      await act(async () => {
+        root!.render(
+          createElement(
+            EditProviderComponent,
+            { createEditor: factory },
+            createElement(ReactFileComponent, {
+              disableWorkerPool: true,
+              edit: true,
+              file: { name: 'edit.ts', contents: 'alpha\nbravo\ncharlie\n' },
+              lineAnnotations,
+              options: { disableFileHeader: true, theme: DEFAULT_THEMES },
+              renderAnnotation: () => createElement('div', null, 'note'),
+            })
+          )
+        );
+        await wait(10);
+      });
+      await waitFor(() => editors[0]?.getFile() !== undefined);
+
+      const findShadowRoot = (): ShadowRoot | undefined => {
+        for (const el of Array.from(container.querySelectorAll('*'))) {
+          if (el.shadowRoot != null) {
+            return el.shadowRoot;
+          }
+        }
+        return undefined;
+      };
+      const rowInfo = (): {
+        slotName: string | undefined;
+        dataLine: string | undefined;
+      } => {
+        const row = findShadowRoot()?.querySelector('[data-line-annotation]');
+        const line = row?.previousElementSibling;
+        return {
+          slotName:
+            row?.querySelector('slot')?.getAttribute('name') ?? undefined,
+          dataLine: line instanceof HTMLElement ? line.dataset.line : undefined,
+        };
+      };
+      await waitFor(() => rowInfo().slotName === 'annotation-2');
+      expect(rowInfo().dataLine).toBe('2');
+      expect(container.querySelector('[slot="annotation-2"]')).not.toBeNull();
+
+      editors[0].applyEdits([
+        {
+          range: {
+            start: { line: 0, character: 0 },
+            end: { line: 0, character: 0 },
+          },
+          newText: 'pad\n',
+        },
+      ]);
+
+      // The shadow row moved with the remap while its frozen slot name — and
+      // therefore the untouched React light-DOM child — kept projecting.
+      expect(rowInfo()).toEqual({ slotName: 'annotation-2', dataLine: '3' });
+      expect(container.querySelector('[slot="annotation-2"]')).not.toBeNull();
+    } finally {
+      await unmountRoot(root);
+      cleanupActEnvironment();
+      cleanup();
+    }
+  });
+
   for (const wrapper of ['MultiFileDiff', 'PatchDiff'] as const) {
     test(`${wrapper} forwards editor options to its FileDiff instance`, async () => {
       const { cleanup } = installDom();
@@ -605,7 +695,9 @@ describe('React editor factory lifecycle', () => {
       const container = document.createElement('div');
       document.body.appendChild(container);
       const editors: TrackedEditor[] = [];
-      const onChange = mock((_event: EditorChangeEvent<undefined>) => {});
+      const onChange = mock(
+        (_event: EditorChangeEvent<undefined, 'file' | 'diff'>) => {}
+      );
       let root: Root | undefined;
       const factory = mock((options: EditorOptions<undefined>) => {
         const editor = new TrackedEditor(options);
@@ -681,7 +773,7 @@ describe('React editor factory lifecycle', () => {
     const container = document.createElement('div');
     document.body.appendChild(container);
     const callbacks = Array.from({ length: 2 }, () =>
-      mock((_event: EditorChangeEvent<undefined>) => {})
+      mock((_event: EditorChangeEvent<undefined, 'file' | 'diff'>) => {})
     );
     const siblingEditors: (TrackedEditor | undefined)[] = [
       undefined,

@@ -1102,7 +1102,7 @@ export function AgentUi({
   );
 
   const handleEditChange = useCallback(
-    (event: EditorChangeEvent<undefined>) => {
+    (event: EditorChangeEvent<undefined, 'file' | 'diff'>) => {
       const target = activeTargetRef.current;
       if (target == null) {
         return;

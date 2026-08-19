@@ -80,7 +80,7 @@ interface CodeViewBaseProps<LAnnotation> {
    * which can create update loops.
    */
   onItemEditChange?(
-    event: EditorChangeEvent<LAnnotation>,
+    event: EditorChangeEvent<LAnnotation, 'file' | 'diff'>,
     item: CodeViewItem<LAnnotation>
   ): void;
   /**
@@ -259,7 +259,7 @@ function CodeViewInner<LAnnotation = undefined>(
   );
   const emitItemEditChange = useStableCallback(
     (
-      event: EditorChangeEvent<LAnnotation>,
+      event: EditorChangeEvent<LAnnotation, 'file' | 'diff'>,
       item: CodeViewItem<LAnnotation>
     ) => {
       onItemEditChange?.(event, item);
@@ -917,6 +917,7 @@ function renderCodeViewItemChildren<LAnnotation>({
           ? (getHoveredLine) => renderGutterUtility(getHoveredLine, item)
           : undefined,
       getHoveredLine: instance.getHoveredLine,
+      getAnnotationSlotName: instance.getAnnotationSlotName,
     });
   } else {
     const { item, instance } = renderedItem;
@@ -944,6 +945,7 @@ function renderCodeViewItemChildren<LAnnotation>({
           ? (getHoveredLine) => renderGutterUtility(getHoveredLine, item)
           : undefined,
       getHoveredLine: instance.getHoveredLine,
+      getAnnotationSlotName: instance.getAnnotationSlotName,
     });
   }
 }
