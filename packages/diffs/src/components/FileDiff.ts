@@ -1864,7 +1864,7 @@ export class FileDiff<
   // Session exit for the live detach path.
   private finishEditSession(): void {
     this.hunksRenderer.endEditSession();
-    this.completeEditSession();
+    this.finalizeEditSessionHunks();
   }
 
   /**
@@ -1879,7 +1879,7 @@ export class FileDiff<
    * the deferred rerender is enabled-guarded. Returns true when a recompute
    * ran.
    */
-  public completeEditSession(): boolean {
+  public finalizeEditSessionHunks(): boolean {
     const fileDiff = this.getLatestDiff();
     if (fileDiff == null || fileDiff.editSessionDirty !== true) {
       return false;

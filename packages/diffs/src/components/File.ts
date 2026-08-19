@@ -898,6 +898,99 @@ export class File<
     };
   }
 
+  /**
+   * Ends the edit session and settles which file this component renders.
+   * Requires the editor to be detached first. Does nothing when no session
+   * exists, so callers can invoke it again safely after it has settled.
+   *
+   * When the edited text matches the external file (including edits undone
+   * all the way back), the session is discarded without calling
+   * `onEditComplete`: the external file stays, and annotations keep the
+   * session's collection so annotation writes made during the session
+   * survive.
+   *
+   * When the text changed, `onEditComplete` receives a fresh keyless
+   * `FileContents` holding the edited text, alongside the current external
+   * file and the session's annotations. Returning the event's `file` installs
+   * it as the new external value together with those annotations. Returning
+   * `null`, returning the exact `originalFile`, or having no handler restores
+   * the external file and its annotations. Any other return throws, as does
+   * an accepted file reusing the replaced file's `cacheKey` — in both cases
+   * the component still leaves the session on the external file before the
+   * error propagates.
+   */
+  public completeEditSession(): void {
+    const {
+      editSessionFile,
+      editSessionAnnotations,
+      file: externalFile,
+    } = this;
+    if (editSessionFile == null || externalFile == null) {
+      return;
+    }
+    if (this.editor != null) {
+      throw new Error(
+        'File.completeEditSession: detach the editor before completing the session'
+      );
+    }
+    this.fileRenderer.endEditSession();
+
+    const sessionAnnotationsCurrent = editSessionAnnotations?.current;
+    const contentsChanged = editSessionFile.contents !== externalFile.contents;
+    let acceptedFile: FileContents | undefined;
+    let failed = false;
+    let failure: unknown;
+    if (contentsChanged) {
+      const completedFile = { ...editSessionFile };
+      const event: FileEditCompleteEvent<LAnnotation> = {
+        file: completedFile,
+        originalFile: externalFile,
+        lineAnnotations: sessionAnnotationsCurrent,
+      };
+      const { onEditComplete } = this.options;
+      try {
+        const returned = onEditComplete != null ? onEditComplete(event) : null;
+        if (returned === completedFile) {
+          if (
+            returned.cacheKey != null &&
+            returned.cacheKey === externalFile.cacheKey
+          ) {
+            throw new Error(
+              'File.completeEditSession: an accepted file must not reuse the replaced file cacheKey'
+            );
+          }
+          acceptedFile = returned;
+        } else if (returned != null && returned !== externalFile) {
+          throw new Error(
+            'File.completeEditSession: onEditComplete must return null, the event file, or the event originalFile. Do not returned a cloned instance.'
+          );
+        }
+      } catch (error) {
+        failed = true;
+        failure = error;
+      }
+    }
+
+    if (acceptedFile != null) {
+      this.file = acceptedFile;
+      if (sessionAnnotationsCurrent != null) {
+        this.lineAnnotations = sessionAnnotationsCurrent;
+      }
+    } else if (!contentsChanged && sessionAnnotationsCurrent != null) {
+      this.lineAnnotations = sessionAnnotationsCurrent;
+    }
+    this.editSessionFile = undefined;
+    this.editSessionAnnotations = undefined;
+    this.pendingEditSessionReplacement = undefined;
+    this.pendingPersistedDocumentRestore = undefined;
+    if (this.fileContainer != null) {
+      this.rerender();
+    }
+    if (failed) {
+      throw failure;
+    }
+  }
+
   // normally triggered by the host when the document line count changes
   public applyDocumentChange(
     textDocument: DiffsTextDocument,

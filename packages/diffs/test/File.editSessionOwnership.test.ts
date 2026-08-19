@@ -1,6 +1,10 @@
 import { afterAll, describe, expect, test } from 'bun:test';
 
 import { disposeHighlighter, File, isFileAnnotationCollection } from '../src';
+import type {
+  FileEditCompleteEvent,
+  FileEditCompleteHandler,
+} from '../src/components/File';
 import { Editor } from '../src/editor/editor';
 import type {
   EditorChangeEvent,
@@ -787,6 +791,372 @@ describe('session-owned line annotations', () => {
       expect(instance.getLatestAnnotationsForTest()).toEqual([
         { lineNumber: 3 },
       ]);
+    } finally {
+      fixture.cleanup();
+    }
+  });
+});
+
+describe('completeEditSession', () => {
+  async function createCompletionFixture(config?: {
+    onEditComplete?: FileEditCompleteHandler<undefined>;
+    onEditChange?: (event: EditorChangeEvent<undefined, 'file'>) => void;
+    lineAnnotations?: LineAnnotation<undefined>[];
+  }) {
+    const dom = installDom();
+    const fileContainer = document.createElement('div');
+    document.body.appendChild(fileContainer);
+    const externalFile = { ...EXTERNAL_FILE };
+    const instance = new TestFile({
+      disableErrorHandling: true,
+      disableFileHeader: true,
+      onEditComplete: config?.onEditComplete,
+      onEditChange: config?.onEditChange,
+    });
+    const editor = new Editor<undefined>({});
+    instance.render({
+      file: externalFile,
+      fileContainer,
+      forceRender: true,
+      lineAnnotations: config?.lineAnnotations,
+    });
+    editor.edit(instance);
+    await waitFor(() => editor.getText() === externalFile.contents, {
+      timeout: 4_000,
+    });
+    return {
+      editor,
+      externalFile,
+      fileContainer,
+      instance,
+      detach() {
+        editor.cleanUp();
+      },
+      cleanup() {
+        editor.cleanUp();
+        instance.cleanUp();
+        dom.cleanup();
+      },
+    };
+  }
+
+  function insertLinesAtStart(editor: Editor<undefined>): void {
+    editor.applyEdits([
+      {
+        range: {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 0 },
+        },
+        newText: 'one\ntwo\n',
+      },
+    ]);
+  }
+
+  test('a changed session delivers a fresh keyless file and the exact external file', async () => {
+    const events: FileEditCompleteEvent<undefined>[] = [];
+    const fixture = await createCompletionFixture({
+      onEditComplete(event) {
+        events.push(event);
+        return null;
+      },
+    });
+    try {
+      const { editor, externalFile, instance } = fixture;
+      replaceDocument(editor, 'edited\nbravo\n');
+      fixture.detach();
+      instance.completeEditSession();
+
+      expect(events).toHaveLength(1);
+      const event = events[0];
+      expect(event.file.contents).toBe('edited\nbravo\n');
+      expect(event.file.cacheKey).toBeUndefined();
+      expect(event.file).not.toBe(externalFile);
+      expect(event.originalFile).toBe(externalFile);
+      expect(externalFile.contents).toBe(EXTERNAL_FILE.contents);
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('returning the event file installs it with the session annotations', async () => {
+    const externalAnnotations: LineAnnotation<undefined>[] = [
+      { lineNumber: 2 },
+    ];
+    const events: FileEditCompleteEvent<undefined>[] = [];
+    const fixture = await createCompletionFixture({
+      lineAnnotations: externalAnnotations,
+      onEditComplete(event) {
+        events.push(event);
+        event.file.cacheKey = 'external:file-v2';
+        return event.file;
+      },
+    });
+    try {
+      const { editor, instance } = fixture;
+      insertLinesAtStart(editor);
+      fixture.detach();
+      instance.completeEditSession();
+
+      expect(events).toHaveLength(1);
+      const event = events[0];
+      expect(instance.file).toBe(event.file);
+      expect(instance.getLatestFileForTest()).toBe(event.file);
+      expect(instance.file?.cacheKey).toBe('external:file-v2');
+      expect(event.lineAnnotations).toBe(
+        instance.getExternalAnnotationsForTest()
+      );
+      expect(instance.getLatestAnnotationsForTest()).toEqual([
+        { lineNumber: 4 },
+      ]);
+
+      // Settled: calling again does not fire the handler a second time.
+      instance.completeEditSession();
+      expect(events).toHaveLength(1);
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('returning null restores the external file and annotations', async () => {
+    const externalAnnotations: LineAnnotation<undefined>[] = [
+      { lineNumber: 2 },
+    ];
+    const fixture = await createCompletionFixture({
+      lineAnnotations: externalAnnotations,
+      onEditComplete: () => null,
+    });
+    try {
+      const { editor, externalFile, instance } = fixture;
+      insertLinesAtStart(editor);
+      expect(instance.getLatestAnnotationsForTest()).toEqual([
+        { lineNumber: 4 },
+      ]);
+      fixture.detach();
+      instance.completeEditSession();
+
+      expect(instance.file).toBe(externalFile);
+      expect(instance.getLatestFileForTest()).toBe(externalFile);
+      expect(instance.getLatestAnnotationsForTest()).toBe(externalAnnotations);
+      expect(externalAnnotations).toEqual([{ lineNumber: 2 }]);
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('returning the exact originalFile reverts like null', async () => {
+    const fixture = await createCompletionFixture({
+      onEditComplete: (event) => event.originalFile,
+    });
+    try {
+      const { editor, externalFile, instance } = fixture;
+      replaceDocument(editor, 'edited\nbravo\n');
+      fixture.detach();
+      instance.completeEditSession();
+
+      expect(instance.file).toBe(externalFile);
+      expect(instance.getLatestFileForTest()).toBe(externalFile);
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('a missing handler reverts a changed session', async () => {
+    const fixture = await createCompletionFixture();
+    try {
+      const { editor, externalFile, instance } = fixture;
+      replaceDocument(editor, 'edited\nbravo\n');
+      fixture.detach();
+      instance.completeEditSession();
+
+      expect(instance.file).toBe(externalFile);
+      expect(instance.getLatestFileForTest()).toBe(externalFile);
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('returning a clone throws and still settles on the external file', async () => {
+    const fixture = await createCompletionFixture({
+      onEditComplete: (event) => ({ ...event.file }),
+    });
+    try {
+      const { editor, externalFile, instance } = fixture;
+      replaceDocument(editor, 'edited\nbravo\n');
+      fixture.detach();
+      expect(() => instance.completeEditSession()).toThrow(
+        'onEditComplete must return null, the event file, or the event originalFile'
+      );
+
+      expect(instance.file).toBe(externalFile);
+      expect(instance.getLatestFileForTest()).toBe(externalFile);
+      // Settled: a second call has no session left to complete.
+      instance.completeEditSession();
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('accepting with the replaced cacheKey throws and reverts', async () => {
+    const fixture = await createCompletionFixture({
+      onEditComplete(event) {
+        event.file.cacheKey = EXTERNAL_FILE.cacheKey;
+        return event.file;
+      },
+    });
+    try {
+      const { editor, externalFile, instance } = fixture;
+      replaceDocument(editor, 'edited\nbravo\n');
+      fixture.detach();
+      expect(() => instance.completeEditSession()).toThrow(
+        'must not reuse the replaced file cacheKey'
+      );
+
+      expect(instance.file).toBe(externalFile);
+      expect(instance.getLatestFileForTest()).toBe(externalFile);
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('a handler exception settles on the external file and propagates', async () => {
+    const fixture = await createCompletionFixture({
+      onEditComplete() {
+        throw new Error('owner exploded');
+      },
+    });
+    try {
+      const { editor, externalFile, instance } = fixture;
+      replaceDocument(editor, 'edited\nbravo\n');
+      fixture.detach();
+      expect(() => instance.completeEditSession()).toThrow('owner exploded');
+
+      expect(instance.file).toBe(externalFile);
+      expect(instance.getLatestFileForTest()).toBe(externalFile);
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('unchanged contents skip the handler and keep session annotation writes', async () => {
+    const externalAnnotations: LineAnnotation<undefined>[] = [
+      { lineNumber: 2 },
+    ];
+    const events: FileEditCompleteEvent<undefined>[] = [];
+    const fixture = await createCompletionFixture({
+      lineAnnotations: externalAnnotations,
+      onEditComplete(event) {
+        events.push(event);
+        return null;
+      },
+    });
+    try {
+      const { externalFile, fileContainer, instance } = fixture;
+      const written: LineAnnotation<undefined>[] = [{ lineNumber: 1 }];
+      instance.render({
+        file: externalFile,
+        fileContainer,
+        forceRender: true,
+        lineAnnotations: written,
+      });
+      fixture.detach();
+      instance.completeEditSession();
+
+      expect(events).toHaveLength(0);
+      expect(instance.file).toBe(externalFile);
+      expect(instance.getExternalAnnotationsForTest()).toBe(written);
+      expect(instance.getLatestAnnotationsForTest()).toBe(written);
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('editing and undoing back to the external contents does not complete', async () => {
+    const events: FileEditCompleteEvent<undefined>[] = [];
+    const fixture = await createCompletionFixture({
+      onEditComplete(event) {
+        events.push(event);
+        return null;
+      },
+    });
+    try {
+      const { editor, externalFile, instance } = fixture;
+      insertLinesAtStart(editor);
+      editor.undo();
+      expect(editor.getText()).toBe(externalFile.contents);
+      fixture.detach();
+      instance.completeEditSession();
+
+      expect(events).toHaveLength(0);
+      expect(instance.file).toBe(externalFile);
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('completion emits no onEditChange', async () => {
+    const changeEvents: EditorChangeEvent<undefined, 'file'>[] = [];
+    const fixture = await createCompletionFixture({
+      onEditChange: (event) => changeEvents.push(event),
+      onEditComplete(event) {
+        event.file.cacheKey = 'external:file-v2';
+        return event.file;
+      },
+    });
+    try {
+      const { editor, instance } = fixture;
+      replaceDocument(editor, 'edited\nbravo\n');
+      fixture.detach();
+      const changesBefore = changeEvents.length;
+      instance.completeEditSession();
+      expect(changeEvents.length).toBe(changesBefore);
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('completing with an attached editor throws', async () => {
+    const fixture = await createCompletionFixture();
+    try {
+      const { editor, instance } = fixture;
+      replaceDocument(editor, 'edited\nbravo\n');
+      expect(() => instance.completeEditSession()).toThrow(
+        'detach the editor before completing the session'
+      );
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('a replacement accepted mid-session becomes the event originalFile', async () => {
+    const events: FileEditCompleteEvent<undefined>[] = [];
+    const fixture = await createCompletionFixture({
+      onEditComplete(event) {
+        events.push(event);
+        return null;
+      },
+    });
+    try {
+      const { editor, fileContainer, instance } = fixture;
+      const replacementFile: FileContents = {
+        name: EXTERNAL_FILE.name,
+        contents: 'replaced\nbravo\n',
+        cacheKey: 'external:file-v2',
+      };
+      instance.render({
+        file: replacementFile,
+        fileContainer,
+        forceRender: true,
+      });
+      await waitFor(() => editor.getText() === replacementFile.contents, {
+        timeout: 4_000,
+      });
+      replaceDocument(editor, 'edited again\nbravo\n');
+      fixture.detach();
+      instance.completeEditSession();
+
+      expect(events).toHaveLength(1);
+      expect(events[0].originalFile).toBe(replacementFile);
+      expect(instance.file).toBe(replacementFile);
     } finally {
       fixture.cleanup();
     }

@@ -2124,7 +2124,7 @@ export class CodeView<LAnnotation = undefined> {
           removedItem == null &&
           item != null &&
           item.type === 'diff' &&
-          item.instance.completeEditSession()
+          item.instance.finalizeEditSessionHunks()
         ) {
           this.markItemLayoutDirty(item);
           this.render();
