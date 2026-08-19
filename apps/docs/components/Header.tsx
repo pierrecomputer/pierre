@@ -151,7 +151,9 @@ export function Header({ onMobileMenuToggle, className }: HeaderProps) {
           variant="ghost"
           size="icon"
           onClick={handleMobileToggle}
-          aria-label="Toggle table of contents"
+          aria-label={
+            ownsPopover ? 'Toggle navigation menu' : 'Toggle table of contents'
+          }
         >
           <IconParagraph />
         </Button>

@@ -44,27 +44,29 @@ export default function Home() {
     <WorkerPoolContext>
       <div className="mx-auto min-h-screen max-w-5xl px-5 xl:max-w-[80rem]">
         <Header className="-mb-[1px]" />
-        <Hero productId={PRODUCT_ID} />
-        <HeadingAnchors />
-        <section className="space-y-12 pb-8">
-          <EditSection />
-          <SplitUnifiedSection />
-          <DiffStylesSection />
-          <MergeConflictSection />
-          <AnnotationsSection />
-          <AcceptRejectSection />
-          <LineSelectionSection />
-          <TokenHoverSection />
+        <main>
+          <Hero productId={PRODUCT_ID} />
+          <HeadingAnchors />
+          <section className="space-y-12 pb-8">
+            <EditSection />
+            <SplitUnifiedSection />
+            <DiffStylesSection />
+            <MergeConflictSection />
+            <AnnotationsSection />
+            <AcceptRejectSection />
+            <LineSelectionSection />
+            <TokenHoverSection />
 
-          <hr />
+            <hr />
 
-          <ShikiThemesSection />
-          <FontStylesSection />
-          <CustomHunkSeparatorsSection />
-          <CustomHeaderSection />
-          <ArbitraryFilesSection />
-        </section>
-        <PierreCompanySection />
+            <ShikiThemesSection />
+            <FontStylesSection />
+            <CustomHunkSeparatorsSection />
+            <CustomHeaderSection />
+            <ArbitraryFilesSection />
+          </section>
+          <PierreCompanySection />
+        </main>
         <Footer />
       </div>
     </WorkerPoolContext>
