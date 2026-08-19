@@ -1,6 +1,18 @@
 import { afterAll, describe, expect, test } from 'bun:test';
+import { createTwoFilesPatch } from 'diff';
 
-import { disposeHighlighter, FileDiff, parseDiffFromFile } from '../src';
+import {
+  cloneFileDiffMetadata,
+  disposeHighlighter,
+  FileDiff,
+  parseDiffFromFile,
+  parsePatchFiles,
+} from '../src';
+import type {
+  FileDiffEditCompleteEvent,
+  FileDiffEditCompleteHandler,
+  FileDiffOptions,
+} from '../src/components/FileDiff';
 import { Editor } from '../src/editor/editor';
 import type {
   DiffLineAnnotation,
@@ -612,6 +624,555 @@ describe('FileDiff edit-session ownership', () => {
       editor.cleanUp();
       instance.cleanUp();
       dom.cleanup();
+    }
+  });
+});
+
+describe('completeEditSession', () => {
+  const EXTERNAL_CONTENTS = 'alpha\nnew value\nomega\n';
+
+  async function createCompletionFixture(config?: {
+    onEditComplete?: FileDiffEditCompleteHandler<undefined>;
+    onEditChange?: (event: EditorChangeEvent<undefined, 'diff'>) => void;
+    lineAnnotations?: DiffLineAnnotation<undefined>[];
+    externalDiff?: FileDiffMetadata;
+    loadDiffFiles?: FileDiffOptions<undefined>['loadDiffFiles'];
+  }) {
+    const dom = installDom();
+    const fileContainer = document.createElement('div');
+    document.body.appendChild(fileContainer);
+    const externalDiff = config?.externalDiff ?? createExternalDiff();
+    const instance = new TestFileDiff({
+      disableErrorHandling: true,
+      disableFileHeader: true,
+      onEditComplete: config?.onEditComplete,
+      onEditChange: config?.onEditChange,
+      loadDiffFiles: config?.loadDiffFiles,
+    });
+    const editor = new Editor<undefined>({});
+    instance.render({
+      fileDiff: externalDiff,
+      fileContainer,
+      forceRender: true,
+      lineAnnotations: config?.lineAnnotations,
+    });
+    editor.edit(instance);
+    await waitFor(
+      () => editor.getText() === externalDiff.additionLines.join(''),
+      { timeout: 4_000 }
+    );
+    return {
+      editor,
+      externalDiff,
+      fileContainer,
+      instance,
+      detach() {
+        editor.cleanUp();
+      },
+      cleanup() {
+        editor.cleanUp();
+        instance.cleanUp();
+        dom.cleanup();
+      },
+    };
+  }
+
+  function replaceDocument(editor: Editor<undefined>, contents: string): void {
+    editor.applyEdits([
+      {
+        range: {
+          start: { line: 0, character: 0 },
+          end: {
+            line: Number.MAX_SAFE_INTEGER,
+            character: Number.MAX_SAFE_INTEGER,
+          },
+        },
+        newText: contents,
+      },
+    ]);
+  }
+
+  function insertLinesAtStart(editor: Editor<undefined>): void {
+    editor.applyEdits([
+      {
+        range: {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 0 },
+        },
+        newText: 'one\ntwo\n',
+      },
+    ]);
+  }
+
+  test('a changed session delivers a recomputed detached diff and complete files', async () => {
+    const events: FileDiffEditCompleteEvent<undefined>[] = [];
+    const fixture = await createCompletionFixture({
+      onEditComplete(event) {
+        events.push(event);
+        return null;
+      },
+    });
+    const externalBefore = captureExternalDiffState(fixture.externalDiff);
+    try {
+      const { editor, externalDiff, instance } = fixture;
+      replaceDocument(editor, 'alpha\nedited value\nomega\n');
+      const sessionDiff = instance.getLatestDiffForTest();
+      if (sessionDiff == null) {
+        throw new Error('Expected an active session diff');
+      }
+      fixture.detach();
+      instance.completeEditSession();
+
+      expect(events).toHaveLength(1);
+      const event = events[0];
+      expect(event.originalFileDiff).toBe(externalDiff);
+      expect(event.fileDiff.cacheKey).toBeUndefined();
+      expect(event.fileDiff.editSessionDirty).toBeUndefined();
+      expect(event.fileDiff.additionLines.join('')).toBe(
+        'alpha\nedited value\nomega\n'
+      );
+      expect(event.fileDiff.deletionLines.join('')).toBe(
+        'alpha\nold value\nomega\n'
+      );
+      expect(event.fileDiff.hunks.length).toBeGreaterThan(0);
+      // The completed diff shares no containers with the external diff or the
+      // discarded session diff.
+      expect(event.fileDiff).not.toBe(externalDiff);
+      expect(event.fileDiff).not.toBe(sessionDiff);
+      expect(event.fileDiff.additionLines).not.toBe(externalDiff.additionLines);
+      expect(event.fileDiff.additionLines).not.toBe(sessionDiff.additionLines);
+      expect(event.fileDiff.deletionLines).not.toBe(externalDiff.deletionLines);
+      expect(event.fileDiff.deletionLines).not.toBe(sessionDiff.deletionLines);
+      expect(event.fileDiff.hunks).not.toBe(externalDiff.hunks);
+      expect(event.fileDiff.hunks).not.toBe(sessionDiff.hunks);
+
+      expect(event.oldFile).toEqual({
+        name: 'session.ts',
+        contents: 'alpha\nold value\nomega\n',
+      });
+      expect(event.newFile).toEqual({
+        name: 'session.ts',
+        contents: 'alpha\nedited value\nomega\n',
+      });
+      expectExternalDiffUnchanged(instance, externalDiff, externalBefore);
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('returning the event fileDiff installs it with the session annotations', async () => {
+    const externalAnnotations: DiffLineAnnotation<undefined>[] = [
+      { side: 'additions', lineNumber: 2 },
+    ];
+    const events: FileDiffEditCompleteEvent<undefined>[] = [];
+    const fixture = await createCompletionFixture({
+      lineAnnotations: externalAnnotations,
+      onEditComplete(event) {
+        events.push(event);
+        event.fileDiff.cacheKey = 'external:session-v2';
+        return event.fileDiff;
+      },
+    });
+    try {
+      const { editor, instance } = fixture;
+      insertLinesAtStart(editor);
+      fixture.detach();
+      instance.completeEditSession();
+
+      expect(events).toHaveLength(1);
+      const event = events[0];
+      expect(instance.fileDiff).toBe(event.fileDiff);
+      expect(instance.getLatestDiffForTest()).toBe(event.fileDiff);
+      expect(instance.fileDiff?.cacheKey).toBe('external:session-v2');
+      expect(event.lineAnnotations).toBe(
+        instance.getExternalAnnotationsForTest()
+      );
+      expect(instance.getLatestAnnotationsForTest()).toEqual([
+        { side: 'additions', lineNumber: 4 },
+      ]);
+
+      // Settled: calling again does not fire the handler a second time.
+      instance.completeEditSession();
+      expect(events).toHaveLength(1);
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('returning null restores the external diff and annotations', async () => {
+    const externalAnnotations: DiffLineAnnotation<undefined>[] = [
+      { side: 'additions', lineNumber: 2 },
+    ];
+    const fixture = await createCompletionFixture({
+      lineAnnotations: externalAnnotations,
+      onEditComplete: () => null,
+    });
+    const externalBefore = captureExternalDiffState(fixture.externalDiff);
+    try {
+      const { editor, externalDiff, instance } = fixture;
+      insertLinesAtStart(editor);
+      expect(instance.getLatestAnnotationsForTest()).toEqual([
+        { side: 'additions', lineNumber: 4 },
+      ]);
+      fixture.detach();
+      instance.completeEditSession();
+
+      expect(instance.fileDiff).toBe(externalDiff);
+      expect(instance.getLatestDiffForTest()).toBe(externalDiff);
+      expect(instance.getLatestAnnotationsForTest()).toBe(externalAnnotations);
+      expect(externalAnnotations).toEqual([
+        { side: 'additions', lineNumber: 2 },
+      ]);
+      expectExternalDiffUnchanged(instance, externalDiff, externalBefore);
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('returning the exact originalFileDiff reverts like null', async () => {
+    const fixture = await createCompletionFixture({
+      onEditComplete: (event) => event.originalFileDiff,
+    });
+    try {
+      const { editor, externalDiff, instance } = fixture;
+      replaceDocument(editor, 'alpha\nedited value\nomega\n');
+      fixture.detach();
+      instance.completeEditSession();
+
+      expect(instance.fileDiff).toBe(externalDiff);
+      expect(instance.getLatestDiffForTest()).toBe(externalDiff);
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('a missing handler reverts a changed session', async () => {
+    const fixture = await createCompletionFixture();
+    try {
+      const { editor, externalDiff, instance } = fixture;
+      replaceDocument(editor, 'alpha\nedited value\nomega\n');
+      fixture.detach();
+      instance.completeEditSession();
+
+      expect(instance.fileDiff).toBe(externalDiff);
+      expect(instance.getLatestDiffForTest()).toBe(externalDiff);
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('returning a clone throws and still settles on the external diff', async () => {
+    const fixture = await createCompletionFixture({
+      onEditComplete: (event) => cloneFileDiffMetadata(event.fileDiff),
+    });
+    try {
+      const { editor, externalDiff, instance } = fixture;
+      replaceDocument(editor, 'alpha\nedited value\nomega\n');
+      fixture.detach();
+      expect(() => instance.completeEditSession()).toThrow(
+        'onEditComplete must return null, the event fileDiff, or the event originalFileDiff'
+      );
+
+      expect(instance.fileDiff).toBe(externalDiff);
+      expect(instance.getLatestDiffForTest()).toBe(externalDiff);
+      // Settled: a second call has no session left to complete.
+      instance.completeEditSession();
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('accepting with the replaced cacheKey throws and reverts', async () => {
+    const fixture = await createCompletionFixture({
+      onEditComplete(event) {
+        event.fileDiff.cacheKey = 'external:session-v1';
+        return event.fileDiff;
+      },
+    });
+    try {
+      const { editor, externalDiff, instance } = fixture;
+      replaceDocument(editor, 'alpha\nedited value\nomega\n');
+      fixture.detach();
+      expect(() => instance.completeEditSession()).toThrow(
+        'must not reuse the replaced diff cacheKey'
+      );
+
+      expect(instance.fileDiff).toBe(externalDiff);
+      expect(instance.getLatestDiffForTest()).toBe(externalDiff);
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('a handler exception settles on the external diff and propagates', async () => {
+    const fixture = await createCompletionFixture({
+      onEditComplete() {
+        throw new Error('owner exploded');
+      },
+    });
+    try {
+      const { editor, externalDiff, instance } = fixture;
+      replaceDocument(editor, 'alpha\nedited value\nomega\n');
+      fixture.detach();
+      expect(() => instance.completeEditSession()).toThrow('owner exploded');
+
+      expect(instance.fileDiff).toBe(externalDiff);
+      expect(instance.getLatestDiffForTest()).toBe(externalDiff);
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('unchanged contents skip the handler and keep session annotation writes', async () => {
+    const externalAnnotations: DiffLineAnnotation<undefined>[] = [
+      { side: 'additions', lineNumber: 2 },
+    ];
+    const events: FileDiffEditCompleteEvent<undefined>[] = [];
+    const fixture = await createCompletionFixture({
+      lineAnnotations: externalAnnotations,
+      onEditComplete(event) {
+        events.push(event);
+        return null;
+      },
+    });
+    try {
+      const { externalDiff, fileContainer, instance } = fixture;
+      const written: DiffLineAnnotation<undefined>[] = [
+        { side: 'additions', lineNumber: 1 },
+      ];
+      instance.render({
+        fileDiff: externalDiff,
+        fileContainer,
+        forceRender: true,
+        lineAnnotations: written,
+      });
+      fixture.detach();
+      instance.completeEditSession();
+
+      expect(events).toHaveLength(0);
+      expect(instance.fileDiff).toBe(externalDiff);
+      expect(instance.getExternalAnnotationsForTest()).toBe(written);
+      expect(instance.getLatestAnnotationsForTest()).toBe(written);
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('editing and undoing back to the external contents does not complete', async () => {
+    const events: FileDiffEditCompleteEvent<undefined>[] = [];
+    const fixture = await createCompletionFixture({
+      onEditComplete(event) {
+        events.push(event);
+        return null;
+      },
+    });
+    try {
+      const { editor, externalDiff, instance } = fixture;
+      insertLinesAtStart(editor);
+      editor.undo();
+      expect(editor.getText()).toBe(EXTERNAL_CONTENTS);
+      fixture.detach();
+      instance.completeEditSession();
+
+      expect(events).toHaveLength(0);
+      expect(instance.fileDiff).toBe(externalDiff);
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('completion emits no onEditChange', async () => {
+    const changeEvents: EditorChangeEvent<undefined, 'diff'>[] = [];
+    const fixture = await createCompletionFixture({
+      onEditChange: (event) => changeEvents.push(event),
+      onEditComplete(event) {
+        event.fileDiff.cacheKey = 'external:session-v2';
+        return event.fileDiff;
+      },
+    });
+    try {
+      const { editor, instance } = fixture;
+      replaceDocument(editor, 'alpha\nedited value\nomega\n');
+      fixture.detach();
+      const changesBefore = changeEvents.length;
+      instance.completeEditSession();
+      expect(changeEvents.length).toBe(changesBefore);
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('completing with an attached editor throws', async () => {
+    const fixture = await createCompletionFixture();
+    try {
+      const { editor, instance } = fixture;
+      replaceDocument(editor, 'alpha\nedited value\nomega\n');
+      expect(() => instance.completeEditSession()).toThrow(
+        'detach the editor before completing the session'
+      );
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('a pair-input caller re-rendering with the event files keeps the accepted diff', async () => {
+    const dom = installDom();
+    const fileContainer = document.createElement('div');
+    document.body.appendChild(fileContainer);
+    const oldFile: FileContents = {
+      name: 'session.ts',
+      contents: 'alpha\nold value\nomega\n',
+    };
+    const newFile: FileContents = {
+      name: 'session.ts',
+      contents: EXTERNAL_CONTENTS,
+    };
+    const events: FileDiffEditCompleteEvent<undefined>[] = [];
+    const instance = new TestFileDiff({
+      disableErrorHandling: true,
+      disableFileHeader: true,
+      onEditComplete(event) {
+        events.push(event);
+        event.fileDiff.cacheKey = 'external:accepted-v1';
+        return event.fileDiff;
+      },
+    });
+    const editor = new Editor<undefined>({});
+    try {
+      instance.render({ oldFile, newFile, fileContainer, forceRender: true });
+      editor.edit(instance);
+      await waitFor(() => editor.getText() === newFile.contents, {
+        timeout: 4_000,
+      });
+      replaceDocument(editor, 'alpha\nedited value\nomega\n');
+      editor.cleanUp();
+      instance.completeEditSession();
+
+      expect(events).toHaveLength(1);
+      const event = events[0];
+      expect(instance.fileDiff).toBe(event.fileDiff);
+      if (event.oldFile == null || event.newFile == null) {
+        throw new Error('Expected both completion files for a changed diff');
+      }
+
+      // The caller stores the event files and re-renders with them: this must
+      // read as the same input, not as a new pair reparsed over the accepted
+      // diff.
+      instance.render({
+        oldFile: event.oldFile,
+        newFile: event.newFile,
+        fileContainer,
+        forceRender: true,
+      });
+      expect(instance.fileDiff).toBe(event.fileDiff);
+      expect(instance.getLatestDiffForTest()).toBe(event.fileDiff);
+
+      // A genuinely different pair later still replaces the accepted diff.
+      instance.render({
+        oldFile: event.oldFile,
+        newFile: { name: 'session.ts', contents: 'brand\nnew\n' },
+        fileContainer,
+        forceRender: true,
+      });
+      expect(instance.fileDiff).not.toBe(event.fileDiff);
+      expect(instance.fileDiff?.additionLines.join('')).toBe('brand\nnew\n');
+    } finally {
+      editor.cleanUp();
+      instance.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test('a new-file diff completes with a null oldFile', async () => {
+    const newFileDiff = parseDiffFromFile(null, {
+      name: 'session.ts',
+      contents: EXTERNAL_CONTENTS,
+    });
+    newFileDiff.cacheKey = 'external:new-v1';
+    const events: FileDiffEditCompleteEvent<undefined>[] = [];
+    const fixture = await createCompletionFixture({
+      externalDiff: newFileDiff,
+      onEditComplete(event) {
+        events.push(event);
+        return null;
+      },
+    });
+    try {
+      const { editor, instance } = fixture;
+      replaceDocument(editor, 'alpha\nedited value\nomega\n');
+      fixture.detach();
+      instance.completeEditSession();
+
+      expect(events).toHaveLength(1);
+      const event = events[0];
+      expect(event.fileDiff.type).toBe('new');
+      expect(event.oldFile).toBeNull();
+      expect(event.newFile).toEqual({
+        name: 'session.ts',
+        contents: 'alpha\nedited value\nomega\n',
+      });
+      expect(instance.fileDiff).toBe(newFileDiff);
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('a partial diff hydrates, edits, and completes with full files', async () => {
+    const oldFile: FileContents = {
+      name: 'partial.ts',
+      contents: 'keep 1\nold value\nkeep 3\nkeep 4\n',
+    };
+    const newFile: FileContents = {
+      name: 'partial.ts',
+      contents: 'keep 1\nnew value\nkeep 3\nkeep 4\n',
+    };
+    const partial = parsePatchFiles(
+      createTwoFilesPatch(
+        oldFile.name,
+        newFile.name,
+        oldFile.contents,
+        newFile.contents,
+        undefined,
+        undefined,
+        { context: 0 }
+      ),
+      'partial',
+      true
+    )[0]?.files[0];
+    if (partial == null) {
+      throw new Error('Expected the patch to parse into one partial diff');
+    }
+    expect(partial.isPartial).toBe(true);
+    partial.cacheKey = 'external:partial-v1';
+
+    const events: FileDiffEditCompleteEvent<undefined>[] = [];
+    const fixture = await createCompletionFixture({
+      externalDiff: partial,
+      loadDiffFiles: () => Promise.resolve({ oldFile, newFile }),
+      onEditComplete(event) {
+        events.push(event);
+        return null;
+      },
+    });
+    try {
+      const { editor, instance } = fixture;
+      expect(partial.isPartial).toBe(false);
+      replaceDocument(editor, 'keep 1\nedited value\nkeep 3\nkeep 4\n');
+      fixture.detach();
+      instance.completeEditSession();
+
+      expect(events).toHaveLength(1);
+      const event = events[0];
+      expect(event.originalFileDiff).toBe(partial);
+      expect(event.oldFile?.contents).toBe(oldFile.contents);
+      expect(event.newFile?.contents).toBe(
+        'keep 1\nedited value\nkeep 3\nkeep 4\n'
+      );
+      // Rejection restores the external diff as hydrated in place.
+      expect(instance.fileDiff).toBe(partial);
+      expect(instance.fileDiff?.isPartial).toBe(false);
+    } finally {
+      fixture.cleanup();
     }
   });
 });

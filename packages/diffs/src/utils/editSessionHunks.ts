@@ -408,9 +408,11 @@ export function rebuildExpansionFromAnchors(
 }
 
 /**
- * Genuine session exit: when session passes reshaped the hunks, run the real
- * full recompute so exit state matches a non-session edit pipeline, and clear
- * the marker. Returns true when a recompute ran.
+ * While editing, hunk updates keep a lightweight session-specific shape and
+ * mark the diff with `editSessionDirty`. Called at session end, this
+ * recomputes the hunks in full from the diff's current lines — the same
+ * hunks a non-session edit would have produced — and clears the flag.
+ * Returns true when a recompute ran.
  */
 export function finishEditSessionForDiff(
   diff: FileDiffMetadata,
