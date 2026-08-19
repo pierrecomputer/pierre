@@ -16,3 +16,8 @@ the task.
 `@pierre/theme` supplies theme objects. `@pierre/theming` selects, resolves, and
 maps those objects. `@pierre/diffs` and `@pierre/trees` render code and file
 trees with the selected theme.
+
+The `diffs` and `trees` skill directories are owned by those published packages
+(`packages/diffs/skills/diffs`, `packages/trees/skills/trees`) so they ship on
+npm. The paths in this folder are convenience symlinks for
+`npx skills add pierrecomputer/pierre`.

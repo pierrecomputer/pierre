@@ -36,6 +36,9 @@ Install the agent skill for this package with the
 npx skills add pierrecomputer/pierre --skill diffs
 ```
 
+The published package also includes the same skill at `skills/diffs/`, so
+installing `@pierre/diffs` version-locks the agent instructions with the API.
+
 ## Development
 
 We use pnpm for workspace package management and Bun for tests.
