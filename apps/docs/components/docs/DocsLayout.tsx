@@ -31,7 +31,7 @@ export function DocsLayout({ children }: DocsLayoutProps) {
           isMobileMenuOpen={isMobileMenuOpen}
           onMobileMenuClose={handleMobileMenuClose}
         />
-        {children}
+        <main className="min-w-0">{children}</main>
       </div>
     </>
   );
