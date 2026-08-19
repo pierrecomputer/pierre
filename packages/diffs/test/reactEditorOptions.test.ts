@@ -68,22 +68,9 @@ function createEditor(options: EditorOptions<undefined>): Editor<undefined> {
 class TrackedEditor extends Editor<undefined> {
   cleanUpCount = 0;
 
-  override cleanUp(recycle = false): void {
+  override cleanUp(reason?: 'discard' | 'recycle' | 'complete'): void {
     this.cleanUpCount += 1;
-    super.cleanUp(recycle);
-  }
-
-  // The disposer returned by edit() tears the editor down without going
-  // through cleanUp() (it also runs the completion boundary), so count its
-  // invocation as a teardown too.
-  override edit<T extends DiffsEditableComponent<undefined>>(
-    fileInstance: EditableInstance<T>
-  ): () => void {
-    const finishSession = super.edit(fileInstance);
-    return () => {
-      this.cleanUpCount += 1;
-      finishSession();
-    };
+    super.cleanUp(reason);
   }
 }
 

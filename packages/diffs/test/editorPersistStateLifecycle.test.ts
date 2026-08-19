@@ -496,10 +496,10 @@ describe('Editor persisted state lifecycle', () => {
         },
       ]);
 
-      editor.cleanUp(true);
+      editor.cleanUp('recycle');
       // A repeated teardown has no attached instance, but must not erase the
       // state-restoration request captured by the first cleanup.
-      editor.cleanUp(true);
+      editor.cleanUp('recycle');
       first.file.cleanUp(true);
       first = undefined;
 

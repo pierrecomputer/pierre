@@ -473,7 +473,7 @@ describe('component onEditChange', () => {
       replaceDocument(editor, 'first\n');
       expect(events).toHaveLength(1);
 
-      editor.cleanUp(true);
+      editor.cleanUp('recycle');
       editor.edit(instance);
       await waitFor(() => editor.getText() === 'first\n', { timeout: 4_000 });
       replaceDocument(editor, 'second\n');
@@ -1267,7 +1267,7 @@ describe('editor session lifecycle', () => {
       editor.edit(instance);
       await waitFor(() => attachCount === 1, { timeout: 4_000 });
       replaceDocument(editor, 'first\n');
-      editor.cleanUp(true);
+      editor.cleanUp('recycle');
       expect(events).toHaveLength(0);
       expect(instance.getLatestFileForTest()?.contents).toBe('first\n');
 
@@ -1340,12 +1340,188 @@ describe('editor session lifecycle', () => {
     try {
       const { editor, instance } = fixture;
       replaceDocument(editor, 'edited\nbravo\n');
-      editor.cleanUp(true);
+      editor.cleanUp('recycle');
       instance.cleanUp(true);
 
       expect(events).toHaveLength(0);
     } finally {
       fixture.cleanup();
+    }
+  });
+});
+
+describe('persistState at completion', () => {
+  async function createPersistFixture(config?: {
+    onEditComplete?: FileEditCompleteHandler<undefined>;
+  }) {
+    const dom = installDom();
+    const fileContainer = document.createElement('div');
+    document.body.appendChild(fileContainer);
+    const externalFile = { ...EXTERNAL_FILE };
+    const instance = new TestFile({
+      disableErrorHandling: true,
+      disableFileHeader: true,
+      onEditComplete: config?.onEditComplete,
+    });
+    const editor = new Editor<undefined>({ persistState: true });
+    instance.render({ file: externalFile, fileContainer, forceRender: true });
+    const finishSession = editor.edit(instance);
+    await waitFor(() => editor.getText() === externalFile.contents, {
+      timeout: 4_000,
+    });
+    return {
+      editor,
+      externalFile,
+      fileContainer,
+      finishSession,
+      instance,
+      cleanup() {
+        editor.cleanUp();
+        instance.cleanUp();
+        dom.cleanup();
+      },
+    };
+  }
+
+  test('a rejected completion cannot come back through persistState', async () => {
+    const fixture = await createPersistFixture({
+      onEditComplete: () => null,
+    });
+    try {
+      const { editor, externalFile, finishSession, instance } = fixture;
+      replaceDocument(editor, 'rejected draft\n');
+      finishSession();
+      expect(instance.file).toBe(externalFile);
+
+      editor.edit(instance);
+      await waitFor(() => editor.getText() === externalFile.contents, {
+        timeout: 4_000,
+      });
+      expect(instance.getLatestFileForTest()?.contents).toBe(
+        externalFile.contents
+      );
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('an accepted completion starts the next session from the accepted text', async () => {
+    const events: FileEditCompleteEvent<undefined>[] = [];
+    const fixture = await createPersistFixture({
+      onEditComplete(event) {
+        events.push(event);
+        event.file.cacheKey = 'external:file-v2';
+        return event.file;
+      },
+    });
+    try {
+      const { editor, finishSession, instance } = fixture;
+      replaceDocument(editor, 'accepted draft\n');
+      finishSession();
+      expect(instance.file).toBe(events[0].file);
+
+      editor.edit(instance);
+      await waitFor(() => editor.getText() === 'accepted draft\n', {
+        timeout: 4_000,
+      });
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('component cleanUp drops the stored draft for the next mount', async () => {
+    const dom = installDom();
+    const fileContainer = document.createElement('div');
+    document.body.appendChild(fileContainer);
+    const externalFile = { ...EXTERNAL_FILE };
+    const instance = new TestFile({
+      disableErrorHandling: true,
+      disableFileHeader: true,
+    });
+    const editor = new Editor<undefined>({ persistState: true });
+    try {
+      instance.render({ file: externalFile, fileContainer, forceRender: true });
+      editor.edit(instance);
+      await waitFor(() => editor.getText() === externalFile.contents, {
+        timeout: 4_000,
+      });
+      replaceDocument(editor, 'discarded draft\n');
+      instance.cleanUp();
+
+      const remounted = new TestFile({
+        disableErrorHandling: true,
+        disableFileHeader: true,
+      });
+      const remountContainer = document.createElement('div');
+      document.body.appendChild(remountContainer);
+      try {
+        remounted.render({
+          file: { ...EXTERNAL_FILE },
+          fileContainer: remountContainer,
+          forceRender: true,
+        });
+        editor.edit(remounted);
+        await waitFor(() => editor.getText() === EXTERNAL_FILE.contents, {
+          timeout: 4_000,
+        });
+        expect(remounted.getLatestFileForTest()?.contents).toBe(
+          EXTERNAL_FILE.contents
+        );
+      } finally {
+        editor.cleanUp();
+        remounted.cleanUp();
+      }
+    } finally {
+      editor.cleanUp();
+      instance.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test('silent editor teardown still stores the draft for a fresh mount', async () => {
+    const dom = installDom();
+    const fileContainer = document.createElement('div');
+    document.body.appendChild(fileContainer);
+    const externalFile = { ...EXTERNAL_FILE };
+    const instance = new TestFile({
+      disableErrorHandling: true,
+      disableFileHeader: true,
+    });
+    const editor = new Editor<undefined>({ persistState: true });
+    try {
+      instance.render({ file: externalFile, fileContainer, forceRender: true });
+      editor.edit(instance);
+      await waitFor(() => editor.getText() === externalFile.contents, {
+        timeout: 4_000,
+      });
+      replaceDocument(editor, 'kept draft\n');
+      editor.cleanUp();
+      instance.cleanUp();
+
+      const remounted = new TestFile({
+        disableErrorHandling: true,
+        disableFileHeader: true,
+      });
+      const remountContainer = document.createElement('div');
+      document.body.appendChild(remountContainer);
+      try {
+        remounted.render({
+          file: { ...EXTERNAL_FILE },
+          fileContainer: remountContainer,
+          forceRender: true,
+        });
+        editor.edit(remounted);
+        await waitFor(() => editor.getText() === 'kept draft\n', {
+          timeout: 4_000,
+        });
+      } finally {
+        editor.cleanUp();
+        remounted.cleanUp();
+      }
+    } finally {
+      editor.cleanUp();
+      instance.cleanUp();
+      dom.cleanup();
     }
   });
 });

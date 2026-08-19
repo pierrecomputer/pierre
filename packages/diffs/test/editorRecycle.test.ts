@@ -314,7 +314,7 @@ describe('Editor onAttach lifecycle', () => {
     let third: TestEditableComponent | undefined;
     try {
       editor.edit(first);
-      editor.cleanUp(true);
+      editor.cleanUp('recycle');
       first.cleanUp();
 
       await wait(0);
@@ -330,7 +330,7 @@ describe('Editor onAttach lifecycle', () => {
       expect(onAttachCompleted).toBe(1);
       expect(onAttach.mock.calls[0]?.[1]).toBe(second);
 
-      editor.cleanUp(true);
+      editor.cleanUp('recycle');
       second.cleanUp();
       third = new TestEditableComponent(createFile());
       editor.edit(third);
@@ -437,7 +437,7 @@ describe('Editor recycle cleanUp', () => {
 
       // Simulate a virtualized unmount: the host recycles, the editor is
       // detached non-destructively.
-      editor.cleanUp(true);
+      editor.cleanUp('recycle');
       first.cleanUp();
 
       // Remount renders from the item's unchanged contents; the retained
@@ -544,7 +544,7 @@ describe('Editor recycle cleanUp', () => {
       const first = new TestEditableComponent(createFile());
       editor.edit(first);
 
-      editor.cleanUp(true);
+      editor.cleanUp('recycle');
       first.cleanUp();
 
       // Re-attach with an unchanged name/lang/cacheKey skips the document
@@ -607,7 +607,7 @@ describe('Editor recycle cleanUp', () => {
       expect(onAttach).toHaveBeenCalledTimes(1);
       insertAtStart(editor, 'X');
 
-      editor.cleanUp(true);
+      editor.cleanUp('recycle');
       first.cleanUp();
 
       // Different file identity (name) — the retained document must not leak

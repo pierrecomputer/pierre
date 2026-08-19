@@ -613,8 +613,10 @@ export class File<
 
   public cleanUp(recycle = false): void {
     this.emitPostRender(true);
-    // Persist editor state while the code scroller still exists.
-    this.editor?.cleanUp(recycle);
+    // Tear the editor down while the code scroller still exists. A recycle
+    // persists its editor state; a full teardown ends the session, so the
+    // editor drops its stored document instead.
+    this.editor?.cleanUp(recycle ? 'recycle' : 'complete');
     this.editor = undefined;
     if (!recycle) {
       this.settleEditSession(false);

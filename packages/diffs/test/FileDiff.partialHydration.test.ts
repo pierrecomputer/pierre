@@ -517,7 +517,7 @@ describe('FileDiff partial hydration', () => {
         forceRender: true,
       });
       const firstEditor = createEditorStub();
-      firstEditor.cleanUp = (recycle) => firstDetach?.(recycle);
+      firstEditor.cleanUp = (reason) => firstDetach?.(reason === 'recycle');
       firstDetach = instance.attachEditor(firstEditor);
       const loadPromise = instance.getPendingFileLoadPromiseForTest();
       expect(loadPromise).toBeDefined();

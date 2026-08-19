@@ -501,7 +501,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#fileInstance = fileInstance;
     this.#initialize();
     this.#detach = fileInstance.attachEditor(this);
-    return () => this.#cleanUp('complete');
+    return () => {
+      const attachedInstance = this.#fileInstance;
+      this.cleanUp('complete');
+      attachedInstance?.completeEditSession();
+    };
   }
 
   /**
@@ -761,21 +765,17 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#contentElement?.blur();
   }
 
-  cleanUp(recycle = false): void {
-    this.#cleanUp(recycle ? 'recycle' : 'discard');
-  }
-
   // 'discard' tears the editor down and nothing more: onEditComplete never
   // fires, and the component keeps whatever session state it has.
   //
   // 'recycle' is a virtualization unmount: the document and its history are
   // kept so the session resumes on the next edit() against the same file.
   //
-  // 'complete' tears down like 'discard', then calls the component's
-  // completeEditSession() so a changed session reaches onEditComplete.
-  #cleanUp(reason: 'discard' | 'recycle' | 'complete'): void {
+  // 'complete' tears down like 'discard' as part of a session end; the
+  // caller runs completeEditSession() afterward, and any persisted document
+  // is dropped instead of stored.
+  cleanUp(reason: 'discard' | 'recycle' | 'complete' = 'discard'): void {
     const recycle = reason === 'recycle';
-    const fileInstance = this.#fileInstance;
     this.#invalidateOnAttach();
     if (!recycle) {
       this.#attachState.delivered = false;
@@ -783,7 +783,15 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     const hadFileInstance = this.#fileInstance != null;
     const shouldRestoreState = this.#options.persistState === true;
     this.#stateRestoreGeneration++;
-    this.#persistCurrentState();
+    if (reason === 'complete') {
+      // The session is over either way: an accepted result lives in the
+      // returned external value, and a rejected one must not come back on
+      // the next edit(). Drop the stored document instead of writing the
+      // edited text under the replaced file's key.
+      this.#dropPersistedDocument();
+    } else {
+      this.#persistCurrentState();
+    }
     if (hadFileInstance) {
       this.#restoreStateOnNextSync = shouldRestoreState;
     }
@@ -854,10 +862,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
     this.#resetState();
     this.#fileInstance = undefined;
-
-    if (reason === 'complete') {
-      fileInstance?.completeEditSession();
-    }
   }
 
   /** @internal Return cached text only when it belongs to the same document. */
@@ -1367,6 +1371,25 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#stateStorageOption = option;
     }
     return this.#stateStorage;
+  }
+
+  // Drop the attached file's cached document.
+  // Selection/scroll records are left alone.
+  #dropPersistedDocument(): void {
+    const fileInfo = this.#fileInfo;
+    if (
+      this.#options.persistState !== true ||
+      this.#fileInstance === undefined ||
+      fileInfo === undefined
+    ) {
+      return;
+    }
+    this.#textDocumentCache.delete(
+      requirePersistedCacheKey({
+        name: fileInfo.name,
+        cacheKey: this.#externalCacheKey,
+      })
+    );
   }
 
   #persistCurrentState(): void {

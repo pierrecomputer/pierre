@@ -868,8 +868,10 @@ export class FileDiff<
   public cleanUp(recycle: boolean = false): void {
     dequeueRender(this.handleEditSessionRender);
     this.emitPostRender(true);
-    // Persist editor state while the code scrollers still exist.
-    this.editor?.cleanUp(recycle);
+    // Tear the editor down while the code scrollers still exist. A recycle
+    // persists its editor state; a full teardown ends the session, so the
+    // editor drops its stored document instead.
+    this.editor?.cleanUp(recycle ? 'recycle' : 'complete');
     this.editor = undefined;
     if (!recycle) {
       this.settleEditSession(false);

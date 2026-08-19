@@ -1189,7 +1189,7 @@ export interface DiffsEditor<LAnnotation> {
   edit<T extends DiffsEditableComponent<LAnnotation>>(
     fileInstance: EditableInstance<T>
   ): () => void;
-  cleanUp(recycle?: boolean): void;
+  cleanUp(reason?: 'discard' | 'recycle' | 'complete'): void;
 }
 
 /**
