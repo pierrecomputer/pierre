@@ -7,6 +7,17 @@ import { PlaygroundClient } from './PlaygroundClient';
 import { parsePlaygroundSearchParams } from './searchParams';
 import Footer from '@/components/Footer';
 import { Header } from '@/components/Header';
+import { pageMetadata } from '@/lib/page-metadata';
+
+// The canonical here matters more than on a static page: every playground
+// control writes to the querystring, so without it each option combination
+// would be a separate indexable near-duplicate of this page.
+export const metadata = pageMetadata({
+  title: 'Playground — Pierre Diffs',
+  description:
+    'Try @pierre/diffs in the browser: switch between split and unified layouts, change themes and fonts, toggle virtualization and line wrapping, and see the result instantly.',
+  path: '/playground',
+});
 
 type PlaygroundSearchParams = Record<string, string | string[] | undefined>;
 

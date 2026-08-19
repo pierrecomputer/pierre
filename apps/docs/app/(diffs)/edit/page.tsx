@@ -13,24 +13,17 @@ import {
   LIVE_EDITING_FILE_DIFF_EXAMPLE,
   LIVE_EDITING_FILE_EXAMPLE,
 } from '../_examples/LiveEditing/constants';
+import { pageMetadata } from '@/lib/page-metadata';
 
 const editTitle = 'Pierre Diffs — now with edit';
 const editDescription =
   'A lightweight, SSR, mobile-friendly editable file and diff layer for @pierre/diffs. Edit files and diffs in place with selection management, multiple cursors, undo history, find/replace, and lint markers.';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: editTitle,
   description: editDescription,
-  openGraph: {
-    title: editTitle,
-    description: editDescription,
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: editTitle,
-    description: editDescription,
-  },
-};
+  path: '/edit',
+});
 
 // Server-renders every edit demo so they all paint highlighted on first load
 // and hydrate cleanly (no flash): the "Live editing" File surface, and the

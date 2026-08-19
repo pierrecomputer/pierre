@@ -15,6 +15,14 @@ import {
   ITEM_CUSTOMIZATION_DEMO_WORKLOAD_NAME,
 } from '../_lib/itemCustomizationDemoData';
 import { loadWorkloadDataPayload } from '../_lib/workloadLoader';
+import { pageMetadata } from '@/lib/page-metadata';
+
+export const metadata = pageMetadata({
+  title: 'Item customization demo — Pierre Trees',
+  description:
+    'Customize individual rows in @pierre/trees with icon sets, per-row decorations, context menu trigger modes, and button visibility rules.',
+  path: '/trees-dev/item-customization',
+});
 
 const ITEM_CUSTOMIZATION_VIEWPORT_HEIGHT = 360;
 

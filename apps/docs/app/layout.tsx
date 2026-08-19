@@ -19,6 +19,7 @@ import { ScrollbarGutterVariables } from '@/components/ScrollbarGutterVariables'
 import { ThemeProvider } from '@/components/theme-provider';
 import { Toaster } from '@/components/ui/sonner';
 import { type ProductId, PRODUCTS } from '@/lib/product-config';
+import { SITE, SITE_ORIGIN } from '@/lib/site-origin';
 
 const inter = Inter({
   variable: '--font-inter',
@@ -98,22 +99,9 @@ const WORKTREE_PREFIX = worktreeTitlePrefix();
 
 // Per-site branding (icons, OG/twitter) is set here explicitly so the
 // dispatcher route at `app/page.tsx` (outside the route groups) inherits it.
-const SITE = (process.env.NEXT_PUBLIC_SITE ?? 'diffs') as ProductId;
+// `SITE` and `SITE_ORIGIN` live in `lib/site-origin` so the metadata routes
+// (`app/robots.ts`, `app/sitemap.ts`) and canonical URLs share one definition.
 const SITE_PRODUCT = PRODUCTS[SITE];
-const PROD_ORIGIN_BY_SITE: Record<ProductId, string> = {
-  diffs: 'https://diffs.com',
-  trees: 'https://trees.software',
-};
-const DEV_PORT_BY_SITE: Record<ProductId, string> = {
-  diffs: '3690',
-  trees: '3691',
-};
-const PROD_ORIGIN = PROD_ORIGIN_BY_SITE[SITE];
-// In dev, point `metadataBase` at localhost so OG previewers fetch
-// in-progress assets instead of whatever's deployed.
-const isDev = process.env.NODE_ENV !== 'production';
-const DEV_PORT = process.env.PORT ?? DEV_PORT_BY_SITE[SITE];
-const SITE_ORIGIN = isDev ? `http://localhost:${DEV_PORT}` : PROD_ORIGIN;
 const baseTitle = `${SITE_PRODUCT.name}, from Pierre`;
 const taggedTitle = `${WORKTREE_PREFIX}${baseTitle}`;
 const description = SITE_PRODUCT.description;
@@ -198,6 +186,9 @@ export const metadata: Metadata = {
     },
     description,
     images: [SITE_OG_IMAGE],
+    siteName: SITE_PRODUCT.name,
+    type: 'website',
+    url: `${SITE_ORIGIN}/`,
   },
   twitter: {
     card: 'summary_large_image',
