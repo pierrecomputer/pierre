@@ -164,6 +164,8 @@ const PLAYGROUND_FILE_DIFF = parseDiffFromFile(
   PLAYGROUND_FILE
 );
 
+PLAYGROUND_FILE_DIFF.cacheKey = 'playground:users-diff';
+
 const PLAYGROUND_ANNOTATIONS = [
   {
     side: 'additions',

@@ -49,7 +49,7 @@ import {
   IconWordWrap,
   IconXSquircle,
 } from '@pierre/icons';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -664,7 +664,6 @@ function PlaygroundControlsContent({
 
 export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
   const searchParams = useSearchParams();
-  const router = useRouter();
 
   // The app-wide color scheme resolved by @pierre/theming (the shared theme
   // controller). The diff's "system" mode must follow this so the editor stays
@@ -861,10 +860,13 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
     committedSelectedRange,
   ]);
 
+  // The querystring only exists so the current setup can be shared as a
+  // link; the server reads it on a real navigation. Sync it with the native
+  // History API — a router navigation would refetch the page's server
+  // payload on every toggle for no benefit.
   useEffect(() => {
-    const url = buildUrl();
-    router.replace(url, { scroll: false });
-  }, [buildUrl, router]);
+    window.history.replaceState(null, '', buildUrl());
+  }, [buildUrl]);
 
   const handleCopyLink = useCallback(() => {
     const url = window.location.origin + buildUrl();
