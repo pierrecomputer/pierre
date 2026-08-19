@@ -72,6 +72,19 @@ class TrackedEditor extends Editor<undefined> {
     this.cleanUpCount += 1;
     super.cleanUp(recycle);
   }
+
+  // The disposer returned by edit() tears the editor down without going
+  // through cleanUp() (it also runs the completion boundary), so count its
+  // invocation as a teardown too.
+  override edit<T extends DiffsEditableComponent<undefined>>(
+    fileInstance: EditableInstance<T>
+  ): () => void {
+    const finishSession = super.edit(fileInstance);
+    return () => {
+      this.cleanUpCount += 1;
+      finishSession();
+    };
+  }
 }
 
 class AttachmentFailingEditor extends TrackedEditor {

@@ -1176,3 +1176,107 @@ describe('completeEditSession', () => {
     }
   });
 });
+
+describe('editor session lifecycle', () => {
+  test('the disposer from edit() finishes the session exactly once', async () => {
+    const dom = installDom();
+    const fileContainer = document.createElement('div');
+    document.body.appendChild(fileContainer);
+    const externalDiff = createExternalDiff();
+    const events: FileDiffEditCompleteEvent<undefined>[] = [];
+    const instance = new TestFileDiff({
+      disableErrorHandling: true,
+      disableFileHeader: true,
+      onEditComplete(event) {
+        events.push(event);
+        event.fileDiff.cacheKey = 'external:session-v2';
+        return event.fileDiff;
+      },
+    });
+    const editor = new Editor<undefined>({});
+    try {
+      instance.render({
+        fileDiff: externalDiff,
+        fileContainer,
+        forceRender: true,
+      });
+      const finishSession = editor.edit(instance);
+      await waitFor(
+        () => editor.getText() === externalDiff.additionLines.join(''),
+        { timeout: 4_000 }
+      );
+      editor.applyEdits([
+        {
+          range: {
+            start: { line: 0, character: 0 },
+            end: { line: 0, character: 0 },
+          },
+          newText: 'inserted\n',
+        },
+      ]);
+      finishSession();
+
+      expect(events).toHaveLength(1);
+      expect(instance.fileDiff).toBe(events[0].fileDiff);
+
+      finishSession();
+      expect(events).toHaveLength(1);
+    } finally {
+      editor.cleanUp();
+      instance.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test('editor.cleanUp() is silent and component cleanUp finishes without installing', async () => {
+    const dom = installDom();
+    const fileContainer = document.createElement('div');
+    document.body.appendChild(fileContainer);
+    const externalDiff = createExternalDiff();
+    const externalBefore = captureExternalDiffState(externalDiff);
+    const events: FileDiffEditCompleteEvent<undefined>[] = [];
+    const instance = new TestFileDiff({
+      disableErrorHandling: true,
+      disableFileHeader: true,
+      onEditComplete(event) {
+        events.push(event);
+        event.fileDiff.cacheKey = 'external:session-v2';
+        return event.fileDiff;
+      },
+    });
+    const editor = new Editor<undefined>({});
+    try {
+      instance.render({
+        fileDiff: externalDiff,
+        fileContainer,
+        forceRender: true,
+      });
+      editor.edit(instance);
+      await waitFor(
+        () => editor.getText() === externalDiff.additionLines.join(''),
+        { timeout: 4_000 }
+      );
+      editor.applyEdits([
+        {
+          range: {
+            start: { line: 0, character: 0 },
+            end: { line: 0, character: 0 },
+          },
+          newText: 'inserted\n',
+        },
+      ]);
+      editor.cleanUp();
+      expect(events).toHaveLength(0);
+
+      instance.cleanUp();
+      expect(events).toHaveLength(1);
+      expect(events[0].fileDiff.additionLines.join('')).toBe(
+        'inserted\nalpha\nnew value\nomega\n'
+      );
+      expect(externalDiff).toEqual(externalBefore.value);
+    } finally {
+      editor.cleanUp();
+      dom.cleanup();
+    }
+  });
+});

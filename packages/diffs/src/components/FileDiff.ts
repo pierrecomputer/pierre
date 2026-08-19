@@ -871,6 +871,9 @@ export class FileDiff<
     // Persist editor state while the code scrollers still exist.
     this.editor?.cleanUp(recycle);
     this.editor = undefined;
+    if (!recycle) {
+      this.settleEditSession(false);
+    }
     this.resizeManager.cleanUp();
     this.interactionManager.cleanUp();
     this.scrollSyncManager.cleanUp();
@@ -1891,6 +1894,10 @@ export class FileDiff<
    * on the external diff before the error propagates.
    */
   public completeEditSession(): void {
+    this.settleEditSession(true);
+  }
+
+  private settleEditSession(installResult: boolean): void {
     const {
       editSessionDiff,
       editSessionAnnotations,
@@ -1953,9 +1960,9 @@ export class FileDiff<
           acceptedDiff = returned;
           acceptedOldFile = event.oldFile;
           acceptedNewFile = event.newFile;
-        } else if (returned !== null && returned !== externalDiff) {
+        } else if (returned != null && returned !== externalDiff) {
           throw new Error(
-            'FileDiff.completeEditSession: onEditComplete must return null, the event fileDiff, or the event originalFileDiff'
+            'FileDiff.completeEditSession: onEditComplete must return null, the event fileDiff, or the event originalFileDiff. Do not return a cloned instance.'
           );
         }
       } catch (error) {
@@ -1964,12 +1971,12 @@ export class FileDiff<
       }
     }
 
-    if (acceptedDiff != null) {
+    if (installResult && acceptedDiff != null) {
       this.fileDiff = acceptedDiff;
-      // Callers using the oldFile/newFile API get the stored pair refreshed
-      // so their next render with the event's files does not reparse over
-      // the accepted diff. Every editable pair has a new side (deleted
-      // files cannot be edited), so that is the check.
+      // Callers using the oldFile/newFile API get the stored pair
+      // refreshed so their next render with the event's files does not
+      // reparse over the accepted diff. Every editable pair has a new
+      // side (deleted files cannot be edited), so that is the check.
       if (this.additionFile != null) {
         this.deletionFile = acceptedOldFile;
         this.additionFile = acceptedNewFile;
@@ -1977,14 +1984,18 @@ export class FileDiff<
       if (sessionAnnotationsCurrent != null) {
         this.lineAnnotations = sessionAnnotationsCurrent;
       }
-    } else if (!contentsChanged && sessionAnnotationsCurrent != null) {
+    } else if (
+      installResult &&
+      !contentsChanged &&
+      sessionAnnotationsCurrent != null
+    ) {
       this.lineAnnotations = sessionAnnotationsCurrent;
     }
     this.editSessionDiff = undefined;
     this.editSessionAnnotations = undefined;
     this.pendingEditSessionReplacement = undefined;
     this.pendingPersistedDocumentRestore = undefined;
-    if (this.fileContainer != null) {
+    if (installResult && this.fileContainer != null) {
       this.rerender();
     }
     if (failed) {

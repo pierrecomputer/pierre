@@ -616,6 +616,9 @@ export class File<
     // Persist editor state while the code scroller still exists.
     this.editor?.cleanUp(recycle);
     this.editor = undefined;
+    if (!recycle) {
+      this.settleEditSession(false);
+    }
     this.resizeManager.cleanUp();
     this.interactionManager.cleanUp();
     this.managersDirty = false;
@@ -920,6 +923,10 @@ export class File<
    * error propagates.
    */
   public completeEditSession(): void {
+    this.settleEditSession(true);
+  }
+
+  private settleEditSession(installResult: boolean): void {
     const {
       editSessionFile,
       editSessionAnnotations,
@@ -962,7 +969,7 @@ export class File<
           acceptedFile = returned;
         } else if (returned != null && returned !== externalFile) {
           throw new Error(
-            'File.completeEditSession: onEditComplete must return null, the event file, or the event originalFile. Do not returned a cloned instance.'
+            'File.completeEditSession: onEditComplete must return null, the event file, or the event originalFile. Do not return a cloned instance.'
           );
         }
       } catch (error) {
@@ -971,19 +978,23 @@ export class File<
       }
     }
 
-    if (acceptedFile != null) {
+    if (installResult && acceptedFile != null) {
       this.file = acceptedFile;
       if (sessionAnnotationsCurrent != null) {
         this.lineAnnotations = sessionAnnotationsCurrent;
       }
-    } else if (!contentsChanged && sessionAnnotationsCurrent != null) {
+    } else if (
+      installResult &&
+      !contentsChanged &&
+      sessionAnnotationsCurrent != null
+    ) {
       this.lineAnnotations = sessionAnnotationsCurrent;
     }
     this.editSessionFile = undefined;
     this.editSessionAnnotations = undefined;
     this.pendingEditSessionReplacement = undefined;
     this.pendingPersistedDocumentRestore = undefined;
-    if (this.fileContainer != null) {
+    if (installResult && this.fileContainer != null) {
       this.rerender();
     }
     if (failed) {

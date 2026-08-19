@@ -96,6 +96,8 @@ class TestEditableComponent implements DiffsEditableComponent<undefined> {
 
   getAnnotationSlotName = getLineAnnotationName;
 
+  completeEditSession(): void {}
+
   attachEditor(editor: DiffsEditor<undefined>): () => void {
     this.#editor = editor;
     this.#syncRenderView();

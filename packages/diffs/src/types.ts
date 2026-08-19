@@ -1090,6 +1090,12 @@ export interface DiffsEditableComponent<
    */
   emitEditChange(event: EditorChangeEvent<LAnnotation, 'file' | 'diff'>): void;
   /**
+   * End the edit session and settle which external value the component
+   * renders, running the component's `onEditComplete` when the session
+   * changed the contents. Does nothing once no session exists.
+   */
+  completeEditSession(): void;
+  /**
    * Resolve the shadow-DOM slot name for one of this component's line
    * annotations. While an edit session is active, the name each annotation
    * carried when it entered the session is kept even as its line number is

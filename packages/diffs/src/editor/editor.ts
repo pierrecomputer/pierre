@@ -501,7 +501,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#fileInstance = fileInstance;
     this.#initialize();
     this.#detach = fileInstance.attachEditor(this);
-    return () => this.cleanUp();
+    return () => this.#cleanUp('complete');
   }
 
   /**
@@ -762,6 +762,20 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   }
 
   cleanUp(recycle = false): void {
+    this.#cleanUp(recycle ? 'recycle' : 'discard');
+  }
+
+  // 'discard' tears the editor down and nothing more: onEditComplete never
+  // fires, and the component keeps whatever session state it has.
+  //
+  // 'recycle' is a virtualization unmount: the document and its history are
+  // kept so the session resumes on the next edit() against the same file.
+  //
+  // 'complete' tears down like 'discard', then calls the component's
+  // completeEditSession() so a changed session reaches onEditComplete.
+  #cleanUp(reason: 'discard' | 'recycle' | 'complete'): void {
+    const recycle = reason === 'recycle';
+    const fileInstance = this.#fileInstance;
     this.#invalidateOnAttach();
     if (!recycle) {
       this.#attachState.delivered = false;
@@ -840,6 +854,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
     this.#resetState();
     this.#fileInstance = undefined;
+
+    if (reason === 'complete') {
+      fileInstance?.completeEditSession();
+    }
   }
 
   /** @internal Return cached text only when it belongs to the same document. */

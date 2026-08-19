@@ -1162,3 +1162,190 @@ describe('completeEditSession', () => {
     }
   });
 });
+
+describe('editor session lifecycle', () => {
+  async function createLifecycleFixture(config?: {
+    onEditComplete?: FileEditCompleteHandler<undefined>;
+  }) {
+    const dom = installDom();
+    const fileContainer = document.createElement('div');
+    document.body.appendChild(fileContainer);
+    const externalFile = { ...EXTERNAL_FILE };
+    const instance = new TestFile({
+      disableErrorHandling: true,
+      disableFileHeader: true,
+      onEditComplete: config?.onEditComplete,
+    });
+    const editor = new Editor<undefined>({});
+    instance.render({ file: externalFile, fileContainer, forceRender: true });
+    const finishSession = editor.edit(instance);
+    await waitFor(() => editor.getText() === externalFile.contents, {
+      timeout: 4_000,
+    });
+    return {
+      editor,
+      externalFile,
+      fileContainer,
+      finishSession,
+      instance,
+      cleanup() {
+        editor.cleanUp();
+        instance.cleanUp();
+        dom.cleanup();
+      },
+    };
+  }
+
+  test('the disposer from edit() finishes the session exactly once', async () => {
+    const events: FileEditCompleteEvent<undefined>[] = [];
+    const fixture = await createLifecycleFixture({
+      onEditComplete(event) {
+        events.push(event);
+        event.file.cacheKey = 'external:file-v2';
+        return event.file;
+      },
+    });
+    try {
+      const { editor, finishSession, instance } = fixture;
+      replaceDocument(editor, 'edited\nbravo\n');
+      finishSession();
+
+      expect(events).toHaveLength(1);
+      expect(instance.file).toBe(events[0].file);
+      expect(instance.getLatestFileForTest()).toBe(events[0].file);
+
+      finishSession();
+      expect(events).toHaveLength(1);
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('editor.cleanUp() tears down without finishing the session', async () => {
+    const events: FileEditCompleteEvent<undefined>[] = [];
+    const fixture = await createLifecycleFixture({
+      onEditComplete(event) {
+        events.push(event);
+        return null;
+      },
+    });
+    try {
+      const { editor, instance } = fixture;
+      replaceDocument(editor, 'edited\nbravo\n');
+      editor.cleanUp();
+
+      expect(events).toHaveLength(0);
+      // The session survives the silent teardown.
+      expect(instance.getLatestFileForTest()?.contents).toBe('edited\nbravo\n');
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('a recycle keeps the session and a later disposer finishes it once', async () => {
+    const events: FileEditCompleteEvent<undefined>[] = [];
+    const dom = installDom();
+    const fileContainer = document.createElement('div');
+    document.body.appendChild(fileContainer);
+    const externalFile = { ...EXTERNAL_FILE };
+    const instance = new TestFile({
+      disableErrorHandling: true,
+      disableFileHeader: true,
+      onEditComplete(event) {
+        events.push(event);
+        return null;
+      },
+    });
+    let attachCount = 0;
+    const editor = new Editor<undefined>({
+      onAttach: () => {
+        attachCount += 1;
+      },
+    });
+    try {
+      instance.render({ file: externalFile, fileContainer, forceRender: true });
+      editor.edit(instance);
+      await waitFor(() => attachCount === 1, { timeout: 4_000 });
+      replaceDocument(editor, 'first\n');
+      editor.cleanUp(true);
+      expect(events).toHaveLength(0);
+      expect(instance.getLatestFileForTest()?.contents).toBe('first\n');
+
+      const finishResumed = editor.edit(instance);
+      await waitFor(() => attachCount === 2, { timeout: 4_000 });
+      replaceDocument(editor, 'first\nsecond\n');
+      finishResumed();
+
+      expect(events).toHaveLength(1);
+      expect(events[0].file.contents).toBe('first\nsecond\n');
+    } finally {
+      editor.cleanUp();
+      instance.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test('component cleanUp finishes a changed session without installing the result', async () => {
+    const events: FileEditCompleteEvent<undefined>[] = [];
+    const fixture = await createLifecycleFixture({
+      onEditComplete(event) {
+        events.push(event);
+        event.file.cacheKey = 'external:file-v2';
+        return event.file;
+      },
+    });
+    try {
+      const { editor, externalFile, instance } = fixture;
+      replaceDocument(editor, 'edited\nbravo\n');
+      instance.cleanUp();
+
+      expect(events).toHaveLength(1);
+      expect(events[0].file.contents).toBe('edited\nbravo\n');
+      expect(events[0].originalFile).toBe(externalFile);
+      expect(externalFile.contents).toBe(EXTERNAL_FILE.contents);
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('component cleanUp after the disposer already finished stays silent', async () => {
+    const events: FileEditCompleteEvent<undefined>[] = [];
+    const fixture = await createLifecycleFixture({
+      onEditComplete(event) {
+        events.push(event);
+        return null;
+      },
+    });
+    try {
+      const { editor, finishSession, instance } = fixture;
+      replaceDocument(editor, 'edited\nbravo\n');
+      finishSession();
+      expect(events).toHaveLength(1);
+
+      instance.cleanUp();
+      expect(events).toHaveLength(1);
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('recycle cleanUp of the component keeps the session silent', async () => {
+    const events: FileEditCompleteEvent<undefined>[] = [];
+    const fixture = await createLifecycleFixture({
+      onEditComplete(event) {
+        events.push(event);
+        return null;
+      },
+    });
+    try {
+      const { editor, instance } = fixture;
+      replaceDocument(editor, 'edited\nbravo\n');
+      editor.cleanUp(true);
+      instance.cleanUp(true);
+
+      expect(events).toHaveLength(0);
+    } finally {
+      fixture.cleanup();
+    }
+  });
+});
