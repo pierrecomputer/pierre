@@ -50,6 +50,7 @@ minimumReleaseAgeExclude:
   - '@shikijs/transformers@4.4.1'
   - '@shikijs/types@4.4.1'
   - shiki@4.4.1
+  - bun-types@1.4.0
 
 catalog:
   '@arethetypeswrong/core': '0.18.2'
@@ -83,7 +84,7 @@ catalog:
   '@shikijs/transformers': '4.4.1'
   '@tailwindcss/postcss': '4.1.13'
   '@tsdown/css': '0.22.3'
-  '@types/bun': '1.3.14'
+  '@types/bun': '1.4.0'
   '@types/culori': '4.0.1'
   '@types/hast': '3.0.4'
   '@types/jsdom': '28.0.1'
