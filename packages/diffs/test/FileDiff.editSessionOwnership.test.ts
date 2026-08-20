@@ -800,6 +800,45 @@ describe('completeEditSession', () => {
     }
   });
 
+  test('a new external annotation mid-session survives a revert', async () => {
+    const externalAnnotations: DiffLineAnnotation<undefined>[] = [
+      { side: 'additions', lineNumber: 2 },
+    ];
+    const fixture = await createCompletionFixture({
+      lineAnnotations: externalAnnotations,
+      onEditComplete: () => null,
+    });
+    try {
+      const { editor, fileContainer, instance } = fixture;
+      insertLinesAtStart(editor);
+      const sessionDiff = instance.getLatestDiffForTest();
+      if (sessionDiff == null) {
+        throw new Error('Expected an active session diff');
+      }
+
+      // A fresh external write while editing, trusted at the line given, is
+      // the new baseline.
+      const added: DiffLineAnnotation<undefined>[] = [
+        ...externalAnnotations,
+        { side: 'additions', lineNumber: 6 },
+      ];
+      instance.render({
+        fileDiff: sessionDiff,
+        fileContainer,
+        forceRender: true,
+        lineAnnotations: added,
+      });
+      expect(instance.getExternalAnnotationsForTest()).toBe(added);
+
+      // The changed diff reverts, but the added annotation is kept.
+      fixture.detach();
+      instance.completeEditSession();
+      expect(instance.getLatestAnnotationsForTest()).toBe(added);
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
   test('returning null restores the external diff and annotations', async () => {
     const externalAnnotations: DiffLineAnnotation<undefined>[] = [
       { side: 'additions', lineNumber: 2 },

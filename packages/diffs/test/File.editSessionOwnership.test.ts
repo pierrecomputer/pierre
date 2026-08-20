@@ -623,11 +623,10 @@ describe('session-owned line annotations', () => {
     }
   });
 
-  test('an annotation-only write mid-session lands in session space', async () => {
+  test('an annotation-only write mid-session rebaselines the external collection', async () => {
     const fixture = await createAnnotatedFixture();
     try {
-      const { editor, externalAnnotations, externalFile, fileContainer } =
-        fixture;
+      const { editor, externalFile, fileContainer } = fixture;
       insertLineAtStart(editor);
 
       const written: LineAnnotation<undefined>[] = [{ lineNumber: 1 }];
@@ -638,10 +637,10 @@ describe('session-owned line annotations', () => {
         lineAnnotations: written,
       });
 
+      // An external write is the source of truth: it renders in the session
+      // and becomes the external collection too, so a revert keeps it.
       expect(fixture.instance.getLatestAnnotationsForTest()).toBe(written);
-      expect(fixture.instance.getExternalAnnotationsForTest()).toBe(
-        externalAnnotations
-      );
+      expect(fixture.instance.getExternalAnnotationsForTest()).toBe(written);
       const single = written.at(0);
       if (single == null) {
         throw new Error('Expected the written annotation to exist');
@@ -913,6 +912,45 @@ describe('completeEditSession', () => {
       // Settled: calling again does not fire the handler a second time.
       instance.completeEditSession();
       expect(events).toHaveLength(1);
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('a new external annotation mid-session survives a revert', async () => {
+    const externalAnnotations: LineAnnotation<undefined>[] = [
+      { lineNumber: 2 },
+    ];
+    const fixture = await createCompletionFixture({
+      lineAnnotations: externalAnnotations,
+      onEditComplete: () => null,
+    });
+    try {
+      const { editor, fileContainer, instance } = fixture;
+      insertLinesAtStart(editor);
+      const sessionFile = instance.getLatestFileForTest();
+      if (sessionFile == null) {
+        throw new Error('Expected an active session file');
+      }
+
+      // The caller adds an annotation while editing — a fresh external write,
+      // trusted at the line number given. It becomes the new baseline.
+      const added: LineAnnotation<undefined>[] = [
+        ...externalAnnotations,
+        { lineNumber: 6 },
+      ];
+      instance.render({
+        file: sessionFile,
+        fileContainer,
+        forceRender: true,
+        lineAnnotations: added,
+      });
+      expect(instance.getExternalAnnotationsForTest()).toBe(added);
+
+      // Reverting keeps the added annotation; the baseline is not rewound.
+      fixture.detach();
+      instance.completeEditSession();
+      expect(instance.getLatestAnnotationsForTest()).toBe(added);
     } finally {
       fixture.cleanup();
     }

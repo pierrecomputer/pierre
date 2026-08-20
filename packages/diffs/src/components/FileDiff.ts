@@ -713,10 +713,11 @@ export class FileDiff<
     if (!this.isNewAnnotations(lineAnnotations)) {
       return;
     }
-    // The new annotations become what the session renders, with their line
-    // numbers read as positions in the edited document. The external
-    // annotations are left alone — they are what renders again once the
-    // session ends.
+    // Externally provided annotations are the source of truth: they become the
+    // new external collection and the session renders them at the line numbers
+    // given. The caller owns whether those positions still make sense after an
+    // edit; a revert renders this collection unchanged rather than moving them.
+    this.lineAnnotations = lineAnnotations;
     writeEditSessionAnnotations(
       sessionAnnotations,
       lineAnnotations,
