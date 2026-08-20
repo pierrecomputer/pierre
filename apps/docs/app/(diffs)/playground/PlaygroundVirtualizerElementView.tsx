@@ -11,7 +11,7 @@ import {
   type LineAnnotation,
   type SelectedLineRange,
 } from '@pierre/diffs';
-import type { EditorChangeEvent, EditorOptions } from '@pierre/diffs/edit';
+import type { EditorOptions } from '@pierre/diffs/edit';
 import {
   File,
   FileDiff,
@@ -115,17 +115,6 @@ function ElementVirtualizerFile({
     []
   );
 
-  const handleEditChange = useCallback(
-    ({
-      lineAnnotations,
-    }: EditorChangeEvent<PlaygroundAnnotationMetadata, 'file'>) => {
-      if (lineAnnotations != null) {
-        setAnnotations(lineAnnotations);
-      }
-    },
-    []
-  );
-
   // Save accepts the completed file under a fresh cacheKey and stores it as
   // the surface's file; Cancel reverts to the current one.
   const handleEditComplete = useCallback(
@@ -137,6 +126,11 @@ function ElementVirtualizerFile({
       savedVersion.current += 1;
       event.file.cacheKey = `${event.file.name}:v${savedVersion.current}`;
       setFile(event.file);
+      // Adopt the session's final annotation positions so the comment
+      // portals render into the accepted (moved) slots.
+      if (event.lineAnnotations != null) {
+        setAnnotations(event.lineAnnotations);
+      }
       return event.file;
     },
     []
@@ -255,7 +249,6 @@ function ElementVirtualizerFile({
       lineAnnotations={showAnnotations ? annotations : EMPTY_FILE_ANNOTATIONS}
       options={fileOptions}
       editorOptions={editorOptions}
-      onEditChange={handleEditChange}
       onEditComplete={handleEditComplete}
       renderHeaderMetadata={renderHeaderMetadata}
       renderAnnotation={renderAnnotation}
@@ -298,27 +291,12 @@ function ElementVirtualizerDiff({
     null
   );
 
-  // Edits remap annotation line numbers; onEditChange keeps this state
-  // tracking the live collection so the add/remove flows below operate on
-  // current positions. The component owns annotation rendering during a
-  // session, so no synchronous flush is needed.
   const editorOptions = useMemo<EditorOptions<PlaygroundAnnotationMetadata>>(
     () => ({
       onAttach(editor) {
         editor.focus({ lineNumber: 'first-visible', preventScroll: true });
       },
     }),
-    []
-  );
-
-  const handleEditChange = useCallback(
-    ({
-      lineAnnotations,
-    }: EditorChangeEvent<PlaygroundAnnotationMetadata, 'diff'>) => {
-      if (lineAnnotations != null) {
-        setAnnotations(lineAnnotations);
-      }
-    },
     []
   );
 
@@ -333,6 +311,9 @@ function ElementVirtualizerDiff({
       savedVersion.current += 1;
       event.fileDiff.cacheKey = `${event.fileDiff.name}:v${savedVersion.current}`;
       setCurrentDiff(event.fileDiff);
+      if (event.lineAnnotations != null) {
+        setAnnotations(event.lineAnnotations);
+      }
       return event.fileDiff;
     },
     []
@@ -475,7 +456,6 @@ function ElementVirtualizerDiff({
       lineAnnotations={showAnnotations ? annotations : EMPTY_ANNOTATIONS}
       options={fileDiffOptions}
       editorOptions={editorOptions}
-      onEditChange={handleEditChange}
       onEditComplete={handleEditComplete}
       renderHeaderMetadata={renderHeaderMetadata}
       renderAnnotation={renderAnnotation}

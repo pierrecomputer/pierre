@@ -8,16 +8,10 @@ import {
   type FileDiffOptions,
   type FileEditCompleteEvent,
   type FileOptions,
-  isDiffAnnotationCollection,
-  isFileAnnotationCollection,
   type LineAnnotation,
   type SelectedLineRange,
 } from '@pierre/diffs';
-import type {
-  Editor,
-  EditorChangeEvent,
-  EditorOptions,
-} from '@pierre/diffs/edit';
+import type { Editor, EditorOptions } from '@pierre/diffs/edit';
 import {
   type CodeViewReactOptions,
   File,
@@ -702,10 +696,6 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
       ? 'select'
       : 'none';
 
-  // Edits remap annotation line numbers (an Enter above a comment shifts it
-  // down); onEditChange keeps this state tracking the live collection so the
-  // add/remove flows below operate on current positions. The components own
-  // annotation rendering during a session, so no synchronous flush is needed.
   const editorRef = useRef<Editor<PlaygroundAnnotationMetadata> | null>(null);
   const editorOptions = useMemo<EditorOptions<PlaygroundAnnotationMetadata>>(
     () => ({
@@ -714,22 +704,6 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
         editor.focus({ lineNumber: 'first-visible', preventScroll: true });
       },
     }),
-    []
-  );
-
-  const handleEditChange = useCallback(
-    ({
-      lineAnnotations,
-    }: EditorChangeEvent<PlaygroundAnnotationMetadata, 'file' | 'diff'>) => {
-      if (lineAnnotations == null) {
-        return;
-      }
-      if (isDiffAnnotationCollection(lineAnnotations)) {
-        setAnnotations(lineAnnotations);
-      } else if (isFileAnnotationCollection(lineAnnotations)) {
-        setFileAnnotations(lineAnnotations);
-      }
-    },
     []
   );
 
@@ -752,6 +726,11 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
       savedVersionRef.current += 1;
       event.file.cacheKey = `${event.file.name}:v${savedVersionRef.current}`;
       setPlaygroundFile(event.file);
+      // Adopt the session's final annotation positions so the comment
+      // portals render into the accepted (moved) slots.
+      if (event.lineAnnotations != null) {
+        setFileAnnotations(event.lineAnnotations);
+      }
       return event.file;
     },
     []
@@ -765,6 +744,9 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
       savedVersionRef.current += 1;
       event.fileDiff.cacheKey = `${event.fileDiff.name}:v${savedVersionRef.current}`;
       setPlaygroundDiff(event.fileDiff);
+      if (event.lineAnnotations != null) {
+        setAnnotations(event.lineAnnotations);
+      }
       return event.fileDiff;
     },
     []
@@ -1264,7 +1246,6 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
       className="border-border overflow-hidden rounded-lg border"
       edit={edit}
       editorOptions={editorOptions}
-      onEditChange={handleEditChange}
       onEditComplete={handleDiffEditComplete}
       renderHeaderMetadata={renderEditButtons}
       selectedLines={selectedRange}
@@ -1280,7 +1261,6 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
       className="border-border overflow-hidden rounded-lg border"
       edit={edit}
       editorOptions={editorOptions}
-      onEditChange={handleEditChange}
       onEditComplete={handleFileEditComplete}
       renderHeaderMetadata={renderEditButtons}
       selectedLines={selectedRange}

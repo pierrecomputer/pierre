@@ -3,8 +3,6 @@
 import {
   type DiffLineAnnotation,
   type FileDiffMetadata,
-  isDiffAnnotationCollection,
-  isFileAnnotationCollection,
   type LineAnnotation,
   VirtualizedFile,
   VirtualizedFileDiff,
@@ -207,27 +205,12 @@ export function PlaygroundVirtualizerView({
           savedVersionRef.current += 1;
           event.file.cacheKey = `${event.file.name}:v${savedVersionRef.current}`;
           currentFileRef.current = event.file;
+          // Adopt the session's final annotation positions so the comment
+          // roots stay matched to the accepted (moved) rows.
+          if (event.lineAnnotations != null) {
+            fileAnnotationsRef.current = event.lineAnnotations;
+          }
           return event.file;
-        },
-        onEditChange: ({ lineAnnotations }) => {
-          if (
-            lineAnnotations == null ||
-            !isFileAnnotationCollection(lineAnnotations)
-          ) {
-            return;
-          }
-          const previous = fileAnnotationsRef.current;
-          if (previous === lineAnnotations) {
-            return;
-          }
-          fileAnnotationsRef.current = lineAnnotations;
-          const liveKeys = new Set(lineAnnotations.map(fileAnnotationKey));
-          for (const annotation of previous) {
-            const key = fileAnnotationKey(annotation);
-            if (!liveKeys.has(key)) {
-              unmountAnnotationRoot(key);
-            }
-          }
         },
         onGutterUtilityClick: (range) => {
           const lineNumber = range.end;
@@ -376,37 +359,10 @@ export function PlaygroundVirtualizerView({
               savedVersionRef.current += 1;
               event.fileDiff.cacheKey = `${event.fileDiff.name}:v${savedVersionRef.current}`;
               currentDiffsRef.current[index] = event.fileDiff;
+              if (event.lineAnnotations != null) {
+                annotationsRef.current[index] = event.lineAnnotations;
+              }
               return event.fileDiff;
-            },
-            // Edits remap annotation line numbers; onEditChange hands the
-            // remapped set back so this view's annotation source of truth
-            // follows the edit — otherwise the next host-driven render snaps
-            // comments back to their pre-edit lines. An annotation whose line
-            // was deleted is dropped from the set; retire its orphaned React
-            // root.
-            onEditChange: ({ lineAnnotations }) => {
-              if (
-                lineAnnotations == null ||
-                !isDiffAnnotationCollection(lineAnnotations)
-              ) {
-                return;
-              }
-              const previous = annotationsRef.current[index];
-              if (previous === lineAnnotations) {
-                return;
-              }
-              annotationsRef.current[index] = lineAnnotations;
-              const liveKeys = new Set(
-                lineAnnotations.map((annotation) =>
-                  annotationKey(index, annotation)
-                )
-              );
-              for (const annotation of previous) {
-                const key = annotationKey(index, annotation);
-                if (!liveKeys.has(key)) {
-                  unmountAnnotationRoot(key);
-                }
-              }
             },
             onGutterUtilityClick: (range) => {
               const side = range.endSide ?? range.side;

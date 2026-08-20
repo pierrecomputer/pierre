@@ -7,19 +7,16 @@ import {
   type DiffLineAnnotation,
   type FileDiffEditCompleteEvent,
   type FileEditCompleteEvent,
-  isDiffAnnotationCollection,
-  isFileAnnotationCollection,
   type LineAnnotation,
   type SelectedLineRange,
 } from '@pierre/diffs';
-import type { EditorChangeEvent, EditorOptions } from '@pierre/diffs/edit';
+import type { EditorOptions } from '@pierre/diffs/edit';
 import {
   CodeView,
   type CodeViewReactOptions,
   useStableCallback,
 } from '@pierre/diffs/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { flushSync } from 'react-dom';
 
 import type { PlaygroundAnnotationMetadata } from './constants';
 import {
@@ -87,61 +84,6 @@ export function PlaygroundCodeView({
       )
     );
   }, []);
-
-  // Edits remap annotation line numbers (an Enter above a comment shifts it
-  // down); this writes the remapped set back to the owning item, with the
-  // version bump every item-data change requires — CodeView drops
-  // same-version pushes, and its render loop re-applies `item.annotations`
-  // to the instance on every pass, so a stale item would snap the comment
-  // back to its pre-edit line. flushSync commits in the same task as the
-  // editor's shadow-slot rename (the items push is a layout effect), so the
-  // comment is never projected nowhere between frames. The identity bail
-  // keeps ordinary typing free: the editor passes the same array reference
-  // when nothing remapped.
-  const handleEditChange = useCallback(
-    (
-      event: EditorChangeEvent<PlaygroundAnnotationMetadata, 'file' | 'diff'>,
-      item: PlaygroundItem
-    ) => {
-      const { lineAnnotations } = event;
-      if (lineAnnotations == null) {
-        return;
-      }
-      flushSync(() => {
-        setItems((current) => {
-          const target = current.find((existing) => existing.id === item.id);
-          if (target == null || target.annotations === lineAnnotations) {
-            return current;
-          }
-          return current.map((existing) => {
-            if (existing.id !== item.id || existing.type !== item.type) {
-              return existing;
-            }
-            const version = (existing.version ?? 0) + 1;
-            if (existing.type === 'file') {
-              if (!isFileAnnotationCollection(lineAnnotations)) {
-                return existing;
-              }
-              return {
-                ...existing,
-                annotations: lineAnnotations,
-                version,
-              };
-            }
-            if (!isDiffAnnotationCollection(lineAnnotations)) {
-              return existing;
-            }
-            return {
-              ...existing,
-              annotations: lineAnnotations,
-              version,
-            };
-          });
-        });
-      });
-    },
-    []
-  );
 
   // Committing a finished edit session: stamp a fresh cacheKey on the
   // completed file/fileDiff and return the nextItem CodeView built from it.
@@ -406,7 +348,6 @@ export function PlaygroundCodeView({
       options={codeViewOptions}
       selectedLines={selectedLines}
       onSelectedLinesChange={setSelectedLines}
-      onItemEditChange={handleEditChange}
       onItemEditComplete={handleEditComplete}
       renderHeaderMetadata={renderHeaderMetadata}
       renderAnnotation={renderAnnotation}
