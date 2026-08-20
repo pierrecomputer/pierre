@@ -55,10 +55,6 @@ const LINE_MODES = ['select', 'comment', 'none'] as const;
 // 'codeview' renders a mixed list in CodeView's own scroller.
 export type ViewMode = (typeof VIEW_MODES)[number];
 
-// The editable surface is rendered read-only (Review) or attached to a live
-// editor (Edit). Markers are diagnostics shown only while editing.
-export type Mode = 'review' | 'edit';
-
 export type HunkSeparatorValue = (typeof HUNK_SEPARATOR_VALUES)[number];
 export type LineHoverHighlight = (typeof LINE_HOVER_HIGHLIGHTS)[number];
 export type PlaygroundLineDiffType = (typeof LINE_DIFF_TYPES)[number];
@@ -81,7 +77,7 @@ export const DEFAULTS = {
   gutterButton: true,
   interactionMode: 'comment' as const,
   annotations: true,
-  mode: 'review' as Mode,
+  edit: false,
   markers: false,
 } as const;
 
@@ -101,7 +97,7 @@ export interface PlaygroundUrlState {
   enableLineSelection: boolean;
   enableGutterUtility: boolean;
   showAnnotations: boolean;
-  mode: Mode;
+  edit: boolean;
   showMarkers: boolean;
   selectedRange: SelectedLineRange | null;
 }
@@ -178,12 +174,10 @@ export function parsePlaygroundSearchParams(
     enableLineSelection,
     enableGutterUtility,
     showAnnotations: pickBool(get('annot'), DEFAULTS.annotations),
-    // The direct File and FileDiff views share one edit control. Scrolling list
-    // views render their own per-file controls instead.
-    mode:
-      (viewMode === 'diff' || viewMode === 'file') && get('edit') === 'edit'
-        ? 'edit'
-        : 'review',
+    // Only the direct File and FileDiff views carry their edit session in the
+    // URL; the scrolling views own per-file controls instead.
+    edit:
+      (viewMode === 'diff' || viewMode === 'file') && get('edit') === 'edit',
     showMarkers: pickBool(get('markers'), DEFAULTS.markers),
     selectedRange: parseLineSelection(get('line')),
   };

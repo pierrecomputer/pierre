@@ -27,6 +27,7 @@ import {
   CommentThread,
   ExampleThread,
 } from './PlaygroundComments';
+import { EditSessionButtons } from './PlaygroundEditButtons';
 
 const CODE_VIEW_STYLES = { height: '70vh', overflow: 'auto' } as const;
 
@@ -384,42 +385,17 @@ export function PlaygroundCodeView({
     }
   );
 
-  const renderHeaderMetadata = useStableCallback((item: PlaygroundItem) => {
-    const buttonClassName =
-      'flex cursor-pointer items-center gap-1 rounded-sm border py-1 px-2 text-xs transition';
-    if (item.edit !== true) {
-      return (
-        <button
-          type="button"
-          onClick={() => toggleEdit(item.id, true)}
-          className={`-mr-[8px] ${buttonClassName} border bg-transparent text-neutral-500 hover:border-neutral-300 hover:bg-neutral-100 hover:text-neutral-700`}
-        >
-          Edit
-        </button>
-      );
-    }
-    return (
-      <div className="-mr-[8px] flex items-center gap-1.5">
-        <button
-          type="button"
-          onClick={() => {
-            cancelledEdits.current.add(item.id);
-            toggleEdit(item.id, false);
-          }}
-          className={`${buttonClassName} border bg-transparent text-neutral-500 hover:border-red-300 hover:bg-red-50 hover:text-red-600`}
-        >
-          Cancel
-        </button>
-        <button
-          type="button"
-          onClick={() => toggleEdit(item.id, false)}
-          className={`${buttonClassName} border-blue-400/50 bg-blue-500/25 text-blue-600 hover:bg-blue-500/35`}
-        >
-          Save
-        </button>
-      </div>
-    );
-  });
+  const renderHeaderMetadata = useStableCallback((item: PlaygroundItem) => (
+    <EditSessionButtons
+      editing={item.edit === true}
+      onEdit={() => toggleEdit(item.id, true)}
+      onCancel={() => {
+        cancelledEdits.current.add(item.id);
+        toggleEdit(item.id, false);
+      }}
+      onSave={() => toggleEdit(item.id, false)}
+    />
+  ));
 
   return (
     <CodeView

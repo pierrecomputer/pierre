@@ -271,32 +271,26 @@
    `aria-pressed`; both state icons and both labels ("Edit" / "Editing") are
    always present and CSS shows the matching pair, so the vanilla toggle only
    has to flip the attribute. */
-.playground-edit-toggle {
-  @apply -mr-[8px] flex cursor-pointer items-center gap-1 rounded-sm border py-1 pr-2 pl-1.5 text-xs transition;
-  @apply bg-transparent text-neutral-500;
+/* Edit-session controls rendered into file/diff header metadata slots by the
+   playground surfaces (React and vanilla alike): an Edit button, replaced by
+   Cancel + Save while a session is active. */
+.playground-edit-actions {
+  @apply -mr-[8px] flex items-center gap-1.5;
 }
-.playground-edit-toggle:hover:not([aria-pressed='true']) {
+.playground-edit-button {
+  @apply flex cursor-pointer items-center rounded-sm border bg-transparent px-2 py-1 text-xs text-neutral-500 transition;
+}
+.playground-edit-button:hover {
   @apply border-neutral-300 bg-neutral-100 text-neutral-700;
 }
-.playground-edit-toggle[aria-pressed='true'] {
+.playground-edit-button[data-action='cancel']:hover {
+  @apply border-red-300 bg-red-50 text-red-600;
+}
+.playground-edit-button[data-action='save'] {
   @apply border-blue-400/50 bg-blue-500/25 text-blue-600;
 }
-.playground-edit-toggle-icon-off {
-  @apply block opacity-50;
-}
-.playground-edit-toggle-icon-on,
-.playground-edit-toggle-label-on {
-  @apply hidden;
-}
-.playground-edit-toggle[aria-pressed='true'] .playground-edit-toggle-icon-off,
-.playground-edit-toggle[aria-pressed='true'] .playground-edit-toggle-label-off {
-  @apply hidden;
-}
-.playground-edit-toggle[aria-pressed='true'] .playground-edit-toggle-icon-on {
-  @apply block;
-}
-.playground-edit-toggle[aria-pressed='true'] .playground-edit-toggle-label-on {
-  @apply inline;
+.playground-edit-button[data-action='save']:hover {
+  @apply border-blue-400/50 bg-blue-500/35 text-blue-600;
 }
 
 .cv-scrollbar {

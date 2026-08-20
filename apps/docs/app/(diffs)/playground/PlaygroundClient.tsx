@@ -4,7 +4,9 @@ import {
   type AnnotationSide,
   type DiffIndicators,
   type DiffLineAnnotation,
+  type FileDiffEditCompleteEvent,
   type FileDiffOptions,
+  type FileEditCompleteEvent,
   type FileOptions,
   isDiffAnnotationCollection,
   isFileAnnotationCollection,
@@ -44,7 +46,6 @@ import {
   IconLink,
   IconListOrdered,
   IconParagraph,
-  IconPencil,
   IconSymbolDiffstat,
   IconWordWrap,
   IconXSquircle,
@@ -67,12 +68,12 @@ import {
   CommentThread,
   ExampleThread,
 } from './PlaygroundComments';
+import { EditSessionButtons } from './PlaygroundEditButtons';
 import { PlaygroundVirtualizerElementView } from './PlaygroundVirtualizerElementView';
 import { PlaygroundVirtualizerView } from './PlaygroundVirtualizerView';
 import type {
   HunkSeparatorValue,
   LineHoverHighlight,
-  Mode,
   ViewMode,
 } from './searchParams';
 import {
@@ -190,8 +191,7 @@ interface PlaygroundControlsContentProps {
   setEnableGutterUtility: (v: boolean) => void;
   showAnnotations: boolean;
   setShowAnnotations: (v: boolean) => void;
-  mode: Mode;
-  setMode: (v: Mode) => void;
+  editing: boolean;
   showMarkers: boolean;
   setShowMarkers: (v: boolean) => void;
   selectedRange: SelectedLineRange | null;
@@ -234,8 +234,7 @@ function PlaygroundControlsContent({
   setEnableGutterUtility,
   showAnnotations,
   setShowAnnotations,
-  mode,
-  setMode,
+  editing,
   showMarkers,
   setShowMarkers,
   selectedRange,
@@ -314,30 +313,6 @@ function PlaygroundControlsContent({
             <IconDiffUnified />
           </ButtonGroupItem>
         </ButtonGroup>
-
-        {/*
-          The direct File and FileDiff views share one global Edit toggle.
-          Virtualizer/CodeView show a per-file edit control in each header.
-        */}
-        {isDirectView(viewMode) && (
-          <>
-            <div className="bg-border h-6 w-px" />
-
-            <ButtonGroup
-              value={mode}
-              onValueChange={(value) => setMode(value as Mode)}
-              aria-label="Edit mode"
-              size="icon"
-            >
-              <ButtonGroupItem value="review">
-                <IconEye />
-              </ButtonGroupItem>
-              <ButtonGroupItem value="edit">
-                <IconPencil />
-              </ButtonGroupItem>
-            </ButtonGroup>
-          </>
-        )}
 
         <div className="bg-border h-6 w-px" />
 
@@ -521,13 +496,10 @@ function PlaygroundControlsContent({
             label="Markers"
             checked={showMarkers}
             onCheckedChange={setShowMarkers}
-            // Markers require an attached editor, so they only apply in Edit mode.
-            disabled={mode !== 'edit'}
-            title={
-              mode !== 'edit'
-                ? 'Switch to Edit mode to show lint markers'
-                : undefined
-            }
+            // Markers require an attached editor, so they only apply while
+            // a session is active.
+            disabled={!editing}
+            title={!editing ? 'Start editing to show lint markers' : undefined}
           />
         )}
 
@@ -708,7 +680,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
   const [showAnnotations, setShowAnnotations] = useState(
     urlState.showAnnotations
   );
-  const [mode, setMode] = useState<Mode>(urlState.mode);
+  const [edit, setEdit] = useState(urlState.edit);
   const [showMarkers, setShowMarkers] = useState(urlState.showMarkers);
   const [selectedRange, setSelectedRange] = useState<SelectedLineRange | null>(
     urlState.selectedRange
@@ -729,8 +701,6 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
     : enableLineSelection
       ? 'select'
       : 'none';
-
-  const edit = mode === 'edit';
 
   // Edits remap annotation line numbers (an Enter above a comment shifts it
   // down); onEditChange keeps this state tracking the live collection so the
@@ -761,6 +731,59 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
       }
     },
     []
+  );
+
+  // The file/diff the direct views show: the fixtures until a session is
+  // saved, then the accepted values. Save accepts the completed value under a
+  // fresh cacheKey; Cancel marks the session before turning edit off so the
+  // completion handler reverts instead.
+  const [playgroundFile, setPlaygroundFile] = useState(PLAYGROUND_FILE);
+  const [playgroundDiff, setPlaygroundDiff] = useState(
+    prerenderedDiff.fileDiff
+  );
+  const cancelledEdit = useRef(false);
+  const savedVersionRef = useRef(0);
+  const handleFileEditComplete = useCallback(
+    (event: FileEditCompleteEvent<PlaygroundAnnotationMetadata>) => {
+      if (cancelledEdit.current) {
+        cancelledEdit.current = false;
+        return null;
+      }
+      savedVersionRef.current += 1;
+      event.file.cacheKey = `${event.file.name}:v${savedVersionRef.current}`;
+      setPlaygroundFile(event.file);
+      return event.file;
+    },
+    []
+  );
+  const handleDiffEditComplete = useCallback(
+    (event: FileDiffEditCompleteEvent<PlaygroundAnnotationMetadata>) => {
+      if (cancelledEdit.current) {
+        cancelledEdit.current = false;
+        return null;
+      }
+      savedVersionRef.current += 1;
+      event.fileDiff.cacheKey = `${event.fileDiff.name}:v${savedVersionRef.current}`;
+      setPlaygroundDiff(event.fileDiff);
+      return event.fileDiff;
+    },
+    []
+  );
+  // Not a stable callback: the components call renderHeaderMetadata during
+  // render, so it has to close over the current `edit` each time.
+  const renderEditButtons = useCallback(
+    () => (
+      <EditSessionButtons
+        editing={edit}
+        onEdit={() => setEdit(true)}
+        onCancel={() => {
+          cancelledEdit.current = true;
+          setEdit(false);
+        }}
+        onSave={() => setEdit(false)}
+      />
+    ),
+    [edit]
   );
 
   // Apply (or clear) the demo markers whenever a direct view enters an edit
@@ -821,7 +844,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
       params.set('gutter', enableGutterUtility ? '1' : '0');
     if (showAnnotations !== DEFAULTS.annotations)
       params.set('annot', showAnnotations ? '1' : '0');
-    if (mode !== DEFAULTS.mode) params.set('edit', mode);
+    if (edit && isDirectView(viewMode)) params.set('edit', 'edit');
     if (showMarkers !== DEFAULTS.markers)
       params.set('markers', showMarkers ? '1' : '0');
 
@@ -855,7 +878,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
     enableLineSelection,
     enableGutterUtility,
     showAnnotations,
-    mode,
+    edit,
     showMarkers,
     committedSelectedRange,
   ]);
@@ -1014,11 +1037,11 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
     return () => document.body.classList.remove('overflow-hidden');
   }, [isControlsOpen]);
 
-  // The direct File and FileDiff views share the global edit control.
-  // Virtualizer and CodeView own per-surface controls instead.
+  // Switching views ends any direct-view edit session; the scrolling views
+  // own per-surface controls instead.
   const setViewModeAndResetEditor = useCallback((mode: ViewMode) => {
     setViewMode(mode);
-    if (!isDirectView(mode)) setMode('review');
+    setEdit(false);
   }, []);
 
   const [usePrerenderedHTML, setUsePrerenderedHTML] = useState(
@@ -1059,8 +1082,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
     setEnableGutterUtility,
     showAnnotations,
     setShowAnnotations,
-    mode,
-    setMode,
+    editing: edit,
     showMarkers,
     setShowMarkers,
     selectedRange,
@@ -1235,6 +1257,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
   const fileDiff = (
     <FileDiff
       {...prerenderedDiff}
+      fileDiff={playgroundDiff}
       prerenderedHTML={
         usePrerenderedHTML ? prerenderedDiff.prerenderedHTML : undefined
       }
@@ -1242,6 +1265,8 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
       edit={edit}
       editorOptions={editorOptions}
       onEditChange={handleEditChange}
+      onEditComplete={handleDiffEditComplete}
+      renderHeaderMetadata={renderEditButtons}
       selectedLines={selectedRange}
       lineAnnotations={showAnnotations ? annotations : EMPTY_ANNOTATIONS}
       options={fileDiffOptions}
@@ -1251,11 +1276,13 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
 
   const file = (
     <File
-      file={PLAYGROUND_FILE}
+      file={playgroundFile}
       className="border-border overflow-hidden rounded-lg border"
       edit={edit}
       editorOptions={editorOptions}
       onEditChange={handleEditChange}
+      onEditComplete={handleFileEditComplete}
+      renderHeaderMetadata={renderEditButtons}
       selectedLines={selectedRange}
       lineAnnotations={
         showAnnotations ? fileAnnotations : EMPTY_FILE_ANNOTATIONS
