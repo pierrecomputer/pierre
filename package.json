@@ -23,11 +23,11 @@
   },
   "lint-staged": {
     "**/*.{js,jsx,ts,tsx}": [
-      "oxfmt --write",
+      "oxfmt --write --no-error-on-unmatched-pattern",
       "oxlint --type-aware --tsconfig tsconfig.oxlint.json --fix"
     ],
     "**/*.{json,jsonc,yml,yaml}": [
-      "oxfmt --write"
+      "oxfmt --write --no-error-on-unmatched-pattern"
     ],
     "**/*.{css,pcss,postcss}": [
       "stylelint --fix"
