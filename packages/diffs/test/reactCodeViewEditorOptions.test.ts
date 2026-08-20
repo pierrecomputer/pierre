@@ -31,6 +31,7 @@ import type {
   DiffLineAnnotation,
   DiffsEditableComponent,
   DiffsEditor,
+  EditCompletionDecision,
   EditorChangeEvent,
   FileContents,
 } from '../src/types';
@@ -507,7 +508,7 @@ describe('React CodeView editor factory', () => {
       (
         _event: ItemCompletionEvent,
         _item: CodeViewItem<undefined>
-      ): CodeViewItem<undefined> | null => null
+      ): EditCompletionDecision => 'reject'
     );
     const editOffItem = makeFileItem('edit-off', {
       edit: true,
@@ -604,7 +605,7 @@ describe('React CodeView editor factory', () => {
       (
         _event: ItemCompletionEvent,
         _item: CodeViewItem<undefined>
-      ): CodeViewItem<undefined> | null => null
+      ): EditCompletionDecision => 'reject'
     );
     const changedItem = makeFileItem('changed', { edit: true, lineCount: 2 });
     const unchangedItem = makeFileItem('unchanged', {
@@ -881,7 +882,7 @@ describe('React CodeView edit completion teardown', () => {
         (
           _event: ItemCompletionEvent,
           _item: CodeViewItem<undefined>
-        ): CodeViewItem<undefined> | null => null
+        ): EditCompletionDecision => 'reject'
       );
       let root: Root | undefined;
 

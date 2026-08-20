@@ -30,6 +30,7 @@ import type {
   DiffsEditableComponent,
   DiffsEditor,
   DiffsTextDocument,
+  EditCompletionDecision,
   EditorActiveLineOptions,
   EditorChangeEvent,
   FileContents,
@@ -119,13 +120,14 @@ export interface FileEditCompleteEvent<LAnnotation> {
 }
 
 /**
- * Decides a completed edit synchronously: return the event's `file` (mutated
- * in place as needed, e.g. with a fresh `cacheKey`) to accept it, or `null`
- * (or the exact `originalFile`) to revert. Any other return throws.
+ * Decides a completed edit synchronously: return `'accept'` to install the
+ * event's `file`, or `'reject'` to restore `originalFile`. The event is frozen,
+ * so re-key the accepted file in place (`event.file.cacheKey = '…'`) before
+ * accepting. A missing handler rejects.
  */
 export type FileEditCompleteHandler<LAnnotation> = (
   event: FileEditCompleteEvent<LAnnotation>
-) => FileContents | null;
+) => EditCompletionDecision;
 
 export interface FileOptions<LAnnotation>
   extends BaseCodeOptions, InteractionManagerBaseOptions<'file'> {
@@ -965,22 +967,23 @@ export class File<
         originalLineAnnotations: externalAnnotations,
       };
       const { onEditComplete } = this.options;
+      // Frozen so a handler cannot swap the event's file/originalFile
+      // references; nested mutation (a fresh cacheKey on event.file) still
+      // works.
+      Object.freeze(event);
       try {
-        const returned = onEditComplete != null ? onEditComplete(event) : null;
-        if (returned === completedFile) {
+        const decision =
+          onEditComplete != null ? onEditComplete(event) : 'reject';
+        if (decision === 'accept') {
           if (
-            returned.cacheKey != null &&
-            returned.cacheKey === externalFile.cacheKey
+            completedFile.cacheKey != null &&
+            completedFile.cacheKey === externalFile.cacheKey
           ) {
             throw new Error(
               'File.completeEditSession: an accepted file must not reuse the replaced file cacheKey'
             );
           }
-          acceptedFile = returned;
-        } else if (returned != null && returned !== externalFile) {
-          throw new Error(
-            'File.completeEditSession: onEditComplete must return null, the event file, or the event originalFile. Do not return a cloned instance.'
-          );
+          acceptedFile = completedFile;
         }
       } catch (error) {
         failed = true;

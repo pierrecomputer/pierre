@@ -2,7 +2,6 @@ import { afterAll, describe, expect, test } from 'bun:test';
 import { createTwoFilesPatch } from 'diff';
 
 import {
-  cloneFileDiffMetadata,
   disposeHighlighter,
   FileDiff,
   parseDiffFromFile,
@@ -709,7 +708,7 @@ describe('completeEditSession', () => {
     const fixture = await createCompletionFixture({
       onEditComplete(event) {
         events.push(event);
-        return null;
+        return 'reject';
       },
     });
     const externalBefore = captureExternalDiffState(fixture.externalDiff);
@@ -770,7 +769,7 @@ describe('completeEditSession', () => {
       onEditComplete(event) {
         events.push(event);
         event.fileDiff.cacheKey = 'external:session-v2';
-        return event.fileDiff;
+        return 'accept';
       },
     });
     try {
@@ -806,7 +805,7 @@ describe('completeEditSession', () => {
     ];
     const fixture = await createCompletionFixture({
       lineAnnotations: externalAnnotations,
-      onEditComplete: () => null,
+      onEditComplete: () => 'reject',
     });
     try {
       const { editor, fileContainer, instance } = fixture;
@@ -845,7 +844,7 @@ describe('completeEditSession', () => {
     ];
     const fixture = await createCompletionFixture({
       lineAnnotations: externalAnnotations,
-      onEditComplete: () => null,
+      onEditComplete: () => 'reject',
     });
     const externalBefore = captureExternalDiffState(fixture.externalDiff);
     try {
@@ -869,9 +868,9 @@ describe('completeEditSession', () => {
     }
   });
 
-  test('returning the exact originalFileDiff reverts like null', async () => {
+  test('returning reject reverts to the external diff', async () => {
     const fixture = await createCompletionFixture({
-      onEditComplete: (event) => event.originalFileDiff,
+      onEditComplete: () => 'reject',
     });
     try {
       const { editor, externalDiff, instance } = fixture;
@@ -901,32 +900,11 @@ describe('completeEditSession', () => {
     }
   });
 
-  test('returning a clone throws and still settles on the external diff', async () => {
-    const fixture = await createCompletionFixture({
-      onEditComplete: (event) => cloneFileDiffMetadata(event.fileDiff),
-    });
-    try {
-      const { editor, externalDiff, instance } = fixture;
-      replaceDocument(editor, 'alpha\nedited value\nomega\n');
-      fixture.detach();
-      expect(() => instance.completeEditSession()).toThrow(
-        'onEditComplete must return null, the event fileDiff, or the event originalFileDiff'
-      );
-
-      expect(instance.fileDiff).toBe(externalDiff);
-      expect(instance.getLatestDiffForTest()).toBe(externalDiff);
-      // Settled: a second call has no session left to complete.
-      instance.completeEditSession();
-    } finally {
-      fixture.cleanup();
-    }
-  });
-
   test('accepting with the replaced cacheKey throws and reverts', async () => {
     const fixture = await createCompletionFixture({
       onEditComplete(event) {
         event.fileDiff.cacheKey = 'external:session-v1';
-        return event.fileDiff;
+        return 'accept';
       },
     });
     try {
@@ -972,7 +950,7 @@ describe('completeEditSession', () => {
       lineAnnotations: externalAnnotations,
       onEditComplete(event) {
         events.push(event);
-        return null;
+        return 'reject';
       },
     });
     try {
@@ -1003,7 +981,7 @@ describe('completeEditSession', () => {
     const fixture = await createCompletionFixture({
       onEditComplete(event) {
         events.push(event);
-        return null;
+        return 'reject';
       },
     });
     try {
@@ -1027,7 +1005,7 @@ describe('completeEditSession', () => {
       onEditChange: (event) => changeEvents.push(event),
       onEditComplete(event) {
         event.fileDiff.cacheKey = 'external:session-v2';
-        return event.fileDiff;
+        return 'accept';
       },
     });
     try {
@@ -1074,7 +1052,7 @@ describe('completeEditSession', () => {
       onEditComplete(event) {
         events.push(event);
         event.fileDiff.cacheKey = 'external:accepted-v1';
-        return event.fileDiff;
+        return 'accept';
       },
     });
     const editor = new Editor<undefined>({});
@@ -1134,7 +1112,7 @@ describe('completeEditSession', () => {
       externalDiff: newFileDiff,
       onEditComplete(event) {
         events.push(event);
-        return null;
+        return 'reject';
       },
     });
     try {
@@ -1191,7 +1169,7 @@ describe('completeEditSession', () => {
       loadDiffFiles: () => Promise.resolve({ oldFile, newFile }),
       onEditComplete(event) {
         events.push(event);
-        return null;
+        return 'reject';
       },
     });
     try {
@@ -1230,7 +1208,7 @@ describe('editor session lifecycle', () => {
       onEditComplete(event) {
         events.push(event);
         event.fileDiff.cacheKey = 'external:session-v2';
-        return event.fileDiff;
+        return 'accept';
       },
     });
     const editor = new Editor<undefined>({});
@@ -1281,7 +1259,7 @@ describe('editor session lifecycle', () => {
       onEditComplete(event) {
         events.push(event);
         event.fileDiff.cacheKey = 'external:session-v2';
-        return event.fileDiff;
+        return 'accept';
       },
     });
     const editor = new Editor<undefined>({});
@@ -1330,7 +1308,7 @@ describe('persistState at completion', () => {
     const instance = new TestFileDiff({
       disableErrorHandling: true,
       disableFileHeader: true,
-      onEditComplete: () => null,
+      onEditComplete: () => 'reject',
     });
     const editor = new Editor<undefined>({ persistState: true });
     try {

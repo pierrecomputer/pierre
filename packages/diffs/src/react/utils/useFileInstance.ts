@@ -97,17 +97,17 @@ export function useFileInstance<LAnnotation>({
   const acceptedCache = useRef<AcceptedCompletion<LAnnotation> | null>(null);
   const handleOnEditComplete = useStableCallback(
     (event: FileEditCompleteEvent<LAnnotation>) => {
-      const returned = _onEditComplete?.(event) ?? null;
-      if (returned === event.file) {
+      const decision = _onEditComplete?.(event) ?? 'reject';
+      if (decision === 'accept') {
         acceptedCache.current = {
-          file: { installed: returned, stale: event.originalFile },
+          file: { installed: event.file, stale: event.originalFile },
           annotations: {
             installed: event.lineAnnotations,
             stale: event.originalLineAnnotations,
           },
         };
       }
-      return returned;
+      return decision;
     }
   );
   const onEditComplete =

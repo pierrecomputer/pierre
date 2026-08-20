@@ -549,6 +549,14 @@ export type DiffLineAnnotation<T = undefined> = {
   lineNumber: number;
 } & OptionalMetadata<T>;
 
+/**
+ * An edit-completion handler's decision: `'accept'` installs the completed
+ * value the event carries, `'reject'` restores the external input. The event
+ * is frozen, so re-key the accepted value in place (`event.file.cacheKey =
+ * '…'`) before returning `'accept'`.
+ */
+export type EditCompletionDecision = 'accept' | 'reject';
+
 export type CodeViewFileItem<T = undefined> = {
   id: string;
   type: 'file';

@@ -116,14 +116,17 @@ export function useFileDiffInstance<LAnnotation>({
   const acceptedCache = useRef<AcceptedCompletion<LAnnotation> | null>(null);
   const handleOnEditComplete = useStableCallback(
     (event: FileDiffEditCompleteEvent<LAnnotation>) => {
-      const returned = _onEditComplete?.(event) ?? null;
-      if (returned === event.fileDiff) {
+      const decision = _onEditComplete?.(event) ?? 'reject';
+      if (decision === 'accept') {
         acceptedCache.current = {
-          fileDiff: { installed: returned, stale: event.originalFileDiff },
+          fileDiff: {
+            installed: event.fileDiff,
+            stale: event.originalFileDiff,
+          },
           filePair:
             fileDiff == null
               ? {
-                  fileDiff: returned,
+                  fileDiff: event.fileDiff,
                   installed: { oldFile: event.oldFile, newFile: event.newFile },
                   stale: { oldFile: oldFile ?? null, newFile: newFile ?? null },
                 }
@@ -134,7 +137,7 @@ export function useFileDiffInstance<LAnnotation>({
           },
         };
       }
-      return returned;
+      return decision;
     }
   );
   const onEditComplete =

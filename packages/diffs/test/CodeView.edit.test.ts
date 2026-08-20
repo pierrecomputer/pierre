@@ -15,6 +15,7 @@ import type {
   DiffLineAnnotation,
   DiffsEditableComponent,
   DiffsEditor,
+  EditCompletionDecision,
   FileContents,
   FileDiffLoadedFiles,
   FileDiffMetadata,
@@ -958,10 +959,10 @@ describe('CodeView item edit mode', () => {
       createEditor: (options) => new Editor<undefined>({ ...options }),
       onItemEditComplete(event, item, nextItem) {
         if (item.type !== 'file' || !('file' in event)) {
-          return null;
+          return 'reject';
         }
         event.file.cacheKey = `${item.id}:v${nextItem.version}`;
-        return nextItem;
+        return 'accept';
       },
     });
     const item = makeEditFileItem('edited', true, 30);
@@ -1633,7 +1634,7 @@ describe('CodeView item edit mode', () => {
         createEditor,
         onItemEditComplete(event, item) {
           completions.push({ event, item });
-          return null;
+          return 'reject';
         },
       });
       const item = makeEditFileItem('a');
@@ -1675,10 +1676,10 @@ describe('CodeView item edit mode', () => {
         createEditor,
         onItemEditComplete(event, item, nextItem) {
           if (item.type !== 'file' || !('file' in event)) {
-            return null;
+            return 'reject';
           }
           event.file.cacheKey = `${item.id}:v${nextItem.version}`;
-          return nextItem;
+          return 'accept';
         },
       });
       const item = makeEditFileItem('a');
@@ -1712,7 +1713,7 @@ describe('CodeView item edit mode', () => {
       const viewer = new CodeView({
         createEditor,
         onItemEditComplete() {
-          return null;
+          return 'reject';
         },
       });
       const item = makeEditFileItem('a');
@@ -1740,8 +1741,8 @@ describe('CodeView item edit mode', () => {
       const { editors, createEditor } = createEditorHarness();
       const viewer = new CodeView({
         createEditor,
-        onItemEditComplete(_event, item) {
-          return item;
+        onItemEditComplete() {
+          return 'reject';
         },
       });
       const item = makeEditFileItem('a');
@@ -1764,48 +1765,17 @@ describe('CodeView item edit mode', () => {
       }
     });
 
-    test('returning a constructed item throws', async () => {
-      const { cleanup } = installDom();
-      const { editors, createEditor } = createEditorHarness();
-      const viewer = new CodeView({
-        createEditor,
-        onItemEditComplete(_event, _item, nextItem) {
-          return { ...nextItem };
-        },
-      });
-      const item = makeEditFileItem('a');
-      try {
-        viewer.setup(createRoot());
-        await renderItems(viewer, [item]);
-        const instance = editors[0].edits[0];
-
-        setSessionText(editors[0], 'changed');
-        expect(() =>
-          viewer.updateItem({ ...item, edit: false, version: 1 })
-        ).toThrow('Do not return a constructed item');
-        // The session still settled on the item file before the throw.
-        expect(getExternalFile(instance)).toBe(
-          item.type === 'file' ? item.file : undefined
-        );
-        expect(getEditSessionFile(instance)).toBeUndefined();
-      } finally {
-        viewer.cleanUp();
-        await wait(0);
-        cleanup();
-      }
-    });
-
     test('fires with the removal-time item and never reinserts it', async () => {
       const { cleanup } = installDom();
       const { editors, createEditor } = createEditorHarness();
       const completions: Completion[] = [];
       const viewer = new CodeView({
         createEditor,
-        onItemEditComplete(event, item, nextItem) {
+        onItemEditComplete(event, item, _nextItem) {
           completions.push({ event, item });
           // Accepting a removed item records the result but must not put the
           // item back into the collection.
-          return nextItem;
+          return 'accept';
         },
       });
       const removed = makeEditFileItem('a');
@@ -1840,7 +1810,7 @@ describe('CodeView item edit mode', () => {
         createEditor,
         onItemEditComplete(event, item) {
           completions.push({ event, item });
-          return null;
+          return 'reject';
         },
       });
       const item = makeEditFileItem('a');
@@ -1884,7 +1854,7 @@ describe('CodeView item edit mode', () => {
         createEditor,
         onItemEditComplete() {
           completions += 1;
-          return null;
+          return 'reject';
         },
       });
       const item = makeEditFileItem('a');
@@ -1912,12 +1882,12 @@ describe('CodeView item edit mode', () => {
           | FileEditCompleteEvent<undefined>
           | FileDiffEditCompleteEvent<undefined>,
         item: CodeViewItem<undefined>
-      ) => {
+      ): EditCompletionDecision => {
         if ('file' in event) {
           completions.push({ id: item.id, contents: event.file.contents });
         }
         viewer.addItems([replacement]);
-        return null;
+        return 'reject';
       };
       const viewer = new CodeView({
         createEditor,
@@ -1965,9 +1935,9 @@ describe('CodeView item edit mode', () => {
       const item = makeEditFileItem('a');
       const viewer = new CodeView({
         createEditor,
-        onItemEditComplete(event, completing, nextItem) {
+        onItemEditComplete(event, completing, _nextItem) {
           completions.push({ event, item: completing });
-          return nextItem;
+          return 'accept';
         },
       });
       try {
@@ -2008,7 +1978,7 @@ describe('CodeView item edit mode', () => {
         createEditor,
         onItemEditComplete(event, item) {
           completions.push({ event, item });
-          return null;
+          return 'reject';
         },
       });
       try {

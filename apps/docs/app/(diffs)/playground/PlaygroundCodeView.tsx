@@ -5,6 +5,7 @@ import {
   type CodeViewItem,
   type CodeViewLineSelection,
   type DiffLineAnnotation,
+  type EditCompletionDecision,
   type FileDiffEditCompleteEvent,
   type FileEditCompleteEvent,
   type LineAnnotation,
@@ -54,8 +55,8 @@ interface PlaygroundCodeViewProps {
 // app-level EditProvider and keeps it attached across virtualization
 // scroll-out, so unsaved edits and undo history survive scrolling. Save and
 // Cancel both end the session by turning edit off; `onItemEditComplete` then
-// accepts by returning the built next item (Save) or reverts by returning
-// null (Cancel, marked before the toggle).
+// returns 'accept' (Save — mirroring the built nextItem into state) or
+// 'reject' (Cancel, marked before the toggle).
 //
 // Annotations ride on item data: a gutter utility gesture appends a comment
 // form at its final line, submitting persists it as a comment thread, and
@@ -86,10 +87,10 @@ export function PlaygroundCodeView({
   }, []);
 
   // Committing a finished edit session: stamp a fresh cacheKey on the
-  // completed file/fileDiff and return the nextItem CodeView built from it.
-  // CodeView installs the value and applies nextItem itself; mirroring the
-  // same object into React state keeps the controlled collection matching
-  // (equal versions make the props push a no-op).
+  // completed file/fileDiff and return 'accept'. CodeView installs the value
+  // and applies the built nextItem itself; mirroring the same object into
+  // React state keeps the controlled collection matching (equal versions make
+  // the props push a no-op).
   const handleEditComplete = useCallback(
     (
       event:
@@ -97,9 +98,9 @@ export function PlaygroundCodeView({
         | FileDiffEditCompleteEvent<PlaygroundAnnotationMetadata>,
       item: PlaygroundItem,
       nextItem: PlaygroundItem
-    ): PlaygroundItem | null => {
+    ): EditCompletionDecision => {
       if (cancelledEdits.current.delete(item.id)) {
-        return null;
+        return 'reject';
       }
       const cacheKey = `${item.id}:v${nextItem.version}`;
       if ('file' in event) {
@@ -112,7 +113,7 @@ export function PlaygroundCodeView({
           existing.id === item.id ? nextItem : existing
         )
       );
-      return nextItem;
+      return 'accept';
     },
     []
   );

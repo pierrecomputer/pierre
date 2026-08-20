@@ -43,6 +43,7 @@ import type {
   DiffsEditableComponent,
   DiffsEditor,
   DiffsTextDocument,
+  EditCompletionDecision,
   EditorActiveLineOptions,
   EditorChangeEvent,
   ExpansionDirections,
@@ -251,13 +252,14 @@ export interface FileDiffEditCompleteEvent<LAnnotation> {
 }
 
 /**
- * Decides a completed edit synchronously: return the event's `fileDiff`
- * (mutated in place as needed, e.g. with a fresh `cacheKey`) to accept it, or
- * `null` (or the exact `originalFileDiff`) to revert. Any other return throws.
+ * Decides a completed edit synchronously: return `'accept'` to install the
+ * event's `fileDiff`, or `'reject'` to restore `originalFileDiff`. The event is
+ * frozen, so re-key the accepted diff in place (`event.fileDiff.cacheKey =
+ * '…'`) before accepting. A missing handler rejects.
  */
 export type FileDiffEditCompleteHandler<LAnnotation> = (
   event: FileDiffEditCompleteEvent<LAnnotation>
-) => FileDiffMetadata | null;
+) => EditCompletionDecision;
 
 export interface FileDiffOptions<LAnnotation>
   extends
@@ -1957,24 +1959,25 @@ export class FileDiff<
         originalLineAnnotations: externalAnnotations,
       };
       const { onEditComplete } = this.options;
+      // Frozen so a handler cannot swap the event's fileDiff/originalFileDiff
+      // references; nested mutation (i.e. a fresh cacheKey on event.fileDiff)
+      // still works.
+      Object.freeze(event);
       try {
-        const returned = onEditComplete != null ? onEditComplete(event) : null;
-        if (returned === completedDiff) {
+        const decision =
+          onEditComplete != null ? onEditComplete(event) : 'reject';
+        if (decision === 'accept') {
           if (
-            returned.cacheKey != null &&
-            returned.cacheKey === externalDiff.cacheKey
+            completedDiff.cacheKey != null &&
+            completedDiff.cacheKey === externalDiff.cacheKey
           ) {
             throw new Error(
               'FileDiff.completeEditSession: an accepted diff must not reuse the replaced diff cacheKey'
             );
           }
-          acceptedDiff = returned;
+          acceptedDiff = completedDiff;
           acceptedOldFile = event.oldFile;
           acceptedNewFile = event.newFile;
-        } else if (returned != null && returned !== externalDiff) {
-          throw new Error(
-            'FileDiff.completeEditSession: onEditComplete must return null, the event fileDiff, or the event originalFileDiff. Do not return a cloned instance.'
-          );
         }
       } catch (error) {
         failed = true;

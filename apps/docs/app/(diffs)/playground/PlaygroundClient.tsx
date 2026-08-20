@@ -721,7 +721,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
     (event: FileEditCompleteEvent<PlaygroundAnnotationMetadata>) => {
       if (cancelledEdit.current) {
         cancelledEdit.current = false;
-        return null;
+        return 'reject';
       }
       savedVersionRef.current += 1;
       event.file.cacheKey = `${event.file.name}:v${savedVersionRef.current}`;
@@ -731,7 +731,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
       if (event.lineAnnotations != null) {
         setFileAnnotations(event.lineAnnotations);
       }
-      return event.file;
+      return 'accept';
     },
     []
   );
@@ -739,7 +739,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
     (event: FileDiffEditCompleteEvent<PlaygroundAnnotationMetadata>) => {
       if (cancelledEdit.current) {
         cancelledEdit.current = false;
-        return null;
+        return 'reject';
       }
       savedVersionRef.current += 1;
       event.fileDiff.cacheKey = `${event.fileDiff.name}:v${savedVersionRef.current}`;
@@ -747,7 +747,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
       if (event.lineAnnotations != null) {
         setAnnotations(event.lineAnnotations);
       }
-      return event.fileDiff;
+      return 'accept';
     },
     []
   );

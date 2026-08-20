@@ -1255,7 +1255,7 @@ describe('React completion lifecycle', () => {
     const harness = createFileHarness((event) => {
       events.push(event);
       event.file.cacheKey = 'accepted:v2';
-      return event.file;
+      return 'accept';
     });
     try {
       await harness.render({ file: FILE_A, edit: true });
@@ -1313,7 +1313,7 @@ describe('React completion lifecycle', () => {
     const harness = createFileHarness((event) => {
       events.push(event);
       event.file.cacheKey = 'accepted:v2';
-      return event.file;
+      return 'accept';
     });
     try {
       await harness.render({ file: KEYED_FILE, edit: true });
@@ -1341,7 +1341,7 @@ describe('React completion lifecycle', () => {
     const events: FileEditCompleteEvent<undefined>[] = [];
     const harness = createFileHarness((event) => {
       events.push(event);
-      return null;
+      return 'reject';
     });
     try {
       await harness.render({ file: FILE_A, edit: true });
@@ -1361,38 +1361,13 @@ describe('React completion lifecycle', () => {
     }
   });
 
-  test('returning a clone throws and the surface settles on the file prop', async () => {
-    const harness = createFileHarness((event) => ({ ...event.file }));
-    try {
-      await harness.render({ file: FILE_A, edit: true });
-      await waitFor(() => harness.editors[0]?.getText() === FILE_A.contents, {
-        timeout: 4_000,
-      });
-      act(() => {
-        insertAtStart(harness.editors[0], '/* edited */\n');
-      });
-      const error = await harness.renderError({ file: FILE_A, edit: false });
-      expect(String(error)).toContain(
-        'onEditComplete must return null, the event file, or the event originalFile'
-      );
-      // The throw from the effect cleanup crashes the React tree (no error
-      // boundary here), so only the prop object's integrity is observable at
-      // this layer; the settle-before-throw behavior is pinned in the
-      // vanilla completeEditSession tests.
-      expect(FILE_A.cacheKey).toBeUndefined();
-      expect(FILE_A.contents).toBe('const value = 1;\nconst other = 2;\n');
-    } finally {
-      await harness.cleanup();
-    }
-  });
-
   test('unmount completes a changed session once without installing', async () => {
     const events: FileEditCompleteEvent<undefined>[] = [];
     const externalFile: FileContents = { ...FILE_A };
     const harness = createFileHarness((event) => {
       events.push(event);
       event.file.cacheKey = 'accepted:v2';
-      return event.file;
+      return 'accept';
     });
     try {
       await harness.render({ file: externalFile, edit: true });
@@ -1417,7 +1392,7 @@ describe('React completion lifecycle', () => {
     const harness = createFileHarness((event) => {
       events.push(event);
       event.file.cacheKey = 'accepted:v2';
-      return event.file;
+      return 'accept';
     });
     try {
       await harness.render({
@@ -1480,7 +1455,7 @@ describe('React diff input bridges after acceptance', () => {
     const onEditComplete: FileDiffEditCompleteHandler<undefined> = (event) => {
       events.push(event);
       event.fileDiff.cacheKey = 'accepted:v2';
-      return event.fileDiff;
+      return 'accept';
     };
     const baseOptions = (extra?: Partial<FileDiffOptions<undefined>>) => ({
       disableFileHeader: true,

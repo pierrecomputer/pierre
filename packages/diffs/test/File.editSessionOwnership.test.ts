@@ -856,7 +856,7 @@ describe('completeEditSession', () => {
     const fixture = await createCompletionFixture({
       onEditComplete(event) {
         events.push(event);
-        return null;
+        return 'reject';
       },
     });
     try {
@@ -887,7 +887,7 @@ describe('completeEditSession', () => {
       onEditComplete(event) {
         events.push(event);
         event.file.cacheKey = 'external:file-v2';
-        return event.file;
+        return 'accept';
       },
     });
     try {
@@ -923,7 +923,7 @@ describe('completeEditSession', () => {
     ];
     const fixture = await createCompletionFixture({
       lineAnnotations: externalAnnotations,
-      onEditComplete: () => null,
+      onEditComplete: () => 'reject',
     });
     try {
       const { editor, fileContainer, instance } = fixture;
@@ -962,7 +962,7 @@ describe('completeEditSession', () => {
     ];
     const fixture = await createCompletionFixture({
       lineAnnotations: externalAnnotations,
-      onEditComplete: () => null,
+      onEditComplete: () => 'reject',
     });
     try {
       const { editor, externalFile, instance } = fixture;
@@ -982,9 +982,9 @@ describe('completeEditSession', () => {
     }
   });
 
-  test('returning the exact originalFile reverts like null', async () => {
+  test('returning reject reverts to the external file', async () => {
     const fixture = await createCompletionFixture({
-      onEditComplete: (event) => event.originalFile,
+      onEditComplete: () => 'reject',
     });
     try {
       const { editor, externalFile, instance } = fixture;
@@ -1014,32 +1014,11 @@ describe('completeEditSession', () => {
     }
   });
 
-  test('returning a clone throws and still settles on the external file', async () => {
-    const fixture = await createCompletionFixture({
-      onEditComplete: (event) => ({ ...event.file }),
-    });
-    try {
-      const { editor, externalFile, instance } = fixture;
-      replaceDocument(editor, 'edited\nbravo\n');
-      fixture.detach();
-      expect(() => instance.completeEditSession()).toThrow(
-        'onEditComplete must return null, the event file, or the event originalFile'
-      );
-
-      expect(instance.file).toBe(externalFile);
-      expect(instance.getLatestFileForTest()).toBe(externalFile);
-      // Settled: a second call has no session left to complete.
-      instance.completeEditSession();
-    } finally {
-      fixture.cleanup();
-    }
-  });
-
   test('accepting with the replaced cacheKey throws and reverts', async () => {
     const fixture = await createCompletionFixture({
       onEditComplete(event) {
         event.file.cacheKey = EXTERNAL_FILE.cacheKey;
-        return event.file;
+        return 'accept';
       },
     });
     try {
@@ -1085,7 +1064,7 @@ describe('completeEditSession', () => {
       lineAnnotations: externalAnnotations,
       onEditComplete(event) {
         events.push(event);
-        return null;
+        return 'reject';
       },
     });
     try {
@@ -1114,7 +1093,7 @@ describe('completeEditSession', () => {
     const fixture = await createCompletionFixture({
       onEditComplete(event) {
         events.push(event);
-        return null;
+        return 'reject';
       },
     });
     try {
@@ -1138,7 +1117,7 @@ describe('completeEditSession', () => {
       onEditChange: (event) => changeEvents.push(event),
       onEditComplete(event) {
         event.file.cacheKey = 'external:file-v2';
-        return event.file;
+        return 'accept';
       },
     });
     try {
@@ -1171,7 +1150,7 @@ describe('completeEditSession', () => {
     const fixture = await createCompletionFixture({
       onEditComplete(event) {
         events.push(event);
-        return null;
+        return 'reject';
       },
     });
     try {
@@ -1241,7 +1220,7 @@ describe('editor session lifecycle', () => {
       onEditComplete(event) {
         events.push(event);
         event.file.cacheKey = 'external:file-v2';
-        return event.file;
+        return 'accept';
       },
     });
     try {
@@ -1265,7 +1244,7 @@ describe('editor session lifecycle', () => {
     const fixture = await createLifecycleFixture({
       onEditComplete(event) {
         events.push(event);
-        return null;
+        return 'reject';
       },
     });
     try {
@@ -1292,7 +1271,7 @@ describe('editor session lifecycle', () => {
       disableFileHeader: true,
       onEditComplete(event) {
         events.push(event);
-        return null;
+        return 'reject';
       },
     });
     let attachCount = 0;
@@ -1330,7 +1309,7 @@ describe('editor session lifecycle', () => {
       onEditComplete(event) {
         events.push(event);
         event.file.cacheKey = 'external:file-v2';
-        return event.file;
+        return 'accept';
       },
     });
     try {
@@ -1352,7 +1331,7 @@ describe('editor session lifecycle', () => {
     const fixture = await createLifecycleFixture({
       onEditComplete(event) {
         events.push(event);
-        return null;
+        return 'reject';
       },
     });
     try {
@@ -1373,7 +1352,7 @@ describe('editor session lifecycle', () => {
     const fixture = await createLifecycleFixture({
       onEditComplete(event) {
         events.push(event);
-        return null;
+        return 'reject';
       },
     });
     try {
@@ -1424,7 +1403,7 @@ describe('persistState at completion', () => {
 
   test('a rejected completion cannot come back through persistState', async () => {
     const fixture = await createPersistFixture({
-      onEditComplete: () => null,
+      onEditComplete: () => 'reject',
     });
     try {
       const { editor, externalFile, finishSession, instance } = fixture;
@@ -1450,7 +1429,7 @@ describe('persistState at completion', () => {
       onEditComplete(event) {
         events.push(event);
         event.file.cacheKey = 'external:file-v2';
-        return event.file;
+        return 'accept';
       },
     });
     try {

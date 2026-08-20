@@ -34,6 +34,7 @@ import {
   type CodeViewSlotSnapshot,
   type DiffLineAnnotation,
   type DiffsEditor,
+  type EditCompletionDecision,
   type GetHoveredLineResult,
   type LineAnnotation,
 } from '../index';
@@ -91,16 +92,17 @@ interface CodeViewBaseProps<LAnnotation> {
    * Not called for sessions without changes; collapse suspends the session
    * instead of completing it. `nextItem` is the accepted replacement
    * CodeView built from `item`: the event's completed `file`/`fileDiff` and
-   * annotations, `edit: false`, and a bumped `version`. Return `nextItem`
-   * (re-keyed as needed) to accept the edit: CodeView applies it through the
-   * item update path when the item still exists, and a controlled owner puts
-   * the same `nextItem` into its state. Return `item` or `null` to revert.
+   * annotations, `edit: false`, and a bumped `version`. Return `'accept'` to
+   * install the edit — CodeView applies `nextItem` through the item update
+   * path when the item still exists, and a controlled owner puts the same
+   * `nextItem` into its state — or `'reject'` to revert. The event is frozen;
+   * re-key the accepted value in place before accepting.
    */
   onItemEditComplete?<TMode extends CodeViewMode>(
     event: CodeViewItemEditCompleteEventMap<LAnnotation>[TMode],
     item: CodeViewModeItemMap<LAnnotation>[TMode],
     nextItem: CodeViewModeItemMap<LAnnotation>[TMode]
-  ): CodeViewItem<LAnnotation> | null;
+  ): EditCompletionDecision;
   renderCustomHeader?(item: CodeViewItem<LAnnotation>): ReactNode;
   renderHeaderPrefix?(item: CodeViewItem<LAnnotation>): ReactNode;
   renderHeaderFilenameSuffix?(item: CodeViewItem<LAnnotation>): ReactNode;
@@ -274,7 +276,7 @@ function CodeViewInner<LAnnotation = undefined>(
       event: CodeViewItemEditCompleteEventMap<LAnnotation>[TMode],
       item: CodeViewModeItemMap<LAnnotation>[TMode],
       nextItem: CodeViewModeItemMap<LAnnotation>[TMode]
-    ) => onItemEditComplete?.(event, item, nextItem) ?? null
+    ) => onItemEditComplete?.(event, item, nextItem) ?? 'reject'
   );
 
   const managedOptions = useMemo(

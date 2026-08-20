@@ -28,9 +28,8 @@ import type {
   CodeViewScrollBehavior,
   CodeViewScrollTarget,
   DiffsEditor,
+  EditCompletionDecision,
   EditorChangeEvent,
-  FileContents,
-  FileDiffMetadata,
   HunkSeparators,
   PendingCodeViewLayoutReset,
   SelectedLineRange,
@@ -553,17 +552,17 @@ export interface CodeViewOptions<LAnnotation>
    * session. `item` is the item that owned the session, and `nextItem` is
    * the accepted replacement CodeView built from it: the event's completed
    * value and annotations, `edit: false`, and a bumped `version`. Return
-   * `nextItem` — mutated in place as needed, e.g. a fresh `cacheKey` on its
-   * file/fileDiff — to accept the edit: CodeView installs the value and
-   * applies `nextItem` through the item update path when the item still
-   * exists, and a controlled owner puts the same `nextItem` into its state.
-   * Return `item` or `null` to revert. Anything else throws.
+   * `'accept'` to install the edit — CodeView applies `nextItem` through the
+   * item update path when the item still exists, and a controlled owner puts
+   * the same `nextItem` into its state — or `'reject'` to revert. The event is
+   * frozen; re-key the accepted value in place (`event.fileDiff.cacheKey =
+   * '…'`) before accepting.
    */
   onItemEditComplete?<TMode extends CodeViewMode>(
     event: CodeViewItemEditCompleteEventMap<LAnnotation>[TMode],
     item: CodeViewModeItemMap<LAnnotation>[TMode],
     nextItem: CodeViewModeItemMap<LAnnotation>[TMode]
-  ): CodeViewItem<LAnnotation> | null;
+  ): EditCompletionDecision;
 
   /** Render a non-virtualized element at the very start of the scroll content,
    * before the first item. It is always rendered and scrolls with the content.
@@ -2212,7 +2211,7 @@ export class CodeView<LAnnotation = undefined> {
   private completeFileItemEdit(
     state: CodeViewItemOptionsState<LAnnotation>,
     event: FileEditCompleteEvent<LAnnotation>
-  ): FileContents | null {
+  ): EditCompletionDecision {
     const item = this.requireItemFromState(state);
     if (item.type !== 'file') {
       throw new Error(
@@ -2226,15 +2225,10 @@ export class CodeView<LAnnotation = undefined> {
       edit: false,
       version: (item.version ?? 0) + 1,
     };
-    const returned =
-      this.options.onItemEditComplete?.(event, item, nextItem) ?? null;
-    if (returned == null || returned === item) {
-      return null;
-    }
-    if (returned !== nextItem) {
-      throw new Error(
-        'CodeView.onItemEditComplete: return the given item, the given nextItem, or null. Do not return a constructed item.'
-      );
+    const decision =
+      this.options.onItemEditComplete?.(event, item, nextItem) ?? 'reject';
+    if (decision === 'reject') {
+      return 'reject';
     }
     if (this.idToItem.has(item.id)) {
       // The accepted item goes through the normal update path; updateItem
@@ -2242,7 +2236,7 @@ export class CodeView<LAnnotation = undefined> {
       // item's acceptance is recorded by the settle but never reinserted.
       this.updateItem(nextItem);
     }
-    return event.file;
+    return 'accept';
   }
 
   /**
@@ -2252,7 +2246,7 @@ export class CodeView<LAnnotation = undefined> {
   private completeDiffItemEdit(
     state: CodeViewItemOptionsState<LAnnotation>,
     event: FileDiffEditCompleteEvent<LAnnotation>
-  ): FileDiffMetadata | null {
+  ): EditCompletionDecision {
     const item = this.requireItemFromState(state);
     if (item.type !== 'diff') {
       throw new Error(
@@ -2266,15 +2260,10 @@ export class CodeView<LAnnotation = undefined> {
       edit: false,
       version: (item.version ?? 0) + 1,
     };
-    const returned =
-      this.options.onItemEditComplete?.(event, item, nextItem) ?? null;
-    if (returned == null || returned === item) {
-      return null;
-    }
-    if (returned !== nextItem) {
-      throw new Error(
-        'CodeView.onItemEditComplete: return the given item, the given nextItem, or null. Do not return a constructed item.'
-      );
+    const decision =
+      this.options.onItemEditComplete?.(event, item, nextItem) ?? 'reject';
+    if (decision === 'reject') {
+      return 'reject';
     }
     if (this.idToItem.has(item.id)) {
       // The accepted item goes through the normal update path; updateItem
@@ -2282,7 +2271,7 @@ export class CodeView<LAnnotation = undefined> {
       // item's acceptance is recorded by the settle but never reinserted.
       this.updateItem(nextItem);
     }
-    return event.fileDiff;
+    return 'accept';
   }
 
   private renamePendingScrollTarget(oldId: string, newId: string): void {

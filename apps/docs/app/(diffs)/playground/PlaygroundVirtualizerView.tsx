@@ -200,7 +200,7 @@ export function PlaygroundVirtualizerView({
         onEditComplete: (event) => {
           if (readmeCancelled) {
             readmeCancelled = false;
-            return null;
+            return 'reject';
           }
           savedVersionRef.current += 1;
           event.file.cacheKey = `${event.file.name}:v${savedVersionRef.current}`;
@@ -210,7 +210,7 @@ export function PlaygroundVirtualizerView({
           if (event.lineAnnotations != null) {
             fileAnnotationsRef.current = event.lineAnnotations;
           }
-          return event.file;
+          return 'accept';
         },
         onGutterUtilityClick: (range) => {
           const lineNumber = range.end;
@@ -354,7 +354,7 @@ export function PlaygroundVirtualizerView({
             onEditComplete: (event) => {
               if (cancelled) {
                 cancelled = false;
-                return null;
+                return 'reject';
               }
               savedVersionRef.current += 1;
               event.fileDiff.cacheKey = `${event.fileDiff.name}:v${savedVersionRef.current}`;
@@ -362,7 +362,7 @@ export function PlaygroundVirtualizerView({
               if (event.lineAnnotations != null) {
                 annotationsRef.current[index] = event.lineAnnotations;
               }
-              return event.fileDiff;
+              return 'accept';
             },
             onGutterUtilityClick: (range) => {
               const side = range.endSide ?? range.side;

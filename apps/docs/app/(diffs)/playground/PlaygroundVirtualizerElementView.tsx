@@ -121,7 +121,7 @@ function ElementVirtualizerFile({
     (event: FileEditCompleteEvent<PlaygroundAnnotationMetadata>) => {
       if (cancelled.current) {
         cancelled.current = false;
-        return null;
+        return 'reject';
       }
       savedVersion.current += 1;
       event.file.cacheKey = `${event.file.name}:v${savedVersion.current}`;
@@ -131,7 +131,7 @@ function ElementVirtualizerFile({
       if (event.lineAnnotations != null) {
         setAnnotations(event.lineAnnotations);
       }
-      return event.file;
+      return 'accept';
     },
     []
   );
@@ -306,7 +306,7 @@ function ElementVirtualizerDiff({
     (event: FileDiffEditCompleteEvent<PlaygroundAnnotationMetadata>) => {
       if (cancelled.current) {
         cancelled.current = false;
-        return null;
+        return 'reject';
       }
       savedVersion.current += 1;
       event.fileDiff.cacheKey = `${event.fileDiff.name}:v${savedVersion.current}`;
@@ -314,7 +314,7 @@ function ElementVirtualizerDiff({
       if (event.lineAnnotations != null) {
         setAnnotations(event.lineAnnotations);
       }
-      return event.fileDiff;
+      return 'accept';
     },
     []
   );
