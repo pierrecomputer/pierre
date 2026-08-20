@@ -24,14 +24,16 @@ import {
   type CodeViewCoordinator,
   type CodeViewCreateEditorOptions,
   type CodeViewItem,
+  type CodeViewItemEditCompleteEventMap,
   type CodeViewLineSelection,
+  type CodeViewMode,
+  type CodeViewModeItemMap,
   type CodeViewOptions,
   type CodeViewRenderedItem,
   type CodeViewScrollTarget,
   type CodeViewSlotSnapshot,
   type DiffLineAnnotation,
   type DiffsEditor,
-  type FileContents,
   type GetHoveredLineResult,
   type LineAnnotation,
 } from '../index';
@@ -84,19 +86,21 @@ interface CodeViewBaseProps<LAnnotation> {
     item: CodeViewItem<LAnnotation>
   ): void;
   /**
-   * Called once with the final contents when an item's edit session ends
-   * (edit turned off, item removed or collapsed). Not called for sessions
-   * that produced no changes. Committing is user-space: make one combined
-   * item write carrying the new file/fileDiff (with a fresh `cacheKey`,
-   * since the contents changed) along with `edit: false`.
+   * Called once when a changed edit session ends: edit turned off, the item
+   * removed, or the CodeView unmounted (where the result is not installed).
+   * Not called for sessions without changes; collapse suspends the session
+   * instead of completing it. `nextItem` is the accepted replacement
+   * CodeView built from `item`: the event's completed `file`/`fileDiff` and
+   * annotations, `edit: false`, and a bumped `version`. Return `nextItem`
+   * (re-keyed as needed) to accept the edit: CodeView applies it through the
+   * item update path when the item still exists, and a controlled owner puts
+   * the same `nextItem` into its state. Return `item` or `null` to revert.
    */
-  onItemEditComplete?(
-    item: CodeViewItem<LAnnotation>,
-    file: FileContents,
-    lineAnnotations?:
-      | LineAnnotation<LAnnotation>[]
-      | DiffLineAnnotation<LAnnotation>[]
-  ): void;
+  onItemEditComplete?<TMode extends CodeViewMode>(
+    event: CodeViewItemEditCompleteEventMap<LAnnotation>[TMode],
+    item: CodeViewModeItemMap<LAnnotation>[TMode],
+    nextItem: CodeViewModeItemMap<LAnnotation>[TMode]
+  ): CodeViewItem<LAnnotation> | null;
   renderCustomHeader?(item: CodeViewItem<LAnnotation>): ReactNode;
   renderHeaderPrefix?(item: CodeViewItem<LAnnotation>): ReactNode;
   renderHeaderFilenameSuffix?(item: CodeViewItem<LAnnotation>): ReactNode;
@@ -266,15 +270,11 @@ function CodeViewInner<LAnnotation = undefined>(
     }
   );
   const emitItemEditComplete = useStableCallback(
-    (
-      item: CodeViewItem<LAnnotation>,
-      file: FileContents,
-      lineAnnotations?:
-        | LineAnnotation<LAnnotation>[]
-        | DiffLineAnnotation<LAnnotation>[]
-    ) => {
-      onItemEditComplete?.(item, file, lineAnnotations);
-    }
+    <TMode extends CodeViewMode>(
+      event: CodeViewItemEditCompleteEventMap<LAnnotation>[TMode],
+      item: CodeViewModeItemMap<LAnnotation>[TMode],
+      nextItem: CodeViewModeItemMap<LAnnotation>[TMode]
+    ) => onItemEditComplete?.(event, item, nextItem) ?? null
   );
 
   const managedOptions = useMemo(

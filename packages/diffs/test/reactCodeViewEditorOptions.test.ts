@@ -12,6 +12,8 @@ import {
 import { createRoot as createReactRoot, type Root } from 'react-dom/client';
 
 import type { CodeViewLineSelection } from '../src/components/CodeView';
+import type { FileEditCompleteEvent } from '../src/components/File';
+import type { FileDiffEditCompleteEvent } from '../src/components/FileDiff';
 import { DEFAULT_THEMES } from '../src/constants';
 import type { EditorOptions } from '../src/editor/editor';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
@@ -96,15 +98,20 @@ function createTrackedEditor(
       if (attachmentError != null) {
         throw attachmentError;
       }
-      return () => editor.cleanUp();
+      // Mirror the real editor's disposer: tear down, then complete the
+      // session on the attached instance.
+      return () => {
+        editor.cleanUp('complete');
+        instance.completeEditSession();
+      };
     },
-    cleanUp(recycle = false) {
-      if (recycle) {
+    cleanUp(reason: 'discard' | 'recycle' | 'complete' = 'discard') {
+      if (reason === 'recycle') {
         editor.recycleCleanUps += 1;
       } else {
         editor.fullCleanUps += 1;
       }
-      detach?.(recycle);
+      detach?.(reason === 'recycle');
       detach = undefined;
     },
     __captureFocusForDOMReplacement() {},
@@ -112,6 +119,28 @@ function createTrackedEditor(
     __syncRenderView() {},
   } as unknown as TrackedCodeViewEditor;
   return editor;
+}
+
+// Write text into an attached instance's private session file, standing in
+// for real editor document changes; completion events are built from it.
+type ItemCompletionEvent =
+  | FileEditCompleteEvent<undefined>
+  | FileDiffEditCompleteEvent<undefined>;
+
+// The completed file contents of a file completion event, for assertions on
+// union-typed mock calls.
+function fileEventContents(event: ItemCompletionEvent | undefined) {
+  return event != null && 'file' in event ? event.file.contents : undefined;
+}
+
+function setSessionText(editor: TrackedCodeViewEditor, contents: string): void {
+  const instance = editor.edits[editor.edits.length - 1];
+  const session = (instance as { editSessionFile?: FileContents })
+    .editSessionFile;
+  if (session == null) {
+    throw new Error('setSessionText: no active edit session');
+  }
+  session.contents = contents;
 }
 
 function createEditorHarness(attachmentError?: Error) {
@@ -475,7 +504,10 @@ describe('React CodeView editor factory', () => {
     const handle = createRef<CodeViewHandle<undefined>>();
     const { createEditor, editors } = createEditorHarness();
     const onItemEditComplete = mock(
-      (_item: CodeViewItem<undefined>, _file: FileContents) => {}
+      (
+        _event: ItemCompletionEvent,
+        _item: CodeViewItem<undefined>
+      ): CodeViewItem<undefined> | null => null
     );
     const editOffItem = makeFileItem('edit-off', {
       edit: true,
@@ -521,18 +553,9 @@ describe('React CodeView editor factory', () => {
       expect(removedEditor).toBeDefined();
       expect(unchangedEditor).toBeDefined();
 
-      editOffEditor!.emitChange({
-        name: 'edit-off.ts',
-        contents: 'edit-off contents',
-      });
-      collapsedEditor!.emitChange({
-        name: 'collapsed.ts',
-        contents: 'collapsed contents',
-      });
-      removedEditor!.emitChange({
-        name: 'removed.ts',
-        contents: 'removed contents',
-      });
+      setSessionText(editOffEditor!, 'edit-off contents');
+      setSessionText(collapsedEditor!, 'collapsed contents');
+      setSessionText(removedEditor!, 'removed contents');
 
       const editOffEnd = { ...editOffItem, edit: false, version: 1 };
       const collapsedEnd = {
@@ -543,31 +566,26 @@ describe('React CodeView editor factory', () => {
       const unchangedEnd = { ...unchangedItem, edit: false, version: 1 };
       await render([editOffEnd, collapsedEnd, unchangedEnd]);
 
-      expect(editors.every((editor) => editor.fullCleanUps > 0)).toBe(true);
-      expect(onItemEditComplete).toHaveBeenCalledTimes(3);
+      // Edit-off and removal complete; collapse suspends its session and the
+      // unchanged session ends without an event.
+      expect(onItemEditComplete).toHaveBeenCalledTimes(2);
       const completions = new Map(
-        onItemEditComplete.mock.calls.map(([item, file]) => [
+        onItemEditComplete.mock.calls.map(([event, item]) => [
           item.id,
-          { file, item },
+          { event, item },
         ])
       );
-      expect([...completions.keys()].sort()).toEqual([
-        'collapsed',
-        'edit-off',
-        'removed',
-      ]);
-      expect(completions.get('edit-off')?.file.contents).toBe(
+      expect([...completions.keys()].sort()).toEqual(['edit-off', 'removed']);
+      expect(fileEventContents(completions.get('edit-off')?.event)).toBe(
         'edit-off contents'
       );
       expect(completions.get('edit-off')?.item).toBe(editOffEnd);
-      expect(completions.get('collapsed')?.file.contents).toBe(
-        'collapsed contents'
-      );
-      expect(completions.get('collapsed')?.item).toBe(collapsedEnd);
-      expect(completions.get('removed')?.file.contents).toBe(
+      expect(fileEventContents(completions.get('removed')?.event)).toBe(
         'removed contents'
       );
       expect(completions.get('removed')?.item).toBe(removedItem);
+      expect(collapsedEditor!.fullCleanUps).toBe(1);
+      expect(handle.current?.getEditor('collapsed')).toBe(collapsedEditor);
     } finally {
       await unmountRoot(root);
       cleanupActEnvironment();
@@ -583,7 +601,10 @@ describe('React CodeView editor factory', () => {
     const handle = createRef<CodeViewHandle<undefined>>();
     const { createEditor, editors } = createEditorHarness();
     const onItemEditComplete = mock(
-      (_item: CodeViewItem<undefined>, _file: FileContents) => {}
+      (
+        _event: ItemCompletionEvent,
+        _item: CodeViewItem<undefined>
+      ): CodeViewItem<undefined> | null => null
     );
     const changedItem = makeFileItem('changed', { edit: true, lineCount: 2 });
     const unchangedItem = makeFileItem('unchanged', {
@@ -615,16 +636,13 @@ describe('React CodeView editor factory', () => {
         | TrackedCodeViewEditor
         | undefined;
       expect(changedEditor).toBeDefined();
-      changedEditor!.emitChange({
-        name: 'changed.ts',
-        contents: 'changed contents',
-      });
+      setSessionText(changedEditor!, 'changed contents');
       await render([]);
 
       expect(editors.every((editor) => editor.fullCleanUps > 0)).toBe(true);
       expect(onItemEditComplete).toHaveBeenCalledTimes(1);
-      expect(onItemEditComplete.mock.calls[0]?.[0]).toBe(changedItem);
-      expect(onItemEditComplete.mock.calls[0]?.[1].contents).toBe(
+      expect(onItemEditComplete.mock.calls[0]?.[1]).toBe(changedItem);
+      expect(fileEventContents(onItemEditComplete.mock.calls[0]?.[0])).toBe(
         'changed contents'
       );
     } finally {
@@ -852,7 +870,7 @@ describe('React CodeView editor factory', () => {
 
 describe('React CodeView edit completion teardown', () => {
   for (const teardown of ['direct cleanup', 'React unmount'] as const) {
-    test(`does not complete a changed session on ${teardown}`, async () => {
+    test(`completes a changed session once on ${teardown}`, async () => {
       const { cleanup } = installCodeViewDom();
       const cleanupActEnvironment = installReactActEnvironment();
       const container = document.createElement('div');
@@ -860,7 +878,10 @@ describe('React CodeView edit completion teardown', () => {
       const handle = createRef<CodeViewHandle<undefined>>();
       const { createEditor, editors } = createEditorHarness();
       const onItemEditComplete = mock(
-        (_item: CodeViewItem<undefined>, _file: FileContents) => {}
+        (
+          _event: ItemCompletionEvent,
+          _item: CodeViewItem<undefined>
+        ): CodeViewItem<undefined> | null => null
       );
       let root: Root | undefined;
 
@@ -879,7 +900,7 @@ describe('React CodeView edit completion teardown', () => {
         );
 
         expect(editors).toHaveLength(1);
-        editors[0].emitChange({ name: 'a.ts', contents: 'unsaved' });
+        setSessionText(editors[0], 'unsaved');
 
         if (teardown === 'direct cleanup') {
           await act(async () => {
@@ -891,7 +912,12 @@ describe('React CodeView edit completion teardown', () => {
           root = undefined;
         }
 
-        expect(onItemEditComplete).not.toHaveBeenCalled();
+        // Teardown is a completion boundary like standalone unmount: the
+        // changed session fires once, and nothing is installed.
+        expect(onItemEditComplete).toHaveBeenCalledTimes(1);
+        expect(fileEventContents(onItemEditComplete.mock.calls[0]?.[0])).toBe(
+          'unsaved'
+        );
         expect(editors[0].fullCleanUps).toBeGreaterThanOrEqual(1);
       } finally {
         await unmountRoot(root);

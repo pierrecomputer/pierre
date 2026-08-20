@@ -5,11 +5,11 @@ import {
   type CodeViewItem,
   type CodeViewLineSelection,
   type DiffLineAnnotation,
-  type FileContents,
+  type FileDiffEditCompleteEvent,
+  type FileEditCompleteEvent,
   isDiffAnnotationCollection,
   isFileAnnotationCollection,
   type LineAnnotation,
-  parseDiffFromFile,
   type SelectedLineRange,
 } from '@pierre/diffs';
 import type { EditorChangeEvent, EditorOptions } from '@pierre/diffs/edit';
@@ -18,8 +18,7 @@ import {
   type CodeViewReactOptions,
   useStableCallback,
 } from '@pierre/diffs/react';
-import { IconCheckboxFill, IconSquircleLg } from '@pierre/icons';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 
 import type { PlaygroundAnnotationMetadata } from './constants';
@@ -52,13 +51,13 @@ interface PlaygroundCodeViewProps {
 // and `overflow: auto`.
 //
 // This view also demos first-class item editing: each header carries an Edit
-// checkbox that flips the item's `edit` flag (any number of items can be in
-// edit mode at once). CodeView creates one Editor per edited item through the
+// button that starts a session, replaced by Cancel/Save while editing (any
+// number of items can be in edit mode at once). CodeView creates one Editor per edited item through the
 // app-level EditProvider and keeps it attached across virtualization
-// scroll-out, so unsaved edits and undo history survive scrolling. When a session ends
-// (checkbox off), `onItemEditComplete` hands us the final contents and we
-// persist them back into the item — file items swap contents directly, diff
-// items re-diff the edited new side against the original old side.
+// scroll-out, so unsaved edits and undo history survive scrolling. Save and
+// Cancel both end the session by turning edit off; `onItemEditComplete` then
+// accepts by returning the built next item (Save) or reverts by returning
+// null (Cancel, marked before the toggle).
 //
 // Annotations ride on item data: a gutter utility gesture appends a comment
 // form at its final line, submitting persists it as a comment thread, and
@@ -73,6 +72,10 @@ export function PlaygroundCodeView({
   const [items, setItems] = useState(initialItems);
   const [selectedLines, setSelectedLines] =
     useState<CodeViewLineSelection | null>(null);
+
+  // Item ids whose next completion should revert: Cancel marks the id here
+  // before turning edit off, and the completion handler consumes the mark.
+  const cancelledEdits = useRef<Set<string>>(new Set());
 
   const toggleEdit = useCallback((id: string, edit: boolean) => {
     setItems((current) =>
@@ -139,48 +142,34 @@ export function PlaygroundCodeView({
     []
   );
 
-  // Committing a finished edit session is user-space: CodeView only ends the
-  // session and reports the final contents through this lifecycle. The app
-  // commits with one combined item write — the new file/fileDiff (fresh
-  // cacheKey, since the contents changed) along with `edit: false`.
+  // Committing a finished edit session: stamp a fresh cacheKey on the
+  // completed file/fileDiff and return the nextItem CodeView built from it.
+  // CodeView installs the value and applies nextItem itself; mirroring the
+  // same object into React state keeps the controlled collection matching
+  // (equal versions make the props push a no-op).
   const handleEditComplete = useCallback(
-    (item: PlaygroundItem, file: FileContents) => {
+    (
+      event:
+        | FileEditCompleteEvent<PlaygroundAnnotationMetadata>
+        | FileDiffEditCompleteEvent<PlaygroundAnnotationMetadata>,
+      item: PlaygroundItem,
+      nextItem: PlaygroundItem
+    ): PlaygroundItem | null => {
+      if (cancelledEdits.current.delete(item.id)) {
+        return null;
+      }
+      const cacheKey = `${item.id}:v${nextItem.version}`;
+      if ('file' in event) {
+        event.file.cacheKey = cacheKey;
+      } else {
+        event.fileDiff.cacheKey = cacheKey;
+      }
       setItems((current) =>
-        current.map((existing) => {
-          if (existing.id !== item.id) {
-            return existing;
-          }
-          const version = (existing.version ?? 0) + 1;
-          const cacheKey = `${existing.id}:v${version}`;
-          if (existing.type === 'file') {
-            return {
-              ...existing,
-              file: { ...existing.file, contents: file.contents, cacheKey },
-              edit: false,
-              version,
-            };
-          }
-          // Rebuild the diff against the edited new side. Generated diffs
-          // carry the full old file in `deletionLines` (lines keep their
-          // endings), so the original old side is recoverable from the item.
-          const { fileDiff } = existing;
-          return {
-            ...existing,
-            fileDiff: {
-              ...parseDiffFromFile(
-                {
-                  name: fileDiff.prevName ?? fileDiff.name,
-                  contents: fileDiff.deletionLines.join(''),
-                },
-                { name: fileDiff.name, contents: file.contents }
-              ),
-              cacheKey,
-            },
-            edit: false,
-            version,
-          };
-        })
+        current.map((existing) =>
+          existing.id === item.id ? nextItem : existing
+        )
       );
+      return nextItem;
     },
     []
   );
@@ -396,30 +385,39 @@ export function PlaygroundCodeView({
   );
 
   const renderHeaderMetadata = useStableCallback((item: PlaygroundItem) => {
-    const isEditing = item.edit === true;
+    const buttonClassName =
+      'flex cursor-pointer items-center gap-1 rounded-sm border py-1 px-2 text-xs transition';
+    if (item.edit !== true) {
+      return (
+        <button
+          type="button"
+          onClick={() => toggleEdit(item.id, true)}
+          className={`-mr-[8px] ${buttonClassName} border bg-transparent text-neutral-500 hover:border-neutral-300 hover:bg-neutral-100 hover:text-neutral-700`}
+        >
+          Edit
+        </button>
+      );
+    }
     return (
-      <button
-        type="button"
-        onClick={() => toggleEdit(item.id, !isEditing)}
-        aria-pressed={isEditing}
-        className={`-mr-[8px] flex cursor-pointer items-center gap-1 rounded-sm border py-1 pr-2 pl-1.5 text-xs transition ${
-          isEditing
-            ? 'border-blue-400/50 bg-blue-500/25 text-blue-600'
-            : 'border bg-transparent text-neutral-500 hover:border-neutral-300 hover:bg-neutral-100 hover:text-neutral-700'
-        }`}
-      >
-        {isEditing ? (
-          <>
-            <IconCheckboxFill size={12} />
-            Editing
-          </>
-        ) : (
-          <>
-            <IconSquircleLg size={12} className="opacity-50" />
-            Edit
-          </>
-        )}
-      </button>
+      <div className="-mr-[8px] flex items-center gap-1.5">
+        <button
+          type="button"
+          onClick={() => {
+            cancelledEdits.current.add(item.id);
+            toggleEdit(item.id, false);
+          }}
+          className={`${buttonClassName} border bg-transparent text-neutral-500 hover:border-red-300 hover:bg-red-50 hover:text-red-600`}
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={() => toggleEdit(item.id, false)}
+          className={`${buttonClassName} border-blue-400/50 bg-blue-500/25 text-blue-600 hover:bg-blue-500/35`}
+        >
+          Save
+        </button>
+      </div>
     );
   });
 

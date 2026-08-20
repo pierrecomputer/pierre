@@ -949,7 +949,6 @@ export class File<
         'File.completeEditSession: detach the editor before completing the session'
       );
     }
-    this.fileRenderer.endEditSession();
 
     const sessionAnnotationsCurrent = editSessionAnnotations?.current;
     const contentsChanged = editSessionFile.contents !== externalFile.contents;
@@ -1004,6 +1003,19 @@ export class File<
     this.editSessionAnnotations = undefined;
     this.pendingEditSessionReplacement = undefined;
     this.pendingPersistedDocumentRestore = undefined;
+    // Ending the session with the settled file lets the renderer adopt it as
+    // the rendered identity when its cache already shows this content, so
+    // the next render treats it as current instead of a new file.
+    const { renderedFile, file: settledFile } = this;
+    this.fileRenderer.endEditSession(settledFile);
+    if (
+      renderedFile != null &&
+      settledFile != null &&
+      renderedFile !== settledFile &&
+      areFileTargetsEqual(renderedFile, settledFile)
+    ) {
+      this.renderedFile = settledFile;
+    }
     if (installResult && this.fileContainer != null) {
       this.rerender();
     }

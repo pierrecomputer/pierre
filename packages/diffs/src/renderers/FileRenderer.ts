@@ -260,10 +260,25 @@ export class FileRenderer<LAnnotation = undefined> {
     }
   }
 
-  /** Leave edit-session mode. Rendering returns to the pool when one works. */
-  public endEditSession(): void {
+  /**
+   * Leave edit-session mode. Rendering returns to the pool when one works.
+   * When `settledFile` has the content the cache already shows, the cache
+   * adopts it as its identity so the next render treats it as current
+   * instead of a new file.
+   */
+  public endEditSession(settledFile?: FileContents): void {
     this.editSessionActive = false;
     this.pendingHighlightResult = undefined;
+    const { renderCache } = this;
+    if (
+      settledFile == null ||
+      renderCache == null ||
+      renderCache.file === settledFile ||
+      !areFileTargetsEqual(renderCache.file, settledFile)
+    ) {
+      return;
+    }
+    renderCache.file = settledFile;
   }
 
   /**
