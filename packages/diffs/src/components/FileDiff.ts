@@ -235,6 +235,11 @@ export type FileDiffType = 'file-diff' | 'unresolved-file';
  * `oldFile`/`newFile` are detached FileContent representations of the
  * completed diff for updating file-pair or patch inputs; `null` marks the
  * missing side of a new file. (deleted files are impossible to edit)
+ *
+ * `lineAnnotations` is the completed annotation collection.
+ *
+ * `originalLineAnnotations` is the last collection provided to the component
+ * externally, which a revert keeps.
  */
 export interface FileDiffEditCompleteEvent<LAnnotation> {
   fileDiff: FileDiffMetadata;
@@ -242,6 +247,7 @@ export interface FileDiffEditCompleteEvent<LAnnotation> {
   oldFile: FileContents | null;
   newFile: FileContents | null;
   lineAnnotations: DiffLineAnnotation<LAnnotation>[] | undefined;
+  originalLineAnnotations: DiffLineAnnotation<LAnnotation>[];
 }
 
 /**
@@ -1904,6 +1910,7 @@ export class FileDiff<
       editSessionDiff,
       editSessionAnnotations,
       fileDiff: externalDiff,
+      lineAnnotations: externalAnnotations,
     } = this;
     if (editSessionDiff == null || externalDiff == null) {
       return;
@@ -1946,6 +1953,7 @@ export class FileDiff<
               },
         newFile,
         lineAnnotations: sessionAnnotationsCurrent,
+        originalLineAnnotations: externalAnnotations,
       };
       const { onEditComplete } = this.options;
       try {

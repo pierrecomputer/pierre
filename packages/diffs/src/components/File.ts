@@ -105,11 +105,17 @@ export interface FileHydrateProps<LAnnotation> extends Omit<
  *
  * `originalFile` is the last `file` provided to the component externally, and
  * returning that will undo any changes in `file`.
+ *
+ * `lineAnnotations` is the completed annotation collection.
+ *
+ * `originalLineAnnotations` is the last collection provided to the component
+ * externally, which a revert keeps.
  */
 export interface FileEditCompleteEvent<LAnnotation> {
   file: FileContents;
-  originalFile: FileContents;
   lineAnnotations: LineAnnotation<LAnnotation>[] | undefined;
+  originalFile: FileContents;
+  originalLineAnnotations: LineAnnotation<LAnnotation>[];
 }
 
 /**
@@ -933,6 +939,7 @@ export class File<
       editSessionFile,
       editSessionAnnotations,
       file: externalFile,
+      lineAnnotations: externalAnnotations,
     } = this;
     if (editSessionFile == null || externalFile == null) {
       return;
@@ -955,6 +962,7 @@ export class File<
         file: completedFile,
         originalFile: externalFile,
         lineAnnotations: sessionAnnotationsCurrent,
+        originalLineAnnotations: externalAnnotations,
       };
       const { onEditComplete } = this.options;
       try {

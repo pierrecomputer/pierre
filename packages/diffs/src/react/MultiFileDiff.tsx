@@ -1,10 +1,7 @@
 'use client';
 
-import { useMemo } from 'react';
-
 import { DIFFS_TAG_NAME } from '../constants';
 import type { DiffFileInput, FileContents } from '../types';
-import { parseDiffFromFile } from '../utils/parseDiffFromFile';
 import type { DiffBasePropsReact } from './types';
 import { renderDiffChildren } from './utils/renderDiffChildren';
 import { templateRender } from './utils/templateRender';
@@ -43,24 +40,23 @@ export function MultiFileDiff<LAnnotation = undefined>({
   onEditChange,
   onEditComplete,
 }: MultiFileDiffProps<LAnnotation>): React.JSX.Element {
-  const fileDiff = useMemo(() => {
-    return parseDiffFromFile(oldFile, newFile, options?.parseDiffOptions);
-  }, [oldFile, newFile, options?.parseDiffOptions]);
-  const { ref, getHoveredLine, getAnnotationSlotName } = useFileDiffInstance({
-    fileDiff,
-    options,
-    editorOptions,
-    metrics,
-    lineAnnotations,
-    selectedLines,
-    prerenderedHTML,
-    hasGutterRenderUtility: renderGutterUtility != null,
-    hasCustomHeader: renderCustomHeader != null,
-    disableWorkerPool,
-    edit,
-    onEditChange,
-    onEditComplete,
-  });
+  const { fileDiff, ref, getHoveredLine, getAnnotationSlotName } =
+    useFileDiffInstance({
+      oldFile,
+      newFile,
+      options,
+      editorOptions,
+      metrics,
+      lineAnnotations,
+      selectedLines,
+      prerenderedHTML,
+      hasGutterRenderUtility: renderGutterUtility != null,
+      hasCustomHeader: renderCustomHeader != null,
+      disableWorkerPool,
+      edit,
+      onEditChange,
+      onEditComplete,
+    });
   const children = renderDiffChildren({
     fileDiff,
     renderCustomHeader,

@@ -1,4 +1,5 @@
 import { afterAll, describe, expect, mock, spyOn, test } from 'bun:test';
+import { createTwoFilesPatch } from 'diff';
 import {
   act,
   type ComponentType,
@@ -9,8 +10,15 @@ import {
 } from 'react';
 import { createRoot as createReactRoot, type Root } from 'react-dom/client';
 
-import { File as FileInstance, type FileOptions } from '../src/components/File';
 import {
+  type FileEditCompleteEvent,
+  type FileEditCompleteHandler,
+  File as FileInstance,
+  type FileOptions,
+} from '../src/components/File';
+import {
+  type FileDiffEditCompleteEvent,
+  type FileDiffEditCompleteHandler,
   FileDiff as FileDiffInstance,
   type FileDiffOptions,
 } from '../src/components/FileDiff';
@@ -37,6 +45,8 @@ import type {
   DiffsEditableComponent,
   EditableInstance,
   EditorChangeEvent,
+  FileContents,
+  LineAnnotation,
 } from '../src/types';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import { installDom, wait, waitFor } from './domHarness';
@@ -1153,6 +1163,589 @@ describe('React editor factory lifecycle', () => {
       await unmountRoot(root);
       cleanupActEnvironment();
       cleanup();
+    }
+  });
+});
+
+describe('React completion lifecycle', () => {
+  const FILE_A: FileContents = {
+    name: 'edit.ts',
+    contents: 'const value = 1;\nconst other = 2;\n',
+  };
+
+  interface FileHarness {
+    cleanup(): Promise<void>;
+    container: HTMLElement;
+    editors: TrackedEditor[];
+    events: FileEditCompleteEvent<undefined>[];
+    getInstance(): FileInstance<undefined> | undefined;
+    render(props: {
+      file: FileContents;
+      edit: boolean;
+      lineAnnotations?: LineAnnotation<undefined>[];
+    }): Promise<void>;
+    renderError(props: { file: FileContents; edit: boolean }): Promise<unknown>;
+  }
+
+  function createFileHarness(
+    onEditComplete: FileEditCompleteHandler<undefined>
+  ): FileHarness {
+    const { cleanup: cleanupDom } = installDom();
+    const cleanupActEnvironment = installReactActEnvironment();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const editors: TrackedEditor[] = [];
+    const events: FileEditCompleteEvent<undefined>[] = [];
+    const factory = (options: EditorOptions<undefined>) => {
+      const editor = new TrackedEditor(options);
+      editors.push(editor);
+      return editor;
+    };
+    let instance: FileInstance<undefined> | undefined;
+    const root = createReactRoot(container);
+    const element = (props: {
+      file: FileContents;
+      edit: boolean;
+      lineAnnotations?: LineAnnotation<undefined>[];
+    }) =>
+      createElement(
+        EditProviderComponent,
+        { createEditor: factory },
+        createElement(ReactFileComponent, {
+          disableWorkerPool: true,
+          edit: props.edit,
+          file: props.file,
+          lineAnnotations: props.lineAnnotations,
+          onEditComplete,
+          options: {
+            disableFileHeader: true,
+            theme: DEFAULT_THEMES,
+            onPostRender(_node, current, phase) {
+              if (phase !== 'unmount') {
+                instance = current;
+              }
+            },
+          },
+        })
+      );
+    return {
+      container,
+      editors,
+      events,
+      getInstance: () => instance,
+      async render(props) {
+        await act(async () => {
+          root.render(element(props));
+          await wait(10);
+        });
+      },
+      renderError(props) {
+        return captureRenderError(root, element(props));
+      },
+      async cleanup() {
+        await unmountRoot(root);
+        cleanupActEnvironment();
+        cleanupDom();
+      },
+    };
+  }
+
+  test('accepting installs the completed file with no stale-prop repaint', async () => {
+    const events: FileEditCompleteEvent<undefined>[] = [];
+    const harness = createFileHarness((event) => {
+      events.push(event);
+      event.file.cacheKey = 'accepted:v2';
+      return event.file;
+    });
+    try {
+      await harness.render({ file: FILE_A, edit: true });
+      await waitFor(() => harness.editors[0]?.getText() === FILE_A.contents, {
+        timeout: 4_000,
+      });
+      act(() => {
+        insertAtStart(harness.editors[0], '/* edited */\n');
+      });
+
+      // The owner never updates its file prop: the accepted result must
+      // still be what renders.
+      await harness.render({ file: FILE_A, edit: false });
+      expect(events).toHaveLength(1);
+      const instance = harness.getInstance();
+      expect(instance?.file).toBe(events[0].file);
+      expect(shadowHTML(harness.container)).toContain('edited');
+
+      // Repeated stale commits neither re-complete nor revert.
+      await harness.render({ file: FILE_A, edit: false });
+      expect(events).toHaveLength(1);
+      expect(harness.getInstance()?.file).toBe(events[0].file);
+
+      // A serialized copy carrying the accepted cache key matches the
+      // accepted file: the exact accepted object stays installed.
+      const serialized: FileContents = { ...events[0].file };
+      await harness.render({ file: serialized, edit: false });
+      expect(harness.getInstance()?.file).toBe(events[0].file);
+
+      // A keyless equal-content rebuild is a new input: it replaces the
+      // accepted object and repaints identical content.
+      const rebuilt: FileContents = {
+        name: events[0].file.name,
+        contents: events[0].file.contents,
+      };
+      await harness.render({ file: rebuilt, edit: false });
+      expect(harness.getInstance()?.file).toBe(rebuilt);
+      expect(shadowHTML(harness.container)).toContain('edited');
+
+      // A genuinely new file supersedes the accepted value.
+      const superseding: FileContents = {
+        name: 'edit.ts',
+        contents: 'const value = 3;\n',
+      };
+      await harness.render({ file: superseding, edit: false });
+      expect(harness.getInstance()?.file).toBe(superseding);
+    } finally {
+      await harness.cleanup();
+    }
+  });
+
+  test('a re-serialized keyed file prop keeps the accepted file installed', async () => {
+    const KEYED_FILE: FileContents = { ...FILE_A, cacheKey: 'file:v1' };
+    const events: FileEditCompleteEvent<undefined>[] = [];
+    const harness = createFileHarness((event) => {
+      events.push(event);
+      event.file.cacheKey = 'accepted:v2';
+      return event.file;
+    });
+    try {
+      await harness.render({ file: KEYED_FILE, edit: true });
+      await waitFor(
+        () => harness.editors[0]?.getText() === KEYED_FILE.contents,
+        { timeout: 4_000 }
+      );
+      act(() => {
+        insertAtStart(harness.editors[0], '/* edited */\n');
+      });
+
+      // The stale prop arrives as a new object with the same cache key, as
+      // a serialization boundary produces: the accepted file must still be
+      // what renders.
+      await harness.render({ file: { ...KEYED_FILE }, edit: false });
+      expect(events).toHaveLength(1);
+      expect(harness.getInstance()?.file).toBe(events[0].file);
+      expect(shadowHTML(harness.container)).toContain('edited');
+    } finally {
+      await harness.cleanup();
+    }
+  });
+
+  test('returning null reverts to the exact file prop', async () => {
+    const events: FileEditCompleteEvent<undefined>[] = [];
+    const harness = createFileHarness((event) => {
+      events.push(event);
+      return null;
+    });
+    try {
+      await harness.render({ file: FILE_A, edit: true });
+      await waitFor(() => harness.editors[0]?.getText() === FILE_A.contents, {
+        timeout: 4_000,
+      });
+      act(() => {
+        insertAtStart(harness.editors[0], '/* edited */\n');
+      });
+      await harness.render({ file: FILE_A, edit: false });
+
+      expect(events).toHaveLength(1);
+      expect(harness.getInstance()?.file).toBe(FILE_A);
+      expect(shadowHTML(harness.container)).not.toContain('edited');
+    } finally {
+      await harness.cleanup();
+    }
+  });
+
+  test('returning a clone throws and the surface settles on the file prop', async () => {
+    const harness = createFileHarness((event) => ({ ...event.file }));
+    try {
+      await harness.render({ file: FILE_A, edit: true });
+      await waitFor(() => harness.editors[0]?.getText() === FILE_A.contents, {
+        timeout: 4_000,
+      });
+      act(() => {
+        insertAtStart(harness.editors[0], '/* edited */\n');
+      });
+      const error = await harness.renderError({ file: FILE_A, edit: false });
+      expect(String(error)).toContain(
+        'onEditComplete must return null, the event file, or the event originalFile'
+      );
+      // The throw from the effect cleanup crashes the React tree (no error
+      // boundary here), so only the prop object's integrity is observable at
+      // this layer; the settle-before-throw behavior is pinned in the
+      // vanilla completeEditSession tests.
+      expect(FILE_A.cacheKey).toBeUndefined();
+      expect(FILE_A.contents).toBe('const value = 1;\nconst other = 2;\n');
+    } finally {
+      await harness.cleanup();
+    }
+  });
+
+  test('unmount completes a changed session once without installing', async () => {
+    const events: FileEditCompleteEvent<undefined>[] = [];
+    const externalFile: FileContents = { ...FILE_A };
+    const harness = createFileHarness((event) => {
+      events.push(event);
+      event.file.cacheKey = 'accepted:v2';
+      return event.file;
+    });
+    try {
+      await harness.render({ file: externalFile, edit: true });
+      await waitFor(
+        () => harness.editors[0]?.getText() === externalFile.contents,
+        { timeout: 4_000 }
+      );
+      act(() => {
+        insertAtStart(harness.editors[0], '/* edited */\n');
+      });
+    } finally {
+      await harness.cleanup();
+    }
+    expect(events).toHaveLength(1);
+    expect(events[0].file.contents).toContain('/* edited */');
+    expect(externalFile).toEqual(FILE_A);
+  });
+
+  test('accepted annotations keep their moved rows through stale commits', async () => {
+    const annotations: LineAnnotation<undefined>[] = [{ lineNumber: 2 }];
+    const events: FileEditCompleteEvent<undefined>[] = [];
+    const harness = createFileHarness((event) => {
+      events.push(event);
+      event.file.cacheKey = 'accepted:v2';
+      return event.file;
+    });
+    try {
+      await harness.render({
+        file: FILE_A,
+        edit: true,
+        lineAnnotations: annotations,
+      });
+      await waitFor(() => harness.editors[0]?.getText() === FILE_A.contents, {
+        timeout: 4_000,
+      });
+      act(() => {
+        insertAtStart(harness.editors[0], 'one\ntwo\n');
+      });
+      await harness.render({
+        file: FILE_A,
+        edit: false,
+        lineAnnotations: annotations,
+      });
+
+      expect(events).toHaveLength(1);
+      expect(events[0].lineAnnotations).toEqual([{ lineNumber: 4 }]);
+      let row: Element | null = null;
+      for (const el of Array.from(harness.container.querySelectorAll('*'))) {
+        row = el.shadowRoot?.querySelector('[data-line-annotation]') ?? row;
+      }
+      const line = row?.previousElementSibling;
+      expect(line instanceof HTMLElement ? line.dataset.line : undefined).toBe(
+        '4'
+      );
+    } finally {
+      await harness.cleanup();
+    }
+  });
+});
+
+describe('React diff input bridges after acceptance', () => {
+  const OLD_FILE: FileContents = {
+    name: 'multi.ts',
+    contents: 'old line;\ncommon;\n',
+  };
+  const NEW_FILE: FileContents = {
+    name: 'multi.ts',
+    contents: 'new line;\ncommon;\n',
+  };
+
+  function createDiffHarness() {
+    const { cleanup: cleanupDom } = installDom();
+    const cleanupActEnvironment = installReactActEnvironment();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const editors: TrackedEditor[] = [];
+    const events: FileDiffEditCompleteEvent<undefined>[] = [];
+    const factory = (options: EditorOptions<undefined>) => {
+      const editor = new TrackedEditor(options);
+      editors.push(editor);
+      return editor;
+    };
+    let instance: FileDiffInstance<undefined> | undefined;
+    const root = createReactRoot(container);
+    const onEditComplete: FileDiffEditCompleteHandler<undefined> = (event) => {
+      events.push(event);
+      event.fileDiff.cacheKey = 'accepted:v2';
+      return event.fileDiff;
+    };
+    const baseOptions = (extra?: Partial<FileDiffOptions<undefined>>) => ({
+      disableFileHeader: true,
+      theme: DEFAULT_THEMES,
+      onPostRender(
+        _node: HTMLElement,
+        current: FileDiffInstance<undefined>,
+        phase: 'mount' | 'update' | 'unmount'
+      ) {
+        if (phase !== 'unmount') {
+          instance = current;
+        }
+      },
+      ...extra,
+    });
+    return {
+      container,
+      editors,
+      events,
+      factory,
+      root,
+      onEditComplete,
+      baseOptions,
+      getInstance: () => instance,
+      async cleanup() {
+        await unmountRoot(root);
+        cleanupActEnvironment();
+        cleanupDom();
+      },
+    };
+  }
+
+  test('MultiFileDiff retains the accepted diff through stale and caught-up pairs', async () => {
+    const harness = createDiffHarness();
+    try {
+      const render = async (
+        oldFile: FileContents,
+        newFile: FileContents,
+        edit: boolean
+      ) => {
+        await act(async () => {
+          harness.root.render(
+            createElement(
+              EditProviderComponent,
+              { createEditor: harness.factory },
+              createElement(MultiFileDiffComponent, {
+                disableWorkerPool: true,
+                edit,
+                oldFile,
+                newFile,
+                onEditComplete: harness.onEditComplete,
+                options: harness.baseOptions(),
+              })
+            )
+          );
+          await wait(10);
+        });
+      };
+      await render(OLD_FILE, NEW_FILE, true);
+      await waitFor(() => harness.editors[0]?.getText() === NEW_FILE.contents, {
+        timeout: 4_000,
+      });
+      act(() => {
+        insertAtStart(harness.editors[0], '/* edited */\n');
+      });
+
+      // Stale pair: the accepted diff stays installed.
+      await render(OLD_FILE, NEW_FILE, false);
+      expect(harness.events).toHaveLength(1);
+      const event = harness.events[0];
+      expect(harness.getInstance()?.fileDiff).toBe(event.fileDiff);
+
+      // The owner's state catches up with the event files: the pair matches
+      // the completion files, so the accepted object is reused, not reparsed.
+      if (event.oldFile == null || event.newFile == null) {
+        throw new Error('Expected both completion files for a changed diff');
+      }
+      await render(event.oldFile, event.newFile, false);
+      expect(harness.getInstance()?.fileDiff).toBe(event.fileDiff);
+
+      // A genuinely new pair supersedes the accepted diff.
+      await render(
+        event.oldFile,
+        { name: 'multi.ts', contents: 'different;\n' },
+        false
+      );
+      expect(harness.getInstance()?.fileDiff).not.toBe(event.fileDiff);
+      expect(harness.getInstance()?.fileDiff?.additionLines.join('')).toBe(
+        'different;\n'
+      );
+    } finally {
+      await harness.cleanup();
+    }
+  });
+
+  test('a newer MultiFileDiff pair supersedes a pending bridge', async () => {
+    const harness = createDiffHarness();
+    try {
+      const render = async (
+        oldFile: FileContents,
+        newFile: FileContents,
+        edit: boolean
+      ) => {
+        await act(async () => {
+          harness.root.render(
+            createElement(
+              EditProviderComponent,
+              { createEditor: harness.factory },
+              createElement(MultiFileDiffComponent, {
+                disableWorkerPool: true,
+                edit,
+                oldFile,
+                newFile,
+                onEditComplete: harness.onEditComplete,
+                options: harness.baseOptions(),
+              })
+            )
+          );
+          await wait(10);
+        });
+      };
+      await render(OLD_FILE, NEW_FILE, true);
+      await waitFor(() => harness.editors[0]?.getText() === NEW_FILE.contents, {
+        timeout: 4_000,
+      });
+      act(() => {
+        insertAtStart(harness.editors[0], '/* edited */\n');
+      });
+      await render(OLD_FILE, NEW_FILE, false);
+      expect(harness.events).toHaveLength(1);
+
+      // The owner never acknowledges; a new pair arrives directly.
+      await render(
+        OLD_FILE,
+        { name: 'multi.ts', contents: 'moved on;\n' },
+        false
+      );
+      expect(harness.getInstance()?.fileDiff?.additionLines.join('')).toBe(
+        'moved on;\n'
+      );
+    } finally {
+      await harness.cleanup();
+    }
+  });
+
+  test('a re-serialized keyed pair keeps the accepted diff installed', async () => {
+    const harness = createDiffHarness();
+    const OLD_KEYED: FileContents = { ...OLD_FILE, cacheKey: 'old:v1' };
+    const NEW_KEYED: FileContents = { ...NEW_FILE, cacheKey: 'new:v1' };
+    try {
+      const render = async (
+        oldFile: FileContents,
+        newFile: FileContents,
+        edit: boolean
+      ) => {
+        await act(async () => {
+          harness.root.render(
+            createElement(
+              EditProviderComponent,
+              { createEditor: harness.factory },
+              createElement(MultiFileDiffComponent, {
+                disableWorkerPool: true,
+                edit,
+                oldFile,
+                newFile,
+                onEditComplete: harness.onEditComplete,
+                options: harness.baseOptions(),
+              })
+            )
+          );
+          await wait(10);
+        });
+      };
+      await render(OLD_KEYED, NEW_KEYED, true);
+      await waitFor(
+        () => harness.editors[0]?.getText() === NEW_KEYED.contents,
+        { timeout: 4_000 }
+      );
+      act(() => {
+        insertAtStart(harness.editors[0], '/* edited */\n');
+      });
+
+      // The stale pair arrives as new file objects with the same cache
+      // keys, as a serialization boundary produces: the reparse matches the
+      // replaced diff by its derived key and the accepted diff stays.
+      await render({ ...OLD_KEYED }, { ...NEW_KEYED }, false);
+      expect(harness.events).toHaveLength(1);
+      expect(harness.getInstance()?.fileDiff).toBe(harness.events[0].fileDiff);
+      expect(shadowHTML(harness.container)).toContain('edited');
+    } finally {
+      await harness.cleanup();
+    }
+  });
+
+  test('PatchDiff keeps the accepted diff until the patch prop advances', async () => {
+    const harness = createDiffHarness();
+    const loadDiffFiles = () =>
+      Promise.resolve({ oldFile: OLD_FILE, newFile: NEW_FILE });
+    const patch1 = createTwoFilesPatch(
+      OLD_FILE.name,
+      NEW_FILE.name,
+      OLD_FILE.contents,
+      NEW_FILE.contents
+    );
+    try {
+      const render = async (patch: string, edit: boolean) => {
+        await act(async () => {
+          harness.root.render(
+            createElement(
+              EditProviderComponent,
+              { createEditor: harness.factory },
+              createElement(PatchDiffComponent, {
+                disableWorkerPool: true,
+                edit,
+                patch,
+                onEditComplete: harness.onEditComplete,
+                options: harness.baseOptions({ loadDiffFiles }),
+              })
+            )
+          );
+          await wait(10);
+        });
+      };
+      await render(patch1, true);
+      await waitFor(() => harness.editors[0]?.getText() === NEW_FILE.contents, {
+        timeout: 4_000,
+      });
+      act(() => {
+        insertAtStart(harness.editors[0], '/* edited */\n');
+      });
+
+      // Stale patch: the accepted diff stays installed, no old-patch flash.
+      await render(patch1, false);
+      expect(harness.events).toHaveLength(1);
+      const event = harness.events[0];
+      expect(harness.getInstance()?.fileDiff).toBe(event.fileDiff);
+      expect(shadowHTML(harness.container)).toContain('edited');
+
+      // A patch string has no identity linking it to the accepted diff:
+      // when the patch prop advances, its parse replaces the accepted
+      // object with identical content.
+      const patch2 = createTwoFilesPatch(
+        OLD_FILE.name,
+        NEW_FILE.name,
+        OLD_FILE.contents,
+        `/* edited */\n${NEW_FILE.contents}`
+      );
+      await render(patch2, false);
+      expect(harness.getInstance()?.fileDiff).not.toBe(event.fileDiff);
+      expect(shadowHTML(harness.container)).toContain('edited');
+
+      // A patch describing something else supersedes.
+      const patch3 = createTwoFilesPatch(
+        OLD_FILE.name,
+        NEW_FILE.name,
+        OLD_FILE.contents,
+        'rewritten;\n'
+      );
+      await render(patch3, false);
+      expect(harness.getInstance()?.fileDiff).not.toBe(event.fileDiff);
+      expect(harness.getInstance()?.fileDiff?.additionLines.join('')).toContain(
+        'rewritten;'
+      );
+    } finally {
+      await harness.cleanup();
     }
   });
 });

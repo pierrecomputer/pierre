@@ -1,4 +1,5 @@
 import {
+  type RefObject,
   useCallback,
   useContext,
   useEffect,
@@ -21,6 +22,7 @@ import type {
   SelectedLineRange,
   VirtualFileMetrics,
 } from '../../types';
+import { areFileTargetsEqual } from '../../utils/areFileTargetsEqual';
 import { areOptionsEqual } from '../../utils/areOptionsEqual';
 import { getLineAnnotationName } from '../../utils/getLineAnnotationName';
 import { noopRender } from '../constants';
@@ -31,6 +33,17 @@ import { useStableCallback } from './useStableCallback';
 
 const useIsomorphicLayoutEffect =
   typeof window === 'undefined' ? useEffect : useLayoutEffect;
+
+interface AcceptedCompletion<LAnnotation> {
+  file: {
+    installed: FileContents;
+    stale: FileContents;
+  } | null;
+  annotations: {
+    installed: LineAnnotation<LAnnotation>[] | undefined;
+    stale: LineAnnotation<LAnnotation>[];
+  } | null;
+}
 
 interface UseFileInstanceProps<LAnnotation> {
   file: FileContents;
@@ -77,9 +90,25 @@ export function useFileInstance<LAnnotation>({
     (event: EditorChangeEvent<LAnnotation, 'file'>) => _onEditChange?.(event)
   );
   const onEditChange = _onEditChange != null ? handleOnEditChange : undefined;
+  // An accepted edit session ends with the instance already showing the
+  // result, but the file/lineAnnotations props stay pre-edit until the
+  // owner's state update lands. This holds the accepted values so the
+  // renders in between do not repaint pre-edit state.
+  const acceptedCache = useRef<AcceptedCompletion<LAnnotation> | null>(null);
   const handleOnEditComplete = useStableCallback(
-    (event: FileEditCompleteEvent<LAnnotation>) =>
-      _onEditComplete?.(event) ?? null
+    (event: FileEditCompleteEvent<LAnnotation>) => {
+      const returned = _onEditComplete?.(event) ?? null;
+      if (returned === event.file) {
+        acceptedCache.current = {
+          file: { installed: returned, stale: event.originalFile },
+          annotations: {
+            installed: event.lineAnnotations,
+            stale: event.originalLineAnnotations,
+          },
+        };
+      }
+      return returned;
+    }
   );
   const onEditComplete =
     _onEditComplete != null ? handleOnEditComplete : undefined;
@@ -153,8 +182,17 @@ export function useFileInstance<LAnnotation>({
     const forceRender =
       newOptions !== undefined &&
       !areOptionsEqual(instanceRef.current.options, newOptions);
+    const resolved = resolveAcceptedValues(
+      file,
+      lineAnnotations,
+      acceptedCache
+    );
     instanceRef.current.setOptions(newOptions);
-    void instanceRef.current.render({ file, lineAnnotations, forceRender });
+    void instanceRef.current.render({
+      file: resolved.file,
+      lineAnnotations: resolved.lineAnnotations,
+      forceRender,
+    });
     if (selectedLines !== undefined) {
       instanceRef.current.setSelectedLines(selectedLines);
     }
@@ -193,6 +231,44 @@ export function useFileInstance<LAnnotation>({
     []
   );
   return { ref, getHoveredLine, getAnnotationSlotName };
+}
+
+// Return the installed values in place of props that still match their stale
+// counterparts. Any other prop value clears its half, and the ref clears once
+// both halves have.
+function resolveAcceptedValues<LAnnotation>(
+  file: FileContents,
+  lineAnnotations: LineAnnotation<LAnnotation>[] | undefined,
+  acceptedCache: RefObject<AcceptedCompletion<LAnnotation> | null>
+): {
+  file: FileContents;
+  lineAnnotations: LineAnnotation<LAnnotation>[] | undefined;
+} {
+  const { current: accepted } = acceptedCache;
+  if (accepted == null) {
+    return { file, lineAnnotations };
+  }
+  const { file: acceptedFiles, annotations: acceptedAnnotations } = accepted;
+  let resolvedFile = file;
+  if (acceptedFiles != null) {
+    if (areFileTargetsEqual(file, acceptedFiles.stale)) {
+      resolvedFile = acceptedFiles.installed;
+    } else {
+      accepted.file = null;
+    }
+  }
+  let resolvedAnnotations = lineAnnotations;
+  if (acceptedAnnotations != null) {
+    if (lineAnnotations === acceptedAnnotations.stale) {
+      resolvedAnnotations = acceptedAnnotations.installed;
+    } else {
+      accepted.annotations = null;
+    }
+  }
+  if (accepted.file == null && accepted.annotations == null) {
+    acceptedCache.current = null;
+  }
+  return { file: resolvedFile, lineAnnotations: resolvedAnnotations };
 }
 
 interface MergeFileOptionsProps<LAnnotation> {

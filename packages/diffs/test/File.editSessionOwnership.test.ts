@@ -905,6 +905,7 @@ describe('completeEditSession', () => {
       expect(event.lineAnnotations).toBe(
         instance.getExternalAnnotationsForTest()
       );
+      expect(event.originalLineAnnotations).toBe(externalAnnotations);
       expect(instance.getLatestAnnotationsForTest()).toEqual([
         { lineNumber: 4 },
       ]);
