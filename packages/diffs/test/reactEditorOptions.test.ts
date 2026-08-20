@@ -1179,12 +1179,15 @@ describe('React completion lifecycle', () => {
     editors: TrackedEditor[];
     events: FileEditCompleteEvent<undefined>[];
     getInstance(): FileInstance<undefined> | undefined;
-    render(props: {
-      file: FileContents;
-      edit: boolean;
-      lineAnnotations?: LineAnnotation<undefined>[];
-    }): Promise<void>;
+    render(props: FileHarnessProps): Promise<void>;
     renderError(props: { file: FileContents; edit: boolean }): Promise<unknown>;
+  }
+
+  interface FileHarnessProps {
+    file: FileContents;
+    edit: boolean;
+    lineAnnotations?: LineAnnotation<undefined>[];
+    onEditChange?(event: EditorChangeEvent<undefined, 'file'>): void;
   }
 
   function createFileHarness(
@@ -1203,11 +1206,7 @@ describe('React completion lifecycle', () => {
     };
     let instance: FileInstance<undefined> | undefined;
     const root = createReactRoot(container);
-    const element = (props: {
-      file: FileContents;
-      edit: boolean;
-      lineAnnotations?: LineAnnotation<undefined>[];
-    }) =>
+    const element = (props: FileHarnessProps) =>
       createElement(
         EditProviderComponent,
         { createEditor: factory },
@@ -1216,6 +1215,7 @@ describe('React completion lifecycle', () => {
           edit: props.edit,
           file: props.file,
           lineAnnotations: props.lineAnnotations,
+          onEditChange: props.onEditChange,
           onEditComplete,
           options: {
             disableFileHeader: true,
@@ -1447,6 +1447,75 @@ describe('React completion lifecycle', () => {
       expect(line instanceof HTMLElement ? line.dataset.line : undefined).toBe(
         '4'
       );
+    } finally {
+      await harness.cleanup();
+    }
+  });
+
+  test('reverting keeps the original annotations while the owner still passes the session collection', async () => {
+    const annotations: LineAnnotation<undefined>[] = [{ lineNumber: 2 }];
+    const events: FileEditCompleteEvent<undefined>[] = [];
+    const harness = createFileHarness((event) => {
+      events.push(event);
+      return null;
+    });
+    // An owner that keeps its annotation state in sync with the session's
+    // remaps, the way an app with add/remove flows must.
+    let mirrored: LineAnnotation<undefined>[] | undefined;
+    const onEditChange = (event: EditorChangeEvent<undefined, 'file'>) => {
+      if (event.lineAnnotations != null) {
+        mirrored = event.lineAnnotations;
+      }
+    };
+    const annotationLine = () => {
+      let row: Element | null = null;
+      for (const el of Array.from(harness.container.querySelectorAll('*'))) {
+        row = el.shadowRoot?.querySelector('[data-line-annotation]') ?? row;
+      }
+      const line = row?.previousElementSibling;
+      return line instanceof HTMLElement ? line.dataset.line : undefined;
+    };
+    try {
+      await harness.render({
+        file: FILE_A,
+        edit: true,
+        lineAnnotations: annotations,
+        onEditChange,
+      });
+      await waitFor(() => harness.editors[0]?.getText() === FILE_A.contents, {
+        timeout: 4_000,
+      });
+      act(() => {
+        insertAtStart(harness.editors[0], 'one\ntwo\n');
+      });
+      expect(mirrored).toEqual([{ lineNumber: 4 }]);
+
+      // The owner's state now holds the moved collection; it cancels with
+      // that collection still passed as the prop.
+      await harness.render({
+        file: FILE_A,
+        edit: true,
+        lineAnnotations: mirrored,
+        onEditChange,
+      });
+      await harness.render({
+        file: FILE_A,
+        edit: false,
+        lineAnnotations: mirrored,
+        onEditChange,
+      });
+      expect(events).toHaveLength(1);
+      expect(events[0].originalLineAnnotations).toBe(annotations);
+      expect(annotationLine()).toBe('2');
+
+      // Restoring from the event settles the bridge on the same collection.
+      await harness.render({
+        file: FILE_A,
+        edit: false,
+        lineAnnotations: events[0].originalLineAnnotations,
+        onEditChange,
+      });
+      expect(annotationLine()).toBe('2');
     } finally {
       await harness.cleanup();
     }

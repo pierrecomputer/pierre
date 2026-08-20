@@ -43,7 +43,7 @@ interface AcceptedFilePair {
   newFile: FileContents | null;
 }
 
-interface AcceptedCompletion<LAnnotation> {
+interface SettledCompletion<LAnnotation> {
   fileDiff: {
     installed: FileDiffMetadata;
     stale: FileDiffMetadata;
@@ -55,7 +55,7 @@ interface AcceptedCompletion<LAnnotation> {
   } | null;
   annotations: {
     installed: DiffLineAnnotation<LAnnotation>[] | undefined;
-    stale: DiffLineAnnotation<LAnnotation>[];
+    stale: DiffLineAnnotation<LAnnotation>[] | undefined;
   } | null;
 }
 
@@ -109,16 +109,18 @@ export function useFileDiffInstance<LAnnotation>({
     (event: EditorChangeEvent<LAnnotation, 'diff'>) => _onEditChange?.(event)
   );
   const onEditChange = _onEditChange != null ? handleOnEditChange : undefined;
-  // An accepted edit session ends with the instance already showing the
-  // result, but the fileDiff/lineAnnotations props stay pre-edit until the
-  // owner's state update lands. This holds the accepted values so the
-  // renders in between do not repaint pre-edit state.
-  const acceptedCache = useRef<AcceptedCompletion<LAnnotation> | null>(null);
+  // A completed edit session ends with the instance already showing the
+  // settled values, but the fileDiff/lineAnnotations props stay where the
+  // owner left them until its state update lands. This holds the settled
+  // values so the renders in between do not repaint stale state: on accept
+  // the props are still pre-edit; on revert an owner that mirrored the
+  // session's annotation remaps still passes the moved collection.
+  const settledCache = useRef<SettledCompletion<LAnnotation> | null>(null);
   const handleOnEditComplete = useStableCallback(
     (event: FileDiffEditCompleteEvent<LAnnotation>) => {
       const returned = _onEditComplete?.(event) ?? null;
       if (returned === event.fileDiff) {
-        acceptedCache.current = {
+        settledCache.current = {
           fileDiff: { installed: returned, stale: event.originalFileDiff },
           filePair:
             fileDiff == null
@@ -131,6 +133,15 @@ export function useFileDiffInstance<LAnnotation>({
           annotations: {
             installed: event.lineAnnotations,
             stale: event.originalLineAnnotations,
+          },
+        };
+      } else if (returned == null || returned === event.originalFileDiff) {
+        settledCache.current = {
+          fileDiff: null,
+          filePair: null,
+          annotations: {
+            installed: event.originalLineAnnotations,
+            stale: event.lineAnnotations,
           },
         };
       }
@@ -147,16 +158,16 @@ export function useFileDiffInstance<LAnnotation>({
     if (fileDiff != null) {
       return fileDiff;
     }
-    const accepted = acceptedCache.current;
-    const filePair = accepted?.filePair;
-    if (accepted != null && filePair != null) {
+    const { current: settled } = settledCache;
+    const filePair = settled?.filePair;
+    if (settled != null && filePair != null) {
       if (
         isSameFilePair(oldFile, newFile, filePair.stale) ||
         isSameFilePair(oldFile, newFile, filePair.installed)
       ) {
         return filePair.fileDiff;
       }
-      accepted.filePair = null;
+      settled.filePair = null;
     }
     return parseDiffFromFile(
       oldFile ?? null,
@@ -237,10 +248,10 @@ export function useFileDiffInstance<LAnnotation>({
     const forceRender =
       newOptions !== undefined &&
       !areOptionsEqual(instance.options, newOptions);
-    const resolved = resolveAcceptedValues(
+    const resolved = resolveSettledValues(
       effectiveFileDiff,
       lineAnnotations,
-      acceptedCache
+      settledCache
     );
     instance.setOptions(newOptions);
     void instance.render({
@@ -309,25 +320,25 @@ function isSameFilePair(
 // Render the installed values in place of props that still match their stale
 // counterparts. Any other prop value clears its slot — filePair settles in
 // the parse memo instead — and the ref clears once all three have.
-function resolveAcceptedValues<LAnnotation>(
+function resolveSettledValues<LAnnotation>(
   fileDiff: FileDiffMetadata,
   lineAnnotations: DiffLineAnnotation<LAnnotation>[] | undefined,
-  acceptedCache: RefObject<AcceptedCompletion<LAnnotation> | null>
+  settledCache: RefObject<SettledCompletion<LAnnotation> | null>
 ): {
   fileDiff: FileDiffMetadata;
   lineAnnotations: DiffLineAnnotation<LAnnotation>[] | undefined;
 } {
-  const accepted = acceptedCache.current;
-  if (accepted == null) {
+  const { current: settled } = settledCache;
+  if (settled == null) {
     return { fileDiff, lineAnnotations };
   }
-  const { fileDiff: acceptedDiff, annotations: acceptedAnnotations } = accepted;
+  const { fileDiff: acceptedDiff, annotations: acceptedAnnotations } = settled;
   let resolvedFileDiff = fileDiff;
   if (acceptedDiff != null) {
     if (areDiffTargetsEqual(fileDiff, acceptedDiff.stale)) {
       resolvedFileDiff = acceptedDiff.installed;
     } else {
-      accepted.fileDiff = null;
+      settled.fileDiff = null;
     }
   }
   let resolvedAnnotations = lineAnnotations;
@@ -335,15 +346,15 @@ function resolveAcceptedValues<LAnnotation>(
     if (lineAnnotations === acceptedAnnotations.stale) {
       resolvedAnnotations = acceptedAnnotations.installed;
     } else {
-      accepted.annotations = null;
+      settled.annotations = null;
     }
   }
   if (
-    accepted.fileDiff == null &&
-    accepted.annotations == null &&
-    accepted.filePair == null
+    settled.fileDiff == null &&
+    settled.annotations == null &&
+    settled.filePair == null
   ) {
-    acceptedCache.current = null;
+    settledCache.current = null;
   }
   return { fileDiff: resolvedFileDiff, lineAnnotations: resolvedAnnotations };
 }

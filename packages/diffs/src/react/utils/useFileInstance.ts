@@ -34,14 +34,14 @@ import { useStableCallback } from './useStableCallback';
 const useIsomorphicLayoutEffect =
   typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
-interface AcceptedCompletion<LAnnotation> {
+interface SettledCompletion<LAnnotation> {
   file: {
     installed: FileContents;
     stale: FileContents;
   } | null;
   annotations: {
     installed: LineAnnotation<LAnnotation>[] | undefined;
-    stale: LineAnnotation<LAnnotation>[];
+    stale: LineAnnotation<LAnnotation>[] | undefined;
   } | null;
 }
 
@@ -90,20 +90,30 @@ export function useFileInstance<LAnnotation>({
     (event: EditorChangeEvent<LAnnotation, 'file'>) => _onEditChange?.(event)
   );
   const onEditChange = _onEditChange != null ? handleOnEditChange : undefined;
-  // An accepted edit session ends with the instance already showing the
-  // result, but the file/lineAnnotations props stay pre-edit until the
-  // owner's state update lands. This holds the accepted values so the
-  // renders in between do not repaint pre-edit state.
-  const acceptedCache = useRef<AcceptedCompletion<LAnnotation> | null>(null);
+  // A completed edit session ends with the instance already showing the
+  // settled values, but the file/lineAnnotations props stay where the
+  // owner left them until its state update lands. This holds the settled
+  // values so the renders in between do not repaint stale state: on accept
+  // the props are still pre-edit; on revert an owner that mirrored the
+  // session's annotation remaps still passes the moved collection.
+  const settledCache = useRef<SettledCompletion<LAnnotation> | null>(null);
   const handleOnEditComplete = useStableCallback(
     (event: FileEditCompleteEvent<LAnnotation>) => {
       const returned = _onEditComplete?.(event) ?? null;
       if (returned === event.file) {
-        acceptedCache.current = {
+        settledCache.current = {
           file: { installed: returned, stale: event.originalFile },
           annotations: {
             installed: event.lineAnnotations,
             stale: event.originalLineAnnotations,
+          },
+        };
+      } else if (returned == null || returned === event.originalFile) {
+        settledCache.current = {
+          file: null,
+          annotations: {
+            installed: event.originalLineAnnotations,
+            stale: event.lineAnnotations,
           },
         };
       }
@@ -182,11 +192,7 @@ export function useFileInstance<LAnnotation>({
     const forceRender =
       newOptions !== undefined &&
       !areOptionsEqual(instanceRef.current.options, newOptions);
-    const resolved = resolveAcceptedValues(
-      file,
-      lineAnnotations,
-      acceptedCache
-    );
+    const resolved = resolveSettledValues(file, lineAnnotations, settledCache);
     instanceRef.current.setOptions(newOptions);
     void instanceRef.current.render({
       file: resolved.file,
@@ -236,25 +242,25 @@ export function useFileInstance<LAnnotation>({
 // Return the installed values in place of props that still match their stale
 // counterparts. Any other prop value clears its half, and the ref clears once
 // both halves have.
-function resolveAcceptedValues<LAnnotation>(
+function resolveSettledValues<LAnnotation>(
   file: FileContents,
   lineAnnotations: LineAnnotation<LAnnotation>[] | undefined,
-  acceptedCache: RefObject<AcceptedCompletion<LAnnotation> | null>
+  settledCache: RefObject<SettledCompletion<LAnnotation> | null>
 ): {
   file: FileContents;
   lineAnnotations: LineAnnotation<LAnnotation>[] | undefined;
 } {
-  const { current: accepted } = acceptedCache;
-  if (accepted == null) {
+  const { current: settled } = settledCache;
+  if (settled == null) {
     return { file, lineAnnotations };
   }
-  const { file: acceptedFiles, annotations: acceptedAnnotations } = accepted;
+  const { file: acceptedFiles, annotations: acceptedAnnotations } = settled;
   let resolvedFile = file;
   if (acceptedFiles != null) {
     if (areFileTargetsEqual(file, acceptedFiles.stale)) {
       resolvedFile = acceptedFiles.installed;
     } else {
-      accepted.file = null;
+      settled.file = null;
     }
   }
   let resolvedAnnotations = lineAnnotations;
@@ -262,11 +268,11 @@ function resolveAcceptedValues<LAnnotation>(
     if (lineAnnotations === acceptedAnnotations.stale) {
       resolvedAnnotations = acceptedAnnotations.installed;
     } else {
-      accepted.annotations = null;
+      settled.annotations = null;
     }
   }
-  if (accepted.file == null && accepted.annotations == null) {
-    acceptedCache.current = null;
+  if (settled.file == null && settled.annotations == null) {
+    settledCache.current = null;
   }
   return { file: resolvedFile, lineAnnotations: resolvedAnnotations };
 }
