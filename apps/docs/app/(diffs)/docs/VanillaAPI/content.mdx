@@ -40,11 +40,12 @@ Both `FileDiff` and `File` accept an options object in their constructor. The
 `File` component has similar options, but excludes diff-specific settings and
 uses `LineAnnotation` instead of `DiffLineAnnotation` (no `side` property).
 
-When one of these components is attached to an `Editor`, keep its annotations in
-an external variable or store and replace them with the current collection
-emitted by `Editor.onChange`. See
-[Editing with line annotations](#edit-mode-editing-with-line-annotations) for
-the synchronization pattern and remapping rules.
+Editable surfaces take `onEditChange` (the live change stream) and
+`onEditComplete` (the accept/revert boundary) as `FileOptions` /
+`FileDiffOptions` members. Edit mode owns annotation positions during a session,
+so you do not sync them back; accepting installs the final collection. See
+[Completing an edit](#edit-mode-completing-an-edit) and
+[Editing with line annotations](#edit-mode-editing-with-line-annotations).
 
 When rendering direct file contents with `FileDiff.render`, pass `FileContents`
 for each existing side. Use `oldFile: null` for a new file, or `newFile: null`

@@ -68,10 +68,14 @@ React `CodeView` gets its editor factory from the nearest `EditProvider`; unlike
 vanilla `CodeView`, it does not accept `createEditor` directly or inside
 `options`. Keep the provider mounted, set `edit: true` on the items that should
 be editable, and pass creation-time item-editor behavior through
-`editorOptions`. `onItemEditChange` reports live contents with the owning item.
-If a session produces a change, `onItemEditComplete` reports its latest contents
-when editing is disabled or the item is collapsed or removed. Direct reset,
-cleanup, and viewer unmount are silent.
+`editorOptions`. `onItemEditChange(event, item)` reports each live change with
+the owning item. `onItemEditComplete(event, item, nextItem)` is the
+accept/revert boundary: when a changed session ends (editing disabled, or the
+item removed), return `'accept'` to install the edit — `CodeView` applies the
+built `nextItem`, which a controlled owner also mirrors into its own state — or
+`'reject'` to revert. Collapsing an item suspends its session rather than
+completing it. A direct `reset()` or `cleanUp()`, and viewer unmount, would also
+complete changed sessions.
 
 Each edited item receives an independent editor whose history survives
 virtualization. Changes to the provider factory or `editorOptions` do not
@@ -198,28 +202,26 @@ items, remove items, or update existing ones.
 
 ### Editing Item Annotations
 
-When an editable item has annotations, `onItemEditChange` receives the owning
-item, its edited `FileContents`, and the complete current annotation collection.
-For a diff item, those contents represent the editable new-file side. When the
-emitted annotation array is a different object, replace `item.annotations` and
-increment the item's `version`. `CodeView` does not write either value for you.
+While an item is editing, edit mode owns its annotation positions and re-renders
+the annotation rows as the document changes — you should not sync them back
+through on `onItemEditChange`. `event.lineAnnotations` on that callback reports
+the current collection if you want to observe it. You only write
+`item.annotations` (with a `version` bump) when you genuinely add/remove/update
+existing annotations.
+
+Currently if you add/remove/update any annotations while in an edit session, it
+will revert any positional edit changes because there's currently no way to
+resolve changes. You may want to disable external annotation updates while
+editing and figure out how to resolve them post edit.
 
 The callback annotation type is `LineAnnotation[] | DiffLineAnnotation[]`: file
 items emit the side-less shape and diff items emit annotations with a `side`.
 Use `isFileAnnotationCollection` or `isDiffAnnotationCollection` to narrow it
 before reading shape-specific fields.
 
-When React owns the `CodeView` item list through `items`, publish a new `items`
-array containing the updated item inside `flushSync` so annotation placement
-updates with the edited content before paint. When `CodeView` owns the list in
-React's imperative mode, call `updateItem` through the component ref; in vanilla
-JS, call `updateItem` on the `CodeView` instance. Skip the update when the
-emitted array is the same object as the item's current annotations, since
-ordinary same-line typing reuses that array.
-
-Keep `onItemEditComplete` focused on committing the final `file` contents or
-rebuilding `fileDiff` with a fresh `cacheKey`. Live annotations should already
-be synchronized through `onItemEditChange`. See
+On completion, the `nextItem` `CodeView` builds already carries the final
+annotation collection (`event.lineAnnotations`) alongside the accepted
+`file`/`fileDiff` — returning `'accept'` installs both. See
 [Editing with line annotations](#edit-mode-editing-with-line-annotations) for
 remapping rules, stable metadata IDs, and annotation-content lifetime guidance.
 

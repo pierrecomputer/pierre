@@ -227,17 +227,19 @@ export type FileDiffType = 'file-diff' | 'unresolved-file';
  * `onEditComplete` event argument when an edit session ends with a changed
  * diff.
  *
- * `fileDiff` is a detached, keyless, and fully re-computed diff offered for
- * ownership transfer.
+ * `fileDiff` is a freshly computed diff of the edited contents with no
+ * `cacheKey` set; accepting installs it.
  *
- * `originalFileDiff` is the last `fileDiff` provided to the component
- * externally, and returning that will undo any changes in `fileDiff`.
+ * `originalFileDiff` is the last `fileDiff` the component was given externally;
+ * a revert restores it.
  *
- * `oldFile`/`newFile` are detached FileContent representations of the
- * completed diff for updating file-pair or patch inputs; `null` marks the
- * missing side of a new file. (deleted files are impossible to edit)
+ * `oldFile`/`newFile` are the completed contents as a file pair, for updating
+ * file-pair or patch inputs. `null` marks the absent side of an added file (a
+ * deleted file cannot be edited).
  *
- * `lineAnnotations` is the completed annotation collection.
+ * `lineAnnotations` is the completed annotation collection, potentially
+ * modified based on the edit changes to keep annotations aligned to their
+ * intended targets
  *
  * `originalLineAnnotations` is the last collection provided to the component
  * externally, which a revert keeps.

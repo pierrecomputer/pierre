@@ -76,11 +76,12 @@ common set of props for configuration, annotations, and styling. The `File`
 component has similar props, but uses `LineAnnotation` instead of
 `DiffLineAnnotation` (no `side` property).
 
-When one of these components is attached to an `Editor`, keep its annotations in
-application-owned state and replace them with the current collection emitted by
-`Editor.onChange`. See
-[Editing with line annotations](#edit-mode-editing-with-line-annotations) for
-the React `flushSync` pattern and annotation-content lifetime guidance.
+Every editable surface (`File`, `FileDiff`, `MultiFileDiff`, `PatchDiff`) also
+takes `onEditChange` — the per-surface live change stream — and `onEditComplete`
+— the one-time accept/revert boundary. Edit mode owns annotation positions
+during a session, so you do not sync them back; accepting installs the final
+collection. See [Completing an edit](#edit-mode-completing-an-edit) and
+[Editing with line annotations](#edit-mode-editing-with-line-annotations).
 
 `CodeView` reuses many of the same option names internally, but it has its own
 controlled `items` mode, imperative mode with optional `initialItems`, viewer

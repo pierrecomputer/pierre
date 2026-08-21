@@ -410,8 +410,9 @@ interface ThreadMetadata {
   threadId: string;
 }
 
-// This is static read-only data. In edit mode, initialize state with this array
-// and replace that state when Editor.onChange emits a different collection.
+// This is static read-only data. In edit mode, pass it as the initial
+// lineAnnotations; edit mode manages positions during a session, and you adopt
+// the final collection from the completion event.
 const lineAnnotations: DiffLineAnnotation<ThreadMetadata>[] = [
   {
     side: 'additions',
@@ -1095,8 +1096,9 @@ interface CommentMetadata {
   commentId: string;
 }
 
-// This is static read-only data. In edit mode, initialize state with this array
-// and replace that state when Editor.onChange emits a different collection.
+// This is static read-only data. In edit mode, pass it as the initial
+// lineAnnotations; edit mode manages positions during a session, and you adopt
+// the final collection from the completion event.
 const lineAnnotations: LineAnnotation<CommentMetadata>[] = [
   {
     lineNumber: 0,

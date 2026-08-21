@@ -102,12 +102,15 @@ export interface FileHydrateProps<LAnnotation> extends Omit<
  * `onEditComplete` event argument when an edit session ends with changed
  * contents.
  *
- * `file` is the detached, keyless FileContents offered for ownership transfer.
+ * `file` is a fresh FileContents with the edited contents and no `cacheKey`
+ * set; accepting installs it.
  *
- * `originalFile` is the last `file` provided to the component externally, and
- * returning that will undo any changes in `file`.
+ * `originalFile` is the last `file` the component was given externally; a
+ * revert restores it.
  *
- * `lineAnnotations` is the completed annotation collection.
+ * `lineAnnotations` is the completed annotation collection, potentially
+ * modified based on the edit changes to keep annotations aligned to their
+ * intended targets
  *
  * `originalLineAnnotations` is the last collection provided to the component
  * externally, which a revert keeps.

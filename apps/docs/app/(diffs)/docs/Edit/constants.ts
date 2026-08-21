@@ -24,7 +24,7 @@ if (root == null || content == null) {
   throw new Error('Expected virtualized file containers to exist');
 }
 
-const file: FileContents = {
+let file: FileContents = {
   name: 'example.ts',
   contents: 'export function greet(name: string) {\\n  return name;\\n}',
 };
@@ -33,24 +33,31 @@ const virtualizer = new Virtualizer();
 virtualizer.setup(root, content);
 
 const fileInstance = new VirtualizedFile(
-  { theme: { dark: 'pierre-dark', light: 'pierre-light' } },
+  {
+    theme: { dark: 'pierre-dark', light: 'pierre-light' },
+    // Per-surface live change stream (optional).
+    onEditChange(event) {
+      console.log('change', event.file.name, event.lineAnnotations);
+    },
+    // Runs once when a changed session ends. Return 'accept' to install the
+    // event's file, or 'reject' to revert.
+    onEditComplete(event) {
+      // Store the edited file so later renders use it, and don't reset back to
+      // the stale original.
+      file = event.file;
+      return 'accept';
+    },
+  },
   virtualizer
 );
 fileInstance.render({ file, containerWrapper: content });
 
-const editor = new Editor({
-  onChange(file, lineAnnotations) {
-    console.log('change', file.name, lineAnnotations);
-  },
-});
-
+const editor = new Editor();
+// Start an edit session
 editor.edit(fileInstance);
 
-// Update the file, editor retains to work with the new file
-const newFile: FileContents = { ... }
-fileInstance.render({ file: newFile });
-
-// Later, when the editor is no longer needed:
+// Later, when the editor is no longer needed. Its disposer completes the
+// session — running onEditComplete — before tearing down.
 editor.cleanUp();`,
   },
   options,
@@ -60,11 +67,11 @@ export const EDIT_VANILLA_FILE_DIFF_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
     name: 'editor_vanilla_file_diff.ts',
     contents: `import {
-  isDiffAnnotationCollection,
-  type DiffLineAnnotation,
+  parseDiffFromFile,
   Virtualizer,
   VirtualizedFileDiff,
-  type FileContents,
+  type DiffLineAnnotation,
+  type FileDiffMetadata,
 } from '@pierre/diffs';
 import { Editor } from '@pierre/diffs/edit';
 
@@ -79,16 +86,17 @@ if (root == null || content == null) {
 }
 const contentWrapper = content;
 
-const oldFile: FileContents = {
-  name: 'example.ts',
-  contents: 'export function greet(name: string) {\\n  return name;\\n}',
-};
-
-let newFile: FileContents = {
-  ...oldFile,
-  contents:
-    'export function greet(name: string) {\\n  return "Hello, " + name;\\n}',
-};
+let fileDiff: FileDiffMetadata = parseDiffFromFile(
+  {
+    name: 'example.ts',
+    contents: 'export function greet(name: string) {\\n  return name;\\n}',
+  },
+  {
+    name: 'example.ts',
+    contents:
+      'export function greet(name: string) {\\n  return "Hello, " + name;\\n}',
+  }
+);
 
 let lineAnnotations: DiffLineAnnotation<ThreadMetadata>[] = [
   {
@@ -109,14 +117,23 @@ const fileDiffInstance = new VirtualizedFileDiff<ThreadMetadata>(
       element.textContent = 'Thread ' + annotation.metadata.id;
       return element;
     },
+    // Edit mode owns annotation positions during the session; you do not sync
+    // them back. Store the completed diff and its final annotations so later
+    // renders stay in sync, then return 'accept'; return 'reject' to revert.
+    onEditComplete(event) {
+      fileDiff = event.fileDiff;
+      if (event.lineAnnotations != null) {
+        lineAnnotations = event.lineAnnotations;
+      }
+      return 'accept';
+    },
   },
   virtualizer
 );
 
 function renderFromApplicationState() {
   fileDiffInstance.render({
-    oldFile,
-    newFile,
+    fileDiff,
     lineAnnotations,
     containerWrapper: contentWrapper,
   });
@@ -124,26 +141,11 @@ function renderFromApplicationState() {
 
 renderFromApplicationState();
 
-const editor = new Editor<ThreadMetadata>({
-  onChange(file, nextAnnotations) {
-    // Preserve application-owned fields and replace only the edited contents.
-    newFile = { ...newFile, contents: file.contents };
-
-    // Replace application state first, then redraw after onChange returns.
-    if (
-      nextAnnotations != null &&
-      isDiffAnnotationCollection(nextAnnotations) &&
-      nextAnnotations !== lineAnnotations
-    ) {
-      lineAnnotations = nextAnnotations;
-      queueMicrotask(renderFromApplicationState);
-    }
-  },
-});
-
+const editor = new Editor<ThreadMetadata>();
 editor.edit(fileDiffInstance);
 
-// Later, when the editor is no longer needed:
+// Later, when the editor is no longer needed. Its disposer completes the
+// session — running onEditComplete — before tearing down.
 editor.cleanUp();`,
   },
   options,
@@ -154,7 +156,6 @@ export const EDIT_VANILLA_CODE_VIEW_EXAMPLE: PreloadFileOptions<undefined> = {
     name: 'editor_vanilla_code_view.ts',
     contents: `import {
   CodeView,
-  isDiffAnnotationCollection,
   parseDiffFromFile,
   type CodeViewItem,
 } from '@pierre/diffs';
@@ -192,42 +193,18 @@ const viewer = new CodeView<ThreadMetadata>({
       },
     });
   },
-  onItemEditChange(item, _file, nextAnnotations) {
-    if (
-      item.type !== 'diff' ||
-      nextAnnotations == null ||
-      !isDiffAnnotationCollection(nextAnnotations) ||
-      item.annotations === nextAnnotations
-    ) {
-      return;
+  // nextItem is the accepted replacement CodeView built — new fileDiff and
+  // annotations, edit: false, bumped version. Re-key the frozen event's value,
+  // then return 'accept' (CodeView applies nextItem for you) or 'reject'. Edit
+  // mode manages annotation positions during the session, so there is no
+  // onItemEditChange sync.
+  onItemEditComplete(event, item, nextItem) {
+    // Often a good idea to update the cacheKey for a new diff or file to
+    // prevent needless extra highlighting
+    if ('fileDiff' in event) {
+      event.fileDiff.cacheKey = item.id + ':v' + nextItem.version;
     }
-
-    const current = viewer.getItem(item.id);
-    if (current?.type !== 'diff') {
-      return;
-    }
-    viewer.updateItem({
-      ...current,
-      annotations: nextAnnotations,
-      version: (current.version ?? 0) + 1,
-    });
-  },
-  onItemEditComplete(item, file) {
-    const current = viewer.getItem(item.id);
-    if (current?.type !== 'diff') {
-      return;
-    }
-    const version = (current.version ?? 0) + 1;
-    const cacheKey = current.id + ':v' + version;
-    viewer.updateItem({
-      ...current,
-      edit: false,
-      version,
-      fileDiff: {
-        ...parseDiffFromFile(oldFile, { ...file, cacheKey }),
-        cacheKey,
-      },
-    });
+    return 'accept';
   },
   renderAnnotation(annotation) {
     const element = document.createElement('div');
@@ -283,11 +260,7 @@ const button = document.getElementById('edit-button');
 
 async function edit(fileInstance: VirtualizedFile): Promise<() => void> {
   const { Editor } = await import('@pierre/diffs/edit');
-  const editor = new Editor({
-    onChange(file, lineAnnotations) {
-      console.log('change', file.name, lineAnnotations);
-    },
-  });
+  const editor = new Editor();
   return editor.edit(fileInstance);
 }
 
@@ -499,17 +472,13 @@ export function EditableFileWithHistoryToolbar() {
   const [canRedo, setCanRedo] = useState(false);
 
   const editorRef = useRef<Editor<undefined> | null>(null);
+  // Creation-time options: capture the editor for the toolbar's imperative
+  // calls. The change stream lives on the component's onEditChange prop.
   const editorOptions = useMemo<EditorOptions<undefined>>(
     () => ({
       historyMaxEntries: 100,
       onAttach(editor) {
         editorRef.current = editor;
-      },
-      onChange() {
-        // Undo and redo run through the same change path as edits, so refresh
-        // toolbar state from \`onChange\` rather than only after button clicks.
-        setCanUndo(editorRef.current?.canUndo ?? false);
-        setCanRedo(editorRef.current?.canRedo ?? false);
       },
     }),
     []
@@ -529,6 +498,12 @@ export function EditableFileWithHistoryToolbar() {
         file={file}
         edit
         editorOptions={editorOptions}
+        onEditChange={() => {
+          // Undo and redo run through the same change path as edits, so
+          // refresh toolbar state on every change, not only on button clicks.
+          setCanUndo(editorRef.current?.canUndo ?? false);
+          setCanRedo(editorRef.current?.canRedo ?? false);
+        }}
       />
     </EditProvider>
   );
@@ -551,19 +526,23 @@ export const EDIT_REACT_CREATE_EDITOR_EXAMPLE: PreloadFileOptions<undefined> = {
 
 const editorOptions = useMemo<EditorOptions<undefined>>(
   () => ({
-    onChange: handleChange,
     onAttach(editor) {
       editorRef.current = editor;
     },
   }),
-  [handleChange]
+  []
 );
 
 // Mount EditProvider near the root so its editors are available to every
 // editable File, diff, and CodeView.
 return (
   <EditProvider createEditor={createEditor}>
-    <File file={file} edit={editing} editorOptions={editorOptions} />
+    <File
+      file={file}
+      edit={editing}
+      editorOptions={editorOptions}
+      onEditChange={handleChange}
+    />
   </EditProvider>
 );`,
   },
@@ -574,13 +553,18 @@ export const EDIT_REACT_SHARED_EDITOR_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
     name: 'editor_react_shared_editor.tsx',
     contents: `const editorOptions = useMemo<EditorOptions<undefined>>(
-  () => ({ persistState: true, onChange: handleChange }),
-  [handleChange]
+  () => ({ persistState: true }),
+  []
 );
 
 return (
   <EditProvider createEditor={createEditor}>
-    <File file={activeFile} edit editorOptions={editorOptions} />
+    <File
+      file={activeFile}
+      edit
+      editorOptions={editorOptions}
+      onEditChange={handleChange}
+    />
   </EditProvider>
 );`,
   },
@@ -590,12 +574,16 @@ return (
 export const EDIT_REACT_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
     name: 'editor_react.tsx',
-    contents: `import type { FileContents, FileOptions } from '@pierre/diffs';
+    contents: `import type {
+  FileContents,
+  FileEditCompleteEvent,
+  FileOptions,
+} from '@pierre/diffs';
 import { Editor, type EditorOptions } from '@pierre/diffs/edit';
 import { EditProvider, File, Virtualizer } from '@pierre/diffs/react';
-import { useMemo, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 
-const file: FileContents = {
+const initialFile: FileContents = {
   name: 'example.ts',
   contents: \`function greet(name: string) {
   console.log(\\\`Hello, \\\${name}!\\\`);
@@ -619,13 +607,27 @@ function createEditor(options: EditorOptions<undefined>) {
 }
 
 export function EditableFile() {
-  const [editable, setEditable] = useState(true);
-  const editorOptions = useMemo<EditorOptions<undefined>>(
-    () => ({
-      onChange(file, lineAnnotations) {
-        console.log('change', file.name, lineAnnotations);
-      },
-    }),
+  const [file, setFile] = useState(initialFile);
+  const [editing, setEditing] = useState(false);
+  // Cancel marks the session so onEditComplete reverts instead of accepting.
+  const cancelled = useRef(false);
+  const version = useRef(0);
+
+  // Runs once when a changed session ends. Return 'accept' to install the
+  // event's file, or 'reject' to revert.
+  const handleEditComplete = useCallback(
+    (event: FileEditCompleteEvent<undefined>) => {
+      if (cancelled.current) {
+        cancelled.current = false;
+        return 'reject';
+      }
+      // Accepting: stamp the new contents with a fresh cacheKey, store them,
+      // then accept — the surface installs the event's file.
+      version.current += 1;
+      event.file.cacheKey = 'example:v' + version.current;
+      setFile(event.file);
+      return 'accept';
+    },
     []
   );
 
@@ -634,16 +636,36 @@ export function EditableFile() {
   // CodeView.
   return (
     <EditProvider createEditor={createEditor}>
-      <button type="button" onClick={() => setEditable((value) => !value)}>
-        {editable ? 'Disable editing' : 'Enable editing'}
-      </button>
+      {editing ? (
+        <>
+          <button
+            type="button"
+            onClick={() => {
+              cancelled.current = true;
+              setEditing(false);
+            }}
+          >
+            Cancel
+          </button>
+          <button type="button" onClick={() => {
+            cancelled.current = false;
+            setEditing(false) 
+          }}>
+            Save
+          </button>
+        </>
+      ) : (
+        <button type="button" onClick={() => setEditing(true)}>
+          Edit
+        </button>
+      )}
 
       <Virtualizer style={virtualizerStyle}>
         <File
           file={file}
           options={fileOptions}
-          edit={editable}
-          editorOptions={editorOptions}
+          edit={editing}
+          onEditComplete={handleEditComplete}
         />
       </Virtualizer>
     </EditProvider>
@@ -657,9 +679,9 @@ export const EDIT_REACT_FILE_DIFF_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
     name: 'editor_react_file_diff.tsx',
     contents: `import {
-  isDiffAnnotationCollection,
   parseDiffFromFile,
   type DiffLineAnnotation,
+  type FileDiffEditCompleteEvent,
   type FileDiffMetadata,
   type FileDiffOptions,
 } from '@pierre/diffs';
@@ -669,8 +691,7 @@ import {
   FileDiff,
   Virtualizer,
 } from '@pierre/diffs/react';
-import { useMemo, useRef, useState } from 'react';
-import { flushSync } from 'react-dom';
+import { useCallback, useRef, useState } from 'react';
 
 interface ThreadMetadata {
   id: string;
@@ -685,7 +706,7 @@ const initialAnnotations: DiffLineAnnotation<ThreadMetadata>[] = [
 ];
 
 // FileDiff takes a pre-parsed FileDiffMetadata object.
-const fileDiff: FileDiffMetadata = parseDiffFromFile(
+const initialDiff: FileDiffMetadata = parseDiffFromFile(
   { name: 'example.ts', contents: 'console.log("Hello world")' },
   { name: 'example.ts', contents: 'console.warn("Updated message")' }
 );
@@ -705,27 +726,30 @@ function createEditor(options: EditorOptions<ThreadMetadata>) {
 }
 
 export function EditableFileDiff() {
-  const [editable, setEditable] = useState(true);
+  const [fileDiff, setFileDiff] = useState(initialDiff);
   const [annotations, setAnnotations] = useState(initialAnnotations);
-  const annotationsRef = useRef(initialAnnotations);
   // Key interaction state by stable metadata rather than line coordinates.
   const [drafts, setDrafts] = useState<Record<string, string>>({});
-  const editorOptions = useMemo<EditorOptions<ThreadMetadata>>(
-    () => ({
-      onChange(_file, nextAnnotations) {
-        if (
-          nextAnnotations == null ||
-          !isDiffAnnotationCollection(nextAnnotations) ||
-          nextAnnotations === annotationsRef.current
-        ) {
-          return;
-        }
+  const [editing, setEditing] = useState(false);
+  const cancelled = useRef(false);
+  const version = useRef(0);
 
-        annotationsRef.current = nextAnnotations;
-        // Publish remapped annotations before the browser paints the edit.
-        flushSync(() => setAnnotations(nextAnnotations));
-      },
-    }),
+  // On completion, accept the new diff and adopt the final annotation
+  // collection, or revert.
+  const handleEditComplete = useCallback(
+    (event: FileDiffEditCompleteEvent<ThreadMetadata>) => {
+      if (cancelled.current) {
+        cancelled.current = false;
+        return 'reject';
+      }
+      version.current += 1;
+      event.fileDiff.cacheKey = 'example:v' + version.current;
+      setFileDiff(event.fileDiff);
+      if (event.lineAnnotations != null) {
+        setAnnotations(event.lineAnnotations);
+      }
+      return 'accept';
+    },
     []
   );
 
@@ -734,17 +758,37 @@ export function EditableFileDiff() {
   // CodeView.
   return (
     <EditProvider createEditor={createEditor}>
-      <button type="button" onClick={() => setEditable((value) => !value)}>
-        {editable ? 'Disable editing' : 'Enable editing'}
-      </button>
+      {editing ? (
+        <>
+          <button
+            type="button"
+            onClick={() => {
+              cancelled.current = true;
+              setEditing(false);
+            }}
+          >
+            Cancel
+          </button>
+          <button type="button" onClick={() => {
+            cancelled.current = false;
+            setEditing(false) 
+          }}>
+            Save
+          </button>
+        </>
+      ) : (
+        <button type="button" onClick={() => setEditing(true)}>
+          Edit
+        </button>
+      )}
 
       <Virtualizer style={virtualizerStyle}>
         <FileDiff<ThreadMetadata>
           fileDiff={fileDiff}
           lineAnnotations={annotations}
           options={fileDiffOptions}
-          edit={editable}
-          editorOptions={editorOptions}
+          edit={editing}
+          onEditComplete={handleEditComplete}
           renderAnnotation={(annotation) => {
             const id = annotation.metadata.id;
             return (
@@ -773,17 +817,14 @@ export const EDIT_REACT_CODE_VIEW_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
     name: 'editor_react_code_view.tsx',
     contents: `import {
-  isDiffAnnotationCollection,
   parseDiffFromFile,
+  type CodeViewDiffItem,
   type CodeViewItem,
-  type DiffLineAnnotation,
-  type FileContents,
-  type LineAnnotation,
+  type FileDiffEditCompleteEvent,
 } from '@pierre/diffs';
 import { Editor, type EditorOptions } from '@pierre/diffs/edit';
 import { CodeView, EditProvider } from '@pierre/diffs/react';
 import { useCallback, useState } from 'react';
-import { flushSync } from 'react-dom';
 
 interface ThreadMetadata {
   id: string;
@@ -840,60 +881,25 @@ export function EditableCodeView() {
     );
   }, []);
 
-  const syncAnnotations = useCallback(
-    (
-      item: CodeViewItem<ThreadMetadata>,
-      _file: FileContents,
-      nextAnnotations?:
-        | LineAnnotation<ThreadMetadata>[]
-        | DiffLineAnnotation<ThreadMetadata>[]
-    ) => {
-      if (
-        item.type !== 'diff' ||
-        nextAnnotations == null ||
-        !isDiffAnnotationCollection(nextAnnotations) ||
-        item.annotations === nextAnnotations
-      ) {
-        return;
-      }
-
-      flushSync(() => {
-        setItems((current) =>
-          current.map((existing) =>
-            existing.id === item.id && existing.type === 'diff'
-              ? {
-                  ...existing,
-                  annotations: nextAnnotations,
-                  version: (existing.version ?? 0) + 1,
-                }
-              : existing
-          )
-        );
-      });
-    },
-    []
-  );
-
+  // Called once when an item's session ends. nextItem is the accepted
+  // replacement CodeView built — the same item with the completed fileDiff and
+  // annotations, edit: false, and a bumped version. Mirror it into state and
+  // return 'accept' (edit mode already managed the annotations), or 'reject' to
+  // revert.
   const commitEdit = useCallback(
-    (item: CodeViewItem<ThreadMetadata>, file: FileContents) => {
-      setItems((current) =>
-        current.map((existing) => {
-          if (existing.id !== item.id || existing.type !== 'diff') {
-            return existing;
-          }
-          const version = (existing.version ?? 0) + 1;
-          const cacheKey = existing.id + ':v' + version;
-          return {
-            ...existing,
-            edit: false,
-            version,
-            fileDiff: {
-              ...parseDiffFromFile(oldFile, { ...file, cacheKey }),
-              cacheKey,
-            },
-          };
-        })
-      );
+    (
+      event: FileDiffEditCompleteEvent<ThreadMetadata>,
+      item: CodeViewDiffItem<ThreadMetadata>,
+      nextItem: CodeViewDiffItem<ThreadMetadata>
+    ) => {
+      event.fileDiff.cacheKey = item.id + ':v' + nextItem.version;
+      setItems((current) => {
+        // We must insert the new item into our controlled array.
+        // If you're using the \`initialItems\` this is unnecessary as
+        // the item will be imperatively added automatically for you
+        return current.map((existing) => existing.id === item.id ? nextItem : existing)
+      });
+      return 'accept';
     },
     []
   );
@@ -910,7 +916,6 @@ export function EditableCodeView() {
         items={items}
         style={codeViewStyle}
         editorOptions={editorOptions}
-        onItemEditChange={syncAnnotations}
         onItemEditComplete={commitEdit}
         renderAnnotation={(annotation) => (
           <div>Thread {annotation.metadata.id}</div>
@@ -1077,18 +1082,11 @@ interface EditorOptions<LAnnotation> {
     fileInstance: DiffsEditableComponent<LAnnotation>
   ) => void;
 
-  // Fires after each edit. file.contents reflects the live document. When
-  // present, lineAnnotations is the complete current collection, not a delta;
-  // replace the application-owned source with it. Unaffected edits reuse the
-  // existing array reference.
-  onChange?: (
-    file: FileContents,
-    lineAnnotations:
-      | LineAnnotation<LAnnotation>[]
-      | DiffLineAnnotation<LAnnotation>[]
-      | undefined,
-    event: EditorChangeEvent<LAnnotation>
-  ) => void;
+  // Editor-centric change stream. Fires after each edit with an
+  // EditorChangeEvent carrying the live file/fileDiff, the current
+  // lineAnnotations, and normalized text changes. Prefer a component's
+  // onEditChange prop/option for per-component handling.
+  onChange?: (event: EditorChangeEvent<LAnnotation, 'file' | 'diff'>) => void;
 
   // Fires when the editable content area gains focus (tab, click, or editor.focus()).
   onFocus?: () => void;
@@ -1147,12 +1145,15 @@ export const EDIT_ON_CHANGE_EXAMPLE: PreloadFileOptions<undefined> = {
     name: 'editor_on_change.ts',
     contents: `import { Editor } from '@pierre/diffs/edit';
 
+// The same EditorChangeEvent reaches a component's onEditChange prop/option.
+// Generally you should avoid using this API unless you're using the Editor API
+// more directly
 new Editor({
-  onChange: (file, lineAnnotations, event) => {
-    // \`event.changes\` is an array containing all edits.
-    const changes = event.changes;
-
-    changes.forEach((change) => {
+  onChange: (event) => {
+    // \`event.file\` (or \`event.fileDiff\`) is the live document, and
+    // \`event.lineAnnotations\` the current collection. \`event.changes\` lists
+    // every normalized edit.
+    event.changes.forEach((change) => {
       console.log('Text inserted/replaced:', change.text);
       console.log('Range of the edit:', change.range); // { start: { line, character }, end: { line, character } }
       console.log('Offset of the change:', change.start, change.end);
@@ -1188,11 +1189,12 @@ const editor = new Editor();
 // onChange and similar handlers read from the latest options on each call;
 // pass onFocus/onBlur before edit() attaches, or set them in the constructor.
 editor.setOptions({
-  onChange(file, lineAnnotations) {
-    // Save file in application state.
-    if (lineAnnotations != null) {
-      // Replace the application-owned annotation collection.
-    }
+  onChange(event) {
+    // Observe the live document via event.file/event.fileDiff. Editing owns
+    // annotation positions during the session — no sync loop needed.
+    // Avoid using this API in favor of the \`onEditChange\` prop on
+    // File/FileDiff components directly
+    console.log(event.changes.length, 'change(s)');
   },
 });
 
@@ -1291,6 +1293,7 @@ export const EDIT_REACT_MULTI_FILE_DIFF_EXAMPLE: PreloadFileOptions<undefined> =
       name: 'editor_react_multi_file_diff.tsx',
       contents: `import type {
   FileContents,
+  FileDiffEditCompleteEvent,
   FileDiffOptions,
 } from '@pierre/diffs';
 import { Editor, type EditorOptions } from '@pierre/diffs/edit';
@@ -1299,16 +1302,16 @@ import {
   MultiFileDiff,
   Virtualizer,
 } from '@pierre/diffs/react';
-import { useMemo, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 
 // Keep file objects stable: define static inputs at module scope, or use
 // useState/useMemo when they depend on component values.
-const oldFile: FileContents = {
+const initialOldFile: FileContents = {
   name: 'example.ts',
   contents: 'console.log("Hello world")',
 };
 
-const newFile: FileContents = {
+const initialNewFile: FileContents = {
   name: 'example.ts',
   contents: 'console.warn("Updated message")',
 };
@@ -1328,13 +1331,32 @@ function createEditor(options: EditorOptions<undefined>) {
 }
 
 export function EditableMultiFileDiff() {
-  const [editable, setEditable] = useState(true);
-  const editorOptions = useMemo<EditorOptions<undefined>>(
-    () => ({
-      onChange(file, lineAnnotations) {
-        console.log('change', file.name, lineAnnotations);
-      },
-    }),
+  const [oldFile, setOldFile] = useState(initialOldFile);
+  const [newFile, setNewFile] = useState(initialNewFile);
+  const [editing, setEditing] = useState(false);
+  const cancelled = useRef(false);
+  const version = useRef(0);
+
+  // MultiFileDiff parses its diff from the file pair. Adopt the completed files
+  // into state (re-keyed) — MultiFileDiff reuses the accepted diff once the
+  // props catch up — then return 'accept'; return 'reject' to revert.
+  const handleEditComplete = useCallback(
+    (event: FileDiffEditCompleteEvent<undefined>) => {
+      if (cancelled.current) {
+        cancelled.current = false;
+        return 'reject';
+      }
+      version.current += 1;
+      if (event.oldFile != null) {
+        event.oldFile.cacheKey = 'old:v' + version.current;
+        setOldFile(event.oldFile);
+      }
+      if (event.newFile != null) {
+        event.newFile.cacheKey = 'new:v' + version.current;
+        setNewFile(event.newFile);
+      }
+      return 'accept';
+    },
     []
   );
 
@@ -1343,16 +1365,33 @@ export function EditableMultiFileDiff() {
   // CodeView.
   return (
     <EditProvider createEditor={createEditor}>
-      <button type="button" onClick={() => setEditable((value) => !value)}>
-        {editable ? 'Disable editing' : 'Enable editing'}
-      </button>
+      {editing ? (
+        <>
+          <button
+            type="button"
+            onClick={() => {
+              cancelled.current = true;
+              setEditing(false);
+            }}
+          >
+            Cancel
+          </button>
+          <button type="button" onClick={() => setEditing(false)}>
+            Save
+          </button>
+        </>
+      ) : (
+        <button type="button" onClick={() => setEditing(true)}>
+          Edit
+        </button>
+      )}
       <Virtualizer style={virtualizerStyle}>
         <MultiFileDiff
           oldFile={oldFile}
           newFile={newFile}
           options={fileDiffOptions}
-          edit={editable}
-          editorOptions={editorOptions}
+          edit={editing}
+          onEditComplete={handleEditComplete}
         />
       </Virtualizer>
     </EditProvider>

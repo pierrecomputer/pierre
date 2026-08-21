@@ -59,9 +59,13 @@ You render the surface first, then attach editing:
    selections after clearing existing ones.
 4. **Updates** — Keystrokes update an internal `TextDocument`, then changed
    lines are re-highlighted through the same tokenizer pipeline as read-only
-   mode. Your `onChange` handler receives updated `FileContents`, optional
-   `lineAnnotations`, and an `EditorChangeEvent` as its third argument. The
-   event includes both values alongside normalized text `changes`.
+   mode. A component's `onEditChange` prop (recommended) or the editor's
+   `onChange` option receives an `EditorChangeEvent` carrying the updated
+   `file`/`fileDiff`, the current `lineAnnotations`, and normalized text
+   `changes` for every live edit.
+5. **Completion** — When a changed session ends, `onEditComplete` runs once as
+   the accept/revert boundary (see
+   [Completing an edit](#edit-mode-completing-an-edit)).
 
 When attaching, edit mode turns on the token transformer and triggers a
 re-render if necessary. Collapsed unchanged regions stay collapsed: arrow keys
@@ -70,6 +74,35 @@ undo, Cmd/Ctrl+End) expand it just enough to show the target, and the separator
 expand buttons keep working. The diff layout is preserved, so a `FileDiff` or
 `MultiFileDiff` stays in whatever view it was rendered in; in unified diffs,
 deleted lines and annotation lines remain read-only.
+
+### The Edit Session
+
+Attaching an editor starts an **edit session**, and completion ends it. Knowing
+who owns what across that lifecycle is the key to wiring edit mode correctly:
+
+- **Before editing**, your application owns the surface's inputs: the
+  `file`/`fileDiff` and the `lineAnnotations` collection you pass as props.
+- **During an edit session**, edit mode creates a private, live copy of the
+  document and the annotation positions. Keystrokes mutate that private copy and
+  re-render the surface. Your original `file`/`fileDiff` and `lineAnnotations`
+  are held in case you want to reject the edit. This is why you should not feed
+  `onEditChange` (or `onChange`) data back into the surface. If your
+  `file`/`fileDiff` or `lineAnnotations` update externally from your app, we
+  will fully apply those changes to your edit session. You can still undo the
+  content changes if you decide to reject it and keep editing. As you edit,
+  we'll manage annotation positions for you to attempt to keep them matched with
+  their intentended lines.
+- **On completion**, (either when you toggle edit off or unmount the component)
+  an edit complete callback is fired that allows you to accept or reject the
+  edit session. If you decide to accept, you'll need to store the new copies of
+  `file`/`fileDiff` and `lineAnnotations` that represent the new edited document
+  state. If you reject the edit you'll be returned to the state prior to
+  starting the edit session. See
+  [Completing an edit](#edit-mode-completing-an-edit).
+
+In other words at a high level, while editing, we internally manage the edited
+states for you, and all you need to do at the end of the session is store or
+reject the finalized edits.
 
 ### React
 
@@ -101,8 +134,8 @@ Changes to `createEditor` or `editorOptions` do not disturb an active edit
 session; their latest values apply the next time `edit` transitions from false
 to true. Use `onAttach` with your own ref when controls need imperative APIs
 such as history, selections, markers, save, or search. Use `Virtualizer` for
-large editable files. The `FileDiff` tab below shows the controlled annotation
-feedback loop.
+large editable files. The `FileDiff` tab below wires `onEditComplete` to accept
+or revert the session.
 
 <EditComponentTabs
   fileExample={editReactExample}
@@ -114,9 +147,10 @@ feedback loop.
 
 Render with `File` or `FileDiff` first, then attach the editor with
 `editor.edit(component)`. Use `VirtualizedFile` and `VirtualizedFileDiff` for
-large editable files. Keep any emitted annotation collection in your external
-source of truth before a later render. Call `cleanUp()` when the editor is
-removed. The `FileDiff` tab below includes this synchronization.
+large editable files. Set `onEditComplete` in the surface's options to accept or
+revert when the session ends. Call `cleanUp()` when the editor is removed — its
+disposer runs completion for you. The `FileDiff` tab below shows the accept
+flow.
 
 <EditComponentTabs
   fileExample={editVanillaFileExample}
@@ -131,18 +165,27 @@ item, and pass creation-time item-editor behavior through the `CodeView`
 `editorOptions` prop. In vanilla JS, pass `createEditor` in `CodeViewOptions`
 instead. Increment the item's `version` whenever `edit` changes.
 
-`CodeView` uses item-aware callbacks instead of `editorOptions.onChange`.
-`onItemEditChange` receives the owning item with each live change: replace that
-item's annotations whenever the emitted array changes, and increment its
-`version`. This live update keeps annotation coordinates synchronized throughout
-the edit session. `onItemEditComplete` receives the item and latest contents
-when a changed session ends because editing is disabled or the item is collapsed
-or removed. Sessions with no changes do not emit it. Resetting, cleaning up, or
-unmounting the viewer is silent teardown.
+`CodeView` uses item-aware callbacks. `onItemEditChange(event, item)` reports
+each live change with the owning item; edit mode manages the item's annotation
+positions during the session, so do not sync them back into the item (those will
+reference the original un-modified `lineAnnotations`).
 
-Persist edited contents to the item's `file`, or rebuild its `fileDiff`. Assign
-a fresh `cacheKey` and increment `version`; `CodeView` does not update item data
-for you.
+`onItemEditComplete(event, item, nextItem)` is the accept/revert boundary for an
+item, called once when a changed edit session ends (edit false, the item is
+removed or `CodeView` unmounts). `nextItem` is the accepted replacement
+`CodeView` built for you — the same item with the completed `file`/`fileDiff`
+and annotations, `edit: false`, and a bumped `version`. Return `'accept'`
+(re-key the event's value first if you use `cacheKey`s): `CodeView` installs the
+value and applies `nextItem` for you. Return `'reject'` to revert. Sessions with
+no changes do not fire it; a collapsed item suspends its session instead of
+completing. Resetting, cleaning up, or unmounting completes changed sessions
+too.
+
+In controlled mode (you pass `items`), you must also write `nextItem` into your
+own item state before returning `'accept'`. `CodeView` applies it to its
+internal records, but your `items` prop is the source of truth on the next
+reconcile, so without this your next render would clobber the accepted edit with
+the stale item. Because the versions match, that push reconciles as a no-op.
 
 <CodeViewExampleTabs
   reactExample={editReactCodeViewExample}
@@ -157,20 +200,73 @@ item sessions keep their current editor, while the latest values apply to the
 next item that enters edit mode. Simultaneously edited items always receive
 independent editor instances.
 
+### Completing an edit
+
+Every editable surface takes two component-level callbacks — as `File`,
+`FileDiff`, `MultiFileDiff`, and `PatchDiff` props, or as `FileOptions` /
+`FileDiffOptions` members in vanilla JS:
+
+- `onEditChange(event)` is the per-surface live change stream. Prefer it over
+  `EditorOptions.onChange`: component options are live (swap the handler
+  mid-session and the next change routes to it), while `editorOptions` are
+  next-session inputs. `CodeView` items report through `onItemEditChange`
+  instead.
+- `onEditComplete(event)` runs once when a changed session ends — the surface's
+  `edit` turns off, or it unmounts. It is the accept/revert boundary.
+
+The event is frozen and carries the finished edit alongside the values a revert
+restores:
+
+- `file` / `fileDiff` — the detached result built from the session, installed on
+  accept. Re-key it in place if you use `cacheKey`s
+  (`event.file.cacheKey = '…'`).
+- `originalFile` / `originalFileDiff` — the latest caller-provided value, which
+  a revert returns to. It is the current external input, not necessarily what
+  editing started from (compatible updates can arrive mid-session).
+- `oldFile` / `newFile` (diff only) — complete files for updating file-pair or
+  patch inputs, or other file-based state.
+- `lineAnnotations` — the final annotation collection; `originalLineAnnotations`
+  is the collection from before completion.
+
+Return `'accept'` or `'reject'` to decide the edit:
+
+- **`'accept'`** — the surface installs the event's `file`/`fileDiff`
+  immediately, so put that same object back into your application state so
+  future renders won't blow away your edits. The React bridge attempts to hold
+  the accepted value on screen until your state update's props catch up.
+- **`'reject'`** — the surface restores `originalFile`/`originalFileDiff`. A
+  missing handler also automatically rejects. There's nothing to store with
+  state if you reject because that's the state you should already be holding
+  onto.
+
+The component owns the accepted value — you never hand it back, so a clone can't
+slip in — but an accepted value may not reuse the replaced value's non-empty
+`cacheKey` as cacheKeys must each represent unique pieces of content.
+
+Accepting installs `lineAnnotations` as the surface's new annotation baseline,
+so commit that collection alongside the accepted `file`/`fileDiff`. Recycling a
+virtualized surface is not completion; unmounting a changed session is, but the
+result is not installed — the callback is your chance to capture it.
+
 ### Editing with Line Annotations
 
-Applications own the annotation collection passed to a `File`, `FileDiff`, or
-other editable surface. When an edit affects annotation coordinates, the editor
-remaps them and passes the complete current collection as `onChange`'s second
-argument alongside the edited file. This collection is authoritative when
-present; it is not a delta. Replace your application-owned collection with it;
-otherwise a later render reapplies stale coordinates.
+While editing a file or diff, edit mode owns annotation positions. As the
+document changes, the editor remaps the current collection internally and
+re-renders the annotation rows — you should **not** mirror those changes back
+into the file or diff or else it can break the revert behavior. The live change
+events (`onEditChange` on the component, or `onChange` on the editor) still
+report the remapped collection as `lineAnnotations` if you want to observe them.
 
-The editor preserves the existing array reference for ordinary same-line edits
-and other edits that do not affect any annotation. When a structural edit
-touches, moves, or removes an annotation, it returns a new array. Check that
-identity before publishing state so ordinary typing does not cause unnecessary
-annotation renders.
+You should bear in mind if you do update any annotations while editing, any
+positional remaps the annotations had will be reset. For now we'd recommend
+disabling annotation updates while an edit is in progress. It can also result
+line annotation inconsistencies if you decide to reject the edit with undo.
+
+On completion, `event.lineAnnotations` is the final collection (see
+[Completing an edit](#edit-mode-completing-an-edit)): accept installs it as the
+surface's new annotation baseline, so commit it alongside the accepted
+`file`/`fileDiff`; revert keeps whatever the surface currently shows and moves
+nothing.
 
 Remapping follows these rules:
 
@@ -180,49 +276,32 @@ Remapping follows these rules:
 - A `DiffLineAnnotation` on the `deletions` side stays attached to the read-only
   old-file side and is not remapped.
 - `lineNumber: 0` remains a file-level annotation and is not remapped.
-- Deleting only an annotated line's text leaves an annotated blank line. To
-  remove a non-final line and its annotation, delete from its start through the
-  start of the next line, consuming its trailing line break. To remove a final
-  line that has a preceding line, delete from the end of the preceding line
-  through EOF, consuming the preceding line break. A one-line document always
-  retains one blank line.
+- If you delete the full content of a line and it's trailing newline that has an
+  annotation, it will also remove the annotation
 - Deleting only the line break before an annotated line while retaining its text
   merges that text into the previous line and moves the annotation to the merged
   line.
-- Undo and redo use the same `onChange` path, restoring or removing annotations
-  with the corresponding document state.
+- Undo and redo restore or remove annotations with the corresponding document
+  state.
 
 For annotations that survive, remapping changes only their coordinates. Metadata
 is preserved, so give each interactive annotation a stable, position-independent
 ID in `metadata` and key application-owned drafts or UI state by that ID.
 
-The shared `onChange` callback accepts either annotation shape: standalone
-`File` surfaces emit `LineAnnotation[]`, while diff surfaces emit
-`DiffLineAnnotation[]`. Narrow `lineAnnotations` before reading the diff-only
-`side` property. Use `isFileAnnotationCollection` or
-`isDiffAnnotationCollection` when the surface type is not already known.
-
-In React, synchronously publish a changed annotation array with `flushSync` so
-the annotation placement updates with the edited content before paint. Do not
-wrap every `onChange` update in `flushSync`: bail out when the emitted array is
-the same object.
+The change events carry either annotation shape: standalone `File` surfaces emit
+`LineAnnotation[]`, while diff surfaces emit `DiffLineAnnotation[]`. Narrow
+`lineAnnotations` before reading the diff-only `side` property. Use
+`isFileAnnotationCollection` or `isDiffAnnotationCollection` when the surface
+type is not already known.
 
 <Notice variant="warning" icon={<IconCiWarningFill />}>
   React may recreate annotation content when annotations are removed, restored,
-  or reordered, or when a `CodeView` item leaves the virtualized window.
-  `flushSync` keeps the placement update visually atomic, but it does not
-  preserve component-local state. Keep drafts and other interactive state in
-  application-owned state keyed by a stable annotation metadata ID. We intend to
-  preserve annotation node identity in a future release, so current remounting
-  behavior is not a long-term API contract.
+  or reordered, or when a `CodeView` item leaves the virtualized window. Keep
+  drafts and other interactive state in application-owned state keyed by a
+  stable annotation metadata ID. We intend to preserve annotation node identity
+  in a future release, so current remounting behavior is not a long-term API
+  contract.
 </Notice>
-
-In vanilla JS, replace the annotation collection in your external variable or
-store before updating the surface. When the emitted array changes, schedule the
-same render function used for the initial surface after `onChange` returns,
-passing the edited file and replacement annotations. For `CodeView`, pass the
-collection to `updateItem` with a `version` increment. In every case, updating
-the source of truth prevents a later render from restoring stale line numbers.
 
 Use one `Editor` per concurrently editable standalone surface. `CodeView`
 instead creates and manages one editor per editable item. See the
