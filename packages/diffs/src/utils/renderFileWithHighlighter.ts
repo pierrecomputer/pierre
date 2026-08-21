@@ -1,4 +1,3 @@
-import { DEFAULT_THEMES } from '../constants';
 import type {
   CodeToHastOptions,
   DiffsHighlighter,
@@ -22,11 +21,7 @@ const DEFAULT_PLAIN_TEXT_OPTIONS: ForceFilePlainTextOptions = {
 export function renderFileWithHighlighter(
   file: FileContents,
   highlighter: DiffsHighlighter,
-  {
-    theme = DEFAULT_THEMES,
-    tokenizeMaxLineLength,
-    useTokenTransformer,
-  }: RenderFileOptions,
+  { theme, tokenizeMaxLineLength, useTokenTransformer }: RenderFileOptions,
   {
     forcePlainText,
     startingLine,
