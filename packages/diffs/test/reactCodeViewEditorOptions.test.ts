@@ -116,6 +116,7 @@ function createTrackedEditor(
       detach = undefined;
     },
     __captureFocusForDOMReplacement() {},
+    __getDocumentContents: () => undefined,
     __postponeBgTokenizeToNextFrame() {},
     __syncRenderView() {},
   } as unknown as TrackedCodeViewEditor;

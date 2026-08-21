@@ -98,6 +98,7 @@ function createEditorHarness({
         detach = undefined;
       },
       __captureFocusForDOMReplacement() {},
+      __getDocumentContents: () => undefined,
       __postponeBgTokenizeToNextFrame() {},
       __syncRenderView() {},
     } as unknown as StubEditor;

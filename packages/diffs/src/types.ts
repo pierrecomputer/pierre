@@ -1177,6 +1177,8 @@ export interface DiffsEditor<LAnnotation> {
   __postponeBgTokenizeToNextFrame(): void;
   /** @internal Capture focus intent before replacing the editable view. */
   __captureFocusForDOMReplacement(): void;
+  /** @internal Return keyed text that an edit-session render should use. */
+  __getDocumentContents(): string | undefined;
   __syncRenderView(props: SyncRenderViewProps<LAnnotation>): void;
   edit<T extends DiffsEditableComponent<LAnnotation>>(
     fileInstance: EditableInstance<T>

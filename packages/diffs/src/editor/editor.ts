@@ -30,6 +30,7 @@ import {
   resolveEditorCommandFromKeyboardEvent,
   resolveFindAgainShortcut,
 } from './command';
+import { DocumentRegistry, type RegisteredDocument } from './documentRegistry';
 import editorCSS from './editor.css?inline';
 import { EditStack } from './editStack';
 import {
@@ -266,6 +267,21 @@ const MULTI_SELECTION_CLIPBOARD_TYPE =
   'application/vnd.pierre.diffs-selections+json';
 
 export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
+  /** Remove a retained document and its undo history from the registry. */
+  static disposeDocument(documentKey: string): boolean {
+    return DocumentRegistry.dispose(documentKey);
+  }
+
+  /** Remove every retained document and undo history from the registry. */
+  static clearDocuments(): void {
+    DocumentRegistry.clear();
+  }
+
+  /** Set the process-wide maximum number of retained documents. */
+  static setDocumentRegistryCapacity(capacity: number): void {
+    DocumentRegistry.setCapacity(capacity);
+  }
+
   #options: EditorOptions<LAnnotation>;
   #metrics = new Metrics();
   #tokenizer?: EditorTokenizer;
@@ -312,12 +328,14 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
   // state
   #fileInstance?: DiffsEditableComponent<LAnnotation>;
-  #fileInfo?: Omit<FileContents, 'contents' | 'header'>;
+  #fileInfo?: Pick<FileContents, 'lang' | 'name'>;
   // FIXME(amadeus): We need this support both types. I think in an ideal
   // world, this instance becomes specific to the type of editor that it
   // is... and we can manage this without `as` ing thing
   #lineAnnotations?: DiffLineAnnotation<LAnnotation>[];
   #textDocument?: TextDocument<LAnnotation>;
+  readonly #documentKey?: string;
+  #registeredDocument?: RegisteredDocument;
   #renderRange?: RenderRange;
   // Bounded render-window size (~viewport + 2*hunkLineCount) from the last view
   // sync. Used to cap how far #applyChange widens the window for an edit, so a
@@ -400,7 +418,12 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
   };
 
-  constructor(options: EditorOptions<LAnnotation> = {}) {
+  /**
+   * @param documentKey Keep this editor's document and undo history under this
+   * key so a later editor using the same key can resume them.
+   */
+  constructor(options: EditorOptions<LAnnotation> = {}, documentKey?: string) {
+    this.#documentKey = documentKey;
     this.#options = options;
   }
 
@@ -416,10 +439,61 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     fileInstance: EditableInstance<T>
   ): () => void;
   edit(fileInstance: DiffsEditableComponent<LAnnotation>): () => void {
+    const previousRegisteredDocument = this.#registeredDocument;
+    const previousTextDocument = this.#textDocument;
+    const previousFileInfo = this.#fileInfo;
+    const previousLineAnnotations = this.#lineAnnotations;
+    const previousRenderRange = this.#renderRange;
+    const previousViewportWindowLines = this.#viewportWindowLines;
     this.#invalidateOnAttach();
+    const docKey = this.#documentKey;
+    const acquiredOwnership =
+      docKey != null ? DocumentRegistry.acquire(docKey, this) : false;
+    const registryAttachment =
+      docKey != null
+        ? DocumentRegistry.beginAttachment(docKey, this)
+        : undefined;
+    // Clone the previous or keyed document before host code runs. The clone is
+    // staged until attachment succeeds, leaving the committed history intact
+    // if the host throws.
+    let textDocument = previousTextDocument?.clone();
+    let sourceRegistration = previousRegisteredDocument;
+    if (textDocument == null && docKey != null) {
+      sourceRegistration = DocumentRegistry.get(docKey);
+      textDocument =
+        sourceRegistration?.document.cloneForAnnotations<LAnnotation>();
+    }
+    if (textDocument != null) {
+      this.#textDocument = textDocument;
+      if (docKey != null && sourceRegistration?.disposed !== true) {
+        const registration = { document: textDocument };
+        DocumentRegistry.retain(docKey, registration);
+        this.#registeredDocument = registration;
+      }
+    }
     this.#fileInstance = fileInstance;
-    this.#initialize();
-    this.#detach = fileInstance.attachEditor(this);
+    try {
+      this.#initialize();
+      this.#detach = fileInstance.attachEditor(this);
+      if (registryAttachment != null) {
+        DocumentRegistry.commitAttachment(registryAttachment);
+      }
+    } catch (error: unknown) {
+      this.cleanUp('recycle');
+      if (docKey != null && registryAttachment != null) {
+        DocumentRegistry.rollbackAttachment(registryAttachment);
+        if (acquiredOwnership) {
+          DocumentRegistry.release(docKey, this);
+        }
+      }
+      this.#registeredDocument = previousRegisteredDocument;
+      this.#textDocument = previousTextDocument;
+      this.#fileInfo = previousFileInfo;
+      this.#lineAnnotations = previousLineAnnotations;
+      this.#renderRange = previousRenderRange;
+      this.#viewportWindowLines = previousViewportWindowLines;
+      throw error;
+    }
     return () => {
       const attachedInstance = this.#fileInstance;
       this.cleanUp('complete');
@@ -692,9 +766,15 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   // edit() against the same file. DOM-backed view state is reset.
   //
   // 'complete' tears down like 'discard' as part of a session end; the caller
-  // runs completeEditSession() afterward.
+  // runs completeEditSession() afterward. Keyed documents outlive all three
+  // teardown modes until explicitly disposed or evicted from the registry.
   cleanUp(reason: 'discard' | 'recycle' | 'complete' = 'discard'): void {
     const recycle = reason === 'recycle';
+    const docKey = this.#documentKey;
+    if (!recycle && docKey != null) {
+      DocumentRegistry.release(docKey, this);
+      this.#registeredDocument = undefined;
+    }
     this.#invalidateOnAttach();
     if (!recycle) {
       this.#attachState.delivered = false;
@@ -793,6 +873,23 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   }
 
   /** @internal */
+  __getDocumentContents(): string | undefined {
+    return this.#documentKey == null
+      ? undefined
+      : this.#textDocument?.getText();
+  }
+
+  // Refresh recency only while this editor still owns the registered entry.
+  // Explicit disposal must not be undone by a later edit on the live document.
+  #touchRegisteredDocument(): void {
+    const docKey = this.#documentKey;
+    const registeredDocument = this.#registeredDocument;
+    if (docKey != null && registeredDocument != null) {
+      DocumentRegistry.touch(docKey, registeredDocument, this);
+    }
+  }
+
+  /** @internal */
   __syncRenderView: DiffsEditor<LAnnotation>['__syncRenderView'] = ({
     highlighter,
     fileContainer,
@@ -803,6 +900,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     const isDiff = 'fileDiff' in renderView;
     const fileOrDiff = isDiff ? renderView.fileDiff : renderView.file;
     const lineAnnotations = renderView.lineAnnotations;
+    const docKey = this.#documentKey;
     const externalDocument = renderView.externalDocument === true;
     const fileInstance = this.#fileInstance;
     if (fileInstance == null) {
@@ -870,27 +968,42 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         ? [createFullDocumentChange(previousTextDocument.getText(), contents)]
         : undefined;
 
+    const resetForExternalDocument = externalDocument && resetHistory;
     const shouldRebuildDocument =
       this.#textDocument === undefined ||
       this.#fileInfo === undefined ||
-      this.#fileInfo.name !== fileOrDiff.name ||
-      this.#textDocument.languageId !== languageId ||
-      resetHistory;
+      (docKey == null &&
+        (this.#fileInfo.name !== fileOrDiff.name ||
+          this.#textDocument.languageId !== languageId)) ||
+      resetForExternalDocument;
     if (shouldRebuildDocument) {
       this.#invalidateOnAttach();
-      const editStack = new EditStack<LAnnotation>({
-        maxEntries: this.#options.historyMaxEntries,
-      });
-      const { name, lang, cacheKey } = fileOrDiff;
-      const textDocument = new TextDocument(
-        fileOrDiff.name,
-        contents,
-        languageId,
-        0,
-        editStack
-      );
-      this.#fileInfo = { name, lang, cacheKey };
+      const { name, lang } = fileOrDiff;
+      let textDocument =
+        docKey == null || resetForExternalDocument
+          ? undefined
+          : this.#textDocument;
+      if (textDocument == null) {
+        const editStack = new EditStack<LAnnotation>({
+          maxEntries: this.#options.historyMaxEntries,
+        });
+        textDocument = new TextDocument(
+          fileOrDiff.name,
+          contents,
+          languageId,
+          0,
+          editStack
+        );
+      }
+      this.#fileInfo = { name, lang };
       this.#textDocument = textDocument;
+      if (docKey != null && this.#registeredDocument?.disposed !== true) {
+        const registration = { document: textDocument };
+        DocumentRegistry.retain(docKey, registration);
+        this.#registeredDocument = registration;
+      } else if (docKey == null) {
+        this.#registeredDocument = undefined;
+      }
       this.#tokenizer?.cleanUp();
       this.#tokenizer = undefined;
       this.#resetState();
@@ -900,11 +1013,12 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#selections = this.#initSelections;
       if (this.#options.__debug === true) {
         console.log(
-          '[diffs/editor] text document rebuilt from',
+          '[diffs/editor] text document initialized from',
           fileOrDiff.name
         );
       }
-    } else if (externalDocument) {
+    }
+    if (externalDocument && !resetForExternalDocument) {
       this.#applyExternalDocumentReplacement(
         contents,
         isDiff
@@ -913,8 +1027,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
               | DiffLineAnnotation<LAnnotation>[]
               | undefined)
       );
-      const { name, lang, cacheKey } = fileOrDiff;
-      this.#fileInfo = { name, lang, cacheKey };
+      const { name, lang } = fileOrDiff;
+      this.#fileInfo = { name, lang };
     }
 
     // The tokenizer is (re)created whenever the current document lacks one:
@@ -1133,6 +1247,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
     this.#tokenizer?.cleanUp();
     this.#tokenizer = undefined;
+    this.#touchRegisteredDocument();
     this.#resetCache();
     this.#wrapLineOffsetsCache.clear();
     this.#markerRenderer?.removePopover();
@@ -2620,7 +2735,12 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
             selectionEdits
           )
         : undefined);
-    this.#applyChange(change, nextSelections, lineAnnotations);
+    const replayedLineAnnotations =
+      lineAnnotations ??
+      (this.#lineAnnotations != null
+        ? applyDocumentChangeToLineAnnotations(change, this.#lineAnnotations)
+        : undefined);
+    this.#applyChange(change, nextSelections, replayedLineAnnotations);
   }
 
   /** Applies one undoable command batch and records its resulting selections. */
@@ -5119,6 +5239,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     newLineAnnotations?: DiffLineAnnotation<LAnnotation>[],
     options?: { skipSearchRefresh?: boolean; skipFocus?: boolean }
   ) {
+    this.#touchRegisteredDocument();
     // Invalidate layout caches touched by the edit. Clear cached line Y
     // positions from startLine onward when either:
     // - the line count changed (inserts/deletes renumber every later line), or

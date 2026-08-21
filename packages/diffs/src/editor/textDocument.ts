@@ -137,6 +137,17 @@ export class TextDocument<LAnnotation> {
     );
   }
 
+  /** Copy text and undo history for an editor with unrelated annotation data. */
+  cloneForAnnotations<NextAnnotation>(): TextDocument<NextAnnotation> {
+    return new TextDocument(
+      this.#uri,
+      this.getText(),
+      this.#languageId,
+      this.#version,
+      this.#editStack.cloneForAnnotations<NextAnnotation>()
+    );
+  }
+
   positionAt(offset: number): Position {
     return this.normalizePosition(this.#pieceTable.positionAt(offset));
   }

@@ -10,8 +10,12 @@ import {
 } from '../src/editor/editor';
 import type { Marker } from '../src/editor/marker';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
-import type { DiffsEditableComponent, FileContents } from '../src/types';
-import { installDom, wait } from './domHarness';
+import type {
+  DiffsEditableComponent,
+  FileContents,
+  LineAnnotation,
+} from '../src/types';
+import { installDom, wait, waitFor } from './domHarness';
 
 afterAll(async () => {
   await disposeHighlighter();
@@ -40,6 +44,7 @@ async function waitForEditableContent(
 
 interface EditorFixture {
   cleanup(): void;
+  container: HTMLElement;
   content: HTMLElement;
   editor: Editor<undefined>;
   file: File<undefined>;
@@ -53,11 +58,19 @@ interface DiffEditorFixture {
   fileDiff: FileDiff<undefined>;
 }
 
+interface PendingEditorFixture {
+  cleanup(): void;
+  complete(): void;
+  editor: Editor<undefined>;
+}
+
 // Mounts a real File-backed editor, mirroring the harness the applyEdits and
 // marker suites use, and returns the editor plus its contenteditable element.
 async function createEditorFixture(
   contents: string,
-  editorOptions?: EditorOptions<undefined>
+  editorOptions?: EditorOptions<undefined>,
+  lineAnnotations?: LineAnnotation<undefined>[],
+  documentKey?: string
 ): Promise<EditorFixture> {
   const dom = installDom();
   const fileContainer = document.createElement('div');
@@ -67,10 +80,15 @@ async function createEditorFixture(
     disableFileHeader: true,
     theme: DEFAULT_THEMES,
   });
-  const editor = new Editor<undefined>(editorOptions);
+  const editor = new Editor<undefined>(editorOptions, documentKey);
   const initialFile: FileContents = { name: 'edits.ts', contents };
 
-  file.render({ file: initialFile, fileContainer, forceRender: true });
+  file.render({
+    file: initialFile,
+    fileContainer,
+    forceRender: true,
+    lineAnnotations,
+  });
   editor.edit(file);
 
   const content = await waitForEditableContent(fileContainer);
@@ -81,14 +99,55 @@ async function createEditorFixture(
       file.cleanUp();
       dom.cleanup();
     },
+    container: fileContainer,
     content,
     editor,
     file,
   };
 }
 
+function createKeyedEditorFixture(
+  contents: string,
+  documentKey: string,
+  lineAnnotations?: LineAnnotation<undefined>[]
+): Promise<EditorFixture> {
+  return createEditorFixture(contents, undefined, lineAnnotations, documentKey);
+}
+
+function createPendingEditorFixture(
+  contents: string,
+  documentKey: string
+): PendingEditorFixture {
+  const dom = installDom();
+  const fileContainer = document.createElement('div');
+  document.body.appendChild(fileContainer);
+  const file = new File<undefined>({
+    disableFileHeader: true,
+    theme: DEFAULT_THEMES,
+  });
+  const editor = new Editor<undefined>({}, documentKey);
+  file.render({
+    file: { name: 'edits.ts', contents },
+    fileContainer,
+    forceRender: true,
+  });
+  const complete = editor.edit(file);
+  return {
+    cleanup() {
+      editor.cleanUp();
+      file.cleanUp();
+      dom.cleanup();
+    },
+    complete,
+    editor,
+  };
+}
+
 async function createDiffEditorFixture(
-  diffStyle: 'split' | 'unified'
+  diffStyle: 'split' | 'unified',
+  editorOptions?: EditorOptions<undefined>,
+  documentKey?: string,
+  newContents = 'alpha\nnew\ncharlie'
 ): Promise<DiffEditorFixture> {
   const dom = installDom();
   const container = document.createElement('div');
@@ -99,10 +158,10 @@ async function createDiffEditorFixture(
     diffStyle,
     theme: DEFAULT_THEMES,
   });
-  const editor = new Editor<undefined>();
+  const editor = new Editor<undefined>(editorOptions, documentKey);
   fileDiff.render({
     oldFile: { name: 'edits.ts', contents: 'alpha\nold\ncharlie' },
-    newFile: { name: 'edits.ts', contents: 'alpha\nnew\ncharlie' },
+    newFile: { name: 'edits.ts', contents: newContents },
     fileContainer: container,
     forceRender: true,
   });
@@ -198,6 +257,162 @@ function hoverMarkerLine(content: HTMLElement, oneIndexedLine: number): void {
   Object.defineProperty(event, 'composedPath', { value: () => [charSpan] });
   content.dispatchEvent(event);
 }
+
+describe('Editor document registry surfaces', () => {
+  test('a retained document repaints a File surface', async () => {
+    Editor.clearDocuments();
+    const documentKey = 'file-surface';
+    const first = await createKeyedEditorFixture(
+      'alpha\nbravo\ncharlie',
+      documentKey
+    );
+    insertText(first.editor, 1, 5, ' retained');
+    const editedText = first.editor.getText();
+    first.cleanup();
+
+    const second = await createKeyedEditorFixture(
+      'new external baseline',
+      documentKey
+    );
+    try {
+      expect(second.editor.getText()).toBe(editedText);
+      await waitFor(() =>
+        Boolean(
+          second.container.shadowRoot?.textContent?.includes('bravo retained')
+        )
+      );
+      expect(second.container.shadowRoot?.textContent).toContain(
+        'bravo retained'
+      );
+      second.file.render({
+        file: { name: 'edits.ts', contents: 'external replacement' },
+        fileContainer: second.container,
+        forceRender: true,
+      });
+      await waitFor(() => second.editor.getText() === 'external replacement');
+      second.editor.undo();
+      expect(second.editor.getText()).toBe(editedText);
+      second.editor.undo();
+      expect(second.editor.getText()).toBe('alpha\nbravo\ncharlie');
+    } finally {
+      second.cleanup();
+      Editor.clearDocuments();
+    }
+  });
+
+  test('a File retains annotation history without diff sides', async () => {
+    Editor.clearDocuments();
+    const documentKey = 'file-annotations';
+    const first = await createKeyedEditorFixture('alpha\nbravo', documentKey, [
+      { lineNumber: 2, metadata: undefined },
+    ]);
+    insertText(first.editor, 0, 0, 'inserted\n');
+    first.cleanup();
+
+    const second = await createKeyedEditorFixture('alpha\nbravo', documentKey, [
+      { lineNumber: 3, metadata: undefined },
+    ]);
+    try {
+      expect(second.editor.getText()).toBe('inserted\nalpha\nbravo');
+      second.editor.undo();
+      expect(second.editor.getText()).toBe('alpha\nbravo');
+    } finally {
+      second.cleanup();
+      Editor.clearDocuments();
+    }
+  });
+
+  test('a retained document repaints a FileDiff surface', async () => {
+    Editor.clearDocuments();
+    const documentKey = 'diff-surface';
+    const first = await createDiffEditorFixture(
+      'split',
+      undefined,
+      documentKey
+    );
+    const originalText = first.editor.getText();
+    insertText(first.editor, 1, 3, ' retained');
+    const editedText = first.editor.getText();
+    first.cleanup();
+
+    const second = await createDiffEditorFixture(
+      'split',
+      undefined,
+      documentKey,
+      'new external baseline'
+    );
+    try {
+      expect(second.editor.getText()).toBe(editedText);
+      await waitFor(() =>
+        Boolean(
+          second.container.shadowRoot?.textContent?.includes('new retained')
+        )
+      );
+      expect(second.container.shadowRoot?.textContent).toContain(
+        'new retained'
+      );
+      second.fileDiff.render({
+        oldFile: { name: 'edits.ts', contents: 'alpha\nold\ncharlie' },
+        newFile: { name: 'edits.ts', contents: 'external replacement' },
+        fileContainer: second.container,
+        forceRender: true,
+      });
+      await waitFor(() => second.editor.getText() === 'external replacement');
+      second.editor.undo();
+      expect(second.editor.getText()).toBe(editedText);
+      second.editor.undo();
+      expect(second.editor.getText()).toBe(originalText);
+    } finally {
+      second.cleanup();
+      Editor.clearDocuments();
+    }
+  });
+
+  test('completion before initial sync retains a claimed document', async () => {
+    Editor.clearDocuments();
+    const documentKey = 'pending-completion';
+    const first = await createKeyedEditorFixture('alpha\nbravo', documentKey);
+    insertText(first.editor, 1, 5, ' retained');
+    first.cleanup();
+
+    const pending = createPendingEditorFixture('alpha\nbravo', documentKey);
+    pending.complete();
+    pending.cleanup();
+
+    const fresh = await createKeyedEditorFixture('alpha\nbravo', documentKey);
+    try {
+      expect(fresh.editor.getText()).toBe('alpha\nbravo retained');
+      expect(fresh.editor.canUndo).toBe(true);
+    } finally {
+      fresh.cleanup();
+      Editor.clearDocuments();
+    }
+  });
+
+  test('disposing a pending adoption does not re-register it', async () => {
+    Editor.clearDocuments();
+    const documentKey = 'pending-disposal';
+    const first = await createKeyedEditorFixture('alpha\nbravo', documentKey);
+    insertText(first.editor, 1, 5, ' retained');
+    const retainedText = first.editor.getText();
+    first.cleanup();
+
+    const pending = createPendingEditorFixture('alpha\nbravo', documentKey);
+    expect(Editor.disposeDocument(documentKey)).toBe(true);
+    await waitFor(() => pending.editor.getText() === retainedText);
+    expect(pending.editor.getText()).toBe(retainedText);
+    pending.cleanup();
+
+    const fresh = await createKeyedEditorFixture('alpha\nbravo', documentKey);
+    try {
+      expect(fresh.editor.getText()).toBe('alpha\nbravo');
+      expect(fresh.editor.canUndo).toBe(false);
+    } finally {
+      fresh.cleanup();
+      Editor.clearDocuments();
+    }
+  });
+});
 
 describe('Editor state round trip', () => {
   test('setState restores selections without rebuilding the document or dropping undo history', async () => {

@@ -195,6 +195,7 @@ describe('virtualized editor viewport', () => {
       let recyclePosition: number | undefined;
       file.attachEditor({
         __captureFocusForDOMReplacement() {},
+        __getDocumentContents: () => undefined,
         __postponeBgTokenizeToNextFrame() {},
         __syncRenderView() {},
         edit: () => () => {},
@@ -268,6 +269,7 @@ describe('virtualized editor viewport', () => {
       let recyclePosition: number | undefined;
       fileDiff.attachEditor({
         __captureFocusForDOMReplacement() {},
+        __getDocumentContents: () => undefined,
         __postponeBgTokenizeToNextFrame() {},
         __syncRenderView() {},
         edit: () => () => {},

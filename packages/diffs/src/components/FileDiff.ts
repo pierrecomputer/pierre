@@ -91,6 +91,7 @@ import {
   captureExpansionAnchors,
   finishEditSessionForDiff,
   rebuildExpansionFromAnchors,
+  rebuildSessionHunks,
 } from '../utils/editSessionHunks';
 import { getDiffFileInput } from '../utils/getDiffFileInput';
 import { getDiffHunksRendererOptions } from '../utils/getDiffHunksRendererOptions';
@@ -110,6 +111,7 @@ import { isSafari } from '../utils/platform';
 import { prerenderHTMLIfNecessary } from '../utils/prerenderHTMLIfNecessary';
 import { getMeasuredScrollbarGutter } from '../utils/scrollbarGutter';
 import { setPreNodeProperties } from '../utils/setWrapperNodeProps';
+import { splitFileContents } from '../utils/splitFileContents';
 import {
   getExpandedRegion,
   getHunkAdditionLineRange,
@@ -1219,15 +1221,15 @@ export class FileDiff<
     if (this.fileDiff !== expectedDiff) {
       return false;
     }
+    const { editor } = this;
     if (this.outgoingSessionDiff != null) {
-      this.installExternalEditSession(expectedDiff);
+      this.installEditSession(expectedDiff);
       return true;
     }
-    const { editor } = this;
     if (editor == null || this.editSessionDiff != null) {
       return false;
     }
-    this.installExternalEditSession(expectedDiff);
+    this.installEditSession(expectedDiff, editor.__getDocumentContents());
     return true;
   }
 
@@ -1254,10 +1256,13 @@ export class FileDiff<
       if (incomingExternalDiff.isPartial) {
         this.loadFilesIfNecessary();
       } else {
-        this.installExternalEditSession(incomingExternalDiff);
+        this.installEditSession(incomingExternalDiff);
       }
     } else if (this.editor != null && !incomingExternalDiff.isPartial) {
-      this.installExternalEditSession(incomingExternalDiff);
+      this.installEditSession(
+        incomingExternalDiff,
+        this.editor.__getDocumentContents()
+      );
     }
     if (this.editSessionAnnotations != null && lineAnnotations != null) {
       // These annotations arrived with the new diff, so their line numbers
@@ -1274,10 +1279,37 @@ export class FileDiff<
     return true;
   }
 
-  private installExternalEditSession(externalDiff: FileDiffMetadata): void {
+  // Editor contents seed a new session. Existing sessions omit the editor so
+  // incoming text renders as an external replacement and joins undo history.
+  private installEditSession(
+    externalDiff: FileDiffMetadata,
+    cachedDocumentContents?: string
+  ): void {
+    const externalContents = externalDiff.additionLines.join('');
+    const usesExternalContents =
+      cachedDocumentContents == null ||
+      cachedDocumentContents === externalContents;
     const sessionDiff = createEditSessionDiff(externalDiff);
+    if (!usesExternalContents) {
+      const {
+        collapsedContextThreshold = DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
+      } = this.options;
+      const anchors = captureExpansionAnchors(
+        externalDiff,
+        this.hunksRenderer.getExpandedHunksMap(),
+        collapsedContextThreshold
+      );
+      sessionDiff.additionLines = splitFileContents(cachedDocumentContents);
+      rebuildSessionHunks(sessionDiff, this.options.parseDiffOptions);
+      this.hunksRenderer.setExpandedHunksMap(
+        rebuildExpansionFromAnchors(sessionDiff, anchors)
+      );
+    }
     this.editSessionDiff = sessionDiff;
-    this.hunksRenderer.beginEditSession(sessionDiff, externalDiff);
+    this.hunksRenderer.beginEditSession(
+      sessionDiff,
+      usesExternalContents ? externalDiff : undefined
+    );
   }
 
   protected setHydratedState(files: LoadedPartialDiffContents): void {
@@ -1730,7 +1762,7 @@ export class FileDiff<
       !externalDiff.isPartial &&
       this.editSessionDiff === pendingReplacement
     ) {
-      this.installExternalEditSession(externalDiff);
+      this.installEditSession(externalDiff);
     }
     const initialExternalDiff =
       this.editSessionDiff == null &&
@@ -1739,7 +1771,10 @@ export class FileDiff<
         ? externalDiff
         : undefined;
     if (initialExternalDiff != null) {
-      this.installExternalEditSession(initialExternalDiff);
+      this.installEditSession(
+        initialExternalDiff,
+        editor.__getDocumentContents()
+      );
     } else {
       this.hunksRenderer.beginEditSession(this.editSessionDiff);
     }

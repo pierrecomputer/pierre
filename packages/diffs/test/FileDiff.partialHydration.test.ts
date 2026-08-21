@@ -63,6 +63,7 @@ function createEditorStub(): DiffsEditor<undefined> {
     cleanUp() {},
     edit: () => () => {},
     __captureFocusForDOMReplacement() {},
+    __getDocumentContents: () => undefined,
     __postponeBgTokenizeToNextFrame() {},
     __syncRenderView() {},
   };

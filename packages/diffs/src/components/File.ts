@@ -366,11 +366,14 @@ export class File<
     this.file = incomingFile;
     this.outgoingSessionFile = undefined;
 
-    if (previousEditSessionFile != null) {
+    if (previousEditSessionFile != null || this.editor != null) {
       this.outgoingSessionFile = previousEditSessionFile;
-      this.installExternalEditSession(incomingFile);
-    } else if (this.editor != null) {
-      this.installExternalEditSession(incomingFile);
+      this.installEditSession(
+        incomingFile,
+        previousEditSessionFile == null
+          ? this.editor?.__getDocumentContents()
+          : undefined
+      );
     } else {
       this.editSessionFile = undefined;
     }
@@ -389,10 +392,24 @@ export class File<
     return true;
   }
 
-  private installExternalEditSession(externalFile: FileContents): void {
+  // Editor contents seed a new session. Existing sessions omit the editor so
+  // incoming text renders as an external replacement and joins undo history.
+  private installEditSession(
+    externalFile: FileContents,
+    cachedDocumentContents?: string
+  ): void {
+    const usesExternalContents =
+      cachedDocumentContents == null ||
+      cachedDocumentContents === externalFile.contents;
     const editSessionFile = createEditSessionFile(externalFile);
+    if (!usesExternalContents) {
+      editSessionFile.contents = cachedDocumentContents;
+    }
     this.editSessionFile = editSessionFile;
-    this.fileRenderer.beginEditSession(editSessionFile, externalFile);
+    this.fileRenderer.beginEditSession(
+      editSessionFile,
+      usesExternalContents ? externalFile : undefined
+    );
   }
 
   public onThemeChange(): void {
@@ -810,7 +827,7 @@ export class File<
       getLineAnnotationName
     );
     if (this.editSessionFile == null && this.file != null) {
-      this.installExternalEditSession(this.file);
+      this.installEditSession(this.file, editor.__getDocumentContents());
     } else {
       this.fileRenderer.beginEditSession(this.editSessionFile);
     }

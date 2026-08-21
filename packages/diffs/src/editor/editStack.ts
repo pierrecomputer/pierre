@@ -78,6 +78,21 @@ export class EditStack<LAnnotation> {
     return clone;
   }
 
+  /** Copy history while validating the runtime shape of opaque annotations. */
+  cloneForAnnotations<NextAnnotation>(): EditStack<NextAnnotation> {
+    const clone = new EditStack<NextAnnotation>({
+      maxEntries: this.#maxEntries,
+    });
+    clone.#undoStack = this.#undoStack.map((entry) =>
+      cloneEditStackEntryForAnnotations<NextAnnotation>(entry)
+    );
+    clone.#redoStack = this.#redoStack.map((entry) =>
+      cloneEditStackEntryForAnnotations<NextAnnotation>(entry)
+    );
+    clone.#canCoalesce = this.#canCoalesce;
+    return clone;
+  }
+
   /** Clears both the undo and redo stacks. */
   clear(): void {
     this.#undoStack.length = 0;
@@ -176,6 +191,49 @@ function cloneEditStackEntry<LAnnotation>(
     lineAnnotationsBefore: entry.lineAnnotationsBefore?.slice(),
     lineAnnotationsAfter: entry.lineAnnotationsAfter?.slice(),
   };
+}
+
+function cloneEditStackEntryForAnnotations<NextAnnotation>(
+  entry: EditStackEntry<unknown>
+): EditStackEntry<NextAnnotation> {
+  return {
+    forwardEdits: entry.forwardEdits.map((edit) => ({ ...edit })),
+    inverseEdits: entry.inverseEdits.map((edit) => ({ ...edit })),
+    versionBefore: entry.versionBefore,
+    versionAfter: entry.versionAfter,
+    selectionsBefore: entry.selectionsBefore?.map(cloneSelection),
+    selectionsAfter: entry.selectionsAfter?.map(cloneSelection),
+    lineAnnotationsBefore: entry.lineAnnotationsBefore?.map(
+      cloneLineAnnotation<NextAnnotation>
+    ),
+    lineAnnotationsAfter: entry.lineAnnotationsAfter?.map(
+      cloneLineAnnotation<NextAnnotation>
+    ),
+    coalescingMode: entry.coalescingMode,
+    undoBoundary: entry.undoBoundary,
+  };
+}
+
+function cloneLineAnnotation<LAnnotation>(
+  annotation: unknown
+): DiffLineAnnotation<LAnnotation> {
+  if (!isLineAnnotation<LAnnotation>(annotation)) {
+    throw new Error('EditStack: invalid retained line annotation');
+  }
+  return annotation;
+}
+
+function isLineAnnotation<LAnnotation>(
+  annotation: unknown
+): annotation is DiffLineAnnotation<LAnnotation> {
+  if (annotation == null || typeof annotation !== 'object') {
+    return false;
+  }
+  const side = Reflect.get(annotation, 'side');
+  return (
+    (side == null || side === 'additions' || side === 'deletions') &&
+    Number.isInteger(Reflect.get(annotation, 'lineNumber'))
+  );
 }
 
 function cloneSelection(selection: EditorSelection): EditorSelection {
