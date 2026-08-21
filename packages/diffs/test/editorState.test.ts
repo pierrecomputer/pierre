@@ -1,13 +1,11 @@
 import { describe, expect, test } from 'bun:test';
 
 import { Editor } from '../src/editor/editor';
-import type { IStateStorage } from '../src/editor/stateStorage';
 import type {
   DiffLineAnnotation,
   DiffsEditableComponent,
   DiffsEditor,
   DiffsHighlighter,
-  EditorState,
   FileContents,
   HighlightedToken,
   RenderRange,
@@ -123,7 +121,6 @@ class TestEditableComponent implements DiffsEditableComponent<undefined> {
       highlighter: createTestHighlighter(),
       fileContainer: this.fileContainer,
       file: this.file,
-      externalCacheKey: this.file.cacheKey,
       lineAnnotations: this.#lineAnnotations,
       renderRange: this.#renderRange,
     });
@@ -188,40 +185,6 @@ describe('Editor state', () => {
       editor.setState({ view: { scrollLeft: 24 } });
 
       expect(component.restoredCodeScrollLefts).toEqual([24]);
-    } finally {
-      editor.cleanUp();
-      component.cleanUp();
-      dom.cleanup();
-    }
-  });
-
-  test('automatic persistence stores horizontal state', () => {
-    const dom = installDom();
-    let storedState: EditorState | undefined;
-    const storage: IStateStorage = {
-      get() {
-        return undefined;
-      },
-      set(_cacheKey, state) {
-        storedState = state;
-      },
-    };
-    const editor = new Editor<undefined>({
-      persistState: true,
-      persistStateStorage: storage,
-    });
-    const component = new TestEditableComponent({
-      name: 'state.ts',
-      contents: 'alpha\nbravo',
-      cacheKey: 'state.ts',
-    });
-
-    try {
-      editor.edit(component);
-      component.codeScrollLeft = 24;
-      editor.cleanUp();
-
-      expect(storedState?.view).toEqual({ scrollLeft: 24, scrollTop: 0 });
     } finally {
       editor.cleanUp();
       component.cleanUp();

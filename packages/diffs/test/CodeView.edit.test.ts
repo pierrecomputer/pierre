@@ -476,7 +476,8 @@ describe('CodeView item edit mode', () => {
       expect(viewer.getEditor('a')).toBe(editors[0]);
 
       await applyItemUpdate(viewer, { ...item, collapsed: true, version: 2 });
-      expect(editors[0].fullCleanUps).toBe(1);
+      expect(editors[0].recycleCleanUps).toBe(1);
+      expect(editors[0].fullCleanUps).toBe(0);
       expect(viewer.getEditor('a')).toBe(editors[0]);
 
       // Expanding re-attaches the same editor; no new editor is created.
@@ -489,6 +490,56 @@ describe('CodeView item edit mode', () => {
       cleanup();
     }
   });
+
+  for (const [itemType, makeItem] of [
+    ['file', () => makeEditFileItem('a')],
+    ['diff', () => makeEditDiffItem('a')],
+  ] as const) {
+    test(`collapse preserves ${itemType} contents and undo history`, async () => {
+      const { cleanup } = installDom();
+      const viewer = new CodeView({
+        createEditor: (options) => new Editor<undefined>(options),
+      });
+      const item = makeItem();
+      try {
+        viewer.setup(createRoot());
+        await renderItems(viewer, [item]);
+        const editor = viewer.getEditor(item.id) as Editor<undefined>;
+        const originalContents = editor.getText();
+
+        editor.applyEdits([
+          {
+            range: {
+              start: { line: 0, character: 0 },
+              end: { line: 0, character: 0 },
+            },
+            newText: 'edited ',
+          },
+        ]);
+        expect(editor.getText()).toBe(`edited ${originalContents}`);
+
+        await applyItemUpdate(viewer, {
+          ...item,
+          collapsed: true,
+          version: 1,
+        });
+        await applyItemUpdate(viewer, {
+          ...item,
+          collapsed: false,
+          version: 2,
+        });
+
+        expect(viewer.getEditor(item.id)).toBe(editor);
+        expect(editor.getText()).toBe(`edited ${originalContents}`);
+        editor.undo();
+        expect(editor.getText()).toBe(originalContents);
+      } finally {
+        viewer.cleanUp();
+        await wait(0);
+        cleanup();
+      }
+    });
+  }
 
   test('entering edit mode preserves the item line selection', async () => {
     const { cleanup } = installDom();
@@ -583,114 +634,6 @@ describe('CodeView item edit mode', () => {
       expect(editors.length).toBe(1);
       expect(editor.edits.length).toBe(2);
       expect(editor.edits[1]).toBe(editor.edits[0]);
-    } finally {
-      viewer.cleanUp();
-      await wait(0);
-      cleanup();
-    }
-  });
-
-  test('recycle restores persisted item-local state without moving CodeView', async () => {
-    const { cleanup } = installDom();
-    const editors: Editor<undefined>[] = [];
-    const viewer = new CodeView<undefined>({
-      createEditor(options) {
-        const editor = new Editor<undefined>({
-          ...options,
-          persistState: true,
-        });
-        editors.push(editor);
-        return editor;
-      },
-    });
-    const edited = makeTextEditFileItem('edited', true, 30);
-    if (edited.type !== 'file') {
-      throw new Error('Expected an edited file item.');
-    }
-    edited.file = { ...edited.file, cacheKey: 'edited' };
-    const items: CodeViewItem<undefined>[] = [
-      edited,
-      ...Array.from({ length: 39 }, (_, index) =>
-        makeTextEditFileItem(`file-${index}`, false, 30)
-      ),
-    ];
-
-    try {
-      const root = createRoot();
-      viewer.setup(root);
-      await renderItems(viewer, items);
-      await waitFor(() => {
-        const rendered = viewer
-          .getRenderedItems()
-          .find((item) => item.id === edited.id);
-        return (
-          viewer.getEditor(edited.id) !== undefined &&
-          rendered?.element.shadowRoot?.querySelector('[data-code]') instanceof
-            HTMLElement
-        );
-      });
-
-      const editor = viewer.getEditor(edited.id) as Editor<undefined>;
-      const firstRendered = viewer
-        .getRenderedItems()
-        .find((item) => item.id === edited.id);
-      const firstCode =
-        firstRendered?.element.shadowRoot?.querySelector('[data-code]');
-      expect(firstCode).toBeInstanceOf(HTMLElement);
-      editor.setSelections([
-        {
-          start: { line: 2, character: 3 },
-          end: { line: 2, character: 3 },
-          direction: 'none',
-        },
-      ]);
-      (firstCode as HTMLElement).scrollLeft = 64;
-
-      root.scrollTop = 20_000;
-      dispatchScroll(root);
-      viewer.render(true);
-      await wait(0);
-      expect(
-        viewer.getRenderedItems().some((item) => item.id === edited.id)
-      ).toBe(false);
-
-      root.scrollTop = 0;
-      dispatchScroll(root);
-      viewer.render(true);
-      await waitFor(() => {
-        const rendered = viewer
-          .getRenderedItems()
-          .find((item) => item.id === edited.id);
-        return (
-          rendered?.element.shadowRoot?.querySelector('[data-code]') instanceof
-          HTMLElement
-        );
-      });
-      const remounted = viewer
-        .getRenderedItems()
-        .find((item) => item.id === edited.id);
-      const remountedCode =
-        remounted?.element.shadowRoot?.querySelector('[data-code]');
-      await waitFor(() => {
-        const selection = editor.getState().selections?.[0];
-        return (
-          selection?.start.line === 2 &&
-          selection.start.character === 3 &&
-          (remountedCode as HTMLElement | undefined)?.scrollLeft === 64
-        );
-      });
-      expect(editors).toHaveLength(1);
-      expect(viewer.getEditor(edited.id)).toBe(editor);
-      expect(editor.getState().selections).toEqual([
-        {
-          start: { line: 2, character: 3 },
-          end: { line: 2, character: 3 },
-          direction: 0,
-        },
-      ]);
-      expect(remountedCode).toBeInstanceOf(HTMLElement);
-      expect(viewer.getScrollTop()).toBe(0);
-      expect((remountedCode as HTMLElement).scrollLeft).toBe(64);
     } finally {
       viewer.cleanUp();
       await wait(0);
@@ -1821,7 +1764,8 @@ describe('CodeView item edit mode', () => {
         setSessionText(editors[0], 'kept across collapse');
         await applyItemUpdate(viewer, { ...item, collapsed: true, version: 1 });
         expect(completions.length).toBe(0);
-        expect(editors[0].fullCleanUps).toBe(1);
+        expect(editors[0].recycleCleanUps).toBe(1);
+        expect(editors[0].fullCleanUps).toBe(0);
         expect(viewer.getEditor('a')).toBe(editors[0]);
 
         await applyItemUpdate(viewer, {

@@ -2136,11 +2136,10 @@ export class CodeView<LAnnotation = undefined> {
       if (removedItem == null && item != null) {
         const { edit = false, collapsed = false } = item.item;
         if (edit) {
-          // If we are collapsed, we'll tear down the editor until we need it
-          // again, but undo history/cursor/selections will still be saved
-          // if/when we resume
+          // Collapse temporarily detaches the editor. Keep its document and
+          // undo history for expansion; DOM-backed view state is reset.
           if (collapsed && this.attachedEditors.delete(id)) {
-            record.editor.cleanUp();
+            record.editor.cleanUp('recycle');
           }
           continue;
         }

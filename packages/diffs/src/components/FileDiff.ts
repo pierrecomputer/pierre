@@ -91,7 +91,6 @@ import {
   captureExpansionAnchors,
   finishEditSessionForDiff,
   rebuildExpansionFromAnchors,
-  rebuildSessionHunks,
 } from '../utils/editSessionHunks';
 import { getDiffFileInput } from '../utils/getDiffFileInput';
 import { getDiffHunksRendererOptions } from '../utils/getDiffHunksRendererOptions';
@@ -111,7 +110,6 @@ import { isSafari } from '../utils/platform';
 import { prerenderHTMLIfNecessary } from '../utils/prerenderHTMLIfNecessary';
 import { getMeasuredScrollbarGutter } from '../utils/scrollbarGutter';
 import { setPreNodeProperties } from '../utils/setWrapperNodeProps';
-import { splitFileContents } from '../utils/splitFileContents';
 import {
   getExpandedRegion,
   getHunkAdditionLineRange,
@@ -135,25 +133,6 @@ type DeferredEditorActiveLineWrite = [
   lineNumber: number | null,
   options: EditorActiveLineOptions | undefined,
 ];
-
-interface PendingEditSessionReplacement {
-  /**
-   * The private editable diff that was active before the new external diff
-   * arrived. It remains active while a partial replacement is loading and is
-   * compared with the completed replacement to determine history compatibility.
-   */
-  editSessionDiff: FileDiffMetadata;
-  /**
-   * The cache key associated with the current editable diff.
-   * The editor continues using it until the replacement is ready.
-   */
-  prevExternalCacheKey: string | undefined;
-}
-
-interface PendingPersistedDocumentRestore {
-  editSessionDiff: FileDiffMetadata;
-  previousContents: string;
-}
 
 function canHydrateDiff(fileDiff: FileDiffMetadata): boolean {
   return (
@@ -419,12 +398,9 @@ export class FileDiff<
   private editSessionAnnotations:
     | EditSessionAnnotations<DiffLineAnnotation<LAnnotation>>
     | undefined;
-  private pendingEditSessionReplacement:
-    | PendingEditSessionReplacement
-    | undefined;
-  private pendingPersistedDocumentRestore:
-    | PendingPersistedDocumentRestore
-    | undefined;
+  // Keeps the outgoing editable diff until its replacement is ready to sync,
+  // so the editor can decide whether to preserve or reset undo history.
+  private outgoingSessionDiff: FileDiffMetadata | undefined;
   protected renderedDiff: FileDiffMetadata | undefined;
   protected renderRange: RenderRange | undefined;
   protected pendingFiles: PendingFileLoad | undefined;
@@ -880,8 +856,8 @@ export class FileDiff<
     dequeueRender(this.handleEditSessionRender);
     this.emitPostRender(true);
     // Tear the editor down while the code scrollers still exist. A recycle
-    // persists its editor state; a full teardown ends the session, so the
-    // editor drops its stored document instead.
+    // keeps its document and undo history; a full teardown drops them as the
+    // session ends.
     this.editor?.cleanUp(recycle ? 'recycle' : 'complete');
     this.editor = undefined;
     if (!recycle) {
@@ -947,8 +923,7 @@ export class FileDiff<
       this.fileDiff = undefined;
       this.editSessionDiff = undefined;
       this.editSessionAnnotations = undefined;
-      this.pendingEditSessionReplacement = undefined;
-      this.pendingPersistedDocumentRestore = undefined;
+      this.outgoingSessionDiff = undefined;
       this.renderedDiff = undefined;
       this.deletionFile = undefined;
       this.additionFile = undefined;
@@ -1244,7 +1219,7 @@ export class FileDiff<
     if (this.fileDiff !== expectedDiff) {
       return false;
     }
-    if (this.pendingEditSessionReplacement != null) {
+    if (this.outgoingSessionDiff != null) {
       this.installExternalEditSession(expectedDiff);
       return true;
     }
@@ -1252,14 +1227,14 @@ export class FileDiff<
     if (editor == null || this.editSessionDiff != null) {
       return false;
     }
-    this.createInitialEditSession(editor, expectedDiff);
+    this.installExternalEditSession(expectedDiff);
     return true;
   }
 
   // Install a replacement diff from the caller; returns false when it is the
   // diff already installed. During an edit session, the outgoing session diff
-  // and cache key are kept aside until the editor syncs — it uses them to
-  // decide whether the swap keeps or resets undo history. A hydrated
+  // is kept aside until the editor syncs so it can decide whether the swap
+  // keeps or resets undo history. A hydrated
   // replacement starts its new session immediately; a partial one starts
   // loading its files and gets a session once hydrated.
   protected updateExternalDiff(
@@ -1270,30 +1245,19 @@ export class FileDiff<
       return false;
     }
 
-    const {
-      fileDiff: prevFileDiff,
-      pendingEditSessionReplacement: pendingReplacement,
-    } = this;
-    const editSessionDiff =
-      pendingReplacement?.editSessionDiff ?? this.editSessionDiff;
-    const prevExternalCacheKey =
-      pendingReplacement?.prevExternalCacheKey ?? prevFileDiff?.cacheKey;
+    const editSessionDiff = this.outgoingSessionDiff ?? this.editSessionDiff;
 
     this.fileDiff = incomingExternalDiff;
-    this.pendingEditSessionReplacement = undefined;
-    this.pendingPersistedDocumentRestore = undefined;
+    this.outgoingSessionDiff = undefined;
     if (editSessionDiff != null) {
-      this.pendingEditSessionReplacement = {
-        editSessionDiff,
-        prevExternalCacheKey,
-      };
+      this.outgoingSessionDiff = editSessionDiff;
       if (incomingExternalDiff.isPartial) {
         this.loadFilesIfNecessary();
       } else {
         this.installExternalEditSession(incomingExternalDiff);
       }
     } else if (this.editor != null && !incomingExternalDiff.isPartial) {
-      this.createInitialEditSession(this.editor, incomingExternalDiff);
+      this.installExternalEditSession(incomingExternalDiff);
     }
     if (this.editSessionAnnotations != null && lineAnnotations != null) {
       // These annotations arrived with the new diff, so their line numbers
@@ -1314,50 +1278,6 @@ export class FileDiff<
     const sessionDiff = createEditSessionDiff(externalDiff);
     this.editSessionDiff = sessionDiff;
     this.hunksRenderer.beginEditSession(sessionDiff, externalDiff);
-  }
-
-  /**
-   * Create the first private editable diff for an editor attachment. When a
-   * persisted document has different text, rebuild the private diff from that
-   * text so the restored editor document and rendered rows start in sync.
-   */
-  private createInitialEditSession(
-    editor: DiffsEditor<LAnnotation>,
-    externalDiff: FileDiffMetadata
-  ): void {
-    const editSessionDiff = createEditSessionDiff(externalDiff);
-    const cachedContents = editor.__getCachedDocumentContents?.(externalDiff);
-    const restoredPersistedContents =
-      cachedContents != null &&
-      cachedContents !== externalDiff.additionLines.join('');
-
-    if (restoredPersistedContents) {
-      const {
-        collapsedContextThreshold = DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
-      } = this.options;
-      const anchors = captureExpansionAnchors(
-        externalDiff,
-        this.hunksRenderer.getExpandedHunksMap(),
-        collapsedContextThreshold
-      );
-      editSessionDiff.additionLines = splitFileContents(cachedContents);
-      rebuildSessionHunks(editSessionDiff, this.options.parseDiffOptions);
-      this.hunksRenderer.setExpandedHunksMap(
-        rebuildExpansionFromAnchors(editSessionDiff, anchors)
-      );
-      this.pendingPersistedDocumentRestore = {
-        editSessionDiff,
-        previousContents: externalDiff.additionLines.join(''),
-      };
-    } else {
-      this.pendingPersistedDocumentRestore = undefined;
-    }
-
-    this.editSessionDiff = editSessionDiff;
-    this.hunksRenderer.beginEditSession(
-      editSessionDiff,
-      restoredPersistedContents ? undefined : externalDiff
-    );
   }
 
   protected setHydratedState(files: LoadedPartialDiffContents): void {
@@ -1705,42 +1625,23 @@ export class FileDiff<
       ) {
         return;
       }
-      const {
-        pendingEditSessionReplacement: replacement,
-        fileDiff: externalDiff,
-        pendingPersistedDocumentRestore: pendingRestore,
-      } = this;
+      const { outgoingSessionDiff: replacement, fileDiff: externalDiff } = this;
       const externalDocument =
-        replacement != null &&
-        externalDiff != null &&
-        replacement.editSessionDiff !== fileDiff;
+        replacement != null && externalDiff != null && replacement !== fileDiff;
       const resetHistory = externalDocument
-        ? shouldResetUndoState(replacement.editSessionDiff, externalDiff)
+        ? shouldResetUndoState(replacement, externalDiff)
         : false;
-      const externalCacheKey =
-        replacement != null && !externalDocument
-          ? replacement.prevExternalCacheKey
-          : externalDiff?.cacheKey;
-      const restoredDocument =
-        pendingRestore?.editSessionDiff === fileDiff
-          ? pendingRestore.previousContents
-          : undefined;
       if (externalDocument) {
-        this.pendingEditSessionReplacement = undefined;
-      }
-      if (restoredDocument != null) {
-        this.pendingPersistedDocumentRestore = undefined;
+        this.outgoingSessionDiff = undefined;
       }
       editor.__syncRenderView({
         highlighter,
         fileContainer,
         fileDiff,
-        externalCacheKey,
         lineAnnotations,
         renderRange,
         externalDocument,
         resetHistory,
-        restoredDocument,
       });
     });
   }
@@ -1821,15 +1722,13 @@ export class FileDiff<
       this.lineAnnotations,
       getLineAnnotationName
     );
-    const {
-      fileDiff: externalDiff,
-      pendingEditSessionReplacement: pendingReplacement,
-    } = this;
+    const { fileDiff: externalDiff, outgoingSessionDiff: pendingReplacement } =
+      this;
     if (
       pendingReplacement != null &&
       externalDiff != null &&
       !externalDiff.isPartial &&
-      this.editSessionDiff === pendingReplacement.editSessionDiff
+      this.editSessionDiff === pendingReplacement
     ) {
       this.installExternalEditSession(externalDiff);
     }
@@ -1840,7 +1739,7 @@ export class FileDiff<
         ? externalDiff
         : undefined;
     if (initialExternalDiff != null) {
-      this.createInitialEditSession(editor, initialExternalDiff);
+      this.installExternalEditSession(initialExternalDiff);
     } else {
       this.hunksRenderer.beginEditSession(this.editSessionDiff);
     }
@@ -1869,9 +1768,9 @@ export class FileDiff<
     }
     return (recycle: boolean = false) => {
       this.editor = undefined;
-      // A recycle detach is a virtualized unmount mid-session: the session
-      // continues on remount, so hunks stay session-shaped. Only a
-      // non-recycle detach runs the exit recompute.
+      // A recycle detach temporarily unmounts the editor mid-session, so hunks
+      // stay session-shaped for reattachment. Only a non-recycle detach runs
+      // the exit recompute.
       if (!recycle) {
         this.finishEditSession();
       }
@@ -2009,8 +1908,7 @@ export class FileDiff<
     }
     this.editSessionDiff = undefined;
     this.editSessionAnnotations = undefined;
-    this.pendingEditSessionReplacement = undefined;
-    this.pendingPersistedDocumentRestore = undefined;
+    this.outgoingSessionDiff = undefined;
     if (installResult && this.fileContainer != null) {
       this.rerender();
     }
@@ -2026,7 +1924,7 @@ export class FileDiff<
    * the session render path — which also invalidates virtualized layout,
    * since nothing else does at exit now that editing does not flip
    * expandUnchanged. Marker-guarded and idempotent; CodeView also calls this
-   * when reaping a session whose detach closure was consumed by a recycle.
+   * when ending a session whose detach closure was consumed by a recycle.
    * Safe on a cleaned-up instance: the recompute is pure metadata work and
    * the deferred rerender is enabled-guarded. Returns true when a recompute
    * ran.

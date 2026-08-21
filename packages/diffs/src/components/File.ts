@@ -190,25 +190,6 @@ interface HydrationSetup<LAnnotation> {
   lineAnnotations: LineAnnotation<LAnnotation>[] | undefined;
 }
 
-interface PendingEditSessionReplacement {
-  /**
-   * The private editable file that was active before the new external file
-   * arrived. It is compared with the final replacement to determine whether
-   * the editor can preserve its history.
-   */
-  editSessionFile: FileContents;
-  /**
-   * The cache key associated with the current editable file. The editor keeps
-   * using it until the replacement is rendered and ready to synchronize.
-   */
-  prevExternalCacheKey: string | undefined;
-}
-
-interface PendingPersistedDocumentRestore {
-  editSessionFile: FileContents;
-  previousContents: string;
-}
-
 function createEditSessionFile(file: FileContents): FileContents {
   const editSessionFile = { ...file };
   delete editSessionFile.cacheKey;
@@ -277,12 +258,9 @@ export class File<
   private editSessionAnnotations:
     | EditSessionAnnotations<LineAnnotation<LAnnotation>>
     | undefined;
-  private pendingEditSessionReplacement:
-    | PendingEditSessionReplacement
-    | undefined;
-  private pendingPersistedDocumentRestore:
-    | PendingPersistedDocumentRestore
-    | undefined;
+  // Keeps the outgoing editable file until its replacement is ready to sync,
+  // so the editor can decide whether to preserve or reset undo history.
+  private outgoingSessionFile: FileContents | undefined;
   protected renderedFile: FileContents | undefined;
   protected renderRange: RenderRange | undefined;
   protected enabled = true;
@@ -372,8 +350,8 @@ export class File<
 
   // Install a replacement file from the caller; returns false when it is the
   // file already installed. During an edit session, the outgoing session file
-  // and cache key are kept aside until the editor syncs — it uses them to
-  // decide whether the swap keeps or resets undo history.
+  // is kept aside until the editor syncs so it can decide whether the swap
+  // keeps or resets undo history.
   protected updateExternalFile(
     incomingFile: FileContents,
     lineAnnotations?: LineAnnotation<LAnnotation>[]
@@ -382,28 +360,17 @@ export class File<
       return false;
     }
 
-    const {
-      file: previousExternalFile,
-      pendingEditSessionReplacement: pendingReplacement,
-    } = this;
     const previousEditSessionFile =
-      pendingReplacement?.editSessionFile ?? this.editSessionFile;
-    const prevExternalCacheKey =
-      pendingReplacement?.prevExternalCacheKey ??
-      previousExternalFile?.cacheKey;
+      this.outgoingSessionFile ?? this.editSessionFile;
 
     this.file = incomingFile;
-    this.pendingEditSessionReplacement = undefined;
-    this.pendingPersistedDocumentRestore = undefined;
+    this.outgoingSessionFile = undefined;
 
     if (previousEditSessionFile != null) {
-      this.pendingEditSessionReplacement = {
-        editSessionFile: previousEditSessionFile,
-        prevExternalCacheKey,
-      };
+      this.outgoingSessionFile = previousEditSessionFile;
       this.installExternalEditSession(incomingFile);
     } else if (this.editor != null) {
-      this.createInitialEditSession(this.editor, incomingFile);
+      this.installExternalEditSession(incomingFile);
     } else {
       this.editSessionFile = undefined;
     }
@@ -426,37 +393,6 @@ export class File<
     const editSessionFile = createEditSessionFile(externalFile);
     this.editSessionFile = editSessionFile;
     this.fileRenderer.beginEditSession(editSessionFile, externalFile);
-  }
-
-  /**
-   * Create the first private editable file for an editor attachment. When a
-   * persisted document has different text, initialize the private file with
-   * that text so the restored editor document and rendered rows start in sync.
-   */
-  private createInitialEditSession(
-    editor: DiffsEditor<LAnnotation>,
-    externalFile: FileContents
-  ): void {
-    const editSessionFile = createEditSessionFile(externalFile);
-    const cachedContents = editor.__getCachedDocumentContents?.(externalFile);
-    const restoredPersistedContents =
-      cachedContents != null && cachedContents !== externalFile.contents;
-
-    if (restoredPersistedContents) {
-      editSessionFile.contents = cachedContents;
-      this.pendingPersistedDocumentRestore = {
-        editSessionFile,
-        previousContents: externalFile.contents,
-      };
-    } else {
-      this.pendingPersistedDocumentRestore = undefined;
-    }
-
-    this.editSessionFile = editSessionFile;
-    this.fileRenderer.beginEditSession(
-      editSessionFile,
-      restoredPersistedContents ? undefined : externalFile
-    );
   }
 
   public onThemeChange(): void {
@@ -626,8 +562,8 @@ export class File<
   public cleanUp(recycle = false): void {
     this.emitPostRender(true);
     // Tear the editor down while the code scroller still exists. A recycle
-    // persists its editor state; a full teardown ends the session, so the
-    // editor drops its stored document instead.
+    // keeps its document and undo history; a full teardown drops them as the
+    // session ends.
     this.editor?.cleanUp(recycle ? 'recycle' : 'complete');
     this.editor = undefined;
     if (!recycle) {
@@ -685,8 +621,7 @@ export class File<
       this.file = undefined;
       this.editSessionFile = undefined;
       this.editSessionAnnotations = undefined;
-      this.pendingEditSessionReplacement = undefined;
-      this.pendingPersistedDocumentRestore = undefined;
+      this.outgoingSessionFile = undefined;
       this.renderedFile = undefined;
     }
     this.enabled = false;
@@ -837,42 +772,23 @@ export class File<
       ) {
         return;
       }
-      const {
-        pendingEditSessionReplacement: replacement,
-        file: externalFile,
-        pendingPersistedDocumentRestore: pendingRestore,
-      } = this;
+      const { outgoingSessionFile: replacement, file: externalFile } = this;
       const externalDocument =
-        replacement != null &&
-        externalFile != null &&
-        replacement.editSessionFile !== file;
+        replacement != null && externalFile != null && replacement !== file;
       const resetHistory = externalDocument
-        ? shouldResetUndoState(replacement.editSessionFile, externalFile)
+        ? shouldResetUndoState(replacement, externalFile)
         : false;
-      const externalCacheKey =
-        replacement != null && !externalDocument
-          ? replacement.prevExternalCacheKey
-          : externalFile?.cacheKey;
-      const restoredDocument =
-        pendingRestore?.editSessionFile === file
-          ? pendingRestore.previousContents
-          : undefined;
       if (externalDocument) {
-        this.pendingEditSessionReplacement = undefined;
-      }
-      if (restoredDocument != null) {
-        this.pendingPersistedDocumentRestore = undefined;
+        this.outgoingSessionFile = undefined;
       }
       editor.__syncRenderView({
         highlighter,
         fileContainer,
         file,
-        externalCacheKey,
         lineAnnotations,
         renderRange,
         externalDocument,
         resetHistory,
-        restoredDocument,
       });
     });
   }
@@ -894,7 +810,7 @@ export class File<
       getLineAnnotationName
     );
     if (this.editSessionFile == null && this.file != null) {
-      this.createInitialEditSession(editor, this.file);
+      this.installExternalEditSession(this.file);
     } else {
       this.fileRenderer.beginEditSession(this.editSessionFile);
     }
@@ -1008,8 +924,7 @@ export class File<
     }
     this.editSessionFile = undefined;
     this.editSessionAnnotations = undefined;
-    this.pendingEditSessionReplacement = undefined;
-    this.pendingPersistedDocumentRestore = undefined;
+    this.outgoingSessionFile = undefined;
     // Ending the session with the settled file lets the renderer adopt it as
     // the rendered identity when its cache already shows this content, so
     // the next render treats it as current instead of a new file.

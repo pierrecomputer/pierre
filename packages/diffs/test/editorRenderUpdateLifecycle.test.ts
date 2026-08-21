@@ -3,14 +3,12 @@ import { createTwoFilesPatch } from 'diff';
 
 import {
   disposeHighlighter,
-  File,
   FileDiff,
   parseDiffFromFile,
   parsePatchFiles,
 } from '../src';
 import { Editor } from '../src/editor/editor';
 import type {
-  FileContents,
   FileDiffLoadedFiles,
   FileDiffMetadata,
   SupportedLanguages,
@@ -59,7 +57,6 @@ async function createFixture(options?: {
   initialType?: FileDiffMetadata['type'];
   loadDiffFiles?: (fileDiff: FileDiffMetadata) => Promise<FileDiffLoadedFiles>;
   onChange?: (contents: string) => void;
-  persistState?: boolean;
 }) {
   const dom = installDom();
   const fileContainer = document.createElement('div');
@@ -79,7 +76,6 @@ async function createFixture(options?: {
     loadDiffFiles: options?.loadDiffFiles,
   });
   const editor = new Editor<undefined>({
-    persistState: options?.persistState,
     onChange: (event) => options?.onChange?.(event.file.contents),
   });
 
@@ -426,52 +422,4 @@ describe('external FileDiff updates during editing', () => {
       }
     });
   }
-
-  test('a cache-key transition keeps independent persisted documents', async () => {
-    const fixture = await createFixture({ persistState: true });
-    const replacement = createDiff({
-      cacheKey: 'session:v2',
-      newContents: 'charlie\n',
-    });
-    let restoredFile: File<undefined> | undefined;
-    const restoredContainer = document.createElement('div');
-    document.body.appendChild(restoredContainer);
-
-    try {
-      replaceDocument(fixture.editor, 'bravo\n');
-      await renderReplacement(fixture, replacement, 'charlie\n');
-      replaceDocument(fixture.editor, 'delta\n');
-
-      fixture.editor.cleanUp();
-      fixture.instance.cleanUp();
-      restoredFile = new File<undefined>({
-        disableErrorHandling: true,
-        disableFileHeader: true,
-      });
-      const originalFile: FileContents = {
-        name: 'session.ts',
-        contents: 'alpha\n',
-        cacheKey: 'session:v1',
-      };
-      restoredFile.render({
-        file: originalFile,
-        fileContainer: restoredContainer,
-        forceRender: true,
-      });
-      fixture.editor.edit(restoredFile);
-      await waitFor(() => fixture.editor.getText() === 'bravo\n', {
-        timeout: 4_000,
-      });
-
-      expect(fixture.editor.getText()).toBe('bravo\n');
-      expect(fixture.editor.getText()).not.toBe('delta\n');
-      expect(fixture.editor.canUndo).toBe(true);
-      fixture.editor.undo();
-      expect(fixture.editor.getText()).toBe('alpha\n');
-    } finally {
-      fixture.editor.cleanUp();
-      restoredFile?.cleanUp();
-      fixture.dom.cleanup();
-    }
-  });
 });

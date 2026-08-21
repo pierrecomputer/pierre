@@ -155,7 +155,6 @@ class TestEditableComponent implements DiffsEditableComponent<undefined> {
       highlighter: createTestHighlighter(),
       fileContainer: this.fileContainer,
       file: this.#file,
-      externalCacheKey: this.#file.cacheKey,
       lineAnnotations: this.#lineAnnotations,
       renderRange: this.#renderRange,
     });
@@ -281,7 +280,6 @@ describe('Editor onAttach lifecycle', () => {
         highlighter: createTestHighlighter(),
         fileContainer: component.fileContainer,
         file,
-        externalCacheKey: file.cacheKey,
         lineAnnotations: undefined,
         renderRange: undefined,
       });

@@ -108,12 +108,6 @@ import {
   SelectionActionWidget,
 } from './selectionAction';
 import { createSpriteElement } from './sprite';
-import {
-  cloneEditorState,
-  createStateStorage,
-  type IStateStorage,
-  type PersistStateStorage,
-} from './stateStorage';
 import { TextDocument, type TextDocumentChange } from './textDocument';
 import {
   getExpandedAsciiTextColumns,
@@ -158,17 +152,6 @@ function getShadowRootRange(shadowRoot: ShadowRoot): StaticRange | undefined {
   };
 }
 
-function requirePersistedCacheKey(
-  file: Pick<FileContents, 'cacheKey' | 'name'>
-): string {
-  if (typeof file.cacheKey !== 'string' || file.cacheKey.length === 0) {
-    throw new Error(
-      `Editor persistState requires a non-empty file.cacheKey for "${file.name}". Provide a unique, stable cacheKey for every editable file.`
-    );
-  }
-  return file.cacheKey;
-}
-
 /** Describe replacing the complete document from its previous text. */
 function createFullDocumentChange(
   previousContents: string,
@@ -190,24 +173,10 @@ function createFullDocumentChange(
   };
 }
 
-function isPromise<T>(value: T | Promise<T>): value is Promise<T> {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    'then' in value &&
-    typeof value.then === 'function'
-  );
-}
-
 interface EditorAttachState {
   generation: number;
   callback: (() => void) | undefined;
   delivered: boolean;
-}
-
-interface ViewportInputWatch {
-  userScrolled(): boolean;
-  dispose(): void;
 }
 
 interface AltColumnDrag {
@@ -224,16 +193,6 @@ export interface EditorOptions<LAnnotation> {
   historyMaxEntries?: number;
   /** Custom keymap groups checked before defaults; later groups take precedence. */
   keymap?: EditorKeymap;
-  /**
-   * Preserve each file's document and item-local editor state when switching files.
-   * Every editable file must provide a unique, stable `cacheKey`.
-   */
-  persistState?: boolean;
-  /**
-   * Storage for serializable editor state. Text documents stay in this Editor's
-   * in-memory cache. Defaults to `"inMemory"`.
-   */
-  persistStateStorage?: PersistStateStorage;
   /** Render rounded corners for selection ranges, default is true. */
   roundedSelection?: boolean;
   /** Highlight matching brackets near the caret, default is true. */
@@ -311,21 +270,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #metrics = new Metrics();
   #tokenizer?: EditorTokenizer;
   #popoverManager?: PopoverManager;
-  #textDocumentCache = new Map<string, TextDocument<LAnnotation>>();
-  #stateStorage?: IStateStorage;
-  #stateStorageOption?: PersistStateStorage;
-  #pendingStateWrites = new Map<string, Promise<void>>();
-  #pendingStateRestore?: {
-    cacheKey: string;
-    textDocument: TextDocument<LAnnotation>;
-    documentVersion: number;
-    selections: EditorSelection[] | undefined;
-    view: EditorState['view'];
-    completion: Promise<void>;
-  };
-  #stateRestoreGeneration = 0;
-  #restoreStateOnNextSync = false;
-
   // event disposes
   #editorEventDisposes?: (() => void)[];
   #globalEventDisposes?: (() => void)[];
@@ -369,8 +313,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   // state
   #fileInstance?: DiffsEditableComponent<LAnnotation>;
   #fileInfo?: Omit<FileContents, 'contents' | 'header'>;
-  // FIXME(amadeus): This should be removed when we remove persistState
-  #externalCacheKey?: string;
   // FIXME(amadeus): We need this support both types. I think in an ideal
   // world, this instance becomes specific to the type of editor that it
   // is... and we can manage this without `as` ing thing
@@ -463,33 +405,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   }
 
   setOptions(options: EditorOptions<LAnnotation>): void {
-    const previousStorageOption =
-      this.#options.persistStateStorage ?? 'inMemory';
-    const nextOptions = {
+    this.#options = {
       ...this.#options,
       ...options,
     };
-    if (nextOptions.persistState === true && this.#fileInfo != null) {
-      requirePersistedCacheKey({
-        name: this.#fileInfo.name,
-        cacheKey: this.#externalCacheKey,
-      });
-    }
-    this.#options = nextOptions;
-    if (this.#options.persistState !== true) {
-      this.#textDocumentCache.clear();
-      this.#stateRestoreGeneration++;
-      this.#restoreStateOnNextSync = false;
-    }
-    if (
-      (this.#options.persistStateStorage ?? 'inMemory') !==
-      previousStorageOption
-    ) {
-      this.#stateRestoreGeneration++;
-      this.#stateStorage = undefined;
-      this.#stateStorageOption = undefined;
-      this.#pendingStateWrites.clear();
-    }
   }
 
   // Small typescript hack to prevent UnresolvedFile from being editable.
@@ -647,8 +566,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     // sits outside that viewport (e.g. TreeApp remount restore).
     if (view != null) {
       this.#fileInstance.setCodeScrollLeft(view.scrollLeft);
-      // Records persisted before scrollTop existed lack it: leave the
-      // viewport where it is rather than guessing.
+      // States without scrollTop leave the viewport where it is rather than
+      // guessing.
       if (view.scrollTop !== undefined) {
         this.#setViewportScrollTop(view.scrollTop);
       }
@@ -768,32 +687,17 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   // 'discard' tears the editor down and nothing more: onEditComplete never
   // fires, and the component keeps whatever session state it has.
   //
-  // 'recycle' is a virtualization unmount: the document and its history are
-  // kept so the session resumes on the next edit() against the same file.
+  // 'recycle' is a temporary detach, such as collapse or virtualization: the
+  // document and its history are kept so the session resumes on the next
+  // edit() against the same file. DOM-backed view state is reset.
   //
-  // 'complete' tears down like 'discard' as part of a session end; the
-  // caller runs completeEditSession() afterward, and any persisted document
-  // is dropped instead of stored.
+  // 'complete' tears down like 'discard' as part of a session end; the caller
+  // runs completeEditSession() afterward.
   cleanUp(reason: 'discard' | 'recycle' | 'complete' = 'discard'): void {
     const recycle = reason === 'recycle';
     this.#invalidateOnAttach();
     if (!recycle) {
       this.#attachState.delivered = false;
-    }
-    const hadFileInstance = this.#fileInstance != null;
-    const shouldRestoreState = this.#options.persistState === true;
-    this.#stateRestoreGeneration++;
-    if (reason === 'complete') {
-      // The session is over either way: an accepted result lives in the
-      // returned external value, and a rejected one must not come back on
-      // the next edit(). Drop the stored document instead of writing the
-      // edited text under the replaced file's key.
-      this.#dropPersistedDocument();
-    } else {
-      this.#persistCurrentState();
-    }
-    if (hadFileInstance) {
-      this.#restoreStateOnNextSync = shouldRestoreState;
     }
     dequeueRender(this.#handleCustomPasteEvent);
     // The tokenizer is destroyed in both modes: it holds highlighter/worker
@@ -802,17 +706,15 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#tokenizer?.cleanUp();
     this.#tokenizer = undefined;
 
-    // A full cleanUp (Edit-mode off, surface switch, unmount) drops the parsed
-    // document, render-model metadata, and external cache identity so the next
-    // edit() rebuilds from the host's current contents. A recycle cleanUp — a
-    // virtualized host temporarily unmounting — keeps them, along with the undo
-    // history living inside the document, so a later edit() against the same
-    // name/lang/external cache key resumes through __syncRenderView's reused-
-    // document path.
+    // A full cleanUp (edit-mode off, surface switch, unmount) drops the parsed
+    // document and render-model metadata so the next edit() rebuilds from the
+    // host's current contents. A recycle cleanUp keeps them, along with the
+    // undo history living inside the document, so a later edit() against the
+    // same name and language resumes through __syncRenderView's reused-document
+    // path.
     if (!recycle) {
       this.#textDocument = undefined;
       this.#fileInfo = undefined;
-      this.#externalCacheKey = undefined;
     }
 
     // dispse event listeners
@@ -864,25 +766,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#fileInstance = undefined;
   }
 
-  /** @internal Return cached text only when it belongs to the same document. */
-  __getCachedDocumentContents(
-    file: Pick<FileContents, 'cacheKey' | 'lang' | 'name'>
-  ): string | undefined {
-    if (this.#options.persistState !== true) {
-      return undefined;
-    }
-
-    const cacheKey = requirePersistedCacheKey(file);
-    const textDocument = this.#getCachedTextDocument(file, cacheKey);
-    if (
-      textDocument == null ||
-      textDocument.uri !== new URL(file.name, 'file://').toString()
-    ) {
-      return undefined;
-    }
-    return textDocument.getText();
-  }
-
   /** @internal */
   __postponeBgTokenizeToNextFrame(): void {
     const tokenizer = this.#tokenizer;
@@ -913,7 +796,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   __syncRenderView: DiffsEditor<LAnnotation>['__syncRenderView'] = ({
     highlighter,
     fileContainer,
-    externalCacheKey,
     renderRange,
     resetHistory = false,
     ...renderView
@@ -922,7 +804,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     const fileOrDiff = isDiff ? renderView.fileDiff : renderView.file;
     const lineAnnotations = renderView.lineAnnotations;
     const externalDocument = renderView.externalDocument === true;
-    const restoredDocument = renderView.restoredDocument;
     const fileInstance = this.#fileInstance;
     if (fileInstance == null) {
       return;
@@ -987,85 +868,29 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       previousTextDocument !== undefined &&
       previousTextDocument.getText() !== contents
         ? [createFullDocumentChange(previousTextDocument.getText(), contents)]
-        : restoredDocument != null && restoredDocument !== contents
-          ? [createFullDocumentChange(restoredDocument, contents)]
-          : undefined;
+        : undefined;
 
-    // Components classify external replacements before this sync. A cache-key
-    // transition identifies new external data, but does not by itself reset
-    // the active document or its history.
     const shouldRebuildDocument =
       this.#textDocument === undefined ||
       this.#fileInfo === undefined ||
       this.#fileInfo.name !== fileOrDiff.name ||
       this.#textDocument.languageId !== languageId ||
-      resetHistory ||
-      (!externalDocument && this.#externalCacheKey !== externalCacheKey);
-    const persistedCacheKey =
-      this.#options.persistState === true
-        ? requirePersistedCacheKey({
-            name: fileOrDiff.name,
-            cacheKey: externalCacheKey,
-          })
-        : undefined;
-
-    let persistedStateTarget:
-      | { cacheKey: string; textDocument: TextDocument<LAnnotation> }
-      | undefined;
-
-    if (externalDocument) {
-      this.#restoreStateOnNextSync = false;
-      this.#stateRestoreGeneration++;
-      this.#persistCurrentState();
-      if (
-        !shouldRebuildDocument &&
-        this.#options.persistState === true &&
-        this.#textDocument !== undefined &&
-        this.#fileInfo !== undefined
-      ) {
-        const previousCacheKey = requirePersistedCacheKey({
-          name: this.#fileInfo.name,
-          cacheKey: this.#externalCacheKey,
-        });
-        this.#textDocumentCache.set(
-          previousCacheKey,
-          this.#textDocument.clone()
-        );
-      }
-    }
-
+      resetHistory;
     if (shouldRebuildDocument) {
       this.#invalidateOnAttach();
       const editStack = new EditStack<LAnnotation>({
         maxEntries: this.#options.historyMaxEntries,
       });
       const { name, lang, cacheKey } = fileOrDiff;
-      const cachedTextDocument =
-        !externalDocument && persistedCacheKey !== undefined
-          ? this.#getCachedTextDocument(fileOrDiff, persistedCacheKey)
-          : undefined;
-      // File creates its private render model from cached text before syncing,
-      // so its DOM always matches a reused document.
-      const reusableTextDocument =
-        fileInstance.type === 'file' ||
-        cachedTextDocument?.getText() === contents
-          ? cachedTextDocument
-          : undefined;
-      const textDocument =
-        reusableTextDocument ??
-        new TextDocument(fileOrDiff.name, contents, languageId, 0, editStack);
+      const textDocument = new TextDocument(
+        fileOrDiff.name,
+        contents,
+        languageId,
+        0,
+        editStack
+      );
       this.#fileInfo = { name, lang, cacheKey };
-      this.#externalCacheKey = externalCacheKey;
       this.#textDocument = textDocument;
-      if (persistedCacheKey !== undefined) {
-        this.#textDocumentCache.set(persistedCacheKey, textDocument);
-        if (!externalDocument || !isDiff) {
-          persistedStateTarget = {
-            cacheKey: persistedCacheKey,
-            textDocument,
-          };
-        }
-      }
       this.#tokenizer?.cleanUp();
       this.#tokenizer = undefined;
       this.#resetState();
@@ -1074,12 +899,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#wrapLineOffsetsCache.clear();
       this.#selections = this.#initSelections;
       if (this.#options.__debug === true) {
-        // A reused document keeps its undo history; only the fallback path
-        // actually rebuilds one from the host's contents.
         console.log(
-          reusableTextDocument !== undefined
-            ? '[diffs/editor] cached text document reused for'
-            : '[diffs/editor] text document rebuilt from',
+          '[diffs/editor] text document rebuilt from',
           fileOrDiff.name
         );
       }
@@ -1094,37 +915,13 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       );
       const { name, lang, cacheKey } = fileOrDiff;
       this.#fileInfo = { name, lang, cacheKey };
-      this.#externalCacheKey = externalCacheKey;
-      if (persistedCacheKey !== undefined && this.#textDocument !== undefined) {
-        this.#textDocumentCache.set(persistedCacheKey, this.#textDocument);
-        if (!isDiff) {
-          persistedStateTarget = {
-            cacheKey: persistedCacheKey,
-            textDocument: this.#textDocument,
-          };
-        }
-      }
-    }
-
-    if (
-      persistedStateTarget === undefined &&
-      !externalDocument &&
-      this.#restoreStateOnNextSync &&
-      persistedCacheKey !== undefined &&
-      this.#textDocument !== undefined
-    ) {
-      persistedStateTarget = {
-        cacheKey: persistedCacheKey,
-        textDocument: this.#textDocument,
-      };
     }
 
     // The tokenizer is (re)created whenever the current document lacks one:
     // right after a fresh document build above, or on the first sync after a
     // recycle cleanUp re-attached a retained document. Tying it to the
     // document (rather than the rebuild) is what keeps a re-attach with an
-    // unchanged external cache key — which skips the rebuild — able to paint
-    // edits.
+    // unchanged document — which skips the rebuild — able to paint edits.
     const textDocument = this.#textDocument;
     if (this.#tokenizer == null && textDocument != null) {
       this.#tokenizer = new EditorTokenizer({
@@ -1273,14 +1070,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       );
     }
 
-    if (persistedStateTarget !== undefined) {
-      this.#restoreStateOnNextSync = false;
-      this.#restorePersistedState(
-        persistedStateTarget.cacheKey,
-        persistedStateTarget.textDocument
-      );
-    }
-
     if (documentChanges != null) {
       this.#emitChange(documentChanges, lineAnnotations);
     }
@@ -1350,248 +1139,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     if (this.#searchPanel !== undefined && this.#matches !== undefined) {
       this.#searchPanel.updateMatches({ syncSelection: false });
     }
-  }
-
-  #getCachedTextDocument(
-    file: Pick<FileContents, 'lang' | 'name'>,
-    cacheKey: string
-  ): TextDocument<LAnnotation> | undefined {
-    const textDocument = this.#textDocumentCache.get(cacheKey);
-    const languageId = file.lang ?? getFiletypeFromFileName(file.name);
-    return textDocument?.languageId === languageId ? textDocument : undefined;
-  }
-
-  #getStateStorage(): IStateStorage {
-    const option = this.#options.persistStateStorage ?? 'inMemory';
-    if (
-      this.#stateStorage === undefined ||
-      this.#stateStorageOption !== option
-    ) {
-      this.#stateStorage = createStateStorage(option);
-      this.#stateStorageOption = option;
-    }
-    return this.#stateStorage;
-  }
-
-  // Drop the attached file's cached document.
-  // Selection/scroll records are left alone.
-  #dropPersistedDocument(): void {
-    const fileInfo = this.#fileInfo;
-    if (
-      this.#options.persistState !== true ||
-      this.#fileInstance === undefined ||
-      fileInfo === undefined
-    ) {
-      return;
-    }
-    this.#textDocumentCache.delete(
-      requirePersistedCacheKey({
-        name: fileInfo.name,
-        cacheKey: this.#externalCacheKey,
-      })
-    );
-  }
-
-  #persistCurrentState(): void {
-    const fileInfo = this.#fileInfo;
-    const textDocument = this.#textDocument;
-    if (
-      this.#options.persistState !== true ||
-      // Requires an attached instance: a repeated cleanUp still holds the
-      // retained fileInfo but must not write (empty) state over the record
-      // the first cleanUp persisted.
-      this.#fileInstance === undefined ||
-      fileInfo === undefined ||
-      textDocument === undefined
-    ) {
-      return;
-    }
-
-    const cacheKey = requirePersistedCacheKey({
-      name: fileInfo.name,
-      cacheKey: this.#externalCacheKey,
-    });
-    this.#textDocumentCache.set(cacheKey, textDocument);
-
-    let storage: IStateStorage;
-    try {
-      storage = this.#getStateStorage();
-    } catch {
-      return;
-    }
-    const state = cloneEditorState(this.getState());
-    const pendingRestore = this.#pendingStateRestore;
-    if (
-      pendingRestore?.cacheKey === cacheKey &&
-      pendingRestore.textDocument === textDocument
-    ) {
-      this.#pendingStateRestore = undefined;
-      if (
-        textDocument.version === pendingRestore.documentVersion &&
-        this.#selections === pendingRestore.selections &&
-        state.view?.scrollLeft === pendingRestore.view?.scrollLeft &&
-        state.view?.scrollTop === pendingRestore.view?.scrollTop
-      ) {
-        return;
-      }
-      this.#writeState(storage, cacheKey, state, pendingRestore.completion);
-      return;
-    }
-
-    this.#writeState(storage, cacheKey, state);
-  }
-
-  // Writes for the same key stay ordered even when custom storage is async.
-  #writeState(
-    storage: IStateStorage,
-    cacheKey: string,
-    state: EditorState,
-    waitFor?: Promise<void>
-  ): void {
-    const previousWrite = this.#pendingStateWrites.get(cacheKey);
-    if (waitFor !== undefined || previousWrite !== undefined) {
-      let pending = waitFor ?? Promise.resolve();
-      if (previousWrite !== undefined) {
-        pending = pending.then(() => previousWrite);
-      }
-      this.#trackStateWrite(
-        cacheKey,
-        pending.then(() => storage.set(cacheKey, state))
-      );
-      return;
-    }
-
-    let result: void | Promise<void>;
-    try {
-      result = storage.set(cacheKey, state);
-    } catch {
-      return;
-    }
-    if (!isPromise(result)) {
-      return;
-    }
-
-    this.#trackStateWrite(cacheKey, result);
-  }
-
-  #trackStateWrite(cacheKey: string, result: Promise<void>): void {
-    const pending = result.catch(() => {});
-    this.#pendingStateWrites.set(cacheKey, pending);
-    void pending.finally(() => {
-      if (this.#pendingStateWrites.get(cacheKey) === pending) {
-        this.#pendingStateWrites.delete(cacheKey);
-      }
-    });
-  }
-
-  #restorePersistedState(
-    cacheKey: string,
-    textDocument: TextDocument<LAnnotation>
-  ): void {
-    const generation = ++this.#stateRestoreGeneration;
-    const documentVersion = textDocument.version;
-    const selections = this.#selections;
-    const view = this.getState().view;
-    let inputWatch: ViewportInputWatch | undefined;
-    const applyState = (state: EditorState | undefined): void => {
-      const currentView = this.getState().view;
-      // scrollTop is deliberately not part of this staleness check: the
-      // surface can legitimately adjust vertical scroll while an async read
-      // is in flight (height reconciliation, clamping), and that must not
-      // block the restore. User scrolls are detected by `inputWatch` instead.
-      if (
-        generation !== this.#stateRestoreGeneration ||
-        this.#textDocument !== textDocument ||
-        textDocument.version !== documentVersion ||
-        this.#selections !== selections ||
-        currentView?.scrollLeft !== view?.scrollLeft ||
-        this.#fileInfo === undefined ||
-        this.#externalCacheKey !== cacheKey
-      ) {
-        return;
-      }
-      // Once the user engages the viewport, the vertical position is theirs:
-      // neither the first-open reset nor a stored scrollTop may move it.
-      const userScrolled = inputWatch?.userScrolled() === true;
-      if (state === undefined) {
-        // No stored record for this cacheKey — the file is opened for the
-        // first time. Start the code scroller and the viewport at the top
-        // instead of inheriting whatever offset the previous file left in a
-        // viewport that stays mounted across switches.
-        this.#fileInstance?.setCodeScrollLeft(0);
-        if (!userScrolled) {
-          this.#setViewportScrollTop(0);
-        }
-        return;
-      }
-      const restored = cloneEditorState(state);
-      if (userScrolled && restored.view !== undefined) {
-        restored.view = { scrollLeft: restored.view.scrollLeft };
-      }
-      this.setState(restored);
-    };
-    const readState = (): void | Promise<void> => {
-      let result: EditorState | undefined | Promise<EditorState | undefined>;
-      try {
-        result = this.#getStateStorage().get(cacheKey);
-      } catch {
-        return;
-      }
-      if (isPromise(result)) {
-        return result.then(applyState).catch(() => {});
-      } else {
-        try {
-          applyState(result);
-        } catch {}
-      }
-    };
-
-    const pendingWrite = this.#pendingStateWrites.get(cacheKey);
-    const result =
-      pendingWrite === undefined ? readState() : pendingWrite.then(readState);
-    if (isPromise(result)) {
-      inputWatch = this.#watchViewportUserInput();
-      const pendingRestore = {
-        cacheKey,
-        textDocument,
-        documentVersion,
-        selections,
-        view,
-        completion: result.catch(() => {}),
-      };
-      this.#pendingStateRestore = pendingRestore;
-      void pendingRestore.completion.finally(() => {
-        inputWatch?.dispose();
-        if (this.#pendingStateRestore === pendingRestore) {
-          this.#pendingStateRestore = undefined;
-        }
-      });
-    }
-  }
-
-  #watchViewportUserInput(): ViewportInputWatch | undefined {
-    const viewport = this.#getScrollViewport();
-    if (!(viewport instanceof HTMLElement)) {
-      return undefined;
-    }
-    let scrolled = false;
-    const eventTypes = ['wheel', 'touchstart', 'mousedown'] as const;
-    const dispose = (): void => {
-      for (const type of eventTypes) {
-        viewport.removeEventListener(type, onInput, { capture: true });
-      }
-    };
-    const onInput = (): void => {
-      scrolled = true;
-      dispose();
-    };
-    for (const type of eventTypes) {
-      viewport.addEventListener(type, onInput, {
-        capture: true,
-        passive: true,
-      });
-    }
-    return { userScrolled: () => scrolled, dispose };
   }
 
   // Whether a zero-based document line has (or will have on scroll) a

@@ -2,7 +2,7 @@ import { afterAll, describe, expect, mock, spyOn, test } from 'bun:test';
 
 import { File, type FileOptions } from '../src/components/File';
 import { DEFAULT_THEMES } from '../src/constants';
-import { Editor, type EditorOptions, type IStateStorage } from '../src/edit';
+import { Editor, type EditorOptions } from '../src/edit';
 import {
   applyTextChangeToSelections,
   DirectionForward,
@@ -84,7 +84,6 @@ async function createEditorFixture(
   const initialFile: FileContents = {
     name: 'edits.ts',
     contents,
-    ...(editorOptions?.persistState === true ? { cacheKey: 'edits-file' } : {}),
     ...fileContents,
   };
 
@@ -107,6 +106,45 @@ async function createEditorFixture(
     window: dom.window as unknown as EditorTestWindow,
   };
 }
+
+describe('Editor file state', () => {
+  test('revisiting a file rebuilds its document from external contents', async () => {
+    const fixture = await createEditorFixture('alpha\nbravo\n');
+    try {
+      fixture.editor.applyEdits([
+        {
+          range: {
+            start: { line: 0, character: 0 },
+            end: { line: 0, character: 0 },
+          },
+          newText: 'X',
+        },
+      ]);
+      fixture.file.render({
+        file: { name: 'other.ts', contents: 'one\n', cacheKey: 'other' },
+        fileContainer: fixture.fileContainer,
+        forceRender: true,
+      });
+      await waitFor(() => fixture.editor.getFile()?.name === 'other.ts');
+
+      fixture.file.render({
+        file: {
+          name: 'edits.ts',
+          contents: 'alpha\nbravo\n',
+          cacheKey: 'edits-file',
+        },
+        fileContainer: fixture.fileContainer,
+        forceRender: true,
+      });
+      await waitFor(() => fixture.editor.getFile()?.name === 'edits.ts');
+
+      expect(fixture.editor.getText()).toBe('alpha\nbravo\n');
+      expect(fixture.editor.canUndo).toBe(false);
+    } finally {
+      fixture.cleanup();
+    }
+  });
+});
 
 // Drives the editor's undo/redo keyboard shortcut. The harness navigator
 // reports macOS, so the primary modifier is the meta key; `shift` selects redo.
@@ -157,138 +195,6 @@ function pressKey(
   content.dispatchEvent(event);
   return event;
 }
-
-function insertAtStart(editor: Editor<undefined>, text: string): void {
-  editor.applyEdits(
-    [
-      {
-        range: {
-          start: { line: 0, character: 0 },
-          end: { line: 0, character: 0 },
-        },
-        newText: text,
-      },
-    ],
-    true
-  );
-}
-
-async function renderFileAndWait(
-  fixture: EditorFixture,
-  fileContents: FileContents
-): Promise<void> {
-  fixture.file.render({
-    file: fileContents,
-    fileContainer: fixture.fileContainer,
-    forceRender: true,
-  });
-  await waitFor(() => {
-    const file = fixture.editor.getFile();
-    return (
-      file?.name === fileContents.name &&
-      file.cacheKey === fileContents.cacheKey
-    );
-  });
-}
-
-describe('Editor persisted file state', () => {
-  test('rejects enabling persistence for an attached unkeyed document', async () => {
-    const fixture = await createEditorFixture('alpha\n');
-    try {
-      expect(() => fixture.editor.setOptions({ persistState: true })).toThrow(
-        'Editor persistState requires a non-empty file.cacheKey for "edits.ts".'
-      );
-    } finally {
-      fixture.cleanup();
-    }
-  });
-
-  test('is disabled by default', async () => {
-    const storageCalls: string[] = [];
-    const storage: IStateStorage = {
-      get(cacheKey) {
-        storageCalls.push(`get:${cacheKey}`);
-        return undefined;
-      },
-      set(cacheKey) {
-        storageCalls.push(`set:${cacheKey}`);
-      },
-    };
-    const fixture = await createEditorFixture('alpha\nbravo\n', {
-      persistStateStorage: storage,
-    });
-
-    try {
-      insertAtStart(fixture.editor, 'X');
-      await renderFileAndWait(fixture, {
-        name: 'other.ts',
-        contents: 'one\n',
-        cacheKey: 'other',
-      });
-      await renderFileAndWait(fixture, {
-        name: 'edits.ts',
-        contents: 'alpha\nbravo\n',
-        cacheKey: 'edits-file',
-      });
-
-      expect(fixture.editor.getText()).toBe('alpha\nbravo\n');
-      expect(fixture.editor.canUndo).toBe(false);
-      expect(storageCalls).toEqual([]);
-    } finally {
-      fixture.cleanup();
-    }
-  });
-
-  test('uses a custom state storage with the explicit file key', async () => {
-    const states = new Map<string, ReturnType<Editor<undefined>['getState']>>();
-    const calls: string[] = [];
-    const storage: IStateStorage = {
-      get(cacheKey) {
-        calls.push(`get:${cacheKey}`);
-        return states.get(cacheKey);
-      },
-      set(cacheKey, state) {
-        calls.push(`set:${cacheKey}`);
-        states.set(cacheKey, state);
-      },
-    };
-    const fixture = await createEditorFixture('alpha\nbravo\n', {
-      persistState: true,
-      persistStateStorage: storage,
-    });
-
-    try {
-      fixture.editor.setSelections([
-        {
-          start: { line: 0, character: 2 },
-          end: { line: 0, character: 2 },
-          direction: 'none',
-        },
-      ]);
-      await renderFileAndWait(fixture, {
-        name: 'other.ts',
-        contents: 'one\n',
-        cacheKey: 'other-revision',
-      });
-      await renderFileAndWait(fixture, {
-        name: 'edits.ts',
-        contents: 'alpha\nbravo\n',
-        cacheKey: 'edits-file',
-      });
-
-      expect(calls).toContain('set:edits-file');
-      expect(calls).toContain('set:other-revision');
-      expect(calls.at(-1)).toBe('get:edits-file');
-      expect(fixture.editor.getState().selections?.[0]).toMatchObject({
-        start: { line: 0, character: 2 },
-        end: { line: 0, character: 2 },
-        direction: 0,
-      });
-    } finally {
-      fixture.cleanup();
-    }
-  });
-});
 
 describe('Editor.applyEdits selection sync', () => {
   test('reports normalized changes against the pre-edit document', async () => {

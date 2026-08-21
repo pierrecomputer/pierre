@@ -32,11 +32,7 @@ export interface FileContents {
   lang?: SupportedLanguages;
   /** Optional header passed to the jsdiff library's `createTwoFilesPatch`. */
   header?: string;
-  /**
-   * Identifies a file for caching. Optional for read-only rendering, but
-   * required and expected to be unique and stable when Editor `persistState`
-   * is enabled.
-   */
+  /** Identifies a file for worker pool highlight caching. */
   cacheKey?: string;
 }
 
@@ -1084,9 +1080,9 @@ export interface DiffsEditableComponent<
   revealLine?: (lineNumber: number) => boolean;
   /**
    * Attach an editor to this component. The returned detach closure receives
-   * `recycle: true` when the editor is only being released by a virtualized
-   * unmount (the session continues on remount) and no argument/false when the
-   * session ends.
+   * `recycle: true` for a temporary unmount, such as collapse or
+   * virtualization (the session continues on remount), and no argument/false
+   * when the session ends.
    */
   attachEditor: (
     editor: DiffsEditor<LAnnotation>
@@ -1150,7 +1146,6 @@ export type EditableInstance<T extends { type: string }> = T extends {
 interface SyncRenderViewBaseProps {
   highlighter: DiffsHighlighter;
   fileContainer: HTMLElement;
-  externalCacheKey: string | undefined;
   renderRange: RenderRange | undefined;
   /** Start fresh history instead of retaining or extending the current history. */
   resetHistory?: boolean;
@@ -1163,8 +1158,6 @@ export interface SyncFileRenderViewProps<
   lineAnnotations: LineAnnotation<LAnnotation>[] | undefined;
   /** Treat the supplied contents as an externally provided document update. */
   externalDocument?: boolean;
-  /** The external contents replaced by a restored persisted document. */
-  restoredDocument?: string;
 }
 
 export interface SyncDiffRenderViewProps<
@@ -1174,11 +1167,6 @@ export interface SyncDiffRenderViewProps<
   lineAnnotations: DiffLineAnnotation<LAnnotation>[] | undefined;
   /** Treat the supplied contents as an externally provided document update. */
   externalDocument?: boolean;
-  /**
-   * The private diff was initialized from a persisted document. The previous
-   * external contents are used only to report that restored document change.
-   */
-  restoredDocument?: string;
 }
 
 export type SyncRenderViewProps<LAnnotation> =
@@ -1186,10 +1174,6 @@ export type SyncRenderViewProps<LAnnotation> =
   | SyncDiffRenderViewProps<LAnnotation>;
 
 export interface DiffsEditor<LAnnotation> {
-  /** @internal Return cached text for the same persisted document identity. */
-  __getCachedDocumentContents?(
-    file: Pick<FileContents, 'cacheKey' | 'lang' | 'name'>
-  ): string | undefined;
   __postponeBgTokenizeToNextFrame(): void;
   /** @internal Capture focus intent before replacing the editable view. */
   __captureFocusForDOMReplacement(): void;

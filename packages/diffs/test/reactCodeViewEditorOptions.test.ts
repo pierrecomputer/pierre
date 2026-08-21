@@ -585,7 +585,8 @@ describe('React CodeView editor factory', () => {
         'removed contents'
       );
       expect(completions.get('removed')?.item).toBe(removedItem);
-      expect(collapsedEditor!.fullCleanUps).toBe(1);
+      expect(collapsedEditor!.recycleCleanUps).toBe(1);
+      expect(collapsedEditor!.fullCleanUps).toBe(0);
       expect(handle.current?.getEditor('collapsed')).toBe(collapsedEditor);
     } finally {
       await unmountRoot(root);
