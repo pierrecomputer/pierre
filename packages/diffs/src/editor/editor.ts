@@ -275,13 +275,13 @@ const MULTI_SELECTION_CLIPBOARD_TYPE =
 
 export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   /** Remove a retained file and its undo history from the registry. */
-  static disposeFile(documentKey: string): boolean {
-    return DocumentRegistry.disposeFile(documentKey);
+  static disposeFile(editHistoryKey: string): boolean {
+    return DocumentRegistry.disposeFile(editHistoryKey);
   }
 
   /** Remove a retained file diff and its undo history from the registry. */
-  static disposeFileDiff(documentKey: string): boolean {
-    return DocumentRegistry.disposeFileDiff(documentKey);
+  static disposeFileDiff(editHistoryKey: string): boolean {
+    return DocumentRegistry.disposeFileDiff(editHistoryKey);
   }
 
   /** Remove every retained document and undo history from the registry. */
@@ -346,7 +346,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   // is... and we can manage this without `as` ing thing
   #lineAnnotations?: DiffLineAnnotation<LAnnotation>[];
   #textDocument?: TextDocument<LAnnotation>;
-  readonly #documentKey?: string;
+  readonly #editHistoryKey?: string;
   readonly #documentKind: EditorDocumentKind;
   #retainedDiffSessionSnapshot?: RetainedDiffSessionSnapshot;
   #renderRange?: RenderRange;
@@ -434,16 +434,16 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   /**
    * @param documentKind The component surface this editor can attach to.
    * @param options Configure editor behavior and lifecycle callbacks.
-   * @param documentKey Keep this editor's document and undo history under this
-   * key so a later editor using the same kind and key can resume them.
+   * @param editHistoryKey Retain this editable draft and its undo/redo history
+   * in memory so a later editor using the same kind and key can resume them.
    */
   constructor(
     documentKind: EditorDocumentKind,
     options: EditorOptions<LAnnotation> = {},
-    documentKey?: string
+    editHistoryKey?: string
   ) {
     this.#documentKind = documentKind;
-    this.#documentKey = documentKey;
+    this.#editHistoryKey = editHistoryKey;
     this.#options = options;
   }
 
@@ -474,7 +474,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       );
     }
     this.#invalidateOnAttach();
-    const docKey = this.#documentKey;
+    const docKey = this.#editHistoryKey;
     const acquiredOwnership =
       docKey != null ? DocumentRegistry.acquire(docKind, docKey, this) : false;
     const registryAttachment =
@@ -813,12 +813,12 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   // teardown modes until explicitly disposed or evicted from the registry.
   cleanUp(reason: 'discard' | 'recycle' | 'complete' = 'discard'): void {
     const recycle = reason === 'recycle';
-    const docKey = this.#documentKey;
+    const historyKey = this.#editHistoryKey;
     const docKind = this.#documentKind;
     const textDocument = this.#textDocument;
     const fileInfo = this.#fileInfo;
     const fileInstance = this.#fileInstance;
-    if (!recycle && docKey != null) {
+    if (!recycle && historyKey != null) {
       if (docKind === 'file') {
         const registration: RegisteredFileDocument | undefined =
           textDocument != null && fileInfo != null
@@ -828,7 +828,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
                 fileInfo: { ...fileInfo },
               }
             : undefined;
-        DocumentRegistry.releaseFile(docKey, this, registration);
+        DocumentRegistry.releaseFile(historyKey, this, registration);
       } else {
         const capturedSnapshot = fileInstance?.__captureDocumentSessionState?.(
           textDocument?.canUndo === true || textDocument?.canRedo === true
@@ -846,7 +846,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
                 diffSession: cloneRetainedDiffSessionSnapshot(retainedSnapshot),
               }
             : undefined;
-        DocumentRegistry.releaseFileDiff(docKey, this, registration);
+        DocumentRegistry.releaseFileDiff(historyKey, this, registration);
       }
     }
     this.#invalidateOnAttach();
@@ -951,7 +951,9 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   __getDocumentContents(): FileContents | undefined {
     const fileInfo = this.#fileInfo;
     const textDocument = this.#textDocument;
-    return this.#documentKey != null && fileInfo != null && textDocument != null
+    return this.#editHistoryKey != null &&
+      fileInfo != null &&
+      textDocument != null
       ? { ...fileInfo, contents: textDocument.getText() }
       : undefined;
   }
@@ -959,7 +961,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   /** @internal */
   __getDocumentSessionState(): RetainedDiffSessionSnapshot | undefined {
     const snapshot = this.#retainedDiffSessionSnapshot;
-    return this.#documentKey != null && snapshot != null
+    return this.#editHistoryKey != null && snapshot != null
       ? cloneRetainedDiffSessionSnapshot(snapshot)
       : undefined;
   }
@@ -975,7 +977,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     const isDiff = 'fileDiff' in renderView;
     const fileOrDiff = isDiff ? renderView.fileDiff : renderView.file;
     const lineAnnotations = renderView.lineAnnotations;
-    const docKey = this.#documentKey;
+    const historyKey = this.#editHistoryKey;
     const externalDocument = renderView.externalDocument === true;
     const fileInstance = this.#fileInstance;
     if (fileInstance == null) {
@@ -1047,7 +1049,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     const shouldRebuildDocument =
       this.#textDocument === undefined ||
       this.#fileInfo === undefined ||
-      (docKey == null &&
+      (historyKey == null &&
         (this.#fileInfo.name !== fileOrDiff.name ||
           this.#textDocument.languageId !== languageId)) ||
       resetForExternalDocument;
@@ -1055,7 +1057,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#invalidateOnAttach();
       const { name, lang } = fileOrDiff;
       let textDocument =
-        docKey == null || resetForExternalDocument
+        historyKey == null || resetForExternalDocument
           ? undefined
           : this.#textDocument;
       if (textDocument == null) {

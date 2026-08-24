@@ -978,8 +978,8 @@ export function AgentUi({
 
   // One external diff baseline per changed file, created up front for worker
   // priming and reused on every visit so its cache identity remains stable.
-  // The shared editor's per-cacheKey document cache restores edited contents
-  // and undo history when a file is revisited.
+  // The per-path editHistoryKey restores edited contents and undo history when
+  // a file is revisited.
   const [diffs] = useState<Map<string, FileDiffMetadata>>(() => {
     const diffs = new Map<string, FileDiffMetadata>();
     for (const file of session.changedFiles) {
@@ -1006,9 +1006,7 @@ export function AgentUi({
 
   // Edited placeholder files listed in the Changes panel as "modified". The
   // entries carry zero snapshot counts because the tree's row decoration
-  // always finds live counts in `liveStats` for tracked placeholders; the
-  // edited contents themselves live in the shared editor's persist-state
-  // document cache, not here.
+  // always finds live counts in `liveStats` for tracked placeholders.
   const editedPlaceholderFiles = useMemo<AuiChangedFile[]>(
     () =>
       editedPlaceholders.map((path) => {
@@ -1039,7 +1037,6 @@ export function AgentUi({
 
   const editorOptions = useMemo<EditorOptions<undefined>>(
     () => ({
-      persistState: true,
       enabledSelectionAction: true,
       renderSelectionAction(selectionAction) {
         const container = document.createElement('div');
@@ -1083,10 +1080,10 @@ export function AgentUi({
       onAttach(editor) {
         // Selecting a file leaves keyboard focus in the tree, so undo/redo
         // shortcuts would silently go nowhere until the user clicks back into
-        // the code — reading as a lost edit history even though the
-        // persist-state document cache restored it. When a file switch lands,
-        // hand focus to the editor; preventScroll keeps the restored viewport
-        // position. The initial auto-opened file must not steal page focus.
+        // the code — reading as a lost edit history even though the retained
+        // document restored it. When a file switch lands, hand focus to the
+        // editor; preventScroll keeps the restored viewport position. The
+        // initial auto-opened file must not steal page focus.
         const target = activeTargetRef.current;
         if (
           lastAttachedPathRef.current !== null &&
@@ -1146,6 +1143,10 @@ export function AgentUi({
     activePath != null && !editedPathsRef.current.has(activePath)
       ? prerenderedDiffs?.[activePath]
       : undefined;
+  const fileDiffEditHistoryKey =
+    activePath != null ? `homepage-agent:file-diff:${activePath}` : undefined;
+  const fileEditHistoryKey =
+    activePath != null ? `homepage-agent:file:${activePath}` : undefined;
 
   const breadcrumbSegments = activePath != null ? activePath.split('/') : [];
 
@@ -1239,16 +1240,16 @@ export function AgentUi({
                 options={{ ...AUI_DIFF_OPTIONS, theme }}
                 prerenderedHTML={activePrerenderedHTML}
                 edit
+                editHistoryKey={fileDiffEditHistoryKey}
                 editorOptions={editorOptions}
                 onEditChange={handleEditChange}
               />
             ) : placeholderContents != null && activePath != null ? (
               // Editable view for explorer files that aren't part of the change
               // set (e.g. the root README or a generated stub). Always mounts
-              // with the pristine placeholder contents: `cacheKey` is required
-              // by the shared editor's `persistState`, whose per-file document
-              // cache substitutes any previously edited contents (and their
-              // undo history) when the surface re-attaches.
+              // with the latest placeholder contents. The per-path edit history
+              // restores undo history when the surface re-attaches; cacheKey
+              // remains only a render-cache identity.
               // Highlighted on the main thread since this File is mounted
               // dynamically outside the editable surface's worker pool.
               <File
@@ -1267,6 +1268,7 @@ export function AgentUi({
                 }}
                 disableWorkerPool
                 edit
+                editHistoryKey={fileEditHistoryKey}
                 editorOptions={editorOptions}
                 onEditChange={handleEditChange}
               />

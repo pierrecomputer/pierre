@@ -518,19 +518,25 @@ export interface CodeViewOptions<LAnnotation>
   onSelectedLinesChange?(selection: CodeViewLineSelection | null): void;
   layout?: CodeViewLayout;
   /**
+   * Return an in-memory retention key for an item's editable draft and
+   * undo/redo history. Called only when CodeView creates the item's editor.
+   */
+  getEditHistoryKey?(item: CodeViewItem<LAnnotation>): string | undefined;
+  /**
    * Create an editor for an item entering edit mode (`edit: true`). Providing
    * this option is what enables item editing. Pass the given options into the
-   * editor constructor — `new Editor(documentKind, options)` — so CodeView can
-   * route document changes to `onItemEditChange`. CodeView owns the returned
-   * editor's lifecycle: it attaches when the edited item mounts, re-attaches
-   * across virtualization unmounts and collapse (which suspend the session),
-   * and tears the editor down when the session ends (edit off or removal).
-   * Returning undefined declines the attach; CodeView retries on later
-   * render passes.
+   * editor constructor — `new Editor(documentKind, options, editHistoryKey)` —
+   * so CodeView can route document changes to `onItemEditChange` and retain
+   * history when requested. CodeView owns the returned editor's lifecycle: it
+   * attaches when the edited item mounts, re-attaches across virtualization
+   * unmounts and collapse (which suspend the session), and tears the editor
+   * down when the session ends (edit off or removal). Returning undefined
+   * declines the attach; CodeView retries on later render passes.
    */
   createEditor?(
     documentKind: EditorDocumentKind,
-    options: CodeViewCreateEditorOptions<LAnnotation>
+    options: CodeViewCreateEditorOptions<LAnnotation>,
+    editHistoryKey?: string
   ): DiffsEditor<LAnnotation> | undefined;
   /**
    * Called with the editor's `EditorChangeEvent` and the owning item whenever
@@ -2093,7 +2099,8 @@ export class CodeView<LAnnotation = undefined> {
               }
               this.options.onItemEditChange?.(event, latest.item);
             },
-          }
+          },
+          this.options.getEditHistoryKey?.(item.item)
         );
         if (editor == null) {
           return;

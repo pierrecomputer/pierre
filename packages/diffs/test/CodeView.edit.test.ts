@@ -58,10 +58,13 @@ function createEditorHarness({
   attachmentError?: Error;
 } = {}) {
   const editors: StubEditor[] = [];
+  const editHistoryKeys: Array<string | undefined> = [];
   const createEditor = (
     _documentKind: EditorDocumentKind,
-    options: CodeViewCreateEditorOptions<undefined>
+    options: CodeViewCreateEditorOptions<undefined>,
+    editHistoryKey?: string
   ): StubEditor => {
+    editHistoryKeys.push(editHistoryKey);
     let detach: ((recycle?: boolean) => void) | undefined;
     const editor = {
       edits: [],
@@ -107,7 +110,7 @@ function createEditorHarness({
     editors.push(editor);
     return editor;
   };
-  return { editors, createEditor };
+  return { editors, createEditor, editHistoryKeys };
 }
 
 // Write text into an attached instance's private session file, standing in
@@ -312,6 +315,63 @@ describe('CodeView item edit mode', () => {
     } finally {
       await wait(0);
       viewer.cleanUp();
+      cleanup();
+    }
+  });
+
+  test('resolves an edit history key only when creating an item editor', async () => {
+    const { cleanup } = installDom();
+    const { createEditor, editHistoryKeys, editors } = createEditorHarness();
+    const resolvedIds: string[] = [];
+    let revision = 'first';
+    const viewer = new CodeView({
+      createEditor,
+      getEditHistoryKey(item) {
+        resolvedIds.push(item.id);
+        return `${item.id}:${revision}`;
+      },
+    });
+    const item = makeEditFileItem('a');
+
+    try {
+      viewer.setup(createRoot());
+      await renderItems(viewer, [item]);
+      expect(editHistoryKeys).toEqual(['a:first']);
+      expect(resolvedIds).toEqual(['a']);
+
+      expect(viewer.updateItemId('a', 'renamed')).toBe(true);
+      const renamed = viewer.getItem('renamed')!;
+      await applyItemUpdate(viewer, {
+        ...renamed,
+        collapsed: true,
+        version: 1,
+      });
+      await applyItemUpdate(viewer, {
+        ...renamed,
+        collapsed: false,
+        version: 2,
+      });
+      expect(editors).toHaveLength(1);
+      expect(editHistoryKeys).toEqual(['a:first']);
+      expect(resolvedIds).toEqual(['a']);
+
+      await applyItemUpdate(viewer, {
+        ...renamed,
+        edit: false,
+        version: 3,
+      });
+      revision = 'second';
+      await applyItemUpdate(viewer, {
+        ...renamed,
+        edit: true,
+        version: 4,
+      });
+      expect(editors).toHaveLength(2);
+      expect(editHistoryKeys).toEqual(['a:first', 'renamed:second']);
+      expect(resolvedIds).toEqual(['a', 'renamed']);
+    } finally {
+      viewer.cleanUp();
+      await wait(0);
       cleanup();
     }
   });

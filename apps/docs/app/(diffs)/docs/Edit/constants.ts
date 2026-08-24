@@ -185,13 +185,13 @@ root.style.overflow = 'auto';
 
 const viewer = new CodeView<ThreadMetadata>({
   theme: { dark: 'pierre-dark', light: 'pierre-light' },
-  createEditor(documentKind, options) {
+  createEditor(documentKind, options, editHistoryKey) {
     return new Editor(documentKind, {
       ...options,
       onAttach(editor) {
         editor.focus({ lineNumber: 'first-visible', preventScroll: true });
       },
-    });
+    }, editHistoryKey);
   },
   // nextItem is the accepted replacement CodeView built — new fileDiff and
   // annotations, edit: false, bumped version. Re-key the frozen event's value,
@@ -375,7 +375,8 @@ import { useCallback, useMemo } from 'react';
 // surface remounts.
 export function PersistedEditor({ file }: { file: FileContents }) {
   const createEditor = useCallback<CreateEditor<undefined>>(
-    (documentKind, options) => new Editor(documentKind, options),
+    (documentKind, options, editHistoryKey) =>
+      new Editor(documentKind, options, editHistoryKey),
     []
   );
   const editorOptions = useMemo<EditorOptions<undefined>>(
@@ -465,9 +466,10 @@ const file: FileContents = {
 
 function createEditor(
   documentKind: 'file' | 'file-diff',
-  options: EditorOptions<undefined>
+  options: EditorOptions<undefined>,
+  editHistoryKey?: string
 ) {
-  return new Editor(documentKind, options);
+  return new Editor(documentKind, options, editHistoryKey);
 }
 
 export function EditableFileWithHistoryToolbar() {
@@ -519,11 +521,11 @@ export const EDIT_REACT_CREATE_EDITOR_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
     name: 'editor_react_create_editor.tsx',
     contents: `const createEditor = useCallback<CreateEditor<undefined>>(
-  (documentKind, surfaceOptions) =>
+  (documentKind, surfaceOptions, editHistoryKey) =>
     new Editor(documentKind, {
       ...defaultEditorOptions,
       ...surfaceOptions,
-    }),
+    }, editHistoryKey),
   []
 );
 
@@ -543,6 +545,7 @@ return (
     <File
       file={file}
       edit={editing}
+      editHistoryKey="review:example.ts"
       editorOptions={editorOptions}
       onEditChange={handleChange}
     />
@@ -607,9 +610,10 @@ const virtualizerStyle = {
 
 function createEditor(
   documentKind: 'file' | 'file-diff',
-  options: EditorOptions<undefined>
+  options: EditorOptions<undefined>,
+  editHistoryKey?: string
 ) {
-  return new Editor(documentKind, options);
+  return new Editor(documentKind, options, editHistoryKey);
 }
 
 export function EditableFile() {
@@ -729,9 +733,10 @@ const virtualizerStyle = {
 
 function createEditor(
   documentKind: 'file' | 'file-diff',
-  options: EditorOptions<ThreadMetadata>
+  options: EditorOptions<ThreadMetadata>,
+  editHistoryKey?: string
 ) {
-  return new Editor(documentKind, options);
+  return new Editor(documentKind, options, editHistoryKey);
 }
 
 export function EditableFileDiff() {
@@ -875,9 +880,10 @@ const editorOptions: EditorOptions<ThreadMetadata> = {
 
 function createEditor(
   documentKind: 'file' | 'file-diff',
-  options: EditorOptions<ThreadMetadata>
+  options: EditorOptions<ThreadMetadata>,
+  editHistoryKey?: string
 ) {
-  return new Editor(documentKind, options);
+  return new Editor(documentKind, options, editHistoryKey);
 }
 
 export function EditableCodeView() {
@@ -928,6 +934,7 @@ export function EditableCodeView() {
         items={items}
         style={codeViewStyle}
         editorOptions={editorOptions}
+        getEditHistoryKey={(item) => \`review:\${item.id}\`}
         onItemEditComplete={commitEdit}
         renderAnnotation={(annotation) => (
           <div>Thread {annotation.metadata.id}</div>
@@ -1002,9 +1009,10 @@ const highlighterOptions = {
 
 function createEditor(
   documentKind: 'file' | 'file-diff',
-  options: EditorOptions<undefined>
+  options: EditorOptions<undefined>,
+  editHistoryKey?: string
 ) {
-  return new Editor(documentKind, options);
+  return new Editor(documentKind, options, editHistoryKey);
 }
 
 export function EditableFileWithWorkerPool() {
@@ -1134,13 +1142,13 @@ export const EDIT_ON_ATTACH_VANILLA_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
     name: 'editor_on_attach_vanilla.ts',
     contents: `const viewer = new CodeView({
-  createEditor(documentKind, options) {
+  createEditor(documentKind, options, editHistoryKey) {
     return new Editor(documentKind, {
       ...options,
       onAttach(editor) {
         editor.focus({ lineNumber: 'first-visible', preventScroll: true });
       },
-    });
+    }, editHistoryKey);
   },
 });`,
   },
@@ -1198,7 +1206,8 @@ fileInstance.render({
   containerWrapper: document.body,
 });
 
-const editor = new Editor('file');
+const editHistoryKey = 'review:example.ts';
+const editor = new Editor('file', {}, editHistoryKey);
 
 // Merge partial options at runtime. Existing fields are preserved.
 // onChange and similar handlers read from the latest options on each call;
@@ -1297,6 +1306,9 @@ editor.canRedo;
 // Undo the last edit or redo the last undone edit. No-ops when history is empty.
 editor.undo();
 editor.redo();
+
+// Release the retained draft and history when this file is no longer needed.
+Editor.disposeFile(editHistoryKey);
 `,
   },
   options,
@@ -1343,9 +1355,10 @@ const virtualizerStyle = {
 
 function createEditor(
   documentKind: 'file' | 'file-diff',
-  options: EditorOptions<undefined>
+  options: EditorOptions<undefined>,
+  editHistoryKey?: string
 ) {
-  return new Editor(documentKind, options);
+  return new Editor(documentKind, options, editHistoryKey);
 }
 
 export function EditableMultiFileDiff() {

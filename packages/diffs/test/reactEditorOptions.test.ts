@@ -98,9 +98,8 @@ class AttachmentFailingEditor extends TrackedEditor {
   }
 
   override edit<T extends DiffsEditableComponent<undefined>>(
-    fileInstance: EditableInstance<T>
+    _fileInstance: EditableInstance<T>
   ): () => void {
-    super.edit(fileInstance);
     throw this.attachmentError;
   }
 }
@@ -179,9 +178,22 @@ async function captureRenderError(
       await wait(10);
     });
   } catch (error) {
-    return error;
+    return unwrapRenderError(error);
   }
   return undefined;
+}
+
+function unwrapRenderError(error: unknown): unknown {
+  if (!(error instanceof AggregateError)) {
+    return error;
+  }
+  for (const nestedError of error.errors) {
+    const unwrapped = unwrapRenderError(nestedError);
+    if (unwrapped instanceof Error && unwrapped.message !== '') {
+      return unwrapped;
+    }
+  }
+  return error;
 }
 
 function insertAtStart(editor: Editor<undefined>, newText: string): void {
@@ -205,7 +217,8 @@ function createEditableSurfaceElement(
   surface: ReactEditableSurface,
   edit = true,
   editorOptions?: EditorOptions<undefined>,
-  onInstance?: (instance: ReactEditableSurfaceInstance) => void
+  onInstance?: (instance: ReactEditableSurfaceInstance) => void,
+  editHistoryKey?: string
 ): ReactElement {
   const oldFile = { name: 'edit.ts', contents: 'const value = 1;\n' };
   if (surface === 'File') {
@@ -221,6 +234,7 @@ function createEditableSurfaceElement(
     return createElement(ReactFileComponent, {
       disableWorkerPool: true,
       edit,
+      editHistoryKey,
       editorOptions,
       file: oldFile,
       options,
@@ -238,6 +252,7 @@ function createEditableSurfaceElement(
   return createElement(ReactFileDiffComponent, {
     disableWorkerPool: true,
     edit,
+    editHistoryKey,
     editorOptions,
     fileDiff: parseDiffFromFile(oldFile, {
       name: 'edit.ts',
@@ -533,6 +548,128 @@ describe('React editor factory lifecycle', () => {
   }
 
   for (const surface of ['File', 'FileDiff'] as const) {
+    test(`${surface} forwards editHistoryKey when creating its editor`, async () => {
+      const { cleanup } = installDom();
+      const cleanupActEnvironment = installReactActEnvironment();
+      const container = document.createElement('div');
+      document.body.appendChild(container);
+      const editHistoryKey = `${surface}-history`;
+      const editors: TrackedEditor[] = [];
+      const factory = mock(
+        (
+          documentKind: EditorDocumentKind,
+          options: EditorOptions<undefined>,
+          historyKey?: string
+        ) => {
+          const editor = new TrackedEditor(documentKind, options, historyKey);
+          editors.push(editor);
+          return editor;
+        }
+      );
+      let root: Root | undefined;
+
+      try {
+        root = createReactRoot(container);
+        await act(async () => {
+          root!.render(
+            createElement(
+              EditProviderComponent,
+              { createEditor: factory },
+              createEditableSurfaceElement(
+                surface,
+                true,
+                {},
+                undefined,
+                editHistoryKey
+              )
+            )
+          );
+          await wait(10);
+        });
+        await waitFor(() => editors[0]?.getFile() !== undefined);
+        expect(factory).toHaveBeenCalledTimes(1);
+        expect(factory.mock.calls[0]?.[2]).toBe(editHistoryKey);
+        expect(editors[0]?.cleanUpCount).toBe(0);
+      } finally {
+        await unmountRoot(root);
+        if (surface === 'File') {
+          Editor.disposeFile(editHistoryKey);
+        } else {
+          Editor.disposeFileDiff(editHistoryKey);
+        }
+        cleanupActEnvironment();
+        cleanup();
+      }
+    });
+  }
+
+  for (const surface of ['File', 'FileDiff'] as const) {
+    test(`${surface} rejects concurrent surfaces using the same editHistoryKey`, async () => {
+      const { cleanup } = installDom();
+      const cleanupActEnvironment = installReactActEnvironment();
+      const container = document.createElement('div');
+      document.body.appendChild(container);
+      const editHistoryKey = `${surface}-shared-history`;
+      const editorOptions: EditorOptions<undefined> = {};
+      const editors: TrackedEditor[] = [];
+      const factory: CreateEditor<undefined> = (
+        documentKind,
+        options,
+        historyKey
+      ) => {
+        const editor = new TrackedEditor(documentKind, options, historyKey);
+        editors.push(editor);
+        return editor;
+      };
+      let root: Root | undefined;
+
+      try {
+        root = createReactRoot(container);
+        const renderError = await captureRenderError(
+          root,
+          createElement(
+            EditProviderComponent,
+            { createEditor: factory },
+            createElement(
+              'div',
+              null,
+              createEditableSurfaceElement(
+                surface,
+                true,
+                editorOptions,
+                undefined,
+                editHistoryKey
+              ),
+              createEditableSurfaceElement(
+                surface,
+                true,
+                editorOptions,
+                undefined,
+                editHistoryKey
+              )
+            )
+          )
+        );
+        expect(renderError).toBeInstanceOf(Error);
+        expect((renderError as Error).message).toBe(
+          `Editor: editHistoryKey "${editHistoryKey}" is already attached to another editor`
+        );
+        expect(editors.length).toBeGreaterThan(1);
+        expect(new Set(editors).size).toBe(editors.length);
+      } finally {
+        await unmountRoot(root);
+        if (surface === 'File') {
+          Editor.disposeFile(editHistoryKey);
+        } else {
+          Editor.disposeFileDiff(editHistoryKey);
+        }
+        cleanupActEnvironment();
+        cleanup();
+      }
+    });
+  }
+
+  for (const surface of ['File', 'FileDiff'] as const) {
     test(`${surface} onEditChange prop receives editor change events and swaps mid-session`, async () => {
       const { cleanup } = installDom();
       const cleanupActEnvironment = installReactActEnvironment();
@@ -720,8 +857,9 @@ describe('React editor factory lifecycle', () => {
         (_event: EditorChangeEvent<undefined, 'file' | 'diff'>) => {}
       );
       let root: Root | undefined;
-      const factory = mock((documentKind, options) => {
-        const editor = new TrackedEditor(documentKind, options);
+      const editHistoryKey = `${wrapper}-history`;
+      const factory = mock((documentKind, options, historyKey?: string) => {
+        const editor = new TrackedEditor(documentKind, options, historyKey);
         editors.push(editor);
         return editor;
       });
@@ -730,6 +868,7 @@ describe('React editor factory lifecycle', () => {
       const sharedProps = {
         disableWorkerPool: true,
         edit: true,
+        editHistoryKey,
         editorOptions: { onChange },
         options: {
           disableFileHeader: true,
@@ -772,6 +911,7 @@ describe('React editor factory lifecycle', () => {
         expect(factory).toHaveBeenCalledTimes(1);
         expect(factory.mock.calls[0]?.[0]).toBe('file-diff');
         expect(factory.mock.calls[0]?.[1].onChange).toBe(onChange);
+        expect(factory.mock.calls[0]?.[2]).toBe(editHistoryKey);
         insertAtStart(editors[0], '/* wrapper */');
         expect(onChange).toHaveBeenCalledTimes(1);
         expect(onChange.mock.calls[0]?.[0].file.contents).toBe(
@@ -783,6 +923,7 @@ describe('React editor factory lifecycle', () => {
         expect(editors[0]?.cleanUpCount).toBeGreaterThan(0);
       } finally {
         await unmountRoot(root);
+        Editor.disposeFileDiff(editHistoryKey);
         cleanupActEnvironment();
         cleanup();
       }
@@ -907,7 +1048,7 @@ describe('React editor factory lifecycle', () => {
   });
 
   for (const surface of ['File', 'FileDiff'] as const) {
-    test(`${surface} reports missing providers and invalid factories`, async () => {
+    test(`${surface} reports a missing provider`, async () => {
       const { cleanup } = installDom();
       const cleanupActEnvironment = installReactActEnvironment();
       const container = document.createElement('div');
@@ -925,22 +1066,6 @@ describe('React editor factory lifecycle', () => {
           surface === 'File'
             ? 'File: EditContext is not attached'
             : 'FileDiff: EditContext is not attached'
-        );
-
-        await unmountRoot(root);
-        root = undefined;
-        root = createReactRoot(container);
-        const invalidFactoryError = await captureRenderError(
-          root,
-          createElement(
-            EditProviderComponent,
-            { createEditor: () => undefined as never },
-            createEditableSurfaceElement(surface)
-          )
-        );
-        expect(invalidFactoryError).toBeInstanceOf(Error);
-        expect((invalidFactoryError as Error).message).toBe(
-          `${surface}: EditProvider.createEditor must return an editor instance`
         );
       } finally {
         await unmountRoot(root);
@@ -979,14 +1104,17 @@ describe('React editor factory lifecycle', () => {
           )
         );
         expect(renderError).toBe(attachmentError);
-        expect(editors).toHaveLength(1);
-        expect(editors[0]?.cleanUpCount).toBe(1);
+        expect(editors.length).toBeGreaterThan(0);
+        expect(editors.every((editor) => editor.cleanUpCount > 0)).toBe(true);
+        const cleanUpCounts = editors.map((editor) => editor.cleanUpCount);
         await wait(0);
         expect(onAttach).not.toHaveBeenCalled();
 
         await unmountRoot(root);
         root = undefined;
-        expect(editors[0]?.cleanUpCount).toBe(1);
+        expect(editors.map((editor) => editor.cleanUpCount)).toEqual(
+          cleanUpCounts
+        );
       } finally {
         await unmountRoot(root);
         cleanupActEnvironment();
@@ -1116,15 +1244,37 @@ describe('React editor factory lifecycle', () => {
 
       await waitFor(() => onAttach.mock.calls.length >= 2);
       await wait(0);
-      // The provider caches editors by options-object identity, so
-      // StrictMode's simulated destroy/re-create pass reuses each surface's
-      // editor instead of leaking a second one: exactly one editor per
-      // surface, cleaned up by the destroy pass and re-attached after it.
-      expect(editors).toHaveLength(2);
+      // StrictMode's simulated destroy/re-create pass gets fresh editors from
+      // the owner factory. The first pair is cleaned before the committed pair
+      // attaches, and the provider retains none of them.
+      expect(editors).toHaveLength(4);
       expect(onAttach).toHaveBeenCalledTimes(2);
-      expect(new Set(onAttach.mock.calls.map(([editor]) => editor))).toEqual(
-        new Set(editors)
+      const attachedEditors = onAttach.mock.calls.map(
+        ([editor]) => editor as TrackedEditor
       );
+      expect(new Set(attachedEditors).size).toBe(2);
+      expect(attachedEditors.every((editor) => editors.includes(editor))).toBe(
+        true
+      );
+      expect(
+        editors
+          .filter((editor) => !attachedEditors.includes(editor))
+          .every((editor) => editor.cleanUpCount > 0)
+      ).toBe(true);
+      for (const editor of attachedEditors) {
+        const character = editor.getText().indexOf('\n');
+        expect(() =>
+          editor.applyEdits([
+            {
+              range: {
+                start: { line: 0, character },
+                end: { line: 0, character },
+              },
+              newText: ' // strict replay',
+            },
+          ])
+        ).not.toThrow();
+      }
 
       await unmountRoot(root);
       root = undefined;

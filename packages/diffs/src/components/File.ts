@@ -669,7 +669,12 @@ export class File<
       );
     }
     this.hydrateElements(fileContainer, prerenderedHTML);
+    // An editor attached before hydration may carry a retained keyed document.
+    // Render through the private edit session instead of adopting external
+    // markup, so the restored document owns the first hydrated paint.
+    const forceEditorRender = this.editor != null;
     if (
+      forceEditorRender ||
       shouldRenderCode(this.pre, file, this.options.collapsed) ||
       shouldRenderHeader(
         this.headerElement,
@@ -677,7 +682,11 @@ export class File<
         this.options.disableFileHeader
       )
     ) {
-      this.render({ ...props, preventEmit: true });
+      this.render({
+        ...props,
+        forceRender: forceEditorRender || props.forceRender,
+        preventEmit: true,
+      });
     }
     // Otherwise orchestrate our setup.
     else {
@@ -821,7 +830,9 @@ export class File<
   }
 
   public attachEditor(editor: DiffsEditor<LAnnotation>): () => void {
-    this.editor?.cleanUp();
+    if (this.editor != null) {
+      throw new Error('File.attachEditor: an editor is already attached');
+    }
     this.editor = editor;
     this.editSessionAnnotations ??= adoptEditSessionAnnotations(
       this.lineAnnotations,

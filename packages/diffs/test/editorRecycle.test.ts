@@ -828,7 +828,7 @@ describe('Editor document registry', () => {
       firstEditor.edit(first);
       insertAtStart(firstEditor, 'X');
       expect(() => secondEditor.edit(second)).toThrow(
-        'documentKey "shared" is already attached to another editor'
+        'editHistoryKey "shared" is already attached to another editor'
       );
 
       firstEditor.cleanUp('discard');
@@ -860,7 +860,7 @@ describe('Editor document registry', () => {
 
       expect(() => editor.edit(failing)).toThrow('attachment failed');
       expect(() => competingEditor.edit(competing)).toThrow(
-        'documentKey "recycled" is already attached to another editor'
+        'editHistoryKey "recycled" is already attached to another editor'
       );
 
       editor.edit(resumed);
@@ -952,7 +952,7 @@ describe('Editor document registry', () => {
 
       competingEditor.edit(competing);
       expect(() => editor.edit(retry)).toThrow(
-        'documentKey "failed" is already attached to another editor'
+        'editHistoryKey "failed" is already attached to another editor'
       );
 
       competingEditor.cleanUp('discard');
@@ -1251,7 +1251,7 @@ describe('Editor document registry', () => {
       }
 
       expect(() => competingEditor.edit(competing)).toThrow(
-        'documentKey "active" is already attached to another editor'
+        'editHistoryKey "active" is already attached to another editor'
       );
       activeEditor.cleanUp('discard');
       active.cleanUp();

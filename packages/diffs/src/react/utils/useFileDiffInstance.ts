@@ -19,6 +19,7 @@ import type { EditorChangeEvent, EditorOptions } from '../../edit';
 import type { GetHoveredLineResult } from '../../managers/InteractionManager';
 import type {
   DiffLineAnnotation,
+  DiffsEditor,
   FileContents,
   FileDiffMetadata,
   SelectedLineRange,
@@ -65,6 +66,7 @@ interface UseFileDiffInstanceProps<LAnnotation> {
   newFile?: FileContents | null;
   options: FileDiffOptions<LAnnotation> | undefined;
   editorOptions: EditorOptions<LAnnotation> | undefined;
+  editHistoryKey: string | undefined;
   lineAnnotations: DiffLineAnnotation<LAnnotation>[] | undefined;
   selectedLines: SelectedLineRange | null | undefined;
   prerenderedHTML: string | undefined;
@@ -90,6 +92,7 @@ export function useFileDiffInstance<LAnnotation>({
   newFile,
   options,
   editorOptions,
+  editHistoryKey,
   lineAnnotations,
   selectedLines,
   prerenderedHTML,
@@ -170,6 +173,13 @@ export function useFileDiffInstance<LAnnotation>({
   const instanceRef = useRef<
     FileDiff<LAnnotation> | VirtualizedFileDiff<LAnnotation> | null
   >(null);
+  const disposeEditorRef = useRef<() => void>(null);
+  const getEditor = useStableCallback(() => {
+    if (createEditor == null) {
+      throw new Error('FileDiff: EditContext is not attached');
+    }
+    return createEditor('file-diff', editorOptions ?? {}, editHistoryKey);
+  });
   const ref = useStableCallback((fileContainer: HTMLElement | null) => {
     if (fileContainer != null) {
       if (instanceRef.current != null) {
@@ -206,6 +216,9 @@ export function useFileDiffInstance<LAnnotation>({
           true
         );
       }
+      if (edit && disposeEditorRef.current == null) {
+        disposeEditorRef.current = applyEdit(instanceRef.current, getEditor);
+      }
       void instanceRef.current.hydrate({
         fileDiff: effectiveFileDiff,
         fileContainer,
@@ -220,6 +233,7 @@ export function useFileDiffInstance<LAnnotation>({
       }
       instanceRef.current.cleanUp();
       instanceRef.current = null;
+      disposeEditorRef.current = null;
     }
   });
 
@@ -240,12 +254,18 @@ export function useFileDiffInstance<LAnnotation>({
     const forceRender =
       newOptions !== undefined &&
       !areOptionsEqual(instance.options, newOptions);
+    instance.setOptions(newOptions);
+    // Detach editor before rendering if required
+    if (!edit && disposeEditorRef.current != null) {
+      const { current: disposeEditor } = disposeEditorRef;
+      disposeEditorRef.current = null;
+      disposeEditor();
+    }
     const resolved = resolveAcceptedValues(
       effectiveFileDiff,
       lineAnnotations,
       acceptedCache
     );
-    instance.setOptions(newOptions);
     void instance.render({
       forceRender,
       fileDiff: resolved.fileDiff,
@@ -254,28 +274,11 @@ export function useFileDiffInstance<LAnnotation>({
     if (selectedLines !== undefined) {
       instance.setSelectedLines(selectedLines);
     }
-  });
-
-  useIsomorphicLayoutEffect(() => {
-    if (edit && instanceRef.current != null) {
-      if (createEditor === undefined) {
-        throw new Error('FileDiff: EditContext is not attached');
-      }
-      const editor = createEditor('file-diff', editorOptions ?? {});
-      if (editor == null) {
-        throw new Error(
-          'FileDiff: EditProvider.createEditor must return an editor instance'
-        );
-      }
-      try {
-        return editor.edit(instanceRef.current);
-      } catch (error) {
-        editor.cleanUp();
-        throw error;
-      }
+    // Attach editor after rendering if required
+    if (edit && disposeEditorRef.current == null) {
+      disposeEditorRef.current = applyEdit(instance, getEditor);
     }
-    return undefined;
-  }, [edit]);
+  });
 
   const getHoveredLine = useCallback(():
     | GetHoveredLineResult<'diff'>
@@ -393,4 +396,17 @@ function mergeFileDiffOptions<LAnnotation>({
     onEditChange,
     onEditComplete,
   };
+}
+
+function applyEdit<LAnnotation>(
+  instance: FileDiff<LAnnotation>,
+  getEditor: () => DiffsEditor<LAnnotation>
+): () => void {
+  const editor = getEditor();
+  try {
+    return editor.edit(instance);
+  } catch (error) {
+    editor.cleanUp();
+    throw error;
+  }
 }

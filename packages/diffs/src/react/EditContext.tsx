@@ -2,7 +2,7 @@
 'use client';
 
 import type { Context, PropsWithChildren } from 'react';
-import { createContext, useContext, useRef } from 'react';
+import { createContext, useContext } from 'react';
 
 import type { EditorOptions } from '../edit';
 import type { DiffsEditor, EditorDocumentKind } from '../types';
@@ -11,7 +11,8 @@ import { useStableCallback } from './utils/useStableCallback';
 /** Creates an Editor. Components manage the instance lifecycle. */
 export type CreateEditor<LAnnotation> = (
   documentKind: EditorDocumentKind,
-  options: EditorOptions<LAnnotation>
+  options: EditorOptions<LAnnotation>,
+  editHistoryKey?: string
 ) => DiffsEditor<LAnnotation>;
 
 export interface EditProviderProps<LAnnotation> {
@@ -26,31 +27,13 @@ export function EditProvider<LAnnotation>({
   children,
   createEditor,
 }: PropsWithChildren<EditProviderProps<LAnnotation>>): React.JSX.Element {
-  // Editors cached by options-object identity: an edit session that restarts
-  // with the same `editorOptions`
-  const editorCacheRef = useRef(
-    new Map<
-      EditorDocumentKind,
-      WeakMap<EditorOptions<LAnnotation>, DiffsEditor<LAnnotation>>
-    >([
-      ['file', new WeakMap()],
-      ['file-diff', new WeakMap()],
-    ])
-  );
   const stableCreateEditor = useStableCallback(
     (
       documentKind: EditorDocumentKind,
-      options: EditorOptions<LAnnotation>
-    ): DiffsEditor<LAnnotation> => {
-      const cache = editorCacheRef.current.get(documentKind)!;
-      const cached = cache.get(options);
-      if (cached != null) {
-        return cached;
-      }
-      const editor = createEditor(documentKind, options);
-      cache.set(options, editor);
-      return editor;
-    }
+      options: EditorOptions<LAnnotation>,
+      editHistoryKey?: string
+    ): DiffsEditor<LAnnotation> =>
+      createEditor(documentKind, options, editHistoryKey)
   );
   return (
     <EditContext.Provider value={stableCreateEditor}>

@@ -10,9 +10,10 @@ import type { ReactNode } from 'react';
 
 function createEditor<LAnnotation>(
   documentKind: EditorDocumentKind,
-  options: EditorOptions<LAnnotation>
+  options: EditorOptions<LAnnotation>,
+  editHistoryKey?: string
 ): Editor<LAnnotation> {
-  return new Editor(documentKind, options);
+  return new Editor(documentKind, options, editHistoryKey);
 }
 
 interface AppEditProviderProps {

@@ -150,14 +150,26 @@ function createEditorHarness(attachmentError?: Error) {
   const editors: TrackedCodeViewEditor[] = [];
   const receivedDocumentKinds: EditorDocumentKind[] = [];
   const receivedOptions: EditorOptions<undefined>[] = [];
-  const createEditor: CreateEditor<undefined> = (documentKind, options) => {
+  const receivedEditHistoryKeys: Array<string | undefined> = [];
+  const createEditor: CreateEditor<undefined> = (
+    documentKind,
+    options,
+    editHistoryKey
+  ) => {
     receivedDocumentKinds.push(documentKind);
     receivedOptions.push(options);
+    receivedEditHistoryKeys.push(editHistoryKey);
     const editor = createTrackedEditor(options, attachmentError);
     editors.push(editor);
     return editor;
   };
-  return { createEditor, editors, receivedDocumentKinds, receivedOptions };
+  return {
+    createEditor,
+    editors,
+    receivedDocumentKinds,
+    receivedEditHistoryKeys,
+    receivedOptions,
+  };
 }
 
 function makeFileItem(
@@ -374,8 +386,13 @@ describe('React CodeView editor factory', () => {
     const cleanupActEnvironment = installReactActEnvironment();
     const container = document.createElement('div');
     document.body.appendChild(container);
-    const { createEditor, editors, receivedDocumentKinds, receivedOptions } =
-      createEditorHarness();
+    const {
+      createEditor,
+      editors,
+      receivedDocumentKinds,
+      receivedEditHistoryKeys,
+      receivedOptions,
+    } = createEditorHarness();
     const attemptedOnChange = mock(() => {});
     const onAttach = mock(() => {});
     const onItemEditChange = mock(
@@ -402,6 +419,7 @@ describe('React CodeView editor factory', () => {
           createEditor,
           createCodeViewElement({
             editorOptions,
+            getEditHistoryKey: (item) => `history:${item.id}`,
             items: [makeFileItem('a', { edit: true }), makeDiffItem('b', true)],
             onItemEditChange,
           })
@@ -411,6 +429,7 @@ describe('React CodeView editor factory', () => {
       expect(editors).toHaveLength(2);
       expect(new Set(editors).size).toBe(2);
       expect(receivedDocumentKinds).toEqual(['file', 'file-diff']);
+      expect(receivedEditHistoryKeys).toEqual(['history:a', 'history:b']);
       expect(receivedOptions).toHaveLength(2);
       for (const options of receivedOptions) {
         expect(options.historyMaxEntries).toBe(17);

@@ -399,9 +399,15 @@ Each editor keeps a single undo stack per file. Typed input and programmatic
 `applyEdits` calls join the same timeline, so a mixed sequence undoes exactly
 like a hand-typed one, and each undo or redo restores the selections that went
 with the edit. Drive it with `undo()` and `redo()` — the same commands behind
-`Cmd/Ctrl+Z` — and read `canUndo` and `canRedo` for toolbar state. History lives
-in the file's text document, so with
-[`persistState`](#edit-mode-persisting-editor-state) it survives file switches.
+`Cmd/Ctrl+Z` — and read `canUndo` and `canRedo` for toolbar state.
+
+To retain the editable draft and undo/redo history after an edit session ends,
+pass an `editHistoryKey` as the `Editor` constructor's third argument. React
+`File`, `FileDiff`, `MultiFileDiff`, and `PatchDiff` accept the same value as a
+prop. Reusing the key with the same surface kind resumes that history. Retention
+is in memory, bounded by the document registry capacity, and does not survive a
+page reload. Call `Editor.disposeFile(key)` or `Editor.disposeFileDiff(key)`
+when the history is no longer needed.
 
 You can limit the stack size with `historyMaxEntries` in
 [Editor Options](#edit-mode-editor-options) (default is `100`).
@@ -450,7 +456,7 @@ These methods are available on an `Editor` instance. Attach it to a rendered
 #### Editor Options
 
 Pass these as the second argument when constructing
-`new Editor(documentKind, { ... })`, or update them later with
+`new Editor(documentKind, { ... }, editHistoryKey?)`, or update them later with
 [`setOptions`](#edit-mode-api-reference). Each editor is dedicated to either
 `'file'` or `'file-diff'` components.
 

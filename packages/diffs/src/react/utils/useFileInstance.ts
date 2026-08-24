@@ -17,6 +17,7 @@ import { VirtualizedFile } from '../../components/VirtualizedFile';
 import type { EditorChangeEvent, EditorOptions } from '../../edit';
 import type { GetHoveredLineResult } from '../../managers/InteractionManager';
 import type {
+  DiffsEditor,
   FileContents,
   LineAnnotation,
   SelectedLineRange,
@@ -49,6 +50,7 @@ interface UseFileInstanceProps<LAnnotation> {
   file: FileContents;
   options: FileOptions<LAnnotation> | undefined;
   editorOptions: EditorOptions<LAnnotation> | undefined;
+  editHistoryKey: string | undefined;
   lineAnnotations: LineAnnotation<LAnnotation>[] | undefined;
   selectedLines: SelectedLineRange | null | undefined;
   prerenderedHTML: string | undefined;
@@ -71,6 +73,7 @@ export function useFileInstance<LAnnotation>({
   file,
   options,
   editorOptions,
+  editHistoryKey,
   lineAnnotations,
   selectedLines,
   prerenderedHTML,
@@ -115,6 +118,13 @@ export function useFileInstance<LAnnotation>({
   const instanceRef = useRef<
     File<LAnnotation> | VirtualizedFile<LAnnotation> | null
   >(null);
+  const disposeEditorRef = useRef<() => void>(null);
+  const getEditor = useStableCallback(() => {
+    if (createEditor == null) {
+      throw new Error('File: EditContext is not attached');
+    }
+    return createEditor('file', editorOptions ?? {}, editHistoryKey);
+  });
   const ref = useStableCallback((node: HTMLElement | null) => {
     if (node != null) {
       if (instanceRef.current != null) {
@@ -151,6 +161,9 @@ export function useFileInstance<LAnnotation>({
           true
         );
       }
+      if (edit && disposeEditorRef.current == null) {
+        disposeEditorRef.current = applyEdit(instanceRef.current, getEditor);
+      }
       void instanceRef.current.hydrate({
         file,
         fileContainer: node,
@@ -163,11 +176,13 @@ export function useFileInstance<LAnnotation>({
       }
       instanceRef.current.cleanUp();
       instanceRef.current = null;
+      disposeEditorRef.current = null;
     }
   });
 
   useIsomorphicLayoutEffect(() => {
-    if (instanceRef.current == null) return;
+    const { current: instance } = instanceRef;
+    if (instance == null) return;
     const newOptions = mergeFileOptions({
       controlledSelection,
       hasCustomHeader,
@@ -181,43 +196,32 @@ export function useFileInstance<LAnnotation>({
     // constructor-default options would force a full render on every commit.
     const forceRender =
       newOptions !== undefined &&
-      !areOptionsEqual(instanceRef.current.options, newOptions);
+      !areOptionsEqual(instance.options, newOptions);
+    instance.setOptions(newOptions);
+    // Detach editor before rendering if required
+    if (!edit && disposeEditorRef.current != null) {
+      const { current: disposeEditor } = disposeEditorRef;
+      disposeEditorRef.current = null;
+      disposeEditor();
+    }
     const resolved = resolveAcceptedValues(
       file,
       lineAnnotations,
       acceptedCache
     );
-    instanceRef.current.setOptions(newOptions);
-    void instanceRef.current.render({
+    void instance.render({
       file: resolved.file,
       lineAnnotations: resolved.lineAnnotations,
       forceRender,
     });
     if (selectedLines !== undefined) {
-      instanceRef.current.setSelectedLines(selectedLines);
+      instance.setSelectedLines(selectedLines);
+    }
+    // Attach editor after rendering if required
+    if (edit && disposeEditorRef.current == null) {
+      disposeEditorRef.current = applyEdit(instance, getEditor);
     }
   });
-
-  useIsomorphicLayoutEffect(() => {
-    if (edit && instanceRef.current != null) {
-      if (createEditor === undefined) {
-        throw new Error('File: EditContext is not attached');
-      }
-      const editor = createEditor('file', editorOptions ?? {});
-      if (editor == null) {
-        throw new Error(
-          'File: EditProvider.createEditor must return an editor instance'
-        );
-      }
-      try {
-        return editor.edit(instanceRef.current);
-      } catch (error) {
-        editor.cleanUp();
-        throw error;
-      }
-    }
-    return undefined;
-  }, [edit]);
 
   const getHoveredLine = useCallback(():
     | GetHoveredLineResult<'file'>
@@ -311,4 +315,17 @@ function mergeFileOptions<LAnnotation>({
     onEditChange,
     onEditComplete,
   };
+}
+
+function applyEdit<LAnnotation>(
+  instance: File<LAnnotation>,
+  getEditor: () => DiffsEditor<LAnnotation>
+): () => void {
+  const editor = getEditor();
+  try {
+    return editor.edit(instance);
+  } catch (error) {
+    editor.cleanUp();
+    throw error;
+  }
 }

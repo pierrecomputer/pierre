@@ -17,6 +17,7 @@ import type {
   FileDiffMetadata,
   LineAnnotation,
 } from '../src/types';
+import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import { installDom, wait, waitFor } from './domHarness';
 
 afterAll(async () => {
@@ -54,8 +55,18 @@ interface EditorFixture {
 }
 
 class TestFileDiff extends FileDiff<undefined> {
+  getCurrentDiff(): FileDiffMetadata | undefined {
+    return this.getLatestDiff();
+  }
+
   getCurrentType(): FileDiffMetadata['type'] | undefined {
     return this.getLatestDiff()?.type;
+  }
+}
+
+class TestFile extends File<undefined> {
+  getCurrentFile(): FileContents | undefined {
+    return this.getLatestFile();
   }
 }
 
@@ -294,7 +305,145 @@ function hoverMarkerLine(content: HTMLElement, oneIndexedLine: number): void {
   content.dispatchEvent(event);
 }
 
+describe('component editor attachment', () => {
+  test('File rejects another editor until the current editor detaches', async () => {
+    const fixture = await createEditorFixture('alpha\nbravo');
+    const replacement = new Editor<undefined>('file');
+    try {
+      expect(() => replacement.edit(fixture.file)).toThrow(
+        'File.attachEditor: an editor is already attached'
+      );
+      expect(fixture.editor.getFile()).toBeDefined();
+      expect(replacement.getFile()).toBeUndefined();
+
+      fixture.complete();
+      replacement.edit(fixture.file);
+      await waitFor(() => replacement.getFile() !== undefined);
+      expect(replacement.getFile()?.contents).toBe('alpha\nbravo');
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('FileDiff rejects another editor until the current editor detaches', async () => {
+    const fixture = await createDiffEditorFixture('split');
+    const replacement = new Editor<undefined>('file-diff');
+    try {
+      expect(() => replacement.edit(fixture.fileDiff)).toThrow(
+        'FileDiff.attachEditor: an editor is already attached'
+      );
+      expect(fixture.editor.getFile()).toBeDefined();
+      expect(replacement.getFile()).toBeUndefined();
+
+      fixture.complete();
+      replacement.edit(fixture.fileDiff);
+      await waitFor(() => replacement.getFile() !== undefined);
+      expect(replacement.getFile()?.contents).toBe('alpha\nnew\ncharlie');
+    } finally {
+      fixture.cleanup();
+    }
+  });
+});
+
 describe('Editor document registry surfaces', () => {
+  test('File restores a keyed draft when its editor is attached before hydrate', async () => {
+    Editor.clearDocuments();
+    const editHistoryKey = 'file-hydration';
+    const first = await createKeyedEditorFixture(
+      'alpha\nbravo\ncharlie',
+      editHistoryKey
+    );
+    const prerenderedHTML = first.container.shadowRoot?.innerHTML;
+    insertText(first.editor, 1, 5, ' retained');
+    const retainedFile = first.editor.getFile();
+    first.cleanup();
+
+    const dom = installDom();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const file = new TestFile({
+      disableFileHeader: true,
+      theme: DEFAULT_THEMES,
+    });
+    const editor = new Editor<undefined>('file', {}, editHistoryKey);
+    try {
+      editor.edit(file);
+      file.hydrate({
+        file: { name: 'edits.ts', contents: 'pristine replacement' },
+        fileContainer: container,
+        prerenderedHTML,
+      });
+
+      expect(file.getCurrentFile()).toEqual(retainedFile);
+      expect(editor.getFile()).toEqual(retainedFile);
+      await waitFor(() =>
+        Boolean(container.shadowRoot?.textContent?.includes('bravo retained'))
+      );
+      expect(container.shadowRoot?.textContent).toContain('bravo retained');
+    } finally {
+      file.cleanUp();
+      Editor.disposeFile(editHistoryKey);
+      dom.cleanup();
+    }
+  });
+
+  test('FileDiff restores exact keyed session hunks when attached before hydrate', async () => {
+    Editor.clearDocuments();
+    const editHistoryKey = 'file-diff-hydration';
+    const oldFile = { name: 'edits.ts', contents: 'alpha\nold\ncharlie' };
+    const newFile = { name: 'edits.ts', contents: 'alpha\nnew\ncharlie' };
+    const first = await createDiffEditorFixture(
+      'split',
+      undefined,
+      editHistoryKey,
+      newFile.contents,
+      { oldFile, newFile }
+    );
+    const prerenderedHTML = first.container.shadowRoot?.innerHTML;
+    insertText(first.editor, 1, 3, ' retained');
+    await waitFor(
+      () =>
+        first.fileDiff.getCurrentDiff()?.additionLines.join('') ===
+        first.editor.getText()
+    );
+    const retainedFile = first.editor.getFile();
+    const retainedHunks = structuredClone(
+      first.fileDiff.getCurrentDiff()?.hunks
+    );
+    first.cleanup();
+
+    const dom = installDom();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const fileDiff = new TestFileDiff({
+      disableFileHeader: true,
+      diffStyle: 'split',
+      theme: DEFAULT_THEMES,
+    });
+    const editor = new Editor<undefined>('file-diff', {}, editHistoryKey);
+    const externalDiff = parseDiffFromFile(oldFile, newFile);
+    try {
+      editor.edit(fileDiff);
+      fileDiff.hydrate({
+        fileDiff: externalDiff,
+        fileContainer: container,
+        prerenderedHTML,
+      });
+
+      expect(editor.getFile()).toEqual(retainedFile);
+      expect(fileDiff.getCurrentDiff()?.hunks).toEqual(retainedHunks);
+      expect(fileDiff.getCurrentDiff()).not.toBe(externalDiff);
+      await waitFor(() =>
+        Boolean(container.shadowRoot?.textContent?.includes('new retained'))
+      );
+      expect(container.shadowRoot?.textContent).toContain('new retained');
+    } finally {
+      fileDiff.cleanUp();
+      Editor.disposeFileDiff(editHistoryKey);
+      dom.cleanup();
+    }
+  });
+
   test('a retained document repaints a File surface', async () => {
     Editor.clearDocuments();
     const documentKey = 'file-surface';

@@ -63,7 +63,7 @@ class DocumentRegistryNamespace<K extends EditorDocumentKind> {
     const session = this.#sessions.get(documentKey);
     if (session != null && session.owner !== owner) {
       throw new Error(
-        `Editor: documentKey "${documentKey}" is already attached to another editor`
+        `Editor: editHistoryKey "${documentKey}" is already attached to another editor`
       );
     }
     if (session != null) {
@@ -83,7 +83,7 @@ class DocumentRegistryNamespace<K extends EditorDocumentKind> {
     const session = this.#sessions.get(documentKey);
     if (session?.owner !== owner) {
       throw new Error(
-        `Editor: documentKey "${documentKey}" must be acquired before attachment`
+        `Editor: editHistoryKey "${documentKey}" must be acquired before attachment`
       );
     }
     const attachment: DocumentRegistryAttachment<K> = {

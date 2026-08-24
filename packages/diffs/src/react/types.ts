@@ -23,6 +23,8 @@ export interface DiffBasePropsReact<LAnnotation> {
   edit?: boolean;
   /** Creation-time options passed to the nearest EditProvider factory. */
   editorOptions?: EditorOptions<LAnnotation>;
+  /** Retain this editable draft and its undo/redo history in memory. */
+  editHistoryKey?: string;
   /**
    * Fired for every document change of an active edit session, with the same
    * `EditorChangeEvent` the editor reports through its own `onChange`. Don't
@@ -62,6 +64,8 @@ export interface FileProps<LAnnotation> {
   edit?: boolean;
   /** Creation-time options passed to the nearest EditProvider factory. */
   editorOptions?: EditorOptions<LAnnotation>;
+  /** Retain this editable draft and its undo/redo history in memory. */
+  editHistoryKey?: string;
   /**
    * Fired for every document change of an active edit session, with the same
    * `EditorChangeEvent` the editor reports through its own `onChange`. Don't

@@ -82,6 +82,13 @@ virtualization. Changes to the provider factory or `editorOptions` do not
 disturb active sessions; their latest values apply the next time an item enters
 edit mode.
 
+Use `getEditHistoryKey(item)` to retain an item's editable draft and undo/redo
+history after its edit session ends. React passes the resolved key through its
+`EditProvider`; vanilla `CodeView` passes it to `createEditor` as the third
+argument. CodeView does not derive this key from `item.id` or a render cache
+key, so choose a stable application identity explicitly. Retention is bounded
+and in-memory only.
+
 For vanilla `CodeView`, keep using `CodeViewOptions.createEditor`. It exposes
 the same item-aware callbacks, and CodeView owns each returned editor's
 lifecycle.
@@ -106,13 +113,20 @@ For vanilla `CodeView`, add the callback while constructing each item editor:
 
 ```ts
 const viewer = new CodeView({
-  createEditor(documentKind, options) {
-    return new Editor(documentKind, {
-      ...options,
-      onAttach(editor) {
-        editor.focus({ lineNumber: 'first-visible', preventScroll: true });
+  getEditHistoryKey(item) {
+    return `review:${item.id}`;
+  },
+  createEditor(documentKind, options, editHistoryKey) {
+    return new Editor(
+      documentKind,
+      {
+        ...options,
+        onAttach(editor) {
+          editor.focus({ lineNumber: 'first-visible', preventScroll: true });
+        },
       },
-    });
+      editHistoryKey
+    );
   },
 });
 ```

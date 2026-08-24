@@ -997,7 +997,12 @@ export class FileDiff<
     const oldFile = fileInput?.oldFile;
     const newFile = fileInput?.newFile;
     this.hydrateElements(fileContainer, prerenderedHTML);
+    // An editor attached before hydration may carry a retained keyed document
+    // and its session-shaped hunks. Render through that private session instead
+    // of adopting external markup, so hydration cannot recompute or flash it.
+    const forceEditorRender = this.editor != null;
     if (
+      forceEditorRender ||
       shouldRenderCode(
         this.pre,
         hasDiffContent({ fileDiff, oldFile, newFile }),
@@ -1014,6 +1019,7 @@ export class FileDiff<
         fileContainer,
         lineAnnotations,
         fileDiff,
+        forceRender: forceEditorRender || fileInputProps.forceRender,
         preventEmit: true,
       });
     }
@@ -1292,12 +1298,16 @@ export class FileDiff<
       } else {
         this.installEditSession(incomingExternalDiff);
       }
-    } else if (this.editor != null && !incomingExternalDiff.isPartial) {
-      this.installEditSession(
-        incomingExternalDiff,
-        this.editor.__getDocumentContents(),
-        this.editor.__getDocumentSessionState?.()
-      );
+    } else if (this.editor != null) {
+      if (incomingExternalDiff.isPartial) {
+        this.loadFilesIfNecessary();
+      } else {
+        this.installEditSession(
+          incomingExternalDiff,
+          this.editor.__getDocumentContents(),
+          this.editor.__getDocumentSessionState?.()
+        );
+      }
     }
     if (this.editSessionAnnotations != null && lineAnnotations != null) {
       // These annotations arrived with the new diff, so their line numbers
@@ -1846,7 +1856,9 @@ export class FileDiff<
         `FileDiff.attachEditor: cannot attach an editor to a "${this.type}" diff`
       );
     }
-    this.editor?.cleanUp();
+    if (this.editor != null) {
+      throw new Error('FileDiff.attachEditor: an editor is already attached');
+    }
     this.editSessionAnnotations ??= adoptEditSessionAnnotations(
       this.lineAnnotations,
       getLineAnnotationName
