@@ -6,6 +6,7 @@ import type {
   DiffsEditableComponent,
   DiffsEditor,
   DiffsHighlighter,
+  EditorState,
   FileContents,
   HighlightedToken,
   RenderRange,
@@ -38,6 +39,7 @@ class TestEditableComponent implements DiffsEditableComponent<undefined> {
   codeScrollLeft = 0;
   editorViewport: HTMLElement | Document | undefined;
   restoredCodeScrollLefts: number[] = [];
+  stateRestoreError: Error | undefined;
 
   constructor(private file: FileContents) {
     this.#renderShadowDom();
@@ -60,6 +62,9 @@ class TestEditableComponent implements DiffsEditableComponent<undefined> {
   }
 
   setCodeScrollLeft(position: number): void {
+    if (this.stateRestoreError != null) {
+      throw this.stateRestoreError;
+    }
     this.codeScrollLeft = position;
     this.restoredCodeScrollLefts.push(position);
   }
@@ -101,10 +106,12 @@ class TestEditableComponent implements DiffsEditableComponent<undefined> {
 
   completeEditSession(): void {}
 
-  attachEditor(editor: DiffsEditor<undefined>): () => void {
+  attachEditor(
+    editor: DiffsEditor<undefined>
+  ): (_recycle: boolean, _state: EditorState) => void {
     this.#editor = editor;
     this.#syncRenderView();
-    return () => {
+    return (_recycle: boolean, _state: EditorState) => {
       this.#editor = undefined;
     };
   }
@@ -157,6 +164,123 @@ class TestEditableComponent implements DiffsEditableComponent<undefined> {
 }
 
 describe('Editor state', () => {
+  test('initialState restores selections and an owned viewport on first attach', () => {
+    const dom = installDom();
+    const viewport = document.createElement('div');
+    const editor = new Editor<undefined>('file', {
+      initialState: {
+        selections: [
+          {
+            start: { line: 1, character: 2 },
+            end: { line: 1, character: 2 },
+            direction: 0,
+          },
+        ],
+        view: { scrollLeft: 24, scrollTop: 48 },
+      },
+    });
+    const component = new TestEditableComponent({
+      name: 'state.ts',
+      contents: 'alpha\nbravo',
+    });
+    component.editorViewport = viewport;
+
+    try {
+      editor.edit(component);
+
+      expect(editor.getState()).toEqual({
+        selections: [
+          {
+            start: { line: 1, character: 2 },
+            end: { line: 1, character: 2 },
+            direction: 0,
+          },
+        ],
+        view: { scrollLeft: 24, scrollTop: 48 },
+      });
+      expect(component.restoredCodeScrollLefts).toEqual([24]);
+      expect(viewport.scrollTop).toBe(48);
+
+      editor.cleanUp('recycle');
+      component.codeScrollLeft = 8;
+      viewport.scrollTop = 16;
+      editor.edit(component);
+
+      expect(editor.getState()).toEqual({
+        selections: undefined,
+        view: { scrollLeft: 8, scrollTop: 16 },
+      });
+      expect(component.restoredCodeScrollLefts).toEqual([24]);
+    } finally {
+      editor.cleanUp();
+      component.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test('initialState ignores vertical scroll without an owned viewport', () => {
+    const dom = installDom();
+    const originalScrollTo = window.scrollTo;
+    let pageScrollCalls = 0;
+    window.scrollTo = () => {
+      pageScrollCalls++;
+    };
+    const editor = new Editor<undefined>('file', {
+      initialState: {
+        view: { scrollLeft: 24, scrollTop: 48 },
+      },
+    });
+    const component = new TestEditableComponent({
+      name: 'state.ts',
+      contents: 'alpha\nbravo',
+    });
+    const scrollAncestor = document.createElement('div');
+    scrollAncestor.style.overflowY = 'scroll';
+    scrollAncestor.scrollTop = 12;
+    scrollAncestor.appendChild(component.fileContainer);
+    document.body.appendChild(scrollAncestor);
+
+    try {
+      editor.edit(component);
+
+      expect(component.restoredCodeScrollLefts).toEqual([24]);
+      expect(scrollAncestor.scrollTop).toBe(12);
+      expect(pageScrollCalls).toBe(0);
+    } finally {
+      window.scrollTo = originalScrollTo;
+      editor.cleanUp();
+      component.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test('initialState remains available when hydration fails', () => {
+    const dom = installDom();
+    const editor = new Editor<undefined>('file', {
+      initialState: {
+        view: { scrollLeft: 24 },
+      },
+    });
+    const component = new TestEditableComponent({
+      name: 'state.ts',
+      contents: 'alpha\nbravo',
+    });
+    const stateRestoreError = new Error('state restoration failed');
+    component.stateRestoreError = stateRestoreError;
+
+    try {
+      expect(() => editor.edit(component)).toThrow(stateRestoreError);
+      component.stateRestoreError = undefined;
+      editor.edit(component);
+
+      expect(component.restoredCodeScrollLefts).toEqual([24]);
+    } finally {
+      editor.cleanUp();
+      component.cleanUp();
+      dom.cleanup();
+    }
+  });
+
   test('getState omits view state without an owned element viewport', () => {
     const dom = installDom();
     const editor = new Editor<undefined>('file');

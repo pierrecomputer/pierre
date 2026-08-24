@@ -199,6 +199,11 @@ interface AltColumnDrag {
 export interface EditorOptions<LAnnotation> {
   /** The maximum number of entries to keep in the undo stack. */
   historyMaxEntries?: number;
+  /**
+   * Selections and scroll to apply when the editor first attaches. Hand back
+   * state captured from a change or completion event to restore a remount.
+   */
+  initialState?: EditorState;
   /** Custom keymap groups checked before defaults; later groups take precedence. */
   keymap?: EditorKeymap;
   /** Render rounded corners for selection ranges, default is true. */
@@ -295,6 +300,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   }
 
   #options: EditorOptions<LAnnotation>;
+  #initialState: EditorState | undefined;
   #metrics = new Metrics();
   #tokenizer?: EditorTokenizer;
   #popoverManager?: PopoverManager;
@@ -445,6 +451,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#documentKind = documentKind;
     this.#editHistoryKey = editHistoryKey;
     this.#options = options;
+    this.#initialState = options.initialState;
   }
 
   setOptions(options: EditorOptions<LAnnotation>): void {
@@ -1266,6 +1273,19 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#searchPanel?.focus();
     }
 
+    const initialState = this.#initialState;
+    if (initialState !== undefined) {
+      // Consume creation-time state before applying it so a render triggered by
+      // selection or viewport restoration cannot apply the same state twice.
+      this.#initialState = undefined;
+      try {
+        this.setState(initialState);
+      } catch (error) {
+        this.#initialState = initialState;
+        throw error;
+      }
+    }
+
     if (this.#options.__debug === true && renderRange !== undefined) {
       const { startingLine, totalLines } = renderRange;
       console.log(
@@ -1503,11 +1523,9 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   }
 
   #setViewportScrollTop(scrollTop: number): void {
-    const viewport = this.#getScrollViewport();
-    if (viewport instanceof HTMLElement) {
+    const viewport = this.#fileInstance?.getEditorViewport?.();
+    if (typeof HTMLElement !== 'undefined' && viewport instanceof HTMLElement) {
       viewport.scrollTop = scrollTop;
-    } else if (viewport instanceof Document) {
-      viewport.defaultView?.scrollTo({ top: scrollTop });
     }
   }
 

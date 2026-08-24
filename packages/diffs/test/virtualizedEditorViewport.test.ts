@@ -214,6 +214,49 @@ describe('virtualized editor viewport', () => {
     }
   });
 
+  test('hydrates initial state into an owned virtualized viewport', async () => {
+    const dom = installDom();
+    const root = document.createElement('div');
+    const virtualizer = createSimpleVirtualizer(root);
+    const file = new VirtualizedFile(
+      { disableFileHeader: true, theme: DEFAULT_THEMES },
+      virtualizer
+    );
+    const editor = new Editor<undefined>('file', {
+      initialState: {
+        selections: [
+          {
+            start: { line: 1, character: 3 },
+            end: { line: 1, character: 3 },
+            direction: 0,
+          },
+        ],
+        view: { scrollLeft: 24, scrollTop: 48 },
+      },
+    });
+
+    try {
+      const code = await renderFile(file, root);
+      editor.edit(file);
+      await waitFor(() => code.scrollLeft === 24 && root.scrollTop === 48);
+
+      expect(editor.getState()).toEqual({
+        selections: [
+          {
+            start: { line: 1, character: 3 },
+            end: { line: 1, character: 3 },
+            direction: 0,
+          },
+        ],
+        view: { scrollLeft: 24, scrollTop: 48 },
+      });
+    } finally {
+      editor.cleanUp();
+      file.cleanUp();
+      dom.cleanup();
+    }
+  });
+
   test('broadcasts owned viewport state on change and completion', async () => {
     const dom = installDom();
     const root = document.createElement('div');
