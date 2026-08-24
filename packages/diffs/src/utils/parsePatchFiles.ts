@@ -345,14 +345,14 @@ function _processFile(
         parsedDeletionLines >= hunkData.deletionCount &&
         !rawLine.startsWith('\\')
       ) {
-        if (
-          throwOnError &&
-          isHunkBodyLine(rawLine) &&
-          !isFormatPatchVersionSeparator(rawLine)
-        ) {
+        const isUnexpectedBodyLine =
+          isHunkBodyLine(rawLine) && !isFormatPatchVersionSeparator(rawLine);
+        if (!isUnexpectedBodyLine) {
+          break;
+        }
+        if (throwOnError) {
           throw Error('parsePatchContent: hunk has more lines than expected');
         }
-        break;
       }
 
       const firstChar = rawLine[0];
@@ -491,20 +491,36 @@ function _processFile(
       console.error(
         `parsePatchContent: hunk line count mismatch: "${firstLine.trimEnd()}", declared old/new ${hunkData.deletionCount}/${hunkData.additionCount}, parsed old/new ${parsedDeletionLines}/${parsedAdditionLines}`
       );
-      // Zero-count ranges use their start as the boundary instead of start - 1.
-      // Preserve the header's original boundary when a repaired side becomes empty.
-      if (hunkData.additionCount > 0 && parsedAdditionLines === 0) {
-        hunkData.additionStart = getHunkSideStartBoundary(
+      // Re-encode each original boundary using the repaired count. Zero-count
+      // ranges use the boundary itself as their start; positive ranges use +1.
+      const repairedAdditionStart =
+        getHunkSideStartBoundary(
           hunkData.additionStart,
           hunkData.additionCount
-        );
-      }
-      if (hunkData.deletionCount > 0 && parsedDeletionLines === 0) {
-        hunkData.deletionStart = getHunkSideStartBoundary(
+        ) + (parsedAdditionLines === 0 ? 0 : 1);
+      const repairedDeletionStart =
+        getHunkSideStartBoundary(
           hunkData.deletionStart,
           hunkData.deletionCount
-        );
+        ) + (parsedDeletionLines === 0 ? 0 : 1);
+
+      // Hydrated hunks index into full-file line arrays, so their indexes must
+      // move with repaired starts. Partial hunks index patch-built arrays.
+      if (!isPartial) {
+        const additionStartDelta =
+          repairedAdditionStart - hunkData.additionStart;
+        const deletionStartDelta =
+          repairedDeletionStart - hunkData.deletionStart;
+        hunkData.additionLineIndex += additionStartDelta;
+        hunkData.deletionLineIndex += deletionStartDelta;
+        for (const content of hunkData.hunkContent) {
+          content.additionLineIndex += additionStartDelta;
+          content.deletionLineIndex += deletionStartDelta;
+        }
       }
+
+      hunkData.additionStart = repairedAdditionStart;
+      hunkData.deletionStart = repairedDeletionStart;
       hunkData.additionCount = parsedAdditionLines;
       hunkData.deletionCount = parsedDeletionLines;
     }

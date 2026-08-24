@@ -184,50 +184,162 @@ describe('parsePatchFiles', () => {
     }
   });
 
-  test('preserves the addition boundary when repair reaches zero', () => {
+  for (const {
+    name,
+    header,
+    body,
+    expectedAddition,
+    expectedDeletion,
+    expectedError,
+  } of [
+    {
+      name: 'addition count changing from positive to zero',
+      header: '@@ -5,1 +5,1 @@\n',
+      body: '-gone\n',
+      expectedAddition: { start: 4, count: 0 },
+      expectedDeletion: { start: 5, count: 1 },
+      expectedError: true,
+    },
+    {
+      name: 'deletion count changing from positive to zero',
+      header: '@@ -5,1 +5,1 @@\n',
+      body: '+added\n',
+      expectedAddition: { start: 5, count: 1 },
+      expectedDeletion: { start: 4, count: 0 },
+      expectedError: true,
+    },
+    {
+      name: 'addition count changing from zero to positive',
+      header: '@@ -5,1 +4,0 @@\n',
+      body: '-old\n+new\n',
+      expectedAddition: { start: 5, count: 1 },
+      expectedDeletion: { start: 5, count: 1 },
+      expectedError: true,
+    },
+    {
+      name: 'deletion count changing from zero to positive',
+      header: '@@ -4,0 +5,1 @@\n',
+      body: '-old\n+new\n',
+      expectedAddition: { start: 5, count: 1 },
+      expectedDeletion: { start: 5, count: 1 },
+      expectedError: true,
+    },
+    {
+      name: 'both sides crossing zero in opposite directions',
+      header: '@@ -5,1 +4,0 @@\n',
+      body: '+added\n',
+      expectedAddition: { start: 5, count: 1 },
+      expectedDeletion: { start: 4, count: 0 },
+      expectedError: true,
+    },
+    {
+      name: 'both zero counts growing from hunk content',
+      header: '@@ -4,0 +4,0 @@\n',
+      body: '-old\n+new\n',
+      expectedAddition: { start: 5, count: 1 },
+      expectedDeletion: { start: 5, count: 1 },
+      expectedError: true,
+    },
+    {
+      name: 'a positive count growing from extra hunk content',
+      header: '@@ -5,1 +5,1 @@\n',
+      body: '-old\n+new\n-extra old\n',
+      expectedAddition: { start: 5, count: 1 },
+      expectedDeletion: { start: 5, count: 2 },
+      expectedError: true,
+    },
+    {
+      name: 'a valid zero-count side remaining unchanged',
+      header: '@@ -4,0 +5,1 @@\n',
+      body: '+added\n',
+      expectedAddition: { start: 5, count: 1 },
+      expectedDeletion: { start: 4, count: 0 },
+      expectedError: false,
+    },
+  ]) {
+    test(`preserves boundaries for ${name}`, () => {
+      const consoleError = spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        const result = parsePatchFiles(
+          ['--- boundary.txt\n', '+++ boundary.txt\n', header, body].join('')
+        );
+        const hunk = result[0].files[0].hunks[0];
+
+        expect(consoleError).toHaveBeenCalledTimes(expectedError ? 1 : 0);
+        expect({
+          start: hunk.additionStart,
+          count: hunk.additionCount,
+        }).toEqual(expectedAddition);
+        expect({
+          start: hunk.deletionStart,
+          count: hunk.deletionCount,
+        }).toEqual(expectedDeletion);
+        expect(hunk.collapsedBefore).toBe(4);
+        expect(verifyPatchHunkValues(result).errors).toEqual([]);
+      } finally {
+        consoleError.mockRestore();
+      }
+    });
+  }
+
+  test('shifts hydrated hunk and content indexes with a repaired start', () => {
     const consoleError = spyOn(console, 'error').mockImplementation(() => {});
     try {
-      const result = parsePatchFiles(
+      const file = processFile(
         [
-          '--- deleted-line.txt\n',
-          '+++ deleted-line.txt\n',
-          '@@ -5,1 +5,1 @@\n',
-          '-gone\n',
-        ].join('')
+          '--- hydrated.txt\n',
+          '+++ hydrated.txt\n',
+          '@@ -5,1 +4,0 @@\n',
+          '+new\n',
+          '-old\n',
+        ].join(''),
+        {
+          oldFile: {
+            name: 'hydrated.txt',
+            contents: 'a\nb\nc\nd\nold\nz\n',
+          },
+          newFile: {
+            name: 'hydrated.txt',
+            contents: 'a\nb\nc\nd\nnew\nz\n',
+          },
+        }
       );
-      const hunk = result[0].files[0].hunks[0];
+      assertDefined(file, 'file should be parsed');
+      const hunk = file.hunks[0];
+      const content = hunk.hunkContent[0];
 
       expect(consoleError).toHaveBeenCalledTimes(1);
-      expect(hunk.additionStart).toBe(4);
-      expect(hunk.additionCount).toBe(0);
-      expect(hunk.deletionStart).toBe(5);
-      expect(hunk.deletionCount).toBe(1);
-      expect(hunk.collapsedBefore).toBe(4);
-      expect(verifyPatchHunkValues(result).errors).toEqual([]);
+      expect(hunk.additionLineIndex).toBe(4);
+      expect(hunk.deletionLineIndex).toBe(4);
+      expect(content.additionLineIndex).toBe(4);
+      expect(content.deletionLineIndex).toBe(4);
     } finally {
       consoleError.mockRestore();
     }
   });
 
-  test('preserves the deletion boundary when repair reaches zero', () => {
+  test('chains later hunk geometry from a zero-to-positive repair', () => {
     const consoleError = spyOn(console, 'error').mockImplementation(() => {});
     try {
       const result = parsePatchFiles(
         [
-          '--- added-line.txt\n',
-          '+++ added-line.txt\n',
-          '@@ -5,1 +5,1 @@\n',
-          '+added\n',
+          '--- multiple-zero.txt\n',
+          '+++ multiple-zero.txt\n',
+          '@@ -5,1 +4,0 @@\n',
+          '+new\n',
+          '-old\n',
+          '@@ -8 +8 @@\n',
+          '-later old\n',
+          '+later new\n',
         ].join('')
       );
-      const hunk = result[0].files[0].hunks[0];
+      const file = result[0].files[0];
+      const [firstHunk, secondHunk] = file.hunks;
 
       expect(consoleError).toHaveBeenCalledTimes(1);
-      expect(hunk.additionStart).toBe(5);
-      expect(hunk.additionCount).toBe(1);
-      expect(hunk.deletionStart).toBe(4);
-      expect(hunk.deletionCount).toBe(0);
-      expect(hunk.collapsedBefore).toBe(4);
+      expect(firstHunk.additionStart).toBe(5);
+      expect(firstHunk.additionCount).toBe(1);
+      expect(secondHunk.collapsedBefore).toBe(2);
       expect(verifyPatchHunkValues(result).errors).toEqual([]);
     } finally {
       consoleError.mockRestore();
