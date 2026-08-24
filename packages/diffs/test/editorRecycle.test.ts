@@ -495,7 +495,7 @@ describe('Editor onAttach lifecycle', () => {
   });
 });
 
-describe('Editor document registry', () => {
+describe('Editor edit-state manager', () => {
   beforeEach(() => {
     Editor.clearDocuments();
     Editor.setDocumentRegistryCapacity(100);
@@ -864,7 +864,7 @@ describe('Editor document registry', () => {
       firstEditor.edit(first);
       insertAtStart(firstEditor, 'X');
       expect(() => secondEditor.edit(second)).toThrow(
-        'editHistoryKey "shared" is already attached to another editor'
+        'editStateKey "shared" is already attached to another editor'
       );
 
       firstEditor.cleanUp('discard');
@@ -896,7 +896,7 @@ describe('Editor document registry', () => {
 
       expect(() => editor.edit(failing)).toThrow('attachment failed');
       expect(() => competingEditor.edit(competing)).toThrow(
-        'editHistoryKey "recycled" is already attached to another editor'
+        'editStateKey "recycled" is already attached to another editor'
       );
 
       editor.edit(resumed);
@@ -988,7 +988,7 @@ describe('Editor document registry', () => {
 
       competingEditor.edit(competing);
       expect(() => editor.edit(retry)).toThrow(
-        'editHistoryKey "failed" is already attached to another editor'
+        'editStateKey "failed" is already attached to another editor'
       );
 
       competingEditor.cleanUp('discard');
@@ -1287,7 +1287,7 @@ describe('Editor document registry', () => {
       }
 
       expect(() => competingEditor.edit(competing)).toThrow(
-        'editHistoryKey "active" is already attached to another editor'
+        'editStateKey "active" is already attached to another editor'
       );
       activeEditor.cleanUp('discard');
       active.cleanUp();
@@ -1377,7 +1377,7 @@ describe('Editor document registry', () => {
     }
   });
 
-  test('applies registry capacity independently to files and diffs', () => {
+  test('applies manager capacity independently to files and diffs', () => {
     const dom = installDom();
     const retain = (
       type: 'file' | 'file-diff',
@@ -1412,7 +1412,7 @@ describe('Editor document registry', () => {
     }
   });
 
-  test('shrinking registry capacity immediately evicts least-recent documents', () => {
+  test('shrinking manager capacity immediately evicts least-recent documents', () => {
     const dom = installDom();
     const retain = (key: string, prefix: string): void => {
       const editor = new Editor<undefined>('file', {}, key);
@@ -1448,7 +1448,7 @@ describe('Editor document registry', () => {
     }
   });
 
-  test('growing registry capacity preserves documents and accepts more', () => {
+  test('growing manager capacity preserves documents and accepts more', () => {
     const dom = installDom();
     const retain = (key: string, prefix: string): void => {
       const editor = new Editor<undefined>('file', {}, key);
@@ -1482,10 +1482,10 @@ describe('Editor document registry', () => {
     }
   });
 
-  test('registry capacity must be a positive integer', () => {
+  test('manager capacity must be a positive integer', () => {
     for (const capacity of [0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
       expect(() => Editor.setDocumentRegistryCapacity(capacity)).toThrow(
-        'document registry capacity must be a positive integer'
+        'EditStateManager: capacity must be a positive integer'
       );
     }
   });

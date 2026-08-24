@@ -78,6 +78,11 @@ export class EditStack<LAnnotation> {
     return clone;
   }
 
+  /** Create an empty timeline with the same history capacity. */
+  cloneWithoutEntries(): EditStack<LAnnotation> {
+    return new EditStack<LAnnotation>({ maxEntries: this.#maxEntries });
+  }
+
   /** Copy history while validating the runtime shape of opaque annotations. */
   cloneForAnnotations<NextAnnotation>(): EditStack<NextAnnotation> {
     const clone = new EditStack<NextAnnotation>({

@@ -652,7 +652,7 @@ describe('React editor factory lifecycle', () => {
         );
         expect(renderError).toBeInstanceOf(Error);
         expect((renderError as Error).message).toBe(
-          `Editor: editHistoryKey "${editHistoryKey}" is already attached to another editor`
+          `Editor: editStateKey "${editHistoryKey}" is already attached to another editor`
         );
         expect(editors.length).toBeGreaterThan(1);
         expect(new Set(editors).size).toBe(editors.length);

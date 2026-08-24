@@ -128,24 +128,41 @@ export class TextDocument<LAnnotation> {
 
   /** Create an independent document with the same text and history. */
   clone(): TextDocument<LAnnotation> {
-    return new TextDocument(
+    const clone = new TextDocument(
       this.#uri,
       this.getText(),
       this.#languageId,
       this.#version,
       this.#editStack.clone()
     );
+    clone.#eol = this.#eol;
+    return clone;
+  }
+
+  /** Create an independent document at the current version without undo history. */
+  cloneWithoutHistory(): TextDocument<LAnnotation> {
+    const clone = new TextDocument(
+      this.#uri,
+      this.getText(),
+      this.#languageId,
+      this.#version,
+      this.#editStack.cloneWithoutEntries()
+    );
+    clone.#eol = this.#eol;
+    return clone;
   }
 
   /** Copy text and undo history for an editor with unrelated annotation data. */
   cloneForAnnotations<NextAnnotation>(): TextDocument<NextAnnotation> {
-    return new TextDocument(
+    const clone = new TextDocument(
       this.#uri,
       this.getText(),
       this.#languageId,
       this.#version,
       this.#editStack.cloneForAnnotations<NextAnnotation>()
     );
+    clone.#eol = this.#eol;
+    return clone;
   }
 
   positionAt(offset: number): Position {
