@@ -610,6 +610,9 @@ function _processFile(
  * @param cacheKeyPrefix - Optional prefix for generating cache keys. When provided,
  *   each file in the patch will get a cache key in the format `prefix-patchIndex-fileIndex`.
  *   This enables caching of rendered diff results in the worker pool.
+ * @param throwOnError - When true, invalid data throws. When false, invalid data
+ *   is reported with `console.error` and the parser attempts to recover when
+ *   possible. Recovery is best-effort and does not guarantee valid output.
  */
 export function parsePatchFiles(
   data: string,
