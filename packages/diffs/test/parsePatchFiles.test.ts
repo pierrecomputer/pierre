@@ -157,6 +157,73 @@ describe('parsePatchFiles', () => {
     }
   });
 
+  test('repairs only the underfilled side of an asymmetric hunk', () => {
+    const consoleError = spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const result = parsePatchFiles(
+        [
+          '--- asymmetric.txt\n',
+          '+++ asymmetric.txt\n',
+          '@@ -1,3 +1,2 @@\n',
+          '-old\n',
+          '+new\n',
+          ' context\n',
+        ].join('')
+      );
+      const hunk = result[0].files[0].hunks[0];
+
+      expect(consoleError).toHaveBeenCalledTimes(1);
+      expect(consoleError.mock.calls[0][0]).toContain('@@ -1,3 +1,2 @@');
+      expect(consoleError.mock.calls[0][0]).toContain('declared old/new 3/2');
+      expect(consoleError.mock.calls[0][0]).toContain('parsed old/new 2/2');
+      expect(hunk.deletionCount).toBe(2);
+      expect(hunk.additionCount).toBe(2);
+      expect(verifyPatchHunkValues(result).errors).toEqual([]);
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
+  test('uses repaired counts for geometry after an underfilled hunk', () => {
+    const consoleError = spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const result = parsePatchFiles(
+        [
+          '--- multiple.txt\n',
+          '+++ multiple.txt\n',
+          '@@ -1,4 +1,4 @@\n',
+          '-old\n',
+          '+new\n',
+          ' context\n',
+          '-tail\n',
+          '+TAIL\n',
+          '@@ -6 +6 @@\n',
+          '-later old\n',
+          '+later new\n',
+        ].join('')
+      );
+      const file = result[0].files[0];
+      const [firstHunk, secondHunk] = file.hunks;
+
+      expect(consoleError).toHaveBeenCalledTimes(1);
+      expect(consoleError.mock.calls[0][0]).toContain('@@ -1,4 +1,4 @@');
+      expect(consoleError.mock.calls[0][0]).toContain('declared old/new 4/4');
+      expect(consoleError.mock.calls[0][0]).toContain('parsed old/new 3/3');
+      expect(firstHunk.additionCount).toBe(3);
+      expect(firstHunk.deletionCount).toBe(3);
+      expect(secondHunk.additionCount).toBe(1);
+      expect(secondHunk.deletionCount).toBe(1);
+      expect(secondHunk.collapsedBefore).toBe(2);
+      expect(secondHunk.splitLineStart).toBe(5);
+      expect(secondHunk.unifiedLineStart).toBe(7);
+      expect(file.splitLineCount).toBe(6);
+      expect(file.unifiedLineCount).toBe(9);
+      expect(verifyPatchHunkValues(result).errors).toEqual([]);
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
   test('throws in strict mode when a hunk has extra content lines', () => {
     expect(() =>
       parsePatchFiles(
