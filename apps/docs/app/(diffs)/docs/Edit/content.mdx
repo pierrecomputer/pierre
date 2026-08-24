@@ -60,9 +60,10 @@ You render the surface first, then attach editing:
 4. **Updates** — Keystrokes update an internal `TextDocument`, then changed
    lines are re-highlighted through the same tokenizer pipeline as read-only
    mode. A component's `onEditChange` prop (recommended) or the editor's
-   `onChange` option receives an `EditorChangeEvent` carrying the updated
-   `file`/`fileDiff`, the current `lineAnnotations`, and normalized text
-   `changes` for every live edit.
+   `onChange` option receives an `EditorChangeEvent` carrying the updated `file`
+   (the editable new side for a diff), the current `lineAnnotations`, and
+   normalized text `changes` for every live edit. Its `state` snapshot contains
+   the current selections and any editor-owned viewport offsets.
 5. **Completion** — When a changed session ends, `onEditComplete` runs once as
    the accept/revert boundary (see
    [Completing an edit](#edit-mode-completing-an-edit)).
@@ -109,10 +110,9 @@ reject the finalized edits.
 Wrap editable surfaces in a permanently mounted `EditProvider`, then toggle the
 standalone surface's `edit` prop or a `CodeView` item's `edit` flag. Standalone
 surface DOM and imperative file/diff instances stay mounted across the toggle.
-The provider's `createEditor` factory gives each editable surface or `CodeView`
-item its own `Editor`, cached by `editorOptions` object identity: an edit
-session that restarts with the same options object reuses its editor, and
-surfaces editable at the same time need distinct options objects.
+The provider's `createEditor` factory creates the `Editor` owned by each active
+standalone surface or `CodeView` item. Forward all three factory arguments so an
+optional `editHistoryKey` reaches the editor.
 
 Pass creation-time callbacks and behavior through the surface's `editorOptions`;
 the factory can spread shared defaults before the surface options so the surface
@@ -121,14 +121,10 @@ scope, or use `useCallback` and `useMemo` when they depend on component values.
 
 <DocsCodeExample {...editReactCreateEditorExample} />
 
-Because editors are cached by options identity, passing one stable
-`editorOptions` object to every surface shares one `Editor` across them. This is
-the pattern for IDE-like UIs that edit one file at a time across many files,
-normally combined with `persistState` so each file's contents, history,
-selections, and scroll position survive switches — see
-[Persisting Editor State](#edit-mode-persisting-editor-state):
-
-<DocsCodeExample {...editReactSharedEditorExample} />
+Pass a distinct `editHistoryKey` for each document whose draft and undo history
+should survive a completed session or remount. Store `event.state` separately
+when selections and virtualized scroll should also return — see
+[Retaining and restoring editor state](#edit-mode-retaining-and-restoring-editor-state).
 
 Changes to `createEditor` or `editorOptions` do not disturb an active edit
 session; their latest values apply the next time `edit` transitions from false
@@ -148,9 +144,10 @@ or revert the session.
 Render with `File` or `FileDiff` first, then attach the editor with
 `editor.edit(component)`. Use `VirtualizedFile` and `VirtualizedFileDiff` for
 large editable files. Set `onEditComplete` in the surface's options to accept or
-revert when the session ends. Call `cleanUp()` when the editor is removed — its
-disposer runs completion for you. The `FileDiff` tab below shows the accept
-flow.
+revert when the session ends. Keep and call the disposer returned by `edit()`
+for normal teardown; it detaches the editor and runs completion. Use
+`editor.cleanUp('discard')` only when completion must not run. The `FileDiff`
+tab below shows the accept flow.
 
 <EditComponentTabs
   fileExample={editVanillaFileExample}
@@ -175,17 +172,20 @@ item, called once when a changed edit session ends (edit false, the item is
 removed or `CodeView` unmounts). `nextItem` is the accepted replacement
 `CodeView` built for you — the same item with the completed `file`/`fileDiff`
 and annotations, `edit: false`, and a bumped `version`. Return `'accept'`
-(re-key the event's value first if you use `cacheKey`s): `CodeView` installs the
-value and applies `nextItem` for you. Return `'reject'` to revert. Sessions with
-no changes do not fire it; a collapsed item suspends its session instead of
-completing. Resetting, cleaning up, or unmounting completes changed sessions
-too.
+(re-key the event's value first if you use `cacheKey`s): `CodeView` applies
+`nextItem` while the item remains present. Acceptance during item removal or
+viewer teardown records the decision without reinserting the item. Return
+`'reject'` to revert while the item remains present; neither decision reinserts
+an item during removal or teardown. Sessions with no changes do not fire it; a
+collapsed item suspends its session instead of completing. Resetting, cleaning
+up, or unmounting completes changed sessions too.
 
-In controlled mode (you pass `items`), you must also write `nextItem` into your
-own item state before returning `'accept'`. `CodeView` applies it to its
-internal records, but your `items` prop is the source of truth on the next
+In controlled mode (you pass `items`), write `nextItem` into your own item state
+before accepting while the item should remain present. `CodeView` applies it to
+its internal records, but your `items` prop is the source of truth on the next
 reconcile, so without this your next render would clobber the accepted edit with
-the stale item. Because the versions match, that push reconciles as a no-op.
+the stale item. Do not reinsert an item that is being removed or torn down.
+Because the versions match, that push reconciles as a no-op.
 
 <CodeViewExampleTabs
   reactExample={editReactCodeViewExample}
@@ -227,6 +227,8 @@ restores:
   patch inputs, or other file-based state.
 - `lineAnnotations` — the final annotation collection; `originalLineAnnotations`
   is the collection from before completion.
+- `state` — the final selections and editor-owned viewport offsets. Capture this
+  snapshot even if no text changed after the user's last selection or scroll.
 
 Return `'accept'` or `'reject'` to decide the edit:
 
@@ -235,9 +237,11 @@ Return `'accept'` or `'reject'` to decide the edit:
   future renders won't blow away your edits. The React bridge attempts to hold
   the accepted value on screen until your state update's props catch up.
 - **`'reject'`** — the surface restores `originalFile`/`originalFileDiff`. A
-  missing handler also automatically rejects. There's nothing to store with
-  state if you reject because that's the state you should already be holding
-  onto.
+  missing handler also automatically rejects. If the editor uses an
+  `editHistoryKey`, its draft and undo history remain retained independently;
+  call the matching `Editor.disposeFile*()` method when rejection should discard
+  them permanently. You may still store `event.state` if the same view state
+  should return later.
 
 The component owns the accepted value — you never hand it back, so a clone can't
 slip in — but an accepted value may not reuse the replaced value's non-empty
@@ -329,48 +333,46 @@ selection (`getSelectionText`, `replaceSelectionText`, `applyEdits`), and
 
 <DocsCodeExample {...editSelectionActionContextType} />
 
-### Persisting Editor State
+### Retaining and Restoring Editor State
 
-By default, each edit session starts fresh: switching files (or re-entering edit
-mode) discards the previous file's edits, history, and selections. Set
-`persistState: true` to keep per-file state alive across file switches on the
-same `Editor` instance. State is keyed by the file's `cacheKey`, so every
-editable file must provide one — unique and stable (the editor throws
-otherwise). Diffs parsed with `parseDiffFromFile` derive a cache key from the
-file pair automatically.
+Draft/history retention and view-state restoration are separate, explicit
+features:
 
-Two layers persist:
+- **Draft and undo/redo history.** Pass `editHistoryKey` as the `Editor`
+  constructor's third argument, or as a React surface prop. Reusing that key
+  with the same surface kind resumes the retained document and its undo
+  timeline. For a diff, scope the key to its old-side baseline; resuming against
+  a different old file throws. This registry is in memory, bounded, and does not
+  survive a page reload.
+- **Selections and view state.** Every change and completion event carries a
+  serializable `state`. Store it in application-owned memory, browser storage,
+  or your backend, then pass it to a newly created editor as
+  `editorOptions.initialState`. It is consumed once on the editor's first
+  successful attach.
 
-- **File contents and undo history.** The editor caches each file's text
-  document on the instance. When a file whose `cacheKey` it has already seen
-  attaches again, the editor swaps the cached document back in — the host keeps
-  passing the original `contents`, and the edited text with its full undo
-  timeline returns.
-- **Editor state.** Selections and scroll positions — the code scroller's
-  `scrollLeft` and the surrounding viewport's `scrollTop` — are written to
-  `persistStateStorage` when the editor detaches or switches files, and restored
-  on the next attach with the same `cacheKey`. If the user scrolls before an
-  async restore lands, the restore leaves the viewport alone.
+These identities are not derived from `file.cacheKey`. The editor never reads a
+render cache key; choose `editHistoryKey` according to your editing-session
+lifecycle. Without one, a new editor starts from the supplied file with fresh
+history. Call `Editor.disposeFile(key)` or `Editor.disposeFileDiff(key)` when a
+retained draft must not return. `Editor.clearDocuments()` clears both
+registries, and `Editor.setDocumentRegistryCapacity(capacity)` changes their
+per-surface capacity (default `100`).
 
-A file with no stored record yet — its first open — starts scrolled to the top
-instead of inheriting whatever offset the previous file left behind in a shared
-scroll container.
+`EditorState.view` is present only when the surface owns a virtualized viewport.
+It can include horizontal code scroll and that viewport's vertical scroll. A
+plain `File` or `FileDiff` does not own page or ancestor scrolling, so its state
+omits `view` and your application remains responsible for that scroll position.
 
-<DocsCodeExample {...editPersistStateExample} />
+<DocsCodeExample {...editEditorStateExample} />
 
-`persistStateStorage` selects where the serializable state lives: `'inMemory'`
-(the default) lasts as long as the `Editor` instance, `'indexedDB'` survives
-page reloads, and a custom `IStateStorage` — an object with `get(cacheKey)` and
-`set(cacheKey, state)`, synchronous or async — bridges to your own store. Cached
-text documents always stay on the editor instance regardless of the storage
-choice, so persisting content across file switches means reusing one editor
-rather than creating one per file.
+In React, capture snapshots with `onEditChange` and `onEditComplete`. Those
+callbacks only run for sessions with text changes, so read `editor.getState()`
+through an `onAttach` ref before toggling edit off or unmounting when a
+selection-only or scroll-only session must also be saved. Supplying both
+`initialState` and `editHistoryKey` restores view state and in-memory document
+history independently:
 
-In React, reuse one editor by passing the same `editorOptions` object to every
-surface — `EditProvider` caches editors by options identity, so a stable object
-yields one instance across file switches:
-
-<DocsCodeExample {...editPersistStateReactExample} />
+<DocsCodeExample {...editEditorStateReactExample} />
 
 ### Markers
 
@@ -404,10 +406,14 @@ with the edit. Drive it with `undo()` and `redo()` — the same commands behind
 To retain the editable draft and undo/redo history after an edit session ends,
 pass an `editHistoryKey` as the `Editor` constructor's third argument. React
 `File`, `FileDiff`, `MultiFileDiff`, and `PatchDiff` accept the same value as a
-prop. Reusing the key with the same surface kind resumes that history. Retention
-is in memory, bounded by the document registry capacity, and does not survive a
-page reload. Call `Editor.disposeFile(key)` or `Editor.disposeFileDiff(key)`
-when the history is no longer needed.
+prop. Reusing the key with the same surface kind resumes that history. A diff
+key must also identify a compatible old-side baseline. Retention is in memory,
+bounded by the document registry capacity, and does not survive a page reload.
+Call `Editor.disposeFile(key)` or `Editor.disposeFileDiff(key)` when the history
+is no longer needed.
+
+The key does not retain selections or scroll. Capture `event.state` and hand it
+back through `initialState` when those should be restored too.
 
 You can limit the stack size with `historyMaxEntries` in
 [Editor Options](#edit-mode-editor-options) (default is `100`).
@@ -462,6 +468,9 @@ Pass these as the second argument when constructing
 
 <DocsCodeExample {...editorOptionsType} />
 
+`initialState` is a creation-time, one-shot input. `setOptions()` does not queue
+another initial restore; use `setState()` when updating an attached editor.
+
 `EditorKeymap` is an array of `{ platform?, bindings }` groups. `platform` can
 be `mac`, `windows`, or `linux`; omit it to enable the group's bindings
 everywhere. Later groups take precedence when bindings overlap. When set, custom
@@ -470,8 +479,9 @@ keymap. Keymaps are immutable; pass a new array to `setOptions` to change one.
 
 #### `onChange`
 
-The third argument is an `EditorChangeEvent`. Its `changes` array contains every
-normalized edit in the change:
+The callback receives an `EditorChangeEvent`. Its `changes` array contains every
+normalized edit in the change, while `state` captures the selections and
+editor-owned viewport after that edit:
 
 <DocsCodeExample {...editOnChangeExample} />
 

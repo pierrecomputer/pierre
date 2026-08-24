@@ -321,72 +321,147 @@ export const EDIT_SELECTION_ACTION_CONTEXT_TYPE: PreloadFileOptions<undefined> =
     options,
   };
 
-export const EDIT_PERSIST_STATE_EXAMPLE: PreloadFileOptions<undefined> = {
+export const EDIT_EDITOR_STATE_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
-    name: 'editor_persist_state.ts',
-    contents: `import type { FileContents } from '@pierre/diffs';
+    name: 'editor_state.ts',
+    contents: `import { File, type EditorState } from '@pierre/diffs';
 import { Editor } from '@pierre/diffs/edit';
 
-// Unique, stable cacheKeys identify each file's cached document and its
-// stored editor state.
-const fileA: FileContents = {
-  name: 'a.ts',
-  contents: 'export const a = 1;',
-  cacheKey: 'a.ts',
-};
-const fileB: FileContents = {
-  name: 'b.ts',
-  contents: 'export const b = 2;',
-  cacheKey: 'b.ts',
-};
+// Store this wherever your app keeps view state. A Map lasts only for this page.
+const stateByFile = new Map<string, EditorState>();
 
-// \`fileInstance\` is a rendered File — see the Vanilla JS section above.
-const editor = new Editor('file', { persistState: true });
-editor.edit(fileInstance);
-fileInstance.render({ file: fileA });
+const fileInstance = new File();
+fileInstance.render({
+  file: { name: 'src/example.ts', contents: 'export const value = 1;' },
+  containerWrapper: document.body,
+});
 
-// ...the user edits, selects, and scrolls fileA...
+function createEditor(fileId: string) {
+  return new Editor(
+    'file',
+    {
+      // Applied once, when this new editor first attaches.
+      initialState: stateByFile.get(fileId),
+      onChange(event) {
+        stateByFile.set(fileId, event.state);
+      },
+    },
+    // Optional: separately retain this draft and undo history in memory.
+    'workspace:' + fileId
+  );
+}
 
-// Switching files caches fileA's document (contents + undo history) on the
-// editor and writes its selections and scroll offsets to the state storage.
-// fileB has no record yet, so its surface starts scrolled to the top.
-fileInstance.render({ file: fileB });
+const editor = createEditor('src/example.ts');
+const finishEditing = editor.edit(fileInstance);
 
-// Switching back renders fileA's edited contents — even though the original
-// \`contents\` string is passed again — and restores its selections, scroll
-// position, and undo history.
-fileInstance.render({ file: fileA });`,
+// Capture getState() before an imperative teardown, or capture event.state from
+// the surface's onEditComplete callback so selection changes after the last edit
+// are included.
+stateByFile.set('src/example.ts', editor.getState());
+finishEditing();`,
   },
   options,
 };
 
-export const EDIT_PERSIST_STATE_REACT_EXAMPLE: PreloadFileOptions<undefined> = {
+export const EDIT_EDITOR_STATE_REACT_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
-    name: 'editor_persist_state_react.tsx',
-    contents: `import type { FileContents } from '@pierre/diffs';
+    name: 'editor_state_react.tsx',
+    contents: `import type { EditorState, FileContents } from '@pierre/diffs';
 import { Editor, type EditorOptions } from '@pierre/diffs/edit';
-import { type CreateEditor, EditProvider, File } from '@pierre/diffs/react';
-import { useCallback, useMemo } from 'react';
+import {
+  type CreateEditor,
+  EditProvider,
+  File,
+  Virtualizer,
+} from '@pierre/diffs/react';
+import {
+  useCallback,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
-// Editors are cached by \`editorOptions\` object identity, so the stable
-// options object below hands every file rendered here the same editor. Its
-// cached documents and default 'inMemory' state store live on that instance,
-// which is what lets per-file contents, selections, and scroll survive
-// surface remounts.
-export function PersistedEditor({ file }: { file: FileContents }) {
+// Replace this page-local Map with application storage if state must survive a
+// reload. EditorState is serializable; undo history is intentionally not.
+const stateByFile = new Map<string, EditorState>();
+
+export function StatefulEditor(props: {
+  fileId: string;
+  initialFile: FileContents;
+}) {
+  // A key change ends the old session and gives the next document fresh local
+  // file state plus a newly created Editor.
+  return <StatefulEditorDocument key={props.fileId} {...props} />;
+}
+
+function StatefulEditorDocument({
+  fileId,
+  initialFile,
+}: {
+  fileId: string;
+  initialFile: FileContents;
+}) {
+  const [file, setFile] = useState(initialFile);
+  const [editing, setEditing] = useState(true);
+  const editorRef = useRef<Editor<undefined> | null>(null);
+  const editorAttachedRef = useRef(false);
   const createEditor = useCallback<CreateEditor<undefined>>(
     (documentKind, options, editHistoryKey) =>
       new Editor(documentKind, options, editHistoryKey),
     []
   );
   const editorOptions = useMemo<EditorOptions<undefined>>(
-    () => ({ persistState: true }),
-    []
+    () => ({
+      initialState: stateByFile.get(fileId),
+      onAttach(editor) {
+        editorRef.current = editor;
+        editorAttachedRef.current = true;
+      },
+    }),
+    [editing, fileId]
   );
+
+  useLayoutEffect(
+    () => () => {
+      if (editorAttachedRef.current && editorRef.current != null) {
+        stateByFile.set(fileId, editorRef.current.getState());
+        editorAttachedRef.current = false;
+      }
+    },
+    [fileId]
+  );
+
+  function toggleEditing() {
+    if (editing && editorRef.current != null) {
+      // Change/completion events do not fire for selection-only sessions.
+      stateByFile.set(fileId, editorRef.current.getState());
+      editorAttachedRef.current = false;
+    }
+    setEditing((value) => !value);
+  }
 
   return (
     <EditProvider createEditor={createEditor}>
-      <File file={file} edit editorOptions={editorOptions} />
+      <button type="button" onClick={toggleEditing}>
+        {editing ? 'Finish edit' : 'Edit'}
+      </button>
+      <Virtualizer style={{ maxHeight: 320, overflow: 'auto' }}>
+        <File
+          file={file}
+          edit={editing}
+          editHistoryKey={'workspace:' + fileId}
+          editorOptions={editorOptions}
+          onEditChange={(event) => {
+            stateByFile.set(fileId, event.state);
+          }}
+          onEditComplete={(event) => {
+            stateByFile.set(fileId, event.state);
+            setFile(event.file);
+            return 'accept';
+          }}
+        />
+      </Virtualizer>
     </EditProvider>
   );
 }`,
@@ -546,28 +621,6 @@ return (
       file={file}
       edit={editing}
       editHistoryKey="review:example.ts"
-      editorOptions={editorOptions}
-      onEditChange={handleChange}
-    />
-  </EditProvider>
-);`,
-  },
-  options,
-};
-
-export const EDIT_REACT_SHARED_EDITOR_EXAMPLE: PreloadFileOptions<undefined> = {
-  file: {
-    name: 'editor_react_shared_editor.tsx',
-    contents: `const editorOptions = useMemo<EditorOptions<undefined>>(
-  () => ({ persistState: true }),
-  []
-);
-
-return (
-  <EditProvider createEditor={createEditor}>
-    <File
-      file={activeFile}
-      edit
       editorOptions={editorOptions}
       onEditChange={handleChange}
     />
@@ -1041,31 +1094,25 @@ export const EDITOR_OPTIONS_TYPE: PreloadFileOptions<undefined> = {
   DiffLineAnnotation,
   DiffsEditableComponent,
   EditorChangeEvent,
+  EditorState,
   FileContents,
   LineAnnotation,
 } from '@pierre/diffs';
 import {
   Editor,
   type EditorKeymap,
-  type IStateStorage,
 } from '@pierre/diffs/edit';
 
 interface EditorOptions<LAnnotation> {
   // Max undo stack entries
   historyMaxEntries?: number;
 
+  // Selections and editor-owned viewport offsets to apply once, when this
+  // Editor first attaches. Capture this from a change or completion event.
+  initialState?: EditorState;
+
   // Custom keymap checked before the default map.
   keymap?: EditorKeymap;
-
-  // Preserve each File's document and item-local editor state between renders.
-  // Requires every editable file to provide a unique, stable cacheKey.
-  // Default: false.
-  persistState?: boolean;
-
-  // Where serializable editor state is stored. Text documents and undo
-  // history remain in this Editor instance's in-memory cache.
-  // Defaults to 'inMemory' when persistState is enabled.
-  persistStateStorage?: 'inMemory' | 'indexedDB' | IStateStorage;
 
   // Render rounded corners on selection ranges (default: true)
   roundedSelection?: boolean;
@@ -1106,9 +1153,9 @@ interface EditorOptions<LAnnotation> {
   ) => void;
 
   // Editor-centric change stream. Fires after each edit with an
-  // EditorChangeEvent carrying the live file/fileDiff, the current
-  // lineAnnotations, and normalized text changes. Prefer a component's
-  // onEditChange prop/option for per-component handling.
+  // EditorChangeEvent carrying the live file (the editable new side for a diff), the current
+  // lineAnnotations, normalized text changes, and EditorState. Prefer a
+  // component's onEditChange prop/option for per-component handling.
   onChange?: (event: EditorChangeEvent<LAnnotation, 'file' | 'diff'>) => void;
 
   // Fires when the editable content area gains focus (tab, click, or editor.focus()).
@@ -1173,9 +1220,10 @@ export const EDIT_ON_CHANGE_EXAMPLE: PreloadFileOptions<undefined> = {
 // more directly
 new Editor('file', {
   onChange: (event) => {
-    // \`event.file\` (or \`event.fileDiff\`) is the live document, and
+    // \`event.file\` is the live document (the editable new side for a diff), and
     // \`event.lineAnnotations\` the current collection. \`event.changes\` lists
-    // every normalized edit.
+    // every normalized edit, and \`event.state\` can hydrate a later editor.
+    saveEditorState(event.state);
     event.changes.forEach((change) => {
       console.log('Text inserted/replaced:', change.text);
       console.log('Range of the edit:', change.range); // { start: { line, character }, end: { line, character } }
@@ -1207,29 +1255,28 @@ fileInstance.render({
 });
 
 const editHistoryKey = 'review:example.ts';
-const editor = new Editor('file', {}, editHistoryKey);
+const initialState: EditorState | undefined = loadEditorState(editHistoryKey);
+const editor = new Editor('file', { initialState }, editHistoryKey);
 
 // Merge partial options at runtime. Existing fields are preserved.
 // onChange and similar handlers read from the latest options on each call;
 // pass onFocus/onBlur before edit() attaches, or set them in the constructor.
 editor.setOptions({
   onChange(event) {
-    // Observe the live document via event.file/event.fileDiff. Editing owns
+    // Observe the live document via event.file. For a diff, this is its editable
+    // new side. Editing owns
     // annotation positions during the session — no sync loop needed.
     // Avoid using this API in favor of the \`onEditChange\` prop on
     // File/FileDiff components directly
+    saveEditorState(editHistoryKey, event.state);
     console.log(event.changes.length, 'change(s)');
   },
 });
 
-// Attach to a rendered File, FileDiff, or virtualized variant.
+// This file-kind editor attaches to a rendered File or VirtualizedFile. Create
+// an Editor('file-diff', ...) for FileDiff or VirtualizedFileDiff.
 // Normalizes conflicting fileInstance options and returns a dispose function.
 const dispose = editor.edit(fileInstance);
-
-// Detach, remove listeners, and clean up injected editor DOM.
-// Pass recycle=true when a virtualized host is temporarily unmounting.
-editor.cleanUp();
-editor.cleanUp(true);
 
 // Apply text edits to the attached document. Positions are zero-based.
 // Edits always join the undo stack, exactly like typed input. The optional
@@ -1307,8 +1354,20 @@ editor.canRedo;
 editor.undo();
 editor.redo();
 
+// End the session through the disposer returned by edit(). It detaches the
+// editor, then runs the surface's onEditComplete accept/reject boundary.
+dispose();
+
+// cleanUp('discard') is the lower-level detach path when completion must not run.
+// Virtualized hosts use cleanUp('recycle') internally for temporary remounts.
+
 // Release the retained draft and history when this file is no longer needed.
 Editor.disposeFile(editHistoryKey);
+Editor.disposeFileDiff('review:example.diff');
+
+// Clear both registries, or change their per-surface dormant-entry capacity.
+Editor.clearDocuments();
+Editor.setDocumentRegistryCapacity(50);
 `,
   },
   options,
