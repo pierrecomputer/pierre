@@ -370,6 +370,13 @@ export interface FileDiffMetadata {
   cacheKey?: string;
 }
 
+/** @internal Session-shaped hunk state retained with a keyed document. */
+export interface RetainedDiffSessionSnapshot {
+  oldFile: { name: string; lines: string[] } | null;
+  type: ChangeTypes;
+  hunks: Hunk[];
+}
+
 export type MergeConflictMarkerRowType =
   | 'marker-start'
   | 'marker-base'
@@ -1000,6 +1007,8 @@ export interface EditorActiveLineOptions {
   side?: SelectionSide;
 }
 
+export type EditorDocumentKind = 'file' | 'file-diff';
+
 export interface DiffsBaseComponent {
   readonly type: 'file' | 'file-diff' | 'unresolved-file';
   readonly top?: number;
@@ -1032,6 +1041,14 @@ export interface DiffsEditableComponent<
    * shared highlighter is actually loaded with and the pool's tokenize limit.
    */
   __getEffectiveCodeOptions(): BaseCodeOptions;
+  /**
+   * @internal Capture component state that follows a retained keyed document.
+   * `null` means the current session is clean; `undefined` means no complete
+   * session is available yet, so previously retained state remains authoritative.
+   */
+  __captureDocumentSessionState?: (
+    hasDocumentHistory: boolean
+  ) => RetainedDiffSessionSnapshot | null | undefined;
   /** @internal Keep the editor caret decoration separate from line selection. */
   setEditorActiveLine: (
     lineNumber: number | null,
@@ -1177,8 +1194,10 @@ export interface DiffsEditor<LAnnotation> {
   __postponeBgTokenizeToNextFrame(): void;
   /** @internal Capture focus intent before replacing the editable view. */
   __captureFocusForDOMReplacement(): void;
-  /** @internal Return keyed text that an edit-session render should use. */
-  __getDocumentContents(): string | undefined;
+  /** @internal Return the keyed document that an edit-session render should use. */
+  __getDocumentContents(): FileContents | undefined;
+  /** @internal Return component state retained with the keyed document. */
+  __getDocumentSessionState?(): RetainedDiffSessionSnapshot | undefined;
   __syncRenderView(props: SyncRenderViewProps<LAnnotation>): void;
   edit<T extends DiffsEditableComponent<LAnnotation>>(
     fileInstance: EditableInstance<T>
@@ -1317,10 +1336,11 @@ export interface DiffsTextDocument {
 /**
  * Options CodeView passes to its `createEditor` factory. A structural subset
  * of `EditorOptions` from `@pierre/diffs/edit`, so factories can spread
- * them straight into the constructor — `new Editor({ ...options })` — and
- * layer any editor configuration of their own on top. Forwarding `onChange`
- * is what lets CodeView resolve document changes back to the owning item and
- * emit them through its own `onItemEditChange` option.
+ * them straight into the constructor —
+ * `new Editor(documentKind, { ...options })` — and layer any editor
+ * configuration of their own on top. Forwarding `onChange` is what lets
+ * CodeView resolve document changes back to the owning item and emit them
+ * through its own `onItemEditChange` option.
  */
 export interface CodeViewCreateEditorOptions<LAnnotation> {
   onChange(event: EditorChangeEvent<LAnnotation, 'file' | 'diff'>): void;

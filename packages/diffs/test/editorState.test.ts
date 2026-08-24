@@ -154,7 +154,7 @@ class TestEditableComponent implements DiffsEditableComponent<undefined> {
 describe('Editor state', () => {
   test('getState captures horizontal state from the code scroller', () => {
     const dom = installDom();
-    const editor = new Editor<undefined>();
+    const editor = new Editor<undefined>('file');
     const component = new TestEditableComponent({
       name: 'state.ts',
       contents: 'alpha\nbravo',
@@ -174,7 +174,7 @@ describe('Editor state', () => {
 
   test('setState restores view state through the editable component', () => {
     const dom = installDom();
-    const editor = new Editor<undefined>();
+    const editor = new Editor<undefined>('file');
     const component = new TestEditableComponent({
       name: 'state.ts',
       contents: 'alpha\nbravo',
@@ -204,7 +204,7 @@ describe('Editor state', () => {
       scrollIntoViewCalls++;
     };
 
-    const editor = new Editor<undefined>();
+    const editor = new Editor<undefined>('file');
     const component = new TestEditableComponent({
       name: 'state.ts',
       contents: 'alpha\nbravo\ncharlie\ndelta\necho\nfoxtrot\n',

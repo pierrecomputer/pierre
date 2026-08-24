@@ -66,7 +66,7 @@ async function createFoldFixture(): Promise<FoldFixture> {
     theme: DEFAULT_THEMES,
     diffStyle: 'split',
   });
-  const editor = new Editor<undefined>();
+  const editor = new Editor<undefined>('file-diff');
   fileDiff.render({
     oldFile: { name: 'edit.ts', contents: oldContents },
     newFile: { name: 'edit.ts', contents: newContents },

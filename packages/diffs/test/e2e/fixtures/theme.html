@@ -50,7 +50,7 @@ export { greeting, count };
 `,
       };
 
-      const editor = new Editor({});
+      const editor = new Editor('file-diff');
       window.__editor = editor;
 
       const searchParams = new URLSearchParams(window.location.search);

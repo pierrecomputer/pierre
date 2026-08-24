@@ -35,6 +35,7 @@ import {
   type DiffLineAnnotation,
   type DiffsEditor,
   type EditCompletionDecision,
+  type EditorDocumentKind,
   type GetHoveredLineResult,
   type LineAnnotation,
 } from '../index';
@@ -245,13 +246,14 @@ function CodeViewInner<LAnnotation = undefined>(
   // next item edit session without forcing CodeView to reconcile active editors.
   const createEditor = useStableCallback(
     (
+      documentKind: EditorDocumentKind,
       options: CodeViewCreateEditorOptions<LAnnotation>
     ): DiffsEditor<LAnnotation> => {
       if (contextCreateEditor == null) {
         throw new Error('CodeView: EditContext is not attached');
       }
 
-      const editor = contextCreateEditor({
+      const editor = contextCreateEditor(documentKind, {
         ...editorOptions,
         ...options,
       });

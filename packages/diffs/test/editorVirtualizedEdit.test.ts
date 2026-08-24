@@ -86,7 +86,7 @@ async function createWindowedEditor(
     disableFileHeader: true,
     theme: DEFAULT_THEMES,
   });
-  const editor = new Editor<undefined>();
+  const editor = new Editor<undefined>('file');
   const initialFile: FileContents = {
     name: 'edits.ts',
     contents: makeContents(lineCount),

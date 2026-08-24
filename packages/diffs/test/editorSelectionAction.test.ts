@@ -64,7 +64,7 @@ async function createSelectionActionFixture(
     disableFileHeader: true,
     theme: DEFAULT_THEMES,
   });
-  const editor = new Editor<undefined>(editorOptions);
+  const editor = new Editor<undefined>('file', editorOptions);
   const initialFile: FileContents = { name: 'edits.ts', contents };
 
   file.render({

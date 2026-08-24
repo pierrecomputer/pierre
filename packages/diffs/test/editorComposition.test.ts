@@ -75,7 +75,7 @@ async function createEditorFixture(
     name: 'editor.ts',
     contents,
   };
-  const editor = new Editor<undefined>();
+  const editor = new Editor<undefined>('file');
 
   file.render({
     file: initialFile,

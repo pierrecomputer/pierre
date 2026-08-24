@@ -780,6 +780,26 @@ describe('DiffHunksRenderer edit-session hunk updates', () => {
     if (result == null) return;
     expect(result.rowCount).toBeGreaterThan(0);
   });
+
+  test('keeps rename classification frozen until session exit', async () => {
+    const renderer = new DiffHunksRenderer({
+      theme: 'github-light',
+      diffStyle: 'split',
+    });
+    const diff = parseDiffFromFile(
+      { name: 'before.ts', contents: '' },
+      { name: 'after.ts', contents: 'temporary\n' }
+    );
+    await renderer.asyncRender(diff);
+    renderer.renderDiff(diff);
+    renderer.beginEditSession();
+
+    renderer.applyDocumentChange(makeTextDocument(['']));
+
+    expect(diff.type).toBe('rename-changed');
+    expect(finishEditSessionForDiff(diff)).toBe(true);
+    expect(diff.type).toBe('rename-pure');
+  });
 });
 
 // Deleting every character empties the editor's document, whose text is "".

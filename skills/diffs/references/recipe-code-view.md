@@ -201,7 +201,8 @@ export function removeReviewSurface() {
 
 In React, wrap `CodeView` in `EditProvider`. In vanilla JavaScript, pass
 `createEditor` in `CodeViewOptions`. Set `edit: true` on each editable item and
-increment its version.
+increment its version. The factory receives `'file'` or `'file-diff'` as its
+first argument so it can construct an editor dedicated to that surface.
 
 Use `onItemEditChange` for live contents and annotation changes. Use
 `onItemEditComplete` to write the final contents into the item, disable edit

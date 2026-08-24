@@ -106,8 +106,8 @@ For vanilla `CodeView`, add the callback while constructing each item editor:
 
 ```ts
 const viewer = new CodeView({
-  createEditor(options) {
-    return new Editor({
+  createEditor(documentKind, options) {
+    return new Editor(documentKind, {
       ...options,
       onAttach(editor) {
         editor.focus({ lineNumber: 'first-visible', preventScroll: true });

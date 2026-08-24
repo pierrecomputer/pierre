@@ -134,7 +134,7 @@ async function createDiffEditorFixture(
     diffStyle,
     ...options,
   });
-  const editor = new Editor<undefined>();
+  const editor = new Editor<undefined>('file-diff');
   const oldFile: FileContents = { name: 'edit.ts', contents: oldContents };
   const newFile: FileContents = { name: 'edit.ts', contents: newContents };
 

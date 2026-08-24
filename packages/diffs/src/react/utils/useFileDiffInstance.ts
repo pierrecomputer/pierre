@@ -261,7 +261,7 @@ export function useFileDiffInstance<LAnnotation>({
       if (createEditor === undefined) {
         throw new Error('FileDiff: EditContext is not attached');
       }
-      const editor = createEditor(editorOptions ?? {});
+      const editor = createEditor('file-diff', editorOptions ?? {});
       if (editor == null) {
         throw new Error(
           'FileDiff: EditProvider.createEditor must return an editor instance'

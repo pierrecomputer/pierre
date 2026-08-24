@@ -449,8 +449,10 @@ These methods are available on an `Editor` instance. Attach it to a rendered
 
 #### Editor Options
 
-Pass these when constructing `new Editor({ ... })`, or update them later with
-[`setOptions`](#edit-mode-api-reference).
+Pass these as the second argument when constructing
+`new Editor(documentKind, { ... })`, or update them later with
+[`setOptions`](#edit-mode-api-reference). Each editor is dedicated to either
+`'file'` or `'file-diff'` components.
 
 <DocsCodeExample {...editorOptionsType} />
 

@@ -60,6 +60,7 @@ import type {
   RenderHeaderMetadataCallback,
   RenderHeaderPrefixCallback,
   RenderRange,
+  RetainedDiffSessionSnapshot,
   SelectedLineRange,
   SelectionSide,
   ThemeTypes,
@@ -72,7 +73,10 @@ import { arePrePropertiesEqual } from '../utils/arePrePropertiesEqual';
 import { areRenderRangesEqual } from '../utils/areRenderRangesEqual';
 import { areThemesEqual } from '../utils/areThemesEqual';
 import { awaitWithTimeout } from '../utils/awaitWithTimeout';
-import { cloneFileDiffMetadata } from '../utils/cloneFileDiffMetadata';
+import {
+  cloneFileDiffMetadata,
+  cloneHunks,
+} from '../utils/cloneFileDiffMetadata';
 import { createAnnotationWrapperNode } from '../utils/createAnnotationWrapperNode';
 import { createGutterUtilityContentNode } from '../utils/createGutterUtilityContentNode';
 import { createUnsafeCSSStyleNode } from '../utils/createUnsafeCSSStyleNode';
@@ -91,7 +95,6 @@ import {
   captureExpansionAnchors,
   finishEditSessionForDiff,
   rebuildExpansionFromAnchors,
-  rebuildSessionHunks,
 } from '../utils/editSessionHunks';
 import { getDiffFileInput } from '../utils/getDiffFileInput';
 import { getDiffHunksRendererOptions } from '../utils/getDiffHunksRendererOptions';
@@ -112,6 +115,7 @@ import { prerenderHTMLIfNecessary } from '../utils/prerenderHTMLIfNecessary';
 import { getMeasuredScrollbarGutter } from '../utils/scrollbarGutter';
 import { setPreNodeProperties } from '../utils/setWrapperNodeProps';
 import { splitFileContents } from '../utils/splitFileContents';
+import { recomputeDiffRenderLineCounts } from '../utils/updateDiffHunks';
 import {
   getExpandedRegion,
   getHunkAdditionLineRange,
@@ -176,6 +180,32 @@ function shouldResetUndoState(
   }
   return prevDiff.deletionLines.some(
     (line, index) => line !== nextDiff.deletionLines[index]
+  );
+}
+
+function areLinesEqual(first: string[], second: string[]): boolean {
+  return (
+    first.length === second.length &&
+    first.every((line, index) => line === second[index])
+  );
+}
+
+// There are certain scenarios where if a diff changes in a certain way, we
+// cannot consider the session resumable.  Basically if the old file has
+// changed in any way (name or contents), then our restored diff would be
+// completely invalid
+function canRestoreDiffSession(
+  snapshot: RetainedDiffSessionSnapshot,
+  externalDiff: FileDiffMetadata
+): boolean {
+  const { oldFile } = snapshot;
+  if (oldFile == null) {
+    return externalDiff.type === 'new';
+  }
+  return (
+    externalDiff.type !== 'new' &&
+    oldFile.name === (externalDiff.prevName ?? externalDiff.name) &&
+    areLinesEqual(oldFile.lines, externalDiff.deletionLines)
   );
 }
 
@@ -1229,7 +1259,11 @@ export class FileDiff<
     if (editor == null || this.editSessionDiff != null) {
       return false;
     }
-    this.installEditSession(expectedDiff, editor.__getDocumentContents());
+    this.installEditSession(
+      expectedDiff,
+      editor.__getDocumentContents(),
+      editor.__getDocumentSessionState?.()
+    );
     return true;
   }
 
@@ -1261,7 +1295,8 @@ export class FileDiff<
     } else if (this.editor != null && !incomingExternalDiff.isPartial) {
       this.installEditSession(
         incomingExternalDiff,
-        this.editor.__getDocumentContents()
+        this.editor.__getDocumentContents(),
+        this.editor.__getDocumentSessionState?.()
       );
     }
     if (this.editSessionAnnotations != null && lineAnnotations != null) {
@@ -1279,36 +1314,66 @@ export class FileDiff<
     return true;
   }
 
-  // Editor contents seed a new session. Existing sessions omit the editor so
-  // incoming text renders as an external replacement and joins undo history.
+  // When an editor opens a document saved under a document key,
+  // `retainedDocument` restores its text and undo history. It is omitted when
+  // replacing the diff in an open editor so the replacement is handled as a
+  // new external update instead of overwriting the document being edited.
   private installEditSession(
     externalDiff: FileDiffMetadata,
-    cachedDocumentContents?: string
+    retainedDocument?: FileContents,
+    retainedSession?: RetainedDiffSessionSnapshot
   ): void {
     const externalContents = externalDiff.additionLines.join('');
-    const usesExternalContents =
-      cachedDocumentContents == null ||
-      cachedDocumentContents === externalContents;
+    const retainedLines =
+      retainedDocument != null
+        ? splitFileContents(retainedDocument.contents)
+        : undefined;
+    const restoreRetainedSession =
+      retainedSession != null &&
+      canRestoreDiffSession(retainedSession, externalDiff);
+    if (retainedSession != null && !restoreRetainedSession) {
+      throw new Error(
+        'FileDiff: retained session cannot resume against a different old file'
+      );
+    }
+    if (
+      retainedDocument != null &&
+      retainedDocument.contents !== externalContents &&
+      !restoreRetainedSession
+    ) {
+      throw new Error(
+        'FileDiff: retained edits are missing their diff session state'
+      );
+    }
+    const usesExternalDocument =
+      retainedDocument == null ||
+      (retainedDocument.name === externalDiff.name &&
+        retainedDocument.lang === externalDiff.lang &&
+        retainedDocument.contents === externalContents);
     const sessionDiff = createEditSessionDiff(externalDiff);
-    if (!usesExternalContents) {
-      const {
-        collapsedContextThreshold = DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
-      } = this.options;
-      const anchors = captureExpansionAnchors(
-        externalDiff,
-        this.hunksRenderer.getExpandedHunksMap(),
-        collapsedContextThreshold
-      );
-      sessionDiff.additionLines = splitFileContents(cachedDocumentContents);
-      rebuildSessionHunks(sessionDiff, this.options.parseDiffOptions);
-      this.hunksRenderer.setExpandedHunksMap(
-        rebuildExpansionFromAnchors(sessionDiff, anchors)
-      );
+    if (
+      retainedDocument != null &&
+      retainedLines != null &&
+      !usesExternalDocument
+    ) {
+      sessionDiff.name = retainedDocument.name;
+      sessionDiff.lang = retainedDocument.lang;
+    }
+    if (
+      restoreRetainedSession &&
+      retainedSession != null &&
+      retainedLines != null
+    ) {
+      sessionDiff.additionLines = retainedLines;
+      sessionDiff.type = retainedSession.type;
+      sessionDiff.hunks = retainedSession.hunks;
+      sessionDiff.editSessionDirty = true;
+      recomputeDiffRenderLineCounts(sessionDiff);
     }
     this.editSessionDiff = sessionDiff;
     this.hunksRenderer.beginEditSession(
       sessionDiff,
-      usesExternalContents ? externalDiff : undefined
+      usesExternalDocument && !restoreRetainedSession ? externalDiff : undefined
     );
   }
 
@@ -1737,6 +1802,39 @@ export class FileDiff<
     onEditChange?.(event);
   }
 
+  /** @internal */
+  public __captureDocumentSessionState(
+    hasDocumentHistory: boolean
+  ): RetainedDiffSessionSnapshot | null | undefined {
+    let { outgoingSessionDiff, fileDiff, editSessionDiff: sessionDiff } = this;
+    if (outgoingSessionDiff != null && fileDiff != null) {
+      if (
+        !fileDiff.isPartial &&
+        shouldResetUndoState(outgoingSessionDiff, fileDiff)
+      ) {
+        return null;
+      }
+      sessionDiff = outgoingSessionDiff;
+    }
+    if (sessionDiff == null || sessionDiff.isPartial) {
+      return undefined;
+    }
+    if (sessionDiff.editSessionDirty !== true && !hasDocumentHistory) {
+      return null;
+    }
+    return {
+      oldFile:
+        sessionDiff.type !== 'new'
+          ? {
+              name: sessionDiff.prevName ?? sessionDiff.name,
+              lines: [...sessionDiff.deletionLines],
+            }
+          : null,
+      type: sessionDiff.type,
+      hunks: cloneHunks(sessionDiff.hunks),
+    };
+  }
+
   public attachEditor(
     editor: DiffsEditor<LAnnotation>
   ): (recycle?: boolean) => void {
@@ -1749,7 +1847,6 @@ export class FileDiff<
       );
     }
     this.editor?.cleanUp();
-    this.editor = editor;
     this.editSessionAnnotations ??= adoptEditSessionAnnotations(
       this.lineAnnotations,
       getLineAnnotationName
@@ -1773,11 +1870,13 @@ export class FileDiff<
     if (initialExternalDiff != null) {
       this.installEditSession(
         initialExternalDiff,
-        editor.__getDocumentContents()
+        editor.__getDocumentContents(),
+        editor.__getDocumentSessionState?.()
       );
     } else {
       this.hunksRenderer.beginEditSession(this.editSessionDiff);
     }
+    this.editor = editor;
     // The editor sync below refuses partial diffs (it needs the full file
     // contents); kick off hydration so the loaded re-render re-runs it.
     if (this.fileDiff?.isPartial === true) {

@@ -75,7 +75,7 @@ async function createFixture(options?: {
     disableFileHeader: true,
     loadDiffFiles: options?.loadDiffFiles,
   });
-  const editor = new Editor<undefined>({
+  const editor = new Editor<undefined>('file-diff', {
     onChange: (event) => options?.onChange?.(event.file.contents),
   });
 

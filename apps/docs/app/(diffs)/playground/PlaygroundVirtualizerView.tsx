@@ -134,7 +134,7 @@ export function PlaygroundVirtualizerView({
     readmeContainer.style.display = 'block';
     content.appendChild(readmeContainer);
     fileAnnotationsRef.current = [];
-    const readmeEditor = new Editor<VirtualizerAnnotationMetadata>({
+    const readmeEditor = new Editor<VirtualizerAnnotationMetadata>('file', {
       onAttach(attachedEditor) {
         attachedEditor.focus({
           lineNumber: 'first-visible',
@@ -279,7 +279,7 @@ export function PlaygroundVirtualizerView({
       fileContainer.style.display = 'block';
       content.appendChild(fileContainer);
 
-      const editor = new Editor<VirtualizerAnnotationMetadata>({
+      const editor = new Editor<VirtualizerAnnotationMetadata>('file-diff', {
         onAttach(attachedEditor) {
           attachedEditor.focus({
             lineNumber: 'first-visible',

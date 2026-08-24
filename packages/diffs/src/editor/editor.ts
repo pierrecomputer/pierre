@@ -9,6 +9,7 @@ import type {
   EditableInstance,
   EditorChange,
   EditorChangeEvent,
+  EditorDocumentKind,
   EditorSelection,
   EditorState,
   FileContents,
@@ -18,9 +19,11 @@ import type {
   Range,
   RenderRange,
   ResolvedTextEdit,
+  RetainedDiffSessionSnapshot,
   SelectionSide,
   TextEdit,
 } from '../types';
+import { cloneRetainedDiffSessionSnapshot } from '../utils/cloneFileDiffMetadata';
 import { computeLineOffsets } from '../utils/computeFileOffsets';
 import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
 import { isGutterUtilityPath } from '../utils/isGutterUtilityPath';
@@ -30,7 +33,11 @@ import {
   resolveEditorCommandFromKeyboardEvent,
   resolveFindAgainShortcut,
 } from './command';
-import { DocumentRegistry, type RegisteredDocument } from './documentRegistry';
+import {
+  DocumentRegistry,
+  type RegisteredFileDiffDocument,
+  type RegisteredFileDocument,
+} from './documentRegistry';
 import editorCSS from './editor.css?inline';
 import { EditStack } from './editStack';
 import {
@@ -267,9 +274,14 @@ const MULTI_SELECTION_CLIPBOARD_TYPE =
   'application/vnd.pierre.diffs-selections+json';
 
 export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
-  /** Remove a retained document and its undo history from the registry. */
-  static disposeDocument(documentKey: string): boolean {
-    return DocumentRegistry.dispose(documentKey);
+  /** Remove a retained file and its undo history from the registry. */
+  static disposeFile(documentKey: string): boolean {
+    return DocumentRegistry.disposeFile(documentKey);
+  }
+
+  /** Remove a retained file diff and its undo history from the registry. */
+  static disposeFileDiff(documentKey: string): boolean {
+    return DocumentRegistry.disposeFileDiff(documentKey);
   }
 
   /** Remove every retained document and undo history from the registry. */
@@ -277,7 +289,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     DocumentRegistry.clear();
   }
 
-  /** Set the process-wide maximum number of retained documents. */
+  /** Set the process-wide per-surface maximum of retained documents. */
   static setDocumentRegistryCapacity(capacity: number): void {
     DocumentRegistry.setCapacity(capacity);
   }
@@ -335,7 +347,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #lineAnnotations?: DiffLineAnnotation<LAnnotation>[];
   #textDocument?: TextDocument<LAnnotation>;
   readonly #documentKey?: string;
-  #registeredDocument?: RegisteredDocument;
+  readonly #documentKind: EditorDocumentKind;
+  #retainedDiffSessionSnapshot?: RetainedDiffSessionSnapshot;
   #renderRange?: RenderRange;
   // Bounded render-window size (~viewport + 2*hunkLineCount) from the last view
   // sync. Used to cap how far #applyChange widens the window for an edit, so a
@@ -419,10 +432,17 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   };
 
   /**
+   * @param documentKind The component surface this editor can attach to.
+   * @param options Configure editor behavior and lifecycle callbacks.
    * @param documentKey Keep this editor's document and undo history under this
-   * key so a later editor using the same key can resume them.
+   * key so a later editor using the same kind and key can resume them.
    */
-  constructor(options: EditorOptions<LAnnotation> = {}, documentKey?: string) {
+  constructor(
+    documentKind: EditorDocumentKind,
+    options: EditorOptions<LAnnotation> = {},
+    documentKey?: string
+  ) {
+    this.#documentKind = documentKind;
     this.#documentKey = documentKey;
     this.#options = options;
   }
@@ -439,38 +459,57 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     fileInstance: EditableInstance<T>
   ): () => void;
   edit(fileInstance: DiffsEditableComponent<LAnnotation>): () => void {
-    const previousRegisteredDocument = this.#registeredDocument;
+    const docKind: EditorDocumentKind =
+      fileInstance.type === 'file-diff' ? 'file-diff' : 'file';
     const previousTextDocument = this.#textDocument;
     const previousFileInfo = this.#fileInfo;
+    const previousRetainedDiffSessionSnapshot =
+      this.#retainedDiffSessionSnapshot;
     const previousLineAnnotations = this.#lineAnnotations;
     const previousRenderRange = this.#renderRange;
     const previousViewportWindowLines = this.#viewportWindowLines;
+    if (this.#documentKind !== docKind) {
+      throw new Error(
+        `Editor: a ${this.#documentKind} editor cannot edit a ${docKind} component`
+      );
+    }
     this.#invalidateOnAttach();
     const docKey = this.#documentKey;
     const acquiredOwnership =
-      docKey != null ? DocumentRegistry.acquire(docKey, this) : false;
+      docKey != null ? DocumentRegistry.acquire(docKind, docKey, this) : false;
     const registryAttachment =
       docKey != null
-        ? DocumentRegistry.beginAttachment(docKey, this)
+        ? docKind === 'file'
+          ? DocumentRegistry.beginAttachment('file', docKey, this)
+          : DocumentRegistry.beginAttachment('file-diff', docKey, this)
         : undefined;
     // Clone the previous or keyed document before host code runs. The clone is
     // staged until attachment succeeds, leaving the committed history intact
     // if the host throws.
     let textDocument = previousTextDocument?.clone();
-    let sourceRegistration = previousRegisteredDocument;
-    if (textDocument == null && docKey != null) {
-      sourceRegistration = DocumentRegistry.get(docKey);
+    let sourceFileInfo = previousFileInfo;
+    let retainedDiffSessionSnapshot =
+      previousRetainedDiffSessionSnapshot == null
+        ? undefined
+        : cloneRetainedDiffSessionSnapshot(previousRetainedDiffSessionSnapshot);
+    const sourceRegistration = registryAttachment?.registration;
+    if (textDocument == null && sourceRegistration != null) {
       textDocument =
-        sourceRegistration?.document.cloneForAnnotations<LAnnotation>();
+        sourceRegistration.document.cloneForAnnotations<LAnnotation>();
+      sourceFileInfo = sourceRegistration.fileInfo;
+      retainedDiffSessionSnapshot =
+        sourceRegistration.documentKind === 'file-diff'
+          ? cloneRetainedDiffSessionSnapshot(sourceRegistration.diffSession)
+          : undefined;
     }
     if (textDocument != null) {
       this.#textDocument = textDocument;
-      if (docKey != null && sourceRegistration?.disposed !== true) {
-        const registration = { document: textDocument };
-        DocumentRegistry.retain(docKey, registration);
-        this.#registeredDocument = registration;
+      if (sourceFileInfo != null) {
+        this.#fileInfo = { ...sourceFileInfo };
       }
     }
+    this.#retainedDiffSessionSnapshot =
+      docKind === 'file-diff' ? retainedDiffSessionSnapshot : undefined;
     this.#fileInstance = fileInstance;
     try {
       this.#initialize();
@@ -483,12 +522,16 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       if (docKey != null && registryAttachment != null) {
         DocumentRegistry.rollbackAttachment(registryAttachment);
         if (acquiredOwnership) {
-          DocumentRegistry.release(docKey, this);
+          if (docKind === 'file') {
+            DocumentRegistry.releaseFile(docKey, this);
+          } else {
+            DocumentRegistry.releaseFileDiff(docKey, this);
+          }
         }
       }
-      this.#registeredDocument = previousRegisteredDocument;
       this.#textDocument = previousTextDocument;
       this.#fileInfo = previousFileInfo;
+      this.#retainedDiffSessionSnapshot = previousRetainedDiffSessionSnapshot;
       this.#lineAnnotations = previousLineAnnotations;
       this.#renderRange = previousRenderRange;
       this.#viewportWindowLines = previousViewportWindowLines;
@@ -771,9 +814,40 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   cleanUp(reason: 'discard' | 'recycle' | 'complete' = 'discard'): void {
     const recycle = reason === 'recycle';
     const docKey = this.#documentKey;
+    const docKind = this.#documentKind;
+    const textDocument = this.#textDocument;
+    const fileInfo = this.#fileInfo;
+    const fileInstance = this.#fileInstance;
     if (!recycle && docKey != null) {
-      DocumentRegistry.release(docKey, this);
-      this.#registeredDocument = undefined;
+      if (docKind === 'file') {
+        const registration: RegisteredFileDocument | undefined =
+          textDocument != null && fileInfo != null
+            ? {
+                documentKind: docKind,
+                document: textDocument,
+                fileInfo: { ...fileInfo },
+              }
+            : undefined;
+        DocumentRegistry.releaseFile(docKey, this, registration);
+      } else {
+        const capturedSnapshot = fileInstance?.__captureDocumentSessionState?.(
+          textDocument?.canUndo === true || textDocument?.canRedo === true
+        );
+        const retainedSnapshot =
+          capturedSnapshot === undefined
+            ? this.#retainedDiffSessionSnapshot
+            : (capturedSnapshot ?? undefined);
+        const registration: RegisteredFileDiffDocument | undefined =
+          textDocument != null && fileInfo != null && retainedSnapshot != null
+            ? {
+                documentKind: docKind,
+                document: textDocument,
+                fileInfo: { ...fileInfo },
+                diffSession: cloneRetainedDiffSessionSnapshot(retainedSnapshot),
+              }
+            : undefined;
+        DocumentRegistry.releaseFileDiff(docKey, this, registration);
+      }
     }
     this.#invalidateOnAttach();
     if (!recycle) {
@@ -795,6 +869,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     if (!recycle) {
       this.#textDocument = undefined;
       this.#fileInfo = undefined;
+      this.#retainedDiffSessionSnapshot = undefined;
     }
 
     // dispse event listeners
@@ -873,20 +948,20 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   }
 
   /** @internal */
-  __getDocumentContents(): string | undefined {
-    return this.#documentKey == null
-      ? undefined
-      : this.#textDocument?.getText();
+  __getDocumentContents(): FileContents | undefined {
+    const fileInfo = this.#fileInfo;
+    const textDocument = this.#textDocument;
+    return this.#documentKey != null && fileInfo != null && textDocument != null
+      ? { ...fileInfo, contents: textDocument.getText() }
+      : undefined;
   }
 
-  // Refresh recency only while this editor still owns the registered entry.
-  // Explicit disposal must not be undone by a later edit on the live document.
-  #touchRegisteredDocument(): void {
-    const docKey = this.#documentKey;
-    const registeredDocument = this.#registeredDocument;
-    if (docKey != null && registeredDocument != null) {
-      DocumentRegistry.touch(docKey, registeredDocument, this);
-    }
+  /** @internal */
+  __getDocumentSessionState(): RetainedDiffSessionSnapshot | undefined {
+    const snapshot = this.#retainedDiffSessionSnapshot;
+    return this.#documentKey != null && snapshot != null
+      ? cloneRetainedDiffSessionSnapshot(snapshot)
+      : undefined;
   }
 
   /** @internal */
@@ -997,12 +1072,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       }
       this.#fileInfo = { name, lang };
       this.#textDocument = textDocument;
-      if (docKey != null && this.#registeredDocument?.disposed !== true) {
-        const registration = { document: textDocument };
-        DocumentRegistry.retain(docKey, registration);
-        this.#registeredDocument = registration;
-      } else if (docKey == null) {
-        this.#registeredDocument = undefined;
+      if (resetForExternalDocument) {
+        this.#retainedDiffSessionSnapshot = undefined;
       }
       this.#tokenizer?.cleanUp();
       this.#tokenizer = undefined;
@@ -1247,7 +1318,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
     this.#tokenizer?.cleanUp();
     this.#tokenizer = undefined;
-    this.#touchRegisteredDocument();
     this.#resetCache();
     this.#wrapLineOffsetsCache.clear();
     this.#markerRenderer?.removePopover();
@@ -5239,7 +5309,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     newLineAnnotations?: DiffLineAnnotation<LAnnotation>[],
     options?: { skipSearchRefresh?: boolean; skipFocus?: boolean }
   ) {
-    this.#touchRegisteredDocument();
     // Invalidate layout caches touched by the edit. Clear cached line Y
     // positions from startLine onward when either:
     // - the line count changed (inserts/deletes renumber every later line), or

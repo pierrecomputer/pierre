@@ -30,6 +30,7 @@ import type {
   DiffsEditor,
   EditCompletionDecision,
   EditorChangeEvent,
+  EditorDocumentKind,
   HunkSeparators,
   PendingCodeViewLayoutReset,
   SelectedLineRange,
@@ -519,8 +520,8 @@ export interface CodeViewOptions<LAnnotation>
   /**
    * Create an editor for an item entering edit mode (`edit: true`). Providing
    * this option is what enables item editing. Pass the given options into the
-   * editor constructor — `new Editor(options)` — so CodeView can route
-   * document changes to `onItemEditChange`. CodeView owns the returned
+   * editor constructor — `new Editor(documentKind, options)` — so CodeView can
+   * route document changes to `onItemEditChange`. CodeView owns the returned
    * editor's lifecycle: it attaches when the edited item mounts, re-attaches
    * across virtualization unmounts and collapse (which suspend the session),
    * and tears the editor down when the session ends (edit off or removal).
@@ -528,6 +529,7 @@ export interface CodeViewOptions<LAnnotation>
    * render passes.
    */
   createEditor?(
+    documentKind: EditorDocumentKind,
     options: CodeViewCreateEditorOptions<LAnnotation>
   ): DiffsEditor<LAnnotation> | undefined;
   /**
@@ -2081,15 +2083,18 @@ export class CodeView<LAnnotation = undefined> {
         // renames keep it pointed at the right item. It also reads the change
         // callback off this.options at invocation time so later setOptions
         // swaps aren't stranded on the callback captured at creation.
-        const editor = createEditor({
-          onChange: (event) => {
-            const latest = this.idToItem.get(state.id);
-            if (latest == null) {
-              return;
-            }
-            this.options.onItemEditChange?.(event, latest.item);
-          },
-        });
+        const editor = createEditor(
+          item.instance.type === 'file-diff' ? 'file-diff' : 'file',
+          {
+            onChange: (event) => {
+              const latest = this.idToItem.get(state.id);
+              if (latest == null) {
+                return;
+              }
+              this.options.onItemEditChange?.(event, latest.item);
+            },
+          }
+        );
         if (editor == null) {
           return;
         }

@@ -80,7 +80,7 @@ async function createEditorFixture(
     theme: DEFAULT_THEMES,
     ...fileOptions,
   });
-  const editor = new Editor<undefined>(editorOptions);
+  const editor = new Editor<undefined>('file', editorOptions);
   const initialFile: FileContents = {
     name: 'edits.ts',
     contents,

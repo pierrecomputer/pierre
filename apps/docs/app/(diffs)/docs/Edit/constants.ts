@@ -52,7 +52,7 @@ const fileInstance = new VirtualizedFile(
 );
 fileInstance.render({ file, containerWrapper: content });
 
-const editor = new Editor();
+const editor = new Editor('file');
 // Start an edit session
 editor.edit(fileInstance);
 
@@ -141,7 +141,7 @@ function renderFromApplicationState() {
 
 renderFromApplicationState();
 
-const editor = new Editor<ThreadMetadata>();
+const editor = new Editor<ThreadMetadata>('file-diff');
 editor.edit(fileDiffInstance);
 
 // Later, when the editor is no longer needed. Its disposer completes the
@@ -185,8 +185,8 @@ root.style.overflow = 'auto';
 
 const viewer = new CodeView<ThreadMetadata>({
   theme: { dark: 'pierre-dark', light: 'pierre-light' },
-  createEditor(options) {
-    return new Editor({
+  createEditor(documentKind, options) {
+    return new Editor(documentKind, {
       ...options,
       onAttach(editor) {
         editor.focus({ lineNumber: 'first-visible', preventScroll: true });
@@ -260,7 +260,7 @@ const button = document.getElementById('edit-button');
 
 async function edit(fileInstance: VirtualizedFile): Promise<() => void> {
   const { Editor } = await import('@pierre/diffs/edit');
-  const editor = new Editor();
+  const editor = new Editor('file');
   return editor.edit(fileInstance);
 }
 
@@ -277,7 +277,7 @@ export const EDIT_SELECTION_ACTION_EXAMPLE: PreloadFileOptions<undefined> = {
     name: 'editor_selection_action.ts',
     contents: `import { Editor } from '@pierre/diffs/edit';
 
-const editor = new Editor({
+const editor = new Editor('file', {
   enabledSelectionAction: true,
   // The popover appears after a user-created ranged selection.
   renderSelectionAction: (context) => {
@@ -341,7 +341,7 @@ const fileB: FileContents = {
 };
 
 // \`fileInstance\` is a rendered File — see the Vanilla JS section above.
-const editor = new Editor({ persistState: true });
+const editor = new Editor('file', { persistState: true });
 editor.edit(fileInstance);
 fileInstance.render({ file: fileA });
 
@@ -375,7 +375,7 @@ import { useCallback, useMemo } from 'react';
 // surface remounts.
 export function PersistedEditor({ file }: { file: FileContents }) {
   const createEditor = useCallback<CreateEditor<undefined>>(
-    (options) => new Editor(options),
+    (documentKind, options) => new Editor(documentKind, options),
     []
   );
   const editorOptions = useMemo<EditorOptions<undefined>>(
@@ -421,7 +421,7 @@ export const EDIT_MARKER_EXAMPLE: PreloadFileOptions<undefined> = {
     name: 'editor_markers.ts',
     contents: `import { Editor } from '@pierre/diffs/edit';
 
-const editor = new Editor();
+const editor = new Editor('file');
 editor.edit(fileInstance);
 
 // Apply diagnostics, e.g. from a linter or language server. Inlining the array
@@ -463,8 +463,11 @@ const file: FileContents = {
   contents: 'export const x = 1;',
 };
 
-function createEditor(options: EditorOptions<undefined>) {
-  return new Editor(options);
+function createEditor(
+  documentKind: 'file' | 'file-diff',
+  options: EditorOptions<undefined>
+) {
+  return new Editor(documentKind, options);
 }
 
 export function EditableFileWithHistoryToolbar() {
@@ -516,8 +519,8 @@ export const EDIT_REACT_CREATE_EDITOR_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
     name: 'editor_react_create_editor.tsx',
     contents: `const createEditor = useCallback<CreateEditor<undefined>>(
-  (surfaceOptions) =>
-    new Editor({
+  (documentKind, surfaceOptions) =>
+    new Editor(documentKind, {
       ...defaultEditorOptions,
       ...surfaceOptions,
     }),
@@ -602,8 +605,11 @@ const virtualizerStyle = {
   borderRadius: '0.5rem',
 } as const;
 
-function createEditor(options: EditorOptions<undefined>) {
-  return new Editor(options);
+function createEditor(
+  documentKind: 'file' | 'file-diff',
+  options: EditorOptions<undefined>
+) {
+  return new Editor(documentKind, options);
 }
 
 export function EditableFile() {
@@ -721,8 +727,11 @@ const virtualizerStyle = {
   borderRadius: '0.5rem',
 } as const;
 
-function createEditor(options: EditorOptions<ThreadMetadata>) {
-  return new Editor(options);
+function createEditor(
+  documentKind: 'file' | 'file-diff',
+  options: EditorOptions<ThreadMetadata>
+) {
+  return new Editor(documentKind, options);
 }
 
 export function EditableFileDiff() {
@@ -864,8 +873,11 @@ const editorOptions: EditorOptions<ThreadMetadata> = {
   },
 };
 
-function createEditor(options: EditorOptions<ThreadMetadata>) {
-  return new Editor(options);
+function createEditor(
+  documentKind: 'file' | 'file-diff',
+  options: EditorOptions<ThreadMetadata>
+) {
+  return new Editor(documentKind, options);
 }
 
 export function EditableCodeView() {
@@ -955,7 +967,7 @@ fileInstance.render({
   containerWrapper: document.body,
 });
 
-const editor = new Editor();
+const editor = new Editor('file');
 editor.edit(fileInstance);`,
   },
   options,
@@ -988,8 +1000,11 @@ const highlighterOptions = {
   useTokenTransformer: true,
 } as const;
 
-function createEditor(options: EditorOptions<undefined>) {
-  return new Editor(options);
+function createEditor(
+  documentKind: 'file' | 'file-diff',
+  options: EditorOptions<undefined>
+) {
+  return new Editor(documentKind, options);
 }
 
 export function EditableFileWithWorkerPool() {
@@ -1119,8 +1134,8 @@ export const EDIT_ON_ATTACH_VANILLA_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
     name: 'editor_on_attach_vanilla.ts',
     contents: `const viewer = new CodeView({
-  createEditor(options) {
-    return new Editor({
+  createEditor(documentKind, options) {
+    return new Editor(documentKind, {
       ...options,
       onAttach(editor) {
         editor.focus({ lineNumber: 'first-visible', preventScroll: true });
@@ -1148,7 +1163,7 @@ export const EDIT_ON_CHANGE_EXAMPLE: PreloadFileOptions<undefined> = {
 // The same EditorChangeEvent reaches a component's onEditChange prop/option.
 // Generally you should avoid using this API unless you're using the Editor API
 // more directly
-new Editor({
+new Editor('file', {
   onChange: (event) => {
     // \`event.file\` (or \`event.fileDiff\`) is the live document, and
     // \`event.lineAnnotations\` the current collection. \`event.changes\` lists
@@ -1183,7 +1198,7 @@ fileInstance.render({
   containerWrapper: document.body,
 });
 
-const editor = new Editor();
+const editor = new Editor('file');
 
 // Merge partial options at runtime. Existing fields are preserved.
 // onChange and similar handlers read from the latest options on each call;
@@ -1326,8 +1341,11 @@ const virtualizerStyle = {
   borderRadius: '0.5rem',
 } as const;
 
-function createEditor(options: EditorOptions<undefined>) {
-  return new Editor(options);
+function createEditor(
+  documentKind: 'file' | 'file-diff',
+  options: EditorOptions<undefined>
+) {
+  return new Editor(documentKind, options);
 }
 
 export function EditableMultiFileDiff() {

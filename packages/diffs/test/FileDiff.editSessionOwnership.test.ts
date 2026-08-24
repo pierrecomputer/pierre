@@ -466,7 +466,7 @@ describe('FileDiff edit-session ownership', () => {
       disableErrorHandling: true,
       disableFileHeader: true,
     });
-    const editor = new Editor<undefined>({
+    const editor = new Editor<undefined>('file-diff', {
       onChange: (event) => changedFiles.push(event.file),
     });
 
@@ -518,7 +518,7 @@ describe('FileDiff edit-session ownership', () => {
       disableFileHeader: true,
       onEditChange: (event) => componentEvents.push(event),
     });
-    const editor = new Editor<undefined>({
+    const editor = new Editor<undefined>('file-diff', {
       onChange: (event) => editorEvents.push(event),
     });
 
@@ -570,7 +570,7 @@ describe('FileDiff edit-session ownership', () => {
       disableErrorHandling: true,
       disableFileHeader: true,
     });
-    const editor = new Editor<undefined>({});
+    const editor = new Editor<undefined>('file-diff');
 
     try {
       instance.render({
@@ -649,7 +649,7 @@ describe('completeEditSession', () => {
       onEditChange: config?.onEditChange,
       loadDiffFiles: config?.loadDiffFiles,
     });
-    const editor = new Editor<undefined>({});
+    const editor = new Editor<undefined>('file-diff');
     instance.render({
       fileDiff: externalDiff,
       fileContainer,
@@ -1056,7 +1056,7 @@ describe('completeEditSession', () => {
         return 'accept';
       },
     });
-    const editor = new Editor<undefined>({});
+    const editor = new Editor<undefined>('file-diff');
     try {
       instance.render({ oldFile, newFile, fileContainer, forceRender: true });
       editor.edit(instance);
@@ -1212,7 +1212,7 @@ describe('editor session lifecycle', () => {
         return 'accept';
       },
     });
-    const editor = new Editor<undefined>({});
+    const editor = new Editor<undefined>('file-diff');
     try {
       instance.render({
         fileDiff: externalDiff,
@@ -1263,7 +1263,7 @@ describe('editor session lifecycle', () => {
         return 'accept';
       },
     });
-    const editor = new Editor<undefined>({});
+    const editor = new Editor<undefined>('file-diff');
     try {
       instance.render({
         fileDiff: externalDiff,

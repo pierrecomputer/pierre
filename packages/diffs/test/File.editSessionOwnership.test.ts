@@ -60,7 +60,7 @@ async function createFixture(options?: {
     disableErrorHandling: true,
     disableFileHeader: true,
   });
-  const editor = new Editor<undefined>({
+  const editor = new Editor<undefined>('file', {
     onChange({ file, lineAnnotations }) {
       options?.onChange?.(
         file.contents,
@@ -394,7 +394,7 @@ describe('component onEditChange', () => {
       disableFileHeader: true,
       onEditChange: (event) => componentEvents.push(event),
     });
-    const editor = new Editor<undefined>({
+    const editor = new Editor<undefined>('file', {
       onChange: (event) => editorEvents.push(event),
     });
     try {
@@ -427,7 +427,7 @@ describe('component onEditChange', () => {
       disableFileHeader: true,
       onEditChange: (event) => firstEvents.push(event),
     });
-    const editor = new Editor<undefined>({});
+    const editor = new Editor<undefined>('file');
     try {
       instance.render({ file: externalFile, fileContainer, forceRender: true });
       editor.edit(instance);
@@ -463,7 +463,7 @@ describe('component onEditChange', () => {
       disableFileHeader: true,
       onEditChange: (event) => events.push(event),
     });
-    const editor = new Editor<undefined>({});
+    const editor = new Editor<undefined>('file');
     try {
       instance.render({ file: externalFile, fileContainer, forceRender: true });
       editor.edit(instance);
@@ -502,7 +502,7 @@ describe('session-owned line annotations', () => {
       disableFileHeader: true,
       onEditChange: (event) => events.push(event),
     });
-    const editor = new Editor<undefined>({});
+    const editor = new Editor<undefined>('file');
     instance.render({
       file: externalFile,
       fileContainer,
@@ -812,7 +812,7 @@ describe('completeEditSession', () => {
       onEditComplete: config?.onEditComplete,
       onEditChange: config?.onEditChange,
     });
-    const editor = new Editor<undefined>({});
+    const editor = new Editor<undefined>('file');
     instance.render({
       file: externalFile,
       fileContainer,
@@ -1194,7 +1194,7 @@ describe('editor session lifecycle', () => {
       disableFileHeader: true,
       onEditComplete: config?.onEditComplete,
     });
-    const editor = new Editor<undefined>({});
+    const editor = new Editor<undefined>('file');
     instance.render({ file: externalFile, fileContainer, forceRender: true });
     const finishSession = editor.edit(instance);
     await waitFor(() => editor.getText() === externalFile.contents, {
@@ -1275,7 +1275,7 @@ describe('editor session lifecycle', () => {
       },
     });
     let attachCount = 0;
-    const editor = new Editor<undefined>({
+    const editor = new Editor<undefined>('file', {
       onAttach: () => {
         attachCount += 1;
       },

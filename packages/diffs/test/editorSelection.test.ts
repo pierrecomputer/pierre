@@ -3915,7 +3915,7 @@ async function createEditorFixture(contents: string): Promise<EditorFixture> {
     disableFileHeader: true,
     theme: DEFAULT_THEMES,
   });
-  const editor = new Editor<undefined>();
+  const editor = new Editor<undefined>('file');
   const initialFile: FileContents = { name: 'selections.txt', contents };
 
   file.render({ file: initialFile, fileContainer, forceRender: true });

@@ -203,7 +203,7 @@ export function useFileInstance<LAnnotation>({
       if (createEditor === undefined) {
         throw new Error('File: EditContext is not attached');
       }
-      const editor = createEditor(editorOptions ?? {});
+      const editor = createEditor('file', editorOptions ?? {});
       if (editor == null) {
         throw new Error(
           'File: EditProvider.createEditor must return an editor instance'

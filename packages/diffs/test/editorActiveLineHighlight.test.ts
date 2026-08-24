@@ -48,7 +48,7 @@ async function createEditorFixture(
     theme: DEFAULT_THEMES,
     ...fileOptions,
   });
-  const editor = new Editor<undefined>();
+  const editor = new Editor<undefined>('file');
   const initialFile: FileContents = { name: 'highlight.ts', contents };
 
   file.render({ file: initialFile, fileContainer, forceRender: true });

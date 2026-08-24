@@ -93,7 +93,7 @@ async function createFixture(
   });
   const oldFile: FileContents = { name: 'edit.ts', contents: oldContents };
   const newFile: FileContents = { name: 'edit.ts', contents: newContents };
-  const editor = new Editor<undefined>();
+  const editor = new Editor<undefined>('file-diff');
 
   fileDiff.render({
     oldFile,
@@ -367,7 +367,7 @@ describe('diff editor: display-option toggle mid-edit', () => {
       theme: DEFAULT_THEMES,
       diffStyle: 'split',
     });
-    const editor = new Editor<undefined>();
+    const editor = new Editor<undefined>('file-diff');
     const oldContents = 'alpha\nbravo\n';
     const newContents = 'alpha\nCHANGED\n';
     const file = { name: 'edit.ts' };
@@ -452,7 +452,7 @@ describe('file editor: theme toggle mid-edit', () => {
       name: 'edit.ts',
       contents: 'alpha\nbravo\n',
     };
-    const editor = new Editor<undefined>();
+    const editor = new Editor<undefined>('file');
     file.render({
       file: fileContents,
       fileContainer: container,
@@ -559,7 +559,7 @@ describe('diff editor: detach then re-attach', () => {
       contents: 'alpha\nCHANGED\n',
       cacheKey: 'new:initial',
     };
-    const editor = new Editor<undefined>();
+    const editor = new Editor<undefined>('file-diff');
     const fileDiff = new FileDiff<undefined>(
       {
         disableFileHeader: true,

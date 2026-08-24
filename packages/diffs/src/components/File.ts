@@ -392,23 +392,24 @@ export class File<
     return true;
   }
 
-  // Editor contents seed a new session. Existing sessions omit the editor so
-  // incoming text renders as an external replacement and joins undo history.
+  // A retained keyed document seeds a new session. Existing sessions omit it
+  // so incoming files render as external replacements and join undo history.
   private installEditSession(
     externalFile: FileContents,
-    cachedDocumentContents?: string
+    retainedDocument?: FileContents
   ): void {
-    const usesExternalContents =
-      cachedDocumentContents == null ||
-      cachedDocumentContents === externalFile.contents;
-    const editSessionFile = createEditSessionFile(externalFile);
-    if (!usesExternalContents) {
-      editSessionFile.contents = cachedDocumentContents;
-    }
+    const usesExternalDocument =
+      retainedDocument == null ||
+      (retainedDocument.name === externalFile.name &&
+        retainedDocument.lang === externalFile.lang &&
+        retainedDocument.contents === externalFile.contents);
+    const editSessionFile = createEditSessionFile(
+      retainedDocument ?? externalFile
+    );
     this.editSessionFile = editSessionFile;
     this.fileRenderer.beginEditSession(
       editSessionFile,
-      usesExternalContents ? externalFile : undefined
+      usesExternalDocument ? externalFile : undefined
     );
   }
 

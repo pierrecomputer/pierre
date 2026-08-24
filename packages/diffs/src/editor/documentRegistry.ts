@@ -1,36 +1,63 @@
 import LRUMapPkg from 'lru_map';
 
-import type { DiffsEditor } from '../types';
+import type {
+  DiffsEditor,
+  EditorDocumentKind,
+  FileContents,
+  RetainedDiffSessionSnapshot,
+} from '../types';
 import type { TextDocument } from './textDocument';
 
 const DEFAULT_DOCUMENT_REGISTRY_CAPACITY = 100;
 
-export interface RegisteredDocument {
+interface RegisteredDocumentBase {
   document: TextDocument<unknown>;
-  disposed?: boolean;
+  fileInfo: Pick<FileContents, 'lang' | 'name'>;
 }
 
-export interface DocumentRegistryAttachment {
+export interface RegisteredFileDocument extends RegisteredDocumentBase {
+  documentKind: 'file';
+  diffSession?: never;
+}
+
+export interface RegisteredFileDiffDocument extends RegisteredDocumentBase {
+  documentKind: 'file-diff';
+  diffSession: RetainedDiffSessionSnapshot;
+}
+
+export type RegisteredDocument =
+  | RegisteredFileDocument
+  | RegisteredFileDiffDocument;
+
+type RegisteredDocumentFor<K extends EditorDocumentKind> = Extract<
+  RegisteredDocument,
+  { documentKind: K }
+>;
+
+export interface DocumentRegistryAttachment<K extends EditorDocumentKind> {
+  documentKind: K;
   documentKey: string;
-  registration?: RegisteredDocument;
-  /**
-   * Whether this attachment was canceled, so its document must not be saved
-   * for future editors.
-   */
-  cancelled: boolean;
+  registration?: RegisteredDocumentFor<K>;
 }
 
-interface DocumentRegistrySession {
+export type AnyDocumentRegistryAttachment =
+  | DocumentRegistryAttachment<'file'>
+  | DocumentRegistryAttachment<'file-diff'>;
+
+interface DocumentRegistrySession<K extends EditorDocumentKind> {
   owner: DiffsEditor<unknown>;
-  attachment?: DocumentRegistryAttachment;
+  attachment?: DocumentRegistryAttachment<K>;
+  retentionCancelled: boolean;
 }
 
-/** Owns retained documents and active-key exclusion for editor sessions. */
-class DocumentRegistryClass {
-  #documents = new LRUMapPkg.LRUMap<string, RegisteredDocument>(
+/** Owns dormant documents and active-key exclusion for one surface kind. */
+class DocumentRegistryNamespace<K extends EditorDocumentKind> {
+  #documents = new LRUMapPkg.LRUMap<string, RegisteredDocumentFor<K>>(
     DEFAULT_DOCUMENT_REGISTRY_CAPACITY
   );
-  #sessions = new Map<string, DocumentRegistrySession>();
+  #sessions = new Map<string, DocumentRegistrySession<K>>();
+
+  constructor(readonly documentKind: K) {}
 
   acquire(documentKey: string, owner: DiffsEditor<unknown>): boolean {
     const session = this.#sessions.get(documentKey);
@@ -42,18 +69,86 @@ class DocumentRegistryClass {
     if (session != null) {
       return false;
     }
-    this.#sessions.set(documentKey, { owner });
+    this.#sessions.set(documentKey, {
+      owner,
+      retentionCancelled: false,
+    });
     return true;
   }
 
-  release(documentKey: string, owner: DiffsEditor<unknown>): void {
+  beginAttachment(
+    documentKey: string,
+    owner: DiffsEditor<unknown>
+  ): DocumentRegistryAttachment<K> {
     const session = this.#sessions.get(documentKey);
-    if (session?.owner === owner) {
-      if (session.attachment != null) {
-        this.#cancelAttachment(session.attachment);
-      }
-      this.#sessions.delete(documentKey);
+    if (session?.owner !== owner) {
+      throw new Error(
+        `Editor: documentKey "${documentKey}" must be acquired before attachment`
+      );
     }
+    const attachment: DocumentRegistryAttachment<K> = {
+      documentKind: this.documentKind,
+      documentKey,
+      registration: this.#documents.delete(documentKey),
+    };
+    session.attachment = attachment;
+    return attachment;
+  }
+
+  commitAttachment(attachment: DocumentRegistryAttachment<K>): void {
+    const session = this.#sessions.get(attachment.documentKey);
+    if (session?.attachment === attachment) {
+      session.attachment = undefined;
+    }
+  }
+
+  rollbackAttachment(attachment: DocumentRegistryAttachment<K>): void {
+    const session = this.#sessions.get(attachment.documentKey);
+    if (session?.attachment !== attachment) {
+      return;
+    }
+    session.attachment = undefined;
+    if (!session.retentionCancelled && attachment.registration != null) {
+      this.#retain(attachment.documentKey, attachment.registration);
+    }
+    attachment.registration = undefined;
+  }
+
+  release(
+    documentKey: string,
+    owner: DiffsEditor<unknown>,
+    registration?: RegisteredDocumentFor<K>
+  ): void {
+    const session = this.#sessions.get(documentKey);
+    if (session?.owner !== owner) {
+      return;
+    }
+    session.attachment = undefined;
+    this.#sessions.delete(documentKey);
+    if (!session.retentionCancelled && registration != null) {
+      this.#retain(documentKey, registration);
+    }
+  }
+
+  dispose(documentKey: string): boolean {
+    const session = this.#sessions.get(documentKey);
+    if (session != null) {
+      session.retentionCancelled = true;
+      if (session.attachment != null) {
+        session.attachment.registration = undefined;
+      }
+    }
+    return this.#documents.delete(documentKey) != null || session != null;
+  }
+
+  clear(): void {
+    this.#sessions.forEach((session) => {
+      session.retentionCancelled = true;
+      if (session.attachment != null) {
+        session.attachment.registration = undefined;
+      }
+    });
+    this.#documents.clear();
   }
 
   setCapacity(capacity: number): void {
@@ -63,144 +158,105 @@ class DocumentRegistryClass {
       );
     }
     while (this.#documents.size > capacity) {
-      const evicted = this.#documents.shift();
-      if (evicted != null) {
-        evicted[1].disposed = true;
-      }
+      this.#documents.shift();
     }
     this.#documents.limit = capacity;
   }
 
-  get(documentKey: string): RegisteredDocument | undefined {
-    return (
-      this.#sessions.get(documentKey)?.attachment?.registration ??
-      this.#documents.get(documentKey)
-    );
-  }
-
-  beginAttachment(
-    documentKey: string,
-    owner: DiffsEditor<unknown>
-  ): DocumentRegistryAttachment {
-    const session = this.#sessions.get(documentKey);
-    if (session?.owner !== owner) {
-      throw new Error(
-        `Editor: documentKey "${documentKey}" must be acquired before attachment`
-      );
-    }
-    const attachment: DocumentRegistryAttachment = {
-      documentKey,
-      cancelled: false,
-    };
-    session.attachment = attachment;
-    return attachment;
-  }
-
-  commitAttachment(attachment: DocumentRegistryAttachment): void {
-    const session = this.#sessions.get(attachment.documentKey);
-    if (session?.attachment !== attachment) {
-      return;
-    }
-    session.attachment = undefined;
-    if (!attachment.cancelled && attachment.registration != null) {
-      this.#retain(attachment.documentKey, attachment.registration);
-    }
-  }
-
-  rollbackAttachment(attachment: DocumentRegistryAttachment): void {
-    const session = this.#sessions.get(attachment.documentKey);
-    if (session?.attachment !== attachment) {
-      return;
-    }
-    session.attachment = undefined;
+  #retain(documentKey: string, registration: RegisteredDocumentFor<K>): void {
     if (
-      attachment.registration != null &&
-      this.#documents.find(attachment.documentKey) !== attachment.registration
-    ) {
-      attachment.registration.disposed = true;
-    }
-  }
-
-  retain(documentKey: string, registration: RegisteredDocument): void {
-    const attachment = this.#sessions.get(documentKey)?.attachment;
-    if (attachment != null) {
-      if (attachment.registration != null) {
-        attachment.registration.disposed = true;
-      }
-      if (attachment.cancelled) {
-        registration.disposed = true;
-      } else {
-        attachment.registration = registration;
-      }
-      return;
-    }
-    this.#retain(documentKey, registration);
-  }
-
-  #retain(documentKey: string, registration: RegisteredDocument): void {
-    const current = this.#documents.find(documentKey);
-    if (current != null && current !== registration) {
-      current.disposed = true;
-    } else if (
-      current == null &&
+      this.#documents.find(documentKey) == null &&
       this.#documents.size >= this.#documents.limit
     ) {
-      const evicted = this.#documents.shift();
-      if (evicted != null) {
-        evicted[1].disposed = true;
-      }
+      this.#documents.shift();
     }
     this.#documents.set(documentKey, registration);
   }
+}
 
-  touch(
+/** Keeps file and diff documents in independent persistence domains. */
+class DocumentRegistryClass {
+  #files = new DocumentRegistryNamespace('file');
+  #diffs = new DocumentRegistryNamespace('file-diff');
+
+  acquire(
+    documentKind: EditorDocumentKind,
     documentKey: string,
-    registration: RegisteredDocument,
     owner: DiffsEditor<unknown>
-  ): void {
-    const session = this.#sessions.get(documentKey);
-    if (session?.attachment != null) {
-      return;
-    }
-    if (
-      session?.owner === owner &&
-      this.#documents.find(documentKey) === registration
-    ) {
-      this.retain(documentKey, registration);
+  ): boolean {
+    return documentKind === 'file'
+      ? this.#files.acquire(documentKey, owner)
+      : this.#diffs.acquire(documentKey, owner);
+  }
+
+  beginAttachment(
+    documentKind: 'file',
+    documentKey: string,
+    owner: DiffsEditor<unknown>
+  ): DocumentRegistryAttachment<'file'>;
+  beginAttachment(
+    documentKind: 'file-diff',
+    documentKey: string,
+    owner: DiffsEditor<unknown>
+  ): DocumentRegistryAttachment<'file-diff'>;
+  beginAttachment(
+    documentKind: EditorDocumentKind,
+    documentKey: string,
+    owner: DiffsEditor<unknown>
+  ): AnyDocumentRegistryAttachment {
+    return documentKind === 'file'
+      ? this.#files.beginAttachment(documentKey, owner)
+      : this.#diffs.beginAttachment(documentKey, owner);
+  }
+
+  commitAttachment(attachment: AnyDocumentRegistryAttachment): void {
+    if (attachment.documentKind === 'file') {
+      this.#files.commitAttachment(attachment);
+    } else {
+      this.#diffs.commitAttachment(attachment);
     }
   }
 
-  dispose(documentKey: string): boolean {
-    const attachment = this.#sessions.get(documentKey)?.attachment;
-    const hadStagedDocument = attachment?.registration != null;
-    if (attachment != null) {
-      this.#cancelAttachment(attachment);
+  rollbackAttachment(attachment: AnyDocumentRegistryAttachment): void {
+    if (attachment.documentKind === 'file') {
+      this.#files.rollbackAttachment(attachment);
+    } else {
+      this.#diffs.rollbackAttachment(attachment);
     }
-    const registration = this.#documents.delete(documentKey);
-    if (registration == null) {
-      return hadStagedDocument;
-    }
-    registration.disposed = true;
-    return true;
+  }
+
+  releaseFile(
+    documentKey: string,
+    owner: DiffsEditor<unknown>,
+    registration?: RegisteredFileDocument
+  ): void {
+    this.#files.release(documentKey, owner, registration);
+  }
+
+  releaseFileDiff(
+    documentKey: string,
+    owner: DiffsEditor<unknown>,
+    registration?: RegisteredFileDiffDocument
+  ): void {
+    this.#diffs.release(documentKey, owner, registration);
+  }
+
+  disposeFile(documentKey: string): boolean {
+    return this.#files.dispose(documentKey);
+  }
+
+  disposeFileDiff(documentKey: string): boolean {
+    return this.#diffs.dispose(documentKey);
   }
 
   clear(): void {
-    this.#sessions.forEach((session) => {
-      if (session.attachment != null) {
-        this.#cancelAttachment(session.attachment);
-      }
-    });
-    this.#documents.forEach((registration) => {
-      registration.disposed = true;
-    });
-    this.#documents.clear();
+    this.#files.clear();
+    this.#diffs.clear();
   }
 
-  #cancelAttachment(attachment: DocumentRegistryAttachment): void {
-    attachment.cancelled = true;
-    if (attachment.registration != null) {
-      attachment.registration.disposed = true;
-    }
+  setCapacity(capacity: number): void {
+    this.#files.setCapacity(capacity);
+    this.#diffs.setCapacity(capacity);
   }
 }
 

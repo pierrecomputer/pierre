@@ -9,10 +9,12 @@ import {
   type EditorOptions,
 } from '../src/editor/editor';
 import type { Marker } from '../src/editor/marker';
+import { TextDocument } from '../src/editor/textDocument';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
 import type {
   DiffsEditableComponent,
   FileContents,
+  FileDiffMetadata,
   LineAnnotation,
 } from '../src/types';
 import { installDom, wait, waitFor } from './domHarness';
@@ -44,18 +46,26 @@ async function waitForEditableContent(
 
 interface EditorFixture {
   cleanup(): void;
+  complete(): void;
   container: HTMLElement;
   content: HTMLElement;
   editor: Editor<undefined>;
   file: File<undefined>;
 }
 
+class TestFileDiff extends FileDiff<undefined> {
+  getCurrentType(): FileDiffMetadata['type'] | undefined {
+    return this.getLatestDiff()?.type;
+  }
+}
+
 interface DiffEditorFixture {
   cleanup(): void;
+  complete(): void;
   container: HTMLElement;
   content: HTMLElement;
   editor: Editor<undefined>;
-  fileDiff: FileDiff<undefined>;
+  fileDiff: TestFileDiff;
 }
 
 interface PendingEditorFixture {
@@ -70,7 +80,8 @@ async function createEditorFixture(
   contents: string,
   editorOptions?: EditorOptions<undefined>,
   lineAnnotations?: LineAnnotation<undefined>[],
-  documentKey?: string
+  documentKey?: string,
+  fileInfo: Pick<FileContents, 'lang' | 'name'> = { name: 'edits.ts' }
 ): Promise<EditorFixture> {
   const dom = installDom();
   const fileContainer = document.createElement('div');
@@ -80,8 +91,8 @@ async function createEditorFixture(
     disableFileHeader: true,
     theme: DEFAULT_THEMES,
   });
-  const editor = new Editor<undefined>(editorOptions, documentKey);
-  const initialFile: FileContents = { name: 'edits.ts', contents };
+  const editor = new Editor<undefined>('file', editorOptions, documentKey);
+  const initialFile: FileContents = { ...fileInfo, contents };
 
   file.render({
     file: initialFile,
@@ -89,7 +100,7 @@ async function createEditorFixture(
     forceRender: true,
     lineAnnotations,
   });
-  editor.edit(file);
+  const complete = editor.edit(file);
 
   const content = await waitForEditableContent(fileContainer);
 
@@ -99,6 +110,7 @@ async function createEditorFixture(
       file.cleanUp();
       dom.cleanup();
     },
+    complete,
     container: fileContainer,
     content,
     editor,
@@ -109,9 +121,16 @@ async function createEditorFixture(
 function createKeyedEditorFixture(
   contents: string,
   documentKey: string,
-  lineAnnotations?: LineAnnotation<undefined>[]
+  lineAnnotations?: LineAnnotation<undefined>[],
+  fileInfo?: Pick<FileContents, 'lang' | 'name'>
 ): Promise<EditorFixture> {
-  return createEditorFixture(contents, undefined, lineAnnotations, documentKey);
+  return createEditorFixture(
+    contents,
+    undefined,
+    lineAnnotations,
+    documentKey,
+    fileInfo
+  );
 }
 
 function createPendingEditorFixture(
@@ -125,7 +144,7 @@ function createPendingEditorFixture(
     disableFileHeader: true,
     theme: DEFAULT_THEMES,
   });
-  const editor = new Editor<undefined>({}, documentKey);
+  const editor = new Editor<undefined>('file', {}, documentKey);
   file.render({
     file: { name: 'edits.ts', contents },
     fileContainer,
@@ -147,25 +166,41 @@ async function createDiffEditorFixture(
   diffStyle: 'split' | 'unified',
   editorOptions?: EditorOptions<undefined>,
   documentKey?: string,
-  newContents = 'alpha\nnew\ncharlie'
+  newContents = 'alpha\nnew\ncharlie',
+  files?: { oldFile: FileContents; newFile: FileContents }
 ): Promise<DiffEditorFixture> {
   const dom = installDom();
   const container = document.createElement('div');
   document.body.appendChild(container);
 
-  const fileDiff = new FileDiff<undefined>({
+  const fileDiff = new TestFileDiff({
     disableFileHeader: true,
     diffStyle,
     theme: DEFAULT_THEMES,
   });
-  const editor = new Editor<undefined>(editorOptions, documentKey);
+  const editor = new Editor<undefined>('file-diff', editorOptions, documentKey);
   fileDiff.render({
-    oldFile: { name: 'edits.ts', contents: 'alpha\nold\ncharlie' },
-    newFile: { name: 'edits.ts', contents: newContents },
+    oldFile:
+      files?.oldFile ??
+      ({
+        name: 'edits.ts',
+        contents: 'alpha\nold\ncharlie',
+      } satisfies FileContents),
+    newFile:
+      files?.newFile ??
+      ({ name: 'edits.ts', contents: newContents } satisfies FileContents),
     fileContainer: container,
     forceRender: true,
   });
-  editor.edit(fileDiff);
+  let complete: () => void;
+  try {
+    complete = editor.edit(fileDiff);
+  } catch (error) {
+    editor.cleanUp();
+    fileDiff.cleanUp();
+    dom.cleanup();
+    throw error;
+  }
 
   const content = await waitForEditableContent(container);
   return {
@@ -174,6 +209,7 @@ async function createDiffEditorFixture(
       fileDiff.cleanUp();
       dom.cleanup();
     },
+    complete,
     container,
     content,
     editor,
@@ -300,6 +336,74 @@ describe('Editor document registry surfaces', () => {
     }
   });
 
+  test('a File adopts retained name and explicit language with its text', async () => {
+    Editor.clearDocuments();
+    const documentKey = 'file-identity';
+    const retainedFile = {
+      name: 'retained.txt',
+      lang: 'typescript',
+    } as const;
+    const first = await createKeyedEditorFixture(
+      'const retained = true;',
+      documentKey,
+      undefined,
+      retainedFile
+    );
+    insertText(first.editor, 0, 22, '\n');
+    const retainedContents = first.editor.getText();
+    first.cleanup();
+
+    const cloneForAnnotations = spyOn(
+      TextDocument.prototype,
+      'cloneForAnnotations'
+    );
+    let second: EditorFixture | undefined;
+    try {
+      second = await createKeyedEditorFixture(
+        'incoming baseline',
+        documentKey,
+        undefined,
+        { name: 'incoming.txt', lang: 'text' }
+      );
+      const adoptedDocument = cloneForAnnotations.mock.results.at(-1)?.value as
+        | TextDocument<unknown>
+        | undefined;
+      expect(adoptedDocument?.uri).toBe('file:///retained.txt');
+      expect(adoptedDocument?.languageId).toBe(retainedFile.lang);
+      expect(second.editor.getFile()).toEqual({
+        ...retainedFile,
+        contents: retainedContents,
+      });
+      expect(second.content.ariaLabel).toBe(retainedFile.name);
+      second.file.render({
+        file: {
+          ...retainedFile,
+          contents: 'const external = true;',
+        },
+        fileContainer: second.container,
+        forceRender: true,
+      });
+      await waitFor(
+        () => second?.editor.getText() === 'const external = true;'
+      );
+      second.editor.undo();
+      expect(second.editor.getText()).toBe(retainedContents);
+      await waitFor(
+        () => (second?.content.querySelectorAll('span[style]').length ?? 0) > 0
+      );
+      second.editor.undo();
+      expect(second.editor.getText()).toBe('const retained = true;');
+      second.editor.redo();
+      expect(second.editor.getText()).toBe(retainedContents);
+      second.editor.redo();
+      expect(second.editor.getText()).toBe('const external = true;');
+    } finally {
+      cloneForAnnotations.mockRestore();
+      second?.cleanup();
+      Editor.clearDocuments();
+    }
+  });
+
   test('a File retains annotation history without diff sides', async () => {
     Editor.clearDocuments();
     const documentKey = 'file-annotations';
@@ -316,6 +420,95 @@ describe('Editor document registry surfaces', () => {
       expect(second.editor.getText()).toBe('inserted\nalpha\nbravo');
       second.editor.undo();
       expect(second.editor.getText()).toBe('alpha\nbravo');
+    } finally {
+      second.cleanup();
+      Editor.clearDocuments();
+    }
+  });
+
+  test('File and FileDiff retain independent documents for the same key', async () => {
+    Editor.clearDocuments();
+    const documentKey = 'shared-surface-key';
+    const fileBaseline = 'plain file contents';
+    const diffBaseline = 'alpha\nnew\ncharlie';
+    const firstFile = await createKeyedEditorFixture(fileBaseline, documentKey);
+    insertText(firstFile.editor, 0, fileBaseline.length, ' retained');
+    const retainedFileText = firstFile.editor.getText();
+
+    const firstDiff = await createDiffEditorFixture(
+      'split',
+      undefined,
+      documentKey,
+      diffBaseline
+    );
+    expect(firstDiff.editor.getText()).toBe(diffBaseline);
+    insertText(firstDiff.editor, 1, 3, ' retained');
+    const retainedDiffText = firstDiff.editor.getText();
+    firstDiff.cleanup();
+    firstFile.cleanup();
+
+    const resumedFile = await createKeyedEditorFixture(
+      'incoming file contents',
+      documentKey
+    );
+    expect(resumedFile.editor.getText()).toBe(retainedFileText);
+    resumedFile.cleanup();
+
+    const resumedDiff = await createDiffEditorFixture(
+      'split',
+      undefined,
+      documentKey,
+      diffBaseline
+    );
+    expect(resumedDiff.editor.getText()).toBe(retainedDiffText);
+    resumedDiff.cleanup();
+
+    expect(Editor.disposeFile(documentKey)).toBe(true);
+    expect(Editor.disposeFileDiff(documentKey)).toBe(true);
+
+    const freshFile = await createKeyedEditorFixture(
+      'fresh file contents',
+      documentKey
+    );
+    expect(freshFile.editor.getText()).toBe('fresh file contents');
+    freshFile.cleanup();
+
+    const freshDiff = await createDiffEditorFixture(
+      'split',
+      undefined,
+      documentKey,
+      diffBaseline
+    );
+    try {
+      expect(freshDiff.editor.getText()).toBe(diffBaseline);
+      expect(freshDiff.editor.canUndo).toBe(false);
+    } finally {
+      freshDiff.cleanup();
+      Editor.clearDocuments();
+    }
+  });
+
+  test('a never-edited FileDiff does not create retained state', async () => {
+    Editor.clearDocuments();
+    const documentKey = 'clean-diff';
+    const first = await createDiffEditorFixture(
+      'split',
+      undefined,
+      documentKey
+    );
+    first.cleanup();
+
+    expect(Editor.disposeFileDiff(documentKey)).toBe(false);
+
+    const second = await createDiffEditorFixture(
+      'split',
+      undefined,
+      documentKey,
+      'fresh incoming diff'
+    );
+    try {
+      expect(second.editor.getText()).toBe('fresh incoming diff');
+      expect(second.editor.canUndo).toBe(false);
     } finally {
       second.cleanup();
       Editor.clearDocuments();
@@ -368,6 +561,444 @@ describe('Editor document registry surfaces', () => {
     }
   });
 
+  test('a FileDiff adopts retained addition identity with a compatible old side', async () => {
+    Editor.clearDocuments();
+    const documentKey = 'diff-identity';
+    const retainedFile = {
+      name: 'retained.txt',
+      lang: 'typescript',
+      contents: 'const retained = true;\n',
+    } as const;
+    const first = await createDiffEditorFixture(
+      'split',
+      undefined,
+      documentKey,
+      undefined,
+      {
+        oldFile: {
+          name: 'original-base.txt',
+          contents: 'const retained = false;\n',
+        },
+        newFile: retainedFile,
+      }
+    );
+    insertText(first.editor, 0, 22, '// kept\n');
+    const retainedContents = first.editor.getText();
+    first.cleanup();
+
+    const cloneForAnnotations = spyOn(
+      TextDocument.prototype,
+      'cloneForAnnotations'
+    );
+    let second: DiffEditorFixture | undefined;
+    try {
+      second = await createDiffEditorFixture(
+        'split',
+        undefined,
+        documentKey,
+        undefined,
+        {
+          oldFile: {
+            name: 'original-base.txt',
+            contents: 'const retained = false;\n',
+          },
+          newFile: {
+            name: 'incoming.txt',
+            lang: 'text',
+            contents: 'incoming new side\n',
+          },
+        }
+      );
+      const adoptedDocument = cloneForAnnotations.mock.results.at(-1)?.value as
+        | TextDocument<unknown>
+        | undefined;
+      expect(adoptedDocument?.uri).toBe('file:///retained.txt');
+      expect(adoptedDocument?.languageId).toBe(retainedFile.lang);
+      expect(second.editor.getFile()).toEqual({
+        name: retainedFile.name,
+        lang: retainedFile.lang,
+        contents: retainedContents,
+      });
+      expect(second.content.ariaLabel).toBe(retainedFile.name);
+      expect(
+        second.container.shadowRoot?.querySelector(
+          '[data-code][data-deletions]'
+        )?.textContent
+      ).toContain('const retained = false;');
+      second.fileDiff.render({
+        oldFile: {
+          name: 'original-base.txt',
+          contents: 'const retained = false;\n',
+        },
+        newFile: {
+          name: retainedFile.name,
+          lang: retainedFile.lang,
+          contents: 'const external = true;\n',
+        },
+        fileContainer: second.container,
+        forceRender: true,
+      });
+      await waitFor(
+        () => second?.editor.getText() === 'const external = true;\n'
+      );
+      second.editor.undo();
+      expect(second.editor.getText()).toBe(retainedContents);
+      await waitFor(
+        () => (second?.content.querySelectorAll('span[style]').length ?? 0) > 0
+      );
+      second.editor.undo();
+      expect(second.editor.getText()).toBe(retainedFile.contents);
+      second.editor.redo();
+      expect(second.editor.getText()).toBe(retainedContents);
+      second.editor.redo();
+      expect(second.editor.getText()).toBe('const external = true;\n');
+    } finally {
+      cloneForAnnotations.mockRestore();
+      second?.cleanup();
+      Editor.clearDocuments();
+    }
+  });
+
+  test('a FileDiff rejects retained edits against a different old file', async () => {
+    Editor.clearDocuments();
+    const documentKey = 'diff-incompatible-old-file';
+    const first = await createDiffEditorFixture(
+      'split',
+      undefined,
+      documentKey
+    );
+    insertText(first.editor, 1, 3, ' retained');
+    first.cleanup();
+
+    try {
+      expect(
+        createDiffEditorFixture(
+          'split',
+          undefined,
+          documentKey,
+          'alpha\nnew\ncharlie',
+          {
+            oldFile: {
+              name: 'edits.ts',
+              contents: 'different old side',
+            },
+            newFile: {
+              name: 'edits.ts',
+              contents: 'alpha\nnew\ncharlie',
+            },
+          }
+        )
+      ).rejects.toThrow(
+        'FileDiff: retained session cannot resume against a different old file'
+      );
+
+      const resumed = await createDiffEditorFixture(
+        'split',
+        undefined,
+        documentKey
+      );
+      try {
+        expect(resumed.editor.getText()).toBe('alpha\nnew retained\ncharlie');
+        expect(resumed.editor.canUndo).toBe(true);
+      } finally {
+        resumed.cleanup();
+      }
+    } finally {
+      Editor.clearDocuments();
+    }
+  });
+
+  test('a clean external replacement drops previously retained diff state', async () => {
+    Editor.clearDocuments();
+    const documentKey = 'diff-clean-replacement';
+    const first = await createDiffEditorFixture(
+      'split',
+      undefined,
+      documentKey
+    );
+    insertText(first.editor, 1, 3, ' retained');
+    first.cleanup();
+
+    const second = await createDiffEditorFixture(
+      'split',
+      undefined,
+      documentKey
+    );
+    second.fileDiff.render({
+      oldFile: { name: 'edits.ts', contents: 'replacement old side' },
+      newFile: { name: 'edits.ts', contents: 'replacement new side' },
+      fileContainer: second.container,
+      forceRender: true,
+    });
+    await waitFor(() => second.editor.getText() === 'replacement new side');
+    expect(second.editor.canUndo).toBe(false);
+    expect(second.editor.canRedo).toBe(false);
+    second.cleanup();
+
+    expect(Editor.disposeFileDiff(documentKey)).toBe(false);
+
+    const fresh = await createDiffEditorFixture(
+      'split',
+      undefined,
+      documentKey,
+      'fresh incoming diff'
+    );
+    try {
+      expect(fresh.editor.getText()).toBe('fresh incoming diff');
+      expect(fresh.editor.canUndo).toBe(false);
+    } finally {
+      fresh.cleanup();
+      Editor.clearDocuments();
+    }
+  });
+
+  test('a compatible external replacement retains its undo history', async () => {
+    Editor.clearDocuments();
+    const documentKey = 'diff-compatible-replacement';
+    const first = await createDiffEditorFixture(
+      'split',
+      undefined,
+      documentKey
+    );
+    first.fileDiff.render({
+      oldFile: { name: 'edits.ts', contents: 'alpha\nold\ncharlie' },
+      newFile: { name: 'edits.ts', contents: 'replacement contents' },
+      fileContainer: first.container,
+      forceRender: true,
+    });
+    await waitFor(() => first.editor.getText() === 'replacement contents');
+    first.cleanup();
+
+    const resumed = await createDiffEditorFixture(
+      'split',
+      undefined,
+      documentKey,
+      'replacement contents'
+    );
+    try {
+      expect(resumed.editor.canUndo).toBe(true);
+      resumed.editor.undo();
+      expect(resumed.editor.getText()).toBe('alpha\nnew\ncharlie');
+    } finally {
+      resumed.cleanup();
+      Editor.clearDocuments();
+    }
+  });
+
+  test('a pending compatible replacement retains the outgoing edits', async () => {
+    Editor.clearDocuments();
+    const documentKey = 'diff-pending-compatible-replacement';
+    const first = await createDiffEditorFixture(
+      'split',
+      undefined,
+      documentKey
+    );
+    insertText(first.editor, 1, 3, ' retained');
+    const retainedText = first.editor.getText();
+    first.fileDiff.render({
+      oldFile: { name: 'edits.ts', contents: 'alpha\nold\ncharlie' },
+      newFile: { name: 'edits.ts', contents: 'replacement contents' },
+      fileContainer: first.container,
+      forceRender: true,
+    });
+    first.cleanup();
+
+    const resumed = await createDiffEditorFixture(
+      'split',
+      undefined,
+      documentKey,
+      'replacement contents'
+    );
+    try {
+      expect(resumed.editor.getText()).toBe(retainedText);
+      expect(resumed.editor.canUndo).toBe(true);
+    } finally {
+      resumed.cleanup();
+      Editor.clearDocuments();
+    }
+  });
+
+  test('a resumed diff keeps its original type until the edit session ends', async () => {
+    Editor.clearDocuments();
+    const documentKey = 'diff-type';
+    const files = {
+      oldFile: { name: 'before.ts', contents: 'same contents\n' },
+      newFile: { name: 'after.ts', contents: 'changed contents\n' },
+    };
+    const first = await createDiffEditorFixture(
+      'split',
+      undefined,
+      documentKey,
+      undefined,
+      files
+    );
+    expect(first.fileDiff.getCurrentType()).toBe('rename-changed');
+    first.editor.applyEdits([
+      {
+        range: {
+          start: { line: 0, character: 0 },
+          end: {
+            line: Number.MAX_SAFE_INTEGER,
+            character: Number.MAX_SAFE_INTEGER,
+          },
+        },
+        newText: files.oldFile.contents,
+      },
+    ]);
+    expect(first.editor.getText()).toBe(files.oldFile.contents);
+    expect(first.fileDiff.getCurrentType()).toBe('rename-changed');
+    first.cleanup();
+
+    const second = await createDiffEditorFixture(
+      'split',
+      undefined,
+      documentKey,
+      undefined,
+      files
+    );
+    try {
+      expect(second.editor.getText()).toBe(files.oldFile.contents);
+      expect(second.fileDiff.getCurrentType()).toBe('rename-changed');
+
+      second.editor.cleanUp();
+      expect(second.fileDiff.getCurrentType()).toBe('rename-pure');
+    } finally {
+      second.cleanup();
+      Editor.clearDocuments();
+    }
+  });
+
+  for (const [mismatch, replacement] of [
+    ['name', { name: 'renamed.ts', contents: 'const replacement = true;' }],
+    [
+      'language',
+      {
+        name: 'retained.ts',
+        lang: 'javascript',
+        contents: 'const replacement = true;',
+      },
+    ],
+  ] as const) {
+    test(`a keyed File ${mismatch} update starts fresh history`, async () => {
+      Editor.clearDocuments();
+      const documentKey = `file-incompatible-${mismatch}`;
+      const fileInfo = { name: 'retained.ts', lang: 'typescript' } as const;
+      const first = await createKeyedEditorFixture(
+        'const original = true;',
+        documentKey,
+        undefined,
+        fileInfo
+      );
+      insertText(first.editor, 0, 0, '// retained\n');
+      first.cleanup();
+
+      const second = await createKeyedEditorFixture(
+        'incoming baseline',
+        documentKey,
+        undefined,
+        fileInfo
+      );
+      try {
+        second.file.render({
+          file: replacement,
+          fileContainer: second.container,
+          forceRender: true,
+        });
+        await waitFor(() => second.editor.getText() === replacement.contents);
+        expect(second.editor.canUndo).toBe(false);
+        expect(second.editor.canRedo).toBe(false);
+      } finally {
+        second.cleanup();
+        Editor.clearDocuments();
+      }
+    });
+  }
+
+  for (const decision of ['accept', 'reject'] as const) {
+    test(`a keyed File ${decision} completion retains history until disposal`, async () => {
+      Editor.clearDocuments();
+      const documentKey = `file-completion-${decision}`;
+      const baseline = 'const original = true;';
+      const first = await createKeyedEditorFixture(baseline, documentKey);
+      first.file.setOptions({
+        ...first.file.options,
+        onEditComplete: () => decision,
+      });
+      insertText(first.editor, 0, 0, `// ${decision}\n`);
+      const editedText = first.editor.getText();
+      first.complete();
+      first.cleanup();
+
+      const resumed = await createKeyedEditorFixture(baseline, documentKey);
+      expect(resumed.editor.getText()).toBe(editedText);
+      resumed.editor.undo();
+      expect(resumed.editor.getText()).toBe(baseline);
+      resumed.editor.redo();
+      expect(resumed.editor.getText()).toBe(editedText);
+      resumed.cleanup();
+
+      expect(Editor.disposeFile(documentKey)).toBe(true);
+      const fresh = await createKeyedEditorFixture(baseline, documentKey);
+      try {
+        expect(fresh.editor.getText()).toBe(baseline);
+        expect(fresh.editor.canUndo).toBe(false);
+        expect(fresh.editor.canRedo).toBe(false);
+      } finally {
+        fresh.cleanup();
+        Editor.clearDocuments();
+      }
+    });
+
+    test(`a keyed FileDiff ${decision} completion retains history until disposal`, async () => {
+      Editor.clearDocuments();
+      const documentKey = `diff-completion-${decision}`;
+      const baseline = 'alpha\nnew\ncharlie';
+      const first = await createDiffEditorFixture(
+        'split',
+        undefined,
+        documentKey,
+        baseline
+      );
+      first.fileDiff.setOptions({
+        ...first.fileDiff.options,
+        onEditComplete: () => decision,
+      });
+      insertText(first.editor, 1, 3, ` ${decision}`);
+      const editedText = first.editor.getText();
+      first.complete();
+      first.cleanup();
+
+      const resumed = await createDiffEditorFixture(
+        'split',
+        undefined,
+        documentKey,
+        baseline
+      );
+      expect(resumed.editor.getText()).toBe(editedText);
+      resumed.editor.undo();
+      expect(resumed.editor.getText()).toBe(baseline);
+      resumed.editor.redo();
+      expect(resumed.editor.getText()).toBe(editedText);
+      resumed.cleanup();
+
+      expect(Editor.disposeFileDiff(documentKey)).toBe(true);
+      const fresh = await createDiffEditorFixture(
+        'split',
+        undefined,
+        documentKey,
+        baseline
+      );
+      try {
+        expect(fresh.editor.getText()).toBe(baseline);
+        expect(fresh.editor.canUndo).toBe(false);
+        expect(fresh.editor.canRedo).toBe(false);
+      } finally {
+        fresh.cleanup();
+        Editor.clearDocuments();
+      }
+    });
+  }
+
   test('completion before initial sync retains a claimed document', async () => {
     Editor.clearDocuments();
     const documentKey = 'pending-completion';
@@ -398,7 +1029,7 @@ describe('Editor document registry surfaces', () => {
     first.cleanup();
 
     const pending = createPendingEditorFixture('alpha\nbravo', documentKey);
-    expect(Editor.disposeDocument(documentKey)).toBe(true);
+    expect(Editor.disposeFile(documentKey)).toBe(true);
     await waitFor(() => pending.editor.getText() === retainedText);
     expect(pending.editor.getText()).toBe(retainedText);
     pending.cleanup();
@@ -636,7 +1267,7 @@ describe('Editor focus lifecycle', () => {
   });
 
   test('targeted focus before attachment is a no-op', () => {
-    const editor = new Editor<undefined>();
+    const editor = new Editor<undefined>('file');
     try {
       editor.focus({ lineNumber: 2 });
       expect(editor.getState().selections).toBeUndefined();

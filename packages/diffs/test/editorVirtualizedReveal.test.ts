@@ -170,7 +170,7 @@ function revealOffscreenLine({
     },
   });
 
-  const editor = new Editor<undefined>();
+  const editor = new Editor<undefined>('file');
   const component = new VirtualizedEditableComponent(modelLineHeight);
 
   try {

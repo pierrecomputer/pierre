@@ -649,14 +649,13 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           diff.additionLines.length <= 1 &&
           diff.additionLines.join('') === ''
         ) {
-          Object.assign(
+          this.applyRecomputePreservingSessionType(
             diff,
             recomputeEmptyDocumentDiff(diff, this.options.parseDiffOptions)
           );
-          this.markEditSessionPass(diff);
           regionsChanged = true;
         } else if (shouldTopAlignAdditionRecompute(diff, diff.additionLines)) {
-          Object.assign(
+          this.applyRecomputePreservingSessionType(
             diff,
             recomputeTopAlignedAdditionDiff(
               diff,
@@ -664,7 +663,6 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
               this.options.parseDiffOptions
             )
           );
-          this.markEditSessionPass(diff);
           regionsChanged = true;
         } else {
           const change = applySessionChangedLines(
@@ -737,7 +735,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     // line element for its caret (the additions column vanishes in split;
     // unified shows only deletions). Keep one empty editable line instead.
     if (diff.additionLines.length <= 1 && diff.additionLines.join('') === '') {
-      Object.assign(
+      this.applyRecomputePreservingSessionType(
         diff,
         recomputeEmptyDocumentDiff(diff, this.options.parseDiffOptions)
       );
@@ -745,7 +743,6 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         0,
         textDocument.getLineText(0)
       );
-      this.markEditSessionPass(diff);
     } else if (this.editSessionActive) {
       this.applySessionDocumentChange(diff);
     } else {
@@ -772,18 +769,30 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     const { parseDiffOptions } = this.options;
     const rawLines = diff.additionLines;
     if (shouldTopAlignAdditionRecompute(diff, rawLines)) {
-      Object.assign(
+      this.applyRecomputePreservingSessionType(
         diff,
         recomputeTopAlignedAdditionDiff(diff, rawLines, parseDiffOptions)
       );
-      this.markEditSessionPass(diff);
       return;
     }
     this.applyExpansionRemap(rebuildSessionHunks(diff, parseDiffOptions));
   }
 
-  // Records a session pass that replaced hunks wholesale (empty-document or
-  // top-aligned shims).
+  // Empty-document and top-aligned recomputes rebuild the complete diff. While
+  // editing, keep the session's original classification until finalization.
+  private applyRecomputePreservingSessionType(
+    diff: FileDiffMetadata,
+    update: ReturnType<typeof recomputeEmptyDocumentDiff>
+  ): void {
+    const sessionType = this.editSessionActive ? diff.type : undefined;
+    Object.assign(diff, update);
+    if (sessionType != null) {
+      diff.type = sessionType;
+    }
+    this.markEditSessionPass(diff);
+  }
+
+  // Records a session pass that replaced hunks wholesale.
   private markEditSessionPass(diff: FileDiffMetadata): void {
     if (!this.editSessionActive) {
       return;

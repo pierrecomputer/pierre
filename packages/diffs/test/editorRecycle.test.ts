@@ -11,6 +11,7 @@ import type {
   FileContents,
   HighlightedToken,
   RenderRange,
+  RetainedDiffSessionSnapshot,
 } from '../src/types';
 import { getLineAnnotationName } from '../src/utils/getLineAnnotationName';
 import { installDom, wait, waitFor } from './domHarness';
@@ -26,7 +27,8 @@ function createTestHighlighter(): DiffsHighlighter {
 }
 
 class TestEditableComponent implements DiffsEditableComponent<undefined> {
-  readonly type = 'file' as const;
+  readonly type: 'file' | 'file-diff';
+  readonly __captureDocumentSessionState?: () => RetainedDiffSessionSnapshot;
   readonly top = 0;
   readonly fileContainer = document.createElement('div');
   options: DiffsEditableComponent<undefined>['options'] = {
@@ -48,12 +50,22 @@ class TestEditableComponent implements DiffsEditableComponent<undefined> {
       queueRerender = false,
       syncOnAttach = true,
       onContentFocus,
+      type = 'file',
     }: {
       queueRerender?: boolean;
       syncOnAttach?: boolean;
       onContentFocus?: (content: HTMLElement) => void;
+      type?: 'file' | 'file-diff';
     } = {}
   ) {
+    this.type = type;
+    if (type === 'file-diff') {
+      this.__captureDocumentSessionState = () => ({
+        oldFile: null,
+        type: 'new',
+        hunks: [],
+      });
+    }
     this.#file = file;
     this.#queueRerender = queueRerender;
     this.#syncOnAttach = syncOnAttach;
@@ -145,9 +157,9 @@ class TestEditableComponent implements DiffsEditableComponent<undefined> {
   completeEditSession(): void {}
 
   attachEditor(editor: DiffsEditor<undefined>): () => void {
-    const retainedContents = editor.__getDocumentContents();
-    if (retainedContents != null && retainedContents !== this.#file.contents) {
-      this.#file = { ...this.#file, contents: retainedContents };
+    const retainedDocument = editor.__getDocumentContents();
+    if (retainedDocument != null) {
+      this.#file = { ...this.#file, ...retainedDocument };
       this.#renderShadowDom();
     }
     this.#editor = editor;
@@ -294,7 +306,7 @@ describe('Editor onAttach lifecycle', () => {
     const onAttach = mock((attachedEditor: Editor<undefined>) => {
       attachedEditor.focus({ preventScroll: true });
     });
-    const editor = new Editor<undefined>({ onAttach });
+    const editor = new Editor<undefined>('file', { onAttach });
     const component = new TestEditableComponent(createFile(), {
       queueRerender: true,
       onContentFocus: (content) => focusTargets.push(content),
@@ -325,7 +337,7 @@ describe('Editor onAttach lifecycle', () => {
         _component: DiffsEditableComponent<undefined>
       ) => {}
     );
-    const editor = new Editor<undefined>({ onAttach });
+    const editor = new Editor<undefined>('file', { onAttach });
     const component = new TestEditableComponent(createFile());
     try {
       editor.edit(component);
@@ -366,7 +378,7 @@ describe('Editor onAttach lifecycle', () => {
         onAttachCompleted++;
       }
     );
-    const editor = new Editor<undefined>({ onAttach });
+    const editor = new Editor<undefined>('file', { onAttach });
     const first = new TestEditableComponent(createFile());
     let second: TestEditableComponent | undefined;
     let third: TestEditableComponent | undefined;
@@ -417,7 +429,7 @@ describe('Editor onAttach lifecycle', () => {
         onAttachCompleted++;
       }
     );
-    const editor = new Editor<undefined>({ onAttach });
+    const editor = new Editor<undefined>('file', { onAttach });
     const first = new TestEditableComponent(createFile());
     let second: TestEditableComponent | undefined;
     let replacementStarted = false;
@@ -458,7 +470,7 @@ describe('Editor onAttach lifecycle', () => {
         _component: DiffsEditableComponent<undefined>
       ) => {}
     );
-    const editor = new Editor<undefined>({ onAttach });
+    const editor = new Editor<undefined>('file', { onAttach });
     const first = new TestEditableComponent(createFile());
     let second: TestEditableComponent | undefined;
     try {
@@ -495,13 +507,13 @@ describe('Editor document registry', () => {
 
   test('the same key resumes contents and undo history over incoming contents', () => {
     const dom = installDom();
-    const firstEditor = new Editor<undefined>({}, 'shared');
+    const firstEditor = new Editor<undefined>('file', {}, 'shared');
     const first = new TestEditableComponent(createFile());
-    const secondEditor = new Editor<undefined>({}, 'shared');
+    const secondEditor = new Editor<undefined>('file', {}, 'shared');
     const second = new TestEditableComponent(
       createFile({ contents: 'new external baseline' })
     );
-    const thirdEditor = new Editor<undefined>({}, 'shared');
+    const thirdEditor = new Editor<undefined>('file', {}, 'shared');
     const third = new TestEditableComponent(createFile());
     try {
       firstEditor.edit(first);
@@ -543,9 +555,9 @@ describe('Editor document registry', () => {
         throw new Error('cacheKey should not be read by Editor');
       },
     });
-    const firstEditor = new Editor<undefined>();
+    const firstEditor = new Editor<undefined>('file');
     const first = new TestEditableComponent(file);
-    const secondEditor = new Editor<undefined>();
+    const secondEditor = new Editor<undefined>('file');
     const second = new TestEditableComponent(createFile());
     try {
       firstEditor.edit(first);
@@ -567,9 +579,9 @@ describe('Editor document registry', () => {
 
   test('a different key starts a fresh document', () => {
     const dom = installDom();
-    const firstEditor = new Editor<undefined>({}, 'first');
+    const firstEditor = new Editor<undefined>('file', {}, 'first');
     const first = new TestEditableComponent(createFile());
-    const secondEditor = new Editor<undefined>({}, 'second');
+    const secondEditor = new Editor<undefined>('file', {}, 'second');
     const second = new TestEditableComponent(createFile());
     try {
       firstEditor.edit(first);
@@ -595,9 +607,9 @@ describe('Editor document registry', () => {
   ] as const) {
     test(`${mismatch} mismatch does not replace a retained document`, () => {
       const dom = installDom();
-      const firstEditor = new Editor<undefined>({}, mismatch);
+      const firstEditor = new Editor<undefined>('file', {}, mismatch);
       const first = new TestEditableComponent(createFile());
-      const secondEditor = new Editor<undefined>({}, mismatch);
+      const secondEditor = new Editor<undefined>('file', {}, mismatch);
       const second = new TestEditableComponent(changedFile);
       try {
         firstEditor.edit(first);
@@ -621,9 +633,9 @@ describe('Editor document registry', () => {
   for (const reason of ['discard', 'recycle'] as const) {
     test(`${reason} keeps a retained document`, () => {
       const dom = installDom();
-      const firstEditor = new Editor<undefined>({}, reason);
+      const firstEditor = new Editor<undefined>('file', {}, reason);
       const first = new TestEditableComponent(createFile());
-      const secondEditor = new Editor<undefined>({}, reason);
+      const secondEditor = new Editor<undefined>('file', {}, reason);
       const second = new TestEditableComponent(createFile());
       try {
         firstEditor.edit(first);
@@ -649,9 +661,9 @@ describe('Editor document registry', () => {
 
   test('complete retains the current document and undo history', () => {
     const dom = installDom();
-    const firstEditor = new Editor<undefined>({}, 'complete');
+    const firstEditor = new Editor<undefined>('file', {}, 'complete');
     const first = new TestEditableComponent(createFile());
-    const secondEditor = new Editor<undefined>({}, 'complete');
+    const secondEditor = new Editor<undefined>('file', {}, 'complete');
     const second = new TestEditableComponent(createFile());
     try {
       const complete = firstEditor.edit(first);
@@ -672,14 +684,14 @@ describe('Editor document registry', () => {
 
   test('complete before initial sync retains the keyed document', () => {
     const dom = installDom();
-    const firstEditor = new Editor<undefined>({}, 'complete');
+    const firstEditor = new Editor<undefined>('file', {}, 'complete');
     const first = new TestEditableComponent(createFile());
-    const completingEditor = new Editor<undefined>({}, 'complete');
+    const completingEditor = new Editor<undefined>('file', {}, 'complete');
     const mismatched = new TestEditableComponent(
       createFile({ name: 'other.ts' }),
       { syncOnAttach: false }
     );
-    const freshEditor = new Editor<undefined>({}, 'complete');
+    const freshEditor = new Editor<undefined>('file', {}, 'complete');
     const fresh = new TestEditableComponent(createFile());
     try {
       firstEditor.edit(first);
@@ -703,11 +715,73 @@ describe('Editor document registry', () => {
     }
   });
 
-  test('disposeDocument and clearDocuments evict retained documents', () => {
+  test('disposing a fresh pending attachment prevents later retention', () => {
     const dom = installDom();
-    const firstEditor = new Editor<undefined>({}, 'first');
+    const pendingEditor = new Editor<undefined>('file', {}, 'pending-disposal');
+    const pending = new TestEditableComponent(createFile(), {
+      syncOnAttach: false,
+    });
+    const freshEditor = new Editor<undefined>('file', {}, 'pending-disposal');
+    const fresh = new TestEditableComponent(
+      createFile({ contents: 'fresh contents' })
+    );
+    try {
+      pendingEditor.edit(pending);
+      expect(Editor.disposeFile('pending-disposal')).toBe(true);
+
+      pending.rerender();
+      expect(pendingEditor.getText()).toBe(FILE_CONTENTS);
+      pendingEditor.cleanUp('discard');
+      pending.cleanUp();
+
+      freshEditor.edit(fresh);
+      expect(freshEditor.getText()).toBe('fresh contents');
+      expect(freshEditor.canUndo).toBe(false);
+    } finally {
+      pendingEditor.cleanUp();
+      freshEditor.cleanUp();
+      pending.cleanUp();
+      fresh.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test('clearing fresh pending attachments prevents later retention', () => {
+    const dom = installDom();
+    const pendingEditor = new Editor<undefined>('file', {}, 'pending-clear');
+    const pending = new TestEditableComponent(createFile(), {
+      syncOnAttach: false,
+    });
+    const freshEditor = new Editor<undefined>('file', {}, 'pending-clear');
+    const fresh = new TestEditableComponent(
+      createFile({ contents: 'fresh contents' })
+    );
+    try {
+      pendingEditor.edit(pending);
+      Editor.clearDocuments();
+
+      pending.rerender();
+      expect(pendingEditor.getText()).toBe(FILE_CONTENTS);
+      pendingEditor.cleanUp('discard');
+      pending.cleanUp();
+
+      freshEditor.edit(fresh);
+      expect(freshEditor.getText()).toBe('fresh contents');
+      expect(freshEditor.canUndo).toBe(false);
+    } finally {
+      pendingEditor.cleanUp();
+      freshEditor.cleanUp();
+      pending.cleanUp();
+      fresh.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test('disposeFile and clearDocuments evict retained documents', () => {
+    const dom = installDom();
+    const firstEditor = new Editor<undefined>('file', {}, 'first');
     const first = new TestEditableComponent(createFile());
-    const secondEditor = new Editor<undefined>({}, 'second');
+    const secondEditor = new Editor<undefined>('file', {}, 'second');
     const second = new TestEditableComponent(createFile());
     try {
       firstEditor.edit(first);
@@ -719,13 +793,13 @@ describe('Editor document registry', () => {
       secondEditor.cleanUp('discard');
       second.cleanUp();
 
-      expect(Editor.disposeDocument('first')).toBe(true);
-      expect(Editor.disposeDocument('first')).toBe(false);
+      expect(Editor.disposeFile('first')).toBe(true);
+      expect(Editor.disposeFile('first')).toBe(false);
       Editor.clearDocuments();
 
-      const freshFirst = new Editor<undefined>({}, 'first');
+      const freshFirst = new Editor<undefined>('file', {}, 'first');
       const freshFirstComponent = new TestEditableComponent(createFile());
-      const freshSecond = new Editor<undefined>({}, 'second');
+      const freshSecond = new Editor<undefined>('file', {}, 'second');
       const freshSecondComponent = new TestEditableComponent(createFile());
       freshFirst.edit(freshFirstComponent);
       freshSecond.edit(freshSecondComponent);
@@ -746,9 +820,9 @@ describe('Editor document registry', () => {
 
   test('rejects concurrent editors using the same key', () => {
     const dom = installDom();
-    const firstEditor = new Editor<undefined>({}, 'shared');
+    const firstEditor = new Editor<undefined>('file', {}, 'shared');
     const first = new TestEditableComponent(createFile());
-    const secondEditor = new Editor<undefined>({}, 'shared');
+    const secondEditor = new Editor<undefined>('file', {}, 'shared');
     const second = new TestEditableComponent(createFile());
     try {
       firstEditor.edit(first);
@@ -772,11 +846,11 @@ describe('Editor document registry', () => {
 
   test('failed recycled reattachment keeps key ownership', () => {
     const dom = installDom();
-    const editor = new Editor<undefined>({}, 'recycled');
+    const editor = new Editor<undefined>('file', {}, 'recycled');
     const first = new TestEditableComponent(createFile());
     const failing = new ThrowingEditableComponent(createFile());
     const resumed = new TestEditableComponent(createFile());
-    const competingEditor = new Editor<undefined>({}, 'recycled');
+    const competingEditor = new Editor<undefined>('file', {}, 'recycled');
     const competing = new TestEditableComponent(createFile());
     try {
       editor.edit(first);
@@ -802,9 +876,39 @@ describe('Editor document registry', () => {
     }
   });
 
+  test('an editor cannot attach to a different surface kind', () => {
+    const dom = installDom();
+    const editor = new Editor<undefined>('file', {}, 'recycled-kind');
+    const pendingFile = new TestEditableComponent(createFile(), {
+      syncOnAttach: false,
+    });
+    const diff = new TestEditableComponent(createFile(), {
+      type: 'file-diff',
+    });
+    const resumedFile = new TestEditableComponent(createFile());
+    try {
+      editor.edit(pendingFile);
+      editor.cleanUp('recycle');
+      pendingFile.cleanUp();
+
+      expect(() => editor.edit(diff)).toThrow(
+        'a file editor cannot edit a file-diff component'
+      );
+
+      editor.edit(resumedFile);
+      expect(editor.getText()).toBe(FILE_CONTENTS);
+    } finally {
+      editor.cleanUp();
+      pendingFile.cleanUp();
+      diff.cleanUp();
+      resumedFile.cleanUp();
+      dom.cleanup();
+    }
+  });
+
   test('failed recycled external sync restores the retained document', () => {
     const dom = installDom();
-    const editor = new Editor<undefined>({}, 'recycled');
+    const editor = new Editor<undefined>('file', {}, 'recycled');
     const first = new TestEditableComponent(createFile());
     const failing = new ExternalSyncThrowingEditableComponent(
       createFile({ contents: `retained:${FILE_CONTENTS}` }),
@@ -836,10 +940,10 @@ describe('Editor document registry', () => {
 
   test('failed initial attachment rolls back document state and ownership', () => {
     const dom = installDom();
-    const editor = new Editor<undefined>({}, 'failed');
+    const editor = new Editor<undefined>('file', {}, 'failed');
     const failing = new SyncingThrowingEditableComponent(createFile());
     const retry = new TestEditableComponent(createFile());
-    const competingEditor = new Editor<undefined>({}, 'failed');
+    const competingEditor = new Editor<undefined>('file', {}, 'failed');
     const competing = new TestEditableComponent(createFile());
     try {
       expect(() => editor.edit(failing)).toThrow(
@@ -867,13 +971,13 @@ describe('Editor document registry', () => {
 
   test('failed keyed attachment restores the retained registration', () => {
     const dom = installDom();
-    const firstEditor = new Editor<undefined>({}, 'failed');
+    const firstEditor = new Editor<undefined>('file', {}, 'failed');
     const first = new TestEditableComponent(createFile());
-    const failingEditor = new Editor<undefined>({}, 'failed');
+    const failingEditor = new Editor<undefined>('file', {}, 'failed');
     const failing = new SyncingThrowingEditableComponent(
       createFile({ name: 'other.ts' })
     );
-    const resumedEditor = new Editor<undefined>({}, 'failed');
+    const resumedEditor = new Editor<undefined>('file', {}, 'failed');
     const resumed = new TestEditableComponent(createFile());
     try {
       firstEditor.edit(first);
@@ -901,9 +1005,9 @@ describe('Editor document registry', () => {
 
   test('undo remaps current annotations after a typed history handoff', () => {
     const dom = installDom();
-    const firstEditor = new Editor<undefined>({}, 'annotations');
+    const firstEditor = new Editor<undefined>('file', {}, 'annotations');
     const first = new TestEditableComponent(createFile());
-    const secondEditor = new Editor<undefined>({}, 'annotations');
+    const secondEditor = new Editor<undefined>('file', {}, 'annotations');
     const second = new TestEditableComponent(createFile());
     try {
       first.render({
@@ -939,9 +1043,9 @@ describe('Editor document registry', () => {
       lineNumber: 2,
       metadata: undefined,
     };
-    const firstEditor = new Editor<undefined>({}, 'annotations');
+    const firstEditor = new Editor<undefined>('file', {}, 'annotations');
     const first = new TestEditableComponent(createFile());
-    const secondEditor = new Editor<undefined>({}, 'annotations');
+    const secondEditor = new Editor<undefined>('file', {}, 'annotations');
     const second = new TestEditableComponent(createFile());
     try {
       first.render({ lineAnnotations: [annotation] });
@@ -978,9 +1082,9 @@ describe('Editor document registry', () => {
 
   test('external replacement during keyed adoption joins retained history', () => {
     const dom = installDom();
-    const firstEditor = new Editor<undefined>({}, 'external');
+    const firstEditor = new Editor<undefined>('file', {}, 'external');
     const first = new TestEditableComponent(createFile());
-    const secondEditor = new Editor<undefined>({}, 'external');
+    const secondEditor = new Editor<undefined>('file', {}, 'external');
     const second = new TestEditableComponent(createFile(), {
       syncOnAttach: false,
     });
@@ -1010,10 +1114,10 @@ describe('Editor document registry', () => {
     }
   });
 
-  test('active edits refresh registry recency', () => {
+  test('a released active document enters the LRU as most recent', () => {
     const dom = installDom();
     const retain = (key: string, prefix: string): void => {
-      const editor = new Editor<undefined>({}, key);
+      const editor = new Editor<undefined>('file', {}, key);
       const component = new TestEditableComponent(createFile());
       editor.edit(component);
       insertAtStart(editor, prefix);
@@ -1021,7 +1125,7 @@ describe('Editor document registry', () => {
       component.cleanUp();
     };
     const read = (key: string): string => {
-      const editor = new Editor<undefined>({}, key);
+      const editor = new Editor<undefined>('file', {}, key);
       const component = new TestEditableComponent(createFile());
       editor.edit(component);
       const text = editor.getText();
@@ -1029,7 +1133,7 @@ describe('Editor document registry', () => {
       component.cleanUp();
       return text;
     };
-    const activeEditor = new Editor<undefined>({}, 'active');
+    const activeEditor = new Editor<undefined>('file', {}, 'active');
     const active = new TestEditableComponent(createFile());
     try {
       activeEditor.edit(active);
@@ -1052,17 +1156,94 @@ describe('Editor document registry', () => {
     }
   });
 
-  test('LRU eviction does not release active key ownership', () => {
+  test('capacity shrink does not evict an active document', () => {
     const dom = installDom();
-    const activeEditor = new Editor<undefined>({}, 'active');
+    const retain = (key: string): void => {
+      const editor = new Editor<undefined>('file', {}, key);
+      const component = new TestEditableComponent(createFile());
+      editor.edit(component);
+      editor.cleanUp('discard');
+      component.cleanUp();
+    };
+    const activeEditor = new Editor<undefined>('file', {}, 'active-shrink');
     const active = new TestEditableComponent(createFile());
-    const competingEditor = new Editor<undefined>({}, 'active');
+    const resumedEditor = new Editor<undefined>('file', {}, 'active-shrink');
+    const resumed = new TestEditableComponent(createFile());
+    try {
+      Editor.setDocumentRegistryCapacity(3);
+      activeEditor.edit(active);
+      insertAtStart(activeEditor, 'active:');
+      retain('dormant-first');
+      retain('dormant-second');
+      retain('dormant-third');
+
+      Editor.setDocumentRegistryCapacity(1);
+      activeEditor.cleanUp('discard');
+      active.cleanUp();
+
+      resumedEditor.edit(resumed);
+      expect(resumedEditor.getText()).toBe(`active:${FILE_CONTENTS}`);
+      expect(resumedEditor.canUndo).toBe(true);
+    } finally {
+      activeEditor.cleanUp();
+      resumedEditor.cleanUp();
+      active.cleanUp();
+      resumed.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test('complete reinserts an active document as most recent', () => {
+    const dom = installDom();
+    const retain = (key: string, prefix: string): void => {
+      const editor = new Editor<undefined>('file', {}, key);
+      const component = new TestEditableComponent(createFile());
+      editor.edit(component);
+      insertAtStart(editor, prefix);
+      editor.cleanUp('discard');
+      component.cleanUp();
+    };
+    const read = (key: string): string => {
+      const editor = new Editor<undefined>('file', {}, key);
+      const component = new TestEditableComponent(createFile());
+      editor.edit(component);
+      const text = editor.getText();
+      editor.cleanUp('discard');
+      component.cleanUp();
+      return text;
+    };
+    const activeEditor = new Editor<undefined>('file', {}, 'completed-mru');
+    const active = new TestEditableComponent(createFile());
+    try {
+      Editor.setDocumentRegistryCapacity(2);
+      const complete = activeEditor.edit(active);
+      insertAtStart(activeEditor, 'completed:');
+      retain('oldest', 'oldest:');
+      retain('newer', 'newer:');
+
+      complete();
+
+      expect(read('completed-mru')).toBe(`completed:${FILE_CONTENTS}`);
+      expect(read('newer')).toBe(`newer:${FILE_CONTENTS}`);
+      expect(read('oldest')).toBe(FILE_CONTENTS);
+    } finally {
+      activeEditor.cleanUp();
+      active.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test('dormant LRU pressure does not evict an active document', () => {
+    const dom = installDom();
+    const activeEditor = new Editor<undefined>('file', {}, 'active');
+    const active = new TestEditableComponent(createFile());
+    const competingEditor = new Editor<undefined>('file', {}, 'active');
     const competing = new TestEditableComponent(createFile());
     try {
       activeEditor.edit(active);
       insertAtStart(activeEditor, 'active:');
       for (let index = 0; index < 100; index++) {
-        const editor = new Editor<undefined>({}, `pressure-${index}`);
+        const editor = new Editor<undefined>('file', {}, `pressure-${index}`);
         const component = new TestEditableComponent(createFile());
         editor.edit(component);
         editor.cleanUp('discard');
@@ -1076,7 +1257,7 @@ describe('Editor document registry', () => {
       active.cleanUp();
 
       competingEditor.edit(competing);
-      expect(competingEditor.getText()).toBe(FILE_CONTENTS);
+      expect(competingEditor.getText()).toBe(`active:${FILE_CONTENTS}`);
     } finally {
       activeEditor.cleanUp();
       competingEditor.cleanUp();
@@ -1086,21 +1267,21 @@ describe('Editor document registry', () => {
     }
   });
 
-  test('pending adoption does not resurrect an LRU-evicted document', () => {
+  test('pending adoption survives dormant LRU pressure', () => {
     const dom = installDom();
     const retain = (key: string, prefix: string): void => {
-      const editor = new Editor<undefined>({}, key);
+      const editor = new Editor<undefined>('file', {}, key);
       const component = new TestEditableComponent(createFile());
       editor.edit(component);
       insertAtStart(editor, prefix);
       editor.cleanUp('discard');
       component.cleanUp();
     };
-    const pendingEditor = new Editor<undefined>({}, 'pending');
+    const pendingEditor = new Editor<undefined>('file', {}, 'pending');
     const pending = new TestEditableComponent(createFile(), {
       syncOnAttach: false,
     });
-    const freshEditor = new Editor<undefined>({}, 'pending');
+    const freshEditor = new Editor<undefined>('file', {}, 'pending');
     const fresh = new TestEditableComponent(createFile());
     try {
       retain('pending', 'retained:');
@@ -1115,8 +1296,8 @@ describe('Editor document registry', () => {
       pending.cleanUp();
 
       freshEditor.edit(fresh);
-      expect(freshEditor.getText()).toBe(FILE_CONTENTS);
-      expect(freshEditor.canUndo).toBe(false);
+      expect(freshEditor.getText()).toBe(`retained:${FILE_CONTENTS}`);
+      expect(freshEditor.canUndo).toBe(true);
     } finally {
       pendingEditor.cleanUp();
       freshEditor.cleanUp();
@@ -1129,7 +1310,7 @@ describe('Editor document registry', () => {
   test('evicts the least-recently-used document past capacity', () => {
     const dom = installDom();
     const retain = (key: string, prefix: string): void => {
-      const editor = new Editor<undefined>({}, key);
+      const editor = new Editor<undefined>('file', {}, key);
       const component = new TestEditableComponent(createFile());
       editor.edit(component);
       insertAtStart(editor, prefix);
@@ -1137,7 +1318,7 @@ describe('Editor document registry', () => {
       component.cleanUp();
     };
     const read = (key: string): string => {
-      const editor = new Editor<undefined>({}, key);
+      const editor = new Editor<undefined>('file', {}, key);
       const component = new TestEditableComponent(createFile());
       editor.edit(component);
       const text = editor.getText();
@@ -1160,10 +1341,45 @@ describe('Editor document registry', () => {
     }
   });
 
+  test('applies registry capacity independently to files and diffs', () => {
+    const dom = installDom();
+    const retain = (
+      type: 'file' | 'file-diff',
+      key: string,
+      prefix: string
+    ): void => {
+      const editor = new Editor<undefined>(type, {}, key);
+      const component = new TestEditableComponent(createFile(), { type });
+      editor.edit(component);
+      insertAtStart(editor, prefix);
+      editor.cleanUp('discard');
+      component.cleanUp();
+    };
+    const read = (type: 'file' | 'file-diff', key: string): string => {
+      const editor = new Editor<undefined>(type, {}, key);
+      const component = new TestEditableComponent(createFile(), { type });
+      editor.edit(component);
+      const text = editor.getText();
+      editor.cleanUp('discard');
+      component.cleanUp();
+      return text;
+    };
+    try {
+      Editor.setDocumentRegistryCapacity(1);
+      retain('file', 'file-key', 'file:');
+      retain('file-diff', 'diff-key', 'diff:');
+
+      expect(read('file', 'file-key')).toBe(`file:${FILE_CONTENTS}`);
+      expect(read('file-diff', 'diff-key')).toBe(`diff:${FILE_CONTENTS}`);
+    } finally {
+      dom.cleanup();
+    }
+  });
+
   test('shrinking registry capacity immediately evicts least-recent documents', () => {
     const dom = installDom();
     const retain = (key: string, prefix: string): void => {
-      const editor = new Editor<undefined>({}, key);
+      const editor = new Editor<undefined>('file', {}, key);
       const component = new TestEditableComponent(createFile());
       editor.edit(component);
       insertAtStart(editor, prefix);
@@ -1171,7 +1387,7 @@ describe('Editor document registry', () => {
       component.cleanUp();
     };
     const read = (key: string): string => {
-      const editor = new Editor<undefined>({}, key);
+      const editor = new Editor<undefined>('file', {}, key);
       const component = new TestEditableComponent(createFile());
       editor.edit(component);
       const text = editor.getText();
@@ -1199,7 +1415,7 @@ describe('Editor document registry', () => {
   test('growing registry capacity preserves documents and accepts more', () => {
     const dom = installDom();
     const retain = (key: string, prefix: string): void => {
-      const editor = new Editor<undefined>({}, key);
+      const editor = new Editor<undefined>('file', {}, key);
       const component = new TestEditableComponent(createFile());
       editor.edit(component);
       insertAtStart(editor, prefix);
@@ -1207,7 +1423,7 @@ describe('Editor document registry', () => {
       component.cleanUp();
     };
     const read = (key: string): string => {
-      const editor = new Editor<undefined>({}, key);
+      const editor = new Editor<undefined>('file', {}, key);
       const component = new TestEditableComponent(createFile());
       editor.edit(component);
       const text = editor.getText();
@@ -1243,7 +1459,7 @@ describe('Editor recycle cleanUp', () => {
   test('recycle keeps document and undo history across re-attach', () => {
     const dom = installDom();
     try {
-      const editor = new Editor<undefined>();
+      const editor = new Editor<undefined>('file');
       const first = new TestEditableComponent(createFile());
       editor.edit(first);
       insertAtStart(editor, 'X');
@@ -1275,7 +1491,7 @@ describe('Editor recycle cleanUp', () => {
     const onAttach = mock((attachedEditor: Editor<undefined>) => {
       attachedEditor.focus({ lineNumber: 2, preventScroll: true });
     });
-    const editor = new Editor<undefined>({ onAttach });
+    const editor = new Editor<undefined>('file', { onAttach });
     const component = new TestEditableComponent(createFile());
     try {
       editor.edit(component);
@@ -1336,7 +1552,7 @@ describe('Editor recycle cleanUp', () => {
       component.rerender();
       component.contentElement.focus = restoredFocus;
     });
-    const editor = new Editor<undefined>({ onAttach });
+    const editor = new Editor<undefined>('file', { onAttach });
     const component = new TestEditableComponent(createFile());
     try {
       editor.edit(component);
@@ -1354,7 +1570,7 @@ describe('Editor recycle cleanUp', () => {
   test('recycled re-attach recreates a tokenizer so edits still paint', () => {
     const dom = installDom();
     try {
-      const editor = new Editor<undefined>();
+      const editor = new Editor<undefined>('file');
       const first = new TestEditableComponent(createFile());
       editor.edit(first);
 
@@ -1381,7 +1597,7 @@ describe('Editor recycle cleanUp', () => {
   test('full cleanUp still rebuilds from host contents', () => {
     const dom = installDom();
     try {
-      const editor = new Editor<undefined>();
+      const editor = new Editor<undefined>('file');
       const first = new TestEditableComponent(createFile());
       editor.edit(first);
       insertAtStart(editor, 'X');
@@ -1414,7 +1630,7 @@ describe('Editor recycle cleanUp', () => {
           _component: DiffsEditableComponent<undefined>
         ) => {}
       );
-      const editor = new Editor<undefined>({ onAttach });
+      const editor = new Editor<undefined>('file', { onAttach });
       const first = new TestEditableComponent(createFile());
       editor.edit(first);
       await wait(0);

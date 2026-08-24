@@ -63,7 +63,7 @@ function render() {
 
 render();
 
-const editor = new Editor<ThreadMetadata>({
+const editor = new Editor<ThreadMetadata>('file-diff', {
   onChange(file, nextAnnotations) {
     newFile = { ...newFile, contents: file.contents };
     saveDraft(newFile);
@@ -109,8 +109,8 @@ import { Editor } from '@pierre/diffs/edit';
 
 export function mountEditableCodeView(root: HTMLElement) {
   const viewer = new CodeView({
-    createEditor(options) {
-      return new Editor(options);
+    createEditor(documentKind, options) {
+      return new Editor(documentKind, options);
     },
     onItemEditChange(item, file, nextAnnotations) {
       saveItemDraft(item.id, file, nextAnnotations);

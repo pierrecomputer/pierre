@@ -10,6 +10,7 @@ member of its classes.
 | `Editor`              | Class | Adds text editing to a `File` or `FileDiff` instance.     |
 | `EditorChange`        | Type  | Describes one normalized editor change.                   |
 | `EditorChangeEvent`   | Type  | Provides normalized edits and current document state.     |
+| `EditorDocumentKind`  | Type  | Selects a `file` or `file-diff` editor surface.           |
 | `EditorOptions`       | Type  | Configures history, state, selections, and callbacks.     |
 | `TextDocument`        | Class | Stores text, positions, edits, search, and undo history.  |
 | `TextDocumentChange`  | Type  | Describes the lines and characters changed by an edit.    |
@@ -42,7 +43,7 @@ member of its classes.
 
 | Member                              | Purpose                                                   |
 | ----------------------------------- | --------------------------------------------------------- |
-| `new Editor(options?)`              | Creates one editor.                                       |
+| `new Editor(kind, options?)`        | Creates an editor dedicated to `file` or `file-diff`.     |
 | `edit(instance)`                    | Attaches to a file or diff and returns a detach function. |
 | `setOptions(options)`               | Replaces editor options.                                  |
 | `applyEdits(edits, updateHistory?)` | Applies programmatic text edits.                          |

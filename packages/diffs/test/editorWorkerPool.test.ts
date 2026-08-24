@@ -1746,7 +1746,9 @@ describe('rendering when an editor attaches', () => {
       useTokenTransformer: true,
     });
     let attaches = 0;
-    const editor = new Editor<undefined>({ onAttach: () => attaches++ });
+    const editor = new Editor<undefined>('file-diff', {
+      onAttach: () => attaches++,
+    });
     try {
       const root = document.createElement('div');
       document.body.appendChild(root);

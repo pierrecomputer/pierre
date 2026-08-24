@@ -50,7 +50,7 @@ async function createBracketMatchFixture(
     disableFileHeader: true,
     theme: DEFAULT_THEMES,
   });
-  const editor = new Editor<undefined>(editorOptions);
+  const editor = new Editor<undefined>('file', editorOptions);
   const initialFile: FileContents = { name: 'brackets.ts', contents };
 
   file.render({ file: initialFile, fileContainer, forceRender: true });

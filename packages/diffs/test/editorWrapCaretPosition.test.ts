@@ -210,7 +210,7 @@ async function createWrapEditor(
     theme: DEFAULT_THEMES,
     overflow: 'wrap',
   });
-  const editor = new Editor<undefined>();
+  const editor = new Editor<undefined>('file');
   const initialFile: FileContents = {
     name: 'wrap.ts',
     contents,
@@ -454,7 +454,7 @@ describe('editor wrap caret position', () => {
       theme: DEFAULT_THEMES,
       overflow: 'wrap',
     });
-    const editor = new Editor<undefined>();
+    const editor = new Editor<undefined>('file');
     const initialFile: FileContents = {
       name: 'wrap.ts',
       contents: 'const a = 1;\nconst b = 2;\nconst c = 3;\nconst d = 4;',

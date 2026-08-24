@@ -43,8 +43,11 @@ const diffOptions: FileDiffOptions<undefined> = {
   diffStyle: 'split',
 };
 
-function createEditor<LAnnotation>(options: EditorOptions<LAnnotation>) {
-  return new Editor(options);
+function createEditor<LAnnotation>(
+  documentKind: 'file' | 'file-diff',
+  options: EditorOptions<LAnnotation>
+) {
+  return new Editor(documentKind, options);
 }
 
 export function EditableDiff() {

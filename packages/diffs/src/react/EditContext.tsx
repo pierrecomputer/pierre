@@ -5,11 +5,12 @@ import type { Context, PropsWithChildren } from 'react';
 import { createContext, useContext, useRef } from 'react';
 
 import type { EditorOptions } from '../edit';
-import type { DiffsEditor } from '../types';
+import type { DiffsEditor, EditorDocumentKind } from '../types';
 import { useStableCallback } from './utils/useStableCallback';
 
 /** Creates an Editor. Components manage the instance lifecycle. */
 export type CreateEditor<LAnnotation> = (
+  documentKind: EditorDocumentKind,
   options: EditorOptions<LAnnotation>
 ) => DiffsEditor<LAnnotation>;
 
@@ -28,16 +29,26 @@ export function EditProvider<LAnnotation>({
   // Editors cached by options-object identity: an edit session that restarts
   // with the same `editorOptions`
   const editorCacheRef = useRef(
-    new WeakMap<EditorOptions<LAnnotation>, DiffsEditor<LAnnotation>>()
+    new Map<
+      EditorDocumentKind,
+      WeakMap<EditorOptions<LAnnotation>, DiffsEditor<LAnnotation>>
+    >([
+      ['file', new WeakMap()],
+      ['file-diff', new WeakMap()],
+    ])
   );
   const stableCreateEditor = useStableCallback(
-    (options: EditorOptions<LAnnotation>): DiffsEditor<LAnnotation> => {
-      const cached = editorCacheRef.current.get(options);
+    (
+      documentKind: EditorDocumentKind,
+      options: EditorOptions<LAnnotation>
+    ): DiffsEditor<LAnnotation> => {
+      const cache = editorCacheRef.current.get(documentKind)!;
+      const cached = cache.get(options);
       if (cached != null) {
         return cached;
       }
-      const editor = createEditor(options);
-      editorCacheRef.current.set(options, editor);
+      const editor = createEditor(documentKind, options);
+      cache.set(options, editor);
       return editor;
     }
   );

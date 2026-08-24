@@ -99,7 +99,7 @@ export default value;
       const events = [];
       window.__editorEvents = events;
 
-      const editor = new Editor({});
+      const editor = new Editor('file-diff');
       window.__editor = editor;
 
       const instance = new FileDiff({

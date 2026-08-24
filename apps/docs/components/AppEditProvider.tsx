@@ -1,13 +1,18 @@
 'use client';
 
-import { Editor, type EditorOptions } from '@pierre/diffs/edit';
+import {
+  Editor,
+  type EditorDocumentKind,
+  type EditorOptions,
+} from '@pierre/diffs/edit';
 import { EditProvider } from '@pierre/diffs/react';
 import type { ReactNode } from 'react';
 
 function createEditor<LAnnotation>(
+  documentKind: EditorDocumentKind,
   options: EditorOptions<LAnnotation>
 ): Editor<LAnnotation> {
-  return new Editor(options);
+  return new Editor(documentKind, options);
 }
 
 interface AppEditProviderProps {
