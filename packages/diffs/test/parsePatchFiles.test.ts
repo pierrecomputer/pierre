@@ -184,6 +184,56 @@ describe('parsePatchFiles', () => {
     }
   });
 
+  test('preserves the addition boundary when repair reaches zero', () => {
+    const consoleError = spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const result = parsePatchFiles(
+        [
+          '--- deleted-line.txt\n',
+          '+++ deleted-line.txt\n',
+          '@@ -5,1 +5,1 @@\n',
+          '-gone\n',
+        ].join('')
+      );
+      const hunk = result[0].files[0].hunks[0];
+
+      expect(consoleError).toHaveBeenCalledTimes(1);
+      expect(hunk.additionStart).toBe(4);
+      expect(hunk.additionCount).toBe(0);
+      expect(hunk.deletionStart).toBe(5);
+      expect(hunk.deletionCount).toBe(1);
+      expect(hunk.collapsedBefore).toBe(4);
+      expect(verifyPatchHunkValues(result).errors).toEqual([]);
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
+  test('preserves the deletion boundary when repair reaches zero', () => {
+    const consoleError = spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const result = parsePatchFiles(
+        [
+          '--- added-line.txt\n',
+          '+++ added-line.txt\n',
+          '@@ -5,1 +5,1 @@\n',
+          '+added\n',
+        ].join('')
+      );
+      const hunk = result[0].files[0].hunks[0];
+
+      expect(consoleError).toHaveBeenCalledTimes(1);
+      expect(hunk.additionStart).toBe(5);
+      expect(hunk.additionCount).toBe(1);
+      expect(hunk.deletionStart).toBe(4);
+      expect(hunk.deletionCount).toBe(0);
+      expect(hunk.collapsedBefore).toBe(4);
+      expect(verifyPatchHunkValues(result).errors).toEqual([]);
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
   test('uses repaired counts for geometry after an underfilled hunk', () => {
     const consoleError = spyOn(console, 'error').mockImplementation(() => {});
     try {

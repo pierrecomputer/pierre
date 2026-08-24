@@ -491,7 +491,20 @@ function _processFile(
       console.error(
         `parsePatchContent: hunk line count mismatch: "${firstLine.trimEnd()}", declared old/new ${hunkData.deletionCount}/${hunkData.additionCount}, parsed old/new ${parsedDeletionLines}/${parsedAdditionLines}`
       );
-      // We correct the count values in non-strict mode
+      // Zero-count ranges use their start as the boundary instead of start - 1.
+      // Preserve the header's original boundary when a repaired side becomes empty.
+      if (hunkData.additionCount > 0 && parsedAdditionLines === 0) {
+        hunkData.additionStart = getHunkSideStartBoundary(
+          hunkData.additionStart,
+          hunkData.additionCount
+        );
+      }
+      if (hunkData.deletionCount > 0 && parsedDeletionLines === 0) {
+        hunkData.deletionStart = getHunkSideStartBoundary(
+          hunkData.deletionStart,
+          hunkData.deletionCount
+        );
+      }
       hunkData.additionCount = parsedAdditionLines;
       hunkData.deletionCount = parsedDeletionLines;
     }
