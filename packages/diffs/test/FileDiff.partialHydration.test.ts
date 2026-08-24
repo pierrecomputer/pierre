@@ -313,7 +313,7 @@ describe('FileDiff partial hydration', () => {
         return deferred.promise;
       },
     });
-    let detach: (() => void) | undefined;
+    let detach: ReturnType<TestFileDiff['attachEditor']> | undefined;
 
     try {
       instance.render({
@@ -348,7 +348,7 @@ describe('FileDiff partial hydration', () => {
       expect(hydratedSession?.additionLines.join('')).toBe(newFile.contents);
       expect(hydratedSession?.deletionLines.join('')).toBe(oldFile.contents);
     } finally {
-      detach?.();
+      detach?.(false, {});
       instance.cleanUp();
       cleanup();
     }
@@ -371,7 +371,7 @@ describe('FileDiff partial hydration', () => {
       disableFileHeader: true,
       loadDiffFiles: () => deferred.promise,
     });
-    let detach: ((recycle?: boolean) => void) | undefined;
+    let detach: ReturnType<TestFileDiff['attachEditor']> | undefined;
     let loadPromise: Promise<void> | undefined;
 
     try {
@@ -410,7 +410,7 @@ describe('FileDiff partial hydration', () => {
     } finally {
       deferred.resolve({ oldFile, newFile });
       await loadPromise;
-      detach?.();
+      detach?.(false, {});
       instance.cleanUp();
       cleanup();
     }
@@ -435,8 +435,8 @@ describe('FileDiff partial hydration', () => {
         return deferred.promise;
       },
     });
-    let firstDetach: ((recycle?: boolean) => void) | undefined;
-    let secondDetach: (() => void) | undefined;
+    let firstDetach: ReturnType<TestFileDiff['attachEditor']> | undefined;
+    let secondDetach: ReturnType<TestFileDiff['attachEditor']> | undefined;
 
     try {
       instance.render({
@@ -445,7 +445,7 @@ describe('FileDiff partial hydration', () => {
         forceRender: true,
       });
       const firstEditor = createEditorStub();
-      firstEditor.cleanUp = (reason) => firstDetach?.(reason === 'recycle');
+      firstEditor.cleanUp = (reason) => firstDetach?.(reason === 'recycle', {});
       firstDetach = instance.attachEditor(firstEditor);
       const loadPromise = instance.getPendingFileLoadPromiseForTest();
       expect(loadPromise).toBeDefined();
@@ -477,7 +477,7 @@ describe('FileDiff partial hydration', () => {
       expect(hydratedSession?.deletionLines.join('')).toBe(oldFile.contents);
       expect(loadCalls).toBe(1);
     } finally {
-      secondDetach?.();
+      secondDetach?.(false, {});
       instance.cleanUp();
       cleanup();
     }
@@ -498,7 +498,7 @@ describe('FileDiff partial hydration', () => {
         return deferred.promise;
       },
     });
-    let detach: (() => void) | undefined;
+    let detach: ReturnType<TestFileDiff['attachEditor']> | undefined;
 
     try {
       instance.render({
@@ -540,7 +540,7 @@ describe('FileDiff partial hydration', () => {
       expect(partial.additionLines).toBe(partial.deletionLines);
       expect(partial).toEqual(hydratedBaseBefore);
     } finally {
-      detach?.();
+      detach?.(false, {});
       instance.cleanUp();
       cleanup();
     }

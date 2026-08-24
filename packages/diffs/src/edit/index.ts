@@ -11,4 +11,5 @@ export type {
   EditorChange,
   EditorChangeEvent,
   EditorDocumentKind,
+  EditorState,
 } from '../types';

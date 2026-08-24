@@ -77,7 +77,7 @@ describe('FileDiff unified edit separators', () => {
 
   test('applyDocumentChange refreshes function hunk separators from the session diff', async () => {
     const { cleanup } = installDom();
-    let detach: (() => void) | undefined;
+    let detach: ReturnType<FileDiff<string>['attachEditor']> | undefined;
     let instance: FileDiff<string> | undefined;
     try {
       const fileDiff = createTwoHunkDiff();
@@ -114,7 +114,7 @@ describe('FileDiff unified edit separators', () => {
       );
       expect(fileDiff.additionLines[69]).toBe('70\n');
     } finally {
-      detach?.();
+      detach?.(false, {});
       instance?.cleanUp();
       cleanup();
     }

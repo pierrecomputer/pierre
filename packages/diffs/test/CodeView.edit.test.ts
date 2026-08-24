@@ -17,6 +17,7 @@ import type {
   DiffsEditor,
   EditCompletionDecision,
   EditorDocumentKind,
+  EditorState,
   FileContents,
   FileDiffLoadedFiles,
   FileDiffMetadata,
@@ -45,7 +46,8 @@ interface StubEditor extends DiffsEditor<undefined> {
     file: FileContents,
     lineAnnotations?:
       | LineAnnotation<undefined>[]
-      | DiffLineAnnotation<undefined>[]
+      | DiffLineAnnotation<undefined>[],
+    state?: EditorState
   ): void;
 }
 
@@ -65,7 +67,7 @@ function createEditorHarness({
     editHistoryKey?: string
   ): StubEditor => {
     editHistoryKeys.push(editHistoryKey);
-    let detach: ((recycle?: boolean) => void) | undefined;
+    let detach: ((recycle: boolean, state: EditorState) => void) | undefined;
     const editor = {
       edits: [],
       fullCleanUps: 0,
@@ -74,9 +76,10 @@ function createEditorHarness({
         file: FileContents,
         lineAnnotations?:
           | LineAnnotation<undefined>[]
-          | DiffLineAnnotation<undefined>[]
+          | DiffLineAnnotation<undefined>[],
+        state: EditorState = {}
       ) {
-        options.onChange({ changes: [], file, lineAnnotations });
+        options.onChange({ changes: [], file, lineAnnotations, state });
       },
       edit(instance: DiffsEditableComponent<undefined>) {
         editor.edits.push(instance);
@@ -99,7 +102,7 @@ function createEditorHarness({
         }
         // Like the real editor, the detach closure learns whether this is a
         // virtualized recycle or a genuine session end.
-        detach?.(reason === 'recycle');
+        detach?.(reason === 'recycle', {});
         detach = undefined;
       },
       __captureFocusForDOMReplacement() {},
@@ -1022,6 +1025,84 @@ describe('CodeView item edit mode', () => {
     }
   });
 
+  test('a real editor preserves final state when a recycled item completes', async () => {
+    const { cleanup } = installDom();
+    const completions: FileEditCompleteEvent<undefined>[] = [];
+    const viewer = new CodeView({
+      createEditor: (documentKind, options) =>
+        new Editor<undefined>(documentKind, options),
+      onItemEditComplete(event) {
+        if ('file' in event) {
+          completions.push(event);
+        }
+        return 'reject';
+      },
+    });
+    const item = makeEditFileItem('recycled-state');
+    if (item.type !== 'file') {
+      throw new Error('Expected a file item');
+    }
+    const root = createRoot();
+
+    try {
+      viewer.setup(root);
+      await renderItems(viewer, [item]);
+      const editor = viewer.getEditor(item.id) as Editor<undefined>;
+      await waitFor(() => editor?.getText() === item.file.contents);
+      editor.applyEdits([
+        {
+          range: {
+            start: { line: 0, character: 0 },
+            end: { line: 0, character: 0 },
+          },
+          newText: 'X',
+        },
+      ]);
+      editor.setSelections([
+        {
+          start: { line: 0, character: 3 },
+          end: { line: 0, character: 3 },
+          direction: 'none',
+        },
+      ]);
+      const code = viewer
+        .getRenderedItems()[0]
+        ?.element.shadowRoot?.querySelector('[data-code]');
+      expect(code).toBeInstanceOf(HTMLElement);
+      (code as HTMLElement).scrollLeft = 24;
+      root.scrollTop = 48;
+
+      await applyItemUpdate(viewer, {
+        ...item,
+        collapsed: true,
+        version: 1,
+      });
+      expect(completions).toHaveLength(0);
+      await applyItemUpdate(viewer, {
+        ...item,
+        collapsed: true,
+        edit: false,
+        version: 2,
+      });
+
+      expect(completions).toHaveLength(1);
+      expect(completions[0]?.state).toEqual({
+        selections: [
+          {
+            start: { line: 0, character: 3 },
+            end: { line: 0, character: 3 },
+            direction: 0,
+          },
+        ],
+        view: { scrollLeft: 24, scrollTop: 48 },
+      });
+    } finally {
+      viewer.cleanUp();
+      await wait(0);
+      cleanup();
+    }
+  });
+
   test('updateItemId keeps the editor and routes changes to the renamed item', async () => {
     const { cleanup } = installDom();
     const { editors, createEditor } = createEditorHarness();
@@ -1052,19 +1133,32 @@ describe('CodeView item edit mode', () => {
   test('onItemEditChange receives the owning item and contents', async () => {
     const { cleanup } = installDom();
     const { editors, createEditor } = createEditorHarness();
-    const changes: Array<[string, string]> = [];
+    const changes: Array<[string, string, EditorState]> = [];
     const viewer = new CodeView({
       createEditor,
       onItemEditChange(event, item) {
-        changes.push([item.id, event.file.contents]);
+        changes.push([item.id, event.file.contents, event.state]);
       },
     });
     try {
       viewer.setup(createRoot());
       await renderItems(viewer, [makeEditFileItem('a')]);
 
-      editors[0].emitChange({ name: 'a.ts', contents: 'edited' });
-      expect(changes).toEqual([['a', 'edited']]);
+      const state: EditorState = {
+        selections: [
+          {
+            start: { line: 0, character: 1 },
+            end: { line: 0, character: 1 },
+            direction: 0,
+          },
+        ],
+      };
+      editors[0].emitChange(
+        { name: 'a.ts', contents: 'edited' },
+        undefined,
+        state
+      );
+      expect(changes).toEqual([['a', 'edited', state]]);
     } finally {
       viewer.cleanUp();
       await wait(0);
@@ -1668,6 +1762,7 @@ describe('CodeView item edit mode', () => {
         // The event's original value is the item's exact external file, and
         // the item handed to the callback is the one that ended the session.
         expect(event.originalFile).toBe(item.file);
+        expect(event.state).toEqual({});
         expect(completedItem.edit).toBe(false);
         expect(completedItem.version).toBe(1);
       } finally {

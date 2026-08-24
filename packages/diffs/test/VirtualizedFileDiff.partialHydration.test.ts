@@ -465,7 +465,7 @@ describe('VirtualizedFileDiff partial hydration', () => {
       },
       virtualizerState.virtualizer
     );
-    let detach: (() => void) | undefined;
+    let detach: ReturnType<TestVirtualizedFileDiff['attachEditor']> | undefined;
 
     try {
       instance.updateCodeViewLayout(partial, 0);
@@ -501,7 +501,7 @@ describe('VirtualizedFileDiff partial hydration', () => {
       expect(sessionDiff?.deletionLines).toBe(partial.deletionLines);
       expect(sessionDiff?.hunks).toBe(partial.hunks);
     } finally {
-      detach?.();
+      detach?.(false, {});
       instance.cleanUp();
     }
   });
@@ -532,7 +532,7 @@ describe('VirtualizedFileDiff partial hydration', () => {
       },
       virtualizerState.virtualizer
     );
-    let detach: (() => void) | undefined;
+    let detach: ReturnType<TestVirtualizedFileDiff['attachEditor']> | undefined;
 
     try {
       instance.updateCodeViewLayout(initial, 0);
@@ -563,7 +563,7 @@ describe('VirtualizedFileDiff partial hydration', () => {
       expect(nextSession?.additionLines).toBe(partial.additionLines);
       expect(nextSession?.deletionLines).toBe(partial.deletionLines);
     } finally {
-      detach?.();
+      detach?.(false, {});
       instance.cleanUp();
     }
   });
@@ -583,7 +583,7 @@ describe('VirtualizedFileDiff partial hydration', () => {
       },
       virtualizerState.virtualizer
     );
-    let detach: (() => void) | undefined;
+    let detach: ReturnType<TestVirtualizedFileDiff['attachEditor']> | undefined;
 
     try {
       instance.updateCodeViewLayout(partial, 0);
@@ -604,7 +604,7 @@ describe('VirtualizedFileDiff partial hydration', () => {
       expect(sessionDiff?.deletionLines).toBe(partial.deletionLines);
       expect(sessionDiff?.hunks).toBe(partial.hunks);
     } finally {
-      detach?.();
+      detach?.(false, {});
       instance.cleanUp();
     }
   });
@@ -668,7 +668,7 @@ describe('VirtualizedFileDiff partial hydration', () => {
       { disableFileHeader: true },
       virtualizerState.virtualizer
     );
-    let detach: (() => void) | undefined;
+    let detach: ReturnType<TestVirtualizedFileDiff['attachEditor']> | undefined;
 
     try {
       instance.render({ fileContainer, fileDiff: externalDiff });
@@ -687,7 +687,7 @@ describe('VirtualizedFileDiff partial hydration', () => {
       expect(instance.getLatestDiffForTest()).toBe(sessionDiff);
       expect(sessionDiff?.additionLines).toBe(externalDiff.additionLines);
     } finally {
-      detach?.();
+      detach?.(false, {});
       instance.cleanUp();
       cleanup();
     }

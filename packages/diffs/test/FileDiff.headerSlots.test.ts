@@ -85,7 +85,7 @@ describe('FileDiff header slots', () => {
       collapsed: true,
       disableErrorHandling: true,
     });
-    let detach: (() => void) | undefined;
+    let detach: ReturnType<FileDiff<undefined>['attachEditor']> | undefined;
 
     try {
       instance.render({ fileDiff: externalDiff, fileContainer });
@@ -98,7 +98,7 @@ describe('FileDiff header slots', () => {
       expect(externalDiff.additionLines).toBe(externalAdditionLines);
       expect(externalDiff.additionLines).toEqual(['new\n']);
     } finally {
-      detach?.();
+      detach?.(false, {});
       instance.cleanUp();
       cleanup();
     }

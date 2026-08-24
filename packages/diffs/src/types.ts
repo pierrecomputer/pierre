@@ -1098,12 +1098,12 @@ export interface DiffsEditableComponent<
   /**
    * Attach an editor to this component. The returned detach closure receives
    * `recycle: true` for a temporary unmount, such as collapse or
-   * virtualization (the session continues on remount), and no argument/false
-   * when the session ends.
+   * virtualization (the session continues on remount). The detach also receives
+   * the editor state captured before its DOM is removed.
    */
   attachEditor: (
     editor: DiffsEditor<LAnnotation>
-  ) => (recycle?: boolean) => void;
+  ) => (recycle: boolean, state: EditorState) => void;
   /**
    * Deliver `EditorChangeEvent` to the component's owner. The attached
    * editor calls this with the same event object it reports through its own
@@ -1301,6 +1301,8 @@ export interface EditorChangeEvent<LAnnotation, TMode extends 'file' | 'diff'> {
   lineAnnotations?: TMode extends 'file'
     ? LineAnnotation<LAnnotation>[]
     : DiffLineAnnotation<LAnnotation>[];
+  /** Selections and editor-owned viewport offsets after the change. */
+  state: EditorState;
 }
 
 /**

@@ -174,7 +174,7 @@ test('a dirty unkeyed session remains authoritative when the same object is re-p
     expect(externalDiff.additionLines).toBe(externalAdditionLines);
     expect(externalDiff.additionLines.join('')).toContain('firstMarker');
     expect(externalDiff.additionLines.join('')).not.toContain('editedMarker');
-    detach();
+    detach(false, {});
   } finally {
     instance.cleanUp();
     cleanup();

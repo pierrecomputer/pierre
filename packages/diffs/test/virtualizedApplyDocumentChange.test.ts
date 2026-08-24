@@ -104,7 +104,7 @@ describe('applyDocumentChange buffer updates', () => {
     advancedInstance.seedRenderRange(seeded);
     advancedInstance.applyDocumentChange(makeDocument(1), undefined, true);
     expect(advancedInstance.bufferUpdates).toBe(0);
-    detachAdvancedEditor();
+    detachAdvancedEditor(false, {});
     advancedInstance.cleanUp();
 
     const simpleInstance = new BufferRecordingFile(
@@ -117,7 +117,7 @@ describe('applyDocumentChange buffer updates', () => {
     simpleInstance.seedRenderRange(seeded);
     simpleInstance.applyDocumentChange(makeDocument(1), undefined, true);
     expect(simpleInstance.bufferUpdates).toBe(1);
-    detachSimpleEditor();
+    detachSimpleEditor(false, {});
     simpleInstance.cleanUp();
   });
 });

@@ -36,6 +36,7 @@ class TestEditableComponent implements DiffsEditableComponent<undefined> {
   #lineAnnotations?: DiffLineAnnotation<undefined>[];
   #renderRange?: RenderRange;
   codeScrollLeft = 0;
+  editorViewport: HTMLElement | Document | undefined;
   restoredCodeScrollLefts: number[] = [];
 
   constructor(private file: FileContents) {
@@ -61,6 +62,10 @@ class TestEditableComponent implements DiffsEditableComponent<undefined> {
   setCodeScrollLeft(position: number): void {
     this.codeScrollLeft = position;
     this.restoredCodeScrollLefts.push(position);
+  }
+
+  getEditorViewport(): HTMLElement | Document | undefined {
+    return this.editorViewport;
   }
 
   render({
@@ -152,7 +157,7 @@ class TestEditableComponent implements DiffsEditableComponent<undefined> {
 }
 
 describe('Editor state', () => {
-  test('getState captures horizontal state from the code scroller', () => {
+  test('getState omits view state without an owned element viewport', () => {
     const dom = installDom();
     const editor = new Editor<undefined>('file');
     const component = new TestEditableComponent({
@@ -164,7 +169,35 @@ describe('Editor state', () => {
       editor.edit(component);
       component.codeScrollLeft = 24;
 
-      expect(editor.getState().view).toEqual({ scrollLeft: 24, scrollTop: 0 });
+      expect(editor.getState().view).toBeUndefined();
+      component.editorViewport = document;
+      expect(editor.getState().view).toBeUndefined();
+    } finally {
+      editor.cleanUp();
+      component.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test('getState captures view state from an owned element viewport', () => {
+    const dom = installDom();
+    const editor = new Editor<undefined>('file');
+    const component = new TestEditableComponent({
+      name: 'state.ts',
+      contents: 'alpha\nbravo',
+    });
+    const viewport = document.createElement('div');
+    component.editorViewport = viewport;
+
+    try {
+      editor.edit(component);
+      component.codeScrollLeft = 24;
+      viewport.scrollTop = 48;
+
+      expect(editor.getState().view).toEqual({
+        scrollLeft: 24,
+        scrollTop: 48,
+      });
     } finally {
       editor.cleanUp();
       component.cleanUp();

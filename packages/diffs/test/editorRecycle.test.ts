@@ -682,6 +682,42 @@ describe('Editor document registry', () => {
     }
   });
 
+  test('file-diff completion after recycle retains its document and history', () => {
+    const dom = installDom();
+    const firstEditor = new Editor<undefined>(
+      'file-diff',
+      {},
+      'recycled-diff-complete'
+    );
+    const first = new TestEditableComponent(createFile(), {
+      type: 'file-diff',
+    });
+    const secondEditor = new Editor<undefined>(
+      'file-diff',
+      {},
+      'recycled-diff-complete'
+    );
+    const second = new TestEditableComponent(createFile(), {
+      type: 'file-diff',
+    });
+    try {
+      const complete = firstEditor.edit(first);
+      insertAtStart(firstEditor, 'X');
+      firstEditor.cleanUp('recycle');
+      complete();
+
+      secondEditor.edit(second);
+      expect(secondEditor.getText()).toBe(`X${FILE_CONTENTS}`);
+      expect(secondEditor.canUndo).toBe(true);
+    } finally {
+      firstEditor.cleanUp();
+      secondEditor.cleanUp();
+      first.cleanUp();
+      second.cleanUp();
+      dom.cleanup();
+    }
+  });
+
   test('complete before initial sync retains the keyed document', () => {
     const dom = installDom();
     const firstEditor = new Editor<undefined>('file', {}, 'complete');

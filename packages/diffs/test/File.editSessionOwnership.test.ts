@@ -403,11 +403,36 @@ describe('component onEditChange', () => {
       await waitFor(() => editor.getText() === externalFile.contents, {
         timeout: 4_000,
       });
-      replaceDocument(editor, 'edited\n');
+      editor.setSelections([
+        {
+          start: { line: 0, character: 5 },
+          end: { line: 0, character: 5 },
+          direction: 'none',
+        },
+      ]);
+      editor.applyEdits([
+        {
+          range: {
+            start: { line: 0, character: 0 },
+            end: { line: 0, character: 0 },
+          },
+          newText: 'X',
+        },
+      ]);
       expect(editorEvents).toHaveLength(1);
       expect(componentEvents).toHaveLength(1);
       expect(componentEvents[0]).toBe(editorEvents[0]);
-      expect(componentEvents[0]?.file.contents).toBe('edited\n');
+      expect(componentEvents[0]?.file.contents).toBe('Xalpha\nbravo\n');
+      expect(componentEvents[0]?.state).toEqual({
+        selections: [
+          {
+            start: { line: 0, character: 6 },
+            end: { line: 0, character: 6 },
+            direction: 0,
+          },
+        ],
+        view: undefined,
+      });
     } finally {
       editor.cleanUp();
       instance.cleanUp();
@@ -862,6 +887,13 @@ describe('completeEditSession', () => {
     try {
       const { editor, externalFile, instance } = fixture;
       replaceDocument(editor, 'edited\nbravo\n');
+      editor.setSelections([
+        {
+          start: { line: 1, character: 3 },
+          end: { line: 1, character: 3 },
+          direction: 'none',
+        },
+      ]);
       fixture.detach();
       instance.completeEditSession();
 
@@ -872,6 +904,17 @@ describe('completeEditSession', () => {
       expect(event.file).not.toBe(externalFile);
       expect(event.originalFile).toBe(externalFile);
       expect(externalFile.contents).toBe(EXTERNAL_FILE.contents);
+      expect(event.state).toEqual({
+        selections: [
+          {
+            start: { line: 1, character: 3 },
+            end: { line: 1, character: 3 },
+            direction: 0,
+          },
+        ],
+        view: undefined,
+      });
+      expect(Object.isFrozen(event)).toBe(true);
     } finally {
       fixture.cleanup();
     }

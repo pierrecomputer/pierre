@@ -82,7 +82,9 @@ function createTrackedEditor(
   options: EditorOptions<undefined>,
   attachmentError?: Error
 ): TrackedCodeViewEditor {
-  let detach: ((recycle?: boolean) => void) | undefined;
+  let detach:
+    | ReturnType<DiffsEditableComponent<undefined>['attachEditor']>
+    | undefined;
   const editor = {
     options,
     edits: [],
@@ -92,7 +94,7 @@ function createTrackedEditor(
       file: FileContents,
       lineAnnotations?: DiffLineAnnotation<undefined>[]
     ) {
-      options.onChange?.({ changes: [], file, lineAnnotations });
+      options.onChange?.({ changes: [], file, lineAnnotations, state: {} });
     },
     edit(instance: DiffsEditableComponent<undefined>) {
       editor.edits.push(instance);
@@ -113,7 +115,7 @@ function createTrackedEditor(
       } else {
         editor.fullCleanUps += 1;
       }
-      detach?.(reason === 'recycle');
+      detach?.(reason === 'recycle', {});
       detach = undefined;
     },
     __captureFocusForDOMReplacement() {},

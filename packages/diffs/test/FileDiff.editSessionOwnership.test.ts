@@ -133,7 +133,7 @@ async function createAttachedFixture(): Promise<{
     fileContainer,
     forceRender: true,
   });
-  const detach = instance.attachEditor(createEditorStub());
+  const detachEditor = instance.attachEditor(createEditorStub());
 
   await waitFor(
     () => {
@@ -156,7 +156,9 @@ async function createAttachedFixture(): Promise<{
       instance.cleanUp();
       dom.cleanup();
     },
-    detach,
+    detach(recycle = false) {
+      detachEditor(recycle, {});
+    },
     externalDiff,
     fileContainer,
     instance,
@@ -716,6 +718,13 @@ describe('completeEditSession', () => {
     try {
       const { editor, externalDiff, instance } = fixture;
       replaceDocument(editor, 'alpha\nedited value\nomega\n');
+      editor.setSelections([
+        {
+          start: { line: 1, character: 6 },
+          end: { line: 1, character: 6 },
+          direction: 'none',
+        },
+      ]);
       const sessionDiff = instance.getLatestDiffForTest();
       if (sessionDiff == null) {
         throw new Error('Expected an active session diff');
@@ -754,6 +763,17 @@ describe('completeEditSession', () => {
         name: 'session.ts',
         contents: 'alpha\nedited value\nomega\n',
       });
+      expect(event.state).toEqual({
+        selections: [
+          {
+            start: { line: 1, character: 6 },
+            end: { line: 1, character: 6 },
+            direction: 0,
+          },
+        ],
+        view: undefined,
+      });
+      expect(Object.isFrozen(event)).toBe(true);
       expectExternalDiffUnchanged(instance, externalDiff, externalBefore);
     } finally {
       fixture.cleanup();

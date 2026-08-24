@@ -302,7 +302,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #editorEventDisposes?: (() => void)[];
   #globalEventDisposes?: (() => void)[];
   #selectEventDisposes?: (() => void)[];
-  #detach?: (recycle?: boolean) => void;
+  #detach?: (recycle: boolean, state: EditorState) => void;
   // onAttach is deferred until the synchronized document and DOM are usable.
   // Track the state so cleanup cannot notify an editor from an ended session.
   #attachState: EditorAttachState = {
@@ -538,9 +538,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       throw error;
     }
     return () => {
-      const attachedInstance = this.#fileInstance;
       this.cleanUp('complete');
-      attachedInstance?.completeEditSession();
+      fileInstance.completeEditSession();
     };
   }
 
@@ -660,13 +659,20 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
   getState(): EditorState {
     const fileInstance = this.#fileInstance;
+    const viewport = fileInstance?.getEditorViewport?.();
+    const ownsViewport =
+      typeof HTMLElement !== 'undefined' && viewport instanceof HTMLElement;
     return {
-      selections: this.#selections,
+      selections: this.#selections?.map((selection) => ({
+        ...selection,
+        start: { ...selection.start },
+        end: { ...selection.end },
+      })),
       view:
-        fileInstance != null
+        ownsViewport && fileInstance != null
           ? {
               scrollLeft: fileInstance.getCodeScrollLeft(),
-              scrollTop: this.#getViewportScrollTop(),
+              scrollTop: viewport.scrollTop,
             }
           : undefined,
     };
@@ -813,11 +819,30 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   // teardown modes until explicitly disposed or evicted from the registry.
   cleanUp(reason: 'discard' | 'recycle' | 'complete' = 'discard'): void {
     const recycle = reason === 'recycle';
+    const finalState = this.getState();
     const historyKey = this.#editHistoryKey;
     const docKind = this.#documentKind;
     const textDocument = this.#textDocument;
     const fileInfo = this.#fileInfo;
     const fileInstance = this.#fileInstance;
+    // Ask the diff component what editing-session data should be kept so the
+    // same draft can be restored later. A snapshot replaces the saved data.
+    // `null` means the current session was inspected and has nothing worth
+    // saving, so any older snapshot must be cleared. `undefined` means a
+    // complete current session was not available to inspect, so an older
+    // snapshot must be kept until a newer result can replace it.
+    const capturedDiffSessionSnapshot =
+      docKind === 'file-diff'
+        ? fileInstance?.__captureDocumentSessionState?.(
+            textDocument?.canUndo === true || textDocument?.canRedo === true
+          )
+        : undefined;
+    if (recycle && capturedDiffSessionSnapshot !== undefined) {
+      this.#retainedDiffSessionSnapshot =
+        capturedDiffSessionSnapshot == null
+          ? undefined
+          : cloneRetainedDiffSessionSnapshot(capturedDiffSessionSnapshot);
+    }
     if (!recycle && historyKey != null) {
       if (docKind === 'file') {
         const registration: RegisteredFileDocument | undefined =
@@ -830,13 +855,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
             : undefined;
         DocumentRegistry.releaseFile(historyKey, this, registration);
       } else {
-        const capturedSnapshot = fileInstance?.__captureDocumentSessionState?.(
-          textDocument?.canUndo === true || textDocument?.canRedo === true
-        );
         const retainedSnapshot =
-          capturedSnapshot === undefined
+          capturedDiffSessionSnapshot === undefined
             ? this.#retainedDiffSessionSnapshot
-            : (capturedSnapshot ?? undefined);
+            : (capturedDiffSessionSnapshot ?? undefined);
         const registration: RegisteredFileDiffDocument | undefined =
           textDocument != null && fileInfo != null && retainedSnapshot != null
             ? {
@@ -877,7 +899,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#globalEventDisposes = undefined;
     this.#editorEventDisposes?.forEach((dispose) => dispose());
     this.#editorEventDisposes = undefined;
-    this.#detach?.(recycle);
+    this.#detach?.(recycle, finalState);
     this.#detach = undefined;
 
     // cache
@@ -1478,14 +1500,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       return undefined;
     }
     return lookupScrollContainer(fileContainer);
-  }
-
-  #getViewportScrollTop(): number {
-    const viewport = this.#getScrollViewport();
-    if (viewport instanceof HTMLElement) {
-      return viewport.scrollTop;
-    }
-    return viewport?.defaultView?.scrollY ?? 0;
   }
 
   #setViewportScrollTop(scrollTop: number): void {
@@ -5433,6 +5447,12 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
     this.#rerender(change, newLineAnnotations, renderRange, shouldUpdateBuffer);
 
+    if (newSelections != null) {
+      // Install the resulting selections before publishing so event state and
+      // synchronous getState() calls describe the edited document.
+      this.#updateSelections(newSelections);
+    }
+
     // Publish the change only after the host renderer agrees with the new
     // document. Consumers may synchronously render the returned annotations,
     // which must not observe the previous line structure.
@@ -5449,13 +5469,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#searchPanel.updateMatches({ syncSelection: false });
     }
 
-    if (newSelections !== undefined) {
-      // Always re-render the selection range and caret overlay so editor state
-      // stays in sync. When skipFocus is set (a programmatic edit on an editor
-      // that is not focused) we stop here: focusing or scrolling would pull the
-      // caret and viewport toward an editor the user is not interacting with.
-      this.#updateSelections(newSelections);
-
+    if (newSelections != null) {
+      // When skipFocus is set (a programmatic edit on an editor that is not
+      // focused) we stop here: focusing or scrolling would pull the caret and
+      // viewport toward an editor the user is not interacting with.
       // focus to update the native window selection, and scroll to the caret
       // to mock the 'contenteditable' behavior
       if (options?.skipFocus !== true) {
@@ -5496,6 +5513,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       changes,
       file,
       lineAnnotations,
+      state: this.getState(),
     };
     onChange?.(event);
     this.#fileInstance?.emitEditChange(event);

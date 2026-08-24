@@ -46,6 +46,7 @@ import type {
   EditCompletionDecision,
   EditorActiveLineOptions,
   EditorChangeEvent,
+  EditorState,
   ExpansionDirections,
   FileContents,
   FileDiffMetadata,
@@ -254,6 +255,9 @@ export type FileDiffType = 'file-diff' | 'unresolved-file';
  *
  * `originalLineAnnotations` is the last collection provided to the component
  * externally, which a revert keeps.
+ *
+ * `state` is the final selection and editor-owned viewport state captured
+ * before the editor detached.
  */
 export interface FileDiffEditCompleteEvent<LAnnotation> {
   fileDiff: FileDiffMetadata;
@@ -262,6 +266,7 @@ export interface FileDiffEditCompleteEvent<LAnnotation> {
   newFile: FileContents | null;
   lineAnnotations: DiffLineAnnotation<LAnnotation>[] | undefined;
   originalLineAnnotations: DiffLineAnnotation<LAnnotation>[];
+  state: EditorState;
 }
 
 /**
@@ -433,6 +438,7 @@ export class FileDiff<
   // Keeps the outgoing editable diff until its replacement is ready to sync,
   // so the editor can decide whether to preserve or reset undo history.
   private outgoingSessionDiff: FileDiffMetadata | undefined;
+  private detachedEditorState: EditorState | undefined;
   protected renderedDiff: FileDiffMetadata | undefined;
   protected renderRange: RenderRange | undefined;
   protected pendingFiles: PendingFileLoad | undefined;
@@ -956,6 +962,7 @@ export class FileDiff<
       this.editSessionDiff = undefined;
       this.editSessionAnnotations = undefined;
       this.outgoingSessionDiff = undefined;
+      this.detachedEditorState = undefined;
       this.renderedDiff = undefined;
       this.deletionFile = undefined;
       this.additionFile = undefined;
@@ -1847,7 +1854,7 @@ export class FileDiff<
 
   public attachEditor(
     editor: DiffsEditor<LAnnotation>
-  ): (recycle?: boolean) => void {
+  ): (recycle: boolean, state: EditorState) => void {
     // Editing is a plain file-diff concern only. Subclasses with their own
     // hunk semantics (UnresolvedFile) are not editable, so an editor must
     // never attach to them.
@@ -1912,7 +1919,8 @@ export class FileDiff<
       // syncs the render view once it paints.
       this.rerender();
     }
-    return (recycle: boolean = false) => {
+    return (recycle: boolean, state: EditorState) => {
+      this.detachedEditorState = state;
       this.editor = undefined;
       // A recycle detach temporarily unmounts the editor mid-session, so hunks
       // stay session-shaped for reattachment. Only a non-recycle detach runs
@@ -1983,6 +1991,12 @@ export class FileDiff<
     let failed = false;
     let failure: unknown;
     if (contentsChanged) {
+      const state = this.detachedEditorState;
+      if (state == null) {
+        throw new Error(
+          'FileDiff.completeEditSession: editor state was not captured before completion'
+        );
+      }
       const completedDiff = cloneFileDiffMetadata(editSessionDiff);
       const newFile: FileContents = {
         name: completedDiff.name,
@@ -2004,6 +2018,7 @@ export class FileDiff<
         newFile,
         lineAnnotations: sessionAnnotationsCurrent,
         originalLineAnnotations: externalAnnotations,
+        state,
       };
       const { onEditComplete } = this.options;
       // Frozen so a handler cannot swap the event's fileDiff/originalFileDiff
@@ -2055,6 +2070,7 @@ export class FileDiff<
     this.editSessionDiff = undefined;
     this.editSessionAnnotations = undefined;
     this.outgoingSessionDiff = undefined;
+    this.detachedEditorState = undefined;
     if (installResult && this.fileContainer != null) {
       this.rerender();
     }

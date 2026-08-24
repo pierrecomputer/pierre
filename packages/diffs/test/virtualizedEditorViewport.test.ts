@@ -1,9 +1,11 @@
 import { describe, expect, test } from 'bun:test';
 
+import type { FileEditCompleteEvent } from '../src/components/File';
 import { VirtualizedFile } from '../src/components/VirtualizedFile';
 import { VirtualizedFileDiff } from '../src/components/VirtualizedFileDiff';
 import { DEFAULT_THEMES } from '../src/constants';
-import type { DiffsEditor } from '../src/types';
+import { Editor } from '../src/editor/editor';
+import type { DiffsEditor, EditorChangeEvent } from '../src/types';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import { installDom, waitFor } from './domHarness';
 
@@ -207,6 +209,104 @@ describe('virtualized editor viewport', () => {
       file.cleanUp(true);
       expect(recyclePosition).toBe(62);
     } finally {
+      file.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test('broadcasts owned viewport state on change and completion', async () => {
+    const dom = installDom();
+    const root = document.createElement('div');
+    const virtualizer = createSimpleVirtualizer(root);
+    const editorEvents: EditorChangeEvent<undefined, 'file' | 'diff'>[] = [];
+    const componentEvents: EditorChangeEvent<undefined, 'file'>[] = [];
+    const completionEvents: FileEditCompleteEvent<undefined>[] = [];
+    const file = new VirtualizedFile(
+      {
+        disableFileHeader: true,
+        theme: DEFAULT_THEMES,
+        onEditChange(event) {
+          componentEvents.push(event);
+        },
+        onEditComplete(event) {
+          completionEvents.push(event);
+          return 'reject';
+        },
+      },
+      virtualizer
+    );
+    const editor = new Editor<undefined>('file', {
+      onChange(event) {
+        editorEvents.push(event);
+      },
+    });
+
+    try {
+      const code = await renderFile(file, root);
+      const finishSession = editor.edit(file);
+      await waitFor(() => editor.getText() === 'alpha\nbravo\n');
+      editor.setSelections([
+        {
+          start: { line: 0, character: 5 },
+          end: { line: 0, character: 5 },
+          direction: 'none',
+        },
+      ]);
+      code.scrollLeft = 24;
+      root.scrollTop = 48;
+
+      editor.applyEdits([
+        {
+          range: {
+            start: { line: 0, character: 0 },
+            end: { line: 0, character: 0 },
+          },
+          newText: 'X',
+        },
+      ]);
+
+      expect(editorEvents).toHaveLength(1);
+      expect(componentEvents).toHaveLength(1);
+      expect(componentEvents[0]).toBe(editorEvents[0]);
+      expect(componentEvents[0]?.state).toEqual({
+        selections: [
+          {
+            start: { line: 0, character: 6 },
+            end: { line: 0, character: 6 },
+            direction: 0,
+          },
+        ],
+        view: { scrollLeft: 24, scrollTop: 48 },
+      });
+
+      editor.setSelections([
+        {
+          start: { line: 1, character: 3 },
+          end: { line: 1, character: 3 },
+          direction: 'none',
+        },
+      ]);
+      code.scrollLeft = 32;
+      root.scrollTop = 64;
+      finishSession();
+
+      expect(completionEvents).toHaveLength(1);
+      expect(completionEvents[0]?.state).toEqual({
+        selections: [
+          {
+            start: { line: 1, character: 3 },
+            end: { line: 1, character: 3 },
+            direction: 0,
+          },
+        ],
+        view: { scrollLeft: 32, scrollTop: 64 },
+      });
+      expect(Object.isFrozen(completionEvents[0])).toBe(true);
+      expect(componentEvents[0]?.state.selections?.[0]?.start.character).toBe(
+        6
+      );
+    } finally {
+      editor.cleanUp();
       file.cleanUp();
       dom.cleanup();
     }
