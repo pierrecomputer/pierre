@@ -482,11 +482,18 @@ function _processFile(
     }
 
     if (
-      throwOnError &&
-      (parsedAdditionLines !== hunkData.additionCount ||
-        parsedDeletionLines !== hunkData.deletionCount)
+      parsedAdditionLines !== hunkData.additionCount ||
+      parsedDeletionLines !== hunkData.deletionCount
     ) {
-      throw Error('parsePatchContent: hunk line count mismatch');
+      if (throwOnError) {
+        throw Error('parsePatchContent: hunk line count mismatch');
+      }
+      console.error(
+        `parsePatchContent: hunk line count mismatch: "${firstLine.trimEnd()}", declared old/new ${hunkData.deletionCount}/${hunkData.additionCount}, parsed old/new ${parsedDeletionLines}/${parsedAdditionLines}`
+      );
+      // We correct the count values in non-strict mode
+      hunkData.additionCount = parsedAdditionLines;
+      hunkData.deletionCount = parsedDeletionLines;
     }
 
     hunkData.additionLines = additionLines;

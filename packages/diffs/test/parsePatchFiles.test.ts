@@ -2,6 +2,7 @@ import { afterAll, describe, expect, spyOn, test } from 'bun:test';
 
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
 import { DiffHunksRenderer } from '../src/renderers/DiffHunksRenderer';
+import { getTotalLineCountFromHunks } from '../src/utils/getTotalLineCountFromHunks';
 import { parsePatchFiles, processFile } from '../src/utils/parsePatchFiles';
 import {
   diffPatch,
@@ -20,6 +21,23 @@ import {
 afterAll(async () => {
   await disposeHighlighter();
 });
+
+const issue1094Patch = [
+  '--- f\n',
+  '+++ f\n',
+  '@@ -1,6 +1,6 @@\n',
+  '-a\n',
+  '+A\n',
+  ' c0\n',
+  ' c1\n',
+  '-b\n',
+  '+B\n',
+].join('');
+
+const validIssue1094Patch = issue1094Patch.replace(
+  '@@ -1,6 +1,6 @@',
+  '@@ -1,4 +1,4 @@'
+);
 
 describe('parsePatchFiles', () => {
   const result = parsePatchFiles(diffPatch);
@@ -52,10 +70,11 @@ describe('parsePatchFiles', () => {
       expect(consoleError).toHaveBeenCalled();
       expect(consoleError.mock.calls[0][0]).toContain('Invalid firstChar');
 
-      // The hunk counts should be off by 1 due to the missing line
+      // The declared count should be repaired to match the usable hunk body.
       const hunk = result[0].files[0].hunks[0];
-      expect(hunk.deletionCount).toBe(87);
+      expect(hunk.deletionCount).toBe(86);
       expect(hunk.deletionLines).toBe(86);
+      expect(verifyPatchHunkValues(result).errors).toEqual([]);
       expect(result).toMatchSnapshot('malformed patch');
     } finally {
       consoleError.mockRestore();
@@ -81,6 +100,61 @@ describe('parsePatchFiles', () => {
         true
       )
     ).toThrow('hunk line count mismatch');
+  });
+
+  test('repairs issue 1094 hunk counts in forgiving mode', () => {
+    const consoleError = spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const result = parsePatchFiles(issue1094Patch);
+      const file = result[0].files[0];
+      const hunk = file.hunks[0];
+
+      expect(consoleError).toHaveBeenCalledTimes(1);
+      expect(consoleError.mock.calls[0][0]).toContain(
+        'parsePatchContent: hunk line count mismatch'
+      );
+      expect(consoleError.mock.calls[0][0]).toContain('@@ -1,6 +1,6 @@');
+      expect(consoleError.mock.calls[0][0]).toContain('declared old/new 6/6');
+      expect(consoleError.mock.calls[0][0]).toContain('parsed old/new 4/4');
+      expect(hunk.additionCount).toBe(4);
+      expect(hunk.deletionCount).toBe(4);
+      expect(file.additionLines).toEqual(['A\n', 'c0\n', 'c1\n', 'B\n']);
+      expect(file.deletionLines).toEqual(['a\n', 'c0\n', 'c1\n', 'b\n']);
+      expect(hunk.hunkContent.map((content) => content.type)).toEqual([
+        'change',
+        'context',
+        'change',
+      ]);
+      expect(hunk.hunkSpecs).toBe('@@ -1,6 +1,6 @@\n');
+      expect(getTotalLineCountFromHunks(file.hunks)).toBe(4);
+      expect(verifyPatchHunkValues(result).errors).toEqual([]);
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
+  test('throws for the issue 1094 patch in strict mode', () => {
+    expect(() => parsePatchFiles(issue1094Patch, undefined, true)).toThrow(
+      'hunk line count mismatch'
+    );
+  });
+
+  test('leaves the valid issue 1094 patch unchanged', () => {
+    const consoleError = spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const result = parsePatchFiles(validIssue1094Patch);
+      const file = result[0].files[0];
+      const hunk = file.hunks[0];
+
+      expect(consoleError).not.toHaveBeenCalled();
+      expect(hunk.additionCount).toBe(4);
+      expect(hunk.deletionCount).toBe(4);
+      expect(hunk.hunkSpecs).toBe('@@ -1,4 +1,4 @@\n');
+      expect(getTotalLineCountFromHunks(file.hunks)).toBe(4);
+      expect(verifyPatchHunkValues(result).errors).toEqual([]);
+    } finally {
+      consoleError.mockRestore();
+    }
   });
 
   test('throws in strict mode when a hunk has extra content lines', () => {
