@@ -40,6 +40,7 @@ class TestEditableComponent implements DiffsEditableComponent<undefined> {
   editorViewport: HTMLElement | Document | undefined;
   restoredCodeScrollLefts: number[] = [];
   stateRestoreError: Error | undefined;
+  detachedState: EditorState | undefined;
 
   constructor(private file: FileContents) {
     this.#renderShadowDom();
@@ -111,7 +112,8 @@ class TestEditableComponent implements DiffsEditableComponent<undefined> {
   ): (_recycle: boolean, _state: EditorState) => void {
     this.#editor = editor;
     this.#syncRenderView();
-    return (_recycle: boolean, _state: EditorState) => {
+    return (_recycle: boolean, state: EditorState) => {
+      this.detachedState = state;
       this.#editor = undefined;
     };
   }
@@ -164,6 +166,63 @@ class TestEditableComponent implements DiffsEditableComponent<undefined> {
 }
 
 describe('Editor state', () => {
+  test('keyed state restores selections and view in a later editor', () => {
+    const dom = installDom();
+    Editor.clearDocuments();
+    const first = new TestEditableComponent({
+      name: 'state.ts',
+      contents: 'alpha\nbravo',
+      lang: 'text',
+    });
+    first.editorViewport = document.createElement('div');
+    const firstEditor = new Editor<undefined>('file', {}, 'complete-state');
+    const second = new TestEditableComponent({
+      name: 'state.ts',
+      contents: 'alpha\nbravo',
+      lang: 'text',
+    });
+    second.editorViewport = document.createElement('div');
+    const secondEditor = new Editor<undefined>('file', {}, 'complete-state');
+
+    try {
+      firstEditor.edit(first);
+      firstEditor.setState({
+        selections: [
+          {
+            start: { line: 1, character: 3 },
+            end: { line: 1, character: 3 },
+            direction: 0,
+          },
+        ],
+        view: { scrollLeft: 18, scrollTop: 36 },
+      });
+      firstEditor.cleanUp('discard');
+      Object.assign(first.detachedState!.selections![0].start, {
+        character: 0,
+      });
+      first.cleanUp();
+
+      secondEditor.edit(second);
+      expect(secondEditor.getState()).toEqual({
+        selections: [
+          {
+            start: { line: 1, character: 3 },
+            end: { line: 1, character: 3 },
+            direction: 0,
+          },
+        ],
+        view: { scrollLeft: 18, scrollTop: 36 },
+      });
+    } finally {
+      firstEditor.cleanUp();
+      secondEditor.cleanUp();
+      first.cleanUp();
+      second.cleanUp();
+      Editor.clearDocuments();
+      dom.cleanup();
+    }
+  });
+
   test('initialState restores selections and an owned viewport on first attach', () => {
     const dom = installDom();
     const viewport = document.createElement('div');
@@ -207,10 +266,16 @@ describe('Editor state', () => {
       editor.edit(component);
 
       expect(editor.getState()).toEqual({
-        selections: undefined,
-        view: { scrollLeft: 8, scrollTop: 16 },
+        selections: [
+          {
+            start: { line: 1, character: 2 },
+            end: { line: 1, character: 2 },
+            direction: 0,
+          },
+        ],
+        view: { scrollLeft: 24, scrollTop: 48 },
       });
-      expect(component.restoredCodeScrollLefts).toEqual([24]);
+      expect(component.restoredCodeScrollLefts).toEqual([24, 24]);
     } finally {
       editor.cleanUp();
       component.cleanUp();

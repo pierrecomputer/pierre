@@ -36,6 +36,7 @@ import {
 import editorCSS from './editor.css?inline';
 import { EditStack } from './editStack';
 import {
+  cloneEditorState,
   EditStateManager,
   type ManagedFileDiffEditState,
   type ManagedFileEditState,
@@ -301,6 +302,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
   #options: EditorOptions<LAnnotation>;
   #initialState: EditorState | undefined;
+  #pendingEditorState?: EditorState;
   #metrics = new Metrics();
   #tokenizer?: EditorTokenizer;
   #popoverManager?: PopoverManager;
@@ -475,6 +477,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     const previousLineAnnotations = this.#lineAnnotations;
     const previousRenderRange = this.#renderRange;
     const previousViewportWindowLines = this.#viewportWindowLines;
+    const previousPendingEditorState = this.#pendingEditorState;
     if (this.#documentKind !== docKind) {
       throw new Error(
         `Editor: a ${this.#documentKind} editor cannot edit a ${docKind} component`
@@ -509,6 +512,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         sourceState.documentKind === 'file-diff'
           ? cloneRetainedDiffSessionSnapshot(sourceState.diffSession)
           : undefined;
+      this.#pendingEditorState = sourceState.editor;
     }
     if (textDocument != null) {
       this.#textDocument = textDocument;
@@ -543,6 +547,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#lineAnnotations = previousLineAnnotations;
       this.#renderRange = previousRenderRange;
       this.#viewportWindowLines = previousViewportWindowLines;
+      this.#pendingEditorState = previousPendingEditorState;
       throw error;
     }
     return () => {
@@ -819,20 +824,22 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   // fires, and the component keeps whatever session state it has.
   //
   // 'recycle' is a temporary detach, such as collapse or virtualization: the
-  // document and its history are kept so the session resumes on the next
-  // edit() against the same file. DOM-backed view state is reset.
+  // document, history, and editor state are kept so the session resumes on the
+  // next edit() against the same file.
   //
   // 'complete' tears down like 'discard' as part of a session end; the caller
   // runs completeEditSession() afterward. Keyed documents outlive all three
   // teardown modes until explicitly disposed or evicted from the manager.
   cleanUp(reason: 'discard' | 'recycle' | 'complete' = 'discard'): void {
     const recycle = reason === 'recycle';
-    const finalState = this.getState();
+    const finalState = this.#pendingEditorState ?? this.getState();
     const editStateKey = this.#editStateKey;
     const docKind = this.#documentKind;
     const textDocument = this.#textDocument;
     const fileInfo = this.#fileInfo;
     const fileInstance = this.#fileInstance;
+    const hasEditorState =
+      finalState.selections != null || finalState.view != null;
     // Ask the diff component what editing-session data should be kept so the
     // same draft can be restored later. A snapshot replaces the saved data.
     // `null` means the current session was inspected and has nothing worth
@@ -842,9 +849,14 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     const capturedDiffSessionSnapshot =
       docKind === 'file-diff'
         ? fileInstance?.__captureDocumentSessionState?.(
-            textDocument?.canUndo === true || textDocument?.canRedo === true
+            hasEditorState ||
+              textDocument?.canUndo === true ||
+              textDocument?.canRedo === true
           )
         : undefined;
+    if (recycle) {
+      this.#pendingEditorState = cloneEditorState(finalState);
+    }
     if (recycle && capturedDiffSessionSnapshot !== undefined) {
       this.#retainedDiffSessionSnapshot =
         capturedDiffSessionSnapshot == null
@@ -859,6 +871,9 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
                 documentKind: docKind,
                 document: textDocument,
                 fileInfo: { ...fileInfo },
+                editor: hasEditorState
+                  ? cloneEditorState(finalState)
+                  : undefined,
               }
             : undefined;
         EditStateManager.releaseFile(editStateKey, this, state);
@@ -873,11 +888,17 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
                 documentKind: docKind,
                 document: textDocument,
                 fileInfo: { ...fileInfo },
+                editor: hasEditorState
+                  ? cloneEditorState(finalState)
+                  : undefined,
                 diffSession: cloneRetainedDiffSessionSnapshot(retainedSnapshot),
               }
             : undefined;
         EditStateManager.releaseFileDiff(editStateKey, this, state);
       }
+    }
+    if (!recycle) {
+      this.#pendingEditorState = undefined;
     }
     this.#invalidateOnAttach();
     if (!recycle) {
@@ -1090,6 +1111,9 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         editStateKey == null || resetForExternalDocument
           ? undefined
           : this.#textDocument;
+      if (previousTextDocument != null && textDocument == null) {
+        this.#pendingEditorState = undefined;
+      }
       if (textDocument == null) {
         const editStack = new EditStack<LAnnotation>({
           maxEntries: this.#options.historyMaxEntries,
@@ -1275,14 +1299,16 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
 
     const initialState = this.#initialState;
-    if (initialState !== undefined) {
-      // Consume creation-time state before applying it so a render triggered by
-      // selection or viewport restoration cannot apply the same state twice.
+    const retainedEditorState = this.#pendingEditorState;
+    const pendingEditorState = initialState ?? retainedEditorState;
+    if (pendingEditorState !== undefined) {
       this.#initialState = undefined;
+      this.#pendingEditorState = undefined;
       try {
-        this.setState(initialState);
+        this.setState(pendingEditorState);
       } catch (error) {
         this.#initialState = initialState;
+        this.#pendingEditorState = retainedEditorState;
         throw error;
       }
     }

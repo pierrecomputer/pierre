@@ -718,6 +718,53 @@ describe('Editor edit-state manager', () => {
     }
   });
 
+  test('a clean file-diff retains selections with its compatible baseline', () => {
+    const dom = installDom();
+    const firstEditor = new Editor<undefined>(
+      'file-diff',
+      {},
+      'diff-selections'
+    );
+    const first = new TestEditableComponent(createFile(), {
+      type: 'file-diff',
+    });
+    const secondEditor = new Editor<undefined>(
+      'file-diff',
+      {},
+      'diff-selections'
+    );
+    const second = new TestEditableComponent(createFile(), {
+      type: 'file-diff',
+    });
+    try {
+      firstEditor.edit(first);
+      firstEditor.setSelections([
+        {
+          start: { line: 1, character: 2 },
+          end: { line: 1, character: 2 },
+          direction: 'none',
+        },
+      ]);
+      firstEditor.cleanUp('discard');
+      first.cleanUp();
+
+      secondEditor.edit(second);
+      expect(secondEditor.getState().selections).toEqual([
+        {
+          start: { line: 1, character: 2 },
+          end: { line: 1, character: 2 },
+          direction: 0,
+        },
+      ]);
+    } finally {
+      firstEditor.cleanUp();
+      secondEditor.cleanUp();
+      first.cleanUp();
+      second.cleanUp();
+      dom.cleanup();
+    }
+  });
+
   test('complete before initial sync retains the keyed document', () => {
     const dom = installDom();
     const firstEditor = new Editor<undefined>('file', {}, 'complete');
@@ -1672,6 +1719,13 @@ describe('Editor recycle cleanUp', () => {
       await wait(0);
       expect(onAttach).toHaveBeenCalledTimes(1);
       insertAtStart(editor, 'X');
+      editor.setSelections([
+        {
+          start: { line: 1, character: 2 },
+          end: { line: 1, character: 2 },
+          direction: 'none',
+        },
+      ]);
 
       editor.cleanUp('recycle');
       first.cleanUp();
@@ -1686,6 +1740,7 @@ describe('Editor recycle cleanUp', () => {
       editor.edit(other);
       await wait(0);
       expect(other.contentElement.textContent).toBe('zulu');
+      expect(editor.getState().selections).toBeUndefined();
       expect(onAttach).toHaveBeenCalledTimes(1);
 
       editor.cleanUp();

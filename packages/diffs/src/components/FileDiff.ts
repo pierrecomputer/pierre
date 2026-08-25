@@ -1821,7 +1821,7 @@ export class FileDiff<
 
   /** @internal */
   public __captureDocumentSessionState(
-    hasDocumentHistory: boolean
+    hasRetainedState: boolean
   ): RetainedDiffSessionSnapshot | null | undefined {
     let { outgoingSessionDiff, fileDiff, editSessionDiff: sessionDiff } = this;
     if (outgoingSessionDiff != null && fileDiff != null) {
@@ -1836,7 +1836,7 @@ export class FileDiff<
     if (sessionDiff == null || sessionDiff.isPartial) {
       return undefined;
     }
-    if (sessionDiff.editSessionDirty !== true && !hasDocumentHistory) {
+    if (sessionDiff.editSessionDirty !== true && !hasRetainedState) {
       return null;
     }
     return {

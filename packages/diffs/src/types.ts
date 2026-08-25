@@ -1043,11 +1043,12 @@ export interface DiffsEditableComponent<
   __getEffectiveCodeOptions(): BaseCodeOptions;
   /**
    * @internal Capture component state that follows a retained keyed document.
-   * `null` means the current session is clean; `undefined` means no complete
-   * session is available yet, so previously retained state remains authoritative.
+   * `null` means no complete state needs retention; `undefined` means no
+   * complete session is available yet, so previously retained state remains
+   * authoritative.
    */
   __captureDocumentSessionState?: (
-    hasDocumentHistory: boolean
+    hasRetainedState: boolean
   ) => RetainedDiffSessionSnapshot | null | undefined;
   /** @internal Keep the editor caret decoration separate from line selection. */
   setEditorActiveLine: (
