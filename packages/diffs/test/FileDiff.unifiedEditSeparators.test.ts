@@ -53,7 +53,7 @@ function createEditorStub(): DiffsEditor<string> {
     __getDocumentContents: () => undefined,
     __postponeBgTokenizeToNextFrame() {},
     __syncRenderView() {},
-  };
+  } as unknown as DiffsEditor<string>;
 }
 
 async function waitForRenderedCode(container: HTMLElement): Promise<void> {
@@ -114,7 +114,7 @@ describe('FileDiff unified edit separators', () => {
       );
       expect(fileDiff.additionLines[69]).toBe('70\n');
     } finally {
-      detach?.(false, {});
+      detach?.(false);
       instance?.cleanUp();
       cleanup();
     }

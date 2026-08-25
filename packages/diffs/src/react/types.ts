@@ -38,7 +38,7 @@ export interface DiffBasePropsReact<LAnnotation> {
   /**
    * Fired when `edit` toggles false or the component unmounts with content
    * changes. Return the event's `fileDiff` to accept the edit or `null` to
-   * revert.
+   * revert. The event contains the detached editor with its final state.
    */
   onEditComplete?: FileDiffEditCompleteHandler<LAnnotation>;
   metrics?: VirtualFileMetrics;
@@ -74,8 +74,8 @@ export interface FileProps<LAnnotation> {
   onEditChange?(event: EditorChangeEvent<LAnnotation, 'file'>): void;
   /**
    * Fired when `edit` toggles false or the component unmounts with content
-   * changes. Return the event's `file` to accept the edit or `null` to
-   * revert.
+   * changes. Return the event's `file` to accept the edit or `null` to revert.
+   * The event contains the detached editor with its final state.
    */
   onEditComplete?: FileEditCompleteHandler<LAnnotation>;
   metrics?: VirtualFileMetrics;

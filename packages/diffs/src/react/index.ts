@@ -2,6 +2,8 @@
 /// <reference path="./jsx.d.ts" />
 
 export * from '../types';
+export type { EditorFocusOptions } from '../editor/editor';
+export type { Marker, MarkerSeverity } from '../editor/marker';
 export * from './CodeView';
 export * from './File';
 export * from './FileDiff';

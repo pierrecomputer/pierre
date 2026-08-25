@@ -43,6 +43,7 @@ import {
 import { type FileDiffProps as ReactFileDiffProps } from '../src/react/FileDiff';
 import type {
   DiffsEditableComponent,
+  DiffsEditor,
   EditableInstance,
   EditorChangeEvent,
   EditorDocumentKind,
@@ -752,12 +753,15 @@ describe('React editor factory lifecycle', () => {
         expect(firstOnEditChange.mock.calls[0]?.[0]).toBe(
           editorOnChange.mock.calls[0]?.[0]
         );
+        expect(firstOnEditChange.mock.calls[0]?.[0].editor).toBe(editors[0]);
+        expect(editorOnChange.mock.calls[0]?.[0].editor).toBe(editors[0]);
 
         await render(secondOnEditChange);
         expect(editors).toHaveLength(1);
         insertAtStart(editors[0], '/* two */');
         expect(firstOnEditChange).toHaveBeenCalledTimes(1);
         expect(secondOnEditChange).toHaveBeenCalledTimes(1);
+        expect(secondOnEditChange.mock.calls[0]?.[0].editor).toBe(editors[0]);
       } finally {
         await unmountRoot(root);
         cleanupActEnvironment();
@@ -1614,6 +1618,7 @@ describe('React diff input bridges after acceptance', () => {
     document.body.appendChild(container);
     const editors: TrackedEditor[] = [];
     const events: FileDiffEditCompleteEvent<undefined>[] = [];
+    const completionEditors: DiffsEditor<undefined>[] = [];
     const factory: CreateEditor<undefined> = (documentKind, options) => {
       const editor = new TrackedEditor(documentKind, options);
       editors.push(editor);
@@ -1623,6 +1628,7 @@ describe('React diff input bridges after acceptance', () => {
     const root = createReactRoot(container);
     const onEditComplete: FileDiffEditCompleteHandler<undefined> = (event) => {
       events.push(event);
+      completionEditors.push(event.editor);
       event.fileDiff.cacheKey = 'accepted:v2';
       return 'accept';
     };
@@ -1643,6 +1649,7 @@ describe('React diff input bridges after acceptance', () => {
     return {
       container,
       editors,
+      completionEditors,
       events,
       factory,
       root,
@@ -1694,6 +1701,7 @@ describe('React diff input bridges after acceptance', () => {
       // Stale pair: the accepted diff stays installed.
       await render(OLD_FILE, NEW_FILE, false);
       expect(harness.events).toHaveLength(1);
+      expect(harness.completionEditors).toEqual([harness.editors[0]]);
       const event = harness.events[0];
       expect(harness.getInstance()?.fileDiff).toBe(event.fileDiff);
 

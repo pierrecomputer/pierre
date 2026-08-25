@@ -5,7 +5,7 @@ import { VirtualizedFile } from '../src/components/VirtualizedFile';
 import { VirtualizedFileDiff } from '../src/components/VirtualizedFileDiff';
 import { DEFAULT_THEMES } from '../src/constants';
 import { Editor } from '../src/editor/editor';
-import type { DiffsEditor, EditorChangeEvent } from '../src/types';
+import type { DiffsEditor, EditorChangeEvent, EditorState } from '../src/types';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import { installDom, waitFor } from './domHarness';
 
@@ -204,7 +204,7 @@ describe('virtualized editor viewport', () => {
         cleanUp() {
           recyclePosition = file.getCodeScrollLeft();
         },
-      } as DiffsEditor<undefined>);
+      } as unknown as DiffsEditor<undefined>);
       code.scrollLeft = 62;
       file.cleanUp(true);
       expect(recyclePosition).toBe(62);
@@ -264,15 +264,19 @@ describe('virtualized editor viewport', () => {
     const editorEvents: EditorChangeEvent<undefined, 'file' | 'diff'>[] = [];
     const componentEvents: EditorChangeEvent<undefined, 'file'>[] = [];
     const completionEvents: FileEditCompleteEvent<undefined>[] = [];
+    const componentStates: EditorState[] = [];
+    const completionStates: EditorState[] = [];
     const file = new VirtualizedFile(
       {
         disableFileHeader: true,
         theme: DEFAULT_THEMES,
         onEditChange(event) {
           componentEvents.push(event);
+          componentStates.push(event.editor.getState());
         },
         onEditComplete(event) {
           completionEvents.push(event);
+          completionStates.push(event.editor.getState());
           return 'reject';
         },
       },
@@ -311,7 +315,7 @@ describe('virtualized editor viewport', () => {
       expect(editorEvents).toHaveLength(1);
       expect(componentEvents).toHaveLength(1);
       expect(componentEvents[0]).toBe(editorEvents[0]);
-      expect(componentEvents[0]?.state).toEqual({
+      expect(componentStates[0]).toEqual({
         selections: [
           {
             start: { line: 0, character: 6 },
@@ -334,7 +338,7 @@ describe('virtualized editor viewport', () => {
       finishSession();
 
       expect(completionEvents).toHaveLength(1);
-      expect(completionEvents[0]?.state).toEqual({
+      expect(completionStates[0]).toEqual({
         selections: [
           {
             start: { line: 1, character: 3 },
@@ -345,9 +349,7 @@ describe('virtualized editor viewport', () => {
         view: { scrollLeft: 32, scrollTop: 64 },
       });
       expect(Object.isFrozen(completionEvents[0])).toBe(true);
-      expect(componentEvents[0]?.state.selections?.[0]?.start.character).toBe(
-        6
-      );
+      expect(componentStates[0]?.selections?.[0]?.start.character).toBe(6);
     } finally {
       editor.cleanUp();
       file.cleanUp();
@@ -419,7 +421,7 @@ describe('virtualized editor viewport', () => {
         cleanUp() {
           recyclePosition = fileDiff.getCodeScrollLeft();
         },
-      } as DiffsEditor<undefined>);
+      } as unknown as DiffsEditor<undefined>);
       code.deletions!.scrollLeft = 64;
       fileDiff.cleanUp(true);
       expect(recyclePosition).toBe(64);

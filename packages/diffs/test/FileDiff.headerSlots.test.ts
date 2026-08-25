@@ -23,7 +23,7 @@ function createEditorStub(): DiffsEditor<undefined> {
     __getDocumentContents: () => undefined,
     __postponeBgTokenizeToNextFrame() {},
     __syncRenderView() {},
-  };
+  } as unknown as DiffsEditor<undefined>;
 }
 
 function makeTextDocument(lines: string[]): DiffsTextDocument {
@@ -98,7 +98,7 @@ describe('FileDiff header slots', () => {
       expect(externalDiff.additionLines).toBe(externalAdditionLines);
       expect(externalDiff.additionLines).toEqual(['new\n']);
     } finally {
-      detach?.(false, {});
+      detach?.(false);
       instance.cleanUp();
       cleanup();
     }

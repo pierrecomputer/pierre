@@ -7,7 +7,9 @@ import type {
 } from '../src/components/File';
 import { Editor } from '../src/editor/editor';
 import type {
+  DiffsEditor,
   EditorChangeEvent,
+  EditorState,
   FileContents,
   LineAnnotation,
 } from '../src/types';
@@ -90,6 +92,7 @@ async function createFixture(options?: {
     instance,
     cleanup() {
       editor.cleanUp();
+      instance.completeEditSession(editor, 'install');
       instance.cleanUp();
       dom.cleanup();
     },
@@ -389,13 +392,21 @@ describe('component onEditChange', () => {
     const externalFile = { ...EXTERNAL_FILE };
     const editorEvents: EditorChangeEvent<undefined, 'file' | 'diff'>[] = [];
     const componentEvents: EditorChangeEvent<undefined, 'file'>[] = [];
+    const editorCallbackEditors: DiffsEditor<undefined>[] = [];
+    const callbackEditors: DiffsEditor<undefined>[] = [];
     const instance = new TestFile({
       disableErrorHandling: true,
       disableFileHeader: true,
-      onEditChange: (event) => componentEvents.push(event),
+      onEditChange: (event) => {
+        componentEvents.push(event);
+        callbackEditors.push(event.editor);
+      },
     });
     const editor = new Editor<undefined>('file', {
-      onChange: (event) => editorEvents.push(event),
+      onChange: (event) => {
+        editorEvents.push(event);
+        editorCallbackEditors.push(event.editor);
+      },
     });
     try {
       instance.render({ file: externalFile, fileContainer, forceRender: true });
@@ -422,8 +433,10 @@ describe('component onEditChange', () => {
       expect(editorEvents).toHaveLength(1);
       expect(componentEvents).toHaveLength(1);
       expect(componentEvents[0]).toBe(editorEvents[0]);
+      expect(editorCallbackEditors).toEqual([editor]);
+      expect(callbackEditors).toEqual([editor]);
       expect(componentEvents[0]?.file.contents).toBe('Xalpha\nbravo\n');
-      expect(componentEvents[0]?.state).toEqual({
+      expect(callbackEditors[0]?.getState()).toEqual({
         selections: [
           {
             start: { line: 0, character: 6 },
@@ -548,6 +561,7 @@ describe('session-owned line annotations', () => {
       instance,
       cleanup() {
         editor.cleanUp();
+        instance.completeEditSession(editor, 'install');
         instance.cleanUp();
         dom.cleanup();
       },
@@ -823,6 +837,7 @@ describe('session-owned line annotations', () => {
 
 describe('completeEditSession', () => {
   async function createCompletionFixture(config?: {
+    editHistoryKey?: string;
     onEditComplete?: FileEditCompleteHandler<undefined>;
     onEditChange?: (event: EditorChangeEvent<undefined, 'file'>) => void;
     lineAnnotations?: LineAnnotation<undefined>[];
@@ -837,7 +852,11 @@ describe('completeEditSession', () => {
       onEditComplete: config?.onEditComplete,
       onEditChange: config?.onEditChange,
     });
-    const editor = new Editor<undefined>('file');
+    const editor = new Editor<undefined>(
+      'file',
+      undefined,
+      config?.editHistoryKey
+    );
     instance.render({
       file: externalFile,
       fileContainer,
@@ -858,6 +877,7 @@ describe('completeEditSession', () => {
       },
       cleanup() {
         editor.cleanUp();
+        instance.completeEditSession(editor, 'install');
         instance.cleanUp();
         dom.cleanup();
       },
@@ -878,9 +898,11 @@ describe('completeEditSession', () => {
 
   test('a changed session delivers a fresh keyless file and the exact external file', async () => {
     const events: FileEditCompleteEvent<undefined>[] = [];
+    let completionEditor: DiffsEditor<undefined> | undefined;
     const fixture = await createCompletionFixture({
       onEditComplete(event) {
         events.push(event);
+        completionEditor = event.editor;
         return 'reject';
       },
     });
@@ -895,16 +917,11 @@ describe('completeEditSession', () => {
         },
       ]);
       fixture.detach();
-      instance.completeEditSession();
+      instance.completeEditSession(editor, 'install');
 
       expect(events).toHaveLength(1);
-      const event = events[0];
-      expect(event.file.contents).toBe('edited\nbravo\n');
-      expect(event.file.cacheKey).toBeUndefined();
-      expect(event.file).not.toBe(externalFile);
-      expect(event.originalFile).toBe(externalFile);
-      expect(externalFile.contents).toBe(EXTERNAL_FILE.contents);
-      expect(event.state).toEqual({
+      expect(completionEditor).toBe(editor);
+      expect(completionEditor?.getState()).toEqual({
         selections: [
           {
             start: { line: 1, character: 3 },
@@ -914,9 +931,53 @@ describe('completeEditSession', () => {
         ],
         view: undefined,
       });
+      const event = events[0];
+      expect(event.file.contents).toBe('edited\nbravo\n');
+      expect(event.file.cacheKey).toBeUndefined();
+      expect(event.file).not.toBe(externalFile);
+      expect(event.originalFile).toBe(externalFile);
+      expect(externalFile.contents).toBe(EXTERNAL_FILE.contents);
       expect(Object.isFrozen(event)).toBe(true);
     } finally {
       fixture.cleanup();
+    }
+  });
+
+  test('releases keyed ownership before the completion callback', async () => {
+    const editHistoryKey = 'completion-callback-release';
+    let replacementEditor: Editor<undefined> | undefined;
+    let replacementInstance: TestFile | undefined;
+    const fixture = await createCompletionFixture({
+      editHistoryKey,
+      onEditComplete() {
+        const fileContainer = document.createElement('div');
+        document.body.appendChild(fileContainer);
+        replacementInstance = new TestFile({ disableFileHeader: true });
+        replacementInstance.render({
+          file: { ...EXTERNAL_FILE },
+          fileContainer,
+          forceRender: true,
+        });
+        replacementEditor = new Editor<undefined>(
+          'file',
+          undefined,
+          editHistoryKey
+        );
+        replacementEditor.edit(replacementInstance);
+        return 'reject';
+      },
+    });
+    try {
+      insertLinesAtStart(fixture.editor);
+      fixture.detach();
+      fixture.instance.completeEditSession(fixture.editor, 'install');
+
+      expect(replacementEditor).toBeDefined();
+    } finally {
+      replacementEditor?.cleanUp();
+      replacementInstance?.cleanUp();
+      fixture.cleanup();
+      Editor.disposeFile(editHistoryKey);
     }
   });
 
@@ -937,7 +998,7 @@ describe('completeEditSession', () => {
       const { editor, instance } = fixture;
       insertLinesAtStart(editor);
       fixture.detach();
-      instance.completeEditSession();
+      instance.completeEditSession(editor, 'install');
 
       expect(events).toHaveLength(1);
       const event = events[0];
@@ -953,7 +1014,7 @@ describe('completeEditSession', () => {
       ]);
 
       // Settled: calling again does not fire the handler a second time.
-      instance.completeEditSession();
+      instance.completeEditSession(editor, 'install');
       expect(events).toHaveLength(1);
     } finally {
       fixture.cleanup();
@@ -992,7 +1053,7 @@ describe('completeEditSession', () => {
 
       // Reverting keeps the added annotation; the baseline is not rewound.
       fixture.detach();
-      instance.completeEditSession();
+      instance.completeEditSession(editor, 'install');
       expect(instance.getLatestAnnotationsForTest()).toBe(added);
     } finally {
       fixture.cleanup();
@@ -1014,7 +1075,7 @@ describe('completeEditSession', () => {
         { lineNumber: 4 },
       ]);
       fixture.detach();
-      instance.completeEditSession();
+      instance.completeEditSession(editor, 'install');
 
       expect(instance.file).toBe(externalFile);
       expect(instance.getLatestFileForTest()).toBe(externalFile);
@@ -1033,7 +1094,7 @@ describe('completeEditSession', () => {
       const { editor, externalFile, instance } = fixture;
       replaceDocument(editor, 'edited\nbravo\n');
       fixture.detach();
-      instance.completeEditSession();
+      instance.completeEditSession(editor, 'install');
 
       expect(instance.file).toBe(externalFile);
       expect(instance.getLatestFileForTest()).toBe(externalFile);
@@ -1048,7 +1109,7 @@ describe('completeEditSession', () => {
       const { editor, externalFile, instance } = fixture;
       replaceDocument(editor, 'edited\nbravo\n');
       fixture.detach();
-      instance.completeEditSession();
+      instance.completeEditSession(editor, 'install');
 
       expect(instance.file).toBe(externalFile);
       expect(instance.getLatestFileForTest()).toBe(externalFile);
@@ -1068,7 +1129,7 @@ describe('completeEditSession', () => {
       const { editor, externalFile, instance } = fixture;
       replaceDocument(editor, 'edited\nbravo\n');
       fixture.detach();
-      expect(() => instance.completeEditSession()).toThrow(
+      expect(() => instance.completeEditSession(editor, 'install')).toThrow(
         'must not reuse the replaced file cacheKey'
       );
 
@@ -1089,7 +1150,9 @@ describe('completeEditSession', () => {
       const { editor, externalFile, instance } = fixture;
       replaceDocument(editor, 'edited\nbravo\n');
       fixture.detach();
-      expect(() => instance.completeEditSession()).toThrow('owner exploded');
+      expect(() => instance.completeEditSession(editor, 'install')).toThrow(
+        'owner exploded'
+      );
 
       expect(instance.file).toBe(externalFile);
       expect(instance.getLatestFileForTest()).toBe(externalFile);
@@ -1120,7 +1183,7 @@ describe('completeEditSession', () => {
         lineAnnotations: written,
       });
       fixture.detach();
-      instance.completeEditSession();
+      instance.completeEditSession(fixture.editor, 'install');
 
       expect(events).toHaveLength(0);
       expect(instance.file).toBe(externalFile);
@@ -1145,7 +1208,7 @@ describe('completeEditSession', () => {
       editor.undo();
       expect(editor.getText()).toBe(externalFile.contents);
       fixture.detach();
-      instance.completeEditSession();
+      instance.completeEditSession(editor, 'install');
 
       expect(events).toHaveLength(0);
       expect(instance.file).toBe(externalFile);
@@ -1168,7 +1231,7 @@ describe('completeEditSession', () => {
       replaceDocument(editor, 'edited\nbravo\n');
       fixture.detach();
       const changesBefore = changeEvents.length;
-      instance.completeEditSession();
+      instance.completeEditSession(editor, 'install');
       expect(changeEvents.length).toBe(changesBefore);
     } finally {
       fixture.cleanup();
@@ -1180,7 +1243,7 @@ describe('completeEditSession', () => {
     try {
       const { editor, instance } = fixture;
       replaceDocument(editor, 'edited\nbravo\n');
-      expect(() => instance.completeEditSession()).toThrow(
+      expect(() => instance.completeEditSession(editor, 'install')).toThrow(
         'detach the editor before completing the session'
       );
     } finally {
@@ -1213,7 +1276,7 @@ describe('completeEditSession', () => {
       });
       replaceDocument(editor, 'edited again\nbravo\n');
       fixture.detach();
-      instance.completeEditSession();
+      instance.completeEditSession(editor, 'install');
 
       expect(events).toHaveLength(1);
       expect(events[0].originalFile).toBe(replacementFile);
@@ -1251,6 +1314,7 @@ describe('editor session lifecycle', () => {
       instance,
       cleanup() {
         editor.cleanUp();
+        instance.completeEditSession(editor, 'install');
         instance.cleanUp();
         dom.cleanup();
       },
@@ -1383,6 +1447,7 @@ describe('editor session lifecycle', () => {
       finishSession();
       expect(events).toHaveLength(1);
 
+      instance.completeEditSession(editor, 'install');
       instance.cleanUp();
       expect(events).toHaveLength(1);
     } finally {
@@ -1390,21 +1455,45 @@ describe('editor session lifecycle', () => {
     }
   });
 
-  test('recycle cleanUp of the component keeps the session silent', async () => {
+  test('a recycled session keeps final state through later component cleanup', async () => {
     const events: FileEditCompleteEvent<undefined>[] = [];
+    const completionStates: EditorState[] = [];
     const fixture = await createLifecycleFixture({
       onEditComplete(event) {
         events.push(event);
+        completionStates.push(event.editor.getState());
         return 'reject';
       },
     });
     try {
       const { editor, instance } = fixture;
       replaceDocument(editor, 'edited\nbravo\n');
+      editor.setSelections([
+        {
+          start: { line: 1, character: 3 },
+          end: { line: 1, character: 3 },
+          direction: 'none',
+        },
+      ]);
       editor.cleanUp('recycle');
       instance.cleanUp(true);
 
       expect(events).toHaveLength(0);
+      expect(editor.getState()).toEqual({
+        selections: [
+          {
+            start: { line: 1, character: 3 },
+            end: { line: 1, character: 3 },
+            direction: 0,
+          },
+        ],
+        view: undefined,
+      });
+
+      instance.completeEditSession(editor, 'install');
+      instance.cleanUp();
+      expect(events).toHaveLength(1);
+      expect(completionStates).toEqual([editor.getState()]);
     } finally {
       fixture.cleanup();
     }

@@ -121,10 +121,11 @@ scope, or use `useCallback` and `useMemo` when they depend on component values.
 
 <DocsCodeExample {...editReactCreateEditorExample} />
 
-Pass a distinct `editHistoryKey` for each document whose draft and undo history
-should survive a completed session or remount. Store `event.state` separately
-when selections and virtualized scroll should also return — see
-[Retaining and restoring editor state](#edit-mode-retaining-and-restoring-editor-state).
+Pass a distinct `editHistoryKey` for each document whose draft, undo history,
+selections, and editor-owned view state should survive a completed session or
+remount. See
+[Retaining and persisting editor state](#edit-mode-retaining-and-persisting-editor-state)
+only when that state must also survive the in-memory registry.
 
 Changes to `createEditor` or `editorOptions` do not disturb an active edit
 session; their latest values apply the next time `edit` transitions from false
@@ -192,8 +193,8 @@ Because the versions match, that push reconciles as a no-op.
   vanillaExample={editVanillaCodeViewExample}
 />
 
-Editors retain their document and history while items move in and out of the
-virtualized window.
+Editors retain their document, history, selections, and editor-owned view state
+while items move in and out of the virtualized window.
 
 `editorOptions` and provider-factory changes are creation-time inputs: active
 item sessions keep their current editor, while the latest values apply to the
@@ -227,8 +228,9 @@ restores:
   patch inputs, or other file-based state.
 - `lineAnnotations` — the final annotation collection; `originalLineAnnotations`
   is the collection from before completion.
-- `state` — the final selections and editor-owned viewport offsets. Capture this
-  snapshot even if no text changed after the user's last selection or scroll.
+- `editor` — the detached editor. Its `getState()` method exposes the final
+  selections and editor-owned viewport offsets when they must be persisted
+  beyond the in-memory editor registry.
 
 Return `'accept'` or `'reject'` to decide the edit:
 
@@ -238,10 +240,9 @@ Return `'accept'` or `'reject'` to decide the edit:
   the accepted value on screen until your state update's props catch up.
 - **`'reject'`** — the surface restores `originalFile`/`originalFileDiff`. A
   missing handler also automatically rejects. If the editor uses an
-  `editHistoryKey`, its draft and undo history remain retained independently;
+  `editHistoryKey`, its complete editor state remains retained independently;
   call the matching `Editor.disposeFile*()` method when rejection should discard
-  them permanently. You may still store `event.state` if the same view state
-  should return later.
+  it permanently.
 
 The component owns the accepted value — you never hand it back, so a clone can't
 slip in — but an accepted value may not reuse the replaced value's non-empty
@@ -333,28 +334,28 @@ selection (`getSelectionText`, `replaceSelectionText`, `applyEdits`), and
 
 <DocsCodeExample {...editSelectionActionContextType} />
 
-### Retaining and Restoring Editor State
+### Retaining and Persisting Editor State
 
-Draft/history retention and view-state restoration are separate, explicit
-features:
+Give an editor a stable `editHistoryKey` to restore its state when editing stops
+and later starts again during the same page session. The key retains the current
+draft, undo/redo history, selections, and editor-owned view state in memory.
+Pass it as the `Editor` constructor's third argument or as a React prop, and
+reuse the same key each time you edit that file.
 
-- **Draft and undo/redo history.** Pass `editHistoryKey` as the `Editor`
-  constructor's third argument, or as a React surface prop. Reusing that key
-  with the same surface kind resumes the retained document and its undo
-  timeline. For a diff, scope the key to its old-side baseline; resuming against
-  a different old file throws. This registry is in memory, bounded, and does not
-  survive a page reload.
-- **Selections and view state.** Every change and completion event carries a
-  serializable `state`. Store it in application-owned memory, browser storage,
-  or your backend, then pass it to a newly created editor as
-  `editorOptions.initialState`. It is consumed once on the editor's first
-  successful attach.
+For a diff, we have to scope the key to a matching `old` code side; resuming
+against a different old file must throw because the diff state cannot be
+guaranteed.
 
-These identities are not derived from `file.cacheKey`. The editor never reads a
-render cache key; choose `editHistoryKey` according to your editing-session
-lifecycle. Without one, a new editor starts from the supplied file with fresh
-history. Call `Editor.disposeFile(key)` or `Editor.disposeFileDiff(key)` when a
-retained draft must not return. `Editor.clearDocuments()` clears both
+Retained state is stored in memory and is lost on page reload. To preserve
+selections and editor-owned view state across reloads, serialize
+`editor.getState()` to browser storage or a backend, then restore it with
+`editorOptions.initialState`. `initialState` is consumed once on a new editor's
+first successful attach. `EditorState` does not include the draft or undo/redo
+history, so persist edited file contents separately.
+
+Without an `editHistoryKey`, a new editor starts from the supplied file with
+fresh history. Call `Editor.disposeFile(key)` or `Editor.disposeFileDiff(key)`
+when a retained draft must not return. `Editor.clearDocuments()` clears both
 registries, and `Editor.setDocumentRegistryCapacity(capacity)` changes their
 per-surface capacity (default `100`).
 
@@ -365,12 +366,12 @@ omits `view` and your application remains responsible for that scroll position.
 
 <DocsCodeExample {...editEditorStateExample} />
 
-In React, capture snapshots with `onEditChange` and `onEditComplete`. Those
-callbacks only run for sessions with text changes, so read `editor.getState()`
-through an `onAttach` ref before toggling edit off or unmounting when a
-selection-only or scroll-only session must also be saved. Supplying both
-`initialState` and `editHistoryKey` restores view state and in-memory document
-history independently:
+Change and completion callbacks do not run for selection-only or scroll-only
+sessions. In React, retain the most recently attached editor through `onAttach`
+and read `editor.getState()` at an actual external persistence boundary such as
+`pagehide` to capture those sessions. `initialState` restores the persisted
+snapshot after a reload, while `editHistoryKey` handles ordinary in-page
+retention:
 
 <DocsCodeExample {...editEditorStateReactExample} />
 
@@ -403,17 +404,17 @@ like a hand-typed one, and each undo or redo restores the selections that went
 with the edit. Drive it with `undo()` and `redo()` — the same commands behind
 `Cmd/Ctrl+Z` — and read `canUndo` and `canRedo` for toolbar state.
 
-To retain the editable draft and undo/redo history after an edit session ends,
-pass an `editHistoryKey` as the `Editor` constructor's third argument. React
-`File`, `FileDiff`, `MultiFileDiff`, and `PatchDiff` accept the same value as a
-prop. Reusing the key with the same surface kind resumes that history. A diff
-key must also identify a compatible old-side baseline. Retention is in memory,
-bounded by the document registry capacity, and does not survive a page reload.
-Call `Editor.disposeFile(key)` or `Editor.disposeFileDiff(key)` when the history
-is no longer needed.
+To retain the editable draft, undo/redo history, selections, and editor-owned
+view state after an edit session ends, pass an `editHistoryKey` as the `Editor`
+constructor's third argument. React `File`, `FileDiff`, `MultiFileDiff`, and
+`PatchDiff` accept the same value as a prop. Reusing the key with the same
+surface kind resumes that state. A diff key must also identify a compatible
+old-side baseline. Retention is in memory, bounded by the document registry
+capacity, and does not survive a page reload. Call `Editor.disposeFile(key)` or
+`Editor.disposeFileDiff(key)` when the state is no longer needed.
 
-The key does not retain selections or scroll. Capture `event.state` and hand it
-back through `initialState` when those should be restored too.
+Use `getState()` and `initialState` only to persist selection and view state
+beyond the in-memory registry.
 
 You can limit the stack size with `historyMaxEntries` in
 [Editor Options](#edit-mode-editor-options) (default is `100`).

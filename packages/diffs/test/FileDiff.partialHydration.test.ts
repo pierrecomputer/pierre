@@ -66,7 +66,7 @@ function createEditorStub(): DiffsEditor<undefined> {
     __getDocumentContents: () => undefined,
     __postponeBgTokenizeToNextFrame() {},
     __syncRenderView() {},
-  };
+  } as unknown as DiffsEditor<undefined>;
 }
 
 function makeDirtyLines(
@@ -348,7 +348,7 @@ describe('FileDiff partial hydration', () => {
       expect(hydratedSession?.additionLines.join('')).toBe(newFile.contents);
       expect(hydratedSession?.deletionLines.join('')).toBe(oldFile.contents);
     } finally {
-      detach?.(false, {});
+      detach?.(false);
       instance.cleanUp();
       cleanup();
     }
@@ -410,7 +410,7 @@ describe('FileDiff partial hydration', () => {
     } finally {
       deferred.resolve({ oldFile, newFile });
       await loadPromise;
-      detach?.(false, {});
+      detach?.(false);
       instance.cleanUp();
       cleanup();
     }
@@ -445,7 +445,7 @@ describe('FileDiff partial hydration', () => {
         forceRender: true,
       });
       const firstEditor = createEditorStub();
-      firstEditor.cleanUp = (reason) => firstDetach?.(reason === 'recycle', {});
+      firstEditor.cleanUp = (reason) => firstDetach?.(reason === 'recycle');
       firstDetach = instance.attachEditor(firstEditor);
       const loadPromise = instance.getPendingFileLoadPromiseForTest();
       expect(loadPromise).toBeDefined();
@@ -477,7 +477,7 @@ describe('FileDiff partial hydration', () => {
       expect(hydratedSession?.deletionLines.join('')).toBe(oldFile.contents);
       expect(loadCalls).toBe(1);
     } finally {
-      secondDetach?.(false, {});
+      secondDetach?.(false);
       instance.cleanUp();
       cleanup();
     }
@@ -540,7 +540,7 @@ describe('FileDiff partial hydration', () => {
       expect(partial.additionLines).toBe(partial.deletionLines);
       expect(partial).toEqual(hydratedBaseBefore);
     } finally {
-      detach?.(false, {});
+      detach?.(false);
       instance.cleanUp();
       cleanup();
     }

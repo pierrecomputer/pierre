@@ -33,7 +33,6 @@ import type {
   EditCompletionDecision,
   EditorActiveLineOptions,
   EditorChangeEvent,
-  EditorState,
   FileContents,
   HighlightedToken,
   LineAnnotation,
@@ -115,23 +114,21 @@ export interface FileHydrateProps<LAnnotation> extends Omit<
  *
  * `originalLineAnnotations` is the last collection provided to the component
  * externally, which a revert keeps.
- *
- * `state` is the final selection and editor-owned viewport state captured
- * before the editor detached.
  */
 export interface FileEditCompleteEvent<LAnnotation> {
   file: FileContents;
+  editor: DiffsEditor<LAnnotation>;
   lineAnnotations: LineAnnotation<LAnnotation>[] | undefined;
   originalFile: FileContents;
   originalLineAnnotations: LineAnnotation<LAnnotation>[];
-  state: EditorState;
 }
 
 /**
  * Decides a completed edit synchronously: return `'accept'` to install the
  * event's `file`, or `'reject'` to restore `originalFile`. The event is frozen,
  * so re-key the accepted file in place (`event.file.cacheKey = '…'`) before
- * accepting. A missing handler rejects.
+ * accepting. The event's editor is detached and returns its final state from
+ * `getState()`. A missing handler rejects.
  */
 export type FileEditCompleteHandler<LAnnotation> = (
   event: FileEditCompleteEvent<LAnnotation>
@@ -175,7 +172,8 @@ export interface FileOptions<LAnnotation>
    * Fired when `edit` toggles false or a component unmounts. Only called if
    * there are content changes resolving in a new file. If no callback is
    * provided, then the component will always revert back to the last `file`
-   * passed into the component
+   * passed into the component. The callback receives the detached editor with
+   * its final pre-detach state.
    */
   onEditComplete?: FileEditCompleteHandler<LAnnotation>;
 }
@@ -266,7 +264,6 @@ export class File<
   // Keeps the outgoing editable file until its replacement is ready to sync,
   // so the editor can decide whether to preserve or reset undo history.
   private outgoingSessionFile: FileContents | undefined;
-  private detachedEditorState: EditorState | undefined;
   protected renderedFile: FileContents | undefined;
   protected renderRange: RenderRange | undefined;
   protected enabled = true;
@@ -584,14 +581,15 @@ export class File<
   }
 
   public cleanUp(recycle = false): void {
+    const editor = this.editor;
     this.emitPostRender(true);
     // Tear the editor down while the code scroller still exists. A recycle
     // keeps its document and undo history; a full teardown drops them as the
     // session ends.
-    this.editor?.cleanUp(recycle ? 'recycle' : 'complete');
+    editor?.cleanUp(recycle ? 'recycle' : 'complete');
     this.editor = undefined;
     if (!recycle) {
-      this.settleEditSession(false);
+      this.settleEditSession(false, editor);
     }
     this.resizeManager.cleanUp();
     this.interactionManager.cleanUp();
@@ -646,7 +644,6 @@ export class File<
       this.editSessionFile = undefined;
       this.editSessionAnnotations = undefined;
       this.outgoingSessionFile = undefined;
-      this.detachedEditorState = undefined;
       this.renderedFile = undefined;
     }
     this.enabled = false;
@@ -838,7 +835,7 @@ export class File<
 
   public attachEditor(
     editor: DiffsEditor<LAnnotation>
-  ): (recycle: boolean, state: EditorState) => void {
+  ): (recycle: boolean) => void {
     if (this.editor != null) {
       throw new Error('File.attachEditor: an editor is already attached');
     }
@@ -863,8 +860,7 @@ export class File<
       // syncs the render view once it paints.
       this.rerender();
     }
-    return (_recycle: boolean, state: EditorState) => {
-      this.detachedEditorState = state;
+    return (_recycle: boolean) => {
       this.editor = undefined;
       this.fileRenderer.endEditSession();
     };
@@ -883,19 +879,25 @@ export class File<
    *
    * When the text changed, `onEditComplete` receives a fresh keyless
    * `FileContents` holding the edited text, alongside the current external
-   * file and the session's annotations. Returning the event's `file` installs
-   * it as the new external value together with those annotations. Returning
-   * `null`, returning the exact `originalFile`, or having no handler restores
-   * the external file and its annotations. Any other return throws, as does
-   * an accepted file reusing the replaced file's `cacheKey` — in both cases
-   * the component still leaves the session on the external file before the
-   * error propagates.
+   * file and the session's annotations. In `install` mode, accepting installs
+   * the event's `file` as the new external value together with those
+   * annotations; `discard` mode always restores the external value. Rejecting
+   * or having no handler also restores the external file and its annotations.
+   * An accepted file reusing the replaced file's `cacheKey` throws; the
+   * component still leaves the session on the external file before the error
+   * propagates.
    */
-  public completeEditSession(): void {
-    this.settleEditSession(true);
+  public completeEditSession(
+    editor: DiffsEditor<LAnnotation>,
+    mode: 'install' | 'discard'
+  ): void {
+    this.settleEditSession(mode === 'install', editor);
   }
 
-  private settleEditSession(installResult: boolean): void {
+  private settleEditSession(
+    installResult: boolean,
+    editor: DiffsEditor<LAnnotation> | undefined
+  ): void {
     const {
       editSessionFile,
       editSessionAnnotations,
@@ -917,42 +919,42 @@ export class File<
     let failed = false;
     let failure: unknown;
     if (contentsChanged) {
-      const state = this.detachedEditorState;
-      if (state == null) {
-        throw new Error(
-          'File.completeEditSession: editor state was not captured before completion'
-        );
-      }
-      const completedFile = { ...editSessionFile };
-      const event: FileEditCompleteEvent<LAnnotation> = {
-        file: completedFile,
-        originalFile: externalFile,
-        lineAnnotations: sessionAnnotationsCurrent,
-        originalLineAnnotations: externalAnnotations,
-        state,
-      };
       const { onEditComplete } = this.options;
-      // Frozen so a handler cannot swap the event's file/originalFile
-      // references; nested mutation (a fresh cacheKey on event.file) still
-      // works.
-      Object.freeze(event);
-      try {
-        const decision =
-          onEditComplete != null ? onEditComplete(event) : 'reject';
-        if (decision === 'accept') {
-          if (
-            completedFile.cacheKey != null &&
-            completedFile.cacheKey === externalFile.cacheKey
-          ) {
-            throw new Error(
-              'File.completeEditSession: an accepted file must not reuse the replaced file cacheKey'
-            );
-          }
-          acceptedFile = completedFile;
+      if (onEditComplete != null) {
+        if (editor == null) {
+          throw new Error(
+            'File.completeEditSession: editor is required for completion'
+          );
         }
-      } catch (error) {
-        failed = true;
-        failure = error;
+        const completedFile = { ...editSessionFile };
+        const event: FileEditCompleteEvent<LAnnotation> = {
+          file: completedFile,
+          editor,
+          originalFile: externalFile,
+          lineAnnotations: sessionAnnotationsCurrent,
+          originalLineAnnotations: externalAnnotations,
+        };
+        // Frozen so a handler cannot swap the event's file/originalFile
+        // references; nested mutation (a fresh cacheKey on event.file) still
+        // works.
+        Object.freeze(event);
+        try {
+          const decision = onEditComplete(event);
+          if (decision === 'accept') {
+            if (
+              completedFile.cacheKey != null &&
+              completedFile.cacheKey === externalFile.cacheKey
+            ) {
+              throw new Error(
+                'File.completeEditSession: an accepted file must not reuse the replaced file cacheKey'
+              );
+            }
+            acceptedFile = completedFile;
+          }
+        } catch (error) {
+          failed = true;
+          failure = error;
+        }
       }
     }
 
@@ -971,7 +973,6 @@ export class File<
     this.editSessionFile = undefined;
     this.editSessionAnnotations = undefined;
     this.outgoingSessionFile = undefined;
-    this.detachedEditorState = undefined;
     // Ending the session with the settled file lets the renderer adopt it as
     // the rendered identity when its cache already shows this content, so
     // the next render treats it as current instead of a new file.

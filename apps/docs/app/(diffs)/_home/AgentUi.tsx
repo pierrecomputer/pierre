@@ -1,16 +1,7 @@
 'use client';
 
-import {
-  DEFAULT_THEMES,
-  type FileDiffEditCompleteEvent,
-  type FileDiffMetadata,
-  type FileEditCompleteEvent,
-} from '@pierre/diffs';
-import type {
-  EditorChangeEvent,
-  EditorOptions,
-  EditorState,
-} from '@pierre/diffs/edit';
+import { DEFAULT_THEMES, type FileDiffMetadata } from '@pierre/diffs';
+import type { EditorChangeEvent, EditorOptions } from '@pierre/diffs/edit';
 import {
   File,
   FileDiff,
@@ -987,8 +978,6 @@ export function AgentUi({
 
   // One external diff baseline per changed file, created up front for worker
   // priming and reused on every visit so its cache identity remains stable.
-  // The per-path editHistoryKey restores edited contents and undo history when
-  // a file is revisited.
   const [diffs] = useState<Map<string, FileDiffMetadata>>(() => {
     const diffs = new Map<string, FileDiffMetadata>();
     for (const file of session.changedFiles) {
@@ -1002,9 +991,6 @@ export function AgentUi({
   // Paths the user has edited. Only consulted to stop an edited file from
   // hydrating out of its prerendered (pristine) server HTML on revisit.
   const editedPathsRef = useRef<Set<string>>(new Set());
-  // Serializable selection and viewport state lives outside the editor. A new
-  // editor created when the user revisits a path receives its latest snapshot.
-  const editorStatesRef = useRef<Map<string, EditorState>>(new Map());
   // The stable onChange callback has no path argument, so track its live target
   // here.
   const activeTargetRef = useRef<string | null>(null);
@@ -1050,10 +1036,6 @@ export function AgentUi({
   const editorOptions = useMemo<EditorOptions<undefined>>(
     () => ({
       enabledSelectionAction: true,
-      initialState:
-        activePath != null
-          ? editorStatesRef.current.get(activePath)
-          : undefined,
       renderSelectionAction(selectionAction) {
         const container = document.createElement('div');
         container.style.cssText = 'display: flex; gap: 4px;';
@@ -1111,7 +1093,7 @@ export function AgentUi({
       },
       __debug: true,
     }),
-    [activePath, addSnippet]
+    [addSnippet]
   );
 
   const handleEditChange = useCallback(
@@ -1121,26 +1103,11 @@ export function AgentUi({
         return;
       }
       editedPathsRef.current.add(target);
-      editorStatesRef.current.set(target, event.state);
       // Recompute the edited file's diff against its original snapshot so the
       // Changes tree's +/- totals reflect the live edits.
       recordEditedStatsRef.current(target, event.file.contents);
     },
     []
-  );
-
-  const handleEditComplete = useCallback(
-    (
-      event:
-        | FileEditCompleteEvent<undefined>
-        | FileDiffEditCompleteEvent<undefined>
-    ) => {
-      if (activePath != null) {
-        editorStatesRef.current.set(activePath, event.state);
-      }
-      return 'reject' as const;
-    },
-    [activePath]
   );
 
   const openFile = useCallback((path: string) => {
@@ -1274,7 +1241,6 @@ export function AgentUi({
                 editHistoryKey={fileDiffEditHistoryKey}
                 editorOptions={editorOptions}
                 onEditChange={handleEditChange}
-                onEditComplete={handleEditComplete}
               />
             ) : placeholderContents != null && activePath != null ? (
               // Editable view for explorer files that aren't part of the change
@@ -1303,7 +1269,6 @@ export function AgentUi({
                 editHistoryKey={fileEditHistoryKey}
                 editorOptions={editorOptions}
                 onEditChange={handleEditChange}
-                onEditComplete={handleEditComplete}
               />
             ) : (
               <div className="aui-empty">Select a file to review.</div>

@@ -77,17 +77,16 @@ built `nextItem`, which a controlled owner also mirrors into its own state — o
 completing it. A direct `reset()` or `cleanUp()`, and viewer unmount, would also
 complete changed sessions.
 
-Each edited item receives an independent editor whose history survives
-virtualization. Changes to the provider factory or `editorOptions` do not
-disturb active sessions; their latest values apply the next time an item enters
-edit mode.
+Each edited item receives an independent editor whose document, history,
+selections, and editor-owned view state survive virtualization. Changes to the
+provider factory or `editorOptions` do not disturb active sessions; their latest
+values apply the next time an item enters edit mode.
 
-Use `getEditHistoryKey(item)` to retain an item's editable draft and undo/redo
-history after its edit session ends. React passes the resolved key through its
-`EditProvider`; vanilla `CodeView` passes it to `createEditor` as the third
-argument. CodeView does not derive this key from `item.id` or a render cache
-key, so choose a stable application identity explicitly. Retention is bounded
-and in-memory only.
+Use `getEditHistoryKey(item)` to retain that complete editor state after its
+edit session ends. React passes the resolved key through its `EditProvider`;
+vanilla `CodeView` passes it to `createEditor` as the third argument. CodeView
+does not derive this key from `item.id` or a render cache key, so choose a
+stable application identity explicitly. Retention is bounded and in-memory only.
 
 For vanilla `CodeView`, keep using `CodeViewOptions.createEditor`. It exposes
 the same item-aware callbacks, and CodeView owns each returned editor's

@@ -34,7 +34,7 @@ function createEditorStub(): DiffsEditor<undefined> {
     __getDocumentContents: () => undefined,
     __postponeBgTokenizeToNextFrame() {},
     __syncRenderView() {},
-  };
+  } as unknown as DiffsEditor<undefined>;
 }
 
 function createVirtualizer(visible = true): {
@@ -501,7 +501,7 @@ describe('VirtualizedFileDiff partial hydration', () => {
       expect(sessionDiff?.deletionLines).toBe(partial.deletionLines);
       expect(sessionDiff?.hunks).toBe(partial.hunks);
     } finally {
-      detach?.(false, {});
+      detach?.(false);
       instance.cleanUp();
     }
   });
@@ -563,7 +563,7 @@ describe('VirtualizedFileDiff partial hydration', () => {
       expect(nextSession?.additionLines).toBe(partial.additionLines);
       expect(nextSession?.deletionLines).toBe(partial.deletionLines);
     } finally {
-      detach?.(false, {});
+      detach?.(false);
       instance.cleanUp();
     }
   });
@@ -604,7 +604,7 @@ describe('VirtualizedFileDiff partial hydration', () => {
       expect(sessionDiff?.deletionLines).toBe(partial.deletionLines);
       expect(sessionDiff?.hunks).toBe(partial.hunks);
     } finally {
-      detach?.(false, {});
+      detach?.(false);
       instance.cleanUp();
     }
   });
@@ -687,7 +687,7 @@ describe('VirtualizedFileDiff partial hydration', () => {
       expect(instance.getLatestDiffForTest()).toBe(sessionDiff);
       expect(sessionDiff?.additionLines).toBe(externalDiff.additionLines);
     } finally {
-      detach?.(false, {});
+      detach?.(false);
       instance.cleanUp();
       cleanup();
     }

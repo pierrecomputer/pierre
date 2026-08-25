@@ -41,6 +41,7 @@ interface StubEditor extends DiffsEditor<undefined> {
   edits: DiffsEditableComponent<undefined>[];
   fullCleanUps: number;
   recycleCleanUps: number;
+  state: EditorState;
   /** The CodeView-built onChange handed to the factory. */
   emitChange(
     file: FileContents,
@@ -65,13 +66,14 @@ function createEditorHarness({
     _documentKind: EditorDocumentKind,
     options: CodeViewCreateEditorOptions<undefined>,
     editHistoryKey?: string
-  ): StubEditor => {
+  ): DiffsEditor<undefined> => {
     editHistoryKeys.push(editHistoryKey);
-    let detach: ((recycle: boolean, state: EditorState) => void) | undefined;
+    let detach: ((recycle: boolean) => void) | undefined;
     const editor = {
       edits: [],
       fullCleanUps: 0,
       recycleCleanUps: 0,
+      state: {},
       emitChange(
         file: FileContents,
         lineAnnotations?:
@@ -79,7 +81,8 @@ function createEditorHarness({
           | DiffLineAnnotation<undefined>[],
         state: EditorState = {}
       ) {
-        options.onChange({ changes: [], file, lineAnnotations, state });
+        editor.state = state;
+        options.onChange({ changes: [], editor, file, lineAnnotations });
       },
       edit(instance: DiffsEditableComponent<undefined>) {
         editor.edits.push(instance);
@@ -91,7 +94,7 @@ function createEditorHarness({
         // session on the attached instance.
         return () => {
           editor.cleanUp('complete');
-          instance.completeEditSession();
+          instance.completeEditSession(editor, 'install');
         };
       },
       cleanUp(reason: 'discard' | 'recycle' | 'complete' = 'discard') {
@@ -102,16 +105,17 @@ function createEditorHarness({
         }
         // Like the real editor, the detach closure learns whether this is a
         // virtualized recycle or a genuine session end.
-        detach?.(reason === 'recycle', {});
+        detach?.(reason === 'recycle');
         detach = undefined;
       },
+      getState: () => editor.state,
       __captureFocusForDOMReplacement() {},
       __getDocumentContents: () => undefined,
       __postponeBgTokenizeToNextFrame() {},
       __syncRenderView() {},
     } as unknown as StubEditor;
     editors.push(editor);
-    return editor;
+    return editor as unknown as DiffsEditor<undefined>;
   };
   return { editors, createEditor, editHistoryKeys };
 }
@@ -970,7 +974,7 @@ describe('CodeView item edit mode', () => {
         new Editor<undefined>(documentKind, { ...options }),
       onItemEditComplete(event, item, nextItem) {
         if (item.type !== 'file' || !('file' in event)) {
-          return 'reject';
+          return 'accept';
         }
         event.file.cacheKey = `${item.id}:v${nextItem.version}`;
         return 'accept';
@@ -1028,12 +1032,14 @@ describe('CodeView item edit mode', () => {
   test('a real editor preserves final state when a recycled item completes', async () => {
     const { cleanup } = installDom();
     const completions: FileEditCompleteEvent<undefined>[] = [];
+    const completionStates: EditorState[] = [];
     const viewer = new CodeView({
       createEditor: (documentKind, options) =>
         new Editor<undefined>(documentKind, options),
       onItemEditComplete(event) {
         if ('file' in event) {
           completions.push(event);
+          completionStates.push(event.editor.getState());
         }
         return 'reject';
       },
@@ -1071,22 +1077,7 @@ describe('CodeView item edit mode', () => {
       expect(code).toBeInstanceOf(HTMLElement);
       (code as HTMLElement).scrollLeft = 24;
       root.scrollTop = 48;
-
-      await applyItemUpdate(viewer, {
-        ...item,
-        collapsed: true,
-        version: 1,
-      });
-      expect(completions).toHaveLength(0);
-      await applyItemUpdate(viewer, {
-        ...item,
-        collapsed: true,
-        edit: false,
-        version: 2,
-      });
-
-      expect(completions).toHaveLength(1);
-      expect(completions[0]?.state).toEqual({
+      const finalState: EditorState = {
         selections: [
           {
             start: { line: 0, character: 3 },
@@ -1095,7 +1086,24 @@ describe('CodeView item edit mode', () => {
           },
         ],
         view: { scrollLeft: 24, scrollTop: 48 },
+      };
+
+      await applyItemUpdate(viewer, {
+        ...item,
+        collapsed: true,
+        version: 1,
       });
+      expect(completions).toHaveLength(0);
+      expect(viewer.getEditor(item.id)?.getState()).toEqual(finalState);
+      await applyItemUpdate(viewer, {
+        ...item,
+        collapsed: true,
+        edit: false,
+        version: 2,
+      });
+
+      expect(completions).toHaveLength(1);
+      expect(completionStates[0]).toEqual(finalState);
     } finally {
       viewer.cleanUp();
       await wait(0);
@@ -1137,7 +1145,7 @@ describe('CodeView item edit mode', () => {
     const viewer = new CodeView({
       createEditor,
       onItemEditChange(event, item) {
-        changes.push([item.id, event.file.contents, event.state]);
+        changes.push([item.id, event.file.contents, event.editor.getState()]);
       },
     });
     try {
@@ -1735,6 +1743,7 @@ describe('CodeView item edit mode', () => {
       const viewer = new CodeView({
         createEditor,
         onItemEditComplete(event, item) {
+          expect(event.editor).toBe(editors[0]);
           completions.push({ event, item });
           return 'reject';
         },
@@ -1762,7 +1771,7 @@ describe('CodeView item edit mode', () => {
         // The event's original value is the item's exact external file, and
         // the item handed to the callback is the one that ended the session.
         expect(event.originalFile).toBe(item.file);
-        expect(event.state).toEqual({});
+        expect(editors[0].getState()).toEqual({});
         expect(completedItem.edit).toBe(false);
         expect(completedItem.version).toBe(1);
       } finally {
@@ -2074,7 +2083,7 @@ describe('CodeView item edit mode', () => {
       }
     });
 
-    test('a direct reset completes changed sessions once', async () => {
+    test('a direct reset discards accepted session output', async () => {
       const { cleanup } = installDom();
       const { editors, createEditor } = createEditorHarness();
       const completions: Completion[] = [];
@@ -2082,7 +2091,7 @@ describe('CodeView item edit mode', () => {
         createEditor,
         onItemEditComplete(event, item) {
           completions.push({ event, item });
-          return 'reject';
+          return 'accept';
         },
       });
       try {
@@ -2097,7 +2106,8 @@ describe('CodeView item edit mode', () => {
         expect(completions[0].item.id).toBe('a');
         expect(editors[0].fullCleanUps).toBeGreaterThanOrEqual(1);
 
-        // cleanUp after the reset finds no session left to complete.
+        // Accepting cannot retain the removed item, and cleanUp after the reset
+        // finds no session left to complete.
         viewer.cleanUp();
         await wait(0);
         expect(completions.length).toBe(1);

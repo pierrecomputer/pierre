@@ -541,7 +541,7 @@ export interface CodeViewOptions<LAnnotation>
   /**
    * Called with the editor's `EditorChangeEvent` and the owning item whenever
    * the edited document changes, from internal (edit) changes or external
-   * (CodeViewItem) changes.
+   * (CodeViewItem) changes. The event contains that same attached editor.
    *
    * Do not feed these changes back into item state.
    */
@@ -564,7 +564,8 @@ export interface CodeViewOptions<LAnnotation>
    * item update path when the item still exists, and a controlled owner puts
    * the same `nextItem` into its state — or `'reject'` to revert. The event is
    * frozen; re-key the accepted value in place (`event.fileDiff.cacheKey =
-   * '…'`) before accepting.
+   * '…'`) before accepting. The event contains the detached editor with its
+   * final pre-detach state.
    */
   onItemEditComplete?<TMode extends CodeViewMode>(
     event: CodeViewItemEditCompleteEventMap<LAnnotation>[TMode],
@@ -1189,6 +1190,7 @@ export class CodeView<LAnnotation = undefined> {
     for (const { record, instance } of teardownSessions) {
       try {
         record.editor.cleanUp('complete');
+        instance?.completeEditSession(record.editor, 'discard');
         instance?.cleanUp();
       } catch (error) {
         if (!failed) {

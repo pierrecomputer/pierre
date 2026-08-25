@@ -6,7 +6,6 @@ import type {
   DiffsEditableComponent,
   DiffsEditor,
   DiffsHighlighter,
-  EditorState,
   FileContents,
   HighlightedToken,
   RenderRange,
@@ -40,7 +39,6 @@ class TestEditableComponent implements DiffsEditableComponent<undefined> {
   editorViewport: HTMLElement | Document | undefined;
   restoredCodeScrollLefts: number[] = [];
   stateRestoreError: Error | undefined;
-  detachedState: EditorState | undefined;
 
   constructor(private file: FileContents) {
     this.#renderShadowDom();
@@ -105,15 +103,15 @@ class TestEditableComponent implements DiffsEditableComponent<undefined> {
 
   getAnnotationSlotName = getLineAnnotationName;
 
-  completeEditSession(): void {}
+  completeEditSession(
+    _editor: DiffsEditor<undefined>,
+    _mode: 'install' | 'discard'
+  ): void {}
 
-  attachEditor(
-    editor: DiffsEditor<undefined>
-  ): (_recycle: boolean, _state: EditorState) => void {
+  attachEditor(editor: DiffsEditor<undefined>): (_recycle: boolean) => void {
     this.#editor = editor;
     this.#syncRenderView();
-    return (_recycle: boolean, state: EditorState) => {
-      this.detachedState = state;
+    return (_recycle: boolean) => {
       this.#editor = undefined;
     };
   }
@@ -197,7 +195,8 @@ describe('Editor state', () => {
         view: { scrollLeft: 18, scrollTop: 36 },
       });
       firstEditor.cleanUp('discard');
-      Object.assign(first.detachedState!.selections![0].start, {
+      const detachedState = firstEditor.getState();
+      Object.assign(detachedState.selections![0].start, {
         character: 0,
       });
       first.cleanUp();
@@ -261,6 +260,16 @@ describe('Editor state', () => {
       expect(viewport.scrollTop).toBe(48);
 
       editor.cleanUp('recycle');
+      expect(editor.getState()).toEqual({
+        selections: [
+          {
+            start: { line: 1, character: 2 },
+            end: { line: 1, character: 2 },
+            direction: 0,
+          },
+        ],
+        view: { scrollLeft: 24, scrollTop: 48 },
+      });
       component.codeScrollLeft = 8;
       viewport.scrollTop = 16;
       editor.edit(component);

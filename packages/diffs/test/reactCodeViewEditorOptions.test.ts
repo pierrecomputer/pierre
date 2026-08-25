@@ -94,8 +94,9 @@ function createTrackedEditor(
       file: FileContents,
       lineAnnotations?: DiffLineAnnotation<undefined>[]
     ) {
-      options.onChange?.({ changes: [], file, lineAnnotations, state: {} });
+      options.onChange?.({ changes: [], editor, file, lineAnnotations });
     },
+    getState: () => ({}),
     edit(instance: DiffsEditableComponent<undefined>) {
       editor.edits.push(instance);
       detach = instance.attachEditor(editor);
@@ -106,7 +107,7 @@ function createTrackedEditor(
       // session on the attached instance.
       return () => {
         editor.cleanUp('complete');
-        instance.completeEditSession();
+        instance.completeEditSession(editor, 'install');
       };
     },
     cleanUp(reason: 'discard' | 'recycle' | 'complete' = 'discard') {
@@ -115,7 +116,7 @@ function createTrackedEditor(
       } else {
         editor.fullCleanUps += 1;
       }
-      detach?.(reason === 'recycle', {});
+      detach?.(reason === 'recycle');
       detach = undefined;
     },
     __captureFocusForDOMReplacement() {},
@@ -163,7 +164,7 @@ function createEditorHarness(attachmentError?: Error) {
     receivedEditHistoryKeys.push(editHistoryKey);
     const editor = createTrackedEditor(options, attachmentError);
     editors.push(editor);
-    return editor;
+    return editor as unknown as DiffsEditor<undefined>;
   };
   return {
     createEditor,
@@ -450,10 +451,12 @@ describe('React CodeView editor factory', () => {
       expect(onItemEditChange.mock.calls[0]?.[0].file.contents).toBe(
         'edited a'
       );
+      expect(onItemEditChange.mock.calls[0]?.[0].editor).toBe(editors[0]);
       expect(onItemEditChange.mock.calls[1]?.[1].id).toBe('b');
       expect(onItemEditChange.mock.calls[1]?.[0].file.contents).toBe(
         'edited b'
       );
+      expect(onItemEditChange.mock.calls[1]?.[0].editor).toBe(editors[1]);
     } finally {
       await unmountRoot(root);
       cleanupActEnvironment();
@@ -534,7 +537,8 @@ describe('React CodeView editor factory', () => {
     const onItemEditComplete = mock(
       (
         _event: ItemCompletionEvent,
-        _item: CodeViewItem<undefined>
+        _item: CodeViewItem<undefined>,
+        _nextItem: CodeViewItem<undefined>
       ): EditCompletionDecision => 'reject'
     );
     const editOffItem = makeFileItem('edit-off', {
@@ -632,7 +636,8 @@ describe('React CodeView editor factory', () => {
     const onItemEditComplete = mock(
       (
         _event: ItemCompletionEvent,
-        _item: CodeViewItem<undefined>
+        _item: CodeViewItem<undefined>,
+        _nextItem: CodeViewItem<undefined>
       ): EditCompletionDecision => 'reject'
     );
     const changedItem = makeFileItem('changed', { edit: true, lineCount: 2 });
@@ -671,6 +676,7 @@ describe('React CodeView editor factory', () => {
       expect(editors.every((editor) => editor.fullCleanUps > 0)).toBe(true);
       expect(onItemEditComplete).toHaveBeenCalledTimes(1);
       expect(onItemEditComplete.mock.calls[0]?.[1]).toBe(changedItem);
+      expect(onItemEditComplete.mock.calls[0]?.[0].editor).toBe(changedEditor!);
       expect(fileEventContents(onItemEditComplete.mock.calls[0]?.[0])).toBe(
         'changed contents'
       );

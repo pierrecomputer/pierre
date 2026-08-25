@@ -45,7 +45,7 @@ function createEditorStub(): DiffsEditor<undefined> {
     __getDocumentContents: () => undefined,
     __postponeBgTokenizeToNextFrame() {},
     __syncRenderView() {},
-  };
+  } as unknown as DiffsEditor<undefined>;
 }
 
 function createDiff(name: string, marker: string): FileDiffMetadata {
@@ -174,7 +174,7 @@ test('a dirty unkeyed session remains authoritative when the same object is re-p
     expect(externalDiff.additionLines).toBe(externalAdditionLines);
     expect(externalDiff.additionLines.join('')).toContain('firstMarker');
     expect(externalDiff.additionLines.join('')).not.toContain('editedMarker');
-    detach(false, {});
+    detach(false);
   } finally {
     instance.cleanUp();
     cleanup();

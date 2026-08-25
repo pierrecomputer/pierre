@@ -4,19 +4,12 @@ Mount one `EditProvider` above the editable surfaces. Its factory receives the
 document kind, the surface's creation-time `editorOptions`, and an optional
 `editHistoryKey`. Each active surface or `CodeView` item owns its editor.
 
-Pass `editHistoryKey` to opt into bounded in-memory draft and undo/redo
-retention across editor instances. Choose this key explicitly; it is not read
-from or derived from a file or diff `cacheKey`. The same active key cannot be
-shared by two editors of the same document kind.
-
-Selection and view state remain application-owned. Capture `event.state` from
-change or completion events and pass it back through
-`editorOptions.initialState` when creating a later editor. `initialState` is
-creation-time state consumed once on the first successful attach. Captured
-scroll state exists only for virtualized editor-owned viewports, not page or
-ancestor scrolling. Neither callback runs for a selection-only or scroll-only
-session, so read `editor.getState()` before toggling edit off or unmounting when
-those sessions must be saved.
+Pass `editHistoryKey` to opt into bounded in-memory retention of the draft,
+undo/redo history, selections, and editor-owned view state across editor
+instances. Choose this key explicitly; it is not read from or derived from a
+file or diff `cacheKey`. The same active key cannot be shared by two editors of
+the same document kind. Applications do not need to synchronize editor state
+through change callbacks.
 
 ## Contents
 
@@ -41,10 +34,9 @@ import {
   type EditorChangeEvent,
   type EditorDocumentKind,
   type EditorOptions,
-  type EditorState,
 } from '@pierre/diffs/edit';
 import { EditProvider, MultiFileDiff, Virtualizer } from '@pierre/diffs/react';
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 
 const oldFile: FileContents = {
   name: 'src/value.ts',
@@ -70,33 +62,26 @@ function createEditor<LAnnotation>(
 export function EditableDiff() {
   const [edit, setEdit] = useState(false);
   const [newFile, setNewFile] = useState(initialNewFile);
-  const draftRef = useRef(newFile);
-  const savedStateRef = useRef<EditorState | undefined>(undefined);
   const editorRef = useRef<Editor<undefined> | null>(null);
-  const editorOptions: EditorOptions<undefined> = {
-    initialState: savedStateRef.current,
-    onAttach(editor) {
-      editorRef.current = editor;
-    },
-  };
+  const editorOptions = useMemo<EditorOptions<undefined>>(
+    () => ({
+      onAttach(editor) {
+        editorRef.current = editor;
+      },
+    }),
+    []
+  );
 
   function toggleEdit() {
-    if (edit && editorRef.current != null) {
-      savedStateRef.current = editorRef.current.getState();
-    }
     setEdit((value) => !value);
   }
 
   function handleEditChange(event: EditorChangeEvent<undefined, 'diff'>) {
-    draftRef.current = event.file;
-    savedStateRef.current = event.state;
     saveDraft(event.file);
   }
 
   function handleEditComplete(event: FileDiffEditCompleteEvent<undefined>) {
-    savedStateRef.current = event.state;
     if (event.newFile != null) {
-      draftRef.current = event.newFile;
       setNewFile(event.newFile);
     }
     return 'accept' as const;
@@ -152,8 +137,9 @@ annotation UI state by a stable metadata ID instead of a line number.
 
 Wrap `CodeView` in the same `EditProvider`. Set `edit: true` on an item and
 increment its `version`. Pass shared creation options through the `CodeView`
-`editorOptions` prop. Use `getEditHistoryKey(item)` for opt-in draft and history
-retention; it is not inferred from the item's file or diff `cacheKey`.
+`editorOptions` prop. Use `getEditHistoryKey(item)` for opt-in draft, history,
+selection, and view-state retention; it is not inferred from the item's file or
+diff `cacheKey`.
 
 Use `onItemEditChange` for live contents and annotation changes. Use
 `onItemEditComplete` to accept or reject the completed edit. If you use keyed
@@ -163,12 +149,10 @@ then return `'accept'`; acceptance during removal or teardown does not reinsert
 it. `CodeView` builds `nextItem` with `edit: false` and an incremented
 `version`; the render `cacheKey` remains separate from `editHistoryKey`.
 
-`CodeViewHandle.getEditor(id)` returns the public `DiffsEditor` lifecycle type.
-Retain or narrow the concrete `Editor` created by the provider factory for fully
-typed imperative commands. The item editor keeps its active document and history
-when virtualization or collapse removes the item from the rendered window.
-`getEditHistoryKey` extends that retention to later editor instances after the
-edit session ends.
+`CodeViewHandle.getEditor(id)` returns the current `DiffsEditor` handle. The
+item editor keeps its active document and history when virtualization or
+collapse removes the item from the rendered window. `getEditHistoryKey` extends
+that retention to later editor instances after the edit session ends.
 
 When a worker pool highlights an editable surface, set
 `useTokenTransformer: true` in the worker `highlighterOptions`.

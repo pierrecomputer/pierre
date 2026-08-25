@@ -18,6 +18,7 @@ import type {
   DiffsEditor,
   DiffsTextDocument,
   EditorChangeEvent,
+  EditorState,
   FileContents,
   FileDiffMetadata,
   HighlightedToken,
@@ -58,7 +59,7 @@ function createEditorStub(): DiffsEditor<undefined> {
     __getDocumentContents: () => undefined,
     __postponeBgTokenizeToNextFrame() {},
     __syncRenderView() {},
-  };
+  } as unknown as DiffsEditor<undefined>;
 }
 
 function createExternalDiff(): FileDiffMetadata {
@@ -157,7 +158,7 @@ async function createAttachedFixture(): Promise<{
       dom.cleanup();
     },
     detach(recycle = false) {
-      detachEditor(recycle, {});
+      detachEditor(recycle);
     },
     externalDiff,
     fileContainer,
@@ -673,6 +674,7 @@ describe('completeEditSession', () => {
       },
       cleanup() {
         editor.cleanUp();
+        instance.completeEditSession(editor, 'install');
         instance.cleanUp();
         dom.cleanup();
       },
@@ -708,9 +710,11 @@ describe('completeEditSession', () => {
 
   test('a changed session delivers a recomputed detached diff and complete files', async () => {
     const events: FileDiffEditCompleteEvent<undefined>[] = [];
+    let completionEditor: DiffsEditor<undefined> | undefined;
     const fixture = await createCompletionFixture({
       onEditComplete(event) {
         events.push(event);
+        completionEditor = event.editor;
         return 'reject';
       },
     });
@@ -730,9 +734,20 @@ describe('completeEditSession', () => {
         throw new Error('Expected an active session diff');
       }
       fixture.detach();
-      instance.completeEditSession();
+      instance.completeEditSession(editor, 'install');
 
       expect(events).toHaveLength(1);
+      expect(completionEditor).toBe(editor);
+      expect(completionEditor?.getState()).toEqual({
+        selections: [
+          {
+            start: { line: 1, character: 6 },
+            end: { line: 1, character: 6 },
+            direction: 0,
+          },
+        ],
+        view: undefined,
+      });
       const event = events[0];
       expect(event.originalFileDiff).toBe(externalDiff);
       expect(event.fileDiff.cacheKey).toBeUndefined();
@@ -763,16 +778,6 @@ describe('completeEditSession', () => {
         name: 'session.ts',
         contents: 'alpha\nedited value\nomega\n',
       });
-      expect(event.state).toEqual({
-        selections: [
-          {
-            start: { line: 1, character: 6 },
-            end: { line: 1, character: 6 },
-            direction: 0,
-          },
-        ],
-        view: undefined,
-      });
       expect(Object.isFrozen(event)).toBe(true);
       expectExternalDiffUnchanged(instance, externalDiff, externalBefore);
     } finally {
@@ -797,7 +802,7 @@ describe('completeEditSession', () => {
       const { editor, instance } = fixture;
       insertLinesAtStart(editor);
       fixture.detach();
-      instance.completeEditSession();
+      instance.completeEditSession(editor, 'install');
 
       expect(events).toHaveLength(1);
       const event = events[0];
@@ -813,7 +818,7 @@ describe('completeEditSession', () => {
       ]);
 
       // Settled: calling again does not fire the handler a second time.
-      instance.completeEditSession();
+      instance.completeEditSession(editor, 'install');
       expect(events).toHaveLength(1);
     } finally {
       fixture.cleanup();
@@ -852,7 +857,7 @@ describe('completeEditSession', () => {
 
       // The changed diff reverts, but the added annotation is kept.
       fixture.detach();
-      instance.completeEditSession();
+      instance.completeEditSession(editor, 'install');
       expect(instance.getLatestAnnotationsForTest()).toBe(added);
     } finally {
       fixture.cleanup();
@@ -875,7 +880,7 @@ describe('completeEditSession', () => {
         { side: 'additions', lineNumber: 4 },
       ]);
       fixture.detach();
-      instance.completeEditSession();
+      instance.completeEditSession(editor, 'install');
 
       expect(instance.fileDiff).toBe(externalDiff);
       expect(instance.getLatestDiffForTest()).toBe(externalDiff);
@@ -897,7 +902,7 @@ describe('completeEditSession', () => {
       const { editor, externalDiff, instance } = fixture;
       replaceDocument(editor, 'alpha\nedited value\nomega\n');
       fixture.detach();
-      instance.completeEditSession();
+      instance.completeEditSession(editor, 'install');
 
       expect(instance.fileDiff).toBe(externalDiff);
       expect(instance.getLatestDiffForTest()).toBe(externalDiff);
@@ -912,7 +917,7 @@ describe('completeEditSession', () => {
       const { editor, externalDiff, instance } = fixture;
       replaceDocument(editor, 'alpha\nedited value\nomega\n');
       fixture.detach();
-      instance.completeEditSession();
+      instance.completeEditSession(editor, 'install');
 
       expect(instance.fileDiff).toBe(externalDiff);
       expect(instance.getLatestDiffForTest()).toBe(externalDiff);
@@ -932,7 +937,7 @@ describe('completeEditSession', () => {
       const { editor, externalDiff, instance } = fixture;
       replaceDocument(editor, 'alpha\nedited value\nomega\n');
       fixture.detach();
-      expect(() => instance.completeEditSession()).toThrow(
+      expect(() => instance.completeEditSession(editor, 'install')).toThrow(
         'must not reuse the replaced diff cacheKey'
       );
 
@@ -953,7 +958,9 @@ describe('completeEditSession', () => {
       const { editor, externalDiff, instance } = fixture;
       replaceDocument(editor, 'alpha\nedited value\nomega\n');
       fixture.detach();
-      expect(() => instance.completeEditSession()).toThrow('owner exploded');
+      expect(() => instance.completeEditSession(editor, 'install')).toThrow(
+        'owner exploded'
+      );
 
       expect(instance.fileDiff).toBe(externalDiff);
       expect(instance.getLatestDiffForTest()).toBe(externalDiff);
@@ -986,7 +993,7 @@ describe('completeEditSession', () => {
         lineAnnotations: written,
       });
       fixture.detach();
-      instance.completeEditSession();
+      instance.completeEditSession(fixture.editor, 'install');
 
       expect(events).toHaveLength(0);
       expect(instance.fileDiff).toBe(externalDiff);
@@ -1011,7 +1018,7 @@ describe('completeEditSession', () => {
       editor.undo();
       expect(editor.getText()).toBe(EXTERNAL_CONTENTS);
       fixture.detach();
-      instance.completeEditSession();
+      instance.completeEditSession(editor, 'install');
 
       expect(events).toHaveLength(0);
       expect(instance.fileDiff).toBe(externalDiff);
@@ -1034,7 +1041,7 @@ describe('completeEditSession', () => {
       replaceDocument(editor, 'alpha\nedited value\nomega\n');
       fixture.detach();
       const changesBefore = changeEvents.length;
-      instance.completeEditSession();
+      instance.completeEditSession(editor, 'install');
       expect(changeEvents.length).toBe(changesBefore);
     } finally {
       fixture.cleanup();
@@ -1046,7 +1053,7 @@ describe('completeEditSession', () => {
     try {
       const { editor, instance } = fixture;
       replaceDocument(editor, 'alpha\nedited value\nomega\n');
-      expect(() => instance.completeEditSession()).toThrow(
+      expect(() => instance.completeEditSession(editor, 'install')).toThrow(
         'detach the editor before completing the session'
       );
     } finally {
@@ -1085,7 +1092,7 @@ describe('completeEditSession', () => {
       });
       replaceDocument(editor, 'alpha\nedited value\nomega\n');
       editor.cleanUp();
-      instance.completeEditSession();
+      instance.completeEditSession(editor, 'install');
 
       expect(events).toHaveLength(1);
       const event = events[0];
@@ -1140,7 +1147,7 @@ describe('completeEditSession', () => {
       const { editor, instance } = fixture;
       replaceDocument(editor, 'alpha\nedited value\nomega\n');
       fixture.detach();
-      instance.completeEditSession();
+      instance.completeEditSession(editor, 'install');
 
       expect(events).toHaveLength(1);
       const event = events[0];
@@ -1198,7 +1205,7 @@ describe('completeEditSession', () => {
       expect(partial.isPartial).toBe(false);
       replaceDocument(editor, 'keep 1\nedited value\nkeep 3\nkeep 4\n');
       fixture.detach();
-      instance.completeEditSession();
+      instance.completeEditSession(editor, 'install');
 
       expect(events).toHaveLength(1);
       const event = events[0];
@@ -1210,6 +1217,47 @@ describe('completeEditSession', () => {
       // Rejection restores the external diff as hydrated in place.
       expect(instance.fileDiff).toBe(partial);
       expect(instance.fileDiff?.isPartial).toBe(false);
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('a recycled session keeps final state through later component cleanup', async () => {
+    const completionStates: EditorState[] = [];
+    const fixture = await createCompletionFixture({
+      onEditComplete(event) {
+        completionStates.push(event.editor.getState());
+        return 'reject';
+      },
+    });
+    try {
+      const { editor, instance } = fixture;
+      replaceDocument(editor, 'alpha\nedited value\nomega\n');
+      editor.setSelections([
+        {
+          start: { line: 1, character: 6 },
+          end: { line: 1, character: 6 },
+          direction: 'none',
+        },
+      ]);
+      editor.cleanUp('recycle');
+      instance.cleanUp(true);
+
+      expect(completionStates).toHaveLength(0);
+      expect(editor.getState()).toEqual({
+        selections: [
+          {
+            start: { line: 1, character: 6 },
+            end: { line: 1, character: 6 },
+            direction: 0,
+          },
+        ],
+        view: undefined,
+      });
+
+      instance.completeEditSession(editor, 'install');
+      instance.cleanUp();
+      expect(completionStates).toEqual([editor.getState()]);
     } finally {
       fixture.cleanup();
     }
@@ -1307,6 +1355,7 @@ describe('editor session lifecycle', () => {
       editor.cleanUp();
       expect(events).toHaveLength(0);
 
+      instance.completeEditSession(editor, 'install');
       instance.cleanUp();
       expect(events).toHaveLength(1);
       expect(events[0].fileDiff.additionLines.join('')).toBe(

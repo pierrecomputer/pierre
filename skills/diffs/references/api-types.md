@@ -104,17 +104,16 @@ callback that `CodeView` uses to emit `onItemEditChange(event, item)`; it does
 not add an item ID. A `CodeViewOptions.createEditor` factory also receives the
 optional `editHistoryKey` returned by `getEditHistoryKey(item)` as its third
 argument. Forward that key separately to the editor constructor. It retains the
-editable draft and undo/redo history and is not a file or diff render
-`cacheKey`.
+editable draft, undo/redo history, selections, and editor-owned view state. It
+is not a file or diff render `cacheKey`.
 
 `onItemEditComplete(event, item, nextItem)` must return `'accept'` to accept the
 completed item or `'reject'` to restore the original while the item remains
 present; a missing callback rejects. During removal or teardown, neither
 decision reinserts the item. Controlled owners must put the supplied `nextItem`
-into their item state when accepting an item that should remain. Change and
-completion events expose selections and editor-owned viewport state through
-`event.state`. If the item uses keyed render caching, assigning a fresh
-`cacheKey` to the accepted event file or diff invalidates that cache.
+into their item state when accepting an item that should remain. If the item
+uses keyed render caching, assigning a fresh `cacheKey` to the accepted event
+file or diff invalidates that cache.
 
 ## Lines, hunks, and render state
 
@@ -178,7 +177,7 @@ completion events expose selections and editor-owned viewport state through
 | `EditorSelection`        | Adds direction to a range.                                  |
 | `EditorState`            | Holds editor selections and view state.                     |
 | `EditorChange`           | Describes one normalized document edit.                     |
-| `EditorChangeEvent`      | Reports changes, current document data, and editor state.   |
+| `EditorChangeEvent`      | Reports normalized changes and current document data.       |
 
 ## Shiki and diff types
 

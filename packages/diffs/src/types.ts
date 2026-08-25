@@ -1099,12 +1099,11 @@ export interface DiffsEditableComponent<
   /**
    * Attach an editor to this component. The returned detach closure receives
    * `recycle: true` for a temporary unmount, such as collapse or
-   * virtualization (the session continues on remount). The detach also receives
-   * the editor state captured before its DOM is removed.
+   * virtualization (the session continues on remount).
    */
   attachEditor: (
     editor: DiffsEditor<LAnnotation>
-  ) => (recycle: boolean, state: EditorState) => void;
+  ) => (recycle: boolean) => void;
   /**
    * Deliver `EditorChangeEvent` to the component's owner. The attached
    * editor calls this with the same event object it reports through its own
@@ -1114,9 +1113,15 @@ export interface DiffsEditableComponent<
   /**
    * End the edit session and settle which external value the component
    * renders, running the component's `onEditComplete` when the session
-   * changed the contents. Does nothing once no session exists.
+   * changed the contents. The caller supplies the editor that owns the
+   * session, which may already be detached. `install` applies an accepted
+   * result; `discard` still runs completion but never installs session output.
+   * Does nothing once no session exists.
    */
-  completeEditSession(): void;
+  completeEditSession(
+    editor: DiffsEditor<LAnnotation>,
+    mode: 'install' | 'discard'
+  ): void;
   /**
    * Resolve the shadow-DOM slot name for one of this component's line
    * annotations. While an edit session is active, the name each annotation
@@ -1192,6 +1197,7 @@ export type SyncRenderViewProps<LAnnotation> =
   | SyncDiffRenderViewProps<LAnnotation>;
 
 export interface DiffsEditor<LAnnotation> {
+  getState(): EditorState;
   __postponeBgTokenizeToNextFrame(): void;
   /** @internal Capture focus intent before replacing the editable view. */
   __captureFocusForDOMReplacement(): void;
@@ -1295,15 +1301,14 @@ export interface EditorChange extends ResolvedTextEdit {
   range: Range;
 }
 
-/** The document state and normalized edits reported after an editor change. */
+/** The document and normalized edits reported after an editor change. */
 export interface EditorChangeEvent<LAnnotation, TMode extends 'file' | 'diff'> {
   changes: EditorChange[];
   file: FileContents;
+  editor: DiffsEditor<LAnnotation>;
   lineAnnotations?: TMode extends 'file'
     ? LineAnnotation<LAnnotation>[]
     : DiffLineAnnotation<LAnnotation>[];
-  /** Selections and editor-owned viewport offsets after the change. */
-  state: EditorState;
 }
 
 /**

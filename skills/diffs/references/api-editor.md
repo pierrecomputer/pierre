@@ -9,7 +9,7 @@ editor APIs used by common integrations.
 | -------------------- | ----- | -------------------------------------------------------- |
 | `Editor`             | Class | Adds text editing to a `File` or `FileDiff` instance.    |
 | `EditorChange`       | Type  | Describes one normalized editor change.                  |
-| `EditorChangeEvent`  | Type  | Provides normalized edits and current document state.    |
+| `EditorChangeEvent`  | Type  | Provides normalized edits and the current document.      |
 | `EditorCommand`      | Type  | Names an editor command.                                 |
 | `EditorDocumentKind` | Type  | Selects a `file` or `file-diff` editor surface.          |
 | `EditorFocusOptions` | Type  | Selects a focus target and scroll behavior.              |
@@ -40,52 +40,53 @@ editor APIs used by common integrations.
 | `clipboard`              | Supplies a text clipboard reader.                        |
 | `renderSelectionAction`  | Produces the selection action element.                   |
 | `onAttach`               | Receives the editor and attached surface.                |
-| `onChange`               | Receives the complete `EditorChangeEvent`.               |
+| `onChange`               | Receives the event, including its editor instance.       |
 | `onFocus`                | Runs after the editor gains focus.                       |
 | `onBlur`                 | Runs after the editor loses focus.                       |
 
-`initialState` is captured when the `Editor` is created and consumed after its
-first successful attach. Updating options later does not queue it again. State
-from change or completion events belongs to the application; pass it as
-`initialState` to a newly created editor, or call `setState` on an attached one.
-`state.view` is captured only for a virtualized, editor-owned element viewport;
-the editor does not capture page or ancestor scrolling. Change and completion
-events require document changes, so call `getState()` before teardown when a
-selection-only or scroll-only session must be saved.
+Use `editHistoryKey` for ordinary in-memory restoration; it retains the draft,
+undo/redo history, selections, and editor-owned view state without an
+application synchronization loop. Use `getState()` and `initialState` only when
+selection and view state must outlive that registry, such as browser or backend
+persistence. `initialState` is captured when the `Editor` is created, consumed
+after its first successful attach, and not queued again by later option updates.
+`state.view` covers only a virtualized, editor-owned element viewport, not page
+or ancestor scrolling. Call `getState()` at the external persistence boundary to
+include selection-only and scroll-only sessions.
 
 ## `Editor` members
 
-| Member                                                   | Purpose                                                   |
-| -------------------------------------------------------- | --------------------------------------------------------- |
-| `new Editor(kind, options?, editHistoryKey?)`            | Creates an editor and optionally opts into keyed history. |
-| `Editor.disposeFile(editHistoryKey)`                     | Disposes one retained file draft and history.             |
-| `Editor.disposeFileDiff(editHistoryKey)`                 | Disposes one retained diff draft and history.             |
-| `Editor.clearDocuments()`                                | Disposes all retained drafts and histories.               |
-| `Editor.setDocumentRegistryCapacity(capacity)`           | Sets the process-wide capacity for each surface kind.     |
-| `edit(instance)`                                         | Attaches and returns the normal completion disposer.      |
-| `setOptions(options)`                                    | Merges editor options.                                    |
-| `applyEdits(edits, updateHistory?)`                      | Applies programmatic text edits.                          |
-| `canUndo`                                                | Reports whether undo has an entry.                        |
-| `canRedo`                                                | Reports whether redo has an entry.                        |
-| `undo()`                                                 | Reverts the latest edit.                                  |
-| `redo()`                                                 | Reapplies the latest reverted edit.                       |
-| `getFile()`                                              | Gets the current file contents.                           |
-| `getText()`                                              | Gets the current text.                                    |
-| `getState()`                                             | Gets selections and editor-owned view state.              |
-| `setState(state)`                                        | Sets selections and editor-owned view state.              |
-| `setSelections(selections)`                              | Sets directed selection ranges.                           |
-| `setMarkers(markers)`                                    | Sets diagnostic markers.                                  |
-| `focus(options?)`                                        | Focuses the editor.                                       |
-| `blur()`                                                 | Removes editor focus.                                     |
-| `cleanUp(reason?: 'discard' \| 'recycle' \| 'complete')` | Detaches without running the completion callback.         |
+| Member                                                   | Purpose                                                |
+| -------------------------------------------------------- | ------------------------------------------------------ |
+| `new Editor(kind, options?, editHistoryKey?)`            | Creates an editor with optional keyed state retention. |
+| `Editor.disposeFile(editHistoryKey)`                     | Disposes one retained file editor state.               |
+| `Editor.disposeFileDiff(editHistoryKey)`                 | Disposes one retained diff editor state.               |
+| `Editor.clearDocuments()`                                | Disposes all retained editor states.                   |
+| `Editor.setDocumentRegistryCapacity(capacity)`           | Sets the process-wide capacity for each surface kind.  |
+| `edit(instance)`                                         | Attaches and returns the normal completion disposer.   |
+| `setOptions(options)`                                    | Merges editor options.                                 |
+| `applyEdits(edits, updateHistory?)`                      | Applies programmatic text edits.                       |
+| `canUndo`                                                | Reports whether undo has an entry.                     |
+| `canRedo`                                                | Reports whether redo has an entry.                     |
+| `undo()`                                                 | Reverts the latest edit.                               |
+| `redo()`                                                 | Reapplies the latest reverted edit.                    |
+| `getFile()`                                              | Gets the current file contents.                        |
+| `getText()`                                              | Gets the current text.                                 |
+| `getState()`                                             | Gets selections and editor-owned view state.           |
+| `setState(state)`                                        | Sets selections and editor-owned view state.           |
+| `setSelections(selections)`                              | Sets directed selection ranges.                        |
+| `setMarkers(markers)`                                    | Sets diagnostic markers.                               |
+| `focus(options?)`                                        | Focuses the editor.                                    |
+| `blur()`                                                 | Removes editor focus.                                  |
+| `cleanUp(reason?: 'discard' \| 'recycle' \| 'complete')` | Detaches without running the completion callback.      |
 
 `editHistoryKey` is an explicit opt-in key, not a file or diff `cacheKey` and
 not derived from one. Editors of the same document kind can use it to resume a
-retained draft and undo/redo history in memory. Retention uses independent,
-least-recently-used file and file-diff registries with a default capacity of 100
-each. A retained diff can resume only against the same old-side baseline, so
-scope its key accordingly. Use the static disposal methods when a retained edit
-is no longer needed.
+retained draft, undo/redo history, selections, and editor-owned view state in
+memory. Retention uses independent, least-recently-used file and file-diff
+registries with a default capacity of 100 each. A retained diff can resume only
+against the same old-side baseline, so scope its key accordingly. Use the static
+disposal methods when retained state is no longer needed.
 
 Call the disposer returned by `edit(instance)` for the normal session-ending
 path; it detaches and then runs the surface's completion boundary. `cleanUp()`

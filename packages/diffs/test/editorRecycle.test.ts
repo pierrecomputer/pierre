@@ -154,7 +154,10 @@ class TestEditableComponent implements DiffsEditableComponent<undefined> {
 
   getAnnotationSlotName = getLineAnnotationName;
 
-  completeEditSession(): void {}
+  completeEditSession(
+    _editor: DiffsEditor<undefined>,
+    _mode: 'install' | 'discard'
+  ): void {}
 
   attachEditor(editor: DiffsEditor<undefined>): () => void {
     const retainedDocument = editor.__getDocumentContents();

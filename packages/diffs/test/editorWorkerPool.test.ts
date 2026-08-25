@@ -1450,7 +1450,7 @@ describe('File component edit session', () => {
 
       // The private session is keyless, so the post-edit worker render cannot
       // reuse the external file's cached result.
-      detach(false, {});
+      detach(false);
       instance.rerender();
       expect(fileContainer.shadowRoot?.innerHTML ?? '').toContain('data-char');
       await waitFor(() => expect(worker.fileRequestCount).toBe(2));
@@ -1601,7 +1601,7 @@ describe('rendering when an editor attaches', () => {
           lineBefore
       ).toBe(true);
       expect(worker.fileRequestCount).toBe(1);
-      detach(false, {});
+      detach(false);
       instance.cleanUp();
     } finally {
       manager.terminate();
@@ -1679,7 +1679,7 @@ describe('rendering when an editor attaches', () => {
         'data-char'
       );
       expect(worker.fileRequestCount).toBe(2);
-      detach(false, {});
+      detach(false);
       instance.cleanUp();
       sibling.cleanUp();
     } finally {
@@ -1731,7 +1731,7 @@ describe('rendering when an editor attaches', () => {
         'data-pool-result'
       );
       expect(worker.fileRequestCount).toBe(1);
-      detach(false, {});
+      detach(false);
       instance.cleanUp();
     } finally {
       manager.terminate();
@@ -1879,7 +1879,7 @@ describe('rendering when an editor attaches', () => {
         fileContainer.shadowRoot?.querySelector('[data-line="1"]') ===
           lineBefore
       ).toBe(true);
-      detach(false, {});
+      detach(false);
       instance.cleanUp();
     } finally {
       dom.cleanup();
@@ -1925,7 +1925,7 @@ describe('rendering when an editor attaches', () => {
           onTokenClick: () => undefined,
         }).useTokenTransformer
       ).toBe(true);
-      detach(false, {});
+      detach(false);
       instance.cleanUp();
     } finally {
       dom.cleanup();
