@@ -215,7 +215,7 @@ describe('virtualized editor viewport', () => {
     }
   });
 
-  test('hydrates initial state into an owned virtualized viewport', async () => {
+  test('hydrates horizontal state without moving the shared viewport', async () => {
     const dom = installDom();
     const root = document.createElement('div');
     const virtualizer = createSimpleVirtualizer(root);
@@ -243,8 +243,11 @@ describe('virtualized editor viewport', () => {
 
     try {
       const code = await renderFile(file, root);
+      root.scrollTop = 12;
       editor.edit(file);
-      await waitFor(() => code.scrollLeft === 24 && root.scrollTop === 48);
+      await waitFor(() => code.scrollLeft === 24);
+
+      expect(root.scrollTop).toBe(12);
 
       expect(editor.getSurfaceState()).toEqual({
         selections: [
@@ -254,7 +257,7 @@ describe('virtualized editor viewport', () => {
             direction: 0,
           },
         ],
-        view: { scrollLeft: 24, scrollTop: 48 },
+        view: { scrollLeft: 24 },
       });
     } finally {
       editor.cleanUp();
@@ -263,7 +266,7 @@ describe('virtualized editor viewport', () => {
     }
   });
 
-  test('broadcasts owned viewport state on change and completion', async () => {
+  test('broadcasts local state without shared vertical position', async () => {
     const dom = installDom();
     const root = document.createElement('div');
     const virtualizer = createSimpleVirtualizer(root);
@@ -329,7 +332,7 @@ describe('virtualized editor viewport', () => {
             direction: 0,
           },
         ],
-        view: { scrollLeft: 24, scrollTop: 48 },
+        view: { scrollLeft: 24 },
       });
 
       editor.setSelections([
@@ -352,7 +355,7 @@ describe('virtualized editor viewport', () => {
             direction: 0,
           },
         ],
-        view: { scrollLeft: 32, scrollTop: 64 },
+        view: { scrollLeft: 32 },
       });
       expect(Object.isFrozen(completionEvents[0])).toBe(true);
       expect(componentStates[0]?.selections?.[0]?.start.character).toBe(6);

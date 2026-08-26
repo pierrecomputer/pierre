@@ -1039,7 +1039,7 @@ describe('CodeView item edit mode', () => {
     }
   });
 
-  test('a real editor preserves final state when a recycled item completes', async () => {
+  test('a real editor restores horizontal state without moving the shared viewport', async () => {
     const { cleanup } = installDom();
     const completions: FileEditCompleteEvent<undefined>[] = [];
     const completionStates: EditorState[] = [];
@@ -1095,7 +1095,7 @@ describe('CodeView item edit mode', () => {
             direction: 0,
           },
         ],
-        view: { scrollLeft: 24, scrollTop: 48 },
+        view: { scrollLeft: 24 },
       };
 
       await applyItemUpdate(viewer, {
@@ -1105,11 +1105,23 @@ describe('CodeView item edit mode', () => {
       });
       expect(completions).toHaveLength(0);
       expect(viewer.getEditor(item.id)?.getSurfaceState()).toEqual(finalState);
+      root.scrollTop = 72;
+      await applyItemUpdate(viewer, {
+        ...item,
+        collapsed: false,
+        version: 2,
+      });
+      const remountedCode = viewer
+        .getRenderedItems()[0]
+        ?.element.shadowRoot?.querySelector('[data-code]');
+      expect(remountedCode).toBeInstanceOf(HTMLElement);
+      await waitFor(() => (remountedCode as HTMLElement).scrollLeft === 24);
+      expect(root.scrollTop).toBe(72);
       await applyItemUpdate(viewer, {
         ...item,
         collapsed: true,
         edit: false,
-        version: 2,
+        version: 3,
       });
 
       expect(completions).toHaveLength(1);

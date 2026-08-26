@@ -490,7 +490,7 @@ describe('component onEditChange', () => {
             direction: 0,
           },
         ],
-        view: undefined,
+        view: { scrollLeft: 0 },
       });
     } finally {
       editor.cleanUp();
@@ -974,7 +974,7 @@ describe('completeEditSession', () => {
             direction: 0,
           },
         ],
-        view: undefined,
+        view: { scrollLeft: 0 },
       });
       const event = events[0];
       expect(event.file.contents).toBe('edited\nbravo\n');
@@ -1519,7 +1519,7 @@ describe('editor session lifecycle', () => {
             direction: 0,
           },
         ],
-        view: undefined,
+        view: { scrollLeft: 0 },
       });
 
       editor.cleanUp('complete');
@@ -1533,7 +1533,7 @@ describe('editor session lifecycle', () => {
               direction: 0,
             },
           ],
-          view: undefined,
+          view: { scrollLeft: 0 },
         },
       ]);
     } finally {

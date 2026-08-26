@@ -202,6 +202,12 @@ export interface EditorOptions<LAnnotation> {
   /** The maximum number of entries to keep in the undo stack. */
   historyMaxEntries?: number;
   /**
+   * Retain and restore the attached component's vertical viewport position.
+   * Defaults to false because scroll views generally contain multiple items.
+   * This option is captured when the editor is constructed.
+   */
+  ownsVerticalViewport?: boolean;
+  /**
    * Complete document and editor state transferred to the first attachment.
    * The editor takes ownership and does not clone it.
    */
@@ -337,6 +343,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #lineAnnotations?: DiffLineAnnotation<LAnnotation>[];
   readonly #editStateKey?: string;
   readonly #documentKind: EditorDocumentKind;
+  readonly #ownsVerticalViewport: boolean;
   #renderRange?: RenderRange;
   // Bounded render-window size (~viewport + 2*hunkLineCount) from the last view
   // sync. Used to cap how far #applyChange widens the window for an edit, so a
@@ -435,6 +442,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   ) {
     this.#documentKind = documentKind;
     this.#editStateKey = editStateKey;
+    this.#ownsVerticalViewport = options.ownsVerticalViewport === true;
     this.#options = options;
     this.#initialState = options.initialState;
   }
@@ -646,28 +654,29 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     return (this.#editSession ?? this.#initialState)?.document?.getText() ?? '';
   }
 
-  /** Return an isolated copy of selections and editor-owned viewport state. */
+  /** Return an isolated copy of selections and restorable surface state. */
   getSurfaceState(): EditorState {
     const fileInstance = this.#isRendering ? this.#fileInstance : undefined;
     if (!this.#isRendering && this.#editSession?.editor != null) {
       return cloneEditorState(this.#editSession?.editor);
     }
-    const viewport = fileInstance?.getEditorViewport?.();
-    const ownsViewport =
-      typeof HTMLElement !== 'undefined' && viewport instanceof HTMLElement;
+    const selections = this.#selections?.map((selection) => ({
+      ...selection,
+      start: { ...selection.start },
+      end: { ...selection.end },
+    }));
+    if (fileInstance == null) {
+      return { selections };
+    }
+
+    const viewport = this.#getOwnedVerticalViewport();
+    const scrollLeft = fileInstance.getCodeScrollLeft();
+    if (viewport == null) {
+      return { selections, view: { scrollLeft } };
+    }
     return {
-      selections: this.#selections?.map((selection) => ({
-        ...selection,
-        start: { ...selection.start },
-        end: { ...selection.end },
-      })),
-      view:
-        ownsViewport && fileInstance != null
-          ? {
-              scrollLeft: fileInstance.getCodeScrollLeft(),
-              scrollTop: viewport.scrollTop,
-            }
-          : undefined,
+      selections,
+      view: { scrollLeft, scrollTop: viewport.scrollTop },
     };
   }
 
@@ -717,10 +726,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#fileInstance.setCodeScrollLeft(view.scrollLeft);
       // States without scrollTop leave the viewport where it is rather than
       // guessing.
-      if (view.scrollTop !== undefined) {
-        this.#setViewportScrollTop(view.scrollTop);
+      const viewport = this.#getOwnedVerticalViewport();
+      if (view.scrollTop !== undefined && viewport != null) {
+        viewport.scrollTop = view.scrollTop;
       }
-    } else {
+    } else if (this.#ownsVerticalViewport) {
       this.#scrollToPrimaryCaret();
     }
     this.#checkpointEditSessionState();
@@ -946,8 +956,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     const editorState = this.#isRendering
       ? this.getSurfaceState()
       : (editSession.editor ?? {});
-    const hasEditorState =
-      editorState.selections != null || editorState.view != null;
+    const { view } = editorState;
+    const hasNonDefaultView =
+      view != null && (view.scrollLeft !== 0 || (view.scrollTop ?? 0) !== 0);
+    const hasEditorState = editorState.selections != null || hasNonDefaultView;
     editSession.editor = cloneEditorState(editorState);
 
     if (editSession.documentKind === 'file') {
@@ -1565,11 +1577,15 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     return lookupScrollContainer(fileContainer);
   }
 
-  #setViewportScrollTop(scrollTop: number): void {
+  #getOwnedVerticalViewport(): HTMLElement | undefined {
+    if (!this.#ownsVerticalViewport) {
+      return undefined;
+    }
     const viewport = this.#fileInstance?.getEditorViewport?.();
     if (typeof HTMLElement !== 'undefined' && viewport instanceof HTMLElement) {
-      viewport.scrollTop = scrollTop;
+      return viewport;
     }
+    return undefined;
   }
 
   #initialize(): void {

@@ -1036,6 +1036,7 @@ export function AgentUi({
   const editorOptions = useMemo<EditorOptions<undefined>>(
     () => ({
       enabledSelectionAction: true,
+      ownsVerticalViewport: true,
       renderSelectionAction(selectionAction) {
         const container = document.createElement('div');
         container.style.cssText = 'display: flex; gap: 4px;';

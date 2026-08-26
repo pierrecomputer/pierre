@@ -789,7 +789,7 @@ describe('completeEditSession', () => {
             direction: 0,
           },
         ],
-        view: undefined,
+        view: { scrollLeft: 0 },
       });
       const event = events[0];
       expect(event.originalFileDiff).toBe(externalDiff);
@@ -1280,7 +1280,7 @@ describe('completeEditSession', () => {
             direction: 0,
           },
         ],
-        view: undefined,
+        view: { scrollLeft: 0 },
       });
 
       editor.cleanUp('complete');
@@ -1293,7 +1293,7 @@ describe('completeEditSession', () => {
               direction: 0,
             },
           ],
-          view: undefined,
+          view: { scrollLeft: 0 },
         },
       ]);
     } finally {

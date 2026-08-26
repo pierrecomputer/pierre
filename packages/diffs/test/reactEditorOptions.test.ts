@@ -440,12 +440,14 @@ describe('React edit surfaces', () => {
 
 describe('React editor factory lifecycle', () => {
   for (const surface of ['File', 'FileDiff'] as const) {
-    test(`${surface} creates editors only for edit sessions and preserves the surface`, async () => {
+    test(`${surface} uses factory inputs only for new edit sessions`, async () => {
       const { cleanup } = installDom();
       const cleanupActEnvironment = installReactActEnvironment();
       const container = document.createElement('div');
       document.body.appendChild(container);
       const editors: TrackedEditor[] = [];
+      const firstEditStateKey = `${surface}:first`;
+      const secondEditStateKey = `${surface}:second`;
       let instance: ReactEditableSurfaceInstance | undefined;
       let root: Root | undefined;
       const firstOnChange = mock(
@@ -454,20 +456,21 @@ describe('React editor factory lifecycle', () => {
       const secondOnChange = mock(
         (_event: EditorChangeEvent<undefined, 'file' | 'diff'>) => {}
       );
-      const firstFactory = mock((documentKind, options) => {
-        const editor = new TrackedEditor(documentKind, options);
+      const firstFactory = mock((documentKind, options, editStateKey) => {
+        const editor = new TrackedEditor(documentKind, options, editStateKey);
         editors.push(editor);
         return editor;
       });
-      const secondFactory = mock((documentKind, options) => {
-        const editor = new TrackedEditor(documentKind, options);
+      const secondFactory = mock((documentKind, options, editStateKey) => {
+        const editor = new TrackedEditor(documentKind, options, editStateKey);
         editors.push(editor);
         return editor;
       });
       const render = async (
         edit: boolean,
         factory: CreateEditor<undefined>,
-        onChange: NonNullable<EditorOptions<undefined>['onChange']>
+        onChange: NonNullable<EditorOptions<undefined>['onChange']>,
+        editStateKey: string
       ) => {
         await act(async () => {
           root!.render(
@@ -480,7 +483,8 @@ describe('React editor factory lifecycle', () => {
                 { onChange },
                 (current) => {
                   instance = current;
-                }
+                },
+                editStateKey
               )
             )
           );
@@ -490,7 +494,7 @@ describe('React editor factory lifecycle', () => {
 
       try {
         root = createReactRoot(container);
-        await render(false, firstFactory, firstOnChange);
+        await render(false, firstFactory, firstOnChange, firstEditStateKey);
         const host = container.firstElementChild;
         const initialInstance = instance;
         expect(host).not.toBeNull();
@@ -498,18 +502,19 @@ describe('React editor factory lifecycle', () => {
         expect(editors).toHaveLength(0);
         expect(firstFactory).not.toHaveBeenCalled();
 
-        await render(true, firstFactory, firstOnChange);
+        await render(true, firstFactory, firstOnChange, firstEditStateKey);
         expect(editors).toHaveLength(1);
         expect(firstFactory).toHaveBeenCalledTimes(1);
         expect(firstFactory.mock.calls[0]?.[0]).toBe(
           surface === 'File' ? 'file' : 'file-diff'
         );
         expect(firstFactory.mock.calls[0]?.[1].onChange).toBe(firstOnChange);
+        expect(firstFactory.mock.calls[0]?.[2]).toBe(firstEditStateKey);
         expect(editors[0]?.cleanUpCount).toBe(0);
         expect(container.firstElementChild).toBe(host);
         expect(instance).toBe(initialInstance);
 
-        await render(true, secondFactory, secondOnChange);
+        await render(true, secondFactory, secondOnChange, secondEditStateKey);
         expect(editors).toHaveLength(1);
         expect(firstFactory).toHaveBeenCalledTimes(1);
         expect(secondFactory).not.toHaveBeenCalled();
@@ -517,12 +522,12 @@ describe('React editor factory lifecycle', () => {
         expect(firstOnChange).toHaveBeenCalledTimes(1);
         expect(secondOnChange).not.toHaveBeenCalled();
 
-        await render(false, secondFactory, secondOnChange);
+        await render(false, secondFactory, secondOnChange, secondEditStateKey);
         expect(editors[0]?.cleanUpCount).toBe(1);
         expect(container.firstElementChild).toBe(host);
         expect(instance).toBe(initialInstance);
 
-        await render(true, secondFactory, secondOnChange);
+        await render(true, secondFactory, secondOnChange, secondEditStateKey);
         expect(editors).toHaveLength(2);
         expect(editors[1]).not.toBe(editors[0]);
         expect(firstFactory).toHaveBeenCalledTimes(1);
@@ -531,6 +536,7 @@ describe('React editor factory lifecycle', () => {
           surface === 'File' ? 'file' : 'file-diff'
         );
         expect(secondFactory.mock.calls[0]?.[1].onChange).toBe(secondOnChange);
+        expect(secondFactory.mock.calls[0]?.[2]).toBe(secondEditStateKey);
         expect(editors[1]?.cleanUpCount).toBe(0);
         expect(container.firstElementChild).toBe(host);
         expect(instance).toBe(initialInstance);
@@ -543,6 +549,9 @@ describe('React editor factory lifecycle', () => {
         expect(editors[1]?.cleanUpCount).toBeGreaterThan(0);
       } finally {
         await unmountRoot(root);
+        const documentKind = surface === 'File' ? 'file' : 'file-diff';
+        EditStateManager.clear(documentKind, firstEditStateKey);
+        EditStateManager.clear(documentKind, secondEditStateKey);
         cleanupActEnvironment();
         cleanup();
       }

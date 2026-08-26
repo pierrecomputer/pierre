@@ -215,14 +215,22 @@ describe('Editor state', () => {
       lang: 'text',
     });
     first.editorViewport = document.createElement('div');
-    const firstEditor = new Editor<undefined>('file', {}, 'complete-state');
+    const firstEditor = new Editor<undefined>(
+      'file',
+      { ownsVerticalViewport: true },
+      'complete-state'
+    );
     const second = new TestEditableComponent({
       name: 'state.ts',
       contents: 'alpha\nbravo',
       lang: 'text',
     });
     second.editorViewport = document.createElement('div');
-    const secondEditor = new Editor<undefined>('file', {}, 'complete-state');
+    const secondEditor = new Editor<undefined>(
+      'file',
+      { ownsVerticalViewport: true },
+      'complete-state'
+    );
 
     try {
       firstEditor.edit(first);
@@ -269,6 +277,7 @@ describe('Editor state', () => {
     const viewport = document.createElement('div');
     const file = { name: 'state.ts', contents: 'alpha\nbravo' };
     const editor = new Editor<undefined>('file', {
+      ownsVerticalViewport: true,
       initialState: createInitialState(file, {
         selections: [
           {
@@ -340,7 +349,9 @@ describe('Editor state', () => {
       lang: 'text',
     });
     first.editorViewport = document.createElement('div');
-    const firstEditor = new Editor<undefined>('file');
+    const firstEditor = new Editor<undefined>('file', {
+      ownsVerticalViewport: true,
+    });
     const second = new TestEditableComponent({
       name: 'state.ts',
       contents: 'alpha\nbravo',
@@ -373,7 +384,10 @@ describe('Editor state', () => {
 
       const state = firstEditor.getEditState()!;
       firstEditor.cleanUp('discard');
-      secondEditor = new Editor('file', { initialState: state });
+      secondEditor = new Editor('file', {
+        initialState: state,
+        ownsVerticalViewport: true,
+      });
       Object.assign(state.editor.selections![0].start, { character: 0 });
       state.editor.view!.scrollLeft = 0;
       secondEditor.edit(second);
@@ -555,7 +569,10 @@ describe('Editor state', () => {
       editor.edit(component);
       editor.cleanUp('complete');
 
-      expect(initialState.editor).toEqual({});
+      expect(initialState.editor).toEqual({
+        selections: undefined,
+        view: { scrollLeft: 0 },
+      });
       expect(component.completedEditState).toBe(initialState);
     } finally {
       editor.cleanUp();
@@ -736,12 +753,15 @@ describe('Editor state', () => {
               direction: 0,
             },
           ],
-          view: undefined,
+          view: { scrollLeft: 0 },
         }
       );
       pendingEditor.cleanUp('complete');
       expect(EditStateManager.get('file', 'pending-hydration')?.editor).toEqual(
-        {}
+        {
+          selections: undefined,
+          view: { scrollLeft: 0 },
+        }
       );
 
       restoredEditor.edit(restored);
@@ -895,7 +915,7 @@ describe('Editor state', () => {
     }
   });
 
-  test('getState omits view state without an owned element viewport', () => {
+  test('getState retains horizontal state without an owned element viewport', () => {
     const dom = installDom();
     const editor = new Editor<undefined>('file');
     const component = new TestEditableComponent({
@@ -907,9 +927,9 @@ describe('Editor state', () => {
       editor.edit(component);
       component.codeScrollLeft = 24;
 
-      expect(editor.getSurfaceState().view).toBeUndefined();
+      expect(editor.getSurfaceState().view).toEqual({ scrollLeft: 24 });
       component.editorViewport = document;
-      expect(editor.getSurfaceState().view).toBeUndefined();
+      expect(editor.getSurfaceState().view).toEqual({ scrollLeft: 24 });
     } finally {
       editor.cleanUp();
       component.cleanUp();
@@ -919,7 +939,9 @@ describe('Editor state', () => {
 
   test('getState captures view state from an owned element viewport', () => {
     const dom = installDom();
-    const editor = new Editor<undefined>('file');
+    const editor = new Editor<undefined>('file', {
+      ownsVerticalViewport: true,
+    });
     const component = new TestEditableComponent({
       name: 'state.ts',
       contents: 'alpha\nbravo',
@@ -936,6 +958,30 @@ describe('Editor state', () => {
         scrollLeft: 24,
         scrollTop: 48,
       });
+    } finally {
+      editor.cleanUp();
+      component.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test('vertical viewport ownership is captured at construction', () => {
+    const dom = installDom();
+    const editor = new Editor<undefined>('file');
+    const component = new TestEditableComponent({
+      name: 'state.ts',
+      contents: 'alpha\nbravo',
+    });
+    const viewport = document.createElement('div');
+    component.editorViewport = viewport;
+
+    try {
+      editor.setOptions({ ownsVerticalViewport: true });
+      editor.edit(component);
+      component.codeScrollLeft = 24;
+      viewport.scrollTop = 48;
+
+      expect(editor.getSurfaceState().view).toEqual({ scrollLeft: 24 });
     } finally {
       editor.cleanUp();
       component.cleanUp();
@@ -1003,6 +1049,41 @@ describe('Editor state', () => {
           direction: 0,
         },
       ]);
+    } finally {
+      Element.prototype.scrollIntoView = originalScrollIntoView;
+      editor.cleanUp();
+      component.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test('selection-only restoration does not scroll a shared viewport', () => {
+    const dom = installDom();
+    let scrollIntoViewCalls = 0;
+    const originalScrollIntoView = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function scrollIntoView() {
+      scrollIntoViewCalls++;
+    };
+
+    const editor = new Editor<undefined>('file');
+    const component = new TestEditableComponent({
+      name: 'state.ts',
+      contents: 'alpha\nbravo\ncharlie\ndelta\necho\nfoxtrot\n',
+    });
+    try {
+      editor.edit(component);
+      editor.setSurfaceState({
+        selections: [
+          {
+            start: { line: 5, character: 0 },
+            end: { line: 5, character: 0 },
+            direction: 0,
+          },
+        ],
+      });
+
+      expect(scrollIntoViewCalls).toBe(0);
+      expect(editor.getSurfaceState().view).toEqual({ scrollLeft: 0 });
     } finally {
       Element.prototype.scrollIntoView = originalScrollIntoView;
       editor.cleanUp();
