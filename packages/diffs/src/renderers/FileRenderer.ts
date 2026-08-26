@@ -189,8 +189,8 @@ export class FileRenderer<LAnnotation = undefined> {
   /**
    * Enter edit-session mode: rendering happens locally with the token
    * transformer forced on, and worker-pool requests/results are suspended
-   * for this renderer. Called on every editor attach, including a re-attach
-   * after recycle.
+   * for this renderer. Called on initial editor association and whenever its
+   * rendering resumes after recycle.
    */
   public beginEditSession(
     file?: FileContents,

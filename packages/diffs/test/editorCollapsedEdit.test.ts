@@ -4,6 +4,7 @@ import type { CreatePatchOptionsNonabortable } from 'diff';
 import { FileDiff } from '../src/components/FileDiff';
 import { DEFAULT_THEMES } from '../src/constants';
 import { Editor } from '../src/editor/editor';
+import { EditStateManager } from '../src/editor/EditStateManager';
 import { PieceTable } from '../src/editor/pieceTable';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
 import { installDom, wait, waitFor } from './domHarness';
@@ -417,7 +418,7 @@ describe('diff editor: collapsed regions during edit', () => {
   });
 
   test('a keyed editor retains a context-only session region after undo', async () => {
-    Editor.clearDocuments();
+    EditStateManager.clearAll();
     const documentKey = 'collapsed-session-hunks';
     const first = await createCollapsedEditFixture(documentKey);
     let firstCleaned = false;
@@ -454,12 +455,12 @@ describe('diff editor: collapsed regions during edit', () => {
       if (!firstCleaned) {
         await first.cleanup();
       }
-      Editor.clearDocuments();
+      EditStateManager.clearAll();
     }
   });
 
   test('a keyed editor retains session hunks across parse option changes', async () => {
-    Editor.clearDocuments();
+    EditStateManager.clearAll();
     const documentKey = 'incompatible-session-hunks';
     const first = await createCollapsedEditFixture(documentKey);
     let firstCleaned = false;
@@ -488,7 +489,7 @@ describe('diff editor: collapsed regions during edit', () => {
       if (!firstCleaned) {
         await first.cleanup();
       }
-      Editor.clearDocuments();
+      EditStateManager.clearAll();
     }
   });
 

@@ -193,7 +193,7 @@ describe('diff editor: empty document', () => {
         }
 
         expect(fixture.fileDiff.fileDiff?.additionLines).toEqual([]);
-        expect(getEditSessionDiff(fixture.fileDiff)?.additionLines).toEqual([]);
+        expect(getEditSessionDiff(fixture.fileDiff)).toBeUndefined();
         const content = findAdditionContent(fixture.container);
         expect(content == null ? 0 : countEditableLineEls(content)).toBe(0);
       } finally {

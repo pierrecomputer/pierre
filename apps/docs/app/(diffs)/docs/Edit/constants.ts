@@ -321,174 +321,6 @@ export const EDIT_SELECTION_ACTION_CONTEXT_TYPE: PreloadFileOptions<undefined> =
     options,
   };
 
-export const EDIT_EDITOR_STATE_EXAMPLE: PreloadFileOptions<undefined> = {
-  file: {
-    name: 'persist_editor_state.ts',
-    contents: `import {
-  File,
-  type DiffsEditor,
-  type EditorState,
-} from '@pierre/diffs';
-import { Editor } from '@pierre/diffs/edit';
-
-const fileId = 'src/example.ts';
-const storageKey = 'editor-state:' + fileId;
-
-function loadEditorState(): EditorState | undefined {
-  const value = localStorage.getItem(storageKey);
-  return value == null ? undefined : (JSON.parse(value) as EditorState);
-}
-
-function persistEditorState(editor: DiffsEditor<undefined>) {
-  localStorage.setItem(storageKey, JSON.stringify(editor.getState()));
-}
-
-const fileInstance = new File({
-  onEditChange(event) {
-    persistEditorState(event.editor);
-  },
-  onEditComplete(event) {
-    persistEditorState(event.editor);
-    return 'accept';
-  },
-});
-
-fileInstance.render({
-  file: { name: fileId, contents: 'export const value = 1;' },
-  containerWrapper: document.body,
-});
-
-const editor = new Editor(
-  'file',
-  // Applied once when a new editor first attaches after a page reload.
-  { initialState: loadEditorState() },
-  // Handles draft, history, selections, and view state within this page.
-  'workspace:' + fileId
-);
-const finishEditing = editor.edit(fileInstance);
-// ... assume some time has passed, edits have happened...
-finishEditing();`,
-  },
-  options,
-};
-
-export const EDIT_EDITOR_STATE_REACT_EXAMPLE: PreloadFileOptions<undefined> = {
-  file: {
-    name: 'persist_editor_state_react.tsx',
-    contents: `'use client';
-
-import type {
-  DiffsEditor,
-  EditorState,
-  FileContents,
-} from '@pierre/diffs';
-import {
-  Editor,
-  type EditorOptions,
-} from '@pierre/diffs/edit';
-import {
-  type CreateEditor,
-  EditProvider,
-  File,
-  Virtualizer,
-} from '@pierre/diffs/react';
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
-
-function loadEditorState(fileId: string): EditorState | undefined {
-  const value = localStorage.getItem('editor-state:' + fileId);
-  return value == null ? undefined : (JSON.parse(value) as EditorState);
-}
-
-function persistEditorState(fileId: string, editor: DiffsEditor<undefined>) {
-  // You can choose to persist the editor state in any system you'd like, 
-  // here we are using localStorage for simplicity
-  localStorage.setItem(
-    'editor-state:' + fileId,
-    JSON.stringify(editor.getState())
-  );
-}
-
-export function PersistedEditor(props: {
-  fileId: string;
-  initialFile: FileContents;
-}) {
-  // A key change ends the old session and gives the next document fresh local
-  // file state plus a newly created Editor.
-  return <PersistedEditorDocument key={props.fileId} {...props} />;
-}
-
-function PersistedEditorDocument({
-  fileId,
-  initialFile,
-}: {
-  fileId: string;
-  initialFile: FileContents;
-}) {
-  const [file, setFile] = useState(initialFile);
-  const [editing, setEditing] = useState(true);
-  const editorRef = useRef<Editor<undefined> | null>(null);
-  const createEditor = useCallback<CreateEditor<undefined>>(
-    (documentKind, options, editHistoryKey) =>
-      new Editor(documentKind, options, editHistoryKey),
-    []
-  );
-  const editorOptions = useMemo<EditorOptions<undefined>>(
-    () => ({
-      // Used only when a new editor starts after a page reload.
-      initialState: loadEditorState(fileId),
-      onAttach(editor) {
-        editorRef.current = editor;
-      },
-    }),
-    [fileId]
-  );
-
-  useEffect(() => {
-    function persistBeforePageHide() {
-      if (editorRef.current != null) {
-        persistEditorState(fileId, editorRef.current);
-      }
-    }
-
-    window.addEventListener('pagehide', persistBeforePageHide);
-    return () => window.removeEventListener('pagehide', persistBeforePageHide);
-  }, [fileId]);
-
-  return (
-    <EditProvider createEditor={createEditor}>
-      <button type="button" onClick={() => setEditing((value) => !value)}>
-        {editing ? 'Finish edit' : 'Edit'}
-      </button>
-      <Virtualizer style={{ maxHeight: 320, overflow: 'auto' }}>
-        <File
-          file={file}
-          edit={editing}
-          editHistoryKey={'workspace:' + fileId}
-          editorOptions={editorOptions}
-          onEditChange={(event) => {
-            persistEditorState(fileId, event.editor);
-          }}
-          onEditComplete={(event) => {
-            persistEditorState(fileId, event.editor);
-            editorRef.current = null;
-            setFile(event.file);
-            return 'accept';
-          }}
-        />
-      </Virtualizer>
-    </EditProvider>
-  );
-}`,
-  },
-  options,
-};
-
 export const EDIT_MARKER_TYPE: PreloadFileOptions<undefined> = {
   file: {
     name: 'marker.ts',
@@ -1114,12 +946,12 @@ export const EDITOR_OPTIONS_TYPE: PreloadFileOptions<undefined> = {
   DiffLineAnnotation,
   DiffsEditableComponent,
   EditorChangeEvent,
-  EditorState,
   FileContents,
   LineAnnotation,
 } from '@pierre/diffs';
 import {
   Editor,
+  type EditState,
   type EditorKeymap,
 } from '@pierre/diffs/edit';
 
@@ -1127,9 +959,10 @@ interface EditorOptions<LAnnotation> {
   // Max undo stack entries
   historyMaxEntries?: number;
 
-  // Selections and editor-owned viewport offsets to apply once, when this
-  // Editor first attaches. Capture this from editor.getState().
-  initialState?: EditorState;
+  // Complete document, history, and editor state to adopt on first attach.
+  // We don't recomment you use this API as it requires handling a lot of
+  // internal state, but it is available as an escape hatch if needed
+  initialState?: EditState<LAnnotation>;
 
   // Custom keymap checked before the default map.
   keymap?: EditorKeymap;
@@ -1154,7 +987,7 @@ interface EditorOptions<LAnnotation> {
   >;
 
   // Show the floating Selection Action popover after a user selection.
-  // Programmatic setSelections/setState calls do not open it (default: false).
+  // Programmatic setSelections/setSurfaceState calls do not open it.
   enabledSelectionAction?: boolean;
 
   // Custom clipboard provider. Recommended in Electron apps — use the native
@@ -1314,14 +1147,14 @@ const file: FileContents | undefined = editor.getFile();
 const text: string = editor.getText();
 
 // Snapshot selections and scroll positions for explicit restoration:
-const state: EditorState = editor.getState();
+const state: EditorState = editor.getSurfaceState();
 // EditorState = {
 //   selections?: EditorSelection[];
 //   view?: { scrollLeft: number; scrollTop?: number };
 // }
 
 // Restore selections and scroll positions after re-rendering.
-editor.setState(state);
+editor.setSurfaceState(state);
 
 // Replace all cursors and ranges programmatically. Positions are zero-based;
 // direction controls which end the caret uses for keyboard extension.

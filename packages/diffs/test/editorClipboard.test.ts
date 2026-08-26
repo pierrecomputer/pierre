@@ -148,6 +148,10 @@ class TestEditableComponent implements DiffsEditableComponent<undefined> {
     return this.options;
   }
 
+  __captureDocumentSessionState(): undefined {
+    return undefined;
+  }
+
   getCodeScrollLeft(): number {
     return 0;
   }
@@ -196,6 +200,13 @@ class TestEditableComponent implements DiffsEditableComponent<undefined> {
     return () => {
       this.#editor = undefined;
     };
+  }
+
+  __resumeEditor(editor: DiffsEditor<undefined>): void {
+    if (this.#editor !== editor) {
+      throw new Error('TestEditableComponent: editor association changed');
+    }
+    this.rerender();
   }
 
   applyDocumentChange(
@@ -402,7 +413,7 @@ describe('Editor clipboard events', () => {
 
       expect(writes).toEqual([['text', 'bravo\n']]);
       expect(editor.getText()).toBe('alpha\ncharlie');
-      expect(editor.getState().selections).toEqual([
+      expect(editor.getSurfaceState().selections).toEqual([
         {
           start: { line: 1, character: 0 },
           end: { line: 1, character: 0 },
@@ -450,7 +461,7 @@ describe('Editor clipboard events', () => {
         ],
       ]);
       expect(editor.getText()).toBe('bravo\ndelta');
-      expect(editor.getState().selections).toEqual([
+      expect(editor.getSurfaceState().selections).toEqual([
         {
           start: { line: 0, character: 0 },
           end: { line: 0, character: 0 },
@@ -500,7 +511,7 @@ describe('Editor clipboard events', () => {
         [MULTI_SELECTION_CLIPBOARD_TYPE, JSON.stringify(['rav', 'charlie\n'])],
       ]);
       expect(editor.getText()).toBe('alpha\nbo\ndelta');
-      expect(editor.getState().selections).toEqual([
+      expect(editor.getSurfaceState().selections).toEqual([
         {
           start: { line: 1, character: 1 },
           end: { line: 1, character: 1 },
@@ -553,7 +564,7 @@ describe('Editor clipboard events', () => {
         ],
       ]);
       expect(editor.getText()).toBe('alpha\ncharlie');
-      expect(editor.getState().selections).toEqual([
+      expect(editor.getSurfaceState().selections).toEqual([
         {
           start: { line: 1, character: 0 },
           end: { line: 1, character: 0 },
@@ -598,7 +609,7 @@ describe('Editor clipboard events', () => {
         [MULTI_SELECTION_CLIPBOARD_TYPE, JSON.stringify(['br', 'bravo\n'])],
       ]);
       expect(editor.getText()).toBe('alpha\ncharlie');
-      expect(editor.getState().selections).toEqual([
+      expect(editor.getSurfaceState().selections).toEqual([
         {
           start: { line: 1, character: 0 },
           end: { line: 1, character: 0 },

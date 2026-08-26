@@ -50,7 +50,7 @@ interface UseFileInstanceProps<LAnnotation> {
   file: FileContents;
   options: FileOptions<LAnnotation> | undefined;
   editorOptions: EditorOptions<LAnnotation> | undefined;
-  editHistoryKey: string | undefined;
+  editStateKey: string | undefined;
   lineAnnotations: LineAnnotation<LAnnotation>[] | undefined;
   selectedLines: SelectedLineRange | null | undefined;
   prerenderedHTML: string | undefined;
@@ -73,7 +73,7 @@ export function useFileInstance<LAnnotation>({
   file,
   options,
   editorOptions,
-  editHistoryKey,
+  editStateKey,
   lineAnnotations,
   selectedLines,
   prerenderedHTML,
@@ -123,7 +123,7 @@ export function useFileInstance<LAnnotation>({
     if (createEditor == null) {
       throw new Error('File: EditContext is not attached');
     }
-    return createEditor('file', editorOptions ?? {}, editHistoryKey);
+    return createEditor('file', editorOptions ?? {}, editStateKey);
   });
   const ref = useStableCallback((node: HTMLElement | null) => {
     if (node != null) {

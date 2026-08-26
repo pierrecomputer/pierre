@@ -13,6 +13,8 @@ import type {
   ThemeRegistrationResolved,
 } from 'shiki';
 
+import type { EditState } from './editor/types';
+
 export type { CreatePatchOptionsNonabortable };
 
 export type CodeViewScrollBehavior = 'instant' | 'smooth' | 'smooth-auto';
@@ -370,11 +372,17 @@ export interface FileDiffMetadata {
   cacheKey?: string;
 }
 
-/** @internal Session-shaped hunk state retained with a keyed document. */
+/** FileDiff baseline and hunk state needed to resume an editing session. */
 export interface RetainedDiffSessionSnapshot {
   oldFile: { name: string; lines: string[] } | null;
   type: ChangeTypes;
   hunks: Hunk[];
+}
+
+/** @internal Current diff state and whether the document changed while editing. */
+export interface CapturedDiffSessionState {
+  diffSession: RetainedDiffSessionSnapshot;
+  hasChanges: boolean;
 }
 
 export type MergeConflictMarkerRowType =
@@ -1042,14 +1050,14 @@ export interface DiffsEditableComponent<
    */
   __getEffectiveCodeOptions(): BaseCodeOptions;
   /**
-   * @internal Capture component state that follows a retained keyed document.
-   * `null` means no complete state needs retention; `undefined` means no
-   * complete session is available yet, so previously retained state remains
-   * authoritative.
+   * @internal Capture the current diff session, or return `undefined` when no
+   * complete compatible session exists.
+   *
+   * When `clone` is true, the returned lines and hunks are copied.
    */
-  __captureDocumentSessionState?: (
-    hasRetainedState: boolean
-  ) => RetainedDiffSessionSnapshot | null | undefined;
+  __captureDocumentSessionState: (
+    clone?: boolean
+  ) => CapturedDiffSessionState | undefined;
   /** @internal Keep the editor caret decoration separate from line selection. */
   setEditorActiveLine: (
     lineNumber: number | null,
@@ -1097,13 +1105,13 @@ export interface DiffsEditableComponent<
    */
   revealLine?: (lineNumber: number) => boolean;
   /**
-   * Attach an editor to this component. The returned detach closure receives
-   * `recycle: true` for a temporary unmount, such as collapse or
-   * virtualization (the session continues on remount).
+   * Associate an editor with this component. The returned closure ends that
+   * association after the editing session finishes; recycled unmounts keep
+   * the association and resume rendering through `__resumeEditor`.
    */
-  attachEditor: (
-    editor: DiffsEditor<LAnnotation>
-  ) => (recycle: boolean) => void;
+  attachEditor: (editor: DiffsEditor<LAnnotation>) => () => void;
+  /** Resume rendering for the editor already associated with this component. */
+  __resumeEditor: (editor: DiffsEditor<LAnnotation>) => void;
   /**
    * Deliver `EditorChangeEvent` to the component's owner. The attached
    * editor calls this with the same event object it reports through its own
@@ -1197,13 +1205,21 @@ export type SyncRenderViewProps<LAnnotation> =
   | SyncDiffRenderViewProps<LAnnotation>;
 
 export interface DiffsEditor<LAnnotation> {
-  getState(): EditorState;
+  /** Return an isolated copy of selections and editor-owned viewport state. */
+  getSurfaceState(): EditorState;
+  /**
+   * Returns the raw objects for the active edit session, or undefined when no
+   * complete state is available. State remains available while rendering is
+   * recycled and during `onEditComplete`. The result is borrowed editor-owned
+   * state and can be transferred directly as `initialState`.
+   */
+  getEditState(): EditState<LAnnotation> | undefined;
   __postponeBgTokenizeToNextFrame(): void;
   /** @internal Capture focus intent before replacing the editable view. */
   __captureFocusForDOMReplacement(): void;
-  /** @internal Return the keyed document that an edit-session render should use. */
+  /** @internal Return the active document that an edit-session render should use. */
   __getDocumentContents(): FileContents | undefined;
-  /** @internal Return component state retained with the keyed document. */
+  /** @internal Return component state retained with the active document. */
   __getDocumentSessionState?(): RetainedDiffSessionSnapshot | undefined;
   __syncRenderView(props: SyncRenderViewProps<LAnnotation>): void;
   edit<T extends DiffsEditableComponent<LAnnotation>>(

@@ -5,6 +5,7 @@ import { VirtualizedFile } from '../src/components/VirtualizedFile';
 import { VirtualizedFileDiff } from '../src/components/VirtualizedFileDiff';
 import { DEFAULT_THEMES } from '../src/constants';
 import { Editor } from '../src/editor/editor';
+import { TextDocument } from '../src/editor/textDocument';
 import type { DiffsEditor, EditorChangeEvent, EditorState } from '../src/types';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import { installDom, waitFor } from './domHarness';
@@ -224,14 +225,19 @@ describe('virtualized editor viewport', () => {
     );
     const editor = new Editor<undefined>('file', {
       initialState: {
-        selections: [
-          {
-            start: { line: 1, character: 3 },
-            end: { line: 1, character: 3 },
-            direction: 0,
-          },
-        ],
-        view: { scrollLeft: 24, scrollTop: 48 },
+        documentKind: 'file',
+        document: new TextDocument('state.txt', 'alpha\nbravo\n', 'text'),
+        fileInfo: { name: 'state.txt', lang: 'text' },
+        editor: {
+          selections: [
+            {
+              start: { line: 1, character: 3 },
+              end: { line: 1, character: 3 },
+              direction: 0,
+            },
+          ],
+          view: { scrollLeft: 24, scrollTop: 48 },
+        },
       },
     });
 
@@ -240,7 +246,7 @@ describe('virtualized editor viewport', () => {
       editor.edit(file);
       await waitFor(() => code.scrollLeft === 24 && root.scrollTop === 48);
 
-      expect(editor.getState()).toEqual({
+      expect(editor.getSurfaceState()).toEqual({
         selections: [
           {
             start: { line: 1, character: 3 },
@@ -272,11 +278,11 @@ describe('virtualized editor viewport', () => {
         theme: DEFAULT_THEMES,
         onEditChange(event) {
           componentEvents.push(event);
-          componentStates.push(event.editor.getState());
+          componentStates.push(event.editor.getSurfaceState());
         },
         onEditComplete(event) {
           completionEvents.push(event);
-          completionStates.push(event.editor.getState());
+          completionStates.push(event.editor.getSurfaceState());
           return 'reject';
         },
       },

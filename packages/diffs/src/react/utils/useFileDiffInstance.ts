@@ -66,7 +66,7 @@ interface UseFileDiffInstanceProps<LAnnotation> {
   newFile?: FileContents | null;
   options: FileDiffOptions<LAnnotation> | undefined;
   editorOptions: EditorOptions<LAnnotation> | undefined;
-  editHistoryKey: string | undefined;
+  editStateKey: string | undefined;
   lineAnnotations: DiffLineAnnotation<LAnnotation>[] | undefined;
   selectedLines: SelectedLineRange | null | undefined;
   prerenderedHTML: string | undefined;
@@ -92,7 +92,7 @@ export function useFileDiffInstance<LAnnotation>({
   newFile,
   options,
   editorOptions,
-  editHistoryKey,
+  editStateKey,
   lineAnnotations,
   selectedLines,
   prerenderedHTML,
@@ -178,7 +178,7 @@ export function useFileDiffInstance<LAnnotation>({
     if (createEditor == null) {
       throw new Error('FileDiff: EditContext is not attached');
     }
-    return createEditor('file-diff', editorOptions ?? {}, editHistoryKey);
+    return createEditor('file-diff', editorOptions ?? {}, editStateKey);
   });
   const ref = useStableCallback((fileContainer: HTMLElement | null) => {
     if (fileContainer != null) {

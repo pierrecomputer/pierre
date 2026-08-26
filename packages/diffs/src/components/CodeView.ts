@@ -521,22 +521,22 @@ export interface CodeViewOptions<LAnnotation>
    * Return an in-memory retention key for an item's editable draft and
    * undo/redo history. Called only when CodeView creates the item's editor.
    */
-  getEditHistoryKey?(item: CodeViewItem<LAnnotation>): string | undefined;
+  getEditStateKey?(item: CodeViewItem<LAnnotation>): string | undefined;
   /**
    * Create an editor for an item entering edit mode (`edit: true`). Providing
    * this option is what enables item editing. Pass the given options into the
-   * editor constructor — `new Editor(documentKind, options, editHistoryKey)` —
+   * editor constructor — `new Editor(documentKind, options, editStateKey)` —
    * so CodeView can route document changes to `onItemEditChange` and retain
    * history when requested. CodeView owns the returned editor's lifecycle: it
-   * attaches when the edited item mounts, re-attaches across virtualization
-   * unmounts and collapse (which suspend the session), and tears the editor
-   * down when the session ends (edit off or removal). Returning undefined
-   * declines the attach; CodeView retries on later render passes.
+   * associates with the edited item, suspends and resumes rendering across
+   * virtualization unmounts and collapse, and tears the editor down when the
+   * session ends (edit off or removal). Returning undefined declines the
+   * attach; CodeView retries on later render passes.
    */
   createEditor?(
     documentKind: EditorDocumentKind,
     options: CodeViewCreateEditorOptions<LAnnotation>,
-    editHistoryKey?: string
+    editStateKey?: string
   ): DiffsEditor<LAnnotation> | undefined;
   /**
    * Called with the editor's `EditorChangeEvent` and the owning item whenever
@@ -678,9 +678,9 @@ export class CodeView<LAnnotation = undefined> {
   private idToItem: CodeViewItemMap<LAnnotation> = new Map();
   private selectedLines: CodeViewLineSelection | null = null;
   // One editor per edit-mode item, created lazily via options.createEditor.
-  // Entries survive virtualization unmounts so a remounted item re-attaches
-  // its existing editor; attachedEditors tracks which entries are currently
-  // bound to a mounted instance. Each record shares its instance's options
+  // Entries survive virtualization unmounts with their editor association;
+  // attachedEditors tracks which entries currently render an editor surface.
+  // Each record shares its instance's options
   // state, whose `id` updateItemId keeps pointed at the current item.
   private itemEditors: Map<string, CodeViewItemEditorRecord<LAnnotation>> =
     new Map();
@@ -1189,8 +1189,7 @@ export class CodeView<LAnnotation = undefined> {
     let failure: unknown;
     for (const { record, instance } of teardownSessions) {
       try {
-        record.editor.cleanUp('complete');
-        instance?.completeEditSession(record.editor, 'discard');
+        record.editor.cleanUp('discard');
         instance?.cleanUp();
       } catch (error) {
         if (!failed) {
@@ -1328,8 +1327,8 @@ export class CodeView<LAnnotation = undefined> {
     }
 
     item.instance.cleanUp(true);
-    // Instance cleanup fully detached any attached editor. The editor itself
-    // stays in itemEditors so the item re-attaches it on remount.
+    // Instance cleanup suspends the editor surface. The association stays in
+    // itemEditors so the same component and editor resume on remount.
     this.attachedEditors.delete(item.item.id);
     item.element = undefined;
     if (element == null) {
@@ -2060,8 +2059,8 @@ export class CodeView<LAnnotation = undefined> {
    * from the render loop so every mounted item passes through it: fresh
    * mounts, remounts after virtualization released the item, and items whose
    * edit flag was just turned on. Editors persist across unmounts, so a
-   * remounted item re-attaches its existing editor and resumes the retained
-   * document; the instance retains its private session model so the remount
+   * remounted item resumes its existing editor and retained document; the
+   * instance retains its private session model so the remount
    * paints the edited text without changing the host input.
    */
   private attachItemEditor(item: CodeViewContextItem<LAnnotation>): void {
@@ -2102,7 +2101,7 @@ export class CodeView<LAnnotation = undefined> {
               this.options.onItemEditChange?.(event, latest.item);
             },
           },
-          this.options.getEditHistoryKey?.(item.item)
+          this.options.getEditStateKey?.(item.item)
         );
         if (editor == null) {
           return;
@@ -2150,8 +2149,8 @@ export class CodeView<LAnnotation = undefined> {
       if (removedItem == null && item != null) {
         const { edit = false, collapsed = false } = item.item;
         if (edit) {
-          // Collapse temporarily detaches the editor. Keep its document and
-          // undo history for expansion; DOM-backed view state is reset.
+          // Collapse suspends editor rendering. Keep its component association,
+          // document, and undo history for expansion; DOM-backed state resets.
           if (collapsed && this.attachedEditors.delete(id)) {
             record.editor.cleanUp('recycle');
           }

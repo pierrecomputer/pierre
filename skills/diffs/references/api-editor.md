@@ -30,7 +30,7 @@ editor APIs used by common integrations.
 | Field                    | Purpose                                                  |
 | ------------------------ | -------------------------------------------------------- |
 | `historyMaxEntries`      | Limits the undo stack.                                   |
-| `initialState`           | Applies selections and view state once on first attach.  |
+| `initialState`           | Transfers a complete edit session on first attach.       |
 | `keymap`                 | Adds shortcut groups checked before the defaults.        |
 | `roundedSelection`       | Controls rounded selection corners.                      |
 | `matchBrackets`          | Controls matching-bracket highlights.                    |
@@ -46,13 +46,25 @@ editor APIs used by common integrations.
 
 Use `editHistoryKey` for ordinary in-memory restoration; it retains the draft,
 undo/redo history, selections, and editor-owned view state without an
-application synchronization loop. Use `getState()` and `initialState` only when
-selection and view state must outlive that registry, such as browser or backend
-persistence. `initialState` is captured when the `Editor` is created, consumed
-after its first successful attach, and not queued again by later option updates.
-`state.view` covers only a virtualized, editor-owned element viewport, not page
-or ancestor scrolling. Call `getState()` at the external persistence boundary to
-include selection-only and scroll-only sessions.
+application synchronization loop. To move a complete session to another editor,
+pass `getEditState()` directly as `initialState`. The editor adopts its
+`TextDocument`, file metadata, history, editor state, and diff-session data by
+reference. Do not retain, modify, clone, or serialize the value after passing it
+to the editor. It is consumed after the first successful synchronization and is
+not queued again by later option updates.
+
+Use `getSurfaceState()` and `setSurfaceState()` for an isolated selection/view
+copy or durable application persistence. `state.view` covers only a virtualized,
+editor-owned element viewport, not page or ancestor scrolling.
+
+`getEditState()` exposes the raw objects from the latest complete edit-lifecycle
+checkpoint. Checkpoints run after synchronization, document edits, explicit
+`setSurfaceState()` calls, recycling, and completion. Selection or scroll
+movement alone does not update it; use `getSurfaceState()` for an exact live
+copy. State remains available while rendering is recycled and during
+`onEditComplete`, and returns `undefined` before synchronization or after
+completion. The result is borrowed editor-owned state rather than a
+serialization format.
 
 ## `Editor` members
 
@@ -72,13 +84,14 @@ include selection-only and scroll-only sessions.
 | `redo()`                                                 | Reapplies the latest reverted edit.                    |
 | `getFile()`                                              | Gets the current file contents.                        |
 | `getText()`                                              | Gets the current text.                                 |
-| `getState()`                                             | Gets selections and editor-owned view state.           |
-| `setState(state)`                                        | Sets selections and editor-owned view state.           |
+| `getSurfaceState()`                                      | Gets selections and editor-owned view state.           |
+| `setSurfaceState(state)`                                 | Sets selections and editor-owned view state.           |
+| `getEditState()`                                         | Gets the latest edit-lifecycle state checkpoint.       |
 | `setSelections(selections)`                              | Sets directed selection ranges.                        |
 | `setMarkers(markers)`                                    | Sets diagnostic markers.                               |
 | `focus(options?)`                                        | Focuses the editor.                                    |
 | `blur()`                                                 | Removes editor focus.                                  |
-| `cleanUp(reason?: 'discard' \| 'recycle' \| 'complete')` | Detaches without running the completion callback.      |
+| `cleanUp(reason?: 'discard' \| 'recycle' \| 'complete')` | Suspends rendering or completes the editing session.   |
 
 `editHistoryKey` is an explicit opt-in key, not a file or diff `cacheKey` and
 not derived from one. Editors of the same document kind can use it to resume a
@@ -89,10 +102,11 @@ against the same old-side baseline, so scope its key accordingly. Use the static
 disposal methods when retained state is no longer needed.
 
 Call the disposer returned by `edit(instance)` for the normal session-ending
-path; it detaches and then runs the surface's completion boundary. `cleanUp()`
-is the lower-level lifecycle primitive. Its reason controls document retention
-and recycle ownership, but even `'complete'` does not invoke `onEditComplete` by
-itself.
+path; it is equivalent to `cleanUp('complete')` and installs an accepted
+completion result. `cleanUp('discard')` still publishes the completion event but
+does not install its result. `cleanUp('recycle')` suspends rendering without
+ending the session or changing the editor-component association. Calling
+`edit(instance)` again resumes rendering for that same component.
 
 ## `TextDocument` members
 

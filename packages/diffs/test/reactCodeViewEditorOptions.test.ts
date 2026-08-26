@@ -85,6 +85,7 @@ function createTrackedEditor(
   let detach:
     | ReturnType<DiffsEditableComponent<undefined>['attachEditor']>
     | undefined;
+  let sessionOwner: DiffsEditableComponent<undefined> | undefined;
   const editor = {
     options,
     edits: [],
@@ -96,19 +97,20 @@ function createTrackedEditor(
     ) {
       options.onChange?.({ changes: [], editor, file, lineAnnotations });
     },
-    getState: () => ({}),
+    getSurfaceState: () => ({}),
     edit(instance: DiffsEditableComponent<undefined>) {
       editor.edits.push(instance);
-      detach = instance.attachEditor(editor);
+      if (sessionOwner != null && sessionOwner !== instance) {
+        throw new Error('TrackedCodeViewEditor: recycled component changed');
+      }
+      if (sessionOwner == null) {
+        sessionOwner = instance;
+        detach = instance.attachEditor(editor);
+      }
       if (attachmentError != null) {
         throw attachmentError;
       }
-      // Mirror the real editor's disposer: tear down, then complete the
-      // session on the attached instance.
-      return () => {
-        editor.cleanUp('complete');
-        instance.completeEditSession(editor, 'install');
-      };
+      return () => editor.cleanUp('complete');
     },
     cleanUp(reason: 'discard' | 'recycle' | 'complete' = 'discard') {
       if (reason === 'recycle') {
@@ -116,8 +118,18 @@ function createTrackedEditor(
       } else {
         editor.fullCleanUps += 1;
       }
-      detach?.(reason === 'recycle');
-      detach = undefined;
+      if (reason !== 'recycle') {
+        try {
+          detach?.();
+          sessionOwner?.completeEditSession(
+            editor,
+            reason === 'complete' ? 'install' : 'discard'
+          );
+        } finally {
+          detach = undefined;
+          sessionOwner = undefined;
+        }
+      }
     },
     __captureFocusForDOMReplacement() {},
     __getDocumentContents: () => undefined,
@@ -153,15 +165,15 @@ function createEditorHarness(attachmentError?: Error) {
   const editors: TrackedCodeViewEditor[] = [];
   const receivedDocumentKinds: EditorDocumentKind[] = [];
   const receivedOptions: EditorOptions<undefined>[] = [];
-  const receivedEditHistoryKeys: Array<string | undefined> = [];
+  const receivedEditStateKeys: Array<string | undefined> = [];
   const createEditor: CreateEditor<undefined> = (
     documentKind,
     options,
-    editHistoryKey
+    editStateKey
   ) => {
     receivedDocumentKinds.push(documentKind);
     receivedOptions.push(options);
-    receivedEditHistoryKeys.push(editHistoryKey);
+    receivedEditStateKeys.push(editStateKey);
     const editor = createTrackedEditor(options, attachmentError);
     editors.push(editor);
     return editor as unknown as DiffsEditor<undefined>;
@@ -170,7 +182,7 @@ function createEditorHarness(attachmentError?: Error) {
     createEditor,
     editors,
     receivedDocumentKinds,
-    receivedEditHistoryKeys,
+    receivedEditStateKeys,
     receivedOptions,
   };
 }
@@ -393,7 +405,7 @@ describe('React CodeView editor factory', () => {
       createEditor,
       editors,
       receivedDocumentKinds,
-      receivedEditHistoryKeys,
+      receivedEditStateKeys,
       receivedOptions,
     } = createEditorHarness();
     const attemptedOnChange = mock(() => {});
@@ -422,7 +434,7 @@ describe('React CodeView editor factory', () => {
           createEditor,
           createCodeViewElement({
             editorOptions,
-            getEditHistoryKey: (item) => `history:${item.id}`,
+            getEditStateKey: (item) => `history:${item.id}`,
             items: [makeFileItem('a', { edit: true }), makeDiffItem('b', true)],
             onItemEditChange,
           })
@@ -432,7 +444,7 @@ describe('React CodeView editor factory', () => {
       expect(editors).toHaveLength(2);
       expect(new Set(editors).size).toBe(2);
       expect(receivedDocumentKinds).toEqual(['file', 'file-diff']);
-      expect(receivedEditHistoryKeys).toEqual(['history:a', 'history:b']);
+      expect(receivedEditStateKeys).toEqual(['history:a', 'history:b']);
       expect(receivedOptions).toHaveLength(2);
       for (const options of receivedOptions) {
         expect(options.historyMaxEntries).toBe(17);

@@ -7,55 +7,58 @@ import type {
   FileContents,
   RetainedDiffSessionSnapshot,
 } from '../types';
-import { cloneRetainedDiffSessionSnapshot } from '../utils/cloneFileDiffMetadata';
-import type { TextDocument } from './textDocument';
+import { TextDocument } from './textDocument';
+import type { EditState, FileDiffEditState, FileEditState } from './types';
 
 const DEFAULT_EDIT_STATE_CAPACITY = 100;
 
-interface ManagedEditStateBase {
-  document: TextDocument<unknown>;
-  fileInfo: Pick<FileContents, 'lang' | 'name'>;
+interface ManagedEditSessionBase<LAnnotation = unknown> {
+  document?: TextDocument<LAnnotation>;
+  fileInfo?: Pick<FileContents, 'lang' | 'name'>;
   editor?: EditorState;
 }
 
-export interface ManagedFileEditState extends ManagedEditStateBase {
+export interface ManagedFileEditSession<
+  LAnnotation = unknown,
+> extends ManagedEditSessionBase<LAnnotation> {
   documentKind: 'file';
   diffSession?: never;
 }
 
-export interface ManagedFileDiffEditState extends ManagedEditStateBase {
+export interface ManagedFileDiffEditSession<
+  LAnnotation = unknown,
+> extends ManagedEditSessionBase<LAnnotation> {
   documentKind: 'file-diff';
-  diffSession: RetainedDiffSessionSnapshot;
+  diffSession?: RetainedDiffSessionSnapshot;
 }
 
-export type ManagedEditState = ManagedFileEditState | ManagedFileDiffEditState;
+export type ManagedEditSession<LAnnotation = unknown> =
+  | ManagedFileEditSession<LAnnotation>
+  | ManagedFileDiffEditSession<LAnnotation>;
+
+export type ManagedFileEditState<LAnnotation = unknown> =
+  FileEditState<LAnnotation>;
+
+export type ManagedFileDiffEditState<LAnnotation = unknown> =
+  FileDiffEditState<LAnnotation>;
+
+export type ManagedEditState<LAnnotation = unknown> =
+  | ManagedFileEditState<LAnnotation>
+  | ManagedFileDiffEditState<LAnnotation>;
+
+type ManagedEditSessionFor<K extends EditorDocumentKind> = Extract<
+  ManagedEditSession,
+  { documentKind: K }
+>;
 
 type ManagedEditStateFor<K extends EditorDocumentKind> = Extract<
   ManagedEditState,
   { documentKind: K }
 >;
 
-export interface EditStateManagerAttachment<K extends EditorDocumentKind> {
-  documentKind: K;
-  editStateKey: string;
-  state?: ManagedEditStateFor<K>;
-}
-
-export type AnyEditStateManagerAttachment =
-  | EditStateManagerAttachment<'file'>
-  | EditStateManagerAttachment<'file-diff'>;
-
-export interface EditStateRetention {
-  document: boolean;
-  history: boolean;
-  selections: boolean;
-  view: boolean;
-}
-
 interface EditStateManagerSession<K extends EditorDocumentKind> {
   owner: DiffsEditor<unknown>;
-  attachment?: EditStateManagerAttachment<K>;
-  retention: EditStateRetention;
+  session: ManagedEditSessionFor<K>;
 }
 
 /** Owns dormant edit state and active-key exclusion for one surface kind. */
@@ -67,97 +70,89 @@ class EditStateManagerNamespace<K extends EditorDocumentKind> {
 
   constructor(readonly documentKind: K) {}
 
-  acquire(editStateKey: string, owner: DiffsEditor<unknown>): boolean {
-    const session = this.#sessions.get(editStateKey);
-    if (session != null && session.owner !== owner) {
+  activate<LAnnotation>(
+    editStateKey: string,
+    owner: DiffsEditor<LAnnotation>,
+    initialState?: ManagedEditStateFor<K>
+  ): ManagedEditSessionFor<K> {
+    const activeSession = this.#sessions.get(editStateKey);
+    if (activeSession != null && activeSession.owner !== owner) {
       throw new Error(
         `Editor: editStateKey "${editStateKey}" is already attached to another editor`
       );
     }
-    if (session != null) {
+    if (activeSession != null) {
+      if (initialState != null) {
+        activeSession.session = initialState;
+      }
+      return activeSession.session;
+    }
+    const retainedState = this.#states.delete(editStateKey);
+    const emptyState = {
+      documentKind: this.documentKind,
+    } as ManagedEditSessionFor<K>;
+    const state: ManagedEditSessionFor<K> =
+      initialState ?? retainedState ?? emptyState;
+    this.#sessions.set(editStateKey, {
+      owner: owner as DiffsEditor<unknown>,
+      session: state,
+    });
+    return state;
+  }
+
+  release<LAnnotation>(
+    editStateKey: string,
+    owner: DiffsEditor<LAnnotation>,
+    discard = false
+  ): void {
+    const activeSession = this.#sessions.get(editStateKey);
+    if (activeSession?.owner !== owner) {
+      return;
+    }
+    this.#sessions.delete(editStateKey);
+    if (discard) {
+      return;
+    }
+    const retainedState = toManagedEditState(activeSession.session);
+    if (retainedState != null) {
+      this.#states.set(editStateKey, retainedState as ManagedEditStateFor<K>);
+    }
+  }
+
+  get<LAnnotation>(editStateKey: string): EditState<LAnnotation> | undefined {
+    const activeSession = this.#sessions.get(editStateKey);
+    if (activeSession != null) {
+      const state = toManagedEditState(
+        activeSession.session as ManagedEditSession<LAnnotation>
+      );
+      if (state == null) {
+        return undefined;
+      }
+      return state;
+    }
+    const state = this.#states.find(editStateKey);
+    return state as EditState<LAnnotation> | undefined;
+  }
+
+  /** Clear dormant state for a key. Omit `parts` to clear everything. */
+  clear(editStateKey: string, parts?: ClearEditStateOptions): boolean {
+    if (this.#sessions.has(editStateKey)) {
       return false;
     }
-    this.#sessions.set(editStateKey, {
-      owner,
-      retention: createEditStateRetention(),
-    });
+
+    const state = this.#states.find(editStateKey);
+    if (state == null) {
+      return false;
+    }
+    if (parts == null || parts.document === true) {
+      this.#states.delete(editStateKey);
+    } else {
+      applyClearEditStateOptions(state, parts);
+    }
     return true;
   }
 
-  beginAttachment(
-    editStateKey: string,
-    owner: DiffsEditor<unknown>
-  ): EditStateManagerAttachment<K> {
-    const session = this.#sessions.get(editStateKey);
-    if (session?.owner !== owner) {
-      throw new Error(
-        `Editor: editStateKey "${editStateKey}" must be acquired before attachment`
-      );
-    }
-    const attachment: EditStateManagerAttachment<K> = {
-      documentKind: this.documentKind,
-      editStateKey,
-      state: this.#states.delete(editStateKey),
-    };
-    session.attachment = attachment;
-    return attachment;
-  }
-
-  commitAttachment(attachment: EditStateManagerAttachment<K>): void {
-    const session = this.#sessions.get(attachment.editStateKey);
-    if (session?.attachment === attachment) {
-      session.attachment = undefined;
-    }
-  }
-
-  rollbackAttachment(attachment: EditStateManagerAttachment<K>): void {
-    const session = this.#sessions.get(attachment.editStateKey);
-    if (session?.attachment !== attachment) {
-      return;
-    }
-    session.attachment = undefined;
-    const state = applyEditStateRetention(attachment.state, session.retention);
-    if (state != null) {
-      this.#retain(attachment.editStateKey, state);
-    }
-    attachment.state = undefined;
-  }
-
-  release(
-    editStateKey: string,
-    owner: DiffsEditor<unknown>,
-    state?: ManagedEditStateFor<K>
-  ): void {
-    const session = this.#sessions.get(editStateKey);
-    if (session?.owner !== owner) {
-      return;
-    }
-    session.attachment = undefined;
-    this.#sessions.delete(editStateKey);
-    const retainedState = applyEditStateRetention(state, session.retention);
-    if (retainedState != null) {
-      this.#retain(editStateKey, retainedState);
-    }
-  }
-
-  dispose(editStateKey: string): boolean {
-    const session = this.#sessions.get(editStateKey);
-    if (session != null) {
-      session.retention = createEditStateRetention(false);
-      if (session.attachment != null) {
-        session.attachment.state = undefined;
-      }
-    }
-    return this.#states.delete(editStateKey) != null || session != null;
-  }
-
-  clear(): void {
-    this.#sessions.forEach((session) => {
-      session.retention = createEditStateRetention(false);
-      if (session.attachment != null) {
-        session.attachment.state = undefined;
-      }
-    });
+  clearAll(): void {
     this.#states.clear();
   }
 
@@ -172,16 +167,6 @@ class EditStateManagerNamespace<K extends EditorDocumentKind> {
     }
     this.#states.limit = capacity;
   }
-
-  #retain(editStateKey: string, state: ManagedEditStateFor<K>): void {
-    if (
-      this.#states.find(editStateKey) == null &&
-      this.#states.size >= this.#states.limit
-    ) {
-      this.#states.shift();
-    }
-    this.#states.set(editStateKey, state);
-  }
 }
 
 /** Keeps file and diff edit state in independent persistence domains. */
@@ -189,85 +174,91 @@ class EditStateManagerClass {
   #files = new EditStateManagerNamespace('file');
   #diffs = new EditStateManagerNamespace('file-diff');
 
-  acquire(
+  /** Mark a keyed session as active and return its initial or stored state. */
+  activate<LAnnotation>(
     documentKind: EditorDocumentKind,
     editStateKey: string,
-    owner: DiffsEditor<unknown>
+    owner: DiffsEditor<LAnnotation>,
+    initialState?: ManagedEditState<LAnnotation>
+  ): ManagedEditSession<LAnnotation> {
+    return (
+      documentKind === 'file'
+        ? this.#files.activate(
+            editStateKey,
+            owner,
+            initialState as ManagedFileEditState | undefined
+          )
+        : this.#diffs.activate(
+            editStateKey,
+            owner,
+            initialState as ManagedFileDiffEditState | undefined
+          )
+    ) as ManagedEditSession<LAnnotation>;
+  }
+
+  /**
+   * Stop tracking this file session as active and store its current state,
+   * unless `discard` is true.
+   */
+  releaseFile<LAnnotation>(
+    editStateKey: string,
+    owner: DiffsEditor<LAnnotation>,
+    discard = false
+  ): void {
+    this.#files.release(editStateKey, owner, discard);
+  }
+
+  /**
+   * Stop tracking this diff session as active and store its current state,
+   * unless `discard` is true.
+   */
+  releaseFileDiff<LAnnotation>(
+    editStateKey: string,
+    owner: DiffsEditor<LAnnotation>,
+    discard = false
+  ): void {
+    this.#diffs.release(editStateKey, owner, discard);
+  }
+
+  /** Return current state for an active or dormant editing session. */
+  get<LAnnotation>(
+    documentKind: EditorDocumentKind,
+    editStateKey: string
+  ): EditState<LAnnotation> | undefined {
+    return documentKind === 'file'
+      ? this.#files.get<LAnnotation>(editStateKey)
+      : this.#diffs.get<LAnnotation>(editStateKey);
+  }
+
+  /** Clear a dormant session, returning false when it is active or missing. */
+  clear(
+    documentKind: EditorDocumentKind,
+    editStateKey: string,
+    parts?: ClearEditStateOptions
   ): boolean {
     return documentKind === 'file'
-      ? this.#files.acquire(editStateKey, owner)
-      : this.#diffs.acquire(editStateKey, owner);
+      ? this.#files.clear(editStateKey, parts)
+      : this.#diffs.clear(editStateKey, parts);
   }
 
-  beginAttachment(
-    documentKind: 'file',
-    editStateKey: string,
-    owner: DiffsEditor<unknown>
-  ): EditStateManagerAttachment<'file'>;
-  beginAttachment(
-    documentKind: 'file-diff',
-    editStateKey: string,
-    owner: DiffsEditor<unknown>
-  ): EditStateManagerAttachment<'file-diff'>;
-  beginAttachment(
-    documentKind: EditorDocumentKind,
-    editStateKey: string,
-    owner: DiffsEditor<unknown>
-  ): AnyEditStateManagerAttachment {
-    return documentKind === 'file'
-      ? this.#files.beginAttachment(editStateKey, owner)
-      : this.#diffs.beginAttachment(editStateKey, owner);
-  }
-
-  commitAttachment(attachment: AnyEditStateManagerAttachment): void {
-    if (attachment.documentKind === 'file') {
-      this.#files.commitAttachment(attachment);
-    } else {
-      this.#diffs.commitAttachment(attachment);
-    }
-  }
-
-  rollbackAttachment(attachment: AnyEditStateManagerAttachment): void {
-    if (attachment.documentKind === 'file') {
-      this.#files.rollbackAttachment(attachment);
-    } else {
-      this.#diffs.rollbackAttachment(attachment);
-    }
-  }
-
-  releaseFile(
-    editStateKey: string,
-    owner: DiffsEditor<unknown>,
-    state?: ManagedFileEditState
-  ): void {
-    this.#files.release(editStateKey, owner, state);
-  }
-
-  releaseFileDiff(
-    editStateKey: string,
-    owner: DiffsEditor<unknown>,
-    state?: ManagedFileDiffEditState
-  ): void {
-    this.#diffs.release(editStateKey, owner, state);
-  }
-
-  disposeFile(editStateKey: string): boolean {
-    return this.#files.dispose(editStateKey);
-  }
-
-  disposeFileDiff(editStateKey: string): boolean {
-    return this.#diffs.dispose(editStateKey);
-  }
-
+  /** Clear all dormant sessions without affecting active editors. */
   clearAll(): void {
-    this.#files.clear();
-    this.#diffs.clear();
+    this.#files.clearAll();
+    this.#diffs.clearAll();
   }
 
   setCapacity(capacity: number): void {
     this.#files.setCapacity(capacity);
     this.#diffs.setCapacity(capacity);
   }
+}
+
+export interface ClearEditStateOptions {
+  document?: boolean;
+  history?: boolean;
+  editor?: boolean;
+  selections?: boolean;
+  view?: boolean;
 }
 
 export function cloneEditorState(state: EditorState): EditorState {
@@ -281,65 +272,41 @@ export function cloneEditorState(state: EditorState): EditorState {
   };
 }
 
-export function cloneManagedEditState(
-  state: ManagedEditState
-): ManagedEditState {
-  const base = {
-    document: state.document.clone(),
-    fileInfo: { ...state.fileInfo },
-    editor: state.editor == null ? undefined : cloneEditorState(state.editor),
-  };
-  return state.documentKind === 'file'
-    ? { ...base, documentKind: 'file' }
-    : {
-        ...base,
-        documentKind: 'file-diff',
-        diffSession: cloneRetainedDiffSessionSnapshot(state.diffSession),
-      };
-}
-
-export function applyEditStateRetention<T extends ManagedEditState>(
-  state: T | undefined,
-  retention: EditStateRetention
-): T | undefined {
-  if (state == null || !retention.document) {
+export function toManagedEditState<LAnnotation>(
+  session: ManagedEditSession<LAnnotation>
+): ManagedEditState<LAnnotation> | undefined {
+  if (session.document == null || session.fileInfo == null) {
     return undefined;
   }
-  if (retention.history && retention.selections && retention.view) {
-    return state;
+  if (session.documentKind === 'file') {
+    session.editor ??= {};
+    return session as ManagedFileEditState<LAnnotation>;
   }
-  const editor = filterEditorState(state.editor, retention);
-  return {
-    ...state,
-    document: retention.history
-      ? state.document
-      : state.document.cloneWithoutHistory(),
-    editor,
-  };
-}
-
-function createEditStateRetention(retain = true): EditStateRetention {
-  return {
-    document: retain,
-    history: retain,
-    selections: retain,
-    view: retain,
-  };
-}
-
-function filterEditorState(
-  state: EditorState | undefined,
-  retention: EditStateRetention
-): EditorState | undefined {
-  if (state == null) {
+  if (session.diffSession == null) {
     return undefined;
   }
-  const selections = retention.selections
-    ? cloneEditorState(state).selections
-    : undefined;
-  const view =
-    retention.view && state.view != null ? { ...state.view } : undefined;
-  return selections == null && view == null ? undefined : { selections, view };
+  session.editor ??= {};
+  return session as ManagedFileDiffEditState<LAnnotation>;
+}
+
+function applyClearEditStateOptions(
+  session: ManagedEditSession | undefined,
+  parts: ClearEditStateOptions
+): void {
+  if (session == null) {
+    return;
+  }
+  if (parts.history === true) {
+    session.document?.clearHistory();
+  }
+  if (session.editor != null) {
+    if (parts.editor === true || parts.selections === true) {
+      session.editor.selections = undefined;
+    }
+    if (parts.editor === true || parts.view === true) {
+      session.editor.view = undefined;
+    }
+  }
 }
 
 export const EditStateManager: EditStateManagerClass =

@@ -44,7 +44,7 @@ interface E2EEditor {
   canRedo: boolean;
   getText: () => string;
   getFile: () => { contents: string } | undefined;
-  getState: () => E2EEditorState;
+  getSurfaceState: () => E2EEditorState;
   setSelections: (selections: E2ESelection[]) => void;
   applyEdits: (edits: E2ETextEdit[], updateHistory?: boolean) => void;
   focus: () => void;

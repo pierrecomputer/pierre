@@ -481,17 +481,19 @@ describe('VirtualizedFileDiff partial hydration', () => {
       expect(instance.getLatestDiffForTest()).toBe(partial);
 
       instance.cleanUp(true);
-      detach = undefined;
       instance.updateCodeViewLayout(partial, 0);
 
-      expect(instance.getLatestDiffForTest()).toBe(partial);
+      const recycledSession = instance.getLatestDiffForTest();
+      expect(recycledSession).not.toBe(partial);
+      expect(recycledSession?.cacheKey).toBeUndefined();
       expect(partial.isPartial).toBe(false);
 
       instance.virtualizedSetup();
       instance.updateCodeViewLayout(partial, 0);
-      detach = instance.attachEditor(editor);
+      instance.__resumeEditor(editor);
 
       const sessionDiff = instance.getLatestDiffForTest();
+      expect(sessionDiff).toBe(recycledSession);
       expect(instance.fileDiff).toBe(partial);
       expect(partial.isPartial).toBe(false);
       expect(partial.cacheKey).toBe('external:advanced-partial:hydrated');
@@ -501,7 +503,7 @@ describe('VirtualizedFileDiff partial hydration', () => {
       expect(sessionDiff?.deletionLines).toBe(partial.deletionLines);
       expect(sessionDiff?.hunks).toBe(partial.hunks);
     } finally {
-      detach?.(false);
+      detach?.();
       instance.cleanUp();
     }
   });
@@ -563,7 +565,7 @@ describe('VirtualizedFileDiff partial hydration', () => {
       expect(nextSession?.additionLines).toBe(partial.additionLines);
       expect(nextSession?.deletionLines).toBe(partial.deletionLines);
     } finally {
-      detach?.(false);
+      detach?.();
       instance.cleanUp();
     }
   });
@@ -604,7 +606,7 @@ describe('VirtualizedFileDiff partial hydration', () => {
       expect(sessionDiff?.deletionLines).toBe(partial.deletionLines);
       expect(sessionDiff?.hunks).toBe(partial.hunks);
     } finally {
-      detach?.(false);
+      detach?.();
       instance.cleanUp();
     }
   });
@@ -687,7 +689,7 @@ describe('VirtualizedFileDiff partial hydration', () => {
       expect(instance.getLatestDiffForTest()).toBe(sessionDiff);
       expect(sessionDiff?.additionLines).toBe(externalDiff.additionLines);
     } finally {
-      detach?.(false);
+      detach?.();
       instance.cleanUp();
       cleanup();
     }

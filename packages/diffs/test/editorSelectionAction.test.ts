@@ -703,7 +703,7 @@ describe('Editor selection action', () => {
           direction: 'backward',
         },
       ]);
-      expect(editor.getState().selections?.[0]?.direction).toBe(
+      expect(editor.getSurfaceState().selections?.[0]?.direction).toBe(
         DirectionBackward
       );
       // setSelections ends by re-focusing the caret, which sets
@@ -732,7 +732,7 @@ describe('Editor selection action', () => {
 
       document.dispatchEvent(new Event('selectionchange'));
 
-      const primarySelection = editor.getState().selections?.at(-1);
+      const primarySelection = editor.getSurfaceState().selections?.at(-1);
       expect(primarySelection?.direction).toBe(DirectionBackward);
       expect(getCaretPosition(primarySelection!)).toEqual({
         line: 0,
@@ -769,7 +769,7 @@ describe('Editor selection action', () => {
           direction: 'backward',
         },
       ]);
-      expect(editor.getState().selections?.[0]?.direction).toBe(
+      expect(editor.getSurfaceState().selections?.[0]?.direction).toBe(
         DirectionBackward
       );
       // Flush setSelections' own re-focus (see the refocus test above) so the
@@ -805,7 +805,7 @@ describe('Editor selection action', () => {
       document.dispatchEvent(new Event('selectionchange'));
 
       // Ignored: the pre-composition backward selection must be untouched.
-      const primarySelection = editor.getState().selections?.at(-1);
+      const primarySelection = editor.getSurfaceState().selections?.at(-1);
       expect(primarySelection?.direction).toBe(DirectionBackward);
       expect(primarySelection?.start).toEqual({ line: 0, character: 0 });
       expect(primarySelection?.end).toEqual({ line: 1, character: 0 });
@@ -1005,7 +1005,7 @@ describe('Editor selection action', () => {
       editor.setMarkers([]);
       await wait(0);
 
-      expect(editor.getState().selections).toEqual([
+      expect(editor.getSurfaceState().selections).toEqual([
         { start, end, direction: DirectionForward },
       ]);
       expect(renderCount).toBe(0);
@@ -1038,11 +1038,11 @@ describe('Editor selection action', () => {
         end: { line: 0, character: 5 },
         direction: DirectionForward,
       };
-      editor.setState({ selections: [selection] });
+      editor.setSurfaceState({ selections: [selection] });
       editor.setMarkers([]);
       await wait(0);
 
-      expect(editor.getState().selections).toEqual([selection]);
+      expect(editor.getSurfaceState().selections).toEqual([selection]);
       expect(renderCount).toBe(0);
       expect(
         (content.getRootNode() as ShadowRoot).querySelector(

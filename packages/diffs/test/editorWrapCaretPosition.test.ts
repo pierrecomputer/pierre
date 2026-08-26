@@ -266,7 +266,7 @@ function expectCaret(
   line: number,
   character: number
 ): void {
-  const selection = editor.getState().selections?.at(-1);
+  const selection = editor.getSurfaceState().selections?.at(-1);
   expect(selection?.start).toEqual({ line, character });
   expect(selection?.end).toEqual({ line, character });
 }
@@ -277,7 +277,7 @@ function caretState(editor: Editor<undefined>): {
   line: number;
   character: number;
 } {
-  const selection = editor.getState().selections?.at(-1);
+  const selection = editor.getSurfaceState().selections?.at(-1);
   if (selection === undefined) {
     throw new Error('no selection in editor state');
   }

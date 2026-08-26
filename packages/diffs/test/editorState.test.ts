@@ -1,15 +1,20 @@
 import { describe, expect, test } from 'bun:test';
 
 import { Editor } from '../src/editor/editor';
+import { EditStateManager } from '../src/editor/EditStateManager';
+import { TextDocument } from '../src/editor/textDocument';
+import type { EditState } from '../src/editor/types';
 import type {
   DiffLineAnnotation,
   DiffsEditableComponent,
   DiffsEditor,
   DiffsHighlighter,
+  EditorState,
   FileContents,
   HighlightedToken,
   RenderRange,
 } from '../src/types';
+import { getFiletypeFromFileName } from '../src/utils/getFiletypeFromFileName';
 import { getLineAnnotationName } from '../src/utils/getLineAnnotationName';
 import { installDom } from './domHarness';
 
@@ -21,6 +26,22 @@ function createTestHighlighter(): DiffsHighlighter {
     loadLanguage: async () => {},
     setTheme: () => ({ theme: { type: 'light' }, colorMap: [''] }),
   } as unknown as DiffsHighlighter;
+}
+
+function createInitialState(
+  file: FileContents,
+  editor: EditorState = {}
+): EditState<undefined> {
+  return {
+    documentKind: 'file',
+    document: new TextDocument(
+      file.name,
+      file.contents,
+      file.lang ?? getFiletypeFromFileName(file.name)
+    ),
+    fileInfo: { name: file.name, lang: file.lang },
+    editor,
+  };
 }
 
 class TestEditableComponent implements DiffsEditableComponent<undefined> {
@@ -39,6 +60,9 @@ class TestEditableComponent implements DiffsEditableComponent<undefined> {
   editorViewport: HTMLElement | Document | undefined;
   restoredCodeScrollLefts: number[] = [];
   stateRestoreError: Error | undefined;
+  attachErrorAfterSync: Error | undefined;
+  deferAttachSync = false;
+  completedEditState: EditState<undefined> | undefined;
 
   constructor(private file: FileContents) {
     this.#renderShadowDom();
@@ -54,6 +78,10 @@ class TestEditableComponent implements DiffsEditableComponent<undefined> {
 
   __getEffectiveCodeOptions(): DiffsEditableComponent<undefined>['options'] {
     return this.options;
+  }
+
+  __captureDocumentSessionState(): undefined {
+    return undefined;
   }
 
   getCodeScrollLeft(): number {
@@ -104,16 +132,30 @@ class TestEditableComponent implements DiffsEditableComponent<undefined> {
   getAnnotationSlotName = getLineAnnotationName;
 
   completeEditSession(
-    _editor: DiffsEditor<undefined>,
+    editor: DiffsEditor<undefined>,
     _mode: 'install' | 'discard'
-  ): void {}
+  ): void {
+    this.completedEditState = editor.getEditState();
+  }
 
-  attachEditor(editor: DiffsEditor<undefined>): (_recycle: boolean) => void {
+  attachEditor(editor: DiffsEditor<undefined>): () => void {
     this.#editor = editor;
-    this.#syncRenderView();
-    return (_recycle: boolean) => {
+    if (!this.deferAttachSync) {
+      this.#syncRenderView();
+    }
+    if (this.attachErrorAfterSync != null) {
+      throw this.attachErrorAfterSync;
+    }
+    return () => {
       this.#editor = undefined;
     };
+  }
+
+  __resumeEditor(editor: DiffsEditor<undefined>): void {
+    if (this.#editor !== editor) {
+      throw new Error('TestEditableComponent: editor association changed');
+    }
+    this.rerender();
   }
 
   applyDocumentChange(
@@ -166,7 +208,7 @@ class TestEditableComponent implements DiffsEditableComponent<undefined> {
 describe('Editor state', () => {
   test('keyed state restores selections and view in a later editor', () => {
     const dom = installDom();
-    Editor.clearDocuments();
+    EditStateManager.clearAll();
     const first = new TestEditableComponent({
       name: 'state.ts',
       contents: 'alpha\nbravo',
@@ -184,7 +226,7 @@ describe('Editor state', () => {
 
     try {
       firstEditor.edit(first);
-      firstEditor.setState({
+      firstEditor.setSurfaceState({
         selections: [
           {
             start: { line: 1, character: 3 },
@@ -194,15 +236,15 @@ describe('Editor state', () => {
         ],
         view: { scrollLeft: 18, scrollTop: 36 },
       });
+      const detachedState = firstEditor.getSurfaceState();
       firstEditor.cleanUp('discard');
-      const detachedState = firstEditor.getState();
       Object.assign(detachedState.selections![0].start, {
         character: 0,
       });
       first.cleanUp();
 
       secondEditor.edit(second);
-      expect(secondEditor.getState()).toEqual({
+      expect(secondEditor.getSurfaceState()).toEqual({
         selections: [
           {
             start: { line: 1, character: 3 },
@@ -217,7 +259,7 @@ describe('Editor state', () => {
       secondEditor.cleanUp();
       first.cleanUp();
       second.cleanUp();
-      Editor.clearDocuments();
+      EditStateManager.clearAll();
       dom.cleanup();
     }
   });
@@ -225,8 +267,9 @@ describe('Editor state', () => {
   test('initialState restores selections and an owned viewport on first attach', () => {
     const dom = installDom();
     const viewport = document.createElement('div');
+    const file = { name: 'state.ts', contents: 'alpha\nbravo' };
     const editor = new Editor<undefined>('file', {
-      initialState: {
+      initialState: createInitialState(file, {
         selections: [
           {
             start: { line: 1, character: 2 },
@@ -235,18 +278,15 @@ describe('Editor state', () => {
           },
         ],
         view: { scrollLeft: 24, scrollTop: 48 },
-      },
+      }),
     });
-    const component = new TestEditableComponent({
-      name: 'state.ts',
-      contents: 'alpha\nbravo',
-    });
+    const component = new TestEditableComponent(file);
     component.editorViewport = viewport;
 
     try {
       editor.edit(component);
 
-      expect(editor.getState()).toEqual({
+      expect(editor.getSurfaceState()).toEqual({
         selections: [
           {
             start: { line: 1, character: 2 },
@@ -260,7 +300,7 @@ describe('Editor state', () => {
       expect(viewport.scrollTop).toBe(48);
 
       editor.cleanUp('recycle');
-      expect(editor.getState()).toEqual({
+      expect(editor.getSurfaceState()).toEqual({
         selections: [
           {
             start: { line: 1, character: 2 },
@@ -274,7 +314,7 @@ describe('Editor state', () => {
       viewport.scrollTop = 16;
       editor.edit(component);
 
-      expect(editor.getState()).toEqual({
+      expect(editor.getSurfaceState()).toEqual({
         selections: [
           {
             start: { line: 1, character: 2 },
@@ -292,6 +332,476 @@ describe('Editor state', () => {
     }
   });
 
+  test('raw complete state transfers draft, history, and editor state', () => {
+    const dom = installDom();
+    const first = new TestEditableComponent({
+      name: 'state.ts',
+      contents: 'alpha\nbravo',
+      lang: 'text',
+    });
+    first.editorViewport = document.createElement('div');
+    const firstEditor = new Editor<undefined>('file');
+    const second = new TestEditableComponent({
+      name: 'state.ts',
+      contents: 'alpha\nbravo',
+      lang: 'text',
+    });
+    second.editorViewport = document.createElement('div');
+    let secondEditor: Editor<undefined> | undefined;
+
+    try {
+      firstEditor.edit(first);
+      firstEditor.applyEdits([
+        {
+          range: {
+            start: { line: 0, character: 0 },
+            end: { line: 0, character: 5 },
+          },
+          newText: 'ALPHA',
+        },
+      ]);
+      firstEditor.setSurfaceState({
+        selections: [
+          {
+            start: { line: 1, character: 3 },
+            end: { line: 1, character: 3 },
+            direction: 0,
+          },
+        ],
+        view: { scrollLeft: 18, scrollTop: 36 },
+      });
+
+      const state = firstEditor.getEditState()!;
+      firstEditor.cleanUp('discard');
+      secondEditor = new Editor('file', { initialState: state });
+      Object.assign(state.editor.selections![0].start, { character: 0 });
+      state.editor.view!.scrollLeft = 0;
+      secondEditor.edit(second);
+
+      expect(secondEditor.getEditState()!.document).toBe(state.document);
+      expect(secondEditor.getText()).toBe('ALPHA\nbravo');
+      expect(secondEditor.canUndo).toBe(true);
+      expect(secondEditor.getSurfaceState()).toEqual({
+        selections: [
+          {
+            start: { line: 1, character: 0 },
+            end: { line: 1, character: 3 },
+            direction: 0,
+          },
+        ],
+        view: { scrollLeft: 0, scrollTop: 36 },
+      });
+      secondEditor.undo();
+      expect(secondEditor.getText()).toBe('alpha\nbravo');
+    } finally {
+      firstEditor.cleanUp();
+      secondEditor?.cleanUp();
+      first.cleanUp();
+      second.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test('getEditState returns the managed document and history', () => {
+    const dom = installDom();
+    const component = new TestEditableComponent({
+      name: 'state.ts',
+      contents: 'alpha',
+      lang: 'text',
+    });
+    component.editorViewport = document.createElement('div');
+    const editor = new Editor<undefined>('file');
+
+    try {
+      editor.edit(component);
+      editor.setSurfaceState({
+        selections: [
+          {
+            start: { line: 0, character: 1 },
+            end: { line: 0, character: 1 },
+            direction: 0,
+          },
+        ],
+      });
+      const state = editor.getEditState()!;
+      const history = state.document.history;
+
+      editor.applyEdits([
+        {
+          range: {
+            start: { line: 0, character: 5 },
+            end: { line: 0, character: 5 },
+          },
+          newText: '!',
+        },
+      ]);
+      editor.setSurfaceState({
+        selections: [
+          {
+            start: { line: 0, character: 6 },
+            end: { line: 0, character: 6 },
+            direction: 0,
+          },
+        ],
+      });
+
+      expect(state.document.getText()).toBe('alpha!');
+      expect(state.document.version).toBe(1);
+      expect(state.document.history.undoStack).toBe(history.undoStack);
+      expect(state.document.history.redoStack).toBe(history.redoStack);
+      expect(history.undoStack).toHaveLength(1);
+      const updatedState = editor.getEditState()!;
+      expect(updatedState).toBe(state);
+      expect(updatedState.document).toBe(state.document);
+      expect(updatedState.document.history.undoStack).toBe(history.undoStack);
+      expect(state.editor.selections?.[0].start.character).toBe(6);
+      expect(updatedState.editor.selections?.[0].start.character).toBe(6);
+      const entry = history.undoStack[0];
+      editor.undo();
+      expect(state.document.getText()).toBe('alpha');
+      expect(history.undoStack).toHaveLength(0);
+      expect(history.redoStack).toEqual([entry]);
+      editor.redo();
+      expect(state.document.getText()).toBe('alpha!');
+      expect(history.undoStack).toEqual([entry]);
+      expect(history.redoStack).toHaveLength(0);
+    } finally {
+      editor.cleanUp();
+      component.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test('keyed state is checkpointed directly on the managed session', () => {
+    const dom = installDom();
+    const component = new TestEditableComponent({
+      name: 'state.ts',
+      contents: 'alpha',
+      lang: 'text',
+    });
+    const editor = new Editor<undefined>('file', {}, 'managed-checkpoint');
+
+    try {
+      editor.edit(component);
+      const state = editor.getEditState()!;
+      expect(EditStateManager.get('file', 'managed-checkpoint')).toBe(state);
+
+      editor.applyEdits([
+        {
+          range: {
+            start: { line: 0, character: 5 },
+            end: { line: 0, character: 5 },
+          },
+          newText: '!',
+        },
+      ]);
+
+      expect(EditStateManager.get('file', 'managed-checkpoint')).toBe(state);
+      expect(state.document.getText()).toBe('alpha!');
+      expect(state.editor).toEqual(editor.getSurfaceState());
+    } finally {
+      editor.cleanUp();
+      component.cleanUp();
+      EditStateManager.clearAll();
+      dom.cleanup();
+    }
+  });
+
+  test('getEditState exposes initialState before synchronization', () => {
+    const dom = installDom();
+    const file = {
+      name: 'state.ts',
+      contents: 'alpha',
+      lang: 'text',
+    };
+    const initialState = createInitialState(file, {
+      view: { scrollLeft: 24 },
+    });
+    const component = new TestEditableComponent(file);
+    component.deferAttachSync = true;
+    const editor = new Editor<undefined>('file', {
+      initialState,
+    });
+
+    try {
+      editor.edit(component);
+      expect(editor.getEditState()).toBe(initialState);
+
+      component.rerender();
+      expect(editor.getEditState()).toBe(initialState);
+    } finally {
+      editor.cleanUp();
+      component.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test('completion checkpoints initialState before synchronization', () => {
+    const dom = installDom();
+    const file = {
+      name: 'state.ts',
+      contents: 'alpha',
+      lang: 'text',
+    };
+    const editorState: EditorState = {
+      view: { scrollLeft: 24, scrollTop: 48 },
+    };
+    const initialState = createInitialState(file, editorState);
+    const component = new TestEditableComponent(file);
+    component.deferAttachSync = true;
+    const editor = new Editor<undefined>('file', { initialState });
+
+    try {
+      editor.edit(component);
+      editor.cleanUp('complete');
+
+      expect(initialState.editor).toEqual({});
+      expect(component.completedEditState).toBe(initialState);
+    } finally {
+      editor.cleanUp();
+      component.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test('completion can transfer state before the editor releases its session', () => {
+    const dom = installDom();
+    const first = new TestEditableComponent({
+      name: 'state.ts',
+      contents: 'alpha',
+      lang: 'text',
+    });
+    const firstEditor = new Editor<undefined>('file');
+    const second = new TestEditableComponent({
+      name: 'state.ts',
+      contents: 'alpha',
+      lang: 'text',
+    });
+    const fresh = new TestEditableComponent({
+      name: 'state.ts',
+      contents: 'alpha',
+      lang: 'text',
+    });
+    let secondEditor: Editor<undefined> | undefined;
+
+    try {
+      firstEditor.edit(first);
+      firstEditor.applyEdits([
+        {
+          range: {
+            start: { line: 0, character: 5 },
+            end: { line: 0, character: 5 },
+          },
+          newText: '!',
+        },
+      ]);
+      firstEditor.cleanUp('complete');
+      firstEditor.cleanUp('complete');
+
+      const completedState = first.completedEditState;
+      expect(completedState?.document.getText()).toBe('alpha!');
+      expect(firstEditor.getEditState()).toBeUndefined();
+
+      firstEditor.edit(fresh);
+      expect(firstEditor.getText()).toBe('alpha');
+      expect(firstEditor.canUndo).toBe(false);
+      firstEditor.cleanUp();
+
+      secondEditor = new Editor('file', {
+        initialState: completedState,
+      });
+      secondEditor.edit(second);
+      expect(secondEditor.getText()).toBe('alpha!');
+      expect(secondEditor.canUndo).toBe(true);
+    } finally {
+      firstEditor.cleanUp();
+      secondEditor?.cleanUp();
+      first.cleanUp();
+      second.cleanUp();
+      fresh.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test('initialState replaces retained keyed state', () => {
+    const dom = installDom();
+    EditStateManager.clearAll();
+    const first = new TestEditableComponent({
+      name: 'state.ts',
+      contents: 'alpha',
+      lang: 'text',
+    });
+    const firstEditor = new Editor<undefined>('file', {}, 'authoritative');
+    const second = new TestEditableComponent({
+      name: 'state.ts',
+      contents: 'alpha',
+      lang: 'text',
+    });
+    const secondEditor = new Editor<undefined>(
+      'file',
+      {
+        initialState: createInitialState({
+          name: 'state.ts',
+          contents: 'replacement',
+          lang: 'text',
+        }),
+      },
+      'authoritative'
+    );
+
+    try {
+      firstEditor.edit(first);
+      firstEditor.applyEdits([
+        {
+          range: {
+            start: { line: 0, character: 5 },
+            end: { line: 0, character: 5 },
+          },
+          newText: '!',
+        },
+      ]);
+      firstEditor.cleanUp('complete');
+      secondEditor.edit(second);
+
+      expect(secondEditor.getText()).toBe('replacement');
+      expect(secondEditor.canUndo).toBe(false);
+    } finally {
+      firstEditor.cleanUp();
+      secondEditor.cleanUp();
+      first.cleanUp();
+      second.cleanUp();
+      EditStateManager.clearAll();
+      dom.cleanup();
+    }
+  });
+
+  test('pre-sync completion keeps the keyed document but clears surface state', () => {
+    const dom = installDom();
+    EditStateManager.clearAll();
+    const first = new TestEditableComponent({
+      name: 'state.ts',
+      contents: 'alpha',
+      lang: 'text',
+    });
+    const firstEditor = new Editor<undefined>('file', {}, 'pending-hydration');
+    const pending = new TestEditableComponent({
+      name: 'state.ts',
+      contents: 'alpha',
+      lang: 'text',
+    });
+    pending.deferAttachSync = true;
+    const pendingEditor = new Editor<undefined>(
+      'file',
+      {},
+      'pending-hydration'
+    );
+    const restored = new TestEditableComponent({
+      name: 'state.ts',
+      contents: 'alpha',
+      lang: 'text',
+    });
+    const restoredEditor = new Editor<undefined>(
+      'file',
+      {},
+      'pending-hydration'
+    );
+
+    try {
+      firstEditor.edit(first);
+      firstEditor.applyEdits([
+        {
+          range: {
+            start: { line: 0, character: 5 },
+            end: { line: 0, character: 5 },
+          },
+          newText: '!',
+        },
+      ]);
+      firstEditor.setSelections([
+        {
+          start: { line: 0, character: 3 },
+          end: { line: 0, character: 3 },
+          direction: 'none',
+        },
+      ]);
+      firstEditor.cleanUp('complete');
+
+      pendingEditor.edit(pending);
+      expect(EditStateManager.get('file', 'pending-hydration')?.editor).toEqual(
+        {
+          selections: [
+            {
+              start: { line: 0, character: 3 },
+              end: { line: 0, character: 3 },
+              direction: 0,
+            },
+          ],
+          view: undefined,
+        }
+      );
+      pendingEditor.cleanUp('complete');
+      expect(EditStateManager.get('file', 'pending-hydration')?.editor).toEqual(
+        {}
+      );
+
+      restoredEditor.edit(restored);
+      expect(restoredEditor.getText()).toBe('alpha!');
+      expect(restoredEditor.canUndo).toBe(true);
+      expect(restoredEditor.getSurfaceState().selections).toBeUndefined();
+    } finally {
+      firstEditor.cleanUp();
+      pendingEditor.cleanUp();
+      restoredEditor.cleanUp();
+      first.cleanUp();
+      pending.cleanUp();
+      restored.cleanUp();
+      EditStateManager.clearAll();
+      dom.cleanup();
+    }
+  });
+
+  test('transfers caller-created document state without cloning it', () => {
+    const dom = installDom();
+    const document = new TextDocument<undefined>(
+      'state.ts',
+      'developer-owned',
+      'text',
+      7
+    );
+    const initialState: EditState<undefined> = {
+      documentKind: 'file',
+      document,
+      fileInfo: { name: 'state.ts', lang: 'text' },
+      editor: { view: { scrollLeft: 24 } },
+    };
+    const editor = new Editor<undefined>('file', { initialState });
+    const component = new TestEditableComponent({
+      name: 'state.ts',
+      contents: 'alpha',
+      lang: 'text',
+    });
+
+    try {
+      expect(editor.getEditState()).toBeUndefined();
+      document.applyResolvedEdits([
+        {
+          start: 0,
+          end: document.getText().length,
+          text: 'changed-after-construction',
+        },
+      ]);
+      editor.edit(component);
+      expect(editor.getText()).toBe('changed-after-construction');
+      expect(editor.canUndo).toBe(true);
+      expect(editor.getEditState()!.document).toBe(document);
+      expect(editor.getEditState()!.fileInfo).toBe(initialState.fileInfo);
+    } finally {
+      editor.cleanUp();
+      component.cleanUp();
+      dom.cleanup();
+    }
+  });
+
   test('initialState ignores vertical scroll without an owned viewport', () => {
     const dom = installDom();
     const originalScrollTo = window.scrollTo;
@@ -300,9 +810,10 @@ describe('Editor state', () => {
       pageScrollCalls++;
     };
     const editor = new Editor<undefined>('file', {
-      initialState: {
-        view: { scrollLeft: 24, scrollTop: 48 },
-      },
+      initialState: createInitialState(
+        { name: 'state.ts', contents: 'alpha\nbravo' },
+        { view: { scrollLeft: 24, scrollTop: 48 } }
+      ),
     });
     const component = new TestEditableComponent({
       name: 'state.ts',
@@ -331,9 +842,10 @@ describe('Editor state', () => {
   test('initialState remains available when hydration fails', () => {
     const dom = installDom();
     const editor = new Editor<undefined>('file', {
-      initialState: {
-        view: { scrollLeft: 24 },
-      },
+      initialState: createInitialState(
+        { name: 'state.ts', contents: 'alpha\nbravo' },
+        { view: { scrollLeft: 24 } }
+      ),
     });
     const component = new TestEditableComponent({
       name: 'state.ts',
@@ -355,6 +867,34 @@ describe('Editor state', () => {
     }
   });
 
+  test('initialState remains available when attachment fails after hydration', () => {
+    const dom = installDom();
+    const editor = new Editor<undefined>('file', {
+      initialState: createInitialState(
+        { name: 'state.ts', contents: 'alpha\nbravo' },
+        { view: { scrollLeft: 24 } }
+      ),
+    });
+    const component = new TestEditableComponent({
+      name: 'state.ts',
+      contents: 'alpha\nbravo',
+    });
+    const attachError = new Error('attachment failed');
+    component.attachErrorAfterSync = attachError;
+
+    try {
+      expect(() => editor.edit(component)).toThrow(attachError);
+      component.attachErrorAfterSync = undefined;
+      editor.edit(component);
+
+      expect(component.restoredCodeScrollLefts).toEqual([24, 24]);
+    } finally {
+      editor.cleanUp();
+      component.cleanUp();
+      dom.cleanup();
+    }
+  });
+
   test('getState omits view state without an owned element viewport', () => {
     const dom = installDom();
     const editor = new Editor<undefined>('file');
@@ -367,9 +907,9 @@ describe('Editor state', () => {
       editor.edit(component);
       component.codeScrollLeft = 24;
 
-      expect(editor.getState().view).toBeUndefined();
+      expect(editor.getSurfaceState().view).toBeUndefined();
       component.editorViewport = document;
-      expect(editor.getState().view).toBeUndefined();
+      expect(editor.getSurfaceState().view).toBeUndefined();
     } finally {
       editor.cleanUp();
       component.cleanUp();
@@ -392,7 +932,7 @@ describe('Editor state', () => {
       component.codeScrollLeft = 24;
       viewport.scrollTop = 48;
 
-      expect(editor.getState().view).toEqual({
+      expect(editor.getSurfaceState().view).toEqual({
         scrollLeft: 24,
         scrollTop: 48,
       });
@@ -413,7 +953,7 @@ describe('Editor state', () => {
 
     try {
       editor.edit(component);
-      editor.setState({ view: { scrollLeft: 24 } });
+      editor.setSurfaceState({ view: { scrollLeft: 24 } });
 
       expect(component.restoredCodeScrollLefts).toEqual([24]);
     } finally {
@@ -443,7 +983,7 @@ describe('Editor state', () => {
 
     try {
       editor.edit(component);
-      editor.setState({
+      editor.setSurfaceState({
         selections: [
           {
             start: { line: 5, character: 0 },
@@ -456,7 +996,7 @@ describe('Editor state', () => {
 
       expect(component.restoredCodeScrollLefts).toEqual([12]);
       expect(scrollIntoViewCalls).toBe(0);
-      expect(editor.getState().selections).toEqual([
+      expect(editor.getSurfaceState().selections).toEqual([
         {
           start: { line: 5, character: 0 },
           end: { line: 5, character: 0 },

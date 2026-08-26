@@ -981,7 +981,7 @@ if (renderFileButton != null) {
         console.log('change', file, lineAnnotations);
       },
       onAttach: (editor) => {
-        const { selections } = editor.getState();
+        const { selections } = editor.getSurfaceState();
         if (selections === undefined || selections.length === 0) {
           editor.setSelections([
             {

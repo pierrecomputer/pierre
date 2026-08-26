@@ -1023,8 +1023,8 @@ export class VirtualizedFileDiff<
   }
 
   protected override shouldSelfHealEditSession(): boolean {
-    // CodeView sessions survive recycling with no editor attached; CodeView
-    // itself runs the exit recompute when it reaps a session.
+    // CodeView sessions retain their editor association while rendering is
+    // suspended; CodeView itself runs the exit recompute when it reaps one.
     return !this.isAdvancedMode() && super.shouldSelfHealEditSession();
   }
 

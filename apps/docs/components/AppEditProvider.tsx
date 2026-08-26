@@ -11,9 +11,9 @@ import type { ReactNode } from 'react';
 function createEditor<LAnnotation>(
   documentKind: EditorDocumentKind,
   options: EditorOptions<LAnnotation>,
-  editHistoryKey?: string
+  editStateKey?: string
 ): Editor<LAnnotation> {
-  return new Editor(documentKind, options, editHistoryKey);
+  return new Editor(documentKind, options, editStateKey);
 }
 
 interface AppEditProviderProps {

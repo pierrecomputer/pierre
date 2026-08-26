@@ -12,7 +12,7 @@ import { useStableCallback } from './utils/useStableCallback';
 export type CreateEditor<LAnnotation> = (
   documentKind: EditorDocumentKind,
   options: EditorOptions<LAnnotation>,
-  editHistoryKey?: string
+  editStateKey?: string
 ) => DiffsEditor<LAnnotation>;
 
 export interface EditProviderProps<LAnnotation> {
@@ -31,9 +31,9 @@ export function EditProvider<LAnnotation>({
     (
       documentKind: EditorDocumentKind,
       options: EditorOptions<LAnnotation>,
-      editHistoryKey?: string
+      editStateKey?: string
     ): DiffsEditor<LAnnotation> =>
-      createEditor(documentKind, options, editHistoryKey)
+      createEditor(documentKind, options, editStateKey)
   );
   return (
     <EditContext.Provider value={stableCreateEditor}>

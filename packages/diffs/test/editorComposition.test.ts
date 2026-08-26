@@ -270,7 +270,7 @@ describe('Editor composition input', () => {
       });
 
       expect(event.defaultPrevented).toBe(false);
-      expect(editor.getState().selections).toEqual([
+      expect(editor.getSurfaceState().selections).toEqual([
         {
           start: { line: 0, character: 2 },
           end: { line: 0, character: 2 },
@@ -332,7 +332,7 @@ describe('Editor keyboard editing', () => {
       });
 
       expect(event.defaultPrevented).toBe(true);
-      expect(editor.getState().selections).toEqual([
+      expect(editor.getSurfaceState().selections).toEqual([
         {
           start: { line: 0, character: 0 },
           end: { line: 1, character: 4 },
@@ -568,7 +568,7 @@ describe('Editor keyboard editing', () => {
 
       expect(event.defaultPrevented).toBe(true);
       expect(editor.getText()).toBe('foo');
-      expect(editor.getState().selections).toEqual([
+      expect(editor.getSurfaceState().selections).toEqual([
         {
           start: { line: 0, character: 0 },
           end: { line: 0, character: 0 },
@@ -597,7 +597,7 @@ describe('Editor keyboard editing', () => {
 
       expect(event.defaultPrevented).toBe(true);
       expect(editor.getText()).toBe('foo');
-      expect(editor.getState().selections).toEqual([
+      expect(editor.getSurfaceState().selections).toEqual([
         {
           start: { line: 0, character: 0 },
           end: { line: 0, character: 0 },
@@ -626,7 +626,7 @@ describe('Editor keyboard editing', () => {
 
       expect(event.defaultPrevented).toBe(true);
       expect(editor.getText()).toBe(' foo');
-      expect(editor.getState().selections).toEqual([
+      expect(editor.getSurfaceState().selections).toEqual([
         {
           start: { line: 0, character: 1 },
           end: { line: 0, character: 1 },
@@ -662,7 +662,7 @@ describe('Editor keyboard editing', () => {
       expect(editor.getText()).toBe('  abcde  fgh');
       // The second caret follows its own inserted indent (column 9), not the
       // pre-shift column 7 that lands before it.
-      expect(editor.getState().selections).toEqual([
+      expect(editor.getSurfaceState().selections).toEqual([
         {
           start: { line: 0, character: 2 },
           end: { line: 0, character: 2 },

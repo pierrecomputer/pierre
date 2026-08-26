@@ -66,6 +66,10 @@ class VirtualizedEditableComponent implements DiffsEditableComponent<undefined> 
     return this.options;
   }
 
+  __captureDocumentSessionState(): undefined {
+    return undefined;
+  }
+
   getCodeScrollLeft(): number {
     return 0;
   }
@@ -101,6 +105,15 @@ class VirtualizedEditableComponent implements DiffsEditableComponent<undefined> 
     return () => {
       this.#editor = undefined;
     };
+  }
+
+  __resumeEditor(editor: DiffsEditor<undefined>): void {
+    if (this.#editor !== editor) {
+      throw new Error(
+        'VirtualizedEditableComponent: editor association changed'
+      );
+    }
+    this.rerender();
   }
 
   applyDocumentChange(

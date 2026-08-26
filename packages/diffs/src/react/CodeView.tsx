@@ -66,7 +66,7 @@ interface CodeViewBaseProps<LAnnotation> {
    */
   editorOptions?: Omit<EditorOptions<LAnnotation>, 'onChange'>;
   /** Resolve an in-memory retention key for an item's draft and undo history. */
-  getEditHistoryKey?(item: CodeViewItem<LAnnotation>): string | undefined;
+  getEditStateKey?(item: CodeViewItem<LAnnotation>): string | undefined;
   className?: string;
   style?: CSSProperties;
   containerRef?: Ref<HTMLDivElement>;
@@ -201,7 +201,7 @@ function CodeViewInner<LAnnotation = undefined>(
     containerRef,
     disableWorkerPool = false,
     editorOptions,
-    getEditHistoryKey,
+    getEditStateKey,
     initialItems,
     items: controlledItems,
     onItemEditChange,
@@ -251,7 +251,7 @@ function CodeViewInner<LAnnotation = undefined>(
     (
       documentKind: EditorDocumentKind,
       options: CodeViewCreateEditorOptions<LAnnotation>,
-      editHistoryKey?: string
+      editStateKey?: string
     ): DiffsEditor<LAnnotation> => {
       if (contextCreateEditor == null) {
         throw new Error('CodeView: EditContext is not attached');
@@ -263,7 +263,7 @@ function CodeViewInner<LAnnotation = undefined>(
           ...editorOptions,
           ...options,
         },
-        editHistoryKey
+        editStateKey
       );
       if (editor == null) {
         throw new Error(
@@ -300,7 +300,7 @@ function CodeViewInner<LAnnotation = undefined>(
         onSelectedLinesChange:
           onSelectedLinesChange != null ? emitSelectedLinesChange : undefined,
         controlledSelection,
-        getEditHistoryKey,
+        getEditStateKey,
         createEditor: contextCreateEditor != null ? createEditor : undefined,
         onItemEditChange:
           onItemEditChange != null ? emitItemEditChange : undefined,
@@ -318,7 +318,7 @@ function CodeViewInner<LAnnotation = undefined>(
       hasCodeViewHeader,
       hasCustomHeader,
       hasGutterRenderer,
-      getEditHistoryKey,
+      getEditStateKey,
       onItemEditChange,
       onItemEditComplete,
       onSelectedLinesChange,
@@ -737,7 +737,7 @@ interface CreateManagedCodeViewOptionsProps<LAnnotation> {
   hasCodeViewFooter: boolean;
   onSelectedLinesChange?(selection: CodeViewLineSelection | null): void;
   controlledSelection: boolean;
-  getEditHistoryKey: CodeViewOptions<LAnnotation>['getEditHistoryKey'];
+  getEditStateKey: CodeViewOptions<LAnnotation>['getEditStateKey'];
   createEditor: CodeViewOptions<LAnnotation>['createEditor'];
   onItemEditChange: CodeViewOptions<LAnnotation>['onItemEditChange'];
   onItemEditComplete: CodeViewOptions<LAnnotation>['onItemEditComplete'];
@@ -751,7 +751,7 @@ function createManagedCodeViewOptions<LAnnotation>({
   hasCodeViewFooter,
   onSelectedLinesChange,
   controlledSelection,
-  getEditHistoryKey,
+  getEditStateKey,
   createEditor,
   onItemEditChange,
   onItemEditComplete,
@@ -763,8 +763,8 @@ function createManagedCodeViewOptions<LAnnotation>({
     createEditor,
   };
 
-  if (getEditHistoryKey != null) {
-    managedOptions.getEditHistoryKey = getEditHistoryKey;
+  if (getEditStateKey != null) {
+    managedOptions.getEditStateKey = getEditStateKey;
   }
 
   // Prop-level editor callbacks win over their options-object counterparts,

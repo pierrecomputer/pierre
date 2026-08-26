@@ -429,7 +429,9 @@ test.describe('edit mode', () => {
       .toContain('removed');
     await expect
       .poll(() =>
-        page.evaluate(() => window.__editor?.getState().selections?.length ?? 0)
+        page.evaluate(
+          () => window.__editor?.getSurfaceState().selections?.length ?? 0
+        )
       )
       .toBe(0);
     await expect(page.locator('pre[data-deleted-text-selection]')).toHaveCount(

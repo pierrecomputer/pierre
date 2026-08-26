@@ -38,6 +38,7 @@ import type {
   AppliedThemeStyleCache,
   BaseCodeOptions,
   BaseDiffOptions,
+  CapturedDiffSessionState,
   CustomPreProperties,
   DiffLineAnnotation,
   DiffsEditableComponent,
@@ -270,7 +271,7 @@ export interface FileDiffEditCompleteEvent<LAnnotation> {
  * event's `fileDiff`, or `'reject'` to restore `originalFileDiff`. The event is
  * frozen, so re-key the accepted diff in place (`event.fileDiff.cacheKey =
  * '…'`) before accepting. The event's editor is detached and returns its final
- * state from `getState()`. A missing handler rejects.
+ * state from `getSurfaceState()`. A missing handler rejects.
  */
 export type FileDiffEditCompleteHandler<LAnnotation> = (
   event: FileDiffEditCompleteEvent<LAnnotation>
@@ -894,10 +895,9 @@ export class FileDiff<
     // Tear the editor down while the code scrollers still exist. A recycle
     // keeps its document and undo history; a full teardown drops them as the
     // session ends.
-    editor?.cleanUp(recycle ? 'recycle' : 'complete');
-    this.editor = undefined;
+    editor?.cleanUp(recycle ? 'recycle' : 'discard');
     if (!recycle) {
-      this.settleEditSession(false, editor);
+      this.editor = undefined;
     }
     this.resizeManager.cleanUp();
     this.interactionManager.cleanUp();
@@ -1816,42 +1816,47 @@ export class FileDiff<
     onEditChange?.(event);
   }
 
-  /** @internal */
+  /**
+   * @internal Capture the current diff session, or return `undefined` when no
+   * complete compatible session exists.
+   *
+   * When `clone` is true, the returned lines and hunks are copied.
+   */
   public __captureDocumentSessionState(
-    hasRetainedState: boolean
-  ): RetainedDiffSessionSnapshot | null | undefined {
+    clone = true
+  ): CapturedDiffSessionState | undefined {
     let { outgoingSessionDiff, fileDiff, editSessionDiff: sessionDiff } = this;
     if (outgoingSessionDiff != null && fileDiff != null) {
       if (
         !fileDiff.isPartial &&
         shouldResetUndoState(outgoingSessionDiff, fileDiff)
       ) {
-        return null;
+        return undefined;
       }
       sessionDiff = outgoingSessionDiff;
     }
     if (sessionDiff == null || sessionDiff.isPartial) {
       return undefined;
     }
-    if (sessionDiff.editSessionDirty !== true && !hasRetainedState) {
-      return null;
-    }
     return {
-      oldFile:
-        sessionDiff.type !== 'new'
-          ? {
-              name: sessionDiff.prevName ?? sessionDiff.name,
-              lines: [...sessionDiff.deletionLines],
-            }
-          : null,
-      type: sessionDiff.type,
-      hunks: cloneHunks(sessionDiff.hunks),
+      diffSession: {
+        oldFile:
+          sessionDiff.type !== 'new'
+            ? {
+                name: sessionDiff.prevName ?? sessionDiff.name,
+                lines: clone
+                  ? [...sessionDiff.deletionLines]
+                  : sessionDiff.deletionLines,
+              }
+            : null,
+        type: sessionDiff.type,
+        hunks: clone ? cloneHunks(sessionDiff.hunks) : sessionDiff.hunks,
+      },
+      hasChanges: sessionDiff.editSessionDirty === true,
     };
   }
 
-  public attachEditor(
-    editor: DiffsEditor<LAnnotation>
-  ): (recycle: boolean) => void {
+  public attachEditor(editor: DiffsEditor<LAnnotation>): () => void {
     // Editing is a plain file-diff concern only. Subclasses with their own
     // hunk semantics (UnresolvedFile) are not editable, so an editor must
     // never attach to them.
@@ -1863,6 +1868,27 @@ export class FileDiff<
     if (this.editor != null) {
       throw new Error('FileDiff.attachEditor: an editor is already attached');
     }
+    const detach = () => {
+      this.editor = undefined;
+      this.finishEditSession();
+    };
+    try {
+      this.resumeEditorRendering(editor);
+      return detach;
+    } catch (error) {
+      detach();
+      throw error;
+    }
+  }
+
+  public __resumeEditor(editor: DiffsEditor<LAnnotation>): void {
+    if (this.editor !== editor) {
+      throw new Error('FileDiff.__resumeEditor: editor association changed');
+    }
+    this.resumeEditorRendering(editor);
+  }
+
+  private resumeEditorRendering(editor: DiffsEditor<LAnnotation>): void {
     this.editSessionAnnotations ??= adoptEditSessionAnnotations(
       this.lineAnnotations,
       getLineAnnotationName
@@ -1916,15 +1942,6 @@ export class FileDiff<
       // syncs the render view once it paints.
       this.rerender();
     }
-    return (recycle: boolean) => {
-      this.editor = undefined;
-      // A recycle detach temporarily unmounts the editor mid-session, so hunks
-      // stay session-shaped for reattachment. Only a non-recycle detach runs
-      // the exit recompute.
-      if (!recycle) {
-        this.finishEditSession();
-      }
-    };
   }
 
   // Session exit for the live detach path.

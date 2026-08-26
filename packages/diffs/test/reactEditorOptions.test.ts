@@ -24,6 +24,7 @@ import {
 } from '../src/components/FileDiff';
 import { DEFAULT_THEMES } from '../src/constants';
 import { Editor, type EditorOptions } from '../src/editor/editor';
+import { EditStateManager } from '../src/editor/EditStateManager';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
 import {
   MultiFileDiff,
@@ -219,7 +220,7 @@ function createEditableSurfaceElement(
   edit = true,
   editorOptions?: EditorOptions<undefined>,
   onInstance?: (instance: ReactEditableSurfaceInstance) => void,
-  editHistoryKey?: string
+  editStateKey?: string
 ): ReactElement {
   const oldFile = { name: 'edit.ts', contents: 'const value = 1;\n' };
   if (surface === 'File') {
@@ -235,7 +236,7 @@ function createEditableSurfaceElement(
     return createElement(ReactFileComponent, {
       disableWorkerPool: true,
       edit,
-      editHistoryKey,
+      editStateKey,
       editorOptions,
       file: oldFile,
       options,
@@ -253,7 +254,7 @@ function createEditableSurfaceElement(
   return createElement(ReactFileDiffComponent, {
     disableWorkerPool: true,
     edit,
-    editHistoryKey,
+    editStateKey,
     editorOptions,
     fileDiff: parseDiffFromFile(oldFile, {
       name: 'edit.ts',
@@ -549,12 +550,12 @@ describe('React editor factory lifecycle', () => {
   }
 
   for (const surface of ['File', 'FileDiff'] as const) {
-    test(`${surface} forwards editHistoryKey when creating its editor`, async () => {
+    test(`${surface} forwards editStateKey when creating its editor`, async () => {
       const { cleanup } = installDom();
       const cleanupActEnvironment = installReactActEnvironment();
       const container = document.createElement('div');
       document.body.appendChild(container);
-      const editHistoryKey = `${surface}-history`;
+      const editStateKey = `${surface}-history`;
       const editors: TrackedEditor[] = [];
       const factory = mock(
         (
@@ -581,7 +582,7 @@ describe('React editor factory lifecycle', () => {
                 true,
                 {},
                 undefined,
-                editHistoryKey
+                editStateKey
               )
             )
           );
@@ -589,14 +590,14 @@ describe('React editor factory lifecycle', () => {
         });
         await waitFor(() => editors[0]?.getFile() !== undefined);
         expect(factory).toHaveBeenCalledTimes(1);
-        expect(factory.mock.calls[0]?.[2]).toBe(editHistoryKey);
+        expect(factory.mock.calls[0]?.[2]).toBe(editStateKey);
         expect(editors[0]?.cleanUpCount).toBe(0);
       } finally {
         await unmountRoot(root);
         if (surface === 'File') {
-          Editor.disposeFile(editHistoryKey);
+          EditStateManager.clear('file', editStateKey);
         } else {
-          Editor.disposeFileDiff(editHistoryKey);
+          EditStateManager.clear('file-diff', editStateKey);
         }
         cleanupActEnvironment();
         cleanup();
@@ -605,12 +606,12 @@ describe('React editor factory lifecycle', () => {
   }
 
   for (const surface of ['File', 'FileDiff'] as const) {
-    test(`${surface} rejects concurrent surfaces using the same editHistoryKey`, async () => {
+    test(`${surface} rejects concurrent surfaces using the same editStateKey`, async () => {
       const { cleanup } = installDom();
       const cleanupActEnvironment = installReactActEnvironment();
       const container = document.createElement('div');
       document.body.appendChild(container);
-      const editHistoryKey = `${surface}-shared-history`;
+      const editStateKey = `${surface}-shared-history`;
       const editorOptions: EditorOptions<undefined> = {};
       const editors: TrackedEditor[] = [];
       const factory: CreateEditor<undefined> = (
@@ -639,30 +640,30 @@ describe('React editor factory lifecycle', () => {
                 true,
                 editorOptions,
                 undefined,
-                editHistoryKey
+                editStateKey
               ),
               createEditableSurfaceElement(
                 surface,
                 true,
                 editorOptions,
                 undefined,
-                editHistoryKey
+                editStateKey
               )
             )
           )
         );
         expect(renderError).toBeInstanceOf(Error);
         expect((renderError as Error).message).toBe(
-          `Editor: editStateKey "${editHistoryKey}" is already attached to another editor`
+          `Editor: editStateKey "${editStateKey}" is already attached to another editor`
         );
         expect(editors.length).toBeGreaterThan(1);
         expect(new Set(editors).size).toBe(editors.length);
       } finally {
         await unmountRoot(root);
         if (surface === 'File') {
-          Editor.disposeFile(editHistoryKey);
+          EditStateManager.clear('file', editStateKey);
         } else {
-          Editor.disposeFileDiff(editHistoryKey);
+          EditStateManager.clear('file-diff', editStateKey);
         }
         cleanupActEnvironment();
         cleanup();
@@ -861,7 +862,7 @@ describe('React editor factory lifecycle', () => {
         (_event: EditorChangeEvent<undefined, 'file' | 'diff'>) => {}
       );
       let root: Root | undefined;
-      const editHistoryKey = `${wrapper}-history`;
+      const editStateKey = `${wrapper}-history`;
       const factory = mock((documentKind, options, historyKey?: string) => {
         const editor = new TrackedEditor(documentKind, options, historyKey);
         editors.push(editor);
@@ -872,7 +873,7 @@ describe('React editor factory lifecycle', () => {
       const sharedProps = {
         disableWorkerPool: true,
         edit: true,
-        editHistoryKey,
+        editStateKey,
         editorOptions: { onChange },
         options: {
           disableFileHeader: true,
@@ -915,7 +916,7 @@ describe('React editor factory lifecycle', () => {
         expect(factory).toHaveBeenCalledTimes(1);
         expect(factory.mock.calls[0]?.[0]).toBe('file-diff');
         expect(factory.mock.calls[0]?.[1].onChange).toBe(onChange);
-        expect(factory.mock.calls[0]?.[2]).toBe(editHistoryKey);
+        expect(factory.mock.calls[0]?.[2]).toBe(editStateKey);
         insertAtStart(editors[0], '/* wrapper */');
         expect(onChange).toHaveBeenCalledTimes(1);
         expect(onChange.mock.calls[0]?.[0].file.contents).toBe(
@@ -927,7 +928,7 @@ describe('React editor factory lifecycle', () => {
         expect(editors[0]?.cleanUpCount).toBeGreaterThan(0);
       } finally {
         await unmountRoot(root);
-        Editor.disposeFileDiff(editHistoryKey);
+        EditStateManager.clear('file-diff', editStateKey);
         cleanupActEnvironment();
         cleanup();
       }

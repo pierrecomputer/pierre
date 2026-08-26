@@ -8,8 +8,8 @@ import {
   type EditorFocusOptions,
   type EditorOptions,
 } from '../src/editor/editor';
+import { EditStateManager } from '../src/editor/EditStateManager';
 import type { Marker } from '../src/editor/marker';
-import { TextDocument } from '../src/editor/textDocument';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
 import type {
   DiffsEditableComponent,
@@ -346,12 +346,31 @@ describe('component editor attachment', () => {
 });
 
 describe('Editor document registry surfaces', () => {
+  test('complete FileDiff state restores an unkeyed session independently', async () => {
+    const first = await createDiffEditorFixture('split');
+    insertText(first.editor, 1, 3, ' retained');
+    const state = first.editor.getEditState();
+    first.cleanup();
+    let second: DiffEditorFixture | undefined;
+
+    try {
+      second = await createDiffEditorFixture('split', { initialState: state });
+      expect(second.editor.getText()).toBe('alpha\nnew retained\ncharlie');
+      expect(second.editor.canUndo).toBe(true);
+
+      second.editor.undo();
+      expect(second.editor.getText()).toBe('alpha\nnew\ncharlie');
+    } finally {
+      second?.cleanup();
+    }
+  });
+
   test('File restores a keyed draft when its editor is attached before hydrate', async () => {
-    Editor.clearDocuments();
-    const editHistoryKey = 'file-hydration';
+    EditStateManager.clearAll();
+    const editStateKey = 'file-hydration';
     const first = await createKeyedEditorFixture(
       'alpha\nbravo\ncharlie',
-      editHistoryKey
+      editStateKey
     );
     const prerenderedHTML = first.container.shadowRoot?.innerHTML;
     insertText(first.editor, 1, 5, ' retained');
@@ -365,7 +384,7 @@ describe('Editor document registry surfaces', () => {
       disableFileHeader: true,
       theme: DEFAULT_THEMES,
     });
-    const editor = new Editor<undefined>('file', {}, editHistoryKey);
+    const editor = new Editor<undefined>('file', {}, editStateKey);
     try {
       editor.edit(file);
       file.hydrate({
@@ -382,20 +401,20 @@ describe('Editor document registry surfaces', () => {
       expect(container.shadowRoot?.textContent).toContain('bravo retained');
     } finally {
       file.cleanUp();
-      Editor.disposeFile(editHistoryKey);
+      EditStateManager.clear('file', editStateKey);
       dom.cleanup();
     }
   });
 
   test('FileDiff restores exact keyed session hunks when attached before hydrate', async () => {
-    Editor.clearDocuments();
-    const editHistoryKey = 'file-diff-hydration';
+    EditStateManager.clearAll();
+    const editStateKey = 'file-diff-hydration';
     const oldFile = { name: 'edits.ts', contents: 'alpha\nold\ncharlie' };
     const newFile = { name: 'edits.ts', contents: 'alpha\nnew\ncharlie' };
     const first = await createDiffEditorFixture(
       'split',
       undefined,
-      editHistoryKey,
+      editStateKey,
       newFile.contents,
       { oldFile, newFile }
     );
@@ -420,7 +439,7 @@ describe('Editor document registry surfaces', () => {
       diffStyle: 'split',
       theme: DEFAULT_THEMES,
     });
-    const editor = new Editor<undefined>('file-diff', {}, editHistoryKey);
+    const editor = new Editor<undefined>('file-diff', {}, editStateKey);
     const externalDiff = parseDiffFromFile(oldFile, newFile);
     try {
       editor.edit(fileDiff);
@@ -439,13 +458,13 @@ describe('Editor document registry surfaces', () => {
       expect(container.shadowRoot?.textContent).toContain('new retained');
     } finally {
       fileDiff.cleanUp();
-      Editor.disposeFileDiff(editHistoryKey);
+      EditStateManager.clear('file-diff', editStateKey);
       dom.cleanup();
     }
   });
 
   test('a retained document repaints a File surface', async () => {
-    Editor.clearDocuments();
+    EditStateManager.clearAll();
     const documentKey = 'file-surface';
     const first = await createKeyedEditorFixture(
       'alpha\nbravo\ncharlie',
@@ -481,12 +500,12 @@ describe('Editor document registry surfaces', () => {
       expect(second.editor.getText()).toBe('alpha\nbravo\ncharlie');
     } finally {
       second.cleanup();
-      Editor.clearDocuments();
+      EditStateManager.clearAll();
     }
   });
 
   test('a File adopts retained name and explicit language with its text', async () => {
-    Editor.clearDocuments();
+    EditStateManager.clearAll();
     const documentKey = 'file-identity';
     const retainedFile = {
       name: 'retained.txt',
@@ -501,11 +520,11 @@ describe('Editor document registry surfaces', () => {
     insertText(first.editor, 0, 22, '\n');
     const retainedContents = first.editor.getText();
     first.cleanup();
+    const retainedHistory = EditStateManager.get<undefined>(
+      'file',
+      documentKey
+    )!.document.history;
 
-    const cloneForAnnotations = spyOn(
-      TextDocument.prototype,
-      'cloneForAnnotations'
-    );
     let second: EditorFixture | undefined;
     try {
       second = await createKeyedEditorFixture(
@@ -514,11 +533,9 @@ describe('Editor document registry surfaces', () => {
         undefined,
         { name: 'incoming.txt', lang: 'text' }
       );
-      const adoptedDocument = cloneForAnnotations.mock.results.at(-1)?.value as
-        | TextDocument<unknown>
-        | undefined;
-      expect(adoptedDocument?.uri).toBe('file:///retained.txt');
-      expect(adoptedDocument?.languageId).toBe(retainedFile.lang);
+      expect(second.editor.getEditState()!.document.history.undoStack).toBe(
+        retainedHistory.undoStack
+      );
       expect(second.editor.getFile()).toEqual({
         ...retainedFile,
         contents: retainedContents,
@@ -547,14 +564,13 @@ describe('Editor document registry surfaces', () => {
       second.editor.redo();
       expect(second.editor.getText()).toBe('const external = true;');
     } finally {
-      cloneForAnnotations.mockRestore();
       second?.cleanup();
-      Editor.clearDocuments();
+      EditStateManager.clearAll();
     }
   });
 
   test('a File retains annotation history without diff sides', async () => {
-    Editor.clearDocuments();
+    EditStateManager.clearAll();
     const documentKey = 'file-annotations';
     const first = await createKeyedEditorFixture('alpha\nbravo', documentKey, [
       { lineNumber: 2, metadata: undefined },
@@ -571,12 +587,12 @@ describe('Editor document registry surfaces', () => {
       expect(second.editor.getText()).toBe('alpha\nbravo');
     } finally {
       second.cleanup();
-      Editor.clearDocuments();
+      EditStateManager.clearAll();
     }
   });
 
   test('File and FileDiff retain independent documents for the same key', async () => {
-    Editor.clearDocuments();
+    EditStateManager.clearAll();
     const documentKey = 'shared-surface-key';
     const fileBaseline = 'plain file contents';
     const diffBaseline = 'alpha\nnew\ncharlie';
@@ -612,8 +628,8 @@ describe('Editor document registry surfaces', () => {
     expect(resumedDiff.editor.getText()).toBe(retainedDiffText);
     resumedDiff.cleanup();
 
-    expect(Editor.disposeFile(documentKey)).toBe(true);
-    expect(Editor.disposeFileDiff(documentKey)).toBe(true);
+    expect(EditStateManager.clear('file', documentKey)).toBe(true);
+    expect(EditStateManager.clear('file-diff', documentKey)).toBe(true);
 
     const freshFile = await createKeyedEditorFixture(
       'fresh file contents',
@@ -633,12 +649,41 @@ describe('Editor document registry surfaces', () => {
       expect(freshDiff.editor.canUndo).toBe(false);
     } finally {
       freshDiff.cleanup();
-      Editor.clearDocuments();
+      EditStateManager.clearAll();
+    }
+  });
+
+  test('does not clear history from an active editor', async () => {
+    EditStateManager.clearAll();
+    const documentKey = 'clear-active-history';
+    const fixture = await createKeyedEditorFixture('alpha', documentKey);
+
+    try {
+      insertText(fixture.editor, 0, 5, '!');
+      const editedText = fixture.editor.getText();
+      const document = fixture.editor.getEditState()!.document;
+      expect(fixture.editor.canUndo).toBe(true);
+
+      expect(
+        EditStateManager.clear('file', documentKey, { history: true })
+      ).toBe(false);
+      expect(fixture.editor.getText()).toBe(editedText);
+      expect(fixture.editor.getEditState()!.document).toBe(document);
+      expect(fixture.editor.canUndo).toBe(true);
+      expect(fixture.editor.canRedo).toBe(false);
+
+      insertText(fixture.editor, 0, 0, '>');
+      fixture.editor.undo();
+      expect(fixture.editor.getText()).toBe(editedText);
+      expect(fixture.editor.canUndo).toBe(true);
+    } finally {
+      fixture.cleanup();
+      EditStateManager.clearAll();
     }
   });
 
   test('a never-edited FileDiff does not create retained state', async () => {
-    Editor.clearDocuments();
+    EditStateManager.clearAll();
     const documentKey = 'clean-diff';
     const first = await createDiffEditorFixture(
       'split',
@@ -647,7 +692,7 @@ describe('Editor document registry surfaces', () => {
     );
     first.cleanup();
 
-    expect(Editor.disposeFileDiff(documentKey)).toBe(false);
+    expect(EditStateManager.clear('file-diff', documentKey)).toBe(false);
 
     const second = await createDiffEditorFixture(
       'split',
@@ -660,12 +705,12 @@ describe('Editor document registry surfaces', () => {
       expect(second.editor.canUndo).toBe(false);
     } finally {
       second.cleanup();
-      Editor.clearDocuments();
+      EditStateManager.clearAll();
     }
   });
 
   test('a retained document repaints a FileDiff surface', async () => {
-    Editor.clearDocuments();
+    EditStateManager.clearAll();
     const documentKey = 'diff-surface';
     const first = await createDiffEditorFixture(
       'split',
@@ -706,12 +751,12 @@ describe('Editor document registry surfaces', () => {
       expect(second.editor.getText()).toBe(originalText);
     } finally {
       second.cleanup();
-      Editor.clearDocuments();
+      EditStateManager.clearAll();
     }
   });
 
   test('a FileDiff adopts retained addition identity with a compatible old side', async () => {
-    Editor.clearDocuments();
+    EditStateManager.clearAll();
     const documentKey = 'diff-identity';
     const retainedFile = {
       name: 'retained.txt',
@@ -734,11 +779,11 @@ describe('Editor document registry surfaces', () => {
     insertText(first.editor, 0, 22, '// kept\n');
     const retainedContents = first.editor.getText();
     first.cleanup();
+    const retainedHistory = EditStateManager.get<undefined>(
+      'file-diff',
+      documentKey
+    )!.document.history;
 
-    const cloneForAnnotations = spyOn(
-      TextDocument.prototype,
-      'cloneForAnnotations'
-    );
     let second: DiffEditorFixture | undefined;
     try {
       second = await createDiffEditorFixture(
@@ -758,11 +803,9 @@ describe('Editor document registry surfaces', () => {
           },
         }
       );
-      const adoptedDocument = cloneForAnnotations.mock.results.at(-1)?.value as
-        | TextDocument<unknown>
-        | undefined;
-      expect(adoptedDocument?.uri).toBe('file:///retained.txt');
-      expect(adoptedDocument?.languageId).toBe(retainedFile.lang);
+      expect(second.editor.getEditState()!.document.history.undoStack).toBe(
+        retainedHistory.undoStack
+      );
       expect(second.editor.getFile()).toEqual({
         name: retainedFile.name,
         lang: retainedFile.lang,
@@ -802,14 +845,13 @@ describe('Editor document registry surfaces', () => {
       second.editor.redo();
       expect(second.editor.getText()).toBe('const external = true;\n');
     } finally {
-      cloneForAnnotations.mockRestore();
       second?.cleanup();
-      Editor.clearDocuments();
+      EditStateManager.clearAll();
     }
   });
 
   test('a FileDiff rejects retained edits against a different old file', async () => {
-    Editor.clearDocuments();
+    EditStateManager.clearAll();
     const documentKey = 'diff-incompatible-old-file';
     const first = await createDiffEditorFixture(
       'split',
@@ -853,12 +895,12 @@ describe('Editor document registry surfaces', () => {
         resumed.cleanup();
       }
     } finally {
-      Editor.clearDocuments();
+      EditStateManager.clearAll();
     }
   });
 
   test('a clean external replacement drops previously retained diff state', async () => {
-    Editor.clearDocuments();
+    EditStateManager.clearAll();
     const documentKey = 'diff-clean-replacement';
     const first = await createDiffEditorFixture(
       'split',
@@ -884,7 +926,7 @@ describe('Editor document registry surfaces', () => {
     expect(second.editor.canRedo).toBe(false);
     second.cleanup();
 
-    expect(Editor.disposeFileDiff(documentKey)).toBe(false);
+    expect(EditStateManager.clear('file-diff', documentKey)).toBe(false);
 
     const fresh = await createDiffEditorFixture(
       'split',
@@ -897,12 +939,12 @@ describe('Editor document registry surfaces', () => {
       expect(fresh.editor.canUndo).toBe(false);
     } finally {
       fresh.cleanup();
-      Editor.clearDocuments();
+      EditStateManager.clearAll();
     }
   });
 
   test('a compatible external replacement retains its undo history', async () => {
-    Editor.clearDocuments();
+    EditStateManager.clearAll();
     const documentKey = 'diff-compatible-replacement';
     const first = await createDiffEditorFixture(
       'split',
@@ -930,12 +972,12 @@ describe('Editor document registry surfaces', () => {
       expect(resumed.editor.getText()).toBe('alpha\nnew\ncharlie');
     } finally {
       resumed.cleanup();
-      Editor.clearDocuments();
+      EditStateManager.clearAll();
     }
   });
 
   test('a pending compatible replacement retains the outgoing edits', async () => {
-    Editor.clearDocuments();
+    EditStateManager.clearAll();
     const documentKey = 'diff-pending-compatible-replacement';
     const first = await createDiffEditorFixture(
       'split',
@@ -963,12 +1005,12 @@ describe('Editor document registry surfaces', () => {
       expect(resumed.editor.canUndo).toBe(true);
     } finally {
       resumed.cleanup();
-      Editor.clearDocuments();
+      EditStateManager.clearAll();
     }
   });
 
-  test('a resumed diff keeps its original type until the edit session ends', async () => {
-    Editor.clearDocuments();
+  test('discarding a resumed diff restores its external type', async () => {
+    EditStateManager.clearAll();
     const documentKey = 'diff-type';
     const files = {
       oldFile: { name: 'before.ts', contents: 'same contents\n' },
@@ -1010,10 +1052,10 @@ describe('Editor document registry surfaces', () => {
       expect(second.fileDiff.getCurrentType()).toBe('rename-changed');
 
       second.editor.cleanUp();
-      expect(second.fileDiff.getCurrentType()).toBe('rename-pure');
+      expect(second.fileDiff.getCurrentType()).toBe('rename-changed');
     } finally {
       second.cleanup();
-      Editor.clearDocuments();
+      EditStateManager.clearAll();
     }
   });
 
@@ -1029,7 +1071,7 @@ describe('Editor document registry surfaces', () => {
     ],
   ] as const) {
     test(`a keyed File ${mismatch} update starts fresh history`, async () => {
-      Editor.clearDocuments();
+      EditStateManager.clearAll();
       const documentKey = `file-incompatible-${mismatch}`;
       const fileInfo = { name: 'retained.ts', lang: 'typescript' } as const;
       const first = await createKeyedEditorFixture(
@@ -1058,14 +1100,14 @@ describe('Editor document registry surfaces', () => {
         expect(second.editor.canRedo).toBe(false);
       } finally {
         second.cleanup();
-        Editor.clearDocuments();
+        EditStateManager.clearAll();
       }
     });
   }
 
   for (const decision of ['accept', 'reject'] as const) {
     test(`a keyed File ${decision} completion retains history until disposal`, async () => {
-      Editor.clearDocuments();
+      EditStateManager.clearAll();
       const documentKey = `file-completion-${decision}`;
       const baseline = 'const original = true;';
       const first = await createKeyedEditorFixture(baseline, documentKey);
@@ -1086,7 +1128,7 @@ describe('Editor document registry surfaces', () => {
       expect(resumed.editor.getText()).toBe(editedText);
       resumed.cleanup();
 
-      expect(Editor.disposeFile(documentKey)).toBe(true);
+      expect(EditStateManager.clear('file', documentKey)).toBe(true);
       const fresh = await createKeyedEditorFixture(baseline, documentKey);
       try {
         expect(fresh.editor.getText()).toBe(baseline);
@@ -1094,12 +1136,12 @@ describe('Editor document registry surfaces', () => {
         expect(fresh.editor.canRedo).toBe(false);
       } finally {
         fresh.cleanup();
-        Editor.clearDocuments();
+        EditStateManager.clearAll();
       }
     });
 
     test(`a keyed FileDiff ${decision} completion retains history until disposal`, async () => {
-      Editor.clearDocuments();
+      EditStateManager.clearAll();
       const documentKey = `diff-completion-${decision}`;
       const baseline = 'alpha\nnew\ncharlie';
       const first = await createDiffEditorFixture(
@@ -1130,7 +1172,7 @@ describe('Editor document registry surfaces', () => {
       expect(resumed.editor.getText()).toBe(editedText);
       resumed.cleanup();
 
-      expect(Editor.disposeFileDiff(documentKey)).toBe(true);
+      expect(EditStateManager.clear('file-diff', documentKey)).toBe(true);
       const fresh = await createDiffEditorFixture(
         'split',
         undefined,
@@ -1143,13 +1185,13 @@ describe('Editor document registry surfaces', () => {
         expect(fresh.editor.canRedo).toBe(false);
       } finally {
         fresh.cleanup();
-        Editor.clearDocuments();
+        EditStateManager.clearAll();
       }
     });
   }
 
   test('completion before initial sync retains a claimed document', async () => {
-    Editor.clearDocuments();
+    EditStateManager.clearAll();
     const documentKey = 'pending-completion';
     const first = await createKeyedEditorFixture('alpha\nbravo', documentKey);
     insertText(first.editor, 1, 5, ' retained');
@@ -1165,12 +1207,12 @@ describe('Editor document registry surfaces', () => {
       expect(fresh.editor.canUndo).toBe(true);
     } finally {
       fresh.cleanup();
-      Editor.clearDocuments();
+      EditStateManager.clearAll();
     }
   });
 
-  test('disposing a pending adoption does not re-register it', async () => {
-    Editor.clearDocuments();
+  test('clearing a pending adoption is ignored while active', async () => {
+    EditStateManager.clearAll();
     const documentKey = 'pending-disposal';
     const first = await createKeyedEditorFixture('alpha\nbravo', documentKey);
     insertText(first.editor, 1, 5, ' retained');
@@ -1178,18 +1220,18 @@ describe('Editor document registry surfaces', () => {
     first.cleanup();
 
     const pending = createPendingEditorFixture('alpha\nbravo', documentKey);
-    expect(Editor.disposeFile(documentKey)).toBe(true);
+    expect(EditStateManager.clear('file', documentKey)).toBe(false);
     await waitFor(() => pending.editor.getText() === retainedText);
     expect(pending.editor.getText()).toBe(retainedText);
     pending.cleanup();
 
     const fresh = await createKeyedEditorFixture('alpha\nbravo', documentKey);
     try {
-      expect(fresh.editor.getText()).toBe('alpha\nbravo');
-      expect(fresh.editor.canUndo).toBe(false);
+      expect(fresh.editor.getText()).toBe(retainedText);
+      expect(fresh.editor.canUndo).toBe(true);
     } finally {
       fresh.cleanup();
-      Editor.clearDocuments();
+      EditStateManager.clearAll();
     }
   });
 });
@@ -1218,7 +1260,7 @@ describe('Editor state round trip', () => {
           direction: 'forward',
         },
       ]);
-      const state = editor.getState();
+      const state = editor.getSurfaceState();
 
       // Move the caret elsewhere, then restore the captured state.
       editor.setSelections([
@@ -1228,9 +1270,9 @@ describe('Editor state round trip', () => {
           direction: 'none',
         },
       ]);
-      editor.setState(state);
+      editor.setSurfaceState(state);
 
-      expect(editor.getState().selections).toEqual(state.selections);
+      expect(editor.getSurfaceState().selections).toEqual(state.selections);
       // getState/setState carry no cacheKey, so restoring state neither rebuilds
       // the document nor discards its undo history.
       expect(editor.canUndo).toBe(true);
@@ -1366,7 +1408,7 @@ describe('Editor focus lifecycle', () => {
         preventScroll: true,
       };
       editor.focus(firstTarget);
-      expect(editor.getState().selections).toEqual([
+      expect(editor.getSurfaceState().selections).toEqual([
         {
           start: { line: 1, character: 0 },
           end: { line: 1, character: 0 },
@@ -1375,7 +1417,7 @@ describe('Editor focus lifecycle', () => {
       ]);
 
       editor.focus({ lineNumber: 99, character: 99, preventScroll: true });
-      expect(editor.getState().selections).toEqual([
+      expect(editor.getSurfaceState().selections).toEqual([
         {
           start: { line: 2, character: 7 },
           end: { line: 2, character: 7 },
@@ -1388,7 +1430,7 @@ describe('Editor focus lifecycle', () => {
         character: Number.NaN,
         preventScroll: true,
       });
-      expect(editor.getState().selections).toEqual([
+      expect(editor.getSurfaceState().selections).toEqual([
         {
           start: { line: 0, character: 0 },
           end: { line: 0, character: 0 },
@@ -1419,7 +1461,7 @@ describe('Editor focus lifecycle', () => {
     const editor = new Editor<undefined>('file');
     try {
       editor.focus({ lineNumber: 2 });
-      expect(editor.getState().selections).toBeUndefined();
+      expect(editor.getSurfaceState().selections).toBeUndefined();
     } finally {
       editor.cleanUp();
     }
@@ -1444,7 +1486,7 @@ describe('Editor focus lifecycle', () => {
         character: 4,
         preventScroll: true,
       });
-      expect(editor.getState().selections).toEqual([
+      expect(editor.getSurfaceState().selections).toEqual([
         {
           start: { line: 1, character: 0 },
           end: { line: 1, character: 0 },
@@ -1472,7 +1514,7 @@ describe('Editor focus lifecycle', () => {
       setRect(rows[2], 39, 59);
 
       editor.focus({ lineNumber: 'first-visible', preventScroll: true });
-      expect(editor.getState().selections?.[0]?.start).toEqual({
+      expect(editor.getSurfaceState().selections?.[0]?.start).toEqual({
         line: 1,
         character: 0,
       });
@@ -1500,7 +1542,7 @@ describe('Editor focus lifecycle', () => {
       setRect(rows[2], 40, 60);
 
       editor.focus({ lineNumber: 'first-visible', preventScroll: true });
-      expect(editor.getState().selections?.[0]?.start).toEqual({
+      expect(editor.getSurfaceState().selections?.[0]?.start).toEqual({
         line: 1,
         character: 0,
       });
@@ -1550,7 +1592,7 @@ describe('Editor focus lifecycle', () => {
         preventScroll: true,
         offset: 10,
       });
-      expect(editor.getState().selections?.[0]?.start.line).toBe(2);
+      expect(editor.getSurfaceState().selections?.[0]?.start.line).toBe(2);
     } finally {
       cleanup();
     }
@@ -1563,13 +1605,13 @@ describe('Editor focus lifecycle', () => {
     try {
       editor.focus({ lineNumber: 2, preventScroll: true });
       await wait(0);
-      const selections = editor.getState().selections;
+      const selections = editor.getSurfaceState().selections;
       const button = document.createElement('button');
       document.body.appendChild(button);
       button.focus();
 
       editor.focus({ lineNumber: 'first-visible', preventScroll: true });
-      expect(editor.getState().selections).toEqual(selections);
+      expect(editor.getSurfaceState().selections).toEqual(selections);
       expect(document.activeElement).toBe(button);
 
       const viewport = document.createElement('div');
@@ -1581,7 +1623,7 @@ describe('Editor focus lifecycle', () => {
       setRect(rows[2], 15, 25);
 
       editor.focus({ lineNumber: 'first-visible', preventScroll: true });
-      expect(editor.getState().selections).toEqual(selections);
+      expect(editor.getSurfaceState().selections).toEqual(selections);
       expect(document.activeElement).toBe(button);
     } finally {
       cleanup();
@@ -1617,7 +1659,7 @@ describe('Editor focus lifecycle', () => {
       setRect(trailingContext!, 30, 50);
 
       editor.focus({ lineNumber: 'first-visible', preventScroll: true });
-      expect(editor.getState().selections?.[0]?.start.line).toBe(2);
+      expect(editor.getSurfaceState().selections?.[0]?.start.line).toBe(2);
     } finally {
       cleanup();
     }
@@ -1650,7 +1692,7 @@ describe('Editor focus lifecycle', () => {
       setRect(target!, 30, 50);
 
       editor.focus({ lineNumber: 'first-visible', preventScroll: true });
-      expect(editor.getState().selections?.[0]?.start.line).toBe(2);
+      expect(editor.getSurfaceState().selections?.[0]?.start.line).toBe(2);
     } finally {
       cleanup();
     }

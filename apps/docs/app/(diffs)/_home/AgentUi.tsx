@@ -1141,9 +1141,9 @@ export function AgentUi({
     activePath != null && !editedPathsRef.current.has(activePath)
       ? prerenderedDiffs?.[activePath]
       : undefined;
-  const fileDiffEditHistoryKey =
+  const fileDiffEditStateKey =
     activePath != null ? `homepage-agent:file-diff:${activePath}` : undefined;
-  const fileEditHistoryKey =
+  const fileEditStateKey =
     activePath != null ? `homepage-agent:file:${activePath}` : undefined;
 
   const breadcrumbSegments = activePath != null ? activePath.split('/') : [];
@@ -1238,7 +1238,7 @@ export function AgentUi({
                 options={{ ...AUI_DIFF_OPTIONS, theme }}
                 prerenderedHTML={activePrerenderedHTML}
                 edit
-                editHistoryKey={fileDiffEditHistoryKey}
+                editStateKey={fileDiffEditStateKey}
                 editorOptions={editorOptions}
                 onEditChange={handleEditChange}
               />
@@ -1266,7 +1266,7 @@ export function AgentUi({
                 }}
                 disableWorkerPool
                 edit
-                editHistoryKey={fileEditHistoryKey}
+                editStateKey={fileEditStateKey}
                 editorOptions={editorOptions}
                 onEditChange={handleEditChange}
               />

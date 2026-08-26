@@ -128,7 +128,7 @@ export interface FileEditCompleteEvent<LAnnotation> {
  * event's `file`, or `'reject'` to restore `originalFile`. The event is frozen,
  * so re-key the accepted file in place (`event.file.cacheKey = '…'`) before
  * accepting. The event's editor is detached and returns its final state from
- * `getState()`. A missing handler rejects.
+ * `getSurfaceState()`. A missing handler rejects.
  */
 export type FileEditCompleteHandler<LAnnotation> = (
   event: FileEditCompleteEvent<LAnnotation>
@@ -586,10 +586,9 @@ export class File<
     // Tear the editor down while the code scroller still exists. A recycle
     // keeps its document and undo history; a full teardown drops them as the
     // session ends.
-    editor?.cleanUp(recycle ? 'recycle' : 'complete');
-    this.editor = undefined;
+    editor?.cleanUp(recycle ? 'recycle' : 'discard');
     if (!recycle) {
-      this.settleEditSession(false, editor);
+      this.editor = undefined;
     }
     this.resizeManager.cleanUp();
     this.interactionManager.cleanUp();
@@ -833,13 +832,37 @@ export class File<
     onEditChange?.(event);
   }
 
-  public attachEditor(
-    editor: DiffsEditor<LAnnotation>
-  ): (recycle: boolean) => void {
+  /** @internal Plain files have no component-owned diff session state. */
+  public __captureDocumentSessionState(): undefined {
+    return undefined;
+  }
+
+  public attachEditor(editor: DiffsEditor<LAnnotation>): () => void {
     if (this.editor != null) {
       throw new Error('File.attachEditor: an editor is already attached');
     }
     this.editor = editor;
+    const detach = () => {
+      this.editor = undefined;
+      this.fileRenderer.endEditSession();
+    };
+    try {
+      this.resumeEditorRendering(editor);
+      return detach;
+    } catch (error) {
+      detach();
+      throw error;
+    }
+  }
+
+  public __resumeEditor(editor: DiffsEditor<LAnnotation>): void {
+    if (this.editor !== editor) {
+      throw new Error('File.__resumeEditor: editor association changed');
+    }
+    this.resumeEditorRendering(editor);
+  }
+
+  private resumeEditorRendering(editor: DiffsEditor<LAnnotation>): void {
     this.editSessionAnnotations ??= adoptEditSessionAnnotations(
       this.lineAnnotations,
       getLineAnnotationName
@@ -860,10 +883,6 @@ export class File<
       // syncs the render view once it paints.
       this.rerender();
     }
-    return (_recycle: boolean) => {
-      this.editor = undefined;
-      this.fileRenderer.endEditSession();
-    };
   }
 
   /**

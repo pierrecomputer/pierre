@@ -98,7 +98,7 @@ describe('FileDiff header slots', () => {
       expect(externalDiff.additionLines).toBe(externalAdditionLines);
       expect(externalDiff.additionLines).toEqual(['new\n']);
     } finally {
-      detach?.(false);
+      detach?.();
       instance.cleanUp();
       cleanup();
     }

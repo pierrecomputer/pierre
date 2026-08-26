@@ -348,7 +348,7 @@ describe('FileDiff partial hydration', () => {
       expect(hydratedSession?.additionLines.join('')).toBe(newFile.contents);
       expect(hydratedSession?.deletionLines.join('')).toBe(oldFile.contents);
     } finally {
-      detach?.(false);
+      detach?.();
       instance.cleanUp();
       cleanup();
     }
@@ -410,7 +410,7 @@ describe('FileDiff partial hydration', () => {
     } finally {
       deferred.resolve({ oldFile, newFile });
       await loadPromise;
-      detach?.(false);
+      detach?.();
       instance.cleanUp();
       cleanup();
     }
@@ -435,8 +435,7 @@ describe('FileDiff partial hydration', () => {
         return deferred.promise;
       },
     });
-    let firstDetach: ReturnType<TestFileDiff['attachEditor']> | undefined;
-    let secondDetach: ReturnType<TestFileDiff['attachEditor']> | undefined;
+    let detach: ReturnType<TestFileDiff['attachEditor']> | undefined;
 
     try {
       instance.render({
@@ -444,9 +443,13 @@ describe('FileDiff partial hydration', () => {
         fileContainer,
         forceRender: true,
       });
-      const firstEditor = createEditorStub();
-      firstEditor.cleanUp = (reason) => firstDetach?.(reason === 'recycle');
-      firstDetach = instance.attachEditor(firstEditor);
+      const editor = createEditorStub();
+      editor.cleanUp = (reason) => {
+        if (reason !== 'recycle') {
+          detach?.();
+        }
+      };
+      detach = instance.attachEditor(editor);
       const loadPromise = instance.getPendingFileLoadPromiseForTest();
       expect(loadPromise).toBeDefined();
       expect(loadCalls).toBe(1);
@@ -454,7 +457,7 @@ describe('FileDiff partial hydration', () => {
       instance.cleanUp(true);
       instance.virtualizedSetup();
       instance.rerender();
-      secondDetach = instance.attachEditor(createEditorStub());
+      instance.__resumeEditor(editor);
 
       expect(loadCalls).toBe(1);
       deferred.resolve({ oldFile, newFile });
@@ -477,7 +480,6 @@ describe('FileDiff partial hydration', () => {
       expect(hydratedSession?.deletionLines.join('')).toBe(oldFile.contents);
       expect(loadCalls).toBe(1);
     } finally {
-      secondDetach?.(false);
       instance.cleanUp();
       cleanup();
     }
@@ -540,7 +542,7 @@ describe('FileDiff partial hydration', () => {
       expect(partial.additionLines).toBe(partial.deletionLines);
       expect(partial).toEqual(hydratedBaseBefore);
     } finally {
-      detach?.(false);
+      detach?.();
       instance.cleanUp();
       cleanup();
     }

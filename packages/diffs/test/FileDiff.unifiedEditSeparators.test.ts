@@ -114,7 +114,7 @@ describe('FileDiff unified edit separators', () => {
       );
       expect(fileDiff.additionLines[69]).toBe('70\n');
     } finally {
-      detach?.(false);
+      detach?.();
       instance?.cleanUp();
       cleanup();
     }
