@@ -357,6 +357,7 @@ describe('virtualized editor viewport', () => {
         ],
         view: { scrollLeft: 32 },
       });
+      expect(root.scrollTop).toBe(64);
       expect(Object.isFrozen(completionEvents[0])).toBe(true);
       expect(componentStates[0]?.selections?.[0]?.start.character).toBe(6);
     } finally {

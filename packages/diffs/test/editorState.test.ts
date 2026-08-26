@@ -887,6 +887,49 @@ describe('Editor state', () => {
     }
   });
 
+  test('keyed state is released for adoption when restoration fails', () => {
+    const dom = installDom();
+    EditStateManager.clearAll();
+    const file = { name: 'state.ts', contents: 'alpha\nbravo' };
+    const initialState = createInitialState(file, {
+      view: { scrollLeft: 24 },
+    });
+    const failingEditor = new Editor<undefined>(
+      'file',
+      { initialState },
+      'failed-restoration'
+    );
+    const failing = new TestEditableComponent(file);
+    failing.stateRestoreError = new Error('state restoration failed');
+    const adoptingEditor = new Editor<undefined>(
+      'file',
+      {},
+      'failed-restoration'
+    );
+    const adopting = new TestEditableComponent(file);
+
+    try {
+      expect(() => failingEditor.edit(failing)).toThrow(
+        'state restoration failed'
+      );
+
+      adoptingEditor.edit(adopting);
+      expect(adoptingEditor.getEditState()?.document).toBe(
+        initialState.document
+      );
+      expect(adoptingEditor.getSurfaceState().view).toEqual({
+        scrollLeft: 24,
+      });
+    } finally {
+      failingEditor.cleanUp();
+      adoptingEditor.cleanUp();
+      failing.cleanUp();
+      adopting.cleanUp();
+      EditStateManager.clearAll();
+      dom.cleanup();
+    }
+  });
+
   test('initialState remains available when attachment fails after hydration', () => {
     const dom = installDom();
     const editor = new Editor<undefined>('file', {

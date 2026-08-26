@@ -592,6 +592,7 @@ describe('FileDiff edit-session ownership', () => {
       expect(editorEvents).toHaveLength(1);
       expect(componentEvents).toHaveLength(1);
       expect(componentEvents[0]).toBe(editorEvents[0]);
+      expect(componentEvents[0]?.editor).toBe(editor);
       expect(componentEvents[0]?.file.contents).toBe(
         'alpha\nedited value\nomega\n'
       );
@@ -754,11 +755,13 @@ describe('completeEditSession', () => {
     const events: FileDiffEditCompleteEvent<undefined>[] = [];
     let completionEditor: DiffsEditor<undefined> | undefined;
     let completionState: EditorState | undefined;
+    let completionEditState: ReturnType<DiffsEditor<undefined>['getEditState']>;
     const fixture = await createCompletionFixture({
       onEditComplete(event) {
         events.push(event);
         completionEditor = event.editor;
         completionState = event.editor.getSurfaceState();
+        completionEditState = event.editor.getEditState();
         return 'reject';
       },
     });
@@ -791,6 +794,11 @@ describe('completeEditSession', () => {
         ],
         view: { scrollLeft: 0 },
       });
+      expect(completionEditState?.document.getText()).toBe(
+        'alpha\nedited value\nomega\n'
+      );
+      expect(completionEditState?.editor).toEqual(completionState);
+      expect(editor.getEditState()).toBeUndefined();
       const event = events[0];
       expect(event.originalFileDiff).toBe(externalDiff);
       expect(event.fileDiff.cacheKey).toBeUndefined();

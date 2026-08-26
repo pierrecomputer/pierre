@@ -944,11 +944,13 @@ describe('completeEditSession', () => {
     const events: FileEditCompleteEvent<undefined>[] = [];
     let completionEditor: DiffsEditor<undefined> | undefined;
     let completionState: EditorState | undefined;
+    let completionEditState: ReturnType<DiffsEditor<undefined>['getEditState']>;
     const fixture = await createCompletionFixture({
       onEditComplete(event) {
         events.push(event);
         completionEditor = event.editor;
         completionState = event.editor.getSurfaceState();
+        completionEditState = event.editor.getEditState();
         return 'reject';
       },
     });
@@ -976,6 +978,9 @@ describe('completeEditSession', () => {
         ],
         view: { scrollLeft: 0 },
       });
+      expect(completionEditState?.document.getText()).toBe('edited\nbravo\n');
+      expect(completionEditState?.editor).toEqual(completionState);
+      expect(editor.getEditState()).toBeUndefined();
       const event = events[0];
       expect(event.file.contents).toBe('edited\nbravo\n');
       expect(event.file.cacheKey).toBeUndefined();

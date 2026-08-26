@@ -321,26 +321,52 @@ describe('EditStateManager', () => {
     expect(
       EditStateManager.clear('file', 'partial', {
         history: true,
-        selections: true,
       })
     ).toBe(true);
-    const retained = inspectFileState('partial')!;
+    let retained = inspectFileState('partial')!;
     expect(retained.document).toBe(state.document);
     expect(retained.document.getText()).toBe('const value = 2;');
     expect(retained.document.canUndo).toBe(false);
+    expect(retained.editor?.selections).toHaveLength(1);
+    expect(retained.editor?.view).toEqual({ scrollLeft: 24, scrollTop: 80 });
+
+    expect(
+      EditStateManager.clear('file', 'partial', { selections: true })
+    ).toBe(true);
+    retained = inspectFileState('partial')!;
     expect(retained.editor).toEqual({
       selections: undefined,
       view: { scrollLeft: 24, scrollTop: 80 },
     });
 
-    expect(EditStateManager.clear('file', 'partial', {})).toBe(true);
-    expect(EditStateManager.clear('file', 'partial', { editor: true })).toBe(
+    expect(EditStateManager.clear('file', 'partial', { view: true })).toBe(
       true
     );
-    expect(inspectFileState('partial')?.editor).toEqual({});
+    expect(inspectFileState('partial')?.editor).toEqual({
+      selections: undefined,
+      view: undefined,
+    });
+    expect(EditStateManager.clear('file', 'partial', {})).toBe(true);
     expect(EditStateManager.clear('file', 'partial')).toBe(true);
     expect(EditStateManager.get('file', 'partial')).toBeUndefined();
     expect(EditStateManager.clear('file', 'partial')).toBe(false);
+
+    const editorState = createState();
+    retainFileState('editor', editorState);
+    expect(EditStateManager.clear('file', 'editor', { editor: true })).toBe(
+      true
+    );
+    expect(inspectFileState('editor')?.document.canUndo).toBe(true);
+    expect(inspectFileState('editor')?.editor).toEqual({});
+
+    retainFileState('document');
+    expect(
+      EditStateManager.clear('file', 'document', {
+        document: true,
+        history: false,
+      })
+    ).toBe(true);
+    expect(EditStateManager.get('file', 'document')).toBeUndefined();
   });
 
   test('does not clear parts of an active session', () => {

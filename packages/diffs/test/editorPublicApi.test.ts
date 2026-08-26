@@ -346,6 +346,55 @@ describe('component editor attachment', () => {
 });
 
 describe('Editor document registry surfaces', () => {
+  for (const documentKind of ['file', 'file-diff'] as const) {
+    for (const stateKind of ['selection', 'view'] as const) {
+      test(`${documentKind} restores a clean ${stateKind}-only session`, async () => {
+        EditStateManager.clearAll();
+        const editStateKey = `${documentKind}-${stateKind}-only`;
+        const createFixture = () =>
+          documentKind === 'file'
+            ? createKeyedEditorFixture('alpha\nbravo', editStateKey)
+            : createDiffEditorFixture(
+                'split',
+                undefined,
+                editStateKey,
+                'alpha\nnew\ncharlie'
+              );
+        const first = await createFixture();
+        const state =
+          stateKind === 'selection'
+            ? {
+                selections: [
+                  {
+                    start: { line: 1, character: 2 },
+                    end: { line: 1, character: 2 },
+                    direction: 0 as const,
+                  },
+                ],
+              }
+            : { view: { scrollLeft: 24 } };
+        first.editor.setSurfaceState(state);
+        first.cleanup();
+
+        const second = await createFixture();
+        try {
+          expect(second.editor.canUndo).toBe(false);
+          expect(second.editor.getSurfaceState()).toEqual({
+            selections:
+              stateKind === 'selection' ? state.selections : undefined,
+            view:
+              stateKind === 'selection'
+                ? { scrollLeft: 0 }
+                : { scrollLeft: 24 },
+          });
+        } finally {
+          second.cleanup();
+          EditStateManager.clearAll();
+        }
+      });
+    }
+  }
+
   test('complete FileDiff state restores an unkeyed session independently', async () => {
     const first = await createDiffEditorFixture('split');
     insertText(first.editor, 1, 3, ' retained');

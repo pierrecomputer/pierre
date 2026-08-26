@@ -476,7 +476,7 @@ describe('React CodeView editor factory', () => {
     }
   });
 
-  test('uses replacement factories and editor options only for later sessions', async () => {
+  test('uses replacement factories, options, and keys only for later sessions', async () => {
     const { cleanup } = installCodeViewDom();
     const cleanupActEnvironment = installReactActEnvironment();
     const container = document.createElement('div');
@@ -489,7 +489,8 @@ describe('React CodeView editor factory', () => {
     const render = async (
       item: CodeViewItem<undefined>,
       createEditor: CreateEditor<undefined>,
-      historyMaxEntries: number
+      historyMaxEntries: number,
+      getEditStateKey: (item: CodeViewItem<undefined>) => string
     ) => {
       await renderRoot(
         root!,
@@ -497,6 +498,7 @@ describe('React CodeView editor factory', () => {
           createEditor,
           createCodeViewElement({
             editorOptions: { historyMaxEntries },
+            getEditStateKey,
             items: [item],
           })
         )
@@ -505,11 +507,22 @@ describe('React CodeView editor factory', () => {
 
     try {
       root = createReactRoot(container);
-      await render(baseItem, first.createEditor, 10);
+      await render(
+        baseItem,
+        first.createEditor,
+        10,
+        (item) => `first:${item.id}`
+      );
       expect(first.editors).toHaveLength(1);
       expect(first.receivedOptions[0]?.historyMaxEntries).toBe(10);
+      expect(first.receivedEditStateKeys).toEqual(['first:a']);
 
-      await render(baseItem, second.createEditor, 20);
+      await render(
+        baseItem,
+        second.createEditor,
+        20,
+        (item) => `second:${item.id}`
+      );
       expect(first.editors).toHaveLength(1);
       expect(second.editors).toHaveLength(0);
       expect(first.editors[0].fullCleanUps).toBe(0);
@@ -517,17 +530,20 @@ describe('React CodeView editor factory', () => {
       await render(
         { ...baseItem, edit: false, version: 1 },
         second.createEditor,
-        20
+        20,
+        (item) => `second:${item.id}`
       );
       expect(first.editors[0].fullCleanUps).toBeGreaterThanOrEqual(1);
 
       await render(
         { ...baseItem, edit: true, version: 2 },
         second.createEditor,
-        20
+        20,
+        (item) => `second:${item.id}`
       );
       expect(second.editors).toHaveLength(1);
       expect(second.receivedOptions[0]?.historyMaxEntries).toBe(20);
+      expect(second.receivedEditStateKeys).toEqual(['second:a']);
 
       await unmountRoot(root);
       root = undefined;
