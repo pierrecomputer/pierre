@@ -111,12 +111,28 @@ function restorePrototypeProperty(
   }
 }
 
+// Build the array-like shape returned by Range.getClientRects in browsers.
+function toDOMRectList(rects: DOMRect[]): DOMRectList {
+  return Object.assign(rects, {
+    item(index: number): DOMRect | null {
+      return rects[index] ?? null;
+    },
+  });
+}
+
 // #wrapLineText detects visual row starts by checking when a Range's top moves
 // downward. jsdom does not measure ranges, so this harness reports a new top
 // every `columns` UTF-16 offsets, making wrap offsets deterministic.
+// The WebKit mode gives a boundary grapheme a zero-width fragment on the
+// previous row followed by its glyph fragment on the continuation row.
 // rangeMeasurements() exposes how many Range rects were taken so tests can
 // assert measurement cost and cache retention.
-function installWrapMeasurement(columns: number): {
+function installWrapMeasurement(
+  columns: number,
+  {
+    webKitBoundaryFragments = false,
+  }: { webKitBoundaryFragments?: boolean } = {}
+): {
   rangeMeasurements(): number;
   restore(): void;
 } {
@@ -126,10 +142,19 @@ function installWrapMeasurement(columns: number): {
     rangeProto,
     'getBoundingClientRect'
   );
+  const originalRangeClientRects = Object.getOwnPropertyDescriptor(
+    rangeProto,
+    'getClientRects'
+  );
   const originalElementRect = Object.getOwnPropertyDescriptor(
     elementProto,
     'getBoundingClientRect'
   );
+
+  const getRangeRect = (offset: number): DOMRect =>
+    rect((offset % columns) * 8, Math.floor(offset / columns) * ROW);
+  const isWrapBoundary = (offset: number): boolean =>
+    webKitBoundaryFragments && offset > 0 && offset % columns === 0;
 
   let rangeMeasurements = 0;
   Object.defineProperty(rangeProto, 'getBoundingClientRect', {
@@ -137,7 +162,26 @@ function installWrapMeasurement(columns: number): {
     value(this: Range): DOMRect {
       rangeMeasurements++;
       const offset = this.startOffset;
-      return rect((offset % columns) * 8, Math.floor(offset / columns) * ROW);
+      if (isWrapBoundary(offset)) {
+        const row = offset / columns;
+        return rect(0, (row - 1) * ROW, columns * 8, ROW * 2);
+      }
+      return getRangeRect(offset);
+    },
+  });
+  Object.defineProperty(rangeProto, 'getClientRects', {
+    configurable: true,
+    value(this: Range): DOMRectList {
+      rangeMeasurements++;
+      const offset = this.startOffset;
+      if (isWrapBoundary(offset)) {
+        const row = offset / columns;
+        return toDOMRectList([
+          rect(columns * 8, (row - 1) * ROW, 0),
+          getRangeRect(offset),
+        ]);
+      }
+      return toDOMRectList([getRangeRect(offset)]);
     },
   });
   Object.defineProperty(elementProto, 'getBoundingClientRect', {
@@ -156,6 +200,11 @@ function installWrapMeasurement(columns: number): {
         rangeProto,
         'getBoundingClientRect',
         originalRangeRect
+      );
+      restorePrototypeProperty(
+        rangeProto,
+        'getClientRects',
+        originalRangeClientRects
       );
       restorePrototypeProperty(
         elementProto,
@@ -190,7 +239,8 @@ function caretAt(line: number) {
 
 async function createWrapEditor(
   contents: string,
-  wrapColumns: number
+  wrapColumns: number,
+  measurementOptions: { webKitBoundaryFragments?: boolean } = {}
 ): Promise<{
   cleanup(): void;
   content: HTMLElement;
@@ -201,7 +251,10 @@ async function createWrapEditor(
   window: EditorTestWindow;
 }> {
   const dom = installDom();
-  const wrapMeasurement = installWrapMeasurement(wrapColumns);
+  const wrapMeasurement = installWrapMeasurement(
+    wrapColumns,
+    measurementOptions
+  );
   const fileContainer = document.createElement('div');
   document.body.appendChild(fileContainer);
 
@@ -675,6 +728,47 @@ describe('caret affinity at a wrap boundary', () => {
 
       dispatchMovementKey(window, content, { key: 'ArrowDown' });
       expectCaret(editor, 0, 30);
+    } finally {
+      cleanup();
+    }
+  });
+});
+
+describe('WebKit wrap boundary fragments', () => {
+  const TWO_ROW_LINE = 'q0w1e2r3t4y5u6i7o8p9';
+
+  test('places the end-of-line caret after the final character', async () => {
+    const { cleanup, editor, fileContainer } = await createWrapEditor(
+      TWO_ROW_LINE,
+      10,
+      { webKitBoundaryFragments: true }
+    );
+    try {
+      setCaret(editor, 0, TWO_ROW_LINE.length);
+      expect(caretXY(fileContainer)).toEqual({ x: colX(10), y: ROW_H });
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('aligns a continuation-row selection with its native text offsets', async () => {
+    const { cleanup, editor, fileContainer } = await createWrapEditor(
+      TWO_ROW_LINE,
+      10,
+      { webKitBoundaryFragments: true }
+    );
+    try {
+      editor.setSelections([
+        {
+          start: { line: 0, character: 14 },
+          end: { line: 0, character: 18 },
+          direction: 'forward',
+        },
+      ]);
+
+      expect(selectionRects(fileContainer)).toEqual([
+        { x: CONTENT_X + 4 * CH, y: ROW_H, width: 4 * CH },
+      ]);
     } finally {
       cleanup();
     }

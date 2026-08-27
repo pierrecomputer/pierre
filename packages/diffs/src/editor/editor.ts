@@ -5966,7 +5966,13 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       const measureGrapheme = (index: number): DOMRect => {
         range.setStart(textNode, graphemeStart(index));
         range.setEnd(textNode, graphemeStart(index + 1));
-        return range.getBoundingClientRect();
+        // WebKit adds a zero-width fragment on the previous row at soft wraps;
+        // the final fragment belongs to the grapheme's rendered row.
+        const clientRects = range.getClientRects();
+        return (
+          clientRects.item(clientRects.length - 1) ??
+          range.getBoundingClientRect()
+        );
       };
 
       // A new visual line starts whenever a grapheme's top edge moves below
