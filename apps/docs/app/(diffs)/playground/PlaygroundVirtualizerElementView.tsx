@@ -230,12 +230,18 @@ function ElementVirtualizerFile({
     () => (
       <EditSessionButtons
         editing={editing}
-        onEdit={() => setEditing(true)}
+        onEdit={() => {
+          cancelled.current = false;
+          setEditing(true);
+        }}
         onCancel={() => {
           cancelled.current = true;
           setEditing(false);
         }}
-        onSave={() => setEditing(false)}
+        onSave={() => {
+          cancelled.current = false;
+          setEditing(false);
+        }}
       />
     ),
     [editing]
@@ -437,12 +443,18 @@ function ElementVirtualizerDiff({
     () => (
       <EditSessionButtons
         editing={editing}
-        onEdit={() => setEditing(true)}
+        onEdit={() => {
+          cancelled.current = false;
+          setEditing(true);
+        }}
         onCancel={() => {
           cancelled.current = true;
           setEditing(false);
         }}
-        onSave={() => setEditing(false)}
+        onSave={() => {
+          cancelled.current = false;
+          setEditing(false);
+        }}
       />
     ),
     [editing]

@@ -331,12 +331,18 @@ export function PlaygroundCodeView({
   const renderHeaderMetadata = useStableCallback((item: PlaygroundItem) => (
     <EditSessionButtons
       editing={item.edit === true}
-      onEdit={() => toggleEdit(item.id, true)}
+      onEdit={() => {
+        cancelledEdits.current.delete(item.id);
+        toggleEdit(item.id, true);
+      }}
       onCancel={() => {
         cancelledEdits.current.add(item.id);
         toggleEdit(item.id, false);
       }}
-      onSave={() => toggleEdit(item.id, false)}
+      onSave={() => {
+        cancelledEdits.current.delete(item.id);
+        toggleEdit(item.id, false);
+      }}
     />
   ));
 

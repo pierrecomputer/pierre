@@ -757,12 +757,18 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
     () => (
       <EditSessionButtons
         editing={edit}
-        onEdit={() => setEdit(true)}
+        onEdit={() => {
+          cancelledEdit.current = false;
+          setEdit(true);
+        }}
         onCancel={() => {
           cancelledEdit.current = true;
           setEdit(false);
         }}
-        onSave={() => setEdit(false)}
+        onSave={() => {
+          cancelledEdit.current = false;
+          setEdit(false);
+        }}
       />
     ),
     [edit]

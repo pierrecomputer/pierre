@@ -562,15 +562,24 @@ export function EditableFile() {
           >
             Cancel
           </button>
-          <button type="button" onClick={() => {
-            cancelled.current = false;
-            setEditing(false) 
-          }}>
+          <button
+            type="button"
+            onClick={() => {
+              cancelled.current = false;
+              setEditing(false);
+            }}
+          >
             Save
           </button>
         </>
       ) : (
-        <button type="button" onClick={() => setEditing(true)}>
+        <button
+          type="button"
+          onClick={() => {
+            cancelled.current = false;
+            setEditing(true);
+          }}
+        >
           Edit
         </button>
       )}
@@ -690,15 +699,24 @@ export function EditableFileDiff() {
           >
             Cancel
           </button>
-          <button type="button" onClick={() => {
-            cancelled.current = false;
-            setEditing(false) 
-          }}>
+          <button
+            type="button"
+            onClick={() => {
+              cancelled.current = false;
+              setEditing(false);
+            }}
+          >
             Save
           </button>
         </>
       ) : (
-        <button type="button" onClick={() => setEditing(true)}>
+        <button
+          type="button"
+          onClick={() => {
+            cancelled.current = false;
+            setEditing(true);
+          }}
+        >
           Edit
         </button>
       )}
@@ -1458,12 +1476,24 @@ export function EditableMultiFileDiff() {
           >
             Cancel
           </button>
-          <button type="button" onClick={() => setEditing(false)}>
+          <button
+            type="button"
+            onClick={() => {
+              cancelled.current = false;
+              setEditing(false);
+            }}
+          >
             Save
           </button>
         </>
       ) : (
-        <button type="button" onClick={() => setEditing(true)}>
+        <button
+          type="button"
+          onClick={() => {
+            cancelled.current = false;
+            setEditing(true);
+          }}
+        >
           Edit
         </button>
       )}
