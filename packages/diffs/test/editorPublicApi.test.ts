@@ -10,13 +10,16 @@ import {
 } from '../src/editor/editor';
 import { EditStateManager } from '../src/editor/EditStateManager';
 import type { Marker } from '../src/editor/marker';
+import { TextDocument } from '../src/editor/textDocument';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
 import type {
   DiffsEditableComponent,
+  EditorViewState,
   FileContents,
   FileDiffMetadata,
   LineAnnotation,
 } from '../src/types';
+import { getFiletypeFromFileName } from '../src/utils/getFiletypeFromFileName';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import { installDom, wait, waitFor } from './domHarness';
 
@@ -373,13 +376,13 @@ describe('Editor document registry surfaces', () => {
                 ],
               }
             : { view: { scrollLeft: 24 } };
-        first.editor.setSurfaceState(state);
+        first.editor.setViewState(state);
         first.cleanup();
 
         const second = await createFixture();
         try {
           expect(second.editor.canUndo).toBe(false);
-          expect(second.editor.getSurfaceState()).toEqual({
+          expect(second.editor.getViewState()).toEqual({
             selections:
               stateKind === 'selection' ? state.selections : undefined,
             view:
@@ -1286,6 +1289,136 @@ describe('Editor document registry surfaces', () => {
 });
 
 describe('Editor state round trip', () => {
+  test('restores a JSON-persisted file and editor state with fresh history', async () => {
+    const first = await createEditorFixture('alpha\nbravo');
+    let serializedDraft: string;
+    try {
+      insertText(first.editor, 1, 5, ' charlie');
+      first.editor.setViewState({
+        selections: [
+          {
+            start: { line: 1, character: 13 },
+            end: { line: 1, character: 13 },
+            direction: 0,
+          },
+        ],
+        view: { scrollLeft: 24 },
+      });
+      expect(first.editor.canUndo).toBe(true);
+
+      serializedDraft = JSON.stringify({
+        file: first.editor.getFile(),
+        editorState: first.editor.getViewState(),
+      });
+    } finally {
+      first.cleanup();
+    }
+
+    const persisted = JSON.parse(serializedDraft) as {
+      file: FileContents;
+      editorState: EditorViewState;
+    };
+    const initialDocument = new TextDocument<undefined>(
+      persisted.file.name,
+      persisted.file.contents,
+      persisted.file.lang ?? getFiletypeFromFileName(persisted.file.name)
+    );
+    let restoredState = false;
+    const restored = await createEditorFixture(
+      persisted.file.contents,
+      {
+        initialState: {
+          documentKind: 'file',
+          document: initialDocument,
+          fileInfo: {
+            name: persisted.file.name,
+            lang: persisted.file.lang,
+          },
+          editor: persisted.editorState,
+        },
+        onAttach() {
+          restoredState = true;
+        },
+      },
+      undefined,
+      undefined,
+      persisted.file
+    );
+    try {
+      await waitFor(() => restoredState);
+      expect(restored.editor.getEditState()?.document).toBe(initialDocument);
+      expect(restored.editor.getFile()).toEqual(persisted.file);
+      expect(restored.editor.getViewState()).toEqual(persisted.editorState);
+      expect(restored.editor.canUndo).toBe(false);
+      expect(restored.editor.canRedo).toBe(false);
+    } finally {
+      restored.cleanup();
+    }
+  });
+
+  test('completes partial FileDiff initialState from the attached diff', async () => {
+    const editorState: EditorViewState = {
+      selections: [
+        {
+          start: { line: 1, character: 2 },
+          end: { line: 1, character: 2 },
+          direction: 0,
+        },
+      ],
+      view: { scrollLeft: 24 },
+    };
+    const restored = await createDiffEditorFixture('split', {
+      initialState: {
+        documentKind: 'file-diff',
+        editor: editorState,
+      },
+    });
+
+    try {
+      expect(restored.editor.getViewState()).toEqual(editorState);
+      expect(restored.editor.getEditState()).toMatchObject({
+        documentKind: 'file-diff',
+        fileInfo: { name: 'edits.ts' },
+      });
+      expect(restored.editor.getEditState()?.diffSession).toBeDefined();
+      expect(restored.editor.getText()).toBe('alpha\nnew\ncharlie');
+      expect(restored.editor.canUndo).toBe(false);
+    } finally {
+      restored.cleanup();
+    }
+  });
+
+  test('adopts a partial initialState document and builds its missing fields', async () => {
+    const first = await createEditorFixture('alpha\nbravo');
+    insertText(first.editor, 1, 5, ' charlie');
+    const document = first.editor.getEditState()!.document;
+    first.cleanup();
+
+    const restored = await createEditorFixture('fallback', {
+      initialState: {
+        documentKind: 'file',
+        document,
+      },
+    });
+
+    try {
+      expect(restored.editor.getEditState()?.document).toBe(document);
+      expect(restored.editor.getText()).toBe('alpha\nbravo charlie');
+      expect(restored.editor.getFile()).toEqual({
+        name: 'edits.ts',
+        lang: undefined,
+        contents: 'alpha\nbravo charlie',
+      });
+      expect(restored.editor.getViewState()).toEqual({
+        selections: undefined,
+        view: { scrollLeft: 0 },
+      });
+      expect(restored.editor.canUndo).toBe(true);
+    } finally {
+      restored.cleanup();
+    }
+  });
+
   test('setState restores selections without rebuilding the document or dropping undo history', async () => {
     const { cleanup, editor } = await createEditorFixture(
       'alpha\nbravo\ncharlie'
@@ -1309,7 +1442,7 @@ describe('Editor state round trip', () => {
           direction: 'forward',
         },
       ]);
-      const state = editor.getSurfaceState();
+      const state = editor.getViewState();
 
       // Move the caret elsewhere, then restore the captured state.
       editor.setSelections([
@@ -1319,9 +1452,9 @@ describe('Editor state round trip', () => {
           direction: 'none',
         },
       ]);
-      editor.setSurfaceState(state);
+      editor.setViewState(state);
 
-      expect(editor.getSurfaceState().selections).toEqual(state.selections);
+      expect(editor.getViewState().selections).toEqual(state.selections);
       // getState/setState carry no cacheKey, so restoring state neither rebuilds
       // the document nor discards its undo history.
       expect(editor.canUndo).toBe(true);
@@ -1457,7 +1590,7 @@ describe('Editor focus lifecycle', () => {
         preventScroll: true,
       };
       editor.focus(firstTarget);
-      expect(editor.getSurfaceState().selections).toEqual([
+      expect(editor.getViewState().selections).toEqual([
         {
           start: { line: 1, character: 0 },
           end: { line: 1, character: 0 },
@@ -1466,7 +1599,7 @@ describe('Editor focus lifecycle', () => {
       ]);
 
       editor.focus({ lineNumber: 99, character: 99, preventScroll: true });
-      expect(editor.getSurfaceState().selections).toEqual([
+      expect(editor.getViewState().selections).toEqual([
         {
           start: { line: 2, character: 7 },
           end: { line: 2, character: 7 },
@@ -1479,7 +1612,7 @@ describe('Editor focus lifecycle', () => {
         character: Number.NaN,
         preventScroll: true,
       });
-      expect(editor.getSurfaceState().selections).toEqual([
+      expect(editor.getViewState().selections).toEqual([
         {
           start: { line: 0, character: 0 },
           end: { line: 0, character: 0 },
@@ -1510,7 +1643,7 @@ describe('Editor focus lifecycle', () => {
     const editor = new Editor<undefined>('file');
     try {
       editor.focus({ lineNumber: 2 });
-      expect(editor.getSurfaceState().selections).toBeUndefined();
+      expect(editor.getViewState().selections).toBeUndefined();
     } finally {
       editor.cleanUp();
     }
@@ -1535,7 +1668,7 @@ describe('Editor focus lifecycle', () => {
         character: 4,
         preventScroll: true,
       });
-      expect(editor.getSurfaceState().selections).toEqual([
+      expect(editor.getViewState().selections).toEqual([
         {
           start: { line: 1, character: 0 },
           end: { line: 1, character: 0 },
@@ -1563,7 +1696,7 @@ describe('Editor focus lifecycle', () => {
       setRect(rows[2], 39, 59);
 
       editor.focus({ lineNumber: 'first-visible', preventScroll: true });
-      expect(editor.getSurfaceState().selections?.[0]?.start).toEqual({
+      expect(editor.getViewState().selections?.[0]?.start).toEqual({
         line: 1,
         character: 0,
       });
@@ -1591,7 +1724,7 @@ describe('Editor focus lifecycle', () => {
       setRect(rows[2], 40, 60);
 
       editor.focus({ lineNumber: 'first-visible', preventScroll: true });
-      expect(editor.getSurfaceState().selections?.[0]?.start).toEqual({
+      expect(editor.getViewState().selections?.[0]?.start).toEqual({
         line: 1,
         character: 0,
       });
@@ -1641,7 +1774,7 @@ describe('Editor focus lifecycle', () => {
         preventScroll: true,
         offset: 10,
       });
-      expect(editor.getSurfaceState().selections?.[0]?.start.line).toBe(2);
+      expect(editor.getViewState().selections?.[0]?.start.line).toBe(2);
     } finally {
       cleanup();
     }
@@ -1654,13 +1787,13 @@ describe('Editor focus lifecycle', () => {
     try {
       editor.focus({ lineNumber: 2, preventScroll: true });
       await wait(0);
-      const selections = editor.getSurfaceState().selections;
+      const selections = editor.getViewState().selections;
       const button = document.createElement('button');
       document.body.appendChild(button);
       button.focus();
 
       editor.focus({ lineNumber: 'first-visible', preventScroll: true });
-      expect(editor.getSurfaceState().selections).toEqual(selections);
+      expect(editor.getViewState().selections).toEqual(selections);
       expect(document.activeElement).toBe(button);
 
       const viewport = document.createElement('div');
@@ -1672,7 +1805,7 @@ describe('Editor focus lifecycle', () => {
       setRect(rows[2], 15, 25);
 
       editor.focus({ lineNumber: 'first-visible', preventScroll: true });
-      expect(editor.getSurfaceState().selections).toEqual(selections);
+      expect(editor.getViewState().selections).toEqual(selections);
       expect(document.activeElement).toBe(button);
     } finally {
       cleanup();
@@ -1708,7 +1841,7 @@ describe('Editor focus lifecycle', () => {
       setRect(trailingContext!, 30, 50);
 
       editor.focus({ lineNumber: 'first-visible', preventScroll: true });
-      expect(editor.getSurfaceState().selections?.[0]?.start.line).toBe(2);
+      expect(editor.getViewState().selections?.[0]?.start.line).toBe(2);
     } finally {
       cleanup();
     }
@@ -1741,7 +1874,7 @@ describe('Editor focus lifecycle', () => {
       setRect(target!, 30, 50);
 
       editor.focus({ lineNumber: 'first-visible', preventScroll: true });
-      expect(editor.getSurfaceState().selections?.[0]?.start.line).toBe(2);
+      expect(editor.getViewState().selections?.[0]?.start.line).toBe(2);
     } finally {
       cleanup();
     }

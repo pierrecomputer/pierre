@@ -128,7 +128,7 @@ export interface FileEditCompleteEvent<LAnnotation> {
  * event's `file`, or `'reject'` to restore `originalFile`. The event is frozen,
  * so re-key the accepted file in place (`event.file.cacheKey = '…'`) before
  * accepting. The event's editor is detached and returns its final state from
- * `getSurfaceState()`. A missing handler rejects.
+ * `getViewState()`. A missing handler rejects.
  */
 export type FileEditCompleteHandler<LAnnotation> = (
   event: FileEditCompleteEvent<LAnnotation>
@@ -374,7 +374,7 @@ export class File<
       this.installEditSession(
         incomingFile,
         previousEditSessionFile == null
-          ? this.editor?.__getDocumentContents()
+          ? this.editor?.__getDocumentContents(incomingFile)
           : undefined
       );
     } else {
@@ -868,7 +868,10 @@ export class File<
       getLineAnnotationName
     );
     if (this.editSessionFile == null && this.file != null) {
-      this.installEditSession(this.file, editor.__getDocumentContents());
+      this.installEditSession(
+        this.file,
+        editor.__getDocumentContents(this.file)
+      );
     } else {
       this.fileRenderer.beginEditSession(this.editSessionFile);
     }

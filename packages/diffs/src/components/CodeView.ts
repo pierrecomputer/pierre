@@ -340,6 +340,14 @@ export interface CodeViewModeItemMap<LAnnotation> {
   diff: CodeViewDiffItem<LAnnotation>;
 }
 
+export type CodeViewItemEditCompleteHandler<LAnnotation> = <
+  TMode extends CodeViewMode,
+>(
+  event: CodeViewItemEditCompleteEventMap<LAnnotation>[TMode],
+  item: CodeViewModeItemMap<LAnnotation>[TMode],
+  nextItem: CodeViewModeItemMap<LAnnotation>[TMode]
+) => EditCompletionDecision;
+
 type CodeViewModeItemContext<
   LAnnotation,
   TMode extends CodeViewMode,
@@ -567,11 +575,7 @@ export interface CodeViewOptions<LAnnotation>
    * '…'`) before accepting. The event contains the detached editor with its
    * final pre-detach state.
    */
-  onItemEditComplete?<TMode extends CodeViewMode>(
-    event: CodeViewItemEditCompleteEventMap<LAnnotation>[TMode],
-    item: CodeViewModeItemMap<LAnnotation>[TMode],
-    nextItem: CodeViewModeItemMap<LAnnotation>[TMode]
-  ): EditCompletionDecision;
+  onItemEditComplete?: CodeViewItemEditCompleteHandler<LAnnotation>;
 
   /** Render a non-virtualized element at the very start of the scroll content,
    * before the first item. It is always rendered and scrolls with the content.

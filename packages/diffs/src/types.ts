@@ -1206,7 +1206,7 @@ export type SyncRenderViewProps<LAnnotation> =
 
 export interface DiffsEditor<LAnnotation> {
   /** Return an isolated copy of selections and editor-owned viewport state. */
-  getSurfaceState(): EditorState;
+  getViewState(): EditorViewState;
   /**
    * Returns the raw objects for the active edit session, or undefined when no
    * complete state is available. State remains available while rendering is
@@ -1218,7 +1218,7 @@ export interface DiffsEditor<LAnnotation> {
   /** @internal Capture focus intent before replacing the editable view. */
   __captureFocusForDOMReplacement(): void;
   /** @internal Return the active document that an edit-session render should use. */
-  __getDocumentContents(): FileContents | undefined;
+  __getDocumentContents(fallbackFile?: FileContents): FileContents | undefined;
   /** @internal Return component state retained with the active document. */
   __getDocumentSessionState?(): RetainedDiffSessionSnapshot | undefined;
   __syncRenderView(props: SyncRenderViewProps<LAnnotation>): void;
@@ -1339,16 +1339,16 @@ export interface EditorSelection extends Range {
   direction: SelectionDirection;
 }
 
-export interface EditorViewState {
+export interface EditorViewportState {
   /** Horizontal position owned by the current editable code scroller. */
   scrollLeft: number;
   /** Vertical position of the editor viewport. */
   scrollTop?: number;
 }
 
-export interface EditorState {
+export interface EditorViewState {
   selections?: EditorSelection[];
-  view?: EditorViewState;
+  view?: EditorViewportState;
 }
 
 export interface DiffsTextDocument {

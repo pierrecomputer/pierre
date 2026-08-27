@@ -16,7 +16,7 @@ export type {
   EditorChange,
   EditorChangeEvent,
   EditorDocumentKind,
-  EditorState,
+  EditorViewState,
   RetainedDiffSessionSnapshot,
 } from '../types';
 export type {
@@ -25,6 +25,7 @@ export type {
   EditHistoryLineAnnotation,
   EditHistoryState,
   EditState,
+  EditorInitialState,
   FileDiffEditState,
   FileEditState,
 } from '../editor/types';

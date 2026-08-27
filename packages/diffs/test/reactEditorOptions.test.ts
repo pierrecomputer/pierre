@@ -283,7 +283,6 @@ describe('React edit surfaces', () => {
     document.body.appendChild(container);
     let instance: FileInstance<undefined> | undefined;
     let root: Root | undefined;
-    let updates = 0;
     const options: FileOptions<undefined> = {
       disableFileHeader: true,
       theme: DEFAULT_THEMES,
@@ -291,9 +290,6 @@ describe('React edit surfaces', () => {
       onPostRender(_node, current, phase) {
         if (phase !== 'unmount') {
           instance = current;
-        }
-        if (phase === 'update') {
-          updates++;
         }
       },
     };
@@ -324,9 +320,6 @@ describe('React edit surfaces', () => {
       // waitFor times out silently; this is the real assertion.
       expect(shadowHTML(container)).toContain('data-char');
       expect(instance!.options.useTokenTransformer).toBe(false);
-      // Mounting straight into edit renders once without a session and again
-      // at editor attach — the accepted pre-paint cost of mount-into-edit.
-      expect(updates).toBeGreaterThanOrEqual(1);
     } finally {
       await unmountRoot(root);
       cleanupActEnvironment();

@@ -93,7 +93,7 @@ function formatSelectionLineLabel(
 // selecting text immediately reveals a floating popover (anchored below the
 // selection) whose contents come from `renderSelectionAction`. Here it mimics an
 // editor's "Add to chat": the primary action sends the selected snippet to a
-// mock chat panel beside the surface, and a secondary action copies it.
+// mock chat panel beside the editor, and a secondary action copies it.
 export function SelectionDemo({ prerenderedFile }: SelectionDemoProps) {
   const [snippets, setSnippets] = useState<ChatSnippet[]>([]);
   const snippetIdRef = useRef(0);
@@ -237,7 +237,7 @@ export function SelectionDemo({ prerenderedFile }: SelectionDemoProps) {
                         disableLineNumbers: true,
                       }}
                       // The page's shared worker pool is wired up for the editable
-                      // editor surface; a dynamically mounted read-only File isn't
+                      // editor component; a dynamically mounted read-only File isn't
                       // highlighted through it, so highlight on the main thread.
                       disableWorkerPool
                       className="max-h-32 overflow-auto"

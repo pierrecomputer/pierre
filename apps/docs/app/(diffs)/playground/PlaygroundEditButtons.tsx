@@ -2,7 +2,7 @@
 
 // Header controls for a playground edit session: an Edit button, replaced by
 // Cancel + Save while the session is active. The React component serves the
-// React surfaces; the DOM builder serves the vanilla Virtualizer view. Both
+// React components; the DOM builder serves the vanilla Virtualizer view. Both
 // share the `.playground-edit-*` styles in globals.css.
 
 interface EditSessionButtonsProps {

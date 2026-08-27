@@ -200,7 +200,7 @@ export function removeReviewSurface() {
 ## Enable item edit mode
 
 In React, wrap `CodeView` in `EditProvider`. In vanilla JavaScript, pass
-`createEditor(documentKind, options, editHistoryKey)` in `CodeViewOptions` and
+`createEditor(documentKind, options, editStateKey)` in `CodeViewOptions` and
 forward all three arguments to `new Editor`. Set `edit: true` on each editable
 item and increment its version. The factory receives `'file'` or `'file-diff'`
 as its first argument so it can construct an editor dedicated to that surface.
@@ -220,11 +220,10 @@ During removal or viewer teardown, neither decision reinserts the item. A
 missing callback rejects. When React controls `items`, put `nextItem` into
 controlled state only when the item should remain.
 
-Use `getEditHistoryKey(item)` to opt into retaining the draft, undo/redo
-history, selections, and editor-owned view state across editor instances. The
-returned `editHistoryKey` is passed separately to the editor factory and is not
-the file or diff `cacheKey`; `cacheKey` remains a render-cache invalidation
-hint. `getEditor(id)` returns the current `DiffsEditor` handle.
+Use `getEditStateKey(item)` to opt into retaining the draft, undo/redo history,
+selections, and editor-owned view state across editor instances. The returned
+`editStateKey` is passed to the editor factory. `getEditor(id)` returns the
+current `DiffsEditor` handle.
 
 Read [Edit with React](recipe-edit-react.md) or
 [Edit with vanilla JavaScript](recipe-edit-vanilla.md) for the complete editor

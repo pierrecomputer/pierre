@@ -3,7 +3,7 @@ import LRUMapPkg from 'lru_map';
 import type {
   DiffsEditor,
   EditorDocumentKind,
-  EditorState,
+  EditorViewState,
   FileContents,
   RetainedDiffSessionSnapshot,
 } from '../types';
@@ -15,7 +15,7 @@ const DEFAULT_EDIT_STATE_CAPACITY = 100;
 interface ManagedEditSessionBase<LAnnotation = unknown> {
   document?: TextDocument<LAnnotation>;
   fileInfo?: Pick<FileContents, 'lang' | 'name'>;
-  editor?: EditorState;
+  editor?: EditorViewState;
 }
 
 export interface ManagedFileEditSession<
@@ -73,7 +73,7 @@ class EditStateManagerNamespace<K extends EditorDocumentKind> {
   activate<LAnnotation>(
     editStateKey: string,
     owner: DiffsEditor<LAnnotation>,
-    initialState?: ManagedEditStateFor<K>
+    initialState?: ManagedEditSessionFor<K>
   ): ManagedEditSessionFor<K> {
     const activeSession = this.#sessions.get(editStateKey);
     if (activeSession != null && activeSession.owner !== owner) {
@@ -179,19 +179,19 @@ class EditStateManagerClass {
     documentKind: EditorDocumentKind,
     editStateKey: string,
     owner: DiffsEditor<LAnnotation>,
-    initialState?: ManagedEditState<LAnnotation>
+    initialState?: ManagedEditSession<LAnnotation>
   ): ManagedEditSession<LAnnotation> {
     return (
       documentKind === 'file'
         ? this.#files.activate(
             editStateKey,
             owner,
-            initialState as ManagedFileEditState | undefined
+            initialState as ManagedFileEditSession | undefined
           )
         : this.#diffs.activate(
             editStateKey,
             owner,
-            initialState as ManagedFileDiffEditState | undefined
+            initialState as ManagedFileDiffEditSession | undefined
           )
     ) as ManagedEditSession<LAnnotation>;
   }
@@ -261,7 +261,7 @@ export interface ClearEditStateOptions {
   view?: boolean;
 }
 
-export function cloneEditorState(state: EditorState): EditorState {
+export function cloneEditorViewState(state: EditorViewState): EditorViewState {
   return {
     selections: state.selections?.map((selection) => ({
       ...selection,

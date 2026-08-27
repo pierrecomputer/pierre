@@ -6,7 +6,11 @@ import { VirtualizedFileDiff } from '../src/components/VirtualizedFileDiff';
 import { DEFAULT_THEMES } from '../src/constants';
 import { Editor } from '../src/editor/editor';
 import { TextDocument } from '../src/editor/textDocument';
-import type { DiffsEditor, EditorChangeEvent, EditorState } from '../src/types';
+import type {
+  DiffsEditor,
+  EditorChangeEvent,
+  EditorViewState,
+} from '../src/types';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import { installDom, waitFor } from './domHarness';
 
@@ -249,7 +253,7 @@ describe('virtualized editor viewport', () => {
 
       expect(root.scrollTop).toBe(12);
 
-      expect(editor.getSurfaceState()).toEqual({
+      expect(editor.getViewState()).toEqual({
         selections: [
           {
             start: { line: 1, character: 3 },
@@ -273,19 +277,19 @@ describe('virtualized editor viewport', () => {
     const editorEvents: EditorChangeEvent<undefined, 'file' | 'diff'>[] = [];
     const componentEvents: EditorChangeEvent<undefined, 'file'>[] = [];
     const completionEvents: FileEditCompleteEvent<undefined>[] = [];
-    const componentStates: EditorState[] = [];
-    const completionStates: EditorState[] = [];
+    const componentStates: EditorViewState[] = [];
+    const completionStates: EditorViewState[] = [];
     const file = new VirtualizedFile(
       {
         disableFileHeader: true,
         theme: DEFAULT_THEMES,
         onEditChange(event) {
           componentEvents.push(event);
-          componentStates.push(event.editor.getSurfaceState());
+          componentStates.push(event.editor.getViewState());
         },
         onEditComplete(event) {
           completionEvents.push(event);
-          completionStates.push(event.editor.getSurfaceState());
+          completionStates.push(event.editor.getViewState());
           return 'reject';
         },
       },

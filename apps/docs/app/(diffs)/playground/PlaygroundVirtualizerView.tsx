@@ -68,7 +68,7 @@ function fileAnnotationKey(annotation: VirtualizerFileAnnotation): string {
 //
 // Each diff header carries its own Edit button (in the header metadata slot),
 // replaced by Cancel/Save while a session is active; Edit attaches a per-file
-// Editor to that diff and flips its new-file surface into contentEditable.
+// Editor to that diff and makes its new-file side contentEditable.
 // Files are edited independently because one Editor only binds to one instance
 // at a time.
 //

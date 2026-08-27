@@ -25,6 +25,7 @@ import {
   type CodeViewCreateEditorOptions,
   type CodeViewItem,
   type CodeViewItemEditCompleteEventMap,
+  type CodeViewItemEditCompleteHandler,
   type CodeViewLineSelection,
   type CodeViewMode,
   type CodeViewModeItemMap,
@@ -34,7 +35,6 @@ import {
   type CodeViewSlotSnapshot,
   type DiffLineAnnotation,
   type DiffsEditor,
-  type EditCompletionDecision,
   type EditorDocumentKind,
   type GetHoveredLineResult,
   type LineAnnotation,
@@ -45,6 +45,8 @@ import { renderDiffChildren } from './utils/renderDiffChildren';
 import { renderFileChildren } from './utils/renderFileChildren';
 import { useStableCallback } from './utils/useStableCallback';
 import { WorkerPoolContext } from './WorkerPoolContext';
+
+export type { CodeViewItemEditCompleteHandler };
 
 const useIsomorphicLayoutEffect =
   typeof window === 'undefined' ? useEffect : useLayoutEffect;
@@ -101,11 +103,7 @@ interface CodeViewBaseProps<LAnnotation> {
    * `nextItem` into its state — or `'reject'` to revert. The event is frozen;
    * re-key the accepted value in place before accepting.
    */
-  onItemEditComplete?<TMode extends CodeViewMode>(
-    event: CodeViewItemEditCompleteEventMap<LAnnotation>[TMode],
-    item: CodeViewModeItemMap<LAnnotation>[TMode],
-    nextItem: CodeViewModeItemMap<LAnnotation>[TMode]
-  ): EditCompletionDecision;
+  onItemEditComplete?: CodeViewItemEditCompleteHandler<LAnnotation>;
   renderCustomHeader?(item: CodeViewItem<LAnnotation>): ReactNode;
   renderHeaderPrefix?(item: CodeViewItem<LAnnotation>): ReactNode;
   renderHeaderFilenameSuffix?(item: CodeViewItem<LAnnotation>): ReactNode;

@@ -1,7 +1,7 @@
 import type {
   DiffLineAnnotation,
   EditorSelection,
-  EditorState,
+  EditorViewState,
   FileContents,
   LineAnnotation,
   ResolvedTextEdit,
@@ -39,7 +39,7 @@ export interface EditHistoryState<LAnnotation> {
 interface EditStateBase<LAnnotation> {
   document: TextDocument<LAnnotation>;
   fileInfo: Pick<FileContents, 'name' | 'lang'>;
-  editor: EditorState;
+  editor: EditorViewState;
 }
 
 export interface FileEditState<
@@ -63,3 +63,12 @@ export interface FileDiffEditState<
 export type EditState<LAnnotation = unknown> =
   | FileEditState<LAnnotation>
   | FileDiffEditState<LAnnotation>;
+
+/** State supplied to a new editor, completed from the attached component. */
+export type EditorInitialState<LAnnotation = unknown> =
+  | ({ documentKind: 'file' } & Partial<
+      Omit<FileEditState<LAnnotation>, 'documentKind'>
+    >)
+  | ({ documentKind: 'file-diff' } & Partial<
+      Omit<FileDiffEditState<LAnnotation>, 'documentKind'>
+    >);

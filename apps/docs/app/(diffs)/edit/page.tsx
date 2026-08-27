@@ -26,7 +26,7 @@ export const metadata: Metadata = pageMetadata({
 });
 
 // Server-renders every edit demo so they all paint highlighted on first load
-// and hydrate cleanly (no flash): the "Live editing" File surface, and the
+// and hydrate cleanly (no flash): the "Live editing" File component, and the
 // lint-marker, find-in-file, undo-history, shortcuts, and selection files.
 export default async function EditRoute() {
   const [

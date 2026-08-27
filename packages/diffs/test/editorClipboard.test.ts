@@ -413,7 +413,7 @@ describe('Editor clipboard events', () => {
 
       expect(writes).toEqual([['text', 'bravo\n']]);
       expect(editor.getText()).toBe('alpha\ncharlie');
-      expect(editor.getSurfaceState().selections).toEqual([
+      expect(editor.getViewState().selections).toEqual([
         {
           start: { line: 1, character: 0 },
           end: { line: 1, character: 0 },
@@ -461,7 +461,7 @@ describe('Editor clipboard events', () => {
         ],
       ]);
       expect(editor.getText()).toBe('bravo\ndelta');
-      expect(editor.getSurfaceState().selections).toEqual([
+      expect(editor.getViewState().selections).toEqual([
         {
           start: { line: 0, character: 0 },
           end: { line: 0, character: 0 },
@@ -511,7 +511,7 @@ describe('Editor clipboard events', () => {
         [MULTI_SELECTION_CLIPBOARD_TYPE, JSON.stringify(['rav', 'charlie\n'])],
       ]);
       expect(editor.getText()).toBe('alpha\nbo\ndelta');
-      expect(editor.getSurfaceState().selections).toEqual([
+      expect(editor.getViewState().selections).toEqual([
         {
           start: { line: 1, character: 1 },
           end: { line: 1, character: 1 },
@@ -564,7 +564,7 @@ describe('Editor clipboard events', () => {
         ],
       ]);
       expect(editor.getText()).toBe('alpha\ncharlie');
-      expect(editor.getSurfaceState().selections).toEqual([
+      expect(editor.getViewState().selections).toEqual([
         {
           start: { line: 1, character: 0 },
           end: { line: 1, character: 0 },
@@ -609,7 +609,7 @@ describe('Editor clipboard events', () => {
         [MULTI_SELECTION_CLIPBOARD_TYPE, JSON.stringify(['br', 'bravo\n'])],
       ]);
       expect(editor.getText()).toBe('alpha\ncharlie');
-      expect(editor.getSurfaceState().selections).toEqual([
+      expect(editor.getViewState().selections).toEqual([
         {
           start: { line: 1, character: 0 },
           end: { line: 1, character: 0 },

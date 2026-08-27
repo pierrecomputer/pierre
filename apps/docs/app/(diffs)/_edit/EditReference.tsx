@@ -108,7 +108,7 @@ const CAPABILITY_GROUPS: ReferenceGroup[] = [
       {
         term: 'Themes & color modes',
         description:
-          'Tokens and editor chrome follow the surface theme, re-tokenizing live when you switch themes or toggle light and dark.',
+          'Tokens and editor chrome follow the component theme, re-tokenizing live when you switch themes or toggle light and dark.',
       },
       {
         term: 'UI adapts to container',

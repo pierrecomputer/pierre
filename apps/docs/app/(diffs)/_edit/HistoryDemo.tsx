@@ -277,7 +277,7 @@ export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
     [applyEdit]
   );
 
-  // Build the undo stack once the demo is on screen so the surface arrives
+  // Build the undo stack once the demo is on screen so the component arrives
   // already fully refactored with history intact. We defer until visible
   // because seeding scrolls the caret into view and would yank the page down
   // to this below-the-fold demo on first load. We poll until the content and
@@ -314,7 +314,7 @@ export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
 
     const startSeeding = () => {
       // Warm the shared highlighter before polling so the editor tokenizer can
-      // pick up the grammar synchronously once the surface attaches.
+      // pick up the grammar synchronously once the component attaches.
       void preloadHighlighter({
         themes: [DEFAULT_THEMES.dark, DEFAULT_THEMES.light],
         langs: [LANGUAGE],
@@ -389,7 +389,7 @@ export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
   // Recover the guided demo after the user typed their own edit. We unwind the
   // whole undo stack (the stray edit plus the seeded steps) back to the original
   // document via the editor's programmatic `undo()`, which is reliable
-  // regardless of where focus sits, then replay all seeded edits so the surface
+  // regardless of where focus sits, then replay all seeded edits so the component
   // lands back at the fully-refactored 7/7 state with its history intact.
   const reset = useCallback(() => {
     const content = getContent();

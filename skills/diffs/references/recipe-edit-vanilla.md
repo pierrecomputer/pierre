@@ -98,10 +98,9 @@ session. Store the final collection from `onEditComplete` alongside the accepted
 file or diff. Use stable metadata IDs for application state that belongs to an
 annotation.
 
-Pass a third `editHistoryKey` argument to `new Editor` when a later editor
-instance should resume the in-memory draft, undo/redo history, selections, and
-editor-owned view state. It is an explicit retention key, not a file or diff
-render `cacheKey` and is not derived from one.
+Pass a third `editStateKey` argument to `new Editor` when a later editor
+instance should resume/save the in-memory draft, undo/redo history, selections,
+and editor-owned view state.
 
 Use `VirtualizedFile` or `VirtualizedFileDiff` with a `Virtualizer` for a large
 standalone surface. Load `@pierre/diffs/edit` with `import()` when edit mode is
@@ -117,11 +116,11 @@ import { Editor } from '@pierre/diffs/edit';
 
 export function mountEditableCodeView(root: HTMLElement) {
   const viewer = new CodeView({
-    getEditHistoryKey(item) {
+    getEditStateKey(item) {
       return 'draft:' + item.id;
     },
-    createEditor(documentKind, options, editHistoryKey) {
-      return new Editor(documentKind, options, editHistoryKey);
+    createEditor(documentKind, options, editStateKey) {
+      return new Editor(documentKind, options, editStateKey);
     },
     onItemEditChange(event, item) {
       saveItemDraft(item.id, event.file, event.lineAnnotations);
@@ -165,11 +164,10 @@ or viewer teardown, neither decision reinserts the item. A missing completion
 callback rejects. A controlled React owner should put `nextItem` into its
 `items` state only when the item should remain.
 
-`getEditHistoryKey(item)` opts an item into draft, undo/redo, selection, and
+`getEditStateKey(item)` opts an item into draft, undo/redo, selection, and
 editor-owned view-state retention across editor instances. Forward the resulting
-third factory argument to `new Editor`. The edit history key is separate from
-the file or diff `cacheKey`, which remains a render-cache invalidation hint.
-`CodeView` creates and removes the item editors.
+third factory argument to `new Editor`. `CodeView` creates and removes the item
+editors.
 
 `viewer.getEditor(id)` returns the current `DiffsEditor` handle. Call
 `viewer.cleanUp()` when the host removes the viewer.

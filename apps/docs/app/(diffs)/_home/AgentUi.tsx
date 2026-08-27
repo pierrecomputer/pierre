@@ -1024,7 +1024,7 @@ export function AgentUi({
   // The session shown in the Changes panel: the live session (agent changes plus
   // explorer-added files) augmented with any edited placeholders. Kept separate
   // from `liveSession` so editing a placeholder lists it here without flipping
-  // its center surface from the editable File view to a diff.
+  // its center view from the editable File component to a diff.
   const changesSession = useMemo<AuiSession>(
     () => ({
       ...liveSession,
@@ -1127,7 +1127,7 @@ export function AgentUi({
 
   // When the active path isn't a changed/added file (e.g. browsing the root
   // README or another explorer file), open editable placeholder contents
-  // instead of a diff so the surface is never blank.
+  // instead of a diff so the view is never blank.
   const placeholderContents = useMemo<string | null>(
     () =>
       activePath != null && activeFile == null
@@ -1247,10 +1247,10 @@ export function AgentUi({
               // Editable view for explorer files that aren't part of the change
               // set (e.g. the root README or a generated stub). Always mounts
               // with the latest placeholder contents. The per-path edit history
-              // restores undo history when the surface re-attaches; cacheKey
+              // restores undo history when the component re-attaches; cacheKey
               // remains only a render-cache identity.
               // Highlighted on the main thread since this File is mounted
-              // dynamically outside the editable surface's worker pool.
+              // dynamically outside the editable component's worker pool.
               <File
                 key={activePath}
                 file={{
@@ -1302,7 +1302,7 @@ export function AgentUi({
                         disableLineNumbers: true,
                       }}
                       // The page's shared worker pool is wired up for the
-                      // editable editor surface; a dynamically mounted
+                      // editable editor component; a dynamically mounted
                       // read-only File isn't highlighted through it, so
                       // highlight on the main thread.
                       disableWorkerPool

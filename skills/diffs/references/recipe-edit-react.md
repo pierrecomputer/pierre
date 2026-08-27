@@ -2,14 +2,13 @@
 
 Mount one `EditProvider` above the editable surfaces. Its factory receives the
 document kind, the surface's creation-time `editorOptions`, and an optional
-`editHistoryKey`. Each active surface or `CodeView` item owns its editor.
+`editStateKey`. Each active surface or `CodeView` item owns its editor.
 
-Pass `editHistoryKey` to opt into bounded in-memory retention of the draft,
-undo/redo history, selections, and editor-owned view state across editor
-instances. Choose this key explicitly; it is not read from or derived from a
-file or diff `cacheKey`. The same active key cannot be shared by two editors of
-the same document kind. Applications do not need to synchronize editor state
-through change callbacks.
+Pass `editStateKey` to opt into bounded in-memory retention of the draft,
+undo/redo history, selections, horizontal scroll, eligible vertical scroll, and
+diff resume metadata across editor instances. Choose this key explicitly; it is
+a stable application identity for the document. The same active key cannot be
+shared by two editors of the same document kind.
 
 ## Contents
 
@@ -21,7 +20,7 @@ through change callbacks.
 
 Set `edit` on `File`, `FileDiff`, `MultiFileDiff`, or `PatchDiff`. Pass editor
 creation options through `editorOptions` and optional retention through
-`editHistoryKey`.
+`editStateKey`.
 
 ```tsx
 import type {
@@ -54,9 +53,9 @@ const diffOptions: FileDiffOptions<undefined> = {
 function createEditor<LAnnotation>(
   documentKind: EditorDocumentKind,
   options: EditorOptions<LAnnotation>,
-  editHistoryKey?: string
+  editStateKey?: string
 ) {
-  return new Editor(documentKind, options, editHistoryKey);
+  return new Editor(documentKind, options, editStateKey);
 }
 
 export function EditableDiff() {
@@ -106,7 +105,7 @@ export function EditableDiff() {
           options={diffOptions}
           edit={edit}
           editorOptions={editorOptions}
-          editHistoryKey="src/value.ts:draft"
+          editStateKey="src/value.ts:draft"
           onEditChange={handleEditChange}
           onEditComplete={handleEditComplete}
         />
@@ -119,10 +118,12 @@ export function EditableDiff() {
 Mount the provider near the application root when many surfaces use edit mode.
 Always forward all three factory arguments. Use `onAttach` when controls need
 `undo`, `redo`, `applyEdits`, selections, markers, focus, or other editor APIs.
-Call `Editor.disposeFile(key)`, `Editor.disposeFileDiff(key)`, or
-`Editor.clearDocuments()` when retained drafts should be discarded. The
-registries keep 100 dormant entries per surface kind by default; change both
-capacities with `Editor.setDocumentRegistryCapacity(capacity)`.
+`EditStateManager` only manages sessions retained with `editStateKey`; unkeyed
+sessions require no manager cleanup. For keyed sessions, use
+`EditStateManager.clear(kind, key)` after a session becomes inactive when its
+retained draft should be discarded. `clearAll()` clears inactive state in both
+namespaces, and `setCapacity(capacity)` changes each namespace's default limit
+of 100 entries. Active state is never mutated by manager clearing.
 
 ## Keep annotations synchronized
 
@@ -137,9 +138,8 @@ annotation UI state by a stable metadata ID instead of a line number.
 
 Wrap `CodeView` in the same `EditProvider`. Set `edit: true` on an item and
 increment its `version`. Pass shared creation options through the `CodeView`
-`editorOptions` prop. Use `getEditHistoryKey(item)` for opt-in draft, history,
-selection, and view-state retention; it is not inferred from the item's file or
-diff `cacheKey`.
+`editorOptions` prop. Use `getEditStateKey(item)` for opt-in draft, history,
+selection, and view-state retention.
 
 Use `onItemEditChange` for live contents and annotation changes. Use
 `onItemEditComplete` to accept or reject the completed edit. If you use keyed
@@ -147,11 +147,11 @@ render caching, assign a fresh `cacheKey` to the event's file or diff. Put the
 supplied `nextItem` into controlled state only while the item should remain,
 then return `'accept'`; acceptance during removal or teardown does not reinsert
 it. `CodeView` builds `nextItem` with `edit: false` and an incremented
-`version`; the render `cacheKey` remains separate from `editHistoryKey`.
+`version`.
 
 `CodeViewHandle.getEditor(id)` returns the current `DiffsEditor` handle. The
 item editor keeps its active document and history when virtualization or
-collapse removes the item from the rendered window. `getEditHistoryKey` extends
+collapse removes the item from the rendered window. `getEditStateKey` extends
 that retention to later editor instances after the edit session ends.
 
 When a worker pool highlights an editable surface, set

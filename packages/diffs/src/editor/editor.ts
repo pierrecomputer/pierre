@@ -11,7 +11,7 @@ import type {
   EditorChangeEvent,
   EditorDocumentKind,
   EditorSelection,
-  EditorState,
+  EditorViewState,
   FileContents,
   HighlightedToken,
   LineAnnotation,
@@ -36,7 +36,7 @@ import {
 import editorCSS from './editor.css?inline';
 import { EditStack } from './editStack';
 import {
-  cloneEditorState,
+  cloneEditorViewState,
   EditStateManager,
   type ManagedEditSession,
   toManagedEditState,
@@ -125,7 +125,7 @@ import {
   snapTextOffsetToUnicodeBoundary,
 } from './textMeasure';
 import { EditorTokenizer, renderLineTokens } from './tokenizer';
-import type { EditState } from './types';
+import type { EditorInitialState, EditState } from './types';
 import {
   addEventListener,
   clampDomOffset,
@@ -208,10 +208,11 @@ export interface EditorOptions<LAnnotation> {
    */
   ownsVerticalViewport?: boolean;
   /**
-   * Complete document and editor state transferred to the first attachment.
-   * The editor takes ownership and does not clone it.
+   * Document and editor state transferred to the first attachment. Missing
+   * fields are initialized from the attached component. The editor takes
+   * ownership and does not clone supplied objects.
    */
-  initialState?: EditState<LAnnotation>;
+  initialState?: EditorInitialState<LAnnotation>;
   /** Custom keymap groups checked before defaults; later groups take precedence. */
   keymap?: EditorKeymap;
   /** Render rounded corners for selection ranges, default is true. */
@@ -288,7 +289,7 @@ const MULTI_SELECTION_CLIPBOARD_TYPE =
 
 export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #options: EditorOptions<LAnnotation>;
-  #initialState: EditState<LAnnotation> | undefined;
+  #initialState: EditorInitialState<LAnnotation> | undefined;
   #editSession?: ManagedEditSession<LAnnotation>;
   #metrics = new Metrics();
   #tokenizer?: EditorTokenizer;
@@ -654,11 +655,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     return (this.#editSession ?? this.#initialState)?.document?.getText() ?? '';
   }
 
-  /** Return an isolated copy of selections and restorable surface state. */
-  getSurfaceState(): EditorState {
+  /** Return an isolated copy of selections and restorable view state. */
+  getViewState(): EditorViewState {
     const fileInstance = this.#isRendering ? this.#fileInstance : undefined;
     if (!this.#isRendering && this.#editSession?.editor != null) {
-      return cloneEditorState(this.#editSession?.editor);
+      return cloneEditorViewState(this.#editSession.editor);
     }
     const selections = this.#selections?.map((selection) => ({
       ...selection,
@@ -709,7 +710,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     return toManagedEditState(editSession);
   }
 
-  setSurfaceState({ selections, view }: EditorState): void {
+  setViewState({ selections, view }: EditorViewState): void {
     if (
       !this.#isRendering ||
       this.#fileInstance === undefined ||
@@ -954,13 +955,13 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
 
     const editorState = this.#isRendering
-      ? this.getSurfaceState()
+      ? this.getViewState()
       : (editSession.editor ?? {});
     const { view } = editorState;
     const hasNonDefaultView =
       view != null && (view.scrollLeft !== 0 || (view.scrollTop ?? 0) !== 0);
     const hasEditorState = editorState.selections != null || hasNonDefaultView;
-    editSession.editor = cloneEditorState(editorState);
+    editSession.editor = cloneEditorViewState(editorState);
 
     if (editSession.documentKind === 'file') {
       return false;
@@ -1023,12 +1024,23 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   }
 
   /** @internal */
-  __getDocumentContents(): FileContents | undefined {
+  __getDocumentContents(fallbackFile?: FileContents): FileContents | undefined {
     const fileInfo = this.#editSession?.fileInfo;
     const textDocument = this.#editSession?.document;
-    return fileInfo != null && textDocument != null
-      ? { ...fileInfo, contents: textDocument.getText() }
-      : undefined;
+    if (textDocument == null) {
+      return fileInfo == null || fallbackFile == null
+        ? undefined
+        : { ...fileInfo, contents: fallbackFile.contents };
+    }
+    const resolvedFileInfo = fileInfo ?? fallbackFile;
+    if (resolvedFileInfo == null) {
+      return undefined;
+    }
+    return {
+      name: resolvedFileInfo.name,
+      lang: resolvedFileInfo.lang,
+      contents: textDocument.getText(),
+    };
   }
 
   /** @internal */
@@ -1131,7 +1143,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#invalidateOnAttach();
       const { name, lang } = fileOrDiff;
       let textDocument =
-        editStateKey == null || resetForExternalDocument
+        resetForExternalDocument ||
+        (editStateKey == null && editSession.fileInfo != null)
           ? undefined
           : editSession.document;
       if (previousTextDocument != null && textDocument == null) {
@@ -1329,7 +1342,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       if (restoreEditorStateOnSync) {
         this.#restoreEditorStateOnSync = false;
         if (retainedEditorState !== undefined) {
-          this.setSurfaceState(retainedEditorState);
+          this.setViewState(retainedEditorState);
         }
       }
 
@@ -5525,7 +5538,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
     if (newSelections != null) {
       // Install the resulting selections before publishing so event state and
-      // synchronous getSurfaceState() calls describe the edited document.
+      // synchronous getViewState() calls describe the edited document.
       this.#updateSelections(newSelections);
     }
 
@@ -6029,7 +6042,7 @@ interface GetEditSessionProps<LAnnotation> {
   documentKind: EditorDocumentKind;
   editStateKey: string | undefined;
   owner: DiffsEditor<LAnnotation>;
-  initialState: EditState<LAnnotation> | undefined;
+  initialState: EditorInitialState<LAnnotation> | undefined;
   previousSession: ManagedEditSession<LAnnotation> | undefined;
 }
 

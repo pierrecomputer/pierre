@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 
 import { EditStack } from '../src/editor/editStack';
 import {
-  cloneEditorState,
+  cloneEditorViewState,
   EditStateManager,
   type ManagedFileEditSession,
   type ManagedFileEditState,
@@ -12,7 +12,7 @@ import type { EditState } from '../src/editor/types';
 import type {
   DiffLineAnnotation,
   DiffsEditor,
-  EditorState,
+  EditorViewState,
 } from '../src/types';
 
 function createOwner(
@@ -428,9 +428,9 @@ describe('EditStateManager', () => {
   });
 });
 
-describe('cloneEditorState', () => {
+describe('cloneEditorViewState', () => {
   test('deeply clones selections and view state', () => {
-    const state: EditorState = {
+    const state: EditorViewState = {
       selections: [
         {
           start: { line: 1, character: 2 },
@@ -440,7 +440,7 @@ describe('cloneEditorState', () => {
       ],
       view: { scrollLeft: 5, scrollTop: 6 },
     };
-    const clone = cloneEditorState(state);
+    const clone = cloneEditorViewState(state);
     Object.assign(clone.selections![0].start, { line: 10 });
     clone.view!.scrollTop = 20;
     expect(state.selections?.[0].start.line).toBe(1);

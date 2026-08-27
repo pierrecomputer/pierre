@@ -97,7 +97,7 @@ function createTrackedEditor(
     ) {
       options.onChange?.({ changes: [], editor, file, lineAnnotations });
     },
-    getSurfaceState: () => ({}),
+    getViewState: () => ({}),
     edit(instance: DiffsEditableComponent<undefined>) {
       editor.edits.push(instance);
       if (sessionOwner != null && sessionOwner !== instance) {

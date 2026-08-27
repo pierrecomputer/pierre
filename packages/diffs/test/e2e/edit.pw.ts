@@ -430,7 +430,7 @@ test.describe('edit mode', () => {
     await expect
       .poll(() =>
         page.evaluate(
-          () => window.__editor?.getSurfaceState().selections?.length ?? 0
+          () => window.__editor?.getViewState().selections?.length ?? 0
         )
       )
       .toBe(0);

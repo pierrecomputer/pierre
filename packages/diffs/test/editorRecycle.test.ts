@@ -796,7 +796,7 @@ describe('Editor edit-state manager', () => {
       first.cleanUp();
 
       secondEditor.edit(second);
-      expect(secondEditor.getSurfaceState().selections).toEqual([
+      expect(secondEditor.getViewState().selections).toEqual([
         {
           start: { line: 1, character: 2 },
           end: { line: 1, character: 2 },
@@ -1665,7 +1665,7 @@ describe('Editor recycle cleanUp', () => {
       await wait(20);
 
       expect(onAttach).toHaveBeenCalledTimes(1);
-      expect(editor.getSurfaceState().selections?.[0]?.start.line).toBe(1);
+      expect(editor.getViewState().selections?.[0]?.start.line).toBe(1);
 
       component.contentElement.dispatchEvent(new Event('blur'));
       component.render({
@@ -1699,7 +1699,7 @@ describe('Editor recycle cleanUp', () => {
 
       expect(restoredFocus).not.toHaveBeenCalled();
       expect(onAttach).toHaveBeenCalledTimes(1);
-      expect(editor.getSurfaceState().selections?.[0]?.start.line).toBe(1);
+      expect(editor.getViewState().selections?.[0]?.start.line).toBe(1);
     } finally {
       editor.cleanUp();
       component.cleanUp();
@@ -1823,7 +1823,7 @@ describe('Editor recycle cleanUp', () => {
       editor.edit(first);
       await wait(0);
       expect(first.contentElement.textContent).toBe('zulu');
-      expect(editor.getSurfaceState().selections).toBeUndefined();
+      expect(editor.getViewState().selections).toBeUndefined();
       expect(onAttach).toHaveBeenCalledTimes(1);
 
       editor.cleanUp();

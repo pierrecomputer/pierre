@@ -17,7 +17,7 @@ import type {
   DiffsEditor,
   EditCompletionDecision,
   EditorDocumentKind,
-  EditorState,
+  EditorViewState,
   FileContents,
   FileDiffLoadedFiles,
   FileDiffMetadata,
@@ -41,14 +41,14 @@ interface StubEditor extends DiffsEditor<undefined> {
   edits: DiffsEditableComponent<undefined>[];
   fullCleanUps: number;
   recycleCleanUps: number;
-  state: EditorState;
+  state: EditorViewState;
   /** The CodeView-built onChange handed to the factory. */
   emitChange(
     file: FileContents,
     lineAnnotations?:
       | LineAnnotation<undefined>[]
       | DiffLineAnnotation<undefined>[],
-    state?: EditorState
+    state?: EditorViewState
   ): void;
 }
 
@@ -80,7 +80,7 @@ function createEditorHarness({
         lineAnnotations?:
           | LineAnnotation<undefined>[]
           | DiffLineAnnotation<undefined>[],
-        state: EditorState = {}
+        state: EditorViewState = {}
       ) {
         editor.state = state;
         options.onChange({ changes: [], editor, file, lineAnnotations });
@@ -118,7 +118,7 @@ function createEditorHarness({
           }
         }
       },
-      getSurfaceState: () => editor.state,
+      getViewState: () => editor.state,
       __captureFocusForDOMReplacement() {},
       __getDocumentContents: () => undefined,
       __postponeBgTokenizeToNextFrame() {},
@@ -1042,14 +1042,14 @@ describe('CodeView item edit mode', () => {
   test('a real editor restores horizontal state without moving the shared viewport', async () => {
     const { cleanup } = installDom();
     const completions: FileEditCompleteEvent<undefined>[] = [];
-    const completionStates: EditorState[] = [];
+    const completionStates: EditorViewState[] = [];
     const viewer = new CodeView({
       createEditor: (documentKind, options) =>
         new Editor<undefined>(documentKind, options),
       onItemEditComplete(event) {
         if ('file' in event) {
           completions.push(event);
-          completionStates.push(event.editor.getSurfaceState());
+          completionStates.push(event.editor.getViewState());
         }
         return 'reject';
       },
@@ -1087,7 +1087,7 @@ describe('CodeView item edit mode', () => {
       expect(code).toBeInstanceOf(HTMLElement);
       (code as HTMLElement).scrollLeft = 24;
       root.scrollTop = 48;
-      const finalState: EditorState = {
+      const finalState: EditorViewState = {
         selections: [
           {
             start: { line: 0, character: 3 },
@@ -1104,7 +1104,7 @@ describe('CodeView item edit mode', () => {
         version: 1,
       });
       expect(completions).toHaveLength(0);
-      expect(viewer.getEditor(item.id)?.getSurfaceState()).toEqual(finalState);
+      expect(viewer.getEditor(item.id)?.getViewState()).toEqual(finalState);
       root.scrollTop = 72;
       await applyItemUpdate(viewer, {
         ...item,
@@ -1163,14 +1163,14 @@ describe('CodeView item edit mode', () => {
   test('onItemEditChange receives the owning item and contents', async () => {
     const { cleanup } = installDom();
     const { editors, createEditor } = createEditorHarness();
-    const changes: Array<[string, string, EditorState]> = [];
+    const changes: Array<[string, string, EditorViewState]> = [];
     const viewer = new CodeView({
       createEditor,
       onItemEditChange(event, item) {
         changes.push([
           item.id,
           event.file.contents,
-          event.editor.getSurfaceState(),
+          event.editor.getViewState(),
         ]);
       },
     });
@@ -1178,7 +1178,7 @@ describe('CodeView item edit mode', () => {
       viewer.setup(createRoot());
       await renderItems(viewer, [makeEditFileItem('a')]);
 
-      const state: EditorState = {
+      const state: EditorViewState = {
         selections: [
           {
             start: { line: 0, character: 1 },
@@ -1797,7 +1797,7 @@ describe('CodeView item edit mode', () => {
         // The event's original value is the item's exact external file, and
         // the item handed to the callback is the one that ended the session.
         expect(event.originalFile).toBe(item.file);
-        expect(editors[0].getSurfaceState()).toEqual({});
+        expect(editors[0].getViewState()).toEqual({});
         expect(completedItem.edit).toBe(false);
         expect(completedItem.version).toBe(1);
       } finally {

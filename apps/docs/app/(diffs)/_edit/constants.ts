@@ -4,7 +4,7 @@ import type { FileOptions } from '@pierre/diffs/react';
 import type { PreloadFileOptions } from '@pierre/diffs/ssr';
 
 // The editor requires the token transformer, so enabling it in the SSR preload
-// keeps hydration from rerendering the surface after the editor attaches.
+// keeps hydration from rerendering the component after the editor attaches.
 // Mirrors LiveEditing/constants.ts.
 const EDITABLE_FILE_OPTIONS: FileOptions<undefined> = {
   theme: DEFAULT_THEMES,

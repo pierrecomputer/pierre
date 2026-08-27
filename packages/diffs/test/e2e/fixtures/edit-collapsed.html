@@ -120,7 +120,7 @@
       };
 
       window.__caretLine = () => {
-        const selection = editor.getSurfaceState().selections?.at(-1);
+        const selection = editor.getViewState().selections?.at(-1);
         return selection == null ? undefined : selection.end.line;
       };
 

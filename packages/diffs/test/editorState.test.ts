@@ -9,7 +9,7 @@ import type {
   DiffsEditableComponent,
   DiffsEditor,
   DiffsHighlighter,
-  EditorState,
+  EditorViewState,
   FileContents,
   HighlightedToken,
   RenderRange,
@@ -30,7 +30,7 @@ function createTestHighlighter(): DiffsHighlighter {
 
 function createInitialState(
   file: FileContents,
-  editor: EditorState = {}
+  editor: EditorViewState = {}
 ): EditState<undefined> {
   return {
     documentKind: 'file',
@@ -234,7 +234,7 @@ describe('Editor state', () => {
 
     try {
       firstEditor.edit(first);
-      firstEditor.setSurfaceState({
+      firstEditor.setViewState({
         selections: [
           {
             start: { line: 1, character: 3 },
@@ -244,7 +244,7 @@ describe('Editor state', () => {
         ],
         view: { scrollLeft: 18, scrollTop: 36 },
       });
-      const detachedState = firstEditor.getSurfaceState();
+      const detachedState = firstEditor.getViewState();
       firstEditor.cleanUp('discard');
       Object.assign(detachedState.selections![0].start, {
         character: 0,
@@ -252,7 +252,7 @@ describe('Editor state', () => {
       first.cleanUp();
 
       secondEditor.edit(second);
-      expect(secondEditor.getSurfaceState()).toEqual({
+      expect(secondEditor.getViewState()).toEqual({
         selections: [
           {
             start: { line: 1, character: 3 },
@@ -278,16 +278,19 @@ describe('Editor state', () => {
     const file = { name: 'state.ts', contents: 'alpha\nbravo' };
     const editor = new Editor<undefined>('file', {
       ownsVerticalViewport: true,
-      initialState: createInitialState(file, {
-        selections: [
-          {
-            start: { line: 1, character: 2 },
-            end: { line: 1, character: 2 },
-            direction: 0,
-          },
-        ],
-        view: { scrollLeft: 24, scrollTop: 48 },
-      }),
+      initialState: {
+        documentKind: 'file',
+        editor: {
+          selections: [
+            {
+              start: { line: 1, character: 2 },
+              end: { line: 1, character: 2 },
+              direction: 0,
+            },
+          ],
+          view: { scrollLeft: 24, scrollTop: 48 },
+        },
+      },
     });
     const component = new TestEditableComponent(file);
     component.editorViewport = viewport;
@@ -295,7 +298,7 @@ describe('Editor state', () => {
     try {
       editor.edit(component);
 
-      expect(editor.getSurfaceState()).toEqual({
+      expect(editor.getViewState()).toEqual({
         selections: [
           {
             start: { line: 1, character: 2 },
@@ -307,9 +310,14 @@ describe('Editor state', () => {
       });
       expect(component.restoredCodeScrollLefts).toEqual([24]);
       expect(viewport.scrollTop).toBe(48);
+      expect(editor.getEditState()).toMatchObject({
+        documentKind: 'file',
+        fileInfo: { name: 'state.ts' },
+      });
+      expect(editor.getEditState()?.document.getText()).toBe('alpha\nbravo');
 
       editor.cleanUp('recycle');
-      expect(editor.getSurfaceState()).toEqual({
+      expect(editor.getViewState()).toEqual({
         selections: [
           {
             start: { line: 1, character: 2 },
@@ -323,7 +331,7 @@ describe('Editor state', () => {
       viewport.scrollTop = 16;
       editor.edit(component);
 
-      expect(editor.getSurfaceState()).toEqual({
+      expect(editor.getViewState()).toEqual({
         selections: [
           {
             start: { line: 1, character: 2 },
@@ -334,6 +342,38 @@ describe('Editor state', () => {
         view: { scrollLeft: 24, scrollTop: 48 },
       });
       expect(component.restoredCodeScrollLefts).toEqual([24, 24]);
+    } finally {
+      editor.cleanUp();
+      component.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test('initialState completes missing file state from the attached component', () => {
+    const dom = installDom();
+    const component = new TestEditableComponent({
+      name: 'state.ts',
+      contents: 'alpha\nbravo',
+      lang: 'text',
+    });
+    const initialState = {
+      documentKind: 'file' as const,
+      editor: { view: { scrollLeft: 24 } },
+    };
+    const editor = new Editor<undefined>('file', { initialState });
+
+    try {
+      editor.edit(component);
+
+      const state = editor.getEditState();
+      expect(state === initialState).toBe(true);
+      expect(state).toMatchObject({
+        documentKind: 'file',
+        fileInfo: { name: 'state.ts', lang: 'text' },
+      });
+      expect(state?.document.getText()).toBe('alpha\nbravo');
+      expect(state?.document.canUndo).toBe(false);
+      expect(state?.editor).toEqual({ view: { scrollLeft: 24 } });
     } finally {
       editor.cleanUp();
       component.cleanUp();
@@ -371,7 +411,7 @@ describe('Editor state', () => {
           newText: 'ALPHA',
         },
       ]);
-      firstEditor.setSurfaceState({
+      firstEditor.setViewState({
         selections: [
           {
             start: { line: 1, character: 3 },
@@ -395,7 +435,7 @@ describe('Editor state', () => {
       expect(secondEditor.getEditState()!.document).toBe(state.document);
       expect(secondEditor.getText()).toBe('ALPHA\nbravo');
       expect(secondEditor.canUndo).toBe(true);
-      expect(secondEditor.getSurfaceState()).toEqual({
+      expect(secondEditor.getViewState()).toEqual({
         selections: [
           {
             start: { line: 1, character: 0 },
@@ -428,7 +468,7 @@ describe('Editor state', () => {
 
     try {
       editor.edit(component);
-      editor.setSurfaceState({
+      editor.setViewState({
         selections: [
           {
             start: { line: 0, character: 1 },
@@ -449,7 +489,7 @@ describe('Editor state', () => {
           newText: '!',
         },
       ]);
-      editor.setSurfaceState({
+      editor.setViewState({
         selections: [
           {
             start: { line: 0, character: 6 },
@@ -512,7 +552,7 @@ describe('Editor state', () => {
 
       expect(EditStateManager.get('file', 'managed-checkpoint')).toBe(state);
       expect(state.document.getText()).toBe('alpha!');
-      expect(state.editor).toEqual(editor.getSurfaceState());
+      expect(state.editor).toEqual(editor.getViewState());
     } finally {
       editor.cleanUp();
       component.cleanUp();
@@ -557,7 +597,7 @@ describe('Editor state', () => {
       contents: 'alpha',
       lang: 'text',
     };
-    const editorState: EditorState = {
+    const editorState: EditorViewState = {
       view: { scrollLeft: 24, scrollTop: 48 },
     };
     const initialState = createInitialState(file, editorState);
@@ -692,7 +732,7 @@ describe('Editor state', () => {
     }
   });
 
-  test('pre-sync completion keeps the keyed document but clears surface state', () => {
+  test('pre-sync completion keeps the keyed document but clears view state', () => {
     const dom = installDom();
     EditStateManager.clearAll();
     const first = new TestEditableComponent({
@@ -767,7 +807,7 @@ describe('Editor state', () => {
       restoredEditor.edit(restored);
       expect(restoredEditor.getText()).toBe('alpha!');
       expect(restoredEditor.canUndo).toBe(true);
-      expect(restoredEditor.getSurfaceState().selections).toBeUndefined();
+      expect(restoredEditor.getViewState().selections).toBeUndefined();
     } finally {
       firstEditor.cleanUp();
       pendingEditor.cleanUp();
@@ -917,7 +957,7 @@ describe('Editor state', () => {
       expect(adoptingEditor.getEditState()?.document).toBe(
         initialState.document
       );
-      expect(adoptingEditor.getSurfaceState().view).toEqual({
+      expect(adoptingEditor.getViewState().view).toEqual({
         scrollLeft: 24,
       });
     } finally {
@@ -970,9 +1010,9 @@ describe('Editor state', () => {
       editor.edit(component);
       component.codeScrollLeft = 24;
 
-      expect(editor.getSurfaceState().view).toEqual({ scrollLeft: 24 });
+      expect(editor.getViewState().view).toEqual({ scrollLeft: 24 });
       component.editorViewport = document;
-      expect(editor.getSurfaceState().view).toEqual({ scrollLeft: 24 });
+      expect(editor.getViewState().view).toEqual({ scrollLeft: 24 });
     } finally {
       editor.cleanUp();
       component.cleanUp();
@@ -997,7 +1037,7 @@ describe('Editor state', () => {
       component.codeScrollLeft = 24;
       viewport.scrollTop = 48;
 
-      expect(editor.getSurfaceState().view).toEqual({
+      expect(editor.getViewState().view).toEqual({
         scrollLeft: 24,
         scrollTop: 48,
       });
@@ -1024,7 +1064,7 @@ describe('Editor state', () => {
       component.codeScrollLeft = 24;
       viewport.scrollTop = 48;
 
-      expect(editor.getSurfaceState().view).toEqual({ scrollLeft: 24 });
+      expect(editor.getViewState().view).toEqual({ scrollLeft: 24 });
     } finally {
       editor.cleanUp();
       component.cleanUp();
@@ -1042,7 +1082,7 @@ describe('Editor state', () => {
 
     try {
       editor.edit(component);
-      editor.setSurfaceState({ view: { scrollLeft: 24 } });
+      editor.setViewState({ view: { scrollLeft: 24 } });
 
       expect(component.restoredCodeScrollLefts).toEqual([24]);
     } finally {
@@ -1072,7 +1112,7 @@ describe('Editor state', () => {
 
     try {
       editor.edit(component);
-      editor.setSurfaceState({
+      editor.setViewState({
         selections: [
           {
             start: { line: 5, character: 0 },
@@ -1085,7 +1125,7 @@ describe('Editor state', () => {
 
       expect(component.restoredCodeScrollLefts).toEqual([12]);
       expect(scrollIntoViewCalls).toBe(0);
-      expect(editor.getSurfaceState().selections).toEqual([
+      expect(editor.getViewState().selections).toEqual([
         {
           start: { line: 5, character: 0 },
           end: { line: 5, character: 0 },
@@ -1115,7 +1155,7 @@ describe('Editor state', () => {
     });
     try {
       editor.edit(component);
-      editor.setSurfaceState({
+      editor.setViewState({
         selections: [
           {
             start: { line: 5, character: 0 },
@@ -1126,7 +1166,7 @@ describe('Editor state', () => {
       });
 
       expect(scrollIntoViewCalls).toBe(0);
-      expect(editor.getSurfaceState().view).toEqual({ scrollLeft: 0 });
+      expect(editor.getViewState().view).toEqual({ scrollLeft: 0 });
     } finally {
       Element.prototype.scrollIntoView = originalScrollIntoView;
       editor.cleanUp();

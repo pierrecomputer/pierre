@@ -24,7 +24,8 @@ CodeView to avoid handling scaling yourself.
 - `scrollTo` APIs for items, line targets, and raw scroll positions.
 - Unified selection API, support for custom annotations, custom headers, and
   gutter utilities across the entire viewer.
-- Optional per-item [edit mode](#edit-mode-codeview) for files and diffs.
+- Optional per-item [edit mode](#edit-mode-enable-editing-codeview) for files
+  and diffs.
 - Optional non-virtualized [header and footer regions](#codeview-header-footer)
   rendered inside the scroll container — ideal for PR summary cards and approval
   bars.
@@ -49,9 +50,9 @@ immutability or deep equality checks, which can quickly become expensive.
   shown. You'll have to wire up your own custom header or utilities if you want
   to control it interactively. Remember to update `version` when this value
   changes.
-- The `edit` property enables [edit mode](#edit-mode-codeview) for an item when
-  React `CodeView` has an `EditProvider`, or vanilla `CodeView` has a
-  `createEditor` option. Update `version` when toggling it.
+- The `edit` property enables [edit mode](#edit-mode-enable-editing-codeview)
+  for an item when React `CodeView` has an `EditProvider`, or vanilla `CodeView`
+  has a `createEditor` option. Update `version` when toggling it.
 - CodeView-level options such as `layout`, `itemMetrics`, `stickyHeaders`,
   `pointerEventsOnScroll`, and `smoothScrollSettings` allow you to configure the
   scroll view. All other options are shared between all files and diffs.
@@ -69,24 +70,36 @@ vanilla `CodeView`, it does not accept `createEditor` directly or inside
 `options`. Keep the provider mounted, set `edit: true` on the items that should
 be editable, and pass creation-time item-editor behavior through
 `editorOptions`. `onItemEditChange(event, item)` reports each live change with
-the owning item. `onItemEditComplete(event, item, nextItem)` is the
-accept/revert boundary: when a changed session ends (editing disabled, or the
-item removed), return `'accept'` to install the edit — `CodeView` applies the
-built `nextItem`, which a controlled owner also mirrors into its own state — or
-`'reject'` to revert. Collapsing an item suspends its session rather than
-completing it. A direct `reset()` or `cleanUp()`, and viewer unmount, would also
-complete changed sessions.
+the owning item and its attached editor.
+`onItemEditComplete(event, item, nextItem)` is the accept/reject boundary for
+content-changing sessions. Return `'accept'` to install `nextItem`; a controlled
+component must also mirror it into its own state. Return `'reject'` to restore
+the latest external item. A missing handler will automatically reject.
+
+Collapsing or scrolling an item out of view suspends its session rather than
+completing it. Disabling editing, removing an item, `reset()`, `cleanUp()`, and
+viewer unmount end changed sessions. Removal and teardown callbacks can capture
+the result.
 
 Each edited item receives an independent editor whose document, history,
-selections, and editor-owned view state survive virtualization. Changes to the
+selections, and horizontal code scroll survive virtualization. Per-item editors
+never own or restore CodeView's shared vertical position. Changes to the
 provider factory or `editorOptions` do not disturb active sessions; their latest
 values apply the next time an item enters edit mode.
 
-Use `getEditHistoryKey(item)` to retain that complete editor state after its
-edit session ends. React passes the resolved key through its `EditProvider`;
-vanilla `CodeView` passes it to `createEditor` as the third argument. CodeView
-does not derive this key from `item.id` or a render cache key, so choose a
-stable application identity explicitly. Retention is bounded and in-memory only.
+Use `getEditStateKey(item)` to retain a resumable session after editing ends.
+Said another way, next time you edit the file in the same session, undo history,
+selection state and caret position will be preserved.
+
+React passes the resolved key through its `EditProvider`; vanilla `CodeView`
+passes it to `createEditor` as the third argument. The resolver runs only when
+the item editor is created, so changing it does not re-key an active editor.
+CodeView will not derive this key for you.
+
+Edit state retention is bounded and in memory only. Accepting or rejecting an
+item does not clear its keyed state. See
+[Retain edit state in memory](#edit-mode-retain-edit-state-in-memory) for
+`EditStateManager`, clearing, and durable persistence guidance.
 
 For vanilla `CodeView`, keep using `CodeViewOptions.createEditor`. It exposes
 the same item-aware callbacks, and CodeView owns each returned editor's
@@ -112,19 +125,20 @@ For vanilla `CodeView`, add the callback while constructing each item editor:
 
 ```ts
 const viewer = new CodeView({
-  getEditHistoryKey(item) {
+  getEditStateKey(item) {
     return `review:${item.id}`;
   },
-  createEditor(documentKind, options, editHistoryKey) {
+  createEditor(documentKind, options, editStateKey) {
     return new Editor(
       documentKind,
       {
         ...options,
         onAttach(editor) {
+          // This would force an initial line focus when edit is enabled on
           editor.focus({ lineNumber: 'first-visible', preventScroll: true });
         },
       },
-      editHistoryKey
+      editStateKey
     );
   },
 });
@@ -134,7 +148,7 @@ const viewer = new CodeView({
 the editor alive while an item is recycled, so the callback does not steal focus
 again when that item re-enters the virtualized window. If several items start an
 autofocusing edit session together, the last callback to run owns focus. See
-[Autofocus on Attach](#edit-mode-autofocus-on-attach) for explicit line targets,
+[Control the editor](#edit-mode-control-the-editor) for explicit line targets,
 viewport fallback, offsets, and selection-state behavior.
 
 ### Padding &amp; Gap
@@ -208,24 +222,21 @@ do not switch between them without remounting with a new `key`.
 
 Use controlled mode when item data already lives naturally in React state and
 the list is small enough that mutating arrays or items is cheap. Use imperative
-mode for very large or streaming surfaces where routing every item update
-through React would be expensive. In imperative mode, omit `items`, optionally
-seed the viewer with `initialItems`, and use the `CodeViewHandle` to add new
-items, remove items, or update existing ones.
+mode for very large or streaming lists where routing every item update through
+React would be expensive. In imperative mode, omit `items`, optionally seed the
+viewer with `initialItems`, and use the `CodeViewHandle` to add new items,
+remove items, or update existing ones.
 
 ### Editing Item Annotations
 
 While an item is editing, edit mode owns its annotation positions and re-renders
 the annotation rows as the document changes — you should not sync them back
-through on `onItemEditChange`. `event.lineAnnotations` on that callback reports
-the current collection if you want to observe it. You only write
-`item.annotations` (with a `version` bump) when you genuinely add/remove/update
-existing annotations.
-
-Currently if you add/remove/update any annotations while in an edit session, it
-will revert any positional edit changes because there's currently no way to
-resolve changes. You may want to disable external annotation updates while
-editing and figure out how to resolve them post edit.
+through `onItemEditChange`. `event.lineAnnotations` on that callback reports the
+current collection if you want to observe it. A genuinely new `item.annotations`
+collection, published with a `version` bump, replaces the editor's internal
+remaps and treats its coordinates as positions in the current document. Defer
+external annotation updates unless you have recomputed their positions against
+that document.
 
 The callback annotation type is `LineAnnotation[] | DiffLineAnnotation[]`: file
 items emit the side-less shape and diff items emit annotations with a `side`.
@@ -235,7 +246,7 @@ before reading shape-specific fields.
 On completion, the `nextItem` `CodeView` builds already carries the final
 annotation collection (`event.lineAnnotations`) alongside the accepted
 `file`/`fileDiff` — returning `'accept'` installs both. See
-[Editing with line annotations](#edit-mode-editing-with-line-annotations) for
+[Line annotations](#edit-mode-extend-the-editing-ui-line-annotations) for
 remapping rules, stable metadata IDs, and annotation-content lifetime guidance.
 
 ### Usage Notes
@@ -286,7 +297,7 @@ heights after initial paint.
 
 If your scrollable region is only code, `CodeView` should usually be your
 starting point. It is heavily optimized for that case: it owns the whole code
-surface, only renders what is visible, and is generally more performant and less
+region, only renders what is visible, and is generally more performant and less
 prone to blanking than the lower-level virtualization APIs.
 
 Drop down to [Virtualization](#virtualization) when you need a more flexible,

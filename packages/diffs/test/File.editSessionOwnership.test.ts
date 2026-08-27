@@ -10,7 +10,7 @@ import { EditStateManager } from '../src/editor/EditStateManager';
 import type {
   DiffsEditor,
   EditorChangeEvent,
-  EditorState,
+  EditorViewState,
   FileContents,
   LineAnnotation,
 } from '../src/types';
@@ -482,7 +482,7 @@ describe('component onEditChange', () => {
       expect(editorCallbackEditors).toEqual([editor]);
       expect(callbackEditors).toEqual([editor]);
       expect(componentEvents[0]?.file.contents).toBe('Xalpha\nbravo\n');
-      expect(callbackEditors[0]?.getSurfaceState()).toEqual({
+      expect(callbackEditors[0]?.getViewState()).toEqual({
         selections: [
           {
             start: { line: 0, character: 6 },
@@ -943,13 +943,13 @@ describe('completeEditSession', () => {
   test('a changed session delivers a fresh keyless file and the exact external file', async () => {
     const events: FileEditCompleteEvent<undefined>[] = [];
     let completionEditor: DiffsEditor<undefined> | undefined;
-    let completionState: EditorState | undefined;
+    let completionState: EditorViewState | undefined;
     let completionEditState: ReturnType<DiffsEditor<undefined>['getEditState']>;
     const fixture = await createCompletionFixture({
       onEditComplete(event) {
         events.push(event);
         completionEditor = event.editor;
-        completionState = event.editor.getSurfaceState();
+        completionState = event.editor.getViewState();
         completionEditState = event.editor.getEditState();
         return 'reject';
       },
@@ -1494,11 +1494,11 @@ describe('editor session lifecycle', () => {
 
   test('a recycled session keeps final state through later editor cleanup', async () => {
     const events: FileEditCompleteEvent<undefined>[] = [];
-    const completionStates: EditorState[] = [];
+    const completionStates: EditorViewState[] = [];
     const fixture = await createLifecycleFixture({
       onEditComplete(event) {
         events.push(event);
-        completionStates.push(event.editor.getSurfaceState());
+        completionStates.push(event.editor.getViewState());
         return 'reject';
       },
     });
@@ -1516,7 +1516,7 @@ describe('editor session lifecycle', () => {
       instance.cleanUp(true);
 
       expect(events).toHaveLength(0);
-      expect(editor.getSurfaceState()).toEqual({
+      expect(editor.getViewState()).toEqual({
         selections: [
           {
             start: { line: 1, character: 3 },

@@ -18,7 +18,7 @@ import type {
   DiffsEditor,
   DiffsTextDocument,
   EditorChangeEvent,
-  EditorState,
+  EditorViewState,
   FileContents,
   FileDiffMetadata,
   HighlightedToken,
@@ -754,13 +754,13 @@ describe('completeEditSession', () => {
   test('a changed session delivers a recomputed detached diff and complete files', async () => {
     const events: FileDiffEditCompleteEvent<undefined>[] = [];
     let completionEditor: DiffsEditor<undefined> | undefined;
-    let completionState: EditorState | undefined;
+    let completionState: EditorViewState | undefined;
     let completionEditState: ReturnType<DiffsEditor<undefined>['getEditState']>;
     const fixture = await createCompletionFixture({
       onEditComplete(event) {
         events.push(event);
         completionEditor = event.editor;
-        completionState = event.editor.getSurfaceState();
+        completionState = event.editor.getViewState();
         completionEditState = event.editor.getEditState();
         return 'reject';
       },
@@ -1259,10 +1259,10 @@ describe('completeEditSession', () => {
   });
 
   test('a recycled session keeps final state through later editor cleanup', async () => {
-    const completionStates: EditorState[] = [];
+    const completionStates: EditorViewState[] = [];
     const fixture = await createCompletionFixture({
       onEditComplete(event) {
-        completionStates.push(event.editor.getSurfaceState());
+        completionStates.push(event.editor.getViewState());
         return 'reject';
       },
     });
@@ -1280,7 +1280,7 @@ describe('completeEditSession', () => {
       instance.cleanUp(true);
 
       expect(completionStates).toHaveLength(0);
-      expect(editor.getSurfaceState()).toEqual({
+      expect(editor.getViewState()).toEqual({
         selections: [
           {
             start: { line: 1, character: 6 },

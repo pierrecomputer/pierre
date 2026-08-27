@@ -85,7 +85,7 @@ interface ElementVirtualizerFileProps {
 const EMPTY_FILE_ANNOTATIONS: LineAnnotation<PlaygroundAnnotationMetadata>[] =
   [];
 
-// The long README plain-file surface leading the list. It owns the same edit,
+// The long README plain-file component leading the list. It owns the same edit,
 // line-selection, and gutter-comment behavior as each diff below it.
 function ElementVirtualizerFile({
   options,
@@ -116,7 +116,7 @@ function ElementVirtualizerFile({
   );
 
   // Save accepts the completed file under a fresh cacheKey and stores it as
-  // the surface's file; Cancel reverts to the current one.
+  // the component's file; Cancel reverts to the current one.
   const handleEditComplete = useCallback(
     (event: FileEditCompleteEvent<PlaygroundAnnotationMetadata>) => {
       if (cancelled.current) {
@@ -267,9 +267,9 @@ interface ElementVirtualizerDiffProps {
 const EMPTY_ANNOTATIONS: DiffLineAnnotation<PlaygroundAnnotationMetadata>[] =
   [];
 
-// One diff in the element-scroll list. Each surface is its own state island
+// One diff in the element-scroll list. Each component is its own state island
 // with an edit toggle, editor options, and annotations. The app-level
-// EditProvider creates an independent editor when that surface enters edit
+// EditProvider creates an independent editor when that component enters edit
 // mode.
 function ElementVirtualizerDiff({
   fileDiff,
@@ -301,7 +301,7 @@ function ElementVirtualizerDiff({
   );
 
   // Save accepts the completed diff under a fresh cacheKey and stores it as
-  // the surface's diff; Cancel reverts to the current one.
+  // the component's diff; Cancel reverts to the current one.
   const handleEditComplete = useCallback(
     (event: FileDiffEditCompleteEvent<PlaygroundAnnotationMetadata>) => {
       if (cancelled.current) {

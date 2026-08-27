@@ -50,7 +50,7 @@ const HUNK_SEPARATOR_VALUES = [
 const LINE_HOVER_HIGHLIGHTS = ['disabled', 'both', 'number', 'line'] as const;
 const LINE_MODES = ['select', 'comment', 'none'] as const;
 
-// The rendering surface used by the playground. 'diff' and 'file' render one
+// The rendering view used by the playground. 'diff' and 'file' render one
 // directly controlled component; the virtualizer modes render scrolling lists;
 // 'codeview' renders a mixed list in CodeView's own scroller.
 export type ViewMode = (typeof VIEW_MODES)[number];

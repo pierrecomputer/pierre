@@ -271,7 +271,7 @@ export interface FileDiffEditCompleteEvent<LAnnotation> {
  * event's `fileDiff`, or `'reject'` to restore `originalFileDiff`. The event is
  * frozen, so re-key the accepted diff in place (`event.fileDiff.cacheKey =
  * '…'`) before accepting. The event's editor is detached and returns its final
- * state from `getSurfaceState()`. A missing handler rejects.
+ * state from `getViewState()`. A missing handler rejects.
  */
 export type FileDiffEditCompleteHandler<LAnnotation> = (
   event: FileDiffEditCompleteEvent<LAnnotation>
@@ -1271,7 +1271,7 @@ export class FileDiff<
     }
     this.installEditSession(
       expectedDiff,
-      editor.__getDocumentContents(),
+      editor.__getDocumentContents(getAdditionFile(expectedDiff)),
       editor.__getDocumentSessionState?.()
     );
     return true;
@@ -1308,7 +1308,9 @@ export class FileDiff<
       } else {
         this.installEditSession(
           incomingExternalDiff,
-          this.editor.__getDocumentContents(),
+          this.editor.__getDocumentContents(
+            getAdditionFile(incomingExternalDiff)
+          ),
           this.editor.__getDocumentSessionState?.()
         );
       }
@@ -1912,7 +1914,7 @@ export class FileDiff<
     if (initialExternalDiff != null) {
       this.installEditSession(
         initialExternalDiff,
-        editor.__getDocumentContents(),
+        editor.__getDocumentContents(getAdditionFile(initialExternalDiff)),
         editor.__getDocumentSessionState?.()
       );
     } else {
@@ -3968,6 +3970,14 @@ interface HasContentProps {
   fileDiff: FileDiffMetadata | undefined;
   oldFile: FileContents | null | undefined;
   newFile: FileContents | null | undefined;
+}
+
+function getAdditionFile(fileDiff: FileDiffMetadata): FileContents {
+  return {
+    name: fileDiff.name,
+    lang: fileDiff.lang,
+    contents: fileDiff.additionLines.join(''),
+  };
 }
 
 function areOptionalFilesEqual(

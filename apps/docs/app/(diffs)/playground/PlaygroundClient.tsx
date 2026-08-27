@@ -131,7 +131,7 @@ function isDirectView(viewMode: ViewMode): boolean {
 // a `<undefined>`-typed options object into an annotated FileDiff would otherwise
 // widen its annotation callbacks to `undefined`). The Virtualizer views take
 // this as their options prop: it carries no callback keys, so it also spreads
-// cleanly into the plain-file FileOptions their README surface uses.
+// cleanly into the plain-file FileOptions their README component uses.
 export type SharedRenderOptions = Pick<
   FileDiffOptions<undefined>,
   | 'diffStyle'
@@ -1020,7 +1020,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
   }, [isControlsOpen]);
 
   // Switching views ends any direct-view edit session; the scrolling views
-  // own per-surface controls instead.
+  // own per-component controls instead.
   const setViewModeAndResetEditor = useCallback((mode: ViewMode) => {
     setViewMode(mode);
     setEdit(false);
@@ -1084,7 +1084,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
     colorMode === 'system' ? (resolvedColorScheme ?? 'system') : colorMode;
 
   // Pure rendering options shared by every view mode. Interaction and
-  // edit-specific options are layered on per surface below.
+  // edit-specific options are layered on per component below.
   const renderOptions = useMemo<SharedRenderOptions>(
     () => ({
       diffStyle,

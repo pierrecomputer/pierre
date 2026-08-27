@@ -23,7 +23,7 @@ interface E2ESelection {
   direction?: 'none' | 'backward' | 'forward';
 }
 
-interface E2EEditorState {
+interface E2EEditorViewState {
   selections?: E2ESelection[];
   view?: {
     scrollLeft: number;
@@ -44,7 +44,7 @@ interface E2EEditor {
   canRedo: boolean;
   getText: () => string;
   getFile: () => { contents: string } | undefined;
-  getSurfaceState: () => E2EEditorState;
+  getViewState: () => E2EEditorViewState;
   setSelections: (selections: E2ESelection[]) => void;
   applyEdits: (edits: E2ETextEdit[], updateHistory?: boolean) => void;
   focus: () => void;
