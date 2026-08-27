@@ -1,0 +1,157 @@
+{
+  "name": "GitHub Dark High Contrast",
+  "appearance": "dark",
+  "style": {
+    "background": "#010409ff",
+    "text": "#ffffffff",
+    "editor.background": "#010409ff",
+    "editor.foreground": "#ffffffff",
+    "syntax": {
+      "attribute": {
+        "color": "#91cbffff"
+      },
+      "boolean": {
+        "color": "#91cbffff"
+      },
+      "comment": {
+        "color": "#9198a1ff"
+      },
+      "comment.doc": {
+        "color": "#9198a1ff"
+      },
+      "constant": {
+        "color": "#91cbffff"
+      },
+      "constructor": {
+        "color": "#ff9492ff"
+      },
+      "embedded": {
+        "color": "#ff9492ff"
+      },
+      "emphasis": {
+        "font_style": "italic"
+      },
+      "emphasis.strong": {
+        "font_weight": 700
+      },
+      "enum": {
+        "color": "#ffb757ff"
+      },
+      "function": {
+        "color": "#dbb7ffff"
+      },
+      "function.method": {
+        "color": "#dbb7ffff"
+      },
+      "function.special.definition": {
+        "color": "#dbb7ffff"
+      },
+      "hint": {
+        "color": "#b7bdc8ff",
+        "font_weight": 700
+      },
+      "keyword": {
+        "color": "#ff9492ff"
+      },
+      "keyword.operator": {
+        "color": "#ff9492ff"
+      },
+      "label": {
+        "color": "#91cbffff"
+      },
+      "link_text": {
+        "color": "#addcffff",
+        "font_style": "italic"
+      },
+      "link_uri": {
+        "color": "#91cbffff"
+      },
+      "number": {
+        "color": "#91cbffff"
+      },
+      "operator": {
+        "color": "#ff9492ff"
+      },
+      "predictive": {
+        "color": "#b7bdc8ff",
+        "font_style": "italic"
+      },
+      "preproc": {
+        "color": "#ff9492ff"
+      },
+      "primary": {
+        "color": "#ffffffff"
+      },
+      "property": {
+        "color": "#ffffffff"
+      },
+      "property.json_key": {
+        "color": "#72f088ff"
+      },
+      "punctuation": {
+        "color": "#ff9492ff"
+      },
+      "punctuation.bracket": {
+        "color": "#ffffffff"
+      },
+      "punctuation.delimiter": {
+        "color": "#ffffffff"
+      },
+      "punctuation.delimiter.jsx": {
+        "color": "#ff9492ff"
+      },
+      "punctuation.list_marker": {
+        "color": "#ffb757ff"
+      },
+      "punctuation.special": {
+        "color": "#ff9492ff"
+      },
+      "string": {
+        "color": "#addcffff"
+      },
+      "string.escape": {
+        "color": "#ff9492ff"
+      },
+      "string.regex": {
+        "color": "#addcffff"
+      },
+      "string.special": {
+        "color": "#91cbffff"
+      },
+      "string.special.symbol": {
+        "color": "#91cbffff"
+      },
+      "tag": {
+        "color": "#72f088ff"
+      },
+      "text.literal": {
+        "color": "#91cbffff"
+      },
+      "title": {
+        "color": "#91cbffff",
+        "font_weight": 700
+      },
+      "type": {
+        "color": "#ffb757ff"
+      },
+      "type.builtin": {
+        "color": "#91cbffff"
+      },
+      "variable": {
+        "color": "#ffffffff"
+      },
+      "variable.builtin": {
+        "color": "#91cbffff"
+      },
+      "variable.parameter": {
+        "color": "#ffb757ff"
+      },
+      "variable.special": {
+        "color": "#91cbffff"
+      },
+      "variant": {
+        "color": "#ffb757ff"
+      }
+    }
+  }
+}

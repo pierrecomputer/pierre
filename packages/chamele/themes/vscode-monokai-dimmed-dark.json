@@ -1,0 +1,159 @@
+{
+  "name": "Monokai Dimmed (VS Code)",
+  "appearance": "dark",
+  "style": {
+    "background": "#1e1e1eff",
+    "text": "#c5c8c6ff",
+    "editor.background": "#1e1e1eff",
+    "editor.foreground": "#c5c8c6ff",
+    "syntax": {
+      "comment": {
+        "color": "#9a9b99ff"
+      },
+      "comment.doc": {
+        "color": "#9a9b99ff"
+      },
+      "string": {
+        "color": "#9aa83aff"
+      },
+      "string.regex": {
+        "color": "#9aa83aff"
+      },
+      "string.escape": {
+        "color": "#8080ffff"
+      },
+      "link_text": {
+        "color": "#ae81ffff"
+      },
+      "number": {
+        "color": "#6089b4ff"
+      },
+      "boolean": {
+        "color": "#408080ff"
+      },
+      "constant.builtin": {
+        "color": "#408080ff"
+      },
+      "constant": {
+        "color": "#6089b4ff"
+      },
+      "variable": {
+        "color": "#c5c8c6ff"
+      },
+      "variable.special": {
+        "color": "#c7444aff"
+      },
+      "variable.parameter": {
+        "color": "#6089b4ff"
+      },
+      "keyword": {
+        "color": "#676867ff"
+      },
+      "operator": {
+        "color": "#9872a2ff"
+      },
+      "type": {
+        "color": "#9b0000ff"
+      },
+      "type.builtin": {
+        "color": "#c7444aff"
+      },
+      "function": {
+        "color": "#ce6700ff"
+      },
+      "function.builtin": {
+        "color": "#9872a2ff"
+      },
+      "tag": {
+        "color": "#6089b4ff"
+      },
+      "attribute": {
+        "color": "#d0b344ff"
+      },
+      "punctuation.special": {
+        "color": "#d08442ff"
+      },
+      "punctuation.bracket": {
+        "color": "#6089b4ff"
+      },
+      "punctuation.delimiter": {
+        "color": "#c7444aff"
+      },
+      "punctuation": {
+        "color": "#c7444aff"
+      },
+      "preproc": {
+        "color": "#ce6700ff"
+      },
+      "title": {
+        "color": "#d0b344ff"
+      },
+      "emphasis.strong": {
+        "color": "#6089b4ff"
+      },
+      "emphasis": {
+        "color": "#6089b4ff"
+      },
+      "text.literal": {
+        "color": "#ff0080ff"
+      },
+      "enum": {
+        "color": "#9b0000ff"
+      },
+      "property": {
+        "color": "#9872a2ff"
+      },
+      "label": {
+        "color": "#6089b4ff"
+      },
+      "constructor": {
+        "color": "#ce6700ff"
+      },
+      "namespace": {
+        "color": "#9b0000ff"
+      },
+      "diff.minus": {
+        "color": "#dc322fff"
+      },
+      "diff.plus": {
+        "color": "#219186ff"
+      },
+      "embedded": {
+        "color": "#c5c8c6ff"
+      },
+      "selector": {
+        "color": "#6089b4ff"
+      },
+      "selector.pseudo": {
+        "color": "#d0b344ff"
+      },
+      "variant": {
+        "color": "#6089b4ff"
+      },
+      "string.special": {
+        "color": "#9aa83aff"
+      },
+      "string.special.symbol": {
+        "color": "#9aa83aff"
+      },
+      "primary": {
+        "color": "#c5c8c6ff"
+      },
+      "link_uri": {
+        "color": "#565656ff"
+      },
+      "hint": {
+        "color": "#c5c8c666"
+      },
+      "predictive": {
+        "color": "#c5c8c666"
+      },
+      "punctuation.list_marker": {
+        "color": "#c7444aff"
+      },
+      "punctuation.markup": {
+        "color": "#c7444aff"
+      }
+    }
+  }
+}

@@ -1,0 +1,175 @@
+{
+  "name": "Night Owl Dark",
+  "appearance": "dark",
+  "style": {
+    "background": "#011627",
+    "text": "#d6deeb",
+    "editor.background": "#011627",
+    "editor.foreground": "#d6deeb",
+    "syntax": {
+      "attribute": {
+        "color": "#c5e478",
+        "font_style": "italic"
+      },
+      "boolean": {
+        "color": "#ff5874"
+      },
+      "comment": {
+        "color": "#637777",
+        "font_style": "italic"
+      },
+      "comment.doc": {
+        "color": "#637777",
+        "font_style": "italic"
+      },
+      "constant": {
+        "color": "#82AAFF"
+      },
+      "constant.builtin": {
+        "color": "#ff5874"
+      },
+      "constructor": {
+        "color": "#82aaff"
+      },
+      "diff.minus": {
+        "color": "#EF5350"
+      },
+      "diff.plus": {
+        "color": "#9CCC65"
+      },
+      "embedded": {
+        "color": "#d6deeb"
+      },
+      "emphasis": {
+        "color": "#82aaff",
+        "font_style": "italic"
+      },
+      "emphasis.strong": {
+        "color": "#ffcb8b",
+        "font_weight": 700
+      },
+      "enum": {
+        "color": "#ffcb8b"
+      },
+      "function": {
+        "color": "#82aaff",
+        "font_style": "italic"
+      },
+      "function.method": {
+        "color": "#82aaff",
+        "font_style": "italic"
+      },
+      "hint": {
+        "color": "#829D9D"
+      },
+      "keyword": {
+        "color": "#c792ea",
+        "font_style": "italic"
+      },
+      "keyword.control": {
+        "color": "#c792ea",
+        "font_style": "italic"
+      },
+      "keyword.declaration": {
+        "color": "#c792ea"
+      },
+      "label": {
+        "color": "#82aaff"
+      },
+      "link_text": {
+        "color": "#82aaff"
+      },
+      "link_uri": {
+        "color": "#7fdbca"
+      },
+      "namespace": {
+        "color": "#d6deeb"
+      },
+      "number": {
+        "color": "#F78C6C"
+      },
+      "operator": {
+        "color": "#c792ea"
+      },
+      "predictive": {
+        "color": "#5f7e97",
+        "font_style": "italic"
+      },
+      "preproc": {
+        "color": "#c792ea",
+        "font_style": "italic"
+      },
+      "primary": {
+        "color": "#d6deeb"
+      },
+      "property": {
+        "color": "#d6deeb"
+      },
+      "punctuation": {
+        "color": "#d6deeb"
+      },
+      "punctuation.bracket": {
+        "color": "#ffd602"
+      },
+      "punctuation.delimiter": {
+        "color": "#d6deeb"
+      },
+      "punctuation.list_marker": {
+        "color": "#7fdbca"
+      },
+      "punctuation.markup": {
+        "color": "#7fdbca"
+      },
+      "punctuation.special": {
+        "color": "#82aaff",
+        "font_style": "italic"
+      },
+      "selector": {
+        "color": "#c5e478"
+      },
+      "selector.pseudo": {
+        "color": "#82aaff"
+      },
+      "string": {
+        "color": "#ecc48d"
+      },
+      "string.escape": {
+        "color": "#F78C6C"
+      },
+      "string.regex": {
+        "color": "#5ca7e4"
+      },
+      "string.special": {
+        "color": "#ecc48d"
+      },
+      "string.special.symbol": {
+        "color": "#ecc48d"
+      },
+      "tag": {
+        "color": "#caece6"
+      },
+      "text.literal": {
+        "color": "#ecc48d"
+      },
+      "title": {
+        "color": "#82aaff",
+        "font_weight": 700
+      },
+      "type": {
+        "color": "#ffcb8b"
+      },
+      "type.builtin": {
+        "color": "#c5e478"
+      },
+      "variable": {
+        "color": "#d6deeb"
+      },
+      "variable.special": {
+        "color": "#7fdbca"
+      },
+      "variant": {
+        "color": "#ffcb8b"
+      }
+    }
+  }
+}

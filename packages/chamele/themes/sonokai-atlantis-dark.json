@@ -1,0 +1,95 @@
+{
+  "name": "Sonokai Atlantis",
+  "appearance": "dark",
+  "style": {
+    "background": "#2a2f38",
+    "text": "#e1e3e4",
+    "editor.background": "#2a2f38",
+    "editor.foreground": "#e1e3e4",
+    "syntax": {
+      "variable": {
+        "color": "#e1e3e4"
+      },
+      "variable.builtin": {
+        "color": "#ff6578"
+      },
+      "variable.parameter": {
+        "color": "#f69c5e",
+        "font_style": "italic"
+      },
+      "constant": {
+        "color": "#ba9cf3"
+      },
+      "constant.builtin": {
+        "color": "#ba9cf3"
+      },
+      "string": {
+        "color": "#eacb64"
+      },
+      "string.regexp": {
+        "color": "#eacb64"
+      },
+      "string.escape": {
+        "color": "#ba9cf3"
+      },
+      "number": {
+        "color": "#ba9cf3"
+      },
+      "boolean": {
+        "color": "#ba9cf3"
+      },
+      "type": {
+        "color": "#72cce8",
+        "font_style": "italic"
+      },
+      "type.builtin": {
+        "color": "#72cce8",
+        "font_style": "italic"
+      },
+      "property": {
+        "color": "#e1e3e4"
+      },
+      "function": {
+        "color": "#9dd274"
+      },
+      "function.method": {
+        "color": "#9dd274"
+      },
+      "function.builtin": {
+        "color": "#9dd274"
+      },
+      "keyword": {
+        "color": "#ff6578"
+      },
+      "keyword.control": {
+        "color": "#ff6578"
+      },
+      "keyword.operator": {
+        "color": "#ff6578"
+      },
+      "keyword.modifier": {
+        "color": "#ff6578"
+      },
+      "tag": {
+        "color": "#ff6578"
+      },
+      "tag.attribute": {
+        "color": "#72cce8",
+        "font_style": "italic"
+      },
+      "comment": {
+        "color": "#828a9a",
+        "font_style": "italic"
+      },
+      "punctuation": {
+        "color": "#828a9a"
+      },
+      "punctuation.delimiter": {
+        "color": "#828a9a"
+      },
+      "punctuation.bracket": {
+        "color": "#828a9a"
+      }
+    }
+  }
+}

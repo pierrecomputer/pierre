@@ -1,0 +1,69 @@
+{
+  "name": "Vesper Light",
+  "appearance": "light",
+  "style": {
+    "background": "#FAFAFA",
+    "text": "#1A1A1A",
+    "editor.background": "#FFFFFF",
+    "editor.foreground": "#1A1A1A",
+    "syntax": {
+      "attribute": {
+        "color": "#6A6A6A"
+      },
+      "comment": {
+        "color": "#B5B5B5"
+      },
+      "constant": {
+        "color": "#E0A96D"
+      },
+      "constructor": {
+        "color": "#E0A96D"
+      },
+      "function": {
+        "color": "#E0A96D"
+      },
+      "keyword": {
+        "color": "#606060"
+      },
+      "label": {
+        "color": "#E0A96D"
+      },
+      "number": {
+        "color": "#E0A96D"
+      },
+      "operator": {
+        "color": "#707070"
+      },
+      "punctuation": {
+        "color": "#808080"
+      },
+      "string": {
+        "color": "#00A88B"
+      },
+      "string.escape": {
+        "color": "#E0A96D"
+      },
+      "string.regex": {
+        "color": "#00A88B"
+      },
+      "tag": {
+        "color": "#E0A96D"
+      },
+      "text.literal": {
+        "color": "#00A88B"
+      },
+      "title": {
+        "color": "#E0A96D"
+      },
+      "type": {
+        "color": "#E0A96D"
+      },
+      "variable": {
+        "color": "#1A1A1A"
+      },
+      "variable.special": {
+        "color": "#606060"
+      }
+    }
+  }
+}

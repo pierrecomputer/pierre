@@ -1,0 +1,95 @@
+{
+  "name": "Sonokai Shusia",
+  "appearance": "dark",
+  "style": {
+    "background": "#2d2a2e",
+    "text": "#e3e1e4",
+    "editor.background": "#2d2a2e",
+    "editor.foreground": "#e3e1e4",
+    "syntax": {
+      "variable": {
+        "color": "#e3e1e4"
+      },
+      "variable.builtin": {
+        "color": "#f85e84"
+      },
+      "variable.parameter": {
+        "color": "#ef9062",
+        "font_style": "italic"
+      },
+      "constant": {
+        "color": "#ab9df2"
+      },
+      "constant.builtin": {
+        "color": "#ab9df2"
+      },
+      "string": {
+        "color": "#e5c463"
+      },
+      "string.regexp": {
+        "color": "#e5c463"
+      },
+      "string.escape": {
+        "color": "#ab9df2"
+      },
+      "number": {
+        "color": "#ab9df2"
+      },
+      "boolean": {
+        "color": "#ab9df2"
+      },
+      "type": {
+        "color": "#7accd7",
+        "font_style": "italic"
+      },
+      "type.builtin": {
+        "color": "#7accd7",
+        "font_style": "italic"
+      },
+      "property": {
+        "color": "#e3e1e4"
+      },
+      "function": {
+        "color": "#9ecd6f"
+      },
+      "function.method": {
+        "color": "#9ecd6f"
+      },
+      "function.builtin": {
+        "color": "#9ecd6f"
+      },
+      "keyword": {
+        "color": "#f85e84"
+      },
+      "keyword.control": {
+        "color": "#f85e84"
+      },
+      "keyword.operator": {
+        "color": "#f85e84"
+      },
+      "keyword.modifier": {
+        "color": "#f85e84"
+      },
+      "tag": {
+        "color": "#f85e84"
+      },
+      "tag.attribute": {
+        "color": "#7accd7",
+        "font_style": "italic"
+      },
+      "comment": {
+        "color": "#848089",
+        "font_style": "italic"
+      },
+      "punctuation": {
+        "color": "#848089"
+      },
+      "punctuation.delimiter": {
+        "color": "#848089"
+      },
+      "punctuation.bracket": {
+        "color": "#848089"
+      }
+    }
+  }
+}

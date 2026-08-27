@@ -1,0 +1,107 @@
+{
+  "name": "Vesper",
+  "appearance": "dark",
+  "style": {
+    "background": "#101010",
+    "text": "#FFFFFF",
+    "editor.background": "#101010",
+    "editor.foreground": "#FFFFFF",
+    "syntax": {
+      "attribute": {
+        "color": "#A0A0A0"
+      },
+      "boolean": {
+        "color": "#FFC799"
+      },
+      "comment": {
+        "color": "#8b8b8b94"
+      },
+      "comment.doc": {
+        "color": "#8b8b8b94"
+      },
+      "constant": {
+        "color": "#FFC799"
+      },
+      "constructor": {
+        "color": "#FFC799"
+      },
+      "emphasis": {
+        "color": "#FFF",
+        "font_style": "italic"
+      },
+      "emphasis.strong": {
+        "color": "#FFF",
+        "font_weight": 700
+      },
+      "function": {
+        "color": "#FFC799"
+      },
+      "keyword": {
+        "color": "#A0A0A0"
+      },
+      "label": {
+        "color": "#FFC799"
+      },
+      "link_text": {
+        "color": "#FFF"
+      },
+      "link_uri": {
+        "color": "#FFF"
+      },
+      "number": {
+        "color": "#FFC799"
+      },
+      "operator": {
+        "color": "#A0A0A0"
+      },
+      "punctuation": {
+        "color": "#A0A0A0"
+      },
+      "punctuation.bracket": {
+        "color": "#A0A0A0"
+      },
+      "punctuation.delimiter": {
+        "color": "#A0A0A0"
+      },
+      "punctuation.list_marker": {
+        "color": "#A0A0A0"
+      },
+      "punctuation.special": {
+        "color": "#A0A0A0"
+      },
+      "string": {
+        "color": "#99FFE4"
+      },
+      "string.escape": {
+        "color": "#FFC799"
+      },
+      "string.regex": {
+        "color": "#99FFE4"
+      },
+      "string.special": {
+        "color": "#99FFE4"
+      },
+      "string.special.symbol": {
+        "color": "#99FFE4"
+      },
+      "tag": {
+        "color": "#FFC799"
+      },
+      "text.literal": {
+        "color": "#99FFE4"
+      },
+      "title": {
+        "color": "#FFC799"
+      },
+      "type": {
+        "color": "#FFC799"
+      },
+      "variable": {
+        "color": "#FFF"
+      },
+      "variable.special": {
+        "color": "#A0A0A0"
+      }
+    }
+  }
+}

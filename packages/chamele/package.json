@@ -1,0 +1,41 @@
+{
+  "name": "@pierre/chamele",
+  "version": "0.0.0",
+  "description": "A fast code highlighter written in WebAssembly Text(Wat), from Pierre",
+  "license": "apache-2.0",
+  "files": [
+    "lib/",
+    "themes/"
+  ],
+  "type": "module",
+  "main": "./lib/node.mjs",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "workerd": "./lib/workerd.mjs",
+      "node": "./lib/node.mjs",
+      "import": "./lib/browser.mjs"
+    },
+    "./themes": {
+      "types": "./themes/index.d.ts",
+      "import": "./themes/index.mjs"
+    }
+  },
+  "scripts": {
+    "prepublishOnly": "pnpm test && pnpm build",
+    "build": "./scripts/build.mjs",
+    "test": "./test/index.mjs",
+    "bench": "./benchmark/bench.mjs"
+  },
+  "devDependencies": {
+    "binaryen": "catalog:",
+    "shiki": "catalog:",
+    "tree-sitter-highlight": "catalog:",
+    "wabt": "catalog:"
+  },
+  "meta": {
+    "chamele.wasm": 67776,
+    "chamele.wasm.gz": 28032
+  }
+}

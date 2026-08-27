@@ -1,0 +1,95 @@
+{
+  "name": "Sonokai Andromeda",
+  "appearance": "dark",
+  "style": {
+    "background": "#2d293e",
+    "text": "#e4e3e1",
+    "editor.background": "#2d293e",
+    "editor.foreground": "#e4e3e1",
+    "syntax": {
+      "variable": {
+        "color": "#e4e3e1"
+      },
+      "variable.builtin": {
+        "color": "#fc5d7c"
+      },
+      "variable.parameter": {
+        "color": "#f39660",
+        "font_style": "italic"
+      },
+      "constant": {
+        "color": "#b39df3"
+      },
+      "constant.builtin": {
+        "color": "#b39df3"
+      },
+      "string": {
+        "color": "#e7c664"
+      },
+      "string.regexp": {
+        "color": "#e7c664"
+      },
+      "string.escape": {
+        "color": "#b39df3"
+      },
+      "number": {
+        "color": "#b39df3"
+      },
+      "boolean": {
+        "color": "#b39df3"
+      },
+      "type": {
+        "color": "#81c1d4",
+        "font_style": "italic"
+      },
+      "type.builtin": {
+        "color": "#81c1d4",
+        "font_style": "italic"
+      },
+      "property": {
+        "color": "#e4e3e1"
+      },
+      "function": {
+        "color": "#91d085"
+      },
+      "function.method": {
+        "color": "#91d085"
+      },
+      "function.builtin": {
+        "color": "#91d085"
+      },
+      "keyword": {
+        "color": "#fc5d7c"
+      },
+      "keyword.control": {
+        "color": "#fc5d7c"
+      },
+      "keyword.operator": {
+        "color": "#fc5d7c"
+      },
+      "keyword.modifier": {
+        "color": "#fc5d7c"
+      },
+      "tag": {
+        "color": "#fc5d7c"
+      },
+      "tag.attribute": {
+        "color": "#81c1d4",
+        "font_style": "italic"
+      },
+      "comment": {
+        "color": "#7f8490",
+        "font_style": "italic"
+      },
+      "punctuation": {
+        "color": "#7f8490"
+      },
+      "punctuation.delimiter": {
+        "color": "#7f8490"
+      },
+      "punctuation.bracket": {
+        "color": "#7f8490"
+      }
+    }
+  }
+}

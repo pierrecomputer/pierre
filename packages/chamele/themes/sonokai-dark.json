@@ -1,0 +1,95 @@
+{
+  "name": "Sonokai",
+  "appearance": "dark",
+  "style": {
+    "background": "#2c2e34",
+    "text": "#e2e2e3",
+    "editor.background": "#2c2e34",
+    "editor.foreground": "#e2e2e3",
+    "syntax": {
+      "variable": {
+        "color": "#e2e2e3"
+      },
+      "variable.builtin": {
+        "color": "#fc5d7c"
+      },
+      "variable.parameter": {
+        "color": "#f39660",
+        "font_style": "italic"
+      },
+      "constant": {
+        "color": "#b39df3"
+      },
+      "constant.builtin": {
+        "color": "#b39df3"
+      },
+      "string": {
+        "color": "#e7c664"
+      },
+      "string.regexp": {
+        "color": "#e7c664"
+      },
+      "string.escape": {
+        "color": "#b39df3"
+      },
+      "number": {
+        "color": "#b39df3"
+      },
+      "boolean": {
+        "color": "#b39df3"
+      },
+      "type": {
+        "color": "#76cce0",
+        "font_style": "italic"
+      },
+      "type.builtin": {
+        "color": "#76cce0",
+        "font_style": "italic"
+      },
+      "property": {
+        "color": "#e2e2e3"
+      },
+      "function": {
+        "color": "#9ed072"
+      },
+      "function.method": {
+        "color": "#9ed072"
+      },
+      "function.builtin": {
+        "color": "#9ed072"
+      },
+      "keyword": {
+        "color": "#fc5d7c"
+      },
+      "keyword.control": {
+        "color": "#fc5d7c"
+      },
+      "keyword.operator": {
+        "color": "#fc5d7c"
+      },
+      "keyword.modifier": {
+        "color": "#fc5d7c"
+      },
+      "tag": {
+        "color": "#fc5d7c"
+      },
+      "tag.attribute": {
+        "color": "#76cce0",
+        "font_style": "italic"
+      },
+      "comment": {
+        "color": "#7f8490",
+        "font_style": "italic"
+      },
+      "punctuation": {
+        "color": "#7f8490"
+      },
+      "punctuation.delimiter": {
+        "color": "#7f8490"
+      },
+      "punctuation.bracket": {
+        "color": "#7f8490"
+      }
+    }
+  }
+}

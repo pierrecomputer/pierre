@@ -1,0 +1,169 @@
+{
+  "name": "Quiet Light (VS Code)",
+  "appearance": "light",
+  "style": {
+    "background": "#f5f5f5ff",
+    "text": "#333333ff",
+    "editor.background": "#f5f5f5ff",
+    "editor.foreground": "#333333ff",
+    "syntax": {
+      "comment": {
+        "color": "#aaaaaaff",
+        "font_style": "italic"
+      },
+      "comment.doc": {
+        "color": "#448c27ff"
+      },
+      "string": {
+        "color": "#448c27ff"
+      },
+      "string.regex": {
+        "color": "#4b69c6ff"
+      },
+      "string.escape": {
+        "color": "#777777ff"
+      },
+      "link_text": {
+        "color": "#448c27ff"
+      },
+      "number": {
+        "color": "#9c5d27ff"
+      },
+      "boolean": {
+        "color": "#9c5d27ff"
+      },
+      "constant.builtin": {
+        "color": "#9c5d27ff"
+      },
+      "constant": {
+        "color": "#9c5d27ff"
+      },
+      "variable": {
+        "color": "#7a3e9dff"
+      },
+      "variable.special": {
+        "color": "#9c5d27ff"
+      },
+      "variable.parameter": {
+        "color": "#7a3e9dff"
+      },
+      "keyword": {
+        "color": "#4b69c6ff"
+      },
+      "operator": {
+        "color": "#777777ff"
+      },
+      "type": {
+        "color": "#7a3e9dff",
+        "font_weight": 700
+      },
+      "type.builtin": {
+        "color": "#7a3e9dff"
+      },
+      "function": {
+        "color": "#aa3731ff",
+        "font_weight": 700
+      },
+      "function.builtin": {
+        "color": "#aa3731ff",
+        "font_weight": 700
+      },
+      "tag": {
+        "color": "#4b69c6ff"
+      },
+      "attribute": {
+        "color": "#8190a0ff",
+        "font_style": "italic"
+      },
+      "punctuation.special": {
+        "color": "#777777ff"
+      },
+      "punctuation.bracket": {
+        "color": "#91b3e0ff"
+      },
+      "punctuation.delimiter": {
+        "color": "#7a3e9dff",
+        "font_weight": 700
+      },
+      "punctuation.list_marker": {
+        "color": "#777777ff"
+      },
+      "punctuation": {
+        "color": "#777777ff"
+      },
+      "preproc": {
+        "color": "#aa3731ff",
+        "font_weight": 700
+      },
+      "title": {
+        "color": "#aa3731ff"
+      },
+      "emphasis.strong": {
+        "color": "#448c27ff"
+      },
+      "emphasis": {
+        "color": "#448c27ff"
+      },
+      "text.literal": {
+        "color": "#9c5d27ff"
+      },
+      "enum": {
+        "color": "#7a3e9dff",
+        "font_weight": 700
+      },
+      "property": {
+        "color": "#7a3e9dff"
+      },
+      "label": {
+        "color": "#4b69c6ff"
+      },
+      "constructor": {
+        "color": "#aa3731ff",
+        "font_weight": 700
+      },
+      "namespace": {
+        "color": "#7a3e9dff",
+        "font_weight": 700
+      },
+      "diff.minus": {
+        "color": "#000000ff"
+      },
+      "diff.plus": {
+        "color": "#000000ff"
+      },
+      "embedded": {
+        "color": "#333333ff"
+      },
+      "selector": {
+        "color": "#7a3e9dff"
+      },
+      "variant": {
+        "color": "#7a3e9dff"
+      },
+      "string.special": {
+        "color": "#448c27ff"
+      },
+      "string.special.symbol": {
+        "color": "#9c5d27ff"
+      },
+      "punctuation.markup": {
+        "color": "#777777ff"
+      },
+      "primary": {
+        "color": "#333333ff"
+      },
+      "link_uri": {
+        "color": "#705697ff"
+      },
+      "hint": {
+        "color": "#33333366"
+      },
+      "predictive": {
+        "color": "#33333366"
+      },
+      "selector.pseudo": {
+        "color": "#7a3e9dff"
+      }
+    }
+  }
+}

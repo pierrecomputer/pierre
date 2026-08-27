@@ -1,0 +1,95 @@
+{
+  "name": "Sonokai Maia",
+  "appearance": "dark",
+  "style": {
+    "background": "#273136",
+    "text": "#e1e2e3",
+    "editor.background": "#273136",
+    "editor.foreground": "#e1e2e3",
+    "syntax": {
+      "variable": {
+        "color": "#e1e2e3"
+      },
+      "variable.builtin": {
+        "color": "#f76c7c"
+      },
+      "variable.parameter": {
+        "color": "#f3a96a",
+        "font_style": "italic"
+      },
+      "constant": {
+        "color": "#baa0f8"
+      },
+      "constant.builtin": {
+        "color": "#baa0f8"
+      },
+      "string": {
+        "color": "#e3d367"
+      },
+      "string.regexp": {
+        "color": "#e3d367"
+      },
+      "string.escape": {
+        "color": "#baa0f8"
+      },
+      "number": {
+        "color": "#baa0f8"
+      },
+      "boolean": {
+        "color": "#baa0f8"
+      },
+      "type": {
+        "color": "#78cee9",
+        "font_style": "italic"
+      },
+      "type.builtin": {
+        "color": "#78cee9",
+        "font_style": "italic"
+      },
+      "property": {
+        "color": "#e1e2e3"
+      },
+      "function": {
+        "color": "#9cd57b"
+      },
+      "function.method": {
+        "color": "#9cd57b"
+      },
+      "function.builtin": {
+        "color": "#9cd57b"
+      },
+      "keyword": {
+        "color": "#f76c7c"
+      },
+      "keyword.control": {
+        "color": "#f76c7c"
+      },
+      "keyword.operator": {
+        "color": "#f76c7c"
+      },
+      "keyword.modifier": {
+        "color": "#f76c7c"
+      },
+      "tag": {
+        "color": "#f76c7c"
+      },
+      "tag.attribute": {
+        "color": "#78cee9",
+        "font_style": "italic"
+      },
+      "comment": {
+        "color": "#82878b",
+        "font_style": "italic"
+      },
+      "punctuation": {
+        "color": "#82878b"
+      },
+      "punctuation.delimiter": {
+        "color": "#82878b"
+      },
+      "punctuation.bracket": {
+        "color": "#82878b"
+      }
+    }
+  }
+}

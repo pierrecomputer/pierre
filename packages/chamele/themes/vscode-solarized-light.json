@@ -1,0 +1,159 @@
+{
+  "name": "Solarized Light (VS Code)",
+  "appearance": "light",
+  "style": {
+    "background": "#fdf6e3ff",
+    "text": "#657b83ff",
+    "editor.background": "#fdf6e3ff",
+    "editor.foreground": "#657b83ff",
+    "syntax": {
+      "comment": {
+        "color": "#93a1a1ff",
+        "font_style": "italic"
+      },
+      "comment.doc": {
+        "color": "#93a1a1ff",
+        "font_style": "italic"
+      },
+      "string": {
+        "color": "#2aa198ff"
+      },
+      "string.regex": {
+        "color": "#dc322fff"
+      },
+      "string.escape": {
+        "color": "#cb4b16ff"
+      },
+      "link_text": {
+        "color": "#2aa198ff"
+      },
+      "number": {
+        "color": "#d33682ff"
+      },
+      "boolean": {
+        "color": "#b58900ff"
+      },
+      "constant.builtin": {
+        "color": "#b58900ff"
+      },
+      "constant": {
+        "color": "#d33682ff"
+      },
+      "variable": {
+        "color": "#657b83ff"
+      },
+      "variable.special": {
+        "color": "#268bd2ff"
+      },
+      "keyword": {
+        "color": "#859900ff"
+      },
+      "operator": {
+        "color": "#859900ff"
+      },
+      "type": {
+        "color": "#cb4b16ff"
+      },
+      "type.builtin": {
+        "color": "#859900ff"
+      },
+      "function": {
+        "color": "#268bd2ff"
+      },
+      "function.builtin": {
+        "color": "#268bd2ff"
+      },
+      "tag": {
+        "color": "#268bd2ff"
+      },
+      "attribute": {
+        "color": "#93a1a1ff"
+      },
+      "punctuation.special": {
+        "color": "#dc322fff"
+      },
+      "punctuation.bracket": {
+        "color": "#93a1a1ff"
+      },
+      "punctuation.delimiter": {
+        "color": "#6c71c4ff"
+      },
+      "punctuation": {
+        "color": "#859900ff"
+      },
+      "preproc": {
+        "color": "#b58900ff"
+      },
+      "title": {
+        "color": "#268bd2ff",
+        "font_weight": 700
+      },
+      "emphasis.strong": {
+        "font_weight": 700
+      },
+      "emphasis": {
+        "font_style": "italic"
+      },
+      "text.literal": {
+        "color": "#2aa198ff"
+      },
+      "enum": {
+        "color": "#cb4b16ff"
+      },
+      "property": {
+        "color": "#268bd2ff"
+      },
+      "label": {
+        "color": "#268bd2ff"
+      },
+      "constructor": {
+        "color": "#268bd2ff"
+      },
+      "namespace": {
+        "color": "#cb4b16ff"
+      },
+      "diff.minus": {
+        "color": "#dc322fff"
+      },
+      "diff.plus": {
+        "color": "#859900ff"
+      },
+      "embedded": {
+        "color": "#657b83ff"
+      },
+      "selector": {
+        "color": "#268bd2ff"
+      },
+      "selector.pseudo": {
+        "color": "#93a1a1ff"
+      },
+      "variant": {
+        "color": "#268bd2ff"
+      },
+      "string.special": {
+        "color": "#2aa198ff"
+      },
+      "string.special.symbol": {
+        "color": "#cb4b16ff"
+      },
+      "primary": {
+        "color": "#657b83ff"
+      },
+      "link_uri": {
+        "color": "#ac9d57ff"
+      },
+      "hint": {
+        "color": "#657b8366"
+      },
+      "predictive": {
+        "color": "#657b8366"
+      },
+      "punctuation.list_marker": {
+        "color": "#859900ff"
+      },
+      "punctuation.markup": {
+        "color": "#859900ff"
+      }
+    }
+  }
+}

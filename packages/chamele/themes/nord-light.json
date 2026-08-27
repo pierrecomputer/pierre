@@ -1,0 +1,85 @@
+{
+  "name": "Nord Light",
+  "appearance": "light",
+  "style": {
+    "background": "#eceff4",
+    "text": "#444d56",
+    "editor.background": "#eceff4",
+    "editor.foreground": "#24292e",
+    "syntax": {
+      "attribute": {
+        "color": "#24292e"
+      },
+      "comment": {
+        "color": "#6A737D",
+        "font_style": "italic"
+      },
+      "comment.doc": {
+        "color": "#6A737D",
+        "font_style": "italic"
+      },
+      "constant": {
+        "color": "#3B4252"
+      },
+      "constructor": {
+        "color": "#0D7579"
+      },
+      "emphasis": {
+        "color": "#24292E",
+        "font_style": "italic"
+      },
+      "emphasis.strong": {
+        "color": "#24292E",
+        "font_weight": 700
+      },
+      "keyword": {
+        "color": "#D73A49"
+      },
+      "label": {
+        "color": "#509546"
+      },
+      "link_text": {
+        "color": "#CB5C69"
+      },
+      "link_uri": {
+        "color": "#CB5C69"
+      },
+      "number": {
+        "color": "#3B4252"
+      },
+      "operator": {
+        "color": "#CB5C69"
+      },
+      "string": {
+        "color": "#032F62"
+      },
+      "string.escape": {
+        "color": "#032F62"
+      },
+      "string.regex": {
+        "color": "#032F62"
+      },
+      "string.special": {
+        "color": "#032F62"
+      },
+      "string.special.symbol": {
+        "color": "#032F62"
+      },
+      "tag": {
+        "color": "#0D7579"
+      },
+      "text.literal": {
+        "color": "#032F62"
+      },
+      "title": {
+        "color": "#509546"
+      },
+      "variable": {
+        "color": "#3B4252"
+      },
+      "variable.special": {
+        "color": "#0C60A5"
+      }
+    }
+  }
+}

@@ -1,0 +1,178 @@
+{
+  "name": "Night Owl Light",
+  "appearance": "light",
+  "style": {
+    "background": "#FBFBFB",
+    "text": "#403f53",
+    "editor.background": "#FBFBFB",
+    "editor.foreground": "#403f53",
+    "syntax": {
+      "attribute": {
+        "color": "#4876d6",
+        "font_style": "italic"
+      },
+      "boolean": {
+        "color": "#bc5454"
+      },
+      "comment": {
+        "color": "#989fb1",
+        "font_style": "italic"
+      },
+      "comment.doc": {
+        "color": "#989fb1",
+        "font_style": "italic"
+      },
+      "constant": {
+        "color": "#4876d6"
+      },
+      "constant.builtin": {
+        "color": "#bc5454"
+      },
+      "constructor": {
+        "color": "#994cc3",
+        "font_style": "italic"
+      },
+      "diff.minus": {
+        "color": "#f76e6e"
+      },
+      "diff.plus": {
+        "color": "#49d0c5"
+      },
+      "embedded": {
+        "color": "#403f53"
+      },
+      "emphasis": {
+        "color": "#994cc3",
+        "font_style": "italic"
+      },
+      "emphasis.strong": {
+        "color": "#4876d6",
+        "font_weight": 700
+      },
+      "enum": {
+        "color": "#4876d6"
+      },
+      "function": {
+        "color": "#4876d6",
+        "font_style": "italic"
+      },
+      "function.method": {
+        "color": "#4876d6",
+        "font_style": "italic"
+      },
+      "hint": {
+        "color": "#969696"
+      },
+      "keyword": {
+        "color": "#994cc3",
+        "font_style": "italic"
+      },
+      "keyword.control": {
+        "color": "#994cc3",
+        "font_style": "italic"
+      },
+      "keyword.declaration": {
+        "color": "#994cc3"
+      },
+      "label": {
+        "color": "#4876d6"
+      },
+      "link_text": {
+        "color": "#403f53"
+      },
+      "link_uri": {
+        "color": "#ff869a"
+      },
+      "namespace": {
+        "color": "#403f53"
+      },
+      "number": {
+        "color": "#aa0982"
+      },
+      "operator": {
+        "color": "#0c969b"
+      },
+      "predictive": {
+        "color": "#93A1A1",
+        "font_style": "italic"
+      },
+      "preproc": {
+        "color": "#994cc3",
+        "font_style": "italic"
+      },
+      "primary": {
+        "color": "#403f53"
+      },
+      "property": {
+        "color": "#0c969b"
+      },
+      "punctuation": {
+        "color": "#403f53"
+      },
+      "punctuation.bracket": {
+        "color": "#994cc3",
+        "font_style": "italic"
+      },
+      "punctuation.delimiter": {
+        "color": "#403f53"
+      },
+      "punctuation.list_marker": {
+        "color": "#4876d6"
+      },
+      "punctuation.markup": {
+        "color": "#4876d6"
+      },
+      "punctuation.special": {
+        "color": "#994cc3",
+        "font_style": "italic"
+      },
+      "selector": {
+        "color": "#994cc3",
+        "font_style": "italic"
+      },
+      "selector.pseudo": {
+        "color": "#994cc3"
+      },
+      "string": {
+        "color": "#c96765"
+      },
+      "string.escape": {
+        "color": "#aa0982"
+      },
+      "string.regex": {
+        "color": "#5ca7e4"
+      },
+      "string.special": {
+        "color": "#c96765"
+      },
+      "string.special.symbol": {
+        "color": "#c96765"
+      },
+      "tag": {
+        "color": "#994cc3"
+      },
+      "text.literal": {
+        "color": "#0c969b"
+      },
+      "title": {
+        "color": "#4876d6",
+        "font_weight": 700
+      },
+      "type": {
+        "color": "#4876d6"
+      },
+      "type.builtin": {
+        "color": "#bc5454"
+      },
+      "variable": {
+        "color": "#403f53"
+      },
+      "variable.special": {
+        "color": "#0c969b"
+      },
+      "variant": {
+        "color": "#4876d6"
+      }
+    }
+  }
+}

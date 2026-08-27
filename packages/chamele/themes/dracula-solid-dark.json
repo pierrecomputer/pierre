@@ -1,0 +1,150 @@
+{
+  "name": "Dracula Solid",
+  "appearance": "dark",
+  "style": {
+    "background": "#282a36ff",
+    "text": "#f8f8f2ff",
+    "editor.background": "#282a36ff",
+    "editor.foreground": "#f8f8f2ff",
+    "syntax": {
+      "attribute": {
+        "color": "#8be9fdff"
+      },
+      "boolean": {
+        "color": "#ff79c6ff"
+      },
+      "comment": {
+        "color": "#6272a4ff"
+      },
+      "comment.doc": {
+        "color": "#ff79c6ff"
+      },
+      "constant": {
+        "color": "#bd93f9ff"
+      },
+      "constructor": {
+        "color": "#ff79c6ff"
+      },
+      "embedded": {
+        "color": "#f8f8f2ff"
+      },
+      "emphasis": {
+        "color": "#f1fa8cff",
+        "font_style": "italic"
+      },
+      "emphasis.strong": {
+        "color": "#ffb86cff",
+        "font_weight": 700
+      },
+      "enum": {
+        "color": "#bd93f9ff"
+      },
+      "function": {
+        "color": "#50fa7bff"
+      },
+      "hint": {
+        "color": "#6272a4ff",
+        "font_style": "italic"
+      },
+      "keyword": {
+        "color": "#ff79c6ff"
+      },
+      "label": {
+        "color": "#f8f8f2ff"
+      },
+      "link_text": {
+        "color": "#ff79c6ff"
+      },
+      "link_uri": {
+        "color": "#8be9fdff"
+      },
+      "number": {
+        "color": "#bd93f9ff"
+      },
+      "operator": {
+        "color": "#ff79c6ff"
+      },
+      "predictive": {
+        "color": "#c6c6c2ff",
+        "font_style": "italic"
+      },
+      "preproc": {
+        "color": "#6272a4ff"
+      },
+      "primary": {
+        "color": "#f8f8f2ff"
+      },
+      "property": {
+        "color": "#8be9fdff"
+      },
+      "punctuation": {
+        "color": "#ff79c6ff"
+      },
+      "punctuation.bracket": {
+        "color": "#f8f8f2ff"
+      },
+      "punctuation.delimiter": {
+        "color": "#ff79c6ff"
+      },
+      "punctuation.list_marker": {
+        "color": "#8be9fdff"
+      },
+      "punctuation.special": {
+        "color": "#ff79c6ff"
+      },
+      "string": {
+        "color": "#f1fa8cff"
+      },
+      "string.escape": {
+        "color": "#ff79c6ff"
+      },
+      "string.regex": {
+        "color": "#ff5555ff"
+      },
+      "string.special": {
+        "color": "#ff79c6ff"
+      },
+      "string.special.symbol": {
+        "color": "#bd93f9ff"
+      },
+      "tag": {
+        "color": "#ff79c6ff"
+      },
+      "text.literal": {
+        "color": "#50fa7bff"
+      },
+      "title": {
+        "color": "#bd93f9ff",
+        "font_weight": 600
+      },
+      "type": {
+        "color": "#8be9fdff"
+      },
+      "type.interface": {
+        "color": "#8be9fdff",
+        "font_style": "italic"
+      },
+      "type.super": {
+        "color": "#8be9fdff",
+        "font_style": "italic"
+      },
+      "variable": {
+        "color": "#f8f8f2ff"
+      },
+      "variable.member": {
+        "color": "#f8f8f2ff"
+      },
+      "variable.parameter": {
+        "color": "#ffb86cff",
+        "font_style": "italic"
+      },
+      "variable.special": {
+        "color": "#bd93f9ff",
+        "font_style": "italic"
+      },
+      "variant": {
+        "color": "#bd93f9ff"
+      }
+    }
+  }
+}

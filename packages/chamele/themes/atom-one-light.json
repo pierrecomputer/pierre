@@ -1,0 +1,156 @@
+{
+  "name": "Atom One Light",
+  "appearance": "light",
+  "style": {
+    "background": "#FAFAFA",
+    "text": "#383A42",
+    "editor.background": "#FAFAFA",
+    "editor.foreground": "#383A42",
+    "syntax": {
+      "attribute": {
+        "color": "#986801"
+      },
+      "boolean": {
+        "color": "#986801"
+      },
+      "comment": {
+        "color": "#A0A1A7",
+        "font_style": "italic"
+      },
+      "comment.doc": {
+        "color": "#A0A1A7",
+        "font_style": "italic"
+      },
+      "constant": {
+        "color": "#986801"
+      },
+      "constructor": {
+        "color": "#4078F2"
+      },
+      "embedded": {
+        "color": "#383A42"
+      },
+      "emphasis": {
+        "color": "#A626A4",
+        "font_style": "italic"
+      },
+      "emphasis.strong": {
+        "color": "#986801",
+        "font_weight": 700
+      },
+      "enum": {
+        "color": "#C18401"
+      },
+      "function": {
+        "color": "#4078F2"
+      },
+      "function.method": {
+        "color": "#4078F2"
+      },
+      "function.special.definition": {
+        "color": "#4078F2"
+      },
+      "hint": {
+        "color": "#9D9D9F"
+      },
+      "keyword": {
+        "color": "#A626A4"
+      },
+      "keyword.operator": {
+        "color": "#A626A4"
+      },
+      "label": {
+        "color": "#E45649"
+      },
+      "link_text": {
+        "color": "#4078F2"
+      },
+      "link_uri": {
+        "color": "#A626A4"
+      },
+      "number": {
+        "color": "#986801"
+      },
+      "operator": {
+        "color": "#0184BC"
+      },
+      "predictive": {
+        "color": "#A0A1A7",
+        "font_style": "italic"
+      },
+      "preproc": {
+        "color": "#A626A4"
+      },
+      "primary": {
+        "color": "#383A42"
+      },
+      "property": {
+        "color": "#E45649"
+      },
+      "property.json_key": {
+        "color": "#E45649"
+      },
+      "punctuation": {
+        "color": "#383A42"
+      },
+      "punctuation.bracket": {
+        "color": "#383A42"
+      },
+      "punctuation.delimiter": {
+        "color": "#383A42"
+      },
+      "punctuation.list_marker": {
+        "color": "#E45649"
+      },
+      "punctuation.special": {
+        "color": "#CA1243"
+      },
+      "string": {
+        "color": "#50A14F"
+      },
+      "string.escape": {
+        "color": "#0184BC"
+      },
+      "string.regex": {
+        "color": "#0184BC"
+      },
+      "string.special": {
+        "color": "#0184BC"
+      },
+      "string.special.symbol": {
+        "color": "#0184BC"
+      },
+      "tag": {
+        "color": "#E45649"
+      },
+      "text.literal": {
+        "color": "#50A14F"
+      },
+      "title": {
+        "color": "#E45649",
+        "font_weight": 700
+      },
+      "type": {
+        "color": "#C18401"
+      },
+      "type.builtin": {
+        "color": "#0184BC"
+      },
+      "variable": {
+        "color": "#E45649"
+      },
+      "variable.builtin": {
+        "color": "#E45649"
+      },
+      "variable.parameter": {
+        "color": "#383A42"
+      },
+      "variable.special": {
+        "color": "#E45649"
+      },
+      "variant": {
+        "color": "#C18401"
+      }
+    }
+  }
+}

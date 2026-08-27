@@ -1,0 +1,68 @@
+{
+  "name": "Monokai-ST3",
+  "appearance": "dark",
+  "style": {
+    "background": "#272822",
+    "text": "#F8F8F2",
+    "editor.background": "#272822",
+    "editor.foreground": "#f8f8f2",
+    "syntax": {
+      "attribute": {
+        "color": "#A6E22E"
+      },
+      "boolean": {
+        "color": "#AE81FF"
+      },
+      "comment": {
+        "color": "#75715E"
+      },
+      "comment.doc": {
+        "color": "#75715E"
+      },
+      "constant": {
+        "color": "#AE81FF"
+      },
+      "function": {
+        "color": "#A6E22E"
+      },
+      "keyword": {
+        "color": "#F92672"
+      },
+      "tag": {
+        "color": "#F92672"
+      },
+      "number": {
+        "color": "#AE81FF"
+      },
+      "string": {
+        "color": "#E6DB74"
+      },
+      "string.escape": {
+        "color": "#E6DB74"
+      },
+      "string.regex": {
+        "color": "#E6DB74"
+      },
+      "string.special": {
+        "color": "#E6DB74"
+      },
+      "string.special.symbol": {
+        "color": "#E6DB74"
+      },
+      "text.literal": {
+        "color": "#E6DB74"
+      },
+      "variable": {
+        "color": "#F8F8F2"
+      },
+      "variable.special": {
+        "color": "#FD971F",
+        "font_style": "italic"
+      },
+      "type": {
+        "color": "#a6e22e",
+        "font_style": "italic"
+      }
+    }
+  }
+}

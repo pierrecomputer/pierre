@@ -1,0 +1,159 @@
+{
+  "name": "Tomorrow Night Blue (VS Code)",
+  "appearance": "dark",
+  "style": {
+    "background": "#002451ff",
+    "text": "#ffffffff",
+    "editor.background": "#002451ff",
+    "editor.foreground": "#ffffffff",
+    "syntax": {
+      "comment": {
+        "color": "#7285b7ff"
+      },
+      "comment.doc": {
+        "color": "#7285b7ff"
+      },
+      "string": {
+        "color": "#d1f1a9ff"
+      },
+      "string.regex": {
+        "color": "#ff9da4ff"
+      },
+      "string.escape": {
+        "color": "#ffc58fff"
+      },
+      "link_text": {
+        "color": "#ff9da4ff"
+      },
+      "number": {
+        "color": "#ffc58fff"
+      },
+      "boolean": {
+        "color": "#ffc58fff"
+      },
+      "constant.builtin": {
+        "color": "#ffc58fff"
+      },
+      "constant": {
+        "color": "#ffffffff"
+      },
+      "variable": {
+        "color": "#ff9da4ff"
+      },
+      "variable.special": {
+        "color": "#ff9da4ff"
+      },
+      "variable.parameter": {
+        "color": "#ffc58fff"
+      },
+      "keyword": {
+        "color": "#ebbbffff"
+      },
+      "operator": {
+        "color": "#99ffffff"
+      },
+      "type": {
+        "color": "#ffeeadff"
+      },
+      "type.builtin": {
+        "color": "#ffeeadff"
+      },
+      "function": {
+        "color": "#bbdaffff"
+      },
+      "function.builtin": {
+        "color": "#bbdaffff"
+      },
+      "tag": {
+        "color": "#ff9da4ff"
+      },
+      "attribute": {
+        "color": "#ff9da4ff"
+      },
+      "punctuation.special": {
+        "color": "#ffc58fff"
+      },
+      "punctuation.delimiter": {
+        "color": "#d1f1a9ff"
+      },
+      "punctuation": {
+        "color": "#ffc58fff"
+      },
+      "preproc": {
+        "color": "#bbdaffff"
+      },
+      "title": {
+        "font_weight": 700
+      },
+      "emphasis.strong": {
+        "font_weight": 700
+      },
+      "emphasis": {
+        "font_style": "italic"
+      },
+      "text.literal": {
+        "color": "#ff9da4ff"
+      },
+      "enum": {
+        "color": "#ffeeadff"
+      },
+      "property": {
+        "color": "#ff9da4ff"
+      },
+      "label": {
+        "color": "#ff9da4ff"
+      },
+      "constructor": {
+        "color": "#bbdaffff"
+      },
+      "namespace": {
+        "color": "#ffeeadff"
+      },
+      "diff.minus": {
+        "color": "#ff9da4ff"
+      },
+      "diff.plus": {
+        "color": "#d1f1a9ff"
+      },
+      "embedded": {
+        "color": "#ffffffff"
+      },
+      "selector": {
+        "color": "#ebbbffff"
+      },
+      "selector.pseudo": {
+        "color": "#ff9da4ff"
+      },
+      "variant": {
+        "color": "#ff9da4ff"
+      },
+      "string.special": {
+        "color": "#d1f1a9ff"
+      },
+      "string.special.symbol": {
+        "color": "#d1f1a9ff"
+      },
+      "primary": {
+        "color": "#ffffffff"
+      },
+      "link_uri": {
+        "color": "#0e639cff"
+      },
+      "hint": {
+        "color": "#ffffff66"
+      },
+      "predictive": {
+        "color": "#ffffff66"
+      },
+      "punctuation.bracket": {
+        "color": "#ffc58fff"
+      },
+      "punctuation.list_marker": {
+        "color": "#ffc58fff"
+      },
+      "punctuation.markup": {
+        "color": "#ffc58fff"
+      }
+    }
+  }
+}
