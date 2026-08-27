@@ -71,7 +71,7 @@ for (const diffStyle of ['split', 'unified'] as const) {
       expect(lines).not.toContain(30);
 
       // Genuine session end: the reverted region collapses away.
-      await page.evaluate(() => window.__editor?.cleanUp());
+      await page.evaluate(() => window.__completeEdit?.());
       await expect
         .poll(async () => (await renderedLines(page)).includes(10))
         .toBe(false);

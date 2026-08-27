@@ -69,6 +69,9 @@
         onEditChange({ file }) {
           events.push(file.contents);
         },
+        onEditComplete() {
+          return 'accept';
+        },
         disableFileHeader: true,
         theme: { dark: 'pierre-dark', light: 'pierre-light' },
         themeType: 'dark',
@@ -81,7 +84,7 @@
         newFile: { name: 'edit.ts', contents: newContents },
         containerWrapper: mount,
       });
-      editor.edit(instance);
+      window.__completeEdit = editor.edit(instance);
 
       const findEditableContent = () => {
         const host = mount.querySelector('diffs-container');

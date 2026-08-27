@@ -77,6 +77,7 @@ interface Window {
 
   // Editor handle exposed by the editable fixtures.
   __editor?: E2EEditor;
+  __completeEdit?: () => void;
   __forceEditorFullRender?: () => void;
   __moveEditorContainer?: () => void;
   __syncCount?: number;
