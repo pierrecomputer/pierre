@@ -1,6 +1,7 @@
 import { afterAll, describe, expect, test } from 'bun:test';
 
 import { File } from '../src/components/File';
+import { FileDiff } from '../src/components/FileDiff';
 import { DEFAULT_THEMES } from '../src/constants';
 import { Editor } from '../src/editor/editor';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
@@ -12,10 +13,11 @@ afterAll(async () => {
 });
 
 async function waitForEditableContent(
-  container: HTMLElement
+  container: HTMLElement,
+  selector = '[data-content]'
 ): Promise<HTMLElement> {
   for (let attempt = 0; attempt < 20; attempt++) {
-    const content = container.shadowRoot?.querySelector('[data-content]');
+    const content = container.shadowRoot?.querySelector(selector);
     if (
       content instanceof HTMLElement &&
       (content.contentEditable === 'true' ||
@@ -771,6 +773,70 @@ describe('WebKit wrap boundary fragments', () => {
       ]);
     } finally {
       cleanup();
+    }
+  });
+});
+
+describe('split wrap overlay offset', () => {
+  test('does not add the shared grid top padding twice', async () => {
+    const dom = installDom();
+    const wrapMeasurement = installWrapMeasurement(10);
+    const fileContainer = document.createElement('div');
+    document.body.appendChild(fileContainer);
+    const fileDiff = new FileDiff<undefined>({
+      disableFileHeader: true,
+      diffStyle: 'split',
+      overflow: 'wrap',
+      theme: DEFAULT_THEMES,
+    });
+    const editor = new Editor<undefined>('file-diff');
+
+    try {
+      fileDiff.render({
+        oldFile: { name: 'wrap.ts', contents: 'old\n' },
+        newFile: {
+          name: 'wrap.ts',
+          contents: 'q0w1e2r3t4y5u6i7o8p9\n',
+        },
+        fileContainer,
+        forceRender: true,
+      });
+      const content = fileContainer.shadowRoot?.querySelector(
+        '[data-code][data-additions] [data-content]'
+      );
+      if (!(content instanceof HTMLElement) || content.parentElement === null) {
+        throw new Error('no additions content rendered');
+      }
+
+      // Split + wrap lays the content grid below the same block padding that
+      // Metrics reads from the display:contents code column.
+      content.parentElement.style.paddingTop = '8px';
+      Object.defineProperty(content, 'offsetTop', {
+        configurable: true,
+        get: () => 8,
+      });
+
+      editor.edit(fileDiff);
+      await waitForEditableContent(
+        fileContainer,
+        '[data-code][data-additions] [data-content]'
+      );
+      editor.setSelections([
+        {
+          start: { line: 0, character: 14 },
+          end: { line: 0, character: 18 },
+          direction: 'forward',
+        },
+      ]);
+
+      expect(selectionRects(fileContainer)).toEqual([
+        { x: CONTENT_X + 4 * CH, y: 8 + ROW_H, width: 4 * CH },
+      ]);
+    } finally {
+      wrapMeasurement.restore();
+      editor.cleanUp();
+      fileDiff.cleanUp();
+      dom.cleanup();
     }
   });
 });

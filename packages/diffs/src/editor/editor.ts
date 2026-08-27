@@ -2554,7 +2554,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #computeContentOffset(contentEl: HTMLElement) {
     if (this.#isDiff && this.#diffSyle === 'split' && this.#isWrap) {
       this.#contentOffset = {
-        top: contentEl.offsetTop,
+        // #getLineY already includes the code column's block padding. Store
+        // only the grid displacement beyond it so split + wrap does not add
+        // the same top gap twice.
+        top: contentEl.offsetTop - this.#metrics.paddingTop,
         left: contentEl.offsetLeft - this.#getGutterWidth(),
       };
       if (this.#options.__debug === true) {
