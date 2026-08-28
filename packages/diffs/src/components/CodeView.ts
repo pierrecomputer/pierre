@@ -10,6 +10,7 @@ import {
   THEME_CSS_ATTRIBUTE,
   UNSAFE_CSS_ATTRIBUTE,
 } from '../constants';
+import type { Editor } from '../editor/editor';
 import type { SelectionWriteOptions } from '../managers/InteractionManager';
 import {
   dequeueRender,
@@ -32,7 +33,6 @@ import type {
   CodeViewRangeScrollTarget,
   CodeViewScrollBehavior,
   CodeViewScrollTarget,
-  DiffsEditor,
   HunkSeparators,
   PendingCodeViewLayoutReset,
   SelectedLineRange,
@@ -452,7 +452,7 @@ type CodeViewItemOptions<
 // `dispose` comes from the latest `editor.edit()` attachment: it tears the
 // editor down and completes the session on the instance it attached to.
 interface CodeViewItemEditorRecord<LAnnotation> {
-  editor: DiffsEditor<LAnnotation>;
+  editor: Editor<LAnnotation>;
   state: CodeViewItemOptionsState<LAnnotation>;
   dispose(): void;
 }
@@ -547,7 +547,7 @@ export interface CodeViewOptions<LAnnotation>
     documentKind: EditorDocumentKind,
     options: CodeViewCreateEditorOptions<LAnnotation>,
     editStateKey?: string
-  ): DiffsEditor<LAnnotation> | undefined;
+  ): Editor<LAnnotation> | undefined;
   /**
    * Called with the editor's `EditorChangeEvent` and the owning item whenever
    * the edited document changes, from internal (edit) changes or external
@@ -1530,7 +1530,7 @@ export class CodeView<LAnnotation = undefined> {
    * Returns undefined once the item's session ends (edit off or removal); a
    * collapsed item keeps its suspended editor.
    */
-  public getEditor(itemId: string): DiffsEditor<LAnnotation> | undefined {
+  public getEditor(itemId: string): Editor<LAnnotation> | undefined {
     return this.itemEditors.get(itemId)?.editor;
   }
 
@@ -2080,7 +2080,7 @@ export class CodeView<LAnnotation = undefined> {
     }
 
     const record = this.itemEditors.get(id);
-    let createdEditor: DiffsEditor<LAnnotation> | undefined;
+    let createdEditor: Editor<LAnnotation> | undefined;
     try {
       if (record == null) {
         assertEditorFactory(createEditor);

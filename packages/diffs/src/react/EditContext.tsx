@@ -4,8 +4,7 @@
 import type { Context, PropsWithChildren } from 'react';
 import { createContext, useContext } from 'react';
 
-import type { EditorDocumentKind, EditorOptions } from '../edit';
-import type { DiffsEditor } from '../types';
+import type { Editor, EditorDocumentKind, EditorOptions } from '../edit';
 import { useStableCallback } from './utils/useStableCallback';
 
 /** Creates an Editor. Components manage the instance lifecycle. */
@@ -13,7 +12,7 @@ export type CreateEditor<LAnnotation, LCaret = undefined> = (
   documentKind: EditorDocumentKind,
   options: EditorOptions<LAnnotation, LCaret>,
   editStateKey?: string
-) => DiffsEditor<LAnnotation>;
+) => Editor<LAnnotation, LCaret>;
 
 export interface EditProviderProps<LAnnotation, LCaret = undefined> {
   /** Combines shared defaults with the supplied per-surface options. */
@@ -34,7 +33,7 @@ export function EditProvider<LAnnotation, LCaret = undefined>({
       documentKind: EditorDocumentKind,
       options: EditorOptions<LAnnotation, LCaret>,
       editStateKey?: string
-    ): DiffsEditor<LAnnotation> =>
+    ): Editor<LAnnotation, LCaret> =>
       createEditor(documentKind, options, editStateKey)
   );
   return (

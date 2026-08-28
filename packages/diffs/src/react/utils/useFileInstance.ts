@@ -14,10 +14,9 @@ import {
   type FileOptions,
 } from '../../components/File';
 import { VirtualizedFile } from '../../components/VirtualizedFile';
-import type { EditorChangeEvent, EditorOptions } from '../../edit';
+import type { Editor, EditorChangeEvent, EditorOptions } from '../../edit';
 import type { GetHoveredLineResult } from '../../managers/InteractionManager';
 import type {
-  DiffsEditor,
   FileContents,
   LineAnnotation,
   SelectedLineRange,
@@ -322,7 +321,7 @@ function mergeFileOptions<LAnnotation>({
 
 function applyEdit<LAnnotation>(
   instance: File<LAnnotation>,
-  getEditor: () => DiffsEditor<LAnnotation>
+  getEditor: () => Editor<LAnnotation>
 ): () => void {
   const editor = getEditor();
   try {

@@ -11,7 +11,6 @@ export {
   type ClearEditStateOptions,
 } from '../editor/EditStateManager';
 export * from '../editor/textDocument';
-export type { DiffsEditor } from '../types';
 export type {
   CaretMetadata,
   CapturedDiffSessionState,

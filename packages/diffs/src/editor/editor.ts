@@ -5,9 +5,10 @@ import {
 import type {
   DiffLineAnnotation,
   DiffsEditableComponent,
-  DiffsEditor,
+  DiffsHighlighter,
   EditableInstance,
   FileContents,
+  FileDiffMetadata,
   HighlightedToken,
   LineAnnotation,
   RenderRange,
@@ -210,6 +211,34 @@ interface TrackedCaret<T> {
   focusOffset: number;
 }
 
+interface SyncRenderViewBaseProps {
+  highlighter: DiffsHighlighter;
+  fileContainer: HTMLElement;
+  renderRange: RenderRange | undefined;
+  /** Start fresh history instead of retaining or extending the current history. */
+  resetHistory?: boolean;
+}
+
+interface SyncFileRenderViewProps<LAnnotation>
+  extends SyncRenderViewBaseProps {
+  file: FileContents;
+  lineAnnotations: LineAnnotation<LAnnotation>[] | undefined;
+  /** Treat the supplied contents as an externally provided document update. */
+  externalDocument?: boolean;
+}
+
+interface SyncDiffRenderViewProps<LAnnotation>
+  extends SyncRenderViewBaseProps {
+  fileDiff: FileDiffMetadata;
+  lineAnnotations: DiffLineAnnotation<LAnnotation>[] | undefined;
+  /** Treat the supplied contents as an externally provided document update. */
+  externalDocument?: boolean;
+}
+
+type SyncRenderViewProps<LAnnotation> =
+  | SyncFileRenderViewProps<LAnnotation>
+  | SyncDiffRenderViewProps<LAnnotation>;
+
 export interface EditorOptions<LAnnotation, LCaret = undefined> {
   /** The maximum number of entries to keep in the undo stack. */
   historyMaxEntries?: number;
@@ -309,10 +338,7 @@ const SELECTION_ACTION_POPOVER_PLACEMENT_KEY = 'selection-action';
 const MULTI_SELECTION_CLIPBOARD_TYPE =
   'application/vnd.pierre.diffs-selections+json';
 
-export class Editor<
-  LAnnotation,
-  LCaret = undefined,
-> implements DiffsEditor<LAnnotation> {
+export class Editor<LAnnotation, LCaret = undefined> {
   #options: EditorOptions<LAnnotation, LCaret>;
   #initialState: EditorInitialState<LAnnotation> | undefined;
   #editSession?: ManagedEditSession<LAnnotation>;
@@ -1117,13 +1143,13 @@ export class Editor<
   }
 
   /** @internal */
-  __syncRenderView: DiffsEditor<LAnnotation>['__syncRenderView'] = ({
+  __syncRenderView = ({
     highlighter,
     fileContainer,
     renderRange,
     resetHistory = false,
     ...renderView
-  }) => {
+  }: SyncRenderViewProps<LAnnotation>): void => {
     const isDiff = 'fileDiff' in renderView;
     const fileOrDiff = isDiff ? renderView.fileDiff : renderView.file;
     const lineAnnotations = renderView.lineAnnotations;
@@ -6260,7 +6286,7 @@ export class Editor<
 interface GetEditSessionProps<LAnnotation> {
   documentKind: EditorDocumentKind;
   editStateKey: string | undefined;
-  owner: DiffsEditor<LAnnotation>;
+  owner: Editor<LAnnotation>;
   initialState: EditorInitialState<LAnnotation> | undefined;
   previousSession: ManagedEditSession<LAnnotation> | undefined;
 }

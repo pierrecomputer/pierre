@@ -18,6 +18,7 @@ import {
 import { createPortal, flushSync } from 'react-dom';
 
 import type {
+  Editor,
   EditorChangeEvent,
   EditorDocumentKind,
   EditorOptions,
@@ -38,7 +39,6 @@ import {
   type CodeViewScrollTarget,
   type CodeViewSlotSnapshot,
   type DiffLineAnnotation,
-  type DiffsEditor,
   type GetHoveredLineResult,
   type LineAnnotation,
 } from '../index';
@@ -150,7 +150,7 @@ export interface CodeViewHandle<LAnnotation> {
   setSelectedLines(selection: CodeViewLineSelection | null): void;
   getSelectedLines(): CodeViewLineSelection | null;
   clearSelectedLines(): void;
-  getEditor(id: string): DiffsEditor<LAnnotation> | undefined;
+  getEditor(id: string): Editor<LAnnotation> | undefined;
   getInstance(): CodeViewClass<LAnnotation> | undefined;
 }
 
@@ -252,7 +252,7 @@ function CodeViewInner<LAnnotation = undefined>(
       documentKind: EditorDocumentKind,
       options: CodeViewCreateEditorOptions<LAnnotation>,
       editStateKey?: string
-    ): DiffsEditor<LAnnotation> => {
+    ): Editor<LAnnotation> => {
       if (contextCreateEditor == null) {
         throw new Error('CodeView: EditContext is not attached');
       }

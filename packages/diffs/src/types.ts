@@ -13,16 +13,12 @@ import type {
   ThemeRegistrationResolved,
 } from 'shiki';
 
+import type { Editor } from './editor/editor';
 import type { TextDocument } from './editor/textDocument';
 import type {
   CapturedDiffSessionState,
   EditorActiveLineOptions,
-  EditorCaret,
   EditorChangeEvent,
-  EditorEditCompleteEvent,
-  EditorViewState,
-  EditState,
-  RetainedDiffSessionSnapshot,
 } from './editor/types';
 
 export type { CreatePatchOptionsNonabortable };
@@ -1087,9 +1083,9 @@ export interface DiffsEditableComponent<
    */
   revealLine?: (lineNumber: number) => boolean;
   /** @internal Associate an editor with this component */
-  __attachEditor: (editor: DiffsEditor<LAnnotation>) => () => void;
+  __attachEditor: (editor: Editor<LAnnotation>) => () => void;
   /** @internal Resume rendering for the editor already associated with this component. */
-  __resumeEditor: (editor: DiffsEditor<LAnnotation>) => void;
+  __resumeEditor: (editor: Editor<LAnnotation>) => void;
   /**
    * Deliver `EditorChangeEvent` to the component's owner. The attached
    * editor calls this with the same event object it reports through its own
@@ -1106,7 +1102,7 @@ export interface DiffsEditableComponent<
    * installs session output. Does nothing once no session exists.
    */
   __completeEditSession(
-    editor: DiffsEditor<LAnnotation>,
+    editor: Editor<LAnnotation>,
     mode: 'install' | 'discard'
   ): void;
   /**
@@ -1152,64 +1148,6 @@ export type EditableInstance<T extends { type: string }> = T extends {
 }
   ? never
   : T;
-
-interface SyncRenderViewBaseProps {
-  highlighter: DiffsHighlighter;
-  fileContainer: HTMLElement;
-  renderRange: RenderRange | undefined;
-  /** Start fresh history instead of retaining or extending the current history. */
-  resetHistory?: boolean;
-}
-
-export interface SyncFileRenderViewProps<
-  LAnnotation,
-> extends SyncRenderViewBaseProps {
-  file: FileContents;
-  lineAnnotations: LineAnnotation<LAnnotation>[] | undefined;
-  /** Treat the supplied contents as an externally provided document update. */
-  externalDocument?: boolean;
-}
-
-export interface SyncDiffRenderViewProps<
-  LAnnotation,
-> extends SyncRenderViewBaseProps {
-  fileDiff: FileDiffMetadata;
-  lineAnnotations: DiffLineAnnotation<LAnnotation>[] | undefined;
-  /** Treat the supplied contents as an externally provided document update. */
-  externalDocument?: boolean;
-}
-
-export type SyncRenderViewProps<LAnnotation> =
-  | SyncFileRenderViewProps<LAnnotation>
-  | SyncDiffRenderViewProps<LAnnotation>;
-
-export interface DiffsEditor<LAnnotation> {
-  /** Return an isolated copy of selections and editor-owned viewport state. */
-  getViewState(): EditorViewState;
-  /**
-   * Returns the raw objects for the active edit session, or undefined when no
-   * complete state is available. State remains available while rendering is
-   * recycled and during `onEditComplete`. The result is borrowed editor-owned
-   * state and can be transferred directly as `initialState`.
-   */
-  getEditState(): EditState<LAnnotation> | undefined;
-  __postponeBgTokenizeToNextFrame(): void;
-  /** @internal Capture focus intent before replacing the editable view. */
-  __captureFocusForDOMReplacement(): void;
-  /** @internal Return the active document that an edit-session render should use. */
-  __getDocumentContents(fallbackFile?: FileContents): FileContents | undefined;
-  /** @internal Return component state retained with the active document. */
-  __getDocumentSessionState(): RetainedDiffSessionSnapshot | undefined;
-  __syncRenderView(props: SyncRenderViewProps<LAnnotation>): void;
-  edit<T extends DiffsEditableComponent<LAnnotation>>(
-    fileInstance: EditableInstance<T>
-  ): () => void;
-  /** @internal Notify the editor that its active edit session completed. */
-  __emitEditComplete(event: EditorEditCompleteEvent<LAnnotation>): void;
-  /** Replace the remote carets and selections. */
-  setCarets(carets: EditorCaret<unknown>[]): void;
-  cleanUp(reason?: 'discard' | 'recycle' | 'complete'): void;
-}
 
 /**
  * Options CodeView passes to its `createEditor` factory. A structural subset

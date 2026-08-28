@@ -14,6 +14,7 @@ import {
   THEME_CSS_ATTRIBUTE,
   UNSAFE_CSS_ATTRIBUTE,
 } from '../constants';
+import type { Editor } from '../editor/editor';
 import type {
   CapturedDiffSessionState,
   EditCompletionDecision,
@@ -51,7 +52,6 @@ import type {
   CustomPreProperties,
   DiffLineAnnotation,
   DiffsEditableComponent,
-  DiffsEditor,
   ExpansionDirections,
   FileContents,
   FileDiffMetadata,
@@ -425,7 +425,7 @@ export class FileDiff<
 
   protected enabled = true;
 
-  protected editor: DiffsEditor<LAnnotation> | undefined;
+  protected editor: Editor<LAnnotation> | undefined;
   protected refreshViewTimeout: ReturnType<typeof setTimeout> | undefined;
   // Defer selected-line and editor active-line writes while a refresh rebuilds
   // the diff rows. This is separate from the timeout because the refresh can
@@ -1837,7 +1837,7 @@ export class FileDiff<
   }
 
   /** @internal Associate this component with its editor for a render lifecycle. */
-  public __attachEditor(editor: DiffsEditor<LAnnotation>): () => void {
+  public __attachEditor(editor: Editor<LAnnotation>): () => void {
     // Editing is a plain file-diff concern only. Subclasses with their own
     // hunk semantics (UnresolvedFile) are not editable, so an editor must
     // never attach to them.
@@ -1863,14 +1863,14 @@ export class FileDiff<
   }
 
   /** @internal Resume rendering for the editor already associated with this component. */
-  public __resumeEditor(editor: DiffsEditor<LAnnotation>): void {
+  public __resumeEditor(editor: Editor<LAnnotation>): void {
     if (this.editor !== editor) {
       throw new Error('FileDiff.__resumeEditor: editor association changed');
     }
     this.resumeEditorRendering(editor);
   }
 
-  private resumeEditorRendering(editor: DiffsEditor<LAnnotation>): void {
+  private resumeEditorRendering(editor: Editor<LAnnotation>): void {
     this.editSessionAnnotations ??= adoptEditSessionAnnotations(
       this.lineAnnotations,
       getLineAnnotationName
@@ -1947,7 +1947,7 @@ export class FileDiff<
    * diff cannot reuse the replaced diff's `cacheKey`.
    */
   public __completeEditSession(
-    editor: DiffsEditor<LAnnotation>,
+    editor: Editor<LAnnotation>,
     mode: 'install' | 'discard'
   ): void {
     this.settleEditSession(mode === 'install', editor);
@@ -1955,7 +1955,7 @@ export class FileDiff<
 
   private settleEditSession(
     installResult: boolean,
-    editor: DiffsEditor<LAnnotation> | undefined
+    editor: Editor<LAnnotation> | undefined
   ): void {
     const {
       editSessionDiff,

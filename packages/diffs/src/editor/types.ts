@@ -1,13 +1,13 @@
 import type {
   ChangeTypes,
   DiffLineAnnotation,
-  DiffsEditor,
   FileContents,
   FileDiffMetadata,
   Hunk,
   LineAnnotation,
   SelectionSide,
 } from '../types';
+import type { Editor } from './editor';
 import type { TextDocument } from './textDocument';
 
 /** FileDiff baseline and hunk state needed to resume an editing session. */
@@ -134,7 +134,7 @@ export interface EditorChangeEvent<
 > {
   changes: EditorChange[];
   file: FileContents;
-  editor: DiffsEditor<LAnnotation>;
+  editor: Editor<LAnnotation>;
   lineAnnotations?: TMode extends 'file'
     ? LineAnnotation<LAnnotation>[]
     : DiffLineAnnotation<LAnnotation>[];
@@ -199,7 +199,7 @@ export interface EditorViewState {
  */
 export interface FileEditCompleteEvent<LAnnotation> {
   file: FileContents;
-  editor: DiffsEditor<LAnnotation>;
+  editor: Editor<LAnnotation>;
   lineAnnotations: LineAnnotation<LAnnotation>[] | undefined;
   originalFile: FileContents;
   originalLineAnnotations: LineAnnotation<LAnnotation>[];
@@ -227,7 +227,7 @@ export interface FileEditCompleteEvent<LAnnotation> {
  */
 export interface FileDiffEditCompleteEvent<LAnnotation> {
   fileDiff: FileDiffMetadata;
-  editor: DiffsEditor<LAnnotation>;
+  editor: Editor<LAnnotation>;
   originalFileDiff: FileDiffMetadata;
   oldFile: FileContents | null;
   newFile: FileContents | null;

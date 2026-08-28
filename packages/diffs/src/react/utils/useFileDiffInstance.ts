@@ -15,11 +15,10 @@ import {
   type FileDiffOptions,
 } from '../../components/FileDiff';
 import { VirtualizedFileDiff } from '../../components/VirtualizedFileDiff';
-import type { EditorChangeEvent, EditorOptions } from '../../edit';
+import type { Editor, EditorChangeEvent, EditorOptions } from '../../edit';
 import type { GetHoveredLineResult } from '../../managers/InteractionManager';
 import type {
   DiffLineAnnotation,
-  DiffsEditor,
   FileContents,
   FileDiffMetadata,
   SelectedLineRange,
@@ -403,7 +402,7 @@ function mergeFileDiffOptions<LAnnotation>({
 
 function applyEdit<LAnnotation>(
   instance: FileDiff<LAnnotation>,
-  getEditor: () => DiffsEditor<LAnnotation>
+  getEditor: () => Editor<LAnnotation>
 ): () => void {
   const editor = getEditor();
   try {

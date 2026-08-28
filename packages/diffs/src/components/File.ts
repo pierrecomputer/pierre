@@ -13,6 +13,7 @@ import {
   THEME_CSS_ATTRIBUTE,
   UNSAFE_CSS_ATTRIBUTE,
 } from '../constants';
+import type { Editor } from '../editor/editor';
 import type {
   EditCompletionDecision,
   EditorActiveLineOptions,
@@ -36,7 +37,6 @@ import type {
   BaseCodeOptions,
   DiffLineAnnotation,
   DiffsEditableComponent,
-  DiffsEditor,
   FileContents,
   HighlightedToken,
   LineAnnotation,
@@ -247,7 +247,7 @@ export class File<
   protected renderRange: RenderRange | undefined;
   protected enabled = true;
 
-  protected editor: DiffsEditor<LAnnotation> | undefined;
+  protected editor: Editor<LAnnotation> | undefined;
 
   constructor(
     public options: FileOptions<LAnnotation> = { theme: DEFAULT_THEMES },
@@ -817,7 +817,7 @@ export class File<
   }
 
   /** @internal Associate this component with its editor for a render lifecycle. */
-  public __attachEditor(editor: DiffsEditor<LAnnotation>): () => void {
+  public __attachEditor(editor: Editor<LAnnotation>): () => void {
     if (this.editor != null) {
       throw new Error('File.__attachEditor: an editor is already attached');
     }
@@ -836,14 +836,14 @@ export class File<
   }
 
   /** @internal Resume rendering for the editor already associated with this component. */
-  public __resumeEditor(editor: DiffsEditor<LAnnotation>): void {
+  public __resumeEditor(editor: Editor<LAnnotation>): void {
     if (this.editor !== editor) {
       throw new Error('File.__resumeEditor: editor association changed');
     }
     this.resumeEditorRendering(editor);
   }
 
-  private resumeEditorRendering(editor: DiffsEditor<LAnnotation>): void {
+  private resumeEditorRendering(editor: Editor<LAnnotation>): void {
     this.editSessionAnnotations ??= adoptEditSessionAnnotations(
       this.lineAnnotations,
       getLineAnnotationName
@@ -884,7 +884,7 @@ export class File<
    * the replaced file's `cacheKey`.
    */
   public __completeEditSession(
-    editor: DiffsEditor<LAnnotation>,
+    editor: Editor<LAnnotation>,
     mode: 'install' | 'discard'
   ): void {
     this.settleEditSession(mode === 'install', editor);
@@ -892,7 +892,7 @@ export class File<
 
   private settleEditSession(
     installResult: boolean,
-    editor: DiffsEditor<LAnnotation> | undefined
+    editor: Editor<LAnnotation> | undefined
   ): void {
     const {
       editSessionFile,

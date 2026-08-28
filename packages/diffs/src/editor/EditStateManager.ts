@@ -1,9 +1,7 @@
 import LRUMapPkg from 'lru_map';
 
-import type {
-  DiffsEditor,
-  FileContents,
-} from '../types';
+import type { FileContents } from '../types';
+import type { Editor } from './editor';
 import { TextDocument } from './textDocument';
 import type {
   EditorDocumentKind,
@@ -61,7 +59,7 @@ type ManagedEditStateFor<K extends EditorDocumentKind> = Extract<
 >;
 
 interface EditStateManagerSession<K extends EditorDocumentKind> {
-  owner: DiffsEditor<unknown>;
+  owner: Editor<unknown>;
   session: ManagedEditSessionFor<K>;
 }
 
@@ -76,7 +74,7 @@ class EditStateManagerNamespace<K extends EditorDocumentKind> {
 
   activate<LAnnotation>(
     editStateKey: string,
-    owner: DiffsEditor<LAnnotation>,
+    owner: Editor<LAnnotation>,
     initialState?: ManagedEditSessionFor<K>
   ): ManagedEditSessionFor<K> {
     const activeSession = this.#sessions.get(editStateKey);
@@ -98,7 +96,7 @@ class EditStateManagerNamespace<K extends EditorDocumentKind> {
     const state: ManagedEditSessionFor<K> =
       initialState ?? retainedState ?? emptyState;
     this.#sessions.set(editStateKey, {
-      owner: owner as DiffsEditor<unknown>,
+      owner: owner as Editor<unknown>,
       session: state,
     });
     return state;
@@ -106,7 +104,7 @@ class EditStateManagerNamespace<K extends EditorDocumentKind> {
 
   release<LAnnotation>(
     editStateKey: string,
-    owner: DiffsEditor<LAnnotation>,
+    owner: Editor<LAnnotation>,
     discard = false
   ): void {
     const activeSession = this.#sessions.get(editStateKey);
@@ -182,7 +180,7 @@ class EditStateManagerClass {
   activate<LAnnotation>(
     documentKind: EditorDocumentKind,
     editStateKey: string,
-    owner: DiffsEditor<LAnnotation>,
+    owner: Editor<LAnnotation>,
     initialState?: ManagedEditSession<LAnnotation>
   ): ManagedEditSession<LAnnotation> {
     return (
@@ -206,7 +204,7 @@ class EditStateManagerClass {
    */
   releaseFile<LAnnotation>(
     editStateKey: string,
-    owner: DiffsEditor<LAnnotation>,
+    owner: Editor<LAnnotation>,
     discard = false
   ): void {
     this.#files.release(editStateKey, owner, discard);
@@ -218,7 +216,7 @@ class EditStateManagerClass {
    */
   releaseFileDiff<LAnnotation>(
     editStateKey: string,
-    owner: DiffsEditor<LAnnotation>,
+    owner: Editor<LAnnotation>,
     discard = false
   ): void {
     this.#diffs.release(editStateKey, owner, discard);
