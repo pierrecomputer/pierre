@@ -4566,7 +4566,9 @@ export class Editor<
         this.#renderSelection(
           highlightContext,
           'caretHighlight',
-          caret.highlight
+          caret.highlight,
+          undefined,
+          caret.position
         );
         for (const highlightElement of highlightContext.elements.values()) {
           if (caret.highlightColor !== undefined) {
@@ -4605,7 +4607,8 @@ export class Editor<
     },
     type: 'selection' | 'match' | 'marker' | 'bracketMatch' | 'caretHighlight',
     range: Range,
-    extraDataset?: string
+    extraDataset?: string,
+    connectedCaret?: Position
   ) {
     if (this.#editSession?.document == null) {
       return;
@@ -4644,7 +4647,8 @@ export class Editor<
             endChar,
             isLastLine,
             type,
-            extraDataset
+            extraDataset,
+            connectedCaret
           );
           continue;
         }
@@ -4679,7 +4683,17 @@ export class Editor<
         0,
         left,
         width,
-        extraDataset
+        extraDataset,
+        {
+          start:
+            connectedCaret?.line === start.line &&
+            connectedCaret.character === start.character &&
+            line === start.line,
+          end:
+            connectedCaret?.line === end.line &&
+            connectedCaret.character === end.character &&
+            line === end.line,
+        }
       );
     }
   }
@@ -4701,7 +4715,8 @@ export class Editor<
     endChar: number,
     isLastLine: boolean,
     type: 'selection' | 'match' | 'marker' | 'bracketMatch' | 'caretHighlight',
-    extraDataset?: string
+    extraDataset?: string,
+    connectedCaret?: Position
   ) {
     const wrapOffsets = this.#wrapLineTextOrWholeLine(line);
     const segmentCount = wrapOffsets.length - 1;
@@ -4757,7 +4772,17 @@ export class Editor<
         wrapLine,
         segmentLeft,
         segmentWidth,
-        extraDataset
+        extraDataset,
+        {
+          start:
+            connectedCaret?.line === line &&
+            connectedCaret.character === startChar &&
+            wrapStartChar === startChar,
+          end:
+            connectedCaret?.line === line &&
+            connectedCaret.character === endChar &&
+            wrapEndChar === endChar,
+        }
       );
     }
   }
@@ -4801,7 +4826,8 @@ export class Editor<
     wrapLine: number,
     left: number,
     width: number,
-    extraDataset?: string
+    extraDataset?: string,
+    connectedCaretEdge?: { start: boolean; end: boolean }
   ) {
     if (width === 0) {
       return;
@@ -4927,6 +4953,16 @@ export class Editor<
         }
         dataset.rbl = '';
         dataset.rbr = '';
+      }
+      // A collaborator's selection meets its caret at this endpoint. Keep
+      // that seam square, while preserving rounded corners at the free edge.
+      if (connectedCaretEdge?.start === true) {
+        delete dataset.rtl;
+        delete dataset.rbl;
+      }
+      if (connectedCaretEdge?.end === true) {
+        delete dataset.rtr;
+        delete dataset.rbr;
       }
     };
 

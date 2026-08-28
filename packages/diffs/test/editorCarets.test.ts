@@ -182,7 +182,7 @@ describe('Editor carets', () => {
     }
   });
 
-  test('keeps overlapping highlights separately tinted and rounded', async () => {
+  test('keeps overlapping highlights separately tinted and squares their caret edge', async () => {
     const { cleanup, editor, fileContainer } = await createEditorFixture(
       'alpha',
       { renderCaret: (caret) => caretElement(caret.metadata.id) }
@@ -225,9 +225,9 @@ describe('Editor carets', () => {
         highlights.every(
           (highlight) =>
             highlight.dataset.rtl !== undefined &&
-            highlight.dataset.rtr !== undefined &&
             highlight.dataset.rbl !== undefined &&
-            highlight.dataset.rbr !== undefined
+            highlight.dataset.rtr === undefined &&
+            highlight.dataset.rbr === undefined
         )
       ).toBe(true);
     } finally {
