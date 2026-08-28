@@ -41,6 +41,7 @@ async function createEditorFixture(
   content: HTMLElement;
   editor: Editor<undefined, CaretMetadata>;
   fileContainer: HTMLElement;
+  triggerResizeObserver(target: Element): void;
 }> {
   const dom = installDom();
   const fileContainer = document.createElement('div');
@@ -68,6 +69,7 @@ async function createEditorFixture(
     content,
     editor,
     fileContainer,
+    triggerResizeObserver: dom.triggerResizeObserver,
   };
 }
 
@@ -394,6 +396,35 @@ describe('Editor carets', () => {
         character: 2,
       });
       expect(editor.getViewState().selections).toBeUndefined();
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('repositions carets after a gutter-width resize', async () => {
+    const { cleanup, content, editor, fileContainer, triggerResizeObserver } =
+      await createEditorFixture('alpha', {
+        renderCaret: (caret) => caretElement(caret.metadata.id),
+      });
+
+    try {
+      editor.setCarets([
+        {
+          anchor: { line: 0, character: 2 },
+          focus: { line: 0, character: 2 },
+          metadata: { id: 'ada', color: '#7c3aed' },
+        },
+      ]);
+      const before = getCaretTransform(getCaretAnchor(fileContainer, 'ada'));
+      content.parentElement?.style.setProperty(
+        '--diffs-column-number-width',
+        '40px'
+      );
+
+      triggerResizeObserver(content);
+
+      const after = getCaretTransform(getCaretAnchor(fileContainer, 'ada'));
+      expect(after.x - before.x).toBe(40);
     } finally {
       cleanup();
     }

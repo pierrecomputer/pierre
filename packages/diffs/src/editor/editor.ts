@@ -3316,6 +3316,9 @@ export class Editor<
     }
     this.#markerRenderer?.removePopover();
     this.#computeContentOffset(this.#contentElement!);
+    // Reposition remote carets after a gutter or content-width change. Their
+    // transforms and wrapped rows use the same geometry caches as selections.
+    this.#renderCarets();
   };
 
   // A custom monospace web font can finish loading after the editor first
