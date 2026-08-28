@@ -5,6 +5,7 @@ import type {
 
 import { WorkerPoolContext } from '../_components/WorkerPoolContext';
 import { LiveEditing } from '../_examples/LiveEditing/LiveEditing';
+import { CaretDemo } from './CaretDemo';
 import { EditHero } from './EditHero';
 import { EditReference } from './EditReference';
 import { FindDemo } from './FindDemo';
@@ -26,6 +27,7 @@ interface EditPageProps {
   historyFile: PreloadedFileResult<undefined>;
   keymapFile: PreloadedFileResult<undefined>;
   selectionFile: PreloadedFileResult<undefined>;
+  caretFile: PreloadedFileResult<undefined>;
 }
 
 export function EditPage({
@@ -36,6 +38,7 @@ export function EditPage({
   historyFile,
   keymapFile,
   selectionFile,
+  caretFile,
 }: EditPageProps) {
   return (
     <WorkerPoolContext>
@@ -50,6 +53,21 @@ export function EditPage({
               prerenderedFile={liveEditingFile}
               prerenderedDiff={liveEditingDiff}
             />
+
+            <div className="space-y-5">
+              <FeatureHeader
+                id="carets"
+                title="Remote carets and highlights"
+                description={
+                  <>
+                    Show collaborators with <code>editor.setCarets()</code>.
+                    Each caret can include an optional highlight range, which
+                    follows document edits alongside its caret position.
+                  </>
+                }
+              />
+              <CaretDemo prerenderedFile={caretFile} />
+            </div>
 
             <div className="space-y-5">
               <FeatureHeader

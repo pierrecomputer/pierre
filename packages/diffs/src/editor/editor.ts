@@ -7,6 +7,7 @@ import type {
   DiffsEditableComponent,
   DiffsEditor,
   EditableInstance,
+  EditorCaret,
   EditorChange,
   EditorChangeEvent,
   EditorDocumentKind,
@@ -105,6 +106,7 @@ import {
   mapCursorMove,
   mapSelectionShift,
   mergeOverlappingSelections,
+  remapOffsetThroughEdits,
   remapSelectionsAfterEdits,
   resolveIndentEdits,
   resolveSelectionCut,
@@ -199,7 +201,13 @@ interface AltColumnDrag {
   renderedGoal?: Position;
 }
 
-export interface EditorOptions<LAnnotation> {
+interface TrackedCaret<T> {
+  caret: EditorCaret<T>;
+  positionOffset: number;
+  highlightOffsets?: readonly [number, number];
+}
+
+export interface EditorOptions<LAnnotation, LCaret = undefined> {
   /** The maximum number of entries to keep in the undo stack. */
   historyMaxEntries?: number;
   /**
@@ -244,9 +252,13 @@ export interface EditorOptions<LAnnotation> {
   renderSelectionAction?: (
     context: SelectionActionContext<LAnnotation>
   ) => HTMLElement;
+  /**
+   * Render an externally owned caret at its normalized document position.
+   */
+  renderCaret?: (caret: EditorCaret<LCaret>) => HTMLElement;
   /** Callback when the editor is attached to a file. */
   onAttach?: (
-    editor: Editor<LAnnotation>,
+    editor: Editor<LAnnotation, LCaret>,
     fileInstance: DiffsEditableComponent<LAnnotation>
   ) => void;
   /**
@@ -294,8 +306,11 @@ const SELECTION_ACTION_POPOVER_PLACEMENT_KEY = 'selection-action';
 const MULTI_SELECTION_CLIPBOARD_TYPE =
   'application/vnd.pierre.diffs-selections+json';
 
-export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
-  #options: EditorOptions<LAnnotation>;
+export class Editor<
+  LAnnotation,
+  LCaret = undefined,
+> implements DiffsEditor<LAnnotation> {
+  #options: EditorOptions<LAnnotation, LCaret>;
   #initialState: EditorInitialState<LAnnotation> | undefined;
   #editSession?: ManagedEditSession<LAnnotation>;
   #metrics = new Metrics();
@@ -338,6 +353,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #contentElement?: HTMLElement;
   #overlayElement?: HTMLElement;
   #overlayElements?: Map<string, HTMLElement>;
+  #caretElements?: Map<TrackedCaret<LCaret>, HTMLElement>;
+  #caretHighlightElements?: HTMLElement[];
   #primaryCaretElement?: HTMLElement;
   #resizeObserver?: ResizeObserver;
 
@@ -361,6 +378,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   // windows, where no cap is needed.
   #viewportWindowLines?: number;
   #markerRenderer?: MarkerRenderer;
+  #carets?: TrackedCaret<LCaret>[];
   #searchPanel?: SearchPanelWidget;
   #selectionAction?: SelectionActionWidget;
   // Programmatic ranges stay passive until the user interacts with the editor.
@@ -445,7 +463,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
    */
   constructor(
     documentKind: EditorDocumentKind,
-    options: EditorOptions<LAnnotation> = {},
+    options: EditorOptions<LAnnotation, LCaret> = {},
     editStateKey?: string
   ) {
     this.#documentKind = documentKind;
@@ -455,15 +473,61 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#initialState = options.initialState;
   }
 
-  setOptions(options: EditorOptions<LAnnotation>): void {
+  setOptions(options: EditorOptions<LAnnotation, LCaret>): void {
+    const previousRenderCaret = this.#options.renderCaret;
     this.#options = {
       ...this.#options,
       ...options,
     };
+    if (previousRenderCaret !== this.#options.renderCaret) {
+      this.#caretElements?.forEach((element) => element.remove());
+      this.#caretElements = undefined;
+      this.#renderCarets();
+    }
   }
 
   __emitEditComplete(event: EditorEditCompleteEvent<LAnnotation>): void {
     this.#options.onComplete?.(event);
+  }
+
+  setCarets(carets: EditorCaret<LCaret>[]): void {
+    const textDocument = this.#editSession?.document;
+    if (textDocument === undefined) return;
+    this.#caretElements?.forEach((element) => element.remove());
+    this.#caretElements = undefined;
+    this.#caretHighlightElements?.forEach((element) => element.remove());
+    this.#caretHighlightElements = undefined;
+    this.#carets =
+      carets.length === 0
+        ? undefined
+        : carets.map((caret) => {
+            const position = textDocument.normalizePosition(caret.position);
+            const highlight =
+              caret.highlight == null
+                ? undefined
+                : {
+                    start: textDocument.normalizePosition(
+                      caret.highlight.start
+                    ),
+                    end: textDocument.normalizePosition(caret.highlight.end),
+                  };
+            return {
+              caret: {
+                ...caret,
+                position,
+                ...(highlight == null ? {} : { highlight }),
+              },
+              positionOffset: textDocument.offsetAt(position),
+              highlightOffsets:
+                highlight == null
+                  ? undefined
+                  : [
+                      textDocument.offsetAt(highlight.start),
+                      textDocument.offsetAt(highlight.end),
+                    ],
+            };
+          });
+    this.#renderCarets();
   }
 
   // Small typescript hack to prevent UnresolvedFile from being editable.
@@ -812,6 +876,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#markerRenderer.listenHover(this.#contentElement);
     }
     this.#updateSelections(this.#selections ?? []);
+    this.#renderCarets();
   }
 
   focus(options?: EditorFocusOptions): void {
@@ -939,7 +1004,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#themeSelectionRefreshFrame = undefined;
     }
 
-    this.#resetState();
+    this.#resetState(recycle);
     if (!recycle) {
       try {
         if (fileInstance != null && editSession != null) {
@@ -1322,6 +1387,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       ) {
         this.#updateSelections(this.#selections ?? []);
       }
+      this.#renderCarets();
 
       if (
         this.#initSelections !== undefined &&
@@ -1515,7 +1581,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#lastAccessedCharX = undefined;
   }
 
-  #resetState(): void {
+  #resetState(preserveCarets = false): void {
     this.#setEditorActiveLineSafe(null);
     this.#gutterWidthCache = undefined;
     this.#contentWidthCache = undefined;
@@ -1523,6 +1589,13 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#suppressNativeSelectionSync = false;
     this.#overlayElements?.forEach((el) => el.remove());
     this.#overlayElements = undefined;
+    this.#caretElements?.forEach((element) => element.remove());
+    this.#caretElements = undefined;
+    this.#caretHighlightElements?.forEach((element) => element.remove());
+    this.#caretHighlightElements = undefined;
+    if (!preserveCarets) {
+      this.#carets = undefined;
+    }
     this.#selections = undefined;
     this.#scrollingToLine = undefined;
     this.#markerRenderer?.cleanup();
@@ -3294,6 +3367,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       ) {
         this.#updateSelections(this.#selections ?? []);
       }
+      this.#renderCarets();
       this.#markerRenderer?.removePopover();
     });
   }
@@ -3501,6 +3575,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         );
       }
     }
+    this.#renderCarets();
 
     if (this.#options.__debug === true) {
       console.log(
@@ -4450,12 +4525,85 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#updateSelectionActionPopover();
   }
 
+  // Render externally owned cursors independently from local selections so
+  // collaboration state never changes focus, editing, or native selection.
+  #renderCarets(): void {
+    const carets = this.#carets;
+    const renderCaret = this.#options.renderCaret;
+    const overlayElement = this.#overlayElement;
+    this.#caretHighlightElements?.forEach((element) => element.remove());
+    this.#caretHighlightElements = undefined;
+    if (
+      carets === undefined ||
+      renderCaret === undefined ||
+      overlayElement === undefined
+    ) {
+      this.#caretElements?.forEach((element) => element.remove());
+      this.#caretElements = undefined;
+      return;
+    }
+
+    const elements = (this.#caretElements ??= new Map());
+    for (const [trackedCaret, element] of elements) {
+      if (!this.#isLineVisible(trackedCaret.caret.position.line)) {
+        element.remove();
+        elements.delete(trackedCaret);
+      }
+    }
+
+    const fragment = document.createDocumentFragment();
+    const highlightElements: HTMLElement[] = [];
+    for (const trackedCaret of carets) {
+      const { caret } = trackedCaret;
+      const { line, character } = caret.position;
+      if (caret.highlight !== undefined) {
+        // Keep each collaborator's rounded-corner state and highlight elements
+        // separate so overlapping ranges retain their own geometry and color.
+        const highlightContext = {
+          fragment,
+          elements: new Map<string, HTMLElement>(),
+        };
+        this.#renderSelection(
+          highlightContext,
+          'caretHighlight',
+          caret.highlight
+        );
+        for (const highlightElement of highlightContext.elements.values()) {
+          if (caret.highlightColor !== undefined) {
+            highlightElement.style.setProperty(
+              '--diffs-caret-highlight-bg',
+              caret.highlightColor
+            );
+          }
+          highlightElements.push(highlightElement);
+        }
+      }
+      // Virtualized views omit off-screen rows. Do not leave an unpositioned
+      // anchor at the overlay origin for a caret whose row is not rendered.
+      if (!this.#isLineVisible(line)) continue;
+      let element = elements.get(trackedCaret);
+      if (element === undefined) {
+        element = h(
+          'div',
+          { dataset: 'remoteCaret', children: [renderCaret(caret)] },
+          fragment
+        );
+        elements.set(trackedCaret, element);
+      }
+      const [left, wrapLine] = this.#getCharX(line, character);
+      const top = this.#getLineY(line) + wrapLine * this.#metrics.lineHeight;
+      element.style.transform = `translateX(${left}px) translateY(${top}px)`;
+    }
+    this.#caretHighlightElements = highlightElements;
+    overlayElement.appendChild(fragment);
+  }
+
   #renderSelection(
     renderCtx: {
       fragment: DocumentFragment;
       elements: Map<string, HTMLElement>;
     },
-    type: 'selection' | 'match' | 'marker' | 'bracketMatch',
+    type: 'selection' | 'match' | 'marker' | 'bracketMatch' | 'caretHighlight',
     range: Range,
     extraDataset?: string
   ) {
@@ -4552,7 +4700,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     startChar: number,
     endChar: number,
     isLastLine: boolean,
-    type: 'selection' | 'match' | 'marker' | 'bracketMatch',
+    type: 'selection' | 'match' | 'marker' | 'bracketMatch' | 'caretHighlight',
     extraDataset?: string
   ) {
     const wrapOffsets = this.#wrapLineTextOrWholeLine(line);
@@ -4648,7 +4796,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         width: number;
       };
     },
-    type: 'selection' | 'match' | 'marker' | 'bracketMatch',
+    type: 'selection' | 'match' | 'marker' | 'bracketMatch' | 'caretHighlight',
     line: number,
     wrapLine: number,
     left: number,
@@ -4664,7 +4812,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     const cacheKey = `${type}-${line}/${wrapLine}-${left}-${width} ${extraDataset ?? ''}`;
     const overlayEls = this.#overlayElements;
     const rounded =
-      (this.#options.roundedSelection ?? true) && type === 'selection';
+      (this.#options.roundedSelection ?? true) &&
+      (type === 'selection' || type === 'caretHighlight');
 
     const addRoundedCorner = (
       line: number,
@@ -5428,6 +5577,28 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     newLineAnnotations?: DiffLineAnnotation<LAnnotation>[],
     options?: { skipSearchRefresh?: boolean; skipFocus?: boolean }
   ) {
+    const textDocument = this.#editSession?.document;
+    if (textDocument !== undefined && this.#carets !== undefined) {
+      for (const trackedCaret of this.#carets) {
+        trackedCaret.positionOffset = remapOffsetThroughEdits(
+          trackedCaret.positionOffset,
+          change.changes
+        );
+        trackedCaret.caret.position = textDocument.positionAt(
+          trackedCaret.positionOffset
+        );
+        if (trackedCaret.highlightOffsets !== undefined) {
+          const [start, end] = trackedCaret.highlightOffsets;
+          const nextStart = remapOffsetThroughEdits(start, change.changes);
+          const nextEnd = remapOffsetThroughEdits(end, change.changes);
+          trackedCaret.highlightOffsets = [nextStart, nextEnd];
+          trackedCaret.caret.highlight = {
+            start: textDocument.positionAt(nextStart),
+            end: textDocument.positionAt(nextEnd),
+          };
+        }
+      }
+    }
     // Invalidate layout caches touched by the edit. Clear cached line Y
     // positions from startLine onward when either:
     // - the line count changed (inserts/deletes renumber every later line), or

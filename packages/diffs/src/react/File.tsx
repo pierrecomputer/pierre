@@ -13,7 +13,7 @@ import { useFileInstance } from './utils/useFileInstance';
 export type { FileEditCompleteEvent, FileEditCompleteHandler };
 export type { FileOptions } from './types';
 
-export function File<LAnnotation = undefined>({
+export function File<LAnnotation = undefined, LCaret = undefined>({
   file,
   lineAnnotations,
   selectedLines,
@@ -34,7 +34,7 @@ export function File<LAnnotation = undefined>({
   edit = false,
   onEditChange,
   onEditComplete,
-}: FileProps<LAnnotation>): React.JSX.Element {
+}: FileProps<LAnnotation, LCaret>): React.JSX.Element {
   const { ref, getHoveredLine, getAnnotationSlotName } = useFileInstance({
     file,
     options,

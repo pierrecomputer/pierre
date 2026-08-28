@@ -5,24 +5,19 @@ import { File } from '@pierre/diffs/react';
 import type { PreloadedFileResult } from '@pierre/diffs/ssr';
 import { useMemo } from 'react';
 
-import {
-  type CursorDecorationMetadata,
-  DECORATION_DEMO_DECORATIONS,
-} from './constants';
+import { CARET_DEMO_CARETS, type CursorCaretMetadata } from './constants';
 
-interface DecorationDemoProps {
+interface CaretDemoProps {
   // Server-preloaded, highlighted File; hydrating from it avoids a highlight flash on load.
   prerenderedFile: PreloadedFileResult<undefined>;
 }
 
-// Decorations render inside the editor's shadow DOM, so the collaborator
+// Carets render inside the editor's shadow DOM, so the collaborator
 // cursors use inline styles rather than page-level Tailwind classes.
-export function DecorationDemo({ prerenderedFile }: DecorationDemoProps) {
-  const editorOptions = useMemo<
-    EditorOptions<undefined, CursorDecorationMetadata>
-  >(
+export function CaretDemo({ prerenderedFile }: CaretDemoProps) {
+  const editorOptions = useMemo<EditorOptions<undefined, CursorCaretMetadata>>(
     () => ({
-      renderDecoration({ metadata }) {
+      renderCaret({ metadata }) {
         const cursor = document.createElement('span');
         cursor.ariaLabel = `${metadata.name}'s cursor`;
         cursor.style.cssText = `position:relative;display:block;width:2px;height:1lh;background-color:${metadata.color};pointer-events:none;`;
@@ -36,7 +31,7 @@ export function DecorationDemo({ prerenderedFile }: DecorationDemoProps) {
         return cursor;
       },
       onAttach(editor) {
-        editor.setDecorations(DECORATION_DEMO_DECORATIONS);
+        editor.setCarets(CARET_DEMO_CARETS);
       },
     }),
     []
@@ -44,7 +39,7 @@ export function DecorationDemo({ prerenderedFile }: DecorationDemoProps) {
 
   return (
     <div className="not-prose">
-      <File<undefined, CursorDecorationMetadata>
+      <File<undefined, CursorCaretMetadata>
         {...prerenderedFile}
         className="diff-container"
         edit

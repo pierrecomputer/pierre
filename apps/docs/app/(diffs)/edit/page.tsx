@@ -2,6 +2,7 @@ import { preloadFile, preloadFileDiff } from '@pierre/diffs/ssr';
 import type { Metadata } from 'next';
 
 import {
+  CARET_DEMO_FILE_EXAMPLE,
   DEFAULT_KEYMAP_FILE_EXAMPLE,
   FIND_DEMO_FILE_EXAMPLE,
   HISTORY_DEMO_FILE_EXAMPLE,
@@ -37,6 +38,7 @@ export default async function EditRoute() {
     historyFile,
     keymapFile,
     selectionFile,
+    caretFile,
   ] = await Promise.all([
     preloadFile(LIVE_EDITING_FILE_EXAMPLE),
     preloadFileDiff(LIVE_EDITING_FILE_DIFF_EXAMPLE),
@@ -45,6 +47,7 @@ export default async function EditRoute() {
     preloadFile(HISTORY_DEMO_FILE_EXAMPLE),
     preloadFile(DEFAULT_KEYMAP_FILE_EXAMPLE),
     preloadFile(SELECTION_DEMO_FILE_EXAMPLE),
+    preloadFile(CARET_DEMO_FILE_EXAMPLE),
   ]);
 
   return (
@@ -56,6 +59,7 @@ export default async function EditRoute() {
       historyFile={historyFile}
       keymapFile={keymapFile}
       selectionFile={selectionFile}
+      caretFile={caretFile}
     />
   );
 }

@@ -4,14 +4,14 @@ import { File } from '../src/components/File';
 import { DEFAULT_THEMES } from '../src/constants';
 import { Editor, type EditorOptions } from '../src/editor/editor';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
-import type { EditorDecoration, FileContents } from '../src/types';
+import type { EditorCaret, FileContents } from '../src/types';
 import { installDom, wait } from './domHarness';
 
 afterAll(async () => {
   await disposeHighlighter();
 });
 
-interface DecorationMetadata {
+interface CaretMetadata {
   id: string;
 }
 
@@ -34,11 +34,11 @@ async function waitForEditableContent(
 
 async function createEditorFixture(
   contents: string,
-  options: EditorOptions<undefined, DecorationMetadata>
+  options: EditorOptions<undefined, CaretMetadata>
 ): Promise<{
   cleanup(): void;
   content: HTMLElement;
-  editor: Editor<undefined, DecorationMetadata>;
+  editor: Editor<undefined, CaretMetadata>;
   fileContainer: HTMLElement;
 }> {
   const dom = installDom();
@@ -48,9 +48,9 @@ async function createEditorFixture(
     disableFileHeader: true,
     theme: DEFAULT_THEMES,
   });
-  const editor = new Editor<undefined, DecorationMetadata>(options);
+  const editor = new Editor<undefined, CaretMetadata>('file', options);
   const initialFile: FileContents = {
-    name: 'decorations.ts',
+    name: 'carets.ts',
     contents,
   };
 
@@ -70,28 +70,25 @@ async function createEditorFixture(
   };
 }
 
-function decorationElement(id: string): HTMLElement {
+function caretElement(id: string): HTMLElement {
   const element = document.createElement('span');
   element.dataset.peer = id;
   element.textContent = id;
   return element;
 }
 
-function getDecorationAnchor(
-  fileContainer: HTMLElement,
-  id: string
-): HTMLElement {
+function getCaretAnchor(fileContainer: HTMLElement, id: string): HTMLElement {
   const rendered = fileContainer.shadowRoot?.querySelector<HTMLElement>(
     `[data-peer="${id}"]`
   );
   const anchor = rendered?.parentElement;
-  if (anchor?.dataset.editorDecoration === undefined) {
-    throw new Error(`decoration ${id} was not rendered`);
+  if (anchor?.dataset.remoteCaret === undefined) {
+    throw new Error(`caret ${id} was not rendered`);
   }
   return anchor;
 }
 
-function getDecorationTransform(element: HTMLElement): {
+function getCaretTransform(element: HTMLElement): {
   x: number;
   y: number;
 } {
@@ -99,32 +96,31 @@ function getDecorationTransform(element: HTMLElement): {
     element.style.transform
   );
   if (match === null) {
-    throw new Error(`invalid decoration transform: ${element.style.transform}`);
+    throw new Error(`invalid caret transform: ${element.style.transform}`);
   }
   return { x: Number(match[1]), y: Number(match[2]) };
 }
 
-describe('Editor decorations', () => {
+describe('Editor carets', () => {
   test('normalizes positions and mounts the custom renderer inside an anchor', async () => {
-    const renderDecoration = mock(
-      (decoration: EditorDecoration<DecorationMetadata>) =>
-        decorationElement(decoration.metadata.id)
+    const renderCaret = mock((caret: EditorCaret<CaretMetadata>) =>
+      caretElement(caret.metadata.id)
     );
     const { cleanup, editor, fileContainer } = await createEditorFixture(
       'alpha\nbravo',
-      { renderDecoration }
+      { renderCaret }
     );
     const metadata = { id: 'ada' };
-    const input: EditorDecoration<DecorationMetadata> = {
+    const input: EditorCaret<CaretMetadata> = {
       position: { line: 99, character: 99 },
       metadata,
     };
 
     try {
-      editor.setDecorations([input]);
+      editor.setCarets([input]);
 
       const anchor = fileContainer.shadowRoot?.querySelector<HTMLElement>(
-        '[data-editor-decoration]'
+        '[data-remote-caret]'
       );
       expect(anchor).not.toBeNull();
       expect(anchor?.firstElementChild).toBe(
@@ -133,8 +129,8 @@ describe('Editor decorations', () => {
       expect(anchor?.style.transform).toMatch(
         /^translateX\([\d.-]+px\) translateY\([\d.-]+px\)$/
       );
-      expect(renderDecoration).toHaveBeenCalledTimes(1);
-      expect(renderDecoration.mock.calls[0]?.[0]).toEqual({
+      expect(renderCaret).toHaveBeenCalledTimes(1);
+      expect(renderCaret.mock.calls[0]?.[0]).toEqual({
         position: { line: 1, character: 5 },
         metadata,
       });
@@ -144,25 +140,119 @@ describe('Editor decorations', () => {
     }
   });
 
-  test('replaces and clears decorations, including peers at one position', async () => {
-    const renderDecoration = mock(
-      (decoration: EditorDecoration<DecorationMetadata>) =>
-        decorationElement(decoration.metadata.id)
+  test('renders a caret highlight across every covered line and remaps it through edits', async () => {
+    const { cleanup, editor, fileContainer } = await createEditorFixture(
+      'alpha\nbravo',
+      { renderCaret: (caret) => caretElement(caret.metadata.id) }
+    );
+
+    try {
+      editor.setCarets([
+        {
+          position: { line: 1, character: 3 },
+          highlight: {
+            start: { line: 0, character: 2 },
+            end: { line: 1, character: 3 },
+          },
+          metadata: { id: 'ada' },
+        },
+      ]);
+      expect(
+        fileContainer.shadowRoot?.querySelectorAll(
+          '[data-caret-highlight-range]'
+        )
+      ).toHaveLength(2);
+
+      editor.applyEdits([
+        {
+          range: {
+            start: { line: 0, character: 0 },
+            end: { line: 0, character: 0 },
+          },
+          newText: 'XY',
+        },
+      ]);
+      expect(
+        fileContainer.shadowRoot?.querySelectorAll(
+          '[data-caret-highlight-range]'
+        )
+      ).toHaveLength(2);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('keeps overlapping highlights separately tinted and rounded', async () => {
+    const { cleanup, editor, fileContainer } = await createEditorFixture(
+      'alpha',
+      { renderCaret: (caret) => caretElement(caret.metadata.id) }
+    );
+
+    try {
+      editor.setCarets([
+        {
+          position: { line: 0, character: 5 },
+          highlight: {
+            start: { line: 0, character: 0 },
+            end: { line: 0, character: 5 },
+          },
+          highlightColor: '#f00',
+          metadata: { id: 'ada' },
+        },
+        {
+          position: { line: 0, character: 5 },
+          highlight: {
+            start: { line: 0, character: 0 },
+            end: { line: 0, character: 5 },
+          },
+          highlightColor: '#00f',
+          metadata: { id: 'grace' },
+        },
+      ]);
+
+      const highlights = Array.from(
+        fileContainer.shadowRoot?.querySelectorAll<HTMLElement>(
+          '[data-caret-highlight-range]'
+        ) ?? []
+      );
+      expect(highlights).toHaveLength(2);
+      expect(
+        highlights.map((highlight) =>
+          highlight.style.getPropertyValue('--diffs-caret-highlight-bg')
+        )
+      ).toEqual(['#f00', '#00f']);
+      expect(
+        highlights.every(
+          (highlight) =>
+            highlight.dataset.rtl !== undefined &&
+            highlight.dataset.rtr !== undefined &&
+            highlight.dataset.rbl !== undefined &&
+            highlight.dataset.rbr !== undefined
+        )
+      ).toBe(true);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('replaces and clears carets, including peers at one position', async () => {
+    const renderCaret = mock((caret: EditorCaret<CaretMetadata>) =>
+      caretElement(caret.metadata.id)
     );
     const { cleanup, editor, fileContainer } = await createEditorFixture(
       'alpha\nbravo',
-      { renderDecoration }
+      { renderCaret }
     );
     const position = { line: 0, character: 2 };
 
     try {
-      editor.setDecorations([
+      editor.setCarets([
         { position, metadata: { id: 'ada' } },
         { position, metadata: { id: 'grace' } },
       ]);
       const firstAnchors = Array.from(
         fileContainer.shadowRoot?.querySelectorAll<HTMLElement>(
-          '[data-editor-decoration]'
+          '[data-remote-caret]'
         ) ?? []
       );
       expect(firstAnchors).toHaveLength(2);
@@ -170,52 +260,51 @@ describe('Editor decorations', () => {
         firstAnchors.map((anchor) => anchor.firstElementChild?.textContent)
       ).toEqual(['ada', 'grace']);
 
-      editor.setDecorations([
+      editor.setCarets([
         { position: { line: 1, character: 1 }, metadata: { id: 'linus' } },
       ]);
       expect(firstAnchors.every((anchor) => !anchor.isConnected)).toBe(true);
       expect(
-        fileContainer.shadowRoot?.querySelectorAll('[data-editor-decoration]')
+        fileContainer.shadowRoot?.querySelectorAll('[data-remote-caret]')
       ).toHaveLength(1);
       expect(
         fileContainer.shadowRoot?.querySelector('[data-peer="linus"]')
       ).not.toBeNull();
 
       const replacement = fileContainer.shadowRoot?.querySelector<HTMLElement>(
-        '[data-editor-decoration]'
+        '[data-remote-caret]'
       );
-      editor.setDecorations([]);
+      editor.setCarets([]);
       expect(replacement?.isConnected).toBe(false);
       expect(
-        fileContainer.shadowRoot?.querySelectorAll('[data-editor-decoration]')
+        fileContainer.shadowRoot?.querySelectorAll('[data-remote-caret]')
       ).toHaveLength(0);
-      expect(renderDecoration).toHaveBeenCalledTimes(3);
+      expect(renderCaret).toHaveBeenCalledTimes(3);
     } finally {
       cleanup();
     }
   });
 
   test('reuses renderer nodes while an edit repaints geometry without a selection', async () => {
-    const renderDecoration = mock(
-      (decoration: EditorDecoration<DecorationMetadata>) =>
-        decorationElement(decoration.metadata.id)
+    const renderCaret = mock((caret: EditorCaret<CaretMetadata>) =>
+      caretElement(caret.metadata.id)
     );
     const { cleanup, editor, fileContainer } = await createEditorFixture(
       'aa-tail',
-      { renderDecoration }
+      { renderCaret }
     );
 
     try {
-      editor.setDecorations([
+      editor.setCarets([
         {
           position: { line: 0, character: 2 },
           metadata: { id: 'ada' },
         },
       ]);
-      expect(editor.getState().selections).toBeUndefined();
+      expect(editor.getViewState().selections).toBeUndefined();
 
       const anchor = fileContainer.shadowRoot?.querySelector<HTMLElement>(
-        '[data-editor-decoration]'
+        '[data-remote-caret]'
       );
       const rendered = anchor?.firstElementChild;
       const xBefore = Number(
@@ -233,7 +322,7 @@ describe('Editor decorations', () => {
       ]);
 
       const repainted = fileContainer.shadowRoot?.querySelector<HTMLElement>(
-        '[data-editor-decoration]'
+        '[data-remote-caret]'
       );
       const xAfter = Number(
         /translateX\(([-\d.]+)px\)/.exec(repainted?.style.transform ?? '')?.[1]
@@ -242,35 +331,32 @@ describe('Editor decorations', () => {
       expect(xAfter).toBeGreaterThan(xBefore);
       expect(repainted).toBe(anchor);
       expect(repainted?.firstElementChild).toBe(rendered);
-      expect(renderDecoration).toHaveBeenCalledTimes(1);
-      expect(renderDecoration.mock.calls[0]?.[0].position).toEqual({
+      expect(renderCaret).toHaveBeenCalledTimes(1);
+      expect(renderCaret.mock.calls[0]?.[0].position).toEqual({
         line: 0,
         character: 2,
       });
-      expect(editor.getState().selections).toBeUndefined();
+      expect(editor.getViewState().selections).toBeUndefined();
     } finally {
       cleanup();
     }
   });
 
-  test('moves a decoration when real typing inserts text before it', async () => {
-    const renderDecoration = mock(
-      (decoration: EditorDecoration<DecorationMetadata>) =>
-        decorationElement(decoration.metadata.id)
+  test('moves a caret when real typing inserts text before it', async () => {
+    const renderCaret = mock((caret: EditorCaret<CaretMetadata>) =>
+      caretElement(caret.metadata.id)
     );
     const { cleanup, content, editor, fileContainer } =
-      await createEditorFixture('abcdef', { renderDecoration });
+      await createEditorFixture('abcdef', { renderCaret });
 
     try {
-      editor.setDecorations([
+      editor.setCarets([
         {
           position: { line: 0, character: 4 },
           metadata: { id: 'ada' },
         },
       ]);
-      const before = getDecorationTransform(
-        getDecorationAnchor(fileContainer, 'ada')
-      );
+      const before = getCaretTransform(getCaretAnchor(fileContainer, 'ada'));
       editor.setSelections([
         {
           start: { line: 0, character: 1 },
@@ -294,9 +380,7 @@ describe('Editor decorations', () => {
 
       expect(event.defaultPrevented).toBe(true);
       expect(editor.getText()).toBe('aXYbcdef');
-      const after = getDecorationTransform(
-        getDecorationAnchor(fileContainer, 'ada')
-      );
+      const after = getCaretTransform(getCaretAnchor(fileContainer, 'ada'));
       expect(after.x - before.x).toBe(16);
       expect(after.y).toBe(before.y);
     } finally {
@@ -304,26 +388,23 @@ describe('Editor decorations', () => {
     }
   });
 
-  test('maps a batched applyEdits insertion before and exactly at the decoration', async () => {
-    const renderDecoration = mock(
-      (decoration: EditorDecoration<DecorationMetadata>) =>
-        decorationElement(decoration.metadata.id)
+  test('maps a batched applyEdits insertion before and exactly at the caret', async () => {
+    const renderCaret = mock((caret: EditorCaret<CaretMetadata>) =>
+      caretElement(caret.metadata.id)
     );
     const { cleanup, editor, fileContainer } = await createEditorFixture(
       'abcdefghij',
-      { renderDecoration }
+      { renderCaret }
     );
 
     try {
-      editor.setDecorations([
+      editor.setCarets([
         {
           position: { line: 0, character: 5 },
           metadata: { id: 'ada' },
         },
       ]);
-      const before = getDecorationTransform(
-        getDecorationAnchor(fileContainer, 'ada')
-      );
+      const before = getCaretTransform(getCaretAnchor(fileContainer, 'ada'));
 
       // Input order is deliberately not document order. Both the insertion
       // before the point and the insertion exactly at it have right gravity.
@@ -352,9 +433,7 @@ describe('Editor decorations', () => {
       ]);
 
       expect(editor.getText()).toBe('aXXbce!fghij');
-      const after = getDecorationTransform(
-        getDecorationAnchor(fileContainer, 'ada')
-      );
+      const after = getCaretTransform(getCaretAnchor(fileContainer, 'ada'));
       // Original character 5 + 2 inserted - 1 deleted + 1 inserted at point.
       expect(after.x - before.x).toBe(16);
       expect(after.y).toBe(before.y);
@@ -363,22 +442,21 @@ describe('Editor decorations', () => {
     }
   });
 
-  test('maps decorations through deletion and replacement ranges', async () => {
+  test('maps carets through deletion and replacement ranges', async () => {
     for (const { expectedAfterDelta, expectedInsideDelta, newText } of [
       { expectedAfterDelta: -24, expectedInsideDelta: -8, newText: '' },
       { expectedAfterDelta: 8, expectedInsideDelta: 24, newText: 'WXYZ' },
     ]) {
-      const renderDecoration = mock(
-        (decoration: EditorDecoration<DecorationMetadata>) =>
-          decorationElement(decoration.metadata.id)
+      const renderCaret = mock((caret: EditorCaret<CaretMetadata>) =>
+        caretElement(caret.metadata.id)
       );
       const { cleanup, editor, fileContainer } = await createEditorFixture(
         'abcdefgh',
-        { renderDecoration }
+        { renderCaret }
       );
 
       try {
-        editor.setDecorations([
+        editor.setCarets([
           {
             position: { line: 0, character: 3 },
             metadata: { id: 'inside' },
@@ -388,11 +466,11 @@ describe('Editor decorations', () => {
             metadata: { id: 'after' },
           },
         ]);
-        const insideBefore = getDecorationTransform(
-          getDecorationAnchor(fileContainer, 'inside')
+        const insideBefore = getCaretTransform(
+          getCaretAnchor(fileContainer, 'inside')
         );
-        const afterBefore = getDecorationTransform(
-          getDecorationAnchor(fileContainer, 'after')
+        const afterBefore = getCaretTransform(
+          getCaretAnchor(fileContainer, 'after')
         );
 
         editor.applyEdits([
@@ -405,11 +483,11 @@ describe('Editor decorations', () => {
           },
         ]);
 
-        const insideAfter = getDecorationTransform(
-          getDecorationAnchor(fileContainer, 'inside')
+        const insideAfter = getCaretTransform(
+          getCaretAnchor(fileContainer, 'inside')
         );
-        const afterAfter = getDecorationTransform(
-          getDecorationAnchor(fileContainer, 'after')
+        const afterAfter = getCaretTransform(
+          getCaretAnchor(fileContainer, 'after')
         );
         expect(insideAfter.x - insideBefore.x).toBe(expectedInsideDelta);
         expect(afterAfter.x - afterBefore.x).toBe(expectedAfterDelta);
@@ -420,26 +498,24 @@ describe('Editor decorations', () => {
   });
 
   test('tracks multiline edits through undo and redo', async () => {
-    let renderedDecoration: EditorDecoration<DecorationMetadata> | undefined;
-    const renderDecoration = mock(
-      (decoration: EditorDecoration<DecorationMetadata>) => {
-        renderedDecoration = decoration;
-        return decorationElement(decoration.metadata.id);
-      }
-    );
+    let renderedCaret: EditorCaret<CaretMetadata> | undefined;
+    const renderCaret = mock((caret: EditorCaret<CaretMetadata>) => {
+      renderedCaret = caret;
+      return caretElement(caret.metadata.id);
+    });
     const { cleanup, editor } = await createEditorFixture(
       'zero\none\ntwo\nthree',
-      { renderDecoration }
+      { renderCaret }
     );
 
     try {
-      editor.setDecorations([
+      editor.setCarets([
         {
           position: { line: 2, character: 2 },
           metadata: { id: 'ada' },
         },
       ]);
-      expect(renderedDecoration?.position).toEqual({
+      expect(renderedCaret?.position).toEqual({
         line: 2,
         character: 2,
       });
@@ -453,18 +529,18 @@ describe('Editor decorations', () => {
           newText: 'new-a\nnew-b\n',
         },
       ]);
-      expect(renderedDecoration?.position).toEqual({
+      expect(renderedCaret?.position).toEqual({
         line: 4,
         character: 2,
       });
 
       editor.undo();
-      expect(renderedDecoration?.position).toEqual({
+      expect(renderedCaret?.position).toEqual({
         line: 2,
         character: 2,
       });
       editor.redo();
-      expect(renderedDecoration?.position).toEqual({
+      expect(renderedCaret?.position).toEqual({
         line: 4,
         character: 2,
       });
@@ -479,7 +555,7 @@ describe('Editor decorations', () => {
         },
       ]);
       expect(editor.getText()).toBe('zero\none\ntwo\nthree');
-      expect(renderedDecoration?.position).toEqual({
+      expect(renderedCaret?.position).toEqual({
         line: 2,
         character: 2,
       });
@@ -488,16 +564,15 @@ describe('Editor decorations', () => {
     }
   });
 
-  test('does not remap decorations replaced synchronously by onChange', async () => {
+  test('does not remap carets replaced synchronously by onChange', async () => {
     const editorRef: {
-      current?: Editor<undefined, DecorationMetadata>;
+      current?: Editor<undefined, CaretMetadata>;
     } = {};
-    const renderDecoration = mock(
-      (decoration: EditorDecoration<DecorationMetadata>) =>
-        decorationElement(decoration.metadata.id)
+    const renderCaret = mock((caret: EditorCaret<CaretMetadata>) =>
+      caretElement(caret.metadata.id)
     );
     const onChange = mock(() => {
-      editorRef.current?.setDecorations([
+      editorRef.current?.setCarets([
         {
           // onChange receives the post-edit document, so this is already the
           // final coordinate and must not be mapped through the edit again.
@@ -508,19 +583,19 @@ describe('Editor decorations', () => {
     });
     const { cleanup, editor, fileContainer } = await createEditorFixture(
       'abcdef',
-      { onChange, renderDecoration }
+      { onChange, renderCaret }
     );
     editorRef.current = editor;
 
     try {
-      editor.setDecorations([
+      editor.setCarets([
         {
           position: { line: 0, character: 1 },
           metadata: { id: 'stale' },
         },
       ]);
-      const expected = getDecorationTransform(
-        getDecorationAnchor(fileContainer, 'stale')
+      const expected = getCaretTransform(
+        getCaretAnchor(fileContainer, 'stale')
       );
 
       editor.applyEdits([
@@ -537,25 +612,24 @@ describe('Editor decorations', () => {
       expect(
         fileContainer.shadowRoot?.querySelector('[data-peer="stale"]')
       ).toBe(null);
-      expect(
-        getDecorationTransform(getDecorationAnchor(fileContainer, 'fresh'))
-      ).toEqual(expected);
+      expect(getCaretTransform(getCaretAnchor(fileContainer, 'fresh'))).toEqual(
+        expected
+      );
     } finally {
       cleanup();
     }
   });
 
-  test('keeps definitions through recycle and clears them after full cleanup', async () => {
+  test('clears carets when an edit session is recycled', async () => {
     const dom = installDom();
-    const renderDecoration = mock(
-      (decoration: EditorDecoration<DecorationMetadata>) =>
-        decorationElement(decoration.metadata.id)
+    const renderCaret = mock((caret: EditorCaret<CaretMetadata>) =>
+      caretElement(caret.metadata.id)
     );
-    const editor = new Editor<undefined, DecorationMetadata>({
-      renderDecoration,
+    const editor = new Editor<undefined, CaretMetadata>('file', {
+      renderCaret,
     });
     const fileContents: FileContents = {
-      name: 'decorations.ts',
+      name: 'carets.ts',
       contents: 'alpha\nbravo',
     };
     const files: File<undefined>[] = [];
@@ -576,7 +650,7 @@ describe('Editor decorations', () => {
 
     try {
       const first = await attach();
-      editor.setDecorations([
+      editor.setCarets([
         {
           position: { line: 1, character: 2 },
           metadata: { id: 'ada' },
@@ -586,21 +660,17 @@ describe('Editor decorations', () => {
         first.shadowRoot?.querySelector('[data-peer="ada"]')
       ).not.toBeNull();
 
-      editor.cleanUp(true);
+      editor.cleanUp('recycle');
       files[0].cleanUp();
       const second = await attach();
-      expect(
-        second.shadowRoot?.querySelector('[data-peer="ada"]')
-      ).not.toBeNull();
-      expect(renderDecoration).toHaveBeenCalledTimes(2);
+      expect(second.shadowRoot?.querySelector('[data-peer="ada"]')).toBeNull();
+      expect(renderCaret).toHaveBeenCalledTimes(1);
 
       editor.cleanUp();
       files[1].cleanUp();
       const third = await attach();
-      expect(third.shadowRoot?.querySelector('[data-editor-decoration]')).toBe(
-        null
-      );
-      expect(renderDecoration).toHaveBeenCalledTimes(2);
+      expect(third.shadowRoot?.querySelector('[data-remote-caret]')).toBe(null);
+      expect(renderCaret).toHaveBeenCalledTimes(1);
     } finally {
       editor.cleanUp();
       for (const file of files) {

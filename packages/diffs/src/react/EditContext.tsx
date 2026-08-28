@@ -9,28 +9,30 @@ import type { DiffsEditor, EditorDocumentKind } from '../types';
 import { useStableCallback } from './utils/useStableCallback';
 
 /** Creates an Editor. Components manage the instance lifecycle. */
-export type CreateEditor<LAnnotation> = (
+export type CreateEditor<LAnnotation, LCaret = undefined> = (
   documentKind: EditorDocumentKind,
-  options: EditorOptions<LAnnotation>,
+  options: EditorOptions<LAnnotation, LCaret>,
   editStateKey?: string
 ) => DiffsEditor<LAnnotation>;
 
-export interface EditProviderProps<LAnnotation> {
+export interface EditProviderProps<LAnnotation, LCaret = undefined> {
   /** Combines shared defaults with the supplied per-surface options. */
-  createEditor: CreateEditor<LAnnotation>;
+  createEditor: CreateEditor<LAnnotation, LCaret>;
 }
 
-export const EditContext: Context<CreateEditor<any> | undefined> =
-  createContext<CreateEditor<any> | undefined>(undefined);
+export const EditContext: Context<CreateEditor<any, any> | undefined> =
+  createContext<CreateEditor<any, any> | undefined>(undefined);
 
-export function EditProvider<LAnnotation>({
+export function EditProvider<LAnnotation, LCaret = undefined>({
   children,
   createEditor,
-}: PropsWithChildren<EditProviderProps<LAnnotation>>): React.JSX.Element {
+}: PropsWithChildren<
+  EditProviderProps<LAnnotation, LCaret>
+>): React.JSX.Element {
   const stableCreateEditor = useStableCallback(
     (
       documentKind: EditorDocumentKind,
-      options: EditorOptions<LAnnotation>,
+      options: EditorOptions<LAnnotation, LCaret>,
       editStateKey?: string
     ): DiffsEditor<LAnnotation> =>
       createEditor(documentKind, options, editStateKey)
@@ -42,8 +44,8 @@ export function EditProvider<LAnnotation>({
   );
 }
 
-export function useCreateEditor<LAnnotation>():
-  | CreateEditor<LAnnotation>
+export function useCreateEditor<LAnnotation, LCaret = undefined>():
+  | CreateEditor<LAnnotation, LCaret>
   | undefined {
   return useContext(EditContext);
 }

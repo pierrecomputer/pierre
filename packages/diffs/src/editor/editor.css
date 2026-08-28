@@ -73,7 +73,8 @@
 [data-match-range],
 [data-bracket-match-range],
 [data-marker-range],
-[data-editor-decoration] {
+[data-remote-caret],
+[data-caret-highlight-range] {
   position: absolute;
   top: 0;
   left: 0;
@@ -105,6 +106,13 @@
 [data-selection-range] {
   z-index: -10;
   background-color: var(--diffs-editor-selection-bg);
+}
+[data-caret-highlight-range] {
+  z-index: -10;
+  background-color: var(
+    --diffs-caret-highlight-bg,
+    var(--diffs-editor-selection-bg)
+  );
 }
 /* Masks the selection's square corner to fake rounding, so it must match the bg
    behind the selection: the line's diff color (passed in via

@@ -46,10 +46,10 @@ interface AcceptedCompletion<LAnnotation> {
   } | null;
 }
 
-interface UseFileInstanceProps<LAnnotation> {
+interface UseFileInstanceProps<LAnnotation, LCaret> {
   file: FileContents;
   options: FileOptions<LAnnotation> | undefined;
-  editorOptions: EditorOptions<LAnnotation> | undefined;
+  editorOptions: EditorOptions<LAnnotation, LCaret> | undefined;
   editStateKey: string | undefined;
   lineAnnotations: LineAnnotation<LAnnotation>[] | undefined;
   selectedLines: SelectedLineRange | null | undefined;
@@ -69,7 +69,7 @@ interface UseFileInstanceReturn<LAnnotation> {
   getAnnotationSlotName(annotation: LineAnnotation<LAnnotation>): string;
 }
 
-export function useFileInstance<LAnnotation>({
+export function useFileInstance<LAnnotation, LCaret>({
   file,
   options,
   editorOptions,
@@ -84,11 +84,14 @@ export function useFileInstance<LAnnotation>({
   edit,
   onEditChange: _onEditChange,
   onEditComplete: _onEditComplete,
-}: UseFileInstanceProps<LAnnotation>): UseFileInstanceReturn<LAnnotation> {
+}: UseFileInstanceProps<
+  LAnnotation,
+  LCaret
+>): UseFileInstanceReturn<LAnnotation> {
   const simpleVirtualizer = useVirtualizer();
   const controlledSelection = selectedLines !== undefined;
   const poolManager = useContext(WorkerPoolContext);
-  const createEditor = useCreateEditor<LAnnotation>();
+  const createEditor = useCreateEditor<LAnnotation, LCaret>();
   const handleOnEditChange = useStableCallback(
     (event: EditorChangeEvent<LAnnotation, 'file'>) => _onEditChange?.(event)
   );

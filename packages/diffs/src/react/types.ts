@@ -32,12 +32,12 @@ export type FileOptions<LAnnotation> = Omit<
   ReactOwnedEditCallbacks
 >;
 
-export interface DiffBasePropsReact<LAnnotation> {
+export interface DiffBasePropsReact<LAnnotation, LCaret = undefined> {
   options?: FileDiffOptions<LAnnotation>;
   /** Whether this surface has an active edit session. */
   edit?: boolean;
   /** Creation-time options passed to the nearest EditProvider factory. */
-  editorOptions?: EditorOptions<LAnnotation>;
+  editorOptions?: EditorOptions<LAnnotation, LCaret>;
   /** Retain this editable draft and its undo/redo history in memory. */
   editStateKey?: string;
   /**
@@ -73,13 +73,13 @@ export interface DiffBasePropsReact<LAnnotation> {
   prerenderedHTML?: string;
 }
 
-export interface FileProps<LAnnotation> {
+export interface FileProps<LAnnotation, LCaret = undefined> {
   file: FileContents;
   options?: FileOptions<LAnnotation>;
   /** Whether this surface has an active edit session. */
   edit?: boolean;
   /** Creation-time options passed to the nearest EditProvider factory. */
-  editorOptions?: EditorOptions<LAnnotation>;
+  editorOptions?: EditorOptions<LAnnotation, LCaret>;
   /** Retain this editable draft and its undo/redo history in memory. */
   editStateKey?: string;
   /**

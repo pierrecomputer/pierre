@@ -1,6 +1,6 @@
 import {
   DEFAULT_THEMES,
-  type EditorDecoration,
+  type EditorCaret,
   type FileContents,
 } from '@pierre/diffs';
 import type { EditorCommand, EditorKeymap } from '@pierre/diffs/edit';
@@ -16,12 +16,12 @@ const EDITABLE_FILE_OPTIONS: FileOptions<undefined> = {
   useTokenTransformer: true,
 };
 
-export interface CursorDecorationMetadata {
+export interface CursorCaretMetadata {
   name: string;
   color: string;
 }
 
-export const DECORATION_DEMO_FILE: FileContents = {
+export const CARET_DEMO_FILE: FileContents = {
   name: 'review.ts',
   contents: `type Review = {
   author: string
@@ -35,17 +35,21 @@ export function summarize(review: Review) {
 `,
 };
 
-export const DECORATION_DEMO_DECORATIONS: EditorDecoration<CursorDecorationMetadata>[] =
-  [
-    {
-      position: { line: 5, character: 26 },
-      metadata: { name: 'Amadeus', color: '#7c3aed' },
+export const CARET_DEMO_CARETS: EditorCaret<CursorCaretMetadata>[] = [
+  {
+    position: { line: 5, character: 26 },
+    metadata: { name: 'Amadeus', color: '#7c3aed' },
+  },
+  {
+    position: { line: 1, character: 8 },
+    highlight: {
+      start: { line: 1, character: 2 },
+      end: { line: 1, character: 8 },
     },
-    {
-      position: { line: 7, character: 18 },
-      metadata: { name: 'Mark', color: '#c2410c' },
-    },
-  ];
+    highlightColor: 'color-mix(in srgb, #c2410c 32%, transparent)',
+    metadata: { name: 'Mark', color: '#c2410c' },
+  },
+];
 
 // Lint-marker demo source. Marker positions below are tied to these exact
 // lines, so keep the two in sync if the contents change.
@@ -368,8 +372,8 @@ export const MARKER_DEMO_FILE_EXAMPLE: PreloadFileOptions<undefined> = {
   options: EDITABLE_FILE_OPTIONS,
 };
 
-export const DECORATION_DEMO_FILE_EXAMPLE: PreloadFileOptions<undefined> = {
-  file: DECORATION_DEMO_FILE,
+export const CARET_DEMO_FILE_EXAMPLE: PreloadFileOptions<undefined> = {
+  file: CARET_DEMO_FILE,
   options: EDITABLE_FILE_OPTIONS,
 };
 

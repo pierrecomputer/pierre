@@ -60,12 +60,12 @@ interface AcceptedCompletion<LAnnotation> {
   } | null;
 }
 
-interface UseFileDiffInstanceProps<LAnnotation> {
+interface UseFileDiffInstanceProps<LAnnotation, LCaret> {
   fileDiff?: FileDiffMetadata;
   oldFile?: FileContents | null;
   newFile?: FileContents | null;
   options: FileDiffOptions<LAnnotation> | undefined;
-  editorOptions: EditorOptions<LAnnotation> | undefined;
+  editorOptions: EditorOptions<LAnnotation, LCaret> | undefined;
   editStateKey: string | undefined;
   lineAnnotations: DiffLineAnnotation<LAnnotation>[] | undefined;
   selectedLines: SelectedLineRange | null | undefined;
@@ -86,7 +86,7 @@ interface UseFileDiffInstanceReturn<LAnnotation> {
   getAnnotationSlotName(annotation: DiffLineAnnotation<LAnnotation>): string;
 }
 
-export function useFileDiffInstance<LAnnotation>({
+export function useFileDiffInstance<LAnnotation, LCaret>({
   fileDiff,
   oldFile,
   newFile,
@@ -103,11 +103,14 @@ export function useFileDiffInstance<LAnnotation>({
   edit,
   onEditChange: _onEditChange,
   onEditComplete: _onEditComplete,
-}: UseFileDiffInstanceProps<LAnnotation>): UseFileDiffInstanceReturn<LAnnotation> {
+}: UseFileDiffInstanceProps<
+  LAnnotation,
+  LCaret
+>): UseFileDiffInstanceReturn<LAnnotation> {
   const simpleVirtualizer = useVirtualizer();
   const controlledSelection = selectedLines !== undefined;
   const poolManager = useContext(WorkerPoolContext);
-  const createEditor = useCreateEditor<LAnnotation>();
+  const createEditor = useCreateEditor<LAnnotation, LCaret>();
   const handleOnEditChange = useStableCallback(
     (event: EditorChangeEvent<LAnnotation, 'diff'>) => _onEditChange?.(event)
   );
