@@ -28,6 +28,9 @@ Install the agent skill for this package with the
 npx skills add pierrecomputer/pierre --skill trees
 ```
 
+The published package also includes the same skill at `skills/trees/`, so
+installing `@pierre/trees` version-locks the agent instructions with the API.
+
 ## Vanilla usage
 
 ```ts

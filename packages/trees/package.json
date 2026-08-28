@@ -6,7 +6,8 @@
     "dist",
     "LICENSE.md",
     "NOTICE.md",
-    "README.md"
+    "README.md",
+    "skills"
   ],
   "type": "module",
   "sideEffects": [

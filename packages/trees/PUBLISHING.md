@@ -58,6 +58,7 @@ The script will:
    `*.tsbuildinfo` files.
 6. Run `pnpm publish --dry-run` against the final tarball, print the
    `package.json` diff and final tarball listing, then stop without uploading.
+   The listing should include `skills/trees/SKILL.md` and the skill references.
 
 Inspect the diff. It should delete the `@pierre/path-store` dependency and the
 release-only scripts that are meaningless inside the packed artifact.
