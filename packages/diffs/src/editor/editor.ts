@@ -4571,12 +4571,10 @@ export class Editor<
           caret.position
         );
         for (const highlightElement of highlightContext.elements.values()) {
-          if (caret.highlightColor !== undefined) {
-            highlightElement.style.setProperty(
-              '--diffs-caret-highlight-bg',
-              caret.highlightColor
-            );
-          }
+          highlightElement.style.setProperty(
+            '--diffs-caret-highlight-bg',
+            `color-mix(in srgb, ${caret.metadata.color} 32%, transparent)`
+          );
           highlightElements.push(highlightElement);
         }
       }

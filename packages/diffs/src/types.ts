@@ -1340,6 +1340,12 @@ export interface EditorSelection extends Range {
   direction: SelectionDirection;
 }
 
+/** Visual metadata shared by a remote caret and its optional highlight. */
+export interface CaretMetadata {
+  /** CSS color used for the caret and its derived highlight tint. */
+  color: string;
+}
+
 /**
  * A non-editable, externally owned caret. `highlight` is commonly a remote
  * collaborator's selection, but can be any range that should move with edits.
@@ -1347,9 +1353,7 @@ export interface EditorSelection extends Range {
 export interface EditorCaret<T> {
   position: Position;
   highlight?: Range;
-  /** CSS color used for this caret's optional highlight range. */
-  highlightColor?: string;
-  metadata: T;
+  metadata: T & CaretMetadata;
 }
 
 export interface EditorViewportState {

@@ -46,7 +46,6 @@ export const CARET_DEMO_CARETS: EditorCaret<CursorCaretMetadata>[] = [
       start: { line: 1, character: 2 },
       end: { line: 1, character: 8 },
     },
-    highlightColor: 'color-mix(in srgb, #c2410c 32%, transparent)',
     metadata: { name: 'Mark', color: '#c2410c' },
   },
 ];

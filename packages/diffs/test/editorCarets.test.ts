@@ -13,6 +13,7 @@ afterAll(async () => {
 
 interface CaretMetadata {
   id: string;
+  color: string;
 }
 
 async function waitForEditableContent(
@@ -110,7 +111,7 @@ describe('Editor carets', () => {
       'alpha\nbravo',
       { renderCaret }
     );
-    const metadata = { id: 'ada' };
+    const metadata = { id: 'ada', color: '#7c3aed' };
     const input: EditorCaret<CaretMetadata> = {
       position: { line: 99, character: 99 },
       metadata,
@@ -154,7 +155,7 @@ describe('Editor carets', () => {
             start: { line: 0, character: 2 },
             end: { line: 1, character: 3 },
           },
-          metadata: { id: 'ada' },
+          metadata: { id: 'ada', color: '#7c3aed' },
         },
       ]);
       expect(
@@ -196,8 +197,7 @@ describe('Editor carets', () => {
             start: { line: 0, character: 0 },
             end: { line: 0, character: 5 },
           },
-          highlightColor: '#f00',
-          metadata: { id: 'ada' },
+          metadata: { id: 'ada', color: '#f00' },
         },
         {
           position: { line: 0, character: 5 },
@@ -205,8 +205,7 @@ describe('Editor carets', () => {
             start: { line: 0, character: 0 },
             end: { line: 0, character: 5 },
           },
-          highlightColor: '#00f',
-          metadata: { id: 'grace' },
+          metadata: { id: 'grace', color: '#00f' },
         },
       ]);
 
@@ -220,7 +219,10 @@ describe('Editor carets', () => {
         highlights.map((highlight) =>
           highlight.style.getPropertyValue('--diffs-caret-highlight-bg')
         )
-      ).toEqual(['#f00', '#00f']);
+      ).toEqual([
+        'color-mix(in srgb, #f00 32%, transparent)',
+        'color-mix(in srgb, #00f 32%, transparent)',
+      ]);
       expect(
         highlights.every(
           (highlight) =>
@@ -247,8 +249,8 @@ describe('Editor carets', () => {
 
     try {
       editor.setCarets([
-        { position, metadata: { id: 'ada' } },
-        { position, metadata: { id: 'grace' } },
+        { position, metadata: { id: 'ada', color: '#7c3aed' } },
+        { position, metadata: { id: 'grace', color: '#7c3aed' } },
       ]);
       const firstAnchors = Array.from(
         fileContainer.shadowRoot?.querySelectorAll<HTMLElement>(
@@ -261,7 +263,10 @@ describe('Editor carets', () => {
       ).toEqual(['ada', 'grace']);
 
       editor.setCarets([
-        { position: { line: 1, character: 1 }, metadata: { id: 'linus' } },
+        {
+          position: { line: 1, character: 1 },
+          metadata: { id: 'linus', color: '#7c3aed' },
+        },
       ]);
       expect(firstAnchors.every((anchor) => !anchor.isConnected)).toBe(true);
       expect(
@@ -298,7 +303,7 @@ describe('Editor carets', () => {
       editor.setCarets([
         {
           position: { line: 0, character: 2 },
-          metadata: { id: 'ada' },
+          metadata: { id: 'ada', color: '#7c3aed' },
         },
       ]);
       expect(editor.getViewState().selections).toBeUndefined();
@@ -353,7 +358,7 @@ describe('Editor carets', () => {
       editor.setCarets([
         {
           position: { line: 0, character: 4 },
-          metadata: { id: 'ada' },
+          metadata: { id: 'ada', color: '#7c3aed' },
         },
       ]);
       const before = getCaretTransform(getCaretAnchor(fileContainer, 'ada'));
@@ -401,7 +406,7 @@ describe('Editor carets', () => {
       editor.setCarets([
         {
           position: { line: 0, character: 5 },
-          metadata: { id: 'ada' },
+          metadata: { id: 'ada', color: '#7c3aed' },
         },
       ]);
       const before = getCaretTransform(getCaretAnchor(fileContainer, 'ada'));
@@ -459,11 +464,11 @@ describe('Editor carets', () => {
         editor.setCarets([
           {
             position: { line: 0, character: 3 },
-            metadata: { id: 'inside' },
+            metadata: { id: 'inside', color: '#7c3aed' },
           },
           {
             position: { line: 0, character: 7 },
-            metadata: { id: 'after' },
+            metadata: { id: 'after', color: '#7c3aed' },
           },
         ]);
         const insideBefore = getCaretTransform(
@@ -512,7 +517,7 @@ describe('Editor carets', () => {
       editor.setCarets([
         {
           position: { line: 2, character: 2 },
-          metadata: { id: 'ada' },
+          metadata: { id: 'ada', color: '#7c3aed' },
         },
       ]);
       expect(renderedCaret?.position).toEqual({
@@ -577,7 +582,7 @@ describe('Editor carets', () => {
           // onChange receives the post-edit document, so this is already the
           // final coordinate and must not be mapped through the edit again.
           position: { line: 0, character: 1 },
-          metadata: { id: 'fresh' },
+          metadata: { id: 'fresh', color: '#7c3aed' },
         },
       ]);
     });
@@ -591,7 +596,7 @@ describe('Editor carets', () => {
       editor.setCarets([
         {
           position: { line: 0, character: 1 },
-          metadata: { id: 'stale' },
+          metadata: { id: 'stale', color: '#7c3aed' },
         },
       ]);
       const expected = getCaretTransform(
@@ -653,7 +658,7 @@ describe('Editor carets', () => {
       editor.setCarets([
         {
           position: { line: 1, character: 2 },
-          metadata: { id: 'ada' },
+          metadata: { id: 'ada', color: '#7c3aed' },
         },
       ]);
       expect(
