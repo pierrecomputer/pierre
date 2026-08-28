@@ -5,6 +5,7 @@ import type {
   RenderDiffRequest,
   RenderFileRequest,
   WorkerInitializationRenderOptions,
+  WorkerPoolOptions,
   WorkerRequest,
   WorkerResponse,
 } from '../src/worker/types';
@@ -82,16 +83,14 @@ export class TestWorker {
     new Promise<InitializeWorkerRequest>((resolve) => {
       this.initializeRequestResolve = resolve;
     });
-  private readonly messageListeners = new Set<
-    (event: MessageEvent<WorkerResponse>) => void
-  >();
+  private readonly messageListeners = new Set<EventListener>();
+  private readonly errorListeners = new Set<EventListener>();
 
-  addEventListener(
-    type: string,
-    listener: (event: MessageEvent<WorkerResponse>) => void
-  ): void {
+  addEventListener(type: string, listener: EventListener): void {
     if (type === 'message') {
       this.messageListeners.add(listener);
+    } else if (type === 'error') {
+      this.errorListeners.add(listener);
     }
   }
 
@@ -153,20 +152,44 @@ export class TestWorker {
       listener({ data: response } as MessageEvent<WorkerResponse>);
     }
   }
+
+  emitError(error: Error): void {
+    const event = { error, message: error.message } as ErrorEvent;
+    for (const listener of this.errorListeners) {
+      listener(event);
+    }
+  }
 }
 
 export function createInitializingManager(
-  initOptions: Partial<WorkerInitializationRenderOptions> = {}
+  initOptions: Partial<WorkerInitializationRenderOptions> = {},
+  poolOptions: Pick<
+    WorkerPoolOptions,
+    'poolSize' | 'workerInitializationTimeout'
+  > = {}
 ): {
   initialization: Promise<void>;
   manager: WorkerPoolManager;
   worker: TestWorker;
+  workers: TestWorker[];
 } {
   const worker = new TestWorker();
+  const workers = [worker];
+  for (let i = 1; i < (poolOptions.poolSize ?? 1); i++) {
+    workers.push(new TestWorker());
+  }
+  let workerIndex = 0;
   const manager = new WorkerPoolManager(
     {
-      poolSize: 1,
-      workerFactory: () => worker as unknown as Worker,
+      poolSize: poolOptions.poolSize ?? 1,
+      workerFactory: () => {
+        const nextWorker = workers[workerIndex++];
+        if (nextWorker == null) {
+          throw new Error('Test worker pool exhausted');
+        }
+        return nextWorker as unknown as Worker;
+      },
+      ...poolOptions,
     },
     {
       langs: [],
@@ -179,6 +202,7 @@ export function createInitializingManager(
     initialization: manager.initialize(),
     manager,
     worker,
+    workers,
   };
 }
 

@@ -1,5 +1,6 @@
-import { afterAll, beforeAll, expect, test } from 'bun:test';
+import { afterAll, beforeAll, expect, spyOn, test } from 'bun:test';
 
+import { File } from '../src/components/File';
 import { FileDiff } from '../src/components/FileDiff';
 import {
   disposeHighlighter,
@@ -8,6 +9,7 @@ import {
 import type {
   DiffLineAnnotation,
   DiffsHighlighter,
+  FileContents,
   FileDiffMetadata,
   RenderDiffOptions,
   ThemedDiffResult,
@@ -15,7 +17,11 @@ import type {
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import { renderDiffWithHighlighter } from '../src/utils/renderDiffWithHighlighter';
 import { installDom, waitFor } from './domHarness';
-import { createInitializedManager, withTimeout } from './workerPoolHarness';
+import {
+  createInitializedManager,
+  createInitializingManager,
+  withTimeout,
+} from './workerPoolHarness';
 
 let sharedHighlighter: DiffsHighlighter;
 
@@ -45,6 +51,12 @@ class TestFileDiff extends FileDiff<string> {
   }
 }
 
+class TestFile extends File<string> {
+  getRenderedFileForTest(): FileContents | undefined {
+    return this.getRenderedFile();
+  }
+}
+
 function createDiff(cacheKey: string, contents: string): FileDiffMetadata {
   return parseDiffFromFile(
     {
@@ -68,6 +80,53 @@ function getAnnotationText(
     .querySelector<HTMLElement>(`[slot="${slot}"]`)
     ?.textContent?.trim();
 }
+
+test('standalone renderers fall back when worker initialization fails', async () => {
+  const dom = installDom();
+  const consoleError = spyOn(console, 'error').mockImplementation(() => {});
+  const { initialization, manager, worker } = createInitializingManager({
+    theme: 'pierre-dark',
+  });
+  const fileInstance = new TestFile(
+    { disableErrorHandling: true, disableFileHeader: true },
+    manager
+  );
+  const diffInstance = new TestFileDiff(
+    { disableErrorHandling: true, disableFileHeader: true },
+    manager
+  );
+  const fileContainer = document.createElement('div');
+  const diffContainer = document.createElement('div');
+  const file: FileContents = {
+    name: 'fallback.ts',
+    contents: 'const fallback = true;\n',
+    cacheKey: 'fallback:file',
+  };
+  const diff = createDiff('fallback:diff', 'const fallback = true;\n');
+
+  try {
+    fileInstance.render({ file, fileContainer });
+    diffInstance.render({ fileDiff: diff, fileContainer: diffContainer });
+    await worker.waitForInitializeRequest();
+
+    worker.emitError(new Error('worker failed to load'));
+    await initialization.catch(() => {});
+    await waitFor(
+      () =>
+        fileInstance.getRenderedFileForTest() === file &&
+        diffInstance.getRenderedDiffForTest() === diff
+    );
+
+    expect(fileInstance.getRenderedFileForTest()).toBe(file);
+    expect(diffInstance.getRenderedDiffForTest()).toBe(diff);
+  } finally {
+    fileInstance.cleanUp();
+    diffInstance.cleanUp();
+    manager.terminate();
+    consoleError.mockRestore();
+    dom.cleanup();
+  }
+});
 
 test('applies replacement annotations while its diff is highlighted', async () => {
   const dom = installDom();

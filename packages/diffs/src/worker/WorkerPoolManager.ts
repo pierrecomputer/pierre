@@ -61,6 +61,7 @@ import type {
 } from './types';
 
 const IGNORE_RESPONSE = Symbol('IGNORE_RESPONSE');
+const DEFAULT_WORKER_INITIALIZATION_TIMEOUT = 10_000;
 
 class WorkerPoolTerminatedError extends Error {
   constructor() {
@@ -458,6 +459,11 @@ export class WorkerPoolManager {
             }
             this.initialized = false;
             this.workersFailed = true;
+            // A partial pool is not supported, so stop every worker before
+            // consumers rerender through the main-thread fallback.
+            this.cancelActiveWorkerTasks();
+            this.terminateWorkers();
+            this.activeTaskById.clear();
             for (const task of this.queuedTasks) {
               this.rejectRenderTaskCallbacks(task, normalizeWorkerError(e));
             }
@@ -501,7 +507,7 @@ export class WorkerPoolManager {
         }
       );
       worker.addEventListener('error', (error) =>
-        console.error('Worker error:', error, managedWorker)
+        this.handleWorkerError(managedWorker, error)
       );
       this.workers.push(managedWorker);
       initPromises.push(
@@ -528,12 +534,51 @@ export class WorkerPoolManager {
             reject,
             requestStart: Date.now(),
           };
+          managedWorker.pendingSetupRequestId = id;
           this.activeTaskById.set(id, task);
           this.executeTask(managedWorker, task);
         })
       );
     }
-    await Promise.all(initPromises);
+    const timeoutMs =
+      this.options.workerInitializationTimeout ??
+      DEFAULT_WORKER_INITIALIZATION_TIMEOUT;
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await Promise.race([
+        Promise.all(initPromises),
+        new Promise<never>((_, reject) => {
+          timeoutId = setTimeout(() => {
+            reject(
+              new Error(
+                `WorkerPoolManager: worker initialization timed out after ${timeoutMs}ms`
+              )
+            );
+          }, timeoutMs);
+        }),
+      ]);
+    } finally {
+      if (timeoutId != null) {
+        clearTimeout(timeoutId);
+      }
+    }
+  }
+
+  private handleWorkerError(
+    managedWorker: ManagedWorker,
+    error: unknown
+  ): void {
+    console.error('Worker error:', error, managedWorker);
+    const { pendingSetupRequestId } = managedWorker;
+    if (pendingSetupRequestId == null) {
+      return;
+    }
+    const task = this.activeTaskById.get(pendingSetupRequestId);
+    if (task?.type !== 'initialize') {
+      return;
+    }
+    task.reject(normalizeWorkerError(error));
+    this.cleanWorkerAndTask(managedWorker, task);
   }
 
   private drainQueue = () => {
@@ -1506,5 +1551,16 @@ function getInstances(
 }
 
 function normalizeWorkerError(error: unknown): Error {
-  return error instanceof Error ? error : new Error(String(error));
+  if (error instanceof Error) {
+    return error;
+  }
+  if (error != null && typeof error === 'object') {
+    if ('error' in error && error.error instanceof Error) {
+      return error.error;
+    }
+    if ('message' in error && typeof error.message === 'string') {
+      return new Error(error.message);
+    }
+  }
+  return new Error(String(error));
 }

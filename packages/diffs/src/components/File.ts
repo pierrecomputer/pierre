@@ -1152,8 +1152,14 @@ export class File<
           nextRenderRange
         );
         if (fileResult == null) {
-          if (this.workerManager?.isInitialized() === false) {
-            void this.workerManager.initialize().then(() => this.rerender());
+          if (
+            this.workerManager?.isInitialized() === false &&
+            this.workerManager.isWorkingPool()
+          ) {
+            void this.workerManager
+              .initialize()
+              .catch(() => {})
+              .then(() => this.rerender());
           }
           return false;
         }

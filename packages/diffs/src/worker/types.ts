@@ -158,6 +158,12 @@ export interface WorkerPoolOptions {
    */
   poolSize?: number;
 
+  /**
+   * Maximum time to wait for the worker pool to initialize, in milliseconds.
+   * @default 10000
+   */
+  workerInitializationTimeout?: number;
+
   totalASTLRUCacheSize?: number;
 }
 

@@ -1584,10 +1584,14 @@ export class FileDiff<
           nextRenderRange
         );
         if (hunksResult == null) {
-          // FIXME(amadeus): I don't think we actually need this check, as
-          // DiffHunksRenderer should probably take care of it for us?
-          if (this.workerManager?.isInitialized() === false) {
-            void this.workerManager.initialize().then(() => this.rerender());
+          if (
+            this.workerManager?.isInitialized() === false &&
+            this.workerManager.isWorkingPool()
+          ) {
+            void this.workerManager
+              .initialize()
+              .catch(() => {})
+              .then(() => this.rerender());
           }
           return false;
         }
