@@ -14,13 +14,11 @@ import {
   type FileEditCompleteEvent,
   type FileEditCompleteHandler,
   File as FileInstance,
-  type FileOptions,
 } from '../src/components/File';
 import {
   type FileDiffEditCompleteEvent,
   type FileDiffEditCompleteHandler,
   FileDiff as FileDiffInstance,
-  type FileDiffOptions,
 } from '../src/components/FileDiff';
 import { DEFAULT_THEMES } from '../src/constants';
 import { Editor, type EditorOptions } from '../src/editor/editor';
@@ -33,6 +31,8 @@ import {
   type PatchDiffProps,
   File as ReactFile,
   FileDiff as ReactFileDiff,
+  type FileDiffOptions as ReactFileDiffOptions,
+  type FileOptions as ReactFileOptions,
   type FileProps as ReactFileProps,
   Virtualizer,
 } from '../src/react';
@@ -249,7 +249,7 @@ function createEditableSurfaceElement(
 ): ReactElement {
   const oldFile = { name: 'edit.ts', contents: 'const value = 1;\n' };
   if (surface === 'File') {
-    const options: FileOptions<undefined> = {
+    const options: ReactFileOptions<undefined> = {
       disableFileHeader: true,
       theme: DEFAULT_THEMES,
       onPostRender(_node, instance, phase) {
@@ -267,7 +267,7 @@ function createEditableSurfaceElement(
       options,
     });
   }
-  const options: FileDiffOptions<undefined> = {
+  const options: ReactFileDiffOptions<undefined> = {
     disableFileHeader: true,
     theme: DEFAULT_THEMES,
     onPostRender(_node, instance, phase) {
@@ -308,7 +308,7 @@ describe('React edit surfaces', () => {
     document.body.appendChild(container);
     let instance: FileInstance<undefined> | undefined;
     let root: Root | undefined;
-    const options: FileOptions<undefined> = {
+    const options: ReactFileOptions<undefined> = {
       disableFileHeader: true,
       theme: DEFAULT_THEMES,
       useTokenTransformer: false,
@@ -359,7 +359,7 @@ describe('React edit surfaces', () => {
     document.body.appendChild(container);
     let instance: FileDiffInstance<undefined> | undefined;
     let root: Root | undefined;
-    const options: FileDiffOptions<undefined> = {
+    const options: ReactFileDiffOptions<undefined> = {
       disableFileHeader: true,
       theme: DEFAULT_THEMES,
       useTokenTransformer: false,
@@ -1701,7 +1701,7 @@ describe('React diff input bridges after acceptance', () => {
       event.fileDiff.cacheKey = 'accepted:v2';
       return 'accept';
     };
-    const baseOptions = (extra?: Partial<FileDiffOptions<undefined>>) => ({
+    const baseOptions = (extra?: Partial<ReactFileDiffOptions<undefined>>) => ({
       disableFileHeader: true,
       theme: DEFAULT_THEMES,
       onPostRender(

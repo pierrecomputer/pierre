@@ -1,9 +1,12 @@
 import { type CSSProperties, type ReactNode } from 'react';
 
-import type { FileEditCompleteHandler, FileOptions } from '../components/File';
 import type {
+  FileOptions as FileClassOptions,
+  FileEditCompleteHandler,
+} from '../components/File';
+import type {
+  FileDiffOptions as FileDiffClassOptions,
   FileDiffEditCompleteHandler,
-  FileDiffOptions,
 } from '../components/FileDiff';
 import type { EditorOptions } from '../edit';
 import type { GetHoveredLineResult } from '../managers/InteractionManager';
@@ -16,6 +19,18 @@ import type {
   SelectedLineRange,
   VirtualFileMetrics,
 } from '../types';
+
+type ReactOwnedEditCallbacks = 'onEditChange' | 'onEditComplete';
+
+export type FileDiffOptions<LAnnotation> = Omit<
+  FileDiffClassOptions<LAnnotation>,
+  ReactOwnedEditCallbacks
+>;
+
+export type FileOptions<LAnnotation> = Omit<
+  FileClassOptions<LAnnotation>,
+  ReactOwnedEditCallbacks
+>;
 
 export interface DiffBasePropsReact<LAnnotation> {
   options?: FileDiffOptions<LAnnotation>;
