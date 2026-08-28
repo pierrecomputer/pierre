@@ -25,8 +25,11 @@ export type {
   EditHistoryLineAnnotation,
   EditHistoryState,
   EditState,
+  EditorEditCompleteEvent,
   EditorInitialState,
+  FileDiffEditCompleteEvent,
   FileDiffEditState,
+  FileEditCompleteEvent,
   FileEditState,
 } from '../editor/types';
 export type { Marker } from '../editor/marker';

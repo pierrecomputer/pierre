@@ -125,6 +125,7 @@ import {
   snapTextOffsetToUnicodeBoundary,
 } from './textMeasure';
 import { EditorTokenizer, renderLineTokens } from './tokenizer';
+import type { EditorEditCompleteEvent } from './types';
 import type { EditorInitialState, EditState } from './types';
 import {
   addEventListener,
@@ -254,6 +255,12 @@ export interface EditorOptions<LAnnotation> {
    * the editor or you will create loops.
    */
   onChange?: (event: EditorChangeEvent<LAnnotation, 'file' | 'diff'>) => void;
+  /**
+   * Observes completion with the same frozen event sent to the component. Runs
+   * before the component callback, including when the component callback is
+   * missing. There is no way to accept or reject from this API.
+   */
+  onComplete?: (event: EditorEditCompleteEvent<LAnnotation>) => void;
   /** Callback when the editor gains focus. */
   onFocus?: () => void;
   /** Callback when the editor loses focus. */
@@ -453,6 +460,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       ...this.#options,
       ...options,
     };
+  }
+
+  __emitEditComplete(event: EditorEditCompleteEvent<LAnnotation>): void {
+    this.#options.onComplete?.(event);
   }
 
   // Small typescript hack to prevent UnresolvedFile from being editable.

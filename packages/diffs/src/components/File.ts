@@ -13,6 +13,7 @@ import {
   THEME_CSS_ATTRIBUTE,
   UNSAFE_CSS_ATTRIBUTE,
 } from '../constants';
+import type { FileEditCompleteEvent } from '../editor/types';
 import {
   type GetHoveredLineResult,
   InteractionManager,
@@ -23,6 +24,7 @@ import {
 import { ResizeManager } from '../managers/ResizeManager';
 import { FileRenderer, type FileRenderResult } from '../renderers/FileRenderer';
 import { SVGSpriteSheet } from '../sprite';
+export type { FileEditCompleteEvent } from '../editor/types';
 import type {
   AppliedThemeStyleCache,
   BaseCodeOptions,
@@ -96,30 +98,6 @@ export interface FileHydrateProps<LAnnotation> extends Omit<
 > {
   fileContainer: HTMLElement;
   prerenderedHTML?: string;
-}
-
-/**
- * `onEditComplete` event argument when an edit session ends.
- *
- * `file` is a fresh FileContents with the final contents and no `cacheKey` set;
- * accepting installs it.
- *
- * `originalFile` is the last `file` the component was given externally; a
- * revert restores it.
- *
- * `lineAnnotations` is the completed annotation collection, potentially
- * modified based on the edit changes to keep annotations aligned to their
- * intended targets
- *
- * `originalLineAnnotations` is the last collection provided to the component
- * externally, which a revert keeps.
- */
-export interface FileEditCompleteEvent<LAnnotation> {
-  file: FileContents;
-  editor: DiffsEditor<LAnnotation>;
-  lineAnnotations: LineAnnotation<LAnnotation>[] | undefined;
-  originalFile: FileContents;
-  originalLineAnnotations: LineAnnotation<LAnnotation>[];
 }
 
 /**
@@ -929,42 +907,40 @@ export class File<
     let acceptedFile: FileContents | undefined;
     let failed = false;
     let failure: unknown;
-    const { onEditComplete } = this.options;
-    if (onEditComplete != null) {
-      if (editor == null) {
-        throw new Error(
-          'File.completeEditSession: editor is required for completion'
-        );
-      }
-      const completedFile = { ...editSessionFile };
-      const event: FileEditCompleteEvent<LAnnotation> = {
-        file: completedFile,
-        editor,
-        originalFile: externalFile,
-        lineAnnotations: sessionAnnotationsCurrent,
-        originalLineAnnotations: externalAnnotations,
-      };
-      // Frozen so a handler cannot swap the event's file/originalFile
-      // references; nested mutation (a fresh cacheKey on event.file) still
-      // works.
-      Object.freeze(event);
-      try {
-        const decision = onEditComplete(event);
-        if (decision === 'accept') {
-          if (
-            completedFile.cacheKey != null &&
-            completedFile.cacheKey === externalFile.cacheKey
-          ) {
-            throw new Error(
-              'File.completeEditSession: an accepted file must not reuse the replaced file cacheKey'
-            );
-          }
-          acceptedFile = completedFile;
+    if (editor == null) {
+      throw new Error(
+        'File.completeEditSession: editor is required for completion'
+      );
+    }
+    const completedFile = { ...editSessionFile };
+    const event: FileEditCompleteEvent<LAnnotation> = {
+      file: completedFile,
+      editor,
+      originalFile: externalFile,
+      lineAnnotations: sessionAnnotationsCurrent,
+      originalLineAnnotations: externalAnnotations,
+    };
+    // Frozen so a handler cannot swap the event's file/originalFile
+    // references; nested mutation (a fresh cacheKey on event.file) still
+    // works.
+    Object.freeze(event);
+    try {
+      editor.__emitEditComplete(event);
+      const decision = this.options.onEditComplete?.(event);
+      if (decision === 'accept') {
+        if (
+          completedFile.cacheKey != null &&
+          completedFile.cacheKey === externalFile.cacheKey
+        ) {
+          throw new Error(
+            'File.completeEditSession: an accepted file must not reuse the replaced file cacheKey'
+          );
         }
-      } catch (error) {
-        failed = true;
-        failure = error;
+        acceptedFile = completedFile;
       }
+    } catch (error) {
+      failed = true;
+      failure = error;
     }
 
     if (installResult && acceptedFile != null) {

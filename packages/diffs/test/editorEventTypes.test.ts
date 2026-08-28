@@ -20,6 +20,22 @@ test('editor events preserve annotation types', () => {
         ?.lineAnnotationsBefore?.[0]?.metadata;
     void metadata;
   };
+  const onComplete: NonNullable<
+    EditorOptions<AnnotationMetadata>['onComplete']
+  > = (event) => {
+    const editor: DiffsEditor<AnnotationMetadata> = event.editor;
+    const metadata: AnnotationMetadata | undefined =
+      event.lineAnnotations?.[0]?.metadata;
+    if ('file' in event) {
+      const fileName: string = event.file.name;
+      void fileName;
+    } else {
+      const diffName: string = event.fileDiff.name;
+      void diffName;
+    }
+    void editor;
+    void metadata;
+  };
   const onFileComplete: FileEditCompleteHandler<AnnotationMetadata> = (
     event
   ) => {
@@ -42,6 +58,7 @@ test('editor events preserve annotation types', () => {
   };
 
   expect(onChange).toBeFunction();
+  expect(onComplete).toBeFunction();
   expect(onFileComplete).toBeFunction();
   expect(onFileDiffComplete).toBeFunction();
 });

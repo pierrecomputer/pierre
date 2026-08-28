@@ -13,7 +13,7 @@ import type {
   ThemeRegistrationResolved,
 } from 'shiki';
 
-import type { EditState } from './editor/types';
+import type { EditorEditCompleteEvent, EditState } from './editor/types';
 
 export type { CreatePatchOptionsNonabortable };
 
@@ -1219,11 +1219,13 @@ export interface DiffsEditor<LAnnotation> {
   /** @internal Return the active document that an edit-session render should use. */
   __getDocumentContents(fallbackFile?: FileContents): FileContents | undefined;
   /** @internal Return component state retained with the active document. */
-  __getDocumentSessionState?(): RetainedDiffSessionSnapshot | undefined;
+  __getDocumentSessionState(): RetainedDiffSessionSnapshot | undefined;
   __syncRenderView(props: SyncRenderViewProps<LAnnotation>): void;
   edit<T extends DiffsEditableComponent<LAnnotation>>(
     fileInstance: EditableInstance<T>
   ): () => void;
+  /** @internal Notify the editor that its active edit session completed. */
+  __emitEditComplete(event: EditorEditCompleteEvent<LAnnotation>): void;
   cleanUp(reason?: 'discard' | 'recycle' | 'complete'): void;
 }
 

@@ -968,6 +968,7 @@ export const EDITOR_OPTIONS_TYPE: PreloadFileOptions<undefined> = {
 } from '@pierre/diffs';
 import {
   Editor,
+  type EditorEditCompleteEvent,
   type EditorInitialState,
   type EditorKeymap,
 } from '@pierre/diffs/edit';
@@ -1030,6 +1031,11 @@ interface EditorOptions<LAnnotation> {
   // a diff), current lineAnnotations, and normalized text changes. Prefer a
   // component's onEditChange prop/option for per-component handling.
   onChange?: (event: EditorChangeEvent<LAnnotation, 'file' | 'diff'>) => void;
+
+  // Editor-wide completion observer. Receives the same frozen event before the
+  // component callback and fires even when that callback is missing. You cannot
+  // accept or reject from this callback.
+  onComplete?: (event: EditorEditCompleteEvent<LAnnotation>) => void;
 
   // Fires when the editable content area gains focus (tab, click, or editor.focus()).
   onFocus?: () => void;

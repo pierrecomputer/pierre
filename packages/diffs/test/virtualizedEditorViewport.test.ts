@@ -202,7 +202,9 @@ describe('virtualized editor viewport', () => {
       let recyclePosition: number | undefined;
       file.attachEditor({
         __captureFocusForDOMReplacement() {},
+        __emitEditComplete() {},
         __getDocumentContents: () => undefined,
+        __getDocumentSessionState: () => undefined,
         __postponeBgTokenizeToNextFrame() {},
         __syncRenderView() {},
         edit: () => () => {},
@@ -428,7 +430,9 @@ describe('virtualized editor viewport', () => {
       let recyclePosition: number | undefined;
       fileDiff.attachEditor({
         __captureFocusForDOMReplacement() {},
+        __emitEditComplete() {},
         __getDocumentContents: () => undefined,
+        __getDocumentSessionState: () => undefined,
         __postponeBgTokenizeToNextFrame() {},
         __syncRenderView() {},
         edit: () => () => {},

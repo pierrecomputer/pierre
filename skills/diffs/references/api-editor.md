@@ -5,29 +5,32 @@ editor APIs used by common integrations.
 
 ## Exports
 
-| Export                  | Kind  | Purpose                                                  |
-| ----------------------- | ----- | -------------------------------------------------------- |
-| `Editor`                | Class | Adds text editing to a `File` or `FileDiff` instance.    |
-| `EditStateManager`      | Value | Manages keyed in-memory edit history and state.          |
-| `ClearEditStateOptions` | Type  | Selects retained state parts to clear.                   |
-| `EditState`             | Type  | Holds one complete live editing session.                 |
-| `EditorInitialState`    | Type  | Selects state fields to supply on first attachment.      |
-| `EditorChange`          | Type  | Describes one normalized editor change.                  |
-| `EditorChangeEvent`     | Type  | Provides normalized edits and the current document.      |
-| `EditorCommand`         | Type  | Names an editor command.                                 |
-| `EditorDocumentKind`    | Type  | Selects a `file` or `file-diff` editor surface.          |
-| `EditorFocusOptions`    | Type  | Selects a focus target and scroll behavior.              |
-| `EditorKeymap`          | Type  | Defines ordered custom shortcut groups.                  |
-| `EditorOptions`         | Type  | Configures history, initial state, behavior, and events. |
-| `EditorShortcut`        | Type  | Defines one command shortcut.                            |
-| `EditorViewState`       | Type  | Holds selections and editor-owned viewport offsets.      |
-| `KeyboardKey`           | Type  | Names a key accepted by an editor shortcut.              |
-| `KeyboardModifier`      | Type  | Names a modifier accepted by an editor shortcut.         |
-| `TextDocument`          | Class | Stores text, positions, edits, search, and undo history. |
-| `TextDocumentChange`    | Type  | Describes the lines and characters changed by an edit.   |
-| `Position`              | Type  | Identifies a zero-based line and character.              |
-| `Range`                 | Type  | Identifies a start and end position.                     |
-| `TextEdit`              | Type  | Replaces one range with new text.                        |
+| Export                      | Kind  | Purpose                                                        |
+| --------------------------- | ----- | -------------------------------------------------------------- |
+| `Editor`                    | Class | Adds text editing to a `File` or `FileDiff` instance.          |
+| `EditStateManager`          | Value | Manages keyed in-memory edit history and state.                |
+| `ClearEditStateOptions`     | Type  | Selects retained state parts to clear.                         |
+| `EditState`                 | Type  | Holds one complete live editing session.                       |
+| `EditorInitialState`        | Type  | Selects state fields to supply on first attachment.            |
+| `EditorChange`              | Type  | Describes one normalized editor change.                        |
+| `EditorChangeEvent`         | Type  | Provides normalized edits and the current document.            |
+| `EditorEditCompleteEvent`   | Type  | Unites file and diff completion events for editor observation. |
+| `FileEditCompleteEvent`     | Type  | Describes a completed file edit session.                       |
+| `FileDiffEditCompleteEvent` | Type  | Describes a completed diff edit session.                       |
+| `EditorCommand`             | Type  | Names an editor command.                                       |
+| `EditorDocumentKind`        | Type  | Selects a `file` or `file-diff` editor surface.                |
+| `EditorFocusOptions`        | Type  | Selects a focus target and scroll behavior.                    |
+| `EditorKeymap`              | Type  | Defines ordered custom shortcut groups.                        |
+| `EditorOptions`             | Type  | Configures history, initial state, behavior, and events.       |
+| `EditorShortcut`            | Type  | Defines one command shortcut.                                  |
+| `EditorViewState`           | Type  | Holds selections and editor-owned viewport offsets.            |
+| `KeyboardKey`               | Type  | Names a key accepted by an editor shortcut.                    |
+| `KeyboardModifier`          | Type  | Names a modifier accepted by an editor shortcut.               |
+| `TextDocument`              | Class | Stores text, positions, edits, search, and undo history.       |
+| `TextDocumentChange`        | Type  | Describes the lines and characters changed by an edit.         |
+| `Position`                  | Type  | Identifies a zero-based line and character.                    |
+| `Range`                     | Type  | Identifies a start and end position.                           |
+| `TextEdit`                  | Type  | Replaces one range with new text.                              |
 
 ## `EditorOptions` fields
 
@@ -46,6 +49,7 @@ editor APIs used by common integrations.
 | `renderSelectionAction`  | Produces the selection action element.                   |
 | `onAttach`               | Receives the editor and attached surface.                |
 | `onChange`               | Receives the event, including its editor instance.       |
+| `onComplete`             | Observes the completed file or diff event.               |
 | `onFocus`                | Runs after the editor gains focus.                       |
 | `onBlur`                 | Runs after the editor loses focus.                       |
 
@@ -53,6 +57,12 @@ For a `file-diff` editor, view-only `initialState` can omit document and diff
 metadata. Transferring an edited document and its undo/redo history requires the
 matching `document`, `fileInfo`, and `diffSession` from one complete
 `EditState`.
+
+`onComplete` receives the exact frozen event that is also passed to the
+component's `onEditComplete` or CodeView's `onItemEditComplete`. The editor
+observer runs first and still runs when the component callback is missing. You
+cannot accept or reject from this API. It is here for symmetry, but most
+integrations should use those component callbacks instead.
 
 Use `editStateKey` for ordinary same-runtime restoration. It retains the draft,
 undo/redo history, selections, horizontal code scroll, eligible vertical scroll,
@@ -70,7 +80,7 @@ shared scrolling remain application/viewer state.
 checkpoint. Checkpoints run after synchronization, document edits, explicit
 `setViewState()` calls, recycling, and completion. Selection or scroll movement
 alone does not update it; use `getViewState()` for an exact live copy. State
-remains available while rendering is recycled and during `onEditComplete`, and
+remains available while rendering is recycled and during `onComplete`, and
 returns `undefined` before synchronization or after completion. The result is
 borrowed editor-owned state rather than a serialization format.
 

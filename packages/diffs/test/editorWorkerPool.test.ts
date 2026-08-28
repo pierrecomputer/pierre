@@ -1437,7 +1437,9 @@ describe('File component edit session', () => {
         __syncRenderView: () => undefined,
         __postponeBgTokenizeToNextFrame: () => undefined,
         __captureFocusForDOMReplacement: () => undefined,
+        __emitEditComplete: () => undefined,
         __getDocumentContents: () => undefined,
+        __getDocumentSessionState: () => undefined,
       } as unknown as DiffsEditor<undefined>;
       const detach = instance.attachEditor(editorStub);
       instance.rerender();
@@ -1509,7 +1511,9 @@ describe('FileDiff component edit session', () => {
         __syncRenderView: () => undefined,
         __postponeBgTokenizeToNextFrame: () => undefined,
         __captureFocusForDOMReplacement: () => undefined,
+        __emitEditComplete: () => undefined,
         __getDocumentContents: () => undefined,
+        __getDocumentSessionState: () => undefined,
       } as unknown as DiffsEditor<undefined>;
       instance.attachEditor(editorStub);
       instance.rerender();
@@ -1532,7 +1536,9 @@ function createEditorStub(): DiffsEditor<undefined> {
     __syncRenderView: () => undefined,
     __postponeBgTokenizeToNextFrame: () => undefined,
     __captureFocusForDOMReplacement: () => undefined,
+    __emitEditComplete: () => undefined,
     __getDocumentContents: () => undefined,
+    __getDocumentSessionState: () => undefined,
   } as unknown as DiffsEditor<undefined>;
 }
 

@@ -419,6 +419,9 @@ merges later values, but not every option is retroactive: for example,
 `matchBrackets` is captured when the document synchronizes, and changing
 `historyMaxEntries` does not resize history already created for a document.
 Callbacks that are read when an event occurs use their latest values.
+`EditorOptions.onComplete` is a low-level observer. You cannot accept or reject
+from this API. Most integrations should use the component completion callbacks
+described above instead.
 
 <DocsCodeExample {...editorOptionsType} />
 

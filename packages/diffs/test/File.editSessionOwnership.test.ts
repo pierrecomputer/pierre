@@ -5,7 +5,7 @@ import type {
   FileEditCompleteEvent,
   FileEditCompleteHandler,
 } from '../src/components/File';
-import { Editor } from '../src/editor/editor';
+import { Editor, type EditorOptions } from '../src/editor/editor';
 import { EditStateManager } from '../src/editor/EditStateManager';
 import type {
   DiffsEditor,
@@ -55,7 +55,9 @@ function createEditorStub(
     cleanUp() {},
     edit: () => () => {},
     __captureFocusForDOMReplacement() {},
+    __emitEditComplete() {},
     __getDocumentContents: () => undefined,
+    __getDocumentSessionState: () => undefined,
     __postponeBgTokenizeToNextFrame() {},
     __syncRenderView() {},
     ...overrides,
@@ -883,6 +885,7 @@ describe('session-owned line annotations', () => {
 describe('completeEditSession', () => {
   async function createCompletionFixture(config?: {
     editStateKey?: string;
+    editorOnComplete?: NonNullable<EditorOptions<undefined>['onComplete']>;
     onEditComplete?: FileEditCompleteHandler<undefined>;
     onEditChange?: (event: EditorChangeEvent<undefined, 'file'>) => void;
     lineAnnotations?: LineAnnotation<undefined>[];
@@ -899,7 +902,7 @@ describe('completeEditSession', () => {
     });
     const editor = new Editor<undefined>(
       'file',
-      undefined,
+      { onComplete: config?.editorOnComplete },
       config?.editStateKey
     );
     instance.render({
@@ -939,6 +942,37 @@ describe('completeEditSession', () => {
       },
     ]);
   }
+
+  test('editor completion receives the component event first and cannot accept', async () => {
+    const calls: string[] = [];
+    let editorEvent: FileEditCompleteEvent<undefined> | undefined;
+    let componentEvent: FileEditCompleteEvent<undefined> | undefined;
+    const fixture = await createCompletionFixture({
+      editorOnComplete(event) {
+        if ('file' in event) {
+          editorEvent = event;
+        }
+        calls.push('editor');
+        return 'accept';
+      },
+      onEditComplete(event) {
+        componentEvent = event;
+        calls.push('component');
+        return 'reject';
+      },
+    });
+    try {
+      replaceDocument(fixture.editor, 'edited\nbravo\n');
+      fixture.editor.cleanUp('complete');
+
+      expect(calls).toEqual(['editor', 'component']);
+      expect(editorEvent).toBe(componentEvent);
+      expect(editorEvent?.editor).toBe(fixture.editor);
+      expect(fixture.instance.file).toBe(fixture.externalFile);
+    } finally {
+      fixture.cleanup();
+    }
+  });
 
   test('a changed session delivers a fresh keyless file and the exact external file', async () => {
     const events: FileEditCompleteEvent<undefined>[] = [];

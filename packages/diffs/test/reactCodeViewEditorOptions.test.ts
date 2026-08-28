@@ -132,7 +132,9 @@ function createTrackedEditor(
       }
     },
     __captureFocusForDOMReplacement() {},
+    __emitEditComplete() {},
     __getDocumentContents: () => undefined,
+    __getDocumentSessionState: () => undefined,
     __postponeBgTokenizeToNextFrame() {},
     __syncRenderView() {},
   } as unknown as TrackedCodeViewEditor;

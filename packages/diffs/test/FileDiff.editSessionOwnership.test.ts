@@ -12,7 +12,7 @@ import type {
   FileDiffEditCompleteHandler,
   FileDiffOptions,
 } from '../src/components/FileDiff';
-import { Editor } from '../src/editor/editor';
+import { Editor, type EditorOptions } from '../src/editor/editor';
 import type {
   DiffLineAnnotation,
   DiffsEditor,
@@ -71,7 +71,9 @@ function createEditorStub(
     cleanUp() {},
     edit: () => () => {},
     __captureFocusForDOMReplacement() {},
+    __emitEditComplete() {},
     __getDocumentContents: () => undefined,
+    __getDocumentSessionState: () => undefined,
     __postponeBgTokenizeToNextFrame() {},
     __syncRenderView() {},
     ...overrides,
@@ -679,6 +681,7 @@ describe('completeEditSession', () => {
   const EXTERNAL_CONTENTS = 'alpha\nnew value\nomega\n';
 
   async function createCompletionFixture(config?: {
+    editorOnComplete?: NonNullable<EditorOptions<undefined>['onComplete']>;
     onEditComplete?: FileDiffEditCompleteHandler<undefined>;
     onEditChange?: (event: EditorChangeEvent<undefined, 'diff'>) => void;
     lineAnnotations?: DiffLineAnnotation<undefined>[];
@@ -696,7 +699,9 @@ describe('completeEditSession', () => {
       onEditChange: config?.onEditChange,
       loadDiffFiles: config?.loadDiffFiles,
     });
-    const editor = new Editor<undefined>('file-diff');
+    const editor = new Editor<undefined>('file-diff', {
+      onComplete: config?.editorOnComplete,
+    });
     instance.render({
       fileDiff: externalDiff,
       fileContainer,
@@ -750,6 +755,31 @@ describe('completeEditSession', () => {
       },
     ]);
   }
+
+  test('editor completion fires without a component handler and cannot accept', async () => {
+    const events: FileDiffEditCompleteEvent<undefined>[] = [];
+    const fixture = await createCompletionFixture({
+      editorOnComplete(event) {
+        if ('fileDiff' in event) {
+          events.push(event);
+        }
+        return 'accept';
+      },
+    });
+    try {
+      replaceDocument(fixture.editor, 'alpha\nedited value\nomega\n');
+      fixture.editor.cleanUp('complete');
+
+      expect(events).toHaveLength(1);
+      expect(events[0]?.editor).toBe(fixture.editor);
+      expect(events[0]?.fileDiff.additionLines.join('')).toBe(
+        'alpha\nedited value\nomega\n'
+      );
+      expect(fixture.instance.fileDiff).toBe(fixture.externalDiff);
+    } finally {
+      fixture.cleanup();
+    }
+  });
 
   test('a changed session delivers a recomputed detached diff and complete files', async () => {
     const events: FileDiffEditCompleteEvent<undefined>[] = [];
