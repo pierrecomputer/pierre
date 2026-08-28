@@ -61,6 +61,7 @@ import type {
 } from './types';
 
 const IGNORE_RESPONSE = Symbol('IGNORE_RESPONSE');
+const DISABLE_HIGHLIGHTING = true;
 
 class WorkerPoolTerminatedError extends Error {
   constructor() {
@@ -572,6 +573,7 @@ export class WorkerPoolManager {
     // attempt to highlight. This should be mostly never hit, but it's just an
     // extra level of safety
     if (
+      DISABLE_HIGHLIGHTING ||
       isFilePlainText(file) ||
       (cachedResult != null &&
         areFileRenderOptionsEqual(
@@ -613,6 +615,7 @@ export class WorkerPoolManager {
     const cachedResult = this.getFileResultCache(file);
     const highlightKey = this.getFileHighlightKey(file);
     if (
+      DISABLE_HIGHLIGHTING ||
       highlightKey == null ||
       isFilePlainText(file) ||
       (cachedResult != null &&
@@ -660,6 +663,7 @@ export class WorkerPoolManager {
     // attempt to highlight. This should be mostly never hit, but it's just an
     // extra level of safety
     if (
+      DISABLE_HIGHLIGHTING ||
       isDiffPlainText(diff) ||
       (cachedResult != null &&
         areDiffRenderOptionsEqual(
@@ -701,6 +705,7 @@ export class WorkerPoolManager {
     const cachedResult = this.getDiffResultCache(diff);
     const highlightKey = this.getDiffHighlightKey(diff);
     if (
+      DISABLE_HIGHLIGHTING ||
       highlightKey == null ||
       isDiffPlainText(diff) ||
       (cachedResult != null &&
