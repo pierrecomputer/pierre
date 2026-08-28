@@ -1224,7 +1224,7 @@ export interface DiffsEditor<LAnnotation> {
   ): () => void;
   /** @internal Notify the editor that its active edit session completed. */
   __emitEditComplete(event: EditorEditCompleteEvent<LAnnotation>): void;
-  /** Replace the remote carets and their optional highlighted ranges. */
+  /** Replace the remote carets and selections. */
   setCarets(carets: EditorCaret<unknown>[]): void;
   cleanUp(reason?: 'discard' | 'recycle' | 'complete'): void;
 }
@@ -1347,12 +1347,13 @@ export interface CaretMetadata {
 }
 
 /**
- * A non-editable, externally owned caret. `highlight` is commonly a remote
- * collaborator's selection, but can be any range that should move with edits.
+ * A non-editable, externally owned selection. This follows the browser's
+ * anchor/focus model: matching positions render a caret, and differing
+ * positions render a highlighted selection with its caret at `focus`.
  */
 export interface EditorCaret<T> {
-  position: Position;
-  highlight?: Range;
+  anchor: Position;
+  focus: Position;
   metadata: T & CaretMetadata;
 }
 

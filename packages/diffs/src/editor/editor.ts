@@ -203,8 +203,8 @@ interface AltColumnDrag {
 
 interface TrackedCaret<T> {
   caret: EditorCaret<T>;
-  positionOffset: number;
-  highlightOffsets?: readonly [number, number];
+  anchorOffset: number;
+  focusOffset: number;
 }
 
 export interface EditorOptions<LAnnotation, LCaret = undefined> {
@@ -501,30 +501,16 @@ export class Editor<
       carets.length === 0
         ? undefined
         : carets.map((caret) => {
-            const position = textDocument.normalizePosition(caret.position);
-            const highlight =
-              caret.highlight == null
-                ? undefined
-                : {
-                    start: textDocument.normalizePosition(
-                      caret.highlight.start
-                    ),
-                    end: textDocument.normalizePosition(caret.highlight.end),
-                  };
+            const anchor = textDocument.normalizePosition(caret.anchor);
+            const focus = textDocument.normalizePosition(caret.focus);
             return {
               caret: {
                 ...caret,
-                position,
-                ...(highlight == null ? {} : { highlight }),
+                anchor,
+                focus,
               },
-              positionOffset: textDocument.offsetAt(position),
-              highlightOffsets:
-                highlight == null
-                  ? undefined
-                  : [
-                      textDocument.offsetAt(highlight.start),
-                      textDocument.offsetAt(highlight.end),
-                    ],
+              anchorOffset: textDocument.offsetAt(anchor),
+              focusOffset: textDocument.offsetAt(focus),
             };
           });
     this.#renderCarets();
@@ -4545,7 +4531,7 @@ export class Editor<
 
     const elements = (this.#caretElements ??= new Map());
     for (const [trackedCaret, element] of elements) {
-      if (!this.#isLineVisible(trackedCaret.caret.position.line)) {
+      if (!this.#isLineVisible(trackedCaret.caret.focus.line)) {
         element.remove();
         elements.delete(trackedCaret);
       }
@@ -4555,8 +4541,8 @@ export class Editor<
     const highlightElements: HTMLElement[] = [];
     for (const trackedCaret of carets) {
       const { caret } = trackedCaret;
-      const { line, character } = caret.position;
-      if (caret.highlight !== undefined) {
+      const { line, character } = caret.focus;
+      if (trackedCaret.anchorOffset !== trackedCaret.focusOffset) {
         // Keep each collaborator's rounded-corner state and highlight elements
         // separate so overlapping ranges retain their own geometry and color.
         const highlightContext = {
@@ -4566,9 +4552,11 @@ export class Editor<
         this.#renderSelection(
           highlightContext,
           'caretHighlight',
-          caret.highlight,
+          trackedCaret.anchorOffset < trackedCaret.focusOffset
+            ? { start: caret.anchor, end: caret.focus }
+            : { start: caret.focus, end: caret.anchor },
           undefined,
-          caret.position
+          caret.focus
         );
         for (const highlightElement of highlightContext.elements.values()) {
           highlightElement.style.setProperty(
@@ -4887,7 +4875,10 @@ export class Editor<
         cornerEl = h(
           'div',
           {
-            dataset: 'selectionRange',
+            dataset:
+              type === 'caretHighlight'
+                ? 'caretHighlightRange'
+                : 'selectionRange',
             style: { cssText: css },
             children: [
               h('div', {
@@ -5614,23 +5605,20 @@ export class Editor<
     const textDocument = this.#editSession?.document;
     if (textDocument !== undefined && this.#carets !== undefined) {
       for (const trackedCaret of this.#carets) {
-        trackedCaret.positionOffset = remapOffsetThroughEdits(
-          trackedCaret.positionOffset,
+        trackedCaret.anchorOffset = remapOffsetThroughEdits(
+          trackedCaret.anchorOffset,
           change.changes
         );
-        trackedCaret.caret.position = textDocument.positionAt(
-          trackedCaret.positionOffset
+        trackedCaret.focusOffset = remapOffsetThroughEdits(
+          trackedCaret.focusOffset,
+          change.changes
         );
-        if (trackedCaret.highlightOffsets !== undefined) {
-          const [start, end] = trackedCaret.highlightOffsets;
-          const nextStart = remapOffsetThroughEdits(start, change.changes);
-          const nextEnd = remapOffsetThroughEdits(end, change.changes);
-          trackedCaret.highlightOffsets = [nextStart, nextEnd];
-          trackedCaret.caret.highlight = {
-            start: textDocument.positionAt(nextStart),
-            end: textDocument.positionAt(nextEnd),
-          };
-        }
+        trackedCaret.caret.anchor = textDocument.positionAt(
+          trackedCaret.anchorOffset
+        );
+        trackedCaret.caret.focus = textDocument.positionAt(
+          trackedCaret.focusOffset
+        );
       }
     }
     // Invalidate layout caches touched by the edit. Clear cached line Y

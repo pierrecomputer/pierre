@@ -102,8 +102,28 @@ function getCaretTransform(element: HTMLElement): {
   return { x: Number(match[1]), y: Number(match[2]) };
 }
 
+function getCaretHighlightRanges(container: HTMLElement): HTMLElement[] {
+  return Array.from(
+    container.shadowRoot?.querySelectorAll<HTMLElement>(
+      '[data-caret-highlight-range]'
+    ) ?? []
+  ).filter(
+    (element) => element.querySelector('[data-selection-corner]') === null
+  );
+}
+
+function getCaretHighlightCorners(container: HTMLElement): HTMLElement[] {
+  return Array.from(
+    container.shadowRoot?.querySelectorAll<HTMLElement>(
+      '[data-caret-highlight-range]'
+    ) ?? []
+  ).filter(
+    (element) => element.querySelector('[data-selection-corner]') !== null
+  );
+}
+
 describe('Editor carets', () => {
-  test('normalizes positions and mounts the custom renderer inside an anchor', async () => {
+  test('normalizes collapsed anchor/focus positions and mounts the custom renderer', async () => {
     const renderCaret = mock((caret: EditorCaret<CaretMetadata>) =>
       caretElement(caret.metadata.id)
     );
@@ -113,7 +133,8 @@ describe('Editor carets', () => {
     );
     const metadata = { id: 'ada', color: '#7c3aed' };
     const input: EditorCaret<CaretMetadata> = {
-      position: { line: 99, character: 99 },
+      anchor: { line: 99, character: 99 },
+      focus: { line: 99, character: 99 },
       metadata,
     };
 
@@ -132,10 +153,12 @@ describe('Editor carets', () => {
       );
       expect(renderCaret).toHaveBeenCalledTimes(1);
       expect(renderCaret.mock.calls[0]?.[0]).toEqual({
-        position: { line: 1, character: 5 },
+        anchor: { line: 1, character: 5 },
+        focus: { line: 1, character: 5 },
         metadata,
       });
-      expect(input.position).toEqual({ line: 99, character: 99 });
+      expect(input.anchor).toEqual({ line: 99, character: 99 });
+      expect(input.focus).toEqual({ line: 99, character: 99 });
     } finally {
       cleanup();
     }
@@ -150,19 +173,21 @@ describe('Editor carets', () => {
     try {
       editor.setCarets([
         {
-          position: { line: 1, character: 3 },
-          highlight: {
-            start: { line: 0, character: 2 },
-            end: { line: 1, character: 3 },
-          },
+          anchor: { line: 0, character: 2 },
+          focus: { line: 1, character: 3 },
           metadata: { id: 'ada', color: '#7c3aed' },
         },
       ]);
+      expect(getCaretHighlightRanges(fileContainer)).toHaveLength(2);
+      const corners = getCaretHighlightCorners(fileContainer);
+      expect(corners).toHaveLength(2);
       expect(
-        fileContainer.shadowRoot?.querySelectorAll(
-          '[data-caret-highlight-range]'
+        corners.every(
+          (corner) =>
+            corner.style.getPropertyValue('--diffs-caret-highlight-bg') ===
+            'color-mix(in srgb, #7c3aed 32%, transparent)'
         )
-      ).toHaveLength(2);
+      ).toBe(true);
 
       editor.applyEdits([
         {
@@ -173,11 +198,38 @@ describe('Editor carets', () => {
           newText: 'XY',
         },
       ]);
-      expect(
-        fileContainer.shadowRoot?.querySelectorAll(
-          '[data-caret-highlight-range]'
-        )
-      ).toHaveLength(2);
+      expect(getCaretHighlightRanges(fileContainer)).toHaveLength(2);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('uses focus as the caret edge for a backward selection', async () => {
+    const renderCaret = mock((caret: EditorCaret<CaretMetadata>) =>
+      caretElement(caret.metadata.id)
+    );
+    const { cleanup, editor, fileContainer } = await createEditorFixture(
+      'alpha\nbravo',
+      { renderCaret }
+    );
+
+    try {
+      editor.setCarets([
+        {
+          anchor: { line: 1, character: 3 },
+          focus: { line: 0, character: 2 },
+          metadata: { id: 'ada', color: '#7c3aed' },
+        },
+      ]);
+
+      expect(renderCaret.mock.calls[0]?.[0].focus).toEqual({
+        line: 0,
+        character: 2,
+      });
+      const highlights = getCaretHighlightRanges(fileContainer);
+      expect(highlights).toHaveLength(2);
+      expect(highlights[0]?.dataset.rtl).toBeUndefined();
+      expect(highlights[0]?.dataset.rbl).toBeUndefined();
     } finally {
       cleanup();
     }
@@ -192,28 +244,18 @@ describe('Editor carets', () => {
     try {
       editor.setCarets([
         {
-          position: { line: 0, character: 5 },
-          highlight: {
-            start: { line: 0, character: 0 },
-            end: { line: 0, character: 5 },
-          },
+          anchor: { line: 0, character: 0 },
+          focus: { line: 0, character: 5 },
           metadata: { id: 'ada', color: '#f00' },
         },
         {
-          position: { line: 0, character: 5 },
-          highlight: {
-            start: { line: 0, character: 0 },
-            end: { line: 0, character: 5 },
-          },
+          anchor: { line: 0, character: 0 },
+          focus: { line: 0, character: 5 },
           metadata: { id: 'grace', color: '#00f' },
         },
       ]);
 
-      const highlights = Array.from(
-        fileContainer.shadowRoot?.querySelectorAll<HTMLElement>(
-          '[data-caret-highlight-range]'
-        ) ?? []
-      );
+      const highlights = getCaretHighlightRanges(fileContainer);
       expect(highlights).toHaveLength(2);
       expect(
         highlights.map((highlight) =>
@@ -249,8 +291,16 @@ describe('Editor carets', () => {
 
     try {
       editor.setCarets([
-        { position, metadata: { id: 'ada', color: '#7c3aed' } },
-        { position, metadata: { id: 'grace', color: '#7c3aed' } },
+        {
+          anchor: position,
+          focus: position,
+          metadata: { id: 'ada', color: '#7c3aed' },
+        },
+        {
+          anchor: position,
+          focus: position,
+          metadata: { id: 'grace', color: '#7c3aed' },
+        },
       ]);
       const firstAnchors = Array.from(
         fileContainer.shadowRoot?.querySelectorAll<HTMLElement>(
@@ -264,7 +314,8 @@ describe('Editor carets', () => {
 
       editor.setCarets([
         {
-          position: { line: 1, character: 1 },
+          anchor: { line: 1, character: 1 },
+          focus: { line: 1, character: 1 },
           metadata: { id: 'linus', color: '#7c3aed' },
         },
       ]);
@@ -302,7 +353,8 @@ describe('Editor carets', () => {
     try {
       editor.setCarets([
         {
-          position: { line: 0, character: 2 },
+          anchor: { line: 0, character: 2 },
+          focus: { line: 0, character: 2 },
           metadata: { id: 'ada', color: '#7c3aed' },
         },
       ]);
@@ -337,7 +389,7 @@ describe('Editor carets', () => {
       expect(repainted).toBe(anchor);
       expect(repainted?.firstElementChild).toBe(rendered);
       expect(renderCaret).toHaveBeenCalledTimes(1);
-      expect(renderCaret.mock.calls[0]?.[0].position).toEqual({
+      expect(renderCaret.mock.calls[0]?.[0].focus).toEqual({
         line: 0,
         character: 2,
       });
@@ -357,7 +409,8 @@ describe('Editor carets', () => {
     try {
       editor.setCarets([
         {
-          position: { line: 0, character: 4 },
+          anchor: { line: 0, character: 4 },
+          focus: { line: 0, character: 4 },
           metadata: { id: 'ada', color: '#7c3aed' },
         },
       ]);
@@ -405,7 +458,8 @@ describe('Editor carets', () => {
     try {
       editor.setCarets([
         {
-          position: { line: 0, character: 5 },
+          anchor: { line: 0, character: 5 },
+          focus: { line: 0, character: 5 },
           metadata: { id: 'ada', color: '#7c3aed' },
         },
       ]);
@@ -463,11 +517,13 @@ describe('Editor carets', () => {
       try {
         editor.setCarets([
           {
-            position: { line: 0, character: 3 },
+            anchor: { line: 0, character: 3 },
+            focus: { line: 0, character: 3 },
             metadata: { id: 'inside', color: '#7c3aed' },
           },
           {
-            position: { line: 0, character: 7 },
+            anchor: { line: 0, character: 7 },
+            focus: { line: 0, character: 7 },
             metadata: { id: 'after', color: '#7c3aed' },
           },
         ]);
@@ -516,11 +572,12 @@ describe('Editor carets', () => {
     try {
       editor.setCarets([
         {
-          position: { line: 2, character: 2 },
+          anchor: { line: 2, character: 2 },
+          focus: { line: 2, character: 2 },
           metadata: { id: 'ada', color: '#7c3aed' },
         },
       ]);
-      expect(renderedCaret?.position).toEqual({
+      expect(renderedCaret?.focus).toEqual({
         line: 2,
         character: 2,
       });
@@ -534,18 +591,18 @@ describe('Editor carets', () => {
           newText: 'new-a\nnew-b\n',
         },
       ]);
-      expect(renderedCaret?.position).toEqual({
+      expect(renderedCaret?.focus).toEqual({
         line: 4,
         character: 2,
       });
 
       editor.undo();
-      expect(renderedCaret?.position).toEqual({
+      expect(renderedCaret?.focus).toEqual({
         line: 2,
         character: 2,
       });
       editor.redo();
-      expect(renderedCaret?.position).toEqual({
+      expect(renderedCaret?.focus).toEqual({
         line: 4,
         character: 2,
       });
@@ -560,7 +617,7 @@ describe('Editor carets', () => {
         },
       ]);
       expect(editor.getText()).toBe('zero\none\ntwo\nthree');
-      expect(renderedCaret?.position).toEqual({
+      expect(renderedCaret?.focus).toEqual({
         line: 2,
         character: 2,
       });
@@ -581,7 +638,8 @@ describe('Editor carets', () => {
         {
           // onChange receives the post-edit document, so this is already the
           // final coordinate and must not be mapped through the edit again.
-          position: { line: 0, character: 1 },
+          anchor: { line: 0, character: 1 },
+          focus: { line: 0, character: 1 },
           metadata: { id: 'fresh', color: '#7c3aed' },
         },
       ]);
@@ -595,7 +653,8 @@ describe('Editor carets', () => {
     try {
       editor.setCarets([
         {
-          position: { line: 0, character: 1 },
+          anchor: { line: 0, character: 1 },
+          focus: { line: 0, character: 1 },
           metadata: { id: 'stale', color: '#7c3aed' },
         },
       ]);
@@ -657,7 +716,8 @@ describe('Editor carets', () => {
       const first = await attach();
       editor.setCarets([
         {
-          position: { line: 1, character: 2 },
+          anchor: { line: 1, character: 2 },
+          focus: { line: 1, character: 2 },
           metadata: { id: 'ada', color: '#7c3aed' },
         },
       ]);

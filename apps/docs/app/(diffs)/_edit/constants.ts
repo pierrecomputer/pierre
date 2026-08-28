@@ -37,15 +37,13 @@ export function summarize(review: Review) {
 
 export const CARET_DEMO_CARETS: EditorCaret<CursorCaretMetadata>[] = [
   {
-    position: { line: 5, character: 26 },
+    anchor: { line: 5, character: 26 },
+    focus: { line: 5, character: 26 },
     metadata: { name: 'Amadeus', color: '#7c3aed' },
   },
   {
-    position: { line: 1, character: 8 },
-    highlight: {
-      start: { line: 1, character: 2 },
-      end: { line: 1, character: 8 },
-    },
+    anchor: { line: 1, character: 2 },
+    focus: { line: 1, character: 8 },
     metadata: { name: 'Mark', color: '#c2410c' },
   },
 ];
