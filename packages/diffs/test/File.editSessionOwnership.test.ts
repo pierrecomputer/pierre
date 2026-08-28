@@ -7,6 +7,7 @@ import type {
 } from '../src/components/File';
 import { Editor, type EditorOptions } from '../src/editor/editor';
 import { EditStateManager } from '../src/editor/EditStateManager';
+import { TextDocument } from '../src/editor/textDocument';
 import type {
   EditorChangeEvent,
   EditorViewState,
@@ -147,11 +148,9 @@ describe('editing a File without changing its input', () => {
         instance.updateRenderCache(new Map([[0, [[0, '', 'edited']]]]), 'dark')
       ).toThrow('File.updateRenderCache: requires an active edit session');
       expect(() =>
-        instance.applyDocumentChange({
-          lineCount: 1,
-          getLineText: () => 'edited',
-          getText: () => 'edited',
-        })
+        instance.applyDocumentChange(
+          new TextDocument<undefined>('inmemory://file-session', 'edited')
+        )
       ).toThrow('File.applyDocumentChange: requires an active edit session');
       expect(externalFile).toEqual(EXTERNAL_FILE);
     } finally {

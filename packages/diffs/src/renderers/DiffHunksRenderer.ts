@@ -8,6 +8,7 @@ import {
   DEFAULT_THEMES,
   DEFAULT_TOKENIZE_MAX_LENGTH,
 } from '../constants';
+import type { TextDocument } from '../editor/textDocument';
 import { areLanguagesAttached } from '../highlighter/languages/areLanguagesAttached';
 import {
   getHighlighterIfLoaded,
@@ -24,7 +25,6 @@ import type {
   CustomPreProperties,
   DiffLineAnnotation,
   DiffsHighlighter,
-  DiffsTextDocument,
   ExpansionDirections,
   FileDiffMetadata,
   FileHeaderRenderMode,
@@ -701,7 +701,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   }
 
   // Normally triggered by the host when the document line count changes.
-  public applyDocumentChange(textDocument: DiffsTextDocument): void {
+  public applyDocumentChange(textDocument: TextDocument<LAnnotation>): void {
     const { pendingStructuralRows, renderCache } = this;
     this.pendingStructuralRows = undefined;
     if (renderCache == null) {
@@ -720,10 +720,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     // Reading line-by-line also preserves blank documents and the final
     // editable empty row after a trailing line break.
     const { additionLines: previousAdditionLines } = diff;
-    diff.additionLines = getEditorDocumentLines(
-      textDocument,
-      previousAdditionLines
-    );
+    diff.additionLines = getEditorDocumentLines(textDocument);
     result.code.additionLines = realignAdditionHastLines(
       previousAdditionLines,
       diff.additionLines,
@@ -2521,11 +2518,11 @@ function contentLineCount(lines: string[]): number {
 // `nextLines` is editor-shaped, and comparing the raw tails would mismatch on
 // the representational trailing `''`, zero out the suffix, and plain-fill
 // every line below the tokenizer's render window.
-function realignAdditionHastLines(
+function realignAdditionHastLines<LAnnotation>(
   previousLines: string[],
   nextLines: string[],
   hastLines: ElementContent[],
-  textDocument: DiffsTextDocument
+  textDocument: TextDocument<LAnnotation>
 ): ElementContent[] {
   const previousContentLength = contentLineCount(previousLines);
   const nextContentLength = contentLineCount(nextLines);
@@ -2599,40 +2596,14 @@ function createPlainAdditionLineElement(
   };
 }
 
-function getEditorDocumentLines(
-  textDocument: DiffsTextDocument,
-  previousLines: string[]
+function getEditorDocumentLines<LAnnotation>(
+  textDocument: TextDocument<LAnnotation>
 ): string[] {
   const lines: string[] = [];
-  const fallbackLineBreak = getFallbackLineBreak(previousLines);
   for (let line = 0; line < textDocument.lineCount; line++) {
-    const lineText = textDocument.getLineText(line, true);
-    lines.push(
-      line < textDocument.lineCount - 1 && !hasLineBreakSuffix(lineText)
-        ? lineText + fallbackLineBreak
-        : lineText
-    );
+    lines.push(textDocument.getLineText(line, true));
   }
   return lines;
-}
-
-function hasLineBreakSuffix(line: string): boolean {
-  return line.endsWith('\n') || line.endsWith('\r');
-}
-
-function getFallbackLineBreak(lines: string[]): string {
-  for (const line of lines) {
-    if (line.endsWith('\r\n')) {
-      return '\r\n';
-    }
-    if (line.endsWith('\n')) {
-      return '\n';
-    }
-    if (line.endsWith('\r')) {
-      return '\r';
-    }
-  }
-  return '\n';
 }
 
 function isDiffMassive(

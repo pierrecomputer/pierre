@@ -19,6 +19,7 @@ import type {
   EditorChangeEvent,
   FileEditCompleteEvent,
 } from '../editor/types';
+import type { TextDocument } from '../editor/textDocument';
 import {
   type GetHoveredLineResult,
   InteractionManager,
@@ -36,7 +37,6 @@ import type {
   DiffLineAnnotation,
   DiffsEditableComponent,
   DiffsEditor,
-  DiffsTextDocument,
   FileContents,
   HighlightedToken,
   LineAnnotation,
@@ -981,7 +981,7 @@ export class File<
 
   // normally triggered by the host when the document line count changes
   public applyDocumentChange(
-    textDocument: DiffsTextDocument,
+    textDocument: TextDocument<LAnnotation>,
     newLineAnnotations?: LineAnnotation<LAnnotation>[]
   ): void {
     const { editSessionFile } = this;

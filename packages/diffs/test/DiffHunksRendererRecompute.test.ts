@@ -7,7 +7,6 @@ import {
 } from '../src';
 import { TextDocument } from '../src/editor/textDocument';
 import type { FileDiffMetadata, HighlightedToken } from '../src/types';
-import type { DiffsTextDocument } from '../src/types';
 import { finishEditSessionForDiff } from '../src/utils/editSessionHunks';
 import { iterateOverDiff } from '../src/utils/iterateOverDiff';
 import {
@@ -49,8 +48,21 @@ const EDITED_LINES = [
 // The tokenizer reports the truncated line and the new line as dirty, using the
 // post-edit line indexes.
 
-function makeTextDocumentFromText(text: string): DiffsTextDocument {
-  return new TextDocument('edit.ts', text, 'typescript', 0);
+function makeTextDocumentFromText(text: string): TextDocument<undefined> {
+  return new TextDocument<undefined>(
+    'inmemory://diff-hunks-recompute',
+    text,
+    'typescript'
+  );
+}
+
+function makeTextDocument(lines: string[]): TextDocument<undefined> {
+  const hasEmbeddedLineBreaks = lines.some(
+    (line) => line.includes('\n') || line.includes('\r')
+  );
+  return makeTextDocumentFromText(
+    lines.join(hasEmbeddedLineBreaks ? '' : '\n')
+  );
 }
 
 function makeDirtyLines(
@@ -62,15 +74,6 @@ function makeDirtyLines(
     dirty.set(line, [[0, '', lineText]]);
   }
   return dirty;
-}
-
-function makeTextDocument(lines: string[]): DiffsTextDocument {
-  const text = lines.join('\n');
-  return {
-    lineCount: lines.length,
-    getText: () => text,
-    getLineText: (lineNumber: number) => lines[lineNumber] ?? '',
-  };
 }
 
 function pairingProjection(diff: FileDiffMetadata) {
@@ -158,7 +161,11 @@ describe('DiffHunksRenderer content-edit recompute split', () => {
     const renderer = await createPrimedRenderer('split');
 
     renderer.applyDocumentChange(
-      makeTextDocumentFromText(EDITED_LINES.join('\n'))
+      new TextDocument<undefined>(
+        'inmemory://diff-hunks',
+        EDITED_LINES.join('\n'),
+        'typescript'
+      )
     );
 
     const rendered = renderer.diffCache;
@@ -197,15 +204,18 @@ describe('DiffHunksRenderer content-edit recompute split', () => {
     });
   });
 
-  test('line-count edits preserve line breaks from legacy host documents', async () => {
+  test('line-count edits do not materialize the document text', async () => {
     const renderer = await createPrimedRenderer('split');
+    const textDocument = new TextDocument<undefined>(
+      'inmemory://diff-hunks-line-breaks',
+      EDITED_LINES.join('\n'),
+      'typescript'
+    );
+    textDocument.getText = () => {
+      throw new Error('getText should not be called for line-count edits');
+    };
 
-    renderer.applyDocumentChange({
-      ...makeTextDocument(EDITED_LINES),
-      getText: () => {
-        throw new Error('getText should not be called for line-count edits');
-      },
-    });
+    renderer.applyDocumentChange(textDocument);
 
     const rendered = renderer.diffCache;
     expect(rendered).toBeDefined();

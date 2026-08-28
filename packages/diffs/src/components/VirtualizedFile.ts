@@ -1,6 +1,6 @@
 import { DEFAULT_VIRTUAL_FILE_METRICS } from '../constants';
+import type { TextDocument } from '../editor/textDocument';
 import type {
-  DiffsTextDocument,
   FileContents,
   LineAnnotation,
   NumericScrollLineAnchor,
@@ -704,7 +704,7 @@ export class VirtualizedFile<
 
   // normally triggered by the host when the document line count changes
   override applyDocumentChange(
-    textDocument: DiffsTextDocument,
+    textDocument: TextDocument<LAnnotation>,
     newLineAnnotations?: LineAnnotation<LAnnotation>[],
     shouldUpdateBuffer = false
   ): void {

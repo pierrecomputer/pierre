@@ -4,13 +4,13 @@ import { FileDiff } from '../src/components/FileDiff';
 import { DEFAULT_THEMES } from '../src/constants';
 import { Editor } from '../src/editor/editor';
 import { DirectionNone } from '../src/editor/selection';
+import type { TextDocument } from '../src/editor/textDocument';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
 import type {
   DiffLineAnnotation,
   DiffsEditableComponent,
   DiffsEditor,
   DiffsHighlighter,
-  DiffsTextDocument,
   FileContents,
   HighlightedToken,
   RenderRange,
@@ -210,7 +210,7 @@ class TestEditableComponent implements DiffsEditableComponent<undefined> {
   }
 
   applyDocumentChange(
-    textDocument: DiffsTextDocument,
+    textDocument: TextDocument<undefined>,
     newLineAnnotations?: DiffLineAnnotation<undefined>[]
   ): void {
     this.#file = {

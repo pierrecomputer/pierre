@@ -1,12 +1,12 @@
 import { describe, expect, test } from 'bun:test';
 
 import { Editor } from '../src/editor/editor';
+import type { TextDocument } from '../src/editor/textDocument';
 import type {
   DiffLineAnnotation,
   DiffsEditableComponent,
   DiffsEditor,
   DiffsHighlighter,
-  DiffsTextDocument,
   FileContents,
   HighlightedToken,
 } from '../src/types';
@@ -117,7 +117,7 @@ class VirtualizedEditableComponent implements DiffsEditableComponent<undefined> 
   }
 
   applyDocumentChange(
-    _textDocument: DiffsTextDocument,
+    _textDocument: TextDocument<undefined>,
     _newLineAnnotations?: DiffLineAnnotation<undefined>[]
   ): void {}
 

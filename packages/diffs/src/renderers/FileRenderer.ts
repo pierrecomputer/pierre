@@ -6,6 +6,7 @@ import {
   DEFAULT_THEMES,
   DEFAULT_TOKENIZE_MAX_LENGTH,
 } from '../constants';
+import type { TextDocument } from '../editor/textDocument';
 import { areLanguagesAttached } from '../highlighter/languages/areLanguagesAttached';
 import {
   getHighlighterIfLoaded,
@@ -16,7 +17,6 @@ import { hasResolvedThemes } from '../highlighter/themes/hasResolvedThemes';
 import type {
   BaseCodeOptions,
   DiffsHighlighter,
-  DiffsTextDocument,
   FileContents,
   FileHeaderRenderMode,
   HighlightedToken,
@@ -133,7 +133,10 @@ export class FileRenderer<LAnnotation = undefined> {
   private lineAnnotations: AnnotationLineMap<LAnnotation> = {};
   private lineCache: LineCache | undefined;
   private pendingStructuralRows: Map<number, HASTElement> | undefined;
-  private textDocumentCache = new WeakMap<FileContents, DiffsTextDocument>();
+  private textDocumentCache = new WeakMap<
+    FileContents,
+    TextDocument<LAnnotation>
+  >();
 
   // Edit-session state: while active, this renderer stays on the main thread
   // with editor-compatible token markup — the editor's caret/selection
@@ -577,7 +580,7 @@ export class FileRenderer<LAnnotation = undefined> {
   }
 
   // normally triggered by the host when the document line count changes
-  public applyDocumentChange(textDocument: DiffsTextDocument): void {
+  public applyDocumentChange(textDocument: TextDocument<LAnnotation>): void {
     const { pendingStructuralRows, renderCache } = this;
     this.pendingStructuralRows = undefined;
     if (renderCache == null) {

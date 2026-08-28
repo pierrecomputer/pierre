@@ -1,7 +1,8 @@
 import { afterAll, describe, expect, test } from 'bun:test';
 
 import { disposeHighlighter, FileDiff, parseDiffFromFile } from '../src';
-import type { DiffsEditor, DiffsTextDocument } from '../src/types';
+import { TextDocument } from '../src/editor/textDocument';
+import type { DiffsEditor } from '../src/types';
 import { installDom } from './domHarness';
 
 const twoHunkFileLineCount = 140;
@@ -33,16 +34,11 @@ function createTwoHunkDiff() {
   return fileDiff;
 }
 
-function makeTextDocument(lines: string[]): DiffsTextDocument {
-  const text = lines.join('\n');
-  return {
-    lineCount: lines.length,
-    getText: () => text,
-    getLineText: (lineNumber: number, includeLineBreak = false) => {
-      const line = lines[lineNumber] ?? '';
-      return includeLineBreak ? line : line.replace(/\r?\n$/, '');
-    },
-  };
+function makeTextDocument(lines: string[]): TextDocument<string> {
+  return new TextDocument<string>(
+    'inmemory://file-diff-unified-separators',
+    lines.join('')
+  );
 }
 
 function createEditorStub(): DiffsEditor<string> {

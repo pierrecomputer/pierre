@@ -13,6 +13,7 @@ import type {
   ThemeRegistrationResolved,
 } from 'shiki';
 
+import type { TextDocument } from './editor/textDocument';
 import type {
   CapturedDiffSessionState,
   EditorActiveLineOptions,
@@ -1120,7 +1121,7 @@ export interface DiffsEditableComponent<
     annotation: LineAnnotation<LAnnotation> | DiffLineAnnotation<LAnnotation>
   ) => string;
   applyDocumentChange: (
-    textDocument: DiffsTextDocument,
+    textDocument: TextDocument<LAnnotation>,
     newLineAnnotations?: DiffLineAnnotation<LAnnotation>[],
     shouldUpdateBuffer?: boolean
   ) => void;
@@ -1208,12 +1209,6 @@ export interface DiffsEditor<LAnnotation> {
   /** Replace the remote carets and selections. */
   setCarets(carets: EditorCaret<unknown>[]): void;
   cleanUp(reason?: 'discard' | 'recycle' | 'complete'): void;
-}
-
-export interface DiffsTextDocument {
-  readonly lineCount: number;
-  getLineText: (lineNumber: number, includeLineBreak?: boolean) => string;
-  getText: () => string;
 }
 
 /**

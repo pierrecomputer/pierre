@@ -9,6 +9,7 @@ import {
 import type { FileEditCompleteEvent } from '../src/components/File';
 import type { FileDiffEditCompleteEvent } from '../src/components/FileDiff';
 import { Editor } from '../src/editor/editor';
+import { TextDocument } from '../src/editor/textDocument';
 import type {
   EditCompletionDecision,
   EditorDocumentKind,
@@ -750,11 +751,9 @@ describe('CodeView item edit mode', () => {
         { length: lineCount },
         (_, i) => `edited ${i}`
       ).join('\n');
-      edited.instance.applyDocumentChange({
-        lineCount,
-        getLineText: (lineNumber: number) => `edited ${lineNumber}`,
-        getText: () => documentText,
-      });
+      edited.instance.applyDocumentChange(
+        new TextDocument<undefined>('inmemory://code-view-file', documentText)
+      );
 
       // Scroll the edited item out (recycle) and back in. The private session
       // survives the renderer cache reset, so the remount renders its grown
@@ -817,11 +816,9 @@ describe('CodeView item edit mode', () => {
       ).toBe(false);
 
       const edited = viewer.getRenderedItems()[0];
-      edited.instance.applyDocumentChange({
-        lineCount: 1,
-        getLineText: () => 'only line',
-        getText: () => 'only line',
-      });
+      edited.instance.applyDocumentChange(
+        new TextDocument<undefined>('inmemory://code-view-shrunk', 'only line')
+      );
       await wait(0);
 
       expect(viewer.getScrollHeight()).toBeLessThan(heightBefore);
@@ -859,11 +856,9 @@ describe('CodeView item edit mode', () => {
         (_, i) => `edited ${i}`
       ).join('\n');
       const edited = viewer.getRenderedItems()[0];
-      edited.instance.applyDocumentChange({
-        lineCount,
-        getLineText: (lineNumber: number) => `edited ${lineNumber}`,
-        getText: () => documentText,
-      });
+      edited.instance.applyDocumentChange(
+        new TextDocument<undefined>('inmemory://code-view-diff', documentText)
+      );
       // Scroll the edited item out before any render pass reconciles it: the
       // released item's cached layout height must still pick up the change.
       root.scrollTop = 10_000;

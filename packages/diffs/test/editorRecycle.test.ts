@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 
 import { Editor } from '../src/editor/editor';
 import { EditStateManager } from '../src/editor/EditStateManager';
+import type { TextDocument } from '../src/editor/textDocument';
 import type { CapturedDiffSessionState } from '../src/editor/types';
 import { queueRender } from '../src/managers/UniversalRenderingManager';
 import type {
@@ -9,7 +10,6 @@ import type {
   DiffsEditableComponent,
   DiffsEditor,
   DiffsHighlighter,
-  DiffsTextDocument,
   FileContents,
   HighlightedToken,
   RenderRange,
@@ -195,7 +195,7 @@ class TestEditableComponent implements DiffsEditableComponent<undefined> {
   }
 
   applyDocumentChange(
-    textDocument: DiffsTextDocument,
+    textDocument: TextDocument<undefined>,
     newLineAnnotations?: DiffLineAnnotation<undefined>[]
   ): void {
     this.#file = {

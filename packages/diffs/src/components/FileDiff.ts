@@ -22,6 +22,7 @@ import type {
   FileDiffEditCompleteEvent,
   RetainedDiffSessionSnapshot,
 } from '../editor/types';
+import type { TextDocument } from '../editor/textDocument';
 import {
   type GetHoveredLineResult,
   type GetLineIndexUtility,
@@ -51,7 +52,6 @@ import type {
   DiffLineAnnotation,
   DiffsEditableComponent,
   DiffsEditor,
-  DiffsTextDocument,
   ExpansionDirections,
   FileContents,
   FileDiffMetadata,
@@ -2093,7 +2093,7 @@ export class FileDiff<
 
   // normally triggered by the host when the document line count changes
   public applyDocumentChange(
-    textDocument: DiffsTextDocument,
+    textDocument: TextDocument<LAnnotation>,
     newLineAnnotations?: DiffLineAnnotation<LAnnotation>[]
   ): void {
     const { editSessionDiff } = this;

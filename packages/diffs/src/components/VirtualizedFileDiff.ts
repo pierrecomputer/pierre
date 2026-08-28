@@ -1,8 +1,8 @@
 import { DEFAULT_COLLAPSED_CONTEXT_THRESHOLD } from '../constants';
+import type { TextDocument } from '../editor/textDocument';
 import type {
   BaseDiffOptions,
   DiffLineAnnotation,
-  DiffsTextDocument,
   ExpansionDirections,
   FileContents,
   FileDiffMetadata,
@@ -1065,7 +1065,7 @@ export class VirtualizedFileDiff<
 
   // Normally triggered by the host when the document line count changes.
   override applyDocumentChange(
-    textDocument: DiffsTextDocument,
+    textDocument: TextDocument<LAnnotation>,
     newLineAnnotations?: DiffLineAnnotation<LAnnotation>[],
     shouldUpdateBuffer = false
   ): void {

@@ -158,7 +158,7 @@ class TestEditableComponent implements DiffsEditableComponent<undefined> {
   }
 
   applyDocumentChange(
-    _textDocument: unknown,
+    _textDocument: TextDocument<undefined>,
     newLineAnnotations?: DiffLineAnnotation<undefined>[]
   ): void {
     this.#lineAnnotations = newLineAnnotations;

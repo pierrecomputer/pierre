@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'bun:test';
 
 import { VirtualizedFile } from '../src/components/VirtualizedFile';
+import { TextDocument } from '../src/editor/textDocument';
 import type {
   DiffsEditor,
-  DiffsTextDocument,
   FileContents,
   RenderRange,
 } from '../src/types';
@@ -37,13 +37,11 @@ function makeContents(lineCount: number): string {
   );
 }
 
-function makeDocument(lineCount: number): DiffsTextDocument {
-  const text = makeContents(lineCount);
-  return {
-    lineCount,
-    getLineText: (lineNumber: number) => `line ${lineNumber + 1}`,
-    getText: () => text,
-  };
+function makeDocument(lineCount: number): TextDocument<undefined> {
+  return new TextDocument<undefined>(
+    'inmemory://virtualized-file',
+    makeContents(lineCount)
+  );
 }
 
 function makeFile(lineCount: number): FileContents {

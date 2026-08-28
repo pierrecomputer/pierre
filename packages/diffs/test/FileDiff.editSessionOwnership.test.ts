@@ -17,10 +17,10 @@ import type {
   EditorChangeEvent,
   EditorViewState,
 } from '../src/editor/types';
+import { TextDocument } from '../src/editor/textDocument';
 import type {
   DiffLineAnnotation,
   DiffsEditor,
-  DiffsTextDocument,
   FileContents,
   FileDiffMetadata,
   HighlightedToken,
@@ -122,15 +122,8 @@ function makeDirtyLines(
   return new Map(edits.map(([line, text]) => [line, [[0, '', text]]]));
 }
 
-function makeTextDocument(lines: string[]): DiffsTextDocument {
-  return {
-    lineCount: lines.length,
-    getText: () => lines.join(''),
-    getLineText: (lineNumber: number, includeLineBreak = false) => {
-      const line = lines[lineNumber] ?? '';
-      return includeLineBreak ? line : line.replace(/\r?\n$/, '');
-    },
-  };
+function makeTextDocument(lines: string[]): TextDocument<undefined> {
+  return new TextDocument<undefined>('inmemory://file-diff-session', lines.join(''));
 }
 
 async function createAttachedFixture(): Promise<{

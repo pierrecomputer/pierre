@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 
 import { FileDiff, parseDiffFromFile } from '../src';
-import type { DiffsEditor, DiffsTextDocument } from '../src/types';
+import { TextDocument } from '../src/editor/textDocument';
+import type { DiffsEditor } from '../src/types';
 import { installDom, wait } from './domHarness';
 
 const fileDiff = parseDiffFromFile(
@@ -28,15 +29,8 @@ function createEditorStub(): DiffsEditor<undefined> {
   } as unknown as DiffsEditor<undefined>;
 }
 
-function makeTextDocument(lines: string[]): DiffsTextDocument {
-  return {
-    lineCount: lines.length,
-    getText: () => lines.join(''),
-    getLineText: (lineNumber: number, includeLineBreak = false) => {
-      const line = lines[lineNumber] ?? '';
-      return includeLineBreak ? line : line.replace(/\r?\n$/, '');
-    },
-  };
+function makeTextDocument(lines: string[]): TextDocument<undefined> {
+  return new TextDocument<undefined>('inmemory://file-diff-header', lines.join(''));
 }
 
 async function waitForSlotText(
