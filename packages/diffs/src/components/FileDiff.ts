@@ -236,10 +236,9 @@ export type FileDiffHydrationProps<LAnnotation> = Omit<
 export type FileDiffType = 'file-diff' | 'unresolved-file';
 
 /**
- * `onEditComplete` event argument when an edit session ends with a changed
- * diff.
+ * `onEditComplete` event argument when an edit session ends.
  *
- * `fileDiff` is a freshly computed diff of the edited contents with no
+ * `fileDiff` is a freshly computed diff of the final contents with no
  * `cacheKey` set; accepting installs it.
  *
  * `originalFileDiff` is the last `fileDiff` the component was given externally;
@@ -268,10 +267,11 @@ export interface FileDiffEditCompleteEvent<LAnnotation> {
 
 /**
  * Decides a completed edit synchronously: return `'accept'` to install the
- * event's `fileDiff`, or `'reject'` to restore `originalFileDiff`. The event is
- * frozen, so re-key the accepted diff in place (`event.fileDiff.cacheKey =
- * '…'`) before accepting. The event's editor is detached and returns its final
- * state from `getViewState()`. A missing handler rejects.
+ * event's `fileDiff` and annotations, or `'reject'` to restore the original
+ * values. The event is frozen, so re-key the accepted diff in place
+ * (`event.fileDiff.cacheKey = '…'`) before accepting. The event's editor is
+ * detached and returns its final state from `getViewState()`. A missing handler
+ * rejects.
  */
 export type FileDiffEditCompleteHandler<LAnnotation> = (
   event: FileDiffEditCompleteEvent<LAnnotation>
@@ -323,11 +323,11 @@ export interface FileDiffOptions<LAnnotation>
   onEditChange?(event: EditorChangeEvent<LAnnotation, 'diff'>): void;
 
   /**
-   * Fired when `edit` toggles false or a component unmounts. Only called if
-   * there are content changes resolving in a new diff. If no callback is
-   * provided, then the component will always revert back to the last
-   * `fileDiff` or `oldFile`/`newFiles` passed into the component. The callback
-   * receives the detached editor with its final pre-detach state.
+   * Fired when `edit` toggles false or a component unmounts, including when the
+   * final contents are unchanged. If no callback is provided, the component
+   * reverts to the last `fileDiff` or `oldFile`/`newFiles` and annotations
+   * passed into it. The callback receives the detached editor with its final
+   * pre-detach state.
    */
   onEditComplete?: FileDiffEditCompleteHandler<LAnnotation>;
 }
@@ -1957,22 +1957,12 @@ export class FileDiff<
    * Requires the editor to be detached first. Does nothing when no session
    * exists, so callers can invoke it again safely after it has settled.
    *
-   * When the edited new-side text matches the external diff (including edits
-   * undone all the way back), the session is discarded without calling
-   * `onEditComplete`: the external diff stays, and annotations keep the
-   * session's collection so annotation writes made during the session
-   * survive.
-   *
-   * When the text changed, `onEditComplete` receives a fresh keyless
-   * `FileDiffMetadata` with fully recomputed hunks, alongside the current
-   * external diff, complete `oldFile`/`newFile` representations derived from
-   * the completed diff, and the session's annotations. In `install` mode,
-   * accepting installs the event's `fileDiff` as the new external value
-   * together with those annotations; `discard` mode always restores the
-   * external value. Rejecting or having no handler also restores the external
-   * diff and its annotations. An accepted diff reusing the replaced diff's
-   * `cacheKey` throws; the component still leaves the session on the external
-   * diff before the error propagates.
+   * `onEditComplete` receives the completed diff, current external diff,
+   * complete file pair, and both annotation collections even when the final
+   * text is unchanged. In `install` mode, accepting installs the completed diff
+   * and its annotations; rejecting or having no handler restores the external
+   * values. `discard` mode always restores the external values. An accepted
+   * diff cannot reuse the replaced diff's `cacheKey`.
    */
   public completeEditSession(
     editor: DiffsEditor<LAnnotation>,
@@ -2003,68 +1993,63 @@ export class FileDiff<
     this.finalizeEditSessionHunks();
 
     const sessionAnnotationsCurrent = editSessionAnnotations?.current;
-    const contentsChanged =
-      editSessionDiff.additionLines.join('') !==
-      externalDiff.additionLines.join('');
     let acceptedDiff: FileDiffMetadata | undefined;
     let acceptedOldFile: FileContents | null = null;
     let acceptedNewFile: FileContents | null = null;
     let failed = false;
     let failure: unknown;
-    if (contentsChanged) {
-      const { onEditComplete } = this.options;
-      if (onEditComplete != null) {
-        if (editor == null) {
-          throw new Error(
-            'FileDiff.completeEditSession: editor is required for completion'
-          );
-        }
-        const completedDiff = cloneFileDiffMetadata(editSessionDiff);
-        const newFile: FileContents = {
-          name: completedDiff.name,
-          contents: completedDiff.additionLines.join(''),
-        };
-        if (completedDiff.lang != null) {
-          newFile.lang = completedDiff.lang;
-        }
-        const event: FileDiffEditCompleteEvent<LAnnotation> = {
-          fileDiff: completedDiff,
-          editor,
-          originalFileDiff: externalDiff,
-          oldFile:
-            completedDiff.type === 'new'
-              ? null
-              : {
-                  name: completedDiff.prevName ?? completedDiff.name,
-                  contents: completedDiff.deletionLines.join(''),
-                },
-          newFile,
-          lineAnnotations: sessionAnnotationsCurrent,
-          originalLineAnnotations: externalAnnotations,
-        };
-        // Frozen so a handler cannot swap the event's fileDiff/originalFileDiff
-        // references; nested mutation (i.e. a fresh cacheKey on event.fileDiff)
-        // still works.
-        Object.freeze(event);
-        try {
-          const decision = onEditComplete(event);
-          if (decision === 'accept') {
-            if (
-              completedDiff.cacheKey != null &&
-              completedDiff.cacheKey === externalDiff.cacheKey
-            ) {
-              throw new Error(
-                'FileDiff.completeEditSession: an accepted diff must not reuse the replaced diff cacheKey'
-              );
-            }
-            acceptedDiff = completedDiff;
-            acceptedOldFile = event.oldFile;
-            acceptedNewFile = event.newFile;
+    const { onEditComplete } = this.options;
+    if (onEditComplete != null) {
+      if (editor == null) {
+        throw new Error(
+          'FileDiff.completeEditSession: editor is required for completion'
+        );
+      }
+      const completedDiff = cloneFileDiffMetadata(editSessionDiff);
+      const newFile: FileContents = {
+        name: completedDiff.name,
+        contents: completedDiff.additionLines.join(''),
+      };
+      if (completedDiff.lang != null) {
+        newFile.lang = completedDiff.lang;
+      }
+      const event: FileDiffEditCompleteEvent<LAnnotation> = {
+        fileDiff: completedDiff,
+        editor,
+        originalFileDiff: externalDiff,
+        oldFile:
+          completedDiff.type === 'new'
+            ? null
+            : {
+                name: completedDiff.prevName ?? completedDiff.name,
+                contents: completedDiff.deletionLines.join(''),
+              },
+        newFile,
+        lineAnnotations: sessionAnnotationsCurrent,
+        originalLineAnnotations: externalAnnotations,
+      };
+      // Frozen so a handler cannot swap the event's fileDiff/originalFileDiff
+      // references; nested mutation (i.e. a fresh cacheKey on event.fileDiff)
+      // still works.
+      Object.freeze(event);
+      try {
+        const decision = onEditComplete(event);
+        if (decision === 'accept') {
+          if (
+            completedDiff.cacheKey != null &&
+            completedDiff.cacheKey === externalDiff.cacheKey
+          ) {
+            throw new Error(
+              'FileDiff.completeEditSession: an accepted diff must not reuse the replaced diff cacheKey'
+            );
           }
-        } catch (error) {
-          failed = true;
-          failure = error;
+          acceptedDiff = completedDiff;
+          acceptedOldFile = event.oldFile;
+          acceptedNewFile = event.newFile;
         }
+      } catch (error) {
+        failed = true;
+        failure = error;
       }
     }
 
@@ -2081,12 +2066,6 @@ export class FileDiff<
       if (sessionAnnotationsCurrent != null) {
         this.lineAnnotations = sessionAnnotationsCurrent;
       }
-    } else if (
-      installResult &&
-      !contentsChanged &&
-      sessionAnnotationsCurrent != null
-    ) {
-      this.lineAnnotations = sessionAnnotationsCurrent;
     }
     this.editSessionDiff = undefined;
     this.editSessionAnnotations = undefined;

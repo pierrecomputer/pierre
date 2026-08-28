@@ -142,12 +142,12 @@ increment its `version`. Pass shared creation options through the `CodeView`
 selection, and view-state retention.
 
 Use `onItemEditChange` for live contents and annotation changes. Use
-`onItemEditComplete` to accept or reject the completed edit. If you use keyed
-render caching, assign a fresh `cacheKey` to the event's file or diff. Put the
-supplied `nextItem` into controlled state only while the item should remain,
-then return `'accept'`; acceptance during removal or teardown does not reinsert
-it. `CodeView` builds `nextItem` with `edit: false` and an incremented
-`version`.
+`onItemEditComplete` to accept or reject every ended session, including when its
+final text is unchanged. If you use keyed render caching, assign a fresh
+`cacheKey` to the event's file or diff. Put the supplied `nextItem` into
+controlled state only while the item should remain, then return `'accept'`;
+acceptance during removal or teardown does not reinsert it. `CodeView` builds
+`nextItem` with `edit: false` and an incremented `version`.
 
 `CodeViewHandle.getEditor(id)` returns the current `DiffsEditor` handle. The
 item editor keeps its active document and history when virtualization or

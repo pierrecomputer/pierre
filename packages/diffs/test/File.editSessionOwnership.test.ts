@@ -1201,7 +1201,7 @@ describe('completeEditSession', () => {
     }
   });
 
-  test('unchanged contents skip the handler and keep session annotation writes', async () => {
+  test('unchanged contents complete and can accept session annotation writes', async () => {
     const externalAnnotations: LineAnnotation<undefined>[] = [
       { lineNumber: 2 },
     ];
@@ -1210,7 +1210,7 @@ describe('completeEditSession', () => {
       lineAnnotations: externalAnnotations,
       onEditComplete(event) {
         events.push(event);
-        return 'reject';
+        return 'accept';
       },
     });
     try {
@@ -1224,8 +1224,10 @@ describe('completeEditSession', () => {
       });
       fixture.editor.cleanUp('complete');
 
-      expect(events).toHaveLength(0);
-      expect(instance.file).toBe(externalFile);
+      expect(events).toHaveLength(1);
+      expect(events[0].file.contents).toBe(externalFile.contents);
+      expect(events[0].file.cacheKey).toBeUndefined();
+      expect(instance.file).toBe(events[0].file);
       expect(instance.getExternalAnnotationsForTest()).toBe(written);
       expect(instance.getLatestAnnotationsForTest()).toBe(written);
     } finally {
@@ -1233,7 +1235,7 @@ describe('completeEditSession', () => {
     }
   });
 
-  test('editing and undoing back to the external contents does not complete', async () => {
+  test('editing and undoing back to the external contents still completes', async () => {
     const events: FileEditCompleteEvent<undefined>[] = [];
     const fixture = await createCompletionFixture({
       onEditComplete(event) {
@@ -1248,7 +1250,9 @@ describe('completeEditSession', () => {
       expect(editor.getText()).toBe(externalFile.contents);
       editor.cleanUp('complete');
 
-      expect(events).toHaveLength(0);
+      expect(events).toHaveLength(1);
+      expect(events[0].file.contents).toBe(externalFile.contents);
+      expect(events[0].file.cacheKey).toBeUndefined();
       expect(instance.file).toBe(externalFile);
     } finally {
       fixture.cleanup();

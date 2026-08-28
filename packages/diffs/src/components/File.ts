@@ -99,11 +99,10 @@ export interface FileHydrateProps<LAnnotation> extends Omit<
 }
 
 /**
- * `onEditComplete` event argument when an edit session ends with changed
- * contents.
+ * `onEditComplete` event argument when an edit session ends.
  *
- * `file` is a fresh FileContents with the edited contents and no `cacheKey`
- * set; accepting installs it.
+ * `file` is a fresh FileContents with the final contents and no `cacheKey` set;
+ * accepting installs it.
  *
  * `originalFile` is the last `file` the component was given externally; a
  * revert restores it.
@@ -125,10 +124,11 @@ export interface FileEditCompleteEvent<LAnnotation> {
 
 /**
  * Decides a completed edit synchronously: return `'accept'` to install the
- * event's `file`, or `'reject'` to restore `originalFile`. The event is frozen,
- * so re-key the accepted file in place (`event.file.cacheKey = '…'`) before
- * accepting. The event's editor is detached and returns its final state from
- * `getViewState()`. A missing handler rejects.
+ * event's `file` and annotations, or `'reject'` to restore the original values.
+ * The event is frozen, so re-key the accepted file in place
+ * (`event.file.cacheKey = '…'`) before accepting. The event's editor is
+ * detached and returns its final state from `getViewState()`. A missing handler
+ * rejects.
  */
 export type FileEditCompleteHandler<LAnnotation> = (
   event: FileEditCompleteEvent<LAnnotation>
@@ -169,11 +169,10 @@ export interface FileOptions<LAnnotation>
   onEditChange?(event: EditorChangeEvent<LAnnotation, 'file'>): void;
 
   /**
-   * Fired when `edit` toggles false or a component unmounts. Only called if
-   * there are content changes resolving in a new file. If no callback is
-   * provided, then the component will always revert back to the last `file`
-   * passed into the component. The callback receives the detached editor with
-   * its final pre-detach state.
+   * Fired when `edit` toggles false or a component unmounts, including when the
+   * final contents are unchanged. If no callback is provided, the component
+   * reverts to the last `file` and annotations passed into it. The callback
+   * receives the detached editor with its final pre-detach state.
    */
   onEditComplete?: FileEditCompleteHandler<LAnnotation>;
 }
@@ -893,21 +892,12 @@ export class File<
    * Requires the editor to be detached first. Does nothing when no session
    * exists, so callers can invoke it again safely after it has settled.
    *
-   * When the edited text matches the external file (including edits undone
-   * all the way back), the session is discarded without calling
-   * `onEditComplete`: the external file stays, and annotations keep the
-   * session's collection so annotation writes made during the session
-   * survive.
-   *
-   * When the text changed, `onEditComplete` receives a fresh keyless
-   * `FileContents` holding the edited text, alongside the current external
-   * file and the session's annotations. In `install` mode, accepting installs
-   * the event's `file` as the new external value together with those
-   * annotations; `discard` mode always restores the external value. Rejecting
-   * or having no handler also restores the external file and its annotations.
-   * An accepted file reusing the replaced file's `cacheKey` throws; the
-   * component still leaves the session on the external file before the error
-   * propagates.
+   * `onEditComplete` receives the completed file, current external file, and
+   * both annotation collections even when the final text is unchanged. In
+   * `install` mode, accepting installs the completed file and its annotations;
+   * rejecting or having no handler restores the external values. `discard`
+   * mode always restores the external values. An accepted file cannot reuse
+   * the replaced file's `cacheKey`.
    */
   public completeEditSession(
     editor: DiffsEditor<LAnnotation>,
@@ -936,47 +926,44 @@ export class File<
     }
 
     const sessionAnnotationsCurrent = editSessionAnnotations?.current;
-    const contentsChanged = editSessionFile.contents !== externalFile.contents;
     let acceptedFile: FileContents | undefined;
     let failed = false;
     let failure: unknown;
-    if (contentsChanged) {
-      const { onEditComplete } = this.options;
-      if (onEditComplete != null) {
-        if (editor == null) {
-          throw new Error(
-            'File.completeEditSession: editor is required for completion'
-          );
-        }
-        const completedFile = { ...editSessionFile };
-        const event: FileEditCompleteEvent<LAnnotation> = {
-          file: completedFile,
-          editor,
-          originalFile: externalFile,
-          lineAnnotations: sessionAnnotationsCurrent,
-          originalLineAnnotations: externalAnnotations,
-        };
-        // Frozen so a handler cannot swap the event's file/originalFile
-        // references; nested mutation (a fresh cacheKey on event.file) still
-        // works.
-        Object.freeze(event);
-        try {
-          const decision = onEditComplete(event);
-          if (decision === 'accept') {
-            if (
-              completedFile.cacheKey != null &&
-              completedFile.cacheKey === externalFile.cacheKey
-            ) {
-              throw new Error(
-                'File.completeEditSession: an accepted file must not reuse the replaced file cacheKey'
-              );
-            }
-            acceptedFile = completedFile;
+    const { onEditComplete } = this.options;
+    if (onEditComplete != null) {
+      if (editor == null) {
+        throw new Error(
+          'File.completeEditSession: editor is required for completion'
+        );
+      }
+      const completedFile = { ...editSessionFile };
+      const event: FileEditCompleteEvent<LAnnotation> = {
+        file: completedFile,
+        editor,
+        originalFile: externalFile,
+        lineAnnotations: sessionAnnotationsCurrent,
+        originalLineAnnotations: externalAnnotations,
+      };
+      // Frozen so a handler cannot swap the event's file/originalFile
+      // references; nested mutation (a fresh cacheKey on event.file) still
+      // works.
+      Object.freeze(event);
+      try {
+        const decision = onEditComplete(event);
+        if (decision === 'accept') {
+          if (
+            completedFile.cacheKey != null &&
+            completedFile.cacheKey === externalFile.cacheKey
+          ) {
+            throw new Error(
+              'File.completeEditSession: an accepted file must not reuse the replaced file cacheKey'
+            );
           }
-        } catch (error) {
-          failed = true;
-          failure = error;
+          acceptedFile = completedFile;
         }
+      } catch (error) {
+        failed = true;
+        failure = error;
       }
     }
 
@@ -985,12 +972,6 @@ export class File<
       if (sessionAnnotationsCurrent != null) {
         this.lineAnnotations = sessionAnnotationsCurrent;
       }
-    } else if (
-      installResult &&
-      !contentsChanged &&
-      sessionAnnotationsCurrent != null
-    ) {
-      this.lineAnnotations = sessionAnnotationsCurrent;
     }
     this.editSessionFile = undefined;
     this.editSessionAnnotations = undefined;

@@ -37,9 +37,9 @@ Mount one stable `EditProvider`, forward all three factory arguments, and set
 editing.
 
 Pass `onEditChange` to monitor live changes while in edit mode. Use
-`onEditComplete` to accept or reject content changes when the edit session ends.
-See [Handle changes and completion](#edit-mode-handle-changes-and-completion)
-for their lifecycle and event payloads.
+`onEditComplete` to accept or reject the result when the edit session ends. See
+[Handle changes and completion](#edit-mode-handle-changes-and-completion) for
+their lifecycle and event payloads.
 
 <DocsCodeExample {...editReactCreateEditorExample} />
 
@@ -62,7 +62,7 @@ completion.
 
 Set `onEditChange` in the component's `FileOptions` or `FileDiffOptions` to
 monitor live changes while in edit mode. Use `onEditComplete` to accept or
-reject content changes when the edit session ends. See
+reject the result when the edit session ends. See
 [Handle changes and completion](#edit-mode-handle-changes-and-completion) for
 their lifecycle and event payloads.
 
@@ -71,10 +71,10 @@ their lifecycle and event payloads.
   fileDiffExample={editVanillaFileDiffExample}
 />
 
-`editor.cleanUp('discard')` also runs completion for changed content, but never
-installs the callback result. `cleanUp('recycle')` temporarily detaches
-rendering without ending the session; virtualized hosts use it when a component
-leaves the render window.
+`editor.cleanUp('discard')` also runs completion, but never installs the
+callback result. `cleanUp('recycle')` temporarily detaches rendering without
+ending the session; virtualized hosts use it when a component leaves the render
+window.
 
 #### CodeView
 
@@ -89,13 +89,12 @@ Set `edit: true` on an item and increment its `version` whenever `edit` changes.
 
 Use `onItemEditChange(event, item)` to monitor an item's live changes while in
 edit mode. Use `onItemEditComplete(event, item, nextItem)` to accept or reject
-content changes when its edit session ends. `nextItem` is the completed
-replacement. In controlled React mode, write it into your `items` state before
-returning `'accept'`. A collapsed or virtualized item keeps its session active;
-turning editing off, removing the item, resetting, cleaning up, or unmounting
-ends it. See
-[Handle changes and completion](#edit-mode-handle-changes-and-completion) for
-the shared lifecycle and event payloads.
+the result when its edit session ends. `nextItem` is the completed replacement.
+In controlled React mode, write it into your `items` state before returning
+`'accept'`. A collapsed or virtualized item keeps its session active; turning
+editing off, removing the item, resetting, cleaning up, or unmounting ends it.
+See [Handle changes and completion](#edit-mode-handle-changes-and-completion)
+for the shared lifecycle and event payloads.
 
 Use `getEditStateKey(item)` for per-item edit state retention. It is evaluated
 only when that item's editor is created. Item editor state retains selections
@@ -135,10 +134,9 @@ Most of the time you probably won't need this API.
 
 <DocsCodeExample {...editOnChangeExample} />
 
-Completion runs only when the final contents differ from the latest external
-input. Selection-only, scroll-only, annotation-only, and fully undone sessions
-do not call `onEditComplete`. For React components and CodeView items,
-completion is triggered when `edit` changes from `true` to `false` or the
+Completion runs whenever an edit session ends, including untouched,
+annotation-only, and fully undone sessions. For React components and CodeView
+items, completion is triggered when `edit` changes from `true` to `false` or the
 component or item unmounts. Direct `Editor` usage ends the session through the
 function returned by `edit()`. You must return `'accept'` or `'reject'` string
 literals to instruct the component what to do next.
@@ -164,9 +162,8 @@ completed replacement item. Returning `'accept'` installs `nextItem`; a
 controlled React owner must also write that item into its `items` state.
 Returning `'reject'` restores the latest external item.
 
-Unmounting a changed component or item can still run completion, but does not
-install the result. The callback remains the place to capture or persist that
-final content.
+Unmounting a component or item still runs completion, but does not install the
+result. The callback remains the place to capture or persist the final state.
 
 Accept and reject control what the component displays. They do not clear a keyed
 editing session.

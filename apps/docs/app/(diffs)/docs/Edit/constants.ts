@@ -39,8 +39,8 @@ const fileInstance = new VirtualizedFile(
     onEditChange(event) {
       console.log('change', event.file.name, event.lineAnnotations);
     },
-    // Runs once when a changed session ends. Return 'accept' to install the
-    // event's file, or 'reject' to revert.
+    // Runs once when a session ends. Return 'accept' to install the event's
+    // file and annotations, or 'reject' to revert.
     onEditComplete(event) {
       // Store the edited file so later renders use it, and don't reset back to
       // the stale original.
@@ -528,8 +528,8 @@ export function EditableFile() {
   const cancelled = useRef(false);
   const version = useRef(0);
 
-  // Runs once when a changed session ends. Return 'accept' to install the
-  // event's file, or 'reject' to revert.
+  // Runs once when a session ends. Return 'accept' to install the event's file
+  // and annotations, or 'reject' to revert.
   const handleEditComplete = useCallback<FileEditCompleteHandler<undefined>>(
     (event) => {
       if (cancelled.current) {
@@ -1359,8 +1359,8 @@ editor.redo();
 // editor, then runs the component's onEditComplete accept/reject boundary.
 dispose();
 
-// cleanUp('discard') also runs changed-session completion, but never installs
-// the result. Virtualized hosts use cleanUp('recycle') for temporary remounts.
+// cleanUp('discard') also runs completion, but never installs the result.
+// Virtualized hosts use cleanUp('recycle') for temporary remounts.
 
 // Inspect complete active or inactive state without changing LRU recency.
 EditStateManager.get('file', editStateKey);

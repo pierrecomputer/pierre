@@ -558,11 +558,10 @@ export interface CodeViewOptions<LAnnotation>
     item: CodeViewItem<LAnnotation>
   ): void;
   /**
-   * Called once when a changed edit session ends: edit turned off, the item
-   * is removed from items, or the viewer tears down (`reset()`/`cleanUp()`,
-   * where the result is not installed because the viewer is going away). Not
-   * called for sessions without changes, or for collapse (which suspends the
-   * session until the item expands).
+   * Called once when an edit session ends: edit to false, the item is removed
+   * from items, or the viewer tears down (`reset()`/`cleanUp()`, where the
+   * result is not installed because the viewer is going away). Collapse does
+   * not call it because the session remains active until the item expands.
    *
    * The event carries the completed `file`/`fileDiff` built from the edit
    * session. `item` is the item that owned the session, and `nextItem` is

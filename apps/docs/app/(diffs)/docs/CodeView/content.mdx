@@ -71,15 +71,15 @@ vanilla `CodeView`, it does not accept `createEditor` directly or inside
 be editable, and pass creation-time item-editor behavior through
 `editorOptions`. `onItemEditChange(event, item)` reports each live change with
 the owning item and its attached editor.
-`onItemEditComplete(event, item, nextItem)` is the accept/reject boundary for
-content-changing sessions. Return `'accept'` to install `nextItem`; a controlled
-component must also mirror it into its own state. Return `'reject'` to restore
-the latest external item. A missing handler will automatically reject.
+`onItemEditComplete(event, item, nextItem)` is the accept/reject boundary when a
+session ends. Return `'accept'` to install `nextItem`; a controlled component
+must also mirror it into its own state. Return `'reject'` to restore the latest
+external item. A missing handler will automatically reject.
 
 Collapsing or scrolling an item out of view suspends its session rather than
 completing it. Disabling editing, removing an item, `reset()`, `cleanUp()`, and
-viewer unmount end changed sessions. Removal and teardown callbacks can capture
-the result.
+viewer unmount end sessions. Removal and teardown callbacks can capture the
+result.
 
 Each edited item receives an independent editor whose document, history,
 selections, and horizontal code scroll survive virtualization. Per-item editors

@@ -42,7 +42,7 @@ Both `FileDiff` and `File` accept an options object in their constructor. The
 uses `LineAnnotation` instead of `DiffLineAnnotation` (no `side` property).
 
 Editable components take `onEditChange` (the live change stream) and
-`onEditComplete` (the accept/reject boundary for content-changing sessions) as
+`onEditComplete` (the accept/reject boundary when a session ends) as
 `FileOptions` / `FileDiffOptions` props. Change events expose the attached
 editor; completion events expose the detached editor and final state during the
 callback. A missing completion handler automatically rejects. Edit mode owns

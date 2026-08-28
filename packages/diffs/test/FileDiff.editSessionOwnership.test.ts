@@ -1011,7 +1011,7 @@ describe('completeEditSession', () => {
     }
   });
 
-  test('unchanged contents skip the handler and keep session annotation writes', async () => {
+  test('unchanged contents complete and can accept session annotation writes', async () => {
     const externalAnnotations: DiffLineAnnotation<undefined>[] = [
       { side: 'additions', lineNumber: 2 },
     ];
@@ -1020,7 +1020,7 @@ describe('completeEditSession', () => {
       lineAnnotations: externalAnnotations,
       onEditComplete(event) {
         events.push(event);
-        return 'reject';
+        return 'accept';
       },
     });
     try {
@@ -1036,8 +1036,12 @@ describe('completeEditSession', () => {
       });
       fixture.editor.cleanUp('complete');
 
-      expect(events).toHaveLength(0);
-      expect(instance.fileDiff).toBe(externalDiff);
+      expect(events).toHaveLength(1);
+      expect(events[0].fileDiff.additionLines).toEqual(
+        externalDiff.additionLines
+      );
+      expect(events[0].fileDiff.cacheKey).toBeUndefined();
+      expect(instance.fileDiff).toBe(events[0].fileDiff);
       expect(instance.getExternalAnnotationsForTest()).toBe(written);
       expect(instance.getLatestAnnotationsForTest()).toBe(written);
     } finally {
@@ -1045,7 +1049,7 @@ describe('completeEditSession', () => {
     }
   });
 
-  test('editing and undoing back to the external contents does not complete', async () => {
+  test('editing and undoing back to the external contents still completes', async () => {
     const events: FileDiffEditCompleteEvent<undefined>[] = [];
     const fixture = await createCompletionFixture({
       onEditComplete(event) {
@@ -1060,7 +1064,9 @@ describe('completeEditSession', () => {
       expect(editor.getText()).toBe(EXTERNAL_CONTENTS);
       editor.cleanUp('complete');
 
-      expect(events).toHaveLength(0);
+      expect(events).toHaveLength(1);
+      expect(events[0].fileDiff.additionLines.join('')).toBe(EXTERNAL_CONTENTS);
+      expect(events[0].fileDiff.cacheKey).toBeUndefined();
       expect(instance.fileDiff).toBe(externalDiff);
     } finally {
       fixture.cleanup();

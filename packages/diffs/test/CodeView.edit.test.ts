@@ -1985,7 +1985,7 @@ describe('CodeView item edit mode', () => {
       }
     });
 
-    test('does not fire for sessions without changes', async () => {
+    test('fires for sessions without changes', async () => {
       const { cleanup } = installDom();
       const { createEditor } = createEditorHarness();
       let completions = 0;
@@ -2002,7 +2002,7 @@ describe('CodeView item edit mode', () => {
         await renderItems(viewer, [item]);
 
         await applyItemUpdate(viewer, { ...item, edit: false, version: 1 });
-        expect(completions).toBe(0);
+        expect(completions).toBe(1);
       } finally {
         viewer.cleanUp();
         await wait(0);

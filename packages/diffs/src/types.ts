@@ -1120,11 +1120,10 @@ export interface DiffsEditableComponent<
   emitEditChange(event: EditorChangeEvent<LAnnotation, 'file' | 'diff'>): void;
   /**
    * End the edit session and settle which external value the component
-   * renders, running the component's `onEditComplete` when the session
-   * changed the contents. The caller supplies the editor that owns the
-   * session, which may already be detached. `install` applies an accepted
-   * result; `discard` still runs completion but never installs session output.
-   * Does nothing once no session exists.
+   * renders and run the component's `onEditComplete`. The caller supplies the
+   * editor that owns the session, which may already be detached. `install`
+   * applies an accepted result; `discard` still runs completion but never
+   * installs session output. Does nothing once no session exists.
    */
   completeEditSession(
     editor: DiffsEditor<LAnnotation>,

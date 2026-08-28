@@ -555,7 +555,7 @@ describe('React CodeView editor factory', () => {
     }
   });
 
-  test('completes only changed controlled sessions with their owning items', async () => {
+  test('completes controlled sessions with their owning items', async () => {
     const { cleanup } = installCodeViewDom();
     const cleanupActEnvironment = installReactActEnvironment();
     const container = document.createElement('div');
@@ -626,16 +626,20 @@ describe('React CodeView editor factory', () => {
       const unchangedEnd = { ...unchangedItem, edit: false, version: 1 };
       await render([editOffEnd, collapsedEnd, unchangedEnd]);
 
-      // Edit-off and removal complete; collapse suspends its session and the
-      // unchanged session ends without an event.
-      expect(onItemEditComplete).toHaveBeenCalledTimes(2);
+      // Edit-off, removal, and the unchanged edit complete. Collapse suspends
+      // its session.
+      expect(onItemEditComplete).toHaveBeenCalledTimes(3);
       const completions = new Map(
         onItemEditComplete.mock.calls.map(([event, item]) => [
           item.id,
           { event, item },
         ])
       );
-      expect([...completions.keys()].sort()).toEqual(['edit-off', 'removed']);
+      expect([...completions.keys()].sort()).toEqual([
+        'edit-off',
+        'removed',
+        'unchanged',
+      ]);
       expect(fileEventContents(completions.get('edit-off')?.event)).toBe(
         'edit-off contents'
       );
@@ -644,6 +648,7 @@ describe('React CodeView editor factory', () => {
         'removed contents'
       );
       expect(completions.get('removed')?.item).toBe(removedItem);
+      expect(completions.get('unchanged')?.item).toBe(unchangedEnd);
       expect(collapsedEditor!.recycleCleanUps).toBe(1);
       expect(collapsedEditor!.fullCleanUps).toBe(0);
       expect(handle.current?.getEditor('collapsed')).toBe(collapsedEditor);
@@ -654,7 +659,7 @@ describe('React CodeView editor factory', () => {
     }
   });
 
-  test('completes a changed session when a controlled empty list removes every item', async () => {
+  test('completes every session when a controlled empty list removes all items', async () => {
     const { cleanup } = installCodeViewDom();
     const cleanupActEnvironment = installReactActEnvironment();
     const container = document.createElement('div');
@@ -702,12 +707,15 @@ describe('React CodeView editor factory', () => {
       await render([]);
 
       expect(editors.every((editor) => editor.fullCleanUps > 0)).toBe(true);
-      expect(onItemEditComplete).toHaveBeenCalledTimes(1);
-      expect(onItemEditComplete.mock.calls[0]?.[1]).toBe(changedItem);
-      expect(onItemEditComplete.mock.calls[0]?.[0].editor).toBe(changedEditor!);
-      expect(fileEventContents(onItemEditComplete.mock.calls[0]?.[0])).toBe(
+      expect(onItemEditComplete).toHaveBeenCalledTimes(2);
+      const completions = new Map(
+        onItemEditComplete.mock.calls.map(([event, item]) => [item.id, event])
+      );
+      expect(completions.get(changedItem.id)?.editor).toBe(changedEditor);
+      expect(fileEventContents(completions.get(changedItem.id))).toBe(
         'changed contents'
       );
+      expect(completions.has(unchangedItem.id)).toBe(true);
     } finally {
       await unmountRoot(root);
       cleanupActEnvironment();

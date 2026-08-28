@@ -155,8 +155,9 @@ export function mountEditableCodeView(root: HTMLElement) {
 Set `edit: true` on an item and increment its `version`. `onItemEditChange`
 receives `(event, item)`; use `event.file` and `event.lineAnnotations` without
 feeding the change back into the viewer. Completion receives
-`(event, item, nextItem)`. `CodeView` builds `nextItem` with the final contents
-and annotations, `edit: false`, and an incremented `version`. If you use keyed
+`(event, item, nextItem)` whenever a session ends, including when its final text
+is unchanged. `CodeView` builds `nextItem` with the final contents and
+annotations, `edit: false`, and an incremented `version`. If you use keyed
 render caching, assign a fresh `cacheKey` to `event.file` or `event.fileDiff`.
 Return `'accept'` to install `nextItem` while the item remains present or
 `'reject'` to restore the original item while it remains present. During removal

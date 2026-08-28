@@ -43,6 +43,7 @@ import {
 } from '../src/react/EditContext';
 import { type FileDiffProps as ReactFileDiffProps } from '../src/react/FileDiff';
 import type {
+  DiffLineAnnotation,
   DiffsEditableComponent,
   DiffsEditor,
   EditableInstance,
@@ -206,6 +207,30 @@ function insertAtStart(editor: Editor<undefined>, newText: string): void {
         end: { line: 0, character: 0 },
       },
       newText,
+    },
+  ]);
+}
+
+function deleteAndRetypeSecondLine(
+  editor: Editor<undefined>,
+  lineText: string
+): void {
+  editor.applyEdits([
+    {
+      range: {
+        start: { line: 1, character: 0 },
+        end: { line: 2, character: 0 },
+      },
+      newText: '',
+    },
+  ]);
+  editor.applyEdits([
+    {
+      range: {
+        start: { line: 1, character: 0 },
+        end: { line: 1, character: 0 },
+      },
+      newText: lineText,
     },
   ]);
 }
@@ -1602,6 +1627,47 @@ describe('React completion lifecycle', () => {
       await harness.cleanup();
     }
   });
+
+  test('accepting unchanged text does not restore stale annotation props', async () => {
+    const annotations: LineAnnotation<undefined>[] = [{ lineNumber: 2 }];
+    const events: FileEditCompleteEvent<undefined>[] = [];
+    const harness = createFileHarness((event) => {
+      events.push(event);
+      return 'accept';
+    });
+    try {
+      await harness.render({
+        file: FILE_A,
+        edit: true,
+        lineAnnotations: annotations,
+      });
+      await waitFor(() => harness.editors[0]?.getText() === FILE_A.contents, {
+        timeout: 4_000,
+      });
+      act(() => {
+        deleteAndRetypeSecondLine(harness.editors[0], 'const other = 2;\n');
+      });
+      expect(harness.editors[0].getText()).toBe(FILE_A.contents);
+
+      await harness.render({
+        file: FILE_A,
+        edit: false,
+        lineAnnotations: annotations,
+      });
+
+      expect(events).toHaveLength(1);
+      expect(events[0].lineAnnotations).toEqual([]);
+      const annotationRows = Array.from(
+        harness.container.querySelectorAll('*')
+      ).flatMap((element) => [
+        ...(element.shadowRoot?.querySelectorAll('[data-line-annotation]') ??
+          []),
+      ]);
+      expect(annotationRows).toHaveLength(0);
+    } finally {
+      await harness.cleanup();
+    }
+  });
 });
 
 describe('React diff input bridges after acceptance', () => {
@@ -1726,6 +1792,57 @@ describe('React diff input bridges after acceptance', () => {
       expect(harness.getInstance()?.fileDiff?.additionLines.join('')).toBe(
         'different;\n'
       );
+    } finally {
+      await harness.cleanup();
+    }
+  });
+
+  test('MultiFileDiff does not restore stale annotations after unchanged text', async () => {
+    const harness = createDiffHarness();
+    const annotations: DiffLineAnnotation<undefined>[] = [
+      { side: 'additions', lineNumber: 2 },
+    ];
+    const render = async (edit: boolean) => {
+      await act(async () => {
+        harness.root.render(
+          createElement(
+            EditProviderComponent,
+            { createEditor: harness.factory },
+            createElement(MultiFileDiffComponent, {
+              disableWorkerPool: true,
+              edit,
+              oldFile: OLD_FILE,
+              newFile: NEW_FILE,
+              lineAnnotations: annotations,
+              onEditComplete: harness.onEditComplete,
+              options: harness.baseOptions(),
+            })
+          )
+        );
+        await wait(10);
+      });
+    };
+    try {
+      await render(true);
+      await waitFor(() => harness.editors[0]?.getText() === NEW_FILE.contents, {
+        timeout: 4_000,
+      });
+      act(() => {
+        deleteAndRetypeSecondLine(harness.editors[0], 'common;\n');
+      });
+      expect(harness.editors[0].getText()).toBe(NEW_FILE.contents);
+
+      await render(false);
+
+      expect(harness.events).toHaveLength(1);
+      expect(harness.events[0].lineAnnotations).toEqual([]);
+      const annotationRows = Array.from(
+        harness.container.querySelectorAll('*')
+      ).flatMap((element) => [
+        ...(element.shadowRoot?.querySelectorAll('[data-line-annotation]') ??
+          []),
+      ]);
+      expect(annotationRows).toHaveLength(0);
     } finally {
       await harness.cleanup();
     }

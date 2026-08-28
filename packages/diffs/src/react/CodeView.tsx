@@ -92,16 +92,15 @@ interface CodeViewBaseProps<LAnnotation> {
     item: CodeViewItem<LAnnotation>
   ): void;
   /**
-   * Called once when a changed edit session ends: edit turned off, the item
-   * removed, or the CodeView unmounted (where the result is not installed).
-   * Not called for sessions without changes; collapse suspends the session
-   * instead of completing it. `nextItem` is the accepted replacement
-   * CodeView built from `item`: the event's completed `file`/`fileDiff` and
-   * annotations, `edit: false`, and a bumped `version`. Return `'accept'` to
-   * install the edit — CodeView applies `nextItem` through the item update
-   * path when the item still exists, and a controlled owner puts the same
-   * `nextItem` into its state — or `'reject'` to revert. The event is frozen;
-   * re-key the accepted value in place before accepting.
+   * Called once when an edit session ends: edit turned off, the item removed,
+   * or the CodeView unmounted (where the result is not installed). Collapse
+   * suspends the session instead of completing it. `nextItem` is the accepted
+   * replacement CodeView built from `item`: the event's completed
+   * `file`/`fileDiff` and annotations, `edit: false`, and a bumped `version`.
+   * Return `'accept'` to install the edit — CodeView applies `nextItem` through
+   * the item update path when the item still exists, and a controlled owner
+   * puts the same `nextItem` into its state — or `'reject'` to revert. The event
+   * is frozen; re-key the accepted value in place before accepting.
    */
   onItemEditComplete?: CodeViewItemEditCompleteHandler<LAnnotation>;
   renderCustomHeader?(item: CodeViewItem<LAnnotation>): ReactNode;
