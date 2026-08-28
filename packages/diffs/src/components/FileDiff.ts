@@ -14,7 +14,14 @@ import {
   THEME_CSS_ATTRIBUTE,
   UNSAFE_CSS_ATTRIBUTE,
 } from '../constants';
-import type { FileDiffEditCompleteEvent } from '../editor/types';
+import type {
+  CapturedDiffSessionState,
+  EditCompletionDecision,
+  EditorActiveLineOptions,
+  EditorChangeEvent,
+  FileDiffEditCompleteEvent,
+  RetainedDiffSessionSnapshot,
+} from '../editor/types';
 import {
   type GetHoveredLineResult,
   type GetLineIndexUtility,
@@ -40,15 +47,11 @@ import type {
   AppliedThemeStyleCache,
   BaseCodeOptions,
   BaseDiffOptions,
-  CapturedDiffSessionState,
   CustomPreProperties,
   DiffLineAnnotation,
   DiffsEditableComponent,
   DiffsEditor,
   DiffsTextDocument,
-  EditCompletionDecision,
-  EditorActiveLineOptions,
-  EditorChangeEvent,
   ExpansionDirections,
   FileContents,
   FileDiffMetadata,
@@ -63,7 +66,6 @@ import type {
   RenderHeaderMetadataCallback,
   RenderHeaderPrefixCallback,
   RenderRange,
-  RetainedDiffSessionSnapshot,
   SelectedLineRange,
   SelectionSide,
   ThemeTypes,

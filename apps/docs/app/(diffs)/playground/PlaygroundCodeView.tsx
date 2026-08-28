@@ -5,13 +5,12 @@ import {
   type CodeViewItem,
   type CodeViewLineSelection,
   type DiffLineAnnotation,
-  type EditCompletionDecision,
   type FileDiffEditCompleteEvent,
   type FileEditCompleteEvent,
   type LineAnnotation,
   type SelectedLineRange,
 } from '@pierre/diffs';
-import type { EditorOptions } from '@pierre/diffs/edit';
+import type { EditCompletionDecision, EditorOptions } from '@pierre/diffs/edit';
 import {
   CodeView,
   type CodeViewReactOptions,

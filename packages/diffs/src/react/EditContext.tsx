@@ -4,8 +4,8 @@
 import type { Context, PropsWithChildren } from 'react';
 import { createContext, useContext } from 'react';
 
-import type { EditorOptions } from '../edit';
-import type { DiffsEditor, EditorDocumentKind } from '../types';
+import type { EditorDocumentKind, EditorOptions } from '../edit';
+import type { DiffsEditor } from '../types';
 import { useStableCallback } from './utils/useStableCallback';
 
 /** Creates an Editor. Components manage the instance lifecycle. */

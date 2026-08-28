@@ -10,14 +10,16 @@ import type { FileEditCompleteEvent } from '../src/components/File';
 import type { FileDiffEditCompleteEvent } from '../src/components/FileDiff';
 import { Editor } from '../src/editor/editor';
 import type {
+  EditCompletionDecision,
+  EditorDocumentKind,
+  EditorViewState,
+} from '../src/editor/types';
+import type {
   CodeViewCreateEditorOptions,
   CodeViewItem,
   DiffLineAnnotation,
   DiffsEditableComponent,
   DiffsEditor,
-  EditCompletionDecision,
-  EditorDocumentKind,
-  EditorViewState,
   FileContents,
   FileDiffLoadedFiles,
   FileDiffMetadata,

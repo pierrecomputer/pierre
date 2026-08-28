@@ -11,10 +11,10 @@ import {
 import { EditStateManager } from '../src/editor/EditStateManager';
 import type { Marker } from '../src/editor/marker';
 import { TextDocument } from '../src/editor/textDocument';
+import type { EditorViewState } from '../src/editor/types';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
 import type {
   DiffsEditableComponent,
-  EditorViewState,
   FileContents,
   FileDiffMetadata,
   LineAnnotation,

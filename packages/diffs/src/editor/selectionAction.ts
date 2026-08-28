@@ -1,9 +1,9 @@
-import type { EditorSelection, TextEdit } from '../types';
 import {
   type PopoverViewportBounds,
   setPopoverPositionStyles,
 } from './popover';
 import type { TextDocument } from './textDocument';
+import type { EditorSelection, TextEdit } from './types';
 import { h } from './utils';
 
 export interface SelectionActionContext<LAnnotation> {

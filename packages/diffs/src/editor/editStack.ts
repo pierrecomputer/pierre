@@ -1,13 +1,11 @@
-import type {
-  DiffLineAnnotation,
-  EditorSelection,
-  ResolvedTextEdit,
-} from '../types';
+import type { DiffLineAnnotation } from '../types';
 import type { TextDocument } from './textDocument';
 import type {
   EditHistoryCoalescingMode,
   EditHistoryEntry,
   EditHistoryState,
+  EditorSelection,
+  ResolvedTextEdit,
 } from './types';
 
 /** Largest number of undo or redo entries kept; oldest entries drop first once exceeded. */

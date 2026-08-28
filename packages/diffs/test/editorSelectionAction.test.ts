@@ -10,8 +10,9 @@ import {
   getCaretPosition,
 } from '../src/editor/selection';
 import type { SelectionActionContext } from '../src/editor/selectionAction';
+import type { EditorSelection } from '../src/editor/types';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
-import type { EditorSelection, FileContents, RenderRange } from '../src/types';
+import type { FileContents, RenderRange } from '../src/types';
 import { installDom, wait } from './domHarness';
 
 afterAll(async () => {

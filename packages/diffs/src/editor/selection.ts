@@ -1,14 +1,14 @@
+import type { DiffLineAnnotation } from '../types';
+import { applyDocumentChangeToLineAnnotations } from './lineAnnotations';
+import type { TextDocument, TextDocumentChange } from './textDocument';
 import type {
-  DiffLineAnnotation,
   EditorSelection,
   Position,
   Range,
   ResolvedTextEdit,
   SelectionDirection,
   TextEdit,
-} from '../types';
-import { applyDocumentChangeToLineAnnotations } from './lineAnnotations';
-import type { TextDocument, TextDocumentChange } from './textDocument';
+} from './types';
 import {
   createSegmenter,
   endsWithLineBreak,

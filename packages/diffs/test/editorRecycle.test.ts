@@ -2,9 +2,9 @@ import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 
 import { Editor } from '../src/editor/editor';
 import { EditStateManager } from '../src/editor/EditStateManager';
+import type { CapturedDiffSessionState } from '../src/editor/types';
 import { queueRender } from '../src/managers/UniversalRenderingManager';
 import type {
-  CapturedDiffSessionState,
   DiffLineAnnotation,
   DiffsEditableComponent,
   DiffsEditor,

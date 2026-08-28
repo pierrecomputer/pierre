@@ -1,4 +1,4 @@
-import type { Position, Range } from '../types';
+import type { Position, Range } from './types';
 import {
   POPOVER_BOUNDARY_LINES,
   type PopoverManager,

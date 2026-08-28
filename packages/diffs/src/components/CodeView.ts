@@ -16,6 +16,11 @@ import {
   queueRender,
 } from '../managers/UniversalRenderingManager';
 import type {
+  EditCompletionDecision,
+  EditorChangeEvent,
+  EditorDocumentKind,
+} from '../editor/types';
+import type {
   CodeViewCreateEditorOptions,
   CodeViewDiffItem,
   CodeViewFileItem,
@@ -28,9 +33,6 @@ import type {
   CodeViewScrollBehavior,
   CodeViewScrollTarget,
   DiffsEditor,
-  EditCompletionDecision,
-  EditorChangeEvent,
-  EditorDocumentKind,
   HunkSeparators,
   PendingCodeViewLayoutReset,
   SelectedLineRange,

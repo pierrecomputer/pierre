@@ -7,9 +7,11 @@ import { DEFAULT_THEMES } from '../src/constants';
 import { Editor } from '../src/editor/editor';
 import { TextDocument } from '../src/editor/textDocument';
 import type {
-  DiffsEditor,
   EditorChangeEvent,
   EditorViewState,
+} from '../src/editor/types';
+import type {
+  DiffsEditor,
 } from '../src/types';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import { installDom, waitFor } from './domHarness';

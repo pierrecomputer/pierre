@@ -8,12 +8,8 @@ import {
   type ManagedFileEditState,
 } from '../src/editor/EditStateManager';
 import { TextDocument } from '../src/editor/textDocument';
-import type { EditState } from '../src/editor/types';
-import type {
-  DiffLineAnnotation,
-  DiffsEditor,
-  EditorViewState,
-} from '../src/types';
+import type { EditorViewState, EditState } from '../src/editor/types';
+import type { DiffLineAnnotation, DiffsEditor } from '../src/types';
 
 function createOwner(
   getState: () => ManagedFileEditState = createState

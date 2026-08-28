@@ -3,8 +3,9 @@ import { afterAll, describe, expect, mock, test } from 'bun:test';
 import { File } from '../src/components/File';
 import { DEFAULT_THEMES } from '../src/constants';
 import { Editor, type EditorOptions } from '../src/editor/editor';
+import type { EditorCaret } from '../src/editor/types';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
-import type { EditorCaret, FileContents } from '../src/types';
+import type { FileContents } from '../src/types';
 import { installDom, wait } from './domHarness';
 
 afterAll(async () => {

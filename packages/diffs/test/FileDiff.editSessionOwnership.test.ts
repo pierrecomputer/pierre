@@ -14,11 +14,13 @@ import type {
 } from '../src/components/FileDiff';
 import { Editor, type EditorOptions } from '../src/editor/editor';
 import type {
+  EditorChangeEvent,
+  EditorViewState,
+} from '../src/editor/types';
+import type {
   DiffLineAnnotation,
   DiffsEditor,
   DiffsTextDocument,
-  EditorChangeEvent,
-  EditorViewState,
   FileContents,
   FileDiffMetadata,
   HighlightedToken,

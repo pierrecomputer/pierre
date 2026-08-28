@@ -16,6 +16,11 @@ import type { FileEditCompleteEvent } from '../src/components/File';
 import type { FileDiffEditCompleteEvent } from '../src/components/FileDiff';
 import { DEFAULT_THEMES } from '../src/constants';
 import type { EditorOptions } from '../src/editor/editor';
+import type {
+  EditCompletionDecision,
+  EditorChangeEvent,
+  EditorDocumentKind,
+} from '../src/editor/types';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
 import {
   CodeView,
@@ -31,9 +36,6 @@ import type {
   DiffLineAnnotation,
   DiffsEditableComponent,
   DiffsEditor,
-  EditCompletionDecision,
-  EditorChangeEvent,
-  EditorDocumentKind,
   FileContents,
 } from '../src/types';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';

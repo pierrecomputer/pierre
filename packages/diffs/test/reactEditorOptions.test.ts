@@ -23,6 +23,10 @@ import {
 import { DEFAULT_THEMES } from '../src/constants';
 import { Editor, type EditorOptions } from '../src/editor/editor';
 import { EditStateManager } from '../src/editor/EditStateManager';
+import type {
+  EditorChangeEvent,
+  EditorDocumentKind,
+} from '../src/editor/types';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
 import {
   MultiFileDiff,
@@ -47,8 +51,6 @@ import type {
   DiffsEditableComponent,
   DiffsEditor,
   EditableInstance,
-  EditorChangeEvent,
-  EditorDocumentKind,
   FileContents,
   LineAnnotation,
 } from '../src/types';

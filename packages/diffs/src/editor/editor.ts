@@ -7,24 +7,12 @@ import type {
   DiffsEditableComponent,
   DiffsEditor,
   EditableInstance,
-  EditorCaret,
-  EditorChange,
-  EditorChangeEvent,
-  EditorDocumentKind,
-  EditorSelection,
-  EditorViewState,
   FileContents,
   HighlightedToken,
   LineAnnotation,
-  Position,
-  Range,
   RenderRange,
-  ResolvedTextEdit,
-  RetainedDiffSessionSnapshot,
   SelectionSide,
-  TextEdit,
 } from '../types';
-import { cloneRetainedDiffSessionSnapshot } from '../utils/cloneFileDiffMetadata';
 import { computeLineOffsets } from '../utils/computeFileOffsets';
 import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
 import { isGutterUtilityPath } from '../utils/isGutterUtilityPath';
@@ -34,6 +22,7 @@ import {
   resolveEditorCommandFromKeyboardEvent,
   resolveFindAgainShortcut,
 } from './command';
+import { cloneRetainedDiffSessionSnapshot } from './cloneRetainedDiffSessionSnapshot';
 import editorCSS from './editor.css?inline';
 import { EditStack } from './editStack';
 import {
@@ -127,8 +116,22 @@ import {
   snapTextOffsetToUnicodeBoundary,
 } from './textMeasure';
 import { EditorTokenizer, renderLineTokens } from './tokenizer';
-import type { EditorEditCompleteEvent } from './types';
-import type { EditorInitialState, EditState } from './types';
+import type {
+  EditorCaret,
+  EditorChange,
+  EditorChangeEvent,
+  EditorDocumentKind,
+  EditorEditCompleteEvent,
+  EditorInitialState,
+  EditorSelection,
+  EditorViewState,
+  EditState,
+  Position,
+  Range,
+  ResolvedTextEdit,
+  RetainedDiffSessionSnapshot,
+  TextEdit,
+} from './types';
 import {
   addEventListener,
   clampDomOffset,

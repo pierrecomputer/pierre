@@ -11,7 +11,7 @@ import {
   type SearchParams,
 } from '../src/editor/searchPanel';
 import { TextDocument } from '../src/editor/textDocument';
-import type { ResolvedTextEdit } from '../src/types';
+import type { ResolvedTextEdit } from '../src/editor/types';
 import { installDom, wait } from './domHarness';
 
 function setInputValue(input: HTMLInputElement, value: string): void {

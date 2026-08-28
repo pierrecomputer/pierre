@@ -13,7 +13,12 @@ import {
   THEME_CSS_ATTRIBUTE,
   UNSAFE_CSS_ATTRIBUTE,
 } from '../constants';
-import type { FileEditCompleteEvent } from '../editor/types';
+import type {
+  EditCompletionDecision,
+  EditorActiveLineOptions,
+  EditorChangeEvent,
+  FileEditCompleteEvent,
+} from '../editor/types';
 import {
   type GetHoveredLineResult,
   InteractionManager,
@@ -32,9 +37,6 @@ import type {
   DiffsEditableComponent,
   DiffsEditor,
   DiffsTextDocument,
-  EditCompletionDecision,
-  EditorActiveLineOptions,
-  EditorChangeEvent,
   FileContents,
   HighlightedToken,
   LineAnnotation,

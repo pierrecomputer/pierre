@@ -1,6 +1,6 @@
-import type { Position, Range, ResolvedTextEdit } from '../types';
 import { computeLineOffsets } from '../utils/computeFileOffsets';
 import type { SearchParams } from './searchPanel';
+import type { Position, Range, ResolvedTextEdit } from './types';
 
 const MAX_FIND_MATCHES = 100000;
 const LINE_FEED = 10;

@@ -1030,13 +1030,13 @@ export const EDITOR_OPTIONS_TYPE: PreloadFileOptions<undefined> = {
     contents: `import type {
   DiffLineAnnotation,
   DiffsEditableComponent,
-  EditorCaret,
-  EditorChangeEvent,
   FileContents,
   LineAnnotation,
 } from '@pierre/diffs';
 import {
   Editor,
+  type EditorCaret,
+  type EditorChangeEvent,
   type EditorEditCompleteEvent,
   type EditorInitialState,
   type EditorKeymap,
@@ -1211,13 +1211,13 @@ export const EDIT_PERSISTED_DRAFT_EXAMPLE: PreloadFileOptions<undefined> = {
     name: 'persisted_edit_draft.tsx',
     contents: `import {
   getFiletypeFromFileName,
-  type EditorViewState,
   type FileContents,
 } from '@pierre/diffs';
 import {
   TextDocument,
   type Editor,
   type EditorOptions,
+  type EditorViewState,
 } from '@pierre/diffs/edit';
 import { File } from '@pierre/diffs/react';
 import { useRef, useState } from 'react';
@@ -1321,7 +1321,6 @@ export const EDITOR_PUBLIC_API: PreloadFileOptions<undefined> = {
     name: 'editor_public_api.ts',
     contents: `import {
   File,
-  type EditorViewState,
   type FileContents,
 } from '@pierre/diffs';
 import {
@@ -1329,6 +1328,7 @@ import {
   EditStateManager,
   type EditState,
   type EditorFocusOptions,
+  type EditorViewState,
 } from '@pierre/diffs/edit';
 
 // Editor

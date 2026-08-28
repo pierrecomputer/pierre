@@ -8,9 +8,11 @@ import type {
 import { Editor, type EditorOptions } from '../src/editor/editor';
 import { EditStateManager } from '../src/editor/EditStateManager';
 import type {
-  DiffsEditor,
   EditorChangeEvent,
   EditorViewState,
+} from '../src/editor/types';
+import type {
+  DiffsEditor,
   FileContents,
   LineAnnotation,
 } from '../src/types';

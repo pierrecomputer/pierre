@@ -17,7 +17,11 @@ import {
 } from 'react';
 import { createPortal, flushSync } from 'react-dom';
 
-import type { EditorChangeEvent, EditorOptions } from '../edit';
+import type {
+  EditorChangeEvent,
+  EditorDocumentKind,
+  EditorOptions,
+} from '../edit';
 import {
   areOptionsEqual,
   CodeView as CodeViewClass,
@@ -35,7 +39,6 @@ import {
   type CodeViewSlotSnapshot,
   type DiffLineAnnotation,
   type DiffsEditor,
-  type EditorDocumentKind,
   type GetHoveredLineResult,
   type LineAnnotation,
 } from '../index';

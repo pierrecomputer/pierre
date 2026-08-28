@@ -1,9 +1,9 @@
-import {
-  DEFAULT_THEMES,
-  type EditorCaret,
-  type FileContents,
-} from '@pierre/diffs';
-import type { EditorCommand, EditorKeymap } from '@pierre/diffs/edit';
+import { DEFAULT_THEMES, type FileContents } from '@pierre/diffs';
+import type {
+  EditorCaret,
+  EditorCommand,
+  EditorKeymap,
+} from '@pierre/diffs/edit';
 import type { FileOptions } from '@pierre/diffs/react';
 import type { PreloadFileOptions } from '@pierre/diffs/ssr';
 

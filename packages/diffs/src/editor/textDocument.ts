@@ -1,12 +1,4 @@
-import type {
-  DiffLineAnnotation,
-  EditorChange,
-  EditorSelection,
-  Position,
-  Range,
-  ResolvedTextEdit,
-  TextEdit,
-} from '../types';
+import type { DiffLineAnnotation } from '../types';
 import { countLineBreaks } from '../utils/computeFileOffsets';
 import {
   coalesceEditStackEntries,
@@ -16,9 +8,18 @@ import {
 } from './editStack';
 import { PieceTable } from './pieceTable';
 import type { SearchParams } from './searchPanel';
-import type { EditHistoryLineAnnotation, EditHistoryState } from './types';
+import type {
+  EditHistoryLineAnnotation,
+  EditHistoryState,
+  EditorChange,
+  EditorSelection,
+  Position,
+  Range,
+  ResolvedTextEdit,
+  TextEdit,
+} from './types';
 
-export type { Position, Range, TextEdit } from '../types';
+export type { Position, Range, TextEdit } from './types';
 
 export interface TextDocumentChange {
   /** The edits that were applied to the text document. */

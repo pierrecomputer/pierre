@@ -2,13 +2,17 @@ import LRUMapPkg from 'lru_map';
 
 import type {
   DiffsEditor,
-  EditorDocumentKind,
-  EditorViewState,
   FileContents,
-  RetainedDiffSessionSnapshot,
 } from '../types';
 import { TextDocument } from './textDocument';
-import type { EditState, FileDiffEditState, FileEditState } from './types';
+import type {
+  EditorDocumentKind,
+  EditorViewState,
+  EditState,
+  FileDiffEditState,
+  FileEditState,
+  RetainedDiffSessionSnapshot,
+} from './types';
 
 const DEFAULT_EDIT_STATE_CAPACITY = 100;
 

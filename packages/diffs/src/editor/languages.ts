@@ -1,5 +1,5 @@
-import type { EditorSelection, TextEdit } from '../types';
 import type { TextDocument } from './textDocument';
+import type { EditorSelection, TextEdit } from './types';
 
 const DEFAULT_LINE_COMMENT = '//';
 const DEFAULT_BLOCK_COMMENT = ['/*', '*/'] as const;

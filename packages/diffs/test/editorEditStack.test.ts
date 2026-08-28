@@ -11,7 +11,7 @@ import type {
   EditorSelection,
   SelectionDirection,
   TextEdit,
-} from '../src/types';
+} from '../src/editor/types';
 
 function createSelection(
   startLine: number,

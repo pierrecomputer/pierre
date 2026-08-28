@@ -6,8 +6,9 @@ import { Editor } from '../src/editor/editor';
 import { type Marker, MarkerRenderer } from '../src/editor/marker';
 import { PopoverManager } from '../src/editor/popover';
 import type { TextDocument } from '../src/editor/textDocument';
+import type { Position } from '../src/editor/types';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
-import type { FileContents, Position } from '../src/types';
+import type { FileContents } from '../src/types';
 import { installDom, wait } from './domHarness';
 
 afterAll(async () => {

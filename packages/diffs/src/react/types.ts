@@ -8,11 +8,10 @@ import type {
   FileDiffOptions as FileDiffClassOptions,
   FileDiffEditCompleteHandler,
 } from '../components/FileDiff';
-import type { EditorOptions } from '../edit';
+import type { EditorChangeEvent, EditorOptions } from '../edit';
 import type { GetHoveredLineResult } from '../managers/InteractionManager';
 import type {
   DiffLineAnnotation,
-  EditorChangeEvent,
   FileContents,
   FileDiffMetadata,
   LineAnnotation,

@@ -11,25 +11,35 @@ export {
   type ClearEditStateOptions,
 } from '../editor/EditStateManager';
 export * from '../editor/textDocument';
+export type { DiffsEditor } from '../types';
 export type {
-  DiffsEditor,
-  EditorChange,
-  EditorChangeEvent,
-  EditorDocumentKind,
-  EditorViewState,
-  RetainedDiffSessionSnapshot,
-} from '../types';
-export type {
+  CaretMetadata,
+  CapturedDiffSessionState,
+  EditCompletionDecision,
   EditHistoryCoalescingMode,
   EditHistoryEntry,
   EditHistoryLineAnnotation,
   EditHistoryState,
   EditState,
+  EditorActiveLineOptions,
+  EditorCaret,
+  EditorChange,
+  EditorChangeEvent,
+  EditorDocumentKind,
   EditorEditCompleteEvent,
   EditorInitialState,
+  EditorSelection,
+  EditorViewState,
+  EditorViewportState,
   FileDiffEditCompleteEvent,
   FileDiffEditState,
   FileEditCompleteEvent,
   FileEditState,
+  Position,
+  Range,
+  ResolvedTextEdit,
+  RetainedDiffSessionSnapshot,
+  SelectionDirection,
+  TextEdit,
 } from '../editor/types';
 export type { Marker } from '../editor/marker';

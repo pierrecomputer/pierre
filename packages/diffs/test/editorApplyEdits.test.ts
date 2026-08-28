@@ -12,12 +12,11 @@ import {
   shiftSelectionLines,
 } from '../src/editor/selection';
 import { TextDocument } from '../src/editor/textDocument';
+import type { EditorSelection, TextEdit } from '../src/editor/types';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
 import type {
   DiffsEditableComponent,
-  EditorSelection,
   FileContents,
-  TextEdit,
 } from '../src/types';
 import { installDom, wait, waitFor } from './domHarness';
 
