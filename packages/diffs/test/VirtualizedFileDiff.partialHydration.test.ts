@@ -467,12 +467,14 @@ describe('VirtualizedFileDiff partial hydration', () => {
       },
       virtualizerState.virtualizer
     );
-    let detach: ReturnType<TestVirtualizedFileDiff['attachEditor']> | undefined;
+    let detach:
+      | ReturnType<TestVirtualizedFileDiff['__attachEditor']>
+      | undefined;
 
     try {
       instance.updateCodeViewLayout(partial, 0);
       const editor = createEditorStub();
-      detach = instance.attachEditor(editor);
+      detach = instance.__attachEditor(editor);
       const loadPromise = instance.getPendingFileLoadPromiseForTest();
       assertDefined(loadPromise, 'expected edit hydration to be pending');
 
@@ -536,11 +538,13 @@ describe('VirtualizedFileDiff partial hydration', () => {
       },
       virtualizerState.virtualizer
     );
-    let detach: ReturnType<TestVirtualizedFileDiff['attachEditor']> | undefined;
+    let detach:
+      | ReturnType<TestVirtualizedFileDiff['__attachEditor']>
+      | undefined;
 
     try {
       instance.updateCodeViewLayout(initial, 0);
-      detach = instance.attachEditor(createEditorStub());
+      detach = instance.__attachEditor(createEditorStub());
       const previousSession = instance.getLatestDiffForTest();
       expect(previousSession).not.toBe(initial);
 
@@ -587,11 +591,13 @@ describe('VirtualizedFileDiff partial hydration', () => {
       },
       virtualizerState.virtualizer
     );
-    let detach: ReturnType<TestVirtualizedFileDiff['attachEditor']> | undefined;
+    let detach:
+      | ReturnType<TestVirtualizedFileDiff['__attachEditor']>
+      | undefined;
 
     try {
       instance.updateCodeViewLayout(partial, 0);
-      detach = instance.attachEditor(createEditorStub());
+      detach = instance.__attachEditor(createEditorStub());
       const loadPromise = instance.getPendingFileLoadPromiseForTest();
       assertDefined(loadPromise, 'expected edit hydration to be pending');
 
@@ -672,11 +678,13 @@ describe('VirtualizedFileDiff partial hydration', () => {
       { disableFileHeader: true },
       virtualizerState.virtualizer
     );
-    let detach: ReturnType<TestVirtualizedFileDiff['attachEditor']> | undefined;
+    let detach:
+      | ReturnType<TestVirtualizedFileDiff['__attachEditor']>
+      | undefined;
 
     try {
       instance.render({ fileContainer, fileDiff: externalDiff });
-      detach = instance.attachEditor(createEditorStub());
+      detach = instance.__attachEditor(createEditorStub());
       const sessionDiff = instance.getLatestDiffForTest();
 
       instance.updateCodeViewLayout(equivalentDiff, 0);

@@ -314,7 +314,7 @@ describe('component editor attachment', () => {
     const replacement = new Editor<undefined>('file');
     try {
       expect(() => replacement.edit(fixture.file)).toThrow(
-        'File.attachEditor: an editor is already attached'
+        'File.__attachEditor: an editor is already attached'
       );
       expect(fixture.editor.getFile()).toBeDefined();
       expect(replacement.getFile()).toBeUndefined();
@@ -333,7 +333,7 @@ describe('component editor attachment', () => {
     const replacement = new Editor<undefined>('file-diff');
     try {
       expect(() => replacement.edit(fixture.fileDiff)).toThrow(
-        'FileDiff.attachEditor: an editor is already attached'
+        'FileDiff.__attachEditor: an editor is already attached'
       );
       expect(fixture.editor.getFile()).toBeDefined();
       expect(replacement.getFile()).toBeUndefined();

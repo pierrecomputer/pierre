@@ -92,7 +92,7 @@ function createEditorHarness({
         }
         if (sessionOwner == null) {
           sessionOwner = instance;
-          detach = instance.attachEditor(editor);
+          detach = instance.__attachEditor(editor);
         }
         if (attachmentError != null) {
           throw attachmentError;
@@ -108,7 +108,7 @@ function createEditorHarness({
         if (reason !== 'recycle') {
           try {
             detach?.();
-            sessionOwner?.completeEditSession(
+            sessionOwner?.__completeEditSession(
               editor,
               reason === 'complete' ? 'install' : 'discard'
             );

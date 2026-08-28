@@ -152,7 +152,7 @@ async function createAttachedFixture(): Promise<{
     fileContainer,
     forceRender: true,
   });
-  const detachEditor = instance.attachEditor(createEditorStub());
+  const detachEditor = instance.__attachEditor(createEditorStub());
 
   await waitFor(
     () => {
@@ -239,12 +239,12 @@ describe('FileDiff edit-session ownership', () => {
       });
       instance.clearRenderCacheForTest();
       instance.throwOnRerender = true;
-      expect(() => instance.attachEditor(createEditorStub())).toThrow(
+      expect(() => instance.__attachEditor(createEditorStub())).toThrow(
         'attachment failed'
       );
 
       instance.throwOnRerender = false;
-      const detach = instance.attachEditor(createEditorStub());
+      const detach = instance.__attachEditor(createEditorStub());
       detach();
     } finally {
       instance.cleanUp();
@@ -677,7 +677,7 @@ describe('FileDiff edit-session ownership', () => {
   });
 });
 
-describe('completeEditSession', () => {
+describe('__completeEditSession', () => {
   const EXTERNAL_CONTENTS = 'alpha\nnew value\nomega\n';
 
   async function createCompletionFixture(config?: {
@@ -898,7 +898,7 @@ describe('completeEditSession', () => {
       ]);
 
       // Settled: calling again does not fire the handler a second time.
-      instance.completeEditSession(editor, 'install');
+      instance.__completeEditSession(editor, 'install');
       expect(events).toHaveLength(1);
     } finally {
       fixture.cleanup();
@@ -1128,7 +1128,7 @@ describe('completeEditSession', () => {
     try {
       const { editor, instance } = fixture;
       replaceDocument(editor, 'alpha\nedited value\nomega\n');
-      expect(() => instance.completeEditSession(editor, 'install')).toThrow(
+      expect(() => instance.__completeEditSession(editor, 'install')).toThrow(
         'detach the editor before completing the session'
       );
     } finally {

@@ -154,7 +154,7 @@ test('a dirty unkeyed session remains authoritative when the same object is re-p
   try {
     instance.render({ fileDiff: externalDiff, fileContainer });
     await waitForStableRow(fileContainer);
-    const detach = instance.attachEditor(createEditorStub());
+    const detach = instance.__attachEditor(createEditorStub());
     instance.updateRenderCache(
       new Map<number, HighlightedToken[]>([
         [0, [[0, '', 'const editedMarker = 3;']]],

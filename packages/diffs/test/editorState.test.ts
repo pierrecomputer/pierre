@@ -131,14 +131,14 @@ class TestEditableComponent implements DiffsEditableComponent<undefined> {
 
   getAnnotationSlotName = getLineAnnotationName;
 
-  completeEditSession(
+  __completeEditSession(
     editor: DiffsEditor<undefined>,
     _mode: 'install' | 'discard'
   ): void {
     this.completedEditState = editor.getEditState();
   }
 
-  attachEditor(editor: DiffsEditor<undefined>): () => void {
+  __attachEditor(editor: DiffsEditor<undefined>): () => void {
     this.#editor = editor;
     if (!this.deferAttachSync) {
       this.#syncRenderView();

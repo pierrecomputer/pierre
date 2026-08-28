@@ -173,7 +173,7 @@ describe('editing a File without changing its input', () => {
         forceRender: true,
       });
       expect(() =>
-        instance.attachEditor(
+        instance.__attachEditor(
           createEditorStub({
             __getDocumentContents() {
               throw attachmentError;
@@ -182,7 +182,7 @@ describe('editing a File without changing its input', () => {
         )
       ).toThrow(attachmentError);
 
-      const detach = instance.attachEditor(createEditorStub());
+      const detach = instance.__attachEditor(createEditorStub());
       detach();
     } finally {
       instance.cleanUp();
@@ -882,7 +882,7 @@ describe('session-owned line annotations', () => {
   });
 });
 
-describe('completeEditSession', () => {
+describe('__completeEditSession', () => {
   async function createCompletionFixture(config?: {
     editStateKey?: string;
     editorOnComplete?: NonNullable<EditorOptions<undefined>['onComplete']>;
@@ -1096,7 +1096,7 @@ describe('completeEditSession', () => {
       ]);
 
       // Settled: calling again does not fire the handler a second time.
-      instance.completeEditSession(editor, 'install');
+      instance.__completeEditSession(editor, 'install');
       expect(events).toHaveLength(1);
     } finally {
       fixture.cleanup();
@@ -1318,7 +1318,7 @@ describe('completeEditSession', () => {
     try {
       const { editor, instance } = fixture;
       replaceDocument(editor, 'edited\nbravo\n');
-      expect(() => instance.completeEditSession(editor, 'install')).toThrow(
+      expect(() => instance.__completeEditSession(editor, 'install')).toThrow(
         'detach the editor before completing the session'
       );
     } finally {
@@ -1522,7 +1522,7 @@ describe('editor session lifecycle', () => {
       finishSession();
       expect(events).toHaveLength(1);
 
-      instance.completeEditSession(editor, 'install');
+      instance.__completeEditSession(editor, 'install');
       instance.cleanUp();
       expect(events).toHaveLength(1);
     } finally {

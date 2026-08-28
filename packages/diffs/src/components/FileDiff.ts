@@ -1830,17 +1830,18 @@ export class FileDiff<
     };
   }
 
-  public attachEditor(editor: DiffsEditor<LAnnotation>): () => void {
+  /** @internal Associate this component with its editor for a render lifecycle. */
+  public __attachEditor(editor: DiffsEditor<LAnnotation>): () => void {
     // Editing is a plain file-diff concern only. Subclasses with their own
     // hunk semantics (UnresolvedFile) are not editable, so an editor must
     // never attach to them.
     if (this.type !== 'file-diff') {
       throw new Error(
-        `FileDiff.attachEditor: cannot attach an editor to a "${this.type}" diff`
+        `FileDiff.__attachEditor: cannot attach an editor to a "${this.type}" diff`
       );
     }
     if (this.editor != null) {
-      throw new Error('FileDiff.attachEditor: an editor is already attached');
+      throw new Error('FileDiff.__attachEditor: an editor is already attached');
     }
     const detach = () => {
       this.editor = undefined;
@@ -1855,6 +1856,7 @@ export class FileDiff<
     }
   }
 
+  /** @internal Resume rendering for the editor already associated with this component. */
   public __resumeEditor(editor: DiffsEditor<LAnnotation>): void {
     if (this.editor !== editor) {
       throw new Error('FileDiff.__resumeEditor: editor association changed');
@@ -1925,6 +1927,8 @@ export class FileDiff<
   }
 
   /**
+   * @internal
+   *
    * Ends the edit session and settles which diff this component renders.
    * Requires the editor to be detached first. Does nothing when no session
    * exists, so callers can invoke it again safely after it has settled.
@@ -1936,7 +1940,7 @@ export class FileDiff<
    * values. `discard` mode always restores the external values. An accepted
    * diff cannot reuse the replaced diff's `cacheKey`.
    */
-  public completeEditSession(
+  public __completeEditSession(
     editor: DiffsEditor<LAnnotation>,
     mode: 'install' | 'discard'
   ): void {
@@ -1958,7 +1962,7 @@ export class FileDiff<
     }
     if (this.editor != null) {
       throw new Error(
-        'FileDiff.completeEditSession: detach the editor before completing the session'
+        'FileDiff.__completeEditSession: detach the editor before completing the session'
       );
     }
     this.hunksRenderer.endEditSession();
@@ -1972,7 +1976,7 @@ export class FileDiff<
     let failure: unknown;
     if (editor == null) {
       throw new Error(
-        'FileDiff.completeEditSession: editor is required for completion'
+        'FileDiff.__completeEditSession: editor is required for completion'
       );
     }
     const completedDiff = cloneFileDiffMetadata(editSessionDiff);
@@ -2011,7 +2015,7 @@ export class FileDiff<
           completedDiff.cacheKey === externalDiff.cacheKey
         ) {
           throw new Error(
-            'FileDiff.completeEditSession: an accepted diff must not reuse the replaced diff cacheKey'
+            'FileDiff.__completeEditSession: an accepted diff must not reuse the replaced diff cacheKey'
           );
         }
         acceptedDiff = completedDiff;

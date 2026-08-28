@@ -162,12 +162,12 @@ class TestEditableComponent implements DiffsEditableComponent<undefined> {
 
   getAnnotationSlotName = getLineAnnotationName;
 
-  completeEditSession(
+  __completeEditSession(
     _editor: DiffsEditor<undefined>,
     _mode: 'install' | 'discard'
   ): void {}
 
-  attachEditor(editor: DiffsEditor<undefined>): () => void {
+  __attachEditor(editor: DiffsEditor<undefined>): () => void {
     if (this.#editor != null) {
       throw new Error('TestEditableComponent: an editor is already attached');
     }
@@ -285,15 +285,15 @@ class ThrowingEditableComponent extends TestEditableComponent {
 }
 
 class SyncingThrowingEditableComponent extends TestEditableComponent {
-  override attachEditor(editor: DiffsEditor<undefined>): () => void {
-    super.attachEditor(editor);
+  override __attachEditor(editor: DiffsEditor<undefined>): () => void {
+    super.__attachEditor(editor);
     throw new Error('attachment failed after sync');
   }
 }
 
 class EditingSyncingThrowingEditableComponent extends TestEditableComponent {
-  override attachEditor(editor: DiffsEditor<undefined>): () => void {
-    super.attachEditor(editor);
+  override __attachEditor(editor: DiffsEditor<undefined>): () => void {
+    super.__attachEditor(editor);
     (editor as Editor<undefined>).applyEdits([
       {
         range: {

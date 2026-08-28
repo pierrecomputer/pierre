@@ -1104,13 +1104,9 @@ export interface DiffsEditableComponent<
    * follow, possibly deferred).
    */
   revealLine?: (lineNumber: number) => boolean;
-  /**
-   * Associate an editor with this component. The returned closure ends that
-   * association after the editing session finishes; recycled unmounts keep
-   * the association and resume rendering through `__resumeEditor`.
-   */
-  attachEditor: (editor: DiffsEditor<LAnnotation>) => () => void;
-  /** Resume rendering for the editor already associated with this component. */
+  /** @internal Associate an editor with this component */
+  __attachEditor: (editor: DiffsEditor<LAnnotation>) => () => void;
+  /** @internal Resume rendering for the editor already associated with this component. */
   __resumeEditor: (editor: DiffsEditor<LAnnotation>) => void;
   /**
    * Deliver `EditorChangeEvent` to the component's owner. The attached
@@ -1119,13 +1115,15 @@ export interface DiffsEditableComponent<
    */
   emitEditChange(event: EditorChangeEvent<LAnnotation, 'file' | 'diff'>): void;
   /**
+   * @internal
+   *
    * End the edit session and settle which external value the component
    * renders and run the component's `onEditComplete`. The caller supplies the
    * editor that owns the session, which may already be detached. `install`
    * applies an accepted result; `discard` still runs completion but never
    * installs session output. Does nothing once no session exists.
    */
-  completeEditSession(
+  __completeEditSession(
     editor: DiffsEditor<LAnnotation>,
     mode: 'install' | 'discard'
   ): void;

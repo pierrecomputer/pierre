@@ -315,7 +315,7 @@ describe('FileDiff partial hydration', () => {
         return deferred.promise;
       },
     });
-    let detach: ReturnType<TestFileDiff['attachEditor']> | undefined;
+    let detach: ReturnType<TestFileDiff['__attachEditor']> | undefined;
 
     try {
       instance.render({
@@ -323,7 +323,7 @@ describe('FileDiff partial hydration', () => {
         fileContainer,
         forceRender: true,
       });
-      detach = instance.attachEditor(createEditorStub());
+      detach = instance.__attachEditor(createEditorStub());
 
       const partialSession = instance.getLatestDiffForTest();
       expect(partialSession).toBeDefined();
@@ -373,7 +373,7 @@ describe('FileDiff partial hydration', () => {
       disableFileHeader: true,
       loadDiffFiles: () => deferred.promise,
     });
-    let detach: ReturnType<TestFileDiff['attachEditor']> | undefined;
+    let detach: ReturnType<TestFileDiff['__attachEditor']> | undefined;
     let loadPromise: Promise<void> | undefined;
 
     try {
@@ -383,7 +383,7 @@ describe('FileDiff partial hydration', () => {
         fileContainer,
         forceRender: true,
       });
-      detach = instance.attachEditor(createEditorStub());
+      detach = instance.__attachEditor(createEditorStub());
       loadPromise = instance.getPendingFileLoadPromiseForTest();
       assertDefined(loadPromise, 'expected partial hydration to be pending');
 
@@ -437,7 +437,7 @@ describe('FileDiff partial hydration', () => {
         return deferred.promise;
       },
     });
-    let detach: ReturnType<TestFileDiff['attachEditor']> | undefined;
+    let detach: ReturnType<TestFileDiff['__attachEditor']> | undefined;
 
     try {
       instance.render({
@@ -451,7 +451,7 @@ describe('FileDiff partial hydration', () => {
           detach?.();
         }
       };
-      detach = instance.attachEditor(editor);
+      detach = instance.__attachEditor(editor);
       const loadPromise = instance.getPendingFileLoadPromiseForTest();
       expect(loadPromise).toBeDefined();
       expect(loadCalls).toBe(1);
@@ -502,7 +502,7 @@ describe('FileDiff partial hydration', () => {
         return deferred.promise;
       },
     });
-    let detach: ReturnType<TestFileDiff['attachEditor']> | undefined;
+    let detach: ReturnType<TestFileDiff['__attachEditor']> | undefined;
 
     try {
       instance.render({
@@ -510,7 +510,7 @@ describe('FileDiff partial hydration', () => {
         fileContainer,
         forceRender: true,
       });
-      detach = instance.attachEditor(createEditorStub());
+      detach = instance.__attachEditor(createEditorStub());
       const loadPromise = instance.getPendingFileLoadPromiseForTest();
       expect(loadPromise).toBeDefined();
       deferred.resolve({ oldFile: null, newFile });

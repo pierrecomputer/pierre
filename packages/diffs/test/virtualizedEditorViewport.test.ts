@@ -200,7 +200,7 @@ describe('virtualized editor viewport', () => {
       expect(code.scrollLeft).toBe(61);
 
       let recyclePosition: number | undefined;
-      file.attachEditor({
+      file.__attachEditor({
         __captureFocusForDOMReplacement() {},
         __emitEditComplete() {},
         __getDocumentContents: () => undefined,
@@ -428,7 +428,7 @@ describe('virtualized editor viewport', () => {
       expect(code.deletions?.scrollLeft).toBe(60);
 
       let recyclePosition: number | undefined;
-      fileDiff.attachEditor({
+      fileDiff.__attachEditor({
         __captureFocusForDOMReplacement() {},
         __emitEditComplete() {},
         __getDocumentContents: () => undefined,

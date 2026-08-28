@@ -87,13 +87,13 @@ describe('FileDiff header slots', () => {
       collapsed: true,
       disableErrorHandling: true,
     });
-    let detach: ReturnType<FileDiff<undefined>['attachEditor']> | undefined;
+    let detach: ReturnType<FileDiff<undefined>['__attachEditor']> | undefined;
 
     try {
       instance.render({ fileDiff: externalDiff, fileContainer });
       await waitForHeaderCount(fileContainer, '[data-additions-count]', '+1');
 
-      detach = instance.attachEditor(createEditorStub());
+      detach = instance.__attachEditor(createEditorStub());
       instance.applyDocumentChange(makeTextDocument(['new\n', 'extra\n']));
 
       await waitForHeaderCount(fileContainer, '[data-additions-count]', '+2');

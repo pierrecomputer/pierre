@@ -814,9 +814,10 @@ export class File<
     return undefined;
   }
 
-  public attachEditor(editor: DiffsEditor<LAnnotation>): () => void {
+  /** @internal Associate this component with its editor for a render lifecycle. */
+  public __attachEditor(editor: DiffsEditor<LAnnotation>): () => void {
     if (this.editor != null) {
-      throw new Error('File.attachEditor: an editor is already attached');
+      throw new Error('File.__attachEditor: an editor is already attached');
     }
     this.editor = editor;
     const detach = () => {
@@ -832,6 +833,7 @@ export class File<
     }
   }
 
+  /** @internal Resume rendering for the editor already associated with this component. */
   public __resumeEditor(editor: DiffsEditor<LAnnotation>): void {
     if (this.editor !== editor) {
       throw new Error('File.__resumeEditor: editor association changed');
@@ -866,6 +868,8 @@ export class File<
   }
 
   /**
+   * @internal
+   *
    * Ends the edit session and settles which file this component renders.
    * Requires the editor to be detached first. Does nothing when no session
    * exists, so callers can invoke it again safely after it has settled.
@@ -877,7 +881,7 @@ export class File<
    * mode always restores the external values. An accepted file cannot reuse
    * the replaced file's `cacheKey`.
    */
-  public completeEditSession(
+  public __completeEditSession(
     editor: DiffsEditor<LAnnotation>,
     mode: 'install' | 'discard'
   ): void {
@@ -899,7 +903,7 @@ export class File<
     }
     if (this.editor != null) {
       throw new Error(
-        'File.completeEditSession: detach the editor before completing the session'
+        'File.__completeEditSession: detach the editor before completing the session'
       );
     }
 
@@ -909,7 +913,7 @@ export class File<
     let failure: unknown;
     if (editor == null) {
       throw new Error(
-        'File.completeEditSession: editor is required for completion'
+        'File.__completeEditSession: editor is required for completion'
       );
     }
     const completedFile = { ...editSessionFile };
@@ -933,7 +937,7 @@ export class File<
           completedFile.cacheKey === externalFile.cacheKey
         ) {
           throw new Error(
-            'File.completeEditSession: an accepted file must not reuse the replaced file cacheKey'
+            'File.__completeEditSession: an accepted file must not reuse the replaced file cacheKey'
           );
         }
         acceptedFile = completedFile;

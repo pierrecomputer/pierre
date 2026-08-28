@@ -83,7 +83,7 @@ function createTrackedEditor(
   attachmentError?: Error
 ): TrackedCodeViewEditor {
   let detach:
-    | ReturnType<DiffsEditableComponent<undefined>['attachEditor']>
+    | ReturnType<DiffsEditableComponent<undefined>['__attachEditor']>
     | undefined;
   let sessionOwner: DiffsEditableComponent<undefined> | undefined;
   const editor = {
@@ -105,7 +105,7 @@ function createTrackedEditor(
       }
       if (sessionOwner == null) {
         sessionOwner = instance;
-        detach = instance.attachEditor(editor);
+        detach = instance.__attachEditor(editor);
       }
       if (attachmentError != null) {
         throw attachmentError;
@@ -121,7 +121,7 @@ function createTrackedEditor(
       if (reason !== 'recycle') {
         try {
           detach?.();
-          sessionOwner?.completeEditSession(
+          sessionOwner?.__completeEditSession(
             editor,
             reason === 'complete' ? 'install' : 'discard'
           );

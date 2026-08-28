@@ -507,7 +507,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#initialize();
       // First edit: attach the editor to the component.
       if (this.#detach == null) {
-        this.#detach = fileInstance.attachEditor(this);
+        this.#detach = fileInstance.__attachEditor(this);
       }
       // After recycling: restore rendering on the same component.
       else {
@@ -943,7 +943,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     if (!recycle) {
       try {
         if (fileInstance != null && editSession != null) {
-          fileInstance.completeEditSession(
+          fileInstance.__completeEditSession(
             this,
             reason === 'complete' ? 'install' : 'discard'
           );
