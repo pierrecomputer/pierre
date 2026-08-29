@@ -17,7 +17,6 @@ export type {
   EditCompletionDecision,
   EditHistoryCoalescingMode,
   EditHistoryEntry,
-  EditHistoryLineAnnotation,
   EditHistoryState,
   EditState,
   EditorActiveLineOptions,

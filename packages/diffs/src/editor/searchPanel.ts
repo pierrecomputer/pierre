@@ -19,7 +19,7 @@ export interface SearchParams {
 }
 
 export interface SearchPanelOptions {
-  textDocument: TextDocument<unknown>;
+  textDocument: TextDocument;
   containerElement: HTMLElement;
   defaultQuery: string;
   mode?: SearchPanelMode;

@@ -131,7 +131,7 @@ export type EditorLineAnnotation<
   TDocumentKind extends EditorDocumentKind = EditorDocumentKind,
   LAnnotation = unknown,
 > = TDocumentKind extends 'file'
-  ? LineAnnotation<LAnnotation>
+  ? LineAnnotation<LAnnotation> & { side?: never }
   : DiffLineAnnotation<LAnnotation>;
 
 /** The document and normalized edits reported after an editor change. */
@@ -254,48 +254,53 @@ export type EditorEditCompleteEvent<
   : FileDiffEditCompleteEvent<LAnnotation>;
 
 export type EditHistoryCoalescingMode = 'insert' | 'backspace' | 'delete';
-export type EditHistoryLineAnnotation<LAnnotation> =
-  | LineAnnotation<LAnnotation>
-  | DiffLineAnnotation<LAnnotation>;
 
 /** One reversible document transaction. */
-export interface EditHistoryEntry<LAnnotation> {
+export interface EditHistoryEntry<
+  TDocumentKind extends EditorDocumentKind,
+  LAnnotation = unknown,
+> {
   forwardEdits: ResolvedTextEdit[];
   inverseEdits: ResolvedTextEdit[];
   versionBefore: number;
   versionAfter: number;
   selectionsBefore?: EditorSelection[];
   selectionsAfter?: EditorSelection[];
-  lineAnnotationsBefore?: EditHistoryLineAnnotation<LAnnotation>[];
-  lineAnnotationsAfter?: EditHistoryLineAnnotation<LAnnotation>[];
+  lineAnnotationsBefore?: EditorLineAnnotation<TDocumentKind, LAnnotation>[];
+  lineAnnotationsAfter?: EditorLineAnnotation<TDocumentKind, LAnnotation>[];
   coalescingMode?: EditHistoryCoalescingMode;
   undoBoundary?: boolean;
 }
 
 /** Undo and redo history for a document. */
-export interface EditHistoryState<LAnnotation> {
-  undoStack: EditHistoryEntry<LAnnotation>[];
-  redoStack: EditHistoryEntry<LAnnotation>[];
+export interface EditHistoryState<
+  TDocumentKind extends EditorDocumentKind,
+  LAnnotation = unknown,
+> {
+  undoStack: EditHistoryEntry<TDocumentKind, LAnnotation>[];
+  redoStack: EditHistoryEntry<TDocumentKind, LAnnotation>[];
   maxEntries: number;
   canCoalesce: boolean;
 }
 
-interface EditStateBase<LAnnotation> {
-  document: TextDocument<LAnnotation>;
+interface EditStateBase<TDocumentKind extends EditorDocumentKind, LAnnotation> {
+  document: TextDocument<TDocumentKind, LAnnotation>;
   fileInfo: Pick<FileContents, 'name' | 'lang'>;
   editor: EditorViewState;
 }
 
-export interface FileEditState<
-  LAnnotation = unknown,
-> extends EditStateBase<LAnnotation> {
+export interface FileEditState<LAnnotation = unknown> extends EditStateBase<
+  'file',
+  LAnnotation
+> {
   documentKind: 'file';
   diffSession?: never;
 }
 
-export interface FileDiffEditState<
-  LAnnotation = unknown,
-> extends EditStateBase<LAnnotation> {
+export interface FileDiffEditState<LAnnotation = unknown> extends EditStateBase<
+  'file-diff',
+  LAnnotation
+> {
   documentKind: 'file-diff';
   diffSession: RetainedDiffSessionSnapshot;
 }

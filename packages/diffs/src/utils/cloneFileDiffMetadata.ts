@@ -1,7 +1,4 @@
-import type {
-  FileDiffMetadata,
-  Hunk,
-} from '../types';
+import type { FileDiffMetadata, Hunk } from '../types';
 
 export function cloneHunks(hunks: Hunk[]): Hunk[] {
   return hunks.map((hunk) => ({

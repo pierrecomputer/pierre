@@ -701,7 +701,9 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   }
 
   // Normally triggered by the host when the document line count changes.
-  public applyDocumentChange(textDocument: TextDocument<LAnnotation>): void {
+  public applyDocumentChange(
+    textDocument: TextDocument<'file-diff', LAnnotation>
+  ): void {
     const { pendingStructuralRows, renderCache } = this;
     this.pendingStructuralRows = undefined;
     if (renderCache == null) {
@@ -2522,7 +2524,7 @@ function realignAdditionHastLines<LAnnotation>(
   previousLines: string[],
   nextLines: string[],
   hastLines: ElementContent[],
-  textDocument: TextDocument<LAnnotation>
+  textDocument: TextDocument<'file-diff', LAnnotation>
 ): ElementContent[] {
   const previousContentLength = contentLineCount(previousLines);
   const nextContentLength = contentLineCount(nextLines);
@@ -2597,7 +2599,7 @@ function createPlainAdditionLineElement(
 }
 
 function getEditorDocumentLines<LAnnotation>(
-  textDocument: TextDocument<LAnnotation>
+  textDocument: TextDocument<'file-diff', LAnnotation>
 ): string[] {
   const lines: string[] = [];
   for (let line = 0; line < textDocument.lineCount; line++) {

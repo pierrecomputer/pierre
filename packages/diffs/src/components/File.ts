@@ -14,13 +14,13 @@ import {
   UNSAFE_CSS_ATTRIBUTE,
 } from '../constants';
 import type { Editor } from '../editor/editor';
+import type { TextDocument } from '../editor/textDocument';
 import type {
   EditCompletionDecision,
   EditorActiveLineOptions,
   EditorChangeEvent,
   FileEditCompleteEvent,
 } from '../editor/types';
-import type { TextDocument } from '../editor/textDocument';
 import {
   type GetHoveredLineResult,
   InteractionManager,
@@ -982,7 +982,7 @@ export class File<LAnnotation = undefined> {
 
   // normally triggered by the host when the document line count changes
   public applyDocumentChange(
-    textDocument: TextDocument<LAnnotation>,
+    textDocument: TextDocument<'file', LAnnotation>,
     newLineAnnotations?: LineAnnotation<LAnnotation>[]
   ): void {
     const { editSessionFile } = this;

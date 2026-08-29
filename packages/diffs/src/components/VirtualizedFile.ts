@@ -705,7 +705,7 @@ export class VirtualizedFile<
 
   // normally triggered by the host when the document line count changes
   override applyDocumentChange(
-    textDocument: TextDocument<LAnnotation>,
+    textDocument: TextDocument<'file', LAnnotation>,
     newLineAnnotations?: LineAnnotation<LAnnotation>[],
     shouldUpdateBuffer = false
   ): void {

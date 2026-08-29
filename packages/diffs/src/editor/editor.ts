@@ -311,7 +311,7 @@ export interface EditorOptions<
   };
   /** Render the selection action widget element. */
   renderSelectionAction?: (
-    context: SelectionActionContext<LAnnotation>
+    context: SelectionActionContext<TDocumentKind, LAnnotation>
   ) => HTMLElement;
   /**
    * Render an externally owned caret at its normalized document position.
@@ -427,7 +427,7 @@ export class Editor<
   // Preserves the current file/diff instance's applyDocumentChange
   // type/semantics to avoid annoying `as X` narrowing
   #applyDocumentChange?: (
-    textDocument: TextDocument<LAnnotation>,
+    textDocument: TextDocument<TDocumentKind, LAnnotation>,
     newLineAnnotations:
       | EditorLineAnnotation<TDocumentKind, LAnnotation>[]
       | undefined,
@@ -1350,10 +1350,10 @@ export class Editor<
         editSession.editor = undefined;
       }
       if (textDocument == null) {
-        const editStack = new EditStack<LAnnotation>({
+        const editStack = new EditStack<TDocumentKind, LAnnotation>({
           maxEntries: this.#options.historyMaxEntries,
         });
-        textDocument = new TextDocument(
+        textDocument = new TextDocument<TDocumentKind, LAnnotation>(
           fileOrDiff.name,
           contents,
           languageId,
@@ -3132,10 +3132,7 @@ export class Editor<
           )
         : undefined);
     const replayedLineAnnotations =
-      // Future plan to fix up this type coercion
-      (lineAnnotations as
-        | EditorLineAnnotation<TDocumentKind, LAnnotation>[]
-        | undefined) ??
+      lineAnnotations ??
       (this.#lineAnnotations != null
         ? applyDocumentChangeToLineAnnotations(change, this.#lineAnnotations)
         : undefined);
@@ -3146,7 +3143,7 @@ export class Editor<
   #applyCommandEdits(
     edits: TextEdit[],
     resolveNextSelections?: (
-      textDocument: TextDocument<LAnnotation>
+      textDocument: TextDocument<TDocumentKind, LAnnotation>
     ) => EditorSelection[]
   ): void {
     const textDocument = this.#editSession?.document;
@@ -4177,7 +4174,7 @@ export class Editor<
   #spanLineSelection(
     anchorLine: number,
     focusLine: number,
-    textDocument: TextDocument<LAnnotation>
+    textDocument: TextDocument<TDocumentKind, LAnnotation>
   ): EditorSelection {
     const lineStart = (line: number): Position => ({ line, character: 0 });
     const lineEnd = (line: number): Position => ({
@@ -5599,7 +5596,7 @@ export class Editor<
     }
     const { nextSelections, change } =
       Array.isArray(text) && text.length === selections.length
-        ? applyTextReplaceToSelections<LAnnotation>(
+        ? applyTextReplaceToSelections<TDocumentKind, LAnnotation>(
             textDocument,
             selections,
             text,
@@ -5607,7 +5604,7 @@ export class Editor<
             undoBoundary,
             textOrder
           )
-        : applyTextChangeToSelections<LAnnotation>(
+        : applyTextChangeToSelections<TDocumentKind, LAnnotation>(
             textDocument,
             selections,
             {
@@ -5636,14 +5633,16 @@ export class Editor<
       return;
     }
 
-    const { nextSelections, change } =
-      applyDeleteCharacterToSelections<LAnnotation>(
-        textDocument,
-        selections,
-        forward,
-        this.#lineAnnotations,
-        this.#metrics.tabSize
-      );
+    const { nextSelections, change } = applyDeleteCharacterToSelections<
+      TDocumentKind,
+      LAnnotation
+    >(
+      textDocument,
+      selections,
+      forward,
+      this.#lineAnnotations,
+      this.#metrics.tabSize
+    );
     if (change !== undefined) {
       this.#applyChange(
         change,
@@ -5672,13 +5671,10 @@ export class Editor<
           return 0;
         }
       : undefined;
-    const { nextSelections, change } =
-      applyDeleteSoftLineBackwardToSelections<LAnnotation>(
-        textDocument,
-        selections,
-        getSoftLineStart,
-        this.#lineAnnotations
-      );
+    const { nextSelections, change } = applyDeleteSoftLineBackwardToSelections<
+      TDocumentKind,
+      LAnnotation
+    >(textDocument, selections, getSoftLineStart, this.#lineAnnotations);
     if (change !== undefined) {
       this.#applyChange(
         change,
@@ -5694,12 +5690,10 @@ export class Editor<
     if (selections === undefined || textDocument === undefined) {
       return;
     }
-    const { nextSelections, change } =
-      applyDeleteWordBackwardToSelections<LAnnotation>(
-        textDocument,
-        selections,
-        this.#lineAnnotations
-      );
+    const { nextSelections, change } = applyDeleteWordBackwardToSelections<
+      TDocumentKind,
+      LAnnotation
+    >(textDocument, selections, this.#lineAnnotations);
     if (change !== undefined) {
       this.#applyChange(
         change,
@@ -5715,12 +5709,10 @@ export class Editor<
     if (selections === undefined || textDocument === undefined) {
       return;
     }
-    const { nextSelections, change } =
-      applyDeleteHardLineForwardToSelections<LAnnotation>(
-        textDocument,
-        selections,
-        this.#lineAnnotations
-      );
+    const { nextSelections, change } = applyDeleteHardLineForwardToSelections<
+      TDocumentKind,
+      LAnnotation
+    >(textDocument, selections, this.#lineAnnotations);
     if (change !== undefined) {
       this.#applyChange(
         change,
@@ -5736,11 +5728,10 @@ export class Editor<
     if (selections === undefined || textDocument === undefined) {
       return;
     }
-    const { nextSelections, change } = applyTransposeToSelections<LAnnotation>(
-      textDocument,
-      selections,
-      this.#lineAnnotations
-    );
+    const { nextSelections, change } = applyTransposeToSelections<
+      TDocumentKind,
+      LAnnotation
+    >(textDocument, selections, this.#lineAnnotations);
     if (change !== undefined) {
       this.#applyChange(
         change,
@@ -6416,16 +6407,19 @@ function getEditSession<TDocumentKind extends EditorDocumentKind, LAnnotation>({
   TDocumentKind,
   LAnnotation
 > {
+  const initialSession = initialState as
+    | ManagedEditSession<TDocumentKind, LAnnotation>
+    | undefined;
   if (editStateKey != null) {
     return EditStateManager.activate(
       documentKind,
       editStateKey,
       owner,
-      initialState
+      initialSession
     );
   }
-  if (initialState != null) {
-    return initialState;
+  if (initialSession != null) {
+    return initialSession;
   }
   if (previousSession != null) {
     return previousSession;

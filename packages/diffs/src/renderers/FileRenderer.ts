@@ -135,7 +135,7 @@ export class FileRenderer<LAnnotation = undefined> {
   private pendingStructuralRows: Map<number, HASTElement> | undefined;
   private textDocumentCache = new WeakMap<
     FileContents,
-    TextDocument<LAnnotation>
+    TextDocument<'file', LAnnotation>
   >();
 
   // Edit-session state: while active, this renderer stays on the main thread
@@ -580,7 +580,9 @@ export class FileRenderer<LAnnotation = undefined> {
   }
 
   // normally triggered by the host when the document line count changes
-  public applyDocumentChange(textDocument: TextDocument<LAnnotation>): void {
+  public applyDocumentChange(
+    textDocument: TextDocument<'file', LAnnotation>
+  ): void {
     const { pendingStructuralRows, renderCache } = this;
     this.pendingStructuralRows = undefined;
     if (renderCache == null) {

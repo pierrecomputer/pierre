@@ -1,4 +1,3 @@
-import type { Position, Range } from './types';
 import {
   POPOVER_BOUNDARY_LINES,
   type PopoverManager,
@@ -7,6 +6,7 @@ import {
 } from './popover';
 import { selectionIntersects } from './selection';
 import type { TextDocument } from './textDocument';
+import type { Position, Range } from './types';
 import { addEventListener, getLineNumberAttr, h } from './utils';
 
 const MARKER_POPOVER_SHOW_DELAY_MS = 300;
@@ -76,10 +76,7 @@ export class MarkerRenderer {
     );
   }
 
-  setMarkers<LAnnotation>(
-    markers: Marker[],
-    textDocument: TextDocument<LAnnotation>
-  ): void {
+  setMarkers(markers: Marker[], textDocument: TextDocument): void {
     this.#lineCount = textDocument.lineCount;
     this.#markers = markers.map((marker) => ({
       ...marker,

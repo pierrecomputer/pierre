@@ -1066,7 +1066,7 @@ export class VirtualizedFileDiff<
 
   // Normally triggered by the host when the document line count changes.
   override applyDocumentChange(
-    textDocument: TextDocument<LAnnotation>,
+    textDocument: TextDocument<'file-diff', LAnnotation>,
     newLineAnnotations?: DiffLineAnnotation<LAnnotation>[],
     shouldUpdateBuffer = false
   ): void {

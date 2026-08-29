@@ -15,6 +15,7 @@ import {
   UNSAFE_CSS_ATTRIBUTE,
 } from '../constants';
 import type { Editor } from '../editor/editor';
+import type { TextDocument } from '../editor/textDocument';
 import type {
   CapturedDiffSessionState,
   EditCompletionDecision,
@@ -23,7 +24,6 @@ import type {
   FileDiffEditCompleteEvent,
   RetainedDiffSessionSnapshot,
 } from '../editor/types';
-import type { TextDocument } from '../editor/textDocument';
 import {
   type GetHoveredLineResult,
   type GetLineIndexUtility,
@@ -2098,7 +2098,7 @@ export class FileDiff<LAnnotation = undefined> {
 
   // normally triggered by the host when the document line count changes
   public applyDocumentChange(
-    textDocument: TextDocument<LAnnotation>,
+    textDocument: TextDocument<'file-diff', LAnnotation>,
     newLineAnnotations?: DiffLineAnnotation<LAnnotation>[]
   ): void {
     const { editSessionDiff } = this;

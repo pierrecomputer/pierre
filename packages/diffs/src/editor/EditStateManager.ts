@@ -12,22 +12,25 @@ import type {
 
 const DEFAULT_EDIT_STATE_CAPACITY = 100;
 
-interface ManagedEditSessionBase<LAnnotation = unknown> {
-  document?: TextDocument<LAnnotation>;
+interface ManagedEditSessionBase<
+  TDocumentKind extends EditorDocumentKind,
+  LAnnotation = unknown,
+> {
+  document?: TextDocument<TDocumentKind, LAnnotation>;
   fileInfo?: Pick<FileContents, 'lang' | 'name'>;
   editor?: EditorViewState;
 }
 
 export interface ManagedFileEditSession<
   LAnnotation = unknown,
-> extends ManagedEditSessionBase<LAnnotation> {
+> extends ManagedEditSessionBase<'file', LAnnotation> {
   documentKind: 'file';
   diffSession?: never;
 }
 
 export interface ManagedFileDiffEditSession<
   LAnnotation = unknown,
-> extends ManagedEditSessionBase<LAnnotation> {
+> extends ManagedEditSessionBase<'file-diff', LAnnotation> {
   documentKind: 'file-diff';
   diffSession?: RetainedDiffSessionSnapshot;
 }
@@ -35,9 +38,10 @@ export interface ManagedFileDiffEditSession<
 export type ManagedEditSession<
   TDocumentKind extends EditorDocumentKind = EditorDocumentKind,
   LAnnotation = unknown,
-> = TDocumentKind extends 'file'
-  ? ManagedFileEditSession<LAnnotation>
-  : ManagedFileDiffEditSession<LAnnotation>;
+> = ManagedEditSessionBase<TDocumentKind, LAnnotation> &
+  (TDocumentKind extends 'file'
+    ? Pick<ManagedFileEditSession, 'documentKind' | 'diffSession'>
+    : Pick<ManagedFileDiffEditSession, 'documentKind' | 'diffSession'>);
 
 interface EditStateManagerSession<K extends EditorDocumentKind> {
   owner: Editor<K, unknown>;

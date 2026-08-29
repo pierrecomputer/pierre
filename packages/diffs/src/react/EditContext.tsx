@@ -31,7 +31,7 @@ export function EditProvider<LAnnotation, LCaret = undefined>({
   EditProviderProps<LAnnotation, LCaret>
 >): React.JSX.Element {
   const stableCreateEditor = useStableCallback(
-    <TDocumentKind extends EditorDocumentKind,>(
+    <TDocumentKind extends EditorDocumentKind>(
       documentKind: TDocumentKind,
       options: EditorOptions<TDocumentKind, LAnnotation, LCaret>,
       editStateKey?: string

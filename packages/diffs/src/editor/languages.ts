@@ -80,7 +80,7 @@ interface LineCommentInfo {
 
 /** Builds one aligned batch of line-comment edits for all selected lines. */
 export function resolveLineCommentEdits(
-  textDocument: TextDocument<unknown>,
+  textDocument: TextDocument,
   selections: readonly EditorSelection[],
   token: string
 ): TextEdit[] {
@@ -192,7 +192,7 @@ export interface BlockCommentEditResult {
 const BLOCK_COMMENT_SEARCH_MARGIN = 50;
 
 function findBlockComment(
-  textDocument: TextDocument<unknown>,
+  textDocument: TextDocument,
   open: string,
   close: string,
   from: number,
@@ -312,7 +312,7 @@ function mapOffset(
 
 /** Builds block-comment edits and content-preserving post-edit selections. */
 export function resolveBlockCommentEdits(
-  textDocument: TextDocument<unknown>,
+  textDocument: TextDocument,
   selections: readonly EditorSelection[],
   [open, close]: readonly [string, string],
   linewise = false

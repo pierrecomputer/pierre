@@ -19,8 +19,8 @@ interface BracketPosition extends Position {
   char: string;
 }
 
-export function findBracketMatchRanges<LAnnotation>(
-  textDocument: TextDocument<LAnnotation>,
+export function findBracketMatchRanges(
+  textDocument: TextDocument,
   tokenizer: EditorTokenizer,
   position: Position
 ): [open: Range, close: Range] | undefined {
@@ -56,8 +56,8 @@ export function findBracketMatchRanges<LAnnotation>(
   return undefined;
 }
 
-function findAdjacentBracket<LAnnotation>(
-  textDocument: TextDocument<LAnnotation>,
+function findAdjacentBracket(
+  textDocument: TextDocument,
   tokenizer: EditorTokenizer,
   position: Position
 ): BracketPosition | undefined {
@@ -86,8 +86,8 @@ function getPreviousCharacterPosition(
   return undefined;
 }
 
-function getBracketAtPosition<LAnnotation>(
-  textDocument: TextDocument<LAnnotation>,
+function getBracketAtPosition(
+  textDocument: TextDocument,
   tokenizer: EditorTokenizer,
   position: Position
 ): BracketPosition | undefined {
@@ -103,8 +103,8 @@ function getBracketAtPosition<LAnnotation>(
   return { ...position, char };
 }
 
-function findClosingBracket<LAnnotation>(
-  textDocument: TextDocument<LAnnotation>,
+function findClosingBracket(
+  textDocument: TextDocument,
   tokenizer: EditorTokenizer,
   bracketPosition: BracketPosition,
   closingBracket: string
@@ -150,8 +150,8 @@ function findClosingBracket<LAnnotation>(
   return undefined;
 }
 
-function findOpeningBracket<LAnnotation>(
-  textDocument: TextDocument<LAnnotation>,
+function findOpeningBracket(
+  textDocument: TextDocument,
   tokenizer: EditorTokenizer,
   bracketPosition: BracketPosition,
   openingBracket: string
