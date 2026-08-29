@@ -93,6 +93,13 @@ export interface ThemeSyntaxSettings {
     | (number & {});
 }
 
+/** Colors for one collaborator slot in a Zed theme's `players` array. */
+export interface ThemePlayer {
+  cursor?: string;
+  selection?: string;
+  background?: string;
+}
+
 /** Colors and syntax scopes from a Zed-compatible theme. */
 export interface ThemeStyle {
   background?: string;
@@ -100,6 +107,14 @@ export interface ThemeStyle {
   text?: string;
   'editor.background'?: string;
   'editor.foreground'?: string;
+  'editor.active_line.background'?: string;
+  'editor.document_highlight.bracket_background'?: string;
+  'search.match_background'?: string;
+  players?: readonly ThemePlayer[];
+  error?: string;
+  warning?: string;
+  info?: string;
+  hint?: string;
   syntax?: Record<string, string | ThemeSyntaxSettings>;
   [key: string]: unknown;
 }
@@ -152,7 +167,7 @@ export interface ThemedToken {
 /** Options shared by every tokenization entry point. */
 export interface CodeToTokensBaseOptions {
   lang: Lang;
-  /** Prefix for per-theme custom properties. Defaults to `--shiki-`. */
+  /** Prefix for per-theme custom properties. Defaults to `--cha-`. */
   cssVariablePrefix?: string;
   /** Only `false` has an effect: emit all theme colors as custom properties. */
   defaultColor?: string | false;
@@ -331,7 +346,8 @@ export function codeToTokens(
 
 /**
  * Highlight code as a Shiki-compatible HAST tree (`root > pre > code`) with
- * one `span.line` per line. Supports Shiki-style transformers and decorations.
+ * one `span.line` per line. WebAssembly lexes and splits lines; JavaScript
+ * builds the nodes and runs Shiki-style transformers and decorations.
  */
 export function codeToHast(
   input: string | Uint8Array | ArrayBuffer,

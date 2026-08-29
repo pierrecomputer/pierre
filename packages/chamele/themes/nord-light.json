@@ -6,6 +6,9 @@
     "text": "#444d56",
     "editor.background": "#eceff4",
     "editor.foreground": "#24292e",
+    "editor.active_line.background": "#f6f8fa",
+    "warning": "#bfa76b",
+    "hint": "#969696ff",
     "syntax": {
       "attribute": {
         "color": "#24292e"

@@ -23,8 +23,11 @@ toCSS(pierreDark);
 
 Each file keeps `name`, `appearance`, and the `style` keys read by chamele:
 `background`, `foreground`, `text`, `editor.background`, `editor.foreground`,
-and `syntax`. UI-only colors are removed. `codeToHtml` also accepts full Zed
-themes and theme families.
+`syntax`, and the editor-chrome keys consumers like `@pierre/diffs` read
+(`editor.active_line.background`,
+`editor.document_highlight.bracket_background`, `search.match_background`, the
+first `players` entry, `error`, `warning`, `info`, `hint`). Other UI-only colors
+are removed. `codeToHtml` also accepts full Zed themes and theme families.
 
 For CSS-controlled colors, use the variable theme:
 

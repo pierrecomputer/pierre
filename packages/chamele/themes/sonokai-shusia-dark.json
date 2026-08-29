@@ -6,6 +6,8 @@
     "text": "#e3e1e4",
     "editor.background": "#2d2a2e",
     "editor.foreground": "#e3e1e4",
+    "editor.active_line.background": "#343136",
+    "hint": "#949094",
     "syntax": {
       "variable": {
         "color": "#e3e1e4"

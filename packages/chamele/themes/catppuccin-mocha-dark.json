@@ -6,6 +6,19 @@
     "text": "#cdd6f4",
     "editor.background": "#1e1e2e",
     "editor.foreground": "#cdd6f4",
+    "editor.active_line.background": "#cdd6f412",
+    "editor.document_highlight.bracket_background": "#cba6f717",
+    "search.match_background": "#94e2d54d",
+    "players": [
+      {
+        "cursor": "#f5e0dc",
+        "selection": "#9399b240"
+      }
+    ],
+    "error": "#f38ba8",
+    "warning": "#f9e2af",
+    "info": "#94e2d5",
+    "hint": "#585b70",
     "syntax": {
       "variable": {
         "color": "#cdd6f4"

@@ -7,6 +7,8 @@ import { gzipSync } from 'node:zlib';
 
 import { init } from '../lib/index.mjs';
 import {
+  buildHast,
+  lineRecordsToRuns,
   lineRecordsToTokens,
   resolveOptionThemes,
   runToToken,
@@ -405,6 +407,144 @@ function benchmarkTokens(contenders) {
   );
 }
 
+function benchmarkHast() {
+  const comparisons = [];
+  const phases = [];
+  for (const { name, lang, input } of TOKEN_FIXTURES) {
+    const options = { lang, theme: pierreDark };
+    const themes = resolveOptionThemes(options);
+    const common = {
+      codeToHast: (code, opts) => chamele.codeToHast(code, opts),
+      codeToTokens: (code, opts) => chamele.codeToTokens(code, opts),
+      meta: {},
+    };
+    const hostCodeToHast = (source) => {
+      let code = source;
+      const hostCommon = {
+        codeToHast: (nextCode, opts) => chamele.codeToHast(nextCode, opts),
+        codeToTokens: (nextCode, opts) => chamele.codeToTokens(nextCode, opts),
+        meta: { ...options.meta },
+      };
+      const context = { ...hostCommon, source: code, options };
+      for (const transformer of options.transformers ?? []) {
+        if (transformer.preprocess != null) {
+          code = transformer.preprocess.call(context, code, options) ?? code;
+        }
+      }
+      const hostThemes = resolveOptionThemes(options);
+      const records = chamele.tokenizeRecords(24, chamele.writeInput(code));
+      const lineRuns = splitRecordLines(code, records, records.length >> 1);
+      const lineStarts = [0];
+      for (
+        let i = code.indexOf('\n');
+        i !== -1;
+        i = code.indexOf('\n', i + 1)
+      ) {
+        lineStarts.push(i + 1);
+      }
+      return buildHast(
+        code,
+        lineRuns,
+        lineStarts,
+        hostThemes,
+        options,
+        hostCommon
+      );
+    };
+    const hostResult = runBench(hostCodeToHast, input);
+    const wasmResult = runBench(
+      (source) => chamele.codeToHast(source, options),
+      input
+    );
+
+    const inputBytes = enc.encode(input);
+    chamele.writeInput(inputBytes);
+    const byteRecords = Uint32Array.from(
+      chamele.tokenizeRecords(24, inputBytes.length)
+    );
+    chamele.writeInput(inputBytes);
+    const lineRecords = Uint32Array.from(
+      chamele.tokenizeLineRecords(24, inputBytes.length)
+    );
+    const hostPrepResult = runBench(() => {
+      const lineRuns = splitRecordLines(
+        input,
+        byteRecords,
+        byteRecords.length >> 1
+      );
+      const lineStarts = [0];
+      for (
+        let i = input.indexOf('\n');
+        i !== -1;
+        i = input.indexOf('\n', i + 1)
+      ) {
+        lineStarts.push(i + 1);
+      }
+      return { lineRuns, lineStarts };
+    }, undefined);
+    const glueResult = runBench(
+      () => lineRecordsToRuns(lineRecords, lineRecords.length >> 1),
+      undefined
+    );
+    const adapted = lineRecordsToRuns(lineRecords, lineRecords.length >> 1);
+    const buildResult = runBench(
+      () =>
+        buildHast(
+          input,
+          adapted.lineRuns,
+          adapted.lineStarts,
+          themes,
+          options,
+          common
+        ),
+      undefined
+    );
+
+    const mb = inputBytes.length / 1024 / 1024;
+    comparisons.push([
+      name,
+      String(adapted.lineRuns.length),
+      us(hostResult.median),
+      us(wasmResult.median),
+      baselineLabel(wasmResult.median / hostResult.median),
+      fmt(mb / (wasmResult.median / 1000)) + ' MB/s',
+    ]);
+    phases.push([
+      name,
+      us(hostPrepResult.median),
+      us(glueResult.median),
+      us(buildResult.median),
+      us(hostResult.median),
+      us(wasmResult.median),
+    ]);
+  }
+
+  console.log('\ncodeToHast (TypeScript, steady state):');
+  printTable(
+    [
+      { title: 'input' },
+      { title: 'lines', align: 'right', hide: 1 },
+      { title: 'JS split', align: 'right' },
+      { title: 'wasm split', align: 'right' },
+      { title: 'change' },
+      { title: 'throughput', align: 'right', hide: 2 },
+    ],
+    comparisons
+  );
+  console.log('\nchamele codeToHast phases (independent timings):');
+  printTable(
+    [
+      { title: 'input' },
+      { title: 'host prep', align: 'right' },
+      { title: 'record glue', align: 'right' },
+      { title: 'HAST build', align: 'right' },
+      { title: 'JS e2e', align: 'right' },
+      { title: 'wasm e2e', align: 'right' },
+    ],
+    phases
+  );
+}
+
 const t0 = performance.now();
 const { code } = transformWat(new URL('../src/chamele.wat', import.meta.url));
 // Use the publish build settings so results match the shipped Wasm.
@@ -427,6 +567,7 @@ const contenders = await loadContenders();
 
 if (tokensOnly) {
   benchmarkTokens(contenders);
+  benchmarkHast();
 } else {
   for (const { name, lang, input } of FIXTURES) {
     const inputBytes = enc.encode(input);

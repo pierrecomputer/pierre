@@ -4,6 +4,9 @@
   "style": {
     "background": "#282c34",
     "editor.background": "#282c34",
+    "editor.active_line.background": "#383E4A",
+    "error": "#c24038",
+    "hint": "#969696ff",
     "syntax": {
       "attribute": {
         "color": "#98c379"

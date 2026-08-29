@@ -1,7 +1,7 @@
 # Benchmark
 
 Throughput and installed size for Chamele, tree-sitter-highlight, Lezer and
-Shiki, plus a focused `codeToTokens` comparison and phase breakdown.
+Shiki, plus focused `codeToTokens` and `codeToHast` comparisons.
 
 ```sh
 moonx chamele:bench
@@ -33,10 +33,10 @@ moonx chamele:bench-tokens
 
 | Input                       |  Lines | JS split | Wasm split | Change | Throughput |   Shiki | Speedup |
 | --------------------------- | -----: | -------: | ---------: | -----: | ---------: | ------: | ------: |
-| `tiny.ts.txt` (1 KB)        |     50 |  9.42 µs |    8.25 µs |  1.14× |   158 MB/s |  700 µs |   84.8× |
-| `small.ts.txt` (31 KB)      |    826 |   224 µs |     197 µs |  1.14× |   152 MB/s | 33.8 ms |    172× |
-| `large.ts.txt` (466 KB)     | 10,673 |  3.23 ms |    2.86 ms |  1.13× |   159 MB/s |  314 ms |    110× |
-| `unicode-lines.ts` (498 KB) | 10,001 |  4.05 ms |    2.77 ms |  1.46× |   186 MB/s |  486 ms |    175× |
+| `tiny.ts.txt` (1 KB)        |     50 |  9.29 µs |    8.08 µs |  1.15× |   162 MB/s |  709 µs |   87.7× |
+| `small.ts.txt` (31 KB)      |    826 |   224 µs |     196 µs |  1.14× |   153 MB/s | 34.1 ms |    174× |
+| `large.ts.txt` (466 KB)     | 10,673 |  3.21 ms |    2.87 ms |  1.12× |   158 MB/s |  316 ms |    110× |
+| `unicode-lines.ts` (498 KB) | 10,001 |  4.10 ms |    2.77 ms |  1.48× |   186 MB/s |  490 ms |    177× |
 
 Mode 2, the previous path, emits UTF-8 byte-end records. JavaScript then
 converts offsets to UTF-16, finds line endings, removes CR from CRLF, creates
@@ -50,10 +50,10 @@ mode adds 467 bytes to optimized Wasm (234 bytes gzip), about 0.7% and 0.8%.
 
 | Input              | UTF-8 encode | Byte Wasm | JS split | JS tokens | Line Wasm | Direct tokens |  JS E2E | Wasm E2E |
 | ------------------ | -----------: | --------: | -------: | --------: | --------: | ------------: | ------: | -------: |
-| `tiny.ts.txt`      |      0.54 µs |   3.04 µs |  2.29 µs |   2.92 µs |   4.54 µs |       2.71 µs | 9.42 µs |  8.25 µs |
-| `small.ts.txt`     |      11.7 µs |   77.6 µs |  59.3 µs |   72.2 µs |    112 µs |       69.6 µs |  224 µs |   197 µs |
-| `large.ts.txt`     |       156 µs |   1.07 ms |   852 µs |    998 µs |   1.68 ms |        938 µs | 3.23 ms |  2.86 ms |
-| `unicode-lines.ts` |       432 µs |    855 µs |  1.71 ms |   1.01 ms |   1.34 ms |        936 µs | 4.05 ms |  2.77 ms |
+| `tiny.ts.txt`      |      0.54 µs |   2.96 µs |  2.25 µs |   2.92 µs |   4.50 µs |       2.75 µs | 9.29 µs |  8.08 µs |
+| `small.ts.txt`     |      10.2 µs |   76.7 µs |  59.0 µs |   71.6 µs |    112 µs |       69.2 µs |  224 µs |   196 µs |
+| `large.ts.txt`     |       156 µs |   1.06 ms |   845 µs |   1.01 ms |   1.68 ms |        942 µs | 3.21 ms |  2.87 ms |
+| `unicode-lines.ts` |       433 µs |    858 µs |  1.74 ms |   1.02 ms |   1.35 ms |        961 µs | 4.10 ms |  2.77 ms |
 
 > Measured on 2026-08-29 with Node.js 24.11.0 on a 14-core Apple M4 Pro with 48
 > GB RAM (macOS arm64). Values are the median across three full benchmark runs.
@@ -61,6 +61,31 @@ mode adds 467 bytes to optimized Wasm (234 bytes gzip), about 0.7% and 0.8%.
 > in linear memory, while the split and token passes use precomputed input. The
 > Unicode case is 10,000 generated lines and exercises byte-to-UTF-16 offset
 > conversion.
+
+## Results(`codeToHast`)
+
+| Input                       |  Lines | JS split | Wasm split | Change | Throughput |
+| --------------------------- | -----: | -------: | ---------: | -----: | ---------: |
+| `tiny.ts.txt` (1 KB)        |     50 |  24.7 µs |    23.8 µs |  1.04× |  55.0 MB/s |
+| `small.ts.txt` (31 KB)      |    826 |   526 µs |     515 µs |  1.02× |  58.1 MB/s |
+| `large.ts.txt` (466 KB)     | 10,673 |  11.1 ms |    11.1 ms |  1.00× |  41.1 MB/s |
+| `unicode-lines.ts` (498 KB) | 10,001 |  12.1 ms |    11.3 ms |  1.07× |  45.7 MB/s |
+
+`codeToHast` also uses mode 3. JavaScript converts the line records into the
+offset runs needed by decorations, then builds HAST and runs transformers. HAST
+allocation dominates large ASCII input, where moving the split is neutral. The
+change reuses the existing Wasm mode and adds no Wasm bytes.
+
+| Input              | Host prep | Record glue | HAST build |  JS E2E | Wasm E2E |
+| ------------------ | --------: | ----------: | ---------: | ------: | -------: |
+| `tiny.ts.txt`      |   2.79 µs |     1.04 µs |    15.8 µs | 24.7 µs |  23.8 µs |
+| `small.ts.txt`     |   70.2 µs |     23.8 µs |     353 µs |  526 µs |   515 µs |
+| `large.ts.txt`     |   1.02 ms |      306 µs |    8.75 ms | 11.1 ms |  11.1 ms |
+| `unicode-lines.ts` |   1.86 ms |      293 µs |    8.96 ms | 12.1 ms |  11.3 ms |
+
+> Measured with the token results above. Host prep includes UTF-8-to-UTF-16
+> conversion, newline splitting, and line-start discovery. Record glue only
+> groups Wasm's UTF-16 records into the runs required by HAST.
 
 ## Installed size
 
@@ -82,4 +107,6 @@ HTML input but emits no token spans for it, so its HTML rows do less
 highlighting work. `Chamele, bytes` receives encoded bytes; regular Chamele
 includes string encoding and UTF-8 output decoding. Themes and markup vary. The
 `codeToTokens` comparison instead includes each tool's complete token-array API,
-using Pierre Dark for Chamele and GitHub Dark for Shiki.
+using Pierre Dark for Chamele and GitHub Dark for Shiki. The `codeToHast`
+comparison measures Chamele's complete HAST API without transformers or
+decorations.

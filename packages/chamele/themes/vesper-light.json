@@ -6,6 +6,10 @@
     "text": "#1A1A1A",
     "editor.background": "#FFFFFF",
     "editor.foreground": "#1A1A1A",
+    "error": "#E57373",
+    "warning": "#FFC107",
+    "info": "#757575",
+    "hint": "#9E9E9E",
     "syntax": {
       "attribute": {
         "color": "#6A6A6A"

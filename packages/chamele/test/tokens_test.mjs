@@ -9,6 +9,8 @@ import {
   TokenizeStream,
 } from '../lib/index.mjs';
 import {
+  buildHast,
+  lineRecordsToRuns,
   resolveOptionThemes,
   runToToken,
   splitRecordLines,
@@ -41,8 +43,7 @@ const langIds = {
 };
 
 /** Run the previous mode-2 host splitter as a parity baseline. */
-function hostTokens(code, lang, maxLineLength) {
-  const themes = resolveOptionThemes({ theme: pierreDark });
+function hostRuns(code, lang, maxLineLength) {
   const recs = highlighter.tokenizeRecords(
     langIds[lang],
     highlighter.writeInput(code)
@@ -53,8 +54,20 @@ function hostTokens(code, lang, maxLineLength) {
     recs.length >> 1,
     undefined,
     maxLineLength
-  ).map((runs) => runs.map((run) => runToToken(code, run, themes, '--shiki-')));
+  );
 }
+
+function hostTokens(code, lang, maxLineLength) {
+  const themes = resolveOptionThemes({ theme: pierreDark });
+  return hostRuns(code, lang, maxLineLength).map((runs) =>
+    runs.map((run) => runToToken(code, run, themes, '--shiki-'))
+  );
+}
+
+const hostLineStarts = (code) => [
+  0,
+  ...Array.from(code.matchAll(/\n/g), (match) => match.index + 1),
+];
 
 void t.test('codeToTokens: lines, offsets, and terminators', () => {
   const code = 'const a = 1; // hi\n\nlet s = "x";\r\nendé 🎈\n';
@@ -132,11 +145,22 @@ void t.test('codeToTokens: token records tile every input (fuzz)', () => {
         input += alphabet[seed % alphabet.length];
       }
       const { tokens } = codeToTokens(input, { lang, theme: pierreDark });
+      const expectedRuns = hostRuns(input, lang);
+      const themes = resolveOptionThemes({ theme: pierreDark });
       assert.deepEqual(
         tokens,
-        hostTokens(input, lang),
+        expectedRuns.map((runs) =>
+          runs.map((run) => runToToken(input, run, themes, '--shiki-'))
+        ),
         `${lang}: wasm lines differ for ${JSON.stringify(input)}`
       );
+      const recs = highlighter.tokenizeLineRecords(
+        langIds[lang],
+        highlighter.writeInput(input)
+      );
+      const adapted = lineRecordsToRuns(recs, recs.length >> 1);
+      assert.deepEqual(adapted.lineRuns, expectedRuns);
+      assert.deepEqual(adapted.lineStarts, hostLineStarts(input));
       // rebuild the input from lines: token contents joined by the input's
       // own terminators must reproduce it exactly (the lossless invariant)
       let rebuilt = '';
@@ -209,6 +233,48 @@ void t.test('codeToHast: shiki-shaped tree', () => {
     `color:${themeColor('keyword.declaration')}`
   );
   assert.equal(span.children[0].value, 'const ');
+});
+
+void t.test('codeToHast: wasm line records match host splitting', () => {
+  const samples = [
+    ['', 'ts'],
+    ['const a = 1;\n\nlet b = 2;\r\n', 'ts'],
+    ['const greeting = "日本語 🎈"; // naïve résumé\n', 'ts'],
+    ['.a {\r\n  color: red; /* x\n  y */\r\n}\n', 'css'],
+    ['<div title="a\nb">é</div>\n', 'html'],
+  ];
+  for (const [code, lang] of samples) {
+    const options = { lang, theme: pierreDark };
+    const themes = resolveOptionThemes(options);
+    const lineRuns = hostRuns(code, lang);
+    const lineStarts = hostLineStarts(code);
+    const common = { codeToHast, codeToTokens, meta: {} };
+    assert.deepEqual(
+      codeToHast(code, options),
+      buildHast(code, lineRuns, lineStarts, themes, options, common),
+      lang
+    );
+  }
+
+  const code = 'let a = 1\nlet bb = 22\nlet c = 3';
+  const options = {
+    lang: 'ts',
+    theme: pierreDark,
+    tokenizeMaxLineLength: 10,
+    decorations: [{ start: 2, end: 15, tagName: 'mark' }],
+  };
+  const themes = resolveOptionThemes(options);
+  assert.deepEqual(
+    codeToHast(code, options),
+    buildHast(
+      code,
+      hostRuns(code, 'ts', options.tokenizeMaxLineLength),
+      hostLineStarts(code),
+      themes,
+      options,
+      { codeToHast, codeToTokens, meta: {} }
+    )
+  );
 });
 
 void t.test('codeToHast: transformer hooks run in shiki order', () => {

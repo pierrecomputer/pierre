@@ -1,6 +1,7 @@
 import { compileTheme } from './theme.mjs';
 import {
   buildHast,
+  lineRecordsToRuns,
   lineRecordsToTokens,
   resolveOptionThemes,
   runToToken,
@@ -223,6 +224,7 @@ class Highlighter {
       this.buffer.fill(0, themePtr + themeTable.length, themePtr + themeBytes);
       this.themeWritten = themeTable;
     }
+    // oxlint-disable-next-line typescript/no-unsafe-return
     return this.run(langId, useCssVariables ? 1 : 0, inputLength);
   }
 
@@ -251,7 +253,7 @@ class Highlighter {
   codeToTokens(input, options) {
     const code = toCode(input);
     const themes = resolveOptionThemes(options);
-    const cssVariablePrefix = options.cssVariablePrefix ?? '--shiki-';
+    const cssVariablePrefix = options.cssVariablePrefix ?? '--cha-';
     const recs = this.tokenizeLineRecords(
       langIdOf(options.lang),
       this.writeInput(code)
@@ -290,18 +292,16 @@ class Highlighter {
       }
     }
     const themes = resolveOptionThemes(options);
-    const recs = this.tokenizeRecords(
+    const recs = this.tokenizeLineRecords(
       langIdOf(options.lang),
       this.writeInput(code)
     );
-    const lineRuns = splitRecordLines(
-      code,
+    const { lineRuns, lineStarts } = lineRecordsToRuns(
       recs,
       recs.length >> 1,
-      undefined,
       options.tokenizeMaxLineLength
     );
-    return buildHast(code, lineRuns, themes, options, common);
+    return buildHast(code, lineRuns, lineStarts, themes, options, common);
   }
 
   /** Grow the wasm linear memory if needed. */
@@ -313,7 +313,7 @@ class Highlighter {
     }
   }
 
-  /** Read one UTF-8 character from wasm memory. */
+  /** Decode a UTF-8 byte range from wasm memory. */
   readChars(ptr, length) {
     this.bindMemory();
     return dec.decode(this.buffer.subarray(ptr, ptr + length));
@@ -336,22 +336,15 @@ function toCode(input) {
   throw new TypeError('input must be a string, Uint8Array, or ArrayBuffer');
 }
 
-/** UTF-8 byte length of `code.slice(from)`. */
-function utf8Length(code, from) {
-  let bytes = 0;
-  for (let i = from; i < code.length; ) {
-    const cp = code.codePointAt(i);
-    bytes += cp <= 0x7f ? 1 : cp <= 0x7ff ? 2 : cp <= 0xffff ? 3 : 4;
-    i += cp > 0xffff ? 2 : 1;
-  }
-  return bytes;
-}
-
 /**
  * The shared highlighter instance and its compiled module.
  * @type {Highlighter}
  */
 let shared;
+
+/** The compiled Wasm module required by the shared highlighter.
+ * @type {WebAssembly.Module}
+ */
 let sharedModule;
 
 /** The compiled Wasm module required by isolated tokenizers. */
@@ -405,10 +398,12 @@ export function codeToHast(input, options) {
 }
 
 /**
- * Tokenize streamed code for SSR in an isolated Wasm instance. Its text buffer
- * accumulates chunks; `pushCode` returns completed lines and keeps the trailing
- * line until a terminator or `end`. Each pass starts at the buffer start, so
- * completed lines include all preceding context.
+ * Tokenize streamed code for SSR in an isolated Wasm instance. The streamed
+ * code lives only in Wasm memory: each push appends the chunk's bytes after
+ * the existing input (overwriting the previous pass's output records) and
+ * retokenizes from the buffer start, so completed lines include all preceding
+ * context. JavaScript keeps only resume offsets and decodes the unreturned
+ * region back out of Wasm memory to build token contents.
  */
 export class TokenizeStream {
   #hl;
@@ -416,20 +411,17 @@ export class TokenizeStream {
   #themes;
   #cssVariablePrefix;
   #maxLineLength;
-  #code = '';
   #byteLen = 0;
-  // Hold a trailing high surrogate so a split pair encodes as one code point
-  // and later byte offsets stay aligned.
   #pendingSurrogate = '';
-  // String and byte offsets of the first unreturned line.
-  #resume = { byte: 0, char: 0 };
+  #resumeByte = 0;
+  #resumeChar = 0;
 
   /** @param {import("./index.d.ts").CodeToTokensOptions} options */
   constructor(options) {
     this.#hl = new Highlighter(moduleOrThrow());
     this.#langId = langIdOf(options.lang);
     this.#themes = resolveOptionThemes(options);
-    this.#cssVariablePrefix = options.cssVariablePrefix ?? '--shiki-';
+    this.#cssVariablePrefix = options.cssVariablePrefix ?? '--cha-';
     this.#maxLineLength = options.tokenizeMaxLineLength;
   }
 
@@ -449,20 +441,21 @@ export class TokenizeStream {
     }
     if (chunk !== '') {
       this.#byteLen += this.#hl.encodeAt(chunk, this.#byteLen);
-      this.#code += chunk;
     }
     // A chunk without a terminator cannot complete a line, so skip full-buffer
     // tokenization.
     if (!chunk.includes('\n')) return [];
-    const lines = this.#tokenize();
+    const { code, lines } = this.#tokenize();
     // Keep the unterminated final line.
     const complete = lines.slice(0, -1);
     if (complete.length > 0) {
-      const tailChar = this.#code.lastIndexOf('\n') + 1;
-      this.#resume = {
-        char: tailChar,
-        byte: this.#byteLen - utf8Length(this.#code, tailChar),
-      };
+      this.#resumeChar += code.lastIndexOf('\n') + 1;
+      // Newlines are single bytes that never occur inside a multibyte
+      // sequence, so the byte scan finds the same newline as the char scan.
+      this.#resumeByte =
+        this.#hl.buffer.lastIndexOf(0x0a, pageSize + this.#byteLen - 1) -
+        pageSize +
+        1;
     }
     return complete;
   }
@@ -474,32 +467,50 @@ export class TokenizeStream {
    */
   end() {
     if (this.#pendingSurrogate !== '') {
-      // Encode a final high surrogate as a replacement character, matching
-      // codeToTokens.
+      // A final lone high surrogate encodes as a replacement character whose
+      // three bytes keep later offsets aligned, matching codeToTokens.
       this.#byteLen += this.#hl.encodeAt(this.#pendingSurrogate, this.#byteLen);
-      this.#code += this.#pendingSurrogate;
       this.#pendingSurrogate = '';
     }
-    const lines = this.#tokenize();
-    this.#resume = { byte: this.#byteLen, char: this.#code.length };
+    const { code, lines } = this.#tokenize();
+    this.#resumeByte = this.#byteLen;
+    this.#resumeChar += code.length;
     return lines;
   }
 
-  /** Tokenize the full buffer and split from the resume point. */
+  /**
+   * Tokenize the full buffer, decode the unreturned region out of Wasm memory,
+   * and split it into per-line tokens with stream-absolute offsets.
+   */
   #tokenize() {
     const recs = this.#hl.tokenizeRecords(this.#langId, this.#byteLen);
+    // The region starts at a line boundary and chunk encoding never splits a
+    // code point, so it decodes cleanly in isolation.
+    const code = this.#hl.readChars(
+      pageSize + this.#resumeByte,
+      this.#byteLen - this.#resumeByte
+    );
     const lineRuns = splitRecordLines(
-      this.#code,
+      code,
       recs,
       recs.length >> 1,
-      this.#resume,
+      { byte: this.#resumeByte, char: 0 },
       this.#maxLineLength
     );
-    return lineRuns.map((runs) =>
-      runs.map((run) =>
-        runToToken(this.#code, run, this.#themes, this.#cssVariablePrefix)
-      )
+    const base = this.#resumeChar;
+    const lines = lineRuns.map((runs) =>
+      runs.map((run) => {
+        const token = runToToken(
+          code,
+          run,
+          this.#themes,
+          this.#cssVariablePrefix
+        );
+        token.offset += base;
+        return token;
+      })
     );
+    return { code, lines };
   }
 }
 
@@ -525,7 +536,7 @@ export class LiveTokenizer {
     this.#hl = new Highlighter(moduleOrThrow());
     this.#langId = langIdOf(options.lang);
     this.#themes = resolveOptionThemes(options);
-    this.#cssVariablePrefix = options.cssVariablePrefix ?? '--shiki-';
+    this.#cssVariablePrefix = options.cssVariablePrefix ?? '--cha-';
     this.#maxLineLength = options.tokenizeMaxLineLength;
     this.#lines = options.code == null ? [''] : options.code.split('\n');
   }

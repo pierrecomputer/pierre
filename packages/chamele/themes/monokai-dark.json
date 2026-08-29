@@ -6,6 +6,15 @@
     "text": "#F8F8F2",
     "editor.background": "#1D1D1A",
     "editor.foreground": "#f8f8f2",
+    "editor.active_line.background": "#3E3D33b0",
+    "search.match_background": "#535C69",
+    "players": [
+      {
+        "cursor": "#566ddaff",
+        "selection": "#566dda3d"
+      }
+    ],
+    "hint": "#969696ff",
     "syntax": {
       "attribute": {
         "color": "#A6E22E"

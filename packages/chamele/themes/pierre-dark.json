@@ -6,6 +6,13 @@
     "text": "#fafafa",
     "editor.background": "#0a0a0a",
     "editor.foreground": "#fafafa",
+    "editor.active_line.background": "#19283c8c",
+    "players": [
+      {
+        "cursor": "#009fff",
+        "selection": "#009fff4d"
+      }
+    ],
     "syntax": {
       "comment": {
         "color": "#737373"

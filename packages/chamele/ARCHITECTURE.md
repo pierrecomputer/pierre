@@ -13,10 +13,10 @@ UTF-8 input -> selected `$hl*` lexer -> emitter (emit.wat) -> HTML bytes
 
 Mode 0 emits inline-color HTML, mode 1 CSS-variable HTML, and mode 2 token
 records. Mode 3 runs the same lexer, then a Wasm post-pass converts its byte-end
-records to UTF-16 ends with newline markers. `codeToTokens` uses mode 3 and
-builds themed token objects directly from those records. `codeToHast`,
-`TokenizeStream`, and `LiveTokenizer` use mode 2; JavaScript splits those
-records at newlines and converts their byte offsets to UTF-16 indexes.
+records to UTF-16 ends with newline markers. `codeToTokens` and `codeToHast` use
+mode 3 and build their JavaScript output directly from those records.
+`TokenizeStream` and `LiveTokenizer` use mode 2; JavaScript splits those records
+at newlines and converts their byte offsets to UTF-16 indexes.
 
 ## Project structure
 
@@ -144,8 +144,7 @@ output and the open span.
   `$hlEnd`, a post-pass scans the covered input once and emits
   `(endUtf16: u32, hl: u32)` records. Token id `0xffffffff` marks a line ending
   and includes its LF or CRLF terminator. JavaScript can then build each line's
-  tokens without byte conversion, substring searches, or intermediate run
-  tuples.
+  tokens or HAST runs without byte conversion or substring searches.
 - `$scanToLineEnd`, `$scanBlockCommentEnd`, and `$scanHexRun` provide bounded
   comment and hexadecimal scans.
 - `$scanFindSpecial`, `$scanWhitespace`, `$scanIdentRun`, and `$utf8SpanEnd`

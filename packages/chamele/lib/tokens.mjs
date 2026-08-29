@@ -278,6 +278,36 @@ export function lineRecordsToTokens(
   return lines;
 }
 
+/** Convert UTF-16 line records to runs and source line starts for HAST. */
+export function lineRecordsToRuns(recs, count, maxLineLength) {
+  const lineRuns = [];
+  const lineStarts = [0];
+  let line = [];
+  let start = 0;
+  let lineStart = 0;
+  const max = maxLineLength ?? 0;
+  for (let rec = 0; rec < count; rec++) {
+    const end = recs[rec * 2];
+    const hl = recs[rec * 2 + 1];
+    if (hl === 0xffffffff) {
+      lineRuns.push(
+        max > 0 && start - lineStart >= max ? [[lineStart, start, 0]] : line
+      );
+      line = [];
+      start = end;
+      lineStart = end;
+      lineStarts.push(end);
+    } else if (end > start) {
+      line.push([start, end, hl]);
+      start = end;
+    }
+  }
+  lineRuns.push(
+    max > 0 && start - lineStart >= max ? [[lineStart, start, 0]] : line
+  );
+  return { lineRuns, lineStarts };
+}
+
 /**
  * Build the `fg`, `bg`, `themeName`, and `rootStyle` block of a Shiki
  * `TokensResult`. `themes` uses CSS declaration lists.
@@ -406,15 +436,10 @@ function splitRunsAt(runs, cuts) {
  * Build Shiki-compatible HAST from line runs, then run transformer hooks for
  * diff renderers and other Shiki integrations.
  */
-export function buildHast(code, lineRuns, themes, options, common) {
-  const cssVariablePrefix = options.cssVariablePrefix ?? '--shiki-';
+export function buildHast(code, lineRuns, lineStarts, themes, options, common) {
+  const cssVariablePrefix = options.cssVariablePrefix ?? '--cha-';
   const transformers = options.transformers ?? [];
   const themeInfo = themeMeta(themes, cssVariablePrefix);
-  // Line-start offsets in the source, after each newline.
-  const lineStarts = [0];
-  for (let i = code.indexOf('\n'); i !== -1; i = code.indexOf('\n', i + 1)) {
-    lineStarts.push(i + 1);
-  }
   const decorations =
     options.decorations != null && options.decorations.length > 0
       ? decorationsByLine(options.decorations, lineStarts)
