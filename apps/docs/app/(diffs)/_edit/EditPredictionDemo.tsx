@@ -13,8 +13,8 @@ import type {
   PreloadedFileResult,
   PreloadFileDiffResult,
 } from '@pierre/diffs/ssr';
-import { IconRefresh } from '@pierre/icons';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { IconBrandGithub, IconRefresh } from '@pierre/icons';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { CodestralIcon } from './CodestralIcon';
 import { EDIT_PREDICTION_NEW_FILE } from './constants';
@@ -68,6 +68,7 @@ export function EditPredictionDemo({
   const predictionEnabledRef = useRef(false);
   const [attached, setAttached] = useState(false);
   const [authenticating, setAuthenticating] = useState(false);
+  const [githubAuthenticated, setGithubAuthenticated] = useState(false);
   const [hasEdits, setHasEdits] = useState(false);
   const [mode, setMode] = useState<PredictionMode>('eager');
   const [predictionEnabled, setPredictionEnabled] = useState(false);
@@ -169,6 +170,29 @@ export function EditPredictionDemo({
     setResetKey((key) => key + 1);
   }, []);
 
+  useEffect(() => {
+    const controller = new AbortController();
+
+    void fetch('/edit/auth', {
+      method: 'HEAD',
+      cache: 'no-store',
+      signal: controller.signal,
+    })
+      .then((response) => {
+        if (!controller.signal.aborted) {
+          setGithubAuthenticated(response.status === 204);
+        }
+      })
+      .catch(() => {
+        // Keep the safe default: the button starts the GitHub connection flow.
+        if (!controller.signal.aborted) {
+          setGithubAuthenticated(false);
+        }
+      });
+
+    return () => controller.abort();
+  }, []);
+
   const placeCursor = useCallback(() => {
     const editor = editorRef.current;
     if (editor == null) {
@@ -203,6 +227,7 @@ export function EditPredictionDemo({
         cache: 'no-store',
       });
       if (response.status === 401) {
+        setGithubAuthenticated(false);
         window.location.assign('/edit/auth');
         return;
       }
@@ -210,6 +235,7 @@ export function EditPredictionDemo({
         setStatus('error');
         return;
       }
+      setGithubAuthenticated(true);
       placeCursor();
     } catch {
       setStatus('error');
@@ -295,8 +321,10 @@ export function EditPredictionDemo({
               onClick={() => void tryCodestral()}
               disabled={!attached || authenticating}
             >
-              <CodestralIcon />
-              Continue with Codestral
+              {githubAuthenticated ? <CodestralIcon /> : <IconBrandGithub />}
+              {githubAuthenticated
+                ? 'Continue with Codestral'
+                : 'Connect GitHub'}
             </Button>
           )}
         </div>
