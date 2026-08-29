@@ -13,7 +13,7 @@ const FUNCTION = themeColor('function');
 const KEYWORD = themeColor('keyword');
 const PROPERTY = themeColor('property');
 
-t.test('vue: template directives and interpolation expressions', () => {
+void t.test('vue: template directives and interpolation expressions', () => {
   const src =
     '<template><button v-if="ok" :class="{ active: ok }" @click="save()">{{ message }}</button></template>';
   const out = checkInvariants(vue.hl, src);
@@ -24,7 +24,7 @@ t.test('vue: template directives and interpolation expressions', () => {
   assert.equal(colorOf(out, 'message'), VARIABLE);
 });
 
-t.test('vue: script setup and scoped style use embedded lexers', () => {
+void t.test('vue: script setup and scoped style use embedded lexers', () => {
   const out = checkInvariants(
     vue.hl,
     '<script setup>const ok = true</script><style scoped>.x { color: red }</style>'
@@ -35,7 +35,7 @@ t.test('vue: script setup and scoped style use embedded lexers', () => {
   assert.equal(colorOf(out, 'color'), PROPERTY);
 });
 
-t.test('vue: malformed and split ranges remain bounded', () => {
+void t.test('vue: malformed and split ranges remain bounded', () => {
   for (const src of [
     '{{',
     '{{ "}"',

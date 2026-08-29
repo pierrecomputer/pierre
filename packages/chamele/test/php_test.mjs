@@ -18,7 +18,7 @@ const PROPERTY = themeColor('property');
 const TYPE = themeColor('type.builtin');
 const PLAIN_KEYWORD = themeColor('keyword');
 
-t.test('php: mixed HTML and PHP regions', () => {
+void t.test('php: mixed HTML and PHP regions', () => {
   const src = '<div><?php echo "hi"; ?></div><?= $name ?>';
   const html = checkInvariants(php.hl, src);
   assert.equal(colorOf(html, 'div'), TAG);
@@ -31,18 +31,21 @@ t.test('php: mixed HTML and PHP regions', () => {
   assert.equal(colorOf(plain, 'main'), TAG);
 });
 
-t.test('php: declarations, members, comments, and tagless snippets', () => {
-  const src = 'function greet($name) { // hi\n return $this->value; }';
-  const html = checkInvariants(php.hl, src);
-  assert.equal(colorOf(html, 'function'), DECL);
-  assert.equal(colorOf(html, 'greet'), FUNCTION);
-  assert.equal(colorOf(html, '$name'), VARIABLE);
-  assert.equal(colorOf(html, '// hi'), COMMENT);
-  assert.equal(colorOf(html, 'return'), KEYWORD);
-  assert.equal(colorOf(html, 'value'), PROPERTY);
-});
+void t.test(
+  'php: declarations, members, comments, and tagless snippets',
+  () => {
+    const src = 'function greet($name) { // hi\n return $this->value; }';
+    const html = checkInvariants(php.hl, src);
+    assert.equal(colorOf(html, 'function'), DECL);
+    assert.equal(colorOf(html, 'greet'), FUNCTION);
+    assert.equal(colorOf(html, '$name'), VARIABLE);
+    assert.equal(colorOf(html, '// hi'), COMMENT);
+    assert.equal(colorOf(html, 'return'), KEYWORD);
+    assert.equal(colorOf(html, 'value'), PROPERTY);
+  }
+);
 
-t.test(
+void t.test(
   'php: close tags terminate line comments and declarations do not leak',
   () => {
     const mixed = checkInvariants(php.hl, '<?php // tail ?> <b>x</b>');
@@ -63,7 +66,7 @@ t.test(
   }
 );
 
-t.test('php: malformed constructs remain lossless', () => {
+void t.test('php: malformed constructs remain lossless', () => {
   for (const src of [
     '',
     '<?php',

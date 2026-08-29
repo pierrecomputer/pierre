@@ -30,4 +30,5 @@ import './lua_test.mjs';
 import './toml_test.mjs';
 import './zig_test.mjs';
 import './theme_test.mjs';
+import './tokens_test.mjs';
 import './languages_test.mjs';

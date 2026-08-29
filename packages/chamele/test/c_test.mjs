@@ -28,7 +28,7 @@ const CONSTANT = themeColor('constant');
 const OPERATOR = themeColor('operator');
 const PUNCT = themeColor('punctuation.bracket');
 
-t.test('c: comments and documentation comments', () => {
+void t.test('c: comments and documentation comments', () => {
   const src =
     '// plain\n/// line docs\n/* block */\n/** block docs */\n//! inner docs';
   const html = checkInvariants(c.hl, src);
@@ -53,7 +53,7 @@ t.test('c: comments and documentation comments', () => {
   assert.equal(colorOf(bucketed, '//! inner docs'), '#222222');
 });
 
-t.test('c: preprocessor directives are bounded line tokens', () => {
+void t.test('c: preprocessor directives are bounded line tokens', () => {
   const src =
     '#include <stdio.h>\n# include "local.h"\n#define ADD(a, b) ((a) + (b))\nint x;';
   const html = checkInvariants(c.hl, src);
@@ -64,7 +64,7 @@ t.test('c: preprocessor directives are bounded line tokens', () => {
   assert.equal(colorOf(html, 'int'), TYPE);
 });
 
-t.test('c: strings, character literals, prefixes, and escapes', () => {
+void t.test('c: strings, character literals, prefixes, and escapes', () => {
   const src = String.raw`const char *s = u8"a\n\x41"; wchar_t q = L'\'';`;
   const html = checkInvariants(c.hl, src);
   assert.equal(colorOf(html, 'u8"a'), STRING);
@@ -73,7 +73,7 @@ t.test('c: strings, character literals, prefixes, and escapes', () => {
   assert.equal(colorOf(html, String.raw`\'`), ESCAPE);
 });
 
-t.test('c: numeric preprocessing tokens', () => {
+void t.test('c: numeric preprocessing tokens', () => {
   const src = 'int n = 42 + 0xffu + 0755 + 3.14f + 1e-3 + 0x1.fp+3 + .5;';
   const html = checkInvariants(c.hl, src);
   for (const literal of [
@@ -89,7 +89,7 @@ t.test('c: numeric preprocessing tokens', () => {
   }
 });
 
-t.test('c: keywords, types, functions, variables, and constants', () => {
+void t.test('c: keywords, types, functions, variables, and constants', () => {
   const src =
     'static unsigned long sum(int count) { if (count > 0) return sum(count - MAX); else return 0; }';
   const html = checkInvariants(c.hl, src);
@@ -103,7 +103,7 @@ t.test('c: keywords, types, functions, variables, and constants', () => {
   assert.equal(colorOf(html, 'MAX'), CONSTANT);
 });
 
-t.test('c: enum word table preserves every keyword category', () => {
+void t.test('c: enum word table preserves every keyword category', () => {
   const theme = {
     name: 'c-word-categories',
     appearance: 'dark',
@@ -188,7 +188,7 @@ t.test('c: enum word table preserves every keyword category', () => {
   }
 });
 
-t.test('c: operators and punctuation', () => {
+void t.test('c: operators and punctuation', () => {
   const src = 'a <<= 2; b = (a && c) ? x->y : z[i];';
   const html = checkInvariants(c.hl, src);
   for (const operator of ['<<=', '=', '&&', '?', '->']) {
@@ -199,7 +199,7 @@ t.test('c: operators and punctuation', () => {
   }
 });
 
-t.test('c: malformed constructs stay lossless and total', () => {
+void t.test('c: malformed constructs stay lossless and total', () => {
   for (const src of [
     '"unterminated',
     "'x",
@@ -215,7 +215,7 @@ t.test('c: malformed constructs stay lossless and total', () => {
   }
 });
 
-t.test('c: lookahead and token scans never cross a split range', () => {
+void t.test('c: lookahead and token scans never cross a split range', () => {
   for (const [prefix, tail] of [
     ['/', '/ comment\nint x;'],
     ['/', '* comment */ int x;'],
@@ -232,7 +232,7 @@ t.test('c: lookahead and token scans never cross a split range', () => {
     checkInvariants(loadLang('c', '$hlC', split).hl, include);
 });
 
-t.test('c: same-style runs remain balanced', () => {
+void t.test('c: same-style runs remain balanced', () => {
   const html = checkInvariants(c.hl, 'int long x; foo(bar); // tail');
   assert.ok(spansOf(html).length > 0);
 });

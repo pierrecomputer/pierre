@@ -13,7 +13,7 @@ import {
 let toml;
 t.before(() => (toml = loadLang('toml', '$hlToml')));
 
-t.test(
+void t.test(
   'toml: assignment, dotted, quoted, header, and inline-table keys',
   () => {
     const src = `title = "chamele"
@@ -43,7 +43,7 @@ sku = 738594937
   }
 );
 
-t.test('toml: only space/tab and LF/CRLF drive record state', () => {
+void t.test('toml: only space/tab and LF/CRLF drive record state', () => {
   const src =
     'first\t = 1\r\nsecond = 2 # comment\r\nthird = 3\rbad = 4\nafter = 5';
   const html = checkInvariants(toml.hl, src);
@@ -54,8 +54,10 @@ t.test('toml: only space/tab and LF/CRLF drive record state', () => {
   assert.equal(colorOf(html, '# comment'), themeColor('comment'));
 });
 
-t.test('toml: numbers, special floats, booleans, and date/time values', () => {
-  const src = `int = -17
+void t.test(
+  'toml: numbers, special floats, booleans, and date/time values',
+  () => {
+    const src = `int = -17
 hex = 0xdead_beef
 octal = 0o755
 binary = 0b1101_0010
@@ -73,42 +75,43 @@ short_time = 07:32
 spaced = 1979-05-27 07:32:00Z
 short_spaced = 1979-05-27 07:32Z
 `;
-  const html = checkInvariants(toml.hl, src);
-  for (const value of [
-    '-17',
-    '0xdead_beef',
-    '0o755',
-    '0b1101_0010',
-    '6.626e-34',
-    '1_234.5_6E+7_8',
-    '+inf',
-    'nan',
-  ]) {
-    assert.equal(colorOf(html, value), themeColor('number'), value);
+    const html = checkInvariants(toml.hl, src);
+    for (const value of [
+      '-17',
+      '0xdead_beef',
+      '0o755',
+      '0b1101_0010',
+      '6.626e-34',
+      '1_234.5_6E+7_8',
+      '+inf',
+      'nan',
+    ]) {
+      assert.equal(colorOf(html, value), themeColor('number'), value);
+    }
+    for (const value of ['true', 'false']) {
+      assert.equal(colorOf(html, value), themeColor('constant'), value);
+    }
+    for (const value of [
+      '1979-05-27T07:32:00.999999-07:00',
+      '1979-05-27t07:32:00z',
+      '1979-05-27',
+      '07:32:00',
+      '07:32',
+    ]) {
+      assert.equal(colorOf(html, value), themeColor('string.special'), value);
+    }
+    assert.equal(
+      colorOf(html, '1979-05-27 07:32:00Z'),
+      themeColor('string.special')
+    );
+    assert.equal(
+      colorOf(html, '1979-05-27 07:32Z'),
+      themeColor('string.special')
+    );
   }
-  for (const value of ['true', 'false']) {
-    assert.equal(colorOf(html, value), themeColor('constant'), value);
-  }
-  for (const value of [
-    '1979-05-27T07:32:00.999999-07:00',
-    '1979-05-27t07:32:00z',
-    '1979-05-27',
-    '07:32:00',
-    '07:32',
-  ]) {
-    assert.equal(colorOf(html, value), themeColor('string.special'), value);
-  }
-  assert.equal(
-    colorOf(html, '1979-05-27 07:32:00Z'),
-    themeColor('string.special')
-  );
-  assert.equal(
-    colorOf(html, '1979-05-27 07:32Z'),
-    themeColor('string.special')
-  );
-});
+);
 
-t.test('toml: atom scanners stop at the grammar boundary', () => {
+void t.test('toml: atom scanners stop at the grammar boundary', () => {
   const src = `suffix = 123abc
 hex_suffix = 0xF?tail
 bool_suffix = trueish
@@ -150,7 +153,7 @@ bad_offset = 1979-05-27T07:32:00+24:00
   }
 });
 
-t.test('toml: all four string forms and basic-string escapes', () => {
+void t.test('toml: all four string forms and basic-string escapes', () => {
   const src = String.raw`basic = "a\n\e\xE9\u0041\U0001F600"
 invalid = "\q\xF\u12\U1234"
 literal = 'C:\Users\name'
@@ -183,7 +186,7 @@ C:\raw
   assert.equal(colorOf(html, 'C:\\raw'), themeColor('string'));
 });
 
-t.test(
+void t.test(
   'toml: multiline escaped newlines include indentation and blank lines',
   () => {
     const continuation = '\\ \t\r\n \n\t';
@@ -197,7 +200,7 @@ next = 1
   }
 );
 
-t.test('toml: arrays, nested arrays, punctuation, and comments', () => {
+void t.test('toml: arrays, nested arrays, punctuation, and comments', () => {
   const src = `values = [1, [2, 3], { name = "four", tags = ["a", "b"] }]
 # full line
 tail = 1 # trailing
@@ -211,17 +214,20 @@ tail = 1 # trailing
   assert.equal(colorOf(html, '# trailing'), themeColor('comment'));
 });
 
-t.test('toml: nested inline containers restore the right key context', () => {
-  const src = `nested = { inner = { a = 1, b = 2 }, tail = 3 }
+void t.test(
+  'toml: nested inline containers restore the right key context',
+  () => {
+    const src = `nested = { inner = { a = 1, b = 2 }, tail = 3 }
 mixed = { rows = [{ a = 1, b = 2 }], tail = 3 }
 `;
-  const html = checkInvariants(toml.hl, src);
-  for (const key of ['b', 'tail']) {
-    assert.equal(colorOf(html, key), themeColor('property'), key);
+    const html = checkInvariants(toml.hl, src);
+    for (const key of ['b', 'tail']) {
+      assert.equal(colorOf(html, key), themeColor('property'), key);
+    }
   }
-});
+);
 
-t.test(
+void t.test(
   'toml: multiline inline tables and deep container stacks preserve key context',
   () => {
     const multiline = `point = {
@@ -233,7 +239,7 @@ t.test(
     let value = '0';
     const tails = [];
     for (let depth = 0; depth < 96; depth++) {
-      if (depth & 1) value = `[${value}]`;
+      if ((depth & 1) !== 0) value = `[${value}]`;
       else {
         tails.push(`tail_${depth}`);
         value = `{ inner = ${value}, tail_${depth} = ${depth} }`;
@@ -254,31 +260,35 @@ t.test(
   }
 );
 
-t.test('toml: malformed constructs and every byte split stay lossless', () => {
-  for (const src of [
-    '',
-    '#',
-    'key =',
-    'key = "unterminated',
-    "key = '''unterminated",
-    '[table',
-    'array = [[1]',
-    'value = 0xF?tail',
-    'date = 1979-05-27 07:32:00Z',
-    'value = """a\\  \r\n \n b"""',
-    'é = 日本語',
-    'key = "\\é',
-  ])
-    checkInvariants(toml.hl, src);
+void t.test(
+  'toml: malformed constructs and every byte split stay lossless',
+  () => {
+    for (const src of [
+      '',
+      '#',
+      'key =',
+      'key = "unterminated',
+      "key = '''unterminated",
+      '[table',
+      'array = [[1]',
+      'value = 0xF?tail',
+      'date = 1979-05-27 07:32:00Z',
+      'value = """a\\  \r\n \n b"""',
+      'é = 日本語',
+      'key = "\\é',
+    ])
+      checkInvariants(toml.hl, src);
 
-  const src = 'date = 1979-05-27 07:32:00Z\nkey = "a\\u0041é" # tail\nnext = 2';
-  const size = new TextEncoder().encode(src).length;
-  for (let split = 0; split <= size; split++) {
-    checkInvariants(loadLang('toml', '$hlToml', split).hl, src);
+    const src =
+      'date = 1979-05-27 07:32:00Z\nkey = "a\\u0041é" # tail\nnext = 2';
+    const size = new TextEncoder().encode(src).length;
+    for (let split = 0; split <= size; split++) {
+      checkInvariants(loadLang('toml', '$hlToml', split).hl, src);
+    }
   }
-});
+);
 
-t.test(
+void t.test(
   'toml: malformed UTF-8 and deterministic fuzz preserve invariants',
   () => {
     const bytes = Uint8Array.of(
@@ -302,7 +312,7 @@ t.test(
     const alphabet = 'abcXYZ09_- #=.,\'\\"\n\r\t[]{}:+é';
     for (let sample = 0; sample < 160; sample++) {
       let src = '';
-      for (let n = state & 63; n--; ) {
+      for (let n = state & 63; n-- !== 0; ) {
         state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
         src += alphabet[state % alphabet.length];
       }

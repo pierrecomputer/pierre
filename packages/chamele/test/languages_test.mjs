@@ -1,7 +1,7 @@
 import assert from 'node:assert';
 import t from 'node:test';
 
-import { init } from '../lib/index.mjs';
+import { createHighlighter, init } from '../lib/index.mjs';
 import { transformWat, wat2wasm } from '../scripts/build.mjs';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import { spansOf, textOf } from './util.mjs';
@@ -112,7 +112,7 @@ t.before(() => {
   highlighter = init(new WebAssembly.Module(wat2wasm(url.pathname, code)));
 });
 
-t.test('languages: every public alias reaches a WAT lexer', () => {
+void t.test('languages: every public alias reaches a WAT lexer', () => {
   for (const lang of aliases) {
     const html = decoder.decode(
       highlighter.codeToHtml('x', { lang, theme: pierreDark })
@@ -122,7 +122,7 @@ t.test('languages: every public alias reaches a WAT lexer', () => {
   }
 });
 
-t.test('languages: deterministic cross-lexer invariant fuzz', () => {
+void t.test('languages: deterministic cross-lexer invariant fuzz', () => {
   const alphabet = [
     ...'abcXYZ09 _-$#@/\\\'"`()[]{}<>=+*&|:;,.!?\n\r\t\0é_日本語',
   ];
@@ -131,7 +131,7 @@ t.test('languages: deterministic cross-lexer invariant fuzz', () => {
     for (let sample = 0; sample < 64; sample++) {
       seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
       let input = '';
-      for (let n = seed & 63; n--; ) {
+      for (let n = seed & 63; n-- !== 0; ) {
         seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
         input += alphabet[seed % alphabet.length];
       }
@@ -144,18 +144,20 @@ t.test('languages: deterministic cross-lexer invariant fuzz', () => {
   }
 });
 
-t.test('languages: every lexer preserves UTF-8 across every byte split', () => {
-  const contexts = [
-    'aé日本🙂z',
-    '"aé日本🙂z"',
-    '// aé日本🙂z\nx',
-    '<p aé="日本🙂">é</p>',
-  ];
-  const encoder = new TextEncoder();
-  for (const lang of canonical) {
-    const entry = `$hl${lang[0].toUpperCase()}${lang.slice(1)}`;
-    const url = new URL(`./utf8_split_${lang}.wat`, import.meta.url);
-    const source = `(module
+void t.test(
+  'languages: every lexer preserves UTF-8 across every byte split',
+  () => {
+    const contexts = [
+      'aé日本🙂z',
+      '"aé日本🙂z"',
+      '// aé日本🙂z\nx',
+      '<p aé="日本🙂">é</p>',
+    ];
+    const encoder = new TextEncoder();
+    for (const lang of canonical) {
+      const entry = `$hl${lang[0].toUpperCase()}${lang.slice(1)}`;
+      const url = new URL(`./utf8_split_${lang}.wat`, import.meta.url);
+      const source = `(module
   (memory (export "memory") 3)
   (import "../src/langs/${lang}.wat")
   (func (export "highlight")
@@ -165,18 +167,21 @@ t.test('languages: every lexer preserves UTF-8 across every byte split', () => {
     (global.set $end (global.get $eof))
     (call ${entry})
     (call $hlEnd)))`;
-    const { code } = transformWat(url, source);
-    const lexer = init(new WebAssembly.Module(wat2wasm(url.pathname, code)));
-    for (const input of contexts) {
-      const length = encoder.encode(input).length;
-      for (let split = 0; split <= length; split++) {
-        lexer.dv.setUint32(32, split, true);
-        const html = decoder.decode(
-          lexer.codeToHtml(input, { lang, theme: pierreDark })
-        );
-        assert.equal(textOf(html), input, `${lang}: byte ${split}/${length}`);
-        spansOf(html);
+      const { code } = transformWat(url, source);
+      const lexer = createHighlighter(
+        new WebAssembly.Module(wat2wasm(url.pathname, code))
+      );
+      for (const input of contexts) {
+        const length = encoder.encode(input).length;
+        for (let split = 0; split <= length; split++) {
+          lexer.dv.setUint32(32, split, true);
+          const html = decoder.decode(
+            lexer.codeToHtml(input, { lang, theme: pierreDark })
+          );
+          assert.equal(textOf(html), input, `${lang}: byte ${split}/${length}`);
+          spansOf(html);
+        }
       }
     }
   }
-});
+);

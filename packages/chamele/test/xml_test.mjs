@@ -20,7 +20,7 @@ const PREPROC = themeColor('preproc');
 const LITERAL = themeColor('text.literal');
 const SPECIAL = themeColor('string.special');
 
-t.test('xml: elements, namespaces, attributes, and entities', () => {
+void t.test('xml: elements, namespaces, attributes, and entities', () => {
   const out = checkInvariants(
     xml.hl,
     '<Root xmlns:x="urn:x"><x:Item ID="A">&amp;</x:Item></Root>'
@@ -31,7 +31,7 @@ t.test('xml: elements, namespaces, attributes, and entities', () => {
   assert.equal(colorOf(out, '&amp;'), SPECIAL);
 });
 
-t.test('xml: PI, CDATA, comments, and an internal-subset doctype', () => {
+void t.test('xml: PI, CDATA, comments, and an internal-subset doctype', () => {
   const src =
     '<?xml version="1.0"?>\n<!DOCTYPE Root [<!ELEMENT Root (#PCDATA)>]>\n<Root><![CDATA[a < b]]><!-- note --></Root>';
   const out = checkInvariants(xml.hl, src);
@@ -45,12 +45,12 @@ t.test('xml: PI, CDATA, comments, and an internal-subset doctype', () => {
   );
 });
 
-t.test('xml: script is XML markup, not HTML raw text', () => {
+void t.test('xml: script is XML markup, not HTML raw text', () => {
   const out = checkInvariants(xml.hl, '<script><Node/></script>');
   assert.equal(colorOf(out, 'Node'), TAG);
 });
 
-t.test('xml: malformed and split ranges remain bounded', () => {
+void t.test('xml: malformed and split ranges remain bounded', () => {
   for (const src of [
     '<',
     '</',

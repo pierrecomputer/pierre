@@ -9,13 +9,13 @@ import wabt from 'wabt';
 const { parseWat } = await wabt();
 
 /**
- * transform the given wat file, to support:
- * - import other wat files
- * - define enums
- * - define named memory addresses (`const`, see src/memory.wat)
- * - emit CSS-variable strings for an enum (`css-variable-table`)
- * - define bit-per-predicate lookup tables over an enum (`bitset`)
- * - convert i32/i64.const string operands to integer literals
+ * Transform WAT source:
+ * - inline local imports
+ * - expand enums
+ * - resolve named addresses (`const`; see `src/memory.wat`)
+ * - emit CSS-variable tables (`css-variable-table`)
+ * - emit enum bitsets (`bitset`)
+ * - convert string operands for `i32.const` and `i64.const` to integer literals
  * @param {string|URL} url
  * @param {string} [content] wat text; read from `url` when omitted
  * @returns {{code: string, enumMap: Map<string, Record<string, number>>, bitsetMap: Map<string, {base: number, bits: Record<string, number>}>, constMap: Map<string, number>}}
@@ -37,9 +37,8 @@ export function transformWat(url, content) {
         '$1'
       );
     });
-  // comment lines are anchored as whole lines ((?:;;[^\n]*\n\s*)*) - an
-  // ambiguous (;;.+\s+)* here backtracks exponentially on comment blocks
-  // with trailing whitespace
+  // Match comment blocks as whole lines. A broad `(?:;;.+\s+)*` pattern
+  // backtracks exponentially on blocks with trailing whitespace.
   let code = flatten(url, content)
     .replace(/(?:;;[^\n]*\n\s*)*\(\s*import +".+" +\( *func.+\)/g, (i) => {
       imports.push(i);
@@ -54,24 +53,26 @@ export function transformWat(url, content) {
           members
             .split(/\s+/g)
             .map((l) => l.trim())
-            .filter((l) => l && /^\"[\w.]+\"$/.test(l))
+            .filter((l) => l !== '' && /^\"[\w.]+\"$/.test(l))
             .map((l) => [JSON.parse(l), i++])
         )
       );
       return '';
     });
 
-  // (const $mem.name <int|$other>[+-<int>]) - named memory addresses, declared
-  // once in src/memory.wat and substituted everywhere, so a region only ever
-  // moves in one place. A reference may carry the same +/- bias (`$mem.x-1`),
-  // which is why const names must not contain `-`.
+  // `(const $mem.name <int|$other>[+-<int>])` defines a named address.
+  // Addresses live in src/memory.wat so each region moves in one place.
+  // References may add a +/- bias; names cannot contain `-`.
   const constExprs = new Map();
   code = code.replace(
     /\s*\(\s*const\s+(\$[\w.]+)\s+(\$[\w.]+|\d+)([+-]\d+)?\s*\)/g,
     (_, name, value, bias) => {
       if (constExprs.has(name))
         throw new Error(`Duplicate const ${name} in ${url.pathname}`);
-      constExprs.set(name, { value, bias: bias ? Number(bias) : 0 });
+      constExprs.set(name, {
+        value,
+        bias: bias !== undefined ? Number(bias) : 0,
+      });
       return '';
     }
   );
@@ -79,9 +80,9 @@ export function transformWat(url, content) {
   const resolveConst = (name, pending) => {
     if (constMap.has(name)) return constMap.get(name);
     const expr = constExprs.get(name);
-    if (!expr)
+    if (expr === undefined)
       throw new Error(`Const '${name}' is undefined in ${url.pathname}`);
-    if (pending.has(name))
+    if (pending.has(name) === true)
       throw new Error(`Const '${name}' is cyclic in ${url.pathname}`);
     pending.add(name);
     const base = /^\d+$/.test(expr.value)
@@ -95,18 +96,19 @@ export function transformWat(url, content) {
     constMap.has(name) ? String(constMap.get(name) + Number(bias ?? 0)) : all
   );
   const stray = code.match(/\$mem\.[\w.]+/);
-  if (stray)
+  if (stray !== null)
     throw new Error(`Const '${stray[0]}' is undefined in ${url.pathname}`);
 
   // (css-variable-table $Enum <stringBase> <stringEnd> <tableBase> <tableEnd>)
   // emits kebab-case token suffixes and [ptr:u16, length:u8] lookup records.
   code = replaceForm(code, 'css-variable-table', (inner) => {
     const m = inner.match(/^\s*(\$\w+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s*$/);
-    if (!m) throw new Error(`Malformed css-variable-table in ${url.pathname}`);
+    if (m === null)
+      throw new Error(`Malformed css-variable-table in ${url.pathname}`);
     const [, enumKey, stringBaseStr, stringEndStr, tableBaseStr, tableEndStr] =
       m;
     const members = enumMap.get(enumKey);
-    if (!members)
+    if (members === undefined)
       throw new Error(
         `css-variable-table references unknown enum '${enumKey}' in ${url.pathname}`
       );
@@ -115,6 +117,7 @@ export function transformWat(url, content) {
     const tableBase = Number(tableBaseStr);
     const tableEnd = Number(tableEndStr);
     const table = new Uint8Array(Object.keys(members).length * 3);
+    /** @type {[string, number][]} */
     const suffixes = Object.entries(members).map(([name, i]) => [
       name === 'none' ? '' : name.replace(/[._]/g, '-'),
       i,
@@ -122,12 +125,12 @@ export function transformWat(url, content) {
     const strings = suffixes
       .filter(
         ([suffix], i) =>
-          suffix &&
+          suffix !== '' &&
           !suffixes.some(([other], j) => i !== j && other.includes(suffix))
       )
       .map(([suffix]) => suffix);
     let blob = '';
-    while (strings.length) {
+    while (strings.length > 0) {
       let best = 0;
       let overlap = 0;
       for (let i = 0; i < strings.length; i++) {
@@ -165,17 +168,17 @@ export function transformWat(url, content) {
     return `(data (i32.const ${stringBase}) "${blob}")\n  (data (i32.const ${tableBase}) "${data}")`;
   });
 
-  // (bitset $Name $Enum <base> (pred "member" ...) ...) - one byte per enum
-  // member, one bit per predicate, emitted as a data segment at <base>. Turns a
-  // long eq-ladder into a load+and whose cost does not grow with the set size.
+  // `(bitset $Name $Enum <base> (pred "member" ...) ...)` emits one byte per
+  // member and one bit per predicate at <base>. It replaces equality ladders
+  // with a fixed-cost load and mask.
   code = replaceForm(code, 'bitset', (raw) => {
     const inner = raw.replace(/;;[^\n]*/g, ''); // comments may sit between members
     const head = inner.match(/^\s*(\$\w+)\s+(\$\w+)\s+(\d+)/);
-    if (!head) throw new Error(`Malformed bitset in ${url.pathname}`);
+    if (head === null) throw new Error(`Malformed bitset in ${url.pathname}`);
     const [, name, enumKey, baseStr] = head;
     if (bitsetMap.has(name)) throw new Error(`Duplicate bitset ${name}`);
     const members = enumMap.get(enumKey);
-    if (!members)
+    if (members === undefined)
       throw new Error(
         `Bitset '${name}' references unknown enum '${enumKey}' in ${url.pathname}`
       );
@@ -212,7 +215,7 @@ export function transformWat(url, content) {
   // (bitset.get $Name.pred <expr>) -> (i32.and (i32.load8_u offset=base <expr>) (i32.const mask))
   code = replaceForm(code, 'bitset.get', (inner) => {
     const m = inner.match(/^\s*(\$\w+)\.(\w+)\s+([\s\S]+)$/);
-    if (!m) throw new Error(`Malformed bitset.get in ${url.pathname}`);
+    if (m === null) throw new Error(`Malformed bitset.get in ${url.pathname}`);
     const [, name, pred, expr] = m;
     const table = bitsetMap.get(name);
     const mask = table?.bits[pred];
@@ -256,7 +259,7 @@ export function transformWat(url, content) {
       return `i${bits}.const ${hex}`;
     });
   checkDataSegments(code, url.pathname);
-  if (imports.length) {
+  if (imports.length > 0) {
     code = code.replace(
       /^\s*\(\s*module(\s+)/,
       `(module\n${imports.map((i) => '  ' + i).join('\n')}$1`
@@ -271,8 +274,8 @@ export function transformWat(url, content) {
 }
 
 /**
- * find every `(head ...)` form and replace it with `fn(innerText)`.
- * scans parens so nested forms and string operands survive.
+ * Replace each `(head ...)` form with `fn(innerText)`.
+ * Parenthesis scanning preserves nested forms and string operands.
  * @param {string} code
  * @param {string} head
  * @param {(inner: string) => string} fn
@@ -286,7 +289,7 @@ function replaceForm(code, head, fn) {
   let out = '';
   let last = 0;
   let m;
-  while ((m = open.exec(code))) {
+  while ((m = open.exec(code)) !== null) {
     let depth = 0,
       i = m.index,
       inStr = false,
@@ -318,9 +321,8 @@ function replaceForm(code, head, fn) {
 }
 
 /**
- * assert the static tables of src/memory.wat still tile page 1: every data
- * segment must stay inside it and no two may overlap. A mistyped address in
- * the layout would otherwise corrupt another language's table silently.
+ * Check that `src/memory.wat` data segments fit in page 1 without overlap.
+ * A bad address can silently corrupt another table.
  * @param {string} code fully expanded wat text
  * @param {string} path source path, for error messages
  */
@@ -328,13 +330,13 @@ function checkDataSegments(code, path) {
   const segments = [];
   const open = /\(\s*data\s+\(\s*i32\.const\s+(\d+)\s*\)/g;
   let m;
-  while ((m = open.exec(code))) {
+  while ((m = open.exec(code)) !== null) {
     let depth = 1,
       i = m.index + m[0].length,
       inStr = false,
       inComment = false,
       length = 0;
-    for (; i < code.length && depth; i++) {
+    for (; i < code.length && depth !== 0; i++) {
       const c = code[i];
       if (inComment) {
         if (c === '\n') inComment = false;
@@ -360,7 +362,7 @@ function checkDataSegments(code, path) {
       );
     }
     const next = segments[i + 1];
-    if (next && next.base < seg.end) {
+    if (next !== undefined && next.base < seg.end) {
       throw new Error(
         `data segments [${seg.base}:${seg.end}) and [${next.base}:${next.end}) overlap in ${path}`
       );
@@ -369,7 +371,7 @@ function checkDataSegments(code, path) {
 }
 
 /**
- * convert the given wat text to wasm binary
+ * Compile WAT to WebAssembly.
  * @param {string} filename
  * @param {string} text
  * @param {Record<string, boolean>} [options]
@@ -389,11 +391,9 @@ export function wat2wasm(filename, text, options) {
 }
 
 /**
- * optimize a wasm binary with binaryen (`wasm-opt -O3 --shrink-level=1`) and
- * use Binaryen's optimized Stack IR writer for the final encoding.
- * The pipeline runs three times: re-reading an optimized binary lets the
- * next pass fold patterns the previous one exposed (the third pass still
- * shrinks the module measurably; a fourth does not).
+ * Optimize with Binaryen at `-O3 --shrink-level=1` and emit optimized Stack IR.
+ * Each pass exposes more patterns for the next. Pass three still shrinks the
+ * module; pass four does not.
  * @param {Uint8Array} wasmBytes
  * @returns {Uint8Array}
  */
@@ -405,14 +405,14 @@ export function optimizeWasm(wasmBytes) {
   for (let pass = 0; pass < 3; pass++) {
     const wasmModule = binaryen.readBinary(wasmBytes);
     try {
-      // must match the features `wat2wasm` compiles with, so binaryen never emits an
-      // instruction the target runtimes cannot execute
+      // Match wat2wasm features so Binaryen does not emit instructions the
+      // target runtimes cannot execute.
       wasmModule.setFeatures(
         binaryen.Features.BulkMemory |
           binaryen.Features.BulkMemoryOpt |
           binaryen.Features.SIMD128
       );
-      if (!wasmModule.validate()) {
+      if (Boolean(wasmModule.validate()) === false) {
         throw new Error('binaryen rejected the module');
       }
       wasmModule.optimize();
@@ -425,14 +425,14 @@ export function optimizeWasm(wasmBytes) {
 }
 
 /**
- * the ordered `$Token` token-type names: the index of a name is its slot in the
- * wasm theme table, so this list IS the theme ABI shared with the JS glue
+ * Return `$Token` names in table order. Each index is a theme-table slot, so
+ * this order defines the JavaScript/WebAssembly theme ABI.
  * @param {Map<string, Record<string, number>>} enumMap
  * @returns {string[]}
  */
 export function listTokenTypes(enumMap) {
   const hl = enumMap.get('$Token');
-  if (!hl) throw new Error('no $Token enum found');
+  if (hl === undefined) throw new Error('no $Token enum found');
   const names = Object.keys(hl);
   names.forEach((name, i) => {
     if (hl[name] !== i) throw new Error(`$Token enum is not dense at ${name}`);
@@ -440,9 +440,9 @@ export function listTokenTypes(enumMap) {
   return names;
 }
 
-// Build chamele.wasm when this script is executed directly.
+// Build chamele.wasm when this script runs directly.
 if (
-  process.argv[1] &&
+  process.argv[1] !== undefined &&
   import.meta.url === pathToFileURL(process.argv[1]).href
 ) {
   const start = performance.now();
@@ -466,14 +466,14 @@ if (
         `export default b;\n`,
       'utf-8'
     );
-    // the $Token member order is the theme-table ABI: regenerate the glue's copy
+    // The `$Token` order is the theme-table ABI; regenerate the glue copy.
     writeFileSync(
       new URL('../lib/token-types.mjs', moduleUrl),
       '// generated by scripts/build.mjs - do not edit\n' +
         `export default ${JSON.stringify(listTokenTypes(enumMap), null, 2).replace(/\n]$/, ',\n]')};\n`,
       'utf-8'
     );
-    // record the wasm sizes in package.json "meta"
+    // Save raw and gzipped Wasm sizes in package.json metadata.
     const pkgUrl = new URL('../package.json', moduleUrl);
     const pkg = JSON.parse(readFileSync(pkgUrl, 'utf-8'));
     pkg.meta = {

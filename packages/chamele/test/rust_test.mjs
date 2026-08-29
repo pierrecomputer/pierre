@@ -13,7 +13,7 @@ import {
 let rust;
 t.before(() => (rust = loadLang('rust', '$hlRust')));
 
-t.test('rust: declarations, control, traits, types, and functions', () => {
+void t.test('rust: declarations, control, traits, types, and functions', () => {
   const src = `use std::fmt;
 pub trait Show { fn show(&self) -> bool; }
 struct Box<T> { value: T }
@@ -27,7 +27,7 @@ fn main() { let n: i32 = 1; if n > 0 { return } }`;
   assert.equal(colorOf(html, 'if'), themeColor('keyword.control'));
 });
 
-t.test('rust: nested comments and documentation buckets', () => {
+void t.test('rust: nested comments and documentation buckets', () => {
   const src =
     '// plain\n/// outer docs\n//! inner docs\n/* a /* nested */ b */\n/** docs */\n/*! inner */';
   const theme = {
@@ -46,7 +46,7 @@ t.test('rust: nested comments and documentation buckets', () => {
   assert.equal(colorOf(html, '/*! inner */'), '#222222');
 });
 
-t.test(
+void t.test(
   'rust: strings, byte literals, raw strings, chars, and lifetimes',
   () => {
     const src = String.raw`let a = "x\n"; let b = b'\x41'; let c = br##"raw \n"##; let d = r#"raw"#; fn f<'a>(x: &'a str) {}`;
@@ -58,20 +58,23 @@ t.test(
   }
 );
 
-t.test('rust: attributes, macros, members, constants, and operators', () => {
-  const src =
-    '#[derive(Debug)] async fn run() { obj.field = obj.call(MAX_VALUE); println!("x"); x >>= 1; }';
-  const html = checkInvariants(rust.hl, src);
-  assert.equal(colorOf(html, '#'), themeColor('attribute'));
-  assert.equal(colorOf(html, 'derive'), themeColor('attribute'));
-  assert.equal(colorOf(html, 'println'), themeColor('function'));
-  assert.equal(colorOf(html, 'field'), themeColor('property'));
-  assert.equal(colorOf(html, 'call'), themeColor('function.method'));
-  assert.equal(colorOf(html, 'MAX_VALUE'), themeColor('constant'));
-  assert.equal(colorOf(html, '>>='), themeColor('operator'));
-});
+void t.test(
+  'rust: attributes, macros, members, constants, and operators',
+  () => {
+    const src =
+      '#[derive(Debug)] async fn run() { obj.field = obj.call(MAX_VALUE); println!("x"); x >>= 1; }';
+    const html = checkInvariants(rust.hl, src);
+    assert.equal(colorOf(html, '#'), themeColor('attribute'));
+    assert.equal(colorOf(html, 'derive'), themeColor('attribute'));
+    assert.equal(colorOf(html, 'println'), themeColor('function'));
+    assert.equal(colorOf(html, 'field'), themeColor('property'));
+    assert.equal(colorOf(html, 'call'), themeColor('function.method'));
+    assert.equal(colorOf(html, 'MAX_VALUE'), themeColor('constant'));
+    assert.equal(colorOf(html, '>>='), themeColor('operator'));
+  }
+);
 
-t.test('rust: malformed constructs stay total and lossless', () => {
+void t.test('rust: malformed constructs stay total and lossless', () => {
   for (const src of [
     '',
     '/',
@@ -89,14 +92,14 @@ t.test('rust: malformed constructs stay total and lossless', () => {
   }
 });
 
-t.test('rust: split ranges bound comments, strings, and lookahead', () => {
+void t.test('rust: split ranges bound comments, strings, and lookahead', () => {
   const src = '/* a /* b */ c */ r##"raw"## b"x\\n" \'a obj.call() println!()';
   const size = new TextEncoder().encode(src).length;
   for (let split = 0; split <= size; split++)
     checkInvariants(loadLang('rust', '$hlRust', split).hl, src);
 });
 
-t.test(
+void t.test(
   'rust: malformed UTF-8 remains balanced and lossless after decoding',
   () => {
     const bytes = Uint8Array.of(0x72, 0x23, 0x20, 0xf0, 0x28, 0x8c, 0x28, 0xff);
@@ -106,7 +109,7 @@ t.test(
   }
 );
 
-t.test('rust: deterministic fuzz preserves lexer invariants', () => {
+void t.test('rust: deterministic fuzz preserves lexer invariants', () => {
   let state = 0xc0ffee;
   const alphabet = 'abcXYZ09_# /\\"\'rnb\n\t{}[]().,:;+-*=!<>&|é';
   for (let n = 0; n < 160; n++) {

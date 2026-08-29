@@ -6,6 +6,11 @@ import { join } from 'node:path';
 import { gzipSync } from 'node:zlib';
 
 import { init } from '../lib/index.mjs';
+import {
+  resolveOptionThemes,
+  runToToken,
+  splitRecordLines,
+} from '../lib/tokens.mjs';
 import { optimizeWasm, transformWat, wat2wasm } from '../scripts/build.mjs';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 
@@ -20,7 +25,8 @@ const kb = (bytes) =>
     : fmt(bytes / 1024) + ' KB';
 const baselineLabel = (rel) =>
   rel >= 1 ? `${fmt(rel)}× slower` : `${fmt(1 / rel)}× faster`;
-const dim = (s) => (process.stdout.isTTY ? `\x1b[90m${s}\x1b[0m` : s);
+const dim = (s) => `\x1b[90m${s}\x1b[0m`;
+const tokensOnly = process.argv.includes('--tokens');
 
 const FIXTURES = [
   { name: 'tiny.css.txt', lang: 'css', input: loadFixture('tiny.css') },
@@ -38,6 +44,14 @@ const FIXTURES = [
   { name: 'large.jsonc.txt', lang: 'jsonc', input: loadFixture('large.jsonc') },
   { name: 'large.ts.txt', lang: 'ts', input: loadFixture('large.ts') },
 ];
+const TOKEN_FIXTURES = [
+  ...FIXTURES.filter((f) => f.lang === 'ts'),
+  {
+    name: 'unicode-lines.ts',
+    lang: 'ts',
+    input: 'const greeting = "日本語 🎈"; // naïve résumé\n'.repeat(10_000),
+  },
+];
 
 function loadFixture(name) {
   return readFileSync(
@@ -47,7 +61,7 @@ function loadFixture(name) {
 }
 
 function printTable(cols, rows) {
-  const termW = process.stdout.columns || Infinity;
+  const termW = process.stdout.columns ?? Infinity;
   const colWidth = (c, i) =>
     Math.max(c.title.length, ...rows.map((r) => (r[i] ?? '').length));
   const tableW = (idxs) =>
@@ -93,7 +107,7 @@ function runBench(fn, arg, budget = 1500, iters = 2000) {
     fn(arg);
     return performance.now() - t;
   })();
-  // slow contenders get a shorter warmup so the whole run stays bounded
+  // Shorten warmup for slow contenders to cap runtime.
   const warmup = first > 200 ? 1 : 5;
   for (let i = 0; i < warmup; i++) fn(arg);
   const samples = [];
@@ -121,6 +135,8 @@ async function loadContenders() {
     html: true,
     fn: (src, lang) =>
       dec.decode(chamele.codeToHtml(src, { lang, theme: pierreDark })),
+    tokens: (src, lang) =>
+      chamele.codeToTokens(src, { lang, theme: pierreDark }),
   });
   contenders.push({
     name: 'chamele (bytes io)',
@@ -137,6 +153,8 @@ async function loadContenders() {
       name: 'shiki',
       html: true,
       fn: (src, lang) => hl.codeToHtml(src, { lang, theme: 'github-dark' }),
+      tokens: (src, lang) =>
+        hl.codeToTokens(src, { lang, theme: 'github-dark' }),
     });
   } catch {
     console.log('(shiki not installed, skipping)');
@@ -181,7 +199,7 @@ function installedSize(...pkgs) {
   let total = 0;
   let found = 0;
   for (const pkg of pkgs) {
-    // direct deps only: pnpm does not hoist transitive ones to the root
+    // Direct dependencies only; pnpm does not hoist transitive packages.
     try {
       total += dirSize(
         realpathSync(
@@ -191,7 +209,7 @@ function installedSize(...pkgs) {
       found += 1;
     } catch {}
   }
-  return found ? total : null;
+  return found > 0 ? total : null;
 }
 
 function sizeRows(wasmBytes) {
@@ -257,9 +275,98 @@ function sizeRows(wasmBytes) {
   return rows;
 }
 
+function benchmarkTokens(contenders) {
+  const shiki = contenders.find((c) => c.name === 'shiki')?.tokens;
+  if (shiki == null) {
+    console.log('shiki not installed; codeToTokens benchmark skipped');
+    return;
+  }
+
+  const themes = resolveOptionThemes({ theme: pierreDark });
+  const comparisons = [];
+  const phases = [];
+  for (const { name, lang, input } of TOKEN_FIXTURES) {
+    const inputBytes = enc.encode(input);
+    const mb = inputBytes.length / 1024 / 1024;
+    const chameleResult = runBench(
+      (src) => chamele.codeToTokens(src, { lang, theme: pierreDark }),
+      input
+    );
+    const shikiResult = runBench((src) => shiki(src, lang), input);
+
+    // Language ID 24 is TypeScript/JavaScript/TSX in chamele.wat.
+    chamele.writeInput(inputBytes);
+    const records = Uint32Array.from(
+      chamele.tokenizeRecords(24, inputBytes.length)
+    );
+    const lineRuns = splitRecordLines(input, records, records.length >> 1);
+    chamele.writeInput(inputBytes);
+    const encodeResult = runBench((src) => chamele.writeInput(src), input);
+    const wasmResult = runBench(
+      () => chamele.tokenizeRecords(24, inputBytes.length),
+      undefined
+    );
+    const splitResult = runBench(
+      () => splitRecordLines(input, records, records.length >> 1),
+      undefined
+    );
+    const objectsResult = runBench(
+      () =>
+        lineRuns.map((runs) =>
+          runs.map((run) => runToToken(input, run, themes, '--shiki-'))
+        ),
+      undefined
+    );
+
+    comparisons.push([
+      name,
+      String(lineRuns.length),
+      us(chameleResult.median),
+      fmt(mb / (chameleResult.median / 1000)) + ' MB/s',
+      us(shikiResult.median),
+      baselineLabel(chameleResult.median / shikiResult.median),
+    ]);
+    phases.push([
+      name,
+      us(encodeResult.median),
+      us(wasmResult.median),
+      us(splitResult.median),
+      us(objectsResult.median),
+      us(chameleResult.median),
+      fmt((splitResult.median / chameleResult.median) * 100) + '%',
+    ]);
+  }
+
+  console.log('codeToTokens (TypeScript, steady state):');
+  printTable(
+    [
+      { title: 'input' },
+      { title: 'lines', align: 'right', hide: 1 },
+      { title: 'chamele', align: 'right' },
+      { title: 'throughput', align: 'right', hide: 2 },
+      { title: 'shiki', align: 'right' },
+      { title: 'vs shiki' },
+    ],
+    comparisons
+  );
+  console.log('\nchamele codeToTokens phases (independent timings):');
+  printTable(
+    [
+      { title: 'input' },
+      { title: 'UTF-8 encode', align: 'right', hide: 1 },
+      { title: 'wasm scan', align: 'right' },
+      { title: 'JS line split', align: 'right' },
+      { title: 'JS tokens', align: 'right' },
+      { title: 'end-to-end', align: 'right' },
+      { title: 'split / e2e', align: 'right', hide: 2 },
+    ],
+    phases
+  );
+}
+
 const t0 = performance.now();
 const { code } = transformWat(new URL('../src/chamele.wat', import.meta.url));
-// optimize exactly as `pnpm build` does, so these numbers describe the published wasm
+// Use the publish build settings so results match the shipped Wasm.
 const wasmBytes = optimizeWasm(wat2wasm('chamele.wat', code));
 const chamele = init(new WebAssembly.Module(wasmBytes));
 console.log(
@@ -277,64 +384,71 @@ console.log(dim(machine + '\n'));
 const BASELINE = 'shiki';
 const contenders = await loadContenders();
 
-for (const { name, lang, input } of FIXTURES) {
-  const inputBytes = enc.encode(input);
-  const mb = inputBytes.length / 1024 / 1024;
+if (tokensOnly) {
+  benchmarkTokens(contenders);
+} else {
+  for (const { name, lang, input } of FIXTURES) {
+    const inputBytes = enc.encode(input);
+    const mb = inputBytes.length / 1024 / 1024;
 
-  const results = [];
-  for (const { name: cname, fn, bytes: wantsBytes, html } of contenders) {
-    try {
-      results.push({
-        name: cname,
-        html,
-        ...runBench((arg) => fn(arg, lang), wantsBytes ? inputBytes : input),
-      });
-    } catch (e) {
-      results.push({ name: cname, error: e.message });
+    const results = [];
+    for (const { name: cname, fn, bytes: wantsBytes, html } of contenders) {
+      try {
+        results.push({
+          name: cname,
+          html,
+          ...runBench(
+            (arg) => fn(arg, lang),
+            wantsBytes === true ? inputBytes : input
+          ),
+        });
+      } catch (e) {
+        results.push({ name: cname, error: e.message });
+      }
     }
-  }
-  const base =
-    results.find((r) => r.name === BASELINE && !r.error) ??
-    results.find((r) => !r.error);
-  results.sort((a, b) => (b.median ?? Infinity) - (a.median ?? Infinity));
+    const base =
+      results.find((r) => r.name === BASELINE && r.error == null) ??
+      results.find((r) => r.error == null);
+    results.sort((a, b) => (b.median ?? Infinity) - (a.median ?? Infinity));
 
-  console.log(
-    `input: ${name} (${(inputBytes.length / 1024).toFixed(0)} KB, lang=${lang})`
-  );
-  const cols = [
-    { title: 'tool' },
-    { title: 'output', hide: 1 },
-    { title: 'iters', align: 'right', hide: 2 },
-    { title: 'median', align: 'right' },
-    { title: 'throughput', align: 'right', hide: 3 },
-    { title: `vs ${base.name}`, hide: 4 },
-  ];
-  const rows = results.map((r) => {
-    if (r.error) {
-      return [r.name, '', '—', '—', '—', `failed: ${r.error.slice(0, 40)}`];
-    }
-    const vs =
-      r === base ? '1.00× (baseline)' : baselineLabel(r.median / base.median);
-    return [
-      r.name,
-      r.html ? 'html' : 'tree',
-      String(r.iters),
-      us(r.median),
-      fmt(mb / (r.median / 1000)) + ' MB/s',
-      vs,
+    console.log(
+      `input: ${name} (${(inputBytes.length / 1024).toFixed(0)} KB, lang=${lang})`
+    );
+    const cols = [
+      { title: 'tool' },
+      { title: 'output', hide: 1 },
+      { title: 'iters', align: 'right', hide: 2 },
+      { title: 'median', align: 'right' },
+      { title: 'throughput', align: 'right', hide: 3 },
+      { title: `vs ${base.name}`, hide: 4 },
     ];
-  });
-  printTable(cols, rows);
-  console.log();
-}
+    const rows = results.map((r) => {
+      if (r.error != null) {
+        return [r.name, '', '—', '—', '—', `failed: ${r.error.slice(0, 40)}`];
+      }
+      const vs =
+        r === base ? '1.00× (baseline)' : baselineLabel(r.median / base.median);
+      return [
+        r.name,
+        r.html != null ? 'html' : 'tree',
+        String(r.iters),
+        us(r.median),
+        fmt(mb / (r.median / 1000)) + ' MB/s',
+        vs,
+      ];
+    });
+    printTable(cols, rows);
+    console.log();
+  }
 
-console.log('size (what you ship / install to highlight ts+json+css+html):');
-const sizes = sizeRows(wasmBytes);
-printTable(
-  [
-    { title: 'tool' },
-    { title: 'size', align: 'right' },
-    { title: 'note', hide: 1 },
-  ],
-  sizes
-);
+  console.log('size (what you ship / install to highlight ts+json+css+html):');
+  const sizes = sizeRows(wasmBytes);
+  printTable(
+    [
+      { title: 'tool' },
+      { title: 'size', align: 'right' },
+      { title: 'note', hide: 1 },
+    ],
+    sizes
+  );
+}

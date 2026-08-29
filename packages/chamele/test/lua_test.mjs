@@ -14,7 +14,7 @@ const COMMENT = themeColor('comment');
 const NUMBER = themeColor('number');
 const VARIABLE = themeColor('variable');
 
-t.test('lua: functions, control flow, calls, strings, and numbers', () => {
+void t.test('lua: functions, control flow, calls, strings, and numbers', () => {
   const src =
     'local function greet(name)\n  if name then print("hi", 42) elseif false then return end\nend';
   const html = checkInvariants(lua.hl, src);
@@ -26,7 +26,7 @@ t.test('lua: functions, control flow, calls, strings, and numbers', () => {
   assert.equal(colorOf(html, '42'), NUMBER);
 });
 
-t.test('lua: line comments and long bracket strings/comments', () => {
+void t.test('lua: line comments and long bracket strings/comments', () => {
   const src = '-- line\n--[=[ long\ncomment ]=]\nlocal s = [==[text\nbody]==]';
   const html = checkInvariants(lua.hl, src);
   assert.equal(colorOf(html, '-- line'), COMMENT);
@@ -34,7 +34,7 @@ t.test('lua: line comments and long bracket strings/comments', () => {
   assert.equal(colorOf(html, '[==[text'), STRING);
 });
 
-t.test(
+void t.test(
   'lua: concatenation, varargs, and anonymous functions reset context',
   () => {
     const src =
@@ -46,7 +46,7 @@ t.test(
   }
 );
 
-t.test('lua: malformed and split ranges stay lossless', () => {
+void t.test('lua: malformed and split ranges stay lossless', () => {
   for (const src of [
     '',
     '--[[',

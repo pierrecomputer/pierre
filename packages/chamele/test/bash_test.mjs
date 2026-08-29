@@ -21,7 +21,7 @@ const FUNCTION_DEF = themeColor('function.definition');
 const OPERATOR = themeColor('operator');
 const BRACKET = themeColor('punctuation.bracket');
 
-t.test('bash: shebangs and lexical comments', () => {
+void t.test('bash: shebangs and lexical comments', () => {
   const src = '#!/usr/bin/env bash\necho foo#bar # trailing note';
   const html = checkInvariants(bash.hl, src);
   assert.equal(colorOf(html, '#!/usr/bin/env bash'), COMMENT);
@@ -29,7 +29,7 @@ t.test('bash: shebangs and lexical comments', () => {
   assert.notEqual(colorOf(html, '#bar'), COMMENT);
 });
 
-t.test('bash: strings, ANSI-C strings, and escapes', () => {
+void t.test('bash: strings, ANSI-C strings, and escapes', () => {
   const src = "printf '%s' \"line\\n$name\" $'tab\\t' `cmd`";
   const html = checkInvariants(bash.hl, src);
   assert.equal(colorOf(html, "'%s'"), STRING);
@@ -39,7 +39,7 @@ t.test('bash: strings, ANSI-C strings, and escapes', () => {
   assert.equal(colorOf(html, '`cmd`'), themeColor('string.special'));
 });
 
-t.test('bash: variables and substitutions', () => {
+void t.test('bash: variables and substitutions', () => {
   const src = 'echo $plain ${HOME:-/tmp} $(date) $((count + 1))';
   const html = checkInvariants(bash.hl, src);
   assert.equal(colorOf(html, '$plain'), VARIABLE);
@@ -48,20 +48,23 @@ t.test('bash: variables and substitutions', () => {
   assert.equal(colorOf(html, 'count'), VARIABLE);
 });
 
-t.test('bash: control words, declarations, commands, and functions', () => {
-  const src =
-    'function greet { local name=world; if true; then printf \'%s\' "$name"; fi; }\ngoodbye() { return 0; }';
-  const html = checkInvariants(bash.hl, src);
-  assert.equal(colorOf(html, 'function'), DECLARATION);
-  assert.equal(colorOf(html, 'greet'), FUNCTION_DEF);
-  assert.equal(colorOf(html, 'goodbye'), FUNCTION_DEF);
-  assert.equal(colorOf(html, 'local'), DECLARATION);
-  assert.equal(colorOf(html, 'if'), KEYWORD);
-  assert.equal(colorOf(html, 'then'), KEYWORD);
-  assert.equal(colorOf(html, 'printf'), FUNCTION);
-});
+void t.test(
+  'bash: control words, declarations, commands, and functions',
+  () => {
+    const src =
+      'function greet { local name=world; if true; then printf \'%s\' "$name"; fi; }\ngoodbye() { return 0; }';
+    const html = checkInvariants(bash.hl, src);
+    assert.equal(colorOf(html, 'function'), DECLARATION);
+    assert.equal(colorOf(html, 'greet'), FUNCTION_DEF);
+    assert.equal(colorOf(html, 'goodbye'), FUNCTION_DEF);
+    assert.equal(colorOf(html, 'local'), DECLARATION);
+    assert.equal(colorOf(html, 'if'), KEYWORD);
+    assert.equal(colorOf(html, 'then'), KEYWORD);
+    assert.equal(colorOf(html, 'printf'), FUNCTION);
+  }
+);
 
-t.test('bash: numbers, operators, and brackets', () => {
+void t.test('bash: numbers, operators, and brackets', () => {
   const src = 'if [[ $n -ge 0 && $n != 42 ]]; then n=$((n+1)); fi';
   const html = checkInvariants(bash.hl, src);
   assert.equal(colorOf(html, '42'), NUMBER);
@@ -71,7 +74,7 @@ t.test('bash: numbers, operators, and brackets', () => {
   assert.equal(colorOf(html, ']]'), BRACKET);
 });
 
-t.test('bash: simple here-documents are bounded strings', () => {
+void t.test('bash: simple here-documents are bounded strings', () => {
   const src = "cat <<'EOF'\npayload $name\nEOF\necho done";
   const html = checkInvariants(bash.hl, src);
   assert.equal(colorOf(html, "'EOF'"), STRING);
@@ -80,7 +83,7 @@ t.test('bash: simple here-documents are bounded strings', () => {
   assert.equal(colorOf(html, 'echo'), FUNCTION);
 });
 
-t.test('bash: malformed and UTF-8 input stays lossless', () => {
+void t.test('bash: malformed and UTF-8 input stays lossless', () => {
   for (const src of [
     "'unterminated λ",
     '"unterminated $变量 \\',
@@ -95,7 +98,7 @@ t.test('bash: malformed and UTF-8 input stays lossless', () => {
     checkInvariants(bash.hl, src);
 });
 
-t.test('bash: lookahead never crosses split ranges', () => {
+void t.test('bash: lookahead never crosses split ranges', () => {
   for (const [prefix, tail] of [
     ['#', '!/bin/bash\necho ok'],
     ['$', '{name}'],
@@ -108,7 +111,7 @@ t.test('bash: lookahead never crosses split ranges', () => {
   }
 });
 
-t.test('bash: deterministic fuzz preserves lexer invariants', () => {
+void t.test('bash: deterministic fuzz preserves lexer invariants', () => {
   const alphabet = 'abcXYZ09_ $\'\\"`{}()[]<>|&;#-=\nλ';
   let state = 0x51a7f00d;
   for (let sample = 0; sample < 160; sample++) {

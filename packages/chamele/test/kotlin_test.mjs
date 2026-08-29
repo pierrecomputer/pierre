@@ -13,7 +13,7 @@ import {
 let kotlin;
 t.before(() => (kotlin = loadLang('kotlin', '$hlKotlin')));
 
-t.test('kotlin: declarations, control flow, types, and functions', () => {
+void t.test('kotlin: declarations, control flow, types, and functions', () => {
   const src = `package demo
 import kotlin.io.println
 interface Show { fun show(): Boolean }
@@ -29,7 +29,7 @@ fun main() { if (true) return else throw Error() }`;
   assert.equal(colorOf(html, 'true'), themeColor('boolean'));
 });
 
-t.test('kotlin: nested comments and documentation buckets', () => {
+void t.test('kotlin: nested comments and documentation buckets', () => {
   const src =
     '// plain\n/// line docs\n/* outer /* nested */ end */\n/** KDoc */';
   const theme = {
@@ -48,18 +48,21 @@ t.test('kotlin: nested comments and documentation buckets', () => {
   assert.equal(colorOf(html, '/** KDoc */'), '#222222');
 });
 
-t.test('kotlin: quoted and triple strings expose escapes and templates', () => {
-  const src =
-    'val a = "hello $name \\n ${value}"; val b = """raw $name\n${value}"""; val c = \'\\u263a\'';
-  const html = checkInvariants(kotlin.hl, src);
-  assert.equal(colorOf(html, '$name'), themeColor('variable'));
-  assert.equal(colorOf(html, '${'), themeColor('punctuation.special'));
-  assert.equal(colorOf(html, String.raw`\n`), themeColor('string.escape'));
-  assert.equal(colorOf(html, '"""raw '), themeColor('string'));
-  assert.equal(colorOf(html, String.raw`\u`), themeColor('string.escape'));
-});
+void t.test(
+  'kotlin: quoted and triple strings expose escapes and templates',
+  () => {
+    const src =
+      'val a = "hello $name \\n ${value}"; val b = """raw $name\n${value}"""; val c = \'\\u263a\'';
+    const html = checkInvariants(kotlin.hl, src);
+    assert.equal(colorOf(html, '$name'), themeColor('variable'));
+    assert.equal(colorOf(html, '${'), themeColor('punctuation.special'));
+    assert.equal(colorOf(html, String.raw`\n`), themeColor('string.escape'));
+    assert.equal(colorOf(html, '"""raw '), themeColor('string'));
+    assert.equal(colorOf(html, String.raw`\u`), themeColor('string.escape'));
+  }
+);
 
-t.test(
+void t.test(
   'kotlin: annotations, members, constants, safe access, and operators',
   () => {
     const src =
@@ -75,7 +78,7 @@ t.test(
   }
 );
 
-t.test('kotlin: malformed constructs stay total and lossless', () => {
+void t.test('kotlin: malformed constructs stay total and lossless', () => {
   for (const src of [
     '',
     '/',
@@ -93,15 +96,18 @@ t.test('kotlin: malformed constructs stay total and lossless', () => {
   }
 });
 
-t.test('kotlin: split ranges bound templates, comments, and lookahead', () => {
-  const src =
-    '/* a /* b */ c */ "hello $name ${value}\\n" """raw\n$name""" @Jvm obj?.call()';
-  const size = new TextEncoder().encode(src).length;
-  for (let split = 0; split <= size; split++)
-    checkInvariants(loadLang('kotlin', '$hlKotlin', split).hl, src);
-});
+void t.test(
+  'kotlin: split ranges bound templates, comments, and lookahead',
+  () => {
+    const src =
+      '/* a /* b */ c */ "hello $name ${value}\\n" """raw\n$name""" @Jvm obj?.call()';
+    const size = new TextEncoder().encode(src).length;
+    for (let split = 0; split <= size; split++)
+      checkInvariants(loadLang('kotlin', '$hlKotlin', split).hl, src);
+  }
+);
 
-t.test(
+void t.test(
   'kotlin: malformed UTF-8 remains balanced and lossless after decoding',
   () => {
     const bytes = Uint8Array.of(
@@ -122,7 +128,7 @@ t.test(
   }
 );
 
-t.test('kotlin: deterministic fuzz preserves lexer invariants', () => {
+void t.test('kotlin: deterministic fuzz preserves lexer invariants', () => {
   let state = 0xbadc0de;
   const alphabet = 'abcXYZ09_$@ /\\"\'\n\t{}[]().,:;+-*=!?<>&|é';
   for (let n = 0; n < 160; n++) {

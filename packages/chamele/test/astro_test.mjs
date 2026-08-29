@@ -13,7 +13,7 @@ const KEYWORD = themeColor('keyword');
 const TYPE = themeColor('type.builtin');
 const CSS_PROPERTY = themeColor('property');
 
-t.test('astro: front matter, HTML, and template expressions', () => {
+void t.test('astro: front matter, HTML, and template expressions', () => {
   const src =
     '---\nconst title: string = "Home";\n---\n<main class="page"><h1>{pageTitle}</h1></main>';
   const out = checkInvariants(astro.hl, src);
@@ -24,7 +24,7 @@ t.test('astro: front matter, HTML, and template expressions', () => {
   assert.equal(colorOf(out, 'pageTitle'), VARIABLE);
 });
 
-t.test('astro: script and style bodies remain embedded languages', () => {
+void t.test('astro: script and style bodies remain embedded languages', () => {
   const src =
     '<script>const value = 1;</script><style>.box { color: red; }</style>{afterValue}';
   const out = checkInvariants(astro.hl, src);
@@ -33,7 +33,7 @@ t.test('astro: script and style bodies remain embedded languages', () => {
   assert.equal(colorOf(out, 'afterValue'), VARIABLE);
 });
 
-t.test('astro: malformed and split ranges remain bounded', () => {
+void t.test('astro: malformed and split ranges remain bounded', () => {
   for (const src of [
     '---',
     '---\na: 1',

@@ -3,7 +3,7 @@
     memory structure
     [] page 1         (control, static data, and scratch)
       [0]             language id (u8)
-      [1]             CSS-variable mode (u8)
+      [1]             output mode (u8): 0 inline colors, 1 CSS variables, 2 token records
       [2:6)           input length (u32 LE)
       [6:10)          output start (u32 LE)
       [10:14)         output length (u32 LE)
@@ -16,7 +16,8 @@
       [11968:65536)   free
     [] pages 2..N     (text buffer)
       [65536:EOF)     input, NUL sentinel, then at least 16 bytes of slack
-      [(EOF+47)&~15:) output HTML; $ensureCap grows memory
+      [(EOF+47)&~15:) output HTML bytes or (end:u32, hl:u32) token records;
+                      $ensureCap grows memory
   ;;)
   (memory (export "memory") 3)
 
@@ -91,6 +92,12 @@
     (call $hlBegin)
     (local.set $lang (i32.load8_u (i32.const 0)))
     (block $lexDone
+      ;; plain text: one unstyled token covering the whole input
+      (if (i32.eq (local.get $lang) (enum.get $Language.plain))
+        (then
+          (call $emitTok (enum.get $Token.none) (global.get $ptr) (global.get $end))
+          (global.set $ptr (global.get $end))
+          (br $lexDone)))
       (if (i32.eq (local.get $lang) (enum.get $Language.tsx))
         (then (call $hlTsx) (br $lexDone)))
       (if (i32.eq (local.get $lang) (enum.get $Language.html))

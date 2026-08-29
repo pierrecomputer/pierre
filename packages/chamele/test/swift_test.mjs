@@ -13,7 +13,7 @@ import {
 let swift;
 t.before(() => (swift = loadLang('swift', '$hlSwift')));
 
-t.test('swift: declarations, control flow, types, and functions', () => {
+void t.test('swift: declarations, control flow, types, and functions', () => {
   const src = `import Foundation
 protocol Show { func show() -> Bool }
 struct Box { let value: Int }
@@ -28,7 +28,7 @@ func main() { if true { return } else { throw Error.bad } }`;
   assert.equal(colorOf(html, 'true'), themeColor('boolean'));
 });
 
-t.test('swift: nested comments and documentation buckets', () => {
+void t.test('swift: nested comments and documentation buckets', () => {
   const src =
     '// plain\n/// docs\n/* outer /* nested */ end */\n/** block docs */';
   const theme = {
@@ -47,7 +47,7 @@ t.test('swift: nested comments and documentation buckets', () => {
   assert.equal(colorOf(html, '/** block docs */'), '#222222');
 });
 
-t.test('swift: ordinary, multiline, raw, and interpolated strings', () => {
+void t.test('swift: ordinary, multiline, raw, and interpolated strings', () => {
   const src = String.raw`let a = "hello \(name)\n"; let b = #"raw \#(name)"#; let c = """multi
 line"""; let d = ##"""raw
 text"""##`;
@@ -61,7 +61,7 @@ text"""##`;
   assert.equal(colorOf(html, '"""multi\nline"""'), themeColor('string'));
 });
 
-t.test('swift: interpolation lexes nested call expressions', () => {
+void t.test('swift: interpolation lexes nested call expressions', () => {
   const src = String.raw`print("distance² = \(origin.distanceSquared(to: Point(x: 3, y: 4)))")`;
   const theme = {
     name: 'swift-interpolation',
@@ -92,7 +92,7 @@ t.test('swift: interpolation lexes nested call expressions', () => {
   );
 });
 
-t.test(
+void t.test(
   'swift: attributes, directives, members, constants, and operators',
   () => {
     const src =
@@ -108,7 +108,7 @@ t.test(
   }
 );
 
-t.test('swift: malformed constructs stay total and lossless', () => {
+void t.test('swift: malformed constructs stay total and lossless', () => {
   for (const src of [
     '',
     '/',
@@ -127,7 +127,7 @@ t.test('swift: malformed constructs stay total and lossless', () => {
   }
 });
 
-t.test('swift: split ranges bound nested and hash-delimited scans', () => {
+void t.test('swift: split ranges bound nested and hash-delimited scans', () => {
   const src = String.raw`/* a /* b */ c */ ##"raw"## """multi
 line""" "value \(outer(inner()))" @available #if obj.call()`;
   const size = new TextEncoder().encode(src).length;
@@ -135,7 +135,7 @@ line""" "value \(outer(inner()))" @available #if obj.call()`;
     checkInvariants(loadLang('swift', '$hlSwift', split).hl, src);
 });
 
-t.test(
+void t.test(
   'swift: malformed UTF-8 remains balanced and lossless after decoding',
   () => {
     const bytes = Uint8Array.of(0x40, 0x61, 0x20, 0xf0, 0x28, 0x8c, 0x28, 0xff);
@@ -145,7 +145,7 @@ t.test(
   }
 );
 
-t.test('swift: deterministic fuzz preserves lexer invariants', () => {
+void t.test('swift: deterministic fuzz preserves lexer invariants', () => {
   let state = 0x5a17;
   const alphabet = 'abcXYZ09_#@ /\\"\'\n\t{}[]().,:;+-*=!?<>&|é';
   for (let n = 0; n < 160; n++) {

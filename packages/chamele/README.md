@@ -13,13 +13,11 @@ Try it live in the [playground](https://chamele-playground.wat-labs.com).
 
 ## Why it's tiny and fast
 
-- **One pass.** Each lexer writes HTML or Tokens as it scans, with no AST.
+- **One pass.** Each lexer emits HTML or tokens directly; no AST.
 - **Zero-copy output.** Results view WebAssembly memory directly.
 - **SIMD scans.** Hot paths read 16 bytes per step.
-- **Merged spans.** Adjacent tokens with the same style share one `<span>`, even
-  across whitespace.
-- **Hand-written WATs.** Every hot-path instruction is intentional; no C/Rust →
-  wasm overhead.
+- **Merged spans.** Equal styles share one `<span>` across whitespace.
+- **Hand-written WAT.** No C or Rust compiler overhead.
 
 ## Usage
 
@@ -46,6 +44,45 @@ new TextDecoder().decode(html);
 `Uint8Array` view containing a self-contained `<pre class="chamele">` fragment.
 The view is valid until the next call. Send it to a `Response` or file, or
 decode it with `TextDecoder`.
+
+## Tokens
+
+`codeToTokens` returns Shiki-compatible themed tokens, and `codeToHast` returns
+a HAST tree. WebAssembly emits style records; JavaScript splits them into lines
+and builds the tokens.
+
+```js
+import { codeToTokens, codeToHast } from '@pierre/chamele';
+
+const { tokens } = codeToTokens('const a = 1', {
+  lang: 'ts',
+  theme: pierreDark,
+});
+// [[{ content: 'const ', offset: 0, color: '#ff678d', fontStyle: 0 }, ...]]
+const root = codeToHast('const a = 1', { lang: 'ts', theme: pierreDark });
+// { type: 'root', children: [{ tagName: 'pre', ... }] }
+```
+
+Pass `theme` for one theme or `themes` for multiple color schemes.
+`tokenizeMaxLineLength` collapses long lines into one unthemed token.
+`codeToHast` also accepts Shiki-style `transformers` and `decorations`.
+
+Use `TokenizeStream` for streaming and `LiveTokenizer` for line edits. Each owns
+a Wasm instance and text buffer:
+
+```js
+import { TokenizeStream, LiveTokenizer } from '@pierre/chamele';
+
+// SSR streaming: push chunks, get newly completed lines of tokens
+const stream = new TokenizeStream({ lang: 'ts', theme: pierreDark });
+const lines = [];
+for await (const chunk of chunks) lines.push(...stream.pushCode(chunk));
+lines.push(...stream.end());
+
+// editing: update one line, get its tokens and string/comment/regex ranges
+const live = new LiveTokenizer({ lang: 'ts', theme: pierreDark, code });
+const { tokens, bracketIgnoredRanges } = live.tokenizeLine(1, 'let b = 2');
+```
 
 ## Themes
 
@@ -117,9 +154,9 @@ toCSS(pierreDark);
 ## Development
 
 ```bash
-pnpm build   # preprocess and compile WAT with wabt + binaryen
-pnpm test    # run tests
-pnpm bench   # run benchmarks
+moonx chamele:build   # preprocess and compile WAT with wabt + binaryen
+moonx chamele:test    # run tests
+moonx chamele:bench   # run benchmarks
 ```
 
 See [ARCHITECTURE.md](./ARCHITECTURE.md) for internals.

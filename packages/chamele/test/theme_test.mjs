@@ -20,14 +20,14 @@ const {
 const json = loadLang('json', '$hlJson');
 const tsx = loadLang('tsx', '$hlTsx');
 
-test('token types: syntax captures are sorted and complete', () => {
+void test('token types: syntax captures are sorted and complete', () => {
   const syntax = tokenTypes.slice(1, -2);
   assert.deepEqual(syntax, [...syntax].sort());
   for (const name of ['namespace', 'punctuation.markup', 'selector'])
     assert.ok(syntax.includes(name));
 });
 
-test('bundled themes: exports every JSON theme', () => {
+void test('bundled themes: exports every JSON theme', () => {
   assert.equal(Object.keys(themes).length, 71);
   assert.deepEqual(
     [
@@ -53,7 +53,7 @@ test('bundled themes: exports every JSON theme', () => {
   );
 });
 
-test('toCSS: converts a theme to custom properties', () => {
+void test('toCSS: converts a theme to custom properties', () => {
   const css = toCSS(pierreDark);
   assert.ok(
     css.startsWith(
@@ -63,12 +63,12 @@ test('toCSS: converts a theme to custom properties', () => {
   );
 });
 
-test('css variables: exported theme selects the dedicated mode', () => {
+void test('css variables: exported theme selects the dedicated mode', () => {
   assert.equal(cssVariables.cssVariables, true);
   assert.deepEqual(cssVariables.style, {});
 });
 
-test('css variables: renderer emits custom properties', () => {
+void test('css variables: renderer emits custom properties', () => {
   assert.equal(
     checkInvariants(tsx.hl, 'const a = 1', { theme: cssVariables }),
     `<pre class="chamele" style="background-color:var(--cha-background);color:var(--cha-foreground);"><code>` +
@@ -83,13 +83,13 @@ test('css variables: renderer emits custom properties', () => {
   );
 });
 
-test('css variables: switching themes does not leak table state', () => {
+void test('css variables: switching themes does not leak table state', () => {
   const variable = tsx.hl('const', { theme: cssVariables });
   assert.match(tsx.hl('const', { theme: pierreDark }), /color:#[a-f0-9]+/);
   assert.equal(tsx.hl('const', { theme: cssVariables }), variable);
 });
 
-test('css variables: bypasses compilation and ignores theme styles', () => {
+void test('css variables: bypasses compilation and ignores theme styles', () => {
   let styleReads = 0;
   const theme = {
     ...cssVariables,

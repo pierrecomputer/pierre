@@ -20,6 +20,7 @@
   (global $cap (mut i32) (i32.const 0))     ;; highest safe write position (16 bytes of slack below memory end)
   (global $spanHl (mut i32) (i32.const -1)) ;; $Token of the currently open span, -1 when none
   (global $cssVariables (mut i32) (i32.const 0))
+  (global $tokens (mut i32) (i32.const 0))  ;; token-record mode: emit (end:u32, hl:u32) records instead of HTML
 
   ;; write one byte as two lowercase hex digits
   (func $hexByte (param $b i32)
@@ -204,9 +205,30 @@
         (local.set $lhs (i32.add (local.get $lhs) (i32.const 1)))
         (br $outer))))
 
+  ;; token-record mode: append an (end:u32, hl:u32) record covering up to
+  ;; input offset $rhs, or extend the previous record when its $hl matches -
+  ;; the analog of span merging. Records tile the input; a record's start is
+  ;; the previous record's end (0 for the first).
+  (func $recTok (param $hl i32) (param $rhs i32)
+    (call $ensureCap (i32.const 16))
+    (if (i32.and
+          (i32.gt_u (global.get $out) (i32.load (i32.const 6)))
+          (i32.eq (i32.load (i32.sub (global.get $out) (i32.const 4))) (local.get $hl)))
+      (then
+        (i32.store (i32.sub (global.get $out) (i32.const 8))
+          (i32.sub (local.get $rhs) (i32.const 65536)))
+        (return)))
+    (i32.store (global.get $out) (i32.sub (local.get $rhs) (i32.const 65536)))
+    (i32.store offset=4 (global.get $out) (local.get $hl))
+    (global.set $out (i32.add (global.get $out) (i32.const 8))))
+
   ;; emit the token bytes [$lhs,$rhs) styled as $hl
   (func $emitTok (param $hl i32) (param $lhs i32) (param $rhs i32)
     (if (i32.ge_u (local.get $lhs) (local.get $rhs)) (then (return)))
+    (if (global.get $tokens)
+      (then
+        (call $recTok (local.get $hl) (local.get $rhs))
+        (return)))
     (call $ensureCap (i32.add
       (i32.mul (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 5))
       (i32.const 96)))
@@ -217,6 +239,14 @@
   ;; span, so same-colored neighbors merge across the gap
   (func $emitGap (param $lhs i32) (param $rhs i32)
     (if (i32.ge_u (local.get $lhs) (local.get $rhs)) (then (return)))
+    (if (global.get $tokens)
+      (then
+        ;; a gap keeps the open record's style, mirroring HTML span merging
+        (if (i32.gt_u (global.get $out) (i32.load (i32.const 6)))
+          (then (i32.store (i32.sub (global.get $out) (i32.const 8))
+            (i32.sub (local.get $rhs) (i32.const 65536))))
+          (else (call $recTok (enum.get $Token.none) (local.get $rhs))))
+        (return)))
     (call $ensureCap (i32.add
       (i32.mul (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 5))
       (i32.const 16)))
@@ -269,9 +299,11 @@
     (global.set $out (i32.add (global.get $out) (i32.const 13))))
 
   ;; driver prologue shared by chamele.wat and the per-language test harnesses:
-  ;; read the control block, place the output, emit the wrapper opening
+  ;; read the control block ([1]: 0 inline colors, 1 CSS variables, 2 token
+  ;; records), place the output, emit the wrapper opening
   (func $hlBegin
-    (global.set $cssVariables (i32.load8_u (i32.const 1)))
+    (global.set $cssVariables (i32.eq (i32.load8_u (i32.const 1)) (i32.const 1)))
+    (global.set $tokens (i32.eq (i32.load8_u (i32.const 1)) (i32.const 2)))
     (global.set $eof (i32.add (i32.const 65536) (i32.load (i32.const 2))))
     (global.set $end (global.get $eof))
     (global.set $ptr (i32.const 65536))
@@ -279,10 +311,10 @@
     (i32.store (i32.const 6) (global.get $out))
     (global.set $cap (i32.sub (i32.mul (memory.size) (i32.const 65536)) (i32.const 16)))
     (global.set $spanHl (i32.const -1))
-    (call $prologue))
+    (if (i32.eqz (global.get $tokens)) (then (call $prologue))))
 
   ;; driver epilogue: emit the wrapper closing and publish the result
   (func $hlEnd
-    (call $epilogue)
+    (if (i32.eqz (global.get $tokens)) (then (call $epilogue)))
     (i32.store (i32.const 10) (i32.sub (global.get $out) (i32.load (i32.const 6)))))
 )

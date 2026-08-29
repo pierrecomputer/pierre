@@ -25,7 +25,7 @@ const PROPERTY = themeColor('property');
 const OPERATOR = themeColor('operator');
 const PUNCT = themeColor('punctuation.bracket');
 
-t.test('cpp: comments, documentation comments, and directives', () => {
+void t.test('cpp: comments, documentation comments, and directives', () => {
   const src = `#include <vector>
 # include "detail/item.hpp"
 #define SUM(a, b) \\
@@ -49,7 +49,7 @@ t.test('cpp: comments, documentation comments, and directives', () => {
   }
 });
 
-t.test('cpp: ordinary, prefixed, character, and raw literals', () => {
+void t.test('cpp: ordinary, prefixed, character, and raw literals', () => {
   const src = `auto s = u8"a\\n\\u0041\\x42";
 auto c = L'\\123';
 auto r = u8R"tag(raw \\n+text )tag"sv;`;
@@ -61,10 +61,10 @@ auto r = u8R"tag(raw \\n+text )tag"sv;`;
   assert.equal(colorOf(html, "L'"), NUMBER);
   assert.equal(colorOf(html, 'u8R"tag(raw'), STRING);
   const raw = spansOf(html).find((span) => span.text.includes('u8R"tag('));
-  assert.ok(raw?.text.includes('\\n') && raw.color === STRING);
+  assert.ok(raw?.text.includes('\\n') === true && raw.color === STRING);
 });
 
-t.test(
+void t.test(
   'cpp: numbers include radix, separators, exponents, and suffixes',
   () => {
     const src = "0xffu 0b1010'0011 1.2e-3f 0x1.fp+2 .5 42_km";
@@ -82,7 +82,7 @@ t.test(
   }
 );
 
-t.test('cpp: keywords, types, functions, members, and constants', () => {
+void t.test('cpp: keywords, types, functions, members, and constants', () => {
   const src = `template <typename T>
 namespace demo { demo::Widget item; }
 class Box {
@@ -102,19 +102,22 @@ int main() { std::vector<int> xs; obj.field = ptr->method(MAX_VALUE); }`;
   assert.equal(colorOf(html, 'MAX_VALUE'), themeColor('constant'));
 });
 
-t.test('cpp: operators, scope/member access, delimiters, and brackets', () => {
-  const src =
-    'ns::Type::value->field += (a <=> b) && arr[i] != 0; obj.*member; f(...);';
-  const html = checkInvariants(cpp.hl, src);
-  for (const op of ['->', '+=', '<=>', '&&', '!=', '.*', '...']) {
-    assert.equal(colorOf(html, op), OPERATOR, op);
+void t.test(
+  'cpp: operators, scope/member access, delimiters, and brackets',
+  () => {
+    const src =
+      'ns::Type::value->field += (a <=> b) && arr[i] != 0; obj.*member; f(...);';
+    const html = checkInvariants(cpp.hl, src);
+    for (const op of ['->', '+=', '<=>', '&&', '!=', '.*', '...']) {
+      assert.equal(colorOf(html, op), OPERATOR, op);
+    }
+    assert.equal(colorOf(html, 'field'), PROPERTY);
+    assert.equal(colorOf(html, '('), PUNCT);
+    assert.equal(colorOf(html, '['), PUNCT);
   }
-  assert.equal(colorOf(html, 'field'), PROPERTY);
-  assert.equal(colorOf(html, '('), PUNCT);
-  assert.equal(colorOf(html, '['), PUNCT);
-});
+);
 
-t.test('cpp: labels, booleans, nullptr, this, and module words', () => {
+void t.test('cpp: labels, booleans, nullptr, this, and module words', () => {
   const src =
     'export module demo; start: if (this == nullptr) goto start; bool yes = true;';
   const html = checkInvariants(cpp.hl, src);
@@ -125,7 +128,7 @@ t.test('cpp: labels, booleans, nullptr, this, and module words', () => {
   assert.equal(colorOf(html, 'true'), themeColor('boolean'));
 });
 
-t.test('cpp: malformed constructs remain total and lossless', () => {
+void t.test('cpp: malformed constructs remain total and lossless', () => {
   for (const src of [
     '',
     '/',
@@ -146,7 +149,7 @@ t.test('cpp: malformed constructs remain total and lossless', () => {
   }
 });
 
-t.test('cpp: every lookahead respects split scan ranges', () => {
+void t.test('cpp: every lookahead respects split scan ranges', () => {
   checkInvariants(loadLang('cpp', '$hlCpp', 2).hl, 'x//tail\n');
   checkInvariants(loadLang('cpp', '$hlCpp', 2).hl, 'R"tag(x)tag"');
   checkInvariants(loadLang('cpp', '$hlCpp', 7).hl, 'auto "x\\ny";');
@@ -156,7 +159,7 @@ t.test('cpp: every lookahead respects split scan ranges', () => {
     checkInvariants(loadLang('cpp', '$hlCpp', split).hl, include);
 });
 
-t.test('cpp: long SIMD literal and comment scans', () => {
+void t.test('cpp: long SIMD literal and comment scans', () => {
   const src = `/* ${'comment '.repeat(200)}*/\nR"d(${'raw text '.repeat(300)})d"\n"${'text'.repeat(500)}"`;
   checkInvariants(cpp.hl, src);
 });

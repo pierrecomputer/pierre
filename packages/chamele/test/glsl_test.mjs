@@ -22,7 +22,6 @@ const ESCAPE = themeColor('string.escape');
 const NUMBER = themeColor('number');
 const KEYWORD = themeColor('keyword');
 const TYPE = themeColor('type.builtin');
-const VARIABLE = themeColor('variable');
 const SPECIAL = themeColor('variable.special');
 const CONSTANT = themeColor('constant');
 const FUNCTION = themeColor('function');
@@ -32,7 +31,7 @@ const PUNCT = themeColor('punctuation.bracket');
 const exactColor = (html, text) =>
   spansOf(html).find((span) => span.text.trim() === text)?.color;
 
-t.test('glsl: representative shader constructs', () => {
+void t.test('glsl: representative shader constructs', () => {
   const html = checkInvariants(
     glsl.hl,
     `#version 460 core
@@ -66,7 +65,7 @@ void main() {
   assert.equal(exactColor(html, '0.0'), NUMBER);
 });
 
-t.test('glsl: comments and Doxygen comments', () => {
+void t.test('glsl: comments and Doxygen comments', () => {
   const theme = {
     name: 'glsl-comments',
     appearance: 'dark',
@@ -87,7 +86,7 @@ t.test('glsl: comments and Doxygen comments', () => {
   assert.equal(colorOf(html, '/*! doc block */'), '#445566');
 });
 
-t.test('glsl: preprocessor paths and quoted strings with escapes', () => {
+void t.test('glsl: preprocessor paths and quoted strings with escapes', () => {
   const html = checkInvariants(
     glsl.hl,
     String.raw`#include <lighting/common.glsl>
@@ -105,7 +104,7 @@ t.test('glsl: preprocessor paths and quoted strings with escapes', () => {
   assert.equal(colorOf(html, '\\t'), ESCAPE);
 });
 
-t.test('glsl: numeric, vector, matrix, scalar and opaque forms', () => {
+void t.test('glsl: numeric, vector, matrix, scalar and opaque forms', () => {
   const html = checkInvariants(
     glsl.hl,
     'float a=.5; double b=1.0e-2LF; uint c=42u; int d=0x1.fp2; uint e=0b1010u; ' +
@@ -135,39 +134,42 @@ t.test('glsl: numeric, vector, matrix, scalar and opaque forms', () => {
   }
 });
 
-t.test('glsl: identifiers, methods, properties and constant-case names', () => {
-  const theme = {
-    name: 'glsl-identifiers',
-    appearance: 'dark',
-    style: {
-      background: '#000000',
-      foreground: '#ffffff',
-      syntax: {
-        variable: '#110001',
-        'variable.special': '#220002',
-        property: '#330003',
-        constant: '#440004',
-        function: '#550005',
-        'function.method': '#660006',
-        type: '#770007',
+void t.test(
+  'glsl: identifiers, methods, properties and constant-case names',
+  () => {
+    const theme = {
+      name: 'glsl-identifiers',
+      appearance: 'dark',
+      style: {
+        background: '#000000',
+        foreground: '#ffffff',
+        syntax: {
+          variable: '#110001',
+          'variable.special': '#220002',
+          property: '#330003',
+          constant: '#440004',
+          function: '#550005',
+          'function.method': '#660006',
+          type: '#770007',
+        },
       },
-    },
-  };
-  const html = checkInvariants(
-    glsl.hl,
-    'Thing value; value.rgb; object.fetch(uv); helper (value); gl_FragCoord; MAX_LIGHTS;',
-    { theme }
-  );
-  assert.equal(exactColor(html, 'Thing'), '#770007');
-  assert.equal(exactColor(html, 'value'), '#110001');
-  assert.equal(exactColor(html, 'rgb'), '#330003');
-  assert.equal(exactColor(html, 'fetch'), '#660006');
-  assert.equal(exactColor(html, 'helper'), '#550005');
-  assert.equal(exactColor(html, 'gl_FragCoord'), '#220002');
-  assert.equal(exactColor(html, 'MAX_LIGHTS'), '#440004');
-});
+    };
+    const html = checkInvariants(
+      glsl.hl,
+      'Thing value; value.rgb; object.fetch(uv); helper (value); gl_FragCoord; MAX_LIGHTS;',
+      { theme }
+    );
+    assert.equal(exactColor(html, 'Thing'), '#770007');
+    assert.equal(exactColor(html, 'value'), '#110001');
+    assert.equal(exactColor(html, 'rgb'), '#330003');
+    assert.equal(exactColor(html, 'fetch'), '#660006');
+    assert.equal(exactColor(html, 'helper'), '#550005');
+    assert.equal(exactColor(html, 'gl_FragCoord'), '#220002');
+    assert.equal(exactColor(html, 'MAX_LIGHTS'), '#440004');
+  }
+);
 
-t.test('glsl: operators and punctuation', () => {
+void t.test('glsl: operators and punctuation', () => {
   const html = checkInvariants(
     glsl.hl,
     'a <<= 2; b = (a++ >= 1 && c != 0) ? a.b : x[0];'
@@ -180,7 +182,7 @@ t.test('glsl: operators and punctuation', () => {
   }
 });
 
-t.test('glsl: malformed constructs remain total and lossless', () => {
+void t.test('glsl: malformed constructs remain total and lossless', () => {
   for (const source of [
     '',
     '/',
@@ -204,7 +206,7 @@ t.test('glsl: malformed constructs remain total and lossless', () => {
   }
 });
 
-t.test('glsl: split scan ranges clamp every lookahead', () => {
+void t.test('glsl: split scan ranges clamp every lookahead', () => {
   const source = '/** doc */ #include <x>\n"a\\n" 0x1.fp2 foo.bar()';
   for (const split of [1, 2, 3, 10, 12, 20, 25, 29, 35, source.length - 1]) {
     const ranged = loadLang('glsl', '$hlGlsl', split);
@@ -212,7 +214,7 @@ t.test('glsl: split scan ranges clamp every lookahead', () => {
   }
 });
 
-t.test('glsl: long comments and strings exercise long-run paths', () => {
+void t.test('glsl: long comments and strings exercise long-run paths', () => {
   const source = `/*${'comment '.repeat(80)}*/\n#define S "${'shader'.repeat(120)}\\n"`;
   const html = checkInvariants(glsl.hl, source);
   assert.equal(colorOf(html, 'comment comment'), COMMENT);

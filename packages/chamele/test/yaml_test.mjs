@@ -15,7 +15,7 @@ const CONSTANT = themeColor('constant.builtin');
 const COMMENT = themeColor('comment');
 const TYPE = themeColor('type');
 
-t.test('yaml: mappings, sequences, scalars, and comments', () => {
+void t.test('yaml: mappings, sequences, scalars, and comments', () => {
   const src =
     'name: chamele\nenabled: true\ncount: 12\nnothing: null\nitems:\n  - one\n  - two # tail\n';
   const html = checkInvariants(yaml.hl, src);
@@ -27,7 +27,7 @@ t.test('yaml: mappings, sequences, scalars, and comments', () => {
   assert.equal(colorOf(html, '# tail'), COMMENT);
 });
 
-t.test('yaml: quoted keys, escapes, anchors, aliases, and tags', () => {
+void t.test('yaml: quoted keys, escapes, anchors, aliases, and tags', () => {
   const src =
     '"quoted": "a\\nb"\nbase: &base value\ncopy: *base\ntagged: !thing x\n';
   const html = checkInvariants(yaml.hl, src);
@@ -38,7 +38,7 @@ t.test('yaml: quoted keys, escapes, anchors, aliases, and tags', () => {
   assert.equal(colorOf(html, '!thing'), TYPE);
 });
 
-t.test('yaml: document markers and flow collections', () => {
+void t.test('yaml: document markers and flow collections', () => {
   const html = checkInvariants(
     yaml.hl,
     '---\nmap: {a: 1, b: [yes, no, off]}\nempty: ~\n...\n'
@@ -47,7 +47,7 @@ t.test('yaml: document markers and flow collections', () => {
   assert.equal(colorOf(html, '~'), CONSTANT);
 });
 
-t.test(
+void t.test(
   'yaml: hashes in plain scalars and key lookahead stay on their line',
   () => {
     const html = checkInvariants(
@@ -60,7 +60,7 @@ t.test(
   }
 );
 
-t.test('yaml: malformed and split ranges stay lossless', () => {
+void t.test('yaml: malformed and split ranges stay lossless', () => {
   for (const src of [
     '',
     "'unterminated",

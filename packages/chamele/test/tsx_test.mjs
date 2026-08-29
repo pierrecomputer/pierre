@@ -1,8 +1,7 @@
 import assert from 'node:assert';
-import { readFileSync } from 'node:fs';
 import t from 'node:test';
 
-import { init } from '../lib/index.mjs';
+import { createHighlighter } from '../lib/index.mjs';
 import { transformWat, wat2wasm } from '../scripts/build.mjs';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import {
@@ -62,24 +61,24 @@ const bucketTheme = {
   },
 };
 
-t.test('tsx: wrapper carries the theme background and foreground', () => {
+void t.test('tsx: wrapper carries the theme background and foreground', () => {
   const html = tsx.hl('1');
   assert.ok(
     html.startsWith(
       `<pre class="chamele" style="background-color:${BG};color:${FG}"><code>`
-    )
+    ) === true
   );
   assert.match(html, /<\/code><\/pre>$/);
 });
 
-t.test('tsx: empty input', () => {
+void t.test('tsx: empty input', () => {
   assert.equal(
     tsx.hl(''),
     `<pre class="chamele" style="background-color:${BG};color:${FG}"><code></code></pre>`
   );
 });
 
-t.test('tsx: keyword buckets resolve to distinct capture names', () => {
+void t.test('tsx: keyword buckets resolve to distinct capture names', () => {
   const html = checkInvariants(
     tsx.hl,
     'if (a) {} else {} switch (a) { case 1: default: }\n' +
@@ -132,7 +131,7 @@ t.test('tsx: keyword buckets resolve to distinct capture names', () => {
   }
 });
 
-t.test('tsx: literal words', () => {
+void t.test('tsx: literal words', () => {
   const html = checkInvariants(
     tsx.hl,
     '[true, false, null, undefined, NaN, Infinity, this, super.x]'
@@ -147,7 +146,7 @@ t.test('tsx: literal words', () => {
   assert.equal(colorOf(html, 'super'), VSPEC);
 });
 
-t.test('tsx: strings with escapes, including UTF-8-adjacent ones', () => {
+void t.test('tsx: strings with escapes, including UTF-8-adjacent ones', () => {
   const html = checkInvariants(tsx.hl, "'a\\nb' + \"c\\u0041d\" + '\\é'");
   assert.equal(colorOf(html, '\\n'), ESC);
   assert.equal(colorOf(html, '\\u0041'), ESC);
@@ -156,7 +155,7 @@ t.test('tsx: strings with escapes, including UTF-8-adjacent ones', () => {
   assert.equal(colorOf(html, 'd"'), STR);
 });
 
-t.test('tsx: escape spans never split a UTF-8 code point', () => {
+void t.test('tsx: escape spans never split a UTF-8 code point', () => {
   for (const src of [
     '"a\\éb"',
     '"\\日本語"',
@@ -168,19 +167,24 @@ t.test('tsx: escape spans never split a UTF-8 code point', () => {
   }
 });
 
-t.test('tsx: \\xNN and \\u{...} escape spans cover exactly the escape', () => {
-  const html = checkInvariants(tsx.hl, String.raw`"z\x41z\u{1F600}z\u0041z"`);
-  const esc = spansOf(html)
-    .filter((s) => s.color === ESC)
-    .map((s) => s.text);
-  assert.deepEqual(esc, ['\\x41', '\\u{1F600}', '\\u0041']);
-  // a short escape must not swallow the closing quote
-  const short = checkInvariants(tsx.hl, String.raw`"\u12"+z`);
-  assert.ok(spansOf(short).some((s) => s.color === ESC && s.text === '\\u12'));
-  assert.equal(colorOf(short, '+'), OP);
-});
+void t.test(
+  'tsx: \\xNN and \\u{...} escape spans cover exactly the escape',
+  () => {
+    const html = checkInvariants(tsx.hl, String.raw`"z\x41z\u{1F600}z\u0041z"`);
+    const esc = spansOf(html)
+      .filter((s) => s.color === ESC)
+      .map((s) => s.text);
+    assert.deepEqual(esc, ['\\x41', '\\u{1F600}', '\\u0041']);
+    // a short escape must not swallow the closing quote
+    const short = checkInvariants(tsx.hl, String.raw`"\u12"+z`);
+    assert.ok(
+      spansOf(short).some((s) => s.color === ESC && s.text === '\\u12')
+    );
+    assert.equal(colorOf(short, '+'), OP);
+  }
+);
 
-t.test('tsx: numbers', () => {
+void t.test('tsx: numbers', () => {
   const html = checkInvariants(
     tsx.hl,
     '0xAB_CDn + 1e-2 + .5 + 1_000 + 0b10_01 + 10n + 1..toString()'
@@ -195,7 +199,7 @@ t.test('tsx: numbers', () => {
   assert.equal(colorOf(html, 'toString'), FUNC);
 });
 
-t.test(
+void t.test(
   'tsx: template literals split into string, escapes, and ${ } specials',
   () => {
     const html = checkInvariants(tsx.hl, '`a\\t${b}c${d}e`');
@@ -212,7 +216,7 @@ t.test(
   }
 );
 
-t.test('tsx: nested and multiline templates', () => {
+void t.test('tsx: nested and multiline templates', () => {
   const html = checkInvariants(
     tsx.hl,
     '`1${`2${x}2`}1`\n`multi\nline ${ {a: `y${z}w`} } tail`'
@@ -225,7 +229,7 @@ t.test('tsx: nested and multiline templates', () => {
   checkInvariants(tsx.hl, 'tag`a${1}`');
 });
 
-t.test('tsx: regexp vs division', () => {
+void t.test('tsx: regexp vs division', () => {
   for (const [src, re] of [
     ['a = /re[/]x/gi', '/re[/]x/gi'],
     ['typeof /re/', '/re/'],
@@ -255,7 +259,7 @@ t.test('tsx: regexp vs division', () => {
   }
 });
 
-t.test('tsx: comments', () => {
+void t.test('tsx: comments', () => {
   const html = checkInvariants(
     tsx.hl,
     '// line\nlet a; /* block\nmore */ b; /** doc */ c;'
@@ -272,7 +276,7 @@ t.test('tsx: comments', () => {
   assert.equal(colorOf(bhtml, '/**/'), '#00000a');
 });
 
-t.test('tsx: JSDoc tags in doc comments', () => {
+void t.test('tsx: JSDoc tags in doc comments', () => {
   const html = checkInvariants(
     tsx.hl,
     '/**\n * Adds widgets. See {@link Widget}.\n' +
@@ -301,7 +305,7 @@ t.test('tsx: JSDoc tags in doc comments', () => {
   assert.equal(colorOf(bhtml, ' b '), '#00000b');
 });
 
-t.test('tsx: JSDoc name arguments', () => {
+void t.test('tsx: JSDoc name arguments', () => {
   const html = checkInvariants(
     tsx.hl,
     '/** @template T */\n/** @typedef {Object} Opts */\n/** @property {string} name */\n' +
@@ -315,7 +319,7 @@ t.test('tsx: JSDoc name arguments', () => {
   assert.equal(spans.find((s) => s.text.includes('Other'))?.color, COMMENT);
 });
 
-t.test('tsx: malformed JSDoc stays lossless', () => {
+void t.test('tsx: malformed JSDoc stays lossless', () => {
   for (const src of [
     '/** @',
     '/** @param',
@@ -339,7 +343,7 @@ t.test('tsx: malformed JSDoc stays lossless', () => {
   assert.equal(colorOf(html2, '{num'), COMMENT);
 });
 
-t.test('tsx: shebang is a comment', () => {
+void t.test('tsx: shebang is a comment', () => {
   const html = checkInvariants(tsx.hl, '#!/usr/bin/env node\nlet x = 1');
   assert.equal(colorOf(html, '#!/usr/bin/env node'), COMMENT);
   // only at the very start
@@ -347,7 +351,7 @@ t.test('tsx: shebang is a comment', () => {
   assert.notEqual(colorOf(html2, '#'), COMMENT);
 });
 
-t.test('tsx: member chains, calls, and identifiers', () => {
+void t.test('tsx: member chains, calls, and identifiers', () => {
   const html = checkInvariants(tsx.hl, 'a.b.c(1); obj?.m(); foo(); bar');
   const spans = spansOf(html);
   assert.equal(spans.find((s) => s.text.trim() === 'a')?.color, VAR);
@@ -358,27 +362,33 @@ t.test('tsx: member chains, calls, and identifiers', () => {
   assert.equal(colorOf(html, 'bar'), VAR);
 });
 
-t.test('tsx: object keys are property, ternary colon operands are not', () => {
-  const html = checkInvariants(tsx.hl, '({key: 1, other: cond ? yes : no})');
-  assert.equal(colorOf(html, 'key'), PROP);
-  assert.equal(colorOf(html, 'other'), PROP);
-  assert.equal(colorOf(html, 'yes'), VAR);
-  assert.equal(colorOf(html, 'no'), VAR);
-  assert.equal(colorOf(html, 'cond'), VAR);
-});
+void t.test(
+  'tsx: object keys are property, ternary colon operands are not',
+  () => {
+    const html = checkInvariants(tsx.hl, '({key: 1, other: cond ? yes : no})');
+    assert.equal(colorOf(html, 'key'), PROP);
+    assert.equal(colorOf(html, 'other'), PROP);
+    assert.equal(colorOf(html, 'yes'), VAR);
+    assert.equal(colorOf(html, 'no'), VAR);
+    assert.equal(colorOf(html, 'cond'), VAR);
+  }
+);
 
-t.test('tsx: interface members are property across `;`/`,` and `?:`', () => {
-  const html = checkInvariants(
-    tsx.hl,
-    'interface B { first: number; second: number, third?: string; label: string }'
-  );
-  assert.equal(colorOf(html, 'first'), PROP);
-  assert.equal(colorOf(html, 'second'), PROP);
-  assert.equal(colorOf(html, 'third'), PROP);
-  assert.equal(colorOf(html, 'label'), PROP);
-});
+void t.test(
+  'tsx: interface members are property across `;`/`,` and `?:`',
+  () => {
+    const html = checkInvariants(
+      tsx.hl,
+      'interface B { first: number; second: number, third?: string; label: string }'
+    );
+    assert.equal(colorOf(html, 'first'), PROP);
+    assert.equal(colorOf(html, 'second'), PROP);
+    assert.equal(colorOf(html, 'third'), PROP);
+    assert.equal(colorOf(html, 'label'), PROP);
+  }
+);
 
-t.test(
+void t.test(
   'tsx: predefined member types and annotation punctuation match Zed',
   () => {
     const theme = {
@@ -419,7 +429,7 @@ t.test(
   }
 );
 
-t.test('tsx: a spaced ternary `?` never reads as an optional key', () => {
+void t.test('tsx: a spaced ternary `?` never reads as an optional key', () => {
   const html = checkInvariants(
     tsx.hl,
     'let x; cond ? a : b; f(y, flag ? c : d)'
@@ -428,49 +438,58 @@ t.test('tsx: a spaced ternary `?` never reads as an optional key', () => {
   assert.equal(colorOf(html, 'flag'), VAR);
 });
 
-t.test('tsx: constructors, decorators, private fields, class heads', () => {
-  const html = checkInvariants(
-    tsx.hl,
-    '@dec class X extends Y { #p = 1; m() { return new Foo(this.#p) } }'
-  );
-  assert.equal(colorOf(html, '@dec'), ATTR);
-  assert.equal(colorOf(html, 'X'), TYPE);
-  assert.equal(colorOf(html, 'Y'), TYPE);
-  assert.equal(colorOf(html, '#p'), VAR); // property
-  assert.equal(colorOf(html, 'Foo'), CTOR);
-  assert.equal(colorOf(html, 'm'), FUNC);
-});
+void t.test(
+  'tsx: constructors, decorators, private fields, class heads',
+  () => {
+    const html = checkInvariants(
+      tsx.hl,
+      '@dec class X extends Y { #p = 1; m() { return new Foo(this.#p) } }'
+    );
+    assert.equal(colorOf(html, '@dec'), ATTR);
+    assert.equal(colorOf(html, 'X'), TYPE);
+    assert.equal(colorOf(html, 'Y'), TYPE);
+    assert.equal(colorOf(html, '#p'), VAR); // property
+    assert.equal(colorOf(html, 'Foo'), CTOR);
+    assert.equal(colorOf(html, 'm'), FUNC);
+  }
+);
 
-t.test('tsx: function declarations name after the function keyword', () => {
-  const html = checkInvariants(tsx.hl, 'function fn(a) { return a }');
-  assert.equal(colorOf(html, 'fn'), FUNC);
-});
+void t.test(
+  'tsx: function declarations name after the function keyword',
+  () => {
+    const html = checkInvariants(tsx.hl, 'function fn(a) { return a }');
+    assert.equal(colorOf(html, 'fn'), FUNC);
+  }
+);
 
-t.test('tsx: TS annotations stay lossless with the uppercase heuristic', () => {
-  const html = checkInvariants(tsx.hl, 'const x: Foo<Bar> = f<T>(1)');
-  assert.equal(colorOf(html, 'Foo'), TYPE);
-  assert.equal(colorOf(html, 'Bar'), TYPE);
-  const kw = checkInvariants(
-    tsx.hl,
-    'type A = keyof B; interface I {} declare const d: number; x satisfies Y; abstract class C {}'
-  );
-  assert.equal(colorOf(kw, 'type'), KEYWORD);
-  assert.equal(colorOf(kw, 'keyof'), KEYWORD);
-  assert.equal(colorOf(kw, 'interface'), KEYWORD);
-  assert.equal(colorOf(kw, 'declare'), KEYWORD);
-  assert.equal(colorOf(kw, 'satisfies'), KEYWORD);
-  assert.equal(colorOf(kw, 'abstract'), KEYWORD);
-  // contextual words in plain expression positions stay identifiers
-  const id = checkInvariants(
-    tsx.hl,
-    'const type = 1; f(get, set); declare = 2'
-  );
-  assert.equal(colorOf(id, 'type'), VAR);
-  assert.equal(colorOf(id, 'get'), VAR);
-  assert.equal(colorOf(id, 'declare'), VAR);
-});
+void t.test(
+  'tsx: TS annotations stay lossless with the uppercase heuristic',
+  () => {
+    const html = checkInvariants(tsx.hl, 'const x: Foo<Bar> = f<T>(1)');
+    assert.equal(colorOf(html, 'Foo'), TYPE);
+    assert.equal(colorOf(html, 'Bar'), TYPE);
+    const kw = checkInvariants(
+      tsx.hl,
+      'type A = keyof B; interface I {} declare const d: number; x satisfies Y; abstract class C {}'
+    );
+    assert.equal(colorOf(kw, 'type'), KEYWORD);
+    assert.equal(colorOf(kw, 'keyof'), KEYWORD);
+    assert.equal(colorOf(kw, 'interface'), KEYWORD);
+    assert.equal(colorOf(kw, 'declare'), KEYWORD);
+    assert.equal(colorOf(kw, 'satisfies'), KEYWORD);
+    assert.equal(colorOf(kw, 'abstract'), KEYWORD);
+    // contextual words in plain expression positions stay identifiers
+    const id = checkInvariants(
+      tsx.hl,
+      'const type = 1; f(get, set); declare = 2'
+    );
+    assert.equal(colorOf(id, 'type'), VAR);
+    assert.equal(colorOf(id, 'get'), VAR);
+    assert.equal(colorOf(id, 'declare'), VAR);
+  }
+);
 
-t.test('tsx: import/export contextual words', () => {
+void t.test('tsx: import/export contextual words', () => {
   const html = checkInvariants(
     tsx.hl,
     'import {a as b} from "mod"; export * as ns from "m2";'
@@ -481,7 +500,7 @@ t.test('tsx: import/export contextual words', () => {
   assert.equal(colorOf(html, '"mod"'), STR);
 });
 
-t.test('tsx: jsx elements, attributes, and containers', () => {
+void t.test('tsx: jsx elements, attributes, and containers', () => {
   const html = checkInvariants(
     tsx.hl,
     'const el = <div className="a" data-on={handler} disabled>hi {name} bye</div>;'
@@ -498,7 +517,7 @@ t.test('tsx: jsx elements, attributes, and containers', () => {
   assert.ok(!spansOf(html).some((s) => s.text.includes('hi ')));
 });
 
-t.test(
+void t.test(
   'tsx: jsx components and dotted names are types, plain tags are tags',
   () => {
     const html = checkInvariants(
@@ -512,7 +531,7 @@ t.test(
   }
 );
 
-t.test('tsx: jsx fragments, nesting, entities', () => {
+void t.test('tsx: jsx fragments, nesting, entities', () => {
   const html = checkInvariants(
     tsx.hl,
     '<>\n  <ul>\n    <li>a &amp; b &#38; c</li>\n  </ul>\n</>'
@@ -523,7 +542,7 @@ t.test('tsx: jsx fragments, nesting, entities', () => {
   assert.equal(colorOf(html, '&#38;'), ESC);
 });
 
-t.test('tsx: jsx containers re-enter the token pipeline', () => {
+void t.test('tsx: jsx containers re-enter the token pipeline', () => {
   const html = checkInvariants(
     tsx.hl,
     '<div>{items.map((i) => <b key={`k${i}`}>{ {x: i}.x }</b>)}</div>'
@@ -535,7 +554,7 @@ t.test('tsx: jsx containers re-enter the token pipeline', () => {
   assert.equal(spansOf(html).find((s) => s.text.trim() === 'x')?.color, PROP);
 });
 
-t.test('tsx: jsx after return / paren / arrow / ternary', () => {
+void t.test('tsx: jsx after return / paren / arrow / ternary', () => {
   for (const src of [
     'function f() { return <div/> }',
     'const a = (<div/>)',
@@ -551,7 +570,7 @@ t.test('tsx: jsx after return / paren / arrow / ternary', () => {
   }
 });
 
-t.test(
+void t.test(
   'tsx: jsx deeper than the 512-entry mode stack keeps close tags matched',
   () => {
     // pushes past capacity are dropped but counted, so every pop matches its
@@ -565,7 +584,7 @@ t.test(
   }
 );
 
-t.test('tsx: generics bail out of jsx', () => {
+void t.test('tsx: generics bail out of jsx', () => {
   const html = checkInvariants(tsx.hl, 'const f = <T,>(x: T) => x');
   assert.ok(!spansOf(html).some((s) => s.color === TAG));
   assert.equal(colorOf(html, '<'), OP);
@@ -574,7 +593,7 @@ t.test('tsx: generics bail out of jsx', () => {
   assert.ok(!spansOf(cmp).some((s) => s.color === TAG));
 });
 
-t.test('tsx: unterminated everything stays lossless and total', () => {
+void t.test('tsx: unterminated everything stays lossless and total', () => {
   for (const src of [
     "'abc",
     "'a\\",
@@ -609,7 +628,7 @@ t.test('tsx: unterminated everything stays lossless and total', () => {
   }
 });
 
-t.test('tsx: adjacent same-color tokens merge into one span', () => {
+void t.test('tsx: adjacent same-color tokens merge into one span', () => {
   const html = tsx.hl('[[]]');
   assert.equal(spansOf(html).length, 1);
   assert.equal(spansOf(html)[0].text, '[[]]');
@@ -618,14 +637,14 @@ t.test('tsx: adjacent same-color tokens merge into one span', () => {
   assert.equal(spansOf(html2).length, 1);
 });
 
-t.test('tsx: html-special bytes are escaped', () => {
+void t.test('tsx: html-special bytes are escaped', () => {
   const html = checkInvariants(tsx.hl, 'a < b && "x>y" + `<&>`');
   assert.ok(bodyOf(html).includes('&lt;'));
   assert.ok(bodyOf(html).includes('&gt;'));
   assert.ok(bodyOf(html).includes('&amp;'));
 });
 
-t.test(
+void t.test(
   'tsx: sub-range scans stay $end-bounded (the html embedding contract)',
   () => {
     // a harness that scans the input as two sub-ranges split at the midpoint,
@@ -646,8 +665,8 @@ t.test(
     (call $hlTsx)
     (call $hlEnd))
 )`;
-    const { code, enumMap } = transformWat(watUrl, src);
-    const highlighter = init(
+    const { code } = transformWat(watUrl, src);
+    const highlighter = createHighlighter(
       new WebAssembly.Module(wat2wasm(watUrl.href, code))
     );
     const dec = new TextDecoder();
@@ -668,7 +687,7 @@ t.test(
   }
 );
 
-t.test('tsx: unthemed types produce no span', () => {
+void t.test('tsx: unthemed types produce no span', () => {
   const theme = {
     name: 'min',
     appearance: 'dark',
@@ -686,7 +705,7 @@ t.test('tsx: unthemed types produce no span', () => {
   assert.equal(spansOf(html)[0].color, '#00ff00');
 });
 
-t.test('tsx: keyof and JSX division regressions', () => {
+void t.test('tsx: keyof and JSX division regressions', () => {
   // keyof before a paren is still the type operator
   assert.equal(
     colorOf(checkInvariants(tsx.hl, 'type K = keyof (typeof x);'), 'keyof'),
@@ -702,7 +721,7 @@ t.test('tsx: keyof and JSX division regressions', () => {
   assert.equal(colorOf(out, '2'), NUM);
 });
 
-t.test('tsx: non-object themes throw a clean TypeError', () => {
+void t.test('tsx: non-object themes throw a clean TypeError', () => {
   for (const theme of [null, 'str', 5, true]) {
     assert.throws(() => tsx.hl('let x = 1;', { theme }), TypeError);
   }

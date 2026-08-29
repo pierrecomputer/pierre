@@ -24,7 +24,7 @@ const FUNCTION = themeColor('function');
 const OPERATOR = themeColor('operator');
 const BRACKET = themeColor('punctuation.bracket');
 
-t.test('haskell: line, nested block, and documentation comments', () => {
+void t.test('haskell: line, nested block, and documentation comments', () => {
   const src =
     '-- plain\n-- | line docs\n{- outer {- nested -} tail -}\n{-| block docs -}';
   const html = checkInvariants(haskell.hl, src);
@@ -48,7 +48,7 @@ t.test('haskell: line, nested block, and documentation comments', () => {
   assert.equal(colorOf(bucketed, '{-| block docs -}'), '#222222');
 });
 
-t.test('haskell: pragmas are preprocessor tokens', () => {
+void t.test('haskell: pragmas are preprocessor tokens', () => {
   const src =
     '{-# LANGUAGE OverloadedStrings #-}\n{-# OPTIONS_GHC -Wall #-}\nmodule Demo where';
   const html = checkInvariants(haskell.hl, src);
@@ -56,7 +56,7 @@ t.test('haskell: pragmas are preprocessor tokens', () => {
   assert.equal(colorOf(html, '{-# OPTIONS_GHC -Wall #-}'), PREPROC);
 });
 
-t.test('haskell: strings, characters, and escapes', () => {
+void t.test('haskell: strings, characters, and escapes', () => {
   const src = "message = \"line\\n\\x41\"\nletter = 'λ'\nquote = '\\''";
   const html = checkInvariants(haskell.hl, src);
   assert.equal(colorOf(html, '"line'), STRING);
@@ -66,7 +66,7 @@ t.test('haskell: strings, characters, and escapes', () => {
   assert.equal(colorOf(html, String.raw`\'`), ESCAPE);
 });
 
-t.test('haskell: numeric literals', () => {
+void t.test('haskell: numeric literals', () => {
   const src = 'values = [42, 0xff, 0o755, 0b1010, 1_000, 3.14, .5, 1e-6]';
   const html = checkInvariants(haskell.hl, src);
   for (const n of [
@@ -83,7 +83,7 @@ t.test('haskell: numeric literals', () => {
   }
 });
 
-t.test(
+void t.test(
   'haskell: modules, imports, declarations, types, and constructors',
   () => {
     const src =
@@ -102,7 +102,7 @@ t.test(
   }
 );
 
-t.test('haskell: control flow, definitions, calls, and operators', () => {
+void t.test('haskell: control flow, definitions, calls, and operators', () => {
   const src =
     'render :: Show a => a -> IO ()\nrender value = do\n  let text = show value\n  if null text then pure () else print text\ncontains = value `elem` values';
   const html = checkInvariants(haskell.hl, src);
@@ -120,7 +120,7 @@ t.test('haskell: control flow, definitions, calls, and operators', () => {
   assert.equal(colorOf(html, '('), BRACKET);
 });
 
-t.test('haskell: malformed and UTF-8 input remains lossless', () => {
+void t.test('haskell: malformed and UTF-8 input remains lossless', () => {
   for (const src of [
     '{- unterminated {- nested -}',
     '{-# LANGUAGE λ',
@@ -134,7 +134,7 @@ t.test('haskell: malformed and UTF-8 input remains lossless', () => {
     checkInvariants(haskell.hl, src);
 });
 
-t.test('haskell: lookahead is bounded by split ranges', () => {
+void t.test('haskell: lookahead is bounded by split ranges', () => {
   for (const [prefix, tail] of [
     ['{', '- block -}'],
     ['{-', '# LANGUAGE GADTs #-}'],
@@ -148,7 +148,7 @@ t.test('haskell: lookahead is bounded by split ranges', () => {
   }
 });
 
-t.test('haskell: deterministic fuzz preserves lexer invariants', () => {
+void t.test('haskell: deterministic fuzz preserves lexer invariants', () => {
   const alphabet = 'abcXYZ09_ \'\\"{}()[]`#.:,+-*/|&=<>\nλ雪';
   let state = 0x13579bdf;
   for (let sample = 0; sample < 180; sample++) {

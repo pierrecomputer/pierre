@@ -19,7 +19,7 @@ const VARIABLE = themeColor('variable');
 const FUNCTION = themeColor('function');
 const STRING = themeColor('string');
 
-t.test('mdx: Markdown with JSX components and expressions', () => {
+void t.test('mdx: Markdown with JSX components and expressions', () => {
   const src =
     '# Hello {user}\n<Card title="Hi" count={items.length}>{render()}</Card>\n';
   const out = checkInvariants(mdx.hl, src);
@@ -36,7 +36,7 @@ t.test('mdx: Markdown with JSX components and expressions', () => {
   );
 });
 
-t.test(
+void t.test(
   'mdx: nested object braces and braces in strings stay in one expression',
   () => {
     const out = checkInvariants(mdx.hl, '{format({ text: "}" })}\nafter');
@@ -45,7 +45,7 @@ t.test(
   }
 );
 
-t.test('mdx: malformed JSX and split ranges stay bounded', () => {
+void t.test('mdx: malformed JSX and split ranges stay bounded', () => {
   for (const src of [
     '<',
     '<Card',

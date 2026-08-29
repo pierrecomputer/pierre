@@ -13,22 +13,25 @@ const NUMBER = themeColor('number');
 const COMMENT = themeColor('comment');
 const PREPROC = themeColor('preproc');
 
-t.test('asm: labels, instructions, registers, immediates, and comments', () => {
-  const src =
-    '.text\nmain:\n  mov %rax, %rbx\n  add r0, r1, #4\n  sub r0, r1, #-4\n  mov $-8, %rax ; tail\n';
-  const html = checkInvariants(asm.hl, src);
-  assert.equal(colorOf(html, '.text'), PREPROC);
-  assert.equal(colorOf(html, 'main'), LABEL);
-  assert.equal(colorOf(html, 'mov'), KEYWORD);
-  assert.equal(colorOf(html, '%rax'), REGISTER);
-  assert.equal(colorOf(html, 'r0'), REGISTER);
-  assert.equal(colorOf(html, '#4'), NUMBER);
-  assert.equal(colorOf(html, '#-4'), NUMBER);
-  assert.equal(colorOf(html, '$-8'), NUMBER);
-  assert.equal(colorOf(html, '; tail'), COMMENT);
-});
+void t.test(
+  'asm: labels, instructions, registers, immediates, and comments',
+  () => {
+    const src =
+      '.text\nmain:\n  mov %rax, %rbx\n  add r0, r1, #4\n  sub r0, r1, #-4\n  mov $-8, %rax ; tail\n';
+    const html = checkInvariants(asm.hl, src);
+    assert.equal(colorOf(html, '.text'), PREPROC);
+    assert.equal(colorOf(html, 'main'), LABEL);
+    assert.equal(colorOf(html, 'mov'), KEYWORD);
+    assert.equal(colorOf(html, '%rax'), REGISTER);
+    assert.equal(colorOf(html, 'r0'), REGISTER);
+    assert.equal(colorOf(html, '#4'), NUMBER);
+    assert.equal(colorOf(html, '#-4'), NUMBER);
+    assert.equal(colorOf(html, '$-8'), NUMBER);
+    assert.equal(colorOf(html, '; tail'), COMMENT);
+  }
+);
 
-t.test('asm: malformed and split ranges stay lossless', () => {
+void t.test('asm: malformed and split ranges stay lossless', () => {
   for (const src of [
     '',
     '.',

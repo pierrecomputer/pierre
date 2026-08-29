@@ -24,7 +24,7 @@ const FUNCTION = themeColor('function');
 const OPERATOR = themeColor('operator');
 const BRACKET = themeColor('punctuation.bracket');
 
-t.test('python: comments and decorators', () => {
+void t.test('python: comments and decorators', () => {
   const src =
     '@cache.memoize\n@pkg.decorator(arg)\ndef work():\n    # implementation note\n    pass';
   const html = checkInvariants(python.hl, src);
@@ -33,7 +33,7 @@ t.test('python: comments and decorators', () => {
   assert.equal(colorOf(html, '# implementation note'), COMMENT);
 });
 
-t.test('python: prefixed, triple, raw, byte, and f-strings', () => {
+void t.test('python: prefixed, triple, raw, byte, and f-strings', () => {
   const src =
     "a = \"line\\n\"\nb = r'raw\\n'\nc = br\"bytes\\x41\"\nd = f\"hello {name!r}\"\ne = '''multi\nline'''";
   const html = checkInvariants(python.hl, src);
@@ -45,24 +45,27 @@ t.test('python: prefixed, triple, raw, byte, and f-strings', () => {
   assert.equal(colorOf(html, "'''multi\nline'''"), STRING);
 });
 
-t.test('python: integers, floats, exponents, bases, and imaginaries', () => {
-  const src = 'values = (42, 0xff, 0b1010, 1_000, 3.14, .5, 1e-9, 2j)';
-  const html = checkInvariants(python.hl, src);
-  for (const n of [
-    '42',
-    '0xff',
-    '0b1010',
-    '1_000',
-    '3.14',
-    '.5',
-    '1e-9',
-    '2j',
-  ]) {
-    assert.equal(colorOf(html, n), NUMBER, n);
+void t.test(
+  'python: integers, floats, exponents, bases, and imaginaries',
+  () => {
+    const src = 'values = (42, 0xff, 0b1010, 1_000, 3.14, .5, 1e-9, 2j)';
+    const html = checkInvariants(python.hl, src);
+    for (const n of [
+      '42',
+      '0xff',
+      '0b1010',
+      '1_000',
+      '3.14',
+      '.5',
+      '1e-9',
+      '2j',
+    ]) {
+      assert.equal(colorOf(html, n), NUMBER, n);
+    }
   }
-});
+);
 
-t.test('python: keywords, imports, literals, and builtins', () => {
+void t.test('python: keywords, imports, literals, and builtins', () => {
   const src =
     'from pathlib import Path\nif value is not None and True:\n    return print(len(list(value)))';
   const html = checkInvariants(python.hl, src);
@@ -77,7 +80,7 @@ t.test('python: keywords, imports, literals, and builtins', () => {
   assert.equal(colorOf(html, 'list'), TYPE_BUILTIN);
 });
 
-t.test(
+void t.test(
   'python: definitions, classes, calls, members, and type-ish names',
   () => {
     const src =
@@ -96,7 +99,7 @@ t.test(
   }
 );
 
-t.test('python: operators and punctuation', () => {
+void t.test('python: operators and punctuation', () => {
   const src = 'if (n := value // 2) >= 1 and n ** 2 != 3:\n    result: int = n';
   const html = checkInvariants(python.hl, src);
   for (const op of [':=', '//', '>=', '**', '!=']) {
@@ -106,7 +109,7 @@ t.test('python: operators and punctuation', () => {
   assert.equal(colorOf(html, '('), BRACKET);
 });
 
-t.test('python: malformed and UTF-8 input remains lossless', () => {
+void t.test('python: malformed and UTF-8 input remains lossless', () => {
   for (const src of [
     "'unterminated λ",
     '"trailing escape \\',
@@ -120,7 +123,7 @@ t.test('python: malformed and UTF-8 input remains lossless', () => {
     checkInvariants(python.hl, src);
 });
 
-t.test('python: lookahead is bounded by split ranges', () => {
+void t.test('python: lookahead is bounded by split ranges', () => {
   for (const [prefix, tail] of [
     ['r', "'raw\\n'"],
     ['fr', '"value {x}"'],
@@ -134,7 +137,7 @@ t.test('python: lookahead is bounded by split ranges', () => {
   }
 });
 
-t.test('python: deterministic fuzz preserves lexer invariants', () => {
+void t.test('python: deterministic fuzz preserves lexer invariants', () => {
   const alphabet = 'abcXYZ09_ rfb\'\\"{}()[]@#.:,+-*/|&=<>\nλ雪';
   let state = 0xc0ffee42;
   for (let sample = 0; sample < 180; sample++) {

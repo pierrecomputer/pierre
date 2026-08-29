@@ -76,13 +76,13 @@ const cssVariables = {
 };
 
 /**
- * Convert a Zed theme, or the first theme in a family, to CSS custom properties.
+ * Convert a Zed theme to CSS custom properties.
  * @param {import("../lib/index.d.ts").Theme} theme
  * @returns {string}
  */
 function toCSS({ style }) {
   let css = '';
-  if (!style) return css;
+  if (style == null) return css;
   const background = style['editor.background'] ?? style.background;
   const foreground =
     style['editor.foreground'] ?? style.text ?? style.foreground;
@@ -92,7 +92,7 @@ function toCSS({ style }) {
   if (foreground) {
     css += `--cha-foreground: ${foreground};`;
   }
-  if (style.syntax) {
+  if (style.syntax != null) {
     for (const [name, value] of Object.entries(style.syntax)) {
       const color = typeof value === 'string' ? value : value.color;
       if (color) {

@@ -1,0 +1,56 @@
+$schema: 'https://moonrepo.dev/schemas/project.json'
+
+language: 'javascript'
+layer: 'library'
+tags: ['publishable']
+
+tasks:
+  # Compile the WAT sources into lib/ (wasm binary, base64 module, expanded
+  # wat, and the generated $Token ABI). The binary artifacts are gitignored,
+  # so workspace consumers (diffs) reach them through their `^:build` deps.
+  build:
+    command: 'node ./scripts/build.mjs'
+    inputs:
+      - 'src/**/*'
+      - 'scripts/build.mjs'
+    outputs:
+      - 'lib/chamele.wat'
+      - 'lib/chamele.wasm'
+      - 'lib/chamele.wasm.mjs'
+      - 'lib/token-types.mjs'
+
+  # The suite runs on node:test and compiles the wasm from the WAT sources
+  # itself, so it replaces the inherited `bun test` and needs no build dep.
+  test:
+    command: 'node ./test/index.mjs'
+    options:
+      merge: 'replace'
+
+  # Hand-written JavaScript with shipped .d.ts files; there is no tsconfig
+  # for the inherited tsgo task to check.
+  typecheck:
+    command: 'noop'
+    options:
+      merge: 'replace'
+
+  prepublish:
+    deps:
+      - 'test'
+
+  # Local-only benchmark; explicit options instead of a preset so it stays
+  # runnable in CI-marked agent shells (see .moon/tasks/tag-tsdown.yml).
+  bench:
+    command: 'node ./benchmark/bench.mjs'
+    deps:
+      - 'build'
+    options:
+      cache: false
+      runInCI: 'always'
+
+  bench-tokens:
+    command: 'node ./benchmark/bench.mjs --tokens'
+    deps:
+      - 'build'
+    options:
+      cache: false
+      runInCI: 'always'

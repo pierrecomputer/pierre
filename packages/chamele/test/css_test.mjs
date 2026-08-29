@@ -36,24 +36,24 @@ const PUNCT = themeColor('punctuation.bracket'); // also punctuation.delimiter
 const COMMENT = themeColor('comment');
 const NAMESPACE = themeColor('namespace');
 
-t.test('css: wrapper carries the theme background and foreground', () => {
+void t.test('css: wrapper carries the theme background and foreground', () => {
   const html = css.hl('a{}');
   assert.ok(
     html.startsWith(
       `<pre class="chamele" style="background-color:${BG};color:${FG}"><code>`
-    )
+    ) === true
   );
   assert.match(html, /<\/code><\/pre>$/);
 });
 
-t.test('css: empty input', () => {
+void t.test('css: empty input', () => {
   assert.equal(
     css.hl(''),
     `<pre class="chamele" style="background-color:${BG};color:${FG}"><code></code></pre>`
   );
 });
 
-t.test('css: selector kinds', () => {
+void t.test('css: selector kinds', () => {
   const html = checkInvariants(
     css.hl,
     '@namespace svg url("urn:svg"); svg|nav.menu#top:hover::before > *, em[data-k="1"] ~ input {}'
@@ -77,14 +77,14 @@ t.test('css: selector kinds', () => {
   assert.equal(eq?.color, OPERATOR);
 });
 
-t.test('css: compound selectors and comma lists', () => {
+void t.test('css: compound selectors and comma lists', () => {
   const html = checkInvariants(css.hl, 'h1, h2.big, h3 > small {}');
   assert.equal(colorOf(html, 'h1'), TAG);
   assert.equal(colorOf(html, '.big'), ATTRIBUTE);
   assert.equal(colorOf(html, 'small'), TAG);
 });
 
-t.test('css: attribute selector operators stay lossless', () => {
+void t.test('css: attribute selector operators stay lossless', () => {
   for (const src of [
     'a[href^="https:"]{}',
     'a[lang|=en]{}',
@@ -102,35 +102,41 @@ t.test('css: attribute selector operators stay lossless', () => {
   }
 });
 
-t.test('css: nested CSS - nested selectors, & parent refs, combinators', () => {
-  const src = `.card {
+void t.test(
+  'css: nested CSS - nested selectors, & parent refs, combinators',
+  () => {
+    const src = `.card {
   color: red;
   .child { margin: 0 auto; }
   &:hover { top: 1px; }
   > .kid { left: 2px; }
   aside:focus { right: 3px; }
 }`;
-  const html = checkInvariants(css.hl, src);
-  assert.equal(colorOf(html, '.card'), ATTRIBUTE);
-  assert.equal(colorOf(html, 'color'), PROPERTY);
-  assert.equal(colorOf(html, 'red'), CONST);
-  assert.equal(colorOf(html, '.child'), ATTRIBUTE); // decided as nested selector
-  assert.equal(colorOf(html, 'margin'), PROPERTY);
-  assert.equal(spansOf(html).find((s) => s.text.trim() === '0')?.color, VALUE);
-  assert.equal(colorOf(html, 'auto'), CONST);
-  assert.equal(colorOf(html, '&'), OPERATOR);
-  assert.equal(colorOf(html, ':hover'), OPERATOR);
-  assert.equal(colorOf(html, 'top'), PROPERTY);
-  assert.equal(colorOf(html, '1px'), VALUE);
-  assert.equal(colorOf(html, '.kid'), ATTRIBUTE);
-  // a nested selector that starts like a declaration would (`aside:focus`)
-  const aside = spansOf(html).find((s) => s.text.trim() === 'aside');
-  assert.equal(aside?.color, TAG);
-  assert.equal(colorOf(html, ':focus'), OPERATOR);
-  assert.equal(colorOf(html, 'right'), PROPERTY);
-});
+    const html = checkInvariants(css.hl, src);
+    assert.equal(colorOf(html, '.card'), ATTRIBUTE);
+    assert.equal(colorOf(html, 'color'), PROPERTY);
+    assert.equal(colorOf(html, 'red'), CONST);
+    assert.equal(colorOf(html, '.child'), ATTRIBUTE); // decided as nested selector
+    assert.equal(colorOf(html, 'margin'), PROPERTY);
+    assert.equal(
+      spansOf(html).find((s) => s.text.trim() === '0')?.color,
+      VALUE
+    );
+    assert.equal(colorOf(html, 'auto'), CONST);
+    assert.equal(colorOf(html, '&'), OPERATOR);
+    assert.equal(colorOf(html, ':hover'), OPERATOR);
+    assert.equal(colorOf(html, 'top'), PROPERTY);
+    assert.equal(colorOf(html, '1px'), VALUE);
+    assert.equal(colorOf(html, '.kid'), ATTRIBUTE);
+    // a nested selector that starts like a declaration would (`aside:focus`)
+    const aside = spansOf(html).find((s) => s.text.trim() === 'aside');
+    assert.equal(aside?.color, TAG);
+    assert.equal(colorOf(html, ':focus'), OPERATOR);
+    assert.equal(colorOf(html, 'right'), PROPERTY);
+  }
+);
 
-t.test(
+void t.test(
   'css: last declaration without a semicolon is still a declaration',
   () => {
     const html = checkInvariants(css.hl, 'p { color: red }');
@@ -139,7 +145,7 @@ t.test(
   }
 );
 
-t.test('css: @media with feature queries', () => {
+void t.test('css: @media with feature queries', () => {
   const html = checkInvariants(
     css.hl,
     '@media screen and (min-width: 600px), print { body { margin: 0; } }'
@@ -153,7 +159,7 @@ t.test('css: @media with feature queries', () => {
   assert.equal(colorOf(html, 'margin'), PROPERTY);
 });
 
-t.test('css: @import and @charset', () => {
+void t.test('css: @import and @charset', () => {
   const html = checkInvariants(
     css.hl,
     '@import "theme.css";\n@charset "utf-8";'
@@ -163,7 +169,7 @@ t.test('css: @import and @charset', () => {
   assert.equal(colorOf(html, '@charset'), DIRECTIVE);
 });
 
-t.test('css: @keyframes with % steps', () => {
+void t.test('css: @keyframes with % steps', () => {
   const html = checkInvariants(
     css.hl,
     '@keyframes spin { from { opacity: 0 } 50% { opacity: .5 } to { transform: rotate(360deg) } }'
@@ -178,7 +184,7 @@ t.test('css: @keyframes with % steps', () => {
   assert.equal(colorOf(html, '360deg'), VALUE);
 });
 
-t.test('css: @supports', () => {
+void t.test('css: @supports', () => {
   const html = checkInvariants(
     css.hl,
     '@supports (display: grid) and (not (float: left)) { i {} }'
@@ -197,7 +203,7 @@ t.test('css: @supports', () => {
   );
 });
 
-t.test('css: minified prelude operators glued to ( stay operators', () => {
+void t.test('css: minified prelude operators glued to ( stay operators', () => {
   const html = checkInvariants(
     css.hl,
     '@supports(display:flex)and(gap:1px){a{color:red}}'
@@ -210,7 +216,7 @@ t.test('css: minified prelude operators glued to ( stay operators', () => {
   assert.equal(colorOf(html, 'gap'), PROPERTY);
 });
 
-t.test(
+void t.test(
   'css: a bare-declaration fragment at depth 0 colors as declarations',
   () => {
     const html = checkInvariants(css.hl, 'color: red;\nfont-size: 12px;');
@@ -221,7 +227,7 @@ t.test(
   }
 );
 
-t.test('css: nested @media inside a rule', () => {
+void t.test('css: nested @media inside a rule', () => {
   const html = checkInvariants(
     css.hl,
     '.a { @media (min-width: 10em) { gap: 1em; } }'
@@ -231,7 +237,7 @@ t.test('css: nested @media inside a rule', () => {
   assert.equal(colorOf(html, 'gap'), PROPERTY);
 });
 
-t.test('css: numbers with units in every shape', () => {
+void t.test('css: numbers with units in every shape', () => {
   const html = checkInvariants(
     css.hl,
     '.n { margin: 1.5rem 80% 10px 0 -2px +3vh .5s 1e2q; }'
@@ -241,7 +247,7 @@ t.test('css: numbers with units in every shape', () => {
   }
 });
 
-t.test('css: hex colors 3/4/6/8 digits', () => {
+void t.test('css: hex colors 3/4/6/8 digits', () => {
   const html = checkInvariants(
     css.hl,
     '.h { color: #f00; border-color: #f00a #ff0000 #ff000080; }'
@@ -255,7 +261,7 @@ t.test('css: hex colors 3/4/6/8 digits', () => {
   }
 });
 
-t.test('css: function values, var() and calc() nesting', () => {
+void t.test('css: function values, var() and calc() nesting', () => {
   const html = checkInvariants(
     css.hl,
     '.f { background: rgb(255 0 0) var(--main, #fff) calc((100% - 10px) / 3) translate(1px, 2%); }'
@@ -272,7 +278,7 @@ t.test('css: function values, var() and calc() nesting', () => {
   assert.equal(minus?.color, OPERATOR);
 });
 
-t.test('css: custom property declaration and use', () => {
+void t.test('css: custom property declaration and use', () => {
   const html = checkInvariants(
     css.hl,
     ':root { --main-color: #333; }\n.t { color: var(--main-color); }'
@@ -285,7 +291,7 @@ t.test('css: custom property declaration and use', () => {
   assert.ok(uses.every((s) => s.color === VARIABLE));
 });
 
-t.test('css: url() quoted and unquoted', () => {
+void t.test('css: url() quoted and unquoted', () => {
   const html = checkInvariants(
     css.hl,
     '.u { background-image: url("a b.png"), url(images/bg.png), url( spaced.png ); }'
@@ -300,7 +306,7 @@ t.test('css: url() quoted and unquoted', () => {
   assert.equal(colorOf(html, 'spaced.png'), CONST);
 });
 
-t.test(
+void t.test(
   'css: url() with a data: uri keeps the ; and , inside one url token',
   () => {
     const body = 'data:image/png;base64,iVBORw0KGgo+AAA==';
@@ -315,7 +321,7 @@ t.test(
   }
 );
 
-t.test('css: !important', () => {
+void t.test('css: !important', () => {
   const html = checkInvariants(
     css.hl,
     '.i { z-index: 10 !important; top: 0 ! important }'
@@ -326,7 +332,7 @@ t.test('css: !important', () => {
   assert.equal(bang?.color, OPERATOR); // detached bang stays an operator
 });
 
-t.test('css: strings both quotes with escapes', () => {
+void t.test('css: strings both quotes with escapes', () => {
   const html = checkInvariants(
     css.hl,
     String.raw`.q { content: "a\"b\2014 c" 'it\'s'; }`
@@ -339,7 +345,7 @@ t.test('css: strings both quotes with escapes', () => {
   assert.ok(spans.some((s) => s.color === STRING && s.text.includes('it')));
 });
 
-t.test(
+void t.test(
   'css: escaped multibyte UTF-8 characters stay whole inside the escape span',
   () => {
     const html = checkInvariants(css.hl, ".q { content: 'a\\éx\\—b'; }");
@@ -350,13 +356,13 @@ t.test(
   }
 );
 
-t.test('css: unterminated string stops at the line break', () => {
+void t.test('css: unterminated string stops at the line break', () => {
   const html = checkInvariants(css.hl, ".q { content: 'abc\ndef; }");
   assert.equal(colorOf(html, "'abc"), STRING);
   assert.equal(colorOf(html, 'def'), CONST); // reparsed as a value ident
 });
 
-t.test('css: font shorthand slash and 12px/1.5', () => {
+void t.test('css: font shorthand slash and 12px/1.5', () => {
   const html = checkInvariants(
     css.hl,
     '.s { font: 12px/1.5 "Fira Sans", sans-serif; }'
@@ -367,7 +373,7 @@ t.test('css: font shorthand slash and 12px/1.5', () => {
   assert.equal(colorOf(html, 'sans-serif'), CONST);
 });
 
-t.test('css: comments everywhere', () => {
+void t.test('css: comments everywhere', () => {
   const html = checkInvariants(
     css.hl,
     '/* top */ .x /* mid-selector */ { color /* in-prop */ : /* pre-value */ red; /* tail */ }'
@@ -386,21 +392,21 @@ t.test('css: comments everywhere', () => {
   assert.equal(colorOf(html, 'red'), CONST);
 });
 
-t.test('css: comment lookahead does not cross $end', () => {
+void t.test('css: comment lookahead does not cross $end', () => {
   const prefix = 'x/';
   const ranged = loadLang('css', '$hlCss', prefix.length);
   const html = checkInvariants(ranged.hl, prefix + '*y');
   assert.equal(colorOf(html, '/'), colorOf(css.hl(prefix), '/'));
 });
 
-t.test('css: custom-property lookahead does not cross $end', () => {
+void t.test('css: custom-property lookahead does not cross $end', () => {
   const prefix = 'x:-';
   const ranged = loadLang('css', '$hlCss', prefix.length);
   const html = checkInvariants(ranged.hl, prefix + '-y');
   assert.equal(colorOf(html, '-'), colorOf(css.hl(prefix), '-'));
 });
 
-t.test('css: numeric lookahead does not cross $end', () => {
+void t.test('css: numeric lookahead does not cross $end', () => {
   const prefix = 'x:+.';
   const ranged = loadLang('css', '$hlCss', prefix.length);
   const html = checkInvariants(ranged.hl, prefix + '1');
@@ -409,7 +415,7 @@ t.test('css: numeric lookahead does not cross $end', () => {
   assert.equal(colorOf(html, '.'), colorOf(standalone, '.'));
 });
 
-t.test('css: pseudo functions and nth arguments', () => {
+void t.test('css: pseudo functions and nth arguments', () => {
   const html = checkInvariants(css.hl, 'li:nth-child(2n+1):not(.done) {}');
   assert.equal(colorOf(html, ':nth-child'), OPERATOR);
   assert.equal(colorOf(html, '2n'), VALUE);
@@ -418,13 +424,13 @@ t.test('css: pseudo functions and nth arguments', () => {
   assert.equal(colorOf(html, '.done'), ATTRIBUTE);
 });
 
-t.test('css: html-special bytes are escaped', () => {
+void t.test('css: html-special bytes are escaped', () => {
   const html = checkInvariants(css.hl, 'a > b { content: "<&>"; }');
   assert.ok(bodyOf(html).includes('&lt;&amp;&gt;'));
   assert.ok(bodyOf(html).includes('&gt;')); // the combinator
 });
 
-t.test('css: adjacent same-color tokens merge into one span', () => {
+void t.test('css: adjacent same-color tokens merge into one span', () => {
   const html = css.hl('div span');
   assert.equal(spansOf(html).length, 1);
   assert.equal(spansOf(html)[0].text, 'div span');
@@ -437,14 +443,14 @@ t.test('css: adjacent same-color tokens merge into one span', () => {
   assert.equal(spansOf(ids)[0].text, '#a #b');
 });
 
-t.test('css: non-ascii bytes are identifier characters', () => {
+void t.test('css: non-ascii bytes are identifier characters', () => {
   const html = checkInvariants(css.hl, '.clàss { còlor: rèd; }');
   assert.equal(colorOf(html, '.clàss'), ATTRIBUTE);
   assert.equal(colorOf(html, 'còlor'), PROPERTY);
   assert.equal(colorOf(html, 'rèd'), CONST);
 });
 
-t.test('css: lenient on malformed input, still lossless', () => {
+void t.test('css: lenient on malformed input, still lossless', () => {
   for (const src of [
     '{',
     '}',
@@ -504,7 +510,7 @@ t.test('css: lenient on malformed input, still lossless', () => {
   }
 });
 
-t.test('css: large realistic stylesheet (SIMD paths)', () => {
+void t.test('css: large realistic stylesheet (SIMD paths)', () => {
   const rules = [];
   rules.push(`/* ${'long comment '.repeat(200)} */`);
   for (let i = 0; i < 120; i++) {
@@ -530,7 +536,7 @@ t.test('css: large realistic stylesheet (SIMD paths)', () => {
   assert.equal(colorOf(html, '--gap-0'), VARIABLE);
 });
 
-t.test('css: unthemed types produce no span', () => {
+void t.test('css: unthemed types produce no span', () => {
   const theme = {
     name: 'min',
     appearance: 'dark',

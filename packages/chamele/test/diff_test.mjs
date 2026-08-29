@@ -41,7 +41,7 @@ const theme = {
   },
 };
 
-t.test('diff: Zed capture boundaries for git headers and hunks', () => {
+void t.test('diff: Zed capture boundaries for git headers and hunks', () => {
   const src = `diff --git a/src/config.js b/src/config.js
 index 1a2b3c4..5d6e7f8 100644
 --- a/src/config.js
@@ -78,7 +78,7 @@ index 1a2b3c4..5d6e7f8 100644
   ]);
 });
 
-t.test('diff: marker-like content is classified by line start', () => {
+void t.test('diff: marker-like content is classified by line start', () => {
   const html = checkInvariants(
     diff.hl,
     '+a\n- b\n++++content\n----content\n context + and -\n',
@@ -107,7 +107,7 @@ t.test('diff: marker-like content is classified by line start', () => {
   );
 });
 
-t.test('diff: metadata and comments follow Zed captures', () => {
+void t.test('diff: metadata and comments follow Zed captures', () => {
   const src = `# generated patch
 new file mode 100644
 deleted file mode 100755
@@ -133,7 +133,7 @@ similarity index 88%
   assert.ok(has('88%', colors.number));
 });
 
-t.test('diff: malformed and bounded ranges stay lossless', () => {
+void t.test('diff: malformed and bounded ranges stay lossless', () => {
   for (const src of ['', '+', '-', '@@', 'é\n+日', '\r\n+++', 'diff --git']) {
     checkInvariants(diff.hl, src);
   }

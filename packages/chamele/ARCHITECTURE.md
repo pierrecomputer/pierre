@@ -1,13 +1,19 @@
 # Architecture
 
 chamele highlights code in one pass over WebAssembly linear memory. A
-hand-written WAT lexer walks the input and streams `<span style="color:#...">`
-fragments to the output. The lexer builds no AST, token array, or string
-objects.
+hand-written WAT lexer walks the input and streams either
+`<span style="color:#...">` fragments or binary token records to the output. The
+lexer builds no AST, token array, or string objects.
 
 ```text
 UTF-8 input -> selected `$hl*` lexer -> emitter (emit.wat) -> HTML bytes
+                                                           -> token records
 ```
+
+Mode 0 emits inline-color HTML, mode 1 CSS-variable HTML, and mode 2 token
+records. JavaScript splits the records at newlines, converts UTF-8 byte offsets
+to UTF-16 indexes, and builds Shiki-compatible tokens and HAST for
+`codeToTokens`, `codeToHast`, `TokenizeStream`, and `LiveTokenizer`.
 
 ## Project structure
 
@@ -15,11 +21,13 @@ UTF-8 input -> selected `$hl*` lexer -> emitter (emit.wat) -> HTML bytes
 src/memory.wat      named addresses for static data and scratch memory
 src/token.wat       $Token enum, CSS-variable table, and theme-record access
 src/scan.wat        read cursors ($ptr/$end/$eof) and SIMD scans
-src/emit.wat        HTML emitter and driver prologue/epilogue
+src/emit.wat        HTML/token-record emitter and driver prologue/epilogue
 src/common.wat      shared ASCII, identifier, number, string, and comment scans
 src/langs/*.wat     29 built-in lexers; aliases share a language id
 src/chamele.wat     memory, $Language enum, imports, and dispatch
-lib/index.mjs       Highlighter, codeToHtml, language aliases, and theme cache
+lib/index.mjs       Highlighter, codeToHtml/codeToTokens/codeToHast, language
+                    aliases, theme cache, TokenizeStream, LiveTokenizer
+lib/tokens.mjs      token records -> shiki-compatible tokens and hast
 lib/theme.mjs       Zed theme -> binary table compiler
 lib/token-types.mjs generated, tracked $Token ABI
 themes/             bundled, pruned Zed theme objects
@@ -124,6 +132,11 @@ output and the open span.
   escapes `& < >`, and merges spans. Empty ranges do nothing.
 - `$emitGap(lhs, rhs)` emits whitespace without changing the span, letting equal
   styles merge across gaps.
+- In token-record mode both write `(end: u32, hl: u32)` records instead
+  (`$recTok`): a record's start is the previous record's end, so the records
+  tile the input; same-`hl` neighbors and gaps extend the previous record, the
+  analog of span merging. Offsets are relative to the input start, and the JS
+  glue resolves colors, so no theme table is written.
 - `$scanToLineEnd`, `$scanBlockCommentEnd`, and `$scanHexRun` provide bounded
   comment and hexadecimal scans.
 - `$scanFindSpecial`, `$scanWhitespace`, `$scanIdentRun`, and `$utf8SpanEnd`

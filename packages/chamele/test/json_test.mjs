@@ -1,6 +1,5 @@
 import assert from 'node:assert';
 import t from 'node:test';
-import { runInNewContext } from 'node:vm';
 
 import {
   bodyOf,
@@ -29,39 +28,42 @@ const CONST = themeColor('constant.builtin'); // -> constant
 const ESC = themeColor('string.escape');
 const COMMENT = themeColor('comment');
 
-t.test('json: wrapper carries the theme background and foreground', () => {
+void t.test('json: wrapper carries the theme background and foreground', () => {
   const html = json.hl('1');
   assert.ok(
     html.startsWith(
       `<pre class="chamele" style="background-color:${BG};color:${FG}"><code>`
-    )
+    ) === true
   );
   assert.match(html, /<\/code><\/pre>$/);
 });
 
-t.test('json: empty input', () => {
+void t.test('json: empty input', () => {
   assert.equal(
     json.hl(''),
     `<pre class="chamele" style="background-color:${BG};color:${FG}"><code></code></pre>`
   );
 });
 
-t.test('json: accepts byte inputs and rejects unsupported input types', () => {
-  const bytes = Uint8Array.of(91, 49, 93); // [1]
-  assert.equal(textOf(json.hl(bytes)), '[1]');
-  assert.equal(textOf(json.hl(bytes.buffer)), '[1]');
-  for (const input of [null, undefined, 1, {}, [], new Uint16Array(1)]) {
-    assert.throws(() => json.hl(input), TypeError);
+void t.test(
+  'json: accepts byte inputs and rejects unsupported input types',
+  () => {
+    const bytes = Uint8Array.of(91, 49, 93); // [1]
+    assert.equal(textOf(json.hl(bytes)), '[1]');
+    assert.equal(textOf(json.hl(bytes.buffer)), '[1]');
+    for (const input of [null, undefined, 1, {}, [], new Uint16Array(1)]) {
+      assert.throws(() => json.hl(input), TypeError);
+    }
   }
-});
+);
 
-t.test('json: object keys are property, values are string', () => {
+void t.test('json: object keys are property, values are string', () => {
   const html = checkInvariants(json.hl, '{"key": "value"}');
   assert.equal(colorOf(html, '"key"'), KEY);
   assert.equal(colorOf(html, '"value"'), STR);
 });
 
-t.test('json: literals', () => {
+void t.test('json: literals', () => {
   const html = checkInvariants(json.hl, '[1, -2.5e3, true, false, null]');
   assert.equal(colorOf(html, '1'), NUM);
   assert.equal(colorOf(html, '-2.5e3'), NUM);
@@ -69,7 +71,7 @@ t.test('json: literals', () => {
   assert.equal(colorOf(html, 'null'), CONST);
 });
 
-t.test('json: nested containers key context', () => {
+void t.test('json: nested containers key context', () => {
   const html = checkInvariants(
     json.hl,
     '{"a": [ {"b": 1}, "s" ], "c": {"d": [2]}}'
@@ -81,18 +83,18 @@ t.test('json: nested containers key context', () => {
   assert.equal(spans.find((s) => s.text.trim() === '"s"')?.color, STR);
 });
 
-t.test('json: top-level and array strings are not keys', () => {
+void t.test('json: top-level and array strings are not keys', () => {
   assert.equal(colorOf(checkInvariants(json.hl, '"top"'), '"top"'), STR);
   assert.equal(colorOf(checkInvariants(json.hl, '["a", "b"]'), '"a"'), STR);
 });
 
-t.test('json: escapes get string.escape spans inside strings', () => {
+void t.test('json: escapes get string.escape spans inside strings', () => {
   const html = checkInvariants(json.hl, '{"a": "x\\n\\u0041y"}');
   assert.equal(colorOf(html, '\\n'), ESC);
   assert.equal(colorOf(html, '\\u0041'), ESC);
 });
 
-t.test('json: a short \\u escape never swallows the closing quote', () => {
+void t.test('json: a short \\u escape never swallows the closing quote', () => {
   const html = checkInvariants(json.hl, '{"a":"\\u12","b":2}');
   const spans = spansOf(html);
   assert.equal(spans.find((s) => s.text.trim() === '\\u12')?.color, ESC);
@@ -101,7 +103,7 @@ t.test('json: a short \\u escape never swallows the closing quote', () => {
   assert.equal(spans.find((s) => s.text.trim() === '2')?.color, NUM);
 });
 
-t.test('json: escape spans never split a UTF-8 code point', () => {
+void t.test('json: escape spans never split a UTF-8 code point', () => {
   // a backslash directly before a multi-byte char: the whole char must stay
   // inside the escape span or the output is no longer valid UTF-8
   for (const src of ['"a\\éb"', '"\\日本語"', '"\\u12é"', '"x\\']) {
@@ -109,7 +111,7 @@ t.test('json: escape spans never split a UTF-8 code point', () => {
   }
 });
 
-t.test('json: html-special bytes are escaped', () => {
+void t.test('json: html-special bytes are escaped', () => {
   const html = checkInvariants(json.hl, '{"<&>": "a<b>&c"}');
   assert.ok(bodyOf(html).includes('&lt;&amp;&gt;'));
   // stripping the span tags and known entities must leave no raw special byte
@@ -119,7 +121,7 @@ t.test('json: html-special bytes are escaped', () => {
   assert.ok(!/[<>&]/.test(leftover), `raw special byte leaked: ${leftover}`);
 });
 
-t.test('json: JSONC comments', () => {
+void t.test('json: JSONC comments', () => {
   const html = checkInvariants(
     json.hl,
     '{\n  // line\n  "a": 1 /* block\n  more */\n}'
@@ -128,20 +130,20 @@ t.test('json: JSONC comments', () => {
   assert.equal(colorOf(html, '/* block'), COMMENT);
 });
 
-t.test('json: comment lookahead does not cross $end', () => {
+void t.test('json: comment lookahead does not cross $end', () => {
   const prefix = 'a/';
   const ranged = loadLang('json', '$hlJson', prefix.length);
   const html = checkInvariants(ranged.hl, prefix + '/b');
   assert.equal(colorOf(html, '/'), colorOf(json.hl(prefix), '/'));
 });
 
-t.test('json: adjacent same-color tokens merge into one span', () => {
+void t.test('json: adjacent same-color tokens merge into one span', () => {
   const html = json.hl('[[]]');
   assert.equal(spansOf(html).length, 1);
   assert.equal(spansOf(html)[0].text, '[[]]');
 });
 
-t.test('json: lenient on malformed input, still lossless', () => {
+void t.test('json: lenient on malformed input, still lossless', () => {
   for (const src of [
     '{',
     '}',
@@ -163,7 +165,7 @@ t.test('json: lenient on malformed input, still lossless', () => {
   }
 });
 
-t.test('json: large input with long clean runs (SIMD paths)', () => {
+void t.test('json: large input with long clean runs (SIMD paths)', () => {
   const big = JSON.stringify(
     {
       data: Array.from({ length: 200 }, (_, i) => ({
@@ -179,7 +181,7 @@ t.test('json: large input with long clean runs (SIMD paths)', () => {
   assert.ok(html.length > big.length);
 });
 
-t.test('json: unthemed types produce no span', () => {
+void t.test('json: unthemed types produce no span', () => {
   const theme = {
     name: 'min',
     appearance: 'dark',
@@ -199,7 +201,7 @@ t.test('json: unthemed types produce no span', () => {
   assert.equal(spansOf(html)[0].color, '#00ff00');
 });
 
-t.test('json: Zed-style theme objects with {color} values work', () => {
+void t.test('json: Zed-style theme objects with {color} values work', () => {
   const theme = {
     name: 'obj',
     appearance: 'dark',
@@ -212,7 +214,7 @@ t.test('json: Zed-style theme objects with {color} values work', () => {
   assert.equal(colorOf(json.hl('["x"]', { theme }), '"x"'), '#123456');
 });
 
-t.test(
+void t.test(
   'json: colors normalize to lowercase hex, alpha kept only when not opaque',
   () => {
     const theme = {
@@ -234,7 +236,7 @@ t.test(
   }
 );
 
-t.test(
+void t.test(
   'json: font_style/font_weight emit font attributes and split merging',
   () => {
     const theme = {
@@ -267,7 +269,7 @@ t.test(
   }
 );
 
-t.test('json: theme fallback walks capture-name dots', () => {
+void t.test('json: theme fallback walks capture-name dots', () => {
   const theme = {
     name: 'fb',
     appearance: 'dark',
@@ -282,7 +284,7 @@ t.test('json: theme fallback walks capture-name dots', () => {
   assert.equal(colorOf(html, 'null'), '#ff0000'); // constant.builtin -> constant
 });
 
-t.test('json: a raw Zed theme-family file works unconverted', () => {
+void t.test('json: a raw Zed theme-family file works unconverted', () => {
   // the shape a Zed extension ships: family wrapper, `text` +
   // `editor.background` style keys, {color} syntax values
   const family = {

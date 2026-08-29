@@ -16,7 +16,7 @@ const TYPE = themeColor('type.builtin');
 const CONST = themeColor('constant.builtin');
 const OPERATOR = themeColor('operator');
 
-t.test('sql: queries, operators, functions, and literals', () => {
+void t.test('sql: queries, operators, functions, and literals', () => {
   const src =
     "SELECT count(*) FROM users WHERE id = 42 AND name LIKE 'A%'; -- tail";
   const html = checkInvariants(sql.hl, src);
@@ -28,7 +28,7 @@ t.test('sql: queries, operators, functions, and literals', () => {
   assert.equal(colorOf(html, '-- tail'), COMMENT);
 });
 
-t.test('sql: DDL, built-in types, null, and parameters', () => {
+void t.test('sql: DDL, built-in types, null, and parameters', () => {
   const src =
     'CREATE TABLE t (id INTEGER PRIMARY KEY, name TEXT DEFAULT null); SELECT * FROM t WHERE id = $1;';
   const html = checkInvariants(sql.hl, src);
@@ -38,7 +38,7 @@ t.test('sql: DDL, built-in types, null, and parameters', () => {
   assert.equal(colorOf(html, 'null'), CONST);
 });
 
-t.test('sql: quoted and dollar strings', () => {
+void t.test('sql: quoted and dollar strings', () => {
   const html = checkInvariants(
     sql.hl,
     "SELECT \"name\", `other`, $$line\ntext$$, $body$a $ b$body$, 'it''s';"
@@ -47,14 +47,14 @@ t.test('sql: quoted and dollar strings', () => {
   assert.equal(colorOf(html, '$body$a $ b$body$'), STRING);
 });
 
-t.test('sql: operators and leading-dot numbers', () => {
+void t.test('sql: operators and leading-dot numbers', () => {
   const html = checkInvariants(sql.hl, 'SELECT a * b & c ^ d | e, .5;');
   for (const op of ['*', '&', '^', '|'])
     assert.equal(colorOf(html, op), OPERATOR);
   assert.equal(colorOf(html, '.5'), NUMBER);
 });
 
-t.test('sql: malformed and split ranges stay lossless', () => {
+void t.test('sql: malformed and split ranges stay lossless', () => {
   for (const src of [
     '',
     "'",

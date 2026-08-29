@@ -12,7 +12,7 @@ const VARIABLE = themeColor('variable');
 const KEYWORD = themeColor('keyword');
 const PROPERTY = themeColor('property');
 
-t.test('svelte: expressions, blocks, and element directives', () => {
+void t.test('svelte: expressions, blocks, and element directives', () => {
   const src =
     '{#if ready}<button on:click={save}>{label}</button>{:else}{@html fallback}{/if}';
   const out = checkInvariants(svelte.hl, src);
@@ -23,7 +23,7 @@ t.test('svelte: expressions, blocks, and element directives', () => {
   assert.equal(colorOf(out, 'fallback'), VARIABLE);
 });
 
-t.test('svelte: script and style bodies stay embedded', () => {
+void t.test('svelte: script and style bodies stay embedded', () => {
   const out = checkInvariants(
     svelte.hl,
     '<script>let ready = true;</script><style>.x { color: red }</style>{afterReady}'
@@ -33,7 +33,7 @@ t.test('svelte: script and style bodies stay embedded', () => {
   assert.equal(colorOf(out, 'afterReady'), VARIABLE);
 });
 
-t.test(
+void t.test(
   'svelte: comments are opaque; malformed and split ranges are bounded',
   () => {
     checkInvariants(svelte.hl, '<!-- {notAnExpression} --><p>{value}</p>');

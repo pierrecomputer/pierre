@@ -13,7 +13,7 @@ import {
 let zig;
 t.before(() => (zig = loadLang('zig', '$hlZig')));
 
-t.test('zig: declarations, control flow, types, and values', () => {
+void t.test('zig: declarations, control flow, types, and values', () => {
   const src = `const std = @import("std");
 const Point = struct { x: i32, y: i32 };
 pub fn add(a: Point, b: Point) u32 {
@@ -30,7 +30,7 @@ pub fn add(a: Point, b: Point) u32 {
   assert.equal(colorOf(html, 'null'), themeColor('constant.builtin'));
 });
 
-t.test(
+void t.test(
   'zig: the keyword hash covers language words and primitive types',
   () => {
     const theme = {
@@ -167,7 +167,7 @@ t.test(
   }
 );
 
-t.test(
+void t.test(
   'zig: calls, members, fields, constants, labels, and quoted identifiers',
   () => {
     const src = `const Thing = struct { field: u8 };
@@ -189,7 +189,7 @@ fn @"quoted name"() void {
   }
 );
 
-t.test('zig: contextual state follows labels and function types', () => {
+void t.test('zig: contextual state follows labels and function types', () => {
   const theme = {
     name: 'zig-context',
     appearance: 'dark',
@@ -224,8 +224,10 @@ fn run(value: u8) void {
   assert.equal(colorOf(html, '@"quoted type"'), '#440004');
 });
 
-t.test('zig: comments, builtins, strings, chars, and multiline strings', () => {
-  const src = String.raw`// plain
+void t.test(
+  'zig: comments, builtins, strings, chars, and multiline strings',
+  () => {
+    const src = String.raw`// plain
 /// declaration docs
 //! container docs
 //// plain four-slash comment
@@ -236,36 +238,37 @@ const d = "\u{1f600}\t";
 const raw = \\first line
   \\second line
 `;
-  const theme = {
-    name: 'zig-comments',
-    appearance: 'dark',
-    style: {
-      syntax: {
-        comment: '#110001',
-        'comment.doc': '#220002',
-        'keyword.import': '#330003',
-        function: '#440004',
-        string: '#550005',
-        'string.escape': '#660006',
+    const theme = {
+      name: 'zig-comments',
+      appearance: 'dark',
+      style: {
+        syntax: {
+          comment: '#110001',
+          'comment.doc': '#220002',
+          'keyword.import': '#330003',
+          function: '#440004',
+          string: '#550005',
+          'string.escape': '#660006',
+        },
       },
-    },
-  };
-  const html = checkInvariants(zig.hl, src, { theme });
-  assert.equal(colorOf(html, '// plain'), '#110001');
-  assert.equal(colorOf(html, '/// declaration docs'), '#220002');
-  assert.equal(colorOf(html, '//! container docs'), '#220002');
-  assert.equal(colorOf(html, '//// plain four-slash comment'), '#110001');
-  assert.equal(colorOf(html, '@import'), '#330003');
-  assert.equal(colorOf(html, '@cImport'), '#330003');
-  assert.equal(colorOf(html, '@as'), '#440004');
-  assert.equal(colorOf(html, String.raw`\n`), '#660006');
-  assert.equal(colorOf(html, String.raw`\x41`), '#660006');
-  assert.equal(colorOf(html, String.raw`\u{1f600}`), '#660006');
-  assert.equal(colorOf(html, String.raw`\t`), '#660006');
-  assert.equal(colorOf(html, String.raw`\\first line`), '#550005');
-});
+    };
+    const html = checkInvariants(zig.hl, src, { theme });
+    assert.equal(colorOf(html, '// plain'), '#110001');
+    assert.equal(colorOf(html, '/// declaration docs'), '#220002');
+    assert.equal(colorOf(html, '//! container docs'), '#220002');
+    assert.equal(colorOf(html, '//// plain four-slash comment'), '#110001');
+    assert.equal(colorOf(html, '@import'), '#330003');
+    assert.equal(colorOf(html, '@cImport'), '#330003');
+    assert.equal(colorOf(html, '@as'), '#440004');
+    assert.equal(colorOf(html, String.raw`\n`), '#660006');
+    assert.equal(colorOf(html, String.raw`\x41`), '#660006');
+    assert.equal(colorOf(html, String.raw`\u{1f600}`), '#660006');
+    assert.equal(colorOf(html, String.raw`\t`), '#660006');
+    assert.equal(colorOf(html, String.raw`\\first line`), '#550005');
+  }
+);
 
-t.test('zig: identifiers follow the ASCII grammar', () => {
+void t.test('zig: identifiers follow the ASCII grammar', () => {
   const theme = {
     name: 'zig-identifiers',
     appearance: 'dark',
@@ -298,7 +301,7 @@ t.test('zig: identifiers follow the ASCII grammar', () => {
   );
 });
 
-t.test('zig: numbers, operators, delimiters, and punctuation', () => {
+void t.test('zig: numbers, operators, delimiters, and punctuation', () => {
   const src =
     '0xff 0b10_10 0o7_5 1_000 1.25e-3 0x1.fp+3 0x1p-2; a +%= b; x.?; p.*; 0..9; f(...) => T; A -> B; q +-> R; z !==> Q';
   const html = checkInvariants(zig.hl, src);
@@ -405,35 +408,38 @@ t.test('zig: numbers, operators, delimiters, and punctuation', () => {
   );
 });
 
-t.test('zig: payload bars are brackets and arrow lookahead is bounded', () => {
-  const theme = {
-    name: 'zig-payloads',
-    appearance: 'dark',
-    style: {
-      syntax: {
-        operator: '#110001',
-        'punctuation.bracket': '#220002',
-        'punctuation.delimiter': '#330003',
+void t.test(
+  'zig: payload bars are brackets and arrow lookahead is bounded',
+  () => {
+    const theme = {
+      name: 'zig-payloads',
+      appearance: 'dark',
+      style: {
+        syntax: {
+          operator: '#110001',
+          'punctuation.bracket': '#220002',
+          'punctuation.delimiter': '#330003',
+        },
       },
-    },
-  };
-  const src =
-    'if (opt) |value| value else |err| err; for (items) |*item, index| item.*; value catch |e| e; errdefer |deferred| {}; switch (tag) { 1 => |v| v }; if (if (inner) |x| x else null) |outer| outer; const bits = (a) | b;';
-  const bars = spansOf(checkInvariants(zig.hl, src, { theme }));
-  const countBars = (color) =>
-    bars
-      .filter((span) => span.color === color)
-      .reduce((n, span) => n + (span.text.match(/\|/g)?.length ?? 0), 0);
-  assert.equal(countBars('#220002'), 16);
-  assert.equal(countBars('#110001'), 1);
+    };
+    const src =
+      'if (opt) |value| value else |err| err; for (items) |*item, index| item.*; value catch |e| e; errdefer |deferred| {}; switch (tag) { 1 => |v| v }; if (if (inner) |x| x else null) |outer| outer; const bits = (a) | b;';
+    const bars = spansOf(checkInvariants(zig.hl, src, { theme }));
+    const countBars = (color) =>
+      bars
+        .filter((span) => span.color === color)
+        .reduce((n, span) => n + (span.text.match(/\|/g)?.length ?? 0), 0);
+    assert.equal(countBars('#220002'), 16);
+    assert.equal(countBars('#110001'), 1);
 
-  const split = checkInvariants(loadLang('zig', '$hlZig', 1).hl, '=>', {
-    theme,
-  });
-  assert.equal(colorOf(split, '='), '#110001');
-});
+    const split = checkInvariants(loadLang('zig', '$hlZig', 1).hl, '=>', {
+      theme,
+    });
+    assert.equal(colorOf(split, '='), '#110001');
+  }
+);
 
-t.test('zig: numeric tokens stop at grammar boundaries', () => {
+void t.test('zig: numeric tokens stop at grammar boundaries', () => {
   const theme = {
     name: 'zig-number-boundaries',
     appearance: 'dark',
@@ -469,32 +475,35 @@ t.test('zig: numeric tokens stop at grammar boundaries', () => {
   assert.ok(!slash.some((span) => span.color === '#660006'));
 });
 
-t.test('zig: malformed constructs and every byte split stay lossless', () => {
-  for (const src of [
-    '',
-    '/',
-    '//',
-    '"unterminated',
-    "'\\x",
-    '@"unterminated',
-    '@',
-    '\\',
-    '\\\\unterminated',
-    '0x_',
-    'é = 日本語',
-  ])
-    checkInvariants(zig.hl, src);
+void t.test(
+  'zig: malformed constructs and every byte split stay lossless',
+  () => {
+    for (const src of [
+      '',
+      '/',
+      '//',
+      '"unterminated',
+      "'\\x",
+      '@"unterminated',
+      '@',
+      '\\',
+      '\\\\unterminated',
+      '0x_',
+      'é = 日本語',
+    ])
+      checkInvariants(zig.hl, src);
 
-  const src = String.raw`fn @"name"(x: u37) void { // docs
+    const src = String.raw`fn @"name"(x: u37) void { // docs
     const s = "a\n😀"; obj.call(...); \\raw
   }`;
-  const size = new TextEncoder().encode(src).length;
-  for (let split = 0; split <= size; split++) {
-    checkInvariants(loadLang('zig', '$hlZig', split).hl, src);
+    const size = new TextEncoder().encode(src).length;
+    for (let split = 0; split <= size; split++) {
+      checkInvariants(loadLang('zig', '$hlZig', split).hl, src);
+    }
   }
-});
+);
 
-t.test(
+void t.test(
   'zig: malformed UTF-8 and deterministic fuzz preserve invariants',
   () => {
     const bytes = Uint8Array.of(0x40, 0x22, 0xf0, 0x28, 0x8c, 0x28, 0x22, 0xff);
@@ -506,7 +515,7 @@ t.test(
     const alphabet = 'abcXYZ09_@ /\\"\'\n\t{}[]().,:;+-*=!<>&|?é';
     for (let sample = 0; sample < 160; sample++) {
       let src = '';
-      for (let n = state & 63; n--; ) {
+      for (let n = state & 63; n-- !== 0; ) {
         state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
         src += alphabet[state % alphabet.length];
       }

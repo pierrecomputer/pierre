@@ -43,6 +43,8 @@ export type Lang =
   | 'mts'
   | 'patch'
   | 'php'
+  | 'plain'
+  | 'plaintext'
   | 'py'
   | 'python'
   | 'rs'
@@ -54,9 +56,11 @@ export type Lang =
   | 'svelte'
   | 'svg'
   | 'swift'
+  | 'text'
   | 'toml'
   | 'ts'
   | 'tsx'
+  | 'txt'
   | 'typescript'
   | 'vert'
   | 'vue'
@@ -70,9 +74,8 @@ export type Lang =
   | 'zsh';
 
 /**
- * Styling for a syntax scope in a Zed-compatible theme. The `& {}` widenings keep the
- * literal hints while accepting `string`/`number`, the types TypeScript infers for the
- * bundled JSON themes.
+ * Styling for a Zed syntax scope. The `& {}` unions keep literal suggestions
+ * while accepting the `string` and `number` types inferred from bundled themes.
  */
 export interface ThemeSyntaxSettings {
   color?: string;
@@ -122,24 +125,260 @@ export interface CodeToHtmlOptions {
   theme: Theme | ThemeFamily;
 }
 
+/**
+ * A Shiki-compatible styled run within one line. `offset` is the absolute
+ * UTF-16 index in the input.
+ */
+export interface ThemedToken {
+  content: string;
+  offset: number;
+  /** Six- or eight-digit hex color, or `var(--cha-*)` for CSS-variable themes. */
+  color?: string;
+  /** Background color. Chamele never emits it, but transformers may set it. */
+  bgColor?: string;
+  /**
+   * Shiki flags: italic 1, bold 2, underline 4, strikethrough 8.
+   * Chamele emits italic and bold; transformers can set the rest.
+   */
+  fontStyle?: number;
+  /** Custom-property styles for multi-theme output, keyed by `${cssVariablePrefix}${themeColor}`. */
+  htmlStyle?: Record<string, string>;
+  /** Extra attributes for the token's `<span>` (`htmlAttrs` in Shiki). */
+  htmlAttrs?: Record<string, string>;
+  /** Standard token type: 0 or omitted for other; 1 comment; 2 string; 3 regex. */
+  type?: number;
+}
+
+/** Options shared by every tokenization entry point. */
+export interface CodeToTokensBaseOptions {
+  lang: Lang;
+  /** Prefix for per-theme custom properties. Defaults to `--shiki-`. */
+  cssVariablePrefix?: string;
+  /** Only `false` has an effect: emit all theme colors as custom properties. */
+  defaultColor?: string | false;
+  /**
+   * Lines at or above this length become one unthemed token, matching Shiki's
+   * `tokenizeMaxLineLength` DOM-safety limit. `0` or undefined disables it.
+   */
+  tokenizeMaxLineLength?: number;
+}
+
+/**
+ * Choose exactly one: `theme` for one theme, or `themes` for named color
+ * schemes such as `{ dark, light }`. `themes` uses CSS custom properties.
+ */
+export type CodeToTokensOptions = CodeToTokensBaseOptions &
+  (
+    | { theme: Theme | ThemeFamily; themes?: undefined }
+    | { theme?: undefined; themes: Record<string, Theme | ThemeFamily> }
+  );
+
+/** Result of `codeToTokens`, matching Shiki's `TokensResult`. */
+export interface TokensResult {
+  tokens: ThemedToken[][];
+  fg?: string;
+  bg?: string;
+  themeName?: string;
+  rootStyle?: string;
+}
+
+/** Minimal structural HAST nodes compatible with the `hast` package types. */
+export interface HastText {
+  type: 'text';
+  value: string;
+}
+export interface HastElement {
+  type: 'element';
+  tagName: string;
+  properties: Record<string, string | number | boolean | (string | number)[]>;
+  children: (HastElement | HastText)[];
+}
+export interface HastRoot {
+  type: 'root';
+  children: HastElement[];
+}
+
+/**
+ * The transformer `this` context shared by every hook, including `preprocess`.
+ * Matches Shiki's `ShikiTransformerContextCommon`.
+ */
+export interface TransformerContextCommon {
+  readonly source: string;
+  readonly options: CodeToHastOptions;
+  /** Mutable per-call scratch data shared by every hook. */
+  meta: Record<string, unknown>;
+  codeToHast(input: string, options: CodeToHastOptions): HastRoot;
+  codeToTokens(input: string, options: CodeToTokensOptions): TokensResult;
+}
+
+/**
+ * The `this` context for tree hooks. It exposes live tree views and
+ * `addClassToHast`, matching Shiki's `ShikiTransformerContext`.
+ */
+export interface TransformerContext extends TransformerContextCommon {
+  readonly structure: 'classic';
+  readonly tokens: ThemedToken[][];
+  readonly root: HastRoot;
+  readonly pre: HastElement;
+  readonly code: HastElement;
+  readonly lines: HastElement[];
+  addClassToHast(node: HastElement, className: string | string[]): HastElement;
+}
+
+/**
+ * Shiki-style hooks for `codeToHast` may mutate or replace nodes. Hooks use a
+ * Shiki-compatible `this`; most transformers are structurally compatible.
+ * Chamele supports only the classic structure and omits `postprocess`.
+ */
+export interface Transformer {
+  name?: string;
+  preprocess?(
+    this: TransformerContextCommon,
+    code: string,
+    options: CodeToHastOptions
+  ): string | void;
+  tokens?(
+    this: TransformerContext,
+    lines: ThemedToken[][]
+  ): ThemedToken[][] | void;
+  span?(
+    this: TransformerContext,
+    node: HastElement,
+    line: number,
+    col: number,
+    lineElement: HastElement,
+    token: ThemedToken
+  ): HastElement | void;
+  line?(
+    this: TransformerContext,
+    node: HastElement,
+    line: number
+  ): HastElement | void;
+  code?(this: TransformerContext, node: HastElement): HastElement | void;
+  pre?(this: TransformerContext, node: HastElement): HastElement | void;
+  root?(this: TransformerContext, node: HastRoot): HastRoot | void;
+}
+
+/** A Shiki-style decoration that wraps a code range in an element. */
+export interface Decoration {
+  /** Absolute offset or 0-based line and character. */
+  start: number | { line: number; character: number };
+  end: number | { line: number; character: number };
+  tagName?: string;
+  properties?: Record<string, string | number | boolean>;
+}
+
+export type CodeToHastOptions = CodeToTokensOptions & {
+  transformers?: Transformer[];
+  decorations?: Decoration[];
+  /**
+   * Extra `<pre>` properties and initial transformer `meta`.
+   * Keys starting with `_` stay off `<pre>`, like Shiki's `meta` option.
+   */
+  meta?: Record<string, unknown>;
+};
+
 /** An initialized highlighter backed by one WebAssembly instance. */
 export interface Highlighter {
   codeToHtml(
     input: string | Uint8Array | ArrayBuffer,
     options: CodeToHtmlOptions
   ): Uint8Array;
+  codeToTokens(
+    input: string | Uint8Array | ArrayBuffer,
+    options: CodeToTokensOptions
+  ): TokensResult;
+  codeToHast(
+    input: string | Uint8Array | ArrayBuffer,
+    options: CodeToHastOptions
+  ): HastRoot;
 }
 
 /**
- * Initializes the shared highlighter from a compiled WebAssembly module.
+ * Initialize the shared highlighter from a compiled WebAssembly module.
  */
 export function init(wasmModule: WebAssembly.Module): Highlighter;
 
 /**
- * Highlights source code as a self-contained `<pre class="chamele">...</pre>` fragment
- * with inline colors.
+ * Create a highlighter with its own WebAssembly instance.
+ * The shared highlighter is unchanged.
+ */
+export function createHighlighter(wasmModule: WebAssembly.Module): Highlighter;
+
+/**
+ * Check whether a name or alias maps to a built-in lexer, including the
+ * `plain`/`text` passthrough.
+ */
+export function isSupportedLanguage(lang: string): lang is Lang;
+
+/**
+ * Highlight code as a self-contained `<pre class="chamele">` fragment with
+ * inline colors.
  */
 export function codeToHtml(
   input: string | Uint8Array | ArrayBuffer,
   options: CodeToHtmlOptions
 ): Uint8Array;
+
+/**
+ * Tokenize code into Shiki-compatible tokens, one array per line.
+ * WebAssembly lexes the code; JavaScript maps style records to tokens.
+ */
+export function codeToTokens(
+  input: string | Uint8Array | ArrayBuffer,
+  options: CodeToTokensOptions
+): TokensResult;
+
+/**
+ * Highlight code as a Shiki-compatible HAST tree (`root > pre > code`) with
+ * one `span.line` per line. Supports Shiki-style transformers and decorations.
+ */
+export function codeToHast(
+  input: string | Uint8Array | ArrayBuffer,
+  options: CodeToHastOptions
+): HastRoot;
+
+/**
+ * Tokenize streamed code for SSR with an isolated WebAssembly instance. Each
+ * pass retokenizes the accumulated input from the start to preserve context.
+ */
+export class TokenizeStream {
+  constructor(options: CodeToTokensOptions);
+  /**
+   * Append a chunk and return newly completed lines with absolute offsets.
+   * The incomplete final line stays buffered until a newline or `end()`.
+   */
+  pushCode(chunk: string): ThemedToken[][];
+  /** Finish the stream and return the remaining lines. */
+  end(): ThemedToken[][];
+}
+
+/**
+ * Retokenize a document for editors after line edits. Each tokenizer has an
+ * isolated WebAssembly instance. Line updates retokenize the whole document in
+ * one pass.
+ */
+export class LiveTokenizer {
+  constructor(options: CodeToTokensOptions & { code?: string });
+  /** Number of lines in the document. */
+  readonly lineCount: number;
+  /** Replace the whole document. */
+  reset(code: string): void;
+  /** Splice whole lines like `Array.prototype.splice`. */
+  spliceLines(
+    start: number,
+    deleteCount: number,
+    ...insertLines: string[]
+  ): void;
+  /**
+   * Update one line (`lineCount` appends) and return its tokens plus
+   * string/comment/regex ranges for bracket matching. Offsets are line-relative.
+   */
+  tokenizeLine(
+    lineIndex: number,
+    lineText: string
+  ): {
+    tokens: ThemedToken[];
+    bracketIgnoredRanges: [offsetStart: number, offsetEnd: number][];
+  };
+}

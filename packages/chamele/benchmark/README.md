@@ -1,10 +1,11 @@
 # Benchmark
 
 Throughput and installed size for Chamele, tree-sitter-highlight, Lezer and
-Shiki.
+Shiki, plus a focused `codeToTokens` comparison and phase breakdown.
 
 ```sh
-pnpm bench
+moonx chamele:bench
+moonx chamele:bench-tokens
 ```
 
 ## Results
@@ -28,6 +29,34 @@ pnpm bench
 > GB RAM (macOS arm64). Higher is better. Parentheses show speedup over Shiki.
 > Rows are sorted by Chamele byte-API throughput.
 
+## `codeToTokens`
+
+| Input                       |  Lines | Chamele | Throughput |   Shiki | Speedup |
+| --------------------------- | -----: | ------: | ---------: | ------: | ------: |
+| `tiny.ts.txt` (1 KB)        |     50 | 9.29 µs |   141 MB/s |  708 µs |   76.2× |
+| `small.ts.txt` (31 KB)      |    826 |  225 µs |   133 MB/s | 34.6 ms |    154× |
+| `large.ts.txt` (466 KB)     | 10,673 | 3.22 ms |   142 MB/s |  317 ms |   98.5× |
+| `unicode-lines.ts` (498 KB) | 10,001 | 4.04 ms |   128 MB/s |  495 ms |    123× |
+
+Chamele lexes and emits token runs in Wasm. In JavaScript, `splitRecordLines`
+converts UTF-8 record ends to UTF-16 indexes, splits at `\n`, removes `\r` from
+CRLF endings, and groups runs by line. ASCII uses direct byte-to-character
+offsets. A final pass slices token content and builds themed token objects.
+
+| Input              | UTF-8 encode | Wasm scan | JS line split | JS tokens | End-to-end | Split / E2E |
+| ------------------ | -----------: | --------: | ------------: | --------: | ---------: | ----------: |
+| `tiny.ts.txt`      |      0.54 µs |   3.00 µs |       2.25 µs |   2.88 µs |    9.29 µs |       24.4% |
+| `small.ts.txt`     |      10.5 µs |   75.8 µs |       59.0 µs |   71.3 µs |     225 µs |       26.6% |
+| `large.ts.txt`     |       154 µs |   1.05 ms |        850 µs |   1.03 ms |    3.22 ms |       26.4% |
+| `unicode-lines.ts` |       428 µs |    849 µs |       1.71 ms |    999 µs |    4.04 ms |       42.5% |
+
+> Measured on 2026-08-29 with Node.js 24.11.0 on a 14-core Apple M4 Pro with 48
+> GB RAM (macOS arm64). Values are the median across three full benchmark runs.
+> The phase timings are independent: the Wasm scan uses input already resident
+> in linear memory, while the split and token passes use precomputed input. The
+> Unicode case is 10,000 generated lines and exercises byte-to-UTF-16 offset
+> conversion.
+
 ## Installed size
 
 | tool                            |     size | contents                                        |
@@ -39,12 +68,13 @@ pnpm bench
 
 ## Method
 
-Each case warms up, then runs for up to 1.5 seconds or 2,000 iterations. Within
-each run, throughput uses the P50 (median) iteration time. Each reported
-throughput and speedup is then the P50 across three full runs. Fixtures are in
+Each case warms up, then runs for up to 1.5 seconds or 2,000 iterations. Results
+are the median of three per-run median times. Fixtures are in
 [`fixtures`](./fixtures).
 
 All contenders include HTML generation. `tree-sitter-highlight` 1.1.2 escapes
 HTML input but emits no token spans for it, so its HTML rows do less
 highlighting work. `Chamele, bytes` receives encoded bytes; regular Chamele
-includes string encoding and UTF-8 output decoding. Themes and markup vary.
+includes string encoding and UTF-8 output decoding. Themes and markup vary. The
+`codeToTokens` comparison instead includes each tool's complete token-array API,
+using Pierre Dark for Chamele and GitHub Dark for Shiki.
