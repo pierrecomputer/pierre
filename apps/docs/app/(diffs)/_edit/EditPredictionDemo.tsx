@@ -305,7 +305,7 @@ export function EditPredictionDemo({
           Reset
         </Button>
 
-        <div className="ml-auto flex basis-full items-center justify-end gap-3 md:basis-auto">
+        <div className="flex basis-full items-center justify-start gap-3 md:ml-auto md:basis-auto md:justify-end">
           {statusText !== null && (
             <span
               className="text-muted-foreground text-xs"
