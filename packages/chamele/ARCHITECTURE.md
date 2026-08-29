@@ -1,19 +1,22 @@
 # Architecture
 
-chamele highlights code in one pass over WebAssembly linear memory. A
-hand-written WAT lexer walks the input and streams either
-`<span style="color:#...">` fragments or binary token records to the output. The
-lexer builds no AST, token array, or string objects.
+chamele uses WebAssembly linear memory throughout highlighting. A hand-written
+WAT lexer walks the input and streams either `<span style="color:#...">`
+fragments or binary token records to the output. The lexer builds no AST, token
+array, or string objects.
 
 ```text
 UTF-8 input -> selected `$hl*` lexer -> emitter (emit.wat) -> HTML bytes
-                                                           -> token records
+                                                           -> byte-end token records
+                                                           -> UTF-16 line records
 ```
 
 Mode 0 emits inline-color HTML, mode 1 CSS-variable HTML, and mode 2 token
-records. JavaScript splits the records at newlines, converts UTF-8 byte offsets
-to UTF-16 indexes, and builds Shiki-compatible tokens and HAST for
-`codeToTokens`, `codeToHast`, `TokenizeStream`, and `LiveTokenizer`.
+records. Mode 3 runs the same lexer, then a Wasm post-pass converts its byte-end
+records to UTF-16 ends with newline markers. `codeToTokens` uses mode 3 and
+builds themed token objects directly from those records. `codeToHast`,
+`TokenizeStream`, and `LiveTokenizer` use mode 2; JavaScript splits those
+records at newlines and converts their byte offsets to UTF-16 indexes.
 
 ## Project structure
 
@@ -62,7 +65,7 @@ before preprocessing, so editor warnings are expected.
 ```
 [] page 1         (control, static data, and scratch)
   [0]             language id (u8)
-  [1]             CSS-variable mode (u8)
+  [1]             output mode (u8): HTML, CSS variables, byte records, or line records
   [2:6)           input length (u32 LE)
   [6:10)          output start (u32 LE)
   [10:14)         output length (u32 LE)
@@ -75,7 +78,7 @@ before preprocessing, so editor warnings are expected.
   [11968:65536)   free
 [] pages 2..N     (text buffer)
   [65536:EOF)     input, NUL sentinel, then at least 16 bytes of slack
-  [(EOF+47)&~15:) output HTML; $ensureCap grows memory
+  [(EOF+47)&~15:) output HTML or token records; $ensureCap grows memory
 ```
 
 Text buffer layout:
@@ -132,11 +135,17 @@ output and the open span.
   escapes `& < >`, and merges spans. Empty ranges do nothing.
 - `$emitGap(lhs, rhs)` emits whitespace without changing the span, letting equal
   styles merge across gaps.
-- In token-record mode both write `(end: u32, hl: u32)` records instead
-  (`$recTok`): a record's start is the previous record's end, so the records
-  tile the input; same-`hl` neighbors and gaps extend the previous record, the
-  analog of span merging. Offsets are relative to the input start, and the JS
-  glue resolves colors, so no theme table is written.
+- In mode 2 both write `(endByte: u32, hl: u32)` records instead (`$recTok`): a
+  record's start is the previous record's end, so the records tile the input;
+  same-`hl` neighbors and gaps extend the previous record, the analog of span
+  merging. Offsets are relative to the input start, and the JS glue resolves
+  colors, so no theme table is written.
+- Mode 3 first emits the same byte records to preserve lexer emission order. At
+  `$hlEnd`, a post-pass scans the covered input once and emits
+  `(endUtf16: u32, hl: u32)` records. Token id `0xffffffff` marks a line ending
+  and includes its LF or CRLF terminator. JavaScript can then build each line's
+  tokens without byte conversion, substring searches, or intermediate run
+  tuples.
 - `$scanToLineEnd`, `$scanBlockCommentEnd`, and `$scanHexRun` provide bounded
   comment and hexadecimal scans.
 - `$scanFindSpecial`, `$scanWhitespace`, `$scanIdentRun`, and `$utf8SpanEnd`

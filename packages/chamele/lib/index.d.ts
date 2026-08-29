@@ -322,7 +322,7 @@ export function codeToHtml(
 
 /**
  * Tokenize code into Shiki-compatible tokens, one array per line.
- * WebAssembly lexes the code; JavaScript maps style records to tokens.
+ * WebAssembly lexes and splits lines; JavaScript maps style records to tokens.
  */
 export function codeToTokens(
   input: string | Uint8Array | ArrayBuffer,

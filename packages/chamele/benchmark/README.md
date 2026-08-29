@@ -8,7 +8,7 @@ moonx chamele:bench
 moonx chamele:bench-tokens
 ```
 
-## Results
+## Results(`codeToHtml`)
 
 | Input                      |        Chamele, bytes |           Chamele | tree-sitter-highlight |                Shiki |
 | -------------------------- | --------------------: | ----------------: | --------------------: | -------------------: |
@@ -29,30 +29,35 @@ moonx chamele:bench-tokens
 > GB RAM (macOS arm64). Higher is better. Parentheses show speedup over Shiki.
 > Rows are sorted by Chamele byte-API throughput.
 
-## `codeToTokens`
+## Results(`codeToTokens`)
 
-| Input                       |  Lines | Chamele | Throughput |   Shiki | Speedup |
-| --------------------------- | -----: | ------: | ---------: | ------: | ------: |
-| `tiny.ts.txt` (1 KB)        |     50 | 9.29 µs |   141 MB/s |  708 µs |   76.2× |
-| `small.ts.txt` (31 KB)      |    826 |  225 µs |   133 MB/s | 34.6 ms |    154× |
-| `large.ts.txt` (466 KB)     | 10,673 | 3.22 ms |   142 MB/s |  317 ms |   98.5× |
-| `unicode-lines.ts` (498 KB) | 10,001 | 4.04 ms |   128 MB/s |  495 ms |    123× |
+| Input                       |  Lines | JS split | Wasm split | Change | Throughput |   Shiki | Speedup |
+| --------------------------- | -----: | -------: | ---------: | -----: | ---------: | ------: | ------: |
+| `tiny.ts.txt` (1 KB)        |     50 |  9.42 µs |    8.25 µs |  1.14× |   158 MB/s |  700 µs |   84.8× |
+| `small.ts.txt` (31 KB)      |    826 |   224 µs |     197 µs |  1.14× |   152 MB/s | 33.8 ms |    172× |
+| `large.ts.txt` (466 KB)     | 10,673 |  3.23 ms |    2.86 ms |  1.13× |   159 MB/s |  314 ms |    110× |
+| `unicode-lines.ts` (498 KB) | 10,001 |  4.05 ms |    2.77 ms |  1.46× |   186 MB/s |  486 ms |    175× |
 
-Chamele lexes and emits token runs in Wasm. In JavaScript, `splitRecordLines`
-converts UTF-8 record ends to UTF-16 indexes, splits at `\n`, removes `\r` from
-CRLF endings, and groups runs by line. ASCII uses direct byte-to-character
-offsets. A final pass slices token content and builds themed token objects.
+Mode 2, the previous path, emits UTF-8 byte-end records. JavaScript then
+converts offsets to UTF-16, finds line endings, removes CR from CRLF, creates
+per-line run tuples, and finally builds themed token objects.
 
-| Input              | UTF-8 encode | Wasm scan | JS line split | JS tokens | End-to-end | Split / E2E |
-| ------------------ | -----------: | --------: | ------------: | --------: | ---------: | ----------: |
-| `tiny.ts.txt`      |      0.54 µs |   3.00 µs |       2.25 µs |   2.88 µs |    9.29 µs |       24.4% |
-| `small.ts.txt`     |      10.5 µs |   75.8 µs |       59.0 µs |   71.3 µs |     225 µs |       26.6% |
-| `large.ts.txt`     |       154 µs |   1.05 ms |        850 µs |   1.03 ms |    3.22 ms |       26.4% |
-| `unicode-lines.ts` |       428 µs |    849 µs |       1.71 ms |    999 µs |    4.04 ms |       42.5% |
+`codeToTokens` now uses mode 3. The lexer first emits the same ordered byte-end
+records. A Wasm post-pass scans the covered input once and produces UTF-16
+record ends with newline markers. JavaScript builds themed tokens directly from
+those records, avoiding the host split and its intermediate arrays. The extra
+mode adds 467 bytes to optimized Wasm (234 bytes gzip), about 0.7% and 0.8%.
+
+| Input              | UTF-8 encode | Byte Wasm | JS split | JS tokens | Line Wasm | Direct tokens |  JS E2E | Wasm E2E |
+| ------------------ | -----------: | --------: | -------: | --------: | --------: | ------------: | ------: | -------: |
+| `tiny.ts.txt`      |      0.54 µs |   3.04 µs |  2.29 µs |   2.92 µs |   4.54 µs |       2.71 µs | 9.42 µs |  8.25 µs |
+| `small.ts.txt`     |      11.7 µs |   77.6 µs |  59.3 µs |   72.2 µs |    112 µs |       69.6 µs |  224 µs |   197 µs |
+| `large.ts.txt`     |       156 µs |   1.07 ms |   852 µs |    998 µs |   1.68 ms |        938 µs | 3.23 ms |  2.86 ms |
+| `unicode-lines.ts` |       432 µs |    855 µs |  1.71 ms |   1.01 ms |   1.34 ms |        936 µs | 4.05 ms |  2.77 ms |
 
 > Measured on 2026-08-29 with Node.js 24.11.0 on a 14-core Apple M4 Pro with 48
 > GB RAM (macOS arm64). Values are the median across three full benchmark runs.
-> The phase timings are independent: the Wasm scan uses input already resident
+> The phase timings are independent: both Wasm scans use input already resident
 > in linear memory, while the split and token passes use precomputed input. The
 > Unicode case is 10,000 generated lines and exercises byte-to-UTF-16 offset
 > conversion.
@@ -61,7 +66,7 @@ offsets. A final pass slices token content and builds themed token objects.
 
 | tool                            |     size | contents                                        |
 | ------------------------------- | -------: | ----------------------------------------------- |
-| Chamele                         |  81.4 KB | 66.2 KB Wasm (27.4 KB gzip) and 15.2 KB JS glue |
+| Chamele                         |  81.9 KB | 66.8 KB Wasm (27.7 KB gzip) and 15.2 KB JS glue |
 | Shiki                           |   589 KB | TextMate grammars, themes, and engines          |
 | Lezer (TS, JSON, CSS, and HTML) | 1,018 KB | LR parser tables as JS                          |
 | tree-sitter-highlight           |  8.24 MB | darwin-arm64 native addon and index.js          |

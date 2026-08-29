@@ -48,8 +48,8 @@ decode it with `TextDecoder`.
 ## Tokens
 
 `codeToTokens` returns Shiki-compatible themed tokens, and `codeToHast` returns
-a HAST tree. WebAssembly emits style records; JavaScript splits them into lines
-and builds the tokens.
+a HAST tree. For `codeToTokens`, WebAssembly emits line-aware UTF-16 style
+records and JavaScript builds the token objects directly.
 
 ```js
 import { codeToTokens, codeToHast } from '@pierre/chamele';

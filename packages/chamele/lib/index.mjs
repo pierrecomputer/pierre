@@ -1,6 +1,7 @@
 import { compileTheme } from './theme.mjs';
 import {
   buildHast,
+  lineRecordsToTokens,
   resolveOptionThemes,
   runToToken,
   splitRecordLines,
@@ -171,7 +172,7 @@ class Highlighter {
 
   /**
    * Run the lexer over the first `inputLength` bytes: 0 inline colors, 1 CSS
-   * variables, or 2 token records.
+   * variables, 2 byte-end records, or 3 UTF-16 line records.
    * Returns a `Uint8Array` view of Wasm memory, valid until the next call.
    */
   run(langId, mode, inputLength) {
@@ -235,6 +236,12 @@ class Highlighter {
     return new Uint32Array(out.buffer, out.byteOffset, out.length >> 2);
   }
 
+  /** Return UTF-16 token records with `0xffffffff` newline markers. */
+  tokenizeLineRecords(langId, inputLength) {
+    const out = this.run(langId, 3, inputLength);
+    return new Uint32Array(out.buffer, out.byteOffset, out.length >> 2);
+  }
+
   /**
    * Tokenize code into Shiki-compatible themed tokens, one array per line.
    * @param {string | Uint8Array | ArrayBuffer} input
@@ -245,19 +252,17 @@ class Highlighter {
     const code = toCode(input);
     const themes = resolveOptionThemes(options);
     const cssVariablePrefix = options.cssVariablePrefix ?? '--shiki-';
-    const recs = this.tokenizeRecords(
+    const recs = this.tokenizeLineRecords(
       langIdOf(options.lang),
       this.writeInput(code)
     );
-    const lineRuns = splitRecordLines(
+    const tokens = lineRecordsToTokens(
       code,
       recs,
       recs.length >> 1,
-      undefined,
+      themes,
+      cssVariablePrefix,
       options.tokenizeMaxLineLength
-    );
-    const tokens = lineRuns.map((runs) =>
-      runs.map((run) => runToToken(code, run, themes, cssVariablePrefix))
     );
     return { tokens, ...themeMeta(themes, cssVariablePrefix) };
   }

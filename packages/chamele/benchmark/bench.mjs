@@ -7,9 +7,11 @@ import { gzipSync } from 'node:zlib';
 
 import { init } from '../lib/index.mjs';
 import {
+  lineRecordsToTokens,
   resolveOptionThemes,
   runToToken,
   splitRecordLines,
+  themeMeta,
 } from '../lib/tokens.mjs';
 import { optimizeWasm, transformWat, wat2wasm } from '../scripts/build.mjs';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
@@ -283,12 +285,24 @@ function benchmarkTokens(contenders) {
   }
 
   const themes = resolveOptionThemes({ theme: pierreDark });
+  const hostCodeToTokens = (input) => {
+    const hostThemes = resolveOptionThemes({ theme: pierreDark });
+    const records = chamele.tokenizeRecords(24, chamele.writeInput(input));
+    const lines = splitRecordLines(input, records, records.length >> 1);
+    return {
+      tokens: lines.map((runs) =>
+        runs.map((run) => runToToken(input, run, hostThemes, '--shiki-'))
+      ),
+      ...themeMeta(hostThemes, '--shiki-'),
+    };
+  };
   const comparisons = [];
   const phases = [];
   for (const { name, lang, input } of TOKEN_FIXTURES) {
     const inputBytes = enc.encode(input);
     const mb = inputBytes.length / 1024 / 1024;
-    const chameleResult = runBench(
+    const chameleResult = runBench(hostCodeToTokens, input);
+    const wasmLinesResult = runBench(
       (src) => chamele.codeToTokens(src, { lang, theme: pierreDark }),
       input
     );
@@ -300,6 +314,10 @@ function benchmarkTokens(contenders) {
       chamele.tokenizeRecords(24, inputBytes.length)
     );
     const lineRuns = splitRecordLines(input, records, records.length >> 1);
+    chamele.writeInput(inputBytes);
+    const lineRecords = Uint32Array.from(
+      chamele.tokenizeLineRecords(24, inputBytes.length)
+    );
     chamele.writeInput(inputBytes);
     const encodeResult = runBench((src) => chamele.writeInput(src), input);
     const wasmResult = runBench(
@@ -317,14 +335,31 @@ function benchmarkTokens(contenders) {
         ),
       undefined
     );
+    const lineWasmResult = runBench(
+      () => chamele.tokenizeLineRecords(24, inputBytes.length),
+      undefined
+    );
+    const directObjectsResult = runBench(
+      () =>
+        lineRecordsToTokens(
+          input,
+          lineRecords,
+          lineRecords.length >> 1,
+          themes,
+          '--shiki-'
+        ),
+      undefined
+    );
 
     comparisons.push([
       name,
       String(lineRuns.length),
       us(chameleResult.median),
-      fmt(mb / (chameleResult.median / 1000)) + ' MB/s',
+      us(wasmLinesResult.median),
+      baselineLabel(wasmLinesResult.median / chameleResult.median),
+      fmt(mb / (wasmLinesResult.median / 1000)) + ' MB/s',
       us(shikiResult.median),
-      baselineLabel(chameleResult.median / shikiResult.median),
+      baselineLabel(wasmLinesResult.median / shikiResult.median),
     ]);
     phases.push([
       name,
@@ -332,8 +367,10 @@ function benchmarkTokens(contenders) {
       us(wasmResult.median),
       us(splitResult.median),
       us(objectsResult.median),
+      us(lineWasmResult.median),
+      us(directObjectsResult.median),
       us(chameleResult.median),
-      fmt((splitResult.median / chameleResult.median) * 100) + '%',
+      us(wasmLinesResult.median),
     ]);
   }
 
@@ -342,7 +379,9 @@ function benchmarkTokens(contenders) {
     [
       { title: 'input' },
       { title: 'lines', align: 'right', hide: 1 },
-      { title: 'chamele', align: 'right' },
+      { title: 'JS split', align: 'right' },
+      { title: 'wasm split', align: 'right' },
+      { title: 'change' },
       { title: 'throughput', align: 'right', hide: 2 },
       { title: 'shiki', align: 'right' },
       { title: 'vs shiki' },
@@ -357,8 +396,10 @@ function benchmarkTokens(contenders) {
       { title: 'wasm scan', align: 'right' },
       { title: 'JS line split', align: 'right' },
       { title: 'JS tokens', align: 'right' },
-      { title: 'end-to-end', align: 'right' },
-      { title: 'split / e2e', align: 'right', hide: 2 },
+      { title: 'line wasm', align: 'right' },
+      { title: 'direct tokens', align: 'right' },
+      { title: 'JS e2e', align: 'right' },
+      { title: 'wasm e2e', align: 'right' },
     ],
     phases
   );

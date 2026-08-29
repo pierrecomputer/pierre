@@ -204,6 +204,11 @@ function isAscii(code, byte, char, recs, count) {
  */
 export function runToToken(code, run, themes, cssVariablePrefix) {
   const [start, end, hl] = run;
+  return rangeToToken(code, start, end, hl, themes, cssVariablePrefix);
+}
+
+/** Convert an offset range and token id to a Shiki `ThemedToken`. */
+export function rangeToToken(code, start, end, hl, themes, cssVariablePrefix) {
   const token = { content: code.slice(start, end), offset: start };
   if (themes.length === 1 && themes[0].color === null) {
     const { styles, fg } = themes[0];
@@ -232,6 +237,45 @@ export function runToToken(code, run, themes, cssVariablePrefix) {
   const type = standardTypes[hl];
   if (type !== 0) token.type = type;
   return token;
+}
+
+/** Convert UTF-16 token records with `0xffffffff` line markers to tokens. */
+export function lineRecordsToTokens(
+  code,
+  recs,
+  count,
+  themes,
+  cssVariablePrefix,
+  maxLineLength
+) {
+  const lines = [];
+  let line = [];
+  let start = 0;
+  let lineStart = 0;
+  const max = maxLineLength ?? 0;
+  for (let rec = 0; rec < count; rec++) {
+    const end = recs[rec * 2];
+    const hl = recs[rec * 2 + 1];
+    if (hl === 0xffffffff) {
+      if (max > 0 && start - lineStart >= max) {
+        line = [
+          rangeToToken(code, lineStart, start, 0, themes, cssVariablePrefix),
+        ];
+      }
+      lines.push(line);
+      line = [];
+      start = end;
+      lineStart = end;
+    } else if (end > start) {
+      line.push(rangeToToken(code, start, end, hl, themes, cssVariablePrefix));
+      start = end;
+    }
+  }
+  if (max > 0 && start - lineStart >= max) {
+    line = [rangeToToken(code, lineStart, start, 0, themes, cssVariablePrefix)];
+  }
+  lines.push(line);
+  return lines;
 }
 
 /**

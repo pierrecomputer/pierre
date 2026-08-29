@@ -8,20 +8,53 @@ import {
   LiveTokenizer,
   TokenizeStream,
 } from '../lib/index.mjs';
+import {
+  resolveOptionThemes,
+  runToToken,
+  splitRecordLines,
+} from '../lib/tokens.mjs';
 import { transformWat, wat2wasm } from '../scripts/build.mjs';
 import { cssVariables } from '../themes/index.mjs';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import pierreLight from '../themes/pierre-light.json' with { type: 'json' };
 import { themeColor } from './util.mjs';
 
+let highlighter;
 t.before(() => {
   const url = new URL('../src/chamele.wat', import.meta.url);
   const { code } = transformWat(url);
-  init(new WebAssembly.Module(wat2wasm(url.pathname, code)));
+  highlighter = init(new WebAssembly.Module(wat2wasm(url.pathname, code)));
 });
 
 /** join a line's token contents back together */
 const lineText = (tokens) => tokens.map((tk) => tk.content).join('');
+
+const langIds = {
+  css: 6,
+  html: 11,
+  json: 12,
+  markdown: 15,
+  python: 18,
+  rust: 19,
+  ts: 24,
+  tsx: 24,
+};
+
+/** Run the previous mode-2 host splitter as a parity baseline. */
+function hostTokens(code, lang, maxLineLength) {
+  const themes = resolveOptionThemes({ theme: pierreDark });
+  const recs = highlighter.tokenizeRecords(
+    langIds[lang],
+    highlighter.writeInput(code)
+  );
+  return splitRecordLines(
+    code,
+    recs,
+    recs.length >> 1,
+    undefined,
+    maxLineLength
+  ).map((runs) => runs.map((run) => runToToken(code, run, themes, '--shiki-')));
+}
 
 void t.test('codeToTokens: lines, offsets, and terminators', () => {
   const code = 'const a = 1; // hi\n\nlet s = "x";\r\nendé 🎈\n';
@@ -99,6 +132,11 @@ void t.test('codeToTokens: token records tile every input (fuzz)', () => {
         input += alphabet[seed % alphabet.length];
       }
       const { tokens } = codeToTokens(input, { lang, theme: pierreDark });
+      assert.deepEqual(
+        tokens,
+        hostTokens(input, lang),
+        `${lang}: wasm lines differ for ${JSON.stringify(input)}`
+      );
       // rebuild the input from lines: token contents joined by the input's
       // own terminators must reproduce it exactly (the lossless invariant)
       let rebuilt = '';
@@ -116,6 +154,34 @@ void t.test('codeToTokens: token records tile every input (fuzz)', () => {
       assert.ok(cursor === input.length);
     }
   }
+});
+
+void t.test('codeToTokens: wasm line records match host splitting', () => {
+  const samples = [
+    ['', 'ts'],
+    ['const a = 1;\n\nlet b = 2;\r\n', 'ts'],
+    ['const greeting = "日本語 🎈"; // naïve résumé\n', 'ts'],
+    ['.a {\r\n  color: red; /* x\n  y */\r\n}\n', 'css'],
+    ['<div title="a\nb">é</div>\n', 'html'],
+  ];
+  for (const [code, lang] of samples) {
+    const options = { lang, theme: pierreDark };
+    assert.deepEqual(
+      codeToTokens(code, options).tokens,
+      hostTokens(code, lang),
+      lang
+    );
+  }
+  const capped = {
+    lang: 'ts',
+    theme: pierreDark,
+    tokenizeMaxLineLength: 10,
+  };
+  const code = 'let a = 1\nlet bb = 22\nlet c = 3';
+  assert.deepEqual(
+    codeToTokens(code, capped).tokens,
+    hostTokens(code, 'ts', capped.tokenizeMaxLineLength)
+  );
 });
 
 void t.test('codeToHast: shiki-shaped tree', () => {
