@@ -27,6 +27,7 @@ export type {
   EditorDocumentKind,
   EditorEditCompleteEvent,
   EditorInitialState,
+  EditorLineAnnotation,
   EditorSelection,
   EditorViewState,
   EditorViewportState,

@@ -8,11 +8,13 @@ import type { Editor, EditorDocumentKind, EditorOptions } from '../edit';
 import { useStableCallback } from './utils/useStableCallback';
 
 /** Creates an Editor. Components manage the instance lifecycle. */
-export type CreateEditor<LAnnotation, LCaret = undefined> = (
-  documentKind: EditorDocumentKind,
-  options: EditorOptions<LAnnotation, LCaret>,
+export type CreateEditor<LAnnotation, LCaret = undefined> = <
+  TDocumentKind extends EditorDocumentKind,
+>(
+  documentKind: TDocumentKind,
+  options: EditorOptions<TDocumentKind, LAnnotation, LCaret>,
   editStateKey?: string
-) => Editor<LAnnotation, LCaret>;
+) => Editor<TDocumentKind, LAnnotation, LCaret>;
 
 export interface EditProviderProps<LAnnotation, LCaret = undefined> {
   /** Combines shared defaults with the supplied per-surface options. */
@@ -29,11 +31,11 @@ export function EditProvider<LAnnotation, LCaret = undefined>({
   EditProviderProps<LAnnotation, LCaret>
 >): React.JSX.Element {
   const stableCreateEditor = useStableCallback(
-    (
-      documentKind: EditorDocumentKind,
-      options: EditorOptions<LAnnotation, LCaret>,
+    <TDocumentKind extends EditorDocumentKind,>(
+      documentKind: TDocumentKind,
+      options: EditorOptions<TDocumentKind, LAnnotation, LCaret>,
       editStateKey?: string
-    ): Editor<LAnnotation, LCaret> =>
+    ): Editor<TDocumentKind, LAnnotation, LCaret> =>
       createEditor(documentKind, options, editStateKey)
   );
   return (

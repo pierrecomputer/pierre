@@ -36,7 +36,6 @@ import type {
   AppliedThemeStyleCache,
   BaseCodeOptions,
   DiffLineAnnotation,
-  DiffsEditableComponent,
   FileContents,
   HighlightedToken,
   LineAnnotation,
@@ -102,6 +101,10 @@ export interface FileHydrateProps<LAnnotation> extends Omit<
   prerenderedHTML?: string;
 }
 
+export type FileEditChangeHandler<LAnnotation> = (
+  event: EditorChangeEvent<'file', LAnnotation>
+) => void;
+
 /**
  * Decides a completed edit synchronously: return `'accept'` to install the
  * event's `file` and annotations, or `'reject'` to restore the original values.
@@ -146,7 +149,7 @@ export interface FileOptions<LAnnotation>
    * its own `onChange`. Do not feed the event's file back into the component
    * while the session is active.
    */
-  onEditChange?(event: EditorChangeEvent<LAnnotation, 'file'>): void;
+  onEditChange?: FileEditChangeHandler<LAnnotation>;
 
   /**
    * Fired when `edit` toggles false or a component unmounts, including when the
@@ -192,9 +195,7 @@ function shouldResetUndoState(
 
 let instanceId = -1;
 
-export class File<
-  LAnnotation = undefined,
-> implements DiffsEditableComponent<LAnnotation> {
+export class File<LAnnotation = undefined> {
   static LoadedCustomComponent: boolean = DiffsContainerLoaded;
 
   readonly __id: string = `file:${++instanceId}`;
@@ -247,7 +248,7 @@ export class File<
   protected renderRange: RenderRange | undefined;
   protected enabled = true;
 
-  protected editor: Editor<LAnnotation> | undefined;
+  protected editor: Editor<'file', LAnnotation> | undefined;
 
   constructor(
     public options: FileOptions<LAnnotation> = { theme: DEFAULT_THEMES },
@@ -802,7 +803,7 @@ export class File<
     });
   }
 
-  public emitEditChange(event: EditorChangeEvent<LAnnotation, 'file'>): void {
+  public emitEditChange(event: EditorChangeEvent<'file', LAnnotation>): void {
     const { lineAnnotations } = event;
     if (lineAnnotations != null) {
       this.syncEditSessionAnnotationsFromEditor(lineAnnotations);
@@ -817,7 +818,7 @@ export class File<
   }
 
   /** @internal Associate this component with its editor for a render lifecycle. */
-  public __attachEditor(editor: Editor<LAnnotation>): () => void {
+  public __attachEditor(editor: Editor<'file', LAnnotation>): () => void {
     if (this.editor != null) {
       throw new Error('File.__attachEditor: an editor is already attached');
     }
@@ -836,14 +837,14 @@ export class File<
   }
 
   /** @internal Resume rendering for the editor already associated with this component. */
-  public __resumeEditor(editor: Editor<LAnnotation>): void {
+  public __resumeEditor(editor: Editor<'file', LAnnotation>): void {
     if (this.editor !== editor) {
       throw new Error('File.__resumeEditor: editor association changed');
     }
     this.resumeEditorRendering(editor);
   }
 
-  private resumeEditorRendering(editor: Editor<LAnnotation>): void {
+  private resumeEditorRendering(editor: Editor<'file', LAnnotation>): void {
     this.editSessionAnnotations ??= adoptEditSessionAnnotations(
       this.lineAnnotations,
       getLineAnnotationName
@@ -884,7 +885,7 @@ export class File<
    * the replaced file's `cacheKey`.
    */
   public __completeEditSession(
-    editor: Editor<LAnnotation>,
+    editor: Editor<'file', LAnnotation>,
     mode: 'install' | 'discard'
   ): void {
     this.settleEditSession(mode === 'install', editor);
@@ -892,7 +893,7 @@ export class File<
 
   private settleEditSession(
     installResult: boolean,
-    editor: Editor<LAnnotation> | undefined
+    editor: Editor<'file', LAnnotation> | undefined
   ): void {
     const {
       editSessionFile,

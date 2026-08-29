@@ -127,18 +127,25 @@ export interface EditorChange extends ResolvedTextEdit {
   range: Range;
 }
 
+export type EditorLineAnnotation<
+  TDocumentKind extends EditorDocumentKind = EditorDocumentKind,
+  LAnnotation = unknown,
+> = TDocumentKind extends 'file'
+  ? LineAnnotation<LAnnotation>
+  : DiffLineAnnotation<LAnnotation>;
+
 /** The document and normalized edits reported after an editor change. */
-export interface EditorChangeEvent<
-  LAnnotation,
-  TMode extends 'file' | 'diff',
-> {
-  changes: EditorChange[];
-  file: FileContents;
-  editor: Editor<LAnnotation>;
-  lineAnnotations?: TMode extends 'file'
-    ? LineAnnotation<LAnnotation>[]
-    : DiffLineAnnotation<LAnnotation>[];
-}
+export type EditorChangeEvent<
+  TDocumentKind extends EditorDocumentKind = EditorDocumentKind,
+  LAnnotation = unknown,
+> = TDocumentKind extends EditorDocumentKind
+  ? {
+      changes: EditorChange[];
+      file: FileContents;
+      editor: Editor<TDocumentKind, LAnnotation>;
+      lineAnnotations?: EditorLineAnnotation<TDocumentKind, LAnnotation>[];
+    }
+  : never;
 
 /**
  * The direction of a selection.
@@ -199,7 +206,7 @@ export interface EditorViewState {
  */
 export interface FileEditCompleteEvent<LAnnotation> {
   file: FileContents;
-  editor: Editor<LAnnotation>;
+  editor: Editor<'file', LAnnotation>;
   lineAnnotations: LineAnnotation<LAnnotation>[] | undefined;
   originalFile: FileContents;
   originalLineAnnotations: LineAnnotation<LAnnotation>[];
@@ -227,7 +234,7 @@ export interface FileEditCompleteEvent<LAnnotation> {
  */
 export interface FileDiffEditCompleteEvent<LAnnotation> {
   fileDiff: FileDiffMetadata;
-  editor: Editor<LAnnotation>;
+  editor: Editor<'file-diff', LAnnotation>;
   originalFileDiff: FileDiffMetadata;
   oldFile: FileContents | null;
   newFile: FileContents | null;
@@ -239,9 +246,12 @@ export interface FileDiffEditCompleteEvent<LAnnotation> {
  * The exact frozen file or diff completion event observed by the editor before
  * the corresponding component completion callback.
  */
-export type EditorEditCompleteEvent<LAnnotation> =
-  | FileEditCompleteEvent<LAnnotation>
-  | FileDiffEditCompleteEvent<LAnnotation>;
+export type EditorEditCompleteEvent<
+  TDocumentKind extends EditorDocumentKind = EditorDocumentKind,
+  LAnnotation = unknown,
+> = TDocumentKind extends 'file'
+  ? FileEditCompleteEvent<LAnnotation>
+  : FileDiffEditCompleteEvent<LAnnotation>;
 
 export type EditHistoryCoalescingMode = 'insert' | 'backspace' | 'delete';
 export type EditHistoryLineAnnotation<LAnnotation> =
@@ -294,15 +304,21 @@ export interface FileDiffEditState<
  * The editor-owned objects that make up a complete session. This state is
  * transferred by reference when supplied as `initialState`.
  */
-export type EditState<LAnnotation = unknown> =
-  | FileEditState<LAnnotation>
-  | FileDiffEditState<LAnnotation>;
+export type EditState<
+  TDocumentKind extends EditorDocumentKind = EditorDocumentKind,
+  LAnnotation = unknown,
+> = TDocumentKind extends 'file'
+  ? FileEditState<LAnnotation>
+  : FileDiffEditState<LAnnotation>;
 
 /** State supplied to a new editor, completed from the attached component. */
-export type EditorInitialState<LAnnotation = unknown> =
-  | ({ documentKind: 'file' } & Partial<
+export type EditorInitialState<
+  TDocumentKind extends EditorDocumentKind = EditorDocumentKind,
+  LAnnotation = unknown,
+> = TDocumentKind extends 'file'
+  ? { documentKind: 'file' } & Partial<
       Omit<FileEditState<LAnnotation>, 'documentKind'>
-    >)
-  | ({ documentKind: 'file-diff' } & Partial<
+    >
+  : { documentKind: 'file-diff' } & Partial<
       Omit<FileDiffEditState<LAnnotation>, 'documentKind'>
-    >);
+    >;

@@ -1,4 +1,4 @@
-import type { DiffLineAnnotation } from '../types';
+import type { AnnotationSide } from '../types';
 import { getLineAnnotationName } from '../utils/getLineAnnotationName';
 import type { TextDocumentChange } from './textDocument';
 import { getLineNumberAttr, h } from './utils';
@@ -10,6 +10,17 @@ interface LineAnnotationChange {
   readonly deletesEndLine: boolean;
   readonly insertedLineBreaks: number;
   readonly lineDelta: number;
+}
+
+interface LineAnnotationPosition {
+  lineNumber: number;
+  side?: AnnotationSide;
+}
+
+function getDefaultLineAnnotationName(
+  annotation: LineAnnotationPosition
+): string {
+  return getLineAnnotationName(annotation);
 }
 
 // When an edit moves an annotation to another line, the remap replaces it
@@ -30,19 +41,25 @@ export function getLineAnnotationSource<T extends object>(annotation: T): T {
   return source == null ? annotation : (source as T);
 }
 
-export function applyDocumentChangeToLineAnnotations<T>(
+export function applyDocumentChangeToLineAnnotations<
+  TLineAnnotation extends LineAnnotationPosition,
+>(
   change: TextDocumentChange,
-  lineAnnotations: DiffLineAnnotation<T>[]
-): DiffLineAnnotation<T>[] | undefined {
+  lineAnnotations: TLineAnnotation[]
+): TLineAnnotation[] | undefined {
   const annotationChanges = getLineAnnotationChanges(change);
   if (annotationChanges.length === 0) {
     return undefined;
   }
 
-  const nextLineAnnotations: DiffLineAnnotation<T>[] = [];
+  const nextLineAnnotations: TLineAnnotation[] = [];
   let changed = false;
   for (const annotation of lineAnnotations) {
-    if (annotation.side === 'deletions' || annotation.lineNumber <= 0) {
+    if (
+      ('side' in annotation && annotation.side === 'deletions') ||
+      annotation.lineNumber <= 0
+    ) {
+      // Annotations that should not be repositioned
       nextLineAnnotations.push(annotation);
       continue;
     }
@@ -240,13 +257,15 @@ function clampLine(line: number, lineCount: number): number {
   return Math.max(0, Math.min(line, Math.max(0, lineCount - 1)));
 }
 
-export function renderLineAnnotations<LAnnotation>(
-  lineAnnotations: DiffLineAnnotation<LAnnotation>[],
+export function renderLineAnnotations<
+  TLineAnnotation extends LineAnnotationPosition,
+>(
+  lineAnnotations: TLineAnnotation[],
   contentEl: HTMLElement,
   gutterEl?: HTMLElement,
   getName: (
-    annotation: DiffLineAnnotation<LAnnotation>
-  ) => string = getLineAnnotationName
+    annotation: TLineAnnotation
+  ) => string = getDefaultLineAnnotationName
 ): void {
   const additionAnnotations = new Map<number, string[]>();
   const deletionAnnotations = new Map<number, string[]>();
@@ -259,7 +278,7 @@ export function renderLineAnnotations<LAnnotation>(
       deletionAnnotations.set(lineNumber, []);
     }
     const map =
-      annotation.side === 'deletions'
+      'side' in annotation && annotation.side === 'deletions'
         ? deletionAnnotations
         : additionAnnotations;
     map.get(lineNumber)!.push(getName(annotation));

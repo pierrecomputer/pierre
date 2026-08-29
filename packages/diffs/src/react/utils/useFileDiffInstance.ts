@@ -10,6 +10,7 @@ import {
 
 import {
   FileDiff,
+  type FileDiffEditChangeHandler,
   type FileDiffEditCompleteEvent,
   type FileDiffEditCompleteHandler,
   type FileDiffOptions,
@@ -64,7 +65,7 @@ interface UseFileDiffInstanceProps<LAnnotation, LCaret> {
   oldFile?: FileContents | null;
   newFile?: FileContents | null;
   options: FileDiffOptions<LAnnotation> | undefined;
-  editorOptions: EditorOptions<LAnnotation, LCaret> | undefined;
+  editorOptions: EditorOptions<'file-diff', LAnnotation, LCaret> | undefined;
   editStateKey: string | undefined;
   lineAnnotations: DiffLineAnnotation<LAnnotation>[] | undefined;
   selectedLines: SelectedLineRange | null | undefined;
@@ -74,8 +75,8 @@ interface UseFileDiffInstanceProps<LAnnotation, LCaret> {
   hasCustomHeader: boolean;
   disableWorkerPool: boolean;
   edit: boolean;
-  onEditChange?(event: EditorChangeEvent<LAnnotation, 'diff'>): void;
-  onEditComplete: FileDiffEditCompleteHandler<LAnnotation> | undefined;
+  onEditChange?: FileDiffEditChangeHandler<LAnnotation>;
+  onEditComplete?: FileDiffEditCompleteHandler<LAnnotation>;
 }
 
 interface UseFileDiffInstanceReturn<LAnnotation> {
@@ -111,7 +112,8 @@ export function useFileDiffInstance<LAnnotation, LCaret>({
   const poolManager = useContext(WorkerPoolContext);
   const createEditor = useCreateEditor<LAnnotation, LCaret>();
   const handleOnEditChange = useStableCallback(
-    (event: EditorChangeEvent<LAnnotation, 'diff'>) => _onEditChange?.(event)
+    (event: EditorChangeEvent<'file-diff', LAnnotation>) =>
+      _onEditChange?.(event)
   );
   const onEditChange = _onEditChange != null ? handleOnEditChange : undefined;
   // An accepted completion installs its diff on the instance immediately,
@@ -360,8 +362,8 @@ interface MergeFileDiffOptionsProps<LAnnotation> {
   controlledSelection: boolean;
   hasCustomHeader: boolean;
   hasGutterRenderUtility: boolean;
-  onEditChange?(event: EditorChangeEvent<LAnnotation, 'diff'>): void;
-  onEditComplete: FileDiffEditCompleteHandler<LAnnotation> | undefined;
+  onEditChange?: FileDiffEditChangeHandler<LAnnotation>;
+  onEditComplete?: FileDiffEditCompleteHandler<LAnnotation>;
   options: FileDiffOptions<LAnnotation> | undefined;
 }
 
@@ -402,7 +404,7 @@ function mergeFileDiffOptions<LAnnotation>({
 
 function applyEdit<LAnnotation>(
   instance: FileDiff<LAnnotation>,
-  getEditor: () => Editor<LAnnotation>
+  getEditor: () => Editor<'file-diff', LAnnotation>
 ): () => void {
   const editor = getEditor();
   try {

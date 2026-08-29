@@ -1,8 +1,8 @@
-import type { DiffLineAnnotation } from '../types';
 import type { TextDocument } from './textDocument';
 import type {
   EditHistoryCoalescingMode,
   EditHistoryEntry,
+  EditHistoryLineAnnotation,
   EditHistoryState,
   EditorSelection,
   ResolvedTextEdit,
@@ -123,8 +123,8 @@ export class EditStack<LAnnotation> {
 
   /** Sets the line annotations after the last undo entry. */
   setLastUndoLineAnnotations(
-    lineAnnotationsBefore: DiffLineAnnotation<LAnnotation>[],
-    lineAnnotationsAfter: DiffLineAnnotation<LAnnotation>[]
+    lineAnnotationsBefore: EditHistoryLineAnnotation<LAnnotation>[],
+    lineAnnotationsAfter: EditHistoryLineAnnotation<LAnnotation>[]
   ): void {
     const lastEntry = this.#undoStack[this.#undoStack.length - 1];
     if (lastEntry !== undefined) {
@@ -218,8 +218,8 @@ export function createEditStackEntry<LAnnotation>(
   versionAfter: number,
   selectionsBefore?: EditorSelection[],
   selectionsAfter?: EditorSelection[],
-  lineAnnotationsBefore?: DiffLineAnnotation<LAnnotation>[],
-  lineAnnotationsAfter?: DiffLineAnnotation<LAnnotation>[]
+  lineAnnotationsBefore?: EditHistoryLineAnnotation<LAnnotation>[],
+  lineAnnotationsAfter?: EditHistoryLineAnnotation<LAnnotation>[]
 ): EditStackEntry<LAnnotation> {
   const forwardEdits = [...resolvedEdits].sort((a, b) => a.start - b.start);
   const inverseEdits: ResolvedTextEdit[] = [];

@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  type FileEditChangeHandler,
   type FileEditCompleteEvent,
   type FileEditCompleteHandler,
 } from '../components/File';
@@ -10,7 +11,11 @@ import { renderFileChildren } from './utils/renderFileChildren';
 import { templateRender } from './utils/templateRender';
 import { useFileInstance } from './utils/useFileInstance';
 
-export type { FileEditCompleteEvent, FileEditCompleteHandler };
+export type {
+  FileEditChangeHandler,
+  FileEditCompleteEvent,
+  FileEditCompleteHandler,
+};
 export type { FileOptions } from './types';
 
 export function File<LAnnotation = undefined, LCaret = undefined>({

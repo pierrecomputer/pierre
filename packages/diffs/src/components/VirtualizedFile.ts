@@ -76,6 +76,7 @@ export class VirtualizedFile<
   LAnnotation = undefined,
 > extends File<LAnnotation> {
   override readonly __id: string = `virtualized-file:${++instanceId}`;
+  public readonly renderType = 'virtualized';
 
   public top: number | undefined;
   public height: number = 0;

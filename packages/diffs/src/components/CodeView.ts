@@ -10,19 +10,18 @@ import {
   THEME_CSS_ATTRIBUTE,
   UNSAFE_CSS_ATTRIBUTE,
 } from '../constants';
-import type { Editor } from '../editor/editor';
+import type { Editor, EditorOptions } from '../editor/editor';
+import type {
+  EditCompletionDecision,
+  EditorChangeEvent,
+  EditorDocumentKind,
+} from '../editor/types';
 import type { SelectionWriteOptions } from '../managers/InteractionManager';
 import {
   dequeueRender,
   queueRender,
 } from '../managers/UniversalRenderingManager';
 import type {
-  EditCompletionDecision,
-  EditorChangeEvent,
-  EditorDocumentKind,
-} from '../editor/types';
-import type {
-  CodeViewCreateEditorOptions,
   CodeViewDiffItem,
   CodeViewFileItem,
   CodeViewItem,
@@ -57,6 +56,15 @@ import type { FileDiffEditCompleteEvent, FileDiffOptions } from './FileDiff';
 import { VirtualizedFile } from './VirtualizedFile';
 import { VirtualizedFileDiff } from './VirtualizedFileDiff';
 import type { VirtualizerConfig } from './Virtualizer';
+
+export type CodeViewCreateEditorOptions<
+  TDocumentKind extends EditorDocumentKind,
+  LAnnotation,
+> = Required<Pick<EditorOptions<TDocumentKind, LAnnotation>, 'onChange'>>;
+
+type CodeViewEditor<LAnnotation> =
+  | Editor<'file', LAnnotation>
+  | Editor<'file-diff', LAnnotation>;
 
 // When re-rendering content of the virtualizer, it's important that we
 // maintain a visual anchor, usually this is the first fully visible element,
@@ -452,7 +460,7 @@ type CodeViewItemOptions<
 // `dispose` comes from the latest `editor.edit()` attachment: it tears the
 // editor down and completes the session on the instance it attached to.
 interface CodeViewItemEditorRecord<LAnnotation> {
-  editor: Editor<LAnnotation>;
+  editor: CodeViewEditor<LAnnotation>;
   state: CodeViewItemOptionsState<LAnnotation>;
   dispose(): void;
 }
@@ -540,14 +548,13 @@ export interface CodeViewOptions<LAnnotation>
    * history when requested. CodeView owns the returned editor's lifecycle: it
    * associates with the edited item, suspends and resumes rendering across
    * virtualization unmounts and collapse, and tears the editor down when the
-   * session ends (edit off or removal). Returning undefined declines the
-   * attach; CodeView retries on later render passes.
+   * session ends (edit off or removal).
    */
-  createEditor?(
-    documentKind: EditorDocumentKind,
-    options: CodeViewCreateEditorOptions<LAnnotation>,
+  createEditor?<TDocumentKind extends EditorDocumentKind>(
+    documentKind: TDocumentKind,
+    options: CodeViewCreateEditorOptions<TDocumentKind, LAnnotation>,
     editStateKey?: string
-  ): Editor<LAnnotation> | undefined;
+  ): Editor<TDocumentKind, LAnnotation>;
   /**
    * Called with the editor's `EditorChangeEvent` and the owning item whenever
    * the edited document changes, from internal (edit) changes or external
@@ -556,7 +563,7 @@ export interface CodeViewOptions<LAnnotation>
    * Do not feed these changes back into item state.
    */
   onItemEditChange?(
-    event: EditorChangeEvent<LAnnotation, 'file' | 'diff'>,
+    event: EditorChangeEvent<EditorDocumentKind, LAnnotation>,
     item: CodeViewItem<LAnnotation>
   ): void;
   /**
@@ -1530,7 +1537,7 @@ export class CodeView<LAnnotation = undefined> {
    * Returns undefined once the item's session ends (edit off or removal); a
    * collapsed item keeps its suspended editor.
    */
-  public getEditor(itemId: string): Editor<LAnnotation> | undefined {
+  public getEditor(itemId: string): CodeViewEditor<LAnnotation> | undefined {
     return this.itemEditors.get(itemId)?.editor;
   }
 
@@ -2080,7 +2087,7 @@ export class CodeView<LAnnotation = undefined> {
     }
 
     const record = this.itemEditors.get(id);
-    let createdEditor: Editor<LAnnotation> | undefined;
+    let createdEditor: CodeViewEditor<LAnnotation> | undefined;
     try {
       if (record == null) {
         assertEditorFactory(createEditor);
@@ -2095,30 +2102,39 @@ export class CodeView<LAnnotation = undefined> {
         // renames keep it pointed at the right item. It also reads the change
         // callback off this.options at invocation time so later setOptions
         // swaps aren't stranded on the callback captured at creation.
-        const editor = createEditor(
-          item.instance.type === 'file-diff' ? 'file-diff' : 'file',
-          {
-            onChange: (event) => {
-              const latest = this.idToItem.get(state.id);
-              if (latest == null) {
-                return;
-              }
-              this.options.onItemEditChange?.(event, latest.item);
-            },
-          },
-          this.options.getEditStateKey?.(item.item)
-        );
-        if (editor == null) {
-          return;
+        const onChange = (
+          event: EditorChangeEvent<EditorDocumentKind, LAnnotation>
+        ) => {
+          const latest = this.idToItem.get(state.id);
+          if (latest == null) {
+            return;
+          }
+          this.options.onItemEditChange?.(event, latest.item);
+        };
+        const editStateKey = this.options.getEditStateKey?.(item.item);
+        if (item.type === 'diff') {
+          const editor = createEditor('file-diff', { onChange }, editStateKey);
+          createdEditor = editor;
+          this.itemEditors.set(id, {
+            editor,
+            state,
+            dispose: editor.edit(item.instance),
+          });
+        } else {
+          const editor = createEditor('file', { onChange }, editStateKey);
+          createdEditor = editor;
+          this.itemEditors.set(id, {
+            editor,
+            state,
+            dispose: editor.edit(item.instance),
+          });
         }
-        createdEditor = editor;
-        this.itemEditors.set(id, {
-          editor,
-          state,
-          dispose: editor.edit(item.instance),
-        });
+      } else if (item.type === 'diff') {
+        const editor = record.editor as Editor<'file-diff', LAnnotation>;
+        record.dispose = editor.edit(item.instance);
       } else {
-        record.dispose = record.editor.edit(item.instance);
+        const editor = record.editor as Editor<'file', LAnnotation>;
+        record.dispose = editor.edit(item.instance);
       }
       this.attachedEditors.add(id);
     } catch (error) {

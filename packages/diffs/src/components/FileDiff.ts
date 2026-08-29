@@ -51,7 +51,6 @@ import type {
   BaseDiffOptions,
   CustomPreProperties,
   DiffLineAnnotation,
-  DiffsEditableComponent,
   ExpansionDirections,
   FileContents,
   FileDiffMetadata,
@@ -239,6 +238,10 @@ export type FileDiffHydrationProps<LAnnotation> = Omit<
 
 export type FileDiffType = 'file-diff' | 'unresolved-file';
 
+export type FileDiffEditChangeHandler<LAnnotation> = (
+  event: EditorChangeEvent<'file-diff', LAnnotation>
+) => void;
+
 /**
  * Decides a completed edit synchronously: return `'accept'` to install the
  * event's `fileDiff` and annotations, or `'reject'` to restore the original
@@ -294,7 +297,7 @@ export interface FileDiffOptions<LAnnotation>
    * its own `onChange`. Do not feed the event's file back into the component
    * while the session is active.
    */
-  onEditChange?(event: EditorChangeEvent<LAnnotation, 'diff'>): void;
+  onEditChange?: FileDiffEditChangeHandler<LAnnotation>;
 
   /**
    * Fired when `edit` toggles false or a component unmounts, including when the
@@ -357,9 +360,7 @@ interface HeaderCache {
 
 let instanceId = -1;
 
-export class FileDiff<
-  LAnnotation = undefined,
-> implements DiffsEditableComponent<LAnnotation> {
+export class FileDiff<LAnnotation = undefined> {
   // NOTE(amadeus): We sorta need this to ensure the web-component file is
   // properly loaded
   static LoadedCustomComponent: boolean = DiffsContainerLoaded;
@@ -425,7 +426,7 @@ export class FileDiff<
 
   protected enabled = true;
 
-  protected editor: Editor<LAnnotation> | undefined;
+  protected editor: Editor<'file-diff', LAnnotation> | undefined;
   protected refreshViewTimeout: ReturnType<typeof setTimeout> | undefined;
   // Defer selected-line and editor active-line writes while a refresh rebuilds
   // the diff rows. This is separate from the timeout because the refresh can
@@ -1787,7 +1788,9 @@ export class FileDiff<
     };
   }
 
-  public emitEditChange(event: EditorChangeEvent<LAnnotation, 'diff'>): void {
+  public emitEditChange(
+    event: EditorChangeEvent<'file-diff', LAnnotation>
+  ): void {
     const { lineAnnotations } = event;
     if (lineAnnotations != null) {
       this.syncEditSessionAnnotationsFromEditor(lineAnnotations);
@@ -1837,7 +1840,7 @@ export class FileDiff<
   }
 
   /** @internal Associate this component with its editor for a render lifecycle. */
-  public __attachEditor(editor: Editor<LAnnotation>): () => void {
+  public __attachEditor(editor: Editor<'file-diff', LAnnotation>): () => void {
     // Editing is a plain file-diff concern only. Subclasses with their own
     // hunk semantics (UnresolvedFile) are not editable, so an editor must
     // never attach to them.
@@ -1863,14 +1866,16 @@ export class FileDiff<
   }
 
   /** @internal Resume rendering for the editor already associated with this component. */
-  public __resumeEditor(editor: Editor<LAnnotation>): void {
+  public __resumeEditor(editor: Editor<'file-diff', LAnnotation>): void {
     if (this.editor !== editor) {
       throw new Error('FileDiff.__resumeEditor: editor association changed');
     }
     this.resumeEditorRendering(editor);
   }
 
-  private resumeEditorRendering(editor: Editor<LAnnotation>): void {
+  private resumeEditorRendering(
+    editor: Editor<'file-diff', LAnnotation>
+  ): void {
     this.editSessionAnnotations ??= adoptEditSessionAnnotations(
       this.lineAnnotations,
       getLineAnnotationName
@@ -1947,7 +1952,7 @@ export class FileDiff<
    * diff cannot reuse the replaced diff's `cacheKey`.
    */
   public __completeEditSession(
-    editor: Editor<LAnnotation>,
+    editor: Editor<'file-diff', LAnnotation>,
     mode: 'install' | 'discard'
   ): void {
     this.settleEditSession(mode === 'install', editor);
@@ -1955,7 +1960,7 @@ export class FileDiff<
 
   private settleEditSession(
     installResult: boolean,
-    editor: Editor<LAnnotation> | undefined
+    editor: Editor<'file-diff', LAnnotation> | undefined
   ): void {
     const {
       editSessionDiff,

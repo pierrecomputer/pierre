@@ -9,6 +9,7 @@ import {
 
 import {
   File,
+  type FileEditChangeHandler,
   type FileEditCompleteEvent,
   type FileEditCompleteHandler,
   type FileOptions,
@@ -48,7 +49,7 @@ interface AcceptedCompletion<LAnnotation> {
 interface UseFileInstanceProps<LAnnotation, LCaret> {
   file: FileContents;
   options: FileOptions<LAnnotation> | undefined;
-  editorOptions: EditorOptions<LAnnotation, LCaret> | undefined;
+  editorOptions: EditorOptions<'file', LAnnotation, LCaret> | undefined;
   editStateKey: string | undefined;
   lineAnnotations: LineAnnotation<LAnnotation>[] | undefined;
   selectedLines: SelectedLineRange | null | undefined;
@@ -58,8 +59,8 @@ interface UseFileInstanceProps<LAnnotation, LCaret> {
   hasCustomHeader: boolean;
   disableWorkerPool: boolean;
   edit: boolean;
-  onEditChange?(event: EditorChangeEvent<LAnnotation, 'file'>): void;
-  onEditComplete: FileEditCompleteHandler<LAnnotation> | undefined;
+  onEditChange?: FileEditChangeHandler<LAnnotation>;
+  onEditComplete?: FileEditCompleteHandler<LAnnotation>;
 }
 
 interface UseFileInstanceReturn<LAnnotation> {
@@ -92,7 +93,7 @@ export function useFileInstance<LAnnotation, LCaret>({
   const poolManager = useContext(WorkerPoolContext);
   const createEditor = useCreateEditor<LAnnotation, LCaret>();
   const handleOnEditChange = useStableCallback(
-    (event: EditorChangeEvent<LAnnotation, 'file'>) => _onEditChange?.(event)
+    (event: EditorChangeEvent<'file', LAnnotation>) => _onEditChange?.(event)
   );
   const onEditChange = _onEditChange != null ? handleOnEditChange : undefined;
   // An accepted completion installs its file on the instance immediately,
@@ -282,7 +283,7 @@ interface MergeFileOptionsProps<LAnnotation> {
   controlledSelection: boolean;
   hasGutterRenderUtility: boolean;
   hasCustomHeader: boolean;
-  onEditChange?(event: EditorChangeEvent<LAnnotation, 'file'>): void;
+  onEditChange: FileEditChangeHandler<LAnnotation> | undefined;
   onEditComplete: FileEditCompleteHandler<LAnnotation> | undefined;
 }
 
@@ -321,7 +322,7 @@ function mergeFileOptions<LAnnotation>({
 
 function applyEdit<LAnnotation>(
   instance: File<LAnnotation>,
-  getEditor: () => Editor<LAnnotation>
+  getEditor: () => Editor<'file', LAnnotation>
 ): () => void {
   const editor = getEditor();
   try {

@@ -1,7 +1,7 @@
-import type { DiffLineAnnotation } from '../types';
 import { applyDocumentChangeToLineAnnotations } from './lineAnnotations';
 import type { TextDocument, TextDocumentChange } from './textDocument';
 import type {
+  EditHistoryLineAnnotation,
   EditorSelection,
   Position,
   Range,
@@ -476,7 +476,7 @@ export function applyTextChangeToSelections<LAnnotation>(
   textDocument: TextDocument<LAnnotation>,
   selections: EditorSelection[],
   edit: ResolvedTextEdit,
-  lineAnnotations?: DiffLineAnnotation<LAnnotation>[],
+  lineAnnotations?: EditHistoryLineAnnotation<LAnnotation>[],
   tabSize = 2,
   undoBoundary = false
 ): {
@@ -623,10 +623,7 @@ export function applyTextChangeToSelections<LAnnotation>(
   textDocument.setLastUndoSelectionsAfter(nextSelections);
   if (change !== undefined && lineAnnotations !== undefined) {
     const nextLineAnnotations =
-      applyDocumentChangeToLineAnnotations<LAnnotation>(
-        change,
-        lineAnnotations
-      );
+      applyDocumentChangeToLineAnnotations(change, lineAnnotations);
     if (nextLineAnnotations !== undefined) {
       textDocument.setLastUndoLineAnnotations(
         lineAnnotations,
@@ -697,7 +694,7 @@ export function applyTextReplaceToSelections<LAnnotation>(
   textDocument: TextDocument<LAnnotation>,
   selections: EditorSelection[],
   texts: string[],
-  lineAnnotations?: DiffLineAnnotation<LAnnotation>[],
+  lineAnnotations?: EditHistoryLineAnnotation<LAnnotation>[],
   undoBoundary = false,
   textOrder: 'selection' | 'document' = 'selection'
 ): {
@@ -850,10 +847,7 @@ export function applyTextReplaceToSelections<LAnnotation>(
   textDocument.setLastUndoSelectionsAfter(nextSelections);
   if (change !== undefined && lineAnnotations !== undefined) {
     const nextLineAnnotations =
-      applyDocumentChangeToLineAnnotations<LAnnotation>(
-        change,
-        lineAnnotations
-      );
+      applyDocumentChangeToLineAnnotations(change, lineAnnotations);
     if (nextLineAnnotations !== undefined) {
       textDocument.setLastUndoLineAnnotations(
         lineAnnotations,
@@ -921,7 +915,7 @@ export function getAutoSurroundReplacementTexts<LAnnotation>(
 export function applyTransposeToSelections<LAnnotation>(
   textDocument: TextDocument<LAnnotation>,
   selections: EditorSelection[],
-  lineAnnotations?: DiffLineAnnotation<LAnnotation>[]
+  lineAnnotations?: EditHistoryLineAnnotation<LAnnotation>[]
 ): {
   nextSelections: EditorSelection[];
   change?: TextDocumentChange;
@@ -1037,10 +1031,7 @@ export function applyTransposeToSelections<LAnnotation>(
   textDocument.setLastUndoSelectionsAfter(nextSelections);
   if (change !== undefined && lineAnnotations !== undefined) {
     const nextLineAnnotations =
-      applyDocumentChangeToLineAnnotations<LAnnotation>(
-        change,
-        lineAnnotations
-      );
+      applyDocumentChangeToLineAnnotations(change, lineAnnotations);
     if (nextLineAnnotations !== undefined) {
       textDocument.setLastUndoLineAnnotations(
         lineAnnotations,
@@ -1059,7 +1050,7 @@ export function applyTransposeToSelections<LAnnotation>(
 export function applyDeleteHardLineForwardToSelections<LAnnotation>(
   textDocument: TextDocument<LAnnotation>,
   selections: EditorSelection[],
-  lineAnnotations?: DiffLineAnnotation<LAnnotation>[]
+  lineAnnotations?: EditHistoryLineAnnotation<LAnnotation>[]
 ): {
   nextSelections: EditorSelection[];
   change?: TextDocumentChange;
@@ -1088,7 +1079,7 @@ export function applyDeleteSoftLineBackwardToSelections<LAnnotation>(
   textDocument: TextDocument<LAnnotation>,
   selections: EditorSelection[],
   getSoftLineStart?: (line: number, character: number) => number,
-  lineAnnotations?: DiffLineAnnotation<LAnnotation>[]
+  lineAnnotations?: EditHistoryLineAnnotation<LAnnotation>[]
 ): {
   nextSelections: EditorSelection[];
   change?: TextDocumentChange;
@@ -1140,7 +1131,7 @@ export function applyDeleteSoftLineBackwardToSelections<LAnnotation>(
 export function applyDeleteWordBackwardToSelections<LAnnotation>(
   textDocument: TextDocument<LAnnotation>,
   selections: EditorSelection[],
-  lineAnnotations?: DiffLineAnnotation<LAnnotation>[]
+  lineAnnotations?: EditHistoryLineAnnotation<LAnnotation>[]
 ): {
   nextSelections: EditorSelection[];
   change?: TextDocumentChange;
@@ -1241,7 +1232,7 @@ export function applyDeleteCharacterToSelections<LAnnotation>(
   textDocument: TextDocument<LAnnotation>,
   selections: EditorSelection[],
   forward: boolean,
-  lineAnnotations?: DiffLineAnnotation<LAnnotation>[],
+  lineAnnotations?: EditHistoryLineAnnotation<LAnnotation>[],
   tabSize = 2
 ): {
   nextSelections: EditorSelection[];

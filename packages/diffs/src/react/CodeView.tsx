@@ -69,7 +69,10 @@ interface CodeViewBaseProps<LAnnotation> {
    * Creation-time options passed to the nearest EditProvider factory.
    * CodeView supplies its item-specific change callback.
    */
-  editorOptions?: Omit<EditorOptions<LAnnotation>, 'onChange'>;
+  editorOptions?: Omit<
+    EditorOptions<EditorDocumentKind, LAnnotation>,
+    'onChange'
+  >;
   /** Resolve an in-memory retention key for an item's draft and undo history. */
   getEditStateKey?(item: CodeViewItem<LAnnotation>): string | undefined;
   className?: string;
@@ -91,7 +94,7 @@ interface CodeViewBaseProps<LAnnotation> {
    * which can create update loops.
    */
   onItemEditChange?(
-    event: EditorChangeEvent<LAnnotation, 'file' | 'diff'>,
+    event: EditorChangeEvent<EditorDocumentKind, LAnnotation>,
     item: CodeViewItem<LAnnotation>
   ): void;
   /**
@@ -150,7 +153,9 @@ export interface CodeViewHandle<LAnnotation> {
   setSelectedLines(selection: CodeViewLineSelection | null): void;
   getSelectedLines(): CodeViewLineSelection | null;
   clearSelectedLines(): void;
-  getEditor(id: string): Editor<LAnnotation> | undefined;
+  getEditor(
+    id: string
+  ): Editor<'file', LAnnotation> | Editor<'file-diff', LAnnotation> | undefined;
   getInstance(): CodeViewClass<LAnnotation> | undefined;
 }
 
@@ -248,34 +253,30 @@ function CodeViewInner<LAnnotation = undefined>(
   // Keep the adapter stable so provider and editor-option changes affect the
   // next item edit session without forcing CodeView to reconcile active editors.
   const createEditor = useStableCallback(
-    (
-      documentKind: EditorDocumentKind,
-      options: CodeViewCreateEditorOptions<LAnnotation>,
+    <TDocumentKind extends EditorDocumentKind>(
+      documentKind: TDocumentKind,
+      options: CodeViewCreateEditorOptions<TDocumentKind, LAnnotation>,
       editStateKey?: string
-    ): Editor<LAnnotation> => {
+    ): Editor<TDocumentKind, LAnnotation> => {
       if (contextCreateEditor == null) {
         throw new Error('CodeView: EditContext is not attached');
       }
 
+      const resolvedOptions = {
+        ...editorOptions,
+        ...options,
+      } as EditorOptions<TDocumentKind, LAnnotation>;
       const editor = contextCreateEditor(
         documentKind,
-        {
-          ...editorOptions,
-          ...options,
-        },
+        resolvedOptions,
         editStateKey
       );
-      if (editor == null) {
-        throw new Error(
-          'CodeView: EditProvider.createEditor must return an editor instance'
-        );
-      }
       return editor;
     }
   );
   const emitItemEditChange = useStableCallback(
     (
-      event: EditorChangeEvent<LAnnotation, 'file' | 'diff'>,
+      event: EditorChangeEvent<EditorDocumentKind, LAnnotation>,
       item: CodeViewItem<LAnnotation>
     ) => {
       onItemEditChange?.(event, item);

@@ -2,13 +2,15 @@ import { type CSSProperties, type ReactNode } from 'react';
 
 import type {
   FileOptions as FileClassOptions,
+  FileEditChangeHandler,
   FileEditCompleteHandler,
 } from '../components/File';
 import type {
   FileDiffOptions as FileDiffClassOptions,
+  FileDiffEditChangeHandler,
   FileDiffEditCompleteHandler,
 } from '../components/FileDiff';
-import type { EditorChangeEvent, EditorOptions } from '../edit';
+import type { EditorOptions } from '../edit';
 import type { GetHoveredLineResult } from '../managers/InteractionManager';
 import type {
   DiffLineAnnotation,
@@ -36,7 +38,7 @@ export interface DiffBasePropsReact<LAnnotation, LCaret = undefined> {
   /** Whether this surface has an active edit session. */
   edit?: boolean;
   /** Creation-time options passed to the nearest EditProvider factory. */
-  editorOptions?: EditorOptions<LAnnotation, LCaret>;
+  editorOptions?: EditorOptions<'file-diff', LAnnotation, LCaret>;
   /** Retain this editable draft and its undo/redo history in memory. */
   editStateKey?: string;
   /**
@@ -48,7 +50,7 @@ export interface DiffBasePropsReact<LAnnotation, LCaret = undefined> {
    * cannot edit the contents of the old file. You are not getting back an
    * update `fileDiff` during this edit session.
    */
-  onEditChange?(event: EditorChangeEvent<LAnnotation, 'diff'>): void;
+  onEditChange?: FileDiffEditChangeHandler<LAnnotation>;
   /**
    * Fired when `edit` toggles false or the component unmounts. Return `'accept'`
    * to install the completed diff and annotations or `'reject'` to restore the
@@ -78,7 +80,7 @@ export interface FileProps<LAnnotation, LCaret = undefined> {
   /** Whether this surface has an active edit session. */
   edit?: boolean;
   /** Creation-time options passed to the nearest EditProvider factory. */
-  editorOptions?: EditorOptions<LAnnotation, LCaret>;
+  editorOptions?: EditorOptions<'file', LAnnotation, LCaret>;
   /** Retain this editable draft and its undo/redo history in memory. */
   editStateKey?: string;
   /**
@@ -86,7 +88,7 @@ export interface FileProps<LAnnotation, LCaret = undefined> {
    * `EditorChangeEvent` the editor reports through its own `onChange`. Don't
    * feed this data back into the component.
    */
-  onEditChange?(event: EditorChangeEvent<LAnnotation, 'file'>): void;
+  onEditChange?: FileEditChangeHandler<LAnnotation>;
   /**
    * Fired when `edit` toggles false or the component unmounts. Return `'accept'`
    * to install the completed file and annotations or `'reject'` to restore the

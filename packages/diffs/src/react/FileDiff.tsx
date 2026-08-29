@@ -1,6 +1,7 @@
 'use client';
 
 import type {
+  FileDiffEditChangeHandler,
   FileDiffEditCompleteEvent,
   FileDiffEditCompleteHandler,
 } from '../components/FileDiff';
@@ -12,6 +13,7 @@ import { templateRender } from './utils/templateRender';
 import { useFileDiffInstance } from './utils/useFileDiffInstance';
 
 export type {
+  FileDiffEditChangeHandler,
   FileDiffEditCompleteEvent,
   FileDiffEditCompleteHandler,
   FileDiffMetadata,

@@ -1,4 +1,3 @@
-import type { DiffLineAnnotation } from '../types';
 import { countLineBreaks } from '../utils/computeFileOffsets';
 import {
   coalesceEditStackEntries,
@@ -309,8 +308,8 @@ export class TextDocument<LAnnotation> {
   }
 
   setLastUndoLineAnnotations(
-    lineAnnotationsBefore: DiffLineAnnotation<LAnnotation>[],
-    lineAnnotationsAfter: DiffLineAnnotation<LAnnotation>[]
+    lineAnnotationsBefore: EditHistoryLineAnnotation<LAnnotation>[],
+    lineAnnotationsAfter: EditHistoryLineAnnotation<LAnnotation>[]
   ): void {
     this.#editStack.setLastUndoLineAnnotations(
       lineAnnotationsBefore,
