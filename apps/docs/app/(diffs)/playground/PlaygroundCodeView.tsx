@@ -40,14 +40,14 @@ interface PlaygroundCodeViewProps {
   enableLineSelection: boolean;
   enableGutterComments: boolean;
   showAnnotations: boolean;
-  editPrediction: NonNullable<
+  editPrediction?: NonNullable<
     EditorOptions<
       EditorType,
       PlaygroundAnnotationMetadata,
       undefined
     >['editPrediction']
   >;
-  onEditingChange: (editing: boolean) => void;
+  onEditingChange?: (editing: boolean) => void;
 }
 
 // Renders a mix of diff and file items in a CodeView. Unlike the Virtualizer
@@ -92,12 +92,12 @@ export function PlaygroundCodeView({
   const hasEditingItem = items.some((item) => item.edit === true);
 
   useEffect(() => {
-    onEditingChange(hasEditingItem);
+    onEditingChange?.(hasEditingItem);
   }, [hasEditingItem, onEditingChange]);
 
   useEffect(
     () => () => {
-      onEditingChange(false);
+      onEditingChange?.(false);
     },
     [onEditingChange]
   );
