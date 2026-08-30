@@ -225,6 +225,9 @@
         (global.set $ptr (i32.add (local.get $candidate) (i32.const 1)))
         (br $search)))
     (call $emitTok (enum.get $Token.string) (local.get $lhs) (global.get $ptr))
+    (if (i32.eqz (local.get $matched))
+      (then (call $streamSetFixed
+        (local.get $lhs) (local.get $n) (enum.get $Token.string))))
     (i32.const 1))
 
   (func $hlSql

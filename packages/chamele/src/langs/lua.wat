@@ -8,6 +8,7 @@
     (local $i i32)
     (local $lhs i32)
     (local $p i32)
+    (local $closed i32)
     (local.set $lhs (global.get $ptr))
     (local.set $bracket (i32.add (global.get $ptr) (local.get $prefix)))
     (if (i32.ge_u (local.get $bracket) (global.get $end))
@@ -49,10 +50,23 @@
                        (i32.eq (i32.load8_u (local.get $p)) (i32.const "]"))))
           (then
             (global.set $ptr (i32.add (local.get $p) (i32.const 1)))
+            (local.set $closed (i32.const 1))
             (br $done)))
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
         (br $scan)))
     (call $emitTok (local.get $hl) (local.get $lhs) (global.get $ptr))
+    (if (i32.eqz (local.get $closed))
+      (then
+        (i32.store8 (i32.const $mem.streamDelimiter) (i32.const "]"))
+        (memory.fill
+          (i32.const $mem.streamDelimiter+1) (i32.const "=") (local.get $eq))
+        (i32.store8
+          (i32.add (i32.const $mem.streamDelimiter+1) (local.get $eq))
+          (i32.const "]"))
+        (call $streamSetFixed
+          (i32.const $mem.streamDelimiter)
+          (i32.add (local.get $eq) (i32.const 2))
+          (local.get $hl))))
     (i32.const 1))
 
   (func $luaWordHl (param $lhs i32) (param $rhs i32) (result i32)

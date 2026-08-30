@@ -24,6 +24,34 @@
   (global $tokenLines (mut i32) (i32.const 0)) ;; line-record mode: UTF-16 ends plus -1 newline markers
   (global $recByte (mut i32) (i32.const 0))
   (global $recChar (mut i32) (i32.const 0))
+  (global $recCarryHl (mut i32) (i32.const -1))
+  (global $streaming (mut i32) (i32.const 0))
+  (global $streamReset (mut i32) (i32.const 0))
+  (global $streamDepth (mut i32) (i32.const 0))
+  (global $streamMode (mut i32) (i32.const 0))
+  (global $streamA (mut i32) (i32.const 0))
+  (global $streamB (mut i32) (i32.const 0))
+  (global $streamC (mut i32) (i32.const 0))
+  (global $streamHl (mut i32) (i32.const 0))
+  (global $streamRegionKind (mut i32) (i32.const 0))
+  (global $streamRegionStarted (mut i32) (i32.const 0))
+
+  (func $streamBegin (param $reset i32)
+    (global.set $streaming (i32.const 1))
+    (global.set $streamReset (local.get $reset))
+    (global.set $streamDepth (i32.const 0))
+    (if (local.get $reset)
+      (then
+        (global.set $streamMode (i32.const 0))
+        (global.set $streamRegionKind (i32.const 0)))))
+
+  (func $streamEnd
+    (global.set $streaming (i32.const 0))
+    (global.set $streamDepth (i32.const 0)))
+
+  (func $streamDisable
+    (global.set $streaming (i32.const 0))
+    (global.set $streamDepth (i32.const 0)))
 
   ;; write one byte as two lowercase hex digits
   (func $hexByte (param $b i32)
@@ -224,6 +252,26 @@
     (i32.store (global.get $out) (i32.sub (local.get $rhs) (i32.const 65536)))
     (i32.store offset=4 (global.get $out) (local.get $hl))
     (global.set $out (i32.add (global.get $out) (i32.const 8))))
+
+  ;; Preserve the open token-record style between incremental lexer calls so
+  ;; leading whitespace in the next chunk keeps the same span.
+  (func $recStreamBegin (param $reset i32)
+    (if (local.get $reset)
+      (then
+        (global.set $recCarryHl (i32.const -1))
+        (return)))
+    (if (i32.ge_s (global.get $recCarryHl) (i32.const 0))
+      (then
+        (call $ensureCap (i32.const 16))
+        (i32.store (global.get $out) (i32.const 0))
+        (i32.store offset=4 (global.get $out) (global.get $recCarryHl))
+        (global.set $out (i32.add (global.get $out) (i32.const 8))))))
+
+  (func $recStreamEnd
+    (if (i32.gt_u (global.get $out) (i32.load (i32.const 6)))
+      (then
+        (global.set $recCarryHl
+          (i32.load (i32.sub (global.get $out) (i32.const 4)))))))
 
   ;; Append a line-aware `(endUtf16:u32, hl:u32)` record. Token id -1 marks a
   ;; line terminator and ends after it. Other equal neighbors merge.

@@ -102,6 +102,7 @@
   ;; Basic strings need TOML's full unicode escapes and triple-quote close.
   (func $tomlBasicString (param $multiline i32) (param $hl i32)
     (local $c i32)
+    (local $closed i32)
     (local $e i32)
     (local $escape i32)
     (local $event i32)
@@ -147,7 +148,10 @@
                 (local.set $quotes (i32.add (local.get $quotes) (i32.const 1)))
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
                 (br $quote)))
-            (br_if $done (i32.ge_u (local.get $quotes) (i32.const 3)))
+            (if (i32.ge_u (local.get $quotes) (i32.const 3))
+              (then
+                (local.set $closed (i32.const 1))
+                (br $done)))
             (br $scan)))
 
         ;; Only TOML escape productions receive the escape capture.
@@ -264,7 +268,10 @@
         (global.set $ptr (local.get $e))
         (local.set $seg (global.get $ptr))
         (br $scan)))
-    (call $emitTok (local.get $hl) (local.get $seg) (global.get $ptr)))
+    (call $emitTok (local.get $hl) (local.get $seg) (global.get $ptr))
+    (if (i32.and (local.get $multiline) (i32.eqz (local.get $closed)))
+      (then (call $streamSetFixed32
+        (i32.const 0x222222) (i32.const 3) (local.get $hl)))))
 
   (func $hlToml
     (local $base i32)

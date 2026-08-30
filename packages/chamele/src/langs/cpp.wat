@@ -194,6 +194,18 @@
               (global.set $ptr (i32.add (global.get $ptr) (i32.const 16)))
               (br $raw)))
           (call $emitTok (enum.get $Token.string) (local.get $lhs) (global.get $ptr))
+          (if (i32.eq (global.get $ptr) (global.get $end))
+            (then
+              (i32.store8 (i32.const $mem.streamDelimiter) (i32.const ")"))
+              (memory.copy
+                (i32.const $mem.streamDelimiter+1) (local.get $d) (local.get $dlen))
+              (i32.store8
+                (i32.add (i32.const $mem.streamDelimiter+1) (local.get $dlen))
+                (i32.const 34))
+              (call $streamSetFixed
+                (i32.const $mem.streamDelimiter)
+                (i32.add (local.get $dlen) (i32.const 2))
+                (enum.get $Token.string))))
           (return))))
 
     ;; An invalid raw prefix falls back to an ordinary quoted literal. This is

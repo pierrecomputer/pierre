@@ -2,6 +2,10 @@
   (import "../common.wat")
   (import "./html.wat")
 
+  (global $phpStreamingCode (mut i32) (i32.const 0))
+  (global $phpStreamDecl (mut i32) (i32.const 0))
+  (global $phpStreamMember (mut i32) (i32.const 0))
+
   (func $phpIsOpen (param $p i32) (result i32)
     (local $c i32)
     (if (i32.gt_u (i32.add (local.get $p) (i32.const 3)) (global.get $end))
@@ -298,6 +302,10 @@
     (local $member i32)
     (local $next i32)
     (local $p i32)
+    (if (i32.and (global.get $streaming) (global.get $phpStreamingCode))
+      (then
+        (local.set $decl (global.get $phpStreamDecl))
+        (local.set $member (global.get $phpStreamMember))))
     (block $done
       (loop $token
         (local.set $lhs (global.get $ptr))
@@ -447,37 +455,63 @@
         (if (i32.ne (local.get $c) (i32.const "&"))
           (then (local.set $decl (i32.const 0))))
         (local.set $member (i32.const 0))
-        (br $token))))
+        (br $token)))
+    (if (global.get $streaming)
+      (then
+        (global.set $phpStreamDecl (local.get $decl))
+        (global.set $phpStreamMember (local.get $member)))))
+
+  (func $phpStreamResume (result i32)
+    (local $lhs i32)
+    (if (i32.eqz (global.get $phpStreamingCode))
+      (then (return (i32.const 0))))
+    (call $phpCode)
+    (if (i32.and
+          (i32.lt_u (i32.add (global.get $ptr) (i32.const 1)) (global.get $end))
+          (i32.eq (i32.load16_u (global.get $ptr)) (i32.const "?>")))
+      (then
+        (local.set $lhs (global.get $ptr))
+        (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))
+        (call $emitTok (enum.get $Token.preproc) (local.get $lhs) (global.get $ptr))
+        (global.set $phpStreamingCode (i32.const 0))
+        (return (i32.const 0))))
+    (i32.const 1))
 
   (func $hlPhp
     (local $open i32)
     (local $p i32)
     (local $saveEnd i32)
     (call $lexEmitLeadingContinuation)
-    (local.set $open (call $phpFindOpen (global.get $ptr)))
-    (if (i32.eq (local.get $open) (global.get $end))
-      (then
-        (local.set $p (call $lexSkipSpaceAt (global.get $ptr)))
-        (if (i32.and
-              (i32.lt_u (i32.add (local.get $p) (i32.const 1)) (global.get $end))
-              (i32.and
-                (i32.eq (i32.load8_u (local.get $p)) (i32.const "<"))
-                (i32.or
-                  (call $lexIsIdentStart (i32.load8_u offset=1 (local.get $p)))
+    (block $out
+      (local.set $open (call $phpFindOpen (global.get $ptr)))
+      (if (i32.eq (local.get $open) (global.get $end))
+        (then
+          (local.set $p (call $lexSkipSpaceAt (global.get $ptr)))
+          (if (i32.and
+                (i32.lt_u (i32.add (local.get $p) (i32.const 1)) (global.get $end))
+                (i32.and
+                  (i32.eq (i32.load8_u (local.get $p)) (i32.const "<"))
                   (i32.or
-                    (i32.eq (i32.load8_u offset=1 (local.get $p)) (i32.const "!"))
-                    (i32.eq (i32.load8_u offset=1 (local.get $p)) (i32.const "/"))))))
-          (then (call $hlHtml))
-          (else
-            (call $phpCode)
-            (if (i32.lt_u (global.get $ptr) (global.get $end))
-              (then
-                (local.set $open (global.get $ptr))
-                (global.set $ptr (global.get $end))
-                (call $emitTok (enum.get $Token.none) (local.get $open) (global.get $ptr))))))
-        (return)))
-    (block $done
-      (loop $part
+                    (call $lexIsIdentStart (i32.load8_u offset=1 (local.get $p)))
+                    (i32.or
+                      (i32.eq (i32.load8_u offset=1 (local.get $p)) (i32.const "!"))
+                      (i32.eq (i32.load8_u offset=1 (local.get $p)) (i32.const "/"))))))
+            (then (call $hlHtml))
+            (else
+              (global.set $phpStreamingCode (i32.const 0))
+              (call $phpCode)
+              (if (i32.and
+                    (global.get $streaming)
+                    (i32.eq (global.get $ptr) (global.get $end)))
+                (then (global.set $phpStreamingCode (i32.const 1))))
+              (if (i32.lt_u (global.get $ptr) (global.get $end))
+                (then
+                  (local.set $open (global.get $ptr))
+                  (global.set $ptr (global.get $end))
+                  (call $emitTok (enum.get $Token.none) (local.get $open) (global.get $ptr))))))
+          (br $out)))
+      (block $done
+        (loop $part
         (if (i32.lt_u (global.get $ptr) (local.get $open))
           (then
             (local.set $saveEnd (global.get $end))
@@ -490,6 +524,7 @@
           (select (i32.const 3) (i32.const 5)
             (i32.eq (i32.load8_u offset=2 (global.get $ptr)) (i32.const "=")))))
         (call $emitTok (enum.get $Token.preproc) (local.get $open) (global.get $ptr))
+        (global.set $phpStreamingCode (i32.const 0))
         (call $phpCode)
         (if (i32.and
               (i32.lt_u (i32.add (global.get $ptr) (i32.const 1)) (global.get $end))
@@ -498,7 +533,12 @@
             (local.set $open (global.get $ptr))
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))
             (call $emitTok (enum.get $Token.preproc) (local.get $open) (global.get $ptr)))
-          (else (br $done)))
+          (else
+            (if (i32.and
+                  (global.get $streaming)
+                  (i32.eq (global.get $ptr) (global.get $end)))
+              (then (global.set $phpStreamingCode (i32.const 1))))
+            (br $done)))
         (local.set $open (call $phpFindOpen (global.get $ptr)))
         (if (i32.lt_u (global.get $ptr) (local.get $open))
           (then
@@ -507,5 +547,5 @@
             (call $hlHtml)
             (global.set $end (local.get $saveEnd))))
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
-        (br $part))))
+          (br $part)))))
 )

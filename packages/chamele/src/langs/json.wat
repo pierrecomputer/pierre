@@ -1,7 +1,5 @@
 (module
-  (import "../token.wat")
-  (import "../scan.wat")
-  (import "../emit.wat")
+  (import "../common.wat")
 
   (func $hlJson
     (local $c i32)
@@ -91,9 +89,7 @@
                 (br $next)))
             (if (i32.eq (local.get $c) (i32.const "*"))
               (then
-                (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))
-                (call $scanBlockCommentEnd)
-                (call $emitTok (enum.get $Token.comment) (local.get $lhs) (global.get $ptr))
+                (call $lexBlockComment (i32.const 2) (enum.get $Token.comment))
                 (br $next)))
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (call $emitTok (enum.get $Token.none) (local.get $lhs) (global.get $ptr))

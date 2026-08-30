@@ -3,7 +3,7 @@
 `@pierre/chamele` is a fast code highlighter written by hand in WebAssembly Text
 (WAT).
 
-- **Lightweight**: 28KB (gzipped wasm) for 29 languages
+- **Lightweight**: 32.7KB (gzipped Wasm) for 32 languages
 - **Fast**: 91–668× faster than Shiki in the latest
   [benchmark](./benchmark/README.md)
 - Built-in language lexers, no external grammar definitions needed
@@ -68,7 +68,8 @@ Pass `theme` for one theme or `themes` for multiple color schemes.
 `codeToHast` also accepts Shiki-style `transformers` and `decorations`.
 
 Use `TokenizeStream` for streaming and `LiveTokenizer` for line edits. Each owns
-a Wasm instance and text buffer:
+a Wasm instance and text buffer. Streams preserve lexer state for every language
+and scan only newly completed chunks:
 
 ```js
 import { TokenizeStream, LiveTokenizer } from '@pierre/chamele';

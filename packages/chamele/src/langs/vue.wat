@@ -283,6 +283,7 @@
 
   (func $hlVue
     (local $c i32)
+    (local $complete i32)
     (local $from i32)
     (local $kind i32)
     (local $p i32)
@@ -344,20 +345,35 @@
                 (i32.eq (i32.load8_u offset=1 (local.get $p)) (i32.const "{"))))
           (then
             (local.set $to (call $tsxExpressionEnd (local.get $p) (local.get $p)))
+            (local.set $complete (i32.and
+              (i32.ge_u
+                (i32.sub (local.get $to) (local.get $p))
+                (i32.const 4))
+              (i32.eq
+                (i32.and
+                  (i32.load (i32.sub (local.get $to) (i32.const 2)))
+                  (i32.const 0xffff))
+                (i32.const "}}"))))
             (call $vueHtmlRange (local.get $from) (local.get $p))
             (call $emitTok (enum.get $Token.punctuation.special)
               (local.get $p) (i32.add (local.get $p) (i32.const 2)))
-            (call $vueTsxRange
-              (i32.add (local.get $p) (i32.const 2))
-              (select (i32.sub (local.get $to) (i32.const 2)) (local.get $to)
-                (i32.and
-                  (i32.ge_u (i32.sub (local.get $to) (local.get $p)) (i32.const 4))
-                  (i32.eq (i32.and (i32.load (i32.sub (local.get $to) (i32.const 2))) (i32.const 0xffff))
-                          (i32.const "}}")))))
-            (if (i32.and
-                  (i32.ge_u (i32.sub (local.get $to) (local.get $p)) (i32.const 4))
-                  (i32.eq (i32.and (i32.load (i32.sub (local.get $to) (i32.const 2))) (i32.const 0xffff))
-                          (i32.const "}}")))
+            (if (i32.and (global.get $streaming) (i32.eqz (local.get $complete)))
+              (then
+                (global.set $ptr (global.get $end))
+                (call $streamSetRegion (i32.const 6))
+                (global.set $ptr (i32.add (local.get $p) (i32.const 2)))
+                (drop (call $hlTsxExpressionStream
+                  (i32.const 1) (i32.const 2)))
+                (global.set $ptr (global.get $end))
+                (global.set $streamRegionStarted (i32.const 1)))
+              (else
+                (call $vueTsxRange
+                  (i32.add (local.get $p) (i32.const 2))
+                  (select
+                    (i32.sub (local.get $to) (i32.const 2))
+                    (local.get $to)
+                    (local.get $complete)))))
+            (if (local.get $complete)
               (then
                 (call $emitTok (enum.get $Token.punctuation.special)
                   (i32.sub (local.get $to) (i32.const 2)) (local.get $to))))

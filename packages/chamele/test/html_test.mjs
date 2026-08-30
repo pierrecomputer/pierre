@@ -160,7 +160,7 @@ void t.test('html: adjacent same-color tokens merge', () => {
   assert.ok(spans.some((s) => s.text === '><'));
 });
 
-void t.test('html: <script> body is highlighted as TSX', () => {
+void t.test('html: <script> body is highlighted as JavaScript', () => {
   const out = checkInvariants(
     html.hl,
     '<script>const x = "s"; // c\n</script>'

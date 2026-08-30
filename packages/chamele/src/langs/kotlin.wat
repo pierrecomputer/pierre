@@ -170,7 +170,9 @@
             (br $loop)))
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
         (br $loop)))
-    (call $emitTok (local.get $hl) (local.get $lhs) (global.get $ptr)))
+    (call $emitTok (local.get $hl) (local.get $lhs) (global.get $ptr))
+    (call $streamSetNested
+      (local.get $depth) (i32.const "/*") (i32.const "*/") (local.get $hl)))
 
   (func $kotlinString (param $triple i32)
     (local $c i32) (local $c2 i32) (local $e i32) (local $seg i32) (local $template i32)
@@ -225,7 +227,12 @@
             (br $scan)))
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
         (br $scan)))
-    (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr)))
+    (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
+    (if (i32.and
+          (local.get $triple)
+          (i32.eq (global.get $ptr) (global.get $end)))
+      (then (call $streamSetFixed32
+        (i32.const 0x222222) (i32.const 3) (enum.get $Token.string)))))
 
   (func $kotlinIsOp (param $c i32) (result i32)
     (i32.or

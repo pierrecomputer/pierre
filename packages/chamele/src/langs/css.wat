@@ -1,7 +1,5 @@
 (module
-  (import "../token.wat")
-  (import "../scan.wat")
-  (import "../emit.wat")
+  (import "../common.wat")
 
   ;; identifier-continuation: a-z A-Z 0-9 `-` `_` and any byte >= 128 - CSS
   ;; identifiers may contain non-ASCII code points; UTF-8 continuation bytes are >= 128
@@ -283,9 +281,7 @@
         (if (i32.and (i32.eq (local.get $c) (i32.const "/"))
                      (i32.eq (local.get $c2) (i32.const "*")))
           (then
-            (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))
-            (call $scanBlockCommentEnd)
-            (call $emitTok (enum.get $Token.comment) (local.get $lhs) (global.get $ptr))
+            (call $lexBlockComment (i32.const 2) (enum.get $Token.comment))
             (br $next)))
 
         ;; statement start: at-rule, or the selector/declaration look-ahead

@@ -139,7 +139,9 @@
             (br $loop)))
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
         (br $loop)))
-    (call $emitTok (local.get $hl) (local.get $lhs) (global.get $ptr)))
+    (call $emitTok (local.get $hl) (local.get $lhs) (global.get $ptr))
+    (call $streamSetNested
+      (local.get $depth) (i32.const "/*") (i32.const "*/") (local.get $hl)))
 
   (func $swiftRawStart (result i32)
     (local $p i32)
@@ -191,7 +193,23 @@
               (then (global.set $ptr (local.get $q)) (br $done)))))
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
         (br $scan)))
-    (call $emitTok (enum.get $Token.string) (local.get $lhs) (global.get $ptr)))
+    (call $emitTok (enum.get $Token.string) (local.get $lhs) (global.get $ptr))
+    (if (i32.eq (global.get $ptr) (global.get $end))
+      (then
+        (memory.fill
+          (i32.const $mem.streamDelimiter) (i32.const 34)
+          (select (i32.const 3) (i32.const 1) (local.get $triple)))
+        (memory.fill
+          (i32.add
+            (i32.const $mem.streamDelimiter)
+            (select (i32.const 3) (i32.const 1) (local.get $triple)))
+          (i32.const "#") (local.get $hashes))
+        (call $streamSetFixed
+          (i32.const $mem.streamDelimiter)
+          (i32.add
+            (local.get $hashes)
+            (select (i32.const 3) (i32.const 1) (local.get $triple)))
+          (enum.get $Token.string)))))
 
   (func $swiftIsOp (param $c i32) (result i32)
     (i32.or

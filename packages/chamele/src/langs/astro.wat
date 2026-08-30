@@ -154,7 +154,20 @@
                   (then (local.set $close (local.get $p)) (br $frontDone)))
                 (local.set $p (call $astroAfterLine (local.get $lineEnd)))
                 (br $front)))
-            (call $astroTsxRange (local.get $body) (local.get $close))
+            (if (i32.and
+                  (global.get $streaming)
+                  (i32.eq (local.get $close) (global.get $end)))
+              (then
+                (global.set $ptr (global.get $end))
+                (call $streamSetRegion (i32.const 3))
+                (global.set $ptr (local.get $body))
+                (local.set $lineEnd (global.get $end))
+                (global.set $end (local.get $close))
+                (call $hlTsxStream (i32.const 1))
+                (global.set $end (local.get $lineEnd))
+                (global.set $ptr (local.get $close))
+                (global.set $streamRegionStarted (i32.const 1)))
+              (else (call $astroTsxRange (local.get $body) (local.get $close))))
             (if (i32.lt_u (local.get $close) (global.get $end))
               (then
                 (global.set $ptr (local.get $close))
@@ -195,7 +208,27 @@
           (then
             (local.set $to (call $tsxExpressionEnd (local.get $p) (local.get $p)))
             (call $astroHtmlRange (local.get $from) (local.get $p))
-            (call $astroTsxRange (local.get $p) (local.get $to))
+            (if (i32.and
+                  (global.get $streaming)
+                  (i32.and
+                    (i32.eq (local.get $to) (global.get $end))
+                    (i32.or
+                      (i32.eq (local.get $to) (local.get $p))
+                      (i32.ne
+                        (i32.load8_u (i32.sub (local.get $to) (i32.const 1)))
+                        (i32.const "}")))))
+              (then
+                (call $emitTok
+                  (enum.get $Token.punctuation.bracket)
+                  (local.get $p) (i32.add (local.get $p) (i32.const 1)))
+                (global.set $ptr (global.get $end))
+                (call $streamSetRegion (i32.const 8))
+                (global.set $ptr (i32.add (local.get $p) (i32.const 1)))
+                (drop (call $hlTsxExpressionStream
+                  (i32.const 1) (i32.const 1)))
+                (global.set $ptr (global.get $end))
+                (global.set $streamRegionStarted (i32.const 1)))
+              (else (call $astroTsxRange (local.get $p) (local.get $to))))
             (local.set $from (local.get $to))
             (local.set $p (local.get $to))
             (br $scan)))

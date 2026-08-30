@@ -1,26 +1,14 @@
 (module
   (import "../common.wat")
 
-  ;; Python string literal at $ptr, including a 0-2 byte prefix. Triple quotes
-  ;; are multiline; raw literals retain backslashes and f-string braces are
-  ;; surfaced without attempting to recursively parse their expressions.
-  (func $pyString (param $prefix i32) (param $quote i32)
-        (param $raw i32) (param $format i32)
+  ;; Scan a Python string body. $seg includes the prefix and opening quote for
+  ;; a new literal and starts at $ptr when resuming a stream chunk. Returns one
+  ;; after the closing quote, two after a continued line, or zero otherwise.
+  (func $pyStringBody (param $quote i32) (param $raw i32)
+        (param $format i32) (param $triple i32) (param $seg i32) (result i32)
     (local $c i32)
     (local $e i32)
-    (local $seg i32)
-    (local $triple i32)
-    (local.set $seg (global.get $ptr))
-    (global.set $ptr (i32.add (global.get $ptr) (local.get $prefix)))
-    (if (i32.and
-          (i32.lt_u (i32.add (global.get $ptr) (i32.const 2)) (global.get $end))
-          (i32.and
-            (i32.eq (i32.load8_u offset=1 (global.get $ptr)) (local.get $quote))
-            (i32.eq (i32.load8_u offset=2 (global.get $ptr)) (local.get $quote))))
-      (then
-        (local.set $triple (i32.const 1))
-        (global.set $ptr (i32.add (global.get $ptr) (i32.const 3))))
-      (else (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))
+    (local $status i32)
     (block $done
       (loop $scan
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
@@ -36,9 +24,11 @@
                         (i32.eq (i32.load8_u offset=2 (global.get $ptr)) (local.get $quote))))
                   (then
                     (global.set $ptr (i32.add (global.get $ptr) (i32.const 3)))
+                    (local.set $status (i32.const 1))
                     (br $done))))
               (else
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+                (local.set $status (i32.const 1))
                 (br $done)))))
         (br_if $done (i32.and
           (i32.eqz (local.get $triple))
@@ -68,6 +58,18 @@
                 (br $utf8)))
             (call $emitTok (enum.get $Token.string.escape) (global.get $ptr) (local.get $e))
             (global.set $ptr (local.get $e))
+            (if (i32.and
+                  (i32.eq (global.get $ptr) (global.get $end))
+                  (i32.and
+                    (i32.gt_u (global.get $ptr) (local.get $seg))
+                    (i32.or
+                      (i32.eq
+                        (i32.load8_u (i32.sub (global.get $ptr) (i32.const 1)))
+                        (i32.const 10))
+                      (i32.eq
+                        (i32.load8_u (i32.sub (global.get $ptr) (i32.const 1)))
+                        (i32.const 13)))))
+              (then (local.set $status (i32.const 2))))
             (local.set $seg (global.get $ptr))
             (br $scan)))
         (if (i32.and
@@ -89,7 +91,73 @@
             (br $scan)))
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
         (br $scan)))
-    (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr)))
+    (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
+    (local.get $status))
+
+  ;; Python string literal at $ptr, including a 0-2 byte prefix. Triple quotes
+  ;; are multiline; raw literals retain backslashes and f-string braces are
+  ;; surfaced without attempting to recursively parse their expressions.
+  (func $pyString (param $prefix i32) (param $quote i32)
+        (param $raw i32) (param $format i32)
+    (local $seg i32)
+    (local $status i32)
+    (local $triple i32)
+    (local.set $seg (global.get $ptr))
+    (global.set $ptr (i32.add (global.get $ptr) (local.get $prefix)))
+    (if (i32.and
+          (i32.lt_u (i32.add (global.get $ptr) (i32.const 2)) (global.get $end))
+          (i32.and
+            (i32.eq (i32.load8_u offset=1 (global.get $ptr)) (local.get $quote))
+            (i32.eq (i32.load8_u offset=2 (global.get $ptr)) (local.get $quote))))
+      (then
+        (local.set $triple (i32.const 1))
+        (global.set $ptr (i32.add (global.get $ptr) (i32.const 3))))
+      (else (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))
+    (local.set $status (call $pyStringBody
+      (local.get $quote) (local.get $raw) (local.get $format)
+      (local.get $triple) (local.get $seg)))
+    (if (i32.and
+          (global.get $streaming)
+          (i32.and
+            (i32.eq (global.get $ptr) (global.get $end))
+            (i32.and
+              (i32.ne (local.get $status) (i32.const 1))
+              (i32.or
+                (local.get $triple)
+                (i32.eq (local.get $status) (i32.const 2))))))
+      (then
+        (global.set $streamMode (i32.const 10))
+        (global.set $streamA (local.get $quote))
+        (global.set $streamB (i32.or
+          (local.get $raw)
+          (i32.or
+            (i32.shl (local.get $format) (i32.const 1))
+            (i32.shl (local.get $triple) (i32.const 2))))))))
+
+  (func $pyStreamResume (result i32)
+    (local $flags i32)
+    (local $status i32)
+    (if (i32.ne (global.get $streamMode) (i32.const 10))
+      (then (return (i32.const 0))))
+    (local.set $flags (global.get $streamB))
+    (local.set $status (call $pyStringBody
+      (global.get $streamA)
+      (i32.and (local.get $flags) (i32.const 1))
+      (i32.and (i32.shr_u (local.get $flags) (i32.const 1)) (i32.const 1))
+      (i32.and (i32.shr_u (local.get $flags) (i32.const 2)) (i32.const 1))
+      (global.get $ptr)))
+    (if (i32.eq (local.get $status) (i32.const 1))
+      (then
+        (global.set $streamMode (i32.const 0))
+        (return (i32.const 0))))
+    (if (i32.and
+          (i32.eq (global.get $ptr) (global.get $end))
+          (i32.or
+            (i32.and (local.get $flags) (i32.const 4))
+            (i32.eq (local.get $status) (i32.const 2))))
+      (then (return (i32.const 1))))
+    (global.set $streamMode (i32.const 0))
+    (i32.const 0))
 
   (func $pyWordHl (param $hash i32) (result i32)
     (if (i32.or

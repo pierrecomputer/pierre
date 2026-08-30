@@ -115,7 +115,10 @@
             (br $scan)))
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
         (br $scan)))
-    (call $emitTok (enum.get $Token.comment) (local.get $lhs) (global.get $ptr)))
+    (call $emitTok (enum.get $Token.comment) (local.get $lhs) (global.get $ptr))
+    (call $streamSetNested
+      (local.get $depth) (i32.const "(;") (i32.const ";)")
+      (enum.get $Token.comment)))
 
   (func $hlWat
     (local $c i32)

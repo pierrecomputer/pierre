@@ -75,6 +75,9 @@ const aliases = [
   'lua',
 ];
 const canonical = [
+  'js',
+  'jsx',
+  'ts',
   'tsx',
   'html',
   'css',
@@ -122,6 +125,24 @@ void t.test('languages: every public alias reaches a WAT lexer', () => {
   }
 });
 
+void t.test(
+  'languages: JS, JSX, TS, and TSX enable independent syntax layers',
+  () => {
+    const html = (lang, code) =>
+      decoder.decode(highlighter.codeToHtml(code, { lang, theme: pierreDark }));
+    const jsxCode = 'const view = <Box value={x} />;';
+    const typeCode = 'type Result = string | number;';
+
+    assert.equal(html('js', jsxCode), html('ts', jsxCode));
+    assert.equal(html('jsx', jsxCode), html('tsx', jsxCode));
+    assert.notEqual(html('js', jsxCode), html('jsx', jsxCode));
+
+    assert.equal(html('js', typeCode), html('jsx', typeCode));
+    assert.equal(html('ts', typeCode), html('tsx', typeCode));
+    assert.notEqual(html('js', typeCode), html('ts', typeCode));
+  }
+);
+
 void t.test('languages: deterministic cross-lexer invariant fuzz', () => {
   const alphabet = [
     ...'abcXYZ09 _-$#@/\\\'"`()[]{}<>=+*&|:;,.!?\n\r\t\0é_日本語',
@@ -156,10 +177,11 @@ void t.test(
     const encoder = new TextEncoder();
     for (const lang of canonical) {
       const entry = `$hl${lang[0].toUpperCase()}${lang.slice(1)}`;
+      const file = ['js', 'jsx', 'ts'].includes(lang) ? 'tsx' : lang;
       const url = new URL(`./utf8_split_${lang}.wat`, import.meta.url);
       const source = `(module
   (memory (export "memory") 3)
-  (import "../src/langs/${lang}.wat")
+  (import "../src/langs/${file}.wat")
   (func (export "highlight")
     (call $hlBegin)
     (global.set $end (i32.add (global.get $ptr) (i32.load (i32.const 32))))

@@ -105,6 +105,7 @@
   ;; Scan a comment, CDATA section, or processing instruction. $kind is
   ;; 1=`-->`, 2=`]]>`, 3=`?>`; the opener has already been recognized.
   (func $xmlSection (param $lhs i32) (param $skip i32) (param $kind i32) (param $hl i32)
+    (local $closed i32)
     (local $hit i32)
     (local $mask i32)
     (local $rem i32)
@@ -146,6 +147,7 @@
                       (i32.const "?>"))))
               (then
                 (global.set $ptr (i32.add (local.get $hit) (i32.const 1)))
+                (local.set $closed (i32.const 1))
                 (br $done)))
             (local.set $mask (i32.and (local.get $mask)
               (i32.sub (local.get $mask) (i32.const 1))))
@@ -156,7 +158,18 @@
             (br $done)))
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 16)))
         (br $wide)))
-    (call $emitTok (local.get $hl) (local.get $lhs) (global.get $ptr)))
+    (call $emitTok (local.get $hl) (local.get $lhs) (global.get $ptr))
+    (if (i32.eqz (local.get $closed))
+      (then
+        (call $streamSetFixed32
+          (select
+            (i32.const "?>")
+            (select (i32.const "-->") (i32.const "]]>")
+              (i32.eq (local.get $kind) (i32.const 1)))
+            (i32.eq (local.get $kind) (i32.const 3)))
+          (select (i32.const 2) (i32.const 3)
+            (i32.eq (local.get $kind) (i32.const 3)))
+          (local.get $hl)))))
 
   ;; XML declarations may contain an internal subset. Only a `>` outside
   ;; quotes and square brackets ends the declaration.

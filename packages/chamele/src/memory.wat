@@ -20,4 +20,6 @@
   (const $mem.tsxBracketStack 5824)
   (const $mem.themeTable 6848)
   (const $mem.tsxJsxStack 7872)
+  (const $mem.streamDelimiter 11968)
+  (const $mem.streamState 12000)
 )

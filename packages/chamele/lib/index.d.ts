@@ -355,8 +355,8 @@ export function codeToHast(
 ): HastRoot;
 
 /**
- * Tokenize streamed code for SSR with an isolated WebAssembly instance. Each
- * pass retokenizes the accumulated input from the start to preserve context.
+ * Tokenize streamed code for SSR with an isolated WebAssembly instance.
+ * Every language scans new chunks incrementally and preserves multiline state.
  */
 export class TokenizeStream {
   constructor(options: CodeToTokensOptions);

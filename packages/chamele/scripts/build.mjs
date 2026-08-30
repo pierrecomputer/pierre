@@ -44,7 +44,7 @@ export function transformWat(url, content) {
       imports.push(i);
       return '';
     })
-    .replace(/\s*\(\s*enum\s+(\$\w+)\s+([^\)]+)\s*\)/g, (_, key, members) => {
+    .replace(/\s*\(\s*enum\s+(\$\w+)\s+([^)]+)\s*\)/g, (_, key, members) => {
       if (enumMap.has(key)) throw new Error(`Duplicate enum ${key}`);
       let i = 0;
       enumMap.set(
@@ -53,12 +53,90 @@ export function transformWat(url, content) {
           members
             .split(/\s+/g)
             .map((l) => l.trim())
-            .filter((l) => l !== '' && /^\"[\w.]+\"$/.test(l))
+            .filter((l) => l !== '' && /^"[\w.]+"$/.test(l))
             .map((l) => [JSON.parse(l), i++])
         )
       );
       return '';
     });
+
+  // Preserve top-level lexer locals between streaming calls. Nested lexers
+  // used for embedded ranges see a non-zero depth and stay ordinary bounded
+  // calls. TypeScript has its own resumable state machine.
+  const streamLexers = new Set([
+    '$hlAsm',
+    '$hlAstro',
+    '$hlBash',
+    '$hlC',
+    '$hlCpp',
+    '$hlCss',
+    '$hlDiff',
+    '$hlGlsl',
+    '$hlGo',
+    '$hlHaskell',
+    '$hlHtml',
+    '$hlJson',
+    '$hlKotlin',
+    '$hlLua',
+    '$hlMarkdown',
+    '$hlMdx',
+    '$hlPhp',
+    '$hlPython',
+    '$hlRust',
+    '$hlSql',
+    '$hlSvelte',
+    '$hlSwift',
+    '$hlToml',
+    '$hlVue',
+    '$hlWat',
+    '$hlXml',
+    '$hlYaml',
+    '$hlZig',
+  ]);
+  let streamStateOffset = 0;
+  code = replaceForm(code, 'func', (inner) => {
+    const name = inner.match(/^\s*(\$\w+)/)?.[1];
+    if (!streamLexers.has(name)) return `(func${inner})`;
+    if (inner.includes('(return')) {
+      throw new Error(`${name} cannot checkpoint locals with an early return`);
+    }
+    const locals = [...inner.matchAll(/\(local\s+(\$\w+)\s+(i32|i64)\s*\)/g)];
+    const state = locals.map(([, local, type]) => {
+      const size = type === 'i64' ? 8 : 4;
+      streamStateOffset = (streamStateOffset + size - 1) & -size;
+      const at = streamStateOffset;
+      streamStateOffset += size;
+      return { local, type, at };
+    });
+    if (streamStateOffset > 48000) {
+      throw new Error('stream lexer state exceeds reserved memory');
+    }
+    const load = state
+      .map(
+        ({ local, type, at }) =>
+          `(local.set ${local} (${type}.load (i32.const $mem.streamState+${at})))`
+      )
+      .join('\n          ');
+    const save = state
+      .map(
+        ({ local, type, at }) =>
+          `(${type}.store (i32.const $mem.streamState+${at}) (local.get ${local}))`
+      )
+      .join('\n        ');
+    let body = inner.replace(
+      new RegExp(`^(\\s*\\${name}\\b)`),
+      '$1\n    (local $streamRoot i32)'
+    );
+    const leading = '(call $lexEmitLeadingContinuation)';
+    if (!body.includes(leading)) {
+      throw new Error(`${name} has no leading-continuation checkpoint`);
+    }
+    body = body.replace(
+      leading,
+      `${leading}\n    (if (i32.and\n          (global.get $streaming)\n          (i32.eqz (global.get $streamDepth)))\n      (then\n        (local.set $streamRoot (i32.const 1))\n        (global.set $streamDepth (i32.const 1))\n        (if (i32.eqz (global.get $streamReset))\n          (then\n            ${load}))))`
+    );
+    return `(func${body}\n    (if (local.get $streamRoot)\n      (then\n        ${save}\n        (global.set $streamDepth (i32.const 0)))))`;
+  });
 
   // `(const $mem.name <int|$other>[+-<int>])` defines a named address.
   // Addresses live in src/memory.wat so each region moves in one place.

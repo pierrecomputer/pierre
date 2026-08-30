@@ -38,8 +38,8 @@ const langIds = {
   markdown: 15,
   python: 18,
   rust: 19,
-  ts: 24,
-  tsx: 24,
+  ts: 31,
+  tsx: 32,
 };
 
 /** Run the previous mode-2 host splitter as a parity baseline. */
@@ -416,10 +416,56 @@ void t.test(
   'TokenizeStream: chunked output matches codeToTokens (fuzz)',
   () => {
     const samples = [
-      ['ts', 'const a = `tpl\nline2`;\n// done\nlet b = "x"\n'],
+      ['plain', 'one\ntwo\n'],
+      ['asm', 'start:\n  /* open\nstill */\n  mov eax, 1\n'],
+      [
+        'astro',
+        '---\nconst title = "x"\n---\n<h1>{\nformat({ title })\n}</h1>\n',
+      ],
+      ['bash', 'cat <<EOF\nhello $USER\nEOF\necho done\n'],
+      ['c', 'int x; /* open\nstill comment */\nint y;\n'],
+      ['cpp', 'auto s = R"tag(one\ntwo)tag";\n'],
       ['css', '.a {\n  color: red; /* note\nspans lines */\n}\n'],
+      ['diff', '@@ -1 +1 @@\n-old\n+new\n'],
+      ['glsl', 'void main() { /* open\nstill */ return;\n}\n'],
+      ['go', 'var s = `one\ntwo`\n'],
+      ['haskell', 'x = 1 {- open\nstill -}\ny = 2\n'],
+      ['html', '<script>\nconst x = 1\n</script>\n'],
+      ['js', 'const view = `one ${\nvalue\n}`;\n'],
+      ['jsx', 'const view = <Box value={{\n  x: 1\n}} />;\n'],
+      ['jsonc', '{ /* open\nstill */ "x": 1\n}\n'],
+      ['kotlin', 'val s = """one\ntwo"""\n'],
+      ['lua', 'local s = [[one\ntwo]]\n'],
       ['markdown', '# title\n\n```js\nlet a = 1\n```\ntail'],
+      ['mdx', '<Box value={{\n  x: 1\n}} />\n<p>{\nformat({ x: 1 })\n}</p>\n'],
+      ['php', '<p>x</p>\n<?php\nfunction f() { return 1; }\n?>\n'],
       ['python', 'def f():\n    return """doc\nstring"""\n'],
+      ['rust', 'let s = r#"one\ntwo"#;\n'],
+      ['sql', 'SELECT $tag$one\ntwo$tag$;\n'],
+      [
+        'svelte',
+        '<script>\nlet x = 1;\n</script>\n<p>{\nformat({ x })\n}</p>\n',
+      ],
+      ['swift', 'let s = """one\ntwo"""\n'],
+      ['toml', 'x = """one\ntwo"""\n'],
+      ['ts', 'interface Box {\n  value?: string\n}\n'],
+      [
+        'tsx',
+        '/**\n * @param {string} name\n */\n' +
+          'const view = <Box title="hello\nworld">text\n{value}</Box>\n' +
+          'const joined = "a\\\nb";\n',
+      ],
+      [
+        'vue',
+        '<script setup>\nconst x = 1\n</script>\n<template>{{\nformat({ x })\n}}</template>\n',
+      ],
+      ['wat', '(; open\nstill ;)\n(module)\n'],
+      ['xml', '<![CDATA[one\ntwo]]>\n<root/>\n'],
+      [
+        'yaml',
+        'message: |\n  one: # literal\n  two\nitems: [\n  one,\n  two\n]\n',
+      ],
+      ['zig', 'const s = \\\\one\n  \\\\two\n;\n'],
       // multi-byte lines followed by ASCII, and astral pairs the random
       // chunking will split across pushes
       ['ts', 'const é = "日本語"\nconst x = 1 // 🎈🎈\nlet y = 2\n'],

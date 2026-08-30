@@ -130,7 +130,42 @@
         (br $scan)))
     (call $emitTok (enum.get $Token.string) (global.get $ptr) (local.get $bodyEnd))
     (global.set $ptr (local.get $bodyEnd))
+    (if (i32.and
+          (global.get $streaming)
+          (i32.eq (global.get $ptr) (global.get $end)))
+      (then
+        (global.set $streamMode (i32.const 11))
+        (global.set $streamA (local.get $indent))))
     (i32.const 1))
+
+  ;; Continue a block scalar until the first non-blank line that is not more
+  ;; indented than its header. Returns one when the whole chunk remains scalar.
+  (func $yamlStreamResume (result i32)
+    (local $bodyEnd i32)
+    (local $col i32)
+    (local $lhs i32)
+    (local $lineEnd i32)
+    (local.set $lhs (global.get $ptr))
+    (local.set $bodyEnd (global.get $ptr))
+    (block $done
+      (loop $scan
+        (br_if $done (i32.ge_u (local.get $bodyEnd) (global.get $end)))
+        (local.set $col (call $yamlSkipHorizontal (local.get $bodyEnd)))
+        (local.set $lineEnd (call $yamlLineEnd (local.get $col)))
+        (br_if $done (i32.and
+          (i32.ne (local.get $col) (local.get $lineEnd))
+          (i32.le_u
+            (i32.sub (local.get $col) (local.get $bodyEnd))
+            (global.get $streamA))))
+        (local.set $bodyEnd (call $yamlAfterLine (local.get $lineEnd)))
+        (br $scan)))
+    (call $emitTok
+      (enum.get $Token.string) (local.get $lhs) (local.get $bodyEnd))
+    (global.set $ptr (local.get $bodyEnd))
+    (if (i32.eq (global.get $ptr) (global.get $end))
+      (then (return (i32.const 1))))
+    (global.set $streamMode (i32.const 0))
+    (i32.const 0))
 
   (func $hlYaml
     (local $after i32)

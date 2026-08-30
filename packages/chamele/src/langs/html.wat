@@ -123,6 +123,7 @@
 
   ;; `<!--` comment: advance past `-->` (or to $end) and emit the whole token
   (func $htmlComment (param $lhs i32)
+    (local $closed i32)
     (local $mask i32)
     (local $rem i32)
     (local $w v128)
@@ -151,6 +152,7 @@
                   (i32.const "--"))
               (then
                 (global.set $ptr (i32.add (local.get $rem) (i32.const 1)))
+                (local.set $closed (i32.const 1))
                 (br $done)))
             (local.set $mask (i32.and (local.get $mask) (i32.sub (local.get $mask) (i32.const 1))))
             (br $hit)))
@@ -160,7 +162,10 @@
             (br $done)))
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 16)))
         (br $wide)))
-    (call $emitTok (enum.get $Token.comment) (local.get $lhs) (global.get $ptr)))
+    (call $emitTok (enum.get $Token.comment) (local.get $lhs) (global.get $ptr))
+    (if (i32.eqz (local.get $closed))
+      (then (call $streamSetFixed32
+        (i32.const "-->") (i32.const 3) (enum.get $Token.comment)))))
 
   ;; `<!...>` / `<?...>` declaration: advance past `>` (or to $end)
   (func $htmlDecl
@@ -348,6 +353,7 @@
     (local $from i32)
     (local $to i32)
     (local $save i32)
+    (local $continued i32)
     (local.set $from (global.get $ptr))
     (block $found
       (loop $l
@@ -361,13 +367,31 @@
     ;; hand [from,to) to the embedded language over an $end swap
     (local.set $to (global.get $ptr))
     (local.set $save (global.get $end))
+    (local.set $continued (i32.and
+      (global.get $streaming) (i32.eq (local.get $to) (local.get $save))))
+    (if (local.get $continued)
+      (then (call $streamSetRegion (local.get $kind))))
     (global.set $end (local.get $to))
     (global.set $ptr (local.get $from))
     (if (i32.eq (local.get $kind) (i32.const 1))
-      (then (call $hlTsx))
-      (else (call $hlCss)))
+      (then
+        (if (local.get $continued)
+          (then (call $hlJsStream (i32.const 1)))
+          (else (call $hlJs))))
+      (else
+        (if (local.get $continued)
+          (then
+            (global.set $streamDepth (i32.const 0))
+            (global.set $streamReset (i32.const 1))))
+        (call $hlCss)
+        (if (local.get $continued)
+          (then
+            (global.set $streamDepth (i32.const 1))
+            (global.set $streamReset (i32.const 0))))))
     (global.set $end (local.get $save))
-    (global.set $ptr (local.get $to)))
+    (global.set $ptr (local.get $to))
+    (if (local.get $continued)
+      (then (global.set $streamRegionStarted (i32.const 1)))))
 
   (func $hlHtml
     (local $c i32)

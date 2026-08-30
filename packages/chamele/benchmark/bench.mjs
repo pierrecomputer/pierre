@@ -48,6 +48,7 @@ const TOKEN_FIXTURES = [
     input: 'const greeting = "日本語 🎈"; // naïve résumé\n'.repeat(10_000),
   },
 ];
+const STREAM_FIXTURES = [...FIXTURES, TOKEN_FIXTURES.at(-1)];
 
 function loadFixture(name) {
   return readFileSync(
@@ -371,7 +372,7 @@ function benchmarkStream(contenders) {
   }
 
   const rows = [];
-  for (const { name, lang, input } of TOKEN_FIXTURES) {
+  for (const { name, lang, input } of STREAM_FIXTURES) {
     const chunks = [];
     for (let at = 0; at < input.length; at += 4096) {
       chunks.push(input.slice(at, at + 4096));
@@ -393,7 +394,7 @@ function benchmarkStream(contenders) {
       baselineLabel(chameleResult.median / shikiResult.median),
     ]);
   }
-  console.log('TokenizeStream (TypeScript, 4,096-character chunks):');
+  console.log('TokenizeStream (4,096-character chunks):');
   printTable(
     [
       { title: 'input' },

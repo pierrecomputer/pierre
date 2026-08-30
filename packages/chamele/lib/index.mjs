@@ -73,25 +73,25 @@ const LANGS = {
   svelte: 21,
   swift: 22,
   toml: 23,
-  cjs: 24,
-  cts: 24,
-  javascript: 24,
-  js: 24,
-  jsx: 24,
-  mjs: 24,
-  mts: 24,
-  ts: 24,
-  tsx: 24,
-  typescript: 24,
-  vue: 25,
-  wasm: 26,
-  wat: 26,
-  svg: 27,
-  xml: 27,
-  xsd: 27,
-  yaml: 28,
-  yml: 28,
-  zig: 29,
+  vue: 24,
+  wasm: 25,
+  wat: 25,
+  svg: 26,
+  xml: 26,
+  xsd: 26,
+  yaml: 27,
+  yml: 27,
+  zig: 28,
+  cjs: 29,
+  javascript: 29,
+  js: 29,
+  mjs: 29,
+  jsx: 30,
+  cts: 31,
+  mts: 31,
+  ts: 31,
+  typescript: 31,
+  tsx: 32,
 };
 
 /** Resolve the Wasm language ID for a name or alias, or throw. */
@@ -122,6 +122,7 @@ class Highlighter {
     const instance = new WebAssembly.Instance(wasmModule, { env });
     this.memory = instance.exports.memory;
     this.highlight = instance.exports.highlight;
+    this.highlightStream = instance.exports.highlightStream;
     this.bindMemory();
   }
 
@@ -236,6 +237,22 @@ class Highlighter {
   tokenizeRecords(langId, inputLength) {
     const out = this.run(langId, 2, inputLength);
     return new Uint32Array(out.buffer, out.byteOffset, out.length >> 2);
+  }
+
+  /** Tokenize one stream chunk to line records while preserving lexer state. */
+  tokenizeStreamLineRecords(langId, inputLength, reset) {
+    this.dv.setUint8(0, langId);
+    this.dv.setUint8(1, 3);
+    this.dv.setUint32(2, inputLength, true);
+    this.buffer[pageSize + inputLength] = 0;
+    try {
+      this.highlightStream(reset);
+    } finally {
+      this.bindMemory();
+    }
+    const outStart = this.dv.getUint32(6, true);
+    const outLength = this.dv.getUint32(10, true);
+    return new Uint32Array(this.buffer.buffer, outStart, outLength >> 2);
   }
 
   /** Return UTF-16 token records with `0xffffffff` newline markers. */
@@ -398,12 +415,8 @@ export function codeToHast(input, options) {
 }
 
 /**
- * Tokenize streamed code for SSR in an isolated Wasm instance. The streamed
- * code lives only in Wasm memory: each push appends the chunk's bytes after
- * the existing input (overwriting the previous pass's output records) and
- * retokenizes from the buffer start, so completed lines include all preceding
- * context. JavaScript keeps only resume offsets and decodes the unreturned
- * region back out of Wasm memory to build token contents.
+ * Tokenize streamed code for SSR in an isolated Wasm instance. Every language
+ * scans each completed chunk once and preserves lexer state in Wasm.
  */
 export class TokenizeStream {
   #hl;
@@ -411,10 +424,10 @@ export class TokenizeStream {
   #themes;
   #cssVariablePrefix;
   #maxLineLength;
-  #byteLen = 0;
   #pendingSurrogate = '';
-  #resumeByte = 0;
-  #resumeChar = 0;
+  #tail = '';
+  #streamChar = 0;
+  #streamStarted = false;
 
   /** @param {import("./index.d.ts").CodeToTokensOptions} options */
   constructor(options) {
@@ -439,25 +452,12 @@ export class TokenizeStream {
       this.#pendingSurrogate = chunk.slice(-1);
       chunk = chunk.slice(0, -1);
     }
-    if (chunk !== '') {
-      this.#byteLen += this.#hl.encodeAt(chunk, this.#byteLen);
-    }
-    // A chunk without a terminator cannot complete a line, so skip full-buffer
-    // tokenization.
-    if (!chunk.includes('\n')) return [];
-    const { code, lines } = this.#tokenize();
-    // Keep the unterminated final line.
-    const complete = lines.slice(0, -1);
-    if (complete.length > 0) {
-      this.#resumeChar += code.lastIndexOf('\n') + 1;
-      // Newlines are single bytes that never occur inside a multibyte
-      // sequence, so the byte scan finds the same newline as the char scan.
-      this.#resumeByte =
-        this.#hl.buffer.lastIndexOf(0x0a, pageSize + this.#byteLen - 1) -
-        pageSize +
-        1;
-    }
-    return complete;
+    this.#tail += chunk;
+    const end = this.#tail.lastIndexOf('\n') + 1;
+    if (end === 0) return [];
+    const code = this.#tail.slice(0, end);
+    this.#tail = this.#tail.slice(end);
+    return this.#tokenizeChunk(code).slice(0, -1);
   }
 
   /**
@@ -466,51 +466,39 @@ export class TokenizeStream {
    * @returns {import("./index.d.ts").ThemedToken[][]}
    */
   end() {
-    if (this.#pendingSurrogate !== '') {
-      // A final lone high surrogate encodes as a replacement character whose
-      // three bytes keep later offsets aligned, matching codeToTokens.
-      this.#byteLen += this.#hl.encodeAt(this.#pendingSurrogate, this.#byteLen);
-      this.#pendingSurrogate = '';
-    }
-    const { code, lines } = this.#tokenize();
-    this.#resumeByte = this.#byteLen;
-    this.#resumeChar += code.length;
-    return lines;
+    this.#tail += this.#pendingSurrogate;
+    this.#pendingSurrogate = '';
+    if (this.#tail === '') return [[]];
+    const code = this.#tail;
+    this.#tail = '';
+    return this.#tokenizeChunk(code);
   }
 
-  /**
-   * Tokenize the full buffer, decode the unreturned region out of Wasm memory,
-   * and split it into per-line tokens with stream-absolute offsets.
-   */
-  #tokenize() {
-    const recs = this.#hl.tokenizeRecords(this.#langId, this.#byteLen);
-    // The region starts at a line boundary and chunk encoding never splits a
-    // code point, so it decodes cleanly in isolation.
-    const code = this.#hl.readChars(
-      pageSize + this.#resumeByte,
-      this.#byteLen - this.#resumeByte
+  /** Tokenize one chunk and apply stream-absolute offsets. */
+  #tokenizeChunk(code) {
+    const byteLen = this.#hl.writeInput(code);
+    const recs = this.#hl.tokenizeStreamLineRecords(
+      this.#langId,
+      byteLen,
+      !this.#streamStarted
     );
-    const lineRuns = splitRecordLines(
+    this.#streamStarted = true;
+    const base = this.#streamChar;
+    const lines = lineRecordsToTokens(
       code,
       recs,
       recs.length >> 1,
-      { byte: this.#resumeByte, char: 0 },
+      this.#themes,
+      this.#cssVariablePrefix,
       this.#maxLineLength
-    );
-    const base = this.#resumeChar;
-    const lines = lineRuns.map((runs) =>
-      runs.map((run) => {
-        const token = runToToken(
-          code,
-          run,
-          this.#themes,
-          this.#cssVariablePrefix
-        );
+    ).map((tokens) =>
+      tokens.map((token) => {
         token.offset += base;
         return token;
       })
     );
-    return { code, lines };
+    this.#streamChar += code.length;
+    return lines;
   }
 }
 

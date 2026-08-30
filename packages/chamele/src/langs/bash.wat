@@ -368,6 +368,9 @@
           (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))
         (br $lines)))
     (call $emitTok (enum.get $Token.string) (local.get $body) (global.get $ptr))
+    (call $streamSetLine
+      (local.get $delim) (local.get $n) (local.get $strip) (i32.const 0)
+      (enum.get $Token.string))
     (i32.const 1))
 
   (func $bashIsOp (param $c i32) (result i32)

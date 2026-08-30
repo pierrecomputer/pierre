@@ -15,8 +15,10 @@ Mode 0 emits inline-color HTML, mode 1 CSS-variable HTML, and mode 2 token
 records. Mode 3 runs the same lexer, then a Wasm post-pass converts its byte-end
 records to UTF-16 ends with newline markers. `codeToTokens` and `codeToHast` use
 mode 3 and build their JavaScript output directly from those records.
-`TokenizeStream` and `LiveTokenizer` use mode 2; JavaScript splits those records
-at newlines and converts their byte offsets to UTF-16 indexes.
+`LiveTokenizer` uses mode 2 and splits the byte records in JavaScript.
+`TokenizeStream` uses mode 3 per completed chunk. Streaming lexer checkpoints
+preserve language context, multiline modes, embedded regions, and the emitter's
+open style between calls, so prior chunks are not rescanned.
 
 ## Project structure
 
@@ -26,7 +28,8 @@ src/token.wat       $Token enum, CSS-variable table, and theme-record access
 src/scan.wat        read cursors ($ptr/$end/$eof) and SIMD scans
 src/emit.wat        HTML/token-record emitter and driver prologue/epilogue
 src/common.wat      shared ASCII, identifier, number, string, and comment scans
-src/langs/*.wat     29 built-in lexers; aliases share a language id
+src/langs/*.wat     32 built-in language modes
+  js/ts/jsx/tsx.wat one feature-gated ECMAScript engine split by concern
 src/chamele.wat     memory, $Language enum, imports, and dispatch
 lib/index.mjs       Highlighter, codeToHtml/codeToTokens/codeToHast, language
                     aliases, theme cache, TokenizeStream, LiveTokenizer
@@ -71,11 +74,13 @@ before preprocessing, so editor warnings are expected.
   [10:14)         output length (u32 LE)
   [14:64)         reserved space
   [64:4800)       emitter, token, and lexer tables
-  [4800:5824)     shared JSON/TOML/TSX-template stack
-  [5824:6848)     TSX bracket-kind stack
+  [4800:5824)     shared JSON/TOML/ECMAScript-template stack
+  [5824:6848)     ECMAScript bracket-kind stack
   [6848:7872)     theme table written by JavaScript
-  [7872:11968)    TSX JSX-mode stack
-  [11968:65536)   free
+  [7872:11968)    JSX-mode stack
+  [11968:12000)   streaming delimiter
+  [12000:60000)   streaming lexer checkpoints
+  [60000:65536)   free
 [] pages 2..N     (text buffer)
   [65536:EOF)     input, NUL sentinel, then at least 16 bytes of slack
   [(EOF+47)&~15:) output HTML or token records; $ensureCap grows memory
@@ -192,8 +197,8 @@ Main conventions:
 | Input           | Captures                                                                                                                             |
 | --------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
 | Common code     | `comment`, `comment.doc`, `string`, `string.escape`, `number`, `keyword*`, `operator`, `function*`, `property`, `type*`, `variable*` |
-| TSX literals    | Templates use `string`, `string.escape`, and `punctuation.special`; regex uses `string.regex`                                        |
-| TSX names       | Calls use `function*`; members use `property`; decorators use `attribute`; uppercase names use `type` or `constant`                  |
+| JS/TS literals  | Templates use `string`, `string.escape`, and `punctuation.special`; regex uses `string.regex`                                        |
+| JS/TS names     | Calls use `function*`; members use `property`; decorators use `attribute`; uppercase names use `type` or `constant`                  |
 | JSDoc           | `keyword.jsdoc`, `type.jsdoc`, and `variable.jsdoc`                                                                                  |
 | JSX             | `punctuation.*.jsx`, `tag.jsx`, `tag.component.jsx`, `attribute.jsx`, and `text.jsx`                                                 |
 | HTML/XML        | `punctuation.*.html`, `tag`, `tag.doctype`, `attribute`, `string`, and `string.special`                                              |
@@ -209,8 +214,9 @@ Main conventions:
 Language-specific lexers add captures such as C-family `preproc`, SQL
 `keyword.operator`, and Zig `keyword.import`. These are token-stream heuristics,
 not parses. TS type positions, parameters, embedded boundaries, and exact query
-fidelity are out of scope. TSX uses capitalization for some types and constants;
-JSDoc names use `variable.jsdoc`.
+fidelity are out of scope. JS, JSX, TS, and TSX share one scanner and enable
+TypeScript and JSX layers independently. The scanner uses capitalization for
+some types and constants; JSDoc names use `variable.jsdoc`.
 
 ## Output shape
 

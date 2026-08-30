@@ -160,9 +160,21 @@
             (call $emitTok (enum.get $Token.keyword.control)
               (local.get $p) (local.get $markerEnd))
             (local.set $p (local.get $markerEnd))))))
-    (call $svelteTsxRange
-      (local.get $p)
-      (select (i32.sub (local.get $to) (i32.const 1)) (local.get $to) (local.get $complete)))
+    (if (i32.and (global.get $streaming) (i32.eqz (local.get $complete)))
+      (then
+        (global.set $ptr (global.get $end))
+        (call $streamSetRegion (i32.const 7))
+        (global.set $ptr (local.get $p))
+        (drop (call $hlTsxExpressionStream (i32.const 1) (i32.const 1)))
+        (global.set $ptr (global.get $end))
+        (global.set $streamRegionStarted (i32.const 1)))
+      (else
+        (call $svelteTsxRange
+          (local.get $p)
+          (select
+            (i32.sub (local.get $to) (i32.const 1))
+            (local.get $to)
+            (local.get $complete)))))
     (if (local.get $complete)
       (then
         (call $emitTok (enum.get $Token.punctuation.special)

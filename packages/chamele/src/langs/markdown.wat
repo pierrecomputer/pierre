@@ -32,13 +32,14 @@
     "tsx" "html" "css" "json" "bash" "c" "cpp" "go" "python"
     "rust" "yaml" "php" "sql" "swift" "haskell" "kotlin" "astro"
     "vue" "svelte" "xml" "markdown" "mdx" "asm" "wat" "diff" "glsl" "lua"
+    "js" "jsx" "ts"
   )
 
   ;; Public language aliases: 16-byte records containing length, enum id, and
   ;; up to ten lowercase bytes. Fences are rare, so one compact linear table
   ;; costs less code than a 66-way comparison ladder.
   (data (i32.const $mem.markdownFence)
-    "\03\01\74\73\78\00\00\00\00\00\00\00\00\00\00\00\02\01\74\73\00\00\00\00\00\00\00\00\00\00\00\00\0a\01\74\79\70\65\73\63\72\69\70\74\00\00\00\00\0a\01\6a\61\76\61\73\63\72\69\70\74\00\00\00\00\02\01\6a\73\00\00\00\00\00\00\00\00\00\00\00\00\03\01\6a\73\78\00\00\00\00\00\00\00\00\00\00\00\03\01\63\6a\73\00\00\00\00\00\00\00\00\00\00\00\03\01\6d\6a\73\00\00\00\00\00\00\00\00\00\00\00\03\01\63\74\73\00\00\00\00\00\00\00\00\00\00\00\03\01\6d\74\73\00\00\00\00\00\00\00\00\00\00\00\04\02\68\74\6d\6c\00\00\00\00\00\00\00\00\00\00\03\02\68\74\6d\00\00\00\00\00\00\00\00\00\00\00\03\03\63\73\73\00\00\00\00\00\00\00\00\00\00\00\04\04\6a\73\6f\6e\00\00\00\00\00\00\00\00\00\00\05\04\6a\73\6f\6e\63\00\00\00\00\00\00\00\00\00\04\05\62\61\73\68\00\00\00\00\00\00\00\00\00\00"
+    "\03\01\74\73\78\00\00\00\00\00\00\00\00\00\00\00\02\1e\74\73\00\00\00\00\00\00\00\00\00\00\00\00\0a\1e\74\79\70\65\73\63\72\69\70\74\00\00\00\00\0a\1c\6a\61\76\61\73\63\72\69\70\74\00\00\00\00\02\1c\6a\73\00\00\00\00\00\00\00\00\00\00\00\00\03\1d\6a\73\78\00\00\00\00\00\00\00\00\00\00\00\03\1c\63\6a\73\00\00\00\00\00\00\00\00\00\00\00\03\1c\6d\6a\73\00\00\00\00\00\00\00\00\00\00\00\03\1e\63\74\73\00\00\00\00\00\00\00\00\00\00\00\03\1e\6d\74\73\00\00\00\00\00\00\00\00\00\00\00\04\02\68\74\6d\6c\00\00\00\00\00\00\00\00\00\00\03\02\68\74\6d\00\00\00\00\00\00\00\00\00\00\00\03\03\63\73\73\00\00\00\00\00\00\00\00\00\00\00\04\04\6a\73\6f\6e\00\00\00\00\00\00\00\00\00\00\05\04\6a\73\6f\6e\63\00\00\00\00\00\00\00\00\00\04\05\62\61\73\68\00\00\00\00\00\00\00\00\00\00"
     "\02\05\73\68\00\00\00\00\00\00\00\00\00\00\00\00\05\05\73\68\65\6c\6c\00\00\00\00\00\00\00\00\00\03\05\7a\73\68\00\00\00\00\00\00\00\00\00\00\00\01\06\63\00\00\00\00\00\00\00\00\00\00\00\00\00\01\06\68\00\00\00\00\00\00\00\00\00\00\00\00\00\03\07\63\70\70\00\00\00\00\00\00\00\00\00\00\00\03\07\63\2b\2b\00\00\00\00\00\00\00\00\00\00\00\02\07\63\63\00\00\00\00\00\00\00\00\00\00\00\00\03\07\63\78\78\00\00\00\00\00\00\00\00\00\00\00\02\07\68\68\00\00\00\00\00\00\00\00\00\00\00\00\03\07\68\70\70\00\00\00\00\00\00\00\00\00\00\00\03\07\68\78\78\00\00\00\00\00\00\00\00\00\00\00\02\08\67\6f\00\00\00\00\00\00\00\00\00\00\00\00\06\08\67\6f\6c\61\6e\67\00\00\00\00\00\00\00\00\06\09\70\79\74\68\6f\6e\00\00\00\00\00\00\00\00\02\09\70\79\00\00\00\00\00\00\00\00\00\00\00\00"
     "\04\0a\72\75\73\74\00\00\00\00\00\00\00\00\00\00\02\0a\72\73\00\00\00\00\00\00\00\00\00\00\00\00\04\0b\79\61\6d\6c\00\00\00\00\00\00\00\00\00\00\03\0b\79\6d\6c\00\00\00\00\00\00\00\00\00\00\00\03\0c\70\68\70\00\00\00\00\00\00\00\00\00\00\00\03\0d\73\71\6c\00\00\00\00\00\00\00\00\00\00\00\05\0e\73\77\69\66\74\00\00\00\00\00\00\00\00\00\07\0f\68\61\73\6b\65\6c\6c\00\00\00\00\00\00\00\02\0f\68\73\00\00\00\00\00\00\00\00\00\00\00\00\06\10\6b\6f\74\6c\69\6e\00\00\00\00\00\00\00\00\02\10\6b\74\00\00\00\00\00\00\00\00\00\00\00\00\03\10\6b\74\73\00\00\00\00\00\00\00\00\00\00\00\05\11\61\73\74\72\6f\00\00\00\00\00\00\00\00\00\03\12\76\75\65\00\00\00\00\00\00\00\00\00\00\00\06\13\73\76\65\6c\74\65\00\00\00\00\00\00\00\00\03\14\78\6d\6c\00\00\00\00\00\00\00\00\00\00\00"
     "\03\14\73\76\67\00\00\00\00\00\00\00\00\00\00\00\03\14\78\73\64\00\00\00\00\00\00\00\00\00\00\00\08\15\6d\61\72\6b\64\6f\77\6e\00\00\00\00\00\00\02\15\6d\64\00\00\00\00\00\00\00\00\00\00\00\00\03\16\6d\64\78\00\00\00\00\00\00\00\00\00\00\00\03\17\61\73\6d\00\00\00\00\00\00\00\00\00\00\00\08\17\61\73\73\65\6d\62\6c\79\00\00\00\00\00\00\01\17\73\00\00\00\00\00\00\00\00\00\00\00\00\00\03\18\77\61\74\00\00\00\00\00\00\00\00\00\00\00\04\18\77\61\73\6d\00\00\00\00\00\00\00\00\00\00\04\19\64\69\66\66\00\00\00\00\00\00\00\00\00\00\05\19\70\61\74\63\68\00\00\00\00\00\00\00\00\00\04\1a\67\6c\73\6c\00\00\00\00\00\00\00\00\00\00\04\1a\63\6f\6d\70\00\00\00\00\00\00\00\00\00\00\04\1a\66\72\61\67\00\00\00\00\00\00\00\00\00\00\04\1a\67\65\6f\6d\00\00\00\00\00\00\00\00\00\00"
@@ -98,6 +99,9 @@
   ;; around each delegation and so returns to zero on its own; never reset it
   ;; in `$hlMarkdown`, which is itself one of the recursive entry points.
   (global $markdownDepth (mut i32) (i32.const 0))
+  (global $markdownStreamFence (mut i32) (i32.const 0))
+  (global $markdownStreamFenceLen (mut i32) (i32.const 0))
+  (global $markdownStreamLang (mut i32) (i32.const 0))
 
   (func $markdownCodeRange (param $lang i32) (param $from i32) (param $to i32)
     (local $save i32)
@@ -116,6 +120,9 @@
     (global.set $ptr (local.get $from))
     (block $codeDone
       (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.tsx)) (then (call $hlTsx) (br $codeDone)))
+      (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.js)) (then (call $hlJs) (br $codeDone)))
+      (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.jsx)) (then (call $hlJsx) (br $codeDone)))
+      (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.ts)) (then (call $hlTs) (br $codeDone)))
       (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.html)) (then (call $hlHtml) (br $codeDone)))
       (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.css)) (then (call $hlCss) (br $codeDone)))
       (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.json)) (then (call $hlJson) (br $codeDone)))
@@ -168,6 +175,71 @@
           (then (return (i32.add (local.get $p) (i32.const 2)))))
         (return (i32.add (local.get $p) (i32.const 1)))))
     (local.get $p))
+
+  ;; Continue a fenced block whose closing delimiter is in a later stream
+  ;; chunk. Returns one while the whole chunk belongs to the fence body.
+  (func $markdownStreamResume (result i32)
+    (local $after i32)
+    (local $c i32)
+    (local $close i32)
+    (local $count i32)
+    (local $lineEnd i32)
+    (local $p i32)
+    (local $q i32)
+    (if (i32.eqz (global.get $markdownStreamFence))
+      (then (return (i32.const 0))))
+    (local.set $p (global.get $ptr))
+    (local.set $close (global.get $end))
+    (block $fenceDone
+      (loop $fenceLines
+        (br_if $fenceDone (i32.ge_u (local.get $p) (global.get $end)))
+        (local.set $q (local.get $p))
+        (local.set $count (i32.const 0))
+        (block $closeRunDone
+          (loop $closeRun
+            (br_if $closeRunDone (i32.ge_u (local.get $q) (global.get $end)))
+            (br_if $closeRunDone
+              (i32.ne
+                (i32.load8_u (local.get $q))
+                (global.get $markdownStreamFence)))
+            (local.set $q (i32.add (local.get $q) (i32.const 1)))
+            (local.set $count (i32.add (local.get $count) (i32.const 1)))
+            (br $closeRun)))
+        (if (i32.ge_u (local.get $count) (global.get $markdownStreamFenceLen))
+          (then
+            (local.set $lineEnd (call $markdownLineEnd (local.get $q)))
+            (block $spaceDone
+              (loop $space
+                (br_if $spaceDone (i32.ge_u (local.get $q) (local.get $lineEnd)))
+                (local.set $c (i32.load8_u (local.get $q)))
+                (br_if $spaceDone (i32.and
+                  (i32.ne (local.get $c) (i32.const 32))
+                  (i32.ne (local.get $c) (i32.const 9))))
+                (local.set $q (i32.add (local.get $q) (i32.const 1)))
+                (br $space)))
+            (if (i32.eq (local.get $q) (local.get $lineEnd))
+              (then
+                (local.set $close (local.get $p))
+                (br $fenceDone)))))
+        (local.set $lineEnd (call $markdownLineEnd (local.get $p)))
+        (local.set $p (call $markdownAfterLine (local.get $lineEnd)))
+        (br $fenceLines)))
+    (if (global.get $markdownStreamLang)
+      (then (call $markdownCodeRange
+        (global.get $markdownStreamLang) (global.get $ptr) (local.get $close)))
+      (else (call $emitTok
+        (enum.get $Token.text.literal) (global.get $ptr) (local.get $close))))
+    (if (i32.eq (local.get $close) (global.get $end))
+      (then (return (i32.const 1))))
+    (global.set $ptr (local.get $close))
+    (local.set $lineEnd (call $markdownLineEnd (global.get $ptr)))
+    (local.set $after (call $markdownAfterLine (local.get $lineEnd)))
+    (call $emitTok (enum.get $Token.punctuation.delimiter)
+      (global.get $ptr) (local.get $after))
+    (global.set $ptr (local.get $after))
+    (global.set $markdownStreamFence (i32.const 0))
+    (global.set $streamMode (i32.const 0))
+    (i32.const 0))
 
   (func $markdownPlainEnd (param $p i32) (result i32)
     (local $hits v128)
@@ -349,6 +421,12 @@
                 (local.set $p (call $markdownAfterLine (local.get $lineEnd)))
                 (br $front)))
             (call $markdownYamlRange (local.get $body) (local.get $close))
+            (if (i32.and
+                  (global.get $streaming)
+                  (i32.eq (local.get $close) (global.get $end)))
+              (then
+                (call $streamSetRegion (i32.const 4))
+                (global.set $streamRegionStarted (i32.const 1))))
             (if (i32.lt_u (local.get $close) (global.get $end))
               (then
                 (global.set $ptr (local.get $close))
@@ -517,6 +595,13 @@
                     (local.get $lang) (local.get $body) (local.get $close)))
                   (else (call $emitTok
                     (enum.get $Token.text.literal) (local.get $body) (local.get $close))))
+                (if (i32.and
+                      (global.get $streaming)
+                      (i32.eq (local.get $close) (global.get $end)))
+                  (then
+                    (global.set $markdownStreamFence (local.get $fence))
+                    (global.set $markdownStreamFenceLen (local.get $fenceLen))
+                    (global.set $markdownStreamLang (local.get $lang))))
                 (global.set $ptr (local.get $close))
                 (if (i32.lt_u (local.get $close) (global.get $end))
                   (then

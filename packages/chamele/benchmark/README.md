@@ -54,23 +54,33 @@ moonx chamele:bench-stream
 
 ## Results (`TokenizeStream`)
 
-| Input                       |  Lines | Chunks | Chamele | Throughput |   Shiki | Speedup |
-| --------------------------- | -----: | -----: | ------: | ---------: | ------: | ------: |
-| `tiny.ts.txt` (1 KB)        |     50 |      1 | 46.0 µs |  28.4 MB/s |  735 µs |   16.0× |
-| `small.ts.txt` (31 KB)      |    826 |      8 |  689 µs |  43.4 MB/s | 34.5 ms |   50.1× |
-| `large.ts.txt` (466 KB)     | 10,673 |    117 | 70.6 ms |  6.44 MB/s |  319 ms |   4.52× |
-| `unicode-lines.ts` (498 KB) | 10,001 |    105 | 57.4 ms |  8.96 MB/s |  494 ms |   8.61× |
+| Input                       |  Lines | Chunks | Chamele | Throughput |    Shiki | Speedup |
+| --------------------------- | -----: | -----: | ------: | ---------: | -------: | ------: |
+| `tiny.css.txt` (2 KB)       |     85 |      1 | 31.3 µs |  47.7 MB/s |  2.59 ms |   82.8× |
+| `tiny.html.txt` (2 KB)      |     51 |      1 | 30.3 µs |  60.6 MB/s |  1.18 ms |   39.1× |
+| `tiny.jsonc.txt` (1 KB)     |     17 |      1 | 18.2 µs |  77.1 MB/s |  81.1 µs |   4.46× |
+| `tiny.ts.txt` (1 KB)        |     50 |      1 | 25.1 µs |  52.1 MB/s |   725 µs |   28.9× |
+| `small.css.txt` (24 KB)     |  1,388 |      6 |  246 µs |  93.2 MB/s |  22.4 ms |   91.1× |
+| `small.html.txt` (4 KB)     |      2 |      1 | 40.1 µs |  93.7 MB/s |  1.34 ms |   33.3× |
+| `small.jsonc.txt` (30 KB)   |    337 |      8 | 79.0 µs |   366 MB/s |  1.67 ms |   21.1× |
+| `small.ts.txt` (31 KB)      |    826 |      8 |  255 µs |   117 MB/s |  35.0 ms |    137× |
+| `large.css.txt` (304 KB)    | 17,619 |     77 | 2.94 ms |   101 MB/s |   301 ms |    102× |
+| `large.html.txt` (409 KB)   |     46 |    103 | 7.34 ms |  54.5 MB/s | 1,232 ms |    168× |
+| `large.jsonc.txt` (292 KB)  |  8,561 |     74 | 1.36 ms |   211 MB/s |  40.6 ms |   30.0× |
+| `large.ts.txt` (466 KB)     | 10,673 |    117 | 3.44 ms |   132 MB/s |   330 ms |   95.8× |
+| `unicode-lines.ts` (498 KB) | 10,001 |    105 | 3.31 ms |   155 MB/s |   493 ms |    149× |
 
 > Measured on 2026-08-30 with Node.js 24.11.0 on a 14-core Apple M4 Pro with 48
 > GB RAM (macOS arm64). Each iteration creates a fresh tokenizer, pushes
 > 4,096-character chunks, and flushes the final line. Shiki carries its grammar
-> state between completed lines.
+> state between completed lines; Chamele preserves each language's lexer state
+> between chunks.
 
 ## Installed size
 
 | tool                            |     size | contents                                        |
 | ------------------------------- | -------: | ----------------------------------------------- |
-| Chamele                         |  81.9 KB | 66.8 KB Wasm (27.7 KB gzip) and 15.2 KB JS glue |
+| Chamele                         |   104 KB | 76.8 KB Wasm (32.7 KB gzip) and 27.5 KB JS glue |
 | Shiki                           |   589 KB | TextMate grammars, themes, and engines          |
 | Lezer (TS, JSON, CSS, and HTML) | 1,018 KB | LR parser tables as JS                          |
 | tree-sitter-highlight           |  8.24 MB | darwin-arm64 native addon and index.js          |

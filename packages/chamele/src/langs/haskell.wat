@@ -28,7 +28,9 @@
                 (br $scan)))))
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
         (br $scan)))
-    (call $emitTok (local.get $hl) (local.get $lhs) (global.get $ptr)))
+    (call $emitTok (local.get $hl) (local.get $lhs) (global.get $ptr))
+    (call $streamSetNested
+      (local.get $depth) (i32.const "{-") (i32.const "-}") (local.get $hl)))
 
   (func $hsPragma
     (local $lhs i32)

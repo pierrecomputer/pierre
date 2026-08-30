@@ -305,7 +305,27 @@
           (then
             (local.set $to (call $tsxExpressionEnd (local.get $p) (local.get $p)))
             (call $mdxMarkdownRange (local.get $from) (local.get $p))
-            (call $mdxTsxRange (local.get $p) (local.get $to))
+            (if (i32.and
+                  (global.get $streaming)
+                  (i32.and
+                    (i32.eq (local.get $to) (global.get $end))
+                    (i32.or
+                      (i32.eq (local.get $to) (local.get $p))
+                      (i32.ne
+                        (i32.load8_u (i32.sub (local.get $to) (i32.const 1)))
+                        (i32.const "}")))))
+              (then
+                (call $emitTok
+                  (enum.get $Token.punctuation.bracket)
+                  (local.get $p) (i32.add (local.get $p) (i32.const 1)))
+                (global.set $ptr (global.get $end))
+                (call $streamSetRegion (i32.const 8))
+                (global.set $ptr (i32.add (local.get $p) (i32.const 1)))
+                (drop (call $hlTsxExpressionStream
+                  (i32.const 1) (i32.const 1)))
+                (global.set $ptr (global.get $end))
+                (global.set $streamRegionStarted (i32.const 1)))
+              (else (call $mdxTsxRange (local.get $p) (local.get $to))))
             (local.set $from (local.get $to))
             (local.set $p (local.get $to))
             (br $scan)))
@@ -325,6 +345,24 @@
               (then
                 (call $mdxMarkdownRange (local.get $from) (local.get $p))
                 (call $mdxTsxRange (local.get $p) (local.get $to))
+                (local.set $from (local.get $to))
+                (local.set $p (local.get $to))
+                (br $scan)))
+            (if (i32.and
+                  (global.get $streaming)
+                  (i32.and
+                    (i32.lt_u (i32.add (local.get $p) (i32.const 1)) (global.get $end))
+                    (call $lexIsIdentStart
+                      (i32.load8_u offset=1 (local.get $p)))))
+              (then
+                (call $mdxMarkdownRange (local.get $from) (local.get $p))
+                (global.set $ptr (global.get $end))
+                (call $streamSetRegion (i32.const 5))
+                (local.set $to (global.get $end))
+                (global.set $ptr (local.get $p))
+                (call $hlTsxStream (i32.const 1))
+                (global.set $ptr (local.get $to))
+                (global.set $streamRegionStarted (i32.const 1))
                 (local.set $from (local.get $to))
                 (local.set $p (local.get $to))
                 (br $scan)))))
