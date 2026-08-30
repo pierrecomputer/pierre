@@ -14,7 +14,6 @@ import { TextDocument } from '../src/editor/textDocument';
 import type { EditorViewState } from '../src/editor/types';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
 import type {
-  DiffsEditableComponent,
   FileContents,
   FileDiffMetadata,
   LineAnnotation,
@@ -53,7 +52,7 @@ interface EditorFixture {
   complete(): void;
   container: HTMLElement;
   content: HTMLElement;
-  editor: Editor<undefined>;
+  editor: Editor<'file', undefined>;
   file: File<undefined>;
 }
 
@@ -78,21 +77,21 @@ interface DiffEditorFixture {
   complete(): void;
   container: HTMLElement;
   content: HTMLElement;
-  editor: Editor<undefined>;
+  editor: Editor<'file-diff', undefined>;
   fileDiff: TestFileDiff;
 }
 
 interface PendingEditorFixture {
   cleanup(): void;
   complete(): void;
-  editor: Editor<undefined>;
+  editor: Editor<'file', undefined>;
 }
 
 // Mounts a real File-backed editor, mirroring the harness the applyEdits and
 // marker suites use, and returns the editor plus its contenteditable element.
 async function createEditorFixture(
   contents: string,
-  editorOptions?: EditorOptions<undefined>,
+  editorOptions?: EditorOptions<'file', undefined>,
   lineAnnotations?: LineAnnotation<undefined>[],
   documentKey?: string,
   fileInfo: Pick<FileContents, 'lang' | 'name'> = { name: 'edits.ts' }
@@ -105,7 +104,7 @@ async function createEditorFixture(
     disableFileHeader: true,
     theme: DEFAULT_THEMES,
   });
-  const editor = new Editor<undefined>('file', editorOptions, documentKey);
+  const editor = new Editor('file', editorOptions, documentKey);
   const initialFile: FileContents = { ...fileInfo, contents };
 
   file.render({
@@ -158,7 +157,7 @@ function createPendingEditorFixture(
     disableFileHeader: true,
     theme: DEFAULT_THEMES,
   });
-  const editor = new Editor<undefined>('file', {}, documentKey);
+  const editor = new Editor('file', {}, documentKey);
   file.render({
     file: { name: 'edits.ts', contents },
     fileContainer,
@@ -178,7 +177,7 @@ function createPendingEditorFixture(
 
 async function createDiffEditorFixture(
   diffStyle: 'split' | 'unified',
-  editorOptions?: EditorOptions<undefined>,
+  editorOptions?: EditorOptions<'file-diff', undefined>,
   documentKey?: string,
   newContents = 'alpha\nnew\ncharlie',
   files?: { oldFile: FileContents; newFile: FileContents }
@@ -192,7 +191,7 @@ async function createDiffEditorFixture(
     diffStyle,
     theme: DEFAULT_THEMES,
   });
-  const editor = new Editor<undefined>('file-diff', editorOptions, documentKey);
+  const editor = new Editor('file-diff', editorOptions, documentKey);
   fileDiff.render({
     oldFile:
       files?.oldFile ??
@@ -232,10 +231,13 @@ async function createDiffEditorFixture(
 }
 
 function setEditorViewport(
-  file: DiffsEditableComponent<undefined>,
+  fileContainer: HTMLElement,
   viewport: HTMLElement | Document
 ): void {
-  file.getEditorViewport = () => viewport;
+  if (viewport instanceof HTMLElement) {
+    viewport.style.overflowY = 'auto';
+    viewport.appendChild(fileContainer);
+  }
 }
 
 function setRect(element: Element, top: number, bottom: number): void {
@@ -266,7 +268,7 @@ function getLineRows(content: HTMLElement): HTMLElement[] {
 }
 
 function insertText(
-  editor: Editor<undefined>,
+  editor: Editor<'file', undefined> | Editor<'file-diff', undefined>,
   line: number,
   character: number,
   text: string,
@@ -311,7 +313,7 @@ function hoverMarkerLine(content: HTMLElement, oneIndexedLine: number): void {
 describe('component editor attachment', () => {
   test('File rejects another editor until the current editor detaches', async () => {
     const fixture = await createEditorFixture('alpha\nbravo');
-    const replacement = new Editor<undefined>('file');
+    const replacement = new Editor('file');
     try {
       expect(() => replacement.edit(fixture.file)).toThrow(
         'File.__attachEditor: an editor is already attached'
@@ -330,7 +332,7 @@ describe('component editor attachment', () => {
 
   test('FileDiff rejects another editor until the current editor detaches', async () => {
     const fixture = await createDiffEditorFixture('split');
-    const replacement = new Editor<undefined>('file-diff');
+    const replacement = new Editor('file-diff');
     try {
       expect(() => replacement.edit(fixture.fileDiff)).toThrow(
         'FileDiff.__attachEditor: an editor is already attached'
@@ -436,7 +438,7 @@ describe('Editor document registry surfaces', () => {
       disableFileHeader: true,
       theme: DEFAULT_THEMES,
     });
-    const editor = new Editor<undefined>('file', {}, editStateKey);
+    const editor = new Editor('file', {}, editStateKey);
     try {
       editor.edit(file);
       file.hydrate({
@@ -491,7 +493,7 @@ describe('Editor document registry surfaces', () => {
       diffStyle: 'split',
       theme: DEFAULT_THEMES,
     });
-    const editor = new Editor<undefined>('file-diff', {}, editStateKey);
+    const editor = new Editor('file-diff', {}, editStateKey);
     const externalDiff = parseDiffFromFile(oldFile, newFile);
     try {
       editor.edit(fileDiff);
@@ -572,7 +574,7 @@ describe('Editor document registry surfaces', () => {
     insertText(first.editor, 0, 22, '\n');
     const retainedContents = first.editor.getText();
     first.cleanup();
-    const retainedHistory = EditStateManager.get<undefined>(
+    const retainedHistory = EditStateManager.get<'file', undefined>(
       'file',
       documentKey
     )!.document.history;
@@ -831,7 +833,7 @@ describe('Editor document registry surfaces', () => {
     insertText(first.editor, 0, 22, '// kept\n');
     const retainedContents = first.editor.getText();
     first.cleanup();
-    const retainedHistory = EditStateManager.get<undefined>(
+    const retainedHistory = EditStateManager.get<'file-diff', undefined>(
       'file-diff',
       documentKey
     )!.document.history;
@@ -1318,7 +1320,7 @@ describe('Editor state round trip', () => {
       file: FileContents;
       editorState: EditorViewState;
     };
-    const initialDocument = new TextDocument<undefined>(
+    const initialDocument = new TextDocument<'file', undefined>(
       persisted.file.name,
       persisted.file.contents,
       persisted.file.lang ?? getFiletypeFromFileName(persisted.file.name)
@@ -1490,10 +1492,7 @@ describe('Editor focus lifecycle', () => {
   test('fires onAttach when the editor attaches to a file', async () => {
     let onAttachCompleted = false;
     const onAttach = mock(
-      (
-        attachedEditor: Editor<undefined>,
-        _file: DiffsEditableComponent<undefined>
-      ) => {
+      (attachedEditor: Editor<'file', undefined>, _file: File<undefined>) => {
         attachedEditor.setMarkers([]);
         onAttachCompleted = true;
       }
@@ -1640,7 +1639,7 @@ describe('Editor focus lifecycle', () => {
   });
 
   test('targeted focus before attachment is a no-op', () => {
-    const editor = new Editor<undefined>('file');
+    const editor = new Editor('file');
     try {
       editor.focus({ lineNumber: 2 });
       expect(editor.getViewState().selections).toBeUndefined();
@@ -1650,12 +1649,12 @@ describe('Editor focus lifecycle', () => {
   });
 
   test('first-visible focus targets the first row whose top is in an element viewport', async () => {
-    const { cleanup, content, editor, file } = await createEditorFixture(
+    const { cleanup, container, content, editor } = await createEditorFixture(
       'alpha\nbravo\ncharlie'
     );
     try {
       const viewport = document.createElement('div');
-      setEditorViewport(file, viewport);
+      setEditorViewport(container, viewport);
       setRect(viewport, 10, 50);
 
       const rows = getLineRows(content);
@@ -1734,12 +1733,12 @@ describe('Editor focus lifecycle', () => {
   });
 
   test('first-visible focus applies a top offset after sticky headers', async () => {
-    const { cleanup, content, editor, file } = await createEditorFixture(
+    const { cleanup, container, content, editor } = await createEditorFixture(
       'alpha\nbravo\ncharlie'
     );
     try {
       const viewport = document.createElement('div');
-      setEditorViewport(file, viewport);
+      setEditorViewport(container, viewport);
       setRect(viewport, 0, 60);
 
       const shadowRoot = content.getRootNode() as ShadowRoot;
@@ -1781,7 +1780,7 @@ describe('Editor focus lifecycle', () => {
   });
 
   test('first-visible focus preserves focus and selection without a visible row top', async () => {
-    const { cleanup, content, editor, file } = await createEditorFixture(
+    const { cleanup, container, content, editor } = await createEditorFixture(
       'alpha\nbravo\ncharlie'
     );
     try {
@@ -1797,7 +1796,7 @@ describe('Editor focus lifecycle', () => {
       expect(document.activeElement).toBe(button);
 
       const viewport = document.createElement('div');
-      setEditorViewport(file, viewport);
+      setEditorViewport(container, viewport);
       setRect(viewport, 0, 10);
       const rows = getLineRows(content);
       setRect(rows[0], -5, 5);
@@ -1813,11 +1812,11 @@ describe('Editor focus lifecycle', () => {
   });
 
   test('first-visible focus skips unified deletion rows', async () => {
-    const { cleanup, content, editor, fileDiff } =
+    const { cleanup, container, content, editor } =
       await createDiffEditorFixture('unified');
     try {
       const viewport = document.createElement('div');
-      setEditorViewport(fileDiff, viewport);
+      setEditorViewport(container, viewport);
       setRect(viewport, 0, 60);
 
       const rows = getLineRows(content);
@@ -1848,11 +1847,11 @@ describe('Editor focus lifecycle', () => {
   });
 
   test('first-visible focus scans the additions column in split diffs', async () => {
-    const { cleanup, container, content, editor, fileDiff } =
+    const { cleanup, container, content, editor } =
       await createDiffEditorFixture('split');
     try {
       const viewport = document.createElement('div');
-      setEditorViewport(fileDiff, viewport);
+      setEditorViewport(container, viewport);
       setRect(viewport, 0, 60);
 
       const deletionContent = container.shadowRoot?.querySelector<HTMLElement>(

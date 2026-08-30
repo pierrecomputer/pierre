@@ -1,20 +1,15 @@
 import { describe, expect, test } from 'bun:test';
 
+import { File, type FileRenderProps } from '../src/components/File';
+import { VirtualizedFile } from '../src/components/VirtualizedFile';
+import { Virtualizer } from '../src/components/Virtualizer';
+import { DEFAULT_THEMES } from '../src/constants';
 import { Editor } from '../src/editor/editor';
 import { EditStateManager } from '../src/editor/EditStateManager';
 import { TextDocument } from '../src/editor/textDocument';
-import type { EditorViewState, EditState } from '../src/editor/types';
-import type {
-  DiffLineAnnotation,
-  DiffsEditableComponent,
-  DiffsEditor,
-  DiffsHighlighter,
-  FileContents,
-  HighlightedToken,
-  RenderRange,
-} from '../src/types';
+import type { EditorViewState, FileEditState } from '../src/editor/types';
+import type { DiffsHighlighter, FileContents } from '../src/types';
 import { getFiletypeFromFileName } from '../src/utils/getFiletypeFromFileName';
-import { getLineAnnotationName } from '../src/utils/getLineAnnotationName';
 import { installDom } from './domHarness';
 
 function createTestHighlighter(): DiffsHighlighter {
@@ -30,10 +25,10 @@ function createTestHighlighter(): DiffsHighlighter {
 function createInitialState(
   file: FileContents,
   editor: EditorViewState = {}
-): EditState<undefined> {
+): FileEditState<undefined> {
   return {
     documentKind: 'file',
-    document: new TextDocument(
+    document: new TextDocument<'file', undefined>(
       file.name,
       file.contents,
       file.lang ?? getFiletypeFromFileName(file.name)
@@ -43,189 +38,184 @@ function createInitialState(
   };
 }
 
-class TestEditableComponent implements DiffsEditableComponent<undefined> {
-  readonly type = 'file' as const;
-  readonly top = 0;
-  readonly fileContainer = document.createElement('div');
-  options: DiffsEditableComponent<undefined>['options'] = {
-    theme: 'github-light',
-    themeType: 'light',
-  };
-
-  #editor?: DiffsEditor<undefined>;
-  #lineAnnotations?: DiffLineAnnotation<undefined>[];
-  #renderRange?: RenderRange;
-  codeScrollLeft = 0;
-  editorViewport: HTMLElement | Document | undefined;
-  restoredCodeScrollLefts: number[] = [];
-  stateRestoreError: Error | undefined;
+type TestFile = File<undefined> & {
   attachErrorAfterSync: Error | undefined;
-  deferAttachSync = false;
-  completedEditState: EditState<undefined> | undefined;
+  codeScrollLeft: number;
+  completedEditState: FileEditState<undefined> | undefined;
+  deferAttachSync: boolean;
+  editorViewport: HTMLElement | Document | undefined;
+  getEditorViewport(): HTMLElement | Document | undefined;
+  restoredCodeScrollLefts: number[];
+  stateRestoreError: Error | undefined;
+  readonly testFileContainer: HTMLElement;
+  render(props: Partial<FileRenderProps<undefined>>): boolean;
+};
 
-  constructor(private file: FileContents) {
-    this.#renderShadowDom();
-  }
+function createTestFile(
+  initialFile: FileContents,
+  { virtualized = false }: { virtualized?: boolean } = {}
+): TestFile {
+  const options = {
+    disableFileHeader: true,
+    theme: DEFAULT_THEMES,
+  };
+  const virtualizedComponent = virtualized
+    ? new VirtualizedFile<undefined>(options, new Virtualizer())
+    : undefined;
+  const component = (virtualizedComponent ??
+    new File<undefined>(options)) as TestFile;
+  const fileContainer = document.createElement('div');
+  document.body.appendChild(fileContainer);
+  let currentFile = initialFile;
 
-  setOptions(options: Partial<DiffsEditableComponent<undefined>['options']>) {
-    this.options = { ...this.options, ...options };
-  }
-
-  setSelectedLines(_range: { start: number; end: number } | null): void {}
-
-  setEditorActiveLine(_lineNumber: number | null): void {}
-
-  __getEffectiveCodeOptions(): DiffsEditableComponent<undefined>['options'] {
-    return this.options;
-  }
-
-  __captureDocumentSessionState(): undefined {
-    return undefined;
-  }
-
-  getCodeScrollLeft(): number {
-    return this.codeScrollLeft;
-  }
-
-  setCodeScrollLeft(position: number): void {
-    if (this.stateRestoreError != null) {
-      throw this.stateRestoreError;
-    }
-    this.codeScrollLeft = position;
-    this.restoredCodeScrollLefts.push(position);
-  }
-
-  getEditorViewport(): HTMLElement | Document | undefined {
-    return this.editorViewport;
-  }
-
-  render({
-    file,
-    lineAnnotations,
-    renderRange,
-  }: {
-    file?: FileContents;
-    lineAnnotations?: DiffLineAnnotation<undefined>[];
-    renderRange?: RenderRange;
-  }): void {
-    if (file !== undefined) {
-      this.file = file;
-    }
-    this.#lineAnnotations = lineAnnotations;
-    this.#renderRange = renderRange;
-    this.#renderShadowDom();
-    this.#syncRenderView();
-  }
-
-  rerender(): void {
-    this.#renderShadowDom();
-    this.#syncRenderView();
-  }
-
-  cleanUp(): void {
-    this.#editor = undefined;
-  }
-
-  emitEditChange(): void {}
-
-  getAnnotationSlotName = getLineAnnotationName;
-
-  __completeEditSession(
-    editor: DiffsEditor<undefined>,
-    _mode: 'install' | 'discard'
-  ): void {
-    this.completedEditState = editor.getEditState();
-  }
-
-  __attachEditor(editor: DiffsEditor<undefined>): () => void {
-    this.#editor = editor;
-    if (!this.deferAttachSync) {
-      this.#syncRenderView();
-    }
-    if (this.attachErrorAfterSync != null) {
-      throw this.attachErrorAfterSync;
-    }
-    return () => {
-      this.#editor = undefined;
-    };
-  }
-
-  __resumeEditor(editor: DiffsEditor<undefined>): void {
-    if (this.#editor !== editor) {
-      throw new Error('TestEditableComponent: editor association changed');
-    }
-    this.rerender();
-  }
-
-  applyDocumentChange(
-    _textDocument: TextDocument<undefined>,
-    newLineAnnotations?: DiffLineAnnotation<undefined>[]
-  ): void {
-    this.#lineAnnotations = newLineAnnotations;
-  }
-
-  updateRenderCache(
-    _lines: Map<number, Array<HighlightedToken>>,
-    _themeType: 'dark' | 'light'
-  ): void {}
-
-  #syncRenderView(): void {
-    this.#editor?.__syncRenderView({
-      highlighter: createTestHighlighter(),
-      fileContainer: this.fileContainer,
-      file: this.file,
-      lineAnnotations: this.#lineAnnotations,
-      renderRange: this.#renderRange,
-    });
-  }
-
-  #renderShadowDom(): void {
+  const ensureTestDom = () => {
     const shadowRoot =
-      this.fileContainer.shadowRoot ??
-      this.fileContainer.attachShadow({ mode: 'open' });
-    shadowRoot.replaceChildren();
-
+      fileContainer.shadowRoot ?? fileContainer.attachShadow({ mode: 'open' });
+    if (shadowRoot.querySelector('[data-content]') != null) return;
     const code = document.createElement('div');
     code.dataset.code = '';
-
+    const gutter = document.createElement('div');
+    gutter.dataset.gutter = '';
     const content = document.createElement('div');
     content.dataset.content = '';
+    for (const [index, line] of currentFile.contents.split('\n').entries()) {
+      const row = document.createElement('div');
+      row.dataset.line = String(index + 1);
+      row.textContent = line;
+      content.appendChild(row);
+    }
+    code.append(gutter, content);
+    shadowRoot.replaceChildren(code);
+  };
 
-    for (const [index, line] of this.file.contents.split('\n').entries()) {
-      const contentLine = document.createElement('div');
-      contentLine.dataset.line = String(index + 1);
-      contentLine.dataset.lineType = 'context';
-      contentLine.textContent = line;
-      content.appendChild(contentLine);
+  component.attachErrorAfterSync = undefined;
+  component.codeScrollLeft = 0;
+  component.completedEditState = undefined;
+  component.deferAttachSync = false;
+  component.editorViewport = undefined;
+  component.restoredCodeScrollLefts = [];
+  component.stateRestoreError = undefined;
+
+  const render = component.render.bind(component);
+  component.render = ((props: Partial<FileRenderProps<undefined>>) => {
+    currentFile = props.file ?? currentFile;
+    virtualizedComponent?.updateCodeViewLayout(currentFile, 0);
+    const rendered = render({
+      ...props,
+      file: currentFile,
+      fileContainer,
+      forceRender: true,
+    });
+    ensureTestDom();
+    return rendered;
+  }) as TestFile['render'];
+
+  Object.defineProperty(component, 'testFileContainer', {
+    get: () => fileContainer,
+  });
+  component.getEditorViewport = () => component.editorViewport;
+
+  component.getCodeScrollLeft = () => component.codeScrollLeft;
+  const setCodeScrollLeft = component.setCodeScrollLeft.bind(component);
+  component.setCodeScrollLeft = (position) => {
+    if (component.stateRestoreError != null) {
+      throw component.stateRestoreError;
+    }
+    component.codeScrollLeft = position;
+    component.restoredCodeScrollLefts.push(position);
+    setCodeScrollLeft(position);
+  };
+
+  const completeEditSession = component.__completeEditSession.bind(component);
+  component.__completeEditSession = (editor, mode) => {
+    component.completedEditState = editor.getEditState();
+    completeEditSession(editor, mode);
+  };
+
+  const syncRenderView = (editor: Editor<'file', undefined>) => {
+    editor.__syncRenderView({
+      highlighter: createTestHighlighter(),
+      fileContainer,
+      file: currentFile,
+      lineAnnotations: undefined,
+      renderRange: undefined,
+    });
+  };
+
+  const attach = component.__attachEditor.bind(component);
+  component.__attachEditor = (editor) => {
+    const attachNow = () => {
+      const detach = attach(editor);
+      try {
+        syncRenderView(editor);
+        if (component.attachErrorAfterSync != null) {
+          throw component.attachErrorAfterSync;
+        }
+      } catch (error) {
+        detach();
+        throw error;
+      }
+      return detach;
+    };
+    if (!component.deferAttachSync) {
+      return attachNow();
     }
 
-    code.appendChild(content);
-    shadowRoot.appendChild(code);
-  }
+    let detach: (() => void) | undefined;
+    let pending = true;
+    const rerender = component.rerender.bind(component);
+    component.rerender = () => {
+      if (pending) {
+        pending = false;
+        detach = attachNow();
+      } else {
+        rerender();
+      }
+    };
+    return () => {
+      pending = false;
+      detach?.();
+    };
+  };
+
+  const resume = component.__resumeEditor.bind(component);
+  component.__resumeEditor = (editor) => {
+    resume(editor);
+    syncRenderView(editor);
+  };
+
+  component.render({ file: initialFile });
+  return component;
 }
 
 describe('Editor state', () => {
   test('keyed state restores selections and view in a later editor', () => {
     const dom = installDom();
     EditStateManager.clearAll();
-    const first = new TestEditableComponent({
-      name: 'state.ts',
-      contents: 'alpha\nbravo',
-      lang: 'text',
-    });
+    const first = createTestFile(
+      {
+        name: 'state.ts',
+        contents: 'alpha\nbravo',
+        lang: 'text',
+      },
+      { virtualized: true }
+    );
     first.editorViewport = document.createElement('div');
-    const firstEditor = new Editor<undefined>(
+    const firstEditor = new Editor(
       'file',
       { ownsVerticalViewport: true },
       'complete-state'
     );
-    const second = new TestEditableComponent({
-      name: 'state.ts',
-      contents: 'alpha\nbravo',
-      lang: 'text',
-    });
+    const second = createTestFile(
+      {
+        name: 'state.ts',
+        contents: 'alpha\nbravo',
+        lang: 'text',
+      },
+      { virtualized: true }
+    );
     second.editorViewport = document.createElement('div');
-    const secondEditor = new Editor<undefined>(
+    const secondEditor = new Editor(
       'file',
       { ownsVerticalViewport: true },
       'complete-state'
@@ -275,7 +265,7 @@ describe('Editor state', () => {
     const dom = installDom();
     const viewport = document.createElement('div');
     const file = { name: 'state.ts', contents: 'alpha\nbravo' };
-    const editor = new Editor<undefined>('file', {
+    const editor = new Editor('file', {
       ownsVerticalViewport: true,
       initialState: {
         documentKind: 'file',
@@ -291,7 +281,7 @@ describe('Editor state', () => {
         },
       },
     });
-    const component = new TestEditableComponent(file);
+    const component = createTestFile(file, { virtualized: true });
     component.editorViewport = viewport;
 
     try {
@@ -350,7 +340,7 @@ describe('Editor state', () => {
 
   test('initialState completes missing file state from the attached component', () => {
     const dom = installDom();
-    const component = new TestEditableComponent({
+    const component = createTestFile({
       name: 'state.ts',
       contents: 'alpha\nbravo',
       lang: 'text',
@@ -359,7 +349,7 @@ describe('Editor state', () => {
       documentKind: 'file' as const,
       editor: { view: { scrollLeft: 24 } },
     };
-    const editor = new Editor<undefined>('file', { initialState });
+    const editor = new Editor('file', { initialState });
 
     try {
       editor.edit(component);
@@ -382,22 +372,28 @@ describe('Editor state', () => {
 
   test('raw complete state transfers draft, history, and editor state', () => {
     const dom = installDom();
-    const first = new TestEditableComponent({
-      name: 'state.ts',
-      contents: 'alpha\nbravo',
-      lang: 'text',
-    });
+    const first = createTestFile(
+      {
+        name: 'state.ts',
+        contents: 'alpha\nbravo',
+        lang: 'text',
+      },
+      { virtualized: true }
+    );
     first.editorViewport = document.createElement('div');
-    const firstEditor = new Editor<undefined>('file', {
+    const firstEditor = new Editor('file', {
       ownsVerticalViewport: true,
     });
-    const second = new TestEditableComponent({
-      name: 'state.ts',
-      contents: 'alpha\nbravo',
-      lang: 'text',
-    });
+    const second = createTestFile(
+      {
+        name: 'state.ts',
+        contents: 'alpha\nbravo',
+        lang: 'text',
+      },
+      { virtualized: true }
+    );
     second.editorViewport = document.createElement('div');
-    let secondEditor: Editor<undefined> | undefined;
+    let secondEditor: Editor<'file', undefined> | undefined;
 
     try {
       firstEditor.edit(first);
@@ -457,13 +453,13 @@ describe('Editor state', () => {
 
   test('getEditState returns the managed document and history', () => {
     const dom = installDom();
-    const component = new TestEditableComponent({
+    const component = createTestFile({
       name: 'state.ts',
       contents: 'alpha',
       lang: 'text',
     });
     component.editorViewport = document.createElement('div');
-    const editor = new Editor<undefined>('file');
+    const editor = new Editor('file');
 
     try {
       editor.edit(component);
@@ -527,12 +523,12 @@ describe('Editor state', () => {
 
   test('keyed state is checkpointed directly on the managed session', () => {
     const dom = installDom();
-    const component = new TestEditableComponent({
+    const component = createTestFile({
       name: 'state.ts',
       contents: 'alpha',
       lang: 'text',
     });
-    const editor = new Editor<undefined>('file', {}, 'managed-checkpoint');
+    const editor = new Editor('file', {}, 'managed-checkpoint');
 
     try {
       editor.edit(component);
@@ -570,9 +566,9 @@ describe('Editor state', () => {
     const initialState = createInitialState(file, {
       view: { scrollLeft: 24 },
     });
-    const component = new TestEditableComponent(file);
+    const component = createTestFile(file);
     component.deferAttachSync = true;
-    const editor = new Editor<undefined>('file', {
+    const editor = new Editor('file', {
       initialState,
     });
 
@@ -600,9 +596,9 @@ describe('Editor state', () => {
       view: { scrollLeft: 24, scrollTop: 48 },
     };
     const initialState = createInitialState(file, editorState);
-    const component = new TestEditableComponent(file);
+    const component = createTestFile(file);
     component.deferAttachSync = true;
-    const editor = new Editor<undefined>('file', { initialState });
+    const editor = new Editor('file', { initialState });
 
     try {
       editor.edit(component);
@@ -622,23 +618,23 @@ describe('Editor state', () => {
 
   test('completion can transfer state before the editor releases its session', () => {
     const dom = installDom();
-    const first = new TestEditableComponent({
+    const first = createTestFile({
       name: 'state.ts',
       contents: 'alpha',
       lang: 'text',
     });
-    const firstEditor = new Editor<undefined>('file');
-    const second = new TestEditableComponent({
+    const firstEditor = new Editor('file');
+    const second = createTestFile({
       name: 'state.ts',
       contents: 'alpha',
       lang: 'text',
     });
-    const fresh = new TestEditableComponent({
+    const fresh = createTestFile({
       name: 'state.ts',
       contents: 'alpha',
       lang: 'text',
     });
-    let secondEditor: Editor<undefined> | undefined;
+    let secondEditor: Editor<'file', undefined> | undefined;
 
     try {
       firstEditor.edit(first);
@@ -682,18 +678,18 @@ describe('Editor state', () => {
   test('initialState replaces retained keyed state', () => {
     const dom = installDom();
     EditStateManager.clearAll();
-    const first = new TestEditableComponent({
+    const first = createTestFile({
       name: 'state.ts',
       contents: 'alpha',
       lang: 'text',
     });
-    const firstEditor = new Editor<undefined>('file', {}, 'authoritative');
-    const second = new TestEditableComponent({
+    const firstEditor = new Editor('file', {}, 'authoritative');
+    const second = createTestFile({
       name: 'state.ts',
       contents: 'alpha',
       lang: 'text',
     });
-    const secondEditor = new Editor<undefined>(
+    const secondEditor = new Editor(
       'file',
       {
         initialState: createInitialState({
@@ -734,33 +730,25 @@ describe('Editor state', () => {
   test('pre-sync completion keeps the keyed document but clears view state', () => {
     const dom = installDom();
     EditStateManager.clearAll();
-    const first = new TestEditableComponent({
+    const first = createTestFile({
       name: 'state.ts',
       contents: 'alpha',
       lang: 'text',
     });
-    const firstEditor = new Editor<undefined>('file', {}, 'pending-hydration');
-    const pending = new TestEditableComponent({
+    const firstEditor = new Editor('file', {}, 'pending-hydration');
+    const pending = createTestFile({
       name: 'state.ts',
       contents: 'alpha',
       lang: 'text',
     });
     pending.deferAttachSync = true;
-    const pendingEditor = new Editor<undefined>(
-      'file',
-      {},
-      'pending-hydration'
-    );
-    const restored = new TestEditableComponent({
+    const pendingEditor = new Editor('file', {}, 'pending-hydration');
+    const restored = createTestFile({
       name: 'state.ts',
       contents: 'alpha',
       lang: 'text',
     });
-    const restoredEditor = new Editor<undefined>(
-      'file',
-      {},
-      'pending-hydration'
-    );
+    const restoredEditor = new Editor('file', {}, 'pending-hydration');
 
     try {
       firstEditor.edit(first);
@@ -821,20 +809,20 @@ describe('Editor state', () => {
 
   test('transfers caller-created document state without cloning it', () => {
     const dom = installDom();
-    const document = new TextDocument<undefined>(
+    const document = new TextDocument<'file', undefined>(
       'state.ts',
       'developer-owned',
       'text',
       7
     );
-    const initialState: EditState<undefined> = {
+    const initialState: FileEditState<undefined> = {
       documentKind: 'file',
       document,
       fileInfo: { name: 'state.ts', lang: 'text' },
       editor: { view: { scrollLeft: 24 } },
     };
-    const editor = new Editor<undefined>('file', { initialState });
-    const component = new TestEditableComponent({
+    const editor = new Editor('file', { initialState });
+    const component = createTestFile({
       name: 'state.ts',
       contents: 'alpha',
       lang: 'text',
@@ -868,20 +856,20 @@ describe('Editor state', () => {
     window.scrollTo = () => {
       pageScrollCalls++;
     };
-    const editor = new Editor<undefined>('file', {
+    const editor = new Editor('file', {
       initialState: createInitialState(
         { name: 'state.ts', contents: 'alpha\nbravo' },
         { view: { scrollLeft: 24, scrollTop: 48 } }
       ),
     });
-    const component = new TestEditableComponent({
+    const component = createTestFile({
       name: 'state.ts',
       contents: 'alpha\nbravo',
     });
     const scrollAncestor = document.createElement('div');
     scrollAncestor.style.overflowY = 'scroll';
     scrollAncestor.scrollTop = 12;
-    scrollAncestor.appendChild(component.fileContainer);
+    scrollAncestor.appendChild(component.testFileContainer);
     document.body.appendChild(scrollAncestor);
 
     try {
@@ -900,13 +888,13 @@ describe('Editor state', () => {
 
   test('initialState remains available when hydration fails', () => {
     const dom = installDom();
-    const editor = new Editor<undefined>('file', {
+    const editor = new Editor('file', {
       initialState: createInitialState(
         { name: 'state.ts', contents: 'alpha\nbravo' },
         { view: { scrollLeft: 24 } }
       ),
     });
-    const component = new TestEditableComponent({
+    const component = createTestFile({
       name: 'state.ts',
       contents: 'alpha\nbravo',
     });
@@ -933,19 +921,15 @@ describe('Editor state', () => {
     const initialState = createInitialState(file, {
       view: { scrollLeft: 24 },
     });
-    const failingEditor = new Editor<undefined>(
+    const failingEditor = new Editor(
       'file',
       { initialState },
       'failed-restoration'
     );
-    const failing = new TestEditableComponent(file);
+    const failing = createTestFile(file);
     failing.stateRestoreError = new Error('state restoration failed');
-    const adoptingEditor = new Editor<undefined>(
-      'file',
-      {},
-      'failed-restoration'
-    );
-    const adopting = new TestEditableComponent(file);
+    const adoptingEditor = new Editor('file', {}, 'failed-restoration');
+    const adopting = createTestFile(file);
 
     try {
       expect(() => failingEditor.edit(failing)).toThrow(
@@ -971,13 +955,13 @@ describe('Editor state', () => {
 
   test('initialState remains available when attachment fails after hydration', () => {
     const dom = installDom();
-    const editor = new Editor<undefined>('file', {
+    const editor = new Editor('file', {
       initialState: createInitialState(
         { name: 'state.ts', contents: 'alpha\nbravo' },
         { view: { scrollLeft: 24 } }
       ),
     });
-    const component = new TestEditableComponent({
+    const component = createTestFile({
       name: 'state.ts',
       contents: 'alpha\nbravo',
     });
@@ -999,8 +983,8 @@ describe('Editor state', () => {
 
   test('getState retains horizontal state without an owned element viewport', () => {
     const dom = installDom();
-    const editor = new Editor<undefined>('file');
-    const component = new TestEditableComponent({
+    const editor = new Editor('file');
+    const component = createTestFile({
       name: 'state.ts',
       contents: 'alpha\nbravo',
     });
@@ -1021,13 +1005,16 @@ describe('Editor state', () => {
 
   test('getState captures view state from an owned element viewport', () => {
     const dom = installDom();
-    const editor = new Editor<undefined>('file', {
+    const editor = new Editor('file', {
       ownsVerticalViewport: true,
     });
-    const component = new TestEditableComponent({
-      name: 'state.ts',
-      contents: 'alpha\nbravo',
-    });
+    const component = createTestFile(
+      {
+        name: 'state.ts',
+        contents: 'alpha\nbravo',
+      },
+      { virtualized: true }
+    );
     const viewport = document.createElement('div');
     component.editorViewport = viewport;
 
@@ -1049,8 +1036,8 @@ describe('Editor state', () => {
 
   test('vertical viewport ownership is captured at construction', () => {
     const dom = installDom();
-    const editor = new Editor<undefined>('file');
-    const component = new TestEditableComponent({
+    const editor = new Editor('file');
+    const component = createTestFile({
       name: 'state.ts',
       contents: 'alpha\nbravo',
     });
@@ -1073,8 +1060,8 @@ describe('Editor state', () => {
 
   test('setState restores view state through the editable component', () => {
     const dom = installDom();
-    const editor = new Editor<undefined>('file');
-    const component = new TestEditableComponent({
+    const editor = new Editor('file');
+    const component = createTestFile({
       name: 'state.ts',
       contents: 'alpha\nbravo',
     });
@@ -1103,8 +1090,8 @@ describe('Editor state', () => {
       scrollIntoViewCalls++;
     };
 
-    const editor = new Editor<undefined>('file');
-    const component = new TestEditableComponent({
+    const editor = new Editor('file');
+    const component = createTestFile({
       name: 'state.ts',
       contents: 'alpha\nbravo\ncharlie\ndelta\necho\nfoxtrot\n',
     });
@@ -1147,8 +1134,8 @@ describe('Editor state', () => {
       scrollIntoViewCalls++;
     };
 
-    const editor = new Editor<undefined>('file');
-    const component = new TestEditableComponent({
+    const editor = new Editor('file');
+    const component = createTestFile({
       name: 'state.ts',
       contents: 'alpha\nbravo\ncharlie\ndelta\necho\nfoxtrot\n',
     });

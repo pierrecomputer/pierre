@@ -1,9 +1,11 @@
 import { afterAll, describe, expect, test } from 'bun:test';
 
 import { disposeHighlighter, FileDiff, parseDiffFromFile } from '../src';
-import { TextDocument } from '../src/editor/textDocument';
-import type { DiffsEditor } from '../src/types';
 import { installDom } from './domHarness';
+import {
+  createEditorInstance,
+  createTextDocumentFromLines,
+} from './editorTestUtils';
 
 const twoHunkFileLineCount = 140;
 const twoHunkChangedLines = [40, 100];
@@ -32,26 +34,6 @@ function createTwoHunkDiff() {
     throw new Error('Expected two hunks with collapsed leading context');
   }
   return fileDiff;
-}
-
-function makeTextDocument(lines: string[]): TextDocument<string> {
-  return new TextDocument<string>(
-    'inmemory://file-diff-unified-separators',
-    lines.join('')
-  );
-}
-
-function createEditorStub(): DiffsEditor<string> {
-  return {
-    cleanUp() {},
-    edit: () => () => {},
-    __captureFocusForDOMReplacement() {},
-    __emitEditComplete() {},
-    __getDocumentContents: () => undefined,
-    __getDocumentSessionState: () => undefined,
-    __postponeBgTokenizeToNextFrame() {},
-    __syncRenderView() {},
-  } as unknown as DiffsEditor<string>;
 }
 
 async function waitForRenderedCode(container: HTMLElement): Promise<void> {
@@ -98,14 +80,22 @@ describe('FileDiff unified edit separators', () => {
         deferManagers: true,
       });
       await waitForRenderedCode(fileContainer);
-      detach = instance.__attachEditor(createEditorStub());
+      detach = instance.__attachEditor(
+        createEditorInstance<'file-diff', string>('file-diff')
+      );
 
       const initialSeparatorCount = countSeparatorSlots(fileContainer);
       expect(initialSeparatorCount).toBeGreaterThan(0);
 
       const sessionLines = [...fileDiff.additionLines];
       sessionLines[69] = 'changed-70\n';
-      instance.applyDocumentChange(makeTextDocument(sessionLines));
+      instance.applyDocumentChange(
+        createTextDocumentFromLines<'file-diff', string>(
+          'file-diff',
+          sessionLines,
+          'inmemory://file-diff-unified-separators'
+        )
+      );
 
       expect(countSeparatorSlots(fileContainer)).toBeGreaterThan(
         initialSeparatorCount

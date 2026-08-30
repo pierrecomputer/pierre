@@ -2,11 +2,8 @@ import { describe, expect, test } from 'bun:test';
 
 import { VirtualizedFile } from '../src/components/VirtualizedFile';
 import { TextDocument } from '../src/editor/textDocument';
-import type {
-  DiffsEditor,
-  FileContents,
-  RenderRange,
-} from '../src/types';
+import type { FileContents, RenderRange } from '../src/types';
+import { createEditorInstance } from './editorTestUtils';
 
 function createStubVirtualizer(type: 'simple' | 'advanced') {
   return {
@@ -37,8 +34,8 @@ function makeContents(lineCount: number): string {
   );
 }
 
-function makeDocument(lineCount: number): TextDocument<undefined> {
-  return new TextDocument<undefined>(
+function makeDocument(lineCount: number): TextDocument<'file', undefined> {
+  return new TextDocument<'file', undefined>(
     'inmemory://virtualized-file',
     makeContents(lineCount)
   );
@@ -46,19 +43,6 @@ function makeDocument(lineCount: number): TextDocument<undefined> {
 
 function makeFile(lineCount: number): FileContents {
   return { name: 'a.txt', contents: makeContents(lineCount), lang: 'text' };
-}
-
-function createEditorStub(): DiffsEditor<undefined> {
-  return {
-    cleanUp() {},
-    edit: () => () => {},
-    __captureFocusForDOMReplacement() {},
-    __emitEditComplete() {},
-    __getDocumentContents: () => undefined,
-    __getDocumentSessionState: () => undefined,
-    __postponeBgTokenizeToNextFrame() {},
-    __syncRenderView() {},
-  } as unknown as DiffsEditor<undefined>;
 }
 
 class BufferRecordingFile extends VirtualizedFile<undefined> {
@@ -98,8 +82,9 @@ describe('applyDocumentChange buffer updates', () => {
       createStubVirtualizer('advanced')
     );
     advancedInstance.updateCodeViewLayout(makeFile(50), 0);
-    const detachAdvancedEditor =
-      advancedInstance.__attachEditor(createEditorStub());
+    const detachAdvancedEditor = advancedInstance.__attachEditor(
+      createEditorInstance('file')
+    );
     setRenderedEditSession(advancedInstance);
     advancedInstance.seedRenderRange(seeded);
     advancedInstance.applyDocumentChange(makeDocument(1), undefined, true);
@@ -112,8 +97,9 @@ describe('applyDocumentChange buffer updates', () => {
       createStubVirtualizer('simple')
     );
     simpleInstance.updateCodeViewLayout(makeFile(50), 0);
-    const detachSimpleEditor =
-      simpleInstance.__attachEditor(createEditorStub());
+    const detachSimpleEditor = simpleInstance.__attachEditor(
+      createEditorInstance('file')
+    );
     setRenderedEditSession(simpleInstance);
     simpleInstance.seedRenderRange(seeded);
     simpleInstance.applyDocumentChange(makeDocument(1), undefined, true);

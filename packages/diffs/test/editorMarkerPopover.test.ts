@@ -36,7 +36,7 @@ async function waitForEditableContent(
 interface MarkerFixture {
   cleanup(): void;
   content: HTMLElement;
-  editor: Editor<undefined>;
+  editor: Editor<'file', undefined>;
 }
 
 async function createMarkerFixture(contents: string): Promise<MarkerFixture> {
@@ -48,7 +48,7 @@ async function createMarkerFixture(contents: string): Promise<MarkerFixture> {
     disableFileHeader: true,
     theme: DEFAULT_THEMES,
   });
-  const editor = new Editor<undefined>('file');
+  const editor = new Editor('file');
   const initialFile: FileContents = { name: 'edits.ts', contents };
 
   file.render({ file: initialFile, fileContainer, forceRender: true });
@@ -249,7 +249,7 @@ function createDirectMarkerFixture({
       normalizePosition(position: Position): Position {
         return position;
       },
-    } as unknown as TextDocument<undefined>
+    } as TextDocument<'file', undefined>
   );
   rendererRef.current.listenHover(content);
 

@@ -40,7 +40,7 @@ async function waitForEditableContent(
 interface SelectionActionFixture {
   cleanup(): void;
   content: HTMLElement;
-  editor: Editor<undefined>;
+  editor: Editor<'file', undefined>;
   triggerResizeObserver(target: Element): void;
   window: Window & {
     CompositionEvent: {
@@ -54,7 +54,7 @@ interface SelectionActionFixture {
 
 async function createSelectionActionFixture(
   contents: string,
-  editorOptions: EditorOptions<undefined>,
+  editorOptions: EditorOptions<'file', undefined>,
   renderRange?: RenderRange
 ): Promise<SelectionActionFixture> {
   const dom = installDom();
@@ -65,7 +65,7 @@ async function createSelectionActionFixture(
     disableFileHeader: true,
     theme: DEFAULT_THEMES,
   });
-  const editor = new Editor<undefined>('file', editorOptions);
+  const editor = new Editor('file', editorOptions);
   const initialFile: FileContents = { name: 'edits.ts', contents };
 
   file.render({
@@ -122,7 +122,7 @@ describe('Editor selection action', () => {
   // drag the popover is first created from the initial single-character
   // selection.
   test('forward-grown selection: acts on the full selection, not the first character', async () => {
-    let captured: SelectionActionContext<undefined> | undefined;
+    let captured: SelectionActionContext<'file', undefined> | undefined;
     const { cleanup, editor, content } = await createSelectionActionFixture(
       'hello world',
       {
@@ -169,7 +169,7 @@ describe('Editor selection action', () => {
   // the last character, so a stale snapshot would be the selection's last
   // letter.
   test('backward-grown selection: acts on the full selection, not the last character', async () => {
-    let captured: SelectionActionContext<undefined> | undefined;
+    let captured: SelectionActionContext<'file', undefined> | undefined;
     const { cleanup, editor, content } = await createSelectionActionFixture(
       'hello world',
       {

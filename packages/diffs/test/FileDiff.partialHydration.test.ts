@@ -8,7 +8,6 @@ import {
   parsePatchFiles,
 } from '../src';
 import type {
-  DiffsEditor,
   FileContents,
   FileDiffLoadedFiles,
   FileDiffMetadata,
@@ -16,6 +15,7 @@ import type {
 } from '../src/types';
 import type { WorkerPoolManager } from '../src/worker';
 import { installDom, wait } from './domHarness';
+import { createEditorInstance } from './editorTestUtils';
 import { assertDefined, createDeferred } from './testUtils';
 
 afterAll(async () => {
@@ -56,19 +56,6 @@ class TestFileDiff extends FileDiff<undefined> {
       newFile: this.additionFile,
     };
   }
-}
-
-function createEditorStub(): DiffsEditor<undefined> {
-  return {
-    cleanUp() {},
-    edit: () => () => {},
-    __captureFocusForDOMReplacement() {},
-    __emitEditComplete() {},
-    __getDocumentContents: () => undefined,
-    __getDocumentSessionState: () => undefined,
-    __postponeBgTokenizeToNextFrame() {},
-    __syncRenderView() {},
-  } as unknown as DiffsEditor<undefined>;
 }
 
 function makeDirtyLines(
@@ -323,7 +310,7 @@ describe('FileDiff partial hydration', () => {
         fileContainer,
         forceRender: true,
       });
-      detach = instance.__attachEditor(createEditorStub());
+      detach = instance.__attachEditor(createEditorInstance('file-diff'));
 
       const partialSession = instance.getLatestDiffForTest();
       expect(partialSession).toBeDefined();
@@ -383,7 +370,7 @@ describe('FileDiff partial hydration', () => {
         fileContainer,
         forceRender: true,
       });
-      detach = instance.__attachEditor(createEditorStub());
+      detach = instance.__attachEditor(createEditorInstance('file-diff'));
       loadPromise = instance.getPendingFileLoadPromiseForTest();
       assertDefined(loadPromise, 'expected partial hydration to be pending');
 
@@ -445,7 +432,7 @@ describe('FileDiff partial hydration', () => {
         fileContainer,
         forceRender: true,
       });
-      const editor = createEditorStub();
+      const editor = createEditorInstance('file-diff');
       editor.cleanUp = (reason) => {
         if (reason !== 'recycle') {
           detach?.();
@@ -510,7 +497,7 @@ describe('FileDiff partial hydration', () => {
         fileContainer,
         forceRender: true,
       });
-      detach = instance.__attachEditor(createEditorStub());
+      detach = instance.__attachEditor(createEditorInstance('file-diff'));
       const loadPromise = instance.getPendingFileLoadPromiseForTest();
       expect(loadPromise).toBeDefined();
       deferred.resolve({ oldFile: null, newFile });

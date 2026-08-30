@@ -48,15 +48,19 @@ const EDITED_LINES = [
 // The tokenizer reports the truncated line and the new line as dirty, using the
 // post-edit line indexes.
 
-function makeTextDocumentFromText(text: string): TextDocument<undefined> {
-  return new TextDocument<undefined>(
+function makeTextDocumentFromText(
+  text: string
+): TextDocument<'file-diff', undefined> {
+  return new TextDocument<'file-diff', undefined>(
     'inmemory://diff-hunks-recompute',
     text,
     'typescript'
   );
 }
 
-function makeTextDocument(lines: string[]): TextDocument<undefined> {
+function makeTextDocument(
+  lines: string[]
+): TextDocument<'file-diff', undefined> {
   const hasEmbeddedLineBreaks = lines.some(
     (line) => line.includes('\n') || line.includes('\r')
   );
@@ -161,7 +165,7 @@ describe('DiffHunksRenderer content-edit recompute split', () => {
     const renderer = await createPrimedRenderer('split');
 
     renderer.applyDocumentChange(
-      new TextDocument<undefined>(
+      new TextDocument<'file-diff', undefined>(
         'inmemory://diff-hunks',
         EDITED_LINES.join('\n'),
         'typescript'
@@ -206,7 +210,7 @@ describe('DiffHunksRenderer content-edit recompute split', () => {
 
   test('line-count edits do not materialize the document text', async () => {
     const renderer = await createPrimedRenderer('split');
-    const textDocument = new TextDocument<undefined>(
+    const textDocument = new TextDocument<'file-diff', undefined>(
       'inmemory://diff-hunks-line-breaks',
       EDITED_LINES.join('\n'),
       'typescript'

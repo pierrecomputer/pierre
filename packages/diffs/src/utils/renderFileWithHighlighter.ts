@@ -88,13 +88,15 @@ export function renderFileWithHighlighter(
   })();
   const highlightedLines = getLineNodes(
     highlighter.codeToHast(
-      isWindowedHighlight
-        ? extractWindowedFileContent(
-            lines ?? linesFromFileContents(file.contents),
-            startingLine,
-            totalLines
-          )
-        : file.contents,
+      normalizeHighlightLineEndings(
+        isWindowedHighlight
+          ? extractWindowedFileContent(
+              lines ?? linesFromFileContents(file.contents),
+              startingLine,
+              totalLines
+            )
+          : file.contents
+      ),
       hastConfig
     )
   );
@@ -106,6 +108,13 @@ export function renderFileWithHighlighter(
   }
 
   return { code, themeStyles, baseThemeType };
+}
+
+// Shiki does not treat a lone carriage return as a line break. Normalize only
+// the text sent to the highlighter so its output stays aligned with the file
+// model while the original document retains its line endings.
+function normalizeHighlightLineEndings(contents: string): string {
+  return contents.replace(/\r(?!\n)/g, '\n');
 }
 
 function extractWindowedFileContent(

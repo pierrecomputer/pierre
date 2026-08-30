@@ -12,10 +12,13 @@ import {
 import { createRoot as createReactRoot, type Root } from 'react-dom/client';
 
 import type { CodeViewLineSelection } from '../src/components/CodeView';
-import type { FileEditCompleteEvent } from '../src/components/File';
-import type { FileDiffEditCompleteEvent } from '../src/components/FileDiff';
+import type { File, FileEditCompleteEvent } from '../src/components/File';
+import type {
+  FileDiff,
+  FileDiffEditCompleteEvent,
+} from '../src/components/FileDiff';
 import { DEFAULT_THEMES } from '../src/constants';
-import type { EditorOptions } from '../src/editor/editor';
+import { Editor, type EditorOptions } from '../src/editor/editor';
 import type {
   EditCompletionDecision,
   EditorChangeEvent,
@@ -31,15 +34,15 @@ import {
   type EditProviderProps,
 } from '../src/react';
 import type { CreateEditor } from '../src/react/EditContext';
-import type {
-  CodeViewItem,
-  DiffLineAnnotation,
-  DiffsEditableComponent,
-  DiffsEditor,
-  FileContents,
-} from '../src/types';
+import type { CodeViewItem } from '../src/types';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
-import { dispatchScroll, installDom, makeFile, wait } from './domHarness';
+import {
+  dispatchScroll,
+  installDom,
+  makeFile,
+  wait,
+  waitFor,
+} from './domHarness';
 
 afterAll(async () => {
   await disposeHighlighter();
@@ -59,87 +62,62 @@ const CODE_VIEW_OPTIONS = {
   theme: DEFAULT_THEMES,
 } as const;
 const CODE_VIEW_STYLE = { height: 800, overflow: 'auto' } as const;
-type ReactManagedCodeViewOptionKey = Extract<
-  keyof CodeViewReactOptions<undefined>,
-  'controlledSelection' | 'createEditor' | 'onSelectedLinesChange'
->;
-const REACT_MANAGED_CODE_VIEW_OPTIONS_ARE_OMITTED: [
-  ReactManagedCodeViewOptionKey,
-] extends [never]
-  ? true
-  : false = true;
 
-interface TrackedCodeViewEditor extends DiffsEditor<undefined> {
-  options: EditorOptions<undefined>;
-  edits: DiffsEditableComponent<undefined>[];
+type TestEditorComponent<TDocumentKind extends EditorDocumentKind> =
+  TDocumentKind extends 'file' ? File<undefined> : FileDiff<undefined>;
+
+interface TrackedCodeViewEditorState {
+  edits: Array<File<undefined> | FileDiff<undefined>>;
   fullCleanUps: number;
   recycleCleanUps: number;
-  emitChange(
-    file: FileContents,
-    lineAnnotations?: DiffLineAnnotation<undefined>[]
-  ): void;
 }
 
-function createTrackedEditor(
-  options: EditorOptions<undefined>,
+type TrackedCodeViewEditor<TDocumentKind extends EditorDocumentKind> = Editor<
+  TDocumentKind,
+  undefined
+> &
+  TrackedCodeViewEditorState;
+
+type AnyTrackedCodeViewEditor =
+  | TrackedCodeViewEditor<'file'>
+  | TrackedCodeViewEditor<'file-diff'>;
+
+function createTrackedEditor<TDocumentKind extends EditorDocumentKind>(
+  documentKind: TDocumentKind,
+  options: EditorOptions<TDocumentKind, undefined>,
   attachmentError?: Error
-): TrackedCodeViewEditor {
-  let detach:
-    | ReturnType<DiffsEditableComponent<undefined>['__attachEditor']>
-    | undefined;
-  let sessionOwner: DiffsEditableComponent<undefined> | undefined;
-  const editor = {
-    options,
-    edits: [],
-    fullCleanUps: 0,
-    recycleCleanUps: 0,
-    emitChange(
-      file: FileContents,
-      lineAnnotations?: DiffLineAnnotation<undefined>[]
-    ) {
-      options.onChange?.({ changes: [], editor, file, lineAnnotations });
-    },
-    getViewState: () => ({}),
-    edit(instance: DiffsEditableComponent<undefined>) {
-      editor.edits.push(instance);
-      if (sessionOwner != null && sessionOwner !== instance) {
-        throw new Error('TrackedCodeViewEditor: recycled component changed');
-      }
-      if (sessionOwner == null) {
-        sessionOwner = instance;
-        detach = instance.__attachEditor(editor);
-      }
-      if (attachmentError != null) {
-        throw attachmentError;
-      }
-      return () => editor.cleanUp('complete');
-    },
-    cleanUp(reason: 'discard' | 'recycle' | 'complete' = 'discard') {
-      if (reason === 'recycle') {
-        editor.recycleCleanUps += 1;
-      } else {
-        editor.fullCleanUps += 1;
-      }
-      if (reason !== 'recycle') {
-        try {
-          detach?.();
-          sessionOwner?.__completeEditSession(
-            editor,
-            reason === 'complete' ? 'install' : 'discard'
-          );
-        } finally {
-          detach = undefined;
-          sessionOwner = undefined;
-        }
-      }
-    },
-    __captureFocusForDOMReplacement() {},
-    __emitEditComplete() {},
-    __getDocumentContents: () => undefined,
-    __getDocumentSessionState: () => undefined,
-    __postponeBgTokenizeToNextFrame() {},
-    __syncRenderView() {},
-  } as unknown as TrackedCodeViewEditor;
+): TrackedCodeViewEditor<TDocumentKind> {
+  const editor = new Editor(
+    documentKind,
+    options
+  ) as TrackedCodeViewEditor<TDocumentKind>;
+  editor.edits = [];
+  editor.fullCleanUps = 0;
+  editor.recycleCleanUps = 0;
+
+  const edit = editor.edit.bind(editor);
+  editor.edit = ((instance: TestEditorComponent<TDocumentKind>) => {
+    editor.edits.push(instance);
+    const complete =
+      instance.type === 'file'
+        ? (edit as (file: File<undefined>) => () => void)(instance)
+        : (edit as (fileDiff: FileDiff<undefined>) => () => void)(instance);
+    if (attachmentError != null) {
+      throw attachmentError;
+    }
+    return complete;
+  }) as typeof editor.edit;
+
+  const cleanUp = editor.cleanUp.bind(editor);
+  editor.cleanUp = (reason) => {
+    if (reason === 'recycle') {
+      editor.recycleCleanUps += 1;
+    } else {
+      editor.fullCleanUps += 1;
+    }
+    cleanUp(reason);
+  };
+
   return editor;
 }
 
@@ -155,20 +133,30 @@ function fileEventContents(event: ItemCompletionEvent | undefined) {
   return event != null && 'file' in event ? event.file.contents : undefined;
 }
 
-function setSessionText(editor: TrackedCodeViewEditor, contents: string): void {
-  const instance = editor.edits[editor.edits.length - 1];
-  const session = (instance as { editSessionFile?: FileContents })
-    .editSessionFile;
-  if (session == null) {
-    throw new Error('setSessionText: no active edit session');
-  }
-  session.contents = contents;
+async function setSessionText(
+  editor: AnyTrackedCodeViewEditor,
+  contents: string
+): Promise<void> {
+  await waitFor(() => editor.getFile() !== undefined);
+  const currentLines = editor.getText().split('\n');
+  editor.applyEdits([
+    {
+      range: {
+        start: { line: 0, character: 0 },
+        end: {
+          line: currentLines.length - 1,
+          character: currentLines.at(-1)?.length ?? 0,
+        },
+      },
+      newText: contents,
+    },
+  ]);
 }
 
 function createEditorHarness(attachmentError?: Error) {
-  const editors: TrackedCodeViewEditor[] = [];
+  const editors: AnyTrackedCodeViewEditor[] = [];
   const receivedDocumentKinds: EditorDocumentKind[] = [];
-  const receivedOptions: EditorOptions<undefined>[] = [];
+  const receivedOptions: EditorOptions<EditorDocumentKind, undefined>[] = [];
   const receivedEditStateKeys: Array<string | undefined> = [];
   const createEditor: CreateEditor<undefined> = (
     documentKind,
@@ -176,11 +164,13 @@ function createEditorHarness(attachmentError?: Error) {
     editStateKey
   ) => {
     receivedDocumentKinds.push(documentKind);
-    receivedOptions.push(options);
+    receivedOptions.push(
+      options as EditorOptions<EditorDocumentKind, undefined>
+    );
     receivedEditStateKeys.push(editStateKey);
-    const editor = createTrackedEditor(options, attachmentError);
-    editors.push(editor);
-    return editor as unknown as DiffsEditor<undefined>;
+    const editor = createTrackedEditor(documentKind, options, attachmentError);
+    editors.push(editor as unknown as AnyTrackedCodeViewEditor);
+    return editor;
   };
   return {
     createEditor,
@@ -324,9 +314,7 @@ describe('React CodeView editor factory', () => {
     const container = document.createElement('div');
     document.body.appendChild(container);
     const handle = createRef<CodeViewHandle<undefined>>();
-    const bypassFactory = mock((_options: EditorOptions<undefined>) =>
-      createTrackedEditor(_options)
-    );
+    const bypassFactory = mock(() => new Editor('file'));
     // Simulate an untyped JavaScript caller trying the removed options escape
     // hatch; the React adapter must still win at runtime.
     const optionsWithFactory = {
@@ -371,35 +359,6 @@ describe('React CodeView editor factory', () => {
     }
   });
 
-  test('rejects a provider factory that does not return an editor', async () => {
-    const { cleanup } = installCodeViewDom();
-    const cleanupActEnvironment = installReactActEnvironment();
-    const container = document.createElement('div');
-    document.body.appendChild(container);
-    let root: Root | undefined;
-
-    try {
-      root = createReactRoot(container);
-      const renderError = await captureRenderError(
-        root,
-        withProvider(
-          () => undefined as never,
-          createCodeViewElement({
-            items: [makeFileItem('a', { edit: true })],
-          })
-        )
-      );
-      expect(renderError).toBeInstanceOf(Error);
-      expect((renderError as Error).message).toBe(
-        'CodeView: EditProvider.createEditor must return an editor instance'
-      );
-    } finally {
-      await unmountRoot(root);
-      cleanupActEnvironment();
-      cleanup();
-    }
-  });
-
   test('merges editor options and isolates simultaneous item callbacks', async () => {
     const { cleanup } = installCodeViewDom();
     const cleanupActEnvironment = installReactActEnvironment();
@@ -416,11 +375,11 @@ describe('React CodeView editor factory', () => {
     const onAttach = mock(() => {});
     const onItemEditChange = mock(
       (
-        _event: EditorChangeEvent<undefined, 'file' | 'diff'>,
+        _event: EditorChangeEvent<'file' | 'file-diff', undefined>,
         _item: CodeViewItem<undefined>
       ) => {}
     );
-    const editorOptions: EditorOptions<undefined> = {
+    const editorOptions: EditorOptions<EditorDocumentKind, undefined> = {
       // A loosely typed caller can still carry onChange at runtime. CodeView's
       // item router must overwrite it before invoking the provider factory.
       historyMaxEntries: 17,
@@ -458,8 +417,8 @@ describe('React CodeView editor factory', () => {
         expect(options.onChange).not.toBe(attemptedOnChange);
       }
 
-      editors[0].emitChange({ name: 'a.ts', contents: 'edited a' });
-      editors[1].emitChange({ name: 'b.ts', contents: 'edited b' });
+      await setSessionText(editors[0], 'edited a');
+      await setSessionText(editors[1], 'edited b');
 
       expect(attemptedOnChange).not.toHaveBeenCalled();
       expect(onItemEditChange).toHaveBeenCalledTimes(2);
@@ -607,7 +566,7 @@ describe('React CodeView editor factory', () => {
       expect(editors).toHaveLength(4);
 
       const getEditor = (id: string) =>
-        handle.current?.getEditor(id) as TrackedCodeViewEditor | undefined;
+        handle.current?.getEditor(id) as AnyTrackedCodeViewEditor | undefined;
       const editOffEditor = getEditor('edit-off');
       const collapsedEditor = getEditor('collapsed');
       const removedEditor = getEditor('removed');
@@ -617,9 +576,9 @@ describe('React CodeView editor factory', () => {
       expect(removedEditor).toBeDefined();
       expect(unchangedEditor).toBeDefined();
 
-      setSessionText(editOffEditor!, 'edit-off contents');
-      setSessionText(collapsedEditor!, 'collapsed contents');
-      setSessionText(removedEditor!, 'removed contents');
+      await setSessionText(editOffEditor!, 'edit-off contents');
+      await setSessionText(collapsedEditor!, 'collapsed contents');
+      await setSessionText(removedEditor!, 'removed contents');
 
       const editOffEnd = { ...editOffItem, edit: false, version: 1 };
       const collapsedEnd = {
@@ -704,10 +663,10 @@ describe('React CodeView editor factory', () => {
       expect(editors).toHaveLength(2);
 
       const changedEditor = handle.current?.getEditor(changedItem.id) as
-        | TrackedCodeViewEditor
+        | AnyTrackedCodeViewEditor
         | undefined;
       expect(changedEditor).toBeDefined();
-      setSessionText(changedEditor!, 'changed contents');
+      await setSessionText(changedEditor!, 'changed contents');
       await render([]);
 
       expect(editors.every((editor) => editor.fullCleanUps > 0)).toBe(true);
@@ -975,7 +934,7 @@ describe('React CodeView edit completion teardown', () => {
         );
 
         expect(editors).toHaveLength(1);
-        setSessionText(editors[0], 'unsaved');
+        await setSessionText(editors[0], 'unsaved');
 
         if (teardown === 'direct cleanup') {
           await act(async () => {
@@ -1044,7 +1003,6 @@ describe('React CodeView selection', () => {
       root = createReactRoot(container);
       await render(initialSelection);
 
-      expect(REACT_MANAGED_CODE_VIEW_OPTIONS_ARE_OMITTED).toBe(true);
       expect(editors).toHaveLength(0);
       expect(handle.current?.getSelectedLines()).toEqual(initialSelection);
 

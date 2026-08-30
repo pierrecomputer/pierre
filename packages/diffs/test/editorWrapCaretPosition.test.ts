@@ -246,7 +246,7 @@ async function createWrapEditor(
 ): Promise<{
   cleanup(): void;
   content: HTMLElement;
-  editor: Editor<undefined>;
+  editor: Editor<'file', undefined>;
   file: File<undefined>;
   fileContainer: HTMLElement;
   rangeMeasurements(): number;
@@ -265,7 +265,7 @@ async function createWrapEditor(
     theme: DEFAULT_THEMES,
     overflow: 'wrap',
   });
-  const editor = new Editor<undefined>('file');
+  const editor = new Editor('file');
   const initialFile: FileContents = {
     name: 'wrap.ts',
     contents,
@@ -306,7 +306,11 @@ function dispatchMovementKey(
   return event;
 }
 
-function setCaret(editor: Editor<undefined>, line: number, character: number) {
+function setCaret(
+  editor: Editor<'file', undefined>,
+  line: number,
+  character: number
+) {
   editor.setSelections([
     {
       start: { line, character },
@@ -317,7 +321,7 @@ function setCaret(editor: Editor<undefined>, line: number, character: number) {
 }
 
 function expectCaret(
-  editor: Editor<undefined>,
+  editor: Editor<'file', undefined>,
   line: number,
   character: number
 ): void {
@@ -328,7 +332,7 @@ function expectCaret(
 
 // Reads back the current caret position rather than asserting it, for tests
 // that need to inspect the actual landing spot (e.g. surrogate-pair checks).
-function caretState(editor: Editor<undefined>): {
+function caretState(editor: Editor<'file', undefined>): {
   line: number;
   character: number;
 } {
@@ -509,7 +513,7 @@ describe('editor wrap caret position', () => {
       theme: DEFAULT_THEMES,
       overflow: 'wrap',
     });
-    const editor = new Editor<undefined>('file');
+    const editor = new Editor('file');
     const initialFile: FileContents = {
       name: 'wrap.ts',
       contents: 'const a = 1;\nconst b = 2;\nconst c = 3;\nconst d = 4;',
@@ -789,7 +793,7 @@ describe('split wrap overlay offset', () => {
       overflow: 'wrap',
       theme: DEFAULT_THEMES,
     });
-    const editor = new Editor<undefined>('file-diff');
+    const editor = new Editor('file-diff');
 
     try {
       fileDiff.render({

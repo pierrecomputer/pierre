@@ -53,7 +53,7 @@ test('File edit mode works when the pool theme differs from component options', 
   // the state a WorkerPoolContextProvider host starts from.
   await disposeHighlighter();
   const { manager } = await createInitializedManager({ theme: 'github-dark' });
-  const editor = new Editor<undefined>('file');
+  const editor = new Editor('file');
   let instance: File<undefined> | undefined;
   try {
     // Component options stay untouched: the default pierre-* themes.
@@ -84,7 +84,7 @@ test('FileDiff edit mode works when the pool theme differs from component option
   const dom = installDom();
   await disposeHighlighter();
   const { manager } = await createInitializedManager({ theme: 'github-dark' });
-  const editor = new Editor<undefined>('file-diff');
+  const editor = new Editor('file-diff');
   let instance: FileDiff<undefined> | undefined;
   try {
     instance = new FileDiff<undefined>(

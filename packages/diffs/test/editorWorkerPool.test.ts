@@ -17,7 +17,6 @@ import {
 } from '../src/renderers/DiffHunksRenderer';
 import { FileRenderer } from '../src/renderers/FileRenderer';
 import type {
-  DiffsEditor,
   DiffsHighlighter,
   FileContents,
   FileDiffMetadata,
@@ -29,6 +28,7 @@ import { renderFileWithHighlighter } from '../src/utils/renderFileWithHighlighte
 import type { RenderDiffRequest } from '../src/worker/types';
 import type { WorkerPoolManager } from '../src/worker/WorkerPoolManager';
 import { installDom, wait } from './domHarness';
+import { createEditorInstance } from './editorTestUtils';
 import { createDeferred, type Deferred } from './testUtils';
 import {
   createInitializedManager,
@@ -1432,16 +1432,8 @@ describe('File component edit session', () => {
         plainFileCode(FILE_CONTENTS)
       );
 
-      const editorStub = {
-        cleanUp: () => undefined,
-        __syncRenderView: () => undefined,
-        __postponeBgTokenizeToNextFrame: () => undefined,
-        __captureFocusForDOMReplacement: () => undefined,
-        __emitEditComplete: () => undefined,
-        __getDocumentContents: () => undefined,
-        __getDocumentSessionState: () => undefined,
-      } as unknown as DiffsEditor<undefined>;
-      const detach = instance.__attachEditor(editorStub);
+      const editor = new Editor('file');
+      const detach = instance.__attachEditor(editor);
       instance.rerender();
       await waitFor(() => {
         expect(fileContainer.shadowRoot?.innerHTML ?? '').toContain(
@@ -1506,16 +1498,8 @@ describe('FileDiff component edit session', () => {
       await withTimeout(worker.waitForDiffRequest());
       expect(worker.diffRequestCount).toBe(1);
 
-      const editorStub = {
-        cleanUp: () => undefined,
-        __syncRenderView: () => undefined,
-        __postponeBgTokenizeToNextFrame: () => undefined,
-        __captureFocusForDOMReplacement: () => undefined,
-        __emitEditComplete: () => undefined,
-        __getDocumentContents: () => undefined,
-        __getDocumentSessionState: () => undefined,
-      } as unknown as DiffsEditor<undefined>;
-      instance.__attachEditor(editorStub);
+      const editor = new Editor('file-diff');
+      instance.__attachEditor(editor);
       instance.rerender();
       await waitFor(() => {
         expect(fileContainer.shadowRoot?.innerHTML ?? '').toContain(
@@ -1529,18 +1513,6 @@ describe('FileDiff component edit session', () => {
     }
   });
 });
-
-function createEditorStub(): DiffsEditor<undefined> {
-  return {
-    cleanUp: () => undefined,
-    __syncRenderView: () => undefined,
-    __postponeBgTokenizeToNextFrame: () => undefined,
-    __captureFocusForDOMReplacement: () => undefined,
-    __emitEditComplete: () => undefined,
-    __getDocumentContents: () => undefined,
-    __getDocumentSessionState: () => undefined,
-  } as unknown as DiffsEditor<undefined>;
-}
 
 // Renders `file` the way a transformer-configured pool worker would, so
 // tests can settle a pool highlight with genuine editor-compatible markup.
@@ -1598,7 +1570,7 @@ describe('rendering when an editor attaches', () => {
       const updatesBefore = updates;
       const lineBefore =
         fileContainer.shadowRoot?.querySelector('[data-line="1"]');
-      const detach = instance.__attachEditor(createEditorStub());
+      const detach = instance.__attachEditor(createEditorInstance('file'));
       await wait(50);
 
       expect(updates).toBe(updatesBefore);
@@ -1672,7 +1644,7 @@ describe('rendering when an editor attaches', () => {
 
       const updatesBefore = updates;
       const siblingUpdatesBefore = siblingUpdates;
-      const detach = instance.__attachEditor(createEditorStub());
+      const detach = instance.__attachEditor(createEditorInstance('file'));
       await waitFor(() => {
         expect(fileContainer.shadowRoot?.innerHTML ?? '').toContain(
           'data-char'
@@ -1712,7 +1684,7 @@ describe('rendering when an editor attaches', () => {
       instance.render({ file, fileContainer, forceRender: true });
       const request = await withTimeout(worker.waitForFileRequest());
 
-      const detach = instance.__attachEditor(createEditorStub());
+      const detach = instance.__attachEditor(createEditorInstance('file'));
       // The local highlight lands without the pool ever answering. The plain
       // pool AST already carries data-char (transformer-shaped), so only the
       // highlight colors prove the attach-time session render ran.
@@ -1752,7 +1724,7 @@ describe('rendering when an editor attaches', () => {
       useTokenTransformer: true,
     });
     let attaches = 0;
-    const editor = new Editor<undefined>('file-diff', {
+    const editor = new Editor('file-diff', {
       onAttach: () => attaches++,
     });
     try {
@@ -1877,7 +1849,7 @@ describe('rendering when an editor attaches', () => {
       const updatesBefore = updates;
       const lineBefore =
         fileContainer.shadowRoot?.querySelector('[data-line="1"]');
-      const detach = instance.__attachEditor(createEditorStub());
+      const detach = instance.__attachEditor(createEditorInstance('file'));
       await wait(50);
 
       expect(updates).toBe(updatesBefore);
@@ -1919,7 +1891,7 @@ describe('rendering when an editor attaches', () => {
       });
 
       const updatesBefore = updates;
-      const detach = instance.__attachEditor(createEditorStub());
+      const detach = instance.__attachEditor(createEditorInstance('file'));
       await wait(50);
 
       expect(updates).toBe(updatesBefore);

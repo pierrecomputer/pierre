@@ -65,10 +65,7 @@ function createWidget(
 ): WidgetHarness {
   const { defaultQuery = '', mode, selectCurrent = true } = options;
   const dom = installDom();
-  const textDocument = new TextDocument<undefined>(
-    'inmemory://search-panel',
-    contents
-  );
+  const textDocument = new TextDocument('inmemory://search-panel', contents);
   const containerElement = document.createElement('div');
   document.body.appendChild(containerElement);
 
@@ -367,7 +364,7 @@ function forwardScanReplaceAll(
 }
 
 interface ReplaceHostHarness {
-  textDocument: TextDocument<undefined>;
+  textDocument: TextDocument;
   queryInput: HTMLInputElement;
   replaceInput: HTMLInputElement;
   regexToggle: HTMLButtonElement;
@@ -388,10 +385,7 @@ interface ReplaceHostHarness {
 // document really changes underneath the panel.
 function mountReplaceHost(contents: string): ReplaceHostHarness {
   const dom = installDom();
-  const textDocument = new TextDocument<undefined>(
-    'inmemory://replace-host',
-    contents
-  );
+  const textDocument = new TextDocument('inmemory://replace-host', contents);
   const containerElement = document.createElement('div');
   document.body.appendChild(containerElement);
 

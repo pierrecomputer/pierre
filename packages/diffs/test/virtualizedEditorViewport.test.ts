@@ -6,13 +6,8 @@ import { VirtualizedFileDiff } from '../src/components/VirtualizedFileDiff';
 import { DEFAULT_THEMES } from '../src/constants';
 import { Editor } from '../src/editor/editor';
 import { TextDocument } from '../src/editor/textDocument';
-import type {
-  EditorChangeEvent,
-  EditorViewState,
-} from '../src/editor/types';
-import type {
-  DiffsEditor,
-} from '../src/types';
+import type { EditorChangeEvent, EditorViewState } from '../src/editor/types';
+import type {} from '../src/types';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import { installDom, waitFor } from './domHarness';
 
@@ -202,18 +197,13 @@ describe('virtualized editor viewport', () => {
       expect(code.scrollLeft).toBe(61);
 
       let recyclePosition: number | undefined;
-      file.__attachEditor({
-        __captureFocusForDOMReplacement() {},
-        __emitEditComplete() {},
-        __getDocumentContents: () => undefined,
-        __getDocumentSessionState: () => undefined,
-        __postponeBgTokenizeToNextFrame() {},
-        __syncRenderView() {},
-        edit: () => () => {},
-        cleanUp() {
-          recyclePosition = file.getCodeScrollLeft();
-        },
-      } as unknown as DiffsEditor<undefined>);
+      const editor = new Editor('file');
+      const cleanUp = editor.cleanUp.bind(editor);
+      editor.cleanUp = (reason) => {
+        recyclePosition = file.getCodeScrollLeft();
+        cleanUp(reason);
+      };
+      file.__attachEditor(editor);
       code.scrollLeft = 62;
       file.cleanUp(true);
       expect(recyclePosition).toBe(62);
@@ -231,10 +221,14 @@ describe('virtualized editor viewport', () => {
       { disableFileHeader: true, theme: DEFAULT_THEMES },
       virtualizer
     );
-    const editor = new Editor<undefined>('file', {
+    const editor = new Editor('file', {
       initialState: {
         documentKind: 'file',
-        document: new TextDocument('state.txt', 'alpha\nbravo\n', 'text'),
+        document: new TextDocument<'file', undefined>(
+          'state.txt',
+          'alpha\nbravo\n',
+          'text'
+        ),
         fileInfo: { name: 'state.txt', lang: 'text' },
         editor: {
           selections: [
@@ -278,8 +272,8 @@ describe('virtualized editor viewport', () => {
     const dom = installDom();
     const root = document.createElement('div');
     const virtualizer = createSimpleVirtualizer(root);
-    const editorEvents: EditorChangeEvent<undefined, 'file' | 'diff'>[] = [];
-    const componentEvents: EditorChangeEvent<undefined, 'file'>[] = [];
+    const editorEvents: EditorChangeEvent<'file', undefined>[] = [];
+    const componentEvents: EditorChangeEvent<'file', undefined>[] = [];
     const completionEvents: FileEditCompleteEvent<undefined>[] = [];
     const componentStates: EditorViewState[] = [];
     const completionStates: EditorViewState[] = [];
@@ -299,7 +293,7 @@ describe('virtualized editor viewport', () => {
       },
       virtualizer
     );
-    const editor = new Editor<undefined>('file', {
+    const editor = new Editor('file', {
       onChange(event) {
         editorEvents.push(event);
       },
@@ -430,18 +424,13 @@ describe('virtualized editor viewport', () => {
       expect(code.deletions?.scrollLeft).toBe(60);
 
       let recyclePosition: number | undefined;
-      fileDiff.__attachEditor({
-        __captureFocusForDOMReplacement() {},
-        __emitEditComplete() {},
-        __getDocumentContents: () => undefined,
-        __getDocumentSessionState: () => undefined,
-        __postponeBgTokenizeToNextFrame() {},
-        __syncRenderView() {},
-        edit: () => () => {},
-        cleanUp() {
-          recyclePosition = fileDiff.getCodeScrollLeft();
-        },
-      } as unknown as DiffsEditor<undefined>);
+      const editor = new Editor('file-diff');
+      const cleanUp = editor.cleanUp.bind(editor);
+      editor.cleanUp = (reason) => {
+        recyclePosition = fileDiff.getCodeScrollLeft();
+        cleanUp(reason);
+      };
+      fileDiff.__attachEditor(editor);
       code.deletions!.scrollLeft = 64;
       fileDiff.cleanUp(true);
       expect(recyclePosition).toBe(64);

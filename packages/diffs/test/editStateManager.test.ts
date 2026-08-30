@@ -1,26 +1,30 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 
+import { Editor } from '../src/editor/editor';
 import { EditStack } from '../src/editor/editStack';
 import {
   cloneEditorViewState,
   EditStateManager,
   type ManagedFileEditSession,
-  type ManagedFileEditState,
 } from '../src/editor/EditStateManager';
 import { TextDocument } from '../src/editor/textDocument';
-import type { EditorViewState, EditState } from '../src/editor/types';
-import type { DiffLineAnnotation, DiffsEditor } from '../src/types';
+import type { EditorViewState, FileEditState } from '../src/editor/types';
+import type { LineAnnotation } from '../src/types';
 
 function createOwner(
-  getState: () => ManagedFileEditState = createState
-): DiffsEditor<unknown> {
-  return {
-    getEditState: getState,
-  } as DiffsEditor<unknown>;
+  getState: () => FileEditState<unknown> = createState
+): Editor<'file', unknown> {
+  const owner = new Editor<'file', unknown>('file');
+  owner.getEditState = getState;
+  return owner;
 }
 
-function createState(): ManagedFileEditState {
-  const document = new TextDocument<unknown>(
+function createDiffOwner(): Editor<'file-diff', unknown> {
+  return new Editor<'file-diff', unknown>('file-diff');
+}
+
+function createState(): FileEditState<unknown> {
+  const document = new TextDocument<'file'>(
     'file:///example.ts',
     'const value = 1;',
     'typescript'
@@ -49,9 +53,9 @@ function retainFileState(key: string, state = createState()): void {
   EditStateManager.releaseFile(key, owner);
 }
 
-function inspectFileState(key: string): ManagedFileEditState | undefined {
+function inspectFileState(key: string): FileEditState<unknown> | undefined {
   const state = EditStateManager.get('file', key);
-  return state as ManagedFileEditState | undefined;
+  return state;
 }
 
 beforeEach(() => {
@@ -66,14 +70,14 @@ afterEach(() => {
 
 describe('EditStateManager', () => {
   test('adopts caller-owned state without cloning its data', () => {
-    const document = new TextDocument<unknown>(
+    const document = new TextDocument<'file'>(
       'file:///example.ts',
       'const value = 1;',
       'typescript',
       3,
-      new EditStack({ maxEntries: 25 })
+      new EditStack<'file'>({ maxEntries: 25 })
     );
-    const state: EditState<unknown> = {
+    const state: FileEditState<unknown> = {
       documentKind: 'file',
       document,
       fileInfo: { name: 'example.ts', lang: 'typescript' },
@@ -81,12 +85,19 @@ describe('EditStateManager', () => {
         view: { scrollLeft: 24 },
       },
     };
-    const session = state;
+    const owner = createOwner(() => state);
+    const session = EditStateManager.activate(
+      'file',
+      'caller-owned',
+      owner,
+      state
+    );
 
     expect(session).toBe(state);
     expect(session.document).toBe(document);
     expect(session.fileInfo).toBe(state.fileInfo);
     expect(session.editor).toBe(state.editor);
+    EditStateManager.releaseFile('caller-owned', owner);
   });
 
   test('keeps one session object from empty activation through resume', () => {
@@ -123,7 +134,7 @@ describe('EditStateManager', () => {
   test('keeps complete dormant state in independent surface namespaces', () => {
     const key = 'shared-key';
     const fileOwner = createOwner();
-    const diffOwner = createOwner();
+    const diffOwner = createDiffOwner();
     const fileState = createState();
     expect(EditStateManager.activate('file', key, fileOwner, fileState)).toBe(
       fileState
@@ -246,8 +257,7 @@ describe('EditStateManager', () => {
 
   test('exposes application annotation records through live state', () => {
     const metadata = { id: 'annotation' };
-    const annotation: DiffLineAnnotation<unknown> = {
-      side: 'additions',
+    const annotation: LineAnnotation<unknown> = {
       lineNumber: 1,
       metadata,
     };
