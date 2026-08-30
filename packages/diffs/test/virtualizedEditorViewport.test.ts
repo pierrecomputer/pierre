@@ -223,7 +223,7 @@ describe('virtualized editor viewport', () => {
     );
     const editor = new Editor('file', {
       initialState: {
-        documentKind: 'file',
+        type: 'file',
         document: new TextDocument<'file', undefined>(
           'state.txt',
           'alpha\nbravo\n',

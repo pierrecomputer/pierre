@@ -128,9 +128,9 @@ const viewer = new CodeView({
   getEditStateKey(item) {
     return `review:${item.id}`;
   },
-  createEditor(documentKind, options, editStateKey) {
+  createEditor(editorType, options, editStateKey) {
     return new Editor(
-      documentKind,
+      editorType,
       {
         ...options,
         onAttach(editor) {

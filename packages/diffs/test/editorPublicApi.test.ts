@@ -351,13 +351,13 @@ describe('component editor attachment', () => {
 });
 
 describe('Editor document registry surfaces', () => {
-  for (const documentKind of ['file', 'file-diff'] as const) {
+  for (const editorType of ['file', 'file-diff'] as const) {
     for (const stateKind of ['selection', 'view'] as const) {
-      test(`${documentKind} restores a clean ${stateKind}-only session`, async () => {
+      test(`${editorType} restores a clean ${stateKind}-only session`, async () => {
         EditStateManager.clearAll();
-        const editStateKey = `${documentKind}-${stateKind}-only`;
+        const editStateKey = `${editorType}-${stateKind}-only`;
         const createFixture = () =>
-          documentKind === 'file'
+          editorType === 'file'
             ? createKeyedEditorFixture('alpha\nbravo', editStateKey)
             : createDiffEditorFixture(
                 'split',
@@ -1330,7 +1330,7 @@ describe('Editor state round trip', () => {
       persisted.file.contents,
       {
         initialState: {
-          documentKind: 'file',
+          type: 'file',
           document: initialDocument,
           fileInfo: {
             name: persisted.file.name,
@@ -1371,7 +1371,7 @@ describe('Editor state round trip', () => {
     };
     const restored = await createDiffEditorFixture('split', {
       initialState: {
-        documentKind: 'file-diff',
+        type: 'file-diff',
         editor: editorState,
       },
     });
@@ -1379,7 +1379,7 @@ describe('Editor state round trip', () => {
     try {
       expect(restored.editor.getViewState()).toEqual(editorState);
       expect(restored.editor.getEditState()).toMatchObject({
-        documentKind: 'file-diff',
+        type: 'file-diff',
         fileInfo: { name: 'edits.ts' },
       });
       expect(restored.editor.getEditState()?.diffSession).toBeDefined();
@@ -1398,7 +1398,7 @@ describe('Editor state round trip', () => {
 
     const restored = await createEditorFixture('fallback', {
       initialState: {
-        documentKind: 'file',
+        type: 'file',
         document,
       },
     });

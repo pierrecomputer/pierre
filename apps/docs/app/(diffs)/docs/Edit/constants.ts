@@ -185,8 +185,8 @@ root.style.overflow = 'auto';
 
 const viewer = new CodeView<ThreadMetadata>({
   theme: { dark: 'pierre-dark', light: 'pierre-light' },
-  createEditor(documentKind, options, editStateKey) {
-    return new Editor(documentKind, {
+  createEditor(editorType, options, editStateKey) {
+    return new Editor(editorType, {
       ...options,
       onAttach(editor) {
         editor.focus({ lineNumber: 'first-visible', preventScroll: true });
@@ -304,13 +304,13 @@ export const EDIT_SELECTION_ACTION_CONTEXT_TYPE: PreloadFileOptions<undefined> =
     file: {
       name: 'selection_action_context.ts',
       contents: `export interface SelectionActionContext<
-  TDocumentKind extends EditorDocumentKind,
+  EType extends EditorType,
   LAnnotation
 > {
   /** The current selection. */
   selection: EditorSelection;
   /** The text document. */
-  textDocument: TextDocument<TDocumentKind, LAnnotation>;
+  textDocument: TextDocument<EType, LAnnotation>;
   /** Applies the edits to the text document. */
   applyEdits: (edits: TextEdit[]) => void;
   /** Gets the text of the current selection. */
@@ -473,10 +473,10 @@ const file: FileContents = {
 };
 
 const createEditor: EditorFactory = (
-  documentKind,
+  editorType,
   options,
   editStateKey
-) => new Editor(documentKind, options, editStateKey);
+) => new Editor(editorType, options, editStateKey);
 
 export function EditableFileWithHistoryToolbar() {
   const [canUndo, setCanUndo] = useState(false);
@@ -527,8 +527,8 @@ export const EDIT_REACT_CREATE_EDITOR_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
     name: 'editor_react_create_editor.tsx',
     contents: `const createEditor = useCallback<EditorFactory>(
-  (documentKind, editorOptions, editStateKey) =>
-    new Editor(documentKind, {
+  (editorType, editorOptions, editStateKey) =>
+    new Editor(editorType, {
       ...defaultEditorOptions,
       ...editorOptions,
     }, editStateKey),
@@ -597,10 +597,10 @@ const virtualizerStyle = {
 } as const;
 
 const createEditor: EditorFactory = (
-  documentKind,
+  editorType,
   options,
   editStateKey
-) => new Editor(documentKind, options, editStateKey);
+) => new Editor(editorType, options, editStateKey);
 
 export function EditableFile() {
   const [file, setFile] = useState(initialFile);
@@ -727,10 +727,10 @@ const virtualizerStyle = {
 } as const;
 
 const createEditor: EditorFactory<ThreadMetadata> = (
-  documentKind,
+  editorType,
   options,
   editStateKey
-) => new Editor(documentKind, options, editStateKey);
+) => new Editor(editorType, options, editStateKey);
 
 export function EditableFileDiff() {
   const [fileDiff, setFileDiff] = useState(initialDiff);
@@ -889,10 +889,10 @@ const editorOptions: EditorOptions<
 };
 
 const createEditor: EditorFactory<ThreadMetadata> = (
-  documentKind,
+  editorType,
   options,
   editStateKey
-) => new Editor(documentKind, options, editStateKey);
+) => new Editor(editorType, options, editStateKey);
 
 export function EditableCodeView() {
   const [items, setItems] = useState(initialItems);
@@ -1014,10 +1014,10 @@ const highlighterOptions = {
 } as const;
 
 const createEditor: EditorFactory = (
-  documentKind,
+  editorType,
   options,
   editStateKey
-) => new Editor(documentKind, options, editStateKey);
+) => new Editor(editorType, options, editStateKey);
 
 export function EditableFileWithWorkerPool() {
   // This example is self-contained. Apps should usually mount EditProvider near
@@ -1052,14 +1052,14 @@ import {
   Editor,
   type EditorCaret,
   type EditorChangeEvent,
-  type EditorDocumentKind,
+  type EditorType,
   type EditorEditCompleteEvent,
   type EditorInitialState,
   type EditorKeymap,
 } from '@pierre/diffs/edit';
 
 interface EditorOptions<
-  TDocumentKind extends EditorDocumentKind = EditorDocumentKind,
+  EType extends EditorType = EditorType,
   LAnnotation = undefined,
   LCaret = undefined
 > {
@@ -1070,9 +1070,9 @@ interface EditorOptions<
   // its scrollable HTMLElement viewport. Captured by the constructor; defaults to false.
   ownsVerticalViewport?: boolean;
 
-  // State to adopt on first attach. Only documentKind is required; omitted
+  // State to adopt on first attach. Only 'type' is required; omitted
   // fields are initialized from the attached component.
-  initialState?: EditorInitialState<TDocumentKind, LAnnotation>;
+  initialState?: EditorInitialState<EType, LAnnotation>;
 
   // Custom keymap checked before the default map.
   keymap?: EditorKeymap;
@@ -1114,8 +1114,8 @@ interface EditorOptions<
 
   // Fires after attach when the text document is ready
   onAttach?: (
-    editor: Editor<TDocumentKind, LAnnotation, LCaret>,
-    fileInstance: TDocumentKind extends 'file'
+    editor: Editor<EType, LAnnotation, LCaret>,
+    fileInstance: EType extends 'file'
       ? File<LAnnotation>
       : FileDiff<LAnnotation>
   ) => void;
@@ -1125,14 +1125,14 @@ interface EditorOptions<
   // a diff), current lineAnnotations, and normalized text changes. Prefer a
   // component's onEditChange prop/option for per-component handling.
   onChange?: (
-    event: EditorChangeEvent<TDocumentKind, LAnnotation>
+    event: EditorChangeEvent<EType, LAnnotation>
   ) => void;
 
   // Editor-wide completion observer. Receives the same frozen event before the
   // component callback and fires even when that callback is missing. You cannot
   // accept or reject from this callback.
   onComplete?: (
-    event: EditorEditCompleteEvent<TDocumentKind, LAnnotation>
+    event: EditorEditCompleteEvent<EType, LAnnotation>
   ) => void;
 
   // Fires when the editable content area gains focus (tab, click, or editor.focus()).
@@ -1166,8 +1166,8 @@ export const EDIT_ON_ATTACH_VANILLA_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
     name: 'editor_on_attach_vanilla.ts',
     contents: `const viewer = new CodeView({
-  createEditor(documentKind, options, editStateKey) {
-    return new Editor(documentKind, {
+  createEditor(editorType, options, editStateKey) {
+    return new Editor(editorType, {
       ...options,
       onAttach(editor) {
         editor.focus({ lineNumber: 'first-visible', preventScroll: true });
@@ -1284,7 +1284,7 @@ export function PersistedEditableFile() {
     // Initialize the edit state from the latest version of the file, minus
     // undo history
     initialState: {
-      documentKind: 'file',
+      type: 'file',
       document: new TextDocument<'file', undefined>(
         initialDraft.file.name,
         initialDraft.file.contents,
@@ -1374,7 +1374,7 @@ editor.setOptions({
   roundedSelection: false,
 });
 
-// This file-kind editor attaches to a rendered File or VirtualizedFile. Create
+// This file editor attaches to a rendered File or VirtualizedFile. Create
 // an Editor('file-diff', ...) for FileDiff or VirtualizedFileDiff.
 // Normalizes conflicting fileInstance options and returns a dispose function.
 const dispose = editor.edit(fileInstance);
@@ -1529,10 +1529,10 @@ const virtualizerStyle = {
 } as const;
 
 const createEditor: EditorFactory = (
-  documentKind,
+  editorType,
   options,
   editStateKey
-) => new Editor(documentKind, options, editStateKey);
+) => new Editor(editorType, options, editStateKey);
 
 export function EditableMultiFileDiff() {
   const [oldFile, setOldFile] = useState(initialOldFile);

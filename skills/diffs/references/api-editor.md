@@ -19,8 +19,8 @@ editor APIs used by common integrations.
 | `FileEditCompleteEvent`     | Type  | Describes a completed file edit session.                       |
 | `FileDiffEditCompleteEvent` | Type  | Describes a completed diff edit session.                       |
 | `EditorCommand`             | Type  | Names an editor command.                                       |
-| `EditorDocumentKind`        | Type  | Selects a `file` or `file-diff` editor surface.                |
-| `EditorFactory`             | Type  | Defines a document-kind-aware editor factory.                  |
+| `EditorType`                | Type  | Selects a `file` or `file-diff` editor surface.                |
+| `EditorFactory`             | Type  | Defines an editor-type-aware editor factory.                   |
 | `EditorFocusOptions`        | Type  | Selects a focus target and scroll behavior.                    |
 | `EditorKeymap`              | Type  | Defines ordered custom shortcut groups.                        |
 | `EditorOptions`             | Type  | Configures history, initial state, behavior, and events.       |
@@ -47,7 +47,7 @@ marker-rendering, and popover-placement building blocks used by `Editor`.
 
 | Export                                  | Kind     | Purpose                                                               |
 | --------------------------------------- | -------- | --------------------------------------------------------------------- |
-| `ManagedEditSession`                    | Type     | Selects mutable in-progress editor state by document kind.            |
+| `ManagedEditSession`                    | Type     | Selects mutable in-progress editor state by editor type.              |
 | `ManagedFileEditSession`                | Type     | Holds mutable state for an active file editor session.                |
 | `ManagedFileDiffEditSession`            | Type     | Holds mutable state for an active file-diff editor session.           |
 | `cloneEditorViewState`                  | Function | Clones editor selections and viewport state.                          |
@@ -121,7 +121,8 @@ borrowed editor-owned state rather than a serialization format.
 
 | Member                                                   | Purpose                                                |
 | -------------------------------------------------------- | ------------------------------------------------------ |
-| `new Editor(kind, options?, editStateKey?)`              | Creates an editor with optional keyed state retention. |
+| `new Editor(type, options?, editStateKey?)`              | Creates an editor with optional keyed state retention. |
+| `type`                                                   | Identifies the editor as `file` or `file-diff`.        |
 | `edit(instance)`                                         | Attaches and returns the normal completion disposer.   |
 | `setOptions(options)`                                    | Merges editor options.                                 |
 | `applyEdits(edits, updateHistory?)`                      | Applies programmatic text edits.                       |
@@ -142,7 +143,7 @@ borrowed editor-owned state rather than a serialization format.
 
 `editStateKey` opts an editor into retained in-memory sessions across editor
 instances. File and file-diff namespaces are independent and each keeps up to
-100 inactive entries by default. The same kind/key cannot be active in two
+100 inactive entries by default. The same type/key cannot be active in two
 editors at once.
 
 Call the disposer returned by `edit(instance)` for the normal session-ending
@@ -156,8 +157,8 @@ ending the session or changing the editor-component association. Calling
 
 | Member                              | Purpose                                                         |
 | ----------------------------------- | --------------------------------------------------------------- |
-| `get(kind, editStateKey)`           | Borrows active or inactive complete state without touching LRU. |
-| `clear(kind, editStateKey, parts?)` | Clears inactive complete or granular state.                     |
+| `get(type, editStateKey)`           | Borrows active or inactive complete state without touching LRU. |
+| `clear(type, editStateKey, parts?)` | Clears inactive complete or granular state.                     |
 | `clearAll()`                        | Clears all inactive state without mutating active editors.      |
 | `setCapacity(capacity)`             | Sets each namespace's inactive retained-state capacity.         |
 

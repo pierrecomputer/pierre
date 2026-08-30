@@ -22,8 +22,8 @@ import { Editor, type EditorOptions } from '../src/editor/editor';
 import type {
   EditCompletionDecision,
   EditorChangeEvent,
-  EditorDocumentKind,
   EditorFactory,
+  EditorType,
 } from '../src/editor/types';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
 import {
@@ -63,8 +63,9 @@ const CODE_VIEW_OPTIONS = {
 } as const;
 const CODE_VIEW_STYLE = { height: 800, overflow: 'auto' } as const;
 
-type TestEditorComponent<TDocumentKind extends EditorDocumentKind> =
-  TDocumentKind extends 'file' ? File<undefined> : FileDiff<undefined>;
+type TestEditorComponent<EType extends EditorType> = EType extends 'file'
+  ? File<undefined>
+  : FileDiff<undefined>;
 
 interface TrackedCodeViewEditorState {
   edits: Array<File<undefined> | FileDiff<undefined>>;
@@ -72,8 +73,8 @@ interface TrackedCodeViewEditorState {
   recycleCleanUps: number;
 }
 
-type TrackedCodeViewEditor<TDocumentKind extends EditorDocumentKind> = Editor<
-  TDocumentKind,
+type TrackedCodeViewEditor<EType extends EditorType> = Editor<
+  EType,
   undefined
 > &
   TrackedCodeViewEditorState;
@@ -82,21 +83,21 @@ type AnyTrackedCodeViewEditor =
   | TrackedCodeViewEditor<'file'>
   | TrackedCodeViewEditor<'file-diff'>;
 
-function createTrackedEditor<TDocumentKind extends EditorDocumentKind>(
-  documentKind: TDocumentKind,
-  options: EditorOptions<TDocumentKind, undefined>,
+function createTrackedEditor<EType extends EditorType>(
+  editorType: EType,
+  options: EditorOptions<EType, undefined>,
   attachmentError?: Error
-): TrackedCodeViewEditor<TDocumentKind> {
+): TrackedCodeViewEditor<EType> {
   const editor = new Editor(
-    documentKind,
+    editorType,
     options
-  ) as TrackedCodeViewEditor<TDocumentKind>;
+  ) as TrackedCodeViewEditor<EType>;
   editor.edits = [];
   editor.fullCleanUps = 0;
   editor.recycleCleanUps = 0;
 
   const edit = editor.edit.bind(editor);
-  editor.edit = ((instance: TestEditorComponent<TDocumentKind>) => {
+  editor.edit = ((instance: TestEditorComponent<EType>) => {
     editor.edits.push(instance);
     const complete =
       instance.type === 'file'
@@ -155,23 +156,21 @@ async function setSessionText(
 
 function createEditorHarness(attachmentError?: Error) {
   const editors: AnyTrackedCodeViewEditor[] = [];
-  const receivedDocumentKinds: EditorDocumentKind[] = [];
-  const receivedOptions: EditorOptions<EditorDocumentKind, undefined>[] = [];
+  const receivedEditorTypes: EditorType[] = [];
+  const receivedOptions: EditorOptions<EditorType, undefined>[] = [];
   const receivedEditStateKeys: Array<string | undefined> = [];
-  const createEditor: EditorFactory = (documentKind, options, editStateKey) => {
-    receivedDocumentKinds.push(documentKind);
-    receivedOptions.push(
-      options as EditorOptions<EditorDocumentKind, undefined>
-    );
+  const createEditor: EditorFactory = (editorType, options, editStateKey) => {
+    receivedEditorTypes.push(editorType);
+    receivedOptions.push(options as EditorOptions<EditorType, undefined>);
     receivedEditStateKeys.push(editStateKey);
-    const editor = createTrackedEditor(documentKind, options, attachmentError);
+    const editor = createTrackedEditor(editorType, options, attachmentError);
     editors.push(editor as unknown as AnyTrackedCodeViewEditor);
     return editor;
   };
   return {
     createEditor,
     editors,
-    receivedDocumentKinds,
+    receivedEditorTypes,
     receivedEditStateKeys,
     receivedOptions,
   };
@@ -363,7 +362,7 @@ describe('React CodeView editor factory', () => {
     const {
       createEditor,
       editors,
-      receivedDocumentKinds,
+      receivedEditorTypes,
       receivedEditStateKeys,
       receivedOptions,
     } = createEditorHarness();
@@ -375,7 +374,7 @@ describe('React CodeView editor factory', () => {
         _item: CodeViewItem<undefined>
       ) => {}
     );
-    const editorOptions: EditorOptions<EditorDocumentKind, undefined> = {
+    const editorOptions: EditorOptions<EditorType, undefined> = {
       // A loosely typed caller can still carry onChange at runtime. CodeView's
       // item router must overwrite it before invoking the provider factory.
       historyMaxEntries: 17,
@@ -402,7 +401,7 @@ describe('React CodeView editor factory', () => {
 
       expect(editors).toHaveLength(2);
       expect(new Set(editors).size).toBe(2);
-      expect(receivedDocumentKinds).toEqual(['file', 'file-diff']);
+      expect(receivedEditorTypes).toEqual(['file', 'file-diff']);
       expect(receivedEditStateKeys).toEqual(['history:a', 'history:b']);
       expect(receivedOptions).toHaveLength(2);
       for (const options of receivedOptions) {

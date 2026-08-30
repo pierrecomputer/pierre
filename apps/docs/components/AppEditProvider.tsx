@@ -2,18 +2,18 @@
 
 import {
   Editor,
-  type EditorDocumentKind,
   type EditorOptions,
+  type EditorType,
 } from '@pierre/diffs/edit';
 import { EditProvider } from '@pierre/diffs/react';
 import type { ReactNode } from 'react';
 
-function createEditor<TDocumentKind extends EditorDocumentKind, LAnnotation>(
-  documentKind: TDocumentKind,
-  options: EditorOptions<TDocumentKind, LAnnotation>,
+function createEditor<EType extends EditorType, LAnnotation>(
+  editorType: EType,
+  options: EditorOptions<EType, LAnnotation>,
   editStateKey?: string
-): Editor<TDocumentKind, LAnnotation> {
-  return new Editor(documentKind, options, editStateKey);
+): Editor<EType, LAnnotation> {
+  return new Editor(editorType, options, editStateKey);
 }
 
 interface AppEditProviderProps {

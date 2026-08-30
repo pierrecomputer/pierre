@@ -56,7 +56,7 @@ editor. Keep factories and object props stable across renders.
 
 #### Vanilla JS
 
-Render the component first, then attach an editor of the matching kind. Keep the
+Render the component first, then attach an editor of the matching type. Keep the
 function returned by `edit()` and call it for a normal, install-capable
 completion.
 
@@ -194,7 +194,7 @@ returned by the `CodeView` `getEditStateKey` option or prop. A key retains:
 - The old-side baseline and hunk metadata needed to resume a FileDiff safely
 
 Retention is in memory, bounded by an LRU, and does not survive page reload.
-File and file-diff keys use independent namespaces. The same kind and key cannot
+File and file-diff keys use independent namespaces. The same type and key cannot
 be active in two editors at once. A retained FileDiff can resume only against a
 compatible old-side baseline.
 
@@ -235,8 +235,8 @@ retained by each namespace; the default is `100` per namespace.
 ### Initialize state on first attach
 
 Use `initialState` to provide application-owned state when constructing an
-editor. `documentKind` is required and must match the editor kind. Every other
-field is optional:
+editor. `type` is required and must match the editor type. Every other field is
+optional:
 
 - `document` supplies the live `TextDocument`, including its current contents
   and any undo/redo history.
@@ -442,15 +442,14 @@ the feature is used.
 
 #### Editor options
 
-Pass options to `new Editor(documentKind, options, editStateKey?)`.
-`initialState` and `ownsVerticalViewport` are constructor-only. `setOptions()`
-merges later values, but not every option is retroactive: for example,
-`matchBrackets` is captured when the document synchronizes, and changing
-`historyMaxEntries` does not resize history already created for a document.
-Callbacks that are read when an event occurs use their latest values.
-`EditorOptions.onComplete` is a low-level observer. You cannot accept or reject
-from this API. Most integrations should use the component completion callbacks
-described above instead.
+Pass options to `new Editor(editorType, options, editStateKey?)`. `initialState`
+and `ownsVerticalViewport` are constructor-only. `setOptions()` merges later
+values, but not every option is retroactive: for example, `matchBrackets` is
+captured when the document synchronizes, and changing `historyMaxEntries` does
+not resize history already created for a document. Callbacks that are read when
+an event occurs use their latest values. `EditorOptions.onComplete` is a
+low-level observer. You cannot accept or reject from this API. Most integrations
+should use the component completion callbacks described above instead.
 
 <DocsCodeExample {...editorOptionsType} />
 

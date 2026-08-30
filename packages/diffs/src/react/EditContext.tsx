@@ -4,12 +4,7 @@
 import type { Context, PropsWithChildren } from 'react';
 import { createContext, useContext } from 'react';
 
-import type {
-  Editor,
-  EditorDocumentKind,
-  EditorFactory,
-  EditorOptions,
-} from '../edit';
+import type { Editor, EditorFactory, EditorOptions, EditorType } from '../edit';
 import { useStableCallback } from './utils/useStableCallback';
 
 export type { EditorFactory } from '../edit';
@@ -29,12 +24,12 @@ export function EditProvider<LAnnotation, LCaret = undefined>({
   EditProviderProps<LAnnotation, LCaret>
 >): React.JSX.Element {
   const stableCreateEditor = useStableCallback(
-    <TDocumentKind extends EditorDocumentKind>(
-      documentKind: TDocumentKind,
-      options: EditorOptions<TDocumentKind, LAnnotation, LCaret>,
+    <EType extends EditorType>(
+      editorType: EType,
+      options: EditorOptions<EType, LAnnotation, LCaret>,
       editStateKey?: string
-    ): Editor<TDocumentKind, LAnnotation, LCaret> =>
-      createEditor(documentKind, options, editStateKey)
+    ): Editor<EType, LAnnotation, LCaret> =>
+      createEditor(editorType, options, editStateKey)
   );
   return (
     <EditContext.Provider value={stableCreateEditor}>

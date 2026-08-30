@@ -1,14 +1,14 @@
 # Recipe: edit with React
 
 Mount one `EditProvider` above the editable surfaces. Its factory receives the
-document kind, the surface's creation-time `editorOptions`, and an optional
+editor type, the surface's creation-time `editorOptions`, and an optional
 `editStateKey`. Each active surface or `CodeView` item owns its editor.
 
 Pass `editStateKey` to opt into bounded in-memory retention of the draft,
 undo/redo history, selections, horizontal scroll, eligible vertical scroll, and
 diff resume metadata across editor instances. Choose this key explicitly; it is
 a stable application identity for the document. The same active key cannot be
-shared by two editors of the same document kind.
+shared by two editors of the same type.
 
 ## Contents
 
@@ -48,10 +48,10 @@ const diffOptions: FileDiffOptions<undefined> = {
 };
 
 const createEditor: EditorFactory = (
-  documentKind,
+  editorType,
   options,
   editStateKey?: string
-) => new Editor(documentKind, options, editStateKey);
+) => new Editor(editorType, options, editStateKey);
 
 export function EditableDiff() {
   const [edit, setEdit] = useState(false);
@@ -115,7 +115,7 @@ Always forward all three factory arguments. Use `onAttach` when controls need
 `undo`, `redo`, `applyEdits`, selections, markers, focus, or other editor APIs.
 `EditStateManager` only manages sessions retained with `editStateKey`; unkeyed
 sessions require no manager cleanup. For keyed sessions, use
-`EditStateManager.clear(kind, key)` after a session becomes inactive when its
+`EditStateManager.clear(type, key)` after a session becomes inactive when its
 retained draft should be discarded. `clearAll()` clears inactive state in both
 namespaces, and `setCapacity(capacity)` changes each namespace's default limit
 of 100 entries. Active state is never mutated by manager clearing.

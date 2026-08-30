@@ -14,7 +14,7 @@ import type { Editor, EditorOptions } from '../editor/editor';
 import type {
   EditCompletionDecision,
   EditorChangeEvent,
-  EditorDocumentKind,
+  EditorType,
 } from '../editor/types';
 import type { SelectionWriteOptions } from '../managers/InteractionManager';
 import {
@@ -58,9 +58,9 @@ import { VirtualizedFileDiff } from './VirtualizedFileDiff';
 import type { VirtualizerConfig } from './Virtualizer';
 
 export type CodeViewCreateEditorOptions<
-  TDocumentKind extends EditorDocumentKind,
+  EType extends EditorType,
   LAnnotation,
-> = Required<Pick<EditorOptions<TDocumentKind, LAnnotation>, 'onChange'>>;
+> = Required<Pick<EditorOptions<EType, LAnnotation>, 'onChange'>>;
 
 type CodeViewEditor<LAnnotation> =
   | Editor<'file', LAnnotation>
@@ -543,18 +543,18 @@ export interface CodeViewOptions<LAnnotation>
   /**
    * Create an editor for an item entering edit mode (`edit: true`). Providing
    * this option is what enables item editing. Pass the given options into the
-   * editor constructor — `new Editor(documentKind, options, editStateKey)` —
+   * editor constructor — `new Editor(editorType, options, editStateKey)` —
    * so CodeView can route document changes to `onItemEditChange` and retain
    * history when requested. CodeView owns the returned editor's lifecycle: it
    * associates with the edited item, suspends and resumes rendering across
    * virtualization unmounts and collapse, and tears the editor down when the
    * session ends (edit off or removal).
    */
-  createEditor?<TDocumentKind extends EditorDocumentKind>(
-    documentKind: TDocumentKind,
-    options: CodeViewCreateEditorOptions<TDocumentKind, LAnnotation>,
+  createEditor?<EType extends EditorType>(
+    editorType: EType,
+    options: CodeViewCreateEditorOptions<EType, LAnnotation>,
     editStateKey?: string
-  ): Editor<TDocumentKind, LAnnotation>;
+  ): Editor<EType, LAnnotation>;
   /**
    * Called with the editor's `EditorChangeEvent` and the owning item whenever
    * the edited document changes, from internal (edit) changes or external
@@ -563,7 +563,7 @@ export interface CodeViewOptions<LAnnotation>
    * Do not feed these changes back into item state.
    */
   onItemEditChange?(
-    event: EditorChangeEvent<EditorDocumentKind, LAnnotation>,
+    event: EditorChangeEvent<EditorType, LAnnotation>,
     item: CodeViewItem<LAnnotation>
   ): void;
   /**
@@ -2103,7 +2103,7 @@ export class CodeView<LAnnotation = undefined> {
         // callback off this.options at invocation time so later setOptions
         // swaps aren't stranded on the callback captured at creation.
         const onChange = (
-          event: EditorChangeEvent<EditorDocumentKind, LAnnotation>
+          event: EditorChangeEvent<EditorType, LAnnotation>
         ) => {
           const latest = this.idToItem.get(state.id);
           if (latest == null) {

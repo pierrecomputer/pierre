@@ -1,9 +1,9 @@
 import { applyDocumentChangeToLineAnnotations } from './lineAnnotations';
 import type { TextDocument, TextDocumentChange } from './textDocument';
 import type {
-  EditorDocumentKind,
   EditorLineAnnotation,
   EditorSelection,
+  EditorType,
   Position,
   Range,
   ResolvedTextEdit,
@@ -470,13 +470,13 @@ export function mapSelectionShift(
  * Applies a text change to the given text document
  */
 export function applyTextChangeToSelections<
-  TDocumentKind extends EditorDocumentKind,
+  EType extends EditorType,
   LAnnotation,
 >(
-  textDocument: TextDocument<TDocumentKind, LAnnotation>,
+  textDocument: TextDocument<EType, LAnnotation>,
   selections: EditorSelection[],
   edit: ResolvedTextEdit,
-  lineAnnotations?: EditorLineAnnotation<TDocumentKind, LAnnotation>[],
+  lineAnnotations?: EditorLineAnnotation<EType, LAnnotation>[],
   tabSize = 2,
   undoBoundary = false
 ): {
@@ -693,13 +693,13 @@ function getNextSelectionOffsetPairAfterReplace(
  * index unless they are explicitly marked as document ordered.
  */
 export function applyTextReplaceToSelections<
-  TDocumentKind extends EditorDocumentKind,
+  EType extends EditorType,
   LAnnotation,
 >(
-  textDocument: TextDocument<TDocumentKind, LAnnotation>,
+  textDocument: TextDocument<EType, LAnnotation>,
   selections: EditorSelection[],
   texts: string[],
-  lineAnnotations?: EditorLineAnnotation<TDocumentKind, LAnnotation>[],
+  lineAnnotations?: EditorLineAnnotation<EType, LAnnotation>[],
   undoBoundary = false,
   textOrder: 'selection' | 'document' = 'selection'
 ): {
@@ -920,12 +920,12 @@ export function getAutoSurroundReplacementTexts(
  * insertTranspose (Ctrl+T) behavior.
  */
 export function applyTransposeToSelections<
-  TDocumentKind extends EditorDocumentKind,
+  EType extends EditorType,
   LAnnotation,
 >(
-  textDocument: TextDocument<TDocumentKind, LAnnotation>,
+  textDocument: TextDocument<EType, LAnnotation>,
   selections: EditorSelection[],
-  lineAnnotations?: EditorLineAnnotation<TDocumentKind, LAnnotation>[]
+  lineAnnotations?: EditorLineAnnotation<EType, LAnnotation>[]
 ): {
   nextSelections: EditorSelection[];
   change?: TextDocumentChange;
@@ -1060,12 +1060,12 @@ export function applyTransposeToSelections<
  * selections delete their selected text instead.
  */
 export function applyDeleteHardLineForwardToSelections<
-  TDocumentKind extends EditorDocumentKind,
+  EType extends EditorType,
   LAnnotation,
 >(
-  textDocument: TextDocument<TDocumentKind, LAnnotation>,
+  textDocument: TextDocument<EType, LAnnotation>,
   selections: EditorSelection[],
-  lineAnnotations?: EditorLineAnnotation<TDocumentKind, LAnnotation>[]
+  lineAnnotations?: EditorLineAnnotation<EType, LAnnotation>[]
 ): {
   nextSelections: EditorSelection[];
   change?: TextDocumentChange;
@@ -1091,13 +1091,13 @@ export function applyDeleteHardLineForwardToSelections<
  * Non-collapsed selections delete their selected text instead.
  */
 export function applyDeleteSoftLineBackwardToSelections<
-  TDocumentKind extends EditorDocumentKind,
+  EType extends EditorType,
   LAnnotation,
 >(
-  textDocument: TextDocument<TDocumentKind, LAnnotation>,
+  textDocument: TextDocument<EType, LAnnotation>,
   selections: EditorSelection[],
   getSoftLineStart?: (line: number, character: number) => number,
-  lineAnnotations?: EditorLineAnnotation<TDocumentKind, LAnnotation>[]
+  lineAnnotations?: EditorLineAnnotation<EType, LAnnotation>[]
 ): {
   nextSelections: EditorSelection[];
   change?: TextDocumentChange;
@@ -1147,12 +1147,12 @@ export function applyDeleteSoftLineBackwardToSelections<
  * Non-collapsed selections delete their selected text instead.
  */
 export function applyDeleteWordBackwardToSelections<
-  TDocumentKind extends EditorDocumentKind,
+  EType extends EditorType,
   LAnnotation,
 >(
-  textDocument: TextDocument<TDocumentKind, LAnnotation>,
+  textDocument: TextDocument<EType, LAnnotation>,
   selections: EditorSelection[],
-  lineAnnotations?: EditorLineAnnotation<TDocumentKind, LAnnotation>[]
+  lineAnnotations?: EditorLineAnnotation<EType, LAnnotation>[]
 ): {
   nextSelections: EditorSelection[];
   change?: TextDocumentChange;
@@ -1250,13 +1250,13 @@ export function resolveDeleteCharacterRange(
  * Deletes one grapheme (or selected text) at each selection.
  */
 export function applyDeleteCharacterToSelections<
-  TDocumentKind extends EditorDocumentKind,
+  EType extends EditorType,
   LAnnotation,
 >(
-  textDocument: TextDocument<TDocumentKind, LAnnotation>,
+  textDocument: TextDocument<EType, LAnnotation>,
   selections: EditorSelection[],
   forward: boolean,
-  lineAnnotations?: EditorLineAnnotation<TDocumentKind, LAnnotation>[],
+  lineAnnotations?: EditorLineAnnotation<EType, LAnnotation>[],
   tabSize = 2
 ): {
   nextSelections: EditorSelection[];

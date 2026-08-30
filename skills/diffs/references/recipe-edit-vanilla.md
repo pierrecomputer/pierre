@@ -119,8 +119,8 @@ export function mountEditableCodeView(root: HTMLElement) {
     getEditStateKey(item) {
       return 'draft:' + item.id;
     },
-    createEditor(documentKind, options, editStateKey) {
-      return new Editor(documentKind, options, editStateKey);
+    createEditor(editorType, options, editStateKey) {
+      return new Editor(editorType, options, editStateKey);
     },
     onItemEditChange(event, item) {
       saveItemDraft(item.id, event.file, event.lineAnnotations);

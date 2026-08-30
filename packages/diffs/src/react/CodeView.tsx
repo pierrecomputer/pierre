@@ -20,8 +20,8 @@ import { createPortal, flushSync } from 'react-dom';
 import type {
   Editor,
   EditorChangeEvent,
-  EditorDocumentKind,
   EditorOptions,
+  EditorType,
 } from '../edit';
 import {
   areOptionsEqual,
@@ -69,10 +69,7 @@ interface CodeViewBaseProps<LAnnotation> {
    * Creation-time options passed to the nearest EditProvider factory.
    * CodeView supplies its item-specific change callback.
    */
-  editorOptions?: Omit<
-    EditorOptions<EditorDocumentKind, LAnnotation>,
-    'onChange'
-  >;
+  editorOptions?: Omit<EditorOptions<EditorType, LAnnotation>, 'onChange'>;
   /** Resolve an in-memory retention key for an item's draft and undo history. */
   getEditStateKey?(item: CodeViewItem<LAnnotation>): string | undefined;
   className?: string;
@@ -94,7 +91,7 @@ interface CodeViewBaseProps<LAnnotation> {
    * which can create update loops.
    */
   onItemEditChange?(
-    event: EditorChangeEvent<EditorDocumentKind, LAnnotation>,
+    event: EditorChangeEvent<EditorType, LAnnotation>,
     item: CodeViewItem<LAnnotation>
   ): void;
   /**
@@ -253,11 +250,11 @@ function CodeViewInner<LAnnotation = undefined>(
   // Keep the adapter stable so provider and editor-option changes affect the
   // next item edit session without forcing CodeView to reconcile active editors.
   const createEditor = useStableCallback(
-    <TDocumentKind extends EditorDocumentKind>(
-      documentKind: TDocumentKind,
-      options: CodeViewCreateEditorOptions<TDocumentKind, LAnnotation>,
+    <EType extends EditorType>(
+      editorType: EType,
+      options: CodeViewCreateEditorOptions<EType, LAnnotation>,
       editStateKey?: string
-    ): Editor<TDocumentKind, LAnnotation> => {
+    ): Editor<EType, LAnnotation> => {
       if (contextCreateEditor == null) {
         throw new Error('CodeView: EditContext is not attached');
       }
@@ -265,9 +262,9 @@ function CodeViewInner<LAnnotation = undefined>(
       const resolvedOptions = {
         ...editorOptions,
         ...options,
-      } as EditorOptions<TDocumentKind, LAnnotation>;
+      } as EditorOptions<EType, LAnnotation>;
       const editor = contextCreateEditor(
-        documentKind,
+        editorType,
         resolvedOptions,
         editStateKey
       );
@@ -276,7 +273,7 @@ function CodeViewInner<LAnnotation = undefined>(
   );
   const emitItemEditChange = useStableCallback(
     (
-      event: EditorChangeEvent<EditorDocumentKind, LAnnotation>,
+      event: EditorChangeEvent<EditorType, LAnnotation>,
       item: CodeViewItem<LAnnotation>
     ) => {
       onItemEditChange?.(event, item);

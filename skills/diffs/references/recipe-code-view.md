@@ -200,10 +200,10 @@ export function removeReviewSurface() {
 ## Enable item edit mode
 
 In React, wrap `CodeView` in `EditProvider`. In vanilla JavaScript, pass
-`createEditor(documentKind, options, editStateKey)` in `CodeViewOptions` and
+`createEditor(editorType, options, editStateKey)` in `CodeViewOptions` and
 forward all three arguments to `new Editor`. Set `edit: true` on each editable
 item and increment its version. The factory receives `'file'` or `'file-diff'`
-as its first argument so it can construct an editor for that item kind.
+as its first argument so it can construct an editor of the requested type.
 
 `onItemEditChange(event, item)` reports live contents and annotation changes.
 Read the current document from `event.file`, the complete annotation collection

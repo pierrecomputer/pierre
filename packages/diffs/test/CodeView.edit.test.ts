@@ -16,7 +16,7 @@ import { Editor } from '../src/editor/editor';
 import { TextDocument } from '../src/editor/textDocument';
 import type {
   EditCompletionDecision,
-  EditorDocumentKind,
+  EditorType,
   EditorViewState,
 } from '../src/editor/types';
 import type {
@@ -40,8 +40,9 @@ import {
   waitFor,
 } from './domHarness';
 
-type TestEditorComponent<TDocumentKind extends EditorDocumentKind> =
-  TDocumentKind extends 'file' ? File<undefined> : FileDiff<undefined>;
+type TestEditorComponent<EType extends EditorType> = EType extends 'file'
+  ? File<undefined>
+  : FileDiff<undefined>;
 
 interface TrackedEditorState {
   /** Instances passed to edit(), in order. */
@@ -50,10 +51,7 @@ interface TrackedEditorState {
   recycleCleanUps: number;
 }
 
-type TrackedEditor<TDocumentKind extends EditorDocumentKind> = Editor<
-  TDocumentKind,
-  undefined
-> &
+type TrackedEditor<EType extends EditorType> = Editor<EType, undefined> &
   TrackedEditorState;
 
 type AnyTrackedEditor = TrackedEditor<'file'> | TrackedEditor<'file-diff'>;
@@ -66,23 +64,23 @@ function createEditorHarness({
 } = {}) {
   const editors: AnyTrackedEditor[] = [];
   const editStateKeys: Array<string | undefined> = [];
-  const createEditor = <TDocumentKind extends EditorDocumentKind>(
-    documentKind: TDocumentKind,
-    options: CodeViewCreateEditorOptions<TDocumentKind, undefined>,
+  const createEditor = <EType extends EditorType>(
+    editorType: EType,
+    options: CodeViewCreateEditorOptions<EType, undefined>,
     editStateKey?: string
-  ): Editor<TDocumentKind, undefined> => {
+  ): Editor<EType, undefined> => {
     editStateKeys.push(editStateKey);
     const editor = new Editor(
-      documentKind,
+      editorType,
       options,
       editStateKey
-    ) as TrackedEditor<TDocumentKind>;
+    ) as TrackedEditor<EType>;
     editor.edits = [];
     editor.fullCleanUps = 0;
     editor.recycleCleanUps = 0;
 
     const edit = editor.edit.bind(editor);
-    editor.edit = ((instance: TestEditorComponent<TDocumentKind>) => {
+    editor.edit = ((instance: TestEditorComponent<EType>) => {
       editor.edits.push(instance);
       const complete =
         instance.type === 'file'
@@ -577,8 +575,7 @@ describe('CodeView item edit mode', () => {
     test(`collapse preserves ${itemType} contents and undo history`, async () => {
       const { cleanup } = installDom();
       const viewer = new CodeView({
-        createEditor: (documentKind, options) =>
-          new Editor(documentKind, options),
+        createEditor: (editorType, options) => new Editor(editorType, options),
       });
       const item = makeItem();
       try {
@@ -994,8 +991,8 @@ describe('CodeView item edit mode', () => {
     // file and return the nextItem CodeView built. CodeView installs the
     // file and applies nextItem through updateItem itself.
     const viewer: CodeView = new CodeView({
-      createEditor: (documentKind, options) =>
-        new Editor(documentKind, { ...options }),
+      createEditor: (editorType, options) =>
+        new Editor(editorType, { ...options }),
       onItemEditComplete(event, item, nextItem) {
         if (item.type !== 'file' || !('file' in event)) {
           return 'accept';
@@ -1062,8 +1059,7 @@ describe('CodeView item edit mode', () => {
     const completions: FileEditCompleteEvent<undefined>[] = [];
     const completionStates: EditorViewState[] = [];
     const viewer = new CodeView({
-      createEditor: (documentKind, options) =>
-        new Editor(documentKind, options),
+      createEditor: (editorType, options) => new Editor(editorType, options),
       onItemEditComplete(event) {
         if ('file' in event) {
           completions.push(event);
@@ -1247,8 +1243,8 @@ describe('CodeView item edit mode', () => {
     }
     initial.fileDiff.cacheKey = 'active:v1';
     const viewer = new CodeView<undefined>({
-      createEditor(documentKind, options) {
-        const editor = new Editor(documentKind, options);
+      createEditor(editorType, options) {
+        const editor = new Editor(editorType, options);
         editors.push(
           editor as Editor<'file', undefined> | Editor<'file-diff', undefined>
         );
@@ -1334,8 +1330,8 @@ describe('CodeView item edit mode', () => {
       ),
     ];
     const viewer = new CodeView<undefined>({
-      createEditor(documentKind, options) {
-        const editor = new Editor(documentKind, options);
+      createEditor(editorType, options) {
+        const editor = new Editor(editorType, options);
         editors.push(
           editor as Editor<'file', undefined> | Editor<'file-diff', undefined>
         );
@@ -1432,8 +1428,8 @@ describe('CodeView item edit mode', () => {
       ),
     ];
     const viewer = new CodeView<undefined>({
-      createEditor(documentKind, options) {
-        const editor = new Editor(documentKind, options);
+      createEditor(editorType, options) {
+        const editor = new Editor(editorType, options);
         editors.push(
           editor as Editor<'file', undefined> | Editor<'file-diff', undefined>
         );
@@ -1528,8 +1524,8 @@ describe('CodeView item edit mode', () => {
     }
     initial.fileDiff.cacheKey = 'active:v1';
     const viewer = new CodeView<undefined>({
-      createEditor(documentKind, options) {
-        const editor = new Editor(documentKind, options);
+      createEditor(editorType, options) {
+        const editor = new Editor(editorType, options);
         editors.push(
           editor as Editor<'file', undefined> | Editor<'file-diff', undefined>
         );

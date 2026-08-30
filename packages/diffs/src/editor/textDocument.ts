@@ -10,9 +10,9 @@ import type { SearchParams } from './searchPanel';
 import type {
   EditHistoryState,
   EditorChange,
-  EditorDocumentKind,
   EditorLineAnnotation,
   EditorSelection,
+  EditorType,
   Position,
   Range,
   ResolvedTextEdit,
@@ -55,13 +55,10 @@ export interface TextDocumentChange {
 
 // Metadata-less replay results include the resolved edits so Editor can remap
 // its live selections without storing a snapshot on the history entry.
-type TextDocumentHistoryResult<
-  TDocumentKind extends EditorDocumentKind,
-  LAnnotation,
-> = [
+type TextDocumentHistoryResult<EType extends EditorType, LAnnotation> = [
   change: TextDocumentChange,
   selections?: EditorSelection[],
-  lineAnnotations?: EditorLineAnnotation<TDocumentKind, LAnnotation>[],
+  lineAnnotations?: EditorLineAnnotation<EType, LAnnotation>[],
   selectionEdits?: ResolvedTextEdit[],
 ];
 
@@ -69,14 +66,14 @@ type TextDocumentHistoryResult<
  * A vscode-languageserver-textdocument compatible text document.
  */
 export class TextDocument<
-  TDocumentKind extends EditorDocumentKind = EditorDocumentKind,
+  EType extends EditorType = EditorType,
   LAnnotation = unknown,
 > {
   #uri: string;
   #languageId: string;
   #version: number;
   #pieceTable: PieceTable;
-  #editStack: EditStack<TDocumentKind, LAnnotation>;
+  #editStack: EditStack<EType, LAnnotation>;
   #eol: '\n' | '\r\n' | '\r';
 
   constructor(
@@ -84,7 +81,7 @@ export class TextDocument<
     text: string,
     languageId = 'text',
     version = 0,
-    editStack: EditStack<TDocumentKind, LAnnotation> = new EditStack(),
+    editStack: EditStack<EType, LAnnotation> = new EditStack(),
     eol?: '\n' | '\r\n' | '\r'
   ) {
     this.#uri = new URL(uri, 'file://').toString();
@@ -131,7 +128,7 @@ export class TextDocument<
     return this.#eol;
   }
 
-  get history(): EditHistoryState<TDocumentKind, LAnnotation> {
+  get history(): EditHistoryState<EType, LAnnotation> {
     return this.#editStack.getLiveState();
   }
 
@@ -315,8 +312,8 @@ export class TextDocument<
   }
 
   setLastUndoLineAnnotations(
-    lineAnnotationsBefore: EditorLineAnnotation<TDocumentKind, LAnnotation>[],
-    lineAnnotationsAfter: EditorLineAnnotation<TDocumentKind, LAnnotation>[]
+    lineAnnotationsBefore: EditorLineAnnotation<EType, LAnnotation>[],
+    lineAnnotationsAfter: EditorLineAnnotation<EType, LAnnotation>[]
   ): void {
     this.#editStack.setLastUndoLineAnnotations(
       lineAnnotationsBefore,
@@ -324,7 +321,7 @@ export class TextDocument<
     );
   }
 
-  undo(): TextDocumentHistoryResult<TDocumentKind, LAnnotation> | undefined {
+  undo(): TextDocumentHistoryResult<EType, LAnnotation> | undefined {
     const entry = this.#editStack.popUndoToRedo();
     if (entry === undefined) {
       return undefined;
@@ -345,7 +342,7 @@ export class TextDocument<
     ];
   }
 
-  redo(): TextDocumentHistoryResult<TDocumentKind, LAnnotation> | undefined {
+  redo(): TextDocumentHistoryResult<EType, LAnnotation> | undefined {
     const entry = this.#editStack.popRedoToUndo();
     if (entry === undefined) {
       return undefined;

@@ -25,8 +25,8 @@ import { Editor, type EditorOptions } from '../src/editor/editor';
 import { EditStateManager } from '../src/editor/EditStateManager';
 import type {
   EditorChangeEvent,
-  EditorDocumentKind,
   EditorFactory,
+  EditorType,
 } from '../src/editor/types';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
 import {
@@ -71,33 +71,30 @@ const PatchDiffComponent = PatchDiff as ComponentType<
   PatchDiffProps<undefined>
 >;
 
-function createEditor<TDocumentKind extends EditorDocumentKind>(
-  documentKind: TDocumentKind,
-  options: EditorOptions<TDocumentKind, undefined>
-): Editor<TDocumentKind, undefined> {
-  return new Editor(documentKind, options);
+function createEditor<EType extends EditorType>(
+  editorType: EType,
+  options: EditorOptions<EType, undefined>
+): Editor<EType, undefined> {
+  return new Editor(editorType, options);
 }
 
-type TrackedEditor<TDocumentKind extends EditorDocumentKind> = Editor<
-  TDocumentKind,
-  undefined
-> & {
+type TrackedEditor<EType extends EditorType> = Editor<EType, undefined> & {
   cleanUpCount: number;
 };
 
-type AnyEditor = Editor<EditorDocumentKind, undefined>;
-type AnyTrackedEditor = TrackedEditor<EditorDocumentKind>;
+type AnyEditor = Editor<EditorType, undefined>;
+type AnyTrackedEditor = TrackedEditor<EditorType>;
 
-function createTrackedEditor<TDocumentKind extends EditorDocumentKind>(
-  documentKind: TDocumentKind,
-  options: EditorOptions<TDocumentKind, undefined>,
+function createTrackedEditor<EType extends EditorType>(
+  editorType: EType,
+  options: EditorOptions<EType, undefined>,
   editStateKey?: string
-): TrackedEditor<TDocumentKind> {
+): TrackedEditor<EType> {
   const editor = new Editor(
-    documentKind,
+    editorType,
     options,
     editStateKey
-  ) as TrackedEditor<TDocumentKind>;
+  ) as TrackedEditor<EType>;
   editor.cleanUpCount = 0;
   const cleanUp = editor.cleanUp.bind(editor);
   editor.cleanUp = (reason) => {
@@ -110,8 +107,8 @@ function createTrackedEditor<TDocumentKind extends EditorDocumentKind>(
 function createTrackedEditorFactory(
   editors: AnyTrackedEditor[]
 ): EditorFactory {
-  return (documentKind, options, editStateKey) => {
-    const editor = createTrackedEditor(documentKind, options, editStateKey);
+  return (editorType, options, editStateKey) => {
+    const editor = createTrackedEditor(editorType, options, editStateKey);
     editors.push(editor as unknown as AnyTrackedEditor);
     return editor;
   };
@@ -250,7 +247,7 @@ type ReactEditableSurfaceInstance =
 function createEditableSurfaceElement(
   surface: ReactEditableSurface,
   edit = true,
-  editorOptions?: EditorOptions<EditorDocumentKind, undefined>,
+  editorOptions?: EditorOptions<EditorType, undefined>,
   onInstance?: (instance: ReactEditableSurfaceInstance) => void,
   editStateKey?: string
 ): ReactElement {
@@ -486,9 +483,7 @@ describe('React editor factory lifecycle', () => {
       const render = async (
         edit: boolean,
         factory: EditorFactory,
-        onChange: NonNullable<
-          EditorOptions<EditorDocumentKind, undefined>['onChange']
-        >,
+        onChange: NonNullable<EditorOptions<EditorType, undefined>['onChange']>,
         editStateKey: string
       ) => {
         await act(async () => {
@@ -572,9 +567,9 @@ describe('React editor factory lifecycle', () => {
         expect(editors[1]?.cleanUpCount).toBeGreaterThan(0);
       } finally {
         await unmountRoot(root);
-        const documentKind = surface === 'File' ? 'file' : 'file-diff';
-        EditStateManager.clear(documentKind, firstEditStateKey);
-        EditStateManager.clear(documentKind, secondEditStateKey);
+        const editorType = surface === 'File' ? 'file' : 'file-diff';
+        EditStateManager.clear(editorType, firstEditStateKey);
+        EditStateManager.clear(editorType, secondEditStateKey);
         cleanupActEnvironment();
         cleanup();
       }
@@ -634,7 +629,7 @@ describe('React editor factory lifecycle', () => {
       const container = document.createElement('div');
       document.body.appendChild(container);
       const editStateKey = `${surface}-shared-history`;
-      const editorOptions: EditorOptions<EditorDocumentKind, undefined> = {};
+      const editorOptions: EditorOptions<EditorType, undefined> = {};
       const editors: AnyTrackedEditor[] = [];
       const factory = createTrackedEditorFactory(editors);
       let root: Root | undefined;
@@ -955,13 +950,14 @@ describe('React editor factory lifecycle', () => {
       undefined,
       undefined,
     ];
-    const editorOptions: EditorOptions<EditorDocumentKind, undefined>[] =
-      callbacks.map((onChange, index) => ({
+    const editorOptions: EditorOptions<EditorType, undefined>[] = callbacks.map(
+      (onChange, index) => ({
         onAttach(editor) {
           siblingEditors[index] = editor as AnyTrackedEditor;
         },
         onChange,
-      }));
+      })
+    );
     const editors: AnyTrackedEditor[] = [];
     let root: Root | undefined;
     const factory = createTrackedEditorFactory(editors);
@@ -1254,11 +1250,11 @@ describe('React editor factory lifecycle', () => {
         attachedEditor = editor;
       },
     });
-    const createSharedEditor: EditorFactory = (documentKind) => {
-      if (documentKind !== 'file') {
+    const createSharedEditor: EditorFactory = (editorType) => {
+      if (editorType !== 'file') {
         throw new Error('Expected a file editor');
       }
-      return sharedEditor as Editor<typeof documentKind, undefined>;
+      return sharedEditor as Editor<typeof editorType, undefined>;
     };
     const factory = mock(createSharedEditor);
     const surfaceOnAttach = mock((_editor: AnyEditor) => {});

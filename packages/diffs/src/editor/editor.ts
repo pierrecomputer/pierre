@@ -123,11 +123,11 @@ import type {
   EditorCaret,
   EditorChange,
   EditorChangeEvent,
-  EditorDocumentKind,
   EditorEditCompleteEvent,
   EditorInitialState,
   EditorLineAnnotation,
   EditorSelection,
+  EditorType,
   EditorViewState,
   EditState,
   Position,
@@ -237,16 +237,16 @@ interface SyncDiffRenderViewProps<LAnnotation> extends SyncRenderViewBaseProps {
 }
 
 type SyncRenderViewProps<
-  TDocumentKind extends EditorDocumentKind,
+  EType extends EditorType,
   LAnnotation,
-> = TDocumentKind extends 'file'
+> = EType extends 'file'
   ? SyncFileRenderViewProps<LAnnotation>
   : SyncDiffRenderViewProps<LAnnotation>;
 
 type EditorComponent<
-  TDocumentKind extends EditorDocumentKind,
+  EType extends EditorType,
   LAnnotation,
-> = TDocumentKind extends 'file' ? File<LAnnotation> : FileDiff<LAnnotation>;
+> = EType extends 'file' ? File<LAnnotation> : FileDiff<LAnnotation>;
 
 type EditorVirtualizedComponent<LAnnotation> =
   | VirtualizedFile<LAnnotation>
@@ -255,7 +255,7 @@ type EditorVirtualizedComponent<LAnnotation> =
 // Narrow an editor host through the virtualized components' runtime marker
 // without importing either component class as a runtime dependency.
 function isVirtualizedEditorComponent<LAnnotation>(
-  instance: EditorComponent<EditorDocumentKind, LAnnotation> | undefined
+  instance: EditorComponent<EditorType, LAnnotation> | undefined
 ): instance is EditorVirtualizedComponent<LAnnotation> {
   return (
     instance != null &&
@@ -265,7 +265,7 @@ function isVirtualizedEditorComponent<LAnnotation>(
 }
 
 export interface EditorOptions<
-  TDocumentKind extends EditorDocumentKind = EditorDocumentKind,
+  EType extends EditorType = EditorType,
   LAnnotation = undefined,
   LCaret = undefined,
 > {
@@ -282,7 +282,7 @@ export interface EditorOptions<
    * fields are initialized from the attached component. The editor takes
    * ownership and does not clone supplied objects.
    */
-  initialState?: EditorInitialState<TDocumentKind, LAnnotation>;
+  initialState?: EditorInitialState<EType, LAnnotation>;
   /** Custom keymap groups checked before defaults; later groups take precedence. */
   keymap?: EditorKeymap;
   /** Render rounded corners for selection ranges, default is true. */
@@ -311,7 +311,7 @@ export interface EditorOptions<
   };
   /** Render the selection action widget element. */
   renderSelectionAction?: (
-    context: SelectionActionContext<TDocumentKind, LAnnotation>
+    context: SelectionActionContext<EType, LAnnotation>
   ) => HTMLElement;
   /**
    * Render an externally owned caret at its normalized document position.
@@ -319,23 +319,21 @@ export interface EditorOptions<
   renderCaret?: (caret: EditorCaret<LCaret>) => HTMLElement;
   /** Callback when the editor is attached to a file. */
   onAttach?: (
-    editor: Editor<TDocumentKind, LAnnotation, LCaret>,
-    fileInstance: EditorComponent<TDocumentKind, LAnnotation>
+    editor: Editor<EType, LAnnotation, LCaret>,
+    fileInstance: EditorComponent<EType, LAnnotation>
   ) => void;
   /**
    * Called with an `EditorChangeEvent` whenever the editor document changes.
    * Treat this as a document notification; do not feed the changes back into
    * the editor or you will create loops.
    */
-  onChange?: (event: EditorChangeEvent<TDocumentKind, LAnnotation>) => void;
+  onChange?: (event: EditorChangeEvent<EType, LAnnotation>) => void;
   /**
    * Observes completion with the same frozen event sent to the component. Runs
    * before the component callback, including when the component callback is
    * missing. There is no way to accept or reject from this API.
    */
-  onComplete?: (
-    event: EditorEditCompleteEvent<TDocumentKind, LAnnotation>
-  ) => void;
+  onComplete?: (event: EditorEditCompleteEvent<EType, LAnnotation>) => void;
   /** Callback when the editor gains focus. */
   onFocus?: () => void;
   /** Callback when the editor loses focus. */
@@ -370,13 +368,13 @@ const MULTI_SELECTION_CLIPBOARD_TYPE =
   'application/vnd.pierre.diffs-selections+json';
 
 export class Editor<
-  TDocumentKind extends EditorDocumentKind = EditorDocumentKind,
+  EType extends EditorType = EditorType,
   LAnnotation = undefined,
   LCaret = undefined,
 > {
-  #options: EditorOptions<TDocumentKind, LAnnotation, LCaret>;
-  #initialState: EditorInitialState<TDocumentKind, LAnnotation> | undefined;
-  #editSession?: ManagedEditSession<TDocumentKind, LAnnotation>;
+  #options: EditorOptions<EType, LAnnotation, LCaret>;
+  #initialState: EditorInitialState<EType, LAnnotation> | undefined;
+  #editSession?: ManagedEditSession<EType, LAnnotation>;
   #metrics = new Metrics();
   #tokenizer?: EditorTokenizer;
   #popoverManager?: PopoverManager;
@@ -423,26 +421,22 @@ export class Editor<
   #resizeObserver?: ResizeObserver;
 
   // state
-  #fileInstance?: EditorComponent<TDocumentKind, LAnnotation>;
+  #fileInstance?: EditorComponent<EType, LAnnotation>;
   // Preserves the current file/diff instance's applyDocumentChange
   // type/semantics to avoid annoying `as X` narrowing
   #applyDocumentChange?: (
-    textDocument: TextDocument<TDocumentKind, LAnnotation>,
-    newLineAnnotations:
-      | EditorLineAnnotation<TDocumentKind, LAnnotation>[]
-      | undefined,
+    textDocument: TextDocument<EType, LAnnotation>,
+    newLineAnnotations: EditorLineAnnotation<EType, LAnnotation>[] | undefined,
     shouldUpdateBuffer?: boolean
   ) => void;
   #publishChange?: (
     changes: EditorChange[],
     file: FileContents,
-    lineAnnotations:
-      | EditorLineAnnotation<TDocumentKind, LAnnotation>[]
-      | undefined
+    lineAnnotations: EditorLineAnnotation<EType, LAnnotation>[] | undefined
   ) => void;
   #isRendering = false;
   #restoreEditorStateOnSync = false;
-  #lineAnnotations?: EditorLineAnnotation<TDocumentKind, LAnnotation>[];
+  #lineAnnotations?: EditorLineAnnotation<EType, LAnnotation>[];
   readonly #editStateKey?: string;
   readonly #ownsVerticalViewport: boolean;
   #renderRange?: RenderRange;
@@ -532,14 +526,14 @@ export class Editor<
   };
 
   /**
-   * @param documentKind The component surface this editor can attach to.
+   * @param type The component surface this editor can attach to.
    * @param options Configure editor behavior and lifecycle callbacks.
    * @param editStateKey Retain this editable draft and its undo/redo history
-   * in memory so a later editor using the same kind and key can resume them.
-   */
+   * in memory so a later editor using the same type and key can resume them.
+  */
   constructor(
-    public readonly documentKind: TDocumentKind,
-    options: EditorOptions<TDocumentKind, LAnnotation, LCaret> = {},
+    public readonly type: EType,
+    options: EditorOptions<EType, LAnnotation, LCaret> = {},
     editStateKey?: string
   ) {
     this.#options = options;
@@ -552,14 +546,12 @@ export class Editor<
   get #getTypedEditor():
     | Editor<'file', LAnnotation, LCaret>
     | Editor<'file-diff', LAnnotation, LCaret> {
-    return this.documentKind === 'file'
+    return this.type === 'file'
       ? (this as Editor<'file', LAnnotation, LCaret>)
       : (this as Editor<'file-diff', LAnnotation, LCaret>);
   }
 
-  setOptions(
-    options: EditorOptions<TDocumentKind, LAnnotation, LCaret>
-  ): void {
+  setOptions(options: EditorOptions<EType, LAnnotation, LCaret>): void {
     const previousRenderCaret = this.#options.renderCaret;
     this.#options = {
       ...this.#options,
@@ -572,9 +564,7 @@ export class Editor<
     }
   }
 
-  __emitEditComplete(
-    event: EditorEditCompleteEvent<TDocumentKind, LAnnotation>
-  ): void {
+  __emitEditComplete(event: EditorEditCompleteEvent<EType, LAnnotation>): void {
     this.#options.onComplete?.(event);
   }
 
@@ -606,10 +596,10 @@ export class Editor<
 
   // UnresolvedFile extends FileDiff for rendering, but its conflict-specific
   // document model is not supported by Editor.
-  edit<T extends EditorComponent<TDocumentKind, LAnnotation>>(
+  edit<T extends EditorComponent<EType, LAnnotation>>(
     fileInstance: T extends { readonly type: 'unresolved-file' } ? never : T
   ): () => void;
-  edit(fileInstance: EditorComponent<TDocumentKind, LAnnotation>): () => void {
+  edit(fileInstance: EditorComponent<EType, LAnnotation>): () => void {
     const editor = this.#getTypedEditor;
     const previousSession = this.#editSession;
     if (this.#isRendering) {
@@ -626,7 +616,7 @@ export class Editor<
     const initialEditorState = initialState?.editor;
     const editStateKey = this.#editStateKey;
     const editSession = getEditSession({
-      documentKind: this.documentKind,
+      type: this.type,
       editStateKey,
       owner: this,
       initialState,
@@ -640,7 +630,7 @@ export class Editor<
     this.#restoreEditorStateOnSync = editSession.editor != null;
     try {
       this.#initialize();
-      if (fileInstance.type === 'file' && editor.documentKind === 'file') {
+      if (fileInstance.type === 'file' && editor.type === 'file') {
         editor.#applyDocumentChange =
           fileInstance.applyDocumentChange.bind(fileInstance);
         editor.#publishChange = (changes, file, lineAnnotations) => {
@@ -663,7 +653,7 @@ export class Editor<
         }
       } else if (
         fileInstance.type === 'file-diff' &&
-        editor.documentKind === 'file-diff'
+        editor.type === 'file-diff'
       ) {
         editor.#applyDocumentChange =
           fileInstance.applyDocumentChange.bind(fileInstance);
@@ -692,16 +682,13 @@ export class Editor<
       this.cleanUp('recycle');
       // A failed attachment never replaced the claimed session. Restore diff
       // state that cleanup could not recapture before returning its key.
-      if (
-        editSession.documentKind === 'file-diff' &&
-        editSession.diffSession == null
-      ) {
+      if (editSession.type === 'file-diff' && editSession.diffSession == null) {
         editSession.diffSession = previousDiffSession;
       }
       // If we haven't ever attached, and failed to edit, release any edit
       // state lock
       if (this.#detach == null && editStateKey != null) {
-        if (editor.documentKind === 'file') {
+        if (editor.type === 'file') {
           EditStateManager.releaseFile(editStateKey, editor);
         } else {
           EditStateManager.releaseFileDiff(editStateKey, editor);
@@ -873,7 +860,7 @@ export class Editor<
    * Return the objects that make up the active edit session, or undefined when
    * no complete session exists.
    */
-  getEditState(): EditState<TDocumentKind, LAnnotation> | undefined {
+  getEditState(): EditState<EType, LAnnotation> | undefined {
     const editSession = this.#editSession;
     if (editSession == null) {
       return undefined;
@@ -881,10 +868,10 @@ export class Editor<
     const fileInstance = this.#fileInstance;
     if (fileInstance == null) {
       throw new Error(
-        `Editor.getEditState: active ${this.documentKind} session has no component`
+        `Editor.getEditState: active ${this.type} session has no component`
       );
     }
-    return toManagedEditState<TDocumentKind, LAnnotation>(editSession);
+    return toManagedEditState<EType, LAnnotation>(editSession);
   }
 
   setViewState({ selections, view }: EditorViewState): void {
@@ -1112,11 +1099,11 @@ export class Editor<
         if (fileInstance != null && editSession != null) {
           const editor = this.#getTypedEditor;
           const mode = reason === 'complete' ? 'install' : 'discard';
-          if (fileInstance.type === 'file' && editor.documentKind === 'file') {
+          if (fileInstance.type === 'file' && editor.type === 'file') {
             fileInstance.__completeEditSession(editor, mode);
           } else if (
             fileInstance.type === 'file-diff' &&
-            editor.documentKind === 'file-diff'
+            editor.type === 'file-diff'
           ) {
             fileInstance.__completeEditSession(editor, mode);
           } else {
@@ -1151,7 +1138,7 @@ export class Editor<
     const hasEditorState = editorState.selections != null || hasNonDefaultView;
     editSession.editor = cloneEditorViewState(editorState);
 
-    if (editSession.documentKind === 'file') {
+    if (editSession.type === 'file') {
       return false;
     }
 
@@ -1176,7 +1163,7 @@ export class Editor<
       return;
     }
     const editor = this.#getTypedEditor;
-    if (editor.documentKind === 'file') {
+    if (editor.type === 'file') {
       EditStateManager.releaseFile(editStateKey, editor);
     } else {
       EditStateManager.releaseFileDiff(editStateKey, editor, discardDiffState);
@@ -1238,9 +1225,7 @@ export class Editor<
   }
 
   /** @internal */
-  __syncRenderView = (
-    props: SyncRenderViewProps<TDocumentKind, LAnnotation>
-  ): void => {
+  __syncRenderView = (props: SyncRenderViewProps<EType, LAnnotation>): void => {
     const {
       highlighter,
       fileContainer,
@@ -1251,15 +1236,15 @@ export class Editor<
       | SyncFileRenderViewProps<LAnnotation>
       | SyncDiffRenderViewProps<LAnnotation> = props;
     let fileOrDiff: FileContents | FileDiffMetadata;
-    if ('file' in renderView && this.documentKind === 'file') {
+    if ('file' in renderView && this.type === 'file') {
       fileOrDiff = renderView.file;
-    } else if ('fileDiff' in renderView && this.documentKind === 'file-diff') {
+    } else if ('fileDiff' in renderView && this.type === 'file-diff') {
       fileOrDiff = renderView.fileDiff;
     } else {
       throw new Error('Editor.__syncRenderView: Impossible render state');
     }
     const lineAnnotations = renderView.lineAnnotations as
-      | EditorLineAnnotation<TDocumentKind, LAnnotation>[]
+      | EditorLineAnnotation<EType, LAnnotation>[]
       | undefined;
     const editStateKey = this.#editStateKey;
     const externalDocument = renderView.externalDocument === true;
@@ -1350,10 +1335,10 @@ export class Editor<
         editSession.editor = undefined;
       }
       if (textDocument == null) {
-        const editStack = new EditStack<TDocumentKind, LAnnotation>({
+        const editStack = new EditStack<EType, LAnnotation>({
           maxEntries: this.#options.historyMaxEntries,
         });
-        textDocument = new TextDocument<TDocumentKind, LAnnotation>(
+        textDocument = new TextDocument<EType, LAnnotation>(
           fileOrDiff.name,
           contents,
           languageId,
@@ -1570,11 +1555,9 @@ export class Editor<
   // applied twice. __syncRenderView emits the resulting onChange notification
   // afterward.
   #applyExternalDocumentReplacement(
-    editSession: ManagedEditSession<TDocumentKind, LAnnotation>,
+    editSession: ManagedEditSession<EType, LAnnotation>,
     contents: string,
-    lineAnnotations:
-      | EditorLineAnnotation<TDocumentKind, LAnnotation>[]
-      | undefined
+    lineAnnotations: EditorLineAnnotation<EType, LAnnotation>[] | undefined
   ): void {
     const textDocument = editSession.document;
     if (textDocument == null || textDocument.getText() === contents) {
@@ -1685,7 +1668,7 @@ export class Editor<
   }
 
   get #isDiff(): boolean {
-    return this.documentKind === 'file-diff';
+    return this.type === 'file-diff';
   }
 
   get #isWrap(): boolean {
@@ -1750,9 +1733,7 @@ export class Editor<
   // A recycled attachment remains the same edit session. If its first
   // notification was canceled, the next live synchronization reschedules it;
   // once delivered, later recycled mounts stay silent.
-  #scheduleOnAttach(
-    fileInstance: EditorComponent<TDocumentKind, LAnnotation>
-  ): void {
+  #scheduleOnAttach(fileInstance: EditorComponent<EType, LAnnotation>): void {
     const attachState = this.#attachState;
     const textDocument = this.#editSession?.document;
     if (
@@ -3143,7 +3124,7 @@ export class Editor<
   #applyCommandEdits(
     edits: TextEdit[],
     resolveNextSelections?: (
-      textDocument: TextDocument<TDocumentKind, LAnnotation>
+      textDocument: TextDocument<EType, LAnnotation>
     ) => EditorSelection[]
   ): void {
     const textDocument = this.#editSession?.document;
@@ -3511,7 +3492,7 @@ export class Editor<
 
   #rerender(
     change: TextDocumentChange,
-    newLineAnnotations?: EditorLineAnnotation<TDocumentKind, LAnnotation>[],
+    newLineAnnotations?: EditorLineAnnotation<EType, LAnnotation>[],
     renderRange = this.#renderRange,
     shouldUpdateBuffer?: boolean
   ) {
@@ -4174,7 +4155,7 @@ export class Editor<
   #spanLineSelection(
     anchorLine: number,
     focusLine: number,
-    textDocument: TextDocument<TDocumentKind, LAnnotation>
+    textDocument: TextDocument<EType, LAnnotation>
   ): EditorSelection {
     const lineStart = (line: number): Position => ({ line, character: 0 });
     const lineEnd = (line: number): Position => ({
@@ -5596,7 +5577,7 @@ export class Editor<
     }
     const { nextSelections, change } =
       Array.isArray(text) && text.length === selections.length
-        ? applyTextReplaceToSelections<TDocumentKind, LAnnotation>(
+        ? applyTextReplaceToSelections<EType, LAnnotation>(
             textDocument,
             selections,
             text,
@@ -5604,7 +5585,7 @@ export class Editor<
             undoBoundary,
             textOrder
           )
-        : applyTextChangeToSelections<TDocumentKind, LAnnotation>(
+        : applyTextChangeToSelections<EType, LAnnotation>(
             textDocument,
             selections,
             {
@@ -5634,7 +5615,7 @@ export class Editor<
     }
 
     const { nextSelections, change } = applyDeleteCharacterToSelections<
-      TDocumentKind,
+      EType,
       LAnnotation
     >(
       textDocument,
@@ -5672,7 +5653,7 @@ export class Editor<
         }
       : undefined;
     const { nextSelections, change } = applyDeleteSoftLineBackwardToSelections<
-      TDocumentKind,
+      EType,
       LAnnotation
     >(textDocument, selections, getSoftLineStart, this.#lineAnnotations);
     if (change !== undefined) {
@@ -5691,7 +5672,7 @@ export class Editor<
       return;
     }
     const { nextSelections, change } = applyDeleteWordBackwardToSelections<
-      TDocumentKind,
+      EType,
       LAnnotation
     >(textDocument, selections, this.#lineAnnotations);
     if (change !== undefined) {
@@ -5710,7 +5691,7 @@ export class Editor<
       return;
     }
     const { nextSelections, change } = applyDeleteHardLineForwardToSelections<
-      TDocumentKind,
+      EType,
       LAnnotation
     >(textDocument, selections, this.#lineAnnotations);
     if (change !== undefined) {
@@ -5729,7 +5710,7 @@ export class Editor<
       return;
     }
     const { nextSelections, change } = applyTransposeToSelections<
-      TDocumentKind,
+      EType,
       LAnnotation
     >(textDocument, selections, this.#lineAnnotations);
     if (change !== undefined) {
@@ -5744,7 +5725,7 @@ export class Editor<
   #applyChange(
     change: TextDocumentChange,
     newSelections?: EditorSelection[],
-    newLineAnnotations?: EditorLineAnnotation<TDocumentKind, LAnnotation>[],
+    newLineAnnotations?: EditorLineAnnotation<EType, LAnnotation>[],
     options?: { skipSearchRefresh?: boolean; skipFocus?: boolean }
   ) {
     const textDocument = this.#editSession?.document;
@@ -5942,9 +5923,7 @@ export class Editor<
 
   #emitChange(
     changes: EditorChange[],
-    lineAnnotations:
-      | EditorLineAnnotation<TDocumentKind, LAnnotation>[]
-      | undefined
+    lineAnnotations: EditorLineAnnotation<EType, LAnnotation>[] | undefined
   ): void {
     const file = this.getFile();
     const publishChange = this.#publishChange;
@@ -5956,7 +5935,7 @@ export class Editor<
 
   #applyChangeToLineAnnotations(
     change: TextDocumentChange
-  ): EditorLineAnnotation<TDocumentKind, LAnnotation>[] | undefined {
+  ): EditorLineAnnotation<EType, LAnnotation>[] | undefined {
     if (this.#lineAnnotations != null) {
       const nextLineAnnotations = applyDocumentChangeToLineAnnotations(
         change,
@@ -6386,37 +6365,29 @@ export class Editor<
   }
 }
 
-interface GetEditSessionProps<
-  TDocumentKind extends EditorDocumentKind,
-  LAnnotation,
-> {
-  documentKind: TDocumentKind;
+interface GetEditSessionProps<EType extends EditorType, LAnnotation> {
+  type: EType;
   editStateKey: string | undefined;
-  owner: Editor<TDocumentKind, LAnnotation>;
-  initialState: EditorInitialState<TDocumentKind, LAnnotation> | undefined;
-  previousSession: ManagedEditSession<TDocumentKind, LAnnotation> | undefined;
+  owner: Editor<EType, LAnnotation>;
+  initialState: EditorInitialState<EType, LAnnotation> | undefined;
+  previousSession: ManagedEditSession<EType, LAnnotation> | undefined;
 }
 
-function getEditSession<TDocumentKind extends EditorDocumentKind, LAnnotation>({
-  documentKind,
+function getEditSession<EType extends EditorType, LAnnotation>({
+  type,
   editStateKey,
   owner,
   initialState,
   previousSession,
-}: GetEditSessionProps<TDocumentKind, LAnnotation>): ManagedEditSession<
-  TDocumentKind,
+}: GetEditSessionProps<EType, LAnnotation>): ManagedEditSession<
+  EType,
   LAnnotation
 > {
   const initialSession = initialState as
-    | ManagedEditSession<TDocumentKind, LAnnotation>
+    | ManagedEditSession<EType, LAnnotation>
     | undefined;
   if (editStateKey != null) {
-    return EditStateManager.activate(
-      documentKind,
-      editStateKey,
-      owner,
-      initialSession
-    );
+    return EditStateManager.activate(type, editStateKey, owner, initialSession);
   }
   if (initialSession != null) {
     return initialSession;
@@ -6425,8 +6396,6 @@ function getEditSession<TDocumentKind extends EditorDocumentKind, LAnnotation>({
     return previousSession;
   }
   return (
-    documentKind === 'file'
-      ? { documentKind: 'file' }
-      : { documentKind: 'file-diff' }
-  ) as ManagedEditSession<TDocumentKind, LAnnotation>;
+    type === 'file' ? { type: 'file' } : { type: 'file-diff' }
+  ) as ManagedEditSession<EType, LAnnotation>;
 }

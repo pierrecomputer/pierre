@@ -3,17 +3,17 @@ import {
   setPopoverPositionStyles,
 } from './popover';
 import type { TextDocument } from './textDocument';
-import type { EditorDocumentKind, EditorSelection, TextEdit } from './types';
+import type { EditorSelection, EditorType, TextEdit } from './types';
 import { h } from './utils';
 
 export interface SelectionActionContext<
-  TDocumentKind extends EditorDocumentKind = EditorDocumentKind,
+  EType extends EditorType = EditorType,
   LAnnotation = unknown,
 > {
   /** The current selection (live: reflects keyboard-driven changes). */
   selection: EditorSelection;
   /** The text document. */
-  textDocument: TextDocument<TDocumentKind, LAnnotation>;
+  textDocument: TextDocument<EType, LAnnotation>;
   /** Applies the edits to the text document. */
   applyEdits: (edits: TextEdit[]) => void;
   /** Gets the text of the current selection. */

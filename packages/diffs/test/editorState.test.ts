@@ -27,7 +27,7 @@ function createInitialState(
   editor: EditorViewState = {}
 ): FileEditState<undefined> {
   return {
-    documentKind: 'file',
+    type: 'file',
     document: new TextDocument<'file', undefined>(
       file.name,
       file.contents,
@@ -268,7 +268,7 @@ describe('Editor state', () => {
     const editor = new Editor('file', {
       ownsVerticalViewport: true,
       initialState: {
-        documentKind: 'file',
+        type: 'file',
         editor: {
           selections: [
             {
@@ -300,7 +300,7 @@ describe('Editor state', () => {
       expect(component.restoredCodeScrollLefts).toEqual([24]);
       expect(viewport.scrollTop).toBe(48);
       expect(editor.getEditState()).toMatchObject({
-        documentKind: 'file',
+        type: 'file',
         fileInfo: { name: 'state.ts' },
       });
       expect(editor.getEditState()?.document.getText()).toBe('alpha\nbravo');
@@ -346,7 +346,7 @@ describe('Editor state', () => {
       lang: 'text',
     });
     const initialState = {
-      documentKind: 'file' as const,
+      type: 'file' as const,
       editor: { view: { scrollLeft: 24 } },
     };
     const editor = new Editor('file', { initialState });
@@ -357,7 +357,7 @@ describe('Editor state', () => {
       const state = editor.getEditState();
       expect(state === initialState).toBe(true);
       expect(state).toMatchObject({
-        documentKind: 'file',
+        type: 'file',
         fileInfo: { name: 'state.ts', lang: 'text' },
       });
       expect(state?.document.getText()).toBe('alpha\nbravo');
@@ -816,7 +816,7 @@ describe('Editor state', () => {
       7
     );
     const initialState: FileEditState<undefined> = {
-      documentKind: 'file',
+      type: 'file',
       document,
       fileInfo: { name: 'state.ts', lang: 'text' },
       editor: { view: { scrollLeft: 24 } },

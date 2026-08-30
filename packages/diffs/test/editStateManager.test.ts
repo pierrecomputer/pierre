@@ -31,7 +31,7 @@ function createState(): FileEditState<unknown> {
   );
   document.applyResolvedEdits([{ start: 14, end: 15, text: '2' }]);
   return {
-    documentKind: 'file',
+    type: 'file',
     document,
     fileInfo: { name: 'example.ts', lang: 'typescript' },
     editor: {
@@ -78,7 +78,7 @@ describe('EditStateManager', () => {
       new EditStack<'file'>({ maxEntries: 25 })
     );
     const state: FileEditState<unknown> = {
-      documentKind: 'file',
+      type: 'file',
       document,
       fileInfo: { name: 'example.ts', lang: 'typescript' },
       editor: {
@@ -142,7 +142,7 @@ describe('EditStateManager', () => {
     EditStateManager.releaseFile(key, fileOwner);
 
     expect(EditStateManager.activate('file-diff', key, diffOwner)).toEqual({
-      documentKind: 'file-diff',
+      type: 'file-diff',
     });
     EditStateManager.releaseFileDiff(key, diffOwner);
 
@@ -212,7 +212,7 @@ describe('EditStateManager', () => {
     const checkSecondOwner = createOwner();
     expect(
       EditStateManager.activate('file', 'second', checkSecondOwner)
-    ).toEqual({ documentKind: 'file' });
+    ).toEqual({ type: 'file' });
     EditStateManager.releaseFile('second', checkSecondOwner);
 
     const checkFirstOwner = createOwner();
@@ -244,7 +244,7 @@ describe('EditStateManager', () => {
 
     const secondOwner = createOwner();
     expect(EditStateManager.activate('file', 'second', secondOwner)).toEqual({
-      documentKind: 'file',
+      type: 'file',
     });
     EditStateManager.releaseFile('second', secondOwner);
 

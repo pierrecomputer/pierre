@@ -3,9 +3,9 @@ import type {
   EditHistoryCoalescingMode,
   EditHistoryEntry,
   EditHistoryState,
-  EditorDocumentKind,
   EditorLineAnnotation,
   EditorSelection,
+  EditorType,
   ResolvedTextEdit,
 } from './types';
 
@@ -17,9 +17,9 @@ const COALESCING_MODE_BACKSPACE = 'backspace';
 const COALESCING_MODE_DELETE = 'delete';
 
 export type EditStackEntry<
-  TDocumentKind extends EditorDocumentKind,
+  EType extends EditorType,
   LAnnotation = unknown,
-> = EditHistoryEntry<TDocumentKind, LAnnotation>;
+> = EditHistoryEntry<EType, LAnnotation>;
 type EditStackCoalescingMode = EditHistoryCoalescingMode;
 
 /** Options for the edit stack. */
@@ -29,12 +29,9 @@ export interface EditStackOptions {
 }
 
 /** A stack of edit entries. */
-export class EditStack<
-  TDocumentKind extends EditorDocumentKind,
-  LAnnotation = unknown,
-> {
-  #undoStack: EditStackEntry<TDocumentKind, LAnnotation>[] = [];
-  #redoStack: EditStackEntry<TDocumentKind, LAnnotation>[] = [];
+export class EditStack<EType extends EditorType, LAnnotation = unknown> {
+  #undoStack: EditStackEntry<EType, LAnnotation>[] = [];
+  #redoStack: EditStackEntry<EType, LAnnotation>[] = [];
   #maxEntries: number;
   #canCoalesce = false;
 
@@ -54,7 +51,7 @@ export class EditStack<
   }
 
   /** Return an independent, developer-editable history snapshot. */
-  getState(): EditHistoryState<TDocumentKind, LAnnotation> {
+  getState(): EditHistoryState<EType, LAnnotation> {
     return {
       undoStack: this.#undoStack.map(cloneEditStackEntryForState),
       redoStack: this.#redoStack.map(cloneEditStackEntryForState),
@@ -64,7 +61,7 @@ export class EditStack<
   }
 
   /** Return a live view over this stack without copying its entries. */
-  getLiveState(): EditHistoryState<TDocumentKind, LAnnotation> {
+  getLiveState(): EditHistoryState<EType, LAnnotation> {
     return Object.defineProperties(
       {},
       {
@@ -85,14 +82,14 @@ export class EditStack<
           get: () => this.#canCoalesce,
         },
       }
-    ) as EditHistoryState<TDocumentKind, LAnnotation>;
+    ) as EditHistoryState<EType, LAnnotation>;
   }
 
   /** Transfer developer-owned history into an edit stack. */
-  static fromState<TDocumentKind extends EditorDocumentKind, LAnnotation>(
-    state: EditHistoryState<TDocumentKind, LAnnotation>
-  ): EditStack<TDocumentKind, LAnnotation> {
-    const stack = new EditStack<TDocumentKind, LAnnotation>({
+  static fromState<EType extends EditorType, LAnnotation>(
+    state: EditHistoryState<EType, LAnnotation>
+  ): EditStack<EType, LAnnotation> {
+    const stack = new EditStack<EType, LAnnotation>({
       maxEntries: state.maxEntries,
     });
     stack.#undoStack = state.undoStack;
@@ -114,7 +111,7 @@ export class EditStack<
   }
 
   /** Pushes a new entry onto the undo stack. */
-  push(entry: EditStackEntry<TDocumentKind, LAnnotation>): void {
+  push(entry: EditStackEntry<EType, LAnnotation>): void {
     this.#undoStack.push(entry);
     this.clearRedo();
     this.#canCoalesce = true;
@@ -135,8 +132,8 @@ export class EditStack<
 
   /** Sets the line annotations after the last undo entry. */
   setLastUndoLineAnnotations(
-    lineAnnotationsBefore: EditorLineAnnotation<TDocumentKind, LAnnotation>[],
-    lineAnnotationsAfter: EditorLineAnnotation<TDocumentKind, LAnnotation>[]
+    lineAnnotationsBefore: EditorLineAnnotation<EType, LAnnotation>[],
+    lineAnnotationsAfter: EditorLineAnnotation<EType, LAnnotation>[]
   ): void {
     const lastEntry = this.#undoStack[this.#undoStack.length - 1];
     if (lastEntry !== undefined) {
@@ -146,19 +143,17 @@ export class EditStack<
   }
 
   /** Returns the last undo entry, or `undefined` if empty. */
-  peekUndo(): EditStackEntry<TDocumentKind, LAnnotation> | undefined {
+  peekUndo(): EditStackEntry<EType, LAnnotation> | undefined {
     return this.#undoStack[this.#undoStack.length - 1];
   }
 
   /** Returns the last undo entry only while its coalescing group is open. */
-  peekUndoForCoalescing():
-    | EditStackEntry<TDocumentKind, LAnnotation>
-    | undefined {
+  peekUndoForCoalescing(): EditStackEntry<EType, LAnnotation> | undefined {
     return this.#canCoalesce ? this.peekUndo() : undefined;
   }
 
   /** Replaces the last undo entry with the given entry. */
-  replaceLastUndo(entry: EditStackEntry<TDocumentKind, LAnnotation>): void {
+  replaceLastUndo(entry: EditStackEntry<EType, LAnnotation>): void {
     if (this.#undoStack.length === 0) {
       this.push(entry);
       return;
@@ -169,7 +164,7 @@ export class EditStack<
   }
 
   /** Moves the latest undo entry to the redo stack and returns it, or `undefined` if empty. */
-  popUndoToRedo(): EditStackEntry<TDocumentKind, LAnnotation> | void {
+  popUndoToRedo(): EditStackEntry<EType, LAnnotation> | void {
     const entry = this.#undoStack.pop();
     if (entry !== undefined) {
       this.#redoStack.push(entry);
@@ -179,7 +174,7 @@ export class EditStack<
   }
 
   /** Moves the latest redo entry back to the undo stack and returns it, or `undefined` if empty. */
-  popRedoToUndo(): EditStackEntry<TDocumentKind, LAnnotation> | void {
+  popRedoToUndo(): EditStackEntry<EType, LAnnotation> | void {
     const entry = this.#redoStack.pop();
     if (entry !== undefined) {
       this.#undoStack.push(entry);
@@ -189,12 +184,9 @@ export class EditStack<
   }
 }
 
-function cloneEditStackEntry<
-  TDocumentKind extends EditorDocumentKind,
-  LAnnotation,
->(
-  entry: EditStackEntry<TDocumentKind, LAnnotation>
-): EditStackEntry<TDocumentKind, LAnnotation> {
+function cloneEditStackEntry<EType extends EditorType, LAnnotation>(
+  entry: EditStackEntry<EType, LAnnotation>
+): EditStackEntry<EType, LAnnotation> {
   return {
     ...entry,
     forwardEdits: entry.forwardEdits.map((edit) => ({ ...edit })),
@@ -206,12 +198,9 @@ function cloneEditStackEntry<
   };
 }
 
-function cloneEditStackEntryForState<
-  TDocumentKind extends EditorDocumentKind,
-  LAnnotation,
->(
-  entry: EditStackEntry<TDocumentKind, LAnnotation>
-): EditStackEntry<TDocumentKind, LAnnotation> {
+function cloneEditStackEntryForState<EType extends EditorType, LAnnotation>(
+  entry: EditStackEntry<EType, LAnnotation>
+): EditStackEntry<EType, LAnnotation> {
   return {
     ...cloneEditStackEntry(entry),
     lineAnnotationsBefore: entry.lineAnnotationsBefore?.map((annotation) => ({
@@ -231,19 +220,16 @@ function cloneSelection(selection: EditorSelection): EditorSelection {
   };
 }
 
-export function createEditStackEntry<
-  TDocumentKind extends EditorDocumentKind,
-  LAnnotation,
->(
-  textDocument: TextDocument<TDocumentKind, LAnnotation>,
+export function createEditStackEntry<EType extends EditorType, LAnnotation>(
+  textDocument: TextDocument<EType, LAnnotation>,
   resolvedEdits: ResolvedTextEdit[],
   versionBefore: number,
   versionAfter: number,
   selectionsBefore?: EditorSelection[],
   selectionsAfter?: EditorSelection[],
-  lineAnnotationsBefore?: EditorLineAnnotation<TDocumentKind, LAnnotation>[],
-  lineAnnotationsAfter?: EditorLineAnnotation<TDocumentKind, LAnnotation>[]
-): EditStackEntry<TDocumentKind, LAnnotation> {
+  lineAnnotationsBefore?: EditorLineAnnotation<EType, LAnnotation>[],
+  lineAnnotationsAfter?: EditorLineAnnotation<EType, LAnnotation>[]
+): EditStackEntry<EType, LAnnotation> {
   const forwardEdits = [...resolvedEdits].sort((a, b) => a.start - b.start);
   const inverseEdits: ResolvedTextEdit[] = [];
   let coalescingMode: EditStackCoalescingMode | undefined;
@@ -311,11 +297,11 @@ export function createEditStackEntry<
  * - 'delete': forward delete
  */
 export function shouldCoalesceEditStackEntry<
-  TDocumentKind extends EditorDocumentKind,
+  EType extends EditorType,
   LAnnotation,
 >(
-  previousEntry: EditStackEntry<TDocumentKind, LAnnotation> | undefined,
-  nextEntry: EditStackEntry<TDocumentKind, LAnnotation>
+  previousEntry: EditStackEntry<EType, LAnnotation> | undefined,
+  nextEntry: EditStackEntry<EType, LAnnotation>
 ): boolean {
   if (
     previousEntry === undefined ||
@@ -409,13 +395,10 @@ export function shouldCoalesceEditStackEntry<
 }
 
 /** Coalesce edit stack entries for simple typing and single-character deletes. */
-export function coalesceEditStackEntries<
-  TDocumentKind extends EditorDocumentKind,
-  LAnnotation,
->(
-  previousEntry: EditStackEntry<TDocumentKind, LAnnotation>,
-  nextEntry: EditStackEntry<TDocumentKind, LAnnotation>
-): EditStackEntry<TDocumentKind, LAnnotation> {
+export function coalesceEditStackEntries<EType extends EditorType, LAnnotation>(
+  previousEntry: EditStackEntry<EType, LAnnotation>,
+  nextEntry: EditStackEntry<EType, LAnnotation>
+): EditStackEntry<EType, LAnnotation> {
   const forwardEdits: ResolvedTextEdit[] = [];
   const replacedTexts: string[] = [];
   let coalescingMode: EditStackCoalescingMode | undefined;

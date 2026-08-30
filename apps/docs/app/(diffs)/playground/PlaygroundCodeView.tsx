@@ -12,8 +12,8 @@ import {
 } from '@pierre/diffs';
 import type {
   EditCompletionDecision,
-  EditorDocumentKind,
   EditorOptions,
+  EditorType,
 } from '@pierre/diffs/edit';
 import {
   CodeView,
@@ -35,7 +35,7 @@ const CODE_VIEW_STYLES = { height: '70vh', overflow: 'auto' } as const;
 type PlaygroundItem = CodeViewItem<PlaygroundAnnotationMetadata>;
 
 const CODE_VIEW_EDITOR_OPTIONS: EditorOptions<
-  EditorDocumentKind,
+  EditorType,
   PlaygroundAnnotationMetadata
 > = {
   onAttach(editor) {

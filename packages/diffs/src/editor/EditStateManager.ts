@@ -4,7 +4,7 @@ import type { FileContents } from '../types';
 import type { Editor } from './editor';
 import { TextDocument } from './textDocument';
 import type {
-  EditorDocumentKind,
+  EditorType,
   EditorViewState,
   EditState,
   RetainedDiffSessionSnapshot,
@@ -13,10 +13,10 @@ import type {
 const DEFAULT_EDIT_STATE_CAPACITY = 100;
 
 interface ManagedEditSessionBase<
-  TDocumentKind extends EditorDocumentKind,
+  EType extends EditorType,
   LAnnotation = unknown,
 > {
-  document?: TextDocument<TDocumentKind, LAnnotation>;
+  document?: TextDocument<EType, LAnnotation>;
   fileInfo?: Pick<FileContents, 'lang' | 'name'>;
   editor?: EditorViewState;
 }
@@ -24,44 +24,44 @@ interface ManagedEditSessionBase<
 export interface ManagedFileEditSession<
   LAnnotation = unknown,
 > extends ManagedEditSessionBase<'file', LAnnotation> {
-  documentKind: 'file';
+  type: 'file';
   diffSession?: never;
 }
 
 export interface ManagedFileDiffEditSession<
   LAnnotation = unknown,
 > extends ManagedEditSessionBase<'file-diff', LAnnotation> {
-  documentKind: 'file-diff';
+  type: 'file-diff';
   diffSession?: RetainedDiffSessionSnapshot;
 }
 
 export type ManagedEditSession<
-  TDocumentKind extends EditorDocumentKind = EditorDocumentKind,
+  EType extends EditorType = EditorType,
   LAnnotation = unknown,
-> = ManagedEditSessionBase<TDocumentKind, LAnnotation> &
-  (TDocumentKind extends 'file'
-    ? Pick<ManagedFileEditSession, 'documentKind' | 'diffSession'>
-    : Pick<ManagedFileDiffEditSession, 'documentKind' | 'diffSession'>);
+> = ManagedEditSessionBase<EType, LAnnotation> &
+  (EType extends 'file'
+    ? Pick<ManagedFileEditSession, 'type' | 'diffSession'>
+    : Pick<ManagedFileDiffEditSession, 'type' | 'diffSession'>);
 
-interface EditStateManagerSession<K extends EditorDocumentKind> {
+interface EditStateManagerSession<K extends EditorType> {
   owner: Editor<K, unknown>;
   session: ManagedEditSession<K>;
 }
 
-/** Owns dormant edit state and active-key exclusion for one surface kind. */
-class EditStateManagerNamespace<K extends EditorDocumentKind> {
-  #states = new LRUMapPkg.LRUMap<string, EditState<K>>(
+/** Owns dormant edit state and active-key exclusion for one editor type. */
+class EditStateManagerNamespace<EType extends EditorType> {
+  #states = new LRUMapPkg.LRUMap<string, EditState<EType>>(
     DEFAULT_EDIT_STATE_CAPACITY
   );
-  #sessions = new Map<string, EditStateManagerSession<K>>();
+  #sessions = new Map<string, EditStateManagerSession<EType>>();
 
-  constructor(readonly documentKind: K) {}
+  constructor(readonly type: EType) {}
 
   activate<LAnnotation>(
     editStateKey: string,
-    owner: Editor<K, LAnnotation>,
-    initialState?: ManagedEditSession<K, LAnnotation>
-  ): ManagedEditSession<K, LAnnotation> {
+    owner: Editor<EType, LAnnotation>,
+    initialState?: ManagedEditSession<EType, LAnnotation>
+  ): ManagedEditSession<EType, LAnnotation> {
     const activeSession = this.#sessions.get(editStateKey);
     if (activeSession != null && activeSession.owner !== owner) {
       throw new Error(
@@ -72,25 +72,25 @@ class EditStateManagerNamespace<K extends EditorDocumentKind> {
       if (initialState != null) {
         activeSession.session = initialState;
       }
-      return activeSession.session as ManagedEditSession<K, LAnnotation>;
+      return activeSession.session as ManagedEditSession<EType, LAnnotation>;
     }
     const retainedState = this.#states.delete(editStateKey);
     const emptyState = {
-      documentKind: this.documentKind,
-    } as ManagedEditSession<K>;
+      type: this.type,
+    } as ManagedEditSession<EType>;
     const state = (initialState ??
       retainedState ??
-      emptyState) as ManagedEditSession<K, LAnnotation>;
+      emptyState) as ManagedEditSession<EType, LAnnotation>;
     this.#sessions.set(editStateKey, {
-      owner: owner as Editor<K, unknown>,
-      session: state as ManagedEditSession<K>,
+      owner: owner as Editor<EType, unknown>,
+      session: state as ManagedEditSession<EType>,
     });
     return state;
   }
 
   release<LAnnotation>(
     editStateKey: string,
-    owner: Editor<K, LAnnotation>,
+    owner: Editor<EType, LAnnotation>,
     discard = false
   ): void {
     const activeSession = this.#sessions.get(editStateKey);
@@ -103,17 +103,17 @@ class EditStateManagerNamespace<K extends EditorDocumentKind> {
     }
     const retainedState = toManagedEditState(activeSession.session);
     if (retainedState != null) {
-      this.#states.set(editStateKey, retainedState as EditState<K>);
+      this.#states.set(editStateKey, retainedState as EditState<EType>);
     }
   }
 
   get<LAnnotation>(
     editStateKey: string
-  ): EditState<K, LAnnotation> | undefined {
+  ): EditState<EType, LAnnotation> | undefined {
     const activeSession = this.#sessions.get(editStateKey);
     if (activeSession != null) {
       const state = toManagedEditState(
-        activeSession.session as ManagedEditSession<K, LAnnotation>
+        activeSession.session as ManagedEditSession<EType, LAnnotation>
       );
       if (state == null) {
         return undefined;
@@ -121,7 +121,7 @@ class EditStateManagerNamespace<K extends EditorDocumentKind> {
       return state;
     }
     const state = this.#states.find(editStateKey);
-    return state as EditState<K, LAnnotation> | undefined;
+    return state as EditState<EType, LAnnotation> | undefined;
   }
 
   /** Clear dormant state for a key. Omit `parts` to clear everything. */
@@ -165,14 +165,14 @@ class EditStateManagerClass {
   #diffs = new EditStateManagerNamespace('file-diff');
 
   /** Mark a keyed session as active and return its initial or stored state. */
-  activate<TDocumentKind extends EditorDocumentKind, LAnnotation>(
-    documentKind: TDocumentKind,
+  activate<EType extends EditorType, LAnnotation>(
+    type: EType,
     editStateKey: string,
-    owner: Editor<TDocumentKind, LAnnotation>,
-    initialState?: ManagedEditSession<TDocumentKind, LAnnotation>
-  ): ManagedEditSession<TDocumentKind, LAnnotation> {
+    owner: Editor<EType, LAnnotation>,
+    initialState?: ManagedEditSession<EType, LAnnotation>
+  ): ManagedEditSession<EType, LAnnotation> {
     return (
-      documentKind === 'file'
+      type === 'file'
         ? this.#files.activate(
             editStateKey,
             owner as Editor<'file', LAnnotation>,
@@ -183,7 +183,7 @@ class EditStateManagerClass {
             owner as Editor<'file-diff', LAnnotation>,
             initialState as ManagedFileDiffEditSession<LAnnotation> | undefined
           )
-    ) as ManagedEditSession<TDocumentKind, LAnnotation>;
+    ) as ManagedEditSession<EType, LAnnotation>;
   }
 
   /**
@@ -211,24 +211,24 @@ class EditStateManagerClass {
   }
 
   /** Return current state for an active or dormant editing session. */
-  get<TDocumentKind extends EditorDocumentKind, LAnnotation>(
-    documentKind: TDocumentKind,
+  get<EType extends EditorType, LAnnotation>(
+    type: EType,
     editStateKey: string
-  ): EditState<TDocumentKind, LAnnotation> | undefined {
+  ): EditState<EType, LAnnotation> | undefined {
     return (
-      documentKind === 'file'
+      type === 'file'
         ? this.#files.get<LAnnotation>(editStateKey)
         : this.#diffs.get<LAnnotation>(editStateKey)
-    ) as EditState<TDocumentKind, LAnnotation> | undefined;
+    ) as EditState<EType, LAnnotation> | undefined;
   }
 
   /** Clear a dormant session, returning false when it is active or missing. */
   clear(
-    documentKind: EditorDocumentKind,
+    type: EditorType,
     editStateKey: string,
     parts?: ClearEditStateOptions
   ): boolean {
-    return documentKind === 'file'
+    return type === 'file'
       ? this.#files.clear(editStateKey, parts)
       : this.#diffs.clear(editStateKey, parts);
   }
@@ -264,24 +264,21 @@ export function cloneEditorViewState(state: EditorViewState): EditorViewState {
   };
 }
 
-export function toManagedEditState<
-  TDocumentKind extends EditorDocumentKind,
-  LAnnotation,
->(
-  session: ManagedEditSession<TDocumentKind, LAnnotation>
-): EditState<TDocumentKind, LAnnotation> | undefined {
+export function toManagedEditState<EType extends EditorType, LAnnotation>(
+  session: ManagedEditSession<EType, LAnnotation>
+): EditState<EType, LAnnotation> | undefined {
   if (session.document == null || session.fileInfo == null) {
     return undefined;
   }
-  if (session.documentKind === 'file') {
+  if (session.type === 'file') {
     session.editor ??= {};
-    return session as EditState<TDocumentKind, LAnnotation>;
+    return session as EditState<EType, LAnnotation>;
   }
   if (session.diffSession == null) {
     return undefined;
   }
   session.editor ??= {};
-  return session as EditState<TDocumentKind, LAnnotation>;
+  return session as EditState<EType, LAnnotation>;
 }
 
 function applyClearEditStateOptions(
