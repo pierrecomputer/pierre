@@ -95,6 +95,7 @@ export * from './utils/hast_utils';
 export * from './utils/hydratePartialDiff';
 export * from './utils/isDefaultRenderRange';
 export * from './utils/isWorkerContext';
+export * from './utils/lineAnnotationIdentity';
 export * from './utils/parseDiffDecorations';
 export * from './utils/parseDiffFromFile';
 export * from './utils/parseLineType';

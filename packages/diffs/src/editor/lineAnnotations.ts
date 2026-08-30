@@ -1,5 +1,9 @@
-import type { AnnotationSide } from '../types';
 import { getLineAnnotationName } from '../utils/getLineAnnotationName';
+import {
+  getLineAnnotationSource,
+  type LineAnnotationPosition,
+  recordLineAnnotationSource,
+} from '../utils/lineAnnotationIdentity';
 import type { TextDocumentChange } from './textDocument';
 import { getLineNumberAttr, h } from './utils';
 
@@ -12,33 +16,10 @@ interface LineAnnotationChange {
   readonly lineDelta: number;
 }
 
-interface LineAnnotationPosition {
-  lineNumber: number;
-  side?: AnnotationSide;
-}
-
 function getDefaultLineAnnotationName(
   annotation: LineAnnotationPosition
 ): string {
   return getLineAnnotationName(annotation);
-}
-
-// When an edit moves an annotation to another line, the remap replaces it
-// with a shallow clone holding the new line number, and later edits clone
-// those clones again. This map links every clone back to the original
-// annotation the caller passed in, so session state keyed by that original —
-// most importantly recorded slot names — keeps working no matter how many
-// times an annotation has been cloned, or which clone generation an undo
-// brings back.
-const lineAnnotationSources = new WeakMap<object, object>();
-
-/**
- * Resolve a possibly-remapped annotation back to the original object it
- * descends from. Annotations that were never cloned resolve to themselves.
- */
-export function getLineAnnotationSource<T extends object>(annotation: T): T {
-  const source = lineAnnotationSources.get(annotation);
-  return source == null ? annotation : (source as T);
 }
 
 export function applyDocumentChangeToLineAnnotations<
@@ -100,7 +81,7 @@ export function applyDocumentChangeToLineAnnotations<
         nextLineAnnotations.push(annotation);
       } else {
         const moved = { ...annotation, lineNumber };
-        lineAnnotationSources.set(moved, getLineAnnotationSource(annotation));
+        recordLineAnnotationSource(moved, getLineAnnotationSource(annotation));
         nextLineAnnotations.push(moved);
       }
       changed = true;
