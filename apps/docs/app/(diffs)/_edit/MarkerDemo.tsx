@@ -15,7 +15,7 @@ interface MarkerDemoProps {
 // Demo of the editor's lint markers, applied imperatively via `editor.setMarkers`
 // (the same call a real linter integration would make) and shown by default.
 export function MarkerDemo({ prerenderedFile }: MarkerDemoProps) {
-  const editorOptions = useMemo<EditorOptions<undefined>>(
+  const editorOptions = useMemo<EditorOptions<'file'>>(
     () => ({
       onAttach(editor) {
         editor.setMarkers(MARKER_DEMO_MARKERS);

@@ -106,7 +106,9 @@ function ElementVirtualizerFile({
     null
   );
 
-  const editorOptions = useMemo<EditorOptions<PlaygroundAnnotationMetadata>>(
+  const editorOptions = useMemo<
+    EditorOptions<'file', PlaygroundAnnotationMetadata>
+  >(
     () => ({
       onAttach(editor) {
         editor.focus({ lineNumber: 'first-visible', preventScroll: true });
@@ -297,7 +299,9 @@ function ElementVirtualizerDiff({
     null
   );
 
-  const editorOptions = useMemo<EditorOptions<PlaygroundAnnotationMetadata>>(
+  const editorOptions = useMemo<
+    EditorOptions<'file-diff', PlaygroundAnnotationMetadata>
+  >(
     () => ({
       onAttach(editor) {
         editor.focus({ lineNumber: 'first-visible', preventScroll: true });

@@ -124,7 +124,7 @@ export function SelectionDemo({ prerenderedFile }: SelectionDemoProps) {
   const addSnippetRef = useRef(addSnippet);
   addSnippetRef.current = addSnippet;
 
-  const editorOptions = useMemo<EditorOptions<undefined>>(
+  const editorOptions = useMemo<EditorOptions<'file'>>(
     () => ({
       enabledSelectionAction: true,
       renderSelectionAction(selectionAction) {

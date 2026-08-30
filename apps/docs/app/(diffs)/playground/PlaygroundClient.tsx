@@ -11,7 +11,11 @@ import {
   type LineAnnotation,
   type SelectedLineRange,
 } from '@pierre/diffs';
-import type { Editor, EditorOptions } from '@pierre/diffs/edit';
+import type {
+  Editor,
+  EditorDocumentKind,
+  EditorOptions,
+} from '@pierre/diffs/edit';
 import {
   type CodeViewReactOptions,
   File,
@@ -696,8 +700,13 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
       ? 'select'
       : 'none';
 
-  const editorRef = useRef<Editor<PlaygroundAnnotationMetadata> | null>(null);
-  const editorOptions = useMemo<EditorOptions<PlaygroundAnnotationMetadata>>(
+  const editorRef = useRef<Editor<
+    EditorDocumentKind,
+    PlaygroundAnnotationMetadata
+  > | null>(null);
+  const editorOptions = useMemo<
+    EditorOptions<EditorDocumentKind, PlaygroundAnnotationMetadata>
+  >(
     () => ({
       onAttach(editor) {
         editorRef.current = editor;

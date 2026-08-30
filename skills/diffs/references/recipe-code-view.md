@@ -224,7 +224,7 @@ should remain.
 Use `getEditStateKey(item)` to opt into retaining the draft, undo/redo history,
 selections, and editor-owned view state across editor instances. The returned
 `editStateKey` is passed to the editor factory. `getEditor(id)` returns the
-current `DiffsEditor` handle.
+current `Editor` instance.
 
 Read [Edit with React](recipe-edit-react.md) or
 [Edit with vanilla JavaScript](recipe-edit-vanilla.md) for the complete editor

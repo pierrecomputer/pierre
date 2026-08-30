@@ -141,7 +141,7 @@ function renderFromApplicationState() {
 
 renderFromApplicationState();
 
-const editor = new Editor<ThreadMetadata>('file-diff');
+const editor = new Editor<'file-diff', ThreadMetadata>('file-diff');
 const dispose = editor.edit(fileDiffInstance);
 
 // Later, complete the session and install an accepted result while the
@@ -303,11 +303,14 @@ export const EDIT_SELECTION_ACTION_CONTEXT_TYPE: PreloadFileOptions<undefined> =
   {
     file: {
       name: 'selection_action_context.ts',
-      contents: `export interface SelectionActionContext<LAnnotation> {
+      contents: `export interface SelectionActionContext<
+  TDocumentKind extends EditorDocumentKind,
+  LAnnotation
+> {
   /** The current selection. */
   selection: EditorSelection;
   /** The text document. */
-  textDocument: TextDocument<LAnnotation>;
+  textDocument: TextDocument<TDocumentKind, LAnnotation>;
   /** Applies the edits to the text document. */
   applyEdits: (edits: TextEdit[]) => void;
   /** Gets the text of the current selection. */
@@ -350,7 +353,7 @@ interface Collaborator {
   name: string;
 }
 
-const editorOptions: EditorOptions<undefined, Collaborator> = {
+const editorOptions: EditorOptions<'file', undefined, Collaborator> = {
   renderCaret({ metadata }) {
     const caret = document.createElement('span');
     caret.ariaLabel = metadata.name + "'s caret";
@@ -366,7 +369,10 @@ const editorOptions: EditorOptions<undefined, Collaborator> = {
   },
 };
 
-const editor = new Editor<undefined, Collaborator>('file', editorOptions);
+const editor = new Editor<'file', undefined, Collaborator>(
+  'file',
+  editorOptions
+);
 editor.edit(fileInstance);
 
 // Replace the complete presence snapshot. Equal positions render a caret;
@@ -451,7 +457,11 @@ export const EDIT_UNDO_REDO_EXAMPLE: PreloadFileOptions<undefined> = {
     name: 'editor_undo_redo.tsx',
     contents: `import type { FileContents } from '@pierre/diffs';
 import { Editor, type EditorOptions } from '@pierre/diffs/edit';
-import { EditProvider, File } from '@pierre/diffs/react';
+import {
+  type CreateEditor,
+  EditProvider,
+  File,
+} from '@pierre/diffs/react';
 import { useMemo, useRef, useState } from 'react';
 
 const file: FileContents = {
@@ -459,22 +469,20 @@ const file: FileContents = {
   contents: 'export const x = 1;',
 };
 
-function createEditor(
-  documentKind: 'file' | 'file-diff',
-  options: EditorOptions<undefined>,
-  editStateKey?: string
-) {
-  return new Editor(documentKind, options, editStateKey);
-}
+const createEditor: CreateEditor<undefined> = (
+  documentKind,
+  options,
+  editStateKey
+) => new Editor(documentKind, options, editStateKey);
 
 export function EditableFileWithHistoryToolbar() {
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
 
-  const editorRef = useRef<Editor<undefined> | null>(null);
+  const editorRef = useRef<Editor<'file'> | null>(null);
   // Creation-time options: capture the editor for the toolbar's imperative
   // calls. The change stream lives on the component's onEditChange prop.
-  const editorOptions = useMemo<EditorOptions<undefined>>(
+  const editorOptions = useMemo<EditorOptions<'file'>>(
     () => ({
       historyMaxEntries: 100,
       onAttach(editor) {
@@ -524,7 +532,7 @@ export const EDIT_REACT_CREATE_EDITOR_EXAMPLE: PreloadFileOptions<undefined> = {
   []
 );
 
-const editorOptions = useMemo<EditorOptions<undefined>>(
+const editorOptions = useMemo<EditorOptions<'file'>>(
   () => ({
     onAttach(editor) {
       editorRef.current = editor;
@@ -558,8 +566,13 @@ export const EDIT_REACT_EXAMPLE: PreloadFileOptions<undefined> = {
   FileEditCompleteHandler,
   FileOptions,
 } from '@pierre/diffs';
-import { Editor, type EditorOptions } from '@pierre/diffs/edit';
-import { EditProvider, File, Virtualizer } from '@pierre/diffs/react';
+import { Editor } from '@pierre/diffs/edit';
+import {
+  type CreateEditor,
+  EditProvider,
+  File,
+  Virtualizer,
+} from '@pierre/diffs/react';
 import { useCallback, useRef, useState } from 'react';
 
 const initialFile: FileContents = {
@@ -581,13 +594,11 @@ const virtualizerStyle = {
   borderRadius: '0.5rem',
 } as const;
 
-function createEditor(
-  documentKind: 'file' | 'file-diff',
-  options: EditorOptions<undefined>,
-  editStateKey?: string
-) {
-  return new Editor(documentKind, options, editStateKey);
-}
+const createEditor: CreateEditor<undefined> = (
+  documentKind,
+  options,
+  editStateKey
+) => new Editor(documentKind, options, editStateKey);
 
 export function EditableFile() {
   const [file, setFile] = useState(initialFile);
@@ -677,8 +688,9 @@ export const EDIT_REACT_FILE_DIFF_EXAMPLE: PreloadFileOptions<undefined> = {
   type FileDiffMetadata,
   type FileDiffOptions,
 } from '@pierre/diffs';
-import { Editor, type EditorOptions } from '@pierre/diffs/edit';
+import { Editor } from '@pierre/diffs/edit';
 import {
+  type CreateEditor,
   EditProvider,
   FileDiff,
   Virtualizer,
@@ -713,13 +725,11 @@ const virtualizerStyle = {
   borderRadius: '0.5rem',
 } as const;
 
-function createEditor(
-  documentKind: 'file' | 'file-diff',
-  options: EditorOptions<ThreadMetadata>,
-  editStateKey?: string
-) {
-  return new Editor(documentKind, options, editStateKey);
-}
+const createEditor: CreateEditor<ThreadMetadata> = (
+  documentKind,
+  options,
+  editStateKey
+) => new Editor(documentKind, options, editStateKey);
 
 export function EditableFileDiff() {
   const [fileDiff, setFileDiff] = useState(initialDiff);
@@ -827,6 +837,7 @@ export const EDIT_REACT_CODE_VIEW_EXAMPLE: PreloadFileOptions<undefined> = {
 import { Editor, type EditorOptions } from '@pierre/diffs/edit';
 import {
   CodeView,
+  type CreateEditor,
   EditProvider,
   type CodeViewItemEditCompleteHandler,
 } from '@pierre/diffs/react';
@@ -864,19 +875,20 @@ const initialItems: CodeViewItem<ThreadMetadata>[] = [
 
 const codeViewStyle = { height: '24rem', overflow: 'auto' } as const;
 
-const editorOptions: EditorOptions<ThreadMetadata> = {
+const editorOptions: EditorOptions<
+  'file' | 'file-diff',
+  ThreadMetadata
+> = {
   onAttach(editor) {
     editor.focus({ lineNumber: 'first-visible', preventScroll: true });
   },
 };
 
-function createEditor(
-  documentKind: 'file' | 'file-diff',
-  options: EditorOptions<ThreadMetadata>,
-  editStateKey?: string
-) {
-  return new Editor(documentKind, options, editStateKey);
-}
+const createEditor: CreateEditor<ThreadMetadata> = (
+  documentKind,
+  options,
+  editStateKey
+) => new Editor(documentKind, options, editStateKey);
 
 export function EditableCodeView() {
   const [items, setItems] = useState(initialItems);
@@ -976,8 +988,9 @@ export const EDIT_WORKER_POOL_REACT_EXAMPLE: PreloadFileOptions<undefined> = {
     contents: `'use client';
 
 import type { FileContents } from '@pierre/diffs';
-import { Editor, type EditorOptions } from '@pierre/diffs/edit';
+import { Editor } from '@pierre/diffs/edit';
 import {
+  type CreateEditor,
   EditProvider,
   File,
   WorkerPoolContextProvider,
@@ -997,13 +1010,11 @@ const highlighterOptions = {
   useTokenTransformer: true,
 } as const;
 
-function createEditor(
-  documentKind: 'file' | 'file-diff',
-  options: EditorOptions<undefined>,
-  editStateKey?: string
-) {
-  return new Editor(documentKind, options, editStateKey);
-}
+const createEditor: CreateEditor<undefined> = (
+  documentKind,
+  options,
+  editStateKey
+) => new Editor(documentKind, options, editStateKey);
 
 export function EditableFileWithWorkerPool() {
   // This example is self-contained. Apps should usually mount EditProvider near
@@ -1029,20 +1040,26 @@ export const EDITOR_OPTIONS_TYPE: PreloadFileOptions<undefined> = {
     name: 'editor_options_type.ts',
     contents: `import type {
   DiffLineAnnotation,
-  DiffsEditableComponent,
+  File,
   FileContents,
+  FileDiff,
   LineAnnotation,
 } from '@pierre/diffs';
 import {
   Editor,
   type EditorCaret,
   type EditorChangeEvent,
+  type EditorDocumentKind,
   type EditorEditCompleteEvent,
   type EditorInitialState,
   type EditorKeymap,
 } from '@pierre/diffs/edit';
 
-interface EditorOptions<LAnnotation, LCaret = undefined> {
+interface EditorOptions<
+  TDocumentKind extends EditorDocumentKind = EditorDocumentKind,
+  LAnnotation = undefined,
+  LCaret = undefined
+> {
   // Max undo stack entries
   historyMaxEntries?: number;
 
@@ -1052,7 +1069,7 @@ interface EditorOptions<LAnnotation, LCaret = undefined> {
 
   // State to adopt on first attach. Only documentKind is required; omitted
   // fields are initialized from the attached component.
-  initialState?: EditorInitialState<LAnnotation>;
+  initialState?: EditorInitialState<TDocumentKind, LAnnotation>;
 
   // Custom keymap checked before the default map.
   keymap?: EditorKeymap;
@@ -1094,20 +1111,26 @@ interface EditorOptions<LAnnotation, LCaret = undefined> {
 
   // Fires after attach when the text document is ready
   onAttach?: (
-    editor: Editor<LAnnotation, LCaret>,
-    fileInstance: DiffsEditableComponent<LAnnotation>
+    editor: Editor<TDocumentKind, LAnnotation, LCaret>,
+    fileInstance: TDocumentKind extends 'file'
+      ? File<LAnnotation>
+      : FileDiff<LAnnotation>
   ) => void;
 
   // Editor-centric change stream. Fires after each edit with an
   // EditorChangeEvent carrying the editor, live file (the editable new side for
   // a diff), current lineAnnotations, and normalized text changes. Prefer a
   // component's onEditChange prop/option for per-component handling.
-  onChange?: (event: EditorChangeEvent<LAnnotation, 'file' | 'diff'>) => void;
+  onChange?: (
+    event: EditorChangeEvent<TDocumentKind, LAnnotation>
+  ) => void;
 
   // Editor-wide completion observer. Receives the same frozen event before the
   // component callback and fires even when that callback is missing. You cannot
   // accept or reject from this callback.
-  onComplete?: (event: EditorEditCompleteEvent<LAnnotation>) => void;
+  onComplete?: (
+    event: EditorEditCompleteEvent<TDocumentKind, LAnnotation>
+  ) => void;
 
   // Fires when the editable content area gains focus (tab, click, or editor.focus()).
   onFocus?: () => void;
@@ -1122,7 +1145,7 @@ interface EditorOptions<LAnnotation, LCaret = undefined> {
 export const EDIT_ON_ATTACH_REACT_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
     name: 'editor_on_attach_react.tsx',
-    contents: `const editorOptions = useMemo<EditorOptions<undefined>>(
+    contents: `const editorOptions = useMemo<EditorOptions>(
   () => ({
     onAttach(editor) {
       editor.focus({ lineNumber: 'first-visible', preventScroll: true });
@@ -1240,7 +1263,7 @@ function loadDraft(): PersistedDraft {
     : (JSON.parse(value) as PersistedDraft);
 }
 
-function persistDraft(file: FileContents, editor: Editor<undefined>) {
+function persistDraft(file: FileContents, editor: Editor<'file'>) {
   const draft: PersistedDraft = {
     file,
     editorState: editor.getViewState(),
@@ -1253,13 +1276,13 @@ export function PersistedEditableFile() {
   const [initialDraft] = useState(loadDraft);
   const [file, setFile] = useState(initialDraft.file);
   const [editing, setEditing] = useState(true);
-  const editorRef = useRef<Editor<undefined> | null>(null);
-  const [editorOptions] = useState<EditorOptions<undefined>>(() => ({
+  const editorRef = useRef<Editor<'file'> | null>(null);
+  const [editorOptions] = useState<EditorOptions<'file'>>(() => ({
     // Initialize the edit state from the latest version of the file, minus
     // undo history
     initialState: {
       documentKind: 'file',
-      document: new TextDocument<undefined>(
+      document: new TextDocument<'file', undefined>(
         initialDraft.file.name,
         initialDraft.file.contents,
         initialDraft.file.lang ?? getFiletypeFromFileName(initialDraft.file.name)
@@ -1383,7 +1406,7 @@ editor.setViewState(state);
 
 // Borrow the complete live document, history, and editor-state checkpoint. This is
 // available only while a complete edit session exists.
-const editState: EditState<undefined> | undefined = editor.getEditState();
+const editState: EditState<'file', undefined> | undefined = editor.getEditState();
 
 // Replace all cursors and ranges programmatically. Positions are zero-based;
 // direction controls which end the caret uses for keyboard extension.
@@ -1472,8 +1495,9 @@ export const EDIT_REACT_MULTI_FILE_DIFF_EXAMPLE: PreloadFileOptions<undefined> =
   FileDiffEditCompleteHandler,
   FileDiffOptions,
 } from '@pierre/diffs';
-import { Editor, type EditorOptions } from '@pierre/diffs/edit';
+import { Editor } from '@pierre/diffs/edit';
 import {
+  type CreateEditor,
   EditProvider,
   MultiFileDiff,
   Virtualizer,
@@ -1502,13 +1526,11 @@ const virtualizerStyle = {
   borderRadius: '0.5rem',
 } as const;
 
-function createEditor(
-  documentKind: 'file' | 'file-diff',
-  options: EditorOptions<undefined>,
-  editStateKey?: string
-) {
-  return new Editor(documentKind, options, editStateKey);
-}
+const createEditor: CreateEditor<undefined> = (
+  documentKind,
+  options,
+  editStateKey
+) => new Editor(documentKind, options, editStateKey);
 
 export function EditableMultiFileDiff() {
   const [oldFile, setOldFile] = useState(initialOldFile);

@@ -137,8 +137,8 @@ export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
   // mapping to the undo stack in that state, so we surface an off-track UI and a
   // Reset rather than letting the step count freeze at a stale value.
   const [diverged, setDiverged] = useState(false);
-  const editorRef = useRef<Editor<undefined> | null>(null);
-  const editorOptions = useMemo<EditorOptions<undefined>>(
+  const editorRef = useRef<Editor<'file'> | null>(null);
+  const editorOptions = useMemo<EditorOptions<'file'>>(
     () => ({
       onAttach(editor) {
         editorRef.current = editor;
@@ -148,7 +148,7 @@ export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
   );
 
   const handleEditChange = useCallback(
-    (event: EditorChangeEvent<undefined, 'file'>) => {
+    (event: EditorChangeEvent<'file', undefined>) => {
       const index = snapshotIndexFor(event.file.contents);
       if (index >= 0) {
         setApplied(index);

@@ -134,14 +134,17 @@ export function PlaygroundVirtualizerView({
     readmeContainer.style.display = 'block';
     content.appendChild(readmeContainer);
     fileAnnotationsRef.current = [];
-    const readmeEditor = new Editor<VirtualizerAnnotationMetadata>('file', {
-      onAttach(attachedEditor) {
-        attachedEditor.focus({
-          lineNumber: 'first-visible',
-          preventScroll: true,
-        });
-      },
-    });
+    const readmeEditor = new Editor<'file', VirtualizerAnnotationMetadata>(
+      'file',
+      {
+        onAttach(attachedEditor) {
+          attachedEditor.focus({
+            lineNumber: 'first-visible',
+            preventScroll: true,
+          });
+        },
+      }
+    );
     // Save and Cancel both run the disposer from `edit()`, which ends the
     // session on the instance and fires onEditComplete; Cancel marks the
     // session first so the handler reverts instead of accepting.
@@ -270,7 +273,7 @@ export function PlaygroundVirtualizerView({
 
     annotationsRef.current = diffs.map(() => []);
     currentDiffsRef.current = [...diffs];
-    const editors: Editor<VirtualizerAnnotationMetadata>[] = [];
+    const editors: Editor<'file-diff', VirtualizerAnnotationMetadata>[] = [];
     const instances = diffs.map((fileDiff, index) => {
       // `diffs-container` is the library's default (registered) container
       // element. We create and append it ourselves so the virtualizer can
@@ -279,14 +282,17 @@ export function PlaygroundVirtualizerView({
       fileContainer.style.display = 'block';
       content.appendChild(fileContainer);
 
-      const editor = new Editor<VirtualizerAnnotationMetadata>('file-diff', {
-        onAttach(attachedEditor) {
-          attachedEditor.focus({
-            lineNumber: 'first-visible',
-            preventScroll: true,
-          });
-        },
-      });
+      const editor = new Editor<'file-diff', VirtualizerAnnotationMetadata>(
+        'file-diff',
+        {
+          onAttach(attachedEditor) {
+            attachedEditor.focus({
+              lineNumber: 'first-visible',
+              preventScroll: true,
+            });
+          },
+        }
+      );
       editors.push(editor);
       let dispose: (() => void) | undefined;
       let cancelled = false;

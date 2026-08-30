@@ -41,4 +41,4 @@ export type {
   SelectionDirection,
   TextEdit,
 } from '../editor/types';
-export type { Marker } from '../editor/marker';
+export type { Marker, MarkerSeverity } from '../editor/marker';

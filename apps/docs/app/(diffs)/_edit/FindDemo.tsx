@@ -34,7 +34,7 @@ function detectMac(): boolean {
 // Opening an empty panel scrolls nothing.
 export function FindDemo({ prerenderedFile }: FindDemoProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
-  const editorRef = useRef<Editor<undefined> | null>(null);
+  const editorRef = useRef<Editor<'file'> | null>(null);
 
   useEffect(() => {
     const wrapper = wrapperRef.current;
@@ -120,7 +120,7 @@ export function FindDemo({ prerenderedFile }: FindDemoProps) {
     };
   }, []);
 
-  const editorOptions = useMemo<EditorOptions<undefined>>(
+  const editorOptions = useMemo<EditorOptions<'file'>>(
     () => ({
       onAttach(editor) {
         editorRef.current = editor;

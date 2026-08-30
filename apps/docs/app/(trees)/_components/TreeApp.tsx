@@ -1211,8 +1211,8 @@ export function TreeApp<LAnnotation = unknown>({
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   const handleEditorChangeRef = useRef<(file: FileContents) => void>(() => {});
-  const editorRef = useRef<Editor<LAnnotation> | null>(null);
-  const editorOptions = useMemo<EditorOptions<LAnnotation>>(
+  const editorRef = useRef<Editor<'file', LAnnotation> | null>(null);
+  const editorOptions = useMemo<EditorOptions<'file', LAnnotation>>(
     () => ({
       onAttach(editor) {
         editorRef.current = editor;
@@ -1222,7 +1222,7 @@ export function TreeApp<LAnnotation = unknown>({
   );
 
   const handleEditChange = useCallback(
-    (event: EditorChangeEvent<LAnnotation, 'file'>) => {
+    (event: EditorChangeEvent<'file', LAnnotation>) => {
       handleEditorChangeRef.current(event.file);
     },
     []

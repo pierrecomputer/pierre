@@ -10,7 +10,11 @@ import {
   type LineAnnotation,
   type SelectedLineRange,
 } from '@pierre/diffs';
-import type { EditCompletionDecision, EditorOptions } from '@pierre/diffs/edit';
+import type {
+  EditCompletionDecision,
+  EditorDocumentKind,
+  EditorOptions,
+} from '@pierre/diffs/edit';
 import {
   CodeView,
   type CodeViewReactOptions,
@@ -30,7 +34,10 @@ const CODE_VIEW_STYLES = { height: '70vh', overflow: 'auto' } as const;
 
 type PlaygroundItem = CodeViewItem<PlaygroundAnnotationMetadata>;
 
-const CODE_VIEW_EDITOR_OPTIONS: EditorOptions<PlaygroundAnnotationMetadata> = {
+const CODE_VIEW_EDITOR_OPTIONS: EditorOptions<
+  EditorDocumentKind,
+  PlaygroundAnnotationMetadata
+> = {
   onAttach(editor) {
     editor.focus({ lineNumber: 'first-visible', preventScroll: true });
   },

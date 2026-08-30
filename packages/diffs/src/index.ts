@@ -12,8 +12,6 @@ export * from './components/VirtualizedFile';
 export * from './components/VirtualizedFileDiff';
 export * from './components/Virtualizer';
 export * from './constants';
-export type { EditorFocusOptions } from './editor/editor';
-export type { Marker, MarkerSeverity } from './editor/marker';
 export * from './highlighter/languages/areLanguagesAttached';
 export * from './highlighter/languages/attachResolvedLanguages';
 export * from './highlighter/languages/cleanUpResolvedLanguages';

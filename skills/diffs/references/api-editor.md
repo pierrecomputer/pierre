@@ -14,6 +14,7 @@ editor APIs used by common integrations.
 | `EditorInitialState`        | Type  | Selects state fields to supply on first attachment.            |
 | `EditorChange`              | Type  | Describes one normalized editor change.                        |
 | `EditorChangeEvent`         | Type  | Provides normalized edits and the current document.            |
+| `EditorActiveLineOptions`   | Type  | Configures reveal behavior for an editor active line.          |
 | `EditorEditCompleteEvent`   | Type  | Unites file and diff completion events for editor observation. |
 | `FileEditCompleteEvent`     | Type  | Describes a completed file edit session.                       |
 | `FileDiffEditCompleteEvent` | Type  | Describes a completed diff edit session.                       |
@@ -23,14 +24,20 @@ editor APIs used by common integrations.
 | `EditorKeymap`              | Type  | Defines ordered custom shortcut groups.                        |
 | `EditorOptions`             | Type  | Configures history, initial state, behavior, and events.       |
 | `EditorShortcut`            | Type  | Defines one command shortcut.                                  |
+| `EditorSelection`           | Type  | Adds caret direction to an editor range.                       |
 | `EditorViewState`           | Type  | Holds selections and editor-owned viewport offsets.            |
+| `EditorViewportState`       | Type  | Holds horizontal and optional vertical scroll offsets.         |
 | `KeyboardKey`               | Type  | Names a key accepted by an editor shortcut.                    |
 | `KeyboardModifier`          | Type  | Names a modifier accepted by an editor shortcut.               |
 | `TextDocument`              | Class | Stores text, positions, edits, search, and undo history.       |
 | `TextDocumentChange`        | Type  | Describes the lines and characters changed by an edit.         |
 | `Position`                  | Type  | Identifies a zero-based line and character.                    |
 | `Range`                     | Type  | Identifies a start and end position.                           |
+| `ResolvedTextEdit`          | Type  | Stores an edit with resolved document offsets.                 |
+| `SelectionDirection`        | Type  | Selects backward, neutral, or forward selection direction.     |
 | `TextEdit`                  | Type  | Replaces one range with new text.                              |
+| `Marker`                    | Type  | Describes an editor diagnostic marker.                         |
+| `MarkerSeverity`            | Type  | Selects an editor marker severity.                             |
 
 ## `EditorOptions` fields
 

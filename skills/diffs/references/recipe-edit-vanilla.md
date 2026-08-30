@@ -73,7 +73,7 @@ function render() {
 
 render();
 
-const editor = new Editor<ThreadMetadata>(
+const editor = new Editor<'file-diff', ThreadMetadata>(
   'file-diff',
   {},
   'src/value.ts:draft'
@@ -170,7 +170,7 @@ editor-owned view-state retention across editor instances. Forward the resulting
 third factory argument to `new Editor`. `CodeView` creates and removes the item
 editors.
 
-`viewer.getEditor(id)` returns the current `DiffsEditor` handle. Call
+`viewer.getEditor(id)` returns the current `Editor` instance. Call
 `viewer.cleanUp()` when the host removes the viewer.
 
 When a worker pool highlights an editable surface, set

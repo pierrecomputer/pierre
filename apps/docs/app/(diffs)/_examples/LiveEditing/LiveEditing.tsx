@@ -30,6 +30,10 @@ interface LiveEditingProps {
   prerenderedDiff: PreloadFileDiffResult<undefined>;
 }
 
+type LiveEditingChangeEvent =
+  | EditorChangeEvent<'file', undefined>
+  | EditorChangeEvent<'file-diff', undefined>;
+
 // Which component the demo renders: a standalone File or a before/after FileDiff.
 type DemoView = 'file' | 'diff';
 
@@ -74,12 +78,9 @@ export function LiveEditing({
   );
 
   // Both components synchronously report the current new-file contents.
-  const handleEditChange = useCallback(
-    (event: EditorChangeEvent<undefined, 'file' | 'diff'>) => {
-      setHasEdits(event.file.contents !== LIVE_EDITING_NEW_FILE.contents);
-    },
-    []
-  );
+  const handleEditChange = useCallback((event: LiveEditingChangeEvent) => {
+    setHasEdits(event.file.contents !== LIVE_EDITING_NEW_FILE.contents);
+  }, []);
 
   // Reset and component switches deliberately discard the current edit session.
   // The new key also rebuilds mutable FileDiff metadata from its pristine copy.

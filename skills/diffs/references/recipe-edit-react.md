@@ -23,16 +23,13 @@ creation options through `editorOptions` and optional retention through
 `editStateKey`.
 
 ```tsx
-import type {
-  FileContents,
-  FileDiffEditCompleteEvent,
-  FileDiffOptions,
-} from '@pierre/diffs';
+import type { FileContents, FileDiffOptions } from '@pierre/diffs';
 import {
   Editor,
   type EditorChangeEvent,
   type EditorDocumentKind,
   type EditorOptions,
+  type FileDiffEditCompleteEvent,
 } from '@pierre/diffs/edit';
 import { EditProvider, MultiFileDiff, Virtualizer } from '@pierre/diffs/react';
 import { useMemo, useRef, useState } from 'react';
@@ -50,9 +47,9 @@ const diffOptions: FileDiffOptions<undefined> = {
   diffStyle: 'split',
 };
 
-function createEditor<LAnnotation>(
-  documentKind: EditorDocumentKind,
-  options: EditorOptions<LAnnotation>,
+function createEditor<TDocumentKind extends EditorDocumentKind, LAnnotation>(
+  documentKind: TDocumentKind,
+  options: EditorOptions<TDocumentKind, LAnnotation>,
   editStateKey?: string
 ) {
   return new Editor(documentKind, options, editStateKey);
@@ -61,8 +58,8 @@ function createEditor<LAnnotation>(
 export function EditableDiff() {
   const [edit, setEdit] = useState(false);
   const [newFile, setNewFile] = useState(initialNewFile);
-  const editorRef = useRef<Editor<undefined> | null>(null);
-  const editorOptions = useMemo<EditorOptions<undefined>>(
+  const editorRef = useRef<Editor<'file-diff'> | null>(null);
+  const editorOptions = useMemo<EditorOptions<'file-diff'>>(
     () => ({
       onAttach(editor) {
         editorRef.current = editor;
@@ -75,7 +72,7 @@ export function EditableDiff() {
     setEdit((value) => !value);
   }
 
-  function handleEditChange(event: EditorChangeEvent<undefined, 'diff'>) {
+  function handleEditChange(event: EditorChangeEvent<'file-diff', undefined>) {
     saveDraft(event.file);
   }
 
@@ -149,10 +146,10 @@ controlled state only while the item should remain, then return `'accept'`;
 acceptance during removal or teardown does not reinsert it. `CodeView` builds
 `nextItem` with `edit: false` and an incremented `version`.
 
-`CodeViewHandle.getEditor(id)` returns the current `DiffsEditor` handle. The
-item editor keeps its active document and history when virtualization or
-collapse removes the item from the rendered window. `getEditStateKey` extends
-that retention to later editor instances after the edit session ends.
+`CodeViewHandle.getEditor(id)` returns the current `Editor` instance. The item
+editor keeps its active document and history when virtualization or collapse
+removes the item from the rendered window. `getEditStateKey` extends that
+retention to later editor instances after the edit session ends.
 
 When a worker pool highlights an editable surface, set
 `useTokenTransformer: true` in the worker `highlighterOptions`.
