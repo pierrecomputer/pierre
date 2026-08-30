@@ -5,16 +5,7 @@ import { arch, cpus, totalmem, type } from 'node:os';
 import { join } from 'node:path';
 import { gzipSync } from 'node:zlib';
 
-import { init } from '../lib/index.mjs';
-import {
-  buildHast,
-  lineRecordsToRuns,
-  lineRecordsToTokens,
-  resolveOptionThemes,
-  runToToken,
-  splitRecordLines,
-  themeMeta,
-} from '../lib/tokens.mjs';
+import { init, TokenizeStream } from '../lib/index.mjs';
 import { optimizeWasm, transformWat, wat2wasm } from '../scripts/build.mjs';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 
@@ -31,6 +22,7 @@ const baselineLabel = (rel) =>
   rel >= 1 ? `${fmt(rel)}× slower` : `${fmt(1 / rel)}× faster`;
 const dim = (s) => `\x1b[90m${s}\x1b[0m`;
 const tokensOnly = process.argv.includes('--tokens');
+const streamOnly = process.argv.includes('--stream');
 
 const FIXTURES = [
   { name: 'tiny.css.txt', lang: 'css', input: loadFixture('tiny.css') },
@@ -141,6 +133,15 @@ async function loadContenders() {
       dec.decode(chamele.codeToHtml(src, { lang, theme: pierreDark })),
     tokens: (src, lang) =>
       chamele.codeToTokens(src, { lang, theme: pierreDark }),
+    stream: (chunks, lang) => {
+      const stream = new TokenizeStream({ lang, theme: pierreDark });
+      let tokenCount = 0;
+      for (const chunk of chunks) {
+        for (const line of stream.pushCode(chunk)) tokenCount += line.length;
+      }
+      for (const line of stream.end()) tokenCount += line.length;
+      return tokenCount;
+    },
   });
   contenders.push({
     name: 'chamele (bytes io)',
@@ -159,6 +160,31 @@ async function loadContenders() {
       fn: (src, lang) => hl.codeToHtml(src, { lang, theme: 'github-dark' }),
       tokens: (src, lang) =>
         hl.codeToTokens(src, { lang, theme: 'github-dark' }),
+      hast: (src, lang) => hl.codeToHast(src, { lang, theme: 'github-dark' }),
+      stream: (chunks, lang) => {
+        let grammarState;
+        let tail = '';
+        let tokenCount = 0;
+        for (const chunk of chunks) {
+          const lines = (tail + chunk).split('\n');
+          tail = lines.pop() ?? '';
+          for (const line of lines) {
+            const result = hl.codeToTokens(line, {
+              lang,
+              theme: 'github-dark',
+              grammarState,
+            });
+            grammarState = result.grammarState;
+            tokenCount += result.tokens[0].length;
+          }
+        }
+        const result = hl.codeToTokens(tail, {
+          lang,
+          theme: 'github-dark',
+          grammarState,
+        });
+        return tokenCount + result.tokens[0].length;
+      },
     });
   } catch {
     console.log('(shiki not installed, skipping)');
@@ -279,269 +305,106 @@ function sizeRows(wasmBytes) {
   return rows;
 }
 
+// Compare chamele's complete codeToTokens and codeToHast APIs against
+// Shiki's, using Pierre Dark for chamele and GitHub Dark for Shiki.
 function benchmarkTokens(contenders) {
-  const shiki = contenders.find((c) => c.name === 'shiki')?.tokens;
+  const shiki = contenders.find((c) => c.name === 'shiki');
   if (shiki == null) {
-    console.log('shiki not installed; codeToTokens benchmark skipped');
+    console.log('shiki not installed; tokens benchmark skipped');
     return;
   }
 
-  const themes = resolveOptionThemes({ theme: pierreDark });
-  const hostCodeToTokens = (input) => {
-    const hostThemes = resolveOptionThemes({ theme: pierreDark });
-    const records = chamele.tokenizeRecords(24, chamele.writeInput(input));
-    const lines = splitRecordLines(input, records, records.length >> 1);
-    return {
-      tokens: lines.map((runs) =>
-        runs.map((run) => runToToken(input, run, hostThemes, '--shiki-'))
-      ),
-      ...themeMeta(hostThemes, '--shiki-'),
-    };
-  };
-  const comparisons = [];
-  const phases = [];
-  for (const { name, lang, input } of TOKEN_FIXTURES) {
-    const inputBytes = enc.encode(input);
-    const mb = inputBytes.length / 1024 / 1024;
-    const chameleResult = runBench(hostCodeToTokens, input);
-    const wasmLinesResult = runBench(
-      (src) => chamele.codeToTokens(src, { lang, theme: pierreDark }),
-      input
+  const apis = [
+    {
+      title: 'codeToTokens',
+      chameleFn: (src, lang) =>
+        chamele.codeToTokens(src, { lang, theme: pierreDark }),
+      shikiFn: shiki.tokens,
+    },
+    {
+      title: 'codeToHast',
+      chameleFn: (src, lang) =>
+        chamele.codeToHast(src, { lang, theme: pierreDark }),
+      shikiFn: shiki.hast,
+    },
+  ];
+  for (const { title, chameleFn, shikiFn } of apis) {
+    const rows = [];
+    for (const { name, lang, input } of TOKEN_FIXTURES) {
+      const mb = enc.encode(input).length / 1024 / 1024;
+      const lines = chamele.codeToTokens(input, { lang, theme: pierreDark })
+        .tokens.length;
+      const chameleResult = runBench((src) => chameleFn(src, lang), input);
+      const shikiResult = runBench((src) => shikiFn(src, lang), input);
+      rows.push([
+        name,
+        String(lines),
+        us(chameleResult.median),
+        fmt(mb / (chameleResult.median / 1000)) + ' MB/s',
+        us(shikiResult.median),
+        baselineLabel(chameleResult.median / shikiResult.median),
+      ]);
+    }
+    console.log(`${title} (TypeScript):`);
+    printTable(
+      [
+        { title: 'input' },
+        { title: 'lines', align: 'right', hide: 1 },
+        { title: 'chamele', align: 'right' },
+        { title: 'throughput', align: 'right', hide: 2 },
+        { title: 'shiki', align: 'right' },
+        { title: 'vs shiki' },
+      ],
+      rows
     );
-    const shikiResult = runBench((src) => shiki(src, lang), input);
+    console.log();
+  }
+}
 
-    // Language ID 24 is TypeScript/JavaScript/TSX in chamele.wat.
-    chamele.writeInput(inputBytes);
-    const records = Uint32Array.from(
-      chamele.tokenizeRecords(24, inputBytes.length)
-    );
-    const lineRuns = splitRecordLines(input, records, records.length >> 1);
-    chamele.writeInput(inputBytes);
-    const lineRecords = Uint32Array.from(
-      chamele.tokenizeLineRecords(24, inputBytes.length)
-    );
-    chamele.writeInput(inputBytes);
-    const encodeResult = runBench((src) => chamele.writeInput(src), input);
-    const wasmResult = runBench(
-      () => chamele.tokenizeRecords(24, inputBytes.length),
-      undefined
-    );
-    const splitResult = runBench(
-      () => splitRecordLines(input, records, records.length >> 1),
-      undefined
-    );
-    const objectsResult = runBench(
-      () =>
-        lineRuns.map((runs) =>
-          runs.map((run) => runToToken(input, run, themes, '--shiki-'))
-        ),
-      undefined
-    );
-    const lineWasmResult = runBench(
-      () => chamele.tokenizeLineRecords(24, inputBytes.length),
-      undefined
-    );
-    const directObjectsResult = runBench(
-      () =>
-        lineRecordsToTokens(
-          input,
-          lineRecords,
-          lineRecords.length >> 1,
-          themes,
-          '--shiki-'
-        ),
-      undefined
-    );
-
-    comparisons.push([
-      name,
-      String(lineRuns.length),
-      us(chameleResult.median),
-      us(wasmLinesResult.median),
-      baselineLabel(wasmLinesResult.median / chameleResult.median),
-      fmt(mb / (wasmLinesResult.median / 1000)) + ' MB/s',
-      us(shikiResult.median),
-      baselineLabel(wasmLinesResult.median / shikiResult.median),
-    ]);
-    phases.push([
-      name,
-      us(encodeResult.median),
-      us(wasmResult.median),
-      us(splitResult.median),
-      us(objectsResult.median),
-      us(lineWasmResult.median),
-      us(directObjectsResult.median),
-      us(chameleResult.median),
-      us(wasmLinesResult.median),
-    ]);
+// Compare fresh streaming tokenizers over Diffs' 4,096-character batches.
+function benchmarkStream(contenders) {
+  const chameleStream = contenders.find((c) => c.name === 'chamele')?.stream;
+  const shikiStream = contenders.find((c) => c.name === 'shiki')?.stream;
+  if (chameleStream == null || shikiStream == null) {
+    console.log('shiki not installed; stream benchmark skipped');
+    return;
   }
 
-  console.log('codeToTokens (TypeScript, steady state):');
+  const rows = [];
+  for (const { name, lang, input } of TOKEN_FIXTURES) {
+    const chunks = [];
+    for (let at = 0; at < input.length; at += 4096) {
+      chunks.push(input.slice(at, at + 4096));
+    }
+    const mb = enc.encode(input).length / 1024 / 1024;
+    const chameleResult = runBench((parts) => {
+      chameleStream(parts, lang);
+    }, chunks);
+    const shikiResult = runBench((parts) => {
+      shikiStream(parts, lang);
+    }, chunks);
+    rows.push([
+      name,
+      String(input.split('\n').length),
+      String(chunks.length),
+      us(chameleResult.median),
+      fmt(mb / (chameleResult.median / 1000)) + ' MB/s',
+      us(shikiResult.median),
+      baselineLabel(chameleResult.median / shikiResult.median),
+    ]);
+  }
+  console.log('TokenizeStream (TypeScript, 4,096-character chunks):');
   printTable(
     [
       { title: 'input' },
       { title: 'lines', align: 'right', hide: 1 },
-      { title: 'JS split', align: 'right' },
-      { title: 'wasm split', align: 'right' },
-      { title: 'change' },
-      { title: 'throughput', align: 'right', hide: 2 },
+      { title: 'chunks', align: 'right', hide: 2 },
+      { title: 'chamele', align: 'right' },
+      { title: 'throughput', align: 'right', hide: 3 },
       { title: 'shiki', align: 'right' },
       { title: 'vs shiki' },
     ],
-    comparisons
-  );
-  console.log('\nchamele codeToTokens phases (independent timings):');
-  printTable(
-    [
-      { title: 'input' },
-      { title: 'UTF-8 encode', align: 'right', hide: 1 },
-      { title: 'wasm scan', align: 'right' },
-      { title: 'JS line split', align: 'right' },
-      { title: 'JS tokens', align: 'right' },
-      { title: 'line wasm', align: 'right' },
-      { title: 'direct tokens', align: 'right' },
-      { title: 'JS e2e', align: 'right' },
-      { title: 'wasm e2e', align: 'right' },
-    ],
-    phases
-  );
-}
-
-function benchmarkHast() {
-  const comparisons = [];
-  const phases = [];
-  for (const { name, lang, input } of TOKEN_FIXTURES) {
-    const options = { lang, theme: pierreDark };
-    const themes = resolveOptionThemes(options);
-    const common = {
-      codeToHast: (code, opts) => chamele.codeToHast(code, opts),
-      codeToTokens: (code, opts) => chamele.codeToTokens(code, opts),
-      meta: {},
-    };
-    const hostCodeToHast = (source) => {
-      let code = source;
-      const hostCommon = {
-        codeToHast: (nextCode, opts) => chamele.codeToHast(nextCode, opts),
-        codeToTokens: (nextCode, opts) => chamele.codeToTokens(nextCode, opts),
-        meta: { ...options.meta },
-      };
-      const context = { ...hostCommon, source: code, options };
-      for (const transformer of options.transformers ?? []) {
-        if (transformer.preprocess != null) {
-          code = transformer.preprocess.call(context, code, options) ?? code;
-        }
-      }
-      const hostThemes = resolveOptionThemes(options);
-      const records = chamele.tokenizeRecords(24, chamele.writeInput(code));
-      const lineRuns = splitRecordLines(code, records, records.length >> 1);
-      const lineStarts = [0];
-      for (
-        let i = code.indexOf('\n');
-        i !== -1;
-        i = code.indexOf('\n', i + 1)
-      ) {
-        lineStarts.push(i + 1);
-      }
-      return buildHast(
-        code,
-        lineRuns,
-        lineStarts,
-        hostThemes,
-        options,
-        hostCommon
-      );
-    };
-    const hostResult = runBench(hostCodeToHast, input);
-    const wasmResult = runBench(
-      (source) => chamele.codeToHast(source, options),
-      input
-    );
-
-    const inputBytes = enc.encode(input);
-    chamele.writeInput(inputBytes);
-    const byteRecords = Uint32Array.from(
-      chamele.tokenizeRecords(24, inputBytes.length)
-    );
-    chamele.writeInput(inputBytes);
-    const lineRecords = Uint32Array.from(
-      chamele.tokenizeLineRecords(24, inputBytes.length)
-    );
-    const hostPrepResult = runBench(() => {
-      const lineRuns = splitRecordLines(
-        input,
-        byteRecords,
-        byteRecords.length >> 1
-      );
-      const lineStarts = [0];
-      for (
-        let i = input.indexOf('\n');
-        i !== -1;
-        i = input.indexOf('\n', i + 1)
-      ) {
-        lineStarts.push(i + 1);
-      }
-      return { lineRuns, lineStarts };
-    }, undefined);
-    const glueResult = runBench(
-      () => lineRecordsToRuns(lineRecords, lineRecords.length >> 1),
-      undefined
-    );
-    const adapted = lineRecordsToRuns(lineRecords, lineRecords.length >> 1);
-    const buildResult = runBench(
-      () =>
-        buildHast(
-          input,
-          adapted.lineRuns,
-          adapted.lineStarts,
-          themes,
-          options,
-          common
-        ),
-      undefined
-    );
-
-    const mb = inputBytes.length / 1024 / 1024;
-    comparisons.push([
-      name,
-      String(adapted.lineRuns.length),
-      us(hostResult.median),
-      us(wasmResult.median),
-      baselineLabel(wasmResult.median / hostResult.median),
-      fmt(mb / (wasmResult.median / 1000)) + ' MB/s',
-    ]);
-    phases.push([
-      name,
-      us(hostPrepResult.median),
-      us(glueResult.median),
-      us(buildResult.median),
-      us(hostResult.median),
-      us(wasmResult.median),
-    ]);
-  }
-
-  console.log('\ncodeToHast (TypeScript, steady state):');
-  printTable(
-    [
-      { title: 'input' },
-      { title: 'lines', align: 'right', hide: 1 },
-      { title: 'JS split', align: 'right' },
-      { title: 'wasm split', align: 'right' },
-      { title: 'change' },
-      { title: 'throughput', align: 'right', hide: 2 },
-    ],
-    comparisons
-  );
-  console.log('\nchamele codeToHast phases (independent timings):');
-  printTable(
-    [
-      { title: 'input' },
-      { title: 'host prep', align: 'right' },
-      { title: 'record glue', align: 'right' },
-      { title: 'HAST build', align: 'right' },
-      { title: 'JS e2e', align: 'right' },
-      { title: 'wasm e2e', align: 'right' },
-    ],
-    phases
+    rows
   );
 }
 
@@ -565,9 +428,10 @@ console.log(dim(machine + '\n'));
 const BASELINE = 'shiki';
 const contenders = await loadContenders();
 
-if (tokensOnly) {
+if (streamOnly) {
+  benchmarkStream(contenders);
+} else if (tokensOnly) {
   benchmarkTokens(contenders);
-  benchmarkHast();
 } else {
   for (const { name, lang, input } of FIXTURES) {
     const inputBytes = enc.encode(input);

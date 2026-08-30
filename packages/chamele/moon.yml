@@ -54,3 +54,11 @@ tasks:
     options:
       cache: false
       runInCI: 'always'
+
+  bench-stream:
+    command: 'node ./benchmark/bench.mjs --stream'
+    deps:
+      - 'build'
+    options:
+      cache: false
+      runInCI: 'always'

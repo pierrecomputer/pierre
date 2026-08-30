@@ -345,21 +345,21 @@ let shared;
 /** The compiled Wasm module required by the shared highlighter.
  * @type {WebAssembly.Module}
  */
-let sharedModule;
+let wasmModule;
 
 /** The compiled Wasm module required by isolated tokenizers. */
-function moduleOrThrow() {
-  if (sharedModule == null) throw new Error('chamele is not initialized');
-  return sharedModule;
+function assertWasmModule() {
+  if (wasmModule == null) throw new Error('chamele is not initialized');
+  return wasmModule;
 }
 
 /**
  * Initialize the wasm module.
- * @param {WebAssembly.Module} wasmModule
+ * @param {WebAssembly.Module} wasm
  * @returns {Highlighter}
  */
-export function init(wasmModule) {
-  sharedModule = wasmModule;
+export function init(wasm) {
+  wasmModule = wasm;
   return (shared = new Highlighter(wasmModule));
 }
 
@@ -418,7 +418,7 @@ export class TokenizeStream {
 
   /** @param {import("./index.d.ts").CodeToTokensOptions} options */
   constructor(options) {
-    this.#hl = new Highlighter(moduleOrThrow());
+    this.#hl = new Highlighter(assertWasmModule());
     this.#langId = langIdOf(options.lang);
     this.#themes = resolveOptionThemes(options);
     this.#cssVariablePrefix = options.cssVariablePrefix ?? '--cha-';
@@ -533,7 +533,7 @@ export class LiveTokenizer {
 
   /** @param {import("./index.d.ts").CodeToTokensOptions & {code?: string}} options */
   constructor(options) {
-    this.#hl = new Highlighter(moduleOrThrow());
+    this.#hl = new Highlighter(assertWasmModule());
     this.#langId = langIdOf(options.lang);
     this.#themes = resolveOptionThemes(options);
     this.#cssVariablePrefix = options.cssVariablePrefix ?? '--cha-';
