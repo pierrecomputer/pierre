@@ -26,6 +26,7 @@ import { EditStateManager } from '../src/editor/EditStateManager';
 import type {
   EditorChangeEvent,
   EditorDocumentKind,
+  EditorFactory,
 } from '../src/editor/types';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
 import {
@@ -40,11 +41,7 @@ import {
   type FileProps as ReactFileProps,
   Virtualizer,
 } from '../src/react';
-import {
-  type CreateEditor,
-  EditProvider,
-  type EditProviderProps,
-} from '../src/react/EditContext';
+import { EditProvider, type EditProviderProps } from '../src/react/EditContext';
 import { type FileDiffProps as ReactFileDiffProps } from '../src/react/FileDiff';
 import type {
   DiffLineAnnotation,
@@ -112,7 +109,7 @@ function createTrackedEditor<TDocumentKind extends EditorDocumentKind>(
 
 function createTrackedEditorFactory(
   editors: AnyTrackedEditor[]
-): CreateEditor<undefined> {
+): EditorFactory {
   return (documentKind, options, editStateKey) => {
     const editor = createTrackedEditor(documentKind, options, editStateKey);
     editors.push(editor as unknown as AnyTrackedEditor);
@@ -488,7 +485,7 @@ describe('React editor factory lifecycle', () => {
       const secondFactory = mock(createTrackedEditorFactory(editors));
       const render = async (
         edit: boolean,
-        factory: CreateEditor<undefined>,
+        factory: EditorFactory,
         onChange: NonNullable<
           EditorOptions<EditorDocumentKind, undefined>['onChange']
         >,
@@ -1257,7 +1254,7 @@ describe('React editor factory lifecycle', () => {
         attachedEditor = editor;
       },
     });
-    const createSharedEditor: CreateEditor<undefined> = (documentKind) => {
+    const createSharedEditor: EditorFactory = (documentKind) => {
       if (documentKind !== 'file') {
         throw new Error('Expected a file editor');
       }

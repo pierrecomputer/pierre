@@ -20,6 +20,7 @@ editor APIs used by common integrations.
 | `FileDiffEditCompleteEvent` | Type  | Describes a completed diff edit session.                       |
 | `EditorCommand`             | Type  | Names an editor command.                                       |
 | `EditorDocumentKind`        | Type  | Selects a `file` or `file-diff` editor surface.                |
+| `EditorFactory`             | Type  | Defines a document-kind-aware editor factory.                  |
 | `EditorFocusOptions`        | Type  | Selects a focus target and scroll behavior.                    |
 | `EditorKeymap`              | Type  | Defines ordered custom shortcut groups.                        |
 | `EditorOptions`             | Type  | Configures history, initial state, behavior, and events.       |
@@ -38,6 +39,31 @@ editor APIs used by common integrations.
 | `TextEdit`                  | Type  | Replaces one range with new text.                              |
 | `Marker`                    | Type  | Describes an editor diagnostic marker.                         |
 | `MarkerSeverity`            | Type  | Selects an editor marker severity.                             |
+
+## Lower-level exports
+
+The edit entrypoint also exposes the state-management, keyboard-resolution,
+marker-rendering, and popover-placement building blocks used by `Editor`.
+
+| Export                                  | Kind     | Purpose                                                               |
+| --------------------------------------- | -------- | --------------------------------------------------------------------- |
+| `ManagedEditSession`                    | Type     | Selects mutable in-progress editor state by document kind.            |
+| `ManagedFileEditSession`                | Type     | Holds mutable state for an active file editor session.                |
+| `ManagedFileDiffEditSession`            | Type     | Holds mutable state for an active file-diff editor session.           |
+| `cloneEditorViewState`                  | Function | Clones editor selections and viewport state.                          |
+| `toManagedEditState`                    | Function | Returns complete edit state when a managed session has required data. |
+| `resolveEditorCommandFromKeyboardEvent` | Function | Resolves a keyboard event through custom and default editor keymaps.  |
+| `resolveFindAgainShortcut`              | Function | Recognizes the next or previous native find shortcut.                 |
+| `MarkerRenderOptions`                   | Type     | Supplies marker rendering, measurement, and popover dependencies.     |
+| `MarkerRenderer`                        | Class    | Renders marker ranges and marker hover popovers.                      |
+| `markerSeverityDatasetKey`              | Function | Maps a marker severity to its DOM dataset key.                        |
+| `POPOVER_BOUNDARY_LINES`                | Value    | Sets the document-edge fallback threshold for popover placement.      |
+| `POPOVER_FLIP_HYSTERESIS_PX`            | Value    | Sets the clearance required before a flipped popover returns.         |
+| `PopoverPlacementBounds`                | Type     | Describes vertical popover placement bounds.                          |
+| `PopoverViewportBounds`                 | Type     | Describes all visible viewport edges for popover clamping.            |
+| `PopoverManagerOptions`                 | Type     | Supplies active-popover state callbacks to `PopoverManager`.          |
+| `PopoverManager`                        | Class    | Tracks viewport geometry and stable popover placement.                |
+| `setPopoverPositionStyles`              | Function | Writes the CSS properties used to position and clamp a popover.       |
 
 ## `EditorOptions` fields
 

@@ -7,7 +7,7 @@ import type {
   LineAnnotation,
   SelectionSide,
 } from '../types';
-import type { Editor } from './editor';
+import type { Editor, EditorOptions } from './editor';
 import type { TextDocument } from './textDocument';
 
 /** FileDiff baseline and hunk state needed to resume an editing session. */
@@ -37,6 +37,15 @@ export interface EditorActiveLineOptions {
 }
 
 export type EditorDocumentKind = 'file' | 'file-diff';
+
+/** Creates an editor whose document kind matches the supplied options. */
+export type EditorFactory<LAnnotation = undefined, LCaret = undefined> = <
+  TDocumentKind extends EditorDocumentKind,
+>(
+  documentKind: TDocumentKind,
+  options: EditorOptions<TDocumentKind, LAnnotation, LCaret>,
+  editStateKey?: string
+) => Editor<TDocumentKind, LAnnotation, LCaret>;
 
 /**
  * Position in a text document expressed as zero-based line and character offset.

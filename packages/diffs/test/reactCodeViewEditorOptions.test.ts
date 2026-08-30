@@ -23,6 +23,7 @@ import type {
   EditCompletionDecision,
   EditorChangeEvent,
   EditorDocumentKind,
+  EditorFactory,
 } from '../src/editor/types';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
 import {
@@ -33,7 +34,6 @@ import {
   EditProvider,
   type EditProviderProps,
 } from '../src/react';
-import type { CreateEditor } from '../src/react/EditContext';
 import type { CodeViewItem } from '../src/types';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import {
@@ -158,11 +158,7 @@ function createEditorHarness(attachmentError?: Error) {
   const receivedDocumentKinds: EditorDocumentKind[] = [];
   const receivedOptions: EditorOptions<EditorDocumentKind, undefined>[] = [];
   const receivedEditStateKeys: Array<string | undefined> = [];
-  const createEditor: CreateEditor<undefined> = (
-    documentKind,
-    options,
-    editStateKey
-  ) => {
+  const createEditor: EditorFactory = (documentKind, options, editStateKey) => {
     receivedDocumentKinds.push(documentKind);
     receivedOptions.push(
       options as EditorOptions<EditorDocumentKind, undefined>
@@ -301,7 +297,7 @@ function installCodeViewDom() {
 }
 
 function withProvider(
-  createEditor: CreateEditor<undefined>,
+  createEditor: EditorFactory,
   child: ReactElement
 ): ReactElement {
   return createElement(EditProviderComponent, { createEditor }, child);
@@ -451,7 +447,7 @@ describe('React CodeView editor factory', () => {
 
     const render = async (
       item: CodeViewItem<undefined>,
-      createEditor: CreateEditor<undefined>,
+      createEditor: EditorFactory,
       historyMaxEntries: number,
       getEditStateKey: (item: CodeViewItem<undefined>) => string
     ) => {

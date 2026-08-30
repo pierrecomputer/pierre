@@ -456,9 +456,12 @@ export const EDIT_UNDO_REDO_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
     name: 'editor_undo_redo.tsx',
     contents: `import type { FileContents } from '@pierre/diffs';
-import { Editor, type EditorOptions } from '@pierre/diffs/edit';
 import {
-  type CreateEditor,
+  Editor,
+  type EditorFactory,
+  type EditorOptions,
+} from '@pierre/diffs/edit';
+import {
   EditProvider,
   File,
 } from '@pierre/diffs/react';
@@ -469,7 +472,7 @@ const file: FileContents = {
   contents: 'export const x = 1;',
 };
 
-const createEditor: CreateEditor<undefined> = (
+const createEditor: EditorFactory = (
   documentKind,
   options,
   editStateKey
@@ -523,7 +526,7 @@ export function EditableFileWithHistoryToolbar() {
 export const EDIT_REACT_CREATE_EDITOR_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
     name: 'editor_react_create_editor.tsx',
-    contents: `const createEditor = useCallback<CreateEditor<undefined>>(
+    contents: `const createEditor = useCallback<EditorFactory>(
   (documentKind, editorOptions, editStateKey) =>
     new Editor(documentKind, {
       ...defaultEditorOptions,
@@ -566,9 +569,8 @@ export const EDIT_REACT_EXAMPLE: PreloadFileOptions<undefined> = {
   FileEditCompleteHandler,
   FileOptions,
 } from '@pierre/diffs';
-import { Editor } from '@pierre/diffs/edit';
+import { Editor, type EditorFactory } from '@pierre/diffs/edit';
 import {
-  type CreateEditor,
   EditProvider,
   File,
   Virtualizer,
@@ -594,7 +596,7 @@ const virtualizerStyle = {
   borderRadius: '0.5rem',
 } as const;
 
-const createEditor: CreateEditor<undefined> = (
+const createEditor: EditorFactory = (
   documentKind,
   options,
   editStateKey
@@ -688,9 +690,8 @@ export const EDIT_REACT_FILE_DIFF_EXAMPLE: PreloadFileOptions<undefined> = {
   type FileDiffMetadata,
   type FileDiffOptions,
 } from '@pierre/diffs';
-import { Editor } from '@pierre/diffs/edit';
+import { Editor, type EditorFactory } from '@pierre/diffs/edit';
 import {
-  type CreateEditor,
   EditProvider,
   FileDiff,
   Virtualizer,
@@ -725,7 +726,7 @@ const virtualizerStyle = {
   borderRadius: '0.5rem',
 } as const;
 
-const createEditor: CreateEditor<ThreadMetadata> = (
+const createEditor: EditorFactory<ThreadMetadata> = (
   documentKind,
   options,
   editStateKey
@@ -834,10 +835,13 @@ export const EDIT_REACT_CODE_VIEW_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
     name: 'editor_react_code_view.tsx',
     contents: `import { parseDiffFromFile, type CodeViewItem } from '@pierre/diffs';
-import { Editor, type EditorOptions } from '@pierre/diffs/edit';
+import {
+  Editor,
+  type EditorFactory,
+  type EditorOptions,
+} from '@pierre/diffs/edit';
 import {
   CodeView,
-  type CreateEditor,
   EditProvider,
   type CodeViewItemEditCompleteHandler,
 } from '@pierre/diffs/react';
@@ -884,7 +888,7 @@ const editorOptions: EditorOptions<
   },
 };
 
-const createEditor: CreateEditor<ThreadMetadata> = (
+const createEditor: EditorFactory<ThreadMetadata> = (
   documentKind,
   options,
   editStateKey
@@ -988,9 +992,8 @@ export const EDIT_WORKER_POOL_REACT_EXAMPLE: PreloadFileOptions<undefined> = {
     contents: `'use client';
 
 import type { FileContents } from '@pierre/diffs';
-import { Editor } from '@pierre/diffs/edit';
+import { Editor, type EditorFactory } from '@pierre/diffs/edit';
 import {
-  type CreateEditor,
   EditProvider,
   File,
   WorkerPoolContextProvider,
@@ -1010,7 +1013,7 @@ const highlighterOptions = {
   useTokenTransformer: true,
 } as const;
 
-const createEditor: CreateEditor<undefined> = (
+const createEditor: EditorFactory = (
   documentKind,
   options,
   editStateKey
@@ -1495,9 +1498,8 @@ export const EDIT_REACT_MULTI_FILE_DIFF_EXAMPLE: PreloadFileOptions<undefined> =
   FileDiffEditCompleteHandler,
   FileDiffOptions,
 } from '@pierre/diffs';
-import { Editor } from '@pierre/diffs/edit';
+import { Editor, type EditorFactory } from '@pierre/diffs/edit';
 import {
-  type CreateEditor,
   EditProvider,
   MultiFileDiff,
   Virtualizer,
@@ -1526,7 +1528,7 @@ const virtualizerStyle = {
   borderRadius: '0.5rem',
 } as const;
 
-const createEditor: CreateEditor<undefined> = (
+const createEditor: EditorFactory = (
   documentKind,
   options,
   editStateKey

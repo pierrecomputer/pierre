@@ -27,7 +27,7 @@ import type { FileContents, FileDiffOptions } from '@pierre/diffs';
 import {
   Editor,
   type EditorChangeEvent,
-  type EditorDocumentKind,
+  type EditorFactory,
   type EditorOptions,
   type FileDiffEditCompleteEvent,
 } from '@pierre/diffs/edit';
@@ -47,13 +47,11 @@ const diffOptions: FileDiffOptions<undefined> = {
   diffStyle: 'split',
 };
 
-function createEditor<TDocumentKind extends EditorDocumentKind, LAnnotation>(
-  documentKind: TDocumentKind,
-  options: EditorOptions<TDocumentKind, LAnnotation>,
+const createEditor: EditorFactory = (
+  documentKind,
+  options,
   editStateKey?: string
-) {
-  return new Editor(documentKind, options, editStateKey);
-}
+) => new Editor(documentKind, options, editStateKey);
 
 export function EditableDiff() {
   const [edit, setEdit] = useState(false);
