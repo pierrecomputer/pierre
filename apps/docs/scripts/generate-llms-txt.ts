@@ -97,7 +97,7 @@ const SECTION_DESCRIPTIONS: Record<string, Record<string, string>> = {
       'Vanilla classes for CodeView, FileDiff, File, UnresolvedFile, props, and low-level renderers',
     CodeView:
       'One virtualized scroll region for mixed file and diff lists, with scrollTo targeting, viewer-wide selection, sticky headers, and header/footer regions',
-    Edit: 'Edit mode for File surfaces via Editor and EditProvider, with selections, history, search, actions, and shortcuts',
+    Edit: 'Edit mode for File components via Editor and EditProvider, with selections, history, search, actions, and shortcuts',
     Virtualization: 'Virtual scrolling for large diffs and files',
     CustomHunkSeparators:
       'Built-in separator presets, CSS customization hooks, and the discouraged vanilla escape hatch',

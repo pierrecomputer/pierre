@@ -23,7 +23,7 @@ interface E2ESelection {
   direction?: 'none' | 'backward' | 'forward';
 }
 
-interface E2EEditorState {
+interface E2EEditorViewState {
   selections?: E2ESelection[];
   view?: {
     scrollLeft: number;
@@ -44,7 +44,7 @@ interface E2EEditor {
   canRedo: boolean;
   getText: () => string;
   getFile: () => { contents: string } | undefined;
-  getState: () => E2EEditorState;
+  getViewState: () => E2EEditorViewState;
   setSelections: (selections: E2ESelection[]) => void;
   applyEdits: (edits: E2ETextEdit[], updateHistory?: boolean) => void;
   focus: () => void;
@@ -77,6 +77,7 @@ interface Window {
 
   // Editor handle exposed by the editable fixtures.
   __editor?: E2EEditor;
+  __completeEdit?: () => void;
   __forceEditorFullRender?: () => void;
   __moveEditorContainer?: () => void;
   __syncCount?: number;

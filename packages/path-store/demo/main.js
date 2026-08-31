@@ -360,7 +360,7 @@ function setActionButtonsDisabled(disabled) {
  * @param {number | undefined} [preferredOffset]
  * @returns {DemoViewContext}
  */
-function getViewContext(store, preferredOffset = undefined) {
+function getViewContext(store, preferredOffset) {
   const visibleCount = store.getVisibleCount();
   const requestedVisibleCount = getRequestedVisibleCount();
   const maxOffset = Math.max(0, visibleCount - requestedVisibleCount);
@@ -396,7 +396,7 @@ function getViewContext(store, preferredOffset = undefined) {
  * @param {DemoBenchmarkCollector | null | undefined} [benchmark]
  * @returns {DemoViewContext | null}
  */
-function renderCurrentWindow(preferredOffset = undefined, benchmark = null) {
+function renderCurrentWindow(preferredOffset, benchmark = null) {
   if (currentStore == null) {
     rowsElement.textContent = '';
     offsetInput.disabled = true;

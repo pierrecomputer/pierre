@@ -1,17 +1,14 @@
 # Recipe: edit with React
 
-Mount one stable `EditProvider` above the editable surfaces. The provider
-supplies an editor factory. Each active surface or `CodeView` item owns a
-separate editor instance, cached by `editorOptions` object identity — an edit
-session restarting with the same options object reuses its editor, and
-simultaneously editable surfaces need distinct options objects.
+Mount one `EditProvider` above the editable surfaces. Its factory receives the
+document kind, the surface's creation-time `editorOptions`, and an optional
+`editStateKey`. Each active surface or `CodeView` item owns its editor.
 
-To share one editor across surfaces, pass the same `editorOptions` object to
-each of them: the cache then hands every surface the same instance. Instance
-state — such as `persistState` records and their default `inMemory` storage —
-survives surface remounts, so per-file selections and scroll positions restore
-across file switches. Share an options object only where one surface is editable
-at a time; simultaneously editable surfaces need distinct options objects.
+Pass `editStateKey` to opt into bounded in-memory retention of the draft,
+undo/redo history, selections, horizontal scroll, eligible vertical scroll, and
+diff resume metadata across editor instances. Choose this key explicitly; it is
+a stable application identity for the document. The same active key cannot be
+shared by two editors of the same document kind.
 
 ## Contents
 
@@ -22,11 +19,21 @@ at a time; simultaneously editable surfaces need distinct options objects.
 ## Edit a standalone file or diff
 
 Set `edit` on `File`, `FileDiff`, `MultiFileDiff`, or `PatchDiff`. Pass editor
-behavior through `editOptions`.
+creation options through `editorOptions` and optional retention through
+`editStateKey`.
 
 ```tsx
-import type { FileContents, FileDiffOptions } from '@pierre/diffs';
-import { Editor, type EditorOptions } from '@pierre/diffs/edit';
+import type {
+  FileContents,
+  FileDiffEditCompleteEvent,
+  FileDiffOptions,
+} from '@pierre/diffs';
+import {
+  Editor,
+  type EditorChangeEvent,
+  type EditorDocumentKind,
+  type EditorOptions,
+} from '@pierre/diffs/edit';
 import { EditProvider, MultiFileDiff, Virtualizer } from '@pierre/diffs/react';
 import { useMemo, useRef, useState } from 'react';
 
@@ -43,31 +50,40 @@ const diffOptions: FileDiffOptions<undefined> = {
   diffStyle: 'split',
 };
 
-function createEditor<LAnnotation>(options: EditorOptions<LAnnotation>) {
-  return new Editor(options);
+function createEditor<LAnnotation>(
+  documentKind: EditorDocumentKind,
+  options: EditorOptions<LAnnotation>,
+  editStateKey?: string
+) {
+  return new Editor(documentKind, options, editStateKey);
 }
 
 export function EditableDiff() {
   const [edit, setEdit] = useState(false);
   const [newFile, setNewFile] = useState(initialNewFile);
-  const draftRef = useRef(newFile);
   const editorRef = useRef<Editor<undefined> | null>(null);
-  const editOptions = useMemo<EditorOptions<undefined>>(
+  const editorOptions = useMemo<EditorOptions<undefined>>(
     () => ({
       onAttach(editor) {
         editorRef.current = editor;
-      },
-      onChange(file) {
-        draftRef.current = file;
-        saveDraft(file);
       },
     }),
     []
   );
 
   function toggleEdit() {
-    if (edit) setNewFile(draftRef.current);
     setEdit((value) => !value);
+  }
+
+  function handleEditChange(event: EditorChangeEvent<undefined, 'diff'>) {
+    saveDraft(event.file);
+  }
+
+  function handleEditComplete(event: FileDiffEditCompleteEvent<undefined>) {
+    if (event.newFile != null) {
+      setNewFile(event.newFile);
+    }
+    return 'accept' as const;
   }
 
   return (
@@ -88,7 +104,10 @@ export function EditableDiff() {
           newFile={newFile}
           options={diffOptions}
           edit={edit}
-          editOptions={editOptions}
+          editorOptions={editorOptions}
+          editStateKey="src/value.ts:draft"
+          onEditChange={handleEditChange}
+          onEditComplete={handleEditComplete}
         />
       </Virtualizer>
     </EditProvider>
@@ -97,34 +116,43 @@ export function EditableDiff() {
 ```
 
 Mount the provider near the application root when many surfaces use edit mode.
-Keep `createEditor` and `editOptions` stable. Use `onAttach` when controls need
+Always forward all three factory arguments. Use `onAttach` when controls need
 `undo`, `redo`, `applyEdits`, selections, markers, focus, or other editor APIs.
+`EditStateManager` only manages sessions retained with `editStateKey`; unkeyed
+sessions require no manager cleanup. For keyed sessions, use
+`EditStateManager.clear(kind, key)` after a session becomes inactive when its
+retained draft should be discarded. `clearAll()` clears inactive state in both
+namespaces, and `setCapacity(capacity)` changes each namespace's default limit
+of 100 entries. Active state is never mutated by manager clearing.
 
 ## Keep annotations synchronized
 
-The `onChange` callback can supply the complete current annotation collection.
-Replace the application collection when the callback supplies a different array.
-Use `isFileAnnotationCollection` or `isDiffAnnotationCollection` to narrow its
-type.
-
-Publish a changed React annotation array inside `flushSync`. This keeps its
-coordinates aligned with the edited contents before paint. Store annotation UI
-state by a stable metadata ID instead of a line number.
+Edit mode owns annotation positions during an active session. Change events
+expose the remapped collection for observation, but do not feed it back into the
+surface. On acceptance, store the completion event's final annotations beside
+the accepted file or diff. Use `isFileAnnotationCollection` or
+`isDiffAnnotationCollection` when the surface type is not already known, and key
+annotation UI state by a stable metadata ID instead of a line number.
 
 ## Edit `CodeView` items
 
 Wrap `CodeView` in the same `EditProvider`. Set `edit: true` on an item and
 increment its `version`. Pass shared creation options through the `CodeView`
-`editOptions` prop.
+`editorOptions` prop. Use `getEditStateKey(item)` for opt-in draft, history,
+selection, and view-state retention.
 
 Use `onItemEditChange` for live contents and annotation changes. Use
-`onItemEditComplete` to commit the final `file` or rebuild the `fileDiff`. In
-the same item update, set `edit: false`, assign a fresh `cacheKey`, and
-increment `version`.
+`onItemEditComplete` to accept or reject every ended session, including when its
+final text is unchanged. If you use keyed render caching, assign a fresh
+`cacheKey` to the event's file or diff. Put the supplied `nextItem` into
+controlled state only while the item should remain, then return `'accept'`;
+acceptance during removal or teardown does not reinsert it. `CodeView` builds
+`nextItem` with `edit: false` and an incremented `version`.
 
-Use the `CodeViewHandle.getEditor(id)` method for imperative editor commands.
-The item editor keeps its document and history when virtualization removes the
-item from the rendered window.
+`CodeViewHandle.getEditor(id)` returns the current `DiffsEditor` handle. The
+item editor keeps its active document and history when virtualization or
+collapse removes the item from the rendered window. `getEditStateKey` extends
+that retention to later editor instances after the edit session ends.
 
 When a worker pool highlights an editable surface, set
 `useTokenTransformer: true` in the worker `highlighterOptions`.

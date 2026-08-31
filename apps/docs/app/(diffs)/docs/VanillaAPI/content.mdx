@@ -24,8 +24,9 @@ for syntax highlighting, theming, layout, and interactivity.
 > `UnresolvedFile` is currently beta/experimental and may change in future
 > releases.
 
-See [Edit mode → Vanilla JS](#edit-mode-vanilla-js) for attaching `Editor` to a
-rendered `File` or `FileDiff` with `edit()`.
+See [Edit mode → Vanilla JS](#edit-mode-enable-editing-vanilla-js) for attaching
+`Editor` to a rendered `File` or `FileDiff` with `edit()`. Pass an optional
+`editStateKey` as the constructor's third argument for same-runtime retention.
 
 `UnresolvedFile` in vanilla supports both uncontrolled and controlled callbacks
 (`onMergeConflictResolve` / `onMergeConflictAction`).
@@ -40,11 +41,16 @@ Both `FileDiff` and `File` accept an options object in their constructor. The
 `File` component has similar options, but excludes diff-specific settings and
 uses `LineAnnotation` instead of `DiffLineAnnotation` (no `side` property).
 
-When one of these components is attached to an `Editor`, keep its annotations in
-an external variable or store and replace them with the current collection
-emitted by `Editor.onChange`. See
-[Editing with line annotations](#edit-mode-editing-with-line-annotations) for
-the synchronization pattern and remapping rules.
+Editable components take `onEditChange` (the live change stream) and
+`onEditComplete` (the accept/reject boundary when a session ends) as
+`FileOptions` / `FileDiffOptions` props. Change events expose the attached
+editor; completion events expose the detached editor and final state during the
+callback. A missing completion handler automatically rejects. Edit mode owns
+annotation positions during a session, so do not sync them back per keystroke;
+accepting installs the final collection (just don't forget to grab references to
+the updated file/fileDiff and annotations if accepting). See
+[Handle changes and completion](#edit-mode-handle-changes-and-completion) and
+[Line annotations](#edit-mode-extend-the-editing-ui-line-annotations).
 
 When rendering direct file contents with `FileDiff.render`, pass `FileContents`
 for each existing side. Use `oldFile: null` for a new file, or `newFile: null`
@@ -64,7 +70,11 @@ default; set `disableErrorHandling: true` when you want errors to rethrow.
 adding CodeView-specific controls like `layout`, `itemMetrics`, `stickyHeaders`,
 `pointerEventsOnScroll`, and `smoothScrollSettings`. Its class instance also
 exposes item-level methods such as `addItems`, `getItem`, `removeItem`, and
-`updateItem`. See [CodeView](#codeview) for the dedicated guide.
+`updateItem`. Editable items use
+`createEditor(documentKind, options, editStateKey)` and optional
+`getEditStateKey(item)`. See [CodeView](#codeview) for the dedicated guide and
+[Retain edit state in memory](#edit-mode-retain-edit-state-in-memory) for state
+inspection and clearing.
 
 Header customization and collapsing behavior:
 

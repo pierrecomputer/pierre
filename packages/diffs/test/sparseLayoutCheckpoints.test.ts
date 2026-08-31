@@ -211,7 +211,7 @@ describe('sparse layout checkpoints', () => {
       metrics
     );
 
-    instance.prepareCodeViewItem(file, 0);
+    instance.updateCodeViewLayout(file, 0);
 
     expect(instance.getLinePosition(10_000)?.top).toBe(
       metrics.diffHeaderHeight + 9_999 * metrics.lineHeight
@@ -222,7 +222,7 @@ describe('sparse layout checkpoints', () => {
     const file = createLargeFile();
     const instance = new VirtualizedFile({}, virtualizer, metrics);
 
-    instance.prepareCodeViewItem(file, 0, undefined, [{ lineNumber: 0 }]);
+    instance.updateCodeViewLayout(file, 0, undefined, [{ lineNumber: 0 }]);
 
     expect(instance.getVirtualizedHeight()).toBe(
       metrics.diffHeaderHeight + 12_000 * metrics.lineHeight + metrics.spacing
@@ -237,13 +237,13 @@ describe('sparse layout checkpoints', () => {
     const file = createLargeFile();
     const instance = new VirtualizedFile({}, virtualizer, metrics);
 
-    instance.prepareCodeViewItem(file, 0, undefined, [{ lineNumber: 0 }]);
+    instance.updateCodeViewLayout(file, 0, undefined, [{ lineNumber: 0 }]);
     expect(instance.getVirtualizedHeight()).toBe(
       metrics.diffHeaderHeight + 12_000 * metrics.lineHeight + metrics.spacing
     );
 
     instance.cleanUp(true);
-    instance.prepareCodeViewItem(file, 0, undefined, []);
+    instance.updateCodeViewLayout(file, 0, undefined, []);
 
     expect(instance.getVirtualizedHeight()).toBe(
       metrics.diffHeaderHeight + 12_000 * metrics.lineHeight + metrics.spacing
@@ -254,7 +254,7 @@ describe('sparse layout checkpoints', () => {
     const file = createLargeFile();
     const instance = new VirtualizedFile({}, virtualizer, metrics);
 
-    instance.prepareCodeViewItem(file, 0, undefined, [{ lineNumber: 0 }]);
+    instance.updateCodeViewLayout(file, 0, undefined, [{ lineNumber: 0 }]);
     inspectFile(instance).cache.fileAnnotationHeight = 25;
     instance.height =
       metrics.diffHeaderHeight +
@@ -276,7 +276,7 @@ describe('sparse layout checkpoints', () => {
     const file = createLargeFile();
     const instance = new VirtualizedFile({}, virtualizer, metrics);
 
-    instance.prepareCodeViewItem(file, 0, undefined, [{ lineNumber: 0 }]);
+    instance.updateCodeViewLayout(file, 0, undefined, [{ lineNumber: 0 }]);
     inspectFile(instance).cache.fileAnnotationHeight = 25;
     instance.height =
       metrics.diffHeaderHeight +
@@ -296,7 +296,7 @@ describe('sparse layout checkpoints', () => {
     const file = createLargeFile();
     const instance = new VirtualizedFile({}, virtualizer, metrics);
 
-    instance.prepareCodeViewItem(file, 0, undefined, [{ lineNumber: 0 }]);
+    instance.updateCodeViewLayout(file, 0, undefined, [{ lineNumber: 0 }]);
 
     const range = inspectFile(instance).computeRenderRangeFromWindow(file, 0, {
       top: metrics.diffHeaderHeight,
@@ -311,7 +311,7 @@ describe('sparse layout checkpoints', () => {
     const file = createLargeFile();
     const instance = new VirtualizedFile({}, virtualizer, metrics);
 
-    instance.prepareCodeViewItem(file, 0, undefined, [{ lineNumber: 0 }]);
+    instance.updateCodeViewLayout(file, 0, undefined, [{ lineNumber: 0 }]);
     inspectFile(instance).cache.fileAnnotationHeight = 0;
 
     const range = inspectFile(instance).computeRenderRangeFromWindow(file, 0, {
@@ -331,7 +331,7 @@ describe('sparse layout checkpoints', () => {
       const instance = new VirtualizedFile({}, virtualizer, metrics);
       let annotationHeight = 25;
 
-      instance.prepareCodeViewItem(file, 0, undefined, [{ lineNumber: 0 }]);
+      instance.updateCodeViewLayout(file, 0, undefined, [{ lineNumber: 0 }]);
       inspectFile(instance).renderRange = createRenderRange();
       inspectFile(instance).fileContainer =
         new FakeHTMLElement() as unknown as HTMLElement;
@@ -376,7 +376,7 @@ describe('sparse layout checkpoints', () => {
     const file = createLargeFile();
     const instance = new VirtualizedFile({}, virtualizer, metrics);
 
-    instance.prepareCodeViewItem(file, 0, undefined, [{ lineNumber: 0 }]);
+    instance.updateCodeViewLayout(file, 0, undefined, [{ lineNumber: 0 }]);
     inspectFile(instance).cache.fileAnnotationHeight = 25;
     inspectFile(instance).renderRange = {
       startingLine: 0,
@@ -403,7 +403,7 @@ describe('sparse layout checkpoints', () => {
       fileAnnotationHeight +
       startingLine * metrics.lineHeight;
 
-    instance.prepareCodeViewItem(file, 0, undefined, [{ lineNumber: 0 }]);
+    instance.updateCodeViewLayout(file, 0, undefined, [{ lineNumber: 0 }]);
     inspectFile(instance).cache.fileAnnotationHeight = fileAnnotationHeight;
     inspectFile(instance).renderRange = {
       startingLine,
@@ -424,7 +424,7 @@ describe('sparse layout checkpoints', () => {
       const file = createLargeFile();
       const instance = new VirtualizedFile({}, virtualizer, metrics);
 
-      instance.prepareCodeViewItem(file, 0, undefined, [{ lineNumber: 0 }]);
+      instance.updateCodeViewLayout(file, 0, undefined, [{ lineNumber: 0 }]);
       inspectFile(instance).renderRange = createRenderRange();
       inspectFile(instance).fileContainer =
         new FakeHTMLElement() as unknown as HTMLElement;
@@ -465,7 +465,7 @@ describe('sparse layout checkpoints', () => {
       const file = createLargeFile();
       const instance = new VirtualizedFile({}, virtualizer, metrics);
 
-      instance.prepareCodeViewItem(file, 0, undefined, [{ lineNumber: 0 }]);
+      instance.updateCodeViewLayout(file, 0, undefined, [{ lineNumber: 0 }]);
       inspectFile(instance).renderRange = createRenderRange();
       inspectFile(instance).fileContainer =
         new FakeHTMLElement() as unknown as HTMLElement;
@@ -500,7 +500,7 @@ describe('sparse layout checkpoints', () => {
       const file = createLargeFile();
       const instance = new VirtualizedFile({}, virtualizer, metrics);
 
-      instance.prepareCodeViewItem(file, 0, undefined, [{ lineNumber: 0 }]);
+      instance.updateCodeViewLayout(file, 0, undefined, [{ lineNumber: 0 }]);
       inspectFile(instance).renderRange = createRenderRange();
       inspectFile(instance).fileContainer =
         new FakeHTMLElement() as unknown as HTMLElement;
@@ -519,7 +519,7 @@ describe('sparse layout checkpoints', () => {
           metrics.spacing
       );
 
-      instance.prepareCodeViewItem(file, 0, undefined, [{ lineNumber: 1 }]);
+      instance.updateCodeViewLayout(file, 0, undefined, [{ lineNumber: 1 }]);
 
       expect(inspectFile(instance).cache.fileAnnotationHeight).toBe(0);
       expect(instance.getVirtualizedHeight()).toBe(
@@ -543,7 +543,7 @@ describe('sparse layout checkpoints', () => {
       metrics
     );
 
-    instance.prepareCodeViewItem(diff, 0);
+    instance.updateCodeViewLayout(diff, 0);
 
     const expectedTop = metrics.diffHeaderHeight + 9_999 * metrics.lineHeight;
     expect(instance.getLinePosition(10_000, 'additions')?.top).toBe(
@@ -578,7 +578,7 @@ describe('sparse layout checkpoints', () => {
     }
     const instance = new VirtualizedFileDiff({}, virtualizer, metrics);
 
-    instance.prepareCodeViewItem(diff, 0);
+    instance.updateCodeViewLayout(diff, 0);
 
     expect(
       instance.getLinePosition(secondHunk.additionStart - 2, 'additions')
@@ -599,7 +599,7 @@ describe('sparse layout checkpoints', () => {
       metrics
     );
 
-    instance.prepareCodeViewItem(createLargeFile(), 0);
+    instance.updateCodeViewLayout(createLargeFile(), 0);
     instance.setOptions({ disableVirtualizationBuffers: true });
 
     expect(layoutDirtyCalls).toEqual([false]);
@@ -621,7 +621,7 @@ describe('sparse layout checkpoints', () => {
       metrics
     );
 
-    instance.prepareCodeViewItem(parseDiffFromFile(oldFile, newFile), 0);
+    instance.updateCodeViewLayout(parseDiffFromFile(oldFile, newFile), 0);
     instance.setOptions({ diffIndicators: 'classic' });
 
     expect(layoutDirtyCalls).toEqual([true]);

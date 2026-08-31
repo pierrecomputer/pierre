@@ -2,7 +2,7 @@ import { afterAll, describe, expect, mock, spyOn, test } from 'bun:test';
 
 import { File, type FileOptions } from '../src/components/File';
 import { DEFAULT_THEMES } from '../src/constants';
-import { Editor, type EditorOptions, type IStateStorage } from '../src/edit';
+import { Editor, type EditorOptions } from '../src/edit';
 import {
   applyTextChangeToSelections,
   DirectionForward,
@@ -80,11 +80,10 @@ async function createEditorFixture(
     theme: DEFAULT_THEMES,
     ...fileOptions,
   });
-  const editor = new Editor<undefined>(editorOptions);
+  const editor = new Editor<undefined>('file', editorOptions);
   const initialFile: FileContents = {
     name: 'edits.ts',
     contents,
-    ...(editorOptions?.persistState === true ? { cacheKey: 'edits-file' } : {}),
     ...fileContents,
   };
 
@@ -107,6 +106,45 @@ async function createEditorFixture(
     window: dom.window as unknown as EditorTestWindow,
   };
 }
+
+describe('Editor file state', () => {
+  test('revisiting a file rebuilds its document from external contents', async () => {
+    const fixture = await createEditorFixture('alpha\nbravo\n');
+    try {
+      fixture.editor.applyEdits([
+        {
+          range: {
+            start: { line: 0, character: 0 },
+            end: { line: 0, character: 0 },
+          },
+          newText: 'X',
+        },
+      ]);
+      fixture.file.render({
+        file: { name: 'other.ts', contents: 'one\n', cacheKey: 'other' },
+        fileContainer: fixture.fileContainer,
+        forceRender: true,
+      });
+      await waitFor(() => fixture.editor.getFile()?.name === 'other.ts');
+
+      fixture.file.render({
+        file: {
+          name: 'edits.ts',
+          contents: 'alpha\nbravo\n',
+          cacheKey: 'edits-file',
+        },
+        fileContainer: fixture.fileContainer,
+        forceRender: true,
+      });
+      await waitFor(() => fixture.editor.getFile()?.name === 'edits.ts');
+
+      expect(fixture.editor.getText()).toBe('alpha\nbravo\n');
+      expect(fixture.editor.canUndo).toBe(false);
+    } finally {
+      fixture.cleanup();
+    }
+  });
+});
 
 // Drives the editor's undo/redo keyboard shortcut. The harness navigator
 // reports macOS, so the primary modifier is the meta key; `shift` selects redo.
@@ -158,231 +196,6 @@ function pressKey(
   return event;
 }
 
-function insertAtStart(editor: Editor<undefined>, text: string): void {
-  editor.applyEdits(
-    [
-      {
-        range: {
-          start: { line: 0, character: 0 },
-          end: { line: 0, character: 0 },
-        },
-        newText: text,
-      },
-    ],
-    true
-  );
-}
-
-async function renderFileAndWait(
-  fixture: EditorFixture,
-  fileContents: FileContents
-): Promise<void> {
-  fixture.file.render({
-    file: fileContents,
-    fileContainer: fixture.fileContainer,
-    forceRender: true,
-  });
-  await waitFor(() => {
-    const file = fixture.editor.getFile();
-    return (
-      file?.name === fileContents.name &&
-      file.cacheKey === fileContents.cacheKey
-    );
-  });
-}
-
-describe('Editor persisted file state', () => {
-  test('requires an explicit cache key when enabled', () => {
-    const dom = installDom();
-    const fileContainer = document.createElement('div');
-    const fileContents: FileContents = {
-      name: 'unkeyed.ts',
-      contents: 'alpha\n',
-    };
-    const file = new File<undefined>({
-      disableFileHeader: true,
-      theme: DEFAULT_THEMES,
-    });
-    const editor = new Editor<undefined>({ persistState: true });
-
-    try {
-      file.render({ file: fileContents, fileContainer, forceRender: true });
-
-      expect(() => editor.edit(file)).toThrow(
-        'Editor persistState requires a non-empty file.cacheKey for "unkeyed.ts".'
-      );
-      expect(fileContents.cacheKey).toBeUndefined();
-    } finally {
-      editor.cleanUp();
-      file.cleanUp();
-      dom.cleanup();
-    }
-  });
-
-  test('rejects enabling persistence before an attached file finishes syncing', () => {
-    const dom = installDom();
-    const fileContainer = document.createElement('div');
-    const file = new File<undefined>({
-      disableFileHeader: true,
-      theme: DEFAULT_THEMES,
-    });
-    const editor = new Editor<undefined>();
-
-    try {
-      file.render({
-        file: { name: 'edits.ts', contents: 'alpha\n' },
-        fileContainer,
-        forceRender: true,
-      });
-      editor.edit(file);
-
-      expect(() => editor.setOptions({ persistState: true })).toThrow(
-        'Editor persistState requires a non-empty file.cacheKey for "edits.ts".'
-      );
-    } finally {
-      editor.cleanUp();
-      file.cleanUp();
-      dom.cleanup();
-    }
-  });
-
-  test('is disabled by default', async () => {
-    const storageCalls: string[] = [];
-    const storage: IStateStorage = {
-      get(cacheKey) {
-        storageCalls.push(`get:${cacheKey}`);
-        return undefined;
-      },
-      set(cacheKey) {
-        storageCalls.push(`set:${cacheKey}`);
-      },
-    };
-    const fixture = await createEditorFixture('alpha\nbravo\n', {
-      persistStateStorage: storage,
-    });
-
-    try {
-      insertAtStart(fixture.editor, 'X');
-      await renderFileAndWait(fixture, {
-        name: 'other.ts',
-        contents: 'one\n',
-        cacheKey: 'other',
-      });
-      await renderFileAndWait(fixture, {
-        name: 'edits.ts',
-        contents: 'alpha\nbravo\n',
-        cacheKey: 'edits-file',
-      });
-
-      expect(fixture.editor.getText()).toBe('alpha\nbravo\n');
-      expect(fixture.editor.canUndo).toBe(false);
-      expect(storageCalls).toEqual([]);
-    } finally {
-      fixture.cleanup();
-    }
-  });
-
-  test('restores the cached document, undo history, and editor state', async () => {
-    const fixture = await createEditorFixture('alpha\nbravo\n', {
-      persistState: true,
-    });
-
-    try {
-      insertAtStart(fixture.editor, 'X');
-      fixture.editor.setSelections([
-        {
-          start: { line: 1, character: 1 },
-          end: { line: 1, character: 4 },
-          direction: 'forward',
-        },
-      ]);
-
-      await renderFileAndWait(fixture, {
-        name: 'other.ts',
-        contents: 'one\n',
-        cacheKey: 'other',
-      });
-      // A fresh object with the same explicit key resumes the editing session.
-      await renderFileAndWait(fixture, {
-        name: 'edits.ts',
-        contents: 'alpha\nbravo\n',
-        cacheKey: 'edits-file',
-      });
-
-      expect(fixture.editor.getText()).toBe('Xalpha\nbravo\n');
-      expect(fixture.editor.getState().selections).toEqual([
-        {
-          start: { line: 1, character: 1 },
-          end: { line: 1, character: 4 },
-          direction: 1,
-        },
-      ]);
-      expect(
-        fixture.fileContainer.shadowRoot?.querySelector(
-          '[data-content] [data-line="1"]'
-        )?.textContent
-      ).toBe('Xalpha');
-      expect(fixture.editor.canUndo).toBe(true);
-
-      fixture.editor.undo();
-      expect(fixture.editor.getText()).toBe('alpha\nbravo\n');
-    } finally {
-      fixture.cleanup();
-    }
-  });
-
-  test('uses a custom state storage with the explicit file key', async () => {
-    const states = new Map<string, ReturnType<Editor<undefined>['getState']>>();
-    const calls: string[] = [];
-    const storage: IStateStorage = {
-      get(cacheKey) {
-        calls.push(`get:${cacheKey}`);
-        return states.get(cacheKey);
-      },
-      set(cacheKey, state) {
-        calls.push(`set:${cacheKey}`);
-        states.set(cacheKey, state);
-      },
-    };
-    const fixture = await createEditorFixture('alpha\nbravo\n', {
-      persistState: true,
-      persistStateStorage: storage,
-    });
-
-    try {
-      fixture.editor.setSelections([
-        {
-          start: { line: 0, character: 2 },
-          end: { line: 0, character: 2 },
-          direction: 'none',
-        },
-      ]);
-      await renderFileAndWait(fixture, {
-        name: 'other.ts',
-        contents: 'one\n',
-        cacheKey: 'other-revision',
-      });
-      await renderFileAndWait(fixture, {
-        name: 'edits.ts',
-        contents: 'alpha\nbravo\n',
-        cacheKey: 'edits-file',
-      });
-
-      expect(calls).toContain('set:edits-file');
-      expect(calls).toContain('get:other-revision');
-      expect(calls).toContain('set:other-revision');
-      expect(calls.at(-1)).toBe('get:edits-file');
-      expect(fixture.editor.getState().selections?.[0]).toMatchObject({
-        start: { line: 0, character: 2 },
-        end: { line: 0, character: 2 },
-        direction: 0,
-      });
-    } finally {
-      fixture.cleanup();
-    }
-  });
-});
-
 describe('Editor.applyEdits selection sync', () => {
   test('reports normalized changes against the pre-edit document', async () => {
     const onChange = mock(
@@ -414,7 +227,7 @@ describe('Editor.applyEdits selection sync', () => {
       ]);
 
       expect(onChange).toHaveBeenCalledTimes(1);
-      const [file, lineAnnotations, event] = onChange.mock.calls[0] ?? [];
+      const [event] = onChange.mock.calls[0] ?? [];
       expect(event?.changes).toEqual([
         {
           text: 'X',
@@ -435,19 +248,17 @@ describe('Editor.applyEdits selection sync', () => {
           end: 19,
         },
       ]);
-      expect(file).toMatchObject({
+      expect(event?.file).toMatchObject({
         name: 'edits.ts',
         contents: 'alXavo\nC',
       });
-      expect(lineAnnotations).toEqual([]);
-      expect(event?.file).toBe(file);
-      expect(event?.lineAnnotations).toBe(lineAnnotations);
+      expect(event?.lineAnnotations).toEqual([]);
     } finally {
       cleanup();
     }
   });
 
-  test('keeps inserted file lines coherent when switching files', async () => {
+  test('switching files does not write inserted lines into the external file', async () => {
     const { cleanup, editor, file, fileContainer, fileContents } =
       await createEditorFixture('alpha\nbravo\n', undefined, {
         disableErrorHandling: true,
@@ -475,11 +286,11 @@ describe('Editor.applyEdits selection sync', () => {
         file.render({ file: otherFile, fileContainer, forceRender: true })
       ).not.toThrow();
 
-      expect(fileContents.contents).toBe('alpha\nbravo\ncharlie\n');
+      expect(fileContents.contents).toBe('alpha\nbravo\n');
       expect(() =>
         file.render({ file: fileContents, fileContainer, forceRender: true })
       ).not.toThrow();
-      expect(editor.getText()).toBe('alpha\nbravo\ncharlie\n');
+      await waitFor(() => editor.getText() === 'alpha\nbravo\n');
     } finally {
       cleanup();
     }
@@ -512,7 +323,7 @@ describe('Editor.applyEdits selection sync', () => {
       expect(editor.getText()).toBe('NEW\nalpha\nbravo\ncharlie');
       // The caret was inside "charlie"; inserting a line above must move it down
       // one line so it still points at the same character of "charlie".
-      expect(editor.getState().selections).toEqual([
+      expect(editor.getViewState().selections).toEqual([
         {
           start: { line: 3, character: 3 },
           end: { line: 3, character: 3 },
@@ -549,7 +360,7 @@ describe('Editor.applyEdits selection sync', () => {
       expect(editor.getText()).toBe('alXYZpha\nbravo');
       // The caret must follow the inserted text so the next keystroke lands
       // after it, not in front of it.
-      expect(editor.getState().selections).toEqual([
+      expect(editor.getViewState().selections).toEqual([
         {
           start: { line: 0, character: 5 },
           end: { line: 0, character: 5 },
@@ -584,7 +395,7 @@ describe('Editor.applyEdits selection sync', () => {
       ]);
 
       expect(editor.getText()).toBe('a📚 plans');
-      expect(editor.getState().selections).toEqual([
+      expect(editor.getViewState().selections).toEqual([
         {
           start: { line: 0, character: 1 },
           end: { line: 0, character: 1 },
@@ -620,7 +431,7 @@ describe('Editor.applyEdits selection sync', () => {
         },
       ]);
 
-      expect(editor.getState().selections).toEqual([
+      expect(editor.getViewState().selections).toEqual([
         {
           start: { line: 3, character: 1 },
           end: { line: 3, character: 4 },
@@ -657,7 +468,7 @@ describe('Editor.applyEdits selection sync', () => {
       ]);
 
       expect(editor.getText()).toBe('alpha\nbravo\nNEW\ncharlie');
-      expect(editor.getState().selections).toEqual([
+      expect(editor.getViewState().selections).toEqual([
         {
           start: { line: 0, character: 2 },
           end: { line: 0, character: 2 },
@@ -695,7 +506,7 @@ describe('Editor.applyEdits selection sync', () => {
 
       pressUndoRedo(window, content, false);
       expect(editor.getText()).toBe('alpha\nbravo\ncharlie');
-      expect(editor.getState().selections).toEqual([
+      expect(editor.getViewState().selections).toEqual([
         {
           start: { line: 2, character: 3 },
           end: { line: 2, character: 3 },
@@ -707,7 +518,7 @@ describe('Editor.applyEdits selection sync', () => {
       expect(editor.getText()).toBe('NEW\nalpha\nbravo\ncharlie');
       // Redo must restore the caret to the post-edit (remapped) position, not
       // leave it where undo placed it.
-      expect(editor.getState().selections).toEqual([
+      expect(editor.getViewState().selections).toEqual([
         {
           start: { line: 3, character: 3 },
           end: { line: 3, character: 3 },
@@ -747,7 +558,7 @@ describe('Editor.applyEdits selection sync', () => {
 
       editor.undo();
       expect(editor.getText()).toBe('alpha\nbravo\ncharlie');
-      expect(editor.getState().selections).toEqual([caret(2, 3)]);
+      expect(editor.getViewState().selections).toEqual([caret(2, 3)]);
 
       editor.setSelections([
         {
@@ -758,7 +569,7 @@ describe('Editor.applyEdits selection sync', () => {
       ]);
       editor.redo();
       expect(editor.getText()).toBe('NEW\nalpha\nbravo\ncharlie');
-      expect(editor.getState().selections).toEqual([caret(1, 2)]);
+      expect(editor.getViewState().selections).toEqual([caret(1, 2)]);
     } finally {
       cleanup();
     }
@@ -797,7 +608,7 @@ describe('Editor.applyEdits selection sync', () => {
       ]);
 
       // Selection state is still remapped so it stays correct...
-      expect(editor.getState().selections).toEqual([
+      expect(editor.getViewState().selections).toEqual([
         {
           start: { line: 3, character: 3 },
           end: { line: 3, character: 3 },
@@ -839,7 +650,7 @@ describe('Editor.applyEdits selection sync', () => {
         },
       ]);
 
-      expect(editor.getState().selections).toEqual([
+      expect(editor.getViewState().selections).toEqual([
         {
           start: { line: 3, character: 3 },
           end: { line: 3, character: 3 },
@@ -884,7 +695,7 @@ describe('Editor.applyEdits selection sync', () => {
         },
       ]);
 
-      expect(editor.getState().selections).toEqual([
+      expect(editor.getViewState().selections).toEqual([
         {
           start: { line: 3, character: 3 },
           end: { line: 3, character: 3 },
@@ -950,7 +761,7 @@ describe('Editor.applyEdits selection sync', () => {
       content.dispatchEvent(new Event('focus'));
       content.dispatchEvent(new Event('blur'));
       document.dispatchEvent(new Event('selectionchange'));
-      expect(editor.getState().selections).toEqual([
+      expect(editor.getViewState().selections).toEqual([
         {
           start: { line: 2, character: 3 },
           end: { line: 2, character: 3 },
@@ -963,7 +774,7 @@ describe('Editor.applyEdits selection sync', () => {
       // the unfocused case above.
       content.dispatchEvent(new Event('focus'));
       document.dispatchEvent(new Event('selectionchange'));
-      expect(editor.getState().selections).toEqual([
+      expect(editor.getViewState().selections).toEqual([
         {
           start: { line: 0, character: 0 },
           end: { line: 0, character: 0 },
@@ -1072,7 +883,7 @@ describe('Editor move line commands', () => {
 
       pressMoveLine(window, content, 'up');
       expect(editor.getText()).toBe('bravo\nalpha\ncharlie');
-      expect(editor.getState().selections).toEqual([
+      expect(editor.getViewState().selections).toEqual([
         {
           start: { line: 0, character: 2 },
           end: { line: 0, character: 2 },
@@ -1082,7 +893,7 @@ describe('Editor move line commands', () => {
 
       pressMoveLine(window, content, 'down');
       expect(editor.getText()).toBe('alpha\nbravo\ncharlie');
-      expect(editor.getState().selections).toEqual([
+      expect(editor.getViewState().selections).toEqual([
         {
           start: { line: 1, character: 2 },
           end: { line: 1, character: 2 },
@@ -1110,7 +921,7 @@ describe('Editor move line commands', () => {
 
       pressMoveLine(window, content, 'up');
       expect(editor.getText()).toBe('alpha\ncharlie\nbravo');
-      expect(editor.getState().selections).toEqual([
+      expect(editor.getViewState().selections).toEqual([
         {
           start: { line: 1, character: 3 },
           end: { line: 1, character: 3 },
@@ -1138,7 +949,7 @@ describe('Editor move line commands', () => {
 
       pressMoveLine(window, content, 'down');
       expect(editor.getText()).toBe('zero\nfour\none\ntwo\nthree');
-      expect(editor.getState().selections).toEqual([
+      expect(editor.getViewState().selections).toEqual([
         {
           start: { line: 2, character: 1 },
           end: { line: 4, character: 2 },
@@ -1166,7 +977,7 @@ describe('Editor move line commands', () => {
 
       pressMoveLine(window, content, 'down');
       expect(editor.getText()).toBe('alpha\ncharlie\nbravo');
-      expect(editor.getState().selections).toEqual([
+      expect(editor.getViewState().selections).toEqual([
         {
           start: { line: 2, character: 0 },
           end: { line: 2, character: 5 },
@@ -1198,7 +1009,7 @@ describe('Editor move line commands', () => {
 
       pressMoveLine(window, content, 'up');
       expect(editor.getText()).toBe('b\na\nc\ne\nd\nf');
-      expect(editor.getState().selections).toEqual([
+      expect(editor.getViewState().selections).toEqual([
         {
           start: { line: 0, character: 0 },
           end: { line: 0, character: 1 },
@@ -1237,7 +1048,7 @@ describe('Editor editing commands', () => {
           newText: 'ALPHA',
         },
       ]);
-      editor.setState({ selections: [caret(1, 3)] });
+      editor.setViewState({ selections: [caret(1, 3)] });
 
       content.dispatchEvent(
         new window.InputEvent('beforeinput', {
@@ -1255,7 +1066,7 @@ describe('Editor editing commands', () => {
           (row) => row.textContent
         )
       ).toEqual(['ALPHA', 'bra', 'vo', 'charlie']);
-      expect(editor.getState().selections).toEqual([caret(2, 0)]);
+      expect(editor.getViewState().selections).toEqual([caret(2, 0)]);
     } finally {
       cleanup();
     }
@@ -1282,7 +1093,7 @@ describe('Editor editing commands', () => {
 
       expect(keydown.defaultPrevented).toBe(true);
       expect(editor.getText()).toBe('hello\nnext');
-      expect(editor.getState().selections).toEqual([
+      expect(editor.getViewState().selections).toEqual([
         {
           start: { line: 0, character: 5 },
           end: { line: 0, character: 5 },
@@ -1314,7 +1125,7 @@ describe('Editor editing commands', () => {
         shiftKey: true,
       });
       expect(editor.getText()).toBe('alpha\nbravo\nbravo\ncharlie');
-      expect(editor.getState().selections?.[0].start).toEqual({
+      expect(editor.getViewState().selections?.[0].start).toEqual({
         line: 1,
         character: 2,
       });
@@ -1325,7 +1136,7 @@ describe('Editor editing commands', () => {
         shiftKey: true,
       });
       expect(editor.getText()).toBe('alpha\nbravo\nbravo\nbravo\ncharlie');
-      expect(editor.getState().selections?.[0].start).toEqual({
+      expect(editor.getViewState().selections?.[0].start).toEqual({
         line: 2,
         character: 2,
       });
@@ -1353,7 +1164,7 @@ describe('Editor editing commands', () => {
       ]);
 
       pressKey(window, content, { key: 'Escape' });
-      expect(editor.getState().selections).toEqual([
+      expect(editor.getViewState().selections).toEqual([
         {
           start: { line: 1, character: 1 },
           end: { line: 1, character: 4 },
@@ -1362,7 +1173,7 @@ describe('Editor editing commands', () => {
       ]);
 
       pressKey(window, content, { key: 'Escape' });
-      expect(editor.getState().selections).toEqual([
+      expect(editor.getViewState().selections).toEqual([
         {
           start: { line: 1, character: 4 },
           end: { line: 1, character: 4 },
@@ -1395,7 +1206,7 @@ describe('Editor editing commands', () => {
       pressKey(window, content, { key: 'Enter', metaKey: true });
 
       expect(editor.getText()).toBe('zero\n\n  one\n  \ntwo');
-      expect(editor.getState().selections).toEqual([
+      expect(editor.getViewState().selections).toEqual([
         {
           start: { line: 1, character: 0 },
           end: { line: 1, character: 0 },
@@ -1428,7 +1239,7 @@ describe('Editor editing commands', () => {
       pressKey(window, content, { key: 'Enter', metaKey: true });
 
       expect(editor.getText()).toBe('zero\n\n  one\ntwo');
-      expect(editor.getState().selections).toEqual([
+      expect(editor.getViewState().selections).toEqual([
         {
           start: { line: 1, character: 0 },
           end: { line: 1, character: 0 },
@@ -1455,11 +1266,11 @@ describe('Editor editing commands', () => {
 
       pressKey(window, content, { key: ']', metaKey: true });
       expect(editor.getText()).toBe('  alpha');
-      expect(editor.getState().selections?.[0].start.character).toBe(5);
+      expect(editor.getViewState().selections?.[0].start.character).toBe(5);
 
       pressKey(window, content, { key: '[', metaKey: true });
       expect(editor.getText()).toBe('alpha');
-      expect(editor.getState().selections?.[0].start.character).toBe(3);
+      expect(editor.getViewState().selections?.[0].start.character).toBe(3);
     } finally {
       cleanup();
     }
@@ -1580,7 +1391,7 @@ describe('Editor editing commands', () => {
         shiftKey: true,
       });
       expect(editor.getText()).toBe('alpha /* beta */');
-      expect(editor.getState().selections).toEqual([
+      expect(editor.getViewState().selections).toEqual([
         {
           start: { line: 0, character: 9 },
           end: { line: 0, character: 13 },
@@ -1595,7 +1406,7 @@ describe('Editor editing commands', () => {
         shiftKey: true,
       });
       expect(editor.getText()).toBe('alpha beta');
-      expect(editor.getState().selections).toEqual([
+      expect(editor.getViewState().selections).toEqual([
         {
           start: { line: 0, character: 6 },
           end: { line: 0, character: 10 },
@@ -1627,7 +1438,7 @@ describe('Editor editing commands', () => {
         shiftKey: true,
       });
       expect(editor.getText()).toBe('alpha /*  */');
-      expect(editor.getState().selections?.[0].start.character).toBe(9);
+      expect(editor.getViewState().selections?.[0].start.character).toBe(9);
 
       pressKey(window, content, {
         key: 'A',
@@ -1636,7 +1447,7 @@ describe('Editor editing commands', () => {
         shiftKey: true,
       });
       expect(editor.getText()).toBe('alpha ');
-      expect(editor.getState().selections?.[0].start.character).toBe(6);
+      expect(editor.getViewState().selections?.[0].start.character).toBe(6);
     } finally {
       cleanup();
     }
@@ -1779,7 +1590,7 @@ describe('Editor undo/redo API', () => {
       editor.undo();
 
       expect(onChange).toHaveBeenCalledTimes(2);
-      const [file, lineAnnotations, event] = onChange.mock.calls[1] ?? [];
+      const [event] = onChange.mock.calls[1] ?? [];
       expect(event?.changes).toEqual([
         {
           text: '',
@@ -1791,9 +1602,7 @@ describe('Editor undo/redo API', () => {
           end: 6,
         },
       ]);
-      expect(file?.contents).toBe('alpha');
-      expect(event?.file).toBe(file);
-      expect(event?.lineAnnotations).toBe(lineAnnotations);
+      expect(event?.file.contents).toBe('alpha');
     } finally {
       cleanup();
     }
@@ -2446,12 +2255,15 @@ describe('line-based indent commands with selections sharing a line', () => {
       await createEditorFixture('quartz vein');
 
     try {
-      editor.setState({ selections: [caret(0, 2), caret(0, 6)] });
+      editor.setViewState({ selections: [caret(0, 2), caret(0, 6)] });
 
       pressKey(window, content, { key: ']', metaKey: true });
 
       expect(editor.getText()).toBe('  quartz vein');
-      expect(editor.getState().selections).toEqual([caret(0, 4), caret(0, 8)]);
+      expect(editor.getViewState().selections).toEqual([
+        caret(0, 4),
+        caret(0, 8),
+      ]);
     } finally {
       cleanup();
     }
@@ -2462,7 +2274,7 @@ describe('line-based indent commands with selections sharing a line', () => {
       await createEditorFixture('ada\nberyl\ncobalt');
 
     try {
-      editor.setState({
+      editor.setViewState({
         selections: [range(0, 1, 1, 2), range(1, 3, 2, 1)],
       });
 
@@ -2479,12 +2291,15 @@ describe('line-based indent commands with selections sharing a line', () => {
       await createEditorFixture('\tquartz vein');
 
     try {
-      editor.setState({ selections: [caret(0, 3), caret(0, 7)] });
+      editor.setViewState({ selections: [caret(0, 3), caret(0, 7)] });
 
       pressKey(window, content, { key: 'Tab', shiftKey: true });
 
       expect(editor.getText()).toBe('quartz vein');
-      expect(editor.getState().selections).toEqual([caret(0, 2), caret(0, 6)]);
+      expect(editor.getViewState().selections).toEqual([
+        caret(0, 2),
+        caret(0, 6),
+      ]);
     } finally {
       cleanup();
     }

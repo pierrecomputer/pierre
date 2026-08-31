@@ -13,7 +13,6 @@ editor for each surface that can be edited at the same time.
 ```ts
 import {
   FileDiff,
-  isDiffAnnotationCollection,
   type DiffLineAnnotation,
   type FileContents,
 } from '@pierre/diffs';
@@ -42,9 +41,20 @@ let annotations: DiffLineAnnotation<ThreadMetadata>[] = [
     metadata: { id: 'value-review' },
   },
 ];
-
 const view = new FileDiff<ThreadMetadata>({
   theme: { light: 'pierre-light', dark: 'pierre-dark' },
+  onEditChange(event) {
+    saveDraft(event.file);
+  },
+  onEditComplete(event) {
+    if (event.newFile != null) {
+      newFile = event.newFile;
+    }
+    if (event.lineAnnotations != null) {
+      annotations = event.lineAnnotations;
+    }
+    return 'accept';
+  },
   renderAnnotation(annotation) {
     const element = document.createElement('p');
     element.textContent = 'Thread ' + annotation.metadata.id;
@@ -63,37 +73,34 @@ function render() {
 
 render();
 
-const editor = new Editor<ThreadMetadata>({
-  onChange(file, nextAnnotations) {
-    newFile = { ...newFile, contents: file.contents };
-    saveDraft(newFile);
-
-    if (
-      nextAnnotations != null &&
-      isDiffAnnotationCollection(nextAnnotations) &&
-      nextAnnotations !== annotations
-    ) {
-      annotations = nextAnnotations;
-      queueMicrotask(render);
-    }
-  },
-});
-
-const detach = editor.edit(view);
+const editor = new Editor<ThreadMetadata>(
+  'file-diff',
+  {},
+  'src/value.ts:draft'
+);
+let finishEditing: (() => void) | undefined = editor.edit(view);
 
 export function stopEditing() {
-  detach();
+  const finish = finishEditing;
+  finishEditing = undefined;
+  finish?.();
 }
 
 export function removeSurface() {
-  editor.cleanUp();
+  stopEditing();
   view.cleanUp();
 }
 ```
 
-The annotation array from `onChange` is the complete current collection. Save it
-before a later render can apply old coordinates. Use stable metadata IDs for
-application state that belongs to an annotation.
+`onEditChange` receives one `EditorChangeEvent`. Observe its remapped
+`lineAnnotations`, but do not feed them back into the surface during the active
+session. Store the final collection from `onEditComplete` alongside the accepted
+file or diff. Use stable metadata IDs for application state that belongs to an
+annotation.
+
+Pass a third `editStateKey` argument to `new Editor` when a later editor
+instance should resume/save the in-memory draft, undo/redo history, selections,
+and editor-owned view state.
 
 Use `VirtualizedFile` or `VirtualizedFileDiff` with a `Virtualizer` for a large
 standalone surface. Load `@pierre/diffs/edit` with `import()` when edit mode is
@@ -109,26 +116,21 @@ import { Editor } from '@pierre/diffs/edit';
 
 export function mountEditableCodeView(root: HTMLElement) {
   const viewer = new CodeView({
-    createEditor(options) {
-      return new Editor(options);
+    getEditStateKey(item) {
+      return 'draft:' + item.id;
     },
-    onItemEditChange(item, file, nextAnnotations) {
-      saveItemDraft(item.id, file, nextAnnotations);
+    createEditor(documentKind, options, editStateKey) {
+      return new Editor(documentKind, options, editStateKey);
     },
-    onItemEditComplete(item, file) {
-      const current = viewer.getItem(item.id);
-      if (current?.type !== 'file') return;
+    onItemEditChange(event, item) {
+      saveItemDraft(item.id, event.file, event.lineAnnotations);
+    },
+    onItemEditComplete(event, item, nextItem) {
+      if (item.type !== 'file' || !('file' in event)) return 'reject';
 
-      const version = (current.version ?? 0) + 1;
-      viewer.updateItem({
-        ...current,
-        edit: false,
-        version,
-        file: {
-          ...file,
-          cacheKey: current.id + ':v' + version,
-        },
-      });
+      // Re-key only if this item participates in keyed render caching.
+      event.file.cacheKey = item.id + ':v' + nextItem.version;
+      return 'accept';
     },
   });
 
@@ -150,14 +152,26 @@ export function mountEditableCodeView(root: HTMLElement) {
 }
 ```
 
-Set `edit: true` on an item and increment its `version`. In
-`onItemEditComplete`, write the final contents into that item, set
-`edit: false`, assign a fresh `cacheKey`, and increment `version` again.
-`CodeView` creates and removes the item editors.
+Set `edit: true` on an item and increment its `version`. `onItemEditChange`
+receives `(event, item)`; use `event.file` and `event.lineAnnotations` without
+feeding the change back into the viewer. Completion receives
+`(event, item, nextItem)` whenever a session ends, including when its final text
+is unchanged. `CodeView` builds `nextItem` with the final contents and
+annotations, `edit: false`, and an incremented `version`. If you use keyed
+render caching, assign a fresh `cacheKey` to `event.file` or `event.fileDiff`.
+Return `'accept'` to install `nextItem` while the item remains present or
+`'reject'` to restore the original item while it remains present. During removal
+or viewer teardown, neither decision reinserts the item. A missing completion
+callback rejects. A controlled React owner should put `nextItem` into its
+`items` state only when the item should remain.
 
-Call `viewer.getEditor(id)` for `undo`, `redo`, `applyEdits`, selections,
-markers, focus, or other editor commands. Call `viewer.cleanUp()` when the host
-removes the viewer.
+`getEditStateKey(item)` opts an item into draft, undo/redo, selection, and
+editor-owned view-state retention across editor instances. Forward the resulting
+third factory argument to `new Editor`. `CodeView` creates and removes the item
+editors.
+
+`viewer.getEditor(id)` returns the current `DiffsEditor` handle. Call
+`viewer.cleanUp()` when the host removes the viewer.
 
 When a worker pool highlights an editable surface, set
 `useTokenTransformer: true` in the worker `highlighterOptions`.

@@ -1,9 +1,6 @@
 import { diffChars, diffWordsWithSpace } from 'diff';
 
-import {
-  DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
-  DEFAULT_THEMES,
-} from '../constants';
+import { DEFAULT_COLLAPSED_CONTEXT_THRESHOLD } from '../constants';
 import type {
   CodeToHastOptions,
   DecorationItem,
@@ -414,7 +411,7 @@ function renderTwoFiles({
   deletionDecorations,
   additionDecorations,
   languageOverride,
-  options: { theme: themeOrThemes = DEFAULT_THEMES, ...options },
+  options: { theme: themeOrThemes, ...options },
 }: RenderTwoFilesProps): RenderDiffFilesResult {
   const deletionLang =
     languageOverride ?? getFiletypeFromFileName(deletionFile.name);

@@ -1,11 +1,18 @@
 import { type CSSProperties, type ReactNode } from 'react';
 
-import type { FileOptions } from '../components/File';
-import type { FileDiffOptions } from '../components/FileDiff';
+import type {
+  FileOptions as FileClassOptions,
+  FileEditCompleteHandler,
+} from '../components/File';
+import type {
+  FileDiffOptions as FileDiffClassOptions,
+  FileDiffEditCompleteHandler,
+} from '../components/FileDiff';
 import type { EditorOptions } from '../edit';
 import type { GetHoveredLineResult } from '../managers/InteractionManager';
 import type {
   DiffLineAnnotation,
+  EditorChangeEvent,
   FileContents,
   FileDiffMetadata,
   LineAnnotation,
@@ -13,12 +20,43 @@ import type {
   VirtualFileMetrics,
 } from '../types';
 
+type ReactOwnedEditCallbacks = 'onEditChange' | 'onEditComplete';
+
+export type FileDiffOptions<LAnnotation> = Omit<
+  FileDiffClassOptions<LAnnotation>,
+  ReactOwnedEditCallbacks
+>;
+
+export type FileOptions<LAnnotation> = Omit<
+  FileClassOptions<LAnnotation>,
+  ReactOwnedEditCallbacks
+>;
+
 export interface DiffBasePropsReact<LAnnotation> {
   options?: FileDiffOptions<LAnnotation>;
   /** Whether this surface has an active edit session. */
   edit?: boolean;
   /** Creation-time options passed to the nearest EditProvider factory. */
   editorOptions?: EditorOptions<LAnnotation>;
+  /** Retain this editable draft and its undo/redo history in memory. */
+  editStateKey?: string;
+  /**
+   * Fired for every document change of an active edit session, with the same
+   * `EditorChangeEvent` the editor reports through its own `onChange`. Don't
+   * feed this data back into the component.
+   *
+   * When editing a diff, you are editing the contents of the new file. You
+   * cannot edit the contents of the old file. You are not getting back an
+   * update `fileDiff` during this edit session.
+   */
+  onEditChange?(event: EditorChangeEvent<LAnnotation, 'diff'>): void;
+  /**
+   * Fired when `edit` toggles false or the component unmounts. Return `'accept'`
+   * to install the completed diff and annotations or `'reject'` to restore the
+   * external values. The event contains the detached editor with its final
+   * state.
+   */
+  onEditComplete?: FileDiffEditCompleteHandler<LAnnotation>;
   metrics?: VirtualFileMetrics;
   lineAnnotations?: DiffLineAnnotation<LAnnotation>[];
   selectedLines?: SelectedLineRange | null;
@@ -42,6 +80,21 @@ export interface FileProps<LAnnotation> {
   edit?: boolean;
   /** Creation-time options passed to the nearest EditProvider factory. */
   editorOptions?: EditorOptions<LAnnotation>;
+  /** Retain this editable draft and its undo/redo history in memory. */
+  editStateKey?: string;
+  /**
+   * Fired for every document change of an active edit session, with the same
+   * `EditorChangeEvent` the editor reports through its own `onChange`. Don't
+   * feed this data back into the component.
+   */
+  onEditChange?(event: EditorChangeEvent<LAnnotation, 'file'>): void;
+  /**
+   * Fired when `edit` toggles false or the component unmounts. Return `'accept'`
+   * to install the completed file and annotations or `'reject'` to restore the
+   * external values. The event contains the detached editor with its final
+   * state.
+   */
+  onEditComplete?: FileEditCompleteHandler<LAnnotation>;
   metrics?: VirtualFileMetrics;
   lineAnnotations?: LineAnnotation<LAnnotation>[];
   selectedLines?: SelectedLineRange | null;

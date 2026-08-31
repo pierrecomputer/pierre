@@ -1,8 +1,13 @@
 'use client';
 
 import { DEFAULT_THEMES, type FileDiffMetadata } from '@pierre/diffs';
-import type { EditorOptions } from '@pierre/diffs/edit';
-import { File, FileDiff, Virtualizer } from '@pierre/diffs/react';
+import type { EditorChangeEvent, EditorOptions } from '@pierre/diffs/edit';
+import {
+  File,
+  FileDiff,
+  useWorkerPool,
+  Virtualizer,
+} from '@pierre/diffs/react';
 import {
   IconArrow,
   IconChevronSm,
@@ -677,6 +682,7 @@ export function AgentUi({
 }: AgentUiProps) {
   const session = AUI_SESSIONS[0];
   const router = useRouter();
+  const workerPool = useWorkerPool();
 
   // Expands the windowed card into the fullscreen route, morphing the shared
   // `.aui` element via the View Transition.
@@ -970,16 +976,18 @@ export function AgentUi({
   const recordEditedStatsRef = useRef(recordEditedStats);
   recordEditedStatsRef.current = recordEditedStats;
 
-  // One FileDiffMetadata per changed file, parsed on first visit and reused
-  // on every revisit. Edit sessions write edits back into the metadata (the
-  // library treats the host's metadata as the diff's content owner and
-  // self-heals session-shaped metadata on re-render), so reusing the object
-  // is what keeps a diff's edited content across file switches — the editor's
-  // persist-state API covers only selections and scroll for diffs.
-  // Placeholder File surfaces need no equivalent: with `persistState` on the
-  // shared editor, the per-cacheKey document cache restores their edited
-  // contents (and undo history) on re-attach.
-  const diffsRef = useRef<Map<string, FileDiffMetadata>>(new Map());
+  // One external diff baseline per changed file, created up front for worker
+  // priming and reused on every visit so its cache identity remains stable.
+  const [diffs] = useState<Map<string, FileDiffMetadata>>(() => {
+    const diffs = new Map<string, FileDiffMetadata>();
+    for (const file of session.changedFiles) {
+      const diff = getFileDiff(file);
+      diffs.set(file.path, diff);
+      void workerPool?.primeDiffHighlightCache(diff);
+    }
+    return diffs;
+  });
+
   // Paths the user has edited. Only consulted to stop an edited file from
   // hydrating out of its prerendered (pristine) server HTML on revisit.
   const editedPathsRef = useRef<Set<string>>(new Set());
@@ -996,9 +1004,7 @@ export function AgentUi({
 
   // Edited placeholder files listed in the Changes panel as "modified". The
   // entries carry zero snapshot counts because the tree's row decoration
-  // always finds live counts in `liveStats` for tracked placeholders; the
-  // edited contents themselves live in the shared editor's persist-state
-  // document cache, not here.
+  // always finds live counts in `liveStats` for tracked placeholders.
   const editedPlaceholderFiles = useMemo<AuiChangedFile[]>(
     () =>
       editedPlaceholders.map((path) => {
@@ -1018,7 +1024,7 @@ export function AgentUi({
   // The session shown in the Changes panel: the live session (agent changes plus
   // explorer-added files) augmented with any edited placeholders. Kept separate
   // from `liveSession` so editing a placeholder lists it here without flipping
-  // its center surface from the editable File view to a diff.
+  // its center view from the editable File component to a diff.
   const changesSession = useMemo<AuiSession>(
     () => ({
       ...liveSession,
@@ -1029,8 +1035,8 @@ export function AgentUi({
 
   const editorOptions = useMemo<EditorOptions<undefined>>(
     () => ({
-      persistState: true,
       enabledSelectionAction: true,
+      ownsVerticalViewport: true,
       renderSelectionAction(selectionAction) {
         const container = document.createElement('div');
         container.style.cssText = 'display: flex; gap: 4px;';
@@ -1073,10 +1079,10 @@ export function AgentUi({
       onAttach(editor) {
         // Selecting a file leaves keyboard focus in the tree, so undo/redo
         // shortcuts would silently go nowhere until the user clicks back into
-        // the code — reading as a lost edit history even though the
-        // persist-state document cache restored it. When a file switch lands,
-        // hand focus to the editor; preventScroll keeps the restored viewport
-        // position. The initial auto-opened file must not steal page focus.
+        // the code — reading as a lost edit history even though the retained
+        // document restored it. When a file switch lands, hand focus to the
+        // editor; preventScroll keeps the restored viewport position. The
+        // initial auto-opened file must not steal page focus.
         const target = activeTargetRef.current;
         if (
           lastAttachedPathRef.current !== null &&
@@ -1086,19 +1092,23 @@ export function AgentUi({
         }
         lastAttachedPathRef.current = target;
       },
-      onChange(file) {
-        const target = activeTargetRef.current;
-        if (target == null) {
-          return;
-        }
-        editedPathsRef.current.add(target);
-        // Recompute the edited file's diff against its original snapshot so the
-        // Changes tree's +/- totals reflect the live edits.
-        recordEditedStatsRef.current(target, file.contents);
-      },
       __debug: true,
     }),
     [addSnippet]
+  );
+
+  const handleEditChange = useCallback(
+    (event: EditorChangeEvent<undefined, 'file' | 'diff'>) => {
+      const target = activeTargetRef.current;
+      if (target == null) {
+        return;
+      }
+      editedPathsRef.current.add(target);
+      // Recompute the edited file's diff against its original snapshot so the
+      // Changes tree's +/- totals reflect the live edits.
+      recordEditedStatsRef.current(target, event.file.contents);
+    },
+    []
   );
 
   const openFile = useCallback((path: string) => {
@@ -1113,10 +1123,11 @@ export function AgentUi({
         : null,
     [liveSession, activePath]
   );
+  const fileDiff = activeFile != null ? diffs.get(activeFile.path) : undefined;
 
   // When the active path isn't a changed/added file (e.g. browsing the root
   // README or another explorer file), open editable placeholder contents
-  // instead of a diff so the surface is never blank.
+  // instead of a diff so the view is never blank.
   const placeholderContents = useMemo<string | null>(
     () =>
       activePath != null && activeFile == null
@@ -1125,27 +1136,16 @@ export function AgentUi({
     [activePath, activeFile]
   );
 
-  // The active file's diff metadata: parsed once on first visit, then reused
-  // from the cache so revisits render the content the last edit session wrote
-  // back into it.
-  const fileDiff = useMemo(() => {
-    if (activeFile == null) {
-      return null;
-    }
-    let diff = diffsRef.current.get(activeFile.path);
-    if (diff == null) {
-      diff = getFileDiff(activeFile);
-      diffsRef.current.set(activeFile.path, diff);
-    }
-    return diff;
-  }, [activeFile]);
-
   // Server-rendered, already-highlighted HTML for the active diff. Only safe
   // when the file is unedited so the markup matches `fileDiff`.
   const activePrerenderedHTML =
     activePath != null && !editedPathsRef.current.has(activePath)
       ? prerenderedDiffs?.[activePath]
       : undefined;
+  const fileDiffEditStateKey =
+    activePath != null ? `homepage-agent:file-diff:${activePath}` : undefined;
+  const fileEditStateKey =
+    activePath != null ? `homepage-agent:file:${activePath}` : undefined;
 
   const breadcrumbSegments = activePath != null ? activePath.split('/') : [];
 
@@ -1239,17 +1239,18 @@ export function AgentUi({
                 options={{ ...AUI_DIFF_OPTIONS, theme }}
                 prerenderedHTML={activePrerenderedHTML}
                 edit
+                editStateKey={fileDiffEditStateKey}
                 editorOptions={editorOptions}
+                onEditChange={handleEditChange}
               />
             ) : placeholderContents != null && activePath != null ? (
               // Editable view for explorer files that aren't part of the change
               // set (e.g. the root README or a generated stub). Always mounts
-              // with the pristine placeholder contents: `cacheKey` is required
-              // by the shared editor's `persistState`, whose per-file document
-              // cache substitutes any previously edited contents (and their
-              // undo history) when the surface re-attaches.
+              // with the latest placeholder contents. The per-path edit history
+              // restores undo history when the component re-attaches; cacheKey
+              // remains only a render-cache identity.
               // Highlighted on the main thread since this File is mounted
-              // dynamically outside the editable surface's worker pool.
+              // dynamically outside the editable component's worker pool.
               <File
                 key={activePath}
                 file={{
@@ -1266,7 +1267,9 @@ export function AgentUi({
                 }}
                 disableWorkerPool
                 edit
+                editStateKey={fileEditStateKey}
                 editorOptions={editorOptions}
+                onEditChange={handleEditChange}
               />
             ) : (
               <div className="aui-empty">Select a file to review.</div>
@@ -1299,7 +1302,7 @@ export function AgentUi({
                         disableLineNumbers: true,
                       }}
                       // The page's shared worker pool is wired up for the
-                      // editable editor surface; a dynamically mounted
+                      // editable editor component; a dynamically mounted
                       // read-only File isn't highlighted through it, so
                       // highlight on the main thread.
                       disableWorkerPool
@@ -1323,6 +1326,7 @@ export function AgentUi({
             <textarea
               className="aui-composer-input"
               placeholder="Ask for changes, @mention files, or run commands…"
+              aria-label="Ask for changes, @mention files, or run commands"
               rows={2}
               disabled
             />

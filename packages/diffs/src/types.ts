@@ -13,6 +13,8 @@ import type {
   ThemeRegistrationResolved,
 } from 'shiki';
 
+import type { EditorEditCompleteEvent, EditState } from './editor/types';
+
 export type { CreatePatchOptionsNonabortable };
 
 export type CodeViewScrollBehavior = 'instant' | 'smooth' | 'smooth-auto';
@@ -32,11 +34,7 @@ export interface FileContents {
   lang?: SupportedLanguages;
   /** Optional header passed to the jsdiff library's `createTwoFilesPatch`. */
   header?: string;
-  /**
-   * Identifies a file for caching. Optional for read-only rendering, but
-   * required and expected to be unique and stable when Editor `persistState`
-   * is enabled.
-   */
+  /** Identifies a file for worker pool highlight caching. */
   cacheKey?: string;
 }
 
@@ -374,6 +372,19 @@ export interface FileDiffMetadata {
   cacheKey?: string;
 }
 
+/** FileDiff baseline and hunk state needed to resume an editing session. */
+export interface RetainedDiffSessionSnapshot {
+  oldFile: { name: string; lines: string[] } | null;
+  type: ChangeTypes;
+  hunks: Hunk[];
+}
+
+/** @internal Current diff state and whether the document changed while editing. */
+export interface CapturedDiffSessionState {
+  diffSession: RetainedDiffSessionSnapshot;
+  hasChanges: boolean;
+}
+
 export type MergeConflictMarkerRowType =
   | 'marker-start'
   | 'marker-base'
@@ -548,6 +559,14 @@ export type DiffLineAnnotation<T = undefined> = {
   side: AnnotationSide;
   lineNumber: number;
 } & OptionalMetadata<T>;
+
+/**
+ * An edit-completion handler's decision: `'accept'` installs the completed
+ * value the event carries, `'reject'` restores the external input. The event
+ * is frozen, so re-key the accepted value in place (`event.file.cacheKey =
+ * '…'`) before returning `'accept'`.
+ */
+export type EditCompletionDecision = 'accept' | 'reject';
 
 export type CodeViewFileItem<T = undefined> = {
   id: string;
@@ -835,9 +854,6 @@ export interface RenderedDiffASTCache {
   result: ThemedDiffResult | undefined;
   renderRange: RenderRange | undefined;
   isDirty?: boolean;
-  // A render was skipped while a highlight was in progress; its completion
-  // will trigger a re-render.
-  highlightPending?: boolean;
 }
 
 /**
@@ -999,6 +1015,8 @@ export interface EditorActiveLineOptions {
   side?: SelectionSide;
 }
 
+export type EditorDocumentKind = 'file' | 'file-diff';
+
 export interface DiffsBaseComponent {
   readonly type: 'file' | 'file-diff' | 'unresolved-file';
   readonly top?: number;
@@ -1026,13 +1044,20 @@ export interface DiffsBaseComponent {
 export interface DiffsEditableComponent<
   LAnnotation,
 > extends DiffsBaseComponent {
-  /** @internal Return the current file when this component renders one. */
-  __getCurrentFile?: () => FileContents | undefined;
   /**
    * @internal Code options with worker-pool overrides applied: the theme the
    * shared highlighter is actually loaded with and the pool's tokenize limit.
    */
   __getEffectiveCodeOptions(): BaseCodeOptions;
+  /**
+   * @internal Capture the current diff session, or return `undefined` when no
+   * complete compatible session exists.
+   *
+   * When `clone` is true, the returned lines and hunks are copied.
+   */
+  __captureDocumentSessionState: (
+    clone?: boolean
+  ) => CapturedDiffSessionState | undefined;
   /** @internal Keep the editor caret decoration separate from line selection. */
   setEditorActiveLine: (
     lineNumber: number | null,
@@ -1079,15 +1104,40 @@ export interface DiffsEditableComponent<
    * follow, possibly deferred).
    */
   revealLine?: (lineNumber: number) => boolean;
+  /** @internal Associate an editor with this component */
+  __attachEditor: (editor: DiffsEditor<LAnnotation>) => () => void;
+  /** @internal Resume rendering for the editor already associated with this component. */
+  __resumeEditor: (editor: DiffsEditor<LAnnotation>) => void;
   /**
-   * Attach an editor to this component. The returned detach closure receives
-   * `recycle: true` when the editor is only being released by a virtualized
-   * unmount (the session continues on remount) and no argument/false on a
-   * genuine session end.
+   * Deliver `EditorChangeEvent` to the component's owner. The attached
+   * editor calls this with the same event object it reports through its own
+   * `onChange`; the component forwards it to its `onEditChange` option.
    */
-  attachEditor: (
-    editor: DiffsEditor<LAnnotation>
-  ) => (recycle?: boolean) => void;
+  emitEditChange(event: EditorChangeEvent<LAnnotation, 'file' | 'diff'>): void;
+  /**
+   * @internal
+   *
+   * End the edit session and settle which external value the component
+   * renders and run the component's `onEditComplete`. The caller supplies the
+   * editor that owns the session, which may already be detached. `install`
+   * applies an accepted result; `discard` still runs completion but never
+   * installs session output. Does nothing once no session exists.
+   */
+  __completeEditSession(
+    editor: DiffsEditor<LAnnotation>,
+    mode: 'install' | 'discard'
+  ): void;
+  /**
+   * Resolve the shadow-DOM slot name for one of this component's line
+   * annotations. While an edit session is active, the name each annotation
+   * carried when it entered the session is kept even as its line number is
+   * remapped, so slotted light-DOM content stays projected without the owner
+   * re-rendering it. Outside a session this is the plain position-derived
+   * name.
+   */
+  getAnnotationSlotName: (
+    annotation: LineAnnotation<LAnnotation> | DiffLineAnnotation<LAnnotation>
+  ) => string;
   applyDocumentChange: (
     textDocument: DiffsTextDocument,
     newLineAnnotations?: DiffLineAnnotation<LAnnotation>[],
@@ -1121,26 +1171,60 @@ export type EditableInstance<T extends { type: string }> = T extends {
   ? never
   : T;
 
+interface SyncRenderViewBaseProps {
+  highlighter: DiffsHighlighter;
+  fileContainer: HTMLElement;
+  renderRange: RenderRange | undefined;
+  /** Start fresh history instead of retaining or extending the current history. */
+  resetHistory?: boolean;
+}
+
+export interface SyncFileRenderViewProps<
+  LAnnotation,
+> extends SyncRenderViewBaseProps {
+  file: FileContents;
+  lineAnnotations: LineAnnotation<LAnnotation>[] | undefined;
+  /** Treat the supplied contents as an externally provided document update. */
+  externalDocument?: boolean;
+}
+
+export interface SyncDiffRenderViewProps<
+  LAnnotation,
+> extends SyncRenderViewBaseProps {
+  fileDiff: FileDiffMetadata;
+  lineAnnotations: DiffLineAnnotation<LAnnotation>[] | undefined;
+  /** Treat the supplied contents as an externally provided document update. */
+  externalDocument?: boolean;
+}
+
+export type SyncRenderViewProps<LAnnotation> =
+  | SyncFileRenderViewProps<LAnnotation>
+  | SyncDiffRenderViewProps<LAnnotation>;
+
 export interface DiffsEditor<LAnnotation> {
-  /** @internal */
-  __prepareFile?(file: FileContents): FileContents;
+  /** Return an isolated copy of selections and editor-owned viewport state. */
+  getViewState(): EditorViewState;
+  /**
+   * Returns the raw objects for the active edit session, or undefined when no
+   * complete state is available. State remains available while rendering is
+   * recycled and during `onEditComplete`. The result is borrowed editor-owned
+   * state and can be transferred directly as `initialState`.
+   */
+  getEditState(): EditState<LAnnotation> | undefined;
   __postponeBgTokenizeToNextFrame(): void;
   /** @internal Capture focus intent before replacing the editable view. */
   __captureFocusForDOMReplacement(): void;
-  __syncRenderView(
-    highlighter: DiffsHighlighter,
-    fileContainer: HTMLElement,
-    fileOrDiff: FileContents | FileDiffMetadata,
-    lineAnnotations:
-      | LineAnnotation<LAnnotation>[]
-      | DiffLineAnnotation<LAnnotation>[]
-      | undefined,
-    renderRange: RenderRange | undefined
-  ): void;
+  /** @internal Return the active document that an edit-session render should use. */
+  __getDocumentContents(fallbackFile?: FileContents): FileContents | undefined;
+  /** @internal Return component state retained with the active document. */
+  __getDocumentSessionState(): RetainedDiffSessionSnapshot | undefined;
+  __syncRenderView(props: SyncRenderViewProps<LAnnotation>): void;
   edit<T extends DiffsEditableComponent<LAnnotation>>(
     fileInstance: EditableInstance<T>
   ): () => void;
-  cleanUp(recycle?: boolean): void;
+  /** @internal Notify the editor that its active edit session completed. */
+  __emitEditComplete(event: EditorEditCompleteEvent<LAnnotation>): void;
+  cleanUp(reason?: 'discard' | 'recycle' | 'complete'): void;
 }
 
 /**
@@ -1232,13 +1316,14 @@ export interface EditorChange extends ResolvedTextEdit {
   range: Range;
 }
 
-/** The document state and normalized edits reported after an editor change. */
-export interface EditorChangeEvent<LAnnotation> {
+/** The document and normalized edits reported after an editor change. */
+export interface EditorChangeEvent<LAnnotation, TMode extends 'file' | 'diff'> {
   changes: EditorChange[];
   file: FileContents;
-  lineAnnotations?:
-    | LineAnnotation<LAnnotation>[]
-    | DiffLineAnnotation<LAnnotation>[];
+  editor: DiffsEditor<LAnnotation>;
+  lineAnnotations?: TMode extends 'file'
+    ? LineAnnotation<LAnnotation>[]
+    : DiffLineAnnotation<LAnnotation>[];
 }
 
 /**
@@ -1253,16 +1338,16 @@ export interface EditorSelection extends Range {
   direction: SelectionDirection;
 }
 
-export interface EditorViewState {
+export interface EditorViewportState {
   /** Horizontal position owned by the current editable code scroller. */
   scrollLeft: number;
   /** Vertical position of the editor viewport. */
   scrollTop?: number;
 }
 
-export interface EditorState {
+export interface EditorViewState {
   selections?: EditorSelection[];
-  view?: EditorViewState;
+  view?: EditorViewportState;
 }
 
 export interface DiffsTextDocument {
@@ -1274,18 +1359,12 @@ export interface DiffsTextDocument {
 /**
  * Options CodeView passes to its `createEditor` factory. A structural subset
  * of `EditorOptions` from `@pierre/diffs/edit`, so factories can spread
- * them straight into the constructor — `new Editor({ ...options })` — and
- * layer any editor configuration of their own on top. Forwarding `onChange`
- * is what lets CodeView resolve document changes back to the owning item and
- * emit them through its own `onItemEditChange` option.
+ * them straight into the constructor —
+ * `new Editor(documentKind, { ...options })` — and layer any editor
+ * configuration of their own on top. Forwarding `onChange` is what lets
+ * CodeView resolve document changes back to the owning item and emit them
+ * through its own `onItemEditChange` option.
  */
 export interface CodeViewCreateEditorOptions<LAnnotation> {
-  onChange: (
-    file: FileContents,
-    lineAnnotations:
-      | LineAnnotation<LAnnotation>[]
-      | DiffLineAnnotation<LAnnotation>[]
-      | undefined,
-    event: EditorChangeEvent<LAnnotation>
-  ) => void;
+  onChange(event: EditorChangeEvent<LAnnotation, 'file' | 'diff'>): void;
 }

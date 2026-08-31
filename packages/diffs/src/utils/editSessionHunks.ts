@@ -26,7 +26,7 @@ import {
 // While an editor is attached to a FileDiff, each hunk is a persistent region
 // identified by its old-side range. Structural passes rebuild those regions
 // from one canonical old/current diff; a reverted region remains as context so
-// its rows keep rendering until the genuine session-exit recompute.
+// its rows keep rendering until the session-exit recompute.
 
 export interface DivergenceCore {
   start: number;
@@ -408,9 +408,11 @@ export function rebuildExpansionFromAnchors(
 }
 
 /**
- * Genuine session exit: when session passes reshaped the hunks, run the real
- * full recompute so exit state matches a non-session edit pipeline, and clear
- * the marker. Returns true when a recompute ran.
+ * While editing, hunk updates keep a lightweight session-specific shape and
+ * mark the diff with `editSessionDirty`. Called at session end, this
+ * recomputes the hunks in full from the diff's current lines — the same
+ * hunks a non-session edit would have produced — and clears the flag.
+ * Returns true when a recompute ran.
  */
 export function finishEditSessionForDiff(
   diff: FileDiffMetadata,
@@ -419,7 +421,7 @@ export function finishEditSessionForDiff(
   if (diff.editSessionDirty !== true) {
     return false;
   }
-  diff.editSessionDirty = undefined;
+  delete diff.editSessionDirty;
   // The empty editor row only hosts a caret; it is not file content after exit.
   Object.assign(
     diff,

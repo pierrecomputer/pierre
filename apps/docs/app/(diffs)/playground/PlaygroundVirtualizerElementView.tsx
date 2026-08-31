@@ -3,10 +3,12 @@
 import {
   type AnnotationSide,
   type DiffLineAnnotation,
+  type FileDiffEditCompleteEvent,
   type FileDiffMetadata,
   type FileDiffOptions,
+  type FileEditCompleteEvent,
   type FileOptions,
-  isDiffAnnotationCollection,
+  type LineAnnotation,
   type SelectedLineRange,
 } from '@pierre/diffs';
 import type { EditorOptions } from '@pierre/diffs/edit';
@@ -16,14 +18,13 @@ import {
   useStableCallback,
   Virtualizer,
 } from '@pierre/diffs/react';
-import { IconCheckboxFill, IconSquircleLg } from '@pierre/icons';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { flushSync } from 'react-dom';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { PlaygroundAnnotationMetadata } from './constants';
 import { ITEM_UNSAFE_CSS, LONG_README_FILE } from './constants';
 import type { SharedRenderOptions } from './PlaygroundClient';
 import { CommentForm, CommentThread } from './PlaygroundComments';
+import { EditSessionButtons } from './PlaygroundEditButtons';
 
 const SCROLL_REGION_STYLES = { height: '70vh', overflow: 'auto' } as const;
 
@@ -54,7 +55,12 @@ export function PlaygroundVirtualizerElementView({
       className="border-border rounded-lg border"
       style={SCROLL_REGION_STYLES}
     >
-      <ElementVirtualizerFile options={options} />
+      <ElementVirtualizerFile
+        options={options}
+        enableLineSelection={enableLineSelection}
+        enableGutterComments={enableGutterComments}
+        showAnnotations={showAnnotations}
+      />
       {diffs.map((fileDiff) => (
         <ElementVirtualizerDiff
           key={fileDiff.name}
@@ -69,55 +75,189 @@ export function PlaygroundVirtualizerElementView({
   );
 }
 
-const FILE_EDITOR_OPTIONS: EditorOptions<undefined> = {
-  onAttach(editor) {
-    editor.focus({ lineNumber: 'first-visible', preventScroll: true });
-  },
-};
+interface ElementVirtualizerFileProps {
+  options: SharedRenderOptions;
+  enableLineSelection: boolean;
+  enableGutterComments: boolean;
+  showAnnotations: boolean;
+}
 
-// The long README plain-file surface leading the list. Carries the same
-// header Edit toggle as the diffs (the app-level EditProvider creates its
-// editor); no comment wiring, since the demo file has no annotations.
-function ElementVirtualizerFile({ options }: { options: SharedRenderOptions }) {
+const EMPTY_FILE_ANNOTATIONS: LineAnnotation<PlaygroundAnnotationMetadata>[] =
+  [];
+
+// The long README plain-file component leading the list. It owns the same edit,
+// line-selection, and gutter-comment behavior as each diff below it.
+function ElementVirtualizerFile({
+  options,
+  enableLineSelection,
+  enableGutterComments,
+  showAnnotations,
+}: ElementVirtualizerFileProps) {
+  const [file, setFile] = useState(LONG_README_FILE);
   const [editing, setEditing] = useState(false);
+  // Cancel marks the session before turning edit off; the completion handler
+  // consumes the mark to revert instead of accept.
+  const cancelled = useRef(false);
+  const savedVersion = useRef(0);
+  const [annotations, setAnnotations] = useState<
+    LineAnnotation<PlaygroundAnnotationMetadata>[]
+  >([]);
+  const [selectedLines, setSelectedLines] = useState<SelectedLineRange | null>(
+    null
+  );
 
-  const fileOptions = useMemo<FileOptions<undefined>>(
+  const editorOptions = useMemo<EditorOptions<PlaygroundAnnotationMetadata>>(
+    () => ({
+      onAttach(editor) {
+        editor.focus({ lineNumber: 'first-visible', preventScroll: true });
+      },
+    }),
+    []
+  );
+
+  // Save accepts the completed file under a fresh cacheKey and stores it as
+  // the component's file; Cancel reverts to the current one.
+  const handleEditComplete = useCallback(
+    (event: FileEditCompleteEvent<PlaygroundAnnotationMetadata>) => {
+      if (cancelled.current) {
+        cancelled.current = false;
+        return 'reject';
+      }
+      savedVersion.current += 1;
+      event.file.cacheKey = `${event.file.name}:v${savedVersion.current}`;
+      setFile(event.file);
+      // Adopt the session's final annotation positions so the comment
+      // portals render into the accepted (moved) slots.
+      if (event.lineAnnotations != null) {
+        setAnnotations(event.lineAnnotations);
+      }
+      return 'accept';
+    },
+    []
+  );
+
+  const addCommentAtRange = useCallback((range: SelectedLineRange) => {
+    const lineNumber = range.end;
+    setAnnotations((current) =>
+      current.some((annotation) => annotation.lineNumber === lineNumber)
+        ? current
+        : [
+            ...current,
+            {
+              lineNumber,
+              metadata: { key: `line-${lineNumber}`, isThread: false },
+            },
+          ]
+    );
+  }, []);
+
+  const removeCommentAtLine = useCallback(
+    (_side: AnnotationSide | undefined, lineNumber: number) => {
+      setAnnotations((current) =>
+        current.filter((annotation) => annotation.lineNumber !== lineNumber)
+      );
+      setSelectedLines(null);
+    },
+    []
+  );
+
+  const submitCommentAtLine = useCallback(
+    (_side: AnnotationSide | undefined, lineNumber: number, body: string) => {
+      setAnnotations((current) =>
+        current.map((annotation) =>
+          annotation.lineNumber === lineNumber
+            ? { ...annotation, metadata: { ...annotation.metadata, body } }
+            : annotation
+        )
+      );
+      setSelectedLines(null);
+    },
+    []
+  );
+
+  useEffect(() => {
+    if (!showAnnotations) {
+      setSelectedLines(null);
+    }
+  }, [showAnnotations]);
+
+  const hasOpenCommentForm = annotations.some(
+    (annotation) => annotation.metadata.body == null
+  );
+  const canSelectLines =
+    enableLineSelection && !enableGutterComments && !hasOpenCommentForm;
+  const canUseGutterComments =
+    enableGutterComments && showAnnotations && !hasOpenCommentForm;
+
+  const fileOptions = useMemo<FileOptions<PlaygroundAnnotationMetadata>>(
     () => ({
       ...options,
       stickyHeader: true,
       unsafeCSS: ITEM_UNSAFE_CSS,
+      enableLineSelection: canSelectLines,
+      enableGutterUtility: canUseGutterComments,
+      onLineSelectionStart: setSelectedLines,
+      onLineSelectionChange: setSelectedLines,
+      onLineSelectionEnd: setSelectedLines,
+      onGutterUtilityClick: canUseGutterComments
+        ? addCommentAtRange
+        : undefined,
     }),
-    [options]
+    [options, canSelectLines, canUseGutterComments, addCommentAtRange]
+  );
+
+  const renderAnnotation = useStableCallback(
+    (annotation: LineAnnotation<PlaygroundAnnotationMetadata>) => {
+      return annotation.metadata.body != null ? (
+        <CommentThread
+          body={annotation.metadata.body}
+          onDelete={() => removeCommentAtLine(undefined, annotation.lineNumber)}
+        />
+      ) : (
+        <CommentForm
+          side={undefined}
+          lineNumber={annotation.lineNumber}
+          onCancel={removeCommentAtLine}
+          onSubmit={submitCommentAtLine}
+        />
+      );
+    }
   );
 
   // Must NOT be a stable callback — see ElementVirtualizerDiff's
   // renderHeaderMetadata for why a per-`editing` useCallback is required.
-  const renderHeaderMetadata = useCallback(() => {
-    return (
-      <button
-        type="button"
-        onClick={() => setEditing((current) => !current)}
-        aria-pressed={editing}
-        className="playground-edit-toggle"
-      >
-        <IconCheckboxFill
-          size={12}
-          className="playground-edit-toggle-icon-on"
-        />
-        <IconSquircleLg size={12} className="playground-edit-toggle-icon-off" />
-        <span className="playground-edit-toggle-label-on">Editing</span>
-        <span className="playground-edit-toggle-label-off">Edit</span>
-      </button>
-    );
-  }, [editing]);
+  const renderHeaderMetadata = useCallback(
+    () => (
+      <EditSessionButtons
+        editing={editing}
+        onEdit={() => {
+          cancelled.current = false;
+          setEditing(true);
+        }}
+        onCancel={() => {
+          cancelled.current = true;
+          setEditing(false);
+        }}
+        onSave={() => {
+          cancelled.current = false;
+          setEditing(false);
+        }}
+      />
+    ),
+    [editing]
+  );
 
   return (
     <File
-      file={LONG_README_FILE}
+      file={file}
       edit={editing}
+      selectedLines={selectedLines}
+      lineAnnotations={showAnnotations ? annotations : EMPTY_FILE_ANNOTATIONS}
       options={fileOptions}
-      editorOptions={FILE_EDITOR_OPTIONS}
+      editorOptions={editorOptions}
+      onEditComplete={handleEditComplete}
       renderHeaderMetadata={renderHeaderMetadata}
+      renderAnnotation={renderAnnotation}
     />
   );
 }
@@ -133,9 +273,9 @@ interface ElementVirtualizerDiffProps {
 const EMPTY_ANNOTATIONS: DiffLineAnnotation<PlaygroundAnnotationMetadata>[] =
   [];
 
-// One diff in the element-scroll list. Each surface is its own state island
+// One diff in the element-scroll list. Each component is its own state island
 // with an edit toggle, editor options, and annotations. The app-level
-// EditProvider creates an independent editor when that surface enters edit
+// EditProvider creates an independent editor when that component enters edit
 // mode.
 function ElementVirtualizerDiff({
   fileDiff,
@@ -144,7 +284,12 @@ function ElementVirtualizerDiff({
   enableGutterComments,
   showAnnotations,
 }: ElementVirtualizerDiffProps) {
+  const [currentDiff, setCurrentDiff] = useState(fileDiff);
   const [editing, setEditing] = useState(false);
+  // Cancel marks the session before turning edit off; the completion handler
+  // consumes the mark to revert instead of accept.
+  const cancelled = useRef(false);
+  const savedVersion = useRef(0);
   const [annotations, setAnnotations] = useState<
     DiffLineAnnotation<PlaygroundAnnotationMetadata>[]
   >([]);
@@ -152,28 +297,31 @@ function ElementVirtualizerDiff({
     null
   );
 
-  // Edits remap annotation line numbers; onChange hands the remapped set back
-  // so the `lineAnnotations` prop — and the React-slotted comment content
-  // keyed by line number — follows the edit. The flushSync matters: the
-  // editor renamed the shadow-DOM annotation slots during this same
-  // keystroke, and a scheduled commit would leave the comments projected
-  // nowhere for the frames in between.
   const editorOptions = useMemo<EditorOptions<PlaygroundAnnotationMetadata>>(
     () => ({
       onAttach(editor) {
         editor.focus({ lineNumber: 'first-visible', preventScroll: true });
       },
-      onChange(_file, lineAnnotations) {
-        if (
-          lineAnnotations != null &&
-          isDiffAnnotationCollection(lineAnnotations)
-        ) {
-          flushSync(() => {
-            setAnnotations(lineAnnotations);
-          });
-        }
-      },
     }),
+    []
+  );
+
+  // Save accepts the completed diff under a fresh cacheKey and stores it as
+  // the component's diff; Cancel reverts to the current one.
+  const handleEditComplete = useCallback(
+    (event: FileDiffEditCompleteEvent<PlaygroundAnnotationMetadata>) => {
+      if (cancelled.current) {
+        cancelled.current = false;
+        return 'reject';
+      }
+      savedVersion.current += 1;
+      event.fileDiff.cacheKey = `${event.fileDiff.name}:v${savedVersion.current}`;
+      setCurrentDiff(event.fileDiff);
+      if (event.lineAnnotations != null) {
+        setAnnotations(event.lineAnnotations);
+      }
+      return 'accept';
+    },
     []
   );
 
@@ -291,33 +439,36 @@ function ElementVirtualizerDiff({
   // state) through a stable wrapper would render the button one toggle behind —
   // the header would reflect the previous `editing` value. A per-`editing`
   // useCallback hands renderDiffChildren the current closure each toggle.
-  const renderHeaderMetadata = useCallback(() => {
-    return (
-      <button
-        type="button"
-        onClick={() => setEditing((current) => !current)}
-        aria-pressed={editing}
-        className="playground-edit-toggle"
-      >
-        <IconCheckboxFill
-          size={12}
-          className="playground-edit-toggle-icon-on"
-        />
-        <IconSquircleLg size={12} className="playground-edit-toggle-icon-off" />
-        <span className="playground-edit-toggle-label-on">Editing</span>
-        <span className="playground-edit-toggle-label-off">Edit</span>
-      </button>
-    );
-  }, [editing]);
+  const renderHeaderMetadata = useCallback(
+    () => (
+      <EditSessionButtons
+        editing={editing}
+        onEdit={() => {
+          cancelled.current = false;
+          setEditing(true);
+        }}
+        onCancel={() => {
+          cancelled.current = true;
+          setEditing(false);
+        }}
+        onSave={() => {
+          cancelled.current = false;
+          setEditing(false);
+        }}
+      />
+    ),
+    [editing]
+  );
 
   return (
     <FileDiff
-      fileDiff={fileDiff}
+      fileDiff={currentDiff}
       edit={editing}
       selectedLines={selectedLines}
       lineAnnotations={showAnnotations ? annotations : EMPTY_ANNOTATIONS}
       options={fileDiffOptions}
       editorOptions={editorOptions}
+      onEditComplete={handleEditComplete}
       renderHeaderMetadata={renderHeaderMetadata}
       renderAnnotation={renderAnnotation}
     />

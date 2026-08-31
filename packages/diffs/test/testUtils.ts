@@ -4,6 +4,24 @@ import { DEFAULT_COLLAPSED_CONTEXT_THRESHOLD } from '../src/constants';
 import type { HunksRenderResult } from '../src/renderers/DiffHunksRenderer';
 import type { FileDiffMetadata, ParsedPatch } from '../src/types';
 
+// Async test helpers
+
+export interface Deferred<T> {
+  promise: Promise<T>;
+  resolve(value: T): void;
+  reject(error: unknown): void;
+}
+
+export function createDeferred<T>(): Deferred<T> {
+  let resolve!: (value: T) => void;
+  let reject!: (error: unknown) => void;
+  const promise = new Promise<T>((promiseResolve, promiseReject) => {
+    resolve = promiseResolve;
+    reject = promiseReject;
+  });
+  return { promise, resolve, reject };
+}
+
 // Assertion helpers
 
 export function assertDefined<T>(

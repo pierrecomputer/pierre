@@ -57,36 +57,56 @@
         throw new Error('Missing edit fixture nodes.');
       }
 
-      const oldFile = {
-        name: 'edit.ts',
-        contents: `const value = 1;
+      const withAnnotations = new URLSearchParams(location.search).has(
+        'annotations'
+      );
+      const oldFile = withAnnotations
+        ? {
+            name: 'edit.ts',
+            contents: `const shared = 1;
+export default shared;
+`,
+          }
+        : {
+            name: 'edit.ts',
+            contents: `const value = 1;
 const removed = 'old';
 export default value;
 `,
-      };
+          };
 
-      const newFile = {
-        name: 'edit.ts',
-        contents: `const value = 1;
+      const newFile = withAnnotations
+        ? {
+            name: 'edit.ts',
+            contents: `const shared = 1;
+const annotated = 2;
+export default shared;
+`,
+          }
+        : {
+            name: 'edit.ts',
+            contents: `const value = 1;
 const added = 'new';
 export default value;
 `,
-      };
+          };
+      const lineAnnotations = withAnnotations
+        ? [{ lineNumber: 2, side: 'additions' }]
+        : undefined;
 
       // Every onChange payload is recorded so tests can assert the editor emits
       // the updated file contents rather than inspecting the DOM alone.
       const events = [];
       window.__editorEvents = events;
 
-      const editor = new Editor({
-        onChange(file) {
-          events.push(file.contents);
-          log.textContent = `changes: ${events.length}`;
-        },
-      });
+      const editor = new Editor('file-diff');
       window.__editor = editor;
 
       const instance = new FileDiff({
+        onEditChange({ file }) {
+          events.push(file.contents);
+          log.textContent = `changes: ${events.length}`;
+        },
         disableFileHeader: true,
         theme: { dark: 'pierre-dark', light: 'pierre-light' },
         themeType: 'dark',
@@ -95,9 +115,21 @@ export default value;
           'gutterUtility'
         ),
         onGutterUtilityClick() {},
+        renderAnnotation() {
+          const annotation = document.createElement('div');
+          annotation.dataset.testAnnotation = '';
+          annotation.style.height = '80px';
+          annotation.textContent = 'annotation';
+          return annotation;
+        },
       });
 
-      instance.render({ oldFile, newFile, containerWrapper: mount });
+      instance.render({
+        oldFile,
+        newFile,
+        lineAnnotations,
+        containerWrapper: mount,
+      });
       editor.edit(instance);
       // Counts completed editor re-syncs. A full render keeps the editable
       // element in place, so specs can't detect completion by watching for a

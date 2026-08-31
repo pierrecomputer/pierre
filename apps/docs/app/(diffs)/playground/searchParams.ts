@@ -30,7 +30,8 @@ export type PlaygroundLightTheme = (typeof LIGHT_THEMES)[number];
 export type PlaygroundDarkTheme = (typeof DARK_THEMES)[number];
 
 const VIEW_MODES = [
-  'normal',
+  'diff',
+  'file',
   'virtualizer',
   'virtualizer-element',
   'codeview',
@@ -49,16 +50,10 @@ const HUNK_SEPARATOR_VALUES = [
 const LINE_HOVER_HIGHLIGHTS = ['disabled', 'both', 'number', 'line'] as const;
 const LINE_MODES = ['select', 'comment', 'none'] as const;
 
-// The rendering surface the playground diff(s) are drawn with. 'normal' is the
-// single editable FileDiff; 'virtualizer' renders several diffs with window
-// scroll (vanilla Virtualizer); 'virtualizer-element' renders them with the
-// React <Virtualizer> inside its own scroll region; 'codeview' renders a mix
-// of diff/file items in CodeView's own scroller.
+// The rendering view used by the playground. 'diff' and 'file' render one
+// directly controlled component; the virtualizer modes render scrolling lists;
+// 'codeview' renders a mixed list in CodeView's own scroller.
 export type ViewMode = (typeof VIEW_MODES)[number];
-
-// The editable surface is rendered read-only (Review) or attached to a live
-// editor (Edit). Markers are diagnostics shown only while editing.
-export type Mode = 'review' | 'edit';
 
 export type HunkSeparatorValue = (typeof HUNK_SEPARATOR_VALUES)[number];
 export type LineHoverHighlight = (typeof LINE_HOVER_HIGHLIGHTS)[number];
@@ -66,7 +61,7 @@ export type PlaygroundLineDiffType = (typeof LINE_DIFF_TYPES)[number];
 
 // Default values for URL param comparison
 export const DEFAULTS = {
-  viewMode: 'normal' as ViewMode,
+  viewMode: 'diff' as ViewMode,
   diffStyle: 'split',
   colorMode: 'system',
   lightTheme: 'pierre-light',
@@ -82,7 +77,7 @@ export const DEFAULTS = {
   gutterButton: true,
   interactionMode: 'comment' as const,
   annotations: true,
-  mode: 'review' as Mode,
+  edit: false,
   markers: false,
 } as const;
 
@@ -102,7 +97,7 @@ export interface PlaygroundUrlState {
   enableLineSelection: boolean;
   enableGutterUtility: boolean;
   showAnnotations: boolean;
-  mode: Mode;
+  edit: boolean;
   showMarkers: boolean;
   selectedRange: SelectedLineRange | null;
 }
@@ -179,9 +174,10 @@ export function parsePlaygroundSearchParams(
     enableLineSelection,
     enableGutterUtility,
     showAnnotations: pickBool(get('annot'), DEFAULTS.annotations),
-    // Edit mode only exists in the Normal view (other views render per-file
-    // edit controls instead), so only honor `?edit=edit` when starting there.
-    mode: viewMode === 'normal' && get('edit') === 'edit' ? 'edit' : 'review',
+    // Only the direct File and FileDiff views carry their edit session in the
+    // URL; the scrolling views own per-file controls instead.
+    edit:
+      (viewMode === 'diff' || viewMode === 'file') && get('edit') === 'edit',
     showMarkers: pickBool(get('markers'), DEFAULTS.markers),
     selectedRange: parseLineSelection(get('line')),
   };

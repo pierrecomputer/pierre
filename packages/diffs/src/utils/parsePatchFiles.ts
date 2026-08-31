@@ -16,6 +16,7 @@ import type {
   ParsedPatch,
 } from '../types';
 import { cleanLastNewline } from './cleanLastNewline';
+import { composeCacheKey } from './composeCacheKey';
 import { detachString, releaseStringDetachBuffer } from './detachString';
 import {
   getHunkSideEndBoundary,
@@ -46,7 +47,8 @@ export function processPatch(
 function _processPatch(
   data: string,
   cacheKeyPrefix?: string,
-  throwOnError = false
+  throwOnError = false,
+  patchIndex?: number
 ): ParsedPatch {
   const isGitDiff = isGitDiffPatch(data);
   const rawFiles = isGitDiff
@@ -92,7 +94,18 @@ function _processPatch(
     const currentFile = _processFile(fileOrPatchMetadata, {
       cacheKey:
         cacheKeyPrefix != null
-          ? `${cacheKeyPrefix}-${files.length}`
+          ? patchIndex == null
+            ? composeCacheKey(
+                'patch-file',
+                cacheKeyPrefix,
+                String(files.length)
+              )
+            : composeCacheKey(
+                'patch-file',
+                cacheKeyPrefix,
+                String(patchIndex),
+                String(files.length)
+              )
           : undefined,
       isGitDiff,
       throwOnError,
@@ -345,14 +358,14 @@ function _processFile(
         parsedDeletionLines >= hunkData.deletionCount &&
         !rawLine.startsWith('\\')
       ) {
-        if (
-          throwOnError &&
-          isHunkBodyLine(rawLine) &&
-          !isFormatPatchVersionSeparator(rawLine)
-        ) {
+        const isUnexpectedBodyLine =
+          isHunkBodyLine(rawLine) && !isFormatPatchVersionSeparator(rawLine);
+        if (!isUnexpectedBodyLine) {
+          break;
+        }
+        if (throwOnError) {
           throw Error('parsePatchContent: hunk has more lines than expected');
         }
-        break;
       }
 
       const firstChar = rawLine[0];
@@ -482,11 +495,47 @@ function _processFile(
     }
 
     if (
-      throwOnError &&
-      (parsedAdditionLines !== hunkData.additionCount ||
-        parsedDeletionLines !== hunkData.deletionCount)
+      parsedAdditionLines !== hunkData.additionCount ||
+      parsedDeletionLines !== hunkData.deletionCount
     ) {
-      throw Error('parsePatchContent: hunk line count mismatch');
+      if (throwOnError) {
+        throw Error('parsePatchContent: hunk line count mismatch');
+      }
+      console.error(
+        `parsePatchContent: hunk line count mismatch: "${firstLine.trimEnd()}", declared old/new ${hunkData.deletionCount}/${hunkData.additionCount}, parsed old/new ${parsedDeletionLines}/${parsedAdditionLines}`
+      );
+      // Re-encode each original boundary using the repaired count. Zero-count
+      // ranges use the boundary itself as their start; positive ranges use +1.
+      const repairedAdditionStart =
+        getHunkSideStartBoundary(
+          hunkData.additionStart,
+          hunkData.additionCount
+        ) + (parsedAdditionLines === 0 ? 0 : 1);
+      const repairedDeletionStart =
+        getHunkSideStartBoundary(
+          hunkData.deletionStart,
+          hunkData.deletionCount
+        ) + (parsedDeletionLines === 0 ? 0 : 1);
+
+      // Hydrated hunks index into full-file line arrays, so their indexes must
+      // move with repaired starts. Partial hunks index patch-built arrays.
+      if (!isPartial) {
+        const additionStartDelta =
+          repairedAdditionStart - hunkData.additionStart;
+        const deletionStartDelta =
+          repairedDeletionStart - hunkData.deletionStart;
+        hunkData.additionLineIndex += additionStartDelta;
+        hunkData.deletionLineIndex += deletionStartDelta;
+        for (const content of hunkData.hunkContent) {
+          content.additionLineIndex += additionStartDelta;
+          content.deletionLineIndex += deletionStartDelta;
+        }
+      }
+
+      hunkData.additionStart = repairedAdditionStart;
+      hunkData.deletionStart = repairedDeletionStart;
+      hunkData.additionCount = parsedAdditionLines;
+      hunkData.deletionCount = parsedDeletionLines;
     }
 
     hunkData.additionLines = additionLines;
@@ -600,9 +649,12 @@ function _processFile(
  * Parses a patch file string into an array of parsed patches.
  *
  * @param data - The raw patch file content (supports multi-commit patches)
- * @param cacheKeyPrefix - Optional prefix for generating cache keys. When provided,
- *   each file in the patch will get a cache key in the format `prefix-patchIndex-fileIndex`.
- *   This enables caching of rendered diff results in the worker pool.
+ * @param cacheKeyPrefix - Optional prefix for collision-safe cache keys derived
+ *   from the prefix, patch index, and file index. This enables caching of
+ *   rendered diff results in the worker pool.
+ * @param throwOnError - When true, invalid data throws. When false, invalid data
+ *   is reported with `console.error` and the parser attempts to recover when
+ *   possible. Recovery is best-effort and does not guarantee valid output.
  */
 export function parsePatchFiles(
   data: string,
@@ -618,12 +670,11 @@ export function parsePatchFiles(
   for (const patch of rawPatches) {
     try {
       patches.push(
-        processPatch(
+        _processPatch(
           patch,
-          cacheKeyPrefix != null
-            ? `${cacheKeyPrefix}-${patches.length}`
-            : undefined,
-          throwOnError
+          cacheKeyPrefix,
+          throwOnError,
+          cacheKeyPrefix != null ? patches.length : undefined
         )
       );
     } catch (error) {
@@ -632,6 +683,8 @@ export function parsePatchFiles(
       } else {
         console.error(error);
       }
+    } finally {
+      releaseStringDetachBuffer();
     }
   }
   return patches;

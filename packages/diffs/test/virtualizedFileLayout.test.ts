@@ -1,11 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import { VirtualizedFile } from '../src/components/VirtualizedFile';
-import type {
-  DiffsEditor,
-  FileContents,
-  VirtualFileMetrics,
-} from '../src/types';
+import type { FileContents, VirtualFileMetrics } from '../src/types';
 import {
   getVirtualFileHeaderRegion,
   getVirtualFilePaddingBottom,
@@ -40,56 +36,8 @@ const virtualizer = {
 
 const codeView = { type: 'advanced' } as never;
 
-describe('VirtualizedFile persisted layout', () => {
-  test('prepares cached contents before computing approximate height', () => {
-    const dom = installDom();
-    const originalFile: FileContents = {
-      name: 'file.ts',
-      contents: 'one',
-      cacheKey: 'file',
-    };
-    const cachedFile: FileContents = {
-      ...originalFile,
-      contents: 'one\ntwo\nthree\nfour',
-    };
-    let prepareCalls = 0;
-    const editor: DiffsEditor<undefined> = {
-      __prepareFile() {
-        prepareCalls++;
-        return cachedFile;
-      },
-      __captureFocusForDOMReplacement() {},
-      __postponeBgTokenizeToNextFrame() {},
-      __syncRenderView() {},
-      edit() {
-        return () => {};
-      },
-      cleanUp() {},
-    };
-    const instance = new VirtualizedFile({}, virtualizer, metrics);
-    const detach = instance.attachEditor(editor);
-
-    try {
-      instance.render({
-        file: originalFile,
-        fileContainer: document.createElement('div'),
-      });
-
-      expect(prepareCalls).toBe(1);
-      expect(instance.file?.contents).toBe(cachedFile.contents);
-      expect(instance.getVirtualizedHeight()).toBe(
-        getVirtualFileHeaderRegion(metrics, false) +
-          4 * metrics.lineHeight +
-          getVirtualFilePaddingBottom(metrics)
-      );
-    } finally {
-      detach();
-      instance.cleanUp();
-      dom.cleanup();
-    }
-  });
-
-  test('recomputes height when an unkeyed file is mutated in place', () => {
+describe('VirtualizedFile layout', () => {
+  test('recomputes height for a new unkeyed file', () => {
     const dom = installDom();
     const file: FileContents = {
       name: 'mutable.ts',
@@ -106,8 +54,8 @@ describe('VirtualizedFile persisted layout', () => {
           getVirtualFilePaddingBottom(metrics)
       );
 
-      file.contents = 'one\ntwo\nthree';
-      instance.render({ file, fileContainer, forceRender: true });
+      const nextFile = { ...file, contents: 'one\ntwo\nthree' };
+      instance.render({ file: nextFile, fileContainer, forceRender: true });
       expect(instance.getVirtualizedHeight()).toBe(
         getVirtualFileHeaderRegion(metrics, false) +
           3 * metrics.lineHeight +
@@ -119,7 +67,7 @@ describe('VirtualizedFile persisted layout', () => {
     }
   });
 
-  test('recomputes CodeView height for an unkeyed in-place mutation', () => {
+  test('recomputes CodeView height for a new unkeyed file', () => {
     const file: FileContents = {
       name: 'mutable.ts',
       contents: 'one',
@@ -128,12 +76,12 @@ describe('VirtualizedFile persisted layout', () => {
     const headerHeight = getVirtualFileHeaderRegion(metrics, false);
     const paddingBottom = getVirtualFilePaddingBottom(metrics);
 
-    expect(instance.prepareCodeViewItem(file, 0)).toBe(
+    expect(instance.updateCodeViewLayout(file, 0)).toBe(
       headerHeight + metrics.lineHeight + paddingBottom
     );
 
-    file.contents = 'one\ntwo\nthree';
-    expect(instance.prepareCodeViewItem(file, 0)).toBe(
+    const nextFile = { ...file, contents: 'one\ntwo\nthree' };
+    expect(instance.updateCodeViewLayout(nextFile, 0)).toBe(
       headerHeight + 3 * metrics.lineHeight + paddingBottom
     );
   });

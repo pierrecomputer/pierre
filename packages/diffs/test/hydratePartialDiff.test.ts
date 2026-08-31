@@ -6,6 +6,7 @@ import type {
   FileDiffLoadedFiles,
   FileDiffMetadata,
 } from '../src/types';
+import { composeCacheKey } from '../src/utils/composeCacheKey';
 import { hydratePartialDiff } from '../src/utils/hydratePartialDiff';
 import { parsePatchFiles } from '../src/utils/parsePatchFiles';
 import { splitFileContents } from '../src/utils/splitFileContents';
@@ -181,7 +182,44 @@ describe('hydratePartialDiff', () => {
     const hydrated = hydratePartialDiff('merge', partial, { oldFile, newFile });
 
     expect(hydrated).toBe(partial);
-    expect(hydrated.cacheKey).toBe('old-full:new-full');
+    expect(hydrated.cacheKey).toBe(
+      composeCacheKey('hydrated-files', 'old-full', 'new-full')
+    );
+  });
+
+  test('encodes loaded file keys without delimiter or hydration-suffix collisions', () => {
+    const hydrateWithKeys = (oldCacheKey: string, newCacheKey: string) => {
+      const oldFile: FileContents = {
+        name: 'collision.txt',
+        cacheKey: oldCacheKey,
+        contents: 'old value\n',
+      };
+      const newFile: FileContents = {
+        name: 'collision.txt',
+        cacheKey: newCacheKey,
+        contents: 'new value\n',
+      };
+      const partial = parseSingleFile(
+        createTwoFilesPatch(
+          oldFile.name,
+          newFile.name,
+          oldFile.contents,
+          newFile.contents,
+          undefined,
+          undefined,
+          { context: 0 }
+        )
+      );
+      return hydratePartialDiff('merge', partial, { oldFile, newFile })
+        .cacheKey;
+    };
+
+    const firstKey = hydrateWithKeys('a:b', 'c');
+    const secondKey = hydrateWithKeys('a', 'b:c');
+
+    expect(firstKey).not.toBe(secondKey);
+    expect(hydrateWithKeys('a:b', 'c')).toBe(firstKey);
+    expect(hydrateWithKeys('a', 'b:hydrated')).not.toBe('a:b:hydrated');
   });
 
   test('does not use one loaded file cache key for a two-sided diff', () => {

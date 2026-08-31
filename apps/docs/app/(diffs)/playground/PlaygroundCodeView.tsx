@@ -5,11 +5,10 @@ import {
   type CodeViewItem,
   type CodeViewLineSelection,
   type DiffLineAnnotation,
-  type FileContents,
-  isDiffAnnotationCollection,
-  isFileAnnotationCollection,
+  type EditCompletionDecision,
+  type FileDiffEditCompleteEvent,
+  type FileEditCompleteEvent,
   type LineAnnotation,
-  parseDiffFromFile,
   type SelectedLineRange,
 } from '@pierre/diffs';
 import type { EditorOptions } from '@pierre/diffs/edit';
@@ -18,9 +17,7 @@ import {
   type CodeViewReactOptions,
   useStableCallback,
 } from '@pierre/diffs/react';
-import { IconCheckboxFill, IconSquircleLg } from '@pierre/icons';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { flushSync } from 'react-dom';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { PlaygroundAnnotationMetadata } from './constants';
 import {
@@ -28,6 +25,7 @@ import {
   CommentThread,
   ExampleThread,
 } from './PlaygroundComments';
+import { EditSessionButtons } from './PlaygroundEditButtons';
 
 const CODE_VIEW_STYLES = { height: '70vh', overflow: 'auto' } as const;
 
@@ -52,13 +50,13 @@ interface PlaygroundCodeViewProps {
 // and `overflow: auto`.
 //
 // This view also demos first-class item editing: each header carries an Edit
-// checkbox that flips the item's `edit` flag (any number of items can be in
-// edit mode at once). CodeView creates one Editor per edited item through the
+// button that starts a session, replaced by Cancel/Save while editing (any
+// number of items can be in edit mode at once). CodeView creates one Editor per edited item through the
 // app-level EditProvider and keeps it attached across virtualization
-// scroll-out, so unsaved edits and undo history survive scrolling. When a session ends
-// (checkbox off), `onItemEditComplete` hands us the final contents and we
-// persist them back into the item — file items swap contents directly, diff
-// items re-diff the edited new side against the original old side.
+// scroll-out, so unsaved edits and undo history survive scrolling. Save and
+// Cancel both end the session by turning edit off; `onItemEditComplete` then
+// returns 'accept' (Save — mirroring the built nextItem into state) or
+// 'reject' (Cancel, marked before the toggle).
 //
 // Annotations ride on item data: a gutter utility gesture appends a comment
 // form at its final line, submitting persists it as a comment thread, and
@@ -74,6 +72,10 @@ export function PlaygroundCodeView({
   const [selectedLines, setSelectedLines] =
     useState<CodeViewLineSelection | null>(null);
 
+  // Item ids whose next completion should revert: Cancel marks the id here
+  // before turning edit off, and the completion handler consumes the mark.
+  const cancelledEdits = useRef<Set<string>>(new Set());
+
   const toggleEdit = useCallback((id: string, edit: boolean) => {
     setItems((current) =>
       current.map((item) =>
@@ -84,110 +86,39 @@ export function PlaygroundCodeView({
     );
   }, []);
 
-  // Edits remap annotation line numbers (an Enter above a comment shifts it
-  // down); this writes the remapped set back to the owning item, with the
-  // version bump every item-data change requires — CodeView drops
-  // same-version pushes, and its render loop re-applies `item.annotations`
-  // to the instance on every pass, so a stale item would snap the comment
-  // back to its pre-edit line. flushSync commits in the same task as the
-  // editor's shadow-slot rename (the items push is a layout effect), so the
-  // comment is never projected nowhere between frames. The identity bail
-  // keeps ordinary typing free: the editor passes the same array reference
-  // when nothing remapped.
-  const handleEditChange = useCallback(
-    (
-      item: PlaygroundItem,
-      _file: FileContents,
-      lineAnnotations?:
-        | LineAnnotation<PlaygroundAnnotationMetadata>[]
-        | DiffLineAnnotation<PlaygroundAnnotationMetadata>[]
-    ) => {
-      if (lineAnnotations == null) {
-        return;
-      }
-      flushSync(() => {
-        setItems((current) => {
-          const target = current.find((existing) => existing.id === item.id);
-          if (target == null || target.annotations === lineAnnotations) {
-            return current;
-          }
-          return current.map((existing) => {
-            if (existing.id !== item.id || existing.type !== item.type) {
-              return existing;
-            }
-            const version = (existing.version ?? 0) + 1;
-            if (existing.type === 'file') {
-              if (!isFileAnnotationCollection(lineAnnotations)) {
-                return existing;
-              }
-              return {
-                ...existing,
-                annotations: lineAnnotations,
-                version,
-              };
-            }
-            if (!isDiffAnnotationCollection(lineAnnotations)) {
-              return existing;
-            }
-            return {
-              ...existing,
-              annotations: lineAnnotations,
-              version,
-            };
-          });
-        });
-      });
-    },
-    []
-  );
-
-  // Committing a finished edit session is user-space: CodeView only ends the
-  // session and reports the final contents through this lifecycle. The app
-  // commits with one combined item write — the new file/fileDiff (fresh
-  // cacheKey, since the contents changed) along with `edit: false`.
+  // Committing a finished edit session: stamp a fresh cacheKey on the
+  // completed file/fileDiff and return 'accept'. CodeView installs the value
+  // and applies the built nextItem itself; mirroring the same object into
+  // React state keeps the controlled collection matching (equal versions make
+  // the props push a no-op).
   const handleEditComplete = useCallback(
-    (item: PlaygroundItem, file: FileContents) => {
+    (
+      event:
+        | FileEditCompleteEvent<PlaygroundAnnotationMetadata>
+        | FileDiffEditCompleteEvent<PlaygroundAnnotationMetadata>,
+      item: PlaygroundItem,
+      nextItem: PlaygroundItem
+    ): EditCompletionDecision => {
+      if (cancelledEdits.current.delete(item.id)) {
+        return 'reject';
+      }
+      const cacheKey = `${item.id}:v${nextItem.version}`;
+      if ('file' in event) {
+        event.file.cacheKey = cacheKey;
+      } else {
+        event.fileDiff.cacheKey = cacheKey;
+      }
       setItems((current) =>
-        current.map((existing) => {
-          if (existing.id !== item.id) {
-            return existing;
-          }
-          const version = (existing.version ?? 0) + 1;
-          const cacheKey = `${existing.id}:v${version}`;
-          if (existing.type === 'file') {
-            return {
-              ...existing,
-              file: { ...existing.file, contents: file.contents, cacheKey },
-              edit: false,
-              version,
-            };
-          }
-          // Rebuild the diff against the edited new side. Generated diffs
-          // carry the full old file in `deletionLines` (lines keep their
-          // endings), so the original old side is recoverable from the item.
-          const { fileDiff } = existing;
-          return {
-            ...existing,
-            fileDiff: {
-              ...parseDiffFromFile(
-                {
-                  name: fileDiff.prevName ?? fileDiff.name,
-                  contents: fileDiff.deletionLines.join(''),
-                },
-                { name: fileDiff.name, contents: file.contents }
-              ),
-              cacheKey,
-            },
-            edit: false,
-            version,
-          };
-        })
+        current.map((existing) =>
+          existing.id === item.id ? nextItem : existing
+        )
       );
+      return 'accept';
     },
     []
   );
 
-  // Mirrors the Normal view's addCommentAtRange, but stores the annotation on
+  // Mirrors the direct Diff view's addCommentAtRange, but stores the annotation on
   // the CodeView item that owns the selected range.
   const addCommentAtRange = useCallback(
     (itemId: string, range: SelectedLineRange) => {
@@ -325,7 +256,7 @@ export function PlaygroundCodeView({
     );
   }, [showAnnotations]);
 
-  // Match the Normal view's precedence: an open comment form (neither a
+  // Match the direct views' precedence: an open comment form (neither a
   // thread nor a submitted comment) pauses the gutter utility so forms can't
   // stack.
   const hasOpenCommentForm = items.some(
@@ -397,33 +328,23 @@ export function PlaygroundCodeView({
     }
   );
 
-  const renderHeaderMetadata = useStableCallback((item: PlaygroundItem) => {
-    const isEditing = item.edit === true;
-    return (
-      <button
-        type="button"
-        onClick={() => toggleEdit(item.id, !isEditing)}
-        aria-pressed={isEditing}
-        className={`-mr-[8px] flex cursor-pointer items-center gap-1 rounded-sm border py-1 pr-2 pl-1.5 text-xs transition ${
-          isEditing
-            ? 'border-blue-400/50 bg-blue-500/25 text-blue-600'
-            : 'border bg-transparent text-neutral-500 hover:border-neutral-300 hover:bg-neutral-100 hover:text-neutral-700'
-        }`}
-      >
-        {isEditing ? (
-          <>
-            <IconCheckboxFill size={12} />
-            Editing
-          </>
-        ) : (
-          <>
-            <IconSquircleLg size={12} className="opacity-50" />
-            Edit
-          </>
-        )}
-      </button>
-    );
-  });
+  const renderHeaderMetadata = useStableCallback((item: PlaygroundItem) => (
+    <EditSessionButtons
+      editing={item.edit === true}
+      onEdit={() => {
+        cancelledEdits.current.delete(item.id);
+        toggleEdit(item.id, true);
+      }}
+      onCancel={() => {
+        cancelledEdits.current.add(item.id);
+        toggleEdit(item.id, false);
+      }}
+      onSave={() => {
+        cancelledEdits.current.delete(item.id);
+        toggleEdit(item.id, false);
+      }}
+    />
+  ));
 
   return (
     <CodeView
@@ -434,7 +355,6 @@ export function PlaygroundCodeView({
       options={codeViewOptions}
       selectedLines={selectedLines}
       onSelectedLinesChange={setSelectedLines}
-      onItemEditChange={handleEditChange}
       onItemEditComplete={handleEditComplete}
       renderHeaderMetadata={renderHeaderMetadata}
       renderAnnotation={renderAnnotation}

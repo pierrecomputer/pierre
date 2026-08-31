@@ -16,22 +16,11 @@ import {
   wait,
   waitFor,
 } from './domHarness';
-import { assertDefined } from './testUtils';
+import { assertDefined, createDeferred } from './testUtils';
 
 afterAll(async () => {
   await disposeHighlighter();
 });
-
-function createDeferred<T>(): {
-  promise: Promise<T>;
-  resolve(value: T): void;
-} {
-  let resolve: (value: T) => void = () => {};
-  const promise = new Promise<T>((promiseResolve) => {
-    resolve = promiseResolve;
-  });
-  return { promise, resolve };
-}
 
 function createPartialChange(): {
   oldFile: FileContents;

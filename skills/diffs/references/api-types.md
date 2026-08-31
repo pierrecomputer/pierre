@@ -82,22 +82,39 @@ The root, React, and SSR entries re-export these types.
 
 ## `CodeView` types
 
-| Export                         | Purpose                                                  |
-| ------------------------------ | -------------------------------------------------------- |
-| `CodeViewFileItem`             | Describes one file item in a virtualized list.           |
-| `CodeViewDiffItem`             | Describes one diff item in a virtualized list.           |
-| `CodeViewItem`                 | Represents a file or diff list item.                     |
-| `CodeViewCreateEditorOptions`  | Adds an item ID to editor creation options.              |
-| `CodeViewScrollBehavior`       | Selects instant, smooth, or automatic smooth scroll.     |
-| `CodeViewScrollTarget`         | Represents any supported list scroll target.             |
-| `CodeViewPositionScrollTarget` | Scrolls to an absolute list position.                    |
-| `CodeViewLineScrollTarget`     | Scrolls to one item line.                                |
-| `CodeViewRangeScrollTarget`    | Scrolls to one item line range.                          |
-| `CodeViewItemScrollTarget`     | Scrolls to one item boundary.                            |
-| `NumericScrollLineAnchor`      | Describes a numeric position inside a line.              |
-| `CodeViewLayout`               | Stores item offsets, heights, and total list height.     |
-| `PendingCodeViewLayoutReset`   | Describes a deferred list layout reset.                  |
-| `SmoothScrollSettings`         | Configures duration and distance for smooth list scroll. |
+| Export                            | Purpose                                                  |
+| --------------------------------- | -------------------------------------------------------- |
+| `CodeViewFileItem`                | Describes one file item in a virtualized list.           |
+| `CodeViewDiffItem`                | Describes one diff item in a virtualized list.           |
+| `CodeViewItem`                    | Represents a file or diff list item.                     |
+| `CodeViewCreateEditorOptions`     | Provides CodeView's routed editor option subset.         |
+| `CodeViewItemEditCompleteHandler` | Handles completion with correlated event and item types. |
+| `CodeViewScrollBehavior`          | Selects instant, smooth, or automatic smooth scroll.     |
+| `CodeViewScrollTarget`            | Represents any supported list scroll target.             |
+| `CodeViewPositionScrollTarget`    | Scrolls to an absolute list position.                    |
+| `CodeViewLineScrollTarget`        | Scrolls to one item line.                                |
+| `CodeViewRangeScrollTarget`       | Scrolls to one item line range.                          |
+| `CodeViewItemScrollTarget`        | Scrolls to one item boundary.                            |
+| `NumericScrollLineAnchor`         | Describes a numeric position inside a line.              |
+| `CodeViewLayout`                  | Stores item offsets, heights, and total list height.     |
+| `PendingCodeViewLayoutReset`      | Describes a deferred list layout reset.                  |
+| `SmoothScrollSettings`            | Configures duration and distance for smooth list scroll. |
+
+`CodeViewCreateEditorOptions` currently contains the routed `onChange(event)`
+callback that `CodeView` uses to emit `onItemEditChange(event, item)`; it does
+not add an item ID. A `CodeViewOptions.createEditor` factory also receives the
+optional `editStateKey` returned by `getEditStateKey(item)` as its third
+argument. Forward that key separately to the editor constructor. It retains the
+editable draft, undo/redo history, selections, and horizontal code scroll. Item
+editors never own CodeView's shared vertical position.
+
+`onItemEditComplete(event, item, nextItem)` must return `'accept'` to accept the
+completed item or `'reject'` to restore the original while the item remains
+present; a missing callback rejects. During removal or teardown, neither
+decision reinserts the item. Controlled owners must put the supplied `nextItem`
+into their item state when accepting an item that should remain. If the item
+uses keyed render caching, assigning a fresh `cacheKey` to the accepted event
+file or diff invalidates that cache.
 
 ## Lines, hunks, and render state
 
@@ -159,7 +176,10 @@ The root, React, and SSR entries re-export these types.
 | `Range`                  | Identifies start and end positions.                         |
 | `TextEdit`               | Replaces one range with new text.                           |
 | `EditorSelection`        | Adds direction to a range.                                  |
-| `EditorState`            | Holds editor selections and view state.                     |
+| `EditorViewState`        | Holds editor selections and view state.                     |
+| `EditorViewportState`    | Holds horizontal and optional vertical scroll offsets.      |
+| `EditorChange`           | Describes one normalized document edit.                     |
+| `EditorChangeEvent`      | Reports normalized changes and current document data.       |
 
 ## Shiki and diff types
 

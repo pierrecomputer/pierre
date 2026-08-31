@@ -28,27 +28,20 @@ import Footer from '@/components/Footer';
 import { PierreCompanySection } from '@/components/PierreCompanySection';
 import { Button } from '@/components/ui/button';
 import { renderMDX } from '@/lib/mdx';
+import { pageMetadata } from '@/lib/page-metadata';
 
-const themeTitle =
-  'Pierre Themes — Themes for Visual Studio Code, Cursor, Zed, and Shiki.';
+// Kept under ~60 characters so it survives SERP truncation; the full editor
+// list still appears in the description below.
+const themeTitle = 'Pierre Themes for VS Code, Cursor, Zed, and Shiki';
 const themeDescription =
   'Beautiful light and dark themes, generated from a shared color palette, for Visual Studio Code, Cursor, Zed, and Shiki.';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: themeTitle,
   description: themeDescription,
-  openGraph: {
-    title: themeTitle,
-    description: themeDescription,
-    images: ['/theme/opengraph-image.png'],
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: themeTitle,
-    description: themeDescription,
-    images: ['/theme/opengraph-image.png'],
-  },
-};
+  path: '/theme',
+  image: '/theme/opengraph-image.png',
+});
 
 export default async function ThemePage() {
   const [

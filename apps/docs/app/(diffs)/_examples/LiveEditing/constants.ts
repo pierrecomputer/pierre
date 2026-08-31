@@ -84,7 +84,7 @@ export const LIVE_EDITING_FILE_OPTIONS: FileOptions<undefined> = {
 
 // Server-side preload input for the File view of the Live editing example.
 // Spreading the resolved result into <File> ships pre-rendered shadow DOM so
-// the initial (default) File surface paints from server HTML instead of
+// the initial (default) File component paints from server HTML instead of
 // flashing in after client highlighting.
 export const LIVE_EDITING_FILE_EXAMPLE: PreloadFileOptions<undefined> = {
   file: LIVE_EDITING_NEW_FILE,

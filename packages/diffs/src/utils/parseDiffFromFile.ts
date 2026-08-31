@@ -1,6 +1,7 @@
 import { type CreatePatchOptionsNonabortable, createTwoFilesPatch } from 'diff';
 
 import type { FileContents, FileDiffMetadata } from '../types';
+import { composeCacheKey } from './composeCacheKey';
 import { processFile } from './parsePatchFiles';
 
 const MISSING_FILE_NAME = '/dev/null';
@@ -8,8 +9,8 @@ const MISSING_FILE_NAME = '/dev/null';
 /**
  * Parses a diff from two file contents objects.
  *
- * If both `oldFile` and `newFile` have a `cacheKey`, the resulting diff will
- * automatically get a combined cache key in the format `oldKey:newKey`.
+ * If both `oldFile` and `newFile` have a `cacheKey`, the resulting diff gets a
+ * collision-safe key derived from both values.
  */
 export function parseDiffFromFile(
   oldFile: FileContents | null,
@@ -37,12 +38,11 @@ export function parseDiffFromFile(
 
   const fileData = processFile(patch, {
     cacheKey: (() => {
-      const oldCacheKey = oldFile?.cacheKey ?? oldFile?.name;
-      const newCacheKey = newFile?.cacheKey ?? newFile?.name;
-      if (oldCacheKey != null && newCacheKey != null) {
-        return oldCacheKey + ':' + newCacheKey;
-      }
-      return oldCacheKey ?? newCacheKey;
+      const oldCacheKey = oldFile?.cacheKey;
+      const newCacheKey = newFile?.cacheKey;
+      return oldCacheKey != null && newCacheKey != null
+        ? composeCacheKey('diff', oldCacheKey, newCacheKey)
+        : undefined;
     })(),
     oldFile: resolvedOldFile,
     newFile: resolvedNewFile,

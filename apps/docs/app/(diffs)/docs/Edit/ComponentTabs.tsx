@@ -55,8 +55,8 @@ export function EditComponentTabs({
           <p>
             Editing a <code>FileDiff</code> requires the full file contents. The
             editor targets the addition side (the new version of the file) and
-            cannot reconstruct it from a partial diff. Make sure one of the
-            following is true before attaching the editor:
+            cannot reconstruct it from patch context alone. Make sure one of the
+            following is true before editing begins:
           </p>
           <ul className="list-disc pl-5">
             <li>
@@ -70,10 +70,14 @@ export function EditComponentTabs({
               <code>additionLines</code> contains the complete new-file contents
               (not just the patch context lines).
             </li>
+            <li>
+              You supplied <code>loadDiffFiles</code> so a partial diff can load
+              its complete old and new files after the editor attaches.
+            </li>
           </ul>
           <p>
-            If neither condition is met — for example, when the diff was parsed
-            from a raw patch with no accompanying source files —{' '}
+            Without any source for the complete files — for example, when the
+            diff was parsed from a raw patch with no accompanying source files —{' '}
             <code>editor.edit()</code> will attach, but editing will have no
             effect.
           </p>

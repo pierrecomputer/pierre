@@ -134,7 +134,7 @@ async function createDiffEditorFixture(
     diffStyle,
     ...options,
   });
-  const editor = new Editor<undefined>();
+  const editor = new Editor<undefined>('file-diff');
   const oldFile: FileContents = { name: 'edit.ts', contents: oldContents };
   const newFile: FileContents = { name: 'edit.ts', contents: newContents };
 
@@ -295,7 +295,7 @@ describe('editor active-line highlight on a diff', () => {
         },
       ]);
       content.dispatchEvent(new Event('focus'));
-      const selectionBefore = fixture.editor.getState().selections;
+      const selectionBefore = fixture.editor.getViewState().selections;
       getSelectionStub = spyOn(document, 'getSelection').mockReturnValue({
         getComposedRanges: () => [
           {
@@ -337,7 +337,7 @@ describe('editor active-line highlight on a diff', () => {
         })
       );
       document.dispatchEvent(new Event('selectionchange'));
-      expect(fixture.editor.getState().selections).toEqual(selectionBefore);
+      expect(fixture.editor.getViewState().selections).toEqual(selectionBefore);
 
       utility?.dispatchEvent(
         new PointerEvent('pointerup', {
@@ -353,7 +353,7 @@ describe('editor active-line highlight on a diff', () => {
       document.dispatchEvent(new Event('selectionchange'));
 
       expect(clickedRanges).toEqual([{ start: 1, end: 1, side: 'deletions' }]);
-      expect(fixture.editor.getState().selections).toEqual(selectionBefore);
+      expect(fixture.editor.getViewState().selections).toEqual(selectionBefore);
       expect(editorActiveGutterNumbers(additions)).toEqual([2]);
       expect(
         fixture.container.shadowRoot
@@ -694,7 +694,7 @@ describe('editor active-line highlight on a diff', () => {
         },
       ]);
       content.dispatchEvent(new Event('focus'));
-      const editorSelection = fixture.editor.getState().selections;
+      const editorSelection = fixture.editor.getViewState().selections;
       getSelectionStub = spyOn(document, 'getSelection').mockReturnValue({
         getComposedRanges: () => [
           {
@@ -732,7 +732,7 @@ describe('editor active-line highlight on a diff', () => {
         })
       );
       document.dispatchEvent(new Event('selectionchange'));
-      expect(fixture.editor.getState().selections).toEqual(editorSelection);
+      expect(fixture.editor.getViewState().selections).toEqual(editorSelection);
 
       fourth.dispatchEvent(
         new PointerEvent('pointermove', {
@@ -745,7 +745,7 @@ describe('editor active-line highlight on a diff', () => {
         })
       );
       document.dispatchEvent(new Event('selectionchange'));
-      expect(fixture.editor.getState().selections).toEqual(editorSelection);
+      expect(fixture.editor.getViewState().selections).toEqual(editorSelection);
 
       fourth.dispatchEvent(
         new PointerEvent('pointerup', {
@@ -760,7 +760,7 @@ describe('editor active-line highlight on a diff', () => {
       document.dispatchEvent(new Event('selectionchange'));
 
       expect(selectedRanges).toEqual([{ start: 1, end: 4, side: 'deletions' }]);
-      expect(fixture.editor.getState().selections).toEqual(editorSelection);
+      expect(fixture.editor.getViewState().selections).toEqual(editorSelection);
       expect(
         fixture.container.shadowRoot
           ?.querySelector('pre')
@@ -890,7 +890,7 @@ describe('editor active-line highlight on a diff', () => {
         },
       ]);
       content.dispatchEvent(new Event('focus'));
-      const editorSelection = fixture.editor.getState().selections;
+      const editorSelection = fixture.editor.getViewState().selections;
       getSelectionStub = spyOn(document, 'getSelection').mockReturnValue({
         getComposedRanges: () => [
           {
@@ -931,7 +931,7 @@ describe('editor active-line highlight on a diff', () => {
         })
       );
       document.dispatchEvent(new Event('selectionchange'));
-      expect(fixture.editor.getState().selections).toEqual(editorSelection);
+      expect(fixture.editor.getViewState().selections).toEqual(editorSelection);
 
       fourth.dispatchEvent(
         new PointerEvent('pointermove', {
@@ -950,7 +950,7 @@ describe('editor active-line highlight on a diff', () => {
         side: 'additions',
       };
       expect(changedRanges.at(-1)).toEqual(selectedRange);
-      expect(fixture.editor.getState().selections).toEqual(editorSelection);
+      expect(fixture.editor.getViewState().selections).toEqual(editorSelection);
       await waitFor(() =>
         arraysEqual(highlightedLineNumbers(additions), [2, 3, 4])
       );
@@ -969,7 +969,7 @@ describe('editor active-line highlight on a diff', () => {
       document.dispatchEvent(new Event('selectionchange'));
 
       expect(selectedRanges).toEqual([selectedRange]);
-      expect(fixture.editor.getState().selections).toEqual(editorSelection);
+      expect(fixture.editor.getViewState().selections).toEqual(editorSelection);
       expect(highlightedLineNumbers(additions)).toEqual([2, 3, 4]);
       expect(editorActiveLineNumbers(additions)).toEqual([1]);
 
@@ -984,7 +984,7 @@ describe('editor active-line highlight on a diff', () => {
         })
       );
       document.dispatchEvent(new Event('selectionchange'));
-      expect(fixture.editor.getState().selections).toEqual([
+      expect(fixture.editor.getViewState().selections).toEqual([
         {
           start: { line: 0, character: 0 },
           end: { line: 0, character: 0 },
@@ -1018,7 +1018,7 @@ describe('editor active-line highlight on a diff', () => {
       if (content == null || firstLine == null || secondGutter == null) {
         throw new Error('missing editor rows');
       }
-      expect(fixture.editor.getState().selections).toBeUndefined();
+      expect(fixture.editor.getViewState().selections).toBeUndefined();
 
       getSelectionStub = spyOn(document, 'getSelection').mockReturnValue({
         getComposedRanges: () => [
@@ -1051,7 +1051,7 @@ describe('editor active-line highlight on a diff', () => {
 
       content.dispatchEvent(new Event('focus'));
       document.dispatchEvent(new Event('selectionchange'));
-      expect(fixture.editor.getState().selections).toEqual([
+      expect(fixture.editor.getViewState().selections).toEqual([
         {
           start: { line: 0, character: 0 },
           end: { line: 0, character: 0 },
@@ -1097,7 +1097,7 @@ describe('editor active-line highlight on a diff', () => {
         new MouseEvent('mousemove', { bubbles: true, composed: true })
       );
       await waitFor(() => editorActiveGutterNumbers(additions).includes(4));
-      expect(fixture.editor.getState().selections).toEqual([
+      expect(fixture.editor.getViewState().selections).toEqual([
         {
           start: { line: 1, character: 0 },
           end: { line: 3, character: 2 },

@@ -151,16 +151,20 @@ export const PLAYGROUND_MARKERS = [
   },
 ];
 
+export const PLAYGROUND_FILE: FileContents = {
+  name: 'api/users.ts',
+  contents: NEW_USERS_CONTENT,
+};
+
 const PLAYGROUND_FILE_DIFF = parseDiffFromFile(
   {
     name: 'api/users.ts',
     contents: OLD_USERS_CONTENT,
   },
-  {
-    name: 'api/users.ts',
-    contents: NEW_USERS_CONTENT,
-  }
+  PLAYGROUND_FILE
 );
+
+PLAYGROUND_FILE_DIFF.cacheKey = 'playground:users-diff';
 
 const PLAYGROUND_ANNOTATIONS = [
   {
@@ -207,7 +211,7 @@ export function getPlaygroundPreloadOptions(
 // Every diff below is built with `parseDiffFromFile` from complete old/new file
 // contents, so they are full (non-partial) diffs. Partial diffs (e.g. from
 // `parsePatchFiles`) would need a `loadDiffFiles` loader to hydrate, which these
-// demo surfaces intentionally avoid.
+// demo components intentionally avoid.
 // -----------------------------------------------------------------------------
 
 const OLD_STYLES_CONTENT = `.button {
@@ -276,7 +280,7 @@ const user = await getUser('123');
 \`\`\`
 `;
 
-// The plain-file items ship the README repeated 10x so the file surfaces are
+// The plain-file items ship the README repeated 10x so the file components are
 // long enough to scroll on their own. Only the file items use this — the diff
 // fixtures keep their authored sizes (one long fixture plus the shorter
 // variants).
@@ -284,7 +288,7 @@ const LONG_README_CONTENT = NEW_README_CONTENT.repeat(10);
 
 // The long README as a ready-made plain file: leads the CodeView items and
 // both Virtualizer lists. FileContents is never mutated by the library, so
-// one shared instance is fine across surfaces.
+// one shared instance is fine across components.
 export const LONG_README_FILE: FileContents = {
   name: 'README.md',
   contents: LONG_README_CONTENT,
@@ -555,7 +559,7 @@ function buildLongFixtureContents(): {
 
 const LONG_FIXTURE_CONTENTS = buildLongFixtureContents();
 
-// Fresh parse per call so each surface (Virtualizer list, CodeView items) gets
+// Fresh parse per call so each component (Virtualizer list, CodeView items) gets
 // its own FileDiffMetadata instance, matching how `variantDiff` builds the
 // replicated fixtures. `context: 8` widens jsdiff's default of 4 so the added
 // import near the top keeps line 1 inside the first hunk instead of leaving a

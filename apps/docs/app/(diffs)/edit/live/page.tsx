@@ -3,17 +3,17 @@ import type { Metadata } from 'next';
 import { WorkerPoolContext } from '../../_components/WorkerPoolContext';
 import { AgentUi } from '../../_home/AgentUi';
 import { preloadAuiPrerenderedDiffs } from '../../_home/preloadAuiDiffs';
+import { pageMetadata } from '@/lib/page-metadata';
 
 const title = 'Live editor — Pierre Diffs';
 const description =
   'A fullscreen, in-browser agent editing session: review and edit changed files with @pierre/diffs and navigate the change tree on the left, powered by @pierre/trees.';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title,
   description,
-  openGraph: { title, description },
-  twitter: { card: 'summary_large_image', title, description },
-};
+  path: '/edit/live',
+});
 
 // The standalone fullscreen counterpart to the homepage's windowed agent demo.
 // Renders nothing but the AgentUi filling the viewport (no header/footer), so

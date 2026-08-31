@@ -198,6 +198,7 @@ function CommentForm({
                 <textarea
                   ref={textareaRef}
                   placeholder="Leave a comment"
+                  aria-label="Leave a comment"
                   className="text-foreground bg-background focus:ring-ring min-h-[60px] w-full resize-none rounded-md border p-2 text-sm focus:ring-2 focus:outline-none"
                 />
                 <div className="mt-3 flex items-center gap-2">

@@ -17,21 +17,25 @@ import {
 } from 'react';
 import { createPortal, flushSync } from 'react-dom';
 
-import type { EditorOptions } from '../edit';
+import type { EditorChangeEvent, EditorOptions } from '../edit';
 import {
   areOptionsEqual,
   CodeView as CodeViewClass,
   type CodeViewCoordinator,
   type CodeViewCreateEditorOptions,
   type CodeViewItem,
+  type CodeViewItemEditCompleteEventMap,
+  type CodeViewItemEditCompleteHandler,
   type CodeViewLineSelection,
+  type CodeViewMode,
+  type CodeViewModeItemMap,
   type CodeViewOptions,
   type CodeViewRenderedItem,
   type CodeViewScrollTarget,
   type CodeViewSlotSnapshot,
   type DiffLineAnnotation,
   type DiffsEditor,
-  type FileContents,
+  type EditorDocumentKind,
   type GetHoveredLineResult,
   type LineAnnotation,
 } from '../index';
@@ -41,6 +45,8 @@ import { renderDiffChildren } from './utils/renderDiffChildren';
 import { renderFileChildren } from './utils/renderFileChildren';
 import { useStableCallback } from './utils/useStableCallback';
 import { WorkerPoolContext } from './WorkerPoolContext';
+
+export type { CodeViewItemEditCompleteHandler };
 
 const useIsomorphicLayoutEffect =
   typeof window === 'undefined' ? useEffect : useLayoutEffect;
@@ -61,6 +67,8 @@ interface CodeViewBaseProps<LAnnotation> {
    * CodeView supplies its item-specific change callback.
    */
   editorOptions?: Omit<EditorOptions<LAnnotation>, 'onChange'>;
+  /** Resolve an in-memory retention key for an item's draft and undo history. */
+  getEditStateKey?(item: CodeViewItem<LAnnotation>): string | undefined;
   className?: string;
   style?: CSSProperties;
   containerRef?: Ref<HTMLDivElement>;
@@ -74,28 +82,27 @@ interface CodeViewBaseProps<LAnnotation> {
   /** Render a non-virtualized node at the very end of the scroll content, after
    * the last item. Always rendered; scrolls with the content. */
   renderCodeViewFooter?(): ReactNode;
-  /** Called with the owning item on every edited-document change. */
+  /**
+   * Called with the editor's `EditorChangeEvent` and the owning item on every
+   * document change. Do not feed it directly back into the controlled item,
+   * which can create update loops.
+   */
   onItemEditChange?(
-    item: CodeViewItem<LAnnotation>,
-    file: FileContents,
-    lineAnnotations?:
-      | LineAnnotation<LAnnotation>[]
-      | DiffLineAnnotation<LAnnotation>[]
+    event: EditorChangeEvent<LAnnotation, 'file' | 'diff'>,
+    item: CodeViewItem<LAnnotation>
   ): void;
   /**
-   * Called once with the final contents when an item's edit session ends
-   * (edit turned off, item removed or collapsed). Not called for sessions
-   * that produced no changes. Committing is user-space: make one combined
-   * item write carrying the new file/fileDiff (with a fresh `cacheKey`,
-   * since the contents changed) along with `edit: false`.
+   * Called once when an edit session ends: edit turned off, the item removed,
+   * or the CodeView unmounted (where the result is not installed). Collapse
+   * suspends the session instead of completing it. `nextItem` is the accepted
+   * replacement CodeView built from `item`: the event's completed
+   * `file`/`fileDiff` and annotations, `edit: false`, and a bumped `version`.
+   * Return `'accept'` to install the edit — CodeView applies `nextItem` through
+   * the item update path when the item still exists, and a controlled owner
+   * puts the same `nextItem` into its state — or `'reject'` to revert. The event
+   * is frozen; re-key the accepted value in place before accepting.
    */
-  onItemEditComplete?(
-    item: CodeViewItem<LAnnotation>,
-    file: FileContents,
-    lineAnnotations?:
-      | LineAnnotation<LAnnotation>[]
-      | DiffLineAnnotation<LAnnotation>[]
-  ): void;
+  onItemEditComplete?: CodeViewItemEditCompleteHandler<LAnnotation>;
   renderCustomHeader?(item: CodeViewItem<LAnnotation>): ReactNode;
   renderHeaderPrefix?(item: CodeViewItem<LAnnotation>): ReactNode;
   renderHeaderFilenameSuffix?(item: CodeViewItem<LAnnotation>): ReactNode;
@@ -191,6 +198,7 @@ function CodeViewInner<LAnnotation = undefined>(
     containerRef,
     disableWorkerPool = false,
     editorOptions,
+    getEditStateKey,
     initialItems,
     items: controlledItems,
     onItemEditChange,
@@ -238,16 +246,22 @@ function CodeViewInner<LAnnotation = undefined>(
   // next item edit session without forcing CodeView to reconcile active editors.
   const createEditor = useStableCallback(
     (
-      options: CodeViewCreateEditorOptions<LAnnotation>
+      documentKind: EditorDocumentKind,
+      options: CodeViewCreateEditorOptions<LAnnotation>,
+      editStateKey?: string
     ): DiffsEditor<LAnnotation> => {
       if (contextCreateEditor == null) {
         throw new Error('CodeView: EditContext is not attached');
       }
 
-      const editor = contextCreateEditor({
-        ...editorOptions,
-        ...options,
-      });
+      const editor = contextCreateEditor(
+        documentKind,
+        {
+          ...editorOptions,
+          ...options,
+        },
+        editStateKey
+      );
       if (editor == null) {
         throw new Error(
           'CodeView: EditProvider.createEditor must return an editor instance'
@@ -258,25 +272,18 @@ function CodeViewInner<LAnnotation = undefined>(
   );
   const emitItemEditChange = useStableCallback(
     (
-      item: CodeViewItem<LAnnotation>,
-      file: FileContents,
-      lineAnnotations?:
-        | LineAnnotation<LAnnotation>[]
-        | DiffLineAnnotation<LAnnotation>[]
+      event: EditorChangeEvent<LAnnotation, 'file' | 'diff'>,
+      item: CodeViewItem<LAnnotation>
     ) => {
-      onItemEditChange?.(item, file, lineAnnotations);
+      onItemEditChange?.(event, item);
     }
   );
   const emitItemEditComplete = useStableCallback(
-    (
-      item: CodeViewItem<LAnnotation>,
-      file: FileContents,
-      lineAnnotations?:
-        | LineAnnotation<LAnnotation>[]
-        | DiffLineAnnotation<LAnnotation>[]
-    ) => {
-      onItemEditComplete?.(item, file, lineAnnotations);
-    }
+    <TMode extends CodeViewMode>(
+      event: CodeViewItemEditCompleteEventMap<LAnnotation>[TMode],
+      item: CodeViewModeItemMap<LAnnotation>[TMode],
+      nextItem: CodeViewModeItemMap<LAnnotation>[TMode]
+    ) => onItemEditComplete?.(event, item, nextItem) ?? 'reject'
   );
 
   const managedOptions = useMemo(
@@ -290,6 +297,7 @@ function CodeViewInner<LAnnotation = undefined>(
         onSelectedLinesChange:
           onSelectedLinesChange != null ? emitSelectedLinesChange : undefined,
         controlledSelection,
+        getEditStateKey,
         createEditor: contextCreateEditor != null ? createEditor : undefined,
         onItemEditChange:
           onItemEditChange != null ? emitItemEditChange : undefined,
@@ -307,6 +315,7 @@ function CodeViewInner<LAnnotation = undefined>(
       hasCodeViewHeader,
       hasCustomHeader,
       hasGutterRenderer,
+      getEditStateKey,
       onItemEditChange,
       onItemEditComplete,
       onSelectedLinesChange,
@@ -725,6 +734,7 @@ interface CreateManagedCodeViewOptionsProps<LAnnotation> {
   hasCodeViewFooter: boolean;
   onSelectedLinesChange?(selection: CodeViewLineSelection | null): void;
   controlledSelection: boolean;
+  getEditStateKey: CodeViewOptions<LAnnotation>['getEditStateKey'];
   createEditor: CodeViewOptions<LAnnotation>['createEditor'];
   onItemEditChange: CodeViewOptions<LAnnotation>['onItemEditChange'];
   onItemEditComplete: CodeViewOptions<LAnnotation>['onItemEditComplete'];
@@ -738,6 +748,7 @@ function createManagedCodeViewOptions<LAnnotation>({
   hasCodeViewFooter,
   onSelectedLinesChange,
   controlledSelection,
+  getEditStateKey,
   createEditor,
   onItemEditChange,
   onItemEditComplete,
@@ -748,6 +759,10 @@ function createManagedCodeViewOptions<LAnnotation>({
     onSelectedLinesChange,
     createEditor,
   };
+
+  if (getEditStateKey != null) {
+    managedOptions.getEditStateKey = getEditStateKey;
+  }
 
   // Prop-level editor callbacks win over their options-object counterparts,
   // but an absent prop must not clobber a value provided via `options`.
@@ -919,6 +934,7 @@ function renderCodeViewItemChildren<LAnnotation>({
           ? (getHoveredLine) => renderGutterUtility(getHoveredLine, item)
           : undefined,
       getHoveredLine: instance.getHoveredLine,
+      getAnnotationSlotName: instance.getAnnotationSlotName,
     });
   } else {
     const { item, instance } = renderedItem;
@@ -946,6 +962,7 @@ function renderCodeViewItemChildren<LAnnotation>({
           ? (getHoveredLine) => renderGutterUtility(getHoveredLine, item)
           : undefined,
       getHoveredLine: instance.getHoveredLine,
+      getAnnotationSlotName: instance.getAnnotationSlotName,
     });
   }
 }

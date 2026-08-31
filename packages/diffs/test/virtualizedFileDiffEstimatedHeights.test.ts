@@ -60,6 +60,7 @@ interface InspectableVirtualizedFileDiff {
     fileAnnotationHeight: number;
   };
   lineAnnotations: unknown[];
+  renderedDiff: FileDiffMetadata | undefined;
   renderRange: RenderRange | undefined;
   getExpandedLineCount(
     fileDiff: FileDiffMetadata,
@@ -78,6 +79,15 @@ function inspect(
   instance: VirtualizedFileDiff
 ): InspectableVirtualizedFileDiff {
   return instance as unknown as InspectableVirtualizedFileDiff;
+}
+
+// Height reconciliation measures existing DOM, so these focused unit tests
+// explicitly identify the diff represented by their manually constructed rows.
+function setRenderedDiff(
+  instance: VirtualizedFileDiff,
+  fileDiff: FileDiffMetadata
+): void {
+  inspect(instance).renderedDiff = fileDiff;
 }
 
 function createRenderRange(startingLine = 0): RenderRange {
@@ -286,7 +296,7 @@ describe('VirtualizedFileDiff estimated height cache', () => {
   test('computes split and unified estimates together on first prepare', () => {
     const instance = new VirtualizedFileDiff({}, virtualizer, metrics);
 
-    instance.prepareCodeViewItem(createTwoHunkDiff(), 0);
+    instance.updateCodeViewLayout(createTwoHunkDiff(), 0);
 
     expect(inspect(instance).cache.estimatedSplitHeight).toBe(326);
     expect(inspect(instance).cache.estimatedUnifiedHeight).toBe(346);
@@ -304,7 +314,7 @@ describe('VirtualizedFileDiff estimated height cache', () => {
       metrics
     );
 
-    instance.prepareCodeViewItem(createHugeSingleBlockDiff(lineCount), 0);
+    instance.updateCodeViewLayout(createHugeSingleBlockDiff(lineCount), 0);
 
     expect(instance.getVirtualizedHeight()).toBe(
       metrics.diffHeaderHeight +
@@ -318,7 +328,7 @@ describe('VirtualizedFileDiff estimated height cache', () => {
     const lineCount = 8;
     const instance = new VirtualizedFileDiff({}, virtualizer, metrics);
 
-    instance.prepareCodeViewItem(createHugeSingleBlockDiff(lineCount), 0);
+    instance.updateCodeViewLayout(createHugeSingleBlockDiff(lineCount), 0);
     inspect(instance).cache.estimatedSplitHeight = 123;
     inspect(instance).cache.estimatedUnifiedHeight = 456;
     inspect(instance).cache.heightDeltas.set(0, 7);
@@ -356,12 +366,12 @@ describe('VirtualizedFileDiff estimated height cache', () => {
     };
     const instance = new VirtualizedFileDiff({}, virtualizer, metrics);
 
-    instance.prepareCodeViewItem(fileDiff, 0);
+    instance.updateCodeViewLayout(fileDiff, 0);
     inspect(instance).cache.estimatedSplitHeight = 123;
     inspect(instance).cache.estimatedUnifiedHeight = 456;
     inspect(instance).cache.heightDeltas.set(0, 7);
     inspect(instance).cache.measuredHeightDeltaTotal = 7;
-    instance.prepareCodeViewItem(equivalentFileDiff, 0);
+    instance.updateCodeViewLayout(equivalentFileDiff, 0);
 
     expect(inspect(instance).cache.estimatedSplitHeight).toBe(123);
     expect(inspect(instance).cache.estimatedUnifiedHeight).toBe(456);
@@ -372,12 +382,12 @@ describe('VirtualizedFileDiff estimated height cache', () => {
   test('clears estimates and measurements for changed diff content', () => {
     const instance = new VirtualizedFileDiff({}, virtualizer, metrics);
 
-    instance.prepareCodeViewItem(createTwoHunkDiff('first'), 0);
+    instance.updateCodeViewLayout(createTwoHunkDiff('first'), 0);
     inspect(instance).cache.estimatedSplitHeight = 123;
     inspect(instance).cache.estimatedUnifiedHeight = 456;
     inspect(instance).cache.heightDeltas.set(0, 7);
     inspect(instance).cache.measuredHeightDeltaTotal = 7;
-    instance.prepareCodeViewItem(createTwoHunkDiff('second'), 0);
+    instance.updateCodeViewLayout(createTwoHunkDiff('second'), 0);
 
     expect(inspect(instance).cache.estimatedSplitHeight).toBe(326);
     expect(inspect(instance).cache.estimatedUnifiedHeight).toBe(346);
@@ -388,7 +398,7 @@ describe('VirtualizedFileDiff estimated height cache', () => {
   test('reuses paired estimates across split and unified style changes', () => {
     const instance = new VirtualizedFileDiff({}, virtualizer, metrics);
 
-    instance.prepareCodeViewItem(createTwoHunkDiff(), 0);
+    instance.updateCodeViewLayout(createTwoHunkDiff(), 0);
     inspect(instance).cache.heightDeltas.set(0, 7);
     inspect(instance).cache.measuredHeightDeltaTotal = 7;
     expect(instance.getLinePosition(40, 'additions')).toBeDefined();
@@ -413,7 +423,7 @@ describe('VirtualizedFileDiff estimated height cache', () => {
   test('keeps paired estimates across collapse changes', () => {
     const instance = new VirtualizedFileDiff({}, virtualizer, metrics);
 
-    instance.prepareCodeViewItem(createTwoHunkDiff(), 0);
+    instance.updateCodeViewLayout(createTwoHunkDiff(), 0);
     inspect(instance).cache.heightDeltas.set(0, 7);
     inspect(instance).cache.measuredHeightDeltaTotal = 7;
     expect(instance.getLinePosition(40, 'additions')).toBeDefined();
@@ -438,7 +448,7 @@ describe('VirtualizedFileDiff estimated height cache', () => {
   test('recomputes paired estimates when hunk expansion changes', () => {
     const instance = new VirtualizedFileDiff({}, virtualizer, metrics);
 
-    instance.prepareCodeViewItem(createTwoHunkDiff(), 0);
+    instance.updateCodeViewLayout(createTwoHunkDiff(), 0);
     inspect(instance).cache.heightDeltas.set(0, 7);
     inspect(instance).cache.measuredHeightDeltaTotal = 7;
     expect(instance.getLinePosition(40, 'additions')).toBeDefined();
@@ -464,7 +474,9 @@ describe('VirtualizedFileDiff estimated height cache', () => {
       );
       let measuredHeight = 17;
 
-      instance.prepareCodeViewItem(createTwoHunkDiff(), 0);
+      const fileDiff = createTwoHunkDiff();
+      instance.updateCodeViewLayout(fileDiff, 0);
+      setRenderedDiff(instance, fileDiff);
       inspect(instance).fileContainer =
         new FakeHTMLElement() as unknown as HTMLElement;
       inspect(instance).codeAdditions = createMeasuredCodeGroup(
@@ -496,7 +508,7 @@ describe('VirtualizedFileDiff estimated height cache', () => {
     const instance = new VirtualizedFileDiff({}, virtualizer, metrics);
     const lineCount = 1_000_000;
 
-    instance.prepareCodeViewItem(
+    instance.updateCodeViewLayout(
       createHugeSingleBlockDiff(lineCount),
       0,
       undefined,
@@ -519,7 +531,7 @@ describe('VirtualizedFileDiff estimated height cache', () => {
     const instance = new VirtualizedFileDiff({}, virtualizer, metrics);
     const fileDiff = createTwoHunkDiff();
 
-    instance.prepareCodeViewItem(fileDiff, 0, undefined, [
+    instance.updateCodeViewLayout(fileDiff, 0, undefined, [
       { side: 'additions', lineNumber: 0 },
     ]);
     inspect(instance).cache.fileAnnotationHeight = 25;
@@ -540,7 +552,7 @@ describe('VirtualizedFileDiff estimated height cache', () => {
     const instance = new VirtualizedFileDiff({}, virtualizer, metrics);
     const fileDiff = createTwoHunkDiff();
 
-    instance.prepareCodeViewItem(fileDiff, 0, undefined, [
+    instance.updateCodeViewLayout(fileDiff, 0, undefined, [
       { side: 'additions', lineNumber: 0 },
     ]);
     inspect(instance).cache.fileAnnotationHeight = 25;
@@ -559,7 +571,7 @@ describe('VirtualizedFileDiff estimated height cache', () => {
     const instance = new VirtualizedFileDiff({}, virtualizer, metrics);
     const fileDiff = createHugeSingleBlockDiff(1_000_000);
 
-    instance.prepareCodeViewItem(fileDiff, 0, undefined, [
+    instance.updateCodeViewLayout(fileDiff, 0, undefined, [
       { side: 'additions', lineNumber: 0 },
     ]);
 
@@ -581,7 +593,7 @@ describe('VirtualizedFileDiff estimated height cache', () => {
       metrics
     );
 
-    instance.prepareCodeViewItem(fileDiff, 0);
+    instance.updateCodeViewLayout(fileDiff, 0);
     const separatorTop =
       metrics.diffHeaderHeight + lineCount * metrics.lineHeight;
     const range = inspect(instance).computeRenderRangeFromWindow(fileDiff, 0, {
@@ -597,7 +609,7 @@ describe('VirtualizedFileDiff estimated height cache', () => {
     const instance = new VirtualizedFileDiff({}, virtualizer, metrics);
     const fileDiff = createHugeSingleBlockDiff(1_000_000);
 
-    instance.prepareCodeViewItem(fileDiff, 0, undefined, [
+    instance.updateCodeViewLayout(fileDiff, 0, undefined, [
       { side: 'additions', lineNumber: 0 },
     ]);
     inspect(instance).cache.fileAnnotationHeight = 0;
@@ -616,7 +628,7 @@ describe('VirtualizedFileDiff estimated height cache', () => {
     const instance = new VirtualizedFileDiff({}, virtualizer, metrics);
     const fileDiff = createNoHunkDiff();
 
-    instance.prepareCodeViewItem(fileDiff, 0, undefined, [
+    instance.updateCodeViewLayout(fileDiff, 0, undefined, [
       { side: 'additions', lineNumber: 0 },
     ]);
 
@@ -635,9 +647,11 @@ describe('VirtualizedFileDiff estimated height cache', () => {
       const instance = new VirtualizedFileDiff({}, virtualizer, metrics);
       let annotationHeight = 25;
 
-      instance.prepareCodeViewItem(createTwoHunkDiff(), 0, undefined, [
+      const fileDiff = createTwoHunkDiff();
+      instance.updateCodeViewLayout(fileDiff, 0, undefined, [
         { side: 'additions', lineNumber: 0 },
       ]);
+      setRenderedDiff(instance, fileDiff);
       inspect(instance).renderRange = createRenderRange();
       inspect(instance).fileContainer =
         new FakeHTMLElement() as unknown as HTMLElement;
@@ -676,9 +690,11 @@ describe('VirtualizedFileDiff estimated height cache', () => {
     try {
       const instance = new VirtualizedFileDiff({}, virtualizer, metrics);
 
-      instance.prepareCodeViewItem(createTwoHunkDiff(), 0, undefined, [
+      const fileDiff = createTwoHunkDiff();
+      instance.updateCodeViewLayout(fileDiff, 0, undefined, [
         { side: 'additions', lineNumber: 0 },
       ]);
+      setRenderedDiff(instance, fileDiff);
       inspect(instance).renderRange = createRenderRange();
       inspect(instance).fileContainer =
         new FakeHTMLElement() as unknown as HTMLElement;
@@ -705,9 +721,10 @@ describe('VirtualizedFileDiff estimated height cache', () => {
       const instance = new VirtualizedFileDiff({}, virtualizer, metrics);
       const fileDiff = createTwoHunkDiff();
 
-      instance.prepareCodeViewItem(fileDiff, 0, undefined, [
+      instance.updateCodeViewLayout(fileDiff, 0, undefined, [
         { side: 'additions', lineNumber: 0 },
       ]);
+      setRenderedDiff(instance, fileDiff);
       inspect(instance).renderRange = createRenderRange();
       inspect(instance).fileContainer =
         new FakeHTMLElement() as unknown as HTMLElement;
@@ -743,9 +760,10 @@ describe('VirtualizedFileDiff estimated height cache', () => {
       const instance = new VirtualizedFileDiff({}, virtualizer, metrics);
       const fileDiff = createTwoHunkDiff();
 
-      instance.prepareCodeViewItem(fileDiff, 0, undefined, [
+      instance.updateCodeViewLayout(fileDiff, 0, undefined, [
         { side: 'additions', lineNumber: 0 },
       ]);
+      setRenderedDiff(instance, fileDiff);
       inspect(instance).renderRange = createRenderRange();
       inspect(instance).fileContainer =
         new FakeHTMLElement() as unknown as HTMLElement;
@@ -780,9 +798,10 @@ describe('VirtualizedFileDiff estimated height cache', () => {
       const instance = new VirtualizedFileDiff({}, virtualizer, metrics);
       const fileDiff = createTwoHunkDiff();
 
-      instance.prepareCodeViewItem(fileDiff, 0, undefined, [
+      instance.updateCodeViewLayout(fileDiff, 0, undefined, [
         { side: 'additions', lineNumber: 0 },
       ]);
+      setRenderedDiff(instance, fileDiff);
       inspect(instance).renderRange = createRenderRange();
       inspect(instance).fileContainer =
         new FakeHTMLElement() as unknown as HTMLElement;
@@ -798,7 +817,7 @@ describe('VirtualizedFileDiff estimated height cache', () => {
       expect(inspect(instance).cache.measuredHeightDeltaTotal).toBe(25);
       expect(instance.getVirtualizedHeight()).toBe(351);
 
-      instance.prepareCodeViewItem(fileDiff, 0, undefined, [
+      instance.updateCodeViewLayout(fileDiff, 0, undefined, [
         { side: 'additions', lineNumber: 1 },
       ]);
 
@@ -816,9 +835,10 @@ describe('VirtualizedFileDiff estimated height cache', () => {
       const instance = new VirtualizedFileDiff({}, virtualizer, metrics);
       const fileDiff = createTwoHunkDiff();
 
-      instance.prepareCodeViewItem(fileDiff, 0, undefined, [
+      instance.updateCodeViewLayout(fileDiff, 0, undefined, [
         { side: 'additions', lineNumber: 0 },
       ]);
+      setRenderedDiff(instance, fileDiff);
       inspect(instance).renderRange = createRenderRange();
       inspect(instance).fileContainer =
         new FakeHTMLElement() as unknown as HTMLElement;
@@ -836,9 +856,7 @@ describe('VirtualizedFileDiff estimated height cache', () => {
       inspect(instance).fileContainer = undefined;
       instance.cleanUp(true);
 
-      expect(inspect(instance).lineAnnotations).toHaveLength(1);
-
-      instance.prepareCodeViewItem(fileDiff, 0, undefined, []);
+      instance.updateCodeViewLayout(fileDiff, 0, undefined, []);
 
       expect(inspect(instance).cache.fileAnnotationHeight).toBe(0);
       expect(inspect(instance).cache.measuredHeightDeltaTotal).toBe(0);
@@ -856,7 +874,7 @@ describe('VirtualizedFileDiff estimated height cache', () => {
       metrics
     );
 
-    instance.prepareCodeViewItem(createLargeExpandedDiff(), 0);
+    instance.updateCodeViewLayout(createLargeExpandedDiff(), 0);
     const estimatedHeight = instance.getVirtualizedHeight();
 
     expect(inspect(instance).cache.totalLines).toBe(0);
@@ -876,7 +894,7 @@ describe('VirtualizedFileDiff estimated height cache', () => {
       metrics
     );
 
-    instance.prepareCodeViewItem(createLargeExpandedDiff(), 0);
+    instance.updateCodeViewLayout(createLargeExpandedDiff(), 0);
     const estimatedHeight = instance.getVirtualizedHeight();
 
     expect(inspect(instance).cache.totalLines).toBe(0);
@@ -926,7 +944,7 @@ describe('VirtualizedFileDiff estimated height cache', () => {
     const instance = new VirtualizedFileDiff({}, virtualizer, metrics);
     const lineCount = 1_000_000;
 
-    instance.prepareCodeViewItem(createHugeSingleBlockDiff(lineCount), 0);
+    instance.updateCodeViewLayout(createHugeSingleBlockDiff(lineCount), 0);
 
     expect(instance.getLinePosition(900_000, 'additions')).toEqual({
       top: metrics.diffHeaderHeight + 899_999 * metrics.lineHeight,
@@ -958,7 +976,7 @@ describe('VirtualizedFileDiff estimated height cache', () => {
       virtualizer,
       metrics
     );
-    instance.prepareCodeViewItem(fileDiff, 0);
+    instance.updateCodeViewLayout(fileDiff, 0);
     const fileHeight = instance.getVirtualizedHeight();
     inspect(instance).computeRenderRangeFromWindow(fileDiff, 0, {
       top: 0,

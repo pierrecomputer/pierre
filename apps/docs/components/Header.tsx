@@ -147,7 +147,14 @@ export function Header({ onMobileMenuToggle, className }: HeaderProps) {
 
       <div className="mr-auto flex items-center gap-1 md:hidden">
         <IconChevronFlat size={16} className="text-border" />
-        <Button variant="ghost" size="icon" onClick={handleMobileToggle}>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={handleMobileToggle}
+          aria-label={
+            ownsPopover ? 'Toggle navigation menu' : 'Toggle table of contents'
+          }
+        >
           <IconParagraph />
         </Button>
       </div>

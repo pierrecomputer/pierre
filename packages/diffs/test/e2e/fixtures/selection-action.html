@@ -57,7 +57,7 @@ const gamma = 'third';
       const actionClicks = [];
       window.__actionClicks = actionClicks;
 
-      const editor = new Editor({
+      const editor = new Editor('file', {
         enabledSelectionAction: true,
         renderSelectionAction({ getSelectionText, close }) {
           const container = document.createElement('div');

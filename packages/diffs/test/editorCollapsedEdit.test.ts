@@ -1,8 +1,10 @@
 import { afterAll, describe, expect, spyOn, test } from 'bun:test';
+import type { CreatePatchOptionsNonabortable } from 'diff';
 
 import { FileDiff } from '../src/components/FileDiff';
 import { DEFAULT_THEMES } from '../src/constants';
 import { Editor } from '../src/editor/editor';
+import { EditStateManager } from '../src/editor/EditStateManager';
 import { PieceTable } from '../src/editor/pieceTable';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
 import { installDom, wait, waitFor } from './domHarness';
@@ -65,7 +67,10 @@ interface CollapsedEditFixture {
 // Editing starts with the still-forced expansion, then the collapse is
 // re-enabled mid-session — the standalone vector for exercising
 // collapse-during-edit before the option forcing is removed.
-async function createCollapsedEditFixture(): Promise<CollapsedEditFixture> {
+async function createCollapsedEditFixture(
+  documentKey?: string,
+  parseDiffOptions?: CreatePatchOptionsNonabortable
+): Promise<CollapsedEditFixture> {
   const dom = installDom();
   const container = document.createElement('div');
   document.body.appendChild(container);
@@ -81,8 +86,9 @@ async function createCollapsedEditFixture(): Promise<CollapsedEditFixture> {
     disableFileHeader: true,
     theme: DEFAULT_THEMES,
     diffStyle: 'split',
+    parseDiffOptions,
   });
-  const editor = new Editor<undefined>();
+  const editor = new Editor<undefined>('file-diff', {}, documentKey);
   fileDiff.render({
     oldFile: { name: 'edit.ts', contents: oldContents },
     newFile: { name: 'edit.ts', contents: newContents },
@@ -152,7 +158,7 @@ describe('diff editor: attach-time markup normalization', () => {
         if (phase === 'update') updates++;
       },
     });
-    const editor = new Editor<undefined>();
+    const editor = new Editor<undefined>('file-diff');
     try {
       fileDiff.render({
         oldFile: { name: 'edit.ts', contents: 'a\nb\n' },
@@ -408,6 +414,82 @@ describe('diff editor: collapsed regions during edit', () => {
       expect(restored[0].textContent).toBe('line 30');
     } finally {
       await fixture.cleanup();
+    }
+  });
+
+  test('a keyed editor retains a context-only session region after undo', async () => {
+    EditStateManager.clearAll();
+    const documentKey = 'collapsed-session-hunks';
+    const first = await createCollapsedEditFixture(documentKey);
+    let firstCleaned = false;
+    try {
+      first.fileDiff.handleExpandHunk(1, 'both');
+      await wait(10);
+      typeAt(first.editor, 29, 0, 'typed ');
+      await wait(30);
+      first.editor.undo();
+      await wait(30);
+      expect(first.fileDiff.isLineRenderable(30)).toBe(true);
+
+      await first.cleanup();
+      firstCleaned = true;
+
+      const second = await createCollapsedEditFixture(documentKey);
+      try {
+        expect(second.editor.getText()).not.toContain('typed line 30');
+        expect(second.fileDiff.isLineRenderable(30)).toBe(true);
+        expect(
+          findAdditionContent(second.container)?.querySelector(
+            '[data-line="30"]'
+          )?.textContent
+        ).toBe('line 30');
+
+        second.editor.redo();
+        await wait(30);
+        expect(second.editor.getText()).toContain('typed line 30');
+        expect(second.fileDiff.isLineRenderable(30)).toBe(true);
+      } finally {
+        await second.cleanup();
+      }
+    } finally {
+      if (!firstCleaned) {
+        await first.cleanup();
+      }
+      EditStateManager.clearAll();
+    }
+  });
+
+  test('a keyed editor retains session hunks across parse option changes', async () => {
+    EditStateManager.clearAll();
+    const documentKey = 'incompatible-session-hunks';
+    const first = await createCollapsedEditFixture(documentKey);
+    let firstCleaned = false;
+    try {
+      first.fileDiff.handleExpandHunk(1, 'both');
+      await wait(10);
+      typeAt(first.editor, 29, 0, 'typed ');
+      await wait(30);
+      first.editor.undo();
+      await wait(30);
+      expect(first.fileDiff.isLineRenderable(30)).toBe(true);
+
+      await first.cleanup();
+      firstCleaned = true;
+
+      const second = await createCollapsedEditFixture(documentKey, {
+        ignoreWhitespace: true,
+      });
+      try {
+        expect(second.editor.getText()).not.toContain('typed line 30');
+        expect(second.fileDiff.isLineRenderable(30)).toBe(true);
+      } finally {
+        await second.cleanup();
+      }
+    } finally {
+      if (!firstCleaned) {
+        await first.cleanup();
+      }
+      EditStateManager.clearAll();
     }
   });
 

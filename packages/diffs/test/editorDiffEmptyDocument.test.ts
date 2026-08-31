@@ -4,7 +4,7 @@ import { FileDiff } from '../src/components/FileDiff';
 import { DEFAULT_THEMES } from '../src/constants';
 import { Editor } from '../src/editor/editor';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
-import type { FileContents } from '../src/types';
+import type { FileContents, FileDiffMetadata } from '../src/types';
 import { installDom, wait } from './domHarness';
 
 afterAll(async () => {
@@ -53,6 +53,13 @@ function countEditableLineEls(content: HTMLElement): number {
   return count;
 }
 
+function getEditSessionDiff(
+  fileDiff: FileDiff<undefined>
+): FileDiffMetadata | undefined {
+  return (fileDiff as unknown as { editSessionDiff?: FileDiffMetadata })
+    .editSessionDiff;
+}
+
 interface DiffEditorFixture {
   container: HTMLElement;
   editor: Editor<undefined>;
@@ -76,7 +83,7 @@ async function createDiffEditorFixture(
   });
   const oldFile: FileContents = { name: 'edit.ts', contents: oldContents };
   const newFile: FileContents = { name: 'edit.ts', contents: newContents };
-  const editor = new Editor<undefined>();
+  const editor = new Editor<undefined>('file-diff');
 
   fileDiff.render({
     oldFile,
@@ -163,7 +170,7 @@ describe('diff editor: empty document', () => {
       }
     });
 
-    test(`restores the zero-line diff after an attach-only session (${diffStyle})`, async () => {
+    test(`keeps the external zero-line diff unchanged after an attach-only session (${diffStyle})`, async () => {
       const fixture = await createDiffEditorFixture(
         diffStyle,
         'removed 1\nremoved 2\n',
@@ -171,21 +178,22 @@ describe('diff editor: empty document', () => {
       );
 
       try {
-        expect(fixture.fileDiff.fileDiff?.additionLines).toEqual(['']);
+        expect(fixture.fileDiff.fileDiff?.additionLines).toEqual([]);
+        expect(getEditSessionDiff(fixture.fileDiff)?.additionLines).toEqual([
+          '',
+        ]);
 
         fixture.editor.cleanUp();
         for (let attempt = 0; attempt < 40; attempt++) {
           const content = findAdditionContent(fixture.container);
-          if (
-            fixture.fileDiff.fileDiff?.additionLines.length === 0 &&
-            (content == null || countEditableLineEls(content) === 0)
-          ) {
+          if (content == null || countEditableLineEls(content) === 0) {
             break;
           }
           await wait(0);
         }
 
         expect(fixture.fileDiff.fileDiff?.additionLines).toEqual([]);
+        expect(getEditSessionDiff(fixture.fileDiff)).toBeUndefined();
         const content = findAdditionContent(fixture.container);
         expect(content == null ? 0 : countEditableLineEls(content)).toBe(0);
       } finally {

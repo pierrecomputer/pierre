@@ -7,6 +7,14 @@ import type { FileTreePathOptions } from '@trees/_lib/fileTreePathOptions';
 import { readSettingsCookies } from '../_components/readSettingsCookies';
 import { DragAndDropDemoClient } from '../_demos/DragAndDropDemoClient';
 import { createPresortedPreparedInput } from '../_lib/createPresortedPreparedInput';
+import { pageMetadata } from '@/lib/page-metadata';
+
+export const metadata = pageMetadata({
+  title: 'Drag and drop demo — Pierre Trees',
+  description:
+    'Pointer and touch drag-and-drop in @pierre/trees, moving files and folders within a virtualized tree with live drop-target feedback.',
+  path: '/trees-dev/drag-and-drop',
+});
 
 const DRAG_AND_DROP_DEMO_PATHS = [
   'assets/images/social/banner.png',

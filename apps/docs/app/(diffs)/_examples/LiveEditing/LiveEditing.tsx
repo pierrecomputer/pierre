@@ -1,7 +1,7 @@
 'use client';
 
 import { cloneFileDiffMetadata } from '@pierre/diffs';
-import type { EditorOptions } from '@pierre/diffs/edit';
+import type { EditorChangeEvent } from '@pierre/diffs/edit';
 import { File, FileDiff } from '@pierre/diffs/react';
 import type {
   PreloadedFileResult,
@@ -23,21 +23,21 @@ import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 
 interface LiveEditingProps {
-  // Pre-rendered File surface (the additions-only view) and the FileDiff
-  // surface (before/after). We ship both so toggling between them hydrates from
+  // Pre-rendered File component (the additions-only view) and FileDiff component
+  // (before/after). We ship both so toggling between them hydrates from
   // server HTML instead of flashing in after client highlighting.
   prerenderedFile: PreloadedFileResult<undefined>;
   prerenderedDiff: PreloadFileDiffResult<undefined>;
 }
 
-// Which surface the demo renders: a standalone File or a before/after FileDiff.
-type Surface = 'file' | 'diff';
+// Which component the demo renders: a standalone File or a before/after FileDiff.
+type DemoView = 'file' | 'diff';
 
-// Review renders the surface read-only (how diffs renders by default); Edit
+// Review renders the component read-only (how diffs renders by default); Edit
 // attaches the editor and makes it editable in place.
 type EditMode = 'review' | 'edit';
 
-// Layout the diff renders in. Only applies to the FileDiff surface.
+// Layout the diff renders in. Only applies to the FileDiff component.
 type DiffLayout = 'unified' | 'split';
 
 export function LiveEditing({
@@ -45,17 +45,17 @@ export function LiveEditing({
   prerenderedDiff,
 }: LiveEditingProps) {
   const [hasEdits, setHasEdits] = useState(false);
-  const [surface, setSurface] = useState<Surface>('file');
+  const [view, setView] = useState<DemoView>('file');
   // Default to Edit so the editor is live on first paint; the toggle drops back
-  // to a read-only Review of the same surface.
+  // to a read-only Review of the same component.
   const [mode, setMode] = useState<EditMode>('edit');
   // Default to the layout the diff was prerendered in (unified) so the first
-  // paint hydrates without a flash; toggling re-renders the surface client-side.
+  // paint hydrates without a flash; toggling re-renders the component client-side.
   const [diffLayout, setDiffLayout] = useState<DiffLayout>(
     prerenderedDiff.options?.diffStyle === 'split' ? 'split' : 'unified'
   );
-  // Bumping this value remounts the editable surface from pristine input.
-  // Reset and surface changes use it as a deliberate new-session boundary.
+  // Bumping this value remounts the editable component from pristine input.
+  // Reset and view changes use it as a deliberate new-session boundary.
   const [resetKey, setResetKey] = useState(0);
   // Editing a FileDiff updates the diff metadata it renders from so the live
   // hunks stay in sync. Keep an untouched baseline and hand FileDiff a fresh
@@ -73,29 +73,27 @@ export function LiveEditing({
     [pristineFileDiff, resetKey]
   );
 
-  const editorOptions = useMemo<EditorOptions<undefined>>(
-    () => ({
-      // Both surfaces synchronously report the current new-file contents.
-      onChange(file) {
-        setHasEdits(file.contents !== LIVE_EDITING_NEW_FILE.contents);
-      },
-    }),
+  // Both components synchronously report the current new-file contents.
+  const handleEditChange = useCallback(
+    (event: EditorChangeEvent<undefined, 'file' | 'diff'>) => {
+      setHasEdits(event.file.contents !== LIVE_EDITING_NEW_FILE.contents);
+    },
     []
   );
 
-  // Reset and surface switches deliberately discard the current edit session.
+  // Reset and component switches deliberately discard the current edit session.
   // The new key also rebuilds mutable FileDiff metadata from its pristine copy.
-  const resetEditableSurface = useCallback(() => {
+  const resetEditableComponent = useCallback(() => {
     setHasEdits(false);
     setResetKey((key) => key + 1);
   }, []);
 
-  const handleSurfaceChange = useCallback(
-    (value: Surface) => {
-      setSurface(value);
-      resetEditableSurface();
+  const handleViewChange = useCallback(
+    (value: DemoView) => {
+      setView(value);
+      resetEditableComponent();
     },
-    [resetEditableSurface]
+    [resetEditableComponent]
   );
 
   // Layout is only a view option, so changing it keeps the current edit session.
@@ -103,12 +101,12 @@ export function LiveEditing({
     setDiffLayout(value);
   }, []);
 
-  // The Reset button lives in the surface header for both File and FileDiff
+  // The Reset button lives in the component header for both File and FileDiff
   // views, so it's defined once and reused by each `renderHeaderMetadata`.
   const renderResetButton = useCallback(
     () => (
       <button
-        onClick={resetEditableSurface}
+        onClick={resetEditableComponent}
         disabled={!hasEdits}
         title="Revert to the original contents"
         className={cn(
@@ -122,7 +120,7 @@ export function LiveEditing({
         Reset
       </button>
     ),
-    [hasEdits, resetEditableSurface]
+    [hasEdits, resetEditableComponent]
   );
 
   const headerMetadata = mode === 'edit' ? renderResetButton : undefined;
@@ -135,12 +133,12 @@ export function LiveEditing({
         title="Live editing"
         description={
           <>
-            Edit mode (experimental) makes any code surface—<code>File</code> or{' '}
-            <code>FileDiff</code>—editable in place. Toggle between a read-only{' '}
-            <strong>Review</strong> and a live <strong>Edit</strong>, switch the
-            surface between a file and a diff, and render the diff unified or
-            side-by-side split. Start typing in the code below and it updates as
-            you edit.
+            Edit mode (experimental) makes any code component—<code>File</code>{' '}
+            or <code>FileDiff</code>—editable in place. Toggle between a
+            read-only <strong>Review</strong> and a live <strong>Edit</strong>,
+            switch the component between a file and a diff, and render the diff
+            unified or side-by-side split. Start typing in the code below and it
+            updates as you edit.
           </>
         }
       />
@@ -169,9 +167,9 @@ export function LiveEditing({
         </div>
 
         <ButtonGroup
-          value={surface}
-          onValueChange={(value) => handleSurfaceChange(value as Surface)}
-          aria-label="Surface"
+          value={view}
+          onValueChange={(value) => handleViewChange(value as DemoView)}
+          aria-label="View"
         >
           {(['file', 'diff'] as const).map((value) => (
             <ButtonGroupItem key={value} value={value} className="capitalize">
@@ -191,8 +189,8 @@ export function LiveEditing({
               key={value}
               value={value}
               aria-label={value}
-              // Layout only applies to the diff surface; disable it for files.
-              disabled={surface === 'file'}
+              // Layout only applies to the diff component; disable it for files.
+              disabled={view === 'file'}
             >
               {value === 'split' ? <IconDiffSplit /> : <IconDiffUnified />}
             </ButtonGroupItem>
@@ -201,7 +199,7 @@ export function LiveEditing({
       </div>
 
       <div>
-        {surface === 'file' ? (
+        {view === 'file' ? (
           <File
             key={resetKey}
             {...prerenderedFile}
@@ -212,7 +210,7 @@ export function LiveEditing({
             className="diff-container"
             renderHeaderMetadata={headerMetadata}
             edit={edit}
-            editorOptions={editorOptions}
+            onEditChange={handleEditChange}
           />
         ) : (
           <FileDiff
@@ -223,7 +221,7 @@ export function LiveEditing({
             className="diff-container"
             renderHeaderMetadata={headerMetadata}
             edit={edit}
-            editorOptions={editorOptions}
+            onEditChange={handleEditChange}
           />
         )}
       </div>

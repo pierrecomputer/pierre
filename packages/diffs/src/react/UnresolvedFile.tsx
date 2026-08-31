@@ -2,7 +2,6 @@
 
 import type { ReactNode } from 'react';
 
-import type { FileDiffOptions } from '../components/FileDiff';
 import type { UnresolvedFile as UnresolvedFileClass } from '../components/UnresolvedFile';
 import { DIFFS_TAG_NAME } from '../constants';
 import type { UnresolvedFileHunksRendererOptions } from '../renderers/UnresolvedFileHunksRenderer';
@@ -14,6 +13,7 @@ import type {
 } from '../types';
 import { type MergeConflictDiffAction } from '../utils/parseMergeConflictDiffFromFile';
 import type { FileDiffProps } from './FileDiff';
+import type { FileDiffOptions } from './types';
 import { renderDiffChildren } from './utils/renderDiffChildren';
 import { templateRender } from './utils/templateRender';
 import { useUnresolvedFileInstance } from './utils/useUnresolvedFileInstance';
@@ -50,7 +50,12 @@ export interface UnresolvedFileReactOptions<LAnnotation>
 
 export interface UnresolvedFileProps<LAnnotation> extends Omit<
   FileDiffProps<LAnnotation>,
-  'fileDiff' | 'options' | 'edit' | 'editorOptions'
+  | 'fileDiff'
+  | 'options'
+  | 'edit'
+  | 'editorOptions'
+  | 'onEditChange'
+  | 'onEditComplete'
 > {
   file: FileContents;
   options?: UnresolvedFileReactOptions<LAnnotation>;

@@ -16,6 +16,7 @@ import {
 } from './editStack';
 import { PieceTable } from './pieceTable';
 import type { SearchParams } from './searchPanel';
+import type { EditHistoryLineAnnotation, EditHistoryState } from './types';
 
 export type { Position, Range, TextEdit } from '../types';
 
@@ -56,7 +57,7 @@ export interface TextDocumentChange {
 type TextDocumentHistoryResult<LAnnotation> = [
   change: TextDocumentChange,
   selections?: EditorSelection[],
-  lineAnnotations?: DiffLineAnnotation<LAnnotation>[],
+  lineAnnotations?: EditHistoryLineAnnotation<LAnnotation>[],
   selectionEdits?: ResolvedTextEdit[],
 ];
 
@@ -69,14 +70,15 @@ export class TextDocument<LAnnotation> {
   #version: number;
   #pieceTable: PieceTable;
   #editStack: EditStack<LAnnotation>;
-  #eol: string;
+  #eol: '\n' | '\r\n' | '\r';
 
   constructor(
     uri: string,
     text: string,
     languageId = 'text',
     version = 0,
-    editStack: EditStack<LAnnotation> = new EditStack()
+    editStack: EditStack<LAnnotation> = new EditStack(),
+    eol?: '\n' | '\r\n' | '\r'
   ) {
     this.#uri = new URL(uri, 'file://').toString();
     this.#languageId = languageId;
@@ -88,13 +90,17 @@ export class TextDocument<LAnnotation> {
     // inserted or pasted text match the rest of the file instead of leaving
     // mixed endings behind and keeps that convention stable as the file is
     // edited. Defaults to Unix `\n` when the initial text has no line break.
-    const firstLineBreak = this.#pieceTable.getLineText(0, true);
-    if (firstLineBreak.endsWith('\r\n')) {
-      this.#eol = '\r\n';
-    } else if (firstLineBreak.endsWith('\r')) {
-      this.#eol = '\r';
+    if (eol != null) {
+      this.#eol = eol;
     } else {
-      this.#eol = '\n';
+      const firstLineBreak = this.#pieceTable.getLineText(0, true);
+      if (firstLineBreak.endsWith('\r\n')) {
+        this.#eol = '\r\n';
+      } else if (firstLineBreak.endsWith('\r')) {
+        this.#eol = '\r';
+      } else {
+        this.#eol = '\n';
+      }
     }
   }
 
@@ -114,8 +120,12 @@ export class TextDocument<LAnnotation> {
     return this.#pieceTable.lineCount;
   }
 
-  get eol(): string {
+  get eol(): '\n' | '\r\n' | '\r' {
     return this.#eol;
+  }
+
+  get history(): EditHistoryState<LAnnotation> {
+    return this.#editStack.getLiveState();
   }
 
   get canUndo(): boolean {
@@ -124,6 +134,11 @@ export class TextDocument<LAnnotation> {
 
   get canRedo(): boolean {
     return this.#editStack.canRedo;
+  }
+
+  /** Clear undo and redo history without changing the document contents. */
+  clearHistory(): void {
+    this.#editStack.clear();
   }
 
   positionAt(offset: number): Position {

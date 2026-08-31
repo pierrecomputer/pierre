@@ -15,6 +15,7 @@ import type {
   HighlightedToken,
   RenderRange,
 } from '../src/types';
+import { getLineAnnotationName } from '../src/utils/getLineAnnotationName';
 import { installDom, wait } from './domHarness';
 
 afterAll(async () => {
@@ -64,7 +65,7 @@ async function createDiffEditorFixture(
   });
   const oldFile: FileContents = { name: 'example.txt', contents: oldContents };
   const newFile: FileContents = { name: 'example.txt', contents: newContents };
-  const editor = new Editor<undefined>();
+  const editor = new Editor<undefined>('file-diff');
 
   fileDiff.render({
     oldFile,
@@ -147,6 +148,10 @@ class TestEditableComponent implements DiffsEditableComponent<undefined> {
     return this.options;
   }
 
+  __captureDocumentSessionState(): undefined {
+    return undefined;
+  }
+
   getCodeScrollLeft(): number {
     return 0;
   }
@@ -180,12 +185,28 @@ class TestEditableComponent implements DiffsEditableComponent<undefined> {
     this.#editor = undefined;
   }
 
-  attachEditor(editor: DiffsEditor<undefined>): () => void {
+  emitEditChange(): void {}
+
+  getAnnotationSlotName = getLineAnnotationName;
+
+  __completeEditSession(
+    _editor: DiffsEditor<undefined>,
+    _mode: 'install' | 'discard'
+  ): void {}
+
+  __attachEditor(editor: DiffsEditor<undefined>): () => void {
     this.#editor = editor;
     this.#syncRenderView();
     return () => {
       this.#editor = undefined;
     };
+  }
+
+  __resumeEditor(editor: DiffsEditor<undefined>): void {
+    if (this.#editor !== editor) {
+      throw new Error('TestEditableComponent: editor association changed');
+    }
+    this.rerender();
   }
 
   applyDocumentChange(
@@ -205,13 +226,13 @@ class TestEditableComponent implements DiffsEditableComponent<undefined> {
   ): void {}
 
   #syncRenderView(): void {
-    this.#editor?.__syncRenderView(
-      createTestHighlighter(),
-      this.fileContainer,
-      this.#file,
-      this.#lineAnnotations,
-      this.#renderRange
-    );
+    this.#editor?.__syncRenderView({
+      highlighter: createTestHighlighter(),
+      fileContainer: this.fileContainer,
+      file: this.#file,
+      lineAnnotations: this.#lineAnnotations,
+      renderRange: this.#renderRange,
+    });
   }
 
   #renderShadowDom(): void {
@@ -371,7 +392,7 @@ describe('Editor clipboard events', () => {
   test('cuts the current line when the primary selection is collapsed', () => {
     const { cleanup } = installDom();
 
-    const editor = new Editor<undefined>();
+    const editor = new Editor<undefined>('file');
     const component = new TestEditableComponent({
       name: 'example.txt',
       contents: 'alpha\nbravo\ncharlie',
@@ -392,7 +413,7 @@ describe('Editor clipboard events', () => {
 
       expect(writes).toEqual([['text', 'bravo\n']]);
       expect(editor.getText()).toBe('alpha\ncharlie');
-      expect(editor.getState().selections).toEqual([
+      expect(editor.getViewState().selections).toEqual([
         {
           start: { line: 1, character: 0 },
           end: { line: 1, character: 0 },
@@ -408,7 +429,7 @@ describe('Editor clipboard events', () => {
   test('cuts every collapsed selection line in a multi-cursor cut', () => {
     const { cleanup } = installDom();
 
-    const editor = new Editor<undefined>();
+    const editor = new Editor<undefined>('file');
     const component = new TestEditableComponent({
       name: 'example.txt',
       contents: 'alpha\nbravo\ncharlie\ndelta',
@@ -440,7 +461,7 @@ describe('Editor clipboard events', () => {
         ],
       ]);
       expect(editor.getText()).toBe('bravo\ndelta');
-      expect(editor.getState().selections).toEqual([
+      expect(editor.getViewState().selections).toEqual([
         {
           start: { line: 0, character: 0 },
           end: { line: 0, character: 0 },
@@ -461,7 +482,7 @@ describe('Editor clipboard events', () => {
   test('cuts mixed ranges and collapsed selection lines together', () => {
     const { cleanup } = installDom();
 
-    const editor = new Editor<undefined>();
+    const editor = new Editor<undefined>('file');
     const component = new TestEditableComponent({
       name: 'example.txt',
       contents: 'alpha\nbravo\ncharlie\ndelta',
@@ -490,7 +511,7 @@ describe('Editor clipboard events', () => {
         [MULTI_SELECTION_CLIPBOARD_TYPE, JSON.stringify(['rav', 'charlie\n'])],
       ]);
       expect(editor.getText()).toBe('alpha\nbo\ndelta');
-      expect(editor.getState().selections).toEqual([
+      expect(editor.getViewState().selections).toEqual([
         {
           start: { line: 1, character: 1 },
           end: { line: 1, character: 1 },
@@ -511,7 +532,7 @@ describe('Editor clipboard events', () => {
   test('cuts a line once when multiple carets share it', () => {
     const { cleanup } = installDom();
 
-    const editor = new Editor<undefined>();
+    const editor = new Editor<undefined>('file');
     const component = new TestEditableComponent({
       name: 'example.txt',
       contents: 'alpha\nbravo\ncharlie',
@@ -543,7 +564,7 @@ describe('Editor clipboard events', () => {
         ],
       ]);
       expect(editor.getText()).toBe('alpha\ncharlie');
-      expect(editor.getState().selections).toEqual([
+      expect(editor.getViewState().selections).toEqual([
         {
           start: { line: 1, character: 0 },
           end: { line: 1, character: 0 },
@@ -559,7 +580,7 @@ describe('Editor clipboard events', () => {
   test('cuts a line once when a range overlaps a caret on the same line', () => {
     const { cleanup } = installDom();
 
-    const editor = new Editor<undefined>();
+    const editor = new Editor<undefined>('file');
     const component = new TestEditableComponent({
       name: 'example.txt',
       contents: 'alpha\nbravo\ncharlie',
@@ -588,7 +609,7 @@ describe('Editor clipboard events', () => {
         [MULTI_SELECTION_CLIPBOARD_TYPE, JSON.stringify(['br', 'bravo\n'])],
       ]);
       expect(editor.getText()).toBe('alpha\ncharlie');
-      expect(editor.getState().selections).toEqual([
+      expect(editor.getViewState().selections).toEqual([
         {
           start: { line: 1, character: 0 },
           end: { line: 1, character: 0 },
@@ -604,7 +625,7 @@ describe('Editor clipboard events', () => {
   test('copies the whole line including its break when collapsed', () => {
     const { cleanup } = installDom();
 
-    const editor = new Editor<undefined>();
+    const editor = new Editor<undefined>('file');
     const component = new TestEditableComponent({
       name: 'example.txt',
       contents: 'alpha\nbravo\ncharlie',
@@ -635,7 +656,7 @@ describe('Editor clipboard events', () => {
   test('copies the final line without a trailing break', () => {
     const { cleanup } = installDom();
 
-    const editor = new Editor<undefined>();
+    const editor = new Editor<undefined>('file');
     const component = new TestEditableComponent({
       name: 'example.txt',
       contents: 'alpha\nbravo\ncharlie',
@@ -664,7 +685,7 @@ describe('Editor clipboard events', () => {
   test('pastes copied selection texts into matching selections', async () => {
     const { cleanup } = installDom();
 
-    const editor = new Editor<undefined>();
+    const editor = new Editor<undefined>('file');
     const component = new TestEditableComponent({
       name: 'example.txt',
       contents: 'one two\nthree four\n---\nAA\nBB',
@@ -717,7 +738,7 @@ describe('Editor clipboard events', () => {
   test('uses plain text when metadata and selection counts differ', () => {
     const { cleanup } = installDom();
 
-    const editor = new Editor<undefined>();
+    const editor = new Editor<undefined>('file');
     const component = new TestEditableComponent({
       name: 'example.txt',
       contents: 'AA\nBB\nCC',
@@ -799,7 +820,7 @@ describe('Editor clipboard events', () => {
     const { cleanup } = installDom();
     let reads = 0;
 
-    const editor = new Editor<undefined>({
+    const editor = new Editor<undefined>('file', {
       clipboard: {
         readText: () => {
           reads++;
@@ -842,7 +863,7 @@ describe('Editor clipboard events', () => {
     const { cleanup } = installDom();
     let reads = 0;
 
-    const editor = new Editor<undefined>({
+    const editor = new Editor<undefined>('file', {
       clipboard: {
         readText: () => {
           reads++;
@@ -882,7 +903,7 @@ describe('Editor clipboard events', () => {
     const { cleanup } = installDom();
     const reads: Array<string | undefined> = [];
 
-    const editor = new Editor<undefined>({
+    const editor = new Editor<undefined>('file', {
       clipboard: {
         readText: (type) => {
           reads.push(type);
@@ -928,7 +949,7 @@ describe('Editor clipboard events', () => {
   test('uses custom clipboard plain text when selection counts differ', async () => {
     const { cleanup } = installDom();
 
-    const editor = new Editor<undefined>({
+    const editor = new Editor<undefined>('file', {
       clipboard: {
         readText: (type) =>
           type === MULTI_SELECTION_CLIPBOARD_TYPE
@@ -975,7 +996,7 @@ describe('Editor clipboard events', () => {
   test('rewrites Windows clipboard line breaks to the document EOL on paste', () => {
     const { cleanup } = installDom();
 
-    const editor = new Editor<undefined>();
+    const editor = new Editor<undefined>('file');
     const component = new TestEditableComponent({
       name: 'example.txt',
       contents: 'alpha\nbravo\ncharlie',
@@ -1007,7 +1028,7 @@ describe('Editor clipboard events', () => {
   test('rewrites lone carriage returns to the document EOL on paste', () => {
     const { cleanup } = installDom();
 
-    const editor = new Editor<undefined>();
+    const editor = new Editor<undefined>('file');
     const component = new TestEditableComponent({
       name: 'example.txt',
       contents: 'alpha\nbravo',
@@ -1037,7 +1058,7 @@ describe('Editor clipboard events', () => {
   test('matches the document EOL when the file uses CRLF', () => {
     const { cleanup } = installDom();
 
-    const editor = new Editor<undefined>();
+    const editor = new Editor<undefined>('file');
     const component = new TestEditableComponent({
       name: 'example.txt',
       contents: 'alpha\r\nbravo',
@@ -1068,7 +1089,7 @@ describe('Editor clipboard events', () => {
   test('matches the document EOL when the file uses lone CR', () => {
     const { cleanup } = installDom();
 
-    const editor = new Editor<undefined>();
+    const editor = new Editor<undefined>('file');
     const component = new TestEditableComponent({
       name: 'example.txt',
       contents: 'a\rb',
@@ -1101,7 +1122,7 @@ describe('Editor clipboard events', () => {
     const { cleanup } = installDom();
     let reads = 0;
 
-    const editor = new Editor<undefined>({
+    const editor = new Editor<undefined>('file', {
       clipboard: {
         readText: () => {
           reads++;
@@ -1143,7 +1164,7 @@ describe('Editor line break input', () => {
     test(`${inputType} inserts the document EOL when the file uses CRLF`, () => {
       const { cleanup } = installDom();
 
-      const editor = new Editor<undefined>();
+      const editor = new Editor<undefined>('file');
       const component = new TestEditableComponent({
         name: 'example.txt',
         contents: 'alpha\r\nbravo',

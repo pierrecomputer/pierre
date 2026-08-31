@@ -1,6 +1,7 @@
 import { afterAll, describe, expect, test } from 'bun:test';
 
 import { File } from '../src/components/File';
+import { FileDiff } from '../src/components/FileDiff';
 import { DEFAULT_THEMES } from '../src/constants';
 import { Editor } from '../src/editor/editor';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
@@ -12,10 +13,11 @@ afterAll(async () => {
 });
 
 async function waitForEditableContent(
-  container: HTMLElement
+  container: HTMLElement,
+  selector = '[data-content]'
 ): Promise<HTMLElement> {
   for (let attempt = 0; attempt < 20; attempt++) {
-    const content = container.shadowRoot?.querySelector('[data-content]');
+    const content = container.shadowRoot?.querySelector(selector);
     if (
       content instanceof HTMLElement &&
       (content.contentEditable === 'true' ||
@@ -111,12 +113,28 @@ function restorePrototypeProperty(
   }
 }
 
+// Build the array-like shape returned by Range.getClientRects in browsers.
+function toDOMRectList(rects: DOMRect[]): DOMRectList {
+  return Object.assign(rects, {
+    item(index: number): DOMRect | null {
+      return rects[index] ?? null;
+    },
+  });
+}
+
 // #wrapLineText detects visual row starts by checking when a Range's top moves
 // downward. jsdom does not measure ranges, so this harness reports a new top
 // every `columns` UTF-16 offsets, making wrap offsets deterministic.
+// The WebKit mode gives a boundary grapheme a zero-width fragment on the
+// previous row followed by its glyph fragment on the continuation row.
 // rangeMeasurements() exposes how many Range rects were taken so tests can
 // assert measurement cost and cache retention.
-function installWrapMeasurement(columns: number): {
+function installWrapMeasurement(
+  columns: number,
+  {
+    webKitBoundaryFragments = false,
+  }: { webKitBoundaryFragments?: boolean } = {}
+): {
   rangeMeasurements(): number;
   restore(): void;
 } {
@@ -126,10 +144,19 @@ function installWrapMeasurement(columns: number): {
     rangeProto,
     'getBoundingClientRect'
   );
+  const originalRangeClientRects = Object.getOwnPropertyDescriptor(
+    rangeProto,
+    'getClientRects'
+  );
   const originalElementRect = Object.getOwnPropertyDescriptor(
     elementProto,
     'getBoundingClientRect'
   );
+
+  const getRangeRect = (offset: number): DOMRect =>
+    rect((offset % columns) * 8, Math.floor(offset / columns) * ROW);
+  const isWrapBoundary = (offset: number): boolean =>
+    webKitBoundaryFragments && offset > 0 && offset % columns === 0;
 
   let rangeMeasurements = 0;
   Object.defineProperty(rangeProto, 'getBoundingClientRect', {
@@ -137,7 +164,26 @@ function installWrapMeasurement(columns: number): {
     value(this: Range): DOMRect {
       rangeMeasurements++;
       const offset = this.startOffset;
-      return rect((offset % columns) * 8, Math.floor(offset / columns) * ROW);
+      if (isWrapBoundary(offset)) {
+        const row = offset / columns;
+        return rect(0, (row - 1) * ROW, columns * 8, ROW * 2);
+      }
+      return getRangeRect(offset);
+    },
+  });
+  Object.defineProperty(rangeProto, 'getClientRects', {
+    configurable: true,
+    value(this: Range): DOMRectList {
+      rangeMeasurements++;
+      const offset = this.startOffset;
+      if (isWrapBoundary(offset)) {
+        const row = offset / columns;
+        return toDOMRectList([
+          rect(columns * 8, (row - 1) * ROW, 0),
+          getRangeRect(offset),
+        ]);
+      }
+      return toDOMRectList([getRangeRect(offset)]);
     },
   });
   Object.defineProperty(elementProto, 'getBoundingClientRect', {
@@ -156,6 +202,11 @@ function installWrapMeasurement(columns: number): {
         rangeProto,
         'getBoundingClientRect',
         originalRangeRect
+      );
+      restorePrototypeProperty(
+        rangeProto,
+        'getClientRects',
+        originalRangeClientRects
       );
       restorePrototypeProperty(
         elementProto,
@@ -190,7 +241,8 @@ function caretAt(line: number) {
 
 async function createWrapEditor(
   contents: string,
-  wrapColumns: number
+  wrapColumns: number,
+  measurementOptions: { webKitBoundaryFragments?: boolean } = {}
 ): Promise<{
   cleanup(): void;
   content: HTMLElement;
@@ -201,7 +253,10 @@ async function createWrapEditor(
   window: EditorTestWindow;
 }> {
   const dom = installDom();
-  const wrapMeasurement = installWrapMeasurement(wrapColumns);
+  const wrapMeasurement = installWrapMeasurement(
+    wrapColumns,
+    measurementOptions
+  );
   const fileContainer = document.createElement('div');
   document.body.appendChild(fileContainer);
 
@@ -210,7 +265,7 @@ async function createWrapEditor(
     theme: DEFAULT_THEMES,
     overflow: 'wrap',
   });
-  const editor = new Editor<undefined>();
+  const editor = new Editor<undefined>('file');
   const initialFile: FileContents = {
     name: 'wrap.ts',
     contents,
@@ -266,7 +321,7 @@ function expectCaret(
   line: number,
   character: number
 ): void {
-  const selection = editor.getState().selections?.at(-1);
+  const selection = editor.getViewState().selections?.at(-1);
   expect(selection?.start).toEqual({ line, character });
   expect(selection?.end).toEqual({ line, character });
 }
@@ -277,7 +332,7 @@ function caretState(editor: Editor<undefined>): {
   line: number;
   character: number;
 } {
-  const selection = editor.getState().selections?.at(-1);
+  const selection = editor.getViewState().selections?.at(-1);
   if (selection === undefined) {
     throw new Error('no selection in editor state');
   }
@@ -454,7 +509,7 @@ describe('editor wrap caret position', () => {
       theme: DEFAULT_THEMES,
       overflow: 'wrap',
     });
-    const editor = new Editor<undefined>();
+    const editor = new Editor<undefined>('file');
     const initialFile: FileContents = {
       name: 'wrap.ts',
       contents: 'const a = 1;\nconst b = 2;\nconst c = 3;\nconst d = 4;',
@@ -677,6 +732,111 @@ describe('caret affinity at a wrap boundary', () => {
       expectCaret(editor, 0, 30);
     } finally {
       cleanup();
+    }
+  });
+});
+
+describe('WebKit wrap boundary fragments', () => {
+  const TWO_ROW_LINE = 'q0w1e2r3t4y5u6i7o8p9';
+
+  test('places the end-of-line caret after the final character', async () => {
+    const { cleanup, editor, fileContainer } = await createWrapEditor(
+      TWO_ROW_LINE,
+      10,
+      { webKitBoundaryFragments: true }
+    );
+    try {
+      setCaret(editor, 0, TWO_ROW_LINE.length);
+      expect(caretXY(fileContainer)).toEqual({ x: colX(10), y: ROW_H });
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('aligns a continuation-row selection with its native text offsets', async () => {
+    const { cleanup, editor, fileContainer } = await createWrapEditor(
+      TWO_ROW_LINE,
+      10,
+      { webKitBoundaryFragments: true }
+    );
+    try {
+      editor.setSelections([
+        {
+          start: { line: 0, character: 14 },
+          end: { line: 0, character: 18 },
+          direction: 'forward',
+        },
+      ]);
+
+      expect(selectionRects(fileContainer)).toEqual([
+        { x: CONTENT_X + 4 * CH, y: ROW_H, width: 4 * CH },
+      ]);
+    } finally {
+      cleanup();
+    }
+  });
+});
+
+describe('split wrap overlay offset', () => {
+  test('does not add the shared grid top padding twice', async () => {
+    const dom = installDom();
+    const wrapMeasurement = installWrapMeasurement(10);
+    const fileContainer = document.createElement('div');
+    document.body.appendChild(fileContainer);
+    const fileDiff = new FileDiff<undefined>({
+      disableFileHeader: true,
+      diffStyle: 'split',
+      overflow: 'wrap',
+      theme: DEFAULT_THEMES,
+    });
+    const editor = new Editor<undefined>('file-diff');
+
+    try {
+      fileDiff.render({
+        oldFile: { name: 'wrap.ts', contents: 'old\n' },
+        newFile: {
+          name: 'wrap.ts',
+          contents: 'q0w1e2r3t4y5u6i7o8p9\n',
+        },
+        fileContainer,
+        forceRender: true,
+      });
+      const content = fileContainer.shadowRoot?.querySelector(
+        '[data-code][data-additions] [data-content]'
+      );
+      if (!(content instanceof HTMLElement) || content.parentElement === null) {
+        throw new Error('no additions content rendered');
+      }
+
+      // Split + wrap lays the content grid below the same block padding that
+      // Metrics reads from the display:contents code column.
+      content.parentElement.style.paddingTop = '8px';
+      Object.defineProperty(content, 'offsetTop', {
+        configurable: true,
+        get: () => 8,
+      });
+
+      editor.edit(fileDiff);
+      await waitForEditableContent(
+        fileContainer,
+        '[data-code][data-additions] [data-content]'
+      );
+      editor.setSelections([
+        {
+          start: { line: 0, character: 14 },
+          end: { line: 0, character: 18 },
+          direction: 'forward',
+        },
+      ]);
+
+      expect(selectionRects(fileContainer)).toEqual([
+        { x: CONTENT_X + 4 * CH, y: 8 + ROW_H, width: 4 * CH },
+      ]);
+    } finally {
+      wrapMeasurement.restore();
+      editor.cleanUp();
+      fileDiff.cleanUp();
+      dom.cleanup();
     }
   });
 });

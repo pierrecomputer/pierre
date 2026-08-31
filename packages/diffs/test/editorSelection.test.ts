@@ -3915,7 +3915,7 @@ async function createEditorFixture(contents: string): Promise<EditorFixture> {
     disableFileHeader: true,
     theme: DEFAULT_THEMES,
   });
-  const editor = new Editor<undefined>();
+  const editor = new Editor<undefined>('file');
   const initialFile: FileContents = { name: 'selections.txt', contents };
 
   file.render({ file: initialFile, fileContainer, forceRender: true });
@@ -3991,28 +3991,28 @@ describe('Editor Alt-drag column selection', () => {
           pointerType: 'mouse',
         })
       );
-      expect(editor.getState().selections).toBeUndefined();
+      expect(editor.getViewState().selections).toBeUndefined();
       document.dispatchEvent(new Event('selectionchange'));
 
       nativeRange = rangeTo(2, 1);
       document.dispatchEvent(new Event('selectionchange'));
-      expect(editor.getState().selections).toEqual(selections.slice(0, 2));
+      expect(editor.getViewState().selections).toEqual(selections.slice(0, 2));
 
       nativeRange = rangeTo(3, 0);
       document.dispatchEvent(new Event('selectionchange'));
-      expect(editor.getState().selections).toEqual(selections.slice(0, 3));
+      expect(editor.getViewState().selections).toEqual(selections.slice(0, 3));
 
       nativeRange = rangeTo(4, 0);
       document.dispatchEvent(new Event('selectionchange'));
-      expect(editor.getState().selections).toEqual(selections.slice(0, 4));
+      expect(editor.getViewState().selections).toEqual(selections.slice(0, 4));
 
       nativeRange = rangeTo(5, 0);
       document.dispatchEvent(new Event('selectionchange'));
-      expect(editor.getState().selections).toEqual(selections.slice(0, 5));
+      expect(editor.getViewState().selections).toEqual(selections.slice(0, 5));
 
       nativeRange = rangeTo(6, 0);
       document.dispatchEvent(new Event('selectionchange'));
-      expect(editor.getState().selections).toEqual(selections.slice(0, 6));
+      expect(editor.getViewState().selections).toEqual(selections.slice(0, 6));
 
       // An empty focus line may not produce another native selectionchange, so
       // pointer movement must update the rectangle on its own.
@@ -4022,7 +4022,7 @@ describe('Editor Alt-drag column selection', () => {
           pointerType: 'mouse',
         })
       );
-      expect(editor.getState().selections).toEqual([
+      expect(editor.getViewState().selections).toEqual([
         createSelection(1, 2, 1, 4, DirectionForward),
         caret(2, 1),
         caret(3, 3),
@@ -4037,15 +4037,15 @@ describe('Editor Alt-drag column selection', () => {
           pointerType: 'mouse',
         })
       );
-      expect(editor.getState().selections).toEqual(selections.slice(0, 6));
+      expect(editor.getViewState().selections).toEqual(selections.slice(0, 6));
 
       nativeRange = rangeTo(7, 0);
       document.dispatchEvent(new Event('selectionchange'));
-      expect(editor.getState().selections).toEqual(selections);
+      expect(editor.getViewState().selections).toEqual(selections);
 
       nativeRange = rangeTo(7, 2);
       document.dispatchEvent(new Event('selectionchange'));
-      expect(editor.getState().selections).toEqual(selections);
+      expect(editor.getViewState().selections).toEqual(selections);
 
       // Cancellation tears down both native-selection and pointer tracking.
       document.dispatchEvent(
@@ -4059,7 +4059,7 @@ describe('Editor Alt-drag column selection', () => {
       );
       nativeRange = rangeTo(1, 0);
       document.dispatchEvent(new Event('selectionchange'));
-      expect(editor.getState().selections).toEqual(selections);
+      expect(editor.getViewState().selections).toEqual(selections);
     } finally {
       document.getSelection = originalGetSelection;
       cleanup();
@@ -4087,7 +4087,7 @@ describe('Editor.setSelections position clamping', () => {
           direction: 'none',
         },
       ]);
-      expect(editor.getState().selections).toEqual([caret(1, 5)]);
+      expect(editor.getViewState().selections).toEqual([caret(1, 5)]);
 
       // Both line and character overshoot: the primary caret lands exactly at
       // the document end ("charlie" is line 2, length 7).
@@ -4098,7 +4098,7 @@ describe('Editor.setSelections position clamping', () => {
           direction: 'none',
         },
       ]);
-      expect(editor.getState().selections).toEqual([caret(2, 7)]);
+      expect(editor.getViewState().selections).toEqual([caret(2, 7)]);
     } finally {
       cleanup();
     }
@@ -4118,7 +4118,7 @@ describe('Editor.setSelections position clamping', () => {
       ]);
       // The valid start edge is untouched; the end edge clamps to doc end and
       // the direction survives.
-      expect(editor.getState().selections).toEqual([
+      expect(editor.getViewState().selections).toEqual([
         {
           start: { line: 0, character: 2 },
           end: { line: 2, character: 7 },
@@ -4144,7 +4144,7 @@ describe('Editor.setSelections with a reversed range', () => {
           direction: 'forward',
         },
       ]);
-      expect(editor.getState().selections).toEqual([
+      expect(editor.getViewState().selections).toEqual([
         {
           start: { line: 0, character: 2 },
           end: { line: 1, character: 3 },

@@ -5,6 +5,7 @@ import { DEFAULT_THEMES } from '../src/constants';
 import { Editor } from '../src/editor/editor';
 import { isMoveCursorShortcut } from '../src/editor/platform';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
+import type { FileDiffMetadata } from '../src/types';
 import { installDom, wait } from './domHarness';
 
 afterAll(async () => {
@@ -28,6 +29,13 @@ function findAdditionContent(container: HTMLElement): HTMLElement | undefined {
     }
   }
   return undefined;
+}
+
+function getEditSessionDiff(
+  fileDiff: FileDiff<undefined>
+): FileDiffMetadata | undefined {
+  return (fileDiff as unknown as { editSessionDiff?: FileDiffMetadata })
+    .editSessionDiff;
 }
 
 interface FoldFixture {
@@ -58,7 +66,7 @@ async function createFoldFixture(): Promise<FoldFixture> {
     theme: DEFAULT_THEMES,
     diffStyle: 'split',
   });
-  const editor = new Editor<undefined>();
+  const editor = new Editor<undefined>('file-diff');
   fileDiff.render({
     oldFile: { name: 'edit.ts', contents: oldContents },
     newFile: { name: 'edit.ts', contents: newContents },
@@ -137,7 +145,7 @@ describe('diff editor: fold-skip navigation', () => {
       setCaret(editor, 13);
       await wait(0);
       pressKey(content, 'ArrowDown');
-      const selections = editor.getState().selections;
+      const selections = editor.getViewState().selections;
       // The caret jumps over lines 15-45 to line 46 (index 45).
       expect(selections?.at(-1)?.start.line).toBe(45);
     } finally {
@@ -152,7 +160,7 @@ describe('diff editor: fold-skip navigation', () => {
       setCaret(editor, 45);
       await wait(0);
       pressKey(content, 'ArrowUp');
-      expect(editor.getState().selections?.at(-1)?.start.line).toBe(13);
+      expect(editor.getViewState().selections?.at(-1)?.start.line).toBe(13);
     } finally {
       await fixture.cleanup();
     }
@@ -166,7 +174,7 @@ describe('diff editor: fold-skip navigation', () => {
       setCaret(editor, 13, 'line 14'.length);
       await wait(0);
       pressKey(content, 'ArrowRight');
-      const selection = editor.getState().selections?.at(-1);
+      const selection = editor.getViewState().selections?.at(-1);
       // The caret lands at the start of the next renderable line (46).
       expect(selection?.start.line).toBe(45);
       expect(selection?.start.character).toBe(0);
@@ -183,7 +191,7 @@ describe('diff editor: fold-skip navigation', () => {
       setCaret(editor, 45, 0);
       await wait(0);
       pressKey(content, 'ArrowLeft');
-      const selection = editor.getState().selections?.at(-1);
+      const selection = editor.getViewState().selections?.at(-1);
       // The caret lands at the end of the previous renderable line (14).
       expect(selection?.start.line).toBe(13);
       expect(selection?.start.character).toBe('line 14'.length);
@@ -199,7 +207,7 @@ describe('diff editor: fold-skip navigation', () => {
       setCaret(editor, 13, 'line 14'.length);
       await wait(0);
       pressKey(content, 'ArrowRight', { shiftKey: true });
-      const selection = editor.getState().selections?.at(-1);
+      const selection = editor.getViewState().selections?.at(-1);
       expect(selection?.start.line).toBe(13);
       expect(selection?.end.line).toBe(45);
       expect(selection?.end.character).toBe(0);
@@ -216,7 +224,7 @@ describe('diff editor: fold-skip navigation', () => {
       setCaret(editor, 53, 'line 54'.length);
       await wait(0);
       pressKey(content, 'ArrowRight');
-      let selection = editor.getState().selections?.at(-1);
+      let selection = editor.getViewState().selections?.at(-1);
       expect(selection?.start.line).toBe(53);
       expect(selection?.start.character).toBe('line 54'.length);
 
@@ -224,7 +232,7 @@ describe('diff editor: fold-skip navigation', () => {
       setCaret(editor, 5, 0);
       await wait(0);
       pressKey(content, 'ArrowLeft');
-      selection = editor.getState().selections?.at(-1);
+      selection = editor.getViewState().selections?.at(-1);
       expect(selection?.start.line).toBe(5);
       expect(selection?.start.character).toBe(0);
     } finally {
@@ -239,7 +247,7 @@ describe('diff editor: fold-skip navigation', () => {
       setCaret(editor, 13);
       await wait(0);
       pressKey(content, 'ArrowDown', { shiftKey: true });
-      const selection = editor.getState().selections?.at(-1);
+      const selection = editor.getViewState().selections?.at(-1);
       // Fold semantics: the selection covers the hidden lines.
       expect(selection?.start.line).toBe(13);
       expect(selection?.end.line).toBe(45);
@@ -306,7 +314,10 @@ describe('diff editor: reveal-on-jump', () => {
     const fixture = await createFoldFixture();
     const { container, editor, fileDiff } = fixture;
     try {
-      const hunksBefore = fileDiff.fileDiff!.hunks.length;
+      const externalHunks = fileDiff.fileDiff!.hunks;
+      const sessionDiff = getEditSessionDiff(fileDiff);
+      expect(sessionDiff).toBeDefined();
+      const hunksBefore = sessionDiff!.hunks.length;
       // Mirrors search replaceAll: a buffer edit with no active selection
       // into a line hidden inside the collapsed gap.
       editor.applyEdits(
@@ -324,7 +335,9 @@ describe('diff editor: reveal-on-jump', () => {
       // The deferred escalation re-render runs through the rAF queue.
       await wait(30);
 
-      expect(fileDiff.fileDiff!.hunks.length).toBe(hunksBefore + 1);
+      expect(getEditSessionDiff(fileDiff)).toBe(sessionDiff);
+      expect(sessionDiff!.hunks.length).toBe(hunksBefore + 1);
+      expect(fileDiff.fileDiff!.hunks).toBe(externalHunks);
       const content = findAdditionContent(container);
       const row = content?.querySelector('[data-line="30"]');
       expect(row).not.toBeNull();

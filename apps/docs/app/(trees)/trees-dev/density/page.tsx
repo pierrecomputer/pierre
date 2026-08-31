@@ -13,6 +13,14 @@ import {
   EXPLICIT_ITEM_HEIGHT,
   type SerializedDensityPayload,
 } from '../_demos/DensityDemoData';
+import { pageMetadata } from '@/lib/page-metadata';
+
+export const metadata = pageMetadata({
+  title: 'Density demo — Pierre Trees',
+  description:
+    'The compact, default, and relaxed density presets in @pierre/trees side by side, plus custom numeric spacing and an explicit item height.',
+  path: '/trees-dev/density',
+});
 
 const KEYWORD_PRESETS = ['compact', 'default', 'relaxed'] as const;
 

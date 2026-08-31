@@ -101,7 +101,7 @@ test('prepareCodeViewItem drops measured heights when the file is replaced', asy
     // the first call latches internal state (currentCollapsed) whose initial
     // transition forces a reset that would mask the swap below. Its return
     // value is the estimate-based height for a fresh layout cache.
-    const estimatedHeight = instance.prepareCodeViewItem(wrappedFile, 0);
+    const estimatedHeight = instance.updateCodeViewLayout(wrappedFile, 0);
     expect(estimatedHeight).toBeGreaterThan(0);
     await wait(10);
 
@@ -113,7 +113,7 @@ test('prepareCodeViewItem drops measured heights when the file is replaced', asy
 
     // Replace the file wholesale; same line count, so a correctly reset cache
     // reproduces the original estimate-based height.
-    const height = instance.prepareCodeViewItem(
+    const height = instance.updateCodeViewLayout(
       makeNamedFile('replaced.ts', 'other'),
       0
     );

@@ -4,6 +4,7 @@ import type { Metadata } from 'next';
 import { Suspense } from 'react';
 
 import { ThemesGridClient } from './ThemesGridClient';
+import { pageMetadata } from '@/lib/page-metadata';
 
 const SAMPLE_OLD_FILE = {
   name: 'config.ts',
@@ -166,26 +167,16 @@ const THEMES = [
   'min-dark',
 ] as const;
 
-const themeTitle =
-  'Pierre Themes — Themes for Visual Studio Code, Cursor, Zed, and Shiki.';
-const themeDescription =
-  'Beautiful light and dark themes, generated from a shared color palette, for Visual Studio Code, Cursor, Zed, and Shiki.';
+const galleryTitle = 'Theme gallery — Pierre Themes';
+const galleryDescription =
+  'Browse every Pierre theme side by side, each rendered on a real syntax-highlighted diff in both light and dark mode.';
 
-export const metadata: Metadata = {
-  title: themeTitle,
-  description: themeDescription,
-  openGraph: {
-    title: themeTitle,
-    description: themeDescription,
-    images: ['/theme/opengraph-image.png'],
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: themeTitle,
-    description: themeDescription,
-    images: ['/theme/opengraph-image.png'],
-  },
-};
+export const metadata: Metadata = pageMetadata({
+  title: galleryTitle,
+  description: galleryDescription,
+  path: '/theme/gallery',
+  image: '/theme/opengraph-image.png',
+});
 
 export default async function ThemeGalleryPage() {
   const resolvedThemes = await Promise.all(

@@ -40,8 +40,8 @@ entry also re-exports every type in [Shared types](api-types.md).
 | `UncontrolledCodeViewProps`         | Defines `CodeView` props with `initialItems`.                     |
 | `CodeViewReactOptions`              | Defines the React-safe `CodeView` option set.                     |
 | `CodeViewHandle`                    | Defines imperative list, selection, scroll, and editor controls.  |
-| `CreateEditor`                      | Defines the editor factory.                                       |
-| `EditProviderProps`                 | Defines the `EditProvider` factory prop.                          |
+| `CreateEditor`                      | Defines a kind-aware editor factory.                              |
+| `EditProviderProps`                 | Defines the kind-aware `EditProvider` factory prop.               |
 | `MergeConflictActionsTypeOption`    | Selects no actions, default actions, or a custom action renderer. |
 | `RenderMergeConflictActionContext`  | Supplies conflict resolution to a custom action renderer.         |
 | `RenderMergeConflictActions`        | Defines a custom conflict action renderer.                        |

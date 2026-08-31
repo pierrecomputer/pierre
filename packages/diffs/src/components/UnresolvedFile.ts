@@ -186,6 +186,7 @@ export class UnresolvedFile<
   ): UnresolvedFileHunksRenderer<LAnnotation> {
     const renderer = new UnresolvedFileHunksRenderer<LAnnotation>(
       this.getHunksRendererOptions(options),
+      this.getAnnotationSlotName,
       this.handleHighlightRender,
       this.workerManager
     );

@@ -17,6 +17,16 @@ import {
   TREES_WORKLOAD_OPTIONS,
   type TreesPageSearchParams,
 } from './_lib/workloadMeta';
+import { pageMetadata } from '@/lib/page-metadata';
+
+// The workload and expansion-mode controls write to the querystring, so the
+// canonical keeps every workload permutation pointing at this one URL.
+export const metadata = pageMetadata({
+  title: 'Main demo — Pierre Trees',
+  description:
+    'Run @pierre/trees against real workloads up to 1.6 million paths: search, inline rename, drag and drop, context menus, and direct mutation on a single hydrated tree.',
+  path: '/trees-dev',
+});
 
 const TREE_HEADER_HTML =
   '<div data-tree-demo-header style="align-items:center;display:flex;gap:12px;padding:8px 12px"><strong>Trees demo header</strong><button type="button">Log header action</button></div>';

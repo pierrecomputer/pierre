@@ -13,7 +13,7 @@ const contents = (page: Page): Promise<string> =>
 const selectionTuples = (page: Page): Promise<number[][] | undefined> =>
   page.evaluate(() =>
     window.__editor
-      ?.getState()
+      ?.getViewState()
       .selections?.map((selection) => [
         selection.start.line,
         selection.start.character,
@@ -82,7 +82,7 @@ test.describe('multi-cursor and indentation', () => {
           return;
         }
         const selections = window.__editor
-          ?.getState()
+          ?.getViewState()
           .selections?.map((selection) => [
             selection.start.line,
             selection.start.character,

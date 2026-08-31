@@ -42,14 +42,12 @@ import {
   EDIT_ON_ATTACH_REACT_EXAMPLE,
   EDIT_ON_ATTACH_VANILLA_EXAMPLE,
   EDIT_ON_CHANGE_EXAMPLE,
-  EDIT_PERSIST_STATE_EXAMPLE,
-  EDIT_PERSIST_STATE_REACT_EXAMPLE,
+  EDIT_PERSISTED_DRAFT_EXAMPLE,
   EDIT_REACT_CODE_VIEW_EXAMPLE,
   EDIT_REACT_CREATE_EDITOR_EXAMPLE,
   EDIT_REACT_EXAMPLE,
   EDIT_REACT_FILE_DIFF_EXAMPLE,
   EDIT_REACT_MULTI_FILE_DIFF_EXAMPLE,
-  EDIT_REACT_SHARED_EDITOR_EXAMPLE,
   EDIT_SELECTION_ACTION_CONTEXT_TYPE,
   EDIT_SELECTION_ACTION_EXAMPLE,
   EDIT_UNDO_REDO_EXAMPLE,
@@ -163,29 +161,17 @@ import { HeadingAnchors } from '@/components/docs/HeadingAnchors';
 import { ProseWrapper } from '@/components/docs/ProseWrapper';
 import Footer from '@/components/Footer';
 import { renderMDX } from '@/lib/mdx';
+import { pageMetadata } from '@/lib/page-metadata';
 
 const docsTitle = 'Diffs docs';
 const docsDescription =
   'Documentation for @pierre/diffs: React and vanilla APIs, virtualization, theming, token hooks, the worker pool, and SSR hydration.';
 
-// Next.js replaces (does not deep-merge) nested metadata objects like
-// `openGraph` and `twitter` from parent segments. Re-declare `images` here
-// so the diffs OG/Twitter cards from `app/layout.tsx` survive on `/docs`.
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: docsTitle,
   description: docsDescription,
-  openGraph: {
-    title: docsTitle,
-    description: docsDescription,
-    images: ['/diffs-brand/opengraph-image.png'],
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: docsTitle,
-    description: docsDescription,
-    images: ['/diffs-brand/twitter-image.png'],
-  },
-};
+  path: '/docs',
+});
 
 export default function DocsPage() {
   return (
@@ -453,18 +439,16 @@ async function EditSection() {
     editLazyFileExample,
     editorOptionsType,
     editOnChangeExample,
+    editPersistedDraftExample,
     editOnAttachReactExample,
     editOnAttachVanillaExample,
     editFocusPositionExample,
     editorPublicApi,
     editSelectionActionContextType,
     editSelectionActionExample,
-    editPersistStateExample,
-    editPersistStateReactExample,
     editMarkerType,
     editMarkerExample,
     editReactCreateEditorExample,
-    editReactSharedEditorExample,
     editReactCodeViewExample,
     editReactExample,
     editReactFileDiffExample,
@@ -480,18 +464,16 @@ async function EditSection() {
     preloadFile(EDIT_LAZY_FILE_EXAMPLE),
     preloadFile(EDITOR_OPTIONS_TYPE),
     preloadFile(EDIT_ON_CHANGE_EXAMPLE),
+    preloadFile(EDIT_PERSISTED_DRAFT_EXAMPLE),
     preloadFile(EDIT_ON_ATTACH_REACT_EXAMPLE),
     preloadFile(EDIT_ON_ATTACH_VANILLA_EXAMPLE),
     preloadFile(EDIT_FOCUS_POSITION_EXAMPLE),
     preloadFile(EDITOR_PUBLIC_API),
     preloadFile(EDIT_SELECTION_ACTION_CONTEXT_TYPE),
     preloadFile(EDIT_SELECTION_ACTION_EXAMPLE),
-    preloadFile(EDIT_PERSIST_STATE_EXAMPLE),
-    preloadFile(EDIT_PERSIST_STATE_REACT_EXAMPLE),
     preloadFile(EDIT_MARKER_TYPE),
     preloadFile(EDIT_MARKER_EXAMPLE),
     preloadFile(EDIT_REACT_CREATE_EDITOR_EXAMPLE),
-    preloadFile(EDIT_REACT_SHARED_EDITOR_EXAMPLE),
     preloadFile(EDIT_REACT_CODE_VIEW_EXAMPLE),
     preloadFile(EDIT_REACT_EXAMPLE),
     preloadFile(EDIT_REACT_FILE_DIFF_EXAMPLE),
@@ -510,18 +492,16 @@ async function EditSection() {
       editLazyFileExample,
       editorOptionsType,
       editOnChangeExample,
+      editPersistedDraftExample,
       editOnAttachReactExample,
       editOnAttachVanillaExample,
       editFocusPositionExample,
       editorPublicApi,
       editSelectionActionContextType,
       editSelectionActionExample,
-      editPersistStateExample,
-      editPersistStateReactExample,
       editMarkerType,
       editMarkerExample,
       editReactCreateEditorExample,
-      editReactSharedEditorExample,
       editReactCodeViewExample,
       editReactExample,
       editReactFileDiffExample,

@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 
 import './globals.css';
-import { SITE_DESCRIPTION, SITE_NAME } from '@/lib/site';
+import { SITE_DESCRIPTION, SITE_NAME, SITE_ORIGIN } from '@/lib/site';
 
 export const viewport: Viewport = {
   width: 'device-width',
@@ -47,12 +47,8 @@ function worktreeTitlePrefix(): string {
 
 const WORKTREE_PREFIX = worktreeTitlePrefix();
 
-const PROD_ORIGIN = 'https://diffshub.com';
-// In dev, point `metadataBase` at localhost so OG previewers fetch
-// in-progress assets instead of whatever's deployed.
-const isDev = process.env.NODE_ENV !== 'production';
-const DEV_PORT = process.env.PORT ?? '3692';
-const SITE_ORIGIN = isDev ? `http://localhost:${DEV_PORT}` : PROD_ORIGIN;
+// `SITE_ORIGIN` lives in `lib/site` so the metadata routes (`app/robots.ts`,
+// `app/sitemap.ts`) and the canonical URLs share one definition.
 const baseTitle = `${SITE_NAME}, from Pierre`;
 const taggedTitle = `${WORKTREE_PREFIX}${baseTitle}`;
 const description = SITE_DESCRIPTION;
@@ -81,6 +77,9 @@ export const metadata: Metadata = {
     },
     description,
     images: [SITE_OG_IMAGE],
+    siteName: SITE_NAME,
+    type: 'website',
+    url: `${SITE_ORIGIN}/`,
   },
   twitter: {
     card: 'summary_large_image',

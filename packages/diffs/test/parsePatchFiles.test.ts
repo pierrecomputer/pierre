@@ -2,7 +2,13 @@ import { afterAll, describe, expect, spyOn, test } from 'bun:test';
 
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
 import { DiffHunksRenderer } from '../src/renderers/DiffHunksRenderer';
-import { parsePatchFiles, processFile } from '../src/utils/parsePatchFiles';
+import { composeCacheKey } from '../src/utils/composeCacheKey';
+import { getTotalLineCountFromHunks } from '../src/utils/getTotalLineCountFromHunks';
+import {
+  parsePatchFiles,
+  processFile,
+  processPatch,
+} from '../src/utils/parsePatchFiles';
 import {
   diffPatch,
   finalBlankLinePatch,
@@ -21,12 +27,93 @@ afterAll(async () => {
   await disposeHighlighter();
 });
 
+const issue1094Patch = [
+  '--- f\n',
+  '+++ f\n',
+  '@@ -1,6 +1,6 @@\n',
+  '-a\n',
+  '+A\n',
+  ' c0\n',
+  ' c1\n',
+  '-b\n',
+  '+B\n',
+].join('');
+
+const validIssue1094Patch = issue1094Patch.replace(
+  '@@ -1,6 +1,6 @@',
+  '@@ -1,4 +1,4 @@'
+);
+
+function createFilePatch(name: string): string {
+  return [
+    `diff --git a/${name} b/${name}\n`,
+    'index 1111111..2222222 100644\n',
+    `--- a/${name}\n`,
+    `+++ b/${name}\n`,
+    '@@ -1 +1 @@\n',
+    '-old\n',
+    '+new\n',
+  ].join('');
+}
+
 describe('parsePatchFiles', () => {
   const result = parsePatchFiles(diffPatch);
   test('should parse diff.patch and match its digest snapshot', () => {
     // Per-file hunk geometry of the whole 400KB patch; line-level accuracy
     // is covered by the invariant and render-count tests below
     expect(patchDigest(result)).toMatchSnapshot('git pr patch digest');
+  });
+
+  test('generates deterministic keys from patch and file indexes', () => {
+    const prefix = 'prefix-0:1';
+    const firstPatch = `${createFilePatch('one.txt')}${createFilePatch('two.txt')}`;
+    const patchFile = [
+      'From aaaaa first patch\n',
+      firstPatch,
+      'From bbbbb second patch\n',
+      createFilePatch('three.txt'),
+      createFilePatch('four.txt'),
+    ].join('');
+    const getKeys = () =>
+      parsePatchFiles(patchFile, prefix, true).map((patch) =>
+        patch.files.map((file) => file.cacheKey)
+      );
+    const expectedKeys = [
+      [
+        composeCacheKey('patch-file', prefix, '0', '0'),
+        composeCacheKey('patch-file', prefix, '0', '1'),
+      ],
+      [
+        composeCacheKey('patch-file', prefix, '1', '0'),
+        composeCacheKey('patch-file', prefix, '1', '1'),
+      ],
+    ];
+
+    const keys = getKeys();
+    expect(keys).toEqual(expectedKeys);
+    expect(new Set(keys.flat()).size).toBe(4);
+    expect(getKeys()).toEqual(keys);
+
+    const directPrefix = `${prefix}-0`;
+    const directKeys = processPatch(firstPatch, directPrefix, true).files.map(
+      (file) => file.cacheKey
+    );
+    expect(directKeys).toEqual([
+      composeCacheKey('patch-file', directPrefix, '0'),
+      composeCacheKey('patch-file', directPrefix, '1'),
+    ]);
+    expect(new Set([...keys.flat(), ...directKeys]).size).toBe(6);
+  });
+
+  test('keeps a direct processFile cache key authoritative', () => {
+    const cacheKey = 'caller:key-0-0:hydrated';
+    const file = processFile(createFilePatch('direct.txt'), {
+      cacheKey,
+      isGitDiff: true,
+      throwOnError: true,
+    });
+
+    expect(file?.cacheKey).toBe(cacheKey);
   });
 
   test('patches with a final blank line should have a \\n added', () => {
@@ -52,10 +139,11 @@ describe('parsePatchFiles', () => {
       expect(consoleError).toHaveBeenCalled();
       expect(consoleError.mock.calls[0][0]).toContain('Invalid firstChar');
 
-      // The hunk counts should be off by 1 due to the missing line
+      // The declared count should be repaired to match the usable hunk body.
       const hunk = result[0].files[0].hunks[0];
-      expect(hunk.deletionCount).toBe(87);
+      expect(hunk.deletionCount).toBe(86);
       expect(hunk.deletionLines).toBe(86);
+      expect(verifyPatchHunkValues(result).errors).toEqual([]);
       expect(result).toMatchSnapshot('malformed patch');
     } finally {
       consoleError.mockRestore();
@@ -81,6 +169,290 @@ describe('parsePatchFiles', () => {
         true
       )
     ).toThrow('hunk line count mismatch');
+  });
+
+  test('repairs issue 1094 hunk counts in forgiving mode', () => {
+    const consoleError = spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const result = parsePatchFiles(issue1094Patch);
+      const file = result[0].files[0];
+      const hunk = file.hunks[0];
+
+      expect(consoleError).toHaveBeenCalledTimes(1);
+      expect(consoleError.mock.calls[0][0]).toContain(
+        'parsePatchContent: hunk line count mismatch'
+      );
+      expect(consoleError.mock.calls[0][0]).toContain('@@ -1,6 +1,6 @@');
+      expect(consoleError.mock.calls[0][0]).toContain('declared old/new 6/6');
+      expect(consoleError.mock.calls[0][0]).toContain('parsed old/new 4/4');
+      expect(hunk.additionCount).toBe(4);
+      expect(hunk.deletionCount).toBe(4);
+      expect(file.additionLines).toEqual(['A\n', 'c0\n', 'c1\n', 'B\n']);
+      expect(file.deletionLines).toEqual(['a\n', 'c0\n', 'c1\n', 'b\n']);
+      expect(hunk.hunkContent.map((content) => content.type)).toEqual([
+        'change',
+        'context',
+        'change',
+      ]);
+      expect(hunk.hunkSpecs).toBe('@@ -1,6 +1,6 @@\n');
+      expect(getTotalLineCountFromHunks(file.hunks)).toBe(4);
+      expect(verifyPatchHunkValues(result).errors).toEqual([]);
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
+  test('throws for the issue 1094 patch in strict mode', () => {
+    expect(() => parsePatchFiles(issue1094Patch, undefined, true)).toThrow(
+      'hunk line count mismatch'
+    );
+  });
+
+  test('leaves the valid issue 1094 patch unchanged', () => {
+    const consoleError = spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const result = parsePatchFiles(validIssue1094Patch);
+      const file = result[0].files[0];
+      const hunk = file.hunks[0];
+
+      expect(consoleError).not.toHaveBeenCalled();
+      expect(hunk.additionCount).toBe(4);
+      expect(hunk.deletionCount).toBe(4);
+      expect(hunk.hunkSpecs).toBe('@@ -1,4 +1,4 @@\n');
+      expect(getTotalLineCountFromHunks(file.hunks)).toBe(4);
+      expect(verifyPatchHunkValues(result).errors).toEqual([]);
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
+  test('repairs only the underfilled side of an asymmetric hunk', () => {
+    const consoleError = spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const result = parsePatchFiles(
+        [
+          '--- asymmetric.txt\n',
+          '+++ asymmetric.txt\n',
+          '@@ -1,3 +1,2 @@\n',
+          '-old\n',
+          '+new\n',
+          ' context\n',
+        ].join('')
+      );
+      const hunk = result[0].files[0].hunks[0];
+
+      expect(consoleError).toHaveBeenCalledTimes(1);
+      expect(consoleError.mock.calls[0][0]).toContain('@@ -1,3 +1,2 @@');
+      expect(consoleError.mock.calls[0][0]).toContain('declared old/new 3/2');
+      expect(consoleError.mock.calls[0][0]).toContain('parsed old/new 2/2');
+      expect(hunk.deletionCount).toBe(2);
+      expect(hunk.additionCount).toBe(2);
+      expect(verifyPatchHunkValues(result).errors).toEqual([]);
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
+  for (const {
+    name,
+    header,
+    body,
+    expectedAddition,
+    expectedDeletion,
+    expectedError,
+  } of [
+    {
+      name: 'addition count changing from positive to zero',
+      header: '@@ -5,1 +5,1 @@\n',
+      body: '-gone\n',
+      expectedAddition: { start: 4, count: 0 },
+      expectedDeletion: { start: 5, count: 1 },
+      expectedError: true,
+    },
+    {
+      name: 'deletion count changing from positive to zero',
+      header: '@@ -5,1 +5,1 @@\n',
+      body: '+added\n',
+      expectedAddition: { start: 5, count: 1 },
+      expectedDeletion: { start: 4, count: 0 },
+      expectedError: true,
+    },
+    {
+      name: 'addition count changing from zero to positive',
+      header: '@@ -5,1 +4,0 @@\n',
+      body: '-old\n+new\n',
+      expectedAddition: { start: 5, count: 1 },
+      expectedDeletion: { start: 5, count: 1 },
+      expectedError: true,
+    },
+    {
+      name: 'deletion count changing from zero to positive',
+      header: '@@ -4,0 +5,1 @@\n',
+      body: '-old\n+new\n',
+      expectedAddition: { start: 5, count: 1 },
+      expectedDeletion: { start: 5, count: 1 },
+      expectedError: true,
+    },
+    {
+      name: 'both sides crossing zero in opposite directions',
+      header: '@@ -5,1 +4,0 @@\n',
+      body: '+added\n',
+      expectedAddition: { start: 5, count: 1 },
+      expectedDeletion: { start: 4, count: 0 },
+      expectedError: true,
+    },
+    {
+      name: 'both zero counts growing from hunk content',
+      header: '@@ -4,0 +4,0 @@\n',
+      body: '-old\n+new\n',
+      expectedAddition: { start: 5, count: 1 },
+      expectedDeletion: { start: 5, count: 1 },
+      expectedError: true,
+    },
+    {
+      name: 'a positive count growing from extra hunk content',
+      header: '@@ -5,1 +5,1 @@\n',
+      body: '-old\n+new\n-extra old\n',
+      expectedAddition: { start: 5, count: 1 },
+      expectedDeletion: { start: 5, count: 2 },
+      expectedError: true,
+    },
+    {
+      name: 'a valid zero-count side remaining unchanged',
+      header: '@@ -4,0 +5,1 @@\n',
+      body: '+added\n',
+      expectedAddition: { start: 5, count: 1 },
+      expectedDeletion: { start: 4, count: 0 },
+      expectedError: false,
+    },
+  ]) {
+    test(`preserves boundaries for ${name}`, () => {
+      const consoleError = spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        const result = parsePatchFiles(
+          ['--- boundary.txt\n', '+++ boundary.txt\n', header, body].join('')
+        );
+        const hunk = result[0].files[0].hunks[0];
+
+        expect(consoleError).toHaveBeenCalledTimes(expectedError ? 1 : 0);
+        expect({
+          start: hunk.additionStart,
+          count: hunk.additionCount,
+        }).toEqual(expectedAddition);
+        expect({
+          start: hunk.deletionStart,
+          count: hunk.deletionCount,
+        }).toEqual(expectedDeletion);
+        expect(hunk.collapsedBefore).toBe(4);
+        expect(verifyPatchHunkValues(result).errors).toEqual([]);
+      } finally {
+        consoleError.mockRestore();
+      }
+    });
+  }
+
+  test('shifts hydrated hunk and content indexes with a repaired start', () => {
+    const consoleError = spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const file = processFile(
+        [
+          '--- hydrated.txt\n',
+          '+++ hydrated.txt\n',
+          '@@ -5,1 +4,0 @@\n',
+          '+new\n',
+          '-old\n',
+        ].join(''),
+        {
+          oldFile: {
+            name: 'hydrated.txt',
+            contents: 'a\nb\nc\nd\nold\nz\n',
+          },
+          newFile: {
+            name: 'hydrated.txt',
+            contents: 'a\nb\nc\nd\nnew\nz\n',
+          },
+        }
+      );
+      assertDefined(file, 'file should be parsed');
+      const hunk = file.hunks[0];
+      const content = hunk.hunkContent[0];
+
+      expect(consoleError).toHaveBeenCalledTimes(1);
+      expect(hunk.additionLineIndex).toBe(4);
+      expect(hunk.deletionLineIndex).toBe(4);
+      expect(content.additionLineIndex).toBe(4);
+      expect(content.deletionLineIndex).toBe(4);
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
+  test('chains later hunk geometry from a zero-to-positive repair', () => {
+    const consoleError = spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const result = parsePatchFiles(
+        [
+          '--- multiple-zero.txt\n',
+          '+++ multiple-zero.txt\n',
+          '@@ -5,1 +4,0 @@\n',
+          '+new\n',
+          '-old\n',
+          '@@ -8 +8 @@\n',
+          '-later old\n',
+          '+later new\n',
+        ].join('')
+      );
+      const file = result[0].files[0];
+      const [firstHunk, secondHunk] = file.hunks;
+
+      expect(consoleError).toHaveBeenCalledTimes(1);
+      expect(firstHunk.additionStart).toBe(5);
+      expect(firstHunk.additionCount).toBe(1);
+      expect(secondHunk.collapsedBefore).toBe(2);
+      expect(verifyPatchHunkValues(result).errors).toEqual([]);
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
+  test('uses repaired counts for geometry after an underfilled hunk', () => {
+    const consoleError = spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const result = parsePatchFiles(
+        [
+          '--- multiple.txt\n',
+          '+++ multiple.txt\n',
+          '@@ -1,4 +1,4 @@\n',
+          '-old\n',
+          '+new\n',
+          ' context\n',
+          '-tail\n',
+          '+TAIL\n',
+          '@@ -6 +6 @@\n',
+          '-later old\n',
+          '+later new\n',
+        ].join('')
+      );
+      const file = result[0].files[0];
+      const [firstHunk, secondHunk] = file.hunks;
+
+      expect(consoleError).toHaveBeenCalledTimes(1);
+      expect(consoleError.mock.calls[0][0]).toContain('@@ -1,4 +1,4 @@');
+      expect(consoleError.mock.calls[0][0]).toContain('declared old/new 4/4');
+      expect(consoleError.mock.calls[0][0]).toContain('parsed old/new 3/3');
+      expect(firstHunk.additionCount).toBe(3);
+      expect(firstHunk.deletionCount).toBe(3);
+      expect(secondHunk.additionCount).toBe(1);
+      expect(secondHunk.deletionCount).toBe(1);
+      expect(secondHunk.collapsedBefore).toBe(2);
+      expect(secondHunk.splitLineStart).toBe(5);
+      expect(secondHunk.unifiedLineStart).toBe(7);
+      expect(file.splitLineCount).toBe(6);
+      expect(file.unifiedLineCount).toBe(9);
+      expect(verifyPatchHunkValues(result).errors).toEqual([]);
+    } finally {
+      consoleError.mockRestore();
+    }
   });
 
   test('throws in strict mode when a hunk has extra content lines', () => {

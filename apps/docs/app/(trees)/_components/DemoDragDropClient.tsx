@@ -114,10 +114,13 @@ export function DemoDragDropClient({ preloadedData }: DemoDragDropClientProps) {
                 Lock package.json
               </div>
             </Button>
+            {/* Visual-only indicator stacked over the Button, which is the
+                interactive control. Keep the Switch out of the tab order and
+                hidden from assistive tech to avoid an unnamed duplicate toggle. */}
             <Switch
               checked={lockPackageJson}
-              onCheckedChange={setLockPackageJson}
-              onClick={(event) => event.stopPropagation()}
+              tabIndex={-1}
+              aria-hidden
               className="pointer-events-none mr-3 place-self-center justify-self-end"
             />
           </div>

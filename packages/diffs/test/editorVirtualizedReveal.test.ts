@@ -10,6 +10,7 @@ import type {
   FileContents,
   HighlightedToken,
 } from '../src/types';
+import { getLineAnnotationName } from '../src/utils/getLineAnnotationName';
 import { installDom } from './domHarness';
 
 const MODEL_LINE_TOP = 20;
@@ -65,6 +66,10 @@ class VirtualizedEditableComponent implements DiffsEditableComponent<undefined> 
     return this.options;
   }
 
+  __captureDocumentSessionState(): undefined {
+    return undefined;
+  }
+
   getCodeScrollLeft(): number {
     return 0;
   }
@@ -85,12 +90,30 @@ class VirtualizedEditableComponent implements DiffsEditableComponent<undefined> 
     this.fileContainer.remove();
   }
 
-  attachEditor(editor: DiffsEditor<undefined>): () => void {
+  emitEditChange(): void {}
+
+  getAnnotationSlotName = getLineAnnotationName;
+
+  __completeEditSession(
+    _editor: DiffsEditor<undefined>,
+    _mode: 'install' | 'discard'
+  ): void {}
+
+  __attachEditor(editor: DiffsEditor<undefined>): () => void {
     this.#editor = editor;
     this.#syncRenderView();
     return () => {
       this.#editor = undefined;
     };
+  }
+
+  __resumeEditor(editor: DiffsEditor<undefined>): void {
+    if (this.#editor !== editor) {
+      throw new Error(
+        'VirtualizedEditableComponent: editor association changed'
+      );
+    }
+    this.rerender();
   }
 
   applyDocumentChange(
@@ -104,19 +127,19 @@ class VirtualizedEditableComponent implements DiffsEditableComponent<undefined> 
   ): void {}
 
   #syncRenderView(): void {
-    this.#editor?.__syncRenderView(
-      createTestHighlighter(),
-      this.fileContainer,
-      this.#file,
-      undefined,
-      {
+    this.#editor?.__syncRenderView({
+      highlighter: createTestHighlighter(),
+      fileContainer: this.fileContainer,
+      file: this.#file,
+      lineAnnotations: undefined,
+      renderRange: {
         // Render only line 3 so the selected line 2 remains virtualized.
         startingLine: 2,
         totalLines: 1,
         bufferBefore: 0,
         bufferAfter: 0,
-      }
-    );
+      },
+    });
   }
 
   #renderShadowDom(): void {
@@ -163,7 +186,7 @@ function revealOffscreenLine({
     },
   });
 
-  const editor = new Editor<undefined>();
+  const editor = new Editor<undefined>('file');
   const component = new VirtualizedEditableComponent(modelLineHeight);
 
   try {

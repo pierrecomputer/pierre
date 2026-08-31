@@ -200,13 +200,31 @@ export function removeReviewSurface() {
 ## Enable item edit mode
 
 In React, wrap `CodeView` in `EditProvider`. In vanilla JavaScript, pass
-`createEditor` in `CodeViewOptions`. Set `edit: true` on each editable item and
-increment its version.
+`createEditor(documentKind, options, editStateKey)` in `CodeViewOptions` and
+forward all three arguments to `new Editor`. Set `edit: true` on each editable
+item and increment its version. The factory receives `'file'` or `'file-diff'`
+as its first argument so it can construct an editor for that item kind.
 
-Use `onItemEditChange` for live contents and annotation changes. Use
-`onItemEditComplete` to write the final contents into the item, disable edit
-mode, assign a fresh `cacheKey`, and increment `version`. Use `getEditor(id)`
-for editor commands such as undo, redo, markers, or programmatic edits.
+`onItemEditChange(event, item)` reports live contents and annotation changes.
+Read the current document from `event.file`, the complete annotation collection
+from `event.lineAnnotations`. Treat it as a notification and do not feed the
+changes back into the viewer.
+
+`onItemEditComplete(event, item, nextItem)` must return `'accept'` or `'reject'`
+whenever a session ends, including when its final text is unchanged. `CodeView`
+builds `nextItem` with the completed contents and annotations, `edit: false`,
+and an incremented `version`. If you use keyed render caching, assign a fresh
+`cacheKey` to `event.file` or `event.fileDiff` before accepting. Return
+`'accept'` to install `nextItem` while the item remains present, or `'reject'`
+to restore the original item while it remains present. During removal or viewer
+teardown, neither decision reinserts the item. A missing callback rejects. When
+React controls `items`, put `nextItem` into controlled state only when the item
+should remain.
+
+Use `getEditStateKey(item)` to opt into retaining the draft, undo/redo history,
+selections, and editor-owned view state across editor instances. The returned
+`editStateKey` is passed to the editor factory. `getEditor(id)` returns the
+current `DiffsEditor` handle.
 
 Read [Edit with React](recipe-edit-react.md) or
 [Edit with vanilla JavaScript](recipe-edit-vanilla.md) for the complete editor

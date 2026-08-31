@@ -31,11 +31,19 @@ The React API exposes six main components:
 />
 
 For editing, mount one stable `EditProvider` high in the tree. Standalone
-surfaces use `edit` and `editorOptions`; `CodeView` uses item `edit` flags and
-its own `editorOptions`. Each active surface or item receives an independent
-editor. `UnresolvedFile` is not editable. See
-[Edit mode → React](#edit-mode-react) and
+components use `edit`, and optional `editorOptions` and `editStateKey`;
+`CodeView` uses item `edit` flags, `editorOptions`, and optional
+`getEditStateKey`. Forward the provider factory's document kind, options, and
+key to `new Editor()`. Each active component or item receives an independent
+editor. Two active editors of the same kind cannot share one key.
+`UnresolvedFile` is not editable. See
+[Edit mode → Enable editing](#edit-mode-enable-editing) and
 [CodeView → Editing](#codeview-editing) for lifecycle and callback details.
+
+`editStateKey` retains state only in memory. See
+[Retain edit state in memory](#edit-mode-retain-edit-state-in-memory) and
+[Persist a draft across reloads](#edit-mode-persist-a-draft-across-reloads) for
+the distinction.
 
 Keep non-primitive props stable across renders. Define static files, diffs,
 options, styles, and factories at module scope; when they depend on component
@@ -76,11 +84,16 @@ common set of props for configuration, annotations, and styling. The `File`
 component has similar props, but uses `LineAnnotation` instead of
 `DiffLineAnnotation` (no `side` property).
 
-When one of these components is attached to an `Editor`, keep its annotations in
-application-owned state and replace them with the current collection emitted by
-`Editor.onChange`. See
-[Editing with line annotations](#edit-mode-editing-with-line-annotations) for
-the React `flushSync` pattern and annotation-content lifetime guidance.
+Every editable component (`File`, `FileDiff`, `MultiFileDiff`, `PatchDiff`) also
+takes `onEditChange` — the component's live change stream — and `onEditComplete`
+— the accept/reject boundary when an edit session ends. Change events expose the
+attached editor; completion events expose the detached editor and final state
+during the callback. A missing completion handler rejects. Edit mode owns
+annotation positions during a session, so do not sync them back per keystroke;
+accepting installs the final file or diff, but you should make sure to hold onto
+the final versions provided to ensure you don't revert the changes. See
+[Handle changes and completion](#edit-mode-handle-changes-and-completion) and
+[Line annotations](#edit-mode-extend-the-editing-ui-line-annotations).
 
 `CodeView` reuses many of the same option names internally, but it has its own
 controlled `items` mode, imperative mode with optional `initialItems`, viewer

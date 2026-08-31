@@ -4,42 +4,21 @@ import type {
   ResolvedTextEdit,
 } from '../types';
 import type { TextDocument } from './textDocument';
+import type {
+  EditHistoryCoalescingMode,
+  EditHistoryEntry,
+  EditHistoryState,
+} from './types';
 
 /** Largest number of undo or redo entries kept; oldest entries drop first once exceeded. */
 const DEFAULT_EDIT_STACK_MAX_ENTRIES = 100;
 
-const COALESCING_MODE_INSERT = 1;
-const COALESCING_MODE_BACKSPACE = 2;
-const COALESCING_MODE_DELETE = 3;
-type EditStackCoalescingMode = 1 | 2 | 3;
+const COALESCING_MODE_INSERT = 'insert';
+const COALESCING_MODE_BACKSPACE = 'backspace';
+const COALESCING_MODE_DELETE = 'delete';
 
-/** An entry in the edit stack. */
-export interface EditStackEntry<LAnnotation> {
-  /** Forward offset edits from the entry's base text to its final text. */
-  forwardEdits: ResolvedTextEdit[];
-  /** Inverse offset edits from the entry's final text back to its base text. */
-  inverseEdits: ResolvedTextEdit[];
-  /** Document version before the entry is applied. */
-  versionBefore: number;
-  /** Document version after the entry is applied. */
-  versionAfter: number;
-  /** Selection before the transaction. */
-  selectionsBefore?: EditorSelection[];
-  /** Selection after the transaction. */
-  selectionsAfter?: EditorSelection[];
-  /** Line annotations before the transaction. */
-  lineAnnotationsBefore?: DiffLineAnnotation<LAnnotation>[];
-  /** Line annotations after the transaction. */
-  lineAnnotationsAfter?: DiffLineAnnotation<LAnnotation>[];
-  /** Input mode inferred from the edit or retained by a coalesced run. */
-  coalescingMode?: EditStackCoalescingMode;
-  /**
-   * When `true`, this entry is its own undo step and never merges with the
-   * entry before or after it. Set for paste and cut, which otherwise look like
-   * typing and would merge into the previous keystroke.
-   */
-  undoBoundary?: boolean;
-}
+export type EditStackEntry<LAnnotation> = EditHistoryEntry<LAnnotation>;
+type EditStackCoalescingMode = EditHistoryCoalescingMode;
 
 /** Options for the edit stack. */
 export interface EditStackOptions {
@@ -67,6 +46,49 @@ export class EditStack<LAnnotation> {
 
   get canRedo(): boolean {
     return this.#redoStack.length > 0;
+  }
+
+  /** Return an independent, developer-editable history snapshot. */
+  getState(): EditHistoryState<LAnnotation> {
+    return {
+      undoStack: this.#undoStack.map(cloneEditStackEntryForState),
+      redoStack: this.#redoStack.map(cloneEditStackEntryForState),
+      maxEntries: this.#maxEntries,
+      canCoalesce: this.#canCoalesce,
+    };
+  }
+
+  /** Return a live view over this stack without copying its entries. */
+  getLiveState(): EditHistoryState<LAnnotation> {
+    return Object.defineProperties({} as EditHistoryState<LAnnotation>, {
+      undoStack: {
+        enumerable: true,
+        get: () => this.#undoStack,
+      },
+      redoStack: {
+        enumerable: true,
+        get: () => this.#redoStack,
+      },
+      maxEntries: {
+        enumerable: true,
+        get: () => this.#maxEntries,
+      },
+      canCoalesce: {
+        enumerable: true,
+        get: () => this.#canCoalesce,
+      },
+    });
+  }
+
+  /** Transfer developer-owned history into an edit stack. */
+  static fromState<LAnnotation>(
+    state: EditHistoryState<LAnnotation>
+  ): EditStack<LAnnotation> {
+    const stack = new EditStack<LAnnotation>({ maxEntries: state.maxEntries });
+    stack.#undoStack = state.undoStack;
+    stack.#redoStack = state.redoStack;
+    stack.#canCoalesce = state.canCoalesce;
+    return stack;
   }
 
   /** Clears both the undo and redo stacks. */
@@ -153,6 +175,42 @@ export class EditStack<LAnnotation> {
       return entry;
     }
   }
+}
+
+function cloneEditStackEntry<LAnnotation>(
+  entry: EditStackEntry<LAnnotation>
+): EditStackEntry<LAnnotation> {
+  return {
+    ...entry,
+    forwardEdits: entry.forwardEdits.map((edit) => ({ ...edit })),
+    inverseEdits: entry.inverseEdits.map((edit) => ({ ...edit })),
+    selectionsBefore: entry.selectionsBefore?.map(cloneSelection),
+    selectionsAfter: entry.selectionsAfter?.map(cloneSelection),
+    lineAnnotationsBefore: entry.lineAnnotationsBefore?.slice(),
+    lineAnnotationsAfter: entry.lineAnnotationsAfter?.slice(),
+  };
+}
+
+function cloneEditStackEntryForState<LAnnotation>(
+  entry: EditStackEntry<LAnnotation>
+): EditStackEntry<LAnnotation> {
+  return {
+    ...cloneEditStackEntry(entry),
+    lineAnnotationsBefore: entry.lineAnnotationsBefore?.map((annotation) => ({
+      ...annotation,
+    })),
+    lineAnnotationsAfter: entry.lineAnnotationsAfter?.map((annotation) => ({
+      ...annotation,
+    })),
+  };
+}
+
+function cloneSelection(selection: EditorSelection): EditorSelection {
+  return {
+    ...selection,
+    start: { ...selection.start },
+    end: { ...selection.end },
+  };
 }
 
 export function createEditStackEntry<LAnnotation>(

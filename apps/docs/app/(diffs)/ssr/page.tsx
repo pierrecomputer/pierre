@@ -3,6 +3,14 @@ import { preloadMultiFileDiff } from '@pierre/diffs/ssr';
 
 import type { AnnotationMetadata } from './ssr_types';
 import { SSRPage } from './SSRPage';
+import { pageMetadata } from '@/lib/page-metadata';
+
+export const metadata = pageMetadata({
+  title: 'SSR demos — Pierre Diffs',
+  description:
+    'Server-rendered @pierre/diffs examples that paint fully syntax-highlighted before any JavaScript runs, then hydrate without a flash.',
+  path: '/ssr',
+});
 
 const OLD_FILE: FileContents = {
   name: 'main.zig',

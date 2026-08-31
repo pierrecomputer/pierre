@@ -13,6 +13,14 @@ import {
   ITEM_CUSTOMIZATION_DEMO_WORKLOAD_NAME,
 } from '../_lib/itemCustomizationDemoData';
 import { loadWorkloadDataPayload } from '../_lib/workloadLoader';
+import { pageMetadata } from '@/lib/page-metadata';
+
+export const metadata = pageMetadata({
+  title: 'Git status demo — Pierre Trees',
+  description:
+    'Git status decoration in @pierre/trees: modified, added, deleted, renamed, untracked, and ignored badges, with change state rolled up onto parent folders.',
+  path: '/trees-dev/git-status',
+});
 
 const GIT_STATUS_VIEWPORT_HEIGHT = 280;
 

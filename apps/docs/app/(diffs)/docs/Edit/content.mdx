@@ -4,105 +4,49 @@
   Edit mode is experimental and subject to change.
 </Notice>
 
-Edit mode is a pluggable editing layer for `File`-style code surfaces. It adds
-keyboard-driven editing to an already-rendered `File` or `FileDiff` while the
-existing renderer continues to own syntax highlighting, layout, annotations, and
-virtualization.
+Edit mode adds text editing, multiple selections, undo and redo, search and
+replace, markers, and custom selection actions to Pierre file and diff
+components. The existing component continues to own syntax highlighting, diff
+layout, annotations, SSR markup, and virtualization.
 
-Edit mode features include:
+Use it when a user needs to review and correct rendered code without replacing
+the surrounding file or diff UI with a separate editor.
 
-- Text editing
-- Multiple cursors
-- Automatic indentation
-- Brace matching
-- History (undo and redo)
-- Find-in-file search and replace
-- [Selection Action](#edit-mode-selection-action) (opt-in, custom UI)
-- Markers (inline diagnostics)
-- SSR support
-- Mobile-friendly
-- Lightweight
+For the complete lifecycle, see
+[Handle changes and completion](#edit-mode-handle-changes-and-completion). The
+later sections cover
+[history, focus, and view state](#edit-mode-control-the-editor),
+[annotations and custom editing UI](#edit-mode-extend-the-editing-ui), and
+[performance and loading](#edit-mode-performance-and-loading). For
+component-specific integration details, see [React API](#react-api),
+[Vanilla JS API](#vanilla-js-api), and [CodeView editing](#codeview-editing).
 
-Use the `Editor` API to add editing to `File`, `FileDiff`, `MultiFileDiff`, and
-`PatchDiff`, or to individual `CodeView` items. In React, wrap editable surfaces
-in `EditProvider`, then set a standalone surface's `edit` prop or a `CodeView`
-item's `edit` flag. In vanilla JS, call `editor.edit(fileInstance)` after
-rendering a standalone surface, or give `CodeView` its own `createEditor`
-option.
+### Enable editing
 
-Edit mode is not a full-fledged IDE, though you can build IDE-like experiences
-on top of it. It is purpose-built for code rendered by this library: the
-existing file and diff surfaces keep their diff layout, annotations, syntax
-highlighting, SSR, and virtualization, and edit mode adds editing, multiple
-selections, history, search and replace, and markers. That focus makes it a
-natural fit for “review and correct” flows with generative code changes.
+An `Editor` attaches to one rendered `File`, `VirtualizedFile`, `FileDiff`, or
+`VirtualizedFileDiff`. React components and `CodeView` create and attach editors
+for you; standalone vanilla components use `editor.edit(instance)` directly.
 
-### How It Works
+Each editor is dedicated to either `'file'` or `'file-diff'` and attaches to one
+matching component at a time.
 
-Edit mode does not replace `File`, `FileDiff`, or their virtualized variants.
-You render the surface first, then attach editing:
+#### React
 
-1. **Attach** — Call `editor.edit(fileInstance)` in vanilla JS, or pass `edit`
-   on a React `File`, `FileDiff`, `MultiFileDiff`, or `PatchDiff` wrapped in
-   `EditProvider`. For React `CodeView`, use the same provider and set
-   `edit: true` on an item. Vanilla `CodeView` instead takes
-   `CodeViewOptions.createEditor`. The hookup returns a dispose function for a
-   standalone vanilla surface; React surfaces and `CodeView` manage it
-   automatically when editing toggles.
-2. **Edit surface** — Edit mode sets `contentEditable` on the code content
-   element so mobile keyboards, paste, and native selection UI work as users
-   expect. Clipboard shortcuts are handled by the browser; edit mode commands
-   handle structure-aware actions like indent and undo.
-3. **Selections** — Carets and ranges are tracked with the native `Selection`
-   API. Multiple non-overlapping selections are supported; Cmd/Ctrl-click adds a
-   cursor, while Alt/Option-drag adds column-aligned cursors or rectangular
-   selections after clearing existing ones.
-4. **Updates** — Keystrokes update an internal `TextDocument`, then changed
-   lines are re-highlighted through the same tokenizer pipeline as read-only
-   mode. Your `onChange` handler receives updated `FileContents`, optional
-   `lineAnnotations`, and an `EditorChangeEvent` as its third argument. The
-   event includes both values alongside normalized text `changes`.
+Mount one stable `EditProvider`, forward all three factory arguments, and set
+`edit` on a `File`, `FileDiff`, `MultiFileDiff`, or `PatchDiff` to begin
+editing.
 
-When attaching, edit mode turns on the token transformer and triggers a
-re-render if necessary. Collapsed unchanged regions stay collapsed: arrow keys
-skip over them like code folds, jumps that must land inside one (search matches,
-undo, Cmd/Ctrl+End) expand it just enough to show the target, and the separator
-expand buttons keep working. The diff layout is preserved, so a `FileDiff` or
-`MultiFileDiff` stays in whatever view it was rendered in; in unified diffs,
-deleted lines and annotation lines remain read-only.
-
-### React
-
-Wrap editable surfaces in a permanently mounted `EditProvider`, then toggle the
-standalone surface's `edit` prop or a `CodeView` item's `edit` flag. Standalone
-surface DOM and imperative file/diff instances stay mounted across the toggle.
-The provider's `createEditor` factory gives each editable surface or `CodeView`
-item its own `Editor`, cached by `editorOptions` object identity: an edit
-session that restarts with the same options object reuses its editor, and
-surfaces editable at the same time need distinct options objects.
-
-Pass creation-time callbacks and behavior through the surface's `editorOptions`;
-the factory can spread shared defaults before the surface options so the surface
-wins. Keep factories and object props stable: define static values at module
-scope, or use `useCallback` and `useMemo` when they depend on component values.
+Pass `onEditChange` to monitor live changes while in edit mode. Use
+`onEditComplete` to accept or reject the result when the edit session ends. See
+[Handle changes and completion](#edit-mode-handle-changes-and-completion) for
+their lifecycle and event payloads.
 
 <DocsCodeExample {...editReactCreateEditorExample} />
 
-Because editors are cached by options identity, passing one stable
-`editorOptions` object to every surface shares one `Editor` across them. This is
-the pattern for IDE-like UIs that edit one file at a time across many files,
-normally combined with `persistState` so each file's contents, history,
-selections, and scroll position survive switches — see
-[Persisting Editor State](#edit-mode-persisting-editor-state):
-
-<DocsCodeExample {...editReactSharedEditorExample} />
-
-Changes to `createEditor` or `editorOptions` do not disturb an active edit
-session; their latest values apply the next time `edit` transitions from false
-to true. Use `onAttach` with your own ref when controls need imperative APIs
-such as history, selections, markers, save, or search. Use `Virtualizer` for
-large editable files. The `FileDiff` tab below shows the controlled annotation
-feedback loop.
+`createEditor`, `editorOptions`, `editStateKey`, and `ownsVerticalViewport` are
+creation-time inputs for an editor. Changing them does not replace an active
+editor; the latest values apply when a later edit session creates another
+editor. Keep factories and object props stable across renders.
 
 <EditComponentTabs
   fileExample={editReactExample}
@@ -110,320 +54,387 @@ feedback loop.
   multiFileDiffExample={editReactMultiFileDiffExample}
 />
 
-### Vanilla JS
+#### Vanilla JS
 
-Render with `File` or `FileDiff` first, then attach the editor with
-`editor.edit(component)`. Use `VirtualizedFile` and `VirtualizedFileDiff` for
-large editable files. Keep any emitted annotation collection in your external
-source of truth before a later render. Call `cleanUp()` when the editor is
-removed. The `FileDiff` tab below includes this synchronization.
+Render the component first, then attach an editor of the matching kind. Keep the
+function returned by `edit()` and call it for a normal, install-capable
+completion.
+
+Set `onEditChange` in the component's `FileOptions` or `FileDiffOptions` to
+monitor live changes while in edit mode. Use `onEditComplete` to accept or
+reject the result when the edit session ends. See
+[Handle changes and completion](#edit-mode-handle-changes-and-completion) for
+their lifecycle and event payloads.
 
 <EditComponentTabs
   fileExample={editVanillaFileExample}
   fileDiffExample={editVanillaFileDiffExample}
 />
 
-### CodeView
+`editor.cleanUp('discard')` also runs completion, but never installs the
+callback result. `cleanUp('recycle')` temporarily detaches rendering without
+ending the session; virtualized hosts use it when a component leaves the render
+window.
 
-`CodeView` manages one `Editor` per editable item. In React, wrap it in the same
-app-level `EditProvider` used by other editable surfaces, set `edit: true` on an
-item, and pass creation-time item-editor behavior through the `CodeView`
-`editorOptions` prop. In vanilla JS, pass `createEditor` in `CodeViewOptions`
-instead. Increment the item's `version` whenever `edit` changes.
+#### CodeView
 
-`CodeView` uses item-aware callbacks instead of `editorOptions.onChange`.
-`onItemEditChange` receives the owning item with each live change: replace that
-item's annotations whenever the emitted array changes, and increment its
-`version`. This live update keeps annotation coordinates synchronized throughout
-the edit session. `onItemEditComplete` receives the item and latest contents
-when a changed session ends because editing is disabled or the item is collapsed
-or removed. Sessions with no changes do not emit it. Resetting, cleaning up, or
-unmounting the viewer is silent teardown.
-
-Persist edited contents to the item's `file`, or rebuild its `fileDiff`. Assign
-a fresh `cacheKey` and increment `version`; `CodeView` does not update item data
-for you.
+`CodeView` owns one editor per editable item. React gets the factory from the
+nearest `EditProvider`; vanilla `CodeView` takes `createEditor` in its options.
+Set `edit: true` on an item and increment its `version` whenever `edit` changes.
 
 <CodeViewExampleTabs
   reactExample={editReactCodeViewExample}
   vanillaExample={editVanillaCodeViewExample}
 />
 
-Editors retain their document and history while items move in and out of the
-virtualized window.
+Use `onItemEditChange(event, item)` to monitor an item's live changes while in
+edit mode. Use `onItemEditComplete(event, item, nextItem)` to accept or reject
+the result when its edit session ends. `nextItem` is the completed replacement.
+In controlled React mode, write it into your `items` state before returning
+`'accept'`. A collapsed or virtualized item keeps its session active; turning
+editing off, removing the item, resetting, cleaning up, or unmounting ends it.
+See [Handle changes and completion](#edit-mode-handle-changes-and-completion)
+for the shared lifecycle and event payloads.
 
-`editorOptions` and provider-factory changes are creation-time inputs: active
-item sessions keep their current editor, while the latest values apply to the
-next item that enters edit mode. Simultaneously edited items always receive
-independent editor instances.
+Use `getEditStateKey(item)` for per-item edit state retention. It is evaluated
+only when that item's editor is created. Item editor state retains selections
+and horizontal code scroll, but they never own or restore the shared CodeView
+scroll position.
 
-### Editing with Line Annotations
+See [CodeView editing](#codeview-editing) for item ownership, removal, and
+controlled-state details.
 
-Applications own the annotation collection passed to a `File`, `FileDiff`, or
-other editable surface. When an edit affects annotation coordinates, the editor
-remaps them and passes the complete current collection as `onChange`'s second
-argument alongside the edited file. This collection is authoritative when
-present; it is not a delta. Replace your application-owned collection with it;
-otherwise a later render reapplies stale coordinates.
+### Handle changes and completion
 
-The editor preserves the existing array reference for ordinary same-line edits
-and other edits that do not affect any annotation. When a structural edit
-touches, moves, or removes an annotation, it returns a new array. Check that
-identity before publishing state so ordinary typing does not cause unnecessary
-annotation renders.
+Use the callbacks exposed by each component:
 
-Remapping follows these rules:
+- React `File`, `FileDiff`, `MultiFileDiff`, and `PatchDiff` expose
+  `onEditChange` and `onEditComplete` as component props.
+- Vanilla `File` and `FileDiff` expose the same callbacks in `FileOptions` and
+  `FileDiffOptions`.
+- React and vanilla `CodeView` use `onItemEditChange` and `onItemEditComplete`
+  so each callback also receives the owning item.
 
-- A `LineAnnotation`, or a `DiffLineAnnotation` on the `additions` side, follows
-  structural edits in the editable file. Inserting lines above it moves it down;
-  deleting earlier lines moves it up.
-- A `DiffLineAnnotation` on the `deletions` side stays attached to the read-only
-  old-file side and is not remapped.
-- `lineNumber: 0` remains a file-level annotation and is not remapped.
-- Deleting only an annotated line's text leaves an annotated blank line. To
-  remove a non-final line and its annotation, delete from its start through the
-  start of the next line, consuming its trailing line break. To remove a final
-  line that has a preceding line, delete from the end of the preceding line
-  through EOF, consuming the preceding line break. A one-line document always
-  retains one blank line.
-- Deleting only the line break before an annotated line while retaining its text
-  merges that text into the previous line and moves the annotation to the merged
-  line.
-- Undo and redo use the same `onChange` path, restoring or removing annotations
-  with the corresponding document state.
+`onEditChange(event)` is the live document change stream. Its
+`EditorChangeEvent` contains:
 
-For annotations that survive, remapping changes only their coordinates. Metadata
-is preserved, so give each interactive annotation a stable, position-independent
-ID in `metadata` and key application-owned drafts or UI state by that ID.
+- `changes` contains normalized text edits with zero-based ranges and offsets.
+- `file` is the current editable document, or the editable new side of a diff.
+- `lineAnnotations` is the current remapped annotation collection when present.
+- `editor` is the attached editor after the change. Pull state with
+  `event.editor.getViewState()` or `event.editor.getEditState()` only when
+  needed.
 
-The shared `onChange` callback accepts either annotation shape: standalone
-`File` surfaces emit `LineAnnotation[]`, while diff surfaces emit
-`DiffLineAnnotation[]`. Narrow `lineAnnotations` before reading the diff-only
-`side` property. Use `isFileAnnotationCollection` or
-`isDiffAnnotationCollection` when the surface type is not already known.
+Do not feed `event.file` or `event.lineAnnotations` back into the active
+component on every change. Edit mode already owns the live document and
+annotation positions. Use the event for autosave, validation, or application
+side effects.
 
-In React, synchronously publish a changed annotation array with `flushSync` so
-the annotation placement updates with the edited content before paint. Do not
-wrap every `onChange` update in `flushSync`: bail out when the emitted array is
-the same object.
+Most of the time you probably won't need this API.
 
-<Notice variant="warning" icon={<IconCiWarningFill />}>
-  React may recreate annotation content when annotations are removed, restored,
-  or reordered, or when a `CodeView` item leaves the virtualized window.
-  `flushSync` keeps the placement update visually atomic, but it does not
-  preserve component-local state. Keep drafts and other interactive state in
-  application-owned state keyed by a stable annotation metadata ID. We intend to
-  preserve annotation node identity in a future release, so current remounting
-  behavior is not a long-term API contract.
-</Notice>
+<DocsCodeExample {...editOnChangeExample} />
 
-In vanilla JS, replace the annotation collection in your external variable or
-store before updating the surface. When the emitted array changes, schedule the
-same render function used for the initial surface after `onChange` returns,
-passing the edited file and replacement annotations. For `CodeView`, pass the
-collection to `updateItem` with a `version` increment. In every case, updating
-the source of truth prevents a later render from restoring stale line numbers.
+Completion runs whenever an edit session ends, including untouched,
+annotation-only, and fully undone sessions. For React components and CodeView
+items, completion is triggered when `edit` changes from `true` to `false` or the
+component or item unmounts. Direct `Editor` usage ends the session through the
+function returned by `edit()`. You must return `'accept'` or `'reject'` string
+literals to instruct the component what to do next.
 
-Use one `Editor` per concurrently editable standalone surface. `CodeView`
-instead creates and manages one editor per editable item. See the
-[playground](/playground) for the complete interaction: submit a line
-annotation, enable editing, insert a line above it, remove its logical line,
-then use undo and redo. The playground controls demonstrate the integration;
-they are not additional public editor options.
+The frozen completion event contains the detached result and the latest external
+values a rejection restores:
 
-### Selection Action
+- `file` / `fileDiff` is the completed result.
+- `originalFile` / `originalFileDiff` is the latest caller-provided value.
+- Diff events also include complete `oldFile` and `newFile` values.
+- `lineAnnotations` is the final collection; `originalLineAnnotations` is the
+  latest caller-provided collection.
+- `editor` is detached, but final `getViewState()` and `getEditState()` remain
+  available during the callback.
 
-Selection Action is an opt-in edit mode feature for showing custom UI alongside
-the current selection — useful for quick transforms, refactor prompts, or other
-selection-scoped tools. Set `enabledSelectionAction: true` and return your UI
-from `renderSelectionAction`; a floating popover holding your UI appears after
-the user creates a ranged selection. Programmatic `setSelections` and `setState`
-calls update the selection without opening the popover. The popover can hold any
-number of actions.
+Return `'accept'` to install the completed value while the component remains
+mounted, or `'reject'` to restore the latest external value. A missing handler
+rejects automatically. Store an accepted value in application state so a later
+render does not replace it with the original stale `file` or `fileDiff`.
 
-<DocsCodeExample {...editSelectionActionExample} />
+For `CodeView`, `onItemEditComplete(event, item, nextItem)` receives the
+completed replacement item. Returning `'accept'` installs `nextItem`; a
+controlled React owner must also write that item into its `items` state.
+Returning `'reject'` restores the latest external item.
 
-`renderSelectionAction` runs when the popover opens. Its context includes the
-active `selection`, the editable `textDocument`, helpers to read or modify the
-selection (`getSelectionText`, `replaceSelectionText`, `applyEdits`), and
-`close` to dismiss the popover:
+Unmounting a component or item still runs completion, but does not install the
+result. The callback remains the place to capture or persist the final state.
 
-<DocsCodeExample {...editSelectionActionContextType} />
+Accept and reject control what the component displays. They do not clear a keyed
+editing session.
 
-### Persisting Editor State
+### Retain edit state in memory
 
-By default, each edit session starts fresh: switching files (or re-entering edit
-mode) discards the previous file's edits, history, and selections. Set
-`persistState: true` to keep per-file state alive across file switches on the
-same `Editor` instance. State is keyed by the file's `cacheKey`, so every
-editable file must provide one — unique and stable (the editor throws
-otherwise). Diffs parsed with `parseDiffFromFile` derive a cache key from the
-file pair automatically.
+By default during any `edit` session, the `Editor` will manage editor state for
+you, including undo/redo history. However, once the `edit` session has ended,
+that session data will be thrown away unless you provide an `editStateKey` to
+your `Editor` instantiation.
 
-Two layers persist:
+Future edit sessions with the same `editStateKey` can resume that undo history
+and other editor state, including selections and cursor position.
 
-- **File contents and undo history.** The editor caches each file's text
-  document on the instance. When a file whose `cacheKey` it has already seen
-  attaches again, the editor swaps the cached document back in — the host keeps
-  passing the original `contents`, and the edited text with its full undo
-  timeline returns.
-- **Editor state.** Selections and scroll positions — the code scroller's
-  `scrollLeft` and the surrounding viewport's `scrollTop` — are written to
-  `persistStateStorage` when the editor detaches or switches files, and restored
-  on the next attach with the same `cacheKey`. If the user scrolls before an
-  async restore lands, the restore leaves the viewport alone.
+For React components, simply pass the key as props:
 
-A file with no stored record yet — its first open — starts scrolled to the top
-instead of inheriting whatever offset the previous file left behind in a shared
-scroll container.
+```tsx
+<File file={file} edit={editing} editStateKey={`review:${file.name}`} />
+```
 
-<DocsCodeExample {...editPersistStateExample} />
+For VanillaJS same key can be passed as the third argument to `new Editor()` or
+returned by the `CodeView` `getEditStateKey` option or prop. A key retains:
 
-`persistStateStorage` selects where the serializable state lives: `'inMemory'`
-(the default) lasts as long as the `Editor` instance, `'indexedDB'` survives
-page reloads, and a custom `IStateStorage` — an object with `get(cacheKey)` and
-`set(cacheKey, state)`, synchronous or async — bridges to your own store. Cached
-text documents always stay on the editor instance regardless of the storage
-choice, so persisting content across file switches means reusing one editor
-rather than creating one per file.
+- Current document contents, name, language, and undo/redo history
+- Cursor and selections
+- Surface-local horizontal `scrollLeft`
+- Vertical `scrollTop` only for an explicitly owned viewport
+- The old-side baseline and hunk metadata needed to resume a FileDiff safely
 
-In React, reuse one editor by passing the same `editorOptions` object to every
-surface — `EditProvider` caches editors by options identity, so a stable object
-yields one instance across file switches:
+Retention is in memory, bounded by an LRU, and does not survive page reload.
+File and file-diff keys use independent namespaces. The same kind and key cannot
+be active in two editors at once. A retained FileDiff can resume only against a
+compatible old-side baseline.
 
-<DocsCodeExample {...editPersistStateReactExample} />
+Changing a key while an editor is active does not re-key that editor. The new
+key applies when a later editor is created.
 
-### Markers
+#### Clear retained EditState
 
-Markers add inline diagnostics — errors, warnings, and other annotations — to
-the editable surface, with a hover popover that shows each marker's message.
-They are useful for surfacing linter or language-server output alongside live
-edits.
+`EditStateManager` clears inactive retained sessions. Clearing an active or
+missing key returns `false` and does not alter the live editor.
 
-Each marker is positioned with zero-based `start` and `end` positions and a
-`severity` that drives its color and popover styling:
+```ts
+import { EditStateManager } from '@pierre/diffs/edit';
 
-<DocsCodeExample {...editMarkerType} />
+const editStateKey = 'review:example.ts';
 
-Call `editor.setMarkers(markers)` after the editor has attached to a surface
-(calling it before attaching throws). Inlining the array lets TypeScript check
-the `severity` literals against the `Marker` type without importing it.
+// Remove the complete retained session.
+EditStateManager.clear('file', editStateKey);
 
-<DocsCodeExample {...editMarkerExample} />
+// Keep the draft while selectively resetting retained state.
+EditStateManager.clear('file', editStateKey, { history: true });
+EditStateManager.clear('file', editStateKey, { selections: true });
+EditStateManager.clear('file', editStateKey, { view: true });
+EditStateManager.clear('file', editStateKey, { editor: true });
 
-Markers re-anchor as the document changes, so they stay attached to their text
-while you edit. Pass an empty array to clear them.
+// Remove every inactive retained file and file-diff session.
+EditStateManager.clearAll();
 
-### History
+// Retain up to 50 inactive entries in each namespace.
+EditStateManager.setCapacity(50);
+```
 
-Each editor keeps a single undo stack per file. Typed input and programmatic
-`applyEdits` calls join the same timeline, so a mixed sequence undoes exactly
-like a hand-typed one, and each undo or redo restores the selections that went
-with the edit. Drive it with `undo()` and `redo()` — the same commands behind
-`Cmd/Ctrl+Z` — and read `canUndo` and `canRedo` for toolbar state. History lives
-in the file's text document, so with
-[`persistState`](#edit-mode-persisting-editor-state) it survives file switches.
+`{ document: true }` removes the complete entry because history and editor state
+depend on that document. `{ editor: true }` clears both selections and view
+state. `setCapacity(capacity)` changes the maximum number of inactive entries
+retained by each namespace; the default is `100` per namespace.
 
-You can limit the stack size with `historyMaxEntries` in
-[Editor Options](#edit-mode-editor-options) (default is `100`).
+### Initialize state on first attach
+
+Use `initialState` to provide application-owned state when constructing an
+editor. `documentKind` is required and must match the editor kind. Every other
+field is optional:
+
+- `document` supplies the live `TextDocument`, including its current contents
+  and any undo/redo history.
+- `fileInfo` supplies the file name and optional language override.
+- `editor` supplies selections and editor-owned scroll state.
+- `diffSession` supplies the old-side baseline and hunk metadata for a
+  `file-diff` editor.
+
+The editor adopts `initialState`, it doesn't clone it. On its first attachment,
+it fills omitted fields from the attached component and defaults. `initialState`
+is constructor-only and is consumed by that first attachment.
+
+For a `file-diff` editor, view-only initialization can omit the document and
+diff-session fields. Transferring an edited document and its undo/redo history
+requires the matching `document`, `fileInfo`, and `diffSession` from the same
+complete `EditState`; diff-session metadata is not standalone state.
+
+### Persist a draft across reloads
+
+`editStateKey` retains an editing session only in memory. To continue editing in
+a new page session, persist the latest `FileContents` and, optionally, its
+`EditorViewState`. Rebuild those values as `initialState` when editing begins
+again. See
+[Initialize state on first attach](#edit-mode-initialize-state-on-first-attach)
+and
+[View state and viewport ownership](#edit-mode-view-state-and-viewport-ownership)
+for the corresponding APIs.
+
+- The latest `FileContents`. Save `event.file` from `onEditChange` to recover an
+  in-progress draft, and save the accepted `event.file` from `onEditComplete` as
+  the application's final file state.
+- The optional `EditorViewState` returned by `getViewState()`. It contains
+  copied selections and scroll positions and is safe to encode as JSON.
+
+On the next page load, construct a fresh `TextDocument` from the persisted file
+and supply it through `initialState` with the file identity and optional
+`EditorViewState`. Pass the same file to the component. The new document
+restores the latest contents with fresh undo/redo history; the editor builds any
+omitted state from the attached component.
+
+<DocsCodeExample {...editPersistedDraftExample} />
+
+`onEditChange` runs for document changes, not selection or scroll movement. The
+example therefore also captures the current file and `EditorViewState` at an
+explicit save point. Applications can do the same before navigation or at
+another application-owned checkpoint.
+
+`EditorViewState` is different from the complete `EditState` returned by
+`getEditState()`. Complete state includes the live document and undo/redo
+history, is borrowed by reference, and can contain non-JSON annotation values,
+functions, DOM nodes, and cycles. It is not a serialization contract.
+
+Pierre does not currently expose serializable undo/redo history. Restoring a
+persisted file and `EditorViewState` starts a new history: edits made before the
+reload cannot be undone in the new page session.
+
+### Control the editor
+
+Use `onAttach` to capture an editor instance for toolbars and to opt into
+initial focus. At this point the document and editable DOM are ready.
+
+<DocsCodeExample {...editOnAttachReactExample} />
+
+Vanilla `CodeView` can add the same behavior in its factory:
+
+<DocsCodeExample {...editOnAttachVanillaExample} />
+
+`'first-visible'` targets the first editable row whose top is inside the usable
+viewport. `offset` adds a non-negative CSS-pixel inset and `preventScroll: true`
+preserves vertical position. Numeric line numbers are one-based; character
+offsets are zero-based.
+
+<DocsCodeExample {...editFocusPositionExample} />
+
+#### Undo and redo
+
+Typed input and `applyEdits()` share one timeline. `undo()` and `redo()` restore
+the associated selections; `canUndo` and `canRedo` drive toolbar state.
+`historyMaxEntries` defaults to `100`.
 
 <DocsCodeExample {...editUndoRedoExample} />
 
-### Using Worker Pool
+#### View state and viewport ownership
 
-Edit mode works with a worker pool out of the box: a file being edited renders
-on the main thread with the token metadata the editor needs, while the pool
-keeps rendering every other file on the page. Keystroke re-highlighting always
-runs on the main thread, with or without a pool.
+`getViewState()` returns copied selections and restorable component-owned scroll
+offsets. An attached component reports horizontal `scrollLeft`. It reports
+vertical `scrollTop` only when the editor was constructed with
+`ownsVerticalViewport: true` and the component exposes an exclusive element
+viewport.
 
-Setting `useTokenTransformer: true` on the pool's `highlighterOptions` is an
-optional optimization for edit-heavy apps: pool-rendered markup is then already
-editor-compatible, so entering edit mode skips a one-time re-render of that
-file. It costs larger DOM for every rendered file, which is why it is off by
-default.
+`setViewState()` requires an attached editor. It restores selections and
+horizontal scroll; `scrollTop` is applied only to an owned viewport.
 
-See [Worker Pool](#worker-pool) for worker factory setup and pool options. In
-vanilla JS, pass the pool as the second argument to `File` or `FileDiff`. In
-React, wrap your tree in `WorkerPoolContextProvider`. Then attach the editor as
-usual.
+`ownsVerticalViewport` defaults to `false` and is captured by the constructor.
+Enable it only when one editable component exclusively owns the vertical
+scroller. Virtualization does not imply ownership, and later `setOptions()`
+calls cannot change it. Never enable it for individual CodeView items because
+they share one viewer viewport.
+
+The retained view-state checkpoint updates after synchronization, edits,
+explicit `setViewState()` calls, recycling, and completion. Pure selection or
+scroll movement does not update that checkpoint; call `getViewState()` for the
+exact live position.
+
+### Extend the editing UI
+
+#### Selection Action
+
+Set `enabledSelectionAction: true` and return custom UI from
+`renderSelectionAction` to show a popover beside a user-created ranged
+selection. Programmatic `setSelections()` and `setViewState()` update the
+selection without opening it.
+
+<DocsCodeExample {...editSelectionActionExample} />
+
+The render context provides the active selection, live document, helpers to read
+or replace selected text, `applyEdits`, and `close`:
+
+<DocsCodeExample {...editSelectionActionContextType} />
+
+#### Markers
+
+Markers add inline diagnostics with severity styling and hover messages. Call
+`setMarkers()` after attachment; pass an empty array to clear them. Marker
+positions re-anchor as the document changes.
+
+<DocsCodeExample {...editMarkerType} />
+
+<DocsCodeExample {...editMarkerExample} />
+
+#### Line annotations
+
+Edit mode owns annotation positions during a session. Additions-side and file
+annotations follow structural edits; deletion-side annotations and file-level
+`lineNumber: 0` annotations stay fixed. Undo and redo restore annotations with
+their document state.
+
+Do not mirror remapped `event.lineAnnotations` back on every change. A genuinely
+new caller-provided annotation array replaces the edit owned collection and may
+trigger unintended positional reverts. Reject restores the latest external
+collection; accept installs the final collection, which should be committed
+alongside the accepted file or diff.
+
+For interactive annotation content, keep application state under a stable,
+position-independent metadata ID. React may recreate annotation content when
+rows move, disappear, or leave a virtualized window.
+
+### Performance and loading
+
+#### Worker Pool
+
+The edited file renders on the main thread while a worker pool continues to
+render other components. Setting `useTokenTransformer: true` in the pool's
+highlighter options can avoid a one-time re-render when entering edit mode, at
+the cost of larger markup for every pool-rendered file.
 
 <EditWorkerPoolTabs
   vanillaExample={editWorkerPoolVanillaExample}
   reactExample={editWorkerPoolReactExample}
 />
 
-### Lazy Importing
+See [Worker Pool](#worker-pool) for setup details.
 
-Because `@pierre/diffs/edit` is a standalone entry point, you can dynamic-import
-it only when the user enters edit mode. That keeps the initial page bundle
-smaller and can improve LCP (Largest Contentful Paint) on pages where editing is
-rare.
+#### Lazy import
+
+`@pierre/diffs/edit` is a separate entry point, so it can be loaded only when
+the feature is used.
 
 <DocsCodeExample {...editLazyFileExample} />
 
-### API Reference
-
-These methods are available on an `Editor` instance. Attach it to a rendered
-`File` or `FileDiff` with `edit()` first.
+### API reference
 
 <DocsCodeExample {...editorPublicApi} />
 
-#### Editor Options
+#### Editor options
 
-Pass these when constructing `new Editor({ ... })`, or update them later with
-[`setOptions`](#edit-mode-api-reference).
+Pass options to `new Editor(documentKind, options, editStateKey?)`.
+`initialState` and `ownsVerticalViewport` are constructor-only. `setOptions()`
+merges later values, but not every option is retroactive: for example,
+`matchBrackets` is captured when the document synchronizes, and changing
+`historyMaxEntries` does not resize history already created for a document.
+Callbacks that are read when an event occurs use their latest values.
+`EditorOptions.onComplete` is a low-level observer. You cannot accept or reject
+from this API. Most integrations should use the component completion callbacks
+described above instead.
 
 <DocsCodeExample {...editorOptionsType} />
 
-`EditorKeymap` is an array of `{ platform?, bindings }` groups. `platform` can
-be `mac`, `windows`, or `linux`; omit it to enable the group's bindings
-everywhere. Later groups take precedence when bindings overlap. When set, custom
-bindings take precedence, while unmatched shortcuts fall back to the built-in
-keymap. Keymaps are immutable; pass a new array to `setOptions` to change one.
+`EditorKeymap` is an array of `{ platform?, bindings }` groups. Platform values
+are `mac`, `windows`, or `linux`; later groups win when bindings overlap. Custom
+bindings take precedence and unmatched shortcuts fall back to the built-in
+keymap.
 
-#### `onChange`
-
-The third argument is an `EditorChangeEvent`. Its `changes` array contains every
-normalized edit in the change:
-
-<DocsCodeExample {...editOnChangeExample} />
-
-Ranges use zero-based line and character positions.
-
-#### `onAttach`
-
-Use `onAttach` to opt into initial caret placement. At this point the text
-document and editable DOM are ready. In React, pass a stable `editorOptions`
-object to any editable surface, including `CodeView`:
-
-<DocsCodeExample {...editOnAttachReactExample} />
-
-Vanilla `CodeView` can add the same behavior in its editor factory:
-
-<DocsCodeExample {...editOnAttachVanillaExample} />
-
-`'first-visible'` selects the first editable row whose top falls inside the
-usable viewport and places the caret at character zero. If no editable row top
-is visible, the call does nothing. Set `offset` to a non-negative number of CSS
-pixels to move the usable top below the viewport if needed. With
-`preventScroll: true`, the focus request does not change the vertical scroll
-position.
-
-You can also target a specific document position:
-
-<DocsCodeExample {...editFocusPositionExample} />
-
-Numeric `lineNumber` values are one-based, while `character` values are
-zero-based. Numeric targeting works on every attached editor. Any targeted focus
-replaces the current selection, so use either this initial placement or restored
-selection/view state as the owner of the edit session's starting position, not
-both. `CodeView` retains an editor while its item is recycled, so `onAttach` is
-not repeated for virtualized remounts in the same edit session.
-
-### Keyboard Shortcuts
+### Keyboard shortcuts
 
 Shortcuts use <kbd>Cmd</kbd> on macOS and <kbd>Ctrl</kbd> on Windows and Linux.
-Jumping to the document start or end uses the modifier with the <kbd>Home</kbd>
-and <kbd>End</kbd> keys; on macOS, the modifier with ↑ and ↓ arrows works too.
+Jumping to the document start or end uses that modifier with <kbd>Home</kbd> and
+
+<kbd>End</kbd>; on macOS, the modifier with the up and down arrows works too.
 
 <KeyboardShortcuts prerenderedFile={keymapFile} />
