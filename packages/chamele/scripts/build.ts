@@ -1,7 +1,7 @@
 import binaryen from 'binaryen';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { pathToFileURL } from 'node:url';
 import { gzipSync } from 'node:zlib';
+import { pathToFileURL } from 'url';
 import wabt from 'wabt';
 
 const { parseWat } = await wabt();
