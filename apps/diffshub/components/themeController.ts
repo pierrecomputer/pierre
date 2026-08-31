@@ -1,6 +1,11 @@
 import { createThemeController, type ThemePersistence } from '@pierre/theming';
 
 import { docsThemeCatalog } from './themeCatalog';
+import {
+  applyThemeBootstrapStyle,
+  buildThemeBootstrapStyle,
+  persistThemeBootstrapSnapshot,
+} from '@/lib/theme/themeBootstrap';
 
 export { docsThemeCatalog } from './themeCatalog';
 
@@ -70,5 +75,34 @@ export const themeController = createThemeController({
   persistence: docsPersistence,
   defaultMode: 'system',
 });
+
+let lastBootstrapTheme: object | undefined;
+let lastBootstrapSelection: string | undefined;
+function syncThemeBootstrap(): void {
+  const state = themeController.getState();
+  const theme = state.resolvedTheme;
+  const colorScheme = state.resolvedColorScheme;
+  const themeName =
+    colorScheme === 'dark' ? state.darkThemeName : state.lightThemeName;
+  const selection = `${colorScheme}:${themeName}`;
+  if (
+    theme == null ||
+    (theme === lastBootstrapTheme && selection === lastBootstrapSelection)
+  ) {
+    return;
+  }
+  lastBootstrapTheme = theme;
+  lastBootstrapSelection = selection;
+
+  const style = buildThemeBootstrapStyle(theme);
+  applyThemeBootstrapStyle(style);
+  persistThemeBootstrapSnapshot(colorScheme, {
+    style,
+    themeName,
+  });
+}
+
+syncThemeBootstrap();
+themeController.subscribe(syncThemeBootstrap);
 
 export const docsThemeResolver = themeController.resolver;

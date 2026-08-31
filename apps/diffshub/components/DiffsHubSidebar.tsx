@@ -343,7 +343,7 @@ function SidebarWrapper({
     <div
       className={cn(
         className,
-        'contain-strict z-30 flex h-full min-h-0 flex-col transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] will-change-transform motion-reduce:transition-none md:z-auto md:translate-y-0 md:will-change-auto',
+        'diffshub-theme-bootstrap contain-strict z-30 flex h-full min-h-0 flex-col transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] will-change-transform motion-reduce:transition-none md:z-auto md:translate-y-0 md:will-change-auto',
         // Fall back to the neutral diffshub chrome background when no Shiki
         // theme bg is available yet (initial render before the resolver
         // returns).

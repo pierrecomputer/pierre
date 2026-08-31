@@ -9,6 +9,13 @@ import { ScrollbarGutterVariables } from '@/components/ScrollbarGutterVariables'
 import { ThemeProvider } from '@/components/ThemeProvider';
 import { Toaster } from '@/components/Toaster';
 import { WorkerPoolContext } from '@/components/WorkerPoolContext';
+import {
+  THEME_BOOTSTRAP_RULE_ID,
+  THEME_BOOTSTRAP_SELECTOR,
+  THEME_BOOTSTRAP_STORAGE_KEY,
+  THEME_BOOTSTRAP_VERSION,
+  type ThemeBootstrapCache,
+} from '@/lib/theme/themeBootstrap';
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -20,7 +27,12 @@ const berkeleyMono = localFont({
   variable: '--font-berkeley-mono',
 });
 
-const themeBootstrapScript = `(${String(function applyInitialTheme() {
+function applyInitialTheme(
+  bootstrapStorageKey: string,
+  bootstrapVersion: number,
+  ruleId: string,
+  selector: string
+) {
   try {
     const storedTheme = window.localStorage.getItem('theme');
     const theme =
@@ -34,6 +46,46 @@ const themeBootstrapScript = `(${String(function applyInitialTheme() {
           : 'light'
         : theme;
     const root = document.documentElement;
+
+    const selectedThemeName = window.localStorage.getItem(
+      resolvedTheme === 'dark' ? 'diffshub-dark-theme' : 'diffshub-light-theme'
+    );
+    let bootstrapStyle: Record<string, string> | undefined;
+    const storedBootstrap = window.localStorage.getItem(bootstrapStorageKey);
+    if (selectedThemeName != null && storedBootstrap != null) {
+      try {
+        const parsed = JSON.parse(
+          storedBootstrap
+        ) as Partial<ThemeBootstrapCache>;
+        const entry = parsed[resolvedTheme];
+        if (
+          parsed.version === bootstrapVersion &&
+          entry?.themeName === selectedThemeName &&
+          entry.style != null &&
+          typeof entry.style === 'object' &&
+          !Array.isArray(entry.style)
+        ) {
+          bootstrapStyle = entry.style;
+        }
+      } catch {
+        // Ignore malformed cached chrome and use the built-in theme.
+      }
+    }
+
+    if (bootstrapStyle != null) {
+      const bootstrapElement = document.createElement('style');
+      bootstrapElement.id = ruleId;
+      document.head.appendChild(bootstrapElement);
+      const sheet = bootstrapElement.sheet;
+      if (sheet != null) {
+        const index = sheet.insertRule(`${selector} {}`, 0);
+        const rule = sheet.cssRules[index] as CSSStyleRule;
+        for (const [property, value] of Object.entries(bootstrapStyle)) {
+          if (typeof value === 'string')
+            rule.style.setProperty(property, value);
+        }
+      }
+    }
 
     root.classList.remove('light', 'dark');
     root.classList.add(resolvedTheme);
@@ -57,7 +109,9 @@ const themeBootstrapScript = `(${String(function applyInitialTheme() {
   } catch {
     // Ignore storage/media failures and let CSS defaults apply.
   }
-})})()`;
+}
+
+const themeBootstrapScript = `(${String(applyInitialTheme)})(${JSON.stringify(THEME_BOOTSTRAP_STORAGE_KEY)},${THEME_BOOTSTRAP_VERSION},${JSON.stringify(THEME_BOOTSTRAP_RULE_ID)},${JSON.stringify(THEME_BOOTSTRAP_SELECTOR)})`;
 
 export function RootLayout({
   children,
