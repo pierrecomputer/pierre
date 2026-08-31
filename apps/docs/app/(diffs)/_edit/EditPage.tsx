@@ -61,8 +61,9 @@ export function EditPage({
                 description={
                   <>
                     Show collaborators with <code>editor.setCarets()</code>.
-                    Each caret can include an optional highlight range, which
-                    follows document edits alongside its caret position.
+                    Type or select in either editor below to see edits, carets,
+                    and highlights reflected in the other collaborator&apos;s
+                    view.
                   </>
                 }
               />
