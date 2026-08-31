@@ -307,11 +307,22 @@
       (then (return (call $yamlStreamResume))))
     (i32.const 0))
 
+  ;; Reset state that lives outside the generic stream globals. Fresh streams
+  ;; may reuse a completed instance, so these must match a new Wasm instance.
+  (func $streamResetLang
+    (global.set $markdownStreamFence (i32.const 0))
+    (global.set $markdownStreamFenceLen (i32.const 0))
+    (global.set $markdownStreamLang (i32.const 0))
+    (global.set $phpStreamingCode (i32.const 0))
+    (global.set $phpStreamDecl (i32.const 0))
+    (global.set $phpStreamMember (i32.const 0)))
+
   ;; Stream one input chunk through any language while preserving lexer and
   ;; emitter state between calls.
   (func (export "highlightStream") (param $reset i32)
     (local $lang i32)
     (call $streamBegin (local.get $reset))
+    (if (local.get $reset) (then (call $streamResetLang)))
     (call $hlBegin)
     (call $recStreamBegin (local.get $reset))
     (local.set $lang (i32.load8_u (i32.const 0)))

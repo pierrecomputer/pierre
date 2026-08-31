@@ -555,6 +555,8 @@ void t.test('TokenizeStream: empty stream yields one empty line', () => {
   const stream = new TokenizeStream({ lang: 'ts', theme: pierreDark });
   assert.deepEqual(stream.pushCode(''), []);
   assert.deepEqual(stream.end(), [[]]);
+  assert.throws(() => stream.pushCode('next'), /stream has ended/);
+  assert.throws(() => stream.end(), /stream has ended/);
 });
 
 void t.test('TokenizeStream: ASCII resumed after a multi-byte line', () => {

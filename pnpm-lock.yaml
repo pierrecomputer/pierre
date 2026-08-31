@@ -441,9 +441,6 @@ importers:
       '@icons-pack/react-simple-icons':
         specifier: 'catalog:'
         version: 13.8.0(react@19.2.7)
-      '@pierre/chamele':
-        specifier: workspace:*
-        version: link:../../packages/chamele
       '@pierre/diffs':
         specifier: workspace:*
         version: link:../../packages/diffs
@@ -662,9 +659,6 @@ importers:
       '@arethetypeswrong/core':
         specifier: 'catalog:'
         version: 0.18.2
-      '@pierre/chamele':
-        specifier: workspace:*
-        version: link:../chamele
       '@playwright/test':
         specifier: 'catalog:'
         version: 1.51.1

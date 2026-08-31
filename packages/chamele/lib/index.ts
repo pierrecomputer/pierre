@@ -421,6 +421,7 @@ export function isSupportedLanguage(lang: string): lang is Lang {
 }
 
 class WasmHighlighter implements Highlighter {
+  wasmModule: WebAssembly.Module;
   memory: WebAssembly.Memory;
   highlight: () => void;
   highlightStream: (reset: number | boolean) => void;
@@ -430,6 +431,7 @@ class WasmHighlighter implements Highlighter {
   themeWritten: Uint8Array | undefined;
 
   constructor(wasmModule: WebAssembly.Module) {
+    this.wasmModule = wasmModule;
     const env = {
       is_id_start: (ptr: number, bits: number) =>
         /^\p{ID_Start}$/u.test(this.readChars(ptr, bits)),
@@ -689,6 +691,10 @@ let shared: WasmHighlighter | undefined;
 /** The compiled Wasm module required by the shared highlighter. */
 let wasmModule: WebAssembly.Module | undefined;
 
+// Reuse one completed stream instance. Bun's Wasm instantiation is expensive,
+// while one slot keeps concurrent streams isolated and bounds retained memory.
+let pooledStreamHighlighter: WasmHighlighter | undefined;
+
 /** The shared highlighter, or throw before `init`. */
 function assertShared(): WasmHighlighter {
   if (shared == null) throw new Error('chamele is not initialized');
@@ -706,6 +712,7 @@ function assertWasmModule(): WebAssembly.Module {
  */
 export function init(wasm: WebAssembly.Module): Highlighter {
   wasmModule = wasm;
+  pooledStreamHighlighter = undefined;
   return (shared = new WasmHighlighter(wasm));
 }
 
@@ -756,7 +763,7 @@ export function codeToHast(
  * scans each completed chunk once and preserves lexer state in Wasm.
  */
 export class TokenizeStream {
-  #hl: WasmHighlighter;
+  #hl: WasmHighlighter | undefined;
   #langId: number;
   #themes: ResolvedTheme[];
   #cssVariablePrefix: string;
@@ -767,7 +774,12 @@ export class TokenizeStream {
   #streamStarted = false;
 
   constructor(options: CodeToTokensOptions) {
-    this.#hl = new WasmHighlighter(assertWasmModule());
+    const compiledWasm = assertWasmModule();
+    this.#hl =
+      pooledStreamHighlighter?.wasmModule === compiledWasm
+        ? pooledStreamHighlighter
+        : new WasmHighlighter(compiledWasm);
+    pooledStreamHighlighter = undefined;
     this.#langId = langIdOf(options.lang);
     this.#themes = resolveOptionThemes(options);
     this.#cssVariablePrefix = options.cssVariablePrefix ?? '--cha-';
@@ -780,6 +792,7 @@ export class TokenizeStream {
    * buffered until a newline or `end()`.
    */
   pushCode(chunk: string): ThemedToken[][] {
+    if (this.#hl == null) throw new Error('stream has ended');
     chunk = this.#pendingSurrogate + chunk;
     this.#pendingSurrogate = '';
     const lastCode = chunk.charCodeAt(chunk.length - 1);
@@ -800,36 +813,47 @@ export class TokenizeStream {
    * after a trailing terminator, matching codeToTokens line splitting.
    */
   end(): ThemedToken[][] {
-    this.#tail += this.#pendingSurrogate;
-    this.#pendingSurrogate = '';
-    if (this.#tail === '') return [[]];
-    const code = this.#tail;
-    this.#tail = '';
-    return this.#tokenizeChunk(code);
+    const hl = this.#hl;
+    if (hl == null) throw new Error('stream has ended');
+    try {
+      this.#tail += this.#pendingSurrogate;
+      this.#pendingSurrogate = '';
+      if (this.#tail === '') return [[]];
+      const code = this.#tail;
+      this.#tail = '';
+      return this.#tokenizeChunk(code);
+    } finally {
+      // Do not retain unusually large stream buffers in the single pool slot.
+      if (
+        pooledStreamHighlighter == null &&
+        hl.wasmModule === wasmModule &&
+        hl.pageN <= 16
+      ) {
+        pooledStreamHighlighter = hl;
+      }
+      this.#hl = undefined;
+    }
   }
 
   /** Tokenize one chunk and apply stream-absolute offsets. */
   #tokenizeChunk(code: string): ThemedToken[][] {
-    const byteLen = this.#hl.writeInput(code);
-    const recs = this.#hl.tokenizeStreamLineRecords(
+    const hl = this.#hl;
+    if (hl == null) throw new Error('stream has ended');
+    const byteLen = hl.writeInput(code);
+    const recs = hl.tokenizeStreamLineRecords(
       this.#langId,
       byteLen,
       !this.#streamStarted
     );
     this.#streamStarted = true;
-    const base = this.#streamChar;
     const lines = lineRecordsToTokens(
       code,
       recs,
       recs.length >> 1,
       this.#themes,
       this.#cssVariablePrefix,
-      this.#maxLineLength
-    ).map((tokens) =>
-      tokens.map((token) => {
-        token.offset += base;
-        return token;
-      })
+      this.#maxLineLength,
+      this.#streamChar
     );
     this.#streamChar += code.length;
     return lines;

@@ -266,9 +266,13 @@ export function rangeToToken(
   end: number,
   hl: number,
   themes: ResolvedTheme[],
-  cssVariablePrefix: string
+  cssVariablePrefix: string,
+  offsetBase = 0
 ): ThemedToken {
-  const token: ThemedToken = { content: code.slice(start, end), offset: start };
+  const token: ThemedToken = {
+    content: code.slice(start, end),
+    offset: start + offsetBase,
+  };
   if (themes.length === 1 && themes[0].color === null) {
     const { styles, fg } = themes[0];
     const style = styles[hl];
@@ -305,7 +309,8 @@ export function lineRecordsToTokens(
   count: number,
   themes: ResolvedTheme[],
   cssVariablePrefix: string,
-  maxLineLength?: number
+  maxLineLength?: number,
+  offsetBase = 0
 ): ThemedToken[][] {
   const lines: ThemedToken[][] = [];
   let line: ThemedToken[] = [];
@@ -318,7 +323,15 @@ export function lineRecordsToTokens(
     if (hl === 0xffffffff) {
       if (max > 0 && start - lineStart >= max) {
         line = [
-          rangeToToken(code, lineStart, start, 0, themes, cssVariablePrefix),
+          rangeToToken(
+            code,
+            lineStart,
+            start,
+            0,
+            themes,
+            cssVariablePrefix,
+            offsetBase
+          ),
         ];
       }
       lines.push(line);
@@ -326,12 +339,32 @@ export function lineRecordsToTokens(
       start = end;
       lineStart = end;
     } else if (end > start) {
-      line.push(rangeToToken(code, start, end, hl, themes, cssVariablePrefix));
+      line.push(
+        rangeToToken(
+          code,
+          start,
+          end,
+          hl,
+          themes,
+          cssVariablePrefix,
+          offsetBase
+        )
+      );
       start = end;
     }
   }
   if (max > 0 && start - lineStart >= max) {
-    line = [rangeToToken(code, lineStart, start, 0, themes, cssVariablePrefix)];
+    line = [
+      rangeToToken(
+        code,
+        lineStart,
+        start,
+        0,
+        themes,
+        cssVariablePrefix,
+        offsetBase
+      ),
+    ];
   }
   lines.push(line);
   return lines;

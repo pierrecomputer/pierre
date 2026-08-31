@@ -44,7 +44,12 @@
     (if (local.get $reset)
       (then
         (global.set $streamMode (i32.const 0))
-        (global.set $streamRegionKind (i32.const 0)))))
+        (global.set $streamA (i32.const 0))
+        (global.set $streamB (i32.const 0))
+        (global.set $streamC (i32.const 0))
+        (global.set $streamHl (i32.const 0))
+        (global.set $streamRegionKind (i32.const 0))
+        (global.set $streamRegionStarted (i32.const 0)))))
 
   (func $streamEnd
     (global.set $streaming (i32.const 0))
