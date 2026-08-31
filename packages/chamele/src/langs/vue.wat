@@ -109,12 +109,9 @@
         (br $open)))
     (block $done
       (loop $body
-        (local.set $p (call $lexFindEither
-          (local.get $p) (i32.const "<") (i32.const "<")))
+        (local.set $p (call $lexFindByte (local.get $p) (i32.const "<")))
         (br_if $done (i32.ge_u (local.get $p) (global.get $end)))
-        (if (i32.and
-              (i32.eq (i32.load8_u (local.get $p)) (i32.const "<"))
-              (call $isRawTextClose (local.get $p) (local.get $kind)))
+        (if (call $isRawTextClose (local.get $p) (local.get $kind))
           (then
             (block $tagDone
               (loop $tag

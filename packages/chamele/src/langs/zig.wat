@@ -62,31 +62,15 @@
   (func $zigString (param $quote i32) (param $hl i32)
     (local $c i32)
     (local $e i32)
-    (local $mask i32)
     (local $seg i32)
-    (local $w v128)
     (local.set $seg (global.get $ptr))
     (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
     (block $done
       (loop $scan
+        (global.set $ptr (call $scanFindSpecial
+          (global.get $ptr) (global.get $end) (local.get $quote)
+          (i32.const 1) (i32.const 1)))
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
-        (if (i32.ge_u
-              (i32.sub (global.get $end) (global.get $ptr)) (i32.const 16))
-          (then
-            (local.set $w (v128.load (global.get $ptr)))
-            (local.set $mask (i8x16.bitmask (v128.or
-              (v128.or
-                (i8x16.eq (local.get $w) (i8x16.splat (local.get $quote)))
-                (i8x16.eq (local.get $w) (i8x16.splat (i32.const 92))))
-              (v128.or
-                (i8x16.eq (local.get $w) (i8x16.splat (i32.const 10)))
-                (i8x16.eq (local.get $w) (i8x16.splat (i32.const 13)))))))
-            (if (i32.eqz (local.get $mask))
-              (then
-                (global.set $ptr (i32.add (global.get $ptr) (i32.const 16)))
-                (br $scan)))
-            (global.set $ptr
-              (i32.add (global.get $ptr) (i32.ctz (local.get $mask))))))
         (local.set $c (i32.load8_u (global.get $ptr)))
         (if (i32.eq (local.get $c) (local.get $quote))
           (then
@@ -96,57 +80,40 @@
           (i32.or
             (i32.eq (local.get $c) (i32.const 10))
             (i32.eq (local.get $c) (i32.const 13))))
-        (if (i32.eq (local.get $c) (i32.const 92))
+        ;; the scan stops only on the quote, a line break, or a backslash, so
+        ;; the rest of the body is the escape case
+        (br_if $done (i32.ne (local.get $c) (i32.const 92)))
+        (call $emitTok (local.get $hl) (local.get $seg) (global.get $ptr))
+        (local.set $e (i32.add (global.get $ptr) (i32.const 1)))
+        (if (i32.lt_u (local.get $e) (global.get $end))
           (then
-            (call $emitTok (local.get $hl) (local.get $seg) (global.get $ptr))
-            (local.set $e (i32.add (global.get $ptr) (i32.const 1)))
-            (if (i32.lt_u (local.get $e) (global.get $end))
-              (then
-                (local.set $c (i32.load8_u (local.get $e)))
-                (if (i32.or
-                      (i32.eq (local.get $c) (i32.const 10))
-                      (i32.eq (local.get $c) (i32.const 13)))
-                  (then)
-                  (else
-                    (local.set $e (i32.add (local.get $e) (i32.const 1)))
-                    (if (i32.eq (local.get $c) (i32.const "x"))
+            (local.set $c (i32.load8_u (local.get $e)))
+            (if (i32.or
+                  (i32.eq (local.get $c) (i32.const 10))
+                  (i32.eq (local.get $c) (i32.const 13)))
+              (then)
+              (else
+                (local.set $e (i32.add (local.get $e) (i32.const 1)))
+                (if (i32.eq (local.get $c) (i32.const "x"))
+                  (then
+                    (local.set $e
+                      (call $scanHexRun (local.get $e) (i32.const 2)))))
+                ;; a code point escape holds at most six hex digits
+                (if (i32.and
+                      (i32.eq (local.get $c) (i32.const "u"))
+                      (i32.eq (call $zigByte (local.get $e)) (i32.const "{")))
+                  (then
+                    (local.set $e (call $scanHexRun
+                      (i32.add (local.get $e) (i32.const 1)) (i32.const 6)))
+                    (if (i32.eq (call $zigByte (local.get $e)) (i32.const "}"))
                       (then
                         (local.set $e
-                          (call $scanHexRun (local.get $e) (i32.const 2)))))
-                    (if (i32.and
-                          (i32.eq (local.get $c) (i32.const "u"))
-                          (i32.eq (call $zigByte (local.get $e)) (i32.const "{")))
-                      (then
-                        (local.set $e (i32.add (local.get $e) (i32.const 1)))
-                        (block $unicodeDone
-                          (loop $unicode
-                            (br_if $unicodeDone
-                              (i32.ge_u (local.get $e) (global.get $end)))
-                            (br_if $unicodeDone
-                              (i32.eqz (call $lexIsHex
-                                (i32.load8_u (local.get $e)))))
-                            (local.set $e
-                              (i32.add (local.get $e) (i32.const 1)))
-                            (br $unicode)))
-                        (if (i32.eq (call $zigByte (local.get $e)) (i32.const "}"))
-                          (then
-                            (local.set $e
-                              (i32.add (local.get $e) (i32.const 1)))))))))))
-            (block $utf8Done
-              (loop $utf8
-                (br_if $utf8Done (i32.ge_u (local.get $e) (global.get $end)))
-                (br_if $utf8Done
-                  (i32.ne
-                    (i32.and (i32.load8_u (local.get $e)) (i32.const 0xc0))
-                    (i32.const 0x80)))
-                (local.set $e (i32.add (local.get $e) (i32.const 1)))
-                (br $utf8)))
-            (call $emitTok
-              (enum.get $Token.string.escape) (global.get $ptr) (local.get $e))
-            (global.set $ptr (local.get $e))
-            (local.set $seg (global.get $ptr))
-            (br $scan)))
-        (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+                          (i32.add (local.get $e) (i32.const 1)))))))))))
+        (local.set $e (call $utf8SpanEnd (local.get $e) (global.get $end)))
+        (call $emitTok
+          (enum.get $Token.string.escape) (global.get $ptr) (local.get $e))
+        (global.set $ptr (local.get $e))
+        (local.set $seg (global.get $ptr))
         (br $scan)))
     (call $emitTok (local.get $hl) (local.get $seg) (global.get $ptr)))
 
@@ -409,8 +376,7 @@
         ;; `////` starts an ordinary line comment.
         (if (i32.and
               (i32.eq (local.get $c) (i32.const "/"))
-              (i32.eq (call $zigByte
-                (i32.add (global.get $ptr) (i32.const 1))) (i32.const "/")))
+              (i32.eq (local.get $p) (i32.const "/")))
           (then
             (local.set $hl (select
               (enum.get $Token.comment.doc) (enum.get $Token.comment)
@@ -428,8 +394,7 @@
         ;; Each `\\` line is one segment of a raw multiline string.
         (if (i32.and
               (i32.eq (local.get $c) (i32.const 92))
-              (i32.eq (call $zigByte
-                (i32.add (global.get $ptr) (i32.const 1))) (i32.const 92)))
+              (i32.eq (local.get $p) (i32.const 92)))
           (then
             (call $lexLineComment (i32.const 2) (enum.get $Token.string))
             (local.set $prevDot (i32.const 0))
@@ -447,8 +412,7 @@
         ;; Quoted identifiers keep declaration, label, and member context.
         (if (i32.and
               (i32.eq (local.get $c) (i32.const "@"))
-              (i32.eq (call $zigByte
-                (i32.add (global.get $ptr) (i32.const 1))) (i32.const 34)))
+              (i32.eq (local.get $p) (i32.const 34)))
           (then
             (local.set $hl (enum.get $Token.variable))
             (if (local.get $expectFunc)
@@ -472,8 +436,7 @@
         ;; Builtin identifiers are functions, except import primitives.
         (if (i32.and
               (i32.eq (local.get $c) (i32.const "@"))
-              (call $zigIsIdentStart
-                (call $zigByte (i32.add (global.get $ptr) (i32.const 1)))))
+              (call $zigIsIdentStart (local.get $p)))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))
             (global.set $ptr (call $zigIdentEnd (global.get $ptr)))
@@ -751,31 +714,26 @@
 
         (if (i32.eq (local.get $c) (i32.const "."))
           (then
+            ;; $zigByte reads as 0 at or past $end, so matching a printable
+            ;; byte there proves it is inside the range: both advances below
+            ;; land at or before $end and need no clamp.
             (if (i32.and
-                  (i32.eq (call $zigByte (i32.add (global.get $ptr) (i32.const 1)))
-                          (i32.const "."))
+                  (i32.eq (local.get $p) (i32.const "."))
                   (i32.eq (call $zigByte (i32.add (global.get $ptr) (i32.const 2)))
                           (i32.const ".")))
               (then
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 3)))
-                (if (i32.gt_u (global.get $ptr) (global.get $end))
-                  (then (global.set $ptr (global.get $end))))
                 (call $emitTok
                   (enum.get $Token.variable.special) (local.get $lhs) (global.get $ptr))
                 (local.set $prevDot (i32.const 0))
                 (br $next)))
             (if (i32.or
-                  (i32.eq (call $zigByte (i32.add (global.get $ptr) (i32.const 1)))
-                          (i32.const "."))
+                  (i32.eq (local.get $p) (i32.const "."))
                   (i32.or
-                    (i32.eq (call $zigByte (i32.add (global.get $ptr) (i32.const 1)))
-                            (i32.const "*"))
-                    (i32.eq (call $zigByte (i32.add (global.get $ptr) (i32.const 1)))
-                            (i32.const "?"))))
+                    (i32.eq (local.get $p) (i32.const "*"))
+                    (i32.eq (local.get $p) (i32.const "?"))))
               (then
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))
-                (if (i32.gt_u (global.get $ptr) (global.get $end))
-                  (then (global.set $ptr (global.get $end))))
                 (call $emitTok
                   (enum.get $Token.operator) (local.get $lhs) (global.get $ptr))
                 (local.set $prevDot (i32.const 0))

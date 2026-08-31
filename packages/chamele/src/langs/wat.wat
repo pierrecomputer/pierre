@@ -1,76 +1,30 @@
 (module
   (import "../common.wat")
 
+  ;; group order is the dispatch order in $watWordHl below
+  (keyword-table $watWords $mem.watWords $mem.watWords+768 16 64
+    (group ;; 1: value types
+      "i32" "i64" "f32" "f64" "v128")
+    (group ;; 2: structured control
+      "if" "br" "else" "loop" "then" "block")
+    (group ;; 3: module fields and declarations
+      "mut" "nop" "data" "elem" "func" "type" "start" "local" "param" "table"
+      "global" "memory" "export" "import" "module" "result"))
+
+  ;; Highlight for the bare word [$lhs,$rhs). Every table word is at most six
+  ;; bytes, so the lookup's length check rejects the dotted instructions that
+  ;; dominate real wat in one compare; a miss falls back to the dot scan, which
+  ;; makes `local.get` and friends functions and everything else a keyword.
   (func $watWordHl (param $lhs i32) (param $rhs i32) (result i32)
     (local $c i32)
-    (local $n i32)
+    (local $g i32)
     (local $p i32)
-    (local $w i64)
-    (local.set $n (i32.sub (local.get $rhs) (local.get $lhs)))
-    (local.set $w (i64.load (local.get $lhs)))
-    (if (i32.or
-          (i32.and (i32.eq (local.get $n) (i32.const 3))
-            (i32.or
-              (i64.eq (i64.and (local.get $w) (i64.const 0xffffff)) (i64.const "i32"))
-              (i32.or
-                (i64.eq (i64.and (local.get $w) (i64.const 0xffffff)) (i64.const "i64"))
-                (i32.or
-                  (i64.eq (i64.and (local.get $w) (i64.const 0xffffff)) (i64.const "f32"))
-                  (i64.eq (i64.and (local.get $w) (i64.const 0xffffff)) (i64.const "f64"))))))
-          (i32.and (i32.eq (local.get $n) (i32.const 4))
-            (i64.eq (i64.and (local.get $w) (i64.const 0xffffffff)) (i64.const "v128"))))
+    (local.set $g (keyword-table.get $watWords (local.get $lhs) (local.get $rhs)))
+    (if (i32.eq (local.get $g) (i32.const 1))
       (then (return (enum.get $Token.type.builtin))))
-    (if (i32.or
-          (i32.and (i32.eq (local.get $n) (i32.const 2))
-            (i32.or
-              (i64.eq (i64.and (local.get $w) (i64.const 0xffff)) (i64.const "if"))
-              (i64.eq (i64.and (local.get $w) (i64.const 0xffff)) (i64.const "br"))))
-          (i32.or
-            (i32.and (i32.eq (local.get $n) (i32.const 4))
-              (i32.or
-                (i64.eq (i64.and (local.get $w) (i64.const 0xffffffff)) (i64.const "else"))
-                (i32.or
-                  (i64.eq (i64.and (local.get $w) (i64.const 0xffffffff)) (i64.const "loop"))
-                  (i64.eq (i64.and (local.get $w) (i64.const 0xffffffff)) (i64.const "then")))))
-            (i32.and (i32.eq (local.get $n) (i32.const 5))
-              (i64.eq (i64.and (local.get $w) (i64.const 0xffffffffff)) (i64.const "block")))))
+    (if (i32.eq (local.get $g) (i32.const 2))
       (then (return (enum.get $Token.keyword.control))))
-    (if (i32.or
-          (i32.and (i32.eq (local.get $n) (i32.const 3))
-            (i32.or
-              (i64.eq (i64.and (local.get $w) (i64.const 0xffffff)) (i64.const "mut"))
-              (i64.eq (i64.and (local.get $w) (i64.const 0xffffff)) (i64.const "nop"))))
-          (i32.or
-            (i32.and (i32.eq (local.get $n) (i32.const 4))
-              (i32.or
-                (i64.eq (i64.and (local.get $w) (i64.const 0xffffffff)) (i64.const "data"))
-                (i32.or
-                  (i64.eq (i64.and (local.get $w) (i64.const 0xffffffff)) (i64.const "elem"))
-                  (i32.or
-                    (i64.eq (i64.and (local.get $w) (i64.const 0xffffffff)) (i64.const "func"))
-                    (i64.eq (i64.and (local.get $w) (i64.const 0xffffffff)) (i64.const "type"))))))
-            (i32.and (i32.eq (local.get $n) (i32.const 5))
-              (i64.eq (i64.and (local.get $w) (i64.const 0xffffffffff)) (i64.const "start")))))
-      (then (return (enum.get $Token.keyword))))
-    (if (i32.or
-          (i32.and (i32.eq (local.get $n) (i32.const 5))
-            (i32.or
-              (i64.eq (i64.and (local.get $w) (i64.const 0xffffffffff)) (i64.const "local"))
-              (i32.or
-                (i64.eq (i64.and (local.get $w) (i64.const 0xffffffffff)) (i64.const "param"))
-                (i64.eq (i64.and (local.get $w) (i64.const 0xffffffffff)) (i64.const "table")))))
-          (i32.and (i32.eq (local.get $n) (i32.const 6))
-            (i32.or
-              (i64.eq (i64.and (local.get $w) (i64.const 0xffffffffffff)) (i64.const "global"))
-              (i32.or
-                (i64.eq (i64.and (local.get $w) (i64.const 0xffffffffffff)) (i64.const "memory"))
-                (i32.or
-                  (i64.eq (i64.and (local.get $w) (i64.const 0xffffffffffff)) (i64.const "export"))
-                  (i32.or
-                    (i64.eq (i64.and (local.get $w) (i64.const 0xffffffffffff)) (i64.const "import"))
-                    (i32.or
-                      (i64.eq (i64.and (local.get $w) (i64.const 0xffffffffffff)) (i64.const "module"))
-                      (i64.eq (i64.and (local.get $w) (i64.const 0xffffffffffff)) (i64.const "result")))))))))
+    (if (local.get $g)
       (then (return (enum.get $Token.keyword))))
     (local.set $p (local.get $lhs))
     (block $plain
@@ -204,8 +158,8 @@
                   (i32.eq (local.get $c) (i32.const ";"))))))
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (br $word)))
-        (if (i32.eq (global.get $ptr) (local.get $lhs))
-          (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))
+        ;; the word run always advances: whitespace, quotes, parens and `;` are
+        ;; the only stop bytes, and each is consumed by a branch above
         (call $emitTok (call $watWordHl (local.get $lhs) (global.get $ptr))
           (local.get $lhs) (global.get $ptr))
         (br $token))))

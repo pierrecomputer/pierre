@@ -37,6 +37,12 @@
 
   (func $astroTsxRange (param $from i32) (param $to i32)
     (local $save i32)
+    ;; skip empty ranges, but still land $ptr at $to: the front-matter caller
+    ;; relies on it when an unterminated `---` opener leaves body == close
+    (if (i32.ge_u (local.get $from) (local.get $to))
+      (then
+        (global.set $ptr (local.get $to))
+        (return)))
     (local.set $save (global.get $end))
     (global.set $end (local.get $to))
     (global.set $ptr (local.get $from))
@@ -44,13 +50,10 @@
     (global.set $end (local.get $save))
     (global.set $ptr (local.get $to)))
 
-  ;; 1 for `<script`, 2 for `<style`, 0 otherwise.
+  ;; 1 for `<script`, 2 for `<style`, 0 otherwise. $p sits on a proven `<`.
   (func $astroRawKind (param $p i32) (result i32)
-    (local $q i32)
     (local $kind i32)
-    (if (i32.ge_u (local.get $p) (global.get $end)) (then (return (i32.const 0))))
-    (if (i32.ne (i32.load8_u (local.get $p)) (i32.const "<"))
-      (then (return (i32.const 0))))
+    (local $q i32)
     (local.set $q (i32.add (local.get $p) (i32.const 1)))
     (if (i32.le_u (i32.add (local.get $q) (i32.const 6)) (global.get $end))
       (then (local.set $kind (call $rawTextKind (local.get $q) (i32.add (local.get $q) (i32.const 6))))))
@@ -98,12 +101,9 @@
         (br $open)))
     (block $done
       (loop $body
-        (local.set $p (call $lexFindEither
-          (local.get $p) (i32.const "<") (i32.const "<")))
+        (local.set $p (call $lexFindByte (local.get $p) (i32.const "<")))
         (br_if $done (i32.ge_u (local.get $p) (global.get $end)))
-        (if (i32.and
-              (i32.eq (i32.load8_u (local.get $p)) (i32.const "<"))
-              (call $isRawTextClose (local.get $p) (local.get $kind)))
+        (if (call $isRawTextClose (local.get $p) (local.get $kind))
           (then
             (block $tagDone
               (loop $tag
@@ -120,6 +120,7 @@
   (func $hlAstro
     (local $after i32)
     (local $body i32)
+    (local $c i32)
     (local $close i32)
     (local $from i32)
     (local $kind i32)
@@ -182,7 +183,8 @@
         (local.set $p (call $lexFindEither
           (local.get $p) (i32.const "{") (i32.const "<")))
         (br_if $done (i32.ge_u (local.get $p) (global.get $end)))
-        (if (i32.eq (i32.load8_u (local.get $p)) (i32.const "<"))
+        (local.set $c (i32.load8_u (local.get $p)))
+        (if (i32.eq (local.get $c) (i32.const "<"))
           (then
             (local.set $kind (call $astroRawKind (local.get $p)))
             (if (local.get $kind)
@@ -192,7 +194,8 @@
                 (call $astroHtmlRange (local.get $p) (local.get $to))
                 (local.set $from (local.get $to))
                 (local.set $p (local.get $to))
-                (br $scan)))))
+                (br $scan)))
+            ;; Keep HTML comments opaque even when their text contains braces.
             (if (i32.and
                   (i32.le_u (i32.add (local.get $p) (i32.const 4)) (global.get $end))
                   (i32.eq (i32.load (local.get $p)) (i32.const "<!--")))
@@ -203,8 +206,8 @@
                 (local.set $to (global.get $ptr))
                 (local.set $from (local.get $to))
                 (local.set $p (local.get $to))
-                (br $scan)))
-        (if (i32.eq (i32.load8_u (local.get $p)) (i32.const "{"))
+                (br $scan)))))
+        (if (i32.eq (local.get $c) (i32.const "{"))
           (then
             (local.set $to (call $tsxExpressionEnd (local.get $p) (local.get $p)))
             (call $astroHtmlRange (local.get $from) (local.get $p))

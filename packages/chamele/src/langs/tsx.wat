@@ -175,9 +175,12 @@
     (local.set $done (global.get $ptr))
     (block $out
       (loop $main
-        ;; jsx TAG/CONTENT modes scan bytes, not tokens
-        (local.set $m
-          (select (call $jsxTopMode) (i32.const 0) (call $ecmaHasJsx)))
+        ;; jsx TAG/CONTENT modes scan bytes, not tokens. An `if`, not a
+        ;; select: select is eager and would pay the stack loads per token
+        ;; even for plain JS/TS.
+        (local.set $m (i32.const 0))
+        (if (call $ecmaHasJsx)
+          (then (local.set $m (call $jsxTopMode))))
         (if (i32.and (i32.ne (local.get $m) (i32.const 0))
                      (i32.ne (local.get $m) (i32.const 3)))
           (then

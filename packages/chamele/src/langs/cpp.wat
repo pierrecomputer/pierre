@@ -217,28 +217,10 @@
     (global.set $ptr (i32.add (local.get $quote) (i32.const 1)))
     (block $done
       (loop $scan
+        ;; hop to the next quote, backslash, or line break, 16 bytes per step
+        (global.set $ptr (call $scanFindSpecial
+          (global.get $ptr) (global.get $end) (local.get $q) (i32.const 1) (i32.const 1)))
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
-        (local.set $w (v128.load (global.get $ptr)))
-        (local.set $mask (i8x16.bitmask (v128.or
-          (v128.or
-            (i8x16.eq (local.get $w) (i8x16.splat (local.get $q)))
-            (i8x16.eq (local.get $w) (i8x16.splat (i32.const 92))))
-          (v128.or
-            (i8x16.eq (local.get $w) (i8x16.splat (i32.const 10)))
-            (i8x16.eq (local.get $w) (i8x16.splat (i32.const 13)))))))
-        (local.set $rem (i32.sub (global.get $end) (global.get $ptr)))
-        (if (i32.lt_u (local.get $rem) (i32.const 16))
-          (then (local.set $mask (i32.and (local.get $mask)
-            (i32.sub (i32.shl (i32.const 1) (local.get $rem)) (i32.const 1))))))
-        (if (i32.eqz (local.get $mask))
-          (then
-            (if (i32.le_u (local.get $rem) (i32.const 16))
-              (then
-                (global.set $ptr (global.get $end))
-                (br $done)))
-            (global.set $ptr (i32.add (global.get $ptr) (i32.const 16)))
-            (br $scan)))
-        (global.set $ptr (i32.add (global.get $ptr) (i32.ctz (local.get $mask))))
         (local.set $c (i32.load8_u (global.get $ptr)))
         (if (i32.eq (local.get $c) (local.get $q))
           (then
@@ -299,261 +281,79 @@
                             (if (i32.and (i32.eq (local.get $c2) (i32.const 13))
                                          (i32.eq (call $cppByte (local.get $e)) (i32.const 10)))
                               (then (local.set $e (i32.add (local.get $e) (i32.const 1)))))))))))))))
-        (if (i32.gt_u (local.get $e) (global.get $end))
-          (then (local.set $e (global.get $end))))
-        (block $utf8Done
-          (loop $utf8
-            (br_if $utf8Done (i32.ge_u (local.get $e) (global.get $end)))
-            (br_if $utf8Done (i32.ne
-              (i32.and (i32.load8_u (local.get $e)) (i32.const 0xc0)) (i32.const 0x80)))
-            (local.set $e (i32.add (local.get $e) (i32.const 1)))
-            (br $utf8)))
+        ;; an escaped multibyte UTF-8 character stays whole inside the span
+        (local.set $e (call $utf8SpanEnd (local.get $e) (global.get $end)))
         (call $emitTok (enum.get $Token.string.escape) (global.get $ptr) (local.get $e))
         (global.set $ptr (local.get $e))
         (local.set $seg (local.get $e))
         (br $scan)))
     (call $emitTok (local.get $hl) (local.get $seg) (global.get $ptr)))
 
-  ;; Exact keyword comparison for up to sixteen bytes. Inputs have sentinel
-  ;; slack, making both unaligned i64 loads safe; masks discard bytes past the
-  ;; identifier itself.
-  (func $cppWordEq (param $lhs i32) (param $rhs i32) (param $n i32)
-      (param $a i64) (param $b i64) (result i32)
-    (local $rem i32)
-    (local $mask i64)
-    (if (i32.ne (i32.sub (local.get $rhs) (local.get $lhs)) (local.get $n))
-      (then (return (i32.const 0))))
-    (if (i32.le_u (local.get $n) (i32.const 8))
-      (then
-        (if (i32.eq (local.get $n) (i32.const 8))
-          (then (return (i64.eq (i64.load (local.get $lhs)) (local.get $a)))))
-        (local.set $mask (i64.sub
-          (i64.shl (i64.const 1) (i64.extend_i32_u (i32.shl (local.get $n) (i32.const 3))))
-          (i64.const 1)))
-        (return (i64.eq (i64.and (i64.load (local.get $lhs)) (local.get $mask)) (local.get $a)))))
-    (if (i64.ne (i64.load (local.get $lhs)) (local.get $a))
-      (then (return (i32.const 0))))
-    (local.set $rem (i32.sub (local.get $n) (i32.const 8)))
-    (if (i32.eq (local.get $rem) (i32.const 8))
-      (then (return (i64.eq (i64.load offset=8 (local.get $lhs)) (local.get $b)))))
-    (local.set $mask (i64.sub
-      (i64.shl (i64.const 1) (i64.extend_i32_u (i32.shl (local.get $rem) (i32.const 3))))
-      (i64.const 1)))
-    (i64.eq (i64.and (i64.load offset=8 (local.get $lhs)) (local.get $mask)) (local.get $b)))
+  ;; group order is the dispatch order in $cppWordHl below
+  (keyword-table $cppWords $mem.cppWords $mem.cppWords+1536 64 256
+    (group ;; 1: control - `continue` lives in $cppWordHl instead
+      "if" "do" "for" "try" "else" "case" "goto" "while" "break" "catch"
+      "throw" "switch" "return" "default" "co_await" "co_yield"
+      "co_return")
+    (group "class" "union" "struct")           ;; 2: declaration, next name is a class type
+    (group "enum" "using" "typedef" "concept") ;; 3: declaration, next name is a type
+    (group "namespace")                        ;; 4: declaration, next name is a namespace
+    (group ;; 5: declaration
+      "extern" "inline" "static" "register" "template")
+    (group "import" "module" "export") ;; 6: modules
+    (group ;; 7: primitive types - `char32_t` lives in $cppWordHl instead
+      "int" "auto" "bool" "char" "long" "void" "float" "short" "double"
+      "signed" "char8_t" "wchar_t" "char16_t" "unsigned")
+    (group "true" "false") ;; 8: booleans
+    (group "nullptr")      ;; 9: built-in constant
+    (group "this")         ;; 10: special variable
+    (group ;; 11: alternative operator spellings
+      "or" "and" "not" "xor" "bitor" "compl" "or_eq" "and_eq" "bitand"
+      "not_eq" "xor_eq")
+    (group ;; 12: remaining keywords, including casts and specifiers
+      "asm" "new" "const" "final" "delete" "friend" "public" "sizeof"
+      "alignas" "alignof" "mutable" "private" "virtual" "decltype"
+      "explicit" "noexcept" "operator" "override" "requires" "typename"
+      "volatile" "consteval" "constexpr" "constinit" "protected"
+      "const_cast" "static_cast" "dynamic_cast" "thread_local"
+      "static_assert" "reinterpret_cast"))
 
-  ;; Token in the low byte. Bits 8/9 request type.class/type for the next
-  ;; non-keyword identifier. -1 means an ordinary identifier.
+  ;; Token in the low byte; the high byte selects the next-name capture:
+  ;; 1=type.class, 2=type, 3=namespace. -1 means an ordinary identifier.
+  ;; `continue` and `char32_t` hash identically to `alignof` and `char16_t` in
+  ;; every bit the table can use - first two bytes, last byte, and length - so
+  ;; each takes one exact eight-byte compare here instead. Input sentinel slack
+  ;; keeps the unaligned i64 loads safe.
   (func $cppWordHl (param $lhs i32) (param $rhs i32) (result i32)
-    (local $n i32)
-    (local.set $n (i32.sub (local.get $rhs) (local.get $lhs)))
-
-    ;; control flow
-    (if (i32.le_u (local.get $n) (i32.const 8))
+    (local $g i32)
+    (if (i32.eq (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 8))
       (then
-        (if (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 2) (i64.const "if") (i64.const 0))
+        (if (i64.eq (i64.load (local.get $lhs)) (i64.const "continue"))
           (then (return (enum.get $Token.keyword.control))))
-        (if (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 2) (i64.const "do") (i64.const 0))
-          (then (return (enum.get $Token.keyword.control))))
-        (if (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 3) (i64.const "for") (i64.const 0))
-          (then (return (enum.get $Token.keyword.control))))
-        (if (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 3) (i64.const "try") (i64.const 0))
-          (then (return (enum.get $Token.keyword.control))))
-        (if (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 4) (i64.const "else") (i64.const 0))
-          (then (return (enum.get $Token.keyword.control))))
-        (if (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 4) (i64.const "case") (i64.const 0))
-          (then (return (enum.get $Token.keyword.control))))
-        (if (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 4) (i64.const "goto") (i64.const 0))
-          (then (return (enum.get $Token.keyword.control))))
-        (if (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 5) (i64.const "while") (i64.const 0))
-          (then (return (enum.get $Token.keyword.control))))
-        (if (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 5) (i64.const "break") (i64.const 0))
-          (then (return (enum.get $Token.keyword.control))))
-        (if (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 5) (i64.const "catch") (i64.const 0))
-          (then (return (enum.get $Token.keyword.control))))
-        (if (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 5) (i64.const "throw") (i64.const 0))
-          (then (return (enum.get $Token.keyword.control))))
-        (if (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 6) (i64.const "switch") (i64.const 0))
-          (then (return (enum.get $Token.keyword.control))))
-        (if (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 6) (i64.const "return") (i64.const 0))
-          (then (return (enum.get $Token.keyword.control))))
-        (if (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 7) (i64.const "default") (i64.const 0))
-          (then (return (enum.get $Token.keyword.control))))
-        (if (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 8) (i64.const "continue") (i64.const 0))
-          (then (return (enum.get $Token.keyword.control))))
-        (if (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 8) (i64.const "co_await") (i64.const 0))
-          (then (return (enum.get $Token.keyword.control))))
-        (if (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 8) (i64.const "co_yield") (i64.const 0))
-          (then (return (enum.get $Token.keyword.control))))))
-    (if (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 9)
-          (i64.const "co_retur") (i64.const "n"))
+        (if (i64.eq (i64.load (local.get $lhs)) (i64.const "char32_t"))
+          (then (return (enum.get $Token.type.builtin))))))
+    (local.set $g (keyword-table.get $cppWords (local.get $lhs) (local.get $rhs)))
+    (if (i32.eqz (local.get $g)) (then (return (i32.const -1))))
+    (if (i32.eq (local.get $g) (i32.const 1))
       (then (return (enum.get $Token.keyword.control))))
-
-    ;; aggregate/declaration words; the high byte selects the next-name capture:
-    ;; 1=type.class, 2=type, 3=namespace.
-    (if (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 5) (i64.const "class") (i64.const 0))
-      (then (return (i32.or (enum.get $Token.keyword.declaration) (i32.const 256)))))
-    (if (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 5) (i64.const "union") (i64.const 0))
-      (then (return (i32.or (enum.get $Token.keyword.declaration) (i32.const 256)))))
-    (if (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 6) (i64.const "struct") (i64.const 0))
-      (then (return (i32.or (enum.get $Token.keyword.declaration) (i32.const 256)))))
-    (if (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 4) (i64.const "enum") (i64.const 0))
-      (then (return (i32.or (enum.get $Token.keyword.declaration) (i32.const 512)))))
-    (if (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 5) (i64.const "using") (i64.const 0))
-      (then (return (i32.or (enum.get $Token.keyword.declaration) (i32.const 512)))))
-    (if (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 7) (i64.const "typedef") (i64.const 0))
-      (then (return (i32.or (enum.get $Token.keyword.declaration) (i32.const 512)))))
-    (if (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 7) (i64.const "concept") (i64.const 0))
-      (then (return (i32.or (enum.get $Token.keyword.declaration) (i32.const 512)))))
-    (if (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 8) (i64.const "template") (i64.const 0))
+    (if (i32.le_u (local.get $g) (i32.const 4))
+      (then (return (i32.or (enum.get $Token.keyword.declaration)
+        (i32.shl (i32.sub (local.get $g) (i32.const 1)) (i32.const 8))))))
+    (if (i32.eq (local.get $g) (i32.const 5))
       (then (return (enum.get $Token.keyword.declaration))))
-    (if (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 9)
-          (i64.const "namespac") (i64.const "e"))
-      (then (return (i32.or (enum.get $Token.keyword.declaration) (i32.const 768)))))
-    (if (i32.or
-          (i32.or
-            (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 6) (i64.const "extern") (i64.const 0))
-            (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 6) (i64.const "inline") (i64.const 0)))
-          (i32.or
-            (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 6) (i64.const "static") (i64.const 0))
-            (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 8) (i64.const "register") (i64.const 0))))
-      (then (return (enum.get $Token.keyword.declaration))))
-
-    ;; modules
-    (if (i32.or
-          (i32.or
-            (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 6) (i64.const "import") (i64.const 0))
-            (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 6) (i64.const "module") (i64.const 0)))
-          (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 6) (i64.const "export") (i64.const 0)))
+    (if (i32.eq (local.get $g) (i32.const 6))
       (then (return (enum.get $Token.keyword.import))))
-
-    ;; primitive types
-    (if (i32.or
-          (i32.or
-            (i32.or
-              (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 3) (i64.const "int") (i64.const 0))
-              (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 4) (i64.const "auto") (i64.const 0)))
-            (i32.or
-              (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 4) (i64.const "bool") (i64.const 0))
-              (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 4) (i64.const "char") (i64.const 0))))
-          (i32.or
-            (i32.or
-              (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 4) (i64.const "long") (i64.const 0))
-              (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 4) (i64.const "void") (i64.const 0)))
-            (i32.or
-              (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 5) (i64.const "float") (i64.const 0))
-              (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 5) (i64.const "short") (i64.const 0)))))
+    (if (i32.eq (local.get $g) (i32.const 7))
       (then (return (enum.get $Token.type.builtin))))
-    (if (i32.or
-          (i32.or
-            (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 6) (i64.const "double") (i64.const 0))
-            (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 6) (i64.const "signed") (i64.const 0)))
-          (i32.or
-            (i32.or
-              (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 7) (i64.const "char8_t") (i64.const 0))
-              (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 7) (i64.const "wchar_t") (i64.const 0)))
-            (i32.or
-              (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 8) (i64.const "char16_t") (i64.const 0))
-              (i32.or
-                (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 8) (i64.const "char32_t") (i64.const 0))
-                (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 8) (i64.const "unsigned") (i64.const 0))))))
-      (then (return (enum.get $Token.type.builtin))))
-
-    ;; literal/special words and alternative operator spellings
-    (if (i32.or
-          (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 4) (i64.const "true") (i64.const 0))
-          (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 5) (i64.const "false") (i64.const 0)))
+    (if (i32.eq (local.get $g) (i32.const 8))
       (then (return (enum.get $Token.boolean))))
-    (if (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 7) (i64.const "nullptr") (i64.const 0))
+    (if (i32.eq (local.get $g) (i32.const 9))
       (then (return (enum.get $Token.constant.builtin))))
-    (if (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 4) (i64.const "this") (i64.const 0))
+    (if (i32.eq (local.get $g) (i32.const 10))
       (then (return (enum.get $Token.variable.special))))
-    (if (i32.or
-          (i32.or
-            (i32.or
-              (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 2) (i64.const "or") (i64.const 0))
-              (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 3) (i64.const "and") (i64.const 0)))
-            (i32.or
-              (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 3) (i64.const "not") (i64.const 0))
-              (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 3) (i64.const "xor") (i64.const 0))))
-          (i32.or
-            (i32.or
-              (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 5) (i64.const "bitor") (i64.const 0))
-              (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 5) (i64.const "compl") (i64.const 0)))
-            (i32.or
-              (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 5) (i64.const "or_eq") (i64.const 0))
-              (i32.or
-                (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 6) (i64.const "and_eq") (i64.const 0))
-                (i32.or
-                  (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 6) (i64.const "bitand") (i64.const 0))
-                  (i32.or
-                    (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 6) (i64.const "not_eq") (i64.const 0))
-                    (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 6) (i64.const "xor_eq") (i64.const 0))))))))
+    (if (i32.eq (local.get $g) (i32.const 11))
       (then (return (enum.get $Token.operator))))
-
-    ;; remaining C++ keywords, including casts and specifiers
-    (if (i32.or
-          (i32.or
-            (i32.or
-              (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 3) (i64.const "asm") (i64.const 0))
-              (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 3) (i64.const "new") (i64.const 0)))
-            (i32.or
-              (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 5) (i64.const "const") (i64.const 0))
-              (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 5) (i64.const "final") (i64.const 0))))
-          (i32.or
-            (i32.or
-              (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 6) (i64.const "delete") (i64.const 0))
-              (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 6) (i64.const "friend") (i64.const 0)))
-            (i32.or
-              (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 6) (i64.const "public") (i64.const 0))
-              (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 6) (i64.const "sizeof") (i64.const 0)))))
-      (then (return (enum.get $Token.keyword))))
-    (if (i32.or
-          (i32.or
-            (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 7) (i64.const "alignas") (i64.const 0))
-            (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 7) (i64.const "alignof") (i64.const 0)))
-          (i32.or
-            (i32.or
-              (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 7) (i64.const "mutable") (i64.const 0))
-              (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 7) (i64.const "private") (i64.const 0)))
-            (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 7) (i64.const "virtual") (i64.const 0))))
-      (then (return (enum.get $Token.keyword))))
-    (if (i32.or
-          (i32.or
-            (i32.or
-              (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 8) (i64.const "decltype") (i64.const 0))
-              (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 8) (i64.const "explicit") (i64.const 0)))
-            (i32.or
-              (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 8) (i64.const "noexcept") (i64.const 0))
-              (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 8) (i64.const "operator") (i64.const 0))))
-          (i32.or
-            (i32.or
-              (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 8) (i64.const "override") (i64.const 0))
-              (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 8) (i64.const "requires") (i64.const 0)))
-            (i32.or
-              (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 8) (i64.const "typename") (i64.const 0))
-              (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 8) (i64.const "volatile") (i64.const 0)))))
-      (then (return (enum.get $Token.keyword))))
-    (if (i32.or
-          (i32.or
-            (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 9) (i64.const "consteva") (i64.const "l"))
-            (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 9) (i64.const "constexp") (i64.const "r")))
-          (i32.or
-            (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 9) (i64.const "constini") (i64.const "t"))
-            (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 9) (i64.const "protecte") (i64.const "d"))))
-      (then (return (enum.get $Token.keyword))))
-    (if (i32.or
-          (i32.or
-            (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 10) (i64.const "const_ca") (i64.const "st"))
-            (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 11) (i64.const "static_c") (i64.const "ast")))
-          (i32.or
-            (i32.or
-              (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 12) (i64.const "dynamic_") (i64.const "cast"))
-              (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 12) (i64.const "thread_l") (i64.const "ocal")))
-            (i32.or
-              (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 13) (i64.const "static_a") (i64.const "ssert"))
-              (call $cppWordEq (local.get $lhs) (local.get $rhs) (i32.const 16) (i64.const "reinterp") (i64.const "ret_cast")))))
-      (then (return (enum.get $Token.keyword))))
-    (i32.const -1))
+    (enum.get $Token.keyword))
 
   (func $hlCpp
     (local $c i32)
@@ -572,19 +372,14 @@
     (local.set $bol (i32.const 1))
     (block $done
       (loop $next
-        ;; Whitespace remains a gap; track whether only horizontal space has
-        ;; occurred since the latest physical newline for directives.
+        ;; Whitespace remains a gap; a physical newline inside it re-arms the
+        ;; beginning-of-line flag for directives.
         (local.set $gap (global.get $ptr))
-        (block $wsDone
-          (loop $ws
-            (br_if $wsDone (i32.ge_u (global.get $ptr) (global.get $end)))
-            (local.set $c (i32.load8_u (global.get $ptr)))
-            (br_if $wsDone (i32.eqz (call $lexIsSpace (local.get $c))))
-            (if (i32.or (i32.eq (local.get $c) (i32.const 10))
-                        (i32.eq (local.get $c) (i32.const 13)))
-              (then (local.set $bol (i32.const 1))))
-            (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-            (br $ws)))
+        (call $lexScanWhitespace)
+        (if (i32.lt_u
+              (call $lexFindEither (local.get $gap) (i32.const 10) (i32.const 13))
+              (global.get $ptr))
+          (then (local.set $bol (i32.const 1))))
         (call $emitGap (local.get $gap) (global.get $ptr))
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
         (local.set $lhs (global.get $ptr))

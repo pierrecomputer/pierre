@@ -124,12 +124,13 @@
         (return (enum.get $Token.property))))
     (if (call $isBuiltinConst (local.get $lhs) (local.get $rhs))
       (then (return (enum.get $Token.constant.builtin))))
+    ;; nested so the word compare only runs for identifiers after a colon
     (if (i32.and
-          (call $ecmaHasTypeScript)
-          (i32.and
-            (i32.eq (local.get $prev) (enum.get $Lex.colon))
-            (call $isPredefinedType (local.get $lhs) (local.get $rhs))))
-      (then (return (enum.get $Token.type.builtin))))
+          (i32.eq (local.get $prev) (enum.get $Lex.colon))
+          (call $ecmaHasTypeScript))
+      (then
+        (if (call $isPredefinedType (local.get $lhs) (local.get $rhs))
+          (then (return (enum.get $Token.type.builtin))))))
     (if (i32.eq (local.get $prev) (enum.get $Lex.keyword_new))
       (then (return (enum.get $Token.type.class))))
     ;; declared type names, before the SCREAMING_CASE constant rule can fire:
@@ -198,18 +199,20 @@
   ;; - strings, templates, comments - are handled by the pipeline itself
   (func $classify (param $prev i32) (param $t i32) (param $next i32)
         (param $lhs i32) (param $rhs i32) (result i32)
+    ;; nested so the word compare only runs for a colon before an identifier -
+    ;; wasm i32.and is eager, and this classifier runs for every token
     (if (i32.and
-          (call $ecmaHasTypeScript)
+          (i32.eq (local.get $t) (enum.get $Lex.colon))
           (i32.and
-            (i32.eq (local.get $t) (enum.get $Lex.colon))
-            (i32.and
-              (i32.eq (local.get $next) (enum.get $Lex.identifier))
-              (i32.or
-                (call $isPredefinedType (global.get $lhs) (global.get $rhs))
-                (i32.le_u
-                  (i32.sub (call $tsxByte (global.get $lhs)) (i32.const "A"))
-                  (i32.const 25))))))
-      (then (return (enum.get $Token.punctuation.special))))
+            (i32.eq (local.get $next) (enum.get $Lex.identifier))
+            (call $ecmaHasTypeScript)))
+      (then
+        (if (i32.or
+              (i32.le_u
+                (i32.sub (call $tsxByte (global.get $lhs)) (i32.const "A"))
+                (i32.const 25))
+              (call $isPredefinedType (global.get $lhs) (global.get $rhs)))
+          (then (return (enum.get $Token.punctuation.special))))))
     (if (i32.and
           (call $ecmaHasTypeScript)
           (i32.and

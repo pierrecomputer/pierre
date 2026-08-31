@@ -89,7 +89,6 @@
   (func $mdxJsxEnd (param $lhs i32) (result i32)
     (local $c i32)
     (local $p i32)
-    (local $q i32)
     (local $to i32)
     (local $close i32)
     (local $value i32) ;; 0 tag/name, 1 after `=`, 2 unquoted value
@@ -108,16 +107,19 @@
           (call $lexIsIdentStart (local.get $c))
           (i32.eq (local.get $c) (i32.const ">"))))
       (then (return (i32.add (local.get $lhs) (i32.const 1)))))
+    ;; a close tag has no attribute values: it ends at the first `>`
+    (if (local.get $close)
+      (then
+        (local.set $p (call $lexFindByte (local.get $p) (i32.const ">")))
+        (if (i32.lt_u (local.get $p) (global.get $end))
+          (then (return (i32.add (local.get $p) (i32.const 1)))))
+        (return (i32.add (local.get $lhs) (i32.const 1)))))
     (block $done
       (loop $l
         (br_if $done (i32.ge_u (local.get $p) (global.get $end)))
         (local.set $c (i32.load8_u (local.get $p)))
         (if (i32.eq (local.get $c) (i32.const ">"))
           (then (return (i32.add (local.get $p) (i32.const 1)))))
-        (if (local.get $close)
-          (then
-            (local.set $p (i32.add (local.get $p) (i32.const 1)))
-            (br $l)))
         (if (i32.and
               (i32.eq (local.get $value) (i32.const 1))
               (i32.eqz (call $lexIsSpace (local.get $c))))
@@ -125,15 +127,11 @@
             (if (i32.or (i32.eq (local.get $c) (i32.const 34))
                         (i32.eq (local.get $c) (i32.const 39)))
               (then
-                (local.set $q (local.get $c))
-                (local.set $p (i32.add (local.get $p) (i32.const 1)))
-                (block $quoteDone
-                  (loop $quote
-                    (br_if $quoteDone (i32.ge_u (local.get $p) (global.get $end)))
-                    (local.set $c (i32.load8_u (local.get $p)))
-                    (local.set $p (i32.add (local.get $p) (i32.const 1)))
-                    (br_if $quoteDone (i32.eq (local.get $c) (local.get $q)))
-                    (br $quote)))
+                ;; SIMD-find the closing quote; unterminated stops at $end
+                (local.set $p (call $lexFindByte
+                  (i32.add (local.get $p) (i32.const 1)) (local.get $c)))
+                (if (i32.lt_u (local.get $p) (global.get $end))
+                  (then (local.set $p (i32.add (local.get $p) (i32.const 1)))))
                 (local.set $value (i32.const 0))
                 (br $l)))
             (if (i32.eq (local.get $c) (i32.const "{"))
@@ -165,7 +163,10 @@
   ;; When the line at $p opens a fenced code block, the offset just past its
   ;; closing fence; 0 otherwise. A fenced body belongs to markdown, which knows
   ;; how to delegate it by info string, so `{` and `<` inside one are literal
-  ;; text rather than MDX expressions or JSX.
+  ;; text rather than MDX expressions or JSX. This scan accepts up to three
+  ;; spaces of indent before the opening and closing runs, unlike markdown's
+  ;; $markdownFenceClose, which requires the closing run at the line start -
+  ;; so the two close scans stay separate.
   (func $mdxFenceEnd (param $p i32) (result i32)
     (local $fence i32)
     (local $indent i32)

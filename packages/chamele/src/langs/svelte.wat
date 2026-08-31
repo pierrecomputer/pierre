@@ -70,12 +70,9 @@
         (br $open)))
     (block $done
       (loop $body
-        (local.set $p (call $lexFindEither
-          (local.get $p) (i32.const "<") (i32.const "<")))
+        (local.set $p (call $lexFindByte (local.get $p) (i32.const "<")))
         (br_if $done (i32.ge_u (local.get $p) (global.get $end)))
-        (if (i32.and
-              (i32.eq (i32.load8_u (local.get $p)) (i32.const "<"))
-              (call $isRawTextClose (local.get $p) (local.get $kind)))
+        (if (call $isRawTextClose (local.get $p) (local.get $kind))
           (then
             (block $tagDone
               (loop $tag
@@ -99,8 +96,8 @@
     ;; A closing block is Svelte syntax, not a JavaScript expression.
     (if (i32.eq (local.get $c) (i32.const "/"))
       (then
-        (local.set $p (call $lexFindEither
-          (i32.add (local.get $p) (i32.const 1)) (i32.const "}") (i32.const "}")))
+        (local.set $p (call $lexFindByte
+          (i32.add (local.get $p) (i32.const 1)) (i32.const "}")))
         (return (select
           (i32.add (local.get $p) (i32.const 1)) (local.get $p)
           (i32.lt_u (local.get $p) (global.get $end))))))
@@ -212,24 +209,10 @@
                   (i32.le_u (i32.add (local.get $p) (i32.const 4)) (global.get $end))
                   (i32.eq (i32.load (local.get $p)) (i32.const "<!--")))
               (then
-                ;; The search starts at `p+2` so the opener's own dashes can
-                ;; close it: that is the spec's abrupt-closing rule, which makes
-                ;; `<!-->` and `<!--->` complete comments rather than runaways.
-                (local.set $to (i32.add (local.get $p) (i32.const 2)))
-                (block $commentDone
-                  (loop $comment
-                    (br_if $commentDone (i32.ge_u (local.get $to) (global.get $end)))
-                    (if (i32.and
-                          (i32.le_u (i32.add (local.get $to) (i32.const 3)) (global.get $end))
-                          (i32.eq (i32.and (i32.load (local.get $to)) (i32.const 0xffffff))
-                                  (i32.const "-->")))
-                      (then
-                        (local.set $to (i32.add (local.get $to) (i32.const 3)))
-                        (br $commentDone)))
-                    (local.set $to (i32.add (local.get $to) (i32.const 1)))
-                    (br $comment)))
                 (call $svelteHtmlRange (local.get $from) (local.get $p))
-                (call $svelteHtmlRange (local.get $p) (local.get $to))
+                (global.set $ptr (local.get $p))
+                (call $htmlComment (local.get $p))
+                (local.set $to (global.get $ptr))
                 (local.set $from (local.get $to))
                 (local.set $p (local.get $to))
                 (br $scan)))))

@@ -5,157 +5,60 @@
     (select (i32.load8_u (local.get $p)) (i32.const 0)
       (i32.lt_u (local.get $p) (global.get $end))))
 
-  (func $rustWordEq (param $lhs i32) (param $rhs i32) (param $n i32) (param $word i64) (result i32)
-    (local $mask i64)
-    (if (i32.ne (i32.sub (local.get $rhs) (local.get $lhs)) (local.get $n))
-      (then (return (i32.const 0))))
-    (if (i32.eq (local.get $n) (i32.const 8))
-      (then (return (i64.eq (i64.load (local.get $lhs)) (local.get $word)))))
-    (local.set $mask (i64.sub
-      (i64.shl (i64.const 1) (i64.extend_i32_u (i32.shl (local.get $n) (i32.const 3))))
-      (i64.const 1)))
-    (i64.eq (i64.and (i64.load (local.get $lhs)) (local.get $mask)) (local.get $word)))
+  ;; Group order is the dispatch order in $rustWordHl below. `where` is absent
+  ;; on purpose: the table hash sees only the first two bytes, the last byte,
+  ;; and the length, which are identical for `while`, so the two words can
+  ;; never share a table and `where` is matched directly in $rustWordHl.
+  (keyword-table $rustWords $mem.rustWords $mem.rustWords+768 16 128
+    (group "fn") ;; 1: declaration, next name is a function
+    (group ;; 2: declaration, next name is a type
+      "mod" "type" "enum" "trait" "union" "struct")
+    (group "use" "crate" "extern") ;; 3: import
+    (group ;; 4: control
+      "if" "for" "else" "loop" "await" "break" "match" "while" "return" "continue")
+    (group "let" "impl" "const" "static") ;; 5: declaration
+    (group "dyn" "mut" "pub" "async" "unsafe") ;; 6: bare keywords
+    (group "as" "in") ;; 7: word operators
+    (group ;; 8: primitive types
+      "i8" "u8" "i16" "u16" "i32" "u32" "i64" "u64" "f32" "f64"
+      "str" "bool" "char" "isize" "usize")
+    (group "true" "false") ;; 9: booleans
+    (group "self" "Self")) ;; 10: the receiver value and its type spelling
 
   ;; Token in the low byte; bit 8 expects a function name and bit 9 a type.
   (func $rustWordHl (param $lhs i32) (param $rhs i32) (result i32)
-    (if (call $rustWordEq (local.get $lhs) (local.get $rhs) (i32.const 2) (i64.const "fn"))
-      (then (return (i32.or (enum.get $Token.keyword.declaration) (i32.const 256)))))
-    (if (i32.or
-          (call $rustWordEq (local.get $lhs) (local.get $rhs) (i32.const 6) (i64.const "struct"))
-          (call $rustWordEq (local.get $lhs) (local.get $rhs) (i32.const 4) (i64.const "enum")))
-      (then (return (i32.or (enum.get $Token.keyword.declaration) (i32.const 512)))))
-    (if (i32.or
-          (call $rustWordEq (local.get $lhs) (local.get $rhs) (i32.const 5) (i64.const "trait"))
-          (call $rustWordEq (local.get $lhs) (local.get $rhs) (i32.const 4) (i64.const "type")))
-      (then (return (i32.or (enum.get $Token.keyword.declaration) (i32.const 512)))))
-    (if (i32.or
-          (call $rustWordEq (local.get $lhs) (local.get $rhs) (i32.const 5) (i64.const "union"))
-          (call $rustWordEq (local.get $lhs) (local.get $rhs) (i32.const 3) (i64.const "mod")))
-      (then (return (i32.or (enum.get $Token.keyword.declaration) (i32.const 512)))))
-    (if (i32.or
-          (call $rustWordEq (local.get $lhs) (local.get $rhs) (i32.const 3) (i64.const "use"))
-          (call $rustWordEq (local.get $lhs) (local.get $rhs) (i32.const 6) (i64.const "extern")))
+    (local $g i32)
+    (local.set $g (keyword-table.get $rustWords (local.get $lhs) (local.get $rhs)))
+    (if (i32.eqz (local.get $g))
+      (then
+        ;; the one word the table cannot hold; the wide load stays inside the
+        ;; input slack, as in the table's own compare
+        (if (i32.and
+              (i32.eq (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 5))
+              (i64.eq
+                (i64.and (i64.load (local.get $lhs)) (i64.const 0xffffffffff))
+                (i64.const "where")))
+          (then (return (enum.get $Token.keyword))))
+        (return (i32.const -1))))
+    ;; groups 1 and 2 also set the capture bit for the name that follows
+    (if (i32.le_u (local.get $g) (i32.const 2))
+      (then (return (i32.or (enum.get $Token.keyword.declaration)
+        (i32.shl (local.get $g) (i32.const 8))))))
+    (if (i32.eq (local.get $g) (i32.const 3))
       (then (return (enum.get $Token.keyword.import))))
-    (if (call $rustWordEq (local.get $lhs) (local.get $rhs) (i32.const 5) (i64.const "crate"))
-      (then (return (enum.get $Token.keyword.import))))
-
-    (if (i32.or
-          (call $rustWordEq (local.get $lhs) (local.get $rhs) (i32.const 2) (i64.const "if"))
-          (call $rustWordEq (local.get $lhs) (local.get $rhs) (i32.const 4) (i64.const "else")))
+    (if (i32.eq (local.get $g) (i32.const 4))
       (then (return (enum.get $Token.keyword.control))))
-    (if (i32.or
-          (call $rustWordEq (local.get $lhs) (local.get $rhs) (i32.const 5) (i64.const "match"))
-          (call $rustWordEq (local.get $lhs) (local.get $rhs) (i32.const 4) (i64.const "loop")))
-      (then (return (enum.get $Token.keyword.control))))
-    (if (i32.or
-          (call $rustWordEq (local.get $lhs) (local.get $rhs) (i32.const 5) (i64.const "while"))
-          (call $rustWordEq (local.get $lhs) (local.get $rhs) (i32.const 3) (i64.const "for")))
-      (then (return (enum.get $Token.keyword.control))))
-    (if (i32.or
-          (call $rustWordEq (local.get $lhs) (local.get $rhs) (i32.const 6) (i64.const "return"))
-          (call $rustWordEq (local.get $lhs) (local.get $rhs) (i32.const 5) (i64.const "break")))
-      (then (return (enum.get $Token.keyword.control))))
-    (if (i32.or
-          (call $rustWordEq (local.get $lhs) (local.get $rhs) (i32.const 8) (i64.const "continue"))
-          (call $rustWordEq (local.get $lhs) (local.get $rhs) (i32.const 5) (i64.const "await")))
-      (then (return (enum.get $Token.keyword.control))))
-
-    (if (i32.or
-          (call $rustWordEq (local.get $lhs) (local.get $rhs) (i32.const 3) (i64.const "let"))
-          (call $rustWordEq (local.get $lhs) (local.get $rhs) (i32.const 5) (i64.const "const")))
+    (if (i32.eq (local.get $g) (i32.const 5))
       (then (return (enum.get $Token.keyword.declaration))))
-    (if (i32.or
-          (call $rustWordEq (local.get $lhs) (local.get $rhs) (i32.const 6) (i64.const "static"))
-          (call $rustWordEq (local.get $lhs) (local.get $rhs) (i32.const 4) (i64.const "impl")))
-      (then (return (enum.get $Token.keyword.declaration))))
-    (if (i32.or
-          (call $rustWordEq (local.get $lhs) (local.get $rhs) (i32.const 3) (i64.const "pub"))
-          (call $rustWordEq (local.get $lhs) (local.get $rhs) (i32.const 3) (i64.const "mut")))
+    (if (i32.eq (local.get $g) (i32.const 6))
       (then (return (enum.get $Token.keyword))))
-    (if (i32.or
-          (call $rustWordEq (local.get $lhs) (local.get $rhs) (i32.const 5) (i64.const "async"))
-          (call $rustWordEq (local.get $lhs) (local.get $rhs) (i32.const 6) (i64.const "unsafe")))
-      (then (return (enum.get $Token.keyword))))
-    (if (i32.or
-          (call $rustWordEq (local.get $lhs) (local.get $rhs) (i32.const 5) (i64.const "where"))
-          (call $rustWordEq (local.get $lhs) (local.get $rhs) (i32.const 3) (i64.const "dyn")))
-      (then (return (enum.get $Token.keyword))))
-    (if (i32.or
-          (call $rustWordEq (local.get $lhs) (local.get $rhs) (i32.const 2) (i64.const "as"))
-          (call $rustWordEq (local.get $lhs) (local.get $rhs) (i32.const 2) (i64.const "in")))
+    (if (i32.eq (local.get $g) (i32.const 7))
       (then (return (enum.get $Token.keyword.operator))))
-
-    (if (i32.or
-          (call $rustWordEq (local.get $lhs) (local.get $rhs) (i32.const 4) (i64.const "bool"))
-          (call $rustWordEq (local.get $lhs) (local.get $rhs) (i32.const 4) (i64.const "char")))
+    (if (i32.eq (local.get $g) (i32.const 8))
       (then (return (enum.get $Token.type.builtin))))
-    (if (i32.or
-          (call $rustWordEq (local.get $lhs) (local.get $rhs) (i32.const 3) (i64.const "str"))
-          (call $rustWordEq (local.get $lhs) (local.get $rhs) (i32.const 5) (i64.const "usize")))
-      (then (return (enum.get $Token.type.builtin))))
-    (if (call $rustWordEq (local.get $lhs) (local.get $rhs) (i32.const 5) (i64.const "isize"))
-      (then (return (enum.get $Token.type.builtin))))
-    (if (i32.and
-          (i32.and (i32.eq (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 2))
-                   (i32.eq (i32.load8_u offset=1 (local.get $lhs)) (i32.const "8")))
-          (i32.or (i32.eq (i32.load8_u (local.get $lhs)) (i32.const "i"))
-                  (i32.eq (i32.load8_u (local.get $lhs)) (i32.const "u"))))
-      (then (return (enum.get $Token.type.builtin))))
-    (if (i32.or
-          (call $rustWordEq (local.get $lhs) (local.get $rhs) (i32.const 3) (i64.const "i16"))
-          (call $rustWordEq (local.get $lhs) (local.get $rhs) (i32.const 3) (i64.const "u16")))
-      (then (return (enum.get $Token.type.builtin))))
-    (if (i32.or
-          (call $rustWordEq (local.get $lhs) (local.get $rhs) (i32.const 3) (i64.const "i32"))
-          (call $rustWordEq (local.get $lhs) (local.get $rhs) (i32.const 3) (i64.const "u32")))
-      (then (return (enum.get $Token.type.builtin))))
-    (if (i32.or
-          (call $rustWordEq (local.get $lhs) (local.get $rhs) (i32.const 3) (i64.const "i64"))
-          (call $rustWordEq (local.get $lhs) (local.get $rhs) (i32.const 3) (i64.const "u64")))
-      (then (return (enum.get $Token.type.builtin))))
-    (if (i32.or
-          (call $rustWordEq (local.get $lhs) (local.get $rhs) (i32.const 3) (i64.const "f32"))
-          (call $rustWordEq (local.get $lhs) (local.get $rhs) (i32.const 3) (i64.const "f64")))
-      (then (return (enum.get $Token.type.builtin))))
-    (if (i32.or
-          (call $rustWordEq (local.get $lhs) (local.get $rhs) (i32.const 4) (i64.const "true"))
-          (call $rustWordEq (local.get $lhs) (local.get $rhs) (i32.const 5) (i64.const "false")))
+    (if (i32.eq (local.get $g) (i32.const 9))
       (then (return (enum.get $Token.boolean))))
-    (if (i32.or
-          (call $rustWordEq (local.get $lhs) (local.get $rhs) (i32.const 4) (i64.const "self"))
-          (call $rustWordEq (local.get $lhs) (local.get $rhs) (i32.const 4) (i64.const "Self")))
-      (then (return (enum.get $Token.variable.special))))
-    (i32.const -1))
-
-  (func $rustBlockComment (param $hl i32)
-    (local $lhs i32) (local $c i32) (local $c2 i32) (local $depth i32)
-    (local.set $lhs (global.get $ptr))
-    (local.set $depth (i32.const 1))
-    (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))
-    (if (i32.gt_u (global.get $ptr) (global.get $end)) (then (global.set $ptr (global.get $end))))
-    (block $done
-      (loop $loop
-        (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
-        (local.set $c (i32.load8_u (global.get $ptr)))
-        (local.set $c2 (call $rustByte (i32.add (global.get $ptr) (i32.const 1))))
-        (if (i32.and (i32.eq (local.get $c) (i32.const "/")) (i32.eq (local.get $c2) (i32.const "*")))
-          (then
-            (local.set $depth (i32.add (local.get $depth) (i32.const 1)))
-            (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))
-            (if (i32.gt_u (global.get $ptr) (global.get $end)) (then (global.set $ptr (global.get $end))))
-            (br $loop)))
-        (if (i32.and (i32.eq (local.get $c) (i32.const "*")) (i32.eq (local.get $c2) (i32.const "/")))
-          (then
-            (local.set $depth (i32.sub (local.get $depth) (i32.const 1)))
-            (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))
-            (if (i32.gt_u (global.get $ptr) (global.get $end)) (then (global.set $ptr (global.get $end))))
-            (br_if $done (i32.eqz (local.get $depth)))
-            (br $loop)))
-        (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-        (br $loop)))
-    (call $emitTok (local.get $hl) (local.get $lhs) (global.get $ptr))
-    (call $streamSetNested
-      (local.get $depth) (i32.const "/*") (i32.const "*/") (local.get $hl)))
+    (enum.get $Token.variable.special))
 
   (func $rustRawStart (param $prefix i32) (result i32)
     (local $p i32)
@@ -177,24 +80,24 @@
         (local.set $hashes (i32.add (local.get $hashes) (i32.const 1)))
         (local.set $p (i32.add (local.get $p) (i32.const 1)))
         (br $hash)))
+    ;; $rustRawStart already proved the byte at $p is the opening quote, so $p
+    ;; is below $end and this cursor lands at most on $end
     (global.set $ptr (i32.add (local.get $p) (i32.const 1)))
-    (if (i32.gt_u (global.get $ptr) (global.get $end)) (then (global.set $ptr (global.get $end))))
     (block $done
       (loop $scan
+        (global.set $ptr (call $lexFindByte (global.get $ptr) (i32.const 34)))
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
-        (if (i32.eq (i32.load8_u (global.get $ptr)) (i32.const 34))
-          (then
-            (local.set $q (i32.add (global.get $ptr) (i32.const 1)))
-            (local.set $seen (i32.const 0))
-            (block $matchDone
-              (loop $match
-                (br_if $matchDone (i32.ge_u (local.get $seen) (local.get $hashes)))
-                (br_if $matchDone (i32.ne (call $rustByte (local.get $q)) (i32.const "#")))
-                (local.set $seen (i32.add (local.get $seen) (i32.const 1)))
-                (local.set $q (i32.add (local.get $q) (i32.const 1)))
-                (br $match)))
-            (if (i32.eq (local.get $seen) (local.get $hashes))
-              (then (global.set $ptr (local.get $q)) (br $done)))))
+        (local.set $q (i32.add (global.get $ptr) (i32.const 1)))
+        (local.set $seen (i32.const 0))
+        (block $matchDone
+          (loop $match
+            (br_if $matchDone (i32.ge_u (local.get $seen) (local.get $hashes)))
+            (br_if $matchDone (i32.ne (call $rustByte (local.get $q)) (i32.const "#")))
+            (local.set $seen (i32.add (local.get $seen) (i32.const 1)))
+            (local.set $q (i32.add (local.get $q) (i32.const 1)))
+            (br $match)))
+        (if (i32.eq (local.get $seen) (local.get $hashes))
+          (then (global.set $ptr (local.get $q)) (br $done)))
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
         (br $scan)))
     (call $emitTok (enum.get $Token.string) (local.get $lhs) (global.get $ptr))
@@ -245,7 +148,7 @@
             (br $next)))
         (if (i32.and (i32.eq (local.get $c) (i32.const "/")) (i32.eq (local.get $c2) (i32.const "*")))
           (then
-            (call $rustBlockComment (select
+            (call $lexNestedBlockComment (i32.const "/*") (i32.const "*/") (select
               (enum.get $Token.comment.doc) (enum.get $Token.comment)
               (i32.or (i32.eq (local.get $c3) (i32.const "*")) (i32.eq (local.get $c3) (i32.const "!")))))
             (br $next)))

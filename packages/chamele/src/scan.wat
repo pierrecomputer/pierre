@@ -175,6 +175,41 @@
     (if (i32.gt_u (global.get $ptr) (global.get $end))
       (then (global.set $ptr (global.get $end)))))
 
+  ;; the next occurrence in [$p,$end) of $a, $b, or $c, or $end when there is
+  ;; none - 16 bytes per step, and the tail never reads past $end
+  (func $scanFind3
+    (param $p i32) (param $a i32) (param $b i32) (param $c i32) (result i32)
+    (local $mask i32)
+    (local $w v128)
+    (if (i32.ge_u (local.get $p) (global.get $end))
+      (then (return (global.get $end))))
+    (block $scalar
+      (loop $simd
+        (br_if $scalar
+          (i32.lt_u (i32.sub (global.get $end) (local.get $p)) (i32.const 16)))
+        (local.set $w (v128.load (local.get $p)))
+        (local.set $mask (i8x16.bitmask (v128.or
+          (v128.or
+            (i8x16.eq (local.get $w) (i8x16.splat (local.get $a)))
+            (i8x16.eq (local.get $w) (i8x16.splat (local.get $b))))
+          (i8x16.eq (local.get $w) (i8x16.splat (local.get $c))))))
+        (if (local.get $mask)
+          (then (return (i32.add (local.get $p) (i32.ctz (local.get $mask))))))
+        (local.set $p (i32.add (local.get $p) (i32.const 16)))
+        (br $simd)))
+    (block $done
+      (loop $tail
+        (br_if $done (i32.ge_u (local.get $p) (global.get $end)))
+        (if (i32.or
+              (i32.or
+                (i32.eq (i32.load8_u (local.get $p)) (local.get $a))
+                (i32.eq (i32.load8_u (local.get $p)) (local.get $b)))
+              (i32.eq (i32.load8_u (local.get $p)) (local.get $c)))
+          (then (return (local.get $p))))
+        (local.set $p (i32.add (local.get $p) (i32.const 1)))
+        (br $tail)))
+    (global.get $end))
+
   ;; clamp $e to $stop, then extend it over UTF-8 continuation bytes: an
   ;; escape span must never split a code point
   (func $utf8SpanEnd (param $e i32) (param $stop i32) (result i32)

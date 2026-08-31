@@ -153,16 +153,11 @@
     (global.set $end (local.get $save))
     (global.set $ptr (local.get $to)))
 
+  ;; First CR or LF at or after $p, or $end - one SIMD compare per 16 bytes.
+  ;; Every caller passes $p <= $end, so the shared finder's clamp to $end
+  ;; matches the old scalar walk exactly.
   (func $markdownLineEnd (param $p i32) (result i32)
-    (block $done
-      (loop $l
-        (br_if $done (i32.ge_u (local.get $p) (global.get $end)))
-        (br_if $done (i32.or
-          (i32.eq (i32.load8_u (local.get $p)) (i32.const 10))
-          (i32.eq (i32.load8_u (local.get $p)) (i32.const 13))))
-        (local.set $p (i32.add (local.get $p) (i32.const 1)))
-        (br $l)))
-    (local.get $p))
+    (call $lexFindEither (local.get $p) (i32.const 10) (i32.const 13)))
 
   (func $markdownAfterLine (param $p i32) (result i32)
     (if (i32.lt_u (local.get $p) (global.get $end))
@@ -176,38 +171,29 @@
         (return (i32.add (local.get $p) (i32.const 1)))))
     (local.get $p))
 
-  ;; Continue a fenced block whose closing delimiter is in a later stream
-  ;; chunk. Returns one while the whole chunk belongs to the fence body.
-  (func $markdownStreamResume (result i32)
-    (local $after i32)
+  ;; Start of the first line at or after $p that closes a fence: a run of at
+  ;; least $len $fence bytes at the line start followed only by blanks.
+  ;; Returns $end when the fence never closes. Each body line is scanned once;
+  ;; the run bytes are not CR/LF, so the line end computed from $q also serves
+  ;; as the line end from $p.
+  (func $markdownFenceClose
+    (param $p i32) (param $fence i32) (param $len i32) (result i32)
     (local $c i32)
-    (local $close i32)
-    (local $count i32)
     (local $lineEnd i32)
-    (local $p i32)
     (local $q i32)
-    (if (i32.eqz (global.get $markdownStreamFence))
-      (then (return (i32.const 0))))
-    (local.set $p (global.get $ptr))
-    (local.set $close (global.get $end))
-    (block $fenceDone
-      (loop $fenceLines
-        (br_if $fenceDone (i32.ge_u (local.get $p) (global.get $end)))
+    (block $done
+      (loop $lines
+        (br_if $done (i32.ge_u (local.get $p) (global.get $end)))
         (local.set $q (local.get $p))
-        (local.set $count (i32.const 0))
-        (block $closeRunDone
-          (loop $closeRun
-            (br_if $closeRunDone (i32.ge_u (local.get $q) (global.get $end)))
-            (br_if $closeRunDone
-              (i32.ne
-                (i32.load8_u (local.get $q))
-                (global.get $markdownStreamFence)))
+        (block $runDone
+          (loop $run
+            (br_if $runDone (i32.ge_u (local.get $q) (global.get $end)))
+            (br_if $runDone (i32.ne (i32.load8_u (local.get $q)) (local.get $fence)))
             (local.set $q (i32.add (local.get $q) (i32.const 1)))
-            (local.set $count (i32.add (local.get $count) (i32.const 1)))
-            (br $closeRun)))
-        (if (i32.ge_u (local.get $count) (global.get $markdownStreamFenceLen))
+            (br $run)))
+        (local.set $lineEnd (call $markdownLineEnd (local.get $q)))
+        (if (i32.ge_u (i32.sub (local.get $q) (local.get $p)) (local.get $len))
           (then
-            (local.set $lineEnd (call $markdownLineEnd (local.get $q)))
             (block $spaceDone
               (loop $space
                 (br_if $spaceDone (i32.ge_u (local.get $q) (local.get $lineEnd)))
@@ -218,12 +204,21 @@
                 (local.set $q (i32.add (local.get $q) (i32.const 1)))
                 (br $space)))
             (if (i32.eq (local.get $q) (local.get $lineEnd))
-              (then
-                (local.set $close (local.get $p))
-                (br $fenceDone)))))
-        (local.set $lineEnd (call $markdownLineEnd (local.get $p)))
+              (then (return (local.get $p))))))
         (local.set $p (call $markdownAfterLine (local.get $lineEnd)))
-        (br $fenceLines)))
+        (br $lines)))
+    (global.get $end))
+
+  ;; Continue a fenced block whose closing delimiter is in a later stream
+  ;; chunk. Returns one while the whole chunk belongs to the fence body.
+  (func $markdownStreamResume (result i32)
+    (local $after i32)
+    (local $close i32)
+    (local $lineEnd i32)
+    (if (i32.eqz (global.get $markdownStreamFence))
+      (then (return (i32.const 0))))
+    (local.set $close (call $markdownFenceClose (global.get $ptr)
+      (global.get $markdownStreamFence) (global.get $markdownStreamFenceLen)))
     (if (global.get $markdownStreamLang)
       (then (call $markdownCodeRange
         (global.get $markdownStreamLang) (global.get $ptr) (local.get $close)))
@@ -313,9 +308,11 @@
           (i32.le_u (i32.add (local.get $lhs) (i32.const 4)) (global.get $end))
           (i32.eq (i32.load (local.get $lhs)) (i32.const "<!--")))
       (then
+        ;; hop dash to dash with SIMD; a terminator must start with `-`
         (local.set $p (i32.add (local.get $lhs) (i32.const 4)))
         (block $commentDone
           (loop $comment
+            (local.set $p (call $lexFindByte (local.get $p) (i32.const "-")))
             (br_if $commentDone (i32.ge_u (local.get $p) (global.get $end)))
             (if (i32.and
                   (i32.le_u (i32.add (local.get $p) (i32.const 3)) (global.get $end))
@@ -325,7 +322,6 @@
             (local.set $p (i32.add (local.get $p) (i32.const 1)))
             (br $comment)))
         (return (global.get $end))))
-    (local.set $p (i32.add (local.get $lhs) (i32.const 1)))
     (block $done
       (loop $l
         (br_if $done (i32.ge_u (local.get $p) (global.get $end)))
@@ -381,13 +377,20 @@
     (local $info i32)
     (local $lang i32)
     (local $lhs i32)
+    ;; End of the line the cursor is on, computed lazily. Valid only while
+    ;; $ptr stays below it; every user re-derives it once $ptr reaches or
+    ;; passes it. Within one call $ptr only moves forward and $end is restored
+    ;; around embedded ranges, so a value below the cache never crosses CR/LF.
+    (local $lineCache i32)
     (local $lineEnd i32)
     (local $lineStart i32)
     (local $p i32)
     (local $q i32)
-    (local $save i32)
-    (local $to i32)
     (call $lexEmitLeadingContinuation)
+    ;; Each stream chunk is rewritten at the same base address, so a line-end
+    ;; cache restored from an earlier chunk points into unrelated bytes and
+    ;; may exceed the new $end. Start every call with the cache invalid.
+    (local.set $lineCache (i32.const 0))
 
     ;; YAML front matter is recognized only at the beginning of the source and
     ;; only when the opener occupies its own line.
@@ -557,39 +560,8 @@
                 (local.set $body (call $markdownAfterLine (local.get $lineEnd)))
                 (call $emitTok (enum.get $Token.punctuation.delimiter)
                   (global.get $ptr) (local.get $body))
-                (local.set $p (local.get $body))
-                (local.set $close (global.get $end))
-                (block $fenceDone
-                  (loop $fenceLines
-                    (br_if $fenceDone (i32.ge_u (local.get $p) (global.get $end)))
-                    (local.set $q (local.get $p))
-                    (local.set $count (i32.const 0))
-                    (block $closeRunDone
-                      (loop $closeRun
-                        (br_if $closeRunDone (i32.ge_u (local.get $q) (global.get $end)))
-                        (br_if $closeRunDone (i32.ne (i32.load8_u (local.get $q)) (local.get $fence)))
-                        (local.set $q (i32.add (local.get $q) (i32.const 1)))
-                        (local.set $count (i32.add (local.get $count) (i32.const 1)))
-                        (br $closeRun)))
-                    (if (i32.ge_u (local.get $count) (local.get $fenceLen))
-                      (then
-                        (local.set $lineEnd (call $markdownLineEnd (local.get $q)))
-                        (block $fenceSpaceDone
-                          (loop $fenceSpace
-                            (br_if $fenceSpaceDone (i32.ge_u (local.get $q) (local.get $lineEnd)))
-                            (local.set $c (i32.load8_u (local.get $q)))
-                            (br_if $fenceSpaceDone (i32.and
-                              (i32.ne (local.get $c) (i32.const 32))
-                              (i32.ne (local.get $c) (i32.const 9))))
-                            (local.set $q (i32.add (local.get $q) (i32.const 1)))
-                            (br $fenceSpace)))
-                        (if (i32.eq (local.get $q) (local.get $lineEnd))
-                          (then
-                            (local.set $close (local.get $p))
-                            (br $fenceDone)))))
-                    (local.set $lineEnd (call $markdownLineEnd (local.get $p)))
-                    (local.set $p (call $markdownAfterLine (local.get $lineEnd)))
-                    (br $fenceLines)))
+                (local.set $close (call $markdownFenceClose
+                  (local.get $body) (local.get $fence) (local.get $fenceLen)))
                 (if (local.get $lang)
                   (then (call $markdownCodeRange
                     (local.get $lang) (local.get $body) (local.get $close)))
@@ -681,27 +653,29 @@
                 (local.set $p (i32.add (local.get $p) (i32.const 1)))
                 (br $ticks)))
             (local.set $count (i32.sub (local.get $p) (global.get $ptr)))
-            (local.set $to (call $markdownLineEnd (local.get $p)))
-            (local.set $close (local.get $to))
+            ;; the opener's backticks hold no CR/LF, so the cached line end
+            ;; also bounds the scan that starts at $p
+            (if (i32.ge_u (global.get $ptr) (local.get $lineCache))
+              (then (local.set $lineCache (call $markdownLineEnd (global.get $ptr)))))
+            (local.set $close (local.get $lineCache))
             (block $codeDone
               (loop $code
-                (br_if $codeDone (i32.ge_u (local.get $p) (local.get $to)))
-                (if (i32.eq (i32.load8_u (local.get $p)) (i32.const "`"))
+                ;; hop backtick to backtick with SIMD, bounded to the line
+                (local.set $p (call $scanFindSpecial (local.get $p)
+                  (local.get $lineCache) (i32.const "`") (i32.const 0) (i32.const 0)))
+                (br_if $codeDone (i32.ge_u (local.get $p) (local.get $lineCache)))
+                (local.set $q (local.get $p))
+                (block $closeTicksDone
+                  (loop $closeTicks
+                    (br_if $closeTicksDone (i32.ge_u (local.get $q) (local.get $lineCache)))
+                    (br_if $closeTicksDone (i32.ne (i32.load8_u (local.get $q)) (i32.const "`")))
+                    (local.set $q (i32.add (local.get $q) (i32.const 1)))
+                    (br $closeTicks)))
+                (if (i32.eq (i32.sub (local.get $q) (local.get $p)) (local.get $count))
                   (then
-                    (local.set $q (local.get $p))
-                    (block $closeTicksDone
-                      (loop $closeTicks
-                        (br_if $closeTicksDone (i32.ge_u (local.get $q) (local.get $to)))
-                        (br_if $closeTicksDone (i32.ne (i32.load8_u (local.get $q)) (i32.const "`")))
-                        (local.set $q (i32.add (local.get $q) (i32.const 1)))
-                        (br $closeTicks)))
-                    (if (i32.eq (i32.sub (local.get $q) (local.get $p)) (local.get $count))
-                      (then
-                        (local.set $close (local.get $q))
-                        (br $codeDone)))
-                    (local.set $p (local.get $q))
-                    (br $code)))
-                (local.set $p (i32.add (local.get $p) (i32.const 1)))
+                    (local.set $close (local.get $q))
+                    (br $codeDone)))
+                (local.set $p (local.get $q))
                 (br $code)))
             (global.set $ptr (local.get $close))
             (call $emitTok (enum.get $Token.text.literal) (local.get $lhs) (global.get $ptr))
@@ -710,28 +684,21 @@
         ;; `[label](uri)` links.
         (if (i32.eq (local.get $c) (i32.const "["))
           (then
-            (local.set $lineEnd (call $markdownLineEnd (global.get $ptr)))
-            (local.set $p (i32.add (global.get $ptr) (i32.const 1)))
-            (block $labelDone
-              (loop $label
-                (br_if $labelDone (i32.ge_u (local.get $p) (local.get $lineEnd)))
-                (br_if $labelDone (i32.eq (i32.load8_u (local.get $p)) (i32.const "]")))
-                (local.set $p (i32.add (local.get $p) (i32.const 1)))
-                (br $label)))
+            (if (i32.ge_u (global.get $ptr) (local.get $lineCache))
+              (then (local.set $lineCache (call $markdownLineEnd (global.get $ptr)))))
+            (local.set $p (call $scanFindSpecial
+              (i32.add (global.get $ptr) (i32.const 1)) (local.get $lineCache)
+              (i32.const "]") (i32.const 0) (i32.const 0)))
             (if (i32.and
-                  (i32.lt_u (i32.add (local.get $p) (i32.const 1)) (local.get $lineEnd))
+                  (i32.lt_u (i32.add (local.get $p) (i32.const 1)) (local.get $lineCache))
                   (i32.and
                     (i32.eq (i32.load8_u (local.get $p)) (i32.const "]"))
                     (i32.eq (i32.load8_u offset=1 (local.get $p)) (i32.const "("))))
               (then
-                (local.set $q (i32.add (local.get $p) (i32.const 2)))
-                (block $uriDone
-                  (loop $uri
-                    (br_if $uriDone (i32.ge_u (local.get $q) (local.get $lineEnd)))
-                    (br_if $uriDone (i32.eq (i32.load8_u (local.get $q)) (i32.const ")")))
-                    (local.set $q (i32.add (local.get $q) (i32.const 1)))
-                    (br $uri)))
-                (if (i32.lt_u (local.get $q) (local.get $lineEnd))
+                (local.set $q (call $scanFindSpecial
+                  (i32.add (local.get $p) (i32.const 2)) (local.get $lineCache)
+                  (i32.const ")") (i32.const 0) (i32.const 0)))
+                (if (i32.lt_u (local.get $q) (local.get $lineCache))
                   (then
                     (call $emitTok (enum.get $Token.punctuation.bracket)
                       (global.get $ptr) (i32.add (global.get $ptr) (i32.const 1)))
@@ -755,24 +722,26 @@
               (i32.and
                 (i32.lt_u (i32.add (global.get $ptr) (i32.const 1)) (global.get $end))
                 (i32.eq (i32.load8_u offset=1 (global.get $ptr)) (local.get $c)))))
-            (local.set $lineEnd (call $markdownLineEnd (global.get $ptr)))
+            (if (i32.ge_u (global.get $ptr) (local.get $lineCache))
+              (then (local.set $lineCache (call $markdownLineEnd (global.get $ptr)))))
             (local.set $p (i32.add (global.get $ptr) (local.get $count)))
             (local.set $close (i32.const 0))
             (block $emDone
               (loop $em
-                (br_if $emDone (i32.ge_u (local.get $p) (local.get $lineEnd)))
-                (if (i32.eq (i32.load8_u (local.get $p)) (local.get $c))
+                ;; hop marker to marker with SIMD, bounded to the line
+                (local.set $p (call $scanFindSpecial (local.get $p)
+                  (local.get $lineCache) (local.get $c) (i32.const 0) (i32.const 0)))
+                (br_if $emDone (i32.ge_u (local.get $p) (local.get $lineCache)))
+                (if (i32.eq (local.get $count) (i32.const 1))
                   (then
-                    (if (i32.eq (local.get $count) (i32.const 1))
-                      (then
-                        (local.set $close (i32.add (local.get $p) (i32.const 1)))
-                        (br $emDone)))
-                    (if (i32.and
-                          (i32.lt_u (i32.add (local.get $p) (i32.const 1)) (local.get $lineEnd))
-                          (i32.eq (i32.load8_u offset=1 (local.get $p)) (local.get $c)))
-                      (then
-                        (local.set $close (i32.add (local.get $p) (i32.const 2)))
-                        (br $emDone)))))
+                    (local.set $close (i32.add (local.get $p) (i32.const 1)))
+                    (br $emDone)))
+                (if (i32.and
+                      (i32.lt_u (i32.add (local.get $p) (i32.const 1)) (local.get $lineCache))
+                      (i32.eq (i32.load8_u offset=1 (local.get $p)) (local.get $c)))
+                  (then
+                    (local.set $close (i32.add (local.get $p) (i32.const 2)))
+                    (br $emDone)))
                 (local.set $p (i32.add (local.get $p) (i32.const 1)))
                 (br $em)))
             (if (local.get $close)
@@ -790,17 +759,10 @@
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (if (i32.lt_u (global.get $ptr) (global.get $end))
               (then
-                (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
                 ;; Keep a UTF-8 escape target whole; span boundaries may not
                 ;; land between its lead and continuation bytes.
-                (block $escapeUtf8Done
-                  (loop $escapeUtf8
-                    (br_if $escapeUtf8Done (i32.ge_u (global.get $ptr) (global.get $end)))
-                    (br_if $escapeUtf8Done (i32.ne
-                      (i32.and (i32.load8_u (global.get $ptr)) (i32.const 0xc0))
-                      (i32.const 0x80)))
-                    (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-                    (br $escapeUtf8)))))
+                (global.set $ptr (call $utf8SpanEnd
+                  (i32.add (global.get $ptr) (i32.const 1)) (global.get $end)))))
             (call $emitTok (enum.get $Token.string.escape) (local.get $lhs) (global.get $ptr))
             (br $next)))
 

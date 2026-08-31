@@ -31,17 +31,21 @@ src/common.wat      shared ASCII, identifier, number, string, and comment scans
 src/langs/*.wat     32 built-in language modes
   js/ts/jsx/tsx.wat one feature-gated ECMAScript engine split by concern
 src/chamele.wat     memory, $Language enum, imports, and dispatch
-lib/index.mjs       Highlighter, codeToHtml/codeToTokens/codeToHast, language
-                    aliases, theme cache, TokenizeStream, LiveTokenizer
-lib/tokens.mjs      token records -> shiki-compatible tokens and hast
-lib/theme.mjs       Zed theme -> binary table compiler
-lib/token-types.mjs generated, tracked $Token ABI
-themes/             bundled, pruned Zed theme objects
-scripts/build.mjs   WAT preprocessor and compiler
-test/               tests
+lib/index.ts        Highlighter, codeToHtml/codeToTokens/codeToHast, language
+                    aliases, theme cache, TokenizeStream, LiveTokenizer,
+                    public types
+lib/tokens.ts       token records -> shiki-compatible tokens and hast
+lib/theme.ts        Zed theme -> binary table compiler
+lib/token-types.ts  generated, tracked $Token ABI
+lib/{browser,node,workerd}.ts  per-runtime entry shims that init the wasm
+themes/             bundled, pruned Zed theme objects; index.ts re-exports
+                    them typed and compiles to a self-contained dist/themes.js
+scripts/build.ts    WAT preprocessor and compiler; writes the wasm artifacts
+                    into dist/, where tsdown also compiles the lib/ glue
+test/               tests (bun test)
 ```
 
-## WAT preprocessor (scripts/build.mjs)
+## WAT preprocessor (scripts/build.ts)
 
 `transformWat()` adds a small source layer over WAT. Its forms are invalid
 before preprocessing, so editor warnings are expected.
@@ -59,6 +63,15 @@ before preprocessing, so editor warnings are expected.
    `(bitset.get ...)` becomes a load and mask.
 6. **Character constants:** `(i32.const "true")` packs up to four ASCII bytes
    little-endian; `i64.const` packs eight. Use hex for escaped quotes.
+7. **Keyword tables:**
+   `(keyword-table $Name <base> <end> <buckets> <slots> (group "word" ...) ...)`
+   emits a displacement-based perfect hash over (first two bytes, last byte,
+   length) with exact-byte verification;
+   `(keyword-table.get $Name <start> <end>)` returns the 1-based group index
+   or 0. Words are 2..31 bytes, matched case-sensitively. Two words sharing
+   first two bytes, last byte, and length collide unfixably - keep one out of
+   the table and match it directly (see rust.wat's `where`). Never spell a form
+   name inside parentheses in a comment; the matchers do not skip comments.
 
 `wat2wasm()` enables bulk memory and SIMD. Hot scans classify 16 bytes with
 `i8x16` comparisons, `i8x16.bitmask`, and `i32.ctz`.
@@ -79,8 +92,10 @@ before preprocessing, so editor warnings are expected.
   [6848:7872)     theme table written by JavaScript
   [7872:11968)    JSX-mode stack
   [11968:12000)   streaming delimiter
-  [12000:60000)   streaming lexer checkpoints
-  [60000:65536)   free
+  [12000:16000)   streaming lexer checkpoints
+  [16000:60000)   keyword-table region (see src/memory.wat)
+  [60000:64818)   span-open fragment cache (HTML modes)
+  [64818:65536)   free
 [] pages 2..N     (text buffer)
   [65536:EOF)     input, NUL sentinel, then at least 16 bytes of slack
   [(EOF+47)&~15:) output HTML or token records; $ensureCap grows memory

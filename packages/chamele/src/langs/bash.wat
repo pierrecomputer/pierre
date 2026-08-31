@@ -5,73 +5,26 @@
   ;; must not be mistaken for a heredoc opener
   (global $bashArith (mut i32) (i32.const 0))
 
-  (func $bashWordEq (param $lhs i32) (param $rhs i32) (param $n i32) (param $word i64) (result i32)
-    (local $mask i64)
-    (if (i32.ne (i32.sub (local.get $rhs) (local.get $lhs)) (local.get $n))
-      (then (return (i32.const 0))))
-    (if (i32.eq (local.get $n) (i32.const 8))
-      (then (return (i64.eq (i64.load (local.get $lhs)) (local.get $word)))))
-    (local.set $mask (i64.sub
-      (i64.shl (i64.const 1) (i64.extend_i32_u (i32.shl (local.get $n) (i32.const 3))))
-      (i64.const 1)))
-    (i64.eq (i64.and (i64.load (local.get $lhs)) (local.get $mask)) (local.get $word)))
+  ;; group order is the dispatch order in $bashWordHl below
+  (keyword-table $bashWords $mem.bashWords $mem.bashWords+512 16 32
+    (group ;; 1: control
+      "do" "fi" "if" "in" "for" "case" "done" "elif" "else" "esac" "then"
+      "break" "until" "while" "return" "select" "continue")
+    (group ;; 2: declaration
+      "local" "export" "declare" "readonly" "typeset")
+    (group "function")       ;; 3: declaration, next name is a function
+    (group "time" "coproc")) ;; 4: plain keyword
 
-  (func $bashWordHl (param $lhs i32) (param $rhs i32) (result i32)
-    (if (call $bashWordEq (local.get $lhs) (local.get $rhs) (i32.const 2) (i64.const "do"))
+  ;; Map a $bashWords group index to its token. Group 0 - a table miss - is an
+  ;; ordinary word, which $hlBash may still promote to a command or a name.
+  (func $bashWordHl (param $group i32) (result i32)
+    (if (i32.eqz (local.get $group))
+      (then (return (enum.get $Token.variable))))
+    (if (i32.eq (local.get $group) (i32.const 1))
       (then (return (enum.get $Token.keyword.control))))
-    (if (call $bashWordEq (local.get $lhs) (local.get $rhs) (i32.const 2) (i64.const "fi"))
-      (then (return (enum.get $Token.keyword.control))))
-    (if (call $bashWordEq (local.get $lhs) (local.get $rhs) (i32.const 2) (i64.const "if"))
-      (then (return (enum.get $Token.keyword.control))))
-    (if (call $bashWordEq (local.get $lhs) (local.get $rhs) (i32.const 2) (i64.const "in"))
-      (then (return (enum.get $Token.keyword.control))))
-    (if (call $bashWordEq (local.get $lhs) (local.get $rhs) (i32.const 3) (i64.const "for"))
-      (then (return (enum.get $Token.keyword.control))))
-    (if (call $bashWordEq (local.get $lhs) (local.get $rhs) (i32.const 4) (i64.const "case"))
-      (then (return (enum.get $Token.keyword.control))))
-    (if (call $bashWordEq (local.get $lhs) (local.get $rhs) (i32.const 4) (i64.const "done"))
-      (then (return (enum.get $Token.keyword.control))))
-    (if (call $bashWordEq (local.get $lhs) (local.get $rhs) (i32.const 4) (i64.const "elif"))
-      (then (return (enum.get $Token.keyword.control))))
-    (if (call $bashWordEq (local.get $lhs) (local.get $rhs) (i32.const 4) (i64.const "else"))
-      (then (return (enum.get $Token.keyword.control))))
-    (if (call $bashWordEq (local.get $lhs) (local.get $rhs) (i32.const 4) (i64.const "esac"))
-      (then (return (enum.get $Token.keyword.control))))
-    (if (call $bashWordEq (local.get $lhs) (local.get $rhs) (i32.const 4) (i64.const "then"))
-      (then (return (enum.get $Token.keyword.control))))
-    (if (call $bashWordEq (local.get $lhs) (local.get $rhs) (i32.const 5) (i64.const "break"))
-      (then (return (enum.get $Token.keyword.control))))
-    (if (call $bashWordEq (local.get $lhs) (local.get $rhs) (i32.const 5) (i64.const "until"))
-      (then (return (enum.get $Token.keyword.control))))
-    (if (call $bashWordEq (local.get $lhs) (local.get $rhs) (i32.const 5) (i64.const "while"))
-      (then (return (enum.get $Token.keyword.control))))
-    (if (call $bashWordEq (local.get $lhs) (local.get $rhs) (i32.const 6) (i64.const "return"))
-      (then (return (enum.get $Token.keyword.control))))
-    (if (call $bashWordEq (local.get $lhs) (local.get $rhs) (i32.const 6) (i64.const "select"))
-      (then (return (enum.get $Token.keyword.control))))
-    (if (call $bashWordEq (local.get $lhs) (local.get $rhs) (i32.const 8) (i64.const "continue"))
-      (then (return (enum.get $Token.keyword.control))))
-
-    (if (call $bashWordEq (local.get $lhs) (local.get $rhs) (i32.const 5) (i64.const "local"))
+    (if (i32.le_u (local.get $group) (i32.const 3))
       (then (return (enum.get $Token.keyword.declaration))))
-    (if (call $bashWordEq (local.get $lhs) (local.get $rhs) (i32.const 6) (i64.const "export"))
-      (then (return (enum.get $Token.keyword.declaration))))
-    (if (call $bashWordEq (local.get $lhs) (local.get $rhs) (i32.const 7) (i64.const "declare"))
-      (then (return (enum.get $Token.keyword.declaration))))
-    (if (call $bashWordEq (local.get $lhs) (local.get $rhs) (i32.const 8) (i64.const "function"))
-      (then (return (enum.get $Token.keyword.declaration))))
-    (if (call $bashWordEq (local.get $lhs) (local.get $rhs) (i32.const 8) (i64.const "readonly"))
-      (then (return (enum.get $Token.keyword.declaration))))
-    (if (call $bashWordEq (local.get $lhs) (local.get $rhs) (i32.const 7) (i64.const "typeset"))
-      (then (return (enum.get $Token.keyword.declaration))))
-
-    (if (call $bashWordEq (local.get $lhs) (local.get $rhs) (i32.const 1) (i64.const "!"))
-      (then (return (enum.get $Token.keyword.operator))))
-    (if (call $bashWordEq (local.get $lhs) (local.get $rhs) (i32.const 4) (i64.const "time"))
-      (then (return (enum.get $Token.keyword))))
-    (if (call $bashWordEq (local.get $lhs) (local.get $rhs) (i32.const 6) (i64.const "coproc"))
-      (then (return (enum.get $Token.keyword))))
-    (enum.get $Token.variable))
+    (enum.get $Token.keyword))
 
   ;; `$` ends a word so a glued expansion still lexes as one: `abc$def` is the
   ;; word `abc` followed by `$def`, and `pre${VAR}post` keeps `${` together.
@@ -140,12 +93,7 @@
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
         (call $emitTok (enum.get $Token.punctuation.special) (local.get $lhs) (global.get $ptr))
         (local.set $seg (global.get $ptr))
-        (block $braceDone
-          (loop $brace
-            (br_if $braceDone (i32.ge_u (global.get $ptr) (global.get $end)))
-            (br_if $braceDone (i32.eq (i32.load8_u (global.get $ptr)) (i32.const "}")))
-            (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-            (br $brace)))
+        (global.set $ptr (call $lexFindByte (global.get $ptr) (i32.const "}")))
         (call $emitTok (enum.get $Token.variable) (local.get $seg) (global.get $ptr))
         (if (i32.lt_u (global.get $ptr) (global.get $end))
           (then
@@ -171,14 +119,15 @@
             (return)))
         (local.set $seg (global.get $ptr))
         (local.set $depth (local.get $close))
+        ;; only the parentheses move $depth, so hop straight to the next one
         (block $subDone
           (loop $sub
+            (global.set $ptr (call $lexFindEither
+              (global.get $ptr) (i32.const "(") (i32.const ")")))
             (br_if $subDone (i32.ge_u (global.get $ptr) (global.get $end)))
-            (local.set $c (i32.load8_u (global.get $ptr)))
-            (if (i32.eq (local.get $c) (i32.const "("))
-              (then (local.set $depth (i32.add (local.get $depth) (i32.const 1)))))
-            (if (i32.eq (local.get $c) (i32.const ")"))
-              (then
+            (if (i32.eq (i32.load8_u (global.get $ptr)) (i32.const "("))
+              (then (local.set $depth (i32.add (local.get $depth) (i32.const 1))))
+              (else
                 (local.set $depth (i32.sub (local.get $depth) (i32.const 1)))
                 (if (i32.eqz (local.get $depth)) (then (br $subDone)))))
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
@@ -199,14 +148,25 @@
           (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))))
     (call $emitTok (enum.get $Token.variable) (local.get $lhs) (global.get $ptr)))
 
+  ;; A double-quoted string ends at `"`, and only a backslash escape or a `$`
+  ;; expansion interrupts it, so each step hops to the first of the three: one
+  ;; SIMD pass locates the quote or the backslash, then a second - bounded by
+  ;; that hit, so it never runs past the string - locates an earlier `$`.
   (func $bashDouble
     (local $c i32)
     (local $e i32)
     (local $seg i32)
+    (local $stop i32)
     (local.set $seg (global.get $ptr))
     (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
     (block $done
       (loop $l
+        (local.set $stop (call $scanFindSpecial
+          (global.get $ptr) (global.get $end) (i32.const 34)
+          (i32.const 1) (i32.const 0)))
+        (global.set $ptr (call $scanFindSpecial
+          (global.get $ptr) (local.get $stop) (i32.const "$")
+          (i32.const 0) (i32.const 0)))
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
         (local.set $c (i32.load8_u (global.get $ptr)))
         (if (i32.eq (local.get $c) (i32.const 34))
@@ -216,17 +176,8 @@
         (if (i32.eq (local.get $c) (i32.const 92))
           (then
             (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
-            (local.set $e (i32.add (global.get $ptr) (i32.const 2)))
-            (if (i32.gt_u (local.get $e) (global.get $end))
-              (then (local.set $e (global.get $end))))
-            (block $utf8Done
-              (loop $utf8
-                (br_if $utf8Done (i32.ge_u (local.get $e) (global.get $end)))
-                (br_if $utf8Done (i32.ne
-                  (i32.and (i32.load8_u (local.get $e)) (i32.const 0xc0))
-                  (i32.const 0x80)))
-                (local.set $e (i32.add (local.get $e) (i32.const 1)))
-                (br $utf8)))
+            (local.set $e (call $utf8SpanEnd
+              (i32.add (global.get $ptr) (i32.const 2)) (global.get $end)))
             (call $emitTok (enum.get $Token.string.escape) (global.get $ptr) (local.get $e))
             (global.set $ptr (local.get $e))
             (local.set $seg (global.get $ptr))
@@ -369,7 +320,7 @@
         (br $lines)))
     (call $emitTok (enum.get $Token.string) (local.get $body) (global.get $ptr))
     (call $streamSetLine
-      (local.get $delim) (local.get $n) (local.get $strip) (i32.const 0)
+      (local.get $delim) (local.get $n) (local.get $strip)
       (enum.get $Token.string))
     (i32.const 1))
 
@@ -388,6 +339,7 @@
     (local $cmd i32)
     (local $decl i32)
     (local $gap i32)
+    (local $group i32)
     (local $hl i32)
     (local $lhs i32)
     (local $p i32)
@@ -472,7 +424,9 @@
           (then
             (call $bashScanWord)
             (local.set $rhs (global.get $ptr))
-            (local.set $hl (call $bashWordHl (local.get $lhs) (local.get $rhs)))
+            (local.set $group
+              (keyword-table.get $bashWords (local.get $lhs) (local.get $rhs)))
+            (local.set $hl (call $bashWordHl (local.get $group)))
             (if (local.get $decl)
               (then
                 (local.set $hl (enum.get $Token.function.definition))
@@ -491,9 +445,11 @@
                                        (i32.ge_u (global.get $ptr) (global.get $end))
                                        (i32.ne (i32.load8_u (global.get $ptr)) (i32.const "="))))
                           (then (local.set $hl (enum.get $Token.function))))))))))
+            ;; group 3 is `function`; the token test keeps a `function` that was
+            ;; itself captured as a definition from opening another one
             (if (i32.and
                   (i32.eq (local.get $hl) (enum.get $Token.keyword.declaration))
-                  (call $bashWordEq (local.get $lhs) (local.get $rhs) (i32.const 8) (i64.const "function")))
+                  (i32.eq (local.get $group) (i32.const 3)))
               (then (local.set $decl (i32.const 1))))
             (call $emitTok (local.get $hl) (local.get $lhs) (local.get $rhs))
             (if (i32.or

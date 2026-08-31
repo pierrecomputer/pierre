@@ -15,7 +15,8 @@
   )
 
   ;; One byte per $CWord. Six category tests replace the old 44-way token
-  ;; ladder. Static C tables occupy [5632:6104), inside the reserved free area.
+  ;; ladder. Static C tables occupy the reserved free area starting at
+  ;; $mem.cWordBits (see memory.wat).
   (bitset $CWordBits $CWord $mem.cWordBits
     (control
       "do" "if" "for" "case" "else" "goto" "break" "while"
@@ -34,7 +35,7 @@
     (constantBuiltin "nullptr")
   )
 
-  ;; Eight bytes per keyword at 5680, indexed by $CWord. Short words are
+  ;; Eight bytes per keyword at $mem.cWords, indexed by $CWord. Short words are
   ;; NUL-padded so a single masked i64 comparison also checks their length.
   (data (i32.const $mem.cWords)
     "\00\00\00\00\00\00\00\00\64\6f\00\00\00\00\00\00\69\66\00\00\00\00\00\00\66\6f\72\00\00\00\00\00\63\61\73\65\00\00\00\00\65\6c\73\65\00\00\00\00\67\6f\74\6f\00\00\00\00\62\72\65\61\6b\00\00\00"
@@ -45,8 +46,8 @@
     "\5f\41\6c\69\67\6e\6f\66\5f\47\65\6e\65\72\69\63\74\72\75\65\00\00\00\00\66\61\6c\73\65\00\00\00\6e\75\6c\6c\70\74\72\00"
   )
 
-  ;; 64-slot open-addressed hash at 6040. The chosen ASCII hash has at most
-  ;; one probe for a member; misses are explicitly bounded by the largest
+  ;; A 64-slot open-addressed hash at $mem.cHash - the chosen ASCII hash has at
+  ;; most one probe for a member; misses are explicitly bounded by the largest
   ;; occupied run (11 slots including its terminating empty slot).
   (data (i32.const $mem.cHash)
     "\00\05\06\00\0b\1e\04\00\00\00\00\12\26\2b\00\1b\0c\1d\08\2c\0d\0f\00\14\00\00\00\23\07\09\00\00"
@@ -142,9 +143,11 @@
               (i32.or (i32.eq (local.get $c) (i32.const "~")) (i32.eq (local.get $c) (i32.const "?")))))))))
 
   ;; Extend the shared numeric run for C hexadecimal floats, whose fractional
-  ;; part may begin with an a-f digit (`0x1.fp+3`).
-  (func $cScanNumber (param $lhs i32)
+  ;; part may begin with an a-f digit (`0x1.fp+3`). The run starts at $ptr.
+  (func $cScanNumber
+    (local $lhs i32)
     (local $next i32)
+    (local.set $lhs (global.get $ptr))
     (call $lexScanNumber)
     (if (i32.and
           (i32.lt_u (i32.add (local.get $lhs) (i32.const 1)) (global.get $end))
@@ -259,7 +262,7 @@
               (i32.and (i32.eq (local.get $c) (i32.const "."))
                        (call $lexIsDigit (local.get $c2))))
           (then
-            (call $cScanNumber (local.get $lhs))
+            (call $cScanNumber)
             (call $emitTok (enum.get $Token.number) (local.get $lhs) (global.get $ptr))
             (br $next)))
 

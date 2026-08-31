@@ -34,82 +34,41 @@
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
         (br $l))))
 
-  (func $xmlSkipText
-    (local $mask i32)
-    (local $rem i32)
-    (local $w v128)
-    (block $done
-      (loop $wide
-        (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
-        (local.set $rem (i32.sub (global.get $end) (global.get $ptr)))
-        (if (i32.lt_u (local.get $rem) (i32.const 16))
-          (then
-            (block $tailDone
-              (loop $tail
-                (br_if $tailDone (i32.ge_u (global.get $ptr) (global.get $end)))
-                (br_if $tailDone (i32.or
-                  (i32.eq (i32.load8_u (global.get $ptr)) (i32.const "<"))
-                  (i32.eq (i32.load8_u (global.get $ptr)) (i32.const "&"))))
-                (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-                (br $tail)))
-            (br $done)))
-        (local.set $w (v128.load (global.get $ptr)))
-        (local.set $mask (i8x16.bitmask (v128.or
-          (i8x16.eq (local.get $w) (i8x16.splat (i32.const "<")))
-          (i8x16.eq (local.get $w) (i8x16.splat (i32.const "&"))))))
-        (if (local.get $mask)
-          (then
-            (global.set $ptr (i32.add (global.get $ptr) (i32.ctz (local.get $mask))))
-            (br $done)))
-        (global.set $ptr (i32.add (global.get $ptr) (i32.const 16)))
-        (br $wide))))
-
+  ;; quoted attribute value starting at the quote
   (func $xmlQuoted
     (local $lhs i32)
-    (local $mask i32)
-    (local $q i32)
-    (local $rem i32)
-    (local $w v128)
+    (local $p i32)
     (local.set $lhs (global.get $ptr))
-    (local.set $q (i32.load8_u (global.get $ptr)))
-    (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-    (block $done
-      (loop $wide
-        (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
-        (local.set $rem (i32.sub (global.get $end) (global.get $ptr)))
-        (if (i32.lt_u (local.get $rem) (i32.const 16))
-          (then
-            (block $tailDone
-              (loop $tail
-                (br_if $tailDone (i32.ge_u (global.get $ptr) (global.get $end)))
-                (if (i32.eq (i32.load8_u (global.get $ptr)) (local.get $q))
-                  (then
-                    (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-                    (br $done)))
-                (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-                (br $tail)))
-            (br $done)))
-        (local.set $w (v128.load (global.get $ptr)))
-        (local.set $mask (i8x16.bitmask
-          (i8x16.eq (local.get $w) (i8x16.splat (local.get $q)))))
-        (if (local.get $mask)
-          (then
-            (global.set $ptr (i32.add
-              (i32.add (global.get $ptr) (i32.ctz (local.get $mask)))
-              (i32.const 1)))
-            (br $done)))
-        (global.set $ptr (i32.add (global.get $ptr) (i32.const 16)))
-        (br $wide)))
+    (local.set $p (call $lexFindByte
+      (i32.add (global.get $ptr) (i32.const 1)) (i32.load8_u (global.get $ptr))))
+    (global.set $ptr (select
+      (i32.add (local.get $p) (i32.const 1)) (global.get $end)
+      (i32.lt_u (local.get $p) (global.get $end))))
     (call $emitTok (enum.get $Token.string) (local.get $lhs) (global.get $ptr)))
 
   ;; Scan a comment, CDATA section, or processing instruction. $kind is
   ;; 1=`-->`, 2=`]]>`, 3=`?>`; the opener has already been recognized.
   (func $xmlSection (param $lhs i32) (param $skip i32) (param $kind i32) (param $hl i32)
     (local $closed i32)
+    (local $closeMask i32)
+    (local $closeOff i32)
+    (local $closeWord i32)
     (local $hit i32)
     (local $mask i32)
     (local $rem i32)
     (local $w v128)
+    ;; hoist the packed close delimiter: each `>` candidate then costs one
+    ;; masked load and compare, whatever the kind
+    (if (i32.eq (local.get $kind) (i32.const 3))
+      (then
+        (local.set $closeWord (i32.const "?>"))
+        (local.set $closeMask (i32.const 0xffff))
+        (local.set $closeOff (i32.const 1)))
+      (else
+        (local.set $closeWord (select (i32.const "-->") (i32.const "]]>")
+          (i32.eq (local.get $kind) (i32.const 1))))
+        (local.set $closeMask (i32.const 0xffffff))
+        (local.set $closeOff (i32.const 2))))
     (global.set $ptr (i32.add (global.get $ptr) (local.get $skip)))
     (if (i32.gt_u (global.get $ptr) (global.get $end))
       (then (global.set $ptr (global.get $end))))
@@ -131,20 +90,11 @@
           (loop $hits
             (br_if $chunkDone (i32.eqz (local.get $mask)))
             (local.set $hit (i32.add (global.get $ptr) (i32.ctz (local.get $mask))))
-            (if (i32.or
+            (if (i32.eq
                   (i32.and
-                    (i32.or
-                      (i32.eq (local.get $kind) (i32.const 1))
-                      (i32.eq (local.get $kind) (i32.const 2)))
-                    (i32.eq
-                      (i32.and (i32.load (i32.sub (local.get $hit) (i32.const 2))) (i32.const 0xffffff))
-                      (select (i32.const "-->") (i32.const "]]>")
-                        (i32.eq (local.get $kind) (i32.const 1)))))
-                  (i32.and
-                    (i32.eq (local.get $kind) (i32.const 3))
-                    (i32.eq
-                      (i32.and (i32.load (i32.sub (local.get $hit) (i32.const 1))) (i32.const 0xffff))
-                      (i32.const "?>"))))
+                    (i32.load (i32.sub (local.get $hit) (local.get $closeOff)))
+                    (local.get $closeMask))
+                  (local.get $closeWord))
               (then
                 (global.set $ptr (i32.add (local.get $hit) (i32.const 1)))
                 (local.set $closed (i32.const 1))
@@ -162,13 +112,8 @@
     (if (i32.eqz (local.get $closed))
       (then
         (call $streamSetFixed32
-          (select
-            (i32.const "?>")
-            (select (i32.const "-->") (i32.const "]]>")
-              (i32.eq (local.get $kind) (i32.const 1)))
-            (i32.eq (local.get $kind) (i32.const 3)))
-          (select (i32.const 2) (i32.const 3)
-            (i32.eq (local.get $kind) (i32.const 3)))
+          (local.get $closeWord)
+          (i32.add (local.get $closeOff) (i32.const 1))
           (local.get $hl)))))
 
   ;; XML declarations may contain an internal subset. Only a `>` outside
@@ -294,7 +239,8 @@
       (loop $next
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
         (local.set $lhs (global.get $ptr))
-        (call $xmlSkipText)
+        (global.set $ptr (call $lexFindEither
+          (global.get $ptr) (i32.const "<") (i32.const "&")))
         (call $emitTok (enum.get $Token.none) (local.get $lhs) (global.get $ptr))
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
         (local.set $lhs (global.get $ptr))

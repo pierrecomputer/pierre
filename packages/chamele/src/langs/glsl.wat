@@ -1,107 +1,90 @@
 (module
   (import "../common.wat")
 
-  ;; djb2-xor hashes are computed while the identifier is scanned. This keeps
-  ;; the keyword path allocation-free and avoids a static table/scratch range.
-  (func $glslWordHl (param $lhs i32) (param $rhs i32) (param $hash i32) (result i32)
+  ;; Exact keyword words live in a shared perfect-hash table; the families with
+  ;; open-ended dimensional suffixes stay as prefix checks below, and the few
+  ;; words the table hash cannot separate get direct compares in $glslWordHl.
+  ;; Group order is the dispatch order in $glslWordHl.
+  (keyword-table $glslWords $mem.glslWords $mem.glslWords+2048 32 128
+    (group "true" "false") ;; 1: booleans
+    (group ;; 2: control flow, including the ray-tracing control statements
+      "break" "case" "continue" "default" "do" "else" "for" "if"
+      "return" "switch" "while" "discard" "demote"
+      "terminateInvocation" "terminateRayNV"
+      "ignoreIntersectionEXT" "ignoreIntersectionNV")
+    (group "struct") ;; 3: declaration, next name is a type
+    (group ;; 4: scalar, extension scalar and opaque built-in types
+      "void" "bool" "int" "uint" "float" "double" "atomic_uint"
+      "int8_t" "uint8_t"
+      "subpassInput" "isubpassInput" "usubpassInput"
+      "accelerationStructureEXT" "rayQueryEXT")
+    (group ;; 5: storage, interpolation, precision and extension qualifiers
+      "const" "in" "out" "inout" "uniform" "shared" "attribute" "varying"
+      "buffer" "coherent" "volatile" "restrict" "readonly" "writeonly"
+      "layout" "centroid" "flat" "smooth" "noperspective" "patch"
+      "sample" "invariant" "precise" "highp" "mediump" "lowp"
+      "precision" "subroutine"
+      "rayPayloadEXT" "rayPayloadInEXT" "hitAttributeEXT"
+      "callableDataEXT" "callableDataInEXT" "shaderRecordEXT"
+      "rayPayloadNV" "rayPayloadInNV" "hitAttributeNV"
+      "callableDataNV" "callableDataInNV" "shaderRecordNV"
+      "require" "enable" "warn" "disable" "typedef" "enum" "union"))
+
+  (func $glslWordHl (param $lhs i32) (param $rhs i32) (result i32)
+    (local $g i32)
     (local $len i32)
     (local $last i32)
     (local $w i32)
+    (local.set $g (keyword-table.get $glslWords (local.get $lhs) (local.get $rhs)))
+    (if (i32.eq (local.get $g) (i32.const 1))
+      (then (return (enum.get $Token.boolean))))
+    (if (i32.eq (local.get $g) (i32.const 2))
+      (then (return (enum.get $Token.keyword.control))))
+    (if (i32.eq (local.get $g) (i32.const 3))
+      (then (return (enum.get $Token.keyword.declaration))))
+    (if (i32.eq (local.get $g) (i32.const 4))
+      (then (return (enum.get $Token.type.builtin))))
+    (if (local.get $g)
+      (then (return (enum.get $Token.keyword))))
     (local.set $len (i32.sub (local.get $rhs) (local.get $lhs)))
 
-    (if (i32.or
-          (i32.eq (local.get $hash) (i32.const 0x7c735233)) ;; true
-          (i32.eq (local.get $hash) (i32.const 0x0a30b018))) ;; false
-      (then (return (enum.get $Token.boolean))))
+    ;; The table hash mixes only the first two bytes, last byte and length, so
+    ;; intN_t/uintN_t/floatN_t collide within each family for N of 16/32/64;
+    ;; match the width tail plus the length-keyed stem exactly instead.
+    (if (i32.ge_u (local.get $len) (i32.const 7))
+      (then
+        (local.set $w (i32.load (i32.sub (local.get $rhs) (i32.const 4))))
+        (if (i32.and
+              (i32.or
+                (i32.or
+                  (i32.eq (local.get $w) (i32.const "16_t"))
+                  (i32.eq (local.get $w) (i32.const "32_t")))
+                (i32.eq (local.get $w) (i32.const "64_t")))
+              (i32.or
+                (i32.or
+                  (i32.and
+                    (i32.eq (local.get $len) (i32.const 7))
+                    (i32.eq
+                      (i32.and (i32.load (local.get $lhs)) (i32.const 0xffffff))
+                      (i32.const "int")))
+                  (i32.and
+                    (i32.eq (local.get $len) (i32.const 8))
+                    (i32.eq (i32.load (local.get $lhs)) (i32.const "uint"))))
+                (i32.and
+                  (i32.eq (local.get $len) (i32.const 9))
+                  (i64.eq
+                    (i64.and (i64.load (local.get $lhs)) (i64.const 0x000000ffffffffff))
+                    (i64.const "float")))))
+          (then (return (enum.get $Token.type.builtin))))))
 
-    ;; Flow keywords, including the ray-tracing control statements.
-    (if (i32.or
-          (i32.or
-            (i32.eq (local.get $hash) (i32.const 0x0a7dd9fa)) ;; break
-            (i32.eq (local.get $hash) (i32.const 0x7c70c251))) ;; case
-          (i32.or
-            (i32.eq (local.get $hash) (i32.const 0x8f091da4)) ;; continue
-            (i32.eq (local.get $hash) (i32.const 0x9ce67dce)))) ;; default
+    ;; terminateRayEXT shares its low hash bits with layout, so no table
+    ;; geometry can hold both; keep the rare one as a direct compare.
+    (if (i32.and
+          (i32.eq (local.get $len) (i32.const 15))
+          (i32.and
+            (i64.eq (i64.load (local.get $lhs)) (i64.const "terminat"))
+            (i64.eq (i64.load offset=7 (local.get $lhs)) (i64.const "teRayEXT"))))
       (then (return (enum.get $Token.keyword.control))))
-    (if (i32.or
-          (i32.or
-            (i32.eq (local.get $hash) (i32.const 0x00596d8e)) ;; do
-            (i32.eq (local.get $hash) (i32.const 0x7c6b8f5a))) ;; else
-          (i32.or
-            (i32.eq (local.get $hash) (i32.const 0x0b8737be)) ;; for
-            (i32.eq (local.get $hash) (i32.const 0x00596f2a)))) ;; if
-      (then (return (enum.get $Token.keyword.control))))
-    (if (i32.or
-          (i32.or
-            (i32.eq (local.get $hash) (i32.const 0x7e985a8f)) ;; return
-            (i32.eq (local.get $hash) (i32.const 0x7fb03db7))) ;; switch
-          (i32.or
-            (i32.eq (local.get $hash) (i32.const 0x0b66c65a)) ;; while
-            (i32.eq (local.get $hash) (i32.const 0xa791710f)))) ;; discard
-      (then (return (enum.get $Token.keyword.control))))
-    (if (i32.or
-          (i32.or
-            (i32.eq (local.get $hash) (i32.const 0x42d58377)) ;; demote
-            (i32.eq (local.get $hash) (i32.const 0x426fafdc))) ;; terminateInvocation
-          (i32.or
-            (i32.eq (local.get $hash) (i32.const 0x30120d7f)) ;; terminateRayEXT
-            (i32.eq (local.get $hash) (i32.const 0xac1f946e)))) ;; terminateRayNV
-      (then (return (enum.get $Token.keyword.control))))
-    (if (i32.or
-          (i32.eq (local.get $hash) (i32.const 0x4d08dd79)) ;; ignoreIntersectionEXT
-          (i32.eq (local.get $hash) (i32.const 0x199b6ca8))) ;; ignoreIntersectionNV
-      (then (return (enum.get $Token.keyword.control))))
-
-    (if (i32.eq (local.get $hash) (i32.const 0x7fa39012)) ;; struct
-      (then (return (enum.get $Token.keyword.declaration))))
-
-    ;; Scalar and extension scalar types.
-    (if (i32.or
-          (i32.or
-            (i32.eq (local.get $hash) (i32.const 0x7c76f231)) ;; void
-            (i32.eq (local.get $hash) (i32.const 0x7c703ceb))) ;; bool
-          (i32.or
-            (i32.eq (local.get $hash) (i32.const 0x0b875316)) ;; int
-            (i32.eq (local.get $hash) (i32.const 0x7c743de3)))) ;; uint
-      (then (return (enum.get $Token.type.builtin))))
-    (if (i32.or
-          (i32.or
-            (i32.eq (local.get $hash) (i32.const 0x0a364435)) ;; float
-            (i32.eq (local.get $hash) (i32.const 0x4348b570))) ;; double
-          (i32.or
-            (i32.eq (local.get $hash) (i32.const 0xf0cfc9c1)) ;; atomic_uint
-            (i32.eq (local.get $hash) (i32.const 0x5fb6f265)))) ;; int8_t
-      (then (return (enum.get $Token.type.builtin))))
-    (if (i32.or
-          (i32.or
-            (i32.eq (local.get $hash) (i32.const 0xb9e47a70)) ;; uint8_t
-            (i32.eq (local.get $hash) (i32.const 0x5690fb7a))) ;; int16_t
-          (i32.or
-            (i32.eq (local.get $hash) (i32.const 0xf66f84cf)) ;; uint16_t
-            (i32.eq (local.get $hash) (i32.const 0x569002bc)))) ;; int32_t
-      (then (return (enum.get $Token.type.builtin))))
-    (if (i32.or
-          (i32.or
-            (i32.eq (local.get $hash) (i32.const 0xf66e6c09)) ;; uint32_t
-            (i32.eq (local.get $hash) (i32.const 0x568c2d1f))) ;; int64_t
-          (i32.or
-            (i32.eq (local.get $hash) (i32.const 0xf67210aa)) ;; uint64_t
-            (i32.eq (local.get $hash) (i32.const 0x077f4b19)))) ;; float16_t
-      (then (return (enum.get $Token.type.builtin))))
-    (if (i32.or
-          (i32.or
-            (i32.eq (local.get $hash) (i32.const 0x078063df)) ;; float32_t
-            (i32.eq (local.get $hash) (i32.const 0x077fd77c))) ;; float64_t
-          (i32.or
-            (i32.eq (local.get $hash) (i32.const 0xaa278166)) ;; subpassInput
-            (i32.eq (local.get $hash) (i32.const 0x3321232f)))) ;; isubpassInput
-      (then (return (enum.get $Token.type.builtin))))
-    (if (i32.or
-          (i32.or
-            (i32.eq (local.get $hash) (i32.const 0xeed73733)) ;; usubpassInput
-            (i32.eq (local.get $hash) (i32.const 0x69d779fb))) ;; accelerationStructureEXT
-          (i32.eq (local.get $hash) (i32.const 0x4fac0b8c))) ;; rayQueryEXT
-      (then (return (enum.get $Token.type.builtin))))
 
     ;; vecN/matN, their typed forms, and rectangular matrices.
     (local.set $last (i32.load8_u (i32.sub (local.get $rhs) (i32.const 1))))
@@ -198,102 +181,6 @@
             (i64.eq (i64.load (local.get $lhs)) (i64.const "utexture"))))
       (then (return (enum.get $Token.type.builtin))))
 
-    ;; Storage, interpolation, precision and extension qualifiers.
-    (if (i32.or
-          (i32.or
-            (i32.eq (local.get $hash) (i32.const 0x0a8bffc0)) ;; const
-            (i32.eq (local.get $hash) (i32.const 0x00596f22))) ;; in
-          (i32.or
-            (i32.eq (local.get $hash) (i32.const 0x0b875f2b)) ;; out
-            (i32.eq (local.get $hash) (i32.const 0x0aa84fac)))) ;; inout
-      (then (return (enum.get $Token.keyword))))
-    (if (i32.or
-          (i32.or
-            (i32.eq (local.get $hash) (i32.const 0xc04bf501)) ;; uniform
-            (i32.eq (local.get $hash) (i32.const 0x8198076c))) ;; shared
-          (i32.or
-            (i32.eq (local.get $hash) (i32.const 0x74923ad9)) ;; attribute
-            (i32.eq (local.get $hash) (i32.const 0x26635b19)))) ;; varying
-      (then (return (enum.get $Token.keyword))))
-    (if (i32.or
-          (i32.or
-            (i32.eq (local.get $hash) (i32.const 0x5a6ca0e5)) ;; buffer
-            (i32.eq (local.get $hash) (i32.const 0x890f5e69))) ;; coherent
-          (i32.or
-            (i32.eq (local.get $hash) (i32.const 0xdf12d9c5)) ;; volatile
-            (i32.eq (local.get $hash) (i32.const 0x7f9a6ad9)))) ;; restrict
-      (then (return (enum.get $Token.keyword))))
-    (if (i32.or
-          (i32.or
-            (i32.eq (local.get $hash) (i32.const 0x9f708903)) ;; readonly
-            (i32.eq (local.get $hash) (i32.const 0xb15cc82c))) ;; writeonly
-          (i32.or
-            (i32.eq (local.get $hash) (i32.const 0x5538d7df)) ;; layout
-            (i32.eq (local.get $hash) (i32.const 0xb2449b49)))) ;; centroid
-      (then (return (enum.get $Token.keyword))))
-    (if (i32.or
-          (i32.or
-            (i32.eq (local.get $hash) (i32.const 0x7c6e427a)) ;; flat
-            (i32.eq (local.get $hash) (i32.const 0x813abc47))) ;; smooth
-          (i32.or
-            (i32.eq (local.get $hash) (i32.const 0xb1f00308)) ;; noperspective
-            (i32.eq (local.get $hash) (i32.const 0x0b2f9e8b)))) ;; patch
-      (then (return (enum.get $Token.keyword))))
-    (if (i32.or
-          (i32.or
-            (i32.eq (local.get $hash) (i32.const 0x80f54c03)) ;; sample
-            (i32.eq (local.get $hash) (i32.const 0x620738d5))) ;; invariant
-          (i32.or
-            (i32.eq (local.get $hash) (i32.const 0x6add655e)) ;; precise
-            (i32.eq (local.get $hash) (i32.const 0x0a9ad1fb)))) ;; highp
-      (then (return (enum.get $Token.keyword))))
-    (if (i32.or
-          (i32.or
-            (i32.eq (local.get $hash) (i32.const 0x48598ae8)) ;; mediump
-            (i32.eq (local.get $hash) (i32.const 0x7c6f2521))) ;; lowp
-          (i32.or
-            (i32.eq (local.get $hash) (i32.const 0x97cc0ff3)) ;; precision
-            (i32.eq (local.get $hash) (i32.const 0x5b9b85df)))) ;; subroutine
-      (then (return (enum.get $Token.keyword))))
-    (if (i32.or
-          (i32.or
-            (i32.eq (local.get $hash) (i32.const 0x49ddb468)) ;; rayPayloadEXT
-            (i32.eq (local.get $hash) (i32.const 0x3843254f))) ;; rayPayloadInEXT
-          (i32.or
-            (i32.eq (local.get $hash) (i32.const 0x0a7722a5)) ;; hitAttributeEXT
-            (i32.eq (local.get $hash) (i32.const 0xad0e6ad4)))) ;; callableDataEXT
-      (then (return (enum.get $Token.keyword))))
-    (if (i32.or
-          (i32.or
-            (i32.eq (local.get $hash) (i32.const 0x2a2bb273)) ;; callableDataInEXT
-            (i32.eq (local.get $hash) (i32.const 0xc2118288))) ;; shaderRecordEXT
-          (i32.or
-            (i32.eq (local.get $hash) (i32.const 0x769a1e19)) ;; rayPayloadNV
-            (i32.eq (local.get $hash) (i32.const 0x85956ede)))) ;; rayPayloadInNV
-      (then (return (enum.get $Token.keyword))))
-    (if (i32.or
-          (i32.or
-            (i32.eq (local.get $hash) (i32.const 0x93b607f4)) ;; hitAttributeNV
-            (i32.eq (local.get $hash) (i32.const 0xb7ab1a65))) ;; callableDataNV
-          (i32.or
-            (i32.eq (local.get $hash) (i32.const 0x4eda87e2)) ;; callableDataInNV
-            (i32.eq (local.get $hash) (i32.const 0x7a3e9839)))) ;; shaderRecordNV
-      (then (return (enum.get $Token.keyword))))
-    (if (i32.or
-          (i32.or
-            (i32.eq (local.get $hash) (i32.const 0x514be348)) ;; require
-            (i32.eq (local.get $hash) (i32.const 0x455ede04))) ;; enable
-          (i32.or
-            (i32.eq (local.get $hash) (i32.const 0x7c7752af)) ;; warn
-            (i32.eq (local.get $hash) (i32.const 0xa7907691)))) ;; disable
-      (then (return (enum.get $Token.keyword))))
-    (if (i32.or
-          (i32.or
-            (i32.eq (local.get $hash) (i32.const 0x518da1fa)) ;; typedef
-            (i32.eq (local.get $hash) (i32.const 0x7c6b8616))) ;; enum
-          (i32.eq (local.get $hash) (i32.const 0x0afd7cf6))) ;; union
-      (then (return (enum.get $Token.keyword))))
-
     (enum.get $Token.none))
 
   (func $hlGlsl
@@ -303,7 +190,6 @@
     (local $gap i32)
     (local $p i32)
     (local $word i32)
-    (local $hash i32)
     (local $hl i32)
     (local $afterDot i32)
     (local $wantType i32)
@@ -442,18 +328,7 @@
         (if (call $lexIsIdentStart (local.get $c))
           (then
             (call $lexScanIdent)
-            (local.set $hash (i32.const 5381))
-            (local.set $p (local.get $lhs))
-            (block $hashDone
-              (loop $hashLoop
-                (br_if $hashDone (i32.ge_u (local.get $p) (global.get $ptr)))
-                (local.set $c (i32.load8_u (local.get $p)))
-                (local.set $hash (i32.xor
-                  (i32.mul (local.get $hash) (i32.const 33)) (local.get $c)))
-                (local.set $p (i32.add (local.get $p) (i32.const 1)))
-                (br $hashLoop)))
-            (local.set $hl (call $glslWordHl
-              (local.get $lhs) (global.get $ptr) (local.get $hash)))
+            (local.set $hl (call $glslWordHl (local.get $lhs) (global.get $ptr)))
             (if (i32.eq (local.get $hl) (enum.get $Token.none))
               (then
                 (if (local.get $wantType)

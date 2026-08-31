@@ -1,37 +1,6 @@
 (module
   (import "../common.wat")
 
-  ;; Haskell block comments nest, unlike C-style comments.
-  (func $hsBlockComment (param $hl i32)
-    (local $depth i32)
-    (local $lhs i32)
-    (local.set $lhs (global.get $ptr))
-    (local.set $depth (i32.const 1))
-    (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))
-    (if (i32.gt_u (global.get $ptr) (global.get $end))
-      (then (global.set $ptr (global.get $end))))
-    (block $done
-      (loop $scan
-        (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
-        (if (i32.lt_u (i32.add (global.get $ptr) (i32.const 1)) (global.get $end))
-          (then
-            (if (i32.eq (i32.load16_u (global.get $ptr)) (i32.const "{-"))
-              (then
-                (local.set $depth (i32.add (local.get $depth) (i32.const 1)))
-                (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))
-                (br $scan)))
-            (if (i32.eq (i32.load16_u (global.get $ptr)) (i32.const "-}"))
-              (then
-                (local.set $depth (i32.sub (local.get $depth) (i32.const 1)))
-                (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))
-                (br_if $done (i32.eqz (local.get $depth)))
-                (br $scan)))))
-        (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-        (br $scan)))
-    (call $emitTok (local.get $hl) (local.get $lhs) (global.get $ptr))
-    (call $streamSetNested
-      (local.get $depth) (i32.const "{-") (i32.const "-}") (local.get $hl)))
-
   (func $hsPragma
     (local $lhs i32)
     (local.set $lhs (global.get $ptr))
@@ -40,12 +9,13 @@
       (then (global.set $ptr (global.get $end))))
     (block $done
       (loop $scan
+        ;; hop between `#` bytes with SIMD; the closing `#-}` holds the only
+        ;; hash a pragma body normally sees
+        (global.set $ptr (call $lexFindByte (global.get $ptr) (i32.const "#")))
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
         (if (i32.and
               (i32.lt_u (i32.add (global.get $ptr) (i32.const 2)) (global.get $end))
-              (i32.and
-                (i32.eq (i32.load8_u (global.get $ptr)) (i32.const "#"))
-                (i32.eq (i32.load16_u offset=1 (global.get $ptr)) (i32.const "-}"))))
+              (i32.eq (i32.load16_u offset=1 (global.get $ptr)) (i32.const "-}")))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 3)))
             (br $done)))
@@ -53,125 +23,40 @@
         (br $scan)))
     (call $emitTok (enum.get $Token.preproc) (local.get $lhs) (global.get $ptr)))
 
-  (func $hsWordHl (param $hash i32) (result i32)
-    (if (i32.or
-          (i32.eq (local.get $hash) (i32.const 0x7c881713)) ;; True
-          (i32.eq (local.get $hash) (i32.const 0x0c4d6f38))) ;; False
-      (then (return (enum.get $Token.boolean))))
-    (if (i32.or
-          (i32.or
-            (i32.eq (local.get $hash) (i32.const 0x576099bf)) ;; module
-            (i32.eq (local.get $hash) (i32.const 0x5fc4f278))) ;; import
-          (i32.or
-            (i32.eq (local.get $hash) (i32.const 0xbb66624b)) ;; qualified
-            (i32.eq (local.get $hash) (i32.const 0x5df255c0)))) ;; hiding
-      (then (return (enum.get $Token.keyword.import))))
-    (if (i32.or
-          (i32.or
-            (i32.eq (local.get $hash) (i32.const 0x7c6adc15)) ;; data
-            (i32.eq (local.get $hash) (i32.const 0xca4925e1))) ;; newtype
-          (i32.or
-            (i32.eq (local.get $hash) (i32.const 0x7c737f9d)) ;; type
-            (i32.or
-              (i32.eq (local.get $hash) (i32.const 0x0a8b90ab)) ;; class
-              (i32.eq (local.get $hash) (i32.const 0x1cf1548c))))) ;; instance
-      (then (return (enum.get $Token.keyword.declaration))))
-    (if (i32.or
-          (i32.or
-            (i32.or
-              (i32.eq (local.get $hash) (i32.const 0x7c70c251)) ;; case
-              (i32.eq (local.get $hash) (i32.const 0x00596f6c))) ;; of
-            (i32.or
-              (i32.eq (local.get $hash) (i32.const 0x00596f2a)) ;; if
-              (i32.eq (local.get $hash) (i32.const 0x7c73be32)))) ;; then
-          (i32.or
-            (i32.or
-              (i32.eq (local.get $hash) (i32.const 0x7c6b8f5a)) ;; else
-              (i32.eq (local.get $hash) (i32.const 0x00596d8e))) ;; do
-            (i32.or
-              (i32.eq (local.get $hash) (i32.const 0x0b874078)) ;; let
-              (i32.eq (local.get $hash) (i32.const 0x00596f22))))) ;; in
-      (then (return (enum.get $Token.keyword.control))))
-    (if (i32.or
-          (i32.or
-            (i32.or
-              (i32.eq (local.get $hash) (i32.const 0x0b66f508)) ;; where
-              (i32.eq (local.get $hash) (i32.const 0x68d45049))) ;; deriving
-            (i32.or
-              (i32.eq (local.get $hash) (i32.const 0x0a4b5460)) ;; guard
-              (i32.eq (local.get $hash) (i32.const 0x0b874443)))) ;; mdo
-          (i32.or
-            (i32.eq (local.get $hash) (i32.const 0x0b878b71)) ;; rec
-            (i32.eq (local.get $hash) (i32.const 0x7c7581eb)))) ;; proc
-      (then (return (enum.get $Token.keyword.control))))
-    (if (i32.or
-          (i32.or
-            (i32.or
-              (i32.eq (local.get $hash) (i32.const 0x00596e37)) ;; as
-              (i32.eq (local.get $hash) (i32.const 0x50b6649f))) ;; forall
-            (i32.or
-              (i32.eq (local.get $hash) (i32.const 0x5045ca33)) ;; family
-              (i32.eq (local.get $hash) (i32.const 0x7c790251)))) ;; role
-          (i32.or
-            (i32.or
-              (i32.eq (local.get $hash) (i32.const 0x959dcc2d)) ;; pattern
-              (i32.eq (local.get $hash) (i32.const 0x6780dabb))) ;; foreign
-            (i32.or
-              (i32.eq (local.get $hash) (i32.const 0x9ce67dce)) ;; default
-              (i32.eq (local.get $hash) (i32.const 0x0aa831f5))))) ;; infix
-      (then (return (enum.get $Token.keyword))))
-    (if (i32.or
-          (i32.eq (local.get $hash) (i32.const 0x5fae70f9)) ;; infixl
-          (i32.eq (local.get $hash) (i32.const 0x5fae70e7))) ;; infixr
-      (then (return (enum.get $Token.keyword))))
+  ;; group order is the dispatch order in $hsWordHl below; let and where keep
+  ;; dedicated groups so the caller can prime the next name as a definition
+  (keyword-table $hsWords $mem.hsWords $mem.hsWords+1024 32 64
+    (group "True" "False")                              ;; 1: booleans
+    (group "module" "import" "qualified" "hiding")      ;; 2: import
+    (group "data" "newtype" "type" "class" "instance")  ;; 3: declaration
+    (group "let")                                       ;; 4: control, binds
+    (group "where")                                     ;; 5: control, binds
+    (group ;; 6: control keywords
+      "case" "of" "if" "then" "else" "do" "in"
+      "deriving" "guard" "mdo" "rec" "proc")
+    (group ;; 7: other keywords
+      "as" "forall" "family" "role" "pattern" "foreign"
+      "default" "infix" "infixl" "infixr")
+    (group ;; 8: prelude functions
+      "map" "fmap" "foldl" "foldr" "pure" "return" "print" "show"
+      "read" "error" "undefined" "id" "const" "flip" "zip" "head"
+      "tail" "null" "length" "filter" "concat" "sequence" "traverse"))
 
-    (if (i32.or
-          (i32.or
-            (i32.or
-              (i32.eq (local.get $hash) (i32.const 0x0b8743b9)) ;; map
-              (i32.eq (local.get $hash) (i32.const 0x7c6e463f))) ;; fmap
-            (i32.or
-              (i32.eq (local.get $hash) (i32.const 0x0a33a428)) ;; foldl
-              (i32.eq (local.get $hash) (i32.const 0x0a33a436)))) ;; foldr
-          (i32.or
-            (i32.or
-              (i32.eq (local.get $hash) (i32.const 0x7c757ed7)) ;; pure
-              (i32.eq (local.get $hash) (i32.const 0x7e985a8f))) ;; return
-            (i32.or
-              (i32.eq (local.get $hash) (i32.const 0x0b25c654)) ;; print
-              (i32.eq (local.get $hash) (i32.const 0x7c79aa86))))) ;; show
-      (then (return (enum.get $Token.function))))
-    (if (i32.or
-          (i32.or
-            (i32.or
-              (i32.eq (local.get $hash) (i32.const 0x7c78f9b7)) ;; read
-              (i32.eq (local.get $hash) (i32.const 0x09de11bd))) ;; error
-            (i32.or
-              (i32.eq (local.get $hash) (i32.const 0x9c327aff)) ;; undefined
-              (i32.eq (local.get $hash) (i32.const 0x00596f28)))) ;; id
-          (i32.or
-            (i32.or
-              (i32.eq (local.get $hash) (i32.const 0x0a8bffc0)) ;; const
-              (i32.eq (local.get $hash) (i32.const 0x7c6e4176))) ;; flip
-            (i32.or
-              (i32.eq (local.get $hash) (i32.const 0x0b87ace6)) ;; zip
-              (i32.eq (local.get $hash) (i32.const 0x7c715ded))))) ;; head
-      (then (return (enum.get $Token.function))))
-    (if (i32.or
-          (i32.or
-            (i32.or
-              (i32.eq (local.get $hash) (i32.const 0x7c73a175)) ;; tail
-              (i32.eq (local.get $hash) (i32.const 0x7c72c9de))) ;; null
-            (i32.or
-              (i32.eq (local.get $hash) (i32.const 0x55758759)) ;; length
-              (i32.eq (local.get $hash) (i32.const 0x50cebe25)))) ;; filter
-          (i32.or
-            (i32.or
-              (i32.eq (local.get $hash) (i32.const 0x5c0bb611)) ;; concat
-              (i32.eq (local.get $hash) (i32.const 0x33636b5a))) ;; sequence
-            (i32.eq (local.get $hash) (i32.const 0x204a1275)))) ;; traverse
-      (then (return (enum.get $Token.function))))
-    (enum.get $Token.none))
+  ;; Map a $hsWords group index to its token; zero (not a keyword) stays none.
+  (func $hsWordHl (param $g i32) (result i32)
+    (if (i32.eqz (local.get $g))
+      (then (return (enum.get $Token.none))))
+    (if (i32.eq (local.get $g) (i32.const 1))
+      (then (return (enum.get $Token.boolean))))
+    (if (i32.eq (local.get $g) (i32.const 2))
+      (then (return (enum.get $Token.keyword.import))))
+    (if (i32.eq (local.get $g) (i32.const 3))
+      (then (return (enum.get $Token.keyword.declaration))))
+    (if (i32.le_u (local.get $g) (i32.const 6)) ;; let, where, other control
+      (then (return (enum.get $Token.keyword.control))))
+    (if (i32.eq (local.get $g) (i32.const 7))
+      (then (return (enum.get $Token.keyword))))
+    (enum.get $Token.function))
 
   (func $hsIsSymbol (param $c i32) (result i32)
     (i32.or
@@ -208,8 +93,8 @@
     (local $atHead i32)
     (local $c i32)
     (local $c2 i32)
+    (local $g i32)
     (local $gap i32)
-    (local $hash i32)
     (local $hl i32)
     (local $importLine i32)
     (local $inBacktick i32)
@@ -225,21 +110,17 @@
     (block $done
       (loop $next
         (local.set $gap (global.get $ptr))
-        (block $spaceDone
-          (loop $space
-            (br_if $spaceDone (i32.ge_u (global.get $ptr) (global.get $end)))
-            (local.set $c (i32.load8_u (global.get $ptr)))
-            (br_if $spaceDone (i32.eqz (call $lexIsSpace (local.get $c))))
-            (if (i32.or (i32.eq (local.get $c) (i32.const 10))
-                        (i32.eq (local.get $c) (i32.const 13)))
-              (then
-                (local.set $lineHead (i32.const 1))
-                (local.set $importLine (i32.const 0))
-                (local.set $typeMode (i32.const 0))
-                (local.set $wantFunction (i32.const 0))
-                (local.set $wantType (i32.const 0))))
-            (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-            (br $space)))
+        (call $lexScanWhitespace)
+        ;; the gap crossed a line break when a CR/LF sits before the new $ptr
+        (if (i32.lt_u
+              (call $lexFindEither (local.get $gap) (i32.const 10) (i32.const 13))
+              (global.get $ptr))
+          (then
+            (local.set $lineHead (i32.const 1))
+            (local.set $importLine (i32.const 0))
+            (local.set $typeMode (i32.const 0))
+            (local.set $wantFunction (i32.const 0))
+            (local.set $wantType (i32.const 0))))
         (call $emitGap (local.get $gap) (global.get $ptr))
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
         (local.set $lhs (global.get $ptr))
@@ -265,7 +146,9 @@
                         (i32.eq (i32.load8_u offset=2 (global.get $ptr)) (i32.const "|"))
                         (i32.eq (i32.load8_u offset=2 (global.get $ptr)) (i32.const "^"))))
                   (then (local.set $hl (enum.get $Token.comment.doc))))
-                (call $hsBlockComment (local.get $hl))))
+                ;; Haskell block comments nest, unlike C-style comments.
+                (call $lexNestedBlockComment
+                  (i32.const "{-") (i32.const "-}") (local.get $hl))))
             (br $next)))
         (block $notComment
           (if (i32.and
@@ -330,7 +213,7 @@
             (br $next)))
         (if (call $lexIsIdentStart (local.get $c))
           (then
-            (local.set $hash (i32.const 5381))
+            ;; identifier bytes plus prime, which marks variants like foldl'
             (block $identDone
               (loop $ident
                 (br_if $identDone (i32.ge_u (global.get $ptr) (global.get $end)))
@@ -339,11 +222,11 @@
                   (i32.or
                     (call $lexIsIdentContinue (local.get $c))
                     (i32.eq (local.get $c) (i32.const 39)))))
-                (local.set $hash (i32.xor
-                  (i32.mul (local.get $hash) (i32.const 33)) (local.get $c)))
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
                 (br $ident)))
-            (local.set $hl (call $hsWordHl (local.get $hash)))
+            (local.set $g (keyword-table.get $hsWords
+              (local.get $lhs) (global.get $ptr)))
+            (local.set $hl (call $hsWordHl (local.get $g)))
             (if (i32.eq (local.get $hl) (enum.get $Token.none))
               (then
                 (if (i32.or
@@ -385,8 +268,8 @@
                   (else
                     (local.set $wantType (i32.const 0))))))
             (local.set $wantFunction (i32.or
-              (i32.eq (local.get $hash) (i32.const 0x0b874078)) ;; let
-              (i32.eq (local.get $hash) (i32.const 0x0b66f508)))) ;; where
+              (i32.eq (local.get $g) (i32.const 4)) ;; let
+              (i32.eq (local.get $g) (i32.const 5)))) ;; where
             (local.set $lineHead (i32.const 0))
             (br $next)))
 
@@ -426,7 +309,7 @@
                 (local.set $p (i32.load16_u (local.get $lhs)))
                 (if (i32.eq (local.get $p) (i32.const "::"))
                   (then (local.set $typeMode (i32.const 1))))
-                (if (i32.eq (local.get $p) (i32.const "="))
+                (if (i32.eq (local.get $p) (i32.const "=="))
                   (then (local.set $typeMode (i32.const 0))))))
             (if (i32.and
                   (i32.eq (local.get $n) (i32.const 1))

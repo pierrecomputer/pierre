@@ -31,8 +31,7 @@
     (global.set $ptr (i32.add (local.get $p) (i32.const 1)))
     (block $done
       (loop $scan
-        (global.set $ptr
-          (call $lexFindEither (global.get $ptr) (i32.const "]") (i32.const "]")))
+        (global.set $ptr (call $lexFindByte (global.get $ptr) (i32.const "]")))
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
         (local.set $p (i32.add (global.get $ptr) (i32.const 1)))
         (local.set $i (i32.const 0))
@@ -69,74 +68,39 @@
           (local.get $hl))))
     (i32.const 1))
 
-  (func $luaWordHl (param $lhs i32) (param $rhs i32) (result i32)
-    (local $n i32)
-    (local $w i64)
-    (local.set $n (i32.sub (local.get $rhs) (local.get $lhs)))
-    (local.set $w (i64.load (local.get $lhs)))
-    (if (i32.or
-          (i32.and (i32.eq (local.get $n) (i32.const 4))
-            (i64.eq (i64.and (local.get $w) (i64.const 0xffffffff)) (i64.const "true")))
-          (i32.and (i32.eq (local.get $n) (i32.const 5))
-            (i64.eq (i64.and (local.get $w) (i64.const 0xffffffffff)) (i64.const "false"))))
+  ;; group order is the dispatch order in $luaWordHl below
+  (keyword-table $luaWords $mem.luaWords $mem.luaWords+512 16 32
+    (group "true" "false")           ;; 1: booleans
+    (group "nil")                    ;; 2: built-in constant
+    (group "and" "not" "in" "or")    ;; 3: operator
+    (group ;; 4: control
+      "do" "if" "end" "for" "else" "then" "break" "until" "while" "repeat"
+      "elseif")
+    (group "local")                  ;; 5: declaration
+    (group "function")               ;; 6: declaration, next name is a function
+    (group "goto" "return"))         ;; 7: plain keyword
+
+  ;; Map a $luaWords group index to its token. Group 0 - a table miss - is an
+  ;; ordinary name, which $hlLua may still promote to a call or a property.
+  (func $luaWordHl (param $group i32) (result i32)
+    (if (i32.eqz (local.get $group))
+      (then (return (enum.get $Token.variable))))
+    (if (i32.eq (local.get $group) (i32.const 1))
       (then (return (enum.get $Token.boolean))))
-    (if (i32.and (i32.eq (local.get $n) (i32.const 3))
-                 (i64.eq (i64.and (local.get $w) (i64.const 0xffffff)) (i64.const "nil")))
+    (if (i32.eq (local.get $group) (i32.const 2))
       (then (return (enum.get $Token.constant.builtin))))
-    (if (i32.or
-          (i32.and (i32.eq (local.get $n) (i32.const 3))
-            (i32.or
-              (i64.eq (i64.and (local.get $w) (i64.const 0xffffff)) (i64.const "and"))
-              (i64.eq (i64.and (local.get $w) (i64.const 0xffffff)) (i64.const "not"))))
-          (i32.and (i32.eq (local.get $n) (i32.const 2))
-            (i32.or
-              (i64.eq (i64.and (local.get $w) (i64.const 0xffff)) (i64.const "in"))
-              (i64.eq (i64.and (local.get $w) (i64.const 0xffff)) (i64.const "or")))))
+    (if (i32.eq (local.get $group) (i32.const 3))
       (then (return (enum.get $Token.keyword.operator))))
-    (if (i32.or
-          (i32.and (i32.eq (local.get $n) (i32.const 2))
-            (i32.or
-              (i64.eq (i64.and (local.get $w) (i64.const 0xffff)) (i64.const "do"))
-              (i64.eq (i64.and (local.get $w) (i64.const 0xffff)) (i64.const "if"))))
-          (i32.and (i32.eq (local.get $n) (i32.const 3))
-            (i32.or
-              (i64.eq (i64.and (local.get $w) (i64.const 0xffffff)) (i64.const "end"))
-              (i64.eq (i64.and (local.get $w) (i64.const 0xffffff)) (i64.const "for")))))
+    (if (i32.eq (local.get $group) (i32.const 4))
       (then (return (enum.get $Token.keyword.control))))
-    (if (i32.or
-          (i32.and (i32.eq (local.get $n) (i32.const 4))
-            (i32.or
-              (i64.eq (i64.and (local.get $w) (i64.const 0xffffffff)) (i64.const "else"))
-              (i64.eq (i64.and (local.get $w) (i64.const 0xffffffff)) (i64.const "then"))))
-          (i32.or
-            (i32.and (i32.eq (local.get $n) (i32.const 5))
-              (i32.or
-                (i64.eq (i64.and (local.get $w) (i64.const 0xffffffffff)) (i64.const "break"))
-                (i32.or
-                  (i64.eq (i64.and (local.get $w) (i64.const 0xffffffffff)) (i64.const "until"))
-                  (i64.eq (i64.and (local.get $w) (i64.const 0xffffffffff)) (i64.const "while")))))
-          (i32.and (i32.eq (local.get $n) (i32.const 6))
-            (i32.or
-              (i64.eq (i64.and (local.get $w) (i64.const 0xffffffffffff)) (i64.const "repeat"))
-              (i64.eq (i64.and (local.get $w) (i64.const 0xffffffffffff)) (i64.const "elseif"))))))
-      (then (return (enum.get $Token.keyword.control))))
-    (if (i32.or
-          (i32.and (i32.eq (local.get $n) (i32.const 5))
-            (i64.eq (i64.and (local.get $w) (i64.const 0xffffffffff)) (i64.const "local")))
-          (i32.and (i32.eq (local.get $n) (i32.const 8))
-            (i64.eq (local.get $w) (i64.const "function"))))
+    (if (i32.le_u (local.get $group) (i32.const 6))
       (then (return (enum.get $Token.keyword.declaration))))
-    (if (i32.or
-          (i32.and (i32.eq (local.get $n) (i32.const 4))
-            (i64.eq (i64.and (local.get $w) (i64.const 0xffffffff)) (i64.const "goto")))
-          (i32.and (i32.eq (local.get $n) (i32.const 6))
-            (i64.eq (i64.and (local.get $w) (i64.const 0xffffffffffff)) (i64.const "return"))))
-      (then (return (enum.get $Token.keyword))))
-    (enum.get $Token.variable))
+    (enum.get $Token.keyword))
 
   (func $hlLua
     (local $c i32)
     (local $decl i32)
+    (local $group i32)
     (local $hl i32)
     (local $lhs i32)
     (local $member i32)
@@ -194,7 +158,9 @@
         (if (call $lexIsIdentStart (local.get $c))
           (then
             (call $lexScanIdent)
-            (local.set $hl (call $luaWordHl (local.get $lhs) (global.get $ptr)))
+            (local.set $group
+              (keyword-table.get $luaWords (local.get $lhs) (global.get $ptr)))
+            (local.set $hl (call $luaWordHl (local.get $group)))
             (if (local.get $decl)
               (then
                 (local.set $hl (enum.get $Token.function.definition))
@@ -215,12 +181,12 @@
                         (if (i32.and (i32.lt_u (local.get $p) (global.get $end))
                                      (i32.eq (i32.load8_u (local.get $p)) (i32.const "(")))
                           (then (local.set $hl (enum.get $Token.function))))))))))
-            (if (i32.eq (local.get $hl) (enum.get $Token.keyword.declaration))
-              (then
-                (if (i32.and
-                      (i32.eq (i32.sub (global.get $ptr) (local.get $lhs)) (i32.const 8))
-                      (i64.eq (i64.load (local.get $lhs)) (i64.const "function")))
-                  (then (local.set $decl (i32.const 1))))))
+            ;; group 6 is `function`; the token test keeps a `function` that was
+            ;; itself captured as a definition from opening another one
+            (if (i32.and
+                  (i32.eq (local.get $hl) (enum.get $Token.keyword.declaration))
+                  (i32.eq (local.get $group) (i32.const 6)))
+              (then (local.set $decl (i32.const 1))))
             (if (call $lexIsConstCase (local.get $lhs) (global.get $ptr))
               (then
                 (if (i32.eq (local.get $hl) (enum.get $Token.variable))

@@ -1,17 +1,6 @@
 (module
   (import "../common.wat")
 
-  ;; identifier-continuation: a-z A-Z 0-9 `-` `_` and any byte >= 128 - CSS
-  ;; identifiers may contain non-ASCII code points; UTF-8 continuation bytes are >= 128
-  (func $cssIdentCont (param $c i32) (result i32)
-    (i32.or
-      (i32.or
-        (i32.le_u (i32.sub (i32.or (local.get $c) (i32.const 32)) (i32.const "a")) (i32.const 25))
-        (i32.le_u (i32.sub (local.get $c) (i32.const "0")) (i32.const 9)))
-      (i32.or
-        (i32.or (i32.eq (local.get $c) (i32.const "-")) (i32.eq (local.get $c) (i32.const "_")))
-        (i32.ge_u (local.get $c) (i32.const 128)))))
-
   ;; identifier-start: a-z A-Z `_` and any byte >= 128 - leading `-` is resolved by
   ;; the callers, which must split `-2px` from `-webkit-x` and `--custom`
   (func $cssIdentStart (param $c i32) (result i32)
@@ -58,11 +47,11 @@
             (if (call $cssIdentStart (local.get $c))
               (then (call $cssScanIdent))))))))
 
-  ;; quoted string starting at the opening quote: emitted as $hl with 2-byte
-  ;; string.escape sub-spans for `\x` escapes. A raw CR/LF terminates the
+  ;; quoted string starting at the opening quote: emitted as $Token.string with
+  ;; 2-byte string.escape sub-spans for `\x` escapes. A raw CR/LF terminates the
   ;; (invalid) string leniently without being consumed; `\` + newline is an
   ;; escape, so continuation lines keep the string open. 16 bytes per step.
-  (func $cssString (param $hl i32)
+  (func $cssString
     (local $q i32)
     (local $seg i32)
     (local $c i32)
@@ -86,7 +75,7 @@
         ;; bytes, clamped to $end. An escaped multibyte UTF-8 character stays
         ;; whole inside the escape span - a span boundary must never split a
         ;; code point, or the output decodes to garbage
-        (call $emitTok (local.get $hl) (local.get $seg) (global.get $ptr))
+        (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
         (local.set $e (call $scanHexRun
           (i32.add (global.get $ptr) (i32.const 1)) (i32.const 6)))
         (if (i32.eq (local.get $e) (i32.add (global.get $ptr) (i32.const 1)))
@@ -96,7 +85,7 @@
         (global.set $ptr (local.get $e))
         (local.set $seg (global.get $ptr))
         (br $wide)))
-    (call $emitTok (local.get $hl) (local.get $seg) (global.get $ptr)))
+    (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr)))
 
   ;; whether [$lhs,$rhs) is a media/supports query operator:
   ;; `and` / `or` / `not` / `only`. wide loads may read past $rhs, always
@@ -206,15 +195,15 @@
                   (i32.lt_u (i32.add (local.get $p) (i32.const 1)) (global.get $end))
                   (i32.eq (i32.load8_u offset=1 (local.get $p)) (i32.const "*")))
               (then
-                ;; skip the comment body
+                ;; skip the comment body, hopping star to star instead of
+                ;; testing every byte; an unterminated comment stops at $end
                 (local.set $p (i32.add (local.get $p) (i32.const 2)))
                 (block $cDone
                   (loop $cl
+                    (local.set $p (call $lexFindByte (local.get $p) (i32.const "*")))
                     (br_if $cDone (i32.ge_u (local.get $p) (global.get $end)))
                     (if (i32.and
-                          (i32.and
-                            (i32.lt_u (i32.add (local.get $p) (i32.const 1)) (global.get $end))
-                            (i32.eq (i32.load8_u (local.get $p)) (i32.const "*")))
+                          (i32.lt_u (i32.add (local.get $p) (i32.const 1)) (global.get $end))
                           (i32.eq (i32.load8_u offset=1 (local.get $p)) (i32.const "/")))
                       (then
                         (local.set $p (i32.add (local.get $p) (i32.const 2)))
@@ -223,11 +212,16 @@
                     (br $cl))))
               (else (local.set $p (i32.add (local.get $p) (i32.const 1)))))
             (br $scan)))
-        ;; skip a quoted string
+        ;; skip a quoted string, hopping 16 bytes per step to the next quote,
+        ;; backslash, or newline - the same three stop classes the scalar loop
+        ;; tested, so a `\` still swallows one byte and a raw CR/LF still ends
+        ;; the string unconsumed
         (local.set $q (local.get $c))
         (local.set $p (i32.add (local.get $p) (i32.const 1)))
         (block $sDone
           (loop $sl
+            (local.set $p (call $scanFindSpecial (local.get $p) (global.get $end)
+              (local.get $q) (i32.const 1) (i32.const 1)))
             (br_if $sDone (i32.ge_u (local.get $p) (global.get $end)))
             (local.set $c (i32.load8_u (local.get $p)))
             (if (i32.eq (local.get $c) (local.get $q))
@@ -236,8 +230,7 @@
                 (br $sDone)))
             (br_if $sDone (i32.or (i32.eq (local.get $c) (i32.const 10))
                                   (i32.eq (local.get $c) (i32.const 13))))
-            (local.set $p (i32.add (local.get $p)
-              (select (i32.const 2) (i32.const 1) (i32.eq (local.get $c) (i32.const 92)))))
+            (local.set $p (i32.add (local.get $p) (i32.const 2)))
             (br $sl)))
         (br $scan)))
     (i32.const 0))
@@ -249,7 +242,6 @@
     (local $lhs i32)
     (local $mid i32)
     (local $p i32)
-    (local $depth i32)
     (local $mode i32)   ;; 0 selector, 1 at-prelude, 2 property, 3 value
     (local $decide i32) ;; 1 at a statement start: classify before dispatching
     (local $attr i32)   ;; selector-mode attr selector: 1 before `=`, 2 after
@@ -258,21 +250,12 @@
     (call $lexEmitLeadingContinuation)
     (block $done
       (loop $next
-        ;; whitespace gap - stays scalar: css gaps are mostly zero or one byte,
-        ;; so the SIMD helper's call overhead outweighs its wide steps here
         (local.set $gap (global.get $ptr))
-        (block $wsDone
-          (loop $ws
-            (br_if $wsDone (i32.ge_u (global.get $ptr) (global.get $end)))
-            (local.set $c (i32.load8_u (global.get $ptr)))
-            (br_if $wsDone (i32.eqz (i32.or
-              (i32.eq (local.get $c) (i32.const 32))
-              (i32.le_u (i32.sub (local.get $c) (i32.const 9)) (i32.const 4)))))
-            (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-            (br $ws)))
+        (call $scanWhitespace)
         (call $emitGap (local.get $gap) (global.get $ptr))
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
         (local.set $lhs (global.get $ptr))
+        (local.set $c (i32.load8_u (global.get $ptr)))
         (local.set $c2 (select
           (i32.load8_u offset=1 (global.get $ptr)) (i32.const 0)
           (i32.lt_u (i32.add (global.get $ptr) (i32.const 1)) (global.get $end))))
@@ -305,24 +288,21 @@
                             (i32.const "e")))))
                 (call $emitTok (enum.get $Token.keyword) (local.get $lhs) (global.get $ptr))
                 (br $next))
-              ;; the look-ahead also runs at depth 0, so a bare-declaration
-              ;; fragment (style attribute, docs snippet) colors as
-              ;; property/value, not as selectors
+              ;; the look-ahead runs at every statement start, nested or not, so
+              ;; a bare-declaration fragment (style attribute, docs snippet)
+              ;; colors as property/value, not as selectors
               (else (local.set $mode
                 (select (i32.const 0) (i32.const 2) (call $cssDecide)))))))
 
         ;; structural bytes end statements in any mode
         (if (i32.eq (local.get $c) (i32.const "{"))
           (then
-            (local.set $depth (i32.add (local.get $depth) (i32.const 1)))
             (local.set $decide (i32.const 1))
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (call $emitTok (enum.get $Token.punctuation.bracket) (local.get $lhs) (global.get $ptr))
             (br $next)))
         (if (i32.eq (local.get $c) (i32.const "}"))
           (then
-            (if (local.get $depth)
-              (then (local.set $depth (i32.sub (local.get $depth) (i32.const 1)))))
             (local.set $decide (i32.const 1))
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (call $emitTok (enum.get $Token.punctuation.bracket) (local.get $lhs) (global.get $ptr))
@@ -337,7 +317,7 @@
         ;; quoted strings, in any mode
         (if (i32.or (i32.eq (local.get $c) (i32.const 34)) (i32.eq (local.get $c) (i32.const 39)))
           (then
-            (call $cssString (enum.get $Token.string))
+            (call $cssString)
             (br $next)))
 
         (block $misc

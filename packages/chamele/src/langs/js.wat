@@ -986,6 +986,8 @@
   ;; Return the byte after the `}` balancing the `{` at $from. This reuses the
   ;; real token scanner, then restores $ptr; unterminated expressions reach
   ;; $end. $body may start after a Svelte block/directive marker.
+  ;; INVARIANT: when $from < $end the result is strictly greater than $from -
+  ;; the vue/svelte/astro main loops rely on this to always advance.
   (func $tsxExpressionEnd (param $from i32) (param $body i32) (result i32)
     (local $save i32)
     (local $to i32)

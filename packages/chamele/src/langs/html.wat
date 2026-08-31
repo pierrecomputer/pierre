@@ -4,6 +4,7 @@
   (import "../emit.wat")
   (import "./tsx.wat")
   (import "./css.wat")
+  (import "./xml.wat")
 
   ;; does [lhs,rhs) name a raw-text element? 1=script 2=style 0=other.
   ;; the OR 0x20 fold is safe: letters fold, digits/dashes already have bit 5
@@ -60,33 +61,6 @@
       (i32.or (i32.eq (local.get $t) (i32.const 32))
               (i32.le_u (i32.sub (local.get $t) (i32.const 9)) (i32.const 4)))))
 
-  ;; advance $ptr to the next `<` or `&` (or $end); text runs 16 bytes per step
-  (func $htmlSkipText
-    (local $mask i32)
-    (local $rem i32)
-    (local $w v128)
-    (block $found
-      (loop $wide
-        (br_if $found (i32.ge_u (global.get $ptr) (global.get $end)))
-        (local.set $w (v128.load (global.get $ptr)))
-        (local.set $mask (i8x16.bitmask (v128.or
-          (i8x16.eq (local.get $w) (i8x16.splat (i32.const "<")))
-          (i8x16.eq (local.get $w) (i8x16.splat (i32.const "&"))))))
-        (local.set $rem (i32.sub (global.get $end) (global.get $ptr)))
-        (if (i32.lt_u (local.get $rem) (i32.const 16))
-          (then (local.set $mask (i32.and (local.get $mask)
-            (i32.sub (i32.shl (i32.const 1) (local.get $rem)) (i32.const 1))))))
-        (if (local.get $mask)
-          (then
-            (global.set $ptr (i32.add (global.get $ptr) (i32.ctz (local.get $mask))))
-            (br $found)))
-        (if (i32.le_u (local.get $rem) (i32.const 16))
-          (then
-            (global.set $ptr (global.get $end))
-            (br $found)))
-        (global.set $ptr (i32.add (global.get $ptr) (i32.const 16)))
-        (br $wide))))
-
   ;; scan a character reference at `&`; emits it as string.escape and returns 1,
   ;; or returns 0 leaving $ptr on the `&`
   (func $htmlEntity (result i32)
@@ -121,79 +95,21 @@
     (global.set $ptr (i32.add (local.get $q) (i32.const 1)))
     (i32.const 1))
 
-  ;; `<!--` comment: advance past `-->` (or to $end) and emit the whole token
+  ;; `<!--` comment: advance past `-->` (or to $end) and emit the whole token.
+  ;; The close scan, the spec's abrupt-closing rule (`<!-->` and `<!--->` are
+  ;; complete comments), and the streaming checkpoint are byte-identical to an
+  ;; XML comment section, so delegate.
   (func $htmlComment (param $lhs i32)
-    (local $closed i32)
-    (local $mask i32)
-    (local $rem i32)
-    (local $w v128)
-    (global.set $ptr (i32.add (global.get $ptr) (i32.const 4)))
-    (block $done
-      (loop $wide
-        (if (i32.ge_u (global.get $ptr) (global.get $end))
-          (then
-            (global.set $ptr (global.get $end))
-            (br $done)))
-        (local.set $w (v128.load (global.get $ptr)))
-        (local.set $mask (i8x16.bitmask (i8x16.eq (local.get $w) (i8x16.splat (i32.const ">")))))
-        (local.set $rem (i32.sub (global.get $end) (global.get $ptr)))
-        (if (i32.lt_u (local.get $rem) (i32.const 16))
-          (then (local.set $mask (i32.and (local.get $mask)
-            (i32.sub (i32.shl (i32.const 1) (local.get $rem)) (i32.const 1))))))
-        (block $noHit
-          (loop $hit
-            (br_if $noHit (i32.eqz (local.get $mask)))
-            (local.set $rem (i32.add (global.get $ptr) (i32.ctz (local.get $mask)))) ;; `>` pos
-            ;; closed by `-->`? the scan starts at lhs+4, so the `--` before
-            ;; this `>` may be the opener's own dashes - that is the spec's
-            ;; abrupt-closing rule (`<!-->` and `<!--->` are complete comments)
-            (if (i32.eq
-                  (i32.and (i32.load (i32.sub (local.get $rem) (i32.const 2))) (i32.const 0xffff))
-                  (i32.const "--"))
-              (then
-                (global.set $ptr (i32.add (local.get $rem) (i32.const 1)))
-                (local.set $closed (i32.const 1))
-                (br $done)))
-            (local.set $mask (i32.and (local.get $mask) (i32.sub (local.get $mask) (i32.const 1))))
-            (br $hit)))
-        (if (i32.le_u (i32.sub (global.get $end) (global.get $ptr)) (i32.const 16))
-          (then
-            (global.set $ptr (global.get $end))
-            (br $done)))
-        (global.set $ptr (i32.add (global.get $ptr) (i32.const 16)))
-        (br $wide)))
-    (call $emitTok (enum.get $Token.comment) (local.get $lhs) (global.get $ptr))
-    (if (i32.eqz (local.get $closed))
-      (then (call $streamSetFixed32
-        (i32.const "-->") (i32.const 3) (enum.get $Token.comment)))))
+    (call $xmlSection
+      (local.get $lhs) (i32.const 4) (i32.const 1) (enum.get $Token.comment)))
 
   ;; `<!...>` / `<?...>` declaration: advance past `>` (or to $end)
   (func $htmlDecl
-    (local $mask i32)
-    (local $rem i32)
-    (local $w v128)
-    (block $done
-      (loop $wide
-        (if (i32.ge_u (global.get $ptr) (global.get $end))
-          (then
-            (global.set $ptr (global.get $end))
-            (br $done)))
-        (local.set $w (v128.load (global.get $ptr)))
-        (local.set $mask (i8x16.bitmask (i8x16.eq (local.get $w) (i8x16.splat (i32.const ">")))))
-        (local.set $rem (i32.sub (global.get $end) (global.get $ptr)))
-        (if (i32.lt_u (local.get $rem) (i32.const 16))
-          (then (local.set $mask (i32.and (local.get $mask)
-            (i32.sub (i32.shl (i32.const 1) (local.get $rem)) (i32.const 1))))))
-        (if (local.get $mask)
-          (then
-            (global.set $ptr (i32.add (i32.add (global.get $ptr) (i32.ctz (local.get $mask))) (i32.const 1)))
-            (br $done)))
-        (if (i32.le_u (local.get $rem) (i32.const 16))
-          (then
-            (global.set $ptr (global.get $end))
-            (br $done)))
-        (global.set $ptr (i32.add (global.get $ptr) (i32.const 16)))
-        (br $wide))))
+    (local $p i32)
+    (local.set $p (call $lexFindByte (global.get $ptr) (i32.const ">")))
+    (global.set $ptr (select
+      (i32.add (local.get $p) (i32.const 1)) (global.get $end)
+      (i32.lt_u (local.get $p) (global.get $end)))))
 
   ;; tag / attribute name: `<` excluded so a stray tag start ends the run
   (func $htmlNameEnd (param $q i32) (result i32)
@@ -235,33 +151,13 @@
   ;; quoted attribute value starting at the quote
   (func $htmlQuoted (param $quote i32)
     (local $lhs i32)
-    (local $mask i32)
-    (local $rem i32)
-    (local $w v128)
+    (local $p i32)
     (local.set $lhs (global.get $ptr))
-    (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-    (block $done
-      (loop $wide
-        (if (i32.ge_u (global.get $ptr) (global.get $end))
-          (then
-            (global.set $ptr (global.get $end))
-            (br $done)))
-        (local.set $w (v128.load (global.get $ptr)))
-        (local.set $mask (i8x16.bitmask (i8x16.eq (local.get $w) (i8x16.splat (local.get $quote)))))
-        (local.set $rem (i32.sub (global.get $end) (global.get $ptr)))
-        (if (i32.lt_u (local.get $rem) (i32.const 16))
-          (then (local.set $mask (i32.and (local.get $mask)
-            (i32.sub (i32.shl (i32.const 1) (local.get $rem)) (i32.const 1))))))
-        (if (local.get $mask)
-          (then
-            (global.set $ptr (i32.add (i32.add (global.get $ptr) (i32.ctz (local.get $mask))) (i32.const 1)))
-            (br $done)))
-        (if (i32.le_u (local.get $rem) (i32.const 16))
-          (then
-            (global.set $ptr (global.get $end))
-            (br $done)))
-        (global.set $ptr (i32.add (global.get $ptr) (i32.const 16)))
-        (br $wide)))
+    (local.set $p (call $lexFindByte
+      (i32.add (global.get $ptr) (i32.const 1)) (local.get $quote)))
+    (global.set $ptr (select
+      (i32.add (local.get $p) (i32.const 1)) (global.get $end)
+      (i32.lt_u (local.get $p) (global.get $end))))
     (call $emitTok (enum.get $Token.string) (local.get $lhs) (global.get $ptr)))
 
   ;; attributes after a tag name until `>` / `/>`; returns 1 when the tag was
@@ -269,7 +165,6 @@
   (func $htmlAttrs (result i32)
     (local $c i32)
     (local $lhs i32)
-    (local $q i32)
     (local $afterEq i32)
     (block $done (result i32)
       (loop $next
@@ -281,13 +176,7 @@
         (if (i32.or (i32.eq (local.get $c) (i32.const 32))
                     (i32.le_u (i32.sub (local.get $c) (i32.const 9)) (i32.const 4)))
           (then
-            (block $wsDone
-              (loop $ws
-                (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-                (br_if $wsDone (i32.ge_u (global.get $ptr) (global.get $end)))
-                (local.set $c (i32.load8_u (global.get $ptr)))
-                (br_if $ws (i32.or (i32.eq (local.get $c) (i32.const 32))
-                                   (i32.le_u (i32.sub (local.get $c) (i32.const 9)) (i32.const 4))))))
+            (call $scanWhitespace)
             (call $emitGap (local.get $lhs) (global.get $ptr))
             (br $next)))
         (if (i32.eq (local.get $c) (i32.const ">"))
@@ -333,16 +222,10 @@
             (br $next)))
         (if (i32.eq (local.get $c) (i32.const "<"))
           (then (br $done (i32.const 0)))) ;; stray tag start: reparse in TEXT mode
-        ;; attribute name (values were consumed by the $afterEq branch above)
-        (local.set $q (call $htmlNameEnd (global.get $ptr)))
-        (if (i32.eq (local.get $q) (global.get $ptr))
-          (then
-            ;; a byte $htmlNameEnd refuses that no branch above took: impossible,
-            ;; but stay total anyway
-            (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-            (call $emitTok (enum.get $Token.none) (local.get $lhs) (global.get $ptr))
-            (br $next)))
-        (global.set $ptr (local.get $q))
+        ;; attribute name (values were consumed by the $afterEq branch above);
+        ;; every byte $htmlNameEnd refuses was taken by a branch above, so the
+        ;; name is never empty
+        (global.set $ptr (call $htmlNameEnd (global.get $ptr)))
         (call $emitTok (enum.get $Token.attribute) (local.get $lhs) (global.get $ptr))
         (br $next))
       (unreachable)))
@@ -357,11 +240,9 @@
     (local.set $from (global.get $ptr))
     (block $found
       (loop $l
-        (call $htmlSkipText)
+        (global.set $ptr (call $lexFindByte (global.get $ptr) (i32.const "<")))
         (br_if $found (i32.ge_u (global.get $ptr) (global.get $end)))
-        (if (i32.eq (i32.load8_u (global.get $ptr)) (i32.const "<"))
-          (then
-            (br_if $found (call $isRawTextClose (global.get $ptr) (local.get $kind)))))
+        (br_if $found (call $isRawTextClose (global.get $ptr) (local.get $kind)))
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
         (br $l)))
     ;; hand [from,to) to the embedded language over an $end swap
@@ -403,9 +284,10 @@
     (block $done
       (loop $next
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
-        ;; text run
+        ;; text run: everything up to the next `<` or `&`
         (local.set $textFrom (global.get $ptr))
-        (call $htmlSkipText)
+        (global.set $ptr (call $lexFindEither
+          (global.get $ptr) (i32.const "<") (i32.const "&")))
         (call $emitTok (enum.get $Token.none) (local.get $textFrom) (global.get $ptr))
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
         (local.set $c (i32.load8_u (global.get $ptr)))
@@ -429,9 +311,7 @@
           (then
             (if (i32.and
                   (i32.le_u (i32.add (global.get $ptr) (i32.const 4)) (global.get $end))
-                  (i32.eq
-                    (i32.and (i32.load (global.get $ptr)) (i32.const 0xffffffff))
-                    (i32.const "<!--")))
+                  (i32.eq (i32.load (global.get $ptr)) (i32.const "<!--")))
               (then (call $htmlComment (local.get $lhs)))
               (else
                 (call $htmlDecl)

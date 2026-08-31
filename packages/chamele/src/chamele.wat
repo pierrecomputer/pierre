@@ -15,8 +15,10 @@
       [6848:7872)     theme table written by JavaScript
       [7872:11968)    JSX-mode stack
       [11968:12000)   streaming delimiter
-      [12000:60000)   streaming lexer checkpoints
-      [60000:65536)   free
+      [12000:16000)   streaming lexer checkpoints
+      [16000:60000)   keyword-table region (see src/memory.wat)
+      [60000:64818)   span-open fragment cache (HTML modes)
+      [64818:65536)   free
     [] pages 2..N     (text buffer)
       [65536:EOF)     input, NUL sentinel, then at least 16 bytes of slack
       [(EOF+47)&~15:) output HTML bytes or (end:u32, hl:u32) token records;
@@ -239,8 +241,7 @@
       (then
         (block $rawDone
           (loop $raw
-            (local.set $p (call $lexFindEither
-              (local.get $p) (i32.const "<") (i32.const "<")))
+            (local.set $p (call $lexFindByte (local.get $p) (i32.const "<")))
             (br_if $rawDone (i32.ge_u (local.get $p) (global.get $end)))
             (if (call $isRawTextClose (local.get $p) (local.get $kind))
               (then
@@ -252,8 +253,7 @@
       (else
         (if (i32.eq (local.get $kind) (i32.const 5))
           (then
-            (local.set $p (call $lexFindEither
-              (local.get $p) (i32.const ">") (i32.const ">")))
+            (local.set $p (call $lexFindByte (local.get $p) (i32.const ">")))
             (if (i32.lt_u (local.get $p) (global.get $end))
               (then
                 (local.set $close (i32.add (local.get $p) (i32.const 1)))

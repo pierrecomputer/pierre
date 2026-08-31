@@ -19,6 +19,7 @@
   (global $out (mut i32) (i32.const 0))     ;; write cursor
   (global $cap (mut i32) (i32.const 0))     ;; highest safe write position (16 bytes of slack below memory end)
   (global $spanHl (mut i32) (i32.const -1)) ;; $Token of the currently open span, -1 when none
+  (global $spanVal (mut i64) (i64.const 0)) ;; style value of the open span, 0 when none
   (global $cssVariables (mut i32) (i32.const 0))
   (global $tokens (mut i32) (i32.const 0))  ;; token-record mode: emit (end:u32, hl:u32) records instead of HTML
   (global $tokenLines (mut i32) (i32.const 0)) ;; line-record mode: UTF-16 ends plus -1 newline markers
@@ -138,44 +139,66 @@
 
   ;; close the open span, if any
   (func $closeSpan
-    (if (i32.ge_s (global.get $spanHl) (i32.const 0))
+    (if (i64.ne (global.get $spanVal) (i64.const 0))
       (then
         (call $ensureCap (i32.const 16))
         (i64.store (global.get $out) (i64.const "</span>"))
-        (global.set $out (i32.add (global.get $out) (i32.const 7)))
-        (global.set $spanHl (i32.const -1)))))
+        (global.set $out (i32.add (global.get $out) (i32.const 7)))))
+    (global.set $spanVal (i64.const 0))
+    (global.set $spanHl (i32.const -1)))
+
+  ;; write `<span style="...">` for $hl at $out. The bytes come from a per-run
+  ;; cache at $mem.spanCache (73 slots of [len:u8, fragment:u8*65]) rendered on
+  ;; first use, so a style's colors are hex-formatted once per run, not per
+  ;; span. $hlBegin clears the cache; the theme table is fixed within a run.
+  (func $emitSpanOpen (param $hl i32)
+    (local $slot i32)
+    (local $len i32)
+    (local $save i32)
+    (local $rec i32)
+    (local.set $slot
+      (i32.add (i32.const $mem.spanCache)
+        (i32.mul (local.get $hl) (i32.const 66))))
+    (local.set $len (i32.load8_u (local.get $slot)))
+    (if (i32.eqz (local.get $len))
+      (then
+        ;; render into the slot through the shared $out-based writers
+        (local.set $save (global.get $out))
+        (global.set $out (i32.add (local.get $slot) (i32.const 1)))
+        (memory.copy (global.get $out) (i32.const $mem.emitterHtml+44) (i32.const 19))
+        (global.set $out (i32.add (global.get $out) (i32.const 19)))
+        (if (global.get $cssVariables)
+          (then (call $emitCssVariable (local.get $hl)))
+          (else
+            (local.set $rec (call $themeRec (local.get $hl)))
+            (call $emitColor (local.get $rec))
+            (call $emitFont (i32.load8_u offset=4 (local.get $rec)))))
+        (i32.store16 (global.get $out) (i32.const 0x3e22)) ;; `">`
+        (global.set $out (i32.add (global.get $out) (i32.const 2)))
+        (local.set $len (i32.sub (global.get $out) (i32.add (local.get $slot) (i32.const 1))))
+        (i32.store8 (local.get $slot) (local.get $len))
+        (global.set $out (local.get $save))))
+    (memory.copy (global.get $out)
+      (i32.add (local.get $slot) (i32.const 1)) (local.get $len))
+    (global.set $out (i32.add (global.get $out) (local.get $len))))
 
   ;; switch the open span to $hl's color/font. adjacent tokens whose records
   ;; hold identical bytes share one span (a 40-bit compare), so runs of
   ;; same-styled tokens and the whitespace between them do not churn spans.
   ;; caller has ensured capacity for close (7) + open (19 + 9 + 34 + 2).
   (func $setSpan (param $hl i32)
-    (local $rec i32)
     (local $val i64)
     (if (i32.eq (local.get $hl) (global.get $spanHl)) (then (return)))
-    (local.set $rec (call $themeRec (local.get $hl)))
+    (global.set $spanHl (local.get $hl))
     (local.set $val (call $styleVal (local.get $hl)))
-    (if (i32.ge_s (global.get $spanHl) (i32.const 0))
+    (if (i64.eq (local.get $val) (global.get $spanVal)) (then (return)))
+    (if (i64.ne (global.get $spanVal) (i64.const 0))
       (then
-        (if (i64.eq (local.get $val) (call $styleVal (global.get $spanHl)))
-          (then
-            (global.set $spanHl (local.get $hl))
-            (return)))
         (i64.store (global.get $out) (i64.const "</span>"))
-        (global.set $out (i32.add (global.get $out) (i32.const 7)))
-        (global.set $spanHl (i32.const -1))))
+        (global.set $out (i32.add (global.get $out) (i32.const 7)))))
+    (global.set $spanVal (local.get $val))
     (if (i64.ne (local.get $val) (i64.const 0))
-      (then
-        (memory.copy (global.get $out) (i32.const $mem.emitterHtml+44) (i32.const 19))
-        (global.set $out (i32.add (global.get $out) (i32.const 19)))
-        (if (global.get $cssVariables)
-          (then (call $emitCssVariable (local.get $hl)))
-          (else
-            (call $emitColor (local.get $rec))
-            (call $emitFont (i32.load8_u offset=4 (local.get $rec)))))
-        (i32.store16 (global.get $out) (i32.const 0x3e22)) ;; `">`
-        (global.set $out (i32.add (global.get $out) (i32.const 2)))
-        (global.set $spanHl (local.get $hl)))))
+      (then (call $emitSpanOpen (local.get $hl)))))
 
   ;; copy [$lhs,$rhs) to $out, escaping & < > - 16 bytes per step.
   ;; wide loads may read up to 15 bytes past $rhs: always inside the input
@@ -317,11 +340,37 @@
     (local $b i32)
     (local $cut i32)
     (local $step i32)
+    (local $mask i32)
+    (local $rem i32)
+    (local $w v128)
     (local.set $p (global.get $recByte))
     (local.set $char (global.get $recChar))
     (block $done
       (loop $scan
         (br_if $done (i32.ge_u (local.get $p) (local.get $rhs)))
+        ;; hop over plain ASCII - anything except LF and non-ASCII counts as
+        ;; one UTF-16 unit, CR included - 16 bytes per step. Wide loads may
+        ;; pass $rhs into the following record or the buffer slack; matches
+        ;; there are masked off.
+        (local.set $w (v128.load (local.get $p)))
+        (local.set $mask (i8x16.bitmask (v128.or
+          (i8x16.lt_s (local.get $w) (i8x16.splat (i32.const 0)))
+          (i8x16.eq (local.get $w) (i8x16.splat (i32.const 10))))))
+        (local.set $rem (i32.sub (local.get $rhs) (local.get $p)))
+        (if (i32.lt_u (local.get $rem) (i32.const 16))
+          (then (local.set $mask (i32.and (local.get $mask)
+            (i32.sub (i32.shl (i32.const 1) (local.get $rem)) (i32.const 1))))))
+        (if (i32.eqz (local.get $mask))
+          (then
+            (local.set $step (select
+              (local.get $rem) (i32.const 16)
+              (i32.lt_u (local.get $rem) (i32.const 16))))
+            (local.set $p (i32.add (local.get $p) (local.get $step)))
+            (local.set $char (i32.add (local.get $char) (local.get $step)))
+            (br $scan)))
+        (local.set $step (i32.ctz (local.get $mask)))
+        (local.set $p (i32.add (local.get $p) (local.get $step)))
+        (local.set $char (i32.add (local.get $char) (local.get $step)))
         (local.set $b (i32.load8_u (local.get $p)))
         (if (i32.eq (local.get $b) (i32.const 10))
           (then
@@ -472,7 +521,13 @@
     (i32.store (i32.const 6) (global.get $out))
     (global.set $cap (i32.sub (i32.mul (memory.size) (i32.const 65536)) (i32.const 16)))
     (global.set $spanHl (i32.const -1))
-    (if (i32.eqz (global.get $tokens)) (then (call $prologue))))
+    (global.set $spanVal (i64.const 0))
+    (if (i32.eqz (global.get $tokens))
+      (then
+        ;; invalidate the span-open fragment cache: the theme table may have
+        ;; changed since the previous run (73 slots x 66 bytes)
+        (memory.fill (i32.const $mem.spanCache) (i32.const 0) (i32.const 4818))
+        (call $prologue))))
 
   ;; driver epilogue: emit the wrapper closing and publish the result
   (func $hlEnd

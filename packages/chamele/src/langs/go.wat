@@ -5,140 +5,44 @@
     (select (i32.load8_u (local.get $p)) (i32.const 0)
       (i32.lt_u (local.get $p) (global.get $end))))
 
-  (func $goWordEq (param $lhs i32) (param $rhs i32) (param $n i32)
-      (param $a i64) (param $b i64) (result i32)
-    (local $rem i32)
-    (local $mask i64)
-    (if (i32.ne (i32.sub (local.get $rhs) (local.get $lhs)) (local.get $n))
-      (then (return (i32.const 0))))
-    (if (i32.le_u (local.get $n) (i32.const 8))
-      (then
-        (if (i32.eq (local.get $n) (i32.const 8))
-          (then (return (i64.eq (i64.load (local.get $lhs)) (local.get $a)))))
-        (local.set $mask (i64.sub
-          (i64.shl (i64.const 1) (i64.extend_i32_u (i32.shl (local.get $n) (i32.const 3))))
-          (i64.const 1)))
-        (return (i64.eq (i64.and (i64.load (local.get $lhs)) (local.get $mask)) (local.get $a)))))
-    (if (i64.ne (i64.load (local.get $lhs)) (local.get $a))
-      (then (return (i32.const 0))))
-    (local.set $rem (i32.sub (local.get $n) (i32.const 8)))
-    (local.set $mask (i64.sub
-      (i64.shl (i64.const 1) (i64.extend_i32_u (i32.shl (local.get $rem) (i32.const 3))))
-      (i64.const 1)))
-    (i64.eq (i64.and (i64.load offset=8 (local.get $lhs)) (local.get $mask)) (local.get $b)))
+  ;; group order is the dispatch order in $goWordHl below
+  (keyword-table $goWords $mem.goWords $mem.goWords+512 16 64
+    (group ;; 1: control
+      "go" "if" "for" "case" "else" "goto" "break" "defer" "range" "return"
+      "select" "switch" "default" "continue" "fallthrough")
+    (group "func")    ;; 2: declaration, next name is a function
+    (group "type")    ;; 3: declaration, next name is a type
+    (group "package") ;; 4: declaration, next name is a namespace
+    (group ;; 5: declaration
+      "var" "const" "map" "chan" "struct" "interface")
+    (group "import")  ;; 6: import
+    (group ;; 7: built-in types
+      "int" "bool" "byte" "rune" "uint" "error" "string" "uintptr"
+      "int8" "int16" "int32" "int64" "uint8" "uint16" "uint32" "uint64"
+      "float32" "float64" "complex64" "complex128")
+    (group "true" "false") ;; 8: booleans
+    (group "nil" "iota"))  ;; 9: built-in constants
 
   ;; Token in the low byte; the high byte selects the next-name capture:
   ;; 1=function, 2=type, 3=namespace.
   (func $goWordHl (param $lhs i32) (param $rhs i32) (result i32)
-    ;; control
-    (if (i32.or
-          (i32.or
-            (i32.or
-              (call $goWordEq (local.get $lhs) (local.get $rhs) (i32.const 2) (i64.const "go") (i64.const 0))
-              (call $goWordEq (local.get $lhs) (local.get $rhs) (i32.const 2) (i64.const "if") (i64.const 0)))
-            (i32.or
-              (call $goWordEq (local.get $lhs) (local.get $rhs) (i32.const 3) (i64.const "for") (i64.const 0))
-              (call $goWordEq (local.get $lhs) (local.get $rhs) (i32.const 4) (i64.const "case") (i64.const 0))))
-          (i32.or
-            (i32.or
-              (call $goWordEq (local.get $lhs) (local.get $rhs) (i32.const 4) (i64.const "else") (i64.const 0))
-              (call $goWordEq (local.get $lhs) (local.get $rhs) (i32.const 4) (i64.const "goto") (i64.const 0)))
-            (i32.or
-              (call $goWordEq (local.get $lhs) (local.get $rhs) (i32.const 5) (i64.const "break") (i64.const 0))
-              (call $goWordEq (local.get $lhs) (local.get $rhs) (i32.const 5) (i64.const "defer") (i64.const 0)))))
+    (local $g i32)
+    (local.set $g (keyword-table.get $goWords (local.get $lhs) (local.get $rhs)))
+    (if (i32.eqz (local.get $g)) (then (return (i32.const -1))))
+    (if (i32.eq (local.get $g) (i32.const 1))
       (then (return (enum.get $Token.keyword.control))))
-    (if (i32.or
-          (i32.or
-            (i32.or
-              (call $goWordEq (local.get $lhs) (local.get $rhs) (i32.const 5) (i64.const "range") (i64.const 0))
-              (call $goWordEq (local.get $lhs) (local.get $rhs) (i32.const 6) (i64.const "return") (i64.const 0)))
-            (i32.or
-              (call $goWordEq (local.get $lhs) (local.get $rhs) (i32.const 6) (i64.const "select") (i64.const 0))
-              (call $goWordEq (local.get $lhs) (local.get $rhs) (i32.const 6) (i64.const "switch") (i64.const 0))))
-          (i32.or
-            (call $goWordEq (local.get $lhs) (local.get $rhs) (i32.const 7) (i64.const "default") (i64.const 0))
-            (i32.or
-              (call $goWordEq (local.get $lhs) (local.get $rhs) (i32.const 8) (i64.const "continue") (i64.const 0))
-              (call $goWordEq (local.get $lhs) (local.get $rhs) (i32.const 11)
-                (i64.const "fallthro") (i64.const "ugh")))))
-      (then (return (enum.get $Token.keyword.control))))
-
-    ;; declarations and imports
-    (if (call $goWordEq (local.get $lhs) (local.get $rhs) (i32.const 4) (i64.const "func") (i64.const 0))
-      (then (return (i32.or (enum.get $Token.keyword.declaration) (i32.const 256)))))
-    (if (call $goWordEq (local.get $lhs) (local.get $rhs) (i32.const 4) (i64.const "type") (i64.const 0))
-      (then (return (i32.or (enum.get $Token.keyword.declaration) (i32.const 512)))))
-    (if (call $goWordEq (local.get $lhs) (local.get $rhs) (i32.const 7) (i64.const "package") (i64.const 0))
-      (then (return (i32.or (enum.get $Token.keyword.declaration) (i32.const 768)))))
-    (if (i32.or
-          (i32.or
-            (call $goWordEq (local.get $lhs) (local.get $rhs) (i32.const 3) (i64.const "var") (i64.const 0))
-            (call $goWordEq (local.get $lhs) (local.get $rhs) (i32.const 5) (i64.const "const") (i64.const 0)))
-          (i32.or
-            (call $goWordEq (local.get $lhs) (local.get $rhs) (i32.const 3) (i64.const "map") (i64.const 0))
-            (i32.or
-              (call $goWordEq (local.get $lhs) (local.get $rhs) (i32.const 4) (i64.const "chan") (i64.const 0))
-              (i32.or
-                (call $goWordEq (local.get $lhs) (local.get $rhs) (i32.const 6) (i64.const "struct") (i64.const 0))
-                (call $goWordEq (local.get $lhs) (local.get $rhs) (i32.const 9)
-                  (i64.const "interfac") (i64.const "e"))))))
+    (if (i32.le_u (local.get $g) (i32.const 4))
+      (then (return (i32.or (enum.get $Token.keyword.declaration)
+        (i32.shl (i32.sub (local.get $g) (i32.const 1)) (i32.const 8))))))
+    (if (i32.eq (local.get $g) (i32.const 5))
       (then (return (enum.get $Token.keyword.declaration))))
-    (if (call $goWordEq (local.get $lhs) (local.get $rhs) (i32.const 6) (i64.const "import") (i64.const 0))
+    (if (i32.eq (local.get $g) (i32.const 6))
       (then (return (enum.get $Token.keyword.import))))
-
-    ;; built-in types
-    (if (i32.or
-          (i32.or
-            (i32.or
-              (call $goWordEq (local.get $lhs) (local.get $rhs) (i32.const 3) (i64.const "int") (i64.const 0))
-              (call $goWordEq (local.get $lhs) (local.get $rhs) (i32.const 4) (i64.const "bool") (i64.const 0)))
-            (i32.or
-              (call $goWordEq (local.get $lhs) (local.get $rhs) (i32.const 4) (i64.const "byte") (i64.const 0))
-              (call $goWordEq (local.get $lhs) (local.get $rhs) (i32.const 4) (i64.const "rune") (i64.const 0))))
-          (i32.or
-            (i32.or
-              (call $goWordEq (local.get $lhs) (local.get $rhs) (i32.const 4) (i64.const "uint") (i64.const 0))
-              (call $goWordEq (local.get $lhs) (local.get $rhs) (i32.const 5) (i64.const "error") (i64.const 0)))
-            (i32.or
-              (call $goWordEq (local.get $lhs) (local.get $rhs) (i32.const 6) (i64.const "string") (i64.const 0))
-              (call $goWordEq (local.get $lhs) (local.get $rhs) (i32.const 7) (i64.const "uintptr") (i64.const 0)))))
+    (if (i32.eq (local.get $g) (i32.const 7))
       (then (return (enum.get $Token.type.builtin))))
-    (if (i32.or
-          (i32.or
-            (i32.or
-              (call $goWordEq (local.get $lhs) (local.get $rhs) (i32.const 4) (i64.const "int8") (i64.const 0))
-              (call $goWordEq (local.get $lhs) (local.get $rhs) (i32.const 5) (i64.const "int16") (i64.const 0)))
-            (i32.or
-              (call $goWordEq (local.get $lhs) (local.get $rhs) (i32.const 5) (i64.const "int32") (i64.const 0))
-              (call $goWordEq (local.get $lhs) (local.get $rhs) (i32.const 5) (i64.const "int64") (i64.const 0))))
-          (i32.or
-            (i32.or
-              (call $goWordEq (local.get $lhs) (local.get $rhs) (i32.const 5) (i64.const "uint8") (i64.const 0))
-              (call $goWordEq (local.get $lhs) (local.get $rhs) (i32.const 6) (i64.const "uint16") (i64.const 0)))
-            (i32.or
-              (call $goWordEq (local.get $lhs) (local.get $rhs) (i32.const 6) (i64.const "uint32") (i64.const 0))
-              (call $goWordEq (local.get $lhs) (local.get $rhs) (i32.const 6) (i64.const "uint64") (i64.const 0)))))
-      (then (return (enum.get $Token.type.builtin))))
-    (if (i32.or
-          (i32.or
-            (call $goWordEq (local.get $lhs) (local.get $rhs) (i32.const 7) (i64.const "float32") (i64.const 0))
-            (call $goWordEq (local.get $lhs) (local.get $rhs) (i32.const 7) (i64.const "float64") (i64.const 0)))
-          (i32.or
-            (call $goWordEq (local.get $lhs) (local.get $rhs) (i32.const 9)
-              (i64.const "complex6") (i64.const "4"))
-            (call $goWordEq (local.get $lhs) (local.get $rhs) (i32.const 10)
-              (i64.const "complex1") (i64.const "28"))))
-      (then (return (enum.get $Token.type.builtin))))
-
-    (if (i32.or
-          (call $goWordEq (local.get $lhs) (local.get $rhs) (i32.const 4) (i64.const "true") (i64.const 0))
-          (call $goWordEq (local.get $lhs) (local.get $rhs) (i32.const 5) (i64.const "false") (i64.const 0)))
+    (if (i32.eq (local.get $g) (i32.const 8))
       (then (return (enum.get $Token.boolean))))
-    (if (i32.or
-          (call $goWordEq (local.get $lhs) (local.get $rhs) (i32.const 3) (i64.const "nil") (i64.const 0))
-          (call $goWordEq (local.get $lhs) (local.get $rhs) (i32.const 4) (i64.const "iota") (i64.const 0)))
-      (then (return (enum.get $Token.constant.builtin))))
-    (i32.const -1))
+    (enum.get $Token.constant.builtin))
 
   (func $goIsOp (param $c i32) (result i32)
     (i32.or

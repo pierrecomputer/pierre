@@ -1,35 +1,42 @@
 $schema: 'https://moonrepo.dev/schemas/project.json'
 
-language: 'javascript'
+language: 'typescript'
 layer: 'library'
-tags: ['publishable']
+tags: ['tsdown', 'publishable']
 
 tasks:
-  # Compile the WAT sources into lib/ (wasm binary, base64 module, expanded
-  # wat, and the generated $Token ABI). The binary artifacts are gitignored,
-  # so workspace consumers (diffs) reach them through their `^:build` deps.
+  # Replaces the tsdown tag build: scripts/build.ts compiles the WAT sources
+  # in src/ into dist/ (wasm binary, base64 module, expanded wat) and
+  # regenerates the $Token ABI in lib/token-types.ts, then tsdown compiles the
+  # TypeScript glue in lib/ into the same dist/ (its config keeps
+  # `clean: false` so the wasm artifacts survive). The wasm artifacts are
+  # gitignored, so workspace consumers (diffs) reach them through their
+  # `^:build` deps.
   build:
-    command: 'node ./scripts/build.mjs'
+    script: 'rm -rf dist && bun ./scripts/build.ts && tsdown'
+    deps:
+      - '^:build'
     inputs:
+      # lib/token-types.ts is derived from the $Token enum in the WAT sources
+      # and rewritten by this task, so it must not key the cache.
       - 'src/**/*'
-      - 'scripts/build.mjs'
+      - 'lib/**/*'
+      - '!lib/token-types.ts'
+      - 'themes/index.ts'
+      - 'themes/*.json'
+      - 'scripts/build.ts'
+      - 'tsdown.config.ts'
+      - 'tsconfig.json'
     outputs:
-      - 'lib/chamele.wat'
-      - 'lib/chamele.wasm'
-      - 'lib/chamele.wasm.mjs'
-      - 'lib/token-types.mjs'
-
-  # The suite runs on node:test and compiles the wasm from the WAT sources
-  # itself, so it replaces the inherited `bun test` and needs no build dep.
-  test:
-    command: 'node ./test/index.mjs'
+      - 'dist'
     options:
       merge: 'replace'
 
-  # Hand-written JavaScript with shipped .d.ts files; there is no tsconfig
-  # for the inherited tsgo task to check.
-  typecheck:
-    command: 'noop'
+  # The suite compiles the wasm from the WAT sources itself and imports the
+  # glue straight from lib/, so it replaces the inherited deps and needs no
+  # build.
+  test:
+    command: 'bun test'
     options:
       merge: 'replace'
 
@@ -37,10 +44,11 @@ tasks:
     deps:
       - 'test'
 
-  # Local-only benchmark; explicit options instead of a preset so it stays
-  # runnable in CI-marked agent shells (see .moon/tasks/tag-tsdown.yml).
+  # Local-only benchmarks; explicit options instead of a preset so they stay
+  # runnable in CI-marked agent shells (see .moon/tasks/tag-tsdown.yml). They
+  # need `build` for the shipped-size table (dist glue sizes).
   bench:
-    command: 'node ./benchmark/bench.mjs'
+    command: 'bun ./benchmark/bench.ts'
     deps:
       - 'build'
     options:
@@ -48,7 +56,7 @@ tasks:
       runInCI: 'always'
 
   bench-tokens:
-    command: 'node ./benchmark/bench.mjs --tokens'
+    command: 'bun ./benchmark/bench.ts --tokens'
     deps:
       - 'build'
     options:
@@ -56,7 +64,7 @@ tasks:
       runInCI: 'always'
 
   bench-stream:
-    command: 'node ./benchmark/bench.mjs --stream'
+    command: 'bun ./benchmark/bench.ts --stream'
     deps:
       - 'build'
     options:

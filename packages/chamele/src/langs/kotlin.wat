@@ -5,226 +5,132 @@
     (select (i32.load8_u (local.get $p)) (i32.const 0)
       (i32.lt_u (local.get $p) (global.get $end))))
 
-  (func $kotlinWordEq (param $lhs i32) (param $rhs i32) (param $n i32)
-      (param $a i64) (param $b i64) (result i32)
-    (local $rem i32) (local $mask i64)
-    (if (i32.ne (i32.sub (local.get $rhs) (local.get $lhs)) (local.get $n))
-      (then (return (i32.const 0))))
-    (if (i32.le_u (local.get $n) (i32.const 8))
-      (then
-        (if (i32.eq (local.get $n) (i32.const 8))
-          (then (return (i64.eq (i64.load (local.get $lhs)) (local.get $a)))))
-        (local.set $mask (i64.sub
-          (i64.shl (i64.const 1) (i64.extend_i32_u (i32.shl (local.get $n) (i32.const 3))))
-          (i64.const 1)))
-        (return (i64.eq (i64.and (i64.load (local.get $lhs)) (local.get $mask)) (local.get $a)))))
-    (if (i64.ne (i64.load (local.get $lhs)) (local.get $a)) (then (return (i32.const 0))))
-    (local.set $rem (i32.sub (local.get $n) (i32.const 8)))
-    (local.set $mask (i64.sub
-      (i64.shl (i64.const 1) (i64.extend_i32_u (i32.shl (local.get $rem) (i32.const 3))))
-      (i64.const 1)))
-    (i64.eq (i64.and (i64.load offset=8 (local.get $lhs)) (local.get $mask)) (local.get $b)))
+  ;; Group order is the dispatch order in $kotlinWordHl below. "Short" is
+  ;; missing on purpose: it and "Byte" land in the same bucket and the same
+  ;; slot for every table size that fits in this range, which no displacement
+  ;; can undo, so $kotlinWordHl matches "Short" directly.
+  (keyword-table $kotlinWords $mem.kotlinWords $mem.kotlinWords+1024 16 128
+    (group ;; 1: control
+      "do" "if" "for" "try" "else" "when" "break" "catch" "throw" "while"
+      "return" "finally" "continue")
+    (group "fun") ;; 2: declaration, next name is a function
+    (group ;; 3: declaration, next name is a type
+      "class" "object" "interface" "typealias")
+    (group ;; 4: declaration
+      "val" "var" "enum" "constructor")
+    (group "package" "import") ;; 5: import
+    (group "in" "is" "as")     ;; 6: operator keywords
+    (group ;; 7: modifiers
+      "open" "data" "final" "inline" "public" "sealed" "private" "suspend"
+      "abstract" "internal" "override" "protected")
+    (group ;; 8: built-in types
+      "Int" "Any" "Long" "Byte" "Char" "Unit" "Float" "Double"
+      "String" "Boolean" "Nothing")
+    (group "true" "false") ;; 9: booleans
+    (group "null")         ;; 10: built-in constant
+    (group "this" "super")) ;; 11: special variables
 
-  ;; Token in the low byte; bit 8 expects a function name and bit 9 a type.
+  ;; Token in the low byte; the high byte selects the next-name capture:
+  ;; 1=function, 2=type.
   (func $kotlinWordHl (param $lhs i32) (param $rhs i32) (result i32)
-    (if (call $kotlinWordEq (local.get $lhs) (local.get $rhs) (i32.const 3) (i64.const "fun") (i64.const 0))
-      (then (return (i32.or (enum.get $Token.keyword.declaration) (i32.const 256)))))
-    (if (i32.or
-          (call $kotlinWordEq (local.get $lhs) (local.get $rhs) (i32.const 5) (i64.const "class") (i64.const 0))
-          (call $kotlinWordEq (local.get $lhs) (local.get $rhs) (i32.const 9) (i64.const "interfac") (i64.const "e")))
-      (then (return (i32.or (enum.get $Token.keyword.declaration) (i32.const 512)))))
-    (if (i32.or
-          (call $kotlinWordEq (local.get $lhs) (local.get $rhs) (i32.const 6) (i64.const "object") (i64.const 0))
-          (call $kotlinWordEq (local.get $lhs) (local.get $rhs) (i32.const 9) (i64.const "typealia") (i64.const "s")))
-      (then (return (i32.or (enum.get $Token.keyword.declaration) (i32.const 512)))))
-    (if (i32.or
-          (call $kotlinWordEq (local.get $lhs) (local.get $rhs) (i32.const 3) (i64.const "val") (i64.const 0))
-          (call $kotlinWordEq (local.get $lhs) (local.get $rhs) (i32.const 3) (i64.const "var") (i64.const 0)))
+    (local $g i32)
+    (local.set $g
+      (keyword-table.get $kotlinWords (local.get $lhs) (local.get $rhs)))
+    (if (i32.eqz (local.get $g))
+      (then
+        ;; the one word the table cannot hold - the wide load is safe because
+        ;; the input buffer keeps slack past $end, as the table probe assumes
+        (if (i32.and
+              (i32.eq (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 5))
+              (i64.eq
+                (i64.and (i64.load (local.get $lhs)) (i64.const 0xffffffffff))
+                (i64.const "Short")))
+          (then (return (enum.get $Token.type.builtin))))
+        (return (i32.const -1))))
+    (if (i32.eq (local.get $g) (i32.const 1))
+      (then (return (enum.get $Token.keyword.control))))
+    (if (i32.le_u (local.get $g) (i32.const 3))
+      (then (return (i32.or (enum.get $Token.keyword.declaration)
+        (i32.shl (i32.sub (local.get $g) (i32.const 1)) (i32.const 8))))))
+    (if (i32.eq (local.get $g) (i32.const 4))
       (then (return (enum.get $Token.keyword.declaration))))
-    (if (i32.or
-          (call $kotlinWordEq (local.get $lhs) (local.get $rhs) (i32.const 4) (i64.const "enum") (i64.const 0))
-          (call $kotlinWordEq (local.get $lhs) (local.get $rhs) (i32.const 11) (i64.const "construc") (i64.const "tor")))
-      (then (return (enum.get $Token.keyword.declaration))))
-    (if (i32.or
-          (call $kotlinWordEq (local.get $lhs) (local.get $rhs) (i32.const 7) (i64.const "package") (i64.const 0))
-          (call $kotlinWordEq (local.get $lhs) (local.get $rhs) (i32.const 6) (i64.const "import") (i64.const 0)))
+    (if (i32.eq (local.get $g) (i32.const 5))
       (then (return (enum.get $Token.keyword.import))))
-
-    (if (i32.or
-          (call $kotlinWordEq (local.get $lhs) (local.get $rhs) (i32.const 2) (i64.const "if") (i64.const 0))
-          (call $kotlinWordEq (local.get $lhs) (local.get $rhs) (i32.const 4) (i64.const "else") (i64.const 0)))
-      (then (return (enum.get $Token.keyword.control))))
-    (if (i32.or
-          (call $kotlinWordEq (local.get $lhs) (local.get $rhs) (i32.const 4) (i64.const "when") (i64.const 0))
-          (call $kotlinWordEq (local.get $lhs) (local.get $rhs) (i32.const 3) (i64.const "for") (i64.const 0)))
-      (then (return (enum.get $Token.keyword.control))))
-    (if (i32.or
-          (call $kotlinWordEq (local.get $lhs) (local.get $rhs) (i32.const 5) (i64.const "while") (i64.const 0))
-          (call $kotlinWordEq (local.get $lhs) (local.get $rhs) (i32.const 2) (i64.const "do") (i64.const 0)))
-      (then (return (enum.get $Token.keyword.control))))
-    (if (i32.or
-          (call $kotlinWordEq (local.get $lhs) (local.get $rhs) (i32.const 6) (i64.const "return") (i64.const 0))
-          (call $kotlinWordEq (local.get $lhs) (local.get $rhs) (i32.const 5) (i64.const "break") (i64.const 0)))
-      (then (return (enum.get $Token.keyword.control))))
-    (if (i32.or
-          (call $kotlinWordEq (local.get $lhs) (local.get $rhs) (i32.const 8) (i64.const "continue") (i64.const 0))
-          (call $kotlinWordEq (local.get $lhs) (local.get $rhs) (i32.const 5) (i64.const "throw") (i64.const 0)))
-      (then (return (enum.get $Token.keyword.control))))
-    (if (i32.or
-          (call $kotlinWordEq (local.get $lhs) (local.get $rhs) (i32.const 3) (i64.const "try") (i64.const 0))
-          (call $kotlinWordEq (local.get $lhs) (local.get $rhs) (i32.const 5) (i64.const "catch") (i64.const 0)))
-      (then (return (enum.get $Token.keyword.control))))
-    (if (call $kotlinWordEq (local.get $lhs) (local.get $rhs) (i32.const 7) (i64.const "finally") (i64.const 0))
-      (then (return (enum.get $Token.keyword.control))))
-    (if (i32.or
-          (call $kotlinWordEq (local.get $lhs) (local.get $rhs) (i32.const 2) (i64.const "in") (i64.const 0))
-          (call $kotlinWordEq (local.get $lhs) (local.get $rhs) (i32.const 2) (i64.const "is") (i64.const 0)))
+    (if (i32.eq (local.get $g) (i32.const 6))
       (then (return (enum.get $Token.keyword.operator))))
-    (if (call $kotlinWordEq (local.get $lhs) (local.get $rhs) (i32.const 2) (i64.const "as") (i64.const 0))
-      (then (return (enum.get $Token.keyword.operator))))
-
-    (if (i32.or
-          (call $kotlinWordEq (local.get $lhs) (local.get $rhs) (i32.const 6) (i64.const "public") (i64.const 0))
-          (call $kotlinWordEq (local.get $lhs) (local.get $rhs) (i32.const 7) (i64.const "private") (i64.const 0)))
+    (if (i32.eq (local.get $g) (i32.const 7))
       (then (return (enum.get $Token.keyword))))
-    (if (i32.or
-          (call $kotlinWordEq (local.get $lhs) (local.get $rhs) (i32.const 9) (i64.const "protecte") (i64.const "d"))
-          (call $kotlinWordEq (local.get $lhs) (local.get $rhs) (i32.const 8) (i64.const "internal") (i64.const 0)))
-      (then (return (enum.get $Token.keyword))))
-    (if (i32.or
-          (call $kotlinWordEq (local.get $lhs) (local.get $rhs) (i32.const 4) (i64.const "open") (i64.const 0))
-          (call $kotlinWordEq (local.get $lhs) (local.get $rhs) (i32.const 5) (i64.const "final") (i64.const 0)))
-      (then (return (enum.get $Token.keyword))))
-    (if (i32.or
-          (call $kotlinWordEq (local.get $lhs) (local.get $rhs) (i32.const 8) (i64.const "abstract") (i64.const 0))
-          (call $kotlinWordEq (local.get $lhs) (local.get $rhs) (i32.const 8) (i64.const "override") (i64.const 0)))
-      (then (return (enum.get $Token.keyword))))
-    (if (i32.or
-          (call $kotlinWordEq (local.get $lhs) (local.get $rhs) (i32.const 4) (i64.const "data") (i64.const 0))
-          (call $kotlinWordEq (local.get $lhs) (local.get $rhs) (i32.const 6) (i64.const "sealed") (i64.const 0)))
-      (then (return (enum.get $Token.keyword))))
-    (if (i32.or
-          (call $kotlinWordEq (local.get $lhs) (local.get $rhs) (i32.const 7) (i64.const "suspend") (i64.const 0))
-          (call $kotlinWordEq (local.get $lhs) (local.get $rhs) (i32.const 6) (i64.const "inline") (i64.const 0)))
-      (then (return (enum.get $Token.keyword))))
-
-    (if (i32.or
-          (call $kotlinWordEq (local.get $lhs) (local.get $rhs) (i32.const 3) (i64.const "Int") (i64.const 0))
-          (call $kotlinWordEq (local.get $lhs) (local.get $rhs) (i32.const 4) (i64.const "Long") (i64.const 0)))
+    (if (i32.eq (local.get $g) (i32.const 8))
       (then (return (enum.get $Token.type.builtin))))
-    (if (i32.or
-          (call $kotlinWordEq (local.get $lhs) (local.get $rhs) (i32.const 5) (i64.const "Short") (i64.const 0))
-          (call $kotlinWordEq (local.get $lhs) (local.get $rhs) (i32.const 4) (i64.const "Byte") (i64.const 0)))
-      (then (return (enum.get $Token.type.builtin))))
-    (if (i32.or
-          (call $kotlinWordEq (local.get $lhs) (local.get $rhs) (i32.const 5) (i64.const "Float") (i64.const 0))
-          (call $kotlinWordEq (local.get $lhs) (local.get $rhs) (i32.const 6) (i64.const "Double") (i64.const 0)))
-      (then (return (enum.get $Token.type.builtin))))
-    (if (i32.or
-          (call $kotlinWordEq (local.get $lhs) (local.get $rhs) (i32.const 7) (i64.const "Boolean") (i64.const 0))
-          (call $kotlinWordEq (local.get $lhs) (local.get $rhs) (i32.const 4) (i64.const "Char") (i64.const 0)))
-      (then (return (enum.get $Token.type.builtin))))
-    (if (i32.or
-          (call $kotlinWordEq (local.get $lhs) (local.get $rhs) (i32.const 6) (i64.const "String") (i64.const 0))
-          (call $kotlinWordEq (local.get $lhs) (local.get $rhs) (i32.const 4) (i64.const "Unit") (i64.const 0)))
-      (then (return (enum.get $Token.type.builtin))))
-    (if (i32.or
-          (call $kotlinWordEq (local.get $lhs) (local.get $rhs) (i32.const 3) (i64.const "Any") (i64.const 0))
-          (call $kotlinWordEq (local.get $lhs) (local.get $rhs) (i32.const 7) (i64.const "Nothing") (i64.const 0)))
-      (then (return (enum.get $Token.type.builtin))))
-    (if (i32.or
-          (call $kotlinWordEq (local.get $lhs) (local.get $rhs) (i32.const 4) (i64.const "true") (i64.const 0))
-          (call $kotlinWordEq (local.get $lhs) (local.get $rhs) (i32.const 5) (i64.const "false") (i64.const 0)))
+    (if (i32.eq (local.get $g) (i32.const 9))
       (then (return (enum.get $Token.boolean))))
-    (if (call $kotlinWordEq (local.get $lhs) (local.get $rhs) (i32.const 4) (i64.const "null") (i64.const 0))
+    (if (i32.eq (local.get $g) (i32.const 10))
       (then (return (enum.get $Token.constant.builtin))))
-    (if (i32.or
-          (call $kotlinWordEq (local.get $lhs) (local.get $rhs) (i32.const 4) (i64.const "this") (i64.const 0))
-          (call $kotlinWordEq (local.get $lhs) (local.get $rhs) (i32.const 5) (i64.const "super") (i64.const 0)))
-      (then (return (enum.get $Token.variable.special))))
-    (i32.const -1))
+    (enum.get $Token.variable.special))
 
-  (func $kotlinBlockComment (param $hl i32)
-    (local $lhs i32) (local $c i32) (local $c2 i32) (local $depth i32)
-    (local.set $lhs (global.get $ptr))
-    (local.set $depth (i32.const 1))
-    (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))
-    (if (i32.gt_u (global.get $ptr) (global.get $end)) (then (global.set $ptr (global.get $end))))
-    (block $done
-      (loop $loop
-        (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
-        (local.set $c (i32.load8_u (global.get $ptr)))
-        (local.set $c2 (call $kotlinByte (i32.add (global.get $ptr) (i32.const 1))))
-        (if (i32.and (i32.eq (local.get $c) (i32.const "/")) (i32.eq (local.get $c2) (i32.const "*")))
-          (then
-            (local.set $depth (i32.add (local.get $depth) (i32.const 1)))
-            (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))
-            (if (i32.gt_u (global.get $ptr) (global.get $end)) (then (global.set $ptr (global.get $end))))
-            (br $loop)))
-        (if (i32.and (i32.eq (local.get $c) (i32.const "*")) (i32.eq (local.get $c2) (i32.const "/")))
-          (then
-            (local.set $depth (i32.sub (local.get $depth) (i32.const 1)))
-            (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))
-            (if (i32.gt_u (global.get $ptr) (global.get $end)) (then (global.set $ptr (global.get $end))))
-            (br_if $done (i32.eqz (local.get $depth)))
-            (br $loop)))
-        (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-        (br $loop)))
-    (call $emitTok (local.get $hl) (local.get $lhs) (global.get $ptr))
-    (call $streamSetNested
-      (local.get $depth) (i32.const "/*") (i32.const "*/") (local.get $hl)))
-
+  ;; A `"` or `"""` literal. Plain body bytes are skipped with two SIMD hops
+  ;; per step: one for the closing quote - plus backslash and CR/LF in a
+  ;; single-line string - and one for the `$` that opens a template. The `$`
+  ;; position is cached because it is often far away or absent: rescanning only
+  ;; when $ptr passes it keeps the whole scan linear even for escape-heavy
+  ;; strings.
   (func $kotlinString (param $triple i32)
     (local $c i32) (local $c2 i32) (local $e i32) (local $seg i32) (local $template i32)
+    (local $stop i32) (local $dollar i32)
     (local.set $seg (global.get $ptr))
+    ;; the caller matched every byte of the opener below $end, so no clamp
     (global.set $ptr (i32.add (global.get $ptr) (select (i32.const 3) (i32.const 1) (local.get $triple))))
-    (if (i32.gt_u (global.get $ptr) (global.get $end)) (then (global.set $ptr (global.get $end))))
+    (local.set $dollar (call $lexFindByte (global.get $ptr) (i32.const "$")))
     (block $done
       (loop $scan
+        (local.set $stop (call $scanFindSpecial
+          (global.get $ptr) (global.get $end) (i32.const 34)
+          (i32.eqz (local.get $triple)) (i32.eqz (local.get $triple))))
+        (if (i32.gt_u (global.get $ptr) (local.get $dollar))
+          (then (local.set $dollar (call $lexFindByte (global.get $ptr) (i32.const "$")))))
+        (global.set $ptr (select (local.get $dollar) (local.get $stop)
+          (i32.lt_u (local.get $dollar) (local.get $stop))))
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
         (local.set $c (i32.load8_u (global.get $ptr)))
-        (local.set $c2 (call $kotlinByte (i32.add (global.get $ptr) (i32.const 1))))
-        (if (i32.and (i32.eq (local.get $c) (i32.const 34))
-              (i32.or (i32.eqz (local.get $triple))
-                (i32.and (i32.eq (local.get $c2) (i32.const 34))
-                  (i32.eq (call $kotlinByte (i32.add (global.get $ptr) (i32.const 2))) (i32.const 34)))))
+        (if (i32.eq (local.get $c) (i32.const 34))
           (then
-            (global.set $ptr (i32.add (global.get $ptr) (select (i32.const 3) (i32.const 1) (local.get $triple))))
-            (if (i32.gt_u (global.get $ptr) (global.get $end)) (then (global.set $ptr (global.get $end))))
-            (br $done)))
+            (if (i32.or (i32.eqz (local.get $triple))
+                  (i32.and
+                    (i32.eq (call $kotlinByte (i32.add (global.get $ptr) (i32.const 1))) (i32.const 34))
+                    (i32.eq (call $kotlinByte (i32.add (global.get $ptr) (i32.const 2))) (i32.const 34))))
+              (then
+                ;; both trailing quotes read below $end, so this cannot overshoot
+                (global.set $ptr (i32.add (global.get $ptr) (select (i32.const 3) (i32.const 1) (local.get $triple))))
+                (br $done)))))
         (br_if $done (i32.and (i32.eqz (local.get $triple))
           (i32.or (i32.eq (local.get $c) (i32.const 10)) (i32.eq (local.get $c) (i32.const 13)))))
         (if (i32.and (i32.eqz (local.get $triple)) (i32.eq (local.get $c) (i32.const 92)))
           (then
             (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
-            (local.set $e (i32.add (global.get $ptr) (i32.const 2)))
-            (if (i32.gt_u (local.get $e) (global.get $end)) (then (local.set $e (global.get $end))))
-            (block $utf8Done
-              (loop $utf8
-                (br_if $utf8Done (i32.ge_u (local.get $e) (global.get $end)))
-                (br_if $utf8Done (i32.ne (i32.and (i32.load8_u (local.get $e)) (i32.const 0xc0)) (i32.const 0x80)))
-                (local.set $e (i32.add (local.get $e) (i32.const 1)))
-                (br $utf8)))
+            (local.set $e (call $utf8SpanEnd
+              (i32.add (global.get $ptr) (i32.const 2)) (global.get $end)))
             (call $emitTok (enum.get $Token.string.escape) (global.get $ptr) (local.get $e))
             (global.set $ptr (local.get $e))
             (local.set $seg (global.get $ptr))
             (br $scan)))
-        (if (i32.and (i32.eq (local.get $c) (i32.const "$"))
-              (i32.or (i32.eq (local.get $c2) (i32.const "{")) (call $lexIsIdentStart (local.get $c2))))
+        (if (i32.eq (local.get $c) (i32.const "$"))
           (then
-            (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
-            (local.set $template (global.get $ptr))
-            (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-            (if (i32.eq (local.get $c2) (i32.const "{"))
+            (local.set $c2 (call $kotlinByte (i32.add (global.get $ptr) (i32.const 1))))
+            (if (i32.or (i32.eq (local.get $c2) (i32.const "{")) (call $lexIsIdentStart (local.get $c2)))
               (then
+                (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
+                (local.set $template (global.get $ptr))
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-                (if (i32.gt_u (global.get $ptr) (global.get $end)) (then (global.set $ptr (global.get $end))))
-                (call $emitTok (enum.get $Token.punctuation.special) (local.get $template) (global.get $ptr)))
-              (else
-                (call $lexScanIdent)
-                (call $emitTok (enum.get $Token.variable) (local.get $template) (global.get $ptr))))
-            (local.set $seg (global.get $ptr))
-            (br $scan)))
+                (if (i32.eq (local.get $c2) (i32.const "{"))
+                  (then
+                    ;; the `{` was read below $end, so this cannot overshoot
+                    (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+                    (call $emitTok (enum.get $Token.punctuation.special) (local.get $template) (global.get $ptr)))
+                  (else
+                    (call $lexScanIdent)
+                    (call $emitTok (enum.get $Token.variable) (local.get $template) (global.get $ptr))))
+                (local.set $seg (global.get $ptr))
+                (br $scan)))))
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
         (br $scan)))
     (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
@@ -273,7 +179,7 @@
             (br $next)))
         (if (i32.and (i32.eq (local.get $c) (i32.const "/")) (i32.eq (local.get $c2) (i32.const "*")))
           (then
-            (call $kotlinBlockComment (select
+            (call $lexNestedBlockComment (i32.const "/*") (i32.const "*/") (select
               (enum.get $Token.comment.doc) (enum.get $Token.comment)
               (i32.eq (local.get $c3) (i32.const "*"))))
             (br $next)))

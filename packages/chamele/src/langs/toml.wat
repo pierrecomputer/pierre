@@ -105,7 +105,6 @@
     (local $closed i32)
     (local $e i32)
     (local $escape i32)
-    (local $event i32)
     (local $line i32)
     (local $quotes i32)
     (local $q i32)
@@ -118,19 +117,17 @@
     (block $done
       (loop $scan
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
-        (local.set $event
-          (call $lexFindEither (global.get $ptr) (i32.const 34) (i32.const 92)))
-        (if (i32.eqz (local.get $multiline))
-          (then
-            (local.set $line
-              (call $lexFindEither (global.get $ptr) (i32.const 10) (i32.const 13)))
-            (if (i32.lt_u (local.get $line) (local.get $event))
-              (then
-                (global.set $ptr (local.get $line))
-                (br $done)))))
-        (global.set $ptr (local.get $event))
+        ;; One pass stops on the closing quote, an escape, and - for a
+        ;; single-line string - the raw line break that leaves it unterminated.
+        (global.set $ptr (call $scanFindSpecial
+          (global.get $ptr) (global.get $end) (i32.const 34) (i32.const 1)
+          (i32.eqz (local.get $multiline))))
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
         (local.set $c (i32.load8_u (global.get $ptr)))
+        ;; a raw line break: unterminated, left unconsumed
+        (br_if $done (i32.and
+          (i32.ne (local.get $c) (i32.const 34))
+          (i32.ne (local.get $c) (i32.const 92))))
         (if (i32.eq (local.get $c) (i32.const 34))
           (then
             (if (i32.eqz (local.get $multiline))
@@ -793,23 +790,16 @@
         (global.set $ptr (local.get $lhs))
         (block $atomDone
           (loop $atom
-            (br_if $atomDone (i32.ge_u (global.get $ptr) (global.get $end)))
+            ;; the shared terminators cover $end, whitespace, `#`, `,`, `]`,
+            ;; and `}`; a plain atom also stops before the remaining punctuation
+            (br_if $atomDone (call $tomlIsValueEnd (global.get $ptr)))
             (local.set $c (i32.load8_u (global.get $ptr)))
-            (br_if $atomDone (i32.or
-              (i32.le_u (i32.sub (local.get $c) (i32.const 9)) (i32.const 1))
-              (i32.or
-                (i32.eq (local.get $c) (i32.const 13))
-                (i32.eq (local.get $c) (i32.const 32)))))
-            (br_if $atomDone (i32.eq (local.get $c) (i32.const "#")))
             (br_if $atomDone (i32.eq (local.get $c) (i32.const "=")))
-            (br_if $atomDone (i32.eq (local.get $c) (i32.const ",")))
             (br_if $atomDone (i32.eq (local.get $c) (i32.const ".")))
             (br_if $atomDone (i32.eq (local.get $c) (i32.const 34)))
             (br_if $atomDone (i32.eq (local.get $c) (i32.const 39)))
             (br_if $atomDone (i32.eq (local.get $c) (i32.const "[")))
-            (br_if $atomDone (i32.eq (local.get $c) (i32.const "]")))
             (br_if $atomDone (i32.eq (local.get $c) (i32.const "{")))
-            (br_if $atomDone (i32.eq (local.get $c) (i32.const "}")))
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (br $atom)))
         (if (i32.eq (global.get $ptr) (local.get $lhs))

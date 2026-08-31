@@ -5,143 +5,48 @@
     (select (i32.load8_u (local.get $p)) (i32.const 0)
       (i32.lt_u (local.get $p) (global.get $end))))
 
-  (func $swiftWordEq (param $lhs i32) (param $rhs i32) (param $n i32)
-      (param $a i64) (param $b i64) (result i32)
-    (local $rem i32) (local $mask i64)
-    (if (i32.ne (i32.sub (local.get $rhs) (local.get $lhs)) (local.get $n))
-      (then (return (i32.const 0))))
-    (if (i32.le_u (local.get $n) (i32.const 8))
-      (then
-        (if (i32.eq (local.get $n) (i32.const 8))
-          (then (return (i64.eq (i64.load (local.get $lhs)) (local.get $a)))))
-        (local.set $mask (i64.sub
-          (i64.shl (i64.const 1) (i64.extend_i32_u (i32.shl (local.get $n) (i32.const 3))))
-          (i64.const 1)))
-        (return (i64.eq (i64.and (i64.load (local.get $lhs)) (local.get $mask)) (local.get $a)))))
-    (if (i64.ne (i64.load (local.get $lhs)) (local.get $a)) (then (return (i32.const 0))))
-    (local.set $rem (i32.sub (local.get $n) (i32.const 8)))
-    (local.set $mask (i64.sub
-      (i64.shl (i64.const 1) (i64.extend_i32_u (i32.shl (local.get $rem) (i32.const 3))))
-      (i64.const 1)))
-    (i64.eq (i64.and (i64.load offset=8 (local.get $lhs)) (local.get $mask)) (local.get $b)))
+  ;; group order is the dispatch order in $swiftWordHl below
+  (keyword-table $swiftWords $mem.swiftWords $mem.swiftWords+768 16 64
+    (group ;; 1: control
+      "if" "for" "try" "case" "else" "guard" "while" "break" "catch" "throw"
+      "async" "await" "repeat" "return" "switch" "continue")
+    (group "func") ;; 2: declaration, next name is a function
+    (group ;; 3: declaration, next name is a type
+      "enum" "class" "actor" "struct" "protocol" "typealias" "extension")
+    (group "let" "var") ;; 4: declaration
+    (group "import")    ;; 5: import
+    (group "in" "is" "as") ;; 6: operator keywords
+    (group ;; 7: built-in types
+      "Int" "Bool" "Void" "Float" "Double" "String")
+    (group "true" "false") ;; 8: booleans
+    (group "nil")          ;; 9: built-in constant
+    (group "self" "super")) ;; 10: special variables
 
-  ;; Token in the low byte; bit 8 expects a function name and bit 9 a type.
+  ;; Token in the low byte; the high byte selects the next-name capture:
+  ;; 1=function, 2=type.
   (func $swiftWordHl (param $lhs i32) (param $rhs i32) (result i32)
-    (if (call $swiftWordEq (local.get $lhs) (local.get $rhs) (i32.const 4) (i64.const "func") (i64.const 0))
-      (then (return (i32.or (enum.get $Token.keyword.declaration) (i32.const 256)))))
-    (if (i32.or
-          (call $swiftWordEq (local.get $lhs) (local.get $rhs) (i32.const 5) (i64.const "class") (i64.const 0))
-          (call $swiftWordEq (local.get $lhs) (local.get $rhs) (i32.const 6) (i64.const "struct") (i64.const 0)))
-      (then (return (i32.or (enum.get $Token.keyword.declaration) (i32.const 512)))))
-    (if (i32.or
-          (call $swiftWordEq (local.get $lhs) (local.get $rhs) (i32.const 4) (i64.const "enum") (i64.const 0))
-          (call $swiftWordEq (local.get $lhs) (local.get $rhs) (i32.const 8) (i64.const "protocol") (i64.const 0)))
-      (then (return (i32.or (enum.get $Token.keyword.declaration) (i32.const 512)))))
-    (if (i32.or
-          (call $swiftWordEq (local.get $lhs) (local.get $rhs) (i32.const 5) (i64.const "actor") (i64.const 0))
-          (call $swiftWordEq (local.get $lhs) (local.get $rhs) (i32.const 9) (i64.const "typealia") (i64.const "s")))
-      (then (return (i32.or (enum.get $Token.keyword.declaration) (i32.const 512)))))
-    (if (call $swiftWordEq (local.get $lhs) (local.get $rhs) (i32.const 9) (i64.const "extensio") (i64.const "n"))
-      (then (return (i32.or (enum.get $Token.keyword.declaration) (i32.const 512)))))
-    (if (i32.or
-          (call $swiftWordEq (local.get $lhs) (local.get $rhs) (i32.const 3) (i64.const "let") (i64.const 0))
-          (call $swiftWordEq (local.get $lhs) (local.get $rhs) (i32.const 3) (i64.const "var") (i64.const 0)))
+    (local $g i32)
+    (local.set $g
+      (keyword-table.get $swiftWords (local.get $lhs) (local.get $rhs)))
+    (if (i32.eqz (local.get $g)) (then (return (i32.const -1))))
+    (if (i32.eq (local.get $g) (i32.const 1))
+      (then (return (enum.get $Token.keyword.control))))
+    (if (i32.le_u (local.get $g) (i32.const 3))
+      (then (return (i32.or (enum.get $Token.keyword.declaration)
+        (i32.shl (i32.sub (local.get $g) (i32.const 1)) (i32.const 8))))))
+    (if (i32.eq (local.get $g) (i32.const 4))
       (then (return (enum.get $Token.keyword.declaration))))
-    (if (call $swiftWordEq (local.get $lhs) (local.get $rhs) (i32.const 6) (i64.const "import") (i64.const 0))
+    (if (i32.eq (local.get $g) (i32.const 5))
       (then (return (enum.get $Token.keyword.import))))
-
-    (if (i32.or
-          (call $swiftWordEq (local.get $lhs) (local.get $rhs) (i32.const 2) (i64.const "if") (i64.const 0))
-          (call $swiftWordEq (local.get $lhs) (local.get $rhs) (i32.const 4) (i64.const "else") (i64.const 0)))
-      (then (return (enum.get $Token.keyword.control))))
-    (if (i32.or
-          (call $swiftWordEq (local.get $lhs) (local.get $rhs) (i32.const 5) (i64.const "guard") (i64.const 0))
-          (call $swiftWordEq (local.get $lhs) (local.get $rhs) (i32.const 6) (i64.const "switch") (i64.const 0)))
-      (then (return (enum.get $Token.keyword.control))))
-    (if (i32.or
-          (call $swiftWordEq (local.get $lhs) (local.get $rhs) (i32.const 4) (i64.const "case") (i64.const 0))
-          (call $swiftWordEq (local.get $lhs) (local.get $rhs) (i32.const 3) (i64.const "for") (i64.const 0)))
-      (then (return (enum.get $Token.keyword.control))))
-    (if (i32.or
-          (call $swiftWordEq (local.get $lhs) (local.get $rhs) (i32.const 5) (i64.const "while") (i64.const 0))
-          (call $swiftWordEq (local.get $lhs) (local.get $rhs) (i32.const 6) (i64.const "repeat") (i64.const 0)))
-      (then (return (enum.get $Token.keyword.control))))
-    (if (i32.or
-          (call $swiftWordEq (local.get $lhs) (local.get $rhs) (i32.const 6) (i64.const "return") (i64.const 0))
-          (call $swiftWordEq (local.get $lhs) (local.get $rhs) (i32.const 5) (i64.const "break") (i64.const 0)))
-      (then (return (enum.get $Token.keyword.control))))
-    (if (i32.or
-          (call $swiftWordEq (local.get $lhs) (local.get $rhs) (i32.const 8) (i64.const "continue") (i64.const 0))
-          (call $swiftWordEq (local.get $lhs) (local.get $rhs) (i32.const 5) (i64.const "throw") (i64.const 0)))
-      (then (return (enum.get $Token.keyword.control))))
-    (if (i32.or
-          (call $swiftWordEq (local.get $lhs) (local.get $rhs) (i32.const 3) (i64.const "try") (i64.const 0))
-          (call $swiftWordEq (local.get $lhs) (local.get $rhs) (i32.const 5) (i64.const "catch") (i64.const 0)))
-      (then (return (enum.get $Token.keyword.control))))
-    (if (i32.or
-          (call $swiftWordEq (local.get $lhs) (local.get $rhs) (i32.const 5) (i64.const "async") (i64.const 0))
-          (call $swiftWordEq (local.get $lhs) (local.get $rhs) (i32.const 5) (i64.const "await") (i64.const 0)))
-      (then (return (enum.get $Token.keyword.control))))
-    (if (i32.or
-          (call $swiftWordEq (local.get $lhs) (local.get $rhs) (i32.const 2) (i64.const "in") (i64.const 0))
-          (call $swiftWordEq (local.get $lhs) (local.get $rhs) (i32.const 2) (i64.const "is") (i64.const 0)))
+    (if (i32.eq (local.get $g) (i32.const 6))
       (then (return (enum.get $Token.keyword.operator))))
-    (if (call $swiftWordEq (local.get $lhs) (local.get $rhs) (i32.const 2) (i64.const "as") (i64.const 0))
-      (then (return (enum.get $Token.keyword.operator))))
-
-    (if (i32.or
-          (call $swiftWordEq (local.get $lhs) (local.get $rhs) (i32.const 3) (i64.const "Int") (i64.const 0))
-          (call $swiftWordEq (local.get $lhs) (local.get $rhs) (i32.const 4) (i64.const "Bool") (i64.const 0)))
+    (if (i32.eq (local.get $g) (i32.const 7))
       (then (return (enum.get $Token.type.builtin))))
-    (if (i32.or
-          (call $swiftWordEq (local.get $lhs) (local.get $rhs) (i32.const 6) (i64.const "String") (i64.const 0))
-          (call $swiftWordEq (local.get $lhs) (local.get $rhs) (i32.const 6) (i64.const "Double") (i64.const 0)))
-      (then (return (enum.get $Token.type.builtin))))
-    (if (i32.or
-          (call $swiftWordEq (local.get $lhs) (local.get $rhs) (i32.const 5) (i64.const "Float") (i64.const 0))
-          (call $swiftWordEq (local.get $lhs) (local.get $rhs) (i32.const 4) (i64.const "Void") (i64.const 0)))
-      (then (return (enum.get $Token.type.builtin))))
-    (if (i32.or
-          (call $swiftWordEq (local.get $lhs) (local.get $rhs) (i32.const 4) (i64.const "true") (i64.const 0))
-          (call $swiftWordEq (local.get $lhs) (local.get $rhs) (i32.const 5) (i64.const "false") (i64.const 0)))
+    (if (i32.eq (local.get $g) (i32.const 8))
       (then (return (enum.get $Token.boolean))))
-    (if (call $swiftWordEq (local.get $lhs) (local.get $rhs) (i32.const 3) (i64.const "nil") (i64.const 0))
+    (if (i32.eq (local.get $g) (i32.const 9))
       (then (return (enum.get $Token.constant.builtin))))
-    (if (i32.or
-          (call $swiftWordEq (local.get $lhs) (local.get $rhs) (i32.const 4) (i64.const "self") (i64.const 0))
-          (call $swiftWordEq (local.get $lhs) (local.get $rhs) (i32.const 5) (i64.const "super") (i64.const 0)))
-      (then (return (enum.get $Token.variable.special))))
-    (i32.const -1))
-
-  (func $swiftBlockComment (param $hl i32)
-    (local $lhs i32) (local $c i32) (local $c2 i32) (local $depth i32)
-    (local.set $lhs (global.get $ptr))
-    (local.set $depth (i32.const 1))
-    (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))
-    (if (i32.gt_u (global.get $ptr) (global.get $end)) (then (global.set $ptr (global.get $end))))
-    (block $done
-      (loop $loop
-        (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
-        (local.set $c (i32.load8_u (global.get $ptr)))
-        (local.set $c2 (call $swiftByte (i32.add (global.get $ptr) (i32.const 1))))
-        (if (i32.and (i32.eq (local.get $c) (i32.const "/")) (i32.eq (local.get $c2) (i32.const "*")))
-          (then
-            (local.set $depth (i32.add (local.get $depth) (i32.const 1)))
-            (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))
-            (if (i32.gt_u (global.get $ptr) (global.get $end)) (then (global.set $ptr (global.get $end))))
-            (br $loop)))
-        (if (i32.and (i32.eq (local.get $c) (i32.const "*")) (i32.eq (local.get $c2) (i32.const "/")))
-          (then
-            (local.set $depth (i32.sub (local.get $depth) (i32.const 1)))
-            (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))
-            (if (i32.gt_u (global.get $ptr) (global.get $end)) (then (global.set $ptr (global.get $end))))
-            (br_if $done (i32.eqz (local.get $depth)))
-            (br $loop)))
-        (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-        (br $loop)))
-    (call $emitTok (local.get $hl) (local.get $lhs) (global.get $ptr))
-    (call $streamSetNested
-      (local.get $depth) (i32.const "/*") (i32.const "*/") (local.get $hl)))
+    (enum.get $Token.variable.special))
 
   (func $swiftRawStart (result i32)
     (local $p i32)
@@ -230,8 +135,8 @@
     (local $c i32) (local $c2 i32) (local $c3 i32)
     (local $gap i32) (local $lhs i32) (local $rhs i32) (local $p i32) (local $e i32)
     (local $kind i32) (local $hl i32) (local $expect i32) (local $member i32)
-    (local $seg i32) (local $mask i32) (local $interp i32) (local $stringMode i32)
-    (local $openedInterp i32) (local $w v128)
+    (local $seg i32) (local $interp i32) (local $stringMode i32)
+    (local $openedInterp i32)
     (call $lexEmitLeadingContinuation)
     (block $done
       (loop $next
@@ -241,22 +146,10 @@
             (local.set $openedInterp (i32.const 0))
             (block $stringDone
               (loop $stringScan
+                (global.set $ptr (call $scanFindSpecial
+                  (global.get $ptr) (global.get $end)
+                  (i32.const 34) (i32.const 1) (i32.const 1)))
                 (br_if $stringDone (i32.ge_u (global.get $ptr) (global.get $end)))
-                (if (i32.ge_u (i32.sub (global.get $end) (global.get $ptr)) (i32.const 16))
-                  (then
-                    (local.set $w (v128.load (global.get $ptr)))
-                    (local.set $mask (i8x16.bitmask (v128.or
-                      (v128.or
-                        (i8x16.eq (local.get $w) (i8x16.splat (i32.const 34)))
-                        (i8x16.eq (local.get $w) (i8x16.splat (i32.const 92))))
-                      (v128.or
-                        (i8x16.eq (local.get $w) (i8x16.splat (i32.const 10)))
-                        (i8x16.eq (local.get $w) (i8x16.splat (i32.const 13)))))))
-                    (if (i32.eqz (local.get $mask))
-                      (then
-                        (global.set $ptr (i32.add (global.get $ptr) (i32.const 16)))
-                        (br $stringScan)))
-                    (global.set $ptr (i32.add (global.get $ptr) (i32.ctz (local.get $mask))))))
                 (local.set $c (i32.load8_u (global.get $ptr)))
                 (if (i32.eq (local.get $c) (i32.const 34))
                   (then
@@ -271,26 +164,16 @@
                           (i32.eq (call $swiftByte (i32.add (global.get $ptr) (i32.const 1))) (i32.const "(")))
                       (then
                         (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
+                        ;; the `(` was read below $end, so `\(` cannot pass it
                         (local.set $e (i32.add (global.get $ptr) (i32.const 2)))
-                        (if (i32.gt_u (local.get $e) (global.get $end))
-                          (then (local.set $e (global.get $end))))
                         (call $emitTok (enum.get $Token.punctuation.special) (global.get $ptr) (local.get $e))
                         (global.set $ptr (local.get $e))
                         (local.set $interp (i32.const 1))
                         (local.set $openedInterp (i32.const 1))
                         (br $stringDone)))
                     (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
-                    (local.set $e (i32.add (global.get $ptr) (i32.const 2)))
-                    (if (i32.gt_u (local.get $e) (global.get $end))
-                      (then (local.set $e (global.get $end))))
-                    (block $utf8Done
-                      (loop $utf8
-                        (br_if $utf8Done (i32.ge_u (local.get $e) (global.get $end)))
-                        (br_if $utf8Done (i32.ne
-                          (i32.and (i32.load8_u (local.get $e)) (i32.const 0xc0))
-                          (i32.const 0x80)))
-                        (local.set $e (i32.add (local.get $e) (i32.const 1)))
-                        (br $utf8)))
+                    (local.set $e (call $utf8SpanEnd
+                      (i32.add (global.get $ptr) (i32.const 2)) (global.get $end)))
                     (call $emitTok (enum.get $Token.string.escape) (global.get $ptr) (local.get $e))
                     (global.set $ptr (local.get $e))
                     (local.set $seg (global.get $ptr))
@@ -318,7 +201,7 @@
             (br $next)))
         (if (i32.and (i32.eq (local.get $c) (i32.const "/")) (i32.eq (local.get $c2) (i32.const "*")))
           (then
-            (call $swiftBlockComment (select
+            (call $lexNestedBlockComment (i32.const "/*") (i32.const "*/") (select
               (enum.get $Token.comment.doc) (enum.get $Token.comment)
               (i32.eq (local.get $c3) (i32.const "*"))))
             (br $next)))

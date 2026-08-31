@@ -174,20 +174,16 @@
     (if (i32.or (i32.eq (local.get $c) (i32.const 34)) (i32.eq (local.get $c) (i32.const 39)))
       (then
         (local.set $q (local.get $c))
-        (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-        (block $sDone
-          (loop $s
-            (br_if $sDone (i32.ge_u (global.get $ptr) (global.get $end)))
-            (local.set $c (i32.load8_u (global.get $ptr)))
-            (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-            (br_if $sDone (i32.eq (local.get $c) (local.get $q)))
-            (br $s)))
-        (if (i32.and
-              (global.get $tsxStreaming)
-              (i32.ne (local.get $c) (local.get $q)))
-          (then
-            (global.set $tsxStreamMode
-              (select (i32.const 6) (i32.const 7) (i32.eq (local.get $q) (i32.const 34))))))
+        (global.set $ptr (call $scanFind3
+          (i32.add (global.get $ptr) (i32.const 1))
+          (local.get $q) (local.get $q) (local.get $q)))
+        (if (i32.lt_u (global.get $ptr) (global.get $end))
+          (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1))))
+          (else
+            (if (global.get $tsxStreaming)
+              (then
+                (global.set $tsxStreamMode
+                  (select (i32.const 6) (i32.const 7) (i32.eq (local.get $q) (i32.const 34))))))))
         (call $emitTok (enum.get $Token.string) (local.get $from) (global.get $ptr))
         (return)))
     ;; `=` between an attribute name and its value
@@ -218,39 +214,40 @@
     (local $c2 i32)
     (local $p i32)
     (local.set $seg (global.get $ptr))
-    ;; text run up to `<` or `{`; `&entity;` gets a string.special span
+    ;; text run up to `<` or `{`, hopping plain text 16 bytes per step;
+    ;; `&entity;` gets a string.special span
     (block $textDone
       (loop $text
+        (global.set $ptr (call $scanFind3
+          (global.get $ptr) (i32.const "<") (i32.const "{") (i32.const "&")))
         (br_if $textDone (i32.ge_u (global.get $ptr) (global.get $end)))
         (local.set $c (i32.load8_u (global.get $ptr)))
-        (br_if $textDone (i32.or (i32.eq (local.get $c) (i32.const "<"))
-                                 (i32.eq (local.get $c) (i32.const "{"))))
-        (if (i32.eq (local.get $c) (i32.const "&"))
+        (br_if $textDone (i32.ne (local.get $c) (i32.const "&")))
+        (local.set $p (i32.add (global.get $ptr) (i32.const 1)))
+        (block $eDone
+          (loop $e
+            (br_if $eDone (i32.ge_u (local.get $p) (global.get $end)))
+            (local.set $c2 (i32.load8_u (local.get $p)))
+            (br_if $eDone (i32.eqz (i32.or
+              (i32.or
+                (i32.le_u (i32.sub (i32.or (local.get $c2) (i32.const 32)) (i32.const "a")) (i32.const 25))
+                (i32.le_u (i32.sub (local.get $c2) (i32.const "0")) (i32.const 9)))
+              (i32.eq (local.get $c2) (i32.const "#")))))
+            (local.set $p (i32.add (local.get $p) (i32.const 1)))
+            (br $e)))
+        (if (i32.and
+              (i32.gt_u (local.get $p) (i32.add (global.get $ptr) (i32.const 1)))
+              (i32.and (i32.lt_u (local.get $p) (global.get $end))
+                       (i32.eq (call $tsxByte (local.get $p)) (i32.const ";"))))
           (then
-            (local.set $p (i32.add (global.get $ptr) (i32.const 1)))
-            (block $eDone
-              (loop $e
-                (br_if $eDone (i32.ge_u (local.get $p) (global.get $end)))
-                (local.set $c2 (i32.load8_u (local.get $p)))
-                (br_if $eDone (i32.eqz (i32.or
-                  (i32.or
-                    (i32.le_u (i32.sub (i32.or (local.get $c2) (i32.const 32)) (i32.const "a")) (i32.const 25))
-                    (i32.le_u (i32.sub (local.get $c2) (i32.const "0")) (i32.const 9)))
-                  (i32.eq (local.get $c2) (i32.const "#")))))
-                (local.set $p (i32.add (local.get $p) (i32.const 1)))
-                (br $e)))
-            (if (i32.and
-                  (i32.gt_u (local.get $p) (i32.add (global.get $ptr) (i32.const 1)))
-                  (i32.and (i32.lt_u (local.get $p) (global.get $end))
-                           (i32.eq (call $tsxByte (local.get $p)) (i32.const ";"))))
-              (then
-                (call $emitTok (enum.get $Token.text.jsx) (local.get $seg) (global.get $ptr))
-                (call $emitTok (enum.get $Token.string.special)
-                  (global.get $ptr) (i32.add (local.get $p) (i32.const 1)))
-                (global.set $ptr (i32.add (local.get $p) (i32.const 1)))
-                (local.set $seg (global.get $ptr))
-                (br $text)))))
-        (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+            (call $emitTok (enum.get $Token.text.jsx) (local.get $seg) (global.get $ptr))
+            (call $emitTok (enum.get $Token.string.special)
+              (global.get $ptr) (i32.add (local.get $p) (i32.const 1)))
+            (global.set $ptr (i32.add (local.get $p) (i32.const 1)))
+            (local.set $seg (global.get $ptr)))
+          (else
+            ;; a bare `&`: plain text
+            (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))
         (br $text)))
     (call $emitTok (enum.get $Token.text.jsx) (local.get $seg) (global.get $ptr))
     (if (i32.ge_u (global.get $ptr) (global.get $end)) (then (return)))

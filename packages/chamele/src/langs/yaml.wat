@@ -1,35 +1,53 @@
 (module
   (import "../common.wat")
 
+  ;; The capture for a plain scalar spanning [$lhs,$rhs). YAML's untagged
+  ;; constants are `~` and the case-insensitive words true, false, yes, no, on,
+  ;; off, and null, so every match is 1..5 bytes: a length gate rejects longer
+  ;; scalars before any byte compare, and each length then tests only its own
+  ;; words. ORing 0x20 into a byte lowercases an ASCII letter, which is what
+  ;; makes the compares case-insensitive.
   (func $yamlWordHl (param $lhs i32) (param $rhs i32) (result i32)
     (local $n i32)
-    (local $w i64)
+    (local $w i32)
     (local.set $n (i32.sub (local.get $rhs) (local.get $lhs)))
-    (local.set $w (i64.load (local.get $lhs)))
-    (if (i32.and (i32.eq (local.get $n) (i32.const 4))
-          (i32.or (i32.eq (i32.or (i32.wrap_i64 (local.get $w)) (i32.const 0x20202020)) (i32.const "true"))
-                  (i32.eq (i32.or (i32.wrap_i64 (local.get $w)) (i32.const 0x20202020)) (i32.const "null"))))
-      (then (return (select (enum.get $Token.boolean) (enum.get $Token.constant.builtin)
-        (i32.eq (i32.or (i32.wrap_i64 (local.get $w)) (i32.const 0x20202020)) (i32.const "true"))))))
-    (if (i32.and (i32.eq (local.get $n) (i32.const 5))
-          (i64.eq (i64.and (i64.or (local.get $w) (i64.const 0x2020202020)) (i64.const 0xffffffffff)) (i64.const "false")))
-      (then (return (enum.get $Token.boolean))))
-    (if (i32.and (i32.eq (local.get $n) (i32.const 1))
-                 (i32.eq (i32.load8_u (local.get $lhs)) (i32.const "~")))
-      (then (return (enum.get $Token.constant.builtin))))
-    (if (i32.and (i32.eq (local.get $n) (i32.const 3))
+    (if (i32.gt_u (i32.sub (local.get $n) (i32.const 1)) (i32.const 4))
+      (then (return (enum.get $Token.string))))
+    (if (i32.eq (local.get $n) (i32.const 1))
+      (then (return (select
+        (enum.get $Token.constant.builtin) (enum.get $Token.string)
+        (i32.eq (i32.load8_u (local.get $lhs)) (i32.const "~"))))))
+    (if (i32.eq (local.get $n) (i32.const 5))
+      (then (return (select
+        (enum.get $Token.boolean) (enum.get $Token.string)
+        (i64.eq
+          (i64.and
+            (i64.or (i64.load (local.get $lhs)) (i64.const 0x2020202020))
+            (i64.const 0xffffffffff))
+          (i64.const "false"))))))
+    ;; wide loads stay inside the buffer slack, so a short word is safe to read
+    (local.set $w (i32.or (i32.load (local.get $lhs)) (i32.const 0x20202020)))
+    (if (i32.eq (local.get $n) (i32.const 4))
+      (then
+        (if (i32.eq (local.get $w) (i32.const "true"))
+          (then (return (enum.get $Token.boolean))))
+        (return (select
+          (enum.get $Token.constant.builtin) (enum.get $Token.string)
+          (i32.eq (local.get $w) (i32.const "null"))))))
+    (if (i32.eq (local.get $n) (i32.const 3))
+      (then
+        (local.set $w (i32.and (local.get $w) (i32.const 0xffffff)))
+        (return (select
+          (enum.get $Token.boolean) (enum.get $Token.string)
           (i32.or
-            (i32.eq (i32.and (i32.or (i32.wrap_i64 (local.get $w)) (i32.const 0x202020)) (i32.const 0xffffff))
-                    (i32.const "yes"))
-            (i32.eq (i32.and (i32.or (i32.wrap_i64 (local.get $w)) (i32.const 0x202020)) (i32.const 0xffffff))
-                    (i32.const "off"))))
-      (then (return (enum.get $Token.boolean))))
-    (if (i32.and (i32.eq (local.get $n) (i32.const 2))
-          (i32.or
-            (i32.eq (i32.and (i32.or (i32.wrap_i64 (local.get $w)) (i32.const 0x2020)) (i32.const 0xffff)) (i32.const "no"))
-            (i32.eq (i32.and (i32.or (i32.wrap_i64 (local.get $w)) (i32.const 0x2020)) (i32.const 0xffff)) (i32.const "on"))))
-      (then (return (enum.get $Token.boolean))))
-    (enum.get $Token.string))
+            (i32.eq (local.get $w) (i32.const "yes"))
+            (i32.eq (local.get $w) (i32.const "off")))))))
+    (local.set $w (i32.and (local.get $w) (i32.const 0xffff)))
+    (select
+      (enum.get $Token.boolean) (enum.get $Token.string)
+      (i32.or
+        (i32.eq (local.get $w) (i32.const "no"))
+        (i32.eq (local.get $w) (i32.const "on")))))
 
   (func $yamlSkipHorizontal (param $p i32) (result i32)
     (block $done
@@ -40,17 +58,6 @@
           (i32.eq (i32.load8_u (local.get $p)) (i32.const 9)))))
         (local.set $p (i32.add (local.get $p) (i32.const 1)))
         (br $space)))
-    (local.get $p))
-
-  (func $yamlLineEnd (param $p i32) (result i32)
-    (block $done
-      (loop $l
-        (br_if $done (i32.ge_u (local.get $p) (global.get $end)))
-        (br_if $done (i32.or
-          (i32.eq (i32.load8_u (local.get $p)) (i32.const 10))
-          (i32.eq (i32.load8_u (local.get $p)) (i32.const 13))))
-        (local.set $p (i32.add (local.get $p) (i32.const 1)))
-        (br $l)))
     (local.get $p))
 
   (func $yamlAfterLine (param $p i32) (result i32)
@@ -120,7 +127,8 @@
       (loop $scan
         (br_if $scanDone (i32.ge_u (local.get $bodyEnd) (global.get $end)))
         (local.set $col (call $yamlSkipHorizontal (local.get $bodyEnd)))
-        (local.set $lineEnd (call $yamlLineEnd (local.get $col)))
+        (local.set $lineEnd
+          (call $lexFindEither (local.get $col) (i32.const 10) (i32.const 13)))
         ;; a blank line always belongs to the body; a filled one only when it is
         ;; indented deeper than the line that opened the block
         (br_if $scanDone (i32.and
@@ -151,7 +159,8 @@
       (loop $scan
         (br_if $done (i32.ge_u (local.get $bodyEnd) (global.get $end)))
         (local.set $col (call $yamlSkipHorizontal (local.get $bodyEnd)))
-        (local.set $lineEnd (call $yamlLineEnd (local.get $col)))
+        (local.set $lineEnd
+          (call $lexFindEither (local.get $col) (i32.const 10) (i32.const 13)))
         (br_if $done (i32.and
           (i32.ne (local.get $col) (local.get $lineEnd))
           (i32.le_u
@@ -202,19 +211,20 @@
                     (i32.eq (local.get $c) (i32.const 39)))
           (then
             (local.set $quote (local.get $c))
-            ;; Probe the closing quote so quoted mapping keys get property.
+            ;; Probe the closing quote so quoted mapping keys get property. The
+            ;; probe hops from quote to backslash instead of walking the body,
+            ;; and crosses line breaks because the scalar itself may.
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (block $quoteDone
               (loop $q
+                (global.set $ptr (call $scanFindSpecial
+                  (global.get $ptr) (global.get $end) (local.get $quote)
+                  (i32.eq (local.get $quote) (i32.const 34)) (i32.const 0)))
                 (br_if $quoteDone (i32.ge_u (global.get $ptr) (global.get $end)))
                 (local.set $c (i32.load8_u (global.get $ptr)))
-                (if (i32.eq (local.get $c) (local.get $quote))
-                  (then
-                    (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-                    (br $quoteDone)))
-                (if (i32.and (i32.eq (local.get $quote) (i32.const 34))
-                             (i32.eq (local.get $c) (i32.const 92)))
-                  (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))
+                (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+                (br_if $quoteDone (i32.eq (local.get $c) (local.get $quote)))
+                ;; a backslash: step over the byte it escapes
                 (if (i32.lt_u (global.get $ptr) (global.get $end))
                   (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))
                 (br $q)))

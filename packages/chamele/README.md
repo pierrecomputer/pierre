@@ -155,8 +155,8 @@ toCSS(pierreDark);
 ## Development
 
 ```bash
-moonx chamele:build   # preprocess and compile WAT with wabt + binaryen
-moonx chamele:test    # run tests
+moonx chamele:build   # compile WAT (wabt + binaryen) and TS glue (tsdown) into dist/
+moonx chamele:test    # run tests (bun test)
 moonx chamele:bench   # run benchmarks
 ```
 

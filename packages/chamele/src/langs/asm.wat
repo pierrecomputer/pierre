@@ -1,6 +1,11 @@
 (module
   (import "../common.wat")
 
+  ;; whether [$lhs,$rhs) names a machine register: `r`/`x`/`w` followed by a
+  ;; digit, or one of the fixed two- and three-byte names. The wide loads below
+  ;; may read up to three bytes past $rhs; that always lands inside the input
+  ;; buffer's trailing slack, and the length checks plus the masks discard
+  ;; whatever those bytes hold.
   (func $asmIsRegister (param $lhs i32) (param $rhs i32) (result i32)
     (local $c i32)
     (local $n i32)
@@ -16,6 +21,9 @@
                       (i32.eq (local.get $c) (i32.const "w"))))
             (call $lexIsDigit (i32.load8_u offset=1 (local.get $lhs)))))
       (then (return (i32.const 1))))
+    ;; every remaining name is two or three bytes, so one compare skips the
+    ;; whole ladder for ordinary mnemonics and symbols
+    (if (i32.gt_u (local.get $n) (i32.const 3)) (then (return (i32.const 0))))
     (local.set $w (i32.or (i32.load (local.get $lhs)) (i32.const 0x20202020)))
     (i32.or
       (i32.and (i32.eq (local.get $n) (i32.const 2))
