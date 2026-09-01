@@ -169,7 +169,8 @@ function findReplaceInput(panel: HTMLElement): HTMLInputElement {
 }
 
 function findSearchInput(panel: HTMLElement): HTMLInputElement {
-  const input = panel.querySelector<HTMLInputElement>('input[data-search]');
+  const input =
+    panel.shadowRoot?.querySelector<HTMLInputElement>('input[data-search]');
   if (input == null) {
     throw new Error('search input was not rendered');
   }
