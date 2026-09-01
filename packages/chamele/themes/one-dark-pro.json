@@ -2,32 +2,70 @@
   "name": "One Dark Pro",
   "appearance": "dark",
   "style": {
-    "background": "#282c34",
-    "editor.background": "#282c34",
-    "text": "#abb2bf",
+    "background": "#23272e",
+    "text": "#cdd3e0",
+    "editor.background": "#23272e",
     "editor.foreground": "#abb2bf",
     "editor.active_line.background": "#2c313c",
-    "editor.document_highlight.bracket_background": "#515a6b",
+    "editor.document_highlight.bracket_background": "#abb2bf30",
     "search.match_background": "#d19a6644",
-    "error": "#c24038",
-    "warning": "#d19a66",
     "players": [
       {
-        "cursor": "#528bff",
-        "selection": "#67769660"
+        "cursor": "#74ade8ff",
+        "background": "#74ade8ff",
+        "selection": "#67769640"
+      },
+      {
+        "cursor": "#be5046ff",
+        "background": "#be5046ff",
+        "selection": "#be504640"
+      },
+      {
+        "cursor": "#bf956aff",
+        "background": "#bf956aff",
+        "selection": "#bf956a40"
+      },
+      {
+        "cursor": "#b477cfff",
+        "background": "#b477cfff",
+        "selection": "#b477cf40"
+      },
+      {
+        "cursor": "#6eb4bfff",
+        "background": "#6eb4bfff",
+        "selection": "#6eb4bf40"
+      },
+      {
+        "cursor": "#d07277ff",
+        "background": "#d07277ff",
+        "selection": "#d0727740"
+      },
+      {
+        "cursor": "#dec184ff",
+        "background": "#dec184ff",
+        "selection": "#dec18440"
+      },
+      {
+        "cursor": "#a1c181ff",
+        "background": "#a1c181ff",
+        "selection": "#a1c18140"
       }
     ],
+    "error": "#c24038",
+    "warning": "#d19a66",
+    "hint": "#7a849c",
     "syntax": {
+      "comment": {
+        "color": "#7F838C"
+      },
+      "comment.doc": {
+        "color": "#7f848e"
+      },
       "attribute": {
         "color": "#d19a66"
       },
-      "comment": {
-        "color": "#7f848e",
-        "font_style": "italic"
-      },
-      "comment.doc": {
-        "color": "#7f848e",
-        "font_style": "italic"
+      "boolean": {
+        "color": "#d19a66"
       },
       "constant": {
         "color": "#d19a66"
@@ -41,8 +79,8 @@
       "emphasis": {
         "color": "#c678dd"
       },
-      "emphasis.strong": {
-        "color": "#d19a66"
+      "enum": {
+        "color": "#56b6c2"
       },
       "function": {
         "color": "#61afef"
@@ -50,35 +88,57 @@
       "keyword": {
         "color": "#c678dd"
       },
+      "keyword.operator": {
+        "color": "#c678dd"
+      },
+      "link_text": {
+        "color": "#61afef"
+      },
+      "link_uri": {
+        "color": "#61afef"
+      },
       "number": {
         "color": "#d19a66"
       },
       "operator": {
         "color": "#abb2bf"
       },
+      "predictive": {
+        "color": "#4d5970",
+        "font_style": "italic"
+      },
       "property": {
+        "color": "#e06c75"
+      },
+      "punctuation": {
         "color": "#abb2bf"
+      },
+      "punctuation.list_marker": {
+        "color": "#d07277ff"
       },
       "string": {
         "color": "#98c379"
       },
       "string.escape": {
-        "color": "#98c379"
+        "color": "#56b6c2"
       },
       "string.regex": {
-        "color": "#98c379"
+        "color": "#e06c75"
       },
       "string.special": {
-        "color": "#56b6c2"
+        "color": "#e06c75"
       },
       "string.special.symbol": {
-        "color": "#56b6c2"
+        "color": "#e06c75"
       },
       "tag": {
         "color": "#e06c75"
       },
       "text.literal": {
         "color": "#98c379"
+      },
+      "title": {
+        "color": "#d07277ff"
       },
       "type": {
         "color": "#e5c07b"
@@ -88,6 +148,9 @@
       },
       "variable.special": {
         "color": "#e5c07b"
+      },
+      "variant": {
+        "color": "#61afef"
       }
     }
   }

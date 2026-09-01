@@ -84,7 +84,7 @@ marketplace versions.
 | `night-owl`                  | Night Owl                  | dark       | Zed port            |
 | `night-owl-light`            | Night Owl Light            | light      | Zed port            |
 | `nord`                       | Nord                       | dark       | Zed port            |
-| `one-dark-pro`               | One Dark Pro               | dark       | TextMate conversion |
+| `one-dark-pro`               | One Dark Pro               | dark       | Zed port            |
 | `one-light`                  | One Light                  | light      | Zed port            |
 | `plastic`                    | Plastic                    | dark       | Zed port            |
 | `poimandres`                 | Poimandres                 | dark       | TextMate conversion |
@@ -100,9 +100,9 @@ marketplace versions.
 | `synthwave-84`               | Synthwave '84              | dark       | Zed port            |
 | `tokyo-night`                | Tokyo Night                | dark       | Zed port            |
 | `vesper`                     | Vesper                     | dark       | Zed port            |
-| `vitesse-black`              | Vitesse Black              | dark       | TextMate conversion |
-| `vitesse-dark`               | Vitesse Dark               | dark       | TextMate conversion |
-| `vitesse-light`              | Vitesse Light              | light      | TextMate conversion |
+| `vitesse-black`              | Vitesse Black              | dark       | Zed port            |
+| `vitesse-dark`               | Vitesse Dark               | dark       | Zed port            |
+| `vitesse-light`              | Vitesse Light              | light      | Zed port            |
 
 ## Pierre themes
 
