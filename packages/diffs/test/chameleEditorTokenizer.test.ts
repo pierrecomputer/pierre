@@ -13,8 +13,12 @@ import { installDom } from './domHarness';
 
 let dom: ReturnType<typeof installDom>;
 
-beforeAll(() => {
+beforeAll(async () => {
   dom = installDom();
+  await chameleHighlighter.load({
+    langs: [],
+    themes: ['pierre-dark', 'pierre-light'],
+  });
 });
 
 afterAll(() => {

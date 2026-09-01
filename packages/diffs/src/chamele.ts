@@ -9,7 +9,8 @@ import {
   LiveTokenizer,
   type Theme,
 } from '@pierre/chamele';
-import * as chameleThemes from '@pierre/chamele/themes';
+import { themes } from '@pierre/chamele/themes';
+import { createThemeResolver } from '@pierre/theming';
 import type { Root } from 'hast';
 import type { CodeToTokensOptions } from 'shiki/core';
 
@@ -46,64 +47,51 @@ function kebab(value: string): string {
     .toLowerCase();
 }
 
-const registeredThemes = new Map<string, Theme>();
-let bundledThemes: Map<string, Theme> | undefined;
+const chameleThemeResolver = createThemeResolver<Theme>();
 
-// the themes barrel also exports non-theme values (e.g. the name list)
-function isTheme(value: unknown): value is Theme {
-  return (
-    typeof value === 'object' &&
-    value != null &&
-    !Array.isArray(value) &&
-    typeof (value as Theme).name === 'string'
-  );
-}
+async function loadChameleTheme(name: string): Promise<void> {
+  if (chameleThemeResolver.hasResolvedTheme(name)) return;
 
-function getBundledThemes(): Map<string, Theme> {
-  if (bundledThemes == null) {
-    bundledThemes = new Map();
-    for (const [exportName, theme] of Object.entries(chameleThemes)) {
-      if (!isTheme(theme)) {
-        continue;
-      }
-      // export-name key first (most predictable), display-name keys after
-      for (const key of [
-        kebab(exportName),
-        kebab(theme.name),
-        `${kebab(theme.name)}-${theme.appearance}`,
-      ]) {
-        if (!bundledThemes.has(key)) bundledThemes.set(key, theme);
-      }
-    }
+  const key = kebab(name);
+  let id = THEME_NAME_ALIASES[key] ?? key;
+  let loader = themes[id];
+  if (loader == null) {
+    warnOnce(
+      `@pierre/diffs/chamele: no chamele theme for "${name}"; falling back ` +
+        `to a Pierre default. Register one with registerChameleTheme().`
+    );
+    id = key.includes('light') ? 'pierre-light' : 'pierre-dark';
+    loader = themes[id];
   }
-  return bundledThemes;
+  chameleThemeResolver.registerThemeIfAbsent(id, loader);
+  chameleThemeResolver.seedResolvedTheme(
+    name,
+    await chameleThemeResolver.resolveTheme(id)
+  );
 }
 
 /**
  * Map a diffs theme name (or an inline Zed theme object) to a chamele theme.
- * Unknown names fall back to Pierre Dark/Light with a one-time warning;
- * register custom names with `registerChameleTheme`.
+ * The async highlighter load warms bundled themes before this synchronous
+ * render path runs. Register custom names with `registerChameleTheme`.
  */
 function resolveChameleTheme(theme: DiffsThemeNames | Theme): Theme {
   if (typeof theme !== 'string') return theme;
-  const registered = registeredThemes.get(theme);
-  if (registered != null) return registered;
-  const bundled = getBundledThemes();
-  const key = kebab(theme);
-  const match = bundled.get(key) ?? bundled.get(THEME_NAME_ALIASES[key] ?? '');
-  if (match != null) return match;
-  warnOnce(
-    `@pierre/diffs/chamele: no chamele theme for "${theme}"; falling back ` +
-      `to a Pierre default. Register one with registerChameleTheme().`
+  const resolved =
+    chameleThemeResolver.getResolvedTheme(theme) ??
+    chameleThemeResolver.getResolvedTheme(
+      THEME_NAME_ALIASES[kebab(theme)] ?? ''
+    );
+  if (resolved != null) return resolved;
+  throw new Error(
+    `Chamele theme "${theme}" is not loaded. Await chameleHighlighter.load() ` +
+      'or preloadHighlighter() before highlighting.'
   );
-  return key.includes('light')
-    ? chameleThemes.pierreLight
-    : chameleThemes.pierreDark;
 }
 
 /** Register a Zed theme for a diffs theme name (or override a bundled one). */
 export function registerChameleTheme(name: string, theme: Theme): void {
-  registeredThemes.set(name, theme);
+  chameleThemeResolver.seedResolvedTheme(name, theme);
 }
 
 const warned = new Set<string>();
@@ -168,7 +156,7 @@ function mapTokensOptions(
       theme: resolveChameleTheme(options.theme as DiffsThemeNames),
     };
   }
-  return { ...base, theme: chameleThemes.pierreDark };
+  return { ...base, theme: resolveChameleTheme('pierre-dark') };
 }
 
 function mapHastOptions(
@@ -320,7 +308,7 @@ class ChameleLiveTokenizer implements CodeLiveTokenizer {
 /**
  * The experimental chamele-backed `CodeHighlighter`: syntax highlighting runs
  * in chamele's WebAssembly lexers instead of shiki's TextMate grammars.
- * Everything is bundled and synchronous, so `load` resolves immediately.
+ * Languages are built in; themes load on demand from chamele's bundle.
  *
  * ```ts
  * import { File, setHighlighter } from '@pierre/diffs';
@@ -332,11 +320,17 @@ class ChameleLiveTokenizer implements CodeLiveTokenizer {
  */
 export const chameleHighlighter: CodeHighlighter = {
   name: 'chamele',
-  load() {
-    // chamele's wasm and themes ship with the package; nothing to load
+  async load({ themes }) {
+    await Promise.all(themes.map((theme) => loadChameleTheme(theme)));
   },
-  isReady() {
-    return true;
+  isReady({ themes }) {
+    return themes.every(
+      (theme) =>
+        chameleThemeResolver.hasResolvedTheme(theme) ||
+        chameleThemeResolver.hasResolvedTheme(
+          THEME_NAME_ALIASES[kebab(theme)] ?? ''
+        )
+    );
   },
   getTheme(name: DiffsThemeNames): ThemeRegistrationResolved {
     const theme = resolveChameleTheme(name);

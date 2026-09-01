@@ -38,9 +38,8 @@ registration, so stale markup is never served — but nothing repaints
 spontaneously on the call itself). Already-running streams and attached editors
 keep the implementation they captured until they are re-created.
 
-The experimental [chamele]-backed highlighter runs its lexers in WebAssembly
-with no async grammar or theme loading. Install the optional `@pierre/chamele`
-peer dependency, then:
+The experimental [chamele]-backed highlighter runs its built-in lexers in
+WebAssembly and lazy-loads bundled themes by ID.
 
 ```ts
 import { File, setHighlighter } from '@pierre/diffs';

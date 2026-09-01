@@ -302,6 +302,10 @@ describe('CodeView worker pool readiness', () => {
       workerManager.asWorkerPoolManager()
     );
 
+    await chameleHighlighter.load({
+      langs: [],
+      themes: ['pierre-dark', 'pierre-light'],
+    });
     setHighlighter(chameleHighlighter);
     try {
       viewer.setup(createRoot({ height: 1000 }));

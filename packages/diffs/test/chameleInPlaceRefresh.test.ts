@@ -10,9 +10,13 @@ import { installDom } from './domHarness';
 
 let dom: ReturnType<typeof installDom>;
 
-beforeAll(() => {
+beforeAll(async () => {
   dom = installDom();
   setHighlighter(chameleHighlighter);
+  await chameleHighlighter.load({
+    langs: [],
+    themes: ['pierre-dark', 'pierre-light'],
+  });
   const { customElements } = window;
   if (customElements.get('diffs-container') == null) {
     customElements.define(

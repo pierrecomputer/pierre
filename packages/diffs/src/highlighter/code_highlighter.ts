@@ -143,8 +143,7 @@ export interface CodeHighlighter {
   /** Implementation name, e.g. `'shiki'` or `'chamele'`. */
   readonly name: string;
   /**
-   * Load everything the given languages/themes need. Resolves immediately for
-   * highlighters with no async assets (chamele).
+   * Load everything the given languages/themes need.
    */
   load(options: CodeHighlighterOptions): Promise<void> | void;
   /** Whether the given languages/themes can highlight synchronously right now. */

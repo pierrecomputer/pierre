@@ -1,4 +1,4 @@
-import { oneDarkPro } from '@pierre/chamele/themes';
+import oneDarkPro from '@pierre/chamele/themes/one-dark-pro';
 import { transformerStyleToClass } from '@shikijs/transformers';
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import type { ElementContent } from 'hast';
@@ -30,6 +30,13 @@ const fileOptions = {
   useTokenTransformer: false,
   tokenizeMaxLineLength: 1000,
 };
+
+beforeAll(async () => {
+  await chameleHighlighter.load({
+    langs: ['typescript'],
+    themes: ['pierre-dark', 'pierre-light', 'one-dark-pro'],
+  });
+});
 
 function linesToHtml(lines: ElementContent[]): string {
   return lines.map((line) => toHtml(line)).join('\n');
@@ -140,7 +147,7 @@ describe('chamele highlighter', () => {
     setHighlighter(shikiHighlighter);
   });
 
-  test('loads synchronously and resolves theme metadata', async () => {
+  test('lazy-loads themes by ID and resolves theme metadata', async () => {
     expect(
       chameleHighlighter.isReady({
         langs: ['typescript'],
@@ -155,6 +162,12 @@ describe('chamele highlighter', () => {
     expect(theme.type).toBe('dark');
     expect(theme.bg).toMatch(/^#/);
     expect(chameleHighlighter.getTheme('pierre-light').type).toBe('light');
+
+    expect(
+      chameleHighlighter.isReady({ langs: [], themes: ['atom-one-dark'] })
+    ).toBe(false);
+    await chameleHighlighter.load({ langs: [], themes: ['atom-one-dark'] });
+    expect(chameleHighlighter.getTheme('atom-one-dark').type).toBe('dark');
   });
 
   test('getTheme maps Zed editor colors onto VS Code color keys', () => {

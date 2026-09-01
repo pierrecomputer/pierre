@@ -9,9 +9,13 @@ import { installDom } from './domHarness';
 
 let dom: ReturnType<typeof installDom>;
 
-beforeAll(() => {
+beforeAll(async () => {
   dom = installDom();
   setHighlighter(chameleHighlighter);
+  await chameleHighlighter.load({
+    langs: [],
+    themes: ['pierre-dark', 'pierre-light'],
+  });
   // FileStream appends its <pre> into the container's shadow root, which the
   // real diffs-container custom element attaches on upgrade; register a
   // minimal stand-in since jsdom lacks the constructable-stylesheet APIs the
