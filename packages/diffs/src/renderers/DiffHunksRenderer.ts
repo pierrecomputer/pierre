@@ -8,12 +8,16 @@ import {
   DEFAULT_THEMES,
   DEFAULT_TOKENIZE_MAX_LENGTH,
 } from '../constants';
-import { areLanguagesAttached } from '../highlighter/languages/areLanguagesAttached';
+import type { CodeHighlighter } from '../highlighter/code_highlighter';
 import {
-  getHighlighterIfLoaded,
-  getSharedHighlighter,
-} from '../highlighter/shared_highlighter';
-import { areThemesAttached } from '../highlighter/themes/areThemesAttached';
+  areHighlighterThemesReady,
+  getCodeHighlighter,
+  getCustomHighlighter,
+  getHighlighterIfReady,
+  isHighlighterLanguageReady,
+  loadHighlighter,
+  type RenderersHighlighter,
+} from '../highlighter/resolve_highlighter';
 import type {
   AnnotationLineMap,
   AnnotationSpan,
@@ -23,7 +27,6 @@ import type {
   CodeColumnType,
   CustomPreProperties,
   DiffLineAnnotation,
-  DiffsHighlighter,
   DiffsTextDocument,
   ExpansionDirections,
   FileDiffMetadata,
@@ -238,7 +241,11 @@ let instanceId = -1;
 export class DiffHunksRenderer<LAnnotation = undefined> {
   readonly __id: string = `diff-hunks-renderer:${++instanceId}`;
 
-  private highlighter: DiffsHighlighter | undefined;
+  private highlighter: RenderersHighlighter | undefined;
+  // The registered highlighter `this.highlighter` and the render caches were
+  // resolved against; a later `setHighlighter` call is detected by comparing
+  // against the current registration.
+  private highlighterRegistration: CodeHighlighter = getCodeHighlighter();
   // The latest diff requested by the component. The render cache may
   // intentionally keep displaying an older highlighted diff while this one
   // is highlighted in the background.
@@ -275,9 +282,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     private workerManager?: WorkerPoolManager | undefined
   ) {
     if (workerManager?.isWorkingPool() !== true) {
-      this.highlighter = areThemesAttached(options.theme ?? DEFAULT_THEMES)
-        ? getHighlighterIfLoaded()
-        : undefined;
+      this.highlighter = getHighlighterIfReady(options.theme ?? DEFAULT_THEMES);
     }
   }
 
@@ -475,6 +480,25 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
   public get diffCache(): FileDiffMetadata | undefined {
     return this.renderCache?.diff ?? this.diff;
+  }
+
+  // Readiness checks consult the currently registered highlighter, while
+  // rendering uses the cached `this.highlighter` and cached markup. When the
+  // app switches highlighters (setHighlighter) after construction, drop
+  // everything derived from the previous one and re-resolve, or the renderer
+  // would keep rendering with the old implementation.
+  private invalidateOnHighlighterChange(): void {
+    const registered = getCodeHighlighter();
+    if (registered === this.highlighterRegistration) return;
+    this.highlighterRegistration = registered;
+    this.highlighter = undefined;
+    this.workerManager?.cleanUpTasks(this);
+    this.clearRenderCache();
+    if (this.workerManager?.isWorkingPool() !== true) {
+      this.highlighter = getHighlighterIfReady(
+        this.options.theme ?? DEFAULT_THEMES
+      );
+    }
   }
 
   public clearRenderCache(): void {
@@ -892,8 +916,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     };
   }
 
-  public async initializeHighlighter(): Promise<DiffsHighlighter> {
-    this.highlighter = await getSharedHighlighter(
+  public async initializeHighlighter(): Promise<RenderersHighlighter> {
+    this.highlighter = await loadHighlighter(
       getHighlighterOptions(this.computedLang, {
         theme: this.getLocalHighlightTheme(),
         preferredHighlighter:
@@ -909,12 +933,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       return;
     }
     this.diff = diff;
+    this.invalidateOnHighlighterChange();
     const { options } = this.getRenderOptions(diff);
     const massiveDiff = isDiffMassive(diff, this.getTokenizeMaxLength());
-    let cache = this.workerManager?.getDiffResultCache(diff);
-    if (cache != null && !areDiffRenderOptionsEqual(options, cache.options)) {
-      cache = undefined;
-    }
+    const cache = this.getMatchingWorkerResultCache(diff, options);
     this.renderCache ??= {
       diff,
       hydrated: true,
@@ -1043,7 +1065,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       return (
         (renderCache.result == null && renderCache.hydrated !== true) ||
         this.workerManager?.isWorkingPool() === true ||
-        (this.highlighter != null && areThemesAttached(options.theme))
+        (this.highlighter != null && areHighlighterThemesReady(options.theme))
       );
     }
     // Hydration has highlighted DOM without a local AST. It is still active
@@ -1060,7 +1082,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       return !renderCache.highlighted;
     }
 
-    return this.highlighter != null && areThemesAttached(options.theme);
+    return this.highlighter != null && areHighlighterThemesReady(options.theme);
   }
 
   public renderDiff(
@@ -1072,6 +1094,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       this.pendingHighlightResult = undefined;
       return undefined;
     }
+    this.invalidateOnHighlighterChange();
     const { expandUnchanged, collapsedContextThreshold } =
       this.getOptionsWithDefaults();
     let { options, forceHighlight } = this.getRenderOptions(diff);
@@ -1160,9 +1183,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     } else {
       this.computedLang = diff.lang ?? getFiletypeFromFileName(diff.name);
       const hasThemes =
-        this.highlighter != null && areThemesAttached(options.theme);
+        this.highlighter != null && areHighlighterThemesReady(options.theme);
       const hasLangs =
-        this.highlighter != null && areLanguagesAttached(this.computedLang);
+        this.highlighter != null &&
+        isHighlighterLanguageReady(this.computedLang);
       const canHighlight = !forcePlainText && hasLangs;
 
       // If we have any semblance of a highlighter with the correct theme(s)
@@ -1241,16 +1265,18 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   private async asyncHighlight(
     diff: FileDiffMetadata
   ): Promise<RenderDiffResult> {
+    this.invalidateOnHighlighterChange();
     const forcePlainText = isDiffMassive(diff, this.getTokenizeMaxLength());
     this.computedLang = forcePlainText
       ? 'text'
       : (diff.lang ?? getFiletypeFromFileName(diff.name));
     const hasThemes =
       this.highlighter != null &&
-      areThemesAttached(this.getLocalHighlightTheme());
+      areHighlighterThemesReady(this.getLocalHighlightTheme());
     const hasLangs =
       forcePlainText ||
-      (this.highlighter != null && areLanguagesAttached(this.computedLang));
+      (this.highlighter != null &&
+        isHighlighterLanguageReady(this.computedLang));
     // If we don't have the required langs or themes, then we need to
     // initialize the highlighter to load the appropriate languages and themes
     if (this.highlighter == null || !hasThemes || !hasLangs) {
@@ -1265,7 +1291,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
   private renderDiffWithHighlighter(
     diff: FileDiffMetadata,
-    highlighter: DiffsHighlighter,
+    highlighter: RenderersHighlighter,
     forcePlainText = false
   ): RenderDiffResult {
     const { options } = this.getRenderOptions(diff);
@@ -1359,7 +1385,9 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     diff: FileDiffMetadata,
     options: RenderDiffOptions
   ): RenderDiffResult | undefined {
-    if (this.editSessionActive) {
+    // Worker results are always shiki-rendered, so they stop being valid the
+    // moment a custom highlighter is registered.
+    if (this.editSessionActive || getCustomHighlighter() != null) {
       return undefined;
     }
     const cache = this.workerManager?.getDiffResultCache(diff);

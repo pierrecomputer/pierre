@@ -5,7 +5,7 @@ import {
   TextDocument,
   type TextDocumentChange,
 } from '../src/editor/textDocument';
-import { EditorTokenizer } from '../src/editor/tokenizer';
+import { ShikiEditorTokenizer } from '../src/editor/tokenizer';
 import type { DiffsHighlighter, HighlightedToken } from '../src/types';
 
 const noopSetStyle = () => {};
@@ -23,7 +23,7 @@ function createTestHighlighter(
 
 function getThemeStyle(colors: Record<string, string>): string {
   let style = '';
-  const tokenizer = new EditorTokenizer({
+  const tokenizer = new ShikiEditorTokenizer({
     highlighter: createTestHighlighter({
       getTheme: () => ({ type: 'dark', colors }),
     }),
@@ -38,7 +38,7 @@ function getThemeStyle(colors: Record<string, string>): string {
   return style;
 }
 
-describe('EditorTokenizer', () => {
+describe('ShikiEditorTokenizer', () => {
   const originalWindowDescriptor = Object.getOwnPropertyDescriptor(
     globalThis,
     'window'
@@ -78,7 +78,7 @@ describe('EditorTokenizer', () => {
   // flows through updateRenderCache into the render cache's baseThemeType
   // and flips the surface's effective scheme after the first edit.
   test('a single pinned theme keeps its own light/dark type', () => {
-    const tokenizer = new EditorTokenizer({
+    const tokenizer = new ShikiEditorTokenizer({
       highlighter: createTestHighlighter(),
       textDocument: new TextDocument('test.txt', 'line 0', 'text'),
       codeOptions: { theme: 'test-theme', themeType: 'light' },
@@ -174,7 +174,7 @@ describe('EditorTokenizer', () => {
         Array.from({ length: 20 }, (_, i) => `line ${i}`).join('\n'),
         'text'
       );
-      const tokenizer = new EditorTokenizer({
+      const tokenizer = new ShikiEditorTokenizer({
         highlighter: createTestHighlighter({
           getLanguage,
           loadLanguage,
@@ -233,7 +233,7 @@ describe('EditorTokenizer', () => {
       'const x = 1\n',
       'typescript'
     );
-    const tokenizer = new EditorTokenizer({
+    const tokenizer = new ShikiEditorTokenizer({
       highlighter: createTestHighlighter({
         getLoadedLanguages: () => (languageLoaded ? ['typescript'] : []),
         getLanguage: () => grammar,
@@ -281,7 +281,7 @@ describe('EditorTokenizer', () => {
       },
     } as unknown as IGrammar;
     const textDocument = new TextDocument('test.ts', "'abc['", 'typescript');
-    const tokenizer = new EditorTokenizer({
+    const tokenizer = new ShikiEditorTokenizer({
       highlighter: createTestHighlighter({
         getLoadedLanguages: () => (languageLoaded ? ['typescript'] : []),
         getLanguage: () => grammar,
@@ -315,7 +315,7 @@ describe('EditorTokenizer', () => {
     } as unknown as IGrammar;
     const createTokenizer = (matchBrackets: boolean) => {
       const textDocument = new TextDocument('test.ts', "'abc['", 'typescript');
-      const tokenizer = new EditorTokenizer({
+      const tokenizer = new ShikiEditorTokenizer({
         highlighter: createTestHighlighter({
           getLanguage: () => grammar,
         }),
@@ -367,7 +367,7 @@ describe('EditorTokenizer', () => {
       ['first[', 'second[', 'third['].join('\n'),
       'typescript'
     );
-    const tokenizer = new EditorTokenizer({
+    const tokenizer = new ShikiEditorTokenizer({
       highlighter: createTestHighlighter({ getLanguage: () => grammar }),
       textDocument,
       codeOptions: { theme: 'test-theme', themeType: 'dark' },
@@ -442,7 +442,7 @@ describe('EditorTokenizer', () => {
         Array.from({ length: 1_000 }, (_, i) => `line ${i}`).join('\n'),
         'typescript'
       );
-      const tokenizer = new EditorTokenizer({
+      const tokenizer = new ShikiEditorTokenizer({
         highlighter: createTestHighlighter({
           getLanguage: () => grammar,
         }),
@@ -517,7 +517,7 @@ describe('EditorTokenizer', () => {
       Array.from({ length: 200 }, (_, i) => `line ${i}`).join('\n'),
       'typescript'
     );
-    const tokenizer = new EditorTokenizer({
+    const tokenizer = new ShikiEditorTokenizer({
       highlighter: createTestHighlighter({
         getLanguage: () => grammar,
       }),
@@ -625,7 +625,7 @@ describe('EditorTokenizer', () => {
       'typescript'
     );
     const offscreenUpdates: Map<number, Array<HighlightedToken>>[] = [];
-    const tokenizer = new EditorTokenizer({
+    const tokenizer = new ShikiEditorTokenizer({
       highlighter: createTestHighlighter({
         getLanguage: () => grammar,
       }),
@@ -716,7 +716,7 @@ describe('EditorTokenizer', () => {
         ).join('\n'),
         'typescript'
       );
-      const tokenizer = new EditorTokenizer({
+      const tokenizer = new ShikiEditorTokenizer({
         highlighter: createTestHighlighter({
           getLanguage: () => grammar,
           setTheme: () => ({
@@ -823,7 +823,7 @@ describe('EditorTokenizer', () => {
         'typescript'
       );
       const deferredUpdates: Map<number, Array<HighlightedToken>>[] = [];
-      const tokenizer = new EditorTokenizer({
+      const tokenizer = new ShikiEditorTokenizer({
         highlighter: createTestHighlighter({
           getLanguage: () => grammar,
         }),
@@ -932,7 +932,7 @@ describe('EditorTokenizer', () => {
         Array.from({ length: 200 }, (_, i) => `line ${i}`).join('\n'),
         'typescript'
       );
-      const tokenizer = new EditorTokenizer({
+      const tokenizer = new ShikiEditorTokenizer({
         highlighter: createTestHighlighter({
           getLanguage: () => grammar,
         }),
@@ -1032,7 +1032,7 @@ describe('EditorTokenizer', () => {
         Array.from({ length: 150 }, (_, i) => `line ${i}`).join('\n'),
         'typescript'
       );
-      const tokenizer = new EditorTokenizer({
+      const tokenizer = new ShikiEditorTokenizer({
         highlighter: createTestHighlighter({
           getLanguage: () => grammar,
           setTheme: () => ({
@@ -1144,7 +1144,7 @@ describe('EditorTokenizer', () => {
         ['line 0', 'line 1', 'line 2'].join('\n'),
         'typescript'
       );
-      const tokenizer = new EditorTokenizer({
+      const tokenizer = new ShikiEditorTokenizer({
         highlighter: createTestHighlighter({
           getLanguage: () => grammar,
         }),
@@ -1192,7 +1192,7 @@ describe('EditorTokenizer', () => {
     const originalPostMessage = globalThis.postMessage;
     const messageListeners = new Set<EventListener>();
     const postedMessages: unknown[] = [];
-    const tokenizers: EditorTokenizer[] = [];
+    const tokenizers: ShikiEditorTokenizer[] = [];
 
     globalThis.addEventListener = ((
       type: string,
@@ -1233,7 +1233,7 @@ describe('EditorTokenizer', () => {
           ['line 0', 'line 1', 'line 2'].join('\n'),
           'typescript'
         );
-        const tokenizer = new EditorTokenizer({
+        const tokenizer = new ShikiEditorTokenizer({
           highlighter: createTestHighlighter({
             getLanguage: () => grammar,
           }),
@@ -1351,7 +1351,7 @@ describe('EditorTokenizer', () => {
       Array.from({ length: 100 }, (_, line) => `line ${line}`).join('\n'),
       'typescript'
     );
-    const tokenizer = new EditorTokenizer({
+    const tokenizer = new ShikiEditorTokenizer({
       highlighter: createTestHighlighter({
         getLanguage: () => grammar,
       }),
@@ -1466,7 +1466,7 @@ describe('EditorTokenizer', () => {
       'typescript'
     );
     const offscreenUpdates: Map<number, Array<HighlightedToken>>[] = [];
-    const tokenizer = new EditorTokenizer({
+    const tokenizer = new ShikiEditorTokenizer({
       highlighter: createTestHighlighter({
         getLanguage: () => grammar,
       }),
@@ -1561,7 +1561,7 @@ describe('EditorTokenizer', () => {
         ['line 0', 'line 1', 'line 2'].join('\n'),
         'typescript'
       );
-      const tokenizer = new EditorTokenizer({
+      const tokenizer = new ShikiEditorTokenizer({
         highlighter: createTestHighlighter({
           getLanguage: () => grammar,
         }),
@@ -1653,7 +1653,7 @@ describe('EditorTokenizer', () => {
         ['line 0', 'line 1', 'line 2'].join('\n'),
         'typescript'
       );
-      const tokenizer = new EditorTokenizer({
+      const tokenizer = new ShikiEditorTokenizer({
         highlighter: createTestHighlighter({
           getLanguage: () => grammar,
         }),
@@ -1742,7 +1742,7 @@ describe('EditorTokenizer', () => {
         ['line 0', 'line 1', 'line 2'].join('\n'),
         'typescript'
       );
-      const tokenizer = new EditorTokenizer({
+      const tokenizer = new ShikiEditorTokenizer({
         highlighter: createTestHighlighter({
           getLanguage: () => grammar,
         }),
@@ -1800,7 +1800,7 @@ describe('EditorTokenizer', () => {
       Array.from({ length: 800 }, (_, i) => `line ${i}`).join('\n'),
       'typescript'
     );
-    const tokenizer = new EditorTokenizer({
+    const tokenizer = new ShikiEditorTokenizer({
       highlighter: createTestHighlighter({
         getLanguage: () => grammar,
       }),
@@ -1912,7 +1912,7 @@ describe('EditorTokenizer', () => {
       Array.from({ length: 12 }, (_, index) => `line ${index}`).join('\n'),
       'typescript'
     );
-    const tokenizer = new EditorTokenizer({
+    const tokenizer = new ShikiEditorTokenizer({
       highlighter: createTestHighlighter({
         getLanguage: () => grammar,
       }),
@@ -2085,7 +2085,7 @@ describe('EditorTokenizer', () => {
         },
       } as unknown as IGrammar;
       const textDocument = new TextDocument('test.ts', 'line 0', 'typescript');
-      const tokenizer = new EditorTokenizer({
+      const tokenizer = new ShikiEditorTokenizer({
         highlighter: createTestHighlighter({
           getLanguage: () => grammar,
         }),
@@ -2172,7 +2172,7 @@ describe('EditorTokenizer', () => {
       } as unknown as IGrammar;
       const textDocument = new TextDocument('test.ts', 'line 0', 'typescript');
       const dualThemes = { light: 'light-theme', dark: 'dark-theme' };
-      const tokenizer = new EditorTokenizer({
+      const tokenizer = new ShikiEditorTokenizer({
         highlighter: createTestHighlighter({
           getLanguage: () => grammar,
           setTheme: (theme: string) => ({
@@ -2250,7 +2250,7 @@ describe('EditorTokenizer', () => {
     let colorScheme: 'light' | 'dark' = 'dark';
     let observerCallback: MutationCallback | undefined;
     let themeChangeCount = 0;
-    let tokenizer: EditorTokenizer | undefined;
+    let tokenizer: ShikiEditorTokenizer | undefined;
     const documentStub = {
       body: {},
       documentElement: {},
@@ -2299,7 +2299,7 @@ describe('EditorTokenizer', () => {
         ['line 0', 'line 1'].join('\n'),
         'typescript'
       );
-      tokenizer = new EditorTokenizer({
+      tokenizer = new ShikiEditorTokenizer({
         highlighter: createTestHighlighter({
           getLanguage: () => grammar,
         }),
@@ -2400,7 +2400,7 @@ describe('EditorTokenizer', () => {
       langs: ['tsx'],
     });
     const textDocument = new TextDocument('Button.tsx', code, 'tsx');
-    const tokenizer = new EditorTokenizer({
+    const tokenizer = new ShikiEditorTokenizer({
       highlighter,
       textDocument,
       codeOptions: { theme: DEFAULT_THEMES, themeType: 'dark' },

@@ -8,10 +8,17 @@ import {
 
 import { DEFAULT_THEMES } from '../constants';
 import type {
+  CodeHighlighter,
+  CodeLiveTokenizer,
+  CodeLiveTokenizerUpdate,
+} from '../highlighter/code_highlighter';
+import type { RenderersHighlighter } from '../highlighter/resolve_highlighter';
+import type {
   BaseCodeOptions,
   DiffsHighlighter,
   HighlightedToken,
   RenderRange,
+  SupportedLanguages,
 } from '../types';
 import type { TextDocument, TextDocumentChange } from './textDocument';
 import { addEventListener, debounce, h } from './utils';
@@ -36,26 +43,290 @@ export interface EditorTokenizerProps {
   __debug?: boolean;
 }
 
-/** Stoppable code tokenizer for the editor */
-export class EditorTokenizer {
-  #highlighter: DiffsHighlighter;
-  #grammar: IGrammar | undefined;
-  #mediaQueryList: MediaQueryList;
-  #themeType: 'light' | 'dark' = 'dark';
+interface LiveEditorTokenizerProps extends Omit<
+  EditorTokenizerProps,
+  'highlighter'
+> {
+  highlighter: CodeHighlighter;
+}
+
+/**
+ * The tokenizer surface the editor drives. `ShikiEditorTokenizer` implements
+ * it over shiki's TextMate grammars with incremental grammar states;
+ * `LiveEditorTokenizer` implements it over a `CodeHighlighter`'s incremental
+ * live tokenizer. `createEditorTokenizer` picks one.
+ */
+export interface DiffsEditorTokenizer {
+  readonly themeType: 'light' | 'dark';
+  /**
+   * Sorted, non-overlapping `[start, end)` column ranges of line `lineIndex`
+   * that bracket matching must ignore (strings, comments, regexes); `null`
+   * when the line has none or cannot be tokenized.
+   */
+  getStringCommentRegexpRangesInLine(
+    lineIndex: number
+  ): [number, number][] | null;
+  /** Re-apply the surface's current theme, re-tokenizing on change. */
+  syncTheme(codeOptions: BaseCodeOptions): void;
+  cleanUp(): void;
+  /** Tokenize after a document change; returns the lines needing repaint. */
+  tokenize(
+    change: TextDocumentChange,
+    renderRange?: RenderRange,
+    hostRealignsRows?: boolean
+  ): Map<number, Array<HighlightedToken>>;
+  /** Warm whatever per-line state the viewport needs (may be a no-op). */
+  prebuildStateStack(renderRange?: RenderRange): void;
+  stopBackgroundTokenize(): void;
+  pauseBackgroundTokenize(): void;
+  resumeBackgroundTokenize(): void;
+}
+
+// Editor-chrome CSS (`--diffs-editor-*`: selection, active line, search and
+// bracket matches, cursor, diagnostics) derived from a theme's VS Code color
+// keys. Custom highlighters with another theme format (chamele's Zed themes)
+// map their colors onto these keys in `getTheme`.
+function buildEditorThemeCSS(colors: Record<string, string>): string {
+  const selectionBackground = colors['editor.selectionBackground'];
+  const themeLineHighlightBackground = colors['editor.lineHighlightBackground'];
+  const lineHighlightBackground =
+    themeLineHighlightBackground != null &&
+    themeLineHighlightBackground.trim() !== '' &&
+    !colorUtils.isFullyTransparent(themeLineHighlightBackground)
+      ? themeLineHighlightBackground
+      : undefined;
+  // A usable theme background opts into the semantic active-line mix.
+  // Missing backgrounds retain the resolved row color and rely on a border.
+  const lineHighlightBorder =
+    colors['editor.lineHighlightBorder'] ??
+    (lineHighlightBackground == null
+      ? 'color-mix(in lab, var(--diffs-bg) 70%, var(--diffs-fg))'
+      : 'transparent');
+  const activeLineSourceMix = lineHighlightBackground == null ? '100%' : '85%';
+  return `:host {
+      --diffs-editor-selection-bg: ${selectionBackground ?? 'var(--diffs-line-bg)'};
+      --diffs-editor-line-highlight-border: ${lineHighlightBorder};
+      --diffs-editor-active-line-source-mix: ${activeLineSourceMix};
+      --diffs-editor-match-bg: ${colors['editor.findMatchBackground'] ?? 'initial'};
+      --diffs-editor-match-highlight-bg: ${colors['editor.findMatchHighlightBackground'] ?? 'initial'};
+      --diffs-editor-bracket-match-bg: ${colors['editorBracketMatch.background'] ?? 'initial'};
+      --diffs-editor-bracket-match-border: ${colors['editorBracketMatch.border'] ?? 'initial'};
+      --diffs-editor-cursor-fg: ${colors['editorCursor.foreground'] ?? 'initial'};
+      --diffs-editor-hint-fg: ${colors['editorHint.foreground'] ?? 'initial'};
+      --diffs-editor-info-fg: ${colors['editorInfo.foreground'] ?? 'initial'};
+      --diffs-editor-warning-fg: ${colors['editorWarning.foreground'] ?? 'initial'};
+      --diffs-editor-error-fg: ${colors['editorError.foreground'] ?? 'initial'};
+    }`;
+}
+
+/**
+ * Shared plumbing for both editor tokenizers: the active theme (name and
+ * light/dark type), the document/OS color-scheme observers dual-theme
+ * surfaces follow, and applying the editor-chrome CSS on theme changes.
+ * Subclasses activate the theme in their highlighter (`activateTheme`) and
+ * drop their tokenization caches when it changes (`resetForThemeChange`).
+ */
+abstract class BaseEditorTokenizer implements DiffsEditorTokenizer {
+  protected readonly textDocument: TextDocument<unknown>;
+  protected readonly tokenizeMaxLineLength: number;
+  protected readonly setStyle: EditorTokenizerProps['setStyle'];
+  protected readonly onDeferTokenize: EditorTokenizerProps['onDeferTokenize'];
+  protected readonly matchBrackets: boolean;
+  protected isCleanedUp = false;
+
+  readonly #onThemeChange: EditorTokenizerProps['onThemeChange'];
+  readonly #mediaQueryList: MediaQueryList;
+  readonly #initialThemeName: string;
+  readonly #initialThemeType: 'light' | 'dark' | undefined;
   // The resolved name of the theme currently applied to the editor (e.g.
   // `github-light`). Tracked so `syncTheme` can detect a host-driven theme swap
   // even when the light/dark mode itself is unchanged.
   #themeName = '';
-  #colorMap: string[];
-  #textDocument: TextDocument<unknown>;
-  #tokenizeMaxLineLength: number;
-  #setStyle: EditorTokenizerProps['setStyle'];
-  #onDeferTokenize: EditorTokenizerProps['onDeferTokenize'];
-  #onThemeChange: EditorTokenizerProps['onThemeChange'];
-  #matchBrackets: boolean;
-  #debug: boolean;
+  #themeType: 'light' | 'dark' = 'dark';
   #disposes?: (() => void)[];
-  #isCleanedUp = false;
+
+  constructor({
+    codeOptions,
+    textDocument,
+    matchBrackets,
+    setStyle,
+    onDeferTokenize,
+    onThemeChange,
+  }: Omit<EditorTokenizerProps, 'highlighter'>) {
+    const { themeType: themeTypeOption = 'system', theme = DEFAULT_THEMES } =
+      codeOptions;
+    this.textDocument = textDocument;
+    this.tokenizeMaxLineLength = codeOptions.tokenizeMaxLineLength ?? 1000;
+    this.setStyle = setStyle;
+    this.onDeferTokenize = onDeferTokenize;
+    this.#onThemeChange = onThemeChange;
+    this.matchBrackets = matchBrackets !== false;
+    this.#mediaQueryList = window.matchMedia('(prefers-color-scheme: dark)');
+    // Prefer the host document's computed color-scheme (page CSS/classes can
+    // force light/dark while the OS media query differs) over matchMedia.
+    const themeType =
+      themeTypeOption === 'system'
+        ? this.resolveSystemThemeType()
+        : themeTypeOption;
+    // Only track the document/system color scheme when the surface follows it
+    // (`themeType: 'system'`). A surface pinned to an explicit 'dark'/'light'
+    // theme keeps that theme regardless of the page, so re-tokenizing after an
+    // edit must emit the same `--diffs-token-{theme}` variable the SSR markup
+    // used; otherwise the edited tokens fall back to the default foreground.
+    if (typeof theme !== 'string' && themeTypeOption === 'system') {
+      const observer = new MutationObserver((mutations) => {
+        for (const { type, attributeName } of mutations) {
+          if (
+            type === 'attributes' &&
+            attributeName !== null &&
+            (attributeName === 'class' || attributeName.startsWith('data-'))
+          ) {
+            const themeType = this.resolveSystemThemeType();
+            this.#emitThemeChange(theme[themeType], themeType);
+            break;
+          }
+        }
+      });
+      observer.observe(document.documentElement, { attributes: true });
+      observer.observe(document.body, { attributes: true });
+      this.#disposes = [
+        addEventListener(this.#mediaQueryList, 'change', () => {
+          // Re-read computed color-scheme so a host-forced scheme still wins
+          // when the OS preference changes underneath it.
+          const themeType = this.resolveSystemThemeType();
+          this.#emitThemeChange(theme[themeType], themeType);
+        }),
+        () => observer.disconnect(),
+      ];
+    }
+    this.#initialThemeName =
+      typeof theme === 'string' ? theme : theme[themeType];
+    this.#initialThemeType = typeof theme === 'string' ? undefined : themeType;
+  }
+
+  get themeType(): 'light' | 'dark' {
+    return this.#themeType;
+  }
+
+  protected get themeName(): string {
+    return this.#themeName;
+  }
+
+  /**
+   * Apply the theme resolved during construction. Subclasses call this at the
+   * end of their constructor — `activateTheme` touches subclass state, which
+   * only exists after the base constructor has returned.
+   */
+  protected applyInitialTheme(): void {
+    this.applyTheme(this.#initialThemeName, this.#initialThemeType);
+  }
+
+  // Activate the theme and record it as current. Without an explicit type
+  // (a pinned single theme) the theme's own classification is authoritative.
+  protected applyTheme(themeName: string, themeType?: 'light' | 'dark'): void {
+    this.activateTheme(themeName);
+    this.#themeName = themeName;
+    this.#themeType = themeType ?? this.resolveThemeType(themeName);
+  }
+
+  // Re-apply the editor's theme from the surface's current code options. Edit
+  // mode reuses a single tokenizer across re-renders, so when the host swaps the
+  // theme — a theme picker, a light/dark toggle, etc. — we must recompute the
+  // active theme and re-tokenize. Without this the editor keeps rendering the
+  // theme it captured when it first attached (stale line-highlight background
+  // and token colors). System-driven changes are still handled by the
+  // observers wired up in the constructor; this covers explicit `themeType`/
+  // `theme` option changes that those observers don't see.
+  syncTheme(codeOptions: BaseCodeOptions): void {
+    const { themeType = 'system', theme = DEFAULT_THEMES } = codeOptions;
+    // A single pinned theme does not follow the themeType option or system
+    // scheme flips; its own classification stays authoritative.
+    if (typeof theme === 'string') {
+      this.#emitThemeChange(theme, this.resolveThemeType(theme));
+      return;
+    }
+    const nextThemeType =
+      themeType === 'system' ? this.resolveSystemThemeType() : themeType;
+    this.#emitThemeChange(theme[nextThemeType], nextThemeType);
+  }
+
+  // By default, diffs components support dual themes, but the tokenizer only
+  // renders the preferred theme. When the theme changes, the tokenizer
+  // re-tokenizes the document.
+  #emitThemeChange(themeName: string, themeType: 'light' | 'dark'): void {
+    if (themeName === this.#themeName && themeType === this.#themeType) {
+      return;
+    }
+    this.applyTheme(themeName, themeType);
+    this.stopBackgroundTokenize();
+    this.resetForThemeChange();
+    // The theme CSS is now applied, so overlay pieces that captured a resolved
+    // theme color (e.g. rounded selection corner masks) can recompute against
+    // the new colors instead of keeping the old light/dark value.
+    this.#onThemeChange?.();
+  }
+
+  // Respect an explicit host color-scheme override. When the computed value
+  // advertises support for both schemes, let the OS preference choose one.
+  protected resolveSystemThemeType(): 'light' | 'dark' {
+    try {
+      if (
+        typeof document !== 'undefined' &&
+        typeof getComputedStyle === 'function' &&
+        document.body != null
+      ) {
+        const colorSchemes = getComputedStyle(document.body).colorScheme.split(
+          /\s+/
+        );
+        const supportsDark = colorSchemes.includes('dark');
+        const supportsLight = colorSchemes.includes('light');
+        // A single host-forced scheme wins. `light dark` only declares support
+        // for both schemes, so the media query still selects the active one.
+        if (supportsDark !== supportsLight) {
+          return supportsDark ? 'dark' : 'light';
+        }
+      }
+    } catch {
+      // jsdom and similar harnesses may lack getComputedStyle or throw; fall
+      // through to the OS media query.
+    }
+    return this.#mediaQueryList.matches ? 'dark' : 'light';
+  }
+
+  cleanUp(): void {
+    this.isCleanedUp = true;
+    this.stopBackgroundTokenize();
+    this.#disposes?.forEach((dispose) => dispose());
+    this.#disposes = undefined;
+  }
+
+  /** Activate `themeName` in the highlighter and emit its editor-chrome CSS. */
+  protected abstract activateTheme(themeName: string): void;
+  /** Drop cached tokenization state and repaint after a theme change. */
+  protected abstract resetForThemeChange(): void;
+  /** The theme's own light/dark classification, for pinned single themes. */
+  protected abstract resolveThemeType(themeName: string): 'light' | 'dark';
+
+  abstract getStringCommentRegexpRangesInLine(
+    lineIndex: number
+  ): [number, number][] | null;
+  abstract tokenize(
+    change: TextDocumentChange,
+    renderRange?: RenderRange,
+    hostRealignsRows?: boolean
+  ): Map<number, Array<HighlightedToken>>;
+  abstract prebuildStateStack(renderRange?: RenderRange): void;
+  abstract stopBackgroundTokenize(): void;
+  abstract pauseBackgroundTokenize(): void;
+  abstract resumeBackgroundTokenize(): void;
+}
+
+/** Stoppable code tokenizer for the editor, over shiki's TextMate grammars. */
+export class ShikiEditorTokenizer extends BaseEditorTokenizer {
+  #highlighter: DiffsHighlighter;
+  #grammar: IGrammar | undefined;
+  #colorMap: string[] = [];
+  #debug: boolean;
 
   // state
   #stateStack: StateStack[] = [INITIAL]; // cached state stack by line index
@@ -79,24 +350,24 @@ export class EditorTokenizer {
   #prebuildStateStack = debounce(async (renderRange?: RenderRange) => {
     // Drop work scheduled before cleanUp; a late timer must not call setTheme
     // on a highlighter that tests (or hosts) have already disposed.
-    if (this.#isCleanedUp) {
+    if (this.isCleanedUp) {
       return;
     }
     const { startingLine = 0, totalLines = Infinity } = renderRange ?? {};
     const endLine = Math.min(
       totalLines === Infinity ? Infinity : startingLine + totalLines,
-      this.#textDocument.lineCount
+      this.textDocument.lineCount
     );
     if (
       this.#grammar === undefined &&
-      !isGrammarlessLanguage(this.#textDocument.languageId)
+      !isGrammarlessLanguage(this.textDocument.languageId)
     ) {
-      await this.#highlighter.loadLanguage(this.#textDocument.languageId);
-      if (this.#isCleanedUp) {
+      await this.#highlighter.loadLanguage(this.textDocument.languageId);
+      if (this.isCleanedUp) {
         return;
       }
       this.#grammar = this.#highlighter.getLanguage(
-        this.#textDocument.languageId
+        this.textDocument.languageId
       );
     }
     this.#ensureActiveTheme();
@@ -126,17 +397,13 @@ export class EditorTokenizer {
     }
   };
 
-  get themeType(): 'light' | 'dark' {
-    return this.#themeType;
-  }
-
   getStringCommentRegexpRangesInLine(
     lineIndex: number
   ): [number, number][] | null {
     if (
-      !this.#matchBrackets ||
+      !this.matchBrackets ||
       lineIndex < 0 ||
-      lineIndex >= this.#textDocument.lineCount
+      lineIndex >= this.textDocument.lineCount
     ) {
       return null;
     }
@@ -153,205 +420,35 @@ export class EditorTokenizer {
     return this.#bracketIgnoredRanges[lineIndex] ?? null;
   }
 
-  constructor({
-    codeOptions,
-    highlighter,
-    textDocument,
-    matchBrackets,
-    setStyle,
-    onDeferTokenize,
-    onThemeChange,
-    __debug,
-  }: EditorTokenizerProps) {
-    const {
-      themeType: themeTypeOption = 'system',
-      theme = DEFAULT_THEMES,
-      tokenizeMaxLineLength = 1000,
-    } = codeOptions;
-    this.#mediaQueryList = window.matchMedia('(prefers-color-scheme: dark)');
-    let themeType: 'light' | 'dark' | undefined;
-    if (themeTypeOption === 'system') {
-      // Prefer the host document's computed color-scheme (page CSS/classes can
-      // force light/dark while the OS media query differs) over matchMedia.
-      themeType = this.#resolveSystemThemeType();
-    } else {
-      themeType = themeTypeOption;
-    }
-    // Only track the document/system color scheme when the surface follows it
-    // (`themeType: 'system'`). A surface pinned to an explicit 'dark'/'light'
-    // theme keeps that theme regardless of the page, so re-tokenizing after an
-    // edit must emit the same `--diffs-token-{theme}` variable the SSR markup
-    // used; otherwise the edited tokens fall back to the default foreground.
-    if (typeof theme !== 'string' && themeTypeOption === 'system') {
-      const observer = new MutationObserver((mutations) => {
-        for (const { type, attributeName } of mutations) {
-          if (
-            type === 'attributes' &&
-            attributeName !== null &&
-            (attributeName === 'class' || attributeName.startsWith('data-'))
-          ) {
-            const themeType = this.#resolveSystemThemeType();
-            this.#emitThemeChange(theme[themeType], themeType);
-            break;
-          }
-        }
-      });
-      observer.observe(document.documentElement, { attributes: true });
-      observer.observe(document.body, { attributes: true });
-      this.#disposes = [
-        addEventListener(this.#mediaQueryList, 'change', () => {
-          // Re-read computed color-scheme so a host-forced scheme still wins
-          // when the OS preference changes underneath it.
-          const themeType = this.#resolveSystemThemeType();
-          this.#emitThemeChange(theme[themeType], themeType);
-        }),
-        () => observer.disconnect(),
-      ];
-    }
-    this.#highlighter = highlighter;
-    this.#textDocument = textDocument;
-    this.#tokenizeMaxLineLength = tokenizeMaxLineLength;
-    this.#setStyle = setStyle;
-    this.#onDeferTokenize = onDeferTokenize;
-    this.#onThemeChange = onThemeChange;
-    this.#matchBrackets = matchBrackets !== false;
-    this.#debug = __debug ?? false;
+  constructor(props: EditorTokenizerProps) {
+    super(props);
+    this.#highlighter = props.highlighter;
+    this.#debug = props.__debug ?? false;
     this.#ensureGrammar();
-    this.#colorMap = [];
-    this.#setTheme(
-      typeof theme === 'string' ? theme : theme[themeType],
-      typeof theme === 'string' ? undefined : themeType
-    );
+    this.applyInitialTheme();
   }
 
-  // By default, diffs components support dual themes, but the tokenizer only renders
-  // the preferred theme. When the theme type is changed, the tokenizer will re-tokenize the document.
-  #emitThemeChange(themeName: string, themeType: 'light' | 'dark') {
-    if (themeName === this.#themeName && themeType === this.#themeType) {
-      return;
-    }
-    this.#setTheme(themeName, themeType);
-    this.stopBackgroundTokenize();
+  // Activate the theme on the shiki instance (its colorMap feeds token
+  // resolution) and emit the editor-chrome CSS from its VS Code color keys.
+  protected activateTheme(themeName: string): void {
+    const { colorMap } = this.#highlighter.setTheme(themeName);
+    const { colors = {} } = this.#highlighter.getTheme(themeName);
+    this.setStyle(buildEditorThemeCSS(colors));
+    this.#colorMap = colorMap;
+  }
+
+  protected resolveThemeType(themeName: string): 'light' | 'dark' {
+    return this.#highlighter.getTheme(themeName).type;
+  }
+
+  protected resetForThemeChange(): void {
     this.#stateStack = [INITIAL];
     this.#comparisonStateStack = [];
     this.#comparisonStateStackStart = 0;
     this.#comparisonLineChanges = [];
-    if (this.#grammar !== undefined && this.#textDocument.lineCount > 0) {
+    if (this.#grammar !== undefined && this.textDocument.lineCount > 0) {
       this.#scheduleBackgroundTokenize(0);
     }
-    // The theme CSS is now applied, so overlay pieces that captured a resolved
-    // theme color (e.g. rounded selection corner masks) can recompute against
-    // the new colors instead of keeping the old light/dark value.
-    this.#onThemeChange?.();
-  }
-
-  // Respect an explicit host color-scheme override. When the computed value
-  // advertises support for both schemes, let the OS preference choose one.
-  #resolveSystemThemeType(): 'light' | 'dark' {
-    try {
-      if (
-        typeof document !== 'undefined' &&
-        typeof getComputedStyle === 'function' &&
-        document.body != null
-      ) {
-        const colorSchemes = getComputedStyle(document.body).colorScheme.split(
-          /\s+/
-        );
-        const supportsDark = colorSchemes.includes('dark');
-        const supportsLight = colorSchemes.includes('light');
-        // A single host-forced scheme wins. `light dark` only declares support
-        // for both schemes, so the media query still selects the active one.
-        if (supportsDark !== supportsLight) {
-          return supportsDark ? 'dark' : 'light';
-        }
-      }
-    } catch {
-      // jsdom and similar harnesses may lack getComputedStyle or throw; fall
-      // through to the OS media query.
-    }
-    return this.#mediaQueryList.matches ? 'dark' : 'light';
-  }
-
-  // Re-apply the editor's theme from the surface's current code options. Edit
-  // mode reuses a single tokenizer across re-renders, so when the host swaps the
-  // theme — a theme picker, a light/dark toggle, etc. — we must recompute the
-  // active theme and re-tokenize. Without this the editor keeps rendering the
-  // theme it captured when it first attached (stale line-highlight background
-  // and token colors). System-driven changes are still handled by the
-  // observers wired up in the constructor; this covers explicit `themeType`/
-  // `theme` option changes that those observers don't see.
-  syncTheme(codeOptions: BaseCodeOptions): void {
-    const { themeType = 'system', theme = DEFAULT_THEMES } = codeOptions;
-    // A single pinned theme does not follow the themeType option or system
-    // scheme flips; its own classification stays authoritative.
-    if (typeof theme === 'string') {
-      const pinnedThemeType = this.#highlighter.getTheme(theme).type;
-      if (theme === this.#themeName && pinnedThemeType === this.#themeType) {
-        return;
-      }
-      this.#emitThemeChange(theme, pinnedThemeType);
-      return;
-    }
-    const nextThemeType =
-      themeType === 'system' ? this.#resolveSystemThemeType() : themeType;
-    const nextThemeName = theme[nextThemeType];
-    if (
-      nextThemeType === this.#themeType &&
-      nextThemeName === this.#themeName
-    ) {
-      return;
-    }
-    this.#emitThemeChange(nextThemeName, nextThemeType);
-  }
-
-  #setTheme(themeName: string, themeType?: 'light' | 'dark') {
-    const { theme, colorMap } = this.#highlighter.setTheme(themeName);
-    const { colors = {} } = this.#highlighter.getTheme(themeName);
-    const selectionBackground = colors['editor.selectionBackground'];
-    const themeLineHighlightBackground =
-      colors['editor.lineHighlightBackground'];
-    const lineHighlightBackground =
-      themeLineHighlightBackground != null &&
-      themeLineHighlightBackground.trim() !== '' &&
-      !colorUtils.isFullyTransparent(themeLineHighlightBackground)
-        ? themeLineHighlightBackground
-        : undefined;
-    // A usable theme background opts into the semantic active-line mix.
-    // Missing backgrounds retain the resolved row color and rely on a border.
-    const lineHighlightBorder =
-      colors['editor.lineHighlightBorder'] ??
-      (lineHighlightBackground == null
-        ? 'color-mix(in lab, var(--diffs-bg) 70%, var(--diffs-fg))'
-        : 'transparent');
-    const activeLineSourceMix =
-      lineHighlightBackground == null ? '100%' : '85%';
-    const cursorForeground = colors['editorCursor.foreground'];
-    const findMatchBackground = colors['editor.findMatchBackground'];
-    const findMatchHighlightBackground =
-      colors['editor.findMatchHighlightBackground'];
-    const bracketMatchBackground = colors['editorBracketMatch.background'];
-    const bracketMatchBorder = colors['editorBracketMatch.border'];
-    const hintForeground = colors['editorHint.foreground'];
-    const infoForeground = colors['editorInfo.foreground'];
-    const warningForeground = colors['editorWarning.foreground'];
-    const errorForeground = colors['editorError.foreground'];
-    this.#setStyle(`:host {
-      --diffs-editor-selection-bg: ${selectionBackground ?? 'var(--diffs-line-bg)'};
-      --diffs-editor-line-highlight-border: ${lineHighlightBorder};
-      --diffs-editor-active-line-source-mix: ${activeLineSourceMix};
-      --diffs-editor-match-bg: ${findMatchBackground ?? 'initial'};
-      --diffs-editor-match-highlight-bg: ${findMatchHighlightBackground ?? 'initial'};
-      --diffs-editor-bracket-match-bg: ${bracketMatchBackground ?? 'initial'};
-      --diffs-editor-bracket-match-border: ${bracketMatchBorder ?? 'initial'};
-      --diffs-editor-cursor-fg: ${cursorForeground ?? 'initial'};
-      --diffs-editor-hint-fg: ${hintForeground ?? 'initial'};
-      --diffs-editor-info-fg: ${infoForeground ?? 'initial'};
-      --diffs-editor-warning-fg: ${warningForeground ?? 'initial'};
-      --diffs-editor-error-fg: ${errorForeground ?? 'initial'};
-    }`);
-    this.#themeName = themeName;
-    this.#themeType = themeType ?? theme.type;
-    this.#colorMap = colorMap;
   }
 
   // The shared highlighter is also used for dual-theme SSR (`themes: {dark,light}`),
@@ -362,19 +459,16 @@ export class EditorTokenizer {
   // comments (stable across maps) still look correct. Re-apply before every
   // tokenize path so a first edit after load matches a later file-switch re-attach.
   #ensureActiveTheme(): void {
-    if (this.#themeName === '') {
+    if (this.themeName === '') {
       return;
     }
-    const { colorMap } = this.#highlighter.setTheme(this.#themeName);
+    const { colorMap } = this.#highlighter.setTheme(this.themeName);
     this.#colorMap = colorMap;
   }
 
-  cleanUp(): void {
-    this.#isCleanedUp = true;
-    this.stopBackgroundTokenize();
+  override cleanUp(): void {
+    super.cleanUp();
     this.#detachMessageListener();
-    this.#disposes?.forEach((dispose) => dispose());
-    this.#disposes = undefined;
   }
 
   // to use `tokenize`, call `prebuildStateStackMap` first to prebuild
@@ -388,14 +482,14 @@ export class EditorTokenizer {
     this.#ensureActiveTheme();
     if (
       this.#grammar === undefined &&
-      !isGrammarlessLanguage(this.#textDocument.languageId)
+      !isGrammarlessLanguage(this.textDocument.languageId)
     ) {
       throw new Error(
-        `Grammar for language "${this.#textDocument.languageId}" not loaded`
+        `Grammar for language "${this.textDocument.languageId}" not loaded`
       );
     }
 
-    const { lineCount } = this.#textDocument;
+    const { lineCount } = this.textDocument;
     const { startingLine = 0, totalLines = Infinity } = renderRange ?? {};
     const renderRangeEndLine =
       totalLines === Infinity
@@ -414,7 +508,7 @@ export class EditorTokenizer {
       change.lineDelta === 0 &&
       (change.changedLineChanges?.every(([, , lineDelta]) => lineDelta === 0) ??
         true);
-    if (this.#matchBrackets && !canReuseCachedStates) {
+    if (this.matchBrackets && !canReuseCachedStates) {
       // Structural edits shift cache indexes, so only the untouched prefix is
       // safe. Same-line edits overwrite every range they re-tokenize and can
       // retain the untouched suffix once grammar state reconverges.
@@ -584,11 +678,11 @@ export class EditorTokenizer {
     }
 
     if (offscreenDirtyLines !== undefined && offscreenDirtyLines.size > 0) {
-      this.#onDeferTokenize(offscreenDirtyLines, this.#themeType);
+      this.onDeferTokenize(offscreenDirtyLines, this.themeType);
     }
 
     if (backgroundStartLine !== undefined) {
-      if (this.#matchBrackets && canReuseCachedStates) {
+      if (this.matchBrackets && canReuseCachedStates) {
         this.#bracketIgnoredRanges.length = Math.min(
           this.#bracketIgnoredRanges.length,
           backgroundStartLine
@@ -606,7 +700,7 @@ export class EditorTokenizer {
           : dirtyStart < viewStart && !canReuseCachedStates
             ? dirtyStart
             : line;
-      if (this.#matchBrackets && canReuseCachedStates) {
+      if (this.matchBrackets && canReuseCachedStates) {
         this.#bracketIgnoredRanges.length = Math.min(
           this.#bracketIgnoredRanges.length,
           backgroundLine
@@ -677,13 +771,13 @@ export class EditorTokenizer {
   #ensureGrammar(): void {
     if (
       this.#grammar === undefined &&
-      !isGrammarlessLanguage(this.#textDocument.languageId) &&
+      !isGrammarlessLanguage(this.textDocument.languageId) &&
       this.#highlighter
         .getLoadedLanguages()
-        .includes(this.#textDocument.languageId)
+        .includes(this.textDocument.languageId)
     ) {
       this.#grammar = this.#highlighter.getLanguage(
-        this.#textDocument.languageId
+        this.textDocument.languageId
       );
     }
   }
@@ -718,7 +812,7 @@ export class EditorTokenizer {
     changedLineRanges?: readonly [number, number][],
     changedRangeIndex = 0
   ): void {
-    if (isGrammarlessLanguage(this.#textDocument.languageId)) {
+    if (isGrammarlessLanguage(this.textDocument.languageId)) {
       return;
     }
 
@@ -786,8 +880,8 @@ export class EditorTokenizer {
     line: number,
     state: StateStack
   ): { resolvedTokens: Array<HighlightedToken>; state: StateStack } {
-    const lineText = this.#textDocument.getLineText(line);
-    if (lineText.length > this.#tokenizeMaxLineLength) {
+    const lineText = this.textDocument.getLineText(line);
+    if (lineText.length > this.tokenizeMaxLineLength) {
       console.warn(
         `[diffs] Line(${line}) too long to tokenize: ${lineText.length}`
       );
@@ -808,7 +902,7 @@ export class EditorTokenizer {
       lineText,
       state,
       TOKENIZE_TIME_LIMIT,
-      this.#matchBrackets
+      this.matchBrackets
     );
     this.#cacheBracketIgnoredRanges(line, result.bracketIgnoredRanges);
     return {
@@ -821,7 +915,7 @@ export class EditorTokenizer {
     line: number,
     ranges: [number, number][] | null
   ): void {
-    if (this.#matchBrackets) {
+    if (this.matchBrackets) {
       this.#bracketIgnoredRanges[line] = ranges;
     }
   }
@@ -877,7 +971,7 @@ export class EditorTokenizer {
   #buildStateStack(endAt: number, timeBudget?: number): boolean {
     const boundedEndAt = Math.min(
       Math.max(0, endAt),
-      this.#textDocument.lineCount
+      this.textDocument.lineCount
     );
     if (this.#stateStack.length > boundedEndAt || this.#grammar === undefined) {
       return true;
@@ -887,9 +981,9 @@ export class EditorTokenizer {
     let state = this.#stateStack[line] ?? INITIAL;
     while (line < boundedEndAt) {
       this.#stateStack[line] = state;
-      const lineText = this.#textDocument.getLineText(line);
+      const lineText = this.textDocument.getLineText(line);
       if (
-        lineText.length <= this.#tokenizeMaxLineLength &&
+        lineText.length <= this.tokenizeMaxLineLength &&
         lineText !== '' &&
         lineText.trim() !== ''
       ) {
@@ -899,7 +993,7 @@ export class EditorTokenizer {
           lineText,
           state,
           TOKENIZE_TIME_LIMIT,
-          this.#matchBrackets,
+          this.matchBrackets,
           false
         );
         this.#cacheBracketIgnoredRanges(line, result.bracketIgnoredRanges);
@@ -958,7 +1052,7 @@ export class EditorTokenizer {
 
     const t = performance.now();
     const lines = new Map<number, Array<HighlightedToken>>();
-    const totalLines = this.#textDocument.lineCount;
+    const totalLines = this.textDocument.lineCount;
     const changedLineRanges = this.#backgroundChangedLineRanges;
 
     let line = this.#lastLine;
@@ -973,8 +1067,8 @@ export class EditorTokenizer {
         currentChangedRangeEnd !== undefined
           ? this.#getPreviousEndState(line + 1)
           : undefined;
-      const lineText = this.#textDocument.getLineText(line);
-      if (lineText.length > this.#tokenizeMaxLineLength) {
+      const lineText = this.textDocument.getLineText(line);
+      if (lineText.length > this.tokenizeMaxLineLength) {
         console.warn(
           `[diffs] Line(${line}) too long to tokenize: ${lineText.length}`
         );
@@ -990,7 +1084,7 @@ export class EditorTokenizer {
           lineText,
           state,
           TOKENIZE_TIME_LIMIT,
-          this.#matchBrackets
+          this.matchBrackets
         );
         lines.set(line, ret.resolvedTokens);
         this.#cacheBracketIgnoredRanges(line, ret.bracketIgnoredRanges);
@@ -1027,7 +1121,7 @@ export class EditorTokenizer {
       }
     }
 
-    this.#onDeferTokenize(lines, this.#themeType);
+    this.onDeferTokenize(lines, this.themeType);
     if (this.#isStopped || this.#isPaused || jobId !== this.#backgroundJobId) {
       return;
     }
@@ -1045,6 +1139,419 @@ export class EditorTokenizer {
     this.#backgroundChangedRangeIndex = changedRangeIndex;
     this.#postTokenizeMessage(jobId);
   }
+}
+
+/**
+ * Editor tokenizer over a `CodeHighlighter`'s incremental live tokenizer
+ * (chamele). The live tokenizer holds its own copy of the document in wasm:
+ * every edit batch forwards through `applyEdits`, which re-tokenizes from the
+ * first changed line until the lexer state reconverges. Lines inside the
+ * viewport come back synchronously as the dirty set; off-viewport lines flow
+ * through the live tokenizer's deferred slices into the host's render cache
+ * via `onDeferTokenize`.
+ */
+export class LiveEditorTokenizer extends BaseEditorTokenizer {
+  #highlighter: CodeHighlighter;
+  #live: CodeLiveTokenizer | undefined;
+  #liveLang: string | undefined;
+  #syncedRevision = 0;
+  #settleLines: Map<number, Array<HighlightedToken>> | undefined;
+  #mutating = false;
+  #stopped = false;
+  #paused = false;
+  #pausedLines: Map<number, Array<HighlightedToken>> | undefined;
+  #ignoredRanges: ([number, number][] | null | undefined)[] = [];
+
+  constructor(props: LiveEditorTokenizerProps) {
+    super(props);
+    this.#highlighter = props.highlighter;
+    this.applyInitialTheme();
+  }
+
+  getStringCommentRegexpRangesInLine(
+    lineIndex: number
+  ): [number, number][] | null {
+    if (
+      !this.matchBrackets ||
+      lineIndex < 0 ||
+      lineIndex >= this.textDocument.lineCount
+    ) {
+      return null;
+    }
+    if (this.#ignoredRanges[lineIndex] === undefined) {
+      this.#lineTokensAt(lineIndex);
+    }
+    return this.#ignoredRanges[lineIndex] ?? null;
+  }
+
+  tokenize(
+    change: TextDocumentChange,
+    renderRange?: RenderRange,
+    hostRealignsRows = false
+  ): Map<number, Array<HighlightedToken>> {
+    this.#stopped = false;
+    const { lineCount } = this.textDocument;
+    const { startingLine = 0, totalLines = Infinity } = renderRange ?? {};
+    const rangeStart = Math.min(startingLine, lineCount);
+    const rangeEnd =
+      totalLines === Infinity
+        ? lineCount
+        : Math.min(startingLine + totalLines, lineCount);
+
+    if (this.#live == null || this.#liveLang !== this.textDocument.languageId) {
+      // (Re)built from the already-edited document: the whole viewport is the
+      // dirty set and nothing needs deferring — the fresh wasm document was
+      // tokenized to convergence on creation.
+      this.#ensureLive();
+      const dirtyLines = new Map<number, Array<HighlightedToken>>();
+      for (let line = rangeStart; line < rangeEnd; line++) {
+        dirtyLines.set(line, this.#lineTokensAt(line));
+      }
+      return dirtyLines;
+    }
+
+    const update = this.#applyChange(this.#live, change, [
+      rangeStart,
+      rangeEnd,
+    ]);
+    this.#remapIgnoredRanges(update);
+    if (this.#pausedLines !== undefined) {
+      this.#pausedLines = remapThroughLineChanges(this.#pausedLines, update);
+    }
+    const settled = this.#settleLines;
+    this.#settleLines = undefined;
+    if (settled !== undefined && settled.size > 0) {
+      // Convergence work from the previous batch that completed during this
+      // call's settle: still-valid lines shift to their new numbers and
+      // refresh the host cache like any deferred delivery.
+      const remapped = remapThroughLineChanges(settled, update);
+      for (const line of remapped.keys()) {
+        this.#ignoredRanges[line] = undefined;
+      }
+      if (remapped.size > 0) {
+        this.#deliver(remapped);
+      }
+    }
+    const dirtyLines = update.lines;
+    for (const line of dirtyLines.keys()) {
+      this.#ignoredRanges[line] = undefined;
+    }
+    // Without host row realignment a structural edit shifts every row below
+    // it under unmoved DOM, so the remainder of the viewport must repaint
+    // even where tokens did not change.
+    const structural =
+      change.lineDelta !== 0 ||
+      (change.changedLineChanges?.some(([, , delta]) => delta !== 0) ?? false);
+    if (structural && !hostRealignsRows) {
+      const repaintStart = Math.max(rangeStart, change.startLine);
+      for (let line = repaintStart; line < rangeEnd; line++) {
+        if (!dirtyLines.has(line)) {
+          dirtyLines.set(line, this.#lineTokensAt(line));
+        }
+      }
+    }
+    return dirtyLines;
+  }
+
+  prebuildStateStack(): void {
+    // No grammar states to prebuild; make sure the wasm document is loaded so
+    // the first edit tokenizes incrementally from a warm buffer.
+    this.#stopped = false;
+    this.#ensureLive();
+  }
+
+  stopBackgroundTokenize(): void {
+    this.#stopped = true;
+    this.#paused = false;
+    this.#pausedLines = undefined;
+  }
+
+  pauseBackgroundTokenize(): void {
+    this.#paused = true;
+  }
+
+  resumeBackgroundTokenize(): void {
+    this.#paused = false;
+    const lines = this.#pausedLines;
+    this.#pausedLines = undefined;
+    if (lines !== undefined && lines.size > 0 && !this.#stopped) {
+      this.onDeferTokenize(lines, this.themeType);
+    }
+  }
+
+  // The chamele adapter maps its Zed theme's editor colors onto the VS Code
+  // color keys of `getTheme(...).colors`, so the shared CSS block applies to
+  // custom highlighters too.
+  protected activateTheme(themeName: string): void {
+    this.setStyle(
+      buildEditorThemeCSS(this.#highlighter.getTheme(themeName).colors ?? {})
+    );
+  }
+
+  protected resolveThemeType(themeName: string): 'light' | 'dark' {
+    return this.#highlighter.getTheme(themeName).type;
+  }
+
+  protected resetForThemeChange(): void {
+    // New theme, new colors: rebuild the live tokenizer against the current
+    // theme and repaint every line through its deferred slices (an empty
+    // initial render range defers the whole document).
+    this.#disposeLive();
+    if (this.textDocument.lineCount > 0) {
+      this.#stopped = false;
+      this.#ensureLive([0, 0]);
+    }
+  }
+
+  override cleanUp(): void {
+    super.cleanUp();
+    this.#disposeLive();
+  }
+
+  /**
+   * The live tokenizer for the current document and theme, creating it from
+   * the document's full text when missing. Without an `initialRenderRange`
+   * the whole document tokenizes synchronously and nothing is delivered;
+   * with one, off-range lines flow through the deferred pipeline.
+   */
+  #ensureLive(
+    initialRenderRange?: readonly [number, number]
+  ): CodeLiveTokenizer | undefined {
+    const { textDocument } = this;
+    if (this.#live != null && this.#liveLang === textDocument.languageId) {
+      return this.#live;
+    }
+    this.#disposeLive();
+    const factory = this.#highlighter.createLiveTokenizer;
+    if (factory == null) {
+      return undefined;
+    }
+    const live = factory.call(this.#highlighter, {
+      lang: textDocument.languageId as SupportedLanguages,
+      theme: this.themeName,
+      code: textDocument.getText(),
+      tokenizeMaxLineLength: this.tokenizeMaxLineLength,
+      onDeferTokenize: this.#onLiveDefer,
+      renderRange: initialRenderRange,
+    });
+    this.#live = live;
+    this.#liveLang = textDocument.languageId;
+    this.#syncedRevision = live.revision;
+    this.#ignoredRanges = [];
+    return live;
+  }
+
+  #disposeLive(): void {
+    this.#live?.dispose();
+    this.#live = undefined;
+    this.#liveLang = undefined;
+    this.#settleLines = undefined;
+    this.#ignoredRanges = [];
+  }
+
+  /**
+   * Forward one edit batch to the live tokenizer, which splits lines at
+   * `\r\n`, `\n`, and lone `\r` exactly like the piece table. Should an
+   * edit still fall outside the live tokenizer's model — a validation
+   * rejection, or a line count diverging from the document's — the
+   * incremental path is abandoned for a full reset from the document text.
+   */
+  #applyChange(
+    live: CodeLiveTokenizer,
+    change: TextDocumentChange,
+    renderRange: readonly [number, number]
+  ): CodeLiveTokenizerUpdate {
+    let update: CodeLiveTokenizerUpdate | undefined;
+    if (change.changes.length > 0) {
+      const edits = change.changes.map((edit) => ({
+        range: edit.range,
+        newText: edit.text,
+      }));
+      this.#mutating = true;
+      try {
+        update = live.applyEdits(edits, { renderRange });
+      } catch {
+        update = undefined;
+      } finally {
+        this.#mutating = false;
+      }
+      if (update !== undefined && update.lineCount !== change.lineCount) {
+        update = undefined;
+      }
+    }
+    if (update === undefined) {
+      // The buffered settle lines describe a document state being replaced.
+      this.#settleLines = undefined;
+      this.#mutating = true;
+      try {
+        update = live.reset(this.textDocument.getText(), { renderRange });
+      } finally {
+        this.#mutating = false;
+      }
+    }
+    this.#syncedRevision = update.revision;
+    return update;
+  }
+
+  #lineTokensAt(line: number): Array<HighlightedToken> {
+    const live = this.#ensureLive();
+    if (live == null || line >= live.lineCount) {
+      return [[0, '', this.textDocument.getLineText(line)]];
+    }
+    const { tokens, bracketIgnoredRanges } = live.getLineTokens(line);
+    this.#ignoredRanges[line] =
+      this.matchBrackets && bracketIgnoredRanges.length > 0
+        ? bracketIgnoredRanges
+        : null;
+    return tokens;
+  }
+
+  #onLiveDefer = (lines: Map<number, Array<HighlightedToken>>): void => {
+    if (this.isCleanedUp || this.#stopped) {
+      return;
+    }
+    if (this.#mutating) {
+      if (this.#settleLines === undefined) {
+        this.#settleLines = lines;
+      } else {
+        for (const [line, tokens] of lines) {
+          this.#settleLines.set(line, tokens);
+        }
+      }
+      return;
+    }
+    if (this.#live == null || this.#live.revision !== this.#syncedRevision) {
+      return;
+    }
+    for (const line of lines.keys()) {
+      this.#ignoredRanges[line] = undefined;
+    }
+    this.#deliver(lines);
+  };
+
+  #deliver(lines: Map<number, Array<HighlightedToken>>): void {
+    if (this.#paused) {
+      if (this.#pausedLines === undefined) {
+        this.#pausedLines = new Map(lines);
+      } else {
+        for (const [line, tokens] of lines) {
+          this.#pausedLines.set(line, tokens);
+        }
+      }
+      return;
+    }
+    this.onDeferTokenize(lines, this.themeType);
+  }
+
+  // Shift the bracket-ignore cache to the update's post-edit line numbers;
+  // entries inside replaced ranges reset and refill lazily.
+  #remapIgnoredRanges(update: CodeLiveTokenizerUpdate): void {
+    if (update.lineChanges.length === 0) {
+      return;
+    }
+    const previous = this.#ignoredRanges;
+    const next: ([number, number][] | null | undefined)[] = new Array(
+      update.lineCount
+    );
+    let oldPos = 0;
+    let newPos = 0;
+    for (const change of update.lineChanges) {
+      // the unchanged span between changes keeps its length, so it copies
+      // over with one shared offset
+      for (let i = 0; oldPos + i < change.oldStartLine; i++) {
+        next[newPos + i] = previous[oldPos + i];
+      }
+      oldPos = change.oldEndLine;
+      newPos = change.newEndLine;
+    }
+    for (
+      let i = 0;
+      oldPos + i < previous.length && newPos + i < next.length;
+      i++
+    ) {
+      next[newPos + i] = previous[oldPos + i];
+    }
+    this.#ignoredRanges = next;
+  }
+}
+
+/**
+ * Create the editor tokenizer matching the given highlighter: the TextMate
+ * implementation for shiki (raw instance or the built-in shiki
+ * `CodeHighlighter`), a `LiveEditorTokenizer` for custom highlighters that
+ * provide `createLiveTokenizer`, and plain-text tokenization otherwise.
+ */
+export function createEditorTokenizer(
+  props: Omit<EditorTokenizerProps, 'highlighter'> & {
+    highlighter: RenderersHighlighter;
+  }
+): DiffsEditorTokenizer {
+  const { highlighter } = props;
+  if (isCodeHighlighter(highlighter)) {
+    // An explicit live tokenizer wins over a shiki pass-through, so a custom
+    // highlighter that also exposes a shiki instance keeps its own edit mode.
+    if (highlighter.createLiveTokenizer != null) {
+      return new LiveEditorTokenizer({ ...props, highlighter });
+    }
+    if (highlighter.getShikiInstance != null) {
+      const shiki = highlighter.getShikiInstance();
+      if (shiki == null) {
+        throw new Error(
+          'createEditorTokenizer: the shiki highlighter is not loaded yet'
+        );
+      }
+      return new ShikiEditorTokenizer({ ...props, highlighter: shiki });
+    }
+    return new LiveEditorTokenizer({ ...props, highlighter });
+  }
+  return new ShikiEditorTokenizer({ ...props, highlighter });
+}
+
+function isCodeHighlighter(
+  highlighter: RenderersHighlighter
+): highlighter is CodeHighlighter {
+  return (
+    typeof (highlighter as CodeHighlighter).isReady === 'function' &&
+    typeof (highlighter as CodeHighlighter).load === 'function'
+  );
+}
+
+/**
+ * Map pre-batch line numbers onto post-batch ones through an update's line
+ * changes: lines inside a replaced old range drop out (the update itself
+ * re-tokenized their replacements), lines beyond one shift by its delta.
+ */
+function remapThroughLineChanges(
+  lines: Map<number, Array<HighlightedToken>>,
+  update: CodeLiveTokenizerUpdate
+): Map<number, Array<HighlightedToken>> {
+  const { lineChanges } = update;
+  if (lineChanges.length === 0) {
+    return lines;
+  }
+  const remapped = new Map<number, Array<HighlightedToken>>();
+  for (const [line, tokens] of lines) {
+    let target = line;
+    let dropped = false;
+    for (const change of lineChanges) {
+      if (line >= change.oldEndLine) {
+        target +=
+          change.newEndLine -
+          change.newStartLine -
+          (change.oldEndLine - change.oldStartLine);
+      } else if (line >= change.oldStartLine) {
+        dropped = true;
+        break;
+      } else {
+        // line changes are ascending; the rest cannot affect this line
+        break;
+      }
+    }
+    if (!dropped && target < update.lineCount) {
+      remapped.set(target, tokens);
+    }
+  }
+  return remapped;
 }
 
 function tokenizeLine(

@@ -133,7 +133,8 @@ interface Theme {
 }
 ```
 
-chamele bundles 69 community themes. See the [theme list](./themes/README.md).
+Chamele bundles themes matching all 65 IDs, names, and appearances in Shiki's
+catalog, plus eight Pierre themes. See the [theme list](./themes/README.md).
 
 ### CSS variables
 

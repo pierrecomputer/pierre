@@ -1,0 +1,199 @@
+{
+  "name": "Kanagawa Lotus",
+  "appearance": "light",
+  "style": {
+    "background": "#f2ecbc",
+    "text": "#545464",
+    "editor.background": "#f2ecbc",
+    "editor.foreground": "#545464",
+    "editor.active_line.background": "#5454640d",
+    "search.match_background": "#597b7533",
+    "players": [
+      {
+        "cursor": "#545464",
+        "selection": "#8a898080",
+        "background": "#545464"
+      },
+      {
+        "cursor": "#5d57a3",
+        "selection": "#5d57a333",
+        "background": "#5d57a3"
+      },
+      {
+        "cursor": "#766b90",
+        "selection": "#766b9033",
+        "background": "#766b90"
+      },
+      {
+        "cursor": "#9fb5c9",
+        "selection": "#9fb5c933",
+        "background": "#9fb5c9"
+      },
+      {
+        "cursor": "#766b90",
+        "selection": "#766b9033",
+        "background": "#766b90"
+      },
+      {
+        "cursor": "#8a8980",
+        "selection": "#8a898033",
+        "background": "#8a8980"
+      },
+      {
+        "cursor": "#597b75",
+        "selection": "#597b7533",
+        "background": "#597b75"
+      },
+      {
+        "cursor": "#6e915f",
+        "selection": "#6e915f33",
+        "background": "#6e915f"
+      }
+    ],
+    "error": "#e82424",
+    "warning": "#cc6d00",
+    "info": "#5a7785",
+    "hint": "#5e857a",
+    "syntax": {
+      "attribute": {
+        "color": "#de9800"
+      },
+      "boolean": {
+        "color": "#cc6d00"
+      },
+      "comment": {
+        "color": "#8a8980",
+        "font_style": "italic"
+      },
+      "comment.doc": {
+        "color": "#8a8980",
+        "font_style": "italic"
+      },
+      "constant": {
+        "color": "#cc6d00"
+      },
+      "constructor": {
+        "color": "#4d699b"
+      },
+      "embedded": {
+        "color": "#e82424"
+      },
+      "emphasis": {
+        "color": "#e82424",
+        "font_style": "italic"
+      },
+      "emphasis.strong": {
+        "color": "#e82424",
+        "font_weight": 700
+      },
+      "enum": {
+        "color": "#5e857a",
+        "font_weight": 700
+      },
+      "function": {
+        "color": "#4d699b",
+        "font_style": "italic"
+      },
+      "hint": {
+        "color": "#5e857a",
+        "font_style": "italic"
+      },
+      "keyword": {
+        "color": "#766b90"
+      },
+      "link_text": {
+        "color": "#4d699b"
+      },
+      "link_uri": {
+        "color": "#4d699b"
+      },
+      "number": {
+        "color": "#b35b79"
+      },
+      "operator": {
+        "color": "#836f4a"
+      },
+      "predictive": {
+        "color": "#8a8980"
+      },
+      "predoc": {
+        "color": "#e82424"
+      },
+      "primary": {
+        "color": "#c84053"
+      },
+      "property": {
+        "color": "#4d699b"
+      },
+      "punctuation": {
+        "color": "#5e857a"
+      },
+      "punctuation.bracket": {
+        "color": "#5e857a"
+      },
+      "punctuation.delimiter": {
+        "color": "#8a8980"
+      },
+      "punctuation.list_marker": {
+        "color": "#5e857a"
+      },
+      "punctuation.special": {
+        "color": "#5e857a"
+      },
+      "punctuation.special.symbol": {
+        "color": "#e82424"
+      },
+      "string": {
+        "color": "#6f894e"
+      },
+      "string.escape": {
+        "color": "#c84053"
+      },
+      "string.regex": {
+        "color": "#c84053"
+      },
+      "string.special": {
+        "color": "#c84053"
+      },
+      "string.special.symbol": {
+        "color": "#d7474b"
+      },
+      "tag": {
+        "color": "#4d699b"
+      },
+      "text.literal": {
+        "color": "#6f894e"
+      },
+      "title": {
+        "color": "#545464",
+        "font_weight": 800
+      },
+      "type": {
+        "color": "#5e857a"
+      },
+      "type.interface": {
+        "color": "#5e857a"
+      },
+      "type.super": {
+        "color": "#5e857a"
+      },
+      "variable": {
+        "color": "#545464"
+      },
+      "variable.member": {
+        "color": "#545464"
+      },
+      "variable.parameter": {
+        "color": "#766b90",
+        "font_style": "italic"
+      },
+      "variable.special": {
+        "color": "#b35b79",
+        "font_style": "italic"
+      },
+      "variant": {
+        "color": "#e82424"
+      }
+    }
+  }
+}

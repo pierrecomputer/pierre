@@ -1,10 +1,10 @@
 import { diffChars, diffWordsWithSpace } from 'diff';
 
 import { DEFAULT_COLLAPSED_CONTEXT_THRESHOLD } from '../constants';
+import type { RenderersHighlighter } from '../highlighter/resolve_highlighter';
 import type {
   CodeToHastOptions,
   DecorationItem,
-  DiffsHighlighter,
   DiffsThemeNames,
   FileContents,
   FileDiffMetadata,
@@ -34,7 +34,7 @@ const DEFAULT_PLAIN_TEXT_OPTIONS: ForceDiffPlainTextOptions = {
 
 export function renderDiffWithHighlighter(
   diff: FileDiffMetadata,
-  highlighter: DiffsHighlighter,
+  highlighter: RenderersHighlighter,
   options: RenderDiffOptions,
   {
     forcePlainText,
@@ -398,7 +398,7 @@ interface RenderTwoFilesProps {
   deletionDecorations: DecorationItem[];
   additionDecorations: DecorationItem[];
   options: RenderDiffOptions;
-  highlighter: DiffsHighlighter;
+  highlighter: RenderersHighlighter;
   languageOverride: SupportedLanguages | undefined;
 }
 

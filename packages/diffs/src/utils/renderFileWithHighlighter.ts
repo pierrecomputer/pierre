@@ -1,6 +1,6 @@
+import type { RenderersHighlighter } from '../highlighter/resolve_highlighter';
 import type {
   CodeToHastOptions,
-  DiffsHighlighter,
   DiffsThemeNames,
   FileContents,
   ForceFilePlainTextOptions,
@@ -20,7 +20,7 @@ const DEFAULT_PLAIN_TEXT_OPTIONS: ForceFilePlainTextOptions = {
 
 export function renderFileWithHighlighter(
   file: FileContents,
-  highlighter: DiffsHighlighter,
+  highlighter: RenderersHighlighter,
   { theme, tokenizeMaxLineLength, useTokenTransformer }: RenderFileOptions,
   {
     forcePlainText,

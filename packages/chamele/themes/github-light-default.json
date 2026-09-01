@@ -1,0 +1,195 @@
+{
+  "name": "GitHub Light Default",
+  "appearance": "light",
+  "style": {
+    "background": "#ffffffff",
+    "text": "#1f2328ff",
+    "editor.background": "#ffffffff",
+    "editor.foreground": "#1f2328ff",
+    "editor.active_line.background": "#f6f8faff",
+    "search.match_background": "#fae17d4d",
+    "players": [
+      {
+        "cursor": "#006edbff",
+        "background": "#006edbff",
+        "selection": "#006edb66"
+      },
+      {
+        "cursor": "#30a147ff",
+        "background": "#30a147ff",
+        "selection": "#30a14766"
+      },
+      {
+        "cursor": "#b88700ff",
+        "background": "#b88700ff",
+        "selection": "#b8870066"
+      },
+      {
+        "cursor": "#df0c24ff",
+        "background": "#df0c24ff",
+        "selection": "#df0c2466"
+      },
+      {
+        "cursor": "#ce2c85ff",
+        "background": "#ce2c85ff",
+        "selection": "#ce2c8566"
+      },
+      {
+        "cursor": "#894cebff",
+        "background": "#894cebff",
+        "selection": "#894ceb66"
+      }
+    ],
+    "error": "#d1242fff",
+    "warning": "#9a6700ff",
+    "info": "#9a6700ff",
+    "hint": "#59636eff",
+    "syntax": {
+      "attribute": {
+        "color": "#0550aeff"
+      },
+      "boolean": {
+        "color": "#0550aeff"
+      },
+      "comment": {
+        "color": "#59636eff"
+      },
+      "comment.doc": {
+        "color": "#59636eff"
+      },
+      "constant": {
+        "color": "#0550aeff"
+      },
+      "constructor": {
+        "color": "#cf222eff"
+      },
+      "embedded": {
+        "color": "#cf222eff"
+      },
+      "emphasis": {
+        "font_style": "italic"
+      },
+      "emphasis.strong": {
+        "font_weight": 700
+      },
+      "enum": {
+        "color": "#953800ff"
+      },
+      "function": {
+        "color": "#8250dfff"
+      },
+      "function.method": {
+        "color": "#8250dfff"
+      },
+      "function.special.definition": {
+        "color": "#8250dfff"
+      },
+      "hint": {
+        "color": "#59636eff",
+        "font_weight": 700
+      },
+      "keyword": {
+        "color": "#cf222eff"
+      },
+      "keyword.operator": {
+        "color": "#cf222eff"
+      },
+      "label": {
+        "color": "#0550aeff"
+      },
+      "link_text": {
+        "color": "#0a3069ff",
+        "font_style": "italic"
+      },
+      "link_uri": {
+        "color": "#0550aeff"
+      },
+      "number": {
+        "color": "#0550aeff"
+      },
+      "operator": {
+        "color": "#cf222eff"
+      },
+      "predictive": {
+        "color": "#59636eff",
+        "font_style": "italic"
+      },
+      "preproc": {
+        "color": "#cf222eff"
+      },
+      "primary": {
+        "color": "#1f2328ff"
+      },
+      "property": {
+        "color": "#1f2328ff"
+      },
+      "property.json_key": {
+        "color": "#116329ff"
+      },
+      "punctuation": {
+        "color": "#cf222eff"
+      },
+      "punctuation.bracket": {
+        "color": "#1f2328ff"
+      },
+      "punctuation.delimiter": {
+        "color": "#1f2328ff"
+      },
+      "punctuation.delimiter.jsx": {
+        "color": "#cf222eff"
+      },
+      "punctuation.list_marker": {
+        "color": "#953800ff"
+      },
+      "punctuation.special": {
+        "color": "#cf222eff"
+      },
+      "string": {
+        "color": "#0a3069ff"
+      },
+      "string.escape": {
+        "color": "#cf222eff"
+      },
+      "string.regex": {
+        "color": "#0a3069ff"
+      },
+      "string.special": {
+        "color": "#0550aeff"
+      },
+      "string.special.symbol": {
+        "color": "#0550aeff"
+      },
+      "tag": {
+        "color": "#116329ff"
+      },
+      "text.literal": {
+        "color": "#0550aeff"
+      },
+      "title": {
+        "color": "#0550aeff",
+        "font_weight": 700
+      },
+      "type": {
+        "color": "#953800ff"
+      },
+      "type.builtin": {
+        "color": "#0550aeff"
+      },
+      "variable": {
+        "color": "#1f2328ff"
+      },
+      "variable.builtin": {
+        "color": "#0550aeff"
+      },
+      "variable.parameter": {
+        "color": "#953800ff"
+      },
+      "variable.special": {
+        "color": "#0550aeff"
+      },
+      "variant": {
+        "color": "#953800ff"
+      }
+    }
+  }
+}

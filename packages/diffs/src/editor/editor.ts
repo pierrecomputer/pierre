@@ -124,7 +124,11 @@ import {
   Metrics,
   snapTextOffsetToUnicodeBoundary,
 } from './textMeasure';
-import { EditorTokenizer, renderLineTokens } from './tokenizer';
+import {
+  createEditorTokenizer,
+  type DiffsEditorTokenizer,
+  renderLineTokens,
+} from './tokenizer';
 import type { EditorEditCompleteEvent } from './types';
 import type { EditorInitialState, EditState } from './types';
 import {
@@ -299,7 +303,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #initialState: EditorInitialState<LAnnotation> | undefined;
   #editSession?: ManagedEditSession<LAnnotation>;
   #metrics = new Metrics();
-  #tokenizer?: EditorTokenizer;
+  #tokenizer?: DiffsEditorTokenizer;
   #popoverManager?: PopoverManager;
   // event disposes
   #editorEventDisposes?: (() => void)[];
@@ -1213,7 +1217,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     // skips the rebuild, able to paint edits.
     const textDocument = editSession.document;
     if (this.#tokenizer == null && textDocument != null) {
-      this.#tokenizer = new EditorTokenizer({
+      this.#tokenizer = createEditorTokenizer({
         highlighter,
         textDocument,
         codeOptions: this.#fileInstance?.__getEffectiveCodeOptions() ?? {},

@@ -5,7 +5,7 @@ import { DEFAULT_THEMES } from '../src/constants';
 import { Editor, type EditorOptions } from '../src/editor/editor';
 import { findBracketMatchRanges } from '../src/editor/matchBrackets';
 import { TextDocument } from '../src/editor/textDocument';
-import { EditorTokenizer } from '../src/editor/tokenizer';
+import { ShikiEditorTokenizer } from '../src/editor/tokenizer';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
 import type { FileContents } from '../src/types';
 import { installDom, wait } from './domHarness';
@@ -133,7 +133,7 @@ describe('editor bracket matching', () => {
 
   test('does not read ignored token ranges when disabled', async () => {
     const getIgnoredRangesSpy = spyOn(
-      EditorTokenizer.prototype,
+      ShikiEditorTokenizer.prototype,
       'getStringCommentRegexpRangesInLine'
     );
     const { cleanup, editor } = await createBracketMatchFixture('{ /{/ }', {
@@ -229,7 +229,7 @@ describe('editor bracket matching', () => {
       ): [number, number][] {
         return lineIndex === 0 ? [[2, 5]] : [];
       },
-    } as EditorTokenizer;
+    } as ShikiEditorTokenizer;
 
     expect(
       findBracketMatchRanges(textDocument, tokenizer, {
@@ -265,7 +265,7 @@ describe('editor bracket matching', () => {
       getStringCommentRegexpRangesInLine() {
         return null;
       },
-    } as unknown as EditorTokenizer;
+    } as unknown as ShikiEditorTokenizer;
 
     expect(
       findBracketMatchRanges(textDocument, tokenizer, {
@@ -286,7 +286,7 @@ describe('editor bracket matching', () => {
         checkedLines.add(lineIndex);
         return null;
       },
-    } as EditorTokenizer;
+    } as ShikiEditorTokenizer;
 
     expect(
       findBracketMatchRanges(textDocument, tokenizer, {
@@ -308,7 +308,7 @@ describe('editor bracket matching', () => {
         checkedLines.add(lineIndex);
         return null;
       },
-    } as EditorTokenizer;
+    } as ShikiEditorTokenizer;
 
     expect(
       findBracketMatchRanges(textDocument, tokenizer, {
@@ -331,7 +331,7 @@ describe('editor bracket matching', () => {
           return [start, start + 1] as [number, number];
         });
       },
-    } as unknown as EditorTokenizer;
+    } as unknown as ShikiEditorTokenizer;
 
     expect(
       findBracketMatchRanges(textDocument, tokenizer, {

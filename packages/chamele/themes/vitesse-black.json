@@ -1,0 +1,120 @@
+{
+  "name": "Vitesse Black",
+  "appearance": "dark",
+  "style": {
+    "background": "#000000",
+    "editor.background": "#000000",
+    "text": "#dbd7cacc",
+    "editor.foreground": "#dbd7cacc",
+    "editor.active_line.background": "#121212",
+    "editor.document_highlight.bracket_background": "#4d937520",
+    "search.match_background": "#e6cc7722",
+    "error": "#cb7676",
+    "warning": "#d4976c",
+    "info": "#6394bf",
+    "hint": "#4d9375",
+    "players": [
+      {
+        "cursor": "#dbd7cacc",
+        "selection": "#eeeeee18"
+      }
+    ],
+    "syntax": {
+      "attribute": {
+        "color": "#bd976a"
+      },
+      "boolean": {
+        "color": "#4d9375"
+      },
+      "comment": {
+        "color": "#758575dd"
+      },
+      "comment.doc": {
+        "color": "#758575dd"
+      },
+      "constant": {
+        "color": "#c99076"
+      },
+      "constructor": {
+        "color": "#4d9375"
+      },
+      "emphasis": {
+        "color": "#dbd7cacc",
+        "font_style": "italic"
+      },
+      "emphasis.strong": {
+        "color": "#dbd7cacc",
+        "font_weight": 700
+      },
+      "function": {
+        "color": "#80a665"
+      },
+      "keyword": {
+        "color": "#4d9375"
+      },
+      "label": {
+        "color": "#80a665"
+      },
+      "link_text": {
+        "color": "#c98a7d"
+      },
+      "link_uri": {
+        "color": "#c98a7d"
+      },
+      "number": {
+        "color": "#4C9A91"
+      },
+      "operator": {
+        "color": "#cb7676"
+      },
+      "punctuation": {
+        "color": "#444444"
+      },
+      "punctuation.bracket": {
+        "color": "#444444"
+      },
+      "punctuation.delimiter": {
+        "color": "#444444"
+      },
+      "punctuation.list_marker": {
+        "color": "#444444"
+      },
+      "punctuation.special": {
+        "color": "#444444"
+      },
+      "string": {
+        "color": "#c98a7d"
+      },
+      "string.escape": {
+        "color": "#c98a7d"
+      },
+      "string.regex": {
+        "color": "#c98a7d"
+      },
+      "string.special": {
+        "color": "#c98a7d"
+      },
+      "string.special.symbol": {
+        "color": "#c98a7d"
+      },
+      "tag": {
+        "color": "#4d9375"
+      },
+      "text.literal": {
+        "color": "#c98a7d"
+      },
+      "title": {
+        "color": "#80a665"
+      },
+      "type": {
+        "color": "#5DA994"
+      },
+      "variable": {
+        "color": "#bd976a"
+      },
+      "variable.special": {
+        "color": "#c99076"
+      }
+    }
+  }
+}

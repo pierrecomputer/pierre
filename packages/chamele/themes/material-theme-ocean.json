@@ -1,0 +1,86 @@
+{
+  "name": "Material Theme Ocean",
+  "appearance": "dark",
+  "style": {
+    "background": "#0F111A",
+    "text": "#babed8",
+    "editor.background": "#0F111A",
+    "editor.foreground": "#babed8",
+    "editor.active_line.background": "#00000050",
+    "players": [],
+    "error": "#f0717870",
+    "warning": "#FFCB6B70",
+    "info": "#82AAFF70",
+    "hint": "#969696ff",
+    "syntax": {
+      "attribute": {
+        "color": "#C792EA"
+      },
+      "comment": {
+        "color": "#464B5D",
+        "font_style": "italic"
+      },
+      "comment.doc": {
+        "color": "#464B5D",
+        "font_style": "italic"
+      },
+      "constructor": {
+        "color": "#f07178"
+      },
+      "emphasis": {
+        "color": "#f07178",
+        "font_style": "italic"
+      },
+      "emphasis.strong": {
+        "color": "#f07178",
+        "font_weight": 700
+      },
+      "function": {
+        "color": "#82AAFF"
+      },
+      "keyword": {
+        "color": "#89DDFF",
+        "font_style": "italic"
+      },
+      "number": {
+        "color": "#F78C6C"
+      },
+      "punctuation": {
+        "color": "#89DDFF"
+      },
+      "punctuation.bracket": {
+        "color": "#89DDFF"
+      },
+      "punctuation.delimiter": {
+        "color": "#89DDFF"
+      },
+      "punctuation.list_marker": {
+        "color": "#89DDFF"
+      },
+      "punctuation.special": {
+        "color": "#89DDFF"
+      },
+      "string": {
+        "color": "#C3E88D"
+      },
+      "string.escape": {
+        "color": "#C3E88D"
+      },
+      "string.regex": {
+        "color": "#C3E88D"
+      },
+      "string.special": {
+        "color": "#C3E88D"
+      },
+      "string.special.symbol": {
+        "color": "#C3E88D"
+      },
+      "tag": {
+        "color": "#f07178"
+      },
+      "text.literal": {
+        "color": "#C3E88D"
+      }
+    }
+  }
+}

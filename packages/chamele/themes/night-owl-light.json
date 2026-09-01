@@ -12,7 +12,43 @@
     "players": [
       {
         "cursor": "#2AA298",
+        "background": "#2AA298",
         "selection": "#2AA29850"
+      },
+      {
+        "cursor": "#994cc3",
+        "background": "#994cc3",
+        "selection": "#994cc33d"
+      },
+      {
+        "cursor": "#4876d6",
+        "background": "#4876d6",
+        "selection": "#4876d63d"
+      },
+      {
+        "cursor": "#0c969b",
+        "background": "#0c969b",
+        "selection": "#0c969b3d"
+      },
+      {
+        "cursor": "#d6438a",
+        "background": "#d6438a",
+        "selection": "#d6438a3d"
+      },
+      {
+        "cursor": "#de3d3b",
+        "background": "#de3d3b",
+        "selection": "#de3d3b3d"
+      },
+      {
+        "cursor": "#daaa01",
+        "background": "#daaa01",
+        "selection": "#daaa013d"
+      },
+      {
+        "cursor": "#49d0c5",
+        "background": "#49d0c5",
+        "selection": "#49d0c53d"
       }
     ],
     "error": "#E64D49",
@@ -85,13 +121,15 @@
         "font_style": "italic"
       },
       "keyword.declaration": {
-        "color": "#994cc3"
+        "color": "#994cc3",
+        "font_style": "normal"
       },
       "label": {
         "color": "#4876d6"
       },
       "link_text": {
-        "color": "#403f53"
+        "color": "#403f53",
+        "font_style": "normal"
       },
       "link_uri": {
         "color": "#ff869a"
@@ -120,14 +158,16 @@
         "color": "#0c969b"
       },
       "punctuation": {
-        "color": "#403f53"
+        "color": "#403f53",
+        "font_style": "normal"
       },
       "punctuation.bracket": {
         "color": "#994cc3",
         "font_style": "italic"
       },
       "punctuation.delimiter": {
-        "color": "#403f53"
+        "color": "#403f53",
+        "font_style": "normal"
       },
       "punctuation.list_marker": {
         "color": "#4876d6"

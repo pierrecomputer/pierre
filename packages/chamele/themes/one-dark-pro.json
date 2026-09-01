@@ -1,0 +1,94 @@
+{
+  "name": "One Dark Pro",
+  "appearance": "dark",
+  "style": {
+    "background": "#282c34",
+    "editor.background": "#282c34",
+    "text": "#abb2bf",
+    "editor.foreground": "#abb2bf",
+    "editor.active_line.background": "#2c313c",
+    "editor.document_highlight.bracket_background": "#515a6b",
+    "search.match_background": "#d19a6644",
+    "error": "#c24038",
+    "warning": "#d19a66",
+    "players": [
+      {
+        "cursor": "#528bff",
+        "selection": "#67769660"
+      }
+    ],
+    "syntax": {
+      "attribute": {
+        "color": "#d19a66"
+      },
+      "comment": {
+        "color": "#7f848e",
+        "font_style": "italic"
+      },
+      "comment.doc": {
+        "color": "#7f848e",
+        "font_style": "italic"
+      },
+      "constant": {
+        "color": "#d19a66"
+      },
+      "constructor": {
+        "color": "#e06c75"
+      },
+      "embedded": {
+        "color": "#abb2bf"
+      },
+      "emphasis": {
+        "color": "#c678dd"
+      },
+      "emphasis.strong": {
+        "color": "#d19a66"
+      },
+      "function": {
+        "color": "#61afef"
+      },
+      "keyword": {
+        "color": "#c678dd"
+      },
+      "number": {
+        "color": "#d19a66"
+      },
+      "operator": {
+        "color": "#abb2bf"
+      },
+      "property": {
+        "color": "#abb2bf"
+      },
+      "string": {
+        "color": "#98c379"
+      },
+      "string.escape": {
+        "color": "#98c379"
+      },
+      "string.regex": {
+        "color": "#98c379"
+      },
+      "string.special": {
+        "color": "#56b6c2"
+      },
+      "string.special.symbol": {
+        "color": "#56b6c2"
+      },
+      "tag": {
+        "color": "#e06c75"
+      },
+      "text.literal": {
+        "color": "#98c379"
+      },
+      "type": {
+        "color": "#e5c07b"
+      },
+      "variable": {
+        "color": "#e06c75"
+      },
+      "variable.special": {
+        "color": "#e5c07b"
+      }
+    }
+  }
+}

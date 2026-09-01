@@ -1,0 +1,86 @@
+{
+  "name": "Slack Ochin",
+  "appearance": "light",
+  "style": {
+    "background": "#FFFFFF",
+    "editor.background": "#FFFFFF",
+    "text": "#000000",
+    "editor.foreground": "#000000",
+    "editor.active_line.background": "#EEEEEE",
+    "search.match_background": "#AED4FB",
+    "hint": "#F9F9F9",
+    "players": [
+      {
+        "cursor": "#000000",
+        "selection": "#AED4FB"
+      }
+    ],
+    "syntax": {
+      "attribute": {
+        "color": "#df8618",
+        "font_style": "italic"
+      },
+      "comment": {
+        "color": "#357b42",
+        "font_style": "italic"
+      },
+      "comment.doc": {
+        "color": "#357b42",
+        "font_style": "italic"
+      },
+      "constant": {
+        "color": "#174781"
+      },
+      "constructor": {
+        "color": "#0444ac"
+      },
+      "emphasis": {
+        "color": "#174781",
+        "font_style": "italic"
+      },
+      "emphasis.strong": {
+        "color": "#08134A",
+        "font_weight": 700
+      },
+      "function": {
+        "color": "#7eb233"
+      },
+      "keyword": {
+        "color": "#7b30d0"
+      },
+      "number": {
+        "color": "#174781"
+      },
+      "string": {
+        "color": "#a44185"
+      },
+      "string.escape": {
+        "color": "#174781"
+      },
+      "string.regex": {
+        "color": "#a44185"
+      },
+      "string.special": {
+        "color": "#a44185"
+      },
+      "string.special.symbol": {
+        "color": "#a44185"
+      },
+      "tag": {
+        "color": "#0444ac"
+      },
+      "text.literal": {
+        "color": "#a44185"
+      },
+      "type": {
+        "color": "#0444ac"
+      },
+      "variable": {
+        "color": "#2f86d2"
+      },
+      "variable.special": {
+        "color": "#2f86d2"
+      }
+    }
+  }
+}

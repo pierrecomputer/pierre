@@ -14,6 +14,7 @@ import type {
 } from 'shiki';
 
 import type { EditorEditCompleteEvent, EditState } from './editor/types';
+import type { CodeHighlighter } from './highlighter/code_highlighter';
 
 export type { CreatePatchOptionsNonabortable };
 
@@ -1172,7 +1173,7 @@ export type EditableInstance<T extends { type: string }> = T extends {
   : T;
 
 interface SyncRenderViewBaseProps {
-  highlighter: DiffsHighlighter;
+  highlighter: DiffsHighlighter | CodeHighlighter;
   fileContainer: HTMLElement;
   renderRange: RenderRange | undefined;
   /** Start fresh history instead of retaining or extending the current history. */

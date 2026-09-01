@@ -1,0 +1,199 @@
+{
+  "name": "Kanagawa Dragon",
+  "appearance": "dark",
+  "style": {
+    "background": "#181616",
+    "text": "#c5c9c5",
+    "editor.background": "#181616",
+    "editor.foreground": "#c5c9c5",
+    "editor.active_line.background": "#c5c9c50d",
+    "search.match_background": "#8ea4a233",
+    "players": [
+      {
+        "cursor": "#c5c9c5",
+        "selection": "#625e5a80",
+        "background": "#c5c9c5"
+      },
+      {
+        "cursor": "#8ba4b0",
+        "selection": "#8ba4b033",
+        "background": "#8ba4b0"
+      },
+      {
+        "cursor": "#8992a7",
+        "selection": "#8992a733",
+        "background": "#8992a7"
+      },
+      {
+        "cursor": "#7fb4ca",
+        "selection": "#7fb4ca33",
+        "background": "#7fb4ca"
+      },
+      {
+        "cursor": "#a292a3",
+        "selection": "#a292a333",
+        "background": "#a292a3"
+      },
+      {
+        "cursor": "#a6a69c",
+        "selection": "#a6a69c33",
+        "background": "#a6a69c"
+      },
+      {
+        "cursor": "#8ea4a2",
+        "selection": "#8ea4a233",
+        "background": "#8ea4a2"
+      },
+      {
+        "cursor": "#8a9a7b",
+        "selection": "#8a9a7b33",
+        "background": "#8a9a7b"
+      }
+    ],
+    "error": "#e82424",
+    "warning": "#ff9e3b",
+    "info": "#8ba4b0",
+    "hint": "#8ea4a2",
+    "syntax": {
+      "attribute": {
+        "color": "#c4b28a"
+      },
+      "boolean": {
+        "color": "#ff9e3b"
+      },
+      "comment": {
+        "color": "#7a8382",
+        "font_style": "italic"
+      },
+      "comment.doc": {
+        "color": "#7a8382",
+        "font_style": "italic"
+      },
+      "constant": {
+        "color": "#b98d7b"
+      },
+      "constructor": {
+        "color": "#8ba4b0"
+      },
+      "embedded": {
+        "color": "#e82424"
+      },
+      "emphasis": {
+        "color": "#e82424",
+        "font_style": "italic"
+      },
+      "emphasis.strong": {
+        "color": "#e82424",
+        "font_weight": 700
+      },
+      "enum": {
+        "color": "#8ea4a2",
+        "font_weight": 700
+      },
+      "function": {
+        "color": "#8ba4b0",
+        "font_style": "italic"
+      },
+      "hint": {
+        "color": "#8ea4a2",
+        "font_style": "italic"
+      },
+      "keyword": {
+        "color": "#E46876"
+      },
+      "link_text": {
+        "color": "#8ba4b0"
+      },
+      "link_uri": {
+        "color": "#8ba4b0"
+      },
+      "number": {
+        "color": "#a292a3"
+      },
+      "operator": {
+        "color": "#b6927b"
+      },
+      "predictive": {
+        "color": "#625e5a"
+      },
+      "predoc": {
+        "color": "#e82424"
+      },
+      "primary": {
+        "color": "#e46876"
+      },
+      "property": {
+        "color": "#E7BD6E"
+      },
+      "punctuation": {
+        "color": "#8ea4a2"
+      },
+      "punctuation.bracket": {
+        "color": "#8ea4a2"
+      },
+      "punctuation.delimiter": {
+        "color": "#625e5a"
+      },
+      "punctuation.list_marker": {
+        "color": "#8ea4a2"
+      },
+      "punctuation.special": {
+        "color": "#8ea4a2"
+      },
+      "punctuation.special.symbol": {
+        "color": "#e82424"
+      },
+      "string": {
+        "color": "#8A9A7B"
+      },
+      "string.escape": {
+        "color": "#e46876"
+      },
+      "string.regex": {
+        "color": "#e46876"
+      },
+      "string.special": {
+        "color": "#e46876"
+      },
+      "string.special.symbol": {
+        "color": "#ff5d62"
+      },
+      "tag": {
+        "color": "#8ba4b0"
+      },
+      "text.literal": {
+        "color": "#87a987"
+      },
+      "title": {
+        "color": "#c5c9c5",
+        "font_weight": 800
+      },
+      "type": {
+        "color": "#8ea4a2"
+      },
+      "type.interface": {
+        "color": "#8ea4a2"
+      },
+      "type.super": {
+        "color": "#8ea4a2"
+      },
+      "variable": {
+        "color": "#c5c9c5"
+      },
+      "variable.member": {
+        "color": "#c5c9c5"
+      },
+      "variable.parameter": {
+        "color": "#9e9b93",
+        "font_style": "italic"
+      },
+      "variable.special": {
+        "color": "#a292a3",
+        "font_style": "italic"
+      },
+      "variant": {
+        "color": "#e82424"
+      }
+    }
+  }
+}

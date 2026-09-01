@@ -1,5 +1,9 @@
 import { DEFAULT_THEMES, DIFFS_TAG_NAME } from '../constants';
-import { getSharedHighlighter } from '../highlighter/shared_highlighter';
+import {
+  getCustomHighlighter,
+  loadHighlighter,
+  type RenderersHighlighter,
+} from '../highlighter/resolve_highlighter';
 import {
   dequeueRender,
   queueRender,
@@ -9,8 +13,10 @@ import type {
   AppliedThemeStyleCache,
   BaseCodeOptions,
   DiffsHighlighter,
+  DiffsThemeNames,
   SupportedLanguages,
   ThemedToken,
+  ThemesType,
   ThemeTypes,
 } from '../types';
 import { createSpanFromToken } from '../utils/createSpanNodeFromToken';
@@ -38,10 +44,16 @@ export interface FileStreamOptions extends BaseCodeOptions {
 
 let instanceId = -1;
 
+// Chunk-coalescing bounds for custom tokenizer streams: hold pending text
+// until a frame passed since the last tokenizer push, unless this many bytes
+// already piled up (a synchronous burst should not wait on wall time).
+const STREAM_COALESCE_MS = 16;
+const STREAM_COALESCE_BYTES = 4096;
+
 export class FileStream {
   readonly __id: string = `file-stream:${++instanceId}`;
 
-  private highlighter: DiffsHighlighter | undefined;
+  private highlighter: RenderersHighlighter | undefined;
   private stream: ReadableStream<string> | undefined;
   private abortController: AbortController | undefined;
   private fileContainer: HTMLElement | undefined;
@@ -83,8 +95,8 @@ export class FileStream {
     );
   }
 
-  private async initializeHighlighter(): Promise<DiffsHighlighter> {
-    this.highlighter = await getSharedHighlighter(
+  private async initializeHighlighter(): Promise<RenderersHighlighter> {
+    this.highlighter = await loadHighlighter(
       getHighlighterOptions(this.options.lang, this.options)
     );
     return this.highlighter;
@@ -115,7 +127,7 @@ export class FileStream {
   private setupStream(
     stream: ReadableStream<string>,
     wrapper: HTMLElement,
-    highlighter: DiffsHighlighter
+    highlighter: RenderersHighlighter
   ): void {
     const {
       disableLineNumbers = false,
@@ -163,27 +175,7 @@ export class FileStream {
     this.stream
       // tokenizeTimeLimit: 0 — never trade silently-wrong token colors for
       // latency; see renderFileWithHighlighter for the full rationale.
-      .pipeThrough(
-        typeof theme === 'string'
-          ? new CodeToTokenTransformStream({
-              ...this.options,
-              theme,
-              highlighter,
-              allowRecalls: true,
-              defaultColor: false,
-              cssVariablePrefix: formatCSSVariablePrefix('token'),
-              tokenizeTimeLimit: 0,
-            })
-          : new CodeToTokenTransformStream({
-              ...this.options,
-              themes: theme,
-              highlighter,
-              allowRecalls: true,
-              defaultColor: false,
-              cssVariablePrefix: formatCSSVariablePrefix('token'),
-              tokenizeTimeLimit: 0,
-            })
-      )
+      .pipeThrough(this.createTokenStream(highlighter, theme))
       .pipeTo(
         new WritableStream({
           start(controller) {
@@ -205,6 +197,90 @@ export class FileStream {
           console.error('FileStream pipe error:', error);
         }
       });
+  }
+
+  /**
+   * The token stream for the active highlighter: the pre-existing shiki
+   * grammar-state stream (with recalls) when shiki is active, or a
+   * `CodeHighlighter.TokenizeStream` wrapper for custom highlighters.
+   */
+  private createTokenStream(
+    highlighter: RenderersHighlighter,
+    theme: DiffsThemeNames | ThemesType
+  ): TransformStream<string, ThemedToken | RecallToken> {
+    const custom = getCustomHighlighter();
+    const options = {
+      ...this.options,
+      ...(typeof theme === 'string' ? { theme } : { themes: theme }),
+      defaultColor: false as const,
+      cssVariablePrefix: formatCSSVariablePrefix('token'),
+      tokenizeTimeLimit: 0,
+    };
+    if (custom != null) {
+      // Stream over the highlighter's TokenizeStream: the same token protocol
+      // CodeToTokenTransformStream emits, minus recalls — the tokenizer holds
+      // the trailing incomplete line back until its newline (or the stream
+      // end) arrives, so no token ever needs re-emitting.
+      //
+      // Tokenizers may re-scan their whole buffer on every push (Chamele's
+      // non-TypeScript lexers currently do), which makes one push per tiny
+      // chunk quadratic over the stream.
+      // Chunks are therefore coalesced: push once a newline is pending and
+      // either a frame's worth of time passed (slow streams keep
+      // line-at-a-time latency) or enough bytes piled up (synchronous bursts
+      // tokenize in few large pushes instead of thousands of small ones).
+      const tokenizer = new custom.TokenizeStream(options);
+      let pending = '';
+      let lastPushTime = 0;
+      const enqueueCompletedLines = (
+        controller: TransformStreamDefaultController<ThemedToken>
+      ) => {
+        lastPushTime = performance.now();
+        const lines = tokenizer.pushCode(pending);
+        pending = '';
+        // every line pushCode returns was newline-terminated in the source
+        for (const line of lines) {
+          for (const token of line) {
+            controller.enqueue(token);
+          }
+          controller.enqueue({ content: '\n', offset: 0 });
+        }
+      };
+      return new TransformStream<string, ThemedToken>({
+        transform(chunk, controller) {
+          pending += chunk;
+          if (!pending.includes('\n')) {
+            return;
+          }
+          if (
+            pending.length < STREAM_COALESCE_BYTES &&
+            performance.now() - lastPushTime < STREAM_COALESCE_MS
+          ) {
+            return;
+          }
+          enqueueCompletedLines(controller);
+        },
+        flush(controller) {
+          if (pending !== '') {
+            enqueueCompletedLines(controller);
+          }
+          const lines = tokenizer.end();
+          lines.forEach((line, index) => {
+            for (const token of line) {
+              controller.enqueue(token);
+            }
+            if (index < lines.length - 1) {
+              controller.enqueue({ content: '\n', offset: 0 });
+            }
+          });
+        },
+      });
+    }
+    return new CodeToTokenTransformStream({
+      ...options,
+      highlighter: highlighter as DiffsHighlighter,
+      allowRecalls: true,
+    });
   }
 
   private queuedTokens: (ThemedToken | RecallToken)[] = [];

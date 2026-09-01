@@ -1,0 +1,120 @@
+{
+  "name": "Vitesse Light",
+  "appearance": "light",
+  "style": {
+    "background": "#ffffff",
+    "editor.background": "#ffffff",
+    "text": "#393a34",
+    "editor.foreground": "#393a34",
+    "editor.active_line.background": "#f7f7f7",
+    "editor.document_highlight.bracket_background": "#1c6b4820",
+    "search.match_background": "#e6cc7744",
+    "error": "#ab5959",
+    "warning": "#a65e2b",
+    "info": "#296aa3",
+    "hint": "#1e754f",
+    "players": [
+      {
+        "cursor": "#393a34",
+        "selection": "#22222218"
+      }
+    ],
+    "syntax": {
+      "attribute": {
+        "color": "#b07d48"
+      },
+      "boolean": {
+        "color": "#1e754f"
+      },
+      "comment": {
+        "color": "#a0ada0"
+      },
+      "comment.doc": {
+        "color": "#a0ada0"
+      },
+      "constant": {
+        "color": "#a65e2b"
+      },
+      "constructor": {
+        "color": "#1e754f"
+      },
+      "emphasis": {
+        "color": "#393a34",
+        "font_style": "italic"
+      },
+      "emphasis.strong": {
+        "color": "#393a34",
+        "font_weight": 700
+      },
+      "function": {
+        "color": "#59873a"
+      },
+      "keyword": {
+        "color": "#1e754f"
+      },
+      "label": {
+        "color": "#59873a"
+      },
+      "link_text": {
+        "color": "#b56959"
+      },
+      "link_uri": {
+        "color": "#b56959"
+      },
+      "number": {
+        "color": "#2f798a"
+      },
+      "operator": {
+        "color": "#ab5959"
+      },
+      "punctuation": {
+        "color": "#999999"
+      },
+      "punctuation.bracket": {
+        "color": "#999999"
+      },
+      "punctuation.delimiter": {
+        "color": "#999999"
+      },
+      "punctuation.list_marker": {
+        "color": "#999999"
+      },
+      "punctuation.special": {
+        "color": "#999999"
+      },
+      "string": {
+        "color": "#b56959"
+      },
+      "string.escape": {
+        "color": "#b56959"
+      },
+      "string.regex": {
+        "color": "#b56959"
+      },
+      "string.special": {
+        "color": "#b56959"
+      },
+      "string.special.symbol": {
+        "color": "#b56959"
+      },
+      "tag": {
+        "color": "#1e754f"
+      },
+      "text.literal": {
+        "color": "#b56959"
+      },
+      "title": {
+        "color": "#59873a"
+      },
+      "type": {
+        "color": "#2e8f82"
+      },
+      "variable": {
+        "color": "#b07d48"
+      },
+      "variable.special": {
+        "color": "#a65e2b"
+      }
+    }
+  }
+}

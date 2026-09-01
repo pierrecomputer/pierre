@@ -27,6 +27,41 @@ JavaScript and React components.
 pnpm add @pierre/diffs
 ```
 
+## Highlighters
+
+`@pierre/diffs` highlights with [shiki] out of the box — nothing changes for
+existing consumers. `setHighlighter` swaps the implementation used by
+subsequently created files, diffs, streams, editors, React components, and SSR
+renderers; instances that already exist keep the implementation they captured.
+
+The experimental [chamele]-backed highlighter runs its lexers in WebAssembly
+with no async grammar or theme loading. Install the optional `@pierre/chamele`
+peer dependency, then:
+
+```ts
+import { File, setHighlighter } from '@pierre/diffs';
+import { chameleHighlighter } from '@pierre/diffs/chamele';
+
+setHighlighter(chameleHighlighter);
+const file = new File(); // use the chamele highlighter
+```
+
+Pass the `shikiHighlighter` export back to `setHighlighter` to restore the
+default. Custom implementations conform to the `CodeHighlighter` interface
+exported from `@pierre/diffs`. Notes on the chamele highlighter:
+
+- Theme names map onto chamele's bundled Zed themes; register custom names with
+  `registerChameleTheme` from `@pierre/diffs/chamele`.
+- Languages without a chamele lexer render as plain text.
+- The worker pool always highlights with shiki, so a registered custom
+  highlighter routes rendering to the main thread (chamele is fast enough that
+  this is not a regression).
+- Edit mode tokenizes through chamele's incremental `LiveTokenizer` instead of
+  the TextMate incremental tokenizer.
+
+[shiki]: https://shiki.style
+[chamele]: ../chamele/README.md
+
 ## Agent skill
 
 Install the agent skill for this package with the

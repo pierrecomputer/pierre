@@ -1,0 +1,90 @@
+{
+  "name": "GitHub Dark Default",
+  "appearance": "dark",
+  "style": {
+    "background": "#0d1117",
+    "text": "#e6edf3",
+    "editor.background": "#0d1117",
+    "editor.foreground": "#e6edf3",
+    "editor.active_line.background": "#6e76811a",
+    "players": [],
+    "warning": "#fbe557",
+    "hint": "#7d8590",
+    "syntax": {
+      "boolean": {
+        "color": "#79c0ff"
+      },
+      "comment": {
+        "color": "#8b949e"
+      },
+      "comment.doc": {
+        "color": "#8b949e"
+      },
+      "constant": {
+        "color": "#79c0ff"
+      },
+      "constructor": {
+        "color": "#7ee787"
+      },
+      "emphasis": {
+        "color": "#e6edf3",
+        "font_style": "italic"
+      },
+      "emphasis.strong": {
+        "color": "#e6edf3",
+        "font_weight": 700
+      },
+      "function": {
+        "color": "#d2a8ff"
+      },
+      "keyword": {
+        "color": "#ff7b72"
+      },
+      "label": {
+        "color": "#ffa657"
+      },
+      "link_text": {
+        "color": "#a5d6ff"
+      },
+      "link_uri": {
+        "color": "#a5d6ff"
+      },
+      "number": {
+        "color": "#79c0ff"
+      },
+      "string": {
+        "color": "#a5d6ff"
+      },
+      "string.escape": {
+        "color": "#ff7b72"
+      },
+      "string.regex": {
+        "color": "#a5d6ff"
+      },
+      "string.special": {
+        "color": "#a5d6ff"
+      },
+      "string.special.symbol": {
+        "color": "#a5d6ff"
+      },
+      "tag": {
+        "color": "#7ee787"
+      },
+      "text.literal": {
+        "color": "#a5d6ff"
+      },
+      "title": {
+        "color": "#ffa657"
+      },
+      "variable": {
+        "color": "#e6edf3"
+      },
+      "type": {
+        "color": "#79c0ff"
+      },
+      "variable.special": {
+        "color": "#79c0ff"
+      }
+    }
+  }
+}

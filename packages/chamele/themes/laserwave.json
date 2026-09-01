@@ -1,0 +1,95 @@
+{
+  "name": "LaserWave",
+  "appearance": "dark",
+  "style": {
+    "background": "#27212e",
+    "editor.background": "#27212e",
+    "text": "#ffffff",
+    "editor.foreground": "#ffffff",
+    "search.match_background": "#40b4c48c",
+    "error": "#ff3e7b",
+    "players": [
+      {
+        "cursor": "#ffffff",
+        "selection": "#eb64b927"
+      }
+    ],
+    "syntax": {
+      "attribute": {
+        "color": "#EB64B9"
+      },
+      "boolean": {
+        "color": "#ffe261"
+      },
+      "comment": {
+        "color": "#91889b"
+      },
+      "comment.doc": {
+        "color": "#91889b"
+      },
+      "constant": {
+        "color": "#ffe261"
+      },
+      "constructor": {
+        "color": "#74dfc4"
+      },
+      "emphasis": {
+        "color": "#EB64B9"
+      },
+      "emphasis.strong": {
+        "color": "#EB64B9"
+      },
+      "function": {
+        "color": "#EB64B9"
+      },
+      "keyword": {
+        "color": "#40b4c4"
+      },
+      "number": {
+        "color": "#b381c5"
+      },
+      "operator": {
+        "color": "#74dfc4"
+      },
+      "punctuation": {
+        "color": "#7b6995"
+      },
+      "punctuation.bracket": {
+        "color": "#7b6995"
+      },
+      "punctuation.delimiter": {
+        "color": "#7b6995"
+      },
+      "punctuation.list_marker": {
+        "color": "#7b6995"
+      },
+      "punctuation.special": {
+        "color": "#7b6995"
+      },
+      "string": {
+        "color": "#b4dce7"
+      },
+      "string.escape": {
+        "color": "#b4dce7"
+      },
+      "string.regex": {
+        "color": "#b4dce7"
+      },
+      "string.special": {
+        "color": "#b4dce7"
+      },
+      "string.special.symbol": {
+        "color": "#b4dce7"
+      },
+      "tag": {
+        "color": "#74dfc4"
+      },
+      "text.literal": {
+        "color": "#b4dce7"
+      },
+      "type": {
+        "color": "#a96bc0"
+      }
+    }
+  }
+}

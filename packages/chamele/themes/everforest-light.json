@@ -1,0 +1,166 @@
+{
+  "name": "Everforest Light",
+  "appearance": "light",
+  "style": {
+    "background": "#efebd4",
+    "text": "#5c6a72",
+    "editor.background": "#fdf6e3",
+    "editor.foreground": "#5c6a72",
+    "editor.active_line.background": "#f4f0d9",
+    "editor.document_highlight.bracket_background": "#e6e2cc",
+    "search.match_background": "#e6e2cc",
+    "players": [
+      {
+        "background": "#e66868",
+        "cursor": "#e66868",
+        "selection": "#eaedc8"
+      }
+    ],
+    "error": "#f85552",
+    "warning": "#dfa000",
+    "info": "#8da101",
+    "hint": "#df69ba",
+    "syntax": {
+      "attribute": {
+        "color": "#df69ba"
+      },
+      "boolean": {
+        "color": "#df69ba"
+      },
+      "comment": {
+        "color": "#939f91"
+      },
+      "comment.doc": {
+        "color": "#829181"
+      },
+      "constant": {
+        "color": "#5c6a72"
+      },
+      "constant.builtin": {
+        "color": "#35a77c"
+      },
+      "constructor": {
+        "color": "#8da101"
+      },
+      "embedded": {
+        "color": "#8da101"
+      },
+      "emphasis": {
+        "color": "#35a77c",
+        "font_style": "italic"
+      },
+      "emphasis.strong": {
+        "color": "#35a77c",
+        "font_weight": 600
+      },
+      "enum": {
+        "color": "#dfa000"
+      },
+      "function": {
+        "color": "#8da101"
+      },
+      "function.builtin": {
+        "color": "#8da101"
+      },
+      "hint": {
+        "color": "#df69ba"
+      },
+      "keyword": {
+        "color": "#f85552"
+      },
+      "label": {
+        "color": "#f57d26"
+      },
+      "link_text": {
+        "color": "#dfa000"
+      },
+      "link_uri": {
+        "color": "#3a94c5"
+      },
+      "namespace": {
+        "color": "#dfa000"
+      },
+      "number": {
+        "color": "#df69ba"
+      },
+      "operator": {
+        "color": "#f57d26"
+      },
+      "predictive": {
+        "color": "#939f91"
+      },
+      "preproc": {
+        "color": "#df69ba"
+      },
+      "primary": {
+        "color": "#5c6a72"
+      },
+      "property": {
+        "color": "#3a94c5"
+      },
+      "punctuation": {
+        "color": "#939f91"
+      },
+      "punctuation.bracket": {
+        "color": "#5c6a72"
+      },
+      "punctuation.delimiter": {
+        "color": "#939f91"
+      },
+      "punctuation.list_marker": {
+        "color": "#3a94c5"
+      },
+      "punctuation.markup": {
+        "color": "#939f91"
+      },
+      "punctuation.special": {
+        "color": "#3a94c5"
+      },
+      "selector": {
+        "color": "#f85552"
+      },
+      "selector.pseudo": {
+        "color": "#df69ba"
+      },
+      "string": {
+        "color": "#35a77c"
+      },
+      "string.escape": {
+        "color": "#8da101"
+      },
+      "string.regex": {
+        "color": "#8da101"
+      },
+      "string.special": {
+        "color": "#dfa000"
+      },
+      "string.special.symbol": {
+        "color": "#5c6a72"
+      },
+      "tag": {
+        "color": "#f57d26"
+      },
+      "tag.doctype": {
+        "color": "#df69ba"
+      },
+      "text.literal": {
+        "color": "#8da101"
+      },
+      "title": {
+        "color": "#f57d26"
+      },
+      "type": {
+        "color": "#dfa000"
+      },
+      "variable": {
+        "color": "#5c6a72"
+      },
+      "variable.special": {
+        "color": "#df69ba"
+      },
+      "variant": {
+        "color": "#5c6a72"
+      }
+    }
+  }
+}

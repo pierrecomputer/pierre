@@ -1,0 +1,86 @@
+{
+  "name": "Material Theme Lighter",
+  "appearance": "light",
+  "style": {
+    "background": "#FAFAFA",
+    "text": "#90A4AE",
+    "editor.background": "#FAFAFA",
+    "editor.foreground": "#90A4AE",
+    "editor.active_line.background": "#CCD7DA50",
+    "players": [],
+    "error": "#E5393570",
+    "warning": "#E2931D70",
+    "info": "#6182B870",
+    "hint": "#969696ff",
+    "syntax": {
+      "attribute": {
+        "color": "#9C3EDA"
+      },
+      "comment": {
+        "color": "#90A4AE",
+        "font_style": "italic"
+      },
+      "comment.doc": {
+        "color": "#90A4AE",
+        "font_style": "italic"
+      },
+      "constructor": {
+        "color": "#E53935"
+      },
+      "emphasis": {
+        "color": "#E53935",
+        "font_style": "italic"
+      },
+      "emphasis.strong": {
+        "color": "#E53935",
+        "font_weight": 700
+      },
+      "function": {
+        "color": "#6182B8"
+      },
+      "keyword": {
+        "color": "#39ADB5",
+        "font_style": "italic"
+      },
+      "number": {
+        "color": "#F76D47"
+      },
+      "punctuation": {
+        "color": "#39ADB5"
+      },
+      "punctuation.bracket": {
+        "color": "#39ADB5"
+      },
+      "punctuation.delimiter": {
+        "color": "#39ADB5"
+      },
+      "punctuation.list_marker": {
+        "color": "#39ADB5"
+      },
+      "punctuation.special": {
+        "color": "#39ADB5"
+      },
+      "string": {
+        "color": "#91B859"
+      },
+      "string.escape": {
+        "color": "#91B859"
+      },
+      "string.regex": {
+        "color": "#91B859"
+      },
+      "string.special": {
+        "color": "#91B859"
+      },
+      "string.special.symbol": {
+        "color": "#91B859"
+      },
+      "tag": {
+        "color": "#E53935"
+      },
+      "text.literal": {
+        "color": "#91B859"
+      }
+    }
+  }
+}

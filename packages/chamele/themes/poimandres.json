@@ -1,0 +1,125 @@
+{
+  "name": "Poimandres",
+  "appearance": "dark",
+  "style": {
+    "background": "#1b1e28",
+    "editor.background": "#1b1e28",
+    "text": "#a6accd",
+    "editor.foreground": "#a6accd",
+    "editor.active_line.background": "#717cb425",
+    "editor.document_highlight.bracket_background": "#00000000",
+    "search.match_background": "#ADD7FF40",
+    "error": "#d0679d",
+    "warning": "#fffac2",
+    "info": "#ADD7FF",
+    "hint": "#7390AAb3",
+    "players": [
+      {
+        "cursor": "#a6accd",
+        "selection": "#717cb425"
+      }
+    ],
+    "syntax": {
+      "attribute": {
+        "color": "#91B4D5",
+        "font_style": "italic"
+      },
+      "boolean": {
+        "color": "#5DE4c7"
+      },
+      "comment": {
+        "color": "#767c9dB0",
+        "font_style": "italic"
+      },
+      "comment.doc": {
+        "color": "#767c9dB0",
+        "font_style": "italic"
+      },
+      "constant": {
+        "color": "#5DE4c7"
+      },
+      "constructor": {
+        "color": "#5DE4c7"
+      },
+      "emphasis": {
+        "color": "#7390AA",
+        "font_style": "italic"
+      },
+      "emphasis.strong": {
+        "color": "#7390AA",
+        "font_weight": 700
+      },
+      "function": {
+        "color": "#ADD7FF"
+      },
+      "keyword": {
+        "color": "#a6accd"
+      },
+      "label": {
+        "color": "#91B4D5"
+      },
+      "link_text": {
+        "color": "#5DE4c7"
+      },
+      "link_uri": {
+        "color": "#5DE4c7"
+      },
+      "number": {
+        "color": "#5DE4c7"
+      },
+      "operator": {
+        "color": "#91B4D5"
+      },
+      "punctuation": {
+        "color": "#a6accd"
+      },
+      "punctuation.bracket": {
+        "color": "#a6accd"
+      },
+      "punctuation.delimiter": {
+        "color": "#a6accd"
+      },
+      "punctuation.list_marker": {
+        "color": "#a6accd"
+      },
+      "punctuation.special": {
+        "color": "#a6accd"
+      },
+      "string": {
+        "color": "#5DE4c7"
+      },
+      "string.escape": {
+        "color": "#5DE4c7"
+      },
+      "string.regex": {
+        "color": "#5DE4c7"
+      },
+      "string.special": {
+        "color": "#5DE4c7"
+      },
+      "string.special.symbol": {
+        "color": "#5DE4c7"
+      },
+      "tag": {
+        "color": "#5DE4c7"
+      },
+      "text.literal": {
+        "color": "#5DE4c7"
+      },
+      "title": {
+        "color": "#91B4D5"
+      },
+      "type": {
+        "color": "#a6accdC0"
+      },
+      "variable": {
+        "color": "#ADD7FF",
+        "font_style": "italic"
+      },
+      "variable.special": {
+        "color": "#ADD7FF",
+        "font_style": "italic"
+      }
+    }
+  }
+}

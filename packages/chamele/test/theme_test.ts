@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { bundledThemesInfo } from 'shiki';
 
+import type { Theme } from '../lib/index';
 import tokenTypes from '../lib/token-types';
 import * as themes from '../themes/index';
 import { checkInvariants, loadLang } from './util';
@@ -27,8 +29,53 @@ void test('token types: syntax captures are sorted and complete', () => {
     assert.ok(syntax.includes(name));
 });
 
-void test('bundled themes: exports every JSON theme', () => {
-  assert.equal(Object.keys(themes).length, 71);
+void test('bundled themes: matches Shiki names and metadata', () => {
+  const camel = (name: string) =>
+    name.replace(/-([a-z\d])/g, (_, part: string) => part.toUpperCase());
+  const shikiThemeNames = bundledThemesInfo.map(({ id }) => id);
+  const pierreExports = [
+    'pierreDark',
+    'pierreDarkProtanopia',
+    'pierreDarkSoft',
+    'pierreDarkTritanopia',
+    'pierreLight',
+    'pierreLightProtanopia',
+    'pierreLightSoft',
+    'pierreLightTritanopia',
+  ];
+  assert.deepEqual(
+    Object.entries(themes)
+      .filter(
+        ([key, value]) =>
+          key !== 'cssVariables' &&
+          value != null &&
+          typeof value === 'object' &&
+          !Array.isArray(value) &&
+          'name' in value
+      )
+      .map(([key]) => key)
+      .sort(),
+    [...shikiThemeNames.map(camel), ...pierreExports].sort()
+  );
+  for (const { id, displayName, type } of bundledThemesInfo) {
+    const theme = themes[camel(id) as keyof typeof themes] as Theme;
+    assert.equal(theme.name, displayName, id);
+    assert.equal(theme.appearance, type, id);
+    assert.ok(Object.keys(theme.style.syntax ?? {}).length > 0, id);
+    assert.match(
+      theme.style['editor.background'] ?? theme.style.background ?? '',
+      /^#[a-f\d]{6}(?:[a-f\d]{2})?$/i,
+      id
+    );
+    assert.match(
+      theme.style['editor.foreground'] ??
+        theme.style.text ??
+        theme.style.foreground ??
+        '',
+      /^#[a-f\d]{6}(?:[a-f\d]{2})?$/i,
+      id
+    );
+  }
   assert.deepEqual(
     [
       pierreLight,

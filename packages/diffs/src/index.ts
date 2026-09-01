@@ -14,6 +14,21 @@ export * from './components/Virtualizer';
 export * from './constants';
 export type { EditorFocusOptions } from './editor/editor';
 export type { Marker, MarkerSeverity } from './editor/marker';
+export {
+  type CodeHighlighter,
+  type CodeHighlighterOptions,
+  type CodeLiveLineChange,
+  type CodeLiveTokenizer,
+  type CodeLiveTokenizerOptions,
+  type CodeLiveTokenizerUpdate,
+  type CodeLiveUpdateOptions,
+  type CodeTextEdit,
+  type CodeTextPosition,
+  type CodeTokenizeStream,
+  isBuiltinShikiHighlighter,
+  type RenderHighlighter,
+  setHighlighter,
+} from './highlighter/code_highlighter';
 export * from './highlighter/languages/areLanguagesAttached';
 export * from './highlighter/languages/attachResolvedLanguages';
 export * from './highlighter/languages/cleanUpResolvedLanguages';
@@ -24,7 +39,19 @@ export * from './highlighter/languages/hasResolvedLanguages';
 export * from './highlighter/languages/registerCustomLanguage';
 export * from './highlighter/languages/resolveLanguage';
 export * from './highlighter/languages/resolveLanguages';
+export {
+  areHighlighterThemesReady,
+  areHighlighterThemesResolved,
+  getCodeHighlighter,
+  getCustomHighlighter,
+  getHighlighterIfReady,
+  isHighlighterLanguageReady,
+  loadHighlighter,
+  type RenderersHighlighter,
+  resolveRenderHighlighter,
+} from './highlighter/resolve_highlighter';
 export * from './highlighter/shared_highlighter';
+export { shikiHighlighter } from './highlighter/shiki_highlighter';
 export * from './highlighter/themes/areThemesAttached';
 export * from './highlighter/themes/attachResolvedThemes';
 export * from './highlighter/themes/cleanUpResolvedThemes';

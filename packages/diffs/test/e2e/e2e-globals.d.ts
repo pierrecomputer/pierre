@@ -64,6 +64,11 @@ interface Window {
   __themeReady?: boolean;
   __selectionActionReady?: boolean;
   __selectionActionEdgesReady?: boolean;
+  __chameleReady?: boolean;
+
+  // chamele.html worker-pool routing flags captured around setHighlighter.
+  __poolWorkingWithShiki?: boolean;
+  __poolWorkingWithChamele?: boolean;
 
   // Interaction logs populated by fixture callbacks.
   __editorEvents?: string[];
