@@ -180,6 +180,11 @@ export function Header({ onMobileMenuToggle, className }: HeaderProps) {
           <NavLink href="/docs" basePath={product.basePath}>
             Docs
           </NavLink>
+          {product.id === 'diffs' && (
+            <NavLink href="/chamele" basePath={product.basePath}>
+              Chamele
+            </NavLink>
+          )}
           {OTHER_PRODUCT_IDS.filter((id) => id !== product.id).map((id) => (
             <Button
               key={id}

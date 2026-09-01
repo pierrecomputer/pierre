@@ -36,6 +36,9 @@ export default function Footer() {
                 <Link href="/docs" className={linkClass}>
                   Docs
                 </Link>
+                <Link href="/chamele" className={linkClass}>
+                  Chamele
+                </Link>
                 <Link href="/playground" className={linkClass}>
                   Playground
                 </Link>
@@ -53,6 +56,9 @@ export default function Footer() {
                 </a>
                 <a href={`${diffsExternal}/docs`} className={linkClass}>
                   Docs
+                </a>
+                <a href={`${diffsExternal}/chamele`} className={linkClass}>
+                  Chamele
                 </a>
                 <a href={`${diffsExternal}/playground`} className={linkClass}>
                   Playground
