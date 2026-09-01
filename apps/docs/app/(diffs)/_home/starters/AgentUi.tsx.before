@@ -196,7 +196,9 @@ export function AgentUi({
     activeTargetRef.current = activePath;
   }, [activePath]);
 
-  const editorOptions = useMemo<EditorOptions<'file-diff'>>(
+  const editorOptions = useMemo<
+    EditorOptions<'file-diff', undefined, undefined>
+  >(
     () => ({
       enabledSelectionAction: true,
       renderSelectionAction({ close, getSelectionText, replaceSelectionText }) {

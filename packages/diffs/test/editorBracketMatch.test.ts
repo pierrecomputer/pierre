@@ -40,7 +40,7 @@ interface BracketMatchFixture {
 
 async function createBracketMatchFixture(
   contents: string,
-  editorOptions: EditorOptions<'file', undefined> = {}
+  editorOptions: EditorOptions<'file', undefined, undefined> = {}
 ): Promise<BracketMatchFixture> {
   const dom = installDom();
   const fileContainer = document.createElement('div');

@@ -112,7 +112,11 @@ object whose `onAttach` callback targets the first editable row with a visible
 top edge:
 
 ```tsx
-const editorOptions: EditorOptions<'file' | 'file-diff', ThreadMetadata> = {
+const editorOptions: EditorOptions<
+  'file' | 'file-diff',
+  ThreadMetadata,
+  undefined
+> = {
   onAttach(editor) {
     editor.focus({ lineNumber: 'first-visible', preventScroll: true });
   },

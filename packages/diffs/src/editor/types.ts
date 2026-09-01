@@ -39,13 +39,11 @@ export interface EditorActiveLineOptions {
 export type EditorType = 'file' | 'file-diff';
 
 /** Creates an editor whose editor type matches the supplied options. */
-export type EditorFactory<LAnnotation = undefined, LCaret = undefined> = <
-  EType extends EditorType,
->(
+export type EditorFactory<LAnnotation, Caret> = <EType extends EditorType>(
   editorType: EType,
-  options: EditorOptions<EType, LAnnotation, LCaret>,
+  options: EditorOptions<EType, LAnnotation, Caret>,
   editStateKey?: string
-) => Editor<EType, LAnnotation, LCaret>;
+) => Editor<EType, LAnnotation, Caret>;
 
 /**
  * Position in a text document expressed as zero-based line and character offset.
@@ -145,13 +143,14 @@ export type EditorLineAnnotation<
 
 /** The document and normalized edits reported after an editor change. */
 export type EditorChangeEvent<
-  EType extends EditorType = EditorType,
-  LAnnotation = unknown,
+  EType extends EditorType,
+  LAnnotation,
+  Caret,
 > = EType extends EditorType
   ? {
       changes: EditorChange[];
       file: FileContents;
-      editor: Editor<EType, LAnnotation>;
+      editor: Editor<EType, LAnnotation, Caret>;
       lineAnnotations?: EditorLineAnnotation<EType, LAnnotation>[];
     }
   : never;
@@ -213,9 +212,9 @@ export interface EditorViewState {
  * `originalLineAnnotations` is the last collection provided to the component
  * externally, which a revert keeps.
  */
-export interface FileEditCompleteEvent<LAnnotation> {
+export interface FileEditCompleteEvent<LAnnotation, Caret> {
   file: FileContents;
-  editor: Editor<'file', LAnnotation>;
+  editor: Editor<'file', LAnnotation, Caret>;
   lineAnnotations: LineAnnotation<LAnnotation>[] | undefined;
   originalFile: FileContents;
   originalLineAnnotations: LineAnnotation<LAnnotation>[];
@@ -241,9 +240,9 @@ export interface FileEditCompleteEvent<LAnnotation> {
  * `originalLineAnnotations` is the last collection provided to the component
  * externally, which a revert keeps.
  */
-export interface FileDiffEditCompleteEvent<LAnnotation> {
+export interface FileDiffEditCompleteEvent<LAnnotation, Caret> {
   fileDiff: FileDiffMetadata;
-  editor: Editor<'file-diff', LAnnotation>;
+  editor: Editor<'file-diff', LAnnotation, Caret>;
   originalFileDiff: FileDiffMetadata;
   oldFile: FileContents | null;
   newFile: FileContents | null;
@@ -256,11 +255,12 @@ export interface FileDiffEditCompleteEvent<LAnnotation> {
  * the corresponding component completion callback.
  */
 export type EditorEditCompleteEvent<
-  EType extends EditorType = EditorType,
-  LAnnotation = unknown,
+  EType extends EditorType,
+  LAnnotation,
+  Caret,
 > = EType extends 'file'
-  ? FileEditCompleteEvent<LAnnotation>
-  : FileDiffEditCompleteEvent<LAnnotation>;
+  ? FileEditCompleteEvent<LAnnotation, Caret>
+  : FileDiffEditCompleteEvent<LAnnotation, Caret>;
 
 export type EditHistoryCoalescingMode = 'insert' | 'backspace' | 'delete';
 

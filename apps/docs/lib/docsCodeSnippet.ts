@@ -2,7 +2,7 @@ import type { PreloadFileOptions } from '@pierre/diffs/ssr';
 
 import { CustomScrollbarCSS } from '@/components/CustomScrollbarCSS';
 
-type SnippetOptions = PreloadFileOptions<undefined>['options'];
+type SnippetOptions = PreloadFileOptions<undefined, undefined>['options'];
 
 const SHARED_OPTIONS = {
   theme: { dark: 'pierre-dark', light: 'pierre-light' },
@@ -19,7 +19,7 @@ export function docsCodeSnippet(
   name: string,
   contents: string,
   optionOverrides?: Partial<SnippetOptions>
-): PreloadFileOptions<undefined> {
+): PreloadFileOptions<undefined, undefined> {
   return {
     file: { name, contents },
     options:

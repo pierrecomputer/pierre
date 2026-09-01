@@ -54,7 +54,7 @@ interface SelectionActionFixture {
 
 async function createSelectionActionFixture(
   contents: string,
-  editorOptions: EditorOptions<'file', undefined>,
+  editorOptions: EditorOptions<'file', undefined, undefined>,
   renderRange?: RenderRange
 ): Promise<SelectionActionFixture> {
   const dom = installDom();

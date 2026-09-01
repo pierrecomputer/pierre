@@ -7,8 +7,8 @@ import { DocsCodeExample } from '@/components/docs/DocsCodeExample';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 
 interface AcceptRejectTabsProps {
-  diffAcceptReject: PreloadedFileResult<undefined>;
-  diffAcceptRejectReact: PreloadedFileResult<undefined>;
+  diffAcceptReject: PreloadedFileResult<undefined, undefined>;
+  diffAcceptRejectReact: PreloadedFileResult<undefined, undefined>;
 }
 
 export function AcceptRejectTabs({

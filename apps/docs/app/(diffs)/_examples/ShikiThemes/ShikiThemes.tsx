@@ -28,7 +28,7 @@ type LightThemeName = string;
 type DarkThemeName = string;
 
 interface ShikiThemesProps {
-  prerenderedDiff: PreloadMultiFileDiffResult<undefined>;
+  prerenderedDiff: PreloadMultiFileDiffResult<undefined, undefined>;
 }
 
 export function ShikiThemes({

@@ -19,15 +19,15 @@ export type {
   FileDiffMetadata,
 };
 
-export interface FileDiffProps<
+export interface FileDiffProps<LAnnotation, Caret> extends DiffBasePropsReact<
   LAnnotation,
-  LCaret = undefined,
-> extends DiffBasePropsReact<LAnnotation, LCaret> {
+  Caret
+> {
   fileDiff: FileDiffMetadata;
   disableWorkerPool?: boolean;
 }
 
-export function FileDiff<LAnnotation = undefined, LCaret = undefined>({
+export function FileDiff<LAnnotation = undefined, Caret = undefined>({
   fileDiff,
   options,
   editorOptions,
@@ -48,7 +48,7 @@ export function FileDiff<LAnnotation = undefined, LCaret = undefined>({
   edit = false,
   onEditChange,
   onEditComplete,
-}: FileDiffProps<LAnnotation, LCaret>): React.JSX.Element {
+}: FileDiffProps<LAnnotation, Caret>): React.JSX.Element {
   const { ref, getHoveredLine, getAnnotationSlotName } = useFileDiffInstance({
     fileDiff,
     options,

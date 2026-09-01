@@ -61,7 +61,7 @@ describe('CodeView partial hydration', () => {
     const { oldFile, newFile, partial } = createPartialChange();
     const loadedContents = { oldFile, newFile };
     const deferred = createDeferred<typeof loadedContents>();
-    const item: CodeViewItem = {
+    const item: CodeViewItem<undefined> = {
       id: 'diff:partial.ts',
       type: 'diff',
       fileDiff: partial,

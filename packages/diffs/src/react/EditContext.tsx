@@ -9,26 +9,26 @@ import { useStableCallback } from './utils/useStableCallback';
 
 export type { EditorFactory } from '../edit';
 
-export interface EditProviderProps<LAnnotation, LCaret = undefined> {
+export interface EditProviderProps<LAnnotation, Caret> {
   /** Combines shared defaults with the supplied per-surface options. */
-  createEditor: EditorFactory<LAnnotation, LCaret>;
+  createEditor: EditorFactory<LAnnotation, Caret>;
 }
 
 export const EditContext: Context<EditorFactory<any, any> | undefined> =
   createContext<EditorFactory<any, any> | undefined>(undefined);
 
-export function EditProvider<LAnnotation, LCaret = undefined>({
+export function EditProvider<LAnnotation = undefined, Caret = undefined>({
   children,
   createEditor,
 }: PropsWithChildren<
-  EditProviderProps<LAnnotation, LCaret>
+  EditProviderProps<LAnnotation, Caret>
 >): React.JSX.Element {
   const stableCreateEditor = useStableCallback(
     <EType extends EditorType>(
       editorType: EType,
-      options: EditorOptions<EType, LAnnotation, LCaret>,
+      options: EditorOptions<EType, LAnnotation, Caret>,
       editStateKey?: string
-    ): Editor<EType, LAnnotation, LCaret> =>
+    ): Editor<EType, LAnnotation, Caret> =>
       createEditor(editorType, options, editStateKey)
   );
   return (
@@ -38,8 +38,8 @@ export function EditProvider<LAnnotation, LCaret = undefined>({
   );
 }
 
-export function useCreateEditor<LAnnotation, LCaret = undefined>():
-  | EditorFactory<LAnnotation, LCaret>
+export function useCreateEditor<LAnnotation, Caret>():
+  | EditorFactory<LAnnotation, Caret>
   | undefined {
   return useContext(EditContext);
 }

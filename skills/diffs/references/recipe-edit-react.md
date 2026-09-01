@@ -42,12 +42,12 @@ const initialNewFile: FileContents = {
   name: 'src/value.ts',
   contents: 'export const value = 2;',
 };
-const diffOptions: FileDiffOptions<undefined> = {
+const diffOptions: FileDiffOptions<undefined, undefined> = {
   theme: { light: 'pierre-light', dark: 'pierre-dark' },
   diffStyle: 'split',
 };
 
-const createEditor: EditorFactory = (
+const createEditor: EditorFactory<undefined, undefined> = (
   editorType,
   options,
   editStateKey?: string
@@ -57,7 +57,9 @@ export function EditableDiff() {
   const [edit, setEdit] = useState(false);
   const [newFile, setNewFile] = useState(initialNewFile);
   const editorRef = useRef<Editor<'file-diff'> | null>(null);
-  const editorOptions = useMemo<EditorOptions<'file-diff'>>(
+  const editorOptions = useMemo<
+    EditorOptions<'file-diff', undefined, undefined>
+  >(
     () => ({
       onAttach(editor) {
         editorRef.current = editor;
@@ -70,11 +72,15 @@ export function EditableDiff() {
     setEdit((value) => !value);
   }
 
-  function handleEditChange(event: EditorChangeEvent<'file-diff', undefined>) {
+  function handleEditChange(
+    event: EditorChangeEvent<'file-diff', undefined, undefined>
+  ) {
     saveDraft(event.file);
   }
 
-  function handleEditComplete(event: FileDiffEditCompleteEvent<undefined>) {
+  function handleEditComplete(
+    event: FileDiffEditCompleteEvent<undefined, undefined>
+  ) {
     if (event.newFile != null) {
       setNewFile(event.newFile);
     }

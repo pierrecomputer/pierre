@@ -7,7 +7,7 @@ import { useEffect, useMemo, useRef } from 'react';
 
 interface FindDemoProps {
   // Server-preloaded, highlighted File; hydrating from it avoids a highlight flash on load.
-  prerenderedFile: PreloadedFileResult<undefined>;
+  prerenderedFile: PreloadedFileResult<undefined, undefined>;
 }
 
 // Custom element the File renders into; its shadow DOM is open, so we can reach in.
@@ -120,7 +120,7 @@ export function FindDemo({ prerenderedFile }: FindDemoProps) {
     };
   }, []);
 
-  const editorOptions = useMemo<EditorOptions<'file'>>(
+  const editorOptions = useMemo<EditorOptions<'file', undefined, undefined>>(
     () => ({
       onAttach(editor) {
         editorRef.current = editor;

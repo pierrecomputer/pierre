@@ -8,7 +8,10 @@ const options = {
   unsafeCSS: CustomScrollbarCSS,
 } as const;
 
-export const REACT_API_POST_RENDER_LIFECYCLE: PreloadFileOptions<undefined> = {
+export const REACT_API_POST_RENDER_LIFECYCLE: PreloadFileOptions<
+  undefined,
+  undefined
+> = {
   file: {
     name: 'post_render_lifecycle.tsx',
     contents: `import type {
@@ -25,7 +28,7 @@ export function DiffWithRenderLifecycle({
 }: {
   fileDiff: FileDiffMetadata;
 }) {
-  const fileDiffOptions = useMemo<FileDiffOptions<undefined>>(
+  const fileDiffOptions = useMemo<FileDiffOptions<undefined, undefined>>(
     () => ({
       onPostRender(node, _instance, phase) {
         if (phase === 'mount') {
@@ -87,7 +90,10 @@ function containsSelectionNode(root: Node, node: Node | null) {
   options,
 };
 
-export const REACT_API_SHARED_DIFF_OPTIONS: PreloadFileOptions<undefined> = {
+export const REACT_API_SHARED_DIFF_OPTIONS: PreloadFileOptions<
+  undefined,
+  undefined
+> = {
   file: {
     name: 'shared_diff_options.tsx',
     contents: `// ============================================================
@@ -352,7 +358,10 @@ interface DiffOptions {
   options,
 };
 
-export const REACT_API_LOAD_DIFF_FILES: PreloadFileOptions<undefined> = {
+export const REACT_API_LOAD_DIFF_FILES: PreloadFileOptions<
+  undefined,
+  undefined
+> = {
   file: {
     name: 'load_diff_files.tsx',
     contents: `import {
@@ -371,7 +380,7 @@ if (fileDiff == null) {
 }
 
 export function ReviewDiff() {
-  const fileDiffOptions = useMemo<FileDiffOptions<undefined>>(
+  const fileDiffOptions = useMemo<FileDiffOptions<undefined, undefined>>(
     () => ({
       async loadDiffFiles(fileDiff): Promise<FileDiffLoadedFiles> {
         const response = await fetch(
@@ -392,11 +401,13 @@ export function ReviewDiff() {
   options,
 };
 
-export const REACT_API_SHARED_DIFF_RENDER_PROPS: PreloadFileOptions<undefined> =
-  {
-    file: {
-      name: 'shared_diff_render_props.tsx',
-      contents: `// ============================================================
+export const REACT_API_SHARED_DIFF_RENDER_PROPS: PreloadFileOptions<
+  undefined,
+  undefined
+> = {
+  file: {
+    name: 'shared_diff_render_props.tsx',
+    contents: `// ============================================================
 // SHARED RENDER PROPS FOR DIFF COMPONENTS
 // ============================================================
 // These props are shared by MultiFileDiff, PatchDiff, and FileDiff.
@@ -545,11 +556,14 @@ const lineAnnotations: DiffLineAnnotation<ThreadMetadata>[] = [
   // See the SSR section for details
   prerenderedHTML={htmlFromServer}
 />`,
-    },
-    options,
-  };
+  },
+  options,
+};
 
-export const REACT_API_MULTI_FILE_DIFF: PreloadFileOptions<undefined> = {
+export const REACT_API_MULTI_FILE_DIFF: PreloadFileOptions<
+  undefined,
+  undefined
+> = {
   file: {
     name: 'multi_file_diff.tsx',
     contents: `import type {
@@ -575,7 +589,7 @@ const newFile: FileContents = {
 };
 
 export function MyDiff() {
-  const fileDiffOptions = useMemo<FileDiffOptions<undefined>>(
+  const fileDiffOptions = useMemo<FileDiffOptions<undefined, undefined>>(
     () => ({
       theme: { dark: 'pierre-dark', light: 'pierre-light' },
       diffStyle: 'split',
@@ -604,7 +618,7 @@ export function MyDiff() {
   options,
 };
 
-export const REACT_API_PATCH_DIFF: PreloadFileOptions<undefined> = {
+export const REACT_API_PATCH_DIFF: PreloadFileOptions<undefined, undefined> = {
   file: {
     name: 'patch_diff.tsx',
     contents: `import type { FileDiffOptions } from '@pierre/diffs';
@@ -623,7 +637,7 @@ const patch = \`diff --git a/example.ts b/example.ts
 \`;
 
 export function MyPatchDiff() {
-  const fileDiffOptions = useMemo<FileDiffOptions<undefined>>(
+  const fileDiffOptions = useMemo<FileDiffOptions<undefined, undefined>>(
     () => ({
       theme: { dark: 'pierre-dark', light: 'pierre-light' },
       diffStyle: 'unified', // patches often look better unified
@@ -649,7 +663,7 @@ export function MyPatchDiff() {
   options,
 };
 
-export const REACT_API_FILE_DIFF: PreloadFileOptions<undefined> = {
+export const REACT_API_FILE_DIFF: PreloadFileOptions<undefined, undefined> = {
   file: {
     name: 'file_diff.tsx',
     contents: `import {
@@ -673,7 +687,7 @@ const fileDiff: FileDiffMetadata = parseDiffFromFile(
 );
 
 export function MyFileDiff() {
-  const fileDiffOptions = useMemo<FileDiffOptions<undefined>>(
+  const fileDiffOptions = useMemo<FileDiffOptions<undefined, undefined>>(
     () => ({
       theme: { dark: 'pierre-dark', light: 'pierre-light' },
       diffStyle: 'split',
@@ -699,7 +713,7 @@ export function MyFileDiff() {
   options,
 };
 
-export const REACT_API_FILE: PreloadFileOptions<undefined> = {
+export const REACT_API_FILE: PreloadFileOptions<undefined, undefined> = {
   file: {
     name: 'file.tsx',
     contents: `import type {
@@ -725,7 +739,7 @@ export { greet };\`,
 };
 
 export function CodeFile() {
-  const fileOptions = useMemo<FileOptions<undefined>>(
+  const fileOptions = useMemo<FileOptions<undefined, undefined>>(
     () => ({
       theme: { dark: 'pierre-dark', light: 'pierre-light' },
     }),
@@ -759,7 +773,10 @@ export function CodeFile() {
   options,
 };
 
-export const REACT_API_UNRESOLVED_FILE: PreloadFileOptions<undefined> = {
+export const REACT_API_UNRESOLVED_FILE: PreloadFileOptions<
+  undefined,
+  undefined
+> = {
   file: {
     name: 'unresolved_file.tsx',
     contents: `import {
@@ -821,7 +838,7 @@ export function MergeConflictPreview() {
   options,
 };
 
-export const REACT_API_CODE_VIEW: PreloadFileOptions<undefined> = {
+export const REACT_API_CODE_VIEW: PreloadFileOptions<undefined, undefined> = {
   file: {
     name: 'code_view.tsx',
     contents: `import {
@@ -870,7 +887,7 @@ const items: CodeViewItem[] = [
 const codeViewStyle = { height: 600, overflow: 'auto' } as const;
 
 export function ReviewSurface() {
-  const codeViewOptions = useMemo<CodeViewReactOptions<undefined>>(
+  const codeViewOptions = useMemo<CodeViewReactOptions<undefined, undefined>>(
     () => ({
       theme: { dark: 'pierre-dark', light: 'pierre-light' },
       stickyHeaders: true,
@@ -891,7 +908,10 @@ export function ReviewSurface() {
   options,
 };
 
-export const REACT_API_SHARED_FILE_OPTIONS: PreloadFileOptions<undefined> = {
+export const REACT_API_SHARED_FILE_OPTIONS: PreloadFileOptions<
+  undefined,
+  undefined
+> = {
   file: {
     name: 'shared_file_options.tsx',
     contents: `// ============================================================
@@ -1081,11 +1101,13 @@ interface FileOptions {
   options,
 };
 
-export const REACT_API_SHARED_FILE_RENDER_PROPS: PreloadFileOptions<undefined> =
-  {
-    file: {
-      name: 'shared_file_render_props.tsx',
-      contents: `// ============================================================
+export const REACT_API_SHARED_FILE_RENDER_PROPS: PreloadFileOptions<
+  undefined,
+  undefined
+> = {
+  file: {
+    name: 'shared_file_render_props.tsx',
+    contents: `// ============================================================
 // RENDER PROPS FOR THE FILE COMPONENT
 // ============================================================
 // These props are available on the File component.
@@ -1222,6 +1244,6 @@ const lineAnnotations: LineAnnotation<CommentMetadata>[] = [
   // See the SSR section for details
   prerenderedHTML={htmlFromServer}
 />`,
-    },
-    options,
-  };
+  },
+  options,
+};

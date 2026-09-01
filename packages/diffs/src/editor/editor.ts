@@ -246,17 +246,20 @@ type SyncRenderViewProps<
 type EditorComponent<
   EType extends EditorType,
   LAnnotation,
-> = EType extends 'file' ? File<LAnnotation> : FileDiff<LAnnotation>;
+  Caret,
+> = EType extends 'file'
+  ? File<LAnnotation, Caret>
+  : FileDiff<LAnnotation, Caret>;
 
-type EditorVirtualizedComponent<LAnnotation> =
-  | VirtualizedFile<LAnnotation>
-  | VirtualizedFileDiff<LAnnotation>;
+type EditorVirtualizedComponent<LAnnotation, Caret> =
+  | VirtualizedFile<LAnnotation, Caret>
+  | VirtualizedFileDiff<LAnnotation, Caret>;
 
 // Narrow an editor host through the virtualized components' runtime marker
 // without importing either component class as a runtime dependency.
-function isVirtualizedEditorComponent<LAnnotation>(
-  instance: EditorComponent<EditorType, LAnnotation> | undefined
-): instance is EditorVirtualizedComponent<LAnnotation> {
+function isVirtualizedEditorComponent<LAnnotation, Caret>(
+  instance: EditorComponent<EditorType, LAnnotation, Caret> | undefined
+): instance is EditorVirtualizedComponent<LAnnotation, Caret> {
   return (
     instance != null &&
     'renderType' in instance &&
@@ -264,11 +267,7 @@ function isVirtualizedEditorComponent<LAnnotation>(
   );
 }
 
-export interface EditorOptions<
-  EType extends EditorType = EditorType,
-  LAnnotation = undefined,
-  LCaret = undefined,
-> {
+export interface EditorOptions<EType extends EditorType, LAnnotation, Caret> {
   /** The maximum number of entries to keep in the undo stack. */
   historyMaxEntries?: number;
   /**
@@ -316,24 +315,26 @@ export interface EditorOptions<
   /**
    * Render an externally owned caret at its normalized document position.
    */
-  renderCaret?: (caret: EditorCaret<LCaret>) => HTMLElement;
+  renderCaret?: (caret: EditorCaret<Caret>) => HTMLElement;
   /** Callback when the editor is attached to a file. */
   onAttach?: (
-    editor: Editor<EType, LAnnotation, LCaret>,
-    fileInstance: EditorComponent<EType, LAnnotation>
+    editor: Editor<EType, LAnnotation, Caret>,
+    fileInstance: EditorComponent<EType, LAnnotation, Caret>
   ) => void;
   /**
    * Called with an `EditorChangeEvent` whenever the editor document changes.
    * Treat this as a document notification; do not feed the changes back into
    * the editor or you will create loops.
    */
-  onChange?: (event: EditorChangeEvent<EType, LAnnotation>) => void;
+  onChange?: (event: EditorChangeEvent<EType, LAnnotation, Caret>) => void;
   /**
    * Observes completion with the same frozen event sent to the component. Runs
    * before the component callback, including when the component callback is
    * missing. There is no way to accept or reject from this API.
    */
-  onComplete?: (event: EditorEditCompleteEvent<EType, LAnnotation>) => void;
+  onComplete?: (
+    event: EditorEditCompleteEvent<EType, LAnnotation, Caret>
+  ) => void;
   /** Callback when the editor gains focus. */
   onFocus?: () => void;
   /** Callback when the editor loses focus. */
@@ -370,9 +371,9 @@ const MULTI_SELECTION_CLIPBOARD_TYPE =
 export class Editor<
   EType extends EditorType = EditorType,
   LAnnotation = undefined,
-  LCaret = undefined,
+  Caret = undefined,
 > {
-  #options: EditorOptions<EType, LAnnotation, LCaret>;
+  #options: EditorOptions<EType, LAnnotation, Caret>;
   #initialState: EditorInitialState<EType, LAnnotation> | undefined;
   #editSession?: ManagedEditSession<EType, LAnnotation>;
   #metrics = new Metrics();
@@ -415,13 +416,13 @@ export class Editor<
   #contentElement?: HTMLElement;
   #overlayElement?: HTMLElement;
   #overlayElements?: Map<string, HTMLElement>;
-  #caretElements?: Map<TrackedCaret<LCaret>, HTMLElement>;
+  #caretElements?: Map<TrackedCaret<Caret>, HTMLElement>;
   #caretHighlightElements?: HTMLElement[];
   #primaryCaretElement?: HTMLElement;
   #resizeObserver?: ResizeObserver;
 
   // state
-  #fileInstance?: EditorComponent<EType, LAnnotation>;
+  #fileInstance?: EditorComponent<EType, LAnnotation, Caret>;
   // Preserves the current file/diff instance's applyDocumentChange
   // type/semantics to avoid annoying `as X` narrowing
   #applyDocumentChange?: (
@@ -448,7 +449,7 @@ export class Editor<
   // windows, where no cap is needed.
   #viewportWindowLines?: number;
   #markerRenderer?: MarkerRenderer;
-  #carets?: TrackedCaret<LCaret>[];
+  #carets?: TrackedCaret<Caret>[];
   #searchPanel?: SearchPanelWidget;
   #selectionAction?: SelectionActionWidget;
   // Programmatic ranges stay passive until the user interacts with the editor.
@@ -530,10 +531,10 @@ export class Editor<
    * @param options Configure editor behavior and lifecycle callbacks.
    * @param editStateKey Retain this editable draft and its undo/redo history
    * in memory so a later editor using the same type and key can resume them.
-  */
+   */
   constructor(
     public readonly type: EType,
-    options: EditorOptions<EType, LAnnotation, LCaret> = {},
+    options: EditorOptions<EType, LAnnotation, Caret> = {},
     editStateKey?: string
   ) {
     this.#options = options;
@@ -542,16 +543,17 @@ export class Editor<
     this.#editStateKey = editStateKey;
   }
 
-  // Quick helper to better infer the editor type
+  // Preserve the component/editor type match while keeping caret metadata
+  // opaque to components, which never read it.
   get #getTypedEditor():
-    | Editor<'file', LAnnotation, LCaret>
-    | Editor<'file-diff', LAnnotation, LCaret> {
+    | Editor<'file', LAnnotation, Caret>
+    | Editor<'file-diff', LAnnotation, Caret> {
     return this.type === 'file'
-      ? (this as Editor<'file', LAnnotation, LCaret>)
-      : (this as Editor<'file-diff', LAnnotation, LCaret>);
+      ? (this as Editor<'file', LAnnotation, Caret>)
+      : (this as Editor<'file-diff', LAnnotation, Caret>);
   }
 
-  setOptions(options: EditorOptions<EType, LAnnotation, LCaret>): void {
+  setOptions(options: EditorOptions<EType, LAnnotation, Caret>): void {
     const previousRenderCaret = this.#options.renderCaret;
     this.#options = {
       ...this.#options,
@@ -564,11 +566,13 @@ export class Editor<
     }
   }
 
-  __emitEditComplete(event: EditorEditCompleteEvent<EType, LAnnotation>): void {
+  __emitEditComplete(
+    event: EditorEditCompleteEvent<EType, LAnnotation, Caret>
+  ): void {
     this.#options.onComplete?.(event);
   }
 
-  setCarets(carets: EditorCaret<LCaret>[]): void {
+  setCarets(carets: EditorCaret<Caret>[]): void {
     const textDocument = this.#editSession?.document;
     if (textDocument === undefined) return;
     this.#caretElements?.forEach((element) => element.remove());
@@ -596,10 +600,10 @@ export class Editor<
 
   // UnresolvedFile extends FileDiff for rendering, but its conflict-specific
   // document model is not supported by Editor.
-  edit<T extends EditorComponent<EType, LAnnotation>>(
+  edit<T extends EditorComponent<EType, LAnnotation, Caret>>(
     fileInstance: T extends { readonly type: 'unresolved-file' } ? never : T
   ): () => void;
-  edit(fileInstance: EditorComponent<EType, LAnnotation>): () => void {
+  edit(fileInstance: EditorComponent<EType, LAnnotation, Caret>): () => void {
     const editor = this.#getTypedEditor;
     const previousSession = this.#editSession;
     if (this.#isRendering) {
@@ -634,7 +638,7 @@ export class Editor<
         editor.#applyDocumentChange =
           fileInstance.applyDocumentChange.bind(fileInstance);
         editor.#publishChange = (changes, file, lineAnnotations) => {
-          const event: EditorChangeEvent<'file', LAnnotation> = {
+          const event: EditorChangeEvent<'file', LAnnotation, Caret> = {
             changes,
             file,
             editor,
@@ -658,7 +662,7 @@ export class Editor<
         editor.#applyDocumentChange =
           fileInstance.applyDocumentChange.bind(fileInstance);
         editor.#publishChange = (changes, file, lineAnnotations) => {
-          const event: EditorChangeEvent<'file-diff', LAnnotation> = {
+          const event: EditorChangeEvent<'file-diff', LAnnotation, Caret> = {
             changes,
             file,
             editor,
@@ -1615,14 +1619,14 @@ export class Editor<
     }
   }
 
-  get #fileDiffInstance(): FileDiff<LAnnotation> | undefined {
+  get #fileDiffInstance(): FileDiff<LAnnotation, Caret> | undefined {
     return this.#fileInstance?.type === 'file-diff'
       ? this.#fileInstance
       : undefined;
   }
 
   get #virtualizedInstance():
-    | EditorVirtualizedComponent<LAnnotation>
+    | EditorVirtualizedComponent<LAnnotation, Caret>
     | undefined {
     return isVirtualizedEditorComponent(this.#fileInstance)
       ? this.#fileInstance
@@ -1733,7 +1737,9 @@ export class Editor<
   // A recycled attachment remains the same edit session. If its first
   // notification was canceled, the next live synchronization reschedules it;
   // once delivered, later recycled mounts stay silent.
-  #scheduleOnAttach(fileInstance: EditorComponent<EType, LAnnotation>): void {
+  #scheduleOnAttach(
+    fileInstance: EditorComponent<EType, LAnnotation, Caret>
+  ): void {
     const attachState = this.#attachState;
     const textDocument = this.#editSession?.document;
     if (
@@ -6365,21 +6371,21 @@ export class Editor<
   }
 }
 
-interface GetEditSessionProps<EType extends EditorType, LAnnotation> {
+interface GetEditSessionProps<EType extends EditorType, LAnnotation, Caret> {
   type: EType;
   editStateKey: string | undefined;
-  owner: Editor<EType, LAnnotation>;
+  owner: Editor<EType, LAnnotation, Caret>;
   initialState: EditorInitialState<EType, LAnnotation> | undefined;
   previousSession: ManagedEditSession<EType, LAnnotation> | undefined;
 }
 
-function getEditSession<EType extends EditorType, LAnnotation>({
+function getEditSession<EType extends EditorType, LAnnotation, Caret>({
   type,
   editStateKey,
   owner,
   initialState,
   previousSession,
-}: GetEditSessionProps<EType, LAnnotation>): ManagedEditSession<
+}: GetEditSessionProps<EType, LAnnotation, Caret>): ManagedEditSession<
   EType,
   LAnnotation
 > {

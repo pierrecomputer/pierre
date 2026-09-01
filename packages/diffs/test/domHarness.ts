@@ -386,9 +386,9 @@ export function makeFileItem(
 }
 
 // Pushes items into the viewer and flushes the rAF-scheduled render pass.
-export async function renderItems(
-  viewer: CodeView,
-  items: readonly CodeViewItem[]
+export async function renderItems<LAnnotation, Caret>(
+  viewer: CodeView<LAnnotation, Caret>,
+  items: readonly CodeViewItem<LAnnotation>[]
 ): Promise<void> {
   viewer.setItems(items);
   viewer.render(true);

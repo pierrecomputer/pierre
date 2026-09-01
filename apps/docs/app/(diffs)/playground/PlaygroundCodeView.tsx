@@ -36,7 +36,8 @@ type PlaygroundItem = CodeViewItem<PlaygroundAnnotationMetadata>;
 
 const CODE_VIEW_EDITOR_OPTIONS: EditorOptions<
   EditorType,
-  PlaygroundAnnotationMetadata
+  PlaygroundAnnotationMetadata,
+  undefined
 > = {
   onAttach(editor) {
     editor.focus({ lineNumber: 'first-visible', preventScroll: true });
@@ -45,7 +46,7 @@ const CODE_VIEW_EDITOR_OPTIONS: EditorOptions<
 
 interface PlaygroundCodeViewProps {
   items: PlaygroundItem[];
-  options: CodeViewReactOptions<PlaygroundAnnotationMetadata>;
+  options: CodeViewReactOptions<PlaygroundAnnotationMetadata, undefined>;
   enableLineSelection: boolean;
   enableGutterComments: boolean;
   showAnnotations: boolean;
@@ -100,8 +101,8 @@ export function PlaygroundCodeView({
   const handleEditComplete = useCallback(
     (
       event:
-        | FileEditCompleteEvent<PlaygroundAnnotationMetadata>
-        | FileDiffEditCompleteEvent<PlaygroundAnnotationMetadata>,
+        | FileEditCompleteEvent<PlaygroundAnnotationMetadata, undefined>
+        | FileDiffEditCompleteEvent<PlaygroundAnnotationMetadata, undefined>,
       item: PlaygroundItem,
       nextItem: PlaygroundItem
     ): EditCompletionDecision => {
@@ -279,7 +280,7 @@ export function PlaygroundCodeView({
     enableGutterComments && showAnnotations && !hasOpenCommentForm;
 
   const codeViewOptions = useMemo<
-    CodeViewReactOptions<PlaygroundAnnotationMetadata>
+    CodeViewReactOptions<PlaygroundAnnotationMetadata, undefined>
   >(
     () => ({
       ...options,

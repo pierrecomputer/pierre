@@ -524,32 +524,32 @@ export interface SelectedLineRange {
   endSide?: SelectionSide;
 }
 
-type OptionalMetadata<T> = T extends undefined
+type OptionalMetadata<LAnnotation> = LAnnotation extends undefined
   ? { metadata?: undefined }
-  : { metadata: T };
+  : { metadata: LAnnotation };
 
 /**
  * Annotation rendered for a file line. Use `lineNumber: 0` to render a
  * file-level annotation above the first rendered file line.
  */
-export type LineAnnotation<T = undefined> = {
+export type LineAnnotation<LAnnotation = undefined> = {
   lineNumber: number;
-} & OptionalMetadata<T>;
+} & OptionalMetadata<LAnnotation>;
 
 /**
  * Annotation rendered for one side of a diff line. Use `lineNumber: 0` to
  * render a side-specific file-level annotation above the first hunk/separator.
  */
-export type DiffLineAnnotation<T = undefined> = {
+export type DiffLineAnnotation<LAnnotation = undefined> = {
   side: AnnotationSide;
   lineNumber: number;
-} & OptionalMetadata<T>;
+} & OptionalMetadata<LAnnotation>;
 
-export type CodeViewFileItem<T = undefined> = {
+export type CodeViewFileItem<LAnnotation = undefined> = {
   id: string;
   type: 'file';
   file: FileContents;
-  annotations?: LineAnnotation<T>[];
+  annotations?: LineAnnotation<LAnnotation>[];
   version?: number;
   collapsed?: boolean;
   /**
@@ -560,11 +560,11 @@ export type CodeViewFileItem<T = undefined> = {
   edit?: boolean;
 };
 
-export type CodeViewDiffItem<T = undefined> = {
+export type CodeViewDiffItem<LAnnotation = undefined> = {
   id: string;
   type: 'diff';
   fileDiff: FileDiffMetadata;
-  annotations?: DiffLineAnnotation<T>[];
+  annotations?: DiffLineAnnotation<LAnnotation>[];
   version?: number;
   collapsed?: boolean;
   /**
@@ -575,9 +575,9 @@ export type CodeViewDiffItem<T = undefined> = {
   edit?: boolean;
 };
 
-export type CodeViewItem<T = undefined> =
-  | CodeViewFileItem<T>
-  | CodeViewDiffItem<T>;
+export type CodeViewItem<LAnnotation> =
+  | CodeViewFileItem<LAnnotation>
+  | CodeViewDiffItem<LAnnotation>;
 
 export interface CodeViewPositionScrollTarget {
   type: 'position';

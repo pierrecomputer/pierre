@@ -63,8 +63,8 @@ interface EditorFixture {
 
 async function createEditorFixture(
   contents: string,
-  editorOptions?: EditorOptions<'file', undefined>,
-  fileOptions?: Partial<FileOptions<undefined>>,
+  editorOptions?: EditorOptions<'file', undefined, undefined>,
+  fileOptions?: Partial<FileOptions<undefined, undefined>>,
   fileContents?: Partial<FileContents>
 ): Promise<EditorFixture> {
   const dom = installDom();
@@ -197,7 +197,7 @@ describe('Editor.applyEdits selection sync', () => {
     const onChange = mock(
       (
         ..._args: Parameters<
-          NonNullable<EditorOptions<'file', undefined>['onChange']>
+          NonNullable<EditorOptions<'file', undefined, undefined>['onChange']>
         >
       ) => {}
     );
@@ -1573,7 +1573,7 @@ describe('Editor undo/redo API', () => {
     const onChange = mock(
       (
         ..._args: Parameters<
-          NonNullable<EditorOptions<'file', undefined>['onChange']>
+          NonNullable<EditorOptions<'file', undefined, undefined>['onChange']>
         >
       ) => {}
     );

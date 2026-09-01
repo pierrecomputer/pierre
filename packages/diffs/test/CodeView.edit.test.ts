@@ -66,7 +66,7 @@ function createEditorHarness({
   const editStateKeys: Array<string | undefined> = [];
   const createEditor = <EType extends EditorType>(
     editorType: EType,
-    options: CodeViewCreateEditorOptions<EType, undefined>,
+    options: CodeViewCreateEditorOptions<EType, undefined, undefined>,
     editStateKey?: string
   ): Editor<EType, undefined> => {
     editStateKeys.push(editStateKey);
@@ -1056,7 +1056,7 @@ describe('CodeView item edit mode', () => {
 
   test('a real editor restores horizontal state without moving the shared viewport', async () => {
     const { cleanup } = installDom();
-    const completions: FileEditCompleteEvent<undefined>[] = [];
+    const completions: FileEditCompleteEvent<undefined, undefined>[] = [];
     const completionStates: EditorViewState[] = [];
     const viewer = new CodeView({
       createEditor: (editorType, options) => new Editor(editorType, options),
@@ -1242,7 +1242,7 @@ describe('CodeView item edit mode', () => {
       throw new Error('Expected a diff item.');
     }
     initial.fileDiff.cacheKey = 'active:v1';
-    const viewer = new CodeView<undefined>({
+    const viewer = new CodeView({
       createEditor(editorType, options) {
         const editor = new Editor(editorType, options);
         editors.push(
@@ -1329,7 +1329,7 @@ describe('CodeView item edit mode', () => {
         makeEditFileItem(`file-${index}`, false, 30)
       ),
     ];
-    const viewer = new CodeView<undefined>({
+    const viewer = new CodeView({
       createEditor(editorType, options) {
         const editor = new Editor(editorType, options);
         editors.push(
@@ -1427,7 +1427,7 @@ describe('CodeView item edit mode', () => {
         makeEditFileItem(`file-${index}`, false, 30)
       ),
     ];
-    const viewer = new CodeView<undefined>({
+    const viewer = new CodeView({
       createEditor(editorType, options) {
         const editor = new Editor(editorType, options);
         editors.push(
@@ -1523,7 +1523,7 @@ describe('CodeView item edit mode', () => {
       throw new Error('Expected a diff item.');
     }
     initial.fileDiff.cacheKey = 'active:v1';
-    const viewer = new CodeView<undefined>({
+    const viewer = new CodeView({
       createEditor(editorType, options) {
         const editor = new Editor(editorType, options);
         editors.push(
@@ -1802,8 +1802,8 @@ describe('CodeView item edit mode', () => {
   describe('onItemEditComplete', () => {
     interface Completion {
       event:
-        | FileEditCompleteEvent<undefined>
-        | FileDiffEditCompleteEvent<undefined>;
+        | FileEditCompleteEvent<undefined, undefined>
+        | FileDiffEditCompleteEvent<undefined, undefined>;
       item: CodeViewItem<undefined>;
     }
 
@@ -2059,12 +2059,14 @@ describe('CodeView item edit mode', () => {
       const { cleanup } = installDom();
       const { editors, createEditor } = createEditorHarness();
       const completions: Array<{ id: string; contents: string }> = [];
-      const snapshots: Array<CodeViewSlotSnapshot<undefined> | undefined> = [];
+      const snapshots: Array<
+        CodeViewSlotSnapshot<undefined, undefined> | undefined
+      > = [];
       const replacement = makeEditFileItem('a', false);
       const onItemEditComplete = (
         event:
-          | FileEditCompleteEvent<undefined>
-          | FileDiffEditCompleteEvent<undefined>,
+          | FileEditCompleteEvent<undefined, undefined>
+          | FileDiffEditCompleteEvent<undefined, undefined>,
         item: CodeViewItem<undefined>
       ): EditCompletionDecision => {
         if ('file' in event) {
@@ -2077,7 +2079,7 @@ describe('CodeView item edit mode', () => {
         createEditor,
         onItemEditComplete,
       });
-      const coordinator: CodeViewCoordinator<undefined> = {
+      const coordinator: CodeViewCoordinator<undefined, undefined> = {
         hasAnnotationRenderer: false,
         hasGutterRenderer: false,
         hasHeaderRenderers: true,

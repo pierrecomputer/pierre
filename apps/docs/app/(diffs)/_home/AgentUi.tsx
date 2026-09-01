@@ -47,8 +47,8 @@ import {
 } from './mockData';
 
 type AgentUiEditorChangeEvent =
-  | EditorChangeEvent<'file', undefined>
-  | EditorChangeEvent<'file-diff', undefined>;
+  | EditorChangeEvent<'file', undefined, undefined>
+  | EditorChangeEvent<'file-diff', undefined, undefined>;
 
 // Added/removed line totals for a single file's diff.
 interface DiffStats {
@@ -1038,7 +1038,9 @@ export function AgentUi({
     [liveSession, editedPlaceholderFiles]
   );
 
-  const editorOptions = useMemo<EditorOptions>(
+  const editorOptions = useMemo<
+    EditorOptions<'file-diff' | 'file', undefined, undefined>
+  >(
     () => ({
       enabledSelectionAction: true,
       ownsVerticalViewport: true,

@@ -49,12 +49,12 @@ afterAll(async () => {
 });
 
 const ReactCodeViewComponent = CodeView as ComponentType<
-  CodeViewProps<undefined> & {
-    ref?: Ref<CodeViewHandle<undefined>>;
+  CodeViewProps<undefined, undefined> & {
+    ref?: Ref<CodeViewHandle<undefined, undefined>>;
   }
 >;
 const EditProviderComponent = EditProvider as ComponentType<
-  PropsWithChildren<EditProviderProps<undefined>>
+  PropsWithChildren<EditProviderProps<undefined, undefined>>
 >;
 
 const CODE_VIEW_OPTIONS = {
@@ -85,7 +85,7 @@ type AnyTrackedCodeViewEditor =
 
 function createTrackedEditor<EType extends EditorType>(
   editorType: EType,
-  options: EditorOptions<EType, undefined>,
+  options: EditorOptions<EType, undefined, undefined>,
   attachmentError?: Error
 ): TrackedCodeViewEditor<EType> {
   const editor = new Editor(
@@ -125,8 +125,8 @@ function createTrackedEditor<EType extends EditorType>(
 // Write text into an attached instance's private session file, standing in
 // for real editor document changes; completion events are built from it.
 type ItemCompletionEvent =
-  | FileEditCompleteEvent<undefined>
-  | FileDiffEditCompleteEvent<undefined>;
+  | FileEditCompleteEvent<undefined, undefined>
+  | FileDiffEditCompleteEvent<undefined, undefined>;
 
 // The completed file contents of a file completion event, for assertions on
 // union-typed mock calls.
@@ -157,11 +157,17 @@ async function setSessionText(
 function createEditorHarness(attachmentError?: Error) {
   const editors: AnyTrackedCodeViewEditor[] = [];
   const receivedEditorTypes: EditorType[] = [];
-  const receivedOptions: EditorOptions<EditorType, undefined>[] = [];
+  const receivedOptions: EditorOptions<EditorType, undefined, undefined>[] = [];
   const receivedEditStateKeys: Array<string | undefined> = [];
-  const createEditor: EditorFactory = (editorType, options, editStateKey) => {
+  const createEditor: EditorFactory<undefined, undefined> = (
+    editorType,
+    options,
+    editStateKey
+  ) => {
     receivedEditorTypes.push(editorType);
-    receivedOptions.push(options as EditorOptions<EditorType, undefined>);
+    receivedOptions.push(
+      options as EditorOptions<EditorType, undefined, undefined>
+    );
     receivedEditStateKeys.push(editStateKey);
     const editor = createTrackedEditor(editorType, options, attachmentError);
     editors.push(editor as unknown as AnyTrackedCodeViewEditor);
@@ -214,8 +220,8 @@ function makeDiffItem(id: string, edit = false): CodeViewItem<undefined> {
 }
 
 function createCodeViewElement(
-  props: CodeViewProps<undefined> & {
-    ref?: Ref<CodeViewHandle<undefined>>;
+  props: CodeViewProps<undefined, undefined> & {
+    ref?: Ref<CodeViewHandle<undefined, undefined>>;
   }
 ): ReactElement {
   return createElement(ReactCodeViewComponent, {
@@ -296,7 +302,7 @@ function installCodeViewDom() {
 }
 
 function withProvider(
-  createEditor: EditorFactory,
+  createEditor: EditorFactory<undefined, undefined>,
   child: ReactElement
 ): ReactElement {
   return createElement(EditProviderComponent, { createEditor }, child);
@@ -308,14 +314,14 @@ describe('React CodeView editor factory', () => {
     const cleanupActEnvironment = installReactActEnvironment();
     const container = document.createElement('div');
     document.body.appendChild(container);
-    const handle = createRef<CodeViewHandle<undefined>>();
+    const handle = createRef<CodeViewHandle<undefined, undefined>>();
     const bypassFactory = mock(() => new Editor('file'));
     // Simulate an untyped JavaScript caller trying the removed options escape
     // hatch; the React adapter must still win at runtime.
     const optionsWithFactory = {
       ...CODE_VIEW_OPTIONS,
       createEditor: bypassFactory,
-    } as CodeViewReactOptions<undefined>;
+    } as CodeViewReactOptions<undefined, undefined>;
     const readOnly = makeFileItem('a');
     let root: Root | undefined;
 
@@ -370,11 +376,11 @@ describe('React CodeView editor factory', () => {
     const onAttach = mock(() => {});
     const onItemEditChange = mock(
       (
-        _event: EditorChangeEvent<'file' | 'file-diff', undefined>,
+        _event: EditorChangeEvent<'file' | 'file-diff', undefined, undefined>,
         _item: CodeViewItem<undefined>
       ) => {}
     );
-    const editorOptions: EditorOptions<EditorType, undefined> = {
+    const editorOptions: EditorOptions<EditorType, undefined, undefined> = {
       // A loosely typed caller can still carry onChange at runtime. CodeView's
       // item router must overwrite it before invoking the provider factory.
       historyMaxEntries: 17,
@@ -446,7 +452,7 @@ describe('React CodeView editor factory', () => {
 
     const render = async (
       item: CodeViewItem<undefined>,
-      createEditor: EditorFactory,
+      createEditor: EditorFactory<undefined, undefined>,
       historyMaxEntries: number,
       getEditStateKey: (item: CodeViewItem<undefined>) => string
     ) => {
@@ -518,7 +524,7 @@ describe('React CodeView editor factory', () => {
     const cleanupActEnvironment = installReactActEnvironment();
     const container = document.createElement('div');
     document.body.appendChild(container);
-    const handle = createRef<CodeViewHandle<undefined>>();
+    const handle = createRef<CodeViewHandle<undefined, undefined>>();
     const { createEditor, editors } = createEditorHarness();
     const onItemEditComplete = mock(
       (
@@ -622,7 +628,7 @@ describe('React CodeView editor factory', () => {
     const cleanupActEnvironment = installReactActEnvironment();
     const container = document.createElement('div');
     document.body.appendChild(container);
-    const handle = createRef<CodeViewHandle<undefined>>();
+    const handle = createRef<CodeViewHandle<undefined, undefined>>();
     const { createEditor, editors } = createEditorHarness();
     const onItemEditComplete = mock(
       (
@@ -686,7 +692,7 @@ describe('React CodeView editor factory', () => {
     const cleanupActEnvironment = installReactActEnvironment();
     const container = document.createElement('div');
     document.body.appendChild(container);
-    const handle = createRef<CodeViewHandle<undefined>>();
+    const handle = createRef<CodeViewHandle<undefined, undefined>>();
     const { createEditor, editors } = createEditorHarness();
     let root: Root | undefined;
 
@@ -723,7 +729,7 @@ describe('React CodeView editor factory', () => {
     const cleanupActEnvironment = installReactActEnvironment();
     const container = document.createElement('div');
     document.body.appendChild(container);
-    const handle = createRef<CodeViewHandle<undefined>>();
+    const handle = createRef<CodeViewHandle<undefined, undefined>>();
     let root: Root | undefined;
 
     try {
@@ -751,7 +757,7 @@ describe('React CodeView editor factory', () => {
     const cleanupActEnvironment = installReactActEnvironment();
     const container = document.createElement('div');
     document.body.appendChild(container);
-    const handle = createRef<CodeViewHandle<undefined>>();
+    const handle = createRef<CodeViewHandle<undefined, undefined>>();
     let root: Root | undefined;
 
     try {
@@ -777,7 +783,7 @@ describe('React CodeView editor factory', () => {
     const cleanupActEnvironment = installReactActEnvironment();
     const container = document.createElement('div');
     document.body.appendChild(container);
-    const handle = createRef<CodeViewHandle<undefined>>();
+    const handle = createRef<CodeViewHandle<undefined, undefined>>();
     const { createEditor, editors } = createEditorHarness();
     const items = [
       makeFileItem('edited', { edit: true, lineCount: 30 }),
@@ -904,7 +910,7 @@ describe('React CodeView edit completion teardown', () => {
       const cleanupActEnvironment = installReactActEnvironment();
       const container = document.createElement('div');
       document.body.appendChild(container);
-      const handle = createRef<CodeViewHandle<undefined>>();
+      const handle = createRef<CodeViewHandle<undefined, undefined>>();
       const { createEditor, editors } = createEditorHarness();
       const onItemEditComplete = mock(
         (
@@ -963,7 +969,7 @@ describe('React CodeView selection', () => {
     const cleanupActEnvironment = installReactActEnvironment();
     const container = document.createElement('div');
     document.body.appendChild(container);
-    const handle = createRef<CodeViewHandle<undefined>>();
+    const handle = createRef<CodeViewHandle<undefined, undefined>>();
     const { createEditor, editors } = createEditorHarness();
     const items = [makeFileItem('a')];
     const initialSelection = {
@@ -1024,7 +1030,7 @@ describe('React CodeView selection', () => {
     const cleanupActEnvironment = installReactActEnvironment();
     const container = document.createElement('div');
     document.body.appendChild(container);
-    const handle = createRef<CodeViewHandle<undefined>>();
+    const handle = createRef<CodeViewHandle<undefined, undefined>>();
     const bypassOnSelectedLinesChange = mock(
       (_selection: CodeViewLineSelection | null) => {}
     );
@@ -1032,7 +1038,7 @@ describe('React CodeView selection', () => {
       ...CODE_VIEW_OPTIONS,
       controlledSelection: true,
       onSelectedLinesChange: bypassOnSelectedLinesChange,
-    } as CodeViewReactOptions<undefined>;
+    } as CodeViewReactOptions<undefined, undefined>;
     const expectedSelection = {
       id: 'a',
       range: { start: 2, end: 3 },

@@ -122,7 +122,7 @@ async function createDiffEditorFixture(
   diffStyle: 'split' | 'unified',
   oldContents: string,
   newContents: string,
-  options: Partial<FileDiffOptions<undefined>> = {}
+  options: Partial<FileDiffOptions<undefined, undefined>> = {}
 ): Promise<DiffEditorFixture> {
   const dom = installDom();
   const container = document.createElement('div');

@@ -272,9 +272,10 @@ describe('virtualized editor viewport', () => {
     const dom = installDom();
     const root = document.createElement('div');
     const virtualizer = createSimpleVirtualizer(root);
-    const editorEvents: EditorChangeEvent<'file', undefined>[] = [];
-    const componentEvents: EditorChangeEvent<'file', undefined>[] = [];
-    const completionEvents: FileEditCompleteEvent<undefined>[] = [];
+    const editorEvents: EditorChangeEvent<'file', undefined, undefined>[] = [];
+    const componentEvents: EditorChangeEvent<'file', undefined, undefined>[] =
+      [];
+    const completionEvents: FileEditCompleteEvent<undefined, undefined>[] = [];
     const componentStates: EditorViewState[] = [];
     const completionStates: EditorViewState[] = [];
     const file = new VirtualizedFile(

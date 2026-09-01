@@ -7,7 +7,9 @@ editor APIs used by common integrations.
 
 | Export                      | Kind  | Purpose                                                        |
 | --------------------------- | ----- | -------------------------------------------------------------- |
+| `CaretMetadata`             | Type  | Supplies the color shared by a remote caret and its highlight. |
 | `Editor`                    | Class | Adds text editing to a `File` or `FileDiff` instance.          |
+| `EditorCaret`               | Type  | Describes an externally owned caret or highlighted selection.  |
 | `EditStateManager`          | Value | Manages keyed in-memory edit history and state.                |
 | `ClearEditStateOptions`     | Type  | Selects retained state parts to clear.                         |
 | `EditState`                 | Type  | Holds one complete live editing session.                       |
@@ -80,6 +82,7 @@ marker-rendering, and popover-placement building blocks used by `Editor`.
 | `enabledSelectionAction` | Enables the selection action surface.                    |
 | `clipboard`              | Supplies a text clipboard reader.                        |
 | `renderSelectionAction`  | Produces the selection action element.                   |
+| `renderCaret`            | Produces an externally owned caret element.              |
 | `onAttach`               | Receives the editor and attached surface.                |
 | `onChange`               | Receives the event, including its editor instance.       |
 | `onComplete`             | Observes the completed file or diff event.               |
@@ -119,27 +122,28 @@ borrowed editor-owned state rather than a serialization format.
 
 ## `Editor` members
 
-| Member                                                   | Purpose                                                |
-| -------------------------------------------------------- | ------------------------------------------------------ |
-| `new Editor(type, options?, editStateKey?)`              | Creates an editor with optional keyed state retention. |
-| `type`                                                   | Identifies the editor as `file` or `file-diff`.        |
-| `edit(instance)`                                         | Attaches and returns the normal completion disposer.   |
-| `setOptions(options)`                                    | Merges editor options.                                 |
-| `applyEdits(edits, updateHistory?)`                      | Applies programmatic text edits.                       |
-| `canUndo`                                                | Reports whether undo has an entry.                     |
-| `canRedo`                                                | Reports whether redo has an entry.                     |
-| `undo()`                                                 | Reverts the latest edit.                               |
-| `redo()`                                                 | Reapplies the latest reverted edit.                    |
-| `getFile()`                                              | Gets the current file contents.                        |
-| `getText()`                                              | Gets the current text.                                 |
-| `getViewState()`                                         | Gets selections and editor-owned view state.           |
-| `setViewState(state)`                                    | Sets selections and editor-owned view state.           |
-| `getEditState()`                                         | Gets the latest edit-lifecycle state checkpoint.       |
-| `setSelections(selections)`                              | Sets directed selection ranges.                        |
-| `setMarkers(markers)`                                    | Sets diagnostic markers.                               |
-| `focus(options?)`                                        | Focuses the editor.                                    |
-| `blur()`                                                 | Removes editor focus.                                  |
-| `cleanUp(reason?: 'discard' \| 'recycle' \| 'complete')` | Suspends rendering or completes the editing session.   |
+| Member                                                   | Purpose                                                 |
+| -------------------------------------------------------- | ------------------------------------------------------- |
+| `new Editor(type, options?, editStateKey?)`              | Creates an editor with optional keyed state retention.  |
+| `type`                                                   | Identifies the editor as `file` or `file-diff`.         |
+| `edit(instance)`                                         | Attaches and returns the normal completion disposer.    |
+| `setOptions(options)`                                    | Merges editor options.                                  |
+| `applyEdits(edits, updateHistory?)`                      | Applies programmatic text edits.                        |
+| `canUndo`                                                | Reports whether undo has an entry.                      |
+| `canRedo`                                                | Reports whether redo has an entry.                      |
+| `undo()`                                                 | Reverts the latest edit.                                |
+| `redo()`                                                 | Reapplies the latest reverted edit.                     |
+| `getFile()`                                              | Gets the current file contents.                         |
+| `getText()`                                              | Gets the current text.                                  |
+| `getViewState()`                                         | Gets selections and editor-owned view state.            |
+| `setViewState(state)`                                    | Sets selections and editor-owned view state.            |
+| `getEditState()`                                         | Gets the latest edit-lifecycle state checkpoint.        |
+| `setSelections(selections)`                              | Sets directed selection ranges.                         |
+| `setCarets(carets)`                                      | Replaces the externally owned caret and highlight list. |
+| `setMarkers(markers)`                                    | Sets diagnostic markers.                                |
+| `focus(options?)`                                        | Focuses the editor.                                     |
+| `blur()`                                                 | Removes editor focus.                                   |
+| `cleanUp(reason?: 'discard' \| 'recycle' \| 'complete')` | Suspends rendering or completes the editing session.    |
 
 `editStateKey` opts an editor into retained in-memory sessions across editor
 instances. File and file-diff namespaces are independent and each keeps up to

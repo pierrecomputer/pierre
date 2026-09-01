@@ -9,8 +9,8 @@ import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 type TokenInteractionMode = 'react' | 'vanilla';
 
 interface TokenHookTabsProps {
-  reactExample: PreloadedFileResult<undefined>;
-  vanillaExample: PreloadedFileResult<undefined>;
+  reactExample: PreloadedFileResult<undefined, undefined>;
+  vanillaExample: PreloadedFileResult<undefined, undefined>;
 }
 
 export function TokenHookTabs({

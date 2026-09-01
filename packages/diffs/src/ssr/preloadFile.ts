@@ -9,24 +9,26 @@ import { wrapThemeCSS } from '../utils/cssWrappers';
 import { shouldUseTokenTransformer } from '../utils/shouldUseTokenTransformer';
 import { renderHTML } from './renderHTML';
 
-export type PreloadFileOptions<LAnnotation> = {
+export type PreloadFileOptions<LAnnotation, Caret> = {
   file: FileContents;
-  options?: FileOptions<LAnnotation>;
+  options?: FileOptions<LAnnotation, Caret>;
   annotations?: LineAnnotation<LAnnotation>[];
 };
 
-export interface PreloadedFileResult<LAnnotation> {
+export interface PreloadedFileResult<LAnnotation, Caret> {
   file: FileContents;
-  options?: FileOptions<LAnnotation>;
+  options?: FileOptions<LAnnotation, Caret>;
   annotations?: LineAnnotation<LAnnotation>[];
   prerenderedHTML: string;
 }
 
-export async function preloadFile<LAnnotation = undefined>({
+export async function preloadFile<LAnnotation = undefined, Caret = undefined>({
   file,
   options,
   annotations,
-}: PreloadFileOptions<LAnnotation>): Promise<PreloadedFileResult<LAnnotation>> {
+}: PreloadFileOptions<LAnnotation, Caret>): Promise<
+  PreloadedFileResult<LAnnotation, Caret>
+> {
   const fileRenderer = new FileRenderer<LAnnotation>({
     ...options,
     // Match the client's option snapshot: token callbacks imply the

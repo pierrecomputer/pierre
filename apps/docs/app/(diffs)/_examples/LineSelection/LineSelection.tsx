@@ -18,7 +18,7 @@ import { FeatureHeader } from '@/components/FeatureHeader';
 import { Button } from '@/components/ui/button';
 
 interface LineSelectionProps {
-  prerenderedDiff: PreloadMultiFileDiffResult<undefined>;
+  prerenderedDiff: PreloadMultiFileDiffResult<undefined, undefined>;
 }
 
 export function LineSelection({ prerenderedDiff }: LineSelectionProps) {

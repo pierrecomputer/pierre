@@ -8,7 +8,7 @@ const options = {
   unsafeCSS: CustomScrollbarCSS,
 } as const;
 
-export const STYLING_CODE_GLOBAL: PreloadFileOptions<undefined> = {
+export const STYLING_CODE_GLOBAL: PreloadFileOptions<undefined, undefined> = {
   file: {
     name: 'global.css',
     contents: `:root {
@@ -58,7 +58,7 @@ export const STYLING_CODE_GLOBAL: PreloadFileOptions<undefined> = {
   options,
 };
 
-export const STYLING_CODE_INLINE: PreloadFileOptions<undefined> = {
+export const STYLING_CODE_INLINE: PreloadFileOptions<undefined, undefined> = {
   file: {
     name: 'inline.tsx',
     contents: `<FileDiff
@@ -72,7 +72,7 @@ export const STYLING_CODE_INLINE: PreloadFileOptions<undefined> = {
   options,
 };
 
-export const STYLING_CODE_UNSAFE: PreloadFileOptions<undefined> = {
+export const STYLING_CODE_UNSAFE: PreloadFileOptions<undefined, undefined> = {
   file: {
     name: 'unsafe-css.tsx',
     contents: `<FileDiff

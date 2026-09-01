@@ -62,7 +62,7 @@ function makeDiffItem(id: string): CodeViewDiffItem<undefined> {
 async function waitForRenderedItems(
   viewer: CodeView,
   count: number
-): Promise<CodeViewRenderedItem<undefined>[]> {
+): Promise<CodeViewRenderedItem<undefined, undefined>[]> {
   for (let attempt = 0; attempt < 50; attempt++) {
     const renderedItems = viewer.getRenderedItems();
     if (renderedItems.length === count) {

@@ -18,7 +18,7 @@ export type {
 };
 export type { FileOptions } from './types';
 
-export function File<LAnnotation = undefined, LCaret = undefined>({
+export function File<LAnnotation = undefined, Caret = undefined>({
   file,
   lineAnnotations,
   selectedLines,
@@ -39,7 +39,7 @@ export function File<LAnnotation = undefined, LCaret = undefined>({
   edit = false,
   onEditChange,
   onEditComplete,
-}: FileProps<LAnnotation, LCaret>): React.JSX.Element {
+}: FileProps<LAnnotation, Caret>): React.JSX.Element {
   const { ref, getHoveredLine, getAnnotationSlotName } = useFileInstance({
     file,
     options,

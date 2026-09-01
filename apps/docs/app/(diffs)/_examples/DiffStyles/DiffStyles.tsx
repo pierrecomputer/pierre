@@ -51,7 +51,7 @@ const diffStyleOptions = [
 ] as const;
 
 interface DiffStylesProps {
-  prerenderedDiff: PreloadMultiFileDiffResult<undefined>;
+  prerenderedDiff: PreloadMultiFileDiffResult<undefined, undefined>;
 }
 
 export function DiffStyles({

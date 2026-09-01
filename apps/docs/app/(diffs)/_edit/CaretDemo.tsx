@@ -9,19 +9,19 @@ import { CARET_DEMO_CARETS, type CursorCaretMetadata } from './constants';
 
 interface CaretDemoProps {
   // Server-preloaded, highlighted File; hydrating from it avoids a highlight flash on load.
-  prerenderedFile: PreloadedFileResult<undefined>;
+  prerenderedFile: PreloadedFileResult<undefined, CursorCaretMetadata>;
 }
 
 // Carets render inside the editor's shadow DOM, so the collaborator
 // cursors use inline styles rather than page-level Tailwind classes.
 export function CaretDemo({ prerenderedFile }: CaretDemoProps) {
   const editors = useRef<
-    (Editor<undefined, CursorCaretMetadata> | undefined)[]
+    (Editor<'file', undefined, CursorCaretMetadata> | undefined)[]
   >([]);
   const activeEditor = useRef<number | undefined>(undefined);
   const syncingEdit = useRef(false);
   const editorOptions = useMemo<
-    EditorOptions<undefined, CursorCaretMetadata>[]
+    EditorOptions<'file', undefined, CursorCaretMetadata>[]
   >(
     () =>
       CARET_DEMO_CARETS.map((_, index) => ({

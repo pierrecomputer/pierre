@@ -238,8 +238,8 @@ export type FileDiffHydrationProps<LAnnotation> = Omit<
 
 export type FileDiffType = 'file-diff' | 'unresolved-file';
 
-export type FileDiffEditChangeHandler<LAnnotation> = (
-  event: EditorChangeEvent<'file-diff', LAnnotation>
+export type FileDiffEditChangeHandler<LAnnotation, Caret> = (
+  event: EditorChangeEvent<'file-diff', LAnnotation, Caret>
 ) => void;
 
 /**
@@ -250,11 +250,11 @@ export type FileDiffEditChangeHandler<LAnnotation> = (
  * detached and returns its final state from `getViewState()`. A missing handler
  * rejects.
  */
-export type FileDiffEditCompleteHandler<LAnnotation> = (
-  event: FileDiffEditCompleteEvent<LAnnotation>
+export type FileDiffEditCompleteHandler<LAnnotation, Caret> = (
+  event: FileDiffEditCompleteEvent<LAnnotation, Caret>
 ) => EditCompletionDecision;
 
-export interface FileDiffOptions<LAnnotation>
+export interface FileDiffOptions<LAnnotation, Caret>
   extends
     Omit<BaseDiffOptions, 'hunkSeparators'>,
     InteractionManagerBaseOptions<'diff'> {
@@ -265,7 +265,7 @@ export interface FileDiffOptions<LAnnotation>
        */
     | ((
         hunk: HunkData,
-        instance: FileDiff<LAnnotation>
+        instance: FileDiff<LAnnotation, Caret>
       ) => HTMLElement | DocumentFragment | null | undefined);
   disableFileHeader?: boolean;
   renderHeaderPrefix?: RenderHeaderPrefixCallback;
@@ -287,7 +287,7 @@ export interface FileDiffOptions<LAnnotation>
 
   onPostRender?(
     node: HTMLElement,
-    instance: FileDiff<LAnnotation>,
+    instance: FileDiff<LAnnotation, Caret>,
     phase: PostRenderPhase
   ): unknown;
 
@@ -297,7 +297,7 @@ export interface FileDiffOptions<LAnnotation>
    * its own `onChange`. Do not feed the event's file back into the component
    * while the session is active.
    */
-  onEditChange?: FileDiffEditChangeHandler<LAnnotation>;
+  onEditChange?: FileDiffEditChangeHandler<LAnnotation, Caret>;
 
   /**
    * Fired when `edit` toggles false or a component unmounts, including when the
@@ -306,7 +306,7 @@ export interface FileDiffOptions<LAnnotation>
    * passed into it. The callback receives the detached editor with its final
    * pre-detach state.
    */
-  onEditComplete?: FileDiffEditCompleteHandler<LAnnotation>;
+  onEditComplete?: FileDiffEditCompleteHandler<LAnnotation, Caret>;
 }
 
 interface AnnotationElementCache<LAnnotation> {
@@ -360,7 +360,7 @@ interface HeaderCache {
 
 let instanceId = -1;
 
-export class FileDiff<LAnnotation = undefined> {
+export class FileDiff<LAnnotation = undefined, Caret = undefined> {
   // NOTE(amadeus): We sorta need this to ensure the web-component file is
   // properly loaded
   static LoadedCustomComponent: boolean = DiffsContainerLoaded;
@@ -426,7 +426,7 @@ export class FileDiff<LAnnotation = undefined> {
 
   protected enabled = true;
 
-  protected editor: Editor<'file-diff', LAnnotation> | undefined;
+  protected editor: Editor<'file-diff', LAnnotation, Caret> | undefined;
   protected refreshViewTimeout: ReturnType<typeof setTimeout> | undefined;
   // Defer selected-line and editor active-line writes while a refresh rebuilds
   // the diff rows. This is separate from the timeout because the refresh can
@@ -436,7 +436,9 @@ export class FileDiff<LAnnotation = undefined> {
   protected deferredEditorActiveLine: DeferredEditorActiveLineWrite | undefined;
 
   constructor(
-    public options: FileDiffOptions<LAnnotation> = { theme: DEFAULT_THEMES },
+    public options: FileDiffOptions<LAnnotation, Caret> = {
+      theme: DEFAULT_THEMES,
+    },
     protected workerManager?: WorkerPoolManager | undefined,
     protected isContainerManaged = false
   ) {
@@ -464,13 +466,13 @@ export class FileDiff<LAnnotation = undefined> {
   };
 
   protected getHunksRendererOptions(
-    options: FileDiffOptions<LAnnotation>
+    options: FileDiffOptions<LAnnotation, Caret>
   ): DiffHunksRendererOptions {
     return getDiffHunksRendererOptions(options);
   }
 
   protected createHunksRenderer(
-    options: FileDiffOptions<LAnnotation>
+    options: FileDiffOptions<LAnnotation, Caret>
   ): DiffHunksRenderer<LAnnotation> {
     return new DiffHunksRenderer<LAnnotation>(
       this.getHunksRendererOptions(options),
@@ -586,7 +588,9 @@ export class FileDiff<LAnnotation = undefined> {
   // * There's also an issue of options that live here on the File class and
   //   those that live on the Hunk class, and it's a bit of an issue with passing
   //   settings down and mirroring them (not great...)
-  public setOptions(options: FileDiffOptions<LAnnotation> | undefined): void {
+  public setOptions(
+    options: FileDiffOptions<LAnnotation, Caret> | undefined
+  ): void {
     if (options == null) return;
     this.options = options;
     this.clearReusableHeader();
@@ -608,7 +612,9 @@ export class FileDiff<LAnnotation = undefined> {
     );
   }
 
-  private mergeOptions(options: Partial<FileDiffOptions<LAnnotation>>): void {
+  private mergeOptions(
+    options: Partial<FileDiffOptions<LAnnotation, Caret>>
+  ): void {
     this.options = { ...this.options, ...options };
   }
 
@@ -1789,7 +1795,7 @@ export class FileDiff<LAnnotation = undefined> {
   }
 
   public emitEditChange(
-    event: EditorChangeEvent<'file-diff', LAnnotation>
+    event: EditorChangeEvent<'file-diff', LAnnotation, Caret>
   ): void {
     const { lineAnnotations } = event;
     if (lineAnnotations != null) {
@@ -1840,7 +1846,9 @@ export class FileDiff<LAnnotation = undefined> {
   }
 
   /** @internal Associate this component with its editor for a render lifecycle. */
-  public __attachEditor(editor: Editor<'file-diff', LAnnotation>): () => void {
+  public __attachEditor(
+    editor: Editor<'file-diff', LAnnotation, Caret>
+  ): () => void {
     // Editing is a plain file-diff concern only. Subclasses with their own
     // hunk semantics (UnresolvedFile) are not editable, so an editor must
     // never attach to them.
@@ -1866,7 +1874,7 @@ export class FileDiff<LAnnotation = undefined> {
   }
 
   /** @internal Resume rendering for the editor already associated with this component. */
-  public __resumeEditor(editor: Editor<'file-diff', LAnnotation>): void {
+  public __resumeEditor(editor: Editor<'file-diff', LAnnotation, Caret>): void {
     if (this.editor !== editor) {
       throw new Error('FileDiff.__resumeEditor: editor association changed');
     }
@@ -1874,7 +1882,7 @@ export class FileDiff<LAnnotation = undefined> {
   }
 
   private resumeEditorRendering(
-    editor: Editor<'file-diff', LAnnotation>
+    editor: Editor<'file-diff', LAnnotation, Caret>
   ): void {
     this.editSessionAnnotations ??= adoptEditSessionAnnotations(
       this.lineAnnotations,
@@ -1952,7 +1960,7 @@ export class FileDiff<LAnnotation = undefined> {
    * diff cannot reuse the replaced diff's `cacheKey`.
    */
   public __completeEditSession(
-    editor: Editor<'file-diff', LAnnotation>,
+    editor: Editor<'file-diff', LAnnotation, Caret>,
     mode: 'install' | 'discard'
   ): void {
     this.settleEditSession(mode === 'install', editor);
@@ -1960,7 +1968,7 @@ export class FileDiff<LAnnotation = undefined> {
 
   private settleEditSession(
     installResult: boolean,
-    editor: Editor<'file-diff', LAnnotation> | undefined
+    editor: Editor<'file-diff', LAnnotation, Caret> | undefined
   ): void {
     const {
       editSessionDiff,
@@ -1998,7 +2006,7 @@ export class FileDiff<LAnnotation = undefined> {
     if (completedDiff.lang != null) {
       newFile.lang = completedDiff.lang;
     }
-    const event: FileDiffEditCompleteEvent<LAnnotation> = {
+    const event: FileDiffEditCompleteEvent<LAnnotation, Caret> = {
       fileDiff: completedDiff,
       editor,
       originalFileDiff: externalDiff,

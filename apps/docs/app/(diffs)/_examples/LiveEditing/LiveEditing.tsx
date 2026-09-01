@@ -26,13 +26,13 @@ interface LiveEditingProps {
   // Pre-rendered File component (the additions-only view) and FileDiff component
   // (before/after). We ship both so toggling between them hydrates from
   // server HTML instead of flashing in after client highlighting.
-  prerenderedFile: PreloadedFileResult<undefined>;
-  prerenderedDiff: PreloadFileDiffResult<undefined>;
+  prerenderedFile: PreloadedFileResult<undefined, undefined>;
+  prerenderedDiff: PreloadFileDiffResult<undefined, undefined>;
 }
 
 type LiveEditingChangeEvent =
-  | EditorChangeEvent<'file', undefined>
-  | EditorChangeEvent<'file-diff', undefined>;
+  | EditorChangeEvent<'file', undefined, undefined>
+  | EditorChangeEvent<'file-diff', undefined, undefined>;
 
 // Which component the demo renders: a standalone File or a before/after FileDiff.
 type DemoView = 'file' | 'diff';

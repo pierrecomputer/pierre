@@ -8,7 +8,10 @@ const options = {
   unsafeCSS: CustomScrollbarCSS,
 } as const;
 
-export const HELPER_PARSE_DIFF_FROM_FILE: PreloadFileOptions<undefined> = {
+export const HELPER_PARSE_DIFF_FROM_FILE: PreloadFileOptions<
+  undefined,
+  undefined
+> = {
   file: {
     name: 'parseDiffFromFile.ts',
     contents: `import {
@@ -57,7 +60,10 @@ const deletedFileDiff: FileDiffMetadata = parseDiffFromFile(oldFile, null);
   options,
 };
 
-export const HELPER_PARSE_PATCH_FILES: PreloadFileOptions<undefined> = {
+export const HELPER_PARSE_PATCH_FILES: PreloadFileOptions<
+  undefined,
+  undefined
+> = {
   file: {
     name: 'parsePatchFiles.ts',
     contents: `import {
@@ -107,7 +113,10 @@ for (const patch of patches) {
   options,
 };
 
-export const HELPER_TRIM_PATCH_CONTEXT: PreloadFileOptions<undefined> = {
+export const HELPER_TRIM_PATCH_CONTEXT: PreloadFileOptions<
+  undefined,
+  undefined
+> = {
   file: {
     name: 'trimPatchContext.ts',
     contents: `import { trimPatchContext } from '@pierre/diffs';
@@ -158,7 +167,10 @@ index abc123..def456 100644
   options,
 };
 
-export const HELPER_REGISTER_CUSTOM_THEME: PreloadFileOptions<undefined> = {
+export const HELPER_REGISTER_CUSTOM_THEME: PreloadFileOptions<
+  undefined,
+  undefined
+> = {
   file: {
     name: 'registerCustomTheme.ts',
     contents: `import { registerCustomTheme } from '@pierre/diffs';
@@ -194,7 +206,10 @@ registerCustomTheme('inline-theme', async () => ({
   options,
 };
 
-export const HELPER_REGISTER_CUSTOM_LANGUAGE: PreloadFileOptions<undefined> = {
+export const HELPER_REGISTER_CUSTOM_LANGUAGE: PreloadFileOptions<
+  undefined,
+  undefined
+> = {
   file: {
     name: 'registerCustomLanguage.ts',
     contents: `import { registerCustomLanguage } from '@pierre/diffs';
@@ -218,7 +233,10 @@ registerCustomLanguage('my-lang', () => import('./my-lang.tmLanguage.json'));`,
   options,
 };
 
-export const HELPER_DISPOSE_HIGHLIGHTER: PreloadFileOptions<undefined> = {
+export const HELPER_DISPOSE_HIGHLIGHTER: PreloadFileOptions<
+  undefined,
+  undefined
+> = {
   file: {
     name: 'disposeHighlighter.ts',
     contents: `import { disposeHighlighter } from '@pierre/diffs';
@@ -235,7 +253,10 @@ disposeHighlighter();`,
   options,
 };
 
-export const HELPER_GET_SHARED_HIGHLIGHTER: PreloadFileOptions<undefined> = {
+export const HELPER_GET_SHARED_HIGHLIGHTER: PreloadFileOptions<
+  undefined,
+  undefined
+> = {
   file: {
     name: 'getSharedHighlighter.ts',
     contents: `import { getSharedHighlighter, DiffsHighlighter } from '@pierre/diffs';
@@ -256,7 +277,10 @@ const tokens = highlighter.codeToTokens('const x = 1;'); `,
   options,
 };
 
-export const HELPER_PRELOAD_HIGHLIGHTER: PreloadFileOptions<undefined> = {
+export const HELPER_PRELOAD_HIGHLIGHTER: PreloadFileOptions<
+  undefined,
+  undefined
+> = {
   file: {
     name: 'preloadHighlighter.ts',
     contents: `import { preloadHighlighter } from '@pierre/diffs';
@@ -281,7 +305,10 @@ await preloadHighlighter({
   options,
 };
 
-export const HELPER_SET_LANGUAGE_OVERRIDE: PreloadFileOptions<undefined> = {
+export const HELPER_SET_LANGUAGE_OVERRIDE: PreloadFileOptions<
+  undefined,
+  undefined
+> = {
   file: {
     name: 'setLanguageOverride.ts',
     contents: `import {
@@ -315,7 +342,10 @@ const typescriptDiff = setLanguageOverride(diff, 'typescript');
   options,
 };
 
-export const HELPER_DIFF_ACCEPT_REJECT: PreloadFileOptions<undefined> = {
+export const HELPER_DIFF_ACCEPT_REJECT: PreloadFileOptions<
+  undefined,
+  undefined
+> = {
   file: {
     name: 'diffAcceptRejectHunk.ts',
     contents: `import {
@@ -366,7 +396,10 @@ instance.render({
   options,
 };
 
-export const HELPER_DIFF_ACCEPT_REJECT_REACT: PreloadFileOptions<undefined> = {
+export const HELPER_DIFF_ACCEPT_REJECT_REACT: PreloadFileOptions<
+  undefined,
+  undefined
+> = {
   file: {
     name: 'AcceptRejectExample.tsx',
     contents: `import {
@@ -461,7 +494,10 @@ export function AcceptRejectExample() {
   options,
 };
 
-export const HELPER_RESOLVE_MERGE_CONFLICT: PreloadFileOptions<undefined> = {
+export const HELPER_RESOLVE_MERGE_CONFLICT: PreloadFileOptions<
+  undefined,
+  undefined
+> = {
   file: {
     name: 'resolveMergeConflict.ts',
     contents: `import {

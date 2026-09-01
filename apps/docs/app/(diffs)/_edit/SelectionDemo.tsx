@@ -24,7 +24,7 @@ import { Button } from '@/components/ui/button';
 
 interface SelectionDemoProps {
   // Server-preloaded, highlighted File; hydrating from it avoids a highlight flash on load.
-  prerenderedFile: PreloadedFileResult<undefined>;
+  prerenderedFile: PreloadedFileResult<undefined, undefined>;
 }
 
 // `renderSelectionAction` returns a plain DOM node, not React, so IconCommentFill
@@ -124,7 +124,7 @@ export function SelectionDemo({ prerenderedFile }: SelectionDemoProps) {
   const addSnippetRef = useRef(addSnippet);
   addSnippetRef.current = addSnippet;
 
-  const editorOptions = useMemo<EditorOptions<'file'>>(
+  const editorOptions = useMemo<EditorOptions<'file', undefined, undefined>>(
     () => ({
       enabledSelectionAction: true,
       renderSelectionAction(selectionAction) {

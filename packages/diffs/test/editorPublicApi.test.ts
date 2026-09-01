@@ -91,7 +91,7 @@ interface PendingEditorFixture {
 // marker suites use, and returns the editor plus its contenteditable element.
 async function createEditorFixture(
   contents: string,
-  editorOptions?: EditorOptions<'file', undefined>,
+  editorOptions?: EditorOptions<'file', undefined, undefined>,
   lineAnnotations?: LineAnnotation<undefined>[],
   documentKey?: string,
   fileInfo: Pick<FileContents, 'lang' | 'name'> = { name: 'edits.ts' }
@@ -177,7 +177,7 @@ function createPendingEditorFixture(
 
 async function createDiffEditorFixture(
   diffStyle: 'split' | 'unified',
-  editorOptions?: EditorOptions<'file-diff', undefined>,
+  editorOptions?: EditorOptions<'file-diff', undefined, undefined>,
   documentKey?: string,
   newContents = 'alpha\nnew\ncharlie',
   files?: { oldFile: FileContents; newFile: FileContents }

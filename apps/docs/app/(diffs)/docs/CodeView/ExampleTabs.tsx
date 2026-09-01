@@ -9,8 +9,8 @@ import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 type CodeViewExampleMode = 'react' | 'vanilla';
 
 interface CodeViewExampleTabsProps {
-  reactExample: PreloadedFileResult<undefined>;
-  vanillaExample: PreloadedFileResult<undefined>;
+  reactExample: PreloadedFileResult<undefined, undefined>;
+  vanillaExample: PreloadedFileResult<undefined, undefined>;
 }
 
 export function CodeViewExampleTabs({

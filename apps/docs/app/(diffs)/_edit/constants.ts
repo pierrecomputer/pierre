@@ -10,7 +10,7 @@ import type { PreloadFileOptions } from '@pierre/diffs/ssr';
 // The editor requires the token transformer, so enabling it in the SSR preload
 // keeps hydration from rerendering the component after the editor attaches.
 // Mirrors LiveEditing/constants.ts.
-const EDITABLE_FILE_OPTIONS: FileOptions<undefined> = {
+const EDITABLE_FILE_OPTIONS: FileOptions<undefined, undefined> = {
   theme: DEFAULT_THEMES,
   themeType: 'dark',
   useTokenTransformer: true,
@@ -364,32 +364,48 @@ const DEFAULT_KEYMAP_FILE: FileContents = {
 // Server-side preload inputs. Spreading the resolved results into <File> ships
 // pre-rendered, already-highlighted shadow DOM so each demo paints instantly
 // instead of flashing in after client highlighting.
-export const MARKER_DEMO_FILE_EXAMPLE: PreloadFileOptions<undefined> = {
+export const MARKER_DEMO_FILE_EXAMPLE: PreloadFileOptions<
+  undefined,
+  undefined
+> = {
   file: MARKER_DEMO_FILE,
   options: EDITABLE_FILE_OPTIONS,
 };
 
-export const CARET_DEMO_FILE_EXAMPLE: PreloadFileOptions<undefined> = {
+export const CARET_DEMO_FILE_EXAMPLE: PreloadFileOptions<
+  undefined,
+  CursorCaretMetadata
+> = {
   file: CARET_DEMO_FILE,
-  options: EDITABLE_FILE_OPTIONS,
+  options: EDITABLE_FILE_OPTIONS as FileOptions<undefined, CursorCaretMetadata>,
 };
 
-export const FIND_DEMO_FILE_EXAMPLE: PreloadFileOptions<undefined> = {
-  file: FIND_DEMO_FILE,
-  options: EDITABLE_FILE_OPTIONS,
-};
+export const FIND_DEMO_FILE_EXAMPLE: PreloadFileOptions<undefined, undefined> =
+  {
+    file: FIND_DEMO_FILE,
+    options: EDITABLE_FILE_OPTIONS,
+  };
 
-export const HISTORY_DEMO_FILE_EXAMPLE: PreloadFileOptions<undefined> = {
+export const HISTORY_DEMO_FILE_EXAMPLE: PreloadFileOptions<
+  undefined,
+  undefined
+> = {
   file: HISTORY_DEMO_FILE,
   options: EDITABLE_FILE_OPTIONS,
 };
 
-export const DEFAULT_KEYMAP_FILE_EXAMPLE: PreloadFileOptions<undefined> = {
+export const DEFAULT_KEYMAP_FILE_EXAMPLE: PreloadFileOptions<
+  undefined,
+  undefined
+> = {
   file: DEFAULT_KEYMAP_FILE,
   options: { ...EDITABLE_FILE_OPTIONS, disableFileHeader: true },
 };
 
-export const SELECTION_DEMO_FILE_EXAMPLE: PreloadFileOptions<undefined> = {
+export const SELECTION_DEMO_FILE_EXAMPLE: PreloadFileOptions<
+  undefined,
+  undefined
+> = {
   file: SELECTION_DEMO_FILE,
   options: EDITABLE_FILE_OPTIONS,
 };

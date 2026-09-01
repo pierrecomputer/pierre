@@ -61,7 +61,7 @@ const codeViewOptions = {
 } as const;
 
 export function ReviewSurface() {
-  const viewerRef = useRef<CodeViewHandle<undefined> | null>(null);
+  const viewerRef = useRef<CodeViewHandle<undefined, undefined> | null>(null);
   const [selection, setSelection] = useState<CodeViewLineSelection | null>(
     null
   );

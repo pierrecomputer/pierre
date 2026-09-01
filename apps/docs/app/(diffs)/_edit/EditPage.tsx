@@ -6,6 +6,7 @@ import type {
 import { WorkerPoolContext } from '../_components/WorkerPoolContext';
 import { LiveEditing } from '../_examples/LiveEditing/LiveEditing';
 import { CaretDemo } from './CaretDemo';
+import type { CursorCaretMetadata } from './constants';
 import { EditHero } from './EditHero';
 import { EditReference } from './EditReference';
 import { FindDemo } from './FindDemo';
@@ -20,14 +21,14 @@ import { Header } from '@/components/Header';
 import { PierreCompanySection } from '@/components/PierreCompanySection';
 
 interface EditPageProps {
-  liveEditingFile: PreloadedFileResult<undefined>;
-  liveEditingDiff: PreloadFileDiffResult<undefined>;
-  markerFile: PreloadedFileResult<undefined>;
-  findFile: PreloadedFileResult<undefined>;
-  historyFile: PreloadedFileResult<undefined>;
-  keymapFile: PreloadedFileResult<undefined>;
-  selectionFile: PreloadedFileResult<undefined>;
-  caretFile: PreloadedFileResult<undefined>;
+  liveEditingFile: PreloadedFileResult<undefined, undefined>;
+  liveEditingDiff: PreloadFileDiffResult<undefined, undefined>;
+  markerFile: PreloadedFileResult<undefined, undefined>;
+  findFile: PreloadedFileResult<undefined, undefined>;
+  historyFile: PreloadedFileResult<undefined, undefined>;
+  keymapFile: PreloadedFileResult<undefined, undefined>;
+  selectionFile: PreloadedFileResult<undefined, undefined>;
+  caretFile: PreloadedFileResult<undefined, CursorCaretMetadata>;
 }
 
 export function EditPage({

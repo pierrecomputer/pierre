@@ -60,12 +60,12 @@ interface AcceptedCompletion<LAnnotation> {
   } | null;
 }
 
-interface UseFileDiffInstanceProps<LAnnotation, LCaret> {
+interface UseFileDiffInstanceProps<LAnnotation, Caret> {
   fileDiff?: FileDiffMetadata;
   oldFile?: FileContents | null;
   newFile?: FileContents | null;
-  options: FileDiffOptions<LAnnotation> | undefined;
-  editorOptions: EditorOptions<'file-diff', LAnnotation, LCaret> | undefined;
+  options: FileDiffOptions<LAnnotation, Caret> | undefined;
+  editorOptions: EditorOptions<'file-diff', LAnnotation, Caret> | undefined;
   editStateKey: string | undefined;
   lineAnnotations: DiffLineAnnotation<LAnnotation>[] | undefined;
   selectedLines: SelectedLineRange | null | undefined;
@@ -75,8 +75,8 @@ interface UseFileDiffInstanceProps<LAnnotation, LCaret> {
   hasCustomHeader: boolean;
   disableWorkerPool: boolean;
   edit: boolean;
-  onEditChange?: FileDiffEditChangeHandler<LAnnotation>;
-  onEditComplete?: FileDiffEditCompleteHandler<LAnnotation>;
+  onEditChange?: FileDiffEditChangeHandler<LAnnotation, Caret>;
+  onEditComplete?: FileDiffEditCompleteHandler<LAnnotation, Caret>;
 }
 
 interface UseFileDiffInstanceReturn<LAnnotation> {
@@ -86,7 +86,7 @@ interface UseFileDiffInstanceReturn<LAnnotation> {
   getAnnotationSlotName(annotation: DiffLineAnnotation<LAnnotation>): string;
 }
 
-export function useFileDiffInstance<LAnnotation, LCaret>({
+export function useFileDiffInstance<LAnnotation, Caret>({
   fileDiff,
   oldFile,
   newFile,
@@ -105,14 +105,14 @@ export function useFileDiffInstance<LAnnotation, LCaret>({
   onEditComplete: _onEditComplete,
 }: UseFileDiffInstanceProps<
   LAnnotation,
-  LCaret
+  Caret
 >): UseFileDiffInstanceReturn<LAnnotation> {
   const simpleVirtualizer = useVirtualizer();
   const controlledSelection = selectedLines !== undefined;
   const poolManager = useContext(WorkerPoolContext);
-  const createEditor = useCreateEditor<LAnnotation, LCaret>();
+  const createEditor = useCreateEditor<LAnnotation, Caret>();
   const handleOnEditChange = useStableCallback(
-    (event: EditorChangeEvent<'file-diff', LAnnotation>) =>
+    (event: EditorChangeEvent<'file-diff', LAnnotation, Caret>) =>
       _onEditChange?.(event)
   );
   const onEditChange = _onEditChange != null ? handleOnEditChange : undefined;
@@ -122,7 +122,7 @@ export function useFileDiffInstance<LAnnotation, LCaret>({
   // between do not repaint pre-edit state.
   const acceptedCache = useRef<AcceptedCompletion<LAnnotation> | null>(null);
   const handleOnEditComplete = useStableCallback(
-    (event: FileDiffEditCompleteEvent<LAnnotation>) => {
+    (event: FileDiffEditCompleteEvent<LAnnotation, Caret>) => {
       const decision = _onEditComplete?.(event) ?? 'reject';
       if (decision === 'accept') {
         acceptedCache.current = {
@@ -175,7 +175,9 @@ export function useFileDiffInstance<LAnnotation, LCaret>({
     );
   }, [fileDiff, oldFile, newFile, options?.parseDiffOptions]);
   const instanceRef = useRef<
-    FileDiff<LAnnotation> | VirtualizedFileDiff<LAnnotation> | null
+    | FileDiff<LAnnotation, Caret>
+    | VirtualizedFileDiff<LAnnotation, Caret>
+    | null
   >(null);
   const disposeEditorRef = useRef<() => void>(null);
   const getEditor = useStableCallback(() => {
@@ -358,24 +360,24 @@ function resolveAcceptedValues<LAnnotation>(
   return { fileDiff: resolvedFileDiff, lineAnnotations: resolvedAnnotations };
 }
 
-interface MergeFileDiffOptionsProps<LAnnotation> {
+interface MergeFileDiffOptionsProps<LAnnotation, Caret> {
   controlledSelection: boolean;
   hasCustomHeader: boolean;
   hasGutterRenderUtility: boolean;
-  onEditChange?: FileDiffEditChangeHandler<LAnnotation>;
-  onEditComplete?: FileDiffEditCompleteHandler<LAnnotation>;
-  options: FileDiffOptions<LAnnotation> | undefined;
+  onEditChange?: FileDiffEditChangeHandler<LAnnotation, Caret>;
+  onEditComplete?: FileDiffEditCompleteHandler<LAnnotation, Caret>;
+  options: FileDiffOptions<LAnnotation, Caret> | undefined;
 }
 
-function mergeFileDiffOptions<LAnnotation>({
+function mergeFileDiffOptions<LAnnotation, Caret>({
   options,
   controlledSelection,
   hasCustomHeader,
   hasGutterRenderUtility,
   onEditChange,
   onEditComplete,
-}: MergeFileDiffOptionsProps<LAnnotation>):
-  | FileDiffOptions<LAnnotation>
+}: MergeFileDiffOptionsProps<LAnnotation, Caret>):
+  | FileDiffOptions<LAnnotation, Caret>
   | undefined {
   const needsReactOverrides =
     controlledSelection ||
@@ -402,9 +404,9 @@ function mergeFileDiffOptions<LAnnotation>({
   };
 }
 
-function applyEdit<LAnnotation>(
-  instance: FileDiff<LAnnotation>,
-  getEditor: () => Editor<'file-diff', LAnnotation>
+function applyEdit<LAnnotation, Caret>(
+  instance: FileDiff<LAnnotation, Caret>,
+  getEditor: () => Editor<'file-diff', LAnnotation, Caret>
 ): () => void {
   const editor = getEditor();
   try {

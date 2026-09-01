@@ -16,7 +16,7 @@ import { Button } from '@/components/ui/button';
 import { InputWithIcon } from '@/components/ui/input-group';
 
 interface KeyboardShortcutsProps {
-  prerenderedFile: PreloadedFileResult<undefined>;
+  prerenderedFile: PreloadedFileResult<undefined, undefined>;
 }
 
 type EditorPlatform = NonNullable<EditorKeymap[number]['platform']>;

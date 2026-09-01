@@ -135,7 +135,9 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
   });
 
   const scrollRef = useRef<HTMLDivElement>(null);
-  const viewerRef = useRef<CodeViewHandle<CommentMetadata> | null>(null);
+  const viewerRef = useRef<CodeViewHandle<CommentMetadata, undefined> | null>(
+    null
+  );
   const loadDiffFiles = useMemo(
     () =>
       domain == null && hasGitHubToken

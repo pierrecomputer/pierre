@@ -37,7 +37,7 @@ interface EditorFixture {
 
 async function createEditorFixture(
   contents: string,
-  fileOptions?: Partial<FileOptions<undefined>>
+  fileOptions?: Partial<FileOptions<undefined, undefined>>
 ): Promise<EditorFixture> {
   const dom = installDom();
   const fileContainer = document.createElement('div');

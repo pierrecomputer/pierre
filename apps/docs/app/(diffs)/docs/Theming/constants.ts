@@ -10,7 +10,9 @@ const options = {
 
 const THEME_REPO_BASE = 'https://github.com/pierrecomputer/theme/blob/main';
 
-type ThemingConstant = PreloadFileOptions<undefined> & { href?: string };
+type ThemingConstant = PreloadFileOptions<undefined, undefined> & {
+  href?: string;
+};
 
 export const THEMING_PROJECT_STRUCTURE: ThemingConstant = {
   file: {

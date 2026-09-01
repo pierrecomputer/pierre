@@ -417,7 +417,7 @@ function renderDiff(parsedPatches: ParsedPatch[], manager?: WorkerPoolManager) {
       });
       const fileAnnotations = patchAnnotations[hunkIndex];
       let isEditing = false;
-      const options: FileDiffOptions<LineCommentMetadata> = {
+      const options: FileDiffOptions<LineCommentMetadata, undefined> = {
         theme: DEMO_THEME,
         themeType,
         diffStyle: unified ? 'unified' : 'split',
@@ -1060,7 +1060,7 @@ if (renderFileButton != null) {
     const fileContainer = document.createElement(DIFFS_TAG_NAME);
     wrapper.appendChild(fileContainer);
     let isEditing = false;
-    const options: FileOptions<LineCommentMetadata> = {
+    const options: FileOptions<LineCommentMetadata, undefined> = {
       overflow: wrap ? 'wrap' : 'scroll',
       theme: DEMO_THEME,
       themeType: getThemeType(),

@@ -57,9 +57,9 @@ class EditStateManagerNamespace<EType extends EditorType> {
 
   constructor(readonly type: EType) {}
 
-  activate<LAnnotation>(
+  activate<LAnnotation, Caret>(
     editStateKey: string,
-    owner: Editor<EType, LAnnotation>,
+    owner: Editor<EType, LAnnotation, Caret>,
     initialState?: ManagedEditSession<EType, LAnnotation>
   ): ManagedEditSession<EType, LAnnotation> {
     const activeSession = this.#sessions.get(editStateKey);
@@ -88,9 +88,9 @@ class EditStateManagerNamespace<EType extends EditorType> {
     return state;
   }
 
-  release<LAnnotation>(
+  release<LAnnotation, Caret>(
     editStateKey: string,
-    owner: Editor<EType, LAnnotation>,
+    owner: Editor<EType, LAnnotation, Caret>,
     discard = false
   ): void {
     const activeSession = this.#sessions.get(editStateKey);
@@ -165,22 +165,22 @@ class EditStateManagerClass {
   #diffs = new EditStateManagerNamespace('file-diff');
 
   /** Mark a keyed session as active and return its initial or stored state. */
-  activate<EType extends EditorType, LAnnotation>(
+  activate<EType extends EditorType, LAnnotation, Caret>(
     type: EType,
     editStateKey: string,
-    owner: Editor<EType, LAnnotation>,
+    owner: Editor<EType, LAnnotation, Caret>,
     initialState?: ManagedEditSession<EType, LAnnotation>
   ): ManagedEditSession<EType, LAnnotation> {
     return (
       type === 'file'
         ? this.#files.activate(
             editStateKey,
-            owner as Editor<'file', LAnnotation>,
+            owner as Editor<'file', LAnnotation, Caret>,
             initialState as ManagedFileEditSession<LAnnotation> | undefined
           )
         : this.#diffs.activate(
             editStateKey,
-            owner as Editor<'file-diff', LAnnotation>,
+            owner as Editor<'file-diff', LAnnotation, Caret>,
             initialState as ManagedFileDiffEditSession<LAnnotation> | undefined
           )
     ) as ManagedEditSession<EType, LAnnotation>;
@@ -190,9 +190,9 @@ class EditStateManagerClass {
    * Stop tracking this file session as active and store its current state,
    * unless `discard` is true.
    */
-  releaseFile<LAnnotation>(
+  releaseFile<LAnnotation, Caret>(
     editStateKey: string,
-    owner: Editor<'file', LAnnotation>,
+    owner: Editor<'file', LAnnotation, Caret>,
     discard = false
   ): void {
     this.#files.release(editStateKey, owner, discard);
@@ -202,9 +202,9 @@ class EditStateManagerClass {
    * Stop tracking this diff session as active and store its current state,
    * unless `discard` is true.
    */
-  releaseFileDiff<LAnnotation>(
+  releaseFileDiff<LAnnotation, Caret>(
     editStateKey: string,
-    owner: Editor<'file-diff', LAnnotation>,
+    owner: Editor<'file-diff', LAnnotation, Caret>,
     discard = false
   ): void {
     this.#diffs.release(editStateKey, owner, discard);

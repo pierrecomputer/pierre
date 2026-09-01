@@ -8,11 +8,11 @@ import {
 import { EditProvider } from '@pierre/diffs/react';
 import type { ReactNode } from 'react';
 
-function createEditor<EType extends EditorType, LAnnotation>(
+function createEditor<EType extends EditorType, LAnnotation, Caret>(
   editorType: EType,
-  options: EditorOptions<EType, LAnnotation>,
+  options: EditorOptions<EType, LAnnotation, Caret>,
   editStateKey?: string
-): Editor<EType, LAnnotation> {
+): Editor<EType, LAnnotation, Caret> {
   return new Editor(editorType, options, editStateKey);
 }
 

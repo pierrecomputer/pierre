@@ -30,7 +30,7 @@ import { Button } from '@/components/ui/button';
 
 interface HistoryDemoProps {
   // Server-preloaded, highlighted File; hydrating from it avoids a highlight flash on load.
-  prerenderedFile: PreloadedFileResult<undefined>;
+  prerenderedFile: PreloadedFileResult<undefined, undefined>;
 }
 
 // Custom element the File renders into; its shadow DOM is open, so we can reach in.
@@ -138,7 +138,7 @@ export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
   // Reset rather than letting the step count freeze at a stale value.
   const [diverged, setDiverged] = useState(false);
   const editorRef = useRef<Editor<'file'> | null>(null);
-  const editorOptions = useMemo<EditorOptions<'file'>>(
+  const editorOptions = useMemo<EditorOptions<'file', undefined, undefined>>(
     () => ({
       onAttach(editor) {
         editorRef.current = editor;
@@ -148,7 +148,7 @@ export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
   );
 
   const handleEditChange = useCallback(
-    (event: EditorChangeEvent<'file', undefined>) => {
+    (event: EditorChangeEvent<'file', undefined, undefined>) => {
       const index = snapshotIndexFor(event.file.contents);
       if (index >= 0) {
         setApplied(index);
