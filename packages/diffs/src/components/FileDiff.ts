@@ -1406,6 +1406,7 @@ export class FileDiff<
     } = this.options;
     const nextRenderRange = collapsed ? undefined : renderRange;
     const themeChanged = this.hasThemeChanged();
+    const highlighterChanged = this.hunksRenderer.hasPendingHighlighterChange();
     const hasFileInput = fileInput != null;
     const filesDidChange =
       hasFileInput &&
@@ -1425,6 +1426,7 @@ export class FileDiff<
       !forceRender &&
       !annotationsChanged &&
       !themeChanged &&
+      !highlighterChanged &&
       // If using the fileDiff API, lets check to see if they are equal to
       // avoid doing work
       ((fileDiff != null && !diffDidChange) ||

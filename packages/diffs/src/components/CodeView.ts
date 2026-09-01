@@ -10,6 +10,7 @@ import {
   THEME_CSS_ATTRIBUTE,
   UNSAFE_CSS_ATTRIBUTE,
 } from '../constants';
+import { getCustomHighlighter } from '../highlighter/resolve_highlighter';
 import type { SelectionWriteOptions } from '../managers/InteractionManager';
 import {
   dequeueRender,
@@ -1785,9 +1786,12 @@ export class CodeView<LAnnotation = undefined> {
     const { workerManager } = this;
     // A failed worker pool never reaches the 'initialized' state (it reverts to
     // 'waiting' with workersFailed: true), so treat failure as ready and let
-    // the renderers fall back to synchronous highlighting.
+    // the renderers fall back to synchronous highlighting. A custom
+    // highlighter routes every render to the main thread, so worker
+    // initialization must not gate rendering under one either.
     if (
       workerManager == null ||
+      getCustomHighlighter() != null ||
       workerManager.isInitialized() ||
       workerManager.getStats().workersFailed
     ) {

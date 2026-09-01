@@ -1155,7 +1155,12 @@ export class LiveEditorTokenizer extends BaseEditorTokenizer {
   #live: CodeLiveTokenizer | undefined;
   #liveLang: string | undefined;
   #syncedRevision = 0;
+  // Deliveries flushed while a mutating call settles the previous batch:
+  // pre-batch line numbers, remapped once the batch's line changes are known.
   #settleLines: Map<number, Array<HighlightedToken>> | undefined;
+  // Deliveries flushed during a mutating call AFTER its revision bump (the
+  // update's own off-range work): already post-batch line numbers.
+  #freshLines: Map<number, Array<HighlightedToken>> | undefined;
   #mutating = false;
   #stopped = false;
   #paused = false;
@@ -1231,6 +1236,16 @@ export class LiveEditorTokenizer extends BaseEditorTokenizer {
       if (remapped.size > 0) {
         this.#deliver(remapped);
       }
+    }
+    // The update's own off-range flush is already in post-batch coordinates;
+    // it goes out after the remapped settle lines so newer tokens win.
+    const fresh = this.#freshLines;
+    this.#freshLines = undefined;
+    if (fresh !== undefined && fresh.size > 0) {
+      for (const line of fresh.keys()) {
+        this.#ignoredRanges[line] = undefined;
+      }
+      this.#deliver(fresh);
     }
     const dirtyLines = update.lines;
     for (const line of dirtyLines.keys()) {
@@ -1346,6 +1361,7 @@ export class LiveEditorTokenizer extends BaseEditorTokenizer {
     this.#live = undefined;
     this.#liveLang = undefined;
     this.#settleLines = undefined;
+    this.#freshLines = undefined;
     this.#ignoredRanges = [];
   }
 
@@ -1380,8 +1396,10 @@ export class LiveEditorTokenizer extends BaseEditorTokenizer {
       }
     }
     if (update === undefined) {
-      // The buffered settle lines describe a document state being replaced.
+      // Both buffers describe a document state the reset replaces: settle
+      // lines are pre-batch, fresh lines belong to the abandoned attempt.
       this.#settleLines = undefined;
+      this.#freshLines = undefined;
       this.#mutating = true;
       try {
         update = live.reset(this.textDocument.getText(), { renderRange });
@@ -1411,7 +1429,19 @@ export class LiveEditorTokenizer extends BaseEditorTokenizer {
       return;
     }
     if (this.#mutating) {
-      if (this.#settleLines === undefined) {
+      // The revision tells the two mutating-call delivery classes apart:
+      // settle work for the outgoing batch still carries the synced revision
+      // (pre-batch coordinates), while the in-progress update's off-range
+      // flush arrives after the bump (post-batch coordinates).
+      if (this.#live != null && this.#live.revision !== this.#syncedRevision) {
+        if (this.#freshLines === undefined) {
+          this.#freshLines = lines;
+        } else {
+          for (const [line, tokens] of lines) {
+            this.#freshLines.set(line, tokens);
+          }
+        }
+      } else if (this.#settleLines === undefined) {
         this.#settleLines = lines;
       } else {
         for (const [line, tokens] of lines) {

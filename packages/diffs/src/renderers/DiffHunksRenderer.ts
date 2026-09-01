@@ -442,8 +442,12 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         })
         .catch((error: unknown) => this.onHighlightError(error));
     }
+    const registration = getCodeHighlighter();
     return this.asyncHighlight(diff)
-      .then((fresh) => this.applyRefreshedResult(diff, fresh))
+      .then((fresh) => {
+        if (getCodeHighlighter() !== registration) return;
+        this.applyRefreshedResult(diff, fresh);
+      })
       .catch((error: unknown) => this.onHighlightError(error));
   }
 
@@ -488,6 +492,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   // everything derived from the previous one and re-resolve, or the renderer
   // would keep rendering with the old implementation.
   private invalidateOnHighlighterChange(): void {
+    // An active edit session keeps rendering through the implementation it
+    // captured; the registration change applies on the first render after
+    // the session ends (the snapshot below stays stale until then).
+    if (this.editSessionActive) return;
     const registered = getCodeHighlighter();
     if (registered === this.highlighterRegistration) return;
     this.highlighterRegistration = registered;
@@ -499,6 +507,17 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         this.options.theme ?? DEFAULT_THEMES
       );
     }
+  }
+
+  // Whether a setHighlighter call since the last render pass is still
+  // unapplied. Components consult this in their render early-outs so a
+  // re-render after a switch repaints in place; an active edit session keeps
+  // its captured implementation and never reports a pending change.
+  public hasPendingHighlighterChange(): boolean {
+    return (
+      !this.editSessionActive &&
+      getCodeHighlighter() !== this.highlighterRegistration
+    );
   }
 
   public clearRenderCache(): void {
@@ -917,7 +936,11 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   }
 
   public async initializeHighlighter(): Promise<RenderersHighlighter> {
-    this.highlighter = await loadHighlighter(
+    // The load resolves against the registration captured here; if
+    // setHighlighter swapped implementations while it was in flight, the
+    // stale result must not displace what invalidation re-resolved.
+    const registration = getCodeHighlighter();
+    const highlighter = await loadHighlighter(
       getHighlighterOptions(this.computedLang, {
         theme: this.getLocalHighlightTheme(),
         preferredHighlighter:
@@ -925,7 +948,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           this.options.preferredHighlighter,
       })
     );
-    return this.highlighter;
+    if (getCodeHighlighter() === registration) {
+      this.highlighter = highlighter;
+    }
+    return highlighter;
   }
 
   public hydrate(diff: FileDiffMetadata | undefined): void {
@@ -1220,7 +1246,11 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       // process which will involve initializing the highlighter with new themes
       // and languages
       if (!hasThemes || (!forcePlainText && !hasLangs)) {
+        // Results are only published when the registration that produced
+        // them is still current; a switch mid-highlight re-renders anyway.
+        const registration = getCodeHighlighter();
         void this.asyncHighlight(diff).then(({ result, options }) => {
+          if (getCodeHighlighter() !== registration) return;
           this.applyHighlightResult(diff, result, options, !forcePlainText);
         });
       }
@@ -1279,14 +1309,13 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         isHighlighterLanguageReady(this.computedLang));
     // If we don't have the required langs or themes, then we need to
     // initialize the highlighter to load the appropriate languages and themes
-    if (this.highlighter == null || !hasThemes || !hasLangs) {
-      this.highlighter = await this.initializeHighlighter();
+    let highlighter = this.highlighter;
+    if (highlighter == null || !hasThemes || !hasLangs) {
+      // render with the loaded instance either way; initializeHighlighter
+      // only retains it when the registration is still current
+      highlighter = await this.initializeHighlighter();
     }
-    return this.renderDiffWithHighlighter(
-      diff,
-      this.highlighter,
-      forcePlainText
-    );
+    return this.renderDiffWithHighlighter(diff, highlighter, forcePlainText);
   }
 
   private renderDiffWithHighlighter(

@@ -115,12 +115,6 @@ export function isHighlighterNull(
   return h == null;
 }
 
-export async function preloadHighlighter(
-  options: HighlighterOptions
-): Promise<void> {
-  return void (await getSharedHighlighter(options));
-}
-
 export async function disposeHighlighter(): Promise<void> {
   if (highlighter == null) return;
   (await highlighter).dispose();

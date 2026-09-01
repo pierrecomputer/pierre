@@ -42,11 +42,13 @@ export * from './highlighter/languages/resolveLanguages';
 export {
   areHighlighterThemesReady,
   areHighlighterThemesResolved,
+  customHighlighterOf,
   getCodeHighlighter,
   getCustomHighlighter,
   getHighlighterIfReady,
   isHighlighterLanguageReady,
   loadHighlighter,
+  preloadHighlighter,
   type RenderersHighlighter,
   resolveRenderHighlighter,
 } from './highlighter/resolve_highlighter';

@@ -229,6 +229,33 @@ describe('LiveEditorTokenizer', () => {
     tokenizer.cleanUp();
   });
 
+  test('an edit above the viewport delivers those lines untranslated', () => {
+    const contents = Array.from(
+      { length: 20 },
+      (_, i) => `const v${i} = ${i};`
+    ).join('\n');
+    const { tokenizer, deferred, textDocument } = createHarness(contents);
+    tokenizer.tokenize(fullChange(textDocument), viewport(10, 5));
+    deferred.length = 0;
+    // a neutral edit on line 0 converges immediately; its re-tokenized line
+    // is flushed as finished off-range work during the update and must land
+    // in post-edit coordinates (here: unchanged), not be remapped away
+    const change = textDocument.applyEdits([
+      {
+        range: {
+          start: { line: 0, character: 13 },
+          end: { line: 0, character: 14 },
+        },
+        newText: '9',
+      },
+    ]);
+    tokenizer.tokenize(change!, viewport(10, 5));
+    const delivered = new Map(deferred.flatMap((map) => [...map.entries()]));
+    expect(delivered.has(0)).toBe(true);
+    expect(lineText(delivered.get(0)!)).toBe(textDocument.getLineText(0));
+    tokenizer.cleanUp();
+  });
+
   test('deferred lines settled by a following edit arrive remapped', async () => {
     const contents = Array.from(
       { length: 20 },

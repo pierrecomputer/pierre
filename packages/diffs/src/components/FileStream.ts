@@ -1,6 +1,6 @@
 import { DEFAULT_THEMES, DIFFS_TAG_NAME } from '../constants';
 import {
-  getCustomHighlighter,
+  customHighlighterOf,
   loadHighlighter,
   type RenderersHighlighter,
 } from '../highlighter/resolve_highlighter';
@@ -160,6 +160,13 @@ export class FileStream {
 
     this.pre = pre;
     this.code = getOrCreateCodeNode({ code: this.code, pre });
+    // Re-setup reuses the code node, but clearing the pre above detached it;
+    // getOrCreateCodeNode only appends nodes it created itself.
+    if (this.code.parentElement !== pre) {
+      pre.appendChild(this.code);
+    }
+    // tokens queued by a previous run describe DOM the wipe just discarded
+    this.queuedTokens.length = 0;
     this.gutterElement = undefined;
     this.contentElement = undefined;
     this.currentRowCount = 0;
@@ -208,7 +215,10 @@ export class FileStream {
     highlighter: RenderersHighlighter,
     theme: DiffsThemeNames | ThemesType
   ): TransformStream<string, ThemedToken | RecallToken> {
-    const custom = getCustomHighlighter();
+    // Derive the tokenizer from the highlighter this stream captured during
+    // setup, not the mutable registration: a setHighlighter call in between
+    // must not pair one implementation's theme CSS with another's tokens.
+    const custom = customHighlighterOf(highlighter);
     const options = {
       ...this.options,
       ...(typeof theme === 'string' ? { theme } : { themes: theme }),
@@ -232,9 +242,14 @@ export class FileStream {
       const tokenizer = new custom.TokenizeStream(options);
       let pending = '';
       let lastPushTime = 0;
+      let coalesceTimer: ReturnType<typeof setTimeout> | undefined;
       const enqueueCompletedLines = (
         controller: TransformStreamDefaultController<ThemedToken>
       ) => {
+        if (coalesceTimer !== undefined) {
+          clearTimeout(coalesceTimer);
+          coalesceTimer = undefined;
+        }
         lastPushTime = performance.now();
         const lines = tokenizer.pushCode(pending);
         pending = '';
@@ -252,15 +267,33 @@ export class FileStream {
           if (!pending.includes('\n')) {
             return;
           }
+          const elapsed = performance.now() - lastPushTime;
           if (
             pending.length < STREAM_COALESCE_BYTES &&
-            performance.now() - lastPushTime < STREAM_COALESCE_MS
+            elapsed < STREAM_COALESCE_MS
           ) {
+            // Hold the completed line for the rest of the coalescing window,
+            // but schedule the flush: if the source pauses, the line must
+            // still paint without waiting for the next chunk or close.
+            coalesceTimer ??= setTimeout(() => {
+              coalesceTimer = undefined;
+              try {
+                if (pending.includes('\n')) {
+                  enqueueCompletedLines(controller);
+                }
+              } catch {
+                // the stream was closed or errored since scheduling
+              }
+            }, STREAM_COALESCE_MS - elapsed);
             return;
           }
           enqueueCompletedLines(controller);
         },
         flush(controller) {
+          if (coalesceTimer !== undefined) {
+            clearTimeout(coalesceTimer);
+            coalesceTimer = undefined;
+          }
           if (pending !== '') {
             enqueueCompletedLines(controller);
           }

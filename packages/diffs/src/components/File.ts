@@ -1040,6 +1040,7 @@ export class File<
     const nextRenderRange = collapsed ? undefined : renderRange;
     const previousRenderRange = this.renderRange;
     const themeChanged = this.hasThemeChanged();
+    const highlighterChanged = this.fileRenderer.hasPendingHighlighterChange();
     const annotationsChanged =
       lineAnnotations != null &&
       (lineAnnotations.length > 0 || this.getLatestAnnotations().length > 0)
@@ -1056,7 +1057,8 @@ export class File<
       areRenderRangesEqual(nextRenderRange, this.renderRange) &&
       !didFileChange &&
       !annotationsChanged &&
-      !themeChanged
+      !themeChanged &&
+      !highlighterChanged
     ) {
       return this.applyCachedThemeState(themeType);
     }

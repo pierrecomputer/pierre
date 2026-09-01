@@ -1,3 +1,4 @@
+import { oneDarkPro } from '@pierre/chamele/themes';
 import { transformerStyleToClass } from '@shikijs/transformers';
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import type { ElementContent } from 'hast';
@@ -10,6 +11,7 @@ import {
   getCodeHighlighter,
   getCustomHighlighter,
 } from '../src/highlighter/resolve_highlighter';
+import { preloadHighlighter } from '../src/highlighter/resolve_highlighter';
 import { shikiHighlighter } from '../src/highlighter/shiki_highlighter';
 import { FileRenderer } from '../src/renderers/FileRenderer';
 import { preloadFile } from '../src/ssr/preloadFile';
@@ -65,6 +67,71 @@ describe('registration', () => {
   });
 });
 
+describe('registration races', () => {
+  afterAll(() => {
+    setHighlighter(shikiHighlighter);
+  });
+
+  test('a stale async load cannot restore the previous highlighter', async () => {
+    let resolveLoad: (() => void) | undefined;
+    let slowRenders = 0;
+    const slow: CodeHighlighter = {
+      ...chameleHighlighter,
+      name: 'slow',
+      isReady: () => false,
+      load: () =>
+        new Promise<void>((resolve) => {
+          resolveLoad = resolve;
+        }),
+      codeToHast(code, options) {
+        slowRenders++;
+        return chameleHighlighter.codeToHast(code, options);
+      },
+    };
+    let chameleRenders = 0;
+    const fast: CodeHighlighter = {
+      ...chameleHighlighter,
+      name: 'fast',
+      codeToHast(code, options) {
+        chameleRenders++;
+        return chameleHighlighter.codeToHast(code, options);
+      },
+    };
+    setHighlighter(slow);
+    const renderer = new FileRenderer();
+    const pending = renderer.initializeHighlighter();
+    // the registration changes while the slow load is still in flight
+    setHighlighter(fast);
+    expect(renderer.renderFile(file)).toBeDefined();
+    const after = chameleRenders;
+    resolveLoad?.();
+    await pending;
+    // a fresh render pass must keep using the current implementation, not
+    // the one whose load resolved late
+    renderer.clearRenderCache();
+    expect(renderer.renderFile(file)).toBeDefined();
+    expect(slowRenders).toBe(0);
+    expect(chameleRenders).toBeGreaterThan(after);
+  });
+
+  test('preloadHighlighter loads the registered implementation', async () => {
+    const loads: unknown[] = [];
+    const custom: CodeHighlighter = {
+      ...chameleHighlighter,
+      name: 'preloadable',
+      load(options) {
+        loads.push(options);
+      },
+    };
+    setHighlighter(custom);
+    await preloadHighlighter({
+      langs: ['typescript'],
+      themes: ['pierre-dark'],
+    });
+    expect(loads).toHaveLength(1);
+  });
+});
+
 describe('chamele highlighter', () => {
   beforeAll(() => {
     setHighlighter(chameleHighlighter);
@@ -97,12 +164,14 @@ describe('chamele highlighter', () => {
     expect(colors?.['editorCursor.foreground']).toBe('#009fff');
     // keys the Zed theme lacks stay unset so the editor keeps its fallbacks
     expect(colors?.['editorBracketMatch.background']).toBeUndefined();
-    // shiki bundled-theme names resolve straight to chamele's bundle
+    // shiki bundled-theme names resolve straight to chamele's bundle; the
+    // expected value comes from the bundled theme itself so upstream theme
+    // tuning does not break the mapping assertion
     expect(
       chameleHighlighter.getTheme('one-dark-pro').colors?.[
         'editor.selectionBackground'
       ]
-    ).toBe('#67769660');
+    ).toBe(oneDarkPro.style.players?.[0]?.selection as string);
     // Pierre variant names resolve through the alias table
     expect(chameleHighlighter.getTheme('pierre-dark-vibrant').colors).toEqual(
       colors

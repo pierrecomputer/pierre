@@ -30,9 +30,13 @@ pnpm add @pierre/diffs
 ## Highlighters
 
 `@pierre/diffs` highlights with [shiki] out of the box — nothing changes for
-existing consumers. `setHighlighter` swaps the implementation used by
-subsequently created files, diffs, streams, editors, React components, and SSR
-renderers; instances that already exist keep the implementation they captured.
+existing consumers. `setHighlighter` swaps the implementation for everything
+rendered afterwards: newly created files, diffs, streams, editors, React
+components, and SSR renderers use it, and an existing file or diff renderer
+adopts it the next time something makes it render (its caches are keyed by the
+registration, so stale markup is never served — but nothing repaints
+spontaneously on the call itself). Already-running streams and attached editors
+keep the implementation they captured until they are re-created.
 
 The experimental [chamele]-backed highlighter runs its lexers in WebAssembly
 with no async grammar or theme loading. Install the optional `@pierre/chamele`
