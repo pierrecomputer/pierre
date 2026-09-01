@@ -395,7 +395,7 @@
     ;; YAML front matter is recognized only at the beginning of the source and
     ;; only when the opener occupies its own line.
     (if (i32.and
-          (i32.eq (global.get $ptr) (i32.const 65536))
+          (i32.eq (global.get $ptr) (global.get $srcBase))
           (i32.and
             (i32.le_u (i32.add (global.get $ptr) (i32.const 3)) (global.get $end))
             (i32.eq (i32.and (i32.load (global.get $ptr)) (i32.const 0xffffff))
@@ -440,9 +440,9 @@
                 (global.set $ptr (local.get $after))))))))
 
     (local.set $lineStart (i32.or
-      (i32.eq (global.get $ptr) (i32.const 65536))
+      (i32.eq (global.get $ptr) (global.get $srcBase))
       (i32.and
-        (i32.gt_u (global.get $ptr) (i32.const 65536))
+        (i32.gt_u (global.get $ptr) (global.get $srcBase))
         (i32.or
           (i32.eq (i32.load8_u (i32.sub (global.get $ptr) (i32.const 1))) (i32.const 10))
           (i32.eq (i32.load8_u (i32.sub (global.get $ptr) (i32.const 1))) (i32.const 13))))))

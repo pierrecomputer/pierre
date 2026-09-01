@@ -88,11 +88,10 @@
         (if (i32.lt_u (local.get $e) (global.get $end))
           (then
             (local.set $c (i32.load8_u (local.get $e)))
-            (if (i32.or
-                  (i32.eq (local.get $c) (i32.const 10))
-                  (i32.eq (local.get $c) (i32.const 13)))
-              (then)
-              (else
+            (if (i32.and
+                  (i32.ne (local.get $c) (i32.const 10))
+                  (i32.ne (local.get $c) (i32.const 13)))
+              (then
                 (local.set $e (i32.add (local.get $e) (i32.const 1)))
                 (if (i32.eq (local.get $c) (i32.const "x"))
                   (then

@@ -6,8 +6,8 @@ tags: ['tsdown', 'publishable']
 
 tasks:
   # Replaces the tsdown tag build: scripts/build.ts compiles the WAT sources
-  # in src/ into dist/ (wasm binary, base64 module, expanded wat) and
-  # regenerates the $Token ABI in lib/token-types.ts, then tsdown compiles the
+  # in src/ into dist/ (wasm binary and base64 module) and regenerates the
+  # $Token ABI in lib/token-types.ts, then tsdown compiles the
   # TypeScript glue in lib/ into the same dist/ (its config keeps
   # `clean: false` so the wasm artifacts survive). The wasm artifacts are
   # gitignored, so workspace consumers (diffs) reach them through their
@@ -67,6 +67,15 @@ tasks:
     command: 'bun ./benchmark/bench.ts --stream'
     deps:
       - 'build'
+    options:
+      cache: false
+      runInCI: 'always'
+
+  # Incremental LiveTokenizer benchmarks: eager indexing, cached reads, edit
+  # latency versus the full-rebuild baseline, and retained-memory footprints.
+  # Compiles the WAT in-process, so it needs no build.
+  bench-live:
+    command: 'bun ./benchmark/bench-live.ts'
     options:
       cache: false
       runInCI: 'always'

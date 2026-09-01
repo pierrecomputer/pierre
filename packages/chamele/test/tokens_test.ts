@@ -630,6 +630,18 @@ void t.test('theme styles cache by object identity, not name', () => {
   assert.equal(colorOf(variantB), '#00ff00');
 });
 
+/** Replace one whole line through the batched edit API. */
+const replaceLine = (live: LiveTokenizer, line: number, text: string) =>
+  live.applyEdits([
+    {
+      range: {
+        start: { line, character: 0 },
+        end: { line, character: live.getLineLength(line) },
+      },
+      newText: text,
+    },
+  ]);
+
 void t.test('LiveTokenizer: line updates and bracket-ignored ranges', () => {
   const live = new LiveTokenizer({
     lang: 'ts',
@@ -637,7 +649,8 @@ void t.test('LiveTokenizer: line updates and bracket-ignored ranges', () => {
     code: 'function f() {\n  return 1;\n}',
   });
   assert.equal(live.lineCount, 3);
-  const updated = live.tokenizeLine(1, '  return "a { b"; // c(d)');
+  replaceLine(live, 1, '  return "a { b"; // c(d)');
+  const updated = live.getLineTokens(1);
   assert.equal(lineText(updated.tokens), '  return "a { b"; // c(d)');
   // offsets are line-relative
   assert.equal(updated.tokens[0].offset, 0);
@@ -646,8 +659,8 @@ void t.test('LiveTokenizer: line updates and bracket-ignored ranges', () => {
     [9, 16],
     [18, 25],
   ]);
-  // unchanged lines tokenize from cache and agree with codeToTokens
-  const line0 = live.tokenizeLine(0, 'function f() {');
+  // unchanged lines agree with codeToTokens
+  const line0 = live.getLineTokens(0);
   const direct = codeToTokens('function f() {\n  return "a { b"; // c(d)\n}', {
     lang: 'ts',
     theme: pierreDark,
@@ -668,21 +681,36 @@ void t.test(
       code: 'const s = `abc\nrest`;',
     });
     // line 1 starts inside the template literal
-    const inside = live.tokenizeLine(1, 'rest`;');
-    assert.equal(inside.tokens[0].type, 2);
+    assert.equal(live.getLineTokens(1).tokens[0].type, 2);
     // closing the template on line 0 flips line 1 out of the string
-    live.tokenizeLine(0, 'const s = `abc`;');
-    const outside = live.tokenizeLine(1, 'rest`;');
-    assert.notEqual(outside.tokens[0].type, 2);
+    const update = replaceLine(live, 0, 'const s = `abc`;');
+    assert.equal(update.lineChanges.length, 1);
+    assert.notEqual(live.getLineTokens(1).tokens[0].type, 2);
   }
 );
 
-void t.test('LiveTokenizer: splice and append lines', () => {
+void t.test('LiveTokenizer: structural edits move lines', () => {
   const live = new LiveTokenizer({ lang: 'ts', theme: pierreDark, code: 'a' });
-  live.tokenizeLine(1, 'let b = 1');
+  live.applyEdits([
+    {
+      range: {
+        start: { line: 0, character: 1 },
+        end: { line: 0, character: 1 },
+      },
+      newText: '\nlet b = 1',
+    },
+  ]);
   assert.equal(live.lineCount, 2);
-  live.spliceLines(0, 1);
+  live.applyEdits([
+    {
+      range: {
+        start: { line: 0, character: 0 },
+        end: { line: 1, character: 0 },
+      },
+      newText: '',
+    },
+  ]);
   assert.equal(live.lineCount, 1);
-  const { tokens } = live.tokenizeLine(0, 'let b = 1');
+  const { tokens } = live.getLineTokens(0);
   assert.equal(lineText(tokens), 'let b = 1');
 });

@@ -28,6 +28,7 @@
 
   (import "./token.wat")
   (import "./emit.wat")
+  (import "./live.wat")
   (import "./langs/asm.wat")
   (import "./langs/astro.wat")
   (import "./langs/bash.wat")
@@ -170,7 +171,9 @@
       (unreachable)))
 
   (func (export "highlight")
-    (call $streamDisable)
+    (global.set $srcBase (i32.const 65536))
+    (global.set $streaming (i32.const 0))
+    (global.set $streamDepth (i32.const 0))
     (call $hlBegin)
     (call $highlightLang (i32.load8_u (i32.const 0)))
     (call $hlEnd))
@@ -307,9 +310,16 @@
       (then (return (call $yamlStreamResume))))
     (i32.const 0))
 
-  ;; Reset state that lives outside the generic stream globals. Fresh streams
-  ;; may reuse a completed instance, so these must match a new Wasm instance.
-  (func $streamResetLang
+  ;; Zero every cross-chunk stream global, matching a fresh Wasm instance.
+  ;; Called for a stream reset and before the live tokenizer's first line.
+  (func $streamResetGlobals
+    (global.set $streamMode (i32.const 0))
+    (global.set $streamA (i32.const 0))
+    (global.set $streamB (i32.const 0))
+    (global.set $streamC (i32.const 0))
+    (global.set $streamHl (i32.const 0))
+    (global.set $streamRegionKind (i32.const 0))
+    (global.set $streamRegionStarted (i32.const 0))
     (global.set $markdownStreamFence (i32.const 0))
     (global.set $markdownStreamFenceLen (i32.const 0))
     (global.set $markdownStreamLang (i32.const 0))
@@ -317,15 +327,10 @@
     (global.set $phpStreamDecl (i32.const 0))
     (global.set $phpStreamMember (i32.const 0)))
 
-  ;; Stream one input chunk through any language while preserving lexer and
-  ;; emitter state between calls.
-  (func (export "highlightStream") (param $reset i32)
-    (local $lang i32)
-    (call $streamBegin (local.get $reset))
-    (if (local.get $reset) (then (call $streamResetLang)))
-    (call $hlBegin)
-    (call $recStreamBegin (local.get $reset))
-    (local.set $lang (i32.load8_u (i32.const 0)))
+  ;; Lex one chunk of $lang in streaming mode: resume any open multiline
+  ;; construct or embedded region, then continue with the language lexer.
+  ;; Shared by highlightStream and the live tokenizer's per-line runs.
+  (func $streamChunk (param $lang i32) (param $reset i32)
     (if (i32.eq (local.get $lang) (enum.get $Language.js))
       (then (call $hlJsStream (local.get $reset)))
       (else
@@ -340,10 +345,24 @@
                   (else
                     (if (i32.eqz (call $streamResumeCommon))
                       (then
-                        (if (call $streamResumeLang (local.get $lang))
-                          (then)
-                          (else (call $highlightLang (local.get $lang))))))))))))))
+                        (if (i32.eqz (call $streamResumeLang (local.get $lang)))
+                          (then (call $highlightLang (local.get $lang)))))))))))))))
+
+  ;; Stream one input chunk through any language while preserving lexer and
+  ;; emitter state between calls.
+  (func (export "highlightStream") (param $reset i32)
+    (global.set $srcBase (i32.const 65536))
+    (global.set $streaming (i32.const 1))
+    (global.set $streamReset (local.get $reset))
+    (global.set $streamDepth (i32.const 0))
+    ;; A pooled instance must reset the same state as a new Wasm instance.
+    (if (local.get $reset)
+      (then (call $streamResetGlobals)))
+    (call $hlBegin)
+    (call $recStreamBegin (local.get $reset))
+    (call $streamChunk (i32.load8_u (i32.const 0)) (local.get $reset))
     (call $recStreamEnd)
     (call $hlEnd)
-    (call $streamEnd))
+    (global.set $streaming (i32.const 0))
+    (global.set $streamDepth (i32.const 0)))
 )

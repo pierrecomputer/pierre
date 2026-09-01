@@ -91,7 +91,4 @@
     (i32.add (i32.const $mem.themeTable)
       (i32.add (i32.shl (local.get $hl) (i32.const 2)) (local.get $hl)))) ;; hl * 5
 
-  ;; the whole 5-byte record as one comparable value.
-  (func $themeVal (param $hl i32) (result i64)
-    (i64.and (i64.load (call $themeRec (local.get $hl))) (i64.const 0xFFFFFFFFFF)))
 )

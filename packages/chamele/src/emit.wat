@@ -36,28 +36,10 @@
   (global $streamHl (mut i32) (i32.const 0))
   (global $streamRegionKind (mut i32) (i32.const 0))
   (global $streamRegionStarted (mut i32) (i32.const 0))
-
-  (func $streamBegin (param $reset i32)
-    (global.set $streaming (i32.const 1))
-    (global.set $streamReset (local.get $reset))
-    (global.set $streamDepth (i32.const 0))
-    (if (local.get $reset)
-      (then
-        (global.set $streamMode (i32.const 0))
-        (global.set $streamA (i32.const 0))
-        (global.set $streamB (i32.const 0))
-        (global.set $streamC (i32.const 0))
-        (global.set $streamHl (i32.const 0))
-        (global.set $streamRegionKind (i32.const 0))
-        (global.set $streamRegionStarted (i32.const 0)))))
-
-  (func $streamEnd
-    (global.set $streaming (i32.const 0))
-    (global.set $streamDepth (i32.const 0)))
-
-  (func $streamDisable
-    (global.set $streaming (i32.const 0))
-    (global.set $streamDepth (i32.const 0)))
+  ;; live bytes in the shared stack for lexers that keep their stack depth in
+  ;; a local (json/toml publish it at exit); the live tokenizer captures the
+  ;; active stack prefix through it
+  (global $liveSharedBytes (mut i32) (i32.const 0))
 
   ;; write one byte as two lowercase hex digits
   (func $hexByte (param $b i32)
@@ -98,13 +80,6 @@
     (global.set $out (i32.add (global.get $out) (local.get $n)))
     (i32.store8 (global.get $out) (i32.const ")"))
     (global.set $out (i32.add (global.get $out) (i32.const 1))))
-
-  ;; Token identity is the style in CSS-variable mode; otherwise the packed
-  ;; theme record determines whether adjacent tokens can share a span.
-  (func $styleVal (param $hl i32) (result i64)
-    (if (global.get $cssVariables)
-      (then (return (i64.extend_i32_u (local.get $hl)))))
-    (call $themeVal (local.get $hl)))
 
   ;; write the record's font attributes: `;font-style:italic` and/or
   ;; `;font-weight:N00` - 34 bytes max
@@ -195,7 +170,15 @@
     (local $val i64)
     (if (i32.eq (local.get $hl) (global.get $spanHl)) (then (return)))
     (global.set $spanHl (local.get $hl))
-    (local.set $val (call $styleVal (local.get $hl)))
+    ;; Token identity is the style in CSS-variable mode; otherwise compare the
+    ;; whole packed five-byte theme record.
+    (local.set $val
+      (if (result i64) (global.get $cssVariables)
+        (then (i64.extend_i32_u (local.get $hl)))
+        (else
+          (i64.and
+            (i64.load (call $themeRec (local.get $hl)))
+            (i64.const 0xFFFFFFFFFF)))))
     (if (i64.eq (local.get $val) (global.get $spanVal)) (then (return)))
     (if (i64.ne (global.get $spanVal) (i64.const 0))
       (then
@@ -275,9 +258,9 @@
           (i32.eq (i32.load (i32.sub (global.get $out) (i32.const 4))) (local.get $hl)))
       (then
         (i32.store (i32.sub (global.get $out) (i32.const 8))
-          (i32.sub (local.get $rhs) (i32.const 65536)))
+          (i32.sub (local.get $rhs) (global.get $srcBase)))
         (return)))
-    (i32.store (global.get $out) (i32.sub (local.get $rhs) (i32.const 65536)))
+    (i32.store (global.get $out) (i32.sub (local.get $rhs) (global.get $srcBase)))
     (i32.store offset=4 (global.get $out) (local.get $hl))
     (global.set $out (i32.add (global.get $out) (i32.const 8))))
 
@@ -381,7 +364,7 @@
           (then
             (local.set $cut (local.get $char))
             (if (i32.and
-                  (i32.gt_u (local.get $p) (i32.const 65536))
+                  (i32.gt_u (local.get $p) (global.get $srcBase))
                   (i32.eq (i32.load8_u (i32.sub (local.get $p) (i32.const 1))) (i32.const 13)))
               (then
                 (local.set $cut (i32.sub (local.get $cut) (i32.const 1)))
@@ -420,7 +403,7 @@
     (global.set $out
       (i32.and (i32.add (local.get $oldEnd) (i32.const 15)) (i32.const -16)))
     (i32.store (i32.const 6) (global.get $out))
-    (global.set $recByte (i32.const 65536))
+    (global.set $recByte (global.get $srcBase))
     (global.set $recChar (i32.const 0))
     (block $done
       (loop $records
@@ -428,11 +411,11 @@
         (local.set $rhs (i32.load (local.get $rec)))
         (if (i32.gt_u
               (local.get $rhs)
-              (i32.sub (global.get $recByte) (i32.const 65536)))
+              (i32.sub (global.get $recByte) (global.get $srcBase)))
           (then
             (call $recLineTok
               (i32.load offset=4 (local.get $rec))
-              (i32.add (i32.const 65536) (local.get $rhs)))))
+              (i32.add (global.get $srcBase) (local.get $rhs)))))
         (local.set $rec (i32.add (local.get $rec) (i32.const 8)))
         (br $records))))
 
@@ -458,7 +441,7 @@
         ;; a gap keeps the open record's style, mirroring HTML span merging
         (if (i32.gt_u (global.get $out) (i32.load (i32.const 6)))
           (then (i32.store (i32.sub (global.get $out) (i32.const 8))
-            (i32.sub (local.get $rhs) (i32.const 65536))))
+            (i32.sub (local.get $rhs) (global.get $srcBase))))
           (else (call $recTok (enum.get $Token.none) (local.get $rhs))))
         (return)))
     (call $ensureCap (i32.add
@@ -519,9 +502,9 @@
     (global.set $cssVariables (i32.eq (i32.load8_u (i32.const 1)) (i32.const 1)))
     (global.set $tokens (i32.ge_u (i32.load8_u (i32.const 1)) (i32.const 2)))
     (global.set $tokenLines (i32.eq (i32.load8_u (i32.const 1)) (i32.const 3)))
-    (global.set $eof (i32.add (i32.const 65536) (i32.load (i32.const 2))))
+    (global.set $eof (i32.add (global.get $srcBase) (i32.load (i32.const 2))))
     (global.set $end (global.get $eof))
-    (global.set $ptr (i32.const 65536))
+    (global.set $ptr (global.get $srcBase))
     (global.set $out (i32.and (i32.add (global.get $eof) (i32.const 47)) (i32.const -16)))
     (i32.store (i32.const 6) (global.get $out))
     (global.set $cap (i32.sub (i32.mul (memory.size) (i32.const 65536)) (i32.const 16)))

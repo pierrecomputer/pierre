@@ -246,7 +246,7 @@
     (call $lexEmitLeadingContinuation)
     ;; Keep inherited Markdown YAML front matter opaque to MDX braces/angles.
     (if (i32.and
-          (i32.eq (global.get $ptr) (i32.const 65536))
+          (i32.eq (global.get $ptr) (global.get $srcBase))
           (i32.and
             (i32.le_u (i32.add (global.get $ptr) (i32.const 3)) (global.get $end))
             (i32.eq (i32.and (i32.load (global.get $ptr)) (i32.const 0xffffff))

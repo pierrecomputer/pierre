@@ -1,13 +1,14 @@
 import { defineConfig, type UserConfig } from 'tsdown';
 
-// scripts/build.ts emits the wasm artifacts (chamele.wat, chamele.wasm,
-// chamele.wasm.mjs) into dist/ before tsdown runs (see the moon build task),
-// so tsdown must not clean dist/ and must keep ./chamele.wasm* imports as-is
-// for runtime resolution next to the compiled glue.
+// scripts/build.ts emits chamele.wasm and chamele.wasm.mjs into dist/ before
+// tsdown runs (see the moon build task), so tsdown must not clean dist/ and must
+// keep ./chamele.wasm* imports as-is for runtime resolution next to the glue.
 const config: UserConfig[] = defineConfig([
   {
     entry: [
       'lib/index.ts',
+      'lib/highlighter.ts',
+      'lib/live.ts',
       'lib/tokens.ts',
       'lib/theme.ts',
       'lib/token-types.ts',

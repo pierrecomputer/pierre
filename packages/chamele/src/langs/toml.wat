@@ -806,5 +806,7 @@
           (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))
         (call $emitTok
           (enum.get $Token.none) (local.get $lhs) (global.get $ptr))
-        (br $next))))
+        (br $next)))
+    ;; publish the active shared-stack prefix for live state capture
+    (global.set $liveSharedBytes (local.get $depth)))
 )

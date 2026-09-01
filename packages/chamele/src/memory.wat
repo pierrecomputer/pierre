@@ -38,4 +38,10 @@
   (const $mem.phpWords 27264)
   (const $mem.watWords 28032)
   (const $mem.spanCache 60000)
+  ;; live-tokenizer tables (see src/live.wat): free-list heads in the page-1
+  ;; free region, the change list and heap on the text pages
+  (const $mem.liveFree 64832)
+  (const $mem.liveChanges 65536)
+  (const $mem.liveChangesEnd 81920)
+  (const $mem.liveHeapBase 86016)
 )

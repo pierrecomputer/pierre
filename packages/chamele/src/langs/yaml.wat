@@ -76,7 +76,7 @@
   (func $yamlLineIndent (param $p i32) (result i32)
     (block $done
       (loop $back
-        (br_if $done (i32.le_u (local.get $p) (i32.const 65536)))
+        (br_if $done (i32.le_u (local.get $p) (global.get $srcBase)))
         (br_if $done (i32.or
           (i32.eq (i32.load8_u (i32.sub (local.get $p) (i32.const 1))) (i32.const 10))
           (i32.eq (i32.load8_u (i32.sub (local.get $p) (i32.const 1))) (i32.const 13))))

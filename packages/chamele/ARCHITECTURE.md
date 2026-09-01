@@ -15,10 +15,12 @@ Mode 0 emits inline-color HTML, mode 1 CSS-variable HTML, and mode 2 token
 records. Mode 3 runs the same lexer, then a Wasm post-pass converts its byte-end
 records to UTF-16 ends with newline markers. `codeToTokens` and `codeToHast` use
 mode 3 and build their JavaScript output directly from those records.
-`LiveTokenizer` uses mode 2 and splits the byte records in JavaScript.
 `TokenizeStream` uses mode 3 per completed chunk. Streaming lexer checkpoints
 preserve language context, multiline modes, embedded regions, and the emitter's
-open style between calls, so prior chunks are not rescanned.
+open style between calls, so prior chunks are not rescanned. `LiveTokenizer`
+drives the same mode-3 streaming pipeline one line at a time from Wasm and keeps
+the document, packed token records, and interned per-line lexer states in linear
+memory (see the live tokenizer section).
 
 ## Project structure
 
@@ -30,10 +32,14 @@ src/emit.wat        HTML/token-record emitter and driver prologue/epilogue
 src/common.wat      shared ASCII, identifier, number, string, and comment scans
 src/langs/*.wat     32 built-in language modes
   js/ts/jsx/tsx.wat one feature-gated ECMAScript engine split by concern
+src/live.wat        incremental-tokenizer core: heap, line table, state
+                    interning, per-line driver, edit splicing, compaction
 src/chamele.wat     memory, $Language enum, imports, and dispatch
-lib/index.ts        Highlighter, codeToHtml/codeToTokens/codeToHast, language
-                    aliases, theme cache, TokenizeStream, LiveTokenizer,
-                    public types
+lib/index.ts        public types and the export barrel
+lib/highlighter.ts  WasmHighlighter, codeToHtml/codeToTokens/codeToHast,
+                    language aliases, theme cache, TokenizeStream
+lib/live.ts         LiveTokenizer glue: edit validation, WTF-8 encoding,
+                    deferred slicing, themed reads over the live exports
 lib/tokens.ts       token records -> shiki-compatible tokens and hast
 lib/theme.ts        Zed theme -> binary table compiler
 lib/token-types.ts  generated, tracked $Token ABI
@@ -243,3 +249,51 @@ Output is one self-contained fragment:
 
 It uses inline styles, with no token classes or line spans. Only `& < >` are
 escaped. Spans never nest. Adjacent equal styles merge across whitespace.
+
+## Live tokenizer (src/live.wat, lib/live.ts)
+
+A `LiveTokenizer` instance is a dedicated Wasm instance whose text pages hold
+the whole editor document instead of a one-shot input buffer:
+
+```
+[] page 1                     control, static data, live free-list heads
+[] [65536:81920)              line-change list: count, then 16-byte entries
+[] [86016:heap ceiling)       size-class heap: document text blocks, per-line
+                              token blocks, interned state blobs, line table
+[] [heap ceiling:memory end)  transient per-line scratch: the line's bytes,
+                              terminator, NUL sentinel, SIMD slack, then the
+                              standard aligned record output
+```
+
+Per line the driver copies the content plus its real terminator into scratch,
+points `$srcBase` at it, and runs the ordinary mode-3 streaming pipeline
+(`$streamChunk`), so live output is byte-identical to `TokenizeStream` fed one
+line per chunk. Around each run it restores and captures the streaming state:
+the cross-chunk globals, the 32-byte stream delimiter, the whole used lexer
+checkpoint region, and the live prefixes of the shared/bracket/jsx stacks. That
+image is a pure function of the incoming state and the line bytes, so blobs are
+interned (FNV-1a 64 then exact bytes) into refcounted ids and exact id equality
+is a sound convergence test.
+
+The line table is a gap buffer of 32-byte descriptors (text pointer/length,
+UTF-16 length, token block, outgoing state id, terminator and format flags).
+Records pack to `(tokenId << 24) | endUtf16` words, or `[endUtf16, tokenId]`
+pairs past the 24-bit range. Edits splice descriptors (the last replacement line
+inherits the old end line's state id, so a state-neutral edit converges on
+itself), then the driver re-tokenizes each dirty range and continues until a
+line's new outgoing id equals its old one, extending the reported line changes
+over every re-tokenized line. All driver state lives in globals, so `liveRun` is
+resumable by line budget: with a `renderRange` the JavaScript glue runs it
+synchronously only until the cursor passes the range end, returns tokens for the
+in-range re-tokenized lines, and drives the remainder in budgeted background
+slices delivered through `onDeferTokenize`. The glue derives each slice's lines
+from the change list plus the driver cursor (`liveStats` keys 10/11); a new edit
+or reset while slices are pending first settles the run to convergence so the
+identity-based stop rule always compares against a fully converged state chain.
+
+The heap uses size-class free lists (8-byte headers, one block size per class)
+with no coalescing; a sliding compaction pass runs when parked free space
+outweighs live data by at least 1 MiB. Text is stored as WTF-8 — JavaScript
+encodes lone surrogates explicitly, and edits that split an astral pair
+synthesize the matching surrogate halves — so `getLineText` round-trips any
+UTF-16 document exactly.

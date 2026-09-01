@@ -67,8 +67,8 @@ Pass `theme` for one theme or `themes` for multiple color schemes.
 `tokenizeMaxLineLength` collapses long lines into one unthemed token.
 `codeToHast` also accepts Shiki-style `transformers` and `decorations`.
 
-Use `TokenizeStream` for streaming and `LiveTokenizer` for line edits. Each owns
-a Wasm instance and text buffer. Streams preserve lexer state for every language
+Use `TokenizeStream` for streaming and `LiveTokenizer` for editors. Each owns a
+Wasm instance and text buffer. Streams preserve lexer state for every language
 and scan only newly completed chunks:
 
 ```js
@@ -80,10 +80,32 @@ const lines = [];
 for await (const chunk of chunks) lines.push(...stream.pushCode(chunk));
 lines.push(...stream.end());
 
-// editing: update one line, get its tokens and string/comment/regex ranges
+// editing: apply batched UTF-16 range edits; only lines whose lexer state
+// changed are re-tokenized, and the update lists exactly those lines
 const live = new LiveTokenizer({ lang: 'ts', theme: pierreDark, code });
-const { tokens, bracketIgnoredRanges } = live.tokenizeLine(1, 'let b = 2');
+const update = live.applyEdits([
+  {
+    range: { start: { line: 1, character: 0 }, end: { line: 1, character: 9 } },
+    newText: 'let b = 2',
+  },
+]);
+for (const change of update.lineChanges) {
+  for (let i = change.newStartLine; i < change.newEndLine; i++) {
+    const { tokens, bracketIgnoredRanges } = live.getLineTokens(i);
+  }
+}
 ```
+
+`LiveTokenizer` keeps the document, per-line token records, and interned lexer
+states in Wasm, and doubles as the document model: `getLineText`/`getText` read
+back the exact document. A `renderRange: [startLine, endLine)` option on the
+constructor, `applyEdits`, and `reset` bounds synchronous work to the visible
+window — the update's `lines` map carries `[column, color, text]` tuples for the
+re-tokenized in-range lines, while off-range lines converge in background slices
+delivered through the `onDeferTokenize(lines)` constructor option (`flush`
+forces completion, `pendingTokenization` reports it). `getLineRecords` exposes
+zero-copy packed records (`tokenNames` maps their token ids), and `dispose`
+releases the instance.
 
 ## Themes
 
