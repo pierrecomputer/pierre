@@ -126,7 +126,7 @@ import {
 } from './textMeasure';
 import {
   createEditorTokenizer,
-  type DiffsEditorTokenizer,
+  type EditorTokenizer,
   renderLineTokens,
 } from './tokenizer';
 import type { EditorEditCompleteEvent } from './types';
@@ -303,7 +303,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #initialState: EditorInitialState<LAnnotation> | undefined;
   #editSession?: ManagedEditSession<LAnnotation>;
   #metrics = new Metrics();
-  #tokenizer?: DiffsEditorTokenizer;
+  #tokenizer?: EditorTokenizer;
   #popoverManager?: PopoverManager;
   // event disposes
   #editorEventDisposes?: (() => void)[];

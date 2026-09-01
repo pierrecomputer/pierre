@@ -341,4 +341,70 @@ describe('chamele highlighter', () => {
     ]);
     live!.dispose();
   });
+
+  test('pending inserted lines expose their text as one unthemed token', () => {
+    const live = chameleHighlighter.createLiveTokenizer?.({
+      lang: 'typescript',
+      theme: 'pierre-dark',
+      code: 'const a = 1;\nconst b = 2;',
+    });
+    // splice in 50 lines but tokenize only the first line synchronously
+    live!.applyEdits(
+      [
+        {
+          range: {
+            start: { line: 0, character: 12 },
+            end: { line: 0, character: 12 },
+          },
+          newText: Array.from(
+            { length: 50 },
+            (_, i) => `\nlet n${i} = ${i};`
+          ).join(''),
+        },
+      ],
+      { renderRange: [0, 1] }
+    );
+    expect(live!.pendingTokenization).toBe(true);
+    // deferred work has not reached line 30 and it has no records yet, but
+    // it must render its current text, not read back as an empty line
+    const pending = live!.getLineTokens(30);
+    expect(pending.tokens).toHaveLength(1);
+    expect(pending.tokens[0][2]).toBe('let n29 = 29;');
+    live!.flush();
+    expect(live!.getLineTokens(30).tokens.length).toBeGreaterThan(1);
+    live!.dispose();
+  });
+
+  test('pause suspends background slices without discarding them', async () => {
+    const live = chameleHighlighter.createLiveTokenizer?.({
+      lang: 'typescript',
+      theme: 'pierre-dark',
+      code: Array.from({ length: 200 }, (_, i) => `let v${i} = ${i};`).join(
+        '\n'
+      ),
+    });
+    live!.applyEdits(
+      [
+        {
+          range: {
+            start: { line: 0, character: 0 },
+            end: { line: 0, character: 0 },
+          },
+          newText: 'const s = `',
+        },
+      ],
+      { renderRange: [0, 2] }
+    );
+    expect(live!.pendingTokenization).toBe(true);
+    live!.pause?.();
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(live!.pendingTokenization).toBe(true);
+    live!.resume?.();
+    const deadline = Date.now() + 2000;
+    while (live!.pendingTokenization && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    expect(live!.pendingTokenization).toBe(false);
+    live!.dispose();
+  });
 });

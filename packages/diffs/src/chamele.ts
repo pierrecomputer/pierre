@@ -31,12 +31,6 @@ import type {
   ThemeRegistrationResolved,
 } from './types';
 
-// ---------------------------------------------------------------------------
-// Theme resolution: diffs passes shiki-style theme *names*; chamele wants Zed
-// theme *objects*. Bundled chamele themes register under their kebab-cased
-// display name and export name (chamele bundles shiki's theme names
-// directly), plus the aliases below for Pierre variant names.
-
 const THEME_NAME_ALIASES: Record<string, string> = {
   'pierre-dark-protanopia-deuteranopia': 'pierre-dark-protanopia',
   'pierre-light-protanopia-deuteranopia': 'pierre-light-protanopia',
@@ -119,10 +113,6 @@ function warnOnce(message: string): void {
   console.warn(message);
 }
 
-// ---------------------------------------------------------------------------
-// Language resolution: diffs derives shiki language ids from file names;
-// chamele covers a subset natively and everything else renders as plain text.
-
 const LANG_ALIASES: Record<string, Lang> = {
   'angular-html': 'html',
   'angular-ts': 'ts',
@@ -147,9 +137,6 @@ function toChameleLang(lang: SupportedLanguages | undefined): Lang {
   );
   return 'text';
 }
-
-// ---------------------------------------------------------------------------
-// Option mapping
 
 function mapTokensOptions(
   options: CodeToTokensOptions<string, string>
@@ -210,11 +197,7 @@ function themeBackground(theme: Theme): string | undefined {
 
 /**
  * Map a Zed theme's editor colors onto the VS Code color keys the diffs
- * editor reads (`buildEditorThemeCSS` in editor/tokenizer.ts): selection and
- * cursor from the first `players` entry, the active line, search matches (Zed
- * has one match color where VS Code splits current/other), bracket match, and
- * diagnostic foregrounds. Missing Zed keys are omitted so the editor keeps
- * its fallbacks.
+ * editor reads (`buildEditorThemeCSS` in editor/tokenizer.ts).
  */
 function themeEditorColors(theme: Theme): Record<string, string> {
   const style = theme.style ?? {};
@@ -238,9 +221,6 @@ function themeEditorColors(theme: Theme): Record<string, string> {
   }
   return colors;
 }
-
-// ---------------------------------------------------------------------------
-// Adapters
 
 class ChameleCodeTokenizeStream implements CodeTokenizeStream {
   #stream: ChameleTokenizeStream;
@@ -314,13 +294,22 @@ class ChameleLiveTokenizer implements CodeLiveTokenizer {
       token.color ?? '',
       token.content,
     ]);
-    // a record-less (empty) line still renders as one plain sentinel tuple
+    // chamele returns a pending line's text as one unthemed token, so an
+    // empty token list really is an empty line; keep the editor's sentinel
     if (tuples.length === 0) tuples.push([0, '', '']);
     return { tokens: tuples, bracketIgnoredRanges };
   }
 
   flush(): void {
     this.#live.flush();
+  }
+
+  pause(): void {
+    this.#live.pause();
+  }
+
+  resume(): void {
+    this.#live.resume();
   }
 
   dispose(): void {

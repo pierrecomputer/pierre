@@ -4,9 +4,9 @@ import chameleHighlighter from '../src/chamele';
 import { TextDocument } from '../src/editor/textDocument';
 import type { TextDocumentChange } from '../src/editor/textDocument';
 import {
+  ChameleEditorTokenizer,
   createEditorTokenizer,
-  type DiffsEditorTokenizer,
-  LiveEditorTokenizer,
+  type EditorTokenizer,
 } from '../src/editor/tokenizer';
 import type { HighlightedToken, RenderRange } from '../src/types';
 import { installDom } from './domHarness';
@@ -22,7 +22,7 @@ afterAll(() => {
 });
 
 interface Harness {
-  tokenizer: DiffsEditorTokenizer;
+  tokenizer: EditorTokenizer;
   textDocument: TextDocument<undefined>;
   styles: string[];
   deferred: Map<number, HighlightedToken[]>[];
@@ -79,7 +79,7 @@ function fullChange(textDocument: TextDocument<undefined>): TextDocumentChange {
 describe('LiveEditorTokenizer', () => {
   test('the factory picks the live tokenizer for chamele', () => {
     const { tokenizer, styles } = createHarness('const a = 1;');
-    expect(tokenizer).toBeInstanceOf(LiveEditorTokenizer);
+    expect(tokenizer).toBeInstanceOf(ChameleEditorTokenizer);
     expect(tokenizer.themeType).toBe('dark');
     // editor chrome CSS applied on construction from the Zed theme's editor
     // colors, mapped onto VS Code color keys by the chamele adapter
@@ -414,6 +414,57 @@ describe('LiveEditorTokenizer', () => {
       for (const [line, tokens] of map) {
         expect(lineText(tokens)).toBe(textDocument.getLineText(line));
       }
+    }
+    tokenizer.cleanUp();
+  });
+
+  test('prebuildStateStack bounds initial tokenization to the viewport', async () => {
+    const contents = Array.from(
+      { length: 50 },
+      (_, i) => `const v${i} = ${i};`
+    ).join('\n');
+    const { tokenizer, deferred } = createHarness(contents);
+    tokenizer.prebuildStateStack(viewport(0, 3));
+    // only the viewport tokenized synchronously; the tail converges in
+    // background slices and refreshes the host cache through onDeferTokenize
+    expect(deferred).toHaveLength(0);
+    await settleTimers();
+    const delivered = new Set(deferred.flatMap((map) => [...map.keys()]));
+    for (let line = 3; line < 50; line++) {
+      expect(delivered.has(line)).toBe(true);
+    }
+    tokenizer.cleanUp();
+  });
+
+  test('pause and stop suspend the underlying background slices', async () => {
+    const contents = Array.from(
+      { length: 30 },
+      (_, i) => `const v${i} = ${i};`
+    ).join('\n');
+    const { tokenizer, deferred, textDocument } = createHarness(contents);
+    tokenizer.tokenize(fullChange(textDocument), viewport(0, 3));
+    const change = textDocument.applyEdits([
+      {
+        range: {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 0 },
+        },
+        newText: 'const s = `',
+      },
+    ]);
+    tokenizer.tokenize(change!, viewport(0, 3));
+    deferred.length = 0;
+    tokenizer.pauseBackgroundTokenize();
+    await settleTimers();
+    expect(deferred).toHaveLength(0);
+    tokenizer.resumeBackgroundTokenize();
+    // the underlying slices were halted, not just their deliveries buffered:
+    // nothing arrives synchronously on resume, everything after it
+    expect(deferred).toHaveLength(0);
+    await settleTimers();
+    const delivered = new Set(deferred.flatMap((map) => [...map.keys()]));
+    for (let line = 3; line < 30; line++) {
+      expect(delivered.has(line)).toBe(true);
     }
     tokenizer.cleanUp();
   });

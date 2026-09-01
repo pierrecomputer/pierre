@@ -1,6 +1,6 @@
 import type { Position, Range } from '../types';
 import type { TextDocument } from './textDocument';
-import type { DiffsEditorTokenizer } from './tokenizer';
+import type { EditorTokenizer } from './tokenizer';
 
 const OPEN_BRACKETS = new Map([
   ['(', ')'],
@@ -21,7 +21,7 @@ interface BracketPosition extends Position {
 
 export function findBracketMatchRanges<LAnnotation>(
   textDocument: TextDocument<LAnnotation>,
-  tokenizer: DiffsEditorTokenizer,
+  tokenizer: EditorTokenizer,
   position: Position
 ): [open: Range, close: Range] | undefined {
   const bracketPosition = findAdjacentBracket(
@@ -58,7 +58,7 @@ export function findBracketMatchRanges<LAnnotation>(
 
 function findAdjacentBracket<LAnnotation>(
   textDocument: TextDocument<LAnnotation>,
-  tokenizer: DiffsEditorTokenizer,
+  tokenizer: EditorTokenizer,
   position: Position
 ): BracketPosition | undefined {
   const previousPosition = getPreviousCharacterPosition(position);
@@ -88,7 +88,7 @@ function getPreviousCharacterPosition(
 
 function getBracketAtPosition<LAnnotation>(
   textDocument: TextDocument<LAnnotation>,
-  tokenizer: DiffsEditorTokenizer,
+  tokenizer: EditorTokenizer,
   position: Position
 ): BracketPosition | undefined {
   const lineText = textDocument.getLineText(position.line);
@@ -105,7 +105,7 @@ function getBracketAtPosition<LAnnotation>(
 
 function findClosingBracket<LAnnotation>(
   textDocument: TextDocument<LAnnotation>,
-  tokenizer: DiffsEditorTokenizer,
+  tokenizer: EditorTokenizer,
   bracketPosition: BracketPosition,
   closingBracket: string
 ): BracketPosition | undefined {
@@ -152,7 +152,7 @@ function findClosingBracket<LAnnotation>(
 
 function findOpeningBracket<LAnnotation>(
   textDocument: TextDocument<LAnnotation>,
-  tokenizer: DiffsEditorTokenizer,
+  tokenizer: EditorTokenizer,
   bracketPosition: BracketPosition,
   openingBracket: string
 ): BracketPosition | undefined {
@@ -198,7 +198,7 @@ function findOpeningBracket<LAnnotation>(
 }
 
 function isInIgnoredTokenRange(
-  tokenizer: DiffsEditorTokenizer,
+  tokenizer: EditorTokenizer,
   position: Position
 ): boolean {
   const ranges = tokenizer.getStringCommentRegexpRangesInLine(position.line);

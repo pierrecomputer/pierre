@@ -56,7 +56,7 @@ interface LiveEditorTokenizerProps extends Omit<
  * `LiveEditorTokenizer` implements it over a `CodeHighlighter`'s incremental
  * live tokenizer. `createEditorTokenizer` picks one.
  */
-export interface DiffsEditorTokenizer {
+export interface EditorTokenizer {
   readonly themeType: 'light' | 'dark';
   /**
    * Sorted, non-overlapping `[start, end)` column ranges of line `lineIndex`
@@ -126,7 +126,7 @@ function buildEditorThemeCSS(colors: Record<string, string>): string {
  * Subclasses activate the theme in their highlighter (`activateTheme`) and
  * drop their tokenization caches when it changes (`resetForThemeChange`).
  */
-abstract class BaseEditorTokenizer implements DiffsEditorTokenizer {
+abstract class BaseEditorTokenizer implements EditorTokenizer {
   protected readonly textDocument: TextDocument<unknown>;
   protected readonly tokenizeMaxLineLength: number;
   protected readonly setStyle: EditorTokenizerProps['setStyle'];
@@ -1141,16 +1141,8 @@ export class ShikiEditorTokenizer extends BaseEditorTokenizer {
   }
 }
 
-/**
- * Editor tokenizer over a `CodeHighlighter`'s incremental live tokenizer
- * (chamele). The live tokenizer holds its own copy of the document in wasm:
- * every edit batch forwards through `applyEdits`, which re-tokenizes from the
- * first changed line until the lexer state reconverges. Lines inside the
- * viewport come back synchronously as the dirty set; off-viewport lines flow
- * through the live tokenizer's deferred slices into the host's render cache
- * via `onDeferTokenize`.
- */
-export class LiveEditorTokenizer extends BaseEditorTokenizer {
+/** Stoppable code tokenizer for the editor, over chamele's live tokenizer. */
+export class ChameleEditorTokenizer extends BaseEditorTokenizer {
   #highlighter: CodeHighlighter;
   #live: CodeLiveTokenizer | undefined;
   #liveLang: string | undefined;
@@ -1205,9 +1197,9 @@ export class LiveEditorTokenizer extends BaseEditorTokenizer {
 
     if (this.#live == null || this.#liveLang !== this.textDocument.languageId) {
       // (Re)built from the already-edited document: the whole viewport is the
-      // dirty set and nothing needs deferring — the fresh wasm document was
-      // tokenized to convergence on creation.
-      this.#ensureLive();
+      // dirty set. Creation tokenizes only up to the viewport's end; the rest
+      // converges through the fresh tokenizer's deferred slices.
+      this.#ensureLive([rangeStart, rangeEnd]);
       const dirtyLines = new Map<number, Array<HighlightedToken>>();
       for (let line = rangeStart; line < rangeEnd; line++) {
         dirtyLines.set(line, this.#lineTokensAt(line));
@@ -1268,30 +1260,58 @@ export class LiveEditorTokenizer extends BaseEditorTokenizer {
     return dirtyLines;
   }
 
-  prebuildStateStack(): void {
-    // No grammar states to prebuild; make sure the wasm document is loaded so
-    // the first edit tokenizes incrementally from a warm buffer.
+  prebuildStateStack(renderRange?: RenderRange): void {
+    // No grammar states to prebuild; load the wasm document so the first edit
+    // tokenizes incrementally from a warm buffer. The viewport bounds the
+    // synchronous work — lines past it converge in background slices — and a
+    // missing range falls back to full synchronous tokenization.
     this.#stopped = false;
-    this.#ensureLive();
+    this.#ensureLive(this.#initialRange(renderRange));
   }
 
   stopBackgroundTokenize(): void {
     this.#stopped = true;
     this.#paused = false;
     this.#pausedLines = undefined;
+    // suspend the tokenizer's own slices too; pending work is not lost — the
+    // next mutating call merges it into its update and restarts the tail
+    this.#live?.pause?.();
   }
 
   pauseBackgroundTokenize(): void {
     this.#paused = true;
+    this.#live?.pause?.();
   }
 
   resumeBackgroundTokenize(): void {
     this.#paused = false;
     const lines = this.#pausedLines;
     this.#pausedLines = undefined;
-    if (lines !== undefined && lines.size > 0 && !this.#stopped) {
+    if (this.#stopped) {
+      return;
+    }
+    if (lines !== undefined && lines.size > 0) {
       this.onDeferTokenize(lines, this.themeType);
     }
+    this.#live?.resume?.();
+  }
+
+  /** Clamp a viewport to the live tokenizer's half-open initial line range. */
+  #initialRange(
+    renderRange?: RenderRange
+  ): readonly [number, number] | undefined {
+    if (renderRange == null) {
+      return undefined;
+    }
+    const { startingLine, totalLines } = renderRange;
+    const { lineCount } = this.textDocument;
+    const start = Math.min(startingLine, lineCount);
+    return [
+      start,
+      totalLines === Infinity
+        ? lineCount
+        : Math.min(start + totalLines, lineCount),
+    ];
   }
 
   // The chamele adapter maps its Zed theme's editor colors onto the VS Code
@@ -1325,9 +1345,7 @@ export class LiveEditorTokenizer extends BaseEditorTokenizer {
 
   /**
    * The live tokenizer for the current document and theme, creating it from
-   * the document's full text when missing. Without an `initialRenderRange`
-   * the whole document tokenizes synchronously and nothing is delivered;
-   * with one, off-range lines flow through the deferred pipeline.
+   * the document's full text when missing.
    */
   #ensureLive(
     initialRenderRange?: readonly [number, number]
@@ -1366,11 +1384,7 @@ export class LiveEditorTokenizer extends BaseEditorTokenizer {
   }
 
   /**
-   * Forward one edit batch to the live tokenizer, which splits lines at
-   * `\r\n`, `\n`, and lone `\r` exactly like the piece table. Should an
-   * edit still fall outside the live tokenizer's model — a validation
-   * rejection, or a line count diverging from the document's — the
-   * incremental path is abandoned for a full reset from the document text.
+   * Forward one edit batch to the live tokenizer.
    */
   #applyChange(
     live: CodeLiveTokenizer,
@@ -1506,22 +1520,19 @@ export class LiveEditorTokenizer extends BaseEditorTokenizer {
 }
 
 /**
- * Create the editor tokenizer matching the given highlighter: the TextMate
- * implementation for shiki (raw instance or the built-in shiki
- * `CodeHighlighter`), a `LiveEditorTokenizer` for custom highlighters that
- * provide `createLiveTokenizer`, and plain-text tokenization otherwise.
+ * Create the editor tokenizer matching the given highlighter.
  */
 export function createEditorTokenizer(
   props: Omit<EditorTokenizerProps, 'highlighter'> & {
     highlighter: RenderersHighlighter;
   }
-): DiffsEditorTokenizer {
+): EditorTokenizer {
   const { highlighter } = props;
   if (isCodeHighlighter(highlighter)) {
     // An explicit live tokenizer wins over a shiki pass-through, so a custom
     // highlighter that also exposes a shiki instance keeps its own edit mode.
     if (highlighter.createLiveTokenizer != null) {
-      return new LiveEditorTokenizer({ ...props, highlighter });
+      return new ChameleEditorTokenizer({ ...props, highlighter });
     }
     if (highlighter.getShikiInstance != null) {
       const shiki = highlighter.getShikiInstance();
@@ -1532,7 +1543,7 @@ export function createEditorTokenizer(
       }
       return new ShikiEditorTokenizer({ ...props, highlighter: shiki });
     }
-    return new LiveEditorTokenizer({ ...props, highlighter });
+    return new ChameleEditorTokenizer({ ...props, highlighter });
   }
   return new ShikiEditorTokenizer({ ...props, highlighter });
 }

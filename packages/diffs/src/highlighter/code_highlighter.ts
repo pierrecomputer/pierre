@@ -105,6 +105,13 @@ export interface CodeLiveTokenizer {
   };
   /** Finish pending deferred re-tokenization synchronously. */
   flush(): void;
+  /**
+   * Suspend background re-tokenization without discarding pending work; a
+   * later `resume`, `flush`, or mutating call restarts it.
+   */
+  pause?(): void;
+  /** Resume background re-tokenization suspended by `pause`. */
+  resume?(): void;
   /** Release the tokenizer and drop pending deferred work. */
   dispose(): void;
 }
