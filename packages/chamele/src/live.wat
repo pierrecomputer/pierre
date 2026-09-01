@@ -872,8 +872,7 @@
     (local $p i32)
     (local $stop i32)
     (local $lineStart i32)
-    (local $contentEnd i32)
-    (local $term i32)
+    (local $b i32)
     (call $lvHeapInit)
     (global.set $lvLang (local.get $lang))
     (i32.store8 (i32.const 1) (i32.const 3))
@@ -887,25 +886,38 @@
     (local.set $p (local.get $ptr))
     (local.set $lineStart (local.get $ptr))
     (local.set $stop (i32.add (local.get $ptr) (local.get $len)))
+    ;; every CR or LF terminates a line: CRLF as one 2-byte terminator, a
+    ;; lone CR (flag bit 16) and a lone LF as 1-byte terminators
     (block $done
       (loop $scan
         (br_if $done (i32.ge_u (local.get $p) (local.get $stop)))
-        (if (i32.eq (i32.load8_u (local.get $p)) (i32.const 10))
+        (local.set $b (i32.load8_u (local.get $p)))
+        (if (i32.eq (local.get $b) (i32.const 13))
           (then
-            (local.set $contentEnd (local.get $p))
-            (local.set $term (i32.const 1))
-            (if (i32.and
-                  (i32.gt_u (local.get $p) (local.get $lineStart))
-                  (i32.eq (i32.load8_u (i32.sub (local.get $p) (i32.const 1)))
-                          (i32.const 13)))
-              (then
-                (local.set $contentEnd (i32.sub (local.get $p) (i32.const 1)))
-                (local.set $term (i32.const 2))))
             (call $lvAppendLine (local.get $lineStart)
-              (i32.sub (local.get $contentEnd) (local.get $lineStart))
-              (i32.or (local.get $term) (i32.const 8)))
-            (local.set $lineStart (i32.add (local.get $p) (i32.const 1)))))
-        (local.set $p (i32.add (local.get $p) (i32.const 1)))
+              (i32.sub (local.get $p) (local.get $lineStart))
+              (select (i32.const 10) (i32.const 25)
+                (i32.and
+                  (i32.lt_u (i32.add (local.get $p) (i32.const 1)) (local.get $stop))
+                  (i32.eq (i32.load8_u (i32.add (local.get $p) (i32.const 1)))
+                          (i32.const 10)))))
+            (local.set $p (i32.add (local.get $p)
+              (select (i32.const 2) (i32.const 1)
+                (i32.and
+                  (i32.lt_u (i32.add (local.get $p) (i32.const 1)) (local.get $stop))
+                  (i32.eq (i32.load8_u (i32.add (local.get $p) (i32.const 1)))
+                          (i32.const 10))))))
+            (local.set $lineStart (local.get $p)))
+          (else
+            (if (i32.eq (local.get $b) (i32.const 10))
+              (then
+                (call $lvAppendLine (local.get $lineStart)
+                  (i32.sub (local.get $p) (local.get $lineStart))
+                  (i32.const 9))
+                (local.set $p (i32.add (local.get $p) (i32.const 1)))
+                (local.set $lineStart (local.get $p)))
+              (else
+                (local.set $p (i32.add (local.get $p) (i32.const 1)))))))
         (br $scan)))
     (call $lvAppendLine (local.get $lineStart)
       (i32.sub (local.get $stop) (local.get $lineStart)) (i32.const 8))
@@ -987,11 +999,33 @@
     (i32.store8 offset=2 (local.get $dst)
       (i32.or (i32.const 0x80) (i32.and (local.get $s) (i32.const 63)))))
 
+  ;; Write replacement line $line (an absolute pre-gap slot index) with its
+  ;; content copied out of the splice scratch region.
+  (func $lvEmitSpliceLine (param $line i32) (param $src i32) (param $len i32)
+      (param $flags i32) (param $state i32)
+    (local $tp i32)
+    (local $slot i32)
+    (if (local.get $len)
+      (then
+        (local.set $tp (call $lvAlloc (local.get $len)))
+        (memory.copy (local.get $tp) (local.get $src) (local.get $len))))
+    (local.set $slot (i32.add (global.get $lvLineTab)
+      (i32.shl (local.get $line) (i32.const 5))))
+    (i32.store (local.get $slot) (local.get $tp))
+    (i32.store offset=4 (local.get $slot) (local.get $len))
+    (i32.store offset=8 (local.get $slot) (i32.const 0))
+    (i32.store offset=12 (local.get $slot) (i32.const 0))
+    (i32.store offset=16 (local.get $slot) (i32.const 0))
+    (i32.store offset=20 (local.get $slot) (local.get $state))
+    (i32.store offset=24 (local.get $slot) (local.get $flags))
+    (i32.store offset=28 (local.get $slot) (i32.const 0)))
+
   ;; Replace lines [sLine, eLine] with the staged text spliced between the
-  ;; retained prefix of sLine and suffix of eLine. Returns how many lines the
-  ;; replacement produced. Coordinates were validated by the caller against
-  ;; the pre-edit revision; edits are applied in descending order so earlier
-  ;; coordinates stay valid.
+  ;; retained prefix of sLine and suffix of eLine. Returns the produced line
+  ;; count shifted left once, with bit 0 set when a CRLF boundary merge
+  ;; extended the splice to also replace line sLine-1. Coordinates were
+  ;; validated by the caller against the pre-edit revision; edits are applied
+  ;; in descending order so earlier coordinates stay valid.
   (func $lvSpliceEdit
     (param $sLine i32) (param $sChar i32) (param $eLine i32) (param $eChar i32)
     (param $textPtr i32) (param $textLen i32) (result i32)
@@ -1003,7 +1037,6 @@
     (local $eText i32)
     (local $eByteLen i32)
     (local $eFlags i32)
-    (local $eTerm i32)
     (local $same i32)
     (local $sPos i32)
     (local $sSplit i32)
@@ -1014,18 +1047,22 @@
     (local $p i32)
     (local $j i32)
     (local $segStart i32)
-    (local $segEnd i32)
-    (local $nl i32)
     (local $term i32)
     (local $pre i32)
-    (local $seg i32)
     (local $suf i32)
-    (local $totalLen i32)
-    (local $tp i32)
     (local $w i32)
-    (local $slot i32)
     (local $cp i32)
     (local $eState i32)
+    (local $scratch i32)
+    (local $L i32)
+    (local $b i32)
+    (local $crlf i32)
+    (local $finalTerm i32)
+    (local $pSlot i32)
+    (local $pText i32)
+    (local $pLen i32)
+    (local $pFlags i32)
+    (local $ext i32)
     (local.set $sSlot (call $lvSlot (local.get $sLine)))
     (local.set $eSlot (call $lvSlot (local.get $eLine)))
     (local.set $same (i32.eq (local.get $sLine) (local.get $eLine)))
@@ -1035,7 +1072,6 @@
     (local.set $eText (i32.load (local.get $eSlot)))
     (local.set $eByteLen (i32.load offset=4 (local.get $eSlot)))
     (local.set $eFlags (i32.load offset=24 (local.get $eSlot)))
-    (local.set $eTerm (i32.and (local.get $eFlags) (i32.const 3)))
     (local.set $sPos (call $lvCharToByte
       (local.get $sText) (local.get $sByteLen) (local.get $sChar)))
     (local.set $sSplit (i32.shr_u (local.get $sPos) (i32.const 31)))
@@ -1044,15 +1080,121 @@
       (local.get $eText) (local.get $eByteLen) (local.get $eChar)))
     (local.set $eSplit (i32.shr_u (local.get $ePos) (i32.const 31)))
     (local.set $ePos (i32.and (local.get $ePos) (i32.const 0x7fffffff)))
-    ;; count separators to size the replacement
+    ;; Assemble the whole replacement region (prefix + staged text + suffix)
+    ;; into one scratch block first, so terminator scanning sees every CR/LF
+    ;; pairing — including ones straddling the old segment boundaries — with
+    ;; one set of rules: CRLF, lone CR, and lone LF all terminate a line.
+    (local.set $pre (i32.add (local.get $sPos)
+      (i32.mul (local.get $sSplit) (i32.const 3))))
+    (local.set $suf (i32.add
+      (i32.mul (local.get $eSplit) (i32.const 3))
+      (i32.sub (i32.sub (local.get $eByteLen) (local.get $ePos))
+        (i32.mul (local.get $eSplit) (i32.const 4)))))
+    (local.set $L (i32.add (i32.add (local.get $pre) (local.get $textLen))
+      (local.get $suf)))
+    (if (local.get $L)
+      (then
+        (local.set $scratch (call $lvAlloc (local.get $L)))
+        (local.set $w (local.get $scratch))
+        (memory.copy (local.get $w) (local.get $sText) (local.get $sPos))
+        (local.set $w (i32.add (local.get $w) (local.get $sPos)))
+        (if (local.get $sSplit)
+          (then
+            (local.set $cp (i32.sub
+              (call $lvReadAstral (i32.add (local.get $sText) (local.get $sPos)))
+              (i32.const 0x10000)))
+            (call $lvWriteSurrogate (local.get $w)
+              (i32.add (i32.const 0xd800)
+                (i32.shr_u (local.get $cp) (i32.const 10))))
+            (local.set $w (i32.add (local.get $w) (i32.const 3)))))
+        (memory.copy (local.get $w) (local.get $textPtr) (local.get $textLen))
+        (local.set $w (i32.add (local.get $w) (local.get $textLen)))
+        (if (local.get $eSplit)
+          (then
+            (local.set $cp (i32.sub
+              (call $lvReadAstral (i32.add (local.get $eText) (local.get $ePos)))
+              (i32.const 0x10000)))
+            (call $lvWriteSurrogate (local.get $w)
+              (i32.add (i32.const 0xdc00)
+                (i32.and (local.get $cp) (i32.const 0x3ff))))
+            (local.set $w (i32.add (local.get $w) (i32.const 3)))))
+        (memory.copy (local.get $w)
+          (i32.add (i32.add (local.get $eText) (local.get $ePos))
+            (i32.mul (local.get $eSplit) (i32.const 4)))
+          (i32.sub (i32.sub (local.get $eByteLen) (local.get $ePos))
+            (i32.mul (local.get $eSplit) (i32.const 4))))))
+    ;; the final segment inherits the end line's terminator (with its CR kind)
+    (local.set $finalTerm (i32.and (local.get $eFlags) (i32.const 19)))
+    ;; When the line above the splice ends in a lone CR and the byte that now
+    ;; follows it is an LF — the region's first byte, or an inherited bare-LF
+    ;; terminator when the region is empty — the two are byte-wise one CRLF.
+    ;; Extend the splice down to that line (its content plus its CR join the
+    ;; scratch region) so the scan below reads the pairing like a byte stream.
+    (if (i32.gt_u (local.get $sLine) (i32.const 0))
+      (then
+        (local.set $pSlot (call $lvSlot (i32.sub (local.get $sLine) (i32.const 1))))
+        (local.set $pFlags (i32.load offset=24 (local.get $pSlot)))
+        (if (i32.and
+              (i32.eq (i32.and (local.get $pFlags) (i32.const 19)) (i32.const 17))
+              (select
+                (i32.eq (i32.load8_u (local.get $scratch)) (i32.const 10))
+                (i32.eq (local.get $finalTerm) (i32.const 1))
+                (local.get $L)))
+          (then
+            (local.set $pText (i32.load (local.get $pSlot)))
+            (local.set $pLen (i32.load offset=4 (local.get $pSlot)))
+            (local.set $w (call $lvAlloc
+              (i32.add (i32.add (local.get $pLen) (i32.const 1)) (local.get $L))))
+            (memory.copy (local.get $w) (local.get $pText) (local.get $pLen))
+            (i32.store8 (i32.add (local.get $w) (local.get $pLen)) (i32.const 13))
+            (if (local.get $L)
+              (then (memory.copy
+                (i32.add (i32.add (local.get $w) (local.get $pLen)) (i32.const 1))
+                (local.get $scratch) (local.get $L))))
+            (if (local.get $scratch)
+              (then (call $lvFree (local.get $scratch))))
+            (local.set $scratch (local.get $w))
+            (local.set $L (i32.add (i32.add (local.get $pLen) (i32.const 1))
+              (local.get $L)))
+            (local.set $sLine (i32.sub (local.get $sLine) (i32.const 1)))
+            (local.set $sText (local.get $pText))
+            (local.set $sByteLen (local.get $pLen))
+            (local.set $sFlags (local.get $pFlags))
+            ;; the absorbed line's own text is released like any replaced
+            ;; interior/end line below, never through the `same` shortcut
+            (local.set $same (i32.const 0))
+            (local.set $ext (i32.const 1))))))
+    ;; a trailing bare CR merges with an inherited bare-LF terminator into
+    ;; one CRLF, exactly like the byte stream would read
+    (if (local.get $L)
+      (then
+        (if (i32.and
+              (i32.eq (i32.load8_u (i32.add (local.get $scratch)
+                (i32.sub (local.get $L) (i32.const 1)))) (i32.const 13))
+              (i32.eq (local.get $finalTerm) (i32.const 1)))
+          (then
+            (local.set $L (i32.sub (local.get $L) (i32.const 1)))
+            (local.set $finalTerm (i32.const 2))))))
+    ;; count the replacement lines
     (local.set $n (i32.const 1))
+    (local.set $p (i32.const 0))
     (block $counted
       (loop $count
-        (br_if $counted (i32.ge_u (local.get $p) (local.get $textLen)))
-        (if (i32.eq (i32.load8_u (i32.add (local.get $textPtr) (local.get $p)))
-                    (i32.const 10))
-          (then (local.set $n (i32.add (local.get $n) (i32.const 1)))))
-        (local.set $p (i32.add (local.get $p) (i32.const 1)))
+        (br_if $counted (i32.ge_u (local.get $p) (local.get $L)))
+        (local.set $b (i32.load8_u (i32.add (local.get $scratch) (local.get $p))))
+        (if (i32.eq (local.get $b) (i32.const 13))
+          (then
+            (local.set $n (i32.add (local.get $n) (i32.const 1)))
+            (local.set $p (i32.add (local.get $p)
+              (select (i32.const 2) (i32.const 1)
+                (i32.and
+                  (i32.lt_u (i32.add (local.get $p) (i32.const 1)) (local.get $L))
+                  (i32.eq (i32.load8_u (i32.add (i32.add (local.get $scratch)
+                    (local.get $p)) (i32.const 1))) (i32.const 10)))))))
+          (else
+            (if (i32.eq (local.get $b) (i32.const 10))
+              (then (local.set $n (i32.add (local.get $n) (i32.const 1)))))
+            (local.set $p (i32.add (local.get $p) (i32.const 1)))))
         (br $count)))
     (local.set $n0 (i32.add (i32.sub (local.get $eLine) (local.get $sLine)) (i32.const 1)))
     (call $lvEnsureLines (local.get $n))
@@ -1066,132 +1208,68 @@
     (block $freed
       (loop $free
         (br_if $freed (i32.gt_u (local.get $j) (local.get $eLine)))
-        (local.set $slot (call $lvSlot (local.get $j)))
+        (local.set $b (call $lvSlot (local.get $j)))
         (if (i32.and
               (i32.gt_u (local.get $j) (local.get $sLine))
               (i32.lt_u (local.get $j) (local.get $eLine)))
-          (then (call $lvFreeLineRes (local.get $slot)))
+          (then (call $lvFreeLineRes (local.get $b)))
           (else
-            (call $lvFree (i32.load offset=12 (local.get $slot)))
+            (call $lvFree (i32.load offset=12 (local.get $b)))
             (if (i32.lt_u (local.get $j) (local.get $eLine))
-              (then (call $lvRelease (i32.load offset=20 (local.get $slot)))))))
+              (then (call $lvRelease (i32.load offset=20 (local.get $b)))))))
         (local.set $j (i32.add (local.get $j) (i32.const 1)))
         (br $free)))
     (call $lvMoveGap (local.get $sLine))
     (global.set $lvLineCount (i32.sub (global.get $lvLineCount) (local.get $n0)))
-    ;; assemble the replacement lines directly into the gap slots
+    ;; emit the replacement lines straight from the scratch region
     (local.set $j (i32.const 0))
     (local.set $segStart (i32.const 0))
+    (local.set $p (i32.const 0))
     (block $built
       (loop $build
-        (br_if $built (i32.ge_u (local.get $j) (local.get $n)))
-        (if (i32.lt_u (local.get $j) (i32.sub (local.get $n) (i32.const 1)))
+        (br_if $built (i32.ge_u (local.get $p) (local.get $L)))
+        (local.set $b (i32.load8_u (i32.add (local.get $scratch) (local.get $p))))
+        (if (i32.eq (local.get $b) (i32.const 13))
           (then
-            (local.set $nl (local.get $segStart))
-            (block $found
-              (loop $seek
-                (br_if $found (i32.eq
-                  (i32.load8_u (i32.add (local.get $textPtr) (local.get $nl)))
-                  (i32.const 10)))
-                (local.set $nl (i32.add (local.get $nl) (i32.const 1)))
-                (br $seek)))
-            (local.set $segEnd (local.get $nl))
-            (local.set $term (i32.const 1))
-            (if (i32.and
-                  (i32.gt_u (local.get $segEnd) (local.get $segStart))
-                  (i32.eq
-                    (i32.load8_u (i32.add (local.get $textPtr)
-                      (i32.sub (local.get $segEnd) (i32.const 1))))
-                    (i32.const 13)))
-              (then
-                (local.set $segEnd (i32.sub (local.get $segEnd) (i32.const 1)))
-                (local.set $term (i32.const 2)))))
+            (local.set $crlf (i32.and
+              (i32.lt_u (i32.add (local.get $p) (i32.const 1)) (local.get $L))
+              (i32.eq (i32.load8_u (i32.add (i32.add (local.get $scratch)
+                (local.get $p)) (i32.const 1))) (i32.const 10))))
+            (local.set $term (select (i32.const 2) (i32.const 17) (local.get $crlf)))
+            (call $lvEmitSpliceLine (i32.add (local.get $sLine) (local.get $j))
+              (i32.add (local.get $scratch) (local.get $segStart))
+              (i32.sub (local.get $p) (local.get $segStart))
+              (local.get $term) (i32.const -1))
+            (local.set $p (i32.add (local.get $p)
+              (select (i32.const 2) (i32.const 1) (local.get $crlf))))
+            (local.set $segStart (local.get $p))
+            (local.set $j (i32.add (local.get $j) (i32.const 1))))
           (else
-            (local.set $segEnd (local.get $textLen))
-            (local.set $term (local.get $eTerm))))
-        (local.set $pre (i32.const 0))
-        (if (i32.eqz (local.get $j))
-          (then (local.set $pre (i32.add (local.get $sPos)
-            (i32.mul (local.get $sSplit) (i32.const 3))))))
-        (local.set $seg (i32.sub (local.get $segEnd) (local.get $segStart)))
-        (local.set $suf (i32.const 0))
-        (if (i32.eq (local.get $j) (i32.sub (local.get $n) (i32.const 1)))
-          (then (local.set $suf (i32.add
-            (i32.mul (local.get $eSplit) (i32.const 3))
-            (i32.sub (i32.sub (local.get $eByteLen) (local.get $ePos))
-              (i32.mul (local.get $eSplit) (i32.const 4)))))))
-        (local.set $totalLen
-          (i32.add (i32.add (local.get $pre) (local.get $seg)) (local.get $suf)))
-        (local.set $tp (i32.const 0))
-        (if (local.get $totalLen)
-          (then
-            (local.set $tp (call $lvAlloc (local.get $totalLen)))
-            (local.set $w (local.get $tp))
-            (if (i32.eqz (local.get $j))
+            (if (i32.eq (local.get $b) (i32.const 10))
               (then
-                (memory.copy (local.get $w) (local.get $sText) (local.get $sPos))
-                (local.set $w (i32.add (local.get $w) (local.get $sPos)))
-                (if (local.get $sSplit)
-                  (then
-                    (local.set $cp (i32.sub
-                      (call $lvReadAstral (i32.add (local.get $sText) (local.get $sPos)))
-                      (i32.const 0x10000)))
-                    (call $lvWriteSurrogate (local.get $w)
-                      (i32.add (i32.const 0xd800)
-                        (i32.shr_u (local.get $cp) (i32.const 10))))
-                    (local.set $w (i32.add (local.get $w) (i32.const 3)))))))
-            (memory.copy (local.get $w)
-              (i32.add (local.get $textPtr) (local.get $segStart)) (local.get $seg))
-            (local.set $w (i32.add (local.get $w) (local.get $seg)))
-            (if (i32.eq (local.get $j) (i32.sub (local.get $n) (i32.const 1)))
-              (then
-                (if (local.get $eSplit)
-                  (then
-                    (local.set $cp (i32.sub
-                      (call $lvReadAstral (i32.add (local.get $eText) (local.get $ePos)))
-                      (i32.const 0x10000)))
-                    (call $lvWriteSurrogate (local.get $w)
-                      (i32.add (i32.const 0xdc00)
-                        (i32.and (local.get $cp) (i32.const 0x3ff))))
-                    (local.set $w (i32.add (local.get $w) (i32.const 3)))))
-                (memory.copy (local.get $w)
-                  (i32.add (i32.add (local.get $eText) (local.get $ePos))
-                    (i32.mul (local.get $eSplit) (i32.const 4)))
-                  (i32.sub (i32.sub (local.get $eByteLen) (local.get $ePos))
-                    (i32.mul (local.get $eSplit) (i32.const 4))))))
-            ;; a bare CR before an LF terminator is really a CRLF terminator
-            (if (i32.and
-                  (i32.eq (local.get $term) (i32.const 1))
-                  (i32.eq
-                    (i32.load8_u (i32.add (local.get $tp)
-                      (i32.sub (local.get $totalLen) (i32.const 1))))
-                    (i32.const 13)))
-              (then
-                (local.set $term (i32.const 2))
-                (local.set $totalLen (i32.sub (local.get $totalLen) (i32.const 1)))))))
-        (local.set $slot (i32.add (global.get $lvLineTab)
-          (i32.shl (i32.add (local.get $sLine) (local.get $j)) (i32.const 5))))
-        (i32.store (local.get $slot) (local.get $tp))
-        (i32.store offset=4 (local.get $slot) (local.get $totalLen))
-        (i32.store offset=8 (local.get $slot) (i32.const 0))
-        (i32.store offset=12 (local.get $slot) (i32.const 0))
-        (i32.store offset=16 (local.get $slot) (i32.const 0))
-        (i32.store offset=20 (local.get $slot)
-          (select (local.get $eState) (i32.const -1)
-            (i32.eq (local.get $j) (i32.sub (local.get $n) (i32.const 1)))))
-        (i32.store offset=24 (local.get $slot) (local.get $term))
-        (i32.store offset=28 (local.get $slot) (i32.const 0))
-        (if (i32.lt_u (local.get $j) (i32.sub (local.get $n) (i32.const 1)))
-          (then (local.set $segStart (i32.add (local.get $nl) (i32.const 1)))))
-        (local.set $j (i32.add (local.get $j) (i32.const 1)))
+                (call $lvEmitSpliceLine (i32.add (local.get $sLine) (local.get $j))
+                  (i32.add (local.get $scratch) (local.get $segStart))
+                  (i32.sub (local.get $p) (local.get $segStart))
+                  (i32.const 1) (i32.const -1))
+                (local.set $p (i32.add (local.get $p) (i32.const 1)))
+                (local.set $segStart (local.get $p))
+                (local.set $j (i32.add (local.get $j) (i32.const 1))))
+              (else
+                (local.set $p (i32.add (local.get $p) (i32.const 1)))))))
         (br $build)))
+    (call $lvEmitSpliceLine (i32.add (local.get $sLine) (local.get $j))
+      (i32.add (local.get $scratch) (local.get $segStart))
+      (i32.sub (local.get $L) (local.get $segStart))
+      (local.get $finalTerm) (local.get $eState))
+    (if (local.get $scratch)
+      (then (call $lvFree (local.get $scratch))))
     (global.set $lvGapAt (i32.add (local.get $sLine) (local.get $n)))
     (global.set $lvLineCount (i32.add (global.get $lvLineCount) (local.get $n)))
     (call $lvFreeLineText (local.get $sText) (local.get $sByteLen) (local.get $sFlags))
     (if (i32.eqz (local.get $same))
       (then (call $lvFreeLineText
         (local.get $eText) (local.get $eByteLen) (local.get $eFlags))))
-    (local.get $n))
+    (i32.or (i32.shl (local.get $n) (i32.const 1)) (local.get $ext)))
 
   ;; append or merge a change entry; returns 1 when a new entry was appended
   (func $lvAddChange
@@ -1397,6 +1475,7 @@
     (local $ranges i32)
     (local $rangeCount i32)
     (local $slot i32)
+    (local $ext i32)
     (local.set $count (i32.load (local.get $staged)))
     ;; descending structural pass; each record's textLen slot is reused to
     ;; hold the line count its splice produced
@@ -1427,13 +1506,19 @@
         (local.set $e (i32.add (i32.add (local.get $staged) (i32.const 4))
           (i32.mul (local.get $k) (i32.const 24))))
         (local.set $n (i32.load offset=20 (local.get $e)))
+        (local.set $ext (i32.and (local.get $n) (i32.const 1)))
+        (local.set $n (i32.shr_u (local.get $n) (i32.const 1)))
         (local.set $n0 (i32.add
-          (i32.sub (i32.load offset=8 (local.get $e)) (i32.load (local.get $e)))
-          (i32.const 1)))
-        (local.set $newFrom (i32.add (i32.load (local.get $e)) (local.get $shift)))
+          (i32.add
+            (i32.sub (i32.load offset=8 (local.get $e)) (i32.load (local.get $e)))
+            (i32.const 1))
+          (local.get $ext)))
+        (local.set $newFrom (i32.add
+          (i32.sub (i32.load (local.get $e)) (local.get $ext))
+          (local.get $shift)))
         (local.set $newTo (i32.add (local.get $newFrom) (local.get $n)))
         (if (call $lvAddChange
-              (i32.load (local.get $e))
+              (i32.sub (i32.load (local.get $e)) (local.get $ext))
               (i32.add (i32.load offset=8 (local.get $e)) (i32.const 1))
               (local.get $newFrom) (local.get $newTo))
           (then

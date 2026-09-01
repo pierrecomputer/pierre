@@ -221,9 +221,20 @@ function checkRenderRange(
   return range;
 }
 
+/** A line's terminator from its descriptor flags: byte-count bits 0-1
+ *  (0 none, 1 one byte, 2 CRLF) plus bit 4 marking a one-byte CR. */
+function eol(flags: number): string {
+  const term = flags & 3;
+  if (term === 0) return '';
+  if (term === 2) return '\r\n';
+  return (flags & 16) !== 0 ? '\r' : '\n';
+}
+
 /**
  * An incremental tokenizer holding the document, line table, token records,
- * and interned per-line lexer states in an isolated Wasm instance. It doubles
+ * and interned per-line lexer states in an isolated Wasm instance. Lines are
+ * terminated by `\r\n`, `\n`, or a lone `\r`, and edits may split or join
+ * terminators freely; lexers see every line break as `\n`. It doubles
  * as the document model: the line table is the source of truth for text
  * reads, so a host editor applies its edits here and renders from the
  * returned token maps. Edits are batched UTF-16 range replacements;
@@ -352,8 +363,7 @@ export class LiveTokenizer {
     let text = '';
     for (let line = 0; line < count; line++) {
       text += this.#lineText(hl, ex, line);
-      const term = ex.liveLineFlags(line) & 3;
-      if (term !== 0) text += term === 2 ? '\r\n' : '\n';
+      text += eol(ex.liveLineFlags(line));
     }
     return text;
   }
@@ -822,7 +832,22 @@ export class LiveTokenizer {
         throw new RangeError('edit ranges overlap');
       }
     }
-    return items.filter((e) => !this.#isNoopEdit(e, hl, ex));
+    const kept = items.filter((e) => !this.#isNoopEdit(e, hl, ex));
+    // Exactly-touching edits collapse into one range so each boundary is
+    // spliced exactly once: a CRLF merge at a shared boundary must not
+    // restructure a line another edit's pre-batch coordinates still name.
+    const merged: NormalizedEdit[] = [];
+    for (const e of kept) {
+      const prev = merged[merged.length - 1];
+      if (prev !== undefined && prev.el === e.sl && prev.ec === e.sc) {
+        prev.el = e.el;
+        prev.ec = e.ec;
+        prev.newText += e.newText;
+      } else {
+        merged.push({ ...e });
+      }
+    }
+    return merged;
   }
 
   /** True when the replacement text equals the range's current text. */
@@ -844,7 +869,7 @@ export class LiveTokenizer {
       const lineText = this.#lineText(hl, ex, line);
       text += line === e.sl ? lineText.slice(e.sc) : lineText;
       if (line < e.el) {
-        text += (ex.liveLineFlags(line) & 3) === 2 ? '\r\n' : '\n';
+        text += eol(ex.liveLineFlags(line));
       }
     }
     if (e.sl < e.el) {

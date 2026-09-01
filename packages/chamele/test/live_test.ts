@@ -74,29 +74,38 @@ const samples: [Lang, string][] = [
   ['xml', '<![CDATA[one\ntwo]]>\n<root/>\n'],
   ['yaml', 'message: |\n  one: # literal\n  two\nitems: [\n  one,\n  two\n]\n'],
   ['zig', 'const s = \\\\one\n  \\\\two\n;\n'],
-  // multi-byte and astral text, CRLF terminators, lone CR content, and NUL
+  // multi-byte and astral text, CRLF/CR/LF terminators, and NUL
   ['ts', 'const é = "日本語"\nconst x = 1 // 🎈🎈\nlet y = 2\n'],
   ['ts', 'const a = 1\r\nconst b = `x\r\ny`\r\nconst c = 3'],
   ['ts', 'let x = 1 \r let y = 2\nz\n'],
+  ['ts', 'const a = 1\rconst b = `x\ry`\rconst c = 3'],
+  ['ts', 'mixed = 1\r\nlet two = 2\rlet three = 3\nlet four = 4\r'],
   ['ts', 'const z = "a\0b"\nlet q = 1\n'],
 ];
 
-/** Content of each line, excluding LF and CRLF terminators. */
+const terminatorRe = /\r\n|\r|\n/g;
+
+/** Content of each line; CRLF, lone CR, and lone LF all terminate. */
 function docLines(code: string): string[] {
-  const lines = code.split('\n');
-  for (let i = 0; i < lines.length - 1; i++) {
-    if (lines[i].endsWith('\r')) lines[i] = lines[i].slice(0, -1);
-  }
-  return lines;
+  return code.split(terminatorRe);
 }
 
 /** Absolute UTF-16 offset of each line start. */
 function lineStartsOf(code: string): number[] {
   const starts = [0];
-  for (let i = code.indexOf('\n'); i !== -1; i = code.indexOf('\n', i + 1)) {
-    starts.push(i + 1);
+  for (const m of code.matchAll(terminatorRe)) {
+    starts.push(m.index + m[0].length);
   }
   return starts;
+}
+
+/**
+ * The document as the reference tokenizers see it: live tokenization presents
+ * every line break to the lexers as `\n`, so lone-CR terminators map to LF
+ * (offsets are unchanged — both are one UTF-16 unit).
+ */
+function lexNormalized(code: string): string {
+  return code.replace(/\r(?!\n)/g, '\n');
 }
 
 /** Assert the live document matches a fresh full tokenization of `code`. */
@@ -106,7 +115,10 @@ function assertMatchesFresh(
   lang: Lang,
   label: string
 ): void {
-  const fresh = codeToTokens(code, { lang, theme: pierreDark }).tokens;
+  const fresh = codeToTokens(lexNormalized(code), {
+    lang,
+    theme: pierreDark,
+  }).tokens;
   const lines = docLines(code);
   const starts = lineStartsOf(code);
   assert.equal(live.lineCount, lines.length, `${label}: line count`);
@@ -154,6 +166,8 @@ const editTexts = [
   '𝛼🙂',
   'é日本',
   '\r\n',
+  '\r',
+  'x\ry',
   '<b>',
   '#',
   '--',
@@ -245,7 +259,10 @@ function assertMatchesLineStream(
 ): void {
   const stream = new TokenizeStream({ lang, theme: pierreDark });
   const streamed: ThemedToken[][] = [];
-  for (const chunk of code.length === 0 ? [] : code.split(/(?<=\n)/)) {
+  const normalized = lexNormalized(code);
+  for (const chunk of normalized.length === 0
+    ? []
+    : normalized.split(/(?<=\n)/)) {
     streamed.push(...stream.pushCode(chunk));
   }
   streamed.push(...stream.end());
@@ -366,7 +383,17 @@ void t.test(
 );
 
 void t.test('LiveTokenizer: empty and edge documents', () => {
-  for (const code of ['', '\n', 'a', 'a\n', '\n\n', '\r\n']) {
+  for (const code of [
+    '',
+    '\n',
+    'a',
+    'a\n',
+    '\n\n',
+    '\r\n',
+    '\r',
+    'a\r',
+    '\r\r',
+  ]) {
     const live = new LiveTokenizer({ lang: 'ts', theme: pierreDark, code });
     assertMatchesFresh(live, code, 'ts', JSON.stringify(code));
     live.dispose();
@@ -769,6 +796,98 @@ void t.test('LiveTokenizer: final-line terminator edits', () => {
   assert.equal(live.lineCount, 1);
   assertMatchesFresh(live, 'a', 'ts', 'removed terminator');
   live.dispose();
+});
+
+void t.test('LiveTokenizer: CR terminators merge and split like bytes', () => {
+  // inserting a CR right before a lone-LF terminator joins into one CRLF
+  const live = new LiveTokenizer({
+    lang: 'ts',
+    theme: pierreDark,
+    code: 'let a = 1;\nlet b = 2;',
+  });
+  let update = live.applyEdits([
+    {
+      range: {
+        start: { line: 0, character: 10 },
+        end: { line: 0, character: 10 },
+      },
+      newText: '\r',
+    },
+  ]);
+  assert.equal(update.lineCount, 2);
+  assert.equal(live.getText(), 'let a = 1;\r\nlet b = 2;');
+  assertMatchesFresh(live, 'let a = 1;\r\nlet b = 2;', 'ts', 'CR+LF join');
+
+  // deleting the LF of a CRLF leaves a lone-CR terminator, same line count
+  update = live.applyEdits([
+    {
+      range: {
+        start: { line: 0, character: 10 },
+        end: { line: 1, character: 0 },
+      },
+      newText: '\r',
+    },
+  ]);
+  assert.equal(update.lineCount, 2);
+  assert.equal(live.getText(), 'let a = 1;\rlet b = 2;');
+  assertMatchesFresh(live, 'let a = 1;\rlet b = 2;', 'ts', 'lone CR');
+
+  // a trailing CR at EOF terminates a final empty line
+  update = live.applyEdits([
+    {
+      range: {
+        start: { line: 1, character: 10 },
+        end: { line: 1, character: 10 },
+      },
+      newText: '\r',
+    },
+  ]);
+  assert.equal(update.lineCount, 3);
+  assert.equal(live.getText(), 'let a = 1;\rlet b = 2;\r');
+  assertMatchesFresh(live, 'let a = 1;\rlet b = 2;\r', 'ts', 'EOF CR');
+  live.dispose();
+
+  // an inserted LF at the start of the line after a lone-CR terminator is
+  // byte-wise the second half of a CRLF: the lines join instead of splitting
+  const joiner = new LiveTokenizer({
+    lang: 'plain',
+    theme: pierreDark,
+    code: 'x\rz',
+  });
+  update = joiner.applyEdits([
+    {
+      range: {
+        start: { line: 1, character: 0 },
+        end: { line: 1, character: 0 },
+      },
+      newText: '\ny',
+    },
+  ]);
+  assert.equal(update.lineCount, 2);
+  assert.equal(joiner.getText(), 'x\r\nyz');
+  assertMatchesFresh(joiner, 'x\r\nyz', 'plain', 'CR absorbs inserted LF');
+  joiner.dispose();
+
+  // deleting a whole line's content between a lone-CR line and an LF
+  // terminator leaves the CR adjacent to the LF: one CRLF, not two breaks
+  const collapser = new LiveTokenizer({
+    lang: 'plain',
+    theme: pierreDark,
+    code: 'x\rab\nz',
+  });
+  update = collapser.applyEdits([
+    {
+      range: {
+        start: { line: 1, character: 0 },
+        end: { line: 1, character: 2 },
+      },
+      newText: '',
+    },
+  ]);
+  assert.equal(update.lineCount, 2);
+  assert.equal(collapser.getText(), 'x\r\nz');
+  assertMatchesFresh(collapser, 'x\r\nz', 'plain', 'CR meets LF terminator');
+  collapser.dispose();
 });
 
 void t.test('LiveTokenizer: renderRange updates match sync updates', () => {
