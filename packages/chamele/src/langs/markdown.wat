@@ -220,8 +220,12 @@
     (local.set $close (call $markdownFenceClose (global.get $ptr)
       (global.get $markdownStreamFence) (global.get $markdownStreamFenceLen)))
     (if (global.get $markdownStreamLang)
-      (then (call $markdownCodeRange
-        (global.get $markdownStreamLang) (global.get $ptr) (local.get $close)))
+      (then
+        ;; streamed fence bodies re-lex per chunk without carried state, so
+        ;; clear the shared parameter-machine globals like the fence open does
+        (call $sigReset)
+        (call $markdownCodeRange
+          (global.get $markdownStreamLang) (global.get $ptr) (local.get $close)))
       (else (call $emitTok
         (enum.get $Token.text.literal) (global.get $ptr) (local.get $close))))
     (if (i32.eq (local.get $close) (global.get $end))
@@ -563,8 +567,12 @@
                 (local.set $close (call $markdownFenceClose
                   (local.get $body) (local.get $fence) (local.get $fenceLen)))
                 (if (local.get $lang)
-                  (then (call $markdownCodeRange
-                    (local.get $lang) (local.get $body) (local.get $close)))
+                  (then
+                    ;; a fence body is a fresh sub-document for the shared
+                    ;; parameter-machine globals
+                    (call $sigReset)
+                    (call $markdownCodeRange
+                      (local.get $lang) (local.get $body) (local.get $close)))
                   (else (call $emitTok
                     (enum.get $Token.text.literal) (local.get $body) (local.get $close))))
                 (if (i32.and

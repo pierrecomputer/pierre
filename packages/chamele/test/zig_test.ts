@@ -524,3 +524,23 @@ void t.test(
     }
   }
 );
+
+void t.test('zig: fn parameters match Zed variable.parameter', () => {
+  const PARAM = themeColor('variable.parameter');
+  const word = (html: string, text: string) =>
+    spansOf(html).find((s) => s.text.trim() === text)?.color;
+  const html = checkInvariants(
+    zig.hl,
+    'pub fn add(first: u8, second: u64) u8 { return first; }\n' +
+      'fn init(allocator: std.mem.Allocator, comptime T: type, items: []const u8) !T {}\n' +
+      'const v = compute(alpha, beta);\n' +
+      'const S = struct { field: u32 };'
+  );
+  for (const name of ['first', 'second', 'allocator', 'T', 'items']) {
+    assert.equal(word(html, name), PARAM, name);
+  }
+  // call arguments and container fields stay plain
+  assert.notEqual(word(html, 'alpha'), PARAM);
+  assert.notEqual(word(html, 'beta'), PARAM);
+  assert.notEqual(word(html, 'field'), PARAM);
+});

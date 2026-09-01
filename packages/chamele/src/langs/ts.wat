@@ -73,6 +73,152 @@
                         (i64.eq (local.get $w) (i64.const "unknown"))))))
     (i32.const 0))
 
+  ;; The ecma driver for the shared parameter-list machine in sig.wat: a
+  ;; paren following a `function`/`catch`/`constructor`/accessor head, or one
+  ;; whose first identifier carries a TS `name:` annotation - a call cannot -
+  ;; is a parameter list, and identifiers at its top level (or one level into
+  ;; a destructuring pattern, matching Zed's one-level captures) classify as
+  ;; variable.parameter.
+
+  ;; the exact word `constructor` - a class constructor head
+  (func $isConstructorWord (param $lhs i32) (param $rhs i32) (result i32)
+    (if (i32.ne (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 11))
+      (then (return (i32.const 0))))
+    (i32.and
+      (i64.eq (i64.load (local.get $lhs)) (i64.const "construc"))
+      (i32.eq (i32.load offset=7 (local.get $lhs)) (i32.const "ctor"))))
+
+  ;; after `( ident )`: whitespace-skipping byte lookahead for the `=>` that
+  ;; makes the ident a sole parenthesized arrow parameter. The pipeline
+  ;; already scanned the `)`, so the tokenizer global $rhs is its end.
+  (func $sigArrowAhead (result i32)
+    (local $p i32)
+    (local $c i32)
+    (local.set $p (global.get $rhs))
+    (block $stop
+      (loop $skip
+        (local.set $c (call $tsxByte (local.get $p)))
+        (br_if $stop (i32.eqz (local.get $c)))
+        (br_if $stop (i32.gt_u (local.get $c) (i32.const 32)))
+        (local.set $p (i32.add (local.get $p) (i32.const 1)))
+        (br $skip)))
+    (i32.and
+      (i32.eq (local.get $c) (i32.const "="))
+      (i32.eq (call $tsxByte (i32.add (local.get $p) (i32.const 1)))
+        (i32.const ">"))))
+
+  ;; advance the parameter-list machine for one classified token. $classify
+  ;; calls this before classifying, so an identifier is judged under the
+  ;; state its predecessors produced.
+  (func $sigStep (param $prev i32) (param $t i32) (param $next i32)
+        (param $lhs i32) (param $rhs i32)
+    ;; `(`: one deeper; a pending head outside its type parameters marks it
+    (if (i32.eq (local.get $t) (enum.get $Lex.l_paren))
+      (then
+        (global.set $sigParens (i32.add (global.get $sigParens) (i32.const 1)))
+        (if (i32.eqz (global.get $sigFnAngle))
+          (then
+            (if (global.get $sigFnPend) (then (call $sigMark)))
+            (global.set $sigFnPend (i32.const 0))))
+        (return)))
+    (if (i32.eq (local.get $t) (enum.get $Lex.r_paren))
+      (then
+        (if (call $sigActive) (then (call $sigUnmark)))
+        (if (i32.gt_u (global.get $sigParens) (i32.const 0))
+          (then (global.set $sigParens
+            (i32.sub (global.get $sigParens) (i32.const 1)))))
+        (return)))
+    ;; heads that arm the machine for their upcoming `(`
+    (if (i32.or (i32.eq (local.get $t) (enum.get $Lex.keyword_function))
+                (i32.eq (local.get $t) (enum.get $Lex.keyword_catch)))
+      (then
+        (global.set $sigFnPend (i32.const 1))
+        (global.set $sigFnAngle (i32.const 0))
+        (return)))
+    ;; `constructor(` and `get`/`set` accessor heads; a `.` before either
+    ;; means a member access, which is a call
+    (if (i32.eqz (i32.or
+          (i32.eq (local.get $prev) (enum.get $Lex.dot))
+          (i32.eq (local.get $prev) (enum.get $Lex.question_mark_dot))))
+      (then
+        (if (i32.and
+              (i32.eq (local.get $t) (enum.get $Lex.identifier))
+              (i32.eq (local.get $next) (enum.get $Lex.l_paren)))
+          (then
+            (if (call $isConstructorWord (local.get $lhs) (local.get $rhs))
+              (then
+                (global.set $sigFnPend (i32.const 1))
+                (global.set $sigFnAngle (i32.const 0))
+                (return)))))
+        (if (i32.and
+              (i32.or (i32.eq (local.get $t) (enum.get $Lex.ctxword_get))
+                      (i32.eq (local.get $t) (enum.get $Lex.ctxword_set)))
+              (call $isIdentish (local.get $next)))
+          (then
+            (global.set $sigFnPend (i32.const 1))
+            (global.set $sigFnAngle (i32.const 0))
+            (return)))))
+    ;; a pending head survives its name, `*`, contextual words, and `<...>`
+    ;; type parameters; any other token cancels it
+    (if (global.get $sigFnPend)
+      (then
+        (if (i32.eq (local.get $t) (enum.get $Lex.l_angle))
+          (then
+            (global.set $sigFnAngle
+              (i32.add (global.get $sigFnAngle) (i32.const 1)))
+            (return)))
+        (if (i32.eq (local.get $t) (enum.get $Lex.r_angle))
+          (then (call $sigFnAngleDrop (i32.const 1)) (return)))
+        (if (i32.eq (local.get $t) (enum.get $Lex.r_shift))
+          (then (call $sigFnAngleDrop (i32.const 2)) (return)))
+        (if (i32.eqz (i32.or
+              (i32.ne (global.get $sigFnAngle) (i32.const 0))
+              (i32.or
+                (i32.eq (local.get $t) (enum.get $Lex.identifier))
+                (i32.or
+                  (i32.eq (local.get $t) (enum.get $Lex.asterisk))
+                  (i32.and
+                    (i32.ge_u (local.get $t) (enum.get $Lex.ctxword_as))
+                    (i32.le_u (local.get $t) (enum.get $Lex.ctxword_type)))))))
+          (then
+            (global.set $sigFnPend (i32.const 0))
+            (global.set $sigFnAngle (i32.const 0))))))
+    ;; nesting inside a marked list: braces and brackets obscure the top
+    ;; level (recording whether the first level opened in pattern position -
+    ;; a destructured parameter - or in an expression, like a default value),
+    ;; angles cover generic type arguments
+    (if (i32.eqz (call $sigActive)) (then (return)))
+    (if (i32.or (i32.eq (local.get $t) (enum.get $Lex.l_brace))
+                (i32.eq (local.get $t) (enum.get $Lex.l_bracket)))
+      (then
+        (if (i32.eqz (global.get $sigObscure))
+          (then (global.set $sigPattern (i32.or
+            (i32.eq (local.get $prev) (enum.get $Lex.l_paren))
+            (i32.eq (local.get $prev) (enum.get $Lex.comma))))))
+        (global.set $sigObscure
+          (i32.add (global.get $sigObscure) (i32.const 1)))
+        (return)))
+    (if (i32.or (i32.eq (local.get $t) (enum.get $Lex.r_brace))
+                (i32.eq (local.get $t) (enum.get $Lex.r_bracket)))
+      (then
+        (if (i32.gt_u (global.get $sigObscure) (i32.const 0))
+          (then (global.set $sigObscure
+            (i32.sub (global.get $sigObscure) (i32.const 1)))))
+        (return)))
+    (if (i32.ne (global.get $sigObscure) (i32.const 0)) (then (return)))
+    (if (i32.eq (local.get $t) (enum.get $Lex.semicolon))
+      (then (call $sigUnmark) (return)))
+    (if (i32.eq (local.get $t) (enum.get $Lex.l_angle))
+      (then
+        (global.set $sigAngle (i32.add (global.get $sigAngle) (i32.const 1)))
+        (return)))
+    (if (i32.eq (local.get $t) (enum.get $Lex.r_angle))
+      (then (call $sigAngleDrop (i32.const 1)) (return)))
+    (if (i32.eq (local.get $t) (enum.get $Lex.r_shift))
+      (then (call $sigAngleDrop (i32.const 2)) (return)))
+    (if (i32.eq (local.get $t) (enum.get $Lex.r_unsigned_shift))
+      (then (call $sigAngleDrop (i32.const 3)))))
+
   ;; classify an identifier or contextual word from its neighbors
   (func $identHl (param $prev i32) (param $t i32) (param $next i32)
         (param $lhs i32) (param $rhs i32) (result i32)
@@ -122,6 +268,60 @@
         (if (i32.eq (local.get $next) (enum.get $Lex.l_paren))
           (then (return (enum.get $Token.function.method))))
         (return (enum.get $Token.property))))
+    ;; parameter positions, mirroring Zed's @variable.parameter captures: an
+    ;; arrow's sole parameter (`x =>` and `(x) =>`), a TS type-predicate
+    ;; subject (`x is T`), the top level of a marked parameter list, and one
+    ;; level into a destructured parameter pattern
+    (if (i32.eq (local.get $next) (enum.get $Lex.function_arrow))
+      (then (return (enum.get $Token.variable.parameter))))
+    (if (i32.and
+          (i32.eq (local.get $prev) (enum.get $Lex.l_paren))
+          (i32.eq (local.get $next) (enum.get $Lex.r_paren)))
+      (then
+        (if (call $sigArrowAhead)
+          (then (return (enum.get $Token.variable.parameter))))))
+    (if (i32.and
+          (i32.eq (local.get $next) (enum.get $Lex.ctxword_is))
+          (call $ecmaHasTypeScript))
+      (then (return (enum.get $Token.variable.parameter))))
+    (if (call $sigActive)
+      (then
+        (if (i32.and
+              (i32.eqz (i32.or (global.get $sigObscure) (global.get $sigAngle)))
+              ;; normalized: bitset.get returns the masked byte, not 0/1
+              (i32.ne
+                (bitset.get $LexBits.sigParamPrev (local.get $prev))
+                (i32.const 0)))
+          (then (return (enum.get $Token.variable.parameter))))
+        (if (i32.and
+              (i32.and
+                (i32.eq (global.get $sigObscure) (i32.const 1))
+                (i32.ne (global.get $sigPattern) (i32.const 0)))
+              (i32.and
+                (i32.ne (local.get $next) (enum.get $Lex.colon))
+                (i32.or
+                  (i32.or
+                    (i32.eq (local.get $prev) (enum.get $Lex.l_brace))
+                    (i32.eq (local.get $prev) (enum.get $Lex.l_bracket)))
+                  (i32.eq (local.get $prev) (enum.get $Lex.comma)))))
+          (then (return (enum.get $Token.variable.parameter))))))
+    ;; a TS `name:` (or `name?:`) annotation right after `(` proves a
+    ;; parameter list - a call cannot contain one - so mark the list for the
+    ;; names after later commas too. The pipeline already scanned $next, so
+    ;; the tokenizer global $rhs is its end: the byte there is the one after
+    ;; the `?`
+    (if (i32.and
+          (i32.eq (local.get $prev) (enum.get $Lex.l_paren))
+          (call $ecmaHasTypeScript))
+      (then
+        (if (i32.or
+              (i32.eq (local.get $next) (enum.get $Lex.colon))
+              (i32.and
+                (i32.eq (local.get $next) (enum.get $Lex.question_mark))
+                (i32.eq (call $tsxByte (global.get $rhs)) (i32.const ":"))))
+          (then
+            (call $sigMark)
+            (return (enum.get $Token.variable.parameter))))))
     (if (call $isBuiltinConst (local.get $lhs) (local.get $rhs))
       (then (return (enum.get $Token.constant.builtin))))
     ;; nested so the word compare only runs for identifiers after a colon
@@ -199,6 +399,8 @@
   ;; - strings, templates, comments - are handled by the pipeline itself
   (func $classify (param $prev i32) (param $t i32) (param $next i32)
         (param $lhs i32) (param $rhs i32) (result i32)
+    (call $sigStep (local.get $prev) (local.get $t) (local.get $next)
+      (local.get $lhs) (local.get $rhs))
     ;; nested so the word compare only runs for a colon before an identifier -
     ;; wasm i32.and is eager, and this classifier runs for every token
     (if (i32.and

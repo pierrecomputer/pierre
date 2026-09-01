@@ -257,10 +257,11 @@ export class LiveTokenizer {
     | undefined;
   #revision = 0;
   // Bumped to invalidate scheduled background slices; a slice whose captured
-  // generation no longer matches was superseded by an edit, reset, flush, or
-  // dispose and must not touch the instance.
+  // generation no longer matches was superseded by an edit, reset, flush,
+  // pause, or dispose and must not touch the instance.
   #deferGeneration = 0;
   #deferBudget = 64;
+  #paused = false;
 
   constructor(options: LiveTokenizerOptions) {
     this.#langId = langIdOf(options.lang);
@@ -328,11 +329,37 @@ export class LiveTokenizer {
 
   /**
    * Finish pending deferred re-tokenization synchronously, delivering the
-   * finished lines through `onDeferTokenize`.
+   * finished lines through `onDeferTokenize`. Clears a `pause`.
    */
   flush(): void {
     const { hl, ex } = this.#live();
+    this.#paused = false;
     this.#settle(hl, ex);
+  }
+
+  /**
+   * Suspend background re-tokenization without discarding the pending work:
+   * no slices run and nothing is delivered while paused, and reads of
+   * unreached lines keep returning pre-edit tokens. `resume` reschedules the
+   * remainder; `flush`, `applyEdits`, and `reset` implicitly resume (a
+   * mutating call starts background work for its own deferred tail).
+   */
+  pause(): void {
+    this.#live();
+    if (this.#paused) return;
+    this.#paused = true;
+    this.#deferGeneration += 1;
+  }
+
+  /** Resume background re-tokenization suspended by `pause`. */
+  resume(): void {
+    const { ex } = this.#live();
+    if (!this.#paused) return;
+    this.#paused = false;
+    if (ex.liveStats(9) !== 0) {
+      const generation = this.#deferGeneration;
+      setTimeout(() => this.#deferSlice(generation), 0);
+    }
   }
 
   /** Release the Wasm instance and drop deferred work; later calls throw. */
@@ -405,7 +432,8 @@ export class LiveTokenizer {
    * ranges for bracket matching. Offsets are line-relative. Lines at or
    * above `tokenizeMaxLineLength` collapse to one unthemed token while the
    * raw records stay precise. While deferred re-tokenization is pending, a
-   * line it has not reached yet returns pre-edit tokens.
+   * line it has not reached yet returns pre-edit tokens; a line with no
+   * records yet (freshly spliced in) returns its text as one unthemed token.
    */
   getLineTokens(line: number): {
     tokens: ThemedToken[];
@@ -463,6 +491,20 @@ export class LiveTokenizer {
         start = end;
       }
     }
+    // no records does not imply an empty line: a freshly spliced line that
+    // deferred work has not reached yet still has text to show unstyled
+    if (tokens.length === 0 && text.length > 0) {
+      tokens.push(
+        rangeToToken(
+          text,
+          0,
+          text.length,
+          0,
+          this.#themes,
+          this.#cssVariablePrefix
+        )
+      );
+    }
     return { tokens, bracketIgnoredRanges };
   }
 
@@ -473,8 +515,9 @@ export class LiveTokenizer {
    * in-range ones are returned in `update.lines`, already-finished off-range
    * ones go to `onDeferTokenize` before this returns, and the remainder
    * converges in background slices that also report through
-   * `onDeferTokenize`. An edit arriving while such work is pending settles
-   * it first.
+   * `onDeferTokenize`. An edit arriving while such work is pending does not
+   * wait for it: the unreached dirty ranges are remapped through the batch
+   * natively and converge with this update's own deferred tail.
    */
   applyEdits(
     edits: readonly TextEdit[],
@@ -493,7 +536,10 @@ export class LiveTokenizer {
         lines: new Map(),
       };
     }
-    this.#settle(hl, ex);
+    // scheduled slices are superseded: the native splice absorbs the pending
+    // dirty ranges into this batch and #runSlice restarts the background tail
+    this.#deferGeneration += 1;
+    this.#paused = false;
     this.#stageEdits(hl, ex, batch);
     this.#revision += 1;
     const lines = this.#runSlice(hl, ex, renderRange);
@@ -507,6 +553,7 @@ export class LiveTokenizer {
     if (typeof code !== 'string') throw new TypeError('code must be a string');
     // pending tokens describe the outgoing document; drop them, don't settle
     this.#deferGeneration += 1;
+    this.#paused = false;
     const previousLineCount = ex.liveLineCount();
     [this.#hl, this.#ex] = LiveTokenizer.#createStaged(code, this.#langId);
     this.#revision += 1;
@@ -578,7 +625,9 @@ export class LiveTokenizer {
       }
       if (off.size > 0) this.#onDeferTokenize(off);
     }
-    if (ex.liveStats(9) !== 0) {
+    // an onDeferTokenize callback above may have paused the tokenizer; a
+    // paused instance schedules nothing until resume
+    if (ex.liveStats(9) !== 0 && !this.#paused) {
       const generation = this.#deferGeneration;
       setTimeout(() => this.#deferSlice(generation), 0);
     }

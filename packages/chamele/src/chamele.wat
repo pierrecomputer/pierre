@@ -174,6 +174,8 @@
     (global.set $srcBase (i32.const 65536))
     (global.set $streaming (i32.const 0))
     (global.set $streamDepth (i32.const 0))
+    ;; a pooled instance may hold parameter-machine state from a prior stream
+    (call $sigReset)
     (call $hlBegin)
     (call $highlightLang (i32.load8_u (i32.const 0)))
     (call $hlEnd))
@@ -343,6 +345,9 @@
                 (if (i32.eq (local.get $lang) (enum.get $Language.tsx))
                   (then (call $hlTsxStream (local.get $reset)))
                   (else
+                    ;; non-ecma lexers share the parameter-machine globals;
+                    ;; the ecma stream entries reset them in $hlEcmaImpl
+                    (if (local.get $reset) (then (call $sigReset)))
                     (if (i32.eqz (call $streamResumeCommon))
                       (then
                         (if (i32.eqz (call $streamResumeLang (local.get $lang)))

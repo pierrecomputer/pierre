@@ -380,6 +380,7 @@
             (call $emitTok (enum.get $Token.variable) (local.get $lhs) (global.get $ptr))
             (local.set $decl (i32.const 0))
             (local.set $member (i32.const 0))
+            (global.set $sigPattern (i32.const 0))
             (br $token)))
         (if (i32.or
               (call $lexIsDigit (local.get $c))
@@ -418,7 +419,21 @@
                         (local.set $p (call $lexSkipSpaceAt (global.get $ptr)))
                         (if (i32.and (i32.lt_u (local.get $p) (global.get $end))
                                      (i32.eq (i32.load8_u (local.get $p)) (i32.const "(")))
-                          (then (local.set $hl (enum.get $Token.function))))))))))
+                          (then (local.set $hl (enum.get $Token.function))))
+                        ;; a PHP 8 named call argument - `name:` after `(` or
+                        ;; `,`, never `::` - is Zed's argument name capture
+                        (if (i32.and
+                              (global.get $sigPattern)
+                              (i32.and
+                                (i32.and
+                                  (i32.lt_u (local.get $p) (global.get $end))
+                                  (i32.eq (i32.load8_u (local.get $p)) (i32.const ":")))
+                                (i32.ne
+                                  (select
+                                    (i32.load8_u offset=1 (local.get $p)) (i32.const 0)
+                                    (i32.lt_u (i32.add (local.get $p) (i32.const 1)) (global.get $end)))
+                                  (i32.const ":"))))
+                          (then (local.set $hl (enum.get $Token.variable.parameter))))))))))
             (if (i32.eq (local.get $hl) (enum.get $Token.keyword.declaration))
               (then
                 (local.set $decl (select
@@ -428,6 +443,7 @@
                     (i64.eq (i64.or (i64.load (local.get $lhs)) (i64.const 0x2020202020202020))
                             (i64.const "function")))))))
             (call $emitTok (local.get $hl) (local.get $lhs) (global.get $ptr))
+            (global.set $sigPattern (i32.const 0))
             (br $token)))
         (if (i32.or
               (i32.and (i32.eq (local.get $c) (i32.const "-"))
@@ -439,6 +455,7 @@
             (call $emitTok (enum.get $Token.operator) (local.get $lhs) (global.get $ptr))
             (local.set $decl (i32.const 0))
             (local.set $member (i32.const 1))
+            (global.set $sigPattern (i32.const 0))
             (br $token)))
         (if (i32.or
               (i32.or (i32.eq (local.get $c) (i32.const "("))
@@ -453,6 +470,8 @@
             (call $emitTok (enum.get $Token.punctuation.bracket) (local.get $lhs) (global.get $ptr))
             (local.set $decl (i32.const 0))
             (local.set $member (i32.const 0))
+            ;; an open paren puts the next bare word in named-argument position
+            (global.set $sigPattern (i32.eq (local.get $c) (i32.const "(")))
             (br $token)))
         (if (i32.or
               (i32.eq (local.get $c) (i32.const ","))
@@ -463,6 +482,7 @@
             (call $emitTok (enum.get $Token.punctuation.delimiter) (local.get $lhs) (global.get $ptr))
             (local.set $decl (i32.const 0))
             (local.set $member (i32.const 0))
+            (global.set $sigPattern (i32.eq (local.get $c) (i32.const ",")))
             (br $token)))
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
         (call $emitTok (select

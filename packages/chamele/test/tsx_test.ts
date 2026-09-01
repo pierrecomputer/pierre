@@ -465,6 +465,102 @@ void t.test(
   }
 );
 
+void t.test('tsx: parameters match Zed variable.parameter captures', () => {
+  const PARAM = themeColor('variable.parameter');
+  // exact-word span colors, in source order; substring search would find
+  // single-letter names inside other words
+  const words = (html: string, text: string) =>
+    spansOf(html)
+      .filter((s) => s.text.trim() === text)
+      .map((s) => s.color);
+  const word = (html: string, text: string) => words(html, text)[0];
+
+  // function declarations: plain, defaulted, rest; the body use stays variable
+  const decl = checkInvariants(
+    tsx.hl,
+    'function add(first: string, second = 1, ...rest: number[]) { return rest }'
+  );
+  assert.equal(word(decl, 'first'), PARAM);
+  assert.equal(word(decl, 'second'), PARAM);
+  assert.deepEqual(words(decl, 'rest'), [PARAM, VAR]);
+
+  // arrows: sole bare parameter, sole parenthesized parameter, and a typed
+  // list whose annotation marks the later untyped name too
+  const arrows = checkInvariants(
+    tsx.hl,
+    'items.map(one => one); use((two) => two); fn((item: T, i) => i)'
+  );
+  assert.deepEqual(words(arrows, 'one'), [PARAM, VAR]);
+  assert.deepEqual(words(arrows, 'two'), [PARAM, VAR]);
+  assert.equal(word(arrows, 'item'), PARAM);
+  assert.equal(word(arrows, 'i'), PARAM);
+
+  // constructor property modifiers, accessors, and catch clauses
+  const cls = checkInvariants(
+    tsx.hl,
+    'class P { constructor(private id: string, readonly kind: K) {} set size(v) {} }\n' +
+      'try {} catch (err) {}'
+  );
+  assert.equal(word(cls, 'id'), PARAM);
+  assert.equal(word(cls, 'kind'), PARAM);
+  assert.equal(word(cls, 'v'), PARAM);
+  assert.equal(word(cls, 'err'), PARAM);
+
+  // destructured parameters capture one level deep like Zed: shorthand and
+  // assignment-pattern names, but not pair keys or pair values
+  const pattern = checkInvariants(
+    tsx.hl,
+    'function h({ a, b: c, d = 1 }, [e]) {}'
+  );
+  assert.equal(word(pattern, 'a'), PARAM);
+  assert.equal(word(pattern, 'd'), PARAM);
+  assert.equal(word(pattern, 'e'), PARAM);
+  assert.equal(word(pattern, 'b'), PROP);
+  assert.notEqual(word(pattern, 'c'), PARAM);
+
+  // optional and predicate positions, and TS function types
+  const typed = checkInvariants(
+    tsx.hl,
+    'function o(opt?: string) {}\n' +
+      'type Cb = (err2: Error, data: D) => void\n' +
+      'function isV(v2: unknown): v2 is V { return true }'
+  );
+  assert.equal(word(typed, 'opt'), PARAM);
+  assert.equal(word(typed, 'err2'), PARAM);
+  assert.equal(word(typed, 'data'), PARAM);
+  assert.deepEqual(words(typed, 'v2'), [PARAM, PARAM]);
+
+  // generic type arguments inside an annotation are not parameters
+  const gen = checkInvariants(
+    tsx.hl,
+    'function pick(dict: Map<string, number>, key: string) { return dict }'
+  );
+  assert.equal(word(gen, 'dict'), PARAM);
+  assert.equal(word(gen, 'key'), PARAM);
+  assert.notEqual(word(gen, 'number'), PARAM);
+
+  // calls, object literals, ternary arguments, and literal defaults stay put
+  const calls = checkInvariants(
+    tsx.hl,
+    'foo(alpha, beta); obj.bar(gamma, flag ? yes : no)\n' +
+      'function q(lit = { x: 1, y: [u, w] }) {}'
+  );
+  for (const name of [
+    'alpha',
+    'beta',
+    'gamma',
+    'flag',
+    'yes',
+    'no',
+    'u',
+    'w',
+  ]) {
+    assert.equal(word(calls, name), VAR, name);
+  }
+  assert.equal(word(calls, 'lit'), PARAM);
+  assert.equal(word(calls, 'x'), PROP);
+});
+
 void t.test(
   'tsx: TS annotations stay lossless with the uppercase heuristic',
   () => {

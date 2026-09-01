@@ -5,6 +5,7 @@ import {
   checkInvariants,
   colorOf,
   loadLang,
+  spansOf,
   type TestLang,
   themeColor,
 } from './util';
@@ -154,5 +155,38 @@ void t.test('python: deterministic fuzz preserves lexer invariants', () => {
       src += alphabet[state % alphabet.length];
     }
     checkInvariants(python.hl, src);
+  }
+});
+
+void t.test('python: def parameters match Zed variable.parameter', () => {
+  const PARAM = themeColor('variable.parameter');
+  const VSPEC = themeColor('variable.special');
+  // exact-word colors; substring search would match inside longer names
+  const word = (html: string, text: string) =>
+    spansOf(html).find((s) => s.text.trim() === text)?.color;
+  const html = checkInvariants(
+    python.hl,
+    'def greet(name, greeting="hi", *args, **kwargs):\n    return name\n' +
+      'class C:\n' +
+      '    def m(self, count: int, data: dict[str, int] = {}) -> None:\n' +
+      '        pass\n' +
+      'def gen[T](item: T) -> T:\n    return item\n' +
+      'f = lambda alpha, beta: alpha\nprint(xs, ys); foo(k=1)'
+  );
+  for (const name of [
+    'name',
+    'greeting',
+    'args',
+    'kwargs',
+    'count',
+    'data',
+    'item',
+  ]) {
+    assert.equal(word(html, name), PARAM, name);
+  }
+  // self stays special, and lambdas plus call arguments stay plain, like Zed
+  assert.equal(word(html, 'self'), VSPEC);
+  for (const name of ['alpha', 'beta', 'xs', 'ys', 'k']) {
+    assert.equal(word(html, name), VARIABLE, name);
   }
 });

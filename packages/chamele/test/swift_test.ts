@@ -161,3 +161,28 @@ void t.test('swift: deterministic fuzz preserves lexer invariants', () => {
     checkInvariants(swift.hl, src);
   }
 });
+
+void t.test('swift: parameters match Zed variable.parameter', () => {
+  const PARAM = themeColor('variable.parameter');
+  const VARIABLE = themeColor('variable');
+  const word = (html: string, text: string) =>
+    spansOf(html).find((s) => s.text.trim() === text)?.color;
+  const html = checkInvariants(
+    swift.hl,
+    'func greet(person: String, from hometown: String) -> String { hometown }\n' +
+      'func f<T: Codable>(_ value: T, count: Int = 1) {}\n' +
+      'class C { init(id: Int) {} }\n' +
+      'greet(person: "x", from: "y"); print(alpha, beta)'
+  );
+  // Zed captures both the external label and the internal name; the merged
+  // same-color span carries the label-name pair
+  assert.equal(word(html, 'person'), PARAM);
+  assert.equal(word(html, 'from hometown'), PARAM);
+  assert.equal(word(html, 'value'), PARAM);
+  assert.equal(word(html, 'count'), PARAM);
+  assert.equal(word(html, 'id'), PARAM);
+  // call-site labels and arguments stay plain
+  for (const name of ['alpha', 'beta']) {
+    assert.equal(word(html, name), VARIABLE, name);
+  }
+});

@@ -5,6 +5,7 @@
   (import "../token.wat")
   (import "../scan.wat")
   (import "../emit.wat")
+  (import "../sig.wat")
 
   ;; $Lex enum - member order is ABI for the keyword
   ;; hash table below, which stores token ids as raw bytes. NOTE: no parens
@@ -247,6 +248,13 @@
     (kwDecl
       "keyword_const" "keyword_let" "keyword_var" "keyword_function"
       "keyword_class" "keyword_enum" "keyword_interface"
+    )
+    ;; tokens before an identifier that put it in parameter position at the
+    ;; top level of a tracked parameter list: `(`, `,`, rest `...`, and the
+    ;; TS constructor-property modifiers
+    (sigParamPrev
+      "l_paren" "comma" "spread" "keyword_public" "keyword_private"
+      "keyword_protected" "ctxword_readonly" "ctxword_override"
     )
   )
 
@@ -1008,6 +1016,7 @@
     (global.set $brkSp (i32.const 0))
     (global.set $rxCloser (i32.const 0))
     (global.set $jsxSp (i32.const 0))
+    (call $sigReset)
     (if (i32.eq (local.get $body) (local.get $from))
       (then (local.set $t (call $nextToken)))
       (else

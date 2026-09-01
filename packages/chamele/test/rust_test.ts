@@ -122,3 +122,24 @@ void t.test('rust: deterministic fuzz preserves lexer invariants', () => {
     checkInvariants(rust.hl, src);
   }
 });
+
+void t.test('rust: fn parameters match Zed variable.parameter', () => {
+  const PARAM = themeColor('variable.parameter');
+  const VARIABLE = themeColor('variable');
+  const word = (html: string, text: string) =>
+    spansOf(html).find((s) => s.text.trim() === text)?.color;
+  const html = checkInvariants(
+    rust.hl,
+    'pub fn get<T: Clone>(key: &str, mut item: T, opts: Map<K, V>) -> T { item }\n' +
+      'impl S { fn m(&self, data: [u8; 4]) {} }\n' +
+      'let r = call(alpha, beta); let pair: (i32, u32) = (1, 2);'
+  );
+  for (const name of ['key', 'item', 'opts', 'data']) {
+    assert.equal(word(html, name), PARAM, name);
+  }
+  // call arguments and tuple types stay plain
+  for (const name of ['alpha', 'beta']) {
+    assert.equal(word(html, name), VARIABLE, name);
+  }
+  assert.notEqual(word(html, 'V'), PARAM);
+});

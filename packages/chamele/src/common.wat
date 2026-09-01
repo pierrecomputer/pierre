@@ -2,6 +2,7 @@
   (import "./token.wat")
   (import "./scan.wat")
   (import "./emit.wat")
+  (import "./sig.wat")
 
   ;; Shared ASCII predicates. Bytes >= 0x80 stay identifier bytes so a lexer
   ;; never puts a span boundary inside a UTF-8 code point.

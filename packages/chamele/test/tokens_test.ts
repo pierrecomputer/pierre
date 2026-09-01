@@ -530,6 +530,20 @@ void t.test(
       // multi-byte lines followed by ASCII, and astral pairs the random
       // chunking will split across pushes
       ['ts', 'const é = "日本語"\nconst x = 1 // 🎈🎈\nlet y = 2\n'],
+      // parameter lists split across lines: the signature-tracking state
+      // must survive chunk boundaries
+      [
+        'ts',
+        'function make(\n  first: string,\n  last = "x",\n  ...rest: number[]\n) { return first }\n',
+      ],
+      [
+        'python',
+        'def make(\n    first,\n    second="x",\n    *rest,\n):\n    return first\n',
+      ],
+      [
+        'rust',
+        'fn make(\n    first: i32,\n    second: Vec<u8>,\n) -> i32 { first }\n',
+      ],
     ];
     let seed = 0x51ed2701;
     for (const [lang, code] of samples) {

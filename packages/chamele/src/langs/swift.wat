@@ -234,6 +234,10 @@
 
         (if (call $lexIsIdentStart (local.get $c))
           (then
+            ;; a pending func head outside its generic angles expects only the
+            ;; opening paren; another identifier here is stale context
+            (if (i32.and (global.get $sigFnPend) (i32.eqz (global.get $sigFnAngle)))
+              (then (global.set $sigFnPend (i32.const 0))))
             (call $lexScanIdent)
             (local.set $rhs (global.get $ptr))
             (local.set $kind (call $swiftWordHl (local.get $lhs) (local.get $rhs)))
@@ -248,21 +252,51 @@
                   (then
                     (local.set $hl (select (enum.get $Token.function.definition) (enum.get $Token.type)
                       (i32.eq (local.get $expect) (i32.const 1))))
+                    ;; a func name arms the parameter machine for the paren
+                    ;; after its optional generic angles
+                    (if (i32.eq (local.get $expect) (i32.const 1))
+                      (then
+                        (global.set $sigFnPend (i32.const 1))
+                        (global.set $sigFnAngle (i32.const 0))))
                     (local.set $expect (i32.const 0)))
                   (else
                     (if (i32.eq (call $swiftByte (local.get $p)) (i32.const "("))
-                      (then (local.set $hl (select
-                        (enum.get $Token.function.method) (enum.get $Token.function) (local.get $member))))
+                      (then
+                        (local.set $hl (select
+                          (enum.get $Token.function.method) (enum.get $Token.function) (local.get $member)))
+                        ;; a bare `init(` head opens a parameter list too
+                        (if (i32.and
+                              (i32.eqz (local.get $member))
+                              (i32.and
+                                (i32.eq (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 4))
+                                (i32.eq (i32.load (local.get $lhs)) (i32.const "init"))))
+                          (then
+                            (global.set $sigFnPend (i32.const 1))
+                            (global.set $sigFnAngle (i32.const 0)))))
                       (else
                         (if (local.get $member)
                           (then (local.set $hl (enum.get $Token.property)))
                           (else
-                            (if (call $lexIsConstCase (local.get $lhs) (local.get $rhs))
-                              (then (local.set $hl (enum.get $Token.constant)))
+                            ;; names at the top level of a marked list are
+                            ;; parameters - Zed captures both the external
+                            ;; label and the internal name - except the `_`
+                            ;; wildcard label; an identifier keeps the
+                            ;; position so a label-name pair both match
+                            (if (i32.and
+                                  (i32.and (call $sigActive) (global.get $sigPattern))
+                                  (i32.and
+                                    (i32.eqz (global.get $sigObscure))
+                                    (i32.eqz (i32.and
+                                      (i32.eq (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 1))
+                                      (i32.eq (local.get $c) (i32.const "_"))))))
+                              (then (local.set $hl (enum.get $Token.variable.parameter)))
                               (else
-                                (if (i32.le_u (i32.sub (i32.load8_u (local.get $lhs)) (i32.const "A")) (i32.const 25))
-                                  (then (local.set $hl (enum.get $Token.type)))
-                                  (else (local.set $hl (enum.get $Token.variable))))))))))))))
+                                (if (call $lexIsConstCase (local.get $lhs) (local.get $rhs))
+                                  (then (local.set $hl (enum.get $Token.constant)))
+                                  (else
+                                    (if (i32.le_u (i32.sub (i32.load8_u (local.get $lhs)) (i32.const "A")) (i32.const 25))
+                                      (then (local.set $hl (enum.get $Token.type)))
+                                      (else (local.set $hl (enum.get $Token.variable))))))))))))))))
             (call $emitTok (local.get $hl) (local.get $lhs) (local.get $rhs))
             (local.set $member (i32.const 0))
             (br $next)))
@@ -297,6 +331,39 @@
                   (then (local.set $interp (i32.add (local.get $interp) (i32.const 1)))))
                 (if (i32.eq (local.get $c) (i32.const ")"))
                   (then (local.set $interp (i32.sub (local.get $interp) (i32.const 1)))))))
+            ;; parameter machine: a paren may open the armed func list and
+            ;; puts the next name in parameter position; other brackets
+            ;; inside a marked list obscure its top level
+            (if (i32.eq (local.get $c) (i32.const "("))
+              (then
+                (global.set $sigParens (i32.add (global.get $sigParens) (i32.const 1)))
+                (if (i32.eqz (global.get $sigFnAngle))
+                  (then
+                    (if (global.get $sigFnPend) (then (call $sigMark)))
+                    (global.set $sigFnPend (i32.const 0))))
+                (global.set $sigPattern (i32.const 1)))
+              (else
+                (global.set $sigPattern (i32.const 0))
+                (if (i32.eq (local.get $c) (i32.const ")"))
+                  (then
+                    (if (call $sigActive) (then (call $sigUnmark)))
+                    (if (i32.gt_u (global.get $sigParens) (i32.const 0))
+                      (then (global.set $sigParens
+                        (i32.sub (global.get $sigParens) (i32.const 1))))))
+                  (else
+                    (if (i32.and (global.get $sigFnPend) (i32.eqz (global.get $sigFnAngle)))
+                      (then (global.set $sigFnPend (i32.const 0))))
+                    (if (call $sigActive)
+                      (then
+                        (if (i32.or
+                              (i32.eq (local.get $c) (i32.const "["))
+                              (i32.eq (local.get $c) (i32.const "{")))
+                          (then (global.set $sigObscure
+                            (i32.add (global.get $sigObscure) (i32.const 1))))
+                          (else
+                            (if (i32.gt_u (global.get $sigObscure) (i32.const 0))
+                              (then (global.set $sigObscure
+                                (i32.sub (global.get $sigObscure) (i32.const 1)))))))))))))
             (call $emitTok (enum.get $Token.punctuation.bracket) (local.get $lhs) (global.get $ptr))
             (local.set $member (i32.const 0))
             (br $next)))
@@ -307,6 +374,13 @@
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (call $emitTok (enum.get $Token.punctuation.delimiter) (local.get $lhs) (global.get $ptr))
             (local.set $member (i32.const 0))
+            ;; a comma returns to parameter position; `:`/`;` leave it, and a
+            ;; top-level `;` proves the marked list was not a parameter list
+            (global.set $sigPattern (i32.eq (local.get $c) (i32.const ",")))
+            (if (i32.and
+                  (i32.eq (local.get $c) (i32.const ";"))
+                  (i32.and (call $sigActive) (i32.eqz (global.get $sigObscure))))
+              (then (call $sigUnmark)))
             (br $next)))
         (if (i32.eq (local.get $c) (i32.const "."))
           (then
@@ -319,6 +393,7 @@
             (call $emitTok (select (enum.get $Token.operator) (enum.get $Token.punctuation.delimiter)
               (i32.eq (local.get $c2) (i32.const "."))) (local.get $lhs) (global.get $ptr))
             (local.set $member (i32.ne (local.get $c2) (i32.const ".")))
+            (global.set $sigPattern (i32.const 0))
             (br $next)))
 
         (if (call $swiftIsOp (local.get $c))
@@ -330,6 +405,10 @@
                 (br $op)))
             (call $emitTok (enum.get $Token.operator) (local.get $lhs) (global.get $ptr))
             (local.set $member (i32.const 0))
+            ;; a pending func head rides `<`/`>` generic operators
+            (if (global.get $sigFnPend)
+              (then (call $sigAngleOps (local.get $lhs) (global.get $ptr))))
+            (global.set $sigPattern (i32.const 0))
             (br $next)))
 
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))

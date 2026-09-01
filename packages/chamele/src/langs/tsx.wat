@@ -164,7 +164,8 @@
         (global.set $rxCloser (i32.const 0))
         (global.set $jsxSp (i32.const 0))
         (global.set $tsxStreamMode (i32.const 0))
-        (global.set $tsxStreamNl (i32.const 0)))
+        (global.set $tsxStreamNl (i32.const 0))
+        (call $sigReset))
       (else
         ;; A later chunk cannot contain the source-level hashbang.
         (global.set $sourceStart (i32.const 0))))

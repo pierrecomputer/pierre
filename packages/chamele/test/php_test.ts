@@ -5,6 +5,7 @@ import {
   checkInvariants,
   colorOf,
   loadLang,
+  spansOf,
   type TestLang,
   themeColor,
 } from './util';
@@ -85,4 +86,24 @@ void t.test('php: malformed constructs remain lossless', () => {
   ]) {
     checkInvariants(php.hl, src);
   }
+});
+
+void t.test('php: named call arguments match Zed variable.parameter', () => {
+  const PARAM = themeColor('variable.parameter');
+  const word = (html: string, text: string) =>
+    spansOf(html).find((s) => s.text.trim() === text)?.color;
+  const html = checkInvariants(
+    php.hl,
+    '<?php\n' +
+      'setUser(name: $n, role: "admin", active: true);\n' +
+      'function f($a, $b) { return $a ? $b : $a; }\n' +
+      'switch ($x) { case FOO: break; }\n' +
+      'Foo::bar($x); $o->method($y);'
+  );
+  for (const name of ['name', 'role', 'active']) {
+    assert.equal(word(html, name), PARAM, name);
+  }
+  // declaration parameters are $variables, and other colons stay untouched
+  assert.notEqual(word(html, 'FOO'), PARAM);
+  assert.notEqual(word(html, 'f'), PARAM);
 });

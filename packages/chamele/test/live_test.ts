@@ -74,6 +74,16 @@ const samples: [Lang, string][] = [
   ['xml', '<![CDATA[one\ntwo]]>\n<root/>\n'],
   ['yaml', 'message: |\n  one: # literal\n  two\nitems: [\n  one,\n  two\n]\n'],
   ['zig', 'const s = \\\\one\n  \\\\two\n;\n'],
+  // parameter lists split across lines: the signature-tracking state must
+  // ride the interned line-state blobs
+  [
+    'ts',
+    'function make(\n  first: string,\n  last = "x",\n  ...rest: number[]\n) { return first }\n',
+  ],
+  [
+    'python',
+    'def make(\n    first,\n    second="x",\n    *rest,\n):\n    return first\n',
+  ],
   // multi-byte and astral text, CRLF/CR/LF terminators, and NUL
   ['ts', 'const é = "日本語"\nconst x = 1 // 🎈🎈\nlet y = 2\n'],
   ['ts', 'const a = 1\r\nconst b = `x\r\ny`\r\nconst c = 3'],
@@ -960,7 +970,7 @@ void t.test('LiveTokenizer: renderRange updates match sync updates', () => {
 });
 
 void t.test(
-  'LiveTokenizer: an edit while deferred work is pending settles it first',
+  'LiveTokenizer: an edit while deferred work is pending merges the tail',
   async () => {
     const code = Array.from(
       { length: 400 },
@@ -989,7 +999,8 @@ void t.test(
     assert.ok(live.pendingTokenization, 'the tail is deferred');
     assert.deepEqual([...first.lines.keys()], [0, 1, 2, 3]);
     const staleTail = live.getLineTokens(399).tokens;
-    // the next edit settles the pending tail before it applies
+    // the next edit does NOT run the old tail to convergence synchronously:
+    // the unreached ranges merge into the new update's own deferred work
     const second = live.applyEdits(
       [
         {
@@ -1002,8 +1013,13 @@ void t.test(
       ],
       { renderRange: [0, 4] }
     );
+    assert.ok(live.pendingTokenization, 'the merged tail is still deferred');
+    assert.deepEqual(live.getLineTokens(399).tokens, staleTail);
+    live.flush();
     assert.equal(live.pendingTokenization, false);
     assert.notDeepEqual(live.getLineTokens(399).tokens, staleTail);
+    // both edits leave line numbers unchanged, so delivery coordinates agree
+    // across the two revisions: every line arrives through one channel
     const delivered = new Set<number>(first.lines.keys());
     for (const lines of deliveries) {
       for (const line of lines.keys()) delivered.add(line);
@@ -1012,11 +1028,119 @@ void t.test(
     assert.equal(delivered.size, 400, 'every line was delivered');
     assert.equal(live.getText(), '`x' + code);
     assertMatchesFresh(live, '`x' + code, 'ts', 'settled document');
-    // superseded slices must not fire after settling
+    // superseded slices must not fire after the flush settles everything
     const settledDeliveries = deliveries.length;
     await new Promise((resolve) => setTimeout(resolve, 20));
     assert.equal(deliveries.length, settledDeliveries);
     live.dispose();
+  }
+);
+
+void t.test(
+  'LiveTokenizer: edits interrupting mid-run background slices converge',
+  async () => {
+    // Structural edits land while budgeted background slices are part-way
+    // through the tail, so the native merge sees a cursor inside a range,
+    // shifted pending pieces, and pieces swallowed by replacements.
+    const rand = makeRand(0x7b21d43);
+    const code = Array.from(
+      { length: 300 },
+      (_, i) => `const v${i} = \`t${i}\`; // note ${i}`
+    ).join('\n');
+    const live = new LiveTokenizer({ lang: 'ts', theme: pierreDark, code });
+    let mirror = code;
+    for (let round = 0; round < 40; round++) {
+      const batch = randomBatch(rand, live);
+      const startLine = rand() % (live.lineCount + 1);
+      live.applyEdits(batch, { renderRange: [startLine, startLine + 3] });
+      mirror = applyToMirror(mirror, batch);
+      // let a few budgeted slices run without settling
+      const ticks = rand() % 3;
+      for (let i = 0; i < ticks; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+    }
+    live.flush();
+    assertMatchesLineStream(live, mirror, 'ts', 'mid-slice merge');
+    live.dispose();
+  }
+);
+
+void t.test('LiveTokenizer: pause suspends slices until resume', async () => {
+  const code = Array.from({ length: 300 }, (_, i) => `let v${i} = ${i};`).join(
+    '\n'
+  );
+  const deliveries: Map<number, HighlightedToken[]>[] = [];
+  const live = new LiveTokenizer({
+    lang: 'ts',
+    theme: pierreDark,
+    code,
+    onDeferTokenize: (lines) => deliveries.push(lines),
+  });
+  live.applyEdits(
+    [
+      {
+        range: {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 0 },
+        },
+        newText: '`',
+      },
+    ],
+    { renderRange: [0, 4] }
+  );
+  assert.ok(live.pendingTokenization);
+  live.pause();
+  const paused = deliveries.length;
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(deliveries.length, paused, 'no slices ran while paused');
+  assert.ok(live.pendingTokenization, 'pending work survives the pause');
+  live.resume();
+  const deadline = Date.now() + 2000;
+  while (live.pendingTokenization && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+  assert.equal(live.pendingTokenization, false, 'resume finishes the tail');
+  assert.ok(deliveries.length > paused, 'resume delivered the tail');
+  assertMatchesFresh(live, '`' + code, 'ts', 'resumed document');
+  live.dispose();
+});
+
+void t.test(
+  'LiveTokenizer: token-dense long lines do not trap the wasm heap',
+  () => {
+    // ~65k token records on one 130k-char line: packing them must grow the
+    // heap while the record window sits far above the heap ceiling
+    const dense = 'const a=1;'.repeat(13_000);
+    const live = new LiveTokenizer({
+      lang: 'ts',
+      theme: pierreDark,
+      code: dense,
+    });
+    assertMatchesFresh(live, dense, 'ts', 'dense init');
+    // the same line arriving through an edit takes the incremental path
+    const edited = new LiveTokenizer({
+      lang: 'ts',
+      theme: pierreDark,
+      code: 'let x = 1;\nlet y = 2;\n',
+    });
+    edited.applyEdits([
+      {
+        range: {
+          start: { line: 1, character: 0 },
+          end: { line: 1, character: 0 },
+        },
+        newText: `${dense}\n`,
+      },
+    ]);
+    assertMatchesFresh(
+      edited,
+      `let x = 1;\n${dense}\nlet y = 2;\n`,
+      'ts',
+      'dense edit'
+    );
+    live.dispose();
+    edited.dispose();
   }
 );
 

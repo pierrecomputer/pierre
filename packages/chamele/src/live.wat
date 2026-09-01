@@ -102,9 +102,16 @@
     (local $delta i32)
     (local.set $delta (i32.and
       (i32.add (local.get $min) (i32.const 327679)) (i32.const -65536)))
+    ;; the window sits above the line's scratch copy, not at the ceiling, so
+    ;; the slide destination ends at $lvTransHi+$delta; growing from the
+    ;; ceiling alone under-allocates by the line length and the copy traps on
+    ;; token-dense long lines
     (call $lvGrowTo (i32.add
-      (i32.add (global.get $lvHeapCeil) (local.get $delta))
-      (i32.add (i32.sub (global.get $lvTransHi) (global.get $lvTransLo)) (i32.const 64))))
+      (i32.add
+        (select (global.get $lvTransHi) (global.get $lvHeapCeil)
+          (i32.gt_u (global.get $lvTransHi) (global.get $lvHeapCeil)))
+        (local.get $delta))
+      (i32.const 64)))
     (if (i32.gt_u (global.get $lvTransHi) (global.get $lvTransLo))
       (then
         (memory.copy
@@ -450,7 +457,7 @@
       (i32.or (i32.shl (global.get $lvIdFree) (i32.const 1)) (i32.const 1)))
     (global.set $lvIdFree (local.get $id)))
 
-  ;; Blob image: [sharedLen, brkLen, jsxLen] u32 head, 30 cross-chunk globals,
+  ;; Blob image: [sharedLen, brkLen, jsxLen] u32 head, 37 cross-chunk globals,
   ;; the 32-byte stream delimiter, the whole used lexer checkpoint region,
   ;; then the live prefixes of the shared, bracket, and jsx stacks. The image
   ;; is a pure function of the incoming state and the line bytes, so exact
@@ -517,11 +524,18 @@
     (i32.store offset=120 (local.get $dst) (global.get $tsxStreamExpressionClose))
     (i32.store offset=124 (local.get $dst) (global.get $tsxStreamExpressionClosed))
     (i32.store offset=128 (local.get $dst) (global.get $tsxStreamExpressionDepth))
-    (memory.copy (i32.add (local.get $dst) (i32.const 132))
+    (i32.store offset=132 (local.get $dst) (global.get $sigParens))
+    (i32.store offset=136 (local.get $dst) (global.get $sigMask))
+    (i32.store offset=140 (local.get $dst) (global.get $sigObscure))
+    (i32.store offset=144 (local.get $dst) (global.get $sigPattern))
+    (i32.store offset=148 (local.get $dst) (global.get $sigAngle))
+    (i32.store offset=152 (local.get $dst) (global.get $sigFnPend))
+    (i32.store offset=156 (local.get $dst) (global.get $sigFnAngle))
+    (memory.copy (i32.add (local.get $dst) (i32.const 160))
       (i32.const $mem.streamDelimiter) (i32.const 32))
-    (memory.copy (i32.add (local.get $dst) (i32.const 164))
+    (memory.copy (i32.add (local.get $dst) (i32.const 192))
       (i32.const $mem.streamState) (i32.const $mem.streamStateUsed))
-    (local.set $p (i32.add (local.get $dst) (i32.const $mem.streamStateUsed+164)))
+    (local.set $p (i32.add (local.get $dst) (i32.const $mem.streamStateUsed+192)))
     (memory.copy (local.get $p) (i32.const $mem.sharedStack) (local.get $sharedLen))
     (local.set $p (i32.add (local.get $p) (local.get $sharedLen)))
     (memory.copy (local.get $p) (i32.const $mem.tsxBracketStack) (local.get $brkLen))
@@ -567,12 +581,19 @@
     (global.set $tsxStreamExpressionClose (i32.load offset=120 (local.get $src)))
     (global.set $tsxStreamExpressionClosed (i32.load offset=124 (local.get $src)))
     (global.set $tsxStreamExpressionDepth (i32.load offset=128 (local.get $src)))
+    (global.set $sigParens (i32.load offset=132 (local.get $src)))
+    (global.set $sigMask (i32.load offset=136 (local.get $src)))
+    (global.set $sigObscure (i32.load offset=140 (local.get $src)))
+    (global.set $sigPattern (i32.load offset=144 (local.get $src)))
+    (global.set $sigAngle (i32.load offset=148 (local.get $src)))
+    (global.set $sigFnPend (i32.load offset=152 (local.get $src)))
+    (global.set $sigFnAngle (i32.load offset=156 (local.get $src)))
     (global.set $liveSharedBytes (local.get $sharedLen))
     (memory.copy (i32.const $mem.streamDelimiter)
-      (i32.add (local.get $src) (i32.const 132)) (i32.const 32))
+      (i32.add (local.get $src) (i32.const 160)) (i32.const 32))
     (memory.copy (i32.const $mem.streamState)
-      (i32.add (local.get $src) (i32.const 164)) (i32.const $mem.streamStateUsed))
-    (local.set $p (i32.add (local.get $src) (i32.const $mem.streamStateUsed+164)))
+      (i32.add (local.get $src) (i32.const 192)) (i32.const $mem.streamStateUsed))
+    (local.set $p (i32.add (local.get $src) (i32.const $mem.streamStateUsed+192)))
     (memory.copy (i32.const $mem.sharedStack) (local.get $p) (local.get $sharedLen))
     (local.set $p (i32.add (local.get $p) (local.get $sharedLen)))
     (memory.copy (i32.const $mem.tsxBracketStack) (local.get $p) (local.get $brkLen))
@@ -600,6 +621,7 @@
     (global.set $tsxStreamExpressionClose (i32.const 0))
     (global.set $tsxStreamExpressionClosed (i32.const 0))
     (global.set $tsxStreamExpressionDepth (i32.const 0))
+    (call $sigReset)
     (global.set $liveSharedBytes (i32.const 0))
     (memory.fill (i32.const $mem.streamDelimiter) (i32.const 0) (i32.const 32))
     (memory.fill (i32.const $mem.streamState) (i32.const 0)
@@ -767,7 +789,7 @@
       (i32.add (i32.add (local.get $recStart) (local.get $recLen)) (i32.const 7))
       (i32.const -8)))
     (call $lvGrowTo (i32.add (local.get $blobBase)
-      (i32.const $mem.streamStateUsed+6372)))
+      (i32.const $mem.streamStateUsed+6400)))
     (local.set $blobLen (call $lvCaptureBlob (local.get $blobBase)))
     (global.set $lvTransLo (local.get $recStart))
     (global.set $lvTransHi (i32.add (local.get $blobBase) (local.get $blobLen)))
@@ -1461,8 +1483,44 @@
     (memory.fill (i32.const $mem.liveFree) (i32.const 0) (i32.const 128))
     (global.set $lvHeapFreed (i32.const 0)))
 
-  ;; apply a validated staged edit batch: [count][24-byte records][text bytes]
-  ;; where each record is sLine, sChar, eLine, eChar, textOff, textLen
+  ;; Merge one pending re-tokenization piece [a, b) — pre-batch line numbers
+  ;; landing at [a+shift, b+shift) in the new document — into the change list
+  ;; and range table; returns the updated range count. Pieces arrive in
+  ;; ascending old-start order interleaved with the batch's own entries, so
+  ;; touching spans coalesce through $lvAddChange and the range table mirrors
+  ;; the entry the piece merged into.
+  (func $lvAddPend (param $a i32) (param $b i32) (param $shift i32)
+      (param $ranges i32) (param $rangeCount i32) (result i32)
+    (local $slot i32)
+    (if (i32.ge_u (local.get $a) (local.get $b))
+      (then (return (local.get $rangeCount))))
+    (if (call $lvAddChange (local.get $a) (local.get $b)
+          (i32.add (local.get $a) (local.get $shift))
+          (i32.add (local.get $b) (local.get $shift)))
+      (then
+        (local.set $slot (i32.add (local.get $ranges)
+          (i32.shl (local.get $rangeCount) (i32.const 3))))
+        (i32.store (local.get $slot) (i32.add (local.get $a) (local.get $shift)))
+        (i32.store offset=4 (local.get $slot)
+          (i32.add (local.get $b) (local.get $shift)))
+        (return (i32.add (local.get $rangeCount) (i32.const 1)))))
+    (local.set $slot (i32.add (local.get $ranges)
+      (i32.shl (i32.sub (local.get $rangeCount) (i32.const 1)) (i32.const 3))))
+    (if (i32.gt_u (i32.add (local.get $b) (local.get $shift))
+          (i32.load offset=4 (local.get $slot)))
+      (then (i32.store offset=4 (local.get $slot)
+        (i32.add (local.get $b) (local.get $shift)))))
+    (local.get $rangeCount))
+
+  ;; Apply a validated staged edit batch: [count][24-byte records][text bytes]
+  ;; where each record is sLine, sChar, eLine, eChar, textOff, textLen.
+  ;; Deferred re-tokenization from a previous batch may still be pending; its
+  ;; remaining dirty ranges are captured in pre-batch coordinates, remapped
+  ;; through this batch's splices, and merged into the new range list — a new
+  ;; edit never runs the old tail to convergence first. Soundness: the merged
+  ;; ranges force re-tokenization of every line the old run had not reached,
+  ;; and beyond them a state-id match against a pre-old-batch id certifies the
+  ;; untouched chain exactly like ordinary convergence.
   (func (export "liveApplyEdits") (param $staged i32)
     (local $count i32)
     (local $k i32)
@@ -1476,7 +1534,45 @@
     (local $rangeCount i32)
     (local $slot i32)
     (local $ext i32)
+    (local $pend i32)
+    (local $pendCount i32)
+    (local $pendIdx i32)
+    (local $pendSlot i32)
+    (local $a i32)
+    (local $b i32)
+    (local $os i32)
+    (local $oe i32)
     (local.set $count (i32.load (local.get $staged)))
+    ;; capture the pending dirty ranges before the splices invalidate their
+    ;; coordinates: the interrupted range restarts at the cursor (at least one
+    ;; line, so a mid-convergence-tail run re-checks convergence there), then
+    ;; the untouched later ranges follow verbatim
+    (if (global.get $lvPhase)
+      (then
+        (local.set $pendCount
+          (i32.sub (global.get $lvRangeCount) (global.get $lvRangeIdx)))
+        (local.set $pend (call $lvAlloc (i32.shl (local.get $pendCount) (i32.const 3))))
+        (i32.store (local.get $pend) (global.get $lvCursor))
+        (i32.store offset=4 (local.get $pend)
+          (select (global.get $lvDirtyTo)
+            (i32.add (global.get $lvCursor) (i32.const 1))
+            (i32.gt_u (global.get $lvDirtyTo) (global.get $lvCursor))))
+        (local.set $k (i32.const 1))
+        (block $copied
+          (loop $copy
+            (br_if $copied (i32.ge_u (local.get $k) (local.get $pendCount)))
+            (local.set $slot (i32.add (global.get $lvRangePtr)
+              (i32.shl (i32.add (global.get $lvRangeIdx) (local.get $k)) (i32.const 3))))
+            (local.set $pendSlot (i32.add (local.get $pend)
+              (i32.shl (local.get $k) (i32.const 3))))
+            (i32.store (local.get $pendSlot) (i32.load (local.get $slot)))
+            (i32.store offset=4 (local.get $pendSlot)
+              (i32.load offset=4 (local.get $slot)))
+            (local.set $k (i32.add (local.get $k) (i32.const 1)))
+            (br $copy)))
+        (call $lvFree (global.get $lvRangePtr))
+        (global.set $lvRangePtr (i32.const 0))
+        (global.set $lvPhase (i32.const 0))))
     ;; descending structural pass; each record's textLen slot is reused to
     ;; hold the line count its splice produced
     (local.set $k (local.get $count))
@@ -1495,10 +1591,13 @@
           (i32.load offset=20 (local.get $e))))
         (i32.store offset=20 (local.get $e) (local.get $n))
         (br $desc)))
-    ;; ascending pass: dirty ranges in new coordinates plus change entries
+    ;; ascending pass: dirty ranges in new coordinates plus change entries,
+    ;; interleaving the batch's own spans with the remapped pending pieces
     (i32.store (i32.const $mem.liveChanges) (i32.const 0))
     (local.set $ranges (call $lvAlloc
-      (i32.shl (i32.add (local.get $count) (i32.const 1)) (i32.const 3))))
+      (i32.shl
+        (i32.add (i32.add (local.get $count) (local.get $pendCount)) (i32.const 1))
+        (i32.const 3))))
     (local.set $k (i32.const 0))
     (block $ranged
       (loop $asc
@@ -1513,13 +1612,34 @@
             (i32.sub (i32.load offset=8 (local.get $e)) (i32.load (local.get $e)))
             (i32.const 1))
           (local.get $ext)))
-        (local.set $newFrom (i32.add
-          (i32.sub (i32.load (local.get $e)) (local.get $ext))
-          (local.get $shift)))
+        (local.set $os (i32.sub (i32.load (local.get $e)) (local.get $ext)))
+        (local.set $oe (i32.add (i32.load offset=8 (local.get $e)) (i32.const 1)))
+        ;; pending pieces before this edit's replaced range [os, oe) keep the
+        ;; shift accumulated so far; the overlap is covered by the edit's own
+        ;; entry, and a piece reaching past the range resumes after it
+        (block $pendDone
+          (loop $pendWalk
+            (br_if $pendDone (i32.ge_u (local.get $pendIdx) (local.get $pendCount)))
+            (local.set $pendSlot (i32.add (local.get $pend)
+              (i32.shl (local.get $pendIdx) (i32.const 3))))
+            (local.set $a (i32.load (local.get $pendSlot)))
+            (local.set $b (i32.load offset=4 (local.get $pendSlot)))
+            (br_if $pendDone (i32.ge_u (local.get $a) (local.get $oe)))
+            (local.set $rangeCount (call $lvAddPend
+              (local.get $a)
+              (select (local.get $b) (local.get $os)
+                (i32.lt_u (local.get $b) (local.get $os)))
+              (local.get $shift) (local.get $ranges) (local.get $rangeCount)))
+            (if (i32.gt_u (local.get $b) (local.get $oe))
+              (then
+                (i32.store (local.get $pendSlot) (local.get $oe))
+                (br $pendDone)))
+            (local.set $pendIdx (i32.add (local.get $pendIdx) (i32.const 1)))
+            (br $pendWalk)))
+        (local.set $newFrom (i32.add (local.get $os) (local.get $shift)))
         (local.set $newTo (i32.add (local.get $newFrom) (local.get $n)))
         (if (call $lvAddChange
-              (i32.sub (i32.load (local.get $e)) (local.get $ext))
-              (i32.add (i32.load offset=8 (local.get $e)) (i32.const 1))
+              (local.get $os) (local.get $oe)
               (local.get $newFrom) (local.get $newTo))
           (then
             (i32.store (i32.add (local.get $ranges)
@@ -1538,6 +1658,19 @@
           (i32.sub (local.get $n) (local.get $n0))))
         (local.set $k (i32.add (local.get $k) (i32.const 1)))
         (br $asc)))
+    ;; pending pieces past the last edit shift by the batch's full line delta
+    (block $pendFlushed
+      (loop $pendFlush
+        (br_if $pendFlushed (i32.ge_u (local.get $pendIdx) (local.get $pendCount)))
+        (local.set $pendSlot (i32.add (local.get $pend)
+          (i32.shl (local.get $pendIdx) (i32.const 3))))
+        (local.set $rangeCount (call $lvAddPend
+          (i32.load (local.get $pendSlot))
+          (i32.load offset=4 (local.get $pendSlot))
+          (local.get $shift) (local.get $ranges) (local.get $rangeCount)))
+        (local.set $pendIdx (i32.add (local.get $pendIdx) (i32.const 1)))
+        (br $pendFlush)))
+    (call $lvFree (local.get $pend))
     (call $lvFree (local.get $staged))
     (global.set $lvRangePtr (local.get $ranges))
     (global.set $lvRangeCount (local.get $rangeCount))

@@ -363,6 +363,10 @@
             (if (i32.and (local.get $wantPayloadParen)
                   (i32.ne (local.get $c) (i32.const "(")))
               (then (local.set $wantPayloadParen (i32.const 0))))
+            ;; an armed fn head expects its parameter paren immediately
+            (if (i32.and (global.get $sigFnPend)
+                  (i32.ne (local.get $c) (i32.const "(")))
+              (then (global.set $sigFnPend (i32.const 0))))
             (if (i32.and (local.get $payloadReady)
                   (i32.eqz (i32.and
                     (i32.eq (local.get $c) (i32.const "|"))
@@ -415,7 +419,10 @@
           (then
             (local.set $hl (enum.get $Token.variable))
             (if (local.get $expectFunc)
-              (then (local.set $hl (enum.get $Token.function.definition))))
+              (then
+                (local.set $hl (enum.get $Token.function.definition))
+                ;; a quoted fn name arms the parameter machine too
+                (global.set $sigFnPend (i32.const 1))))
             (if (local.get $expectLabel)
               (then (local.set $hl (enum.get $Token.label))))
             (if (local.get $expectType)
@@ -569,7 +576,10 @@
             (local.set $p (call $lexSkipSpaceAt (global.get $ptr)))
             (local.set $hl (enum.get $Token.variable))
             (if (local.get $expectFunc)
-              (then (local.set $hl (enum.get $Token.function.definition))))
+              (then
+                (local.set $hl (enum.get $Token.function.definition))
+                ;; an fn name arms the parameter machine for its paren
+                (global.set $sigFnPend (i32.const 1))))
             (if (local.get $expectLabel)
               (then (local.set $hl (enum.get $Token.label))))
             (if (local.get $expectType)
@@ -594,8 +604,10 @@
                   (call $lexIsConstCase (local.get $lhs) (global.get $ptr))))))
 
             ;; Container fields are properties; block/loop prefixes are labels.
+            ;; A `const` inside a preceding type (`[]const u8`) sets
+            ;; $expectVar, so a marked parameter list overrides that gate.
             (if (i32.and
-                  (i32.eqz (local.get $expectVar))
+                  (i32.or (i32.eqz (local.get $expectVar)) (call $sigActive))
                   (i32.eq (call $zigByte (local.get $p)) (i32.const ":")))
               (then
                 (local.set $q
@@ -633,13 +645,23 @@
                     (local.set $labelColon (i32.const 1)))
                   (else
                     (if (i32.eqz (local.get $parenDepth))
-                      (then (local.set $hl (enum.get $Token.property))))))))
+                      (then (local.set $hl (enum.get $Token.property)))
+                      (else
+                        ;; an annotated name at the top level of a marked fn
+                        ;; list is a parameter (Zed's parameter name capture)
+                        (if (i32.and
+                              (i32.and (call $sigActive) (global.get $sigPattern))
+                              (i32.eqz (global.get $sigObscure)))
+                          (then (local.set $hl (enum.get $Token.variable.parameter))))))))))
             (call $emitTok (local.get $hl) (local.get $lhs) (global.get $ptr))
             (local.set $expectFunc (i32.const 0))
             (local.set $expectLabel (i32.const 0))
             (local.set $expectType (i32.const 0))
             (local.set $expectVar (i32.const 0))
             (local.set $prevDot (i32.const 0))
+            ;; a name consumes parameter position; keyword modifiers such as
+            ;; `comptime` take the keyword path above and leave it alone
+            (global.set $sigPattern (i32.const 0))
             (br $next)))
 
         (if (i32.or
@@ -667,7 +689,14 @@
                           (i64.const 1)
                           (i64.extend_i32_u (local.get $parenDepth)))))))
                 (local.set $wantPayloadParen (i32.const 0))
-                (local.set $expectFunc (i32.const 0))))
+                (local.set $expectFunc (i32.const 0))
+                ;; parameter machine: the paren may open the armed fn list
+                ;; and puts the next name in parameter position
+                (global.set $sigParens
+                  (i32.add (global.get $sigParens) (i32.const 1)))
+                (if (global.get $sigFnPend) (then (call $sigMark)))
+                (global.set $sigFnPend (i32.const 0))
+                (global.set $sigPattern (i32.const 1))))
             (if (i32.and
                   (i32.eq (local.get $c) (i32.const ")"))
                   (i32.ne (local.get $parenDepth) (i32.const 0)))
@@ -688,6 +717,27 @@
                       (i64.const -1))))
                 (local.set $parenDepth
                   (i32.sub (local.get $parenDepth) (i32.const 1)))))
+            (if (i32.ne (local.get $c) (i32.const "("))
+              (then
+                (global.set $sigPattern (i32.const 0))
+                (if (i32.eq (local.get $c) (i32.const ")"))
+                  (then
+                    (if (call $sigActive) (then (call $sigUnmark)))
+                    (if (i32.gt_u (global.get $sigParens) (i32.const 0))
+                      (then (global.set $sigParens
+                        (i32.sub (global.get $sigParens) (i32.const 1))))))
+                  (else
+                    (if (call $sigActive)
+                      (then
+                        (if (i32.or
+                              (i32.eq (local.get $c) (i32.const "["))
+                              (i32.eq (local.get $c) (i32.const "{")))
+                          (then (global.set $sigObscure
+                            (i32.add (global.get $sigObscure) (i32.const 1))))
+                          (else
+                            (if (i32.gt_u (global.get $sigObscure) (i32.const 0))
+                              (then (global.set $sigObscure
+                                (i32.sub (global.get $sigObscure) (i32.const 1)))))))))))))
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (call $emitTok
               (enum.get $Token.punctuation.bracket) (local.get $lhs) (global.get $ptr))
@@ -741,6 +791,7 @@
             (call $emitTok
               (enum.get $Token.punctuation.delimiter) (local.get $lhs) (global.get $ptr))
             (local.set $prevDot (i32.const 1))
+            (global.set $sigPattern (i32.const 0))
             (br $next)))
 
         (if (i32.or
@@ -762,6 +813,13 @@
             (call $emitTok
               (enum.get $Token.punctuation.delimiter) (local.get $lhs) (global.get $ptr))
             (local.set $prevDot (i32.const 0))
+            ;; a comma returns to parameter position; a top-level `;` proves
+            ;; the marked list was not a parameter list after all
+            (global.set $sigPattern (i32.eq (local.get $c) (i32.const ",")))
+            (if (i32.and
+                  (i32.eq (local.get $c) (i32.const ";"))
+                  (i32.and (call $sigActive) (i32.eqz (global.get $sigObscure))))
+              (then (call $sigUnmark)))
             (br $next)))
 
         ;; Payload captures use bracket-colored bars, unlike bitwise operators.

@@ -275,6 +275,16 @@
           (i32.load8_u offset=1 (global.get $ptr)) (i32.const 0)
           (i32.lt_u (i32.add (global.get $ptr) (i32.const 1)) (global.get $end))))
 
+        ;; a pending `def` head survives only its `[...]` type-parameter list
+        ;; and comments on the way to the `(` of its parameter list
+        (if (i32.and (global.get $sigFnPend) (i32.eqz (global.get $sigFnAngle)))
+          (then
+            (if (i32.eqz (i32.or
+                  (i32.or (i32.eq (local.get $c) (i32.const "("))
+                          (i32.eq (local.get $c) (i32.const "[")))
+                  (i32.eq (local.get $c) (i32.const "#"))))
+              (then (global.set $sigFnPend (i32.const 0))))))
+
         (if (i32.eq (local.get $c) (i32.const "#"))
           (then
             (call $lexLineComment (i32.const 1) (enum.get $Token.comment))
@@ -378,7 +388,12 @@
                     (local.set $hl (select
                       (enum.get $Token.type.class)
                       (enum.get $Token.function.definition)
-                      (i32.eq (local.get $afterDecl) (i32.const 2)))))
+                      (i32.eq (local.get $afterDecl) (i32.const 2))))
+                    ;; a `def` name arms the parameter machine for its `(`
+                    (if (i32.eq (local.get $afterDecl) (i32.const 1))
+                      (then
+                        (global.set $sigFnPend (i32.const 1))
+                        (global.set $sigFnAngle (i32.const 0)))))
                   (else
                     (if (local.get $afterDot)
                       (then
@@ -389,27 +404,37 @@
                             (i32.lt_u (local.get $q) (global.get $end))
                             (i32.eq (i32.load8_u (local.get $q)) (i32.const "("))))))
                       (else
-                        (if (call $lexIsConstCase (local.get $lhs) (global.get $ptr))
-                          (then (local.set $hl (enum.get $Token.constant)))
+                        ;; a name at the top level of a marked `def` list after
+                        ;; `(`, `,`, or a splat star is a parameter (Zed's
+                        ;; function_definition parameters captures); self/cls
+                        ;; return variable.special above, matching Zed
+                        (if (i32.and
+                              (i32.and (call $sigActive) (global.get $sigPattern))
+                              (i32.eqz (global.get $sigObscure)))
+                          (then (local.set $hl (enum.get $Token.variable.parameter)))
                           (else
-                            (if (i32.or
-                                  (local.get $typeNext)
-                                  (i32.le_u
-                                    (i32.sub (i32.load8_u (local.get $lhs)) (i32.const "A"))
-                                    (i32.const 25)))
-                              (then (local.set $hl (enum.get $Token.type)))
+                            (if (call $lexIsConstCase (local.get $lhs) (global.get $ptr))
+                              (then (local.set $hl (enum.get $Token.constant)))
                               (else
-                                (local.set $q (call $lexSkipSpaceAt (global.get $ptr)))
-                                (local.set $hl (select
-                                  (enum.get $Token.function) (enum.get $Token.variable)
-                                  (i32.and
-                                    (i32.lt_u (local.get $q) (global.get $end))
-                                    (i32.eq (i32.load8_u (local.get $q)) (i32.const "(")))))))))))))))
+                                (if (i32.or
+                                      (local.get $typeNext)
+                                      (i32.le_u
+                                        (i32.sub (i32.load8_u (local.get $lhs)) (i32.const "A"))
+                                        (i32.const 25)))
+                                  (then (local.set $hl (enum.get $Token.type)))
+                                  (else
+                                    (local.set $q (call $lexSkipSpaceAt (global.get $ptr)))
+                                    (local.set $hl (select
+                                      (enum.get $Token.function) (enum.get $Token.variable)
+                                      (i32.and
+                                        (i32.lt_u (local.get $q) (global.get $end))
+                                        (i32.eq (i32.load8_u (local.get $q)) (i32.const "(")))))))))))))))))
             (call $emitTok (local.get $hl) (local.get $lhs) (global.get $ptr))
             (local.set $afterDecl (i32.shr_u (local.get $g) (i32.const 8)))
             (local.set $afterDot (i32.const 0))
             (local.set $typeNext (i32.const 0))
             (local.set $lineHead (i32.const 0))
+            (global.set $sigPattern (i32.const 0))
             (br $next)))
 
         (if (i32.or
@@ -421,6 +446,49 @@
                 (i32.or (i32.eq (local.get $c) (i32.const "{"))
                         (i32.eq (local.get $c) (i32.const "}")))))
           (then
+            ;; parameter machine: `(` may open the armed `def` list and puts
+            ;; the next name in parameter position; `[` right after the name
+            ;; is a PEP 695 type-parameter list; brackets inside a marked
+            ;; list obscure its top level (defaults, annotations, subscripts)
+            (if (i32.eq (local.get $c) (i32.const "("))
+              (then
+                (global.set $sigParens
+                  (i32.add (global.get $sigParens) (i32.const 1)))
+                (if (i32.eqz (global.get $sigFnAngle))
+                  (then
+                    (if (global.get $sigFnPend) (then (call $sigMark)))
+                    (global.set $sigFnPend (i32.const 0))))
+                (global.set $sigPattern (i32.const 1)))
+              (else
+                (global.set $sigPattern (i32.const 0))
+                (if (i32.eq (local.get $c) (i32.const ")"))
+                  (then
+                    (if (call $sigActive) (then (call $sigUnmark)))
+                    (if (i32.gt_u (global.get $sigParens) (i32.const 0))
+                      (then (global.set $sigParens
+                        (i32.sub (global.get $sigParens) (i32.const 1))))))
+                  (else
+                    (if (global.get $sigFnPend)
+                      (then
+                        (if (i32.eq (local.get $c) (i32.const "["))
+                          (then (global.set $sigFnAngle
+                            (i32.add (global.get $sigFnAngle) (i32.const 1))))
+                          (else
+                            (if (i32.eq (local.get $c) (i32.const "]"))
+                              (then (call $sigFnAngleDrop (i32.const 1)))
+                              (else (global.set $sigFnPend (i32.const 0)))))))
+                      (else
+                        (if (call $sigActive)
+                          (then
+                            (if (i32.or
+                                  (i32.eq (local.get $c) (i32.const "["))
+                                  (i32.eq (local.get $c) (i32.const "{")))
+                              (then (global.set $sigObscure
+                                (i32.add (global.get $sigObscure) (i32.const 1))))
+                              (else
+                                (if (i32.gt_u (global.get $sigObscure) (i32.const 0))
+                                  (then (global.set $sigObscure
+                                    (i32.sub (global.get $sigObscure) (i32.const 1)))))))))))))))
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (call $emitTok (enum.get $Token.punctuation.bracket) (local.get $lhs) (global.get $ptr))
             (local.set $afterDot (i32.const 0))
@@ -439,6 +507,8 @@
             (local.set $afterDot (i32.eq (local.get $c) (i32.const ".")))
             (local.set $typeNext (i32.eq (local.get $c) (i32.const ":")))
             (local.set $lineHead (i32.const 0))
+            ;; a comma returns to parameter position; `.`/`:`/`;` leave it
+            (global.set $sigPattern (i32.eq (local.get $c) (i32.const ",")))
             (br $next)))
         (if (i32.or
               (call $pyIsOp (local.get $c))
@@ -470,6 +540,11 @@
               (i32.eq (local.get $c2) (i32.const ">"))))
             (local.set $afterDot (i32.const 0))
             (local.set $lineHead (i32.const 0))
+            ;; a splat star after `(` or `,` keeps parameter position, so
+            ;; `*args` and `**kwargs` names still read as parameters
+            (global.set $sigPattern (i32.and
+              (global.get $sigPattern)
+              (i32.eq (local.get $c) (i32.const "*"))))
             (br $next)))
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
         (call $emitTok (enum.get $Token.none) (local.get $lhs) (global.get $ptr))

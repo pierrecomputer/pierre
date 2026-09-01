@@ -11,17 +11,6 @@ UTF-8 input -> selected `$hl*` lexer -> emitter (emit.wat) -> HTML bytes
                                                            -> UTF-16 line records
 ```
 
-Mode 0 emits inline-color HTML, mode 1 CSS-variable HTML, and mode 2 token
-records. Mode 3 runs the same lexer, then a Wasm post-pass converts its byte-end
-records to UTF-16 ends with newline markers. `codeToTokens` and `codeToHast` use
-mode 3 and build their JavaScript output directly from those records.
-`TokenizeStream` uses mode 3 per completed chunk. Streaming lexer checkpoints
-preserve language context, multiline modes, embedded regions, and the emitter's
-open style between calls, so prior chunks are not rescanned. `LiveTokenizer`
-drives the same mode-3 streaming pipeline one line at a time from Wasm and keeps
-the document, packed token records, and interned per-line lexer states in linear
-memory (see the live tokenizer section).
-
 ## Project structure
 
 ```
@@ -30,8 +19,8 @@ src/token.wat       $Token enum, CSS-variable table, and theme-record access
 src/scan.wat        read cursors ($ptr/$end/$eof) and SIMD scans
 src/emit.wat        HTML/token-record emitter and driver prologue/epilogue
 src/common.wat      shared ASCII, identifier, number, string, and comment scans
+src/sig.wat         shared parameter-list machine (variable.parameter)
 src/langs/*.wat     32 built-in language modes
-  js/ts/jsx/tsx.wat one feature-gated ECMAScript engine split by concern
 src/live.wat        incremental-tokenizer core: heap, line table, state
                     interning, per-line driver, edit splicing, compaction
 src/chamele.wat     memory, $Language enum, imports, and dispatch
@@ -43,7 +32,6 @@ lib/live.ts         LiveTokenizer glue: edit validation, WTF-8 encoding,
 lib/tokens.ts       token records -> shiki-compatible tokens and hast
 lib/theme.ts        Zed theme -> binary table compiler
 lib/token-types.ts  generated, tracked $Token ABI
-lib/{browser,node,workerd}.ts  per-runtime entry shims that init the wasm
 themes/             bundled, pruned Zed theme objects; index.ts re-exports
                     them typed and compiles to a self-contained dist/themes.js
 scripts/build.ts    WAT preprocessor and compiler; writes the wasm artifacts
@@ -210,36 +198,7 @@ An embedded lexer uses a bounded subrange:
 ;; $ptr == $to here
 ```
 
-## Token conventions
-
-Lexers emit Zed capture names from `$Token`, guided by Zed highlight queries.
-Main conventions:
-
-| Input           | Captures                                                                                                                             |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| Common code     | `comment`, `comment.doc`, `string`, `string.escape`, `number`, `keyword*`, `operator`, `function*`, `property`, `type*`, `variable*` |
-| JS/TS literals  | Templates use `string`, `string.escape`, and `punctuation.special`; regex uses `string.regex`                                        |
-| JS/TS names     | Calls use `function*`; members use `property`; decorators use `attribute`; uppercase names use `type` or `constant`                  |
-| JSDoc           | `keyword.jsdoc`, `type.jsdoc`, and `variable.jsdoc`                                                                                  |
-| JSX             | `punctuation.*.jsx`, `tag.jsx`, `tag.component.jsx`, `attribute.jsx`, and `text.jsx`                                                 |
-| HTML/XML        | `punctuation.*.html`, `tag`, `tag.doctype`, `attribute`, `string`, and `string.special`                                              |
-| CSS             | `selector.*`, `namespace`, `tag`, `attribute`, `property`, `variable`, `function`, `constant.builtin`, and `string.special`          |
-| JSON            | Object keys use `property.json_key`; values use `string`, `number`, `boolean`, and `constant.builtin`                                |
-| TOML            | Keys use `property`; dates use `string.special`; booleans and infinities use `constant`; numbers use `number`                        |
-| YAML            | Keys use `property`; anchors, aliases, tags, and markers use `type` or `punctuation.special`                                         |
-| Markdown/MDX    | `title`, `emphasis*`, `link_text`, `link_uri`, `punctuation.list_marker`, `punctuation.markup`, and `text.literal`                   |
-| Markdown fences | Supported info strings delegate to a bounded lexer; unknown languages stay `text.literal`                                            |
-| Assembly/WAT    | Mnemonics or forms use `keyword`; registers and names use `variable*`; directives use `preproc`                                      |
-| Diff            | Payload uses `diff.plus` or `diff.minus`; metadata uses contextual captures                                                          |
-
-Language-specific lexers add captures such as C-family `preproc`, SQL
-`keyword.operator`, and Zig `keyword.import`. These are token-stream heuristics,
-not parses. TS type positions, parameters, embedded boundaries, and exact query
-fidelity are out of scope. JS, JSX, TS, and TSX share one scanner and enable
-TypeScript and JSX layers independently. The scanner uses capitalization for
-some types and constants; JSDoc names use `variable.jsdoc`.
-
-## Output shape
+## HTML output shape
 
 Output is one self-contained fragment:
 
@@ -287,9 +246,13 @@ resumable by line budget: with a `renderRange` the JavaScript glue runs it
 synchronously only until the cursor passes the range end, returns tokens for the
 in-range re-tokenized lines, and drives the remainder in budgeted background
 slices delivered through `onDeferTokenize`. The glue derives each slice's lines
-from the change list plus the driver cursor (`liveStats` keys 10/11); a new edit
-or reset while slices are pending first settles the run to convergence so the
-identity-based stop rule always compares against a fully converged state chain.
+from the change list plus the driver cursor (`liveStats` keys 10/11); `pause`
+suspends the slices without discarding them. A new edit while slices are pending
+does not settle first: `liveApplyEdits` captures the unreached dirty ranges in
+pre-batch coordinates, remaps them through the batch's splices, and merges them
+into the new range list, so the driver still re-tokenizes every line the old run
+had not reached — beyond those ranges a state-id match against a pre-old-batch
+id certifies the untouched chain exactly like ordinary convergence.
 
 The heap uses size-class free lists (8-byte headers, one block size per class)
 with no coalescing; a sliding compaction pass runs when parked free space
