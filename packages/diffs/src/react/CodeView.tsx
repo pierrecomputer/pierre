@@ -756,10 +756,7 @@ interface CreateManagedCodeViewOptionsProps<LAnnotation, LDecoration> {
   hasCodeViewFooter: boolean;
   onSelectedLinesChange?(selection: CodeViewLineSelection | null): void;
   controlledSelection: boolean;
-  getEditStateKey: CodeViewOptions<
-    LAnnotation,
-    LDecoration
-  >['getEditStateKey'];
+  getEditStateKey: CodeViewOptions<LAnnotation, LDecoration>['getEditStateKey'];
   createEditor: CodeViewOptions<LAnnotation, LDecoration>['createEditor'];
   onItemEditChange: CodeViewOptions<
     LAnnotation,

@@ -24,10 +24,7 @@ import type {
 
 type ReactOwnedEditCallbacks = 'onEditChange' | 'onEditComplete';
 
-export type FileDiffOptions<
-  LAnnotation,
-  LDecoration = undefined,
-> = Omit<
+export type FileDiffOptions<LAnnotation, LDecoration = undefined> = Omit<
   FileDiffClassOptions<LAnnotation, LDecoration>,
   ReactOwnedEditCallbacks
 >;

@@ -435,10 +435,7 @@ function finalizeBarDepths(map: NormalizedLineDecorationMap): void {
 
       const higherNeighbors =
         higherNeighborsBySourceIndex.get(lowerLayer.sourceIndex) ?? new Set();
-      higherNeighborsBySourceIndex.set(
-        lowerLayer.sourceIndex,
-        higherNeighbors
-      );
+      higherNeighborsBySourceIndex.set(lowerLayer.sourceIndex, higherNeighbors);
       higherNeighbors.add(higherLayer.sourceIndex);
     }
   }
@@ -457,7 +454,8 @@ function finalizeBarDepths(map: NormalizedLineDecorationMap): void {
 
     let maxCoveredDepth = 0;
     for (const higherSourceIndex of higherNeighbors) {
-      const higherCoveredDepth = coveredDepthBySourceIndex.get(higherSourceIndex) ?? 0;
+      const higherCoveredDepth =
+        coveredDepthBySourceIndex.get(higherSourceIndex) ?? 0;
       if (higherCoveredDepth + 1 > maxCoveredDepth) {
         maxCoveredDepth = higherCoveredDepth + 1;
       }
