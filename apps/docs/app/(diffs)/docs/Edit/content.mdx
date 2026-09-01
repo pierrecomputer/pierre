@@ -5,9 +5,9 @@
 </Notice>
 
 Edit mode adds text editing, multiple selections, undo and redo, search and
-replace, markers, and custom selection actions to Pierre file and diff
-components. The existing component continues to own syntax highlighting, diff
-layout, annotations, SSR markup, and virtualization.
+replace, remote carets, markers, and custom selection actions to Pierre file and
+diff components. The existing component continues to own syntax highlighting,
+diff layout, annotations, SSR markup, and virtualization.
 
 Use it when a user needs to review and correct rendered code without replacing
 the surrounding file or diff UI with a separate editor.
@@ -342,6 +342,35 @@ scroll movement does not update that checkpoint; call `getViewState()` for the
 exact live position.
 
 ### Extend the editing UI
+
+#### Remote carets and highlights
+
+<Notice icon={<IconInfoFill />}>
+  The caret API is render-only. Diffs does not synchronize documents, edits,
+  selections, or presence. Your application must implement co-editing and pass
+  the current remote caret and highlight state to Diffs.
+</Notice>
+
+Use `setCarets()` for selections owned by a presence or collaboration layer.
+Each call replaces the complete remote-caret list, so pass the latest presence
+snapshot and use an empty array to clear it.
+
+Matching `anchor` and `focus` positions render a caret. Different positions also
+render a non-editable highlight, with the caret at `focus` for both forward and
+backward ranges. Positions are zero-based and normalized to the current
+document. Remote carets follow local edits without changing focus, the native
+selection, or `getViewState()`.
+
+<DocsCodeExample {...editCaretType} />
+
+Provide `renderCaret` in `EditorOptions` and call `setCarets()` after the editor
+attaches. The returned element renders inside the editor shadow root, so style
+it inline or from within that root. Pierre uses `metadata.color` to derive the
+range highlight. The second `EditorOptions` generic carries custom caret
+metadata; use the same type as the second generic on React components such as
+`File` and `FileDiff`.
+
+<DocsCodeExample {...editCaretExample} />
 
 #### Selection Action
 

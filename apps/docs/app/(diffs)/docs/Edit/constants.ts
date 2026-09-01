@@ -321,6 +321,74 @@ export const EDIT_SELECTION_ACTION_CONTEXT_TYPE: PreloadFileOptions<undefined> =
     options,
   };
 
+export const EDIT_CARET_TYPE: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'editor_caret.ts',
+    contents: `interface CaretMetadata {
+  /** Caret color, also used for the derived highlight tint. */
+  color: string;
+}
+
+interface EditorCaret<T> {
+  /** Fixed edge of the remote selection. */
+  anchor: { line: number; character: number };
+  /** Active edge where the remote caret renders. */
+  focus: { line: number; character: number };
+  /** Application metadata plus the required caret color. */
+  metadata: T & CaretMetadata;
+}`,
+  },
+  options,
+};
+
+export const EDIT_CARET_EXAMPLE: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'editor_carets.ts',
+    contents: `import { Editor, type EditorOptions } from '@pierre/diffs/edit';
+
+interface Collaborator {
+  name: string;
+}
+
+const editorOptions: EditorOptions<undefined, Collaborator> = {
+  renderCaret({ metadata }) {
+    const caret = document.createElement('span');
+    caret.ariaLabel = metadata.name + "'s caret";
+    caret.textContent = metadata.name;
+    // The element is mounted inside the editor's shadow root.
+    caret.style.cssText =
+      'display:block;border-left:2px solid ' +
+      metadata.color +
+      ';padding-left:4px;color:' +
+      metadata.color +
+      ';white-space:nowrap';
+    return caret;
+  },
+};
+
+const editor = new Editor<undefined, Collaborator>('file', editorOptions);
+editor.edit(fileInstance);
+
+// Replace the complete presence snapshot. Equal positions render a caret;
+// different positions also render a highlight between anchor and focus.
+editor.setCarets([
+  {
+    anchor: { line: 2, character: 4 },
+    focus: { line: 2, character: 4 },
+    metadata: { name: 'Ada', color: '#7c3aed' },
+  },
+  {
+    anchor: { line: 5, character: 12 },
+    focus: { line: 5, character: 2 },
+    metadata: { name: 'Lin', color: '#0284c7' },
+  },
+]);
+
+editor.setCarets([]);`,
+  },
+  options,
+};
+
 export const EDIT_MARKER_TYPE: PreloadFileOptions<undefined> = {
   file: {
     name: 'marker.ts',
@@ -962,6 +1030,7 @@ export const EDITOR_OPTIONS_TYPE: PreloadFileOptions<undefined> = {
     contents: `import type {
   DiffLineAnnotation,
   DiffsEditableComponent,
+  EditorCaret,
   EditorChangeEvent,
   FileContents,
   LineAnnotation,
@@ -973,7 +1042,7 @@ import {
   type EditorKeymap,
 } from '@pierre/diffs/edit';
 
-interface EditorOptions<LAnnotation> {
+interface EditorOptions<LAnnotation, LCaret = undefined> {
   // Max undo stack entries
   historyMaxEntries?: number;
 
@@ -1020,9 +1089,12 @@ interface EditorOptions<LAnnotation> {
   // Custom Selection Action UI. See Selection Action docs for context shape.
   renderSelectionAction?: (context) => HTMLElement;
 
+  // Render an externally owned caret at its normalized document position.
+  renderCaret?: (caret: EditorCaret<LCaret>) => HTMLElement;
+
   // Fires after attach when the text document is ready
   onAttach?: (
-    editor: Editor<LAnnotation>,
+    editor: Editor<LAnnotation, LCaret>,
     fileInstance: DiffsEditableComponent<LAnnotation>
   ) => void;
 
@@ -1322,6 +1394,10 @@ editor.setSelections([
     direction: 'forward', // 'forward' | 'backward' | 'none'
   },
 ]);
+
+// Replace all externally owned carets and highlighted ranges. Pass [] to clear.
+// Configure their elements with EditorOptions.renderCaret.
+editor.setCarets([]);
 
 // Show inline diagnostic markers. Pass [] to clear. Throws if not attached.
 editor.setMarkers([
