@@ -1,4 +1,5 @@
 import LRUMapPkg from 'lru_map';
+import type { LRUMap } from 'lru_map';
 
 import { DEFAULT_THEMES } from '../constants';
 import { getResolvedLanguages } from '../highlighter/languages/getResolvedLanguages';
@@ -76,8 +77,8 @@ class WorkerPoolTaskCanceledError extends Error {
 }
 
 interface GetCachesResult {
-  fileCache: LRUMapPkg.LRUMap<string, RenderFileResult>;
-  diffCache: LRUMapPkg.LRUMap<string, RenderDiffResult>;
+  fileCache: LRUMap<string, RenderFileResult>;
+  diffCache: LRUMap<string, RenderDiffResult>;
 }
 
 interface ManagedWorker {
@@ -124,8 +125,8 @@ export class WorkerPoolManager {
   private themeSubscribers = new Set<ThemeSubscriber>();
   private workersFailed = false;
   private statSubscribers = new Set<(stats: WorkerStats) => unknown>();
-  private fileCache: LRUMapPkg.LRUMap<string, RenderFileResult>;
-  private diffCache: LRUMapPkg.LRUMap<string, RenderDiffResult>;
+  private fileCache: LRUMap<string, RenderFileResult>;
+  private diffCache: LRUMap<string, RenderDiffResult>;
   private _queuedBroadcast: number | undefined;
   // Incremented on terminate so async lifecycle work can identify stale results.
   private lifecycleGeneration = 0;
