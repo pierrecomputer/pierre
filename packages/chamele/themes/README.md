@@ -14,6 +14,14 @@ codeToHtml('const a = 1', { lang: 'js', theme: vitesseDark });
 JSON filenames become camel-case exports: `vitesse-dark.json` → `vitesseDark`.
 Pierre themes remain separate named exports.
 
+Import one theme without loading the barrel through its default export:
+
+```js
+import vitesseDark from '@pierre/chamele/themes/vitesse-dark';
+```
+
+`themes` maps every JSON filename to one of these dynamic imports.
+
 Use `toCSS` to convert a theme into CSS-variable declarations:
 
 ```js

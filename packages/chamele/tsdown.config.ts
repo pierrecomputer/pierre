@@ -1,7 +1,8 @@
+import { execFileSync } from 'node:child_process';
 import { defineConfig, type UserConfig } from 'tsdown';
 
-// scripts/build.ts emits chamele.wasm and chamele.wasm.mjs into dist/ before
-// tsdown runs (see the moon build task), so tsdown must not clean dist/ and must
+// The two configs share dist/, so neither may clean the other's output.
+// scripts/build.ts emits chamele.wasm and chamele.wasm.mjs after tsdown runs;
 // keep ./chamele.wasm* imports as-is for runtime resolution next to the glue.
 const config: UserConfig[] = defineConfig([
   {
@@ -40,6 +41,14 @@ const config: UserConfig[] = defineConfig([
       tsgo: true,
     },
     platform: 'neutral',
+    hooks: {
+      'build:done': () => {
+        execFileSync('bun', ['./scripts/build.ts'], {
+          cwd: import.meta.dirname,
+          stdio: 'inherit',
+        });
+      },
+    },
   },
 ]);
 

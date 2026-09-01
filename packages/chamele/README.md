@@ -77,8 +77,12 @@ import { TokenizeStream, LiveTokenizer } from '@pierre/chamele';
 // SSR streaming: push chunks, get newly completed lines of tokens
 const stream = new TokenizeStream({ lang: 'ts', theme: pierreDark });
 const lines = [];
-for await (const chunk of chunks) lines.push(...stream.pushCode(chunk));
-lines.push(...stream.end());
+try {
+  for await (const chunk of chunks) lines.push(...stream.pushCode(chunk));
+  lines.push(...stream.end());
+} finally {
+  stream.dispose();
+}
 
 // editing: apply batched UTF-16 range edits; only lines whose lexer state
 // changed are re-tokenized, and the update lists exactly those lines

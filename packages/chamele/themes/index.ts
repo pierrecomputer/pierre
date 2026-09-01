@@ -178,3 +178,5 @@ export const pierreLight: Theme = pierreLightJson;
 export const pierreLightProtanopia: Theme = pierreLightProtanopiaJson;
 export const pierreLightSoft: Theme = pierreLightSoftJson;
 export const pierreLightTritanopia: Theme = pierreLightTritanopiaJson;
+
+export const themes: Record<string, () => Promise<{ default: Theme }>> = {};

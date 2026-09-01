@@ -21,6 +21,10 @@
     "./themes": {
       "types": "./dist/themes.d.ts",
       "import": "./dist/themes.js"
+    },
+    "./themes/*": {
+      "types": "./dist/themes/*.d.ts",
+      "import": "./dist/themes/*.js"
     }
   },
   "scripts": {

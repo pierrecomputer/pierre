@@ -1,5 +1,5 @@
 import binaryen from 'binaryen';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { gzipSync } from 'node:zlib';
 import { pathToFileURL } from 'url';
 import wabt from 'wabt';
@@ -676,6 +676,13 @@ function writeIfChanged(url: URL, content: string): void {
   if (current !== content) writeFileSync(url, content, 'utf-8');
 }
 
+function listThemeNames(moduleUrl: string): string[] {
+  return readdirSync(new URL('../themes/', moduleUrl))
+    .filter((name) => name.endsWith('.json'))
+    .map((name) => name.slice(0, -'.json'.length))
+    .sort();
+}
+
 if (import.meta.main) {
   const start = performance.now();
   const moduleUrl = import.meta.url;
@@ -702,6 +709,42 @@ if (import.meta.main) {
         .map((name) => `  '${name}',`)
         .join('\n') +
       '\n];\n\nexport default tokenTypes;\n'
+  );
+  const themesUrl = new URL('../themes/', moduleUrl);
+  const themeNames = listThemeNames(moduleUrl);
+  const distThemesUrl = new URL('../dist/themes/', moduleUrl);
+  mkdirSync(distThemesUrl, { recursive: true });
+  const themeDts =
+    "import type { Theme } from '../index.js';\n\n" +
+    'declare const theme: Theme;\n\n' +
+    'export default theme;\n';
+  for (const name of themeNames) {
+    const json = readFileSync(new URL(`${name}.json`, themesUrl), 'utf-8');
+    writeIfChanged(
+      new URL(`${name}.js`, distThemesUrl),
+      `export default ${json.trim()};\n`
+    );
+    writeIfChanged(new URL(`${name}.d.ts`, distThemesUrl), themeDts);
+  }
+  const themesIndexUrl = new URL('../dist/themes.js', moduleUrl);
+  const themesIndex = readFileSync(themesIndexUrl, 'utf-8');
+  const placeholder = 'const themes = {};';
+  if (!themesIndex.includes(placeholder)) {
+    throw new Error('dist/themes.js has no themes placeholder');
+  }
+  writeIfChanged(
+    themesIndexUrl,
+    themesIndex.replace(
+      placeholder,
+      'const themes = {\n' +
+        themeNames
+          .map(
+            (name) =>
+              `  "${name}": () => import("@pierre/chamele/themes/${name}"),`
+          )
+          .join('\n') +
+        '\n};'
+    )
   );
   const pkgUrl = new URL('../package.json', moduleUrl);
   const pkg = JSON.parse(readFileSync(pkgUrl, 'utf-8'));

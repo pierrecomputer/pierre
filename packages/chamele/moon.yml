@@ -5,15 +5,13 @@ layer: 'library'
 tags: ['tsdown', 'publishable']
 
 tasks:
-  # Replaces the tsdown tag build: scripts/build.ts compiles the WAT sources
-  # in src/ into dist/ (wasm binary and base64 module) and regenerates the
-  # $Token ABI in lib/token-types.ts, then tsdown compiles the
-  # TypeScript glue in lib/ into the same dist/ (its config keeps
-  # `clean: false` so the wasm artifacts survive). The wasm artifacts are
-  # gitignored, so workspace consumers (diffs) reach them through their
-  # `^:build` deps.
+  # Replaces the tsdown tag build. The tsdown build hook compiles the WAT
+  # sources, emits the wasm and per-theme ESM modules, regenerates the $Token
+  # ABI, and fills the theme loader placeholder in dist/themes.js. The wasm
+  # artifacts are gitignored, so workspace consumers (diffs) reach them through
+  # their `^:build` deps.
   build:
-    script: 'rm -rf dist && bun ./scripts/build.ts && tsdown'
+    script: 'rm -rf dist && tsdown'
     deps:
       - '^:build'
     inputs:

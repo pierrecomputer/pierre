@@ -511,8 +511,7 @@ export class TokenizeStream {
    * after a trailing terminator, matching codeToTokens line splitting.
    */
   end(): ThemedToken[][] {
-    const hl = this.#hl;
-    if (hl == null) throw new Error('stream has ended');
+    if (this.#hl == null) throw new Error('stream has ended');
     try {
       this.#tail += this.#pendingSurrogate;
       this.#pendingSurrogate = '';
@@ -521,16 +520,25 @@ export class TokenizeStream {
       this.#tail = '';
       return this.#tokenizeChunk(code);
     } finally {
-      // Do not retain unusually large stream buffers in the single pool slot.
-      if (
-        pooledStreamHighlighter == null &&
-        hl.wasmModule === wasmModule &&
-        hl.pageN <= 16
-      ) {
-        pooledStreamHighlighter = hl;
-      }
-      this.#hl = undefined;
+      this.dispose();
     }
+  }
+
+  /** Release the Wasm instance and discard buffered input; later calls throw. */
+  dispose(): void {
+    const hl = this.#hl;
+    if (hl == null) return;
+    // Do not retain unusually large stream buffers in the single pool slot.
+    if (
+      pooledStreamHighlighter == null &&
+      hl.wasmModule === wasmModule &&
+      hl.pageN <= 16
+    ) {
+      pooledStreamHighlighter = hl;
+    }
+    this.#hl = undefined;
+    this.#pendingSurrogate = '';
+    this.#tail = '';
   }
 
   /** Tokenize one chunk and apply stream-absolute offsets. */

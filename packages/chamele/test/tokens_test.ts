@@ -573,6 +573,22 @@ void t.test('TokenizeStream: empty stream yields one empty line', () => {
   assert.throws(() => stream.end(), /stream has ended/);
 });
 
+void t.test('TokenizeStream: dispose abandons the stream', () => {
+  const stream = new TokenizeStream({ lang: 'ts', theme: pierreDark });
+  stream.pushCode('/* open\nbuffered');
+  stream.dispose();
+  assert.throws(() => stream.pushCode('next'), /stream has ended/);
+  assert.throws(() => stream.end(), /stream has ended/);
+  stream.dispose(); // idempotent
+
+  const next = new TokenizeStream({ lang: 'ts', theme: pierreDark });
+  const code = 'const x = 1\n';
+  assert.deepEqual(
+    [...next.pushCode(code), ...next.end()],
+    codeToTokens(code, { lang: 'ts', theme: pierreDark }).tokens
+  );
+});
+
 void t.test('TokenizeStream: ASCII resumed after a multi-byte line', () => {
   // the resumed byte offset (3 for `é\n`) exceeds the char offset (2); the
   // ASCII fast path must not treat record byte ends as string offsets
