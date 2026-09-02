@@ -79,7 +79,7 @@
     (i32.const 1))
 
   ;; group order is the dispatch order in $luaWordHl below
-  (keyword-table $luaWords $mem.luaWords $mem.luaWords+512 16 32
+  (keyword-table $luaWords $mem.luaWords $mem.luaWords+256 16 32
     (group "true" "false")           ;; 1: booleans
     (group "nil")                    ;; 2: built-in constant
     (group "and" "not" "in" "or")    ;; 3: operator

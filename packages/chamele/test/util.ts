@@ -72,9 +72,11 @@ export function loadLang(
     splitBytes === undefined
       ? ''
       : `(global.set $end (global.get $eof))\n    (call ${funcName})`;
+  // the css preprocessors share css.wat
+  const file = ['less', 'sass', 'scss'].includes(name) ? 'css' : name;
   const src = `(module
   (memory (export "memory") 3)
-  (import "../src/langs/${name}.wat")
+  (import "../src/langs/${file}.wat")
   (func (export "highlight")
     (call $hlBegin)
     ${clamp}

@@ -9,19 +9,21 @@
       [6:10)          output start (u32 LE)
       [10:14)         output length (u32 LE)
       [14:64)         reserved space
-      [64:4800)       emitter, token, and lexer tables
-      [4800:5824)     shared JSON/TOML/ECMAScript-template stack
-      [5824:6848)     ECMAScript bracket-kind stack
-      [6848:7872)     theme table written by JavaScript
-      [7872:11968)    JSX-mode stack
-      [11968:12000)   streaming delimiter
-      [12000:16000)   streaming lexer checkpoints
-      [16000:26752)   keyword-table region (see src/memory.wat)
-      [26752:31570)   span-open fragment cache (HTML modes)
-      [31584:31712)   live free-list heads
-      [31744:34304)   zig keyword table
-      [34304:65536)   free
-    [] pages 2..N     (text buffer)
+      [64:2000)       theme table written by JavaScript, then the CSS-variable name table
+      [2000:6976)     emitter HTML fragments and span-open fragment cache
+      [6976:7008)     streaming delimiter
+      [7008:11008)    streaming lexer checkpoints
+      [11008:35872)   word tables: ECMAScript, C, and one per language (see src/memory.wat)
+      [35872:36928)   markdown fence aliases
+      [36928:37952)   JSON nesting stack
+      [37952:38976)   TOML nesting stack
+      [38976:39120)   ECMAScript token-class bitset
+      [39120:40144)   ECMAScript template stack
+      [40144:41168)   ECMAScript bracket-kind stack
+      [41168:45264)   JSX-mode stack
+      [45264:65536)   free
+    [] pages 2..N     (text buffer; a live instance lays them out itself,
+                      see src/live.wat)
       [65536:EOF)     input, NUL sentinel, then at least 16 bytes of slack
       [(EOF+47)&~15:) output HTML bytes or (end:u32, hl:u32) token records;
                       $ensureCap grows memory
@@ -35,28 +37,42 @@
   (import "./langs/astro.wat")
   (import "./langs/bash.wat")
   (import "./langs/c.wat")
+  (import "./langs/c3.wat")
   (import "./langs/cpp.wat")
+  (import "./langs/csharp.wat")
   (import "./langs/css.wat")
+  (import "./langs/dart.wat")
   (import "./langs/diff.wat")
+  (import "./langs/elixir.wat")
   (import "./langs/glsl.wat")
   (import "./langs/go.wat")
   (import "./langs/haskell.wat")
+  (import "./langs/hlsl.wat")
   (import "./langs/html.wat")
+  (import "./langs/java.wat")
   (import "./langs/json.wat")
   (import "./langs/kotlin.wat")
+  (import "./langs/lisp.wat")
   (import "./langs/lua.wat")
   (import "./langs/markdown.wat")
   (import "./langs/mdx.wat")
+  (import "./langs/objc.wat")
+  (import "./langs/ocaml.wat")
+  (import "./langs/perl.wat")
   (import "./langs/php.wat")
+  (import "./langs/proto.wat")
   (import "./langs/python.wat")
+  (import "./langs/ruby.wat")
   (import "./langs/rust.wat")
   (import "./langs/sql.wat")
   (import "./langs/svelte.wat")
   (import "./langs/swift.wat")
+  (import "./langs/terraform.wat")
   (import "./langs/toml.wat")
   (import "./langs/tsx.wat")
   (import "./langs/vue.wat")
   (import "./langs/wat.wat")
+  (import "./langs/wgsl.wat")
   (import "./langs/xml.wat")
   (import "./langs/yaml.wat")
   (import "./langs/zig.wat")
@@ -96,6 +112,23 @@
     "jsx"
     "ts"
     "tsx"
+    "c3"
+    "csharp"
+    "dart"
+    "elixir"
+    "hlsl"
+    "java"
+    "less"
+    "lisp"
+    "objc"
+    "ocaml"
+    "perl"
+    "proto"
+    "ruby"
+    "sass"
+    "scss"
+    "terraform"
+    "wgsl"
   )
 
   ;; language dispatch table, one entry per $Language member in enum order
@@ -104,7 +137,10 @@
       $hlPlain $hlAsm $hlAstro $hlBash $hlC $hlCpp $hlCss $hlDiff $hlGlsl
       $hlGo $hlHaskell $hlHtml $hlJson $hlKotlin $hlLua $hlMarkdown $hlMdx
       $hlPhp $hlPython $hlRust $hlSql $hlSvelte $hlSwift $hlToml $hlVue
-      $hlWat $hlXml $hlYaml $hlZig $hlJs $hlJsx $hlTs $hlTsx))
+      $hlWat $hlXml $hlYaml $hlZig $hlJs $hlJsx $hlTs $hlTsx
+      $hlC3 $hlCsharp $hlDart $hlElixir $hlHlsl $hlJava $hlLess $hlLisp
+      $hlObjc $hlOcaml $hlPerl $hlProto $hlRuby $hlSass $hlScss $hlTerraform
+      $hlWgsl))
 
   ;; plain text: one unstyled token covering the whole input
   (func $hlPlain

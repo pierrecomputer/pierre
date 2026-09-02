@@ -6,7 +6,7 @@
   (global $bashArith (mut i32) (i32.const 0))
 
   ;; group order is the dispatch order in $bashWordHl below
-  (keyword-table $bashWords $mem.bashWords $mem.bashWords+512 16 32
+  (keyword-table $bashWords $mem.bashWords $mem.bashWords+256 16 32
     (group ;; 1: control
       "do" "fi" "if" "in" "for" "case" "done" "elif" "else" "esac" "then"
       "break" "until" "while" "return" "select" "continue")

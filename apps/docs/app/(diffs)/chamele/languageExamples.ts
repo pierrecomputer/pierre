@@ -606,6 +606,472 @@ optimize = "speed"
 simd128 = true
 bulk_memory = true`,
   ],
+  [
+    'java',
+    'Java',
+    `package demo;
+
+import java.util.List;
+
+/** A labelled counter. */
+public record Counter(String label, int count) {
+  private static final int MAX = 10;
+
+  public Counter increment() {
+    if (count >= MAX) throw new IllegalStateException("full");
+    return new Counter(label, count + 1);
+  }
+
+  public static void main(String[] args) {
+    var c = new Counter("hits", 0).increment();
+    System.out.printf("%s=%d%n", c.label(), c.count());
+  }
+}`,
+  ],
+  [
+    'csharp',
+    'C#',
+    `using System.Collections.Generic;
+
+namespace Demo;
+
+/// <summary>A labelled counter.</summary>
+public sealed record Counter(string Label, int Count)
+{
+    private const int Max = 10;
+
+    public Counter Increment() =>
+        Count >= Max ? throw new InvalidOperationException("full")
+                     : this with { Count = Count + 1 };
+
+    public static void Main()
+    {
+        var c = new Counter("hits", 0).Increment();
+        Console.WriteLine($"{c.Label}={c.Count}");
+    }
+}`,
+  ],
+  [
+    'dart',
+    'Dart',
+    `import 'dart:math';
+
+/// A point in 2D space.
+class Point {
+  final double x, y;
+  const Point(this.x, this.y);
+
+  double distanceTo(Point other) {
+    final dx = x - other.x, dy = y - other.y;
+    return sqrt(dx * dx + dy * dy);
+  }
+
+  @override
+  String toString() => 'Point($x, $y)';
+}
+
+void main() {
+  const a = Point(0, 0);
+  print('\${a.distanceTo(const Point(3, 4))}');
+}`,
+  ],
+  [
+    'ruby',
+    'Ruby',
+    `# frozen_string_literal: true
+
+require 'json'
+
+module Demo
+  # A labelled counter.
+  class Counter
+    MAX = 10
+    attr_reader :label, :count
+
+    def initialize(label:, count: 0)
+      @label = label
+      @count = count
+    end
+
+    def increment
+      raise ArgumentError, "full" if @count >= MAX
+
+      Counter.new(label: @label, count: @count + 1)
+    end
+
+    def to_s = "#{label}=#{count}"
+  end
+end
+
+puts Demo::Counter.new(label: :hits).increment`,
+  ],
+  [
+    'elixir',
+    'Elixir',
+    `defmodule Demo.Counter do
+  @moduledoc """
+  A labelled counter.
+  """
+  @max 10
+
+  defstruct label: nil, count: 0
+
+  def increment(%__MODULE__{count: count}) when count >= @max do
+    {:error, :full}
+  end
+
+  def increment(%__MODULE__{} = counter) do
+    {:ok, %{counter | count: counter.count + 1}}
+  end
+
+  def to_string(%{label: label, count: count}), do: "#{label}=#{count}"
+end
+
+{:ok, c} = Demo.Counter.increment(%Demo.Counter{label: :hits})
+IO.puts(Demo.Counter.to_string(c))`,
+  ],
+  [
+    'perl',
+    'Perl',
+    `#!/usr/bin/perl
+use strict;
+use warnings;
+
+package Demo::Counter;
+
+my $MAX = 10;
+
+sub new {
+    my ($class, %args) = @_;
+    return bless { label => $args{label}, count => $args{count} // 0 }, $class;
+}
+
+sub increment {
+    my $self = shift;
+    die "full\n" if $self->{count} >= $MAX;
+    return Demo::Counter->new(%$self, count => $self->{count} + 1);
+}
+
+my $c = Demo::Counter->new(label => 'hits')->increment;
+printf "%s=%d\n", $c->{label}, $c->{count};`,
+  ],
+  [
+    'ocaml',
+    'OCaml',
+    `(* A labelled counter. *)
+type counter = { label : string; count : int }
+
+exception Full of string
+
+let max = 10
+
+let increment c =
+  if c.count >= max then raise (Full c.label)
+  else { c with count = c.count + 1 }
+
+let to_string { label; count } = Printf.sprintf "%s=%d" label count
+
+let () =
+  let c = increment { label = "hits"; count = 0 } in
+  print_endline (to_string c)`,
+  ],
+  [
+    'lisp',
+    'Lisp',
+    `;;; A labelled counter.
+(defpackage :demo (:use :cl))
+(in-package :demo)
+
+(defconstant +max+ 10)
+
+(defstruct counter label (count 0))
+
+(defun increment (c)
+  "Return a copy of C with its count bumped."
+  (when (>= (counter-count c) +max+)
+    (error "full: ~a" (counter-label c)))
+  (make-counter :label (counter-label c)
+                :count (1+ (counter-count c))))
+
+(let ((c (increment (make-counter :label :hits))))
+  (format t "~a=~d~%" (counter-label c) (counter-count c)))`,
+  ],
+  [
+    'objc',
+    'Objective-C',
+    `#import <Foundation/Foundation.h>
+
+@interface Counter : NSObject
+@property (nonatomic, copy, readonly) NSString *label;
+@property (nonatomic, readonly) NSInteger count;
+- (instancetype)initWithLabel:(NSString *)label count:(NSInteger)count;
+- (Counter *)increment;
+@end
+
+@implementation Counter
+- (instancetype)initWithLabel:(NSString *)label count:(NSInteger)count {
+  if ((self = [super init])) {
+    _label = [label copy];
+    _count = count;
+  }
+  return self;
+}
+
+- (Counter *)increment {
+  return [[Counter alloc] initWithLabel:self.label count:self.count + 1];
+}
+@end
+
+int main(void) {
+  @autoreleasepool {
+    Counter *c = [[[Counter alloc] initWithLabel:@"hits" count:0] increment];
+    NSLog(@"%@=%ld", c.label, (long)c.count);
+  }
+  return 0;
+}`,
+  ],
+  [
+    'c3',
+    'C3',
+    `module demo;
+import std::io;
+
+const int MAX = 10;
+
+struct Counter {
+    String label;
+    int count;
+}
+
+fault CounterError { FULL }
+
+<* Return a copy with the count bumped. *>
+fn Counter! Counter.increment(&self) {
+    if (self.count >= MAX) return CounterError.FULL?;
+    return { .label = self.label, .count = self.count + 1 };
+}
+
+fn void main() {
+    Counter c = { .label = "hits", .count = 0 };
+    Counter! next = c.increment();
+    if (catch err = next) {
+        io::printfn("error: %s", err);
+        return;
+    }
+    io::printfn("%s=%d", next.label, next.count);
+}`,
+  ],
+  [
+    'proto',
+    'Protocol Buffers',
+    `syntax = "proto3";
+
+package demo.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option java_package = "com.demo.v1";
+
+// A labelled counter.
+message Counter {
+  string label = 1;
+  int32 count = 2;
+  google.protobuf.Timestamp updated_at = 3;
+  repeated string tags = 4 [deprecated = true];
+  reserved 5 to 9;
+}
+
+enum Status {
+  STATUS_UNSPECIFIED = 0;
+  STATUS_ACTIVE = 1;
+}
+
+service Counters {
+  rpc Increment(Counter) returns (Counter);
+  rpc Watch(Counter) returns (stream Counter);
+}`,
+  ],
+  [
+    'terraform',
+    'Terraform',
+    `terraform {
+  required_providers {
+    aws = { source = "hashicorp/aws", version = "~> 5.0" }
+  }
+}
+
+variable "env" {
+  type    = string
+  default = "dev"
+}
+
+locals {
+  name = "counter-\${var.env}"
+  tags = { for k, v in var.tags : k => upper(v) if v != null }
+}
+
+resource "aws_instance" "counter" {
+  count         = var.env == "prod" ? 3 : 1
+  ami           = data.aws_ami.ubuntu.id
+  instance_type = "t3.micro"
+  user_data     = <<-EOT
+    #!/bin/bash
+    echo "hello \${local.name}"
+  EOT
+  tags = merge(local.tags, { Name = local.name })
+}
+
+output "ip" {
+  value = aws_instance.counter[*].public_ip
+}`,
+  ],
+  [
+    'less',
+    'Less',
+    `// Variables and mixins
+@primary: #3b82f6;
+@radius: 4px;
+
+.rounded(@r: @radius) {
+  border-radius: @r;
+}
+
+.card {
+  .rounded();
+  color: darken(@primary, 10%);
+  padding: (@radius * 2);
+
+  &-title {
+    font-weight: bold;
+  }
+
+  &:hover when (lightness(@primary) > 50%) {
+    background: @primary;
+  }
+
+  @media (min-width: 768px) {
+    width: ~"calc(100% - @{radius})";
+  }
+}`,
+  ],
+  [
+    'scss',
+    'SCSS',
+    `@use "sass:math";
+
+// Variables and mixins
+$primary: #3b82f6 !default;
+$sizes: (sm: 4px, md: 8px);
+
+@mixin rounded($r: map-get($sizes, sm)) {
+  border-radius: $r;
+}
+
+.card {
+  @include rounded;
+  color: darken($primary, 10%);
+  padding: math.div(16px, 2);
+
+  &-title {
+    font-weight: bold;
+  }
+
+  @each $name, $size in $sizes {
+    &.pad-#{$name} {
+      padding: $size;
+    }
+  }
+
+  @if lightness($primary) > 50% {
+    background: $primary;
+  } @else {
+    background: white;
+  }
+}`,
+  ],
+  [
+    'sass',
+    'Sass',
+    `// Variables and mixins
+$primary: #3b82f6
+$radius: 4px
+
+=rounded($r: $radius)
+  border-radius: $r
+
+.card
+  +rounded
+  color: darken($primary, 10%)
+  padding: $radius * 2
+
+  &-title
+    font-weight: bold
+
+  &:hover
+    background: $primary
+
+  @media (min-width: 768px)
+    width: calc(100% - #{$radius})`,
+  ],
+  [
+    'hlsl',
+    'HLSL',
+    `cbuffer Params : register(b0) {
+  float4x4 mvp;
+  float2 uv_scale;
+};
+
+Texture2D<float4> tex : register(t0);
+SamplerState samp : register(s0);
+
+struct VSOut {
+  float4 pos : SV_Position;
+  float2 uv : TEXCOORD0;
+};
+
+VSOut vs_main(float3 pos : POSITION, float2 uv : TEXCOORD0) {
+  VSOut o;
+  o.pos = mul(mvp, float4(pos, 1.0));
+  o.uv = uv * uv_scale;
+  return o;
+}
+
+[earlydepthstencil]
+float4 ps_main(VSOut i) : SV_Target {
+  float4 c = tex.Sample(samp, i.uv);
+  if (c.a < 0.5f) discard;
+  return c * 0.5h;
+}`,
+  ],
+  [
+    'wgsl',
+    'WGSL',
+    `struct VertexOutput {
+  @builtin(position) pos: vec4<f32>,
+  @location(0) uv: vec2f,
+};
+
+@group(0) @binding(0) var<uniform> mvp: mat4x4<f32>;
+@group(0) @binding(1) var tex: texture_2d<f32>;
+@group(0) @binding(2) var samp: sampler;
+
+const SCALE: f32 = 0.5;
+
+@vertex
+fn vs_main(@location(0) pos: vec3<f32>, @location(1) uv: vec2f) -> VertexOutput {
+  var out: VertexOutput;
+  out.pos = mvp * vec4<f32>(pos, 1.0);
+  out.uv = uv * SCALE;
+  return out;
+}
+
+@fragment
+fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
+  let c = textureSample(tex, samp, in.uv);
+  if (c.a < 0.5) { discard; }
+  return c;
+}`,
+  ],
 ] as const satisfies readonly (readonly [Lang, string, string])[];
 
 export type PlaygroundLanguage = (typeof PLAYGROUND_LANGUAGES)[number][0];

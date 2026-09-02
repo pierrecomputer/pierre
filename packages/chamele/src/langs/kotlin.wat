@@ -11,7 +11,7 @@
   ;; can undo, so $kotlinWordHl matches "Short" directly. "where" is missing
   ;; for the same reason: the hash sees only the first two bytes, the last
   ;; byte, and the length, which "while" shares.
-  (keyword-table $kotlinWords $mem.kotlinWords $mem.kotlinWords+1024 16 128
+  (keyword-table $kotlinWords $mem.kotlinWords $mem.kotlinWords+768 16 128
     (group ;; 1: control
       "do" "if" "for" "try" "else" "when" "break" "catch" "throw" "while"
       "return" "finally" "continue")

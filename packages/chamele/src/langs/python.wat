@@ -187,7 +187,7 @@
   ;; bytes, last byte, length) with range, so no table geometry holds both;
   ;; $pyWordHl matches it with a direct compare instead. match and case are
   ;; soft keywords and live in $pySoftKeyword, which needs the line position.
-  (keyword-table $pyWords $mem.pyWords $mem.pyWords+1280 32 256
+  (keyword-table $pyWords $mem.pythonWords $mem.pythonWords+1152 32 256
     (group "True" "False")                       ;; 1: booleans
     (group "None" "Ellipsis" "NotImplemented")   ;; 2: built-in constants
     (group "self" "cls")                         ;; 3: special variables

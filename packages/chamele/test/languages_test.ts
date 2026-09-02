@@ -74,6 +74,49 @@ const aliases: Lang[] = [
   'geom',
   'comp',
   'lua',
+  'c3',
+  'csharp',
+  'cs',
+  'c#',
+  'dart',
+  'elixir',
+  'ex',
+  'exs',
+  'hlsl',
+  'java',
+  'less',
+  'lisp',
+  'cl',
+  'el',
+  'elisp',
+  'emacs-lisp',
+  'lsp',
+  'scheme',
+  'scm',
+  'objc',
+  'objective-c',
+  'objectivec',
+  'm',
+  'mm',
+  'objcpp',
+  'objective-cpp',
+  'ocaml',
+  'ml',
+  'mli',
+  'perl',
+  'pl',
+  'pm',
+  'proto',
+  'protobuf',
+  'ruby',
+  'rb',
+  'sass',
+  'scss',
+  'terraform',
+  'tf',
+  'tfvars',
+  'hcl',
+  'wgsl',
 ];
 const canonical: Lang[] = [
   'js',
@@ -106,6 +149,23 @@ const canonical: Lang[] = [
   'diff',
   'glsl',
   'lua',
+  'c3',
+  'csharp',
+  'dart',
+  'elixir',
+  'hlsl',
+  'java',
+  'less',
+  'lisp',
+  'objc',
+  'ocaml',
+  'perl',
+  'proto',
+  'ruby',
+  'sass',
+  'scss',
+  'terraform',
+  'wgsl',
 ];
 const decoder = new TextDecoder();
 let highlighter: Highlighter;
@@ -178,7 +238,12 @@ void t.test(
     const encoder = new TextEncoder();
     for (const lang of canonical) {
       const entry = `$hl${lang[0].toUpperCase()}${lang.slice(1)}`;
-      const file = ['js', 'jsx', 'ts'].includes(lang) ? 'tsx' : lang;
+      // the ecma lexers share tsx.wat and the css preprocessors css.wat
+      const file = ['js', 'jsx', 'ts'].includes(lang)
+        ? 'tsx'
+        : ['less', 'sass', 'scss'].includes(lang)
+          ? 'css'
+          : lang;
       const url = new URL(`./utf8_split_${lang}.wat`, import.meta.url);
       const source = `(module
   (memory (export "memory") 3)

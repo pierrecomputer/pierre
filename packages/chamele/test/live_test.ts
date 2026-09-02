@@ -73,6 +73,29 @@ const samples: [Lang, string][] = [
   ['wat', '(; open\nstill ;)\n(module)\n'],
   ['xml', '<![CDATA[one\ntwo]]>\n<root/>\n'],
   ['yaml', 'message: |\n  one: # literal\n  two\nitems: [\n  one,\n  two\n]\n'],
+  ['c3', 'String s = `one\ntwo`;\n/* a /* b */ c */\nint x;\n'],
+  ['csharp', 'var s = @"one\ntwo";\nvar t = $"a {x} b";\n'],
+  ['dart', "var s = '''one\n$x two''';\nvar y = 1;\n"],
+  ['elixir', 'x = """\none #{y}\n"""\nz = 1\n'],
+  ['hlsl', 'float4 main() { /* open\nstill */ return 0; }\n'],
+  ['java', 'String s = """\n  one\n  two""";\nint x;\n'],
+  ['less', '.a {\n  color: @c; /* note\nspans lines */\n}\n'],
+  ['lisp', '#| open\nstill |#\n(defun f () "multi\nline")\n'],
+  ['objc', 'NSString *s = @"a"; /* open\nstill */\nint x;\n'],
+  ['ocaml', 'let s = {id|one\ntwo|id} (* open\nstill *)\nlet x = 1\n'],
+  [
+    'perl',
+    'my $s = <<"EOT";\nhello $x\nEOT\n=head1 doc\ntext\n=cut\nprint 1;\n',
+  ],
+  ['proto', 'message A { /* open\nstill */ int32 x = 1; }\n'],
+  ['ruby', 'x = <<~EOS\n  hi #{y}\nEOS\n=begin\nblock\n=end\nz = %w[a\nb]\n'],
+  ['sass', '// note\n.a\n  color: red\n  &:hover\n    color: blue\n'],
+  [
+    'scss',
+    '.a {\n  color: red; /* note\nspans lines */\n  .b { c: #{$d}; }\n}\n',
+  ],
+  ['terraform', 'x = <<-EOT\n  hello ${var.y}\n  EOT\ny = "a ${z} b"\n'],
+  ['wgsl', 'fn f() { /* open\nstill */ return; }\n'],
   ['zig', 'const s = \\\\one\n  \\\\two\n;\n'],
   // parameter lists split across lines: the signature-tracking state must
   // ride the interned line-state blobs
@@ -1365,7 +1388,7 @@ void t.test(
       const quarter = 1 << (p - 2);
       return (size + quarter - 1) & -quarter;
     };
-    const freeHeads = 31584;
+    const freeHeads = 81920; // $mem.liveFree in src/memory.wat
     for (const [staged, used] of [
       [1000, 300],
       [4096, 100],

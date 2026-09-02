@@ -1,0 +1,179 @@
+import assert from 'node:assert';
+import t from 'node:test';
+
+import type { Lang, Theme, ThemedToken } from '../lib/index';
+import { codeToTokens, init, StreamTokenizer } from '../lib/index';
+import tokenTypes from '../lib/token-types';
+import { transformWat, wat2wasm } from '../scripts/build';
+import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
+import {
+  checkInvariants,
+  loadLang,
+  spansOf,
+  type TestLang,
+  textOf,
+} from './util';
+
+// one unique color per token type so equal styles cannot merge neighboring
+// spans and hide a classification behind a same-colored token
+const distinct = {
+  name: 'distinct',
+  appearance: 'dark',
+  style: {
+    background: '#000000',
+    foreground: '#ffffff',
+    syntax: Object.fromEntries(
+      tokenTypes
+        .filter((name) => !['background', 'foreground', 'none'].includes(name))
+        .map((name, i) => [name, '#' + (0x100000 + i * 0x101).toString(16)])
+    ),
+  },
+} as unknown as Theme;
+
+/** The distinct theme's color for a token type name. */
+function distinctColor(name: string): string {
+  const i = tokenTypes.indexOf(name);
+  assert.ok(i >= 0, `unknown token type: ${name}`);
+  return distinct.style.syntax?.[name] as string;
+}
+
+let lexer: TestLang;
+t.before(() => {
+  lexer = loadLang('proto', '$hlProto');
+  // the streaming tests below need the full module behind codeToTokens
+  const url = new URL('../src/chamele.wat', import.meta.url);
+  const { code } = transformWat(url);
+  init(new WebAssembly.Module(wat2wasm(url.pathname, code)));
+});
+
+/**
+ * Tokens for `code` from the whole buffer and from a StreamTokenizer fed one
+ * line per push - the chunk shape the LiveTokenizer uses - so a test can
+ * assert that a construct crossing line boundaries resumes correctly.
+ */
+function wholeAndLineFed(
+  lang: Lang,
+  code: string
+): [ThemedToken[][], ThemedToken[][]] {
+  const whole = codeToTokens(code, { lang, theme: pierreDark }).tokens;
+  const stream = new StreamTokenizer({ lang, theme: pierreDark });
+  const streamed: ThemedToken[][] = [];
+  for (const line of code.split(/(?<=\n)/)) {
+    streamed.push(...stream.pushCode(line));
+  }
+  streamed.push(...stream.end());
+  return [whole, streamed];
+}
+
+/** The color of the first span whose trimmed text is exactly `word`. */
+function exact(html: string, word: string): string | null | undefined {
+  return spansOf(html).find((s) => s.text.trim() === word)?.color;
+}
+
+void t.test('proto: declarations, fields, options, and services', () => {
+  const html = checkInvariants(
+    lexer.hl,
+    'syntax = "proto3";\npackage demo.api.v1;\nimport public "x.proto";\noption java_package = "com.demo";\nmessage User {\n  reserved 2, 15 to 20;\n  string name = 1 [deprecated = true];\n  repeated .google.protobuf.Any items = 3;\n  map<string, int64> counts = 4;\n  oneof kind { Address addr = 5; required int32 legacy = 6; }\n  enum Role { ROLE_UNSPECIFIED = 0; }\n}\nservice Users { rpc Get(GetRequest) returns (stream User); }',
+    { theme: distinct }
+  );
+  assert.equal(exact(html, 'syntax'), distinctColor('keyword'));
+  assert.equal(exact(html, 'package'), distinctColor('keyword.declaration'));
+  assert.equal(exact(html, 'demo'), distinctColor('namespace'));
+  assert.equal(exact(html, 'v1'), distinctColor('namespace'));
+  assert.equal(exact(html, 'import'), distinctColor('keyword.import'));
+  assert.equal(exact(html, 'public'), distinctColor('keyword'));
+  assert.equal(exact(html, 'java_package'), distinctColor('property'));
+  assert.equal(exact(html, 'message'), distinctColor('keyword.declaration'));
+  assert.equal(exact(html, 'User'), distinctColor('type'));
+  assert.equal(exact(html, 'reserved'), distinctColor('keyword'));
+  assert.equal(exact(html, 'to'), distinctColor('keyword'));
+  assert.equal(exact(html, 'string'), distinctColor('type.builtin'));
+  assert.equal(exact(html, 'name'), distinctColor('property'));
+  assert.equal(exact(html, 'deprecated'), distinctColor('property'));
+  assert.equal(exact(html, 'true'), distinctColor('boolean'));
+  assert.equal(exact(html, 'repeated'), distinctColor('keyword'));
+  assert.equal(exact(html, 'google'), distinctColor('namespace'));
+  assert.equal(exact(html, 'Any'), distinctColor('type'));
+  assert.equal(exact(html, 'map'), distinctColor('keyword'));
+  assert.equal(exact(html, 'required'), distinctColor('keyword'));
+  assert.equal(exact(html, 'ROLE_UNSPECIFIED'), distinctColor('constant'));
+  assert.equal(exact(html, 'service'), distinctColor('keyword.declaration'));
+  assert.equal(exact(html, 'rpc'), distinctColor('keyword.declaration'));
+  assert.equal(exact(html, 'Get'), distinctColor('function.definition'));
+  assert.equal(exact(html, 'stream'), distinctColor('keyword'));
+});
+
+void t.test('proto: malformed constructs stay total and lossless', () => {
+  for (const src of [
+    '',
+    '/',
+    '/*',
+    '// tail',
+    '"unterminated',
+    "'\\",
+    '0x_',
+    '\u00e9 \u65e5\u672c\u8a9e',
+    '#',
+    '@',
+    '${',
+    '#{',
+    '<<',
+    '%',
+    'message',
+    '/*',
+    '= -',
+  ]) {
+    checkInvariants(lexer.hl, src);
+  }
+});
+
+void t.test('proto: split ranges bound every lookahead', () => {
+  const src = 'x// tail\nmessage A { /* c\nd */ int32 x = 1; }';
+  for (let split = 0; split <= new TextEncoder().encode(src).length; split++) {
+    checkInvariants(loadLang('proto', '$hlProto', split).hl, src);
+  }
+});
+
+void t.test(
+  'proto: malformed UTF-8 stays balanced and decodes losslessly',
+  () => {
+    const bytes = Uint8Array.of(
+      0x66,
+      0x6f,
+      0x6f,
+      0x20,
+      0xf0,
+      0x28,
+      0x8c,
+      0x28,
+      0x20,
+      0xff
+    );
+    const html = lexer.hl(bytes);
+    assert.equal(textOf(html), new TextDecoder().decode(bytes));
+    spansOf(html);
+  }
+);
+
+void t.test('proto: deterministic fuzz preserves lexer invariants', () => {
+  let state = 0x51f15e;
+  const alphabet = 'abcXYZ09_ /\\"\'`\n\t{}[]().,:;+-*=!<>&|#@$%~?\u00e9';
+  for (let n = 0; n < 160; n++) {
+    let src = '';
+    for (let i = 0, len = state & 63; i < len; i++) {
+      state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+      src += alphabet[state % alphabet.length];
+    }
+    checkInvariants(lexer.hl, src);
+  }
+});
+
+void t.test('proto: multi-line constructs resume line-fed', () => {
+  for (const code of [
+    'message A { /* open\nstill */ int32 x = 1; }\n',
+    'message A {\n  string s = 1;\n}\n',
+  ]) {
+    const [whole, streamed] = wholeAndLineFed('proto', code);
+    assert.deepEqual(streamed, whole, JSON.stringify(code));
+  }
+});

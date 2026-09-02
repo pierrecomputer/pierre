@@ -6,8 +6,9 @@
     line table, per-line token blocks, and interned per-line lexer states in
     linear memory:
 
-      page 1                    control, static data, live free-list heads
+      page 1                    control, static data, lexer scratch
       [65536:81920)             line-change list: count, then 16-byte entries
+      [81920:82048)             size-class free-list heads, 32 u32
       [86016:$lvHeapCeil)       size-class heap: staged text, line text
                                 blocks, token blocks, state blobs, line table
       [$lvHeapCeil:mem end)     transient per-line scratch: the line's bytes,
@@ -463,9 +464,11 @@
       (i32.or (i32.shl (global.get $lvIdFree) (i32.const 1)) (i32.const 1)))
     (global.set $lvIdFree (local.get $id)))
 
-  ;; Blob image: [sharedLen, brkLen, jsxLen] u32 head, 37 cross-chunk globals,
-  ;; the 32-byte stream delimiter, the live prefixes of the shared, bracket,
-  ;; and jsx stacks, then the whole used lexer checkpoint region. The image
+  ;; Blob image: [stackLen, brkLen, jsxLen] u32 head, 37 cross-chunk globals,
+  ;; the 32-byte stream delimiter, the live prefixes of the language's own
+  ;; stack - json or toml nesting, or the ECMAScript template stack - and of
+  ;; the bracket and jsx stacks, then the whole used lexer checkpoint region.
+  ;; The image
   ;; is a pure function of the incoming state and the line bytes, so exact
   ;; byte identity is a sound convergence test. Capture builds the full
   ;; image; interning and restore work on its zero-trimmed form. The
@@ -477,14 +480,23 @@
   (global $lvLang (mut i32) (i32.const 0))
   (global $lvMachineId (mut i32) (i32.const -1)) ;; state the machine holds now
 
-  ;; blob bytes for the current shared-stack prefix: json and toml publish
-  ;; their depth through a global, the ecma machine derives it from tmplSp
-  (func $lvSharedPrefix (result i32)
+  ;; the stack the current language nests in: json and toml keep their own,
+  ;; every other lexer that has one uses the ECMAScript template stack
+  (func $lvStackBase (result i32)
+    (if (i32.eq (global.get $lvLang) (enum.get $Language.json))
+      (then (return (i32.const $mem.jsonStack))))
+    (if (i32.eq (global.get $lvLang) (enum.get $Language.toml))
+      (then (return (i32.const $mem.tomlStack))))
+    (i32.const $mem.tsxTemplateStack))
+
+  ;; blob bytes for the current stack prefix: json and toml publish their
+  ;; depth through a global, the ecma machine derives it from tmplSp
+  (func $lvStackPrefix (result i32)
     (local $n i32)
     (if (i32.or
           (i32.eq (global.get $lvLang) (enum.get $Language.json))
           (i32.eq (global.get $lvLang) (enum.get $Language.toml)))
-      (then (local.set $n (global.get $liveSharedBytes)))
+      (then (local.set $n (global.get $liveStackBytes)))
       (else (local.set $n (i32.shl (global.get $tmplSp) (i32.const 2)))))
     (if (i32.gt_u (local.get $n) (i32.const 1024))
       (then (local.set $n (i32.const 1024))))
@@ -492,17 +504,17 @@
 
   (func $lvCaptureBlob (param $dst i32) (result i32)
     (local $p i32)
-    (local $sharedLen i32)
+    (local $stackLen i32)
     (local $brkLen i32)
     (local $jsxLen i32)
-    (local.set $sharedLen (call $lvSharedPrefix))
+    (local.set $stackLen (call $lvStackPrefix))
     (local.set $brkLen (global.get $brkSp))
     (if (i32.gt_u (local.get $brkLen) (i32.const 1024))
       (then (local.set $brkLen (i32.const 1024))))
     (local.set $jsxLen (i32.shl (global.get $jsxSp) (i32.const 3)))
     (if (i32.gt_u (local.get $jsxLen) (i32.const 4096))
       (then (local.set $jsxLen (i32.const 4096))))
-    (i32.store (local.get $dst) (local.get $sharedLen))
+    (i32.store (local.get $dst) (local.get $stackLen))
     (i32.store offset=4 (local.get $dst) (local.get $brkLen))
     (i32.store offset=8 (local.get $dst) (local.get $jsxLen))
     (i32.store offset=12 (local.get $dst) (global.get $streamMode))
@@ -545,8 +557,8 @@
     (memory.copy (i32.add (local.get $dst) (i32.const 160))
       (i32.const $mem.streamDelimiter) (i32.const 32))
     (local.set $p (i32.add (local.get $dst) (i32.const 192)))
-    (memory.copy (local.get $p) (i32.const $mem.sharedStack) (local.get $sharedLen))
-    (local.set $p (i32.add (local.get $p) (local.get $sharedLen)))
+    (memory.copy (local.get $p) (call $lvStackBase) (local.get $stackLen))
+    (local.set $p (i32.add (local.get $p) (local.get $stackLen)))
     (memory.copy (local.get $p) (i32.const $mem.tsxBracketStack) (local.get $brkLen))
     (local.set $p (i32.add (local.get $p) (local.get $brkLen)))
     (memory.copy (local.get $p) (i32.const $mem.tsxJsxStack) (local.get $jsxLen))
@@ -583,10 +595,10 @@
 
   (func $lvRestoreBlob (param $src i32)
     (local $p i32)
-    (local $sharedLen i32)
+    (local $stackLen i32)
     (local $brkLen i32)
     (local $jsxLen i32)
-    (local.set $sharedLen (i32.load (local.get $src)))
+    (local.set $stackLen (i32.load (local.get $src)))
     (local.set $brkLen (i32.load offset=4 (local.get $src)))
     (local.set $jsxLen (i32.load offset=8 (local.get $src)))
     (global.set $streamMode (i32.load offset=12 (local.get $src)))
@@ -626,12 +638,12 @@
     (global.set $sigAngle (i32.load offset=148 (local.get $src)))
     (global.set $sigFnPend (i32.load offset=152 (local.get $src)))
     (global.set $sigFnAngle (i32.load offset=156 (local.get $src)))
-    (global.set $liveSharedBytes (local.get $sharedLen))
+    (global.set $liveStackBytes (local.get $stackLen))
     (memory.copy (i32.const $mem.streamDelimiter)
       (i32.add (local.get $src) (i32.const 160)) (i32.const 32))
     (local.set $p (i32.add (local.get $src) (i32.const 192)))
-    (memory.copy (i32.const $mem.sharedStack) (local.get $p) (local.get $sharedLen))
-    (local.set $p (i32.add (local.get $p) (local.get $sharedLen)))
+    (memory.copy (call $lvStackBase) (local.get $p) (local.get $stackLen))
+    (local.set $p (i32.add (local.get $p) (local.get $stackLen)))
     (memory.copy (i32.const $mem.tsxBracketStack) (local.get $p) (local.get $brkLen))
     (local.set $p (i32.add (local.get $p) (local.get $brkLen)))
     (memory.copy (i32.const $mem.tsxJsxStack) (local.get $p) (local.get $jsxLen))
@@ -661,7 +673,7 @@
     (global.set $tsxStreamExpressionClosed (i32.const 0))
     (global.set $tsxStreamExpressionDepth (i32.const 0))
     (call $sigReset)
-    (global.set $liveSharedBytes (i32.const 0))
+    (global.set $liveStackBytes (i32.const 0))
     (memory.fill (i32.const $mem.streamDelimiter) (i32.const 0) (i32.const 32))
     (memory.fill (i32.const $mem.streamState) (i32.const 0)
       (i32.const $mem.streamStateUsed)))

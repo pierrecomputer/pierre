@@ -19,7 +19,7 @@
 
   ;; group order is the dispatch order in $hsWordHl below; let and where keep
   ;; dedicated groups so the caller can prime the next name as a definition
-  (keyword-table $hsWords $mem.hsWords $mem.hsWords+1024 32 64
+  (keyword-table $hsWords $mem.haskellWords $mem.haskellWords+640 32 64
     (group "True" "False")                              ;; 1: booleans
     (group "module" "import" "qualified" "hiding")      ;; 2: import
     (group "data" "newtype" "type" "class" "instance")  ;; 3: declaration

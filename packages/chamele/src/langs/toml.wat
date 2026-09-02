@@ -905,15 +905,15 @@
         (call $emitTok
           (enum.get $Token.none) (local.get $lhs) (global.get $ptr))
         (br $next)))
-    ;; publish the active shared-stack prefix for live state capture
-    (global.set $liveSharedBytes (local.get $depth)))
+    ;; publish the active stack prefix for live state capture
+    (global.set $liveStackBytes (local.get $depth)))
 
   ;; Resume toml stream mode 13: a multi-line string body left open at the
   ;; previous chunk end, literal when $streamA is the single quote and basic
   ;; otherwise. Returns 1 when the body consumed the whole chunk, 0 when the
   ;; language lexer should continue from $ptr. When the whole chunk is string
-  ;; body $hlToml does not run, so $liveSharedBytes keeps the depth restored
-  ;; for this line, which is still the live shared-stack prefix.
+  ;; body $hlToml does not run, so $liveStackBytes keeps the depth restored
+  ;; for this line, which is still the live stack prefix.
   (func $tomlStreamResume (result i32)
     (local $status i32)
     (if (i32.eq (global.get $streamA) (i32.const 39))

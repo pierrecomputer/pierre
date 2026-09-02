@@ -264,9 +264,10 @@
         (global.set $streamC (local.get $close))
         (global.set $streamHl (local.get $hl)))))
 
-  ;; Save a delimiter that must occupy a whole line (bash heredocs). $trim is
-  ;; one when leading tabs are allowed before it (`<<-`). Delimiters longer
-  ;; than the 32-byte region are not checkpointed (see $streamSetFixed).
+  ;; Save a delimiter that must occupy a whole line (bash and terraform
+  ;; heredocs). $trim is one when leading tabs are allowed before it (`<<-`)
+  ;; and two when spaces are too. Delimiters longer than the 32-byte region
+  ;; are not checkpointed (see $streamSetFixed).
   (func $streamSetLine
     (param $delimiter i32) (param $len i32) (param $trim i32) (param $hl i32)
     (if (i32.and
@@ -421,8 +422,12 @@
               (loop $trim
                 (br_if $trimDone
                   (i32.ge_u (local.get $candidate) (global.get $end)))
-                (br_if $trimDone
-                  (i32.ne (i32.load8_u (local.get $candidate)) (i32.const 9)))
+                (local.set $c (i32.load8_u (local.get $candidate)))
+                (br_if $trimDone (i32.eqz (i32.or
+                  (i32.eq (local.get $c) (i32.const 9))
+                  (i32.and
+                    (i32.eq (local.get $c) (i32.const 32))
+                    (i32.eq (global.get $streamB) (i32.const 2))))))
                 (local.set $candidate
                   (i32.add (local.get $candidate) (i32.const 1)))
                 (br $trim)))))
@@ -551,9 +556,9 @@
         (br $l)))
     (local.get $p))
 
-  ;; Split a C-family `#include` directive already bounded by [lhs,rhs).
-  ;; Return one after emitting a quoted or angle-bracket header, zero when the
-  ;; directive uses a macro or has another name.
+  ;; Split a C-family `#include` or `#import` directive already bounded by
+  ;; [lhs,rhs). Return one after emitting a quoted or angle-bracket header,
+  ;; zero when the directive uses a macro or has another name.
   (func $lexEmitIncludeDirective (param $lhs i32) (param $rhs i32) (result i32)
     (local $p i32)
     (local $word i32)
@@ -569,13 +574,21 @@
         (local.set $p (i32.add (local.get $p) (i32.const 1)))
         (br $space)))
     (local.set $word (local.get $p))
-    (if (i32.gt_u (i32.add (local.get $word) (i32.const 7)) (local.get $rhs))
+    (if (i32.gt_u (i32.add (local.get $word) (i32.const 6)) (local.get $rhs))
       (then (return (i32.const 0))))
-    (if (i64.ne
+    ;; the wide loads stay inside the input slack
+    (if (i64.eq
           (i64.and (i64.load (local.get $word)) (i64.const 0x00ffffffffffffff))
           (i64.const "include"))
+      (then (local.set $p (i32.add (local.get $word) (i32.const 7))))
+      (else
+        (if (i64.ne
+              (i64.and (i64.load (local.get $word)) (i64.const 0x0000ffffffffffff))
+              (i64.const "import"))
+          (then (return (i32.const 0))))
+        (local.set $p (i32.add (local.get $word) (i32.const 6)))))
+    (if (i32.gt_u (local.get $p) (local.get $rhs))
       (then (return (i32.const 0))))
-    (local.set $p (i32.add (local.get $word) (i32.const 7)))
     (if (i32.and (i32.lt_u (local.get $p) (local.get $rhs))
           (call $lexIsIdentContinue (i32.load8_u (local.get $p))))
       (then (return (i32.const 0))))
@@ -750,6 +763,23 @@
         (local.set $p (i32.add (local.get $p) (i32.const 1)))
         (br $tail)))
     (global.get $end))
+
+  ;; Whether the operator [lhs,rhs) is made only of `<`, `>`, and `?` - the
+  ;; bytes that glue a generic or nullable type together - so a C-family
+  ;; lexer can keep a type pending across `List<Map<K, V>>` and `String?`.
+  (func $lexIsTypeGlue (param $lhs i32) (param $rhs i32) (result i32)
+    (local $c i32)
+    (block $done
+      (loop $l
+        (br_if $done (i32.ge_u (local.get $lhs) (local.get $rhs)))
+        (local.set $c (i32.load8_u (local.get $lhs)))
+        (if (i32.and
+              (i32.ne (local.get $c) (i32.const "<"))
+              (i32.and (i32.ne (local.get $c) (i32.const ">")) (i32.ne (local.get $c) (i32.const "?"))))
+          (then (return (i32.const 0))))
+        (local.set $lhs (i32.add (local.get $lhs) (i32.const 1)))
+        (br $l)))
+    (i32.const 1))
 
   ;; SCREAMING_CASE test for a name: at least one uppercase letter and only
   ;; [A-Z0-9_]. Single letters are excluded - `T` is a type parameter, not a

@@ -1,186 +1,49 @@
 (module
   (import "../common.wat")
 
-  ;; Keyword ids double as indices into the packed word and category tables.
-  (enum $CWord
-    "none"
-    "do" "if" "for" "case" "else" "goto" "break" "while"
-    "return" "switch" "default" "continue"
-    "auto" "extern" "inline" "static" "typedef" "register"
-    "int" "bool" "char" "enum" "long" "void" "float" "short" "union"
-    "_Bool" "double" "signed" "struct" "unsigned" "_Complex"
-    "const" "sizeof" "restrict" "volatile"
-    "_Atomic" "_Alignas" "_Alignof" "_Generic"
-    "true" "false" "nullptr"
-  )
-
-  ;; One byte per $CWord. Six category tests replace the old 44-way token
-  ;; ladder. Static C tables occupy the reserved free area starting at
-  ;; $mem.cWordBits (see memory.wat).
-  (bitset $CWordBits $CWord $mem.cWordBits
-    (control
-      "do" "if" "for" "case" "else" "goto" "break" "while"
-      "return" "switch" "default" "continue"
-    )
-    (declaration "auto" "extern" "inline" "static" "typedef" "register")
-    (builtin
+  ;; Group order is the dispatch order in $cWordHl below; the C11 and C23
+  ;; spellings sit alongside the classic keywords. `continue` is absent on
+  ;; purpose: it shares every hash feature the table can use - first two
+  ;; bytes, last byte, and length - with `alignof`, so $cWordHl matches it
+  ;; with one exact eight-byte compare instead.
+  (keyword-table $cWords $mem.cWords $mem.cWords+1024 16 256
+    (group ;; 1: control
+      "do" "if" "for" "case" "else" "goto" "break" "while" "return" "switch"
+      "default")
+    (group ;; 2: declaration
+      "auto" "extern" "inline" "static" "typedef" "register" "_Noreturn"
+      "thread_local" "_Thread_local")
+    (group ;; 3: built-in types
       "int" "bool" "char" "enum" "long" "void" "float" "short" "union"
-      "_Bool" "double" "signed" "struct" "unsigned" "_Complex"
-    )
-    (keyword
-      "const" "sizeof" "restrict" "volatile"
-      "_Atomic" "_Alignas" "_Alignof" "_Generic"
-    )
-    (boolean "true" "false")
-    (constantBuiltin "nullptr")
-  )
-
-  ;; Eight bytes per keyword at $mem.cWords, indexed by $CWord. Short words are
-  ;; NUL-padded so a single masked i64 comparison also checks their length.
-  (data (i32.const $mem.cWords)
-    "\00\00\00\00\00\00\00\00\64\6f\00\00\00\00\00\00\69\66\00\00\00\00\00\00\66\6f\72\00\00\00\00\00\63\61\73\65\00\00\00\00\65\6c\73\65\00\00\00\00\67\6f\74\6f\00\00\00\00\62\72\65\61\6b\00\00\00"
-    "\77\68\69\6c\65\00\00\00\72\65\74\75\72\6e\00\00\73\77\69\74\63\68\00\00\64\65\66\61\75\6c\74\00\63\6f\6e\74\69\6e\75\65\61\75\74\6f\00\00\00\00\65\78\74\65\72\6e\00\00\69\6e\6c\69\6e\65\00\00"
-    "\73\74\61\74\69\63\00\00\74\79\70\65\64\65\66\00\72\65\67\69\73\74\65\72\69\6e\74\00\00\00\00\00\62\6f\6f\6c\00\00\00\00\63\68\61\72\00\00\00\00\65\6e\75\6d\00\00\00\00\6c\6f\6e\67\00\00\00\00"
-    "\76\6f\69\64\00\00\00\00\66\6c\6f\61\74\00\00\00\73\68\6f\72\74\00\00\00\75\6e\69\6f\6e\00\00\00\5f\42\6f\6f\6c\00\00\00\64\6f\75\62\6c\65\00\00\73\69\67\6e\65\64\00\00\73\74\72\75\63\74\00\00"
-    "\75\6e\73\69\67\6e\65\64\5f\43\6f\6d\70\6c\65\78\63\6f\6e\73\74\00\00\00\73\69\7a\65\6f\66\00\00\72\65\73\74\72\69\63\74\76\6f\6c\61\74\69\6c\65\5f\41\74\6f\6d\69\63\00\5f\41\6c\69\67\6e\61\73"
-    "\5f\41\6c\69\67\6e\6f\66\5f\47\65\6e\65\72\69\63\74\72\75\65\00\00\00\00\66\61\6c\73\65\00\00\00\6e\75\6c\6c\70\74\72\00"
-  )
-
-  ;; A 64-slot open-addressed hash at $mem.cHash - the chosen ASCII hash has at
-  ;; most one probe for a member; misses are explicitly bounded by the largest
-  ;; occupied run (11 slots including its terminating empty slot).
-  (data (i32.const $mem.cHash)
-    "\00\05\06\00\0b\1e\04\00\00\00\00\12\26\2b\00\1b\0c\1d\08\2c\0d\0f\00\14\00\00\00\23\07\09\00\00"
-    "\03\24\0e\16\20\00\00\18\00\19\29\00\1f\28\11\1a\00\10\1c\22\02\17\25\0a\13\15\01\00\27\21\2a\00"
-  )
-
-  (func $cWord (param $lhs i32) (param $rhs i32) (result i32)
-    (local $n i32)
-    (local $hash i32)
-    (local $word i32)
-    (local $probes i32)
-    (local $packed i64)
-    (local $mask i64)
-    (local.set $n (i32.sub (local.get $rhs) (local.get $lhs)))
-    (if (i32.gt_u (i32.sub (local.get $n) (i32.const 2)) (i32.const 6))
-      (then (return (enum.get $CWord.none))))
-    (if (i32.eq (local.get $n) (i32.const 8))
-      (then (local.set $mask (i64.const -1)))
-      (else
-        (local.set $mask (i64.sub
-          (i64.shl (i64.const 1) (i64.extend_i32_u (i32.shl (local.get $n) (i32.const 3))))
-          (i64.const 1)))))
-    (local.set $packed (i64.and (i64.load (local.get $lhs)) (local.get $mask)))
-    (local.set $hash
-      (i32.and
-        (i32.add
-          (i32.add
-            (local.get $n)
-            (i32.shl (i32.load8_u (local.get $lhs)) (i32.const 1)))
-          (i32.add
-            (i32.mul (i32.load8_u (i32.sub (local.get $rhs) (i32.const 1))) (i32.const 11))
-            (i32.mul (i32.load8_u offset=1 (local.get $lhs)) (i32.const 5))))
-        (i32.const 63)))
-    (local.set $probes (i32.const 11))
-    (loop $probe
-      (local.set $word (i32.load8_u (i32.add (i32.const $mem.cHash) (local.get $hash))))
-      (if (i32.eqz (local.get $word))
-        (then (return (enum.get $CWord.none))))
-      (if (i64.eq
-            (local.get $packed)
-            (i64.load (i32.add (i32.const $mem.cWords) (i32.shl (local.get $word) (i32.const 3)))))
-        (then (return (local.get $word))))
-      (local.set $hash (i32.and (i32.add (local.get $hash) (i32.const 1)) (i32.const 63)))
-      (local.set $probes (i32.sub (local.get $probes) (i32.const 1)))
-      (br_if $probe (local.get $probes)))
-    (enum.get $CWord.none))
-
-  ;; Modern C spellings the eight-byte word table cannot hold - the longer
-  ;; C11 `_` keywords and the C23 lowercase forms - matched by exact compare.
-  ;; The length gate keeps the cost for ordinary names to one subtraction;
-  ;; the wide loads stay inside the input slack. Returns none for a miss.
-  (func $cLongWordHl (param $lhs i32) (param $rhs i32) (result i32)
-    (local $n i32)
-    (local $w i64)
-    (local.set $n (i32.sub (local.get $rhs) (local.get $lhs)))
-    (if (i32.gt_u (i32.sub (local.get $n) (i32.const 6)) (i32.const 8))
-      (then (return (enum.get $Token.none))))
-    (local.set $w (i64.load (local.get $lhs)))
-    (if (i32.eq (local.get $n) (i32.const 6))
-      (then
-        (if (i64.eq
-              (i64.and (local.get $w) (i64.const 0x0000ffffffffffff))
-              (i64.const "typeof"))
-          (then (return (enum.get $Token.keyword))))))
-    (if (i32.eq (local.get $n) (i32.const 7))
-      (then
-        (local.set $w (i64.and (local.get $w) (i64.const 0x00ffffffffffffff)))
-        (if (i32.or
-              (i64.eq (local.get $w) (i64.const "alignas"))
-              (i64.eq (local.get $w) (i64.const "alignof")))
-          (then (return (enum.get $Token.keyword))))))
-    (if (i32.eq (local.get $n) (i32.const 9))
-      (then
-        (if (i32.and
-              (i64.eq (local.get $w) (i64.const "_Noretur"))
-              (i32.eq (i32.load8_u offset=8 (local.get $lhs)) (i32.const "n")))
-          (then (return (enum.get $Token.keyword.declaration))))
-        (if (i32.and
-              (i64.eq (local.get $w) (i64.const "constexp"))
-              (i32.eq (i32.load8_u offset=8 (local.get $lhs)) (i32.const "r")))
-          (then (return (enum.get $Token.keyword))))))
-    (if (i32.eq (local.get $n) (i32.const 10))
-      (then
-        (if (i32.and
-              (i64.eq (local.get $w) (i64.const "_Imagina"))
-              (i32.eq (i32.load16_u offset=8 (local.get $lhs)) (i32.const "ry")))
-          (then (return (enum.get $Token.type.builtin))))))
-    (if (i32.eq (local.get $n) (i32.const 12))
-      (then
-        (if (i32.and
-              (i64.eq (local.get $w) (i64.const "thread_l"))
-              (i32.eq (i32.load offset=8 (local.get $lhs)) (i32.const "ocal")))
-          (then (return (enum.get $Token.keyword.declaration))))))
-    (if (i32.eq (local.get $n) (i32.const 13))
-      (then
-        (if (i32.and
-              (i64.eq (local.get $w) (i64.const "_Thread_"))
-              (i64.eq (i64.load offset=5 (local.get $lhs)) (i64.const "ad_local")))
-          (then (return (enum.get $Token.keyword.declaration))))
-        (if (i32.and
-              (i64.eq (local.get $w) (i64.const "static_a"))
-              (i64.eq (i64.load offset=5 (local.get $lhs)) (i64.const "c_assert")))
-          (then (return (enum.get $Token.keyword))))
-        (if (i32.and
-              (i64.eq (local.get $w) (i64.const "typeof_u"))
-              (i64.eq (i64.load offset=5 (local.get $lhs)) (i64.const "f_unqual")))
-          (then (return (enum.get $Token.keyword))))))
-    (if (i32.eq (local.get $n) (i32.const 14))
-      (then
-        (if (i32.and
-              (i64.eq (local.get $w) (i64.const "_Static_"))
-              (i64.eq (i64.load offset=6 (local.get $lhs)) (i64.const "c_assert")))
-          (then (return (enum.get $Token.keyword))))))
-    (enum.get $Token.none))
+      "_Bool" "double" "signed" "struct" "unsigned" "_Complex" "_Imaginary")
+    (group ;; 4: qualifiers and operators
+      "const" "sizeof" "typeof" "alignas" "alignof" "restrict" "volatile"
+      "_Atomic" "_Alignas" "_Alignof" "_Generic" "constexpr" "static_assert"
+      "typeof_unqual" "_Static_assert")
+    (group "true" "false") ;; 5: booleans
+    (group "nullptr"))     ;; 6: built-in constant
 
   (func $cWordHl (param $lhs i32) (param $rhs i32) (result i32)
     (local $p i32)
-    (local $word i32)
-    (local.set $word (call $cWord (local.get $lhs) (local.get $rhs)))
-    (if (bitset.get $CWordBits.control (local.get $word))
+    (local $g i32)
+    ;; the input sentinel slack keeps the unaligned i64 load safe
+    (if (i32.and
+          (i32.eq (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 8))
+          (i64.eq (i64.load (local.get $lhs)) (i64.const "continue")))
       (then (return (enum.get $Token.keyword.control))))
-    (if (bitset.get $CWordBits.declaration (local.get $word))
+    (local.set $g (keyword-table.get $cWords (local.get $lhs) (local.get $rhs)))
+    (if (i32.eq (local.get $g) (i32.const 1))
+      (then (return (enum.get $Token.keyword.control))))
+    (if (i32.eq (local.get $g) (i32.const 2))
       (then (return (enum.get $Token.keyword.declaration))))
-    (if (bitset.get $CWordBits.builtin (local.get $word))
+    (if (i32.eq (local.get $g) (i32.const 3))
       (then (return (enum.get $Token.type.builtin))))
-    (if (bitset.get $CWordBits.keyword (local.get $word))
+    (if (i32.eq (local.get $g) (i32.const 4))
       (then (return (enum.get $Token.keyword))))
-    (if (bitset.get $CWordBits.boolean (local.get $word))
+    (if (i32.eq (local.get $g) (i32.const 5))
       (then (return (enum.get $Token.boolean))))
-    (if (bitset.get $CWordBits.constantBuiltin (local.get $word))
+    (if (i32.eq (local.get $g) (i32.const 6))
       (then (return (enum.get $Token.constant.builtin))))
-    (local.set $word (call $cLongWordHl (local.get $lhs) (local.get $rhs)))
-    (if (local.get $word) (then (return (local.get $word))))
 
     (if (call $lexIsConstCase (local.get $lhs) (local.get $rhs))
       (then (return (enum.get $Token.constant))))

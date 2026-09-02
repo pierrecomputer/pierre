@@ -78,11 +78,8 @@
     "foreground"
   )
 
-  ;; CSS-variable suffix bytes and [ptr:u16, length:u8] records.
-  (css-variable-table
-    $Token
-    $mem.tokenCssStrings $mem.tokenCssTable
-    $mem.tokenCssTable $mem.tokenCssTableEnd)
+  ;; [ptr:u16, length:u8] records over the kebab-case CSS-variable suffixes
+  (css-variable-table $Token $mem.tokenCssTable $mem.tokenCssTable+912)
 
   ;; theme record for a $Token member: [r][g][b][a][style], where style
   ;; packs italic in bit 4 and font-weight/100 in the low nibble;

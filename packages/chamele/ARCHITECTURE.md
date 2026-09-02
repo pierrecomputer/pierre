@@ -20,12 +20,12 @@ src/scan.wat        read cursors ($ptr/$end/$eof) and SIMD scans
 src/emit.wat        HTML/token-record emitter and driver prologue/epilogue
 src/common.wat      shared ASCII, identifier, number, string, and comment scans
 src/sig.wat         shared parameter-list machine (variable.parameter)
-src/langs/*.wat     32 built-in language modes
+src/langs/*.wat     49 built-in language modes
 src/live.wat        incremental-tokenizer core: heap, line table, state
                     interning, per-line driver, edit splicing, compaction
 src/chamele.wat     memory, $Language enum, imports, and dispatch
 lib/index.ts        public types and the export barrel
-lib/highlighter.ts  WasmHighlighter, codeToHtml/codeToTokens/codeToHast,
+lib/highlighter.ts  ChameleHighlighter, codeToHtml/codeToTokens/codeToHast,
                     language aliases, theme cache, StreamTokenizer
 lib/live.ts         LiveTokenizer glue: edit validation, WTF-8 encoding,
                     deferred slicing, themed reads over the live exports
@@ -80,18 +80,19 @@ before preprocessing, so editor warnings are expected.
   [6:10)          output start (u32 LE)
   [10:14)         output length (u32 LE)
   [14:64)         reserved space
-  [64:4800)       emitter, token, and lexer tables
-  [4800:5824)     shared JSON/TOML/ECMAScript-template stack
-  [5824:6848)     ECMAScript bracket-kind stack
-  [6848:7872)     theme table written by JavaScript
-  [7872:11968)    JSX-mode stack
-  [11968:12000)   streaming delimiter
-  [12000:16000)   streaming lexer checkpoints
-  [16000:26752)   keyword-table region (see src/memory.wat)
-  [26752:31570)   span-open fragment cache (HTML modes)
-  [31584:31712)   live free-list heads
-  [31744:34304)   zig keyword table
-  [34304:65536)   free
+  [64:2000)       theme table written by JavaScript, then the CSS-variable name table
+  [2000:6976)     emitter HTML fragments and span-open fragment cache
+  [6976:7008)     streaming delimiter
+  [7008:11008)    streaming lexer checkpoints
+  [11008:35872)   word tables: ECMAScript, C, and one per language (see src/memory.wat)
+  [35872:36928)   markdown fence aliases
+  [36928:37952)   JSON nesting stack
+  [37952:38976)   TOML nesting stack
+  [38976:39120)   ECMAScript token-class bitset
+  [39120:40144)   ECMAScript template stack
+  [40144:41168)   ECMAScript bracket-kind stack
+  [41168:45264)   JSX-mode stack
+  [45264:65536)   free
 [] pages 2..N     (text buffer)
   [65536:EOF)     input, NUL sentinel, then at least 16 bytes of slack
   [(EOF+47)&~15:) output HTML or token records; $ensureCap grows memory
@@ -124,7 +125,7 @@ Formula: `(EOF + 47) & ~15`
 longest dot-boundary prefix in `theme.style.syntax` (`function.method` →
 `function`).
 
-Each token gets a five-byte record at 6848: `r g b a style`. Colors must be
+Each token gets a five-byte record at 64: `r g b a style`. Colors must be
 `#rrggbb` or `#rrggbbaa`; omitted alpha is `0xff`. Style bit 4 means italic, and
 the low nibble holds `font_weight / 100` (0 means default). Entries without a
 color remain zero, including their font settings.
@@ -217,8 +218,9 @@ A `LiveTokenizer` instance is a dedicated Wasm instance whose text pages hold
 the whole editor document instead of a one-shot input buffer:
 
 ```
-[] page 1                     control, static data, live free-list heads
+[] page 1                     control, static data, lexer scratch
 [] [65536:81920)              line-change list: count, then 16-byte entries
+[] [81920:82048)              size-class free-list heads
 [] [86016:heap ceiling)       size-class heap: document text blocks, per-line
                               token blocks, interned state blobs, line table
 [] [heap ceiling:memory end)  transient per-line scratch: the line's bytes,
@@ -231,13 +233,14 @@ then `$streamChunk` runs the ordinary mode-3 pipeline. Output matches
 `StreamTokenizer` fed one line per chunk.
 
 Before and after each line the driver saves streaming state: cross-chunk
-globals, the 32-byte stream delimiter, the live prefixes of the
-shared/bracket/jsx stacks, and the used lexer checkpoint region. Blobs are
-interned (FNV-1a 64, then exact bytes) into refcounted ids. Equal ids mean
-convergence. Trailing zeros are trimmed; the checkpoint region comes last so the
-trim drops it entirely for lexers that keep their state in globals and stacks
-(the ECMAScript family). If outgoing bytes match the incoming blob, the same id
-is reused without hashing.
+globals, the 32-byte stream delimiter, the live prefixes of the language's
+nesting stack (JSON, TOML, or the ECMAScript template stack) and of the bracket
+and JSX stacks, and the used lexer checkpoint region. Blobs are interned (FNV-1a
+64, then exact bytes) into refcounted ids. Equal ids mean convergence. Trailing
+zeros are trimmed; the checkpoint region comes last so the trim drops it
+entirely for lexers that keep their state in globals and stacks (the ECMAScript
+family). If outgoing bytes match the incoming blob, the same id is reused
+without hashing.
 
 The line table is a gap buffer of 32-byte descriptors: text pointer/length,
 UTF-16 length, token block, outgoing state id, terminator and format flags.

@@ -35,10 +35,10 @@
   (global $streamHl (mut i32) (i32.const 0))
   (global $streamRegionKind (mut i32) (i32.const 0))
   (global $streamRegionStarted (mut i32) (i32.const 0))
-  ;; live bytes in the shared stack for lexers that keep their stack depth in
-  ;; a local (json/toml publish it at exit); the live tokenizer captures the
-  ;; active stack prefix through it
-  (global $liveSharedBytes (mut i32) (i32.const 0))
+  ;; live bytes in the json or toml stack, which those lexers keep as a local
+  ;; depth and publish at exit; the live tokenizer captures the active stack
+  ;; prefix through it
+  (global $liveStackBytes (mut i32) (i32.const 0))
 
   ;; write one byte as two lowercase hex digits
   (func $hexByte (param $b i32)
@@ -127,7 +127,7 @@
     (global.set $spanHl (i32.const -1)))
 
   ;; write `<span style="...">` for $hl at $out. The bytes come from a per-run
-  ;; cache at $mem.spanCache (73 slots of [len:u8, fragment:u8*65]) rendered on
+  ;; cache at $mem.emitterSpanCache (73 slots of [len:u8, fragment:u8*65]) rendered on
   ;; first use, so a style's colors are hex-formatted once per run, not per
   ;; span. $hlBegin clears the cache; the theme table is fixed within a run.
   (func $emitSpanOpen (param $hl i32)
@@ -136,7 +136,7 @@
     (local $save i32)
     (local $rec i32)
     (local.set $slot
-      (i32.add (i32.const $mem.spanCache)
+      (i32.add (i32.const $mem.emitterSpanCache)
         (i32.mul (local.get $hl) (i32.const 66))))
     (local.set $len (i32.load8_u (local.get $slot)))
     (if (i32.eqz (local.get $len))
@@ -512,7 +512,7 @@
       (then
         ;; invalidate the span-open fragment cache: the theme table may have
         ;; changed since the previous run (73 slots x 66 bytes)
-        (memory.fill (i32.const $mem.spanCache) (i32.const 0) (i32.const 4818))
+        (memory.fill (i32.const $mem.emitterSpanCache) (i32.const 0) (i32.const 4818))
         (call $prologue))))
 
   ;; driver epilogue: emit the wrapper closing and publish the result

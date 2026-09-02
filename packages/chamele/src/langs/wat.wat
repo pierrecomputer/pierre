@@ -2,7 +2,7 @@
   (import "../common.wat")
 
   ;; group order is the dispatch order in $watWordHl below
-  (keyword-table $watWords $mem.watWords $mem.watWords+768 16 64
+  (keyword-table $watWords $mem.watWords $mem.watWords+384 16 64
     (group ;; 1: value types
       "i32" "i64" "f32" "f64" "v128")
     (group ;; 2: structured control

@@ -107,8 +107,6 @@ const LANG_ALIASES: Record<string, Lang> = {
   ansi: 'text',
   'git-commit': 'diff',
   'git-rebase': 'diff',
-  'objective-c': 'c',
-  'objective-cpp': 'cpp',
   riscv: 'asm',
   shellscript: 'bash',
   shellsession: 'bash',

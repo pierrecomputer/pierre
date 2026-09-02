@@ -339,7 +339,7 @@
     (i32.const 0))
 
   ;; group order is the dispatch order in $cppWordHl below
-  (keyword-table $cppWords $mem.cppWords $mem.cppWords+1536 64 256
+  (keyword-table $cppWords $mem.cppWords $mem.cppWords+1280 64 256
     (group ;; 1: control - `continue` lives in $cppWordHl instead
       "if" "do" "for" "try" "else" "case" "goto" "while" "break" "catch"
       "throw" "switch" "return" "default" "co_await" "co_yield"

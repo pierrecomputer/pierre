@@ -113,8 +113,8 @@
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
         (call $emitTok (enum.get $Token.none) (local.get $lhs) (global.get $ptr))
         (br $next)))
-    ;; publish the active shared-stack prefix for live state capture
-    (global.set $liveSharedBytes (local.get $depth)))
+    ;; publish the active stack prefix for live state capture
+    (global.set $liveStackBytes (local.get $depth)))
 
   (func $jsonWordHl (param $lhs i32) (param $rhs i32) (result i32)
     (local $len i32)

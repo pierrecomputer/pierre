@@ -143,7 +143,7 @@
   ;; words can never share a table and `comptime` is matched directly. The
   ;; one-byte names `c` and `_` are below the table's minimum length and are
   ;; matched directly too.
-  (keyword-table $zigWords $mem.zigKeywords $mem.zigKeywordsEnd 32 128
+  (keyword-table $zigWords $mem.zigWords $mem.zigWords+896 32 128
     (group "fn") ;; 1: declaration, next name is a function
     (group "const" "var") ;; 2: declaration, next name is a variable
     (group "struct" "enum" "union" "opaque") ;; 3: declaration

@@ -80,27 +80,41 @@ export function transformWat(
     '$hlAstro',
     '$hlBash',
     '$hlC',
+    '$hlC3',
     '$hlCpp',
-    '$hlCss',
+    '$hlCsharp',
+    '$hlCssImpl',
+    '$hlDart',
     '$hlDiff',
+    '$hlElixir',
     '$hlGlsl',
     '$hlGo',
     '$hlHaskell',
+    '$hlHlsl',
     '$hlHtml',
+    '$hlJava',
     '$hlJson',
     '$hlKotlin',
+    '$hlLisp',
     '$hlLua',
     '$hlMarkdown',
     '$hlMdx',
+    '$hlObjc',
+    '$hlOcaml',
+    '$hlPerl',
     '$hlPhp',
+    '$hlProto',
     '$hlPython',
+    '$hlRuby',
     '$hlRust',
     '$hlSql',
     '$hlSvelte',
     '$hlSwift',
+    '$hlTerraform',
     '$hlToml',
     '$hlVue',
     '$hlWat',
+    '$hlWgsl',
     '$hlXml',
     '$hlYaml',
     '$hlZig',
@@ -194,24 +208,24 @@ export function transformWat(
   if (stray !== null)
     throw new Error(`Const '${stray[0]}' is undefined in ${url.pathname}`);
 
-  // (css-variable-table $Enum <stringBase> <stringEnd> <tableBase> <tableEnd>)
-  // emits kebab-case token suffixes and [ptr:u16, length:u8] lookup records.
+  // (css-variable-table $Enum <base> <end>) emits [ptr:u16, length:u8]
+  // lookup records, one per enum member, at <base>, followed by the blob of
+  // kebab-case token suffixes the records point into; the whole must fit
+  // below <end>.
   code = replaceForm(code, 'css-variable-table', (inner) => {
-    const m = inner.match(/^\s*(\$\w+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s*$/);
+    const m = inner.match(/^\s*(\$\w+)\s+(\d+)\s+(\d+)\s*$/);
     if (m === null)
       throw new Error(`Malformed css-variable-table in ${url.pathname}`);
-    const [, enumKey, stringBaseStr, stringEndStr, tableBaseStr, tableEndStr] =
-      m;
+    const [, enumKey, baseStr, endStr] = m;
     const members = enumMap.get(enumKey);
     if (members === undefined)
       throw new Error(
         `css-variable-table references unknown enum '${enumKey}' in ${url.pathname}`
       );
-    const stringBase = Number(stringBaseStr);
-    const stringEnd = Number(stringEndStr);
-    const tableBase = Number(tableBaseStr);
-    const tableEnd = Number(tableEndStr);
+    const tableBase = Number(baseStr);
+    const rangeEnd = Number(endStr);
     const table = new Uint8Array(Object.keys(members).length * 3);
+    const stringBase = tableBase + table.length;
     const suffixes: [string, number][] = Object.entries(members).map(
       ([name, i]) => [name === 'none' ? '' : name.replace(/[._]/g, '-'), i]
     );
@@ -247,18 +261,15 @@ export function transformWat(
       table[i * 3 + 1] = ptr >> 8;
       table[i * 3 + 2] = suffix.length;
     }
-    if (
-      stringBase + blob.length > stringEnd ||
-      tableBase + table.length > tableEnd
-    ) {
+    if (stringBase + blob.length > rangeEnd) {
       throw new Error(
-        `css-variable-table exceeds its memory range in ${url.pathname}`
+        `css-variable-table needs ${stringBase + blob.length - tableBase} bytes, range holds ${rangeEnd - tableBase} in ${url.pathname}`
       );
     }
     const data = [...table]
       .map((b) => '\\' + b.toString(16).padStart(2, '0'))
       .join('');
-    return `(data (i32.const ${stringBase}) "${blob}")\n  (data (i32.const ${tableBase}) "${data}")`;
+    return `(data (i32.const ${tableBase}) "${data}")\n  (data (i32.const ${stringBase}) "${blob}")`;
   });
 
   // `(bitset $Name $Enum <base> (pred "member" ...) ...)` emits one byte per
@@ -336,12 +347,12 @@ export function transformWat(
       [];
     let group = 0;
     for (const [, list] of inner.matchAll(
-      /\(group((?:\s+"[\w.@#!]+")+)\s*\)/g
+      /\(group((?:\s+"[\w.@#!-]+")+)\s*\)/g
     )) {
       group += 1;
       if (group > 255)
         throw new Error(`keyword-table ${name} has more than 255 groups`);
-      for (const q of list.match(/"[\w.@#!]+"/g) ?? []) {
+      for (const q of list.match(/"[\w.@#!-]+"/g) ?? []) {
         const word = JSON.parse(q);
         if (word.length < 2 || word.length > 31)
           throw new Error(

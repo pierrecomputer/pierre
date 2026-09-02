@@ -23,7 +23,7 @@ import {
 const enc = new TextEncoder();
 const dec = new TextDecoder();
 const pageSize = 65536;
-const themePtr = 6848;
+const themePtr = 64; // $mem.themeTable in src/memory.wat
 const themeBytes = 1024;
 const themeBuildCache = new WeakMap<Theme, Uint8Array>();
 
@@ -100,6 +100,49 @@ const LANGS: Record<string, number> = {
   ts: 31,
   typescript: 31,
   tsx: 32,
+  c3: 33,
+  'c#': 34,
+  cs: 34,
+  csharp: 34,
+  dart: 35,
+  elixir: 36,
+  ex: 36,
+  exs: 36,
+  hlsl: 37,
+  java: 38,
+  less: 39,
+  cl: 40,
+  el: 40,
+  elisp: 40,
+  'emacs-lisp': 40,
+  lisp: 40,
+  lsp: 40,
+  scheme: 40,
+  scm: 40,
+  m: 41,
+  mm: 41,
+  objc: 41,
+  objcpp: 41,
+  'objective-c': 41,
+  'objective-cpp': 41,
+  objectivec: 41,
+  ml: 42,
+  mli: 42,
+  ocaml: 42,
+  perl: 43,
+  pl: 43,
+  pm: 43,
+  proto: 44,
+  protobuf: 44,
+  rb: 45,
+  ruby: 45,
+  sass: 46,
+  scss: 47,
+  hcl: 48,
+  terraform: 48,
+  tf: 48,
+  tfvars: 48,
+  wgsl: 49,
 };
 
 /** Resolve the Wasm language ID for a name or alias, or throw. */
