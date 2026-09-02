@@ -39,6 +39,11 @@ interface PredictionFixture {
   container: HTMLElement;
   content: HTMLElement;
   editor: Editor<EditorType, undefined, undefined>;
+  replaceExternalDocument(options: {
+    contents: string;
+    name?: string;
+    oldContents?: string;
+  }): void;
 }
 
 interface Deferred<T> {
@@ -85,6 +90,7 @@ async function createPredictionFixture({
     editorOptions
   );
   let cleanUpSurface: () => void;
+  let replaceExternalDocument: PredictionFixture['replaceExternalDocument'];
 
   if (surface === 'File') {
     const file = new File<undefined>({
@@ -99,20 +105,47 @@ async function createPredictionFixture({
     });
     editor.edit(file);
     cleanUpSurface = () => file.cleanUp();
+    replaceExternalDocument = (replacement) => {
+      file.render({
+        file: {
+          name: replacement.name ?? name,
+          contents: replacement.contents,
+        },
+        fileContainer: container,
+        forceRender: true,
+        renderRange,
+      });
+    };
   } else {
+    const diffOldContents = contents.replaceAll('value', 'previous');
     const fileDiff = new FileDiff<undefined>({
       disableFileHeader: true,
       diffStyle: 'split',
       theme: DEFAULT_THEMES,
     });
     fileDiff.render({
-      oldFile: { name, contents: contents.replaceAll('value', 'previous') },
+      oldFile: { name, contents: diffOldContents },
       newFile: { name, contents },
       fileContainer: container,
       forceRender: true,
     });
     editor.edit(fileDiff);
     cleanUpSurface = () => fileDiff.cleanUp();
+    replaceExternalDocument = (replacement) => {
+      const replacementName = replacement.name ?? name;
+      fileDiff.render({
+        oldFile: {
+          name: replacementName,
+          contents: replacement.oldContents ?? diffOldContents,
+        },
+        newFile: {
+          name: replacementName,
+          contents: replacement.contents,
+        },
+        fileContainer: container,
+        forceRender: true,
+      });
+    };
   }
 
   await waitFor(() => findEditableContent(container) !== undefined, {
@@ -133,6 +166,7 @@ async function createPredictionFixture({
     container,
     content,
     editor,
+    replaceExternalDocument,
   };
 }
 
@@ -1390,6 +1424,65 @@ describe('Editor edit prediction', () => {
       await fixture.cleanup();
     }
   });
+
+  test.each([
+    {
+      name: 'the File name changes',
+      replacement: {
+        contents: 'fresh',
+        name: 'src/replacement.ts',
+      },
+      surface: 'File',
+    },
+    {
+      name: 'the FileDiff base changes',
+      replacement: {
+        contents: 'fresh',
+        name: undefined,
+        oldContents: 'unrelated base',
+      },
+      surface: 'FileDiff',
+    },
+  ] as const)(
+    'clears prediction history when $name',
+    async ({ replacement, surface }) => {
+      const calls: PredictionCall[] = [];
+      const provider: EditPredictProvider = {
+        predict(request, context) {
+          calls.push({ context, request });
+          return Promise.resolve({
+            edits: [],
+            newCursor: { line: 0, character: 0 },
+          });
+        },
+      };
+      const fixture = await createPredictionFixture({
+        contents: 'value',
+        editorOptions: { editPrediction: { provider } },
+        surface,
+      });
+
+      try {
+        setCaret(fixture.editor, 0, 5);
+        dispatchTextInput(fixture.content, '!');
+        await expectCallCount(calls, 1);
+        expect(calls[0].request.editHistory).toHaveLength(1);
+        expect(calls[0].request.editHistory[0]?.diff).toContain('+value!');
+
+        fixture.replaceExternalDocument(replacement);
+        await waitFor(() => fixture.editor.getText() === replacement.contents, {
+          timeout: PREDICT_TIMEOUT,
+        });
+
+        setCaret(fixture.editor, 0, replacement.contents.length);
+        await expectCallCount(calls, 2);
+        expect(calls[1].request.path).toBe(replacement.name ?? FILE_NAME);
+        expect(calls[1].request.editHistory).toHaveLength(0);
+      } finally {
+        await fixture.cleanup();
+      }
+    }
+  );
 
   test('keeps subtle predictions hidden and unavailable before reveal', async () => {
     const calls: PredictionCall[] = [];

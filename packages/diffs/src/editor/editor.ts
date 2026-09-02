@@ -1423,6 +1423,8 @@ export class Editor<
           editSession.document.languageId !== languageId)) ||
       resetForExternalDocument;
     if (shouldRebuildDocument) {
+      this.#cancelEditPrediction(true);
+      this.#editPredictionHistory = [];
       this.#invalidateOnAttach();
       const { name, lang } = fileOrDiff;
       let textDocument =
