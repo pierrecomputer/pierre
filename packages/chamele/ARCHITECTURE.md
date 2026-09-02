@@ -87,9 +87,10 @@ before preprocessing, so editor warnings are expected.
   [7872:11968)    JSX-mode stack
   [11968:12000)   streaming delimiter
   [12000:16000)   streaming lexer checkpoints
-  [16000:60000)   keyword-table region (see src/memory.wat)
-  [60000:64818)   span-open fragment cache (HTML modes)
-  [64818:65536)   free
+  [16000:26752)   keyword-table region (see src/memory.wat)
+  [26752:31570)   span-open fragment cache (HTML modes)
+  [31584:31712)   live free-list heads
+  [31712:65536)   free
 [] pages 2..N     (text buffer)
   [65536:EOF)     input, NUL sentinel, then at least 16 bytes of slack
   [(EOF+47)&~15:) output HTML or token records; $ensureCap grows memory
@@ -232,7 +233,9 @@ the cross-chunk globals, the 32-byte stream delimiter, the whole used lexer
 checkpoint region, and the live prefixes of the shared/bracket/jsx stacks. That
 image is a pure function of the incoming state and the line bytes, so blobs are
 interned (FNV-1a 64 then exact bytes) into refcounted ids and exact id equality
-is a sound convergence test.
+is a sound convergence test. Blobs are stored with trailing zeros trimmed — most
+of the image is idle checkpoint space — and a line whose outgoing bytes equal
+the incoming blob reuses its id without hashing.
 
 The line table is a gap buffer of 32-byte descriptors (text pointer/length,
 UTF-16 length, token block, outgoing state id, terminator and format flags).

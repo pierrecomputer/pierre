@@ -16,9 +16,10 @@
       [7872:11968)    JSX-mode stack
       [11968:12000)   streaming delimiter
       [12000:16000)   streaming lexer checkpoints
-      [16000:60000)   keyword-table region (see src/memory.wat)
-      [60000:64818)   span-open fragment cache (HTML modes)
-      [64818:65536)   free
+      [16000:26752)   keyword-table region (see src/memory.wat)
+      [26752:31570)   span-open fragment cache (HTML modes)
+      [31584:31712)   live free-list heads
+      [31712:65536)   free
     [] pages 2..N     (text buffer)
       [65536:EOF)     input, NUL sentinel, then at least 16 bytes of slack
       [(EOF+47)&~15:) output HTML bytes or (end:u32, hl:u32) token records;
@@ -96,79 +97,22 @@
     "tsx"
   )
 
+  ;; language dispatch table, one entry per $Language member in enum order
+  (table $hlDispatch funcref
+    (elem
+      $hlPlain $hlAsm $hlAstro $hlBash $hlC $hlCpp $hlCss $hlDiff $hlGlsl
+      $hlGo $hlHaskell $hlHtml $hlJson $hlKotlin $hlLua $hlMarkdown $hlMdx
+      $hlPhp $hlPython $hlRust $hlSql $hlSvelte $hlSwift $hlToml $hlVue
+      $hlWat $hlXml $hlYaml $hlZig $hlJs $hlJsx $hlTs $hlTsx))
+
+  ;; plain text: one unstyled token covering the whole input
+  (func $hlPlain
+    (call $emitTok (enum.get $Token.none) (global.get $ptr) (global.get $end))
+    (global.set $ptr (global.get $end)))
+
+  ;; an out-of-range id traps on the table bound, like the JS-side check
   (func $highlightLang (param $lang i32)
-    (block $lexDone
-      ;; plain text: one unstyled token covering the whole input
-      (if (i32.eq (local.get $lang) (enum.get $Language.plain))
-        (then
-          (call $emitTok (enum.get $Token.none) (global.get $ptr) (global.get $end))
-          (global.set $ptr (global.get $end))
-          (br $lexDone)))
-      (if (i32.eq (local.get $lang) (enum.get $Language.js))
-        (then (call $hlJs) (br $lexDone)))
-      (if (i32.eq (local.get $lang) (enum.get $Language.jsx))
-        (then (call $hlJsx) (br $lexDone)))
-      (if (i32.eq (local.get $lang) (enum.get $Language.ts))
-        (then (call $hlTs) (br $lexDone)))
-      (if (i32.eq (local.get $lang) (enum.get $Language.tsx))
-        (then (call $hlTsx) (br $lexDone)))
-      (if (i32.eq (local.get $lang) (enum.get $Language.html))
-        (then (call $hlHtml) (br $lexDone)))
-      (if (i32.eq (local.get $lang) (enum.get $Language.css))
-        (then (call $hlCss) (br $lexDone)))
-      (if (i32.eq (local.get $lang) (enum.get $Language.json))
-        (then (call $hlJson) (br $lexDone)))
-      (if (i32.eq (local.get $lang) (enum.get $Language.bash))
-        (then (call $hlBash) (br $lexDone)))
-      (if (i32.eq (local.get $lang) (enum.get $Language.c))
-        (then (call $hlC) (br $lexDone)))
-      (if (i32.eq (local.get $lang) (enum.get $Language.cpp))
-        (then (call $hlCpp) (br $lexDone)))
-      (if (i32.eq (local.get $lang) (enum.get $Language.go))
-        (then (call $hlGo) (br $lexDone)))
-      (if (i32.eq (local.get $lang) (enum.get $Language.python))
-        (then (call $hlPython) (br $lexDone)))
-      (if (i32.eq (local.get $lang) (enum.get $Language.rust))
-        (then (call $hlRust) (br $lexDone)))
-      (if (i32.eq (local.get $lang) (enum.get $Language.yaml))
-        (then (call $hlYaml) (br $lexDone)))
-      (if (i32.eq (local.get $lang) (enum.get $Language.php))
-        (then (call $hlPhp) (br $lexDone)))
-      (if (i32.eq (local.get $lang) (enum.get $Language.sql))
-        (then (call $hlSql) (br $lexDone)))
-      (if (i32.eq (local.get $lang) (enum.get $Language.swift))
-        (then (call $hlSwift) (br $lexDone)))
-      (if (i32.eq (local.get $lang) (enum.get $Language.toml))
-        (then (call $hlToml) (br $lexDone)))
-      (if (i32.eq (local.get $lang) (enum.get $Language.haskell))
-        (then (call $hlHaskell) (br $lexDone)))
-      (if (i32.eq (local.get $lang) (enum.get $Language.kotlin))
-        (then (call $hlKotlin) (br $lexDone)))
-      (if (i32.eq (local.get $lang) (enum.get $Language.astro))
-        (then (call $hlAstro) (br $lexDone)))
-      (if (i32.eq (local.get $lang) (enum.get $Language.vue))
-        (then (call $hlVue) (br $lexDone)))
-      (if (i32.eq (local.get $lang) (enum.get $Language.svelte))
-        (then (call $hlSvelte) (br $lexDone)))
-      (if (i32.eq (local.get $lang) (enum.get $Language.xml))
-        (then (call $hlXml) (br $lexDone)))
-      (if (i32.eq (local.get $lang) (enum.get $Language.markdown))
-        (then (call $hlMarkdown) (br $lexDone)))
-      (if (i32.eq (local.get $lang) (enum.get $Language.mdx))
-        (then (call $hlMdx) (br $lexDone)))
-      (if (i32.eq (local.get $lang) (enum.get $Language.asm))
-        (then (call $hlAsm) (br $lexDone)))
-      (if (i32.eq (local.get $lang) (enum.get $Language.wat))
-        (then (call $hlWat) (br $lexDone)))
-      (if (i32.eq (local.get $lang) (enum.get $Language.diff))
-        (then (call $hlDiff) (br $lexDone)))
-      (if (i32.eq (local.get $lang) (enum.get $Language.glsl))
-        (then (call $hlGlsl) (br $lexDone)))
-      (if (i32.eq (local.get $lang) (enum.get $Language.lua))
-        (then (call $hlLua) (br $lexDone)))
-      (if (i32.eq (local.get $lang) (enum.get $Language.zig))
-        (then (call $hlZig) (br $lexDone)))
-      (unreachable)))
+    (call_indirect (local.get $lang)))
 
   (func (export "highlight")
     (global.set $srcBase (i32.const 65536))
@@ -334,24 +278,19 @@
   ;; Shared by highlightStream and the live tokenizer's per-line runs.
   (func $streamChunk (param $lang i32) (param $reset i32)
     (if (i32.eq (local.get $lang) (enum.get $Language.js))
-      (then (call $hlJsStream (local.get $reset)))
-      (else
-        (if (i32.eq (local.get $lang) (enum.get $Language.jsx))
-          (then (call $hlJsxStream (local.get $reset)))
-          (else
-            (if (i32.eq (local.get $lang) (enum.get $Language.ts))
-              (then (call $hlTsStream (local.get $reset)))
-              (else
-                (if (i32.eq (local.get $lang) (enum.get $Language.tsx))
-                  (then (call $hlTsxStream (local.get $reset)))
-                  (else
-                    ;; non-ecma lexers share the parameter-machine globals;
-                    ;; the ecma stream entries reset them in $hlEcmaImpl
-                    (if (local.get $reset) (then (call $sigReset)))
-                    (if (i32.eqz (call $streamResumeCommon))
-                      (then
-                        (if (i32.eqz (call $streamResumeLang (local.get $lang)))
-                          (then (call $highlightLang (local.get $lang)))))))))))))))
+      (then (call $hlJsStream (local.get $reset)) (return)))
+    (if (i32.eq (local.get $lang) (enum.get $Language.jsx))
+      (then (call $hlJsxStream (local.get $reset)) (return)))
+    (if (i32.eq (local.get $lang) (enum.get $Language.ts))
+      (then (call $hlTsStream (local.get $reset)) (return)))
+    (if (i32.eq (local.get $lang) (enum.get $Language.tsx))
+      (then (call $hlTsxStream (local.get $reset)) (return)))
+    ;; non-ecma lexers share the parameter-machine globals; the ecma stream
+    ;; entries reset them in $hlEcmaImpl
+    (if (local.get $reset) (then (call $sigReset)))
+    (if (call $streamResumeCommon) (then (return)))
+    (if (call $streamResumeLang (local.get $lang)) (then (return)))
+    (call $highlightLang (local.get $lang)))
 
   ;; Stream one input chunk through any language while preserving lexer and
   ;; emitter state between calls.

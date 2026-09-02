@@ -350,7 +350,7 @@
     (block $done
       (loop $next
         (local.set $gap (global.get $ptr))
-        (call $lexScanWhitespace)
+        (call $scanWhitespace)
         (call $emitGap (local.get $gap) (global.get $ptr))
         (if (call $bashHasNl (local.get $gap) (global.get $ptr))
           (then (local.set $cmd (i32.const 1))))
@@ -474,7 +474,7 @@
                     (i32.lt_u (global.get $ptr) (global.get $end))
                     (i32.eq (i32.load8_u (global.get $ptr)) (local.get $c))))
               (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))
-            ;; `))` closes the innermost `$((` we counted
+            ;; `))` closes the innermost counted `$((`
             (if (i32.and
                   (i32.and (global.get $bashArith)
                            (i32.eq (local.get $c) (i32.const ")")))

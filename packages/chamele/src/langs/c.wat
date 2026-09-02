@@ -180,7 +180,7 @@
       (loop $next
         ;; whitespace gaps
         (local.set $gap (global.get $ptr))
-        (call $lexScanWhitespace)
+        (call $scanWhitespace)
         (call $emitGap (local.get $gap) (global.get $ptr))
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
         (local.set $lhs (global.get $ptr))

@@ -18,12 +18,12 @@
   (const $mem.tomlStack $mem.sharedStack)
   (const $mem.jsonStack $mem.sharedStack)
   (const $mem.tsxBracketStack 5824)
-  (const $mem.themeTable 6848)
+  (const $mem.themeTable 6848) ;; written by JavaScript (lib/highlighter.ts)
   (const $mem.tsxJsxStack 7872)
   (const $mem.streamDelimiter 11968)
   (const $mem.streamState 12000)
-  ;; keyword-table region [16000:60000); each table's range is enforced by its
-  ;; keyword-table form and the segment-overlap checks in scripts/build.mjs
+  ;; keyword-table region; each table's range is enforced by its keyword-table
+  ;; form and the segment-overlap checks in scripts/build.ts
   (const $mem.goWords 16000)
   (const $mem.cppWords 16512)
   (const $mem.kotlinWords 18048)
@@ -33,15 +33,11 @@
   (const $mem.pyWords 22656)
   (const $mem.hsWords 23936)
   (const $mem.bashWords 24960)
-  (const $mem.sqlWords 25472)
-  (const $mem.luaWords 26752)
-  (const $mem.phpWords 27264)
-  (const $mem.watWords 28032)
-  (const $mem.spanCache 60000)
-  ;; live-tokenizer tables (see src/live.wat): free-list heads in the page-1
-  ;; free region, the change list and heap on the text pages
-  (const $mem.liveFree 64832)
+  (const $mem.luaWords 25472)
+  (const $mem.watWords 25984)
+  (const $mem.spanCache 26752)
+  (const $mem.liveFree 31584)
+  ;; live-tokenizer change list and heap on the text pages (see src/live.wat)
   (const $mem.liveChanges 65536)
-  (const $mem.liveChangesEnd 81920)
   (const $mem.liveHeapBase 86016)
 )

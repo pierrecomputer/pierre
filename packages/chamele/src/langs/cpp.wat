@@ -375,7 +375,7 @@
         ;; Whitespace remains a gap; a physical newline inside it re-arms the
         ;; beginning-of-line flag for directives.
         (local.set $gap (global.get $ptr))
-        (call $lexScanWhitespace)
+        (call $scanWhitespace)
         (if (i32.lt_u
               (call $lexFindEither (local.get $gap) (i32.const 10) (i32.const 13))
               (global.get $ptr))

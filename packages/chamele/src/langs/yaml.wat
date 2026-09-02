@@ -190,7 +190,7 @@
     (block $done
       (loop $next
         (local.set $lhs (global.get $ptr))
-        (call $lexScanWhitespace)
+        (call $scanWhitespace)
         (call $emitGap (local.get $lhs) (global.get $ptr))
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
         (local.set $commentOk (i32.or

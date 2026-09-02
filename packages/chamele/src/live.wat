@@ -217,7 +217,8 @@
     (memory.fill (i32.const $mem.liveFree) (i32.const 0) (i32.const 128)))
 
   ;; A state blob is the byte image of everything the streaming pipeline
-  ;; carries across chunk boundaries. Blob blocks hold
+  ;; carries across chunk boundaries, stored with trailing zeros trimmed
+  ;; (see $lvTrimBlob). Blob blocks hold
   ;; [next, refcount, len, hashLo, hashHi, id] then the bytes. The id table
   ;; maps stable ids to blob pointers; id 0 is the reset state and
   ;; 0xffffffff marks a line whose old state is gone.
@@ -461,7 +462,8 @@
   ;; the 32-byte stream delimiter, the whole used lexer checkpoint region,
   ;; then the live prefixes of the shared, bracket, and jsx stacks. The image
   ;; is a pure function of the incoming state and the line bytes, so exact
-  ;; byte identity is a sound convergence test.
+  ;; byte identity is a sound convergence test. Capture builds the full
+  ;; image; interning and restore work on its zero-trimmed form.
 
   (global $lvLang (mut i32) (i32.const 0))
   (global $lvMachineId (mut i32) (i32.const -1)) ;; state the machine holds now
@@ -542,6 +544,32 @@
     (local.set $p (i32.add (local.get $p) (local.get $brkLen)))
     (memory.copy (local.get $p) (i32.const $mem.tsxJsxStack) (local.get $jsxLen))
     (i32.sub (i32.add (local.get $p) (local.get $jsxLen)) (local.get $dst)))
+
+  ;; Length of the blob at $base without its trailing zero bytes. Most of a
+  ;; captured image is zero (idle checkpoint slices, empty stacks), so blobs
+  ;; store, hash, and compare only the short nonzero prefix. Identity is
+  ;; preserved: the section lengths are derived from the head, so the full
+  ;; image is exactly the trimmed bytes zero-padded, and equal trims imply
+  ;; equal states.
+  (func $lvTrimBlob (param $base i32) (param $len i32) (result i32)
+    (local $p i32)
+    (local.set $p (i32.add (local.get $base) (local.get $len)))
+    ;; drop whole zero 16-byte chunks, then the bytes of the last one
+    (block $chunks
+      (loop $wide
+        (br_if $chunks
+          (i32.lt_u (i32.sub (local.get $p) (local.get $base)) (i32.const 16)))
+        (br_if $chunks
+          (v128.any_true (v128.load (i32.sub (local.get $p) (i32.const 16)))))
+        (local.set $p (i32.sub (local.get $p) (i32.const 16)))
+        (br $wide)))
+    (block $done
+      (loop $byte
+        (br_if $done (i32.le_u (local.get $p) (local.get $base)))
+        (br_if $done (i32.load8_u (i32.sub (local.get $p) (i32.const 1))))
+        (local.set $p (i32.sub (local.get $p) (i32.const 1)))
+        (br $byte)))
+    (i32.sub (local.get $p) (local.get $base)))
 
   (func $lvRestoreBlob (param $src i32)
     (local $p i32)
@@ -744,6 +772,7 @@
     (local $tokPtr i32)
     (local $before i32)
     (local $w i32)
+    (local $node i32)
     (local.set $slot (call $lvSlot (local.get $i)))
     (local.set $flags (i32.load offset=24 (local.get $slot)))
     (local.set $byteLen (i32.load offset=4 (local.get $slot)))
@@ -751,6 +780,24 @@
     (local.set $total (i32.add (local.get $byteLen) (local.get $termBytes)))
     (local.set $inBase (i32.add (global.get $lvHeapCeil) (i32.const 16)))
     (call $lvGrowTo (i32.add (i32.add (local.get $inBase) (local.get $total)) (i32.const 64)))
+    (if (local.get $reset)
+      (then (call $lvResetCaptured))
+      (else
+        (if (i32.ne (global.get $lvMachineId) (global.get $lvIncoming))
+          (then
+            ;; blobs are stored zero-trimmed: rebuild the full image in the
+            ;; scratch area, which the line copy below then overwrites
+            (local.set $node (i32.load (i32.add (global.get $lvIdTab)
+              (i32.shl (global.get $lvIncoming) (i32.const 2)))))
+            (call $lvGrowTo (i32.add (local.get $inBase)
+              (i32.const $mem.streamStateUsed+6400)))
+            (memory.fill (local.get $inBase) (i32.const 0)
+              (i32.const $mem.streamStateUsed+6400))
+            (memory.copy (local.get $inBase)
+              (i32.add (local.get $node) (i32.const 24))
+              (i32.load offset=8 (local.get $node)))
+            (call $lvRestoreBlob (local.get $inBase))))))
+    (global.set $lvMachineId (i32.const -1))
     (memory.copy (local.get $inBase) (i32.load (local.get $slot)) (local.get $byteLen))
     (if (i32.eq (local.get $termBytes) (i32.const 2))
       (then (i32.store16 (i32.add (local.get $inBase) (local.get $byteLen))
@@ -766,15 +813,6 @@
     (global.set $streaming (i32.const 1))
     (global.set $streamReset (local.get $reset))
     (global.set $streamDepth (i32.const 0))
-    (if (local.get $reset)
-      (then (call $lvResetCaptured))
-      (else
-        (if (i32.ne (global.get $lvMachineId) (global.get $lvIncoming))
-          (then (call $lvRestoreBlob (i32.add
-            (i32.load (i32.add (global.get $lvIdTab)
-              (i32.shl (global.get $lvIncoming) (i32.const 2))))
-            (i32.const 24)))))))
-    (global.set $lvMachineId (i32.const -1))
     (call $hlBegin)
     (call $recStreamBegin (local.get $reset))
     (call $streamChunk (global.get $lvLang) (local.get $reset))
@@ -790,13 +828,37 @@
       (i32.const -8)))
     (call $lvGrowTo (i32.add (local.get $blobBase)
       (i32.const $mem.streamStateUsed+6400)))
-    (local.set $blobLen (call $lvCaptureBlob (local.get $blobBase)))
+    (local.set $blobLen (call $lvTrimBlob (local.get $blobBase)
+      (call $lvCaptureBlob (local.get $blobBase))))
     (global.set $lvTransLo (local.get $recStart))
     (global.set $lvTransHi (i32.add (local.get $blobBase) (local.get $blobLen)))
-    (local.set $before (global.get $lvTransLo))
-    (local.set $newId (call $lvIntern (local.get $blobBase) (local.get $blobLen)))
-    (local.set $recStart (i32.add (local.get $recStart)
-      (i32.sub (global.get $lvTransLo) (local.get $before))))
+    ;; the common line leaves the state unchanged: compare against the
+    ;; incoming blob first and skip the hash and bucket walk on a match
+    (if (i32.and
+          (i32.eqz (local.get $reset))
+          (i32.lt_u (global.get $lvIncoming) (global.get $lvIdNext)))
+      (then
+        (local.set $node (i32.load (i32.add (global.get $lvIdTab)
+          (i32.shl (global.get $lvIncoming) (i32.const 2)))))
+        (if (i32.and
+              (i32.eqz (i32.and (local.get $node) (i32.const 1)))
+              (i32.and
+                (i32.ne (local.get $node) (i32.const 0))
+                (i32.eq (i32.load offset=8 (local.get $node)) (local.get $blobLen))))
+          (then
+            (if (call $lvBytesEq
+                  (i32.add (local.get $node) (i32.const 24))
+                  (local.get $blobBase) (local.get $blobLen))
+              (then
+                (i32.store offset=4 (local.get $node)
+                  (i32.add (i32.load offset=4 (local.get $node)) (i32.const 1)))
+                (local.set $newId (global.get $lvIncoming))))))))
+    (if (i32.eqz (local.get $newId))
+      (then
+        (local.set $before (global.get $lvTransLo))
+        (local.set $newId (call $lvIntern (local.get $blobBase) (local.get $blobLen)))
+        (local.set $recStart (i32.add (local.get $recStart)
+          (i32.sub (global.get $lvTransLo) (local.get $before))))))
     (global.set $lvMachineId (local.get $newId))
     ;; parse the line records: count content records, find the utf16 length
     (local.set $recs (local.get $recStart))

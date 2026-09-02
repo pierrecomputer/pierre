@@ -110,7 +110,7 @@
     (block $done
       (loop $next
         (local.set $gap (global.get $ptr))
-        (call $lexScanWhitespace)
+        (call $scanWhitespace)
         ;; the gap crossed a line break when a CR/LF sits before the new $ptr
         (if (i32.lt_u
               (call $lexFindEither (local.get $gap) (i32.const 10) (i32.const 13))

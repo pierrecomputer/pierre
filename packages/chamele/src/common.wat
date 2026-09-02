@@ -35,9 +35,8 @@
   (func $lexIsIdentContinue (param $c i32) (result i32)
     (i32.or (call $lexIsIdentStart (local.get $c)) (call $lexIsDigit (local.get $c))))
 
-  (func $lexScanWhitespace
-    (call $scanWhitespace))
-
+  ;; the default identifier run: `$` is an identifier byte in every language
+  ;; that uses it
   (func $lexScanIdent
     (call $scanIdentRun (i32.const "$")))
 
@@ -573,13 +572,12 @@
     (call $emitTok (enum.get $Token.preproc) (local.get $p) (local.get $rhs))
     (i32.const 1))
 
-  ;; Look a word up in a keyword-table - see scripts/build.mjs - using a
+  ;; Look a word up in a keyword table - see scripts/build.ts - using a
   ;; displacement-based perfect hash over the first two bytes, last byte, and
   ;; length. Returns the word's 1-based group index, or 0 for a miss - one
   ;; probe and one bounded compare, however many words the table holds.
   ;; Callers go through the keyword-table.get form, which fills in the table
-  ;; constants. NOTE: never spell a preprocessor form inside parentheses in a
-  ;; comment; the form matchers do not skip comments.
+  ;; constants.
   (func $lexKeywordLookup
     (param $start i32) (param $end i32) (param $base i32)
     (param $bucketMask i32) (param $slotMask i32) (result i32)

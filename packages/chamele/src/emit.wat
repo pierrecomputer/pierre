@@ -22,7 +22,6 @@
   (global $spanVal (mut i64) (i64.const 0)) ;; style value of the open span, 0 when none
   (global $cssVariables (mut i32) (i32.const 0))
   (global $tokens (mut i32) (i32.const 0))  ;; token-record mode: emit (end:u32, hl:u32) records instead of HTML
-  (global $tokenLines (mut i32) (i32.const 0)) ;; line-record mode: UTF-16 ends plus -1 newline markers
   (global $recByte (mut i32) (i32.const 0))
   (global $recChar (mut i32) (i32.const 0))
   (global $recCarryHl (mut i32) (i32.const -1))
@@ -501,7 +500,6 @@
   (func $hlBegin
     (global.set $cssVariables (i32.eq (i32.load8_u (i32.const 1)) (i32.const 1)))
     (global.set $tokens (i32.ge_u (i32.load8_u (i32.const 1)) (i32.const 2)))
-    (global.set $tokenLines (i32.eq (i32.load8_u (i32.const 1)) (i32.const 3)))
     (global.set $eof (i32.add (global.get $srcBase) (i32.load (i32.const 2))))
     (global.set $end (global.get $eof))
     (global.set $ptr (global.get $srcBase))
@@ -520,6 +518,7 @@
   ;; driver epilogue: emit the wrapper closing and publish the result
   (func $hlEnd
     (if (i32.eqz (global.get $tokens)) (then (call $epilogue)))
-    (if (global.get $tokenLines) (then (call $recLinesPost)))
+    (if (i32.eq (i32.load8_u (i32.const 1)) (i32.const 3))
+      (then (call $recLinesPost)))
     (i32.store (i32.const 10) (i32.sub (global.get $out) (i32.load (i32.const 6)))))
 )
