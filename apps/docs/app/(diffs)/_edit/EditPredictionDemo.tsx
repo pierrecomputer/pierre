@@ -66,6 +66,7 @@ export function EditPredictionDemo({
     null
   );
   const predictionEnabledRef = useRef(false);
+  const restorePredictionAfterSurfaceChangeRef = useRef(false);
   const [attached, setAttached] = useState(false);
   const [authenticating, setAuthenticating] = useState(false);
   const [githubAuthenticated, setGithubAuthenticated] = useState(false);
@@ -162,6 +163,7 @@ export function EditPredictionDemo({
 
   const reset = useCallback(() => {
     predictionEnabledRef.current = false;
+    restorePredictionAfterSurfaceChangeRef.current = false;
     editorRef.current = null;
     setAttached(false);
     setHasEdits(false);
@@ -259,11 +261,31 @@ export function EditPredictionDemo({
 
   const handleSurfaceChange = useCallback(
     (value: Surface) => {
+      if (value === surface) {
+        return;
+      }
+      // File and FileDiff need separate editor instances, but a surface change
+      // should not discard the authenticated prediction session. Once the new
+      // instance attaches, restore its cursor and prediction scheduling.
+      restorePredictionAfterSurfaceChangeRef.current =
+        predictionEnabledRef.current;
       setSurface(value);
-      reset();
+      editorRef.current = null;
+      setAttached(false);
+      setHasEdits(false);
+      setStatus(predictionEnabledRef.current ? 'waiting' : 'idle');
+      setResetKey((key) => key + 1);
     },
-    [reset]
+    [surface]
   );
+
+  useEffect(() => {
+    if (!attached || !restorePredictionAfterSurfaceChangeRef.current) {
+      return;
+    }
+    restorePredictionAfterSurfaceChangeRef.current = false;
+    placeCursor();
+  }, [attached, placeCursor]);
 
   const statusText = authenticating
     ? 'Checking GitHub sign-in…'
