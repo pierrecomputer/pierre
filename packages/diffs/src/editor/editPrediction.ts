@@ -121,6 +121,15 @@ function lineStarts(text: string): number[] {
   return starts;
 }
 
+// A line start at text.length is the boundary after a trailing terminator,
+// not an additional document line for unified-diff counts.
+function diffLineCount(text: string, starts: readonly number[]): number {
+  if (text.length === 0) {
+    return 0;
+  }
+  return starts.at(-1) === text.length ? starts.length - 1 : starts.length;
+}
+
 function lineEnd(
   text: string,
   starts: readonly number[],
@@ -166,8 +175,8 @@ function lineDiffBounds(
   newText: string,
   newStarts: readonly number[]
 ): LineDiffBounds {
-  const oldLineCount = oldText.length === 0 ? 0 : oldStarts.length;
-  const newLineCount = newText.length === 0 ? 0 : newStarts.length;
+  const oldLineCount = diffLineCount(oldText, oldStarts);
+  const newLineCount = diffLineCount(newText, newStarts);
   let prefixLines = 0;
   while (prefixLines < oldLineCount && prefixLines < newLineCount) {
     if (

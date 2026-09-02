@@ -11,7 +11,9 @@ import {
   type EditPredictRequest,
   type EditPredictResponse,
 } from '../src/editor/editor';
+import { recordEditPrediction } from '../src/editor/editPrediction';
 import { TextDocument } from '../src/editor/textDocument';
+import { getTextDocumentChangeTransaction } from '../src/editor/textDocumentChangeTransaction';
 import type { EditorType } from '../src/editor/types';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
 import type { RenderRange } from '../src/types';
@@ -1191,6 +1193,58 @@ describe('Editor edit prediction', () => {
       await fixture.cleanup();
     }
   });
+
+  test.each([
+    {
+      eol: 'LF',
+      contents: 'x\n',
+      expected:
+        '--- a/src/edit.ts\n+++ b/src/edit.ts\n@@ -1,1 +1,1 @@\n-x\n+xa',
+    },
+    {
+      eol: 'CRLF',
+      contents: 'x\r\n',
+      expected:
+        '--- a/src/edit.ts\n+++ b/src/edit.ts\n@@ -1,1 +1,1 @@\n-x\n+xa',
+    },
+    {
+      eol: 'CR',
+      contents: 'x\r',
+      expected:
+        '--- a/src/edit.ts\n+++ b/src/edit.ts\n@@ -1,1 +1,1 @@\n-x\n+xa',
+    },
+    {
+      eol: 'LF with following context',
+      contents: 'x\nnext\n',
+      expected:
+        '--- a/src/edit.ts\n+++ b/src/edit.ts\n@@ -1,2 +1,2 @@\n-x\n+xa\n next',
+    },
+  ])(
+    'excludes the trailing $eol sentinel from history hunk line counts',
+    ({ contents, expected }) => {
+      const document = new TextDocument('src/edit.ts', contents, 'plain');
+      const change = document.applyResolvedEdits([
+        { start: 1, end: 1, text: 'a' },
+      ]);
+      if (change === undefined) {
+        throw new Error('Expected the edit to change the document');
+      }
+      const transaction = getTextDocumentChangeTransaction(change);
+      if (transaction === undefined) {
+        throw new Error('Expected edit prediction transaction metadata');
+      }
+
+      const record = recordEditPrediction(
+        [],
+        'src/edit.ts',
+        document,
+        transaction,
+        'user'
+      )[0];
+
+      expect(record?.hunk).toBe(expected);
+    }
+  );
 
   test('Shift+Tab runs outdent instead of accepting a prediction', async () => {
     const calls: PredictionCall[] = [];
