@@ -257,7 +257,13 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
         throw error;
       }
     },
-    [commentFileByItemId, getGitHubToken, githubHeadSha, handleGitHubPostError, path]
+    [
+      commentFileByItemId,
+      getGitHubToken,
+      githubHeadSha,
+      handleGitHubPostError,
+      path,
+    ]
   );
 
   const postGitHubReply = useCallback(

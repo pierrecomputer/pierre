@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
+import { useOnValueChange } from './useOnValueChange';
 import type { GitHubCommentUser } from '@/lib/githubComments';
 
 interface UseGitHubUserOptions {
@@ -20,9 +21,15 @@ export function useGitHubUser({
   tokenVersion,
 }: UseGitHubUserOptions): GitHubCommentUser | undefined {
   const [user, setUser] = useState<GitHubCommentUser>();
+  const request = useMemo(
+    () => ({ getToken, hasToken, tokenVersion }),
+    [getToken, hasToken, tokenVersion]
+  );
+  // Clear the previous token owner's identity before the next request commits.
+  useOnValueChange(request, () => setUser(undefined), request);
 
   useEffect(() => {
-    setUser(undefined);
+    const { getToken, hasToken } = request;
     if (!hasToken) {
       return;
     }
@@ -62,7 +69,7 @@ export function useGitHubUser({
     };
     void load();
     return () => controller.abort();
-  }, [getToken, hasToken, tokenVersion]);
+  }, [request]);
 
   return user;
 }

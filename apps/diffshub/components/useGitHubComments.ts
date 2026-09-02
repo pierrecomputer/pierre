@@ -7,10 +7,12 @@ import {
   type RefObject,
   type SetStateAction,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from 'react';
 
+import { useOnValueChange } from './useOnValueChange';
 import { classifyCommentLineType } from '@/lib/classifyCommentLineType';
 import {
   type GitHubCommentsPayload,
@@ -39,7 +41,7 @@ interface UseGitHubCommentsOptions {
   setCommentSections: Dispatch<SetStateAction<DiffsHubSavedCommentItem[]>>;
   tokenVersion: number;
   treeSource: DiffsHubFileTreeSource | null;
-  viewerRef: RefObject<CodeViewHandle<CommentMetadata> | null>;
+  viewerRef: RefObject<CodeViewHandle<CommentMetadata, undefined> | null>;
 }
 
 interface UseGitHubCommentsResult {
@@ -81,10 +83,22 @@ export function useGitHubComments({
   // after a token change refetch) can clear annotations from items whose
   // threads disappeared.
   const annotatedItemIdsRef = useRef<ReadonlySet<string>>(new Set());
+  const request = useMemo(
+    () => ({ domain, getToken, path, tokenVersion }),
+    [domain, getToken, path, tokenVersion]
+  );
+  // Clear the previous source's result before committing a new request.
+  useOnValueChange(
+    request,
+    () => {
+      setPayload(undefined);
+      setCommentsError(undefined);
+    },
+    request
+  );
 
   useEffect(() => {
-    setPayload(undefined);
-    setCommentsError(undefined);
+    const { domain, getToken, path } = request;
     // Non-GitHub sources (tangled.org etc.) have no GitHub comments and must
     // never see the PAT, mirroring the patch loader's domain gate.
     if (domain != null) {
@@ -120,7 +134,7 @@ export function useGitHubComments({
     };
     void load();
     return () => controller.abort();
-  }, [domain, getToken, path, tokenVersion]);
+  }, [request]);
 
   useEffect(() => {
     if (payload == null || loadState !== 'ready' || treeSource == null) {
@@ -166,7 +180,7 @@ function mapGitHubThreads(
   threads: readonly GitHubCommentThread[],
   pathToItemId: ReadonlyMap<string, string>,
   commentFileByItemId: DiffsHubCommentFileByItemId | null,
-  viewer: CodeViewHandle<CommentMetadata> | null
+  viewer: CodeViewHandle<CommentMetadata, undefined> | null
 ): MappedGitHubThreadView {
   interface SectionAccumulator {
     comments: DiffsHubSavedCommentEntry[];
@@ -293,7 +307,7 @@ function mapGitHubThreads(
 // GitHub annotations in the previous apply but not in this one are cleared.
 // Returns the item ids that now carry GitHub annotations.
 function applyGitHubAnnotations(
-  viewer: CodeViewHandle<CommentMetadata>,
+  viewer: CodeViewHandle<CommentMetadata, undefined>,
   annotationsByItemId: ReadonlyMap<
     string,
     DiffLineAnnotation<CommentMetadata>[]
@@ -312,7 +326,7 @@ function applyGitHubAnnotations(
 }
 
 function setGitHubAnnotationsOnItem(
-  viewer: CodeViewHandle<CommentMetadata>,
+  viewer: CodeViewHandle<CommentMetadata, undefined>,
   itemId: string,
   annotations: readonly DiffLineAnnotation<CommentMetadata>[] | undefined
 ): void {
