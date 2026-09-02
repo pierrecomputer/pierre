@@ -257,9 +257,13 @@ describe('diff editor: collapsed regions during edit', () => {
         })
       );
       await wait(0);
-      const input = container.shadowRoot?.querySelector<HTMLInputElement>(
-        '[data-search-panel] input[data-search]'
+      const panel = container.shadowRoot?.querySelector<HTMLElement>(
+        '[data-search-panel]'
       );
+      const input =
+        panel?.shadowRoot?.querySelector<HTMLInputElement>(
+          'input[data-search]'
+        );
       expect(input).not.toBeNull();
       input!.value = 'line';
       input!.dispatchEvent(new window.Event('input', { bubbles: true }));

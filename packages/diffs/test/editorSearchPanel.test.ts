@@ -1,9 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import {
-  buildSearchReplacementText,
-  PieceTable,
-} from '../src/editor/pieceTable';
+import { PieceTable } from '../src/editor/pieceTable';
 import {
   type MatchRange,
   type SearchPanelOptions,
@@ -11,6 +8,7 @@ import {
   type SearchParams,
 } from '../src/editor/searchPanel';
 import { TextDocument } from '../src/editor/textDocument';
+import { buildSearchReplacementText } from '../src/search';
 import type { ResolvedTextEdit } from '../src/types';
 import { installDom, wait } from './domHarness';
 
@@ -34,6 +32,35 @@ function pressKey(
   });
   input.dispatchEvent(event);
   return event;
+}
+
+function waitForAnimationFrame(): Promise<void> {
+  return wait(0);
+}
+
+function createContainer(): HTMLElement {
+  const container = document.createElement('pre');
+  document.body.appendChild(container);
+  return container;
+}
+
+function getSearchPanelRoot(): ShadowRoot {
+  const host = document.querySelector<HTMLElement>('[data-search-panel]');
+  if (host?.shadowRoot === undefined || host.shadowRoot === null) {
+    throw new Error('Expected search panel shadow root');
+  }
+  return host.shadowRoot;
+}
+
+function defaultSearchParams(overrides: Partial<SearchParams>): SearchParams {
+  return {
+    text: '',
+    replaceText: '',
+    caseSensitive: false,
+    wholeWord: false,
+    regex: false,
+    ...overrides,
+  };
 }
 
 interface WidgetHarness {
@@ -76,14 +103,44 @@ function createWidget(
   const applied: ResolvedTextEdit[][] = [];
   const updates: (MatchRange[] | undefined)[] = [];
 
+  const buildReplacementEdit = (
+    [start, end]: MatchRange,
+    searchParams: SearchParams
+  ): ResolvedTextEdit => ({
+    start,
+    end,
+    text: buildSearchReplacementText(
+      (offset) => textDocument.positionAt(offset),
+      (position) => textDocument.offsetAt(position),
+      (line) => textDocument.getLineText(line),
+      searchParams,
+      start,
+      end
+    ),
+  });
+
   let closed = false;
   const widget = new SearchPanelWidget({
-    textDocument,
     containerElement,
     defaultQuery,
     mode,
+    search: (searchParams) => textDocument.search(searchParams),
+    isSameMatch: ([aStart, aEnd], [bStart, bEnd]) =>
+      aStart === bStart && aEnd === bEnd,
     scrollToMatch: (nextMatch) => scrolled.push([...nextMatch]),
-    applyReplace: (edits) => applied.push(edits),
+    replace: {
+      replaceMatch: (match, searchParams): MatchRange => {
+        const edit = buildReplacementEdit(match, searchParams);
+        applied.push([edit]);
+        const nextOffset = edit.start + edit.text.length;
+        return [nextOffset, nextOffset];
+      },
+      replaceAll: (matches, searchParams) => {
+        applied.push(
+          matches.map((match) => buildReplacementEdit(match, searchParams))
+        );
+      },
+    },
     onUpdate: (matches) => {
       updates.push(matches.map((match) => [...match] as MatchRange));
       return selectCurrent ? matches[0] : undefined;
@@ -94,15 +151,15 @@ function createWidget(
   });
 
   const query = (selector: string) =>
-    document.querySelector<HTMLElement>(`[data-search-panel] ${selector}`);
+    getSearchPanelRoot().querySelector<HTMLElement>(selector);
 
   return {
     widget,
     input: query('input[data-search]') as HTMLInputElement,
     replaceInput: query('input[data-replace]') as HTMLInputElement,
     button: (container, index) =>
-      document.querySelectorAll<HTMLButtonElement>(
-        `[data-search-panel] [data-${container}] button`
+      getSearchPanelRoot().querySelectorAll<HTMLButtonElement>(
+        `[data-${container}] button`
       )[index],
     matchesText: () => query('[data-matches]')?.textContent ?? null,
     mode: () => query('[data-search-grid]')?.dataset.mode,
@@ -404,23 +461,55 @@ function mountReplaceHost(contents: string): ReplaceHostHarness {
     scrolled.push([nextMatch[0], nextMatch[1]]);
   };
 
+  const buildReplacementEdit = (
+    [start, end]: MatchRange,
+    searchParams: SearchParams
+  ): ResolvedTextEdit => ({
+    start,
+    end,
+    text: buildSearchReplacementText(
+      (offset) => textDocument.positionAt(offset),
+      (position) => textDocument.offsetAt(position),
+      (line) => textDocument.getLineText(line),
+      searchParams,
+      start,
+      end
+    ),
+  });
+
+  const applyReplace = (edits: ResolvedTextEdit[]) => {
+    appliedBatches.push(edits);
+    textDocument.applyEdits(
+      edits.map((edit) => ({
+        range: {
+          start: textDocument.positionAt(edit.start),
+          end: textDocument.positionAt(edit.end),
+        },
+        newText: edit.text,
+      }))
+    );
+  };
+
   const widget = new SearchPanelWidget({
-    textDocument,
     containerElement,
     defaultQuery: '',
     mode: 'replace',
+    search: (searchParams) => textDocument.search(searchParams),
+    isSameMatch: ([aStart, aEnd], [bStart, bEnd]) =>
+      aStart === bStart && aEnd === bEnd,
     scrollToMatch,
-    applyReplace: (edits) => {
-      appliedBatches.push(edits);
-      textDocument.applyEdits(
-        edits.map((edit) => ({
-          range: {
-            start: textDocument.positionAt(edit.start),
-            end: textDocument.positionAt(edit.end),
-          },
-          newText: edit.text,
-        }))
-      );
+    replace: {
+      replaceMatch: (match, searchParams): MatchRange => {
+        const edit = buildReplacementEdit(match, searchParams);
+        applyReplace([edit]);
+        const nextOffset = edit.start + edit.text.length;
+        return [nextOffset, nextOffset];
+      },
+      replaceAll: (matches, searchParams) => {
+        applyReplace(
+          matches.map((match) => buildReplacementEdit(match, searchParams))
+        );
+      },
     },
     onUpdate: (matches) => {
       for (const match of matches) {
@@ -435,10 +524,10 @@ function mountReplaceHost(contents: string): ReplaceHostHarness {
   });
 
   const panel = (selector: string) =>
-    document.querySelector<HTMLElement>(`[data-search-panel] ${selector}`);
+    getSearchPanelRoot().querySelector<HTMLElement>(selector);
   const buttons = (container: string) =>
-    document.querySelectorAll<HTMLButtonElement>(
-      `[data-search-panel] [data-${container}] button`
+    getSearchPanelRoot().querySelectorAll<HTMLButtonElement>(
+      `[data-${container}] button`
     );
 
   return {
@@ -993,5 +1082,116 @@ describe('search agrees with a string-model oracle under random splices', () => 
       ['gap', 'e', '90', '\n', '\r', '\r\n', ' ', ''],
       40
     );
+  });
+});
+describe('SearchPanelWidget', () => {
+  test('runs in find-only mode without replace handlers', async () => {
+    const dom = installDom();
+    try {
+      const searchCalls: SearchParams[] = [];
+      const updates: MatchRange[][] = [];
+
+      const widget = new SearchPanelWidget<MatchRange>({
+        containerElement: createContainer(),
+        defaultQuery: 'foo',
+        mode: 'replace',
+        initialMatch: [0, 3],
+        search: (params) => {
+          searchCalls.push(params);
+          return [[0, 3]];
+        },
+        scrollToMatch: () => {},
+        onUpdate: (matches) => {
+          updates.push(matches);
+          return matches[0];
+        },
+        onClose: () => {},
+      });
+
+      await waitForAnimationFrame();
+
+      const panel = getSearchPanelRoot();
+      const grid = panel?.querySelector<HTMLElement>('[data-search-grid]');
+
+      expect(searchCalls).toEqual([defaultSearchParams({ text: 'foo' })]);
+      expect(updates).toEqual([[[0, 3]]]);
+      expect(grid?.dataset.mode).toBe('find');
+      expect(panel?.querySelector('[data-replace]')).toBeNull();
+      expect(
+        panel.querySelector('#diffs-editor-icon-arrow-down')
+      ).not.toBeNull();
+
+      widget.setMode('replace');
+      expect(grid?.dataset.mode).toBe('find');
+
+      widget.cleanup();
+    } finally {
+      dom.cleanup();
+    }
+  });
+
+  test('delegates replace actions to optional replace handlers', async () => {
+    const dom = installDom();
+    try {
+      const matches: MatchRange[] = [
+        [0, 3],
+        [4, 7],
+      ];
+      const replacedMatches: [MatchRange, SearchParams][] = [];
+      const scrolledMatches: [MatchRange, boolean][] = [];
+      const replaceAllCalls: [MatchRange[], SearchParams][] = [];
+
+      const widget = new SearchPanelWidget<MatchRange>({
+        containerElement: createContainer(),
+        defaultQuery: 'foo',
+        mode: 'replace',
+        initialMatch: matches[0],
+        search: () => matches,
+        isSameMatch: ([aStart, aEnd], [bStart, bEnd]) =>
+          aStart === bStart && aEnd === bEnd,
+        scrollToMatch: (match, retainFocus) => {
+          scrolledMatches.push([match, retainFocus]);
+        },
+        replace: {
+          replaceMatch: (match, params) => {
+            replacedMatches.push([match, params]);
+            return [11, 11];
+          },
+          replaceAll: (allMatches, params) => {
+            replaceAllCalls.push([allMatches, params]);
+          },
+        },
+        onUpdate: (allMatches) => allMatches[0],
+        onClose: () => {},
+      });
+
+      await waitForAnimationFrame();
+
+      const panel = getSearchPanelRoot();
+      const replaceInput = panel.querySelector<HTMLInputElement>(
+        'input[data-replace]'
+      )!;
+      replaceInput.value = 'bar';
+      replaceInput.dispatchEvent(new Event('input', { bubbles: true }));
+
+      panel
+        .querySelector<HTMLButtonElement>('button[title="Replace"]')!
+        .click();
+      panel
+        .querySelector<HTMLButtonElement>('button[title="Replace All"]')!
+        .click();
+
+      expect(replacedMatches).toEqual([
+        [matches[0], defaultSearchParams({ text: 'foo', replaceText: 'bar' })],
+      ]);
+      expect(scrolledMatches).toContainEqual([[11, 11], true]);
+      expect(replaceAllCalls).toEqual([
+        [matches, defaultSearchParams({ text: 'foo', replaceText: 'bar' })],
+      ]);
+
+      widget.cleanup();
+    } finally {
+      dom.cleanup();
+    }
   });
 });

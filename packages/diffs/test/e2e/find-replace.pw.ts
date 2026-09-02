@@ -21,7 +21,6 @@ const contents = (page: Page): Promise<string> =>
 async function openSearchPanel(page: Page): Promise<void> {
   await page.locator(CONTENT).click();
   await page.keyboard.press('ControlOrMeta+f');
-  await expect(page.locator(PANEL)).toHaveCount(1);
   await expect(page.locator(SEARCH_INPUT)).toBeVisible();
 }
 
@@ -114,7 +113,7 @@ test.describe('find and replace', () => {
     // Escape. This is handled by the content-focused keydown handler, a
     // separate teardown path that must clear the highlights too.
     await page.locator(CONTENT).click();
-    await expect(page.locator(PANEL)).toHaveCount(1);
+    await expect(page.locator(SEARCH_INPUT)).toBeVisible();
     await page.keyboard.press('Escape');
 
     await expect(page.locator(PANEL)).toHaveCount(0);

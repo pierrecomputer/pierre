@@ -10,11 +10,20 @@ import {
   THEME_CSS_ATTRIBUTE,
   UNSAFE_CSS_ATTRIBUTE,
 } from '../constants';
+import { resolveFindAgainShortcut } from '../editor/command';
+import { isPrimaryModifier } from '../editor/platform';
+import { SearchPanelWidget } from '../editor/searchPanel';
 import type { SelectionWriteOptions } from '../managers/InteractionManager';
 import {
   dequeueRender,
   queueRender,
 } from '../managers/UniversalRenderingManager';
+import {
+  type LineByLineSearchDocument,
+  MAX_FIND_MATCHES,
+  searchLineByLine,
+  type SearchParams,
+} from '../search';
 import type {
   CodeViewCreateEditorOptions,
   CodeViewDiffItem,
@@ -27,12 +36,14 @@ import type {
   CodeViewRangeScrollTarget,
   CodeViewScrollBehavior,
   CodeViewScrollTarget,
+  DiffSearchLineDecoration,
   DiffsEditor,
   EditCompletionDecision,
   EditorChangeEvent,
   EditorDocumentKind,
   HunkSeparators,
   PendingCodeViewLayoutReset,
+  SearchLineDecoration,
   SelectedLineRange,
   SelectionSide,
   SmoothScrollSettings,
@@ -44,9 +55,12 @@ import { areObjectsEqual } from '../utils/areObjectsEqual';
 import { areOptionsEqual } from '../utils/areOptionsEqual';
 import { areSelectionsEqual } from '../utils/areSelectionsEqual';
 import { areThemesEqual } from '../utils/areThemesEqual';
+import { linesFromFileContents } from '../utils/computeFileOffsets';
 import { createCodeViewHeaderFooterHostElement } from '../utils/createCodeViewHeaderFooterHostElement';
 import { createWindowFromScrollPosition } from '../utils/createWindowFromScrollPosition';
 import { isStyleNode } from '../utils/isStyleNode';
+import type { DiffLineMetadata } from '../utils/iterateOverDiff';
+import { iterateOverDiff } from '../utils/iterateOverDiff';
 import { prefersReducedMotion } from '../utils/prefersReducedMotion';
 import { roundToDevicePixel } from '../utils/roundToDevicePixel';
 import type { WorkerPoolManager } from '../worker';
@@ -107,6 +121,33 @@ interface PagedScrollPosition {
   scrollPageOffset: number;
 }
 
+interface CodeViewSearchLineMetadata {
+  itemId: string;
+  itemIndex: number;
+  itemType: CodeViewItem['type'];
+  side: SelectionSide | undefined;
+  lineNumber: number;
+  lineIndex: number;
+  renderedLineIndex: number;
+}
+
+interface CodeViewSearchLine {
+  text: string;
+  metadata: CodeViewSearchLineMetadata;
+}
+
+interface CodeViewSearchMatch extends CodeViewSearchLineMetadata {
+  startCharacter: number;
+  endCharacter: number;
+}
+
+interface CodeViewSearchState {
+  params: SearchParams | undefined;
+  matches: CodeViewSearchMatch[];
+  matchesByItem: Map<string, CodeViewSearchMatch[]>;
+  current: CodeViewSearchMatch | undefined;
+}
+
 interface AdvancedVirtualizedBaseItem {
   /** Current index of this record in the ordered items array. */
   index: number;
@@ -121,6 +162,8 @@ interface AdvancedVirtualizedBaseItem {
   version: number | undefined;
   /** Last CodeView option revision this item rendered with. */
   renderedOptionsRevision: number;
+  /** Last CodeView search-highlight revision this item rendered with. */
+  renderedSearchRevision: number;
 }
 
 interface CodeViewDiffItemContext<
@@ -748,6 +791,15 @@ export class CodeView<LAnnotation = undefined> {
 
   private root: HTMLElement | undefined;
   private resizeObserver: ResizeObserver | undefined;
+  private searchPanel: SearchPanelWidget<CodeViewSearchMatch> | undefined;
+  private searchState: CodeViewSearchState = {
+    params: undefined,
+    matches: [],
+    matchesByItem: new Map(),
+    current: undefined,
+  };
+  private searchMatchesDirty = false;
+  private searchRenderRevision = 0;
 
   private container: HTMLDivElement | undefined = document.createElement('div');
   private stickyContainer = document.createElement('div');
@@ -1132,6 +1184,7 @@ export class CodeView<LAnnotation = undefined> {
     this.root.addEventListener('pointerdown', this.clearPendingScroll, {
       passive: true,
     });
+    this.root.addEventListener('keydown', this.handleSearchKeyDown);
     this.root.addEventListener('keydown', this.clearPendingScroll, {
       passive: true,
     });
@@ -1169,6 +1222,7 @@ export class CodeView<LAnnotation = undefined> {
   public reset(): void {
     dequeueRender(this.computeRenderRangeAndEmit);
     this.clearReadySubscription();
+    this.closeSearchPanel();
     this.restoreScrollInteractions();
     this.cleanAllRenderedItems();
     // Ending an edit session must fire onItemEditComplete. All items are being
@@ -1239,6 +1293,9 @@ export class CodeView<LAnnotation = undefined> {
       resetFailed = true;
       resetFailure = error;
     }
+    // Completion handlers can call back into CodeView while reset settles
+    // sessions, so discard any render they queued before detaching the root.
+    dequeueRender(this.computeRenderRangeAndEmit);
     this.clearElementPool();
     this.restoreScrollInteractions();
     this.workerManager?.unsubscribeToThemeChanges(this);
@@ -1248,6 +1305,7 @@ export class CodeView<LAnnotation = undefined> {
     this.root?.removeEventListener('wheel', this.clearPendingScroll);
     this.root?.removeEventListener('touchstart', this.clearPendingScroll);
     this.root?.removeEventListener('pointerdown', this.clearPendingScroll);
+    this.root?.removeEventListener('keydown', this.handleSearchKeyDown);
     this.root?.removeEventListener('keydown', this.clearPendingScroll);
     this.root?.style.removeProperty('overflow-anchor');
     this.container?.remove();
@@ -1267,6 +1325,338 @@ export class CodeView<LAnnotation = undefined> {
     if (resetFailed) {
       throw resetFailure;
     }
+  }
+
+  private openSearchPanel(): void {
+    const container = this.container;
+    if (container === undefined) {
+      return;
+    }
+
+    if (this.searchPanel !== undefined) {
+      this.searchPanel.setMode('find');
+      this.searchPanel.focus();
+      return;
+    }
+
+    this.searchPanel = new SearchPanelWidget<CodeViewSearchMatch>({
+      containerElement: container,
+      defaultQuery: '',
+      mode: 'find',
+      search: (searchParams) => {
+        const matches = this.searchCodeView(searchParams);
+        this.searchState.params = searchParams;
+        return matches;
+      },
+      isSameMatch: areCodeViewSearchMatchesEqual,
+      scrollToMatch: (match) => {
+        this.scrollToSearchMatch(match);
+      },
+      onUpdate: (matches, options) => {
+        const current = this.searchState.current;
+        if (current !== undefined) {
+          const nextCurrent = matches.find((match) =>
+            areCodeViewSearchMatchesEqual(match, current)
+          );
+          if (nextCurrent !== undefined) {
+            this.setSearchResults(matches, nextCurrent);
+            return nextCurrent;
+          }
+        }
+        if (matches.length === 0 || options?.syncSelection === false) {
+          this.setSearchResults(matches, undefined);
+          return undefined;
+        }
+
+        const nextCurrent = matches[0];
+        this.setSearchResults(matches, nextCurrent);
+        this.scrollToSearchMatch(nextCurrent);
+        return nextCurrent;
+      },
+      onClose: () => {
+        this.searchPanel = undefined;
+        this.resetSearchState();
+      },
+    });
+    this.applySearchPanelOverlayStyles();
+    this.searchPanel.focus();
+  }
+
+  private closeSearchPanel(): void {
+    this.searchPanel?.cleanup();
+    this.searchPanel = undefined;
+    this.resetSearchState();
+  }
+
+  private resetSearchState(): void {
+    const hadSearchDecorations =
+      this.searchState.matches.length > 0 ||
+      this.searchState.current !== undefined;
+    this.searchState.params = undefined;
+    this.searchState.matches = [];
+    this.searchState.matchesByItem = new Map();
+    this.searchState.current = undefined;
+    this.searchMatchesDirty = false;
+    if (hadSearchDecorations) {
+      this.invalidateSearchDecorations();
+    }
+  }
+
+  private scrollToSearchMatch(match: CodeViewSearchMatch): void {
+    this.setCurrentSearchMatch(match);
+    this.scrollTo({
+      type: 'line',
+      id: match.itemId,
+      lineNumber: match.lineNumber,
+      side: match.side,
+      align: 'center',
+      behavior: 'smooth-auto',
+    });
+  }
+
+  private markSearchMatchesDirty(): void {
+    if (
+      this.searchPanel === undefined ||
+      this.searchState.params === undefined
+    ) {
+      return;
+    }
+
+    this.searchMatchesDirty = true;
+    this.render();
+  }
+
+  private flushSearchMatches(): void {
+    if (!this.searchMatchesDirty) {
+      return;
+    }
+
+    this.searchMatchesDirty = false;
+    if (
+      this.searchPanel === undefined ||
+      this.searchState.params === undefined
+    ) {
+      return;
+    }
+
+    this.searchPanel.updateMatches({ syncSelection: false });
+  }
+
+  private setSearchResults(
+    matches: CodeViewSearchMatch[],
+    current: CodeViewSearchMatch | undefined
+  ): void {
+    const matchesChanged = !areCodeViewSearchMatchArraysEqual(
+      this.searchState.matches,
+      matches
+    );
+    const currentChanged = !areOptionalCodeViewSearchMatchesEqual(
+      this.searchState.current,
+      current
+    );
+
+    if (matchesChanged) {
+      this.searchState.matches = matches;
+      this.searchState.matchesByItem =
+        groupCodeViewSearchMatchesByItem(matches);
+    }
+    this.searchState.current = current;
+
+    if (matchesChanged || currentChanged) {
+      this.invalidateSearchDecorations();
+    }
+  }
+
+  private setCurrentSearchMatch(match: CodeViewSearchMatch): void {
+    if (
+      areOptionalCodeViewSearchMatchesEqual(this.searchState.current, match)
+    ) {
+      return;
+    }
+
+    this.searchState.current = match;
+    this.invalidateSearchDecorations();
+  }
+
+  private invalidateSearchDecorations(): void {
+    this.searchRenderRevision++;
+    this.render();
+  }
+
+  private getSearchDecorationsForItem(
+    item: CodeViewContextItem<LAnnotation>
+  ):
+    | readonly SearchLineDecoration[]
+    | readonly DiffSearchLineDecoration[]
+    | undefined {
+    const matches = this.searchState.matchesByItem.get(item.item.id);
+    if (matches == null || matches.length === 0) {
+      return undefined;
+    }
+
+    const current = this.searchState.current;
+    if (item.type === 'file') {
+      return matches.map(
+        (match): SearchLineDecoration => ({
+          lineIndex: match.lineIndex,
+          startCharacter: match.startCharacter,
+          endCharacter: match.endCharacter,
+          current:
+            current !== undefined &&
+            areCodeViewSearchMatchesEqual(match, current),
+        })
+      );
+    }
+
+    return matches.flatMap((match): DiffSearchLineDecoration[] => {
+      if (match.side === undefined) {
+        return [];
+      }
+      return [
+        {
+          side: match.side,
+          lineIndex: match.lineIndex,
+          startCharacter: match.startCharacter,
+          endCharacter: match.endCharacter,
+          current:
+            current !== undefined &&
+            areCodeViewSearchMatchesEqual(match, current),
+        },
+      ];
+    });
+  }
+
+  private searchCodeView(searchParams: SearchParams): CodeViewSearchMatch[] {
+    const matches: CodeViewSearchMatch[] = [];
+    for (const item of this.items) {
+      const remaining = MAX_FIND_MATCHES - matches.length;
+      if (remaining <= 0) {
+        break;
+      }
+
+      const nextMatches =
+        item.type === 'file'
+          ? this.searchFileItem(item, searchParams, remaining)
+          : this.searchDiffItem(item, searchParams, remaining);
+      matches.push(...nextMatches);
+    }
+    return matches;
+  }
+
+  private searchFileItem(
+    item: CodeViewFileItemContext<LAnnotation>,
+    searchParams: SearchParams,
+    limit: number
+  ): CodeViewSearchMatch[] {
+    if (item.item.collapsed === true) {
+      return [];
+    }
+
+    const lines = linesFromFileContents(item.item.file.contents).map(
+      (text, lineIndex): CodeViewSearchLine => ({
+        text,
+        metadata: {
+          itemId: item.item.id,
+          itemIndex: item.index,
+          itemType: 'file',
+          side: undefined,
+          lineNumber: lineIndex + 1,
+          lineIndex,
+          renderedLineIndex: lineIndex,
+        },
+      })
+    );
+
+    return collectCodeViewLineMatches(lines, searchParams, limit);
+  }
+
+  private searchDiffItem(
+    item: CodeViewDiffItemContext<LAnnotation>,
+    searchParams: SearchParams,
+    limit: number
+  ): CodeViewSearchMatch[] {
+    if (item.item.collapsed === true) {
+      return [];
+    }
+
+    const fileDiff = item.item.fileDiff;
+    const diffStyle = this.options.diffStyle ?? 'split';
+    const expandedHunks =
+      this.options.expandUnchanged === true
+        ? true
+        : item.instance.getExpandedHunksForSearch();
+    const lines: CodeViewSearchLine[] = [];
+
+    const addLine = (
+      side: SelectionSide,
+      line: DiffLineMetadata | undefined
+    ): void => {
+      if (line === undefined) {
+        return;
+      }
+
+      const sourceLines =
+        side === 'additions' ? fileDiff.additionLines : fileDiff.deletionLines;
+      const text = sourceLines[line.lineIndex];
+      if (text === undefined) {
+        return;
+      }
+
+      lines.push({
+        text,
+        metadata: {
+          itemId: item.item.id,
+          itemIndex: item.index,
+          itemType: 'diff',
+          side,
+          lineNumber: line.lineNumber,
+          lineIndex: line.lineIndex,
+          renderedLineIndex:
+            diffStyle === 'unified'
+              ? line.unifiedLineIndex
+              : line.splitLineIndex,
+        },
+      });
+    };
+
+    iterateOverDiff({
+      diff: fileDiff,
+      diffStyle,
+      expandedHunks,
+      collapsedContextThreshold:
+        this.options.collapsedContextThreshold ??
+        DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
+      callback: ({ additionLine, deletionLine }) => {
+        if (diffStyle === 'unified') {
+          if (
+            additionLine !== undefined &&
+            fileDiff.additionLines[additionLine.lineIndex] !== undefined
+          ) {
+            addLine('additions', additionLine);
+          } else {
+            addLine('deletions', deletionLine);
+          }
+          return;
+        }
+
+        addLine('deletions', deletionLine);
+        addLine('additions', additionLine);
+      },
+    });
+
+    return collectCodeViewLineMatches(lines, searchParams, limit);
+  }
+
+  private applySearchPanelOverlayStyles(): void {
+    const panelElement = this.container?.previousElementSibling;
+    if (
+      !(panelElement instanceof HTMLElement) ||
+      panelElement.dataset.searchPanel === undefined
+    ) {
+      return;
+    }
+
+    panelElement.dataset.searchPanelOverlay = '';
   }
 
   private cleanAllRenderedItems() {
@@ -1548,6 +1938,7 @@ export class CodeView<LAnnotation = undefined> {
     this.render();
     this.syncItemEditors();
     this.syncSelection();
+    this.markSearchMatchesDirty();
     return true;
   }
 
@@ -1586,6 +1977,7 @@ export class CodeView<LAnnotation = undefined> {
     }
     this.renamePendingScrollTarget(oldId, newId);
     this.renamePendingLayoutAnchor(oldId, newId);
+    this.markSearchMatchesDirty();
     this.render();
     return true;
   }
@@ -1598,6 +1990,7 @@ export class CodeView<LAnnotation = undefined> {
     this.appendItemsInternal(inputs);
     this.syncItemEditors();
     this.syncSelection();
+    this.markSearchMatchesDirty();
   }
 
   public removeItem(itemId: string): boolean {
@@ -1626,6 +2019,7 @@ export class CodeView<LAnnotation = undefined> {
     }
     this.syncItemEditors(removedItemsById);
     this.syncSelection();
+    this.markSearchMatchesDirty();
   }
 
   /**
@@ -1750,6 +2144,9 @@ export class CodeView<LAnnotation = undefined> {
     ) {
       this.render();
     }
+    if (hasSearchIndexOptionChanged(prevOptions, options)) {
+      this.markSearchMatchesDirty();
+    }
   }
 
   public capturePendingLayoutAnchor(
@@ -1839,6 +2236,7 @@ export class CodeView<LAnnotation = undefined> {
     if (layoutDirty) {
       this.markItemLayoutDirty(item);
     }
+    this.markSearchMatchesDirty();
     this.render();
   }
 
@@ -1984,6 +2382,7 @@ export class CodeView<LAnnotation = undefined> {
         height: 0,
         element: undefined,
         renderedOptionsRevision: this.renderOptionsRevision,
+        renderedSearchRevision: this.searchRenderRevision,
         instance,
       } satisfies CodeViewDiffItemContext<LAnnotation>;
     }
@@ -2004,6 +2403,7 @@ export class CodeView<LAnnotation = undefined> {
       height: 0,
       element: undefined,
       renderedOptionsRevision: this.renderOptionsRevision,
+      renderedSearchRevision: this.searchRenderRevision,
       instance,
     } satisfies CodeViewFileItemContext<LAnnotation>;
   }
@@ -3313,6 +3713,8 @@ export class CodeView<LAnnotation = undefined> {
       this.syncContainerHeight();
     }
 
+    this.flushSearchMatches();
+
     // Resolve the logical scrollTop this render frame should target. The paged
     // root scrollTop is derived later only if the scaffold needs to move.
     const targetScrollTop = this.computeTargetScrollTopForFrame(
@@ -3409,8 +3811,16 @@ export class CodeView<LAnnotation = undefined> {
         item.element = this.acquireElement();
         syncRenderedItemOrder(this.stickyContainer, item.element, prevElement);
         instance.virtualizedSetup();
-        if (renderItem(item, item.element)) {
+        if (
+          renderItem(
+            item,
+            item.element,
+            false,
+            this.getSearchDecorationsForItem(item)
+          )
+        ) {
           item.renderedOptionsRevision = this.renderOptionsRevision;
+          item.renderedSearchRevision = this.searchRenderRevision;
           updatedItems.add(item);
         }
         prevElement = item.element;
@@ -3419,9 +3829,18 @@ export class CodeView<LAnnotation = undefined> {
       else {
         syncRenderedItemOrder(this.stickyContainer, item.element, prevElement);
         const forceRender =
-          item.renderedOptionsRevision !== this.renderOptionsRevision;
-        if (renderItem(item, undefined, forceRender)) {
+          item.renderedOptionsRevision !== this.renderOptionsRevision ||
+          item.renderedSearchRevision !== this.searchRenderRevision;
+        if (
+          renderItem(
+            item,
+            undefined,
+            forceRender,
+            this.getSearchDecorationsForItem(item)
+          )
+        ) {
           item.renderedOptionsRevision = this.renderOptionsRevision;
+          item.renderedSearchRevision = this.searchRenderRevision;
           updatedItems.add(item);
         }
         prevElement = item.element;
@@ -3704,13 +4123,46 @@ export class CodeView<LAnnotation = undefined> {
     this.render();
   };
 
-  // Abort any in-flight programmatic scroll when the user takes over.
-  // Attached to root as a passive listener for wheel / touchstart /
-  // pointerdown / keydown; we never mutate the event, just drop our state.
-  private clearPendingScroll = (): void => {
+  // Abort any in-flight programmatic scroll when the user takes over. Handled
+  // shortcuts may start their own programmatic scroll, so leave those intact.
+  private clearPendingScroll = (event?: Event): void => {
+    if (event?.defaultPrevented === true) {
+      return;
+    }
     this.pendingScrollTarget = undefined;
     this.pendingLayoutAnchor = undefined;
     this.scrollAnimation = undefined;
+  };
+
+  private handleSearchKeyDown = (event: KeyboardEvent): void => {
+    if (event.defaultPrevented) {
+      return;
+    }
+
+    if (event.key === 'Escape' && this.searchPanel !== undefined) {
+      event.preventDefault();
+      this.closeSearchPanel();
+      return;
+    }
+
+    if (this.searchPanel !== undefined) {
+      const findAgain = resolveFindAgainShortcut(event);
+      if (findAgain !== undefined) {
+        event.preventDefault();
+        this.searchPanel.navigate(findAgain === 'previous');
+        return;
+      }
+    }
+
+    if (
+      isPrimaryModifier(event) &&
+      (event.key === 'f' || event.code === 'KeyF')
+    ) {
+      // Prevent the browser find UI and open CodeView's find-only panel.
+      event.preventDefault();
+      this.openSearchPanel();
+      this.searchPanel?.setMode(event.altKey ? 'replace' : 'find');
+    }
   };
 
   private handleResize = (entries: ResizeObserverEntry[]) => {
@@ -4227,6 +4679,178 @@ export class CodeView<LAnnotation = undefined> {
   }
 }
 
+class CodeViewLineSearchDocument implements LineByLineSearchDocument {
+  readonly lines: CodeViewSearchLine[];
+  readonly lineStarts: number[] = [];
+  readonly textLength: number;
+
+  constructor(lines: readonly CodeViewSearchLine[]) {
+    this.lines = lines.map(({ text, metadata }) => ({
+      text: trimLineEnding(text),
+      metadata,
+    }));
+
+    let offset = 0;
+    for (const line of this.lines) {
+      this.lineStarts.push(offset);
+      offset += line.text.length + 1;
+    }
+
+    this.textLength = this.lines.length === 0 ? 0 : offset - 1;
+  }
+
+  get lineCount(): number {
+    return this.lines.length;
+  }
+
+  getLineText(line: number): string {
+    return this.lines[line]?.text ?? '';
+  }
+
+  getLineStartOffset(line: number): number {
+    return this.lineStarts[line] ?? this.textLength;
+  }
+
+  getMetadata(line: number): CodeViewSearchLineMetadata {
+    const metadata = this.lines[line]?.metadata;
+    if (metadata === undefined) {
+      throw new Error('CodeViewLineSearchDocument.getMetadata: invalid line');
+    }
+    return metadata;
+  }
+
+  charAt(offset: number): string {
+    if (offset < 0 || offset >= this.textLength || this.lines.length === 0) {
+      return '';
+    }
+
+    const lineIndex = this.getLineIndexAtOffset(offset);
+    const line = this.lines[lineIndex];
+    const lineStart = this.getLineStartOffset(lineIndex);
+    if (line === undefined) {
+      return '';
+    }
+
+    const character = offset - lineStart;
+    return character < line.text.length ? line.text.charAt(character) : '\n';
+  }
+
+  getLineIndexAtOffset(offset: number): number {
+    let low = 0;
+    let high = this.lineStarts.length - 1;
+    let result = 0;
+
+    while (low <= high) {
+      const mid = (low + high) >> 1;
+      const lineStart = this.lineStarts[mid] ?? 0;
+      if (lineStart <= offset) {
+        result = mid;
+        low = mid + 1;
+      } else {
+        high = mid - 1;
+      }
+    }
+
+    return result;
+  }
+}
+
+function collectCodeViewLineMatches(
+  lines: readonly CodeViewSearchLine[],
+  searchParams: SearchParams,
+  limit: number
+): CodeViewSearchMatch[] {
+  if (lines.length === 0 || limit <= 0) {
+    return [];
+  }
+
+  const document = new CodeViewLineSearchDocument(lines);
+  const ranges = searchLineByLine(document, searchParams, limit);
+  return ranges.map(([startOffset, endOffset]) => {
+    const lineIndex = document.getLineIndexAtOffset(startOffset);
+    const lineStart = document.getLineStartOffset(lineIndex);
+    return {
+      ...document.getMetadata(lineIndex),
+      startCharacter: startOffset - lineStart,
+      endCharacter: endOffset - lineStart,
+    };
+  });
+}
+
+function trimLineEnding(text: string): string {
+  let end = text.length;
+  while (end > 0) {
+    const charCode = text.charCodeAt(end - 1);
+    if (charCode !== 10 && charCode !== 13) {
+      break;
+    }
+    end--;
+  }
+  return end === text.length ? text : text.slice(0, end);
+}
+
+function areCodeViewSearchMatchesEqual(
+  a: CodeViewSearchMatch,
+  b: CodeViewSearchMatch
+): boolean {
+  return (
+    a.itemId === b.itemId &&
+    a.itemType === b.itemType &&
+    a.side === b.side &&
+    a.lineNumber === b.lineNumber &&
+    a.lineIndex === b.lineIndex &&
+    a.renderedLineIndex === b.renderedLineIndex &&
+    a.startCharacter === b.startCharacter &&
+    a.endCharacter === b.endCharacter
+  );
+}
+
+function areOptionalCodeViewSearchMatchesEqual(
+  a: CodeViewSearchMatch | undefined,
+  b: CodeViewSearchMatch | undefined
+): boolean {
+  if (a === undefined || b === undefined) {
+    return a === b;
+  }
+  return areCodeViewSearchMatchesEqual(a, b);
+}
+
+function areCodeViewSearchMatchArraysEqual(
+  a: readonly CodeViewSearchMatch[],
+  b: readonly CodeViewSearchMatch[]
+): boolean {
+  if (a === b) {
+    return true;
+  }
+  if (a.length !== b.length) {
+    return false;
+  }
+  for (let index = 0; index < a.length; index++) {
+    const aMatch = a[index];
+    const bMatch = b[index];
+    if (
+      aMatch === undefined ||
+      bMatch === undefined ||
+      !areCodeViewSearchMatchesEqual(aMatch, bMatch)
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function groupCodeViewSearchMatchesByItem(
+  matches: readonly CodeViewSearchMatch[]
+): Map<string, CodeViewSearchMatch[]> {
+  const grouped = new Map<string, CodeViewSearchMatch[]>();
+  for (const match of matches) {
+    const itemMatches = grouped.get(match.itemId) ?? [];
+    itemMatches.push(match);
+    grouped.set(match.itemId, itemMatches);
+  }
+  return grouped;
+}
+
 function prepareItemInstance<LAnnotation>(
   item: CodeViewContextItem<LAnnotation>
 ): number {
@@ -4290,6 +4914,22 @@ function hasItemLayoutOptionChanged<LAnnotation>(
   );
 }
 
+function hasSearchIndexOptionChanged<LAnnotation>(
+  previousOptions: CodeViewOptions<LAnnotation>,
+  nextOptions: CodeViewOptions<LAnnotation>
+): boolean {
+  return (
+    (previousOptions.diffStyle ?? 'split') !==
+      (nextOptions.diffStyle ?? 'split') ||
+    (previousOptions.expandUnchanged ?? false) !==
+      (nextOptions.expandUnchanged ?? false) ||
+    (previousOptions.collapsedContextThreshold ??
+      DEFAULT_COLLAPSED_CONTEXT_THRESHOLD) !==
+      (nextOptions.collapsedContextThreshold ??
+        DEFAULT_COLLAPSED_CONTEXT_THRESHOLD)
+  );
+}
+
 function hasCodeViewDiffEstimateOptionChanged<LAnnotation>(
   previousOptions: CodeViewOptions<LAnnotation>,
   nextOptions: CodeViewOptions<LAnnotation>
@@ -4340,7 +4980,10 @@ function formatSelectedLinePoint(
 function renderItem<LAnnotation>(
   item: CodeViewContextItem<LAnnotation>,
   fileContainer?: HTMLElement,
-  forceRender = false
+  forceRender = false,
+  searchDecorations?:
+    | readonly SearchLineDecoration[]
+    | readonly DiffSearchLineDecoration[]
 ): boolean {
   if (item.type === 'diff') {
     return item.instance.render({
@@ -4349,6 +4992,9 @@ function renderItem<LAnnotation>(
       fileDiff: item.item.fileDiff,
       forceRender,
       lineAnnotations: item.item.annotations ?? [],
+      searchDecorations: searchDecorations as
+        | readonly DiffSearchLineDecoration[]
+        | undefined,
     });
   } else {
     return item.instance.render({
@@ -4357,6 +5003,9 @@ function renderItem<LAnnotation>(
       file: item.item.file,
       forceRender,
       lineAnnotations: item.item.annotations ?? [],
+      searchDecorations: searchDecorations as
+        | readonly SearchLineDecoration[]
+        | undefined,
     });
   }
 }

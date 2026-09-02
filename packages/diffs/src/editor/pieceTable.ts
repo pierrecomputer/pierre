@@ -1,13 +1,13 @@
+import {
+  type MatchRange,
+  searchLineByLine,
+  type SearchParams,
+} from '../search';
 import type { Position, Range, ResolvedTextEdit } from '../types';
 import { computeLineOffsets } from '../utils/computeFileOffsets';
-import type { SearchParams } from './searchPanel';
 
-const MAX_FIND_MATCHES = 100000;
 const LINE_FEED = 10;
 const CARRIAGE_RETURN = 13;
-// TODO(ije): use Intl.Segmenter instead of regex for word separators
-const WORD_SEPARATORS = '`~!@#$%^&*()-=+[{]}\\|;:\'",.<>/?' as const;
-
 // A piece is a segment of text that is either original or added.
 class Piece {
   static Original = 0;
@@ -328,90 +328,28 @@ export class PieceTable {
     return foundOffset ?? wrappedOffset;
   }
 
-  search(searchParams: SearchParams): [start: number, end: number][] {
-    if (searchParams.text.length === 0 || this.#length === 0) {
-      return [];
-    }
-
-    // Search currently operates line-by-line, so newline-spanning patterns are unsupported.
-    if (
-      searchParams.text.includes('\n') ||
-      searchParams.text.includes('\r') ||
-      (searchParams.regex &&
-        (searchParams.text.includes('\\n') ||
-          searchParams.text.includes('\\r')))
-    ) {
-      return [];
-    }
-
-    let pattern: RegExp;
-    try {
-      pattern = compileSearchRegExp(
-        searchParams.text,
-        searchParams.regex,
-        searchParams.caseSensitive
-      );
-    } catch {
-      return [];
-    }
-
-    return this.#collectSearchMatchesLineByLine(
-      pattern,
-      searchParams.wholeWord,
-      MAX_FIND_MATCHES
-    );
-  }
-
-  #collectSearchMatchesLineByLine(
-    pattern: RegExp,
-    wholeWord: boolean,
-    limit: number
-  ): [number, number][] {
-    const out: [number, number][] = [];
-    // Search visits the whole document, so flatten it once instead of making
-    // several treap descents for every line and whole-word boundary.
+  search(searchParams: SearchParams): MatchRange[] {
+    // Search scans the whole document, so flatten the treap once instead of
+    // descending it again for every line and whole-word boundary.
     const documentText = this.#textFromPieces();
-    const docLength = documentText.length;
     const lineOffsets = computeLineOffsets(documentText);
-
-    // Reuse the single compiled pattern across every line, resetting its
-    // lastIndex before each line, instead of allocating a fresh RegExp per
-    // line. The pattern is global, so lastIndex tracks progress within a line.
-    for (let line = 0; line < lineOffsets.length; line++) {
-      const lineStart = lineOffsets[line];
-      let lineEnd = lineOffsets[line + 1] ?? docLength;
-      while (
-        lineEnd > lineStart &&
-        isEOL(documentText.charCodeAt(lineEnd - 1))
-      ) {
-        lineEnd--;
-      }
-      const lineText = documentText.slice(lineStart, lineEnd);
-      pattern.lastIndex = 0;
-      let match: RegExpExecArray | null;
-      while ((match = pattern.exec(lineText)) !== null) {
-        const rel = match.index;
-        const fragment = match[0];
-        if (fragment.length === 0) {
-          pattern.lastIndex = advancePastEmptyMatch(lineText, rel);
-          continue;
-        }
-        const docStart = lineStart + rel;
-        if (
-          !wholeWord ||
-          isWholeWordAtDocOffsets(documentText, docStart, fragment.length)
-        ) {
-          out.push([docStart, docStart + fragment.length]);
-          if (out.length >= limit) {
-            return out;
+    return searchLineByLine(
+      {
+        textLength: documentText.length,
+        lineCount: lineOffsets.length,
+        getLineText: (line) => {
+          const start = lineOffsets[line] ?? documentText.length;
+          let end = lineOffsets[line + 1] ?? documentText.length;
+          while (end > start && isEOL(documentText.charCodeAt(end - 1))) {
+            end--;
           }
-        }
-        if (rel === pattern.lastIndex) {
-          pattern.lastIndex = advancePastEmptyMatch(lineText, rel);
-        }
-      }
-    }
-    return out;
+          return documentText.slice(start, end);
+        },
+        getLineStartOffset: (line) => lineOffsets[line] ?? documentText.length,
+        charAt: (offset) => documentText.charAt(offset),
+      },
+      searchParams
+    );
   }
 
   insert(text: string, offset: number): void {
@@ -1106,120 +1044,4 @@ function upperBound(values: number[], target: number): number {
     }
   }
   return lo;
-}
-
-function escapeRegExp(text: string): string {
-  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-function isWordSeparatorCharCode(charCode: number): boolean {
-  if (charCode <= 32 || charCode === 127) {
-    return true;
-  }
-  const ch = String.fromCharCode(charCode);
-  return WORD_SEPARATORS.includes(ch);
-}
-
-// Checks if the given text is a whole word by checking if the
-// characters before and after are word separators.
-function isWholeWordAtDocOffsets(
-  text: string,
-  docStart: number,
-  length: number
-): boolean {
-  const beforeOk =
-    docStart <= 0 || isWordSeparatorCharCode(text.charCodeAt(docStart - 1));
-  const afterOk =
-    docStart + length >= text.length ||
-    isWordSeparatorCharCode(text.charCodeAt(docStart + length));
-  return beforeOk && afterOk;
-}
-
-function compileSearchRegExp(
-  source: string,
-  isRegex: boolean,
-  caseSensitive: boolean
-): RegExp {
-  const body = isRegex ? source : escapeRegExp(source);
-  const flags = `g${caseSensitive ? '' : 'i'}${isRegex ? 'm' : ''}`;
-  return new RegExp(body, flags);
-}
-
-/** Expands `$&`, `$1`, `$$`, etc. in a regex replace string using a match. */
-function expandReplaceString(
-  replacement: string,
-  match: RegExpExecArray
-): string {
-  return replacement.replace(/\$([$&]|\d+)/g, (_token, group: string) => {
-    if (group === '$') {
-      return '$';
-    }
-    if (group === '&') {
-      return match[0] ?? '';
-    }
-    const index = Number(group);
-    return match[index] ?? '';
-  });
-}
-
-/**
- * Builds the text to insert for one search match, including regex capture
- * substitution when regex mode is enabled.
- */
-export function buildSearchReplacementText(
-  positionAt: (offset: number) => Position,
-  offsetAt: (position: Position) => number,
-  getLineText: (line: number) => string,
-  searchParams: SearchParams,
-  matchStart: number,
-  matchEnd: number
-): string {
-  if (!searchParams.regex) {
-    return searchParams.replaceText;
-  }
-
-  const position = positionAt(matchStart);
-  const lineText = getLineText(position.line);
-  const lineStart = offsetAt({ line: position.line, character: 0 });
-  const relStart = matchStart - lineStart;
-
-  let pattern: RegExp;
-  try {
-    pattern = compileSearchRegExp(
-      searchParams.text,
-      true,
-      searchParams.caseSensitive
-    );
-  } catch {
-    return searchParams.replaceText;
-  }
-
-  // Re-run at the original line offset so lookaround can inspect context
-  // outside the matched range while captures still come from this exact hit.
-  pattern.lastIndex = relStart;
-  const match = pattern.exec(lineText);
-  if (
-    match === null ||
-    match.index !== relStart ||
-    match[0].length !== matchEnd - matchStart
-  ) {
-    return searchParams.replaceText;
-  }
-  return expandReplaceString(searchParams.replaceText, match);
-}
-
-function advancePastEmptyMatch(text: string, index: number): number {
-  if (index + 1 < text.length) {
-    const first = text.charCodeAt(index);
-    const second = text.charCodeAt(index + 1);
-    if (
-      first >= 0xd800 &&
-      first <= 0xdbff &&
-      second >= 0xdc00 &&
-      second <= 0xdfff
-    ) {
-      return index + 2;
-    }
-  }
-  return index + 1;
 }
