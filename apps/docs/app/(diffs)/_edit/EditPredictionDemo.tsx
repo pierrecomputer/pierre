@@ -48,12 +48,14 @@ const statusTextMap = {
 const readyStatusText = {
   eager: (
     <>
-      Prediction ready — press <kbd>Tab</kbd> to accept.
+      Prediction ready — press <kbd>Tab</kbd> to accept or <kbd>Esc</kbd> to
+      dismiss.
     </>
   ),
   subtle: (
     <>
-      Prediction ready — hold <kbd>Alt</kbd> and press <kbd>Tab</kbd> to accept.
+      Prediction ready — press <kbd>Alt</kbd> to reveal, then <kbd>Tab</kbd> to
+      accept or <kbd>Esc</kbd> to dismiss.
     </>
   ),
 };

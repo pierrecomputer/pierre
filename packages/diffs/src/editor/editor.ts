@@ -326,7 +326,7 @@ export interface EditorOptions<EType extends EditorType, LAnnotation, Caret> {
     /**
      * The edit prediction mode.
      * - 'eager': predictions appear inline when the user types.
-     * - 'subtle': predictions only appear inline when holding the `Alt` key.
+     * - 'subtle': predictions appear inline after pressing the `Alt` key.
      * @default 'eager'
      */
     mode?: 'eager' | 'subtle';
@@ -558,7 +558,7 @@ export class Editor<
   #editPredictionTimer?: ReturnType<typeof setTimeout>;
   #editPredictionAbortController?: AbortController;
   #editPredictionGeneration = 0;
-  #editPredictionAltPressed = false;
+  #editPredictionRevealed = false;
   #editPrediction?: {
     document: TextDocument<EType, LAnnotation>;
     version: number;
@@ -1123,7 +1123,6 @@ export class Editor<
     const fileInstance = this.#fileInstance;
     const recycle = reason === 'recycle';
     this.#cancelEditPrediction(true);
-    this.#editPredictionAltPressed = false;
     if (!recycle) {
       this.#editPredictionHistory = [];
     }
@@ -2138,9 +2137,10 @@ export class Editor<
           } else if (
             e.key === 'Alt' &&
             this.#contentHasFocus &&
-            !this.#editPredictionAltPressed
+            this.#options.editPrediction?.mode === 'subtle' &&
+            !this.#editPredictionRevealed
           ) {
-            this.#editPredictionAltPressed = true;
+            this.#editPredictionRevealed = true;
             this.#updateSelections(this.#selections ?? []);
           }
         },
@@ -2153,21 +2153,6 @@ export class Editor<
         (e) => {
           if (e.key === 'Shift') {
             this.#selectionStart = undefined;
-          } else if (e.key === 'Alt' && this.#editPredictionAltPressed) {
-            this.#editPredictionAltPressed = false;
-            this.#updateSelections(this.#selections ?? []);
-          }
-        },
-        { passive: true }
-      ),
-
-      addEventListener(
-        window,
-        'blur',
-        () => {
-          if (this.#editPredictionAltPressed) {
-            this.#editPredictionAltPressed = false;
-            this.#updateSelections(this.#selections ?? []);
           }
         },
         { passive: true }
@@ -2407,8 +2392,7 @@ export class Editor<
           (!e.altKey || this.#options.editPrediction?.mode === 'subtle') &&
           this.#acceptEditPrediction(
             this.#options.editPrediction?.mode !== 'subtle' ||
-              this.#editPredictionAltPressed ||
-              e.altKey
+              this.#editPredictionRevealed
           )
         ) {
           e.preventDefault();
@@ -4703,7 +4687,7 @@ export class Editor<
       prediction.version === textDocument?.version &&
       contentElement !== undefined &&
       (this.#options.editPrediction?.mode !== 'subtle' ||
-        this.#editPredictionAltPressed)
+        this.#editPredictionRevealed)
     ) {
       const continuationLines = new Map<number, number>();
       for (
@@ -4798,6 +4782,7 @@ export class Editor<
     this.#editPredictionAbortController?.abort();
     this.#editPredictionAbortController = undefined;
     this.#editPredictionGeneration++;
+    this.#editPredictionRevealed = false;
     this.#editPrediction = undefined;
     this.#contentElement?.style.removeProperty('padding-block-end');
     this.#syncEditPredictionSpacers();
@@ -5157,7 +5142,7 @@ export class Editor<
       prediction.document !== textDocument ||
       prediction.version !== textDocument?.version ||
       (this.#options.editPrediction?.mode === 'subtle' &&
-        !this.#editPredictionAltPressed)
+        !this.#editPredictionRevealed)
     ) {
       return;
     }

@@ -1176,7 +1176,7 @@ interface EditorOptions<EType extends EditorType, LAnnotation, Caret> {
 
   // Inline edit prediction. The app supplies the model/service implementation.
   editPrediction?: {
-    // 'eager' displays predictions immediately; 'subtle' reveals them on Alt.
+    // 'eager' displays predictions immediately; 'subtle' reveals them after pressing Alt.
     // Default: 'eager'.
     mode?: 'eager' | 'subtle';
     provider: EditPredictProvider;

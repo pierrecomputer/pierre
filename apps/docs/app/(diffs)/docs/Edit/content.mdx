@@ -440,8 +440,9 @@ the feature is used.
 
 Edit prediction is opt-in and model agnostic. Provide a `predict()` function
 through `editorOptions.editPrediction`; the editor renders its validated
-response as ghost text and applies it when the user presses <kbd>Tab</kbd>. Keep
-model credentials in your service rather than shipping them to the browser.
+response as ghost text. Accept a visible prediction with <kbd>Tab</kbd>, or
+dismiss it with <kbd>Esc</kbd>. Keep model credentials in your service rather
+than shipping them to the browser.
 
 <DocsCodeExample {...editPredictionExample} />
 
@@ -449,11 +450,9 @@ model credentials in your service rather than shipping them to the browser.
 
 The editor calls `predict()` 300 ms after typing or moving to a single,
 collapsed caret. A document or cursor change clears the current prediction and
-aborts in-progress work through `context.signal`. In `'subtle'` mode, hold
-
-<kbd>Alt</kbd> to reveal a prediction before accepting it with <kbd>Tab</kbd>.
-Use `include` and `exclude` to filter slash-normalized file paths; exclusions
-take precedence.
+aborts in-progress work through `context.signal`. For `'subtle'` mode, reveal a
+prediction with <kbd>Alt</kbd> before accepting or dismissing it. Use `include`
+and `exclude` to filter slash-normalized file paths; exclusions take precedence.
 
 ### API reference
 

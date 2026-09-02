@@ -1391,7 +1391,7 @@ describe('Editor edit prediction', () => {
     }
   });
 
-  test('subtle predictions are visible only while Alt is held', async () => {
+  test('keeps subtle predictions hidden and unavailable before reveal', async () => {
     const calls: PredictionCall[] = [];
     const provider: EditPredictProvider = {
       predict(request, context) {
@@ -1426,19 +1426,6 @@ describe('Editor edit prediction', () => {
       expect(hasVisiblePrediction(fixture.container)).toBe(false);
       expect(fixture.editor.getText()).toBe('ab');
 
-      dispatchKey(fixture.content, 'Alt', { altKey: true });
-      await waitFor(() => hasVisiblePrediction(fixture.container), {
-        timeout: PREDICT_TIMEOUT,
-      });
-      expect(hasVisiblePrediction(fixture.container)).toBe(true);
-      expect(fixture.editor.getText()).toBe('ab');
-
-      dispatchKey(fixture.content, 'Alt', {}, 'keyup');
-      await waitFor(() => !hasVisiblePrediction(fixture.container), {
-        timeout: PREDICT_TIMEOUT,
-      });
-      expect(hasVisiblePrediction(fixture.container)).toBe(false);
-
       const tab = dispatchKey(fixture.content, 'Tab');
       expect(tab.defaultPrevented).toBe(true);
       expect(fixture.editor.getText()).toBe('ab  ');
@@ -1448,9 +1435,11 @@ describe('Editor edit prediction', () => {
     }
   });
 
-  test('accepts a subtle prediction with Alt+Tab', async () => {
+  test('accepts a revealed subtle prediction with plain Tab', async () => {
+    const calls: PredictionCall[] = [];
     const provider: EditPredictProvider = {
-      predict() {
+      predict(request, context) {
+        calls.push({ context, request });
         return Promise.resolve({
           edits: [
             {
@@ -1479,9 +1468,16 @@ describe('Editor edit prediction', () => {
         timeout: PREDICT_TIMEOUT,
       });
 
-      const tab = dispatchKey(fixture.content, 'Tab', { altKey: true });
+      dispatchKey(fixture.content, 'Alt', {}, 'keyup');
+      expect(hasVisiblePrediction(fixture.container)).toBe(true);
+
+      const tab = dispatchKey(fixture.content, 'Tab');
       expect(tab.defaultPrevented).toBe(true);
       expect(fixture.editor.getText()).toBe('a!');
+
+      await expectCallCount(calls, 2);
+      await wait(0);
+      expect(hasVisiblePrediction(fixture.container)).toBe(false);
     } finally {
       await fixture.cleanup();
     }
