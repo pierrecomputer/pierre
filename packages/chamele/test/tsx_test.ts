@@ -6,7 +6,7 @@ import {
   codeToTokens,
   createHighlighter,
   init,
-  TokenizeStream,
+  StreamTokenizer,
 } from '../lib/index';
 import tokenTypes from '../lib/token-types';
 import { transformWat, wat2wasm } from '../scripts/build';
@@ -27,7 +27,7 @@ let tsx: TestLang;
 
 t.before(() => {
   tsx = loadLang('tsx', '$hlTsx');
-  // the full module drives the chunked TokenizeStream parity checks below
+  // the full module drives the chunked StreamTokenizer parity checks below
   const url = new URL('../src/chamele.wat', import.meta.url);
   const { code } = transformWat(url);
   init(new WebAssembly.Module(wat2wasm(url.pathname, code)));
@@ -57,7 +57,7 @@ const distinctTheme: Theme = {
  */
 function assertLineFedParity(lang: Lang, code: string): void {
   const whole = codeToTokens(code, { lang, theme: distinctTheme }).tokens;
-  const stream = new TokenizeStream({ lang, theme: distinctTheme });
+  const stream = new StreamTokenizer({ lang, theme: distinctTheme });
   const streamed: ThemedToken[][] = [];
   for (const line of code.split(/(?<=\n)/)) {
     streamed.push(...stream.pushCode(line));

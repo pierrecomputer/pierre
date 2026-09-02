@@ -140,7 +140,7 @@ describe('FileStream with the chamele highlighter', () => {
       const wrapped: CodeHighlighter = {
         ...chameleHighlighter,
         name: 'wrapped-chamele',
-        TokenizeStream: class {
+        StreamTokenizer: class {
           constructor() {
             constructed++;
           }

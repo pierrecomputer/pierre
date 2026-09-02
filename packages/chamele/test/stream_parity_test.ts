@@ -2,7 +2,7 @@ import assert from 'node:assert';
 import t from 'node:test';
 
 import type { Lang, Theme, ThemedToken } from '../lib/index';
-import { codeToTokens, init, TokenizeStream } from '../lib/index';
+import { codeToTokens, init, StreamTokenizer } from '../lib/index';
 import tokenTypes from '../lib/token-types';
 import { transformWat, wat2wasm } from '../scripts/build';
 
@@ -57,7 +57,7 @@ function flat(lines: ThemedToken[][]): string {
 /** Assert that feeding one line per chunk matches a whole-buffer run. */
 function assertLineFedParity(lang: Lang, code: string): void {
   const whole = codeToTokens(code, { lang, theme: distinctTheme }).tokens;
-  const stream = new TokenizeStream({ lang, theme: distinctTheme });
+  const stream = new StreamTokenizer({ lang, theme: distinctTheme });
   const streamed: ThemedToken[][] = [];
   for (const line of code.split(/(?<=\n)/)) {
     streamed.push(...stream.pushCode(line));

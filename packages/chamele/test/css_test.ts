@@ -2,7 +2,7 @@ import assert from 'node:assert';
 import t from 'node:test';
 
 import type { Lang, ThemedToken } from '../lib/index';
-import { codeToTokens, init, TokenizeStream } from '../lib/index';
+import { codeToTokens, init, StreamTokenizer } from '../lib/index';
 import { transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import {
@@ -21,7 +21,7 @@ let css: TestLang;
 t.before(() => {
   css = loadLang('css', '$hlCss');
   // the streaming tests below need the whole module: css is also embedded by
-  // html, and TokenizeStream runs the shared stream driver
+  // html, and StreamTokenizer runs the shared stream driver
   const url = new URL('../src/chamele.wat', import.meta.url);
   const { code } = transformWat(url);
   init(new WebAssembly.Module(wat2wasm(url.pathname, code)));
@@ -29,7 +29,7 @@ t.before(() => {
 
 /** Tokens for `code` fed one line per chunk - the LiveTokenizer's shape. */
 function lineFed(lang: Lang, code: string): ThemedToken[][] {
-  const stream = new TokenizeStream({ lang, theme: pierreDark });
+  const stream = new StreamTokenizer({ lang, theme: pierreDark });
   const lines: ThemedToken[][] = [];
   for (const line of code.split(/(?<=\n)/)) {
     lines.push(...stream.pushCode(line));

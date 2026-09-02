@@ -2,7 +2,7 @@ import assert from 'node:assert';
 import t from 'node:test';
 
 import type { Lang, Theme, ThemedToken } from '../lib/index';
-import { codeToTokens, init, TokenizeStream } from '../lib/index';
+import { codeToTokens, init, StreamTokenizer } from '../lib/index';
 import tokenTypes from '../lib/token-types';
 import { transformWat, wat2wasm } from '../scripts/build';
 import {
@@ -17,7 +17,7 @@ import {
 let php: TestLang;
 t.before(() => {
   php = loadLang('php', '$hlPhp');
-  // the full module drives the line-fed TokenizeStream parity checks below
+  // the full module drives the line-fed StreamTokenizer parity checks below
   const url = new URL('../src/chamele.wat', import.meta.url);
   const { code } = transformWat(url);
   init(new WebAssembly.Module(wat2wasm(url.pathname, code)));
@@ -46,7 +46,7 @@ const distinctTheme: Theme = {
  */
 function assertLineFedParity(lang: Lang, code: string): void {
   const whole = codeToTokens(code, { lang, theme: distinctTheme }).tokens;
-  const stream = new TokenizeStream({ lang, theme: distinctTheme });
+  const stream = new StreamTokenizer({ lang, theme: distinctTheme });
   const streamed: ThemedToken[][] = [];
   for (const line of code.split(/(?<=\n)/)) {
     streamed.push(...stream.pushCode(line));

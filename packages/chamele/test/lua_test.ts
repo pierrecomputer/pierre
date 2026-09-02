@@ -2,7 +2,7 @@ import assert from 'node:assert';
 import t from 'node:test';
 
 import type { ThemedToken } from '../lib/index';
-import { codeToTokens, init, TokenizeStream } from '../lib/index';
+import { codeToTokens, init, StreamTokenizer } from '../lib/index';
 import { transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import {
@@ -17,7 +17,7 @@ let lua: TestLang;
 t.before(() => (lua = loadLang('lua', '$hlLua')));
 
 /**
- * Compile the whole module once for the streaming checks: TokenizeStream and
+ * Compile the whole module once for the streaming checks: StreamTokenizer and
  * codeToTokens run on the shared highlighter rather than the single-lexer
  * harness. Lazy, so the lexer-only tests still run while another language
  * file is mid-edit.
@@ -31,9 +31,9 @@ function initFullModule(): void {
   fullModuleReady = true;
 }
 
-/** Tokens for `code` fed to TokenizeStream one line per push. */
+/** Tokens for `code` fed to StreamTokenizer one line per push. */
 function lineStreamed(code: string): ThemedToken[][] {
-  const stream = new TokenizeStream({ lang: 'lua', theme: pierreDark });
+  const stream = new StreamTokenizer({ lang: 'lua', theme: pierreDark });
   const streamed: ThemedToken[][] = [];
   for (const line of code.split(/(?<=\n)/))
     streamed.push(...stream.pushCode(line));

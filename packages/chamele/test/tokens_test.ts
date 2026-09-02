@@ -15,7 +15,7 @@ import {
   codeToTokens,
   init,
   LiveTokenizer,
-  TokenizeStream,
+  StreamTokenizer,
 } from '../lib/index';
 import {
   buildHast,
@@ -474,7 +474,7 @@ void t.test('codeToHast: transformer context and token htmlAttrs', () => {
 });
 
 void t.test(
-  'TokenizeStream: chunked output matches codeToTokens (fuzz)',
+  'StreamTokenizer: chunked output matches codeToTokens (fuzz)',
   () => {
     const samples: [Lang, string][] = [
       ['plain', 'one\ntwo\n'],
@@ -549,7 +549,7 @@ void t.test(
     for (const [lang, code] of samples) {
       const direct = codeToTokens(code, { lang, theme: pierreDark }).tokens;
       for (let round = 0; round < 16; round++) {
-        const stream = new TokenizeStream({ lang, theme: pierreDark });
+        const stream = new StreamTokenizer({ lang, theme: pierreDark });
         const streamed: ThemedToken[][] = [];
         let at = 0;
         while (at < code.length) {
@@ -565,23 +565,23 @@ void t.test(
   }
 );
 
-void t.test('TokenizeStream: empty stream yields one empty line', () => {
-  const stream = new TokenizeStream({ lang: 'ts', theme: pierreDark });
+void t.test('StreamTokenizer: empty stream yields one empty line', () => {
+  const stream = new StreamTokenizer({ lang: 'ts', theme: pierreDark });
   assert.deepEqual(stream.pushCode(''), []);
   assert.deepEqual(stream.end(), [[]]);
   assert.throws(() => stream.pushCode('next'), /stream has ended/);
   assert.throws(() => stream.end(), /stream has ended/);
 });
 
-void t.test('TokenizeStream: dispose abandons the stream', () => {
-  const stream = new TokenizeStream({ lang: 'ts', theme: pierreDark });
+void t.test('StreamTokenizer: dispose abandons the stream', () => {
+  const stream = new StreamTokenizer({ lang: 'ts', theme: pierreDark });
   stream.pushCode('/* open\nbuffered');
   stream.dispose();
   assert.throws(() => stream.pushCode('next'), /stream has ended/);
   assert.throws(() => stream.end(), /stream has ended/);
   stream.dispose(); // idempotent
 
-  const next = new TokenizeStream({ lang: 'ts', theme: pierreDark });
+  const next = new StreamTokenizer({ lang: 'ts', theme: pierreDark });
   const code = 'const x = 1\n';
   assert.deepEqual(
     [...next.pushCode(code), ...next.end()],
@@ -589,12 +589,12 @@ void t.test('TokenizeStream: dispose abandons the stream', () => {
   );
 });
 
-void t.test('TokenizeStream: ASCII resumed after a multi-byte line', () => {
+void t.test('StreamTokenizer: ASCII resumed after a multi-byte line', () => {
   // the resumed byte offset (3 for `é\n`) exceeds the char offset (2); the
   // ASCII fast path must not treat record byte ends as string offsets
   const code = 'é\nconst x = 1\n';
   const direct = codeToTokens(code, { lang: 'ts', theme: pierreDark }).tokens;
-  const stream = new TokenizeStream({ lang: 'ts', theme: pierreDark });
+  const stream = new StreamTokenizer({ lang: 'ts', theme: pierreDark });
   const streamed = [
     ...stream.pushCode('é\n'),
     ...stream.pushCode('const x = 1\n'),
@@ -604,11 +604,11 @@ void t.test('TokenizeStream: ASCII resumed after a multi-byte line', () => {
   assert.equal(lineText(streamed[1]), 'const x = 1');
 });
 
-void t.test('TokenizeStream: surrogate pair split across chunks', () => {
+void t.test('StreamTokenizer: surrogate pair split across chunks', () => {
   const code = 'const s = "🎈"\nlet x = 1\n';
   const direct = codeToTokens(code, { lang: 'ts', theme: pierreDark }).tokens;
   const [high, low] = ['🎈'[0], '🎈'[1]];
-  const stream = new TokenizeStream({ lang: 'ts', theme: pierreDark });
+  const stream = new StreamTokenizer({ lang: 'ts', theme: pierreDark });
   const streamed = [
     ...stream.pushCode(`const s = "${high}`),
     ...stream.pushCode(`${low}"\nlet x = 1\n`),
@@ -634,7 +634,7 @@ void t.test('tokenizeMaxLineLength collapses overlong lines', () => {
   assert.equal(tokens[1][0].color, themeColor('foreground'));
   assert.ok(tokens[2].length > 1);
   // streaming honors the same cap
-  const stream = new TokenizeStream({
+  const stream = new StreamTokenizer({
     lang: 'ts',
     theme: pierreDark,
     tokenizeMaxLineLength: 10,

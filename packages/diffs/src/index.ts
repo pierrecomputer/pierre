@@ -24,7 +24,7 @@ export {
   type CodeLiveUpdateOptions,
   type CodeTextEdit,
   type CodeTextPosition,
-  type CodeTokenizeStream,
+  type CodeStreamTokenizer,
   isBuiltinShikiHighlighter,
   type RenderHighlighter,
   setHighlighter,

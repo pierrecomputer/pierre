@@ -2,7 +2,7 @@ import assert from 'node:assert';
 import t from 'node:test';
 
 import type { Lang, ThemedToken } from '../lib/index';
-import { codeToTokens, init, TokenizeStream } from '../lib/index';
+import { codeToTokens, init, StreamTokenizer } from '../lib/index';
 import { transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import {
@@ -38,11 +38,11 @@ const ESCAPE = themeColor('string.escape');
 const DELIMITER = themeColor('punctuation.delimiter');
 
 /**
- * Tokenize `code` through `TokenizeStream` one line per push: the boundary
+ * Tokenize `code` through `StreamTokenizer` one line per push: the boundary
  * the live tokenizer cuts at. Returns the token lines.
  */
 function lineFed(lang: Lang, code: string): ThemedToken[][] {
-  const stream = new TokenizeStream({ lang, theme: pierreDark });
+  const stream = new StreamTokenizer({ lang, theme: pierreDark });
   const out: ThemedToken[][] = [];
   for (const line of code.split(/(?<=\n)/)) out.push(...stream.pushCode(line));
   out.push(...stream.end());

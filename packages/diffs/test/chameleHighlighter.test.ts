@@ -240,8 +240,8 @@ describe('chamele highlighter', () => {
     expect(additionHtml).toContain('newValue');
   });
 
-  test('TokenizeStream emits completed lines and flushes the tail', () => {
-    const stream = new chameleHighlighter.TokenizeStream({
+  test('StreamTokenizer emits completed lines and flushes the tail', () => {
+    const stream = new chameleHighlighter.StreamTokenizer({
       lang: 'ts',
       theme: 'pierre-dark',
     });

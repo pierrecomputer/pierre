@@ -116,30 +116,30 @@ export function isSupportedLanguage(lang: string): lang is Lang {
   return typeof LANGS[String(lang).toLowerCase()] === 'number';
 }
 
-export class WasmHighlighter implements Highlighter {
+export class ChameleHighlighter implements Highlighter {
+  #highlight: () => void;
+  #highlightStream: (reset: number | boolean) => void;
+  #themeWritten: Uint8Array | undefined;
   wasmModule: WebAssembly.Module;
   instance: WebAssembly.Instance;
   memory: WebAssembly.Memory;
-  highlight: () => void;
-  highlightStream: (reset: number | boolean) => void;
   buffer: Uint8Array;
   dv: DataView;
   pageN: number;
-  themeWritten: Uint8Array | undefined;
 
   constructor(wasmModule: WebAssembly.Module) {
     this.wasmModule = wasmModule;
     const env = {
       is_id_start: (ptr: number, bits: number) =>
-        /^\p{ID_Start}$/u.test(this.readChars(ptr, bits)),
+        /^\p{ID_Start}$/u.test(this.#readChars(ptr, bits)),
       is_id_continue: (ptr: number, bits: number) =>
-        /^[\u200C\u200D\p{ID_Continue}]$/u.test(this.readChars(ptr, bits)),
+        /^[\u200C\u200D\p{ID_Continue}]$/u.test(this.#readChars(ptr, bits)),
     };
     const instance = new WebAssembly.Instance(wasmModule, { env });
     this.instance = instance;
     this.memory = instance.exports.memory as WebAssembly.Memory;
-    this.highlight = instance.exports.highlight as () => void;
-    this.highlightStream = instance.exports.highlightStream as (
+    this.#highlight = instance.exports.highlight as () => void;
+    this.#highlightStream = instance.exports.highlightStream as (
       reset: number | boolean
     ) => void;
     this.pageN = this.memory.buffer.byteLength / pageSize;
@@ -152,9 +152,9 @@ export class WasmHighlighter implements Highlighter {
    * memory as needed.
    * Returns the number of bytes written.
    */
-  encodeAt(str: string, at: number): number {
+  #encodeAt(str: string, at: number): number {
     // Try an ASCII-sized destination first; grow if UTF-8 needs more room.
-    this.growMemoryIfNeeded(at + str.length + 96);
+    this.#growMemoryIfNeeded(at + str.length + 96);
     let { read, written } = enc.encodeInto(
       str,
       this.buffer.subarray(pageSize + at, pageSize + at + str.length)
@@ -162,7 +162,7 @@ export class WasmHighlighter implements Highlighter {
     if (read < str.length) {
       // Allow three bytes per remaining UTF-16 code unit.
       const rest = str.slice(read);
-      this.growMemoryIfNeeded(at + written + rest.length * 3 + 96);
+      this.#growMemoryIfNeeded(at + written + rest.length * 3 + 96);
       written += enc.encodeInto(
         rest,
         this.buffer.subarray(
@@ -179,7 +179,7 @@ export class WasmHighlighter implements Highlighter {
    */
   writeInput(input: string | Uint8Array | ArrayBuffer): number {
     if (typeof input === 'string') {
-      return this.encodeAt(input, 0);
+      return this.#encodeAt(input, 0);
     }
     if (input instanceof ArrayBuffer) {
       input = new Uint8Array(input);
@@ -187,7 +187,7 @@ export class WasmHighlighter implements Highlighter {
     if (!(input instanceof Uint8Array)) {
       throw new TypeError('input must be a string, Uint8Array, or ArrayBuffer');
     }
-    this.growMemoryIfNeeded(input.length + 96);
+    this.#growMemoryIfNeeded(input.length + 96);
     this.buffer.set(input, pageSize);
     return input.length;
   }
@@ -197,13 +197,13 @@ export class WasmHighlighter implements Highlighter {
    * variables, 2 byte-end records, or 3 UTF-16 line records.
    * Returns a `Uint8Array` view of Wasm memory, valid until the next call.
    */
-  run(langId: number, mode: number, inputLength: number): Uint8Array {
+  #run(langId: number, mode: number, inputLength: number): Uint8Array {
     this.dv.setUint8(0, langId);
     this.dv.setUint8(1, mode);
     this.dv.setUint32(2, inputLength, true);
     this.buffer[pageSize + inputLength] = 0; // NUL sentinel: lexers treat byte 0 at EOF as end
     try {
-      this.highlight();
+      this.#highlight();
     } finally {
       this.bindMemory();
     }
@@ -241,12 +241,12 @@ export class WasmHighlighter implements Highlighter {
       }
     }
     const inputLength = this.writeInput(input);
-    if (themeTable !== undefined && this.themeWritten !== themeTable) {
+    if (themeTable !== undefined && this.#themeWritten !== themeTable) {
       this.buffer.set(themeTable, themePtr);
       this.buffer.fill(0, themePtr + themeTable.length, themePtr + themeBytes);
-      this.themeWritten = themeTable;
+      this.#themeWritten = themeTable;
     }
-    return this.run(langId, useCssVariables ? 1 : 0, inputLength);
+    return this.#run(langId, useCssVariables ? 1 : 0, inputLength);
   }
 
   /**
@@ -255,12 +255,12 @@ export class WasmHighlighter implements Highlighter {
    * No theme table is written; JavaScript resolves the colors.
    */
   tokenizeRecords(langId: number, inputLength: number): Uint32Array {
-    const out = this.run(langId, 2, inputLength);
+    const out = this.#run(langId, 2, inputLength);
     return new Uint32Array(out.buffer, out.byteOffset, out.length >> 2);
   }
 
   /** Tokenize one stream chunk to line records while preserving lexer state. */
-  tokenizeStreamLineRecords(
+  streamTokenizeLineRecords(
     langId: number,
     inputLength: number,
     reset: boolean
@@ -270,7 +270,7 @@ export class WasmHighlighter implements Highlighter {
     this.dv.setUint32(2, inputLength, true);
     this.buffer[pageSize + inputLength] = 0;
     try {
-      this.highlightStream(reset);
+      this.#highlightStream(reset);
     } finally {
       this.bindMemory();
     }
@@ -281,7 +281,7 @@ export class WasmHighlighter implements Highlighter {
 
   /** Return UTF-16 token records with `0xffffffff` newline markers. */
   tokenizeLineRecords(langId: number, inputLength: number): Uint32Array {
-    const out = this.run(langId, 3, inputLength);
+    const out = this.#run(langId, 3, inputLength);
     return new Uint32Array(out.buffer, out.byteOffset, out.length >> 2);
   }
 
@@ -352,7 +352,7 @@ export class WasmHighlighter implements Highlighter {
   }
 
   /** Grow the wasm linear memory if needed. */
-  growMemoryIfNeeded(len: number): void {
+  #growMemoryIfNeeded(len: number): void {
     const neededPages = 1 + Math.ceil(len / pageSize);
     if (neededPages > this.pageN) {
       this.memory.grow(neededPages - this.pageN);
@@ -361,7 +361,7 @@ export class WasmHighlighter implements Highlighter {
   }
 
   /** Decode a UTF-8 byte range from wasm memory. */
-  readChars(ptr: number, length: number): string {
+  #readChars(ptr: number, length: number): string {
     this.bindMemory();
     return dec.decode(this.buffer.subarray(ptr, ptr + length));
   }
@@ -384,17 +384,17 @@ function toCode(input: string | Uint8Array | ArrayBuffer): string {
 }
 
 /** The shared highlighter instance created by `init`. */
-let shared: WasmHighlighter | undefined;
+let shared: ChameleHighlighter | undefined;
 
 /** The compiled Wasm module required by the shared highlighter. */
 let wasmModule: WebAssembly.Module | undefined;
 
 // Reuse one completed stream instance. Bun's Wasm instantiation is expensive,
 // while one slot keeps concurrent streams isolated and bounds retained memory.
-let pooledStreamHighlighter: WasmHighlighter | undefined;
+let pooledStreamHighlighter: ChameleHighlighter | undefined;
 
 /** The shared highlighter, or throw before `init`. */
-function assertShared(): WasmHighlighter {
+function assertShared(): ChameleHighlighter {
   if (shared == null) throw new Error('chamele is not initialized');
   return shared;
 }
@@ -411,7 +411,7 @@ export function assertWasmModule(): WebAssembly.Module {
 export function init(wasm: WebAssembly.Module): Highlighter {
   wasmModule = wasm;
   pooledStreamHighlighter = undefined;
-  return (shared = new WasmHighlighter(wasm));
+  return (shared = new ChameleHighlighter(wasm));
 }
 
 /**
@@ -419,7 +419,7 @@ export function init(wasm: WebAssembly.Module): Highlighter {
  * The shared highlighter is unchanged.
  */
 export function createHighlighter(wasmModule: WebAssembly.Module): Highlighter {
-  return new WasmHighlighter(wasmModule);
+  return new ChameleHighlighter(wasmModule);
 }
 
 /**
@@ -460,8 +460,8 @@ export function codeToHast(
  * Tokenize streamed code for SSR in an isolated Wasm instance. Every language
  * scans each completed chunk once and preserves lexer state in Wasm.
  */
-export class TokenizeStream {
-  #hl: WasmHighlighter | undefined;
+export class StreamTokenizer {
+  #hl: ChameleHighlighter | undefined;
   #langId: number;
   #themes: ResolvedTheme[];
   #cssVariablePrefix: string;
@@ -476,7 +476,7 @@ export class TokenizeStream {
     this.#hl =
       pooledStreamHighlighter?.wasmModule === compiledWasm
         ? pooledStreamHighlighter
-        : new WasmHighlighter(compiledWasm);
+        : new ChameleHighlighter(compiledWasm);
     pooledStreamHighlighter = undefined;
     this.#langId = langIdOf(options.lang);
     this.#themes = resolveOptionThemes(options);
@@ -546,7 +546,7 @@ export class TokenizeStream {
     const hl = this.#hl;
     if (hl == null) throw new Error('stream has ended');
     const byteLen = hl.writeInput(code);
-    const recs = hl.tokenizeStreamLineRecords(
+    const recs = hl.streamTokenizeLineRecords(
       this.#langId,
       byteLen,
       !this.#streamStarted

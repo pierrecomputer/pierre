@@ -11,7 +11,7 @@ import {
   codeToTokens,
   init,
   LiveTokenizer,
-  TokenizeStream,
+  StreamTokenizer,
   tokenNames,
 } from '../lib/index';
 import { transformWat, wat2wasm } from '../scripts/build';
@@ -30,7 +30,7 @@ t.before(() => {
  * Documents with multi-line constructs for every supported language. Live
  * tokenization feeds whole lines through the streaming pipeline, so these
  * must match full-document output (the same boundary condition the
- * TokenizeStream fuzz pins down).
+ * StreamTokenizer fuzz pins down).
  */
 const samples: [Lang, string][] = [
   ['plain', 'one\ntwo\n'],
@@ -254,7 +254,7 @@ void t.test('LiveTokenizer: eager indexing matches codeToTokens', () => {
 });
 
 /**
- * Assert the live document matches the same text fed to TokenizeStream one
+ * Assert the live document matches the same text fed to StreamTokenizer one
  * line per chunk: exactly the boundary condition live tokenization uses.
  * Full-document lookahead (markdown and mdx block decisions) may legally
  * differ from this on malformed constructs, so randomized edits compare
@@ -267,7 +267,7 @@ function assertMatchesLineStream(
   lang: Lang,
   label: string
 ): void {
-  const stream = new TokenizeStream({ lang, theme: pierreDark });
+  const stream = new StreamTokenizer({ lang, theme: pierreDark });
   const streamed: ThemedToken[][] = [];
   const normalized = lexNormalized(code);
   for (const chunk of normalized.length === 0

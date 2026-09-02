@@ -67,15 +67,15 @@ Pass `theme` for one theme or `themes` for multiple color schemes.
 `tokenizeMaxLineLength` collapses long lines into one unthemed token.
 `codeToHast` also accepts Shiki-style `transformers` and `decorations`.
 
-Use `TokenizeStream` for streaming and `LiveTokenizer` for editors. Each owns a
+Use `StreamTokenizer` for streaming and `LiveTokenizer` for editors. Each owns a
 Wasm instance and text buffer. Streams preserve lexer state for every language
 and scan only newly completed chunks:
 
 ```js
-import { TokenizeStream, LiveTokenizer } from '@pierre/chamele';
+import { StreamTokenizer, LiveTokenizer } from '@pierre/chamele';
 
 // SSR streaming: push chunks, get newly completed lines of tokens
-const stream = new TokenizeStream({ lang: 'ts', theme: pierreDark });
+const stream = new StreamTokenizer({ lang: 'ts', theme: pierreDark });
 const lines = [];
 try {
   for await (const chunk of chunks) lines.push(...stream.pushCode(chunk));

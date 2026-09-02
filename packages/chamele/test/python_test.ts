@@ -2,7 +2,7 @@ import assert from 'node:assert';
 import t from 'node:test';
 
 import type { ThemedToken } from '../lib/index';
-import { codeToTokens, init, TokenizeStream } from '../lib/index';
+import { codeToTokens, init, StreamTokenizer } from '../lib/index';
 import { transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import {
@@ -21,7 +21,7 @@ t.before(() => {
 });
 
 /**
- * Compile the whole module once for the streaming checks: TokenizeStream and
+ * Compile the whole module once for the streaming checks: StreamTokenizer and
  * codeToTokens run on the shared highlighter rather than the single-lexer
  * harness. Lazy, so the lexer-only tests still run while another language
  * file is mid-edit.
@@ -36,12 +36,12 @@ function initFullModule(): void {
 }
 
 /**
- * Tokens for `code` fed to TokenizeStream one line per push - the shape the
+ * Tokens for `code` fed to StreamTokenizer one line per push - the shape the
  * live tokenizer uses - which must equal the whole-buffer tokens.
  */
 function assertLineStreamParity(code: string, label: string): ThemedToken[][] {
   initFullModule();
-  const stream = new TokenizeStream({ lang: 'python', theme: pierreDark });
+  const stream = new StreamTokenizer({ lang: 'python', theme: pierreDark });
   const streamed: ThemedToken[][] = [];
   for (const line of code.split(/(?<=\n)/))
     streamed.push(...stream.pushCode(line));

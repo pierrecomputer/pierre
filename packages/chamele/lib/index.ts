@@ -316,7 +316,7 @@ export {
   createHighlighter,
   init,
   isSupportedLanguage,
-  TokenizeStream,
+  StreamTokenizer,
 } from './highlighter';
 export type {
   HighlightedToken,

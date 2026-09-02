@@ -26,7 +26,7 @@ src/live.wat        incremental-tokenizer core: heap, line table, state
 src/chamele.wat     memory, $Language enum, imports, and dispatch
 lib/index.ts        public types and the export barrel
 lib/highlighter.ts  WasmHighlighter, codeToHtml/codeToTokens/codeToHast,
-                    language aliases, theme cache, TokenizeStream
+                    language aliases, theme cache, StreamTokenizer
 lib/live.ts         LiveTokenizer glue: edit validation, WTF-8 encoding,
                     deferred slicing, themed reads over the live exports
 lib/tokens.ts       token records -> shiki-compatible tokens and hast
@@ -228,7 +228,7 @@ the whole editor document instead of a one-shot input buffer:
 
 Each line is copied into scratch with its terminator. `$srcBase` points at it,
 then `$streamChunk` runs the ordinary mode-3 pipeline. Output matches
-`TokenizeStream` fed one line per chunk.
+`StreamTokenizer` fed one line per chunk.
 
 Before and after each line the driver saves streaming state: cross-chunk
 globals, the 32-byte stream delimiter, the live prefixes of the

@@ -3,7 +3,7 @@ import {
   type CodeToHastOptions as ChameleCodeToHastOptions,
   codeToTokens as chameleCodeToTokens,
   type CodeToTokensOptions as ChameleCodeToTokensOptions,
-  TokenizeStream as ChameleTokenizeStream,
+  StreamTokenizer as ChameleStreamTokenizer,
   isSupportedLanguage,
   type Lang,
   LiveTokenizer,
@@ -20,8 +20,8 @@ import type {
   CodeLiveTokenizerOptions,
   CodeLiveTokenizerUpdate,
   CodeLiveUpdateOptions,
+  CodeStreamTokenizer,
   CodeTextEdit,
-  CodeTokenizeStream,
 } from './highlighter/code_highlighter';
 import type {
   CodeToHastOptions,
@@ -210,11 +210,11 @@ function themeEditorColors(theme: Theme): Record<string, string> {
   return colors;
 }
 
-class ChameleCodeTokenizeStream implements CodeTokenizeStream {
-  #stream: ChameleTokenizeStream;
+class ChameleCodeStreamTokenizer implements CodeStreamTokenizer {
+  #stream: ChameleStreamTokenizer;
 
   constructor(options: CodeToTokensOptions<string, string>) {
-    this.#stream = new ChameleTokenizeStream(mapTokensOptions(options));
+    this.#stream = new ChameleStreamTokenizer(mapTokensOptions(options));
   }
 
   pushCode(code: string): ThemedToken[][] {
@@ -352,7 +352,7 @@ export const chameleHighlighter: CodeHighlighter = {
   codeToHast(code: string, options: CodeToHastOptions<DiffsThemeNames>): Root {
     return chameleCodeToHast(code, mapHastOptions(options)) as unknown as Root;
   },
-  TokenizeStream: ChameleCodeTokenizeStream,
+  StreamTokenizer: ChameleCodeStreamTokenizer,
   createLiveTokenizer(options: CodeLiveTokenizerOptions): CodeLiveTokenizer {
     return new ChameleLiveTokenizer(options);
   },

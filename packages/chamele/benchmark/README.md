@@ -100,7 +100,7 @@ transformers or decorations.
 > Run on 2026-09-02 with Bun 1.4.0 on a 14-core Apple M4 Pro with 48 GB RAM
 > (macOS arm64).
 
-Every sample creates a fresh Chamele `TokenizeStream`. Completed streams return
+Every sample creates a fresh Chamele `StreamTokenizer`. Completed streams return
 one reasonably sized Wasm instance to a single-slot pool; active streams remain
 isolated. Shiki reuses its highlighter but starts with empty grammar state.
 Chamele preserves lexer state between chunks; Shiki carries grammar state

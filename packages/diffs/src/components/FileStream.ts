@@ -209,7 +209,7 @@ export class FileStream {
   /**
    * The token stream for the active highlighter: the pre-existing shiki
    * grammar-state stream (with recalls) when shiki is active, or a
-   * `CodeHighlighter.TokenizeStream` wrapper for custom highlighters.
+   * `CodeHighlighter.StreamTokenizer` wrapper for custom highlighters.
    */
   private createTokenStream(
     highlighter: RenderersHighlighter,
@@ -227,7 +227,7 @@ export class FileStream {
       tokenizeTimeLimit: 0,
     };
     if (custom != null) {
-      // Stream over the highlighter's TokenizeStream: the same token protocol
+      // Stream over the highlighter's StreamTokenizer: the same token protocol
       // CodeToTokenTransformStream emits, minus recalls — the tokenizer holds
       // the trailing incomplete line back until its newline (or the stream
       // end) arrives, so no token ever needs re-emitting.
@@ -239,7 +239,7 @@ export class FileStream {
       // either a frame's worth of time passed (slow streams keep
       // line-at-a-time latency) or enough bytes piled up (synchronous bursts
       // tokenize in few large pushes instead of thousands of small ones).
-      const tokenizer = new custom.TokenizeStream(options);
+      const tokenizer = new custom.StreamTokenizer(options);
       let pending = '';
       let lastPushTime = 0;
       let coalesceTimer: ReturnType<typeof setTimeout> | undefined;

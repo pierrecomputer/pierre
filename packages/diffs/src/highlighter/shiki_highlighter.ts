@@ -10,7 +10,7 @@ import type {
 import type {
   CodeHighlighter,
   CodeHighlighterOptions,
-  CodeTokenizeStream,
+  CodeStreamTokenizer,
 } from './code_highlighter';
 import { markBuiltinShikiHighlighter } from './code_highlighter';
 import { areLanguagesAttached } from './languages/areLanguagesAttached';
@@ -37,7 +37,7 @@ function loadedInstance(): DiffsHighlighter {
  * unterminated tail is buffered until its newline (or `end`) arrives. This is
  * the synchronous line-oriented sibling of `ShikiStreamTokenizer`.
  */
-class ShikiTokenizeStream implements CodeTokenizeStream {
+class ShikiCodeStreamTokenizer implements CodeStreamTokenizer {
   #options: CodeToTokensOptions<string, string>;
   #grammarState: GrammarState | undefined;
   #tail = '';
@@ -107,6 +107,6 @@ export const shikiHighlighter: CodeHighlighter = asBuiltinShikiAdapter({
   codeToHast(code: string, options: CodeToHastOptions<DiffsThemeNames>): Root {
     return loadedInstance().codeToHast(code, options);
   },
-  TokenizeStream: ShikiTokenizeStream,
+  StreamTokenizer: ShikiCodeStreamTokenizer,
   getShikiInstance: getHighlighterIfLoaded,
 });

@@ -23,7 +23,7 @@ export interface CodeHighlighterOptions {
  * Streaming tokenizer contract used by `FileStream`: push code chunks, get
  * back completed lines of themed tokens (`end` flushes the rest).
  */
-export interface CodeTokenizeStream {
+export interface CodeStreamTokenizer {
   pushCode(code: string): ThemedToken[][];
   end(): ThemedToken[][];
 }
@@ -161,9 +161,9 @@ export interface CodeHighlighter {
   /** Highlight code as a shiki-shaped hast tree (transformers included). */
   codeToHast(code: string, options: CodeToHastOptions<DiffsThemeNames>): Root;
   /** Streaming tokenizer for `FileStream`; each instance owns its own state. */
-  TokenizeStream: new (
+  StreamTokenizer: new (
     options: CodeToTokensOptions<string, string>
-  ) => CodeTokenizeStream;
+  ) => CodeStreamTokenizer;
   /**
    * Incremental document tokenizer for edit mode. Implementations without
    * one (shiki, whose edit-mode tokenization runs through the editor's own

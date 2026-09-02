@@ -61,10 +61,10 @@ const root = codeToHast(source, {
   chameleStream: {
     file: {
       name: 'stream.ts',
-      contents: `import { TokenizeStream } from '@pierre/chamele';
+      contents: `import { StreamTokenizer } from '@pierre/chamele';
 import { pierreDark } from '@pierre/chamele/themes';
 
-const stream = new TokenizeStream({ lang: 'tsx', theme: pierreDark });
+const stream = new StreamTokenizer({ lang: 'tsx', theme: pierreDark });
 
 try {
   for await (const chunk of chunks) {
@@ -183,7 +183,7 @@ await preloadHighlighter({
   isSupportedLanguage,
   LiveTokenizer,
   tokenNames,
-  TokenizeStream,
+  StreamTokenizer,
 } from '@pierre/chamele';`,
     },
     options,

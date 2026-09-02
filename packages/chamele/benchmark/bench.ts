@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { arch, cpus, totalmem, type } from 'node:os';
 import type { Language } from 'tree-sitter-highlight';
 
-import { init, TokenizeStream } from '../lib/index';
+import { init, StreamTokenizer } from '../lib/index';
 import { optimizeWasm, transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 
@@ -165,7 +165,7 @@ async function loadContenders(): Promise<Contender[]> {
     tokens: (src, lang) =>
       chamele.codeToTokens(src, { lang, theme: pierreDark }),
     stream: (chunks, lang) => {
-      const stream = new TokenizeStream({ lang, theme: pierreDark });
+      const stream = new StreamTokenizer({ lang, theme: pierreDark });
       let tokenCount = 0;
       for (const chunk of chunks) {
         for (const line of stream.pushCode(chunk)) tokenCount += line.length;
@@ -339,7 +339,7 @@ function benchmarkStream(contenders: Contender[]) {
       baselineLabel(chameleResult.median / shikiResult.median),
     ]);
   }
-  console.log('TokenizeStream (4,096-character chunks):');
+  console.log('StreamTokenizer (4,096-character chunks):');
   printTable(
     [
       { title: 'input' },

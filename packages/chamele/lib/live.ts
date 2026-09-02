@@ -1,4 +1,4 @@
-import { assertWasmModule, langIdOf, WasmHighlighter } from './highlighter';
+import { assertWasmModule, ChameleHighlighter, langIdOf } from './highlighter';
 import type { CodeToTokensOptions, ThemedToken } from './index';
 import tokenTypes from './token-types';
 import type { ResolvedTheme } from './tokens';
@@ -246,7 +246,7 @@ function eol(flags: number): string {
  * reads return pre-edit tokens (`flush` forces completion).
  */
 export class LiveTokenizer {
-  #hl: WasmHighlighter | undefined;
+  #hl: ChameleHighlighter | undefined;
   #ex: LiveWasmExports;
   #langId: number;
   #themes: ResolvedTheme[];
@@ -282,8 +282,8 @@ export class LiveTokenizer {
   static #createStaged(
     code: string,
     langId: number
-  ): [WasmHighlighter, LiveWasmExports] {
-    const hl = new WasmHighlighter(assertWasmModule());
+  ): [ChameleHighlighter, LiveWasmExports] {
+    const hl = new ChameleHighlighter(assertWasmModule());
     const ex = hl.instance.exports as unknown as LiveWasmExports;
     LiveTokenizer.#stageDocument(hl, ex, code, langId);
     return [hl, ex];
@@ -291,7 +291,7 @@ export class LiveTokenizer {
 
   /** Copy `code` into a staged block and split it into the line table. */
   static #stageDocument(
-    hl: WasmHighlighter,
+    hl: ChameleHighlighter,
     ex: LiveWasmExports,
     code: string,
     langId: number
@@ -305,7 +305,7 @@ export class LiveTokenizer {
   }
 
   /** The wrapper, or throw when disposed. */
-  #live(): { hl: WasmHighlighter; ex: LiveWasmExports } {
+  #live(): { hl: ChameleHighlighter; ex: LiveWasmExports } {
     const hl = this.#hl;
     if (hl == null) throw new Error('tokenizer is disposed');
     return { hl, ex: this.#ex };
@@ -395,7 +395,7 @@ export class LiveTokenizer {
     return text;
   }
 
-  #lineText(hl: WasmHighlighter, ex: LiveWasmExports, line: number): string {
+  #lineText(hl: ChameleHighlighter, ex: LiveWasmExports, line: number): string {
     const ptr = ex.liveLineTextPtr(line);
     const len = ex.liveLineByteLen(line);
     if (len === 0) return '';
@@ -582,7 +582,7 @@ export class LiveTokenizer {
    * `onDeferTokenize`, and schedules background slices for the remainder.
    */
   #runSlice(
-    hl: WasmHighlighter,
+    hl: ChameleHighlighter,
     ex: LiveWasmExports,
     renderRange: readonly [number, number] | undefined
   ): Map<number, HighlightedToken[]> {
@@ -659,7 +659,7 @@ export class LiveTokenizer {
    * Cancel scheduled slices and run pending deferred work to completion,
    * delivering the finished lines through `onDeferTokenize`.
    */
-  #settle(hl: WasmHighlighter, ex: LiveWasmExports): void {
+  #settle(hl: ChameleHighlighter, ex: LiveWasmExports): void {
     this.#deferGeneration += 1;
     if (ex.liveStats(9) === 0) return;
     const from = ex.liveStats(10);
@@ -669,7 +669,7 @@ export class LiveTokenizer {
   }
 
   #deliverDeferred(
-    hl: WasmHighlighter,
+    hl: ChameleHighlighter,
     ex: LiveWasmExports,
     from: number,
     to: number
@@ -682,7 +682,7 @@ export class LiveTokenizer {
 
   /** Tokens for every re-tokenized line in the `[from, to)` window. */
   #collectLines(
-    hl: WasmHighlighter,
+    hl: ChameleHighlighter,
     ex: LiveWasmExports,
     from: number,
     to: number
@@ -707,7 +707,7 @@ export class LiveTokenizer {
    * entries past the current one are still pending.
    */
   #retokenizedSpans(
-    hl: WasmHighlighter,
+    hl: ChameleHighlighter,
     ex: LiveWasmExports
   ): [number, number][] {
     const base = ex.liveChangesPtr();
@@ -733,7 +733,7 @@ export class LiveTokenizer {
    * single unstyled tuple so consumers can render it as plain text.
    */
   #lineTuples(
-    hl: WasmHighlighter,
+    hl: ChameleHighlighter,
     ex: LiveWasmExports,
     line: number
   ): HighlightedToken[] {
@@ -769,7 +769,7 @@ export class LiveTokenizer {
 
   /** Read the coalesced change list the native driver produced. */
   #readUpdate(
-    hl: WasmHighlighter,
+    hl: ChameleHighlighter,
     ex: LiveWasmExports,
     previousLineCount: number,
     lines: Map<number, HighlightedToken[]>
@@ -809,7 +809,7 @@ export class LiveTokenizer {
    */
   #validate(
     edits: readonly TextEdit[],
-    hl: WasmHighlighter,
+    hl: ChameleHighlighter,
     ex: LiveWasmExports
   ): NormalizedEdit[] {
     if (!Array.isArray(edits)) throw new TypeError('edits must be an array');
@@ -902,7 +902,7 @@ export class LiveTokenizer {
   /** True when the replacement text equals the range's current text. */
   #isNoopEdit(
     e: NormalizedEdit,
-    hl: WasmHighlighter,
+    hl: ChameleHighlighter,
     ex: LiveWasmExports
   ): boolean {
     let rangeLen = 0;
@@ -932,7 +932,7 @@ export class LiveTokenizer {
 
   /** Encode and copy the batch into a staged block, then splice natively. */
   #stageEdits(
-    hl: WasmHighlighter,
+    hl: ChameleHighlighter,
     ex: LiveWasmExports,
     batch: NormalizedEdit[]
   ): void {

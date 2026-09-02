@@ -60,7 +60,7 @@ token and HAST APIs accept either form.
 
 ### Streaming
 
-`TokenizeStream` owns an isolated WebAssembly instance, preserves lexer state
+`StreamTokenizer` owns an isolated WebAssembly instance, preserves lexer state
 between chunks, and tokenizes each completed chunk once. Token offsets stay
 relative to the complete stream.
 
@@ -201,7 +201,7 @@ The main entry exports the complete runtime and its public types:
 fragment. `codeToTokens()` returns a `TokensResult`, and `codeToHast()` returns
 a `HastRoot`. All three accept a string, `Uint8Array`, or `ArrayBuffer`.
 
-`TokenizeStream` owns an isolated WebAssembly instance. `pushCode(chunk)`
+`StreamTokenizer` owns an isolated WebAssembly instance. `pushCode(chunk)`
 returns tokens for completed lines, `end()` returns the remaining lines and
 disposes the stream, and `dispose()` discards an unfinished stream.
 

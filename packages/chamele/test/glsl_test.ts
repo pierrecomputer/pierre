@@ -2,7 +2,7 @@ import assert from 'node:assert';
 import t from 'node:test';
 
 import type { ThemedToken } from '../lib/index';
-import { codeToTokens, init, TokenizeStream } from '../lib/index';
+import { codeToTokens, init, StreamTokenizer } from '../lib/index';
 import { transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import {
@@ -32,7 +32,7 @@ function lineFed(code: string): {
 } {
   const options = { lang: 'glsl' as const, theme: pierreDark };
   const direct = codeToTokens(code, options).tokens;
-  const stream = new TokenizeStream(options);
+  const stream = new StreamTokenizer(options);
   const streamed: ThemedToken[][] = [];
   for (const line of code.split(/(?<=\n)/)) {
     streamed.push(...stream.pushCode(line));
