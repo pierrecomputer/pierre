@@ -825,6 +825,56 @@ describe('Editor edit prediction', () => {
         await fixture.cleanup();
       }
     });
+
+    test(`${surface} sums spacer rows for grouped multiline edits`, async () => {
+      const contents = 'alpha value\nnext();';
+      const provider: EditPredictProvider = {
+        predict() {
+          return Promise.resolve({
+            edits: [
+              {
+                range: {
+                  start: { line: 0, character: 5 },
+                  end: { line: 0, character: 5 },
+                },
+                newText: '\nfirst',
+              },
+              {
+                range: {
+                  start: { line: 0, character: 11 },
+                  end: { line: 0, character: 11 },
+                },
+                newText: '\nsecond',
+              },
+            ],
+            newCursor: { line: 2, character: 6 },
+          });
+        },
+      };
+      const fixture = await createPredictionFixture({
+        contents,
+        editorOptions: { editPrediction: { provider } },
+        surface,
+      });
+
+      try {
+        setCaret(fixture.editor, 0, 5);
+        await waitFor(() => predictionElements(fixture.container).length > 0, {
+          timeout: PREDICT_TIMEOUT,
+        });
+
+        const anchorLine =
+          fixture.content.querySelector<HTMLElement>('[data-line="1"]');
+        expect(anchorLine?.dataset.editPredictionSpacer).toBe('');
+        expect(
+          anchorLine?.style.getPropertyValue(
+            '--diffs-edit-prediction-spacer-height'
+          )
+        ).toBe('2lh');
+      } finally {
+        await fixture.cleanup();
+      }
+    });
   }
 
   test('reserves and clears space for a multiline FileDiff prediction at EOF', async () => {

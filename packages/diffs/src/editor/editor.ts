@@ -16,7 +16,10 @@ import type {
   RenderRange,
   SelectionSide,
 } from '../types';
-import { computeLineOffsets } from '../utils/computeFileOffsets';
+import {
+  computeLineOffsets,
+  countLineBreaks,
+} from '../utils/computeFileOffsets';
 import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
 import { isGutterUtilityPath } from '../utils/isGutterUtilityPath';
 import { cloneRetainedDiffSessionSnapshot } from './cloneRetainedDiffSessionSnapshot';
@@ -4644,6 +4647,49 @@ export class Editor<
     }
   }
 
+  // Combines edits that share source lines into the exact text range rendered
+  // by one ghost preview. Spacing and rendering both use this geometry so they
+  // cannot disagree about how many continuation lines the preview contains.
+  #composeEditPredictionGroup(
+    textDocument: TextDocument<EType, LAnnotation>,
+    edits: readonly TextEdit[],
+    startIndex: number
+  ): { edit: TextEdit; endIndex: number } {
+    const firstEdit = edits[startIndex];
+    let endIndex = startIndex;
+    let endLine = firstEdit.range.end.line;
+    while (
+      endIndex + 1 < edits.length &&
+      edits[endIndex + 1].range.start.line <= endLine
+    ) {
+      endIndex++;
+      endLine = Math.max(endLine, edits[endIndex].range.end.line);
+    }
+    if (endIndex === startIndex) {
+      return { edit: firstEdit, endIndex };
+    }
+
+    const start = firstEdit.range.start;
+    const end = {
+      line: endLine,
+      character: textDocument.getLineLength(endLine),
+    };
+    const parts: string[] = [];
+    let consumed = textDocument.offsetAt(start);
+    for (let index = startIndex; index <= endIndex; index++) {
+      const edit = edits[index];
+      const editStart = textDocument.offsetAt(edit.range.start);
+      const editEnd = textDocument.offsetAt(edit.range.end);
+      parts.push(textDocument.getTextSlice(consumed, editStart), edit.newText);
+      consumed = editEnd;
+    }
+    parts.push(textDocument.getTextSlice(consumed, textDocument.offsetAt(end)));
+    return {
+      edit: { range: { start, end }, newText: parts.join('') },
+      endIndex,
+    };
+  }
+
   // Reserve numberless grid space for ghost continuation lines without adding
   // rows that could be mistaken for document content by the editor.
   #syncEditPredictionSpacers(): void {
@@ -4660,25 +4706,25 @@ export class Editor<
         this.#editPredictionAltPressed)
     ) {
       const continuationLines = new Map<number, number>();
-      for (const edit of prediction.response.edits) {
+      for (
+        let editIndex = 0;
+        editIndex < prediction.response.edits.length;
+        editIndex++
+      ) {
+        const group = this.#composeEditPredictionGroup(
+          textDocument,
+          prediction.response.edits,
+          editIndex
+        );
+        const { edit } = group;
+        editIndex = group.endIndex;
         if (
           edit.newText.length === 0 ||
           !this.#isLineVisible(edit.range.start.line)
         ) {
           continue;
         }
-        let count = 0;
-        for (let index = 0; index < edit.newText.length; index++) {
-          const char = edit.newText.charCodeAt(index);
-          if (char === 10) {
-            count++;
-          } else if (char === 13) {
-            count++;
-            if (edit.newText.charCodeAt(index + 1) === 10) {
-              index++;
-            }
-          }
-        }
+        const count = countLineBreaks(edit.newText);
         if (count > (continuationLines.get(edit.range.start.line) ?? 0)) {
           continuationLines.set(edit.range.start.line, count);
         }
@@ -5122,54 +5168,13 @@ export class Editor<
       editIndex < prediction.response.edits.length;
       editIndex++
     ) {
-      let edit = prediction.response.edits[editIndex];
-      let groupEndIndex = editIndex;
-      let groupEndLine = edit.range.end.line;
-      while (
-        groupEndIndex + 1 < prediction.response.edits.length &&
-        prediction.response.edits[groupEndIndex + 1].range.start.line <=
-          groupEndLine
-      ) {
-        groupEndIndex++;
-        groupEndLine = Math.max(
-          groupEndLine,
-          prediction.response.edits[groupEndIndex].range.end.line
-        );
-      }
-
-      // Edits sharing a source line must render as one preview so unchanged
-      // text between them is masked and redrawn exactly once.
-      if (groupEndIndex > editIndex) {
-        const start = edit.range.start;
-        const end = {
-          line: groupEndLine,
-          character: textDocument.getLineLength(groupEndLine),
-        };
-        const parts: string[] = [];
-        let consumed = textDocument.offsetAt(start);
-        for (
-          let groupedIndex = editIndex;
-          groupedIndex <= groupEndIndex;
-          groupedIndex++
-        ) {
-          const groupedEdit = prediction.response.edits[groupedIndex];
-          const groupedStart = textDocument.offsetAt(groupedEdit.range.start);
-          const groupedEnd = textDocument.offsetAt(groupedEdit.range.end);
-          parts.push(
-            textDocument.getTextSlice(consumed, groupedStart),
-            groupedEdit.newText
-          );
-          consumed = groupedEnd;
-        }
-        parts.push(
-          textDocument.getTextSlice(consumed, textDocument.offsetAt(end))
-        );
-        edit = {
-          range: { start, end },
-          newText: parts.join(''),
-        };
-        editIndex = groupEndIndex;
-      }
+      const group = this.#composeEditPredictionGroup(
+        textDocument,
+        prediction.response.edits,
+        editIndex
+      );
+      const { edit } = group;
+      editIndex = group.endIndex;
       const { start, end } = edit.range;
       const isDeletion = edit.newText.length === 0;
       const isReplacement = comparePosition(start, end) !== 0;
