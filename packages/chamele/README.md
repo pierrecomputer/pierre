@@ -3,8 +3,8 @@
 `@pierre/chamele` is a fast code highlighter written by hand in WebAssembly Text
 (WAT).
 
-- **Lightweight**: 32.7KB (gzipped Wasm) for 32 languages
-- **Fast**: 91–668× faster than Shiki in the latest
+- **Lightweight**: 36.8KB (gzipped Wasm) for 32 languages
+- **Fast**: 92–771× faster than Shiki in the latest
   [benchmark](./benchmark/README.md)
 - Built-in language lexers, no external grammar definitions needed
 - Compatible with Zed's theme format
@@ -182,9 +182,10 @@ toCSS(pierreDark);
 ## Development
 
 ```bash
-moonx chamele:build   # compile WAT (wabt + binaryen) and TS glue (tsdown) into dist/
-moonx chamele:test    # run tests (bun test)
-moonx chamele:bench   # run benchmarks
+moonx chamele:build        # compile WAT (wabt + binaryen) and TS glue (tsdown) into dist/
+moonx chamele:test         # run tests (bun test)
+moonx chamele:bench        # run benchmarks
+moonx chamele:bench-live   # benchmark incremental editor tokenization
 ```
 
 See [ARCHITECTURE.md](./ARCHITECTURE.md) for internals.

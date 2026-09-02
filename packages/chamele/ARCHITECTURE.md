@@ -225,41 +225,41 @@ the whole editor document instead of a one-shot input buffer:
                               standard aligned record output
 ```
 
-Per line the driver copies the content plus its real terminator into scratch,
-points `$srcBase` at it, and runs the ordinary mode-3 streaming pipeline
-(`$streamChunk`), so live output is byte-identical to `TokenizeStream` fed one
-line per chunk. Around each run it restores and captures the streaming state:
-the cross-chunk globals, the 32-byte stream delimiter, the whole used lexer
-checkpoint region, and the live prefixes of the shared/bracket/jsx stacks. That
-image is a pure function of the incoming state and the line bytes, so blobs are
-interned (FNV-1a 64 then exact bytes) into refcounted ids and exact id equality
-is a sound convergence test. Blobs are stored with trailing zeros trimmed — most
-of the image is idle checkpoint space — and a line whose outgoing bytes equal
-the incoming blob reuses its id without hashing.
+Each line is copied into scratch with its terminator. `$srcBase` points at it,
+then `$streamChunk` runs the ordinary mode-3 pipeline. Output matches
+`TokenizeStream` fed one line per chunk.
 
-The line table is a gap buffer of 32-byte descriptors (text pointer/length,
-UTF-16 length, token block, outgoing state id, terminator and format flags).
-Records pack to `(tokenId << 24) | endUtf16` words, or `[endUtf16, tokenId]`
-pairs past the 24-bit range. Edits splice descriptors (the last replacement line
-inherits the old end line's state id, so a state-neutral edit converges on
-itself), then the driver re-tokenizes each dirty range and continues until a
-line's new outgoing id equals its old one, extending the reported line changes
-over every re-tokenized line. All driver state lives in globals, so `liveRun` is
-resumable by line budget: with a `renderRange` the JavaScript glue runs it
-synchronously only until the cursor passes the range end, returns tokens for the
-in-range re-tokenized lines, and drives the remainder in budgeted background
-slices delivered through `onDeferTokenize`. The glue derives each slice's lines
-from the change list plus the driver cursor (`liveStats` keys 10/11); `pause`
-suspends the slices without discarding them. A new edit while slices are pending
-does not settle first: `liveApplyEdits` captures the unreached dirty ranges in
-pre-batch coordinates, remaps them through the batch's splices, and merges them
-into the new range list, so the driver still re-tokenizes every line the old run
-had not reached — beyond those ranges a state-id match against a pre-old-batch
-id certifies the untouched chain exactly like ordinary convergence.
+Before and after each line the driver saves streaming state: cross-chunk
+globals, the 32-byte stream delimiter, the used lexer checkpoint region, and the
+live prefixes of the shared/bracket/jsx stacks. Blobs are interned (FNV-1a 64,
+then exact bytes) into refcounted ids. Equal ids mean convergence. Trailing
+zeros are trimmed. If outgoing bytes match the incoming blob, the same id is
+reused without hashing.
 
-The heap uses size-class free lists (8-byte headers, one block size per class)
-with no coalescing; a sliding compaction pass runs when parked free space
-outweighs live data by at least 1 MiB. Text is stored as WTF-8 — JavaScript
-encodes lone surrogates explicitly, and edits that split an astral pair
-synthesize the matching surrogate halves — so `getLineText` round-trips any
-UTF-16 document exactly.
+The line table is a gap buffer of 32-byte descriptors: text pointer/length,
+UTF-16 length, token block, outgoing state id, terminator and format flags.
+Token records pack as `(tokenId << 24) | endUtf16`, or `[endUtf16, tokenId]`
+once the id exceeds 24 bits.
+
+Edits splice descriptors. The last replacement line keeps the old end line's
+state id. The driver re-tokenizes dirty ranges until a line's new outgoing id
+matches its old one, and reports every re-tokenized line.
+
+Driver state is all globals, so `liveRun` can stop at a line budget. With a
+`renderRange`, JavaScript runs until the cursor passes the range, returns those
+tokens, and continues in background slices via `onDeferTokenize`. Slice lines
+come from the change list plus the driver cursor (`liveStats` keys 10/11).
+`pause` holds slices without dropping them.
+
+A new edit does not wait for pending slices. `liveApplyEdits` remaps unreached
+dirty ranges through the batch splices and merges them into the new range list.
+Lines the old run never reached still get re-tokenized; beyond that, matching a
+pre-old-batch state id is enough to stop.
+
+The heap is size-class free lists (8-byte headers, one size per class), no
+coalescing. Compaction slides live blocks when parked free space exceeds live
+data by at least 1 MiB.
+
+Text is WTF-8. JavaScript encodes lone surrogates; edits that split an astral
+pair synthesize the matching halves. `getLineText` round-trips any UTF-16
+document.
