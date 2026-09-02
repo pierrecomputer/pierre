@@ -120,6 +120,7 @@ import {
 } from './selectionAction';
 import { createSpriteElement } from './sprite';
 import { TextDocument, type TextDocumentChange } from './textDocument';
+import { getTextDocumentChangeTransaction } from './textDocumentChangeTransaction';
 import {
   getExpandedAsciiTextColumns,
   getUnicodeMeasurementOffsets,
@@ -563,8 +564,6 @@ export class Editor<
     response: EditPredictResponse;
   };
   #editPredictionHistory: EditPredictionHistoryRecord[] = [];
-  #editPredictionHistoryText?: string;
-  #pendingEditPredictionHistorySource?: 'user' | 'prediction';
   #editPredictionSpacers = new Map<HTMLElement, number>();
   #onDeferTokenize = (
     lines: Map<number, Array<HighlightedToken>>,
@@ -651,8 +650,6 @@ export class Editor<
     if (previousEditPrediction !== this.#options.editPrediction) {
       this.#cancelEditPrediction(true);
       this.#editPredictionHistory = [];
-      this.#editPredictionHistoryText = undefined;
-      this.#pendingEditPredictionHistorySource = undefined;
       this.#scheduleEditPrediction();
     }
   }
@@ -1126,8 +1123,6 @@ export class Editor<
     this.#editPredictionAltPressed = false;
     if (!recycle) {
       this.#editPredictionHistory = [];
-      this.#editPredictionHistoryText = undefined;
-      this.#pendingEditPredictionHistorySource = undefined;
     }
     const editSession = this.#editSession;
     if (fileInstance != null && editSession != null) {
@@ -2413,6 +2408,12 @@ export class Editor<
               e.altKey
           )
         ) {
+          e.preventDefault();
+          return;
+        }
+
+        if (e.key === 'Escape' && this.#editPrediction !== undefined) {
+          this.#cancelEditPrediction(true);
           e.preventDefault();
           return;
         }
@@ -4759,6 +4760,23 @@ export class Editor<
     }
   }
 
+  #includesEditPredictionPath(path: string): boolean {
+    const options = this.#options.editPrediction;
+    if (options === undefined) {
+      return false;
+    }
+    const normalizedPath = path.replaceAll('\\', '/');
+    return (
+      (options.include === undefined ||
+        options.include.some((pattern) =>
+          matchesEditPredictionPattern(normalizedPath, pattern)
+        )) &&
+      options.exclude?.some((pattern) =>
+        matchesEditPredictionPattern(normalizedPath, pattern)
+      ) !== true
+    );
+  }
+
   #scheduleEditPrediction(): void {
     this.#cancelEditPrediction(true);
     const selection = this.#selections?.[0];
@@ -4792,26 +4810,13 @@ export class Editor<
         return;
       }
 
-      const normalizedPath = path.replaceAll('\\', '/');
-      if (
-        (options.include !== undefined &&
-          !options.include.some((pattern) =>
-            matchesEditPredictionPattern(normalizedPath, pattern)
-          )) ||
-        options.exclude?.some((pattern) =>
-          matchesEditPredictionPattern(normalizedPath, pattern)
-        ) === true
-      ) {
+      if (!this.#includesEditPredictionPath(path)) {
         return;
       }
 
-      this.#recordEditPredictionHistory(
-        this.#pendingEditPredictionHistorySource ?? 'user'
-      );
       const request = buildEditPredictionRequest(
         path,
-        document.version,
-        document.getText(),
+        document,
         cursorOffset,
         this.#editPredictionHistory
       );
@@ -5012,28 +5017,26 @@ export class Editor<
     }, EDIT_PREDICTION_DEBOUNCE_MS);
   }
 
-  #recordEditPredictionHistory(source: 'user' | 'prediction'): void {
+  #recordEditPredictionHistory(
+    change: TextDocumentChange,
+    source: 'user' | 'prediction'
+  ): void {
     const textDocument = this.#editSession?.document;
     const path = this.#editSession?.fileInfo?.name;
+    const transaction = getTextDocumentChangeTransaction(change);
     if (
-      this.#options.editPrediction === undefined ||
       textDocument === undefined ||
-      path === undefined
+      path === undefined ||
+      transaction === undefined ||
+      !this.#includesEditPredictionPath(path)
     ) {
-      return;
-    }
-    const text = textDocument.getText();
-    const previousText = this.#editPredictionHistoryText;
-    this.#editPredictionHistoryText = text;
-    this.#pendingEditPredictionHistorySource = undefined;
-    if (previousText === undefined || previousText === text) {
       return;
     }
     this.#editPredictionHistory = recordEditPrediction(
       this.#editPredictionHistory,
       path,
-      previousText,
-      text,
+      textDocument,
+      transaction,
       source
     );
   }
@@ -5119,7 +5122,54 @@ export class Editor<
       editIndex < prediction.response.edits.length;
       editIndex++
     ) {
-      const edit = prediction.response.edits[editIndex];
+      let edit = prediction.response.edits[editIndex];
+      let groupEndIndex = editIndex;
+      let groupEndLine = edit.range.end.line;
+      while (
+        groupEndIndex + 1 < prediction.response.edits.length &&
+        prediction.response.edits[groupEndIndex + 1].range.start.line <=
+          groupEndLine
+      ) {
+        groupEndIndex++;
+        groupEndLine = Math.max(
+          groupEndLine,
+          prediction.response.edits[groupEndIndex].range.end.line
+        );
+      }
+
+      // Edits sharing a source line must render as one preview so unchanged
+      // text between them is masked and redrawn exactly once.
+      if (groupEndIndex > editIndex) {
+        const start = edit.range.start;
+        const end = {
+          line: groupEndLine,
+          character: textDocument.getLineLength(groupEndLine),
+        };
+        const parts: string[] = [];
+        let consumed = textDocument.offsetAt(start);
+        for (
+          let groupedIndex = editIndex;
+          groupedIndex <= groupEndIndex;
+          groupedIndex++
+        ) {
+          const groupedEdit = prediction.response.edits[groupedIndex];
+          const groupedStart = textDocument.offsetAt(groupedEdit.range.start);
+          const groupedEnd = textDocument.offsetAt(groupedEdit.range.end);
+          parts.push(
+            textDocument.getTextSlice(consumed, groupedStart),
+            groupedEdit.newText
+          );
+          consumed = groupedEnd;
+        }
+        parts.push(
+          textDocument.getTextSlice(consumed, textDocument.offsetAt(end))
+        );
+        edit = {
+          range: { start, end },
+          newText: parts.join(''),
+        };
+        editIndex = groupEndIndex;
+      }
       const { start, end } = edit.range;
       const isDeletion = edit.newText.length === 0;
       const isReplacement = comparePosition(start, end) !== 0;
@@ -6722,11 +6772,7 @@ export class Editor<
 
     this.#checkpointEditSessionState();
 
-    if (options?.editSource === 'prediction') {
-      this.#recordEditPredictionHistory('prediction');
-    } else {
-      this.#pendingEditPredictionHistorySource = 'user';
-    }
+    this.#recordEditPredictionHistory(change, options?.editSource ?? 'user');
     this.#scheduleEditPrediction();
 
     // Publish the change only after the host renderer agrees with the new

@@ -7,6 +7,7 @@ import {
 } from './editStack';
 import { PieceTable } from './pieceTable';
 import type { SearchParams } from './searchPanel';
+import { setTextDocumentChangeTransaction } from './textDocumentChangeTransaction';
 import type {
   EditHistoryState,
   EditorChange,
@@ -304,6 +305,10 @@ export class TextDocument<
     } else {
       this.#editStack.push(entry);
     }
+    setTextDocumentChangeTransaction(change, {
+      appliedEdits: entry.forwardEdits,
+      inverseEdits: entry.inverseEdits,
+    });
     return change;
   }
 
@@ -330,6 +335,10 @@ export class TextDocument<
     if (change === undefined) {
       return undefined;
     }
+    setTextDocumentChangeTransaction(change, {
+      appliedEdits: entry.inverseEdits,
+      inverseEdits: entry.forwardEdits,
+    });
     this.#version = entry.versionBefore;
     const selections = entry.selectionsBefore?.slice();
     return [
@@ -351,6 +360,10 @@ export class TextDocument<
     if (change === undefined) {
       return undefined;
     }
+    setTextDocumentChangeTransaction(change, {
+      appliedEdits: entry.forwardEdits,
+      inverseEdits: entry.inverseEdits,
+    });
     this.#version = entry.versionAfter;
     const selections = entry.selectionsAfter?.slice();
     return [
