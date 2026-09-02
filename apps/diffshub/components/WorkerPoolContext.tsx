@@ -9,9 +9,8 @@ import {
 import { type ReactNode, useState } from 'react';
 
 import { themeController } from '@/components/themeController';
-import { diffThemeProps } from '@/lib/theme/diffThemeProps';
-
 import { getPreferredHighlighter } from '@/lib/getPreferredHighlighter';
+import { diffThemeProps } from '@/lib/theme/diffThemeProps';
 
 function isMobileBrowser(): boolean {
   const navigator = global.navigator;
