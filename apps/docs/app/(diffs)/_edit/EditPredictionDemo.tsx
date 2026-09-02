@@ -54,8 +54,8 @@ const readyStatusText = {
   ),
   subtle: (
     <>
-      Prediction ready — press <kbd>Alt</kbd> to reveal, then <kbd>Tab</kbd> to
-      accept or <kbd>Esc</kbd> to dismiss.
+      Prediction ready — tap <kbd>Alt</kbd> to show or hide it, then{' '}
+      <kbd>Tab</kbd> to accept or <kbd>Esc</kbd> to dismiss.
     </>
   ),
 };

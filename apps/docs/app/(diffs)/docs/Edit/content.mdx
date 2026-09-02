@@ -450,9 +450,9 @@ than shipping them to the browser.
 
 The editor calls `predict()` 300 ms after typing or moving to a single,
 collapsed caret. A document or cursor change clears the current prediction and
-aborts in-progress work through `context.signal`. For `'subtle'` mode, reveal a
-prediction with <kbd>Alt</kbd> before accepting or dismissing it. Use `include`
-and `exclude` to filter slash-normalized file paths; exclusions take precedence.
+aborts in-progress work through `context.signal`. In `'subtle'` mode, the
+prediction toggles when you tap <kbd>Alt</kbd>. Use `include` and `exclude` to
+filter slash-normalized file paths; exclusions take precedence.
 
 ### API reference
 

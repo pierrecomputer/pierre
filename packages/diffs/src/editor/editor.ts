@@ -326,7 +326,7 @@ export interface EditorOptions<EType extends EditorType, LAnnotation, Caret> {
     /**
      * The edit prediction mode.
      * - 'eager': predictions appear inline when the user types.
-     * - 'subtle': predictions appear inline after pressing the `Alt` key.
+     * - 'subtle': pressing the `Alt` key toggles predictions inline.
      * @default 'eager'
      */
     mode?: 'eager' | 'subtle';
@@ -2136,11 +2136,11 @@ export class Editor<
             this.#selectionStart = this.#selections?.at(-1);
           } else if (
             e.key === 'Alt' &&
+            !e.repeat &&
             this.#contentHasFocus &&
-            this.#options.editPrediction?.mode === 'subtle' &&
-            !this.#editPredictionRevealed
+            this.#options.editPrediction?.mode === 'subtle'
           ) {
-            this.#editPredictionRevealed = true;
+            this.#editPredictionRevealed = !this.#editPredictionRevealed;
             this.#updateSelections(this.#selections ?? []);
           }
         },

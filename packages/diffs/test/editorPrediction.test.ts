@@ -1483,6 +1483,71 @@ describe('Editor edit prediction', () => {
     }
   });
 
+  test('toggles a subtle prediction without discarding it', async () => {
+    const calls: PredictionCall[] = [];
+    const provider: EditPredictProvider = {
+      predict(request, context) {
+        calls.push({ context, request });
+        return Promise.resolve({
+          edits: [
+            {
+              range: {
+                start: { line: 0, character: 1 },
+                end: { line: 0, character: 1 },
+              },
+              newText: '!',
+            },
+          ],
+          newCursor: { line: 0, character: 2 },
+        });
+      },
+    };
+    const fixture = await createPredictionFixture({
+      contents: 'a',
+      editorOptions: {
+        editPrediction: { mode: 'subtle', provider },
+      },
+    });
+
+    try {
+      setCaret(fixture.editor, 0, 1);
+      dispatchKey(fixture.content, 'Alt', { altKey: true });
+      await waitFor(() => hasVisiblePrediction(fixture.container), {
+        timeout: PREDICT_TIMEOUT,
+      });
+      await expectCallCount(calls, 1);
+
+      dispatchKey(fixture.content, 'Alt', {
+        altKey: true,
+        repeat: true,
+      });
+      expect(hasVisiblePrediction(fixture.container)).toBe(true);
+
+      dispatchKey(fixture.content, 'Alt', {}, 'keyup');
+      dispatchKey(fixture.content, 'Alt', { altKey: true });
+      expect(hasVisiblePrediction(fixture.container)).toBe(false);
+      expect(calls).toHaveLength(1);
+      expect(fixture.editor.getText()).toBe('a');
+
+      dispatchKey(fixture.content, 'Alt', {}, 'keyup');
+      dispatchKey(fixture.content, 'Alt', { altKey: true });
+      expect(hasVisiblePrediction(fixture.container)).toBe(true);
+      expect(calls).toHaveLength(1);
+
+      const escape = dispatchKey(fixture.content, 'Escape');
+      expect(escape.defaultPrevented).toBe(true);
+      expect(predictionElements(fixture.container)).toHaveLength(0);
+
+      dispatchKey(fixture.content, 'Alt', {}, 'keyup');
+      dispatchKey(fixture.content, 'Alt', { altKey: true });
+      await wait(0);
+      expect(hasVisiblePrediction(fixture.container)).toBe(false);
+      expect(calls).toHaveLength(1);
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
   const filterCases: Array<{
     allowed: boolean;
     name: string;
