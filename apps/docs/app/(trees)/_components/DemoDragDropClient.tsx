@@ -76,7 +76,6 @@ export function DemoDragDropClient({ preloadedData }: DemoDragDropClientProps) {
 
   useEffect(() => {
     activeModel.resetPaths(sampleFileList);
-    setHasDragged(false);
   }, [activeModel]);
 
   return (
@@ -107,7 +106,10 @@ export function DemoDragDropClient({ preloadedData }: DemoDragDropClientProps) {
             <Button
               variant="outline"
               className="w-full justify-between gap-3 pr-11 pl-3 md:w-auto"
-              onClick={() => setLockPackageJson((previous) => !previous)}
+              onClick={() => {
+                setLockPackageJson((previous) => !previous);
+                setHasDragged(false);
+              }}
             >
               <div className="flex items-center gap-2">
                 <IconLock />
