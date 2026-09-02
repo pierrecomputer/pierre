@@ -33,5 +33,5 @@ export function buildAnnotationThemeStyle(
     }
   }
 
-  return Object.keys(style).length > 0 ? (style as CSSProperties) : undefined;
+  return Object.keys(style).length > 0 ? style : undefined;
 }

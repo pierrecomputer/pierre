@@ -1526,7 +1526,7 @@ export function TreeApp<LAnnotation = unknown>({
       Object.entries(treeStyleRecord).filter(([key]) =>
         key.startsWith('--trees-')
       )
-    ) as CSSProperties;
+    );
   }, [treeStyleRecord]);
 
   const containerStyle = useMemo<CSSProperties>(() => {

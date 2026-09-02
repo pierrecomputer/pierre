@@ -56,7 +56,7 @@ function rect(left: number, top: number, width = 1, height = 1): DOMRect {
     toJSON() {
       return {};
     },
-  } as DOMRect;
+  };
 }
 
 // jsdom performs no layout, so every element.offsetTop is 0 and the wrap-induced

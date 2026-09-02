@@ -356,7 +356,7 @@ function hasFileContents(
   if (typeof value !== 'object' || value === null || !('file' in value)) {
     return false;
   }
-  const file = (value as { file: unknown }).file;
+  const file = value.file;
   if (typeof file !== 'object' || file === null) return false;
   const f = file as { name?: unknown; contents?: unknown };
   return typeof f.contents === 'string' && typeof f.name === 'string';

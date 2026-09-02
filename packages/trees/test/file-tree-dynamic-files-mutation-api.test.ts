@@ -591,7 +591,7 @@ describe('file-tree dynamic files / mutation API', () => {
                 context.close();
               });
               menu.append(deleteButton);
-              return menu as unknown as HTMLElement;
+              return menu;
             },
           },
         },

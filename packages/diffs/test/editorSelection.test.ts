@@ -83,7 +83,7 @@ function composedRange(
     endContainer,
     endOffset,
     collapsed: startContainer === endContainer && startOffset === endOffset,
-  } as StaticRange;
+  };
 }
 
 function editorSelection(
