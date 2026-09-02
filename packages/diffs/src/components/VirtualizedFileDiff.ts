@@ -115,7 +115,8 @@ let instanceId = -1;
 
 export class VirtualizedFileDiff<
   LAnnotation = undefined,
-> extends FileDiff<LAnnotation> {
+  LDecoration = undefined,
+> extends FileDiff<LAnnotation, LDecoration> {
   override readonly __id: string = `little-virtualized-file-diff:${++instanceId}`;
 
   public top: number | undefined;
@@ -132,7 +133,7 @@ export class VirtualizedFileDiff<
   };
   private isVisible: boolean = false;
   private isSetup: boolean = false;
-  private virtualizer: Virtualizer | CodeView<LAnnotation>;
+  private virtualizer: Virtualizer | CodeView<LAnnotation, LDecoration>;
   private layoutDirty = true;
   private forceRenderOverride: true | undefined;
   private currentCollapsed: boolean | undefined;
@@ -143,8 +144,8 @@ export class VirtualizedFileDiff<
   private pendingRender: PendingRender | undefined;
 
   constructor(
-    options: FileDiffOptions<LAnnotation> | undefined,
-    virtualizer: Virtualizer | CodeView<LAnnotation>,
+    options: FileDiffOptions<LAnnotation, LDecoration> | undefined,
+    virtualizer: Virtualizer | CodeView<LAnnotation, LDecoration>,
     metrics?: Partial<VirtualFileMetrics>,
     workerManager?: WorkerPoolManager,
     isContainerManaged = false
@@ -244,13 +245,14 @@ export class VirtualizedFileDiff<
     return this.metrics.lineHeight * multiplier;
   }
 
-  override setOptions(options: FileDiffOptions<LAnnotation> | undefined): void {
+  override setOptions(
+    options: FileDiffOptions<LAnnotation, LDecoration> | undefined
+  ): void {
     if (this.isAdvancedMode()) {
       throw new Error(
         'VirtualizedFileDiff.setOptions cannot be used inside CodeView. Update CodeView options instead.'
       );
     }
-
     if (options == null) return;
     const { options: previousOptions } = this;
     const optionsChanged = !areOptionsEqual(previousOptions, options);
@@ -1241,7 +1243,7 @@ export class VirtualizedFileDiff<
     forceRender = false,
     lineAnnotations,
     ...fileInputProps
-  }: FileDiffRenderProps<LAnnotation> = {}): boolean {
+  }: FileDiffRenderProps<LAnnotation, LDecoration> = {}): boolean {
     const fileInput = getDiffFileInput(
       fileInputProps,
       'VirtualizedFileDiff.render'
@@ -1452,7 +1454,9 @@ export class VirtualizedFileDiff<
     return this.virtualizer.type === 'simple' ? this.virtualizer : undefined;
   }
 
-  private getAdvancedVirtualizer(): CodeView<LAnnotation> | undefined {
+  private getAdvancedVirtualizer():
+    | CodeView<LAnnotation, LDecoration>
+    | undefined {
     return this.virtualizer.type === 'advanced' ? this.virtualizer : undefined;
   }
 
@@ -2201,9 +2205,9 @@ function getHunkMetadataOffsets({
   return offsets;
 }
 
-function hasDiffLayoutOptionChanged<LAnnotation>(
-  previousOptions: FileDiffOptions<LAnnotation>,
-  nextOptions: FileDiffOptions<LAnnotation>
+function hasDiffLayoutOptionChanged<LAnnotation, LDecoration>(
+  previousOptions: FileDiffOptions<LAnnotation, LDecoration>,
+  nextOptions: FileDiffOptions<LAnnotation, LDecoration>
 ): boolean {
   return (
     (previousOptions.diffStyle ?? 'split') !==
@@ -2231,9 +2235,9 @@ function hasDiffLayoutOptionChanged<LAnnotation>(
   );
 }
 
-function hasDiffEstimateOptionChanged<LAnnotation>(
-  previousOptions: FileDiffOptions<LAnnotation>,
-  nextOptions: FileDiffOptions<LAnnotation>
+function hasDiffEstimateOptionChanged<LAnnotation, LDecoration>(
+  previousOptions: FileDiffOptions<LAnnotation, LDecoration>,
+  nextOptions: FileDiffOptions<LAnnotation, LDecoration>
 ): boolean {
   return (
     (previousOptions.disableFileHeader ?? false) !==
@@ -2262,8 +2266,10 @@ function canHydrateCollapsedContext(
   );
 }
 
-function getOptionHunkSeparatorType<LAnnotation>(
-  hunkSeparators: FileDiffOptions<LAnnotation>['hunkSeparators'] | undefined
+function getOptionHunkSeparatorType<LAnnotation, LDecoration>(
+  hunkSeparators:
+    | FileDiffOptions<LAnnotation, LDecoration>['hunkSeparators']
+    | undefined
 ): HunkSeparators {
   return typeof hunkSeparators === 'function'
     ? 'custom'

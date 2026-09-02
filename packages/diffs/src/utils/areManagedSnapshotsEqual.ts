@@ -3,9 +3,9 @@ import type {
   CodeViewSlotSnapshot,
 } from '../components/CodeView';
 
-export function areManagedSnapshotsEqual<LAnnotation>(
-  previous: CodeViewSlotSnapshot<LAnnotation> | undefined,
-  next: CodeViewSlotSnapshot<LAnnotation> | undefined
+export function areManagedSnapshotsEqual<LAnnotation, LDecoration>(
+  previous: CodeViewSlotSnapshot<LAnnotation, LDecoration> | undefined,
+  next: CodeViewSlotSnapshot<LAnnotation, LDecoration> | undefined
 ): boolean {
   if (previous == null || next == null) {
     return previous === next;
@@ -18,9 +18,9 @@ export function areManagedSnapshotsEqual<LAnnotation>(
   return areRenderedItemsEqual(previous.items, next.items);
 }
 
-function areRenderedItemsEqual<LAnnotation>(
-  previous: CodeViewRenderedItem<LAnnotation>[] | undefined,
-  next: CodeViewRenderedItem<LAnnotation>[] | undefined
+function areRenderedItemsEqual<LAnnotation, LDecoration>(
+  previous: CodeViewRenderedItem<LAnnotation, LDecoration>[] | undefined,
+  next: CodeViewRenderedItem<LAnnotation, LDecoration>[] | undefined
 ): boolean {
   if (previous == null || next == null) {
     return previous === next;

@@ -22,6 +22,7 @@ import type {
   BaseDiffOptionsWithDefaults,
   CodeColumnType,
   CustomPreProperties,
+  DiffDecorationItem,
   DiffLineAnnotation,
   DiffsHighlighter,
   DiffsTextDocument,
@@ -62,6 +63,13 @@ import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
 import { getHighlighterOptions } from '../utils/getHighlighterOptions';
 import { getHunkSeparatorSlotName } from '../utils/getHunkSeparatorSlotName';
 import { getLineAnnotationName } from '../utils/getLineAnnotationName';
+import {
+  getLineDecorationContentProperties,
+  getLineDecorationGutterChildren,
+  getLineDecorationGutterProperties,
+  mergeHastProperties,
+  mergeNormalizedLineDecorations,
+} from '../utils/getLineDecorationProperties';
 import { getTotalLineCountFromHunks } from '../utils/getTotalLineCountFromHunks';
 import {
   createGutterGap,
@@ -79,6 +87,11 @@ import { isDefaultRenderRange } from '../utils/isDefaultRenderRange';
 import { isDiffPlainText } from '../utils/isDiffPlainText';
 import type { DiffLineMetadata } from '../utils/iterateOverDiff';
 import { iterateOverDiff } from '../utils/iterateOverDiff';
+import {
+  normalizeDiffDecorations,
+  type NormalizedLineDecorationMap,
+  type NormalizedLineDecorations,
+} from '../utils/normalizeLineDecorations';
 import { renderDiffWithHighlighter } from '../utils/renderDiffWithHighlighter';
 import {
   recomputeDiffHunksForEdit,
@@ -173,6 +186,7 @@ export interface SplitLineDecorationProps {
 export interface LineDecoration {
   gutterLineType: LineTypes;
   gutterProperties?: Properties;
+  gutterChildren?: ElementContent[];
   contentProperties?: Properties;
 }
 
@@ -235,7 +249,10 @@ export interface HunksRenderResult {
 
 let instanceId = -1;
 
-export class DiffHunksRenderer<LAnnotation = undefined> {
+export class DiffHunksRenderer<
+  LAnnotation = undefined,
+  LDecoration = undefined,
+> {
   readonly __id: string = `diff-hunks-renderer:${++instanceId}`;
 
   private highlighter: DiffsHighlighter | undefined;
@@ -248,6 +265,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
   private deletionAnnotations: AnnotationLineMap<LAnnotation> = {};
   private additionAnnotations: AnnotationLineMap<LAnnotation> = {};
+  private deletionDecorationsByLine: NormalizedLineDecorationMap = {};
+  private additionDecorationsByLine: NormalizedLineDecorationMap = {};
 
   private computedLang: SupportedLanguages = 'text';
   private renderCache: DiffRenderCache | undefined;
@@ -289,6 +308,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   }
 
   public recycle(): void {
+    this.deletionDecorationsByLine = {};
+    this.additionDecorationsByLine = {};
     this.highlighter = undefined;
     this.diff = undefined;
     this.clearRenderCache();
@@ -800,6 +821,14 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     diff.editSessionDirty = true;
   }
 
+  public setDecorations(
+    decorations: readonly DiffDecorationItem<LDecoration>[]
+  ): void {
+    const maps = normalizeDiffDecorations(decorations);
+    this.additionDecorationsByLine = maps.additions;
+    this.deletionDecorationsByLine = maps.deletions;
+  }
+
   protected getUnifiedLineDecoration({
     lineType,
   }: UnifiedLineDecorationProps): LineDecoration {
@@ -829,7 +858,40 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     };
   }
 
-  private createAnnotationElement = (span: AnnotationSpan): HASTElement => {
+  protected getLineDecorations(
+    side: 'deletions' | 'additions',
+    lineNumber: number | undefined
+  ): NormalizedLineDecorations | undefined {
+    if (lineNumber == null) {
+      return undefined;
+    }
+    return side === 'deletions'
+      ? this.deletionDecorationsByLine[lineNumber]
+      : this.additionDecorationsByLine[lineNumber];
+  }
+
+  protected mergeLineDecoration(
+    decoration: LineDecoration,
+    lineDecorations: NormalizedLineDecorations | undefined
+  ): LineDecoration {
+    return {
+      ...decoration,
+      gutterChildren: mergeElementContents(
+        decoration.gutterChildren,
+        getLineDecorationGutterChildren(lineDecorations)
+      ),
+      gutterProperties: mergeHastProperties(
+        decoration.gutterProperties,
+        getLineDecorationGutterProperties(lineDecorations)
+      ),
+      contentProperties: mergeHastProperties(
+        decoration.contentProperties,
+        getLineDecorationContentProperties(lineDecorations)
+      ),
+    };
+  }
+
+  protected createAnnotationElement = (span: AnnotationSpan): HASTElement => {
     return createDefaultAnnotationElement(span);
   };
 
@@ -1516,11 +1578,18 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       lineType: LineTypes | 'buffer' | 'separator' | 'annotation',
       lineNumber: number,
       lineIndex: string,
-      gutterProperties: Properties | undefined
+      gutterProperties: Properties | undefined,
+      gutterChildren: ElementContent[] | undefined
     ) => {
       context.pushToGutter(
         type,
-        createGutterItem(lineType, lineNumber, lineIndex, gutterProperties)
+        createGutterItem(
+          lineType,
+          lineNumber,
+          lineIndex,
+          gutterProperties,
+          gutterChildren
+        )
       );
     };
 
@@ -1623,19 +1692,31 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             additionLineIndex: additionLine?.lineIndex,
             deletionLineIndex: deletionLine?.lineIndex,
           });
+          const unifiedLineDecoration = this.mergeLineDecoration(
+            lineDecoration,
+            mergeNormalizedLineDecorations(
+              deletionLine != null
+                ? this.getLineDecorations('deletions', deletionLine.lineNumber)
+                : undefined,
+              additionLine != null
+                ? this.getLineDecorations('additions', additionLine.lineNumber)
+                : undefined
+            )
+          );
           pushGutterLineNumber(
             'unified',
-            lineDecoration.gutterLineType,
+            unifiedLineDecoration.gutterLineType,
             additionLine != null
               ? additionLine.lineNumber
               : deletionLine.lineNumber,
             `${unifiedLineIndex},${splitLineIndex}`,
-            lineDecoration.gutterProperties
+            unifiedLineDecoration.gutterProperties,
+            unifiedLineDecoration.gutterChildren
           );
           if (additionLineContent != null) {
             additionLineContent = withContentProperties(
               additionLineContent,
-              lineDecoration.contentProperties,
+              unifiedLineDecoration.contentProperties,
               isRenderCacheDirty && additionLine != null
                 ? {
                     'data-line': additionLine.lineNumber,
@@ -1646,7 +1727,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           } else if (deletionLineContent != null) {
             deletionLineContent = withContentProperties(
               deletionLineContent,
-              lineDecoration.contentProperties,
+              unifiedLineDecoration.contentProperties,
               isRenderCacheDirty && deletionLine != null
                 ? {
                     'data-line': deletionLine.lineNumber,
@@ -1703,6 +1784,18 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             type,
             lineIndex: additionLine?.lineIndex,
           });
+          const decoratedDeletionLine = this.mergeLineDecoration(
+            deletionLineDecoration,
+            deletionLine != null
+              ? this.getLineDecorations('deletions', deletionLine.lineNumber)
+              : undefined
+          );
+          const decoratedAdditionLine = this.mergeLineDecoration(
+            additionLineDecoration,
+            additionLine != null
+              ? this.getLineDecorations('additions', additionLine.lineNumber)
+              : undefined
+          );
 
           if (deletionLineContent == null && additionLineContent == null) {
             const errorMessage =
@@ -1752,7 +1845,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           if (deletionLine != null) {
             const deletionLineDecorated = withContentProperties(
               deletionLineContent,
-              deletionLineDecoration.contentProperties,
+              decoratedDeletionLine.contentProperties,
               isRenderCacheDirty
                 ? {
                     'data-line': deletionLine.lineNumber,
@@ -1762,10 +1855,11 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             );
             pushGutterLineNumber(
               'deletions',
-              deletionLineDecoration.gutterLineType,
+              decoratedDeletionLine.gutterLineType,
               deletionLine.lineNumber,
               `${deletionLine.unifiedLineIndex},${splitLineIndex}`,
-              deletionLineDecoration.gutterProperties
+              decoratedDeletionLine.gutterProperties,
+              decoratedDeletionLine.gutterChildren
             );
             if (deletionLineDecorated != null) {
               deletionLineContent = deletionLineDecorated;
@@ -1774,7 +1868,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           if (additionLine != null) {
             const additionLineDecorated = withContentProperties(
               additionLineContent,
-              additionLineDecoration.contentProperties,
+              decoratedAdditionLine.contentProperties,
               isRenderCacheDirty
                 ? {
                     'data-line': additionLine.lineNumber,
@@ -1784,10 +1878,11 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             );
             pushGutterLineNumber(
               'additions',
-              additionLineDecoration.gutterLineType,
+              decoratedAdditionLine.gutterLineType,
               additionLine.lineNumber,
               `${additionLine.unifiedLineIndex},${splitLineIndex}`,
-              additionLineDecoration.gutterProperties
+              decoratedAdditionLine.gutterProperties,
+              decoratedAdditionLine.gutterChildren
             );
             if (additionLineDecorated != null) {
               additionLineContent = additionLineDecorated;
@@ -2242,6 +2337,19 @@ function getModifiedLinesString(lines: number) {
   return `${lines} unmodified line${suffix}`;
 }
 
+function mergeElementContents(
+  first: ElementContent[] | undefined,
+  second: ElementContent[] | undefined
+): ElementContent[] | undefined {
+  if (first == null) {
+    return second;
+  }
+  if (second == null) {
+    return first;
+  }
+  return [...first, ...second];
+}
+
 function pushUnifiedInjectedRows(
   rows: InjectedRow[],
   context: ProcessContext
@@ -2488,8 +2596,7 @@ function withContentProperties(
   return {
     ...lineNode,
     properties: {
-      ...lineNode.properties,
-      ...contentProperties,
+      ...(mergeHastProperties(lineNode.properties, contentProperties) ?? {}),
       ...extendProperties,
     },
   };

@@ -1,4 +1,4 @@
-import type { ElementContent, Element as HASTElement } from 'hast';
+import type { ElementContent, Element as HASTElement, Properties } from 'hast';
 import { toHtml } from 'hast-util-to-html';
 
 import {
@@ -18,6 +18,7 @@ import type {
   DiffsHighlighter,
   DiffsTextDocument,
   FileContents,
+  FileDecorationItem,
   FileHeaderRenderMode,
   HighlightedToken,
   LineAnnotation,
@@ -40,6 +41,12 @@ import { createPreElement } from '../utils/createPreElement';
 import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
 import { getHighlighterOptions } from '../utils/getHighlighterOptions';
 import { getLineAnnotationName } from '../utils/getLineAnnotationName';
+import {
+  getLineDecorationContentProperties,
+  getLineDecorationGutterChildren,
+  getLineDecorationGutterProperties,
+  mergeHastProperties,
+} from '../utils/getLineDecorationProperties';
 import { getThemes } from '../utils/getThemes';
 import {
   createGutterGap,
@@ -55,6 +62,11 @@ import {
 } from '../utils/includesFileAnnotations';
 import { isDefaultRenderRange } from '../utils/isDefaultRenderRange';
 import { isFilePlainText } from '../utils/isFilePlainText';
+import {
+  type NormalizedLineDecorationMap,
+  type NormalizedLineDecorations,
+  normalizeFileDecorations,
+} from '../utils/normalizeLineDecorations';
 import { renderFileWithHighlighter } from '../utils/renderFileWithHighlighter';
 import type { WorkerPoolManager } from '../worker';
 
@@ -115,7 +127,7 @@ export interface FileRendererOptions extends BaseCodeOptions {
 
 let instanceId = -1;
 
-export class FileRenderer<LAnnotation = undefined> {
+export class FileRenderer<LAnnotation = undefined, LDecoration = undefined> {
   readonly __id: string = `file-renderer:${++instanceId}`;
 
   private highlighter: DiffsHighlighter | undefined;
@@ -131,6 +143,7 @@ export class FileRenderer<LAnnotation = undefined> {
 
   private computedLang: SupportedLanguages = 'text';
   private lineAnnotations: AnnotationLineMap<LAnnotation> = {};
+  private decorationsByLine: NormalizedLineDecorationMap = {};
   private lineCache: LineCache | undefined;
   private pendingStructuralRows: Map<number, HASTElement> | undefined;
   private textDocumentCache = new WeakMap<FileContents, DiffsTextDocument>();
@@ -178,6 +191,12 @@ export class FileRenderer<LAnnotation = undefined> {
       this.lineAnnotations[annotation.lineNumber] = arr;
       arr.push(annotation);
     }
+  }
+
+  public setDecorations(
+    decorations: readonly FileDecorationItem<LDecoration>[]
+  ): void {
+    this.decorationsByLine = normalizeFileDecorations(decorations);
   }
 
   public cleanUp(): void {
@@ -293,6 +312,8 @@ export class FileRenderer<LAnnotation = undefined> {
   }
 
   public recycle(): void {
+    this.lineAnnotations = {};
+    this.decorationsByLine = {};
     this.clearRenderCache();
     this.highlighter = undefined;
     this.workerManager?.cleanUpTasks(this);
@@ -678,6 +699,15 @@ export class FileRenderer<LAnnotation = undefined> {
     file.contents = textDocument.getText();
   }
 
+  protected getLineDecorations(
+    lineNumber: number | undefined
+  ): NormalizedLineDecorations | undefined {
+    if (lineNumber == null) {
+      return undefined;
+    }
+    return this.decorationsByLine[lineNumber];
+  }
+
   public renderFile(
     file: FileContents | undefined = this.file,
     renderRange: RenderRange = DEFAULT_RENDER_RANGE
@@ -916,11 +946,23 @@ export class FileRenderer<LAnnotation = undefined> {
         throw new Error(message);
       }
 
+      const lineDecorations = this.getLineDecorations(lineNumber);
       // Add gutter line number
       gutter.children.push(
-        createGutterItem('context', lineNumber, `${lineIndex}`)
+        createGutterItem(
+          'context',
+          lineNumber,
+          `${lineIndex}`,
+          getLineDecorationGutterProperties(lineDecorations),
+          getLineDecorationGutterChildren(lineDecorations)
+        )
       );
-      contentArray.push(line);
+      contentArray.push(
+        withContentProperties(
+          line,
+          getLineDecorationContentProperties(lineDecorations)
+        )
+      );
       rowCount++;
 
       // Check annotations using ACTUAL line number from file
@@ -1147,4 +1189,18 @@ export class FileRenderer<LAnnotation = undefined> {
 
 function isFileMassive(lineCount: number, tokenizeMaxLength: number): boolean {
   return lineCount > tokenizeMaxLength;
+}
+
+function withContentProperties(
+  lineNode: ElementContent,
+  contentProperties: Properties | undefined
+): ElementContent {
+  if (lineNode.type !== 'element' || contentProperties == null) {
+    return lineNode;
+  }
+  return {
+    ...lineNode,
+    properties:
+      mergeHastProperties(lineNode.properties, contentProperties) ?? {},
+  };
 }

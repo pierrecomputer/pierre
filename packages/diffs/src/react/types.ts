@@ -11,9 +11,11 @@ import type {
 import type { EditorOptions } from '../edit';
 import type { GetHoveredLineResult } from '../managers/InteractionManager';
 import type {
+  DiffDecorationItem,
   DiffLineAnnotation,
   EditorChangeEvent,
   FileContents,
+  FileDecorationItem,
   FileDiffMetadata,
   LineAnnotation,
   SelectedLineRange,
@@ -22,18 +24,22 @@ import type {
 
 type ReactOwnedEditCallbacks = 'onEditChange' | 'onEditComplete';
 
-export type FileDiffOptions<LAnnotation> = Omit<
-  FileDiffClassOptions<LAnnotation>,
+export type FileDiffOptions<LAnnotation, LDecoration = undefined> = Omit<
+  FileDiffClassOptions<LAnnotation, LDecoration>,
   ReactOwnedEditCallbacks
 >;
 
-export type FileOptions<LAnnotation> = Omit<
-  FileClassOptions<LAnnotation>,
+export type FileOptions<LAnnotation, LDecoration = undefined> = Omit<
+  FileClassOptions<LAnnotation, LDecoration>,
   ReactOwnedEditCallbacks
 >;
 
-export interface DiffBasePropsReact<LAnnotation, LCaret = undefined> {
-  options?: FileDiffOptions<LAnnotation>;
+export interface DiffBasePropsReact<
+  LAnnotation,
+  LDecoration = undefined,
+  LCaret = undefined,
+> {
+  options?: FileDiffOptions<LAnnotation, LDecoration>;
   /** Whether this surface has an active edit session. */
   edit?: boolean;
   /** Creation-time options passed to the nearest EditProvider factory. */
@@ -59,6 +65,7 @@ export interface DiffBasePropsReact<LAnnotation, LCaret = undefined> {
   onEditComplete?: FileDiffEditCompleteHandler<LAnnotation>;
   metrics?: VirtualFileMetrics;
   lineAnnotations?: DiffLineAnnotation<LAnnotation>[];
+  decorations?: DiffDecorationItem<LDecoration>[];
   selectedLines?: SelectedLineRange | null;
   renderAnnotation?(annotations: DiffLineAnnotation<LAnnotation>): ReactNode;
   renderCustomHeader?(fileDiff: FileDiffMetadata): ReactNode;
@@ -73,9 +80,13 @@ export interface DiffBasePropsReact<LAnnotation, LCaret = undefined> {
   prerenderedHTML?: string;
 }
 
-export interface FileProps<LAnnotation, LCaret = undefined> {
+export interface FileProps<
+  LAnnotation,
+  LDecoration = undefined,
+  LCaret = undefined,
+> {
   file: FileContents;
-  options?: FileOptions<LAnnotation>;
+  options?: FileOptions<LAnnotation, LDecoration>;
   /** Whether this surface has an active edit session. */
   edit?: boolean;
   /** Creation-time options passed to the nearest EditProvider factory. */
@@ -97,6 +108,7 @@ export interface FileProps<LAnnotation, LCaret = undefined> {
   onEditComplete?: FileEditCompleteHandler<LAnnotation>;
   metrics?: VirtualFileMetrics;
   lineAnnotations?: LineAnnotation<LAnnotation>[];
+  decorations?: FileDecorationItem<LDecoration>[];
   selectedLines?: SelectedLineRange | null;
   renderAnnotation?(annotations: LineAnnotation<LAnnotation>): ReactNode;
   renderCustomHeader?(file: FileContents): ReactNode;

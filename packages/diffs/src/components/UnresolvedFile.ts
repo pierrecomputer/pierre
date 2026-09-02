@@ -35,29 +35,35 @@ import {
   type FileDiffRenderBaseProps,
 } from './FileDiff';
 
-export type RenderMergeConflictActions<LAnnotation> = (
+export type RenderMergeConflictActions<LAnnotation, LDecoration> = (
   action: MergeConflictDiffAction,
-  instance: UnresolvedFile<LAnnotation>
+  instance: UnresolvedFile<LAnnotation, LDecoration>
 ) => HTMLElement | DocumentFragment | null | undefined;
 
-export type MergeConflictActionsTypeOption<LAnnotation> =
+export type MergeConflictActionsTypeOption<LAnnotation, LDecoration> =
   | 'none'
   | 'default'
-  | RenderMergeConflictActions<LAnnotation>;
+  | RenderMergeConflictActions<LAnnotation, LDecoration>;
 
-export interface UnresolvedFileOptions<LAnnotation> extends Omit<
-  FileDiffOptions<LAnnotation>,
+export interface UnresolvedFileOptions<
+  LAnnotation = undefined,
+  LDecoration = undefined,
+> extends Omit<
+  FileDiffOptions<LAnnotation, LDecoration>,
   'diffStyle' | 'onPostRender'
 > {
   onPostRender?(
     node: HTMLElement,
-    instance: UnresolvedFile<LAnnotation>,
+    instance: UnresolvedFile<LAnnotation, LDecoration>,
     phase: PostRenderPhase
   ): unknown;
-  mergeConflictActionsType?: MergeConflictActionsTypeOption<LAnnotation>;
+  mergeConflictActionsType?: MergeConflictActionsTypeOption<
+    LAnnotation,
+    LDecoration
+  >;
   onMergeConflictAction?(
     payload: MergeConflictActionPayload,
-    instance: UnresolvedFile<LAnnotation>
+    instance: UnresolvedFile<LAnnotation, LDecoration>
   ): void;
   onMergeConflictResolve?(
     file: FileContents,
@@ -68,16 +74,17 @@ export interface UnresolvedFileOptions<LAnnotation> extends Omit<
 
 export interface UnresolvedFileRenderProps<
   LAnnotation,
-> extends FileDiffRenderBaseProps<LAnnotation> {
+  LDecoration,
+> extends FileDiffRenderBaseProps<LAnnotation, LDecoration> {
   file?: FileContents;
   actions?: (MergeConflictDiffAction | undefined)[];
   markerRows?: MergeConflictMarkerRow[];
 }
 
-export interface UnresolvedFileHydrationProps<LAnnotation> extends Omit<
-  UnresolvedFileRenderProps<LAnnotation>,
-  'file'
-> {
+export interface UnresolvedFileHydrationProps<
+  LAnnotation,
+  LDecoration,
+> extends Omit<UnresolvedFileRenderProps<LAnnotation, LDecoration>, 'file'> {
   file?: FileContents;
   fileContainer: HTMLElement;
   prerenderedHTML?: string;
@@ -114,7 +121,8 @@ let instanceId = -1;
 
 export class UnresolvedFile<
   LAnnotation = undefined,
-> extends FileDiff<LAnnotation> {
+  LDecoration = undefined,
+> extends FileDiff<LAnnotation, LDecoration> {
   override readonly __id: string = `unresolved-file:${++instanceId}`;
   override readonly type = 'unresolved-file';
 
@@ -130,7 +138,7 @@ export class UnresolvedFile<
     new Map();
 
   constructor(
-    public override options: UnresolvedFileOptions<LAnnotation> = {
+    public override options: UnresolvedFileOptions<LAnnotation, LDecoration> = {
       theme: DEFAULT_THEMES,
     },
     workerManager?: WorkerPoolManager | undefined,
@@ -141,7 +149,7 @@ export class UnresolvedFile<
   }
 
   override setOptions(
-    options: UnresolvedFileOptions<LAnnotation> | undefined
+    options: UnresolvedFileOptions<LAnnotation, LDecoration> | undefined
   ): void {
     if (options == null) {
       return;
@@ -182,9 +190,9 @@ export class UnresolvedFile<
   }
 
   protected override createHunksRenderer(
-    options: UnresolvedFileOptions<LAnnotation>
-  ): UnresolvedFileHunksRenderer<LAnnotation> {
-    const renderer = new UnresolvedFileHunksRenderer<LAnnotation>(
+    options: UnresolvedFileOptions<LAnnotation, LDecoration>
+  ): UnresolvedFileHunksRenderer<LAnnotation, LDecoration> {
+    const renderer = new UnresolvedFileHunksRenderer<LAnnotation, LDecoration>(
       this.getHunksRendererOptions(options),
       this.getAnnotationSlotName,
       this.handleHighlightRender,
@@ -194,7 +202,7 @@ export class UnresolvedFile<
   }
 
   protected override getHunksRendererOptions(
-    options: UnresolvedFileOptions<LAnnotation>
+    options: UnresolvedFileOptions<LAnnotation, LDecoration>
   ): UnresolvedFileHunksRendererOptions {
     return getUnresolvedDiffHunksRendererOptions(options, this.options);
   }
@@ -346,13 +354,16 @@ export class UnresolvedFile<
     return { fileDiff, actions, markerRows };
   }
 
-  override hydrate(props: UnresolvedFileHydrationProps<LAnnotation>): void {
+  override hydrate(
+    props: UnresolvedFileHydrationProps<LAnnotation, LDecoration>
+  ): void {
     const {
       file,
       fileDiff,
       actions,
       markerRows,
       lineAnnotations,
+      decorations,
       fileContainer,
       prerenderedHTML,
       preventEmit = false,
@@ -382,7 +393,11 @@ export class UnresolvedFile<
     }
     // Otherwise orchestrate our setup
     else {
-      this.hydrationSetup({ fileDiff: source.fileDiff, lineAnnotations });
+      this.hydrationSetup({
+        fileDiff: source.fileDiff,
+        lineAnnotations,
+        decorations,
+      });
       if (this.pre != null) {
         this.renderMergeConflictActionSlots();
       }
@@ -399,13 +414,16 @@ export class UnresolvedFile<
     this.render({ forceRender: true, renderRange: this.renderRange });
   }
 
-  override render(props: UnresolvedFileRenderProps<LAnnotation> = {}): boolean {
+  override render(
+    props: UnresolvedFileRenderProps<LAnnotation, LDecoration> = {}
+  ): boolean {
     const {
       file,
       fileDiff,
       actions,
       markerRows,
       lineAnnotations,
+      decorations,
       preventEmit = false,
       ...rest
     } = props;
@@ -423,6 +441,7 @@ export class UnresolvedFile<
       ...rest,
       fileDiff: source.fileDiff,
       lineAnnotations,
+      decorations,
       preventEmit: true,
     });
     if (didRender) {
@@ -863,9 +882,9 @@ function shouldRenderHeader(
 
 // NOTE(amadeus): Should probably pull this out into a util, and make variants
 // for all component types
-export function getUnresolvedDiffHunksRendererOptions<LAnnotation>(
-  options?: UnresolvedFileOptions<LAnnotation>,
-  baseOptions?: UnresolvedFileOptions<LAnnotation>
+export function getUnresolvedDiffHunksRendererOptions<LAnnotation, LDecoration>(
+  options?: UnresolvedFileOptions<LAnnotation, LDecoration>,
+  baseOptions?: UnresolvedFileOptions<LAnnotation, LDecoration>
 ): UnresolvedFileHunksRendererOptions {
   const merged = { ...baseOptions, ...options };
   return {

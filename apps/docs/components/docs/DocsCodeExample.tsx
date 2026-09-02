@@ -12,20 +12,21 @@ import { IconBrandGithub } from '@pierre/icons';
 import { CopyCodeButton } from './CopyCodeButton';
 import { cn } from '@/lib/utils';
 
-interface DocsCodeExampleProps<LAnnotation> {
+interface DocsCodeExampleProps<LAnnotation, LDecoration> {
   file: FileContents;
-  options?: FileOptions<LAnnotation>;
+  options?: FileOptions<LAnnotation, LDecoration>;
   annotations?: LineAnnotation<LAnnotation>[];
   prerenderedHTML?: string;
-  style?: FileProps<LAnnotation>['style'];
+  style?: FileProps<LAnnotation, LDecoration>['style'];
   className?: string | undefined;
   /** Optional link to the source file on GitHub */
   href?: string;
 }
 
-export function DocsCodeExample<LAnnotation = undefined>(
-  props: DocsCodeExampleProps<LAnnotation>
-) {
+export function DocsCodeExample<
+  LAnnotation = undefined,
+  LDecoration = undefined,
+>(props: DocsCodeExampleProps<LAnnotation, LDecoration>) {
   const { href, ...rest } = props;
   return (
     <File

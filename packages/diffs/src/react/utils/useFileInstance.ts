@@ -19,6 +19,7 @@ import type { GetHoveredLineResult } from '../../managers/InteractionManager';
 import type {
   DiffsEditor,
   FileContents,
+  FileDecorationItem,
   LineAnnotation,
   SelectedLineRange,
   VirtualFileMetrics,
@@ -46,12 +47,13 @@ interface AcceptedCompletion<LAnnotation> {
   } | null;
 }
 
-interface UseFileInstanceProps<LAnnotation, LCaret> {
+interface UseFileInstanceProps<LAnnotation, LDecoration, LCaret> {
   file: FileContents;
-  options: FileOptions<LAnnotation> | undefined;
+  options: FileOptions<LAnnotation, LDecoration> | undefined;
   editorOptions: EditorOptions<LAnnotation, LCaret> | undefined;
   editStateKey: string | undefined;
   lineAnnotations: LineAnnotation<LAnnotation>[] | undefined;
+  decorations: FileDecorationItem<LDecoration>[] | undefined;
   selectedLines: SelectedLineRange | null | undefined;
   prerenderedHTML: string | undefined;
   metrics?: VirtualFileMetrics;
@@ -69,12 +71,13 @@ interface UseFileInstanceReturn<LAnnotation> {
   getAnnotationSlotName(annotation: LineAnnotation<LAnnotation>): string;
 }
 
-export function useFileInstance<LAnnotation, LCaret>({
+export function useFileInstance<LAnnotation, LDecoration, LCaret>({
   file,
   options,
   editorOptions,
   editStateKey,
   lineAnnotations,
+  decorations,
   selectedLines,
   prerenderedHTML,
   metrics,
@@ -86,6 +89,7 @@ export function useFileInstance<LAnnotation, LCaret>({
   onEditComplete: _onEditComplete,
 }: UseFileInstanceProps<
   LAnnotation,
+  LDecoration,
   LCaret
 >): UseFileInstanceReturn<LAnnotation> {
   const simpleVirtualizer = useVirtualizer();
@@ -119,7 +123,9 @@ export function useFileInstance<LAnnotation, LCaret>({
   const onEditComplete =
     _onEditComplete != null ? handleOnEditComplete : undefined;
   const instanceRef = useRef<
-    File<LAnnotation> | VirtualizedFile<LAnnotation> | null
+    | File<LAnnotation, LDecoration>
+    | VirtualizedFile<LAnnotation, LDecoration>
+    | null
   >(null);
   const disposeEditorRef = useRef<() => void>(null);
   const getEditor = useStableCallback(() => {
@@ -171,6 +177,7 @@ export function useFileInstance<LAnnotation, LCaret>({
         file,
         fileContainer: node,
         lineAnnotations,
+        decorations,
         prerenderedHTML,
       });
     } else {
@@ -215,6 +222,7 @@ export function useFileInstance<LAnnotation, LCaret>({
     void instance.render({
       file: resolved.file,
       lineAnnotations: resolved.lineAnnotations,
+      decorations,
       forceRender,
     });
     if (selectedLines !== undefined) {
@@ -278,8 +286,8 @@ function resolveAcceptedValues<LAnnotation>(
   return { file: resolvedFile, lineAnnotations: resolvedAnnotations };
 }
 
-interface MergeFileOptionsProps<LAnnotation> {
-  options: FileOptions<LAnnotation> | undefined;
+interface MergeFileOptionsProps<LAnnotation, LDecoration> {
+  options: FileOptions<LAnnotation, LDecoration> | undefined;
   controlledSelection: boolean;
   hasGutterRenderUtility: boolean;
   hasCustomHeader: boolean;
@@ -287,14 +295,16 @@ interface MergeFileOptionsProps<LAnnotation> {
   onEditComplete: FileEditCompleteHandler<LAnnotation> | undefined;
 }
 
-function mergeFileOptions<LAnnotation>({
+function mergeFileOptions<LAnnotation, LDecoration>({
   options,
   controlledSelection,
   hasCustomHeader,
   hasGutterRenderUtility,
   onEditChange,
   onEditComplete,
-}: MergeFileOptionsProps<LAnnotation>): FileOptions<LAnnotation> | undefined {
+}: MergeFileOptionsProps<LAnnotation, LDecoration>):
+  | FileOptions<LAnnotation, LDecoration>
+  | undefined {
   const needsReactOverrides =
     controlledSelection ||
     hasGutterRenderUtility ||
@@ -320,8 +330,8 @@ function mergeFileOptions<LAnnotation>({
   };
 }
 
-function applyEdit<LAnnotation>(
-  instance: File<LAnnotation>,
+function applyEdit<LAnnotation, LDecoration>(
+  instance: File<LAnnotation, LDecoration>,
   getEditor: () => DiffsEditor<LAnnotation>
 ): () => void {
   const editor = getEditor();

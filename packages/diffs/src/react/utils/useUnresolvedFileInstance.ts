@@ -14,6 +14,7 @@ import {
 } from '../../components/UnresolvedFile';
 import type { GetHoveredLineResult } from '../../managers/InteractionManager';
 import type {
+  DiffDecorationItem,
   DiffLineAnnotation,
   FileContents,
   FileDiffMetadata,
@@ -34,10 +35,11 @@ import { useStableCallback } from './useStableCallback';
 const useIsomorphicLayoutEffect =
   typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
-interface UseUnresolvedFileInstanceProps<LAnnotation> {
+interface UseUnresolvedFileInstanceProps<LAnnotation, LDecoration> {
   file: FileContents;
-  options?: UnresolvedFileReactOptions<LAnnotation>;
+  options?: UnresolvedFileReactOptions<LAnnotation, LDecoration>;
   lineAnnotations: DiffLineAnnotation<LAnnotation>[] | undefined;
+  decorations: DiffDecorationItem<LDecoration>[] | undefined;
   selectedLines: SelectedLineRange | null | undefined;
   prerenderedHTML: string | undefined;
   hasConflictUtility: boolean;
@@ -46,26 +48,30 @@ interface UseUnresolvedFileInstanceProps<LAnnotation> {
   disableWorkerPool: boolean;
 }
 
-interface UseUnresolvedFileInstanceReturn<LAnnotation> {
+interface UseUnresolvedFileInstanceReturn<LAnnotation, LDecoration> {
   fileDiff: FileDiffMetadata;
   actions: (MergeConflictDiffAction | undefined)[];
   markerRows: MergeConflictMarkerRow[];
   ref(node: HTMLElement | null): void;
   getHoveredLine(): GetHoveredLineResult<'diff'> | undefined;
-  getInstance(): UnresolvedFile<LAnnotation> | undefined;
+  getInstance(): UnresolvedFile<LAnnotation, LDecoration> | undefined;
 }
 
-export function useUnresolvedFileInstance<LAnnotation>({
+export function useUnresolvedFileInstance<LAnnotation, LDecoration>({
   file,
   options,
   lineAnnotations,
+  decorations,
   selectedLines,
   prerenderedHTML,
   hasConflictUtility,
   hasGutterRenderUtility,
   hasCustomHeader,
   disableWorkerPool,
-}: UseUnresolvedFileInstanceProps<LAnnotation>): UseUnresolvedFileInstanceReturn<LAnnotation> {
+}: UseUnresolvedFileInstanceProps<
+  LAnnotation,
+  LDecoration
+>): UseUnresolvedFileInstanceReturn<LAnnotation, LDecoration> {
   const [{ fileDiff, actions, markerRows }, setState] = useState(() => {
     const { fileDiff, actions, markerRows } = parseMergeConflictDiffFromFile(
       file,
@@ -79,7 +85,7 @@ export function useUnresolvedFileInstance<LAnnotation>({
   const onMergeConflictAction = useStableCallback(
     (
       payload: MergeConflictActionPayload,
-      instance: UnresolvedFile<LAnnotation>
+      instance: UnresolvedFile<LAnnotation, LDecoration>
     ) => {
       setState((prevState) => {
         const { fileDiff, actions, markerRows } =
@@ -98,7 +104,10 @@ export function useUnresolvedFileInstance<LAnnotation>({
   );
   const controlledSelection = selectedLines !== undefined;
   const poolManager = useContext(WorkerPoolContext);
-  const instanceRef = useRef<UnresolvedFileClass<LAnnotation> | null>(null);
+  const instanceRef = useRef<UnresolvedFileClass<
+    LAnnotation,
+    LDecoration
+  > | null>(null);
   const ref = useStableCallback((fileContainer: HTMLElement | null) => {
     if (fileContainer != null) {
       if (instanceRef.current != null) {
@@ -124,6 +133,7 @@ export function useUnresolvedFileInstance<LAnnotation>({
         markerRows,
         fileContainer,
         lineAnnotations,
+        decorations,
         prerenderedHTML,
       });
     } else {
@@ -160,6 +170,7 @@ export function useUnresolvedFileInstance<LAnnotation>({
       actions,
       markerRows,
       lineAnnotations,
+      decorations,
       forceRender,
     });
     if (selectedLines !== undefined) {
@@ -180,23 +191,29 @@ export function useUnresolvedFileInstance<LAnnotation>({
   return { ref, getHoveredLine, fileDiff, actions, markerRows, getInstance };
 }
 
-interface MergeUnresolvedOptionsProps<LAnnotation> {
-  options: UnresolvedFileReactOptions<LAnnotation> | undefined;
+interface MergeUnresolvedOptionsProps<LAnnotation, LDecoration> {
+  options: UnresolvedFileReactOptions<LAnnotation, LDecoration> | undefined;
   controlledSelection: boolean;
-  onMergeConflictAction: UnresolvedFileOptions<LAnnotation>['onMergeConflictAction'];
+  onMergeConflictAction: UnresolvedFileOptions<
+    LAnnotation,
+    LDecoration
+  >['onMergeConflictAction'];
   hasConflictUtility: boolean;
   hasGutterRenderUtility: boolean;
   hasCustomHeader: boolean;
 }
 
-function mergeUnresolvedOptions<LAnnotation>({
+function mergeUnresolvedOptions<LAnnotation, LDecoration>({
   options,
   controlledSelection,
   onMergeConflictAction,
   hasConflictUtility,
   hasCustomHeader,
   hasGutterRenderUtility,
-}: MergeUnresolvedOptionsProps<LAnnotation>): UnresolvedFileOptions<LAnnotation> {
+}: MergeUnresolvedOptionsProps<
+  LAnnotation,
+  LDecoration
+>): UnresolvedFileOptions<LAnnotation, LDecoration> {
   return {
     ...options,
     controlledSelection,

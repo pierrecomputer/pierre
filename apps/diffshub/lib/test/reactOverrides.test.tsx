@@ -100,7 +100,7 @@ describe('React themed component overrides', () => {
   test('ThemedCodeView preserves caller themeType while applying the active theme pair', async () => {
     const container = document.createElement('div');
     document.body.append(container);
-    const codeViewRef = createRef<CodeViewHandle<undefined>>();
+    const codeViewRef = createRef<CodeViewHandle<undefined, undefined>>();
     let root: Root | undefined;
 
     await act(async () => {

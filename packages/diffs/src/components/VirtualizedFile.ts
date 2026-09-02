@@ -56,9 +56,9 @@ const LAYOUT_CHECKPOINT_INTERVAL = 5_000;
 
 let instanceId = -1;
 
-function hasFileLayoutOptionChanged<LAnnotation>(
-  previousOptions: FileOptions<LAnnotation>,
-  nextOptions: FileOptions<LAnnotation>
+function hasFileLayoutOptionChanged<LAnnotation, LDecoration>(
+  previousOptions: FileOptions<LAnnotation, LDecoration>,
+  nextOptions: FileOptions<LAnnotation, LDecoration>
 ): boolean {
   return (
     (previousOptions.overflow ?? 'scroll') !==
@@ -74,7 +74,8 @@ function hasFileLayoutOptionChanged<LAnnotation>(
 
 export class VirtualizedFile<
   LAnnotation = undefined,
-> extends File<LAnnotation> {
+  LDecoration = undefined,
+> extends File<LAnnotation, LDecoration> {
   override readonly __id: string = `virtualized-file:${++instanceId}`;
 
   public top: number | undefined;
@@ -92,8 +93,8 @@ export class VirtualizedFile<
   private currentCollapsed: boolean | undefined;
 
   constructor(
-    options: FileOptions<LAnnotation> | undefined,
-    private virtualizer: Virtualizer | CodeView<LAnnotation>,
+    options: FileOptions<LAnnotation, LDecoration> | undefined,
+    private virtualizer: Virtualizer | CodeView<LAnnotation, LDecoration>,
     private metrics: VirtualFileMetrics = DEFAULT_VIRTUAL_FILE_METRICS,
     workerManager?: WorkerPoolManager,
     isContainerManaged = false
@@ -167,7 +168,9 @@ export class VirtualizedFile<
     return this.metrics.lineHeight * multiplier;
   }
 
-  override setOptions(options: FileOptions<LAnnotation> | undefined): void {
+  override setOptions(
+    options: FileOptions<LAnnotation, LDecoration> | undefined
+  ): void {
     if (this.isAdvancedMode()) {
       throw new Error(
         'VirtualizedFile.setOptions cannot be used inside CodeView. Update CodeView options instead.'
@@ -748,7 +751,7 @@ export class VirtualizedFile<
     forceRender = false,
     lineAnnotations,
     ...props
-  }: FileRenderProps<LAnnotation>): boolean {
+  }: FileRenderProps<LAnnotation, LDecoration>): boolean {
     const didFileChange = !areFileTargetsEqual(this.file, file);
     if (didFileChange) {
       this.updateExternalFile(file, lineAnnotations);
@@ -820,6 +823,9 @@ export class VirtualizedFile<
       this.isSimpleMode() &&
       (!didFileChange || !isSetup)
     ) {
+      if (props.decorations != null) {
+        this.setDecorations(props.decorations);
+      }
       this.pendingRender = undefined;
       return this.renderPlaceholder(this.height);
     }
@@ -1006,7 +1012,9 @@ export class VirtualizedFile<
     return this.virtualizer.type === 'simple' ? this.virtualizer : undefined;
   }
 
-  private getAdvancedVirtualizer(): CodeView<LAnnotation> | undefined {
+  private getAdvancedVirtualizer():
+    | CodeView<LAnnotation, LDecoration>
+    | undefined {
     return this.virtualizer.type === 'advanced' ? this.virtualizer : undefined;
   }
 

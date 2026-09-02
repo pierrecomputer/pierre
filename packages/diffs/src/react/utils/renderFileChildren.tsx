@@ -12,20 +12,29 @@ import { getLineAnnotationName } from '../../utils/getLineAnnotationName';
 import { GutterUtilitySlotStyles } from '../constants';
 import type { FileProps } from '../types';
 
-interface RenderFileChildrenProps<LAnnotation> {
+interface RenderFileChildrenProps<LAnnotation, LDecoration> {
   file: FileContents;
-  renderCustomHeader: FileProps<LAnnotation>['renderCustomHeader'];
-  renderHeaderPrefix: FileProps<LAnnotation>['renderHeaderPrefix'];
-  renderHeaderFilenameSuffix?: FileProps<LAnnotation>['renderHeaderFilenameSuffix'];
-  renderHeaderMetadata: FileProps<LAnnotation>['renderHeaderMetadata'];
-  renderAnnotation: FileProps<LAnnotation>['renderAnnotation'];
-  lineAnnotations: FileProps<LAnnotation>['lineAnnotations'];
-  renderGutterUtility: FileProps<LAnnotation>['renderGutterUtility'];
+  renderCustomHeader: FileProps<LAnnotation, LDecoration>['renderCustomHeader'];
+  renderHeaderPrefix: FileProps<LAnnotation, LDecoration>['renderHeaderPrefix'];
+  renderHeaderFilenameSuffix?: FileProps<
+    LAnnotation,
+    LDecoration
+  >['renderHeaderFilenameSuffix'];
+  renderHeaderMetadata: FileProps<
+    LAnnotation,
+    LDecoration
+  >['renderHeaderMetadata'];
+  renderAnnotation: FileProps<LAnnotation, LDecoration>['renderAnnotation'];
+  lineAnnotations: FileProps<LAnnotation, LDecoration>['lineAnnotations'];
+  renderGutterUtility: FileProps<
+    LAnnotation,
+    LDecoration
+  >['renderGutterUtility'];
   getHoveredLine(): GetHoveredLineResult<'file'> | undefined;
   getAnnotationSlotName?(annotation: LineAnnotation<LAnnotation>): string;
 }
 
-export function renderFileChildren<LAnnotation>({
+export function renderFileChildren<LAnnotation, LDecoration>({
   file,
   renderCustomHeader,
   renderHeaderPrefix,
@@ -36,7 +45,7 @@ export function renderFileChildren<LAnnotation>({
   renderGutterUtility,
   getHoveredLine,
   getAnnotationSlotName = getLineAnnotationName,
-}: RenderFileChildrenProps<LAnnotation>): ReactNode {
+}: RenderFileChildrenProps<LAnnotation, LDecoration>): ReactNode {
   const customHeader = renderCustomHeader?.(file);
   const prefix = renderHeaderPrefix?.(file);
   const suffix = renderHeaderFilenameSuffix?.(file);
