@@ -16,6 +16,7 @@ import type {
   SupportedLanguages,
   ThemedDiffResult,
 } from '../types';
+import { appendItems } from './appendItems';
 import { cleanLastNewline } from './cleanLastNewline';
 import { createTransformerWithState } from './createTransformerWithState';
 import { formatCSSVariablePrefix } from './formatCSSVariablePrefix';
@@ -225,7 +226,7 @@ export function renderDiffWithHighlighter(
         }
       }
     } else {
-      appendLines(code.deletionLines, deletionLines);
+      appendItems(code.deletionLines, deletionLines);
     }
     if (bucket.additionSegments.length > 0) {
       for (const seg of bucket.additionSegments) {
@@ -235,20 +236,11 @@ export function renderDiffWithHighlighter(
         }
       }
     } else {
-      appendLines(code.additionLines, additionLines);
+      appendItems(code.additionLines, additionLines);
     }
   }
 
   return { code, themeStyles, baseThemeType };
-}
-
-// Deliberately not `target.push(...lines)`: a spread passes one argument per
-// entry, and engines cap argument counts (V8 near 124k), so a hunk of a massive
-// diff overflowed the stack.
-function appendLines<T>(target: T[], lines: T[]): void {
-  for (const line of lines) {
-    target.push(line);
-  }
 }
 
 interface ProcessLineDiffProps {
