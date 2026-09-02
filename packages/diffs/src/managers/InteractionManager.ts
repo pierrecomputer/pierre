@@ -626,7 +626,7 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
         }
 
         if (isTokenPointerTarget(target) && onTokenClick != null) {
-          onTokenClick(this.toTokenEventBaseProps(target), event as MouseEvent);
+          onTokenClick(this.toTokenEventBaseProps(target), event);
         }
 
         const eventBase = this.toEventBaseProps(target);
@@ -2085,7 +2085,7 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
     }
 
     if (mergeConflictActionTarget != null) {
-      return mergeConflictActionTarget as ResolvedPointerTarget<TMode>;
+      return mergeConflictActionTarget;
     }
 
     if (expandInfo?.hunkIndex != null) {
@@ -2094,7 +2094,7 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
         hunkIndex: expandInfo.hunkIndex,
         direction: expandInfo.direction,
         all: expandInfo.all,
-      } as ResolvedPointerTarget<TMode>;
+      };
     }
 
     lineElement ??=

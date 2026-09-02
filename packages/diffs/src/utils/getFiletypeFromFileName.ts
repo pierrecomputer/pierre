@@ -422,7 +422,5 @@ export function setCustomExtension(
 }
 
 export function getCustomExtensionsMap(): ExtensionFormatMap {
-  return Object.fromEntries(
-    CUSTOM_EXTENSION_TO_FILE_FORMAT
-  ) as ExtensionFormatMap;
+  return Object.fromEntries(CUSTOM_EXTENSION_TO_FILE_FORMAT);
 }

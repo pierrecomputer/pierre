@@ -404,10 +404,10 @@ describe('Editor selection action', () => {
         return POPOVER_HEIGHT;
       },
     });
-    globalThis.getComputedStyle = (() =>
+    globalThis.getComputedStyle = () =>
       ({
         overflowY: 'auto',
-      }) as CSSStyleDeclaration) as typeof getComputedStyle;
+      }) as CSSStyleDeclaration;
 
     try {
       const shadowRoot = content.getRootNode() as ShadowRoot;
@@ -416,20 +416,19 @@ describe('Editor selection action', () => {
       document.body.appendChild(scrollContainer);
       scrollContainer.appendChild(fileContainer);
 
-      const stubRect = (top: number, bottom: number): DOMRect =>
-        ({
-          top,
-          bottom,
-          left: 0,
-          right: 0,
-          width: 0,
-          height: bottom - top,
-          x: 0,
-          y: top,
-          toJSON() {
-            return {};
-          },
-        }) as DOMRect;
+      const stubRect = (top: number, bottom: number): DOMRect => ({
+        top,
+        bottom,
+        left: 0,
+        right: 0,
+        width: 0,
+        height: bottom - top,
+        x: 0,
+        y: top,
+        toJSON() {
+          return {};
+        },
+      });
 
       // A 200px-tall viewport fixed at the screen's top edge.
       Object.defineProperty(scrollContainer, 'getBoundingClientRect', {
@@ -540,10 +539,10 @@ describe('Editor selection action', () => {
           : ROW_HEIGHT;
       },
     });
-    globalThis.getComputedStyle = (() =>
+    globalThis.getComputedStyle = () =>
       ({
         overflowY: 'auto',
-      }) as CSSStyleDeclaration) as typeof getComputedStyle;
+      }) as CSSStyleDeclaration;
 
     try {
       const shadowRoot = content.getRootNode() as ShadowRoot;
@@ -552,20 +551,19 @@ describe('Editor selection action', () => {
       document.body.appendChild(scrollContainer);
       scrollContainer.appendChild(fileContainer);
 
-      const stubRect = (top: number, bottom: number): DOMRect =>
-        ({
-          top,
-          bottom,
-          left: 0,
-          right: 0,
-          width: 0,
-          height: bottom - top,
-          x: 0,
-          y: top,
-          toJSON() {
-            return {};
-          },
-        }) as DOMRect;
+      const stubRect = (top: number, bottom: number): DOMRect => ({
+        top,
+        bottom,
+        left: 0,
+        right: 0,
+        width: 0,
+        height: bottom - top,
+        x: 0,
+        y: top,
+        toJSON() {
+          return {};
+        },
+      });
 
       Object.defineProperty(scrollContainer, 'getBoundingClientRect', {
         configurable: true,

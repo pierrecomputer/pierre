@@ -77,7 +77,7 @@ const config: UserConfig[] = defineConfig([
     tsconfig: './tsconfig.json',
     clean: false,
     unbundle: false,
-    noExternal: [/.*/],
+    deps: { alwaysBundle: [/.*/] },
     dts: { sourcemap: true, tsgo: true },
     platform: 'neutral',
     format: 'esm',

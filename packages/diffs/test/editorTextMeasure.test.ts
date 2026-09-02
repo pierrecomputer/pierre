@@ -223,14 +223,14 @@ describe('Metrics.measureTextWidth (tab stops)', () => {
   } {
     const { cleanup } = installDom();
     const realGetComputedStyle = globalThis.getComputedStyle;
-    globalThis.getComputedStyle = (() =>
+    globalThis.getComputedStyle = () =>
       ({
         fontSize: '12px',
         fontFamily: 'monospace',
         tabSize: '4',
         lineHeight: '20px',
         paddingTop: '0px',
-      }) as CSSStyleDeclaration) as typeof getComputedStyle;
+      }) as CSSStyleDeclaration;
 
     // ASCII and spaces are 1ch. CJK characters are 2ch, matching common
     // monospace rendering where East Asian glyphs are double-width.
@@ -430,14 +430,14 @@ describe('Metrics.measureTextWidth (DOM path)', () => {
     let fontFamily = 'monospace';
     // Drive the font Metrics.init() reads so the test controls when the font
     // string changes, independent of jsdom's computed-style behavior.
-    globalThis.getComputedStyle = (() =>
+    globalThis.getComputedStyle = () =>
       ({
         fontSize: '12px',
         fontFamily,
         tabSize: '2',
         lineHeight: '20px',
         paddingTop: '0px',
-      }) as CSSStyleDeclaration) as typeof getComputedStyle;
+      }) as CSSStyleDeclaration;
     try {
       const rootA = document.createElement('div');
       document.body.appendChild(rootA);

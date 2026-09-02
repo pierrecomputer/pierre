@@ -94,9 +94,7 @@ export function DemoThemingClient({
     setError(null);
     setLoading(true);
     try {
-      const theme = await resolveTheme(
-        themeName as Parameters<typeof resolveTheme>[0]
-      );
+      const theme = await resolveTheme(themeName);
       setThemeStyles(themeToTreeStyles(theme));
     } catch (themeError) {
       setError(

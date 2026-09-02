@@ -51,7 +51,7 @@ describe('EditorTokenizer', () => {
       value: globalThis,
       writable: true,
     });
-    globalThis.window.matchMedia = (() =>
+    globalThis.window.matchMedia = () =>
       ({
         addEventListener: () => {},
         addListener: () => {},
@@ -61,7 +61,7 @@ describe('EditorTokenizer', () => {
         onchange: null,
         removeEventListener: () => {},
         removeListener: () => {},
-      }) as MediaQueryList) as typeof window.matchMedia;
+      }) as MediaQueryList;
   });
 
   afterAll(() => {
@@ -2056,7 +2056,7 @@ describe('EditorTokenizer', () => {
   test('pins a dual-theme surface to an explicit themeType instead of following the page', () => {
     const originalMatchMedia = globalThis.window.matchMedia;
     let mediaListenerCount = 0;
-    globalThis.window.matchMedia = (() =>
+    globalThis.window.matchMedia = () =>
       ({
         addEventListener: () => {
           mediaListenerCount++;
@@ -2071,7 +2071,7 @@ describe('EditorTokenizer', () => {
         onchange: null,
         removeEventListener: () => {},
         removeListener: () => {},
-      }) as MediaQueryList) as typeof window.matchMedia;
+      }) as MediaQueryList;
 
     try {
       const grammar = {
@@ -2121,7 +2121,7 @@ describe('EditorTokenizer', () => {
     let colorScheme = 'dark';
     let prefersDark = false;
 
-    globalThis.window.matchMedia = (() =>
+    globalThis.window.matchMedia = () =>
       ({
         addEventListener: () => {},
         addListener: () => {},
@@ -2134,7 +2134,7 @@ describe('EditorTokenizer', () => {
         onchange: null,
         removeEventListener: () => {},
         removeListener: () => {},
-      }) as MediaQueryList) as typeof window.matchMedia;
+      }) as MediaQueryList;
     Reflect.set(globalThis, 'document', {
       body: {},
       documentElement: {},

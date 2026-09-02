@@ -120,7 +120,7 @@ function makeRect({
     toJSON() {
       return {};
     },
-  } as DOMRect;
+  };
 }
 
 function installMarkerPopoverHeight(height: number): () => void {
