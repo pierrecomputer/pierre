@@ -7,6 +7,7 @@ import type {
   RenderFileOptions,
   ThemedFileResult,
 } from '../types';
+import { appendItems } from './appendItems';
 import { linesFromFileContents } from './computeFileOffsets';
 import { createTransformerWithState } from './createTransformerWithState';
 import { formatCSSVariablePrefix } from './formatCSSVariablePrefix';
@@ -101,7 +102,7 @@ export function renderFileWithHighlighter(
   // Create sparse array for windowed rendering
   const code = isWindowedHighlight ? new Array(startingLine) : highlightedLines;
   if (isWindowedHighlight) {
-    code.push(...highlightedLines);
+    appendItems(code, highlightedLines);
   }
 
   return { code, themeStyles, baseThemeType };

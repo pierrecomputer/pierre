@@ -1,5 +1,6 @@
 import type { GrammarState, ThemedToken } from 'shiki/core';
 
+import { appendItems } from '../utils/appendItems';
 import type {
   ShikiStreamTokenizerEnqueueResult,
   ShikiStreamTokenizerOptions,
@@ -48,7 +49,7 @@ export class ShikiStreamTokenizer {
       }
     });
 
-    this.tokensStable.push(...stable);
+    appendItems(this.tokensStable, stable);
     this.tokensUnstable = unstable;
 
     return {
