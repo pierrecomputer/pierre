@@ -226,7 +226,7 @@
     margin: 0;
     padding: 0;
     display: block;
-    outline: none;
+    outline-style: none;
     font-family: var(--diffs-font-family, var(--diffs-font-fallback));
   }
 
@@ -783,7 +783,7 @@
   }
 
   [data-code]::-webkit-scrollbar-track {
-    background: transparent;
+    background-color: transparent;
   }
 
   [data-code]::-webkit-scrollbar-thumb {
@@ -1036,7 +1036,6 @@
   [data-expand-button],
   [data-separator-content] {
     display: flex;
-    flex: 0 0 auto;
     align-items: center;
     background-color: var(--diffs-bg-separator);
   }
@@ -1069,7 +1068,7 @@
   }
 
   [data-separator-content] {
-    flex: 1 1 auto;
+    flex-grow: 1;
     padding: 0 1ch;
     height: 100%;
     color: var(--diffs-fg-number);
@@ -1093,7 +1092,6 @@
     min-width: 0;
     text-overflow: ellipsis;
     white-space: nowrap;
-    flex: 0 1 auto;
   }
 
   @supports (width: 1cqi) {
@@ -1519,7 +1517,7 @@
   [data-merge-conflict-actions-content] {
     display: flex;
     align-items: center;
-    gap: 0.25rem;
+    column-gap: 0.25rem;
     padding-inline: 0.5rem;
     min-height: 1.75rem;
     font-family: var(
@@ -1533,8 +1531,8 @@
 
   [data-merge-conflict-action] {
     appearance: none;
-    border: 0;
-    background: transparent;
+    border-style: none;
+    background-color: transparent;
     color: var(--diffs-fg-number);
     font: inherit;
     font-style: normal;
@@ -1566,10 +1564,9 @@
     position: relative;
     background-color: var(--diffs-bg);
     display: flex;
-    flex-direction: row;
     justify-content: space-between;
     align-items: center;
-    gap: var(--diffs-gap-inline, var(--diffs-gap-fallback));
+    column-gap: var(--diffs-gap-inline, var(--diffs-gap-fallback));
     min-height: calc(
       1lh + (var(--diffs-gap-block, var(--diffs-gap-fallback)) * 3)
     );
@@ -1580,9 +1577,8 @@
 
   [data-header-content] {
     display: flex;
-    flex-direction: row;
     align-items: center;
-    gap: var(--diffs-gap-inline, var(--diffs-gap-fallback));
+    column-gap: var(--diffs-gap-inline, var(--diffs-gap-fallback));
     min-width: 0;
     white-space: nowrap;
   }
@@ -1609,7 +1605,7 @@
   [data-diffs-header='default'] [data-metadata] {
     display: flex;
     align-items: center;
-    gap: 1ch;
+    column-gap: 1ch;
     white-space: nowrap;
   }
 
@@ -1696,7 +1692,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    border: none;
+    border-style: none;
     appearance: none;
     width: 1lh;
     height: 1lh;
