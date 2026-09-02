@@ -13,6 +13,7 @@ import {
   AGENT_PROMPT,
   AGENT_SKILL_INSTALL,
 } from '../docs/BuildWithAgents/constants';
+import { CHAMELE_HIGHLIGHTER_EXAMPLES } from '../docs/ChameleHighlighter/constants';
 import {
   CODE_VIEW_HEADER_FOOTER_REACT_EXAMPLE,
   CODE_VIEW_HEADER_FOOTER_VANILLA_EXAMPLE,
@@ -160,7 +161,7 @@ import { DocsLayout } from '@/components/docs/DocsLayout';
 import { HeadingAnchors } from '@/components/docs/HeadingAnchors';
 import { ProseWrapper } from '@/components/docs/ProseWrapper';
 import Footer from '@/components/Footer';
-import { renderMDX } from '@/lib/mdx';
+import { renderMDX, renderMDXWithPreloadedFiles } from '@/lib/mdx';
 import { pageMetadata } from '@/lib/page-metadata';
 
 const docsTitle = 'Diffs docs';
@@ -196,6 +197,7 @@ export default function DocsPage() {
           <TokenHooksSection />
           <WorkerPoolSection />
           <SSRSection />
+          <ChameleHighlighterSection />
         </div>
       </DocsLayout>
       <Footer />
@@ -620,6 +622,14 @@ async function ThemingSection() {
   const content = await renderMDX({
     filePath: '(diffs)/docs/Theming/docs-content.mdx',
   });
+  return <ProseWrapper>{content}</ProseWrapper>;
+}
+
+async function ChameleHighlighterSection() {
+  const content = await renderMDXWithPreloadedFiles(
+    '(diffs)/docs/ChameleHighlighter/content.mdx',
+    CHAMELE_HIGHLIGHTER_EXAMPLES
+  );
   return <ProseWrapper>{content}</ProseWrapper>;
 }
 

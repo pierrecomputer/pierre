@@ -1,6 +1,6 @@
 'use client';
 
-import { IconArrowUpRight, IconBrandGithub } from '@pierre/icons';
+import { IconArrowUpRight, IconBook, IconBrandGithub } from '@pierre/icons';
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 
@@ -43,7 +43,7 @@ export function ChameleHero({ gzipBytes }: { gzipBytes: number }) {
       </span>
 
       <h1 className="text-4xl font-semibold tracking-tight text-balance md:text-5xl lg:text-6xl">
-        Highlight code at WebAssembly speed
+        Highlight code at native speed
       </h1>
       <p className="text-md text-muted-foreground mb-2 max-w-[740px] text-pretty md:text-lg lg:text-xl">
         <code>@pierre/chamele</code> is a fast code highlighter written by hand
@@ -69,6 +69,12 @@ export function ChameleHero({ gzipBytes }: { gzipBytes: number }) {
           <span className="mx-auto min-[460px]:mx-0">{INSTALL_COMMAND}</span>
           <CopyStateIcon copied={copied} />
         </Button>
+        <Button asChild size="xl">
+          <Link href="/docs#chamele-highlighter">
+            <IconBook />
+            Documentation
+          </Link>
+        </Button>
         <Button variant="secondary" asChild size="xl">
           <Link
             href="https://github.com/pierrecomputer/pierre/tree/main/packages/chamele"
@@ -84,6 +90,16 @@ export function ChameleHero({ gzipBytes }: { gzipBytes: number }) {
 
       <p className="text-muted-foreground mt-2 text-sm">
         {(gzipBytes / 1024).toFixed(1)} kB gzipped Wasm · 32 built-in languages
+        · 92–771× faster than Shiki (
+        <Link
+          target="_blank"
+          rel="noopener noreferrer"
+          className="hover:text-foreground muted-foreground hover:decoration-foreground underline decoration-[1px] underline-offset-4 transition-colors"
+          href="https://github.com/pierrecomputer/pierre/tree/main/packages/chamele/benchmark"
+        >
+          Benchmark
+        </Link>
+        )
       </p>
     </section>
   );
