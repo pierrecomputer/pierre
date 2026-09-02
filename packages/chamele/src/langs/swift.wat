@@ -5,22 +5,30 @@
     (select (i32.load8_u (local.get $p)) (i32.const 0)
       (i32.lt_u (local.get $p) (global.get $end))))
 
-  ;; group order is the dispatch order in $swiftWordHl below
-  (keyword-table $swiftWords $mem.swiftWords $mem.swiftWords+768 16 64
+  ;; Group order is the dispatch order in $swiftWordHl below. `where` is
+  ;; absent on purpose: the table hash sees only the first two bytes, the last
+  ;; byte, and the length, which are identical for `while`, so the two words
+  ;; can never share a table and `where` is matched directly in $swiftWordHl.
+  (keyword-table $swiftWords $mem.swiftWords $mem.swiftWords+768 16 128
     (group ;; 1: control
-      "if" "for" "try" "case" "else" "guard" "while" "break" "catch" "throw"
-      "async" "await" "repeat" "return" "switch" "continue")
+      "do" "if" "for" "try" "case" "else" "defer" "guard" "while" "break"
+      "catch" "throw" "async" "await" "repeat" "return" "switch" "default"
+      "continue")
     (group "func") ;; 2: declaration, next name is a function
     (group ;; 3: declaration, next name is a type
       "enum" "class" "actor" "struct" "protocol" "typealias" "extension")
-    (group "let" "var") ;; 4: declaration
+    (group "let" "var" "deinit" "subscript") ;; 4: declaration
     (group "import")    ;; 5: import
     (group "in" "is" "as") ;; 6: operator keywords
     (group ;; 7: built-in types
       "Int" "Bool" "Void" "Float" "Double" "String")
     (group "true" "false") ;; 8: booleans
     (group "nil")          ;; 9: built-in constant
-    (group "self" "super")) ;; 10: special variables
+    (group "self" "super") ;; 10: special variables
+    (group ;; 11: modifiers
+      "any" "some" "lazy" "weak" "open" "final" "inout" "static" "public"
+      "throws" "private" "unowned" "internal" "mutating" "override"
+      "rethrows" "fileprivate"))
 
   ;; Token in the low byte; the high byte selects the next-name capture:
   ;; 1=function, 2=type.
@@ -28,7 +36,17 @@
     (local $g i32)
     (local.set $g
       (keyword-table.get $swiftWords (local.get $lhs) (local.get $rhs)))
-    (if (i32.eqz (local.get $g)) (then (return (i32.const -1))))
+    (if (i32.eqz (local.get $g))
+      (then
+        ;; the one word the table cannot hold; the wide load stays inside the
+        ;; input slack, as in the table's own compare
+        (if (i32.and
+              (i32.eq (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 5))
+              (i64.eq
+                (i64.and (i64.load (local.get $lhs)) (i64.const 0xffffffffff))
+                (i64.const "where")))
+          (then (return (enum.get $Token.keyword))))
+        (return (i32.const -1))))
     (if (i32.eq (local.get $g) (i32.const 1))
       (then (return (enum.get $Token.keyword.control))))
     (if (i32.le_u (local.get $g) (i32.const 3))
@@ -46,7 +64,9 @@
       (then (return (enum.get $Token.boolean))))
     (if (i32.eq (local.get $g) (i32.const 9))
       (then (return (enum.get $Token.constant.builtin))))
-    (enum.get $Token.variable.special))
+    (if (i32.eq (local.get $g) (i32.const 10))
+      (then (return (enum.get $Token.variable.special))))
+    (enum.get $Token.keyword))
 
   (func $swiftRawStart (result i32)
     (local $p i32)
@@ -58,32 +78,44 @@
         (br $hash)))
     (i32.eq (call $swiftByte (local.get $p)) (i32.const 34)))
 
-  ;; A hash-delimited string, or a triple-quoted string when hashes is zero.
-  (func $swiftHashString
-    (local $lhs i32) (local $p i32) (local $q i32)
-    (local $hashes i32) (local $seen i32) (local $triple i32)
+  ;; The opener of a hash-delimited or triple-quoted string at $ptr - the
+  ;; hashes and the quote or quotes - emitted as string. Returns the hash
+  ;; count plus one, shifted left once, with the triple flag in bit zero:
+  ;; $hlSwift keeps that in a checkpointed local while the body is open, so
+  ;; a body crossing a chunk boundary resumes from the local rather than
+  ;; from the 32-byte stream delimiter, which cannot hold long hash runs.
+  (func $swiftHashOpen (result i32)
+    (local $lhs i32) (local $hashes i32) (local $triple i32)
     (local.set $lhs (global.get $ptr))
-    (local.set $p (global.get $ptr))
-    (block $hashDone
+    (block $done
       (loop $hash
-        (br_if $hashDone (i32.ne (call $swiftByte (local.get $p)) (i32.const "#")))
+        (br_if $done (i32.ne (call $swiftByte (global.get $ptr)) (i32.const "#")))
         (local.set $hashes (i32.add (local.get $hashes) (i32.const 1)))
-        (local.set $p (i32.add (local.get $p) (i32.const 1)))
+        (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
         (br $hash)))
+    ;; the caller proved the byte here is a quote, and the two after it are
+    ;; read through $swiftByte, so the cursor lands at most on $end
     (local.set $triple (i32.and
-      (i32.eq (call $swiftByte (i32.add (local.get $p) (i32.const 1))) (i32.const 34))
-      (i32.eq (call $swiftByte (i32.add (local.get $p) (i32.const 2))) (i32.const 34))))
-    (global.set $ptr (i32.add (local.get $p) (select (i32.const 3) (i32.const 1) (local.get $triple))))
-    (if (i32.gt_u (global.get $ptr) (global.get $end)) (then (global.set $ptr (global.get $end))))
+      (i32.eq (call $swiftByte (i32.add (global.get $ptr) (i32.const 1))) (i32.const 34))
+      (i32.eq (call $swiftByte (i32.add (global.get $ptr) (i32.const 2))) (i32.const 34))))
+    (global.set $ptr (i32.add (global.get $ptr) (select (i32.const 3) (i32.const 1) (local.get $triple))))
+    (call $emitTok (enum.get $Token.string) (local.get $lhs) (global.get $ptr))
+    (i32.or (i32.shl (i32.add (local.get $hashes) (i32.const 1)) (i32.const 1)) (local.get $triple)))
+
+  ;; Advance $ptr through a hash-delimited or triple-quoted body to just past
+  ;; its closing quote or quotes and $hashes hashes, or to $end: hop between
+  ;; quotes with SIMD and verify the rest only at each candidate. Returns 1
+  ;; when the body closed.
+  (func $swiftHashBody (param $hashes i32) (param $triple i32) (result i32)
+    (local $q i32) (local $seen i32)
     (block $done
       (loop $scan
+        (global.set $ptr (call $lexFindByte (global.get $ptr) (i32.const 34)))
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
-        (if (i32.and
-              (i32.eq (i32.load8_u (global.get $ptr)) (i32.const 34))
-              (i32.or (i32.eqz (local.get $triple))
-                (i32.and
-                  (i32.eq (call $swiftByte (i32.add (global.get $ptr) (i32.const 1))) (i32.const 34))
-                  (i32.eq (call $swiftByte (i32.add (global.get $ptr) (i32.const 2))) (i32.const 34)))))
+        (if (i32.or (i32.eqz (local.get $triple))
+              (i32.and
+                (i32.eq (call $swiftByte (i32.add (global.get $ptr) (i32.const 1))) (i32.const 34))
+                (i32.eq (call $swiftByte (i32.add (global.get $ptr) (i32.const 2))) (i32.const 34))))
           (then
             (local.set $q (i32.add (global.get $ptr) (select (i32.const 3) (i32.const 1) (local.get $triple))))
             (local.set $seen (i32.const 0))
@@ -95,26 +127,12 @@
                 (local.set $q (i32.add (local.get $q) (i32.const 1)))
                 (br $match)))
             (if (i32.eq (local.get $seen) (local.get $hashes))
-              (then (global.set $ptr (local.get $q)) (br $done)))))
+              (then
+                (global.set $ptr (local.get $q))
+                (return (i32.const 1))))))
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
         (br $scan)))
-    (call $emitTok (enum.get $Token.string) (local.get $lhs) (global.get $ptr))
-    (if (i32.eq (global.get $ptr) (global.get $end))
-      (then
-        (memory.fill
-          (i32.const $mem.streamDelimiter) (i32.const 34)
-          (select (i32.const 3) (i32.const 1) (local.get $triple)))
-        (memory.fill
-          (i32.add
-            (i32.const $mem.streamDelimiter)
-            (select (i32.const 3) (i32.const 1) (local.get $triple)))
-          (i32.const "#") (local.get $hashes))
-        (call $streamSetFixed
-          (i32.const $mem.streamDelimiter)
-          (i32.add
-            (local.get $hashes)
-            (select (i32.const 3) (i32.const 1) (local.get $triple)))
-          (enum.get $Token.string)))))
+    (i32.const 0))
 
   (func $swiftIsOp (param $c i32) (result i32)
     (i32.or
@@ -131,17 +149,43 @@
                 (i32.or (i32.eq (local.get $c) (i32.const "|")) (i32.eq (local.get $c) (i32.const "^")))
                 (i32.or (i32.eq (local.get $c) (i32.const "?")) (i32.eq (local.get $c) (i32.const "~"))))))))))
 
+  ;; $stringMode marks an open `"` body with $seg the start of its bytes not
+  ;; yet emitted - zero across a chunk boundary, where the body resumes at
+  ;; the chunk start; $interp counts parens inside a `\(` interpolation; and
+  ;; $rawOpen holds an open hash-delimited or triple-quoted body as packed by
+  ;; $swiftHashOpen. All of these are checkpointed between stream chunks.
   (func $hlSwift
     (local $c i32) (local $c2 i32) (local $c3 i32)
     (local $gap i32) (local $lhs i32) (local $rhs i32) (local $p i32) (local $e i32)
     (local $kind i32) (local $hl i32) (local $expect i32) (local $member i32)
     (local $seg i32) (local $interp i32) (local $stringMode i32)
-    (local $openedInterp i32)
+    (local $openedInterp i32) (local $rawOpen i32)
     (call $lexEmitLeadingContinuation)
     (block $done
       (loop $next
+        ;; a hash-delimited or triple-quoted body left open by its opener or
+        ;; by the previous chunk
+        (if (i32.and
+              (i32.ne (local.get $rawOpen) (i32.const 0))
+              (i32.lt_u (global.get $ptr) (global.get $end)))
+          (then
+            (local.set $lhs (global.get $ptr))
+            (if (call $swiftHashBody
+                  (i32.sub (i32.shr_u (local.get $rawOpen) (i32.const 1)) (i32.const 1))
+                  (i32.and (local.get $rawOpen) (i32.const 1)))
+              (then (local.set $rawOpen (i32.const 0))))
+            (call $emitTok (enum.get $Token.string) (local.get $lhs) (global.get $ptr))
+            (br $next)))
+
         (if (local.get $stringMode)
           (then
+            ;; a body continued past a chunk boundary by an escaped line
+            ;; break has nothing pending yet: keep the mode until the next
+            ;; chunk starts
+            (if (i32.eqz (local.get $seg))
+              (then
+                (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
+                (local.set $seg (global.get $ptr))))
             (local.set $stringMode (i32.const 0))
             (local.set $openedInterp (i32.const 0))
             (block $stringDone
@@ -172,16 +216,28 @@
                         (local.set $openedInterp (i32.const 1))
                         (br $stringDone)))
                     (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
-                    (local.set $e (call $utf8SpanEnd
-                      (i32.add (global.get $ptr) (i32.const 2)) (global.get $end)))
+                    (local.set $e (call $lexEscapeEnd (global.get $ptr)))
                     (call $emitTok (enum.get $Token.string.escape) (global.get $ptr) (local.get $e))
                     (global.set $ptr (local.get $e))
                     (local.set $seg (global.get $ptr))
+                    ;; an escaped line break ending at $end continues the
+                    ;; string in the next chunk
+                    (if (i32.and
+                          (i32.eq (global.get $ptr) (global.get $end))
+                          (i32.or
+                            (i32.eq (i32.load8_u (i32.sub (global.get $ptr) (i32.const 1))) (i32.const 10))
+                            (i32.eq (i32.load8_u (i32.sub (global.get $ptr) (i32.const 1))) (i32.const 13))))
+                      (then
+                        (local.set $stringMode (i32.const 1))
+                        (local.set $seg (i32.const 0))
+                        (br $stringDone)))
                     (br $stringScan)))
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
                 (br $stringScan)))
-            (if (i32.eqz (local.get $openedInterp))
-              (then (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))))
+            (if (i32.and (i32.eqz (local.get $openedInterp)) (i32.ne (local.get $seg) (i32.const 0)))
+              (then
+                (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
+                (local.set $seg (i32.const 0))))
             (br $next)))
 
         (local.set $gap (global.get $ptr))
@@ -207,10 +263,16 @@
             (br $next)))
 
         (if (i32.and (i32.eq (local.get $c) (i32.const "#")) (call $swiftRawStart))
-          (then (call $swiftHashString) (local.set $member (i32.const 0)) (br $next)))
+          (then
+            (local.set $rawOpen (call $swiftHashOpen))
+            (local.set $member (i32.const 0))
+            (br $next)))
         (if (i32.and (i32.eq (local.get $c) (i32.const 34))
               (i32.and (i32.eq (local.get $c2) (i32.const 34)) (i32.eq (local.get $c3) (i32.const 34))))
-          (then (call $swiftHashString) (local.set $member (i32.const 0)) (br $next)))
+          (then
+            (local.set $rawOpen (call $swiftHashOpen))
+            (local.set $member (i32.const 0))
+            (br $next)))
         (if (i32.eq (local.get $c) (i32.const 34))
           (then
             (local.set $seg (global.get $ptr))
@@ -401,6 +463,12 @@
             (block $opDone
               (loop $op
                 (br_if $opDone (i32.eqz (call $swiftIsOp (call $swiftByte (global.get $ptr)))))
+                ;; a comment opener ends the run
+                (br_if $opDone (i32.and
+                  (i32.eq (call $swiftByte (global.get $ptr)) (i32.const "/"))
+                  (i32.or
+                    (i32.eq (call $swiftByte (i32.add (global.get $ptr) (i32.const 1))) (i32.const "/"))
+                    (i32.eq (call $swiftByte (i32.add (global.get $ptr) (i32.const 1))) (i32.const "*")))))
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
                 (br $op)))
             (call $emitTok (enum.get $Token.operator) (local.get $lhs) (global.get $ptr))

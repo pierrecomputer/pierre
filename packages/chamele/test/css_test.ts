@@ -1,6 +1,10 @@
 import assert from 'node:assert';
 import t from 'node:test';
 
+import type { Lang, ThemedToken } from '../lib/index';
+import { codeToTokens, init, TokenizeStream } from '../lib/index';
+import { transformWat, wat2wasm } from '../scripts/build';
+import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import {
   bodyOf,
   checkInvariants,
@@ -16,7 +20,36 @@ let css: TestLang;
 
 t.before(() => {
   css = loadLang('css', '$hlCss');
+  // the streaming tests below need the whole module: css is also embedded by
+  // html, and TokenizeStream runs the shared stream driver
+  const url = new URL('../src/chamele.wat', import.meta.url);
+  const { code } = transformWat(url);
+  init(new WebAssembly.Module(wat2wasm(url.pathname, code)));
 });
+
+/** Tokens for `code` fed one line per chunk - the LiveTokenizer's shape. */
+function lineFed(lang: Lang, code: string): ThemedToken[][] {
+  const stream = new TokenizeStream({ lang, theme: pierreDark });
+  const lines: ThemedToken[][] = [];
+  for (const line of code.split(/(?<=\n)/)) {
+    lines.push(...stream.pushCode(line));
+  }
+  lines.push(...stream.end());
+  return lines;
+}
+
+/** Whole-buffer tokens for `code`, the reference the line-fed run must match. */
+function wholeTokens(lang: Lang, code: string): ThemedToken[][] {
+  return codeToTokens(code, { lang, theme: pierreDark }).tokens;
+}
+
+/** The color of the first streamed token whose text contains `text`. */
+function streamedColor(
+  lines: ThemedToken[][],
+  text: string
+): string | undefined {
+  return lines.flat().find((tk) => tk.content.includes(text))?.color;
+}
 
 // pierre-dark colors resolved from themes/pierre-dark.json (see themeColor)
 const BG = themeColor('background');
@@ -555,3 +588,73 @@ void t.test('css: unthemed types produce no span', () => {
   assert.equal(spansOf(html).length, 1);
   assert.equal(spansOf(html)[0].color, '#00ff00');
 });
+
+void t.test(
+  'css: selectors whose { sits on a later line decide the same line-fed',
+  () => {
+    // a streamed chunk is one line, so the selector/declaration look-ahead
+    // cannot see the `{`; the chunk-end guess must agree with the whole run
+    for (const src of [
+      'h1,\nh2,\nh3 {\n  margin: 0;\n}\n',
+      '.a,\n.b {\n  color: red;\n}\n',
+      'h1\n{\n  margin: 0;\n}\n',
+      'a:hover,\na:focus {\n  color: red;\n}\n',
+      '@media (min-width: 1px) {\n  .a,\n  .b {\n    color:\n      red;\n  }\n}\n',
+      '@supports (display: grid) and\n  (gap: 1px) {\n  .g { gap: 1px }\n}\n',
+      '@media screen,\n  print {\n  h1 { margin: 0 }\n}\n',
+      '.card {\n  transition: opacity 0.3s,\n    transform 0.3s;\n  &:hover,\n  &:focus {\n    top: 1px;\n  }\n  .child\n  {\n    left: 2px\n  }\n}\n',
+      '.a {\n  grid-template-areas:\n    "a b"\n    "c d";\n  font-family: A,\n    B;\n}\n',
+      'a { color: red; }\nb,\nc { color: blue }\n',
+      '.x { /* c */\n  color: red; /* note\nspans lines */\n}\n',
+      'color: red;\nfont-size: 12px;\n',
+      'a {\n  color',
+    ]) {
+      assert.deepEqual(lineFed('css', src), wholeTokens('css', src), src);
+    }
+    const streamed = lineFed('css', 'h1,\nh2 {\n  margin: 0;\n}\n');
+    assert.equal(streamedColor(streamed, 'h1'), TAG);
+    assert.equal(streamedColor(streamed, 'h2'), TAG);
+    assert.equal(streamedColor(streamed, 'margin'), PROPERTY);
+  }
+);
+
+void t.test('css: multi-line selectors inside a streamed <style> block', () => {
+  for (const src of [
+    '<style>\nh1,\nh2 {\n  margin: 0;\n}\n</style>\n<style>h1 { color: red }</style>\n',
+    '<div>\n<style>\n.a,\n.b\n{\n  color:\n    red\n}\n</style>\n</div>\n',
+  ]) {
+    assert.deepEqual(lineFed('html', src), wholeTokens('html', src), src);
+  }
+  const streamed = lineFed(
+    'html',
+    '<style>\nh1,\nh2 {\n  margin: 0;\n}\n</style>\n'
+  );
+  assert.equal(streamedColor(streamed, 'h1'), TAG);
+});
+
+void t.test(
+  'css: a \\ line continuation keeps the string open line-fed',
+  () => {
+    for (const src of [
+      'a { content: "abc\\\ndef"; }\n',
+      "a { content: 'abc\\\r\ndef\\\nghi'; color: red }\n",
+      'a { content: "abc\\\ndef\n; color: red }\n',
+      '<style>\na { content: "abc\\\ndef"; color: red }\n</style>\n',
+    ]) {
+      const lang = src.startsWith('<') ? 'html' : 'css';
+      assert.deepEqual(lineFed(lang, src), wholeTokens(lang, src), src);
+    }
+    const streamed = lineFed('css', 'a { content: "abc\\\ndef"; }\n');
+    assert.equal(streamedColor(streamed, 'def"'), STRING);
+  }
+);
+
+void t.test(
+  'css: a \\ before CRLF continues the string like one before LF',
+  () => {
+    const html = checkInvariants(css.hl, 'a { content: "abc\\\r\ndef"; }');
+    const spans = spansOf(html);
+    assert.ok(spans.some((s) => s.color === ESCAPE && s.text === '\\\r\n'));
+    assert.ok(spans.some((s) => s.color === STRING && s.text === 'def"'));
+  }
+);

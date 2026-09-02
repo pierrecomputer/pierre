@@ -23,13 +23,11 @@ const wasmModule = new WebAssembly.Module(
 init(wasmModule);
 
 const largeTs = readFileSync(
+  // ~ 10k lines
   new URL('./fixtures/large.ts.txt', import.meta.url),
   'utf8'
 );
-const hundredK = Array.from(
-  { length: 100_000 },
-  (_, i) => `const value${i} = compute(${i}) + "text ${i}"; // trailing note`
-).join('\n');
+const hundredK = largeTs.repeat(10);
 const unicode = 'const greeting = "日本語 🎈"; // naïve résumé\n'.repeat(
   10_000
 );

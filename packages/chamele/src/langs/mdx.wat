@@ -107,11 +107,14 @@
           (call $lexIsIdentStart (local.get $c))
           (i32.eq (local.get $c) (i32.const ">"))))
       (then (return (i32.add (local.get $lhs) (i32.const 1)))))
-    ;; a close tag has no attribute values: it ends at the first `>`
+    ;; a close tag has no attribute values: it ends at the first `>`; a `<`
+    ;; before that starts another tag, so this one never closed
     (if (local.get $close)
       (then
-        (local.set $p (call $lexFindByte (local.get $p) (i32.const ">")))
-        (if (i32.lt_u (local.get $p) (global.get $end))
+        (local.set $p (call $lexFindEither (local.get $p) (i32.const ">") (i32.const "<")))
+        (if (i32.and
+              (i32.lt_u (local.get $p) (global.get $end))
+              (i32.eq (i32.load8_u (local.get $p)) (i32.const ">")))
           (then (return (i32.add (local.get $p) (i32.const 1)))))
         (return (i32.add (local.get $lhs) (i32.const 1)))))
     (block $done
@@ -120,6 +123,9 @@
         (local.set $c (i32.load8_u (local.get $p)))
         (if (i32.eq (local.get $c) (i32.const ">"))
           (then (return (i32.add (local.get $p) (i32.const 1)))))
+        ;; a stray `<` outside quotes and braces: the tag never closed, and
+        ;; a line-fed lexer could not have joined it with the next line either
+        (br_if $done (i32.eq (local.get $c) (i32.const "<")))
         (if (i32.and
               (i32.eq (local.get $value) (i32.const 1))
               (i32.eqz (call $lexIsSpace (local.get $c))))
@@ -163,27 +169,60 @@
   ;; When the line at $p opens a fenced code block, the offset just past its
   ;; closing fence; 0 otherwise. A fenced body belongs to markdown, which knows
   ;; how to delegate it by info string, so `{` and `<` inside one are literal
-  ;; text rather than MDX expressions or JSX. This scan accepts up to three
-  ;; spaces of indent before the opening and closing runs, unlike markdown's
-  ;; $markdownFenceClose, which requires the closing run at the line start -
-  ;; so the two close scans stay separate.
+  ;; text rather than MDX expressions or JSX. The opener may sit behind block
+  ;; quote markers and spaces exactly as the markdown lexer accepts them, and
+  ;; the closer is found by the markdown lexer's own scan, so the two never
+  ;; disagree on where a body ends.
   (func $mdxFenceEnd (param $p i32) (result i32)
+    (local $close i32)
     (local $fence i32)
-    (local $indent i32)
     (local $len i32)
-    (local $lineEnd i32)
     (local $q i32)
-    (local $run i32)
-    (block $indentDone
-      (loop $indentScan
-        (br_if $indentDone (i32.ge_u (local.get $indent) (i32.const 3)))
-        (br_if $indentDone (i32.ge_u (local.get $p) (global.get $end)))
-        (br_if $indentDone (i32.ne (i32.load8_u (local.get $p)) (i32.const 32)))
-        (local.set $p (i32.add (local.get $p) (i32.const 1)))
-        (local.set $indent (i32.add (local.get $indent) (i32.const 1)))
-        (br $indentScan)))
+    (local $quotes i32)
+    ;; line prefix, as the markdown lexer keeps line-start meaning behind it:
+    ;; spaces, `>` markers (counted), and list markers followed by a blank
+    (block $prefixDone
+      (loop $prefix
+        (br_if $prefixDone (i32.ge_u (local.get $p) (global.get $end)))
+        (local.set $fence (i32.load8_u (local.get $p)))
+        (local.set $q (local.get $p))
+        (if (i32.eq (local.get $fence) (i32.const ">"))
+          (then
+            (local.set $quotes (i32.add (local.get $quotes) (i32.const 1)))
+            (local.set $q (i32.add (local.get $q) (i32.const 1))))
+          (else
+            (if (i32.eq (local.get $fence) (i32.const 32))
+              (then (local.set $q (i32.add (local.get $q) (i32.const 1))))
+              (else
+                (if (i32.or
+                      (i32.eq (local.get $fence) (i32.const "-"))
+                      (i32.or (i32.eq (local.get $fence) (i32.const "+"))
+                              (i32.eq (local.get $fence) (i32.const "*"))))
+                  (then (local.set $q (i32.add (local.get $q) (i32.const 1))))
+                  (else
+                    (block $digitsDone
+                      (loop $digits
+                        (br_if $digitsDone (i32.ge_u (local.get $q) (global.get $end)))
+                        (br_if $digitsDone (i32.eqz (call $lexIsDigit (i32.load8_u (local.get $q)))))
+                        (local.set $q (i32.add (local.get $q) (i32.const 1)))
+                        (br $digits)))
+                    (if (i32.and
+                          (i32.gt_u (local.get $q) (local.get $p))
+                          (i32.and
+                            (i32.lt_u (local.get $q) (global.get $end))
+                            (i32.or
+                              (i32.eq (i32.load8_u (local.get $q)) (i32.const "."))
+                              (i32.eq (i32.load8_u (local.get $q)) (i32.const ")")))))
+                      (then (local.set $q (i32.add (local.get $q) (i32.const 1))))
+                      (else (local.set $q (local.get $p))))))
+                ;; a list marker counts only with a blank after it
+                (br_if $prefixDone (i32.eq (local.get $q) (local.get $p)))
+                (br_if $prefixDone (i32.or
+                  (i32.ge_u (local.get $q) (global.get $end))
+                  (i32.eqz (call $lexIsSpace (i32.load8_u (local.get $q))))))))))
+        (local.set $p (local.get $q))
+        (br $prefix)))
     (if (i32.ge_u (local.get $p) (global.get $end)) (then (return (i32.const 0))))
-    (local.set $fence (i32.load8_u (local.get $p)))
     (if (i32.and (i32.ne (local.get $fence) (i32.const "`"))
                  (i32.ne (local.get $fence) (i32.const "~")))
       (then (return (i32.const 0))))
@@ -196,57 +235,102 @@
         (br $openRun)))
     (local.set $len (i32.sub (local.get $q) (local.get $p)))
     (if (i32.lt_u (local.get $len) (i32.const 3)) (then (return (i32.const 0))))
-    (local.set $p (call $markdownAfterLine (call $markdownLineEnd (local.get $q))))
-    (block $lineDone
-      (loop $lines
-        (br_if $lineDone (i32.ge_u (local.get $p) (global.get $end)))
-        (local.set $lineEnd (call $markdownLineEnd (local.get $p)))
-        (local.set $q (local.get $p))
-        (local.set $indent (i32.const 0))
-        (block $closeIndentDone
-          (loop $closeIndent
-            (br_if $closeIndentDone (i32.ge_u (local.get $indent) (i32.const 3)))
-            (br_if $closeIndentDone (i32.ge_u (local.get $q) (local.get $lineEnd)))
-            (br_if $closeIndentDone (i32.ne (i32.load8_u (local.get $q)) (i32.const 32)))
-            (local.set $q (i32.add (local.get $q) (i32.const 1)))
-            (local.set $indent (i32.add (local.get $indent) (i32.const 1)))
-            (br $closeIndent)))
-        (local.set $run (local.get $q))
-        (block $closeRunDone
-          (loop $closeRun
-            (br_if $closeRunDone (i32.ge_u (local.get $run) (local.get $lineEnd)))
-            (br_if $closeRunDone (i32.ne (i32.load8_u (local.get $run)) (local.get $fence)))
-            (local.set $run (i32.add (local.get $run) (i32.const 1)))
-            (br $closeRun)))
-        (if (i32.ge_u (i32.sub (local.get $run) (local.get $q)) (local.get $len))
-          (then
-            ;; only blanks may trail a closing fence
-            (block $tailDone
-              (loop $tail
-                (br_if $tailDone (i32.ge_u (local.get $run) (local.get $lineEnd)))
-                (br_if $tailDone (i32.and
-                  (i32.ne (i32.load8_u (local.get $run)) (i32.const 32))
-                  (i32.ne (i32.load8_u (local.get $run)) (i32.const 9))))
-                (local.set $run (i32.add (local.get $run) (i32.const 1)))
-                (br $tail)))
-            (if (i32.eq (local.get $run) (local.get $lineEnd))
-              (then (return (call $markdownAfterLine (local.get $lineEnd)))))))
-        (local.set $p (call $markdownAfterLine (local.get $lineEnd)))
-        (br $lines)))
+    (local.set $close (call $markdownFenceClose
+      (call $markdownAfterLine (call $markdownLineEnd (local.get $q)))
+      (local.get $fence) (local.get $len) (local.get $quotes)))
     ;; unterminated: the block runs to the end, exactly as markdown treats it
-    (global.get $end))
+    (if (i32.ge_u (local.get $close) (global.get $end))
+      (then (return (global.get $end))))
+    (call $markdownAfterLine (call $markdownLineEnd (local.get $close))))
+
+  ;; Does the `<` at $p plausibly open a JSX tag whose `>` arrives in a later
+  ;; stream chunk? Everything after the tag name up to $end must read as
+  ;; attributes: names, `=`, quoted values, braced expressions, `/`, blanks.
+  ;; A bare `<word` mid-line with nothing else, as in prose `a <b c`, is not
+  ;; enough on its own: the tag must also be a component, sit at a line
+  ;; start, or carry an attribute assignment. Without this the region would
+  ;; swallow every following line as attributes.
+  (func $mdxTagStartContinues (param $p i32) (result i32)
+    (local $c i32)
+    (local $evidence i32)
+    (local $q i32)
+    (local.set $c (i32.load8_u offset=1 (local.get $p)))
+    (local.set $evidence
+      (i32.le_u (i32.sub (local.get $c) (i32.const "A")) (i32.const 25)))
+    ;; flow position: only blanks between the line start and the `<`
+    (local.set $q (local.get $p))
+    (block $lineChecked
+      (loop $back
+        (if (i32.le_u (local.get $q) (global.get $srcBase))
+          (then
+            (local.set $evidence (i32.const 1))
+            (br $lineChecked)))
+        (local.set $c (i32.load8_u (i32.sub (local.get $q) (i32.const 1))))
+        (if (i32.or (i32.eq (local.get $c) (i32.const 10))
+                    (i32.eq (local.get $c) (i32.const 13)))
+          (then
+            (local.set $evidence (i32.const 1))
+            (br $lineChecked)))
+        (br_if $lineChecked (i32.and
+          (i32.ne (local.get $c) (i32.const 32))
+          (i32.ne (local.get $c) (i32.const 9))))
+        (local.set $q (i32.sub (local.get $q) (i32.const 1)))
+        (br $back)))
+    (local.set $q (i32.add (local.get $p) (i32.const 1)))
+    (block $done
+      (loop $attrs
+        (br_if $done (i32.ge_u (local.get $q) (global.get $end)))
+        (local.set $c (i32.load8_u (local.get $q)))
+        (if (i32.eq (local.get $c) (i32.const "="))
+          (then (local.set $evidence (i32.const 1))))
+        (if (i32.or (i32.eq (local.get $c) (i32.const 34))
+                    (i32.eq (local.get $c) (i32.const 39)))
+          (then
+            (local.set $q (call $lexFindByte
+              (i32.add (local.get $q) (i32.const 1)) (local.get $c)))
+            (br_if $done (i32.ge_u (local.get $q) (global.get $end)))
+            (local.set $q (i32.add (local.get $q) (i32.const 1)))
+            (br $attrs)))
+        (if (i32.eq (local.get $c) (i32.const "{"))
+          (then
+            (local.set $q (call $tsxExpressionEnd (local.get $q) (local.get $q)))
+            (br $attrs)))
+        (if (i32.eqz (i32.or
+              (i32.or
+                (call $lexIsSpace (local.get $c))
+                (call $lexIsIdentContinue (local.get $c)))
+              (i32.or
+                (i32.or (i32.eq (local.get $c) (i32.const "="))
+                        (i32.eq (local.get $c) (i32.const "/")))
+                (i32.or
+                  (i32.or (i32.eq (local.get $c) (i32.const "-"))
+                          (i32.eq (local.get $c) (i32.const ":")))
+                  (i32.eq (local.get $c) (i32.const "."))))))
+          (then (return (i32.const 0))))
+        (local.set $q (i32.add (local.get $q) (i32.const 1)))
+        (br $attrs)))
+    (local.get $evidence))
 
   (func $hlMdx
     (local $fenceAt i32)
     (local $from i32)
     (local $inFence i32)
     (local $lineEnd i32)
+    ;; set once a `>` search from some `<` reached $end: no later `<` in
+    ;; this chunk can close a tag, so their scans are skipped
+    (local $noClose i32)
     (local $p i32)
     (local $to i32)
     (call $lexEmitLeadingContinuation)
+    ;; the memo describes the previous chunk's bytes once restored; the scan
+    ;; below restarts from $ptr, so start every call without it
+    (local.set $noClose (i32.const 0))
     ;; Keep inherited Markdown YAML front matter opaque to MDX braces/angles.
+    ;; Streaming also demands the first chunk, as the markdown lexer does.
     (if (i32.and
-          (i32.eq (global.get $ptr) (global.get $srcBase))
+          (i32.and
+            (i32.eq (global.get $ptr) (global.get $srcBase))
+            (i32.or (i32.eqz (global.get $streaming)) (global.get $streamReset)))
           (i32.and
             (i32.le_u (i32.add (global.get $ptr) (i32.const 3)) (global.get $end))
             (i32.eq (i32.and (i32.load (global.get $ptr)) (i32.const 0xffffff))
@@ -336,12 +420,24 @@
                   (i32.le_u (i32.add (local.get $p) (i32.const 4)) (global.get $end))
                   (i32.eq (i32.load (local.get $p)) (i32.const "<!--")))
               (then
-                (local.set $to (call $markdownHtmlEnd (local.get $p)))
+                (local.set $to (call $markdownHtmlEnd
+                  (local.get $p) (call $markdownLineEnd (local.get $p))))
                 (call $mdxMarkdownRange (local.get $from) (local.get $to))
                 (local.set $from (local.get $to))
                 (local.set $p (local.get $to))
                 (br $scan)))
-            (local.set $to (call $mdxJsxEnd (local.get $p)))
+            (local.set $to (i32.add (local.get $p) (i32.const 1)))
+            (if (i32.eqz (local.get $noClose))
+              (then
+                (local.set $to (call $mdxJsxEnd (local.get $p)))
+                (if (i32.le_u (local.get $to) (i32.add (local.get $p) (i32.const 1)))
+                  (then
+                    ;; no tag closed here; when no `>` follows at all, every
+                    ;; later `<` in the chunk would rescan to $end for nothing
+                    (if (i32.ge_u
+                          (call $lexFindByte (i32.add (local.get $p) (i32.const 1)) (i32.const ">"))
+                          (global.get $end))
+                      (then (local.set $noClose (i32.const 1))))))))
             (if (i32.gt_u (local.get $to) (i32.add (local.get $p) (i32.const 1)))
               (then
                 (call $mdxMarkdownRange (local.get $from) (local.get $p))
@@ -353,8 +449,10 @@
                   (global.get $streaming)
                   (i32.and
                     (i32.lt_u (i32.add (local.get $p) (i32.const 1)) (global.get $end))
-                    (call $lexIsIdentStart
-                      (i32.load8_u offset=1 (local.get $p)))))
+                    (i32.and
+                      (call $lexIsIdentStart
+                        (i32.load8_u offset=1 (local.get $p)))
+                      (call $mdxTagStartContinues (local.get $p)))))
               (then
                 (call $mdxMarkdownRange (local.get $from) (local.get $p))
                 (global.set $ptr (global.get $end))

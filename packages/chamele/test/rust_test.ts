@@ -1,6 +1,10 @@
 import assert from 'node:assert';
 import t from 'node:test';
 
+import type { Lang, ThemedToken } from '../lib/index';
+import { codeToTokens, init, TokenizeStream } from '../lib/index';
+import { transformWat, wat2wasm } from '../scripts/build';
+import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import {
   checkInvariants,
   colorOf,
@@ -12,7 +16,32 @@ import {
 } from './util';
 
 let rust: TestLang;
-t.before(() => (rust = loadLang('rust', '$hlRust')));
+t.before(() => {
+  rust = loadLang('rust', '$hlRust');
+  // the streaming tests below need the full module behind codeToTokens
+  const url = new URL('../src/chamele.wat', import.meta.url);
+  const { code } = transformWat(url);
+  init(new WebAssembly.Module(wat2wasm(url.pathname, code)));
+});
+
+/**
+ * Tokens for `code` from the whole buffer and from a TokenizeStream fed one
+ * line per push - the chunk shape the LiveTokenizer uses - so a test can
+ * assert that a construct crossing line boundaries resumes correctly.
+ */
+function wholeAndLineFed(
+  lang: Lang,
+  code: string
+): [ThemedToken[][], ThemedToken[][]] {
+  const whole = codeToTokens(code, { lang, theme: pierreDark }).tokens;
+  const stream = new TokenizeStream({ lang, theme: pierreDark });
+  const streamed: ThemedToken[][] = [];
+  for (const line of code.split(/(?<=\n)/)) {
+    streamed.push(...stream.pushCode(line));
+  }
+  streamed.push(...stream.end());
+  return [whole, streamed];
+}
 
 void t.test('rust: declarations, control, traits, types, and functions', () => {
   const src = `use std::fmt;
@@ -142,4 +171,56 @@ void t.test('rust: fn parameters match Zed variable.parameter', () => {
     assert.equal(word(html, name), VARIABLE, name);
   }
   assert.notEqual(word(html, 'V'), PARAM);
+});
+
+void t.test('rust: macro bang, fn types, and :: paths classify names', () => {
+  const word = (html: string, text: string) =>
+    spansOf(html).find((s) => s.text.trim() === text)?.color;
+  const html = checkInvariants(
+    rust.hl,
+    'a != b; let f: fn(i32) -> i32 = handler; println!("x");\n' +
+      'use std::collections::HashMap; let m = Foo::MAX; s.field;'
+  );
+  // `!=` is an operator, not a macro bang
+  assert.equal(word(html, 'a'), themeColor('variable'));
+  assert.equal(word(html, 'println'), themeColor('function'));
+  // an `fn(...)` type does not name the next identifier
+  assert.equal(word(html, 'handler'), themeColor('variable'));
+  // capitalised names after `::` are types or constants, fields after `.`
+  assert.equal(word(html, 'HashMap'), themeColor('type'));
+  assert.equal(word(html, 'Foo'), themeColor('type'));
+  assert.equal(word(html, 'MAX'), themeColor('constant'));
+  assert.equal(word(html, 'field'), themeColor('property'));
+});
+
+void t.test('rust: move, ref, and super are keywords', () => {
+  const html = checkInvariants(rust.hl, 'move ref super::x');
+  assert.equal(colorOf(html, 'move'), themeColor('keyword'));
+  assert.equal(colorOf(html, 'ref'), themeColor('keyword'));
+  assert.equal(colorOf(html, 'super'), themeColor('keyword.import'));
+});
+
+void t.test('rust: raw strings resume line-fed for any hash count', () => {
+  const probe = 'fn main() { let x: i32 = 1; }\n';
+  const before = codeToTokens(probe, { lang: 'rust', theme: pierreDark });
+  for (const hashes of [0, 1, 30, 31, 40, 300, 5000]) {
+    const h = '#'.repeat(hashes);
+    const code = `let s = br${h}"one\n"${h.slice(1)}"two"${h};\nlet x = 1;\n`;
+    const [whole, streamed] = wholeAndLineFed('rust', code);
+    assert.deepEqual(streamed, whole, `${hashes} hashes`);
+    assert.equal(whole[1][0].color, themeColor('string'), `${hashes} hashes`);
+  }
+  // long hash runs never spill past the stream delimiter into lexer state
+  assert.deepEqual(
+    codeToTokens(probe, { lang: 'rust', theme: pierreDark }),
+    before
+  );
+});
+
+void t.test('rust: nested comments at even depth match line-fed', () => {
+  const code = '/* /* a\nb\n*/ */\nc\n';
+  const [whole, streamed] = wholeAndLineFed('rust', code);
+  assert.deepEqual(streamed, whole);
+  assert.equal(whole[2][0].color, themeColor('comment'));
+  assert.equal(whole[3][0].color, themeColor('variable'));
 });

@@ -1,27 +1,21 @@
 (module
   (import "../common.wat")
 
-  (func $hsPragma
-    (local $lhs i32)
-    (local.set $lhs (global.get $ptr))
-    (global.set $ptr (i32.add (global.get $ptr) (i32.const 3)))
-    (if (i32.gt_u (global.get $ptr) (global.get $end))
-      (then (global.set $ptr (global.get $end))))
-    (block $done
-      (loop $scan
-        ;; hop between `#` bytes with SIMD; the closing `#-}` holds the only
-        ;; hash a pragma body normally sees
-        (global.set $ptr (call $lexFindByte (global.get $ptr) (i32.const "#")))
-        (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
-        (if (i32.and
-              (i32.lt_u (i32.add (global.get $ptr) (i32.const 2)) (global.get $end))
-              (i32.eq (i32.load16_u offset=1 (global.get $ptr)) (i32.const "-}")))
-          (then
-            (global.set $ptr (i32.add (global.get $ptr) (i32.const 3)))
-            (br $done)))
-        (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-        (br $scan)))
-    (call $emitTok (enum.get $Token.preproc) (local.get $lhs) (global.get $ptr)))
+  ;; A character literal starts at the tick $p when a single character - an
+  ;; escape, or one code point - sits between it and a closing tick. Any other
+  ;; tick is a name quote: a promoted constructor like 'True or '[] under
+  ;; DataKinds, or a Template Haskell 'name / ''Type.
+  (func $hsIsCharLiteral (param $p i32) (result i32)
+    (local $e i32)
+    (if (i32.ge_u (i32.add (local.get $p) (i32.const 1)) (global.get $end))
+      (then (return (i32.const 0))))
+    (if (i32.eq (i32.load8_u offset=1 (local.get $p)) (i32.const 92))
+      (then (return (i32.const 1))))
+    (local.set $e (call $utf8SpanEnd
+      (i32.add (local.get $p) (i32.const 2)) (global.get $end)))
+    (i32.and
+      (i32.lt_u (local.get $e) (global.get $end))
+      (i32.eq (i32.load8_u (local.get $e)) (i32.const 39))))
 
   ;; group order is the dispatch order in $hsWordHl below; let and where keep
   ;; dedicated groups so the caller can prime the next name as a definition
@@ -113,7 +107,8 @@
         (call $scanWhitespace)
         ;; the gap crossed a line break when a CR/LF sits before the new $ptr
         (if (i32.lt_u
-              (call $lexFindEither (local.get $gap) (i32.const 10) (i32.const 13))
+              (call $scanFindSpecial (local.get $gap) (global.get $ptr)
+                (i32.const 10) (i32.const 0) (i32.const 1))
               (global.get $ptr))
           (then
             (local.set $lineHead (i32.const 1))
@@ -137,7 +132,11 @@
             (if (i32.and
                   (i32.lt_u (i32.add (global.get $ptr) (i32.const 2)) (global.get $end))
                   (i32.eq (i32.load8_u offset=2 (global.get $ptr)) (i32.const "#")))
-              (then (call $hsPragma))
+              (then
+                ;; a pragma closes with `#-}`, so the nested comment scan
+                ;; finds its end and checkpoints a pragma that spans chunks
+                (call $lexNestedBlockComment
+                  (i32.const "{-") (i32.const "-}") (enum.get $Token.preproc)))
               (else
                 (local.set $hl (enum.get $Token.comment))
                 (if (i32.and
@@ -190,9 +189,18 @@
             (call $lexString (i32.const 34) (i32.const 0) (enum.get $Token.string))
             (local.set $lineHead (i32.const 0))
             (br $next)))
-        (if (i32.eq (local.get $c) (i32.const 39))
+        (if (i32.and
+              (i32.eq (local.get $c) (i32.const 39))
+              (call $hsIsCharLiteral (global.get $ptr)))
           (then
             (call $lexString (i32.const 39) (i32.const 0) (enum.get $Token.string.special))
+            (local.set $lineHead (i32.const 0))
+            (br $next)))
+        ;; a name-quoting tick: the constructor or name after it lexes as usual
+        (if (i32.eq (local.get $c) (i32.const 39))
+          (then
+            (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+            (call $emitTok (enum.get $Token.punctuation.special) (local.get $lhs) (global.get $ptr))
             (local.set $lineHead (i32.const 0))
             (br $next)))
         (if (i32.eq (local.get $c) (i32.const "`"))
@@ -211,19 +219,15 @@
             (call $emitTok (enum.get $Token.number) (local.get $lhs) (global.get $ptr))
             (local.set $lineHead (i32.const 0))
             (br $next)))
-        (if (call $lexIsIdentStart (local.get $c))
+        ;; `$` is an operator here, not an identifier byte as in the shared
+        ;; predicate, so `f $ x` keeps its application operator
+        (if (i32.and
+              (call $lexIsIdentStart (local.get $c))
+              (i32.ne (local.get $c) (i32.const "$")))
           (then
-            ;; identifier bytes plus prime, which marks variants like foldl'
-            (block $identDone
-              (loop $ident
-                (br_if $identDone (i32.ge_u (global.get $ptr) (global.get $end)))
-                (local.set $c (i32.load8_u (global.get $ptr)))
-                (br_if $identDone (i32.eqz
-                  (i32.or
-                    (call $lexIsIdentContinue (local.get $c))
-                    (i32.eq (local.get $c) (i32.const 39)))))
-                (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-                (br $ident)))
+            ;; identifier bytes plus prime, which marks variants like foldl';
+            ;; 16 bytes per step
+            (call $scanIdentRun (i32.const 39))
             (local.set $g (keyword-table.get $hsWords
               (local.get $lhs) (global.get $ptr)))
             (local.set $hl (call $hsWordHl (local.get $g)))

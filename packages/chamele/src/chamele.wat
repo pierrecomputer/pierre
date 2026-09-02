@@ -19,7 +19,8 @@
       [16000:26752)   keyword-table region (see src/memory.wat)
       [26752:31570)   span-open fragment cache (HTML modes)
       [31584:31712)   live free-list heads
-      [31712:65536)   free
+      [31744:34304)   zig keyword table
+      [34304:65536)   free
     [] pages 2..N     (text buffer)
       [65536:EOF)     input, NUL sentinel, then at least 16 bytes of slack
       [(EOF+47)&~15:) output HTML bytes or (end:u32, hl:u32) token records;
@@ -144,7 +145,15 @@
           (then (call $hlCss))
           (else
             (if (i32.eq (local.get $kind) (i32.const 4))
-              (then (call $hlYaml))
+              (then
+                ;; a block scalar left open by the previous chunk is a
+                ;; yaml-owned mode that the top-level resume only checks
+                ;; for yaml documents; resume it inside the range first
+                (if (i32.and
+                      (i32.eqz (local.get $reset))
+                      (i32.eq (global.get $streamMode) (i32.const 11)))
+                  (then (drop (call $yamlStreamResume))))
+                (call $hlYaml))
               (else (call $hlTsxStream (local.get $reset))))))))
     (global.set $end (local.get $saveEnd))
     (global.set $ptr (local.get $to))
@@ -242,18 +251,39 @@
     (i32.const 0))
 
   (func $streamResumeLang (param $lang i32) (result i32)
+    ;; start-tag regions owned by the markup lexers (kinds 9-13)
+    (if (i32.eq (global.get $streamRegionKind) (i32.const 9))
+      (then (return (call $htmlStreamResumeTag))))
+    (if (i32.eq (global.get $streamRegionKind) (i32.const 10))
+      (then (return (call $xmlStreamResumeTag))))
+    (if (i32.eq (global.get $streamRegionKind) (i32.const 11))
+      (then (return (call $vueStreamResumeTag))))
+    (if (i32.eq (global.get $streamRegionKind) (i32.const 12))
+      (then (return (call $svelteStreamResumeTag))))
+    (if (i32.eq (global.get $streamRegionKind) (i32.const 13))
+      (then (return (call $astroStreamResumeTag))))
     (if (global.get $streamRegionKind)
       (then (return (call $streamResumeRegion))))
     (if (i32.eq (local.get $lang) (enum.get $Language.python))
       (then (return (call $pyStreamResume))))
     (if (i32.eq (local.get $lang) (enum.get $Language.php))
       (then (return (call $phpStreamResume))))
-    (if (i32.eq (local.get $lang) (enum.get $Language.markdown))
+    (if (i32.or
+          (i32.eq (local.get $lang) (enum.get $Language.markdown))
+          (i32.eq (local.get $lang) (enum.get $Language.mdx)))
       (then (return (call $markdownStreamResume))))
     (if (i32.and
           (i32.eq (local.get $lang) (enum.get $Language.yaml))
           (i32.eq (global.get $streamMode) (i32.const 11)))
       (then (return (call $yamlStreamResume))))
+    (if (i32.and
+          (i32.eq (local.get $lang) (enum.get $Language.bash))
+          (i32.eq (global.get $streamMode) (i32.const 12)))
+      (then (return (call $bashStreamResume))))
+    (if (i32.and
+          (i32.eq (local.get $lang) (enum.get $Language.toml))
+          (i32.eq (global.get $streamMode) (i32.const 13)))
+      (then (return (call $tomlStreamResume))))
     (i32.const 0))
 
   ;; Zero every cross-chunk stream global, matching a fresh Wasm instance.

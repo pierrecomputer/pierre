@@ -2,10 +2,12 @@
   (import "../common.wat")
 
   ;; whether [$lhs,$rhs) names a machine register: `r`/`x`/`w` followed by a
-  ;; digit, or one of the fixed two- and three-byte names. The wide loads below
-  ;; may read up to three bytes past $rhs; that always lands inside the input
-  ;; buffer's trailing slack, and the length checks plus the masks discard
-  ;; whatever those bytes hold.
+  ;; digit, `xmm`/`ymm`/`zmm` plus a digit, one of the fixed two-byte names,
+  ;; or an `e`/`r` prefixed x86 name - `eax`..`edx`, `esi`, `edi`, `ebp`,
+  ;; `esp`, `eip` and their 64-bit `r` forms. The wide loads below may read up
+  ;; to three bytes past $rhs; that always lands inside the input buffer's
+  ;; trailing slack, and the length checks plus the masks discard whatever
+  ;; those bytes hold.
   (func $asmIsRegister (param $lhs i32) (param $rhs i32) (result i32)
     (local $c i32)
     (local $n i32)
@@ -21,31 +23,52 @@
                       (i32.eq (local.get $c) (i32.const "w"))))
             (call $lexIsDigit (i32.load8_u offset=1 (local.get $lhs)))))
       (then (return (i32.const 1))))
+    (local.set $w (i32.or (i32.load (local.get $lhs)) (i32.const 0x20202020)))
+    ;; vector registers: `xmm0`..`zmm31`
+    (if (i32.and
+          (i32.le_u (i32.sub (local.get $n) (i32.const 4)) (i32.const 1))
+          (i32.and
+            (i32.eq (i32.and (local.get $w) (i32.const 0x00ffff00)) (i32.const 0x006d6d00))
+            (i32.and
+              (i32.le_u (i32.sub (local.get $c) (i32.const "x")) (i32.const 2))
+              (call $lexIsDigit (i32.load8_u offset=3 (local.get $lhs))))))
+      (then (return (i32.const 1))))
     ;; every remaining name is two or three bytes, so one compare skips the
     ;; whole ladder for ordinary mnemonics and symbols
     (if (i32.gt_u (local.get $n) (i32.const 3)) (then (return (i32.const 0))))
-    (local.set $w (i32.or (i32.load (local.get $lhs)) (i32.const 0x20202020)))
+    (if (i32.eq (local.get $n) (i32.const 2))
+      (then
+        (local.set $w (i32.and (local.get $w) (i32.const 0xffff)))
+        (return (i32.or
+          (i32.or
+            (i32.eq (local.get $w) (i32.const "sp"))
+            (i32.eq (local.get $w) (i32.const "fp")))
+          (i32.or
+            (i32.eq (local.get $w) (i32.const "lr"))
+            (i32.eq (local.get $w) (i32.const "pc")))))))
+    (if (i32.ne (local.get $n) (i32.const 3)) (then (return (i32.const 0))))
+    (if (i32.and (i32.ne (local.get $c) (i32.const "e"))
+                 (i32.ne (local.get $c) (i32.const "r")))
+      (then (return (i32.const 0))))
+    ;; the two bytes after the `e`/`r` prefix
+    (local.set $w (i32.and (i32.shr_u (local.get $w) (i32.const 8)) (i32.const 0xffff)))
     (i32.or
-      (i32.and (i32.eq (local.get $n) (i32.const 2))
+      (i32.or
         (i32.or
-          (i32.eq (i32.and (local.get $w) (i32.const 0xffff)) (i32.const "sp"))
-          (i32.or
-            (i32.eq (i32.and (local.get $w) (i32.const 0xffff)) (i32.const "fp"))
-            (i32.or
-              (i32.eq (i32.and (local.get $w) (i32.const 0xffff)) (i32.const "lr"))
-              (i32.eq (i32.and (local.get $w) (i32.const 0xffff)) (i32.const "pc"))))))
-      (i32.and (i32.eq (local.get $n) (i32.const 3))
+          (i32.eq (local.get $w) (i32.const "ax"))
+          (i32.eq (local.get $w) (i32.const "bx")))
         (i32.or
-          (i32.eq (i32.and (local.get $w) (i32.const 0xffffff)) (i32.const "eax"))
+          (i32.eq (local.get $w) (i32.const "cx"))
+          (i32.eq (local.get $w) (i32.const "dx"))))
+      (i32.or
+        (i32.or
+          (i32.eq (local.get $w) (i32.const "si"))
+          (i32.eq (local.get $w) (i32.const "di")))
+        (i32.or
           (i32.or
-            (i32.eq (i32.and (local.get $w) (i32.const 0xffffff)) (i32.const "ebx"))
-            (i32.or
-              (i32.eq (i32.and (local.get $w) (i32.const 0xffffff)) (i32.const "ecx"))
-              (i32.or
-                (i32.eq (i32.and (local.get $w) (i32.const 0xffffff)) (i32.const "edx"))
-                (i32.or
-                  (i32.eq (i32.and (local.get $w) (i32.const 0xffffff)) (i32.const "rax"))
-                  (i32.eq (i32.and (local.get $w) (i32.const 0xffffff)) (i32.const "rsp"))))))))))
+            (i32.eq (local.get $w) (i32.const "bp"))
+            (i32.eq (local.get $w) (i32.const "sp")))
+          (i32.eq (local.get $w) (i32.const "ip"))))))
 
   (func $hlAsm
     (local $c i32)
@@ -61,16 +84,13 @@
     (block $done
       (loop $token
         (local.set $lhs (global.get $ptr))
-        (block $wsDone
-          (loop $ws
-            (br_if $wsDone (i32.ge_u (global.get $ptr) (global.get $end)))
-            (local.set $c (i32.load8_u (global.get $ptr)))
-            (br_if $wsDone (i32.eqz (call $lexIsSpace (local.get $c))))
-            (if (i32.or (i32.eq (local.get $c) (i32.const 10))
-                        (i32.eq (local.get $c) (i32.const 13)))
-              (then (local.set $expectMnemonic (i32.const 1))))
-            (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-            (br $ws)))
+        (call $scanWhitespace)
+        ;; a line break in the gap puts the next word in mnemonic position
+        (if (i32.lt_u
+              (call $scanFindSpecial
+                (local.get $lhs) (global.get $ptr) (i32.const 10) (i32.const 0) (i32.const 1))
+              (global.get $ptr))
+          (then (local.set $expectMnemonic (i32.const 1))))
         (call $emitGap (local.get $lhs) (global.get $ptr))
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
         (local.set $lhs (global.get $ptr))

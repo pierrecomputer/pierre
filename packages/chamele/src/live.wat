@@ -202,6 +202,11 @@
     (local.set $keep (call $lvRoundSize (i32.add (local.get $len) (i32.const 8))))
     (local.set $rest (i32.sub (local.get $total) (local.get $keep)))
     (if (i32.lt_u (local.get $rest) (i32.const 16)) (then (return)))
+    ;; the tail joins a free list keyed by class size, and $lvAlloc hands a
+    ;; block from that list out at the class size; a tail that is not exactly
+    ;; a class size would be handed out larger than it is
+    (if (i32.ne (call $lvRoundSize (local.get $rest)) (local.get $rest))
+      (then (return)))
     (i32.store (local.get $hdr) (local.get $keep))
     (i32.store (i32.add (local.get $hdr) (local.get $keep)) (local.get $rest))
     (call $lvFree (i32.add (i32.add (local.get $hdr) (local.get $keep)) (i32.const 8))))
@@ -459,11 +464,15 @@
     (global.set $lvIdFree (local.get $id)))
 
   ;; Blob image: [sharedLen, brkLen, jsxLen] u32 head, 37 cross-chunk globals,
-  ;; the 32-byte stream delimiter, the whole used lexer checkpoint region,
-  ;; then the live prefixes of the shared, bracket, and jsx stacks. The image
+  ;; the 32-byte stream delimiter, the live prefixes of the shared, bracket,
+  ;; and jsx stacks, then the whole used lexer checkpoint region. The image
   ;; is a pure function of the incoming state and the line bytes, so exact
   ;; byte identity is a sound convergence test. Capture builds the full
-  ;; image; interning and restore work on its zero-trimmed form.
+  ;; image; interning and restore work on its zero-trimmed form. The
+  ;; checkpoint region comes last because it is all zero for the ECMAScript
+  ;; family (which keeps its state in globals and the stacks): trailing-zero
+  ;; trimming then drops it entirely instead of storing, hashing, and
+  ;; comparing a kilobyte of zeros per line.
 
   (global $lvLang (mut i32) (i32.const 0))
   (global $lvMachineId (mut i32) (i32.const -1)) ;; state the machine holds now
@@ -535,15 +544,16 @@
     (i32.store offset=156 (local.get $dst) (global.get $sigFnAngle))
     (memory.copy (i32.add (local.get $dst) (i32.const 160))
       (i32.const $mem.streamDelimiter) (i32.const 32))
-    (memory.copy (i32.add (local.get $dst) (i32.const 192))
-      (i32.const $mem.streamState) (i32.const $mem.streamStateUsed))
-    (local.set $p (i32.add (local.get $dst) (i32.const $mem.streamStateUsed+192)))
+    (local.set $p (i32.add (local.get $dst) (i32.const 192)))
     (memory.copy (local.get $p) (i32.const $mem.sharedStack) (local.get $sharedLen))
     (local.set $p (i32.add (local.get $p) (local.get $sharedLen)))
     (memory.copy (local.get $p) (i32.const $mem.tsxBracketStack) (local.get $brkLen))
     (local.set $p (i32.add (local.get $p) (local.get $brkLen)))
     (memory.copy (local.get $p) (i32.const $mem.tsxJsxStack) (local.get $jsxLen))
-    (i32.sub (i32.add (local.get $p) (local.get $jsxLen)) (local.get $dst)))
+    (local.set $p (i32.add (local.get $p) (local.get $jsxLen)))
+    (memory.copy (local.get $p)
+      (i32.const $mem.streamState) (i32.const $mem.streamStateUsed))
+    (i32.sub (i32.add (local.get $p) (i32.const $mem.streamStateUsed)) (local.get $dst)))
 
   ;; Length of the blob at $base without its trailing zero bytes. Most of a
   ;; captured image is zero (idle checkpoint slices, empty stacks), so blobs
@@ -619,14 +629,15 @@
     (global.set $liveSharedBytes (local.get $sharedLen))
     (memory.copy (i32.const $mem.streamDelimiter)
       (i32.add (local.get $src) (i32.const 160)) (i32.const 32))
-    (memory.copy (i32.const $mem.streamState)
-      (i32.add (local.get $src) (i32.const 192)) (i32.const $mem.streamStateUsed))
-    (local.set $p (i32.add (local.get $src) (i32.const $mem.streamStateUsed+192)))
+    (local.set $p (i32.add (local.get $src) (i32.const 192)))
     (memory.copy (i32.const $mem.sharedStack) (local.get $p) (local.get $sharedLen))
     (local.set $p (i32.add (local.get $p) (local.get $sharedLen)))
     (memory.copy (i32.const $mem.tsxBracketStack) (local.get $p) (local.get $brkLen))
     (local.set $p (i32.add (local.get $p) (local.get $brkLen)))
-    (memory.copy (i32.const $mem.tsxJsxStack) (local.get $p) (local.get $jsxLen)))
+    (memory.copy (i32.const $mem.tsxJsxStack) (local.get $p) (local.get $jsxLen))
+    (local.set $p (i32.add (local.get $p) (local.get $jsxLen)))
+    (memory.copy (i32.const $mem.streamState)
+      (local.get $p) (i32.const $mem.streamStateUsed)))
 
   ;; canonicalize every captured location before the first line so stale
   ;; values from earlier batches can never leak into a blob

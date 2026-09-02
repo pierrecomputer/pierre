@@ -1,4 +1,4 @@
-// https://github.com/microsoft/TypeScript/blob/main/src/compiler/sourcemap.ts
+// https://github.com/microsoft/TypeScript/blob/v6.0.3/src/compiler/sourcemap.ts
 
 import {
     arrayFrom,

@@ -2,13 +2,15 @@
   (import "../common.wat")
   (import "./html.wat")
 
+  ;; lex [$from,$to) as html; a start tag cut by the chunk end is
+  ;; checkpointed as region 12 so $svelteStreamResumeTag continues it
   (func $svelteHtmlRange (param $from i32) (param $to i32)
     (local $save i32)
     (if (i32.ge_u (local.get $from) (local.get $to)) (then (return)))
     (local.set $save (global.get $end))
     (global.set $end (local.get $to))
     (global.set $ptr (local.get $from))
-    (call $hlHtml)
+    (call $htmlLex (i32.const 12))
     (global.set $end (local.get $save))
     (global.set $ptr (local.get $to)))
 
@@ -46,45 +48,25 @@
           (then (return (i32.const 0))))))
     (local.get $kind))
 
-  (func $svelteRawEnd (param $p i32) (param $kind i32) (result i32)
-    (local $c i32)
-    (local $quote i32)
-    (block $openDone
-      (loop $open
-        (br_if $openDone (i32.ge_u (local.get $p) (global.get $end)))
-        (local.set $c (i32.load8_u (local.get $p)))
-        (if (local.get $quote)
-          (then
-            (if (i32.eq (local.get $c) (local.get $quote))
-              (then (local.set $quote (i32.const 0)))))
-          (else
-            (if (i32.or (i32.eq (local.get $c) (i32.const 34))
-                        (i32.eq (local.get $c) (i32.const 39)))
-              (then (local.set $quote (local.get $c)))
-              (else
-                (if (i32.eq (local.get $c) (i32.const ">"))
-                  (then
-                    (local.set $p (i32.add (local.get $p) (i32.const 1)))
-                    (br $openDone)))))))
-        (local.set $p (i32.add (local.get $p) (i32.const 1)))
-        (br $open)))
+  ;; The next position at or after $p where the html range must stop: a `{`
+  ;; expression, a `<!--` comment, or a `<script`/`<style` element (whose
+  ;; body must stay opaque to `{`); $end when there is none. The main loop
+  ;; and the tag resume share it so both cut html identically.
+  (func $svelteNextCut (param $p i32) (result i32)
     (block $done
-      (loop $body
-        (local.set $p (call $lexFindByte (local.get $p) (i32.const "<")))
+      (loop $scan
+        (local.set $p (call $lexFindEither
+          (local.get $p) (i32.const "{") (i32.const "<")))
         (br_if $done (i32.ge_u (local.get $p) (global.get $end)))
-        (if (call $isRawTextClose (local.get $p) (local.get $kind))
-          (then
-            (block $tagDone
-              (loop $tag
-                (br_if $tagDone (i32.ge_u (local.get $p) (global.get $end)))
-                (local.set $c (i32.load8_u (local.get $p)))
-                (local.set $p (i32.add (local.get $p) (i32.const 1)))
-                (br_if $tagDone (i32.eq (local.get $c) (i32.const ">")))
-                (br $tag)))
-            (return (local.get $p))))
+        (br_if $done (i32.eq (i32.load8_u (local.get $p)) (i32.const "{")))
+        (br_if $done (call $svelteRawKind (local.get $p)))
+        (br_if $done (i32.and
+          (i32.le_u (i32.add (local.get $p) (i32.const 4)) (global.get $end))
+          (i32.eq (i32.load (local.get $p)) (i32.const "<!--"))))
         (local.set $p (i32.add (local.get $p) (i32.const 1)))
-        (br $body)))
-    (global.get $end))
+        (br $scan)))
+    (select (local.get $p) (global.get $end)
+      (i32.lt_u (local.get $p) (global.get $end))))
 
   (func $svelteExpressionEnd (param $from i32) (result i32)
     (local $c i32)
@@ -179,53 +161,44 @@
     (global.set $ptr (local.get $to)))
 
   (func $hlSvelte
-    (local $c i32)
     (local $from i32)
-    (local $kind i32)
     (local $p i32)
     (local $to i32)
     (call $lexEmitLeadingContinuation)
     (local.set $from (global.get $ptr))
-    (local.set $p (global.get $ptr))
     (block $done
       (loop $scan
-        (local.set $p (call $lexFindEither
-          (local.get $p) (i32.const "{") (i32.const "<")))
+        (local.set $p (call $svelteNextCut (local.get $from)))
+        (call $svelteHtmlRange (local.get $from) (local.get $p))
         (br_if $done (i32.ge_u (local.get $p) (global.get $end)))
-        (local.set $c (i32.load8_u (local.get $p)))
-        (if (i32.eq (local.get $c) (i32.const "<"))
-          (then
-            (local.set $kind (call $svelteRawKind (local.get $p)))
-            (if (local.get $kind)
-              (then
-                (local.set $to (call $svelteRawEnd (local.get $p) (local.get $kind)))
-                (call $svelteHtmlRange (local.get $from) (local.get $p))
-                (call $svelteHtmlRange (local.get $p) (local.get $to))
-                (local.set $from (local.get $to))
-                (local.set $p (local.get $to))
-                (br $scan)))
-            ;; Keep HTML comments opaque even when their text contains braces.
-            (if (i32.and
-                  (i32.le_u (i32.add (local.get $p) (i32.const 4)) (global.get $end))
-                  (i32.eq (i32.load (local.get $p)) (i32.const "<!--")))
-              (then
-                (call $svelteHtmlRange (local.get $from) (local.get $p))
-                (global.set $ptr (local.get $p))
-                (call $htmlComment (local.get $p))
-                (local.set $to (global.get $ptr))
-                (local.set $from (local.get $to))
-                (local.set $p (local.get $to))
-                (br $scan)))))
-        (if (i32.eq (local.get $c) (i32.const "{"))
+        (if (i32.eq (i32.load8_u (local.get $p)) (i32.const "{"))
           (then
             (local.set $to (call $svelteExpressionEnd (local.get $p)))
-            (call $svelteHtmlRange (local.get $from) (local.get $p))
             (call $svelteExpression (local.get $p) (local.get $to))
             (local.set $from (local.get $to))
-            (local.set $p (local.get $to))
             (br $scan)))
-        (local.set $p (i32.add (local.get $p) (i32.const 1)))
+        ;; a script/style element is scanned once, opaque to `{`; comments
+        ;; stay opaque even when their text contains braces
+        (global.set $ptr (local.get $p))
+        (if (call $svelteRawKind (local.get $p))
+          (then (call $htmlTag (i32.const 12)))
+          (else (call $htmlComment (local.get $p))))
+        (local.set $from (global.get $ptr))
         (br $scan)))
-    (call $svelteHtmlRange (local.get $from) (global.get $end))
     (global.set $ptr (global.get $end)))
+
+  ;; Resume stream region 12: a start tag whose attributes continue past
+  ;; the previous chunk end. Returns 1 when the region consumed the whole
+  ;; chunk, 0 when the language lexer should continue from $ptr. An
+  ;; ordinary tag stops where the html range would have been cut; a
+  ;; script/style tag ($streamA set) never is.
+  (func $svelteStreamResumeTag (result i32)
+    (local $r i32)
+    (local $save i32)
+    (local.set $save (global.get $end))
+    (if (i32.eqz (global.get $streamA))
+      (then (global.set $end (call $svelteNextCut (global.get $ptr)))))
+    (local.set $r (call $htmlTagResume (i32.const 12)))
+    (global.set $end (local.get $save))
+    (local.get $r))
 )

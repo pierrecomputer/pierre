@@ -965,22 +965,26 @@
             (if (i32.eq (i32.load8_u (global.get $lhs)) (i32.const 34))
               (then (global.set $tsxStreamMode (i32.const 4))))
             (if (i32.eq (i32.load8_u (global.get $lhs)) (i32.const 39))
-              (then (global.set $tsxStreamMode (i32.const 5))))))
-        (if (i32.and
-              (i32.eq (local.get $t) (enum.get $Lex.multiline_comment))
-              (i32.or
-                (i32.lt_u (i32.sub (global.get $rhs) (global.get $lhs)) (i32.const 2))
-                (i32.ne
-                  (i32.load16_u (i32.sub (global.get $rhs) (i32.const 2)))
-                  (i32.const 0x2f2a))))
+              (then (global.set $tsxStreamMode (i32.const 5))))
+            ;; a quoted string cut by a `\` line continuation: $scanStringBody
+            ;; only consumes a line break behind a backslash, so a trailing LF
+            ;; means the string goes on in the next chunk. Report it as a
+            ;; string literal so the token before it - `from` - classifies as
+            ;; in the whole-buffer run; the emitter treats both kinds alike and
+            ;; the resume records the final kind
+            (if (i32.and
+                  (i32.le_u (i32.sub (global.get $tsxStreamMode) (i32.const 4)) (i32.const 1))
+                  (i32.eq
+                    (i32.load8_u (i32.sub (global.get $rhs) (i32.const 1)))
+                    (i32.const 10)))
+              (then (local.set $t (enum.get $Lex.string_literal))))))
+        (if (i32.eq (local.get $t) (enum.get $Lex.multiline_comment))
           (then
-            (global.set $tsxStreamMode
-              (select
-                (i32.const 3)
-                (i32.const 2)
-                (i32.and
-                  (i32.gt_u (i32.sub (global.get $rhs) (global.get $lhs)) (i32.const 3))
-                  (i32.eq (i32.load8_u offset=2 (global.get $lhs)) (i32.const "*")))))))))
+            (if (call $blockCommentOpen (global.get $lhs) (global.get $rhs))
+              (then
+                (global.set $tsxStreamMode
+                  (select (i32.const 3) (i32.const 2)
+                    (call $isDocComment (global.get $lhs) (global.get $rhs))))))))))
     (if (i32.and
           (i32.eqz (bitset.get $LexBits.comment (local.get $t)))
           (i32.and
@@ -1087,13 +1091,19 @@
         (br $l)))
     (call $emitTok (local.get $hl) (local.get $seg) (local.get $to)))
 
-  ;; emit a template token: a leading `}` (resume) and a trailing `${` are
-  ;; punctuation.special, the rest is string with escape sub-spans
+  ;; emit a template token: a trailing `${` is punctuation.special, and so is
+  ;; a leading `}` when $leadBrace is set - the token picked the template up
+  ;; after a substitution. The rest is string with escape sub-spans. A chunk
+  ;; continuation passes $leadBrace zero: its first byte is template text
+  ;; even when it happens to be a `}`
   (func $emitTemplate (param $lhs i32) (param $rhs i32) (param $dollarBrace i32)
+        (param $leadBrace i32)
     (local $p i32)
     (local $e i32)
     (local.set $p (local.get $lhs))
-    (if (i32.eq (i32.load8_u (local.get $lhs)) (i32.const "}"))
+    (if (i32.and
+          (local.get $leadBrace)
+          (i32.eq (i32.load8_u (local.get $lhs)) (i32.const "}")))
       (then
         (local.set $p (i32.add (local.get $lhs) (i32.const 1)))
         (call $emitTok (enum.get $Token.punctuation.special) (local.get $lhs) (local.get $p))))
@@ -1286,6 +1296,28 @@
 
   (func $emitDocComment (param $lhs i32) (param $rhs i32)
     (call $emitDocCommentRange (local.get $lhs) (local.get $rhs) (i32.const 3)))
+
+  ;; does the block comment token [$lhs,$rhs) lack its closing `*/`? The
+  ;; shortest closed comment is `/**/`, so a bare `/*/` still counts as open
+  (func $blockCommentOpen (param $lhs i32) (param $rhs i32) (result i32)
+    (i32.or
+      (i32.lt_u (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 4))
+      (i32.ne
+        (i32.load16_u (i32.sub (local.get $rhs) (i32.const 2)))
+        (i32.const 0x2f2a))))
+
+  ;; is the block comment token [$lhs,$rhs) a `/** ... */` doc comment? A
+  ;; third `*` marks one, except for the empty `/**/`. A comment still open at
+  ;; the token's end is judged by its opener alone, so a `/**` cut at a chunk
+  ;; boundary reads the same as the closed comment the whole-buffer run sees
+  (func $isDocComment (param $lhs i32) (param $rhs i32) (result i32)
+    (i32.and
+      (i32.eq
+        (call $tsxByte (i32.add (local.get $lhs) (i32.const 2)))
+        (i32.const "*"))
+      (i32.or
+        (i32.gt_u (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 4))
+        (call $blockCommentOpen (local.get $lhs) (local.get $rhs)))))
 
   ;; Entry points compose with the shared pipeline in tsx.wat.
   (func $hlJs (call $hlEcma (i32.const 0)))

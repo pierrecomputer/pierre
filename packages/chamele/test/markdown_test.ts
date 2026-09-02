@@ -1,6 +1,10 @@
 import assert from 'node:assert';
 import t from 'node:test';
 
+import type { Lang, ThemedToken } from '../lib/index';
+import { codeToTokens, init, TokenizeStream } from '../lib/index';
+import { transformWat, wat2wasm } from '../scripts/build';
+import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import {
   checkInvariants,
   colorOf,
@@ -11,7 +15,14 @@ import {
 } from './util';
 
 let markdown: TestLang;
-t.before(() => (markdown = loadLang('markdown', '$hlMarkdown')));
+t.before(() => {
+  markdown = loadLang('markdown', '$hlMarkdown');
+  // streaming tests need the whole module: fence bodies delegate to every
+  // other lexer and the stream driver lives in chamele.wat
+  const url = new URL('../src/chamele.wat', import.meta.url);
+  const { code } = transformWat(url);
+  init(new WebAssembly.Module(wat2wasm(url.pathname, code)));
+});
 
 const TITLE = themeColor('title');
 const LIST = themeColor('punctuation.list_marker');
@@ -22,6 +33,46 @@ const PROPERTY = themeColor('property');
 const NUMBER = themeColor('number');
 const TAG = themeColor('tag');
 const ATTR = themeColor('attribute');
+const KEYWORD = themeColor('keyword.declaration');
+const ESCAPE = themeColor('string.escape');
+const DELIMITER = themeColor('punctuation.delimiter');
+
+/**
+ * Tokenize `code` through `TokenizeStream` one line per push: the boundary
+ * the live tokenizer cuts at. Returns the token lines.
+ */
+function lineFed(lang: Lang, code: string): ThemedToken[][] {
+  const stream = new TokenizeStream({ lang, theme: pierreDark });
+  const out: ThemedToken[][] = [];
+  for (const line of code.split(/(?<=\n)/)) out.push(...stream.pushCode(line));
+  out.push(...stream.end());
+  return out;
+}
+
+/** Assert line-fed streaming reproduces the whole-buffer tokens exactly. */
+function assertLineFedMatchesWhole(lang: Lang, code: string): ThemedToken[][] {
+  const whole = codeToTokens(code, { lang, theme: pierreDark }).tokens;
+  assert.deepEqual(lineFed(lang, code), whole, JSON.stringify(code));
+  return whole;
+}
+
+/** The color of the first streamed token on `line` whose text contains `text`. */
+function streamColorOf(
+  lines: ThemedToken[][],
+  line: number,
+  text: string
+): string | undefined {
+  return lines[line].find((tk) => tk.content.includes(text))?.color;
+}
+
+/**
+ * The token texts of `line`. Records tile the input by token type, so an
+ * emphasis span shows up as its own token even when the theme gives it no
+ * color, and plain text around it merges into one token.
+ */
+function tokenTexts(lines: ThemedToken[][], line: number): string[] {
+  return lines[line].map((tk) => tk.content);
+}
 
 void t.test(
   'markdown: headings, lists, links, emphasis, and inline code',
@@ -191,3 +242,166 @@ void t.test(
     }
   }
 );
+
+void t.test(
+  'markdown: a thematic break mid-document never opens front matter',
+  () => {
+    // every stream chunk starts at the source base, so the front-matter gate
+    // must also demand the first chunk
+    const code = '# Title\n\nintro\n\n---\n\nkey: value\nmore *text*\n';
+    const lines = assertLineFedMatchesWhole('markdown', code);
+    assert.notEqual(streamColorOf(lines, 6, 'key'), PROPERTY);
+    assert.notEqual(
+      streamColorOf(lines, 4, '---'),
+      themeColor('punctuation.special')
+    );
+    const out = checkInvariants(
+      markdown.hl,
+      '---\ntitle: x\n---\n# h\n---\nk: v\n'
+    );
+    assert.equal(colorOf(out, 'title'), PROPERTY);
+    assert.equal(colorOf(out, 'k: v'), null);
+  }
+);
+
+void t.test(
+  'markdown: inline script/style tags do not flip the stream, blocks do',
+  () => {
+    for (const code of [
+      'Use <script src="a.js"></script> here\n\n# Next heading\nplain *em*\n',
+      'Use <style>b</style> here\n\n# Next heading\nplain *em*\n',
+    ]) {
+      const lines = assertLineFedMatchesWhole('markdown', code);
+      assert.equal(streamColorOf(lines, 2, 'Next heading'), TITLE);
+    }
+    // a script body that starts on the next line is JavaScript both ways
+    const block = '<script>\nlet x = 1\n</script>\n# h\n';
+    const lines = assertLineFedMatchesWhole('markdown', block);
+    assert.equal(streamColorOf(lines, 1, 'let'), KEYWORD);
+    assert.equal(streamColorOf(lines, 3, 'h'), TITLE);
+    const out = checkInvariants(markdown.hl, block);
+    assert.equal(colorOf(out, 'let'), KEYWORD);
+    assert.equal(colorOf(out, 'script'), TAG);
+    // unterminated raw text runs to the end, as the HTML lexer treats it
+    checkInvariants(markdown.hl, '<script>\nlet x = 1\n');
+    assertLineFedMatchesWhole('markdown', '<script>\nlet x = 1\n');
+  }
+);
+
+void t.test(
+  'markdown: an open comment in a fence body does not eat the closing fence',
+  () => {
+    const code = '```css\n/* open\n```\n# heading\n*em*\n';
+    const lines = assertLineFedMatchesWhole('markdown', code);
+    assert.equal(streamColorOf(lines, 2, '```'), DELIMITER);
+    assert.equal(streamColorOf(lines, 3, 'heading'), TITLE);
+  }
+);
+
+void t.test(
+  'markdown: fences close behind list and block-quote prefixes',
+  () => {
+    const list =
+      '1. Install:\n\n   ```sh\n   npm i\n   ```\n\n2. Next *step*\n';
+    let out = checkInvariants(markdown.hl, list);
+    assert.equal(colorOf(out, '2.'), LIST);
+    assert.equal(colorOf(out, '   ```'), DELIMITER);
+    assert.deepEqual(
+      tokenTexts(assertLineFedMatchesWhole('markdown', list), 6),
+      ['2. ', 'Next ', '*step*']
+    );
+
+    const quote = '> ```js\n> let a = 1\n> ```\n\nafter *em*\n';
+    out = checkInvariants(markdown.hl, quote);
+    assert.equal(colorOf(out, 'let'), KEYWORD);
+    assert.equal(colorOf(out, '> ```'), DELIMITER);
+    assert.deepEqual(
+      tokenTexts(assertLineFedMatchesWhole('markdown', quote), 4),
+      ['after ', '*em*']
+    );
+    assertLineFedMatchesWhole(
+      'markdown',
+      '> > ```js\n> > let a = 1\n> > ```\n> *em*\n'
+    );
+
+    // four spaces is indented code, not a closer: the body runs on
+    out = checkInvariants(markdown.hl, '```js\nlet a = 1\n    ```\nx\n');
+    assert.notEqual(colorOf(out, 'x'), undefined);
+    assert.ok(
+      !spansOf(out).some(
+        (s) => s.color === DELIMITER && s.text.includes('    ')
+      )
+    );
+  }
+);
+
+void t.test('markdown: list items keep line-start meaning', () => {
+  const code = '- ```js\nlet a = 1\n```\nafter *em*\n';
+  const out = checkInvariants(markdown.hl, code);
+  assert.equal(colorOf(out, '```js'), DELIMITER);
+  assert.equal(colorOf(out, 'let'), KEYWORD);
+  assert.equal(colorOf(out, 'after '), undefined);
+  assert.deepEqual(tokenTexts(assertLineFedMatchesWhole('markdown', code), 3), [
+    'after ',
+    '*em*',
+  ]);
+  const nested = checkInvariants(
+    markdown.hl,
+    '- # title\n- > quote\n1. 2. x\n'
+  );
+  assert.equal(colorOf(nested, 'title'), TITLE);
+  assert.equal(colorOf(nested, '>'), themeColor('punctuation.markup'));
+  assert.equal(colorOf(nested, '1. 2.'), LIST);
+});
+
+void t.test('markdown: backslash escapes only ASCII punctuation', () => {
+  const code = 'a\\\n# heading\n';
+  const out = checkInvariants(markdown.hl, code);
+  assert.equal(colorOf(out, 'heading'), TITLE);
+  assert.equal(colorOf(out, 'a\\'), null);
+  assertLineFedMatchesWhole('markdown', code);
+  assertLineFedMatchesWhole('markdown', 'a\\\r\n# heading\r\n');
+  const escapes = checkInvariants(markdown.hl, '\\* x \\é \\\\ \\');
+  assert.equal(colorOf(escapes, '\\*'), ESCAPE);
+  assert.equal(colorOf(escapes, '\\\\'), ESCAPE);
+  assert.equal(colorOf(escapes, '\\é'), undefined);
+});
+
+void t.test(
+  'markdown: underscore emphasis needs a left-flanking opener',
+  () => {
+    const code = 'use snake_case_name and _em_ and _ no_ and 日_本_ here\n';
+    checkInvariants(markdown.hl, code);
+    // only `_em_` is an emphasis token; every other `_` stays in plain text
+    assert.deepEqual(
+      tokenTexts(assertLineFedMatchesWhole('markdown', code), 0),
+      ['use snake_case_name and ', '_em_', ' and _ no_ and 日_本_ here']
+    );
+    assert.deepEqual(
+      tokenTexts(
+        assertLineFedMatchesWhole('markdown', '__init__ and a__b__\n'),
+        0
+      ),
+      ['__init__', ' and a__b__']
+    );
+  }
+);
+
+void t.test('markdown: lines of many `<` or `[` stay linear', () => {
+  // each `<` used to rescan to the line end: 80k of them took ~760ms
+  for (const line of ['<a', '[', '[a](', '[a] ', '<a "x>" ']) {
+    const code = line.repeat(80000) + '\n';
+    const start = performance.now();
+    const out = checkInvariants(markdown.hl, code);
+    assert.ok(
+      performance.now() - start < 250,
+      `${JSON.stringify(line)} x80000 took too long`
+    );
+    assert.ok(out.length > 0);
+  }
+  // a memoised `<` still leaves later constructs alone
+  const out = checkInvariants(markdown.hl, 'a <b c <i>x</i> [d [e](f)\n');
+  assert.equal(colorOf(out, 'i'), TAG);
+  assert.equal(colorOf(out, 'e'), LINK_TEXT);
+  assert.equal(colorOf(out, 'f'), LINK_URI);
+});

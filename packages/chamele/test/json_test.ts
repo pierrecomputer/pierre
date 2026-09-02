@@ -1,6 +1,10 @@
 import assert from 'node:assert';
 import t from 'node:test';
 
+import type { Lang, ThemedToken } from '../lib/index';
+import { codeToTokens, init, TokenizeStream } from '../lib/index';
+import { transformWat, wat2wasm } from '../scripts/build';
+import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import {
   bodyOf,
   checkInvariants,
@@ -16,7 +20,35 @@ let json: TestLang;
 
 t.before(() => {
   json = loadLang('json', '$hlJson');
+  // the streaming tests below run TokenizeStream over the whole module
+  const url = new URL('../src/chamele.wat', import.meta.url);
+  const { code } = transformWat(url);
+  init(new WebAssembly.Module(wat2wasm(url.pathname, code)));
 });
+
+/** Tokens for `code` fed one line per chunk - the LiveTokenizer's shape. */
+function lineFed(lang: Lang, code: string): ThemedToken[][] {
+  const stream = new TokenizeStream({ lang, theme: pierreDark });
+  const lines: ThemedToken[][] = [];
+  for (const line of code.split(/(?<=\n)/)) {
+    lines.push(...stream.pushCode(line));
+  }
+  lines.push(...stream.end());
+  return lines;
+}
+
+/** Whole-buffer tokens for `code`, the reference the line-fed run must match. */
+function wholeTokens(lang: Lang, code: string): ThemedToken[][] {
+  return codeToTokens(code, { lang, theme: pierreDark }).tokens;
+}
+
+/** The color of the first streamed token whose text contains `text`. */
+function streamedColor(
+  lines: ThemedToken[][],
+  text: string
+): string | undefined {
+  return lines.flat().find((tk) => tk.content.includes(text))?.color;
+}
 
 // pierre-dark colors resolved from themes/pierre-dark.json (see themeColor)
 const BG = themeColor('background');
@@ -310,3 +342,34 @@ void t.test('json: a raw Zed theme-family file works unconverted', () => {
   assert.match(html, /background-color:#222222;color:#eeeeee/);
   assert.equal(colorOf(html, '"x"'), '#aabbcc');
 });
+
+void t.test(
+  'json: a \\ line continuation keeps the string open line-fed',
+  () => {
+    // whole-buffer, `\` + newline is an escape and the string runs on; the
+    // streamed run must checkpoint that instead of lexing `def"}` afresh
+    for (const src of [
+      '{"a": "abc\\\ndef"}\n',
+      '{"a": "abc\\\r\ndef"}\n',
+      '{"a": "abc\\\ndef\\\nghi", "b": 1}\n',
+      '{"a": "abc\\\ndef\n, "b": 1}\n',
+      '{"k\\\ney": 1}\n',
+    ]) {
+      assert.deepEqual(lineFed('json', src), wholeTokens('json', src), src);
+    }
+    const streamed = lineFed('json', '{"a": "abc\\\ndef"}\n');
+    assert.equal(streamedColor(streamed, 'def"'), STR);
+    const key = lineFed('json', '{"k\\\ney": 1}\n');
+    assert.equal(streamedColor(key, 'ey"'), KEY);
+  }
+);
+
+void t.test(
+  'json: a \\ before CRLF continues the string like one before LF',
+  () => {
+    const html = checkInvariants(json.hl, '{"a": "x\\\r\ny"}');
+    const spans = spansOf(html);
+    assert.ok(spans.some((s) => s.color === ESC && s.text === '\\\r\n'));
+    assert.ok(spans.some((s) => s.color === STR && s.text === 'y"'));
+  }
+);

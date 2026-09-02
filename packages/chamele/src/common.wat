@@ -77,6 +77,24 @@
             (br $l)))
         (br $done))))
 
+  ;; End of the escape span that starts at the backslash $p: the backslash,
+  ;; the escaped byte with any UTF-8 continuation bytes, and - when the
+  ;; escaped byte is CR followed by LF - the LF as well, so a backslash before
+  ;; CRLF continues the line exactly like one before LF. Clamped to $end.
+  (func $lexEscapeEnd (param $p i32) (result i32)
+    (local $e i32)
+    (local.set $e (call $utf8SpanEnd
+      (i32.add (local.get $p) (i32.const 2)) (global.get $end)))
+    (if (i32.and
+          (i32.eq (local.get $e) (i32.add (local.get $p) (i32.const 2)))
+          (i32.and
+            (i32.eq (i32.load8_u offset=1 (local.get $p)) (i32.const 13))
+            (i32.and
+              (i32.lt_u (local.get $e) (global.get $end))
+              (i32.eq (i32.load8_u (local.get $e)) (i32.const 10)))))
+      (then (local.set $e (i32.add (local.get $e) (i32.const 1)))))
+    (local.get $e))
+
   ;; Scan a quoted literal body. $seg includes the opening quote for a new
   ;; token and starts at $ptr when resuming a stream chunk. Returns 1 after a
   ;; closing quote, 2 after an escaped newline at EOF, or 0 otherwise.
@@ -101,8 +119,7 @@
         ;; a raw line break: unterminated, left unconsumed
         (br_if $done (i32.ne (local.get $c) (i32.const 92)))
         (call $emitTok (local.get $hl) (local.get $seg) (global.get $ptr))
-        (local.set $e (call $utf8SpanEnd
-          (i32.add (global.get $ptr) (i32.const 2)) (global.get $end)))
+        (local.set $e (call $lexEscapeEnd (global.get $ptr)))
         (call $emitTok (enum.get $Token.string.escape) (global.get $ptr) (local.get $e))
         (global.set $ptr (local.get $e))
         (if (i32.and
@@ -210,11 +227,15 @@
         (global.set $streamHl (local.get $hl)))))
 
   ;; Save an arbitrary delimiter (up to 32 bytes) for a multiline token whose
-  ;; body has one highlight and no nesting.
+  ;; body has one highlight and no nesting. Longer delimiters cannot be
+  ;; checkpointed: the region is 32 bytes and anything past it is the lexer
+  ;; checkpoint area, so the token simply ends at the chunk.
   (func $streamSetFixed (param $delimiter i32) (param $len i32) (param $hl i32)
     (if (i32.and
           (global.get $streaming)
-          (i32.eq (global.get $ptr) (global.get $end)))
+          (i32.and
+            (i32.le_u (local.get $len) (i32.const 32))
+            (i32.eq (global.get $ptr) (global.get $end))))
       (then
         (memory.copy
           (i32.const $mem.streamDelimiter) (local.get $delimiter) (local.get $len))
@@ -234,7 +255,7 @@
     (if (i32.and
           (global.get $streaming)
           (i32.and
-            (local.get $depth)
+            (i32.ne (local.get $depth) (i32.const 0))
             (i32.eq (global.get $ptr) (global.get $end))))
       (then
         (global.set $streamMode (i32.const 21))
@@ -244,12 +265,15 @@
         (global.set $streamHl (local.get $hl)))))
 
   ;; Save a delimiter that must occupy a whole line (bash heredocs). $trim is
-  ;; one when leading tabs are allowed before it (`<<-`).
+  ;; one when leading tabs are allowed before it (`<<-`). Delimiters longer
+  ;; than the 32-byte region are not checkpointed (see $streamSetFixed).
   (func $streamSetLine
     (param $delimiter i32) (param $len i32) (param $trim i32) (param $hl i32)
     (if (i32.and
           (global.get $streaming)
-          (i32.eq (global.get $ptr) (global.get $end)))
+          (i32.and
+            (i32.le_u (local.get $len) (i32.const 32))
+            (i32.eq (global.get $ptr) (global.get $end))))
       (then
         (memory.copy
           (i32.const $mem.streamDelimiter) (local.get $delimiter) (local.get $len))
@@ -260,7 +284,9 @@
 
   ;; Mark an embedded region whose body continues in another chunk: one is a
   ;; script tag, two a style tag, three TSX front matter, four YAML front matter,
-  ;; five an MDX JSX tag, and six through eight framework expressions.
+  ;; five an MDX JSX tag, six through eight framework expressions, and nine
+  ;; through thirteen start tags whose attributes continue (html, xml, vue,
+  ;; svelte, astro - resumed by the owning lexer through chamele.wat).
   (func $streamSetRegion (param $kind i32)
     (if (i32.and
           (global.get $streaming)
@@ -269,6 +295,8 @@
         (global.set $streamRegionKind (local.get $kind))
         (global.set $streamRegionStarted (i32.const 0)))))
 
+  ;; Resume a fixed-delimiter body: hop to each occurrence of the delimiter's
+  ;; first byte with SIMD, then verify the rest.
   (func $streamResumeFixed (result i32)
     (local $i i32)
     (local $lhs i32)
@@ -278,11 +306,13 @@
     (local.set $p (global.get $ptr))
     (block $notFound
       (loop $search
+        (local.set $p (call $lexFindByte
+          (local.get $p) (i32.load8_u (i32.const $mem.streamDelimiter))))
         (br_if $notFound
           (i32.gt_u
             (i32.add (local.get $p) (global.get $streamA))
             (global.get $end)))
-        (local.set $i (i32.const 0))
+        (local.set $i (i32.const 1))
         (local.set $matched (i32.const 1))
         (block $compareDone
           (loop $compare
@@ -504,11 +534,19 @@
       (then (return (call $streamResumeLine))))
     (i32.const 0))
 
+  ;; Skip blanks (space, TAB) from $p on the same line. Line breaks stop the
+  ;; scan on purpose: the streaming and live engines lex one line per chunk,
+  ;; so a lookahead that crossed them would classify `foo` in `foo\n(` one way
+  ;; whole-buffer and another way line-fed.
   (func $lexSkipSpaceAt (param $p i32) (result i32)
+    (local $c i32)
     (block $done
       (loop $l
         (br_if $done (i32.ge_u (local.get $p) (global.get $end)))
-        (br_if $done (i32.eqz (call $lexIsSpace (i32.load8_u (local.get $p)))))
+        (local.set $c (i32.load8_u (local.get $p)))
+        (br_if $done (i32.and
+          (i32.ne (local.get $c) (i32.const 32))
+          (i32.ne (local.get $c) (i32.const 9))))
         (local.set $p (i32.add (local.get $p) (i32.const 1)))
         (br $l)))
     (local.get $p))
@@ -713,9 +751,14 @@
         (br $tail)))
     (global.get $end))
 
+  ;; SCREAMING_CASE test for a name: at least one uppercase letter and only
+  ;; [A-Z0-9_]. Single letters are excluded - `T` is a type parameter, not a
+  ;; constant.
   (func $lexIsConstCase (param $lhs i32) (param $rhs i32) (result i32)
     (local $c i32)
     (local $upper i32)
+    (if (i32.lt_u (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 2))
+      (then (return (i32.const 0))))
     (block $done
       (loop $l
         (br_if $done (i32.ge_u (local.get $lhs) (local.get $rhs)))

@@ -26,25 +26,35 @@
         (i32.or (i32.eq (local.get $c) (i32.const "_"))
                 (i32.eq (local.get $c) (i32.const ":"))))))
 
+  ;; advance $ptr over an XML name: the shared 16-byte identifier scan takes
+  ;; letters, digits, `_`, non-ASCII, and `-`; the rarer `.` and `:` restart
+  ;; it
   (func $xmlScanName
+    (local $c i32)
     (block $done
       (loop $l
+        (call $scanIdentRun (i32.const "-"))
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
-        (br_if $done (i32.eqz (call $xmlNameChar (i32.load8_u (global.get $ptr)))))
+        (local.set $c (i32.load8_u (global.get $ptr)))
+        (br_if $done (i32.and
+          (i32.ne (local.get $c) (i32.const "."))
+          (i32.ne (local.get $c) (i32.const ":"))))
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
         (br $l))))
 
-  ;; quoted attribute value starting at the quote
-  (func $xmlQuoted
-    (local $lhs i32)
+  ;; the rest of a quoted attribute value: scan from $ptr to the closing
+  ;; $quote and emit [$lhs, after the quote) as one string. Returns $quote
+  ;; when the value is still open at $end, 0 once it closed.
+  (func $xmlQuotedBody (param $quote i32) (param $lhs i32) (result i32)
     (local $p i32)
-    (local.set $lhs (global.get $ptr))
-    (local.set $p (call $lexFindByte
-      (i32.add (global.get $ptr) (i32.const 1)) (i32.load8_u (global.get $ptr))))
-    (global.set $ptr (select
-      (i32.add (local.get $p) (i32.const 1)) (global.get $end)
-      (i32.lt_u (local.get $p) (global.get $end))))
-    (call $emitTok (enum.get $Token.string) (local.get $lhs) (global.get $ptr)))
+    (local.set $p (call $lexFindByte (global.get $ptr) (local.get $quote)))
+    (if (i32.lt_u (local.get $p) (global.get $end))
+      (then
+        (global.set $ptr (i32.add (local.get $p) (i32.const 1)))
+        (local.set $quote (i32.const 0)))
+      (else (global.set $ptr (global.get $end))))
+    (call $emitTok (enum.get $Token.string) (local.get $lhs) (global.get $ptr))
+    (local.get $quote))
 
   ;; Scan a comment, CDATA section, or processing instruction. $kind is
   ;; 1=`-->`, 2=`]]>`, 3=`?>`; the opener has already been recognized.
@@ -117,40 +127,73 @@
           (local.get $hl)))))
 
   ;; XML declarations may contain an internal subset. Only a `>` outside
-  ;; quotes and square brackets ends the declaration.
-  (func $xmlDoctype (param $lhs i32)
+  ;; quotes and square brackets ends the declaration. Scans from $ptr with
+  ;; the bracket $depth and open $quote of a declaration cut by a chunk end
+  ;; (both 0 for a fresh one), emitting [$lhs, cursor) as one doctype token,
+  ;; and returns 1 once the declaration closed. At a real chunk end an open
+  ;; declaration is checkpointed as stream region 10 with $streamC = 1,
+  ;; $streamA = depth, $streamB = quote; $xmlStreamResumeTag continues it.
+  ;; Hops between the bytes that matter with the 16-byte finders.
+  (func $xmlDoctypeBody (param $lhs i32) (param $depth i32) (param $quote i32) (result i32)
     (local $c i32)
-    (local $depth i32)
-    (local $quote i32)
-    (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))
+    (local $closed i32)
+    (local $p i32)
+    (local $q i32)
+    (local.set $p (global.get $ptr))
     (block $done
       (loop $l
-        (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
-        (local.set $c (i32.load8_u (global.get $ptr)))
+        (br_if $done (i32.ge_u (local.get $p) (global.get $end)))
         (if (local.get $quote)
           (then
-            (if (i32.eq (local.get $c) (local.get $quote))
-              (then (local.set $quote (i32.const 0)))))
-          (else
-            (if (i32.or (i32.eq (local.get $c) (i32.const 34))
-                        (i32.eq (local.get $c) (i32.const 39)))
-              (then (local.set $quote (local.get $c)))
-              (else
-                (if (i32.eq (local.get $c) (i32.const "["))
-                  (then (local.set $depth (i32.add (local.get $depth) (i32.const 1))))
-                  (else
-                    (if (i32.and (i32.eq (local.get $c) (i32.const "]"))
-                                 (i32.gt_u (local.get $depth) (i32.const 0)))
-                      (then (local.set $depth (i32.sub (local.get $depth) (i32.const 1))))
-                      (else
-                        (if (i32.and (i32.eqz (local.get $depth))
-                                     (i32.eq (local.get $c) (i32.const ">")))
-                          (then
-                            (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-                            (br $done)))))))))))
-        (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+            (local.set $p (call $lexFindByte (local.get $p) (local.get $quote)))
+            (br_if $done (i32.ge_u (local.get $p) (global.get $end)))
+            (local.set $quote (i32.const 0))
+            (local.set $p (i32.add (local.get $p) (i32.const 1)))
+            (br $l)))
+        (local.set $q (call $scanFind3
+          (local.get $p) (i32.const "[") (i32.const "]") (i32.const ">")))
+        (local.set $p (call $lexFindEither (local.get $p) (i32.const 34) (i32.const 39)))
+        (if (i32.lt_u (local.get $q) (local.get $p))
+          (then (local.set $p (local.get $q))))
+        (br_if $done (i32.ge_u (local.get $p) (global.get $end)))
+        (local.set $c (i32.load8_u (local.get $p)))
+        (local.set $p (i32.add (local.get $p) (i32.const 1)))
+        (if (i32.or (i32.eq (local.get $c) (i32.const 34))
+                    (i32.eq (local.get $c) (i32.const 39)))
+          (then
+            (local.set $quote (local.get $c))
+            (br $l)))
+        (if (i32.eq (local.get $c) (i32.const "["))
+          (then
+            (local.set $depth (i32.add (local.get $depth) (i32.const 1)))
+            (br $l)))
+        (if (i32.eq (local.get $c) (i32.const "]"))
+          (then
+            (if (i32.gt_u (local.get $depth) (i32.const 0))
+              (then (local.set $depth (i32.sub (local.get $depth) (i32.const 1)))))
+            (br $l)))
+        ;; `>` closes only outside the internal subset
+        (if (i32.eqz (local.get $depth))
+          (then
+            (local.set $closed (i32.const 1))
+            (br $done)))
         (br $l)))
-    (call $emitTok (enum.get $Token.tag.doctype) (local.get $lhs) (global.get $ptr)))
+    (global.set $ptr (select (local.get $p) (global.get $end)
+      (i32.lt_u (local.get $p) (global.get $end))))
+    (call $emitTok (enum.get $Token.tag.doctype) (local.get $lhs) (global.get $ptr))
+    (if (i32.and
+          (i32.eqz (local.get $closed))
+          (i32.and (global.get $streaming) (i32.eq (global.get $ptr) (global.get $eof))))
+      (then
+        (call $streamSetRegion (i32.const 10))
+        (global.set $streamA (local.get $depth))
+        (global.set $streamB (local.get $quote))
+        (global.set $streamC (i32.const 1))))
+    (local.get $closed))
+
+  (func $xmlDoctype (param $lhs i32)
+    (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))
+    (drop (call $xmlDoctypeBody (local.get $lhs) (i32.const 0) (i32.const 0))))
 
   (func $xmlEntity (result i32)
     (local $lhs i32)
@@ -177,23 +220,43 @@
     (global.set $ptr (local.get $lhs))
     (i32.const 0))
 
-  (func $xmlAttrs
+  ;; Attributes after a tag name until `>` / `/>`. Returns 1 when the tag was
+  ;; closed by a plain `>`, 2 for `/>`, 0 for a stray `<` (the caller
+  ;; reparses it as markup) or input end. $quote is the open quote of a
+  ;; value left unterminated by the previous chunk, so the loop resumes
+  ;; inside it. At a real chunk end the open tag is checkpointed as stream
+  ;; region 10 with $streamB = open quote and $streamC = 0 (a tag, not a
+  ;; doctype); $xmlStreamResumeTag calls back in with them.
+  (func $xmlAttrs (param $quote i32) (result i32)
     (local $c i32)
     (local $lhs i32)
-    (block $done
+    (if (local.get $quote)
+      (then (local.set $quote (call $xmlQuotedBody (local.get $quote) (global.get $ptr)))))
+    (block $done (result i32)
       (loop $next
-        (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
-        (local.set $lhs (global.get $ptr))
-        (call $scanWhitespace)
-        (call $emitGap (local.get $lhs) (global.get $ptr))
-        (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
+        (if (i32.ge_u (global.get $ptr) (global.get $end))
+          (then
+            (if (i32.and
+                  (global.get $streaming)
+                  (i32.eq (global.get $ptr) (global.get $eof)))
+              (then
+                (call $streamSetRegion (i32.const 10))
+                (global.set $streamA (i32.const 0))
+                (global.set $streamB (local.get $quote))
+                (global.set $streamC (i32.const 0))))
+            (br $done (i32.const 0))))
         (local.set $lhs (global.get $ptr))
         (local.set $c (i32.load8_u (global.get $ptr)))
+        (if (call $lexIsSpace (local.get $c))
+          (then
+            (call $scanWhitespace)
+            (call $emitGap (local.get $lhs) (global.get $ptr))
+            (br $next)))
         (if (i32.eq (local.get $c) (i32.const ">"))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (call $emitTok (enum.get $Token.punctuation.bracket.html) (local.get $lhs) (global.get $ptr))
-            (br $done)))
+            (br $done (i32.const 1))))
         (if (i32.and
               (i32.eq (local.get $c) (i32.const "/"))
               (i32.and
@@ -202,7 +265,7 @@
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))
             (call $emitTok (enum.get $Token.punctuation.bracket.html) (local.get $lhs) (global.get $ptr))
-            (br $done)))
+            (br $done (i32.const 2))))
         (if (i32.eq (local.get $c) (i32.const "="))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
@@ -210,12 +273,18 @@
             (br $next)))
         (if (i32.or (i32.eq (local.get $c) (i32.const 34))
                     (i32.eq (local.get $c) (i32.const 39)))
-          (then (call $xmlQuoted) (br $next)))
+          (then
+            (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+            (local.set $quote (call $xmlQuotedBody (local.get $c) (local.get $lhs)))
+            (br $next)))
         (if (call $xmlNameStart (local.get $c))
           (then
             (call $xmlScanName)
             (call $emitTok (enum.get $Token.attribute) (local.get $lhs) (global.get $ptr))
             (br $next)))
+        ;; a stray `<` starts the next tag: a tag that never closed ends here
+        (if (i32.eq (local.get $c) (i32.const "<"))
+          (then (br $done (i32.const 0))))
         ;; Malformed unquoted attribute value or stray punctuation.
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
         (block $valueDone
@@ -228,7 +297,8 @@
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (br $value)))
         (call $emitTok (enum.get $Token.string) (local.get $lhs) (global.get $ptr))
-        (br $next))))
+        (br $next))
+      (unreachable)))
 
   (func $hlXml
     (local $c i32)
@@ -296,9 +366,31 @@
             (call $emitTok (enum.get $Token.punctuation.bracket.html) (local.get $lhs) (local.get $name))
             (call $xmlScanName)
             (call $emitTok (enum.get $Token.tag) (local.get $name) (global.get $ptr))
-            (call $xmlAttrs)
+            (drop (call $xmlAttrs (i32.const 0)))
             (br $next)))
         (global.set $ptr (i32.add (local.get $lhs) (i32.const 1)))
         (call $emitTok (enum.get $Token.none) (local.get $lhs) (global.get $ptr))
         (br $next))))
+
+  ;; Resume stream region 10: a start tag whose attributes continue past
+  ;; the previous chunk end, or ($streamC = 1) a doctype whose internal
+  ;; subset does. Returns 1 when the region consumed the whole chunk, 0 when
+  ;; the language lexer should continue from $ptr. A tag ending at the chunk
+  ;; end checkpoints itself again; one abandoned at a stray `<` hands the
+  ;; `<` back to the lexer.
+  (func $xmlStreamResumeTag (result i32)
+    (local $status i32)
+    (if (global.get $streamC)
+      (then
+        (local.set $status
+          (call $xmlDoctypeBody (global.get $ptr) (global.get $streamA) (global.get $streamB))))
+      (else
+        (local.set $status (call $xmlAttrs (global.get $streamB)))))
+    (if (i32.and
+          (i32.eqz (local.get $status))
+          (i32.eq (global.get $ptr) (global.get $eof)))
+      (then (return (i32.const 1))))
+    (global.set $streamRegionKind (i32.const 0))
+    (global.set $streamMode (i32.const 0))
+    (i32.const 0))
 )

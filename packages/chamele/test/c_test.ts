@@ -1,6 +1,10 @@
 import assert from 'node:assert';
 import t from 'node:test';
 
+import type { ThemedToken } from '../lib/index';
+import { codeToTokens, init, TokenizeStream } from '../lib/index';
+import { transformWat, wat2wasm } from '../scripts/build';
+import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import {
   checkInvariants,
   colorOf,
@@ -14,7 +18,28 @@ let c: TestLang;
 
 t.before(() => {
   c = loadLang('c', '$hlC');
+  const url = new URL('../src/chamele.wat', import.meta.url);
+  init(new WebAssembly.Module(wat2wasm(url.pathname, transformWat(url).code)));
 });
+
+/**
+ * Tokens from the full module for a whole-buffer run and for a stream fed
+ * one line per chunk, the shape the live tokenizer uses; both must agree.
+ */
+function lineFed(code: string): {
+  direct: ThemedToken[][];
+  streamed: ThemedToken[][];
+} {
+  const options = { lang: 'c' as const, theme: pierreDark };
+  const direct = codeToTokens(code, options).tokens;
+  const stream = new TokenizeStream(options);
+  const streamed: ThemedToken[][] = [];
+  for (const line of code.split(/(?<=\n)/)) {
+    streamed.push(...stream.pushCode(line));
+  }
+  streamed.push(...stream.end());
+  return { direct, streamed };
+}
 
 const COMMENT = themeColor('comment');
 const PREPROC = themeColor('preproc');
@@ -236,4 +261,66 @@ void t.test('c: lookahead and token scans never cross a split range', () => {
 void t.test('c: same-style runs remain balanced', () => {
   const html = checkInvariants(c.hl, 'int long x; foo(bar); // tail');
   assert.ok(spansOf(html).length > 0);
+});
+
+void t.test('c: modern keywords beyond the eight-byte word table', () => {
+  const theme = {
+    name: 'c-long-words',
+    appearance: 'dark',
+    style: {
+      background: '#000000',
+      foreground: '#ffffff',
+      syntax: {
+        'keyword.declaration': { color: '#220002' },
+        'type.builtin': { color: '#330003' },
+        keyword: { color: '#440004' },
+        variable: { color: '#770007' },
+      },
+    },
+  };
+  const expected: [string, string[]][] = [
+    ['#220002', ['_Noreturn', '_Thread_local', 'thread_local']],
+    ['#330003', ['_Imaginary']],
+    [
+      '#440004',
+      [
+        '_Static_assert',
+        'static_assert',
+        'constexpr',
+        'typeof',
+        'typeof_unqual',
+        'alignas',
+        'alignof',
+      ],
+    ],
+    // near misses of every gated length stay ordinary names
+    ['#770007', ['_Noreturnx', 'typeofx', 'alignat', '_Thread_locaL', 'x']],
+  ];
+  for (const [color, words] of expected) {
+    for (const word of words) {
+      const html = checkInvariants(c.hl, `${word};`, { theme });
+      assert.equal(colorOf(html, word), color, word);
+    }
+  }
+});
+
+void t.test('c: a lone capital letter is a type, not a constant', () => {
+  const html = checkInvariants(c.hl, 'T max(T a, T b);');
+  const exact = (text: string) =>
+    spansOf(html).find((span) => span.text.trim() === text)?.color;
+  assert.equal(exact('T'), themeColor('type'));
+  assert.equal(exact('a'), VARIABLE);
+});
+
+void t.test('c: escaped line breaks inside literals resume line-fed', () => {
+  const html = checkInvariants(c.hl, 's = "abc\\\r\ndef";');
+  assert.equal(colorOf(html, 'def"'), STRING);
+  for (const code of [
+    's = "abc\\\ndef";\nint z = 1;\n',
+    's = "abc\\\r\ndef";\r\nint z = 1;\r\n',
+    "c = 'a\\\n';\nint z = 1;\n",
+  ]) {
+    const { direct, streamed } = lineFed(code);
+    assert.deepEqual(streamed, direct, JSON.stringify(code));
+  }
 });

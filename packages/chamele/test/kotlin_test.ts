@@ -1,6 +1,10 @@
 import assert from 'node:assert';
 import t from 'node:test';
 
+import type { Lang, ThemedToken } from '../lib/index';
+import { codeToTokens, init, TokenizeStream } from '../lib/index';
+import { transformWat, wat2wasm } from '../scripts/build';
+import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import {
   checkInvariants,
   colorOf,
@@ -12,7 +16,32 @@ import {
 } from './util';
 
 let kotlin: TestLang;
-t.before(() => (kotlin = loadLang('kotlin', '$hlKotlin')));
+t.before(() => {
+  kotlin = loadLang('kotlin', '$hlKotlin');
+  // the streaming tests below need the full module behind codeToTokens
+  const url = new URL('../src/chamele.wat', import.meta.url);
+  const { code } = transformWat(url);
+  init(new WebAssembly.Module(wat2wasm(url.pathname, code)));
+});
+
+/**
+ * Tokens for `code` from the whole buffer and from a TokenizeStream fed one
+ * line per push - the chunk shape the LiveTokenizer uses - so a test can
+ * assert that a construct crossing line boundaries resumes correctly.
+ */
+function wholeAndLineFed(
+  lang: Lang,
+  code: string
+): [ThemedToken[][], ThemedToken[][]] {
+  const whole = codeToTokens(code, { lang, theme: pierreDark }).tokens;
+  const stream = new TokenizeStream({ lang, theme: pierreDark });
+  const streamed: ThemedToken[][] = [];
+  for (const line of code.split(/(?<=\n)/)) {
+    streamed.push(...stream.pushCode(line));
+  }
+  streamed.push(...stream.end());
+  return [whole, streamed];
+}
 
 void t.test('kotlin: declarations, control flow, types, and functions', () => {
   const src = `package demo
@@ -140,4 +169,158 @@ void t.test('kotlin: deterministic fuzz preserves lexer invariants', () => {
     }
     checkInvariants(kotlin.hl, src);
   }
+});
+
+void t.test(
+  'kotlin: template expressions lex nested strings and braces',
+  () => {
+    // distinct colors: Pierre Dark shares one between keywords and `${`
+    const theme = {
+      name: 'kotlin-templates',
+      appearance: 'dark',
+      style: {
+        syntax: {
+          string: { color: '#111111' },
+          'punctuation.special': { color: '#222222' },
+          variable: { color: '#333333' },
+          keyword: { color: '#444444' },
+        },
+      },
+    };
+    const html = checkInvariants(
+      kotlin.hl,
+      'val s = "${map["key"]} end"; val t = "${if (x) "a" else "b"}"; ' +
+        'val u = """${list.map { it }} $c"""',
+      { theme }
+    );
+    const spans = spansOf(html);
+    const texts = (color: string) =>
+      spans.filter((s) => s.color === color).map((s) => s.text);
+    assert.deepEqual(texts('#222222'), ['${', '}', '${', '}', '${', '}']);
+    assert.deepEqual(texts('#111111'), [
+      '"',
+      '"key"',
+      ' end"',
+      '"',
+      '"a" ',
+      '"b"',
+      '"',
+      '"""',
+      ' ',
+      '"""',
+    ]);
+    assert.equal(colorOf(html, 'map'), '#333333');
+    assert.equal(colorOf(html, 'if'), '#444444');
+    assert.equal(colorOf(html, 'it'), '#333333');
+    assert.equal(colorOf(html, '$c'), '#333333');
+  }
+);
+
+void t.test('kotlin: template expressions resume line-fed', () => {
+  for (const code of [
+    'val s = "${\nmap["key"]\n} end $x"\nval t = 2\n',
+    'val s = """${\nx\n}\n$y\n"""\nval t = 2\n',
+    'val s = "${ "${x}" } ${y}"\nval t = 2\n',
+  ]) {
+    const [whole, streamed] = wholeAndLineFed('kotlin', code);
+    assert.deepEqual(streamed, whole, JSON.stringify(code));
+    assert.equal(whole.at(-2)?.[0].color, themeColor('keyword.declaration'));
+  }
+});
+
+void t.test('kotlin: escaped line breaks continue a string line-fed', () => {
+  for (const nl of ['\n', '\r\n']) {
+    const code = `val s = "abc\\${nl}def $x \\n"${nl}val z = 1${nl}`;
+    const [whole, streamed] = wholeAndLineFed('kotlin', code);
+    assert.deepEqual(streamed, whole, JSON.stringify(nl));
+    // the continuation is still string, with its template lexed
+    const line = whole[1];
+    assert.equal(line[0].content, 'def ');
+    assert.equal(line[0].color, themeColor('string'));
+    assert.equal(line[1].content, '$x');
+    assert.equal(line[1].color, themeColor('variable'));
+    assert.equal(whole[2][0].color, themeColor('keyword.declaration'));
+  }
+});
+
+void t.test('kotlin: strings without templates lex in linear time', () => {
+  // the `$` search is bounded by the string, not by the rest of the file:
+  // 20k template-free strings used to rescan the remaining input each
+  const line = 'val s = "hello world"';
+  const code = Array.from({ length: 20000 }, () => line).join('\n') + '\n';
+  const start = performance.now();
+  const { tokens } = codeToTokens(code, { lang: 'kotlin', theme: pierreDark });
+  const elapsed = performance.now() - start;
+  assert.equal(tokens.length, 20001);
+  assert.equal(tokens[19999][3].color, themeColor('string'));
+  assert.ok(elapsed < 100, `took ${elapsed} ms`);
+});
+
+void t.test('kotlin: fun heads keep the name past type parameters', () => {
+  const word = (html: string, text: string) =>
+    spansOf(html).find((s) => s.text.trim() === text)?.color;
+  const html = checkInvariants(
+    kotlin.hl,
+    'fun <T> foo(x: T) {}\n' +
+      'fun <T : Comparable<T>> List<T>.max(): T? = null\n' +
+      'fun Foo?.bar() {}\n' +
+      'class Box<T>(val v: T)'
+  );
+  assert.equal(word(html, 'foo'), themeColor('function.definition'));
+  assert.equal(word(html, 'max'), themeColor('function.definition'));
+  assert.equal(word(html, 'bar'), themeColor('function.definition'));
+  for (const name of ['T', 'Comparable', 'List', 'Foo', 'Box']) {
+    assert.equal(word(html, name), themeColor('type'), name);
+  }
+});
+
+void t.test('kotlin: modifier and declaration keywords', () => {
+  const html = checkInvariants(
+    kotlin.hl,
+    'companion lateinit const init by inner operator infix vararg reified ' +
+      'out where while Short'
+  );
+  const KEYWORD = themeColor('keyword');
+  for (const w of [
+    'companion',
+    'lateinit',
+    'const',
+    'by',
+    'inner',
+    'operator',
+    'infix',
+    'vararg',
+    'reified',
+    'out',
+    'where',
+  ]) {
+    assert.equal(colorOf(html, w), KEYWORD, w);
+  }
+  assert.equal(colorOf(html, 'init'), themeColor('keyword.declaration'));
+  assert.equal(colorOf(html, 'while'), themeColor('keyword.control'));
+  assert.equal(colorOf(html, 'Short'), themeColor('type.builtin'));
+});
+
+void t.test('kotlin: an operator run stops at a comment opener', () => {
+  const html = checkInvariants(kotlin.hl, 'i++//c\nj--/*d*/ k');
+  const spans = spansOf(html);
+  assert.equal(
+    spans.find((s) => s.text === '++')?.color,
+    themeColor('operator')
+  );
+  assert.equal(colorOf(html, '//c'), themeColor('comment'));
+  assert.equal(
+    spans.find((s) => s.text === '--')?.color,
+    themeColor('operator')
+  );
+  assert.equal(colorOf(html, '/*d*/'), themeColor('comment'));
+  assert.equal(colorOf(html, 'k'), themeColor('variable'));
+});
+
+void t.test('kotlin: nested comments at even depth match line-fed', () => {
+  const code = '/* /* a\nb\n*/ */\nc\n';
+  const [whole, streamed] = wholeAndLineFed('kotlin', code);
+  assert.deepEqual(streamed, whole);
+  assert.equal(whole[2][0].color, themeColor('comment'));
+  assert.equal(whole[3][0].color, themeColor('variable'));
 });

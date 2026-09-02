@@ -95,6 +95,74 @@
       (br_if $probe (local.get $probes)))
     (enum.get $CWord.none))
 
+  ;; Modern C spellings the eight-byte word table cannot hold - the longer
+  ;; C11 `_` keywords and the C23 lowercase forms - matched by exact compare.
+  ;; The length gate keeps the cost for ordinary names to one subtraction;
+  ;; the wide loads stay inside the input slack. Returns none for a miss.
+  (func $cLongWordHl (param $lhs i32) (param $rhs i32) (result i32)
+    (local $n i32)
+    (local $w i64)
+    (local.set $n (i32.sub (local.get $rhs) (local.get $lhs)))
+    (if (i32.gt_u (i32.sub (local.get $n) (i32.const 6)) (i32.const 8))
+      (then (return (enum.get $Token.none))))
+    (local.set $w (i64.load (local.get $lhs)))
+    (if (i32.eq (local.get $n) (i32.const 6))
+      (then
+        (if (i64.eq
+              (i64.and (local.get $w) (i64.const 0x0000ffffffffffff))
+              (i64.const "typeof"))
+          (then (return (enum.get $Token.keyword))))))
+    (if (i32.eq (local.get $n) (i32.const 7))
+      (then
+        (local.set $w (i64.and (local.get $w) (i64.const 0x00ffffffffffffff)))
+        (if (i32.or
+              (i64.eq (local.get $w) (i64.const "alignas"))
+              (i64.eq (local.get $w) (i64.const "alignof")))
+          (then (return (enum.get $Token.keyword))))))
+    (if (i32.eq (local.get $n) (i32.const 9))
+      (then
+        (if (i32.and
+              (i64.eq (local.get $w) (i64.const "_Noretur"))
+              (i32.eq (i32.load8_u offset=8 (local.get $lhs)) (i32.const "n")))
+          (then (return (enum.get $Token.keyword.declaration))))
+        (if (i32.and
+              (i64.eq (local.get $w) (i64.const "constexp"))
+              (i32.eq (i32.load8_u offset=8 (local.get $lhs)) (i32.const "r")))
+          (then (return (enum.get $Token.keyword))))))
+    (if (i32.eq (local.get $n) (i32.const 10))
+      (then
+        (if (i32.and
+              (i64.eq (local.get $w) (i64.const "_Imagina"))
+              (i32.eq (i32.load16_u offset=8 (local.get $lhs)) (i32.const "ry")))
+          (then (return (enum.get $Token.type.builtin))))))
+    (if (i32.eq (local.get $n) (i32.const 12))
+      (then
+        (if (i32.and
+              (i64.eq (local.get $w) (i64.const "thread_l"))
+              (i32.eq (i32.load offset=8 (local.get $lhs)) (i32.const "ocal")))
+          (then (return (enum.get $Token.keyword.declaration))))))
+    (if (i32.eq (local.get $n) (i32.const 13))
+      (then
+        (if (i32.and
+              (i64.eq (local.get $w) (i64.const "_Thread_"))
+              (i64.eq (i64.load offset=5 (local.get $lhs)) (i64.const "ad_local")))
+          (then (return (enum.get $Token.keyword.declaration))))
+        (if (i32.and
+              (i64.eq (local.get $w) (i64.const "static_a"))
+              (i64.eq (i64.load offset=5 (local.get $lhs)) (i64.const "c_assert")))
+          (then (return (enum.get $Token.keyword))))
+        (if (i32.and
+              (i64.eq (local.get $w) (i64.const "typeof_u"))
+              (i64.eq (i64.load offset=5 (local.get $lhs)) (i64.const "f_unqual")))
+          (then (return (enum.get $Token.keyword))))))
+    (if (i32.eq (local.get $n) (i32.const 14))
+      (then
+        (if (i32.and
+              (i64.eq (local.get $w) (i64.const "_Static_"))
+              (i64.eq (i64.load offset=6 (local.get $lhs)) (i64.const "c_assert")))
+          (then (return (enum.get $Token.keyword))))))
+    (enum.get $Token.none))
+
   (func $cWordHl (param $lhs i32) (param $rhs i32) (result i32)
     (local $p i32)
     (local $word i32)
@@ -111,6 +179,8 @@
       (then (return (enum.get $Token.boolean))))
     (if (bitset.get $CWordBits.constantBuiltin (local.get $word))
       (then (return (enum.get $Token.constant.builtin))))
+    (local.set $word (call $cLongWordHl (local.get $lhs) (local.get $rhs)))
+    (if (local.get $word) (then (return (local.get $word))))
 
     (if (call $lexIsConstCase (local.get $lhs) (local.get $rhs))
       (then (return (enum.get $Token.constant))))

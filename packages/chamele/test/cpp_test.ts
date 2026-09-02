@@ -1,17 +1,45 @@
 import assert from 'node:assert';
 import t from 'node:test';
 
+import type { ThemedToken } from '../lib/index';
+import { codeToTokens, init, TokenizeStream } from '../lib/index';
+import { transformWat, wat2wasm } from '../scripts/build';
+import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import {
   checkInvariants,
   colorOf,
   loadLang,
   spansOf,
   type TestLang,
+  textOf,
   themeColor,
 } from './util';
 
 let cpp: TestLang;
-t.before(() => (cpp = loadLang('cpp', '$hlCpp')));
+t.before(() => {
+  cpp = loadLang('cpp', '$hlCpp');
+  const url = new URL('../src/chamele.wat', import.meta.url);
+  init(new WebAssembly.Module(wat2wasm(url.pathname, transformWat(url).code)));
+});
+
+/**
+ * Tokens from the full module for a whole-buffer run and for a stream fed
+ * one line per chunk, the shape the live tokenizer uses; both must agree.
+ */
+function lineFed(code: string): {
+  direct: ThemedToken[][];
+  streamed: ThemedToken[][];
+} {
+  const options = { lang: 'cpp' as const, theme: pierreDark };
+  const direct = codeToTokens(code, options).tokens;
+  const stream = new TokenizeStream(options);
+  const streamed: ThemedToken[][] = [];
+  for (const line of code.split(/(?<=\n)/)) {
+    streamed.push(...stream.pushCode(line));
+  }
+  streamed.push(...stream.end());
+  return { direct, streamed };
+}
 
 const COMMENT = themeColor('comment');
 const PREPROC = themeColor('preproc');
@@ -103,6 +131,18 @@ int main() { std::vector<int> xs; obj.field = ptr->method(MAX_VALUE); }`;
   assert.equal(colorOf(html, 'MAX_VALUE'), themeColor('constant'));
 });
 
+void t.test('cpp: typeid is a keyword and a lone capital is a type', () => {
+  const html = checkInvariants(
+    cpp.hl,
+    'template <typename T> T max(T a, T b) { return typeid(a) == typeid(b) ? a : b; }'
+  );
+  assert.equal(colorOf(html, 'typeid'), themeColor('keyword'));
+  const exact = (text: string) =>
+    spansOf(html).find((span) => span.text.trim() === text)?.color;
+  assert.equal(exact('T'), themeColor('type'));
+  assert.equal(exact('max'), FUNCTION);
+});
+
 void t.test(
   'cpp: operators, scope/member access, delimiters, and brackets',
   () => {
@@ -163,4 +203,53 @@ void t.test('cpp: every lookahead respects split scan ranges', () => {
 void t.test('cpp: long SIMD literal and comment scans', () => {
   const src = `/* ${'comment '.repeat(200)}*/\nR"d(${'raw text '.repeat(300)})d"\n"${'text'.repeat(500)}"`;
   checkInvariants(cpp.hl, src);
+});
+
+void t.test(
+  'cpp: backslash-continued directives and literals resume across lines',
+  () => {
+    // Whole-buffer: the continuation line stays inside the directive and
+    // the literal, and a `#` after a resumed literal is not a directive.
+    const html = checkInvariants(
+      cpp.hl,
+      '#define X \\\n  foo(1)\ns = "abc\\\ndef" # x;\nint y;\n'
+    );
+    assert.equal(colorOf(html, 'foo(1)'), PREPROC);
+    assert.equal(colorOf(html, 'def"'), STRING);
+    assert.equal(colorOf(html, '#'), PREPROC);
+    assert.equal(
+      spansOf(html).find((span) => span.text.includes('# '))?.color,
+      OPERATOR
+    );
+    // Line-fed streaming must checkpoint each open construct at the chunk
+    // end and produce the whole-buffer tokens.
+    for (const code of [
+      '#define X \\\n  foo(1)\nint y;\n',
+      '#define X \\\r\n  foo(1) \\\r\n  bar(2)\r\nint y;\r\n',
+      '#define X \\\n\nint y;\n',
+      '#include \\\n<foo.h>\nint z;\n',
+      's = "abc\\\ndef" # x;\nint y;\n',
+      's = "abc\\\r\ndef"\r\nz = 1\r\n',
+      's = "abc\\\n\\x41\\u0042\\101def"sv;\nz = 1\n',
+      "c = 'a\\\n';\nz = 1\n",
+      'x = "abc\\\ndef\nz = 1\n',
+      'int x; /* a\nb */ #define Y 1\nint z;\n',
+      '/* a\nb */ #define Y 1\nint z;\n',
+    ]) {
+      const { direct, streamed } = lineFed(code);
+      assert.deepEqual(streamed, direct, JSON.stringify(code));
+    }
+  }
+);
+
+void t.test('cpp: a single long line highlights in linear time', () => {
+  // The beginning-of-line check once rescanned the rest of the line for
+  // every token, which made one 500 KB line take seconds.
+  const unit = 'int x = foo(a, b) + 1; ';
+  const src = unit.repeat(Math.ceil(500_000 / unit.length));
+  const started = performance.now();
+  const html = cpp.hl(src);
+  const elapsed = performance.now() - started;
+  assert.equal(textOf(html), src);
+  assert.ok(elapsed < 1000, `one long line took ${elapsed.toFixed(0)}ms`);
 });

@@ -1,6 +1,10 @@
 import assert from 'node:assert';
 import t from 'node:test';
 
+import type { ThemedToken } from '../lib/index';
+import { codeToTokens, init, TokenizeStream } from '../lib/index';
+import { transformWat, wat2wasm } from '../scripts/build';
+import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import {
   checkInvariants,
   colorOf,
@@ -15,6 +19,44 @@ let python: TestLang;
 t.before(() => {
   python = loadLang('python', '$hlPython');
 });
+
+/**
+ * Compile the whole module once for the streaming checks: TokenizeStream and
+ * codeToTokens run on the shared highlighter rather than the single-lexer
+ * harness. Lazy, so the lexer-only tests still run while another language
+ * file is mid-edit.
+ */
+let fullModuleReady = false;
+function initFullModule(): void {
+  if (fullModuleReady) return;
+  const url = new URL('../src/chamele.wat', import.meta.url);
+  const { code } = transformWat(url);
+  init(new WebAssembly.Module(wat2wasm(url.pathname, code)));
+  fullModuleReady = true;
+}
+
+/**
+ * Tokens for `code` fed to TokenizeStream one line per push - the shape the
+ * live tokenizer uses - which must equal the whole-buffer tokens.
+ */
+function assertLineStreamParity(code: string, label: string): ThemedToken[][] {
+  initFullModule();
+  const stream = new TokenizeStream({ lang: 'python', theme: pierreDark });
+  const streamed: ThemedToken[][] = [];
+  for (const line of code.split(/(?<=\n)/))
+    streamed.push(...stream.pushCode(line));
+  streamed.push(...stream.end());
+  const whole = codeToTokens(code, {
+    lang: 'python',
+    theme: pierreDark,
+  }).tokens;
+  assert.deepEqual(streamed, whole, label);
+  return streamed;
+}
+
+/** The color of the first span whose trimmed text is exactly `text`. */
+const wordColor = (html: string, text: string) =>
+  spansOf(html).find((s) => s.text.trim() === text)?.color;
 
 const COMMENT = themeColor('comment');
 const ATTRIBUTE = themeColor('attribute');
@@ -189,4 +231,137 @@ void t.test('python: def parameters match Zed variable.parameter', () => {
   for (const name of ['alpha', 'beta', 'xs', 'ys', 'k']) {
     assert.equal(word(html, name), VARIABLE, name);
   }
+});
+
+void t.test('python: multi-line docstrings survive line-fed streaming', () => {
+  // the resume check once and-ed the 4-valued triple flag with a boolean, so
+  // a triple-quoted string open at a chunk end lapsed into code on line 3
+  const doc =
+    'def f():\n    """Doc line 1\n    line 2\n    line 3\n    """\n    return 1\n';
+  const streamed = assertLineStreamParity(doc, 'three-line docstring');
+  assert.equal(
+    streamed[3].find((tk) => tk.content.trim() === 'line 3')?.color,
+    STRING
+  );
+  assert.equal(
+    streamed[5].find((tk) => tk.content.trim() === 'return')?.color,
+    CONTROL
+  );
+  assertLineStreamParity(
+    'x = """a\nb\nc\nd\n"""\ny = f"""{\nx\n}"""\nz = 1\n',
+    'four-line and f-string bodies'
+  );
+});
+
+void t.test(
+  'python: a backslash before CRLF continues a string like LF',
+  () => {
+    const html = checkInvariants(
+      python.hl,
+      's = "abc\\\r\ndef"\nt = r"x\\\r\ny"\n'
+    );
+    assert.equal(colorOf(html, '\\\r\n'), ESCAPE);
+    assert.equal(colorOf(html, 'def"'), STRING);
+    assert.equal(colorOf(html, 'y"'), STRING);
+    for (const nl of ['\n', '\r\n']) {
+      assertLineStreamParity(
+        `s = "abc\\${nl}def"${nl}t = r"x\\${nl}y"${nl}z = 1${nl}`,
+        JSON.stringify(nl)
+      );
+    }
+  }
+);
+
+void t.test(
+  'python: colons arm annotations only in annotation position',
+  () => {
+    const html = checkInvariants(
+      python.hl,
+      "d = {'a': dval}\nv = a[i:jbound]\nf = lambda larg: lbody + 1\n" +
+        'x: mytype = 1\nself.y: attrtype = 2\nif cond:\n    after = 1\n' +
+        'm = {\n    key: mval,\n}\n' +
+        'def g(pa: ptype, cb=lambda la: lb, pb: qtype = 1) -> rtype:\n' +
+        '    pass\nif a and \\\n   contd:\n    contcall()\n'
+    );
+    // dict values, slice bounds, lambda bodies, and statement bodies stay plain
+    for (const name of [
+      'dval',
+      'jbound',
+      'lbody',
+      'after',
+      'key',
+      'mval',
+      'lb',
+    ])
+      assert.equal(wordColor(html, name), VARIABLE, name);
+    // variable, attribute, parameter, and return annotations read as types
+    for (const name of ['mytype', 'attrtype', 'ptype', 'qtype', 'rtype'])
+      assert.equal(wordColor(html, name), TYPE, name);
+    assert.equal(wordColor(html, 'contcall'), FUNCTION);
+    assertLineStreamParity(
+      'if a and \\\n   contd:\n    contcall()\nx = f(lambda x,\n  y: x)\n' +
+        'def g() -> \\\n    Foo:\n    pass\n',
+      'continuation lines'
+    );
+  }
+);
+
+void t.test('python: match and case are soft keywords', () => {
+  // one snippet per shape: equal colors merge across lines in one document
+  const word = (src: string, text: string) =>
+    wordColor(checkInvariants(python.hl, src), text);
+  assert.equal(
+    word('m = re.match(p, s)', 'match'),
+    themeColor('function.method')
+  );
+  assert.equal(word('match = 3', 'match'), VARIABLE);
+  assert.equal(word('print(match)', 'match'), VARIABLE);
+  assert.equal(word('obj.match', 'match'), themeColor('property'));
+  // bodies are plain statements: a keyword body such as `pass` would merge
+  // with the next `case` span
+  const html = checkInvariants(
+    python.hl,
+    'match point:\n    case Point(x=0):\n        n = 1\n' +
+      '    case [first, *rest]:\n        n = 2\n    case _:\n        n = 3'
+  );
+  assert.equal(wordColor(html, 'match'), CONTROL);
+  assert.deepEqual(
+    spansOf(html)
+      .filter((s) => s.text.trim() === 'case')
+      .map((s) => s.color),
+    [CONTROL, CONTROL, CONTROL]
+  );
+  // a member name is never a builtin or keyword
+  assert.equal(word('obj.print', 'print'), themeColor('property'));
+  assert.equal(word('obj.type', 'type'), themeColor('property'));
+  assert.equal(word('obj.if()', 'if'), themeColor('function.method'));
+});
+
+void t.test('python: f-string replacement fields track brace depth', () => {
+  const SPECIAL = themeColor('punctuation.special');
+  const html = checkInvariants(python.hl, 'f"{x!r:>{w}} {{lit}} {y}"');
+  assert.deepEqual(
+    spansOf(html).map((s) => [s.text, s.color]),
+    [
+      ['f"', STRING],
+      ['{', SPECIAL],
+      ['x!r:>', STRING],
+      ['{', SPECIAL],
+      ['w', STRING],
+      ['}}', SPECIAL],
+      [' {{lit}} ', STRING],
+      ['{', SPECIAL],
+      ['y', STRING],
+      ['}', SPECIAL],
+      ['"', STRING],
+    ]
+  );
+  const streamed = assertLineStreamParity(
+    's = f"""{a:{\nw}} {{x}}\n"""\ny = 1\n',
+    'field open across lines'
+  );
+  assert.equal(
+    streamed[3].find((tk) => tk.content.trim() === 'y')?.color,
+    VARIABLE
+  );
 });

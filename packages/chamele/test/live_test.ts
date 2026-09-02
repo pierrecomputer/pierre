@@ -1339,3 +1339,92 @@ void t.test(
     live.dispose();
   }
 );
+
+void t.test(
+  'live wasm: a shrunk staging block leaves only class-sized free blocks',
+  () => {
+    // The document initializer trims the staged block to the encoded length.
+    // A tail that is not exactly a size-class size must stay attached: a free
+    // list keyed by class hands blocks out at the class size, so a smaller
+    // block parked there would overrun its neighbor on the next allocation.
+    interface RawLive {
+      memory: WebAssembly.Memory;
+      liveStage(len: number): number;
+      liveInitDoc(ptr: number, len: number, lang: number): void;
+      liveRun(budget: number): number;
+    }
+    const env = { is_id_start: () => 1, is_id_continue: () => 1 };
+    const raw = new WebAssembly.Instance(wasmModule, { env })
+      .exports as unknown as RawLive;
+    // mirror of $lvRoundSize: 8-byte steps to 64, quarter-power-of-two above
+    const roundSize = (size: number): number => {
+      if (size < 16) size = 16;
+      if (size <= 64) return (size + 7) & -8;
+      const p = 32 - Math.clz32(size - 1);
+      if (p >= 17) return (size + 7) & -8;
+      const quarter = 1 << (p - 2);
+      return (size + quarter - 1) & -quarter;
+    };
+    const freeHeads = 31584;
+    for (const [staged, used] of [
+      [1000, 300],
+      [4096, 100],
+      [70000, 65000],
+    ] as const) {
+      const ptr = raw.liveStage(staged);
+      const bytes = new TextEncoder().encode('a'.repeat(used - 1) + '\n');
+      new Uint8Array(raw.memory.buffer).set(bytes, ptr);
+      raw.liveInitDoc(ptr, used, 4);
+      raw.liveRun(0x7fffffff);
+      const dv = new DataView(raw.memory.buffer);
+      for (let idx = 0; idx < 32; idx++) {
+        let head = dv.getUint32(freeHeads + idx * 4, true);
+        while (head !== 0) {
+          const size = dv.getUint32(head, true) & -2;
+          assert.equal(
+            roundSize(size),
+            size,
+            `free block of ${size} bytes in class ${idx} after staging ${staged}/${used}`
+          );
+          head = dv.getUint32(head + 4, true);
+        }
+      }
+    }
+  }
+);
+
+void t.test(
+  'live wasm: ECMAScript state blobs stay small inside braces',
+  () => {
+    // The ecma lexers keep their cross-line state in globals and stacks, so
+    // the lexer checkpoint region is all zero for them; the blob layout puts
+    // it last so the trailing-zero trim drops it from every interned state.
+    interface RawLive {
+      memory: WebAssembly.Memory;
+      liveStage(len: number): number;
+      liveInitDoc(ptr: number, len: number, lang: number): void;
+      liveRun(budget: number): number;
+      liveStats(k: number): number;
+    }
+    const env = { is_id_start: () => 1, is_id_continue: () => 1 };
+    const raw = new WebAssembly.Instance(wasmModule, { env })
+      .exports as unknown as RawLive;
+    const doc = Array.from(
+      { length: 500 },
+      (_, i) =>
+        `function f${i}(a, b) {\n  if (a) {\n    return b + ${i};\n  }\n  return a;\n}\n`
+    ).join('');
+    const bytes = new TextEncoder().encode(doc);
+    const ptr = raw.liveStage(bytes.length);
+    new Uint8Array(raw.memory.buffer).set(bytes, ptr);
+    raw.liveInitDoc(ptr, bytes.length, 29); // js
+    raw.liveRun(0x7fffffff);
+    const states = raw.liveStats(1);
+    const stateBytes = raw.liveStats(2);
+    assert.ok(states > 0);
+    assert.ok(
+      stateBytes / states < 400,
+      `average blob ${stateBytes / states} bytes; the checkpoint region leaked in`
+    );
+  }
+);

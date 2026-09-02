@@ -1,8 +1,14 @@
 import assert from 'node:assert';
 import t from 'node:test';
 
-import type { Theme } from '../lib/index';
-import { createHighlighter } from '../lib/index';
+import type { Lang, Theme, ThemedToken } from '../lib/index';
+import {
+  codeToTokens,
+  createHighlighter,
+  init,
+  TokenizeStream,
+} from '../lib/index';
+import tokenTypes from '../lib/token-types';
 import { transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import {
@@ -21,7 +27,49 @@ let tsx: TestLang;
 
 t.before(() => {
   tsx = loadLang('tsx', '$hlTsx');
+  // the full module drives the chunked TokenizeStream parity checks below
+  const url = new URL('../src/chamele.wat', import.meta.url);
+  const { code } = transformWat(url);
+  init(new WebAssembly.Module(wat2wasm(url.pathname, code)));
 });
+
+// every token type gets its own color, so a parity check also catches kinds
+// that pierre-dark paints alike (function vs function.method, comment vs
+// comment.doc)
+const distinctTheme: Theme = {
+  name: 'distinct',
+  appearance: 'dark',
+  style: {
+    background: '#000000',
+    foreground: '#ffffff',
+    syntax: Object.fromEntries(
+      tokenTypes
+        .filter((name) => !['background', 'foreground', 'none'].includes(name))
+        .map((name, i) => [name, '#' + (0x100000 + i * 0x101).toString(16)])
+    ),
+  },
+};
+
+/**
+ * Assert that feeding `code` one line per `pushCode` - the LiveTokenizer
+ * shape, where every line break is a chunk boundary - yields exactly the
+ * tokens of one whole-buffer run.
+ */
+function assertLineFedParity(lang: Lang, code: string): void {
+  const whole = codeToTokens(code, { lang, theme: distinctTheme }).tokens;
+  const stream = new TokenizeStream({ lang, theme: distinctTheme });
+  const streamed: ThemedToken[][] = [];
+  for (const line of code.split(/(?<=\n)/)) {
+    streamed.push(...stream.pushCode(line));
+  }
+  streamed.push(...stream.end());
+  assert.deepEqual(streamed, whole, `${lang}: ${JSON.stringify(code)}`);
+}
+
+/** The color of the span whose text is exactly `text`. */
+function spanColor(html: string, text: string): string | null | undefined {
+  return spansOf(html).find((s) => s.text === text)?.color;
+}
 
 // pierre-dark colors resolved from themes/pierre-dark.json (see themeColor)
 const BG = themeColor('background');
@@ -818,6 +866,77 @@ void t.test('tsx: keyof and JSX division regressions', () => {
     'no regexp span expected'
   );
   assert.equal(colorOf(out, '2'), NUM);
+});
+
+void t.test(
+  'tsx: the token before a comment cut at a line break still updates prev',
+  () => {
+    // a block comment is transparent, so the identifier after one that
+    // crosses a chunk boundary is judged by the token before the comment
+    for (const [src, word, color] of [
+      ['const o = { /* c\n */ a: 1 }', 'a', PROP],
+      ['a. /* c\n */ b()', 'b', FUNC],
+      ['const x = new /*\n*/ Foo();', 'Foo', CTOR],
+    ] as const) {
+      const html = checkInvariants(tsx.hl, src);
+      assert.equal(spanColor(html, word), color, src);
+      for (const lang of ['js', 'jsx', 'ts', 'tsx'] as const) {
+        assertLineFedParity(lang, src + '\n');
+      }
+    }
+    assertLineFedParity('js', 'foo /* a\n*/ (1)\nobj?. /* c\n */ prop\n');
+  }
+);
+
+void t.test(
+  'tsx: a closed comment before a cut doc comment stays plain',
+  () => {
+    // the doc distinction is the token's own bytes, never the stream mode the
+    // lookahead comment may already have set
+    const html = checkInvariants(tsx.hl, '/* a */ /** b\n */ x', {
+      theme: bucketTheme,
+    });
+    assert.equal(colorOf(html, '/* a */'), '#00000a');
+    assert.equal(colorOf(html, '/** b'), '#00000b');
+    assertLineFedParity('tsx', '/* a */ /** b\n */\n');
+    assertLineFedParity('js', 'let y = /* a */ /**\n*/ 2\n');
+    // an open `/**` reads as a doc comment however short the input cuts it
+    assertLineFedParity(
+      'tsx',
+      '/**\n * @param {number} n\n */\nfunction f(n) {}\n'
+    );
+    assertLineFedParity('tsx', '/**\n');
+    assertLineFedParity('tsx', '/**');
+    assertLineFedParity('tsx', '/*/\nlet x\n');
+  }
+);
+
+void t.test('tsx: a template line starting with `}` is still string', () => {
+  const html = checkInvariants(tsx.hl, 'const s = `abc\n}def`;');
+  assert.equal(colorOf(html, '}def`'), STR);
+  assertLineFedParity('js', 'const s = `abc\n}def`;\n');
+  assertLineFedParity('tsx', 'const s = `a${1}b\n}}c${2}\n}d`;\n');
+  assertLineFedParity('ts', '`x\n}\n`\n');
+});
+
+void t.test('tsx: `from` before a string cut by a line continuation', () => {
+  const html = checkInvariants(tsx.hl, 'import x from "y\\\nz"');
+  assert.equal(colorOf(html, 'from'), KEYWORD);
+  assertLineFedParity('ts', 'import x from "y\\\nz"\n');
+  assertLineFedParity('js', "import x from 'y\\\r\nz'\nlet q = 1\n");
+  assertLineFedParity(
+    'ts',
+    'import x from "y\\\nz\\\nw"\nexport { q } from "a\\\nb"\n'
+  );
+  // an unterminated specifier at the end of the input stays invalid in both
+  assertLineFedParity('tsx', "import x from 'abc");
+});
+
+void t.test('tsx: jsx attribute strings resume across line breaks', () => {
+  assertLineFedParity('tsx', '<div a="x\ny" b=\'p\nq\' />\n');
+  assertLineFedParity('jsx', '<a b=\'x\ny\' c="p\nq">\n{1 +\n2}\n</a>\n');
+  assertLineFedParity('tsx', '<div a="x');
+  assertLineFedParity('tsx', "<div a='x\n");
 });
 
 void t.test('tsx: non-object themes throw a clean TypeError', () => {

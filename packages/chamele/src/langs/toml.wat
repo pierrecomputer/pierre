@@ -18,6 +18,41 @@
           (i32.eq (local.get $c) (i32.const "_"))
           (i32.eq (local.get $c) (i32.const "-"))))))
 
+  ;; End of the bare-key run [A-Za-z0-9_-] starting at $p - 16 bytes per
+  ;; step, clamped to $end. Bare keys are ASCII, so unlike $scanIdentRun this
+  ;; stops at bytes >= 0x80 instead of absorbing a UTF-8 sequence.
+  (func $tomlBareKeyEnd (param $p i32) (result i32)
+    (local $mask i32)
+    (local $w v128)
+    (block $done
+      (loop $wide
+        (br_if $done (i32.ge_u (local.get $p) (global.get $end)))
+        (local.set $w (v128.load (local.get $p)))
+        (local.set $mask (i32.xor
+          (i8x16.bitmask (v128.or
+            (v128.or
+              (i8x16.le_u
+                (i8x16.sub
+                  (v128.or (local.get $w) (i8x16.splat (i32.const 32)))
+                  (i8x16.splat (i32.const "a")))
+                (i8x16.splat (i32.const 25)))
+              (i8x16.le_u
+                (i8x16.sub (local.get $w) (i8x16.splat (i32.const "0")))
+                (i8x16.splat (i32.const 9))))
+            (v128.or
+              (i8x16.eq (local.get $w) (i8x16.splat (i32.const "_")))
+              (i8x16.eq (local.get $w) (i8x16.splat (i32.const "-"))))))
+          (i32.const 65535)))
+        (if (local.get $mask)
+          (then
+            (local.set $p (i32.add (local.get $p) (i32.ctz (local.get $mask))))
+            (br $done)))
+        (local.set $p (i32.add (local.get $p) (i32.const 16)))
+        (br $wide)))
+    (if (i32.gt_u (local.get $p) (global.get $end))
+      (then (local.set $p (global.get $end))))
+    (local.get $p))
+
   ;; TOML digits may contain underscores only between digits. $base is 2, 8,
   ;; 10, or 16; the caller checks that at least one digit was consumed.
   (func $tomlScanDigits (param $p i32) (param $base i32) (result i32)
@@ -99,8 +134,41 @@
       (i32.ge_u (local.get $n) (local.get $min))
       (i32.le_u (local.get $n) (local.get $max))))
 
-  ;; Basic strings need TOML's full unicode escapes and triple-quote close.
-  (func $tomlBasicString (param $multiline i32) (param $hl i32)
+  ;; End of the whitespace a line-ending backslash trims: spaces, tabs, LFs,
+  ;; and CRLFs from $q, clamped to $end.
+  (func $tomlTrimEnd (param $q i32) (result i32)
+    (local $c i32)
+    (block $trimDone
+      (loop $trim
+        (br_if $trimDone (i32.ge_u (local.get $q) (global.get $end)))
+        (local.set $c (i32.load8_u (local.get $q)))
+        (if (i32.or
+              (i32.eq (local.get $c) (i32.const 9))
+              (i32.or
+                (i32.eq (local.get $c) (i32.const 10))
+                (i32.eq (local.get $c) (i32.const 32))))
+          (then
+            (local.set $q (i32.add (local.get $q) (i32.const 1)))
+            (br $trim)))
+        (br_if $trimDone (i32.ne (local.get $c) (i32.const 13)))
+        (br_if $trimDone
+          (i32.ge_u (i32.add (local.get $q) (i32.const 1)) (global.get $end)))
+        (br_if $trimDone
+          (i32.ne (i32.load8_u offset=1 (local.get $q)) (i32.const 10)))
+        (local.set $q (i32.add (local.get $q) (i32.const 2)))
+        (br $trim)))
+    (local.get $q))
+
+  ;; Scan a basic string body from $ptr with TOML's escape productions and
+  ;; the three-to-five-quote close. $seg starts the pending string token;
+  ;; $trim is one when the previous chunk ended inside the whitespace a
+  ;; line-ending backslash trims, so the leading whitespace here is still
+  ;; escape text. Returns 1 after the closing quote(s), 2 when the body
+  ;; reached $end inside such a trim run, and 0 when it reached $end - or,
+  ;; single-line, an unconsumed raw line break - otherwise.
+  (func $tomlBasicStringBody
+    (param $multiline i32) (param $hl i32) (param $seg i32) (param $trim i32)
+    (result i32)
     (local $c i32)
     (local $closed i32)
     (local $e i32)
@@ -108,12 +176,16 @@
     (local $line i32)
     (local $quotes i32)
     (local $q i32)
-    (local $seg i32)
-    (local.set $seg (global.get $ptr))
-    (global.set $ptr (i32.add (global.get $ptr)
-      (select (i32.const 3) (i32.const 1) (local.get $multiline))))
-    (if (i32.gt_u (global.get $ptr) (global.get $end))
-      (then (global.set $ptr (global.get $end))))
+    (if (local.get $trim)
+      (then
+        (local.set $e (call $tomlTrimEnd (global.get $ptr)))
+        (call $emitTok
+          (enum.get $Token.string.escape) (global.get $ptr) (local.get $e))
+        (global.set $ptr (local.get $e))
+        (local.set $seg (local.get $e))
+        (if (i32.ge_u (global.get $ptr) (global.get $end))
+          (then (return (i32.const 2))))
+        (local.set $trim (i32.const 0))))
     (block $done
       (loop $scan
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
@@ -133,6 +205,7 @@
             (if (i32.eqz (local.get $multiline))
               (then
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+                (local.set $closed (i32.const 1))
                 (br $done)))
             (local.set $quotes (i32.const 0))
             (block $quoteDone
@@ -155,6 +228,8 @@
         (call $emitTok (local.get $hl) (local.get $seg) (global.get $ptr))
         (local.set $e (i32.add (global.get $ptr) (i32.const 1)))
         (local.set $escape (i32.const 0))
+        (local.set $line (i32.const 0))
+        (local.set $trim (i32.const 0))
         (if (i32.lt_u (i32.add (global.get $ptr) (i32.const 1)) (global.get $end))
           (then
             (local.set $c (i32.load8_u offset=1 (global.get $ptr)))
@@ -206,6 +281,8 @@
                   (then
                     (local.set $e (local.get $q))
                     (local.set $escape (i32.const 1))))))
+            ;; a line-ending backslash: the escape spans the line break and
+            ;; every blank line and indentation up to the next content
             (if (local.get $multiline)
               (then
                 (local.set $q (i32.add (global.get $ptr) (i32.const 1)))
@@ -218,7 +295,6 @@
                       (i32.ne (local.get $c) (i32.const 32))))
                     (local.set $q (i32.add (local.get $q) (i32.const 1)))
                     (br $indent)))
-                (local.set $line (i32.const 0))
                 (if (i32.lt_u (local.get $q) (global.get $end))
                   (then
                     (local.set $c (i32.load8_u (local.get $q)))
@@ -236,27 +312,12 @@
                         (local.set $line (i32.const 1))))))
                 (if (local.get $line)
                   (then
-                    (block $trimDone
-                      (loop $trim
-                        (br_if $trimDone (i32.ge_u (local.get $q) (global.get $end)))
-                        (local.set $c (i32.load8_u (local.get $q)))
-                        (if (i32.or
-                              (i32.eq (local.get $c) (i32.const 9))
-                              (i32.or
-                                (i32.eq (local.get $c) (i32.const 10))
-                                (i32.eq (local.get $c) (i32.const 32))))
-                          (then
-                            (local.set $q (i32.add (local.get $q) (i32.const 1)))
-                            (br $trim)))
-                        (br_if $trimDone (i32.ne (local.get $c) (i32.const 13)))
-                        (br_if $trimDone
-                          (i32.ge_u (i32.add (local.get $q) (i32.const 1)) (global.get $end)))
-                        (br_if $trimDone
-                          (i32.ne (i32.load8_u offset=1 (local.get $q)) (i32.const 10)))
-                        (local.set $q (i32.add (local.get $q) (i32.const 2)))
-                        (br $trim)))
-                    (local.set $e (local.get $q))
-                    (local.set $escape (i32.const 1))))))))
+                    (local.set $e (call $tomlTrimEnd (local.get $q)))
+                    (local.set $escape (i32.const 1))
+                    ;; a trim run cut off by the chunk end continues in the
+                    ;; next chunk
+                    (local.set $trim
+                      (i32.eq (local.get $e) (global.get $end)))))))))
         (call $emitTok
           (select
             (enum.get $Token.string.escape) (local.get $hl)
@@ -266,9 +327,80 @@
         (local.set $seg (global.get $ptr))
         (br $scan)))
     (call $emitTok (local.get $hl) (local.get $seg) (global.get $ptr))
-    (if (i32.and (local.get $multiline) (i32.eqz (local.get $closed)))
-      (then (call $streamSetFixed32
-        (i32.const 0x222222) (i32.const 3) (local.get $hl)))))
+    (select
+      (i32.const 1)
+      (select (i32.const 2) (i32.const 0) (local.get $trim))
+      (local.get $closed)))
+
+  ;; Checkpoint a multi-line string left open at the chunk end as toml stream
+  ;; mode 13: the quote byte in $streamA and, in $streamB, whether a
+  ;; line-ending backslash is still trimming leading whitespace. The shared
+  ;; fixed-delimiter mode cannot resume these bodies: it knows nothing about
+  ;; escapes or the two extra quotes a closing delimiter may absorb.
+  (func $tomlStreamOpen (param $quote i32) (param $trim i32) (param $hl i32)
+    (if (i32.and
+          (global.get $streaming)
+          (i32.eq (global.get $ptr) (global.get $end)))
+      (then
+        (global.set $streamMode (i32.const 13))
+        (global.set $streamA (local.get $quote))
+        (global.set $streamB (local.get $trim))
+        (global.set $streamHl (local.get $hl)))))
+
+  ;; A basic string at $ptr: `"` single-line or `"""` multi-line.
+  (func $tomlBasicString (param $multiline i32) (param $hl i32)
+    (local $seg i32)
+    (local $status i32)
+    (local.set $seg (global.get $ptr))
+    (global.set $ptr (i32.add (global.get $ptr)
+      (select (i32.const 3) (i32.const 1) (local.get $multiline))))
+    (if (i32.gt_u (global.get $ptr) (global.get $end))
+      (then (global.set $ptr (global.get $end))))
+    (local.set $status
+      (call $tomlBasicStringBody
+        (local.get $multiline) (local.get $hl) (local.get $seg) (i32.const 0)))
+    (if (i32.and (local.get $multiline) (i32.ne (local.get $status) (i32.const 1)))
+      (then (call $tomlStreamOpen
+        (i32.const 34) (i32.eq (local.get $status) (i32.const 2)) (local.get $hl)))))
+
+  ;; Scan a multi-line literal string body from $ptr: hop between quotes with
+  ;; SIMD and stop after a run of three to five, since up to two quotes may
+  ;; precede the closing delimiter. $lhs starts the pending token. Returns 1
+  ;; when the string closed, 0 when it ran to $end.
+  (func $tomlLiteralStringBody (param $hl i32) (param $lhs i32) (result i32)
+    (local $closed i32)
+    (local $quotes i32)
+    (block $rawDone
+      (loop $raw
+        (global.set $ptr (call $lexFindByte (global.get $ptr) (i32.const 39)))
+        (br_if $rawDone (i32.ge_u (global.get $ptr) (global.get $end)))
+        (local.set $quotes (i32.const 0))
+        (block $quoteDone
+          (loop $quote
+            (br_if $quoteDone (i32.ge_u (local.get $quotes) (i32.const 5)))
+            (br_if $quoteDone (i32.ge_u (global.get $ptr) (global.get $end)))
+            (br_if $quoteDone
+              (i32.ne (i32.load8_u (global.get $ptr)) (i32.const 39)))
+            (local.set $quotes (i32.add (local.get $quotes) (i32.const 1)))
+            (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+            (br $quote)))
+        (if (i32.ge_u (local.get $quotes) (i32.const 3))
+          (then
+            (local.set $closed (i32.const 1))
+            (br $rawDone)))
+        (br $raw)))
+    (call $emitTok (local.get $hl) (local.get $lhs) (global.get $ptr))
+    (local.get $closed))
+
+  ;; A `'''` multi-line literal string at $ptr.
+  (func $tomlLiteralString (param $hl i32)
+    (local $lhs i32)
+    (local.set $lhs (global.get $ptr))
+    (global.set $ptr (i32.add (global.get $ptr) (i32.const 3)))
+    (if (i32.gt_u (global.get $ptr) (global.get $end))
+      (then (global.set $ptr (global.get $end))))
+    (if (i32.eqz (call $tomlLiteralStringBody (local.get $hl) (local.get $lhs)))
+      (then (call $tomlStreamOpen (i32.const 39) (i32.const 0) (local.get $hl)))))
 
   (func $hlToml
     (local $base i32)
@@ -284,7 +416,6 @@
     (local $n i32)
     (local $p i32)
     (local $q i32)
-    (local $quotes i32)
     (local $r i32)
     (local $sawNewline i32)
     (local $time i32)
@@ -345,36 +476,7 @@
               (then
                 (if (i32.eq (local.get $c) (i32.const 34))
                   (then (call $tomlBasicString (i32.const 1) (local.get $hl)))
-                  (else
-                    (global.set $ptr (i32.add (global.get $ptr) (i32.const 3)))
-                    (if (i32.gt_u (global.get $ptr) (global.get $end))
-                      (then (global.set $ptr (global.get $end))))
-                    (block $rawDone
-                      (loop $raw
-                        (global.set $ptr
-                          (call $lexFindEither
-                            (global.get $ptr) (i32.const 39) (i32.const 39)))
-                        (br_if $rawDone
-                          (i32.ge_u (global.get $ptr) (global.get $end)))
-                        (local.set $quotes (i32.const 0))
-                        (block $quoteDone
-                          (loop $quote
-                            (br_if $quoteDone
-                              (i32.ge_u (local.get $quotes) (i32.const 5)))
-                            (br_if $quoteDone
-                              (i32.ge_u (global.get $ptr) (global.get $end)))
-                            (br_if $quoteDone
-                              (i32.ne (i32.load8_u (global.get $ptr)) (i32.const 39)))
-                            (local.set $quotes
-                              (i32.add (local.get $quotes) (i32.const 1)))
-                            (global.set $ptr
-                              (i32.add (global.get $ptr) (i32.const 1)))
-                            (br $quote)))
-                        (br_if $rawDone
-                          (i32.ge_u (local.get $quotes) (i32.const 3)))
-                        (br $raw)))
-                    (call $emitTok
-                      (local.get $hl) (local.get $lhs) (global.get $ptr)))))
+                  (else (call $tomlLiteralString (local.get $hl)))))
               (else
                 (if (i32.eq (local.get $c) (i32.const 34))
                   (then (call $tomlBasicString (i32.const 0) (local.get $hl)))
@@ -387,11 +489,7 @@
               (i32.or (local.get $key) (local.get $header))
               (call $tomlIsBareKey (local.get $c)))
           (then
-            (loop $bare
-              (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-              (br_if $bare (i32.and
-                (i32.lt_u (global.get $ptr) (global.get $end))
-                (call $tomlIsBareKey (i32.load8_u (global.get $ptr))))))
+            (global.set $ptr (call $tomlBareKeyEnd (global.get $ptr)))
             (call $emitTok
               (enum.get $Token.property) (local.get $lhs) (global.get $ptr))
             (br $next)))
@@ -809,4 +907,30 @@
         (br $next)))
     ;; publish the active shared-stack prefix for live state capture
     (global.set $liveSharedBytes (local.get $depth)))
+
+  ;; Resume toml stream mode 13: a multi-line string body left open at the
+  ;; previous chunk end, literal when $streamA is the single quote and basic
+  ;; otherwise. Returns 1 when the body consumed the whole chunk, 0 when the
+  ;; language lexer should continue from $ptr. When the whole chunk is string
+  ;; body $hlToml does not run, so $liveSharedBytes keeps the depth restored
+  ;; for this line, which is still the live shared-stack prefix.
+  (func $tomlStreamResume (result i32)
+    (local $status i32)
+    (if (i32.eq (global.get $streamA) (i32.const 39))
+      (then
+        (local.set $status
+          (call $tomlLiteralStringBody (global.get $streamHl) (global.get $ptr))))
+      (else
+        (local.set $status
+          (call $tomlBasicStringBody
+            (i32.const 1) (global.get $streamHl) (global.get $ptr)
+            (global.get $streamB)))))
+    (if (i32.and
+          (i32.ne (local.get $status) (i32.const 1))
+          (i32.eq (global.get $ptr) (global.get $end)))
+      (then
+        (global.set $streamB (i32.eq (local.get $status) (i32.const 2)))
+        (return (i32.const 1))))
+    (global.set $streamMode (i32.const 0))
+    (i32.const 0))
 )

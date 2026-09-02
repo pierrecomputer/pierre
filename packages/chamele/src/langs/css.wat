@@ -71,21 +71,40 @@
             (br $done)))
         (br_if $done (i32.or (i32.eq (local.get $c) (i32.const 10))
                              (i32.eq (local.get $c) (i32.const 13))))
-        ;; backslash escape: `\` + up to 6 hex digits (css hex escape) or two
-        ;; bytes, clamped to $end. An escaped multibyte UTF-8 character stays
-        ;; whole inside the escape span - a span boundary must never split a
-        ;; code point, or the output decodes to garbage
+        ;; backslash escape: `\` + up to 6 hex digits (css hex escape) or the
+        ;; escaped byte, clamped to $end. An escaped multibyte UTF-8 character
+        ;; stays whole inside the escape span - a span boundary must never
+        ;; split a code point, or the output decodes to garbage - and a `\`
+        ;; before LF or CRLF continues the string on the next line
         (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
         (local.set $e (call $scanHexRun
           (i32.add (global.get $ptr) (i32.const 1)) (i32.const 6)))
         (if (i32.eq (local.get $e) (i32.add (global.get $ptr) (i32.const 1)))
-          (then (local.set $e (i32.add (global.get $ptr) (i32.const 2)))))
-        (local.set $e (call $utf8SpanEnd (local.get $e) (global.get $end)))
+          (then (local.set $e (call $lexEscapeEnd (global.get $ptr))))
+          (else (local.set $e (call $utf8SpanEnd (local.get $e) (global.get $end)))))
         (call $emitTok (enum.get $Token.string.escape) (global.get $ptr) (local.get $e))
         (global.set $ptr (local.get $e))
         (local.set $seg (global.get $ptr))
+        (call $cssStringOpenAtChunkEnd (local.get $q))
         (br $wide)))
     (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr)))
+
+  ;; A string whose escaped line break ends the chunk stays open: hand it to
+  ;; the shared string mode so the next chunk resumes the body instead of
+  ;; lexing the continuation line as css
+  (func $cssStringOpenAtChunkEnd (param $q i32)
+    (if (i32.and
+          (global.get $streaming)
+          (i32.and
+            (i32.eq (global.get $ptr) (global.get $end))
+            (i32.or
+              (i32.eq (i32.load8_u (i32.sub (global.get $ptr) (i32.const 1))) (i32.const 10))
+              (i32.eq (i32.load8_u (i32.sub (global.get $ptr) (i32.const 1))) (i32.const 13)))))
+      (then
+        (global.set $streamMode (i32.const 2))
+        (global.set $streamA (local.get $q))
+        (global.set $streamB (i32.const 0))
+        (global.set $streamHl (enum.get $Token.string)))))
 
   ;; whether [$lhs,$rhs) is a media/supports query operator:
   ;; `and` / `or` / `not` / `only`. wide loads may read past $rhs, always
@@ -143,21 +162,24 @@
         (br $wide))))
 
   ;; the statement-start decider: scan ahead from $ptr without emitting until
-  ;; a `{` (returns 1: selector) or a `;` / `}` / $end (returns 0: leniently a
-  ;; declaration), skipping strings and comments. The string skip mirrors
-  ;; $cssString - a raw newline ends a string - so both passes agree.
-  (func $cssDecide (result i32)
+  ;; a `{` (returns 1: selector) or a `;` / `}` (returns 0: declaration),
+  ;; skipping strings and comments. The string skip mirrors $cssString - a
+  ;; raw newline ends a string - so both passes agree. Reaching $end first
+  ;; hands the guess to $cssDecideAtEnd. $depth is the number of `{` blocks
+  ;; still open.
+  (func $cssDecide (param $depth i32) (result i32)
     (local $p i32)
     (local $c i32)
     (local $q i32)
     (local $mask i32)
     (local $rem i32)
+    (local $colon i32) ;; first `:` seen: 1 before a blank or $end, 2 otherwise
     (local $w v128)
     (local.set $p (global.get $ptr))
     (block $decl
       (loop $scan
         (br_if $decl (i32.ge_u (local.get $p) (global.get $end)))
-        ;; hop to the next of `{` `}` `;` `/` or a quote, 16 bytes per step
+        ;; hop to the next of `{` `}` `;` `:` `/` or a quote, 16 bytes per step
         (block $found
           (loop $wide
             (local.set $w (v128.load (local.get $p)))
@@ -170,8 +192,10 @@
                   (i8x16.eq (local.get $w) (i8x16.splat (i32.const ";")))
                   (i8x16.eq (local.get $w) (i8x16.splat (i32.const "/")))))
               (v128.or
-                (i8x16.eq (local.get $w) (i8x16.splat (i32.const 34)))
-                (i8x16.eq (local.get $w) (i8x16.splat (i32.const 39)))))))
+                (v128.or
+                  (i8x16.eq (local.get $w) (i8x16.splat (i32.const 34)))
+                  (i8x16.eq (local.get $w) (i8x16.splat (i32.const 39))))
+                (i8x16.eq (local.get $w) (i8x16.splat (i32.const ":")))))))
             (local.set $rem (i32.sub (global.get $end) (local.get $p)))
             (if (i32.lt_u (local.get $rem) (i32.const 16))
               (then (local.set $mask (i32.and (local.get $mask)
@@ -189,6 +213,19 @@
         (if (i32.or (i32.eq (local.get $c) (i32.const "}"))
                     (i32.eq (local.get $c) (i32.const ";")))
           (then (return (i32.const 0))))
+        (if (i32.eq (local.get $c) (i32.const ":"))
+          (then
+            ;; only the first colon shapes the chunk-end guess: `: ` opens a
+            ;; declaration value, `:x` names a pseudo-class
+            (if (i32.eqz (local.get $colon))
+              (then
+                (local.set $c (select
+                  (i32.load8_u offset=1 (local.get $p)) (i32.const 32)
+                  (i32.lt_u (i32.add (local.get $p) (i32.const 1)) (global.get $end))))
+                (local.set $colon (select (i32.const 1) (i32.const 2)
+                  (call $lexIsSpace (local.get $c))))))
+            (local.set $p (i32.add (local.get $p) (i32.const 1)))
+            (br $scan)))
         (if (i32.eq (local.get $c) (i32.const "/"))
           (then
             (if (i32.and
@@ -233,7 +270,42 @@
             (local.set $p (i32.add (local.get $p) (i32.const 2)))
             (br $sl)))
         (br $scan)))
-    (i32.const 0))
+    (call $cssDecideAtEnd (local.get $depth) (local.get $colon)))
+
+  ;; The verdict for a statement that reached $end without a `{`, `;`, or
+  ;; `}`: the last statement of an unfinished document, or - since a streamed
+  ;; chunk is one line - any statement whose verdict byte sits on a later
+  ;; line. Both runs guess from the text's shape so they agree: a `: ` opens
+  ;; a declaration value and any other `:` names a pseudo-class. Without a
+  ;; colon the text is a selector whose `{` is still to come - `h1,` /
+  ;; `.a > .b` / `&` - except for a bare identifier inside a block, which is
+  ;; a property name still being typed.
+  (func $cssDecideAtEnd (param $depth i32) (param $colon i32) (result i32)
+    (local $p i32)
+    (local $c i32)
+    (if (local.get $colon)
+      (then (return (i32.eq (local.get $colon) (i32.const 2)))))
+    (if (i32.eqz (local.get $depth))
+      (then (return (i32.const 1))))
+    ;; one identifier run, then blanks to $end, is a bare property name;
+    ;; anything else on the line makes it a selector
+    (local.set $p (global.get $ptr))
+    (block $word
+      (loop $ident
+        (br_if $word (i32.ge_u (local.get $p) (global.get $end)))
+        (local.set $c (i32.load8_u (local.get $p)))
+        (br_if $word (i32.eqz (i32.or
+          (i32.or (call $cssIdentStart (local.get $c)) (i32.eq (local.get $c) (i32.const "-")))
+          (i32.le_u (i32.sub (local.get $c) (i32.const "0")) (i32.const 9)))))
+        (local.set $p (i32.add (local.get $p) (i32.const 1)))
+        (br $ident)))
+    (block $blank
+      (loop $space
+        (br_if $blank (i32.ge_u (local.get $p) (global.get $end)))
+        (br_if $blank (i32.eqz (call $lexIsSpace (i32.load8_u (local.get $p)))))
+        (local.set $p (i32.add (local.get $p) (i32.const 1)))
+        (br $space)))
+    (i32.lt_u (local.get $p) (global.get $end)))
 
   (func $hlCss
     (local $c i32)
@@ -246,6 +318,7 @@
     (local $decide i32) ;; 1 at a statement start: classify before dispatching
     (local $attr i32)   ;; selector-mode attr selector: 1 before `=`, 2 after
     (local $namespace i32) ;; @namespace prelude still expects its optional name
+    (local $depth i32)  ;; `{` blocks still open, for the chunk-end decider
     (local.set $decide (i32.const 1))
     (call $lexEmitLeadingContinuation)
     (block $done
@@ -292,18 +365,22 @@
               ;; a bare-declaration fragment (style attribute, docs snippet)
               ;; colors as property/value, not as selectors
               (else (local.set $mode
-                (select (i32.const 0) (i32.const 2) (call $cssDecide)))))))
+                (select (i32.const 0) (i32.const 2)
+                  (call $cssDecide (local.get $depth))))))))
 
         ;; structural bytes end statements in any mode
         (if (i32.eq (local.get $c) (i32.const "{"))
           (then
             (local.set $decide (i32.const 1))
+            (local.set $depth (i32.add (local.get $depth) (i32.const 1)))
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (call $emitTok (enum.get $Token.punctuation.bracket) (local.get $lhs) (global.get $ptr))
             (br $next)))
         (if (i32.eq (local.get $c) (i32.const "}"))
           (then
             (local.set $decide (i32.const 1))
+            (if (local.get $depth)
+              (then (local.set $depth (i32.sub (local.get $depth) (i32.const 1)))))
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (call $emitTok (enum.get $Token.punctuation.bracket) (local.get $lhs) (global.get $ptr))
             (br $next)))

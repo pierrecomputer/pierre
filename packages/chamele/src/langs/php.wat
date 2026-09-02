@@ -71,18 +71,26 @@
 
   ;; PHP keywords are case-insensitive: fold the first eight bytes once with
   ;; OR 0x20, then dispatch on length so only one length group's compares run.
+  ;; Words longer than eight bytes compare their folded tail separately. The
+  ;; buckets follow the lexer's split: control flow and language constructs
+  ;; such as `echo`/`isset` are keyword.control, words that name what follows
+  ;; (`class`, `extends`, `namespace`) are keyword.declaration so $phpCode
+  ;; can prime the next identifier, and modifiers are plain keyword.
   (func $phpWordHl (param $lhs i32) (param $rhs i32) (result i32)
     (local $n i32)
+    (local $tail i32)
     (local $w i64)
     (local.set $n (i32.sub (local.get $rhs) (local.get $lhs)))
-    ;; every keyword is 2..9 bytes long
-    (if (i32.gt_u (i32.sub (local.get $n) (i32.const 2)) (i32.const 7))
+    ;; every keyword is 2..12 bytes long
+    (if (i32.gt_u (i32.sub (local.get $n) (i32.const 2)) (i32.const 10))
       (then (return (enum.get $Token.variable))))
     (local.set $w (i64.or (i64.load (local.get $lhs)) (i64.const 0x2020202020202020)))
     (if (i32.eq (local.get $n) (i32.const 2))
       (then
         (local.set $w (i64.and (local.get $w) (i64.const 0xffff)))
-        (if (i64.eq (local.get $w) (i64.const "if"))
+        (if (i32.or
+              (i64.eq (local.get $w) (i64.const "if"))
+              (i64.eq (local.get $w) (i64.const "do")))
           (then (return (enum.get $Token.keyword.control))))
         (if (i32.or
               (i64.eq (local.get $w) (i64.const "as"))
@@ -94,7 +102,9 @@
         (local.set $w (i64.and (local.get $w) (i64.const 0xffffff)))
         (if (i32.or
               (i64.eq (local.get $w) (i64.const "new"))
-              (i64.eq (local.get $w) (i64.const "use")))
+              (i32.or
+                (i64.eq (local.get $w) (i64.const "use"))
+                (i64.eq (local.get $w) (i64.const "var"))))
           (then (return (enum.get $Token.keyword))))
         (if (i32.or
               (i64.eq (local.get $w) (i64.const "for"))
@@ -111,12 +121,18 @@
         (if (i64.eq (local.get $w) (i64.const "null"))
           (then (return (enum.get $Token.constant.builtin))))
         (if (i32.or
-              (i64.eq (local.get $w) (i64.const "else"))
               (i32.or
-                (i64.eq (local.get $w) (i64.const "case"))
-                (i64.eq (local.get $w) (i64.const "echo"))))
+                (i64.eq (local.get $w) (i64.const "else"))
+                (i64.eq (local.get $w) (i64.const "case")))
+              (i32.or
+                (i64.eq (local.get $w) (i64.const "echo"))
+                (i64.eq (local.get $w) (i64.const "goto"))))
           (then (return (enum.get $Token.keyword.control))))
-        (if (i64.eq (local.get $w) (i64.const "bool"))
+        (if (i64.eq (local.get $w) (i64.const "enum"))
+          (then (return (enum.get $Token.keyword.declaration))))
+        (if (i32.or
+              (i64.eq (local.get $w) (i64.const "bool"))
+              (i64.eq (local.get $w) (i64.const "void")))
           (then (return (enum.get $Token.type.builtin))))
         (return (enum.get $Token.variable))))
     (if (i32.eq (local.get $n) (i32.const 5))
@@ -124,15 +140,29 @@
         (local.set $w (i64.and (local.get $w) (i64.const 0xffffffffff)))
         (if (i64.eq (local.get $w) (i64.const "false"))
           (then (return (enum.get $Token.boolean))))
-        (if (i64.eq (local.get $w) (i64.const "yield"))
+        (if (i32.or
+              (i64.eq (local.get $w) (i64.const "yield"))
+              (i32.or
+                (i64.eq (local.get $w) (i64.const "final"))
+                (i64.eq (local.get $w) (i64.const "clone"))))
           (then (return (enum.get $Token.keyword))))
         (if (i32.or
               (i32.or
-                (i64.eq (local.get $w) (i64.const "break"))
-                (i64.eq (local.get $w) (i64.const "catch")))
+                (i32.or
+                  (i64.eq (local.get $w) (i64.const "break"))
+                  (i64.eq (local.get $w) (i64.const "catch")))
+                (i32.or
+                  (i64.eq (local.get $w) (i64.const "while"))
+                  (i64.eq (local.get $w) (i64.const "throw"))))
               (i32.or
-                (i64.eq (local.get $w) (i64.const "while"))
-                (i64.eq (local.get $w) (i64.const "throw"))))
+                (i32.or
+                  (i64.eq (local.get $w) (i64.const "match"))
+                  (i64.eq (local.get $w) (i64.const "print")))
+                (i32.or
+                  (i64.eq (local.get $w) (i64.const "isset"))
+                  (i32.or
+                    (i64.eq (local.get $w) (i64.const "empty"))
+                    (i64.eq (local.get $w) (i64.const "unset"))))))
           (then (return (enum.get $Token.keyword.control))))
         (if (i32.or
               (i64.eq (local.get $w) (i64.const "class"))
@@ -141,29 +171,116 @@
                 (i64.eq (local.get $w) (i64.const "trait"))))
           (then (return (enum.get $Token.keyword.declaration))))
         (if (i32.or
-              (i64.eq (local.get $w) (i64.const "array"))
               (i32.or
-                (i64.eq (local.get $w) (i64.const "float"))
-                (i64.eq (local.get $w) (i64.const "mixed"))))
+                (i64.eq (local.get $w) (i64.const "array"))
+                (i64.eq (local.get $w) (i64.const "float")))
+              (i32.or
+                (i64.eq (local.get $w) (i64.const "mixed"))
+                (i64.eq (local.get $w) (i64.const "never"))))
           (then (return (enum.get $Token.type.builtin))))
         (return (enum.get $Token.variable))))
     (if (i32.eq (local.get $n) (i32.const 6))
       (then
         (local.set $w (i64.and (local.get $w) (i64.const 0xffffffffffff)))
-        (if (i64.eq (local.get $w) (i64.const "return"))
+        (if (i32.or
+              (i64.eq (local.get $w) (i64.const "return"))
+              (i32.or
+                (i64.eq (local.get $w) (i64.const "switch"))
+                (i64.eq (local.get $w) (i64.const "elseif"))))
           (then (return (enum.get $Token.keyword.control))))
-        (if (i64.eq (local.get $w) (i64.const "string"))
+        (if (i32.or
+              (i64.eq (local.get $w) (i64.const "public"))
+              (i32.or
+                (i64.eq (local.get $w) (i64.const "static"))
+                (i64.eq (local.get $w) (i64.const "global"))))
+          (then (return (enum.get $Token.keyword))))
+        (if (i32.or
+              (i64.eq (local.get $w) (i64.const "string"))
+              (i64.eq (local.get $w) (i64.const "object")))
           (then (return (enum.get $Token.type.builtin))))
         (return (enum.get $Token.variable))))
-    (if (i32.and (i32.eq (local.get $n) (i32.const 8))
-                 (i64.eq (local.get $w) (i64.const "function")))
-      (then (return (enum.get $Token.keyword.declaration))))
-    (if (i32.and
-          (i32.eq (local.get $n) (i32.const 9))
-          (i32.and
-            (i64.eq (local.get $w) (i64.const "interfac"))
-            (i32.eq (i32.or (i32.load8_u offset=8 (local.get $lhs)) (i32.const 32)) (i32.const "e"))))
-      (then (return (enum.get $Token.keyword.declaration))))
+    (if (i32.eq (local.get $n) (i32.const 7))
+      (then
+        (local.set $w (i64.and (local.get $w) (i64.const 0xffffffffffffff)))
+        (if (i32.or
+              (i64.eq (local.get $w) (i64.const "foreach"))
+              (i32.or
+                (i64.eq (local.get $w) (i64.const "default"))
+                (i64.eq (local.get $w) (i64.const "finally"))))
+          (then (return (enum.get $Token.keyword.control))))
+        (if (i64.eq (local.get $w) (i64.const "extends"))
+          (then (return (enum.get $Token.keyword.declaration))))
+        (if (i32.or
+              (i32.or
+                (i64.eq (local.get $w) (i64.const "private"))
+                (i64.eq (local.get $w) (i64.const "declare")))
+              (i32.or
+                (i64.eq (local.get $w) (i64.const "require"))
+                (i64.eq (local.get $w) (i64.const "include"))))
+          (then (return (enum.get $Token.keyword))))
+        (return (enum.get $Token.variable))))
+    (if (i32.eq (local.get $n) (i32.const 8))
+      (then
+        (if (i64.eq (local.get $w) (i64.const "function"))
+          (then (return (enum.get $Token.keyword.declaration))))
+        (if (i64.eq (local.get $w) (i64.const "continue"))
+          (then (return (enum.get $Token.keyword.control))))
+        (if (i32.or
+              (i64.eq (local.get $w) (i64.const "abstract"))
+              (i64.eq (local.get $w) (i64.const "readonly")))
+          (then (return (enum.get $Token.keyword))))
+        (if (i32.or
+              (i64.eq (local.get $w) (i64.const "callable"))
+              (i64.eq (local.get $w) (i64.const "iterable")))
+          (then (return (enum.get $Token.type.builtin))))
+        (return (enum.get $Token.variable))))
+    ;; longer words: up to four folded tail bytes after the first eight. The
+    ;; load may pass $end into the input slack; the mask discards those bytes.
+    (local.set $tail (i32.or (i32.load offset=8 (local.get $lhs)) (i32.const 0x20202020)))
+    (if (i32.eq (local.get $n) (i32.const 9))
+      (then
+        (local.set $tail (i32.and (local.get $tail) (i32.const 0xff)))
+        (if (i32.or
+              (i32.and
+                (i64.eq (local.get $w) (i64.const "interfac"))
+                (i32.eq (local.get $tail) (i32.const "e")))
+              (i32.and
+                (i64.eq (local.get $w) (i64.const "namespac"))
+                (i32.eq (local.get $tail) (i32.const "e"))))
+          (then (return (enum.get $Token.keyword.declaration))))
+        (if (i32.or
+              (i32.and
+                (i64.eq (local.get $w) (i64.const "protecte"))
+                (i32.eq (local.get $tail) (i32.const "d")))
+              (i32.and
+                (i64.eq (local.get $w) (i64.const "insteado"))
+                (i32.eq (local.get $tail) (i32.const "f"))))
+          (then (return (enum.get $Token.keyword))))
+        (return (enum.get $Token.variable))))
+    (if (i32.eq (local.get $n) (i32.const 10))
+      (then
+        (local.set $tail (i32.and (local.get $tail) (i32.const 0xffff)))
+        (if (i32.and
+              (i64.eq (local.get $w) (i64.const "implemen"))
+              (i32.eq (local.get $tail) (i32.const "ts")))
+          (then (return (enum.get $Token.keyword.declaration))))
+        (if (i32.and
+              (i64.eq (local.get $w) (i64.const "instance"))
+              (i32.eq (local.get $tail) (i32.const "of")))
+          (then (return (enum.get $Token.keyword))))
+        (return (enum.get $Token.variable))))
+    ;; `require_once` / `include_once`: the fold would turn `_` into 0x7f, so
+    ;; the eighth byte is compared unfolded
+    (if (i32.eq (local.get $n) (i32.const 12))
+      (then
+        (if (i32.and
+              (i32.and
+                (i32.or
+                  (i64.eq (i64.and (local.get $w) (i64.const 0xffffffffffffff)) (i64.const "require"))
+                  (i64.eq (i64.and (local.get $w) (i64.const 0xffffffffffffff)) (i64.const "include")))
+                (i32.eq (i32.load8_u offset=7 (local.get $lhs)) (i32.const "_")))
+              (i32.eq (local.get $tail) (i32.const "once")))
+          (then (return (enum.get $Token.keyword))))))
     (enum.get $Token.variable))
 
   ;; $p always sits on a CR, an LF, or $end here (callers land on the result
@@ -221,6 +338,63 @@
         (br_if $cmp (local.get $n))))
     (i32.const 1))
 
+  ;; Emit a heredoc/nowdoc body that starts at $body and ends at the first
+  ;; line whose first non-blank run is the $n-byte label at $delim followed
+  ;; by a non-identifier byte (`EOT;` closes, `EOTX` does not). Returns 1
+  ;; with $ptr after the label. An unterminated body runs to $end and returns
+  ;; 0; in streaming it becomes php-owned stream mode 14 so the next chunk
+  ;; keeps looking for the closer: the label is copied into the 32-byte
+  ;; stream delimiter and its length into $streamA. Longer labels cannot be
+  ;; checkpointed and simply end at the chunk.
+  (func $phpHeredocBody (param $body i32) (param $delim i32) (param $n i32) (result i32)
+    (local $c i32)
+    (local $line i32)
+    (local $start i32)
+    (local.set $line (local.get $body))
+    (block $found
+      (block $eof
+        (loop $scan
+          (br_if $eof (i32.ge_u (local.get $line) (global.get $end)))
+          (local.set $start (call $phpBlanksAt (local.get $line)))
+          (if (call $phpBytesEq (local.get $start) (local.get $delim) (local.get $n))
+            (then
+              (local.set $c (i32.add (local.get $start) (local.get $n)))
+              ;; the label must not be a prefix of a longer word
+              (if (i32.or
+                    (i32.ge_u (local.get $c) (global.get $end))
+                    (i32.eqz (call $lexIsIdentContinue (i32.load8_u (local.get $c)))))
+                (then (br $found)))))
+          (local.set $line (call $phpAfterLine
+            (call $phpLineEndAt (local.get $line))))
+          (br $scan)))
+      ;; unterminated: the body is the rest of the range
+      (call $emitTok (enum.get $Token.string) (local.get $body) (global.get $end))
+      (global.set $ptr (global.get $end))
+      (if (i32.and (global.get $streaming) (i32.le_u (local.get $n) (i32.const 32)))
+        (then
+          (memory.copy
+            (i32.const $mem.streamDelimiter) (local.get $delim) (local.get $n))
+          (global.set $streamMode (i32.const 14))
+          (global.set $streamA (local.get $n))))
+      (return (i32.const 0)))
+    (call $emitTok (enum.get $Token.string) (local.get $body) (local.get $line))
+    (call $emitGap (local.get $line) (local.get $start))
+    (call $emitTok (enum.get $Token.string)
+      (local.get $start) (i32.add (local.get $start) (local.get $n)))
+    (global.set $ptr (i32.add (local.get $start) (local.get $n)))
+    (i32.const 1))
+
+  ;; Resume php-owned stream mode 14: a heredoc/nowdoc body the previous
+  ;; chunk left open. Returns 1 when the body still runs past this chunk, 0
+  ;; with the mode cleared and $ptr after the closing label.
+  (func $phpHeredocResume (result i32)
+    (if (call $phpHeredocBody
+          (global.get $ptr) (i32.const $mem.streamDelimiter) (global.get $streamA))
+      (then
+        (global.set $streamMode (i32.const 0))
+        (return (i32.const 0))))
+    (i32.const 1))
+
   ;; `<<<ID`, `<<<"ID"` and nowdoc `<<<'ID'`. The body runs to the first line
   ;; whose first non-blank run is the identifier, so everything in between -
   ;; `?>` included - stays literal text instead of closing PHP mode.
@@ -229,7 +403,6 @@
     (local $body i32)
     (local $c i32)
     (local $delim i32)
-    (local $line i32)
     (local $lhs i32)
     (local $n i32)
     (local $p i32)
@@ -281,38 +454,13 @@
     (call $emitGap (local.get $p) (local.get $start))
     (local.set $body (call $phpAfterLine (local.get $start)))
     (call $emitGap (local.get $start) (local.get $body))
-    (global.set $ptr (local.get $body))
-    ;; walk whole lines looking for the closing label
-    (local.set $line (local.get $body))
-    (block $found
-      (block $eof
-        (loop $scan
-          (br_if $eof (i32.ge_u (local.get $line) (global.get $end)))
-          (local.set $start (call $phpBlanksAt (local.get $line)))
-          (if (call $phpBytesEq (local.get $start) (local.get $delim) (local.get $n))
-            (then
-              (local.set $c (i32.add (local.get $start) (local.get $n)))
-              ;; the label must not be a prefix of a longer word
-              (if (i32.or
-                    (i32.ge_u (local.get $c) (global.get $end))
-                    (i32.eqz (call $lexIsIdentContinue (i32.load8_u (local.get $c)))))
-                (then (br $found)))))
-          (local.set $line (call $phpAfterLine
-            (call $phpLineEndAt (local.get $line))))
-          (br $scan)))
-      ;; unterminated: the body is the rest of the range
-      (call $emitTok (enum.get $Token.string) (local.get $body) (global.get $end))
-      (global.set $ptr (global.get $end))
-      (return (i32.const 1)))
-    (call $emitTok (enum.get $Token.string) (local.get $body) (local.get $line))
-    (call $emitGap (local.get $line) (local.get $start))
-    (call $emitTok (enum.get $Token.string)
-      (local.get $start) (i32.add (local.get $start) (local.get $n)))
-    (global.set $ptr (i32.add (local.get $start) (local.get $n)))
+    (drop (call $phpHeredocBody (local.get $body) (local.get $delim) (local.get $n)))
     (i32.const 1))
 
-  ;; PHP code, stopping before a live `?>` delimiter.
-  (func $phpCode
+  ;; PHP code, stopping before a live `?>` delimiter. $resume is 1 when the
+  ;; previous chunk ended inside code: the declaration and member lookahead
+  ;; it checkpointed continues into this chunk.
+  (func $phpCode (param $resume i32)
     (local $c i32)
     (local $decl i32) ;; 1 function, 2 class-like
     (local $hl i32)
@@ -320,7 +468,7 @@
     (local $member i32)
     (local $next i32)
     (local $p i32)
-    (if (i32.and (global.get $streaming) (global.get $phpStreamingCode))
+    (if (local.get $resume)
       (then
         (local.set $decl (global.get $phpStreamDecl))
         (local.set $member (global.get $phpStreamMember))))
@@ -499,11 +647,21 @@
         (global.set $phpStreamDecl (local.get $decl))
         (global.set $phpStreamMember (local.get $member)))))
 
+  ;; Resume the php stream state the previous chunk left: first a heredoc
+  ;; body (mode 14), then - when the chunk ended inside PHP code - the code
+  ;; itself up to `?>`. Returns 1 when the whole chunk was consumed; on 0
+  ;; $hlPhp continues from $ptr, in markup mode after a `?>`.
   (func $phpStreamResume (result i32)
+    (local $code i32)
     (local $lhs i32)
-    (if (i32.eqz (global.get $phpStreamingCode))
-      (then (return (i32.const 0))))
-    (call $phpCode)
+    (local.set $code (i32.eq (global.get $phpStreamingCode) (i32.const 1)))
+    (if (i32.eq (global.get $streamMode) (i32.const 14))
+      (then
+        (if (call $phpHeredocResume) (then (return (i32.const 1))))
+        ;; a heredoc only opens inside code, so its closer continues code
+        (local.set $code (i32.const 1))))
+    (if (i32.eqz (local.get $code)) (then (return (i32.const 0))))
+    (call $phpCode (i32.const 1))
     (if (i32.and
           (i32.lt_u (i32.add (global.get $ptr) (i32.const 1)) (global.get $end))
           (i32.eq (i32.load16_u (global.get $ptr)) (i32.const "?>")))
@@ -511,46 +669,78 @@
         (local.set $lhs (global.get $ptr))
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))
         (call $emitTok (enum.get $Token.preproc) (local.get $lhs) (global.get $ptr))
-        (global.set $phpStreamingCode (i32.const 0))
+        (global.set $phpStreamingCode (i32.const 2))
         (return (i32.const 0))))
     (i32.const 1))
 
+  ;; Does the visible text at $p start markup - a tag, a comment or doctype,
+  ;; or a close tag - rather than a bare PHP snippet?
+  (func $phpLooksLikeMarkup (param $p i32) (result i32)
+    (local $c i32)
+    (if (i32.ge_u (i32.add (local.get $p) (i32.const 1)) (global.get $end))
+      (then (return (i32.const 0))))
+    (if (i32.ne (i32.load8_u (local.get $p)) (i32.const "<"))
+      (then (return (i32.const 0))))
+    (local.set $c (i32.load8_u offset=1 (local.get $p)))
+    (i32.or
+      (call $lexIsIdentStart (local.get $c))
+      (i32.or
+        (i32.eq (local.get $c) (i32.const "!"))
+        (i32.eq (local.get $c) (i32.const "/")))))
+
+  ;; Skip every ASCII whitespace byte from $p, line breaks included, so the
+  ;; snippet-versus-markup decision reads the first visible byte wherever
+  ;; its line is.
+  (func $phpSkipWhitespaceAt (param $p i32) (result i32)
+    (block $done
+      (loop $l
+        (br_if $done (i32.ge_u (local.get $p) (global.get $end)))
+        (br_if $done (i32.eqz (call $lexIsSpace (i32.load8_u (local.get $p)))))
+        (local.set $p (i32.add (local.get $p) (i32.const 1)))
+        (br $l)))
+    (local.get $p))
+
+  ;; A PHP file is markup with `<?php ... ?>` islands; input without an
+  ;; opener is a bare code snippet unless its first visible byte starts
+  ;; markup. Streaming decides that on the first non-blank chunk and keeps
+  ;; the answer in $phpStreamingCode - 1 code, 2 markup, 0 undecided - so
+  ;; later chunks without an opener stay markup after a `?>`, and blank
+  ;; chunks decide nothing, keeping leading empty lines equal to a
+  ;; whole-buffer run.
   (func $hlPhp
     (local $open i32)
     (local $p i32)
     (local $saveEnd i32)
+    (local $snippet i32)
     (call $lexEmitLeadingContinuation)
+    (local.set $snippet (i32.const 0))
     (block $out
       (local.set $open (call $phpFindOpen (global.get $ptr)))
       (if (i32.eq (local.get $open) (global.get $end))
         (then
-          (local.set $p (call $lexSkipSpaceAt (global.get $ptr)))
           (if (i32.and
-                (i32.lt_u (i32.add (local.get $p) (i32.const 1)) (global.get $end))
-                (i32.and
-                  (i32.eq (i32.load8_u (local.get $p)) (i32.const "<"))
-                  (i32.or
-                    (call $lexIsIdentStart (i32.load8_u offset=1 (local.get $p)))
-                    (i32.or
-                      (i32.eq (i32.load8_u offset=1 (local.get $p)) (i32.const "!"))
-                      (i32.eq (i32.load8_u offset=1 (local.get $p)) (i32.const "/"))))))
-            (then (call $hlHtml))
-            (else
-              (global.set $phpStreamingCode (i32.const 0))
-              (call $phpCode)
-              (if (i32.and
-                    (global.get $streaming)
-                    (i32.eq (global.get $ptr) (global.get $end)))
-                (then (global.set $phpStreamingCode (i32.const 1))))
-              (if (i32.lt_u (global.get $ptr) (global.get $end))
-                (then
-                  (local.set $open (global.get $ptr))
-                  (global.set $ptr (global.get $end))
-                  (call $emitTok (enum.get $Token.none) (local.get $open) (global.get $ptr))))))
-          (br $out)))
+                (global.get $streaming)
+                (i32.eq (global.get $phpStreamingCode) (i32.const 2)))
+            (then
+              (call $hlHtml)
+              (br $out)))
+          (local.set $p (call $phpSkipWhitespaceAt (global.get $ptr)))
+          (if (i32.ge_u (local.get $p) (global.get $end))
+            (then
+              (call $emitGap (global.get $ptr) (global.get $end))
+              (global.set $ptr (global.get $end))
+              (br $out)))
+          (if (call $phpLooksLikeMarkup (local.get $p))
+            (then
+              (global.set $phpStreamingCode (i32.const 2))
+              (call $hlHtml)
+              (br $out)))
+          (local.set $snippet (i32.const 1))))
       ;; the html prefix runs once here; each loop iteration ends by lexing
       ;; the html between `?>` and the next opener itself
-      (if (i32.lt_u (global.get $ptr) (local.get $open))
+      (if (i32.and
+            (i32.eqz (local.get $snippet))
+            (i32.lt_u (global.get $ptr) (local.get $open)))
         (then
           (local.set $saveEnd (global.get $end))
           (global.set $end (local.get $open))
@@ -559,25 +749,27 @@
       (block $done
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
         (loop $part
-          (local.set $open (global.get $ptr))
-          (global.set $ptr (i32.add (global.get $ptr)
-            (select (i32.const 3) (i32.const 5)
-              (i32.eq (i32.load8_u offset=2 (global.get $ptr)) (i32.const "=")))))
-          (call $emitTok (enum.get $Token.preproc) (local.get $open) (global.get $ptr))
-          (global.set $phpStreamingCode (i32.const 0))
-          (call $phpCode)
+          ;; a snippet has no opener before its code
+          (if (i32.eqz (local.get $snippet))
+            (then
+              (local.set $open (global.get $ptr))
+              (global.set $ptr (i32.add (global.get $ptr)
+                (select (i32.const 3) (i32.const 5)
+                  (i32.eq (i32.load8_u offset=2 (global.get $ptr)) (i32.const "=")))))
+              (call $emitTok (enum.get $Token.preproc) (local.get $open) (global.get $ptr))))
+          (local.set $snippet (i32.const 0))
+          (call $phpCode (i32.const 0))
           (if (i32.and
                 (i32.lt_u (i32.add (global.get $ptr) (i32.const 1)) (global.get $end))
                 (i32.eq (i32.load16_u (global.get $ptr)) (i32.const "?>")))
             (then
               (local.set $open (global.get $ptr))
               (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))
-              (call $emitTok (enum.get $Token.preproc) (local.get $open) (global.get $ptr)))
+              (call $emitTok (enum.get $Token.preproc) (local.get $open) (global.get $ptr))
+              (global.set $phpStreamingCode (i32.const 2)))
             (else
-              (if (i32.and
-                    (global.get $streaming)
-                    (i32.eq (global.get $ptr) (global.get $end)))
-                (then (global.set $phpStreamingCode (i32.const 1))))
+              ;; code only stops at `?>` or $end: the next chunk resumes code
+              (global.set $phpStreamingCode (i32.const 1))
               (br $done)))
           (local.set $open (call $phpFindOpen (global.get $ptr)))
           (if (i32.lt_u (global.get $ptr) (local.get $open))

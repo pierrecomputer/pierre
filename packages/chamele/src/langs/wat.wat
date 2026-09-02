@@ -74,6 +74,29 @@
       (local.get $depth) (i32.const "(;") (i32.const ";)")
       (enum.get $Token.comment)))
 
+  ;; Advance $ptr over a wat name or bare word: any byte up to whitespace, a
+  ;; quote, a paren, or `;`. Names are mostly identifier bytes - dotted
+  ;; instructions also pass `.` as $extra - so a SIMD identifier run covers
+  ;; each token in one step, and only the rarer punctuation inside a name
+  ;; (`$a-b`, `!`, `+`) takes the per-byte path before restarting the run.
+  (func $watScanName (param $extra i32)
+    (local $c i32)
+    (block $done
+      (loop $l
+        (call $scanIdentRun (local.get $extra))
+        (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
+        (local.set $c (i32.load8_u (global.get $ptr)))
+        (br_if $done (i32.or
+          (call $lexIsSpace (local.get $c))
+          (i32.or
+            (i32.eq (local.get $c) (i32.const 34))
+            (i32.or
+              (i32.or (i32.eq (local.get $c) (i32.const "("))
+                      (i32.eq (local.get $c) (i32.const ")")))
+              (i32.eq (local.get $c) (i32.const ";"))))))
+        (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+        (br $l))))
+
   (func $hlWat
     (local $c i32)
     (local $lhs i32)
@@ -107,19 +130,7 @@
         (if (i32.eq (local.get $c) (i32.const "$"))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-            (block $nameDone
-              (loop $name
-                (br_if $nameDone (i32.ge_u (global.get $ptr) (global.get $end)))
-                (local.set $c (i32.load8_u (global.get $ptr)))
-                (br_if $nameDone (i32.or
-                  (call $lexIsSpace (local.get $c))
-                  (i32.or
-                    (i32.or (i32.eq (local.get $c) (i32.const "("))
-                            (i32.eq (local.get $c) (i32.const ")")))
-                    (i32.or (i32.eq (local.get $c) (i32.const ";"))
-                            (i32.eq (local.get $c) (i32.const 34))))))
-                (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-                (br $name)))
+            (call $watScanName (i32.const 0))
             (call $emitTok (enum.get $Token.variable) (local.get $lhs) (global.get $ptr))
             (br $token)))
         (if (i32.or
@@ -144,20 +155,7 @@
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (call $emitTok (enum.get $Token.punctuation.delimiter) (local.get $lhs) (global.get $ptr))
             (br $token)))
-        (block $wordDone
-          (loop $word
-            (br_if $wordDone (i32.ge_u (global.get $ptr) (global.get $end)))
-            (local.set $c (i32.load8_u (global.get $ptr)))
-            (br_if $wordDone (i32.or
-              (call $lexIsSpace (local.get $c))
-              (i32.or
-                (i32.eq (local.get $c) (i32.const 34))
-                (i32.or
-                  (i32.or (i32.eq (local.get $c) (i32.const "("))
-                          (i32.eq (local.get $c) (i32.const ")")))
-                  (i32.eq (local.get $c) (i32.const ";"))))))
-            (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-            (br $word)))
+        (call $watScanName (i32.const "."))
         ;; the word run always advances: whitespace, quotes, parens and `;` are
         ;; the only stop bytes, and each is consumed by a branch above
         (call $emitTok (call $watWordHl (local.get $lhs) (global.get $ptr))

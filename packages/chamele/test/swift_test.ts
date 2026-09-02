@@ -1,6 +1,10 @@
 import assert from 'node:assert';
 import t from 'node:test';
 
+import type { Lang, ThemedToken } from '../lib/index';
+import { codeToTokens, init, TokenizeStream } from '../lib/index';
+import { transformWat, wat2wasm } from '../scripts/build';
+import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import {
   checkInvariants,
   colorOf,
@@ -12,7 +16,32 @@ import {
 } from './util';
 
 let swift: TestLang;
-t.before(() => (swift = loadLang('swift', '$hlSwift')));
+t.before(() => {
+  swift = loadLang('swift', '$hlSwift');
+  // the streaming tests below need the full module behind codeToTokens
+  const url = new URL('../src/chamele.wat', import.meta.url);
+  const { code } = transformWat(url);
+  init(new WebAssembly.Module(wat2wasm(url.pathname, code)));
+});
+
+/**
+ * Tokens for `code` from the whole buffer and from a TokenizeStream fed one
+ * line per push - the chunk shape the LiveTokenizer uses - so a test can
+ * assert that a construct crossing line boundaries resumes correctly.
+ */
+function wholeAndLineFed(
+  lang: Lang,
+  code: string
+): [ThemedToken[][], ThemedToken[][]] {
+  const whole = codeToTokens(code, { lang, theme: pierreDark }).tokens;
+  const stream = new TokenizeStream({ lang, theme: pierreDark });
+  const streamed: ThemedToken[][] = [];
+  for (const line of code.split(/(?<=\n)/)) {
+    streamed.push(...stream.pushCode(line));
+  }
+  streamed.push(...stream.end());
+  return [whole, streamed];
+}
 
 void t.test('swift: declarations, control flow, types, and functions', () => {
   const src = `import Foundation
@@ -185,4 +214,92 @@ void t.test('swift: parameters match Zed variable.parameter', () => {
   for (const name of ['alpha', 'beta']) {
     assert.equal(word(html, name), VARIABLE, name);
   }
+});
+
+void t.test('swift: modifier, control, and declaration keywords', () => {
+  const html = checkInvariants(
+    swift.hl,
+    'static private public internal fileprivate open override final ' +
+      'mutating throws rethrows some any lazy weak unowned inout where ' +
+      'do default defer deinit subscript while'
+  );
+  const KEYWORD = themeColor('keyword');
+  for (const w of ['static', 'fileprivate', 'mutating', 'rethrows', 'where']) {
+    assert.equal(colorOf(html, w), KEYWORD, w);
+  }
+  for (const w of ['do', 'default', 'defer', 'while']) {
+    assert.equal(colorOf(html, w), themeColor('keyword.control'), w);
+  }
+  for (const w of ['deinit', 'subscript']) {
+    assert.equal(colorOf(html, w), themeColor('keyword.declaration'), w);
+  }
+});
+
+void t.test('swift: an operator run stops at a comment opener', () => {
+  const html = checkInvariants(swift.hl, 'i++//c\nj--/*d*/ k');
+  const spans = spansOf(html);
+  assert.equal(
+    spans.find((s) => s.text === '++')?.color,
+    themeColor('operator')
+  );
+  assert.equal(colorOf(html, '//c'), themeColor('comment'));
+  assert.equal(
+    spans.find((s) => s.text === '--')?.color,
+    themeColor('operator')
+  );
+  assert.equal(colorOf(html, '/*d*/'), themeColor('comment'));
+  assert.equal(colorOf(html, 'k'), themeColor('variable'));
+});
+
+void t.test('swift: hash-delimited bodies close on the full delimiter', () => {
+  const html = checkInvariants(swift.hl, '#"a "b" c"# x ##"""d"""#e"""## y');
+  assert.equal(colorOf(html, '#"a "b" c"#'), themeColor('string'));
+  assert.equal(colorOf(html, '##"""d"""#e"""##'), themeColor('string'));
+  assert.equal(colorOf(html, 'x'), themeColor('variable'));
+  assert.equal(colorOf(html, 'y'), themeColor('variable'));
+});
+
+void t.test('swift: hash strings resume line-fed for any hash count', () => {
+  const probe = 'func main() { let x: Int = 1 }\n';
+  const before = codeToTokens(probe, { lang: 'swift', theme: pierreDark });
+  for (const hashes of [0, 1, 29, 30, 31, 40, 300, 5000]) {
+    const h = '#'.repeat(hashes);
+    for (const quotes of hashes === 0 ? ['"""'] : ['"', '"""']) {
+      // the body holds a near miss: one hash short, or `""` for `"""`
+      const miss = hashes === 0 ? quotes.slice(1) : quotes + h.slice(1);
+      const code =
+        `let s = ${h}${quotes}one\n${miss}two${quotes}${h}\n` + 'let x = 1\n';
+      const [whole, streamed] = wholeAndLineFed('swift', code);
+      assert.deepEqual(streamed, whole, `${hashes} hashes ${quotes}`);
+      assert.equal(whole[1][0].color, themeColor('string'));
+      assert.equal(whole[2][0].color, themeColor('keyword.declaration'));
+    }
+  }
+  // long hash runs never spill past the stream delimiter into lexer state
+  assert.deepEqual(
+    codeToTokens(probe, { lang: 'swift', theme: pierreDark }),
+    before
+  );
+});
+
+void t.test('swift: escaped line breaks continue a string line-fed', () => {
+  for (const nl of ['\n', '\r\n']) {
+    const code = `let s = "abc\\${nl}def \\(x) \\n"${nl}let z = 1${nl}`;
+    const [whole, streamed] = wholeAndLineFed('swift', code);
+    assert.deepEqual(streamed, whole, JSON.stringify(nl));
+    // the continuation is still string, with its interpolation lexed
+    const line = whole[1];
+    assert.equal(line[0].content, 'def ');
+    assert.equal(line[0].color, themeColor('string'));
+    assert.equal(line[1].color, themeColor('punctuation.special'));
+    assert.equal(whole[2][0].color, themeColor('keyword.declaration'));
+  }
+});
+
+void t.test('swift: nested comments at even depth match line-fed', () => {
+  const code = '/* /* a\nb\n*/ */\nc\n';
+  const [whole, streamed] = wholeAndLineFed('swift', code);
+  assert.deepEqual(streamed, whole);
+  assert.equal(whole[2][0].color, themeColor('comment'));
+  assert.equal(whole[3][0].color, themeColor('variable'));
 });

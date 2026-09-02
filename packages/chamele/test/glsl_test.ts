@@ -1,6 +1,10 @@
 import assert from 'node:assert';
 import t from 'node:test';
 
+import type { ThemedToken } from '../lib/index';
+import { codeToTokens, init, TokenizeStream } from '../lib/index';
+import { transformWat, wat2wasm } from '../scripts/build';
+import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import {
   checkInvariants,
   colorOf,
@@ -14,7 +18,28 @@ let glsl: TestLang;
 
 t.before(() => {
   glsl = loadLang('glsl', '$hlGlsl');
+  const url = new URL('../src/chamele.wat', import.meta.url);
+  init(new WebAssembly.Module(wat2wasm(url.pathname, transformWat(url).code)));
 });
+
+/**
+ * Tokens from the full module for a whole-buffer run and for a stream fed
+ * one line per chunk, the shape the live tokenizer uses; both must agree.
+ */
+function lineFed(code: string): {
+  direct: ThemedToken[][];
+  streamed: ThemedToken[][];
+} {
+  const options = { lang: 'glsl' as const, theme: pierreDark };
+  const direct = codeToTokens(code, options).tokens;
+  const stream = new TokenizeStream(options);
+  const streamed: ThemedToken[][] = [];
+  for (const line of code.split(/(?<=\n)/)) {
+    streamed.push(...stream.pushCode(line));
+  }
+  streamed.push(...stream.end());
+  return { direct, streamed };
+}
 
 const COMMENT = themeColor('comment');
 const PREPROC = themeColor('preproc');
@@ -220,4 +245,22 @@ void t.test('glsl: long comments and strings exercise long-run paths', () => {
   const html = checkInvariants(glsl.hl, source);
   assert.equal(colorOf(html, 'comment comment'), COMMENT);
   assert.equal(colorOf(html, 'shadershader'), STRING);
+});
+
+void t.test('glsl: a lone capital letter is a type, not a constant', () => {
+  const html = checkInvariants(glsl.hl, 'T max(T a, T b);');
+  assert.equal(exactColor(html, 'T'), themeColor('type'));
+  assert.equal(exactColor(html, 'max'), FUNCTION);
+});
+
+void t.test('glsl: escaped line breaks inside literals resume line-fed', () => {
+  const html = checkInvariants(glsl.hl, 's = "abc\\\r\ndef";');
+  assert.equal(colorOf(html, 'def"'), STRING);
+  for (const code of [
+    's = "abc\\\ndef";\nint z = 1;\n',
+    's = "abc\\\r\ndef";\r\nint z = 1;\r\n',
+  ]) {
+    const { direct, streamed } = lineFed(code);
+    assert.deepEqual(streamed, direct, JSON.stringify(code));
+  }
 });

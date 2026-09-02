@@ -90,7 +90,8 @@ before preprocessing, so editor warnings are expected.
   [16000:26752)   keyword-table region (see src/memory.wat)
   [26752:31570)   span-open fragment cache (HTML modes)
   [31584:31712)   live free-list heads
-  [31712:65536)   free
+  [31744:34304)   zig keyword table
+  [34304:65536)   free
 [] pages 2..N     (text buffer)
   [65536:EOF)     input, NUL sentinel, then at least 16 bytes of slack
   [(EOF+47)&~15:) output HTML or token records; $ensureCap grows memory
@@ -230,11 +231,13 @@ then `$streamChunk` runs the ordinary mode-3 pipeline. Output matches
 `TokenizeStream` fed one line per chunk.
 
 Before and after each line the driver saves streaming state: cross-chunk
-globals, the 32-byte stream delimiter, the used lexer checkpoint region, and the
-live prefixes of the shared/bracket/jsx stacks. Blobs are interned (FNV-1a 64,
-then exact bytes) into refcounted ids. Equal ids mean convergence. Trailing
-zeros are trimmed. If outgoing bytes match the incoming blob, the same id is
-reused without hashing.
+globals, the 32-byte stream delimiter, the live prefixes of the
+shared/bracket/jsx stacks, and the used lexer checkpoint region. Blobs are
+interned (FNV-1a 64, then exact bytes) into refcounted ids. Equal ids mean
+convergence. Trailing zeros are trimmed; the checkpoint region comes last so the
+trim drops it entirely for lexers that keep their state in globals and stacks
+(the ECMAScript family). If outgoing bytes match the incoming blob, the same id
+is reused without hashing.
 
 The line table is a gap buffer of 32-byte descriptors: text pointer/length,
 UTF-16 length, token block, outgoing state id, terminator and format flags.

@@ -103,13 +103,36 @@
     (call $xmlSection
       (local.get $lhs) (i32.const 4) (i32.const 1) (enum.get $Token.comment)))
 
-  ;; `<!...>` / `<?...>` declaration: advance past `>` (or to $end)
-  (func $htmlDecl
+  ;; `<!...>` declaration ($pi 0) or `<?...?>` processing instruction ($pi 1)
+  ;; at $ptr: emit it as $hl, advancing past the close (or to $end). A token
+  ;; still open at a real chunk end is checkpointed as a fixed-delimiter mode
+  ;; so the next chunk keeps its color; a bounded sub-range end is not a
+  ;; chunk end and leaves no mode behind.
+  (func $htmlDecl (param $lhs i32) (param $pi i32) (param $hl i32)
     (local $p i32)
-    (local.set $p (call $lexFindByte (global.get $ptr) (i32.const ">")))
-    (global.set $ptr (select
-      (i32.add (local.get $p) (i32.const 1)) (global.get $end)
-      (i32.lt_u (local.get $p) (global.get $end)))))
+    (local.set $p (i32.add (global.get $ptr) (i32.const 2)))
+    (block $found
+      (loop $l
+        (local.set $p (call $lexFindByte (local.get $p) (i32.const ">")))
+        (br_if $found (i32.ge_u (local.get $p) (global.get $end)))
+        (br_if $found (i32.or
+          (i32.eqz (local.get $pi))
+          (i32.eq (i32.load8_u (i32.sub (local.get $p) (i32.const 1))) (i32.const "?"))))
+        (local.set $p (i32.add (local.get $p) (i32.const 1)))
+        (br $l)))
+    (if (i32.lt_u (local.get $p) (global.get $end))
+      (then
+        (global.set $ptr (i32.add (local.get $p) (i32.const 1)))
+        (call $emitTok (local.get $hl) (local.get $lhs) (global.get $ptr)))
+      (else
+        (global.set $ptr (global.get $end))
+        (call $emitTok (local.get $hl) (local.get $lhs) (global.get $ptr))
+        (if (i32.eq (global.get $ptr) (global.get $eof))
+          (then
+            (call $streamSetFixed32
+              (select (i32.const "?>") (i32.const ">") (local.get $pi))
+              (i32.add (local.get $pi) (i32.const 1))
+              (local.get $hl)))))))
 
   ;; tag / attribute name: `<` excluded so a stray tag start ends the run
   (func $htmlNameEnd (param $q i32) (result i32)
@@ -148,28 +171,52 @@
         (br $l)))
     (local.get $q))
 
-  ;; quoted attribute value starting at the quote
-  (func $htmlQuoted (param $quote i32)
-    (local $lhs i32)
+  ;; the rest of a quoted attribute value: scan from $ptr to the closing
+  ;; $quote and emit [$lhs, after the quote) as one string. Returns $quote
+  ;; when the value is still open at $end (so a chunk end can checkpoint it),
+  ;; 0 once it closed. $lhs is the opening quote, or the chunk start when a
+  ;; value left open by the previous chunk resumes.
+  (func $htmlQuotedBody (param $quote i32) (param $lhs i32) (result i32)
     (local $p i32)
-    (local.set $lhs (global.get $ptr))
-    (local.set $p (call $lexFindByte
-      (i32.add (global.get $ptr) (i32.const 1)) (local.get $quote)))
-    (global.set $ptr (select
-      (i32.add (local.get $p) (i32.const 1)) (global.get $end)
-      (i32.lt_u (local.get $p) (global.get $end))))
-    (call $emitTok (enum.get $Token.string) (local.get $lhs) (global.get $ptr)))
+    (local.set $p (call $lexFindByte (global.get $ptr) (local.get $quote)))
+    (if (i32.lt_u (local.get $p) (global.get $end))
+      (then
+        (global.set $ptr (i32.add (local.get $p) (i32.const 1)))
+        (local.set $quote (i32.const 0)))
+      (else (global.set $ptr (global.get $end))))
+    (call $emitTok (enum.get $Token.string) (local.get $lhs) (global.get $ptr))
+    (local.get $quote))
 
-  ;; attributes after a tag name until `>` / `/>`; returns 1 when the tag was
-  ;; closed by a plain `>`, 2 for `/>` (0 for a stray `<` or input end)
-  (func $htmlAttrs (result i32)
+  ;; Attributes after a tag name until `>` / `/>`. Returns 1 when the tag was
+  ;; closed by a plain `>`, 2 for `/>`, 0 for a stray `<` (the caller
+  ;; reparses it in text mode) or input end. The loop is re-enterable so a
+  ;; tag cut by a chunk end resumes where it stopped: $afterEq is set when
+  ;; the value after `=` is still expected, $quote is the open quote of an
+  ;; unterminated value. At a real chunk end (never a bounded sub-range end)
+  ;; the open tag becomes stream region $region with $streamA = $kind
+  ;; (1 script, 2 style: a raw-text body must follow the tag), $streamB =
+  ;; after-`=` flag, $streamC = open quote; the owning lexer's resume hook
+  ;; calls back into this loop with them.
+  (func $htmlAttrs
+    (param $afterEq i32) (param $quote i32) (param $kind i32) (param $region i32)
+    (result i32)
     (local $c i32)
     (local $lhs i32)
-    (local $afterEq i32)
+    (if (local.get $quote)
+      (then (local.set $quote (call $htmlQuotedBody (local.get $quote) (global.get $ptr)))))
     (block $done (result i32)
       (loop $next
         (if (i32.ge_u (global.get $ptr) (global.get $end))
-          (then (br $done (i32.const 0))))
+          (then
+            (if (i32.and
+                  (global.get $streaming)
+                  (i32.eq (global.get $ptr) (global.get $eof)))
+              (then
+                (call $streamSetRegion (local.get $region))
+                (global.set $streamA (local.get $kind))
+                (global.set $streamB (local.get $afterEq))
+                (global.set $streamC (local.get $quote))))
+            (br $done (i32.const 0))))
         (local.set $c (i32.load8_u (global.get $ptr)))
         (local.set $lhs (global.get $ptr))
         ;; whitespace gap
@@ -191,7 +238,8 @@
             (local.set $afterEq (i32.const 0))
             (if (i32.or (i32.eq (local.get $c) (i32.const 34)) (i32.eq (local.get $c) (i32.const 39)))
               (then
-                (call $htmlQuoted (local.get $c))
+                (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+                (local.set $quote (call $htmlQuotedBody (local.get $c) (local.get $lhs)))
                 (br $next)))
             (if (i32.eq (local.get $c) (i32.const "<"))
               (then (br $done (i32.const 0)))) ;; stray tag start: reparse in TEXT mode
@@ -218,7 +266,8 @@
             (br $next)))
         (if (i32.or (i32.eq (local.get $c) (i32.const 34)) (i32.eq (local.get $c) (i32.const 39)))
           (then
-            (call $htmlQuoted (local.get $c))
+            (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+            (local.set $quote (call $htmlQuotedBody (local.get $c) (local.get $lhs)))
             (br $next)))
         (if (i32.eq (local.get $c) (i32.const "<"))
           (then (br $done (i32.const 0)))) ;; stray tag start: reparse in TEXT mode
@@ -274,13 +323,38 @@
     (if (local.get $continued)
       (then (global.set $streamRegionStarted (i32.const 1)))))
 
-  (func $hlHtml
-    (local $c i32)
+  ;; `<name ...>` start tag at $ptr (a name byte follows the `<`). A raw-text
+  ;; body follows a completed script/style tag - `/>` counts too, real html
+  ;; ignores the slash on script/style, so does the browser. Leaves $ptr
+  ;; after the tag, or on the `<` of the close tag for raw-text elements.
+  ;; $region is the stream region an unfinished tag is checkpointed as.
+  (func $htmlTag (param $region i32)
     (local $lhs i32)
     (local $q i32)
     (local $kind i32)
+    (local.set $lhs (global.get $ptr))
+    (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+    (call $emitTok (enum.get $Token.punctuation.bracket.html) (local.get $lhs) (global.get $ptr))
+    (local.set $q (call $htmlNameEnd (global.get $ptr)))
+    (local.set $kind (call $rawTextKind (global.get $ptr) (local.get $q)))
+    (call $emitTok (enum.get $Token.tag) (global.get $ptr) (local.get $q))
+    (global.set $ptr (local.get $q))
+    (if (i32.and
+          (i32.ne
+            (call $htmlAttrs (i32.const 0) (i32.const 0) (local.get $kind) (local.get $region))
+            (i32.const 0))
+          (i32.ne (local.get $kind) (i32.const 0)))
+      (then (call $htmlRawText (local.get $kind)))))
+
+  ;; The html main loop over [$ptr, $end). Frameworks that lex html between
+  ;; their own constructs call it with their own $region (svelte 12, astro
+  ;; 13) so a start tag cut by a chunk end is resumed by their hook, which
+  ;; knows where the html range must stop; the html lexer itself uses 9.
+  (func $htmlLex (param $region i32)
+    (local $c i32)
+    (local $lhs i32)
+    (local $q i32)
     (local $textFrom i32)
-    (call $lexEmitLeadingContinuation)
     (block $done
       (loop $next
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
@@ -306,7 +380,7 @@
         (local.set $c (select (i32.load8_u offset=1 (global.get $ptr)) (i32.const 0)
           (i32.lt_u (i32.add (global.get $ptr) (i32.const 1)) (global.get $end))))
 
-        ;; `<!--` / `<!...>` / `<?...>`
+        ;; `<!--` / `<!...>` / `<?...?>`
         (if (i32.eq (local.get $c) (i32.const "!"))
           (then
             (if (i32.and
@@ -314,13 +388,11 @@
                   (i32.eq (i32.load (global.get $ptr)) (i32.const "<!--")))
               (then (call $htmlComment (local.get $lhs)))
               (else
-                (call $htmlDecl)
-                (call $emitTok (enum.get $Token.tag.doctype) (local.get $lhs) (global.get $ptr))))
+                (call $htmlDecl (local.get $lhs) (i32.const 0) (enum.get $Token.tag.doctype))))
             (br $next)))
         (if (i32.eq (local.get $c) (i32.const "?"))
           (then
-            (call $htmlDecl)
-            (call $emitTok (enum.get $Token.comment) (local.get $lhs) (global.get $ptr))
+            (call $htmlDecl (local.get $lhs) (i32.const 1) (enum.get $Token.comment))
             (br $next)))
 
         ;; `</name ... >`
@@ -331,7 +403,7 @@
             (local.set $q (call $htmlNameEnd (global.get $ptr)))
             (call $emitTok (enum.get $Token.tag) (global.get $ptr) (local.get $q))
             (global.set $ptr (local.get $q))
-            (drop (call $htmlAttrs))
+            (drop (call $htmlAttrs (i32.const 0) (i32.const 0) (i32.const 0) (local.get $region)))
             (br $next)))
 
         ;; `<name`: an open tag only when a name really starts here
@@ -339,21 +411,55 @@
               (i32.le_u (i32.sub (i32.or (local.get $c) (i32.const 32)) (i32.const "a")) (i32.const 25))
               (i32.or (i32.eq (local.get $c) (i32.const "_")) (i32.ge_u (local.get $c) (i32.const 128))))
           (then
-            (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-            (call $emitTok (enum.get $Token.punctuation.bracket.html) (local.get $lhs) (global.get $ptr))
-            (local.set $q (call $htmlNameEnd (global.get $ptr)))
-            (local.set $kind (call $rawTextKind (global.get $ptr) (local.get $q)))
-            (call $emitTok (enum.get $Token.tag) (global.get $ptr) (local.get $q))
-            (global.set $ptr (local.get $q))
-            ;; raw-text bodies after a completed open tag; `/>` counts too -
-            ;; real html ignores the slash on script/style, so does the browser
-            (if (i32.and (i32.ne (call $htmlAttrs) (i32.const 0))
-                         (i32.ne (local.get $kind) (i32.const 0)))
-              (then (call $htmlRawText (local.get $kind))))
+            (call $htmlTag (local.get $region))
             (br $next)))
 
         ;; a lone `<`: plain text
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
         (call $emitTok (enum.get $Token.none) (local.get $lhs) (global.get $ptr))
         (br $next))))
+
+  (func $hlHtml
+    (call $lexEmitLeadingContinuation)
+    (call $htmlLex (i32.const 9)))
+
+  ;; Finish a resumed start tag from its attribute-loop status. Status 0 with
+  ;; the cursor at the chunk end means the tag is still open (the loop
+  ;; checkpointed it again): report the chunk as consumed. Status 0 elsewhere
+  ;; abandons the tag at a stray `<` or at the owner's range bound. A closed
+  ;; script/style tag starts its raw-text body, which may itself continue as
+  ;; region 1/2. The resume hooks run at stream depth 1 so embedded lexers
+  ;; behave as they do under the html root; this resets the depth.
+  (func $htmlTagResumeEnd (param $status i32) (param $kind i32) (result i32)
+    (if (i32.and
+          (i32.eqz (local.get $status))
+          (i32.eq (global.get $ptr) (global.get $eof)))
+      (then
+        (global.set $streamDepth (i32.const 0))
+        (return (i32.const 1))))
+    (global.set $streamRegionKind (i32.const 0))
+    (global.set $streamMode (i32.const 0))
+    (if (i32.and
+          (i32.ne (local.get $status) (i32.const 0))
+          (i32.ne (local.get $kind) (i32.const 0)))
+      (then (call $htmlRawText (local.get $kind))))
+    (global.set $streamDepth (i32.const 0))
+    (i32.const 0))
+
+  ;; Continue a start tag checkpointed by $htmlAttrs as region $region from
+  ;; the chunk start, within the current [$ptr, $end).
+  (func $htmlTagResume (param $region i32) (result i32)
+    (local $kind i32)
+    (local.set $kind (global.get $streamA))
+    (global.set $streamDepth (i32.const 1))
+    (call $htmlTagResumeEnd
+      (call $htmlAttrs
+        (global.get $streamB) (global.get $streamC) (local.get $kind) (local.get $region))
+      (local.get $kind)))
+
+  ;; Resume stream region 9: a start tag whose attributes continue past
+  ;; the previous chunk end. Returns 1 when the region consumed the whole
+  ;; chunk, 0 when the language lexer should continue from $ptr.
+  (func $htmlStreamResumeTag (result i32)
+    (call $htmlTagResume (i32.const 9)))
 )

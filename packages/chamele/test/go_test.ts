@@ -1,6 +1,10 @@
 import assert from 'node:assert';
 import t from 'node:test';
 
+import type { ThemedToken } from '../lib/index';
+import { codeToTokens, init, TokenizeStream } from '../lib/index';
+import { transformWat, wat2wasm } from '../scripts/build';
+import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import {
   checkInvariants,
   colorOf,
@@ -12,7 +16,30 @@ import {
 } from './util';
 
 let go: TestLang;
-t.before(() => (go = loadLang('go', '$hlGo')));
+t.before(() => {
+  go = loadLang('go', '$hlGo');
+  const url = new URL('../src/chamele.wat', import.meta.url);
+  init(new WebAssembly.Module(wat2wasm(url.pathname, transformWat(url).code)));
+});
+
+/**
+ * Tokens from the full module for a whole-buffer run and for a stream fed
+ * one line per chunk, the shape the live tokenizer uses; both must agree.
+ */
+function lineFed(code: string): {
+  direct: ThemedToken[][];
+  streamed: ThemedToken[][];
+} {
+  const options = { lang: 'go' as const, theme: pierreDark };
+  const direct = codeToTokens(code, options).tokens;
+  const stream = new TokenizeStream(options);
+  const streamed: ThemedToken[][] = [];
+  for (const line of code.split(/(?<=\n)/)) {
+    streamed.push(...stream.pushCode(line));
+  }
+  streamed.push(...stream.end());
+  return { direct, streamed };
+}
 
 void t.test('go: declarations, control flow, types, and builtins', () => {
   const src = `package demo
@@ -129,3 +156,78 @@ void t.test('go: deterministic fuzz preserves lexer invariants', () => {
     checkInvariants(go.hl, src);
   }
 });
+
+void t.test(
+  'go: only the name after a receiver is the method definition',
+  () => {
+    const theme = {
+      name: 'go-names',
+      appearance: 'dark',
+      style: {
+        syntax: {
+          'function.definition': { color: '#110001' },
+          function: { color: '#220002' },
+          variable: { color: '#330003' },
+          type: { color: '#440004' },
+          'type.builtin': { color: '#550005' },
+        },
+      },
+    };
+    // equal styles merge across gaps, so key on the first word of a span
+    const exact = (html: string, text: string) =>
+      spansOf(html).find((span) => span.text.trim().split(/\s+/)[0] === text)
+        ?.color;
+    const html = checkInvariants(
+      go.hl,
+      `func (s *Server) Start(ctx context.Context) error {
+	defer func() { recover() }()
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {})
+	x := func(a int) MyType { return a }
+	return nil
+}
+func Map[T any](xs []T) []T { return xs }
+func plain() {}`,
+      { theme }
+    );
+    assert.equal(exact(html, 's'), '#330003');
+    assert.equal(exact(html, 'Server'), '#440004');
+    assert.equal(exact(html, 'Start'), '#110001');
+    assert.equal(exact(html, 'recover'), '#220002');
+    assert.equal(exact(html, 'w'), '#330003');
+    assert.equal(exact(html, 'MyType'), '#440004');
+    assert.equal(exact(html, 'Map'), '#110001');
+    assert.equal(exact(html, 'any'), '#550005');
+    assert.equal(exact(html, 'T'), '#440004');
+    assert.equal(exact(html, 'plain'), '#110001');
+    // a function type's closing paren ends the statement at the line break,
+    // so a call on the next line is not a definition
+    for (const src of [
+      'var h func(x int)\nfoo()',
+      'var f func(a int) int\nfoo()',
+      'type H func(int) error\nfoo()',
+      'cb := func(a int) (T, error) { return a, nil }\nfoo()',
+    ]) {
+      assert.equal(
+        exact(checkInvariants(go.hl, src, { theme }), 'foo'),
+        '#220002',
+        src
+      );
+    }
+    assert.equal(
+      colorOf(
+        checkInvariants(go.hl, 'var c comparable', { theme }),
+        'comparable'
+      ),
+      '#550005'
+    );
+    // a receiver split over lines keeps its state between line-fed chunks
+    for (const code of [
+      'func (s *Server)\nStart(ctx context.Context) error {\n',
+      'func (\n  s *Server,\n) Start(\n  ctx context.Context,\n) error {\n',
+      's := "abc\\\ndef"\nz := 1\n',
+    ]) {
+      const { direct, streamed } = lineFed(code);
+      assert.deepEqual(streamed, direct, JSON.stringify(code));
+    }
+  }
+);

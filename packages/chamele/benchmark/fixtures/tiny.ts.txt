@@ -1,4 +1,4 @@
-// https://github.com/microsoft/TypeScript/blob/main/src/compiler/corePublic.ts
+// https://github.com/microsoft/TypeScript/blob/v6.0.3/src/compiler/corePublic.ts
 
 // WARNING: The script `configurePrerelease.ts` uses a regexp to parse out these values.
 // If changing the text in this section, be sure to test `configurePrerelease` too.

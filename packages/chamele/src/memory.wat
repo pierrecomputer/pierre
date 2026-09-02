@@ -10,20 +10,15 @@
   (const $mem.cHash 2216)
   (const $mem.markdownFence 2288)
   (const $mem.markdownFenceEnd 3344)
-  (const $mem.zigWords 3344)
-  (const $mem.zigHash 4592)
-  (const $mem.zigBits 4720)
   (const $mem.sharedStack 4800)
   (const $mem.tsxTemplateStack $mem.sharedStack)
   (const $mem.tomlStack $mem.sharedStack)
   (const $mem.jsonStack $mem.sharedStack)
   (const $mem.tsxBracketStack 5824)
-  (const $mem.themeTable 6848) ;; written by JavaScript (lib/highlighter.ts)
+  (const $mem.themeTable 6848)
   (const $mem.tsxJsxStack 7872)
   (const $mem.streamDelimiter 11968)
   (const $mem.streamState 12000)
-  ;; keyword-table region; each table's range is enforced by its keyword-table
-  ;; form and the segment-overlap checks in scripts/build.ts
   (const $mem.goWords 16000)
   (const $mem.cppWords 16512)
   (const $mem.kotlinWords 18048)
@@ -37,6 +32,10 @@
   (const $mem.watWords 25984)
   (const $mem.spanCache 26752)
   (const $mem.liveFree 31584)
+  ;; zig's keyword table sits above the live free-list heads; the range is
+  ;; enforced by the table form in langs/zig.wat
+  (const $mem.zigKeywords 31744)
+  (const $mem.zigKeywordsEnd 34304)
   ;; live-tokenizer change list and heap on the text pages (see src/live.wat)
   (const $mem.liveChanges 65536)
   (const $mem.liveHeapBase 86016)

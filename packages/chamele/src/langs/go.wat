@@ -16,10 +16,10 @@
     (group ;; 5: declaration
       "var" "const" "map" "chan" "struct" "interface")
     (group "import")  ;; 6: import
-    (group ;; 7: built-in types
+    (group ;; 7: built-in types and constraints
       "int" "bool" "byte" "rune" "uint" "error" "string" "uintptr"
       "int8" "int16" "int32" "int64" "uint8" "uint16" "uint32" "uint64"
-      "float32" "float64" "complex64" "complex128")
+      "float32" "float64" "complex64" "complex128" "any" "comparable")
     (group "true" "false") ;; 8: booleans
     (group "nil" "iota"))  ;; 9: built-in constants
 
@@ -57,10 +57,16 @@
             (i32.or (i32.eq (local.get $c) (i32.const ">")) (i32.eq (local.get $c) (i32.const "&")))
             (i32.or (i32.eq (local.get $c) (i32.const "|")) (i32.eq (local.get $c) (i32.const "^"))))))))
 
+  ;; $expect is the pending next-name capture from $goWordHl, or 4 for the
+  ;; name after a receiver's closing paren, which is a method definition only
+  ;; when its own parameter list follows - `func (s *T) Name(` - and an
+  ;; ordinary name otherwise, as in a literal's result type `func(x int) T {`.
+  ;; $recv is 1 inside the paren that directly follows `func`.
   (func $hlGo
     (local $c i32) (local $c2 i32) (local $c3 i32)
     (local $gap i32) (local $lhs i32) (local $rhs i32) (local $p i32)
     (local $kind i32) (local $hl i32) (local $expect i32) (local $member i32)
+    (local $recv i32)
     (call $lexEmitLeadingContinuation)
     (block $done
       (loop $next
@@ -107,17 +113,29 @@
             (if (i32.ge_s (local.get $kind) (i32.const 0))
               (then
                 (local.set $hl (i32.and (local.get $kind) (i32.const 255)))
+                ;; a keyword after a receiver's `)` is a result type, not
+                ;; the method name
+                (if (i32.eq (local.get $expect) (i32.const 4))
+                  (then (local.set $expect (i32.const 0))))
                 (if (i32.shr_u (local.get $kind) (i32.const 8))
                   (then (local.set $expect (i32.shr_u (local.get $kind) (i32.const 8))))))
               (else
                 (local.set $p (call $lexSkipSpaceAt (local.get $rhs)))
+                ;; after a receiver, only a name with its own parameter
+                ;; list is the method being defined
+                (if (i32.and
+                      (i32.eq (local.get $expect) (i32.const 4))
+                      (i32.ne (call $goByte (local.get $p)) (i32.const "(")))
+                  (then (local.set $expect (i32.const 0))))
                 (if (local.get $expect)
                   (then
                     (local.set $hl
                       (select (enum.get $Token.function.definition)
                         (select (enum.get $Token.namespace) (enum.get $Token.type)
                           (i32.eq (local.get $expect) (i32.const 3)))
-                        (i32.eq (local.get $expect) (i32.const 1))))
+                        (i32.or
+                          (i32.eq (local.get $expect) (i32.const 1))
+                          (i32.eq (local.get $expect) (i32.const 4)))))
                     (local.set $expect (i32.const 0)))
                   (else
                     (if (i32.eq (call $goByte (local.get $p)) (i32.const "("))
@@ -155,6 +173,25 @@
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (call $emitTok (enum.get $Token.punctuation.bracket) (local.get $lhs) (global.get $ptr))
             (local.set $member (i32.const 0))
+            ;; A paren right after `func` opens a receiver or a literal's
+            ;; parameter list and ends the plain next-name capture; its close
+            ;; re-arms the conditional one when a name follows on the same
+            ;; line - a line break ends the statement instead. Braces end
+            ;; any pending capture.
+            (if (i32.eq (local.get $c) (i32.const "("))
+              (then
+                (local.set $recv (i32.eq (local.get $expect) (i32.const 1)))
+                (local.set $expect (i32.const 0))))
+            (if (i32.and (i32.eq (local.get $c) (i32.const ")")) (local.get $recv))
+              (then
+                (local.set $recv (i32.const 0))
+                (if (call $lexIsIdentStart
+                      (call $goByte (call $lexSkipSpaceAt (global.get $ptr))))
+                  (then (local.set $expect (i32.const 4))))))
+            (if (i32.or (i32.eq (local.get $c) (i32.const "{")) (i32.eq (local.get $c) (i32.const "}")))
+              (then
+                (local.set $recv (i32.const 0))
+                (local.set $expect (i32.const 0))))
             (br $next)))
         (if (i32.or
               (i32.or (i32.eq (local.get $c) (i32.const ",")) (i32.eq (local.get $c) (i32.const ";")))
@@ -163,6 +200,10 @@
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (call $emitTok (enum.get $Token.punctuation.delimiter) (local.get $lhs) (global.get $ptr))
             (local.set $member (i32.const 0))
+            (if (i32.eq (local.get $c) (i32.const ";"))
+              (then
+                (local.set $recv (i32.const 0))
+                (local.set $expect (i32.const 0))))
             (br $next)))
         (if (i32.eq (local.get $c) (i32.const "."))
           (then

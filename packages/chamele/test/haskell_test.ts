@@ -1,10 +1,15 @@
 import assert from 'node:assert';
 import t from 'node:test';
 
+import type { ThemedToken } from '../lib/index';
+import { codeToTokens, init, TokenizeStream } from '../lib/index';
+import { transformWat, wat2wasm } from '../scripts/build';
+import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import {
   checkInvariants,
   colorOf,
   loadLang,
+  spansOf,
   type TestLang,
   themeColor,
 } from './util';
@@ -14,6 +19,44 @@ let haskell: TestLang;
 t.before(() => {
   haskell = loadLang('haskell', '$hlHaskell');
 });
+
+/**
+ * Compile the whole module once for the streaming checks: TokenizeStream and
+ * codeToTokens run on the shared highlighter rather than the single-lexer
+ * harness. Lazy, so the lexer-only tests still run while another language
+ * file is mid-edit.
+ */
+let fullModuleReady = false;
+function initFullModule(): void {
+  if (fullModuleReady) return;
+  const url = new URL('../src/chamele.wat', import.meta.url);
+  const { code } = transformWat(url);
+  init(new WebAssembly.Module(wat2wasm(url.pathname, code)));
+  fullModuleReady = true;
+}
+
+/**
+ * Tokens for `code` fed to TokenizeStream one line per push - the shape the
+ * live tokenizer uses - which must equal the whole-buffer tokens.
+ */
+function assertLineStreamParity(code: string, label: string): ThemedToken[][] {
+  initFullModule();
+  const stream = new TokenizeStream({ lang: 'haskell', theme: pierreDark });
+  const streamed: ThemedToken[][] = [];
+  for (const line of code.split(/(?<=\n)/))
+    streamed.push(...stream.pushCode(line));
+  streamed.push(...stream.end());
+  const whole = codeToTokens(code, {
+    lang: 'haskell',
+    theme: pierreDark,
+  }).tokens;
+  assert.deepEqual(streamed, whole, label);
+  return streamed;
+}
+
+/** The color of the first span whose trimmed text is exactly `text`. */
+const wordColor = (html: string, text: string) =>
+  spansOf(html).find((s) => s.text.trim() === text)?.color;
 
 const COMMENT = themeColor('comment');
 const PREPROC = themeColor('preproc');
@@ -166,4 +209,60 @@ void t.test('haskell: deterministic fuzz preserves lexer invariants', () => {
     }
     checkInvariants(haskell.hl, src);
   }
+});
+
+void t.test(
+  'haskell: a pragma spanning lines streams like a block comment',
+  () => {
+    const src = '{-# LANGUAGE\n  GADTs,\n  DataKinds #-}\nmain = 1\n';
+    const html = checkInvariants(haskell.hl, src);
+    assert.equal(colorOf(html, 'DataKinds #-}'), PREPROC);
+    const streamed = assertLineStreamParity(src, 'pragma');
+    assert.equal(
+      streamed[1].find((tk) => tk.content.trim() === 'GADTs,')?.color,
+      PREPROC
+    );
+    assert.equal(
+      streamed[3].find((tk) => tk.content.trim() === 'main')?.color,
+      themeColor('function.definition')
+    );
+    assertLineStreamParity(
+      '{- a\n{- b -}\nc -}\nx = 2\nfoo\n(1)\n',
+      'nested comment'
+    );
+  }
+);
+
+void t.test('haskell: primes, dollar, and name-quoting ticks', () => {
+  const SPECIAL = themeColor('punctuation.special');
+  const html = checkInvariants(
+    haskell.hl,
+    "go' = foldl' step z xs\nh = f $ g x\nc = ['a', '\\n', 'λ', '\\'']\n"
+  );
+  assert.equal(wordColor(html, "go'"), themeColor('function.definition'));
+  // the prime stays inside the name: no tick punctuation on the first line
+  assert.ok(
+    spansOf(checkInvariants(haskell.hl, "go' = foldl' step z xs")).every(
+      (s) => s.color !== SPECIAL
+    )
+  );
+  assert.equal(wordColor(html, '$'), OPERATOR);
+  assert.equal(wordColor(html, "'a'"), CHAR);
+  assert.equal(wordColor(html, "'λ'"), CHAR);
+  assert.equal(colorOf(html, '\\n'), ESCAPE);
+  assert.equal(colorOf(html, "\\'"), ESCAPE);
+
+  // a tick without a closing tick quotes a name: promoted constructors and
+  // Template Haskell names lex as the tick plus the name
+  const quoted = "t :: Proxy 'True\nu :: Proxy '[Int]\nv = ''Int\nw = 'λ";
+  const qhtml = checkInvariants(haskell.hl, quoted);
+  assert.deepEqual(
+    spansOf(qhtml)
+      .filter((s) => s.text === "'" || s.text === "''")
+      .map((s) => s.color),
+    [SPECIAL, SPECIAL, SPECIAL, SPECIAL]
+  );
+  assert.equal(wordColor(qhtml, 'True'), themeColor('boolean'));
+  assert.equal(wordColor(qhtml, 'Int'), TYPE);
+  assertLineStreamParity(quoted + '\n', 'ticks');
 });

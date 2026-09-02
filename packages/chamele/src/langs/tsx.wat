@@ -13,11 +13,11 @@
         (return)))
     (if (i32.eq (local.get $t) (enum.get $Lex.backtick))
       (then
-        (call $emitTemplate (local.get $lhs) (local.get $rhs) (i32.const 0))
+        (call $emitTemplate (local.get $lhs) (local.get $rhs) (i32.const 0) (i32.const 1))
         (return)))
     (if (i32.eq (local.get $t) (enum.get $Lex.dollar_brace))
       (then
-        (call $emitTemplate (local.get $lhs) (local.get $rhs) (i32.const 1))
+        (call $emitTemplate (local.get $lhs) (local.get $rhs) (i32.const 1) (i32.const 1))
         (return)))
     (if (i32.or (i32.eq (local.get $t) (enum.get $Lex.comment))
                 (i32.eq (local.get $t) (enum.get $Lex.hash_bang)))
@@ -26,12 +26,10 @@
         (return)))
     (if (i32.eq (local.get $t) (enum.get $Lex.multiline_comment))
       (then
-        ;; `/** ... */` but not `/**/` is a doc comment with JSDoc tags
-        (if (i32.or
-              (i32.eq (global.get $tsxStreamMode) (i32.const 3))
-              (i32.and
-                (i32.eq (i32.load8_u offset=2 (local.get $lhs)) (i32.const "*"))
-                (i32.gt_u (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 4))))
+        ;; `/** ... */` but not `/**/` is a doc comment with JSDoc tags. Judge
+        ;; the token's own bytes: the stream mode may already describe the
+        ;; lookahead token, which is cut at the chunk end
+        (if (call $isDocComment (local.get $lhs) (local.get $rhs))
           (then (call $emitDocComment (local.get $lhs) (local.get $rhs)))
           (else (call $emitTok (enum.get $Token.comment) (local.get $lhs) (local.get $rhs))))
         (return)))
@@ -45,7 +43,7 @@
             (return)))
         (if (i32.or (i32.eq (local.get $c) (i32.const "`")) (i32.eq (local.get $c) (i32.const "}")))
           (then
-            (call $emitTemplate (local.get $lhs) (local.get $rhs) (i32.const 0))
+            (call $emitTemplate (local.get $lhs) (local.get $rhs) (i32.const 0) (i32.const 1))
             (return)))
         (if (i32.eq (local.get $c) (i32.const "/"))
           (then
@@ -78,10 +76,13 @@
     (if (i32.eq (local.get $mode) (i32.const 1))
       (then
         (local.set $t (call $scanTemplateBody))
+        ;; the continuation is template text from its first byte: a leading
+        ;; `}` here is a character, not a substitution close
         (call $emitTemplate
           (local.get $from)
           (global.get $ptr)
-          (i32.eq (local.get $t) (enum.get $Lex.dollar_brace)))
+          (i32.eq (local.get $t) (enum.get $Lex.dollar_brace))
+          (i32.const 0))
         (if (i32.eq (local.get $t) (enum.get $Lex.invalid))
           (then (return (i32.const 1))))
         (global.set $tsxStreamMode (i32.const 0))
@@ -121,19 +122,17 @@
         (global.set $tsxStreamMode (i32.const 0))
         (call $tsxFinishStreamToken (local.get $t))
         (return (i32.const 0))))
-    ;; quoted JSX attribute value
+    ;; quoted JSX attribute value: hop to the closing quote 16 bytes per step,
+    ;; as $jsxTagStep does for the opening chunk
     (local.set $quote
       (select (i32.const 34) (i32.const 39) (i32.eq (local.get $mode) (i32.const 6))))
-    (local.set $c (i32.const -1))
-    (block $done
-      (loop $scan
-        (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
-        (local.set $c (i32.load8_u (global.get $ptr)))
-        (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-        (br_if $done (i32.eq (local.get $c) (local.get $quote)))
-        (br $scan)))
+    (global.set $ptr (call $scanFind3
+      (global.get $ptr) (local.get $quote) (local.get $quote) (local.get $quote)))
+    (local.set $c (i32.lt_u (global.get $ptr) (global.get $end)))
+    (if (local.get $c)
+      (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))
     (call $emitTok (enum.get $Token.string) (local.get $from) (global.get $ptr))
-    (if (i32.ne (local.get $c) (local.get $quote))
+    (if (i32.eqz (local.get $c))
       (then (return (i32.const 1))))
     (global.set $tsxStreamMode (i32.const 0))
     (i32.const 0))
@@ -150,6 +149,7 @@
     (local $haveNext i32)
     (local $done i32)
     (local $m i32)
+    (local $cut i32)
     (call $lexEmitLeadingContinuation)
     (if (local.get $reset)
       (then
@@ -270,7 +270,11 @@
                 (call $jsxPush (i32.const 1) (i32.const 0))
                 (local.set $done (global.get $ptr))
                 (br $main)))))
-        ;; lookahead, then emit the current token
+        ;; lookahead, then emit the current token. A nonzero stream mode
+        ;; before the lookahead means the current token itself was cut at the
+        ;; chunk end; read it now, because the lookahead sets the mode for the
+        ;; NEXT token when that one is the cut one
+        (local.set $cut (global.get $tsxStreamMode))
         (local.set $nxtT (call $nextToken))
         (local.set $nxtLhs (global.get $lhs))
         (local.set $nxtRhs (global.get $rhs))
@@ -278,9 +282,11 @@
         (call $emitCur (local.get $curT) (local.get $curLhs) (local.get $curRhs)
                        (local.get $nxtT))
         (local.set $done (local.get $curRhs))
+        ;; comments are transparent to prev; a cut token's kind is recorded by
+        ;; the resume instead
         (if (i32.and
               (i32.eqz (bitset.get $LexBits.comment (local.get $curT)))
-              (i32.eqz (global.get $tsxStreamMode)))
+              (i32.eqz (local.get $cut)))
           (then (global.set $prevTok (local.get $curT))))
         (br $main)))
     (if (i32.eqz (global.get $tsxStreamExpressionClosed))

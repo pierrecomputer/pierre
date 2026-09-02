@@ -54,7 +54,17 @@
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
         (br $scan)))
     (call $emitTok (local.get $hl) (local.get $lhs) (global.get $ptr))
-    (if (i32.eqz (local.get $closed))
+    ;; An open long bracket continues in the next stream chunk with its
+    ;; closing `]=...=]` as the fixed delimiter. Build it only when streaming
+    ;; and only when it fits the 32-byte delimiter region: the bytes past
+    ;; that region hold the lexer checkpoints and keyword tables, and a
+    ;; `--[` followed by thousands of `=` must not overwrite them. A longer
+    ;; delimiter simply ends the token at the chunk, like $streamSetFixed.
+    (if (i32.and
+          (i32.eqz (local.get $closed))
+          (i32.and
+            (global.get $streaming)
+            (i32.le_u (i32.add (local.get $eq) (i32.const 2)) (i32.const 32))))
       (then
         (i32.store8 (i32.const $mem.streamDelimiter) (i32.const "]"))
         (memory.fill

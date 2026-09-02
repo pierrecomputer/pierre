@@ -12,18 +12,38 @@
         (i32.const 25))
       (i32.eq (local.get $c) (i32.const "_"))))
 
+  ;; End of the ASCII identifier run [A-Za-z0-9_] starting at $p - 16 bytes
+  ;; per step, clamped to $end. Zig identifiers are ASCII, so unlike
+  ;; $scanIdentRun this stops at bytes >= 0x80 instead of absorbing a UTF-8
+  ;; sequence into the name.
   (func $zigIdentEnd (param $p i32) (result i32)
-    (local $c i32)
+    (local $mask i32)
+    (local $w v128)
     (block $done
-      (loop $byte
+      (loop $wide
         (br_if $done (i32.ge_u (local.get $p) (global.get $end)))
-        (local.set $c (i32.load8_u (local.get $p)))
-        (br_if $done
-          (i32.eqz (i32.or
-            (call $zigIsIdentStart (local.get $c))
-            (call $lexIsDigit (local.get $c)))))
-        (local.set $p (i32.add (local.get $p) (i32.const 1)))
-        (br $byte)))
+        (local.set $w (v128.load (local.get $p)))
+        (local.set $mask (i32.xor
+          (i8x16.bitmask (v128.or
+            (i8x16.le_u
+              (i8x16.sub
+                (v128.or (local.get $w) (i8x16.splat (i32.const 32)))
+                (i8x16.splat (i32.const "a")))
+              (i8x16.splat (i32.const 25)))
+            (v128.or
+              (i8x16.le_u
+                (i8x16.sub (local.get $w) (i8x16.splat (i32.const "0")))
+                (i8x16.splat (i32.const 9)))
+              (i8x16.eq (local.get $w) (i8x16.splat (i32.const "_"))))))
+          (i32.const 65535)))
+        (if (local.get $mask)
+          (then
+            (local.set $p (i32.add (local.get $p) (i32.ctz (local.get $mask))))
+            (br $done)))
+        (local.set $p (i32.add (local.get $p) (i32.const 16)))
+        (br $wide)))
+    (if (i32.gt_u (local.get $p) (global.get $end))
+      (then (local.set $p (global.get $end))))
     (local.get $p))
 
   (func $zigIsDigitForBase (param $c i32) (param $base i32) (result i32)
@@ -116,133 +136,66 @@
         (br $scan)))
     (call $emitTok (local.get $hl) (local.get $seg) (global.get $ptr)))
 
-  ;; IDs are stored as raw bytes in the records and hash table below.
-  (enum $ZigWord
-    "invalid"
-    "fn" "const" "var" "struct" "enum" "union" "opaque" "if"
-    "else" "switch" "for" "while" "break" "continue" "return" "defer"
-    "errdefer" "try" "catch" "suspend" "nosuspend" "resume"
-    "export" "and" "or" "orelse" "bool" "void" "noreturn"
-    "type" "anyerror" "anyframe" "anytype" "comptime_int" "comptime_float" "anyopaque" "isize"
-    "usize" "f16" "f32" "f64" "f80" "f128" "c_char" "c_short"
-    "c_ushort" "c_int" "c_uint" "c_long" "c_ulong" "c_longlong" "c_ulonglong" "c_longdouble"
-    "true" "false" "null" "unreachable" "undefined" "c" "_" "asm"
-    "test" "error" "pub" "inline" "noinline" "extern" "comptime" "packed"
-    "threadlocal" "volatile" "allowzero" "noalias" "addrspace" "align" "callconv" "linksection"
-  )
-
-  (bitset $ZigBits $ZigWord $mem.zigBits
-    (declaration "fn" "const" "var" "struct" "enum" "union" "opaque")
-    (control
-      "if" "else" "switch" "for" "while" "break" "continue" "return"
-      "defer" "errdefer" "try" "catch" "suspend" "nosuspend" "resume")
-    (import "export")
-    (wordOperator "and" "or" "orelse")
-    (typeBuiltin
+  ;; Group order is the dispatch order in $zigWordHl below; the groups that
+  ;; also drive lexer context are checked by number in $hlZig. `comptime` is
+  ;; absent on purpose: the table hash sees only the first two bytes, the last
+  ;; byte, and the length, which are identical for `continue`, so the two
+  ;; words can never share a table and `comptime` is matched directly. The
+  ;; one-byte names `c` and `_` are below the table's minimum length and are
+  ;; matched directly too.
+  (keyword-table $zigWords $mem.zigKeywords $mem.zigKeywordsEnd 32 128
+    (group "fn") ;; 1: declaration, next name is a function
+    (group "const" "var") ;; 2: declaration, next name is a variable
+    (group "struct" "enum" "union" "opaque") ;; 3: declaration
+    (group "if") ;; 4: control, a payload paren may follow
+    (group "for" "while") ;; 5: control, payload paren, label target
+    (group "switch") ;; 6: control, label target unless inline
+    (group "break" "continue") ;; 7: control, a label may follow
+    (group "else" "catch" "errdefer") ;; 8: control, payload bars may follow
+    (group ;; 9: control
+      "return" "defer" "try" "suspend" "nosuspend" "resume")
+    (group "export") ;; 10: import
+    (group "and" "or" "orelse") ;; 11: word operators
+    (group ;; 12: primitive types
       "bool" "void" "noreturn" "type" "anyerror" "anyframe" "anytype"
       "comptime_int" "comptime_float" "anyopaque" "isize" "usize"
       "f16" "f32" "f64" "f80" "f128" "c_char" "c_short" "c_ushort"
-      "c_int" "c_uint" "c_long" "c_ulong" "c_longlong" "c_ulonglong" "c_longdouble")
-    (boolean "true" "false")
-    (constantBuiltin "null" "unreachable" "undefined")
-    (variableSpecial "c" "_")
-  )
+      "c_int" "c_uint" "c_long" "c_ulong" "c_longlong" "c_ulonglong"
+      "c_longdouble")
+    (group "true" "false") ;; 13: booleans
+    (group "null" "unreachable" "undefined") ;; 14: builtin constants
+    (group "inline") ;; 15: keyword, may prefix a labeled loop
+    (group ;; 16: keywords
+      "asm" "test" "error" "pub" "noinline" "extern" "packed" "threadlocal"
+      "volatile" "allowzero" "noalias" "addrspace" "align" "callconv"
+      "linksection"))
 
-  ;; 78 sixteen-byte records, then a 128-slot open-addressed hash. Each
-  ;; record is length, enum id, and up to 14 exact bytes.
-  (data (i32.const $mem.zigWords)
-    "\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\02\01\66\6e\00\00\00\00\00\00\00\00\00\00\00\00\05\02\63\6f\6e\73\74\00\00\00\00\00\00\00\00\00\03\03\76\61\72\00\00\00\00\00\00\00\00\00\00\00\06\04\73\74\72\75\63\74\00\00\00\00\00\00\00\00\04\05\65\6e\75\6d\00\00\00\00\00\00\00\00\00\00\05\06\75\6e\69\6f\6e\00\00\00\00\00\00\00\00\00\06\07\6f\70\61\71\75\65\00\00\00\00\00\00\00\00\02\08\69\66\00\00\00\00\00\00\00\00\00\00\00\00\04\09\65\6c\73\65\00\00\00\00\00\00\00\00\00\00\06\0a\73\77\69\74\63\68\00\00\00\00\00\00\00\00\03\0b\66\6f\72\00\00\00\00\00\00\00\00\00\00\00\05\0c\77\68\69\6c\65\00\00\00\00\00\00\00\00\00\05\0d\62\72\65\61\6b\00\00\00\00\00\00\00\00\00\08\0e\63\6f\6e\74\69\6e\75\65\00\00\00\00\00\00\06\0f\72\65\74\75\72\6e\00\00\00\00\00\00\00\00"
-    "\05\10\64\65\66\65\72\00\00\00\00\00\00\00\00\00\08\11\65\72\72\64\65\66\65\72\00\00\00\00\00\00\03\12\74\72\79\00\00\00\00\00\00\00\00\00\00\00\05\13\63\61\74\63\68\00\00\00\00\00\00\00\00\00\07\14\73\75\73\70\65\6e\64\00\00\00\00\00\00\00\09\15\6e\6f\73\75\73\70\65\6e\64\00\00\00\00\00\06\16\72\65\73\75\6d\65\00\00\00\00\00\00\00\00\06\17\65\78\70\6f\72\74\00\00\00\00\00\00\00\00\03\18\61\6e\64\00\00\00\00\00\00\00\00\00\00\00\02\19\6f\72\00\00\00\00\00\00\00\00\00\00\00\00\06\1a\6f\72\65\6c\73\65\00\00\00\00\00\00\00\00\04\1b\62\6f\6f\6c\00\00\00\00\00\00\00\00\00\00\04\1c\76\6f\69\64\00\00\00\00\00\00\00\00\00\00\08\1d\6e\6f\72\65\74\75\72\6e\00\00\00\00\00\00\04\1e\74\79\70\65\00\00\00\00\00\00\00\00\00\00\08\1f\61\6e\79\65\72\72\6f\72\00\00\00\00\00\00"
-    "\08\20\61\6e\79\66\72\61\6d\65\00\00\00\00\00\00\07\21\61\6e\79\74\79\70\65\00\00\00\00\00\00\00\0c\22\63\6f\6d\70\74\69\6d\65\5f\69\6e\74\00\00\0e\23\63\6f\6d\70\74\69\6d\65\5f\66\6c\6f\61\74\09\24\61\6e\79\6f\70\61\71\75\65\00\00\00\00\00\05\25\69\73\69\7a\65\00\00\00\00\00\00\00\00\00\05\26\75\73\69\7a\65\00\00\00\00\00\00\00\00\00\03\27\66\31\36\00\00\00\00\00\00\00\00\00\00\00\03\28\66\33\32\00\00\00\00\00\00\00\00\00\00\00\03\29\66\36\34\00\00\00\00\00\00\00\00\00\00\00\03\2a\66\38\30\00\00\00\00\00\00\00\00\00\00\00\04\2b\66\31\32\38\00\00\00\00\00\00\00\00\00\00\06\2c\63\5f\63\68\61\72\00\00\00\00\00\00\00\00\07\2d\63\5f\73\68\6f\72\74\00\00\00\00\00\00\00\08\2e\63\5f\75\73\68\6f\72\74\00\00\00\00\00\00\05\2f\63\5f\69\6e\74\00\00\00\00\00\00\00\00\00"
-    "\06\30\63\5f\75\69\6e\74\00\00\00\00\00\00\00\00\06\31\63\5f\6c\6f\6e\67\00\00\00\00\00\00\00\00\07\32\63\5f\75\6c\6f\6e\67\00\00\00\00\00\00\00\0a\33\63\5f\6c\6f\6e\67\6c\6f\6e\67\00\00\00\00\0b\34\63\5f\75\6c\6f\6e\67\6c\6f\6e\67\00\00\00\0c\35\63\5f\6c\6f\6e\67\64\6f\75\62\6c\65\00\00\04\36\74\72\75\65\00\00\00\00\00\00\00\00\00\00\05\37\66\61\6c\73\65\00\00\00\00\00\00\00\00\00\04\38\6e\75\6c\6c\00\00\00\00\00\00\00\00\00\00\0b\39\75\6e\72\65\61\63\68\61\62\6c\65\00\00\00\09\3a\75\6e\64\65\66\69\6e\65\64\00\00\00\00\00\01\3b\63\00\00\00\00\00\00\00\00\00\00\00\00\00\01\3c\5f\00\00\00\00\00\00\00\00\00\00\00\00\00\03\3d\61\73\6d\00\00\00\00\00\00\00\00\00\00\00\04\3e\74\65\73\74\00\00\00\00\00\00\00\00\00\00\05\3f\65\72\72\6f\72\00\00\00\00\00\00\00\00\00"
-    "\03\40\70\75\62\00\00\00\00\00\00\00\00\00\00\00\06\41\69\6e\6c\69\6e\65\00\00\00\00\00\00\00\00\08\42\6e\6f\69\6e\6c\69\6e\65\00\00\00\00\00\00\06\43\65\78\74\65\72\6e\00\00\00\00\00\00\00\00\08\44\63\6f\6d\70\74\69\6d\65\00\00\00\00\00\00\06\45\70\61\63\6b\65\64\00\00\00\00\00\00\00\00\0b\46\74\68\72\65\61\64\6c\6f\63\61\6c\00\00\00\08\47\76\6f\6c\61\74\69\6c\65\00\00\00\00\00\00\09\48\61\6c\6c\6f\77\7a\65\72\6f\00\00\00\00\00\07\49\6e\6f\61\6c\69\61\73\00\00\00\00\00\00\00\09\4a\61\64\64\72\73\70\61\63\65\00\00\00\00\00\05\4b\61\6c\69\67\6e\00\00\00\00\00\00\00\00\00\08\4c\63\61\6c\6c\63\6f\6e\76\00\00\00\00\00\00\0b\4d\6c\69\6e\6b\73\65\63\74\69\6f\6e\00\00\00")
-  (data (i32.const $mem.zigHash)
-    "\44\15\07\2f\30\37\3e\45\4b\32\00\2b\00\3f\00\00\00\00\14\29\00\40\00\00\00\00\00\34\00\31\19\00\1b\00\47\00\00\43\00\39\00\00\00\00\00\17\06\0e\01\0c\1e\36\3a\11\41\00\00\18\00\4a\00\3b\23\00"
-    "\35\38\00\00\00\00\1c\00\00\00\00\00\25\00\00\00\0f\00\00\00\13\00\05\00\24\28\3d\42\46\00\00\04\0d\03\00\0a\26\20\09\2c\00\0b\1a\33\00\16\27\3c\48\4d\21\49\02\1d\10\12\1f\22\4c\00\2d\2e\08\2a")
-
-  (func $zigLookupWord (param $lhs i32) (param $rhs i32) (result i32)
-    (local $hash i32)
-    (local $mask i64)
-    (local $n i32)
-    (local $packed i64)
-    (local $probes i32)
-    (local $record i32)
-    (local $rem i32)
-    (local $word i32)
-    (local.set $n (i32.sub (local.get $rhs) (local.get $lhs)))
-    (if (i32.gt_u (i32.sub (local.get $n) (i32.const 1)) (i32.const 13))
-      (then (return (enum.get $ZigWord.invalid))))
-    (local.set $hash
-      (i32.and
-        (i32.add
-          (i32.add (local.get $n)
-            (i32.shl (i32.load8_u (local.get $lhs)) (i32.const 1)))
-          (i32.add
-            (i32.mul (i32.load8_u (i32.sub (local.get $rhs) (i32.const 1))) (i32.const 11))
-            (i32.add
-              (i32.mul
-                (select (i32.load8_u offset=1 (local.get $lhs)) (i32.const 0)
-                  (i32.gt_u (local.get $n) (i32.const 1)))
-                (i32.const 5))
-              (i32.mul
-                (i32.load8_u (i32.add (local.get $lhs)
-                  (i32.shr_u (local.get $n) (i32.const 1))))
-                (i32.const 7)))))
-        (i32.const 127)))
-    (local.set $probes (i32.const 13))
-    (loop $probe
-      (local.set $word
-        (i32.load8_u (i32.add (i32.const $mem.zigHash) (local.get $hash))))
-      (if (i32.eqz (local.get $word))
-        (then (return (enum.get $ZigWord.invalid))))
-      (local.set $record
-        (i32.add (i32.const $mem.zigWords) (i32.shl (local.get $word) (i32.const 4))))
-      (if (i32.eq (i32.load8_u (local.get $record)) (local.get $n))
-        (then
-          (if (i32.le_u (local.get $n) (i32.const 8))
-            (then
-              (local.set $mask (select
-                (i64.const -1)
-                (i64.sub
-                  (i64.shl (i64.const 1)
-                    (i64.extend_i32_u (i32.shl (local.get $n) (i32.const 3))))
-                  (i64.const 1))
-                (i32.eq (local.get $n) (i32.const 8))))
-              (local.set $packed (i64.and (i64.load (local.get $lhs)) (local.get $mask)))
-              (if (i64.eq (local.get $packed)
-                    (i64.and (i64.load offset=2 (local.get $record)) (local.get $mask)))
-                (then (return (local.get $word)))))
-            (else
-              (if (i64.eq (i64.load (local.get $lhs))
-                    (i64.load offset=2 (local.get $record)))
-                (then
-                  (local.set $rem (i32.sub (local.get $n) (i32.const 8)))
-                  (local.set $mask
-                    (i64.sub
-                      (i64.shl (i64.const 1)
-                        (i64.extend_i32_u (i32.shl (local.get $rem) (i32.const 3))))
-                      (i64.const 1)))
-                  (if (i64.eq
-                        (i64.and (i64.load offset=8 (local.get $lhs)) (local.get $mask))
-                        (i64.and (i64.load offset=10 (local.get $record)) (local.get $mask)))
-                    (then (return (local.get $word))))))))))
-      (local.set $hash
-        (i32.and (i32.add (local.get $hash) (i32.const 1)) (i32.const 127)))
-      (local.set $probes (i32.sub (local.get $probes) (i32.const 1)))
-      (br_if $probe (local.get $probes)))
-    (enum.get $ZigWord.invalid))
-
-  (func $zigWordHl (param $word i32) (param $lhs i32) (param $rhs i32) (result i32)
+  ;; Classify the name [lhs,rhs): the token in the low byte and the table
+  ;; group in the high byte, or -1 for a plain name. Arbitrary-width `iN` and
+  ;; `uN` names are primitive types.
+  (func $zigWordHl (param $lhs i32) (param $rhs i32) (result i32)
+    (local $g i32)
     (local $p i32)
     (local $width i32)
-    ;; Arbitrary-width signed and unsigned integers are primitive types.
-    (if (i32.eq (local.get $word) (enum.get $ZigWord.invalid))
+    (local.set $g (keyword-table.get $zigWords (local.get $lhs) (local.get $rhs)))
+    (if (i32.eqz (local.get $g))
       (then
+        (if (i32.eq (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 1))
+          (then
+            (if (i32.or
+                  (i32.eq (i32.load8_u (local.get $lhs)) (i32.const "c"))
+                  (i32.eq (i32.load8_u (local.get $lhs)) (i32.const "_")))
+              (then (return (enum.get $Token.variable.special))))
+            (return (i32.const -1))))
+        ;; the one word the table cannot hold; the wide load stays inside the
+        ;; input slack, as in the table's own compare
         (if (i32.and
-              (i32.gt_u (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 1))
-              (i32.or
-                (i32.eq (i32.load8_u (local.get $lhs)) (i32.const "i"))
-                (i32.eq (i32.load8_u (local.get $lhs)) (i32.const "u"))))
+              (i32.eq (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 8))
+              (i64.eq (i64.load (local.get $lhs)) (i64.const "comptime")))
+          (then (return (enum.get $Token.keyword))))
+        (if (i32.or
+              (i32.eq (i32.load8_u (local.get $lhs)) (i32.const "i"))
+              (i32.eq (i32.load8_u (local.get $lhs)) (i32.const "u")))
           (then
             (local.set $p (i32.add (local.get $lhs) (i32.const 1)))
             (block $notType
@@ -262,27 +215,23 @@
                 (br $digit)))
             (return (enum.get $Token.type.builtin))))
         (return (i32.const -1))))
-    (if (bitset.get $ZigBits.declaration (local.get $word))
-      (then
-        (if (i32.eq (local.get $word) (enum.get $ZigWord.fn))
-          (then (return
-            (i32.or (enum.get $Token.keyword.declaration) (i32.const 256)))))
-        (return (enum.get $Token.keyword.declaration))))
-    (if (bitset.get $ZigBits.control (local.get $word))
-      (then (return (enum.get $Token.keyword.control))))
-    (if (bitset.get $ZigBits.import (local.get $word))
+    (if (i32.le_u (local.get $g) (i32.const 3))
+      (then (return (i32.or (enum.get $Token.keyword.declaration)
+        (i32.shl (local.get $g) (i32.const 8))))))
+    (if (i32.le_u (local.get $g) (i32.const 9))
+      (then (return (i32.or (enum.get $Token.keyword.control)
+        (i32.shl (local.get $g) (i32.const 8))))))
+    (if (i32.eq (local.get $g) (i32.const 10))
       (then (return (enum.get $Token.keyword.import))))
-    (if (bitset.get $ZigBits.wordOperator (local.get $word))
+    (if (i32.eq (local.get $g) (i32.const 11))
       (then (return (enum.get $Token.keyword.operator))))
-    (if (bitset.get $ZigBits.typeBuiltin (local.get $word))
+    (if (i32.eq (local.get $g) (i32.const 12))
       (then (return (enum.get $Token.type.builtin))))
-    (if (bitset.get $ZigBits.boolean (local.get $word))
+    (if (i32.eq (local.get $g) (i32.const 13))
       (then (return (enum.get $Token.boolean))))
-    (if (bitset.get $ZigBits.constantBuiltin (local.get $word))
+    (if (i32.eq (local.get $g) (i32.const 14))
       (then (return (enum.get $Token.constant.builtin))))
-    (if (bitset.get $ZigBits.variableSpecial (local.get $word))
-      (then (return (enum.get $Token.variable.special))))
-    (enum.get $Token.keyword))
+    (i32.or (enum.get $Token.keyword) (i32.shl (local.get $g) (i32.const 8))))
 
   (func $zigIsOp (param $c i32) (result i32)
     (i32.or
@@ -536,34 +485,24 @@
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (global.set $ptr (call $zigIdentEnd (global.get $ptr)))
-            (local.set $word
-              (call $zigLookupWord (local.get $lhs) (global.get $ptr)))
             (local.set $hl
-              (call $zigWordHl (local.get $word) (local.get $lhs) (global.get $ptr)))
+              (call $zigWordHl (local.get $lhs) (global.get $ptr)))
             (if (i32.ge_s (local.get $hl) (i32.const 0))
               (then
-                (if (i32.and (local.get $hl) (i32.const 256))
-                  (then (local.set $expectFunc (i32.const 1))))
+                ;; the table group rides in the high byte, see $zigWordHl
+                (local.set $word (i32.shr_u (local.get $hl) (i32.const 8)))
                 (local.set $hl (i32.and (local.get $hl) (i32.const 255)))
-                (if (i32.or
-                      (i32.eq (local.get $word) (enum.get $ZigWord.break))
-                      (i32.eq (local.get $word) (enum.get $ZigWord.continue)))
-                  (then (local.set $wantBreakLabel (i32.const 1))))
-                (if (i32.or
-                      (i32.eq (local.get $word) (enum.get $ZigWord.const))
-                      (i32.eq (local.get $word) (enum.get $ZigWord.var)))
+                (if (i32.eq (local.get $word) (i32.const 1))
+                  (then (local.set $expectFunc (i32.const 1))))
+                (if (i32.eq (local.get $word) (i32.const 2))
                   (then (local.set $expectVar (i32.const 1))))
                 (if (i32.or
-                      (i32.eq (local.get $word) (enum.get $ZigWord.if))
-                      (i32.or
-                        (i32.eq (local.get $word) (enum.get $ZigWord.while))
-                        (i32.eq (local.get $word) (enum.get $ZigWord.for))))
+                      (i32.eq (local.get $word) (i32.const 4))
+                      (i32.eq (local.get $word) (i32.const 5)))
                   (then (local.set $wantPayloadParen (i32.const 1))))
-                (if (i32.or
-                      (i32.eq (local.get $word) (enum.get $ZigWord.catch))
-                      (i32.or
-                        (i32.eq (local.get $word) (enum.get $ZigWord.else))
-                        (i32.eq (local.get $word) (enum.get $ZigWord.errdefer))))
+                (if (i32.eq (local.get $word) (i32.const 7))
+                  (then (local.set $wantBreakLabel (i32.const 1))))
+                (if (i32.eq (local.get $word) (i32.const 8))
                   (then (local.set $payloadReady (i32.const 1))))
                 (call $emitTok (local.get $hl) (local.get $lhs) (global.get $ptr))
                 (local.set $prevDot (i32.const 0))
@@ -613,13 +552,17 @@
                 (local.set $q
                   (call $lexSkipSpaceAt (i32.add (local.get $p) (i32.const 1))))
                 (local.set $base (i32.const 0))
-                (local.set $word (enum.get $ZigWord.invalid))
-                (if (call $zigIsIdentStart (call $zigByte (local.get $q)))
+                (local.set $word (i32.const 0))
+                ;; only a top-level `name:` can be a label, so the lookahead
+                ;; for its loop keyword is skipped inside parameter lists
+                (if (i32.and
+                      (i32.eqz (local.get $parenDepth))
+                      (call $zigIsIdentStart (call $zigByte (local.get $q))))
                   (then
                     (local.set $p (call $zigIdentEnd (local.get $q)))
                     (local.set $word
-                      (call $zigLookupWord (local.get $q) (local.get $p)))
-                    (if (i32.eq (local.get $word) (enum.get $ZigWord.inline))
+                      (keyword-table.get $zigWords (local.get $q) (local.get $p)))
+                    (if (i32.eq (local.get $word) (i32.const 15))
                       (then
                         (local.set $base (i32.const 1))
                         (local.set $q (call $lexSkipSpaceAt (local.get $p)))
@@ -627,19 +570,16 @@
                           (then
                             (local.set $p (call $zigIdentEnd (local.get $q)))
                             (local.set $word
-                              (call $zigLookupWord
+                              (keyword-table.get $zigWords
                                 (local.get $q) (local.get $p)))))))))
                 (if (i32.and (i32.eqz (local.get $parenDepth))
                       (i32.or
                         (i32.eq (call $zigByte (local.get $q)) (i32.const "{"))
                         (i32.or
-                          (i32.eq (local.get $word) (enum.get $ZigWord.for))
-                          (i32.or
-                            (i32.eq (local.get $word) (enum.get $ZigWord.while))
-                            (i32.and
-                              (i32.eqz (local.get $base))
-                              (i32.eq
-                                (local.get $word) (enum.get $ZigWord.switch)))))))
+                          (i32.eq (local.get $word) (i32.const 5))
+                          (i32.and
+                            (i32.eqz (local.get $base))
+                            (i32.eq (local.get $word) (i32.const 6))))))
                   (then
                     (local.set $hl (enum.get $Token.label))
                     (local.set $labelColon (i32.const 1)))

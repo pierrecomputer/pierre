@@ -155,21 +155,40 @@
         (br_if $done (i32.ne (local.get $c) (i32.const 92)))
         (call $emitTok (local.get $hl) (local.get $seg) (global.get $ptr))
         ;; `\u`: span covers `\u` plus the hex digits actually present
-        ;; (up to 4) - a short escape must not swallow the closing quote
+        ;; (up to 4) - a short escape must not swallow the closing quote.
+        ;; Any other escaped byte stays whole with its UTF-8 tail - a span
+        ;; boundary must never split a code point - and a `\` before LF or
+        ;; CRLF continues the string on the next line
         (if (i32.and
               (i32.lt_u (i32.add (global.get $ptr) (i32.const 1)) (global.get $end))
               (i32.eq (i32.load8_u offset=1 (global.get $ptr)) (i32.const "u")))
-          (then (local.set $e (call $scanHexRun
-            (i32.add (global.get $ptr) (i32.const 2)) (i32.const 4))))
-          (else (local.set $e (i32.add (global.get $ptr) (i32.const 2)))))
-        ;; an escaped multibyte UTF-8 character stays whole inside the escape
-        ;; span - a span boundary must never split a code point
-        (local.set $e (call $utf8SpanEnd (local.get $e) (global.get $end)))
+          (then (local.set $e (call $utf8SpanEnd
+            (call $scanHexRun (i32.add (global.get $ptr) (i32.const 2)) (i32.const 4))
+            (global.get $end))))
+          (else (local.set $e (call $lexEscapeEnd (global.get $ptr)))))
         (call $emitTok (enum.get $Token.string.escape) (global.get $ptr) (local.get $e))
         (global.set $ptr (local.get $e))
         (local.set $seg (global.get $ptr))
+        (call $jsonStringOpenAtChunkEnd (local.get $hl))
         (br $l)))
     (call $emitTok (local.get $hl) (local.get $seg) (global.get $ptr)))
+
+  ;; A string whose escaped line break ends the chunk stays open: hand it to
+  ;; the shared string mode so the next chunk resumes the body instead of
+  ;; lexing the continuation line as json
+  (func $jsonStringOpenAtChunkEnd (param $hl i32)
+    (if (i32.and
+          (global.get $streaming)
+          (i32.and
+            (i32.eq (global.get $ptr) (global.get $end))
+            (i32.or
+              (i32.eq (i32.load8_u (i32.sub (global.get $ptr) (i32.const 1))) (i32.const 10))
+              (i32.eq (i32.load8_u (i32.sub (global.get $ptr) (i32.const 1))) (i32.const 13)))))
+      (then
+        (global.set $streamMode (i32.const 2))
+        (global.set $streamA (i32.const 34))
+        (global.set $streamB (i32.const 0))
+        (global.set $streamHl (local.get $hl)))))
 
   ;; loose number tail: digits, dot, exponent; first character already consumed
   (func $jsonNumber
