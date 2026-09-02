@@ -36,6 +36,7 @@ import type {
   CSSProperties,
   ReactNode,
   PointerEvent as ReactPointerEvent,
+  RefObject,
 } from 'react';
 import {
   useCallback,
@@ -567,6 +568,34 @@ function useIsMobile(query = '(max-width: 767px)'): boolean {
   );
 }
 
+// This is purely to allow the parent hook/component to be react compilered.
+function useRenderRefValue<T>(ref: RefObject<T>, value: T): void {
+  /* oxlint-disable-next-line react/refs -- preserve the existing render-time
+   * callback handoff */
+  ref.current = value;
+}
+
+// Preserves the local file selected after a save until the host acknowledges
+// it by replacing that path's file object.
+// Also wrapped in a hook to ensure that the parent function/component can be
+// react compilered.
+function useUsesLocalFile(
+  activePath: string | null,
+  activeHostFile: FileContents | undefined,
+  unsavedPaths: ReadonlySet<string>,
+  hostFilesAtSaveByPathRef: RefObject<Map<string, FileContents | undefined>>
+): boolean {
+  /* oxlint-disable react/refs -- isolate the existing render-time host acknowledgement snapshot */
+  const usesLocalFile =
+    activePath != null &&
+    (unsavedPaths.has(activePath) ||
+      (hostFilesAtSaveByPathRef.current.has(activePath) &&
+        hostFilesAtSaveByPathRef.current.get(activePath) === activeHostFile));
+  /* oxlint-enable react/refs */
+
+  return usesLocalFile;
+}
+
 // Owns the explorer sidebar width and exposes a pointer-down handler for the
 // drag handle. Uses pointer capture so the drag continues smoothly even if the
 // pointer leaves the handle element.
@@ -697,22 +726,15 @@ function useOpenTabs({
     }
   }, [isMobile, model, selectedPaths]);
 
-  // When the viewport flips into mobile, drop any extra tabs from a previous
-  // desktop session so only the active file remains. We never re-expand the
-  // tab list when going back to desktop; the user can reopen what they want.
-  useEffect(() => {
-    if (!isMobile) {
-      return;
-    }
-    setOpenPaths((current) => {
-      if (activePath == null) {
-        return current.length === 0 ? current : [];
-      }
-      return current.length === 1 && current[0] === activePath
-        ? current
-        : [activePath];
-    });
-  }, [activePath, isMobile]);
+  // When the viewport flips into mobile, discard any extra desktop tabs before
+  // committing the mobile layout. Returning to desktop does not restore them.
+  if (
+    isMobile &&
+    (openPaths.length !== (activePath == null ? 0 : 1) ||
+      (activePath != null && openPaths[0] !== activePath))
+  ) {
+    setOpenPaths(activePath == null ? [] : [activePath]);
+  }
 
   const closeTab = useCallback(
     (path: string) => {
@@ -1207,7 +1229,7 @@ export function TreeApp<LAnnotation = unknown>({
     new Map<string, FileContents | undefined>()
   );
   const unsavedPathsRef = useRef(unsavedPaths);
-  unsavedPathsRef.current = unsavedPaths;
+  useRenderRefValue(unsavedPathsRef, unsavedPaths);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   const handleEditorChangeRef = useRef<(file: FileContents) => void>(() => {});
@@ -1432,7 +1454,7 @@ export function TreeApp<LAnnotation = unknown>({
     isMobile,
     model,
   });
-  activePathRef.current = activePath;
+  useRenderRefValue(activePathRef, activePath);
 
   useEffect(
     () =>
@@ -1483,7 +1505,7 @@ export function TreeApp<LAnnotation = unknown>({
     [model]
   );
 
-  handleEditorChangeRef.current = handleEditorChange;
+  useRenderRefValue(handleEditorChangeRef, handleEditorChange);
 
   const mutations = useTreeMutations({
     model,
@@ -1662,11 +1684,12 @@ export function TreeApp<LAnnotation = unknown>({
   );
 
   const activeHostFile = activePath == null ? undefined : files?.[activePath];
-  const usesLocalFile =
-    activePath != null &&
-    (unsavedPaths.has(activePath) ||
-      (hostFilesAtSaveByPathRef.current.has(activePath) &&
-        hostFilesAtSaveByPathRef.current.get(activePath) === activeHostFile));
+  const usesLocalFile = useUsesLocalFile(
+    activePath,
+    activeHostFile,
+    unsavedPaths,
+    hostFilesAtSaveByPathRef
+  );
   const activeFile =
     activePath != null && usesLocalFile
       ? (editedFilesByPath[activePath] ?? activeHostFile)

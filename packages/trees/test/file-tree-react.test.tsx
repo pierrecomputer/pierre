@@ -240,6 +240,7 @@ describe('file-tree React lane', () => {
 
     function Harness() {
       const { model } = useFileTree(BASE_OPTIONS);
+      // oxlint-disable-next-line react/globals
       capturedModel = model;
       return <FileTreeReact model={model} />;
     }
@@ -280,6 +281,7 @@ describe('file-tree React lane', () => {
 
     function Harness() {
       const { model } = useFileTree(options);
+      // oxlint-disable-next-line react/globals
       capturedModel = model;
       return <FileTreeReact model={model} />;
     }
@@ -668,11 +670,11 @@ describe('file-tree React lane', () => {
           <button
             data-test-toggle-menu
             onClick={() => {
-              setShowMenu(false);
+              setShowMenu((visible) => !visible);
             }}
             type="button"
           >
-            Hide menu
+            Toggle menu
           </button>
           <FileTreeReact
             header={
@@ -737,6 +739,9 @@ describe('file-tree React lane', () => {
     await flushDom();
 
     expect(host.querySelector('[slot="header"]')).toBeNull();
+    expect(
+      host.querySelector('[slot="context-menu"] [data-test-menu]')?.textContent
+    ).toBe('README.md');
 
     await actAndFlush(() => {
       dispatchClick(toggleMenuButton);
@@ -744,6 +749,27 @@ describe('file-tree React lane', () => {
     await flushDom();
 
     expect(host.querySelector('[slot="context-menu"]')).toBeNull();
+
+    await actAndFlush(() => {
+      dispatchClick(toggleMenuButton);
+    });
+    await flushDom();
+
+    expect(host.querySelector('[slot="context-menu"]')).toBeNull();
+
+    await actAndFlush(() => {
+      readmeButton.dispatchEvent(
+        new dom.window.MouseEvent('contextmenu', {
+          bubbles: true,
+          clientX: 24,
+          clientY: 36,
+        })
+      );
+    });
+
+    expect(
+      host.querySelector('[slot="context-menu"] [data-test-menu]')?.textContent
+    ).toBe('README.md');
   });
 
   test('renderContextMenu preserves baseline context-menu trigger settings and handlers', async () => {

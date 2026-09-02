@@ -7,8 +7,8 @@ import type { FileTreePreloadedData } from '@pierre/trees/react';
 import { useFileTree } from '@pierre/trees/react';
 import { TreeApp } from '@trees/_components/TreeApp';
 import type { TreeAppTheme } from '@trees/_components/TreeApp';
-import type { CSSProperties } from 'react';
-import { useEffect, useMemo, useState } from 'react';
+import type { CSSProperties, Dispatch, SetStateAction } from 'react';
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 
 import { TREE_NEW_VIEWPORT_HEIGHTS } from '../_lib/dimensions';
 import {
@@ -184,6 +184,34 @@ function isPathInsideIgnoredDirectory(
   return false;
 }
 
+// Keeps local edits until the server provides a new source value, then resets
+// them before React commits a render with stale data.
+function useResettableState<T>(source: T): [T, Dispatch<SetStateAction<T>>] {
+  const [previousSource, setPreviousSource] = useState(source);
+  const [value, setValue] = useState(source);
+
+  if (previousSource !== source) {
+    setPreviousSource(source);
+    setValue(source);
+  }
+
+  return [value, setValue];
+}
+
+// The portal node is owned by the root layout and remains stable after
+// hydration, so there are no subsequent updates to subscribe to.
+function subscribeToPortalContainer(): () => void {
+  return () => {};
+}
+
+function getPortalContainer(): HTMLElement | null {
+  return document.getElementById('dark-mode-portal-container');
+}
+
+function getServerPortalContainer(): null {
+  return null;
+}
+
 export function DemoTreeAppClient({
   files,
   initialActivePath,
@@ -193,32 +221,21 @@ export function DemoTreeAppClient({
   treeId,
   treePreloadedData,
 }: DemoTreeAppClientProps) {
-  const [portalContainer, setPortalContainer] = useState<HTMLElement | null>(
-    null
+  const portalContainer = useSyncExternalStore(
+    subscribeToPortalContainer,
+    getPortalContainer,
+    getServerPortalContainer
   );
   // Owned here (rather than inside TreeApp) so the mobile fade overlay
   // rendered alongside <TreeApp /> below can pick the right gradient color
   // for the active theme.
   const [theme, setTheme] = useState<TreeAppTheme>('dark');
-  const [filesByPath, setFilesByPath] = useState(files);
+  const [filesByPath, setFilesByPath] = useResettableState(files);
   const [gitStatusEntries, setGitStatusEntries] = useState(
     TREE_APP_DEMO_GIT_STATUSES
   );
-  const [prerenderedHtmlByPathState, setPrerenderedHtmlByPathState] = useState(
-    prerenderedHTMLByPath
-  );
-
-  useEffect(() => {
-    setPortalContainer(document.getElementById('dark-mode-portal-container'));
-  }, []);
-
-  useEffect(() => {
-    setFilesByPath(files);
-  }, [files]);
-
-  useEffect(() => {
-    setPrerenderedHtmlByPathState(prerenderedHTMLByPath);
-  }, [prerenderedHTMLByPath]);
+  const [prerenderedHtmlByPathState, setPrerenderedHtmlByPathState] =
+    useResettableState(prerenderedHTMLByPath);
 
   const treeOptions = useMemo(
     () => ({
@@ -292,7 +309,7 @@ export function DemoTreeAppClient({
           return nextEntries;
         });
       }),
-    [model]
+    [model, setFilesByPath, setPrerenderedHtmlByPathState]
   );
 
   return (
