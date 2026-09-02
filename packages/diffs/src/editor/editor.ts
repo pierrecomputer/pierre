@@ -5163,6 +5163,7 @@ export class Editor<
     }
 
     const isWrap = this.#isWrap;
+    let allGroupsRendered = prediction.response.edits.length > 0;
     for (
       let editIndex = 0;
       editIndex < prediction.response.edits.length;
@@ -5180,6 +5181,20 @@ export class Editor<
       const isReplacement = comparePosition(start, end) !== 0;
       const lineLength = textDocument.getLineLength(start.line);
       const isMidLineInsertion = !isReplacement && start.character < lineLength;
+      // A prediction can be accepted only after every group is shown. A
+      // virtualized or collapsed row cannot show its edit, so accepting the
+      // response would otherwise change unseen document content.
+      let groupRendered = true;
+      for (let line = start.line; line <= end.line; line++) {
+        if (!this.#isLineVisible(line)) {
+          groupRendered = false;
+          break;
+        }
+      }
+      if (!groupRendered) {
+        allGroupsRendered = false;
+        continue;
+      }
       if (isReplacement) {
         const elementCount = renderCtx.elements.size;
         this.#renderSelection(
@@ -5187,7 +5202,7 @@ export class Editor<
           isDeletion ? 'editPredictionDeletion' : 'editPredictionReplacement',
           { start, end }
         );
-        prediction.rendered ||= renderCtx.elements.size > elementCount;
+        groupRendered = renderCtx.elements.size > elementCount;
       } else if (isMidLineInsertion) {
         // Hide the in-flow suffix so ghost text never collides with it.
         this.#renderSelection(renderCtx, 'editPredictionInsertion', {
@@ -5196,7 +5211,8 @@ export class Editor<
         });
       }
 
-      if (isDeletion || !this.#isLineVisible(start.line)) {
+      if (isDeletion) {
+        allGroupsRendered &&= groupRendered;
         continue;
       }
 
@@ -5307,8 +5323,9 @@ export class Editor<
       }
       element.style.transform = `translateX(${lineLeft}px) translateY(${anchorTop}px)`;
       renderCtx.elements.set(key, element);
-      prediction.rendered = true;
+      allGroupsRendered &&= groupRendered;
     }
+    prediction.rendered = allGroupsRendered;
   }
 
   #updateSelections(selections: EditorSelection[]) {

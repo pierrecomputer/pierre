@@ -14,6 +14,7 @@ import {
 import { TextDocument } from '../src/editor/textDocument';
 import type { EditorType } from '../src/editor/types';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
+import type { RenderRange } from '../src/types';
 import { installDom, wait, waitFor } from './domHarness';
 
 afterAll(async () => {
@@ -65,11 +66,13 @@ async function createPredictionFixture({
   contents,
   editorOptions,
   name = FILE_NAME,
+  renderRange,
   surface = 'File',
 }: {
   contents: string;
   editorOptions: EditorOptions<EditorType, undefined, undefined>;
   name?: string;
+  renderRange?: RenderRange;
   surface?: Surface;
 }): Promise<PredictionFixture> {
   const dom = installDom();
@@ -90,6 +93,7 @@ async function createPredictionFixture({
       file: { name, contents },
       fileContainer: container,
       forceRender: true,
+      renderRange,
     });
     editor.edit(file);
     cleanUpSurface = () => file.cleanUp();
@@ -876,6 +880,59 @@ describe('Editor edit prediction', () => {
       }
     });
   }
+
+  test('does not accept a response when a virtualized edit is not previewed', async () => {
+    const contents = Array.from(
+      { length: 100 },
+      (_, index) => `line ${index + 1}`
+    ).join('\n');
+    const provider: EditPredictProvider = {
+      predict() {
+        return Promise.resolve({
+          edits: [
+            {
+              range: {
+                start: { line: 0, character: 0 },
+                end: { line: 0, character: 6 },
+              },
+              newText: 'visible',
+            },
+            {
+              range: {
+                start: { line: 80, character: 0 },
+                end: { line: 80, character: 7 },
+              },
+              newText: 'unseen',
+            },
+          ],
+          newCursor: { line: 0, character: 0 },
+        });
+      },
+    };
+    const fixture = await createPredictionFixture({
+      contents,
+      editorOptions: { editPrediction: { provider } },
+      renderRange: {
+        startingLine: 0,
+        totalLines: 10,
+        bufferAfter: 0,
+        bufferBefore: 0,
+      },
+    });
+
+    try {
+      setCaret(fixture.editor, 0, 0);
+      await waitFor(() => predictionElements(fixture.container).length === 1, {
+        timeout: PREDICT_TIMEOUT,
+      });
+
+      dispatchKey(fixture.content, 'Tab');
+      expect(fixture.editor.getText()).not.toContain('visible');
+      expect(fixture.editor.getText()).toContain('line 81');
+    } finally {
+      await fixture.cleanup();
+    }
+  });
 
   test('reserves and clears space for a multiline FileDiff prediction at EOF', async () => {
     const provider: EditPredictProvider = {
