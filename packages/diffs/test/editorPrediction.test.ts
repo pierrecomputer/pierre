@@ -671,6 +671,58 @@ describe('Editor edit prediction', () => {
       }
     });
 
+    test(`${surface} masks and preserves the suffix for a mid-line replacement`, async () => {
+      const contents = 'return value;';
+      const start = 'return '.length;
+      const end = start + 'value'.length;
+      const replacement = 'longerName';
+      const provider: EditPredictProvider = {
+        predict() {
+          return Promise.resolve({
+            edits: [
+              {
+                range: {
+                  start: { line: 0, character: start },
+                  end: { line: 0, character: end },
+                },
+                newText: replacement,
+              },
+            ],
+            newCursor: { line: 0, character: start + replacement.length },
+          });
+        },
+      };
+      const fixture = await createPredictionFixture({
+        contents,
+        editorOptions: { editPrediction: { provider } },
+        surface,
+      });
+
+      try {
+        setCaret(fixture.editor, 0, end);
+        await waitFor(() => predictionElements(fixture.container).length > 0, {
+          timeout: PREDICT_TIMEOUT,
+        });
+
+        const prediction = predictionElements(fixture.container)[0];
+        expect(prediction.dataset.replacement).toBe('');
+        const replacementRange =
+          fixture.container.shadowRoot?.querySelector<HTMLElement>(
+            '[data-edit-prediction-replacement-range]'
+          );
+        expect(replacementRange).not.toBeNull();
+        expect(replacementRange?.style.width).toBe('48px');
+        expect(
+          prediction.querySelector('[data-edit-prediction-line]')?.textContent
+        ).toBe('longerName;');
+
+        expect(dispatchKey(fixture.content, 'Tab').defaultPrevented).toBe(true);
+        expect(fixture.editor.getText()).toBe('return longerName;');
+      } finally {
+        await fixture.cleanup();
+      }
+    });
+
     test(`${surface} composes multiple same-line insertions in the preview`, async () => {
       const contents = 'alpha value gamma';
       const firstCharacter = 'alpha '.length;

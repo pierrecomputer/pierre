@@ -4634,8 +4634,10 @@ export class Editor<
   }
 
   // Combines edits that share source lines into the exact text range rendered
-  // by one ghost preview. Spacing and rendering both use this geometry so they
-  // cannot disagree about how many continuation lines the preview contains.
+  // by one ghost preview. A non-deletion replacement also includes the
+  // preserved line suffix so it reflows after the ghost text. Spacing and
+  // rendering both use this geometry so they cannot disagree about how many
+  // continuation lines the preview contains.
   #composeEditPredictionGroup(
     textDocument: TextDocument<EType, LAnnotation>,
     edits: readonly TextEdit[],
@@ -4651,7 +4653,11 @@ export class Editor<
       endIndex++;
       endLine = Math.max(endLine, edits[endIndex].range.end.line);
     }
-    if (endIndex === startIndex) {
+    if (
+      endIndex === startIndex &&
+      (firstEdit.newText.length === 0 ||
+        comparePosition(firstEdit.range.start, firstEdit.range.end) === 0)
+    ) {
       return { edit: firstEdit, endIndex };
     }
 
