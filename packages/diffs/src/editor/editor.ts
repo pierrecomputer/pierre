@@ -6389,6 +6389,11 @@ function getEditSession<EType extends EditorType, LAnnotation, Caret>({
   EType,
   LAnnotation
 > {
+  if (initialState != null && initialState.type !== type) {
+    throw new TypeError(
+      `Editor: initialState: a ${initialState.type} state cannot initialize a ${type} editor`
+    );
+  }
   const initialSession = initialState as
     | ManagedEditSession<EType, LAnnotation>
     | undefined;

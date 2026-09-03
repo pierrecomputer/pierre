@@ -7,7 +7,12 @@ import { DEFAULT_THEMES } from '../src/constants';
 import { Editor } from '../src/editor/editor';
 import { EditStateManager } from '../src/editor/EditStateManager';
 import { TextDocument } from '../src/editor/textDocument';
-import type { EditorViewState, FileEditState } from '../src/editor/types';
+import type {
+  EditorInitialState,
+  EditorType,
+  EditorViewState,
+  FileEditState,
+} from '../src/editor/types';
 import type { DiffsHighlighter, FileContents } from '../src/types';
 import { getFiletypeFromFileName } from '../src/utils/getFiletypeFromFileName';
 import { installDom } from './domHarness';
@@ -189,6 +194,31 @@ function createTestFile(
 }
 
 describe('Editor state', () => {
+  test('rejects initial state for a different editor type', () => {
+    const dom = installDom();
+    const component = createTestFile({
+      name: 'state.ts',
+      contents: 'alpha',
+      lang: 'text',
+    });
+    const initialState: EditorInitialState<EditorType, undefined> = {
+      type: 'file-diff',
+    };
+    const editor = new Editor<EditorType, undefined, undefined>('file', {
+      initialState,
+    });
+
+    try {
+      expect(() => editor.edit(component)).toThrow(
+        'Editor: initialState: a file-diff state cannot initialize a file editor'
+      );
+    } finally {
+      editor.cleanUp();
+      component.cleanUp();
+      dom.cleanup();
+    }
+  });
+
   test('keyed state restores selections and view in a later editor', () => {
     const dom = installDom();
     EditStateManager.clearAll();
