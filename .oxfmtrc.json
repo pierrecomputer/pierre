@@ -42,6 +42,8 @@
     ".next",
     ".source",
     ".vercel",
+    "apps/**/AGENTS.md",
+    "apps/**/CLAUDE.md",
     "apps/docs/public/r/*",
     "apps/docs/next-env.d.ts",
     "packages/theme/themes/*.json",
