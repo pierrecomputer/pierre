@@ -910,7 +910,8 @@ const codeViewStyle = { height: '24rem', overflow: 'auto' } as const;
 
 const editorOptions: EditorOptions<
   'file' | 'file-diff',
-  ThreadMetadata
+  ThreadMetadata,
+  undefined
 > = {
   onAttach(editor) {
     editor.focus({ lineNumber: 'first-visible', preventScroll: true });
@@ -1184,7 +1185,9 @@ export const EDIT_ON_ATTACH_REACT_EXAMPLE: PreloadFileOptions<
 > = {
   file: {
     name: 'editor_on_attach_react.tsx',
-    contents: `const editorOptions = useMemo<EditorOptions>(
+    contents: `const editorOptions = useMemo<
+  EditorOptions<'file' | 'file-diff', undefined, undefined>
+>(
   () => ({
     onAttach(editor) {
       editor.focus({ lineNumber: 'first-visible', preventScroll: true });
