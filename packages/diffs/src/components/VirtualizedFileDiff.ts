@@ -933,11 +933,16 @@ export class VirtualizedFileDiff<
   }
 
   override cleanUp(recycle = false): void {
+    const hadGhostTextRows = this.cache.ghostTextRows.size > 0;
+    if (hadGhostTextRows) {
+      this.layoutDirty = true;
+    }
     const shouldRecomputeLayout =
       recycle &&
       this.isAdvancedMode() &&
       this.fileContainer != null &&
-      !areDiffTargetsEqual(this.getRenderedDiff(), this.getLatestDiff());
+      (hadGhostTextRows ||
+        !areDiffTargetsEqual(this.getRenderedDiff(), this.getLatestDiff()));
     if (this.fileContainer != null && this.isSimpleMode()) {
       this.getSimpleVirtualizer()?.disconnect(this.fileContainer);
     }
@@ -1160,9 +1165,9 @@ export class VirtualizedFileDiff<
       codeView.capturePendingLayoutAnchor();
       this.layoutDirty = true;
       codeView.instanceChanged(this, true);
-      return;
+    } else {
+      this.getSimpleVirtualizer()?.requestHeightReconcile(this);
     }
-    this.getSimpleVirtualizer()?.requestHeightReconcile(this);
   }
 
   // Normally triggered by the host when the document line count changes.

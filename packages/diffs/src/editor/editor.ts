@@ -1145,7 +1145,7 @@ export class Editor<
   cleanUp(reason: 'discard' | 'recycle' | 'complete' = 'discard'): void {
     const fileInstance = this.#fileInstance;
     const recycle = reason === 'recycle';
-    this.#cancelEditPrediction(true);
+    this.#cancelEditPrediction(true, false);
     if (!recycle) {
       this.#editPredictionHistory = [];
     }
@@ -4755,7 +4755,7 @@ export class Editor<
 
   // Reserve numberless grid space for ghost continuation lines without adding
   // rows that could be mistaken for document content by the editor.
-  #syncEditPredictionSpacers(): void {
+  #syncEditPredictionSpacers(notifyComponent = true): void {
     const nextSpacers = new Map<HTMLElement, number>();
     // Ghost text rows per line for this sync. It replaces #ghostTextRows only
     // when the contents differ, so an unchanged map keeps its identity.
@@ -4833,13 +4833,16 @@ export class Editor<
     this.#editPredictionSpacers = nextSpacers;
     if (rowsChanged || ghostTextRows.size !== previousRows.size) {
       this.#ghostTextRows = ghostTextRows;
+      if (notifyComponent) {
+        this.#virtualizedInstance?.syncGhostTextRows();
+      }
     }
     if (changed) {
       this.#resetCache();
     }
   }
 
-  #cancelEditPrediction(removeRendered: boolean): void {
+  #cancelEditPrediction(removeRendered: boolean, notifyComponent = true): void {
     if (this.#editPredictionTimer !== undefined) {
       clearTimeout(this.#editPredictionTimer);
       this.#editPredictionTimer = undefined;
@@ -4851,7 +4854,7 @@ export class Editor<
     this.#retryEditPredictionOnRender = false;
     this.#editPrediction = undefined;
     this.#contentElement?.style.removeProperty('padding-block-end');
-    this.#syncEditPredictionSpacers();
+    this.#syncEditPredictionSpacers(notifyComponent);
     if (removeRendered) {
       this.#removeRenderedEditPrediction();
     }
@@ -6690,6 +6693,12 @@ export class Editor<
       editSource?: 'user' | 'prediction';
     }
   ) {
+    // Cancel first so a line-count change, which rebuilds the component's
+    // layout, folds the now-empty ghost rows rather than rows keyed by pre-edit
+    // lines. Every change ends the prediction anyway.
+    if (this.#editPrediction != null) {
+      this.#cancelEditPrediction(true);
+    }
     const textDocument = this.#editSession?.document;
     if (textDocument !== undefined && this.#carets !== undefined) {
       for (const trackedCaret of this.#carets) {

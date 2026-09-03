@@ -641,11 +641,19 @@ export class VirtualizedFile<
   }
 
   override cleanUp(recycle = false): void {
+    // The editor's own cleanUp has already cleared its ghost text rows without
+    // asking for a layout pass. Mark the layout dirty so a pooled item drops the
+    // folded rows on its next pass instead of keeping phantom height.
+    const hadGhostTextRows = this.cache.ghostTextRows.size > 0;
+    if (hadGhostTextRows) {
+      this.layoutDirty = true;
+    }
     const shouldRecomputeLayout =
       recycle &&
       this.isAdvancedMode() &&
       this.fileContainer != null &&
-      !areFileTargetsEqual(this.getRenderedFile(), this.getLatestFile());
+      (hadGhostTextRows ||
+        !areFileTargetsEqual(this.getRenderedFile(), this.getLatestFile()));
     if (this.fileContainer != null && this.isSimpleMode()) {
       this.getSimpleVirtualizer()?.disconnect(this.fileContainer);
     }
@@ -774,7 +782,6 @@ export class VirtualizedFile<
       codeView.capturePendingLayoutAnchor();
       this.layoutDirty = true;
       codeView.instanceChanged(this, true);
-      return;
     } else {
       this.getSimpleVirtualizer()?.requestHeightReconcile(this);
     }
