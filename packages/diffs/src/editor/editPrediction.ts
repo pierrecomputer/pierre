@@ -529,16 +529,19 @@ export function recordEditPrediction(
   return kept.slice(-MAX_HISTORY_ENTRIES);
 }
 
+// Grows [first, last] one line at a time in both directions while the token
+// budget allows and `canExpandTo` accepts the next line on that side.
 function expandLinewise(
   lineCount: number,
   costForLine: (line: number) => number,
+  canExpandTo: (line: number) => boolean,
   first: number,
   last: number,
   remaining: number
 ): { first: number; last: number } {
   while (remaining > 0 && (first > 0 || last < lineCount - 1)) {
     let expanded = false;
-    if (first > 0) {
+    if (first > 0 && canExpandTo(first - 1)) {
       const cost = costForLine(first - 1);
       if (cost <= remaining) {
         first--;
@@ -546,7 +549,7 @@ function expandLinewise(
         expanded = true;
       }
     }
-    if (last < lineCount - 1) {
+    if (last < lineCount - 1 && canExpandTo(last + 1)) {
       const cost = costForLine(last + 1);
       if (cost <= remaining) {
         last++;
@@ -561,11 +564,19 @@ function expandLinewise(
   return { first, last };
 }
 
+// Builds the request sent to the prediction provider. It carries a bounded
+// excerpt of the document around the cursor and marks the part of it the
+// provider may edit. The editable part grows outward from the cursor line and
+// stops at the first line `isLineEditable` rejects, so the provider never sees
+// an editable line the editor could not show a preview for. The rest of the
+// excerpt is read-only context and is not filtered. Returns undefined when the
+// cursor line itself is rejected.
 export function buildEditPredictionRequest(
   path: string,
   document: EditPredictionDocument,
   cursorOffset: number,
-  history: readonly EditPredictionHistoryRecord[]
+  history: readonly EditPredictionHistoryRecord[],
+  isLineEditable: (line: number) => boolean
 ): EditPredictRequest | undefined {
   if (document.lineCount <= 0) {
     return;
@@ -593,6 +604,24 @@ export function buildEditPredictionRequest(
     cursor--;
   }
   const cursorLine = document.positionAt(cursor).line;
+  // Cache whether each line may be edited. `isLineEditable` can be costly (a
+  // diff has to walk its hunks to answer), and the loops below ask about the
+  // same boundary lines over and over.
+  const editableLines = new Map<number, boolean>();
+  const canEdit = (line: number): boolean => {
+    if (line < 0 || line >= document.lineCount) {
+      return false;
+    }
+    let editable = editableLines.get(line);
+    if (editable == null) {
+      editable = isLineEditable(line);
+      editableLines.set(line, editable);
+    }
+    return editable;
+  };
+  if (!canEdit(cursorLine)) {
+    return;
+  }
   const tokenCosts = new Map<number, number>();
   const costForLine = (line: number): number => {
     const cached = tokenCosts.get(line);
@@ -619,9 +648,9 @@ export function buildEditPredictionRequest(
   let remaining = Math.max(0, initialBudget - costForLine(cursorLine));
   while (
     remaining > 0 &&
-    (editableFirst > 0 || editableLast < document.lineCount - 1)
+    (canEdit(editableFirst - 1) || canEdit(editableLast + 1))
   ) {
-    if (editableLast < document.lineCount - 1) {
+    if (canEdit(editableLast + 1)) {
       const cost = costForLine(editableLast + 1);
       if (cost > remaining) {
         break;
@@ -629,7 +658,7 @@ export function buildEditPredictionRequest(
       editableLast++;
       remaining -= cost;
     }
-    if (editableFirst > 0 && remaining > 0) {
+    if (canEdit(editableFirst - 1) && remaining > 0) {
       const cost = costForLine(editableFirst - 1);
       if (cost > remaining) {
         break;
@@ -642,6 +671,7 @@ export function buildEditPredictionRequest(
   ({ first: editableFirst, last: editableLast } = expandLinewise(
     document.lineCount,
     costForLine,
+    canEdit,
     editableFirst,
     editableLast,
     remaining
@@ -652,6 +682,7 @@ export function buildEditPredictionRequest(
   ({ first: contextFirst, last: contextLast } = expandLinewise(
     document.lineCount,
     costForLine,
+    () => true,
     contextFirst,
     contextLast,
     CONTEXT_TOKENS

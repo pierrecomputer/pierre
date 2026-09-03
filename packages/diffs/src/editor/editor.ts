@@ -568,6 +568,11 @@ export class Editor<
   #editPredictionAbortController?: AbortController;
   #editPredictionGeneration = 0;
   #editPredictionRevealed = false;
+  // True when we skipped asking for a prediction because the caret sits on a
+  // line that has no rendered row right now (for example a large paste pushed
+  // it below the virtualized window). The next time the attached component
+  // renders and that row exists, we ask again.
+  #retryEditPredictionOnRender = false;
   #editPrediction?: {
     document: TextDocument<EType, LAnnotation>;
     version: number;
@@ -1599,6 +1604,9 @@ export class Editor<
         this.#updateSelections(this.#selections ?? []);
       }
       this.#renderCarets();
+      if (this.#retryEditPredictionOnRender) {
+        this.#scheduleEditPrediction();
+      }
 
       if (
         this.#initSelections !== undefined &&
@@ -4823,6 +4831,7 @@ export class Editor<
     this.#editPredictionAbortController = undefined;
     this.#editPredictionGeneration++;
     this.#editPredictionRevealed = false;
+    this.#retryEditPredictionOnRender = false;
     this.#editPrediction = undefined;
     this.#contentElement?.style.removeProperty('padding-block-end');
     this.#syncEditPredictionSpacers();
@@ -4885,11 +4894,18 @@ export class Editor<
         return;
       }
 
+      const isLineEditable = (line: number): boolean =>
+        this.#isLineInRenderRange(line) && this.#isLineRenderable(line);
+      if (!isLineEditable(getCaretPosition(currentSelection).line)) {
+        this.#retryEditPredictionOnRender = true;
+        return;
+      }
       const request = buildEditPredictionRequest(
         path,
         document,
         cursorOffset,
-        this.#editPredictionHistory
+        this.#editPredictionHistory,
+        isLineEditable
       );
       if (request === undefined) {
         return;
@@ -6914,6 +6930,19 @@ export class Editor<
     return ranges;
   }
 
+  // Whether the File or FileDiff component this editor is attached to
+  // currently renders a row for this document line. Virtualized components
+  // only render a window of lines, so a line outside that window has no DOM
+  // row. Without a render range, every line has a row.
+  #isLineInRenderRange(line: number): boolean {
+    const renderRange = this.#renderRange;
+    return (
+      renderRange == null ||
+      (line >= renderRange.startingLine &&
+        line < renderRange.startingLine + renderRange.totalLines)
+    );
+  }
+
   #getLineElement(line: number): HTMLElement | undefined {
     let lineElement = this.#lineElementsCache.get(line);
     if (lineElement !== undefined) {
@@ -6921,11 +6950,7 @@ export class Editor<
     }
 
     const renderRange = this.#renderRange;
-    if (
-      renderRange !== undefined &&
-      (line < renderRange.startingLine ||
-        line >= renderRange.startingLine + renderRange.totalLines)
-    ) {
+    if (!this.#isLineInRenderRange(line)) {
       return undefined;
     }
 

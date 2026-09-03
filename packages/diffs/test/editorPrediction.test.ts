@@ -1014,9 +1014,18 @@ describe('Editor edit prediction', () => {
       setCaret(fixture.editor, 0, 0);
       await expectCallCount(calls, 1);
       await wait(0);
-      // One group has no rendered row, so nothing is drawn: no ghost, no strike
-      // for the visible group either. Tab then behaves as if no prediction
-      // existed and indents.
+      // The request only offers the ten rendered lines for editing, so the
+      // response's line 80 edit is rejected and nothing is drawn: no ghost,
+      // no strike for the visible group either. Tab then behaves as if no
+      // prediction existed and indents.
+      const [{ request }] = calls;
+      const editableEndLine =
+        request.excerptStartLine +
+        request.excerptText.slice(0, request.editableRange.end).split('\n')
+          .length -
+        1;
+      expect(request.excerptStartLine).toBe(0);
+      expect(editableEndLine).toBe(9);
       expect(predictionElements(fixture.container)).toHaveLength(0);
       expect(
         fixture.container.shadowRoot?.querySelectorAll(
@@ -1029,6 +1038,84 @@ describe('Editor edit prediction', () => {
       expect(fixture.editor.getText()).not.toContain('visible');
       expect(fixture.editor.getText()).not.toContain('unseen');
       expect(fixture.editor.getText().startsWith('  line 1\n')).toBe(true);
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  test('clamps the editable range to renderable lines beside a collapsed hunk', async () => {
+    const contents = Array.from({ length: 41 }, (_, index) =>
+      index === 0 || index === 40
+        ? `line ${index + 1} value`
+        : `line ${index + 1}`
+    ).join('\n');
+    const calls: PredictionCall[] = [];
+    const provider: EditPredictProvider = {
+      predict(request, context) {
+        calls.push({ context, request });
+        return Promise.resolve({
+          edits: [],
+          newCursor: { line: 4, character: 0 },
+        });
+      },
+    };
+    const fixture = await createPredictionFixture({
+      contents,
+      editorOptions: { editPrediction: { provider } },
+      surface: 'FileDiff',
+    });
+
+    try {
+      // Lines 5..35 sit in the collapsed gap between the two hunks; the caret
+      // is on the last rendered line before it.
+      setCaret(fixture.editor, 4, 0);
+      await expectCallCount(calls, 1);
+      const [{ request }] = calls;
+      const excerptLines = request.excerptText.split('\n');
+      const editableEndLine =
+        request.excerptStartLine +
+        request.excerptText.slice(0, request.editableRange.end).split('\n')
+          .length -
+        1;
+      expect(request.excerptStartLine).toBe(0);
+      expect(editableEndLine).toBe(4);
+      // Context is not clamped: it still reaches past the collapsed region.
+      expect(request.excerptStartLine + excerptLines.length - 1).toBe(40);
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  test('makes no request while the caret row is outside the render window', async () => {
+    const contents = Array.from(
+      { length: 100 },
+      (_, index) => `line ${index + 1}`
+    ).join('\n');
+    const calls: PredictionCall[] = [];
+    const provider: EditPredictProvider = {
+      predict(request, context) {
+        calls.push({ context, request });
+        return Promise.resolve({
+          edits: [],
+          newCursor: { line: 50, character: 0 },
+        });
+      },
+    };
+    const fixture = await createPredictionFixture({
+      contents,
+      editorOptions: { editPrediction: { provider } },
+      renderRange: {
+        startingLine: 0,
+        totalLines: 10,
+        bufferAfter: 0,
+        bufferBefore: 0,
+      },
+    });
+
+    try {
+      setCaret(fixture.editor, 50, 0);
+      await wait(PREDICT_TIMEOUT);
+      expect(calls).toHaveLength(0);
     } finally {
       await fixture.cleanup();
     }
