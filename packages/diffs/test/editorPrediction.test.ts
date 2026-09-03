@@ -974,8 +974,10 @@ describe('Editor edit prediction', () => {
       { length: 100 },
       (_, index) => `line ${index + 1}`
     ).join('\n');
+    const calls: PredictionCall[] = [];
     const provider: EditPredictProvider = {
-      predict() {
+      predict(request, context) {
+        calls.push({ context, request });
         return Promise.resolve({
           edits: [
             {
@@ -1010,13 +1012,23 @@ describe('Editor edit prediction', () => {
 
     try {
       setCaret(fixture.editor, 0, 0);
-      await waitFor(() => predictionElements(fixture.container).length === 1, {
-        timeout: PREDICT_TIMEOUT,
-      });
+      await expectCallCount(calls, 1);
+      await wait(0);
+      // One group has no rendered row, so nothing is drawn: no ghost, no strike
+      // for the visible group either. Tab then behaves as if no prediction
+      // existed and indents.
+      expect(predictionElements(fixture.container)).toHaveLength(0);
+      expect(
+        fixture.container.shadowRoot?.querySelectorAll(
+          '[data-edit-prediction-replacement-range]'
+        )
+      ).toHaveLength(0);
 
-      dispatchKey(fixture.content, 'Tab');
+      const tab = dispatchKey(fixture.content, 'Tab');
+      expect(tab.defaultPrevented).toBe(true);
       expect(fixture.editor.getText()).not.toContain('visible');
-      expect(fixture.editor.getText()).toContain('line 81');
+      expect(fixture.editor.getText()).not.toContain('unseen');
+      expect(fixture.editor.getText().startsWith('  line 1\n')).toBe(true);
     } finally {
       await fixture.cleanup();
     }

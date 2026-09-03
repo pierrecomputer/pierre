@@ -428,6 +428,15 @@ type OverlayRangeType =
   | 'editPredictionInsertion'
   | 'editPredictionReplacement';
 
+// Response edits that touch the same source lines are previewed by one ghost
+// overlay. `edit` is their combined text range; `startIndex` and `endIndex`
+// are the response edits it covers.
+interface EditPredictionGroup {
+  edit: TextEdit;
+  startIndex: number;
+  endIndex: number;
+}
+
 export class Editor<
   EType extends EditorType = EditorType,
   LAnnotation = undefined,
@@ -2392,11 +2401,11 @@ export class Editor<
           !e.isComposing &&
           !this.#isComposing &&
           (!e.altKey || this.#options.editPrediction?.mode === 'subtle') &&
-          this.#acceptEditPrediction(
-            this.#options.editPrediction?.mode !== 'subtle' ||
-              this.#editPredictionRevealed
-          )
+          this.#editPrediction?.rendered === true
         ) {
+          // Ghost text is on screen, so Tab belongs to the prediction even when
+          // acceptance fails; it must never fall through to indentation.
+          this.#acceptEditPrediction();
           e.preventDefault();
           return;
         }
@@ -4682,38 +4691,61 @@ export class Editor<
     };
   }
 
+  // Composes the active prediction into ghost groups and decides, once, whether
+  // every group has rendered rows. Spacers and ghost rendering read this result
+  // directly; Tab acceptance reads the `rendered` flag that rendering sets only
+  // after drawing every group. A prediction is therefore shown all-or-nothing
+  // and Tab acts on exactly the ghost text the user sees. A virtualized or
+  // collapsed row cannot show its edit, and accepting would change unseen
+  // document content. Undefined when no prediction applies to the current
+  // document version or subtle mode has not revealed it.
+  #getEditPredictionGroups():
+    | { groups: EditPredictionGroup[]; allVisible: boolean }
+    | undefined {
+    const prediction = this.#editPrediction;
+    const textDocument = this.#editSession?.document;
+    if (
+      prediction == null ||
+      textDocument == null ||
+      prediction.document !== textDocument ||
+      prediction.version !== textDocument.version ||
+      (this.#options.editPrediction?.mode === 'subtle' &&
+        !this.#editPredictionRevealed)
+    ) {
+      return undefined;
+    }
+    const { edits } = prediction.response;
+    const groups: EditPredictionGroup[] = [];
+    let allVisible = edits.length > 0;
+    for (let startIndex = 0; startIndex < edits.length; ) {
+      const { edit, endIndex } = this.#composeEditPredictionGroup(
+        textDocument,
+        edits,
+        startIndex
+      );
+      for (
+        let line = edit.range.start.line;
+        allVisible && line <= edit.range.end.line;
+        line++
+      ) {
+        allVisible = this.#isLineVisible(line);
+      }
+      groups.push({ edit, startIndex, endIndex });
+      startIndex = endIndex + 1;
+    }
+    return { groups, allVisible };
+  }
+
   // Reserve numberless grid space for ghost continuation lines without adding
   // rows that could be mistaken for document content by the editor.
   #syncEditPredictionSpacers(): void {
     const nextSpacers = new Map<HTMLElement, number>();
-    const prediction = this.#editPrediction;
-    const textDocument = this.#editSession?.document;
     const contentElement = this.#contentElement;
-    if (
-      prediction !== undefined &&
-      prediction.document === textDocument &&
-      prediction.version === textDocument?.version &&
-      contentElement !== undefined &&
-      (this.#options.editPrediction?.mode !== 'subtle' ||
-        this.#editPredictionRevealed)
-    ) {
+    const composed = this.#getEditPredictionGroups();
+    if (contentElement != null && composed != null && composed.allVisible) {
       const continuationLines = new Map<number, number>();
-      for (
-        let editIndex = 0;
-        editIndex < prediction.response.edits.length;
-        editIndex++
-      ) {
-        const group = this.#composeEditPredictionGroup(
-          textDocument,
-          prediction.response.edits,
-          editIndex
-        );
-        const { edit } = group;
-        editIndex = group.endIndex;
-        if (
-          edit.newText.length === 0 ||
-          !this.#isLineVisible(edit.range.start.line)
-        ) {
+      for (const { edit } of composed.groups) {
+        if (edit.newText.length === 0) {
           continue;
         }
         const count = countLineBreaks(edit.newText);
@@ -5080,12 +5112,11 @@ export class Editor<
     );
   }
 
-  #acceptEditPrediction(visible: boolean): boolean {
+  #acceptEditPrediction(): void {
     const prediction = this.#editPrediction;
     const textDocument = this.#editSession?.document;
     const selection = this.#selections?.[0];
     if (
-      !visible ||
       prediction === undefined ||
       !prediction.rendered ||
       textDocument === undefined ||
@@ -5097,7 +5128,7 @@ export class Editor<
       textDocument.offsetAt(getCaretPosition(selection)) !==
         prediction.cursorOffset
     ) {
-      return false;
+      return;
     }
 
     const { edits, newCursor } = prediction.response;
@@ -5117,7 +5148,7 @@ export class Editor<
     );
     if (change === undefined) {
       this.#scheduleEditPrediction();
-      return false;
+      return;
     }
 
     const cursor = textDocument.normalizePosition(newCursor);
@@ -5131,7 +5162,6 @@ export class Editor<
       this.#applyChangeToLineAnnotations(change),
       { editSource: 'prediction' }
     );
-    return true;
   }
 
   #renderEditPrediction(renderCtx: {
@@ -5140,62 +5170,33 @@ export class Editor<
   }): void {
     const prediction = this.#editPrediction;
     const textDocument = this.#editSession?.document;
-    const contentElement = this.#contentElement;
-    contentElement?.style.removeProperty('padding-block-end');
+    this.#contentElement?.style.removeProperty('padding-block-end');
     if (prediction !== undefined) {
       prediction.rendered = false;
     }
+    const composed = this.#getEditPredictionGroups();
     if (
-      prediction === undefined ||
-      prediction.document !== textDocument ||
-      prediction.version !== textDocument?.version ||
-      (this.#options.editPrediction?.mode === 'subtle' &&
-        !this.#editPredictionRevealed)
+      prediction == null ||
+      textDocument == null ||
+      composed == null ||
+      !composed.allVisible
     ) {
       return;
     }
 
     const isWrap = this.#isWrap;
-    let allGroupsRendered = prediction.response.edits.length > 0;
-    for (
-      let editIndex = 0;
-      editIndex < prediction.response.edits.length;
-      editIndex++
-    ) {
-      const group = this.#composeEditPredictionGroup(
-        textDocument,
-        prediction.response.edits,
-        editIndex
-      );
-      const { edit } = group;
-      editIndex = group.endIndex;
+    for (const { edit, startIndex, endIndex } of composed.groups) {
       const { start, end } = edit.range;
       const isDeletion = edit.newText.length === 0;
       const isReplacement = comparePosition(start, end) !== 0;
       const lineLength = textDocument.getLineLength(start.line);
       const isMidLineInsertion = !isReplacement && start.character < lineLength;
-      // A prediction can be accepted only after every group is shown. A
-      // virtualized or collapsed row cannot show its edit, so accepting the
-      // response would otherwise change unseen document content.
-      let groupRendered = true;
-      for (let line = start.line; line <= end.line; line++) {
-        if (!this.#isLineVisible(line)) {
-          groupRendered = false;
-          break;
-        }
-      }
-      if (!groupRendered) {
-        allGroupsRendered = false;
-        continue;
-      }
       if (isReplacement) {
-        const elementCount = renderCtx.elements.size;
         this.#renderSelection(
           renderCtx,
           isDeletion ? 'editPredictionDeletion' : 'editPredictionReplacement',
           { start, end }
         );
-        groupRendered = renderCtx.elements.size > elementCount;
       } else if (isMidLineInsertion) {
         // Hide the in-flow suffix so ghost text never collides with it.
         this.#renderSelection(renderCtx, 'editPredictionInsertion', {
@@ -5205,7 +5206,6 @@ export class Editor<
       }
 
       if (isDeletion) {
-        allGroupsRendered &&= groupRendered;
         continue;
       }
 
@@ -5216,7 +5216,7 @@ export class Editor<
       const lineLeft = this.#getCharX(start.line, 0)[0];
       const anchorTop =
         this.#getLineY(start.line) + anchorWrapLine * this.#metrics.lineHeight;
-      const key = `editPrediction-${editIndex}`;
+      const key = `editPrediction-${endIndex}`;
       let element = this.#overlayElements?.get(key);
       if (element !== undefined) {
         this.#overlayElements?.delete(key);
@@ -5258,10 +5258,9 @@ export class Editor<
       if (
         isMidLineInsertion &&
         !isWrap &&
-        prediction.response.edits[editIndex - 1]?.range.end.line !==
+        prediction.response.edits[startIndex - 1]?.range.end.line !==
           start.line &&
-        prediction.response.edits[editIndex + 1]?.range.start.line !==
-          start.line
+        prediction.response.edits[endIndex + 1]?.range.start.line !== start.line
       ) {
         const sourceLine = this.#getLineElement(start.line);
         if (sourceLine === undefined) {
@@ -5316,9 +5315,8 @@ export class Editor<
       }
       element.style.transform = `translateX(${lineLeft}px) translateY(${anchorTop}px)`;
       renderCtx.elements.set(key, element);
-      allGroupsRendered &&= groupRendered;
     }
-    prediction.rendered = allGroupsRendered;
+    prediction.rendered = true;
   }
 
   #updateSelections(selections: EditorSelection[]) {
@@ -5642,6 +5640,27 @@ export class Editor<
       const endChar = isLastLine
         ? end.character
         : this.#editSession?.document.getLineLength(line);
+
+      // A predicted deletion of an empty line or of a lone line break has no
+      // text to strike through; draw a one-character mark at the boundary so
+      // the removal is visible, on flat and soft-wrapped lines alike.
+      if (
+        startChar === endChar &&
+        (type === 'editPredictionDeletion' ||
+          type === 'editPredictionReplacement')
+      ) {
+        const [left, wrapLine] = this.#getCharX(line, startChar);
+        this.#renderSelectionBlock(
+          renderCtx,
+          type,
+          line,
+          wrapLine,
+          left,
+          this.#metrics.ch,
+          extraDataset
+        );
+        continue;
+      }
 
       if (this.#isWrap) {
         const contentWidth = this.#getContentWidth();
