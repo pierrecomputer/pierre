@@ -44,6 +44,7 @@ import {
 } from '../index';
 import { areManagedSnapshotsEqual } from '../utils/areManagedSnapshotsEqual';
 import { useCreateEditor } from './EditContext';
+import { assignRef } from './utils/assignRef';
 import { renderDiffChildren } from './utils/renderDiffChildren';
 import { renderFileChildren } from './utils/renderFileChildren';
 import { useStableCallback } from './utils/useStableCallback';
@@ -369,11 +370,7 @@ function CodeViewInner<LAnnotation = undefined, Caret = undefined>(
       cachedDataRef.current.instance.setup(node);
     }
 
-    if (typeof containerRef === 'function') {
-      containerRef(node);
-    } else if (containerRef != null) {
-      containerRef.current = node;
-    }
+    assignRef(containerRef, node);
   });
 
   const onSnapshotChange = useStableCallback(

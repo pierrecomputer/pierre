@@ -115,25 +115,24 @@ export const WorkerPoolStatus = memo(function WorkerPoolStatus({
   const [stats, setStats] = useState<WorkerStats | undefined>(undefined);
   useEffect(() => {
     if (pool == null) {
-      setStats(undefined);
       return undefined;
-    } else {
-      return pool.subscribeToStatChanges((newStats) => {
-        setStats((prevStats): WorkerStats | undefined => {
-          if (areWorkerStatsEqual(prevStats, newStats)) {
-            return prevStats;
-          }
-          return newStats;
-        });
-      });
     }
+    return pool.subscribeToStatChanges((newStats) => {
+      setStats((prevStats): WorkerStats | undefined => {
+        if (areWorkerStatsEqual(prevStats, newStats)) {
+          return prevStats;
+        }
+        return newStats;
+      });
+    });
   }, [pool]);
+  const visibleStats = pool == null ? undefined : stats;
   return (
-    stats != null && (
+    visibleStats != null && (
       <StatsDisplay
         expanded={expanded}
         onToggle={onToggle}
-        stats={stats}
+        stats={visibleStats}
         themeCycle={themeCycle}
         viewerRef={viewerRef}
       />

@@ -8,9 +8,9 @@ import {
   type ReactNode,
   useCallback,
   useEffect,
-  useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
 } from 'react';
 
 import { DiffsHubHeader } from './DiffsHubHeader';
@@ -18,6 +18,7 @@ import { DiffsHubSidebar } from './DiffsHubSidebar';
 import { DiffsHubStatusPanel } from './DiffsHubStatusPanel';
 import { DiffsHubViewer } from './DiffsHubViewer';
 import { ThemeSourceProvider } from './ThemeSourceProvider';
+import { useGitHubDiffFileLoader } from './useGitHubDiffFileLoader';
 import { useGitHubToken } from './useGitHubToken';
 import { usePatchLoader } from './usePatchLoader';
 import { useThemeCycle } from './useThemeCycle';
@@ -26,7 +27,6 @@ import {
   themeController,
 } from '@/components/themeController';
 import { preloadAvatars } from '@/lib/annotation';
-import { createGitHubDiffFileLoader } from '@/lib/githubDiffFileLoader';
 import { removeSavedCommentSidebarEntry } from '@/lib/removeSavedCommentSidebarEntry';
 import type { DarkThemeName, LightThemeName } from '@/lib/themeNames';
 import type {
@@ -41,6 +41,20 @@ interface ReviewUIProps {
   domain?: string;
   initialUrl: string;
   path: string;
+}
+
+// Hydration state changes only once, from the server snapshot to the client
+// snapshot, so there is no external source to subscribe to.
+function nullSubscription(): () => void {
+  return () => {};
+}
+
+function getClientHydrationState(): boolean {
+  return true;
+}
+
+function getServerHydrationState(): boolean {
+  return false;
 }
 
 export function ReviewUI({ domain, initialUrl, path }: ReviewUIProps) {
@@ -73,15 +87,13 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
     token: githubToken,
     tokenVersion: githubTokenVersion,
   } = useGitHubToken();
-  const githubTokenRef = useRef(githubToken);
-  const githubTokenVersionRef = useRef(githubTokenVersion);
-  useEffect(() => {
-    githubTokenRef.current = githubToken;
-  }, [githubToken]);
-  useEffect(() => {
-    githubTokenVersionRef.current = githubTokenVersion;
-  }, [githubTokenVersion]);
-  const getGitHubToken = useCallback(() => githubTokenRef.current, []);
+  const { getGitHubToken, loadDiffFiles } = useGitHubDiffFileLoader({
+    domain,
+    hasGitHubToken,
+    path,
+    token: githubToken,
+    tokenVersion: githubTokenVersion,
+  });
   // All theming state — color mode and the light/dark theme-name picks — lives
   // in the single @pierre/theming controller (the same instance the app-wide
   // ThemeProvider is bound to). Reading it here means picking Auto/Light/Dark
@@ -93,14 +105,15 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
   // on the client, so useSyncExternalStore would surface them on the very first
   // client render — but the server rendered the defaults. Gate every
   // theme-derived value (rendered into inline chrome styles + the CodeView
-  // themeType) behind a client-mounted flag so the first client render matches
+  // themeType) behind a hydration snapshot so the first client render matches
   // the SSR markup, then flips to the user's selection. This also keeps the
   // long-lived WorkerPool and the CodeView from mounting against the default
   // palette before the persisted values apply.
-  const [themesHydrated, setThemesHydrated] = useState(false);
-  useEffect(() => {
-    setThemesHydrated(true);
-  }, []);
+  const themesHydrated = useSyncExternalStore(
+    nullSubscription,
+    getClientHydrationState,
+    getServerHydrationState
+  );
 
   const colorMode: ColorMode = themesHydrated ? themeState.mode : 'system';
   const appResolvedTheme = themesHydrated
@@ -137,16 +150,6 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<CodeViewHandle<CommentMetadata, undefined> | null>(
     null
-  );
-  const loadDiffFiles = useMemo(
-    () =>
-      domain == null && hasGitHubToken
-        ? createGitHubDiffFileLoader(path, {
-            getAuthVersion: () => githubTokenVersionRef.current,
-            getToken: () => githubTokenRef.current,
-          })
-        : undefined,
-    [domain, hasGitHubToken, path]
   );
   const handlePatchLoadStart = useCallback(() => {
     setFileTreeOverlayOpen(false);

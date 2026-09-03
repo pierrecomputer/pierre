@@ -18,7 +18,7 @@ import {
   useStableCallback,
   Virtualizer,
 } from '@pierre/diffs/react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 
 import type { PlaygroundAnnotationMetadata } from './constants';
 import { ITEM_UNSAFE_CSS, LONG_README_FILE } from './constants';
@@ -123,6 +123,9 @@ function ElementVirtualizerFile({
   const [selectedLines, setSelectedLines] = useState<SelectedLineRange | null>(
     null
   );
+  // Starts `true` so mounting with annotations hidden clears the selection
+  // the same way toggling them off later does.
+  const [previousShowAnnotations, setPreviousShowAnnotations] = useState(true);
 
   const editorOptions = useMemo<
     EditorOptions<'file', PlaygroundAnnotationMetadata, undefined>
@@ -196,11 +199,12 @@ function ElementVirtualizerFile({
     []
   );
 
-  useEffect(() => {
+  if (previousShowAnnotations !== showAnnotations) {
+    setPreviousShowAnnotations(showAnnotations);
     if (!showAnnotations) {
       setSelectedLines(null);
     }
-  }, [showAnnotations]);
+  }
 
   const hasOpenCommentForm = annotations.some(
     (annotation) => annotation.metadata.body == null
@@ -327,6 +331,9 @@ function ElementVirtualizerDiff({
   const [selectedLines, setSelectedLines] = useState<SelectedLineRange | null>(
     null
   );
+  // Starts `true` so mounting with annotations hidden clears the selection
+  // the same way toggling them off later does.
+  const [previousShowAnnotations, setPreviousShowAnnotations] = useState(true);
 
   const editorOptions = useMemo<
     EditorOptions<'file-diff', PlaygroundAnnotationMetadata, undefined>
@@ -413,11 +420,12 @@ function ElementVirtualizerDiff({
     []
   );
 
-  useEffect(() => {
+  if (previousShowAnnotations !== showAnnotations) {
+    setPreviousShowAnnotations(showAnnotations);
     if (!showAnnotations) {
       setSelectedLines(null);
     }
-  }, [showAnnotations]);
+  }
 
   // Match the other views' precedence: an open comment form (no submitted
   // body yet) pauses the gutter utility so another form cannot be opened

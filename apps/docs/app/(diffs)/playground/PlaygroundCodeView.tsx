@@ -101,6 +101,9 @@ export function PlaygroundCodeView({
     },
     [onEditingChange]
   );
+  // Starts `true` so mounting with annotations hidden runs the same clearing
+  // pass as toggling them off later.
+  const [previousShowAnnotations, setPreviousShowAnnotations] = useState(true);
 
   // Item ids whose next completion should revert: Cancel marks the id here
   // before turning edit off, and the completion handler consumes the mark.
@@ -272,19 +275,19 @@ export function PlaygroundCodeView({
 
   // Annotations live on item data, so hiding them is a data change: turning
   // the toggle off clears any comments that were added.
-  useEffect(() => {
-    if (showAnnotations) {
-      return;
+  if (previousShowAnnotations !== showAnnotations) {
+    setPreviousShowAnnotations(showAnnotations);
+    if (!showAnnotations) {
+      setSelectedLines(null);
+      setItems((current) =>
+        current.map((item) =>
+          (item.annotations?.length ?? 0) > 0
+            ? { ...item, annotations: [], version: (item.version ?? 0) + 1 }
+            : item
+        )
+      );
     }
-    setSelectedLines(null);
-    setItems((current) =>
-      current.map((item) =>
-        (item.annotations?.length ?? 0) > 0
-          ? { ...item, annotations: [], version: (item.version ?? 0) + 1 }
-          : item
-      )
-    );
-  }, [showAnnotations]);
+  }
 
   // Match the direct views' precedence: an open comment form (neither a
   // thread nor a submitted comment) pauses the gutter utility so forms can't

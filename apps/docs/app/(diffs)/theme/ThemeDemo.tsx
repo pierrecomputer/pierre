@@ -311,9 +311,14 @@ interface WorkingFile {
 
 export function ThemeDemo() {
   const { resolvedColorScheme } = useTheme();
-  const [colorMode, setColorMode] = useState<'light' | 'dark'>('dark');
+  // Seed from the resolved scheme when it is already known (a fresh client
+  // mount); the change tracking below covers hydration and later flips.
+  const [colorMode, setColorMode] = useState<'light' | 'dark'>(
+    () => resolvedColorScheme ?? 'dark'
+  );
+  const [previousResolvedColorScheme, setPreviousResolvedColorScheme] =
+    useState(resolvedColorScheme);
   const [activeTab, setActiveTab] = useState<TabId>('typescript');
-  const [mounted, setMounted] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -348,13 +353,12 @@ export function ThemeDemo() {
     [workingFiles]
   );
 
-  // Sync with system theme on mount
-  useEffect(() => {
-    setMounted(true);
+  if (previousResolvedColorScheme !== resolvedColorScheme) {
+    setPreviousResolvedColorScheme(resolvedColorScheme);
     if (resolvedColorScheme === 'light' || resolvedColorScheme === 'dark') {
       setColorMode(resolvedColorScheme);
     }
-  }, [resolvedColorScheme]);
+  }
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -460,7 +464,7 @@ export function ThemeDemo() {
     );
   };
 
-  if (!mounted) {
+  if (resolvedColorScheme == null) {
     return (
       <div className="aspect-[16/10] w-full animate-pulse rounded-lg bg-neutral-200 dark:bg-neutral-800" />
     );
