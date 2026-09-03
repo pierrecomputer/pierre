@@ -123,6 +123,15 @@
 [data-edit-prediction-spacer] {
   margin-block-end: var(--diffs-edit-prediction-spacer-height);
 }
+/* The deletions column of a split diff shows no ghost text, so its reserved
+   rows are padding: the row tint and the buffer hatch extend over them instead
+   of leaving a blank strip. Buffers size themselves with a border-box
+   min-height that would absorb the padding, hence content-box. */
+[data-code][data-deletions] [data-edit-prediction-spacer] {
+  margin-block-end: 0;
+  padding-block-end: var(--diffs-edit-prediction-spacer-height);
+  box-sizing: content-box;
+}
 [data-edit-prediction-deletion-range] {
   --diffs-edit-prediction-deletion-color: var(
     --diffs-editor-edit-prediction-deletion-fg,

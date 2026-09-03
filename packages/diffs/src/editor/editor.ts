@@ -437,6 +437,14 @@ interface EditPredictionGroup {
   endIndex: number;
 }
 
+// A rendered column's content element and its gutter counterpart, or one
+// content child and the gutter child at the same index. Every rendered column
+// has a gutter, and gutter and content children are kept parallel.
+interface ColumnElements {
+  content: HTMLElement;
+  gutter: HTMLElement;
+}
+
 export class Editor<
   EType extends EditorType = EditorType,
   LAnnotation = undefined,
@@ -483,6 +491,7 @@ export class Editor<
   #fileContainer?: HTMLElement;
   #gutterElement?: HTMLElement;
   #contentElement?: HTMLElement;
+  #deletionsColumn?: ColumnElements;
   #overlayElement?: HTMLElement;
   #overlayElements?: Map<string, HTMLElement>;
   #caretElements?: Map<TrackedCaret<Caret>, HTMLElement>;
@@ -1199,6 +1208,7 @@ export class Editor<
     this.#popoverManager?.cleanUp();
     this.#popoverManager = undefined;
     this.#gutterElement = undefined;
+    this.#deletionsColumn = undefined;
     this.#contentElement?.removeAttribute('contentEditable');
     this.#contentElement = undefined;
     this.#replacementFocusRequest = undefined;
@@ -1384,20 +1394,44 @@ export class Editor<
     let codeElement: HTMLElement | undefined;
     let gutterEl: HTMLElement | undefined;
     let contentEl: HTMLElement | undefined;
+    let deletionsGutterEl: HTMLElement | undefined;
+    let deletionsContentEl: HTMLElement | undefined;
     for (const el of shadowRoot.querySelectorAll<HTMLElement>('[data-code]')) {
-      if (el.dataset.deletions === undefined) {
+      const isDeletions = el.dataset.deletions != null;
+      if (!isDeletions) {
         codeElement = el;
-        for (const child of el.children) {
-          const el = child as HTMLElement;
-          const { gutter, content } = el.dataset;
-          if (gutter !== undefined) {
-            gutterEl = el;
-          } else if (content !== undefined) {
-            contentEl = el;
+      }
+      for (const child of el.children) {
+        if (!(child instanceof HTMLElement)) {
+          continue;
+        }
+        const { gutter, content } = child.dataset;
+        if (gutter != null) {
+          if (isDeletions) {
+            deletionsGutterEl = child;
+          } else {
+            gutterEl = child;
+          }
+        } else if (content != null) {
+          if (isDeletions) {
+            deletionsContentEl = child;
+          } else {
+            contentEl = child;
           }
         }
-        break;
       }
+    }
+    if (deletionsContentEl == null) {
+      this.#deletionsColumn = undefined;
+    } else if (deletionsGutterEl == null) {
+      throw new Error(
+        'Editor.__syncRenderView: the deletions column has no gutter'
+      );
+    } else {
+      this.#deletionsColumn = {
+        content: deletionsContentEl,
+        gutter: deletionsGutterEl,
+      };
     }
     if (codeElement === undefined || contentEl === undefined) {
       this.#replacementFocusRequest = undefined;
@@ -4806,6 +4840,18 @@ export class Editor<
           if (gutterRow instanceof HTMLElement) {
             nextSpacers.set(gutterRow, count);
           }
+          const partner = this.#deletionsColumnPartner(rowIndex);
+          if (partner != null) {
+            // Several anchors can share one buffer, so their rows add up.
+            nextSpacers.set(
+              partner.content,
+              (nextSpacers.get(partner.content) ?? 0) + count
+            );
+            nextSpacers.set(
+              partner.gutter,
+              (nextSpacers.get(partner.gutter) ?? 0) + count
+            );
+          }
         }
       }
     }
@@ -4840,6 +4886,50 @@ export class Editor<
     if (changed) {
       this.#resetCache();
     }
+  }
+
+  // In a split diff whose columns scroll separately, each column is its own
+  // grid, so a ghost text margin on an additions row grows that column alone
+  // and the deletions rows below drift out of line. Find the deletions element
+  // in the same grid track as the additions row at `rowIndex`: its paired line
+  // row, or the empty buffer that spans the tracks of a one-sided run. A row is
+  // one track; a buffer spans `data-buffer-size` tracks. Undefined when the
+  // columns share a grid (wrap mode) or this is not a split diff.
+  #deletionsColumnPartner(rowIndex: number): ColumnElements | undefined {
+    const deletionsColumn = this.#deletionsColumn;
+    const contentElement = this.#contentElement;
+    if (
+      deletionsColumn == null ||
+      contentElement == null ||
+      !this.#isDiff ||
+      this.#diffSyle !== 'split' ||
+      this.#isWrap
+    ) {
+      return undefined;
+    }
+    let track = 0;
+    for (let index = 0; index < rowIndex; index++) {
+      track += gridTrackSpan(contentElement.children[index]);
+    }
+    const { content, gutter } = deletionsColumn;
+    let covered = 0;
+    for (let index = 0; index < content.children.length; index++) {
+      const child = content.children[index];
+      covered += gridTrackSpan(child);
+      if (covered > track) {
+        const gutterChild = gutter.children[index];
+        if (
+          !(child instanceof HTMLElement) ||
+          !(gutterChild instanceof HTMLElement)
+        ) {
+          throw new Error(
+            'Editor: deletions column rows and gutter cells are out of step'
+          );
+        }
+        return { content: child, gutter: gutterChild };
+      }
+    }
+    return undefined;
   }
 
   #cancelEditPrediction(removeRendered: boolean, notifyComponent = true): void {
@@ -7386,6 +7476,15 @@ function getEditSession<EType extends EditorType, LAnnotation, Caret>({
   return (
     type === 'file' ? { type: 'file' } : { type: 'file-diff' }
   ) as ManagedEditSession<EType, LAnnotation>;
+}
+
+// Grid tracks a rendered column child occupies: rows take one, empty buffers
+// take the `data-buffer-size` they were emitted with.
+function gridTrackSpan(child: Element | undefined): number {
+  if (!(child instanceof HTMLElement)) {
+    return 1;
+  }
+  return Number(child.dataset.bufferSize ?? 1);
 }
 
 function isValidEditPredictionPosition<EType extends EditorType, LAnnotation>(

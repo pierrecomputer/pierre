@@ -73,12 +73,16 @@ async function createPredictionFixture({
   contents,
   editorOptions,
   name = FILE_NAME,
+  oldContents,
   renderRange,
   surface = 'File',
 }: {
   contents: string;
   editorOptions: EditorOptions<EditorType, undefined, undefined>;
   name?: string;
+  // FileDiff only: the old side. Defaults to `contents` with every "value"
+  // replaced, so each such line becomes a two-sided change.
+  oldContents?: string;
   renderRange?: RenderRange;
   surface?: Surface;
 }): Promise<PredictionFixture> {
@@ -117,7 +121,8 @@ async function createPredictionFixture({
       });
     };
   } else {
-    const diffOldContents = contents.replaceAll('value', 'previous');
+    const diffOldContents =
+      oldContents ?? contents.replaceAll('value', 'previous');
     const fileDiff = new FileDiff<undefined>({
       disableFileHeader: true,
       diffStyle: 'split',
@@ -1116,6 +1121,182 @@ describe('Editor edit prediction', () => {
       setCaret(fixture.editor, 50, 0);
       await wait(PREDICT_TIMEOUT);
       expect(calls).toHaveLength(0);
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  test('split FileDiff grows the deletions column under multiline ghost text', async () => {
+    const provider: EditPredictProvider = {
+      predict() {
+        return Promise.resolve({
+          edits: [
+            {
+              range: {
+                start: { line: 1, character: 7 },
+                end: { line: 1, character: 7 },
+              },
+              newText: '\nghostOne();\nghostTwo();',
+            },
+          ],
+          newCursor: { line: 3, character: 11 },
+        });
+      },
+    };
+    const fixture = await createPredictionFixture({
+      contents: 'const value = 1;\nnext();\nend();',
+      editorOptions: { editPrediction: { provider } },
+      surface: 'FileDiff',
+    });
+
+    try {
+      setCaret(fixture.editor, 1, 7);
+      await waitFor(() => predictionElements(fixture.container).length > 0, {
+        timeout: PREDICT_TIMEOUT,
+      });
+      const shadowRoot = fixture.container.shadowRoot;
+      const spacers = Array.from(
+        shadowRoot?.querySelectorAll<HTMLElement>(
+          '[data-edit-prediction-spacer]'
+        ) ?? []
+      );
+      // The additions row and its gutter cell, plus the deletions row and its
+      // gutter cell in the same grid track, all reserve the same two rows.
+      expect(spacers).toHaveLength(4);
+      expect(
+        shadowRoot?.querySelectorAll(
+          '[data-code][data-deletions] [data-edit-prediction-spacer]'
+        )
+      ).toHaveLength(2);
+      for (const spacer of spacers) {
+        expect(
+          spacer.style.getPropertyValue('--diffs-edit-prediction-spacer-height')
+        ).toBe('2lh');
+      }
+
+      dispatchKey(fixture.content, 'ArrowLeft');
+      expect(
+        shadowRoot?.querySelectorAll('[data-edit-prediction-spacer]')
+      ).toHaveLength(0);
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  test('split FileDiff grows the buffer opposite a one-sided run, summing anchors', async () => {
+    // x1..x3 are added lines: the deletions column shows one empty buffer
+    // spanning their three tracks. Ghost text under x1 (one row) and x3 (two
+    // rows) must both grow that buffer.
+    const provider: EditPredictProvider = {
+      predict() {
+        return Promise.resolve({
+          edits: [
+            {
+              range: {
+                start: { line: 1, character: 5 },
+                end: { line: 1, character: 5 },
+              },
+              newText: '\nghost();',
+            },
+            {
+              range: {
+                start: { line: 3, character: 5 },
+                end: { line: 3, character: 5 },
+              },
+              newText: '\nghost();\nghost();',
+            },
+          ],
+          newCursor: { line: 1, character: 5 },
+        });
+      },
+    };
+    const fixture = await createPredictionFixture({
+      contents: 'a();\nx1();\nx2();\nx3();\nb();\nc();',
+      oldContents: 'a();\nb();\nc();',
+      editorOptions: { editPrediction: { provider } },
+      surface: 'FileDiff',
+    });
+
+    try {
+      setCaret(fixture.editor, 1, 5);
+      await waitFor(() => predictionElements(fixture.container).length > 0, {
+        timeout: PREDICT_TIMEOUT,
+      });
+      const shadowRoot = fixture.container.shadowRoot;
+      const spacerHeight = (selector: string) =>
+        shadowRoot
+          ?.querySelector<HTMLElement>(selector)
+          ?.style.getPropertyValue('--diffs-edit-prediction-spacer-height');
+      expect(
+        spacerHeight(
+          '[data-code]:not([data-deletions]) [data-line="2"][data-edit-prediction-spacer]'
+        )
+      ).toBe('1lh');
+      expect(
+        spacerHeight(
+          '[data-code]:not([data-deletions]) [data-line="4"][data-edit-prediction-spacer]'
+        )
+      ).toBe('2lh');
+      expect(
+        spacerHeight(
+          '[data-code][data-deletions] [data-content-buffer][data-buffer-size="3"][data-edit-prediction-spacer]'
+        )
+      ).toBe('3lh');
+      expect(
+        spacerHeight(
+          '[data-code][data-deletions] [data-gutter-buffer][data-buffer-size="3"][data-edit-prediction-spacer]'
+        )
+      ).toBe('3lh');
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  test('split FileDiff pairs the deletions row past a deletions-only run', async () => {
+    // d1 and d2 exist only on the old side, so the additions column carries a
+    // two-track buffer before b(). The partner for b() is the deletions b()
+    // row, not one of the deleted lines.
+    const provider: EditPredictProvider = {
+      predict() {
+        return Promise.resolve({
+          edits: [
+            {
+              range: {
+                start: { line: 1, character: 4 },
+                end: { line: 1, character: 4 },
+              },
+              newText: '\nghost();',
+            },
+          ],
+          newCursor: { line: 1, character: 4 },
+        });
+      },
+    };
+    const fixture = await createPredictionFixture({
+      contents: 'a();\nb();\nc();',
+      oldContents: 'a();\nd1();\nd2();\nb();\nc();',
+      editorOptions: { editPrediction: { provider } },
+      surface: 'FileDiff',
+    });
+
+    try {
+      setCaret(fixture.editor, 1, 4);
+      await waitFor(() => predictionElements(fixture.container).length > 0, {
+        timeout: PREDICT_TIMEOUT,
+      });
+      const deletionsSpacers = Array.from(
+        fixture.container.shadowRoot?.querySelectorAll<HTMLElement>(
+          '[data-code][data-deletions] [data-edit-prediction-spacer]'
+        ) ?? []
+      );
+      expect(deletionsSpacers).toHaveLength(2);
+      const [row] = deletionsSpacers.filter((element) =>
+        element.matches('[data-line]')
+      );
+      expect(row?.textContent).toContain('b();');
+      expect(
+        row?.style.getPropertyValue('--diffs-edit-prediction-spacer-height')
+      ).toBe('1lh');
     } finally {
       await fixture.cleanup();
     }
