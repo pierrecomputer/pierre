@@ -11,7 +11,7 @@ import type {
   EditorSelection,
   SelectionDirection,
   TextEdit,
-} from '../src/types';
+} from '../src/editor/types';
 
 function createSelection(
   startLine: number,
@@ -254,7 +254,7 @@ describe('shouldCoalesceEditStackEntry', () => {
 
 // --- Shared helpers for the undo/redo coalescing and history scenarios below ---
 
-function doc(text: string, editStack?: EditStack<unknown>) {
+function doc(text: string, editStack?: EditStack<'file'>) {
   return new TextDocument('inmemory://1', text, 'plain', 0, editStack);
 }
 

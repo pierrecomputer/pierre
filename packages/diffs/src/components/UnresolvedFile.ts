@@ -46,7 +46,7 @@ export type MergeConflictActionsTypeOption<LAnnotation> =
   | RenderMergeConflictActions<LAnnotation>;
 
 export interface UnresolvedFileOptions<LAnnotation> extends Omit<
-  FileDiffOptions<LAnnotation>,
+  FileDiffOptions<LAnnotation, undefined>,
   'diffStyle' | 'onPostRender'
 > {
   onPostRender?(
@@ -112,9 +112,10 @@ type UnresolvedFileDataCache = GetOrComputeDiffProps;
 
 let instanceId = -1;
 
-export class UnresolvedFile<
-  LAnnotation = undefined,
-> extends FileDiff<LAnnotation> {
+export class UnresolvedFile<LAnnotation = undefined> extends FileDiff<
+  LAnnotation,
+  undefined
+> {
   override readonly __id: string = `unresolved-file:${++instanceId}`;
   override readonly type = 'unresolved-file';
 

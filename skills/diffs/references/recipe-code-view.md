@@ -61,7 +61,7 @@ const codeViewOptions = {
 } as const;
 
 export function ReviewSurface() {
-  const viewerRef = useRef<CodeViewHandle<undefined> | null>(null);
+  const viewerRef = useRef<CodeViewHandle<undefined, undefined> | null>(null);
   const [selection, setSelection] = useState<CodeViewLineSelection | null>(
     null
   );
@@ -200,10 +200,10 @@ export function removeReviewSurface() {
 ## Enable item edit mode
 
 In React, wrap `CodeView` in `EditProvider`. In vanilla JavaScript, pass
-`createEditor(documentKind, options, editStateKey)` in `CodeViewOptions` and
+`createEditor(editorType, options, editStateKey)` in `CodeViewOptions` and
 forward all three arguments to `new Editor`. Set `edit: true` on each editable
 item and increment its version. The factory receives `'file'` or `'file-diff'`
-as its first argument so it can construct an editor for that item kind.
+as its first argument so it can construct an editor of the requested type.
 
 `onItemEditChange(event, item)` reports live contents and annotation changes.
 Read the current document from `event.file`, the complete annotation collection
@@ -224,7 +224,7 @@ should remain.
 Use `getEditStateKey(item)` to opt into retaining the draft, undo/redo history,
 selections, and editor-owned view state across editor instances. The returned
 `editStateKey` is passed to the editor factory. `getEditor(id)` returns the
-current `DiffsEditor` handle.
+current `Editor` instance.
 
 Read [Edit with React](recipe-edit-react.md) or
 [Edit with vanilla JavaScript](recipe-edit-vanilla.md) for the complete editor

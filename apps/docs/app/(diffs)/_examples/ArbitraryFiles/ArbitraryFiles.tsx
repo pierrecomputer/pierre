@@ -7,7 +7,7 @@ import { useState } from 'react';
 import { FeatureHeader } from '@/components/FeatureHeader';
 
 interface ArbitraryFilesProps {
-  prerenderedDiff: PreloadMultiFileDiffResult<undefined>;
+  prerenderedDiff: PreloadMultiFileDiffResult<undefined, undefined>;
 }
 
 export function ArbitraryFiles({ prerenderedDiff }: ArbitraryFilesProps) {

@@ -1,9 +1,9 @@
-import type { ResolvedTextEdit } from '../types';
 import { resolveFindAgainShortcut } from './command';
 import { buildSearchReplacementText } from './pieceTable';
 import { isPrimaryModifier } from './platform';
 import { getEditorIconSvg, type SVGSpriteNames } from './sprite';
 import type { TextDocument } from './textDocument';
+import type { ResolvedTextEdit } from './types';
 import { h } from './utils';
 
 export type MatchRange = [startOffset: number, endOffset: number];
@@ -19,7 +19,7 @@ export interface SearchParams {
 }
 
 export interface SearchPanelOptions {
-  textDocument: TextDocument<unknown>;
+  textDocument: TextDocument;
   containerElement: HTMLElement;
   defaultQuery: string;
   mode?: SearchPanelMode;

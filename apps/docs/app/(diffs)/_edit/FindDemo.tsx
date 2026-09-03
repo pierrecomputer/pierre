@@ -7,7 +7,7 @@ import { useEffect, useMemo, useRef } from 'react';
 
 interface FindDemoProps {
   // Server-preloaded, highlighted File; hydrating from it avoids a highlight flash on load.
-  prerenderedFile: PreloadedFileResult<undefined>;
+  prerenderedFile: PreloadedFileResult<undefined, undefined>;
 }
 
 // Custom element the File renders into; its shadow DOM is open, so we can reach in.
@@ -34,7 +34,7 @@ function detectMac(): boolean {
 // Opening an empty panel scrolls nothing.
 export function FindDemo({ prerenderedFile }: FindDemoProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
-  const editorRef = useRef<Editor<undefined> | null>(null);
+  const editorRef = useRef<Editor<'file'> | null>(null);
 
   useEffect(() => {
     const wrapper = wrapperRef.current;
@@ -120,7 +120,7 @@ export function FindDemo({ prerenderedFile }: FindDemoProps) {
     };
   }, []);
 
-  const editorOptions = useMemo<EditorOptions<undefined>>(
+  const editorOptions = useMemo<EditorOptions<'file', undefined, undefined>>(
     () => ({
       onAttach(editor) {
         editorRef.current = editor;

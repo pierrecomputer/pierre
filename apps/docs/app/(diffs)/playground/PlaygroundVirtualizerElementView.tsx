@@ -106,7 +106,9 @@ function ElementVirtualizerFile({
     null
   );
 
-  const editorOptions = useMemo<EditorOptions<PlaygroundAnnotationMetadata>>(
+  const editorOptions = useMemo<
+    EditorOptions<'file', PlaygroundAnnotationMetadata, undefined>
+  >(
     () => ({
       onAttach(editor) {
         editor.focus({ lineNumber: 'first-visible', preventScroll: true });
@@ -118,7 +120,7 @@ function ElementVirtualizerFile({
   // Save accepts the completed file under a fresh cacheKey and stores it as
   // the component's file; Cancel reverts to the current one.
   const handleEditComplete = useCallback(
-    (event: FileEditCompleteEvent<PlaygroundAnnotationMetadata>) => {
+    (event: FileEditCompleteEvent<PlaygroundAnnotationMetadata, undefined>) => {
       if (cancelled.current) {
         cancelled.current = false;
         return 'reject';
@@ -189,7 +191,9 @@ function ElementVirtualizerFile({
   const canUseGutterComments =
     enableGutterComments && showAnnotations && !hasOpenCommentForm;
 
-  const fileOptions = useMemo<FileOptions<PlaygroundAnnotationMetadata>>(
+  const fileOptions = useMemo<
+    FileOptions<PlaygroundAnnotationMetadata, undefined>
+  >(
     () => ({
       ...options,
       stickyHeader: true,
@@ -264,7 +268,7 @@ function ElementVirtualizerFile({
 
 interface ElementVirtualizerDiffProps {
   fileDiff: FileDiffMetadata;
-  options: FileDiffOptions<PlaygroundAnnotationMetadata>;
+  options: FileDiffOptions<PlaygroundAnnotationMetadata, undefined>;
   enableLineSelection: boolean;
   enableGutterComments: boolean;
   showAnnotations: boolean;
@@ -297,7 +301,9 @@ function ElementVirtualizerDiff({
     null
   );
 
-  const editorOptions = useMemo<EditorOptions<PlaygroundAnnotationMetadata>>(
+  const editorOptions = useMemo<
+    EditorOptions<'file-diff', PlaygroundAnnotationMetadata, undefined>
+  >(
     () => ({
       onAttach(editor) {
         editor.focus({ lineNumber: 'first-visible', preventScroll: true });
@@ -309,7 +315,9 @@ function ElementVirtualizerDiff({
   // Save accepts the completed diff under a fresh cacheKey and stores it as
   // the component's diff; Cancel reverts to the current one.
   const handleEditComplete = useCallback(
-    (event: FileDiffEditCompleteEvent<PlaygroundAnnotationMetadata>) => {
+    (
+      event: FileDiffEditCompleteEvent<PlaygroundAnnotationMetadata, undefined>
+    ) => {
       if (cancelled.current) {
         cancelled.current = false;
         return 'reject';
@@ -395,7 +403,7 @@ function ElementVirtualizerDiff({
     enableGutterComments && showAnnotations && !hasOpenCommentForm;
 
   const fileDiffOptions = useMemo<
-    FileDiffOptions<PlaygroundAnnotationMetadata>
+    FileDiffOptions<PlaygroundAnnotationMetadata, undefined>
   >(
     () => ({
       ...options,

@@ -24,12 +24,12 @@ type SharedPropsTypes =
   | 'file-render-props';
 
 interface ComponentTabsProps {
-  reactAPICodeView: PreloadedFileResult<undefined>;
-  reactAPIMultiFileDiff: PreloadedFileResult<undefined>;
-  reactAPIFileDiff: PreloadedFileResult<undefined>;
-  reactAPIPatch: PreloadedFileResult<undefined>;
-  reactAPIFile: PreloadedFileResult<undefined>;
-  reactAPIUnresolvedFile: PreloadedFileResult<undefined>;
+  reactAPICodeView: PreloadedFileResult<undefined, undefined>;
+  reactAPIMultiFileDiff: PreloadedFileResult<undefined, undefined>;
+  reactAPIFileDiff: PreloadedFileResult<undefined, undefined>;
+  reactAPIPatch: PreloadedFileResult<undefined, undefined>;
+  reactAPIFile: PreloadedFileResult<undefined, undefined>;
+  reactAPIUnresolvedFile: PreloadedFileResult<undefined, undefined>;
 }
 
 export function ComponentTabs({
@@ -81,10 +81,10 @@ export function ComponentTabs({
 }
 
 interface SharedPropTabsProps {
-  sharedDiffOptions: PreloadedFileResult<undefined>;
-  sharedDiffRenderProps: PreloadedFileResult<undefined>;
-  sharedFileOptions: PreloadedFileResult<undefined>;
-  sharedFileRenderProps: PreloadedFileResult<undefined>;
+  sharedDiffOptions: PreloadedFileResult<undefined, undefined>;
+  sharedDiffRenderProps: PreloadedFileResult<undefined, undefined>;
+  sharedFileOptions: PreloadedFileResult<undefined, undefined>;
+  sharedFileRenderProps: PreloadedFileResult<undefined, undefined>;
 }
 
 export function SharedPropTabs({

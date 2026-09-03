@@ -215,7 +215,7 @@ export interface TreeAppProps<LAnnotation = unknown> {
   // derives one from the file path.
   files?: Readonly<Record<string, FileContents>>;
   prerenderedHTMLByPath?: TreeAppThemeValue<Readonly<Record<string, string>>>;
-  fileOptions?: TreeAppThemeValue<FileOptions<LAnnotation>>;
+  fileOptions?: TreeAppThemeValue<FileOptions<LAnnotation, undefined>>;
   // Fired on Cmd/Ctrl+S after TreeApp clears the tab's unsaved indicator.
   // Hosts that own the `files` map should update it here so the next edit
   // cycle compares against the saved contents, advancing any explicit
@@ -1211,8 +1211,8 @@ export function TreeApp<LAnnotation = unknown>({
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   const handleEditorChangeRef = useRef<(file: FileContents) => void>(() => {});
-  const editorRef = useRef<Editor<LAnnotation> | null>(null);
-  const editorOptions = useMemo<EditorOptions<LAnnotation>>(
+  const editorRef = useRef<Editor<'file', LAnnotation> | null>(null);
+  const editorOptions = useMemo<EditorOptions<'file', LAnnotation, undefined>>(
     () => ({
       onAttach(editor) {
         editorRef.current = editor;
@@ -1222,7 +1222,7 @@ export function TreeApp<LAnnotation = unknown>({
   );
 
   const handleEditChange = useCallback(
-    (event: EditorChangeEvent<LAnnotation, 'file'>) => {
+    (event: EditorChangeEvent<'file', LAnnotation, undefined>) => {
       handleEditorChangeRef.current(event.file);
     },
     []
@@ -1499,7 +1499,7 @@ export function TreeApp<LAnnotation = unknown>({
     search.open();
   }, [search]);
 
-  const fileOptions = useMemo<FileOptions<LAnnotation>>(
+  const fileOptions = useMemo<FileOptions<LAnnotation, undefined>>(
     () => ({
       ...resolvedFileOptions,
       overflow: 'wrap',

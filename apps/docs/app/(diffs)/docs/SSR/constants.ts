@@ -8,7 +8,7 @@ const options = {
   unsafeCSS: CustomScrollbarCSS,
 } as const;
 
-export const SSR_USAGE_SERVER: PreloadFileOptions<undefined> = {
+export const SSR_USAGE_SERVER: PreloadFileOptions<undefined, undefined> = {
   file: {
     name: 'page.tsx',
     contents: `// app/diff/page.tsx (Server Component)
@@ -42,7 +42,7 @@ export default async function DiffPage() {
   options,
 };
 
-export const SSR_USAGE_CLIENT: PreloadFileOptions<undefined> = {
+export const SSR_USAGE_CLIENT: PreloadFileOptions<undefined, undefined> = {
   file: {
     name: 'DiffViewer.tsx',
     contents: `// app/diff/DiffViewer.tsx (Client Component)
@@ -63,7 +63,7 @@ export function DiffViewer({ preloaded }: Props) {
   options,
 };
 
-export const SSR_PRELOAD_FILE_DIFF: PreloadFileOptions<undefined> = {
+export const SSR_PRELOAD_FILE_DIFF: PreloadFileOptions<undefined, undefined> = {
   file: {
     name: 'example.tsx',
     contents: `import { preloadFileDiff } from '@pierre/diffs/ssr';
@@ -86,7 +86,10 @@ const result = await preloadFileDiff({
   options,
 };
 
-export const SSR_PRELOAD_MULTI_FILE_DIFF: PreloadFileOptions<undefined> = {
+export const SSR_PRELOAD_MULTI_FILE_DIFF: PreloadFileOptions<
+  undefined,
+  undefined
+> = {
   file: {
     name: 'example.tsx',
     contents: `import { preloadMultiFileDiff } from '@pierre/diffs/ssr';
@@ -107,10 +110,11 @@ const result = await preloadMultiFileDiff({
   options,
 };
 
-export const SSR_PRELOAD_PATCH_DIFF: PreloadFileOptions<undefined> = {
-  file: {
-    name: 'example.tsx',
-    contents: `import { preloadPatchDiff } from '@pierre/diffs/ssr';
+export const SSR_PRELOAD_PATCH_DIFF: PreloadFileOptions<undefined, undefined> =
+  {
+    file: {
+      name: 'example.tsx',
+      contents: `import { preloadPatchDiff } from '@pierre/diffs/ssr';
 
 const patch = \`--- a/example.ts
 +++ b/example.ts
@@ -124,11 +128,11 @@ const result = await preloadPatchDiff({
 });
 
 // Spread result into <PatchDiff {...result} />`,
-  },
-  options,
-};
+    },
+    options,
+  };
 
-export const SSR_PRELOAD_FILE: PreloadFileOptions<undefined> = {
+export const SSR_PRELOAD_FILE: PreloadFileOptions<undefined, undefined> = {
   file: {
     name: 'example.tsx',
     contents: `import { preloadFile } from '@pierre/diffs/ssr';
@@ -148,7 +152,10 @@ const result = await preloadFile({
   options,
 };
 
-export const SSR_PRELOAD_UNRESOLVED_FILE: PreloadFileOptions<undefined> = {
+export const SSR_PRELOAD_UNRESOLVED_FILE: PreloadFileOptions<
+  undefined,
+  undefined
+> = {
   file: {
     name: 'example.tsx',
     contents: `import { preloadUnresolvedFile } from '@pierre/diffs/ssr';
@@ -173,10 +180,11 @@ const result = await preloadUnresolvedFile({
   options,
 };
 
-export const SSR_PRELOAD_PATCH_FILE: PreloadFileOptions<undefined> = {
-  file: {
-    name: 'example.tsx',
-    contents: `import { preloadPatchFile } from '@pierre/diffs/ssr';
+export const SSR_PRELOAD_PATCH_FILE: PreloadFileOptions<undefined, undefined> =
+  {
+    file: {
+      name: 'example.tsx',
+      contents: `import { preloadPatchFile } from '@pierre/diffs/ssr';
 
 // A patch containing multiple file changes
 const patch = \`diff --git a/foo.ts b/foo.ts
@@ -198,6 +206,6 @@ const results = await preloadPatchFile({
 });
 
 // Spread each result into <FileDiff {...results[i]} />`,
-  },
-  options,
-};
+    },
+    options,
+  };

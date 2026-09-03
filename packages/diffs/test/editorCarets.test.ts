@@ -3,8 +3,9 @@ import { afterAll, describe, expect, mock, test } from 'bun:test';
 import { File } from '../src/components/File';
 import { DEFAULT_THEMES } from '../src/constants';
 import { Editor, type EditorOptions } from '../src/editor/editor';
+import type { EditorCaret } from '../src/editor/types';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
-import type { EditorCaret, FileContents } from '../src/types';
+import type { FileContents } from '../src/types';
 import { installDom, wait } from './domHarness';
 
 afterAll(async () => {
@@ -35,22 +36,22 @@ async function waitForEditableContent(
 
 async function createEditorFixture(
   contents: string,
-  options: EditorOptions<undefined, CaretMetadata>
+  options: EditorOptions<'file', undefined, CaretMetadata>
 ): Promise<{
   cleanup(): void;
   content: HTMLElement;
-  editor: Editor<undefined, CaretMetadata>;
+  editor: Editor<'file', undefined, CaretMetadata>;
   fileContainer: HTMLElement;
   triggerResizeObserver(target: Element): void;
 }> {
   const dom = installDom();
   const fileContainer = document.createElement('div');
   document.body.appendChild(fileContainer);
-  const file = new File<undefined>({
+  const file = new File<undefined, CaretMetadata>({
     disableFileHeader: true,
     theme: DEFAULT_THEMES,
   });
-  const editor = new Editor<undefined, CaretMetadata>('file', options);
+  const editor = new Editor<'file', undefined, CaretMetadata>('file', options);
   const initialFile: FileContents = {
     name: 'carets.ts',
     contents,
@@ -659,7 +660,7 @@ describe('Editor carets', () => {
 
   test('does not remap carets replaced synchronously by onChange', async () => {
     const editorRef: {
-      current?: Editor<undefined, CaretMetadata>;
+      current?: Editor<'file', undefined, CaretMetadata>;
     } = {};
     const renderCaret = mock((caret: EditorCaret<CaretMetadata>) =>
       caretElement(caret.metadata.id)
@@ -720,19 +721,19 @@ describe('Editor carets', () => {
     const renderCaret = mock((caret: EditorCaret<CaretMetadata>) =>
       caretElement(caret.metadata.id)
     );
-    const editor = new Editor<undefined, CaretMetadata>('file', {
+    const editor = new Editor<'file', undefined, CaretMetadata>('file', {
       renderCaret,
     });
     const fileContents: FileContents = {
       name: 'carets.ts',
       contents: 'alpha\nbravo',
     };
-    const files: File<undefined>[] = [];
+    const files: File<undefined, CaretMetadata>[] = [];
 
     const attach = async (): Promise<HTMLElement> => {
       const fileContainer = document.createElement('div');
       document.body.appendChild(fileContainer);
-      const file = new File<undefined>({
+      const file = new File<undefined, CaretMetadata>({
         disableFileHeader: true,
         theme: DEFAULT_THEMES,
       });

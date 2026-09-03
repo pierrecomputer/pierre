@@ -13,7 +13,14 @@ import {
   THEME_CSS_ATTRIBUTE,
   UNSAFE_CSS_ATTRIBUTE,
 } from '../constants';
-import type { FileEditCompleteEvent } from '../editor/types';
+import type { Editor } from '../editor/editor';
+import type { TextDocument } from '../editor/textDocument';
+import type {
+  EditCompletionDecision,
+  EditorActiveLineOptions,
+  EditorChangeEvent,
+  FileEditCompleteEvent,
+} from '../editor/types';
 import {
   type GetHoveredLineResult,
   InteractionManager,
@@ -29,12 +36,6 @@ import type {
   AppliedThemeStyleCache,
   BaseCodeOptions,
   DiffLineAnnotation,
-  DiffsEditableComponent,
-  DiffsEditor,
-  DiffsTextDocument,
-  EditCompletionDecision,
-  EditorActiveLineOptions,
-  EditorChangeEvent,
   FileContents,
   HighlightedToken,
   LineAnnotation,
@@ -100,6 +101,10 @@ export interface FileHydrateProps<LAnnotation> extends Omit<
   prerenderedHTML?: string;
 }
 
+export type FileEditChangeHandler<LAnnotation, Caret> = (
+  event: EditorChangeEvent<'file', LAnnotation, Caret>
+) => void;
+
 /**
  * Decides a completed edit synchronously: return `'accept'` to install the
  * event's `file` and annotations, or `'reject'` to restore the original values.
@@ -108,11 +113,11 @@ export interface FileHydrateProps<LAnnotation> extends Omit<
  * detached and returns its final state from `getViewState()`. A missing handler
  * rejects.
  */
-export type FileEditCompleteHandler<LAnnotation> = (
-  event: FileEditCompleteEvent<LAnnotation>
+export type FileEditCompleteHandler<LAnnotation, Caret> = (
+  event: FileEditCompleteEvent<LAnnotation, Caret>
 ) => EditCompletionDecision;
 
-export interface FileOptions<LAnnotation>
+export interface FileOptions<LAnnotation, Caret>
   extends BaseCodeOptions, InteractionManagerBaseOptions<'file'> {
   disableFileHeader?: boolean;
   renderHeaderPrefix?: RenderFileMetadata;
@@ -134,7 +139,7 @@ export interface FileOptions<LAnnotation>
 
   onPostRender?(
     node: HTMLElement,
-    instance: File<LAnnotation>,
+    instance: File<LAnnotation, Caret>,
     phase: PostRenderPhase
   ): unknown;
 
@@ -144,7 +149,7 @@ export interface FileOptions<LAnnotation>
    * its own `onChange`. Do not feed the event's file back into the component
    * while the session is active.
    */
-  onEditChange?(event: EditorChangeEvent<LAnnotation, 'file'>): void;
+  onEditChange?: FileEditChangeHandler<LAnnotation, Caret>;
 
   /**
    * Fired when `edit` toggles false or a component unmounts, including when the
@@ -152,7 +157,7 @@ export interface FileOptions<LAnnotation>
    * reverts to the last `file` and annotations passed into it. The callback
    * receives the detached editor with its final pre-detach state.
    */
-  onEditComplete?: FileEditCompleteHandler<LAnnotation>;
+  onEditComplete?: FileEditCompleteHandler<LAnnotation, Caret>;
 }
 
 interface AnnotationElementCache<LAnnotation> {
@@ -190,9 +195,7 @@ function shouldResetUndoState(
 
 let instanceId = -1;
 
-export class File<
-  LAnnotation = undefined,
-> implements DiffsEditableComponent<LAnnotation> {
+export class File<LAnnotation = undefined, Caret = undefined> {
   static LoadedCustomComponent: boolean = DiffsContainerLoaded;
 
   readonly __id: string = `file:${++instanceId}`;
@@ -245,10 +248,12 @@ export class File<
   protected renderRange: RenderRange | undefined;
   protected enabled = true;
 
-  protected editor: DiffsEditor<LAnnotation> | undefined;
+  protected editor: Editor<'file', LAnnotation, Caret> | undefined;
 
   constructor(
-    public options: FileOptions<LAnnotation> = { theme: DEFAULT_THEMES },
+    public options: FileOptions<LAnnotation, Caret> = {
+      theme: DEFAULT_THEMES,
+    },
     private workerManager?: WorkerPoolManager | undefined,
     private isContainerManaged = false
   ) {
@@ -398,7 +403,9 @@ export class File<
     this.rerender();
   }
 
-  public setOptions(options: FileOptions<LAnnotation> | undefined): void {
+  public setOptions(
+    options: FileOptions<LAnnotation, Caret> | undefined
+  ): void {
     if (options == null) return;
     this.options = options;
     this.cachedHeaderHTML = undefined;
@@ -409,7 +416,9 @@ export class File<
     this.interactionManager.setOptions(pluckInteractionOptions(this.options));
   }
 
-  private mergeOptions(options: Partial<FileOptions<LAnnotation>>): void {
+  private mergeOptions(
+    options: Partial<FileOptions<LAnnotation, Caret>>
+  ): void {
     this.options = { ...this.options, ...options };
   }
 
@@ -800,7 +809,9 @@ export class File<
     });
   }
 
-  public emitEditChange(event: EditorChangeEvent<LAnnotation, 'file'>): void {
+  public emitEditChange(
+    event: EditorChangeEvent<'file', LAnnotation, Caret>
+  ): void {
     const { lineAnnotations } = event;
     if (lineAnnotations != null) {
       this.syncEditSessionAnnotationsFromEditor(lineAnnotations);
@@ -815,7 +826,9 @@ export class File<
   }
 
   /** @internal Associate this component with its editor for a render lifecycle. */
-  public __attachEditor(editor: DiffsEditor<LAnnotation>): () => void {
+  public __attachEditor(
+    editor: Editor<'file', LAnnotation, Caret>
+  ): () => void {
     if (this.editor != null) {
       throw new Error('File.__attachEditor: an editor is already attached');
     }
@@ -834,14 +847,16 @@ export class File<
   }
 
   /** @internal Resume rendering for the editor already associated with this component. */
-  public __resumeEditor(editor: DiffsEditor<LAnnotation>): void {
+  public __resumeEditor(editor: Editor<'file', LAnnotation, Caret>): void {
     if (this.editor !== editor) {
       throw new Error('File.__resumeEditor: editor association changed');
     }
     this.resumeEditorRendering(editor);
   }
 
-  private resumeEditorRendering(editor: DiffsEditor<LAnnotation>): void {
+  private resumeEditorRendering(
+    editor: Editor<'file', LAnnotation, Caret>
+  ): void {
     this.editSessionAnnotations ??= adoptEditSessionAnnotations(
       this.lineAnnotations,
       getLineAnnotationName
@@ -882,7 +897,7 @@ export class File<
    * the replaced file's `cacheKey`.
    */
   public __completeEditSession(
-    editor: DiffsEditor<LAnnotation>,
+    editor: Editor<'file', LAnnotation, Caret>,
     mode: 'install' | 'discard'
   ): void {
     this.settleEditSession(mode === 'install', editor);
@@ -890,7 +905,7 @@ export class File<
 
   private settleEditSession(
     installResult: boolean,
-    editor: DiffsEditor<LAnnotation> | undefined
+    editor: Editor<'file', LAnnotation, Caret> | undefined
   ): void {
     const {
       editSessionFile,
@@ -917,7 +932,7 @@ export class File<
       );
     }
     const completedFile = { ...editSessionFile };
-    const event: FileEditCompleteEvent<LAnnotation> = {
+    const event: FileEditCompleteEvent<LAnnotation, Caret> = {
       file: completedFile,
       editor,
       originalFile: externalFile,
@@ -979,7 +994,7 @@ export class File<
 
   // normally triggered by the host when the document line count changes
   public applyDocumentChange(
-    textDocument: DiffsTextDocument,
+    textDocument: TextDocument<'file', LAnnotation>,
     newLineAnnotations?: LineAnnotation<LAnnotation>[]
   ): void {
     const { editSessionFile } = this;

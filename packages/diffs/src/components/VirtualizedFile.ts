@@ -1,6 +1,6 @@
 import { DEFAULT_VIRTUAL_FILE_METRICS } from '../constants';
+import type { TextDocument } from '../editor/textDocument';
 import type {
-  DiffsTextDocument,
   FileContents,
   LineAnnotation,
   NumericScrollLineAnchor,
@@ -56,9 +56,9 @@ const LAYOUT_CHECKPOINT_INTERVAL = 5_000;
 
 let instanceId = -1;
 
-function hasFileLayoutOptionChanged<LAnnotation>(
-  previousOptions: FileOptions<LAnnotation>,
-  nextOptions: FileOptions<LAnnotation>
+function hasFileLayoutOptionChanged<LAnnotation, Caret>(
+  previousOptions: FileOptions<LAnnotation, Caret>,
+  nextOptions: FileOptions<LAnnotation, Caret>
 ): boolean {
   return (
     (previousOptions.overflow ?? 'scroll') !==
@@ -74,8 +74,10 @@ function hasFileLayoutOptionChanged<LAnnotation>(
 
 export class VirtualizedFile<
   LAnnotation = undefined,
-> extends File<LAnnotation> {
+  Caret = undefined,
+> extends File<LAnnotation, Caret> {
   override readonly __id: string = `virtualized-file:${++instanceId}`;
+  public readonly renderType = 'virtualized';
 
   public top: number | undefined;
   public height: number = 0;
@@ -92,8 +94,8 @@ export class VirtualizedFile<
   private currentCollapsed: boolean | undefined;
 
   constructor(
-    options: FileOptions<LAnnotation> | undefined,
-    private virtualizer: Virtualizer | CodeView<LAnnotation>,
+    options: FileOptions<LAnnotation, Caret> | undefined,
+    private virtualizer: Virtualizer | CodeView<LAnnotation, Caret>,
     private metrics: VirtualFileMetrics = DEFAULT_VIRTUAL_FILE_METRICS,
     workerManager?: WorkerPoolManager,
     isContainerManaged = false
@@ -167,7 +169,9 @@ export class VirtualizedFile<
     return this.metrics.lineHeight * multiplier;
   }
 
-  override setOptions(options: FileOptions<LAnnotation> | undefined): void {
+  override setOptions(
+    options: FileOptions<LAnnotation, Caret> | undefined
+  ): void {
     if (this.isAdvancedMode()) {
       throw new Error(
         'VirtualizedFile.setOptions cannot be used inside CodeView. Update CodeView options instead.'
@@ -704,7 +708,7 @@ export class VirtualizedFile<
 
   // normally triggered by the host when the document line count changes
   override applyDocumentChange(
-    textDocument: DiffsTextDocument,
+    textDocument: TextDocument<'file', LAnnotation>,
     newLineAnnotations?: LineAnnotation<LAnnotation>[],
     shouldUpdateBuffer = false
   ): void {
@@ -1006,7 +1010,7 @@ export class VirtualizedFile<
     return this.virtualizer.type === 'simple' ? this.virtualizer : undefined;
   }
 
-  private getAdvancedVirtualizer(): CodeView<LAnnotation> | undefined {
+  private getAdvancedVirtualizer(): CodeView<LAnnotation, Caret> | undefined {
     return this.virtualizer.type === 'advanced' ? this.virtualizer : undefined;
   }
 

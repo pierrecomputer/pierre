@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { PieceTable } from '../src/editor/pieceTable';
 import { TextDocument } from '../src/editor/textDocument';
-import type { Position } from '../src/types';
+import type { Position } from '../src/editor/types';
 
 function lineTexts(text: string): string[] {
   if (text === '') {

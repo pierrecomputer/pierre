@@ -175,7 +175,10 @@ const PLAYGROUND_ANNOTATIONS = [
       isThread: true,
     },
   },
-] satisfies PreloadFileDiffOptions<PlaygroundAnnotationMetadata>['annotations'];
+] satisfies PreloadFileDiffOptions<
+  PlaygroundAnnotationMetadata,
+  undefined
+>['annotations'];
 
 // Maps the shared URL state onto the preload options, so the prerendered
 // markup matches what the client derives from the same querystring — the
@@ -186,7 +189,7 @@ const PLAYGROUND_ANNOTATIONS = [
 // the client theme controller settles.
 export function getPlaygroundPreloadOptions(
   state: PlaygroundUrlState
-): PreloadFileDiffOptions<PlaygroundAnnotationMetadata> {
+): PreloadFileDiffOptions<PlaygroundAnnotationMetadata, undefined> {
   return {
     fileDiff: PLAYGROUND_FILE_DIFF,
     options: {

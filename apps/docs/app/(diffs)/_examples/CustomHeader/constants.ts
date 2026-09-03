@@ -60,7 +60,10 @@ struct AppConfig {
 `,
 };
 
-export const CUSTOM_HEADER_EXAMPLE: PreloadMultiFileDiffOptions<undefined> = {
+export const CUSTOM_HEADER_EXAMPLE: PreloadMultiFileDiffOptions<
+  undefined,
+  undefined
+> = {
   oldFile: CUSTOM_HEADER_OLD_FILE,
   newFile: CUSTOM_HEADER_NEW_FILE,
   options: {

@@ -1,8 +1,8 @@
 import { DEFAULT_COLLAPSED_CONTEXT_THRESHOLD } from '../constants';
+import type { TextDocument } from '../editor/textDocument';
 import type {
   BaseDiffOptions,
   DiffLineAnnotation,
-  DiffsTextDocument,
   ExpansionDirections,
   FileContents,
   FileDiffMetadata,
@@ -115,8 +115,10 @@ let instanceId = -1;
 
 export class VirtualizedFileDiff<
   LAnnotation = undefined,
-> extends FileDiff<LAnnotation> {
+  Caret = undefined,
+> extends FileDiff<LAnnotation, Caret> {
   override readonly __id: string = `little-virtualized-file-diff:${++instanceId}`;
+  public readonly renderType = 'virtualized';
 
   public top: number | undefined;
   public height: number = 0;
@@ -132,7 +134,7 @@ export class VirtualizedFileDiff<
   };
   private isVisible: boolean = false;
   private isSetup: boolean = false;
-  private virtualizer: Virtualizer | CodeView<LAnnotation>;
+  private virtualizer: Virtualizer | CodeView<LAnnotation, Caret>;
   private layoutDirty = true;
   private forceRenderOverride: true | undefined;
   private currentCollapsed: boolean | undefined;
@@ -143,8 +145,8 @@ export class VirtualizedFileDiff<
   private pendingRender: PendingRender | undefined;
 
   constructor(
-    options: FileDiffOptions<LAnnotation> | undefined,
-    virtualizer: Virtualizer | CodeView<LAnnotation>,
+    options: FileDiffOptions<LAnnotation, Caret> | undefined,
+    virtualizer: Virtualizer | CodeView<LAnnotation, Caret>,
     metrics?: Partial<VirtualFileMetrics>,
     workerManager?: WorkerPoolManager,
     isContainerManaged = false
@@ -244,7 +246,9 @@ export class VirtualizedFileDiff<
     return this.metrics.lineHeight * multiplier;
   }
 
-  override setOptions(options: FileDiffOptions<LAnnotation> | undefined): void {
+  override setOptions(
+    options: FileDiffOptions<LAnnotation, Caret> | undefined
+  ): void {
     if (this.isAdvancedMode()) {
       throw new Error(
         'VirtualizedFileDiff.setOptions cannot be used inside CodeView. Update CodeView options instead.'
@@ -1065,7 +1069,7 @@ export class VirtualizedFileDiff<
 
   // Normally triggered by the host when the document line count changes.
   override applyDocumentChange(
-    textDocument: DiffsTextDocument,
+    textDocument: TextDocument<'file-diff', LAnnotation>,
     newLineAnnotations?: DiffLineAnnotation<LAnnotation>[],
     shouldUpdateBuffer = false
   ): void {
@@ -1452,7 +1456,7 @@ export class VirtualizedFileDiff<
     return this.virtualizer.type === 'simple' ? this.virtualizer : undefined;
   }
 
-  private getAdvancedVirtualizer(): CodeView<LAnnotation> | undefined {
+  private getAdvancedVirtualizer(): CodeView<LAnnotation, Caret> | undefined {
     return this.virtualizer.type === 'advanced' ? this.virtualizer : undefined;
   }
 
@@ -2201,9 +2205,9 @@ function getHunkMetadataOffsets({
   return offsets;
 }
 
-function hasDiffLayoutOptionChanged<LAnnotation>(
-  previousOptions: FileDiffOptions<LAnnotation>,
-  nextOptions: FileDiffOptions<LAnnotation>
+function hasDiffLayoutOptionChanged<LAnnotation, Caret>(
+  previousOptions: FileDiffOptions<LAnnotation, Caret>,
+  nextOptions: FileDiffOptions<LAnnotation, Caret>
 ): boolean {
   return (
     (previousOptions.diffStyle ?? 'split') !==
@@ -2231,9 +2235,9 @@ function hasDiffLayoutOptionChanged<LAnnotation>(
   );
 }
 
-function hasDiffEstimateOptionChanged<LAnnotation>(
-  previousOptions: FileDiffOptions<LAnnotation>,
-  nextOptions: FileDiffOptions<LAnnotation>
+function hasDiffEstimateOptionChanged<LAnnotation, Caret>(
+  previousOptions: FileDiffOptions<LAnnotation, Caret>,
+  nextOptions: FileDiffOptions<LAnnotation, Caret>
 ): boolean {
   return (
     (previousOptions.disableFileHeader ?? false) !==
@@ -2262,8 +2266,10 @@ function canHydrateCollapsedContext(
   );
 }
 
-function getOptionHunkSeparatorType<LAnnotation>(
-  hunkSeparators: FileDiffOptions<LAnnotation>['hunkSeparators'] | undefined
+function getOptionHunkSeparatorType<LAnnotation, Caret>(
+  hunkSeparators:
+    | FileDiffOptions<LAnnotation, Caret>['hunkSeparators']
+    | undefined
 ): HunkSeparators {
   return typeof hunkSeparators === 'function'
     ? 'custom'

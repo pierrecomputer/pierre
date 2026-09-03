@@ -11,7 +11,6 @@ The root, React, and SSR entries re-export these types.
 - [`CodeView` types](#codeview-types)
 - [Lines, hunks, and render state](#lines-hunks-and-render-state)
 - [Render results and virtualization](#render-results-and-virtualization)
-- [Component and editor contracts](#component-and-editor-contracts)
 - [Shiki and diff types](#shiki-and-diff-types)
 
 ## Files and patches
@@ -68,17 +67,15 @@ The root, React, and SSR entries re-export these types.
 
 ## Annotations and selection
 
-| Export                    | Purpose                                                      |
-| ------------------------- | ------------------------------------------------------------ |
-| `AnnotationSide`          | Selects deletions or additions for an annotation.            |
-| `LineAnnotation`          | Associates metadata with one file line.                      |
-| `DiffLineAnnotation`      | Associates metadata with one side and line.                  |
-| `AnnotationLineMap`       | Groups diff annotations by line number.                      |
-| `SelectedLineRange`       | Describes a selected start and end across diff sides.        |
-| `SelectionSide`           | Selects deletions or additions for a selection.              |
-| `SelectionPoint`          | Describes one line and optional side.                        |
-| `SelectionDirection`      | Describes backward, neutral, or forward selection direction. |
-| `EditorActiveLineOptions` | Configures reveal behavior for an editor active line.        |
+| Export               | Purpose                                               |
+| -------------------- | ----------------------------------------------------- |
+| `AnnotationSide`     | Selects deletions or additions for an annotation.     |
+| `LineAnnotation`     | Associates metadata with one file line.               |
+| `DiffLineAnnotation` | Associates metadata with one side and line.           |
+| `AnnotationLineMap`  | Groups diff annotations by line number.               |
+| `SelectedLineRange`  | Describes a selected start and end across diff sides. |
+| `SelectionSide`      | Selects deletions or additions for a selection.       |
+| `SelectionPoint`     | Describes one line and optional side.                 |
 
 ## `CodeView` types
 
@@ -161,25 +158,6 @@ file or diff invalidates that cache.
 | `RenderWindow`              | Describes first and last rows in a render window.       |
 | `VirtualWindowSpecs`        | Describes viewport position, height, and row window.    |
 | `VirtualFileMetrics`        | Describes estimated header and line heights.            |
-
-## Component and editor contracts
-
-| Export                   | Purpose                                                     |
-| ------------------------ | ----------------------------------------------------------- |
-| `DiffsComponentOptions`  | Defines shared options for a render component.              |
-| `DiffsBaseComponent`     | Defines the common file and diff component methods.         |
-| `DiffsEditableComponent` | Adds editor attachment and document updates to a component. |
-| `EditableInstance`       | Selects an editable file or diff instance.                  |
-| `DiffsEditor`            | Defines the editor interface that render components use.    |
-| `DiffsTextDocument`      | Defines the text document interface that components use.    |
-| `Position`               | Identifies a zero-based line and character.                 |
-| `Range`                  | Identifies start and end positions.                         |
-| `TextEdit`               | Replaces one range with new text.                           |
-| `EditorSelection`        | Adds direction to a range.                                  |
-| `EditorViewState`        | Holds editor selections and view state.                     |
-| `EditorViewportState`    | Holds horizontal and optional vertical scroll offsets.      |
-| `EditorChange`           | Describes one normalized document edit.                     |
-| `EditorChangeEvent`      | Reports normalized changes and current document data.       |
 
 ## Shiki and diff types
 

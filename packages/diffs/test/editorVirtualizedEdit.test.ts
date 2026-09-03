@@ -54,7 +54,7 @@ function renderedLineNumbers(content: HTMLElement): number[] {
 }
 
 type EditableSelection = Parameters<
-  Editor<undefined>['setSelections']
+  Editor<'file', undefined>['setSelections']
 >[0][number];
 
 function collapsedCaret(line: number): EditableSelection {
@@ -68,7 +68,7 @@ function collapsedCaret(line: number): EditableSelection {
 interface WindowedEditor {
   cleanup(): void;
   content: HTMLElement;
-  editor: Editor<undefined>;
+  editor: Editor<'file', undefined>;
   fileContainer: HTMLElement;
 }
 
@@ -86,7 +86,7 @@ async function createWindowedEditor(
     disableFileHeader: true,
     theme: DEFAULT_THEMES,
   });
-  const editor = new Editor<undefined>('file');
+  const editor = new Editor('file');
   const initialFile: FileContents = {
     name: 'edits.ts',
     contents: makeContents(lineCount),

@@ -1,12 +1,9 @@
 import { afterAll, expect, test } from 'bun:test';
 
 import { disposeHighlighter, FileDiff, parseDiffFromFile } from '../src';
-import type {
-  DiffsEditor,
-  FileDiffMetadata,
-  HighlightedToken,
-} from '../src/types';
+import type { FileDiffMetadata, HighlightedToken } from '../src/types';
 import { installDom, wait, waitFor } from './domHarness';
+import { createEditorInstance } from './editorTestUtils';
 
 afterAll(async () => {
   await disposeHighlighter();
@@ -35,19 +32,6 @@ async function waitForStableRow(
     await wait(25);
   }
   return row;
-}
-
-function createEditorStub(): DiffsEditor<undefined> {
-  return {
-    cleanUp() {},
-    edit: () => () => {},
-    __captureFocusForDOMReplacement() {},
-    __emitEditComplete() {},
-    __getDocumentContents: () => undefined,
-    __getDocumentSessionState: () => undefined,
-    __postponeBgTokenizeToNextFrame() {},
-    __syncRenderView() {},
-  } as unknown as DiffsEditor<undefined>;
 }
 
 function createDiff(name: string, marker: string): FileDiffMetadata {
@@ -154,7 +138,7 @@ test('a dirty unkeyed session remains authoritative when the same object is re-p
   try {
     instance.render({ fileDiff: externalDiff, fileContainer });
     await waitForStableRow(fileContainer);
-    const detach = instance.__attachEditor(createEditorStub());
+    const detach = instance.__attachEditor(createEditorInstance('file-diff'));
     instance.updateRenderCache(
       new Map<number, HighlightedToken[]>([
         [0, [[0, '', 'const editedMarker = 3;']]],

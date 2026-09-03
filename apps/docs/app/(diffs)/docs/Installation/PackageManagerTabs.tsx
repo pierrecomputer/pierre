@@ -8,7 +8,10 @@ import { DocsCodeExample } from '@/components/docs/DocsCodeExample';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 
 interface PackageManagerTabsProps {
-  installationExamples: Record<PackageManager, PreloadedFileResult<undefined>>;
+  installationExamples: Record<
+    PackageManager,
+    PreloadedFileResult<undefined, undefined>
+  >;
 }
 
 export function PackageManagerTabs({

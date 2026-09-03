@@ -357,9 +357,13 @@ describe('CodeView element pooling', () => {
 
   test('waits for managed slot children to clear before reusing a shell', async () => {
     const { cleanup } = installDom();
-    const viewer = new CodeView({ disableFileHeader: true }, undefined, true);
+    const viewer = new CodeView<undefined, undefined>(
+      { disableFileHeader: true },
+      undefined,
+      true
+    );
     const root = createRoot({ height: 120 });
-    const coordinator: CodeViewCoordinator<undefined> = {
+    const coordinator: CodeViewCoordinator<undefined, undefined> = {
       hasAnnotationRenderer: false,
       hasGutterRenderer: false,
       hasHeaderRenderers: true,

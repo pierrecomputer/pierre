@@ -33,7 +33,7 @@ const fontSizes = ['10px', '12px', '13px', '14px', '18px'];
 const lineHeights = ['16px', '20px', '24px', '28px'];
 
 interface FontStylesProps {
-  prerenderedDiff: PreloadMultiFileDiffResult<undefined>;
+  prerenderedDiff: PreloadMultiFileDiffResult<undefined, undefined>;
 }
 
 export function FontStyles({ prerenderedDiff }: FontStylesProps) {

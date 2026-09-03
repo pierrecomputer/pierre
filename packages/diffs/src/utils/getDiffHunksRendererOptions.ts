@@ -4,8 +4,8 @@ import { shouldUseTokenTransformer } from './shouldUseTokenTransformer';
 
 // Build the renderer option snapshot with direct property reads. CodeView item
 // options may inherit prototype getters, so object spread can miss values.
-export function getDiffHunksRendererOptions<LAnnotation>(
-  options: FileDiffOptions<LAnnotation> | undefined
+export function getDiffHunksRendererOptions<LAnnotation, Caret>(
+  options: FileDiffOptions<LAnnotation, Caret> | undefined
 ): DiffHunksRendererOptions {
   return {
     theme: options?.theme,

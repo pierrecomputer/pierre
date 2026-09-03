@@ -8,10 +8,10 @@ import type { DocsExampleTypes } from '@/components/docs/types';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 
 interface CodeToggleProps {
-  reactSingleFile: PreloadedFileResult<undefined>;
-  reactPatchFile: PreloadedFileResult<undefined>;
-  vanillaSingleFile: PreloadedFileResult<undefined>;
-  vanillaPatchFile: PreloadedFileResult<undefined>;
+  reactSingleFile: PreloadedFileResult<undefined, undefined>;
+  reactPatchFile: PreloadedFileResult<undefined, undefined>;
+  vanillaSingleFile: PreloadedFileResult<undefined, undefined>;
+  vanillaPatchFile: PreloadedFileResult<undefined, undefined>;
 }
 
 export function CodeToggle({

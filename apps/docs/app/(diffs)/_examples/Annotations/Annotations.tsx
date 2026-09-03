@@ -16,7 +16,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 
 interface AnnotationsProps {
-  prerenderedDiff: PreloadMultiFileDiffResult<AnnotationMetadata>;
+  prerenderedDiff: PreloadMultiFileDiffResult<AnnotationMetadata, undefined>;
 }
 
 export function Annotations({ prerenderedDiff }: AnnotationsProps) {

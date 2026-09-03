@@ -9,15 +9,15 @@ import {
 
 import {
   File,
+  type FileEditChangeHandler,
   type FileEditCompleteEvent,
   type FileEditCompleteHandler,
   type FileOptions,
 } from '../../components/File';
 import { VirtualizedFile } from '../../components/VirtualizedFile';
-import type { EditorChangeEvent, EditorOptions } from '../../edit';
+import type { Editor, EditorChangeEvent, EditorOptions } from '../../edit';
 import type { GetHoveredLineResult } from '../../managers/InteractionManager';
 import type {
-  DiffsEditor,
   FileContents,
   LineAnnotation,
   SelectedLineRange,
@@ -46,10 +46,10 @@ interface AcceptedCompletion<LAnnotation> {
   } | null;
 }
 
-interface UseFileInstanceProps<LAnnotation, LCaret> {
+interface UseFileInstanceProps<LAnnotation, Caret> {
   file: FileContents;
-  options: FileOptions<LAnnotation> | undefined;
-  editorOptions: EditorOptions<LAnnotation, LCaret> | undefined;
+  options: FileOptions<LAnnotation, Caret> | undefined;
+  editorOptions: EditorOptions<'file', LAnnotation, Caret> | undefined;
   editStateKey: string | undefined;
   lineAnnotations: LineAnnotation<LAnnotation>[] | undefined;
   selectedLines: SelectedLineRange | null | undefined;
@@ -59,8 +59,8 @@ interface UseFileInstanceProps<LAnnotation, LCaret> {
   hasCustomHeader: boolean;
   disableWorkerPool: boolean;
   edit: boolean;
-  onEditChange?(event: EditorChangeEvent<LAnnotation, 'file'>): void;
-  onEditComplete: FileEditCompleteHandler<LAnnotation> | undefined;
+  onEditChange?: FileEditChangeHandler<LAnnotation, Caret>;
+  onEditComplete?: FileEditCompleteHandler<LAnnotation, Caret>;
 }
 
 interface UseFileInstanceReturn<LAnnotation> {
@@ -69,7 +69,7 @@ interface UseFileInstanceReturn<LAnnotation> {
   getAnnotationSlotName(annotation: LineAnnotation<LAnnotation>): string;
 }
 
-export function useFileInstance<LAnnotation, LCaret>({
+export function useFileInstance<LAnnotation, Caret>({
   file,
   options,
   editorOptions,
@@ -86,14 +86,15 @@ export function useFileInstance<LAnnotation, LCaret>({
   onEditComplete: _onEditComplete,
 }: UseFileInstanceProps<
   LAnnotation,
-  LCaret
+  Caret
 >): UseFileInstanceReturn<LAnnotation> {
   const simpleVirtualizer = useVirtualizer();
   const controlledSelection = selectedLines !== undefined;
   const poolManager = useContext(WorkerPoolContext);
-  const createEditor = useCreateEditor<LAnnotation, LCaret>();
+  const createEditor = useCreateEditor<LAnnotation, Caret>();
   const handleOnEditChange = useStableCallback(
-    (event: EditorChangeEvent<LAnnotation, 'file'>) => _onEditChange?.(event)
+    (event: EditorChangeEvent<'file', LAnnotation, Caret>) =>
+      _onEditChange?.(event)
   );
   const onEditChange = _onEditChange != null ? handleOnEditChange : undefined;
   // An accepted completion installs its file on the instance immediately,
@@ -102,7 +103,7 @@ export function useFileInstance<LAnnotation, LCaret>({
   // not repaint pre-edit state.
   const acceptedCache = useRef<AcceptedCompletion<LAnnotation> | null>(null);
   const handleOnEditComplete = useStableCallback(
-    (event: FileEditCompleteEvent<LAnnotation>) => {
+    (event: FileEditCompleteEvent<LAnnotation, Caret>) => {
       const decision = _onEditComplete?.(event) ?? 'reject';
       if (decision === 'accept') {
         acceptedCache.current = {
@@ -119,7 +120,7 @@ export function useFileInstance<LAnnotation, LCaret>({
   const onEditComplete =
     _onEditComplete != null ? handleOnEditComplete : undefined;
   const instanceRef = useRef<
-    File<LAnnotation> | VirtualizedFile<LAnnotation> | null
+    File<LAnnotation, Caret> | VirtualizedFile<LAnnotation, Caret> | null
   >(null);
   const disposeEditorRef = useRef<() => void>(null);
   const getEditor = useStableCallback(() => {
@@ -278,23 +279,25 @@ function resolveAcceptedValues<LAnnotation>(
   return { file: resolvedFile, lineAnnotations: resolvedAnnotations };
 }
 
-interface MergeFileOptionsProps<LAnnotation> {
-  options: FileOptions<LAnnotation> | undefined;
+interface MergeFileOptionsProps<LAnnotation, Caret> {
+  options: FileOptions<LAnnotation, Caret> | undefined;
   controlledSelection: boolean;
   hasGutterRenderUtility: boolean;
   hasCustomHeader: boolean;
-  onEditChange?(event: EditorChangeEvent<LAnnotation, 'file'>): void;
-  onEditComplete: FileEditCompleteHandler<LAnnotation> | undefined;
+  onEditChange: FileEditChangeHandler<LAnnotation, Caret> | undefined;
+  onEditComplete: FileEditCompleteHandler<LAnnotation, Caret> | undefined;
 }
 
-function mergeFileOptions<LAnnotation>({
+function mergeFileOptions<LAnnotation, Caret>({
   options,
   controlledSelection,
   hasCustomHeader,
   hasGutterRenderUtility,
   onEditChange,
   onEditComplete,
-}: MergeFileOptionsProps<LAnnotation>): FileOptions<LAnnotation> | undefined {
+}: MergeFileOptionsProps<LAnnotation, Caret>):
+  | FileOptions<LAnnotation, Caret>
+  | undefined {
   const needsReactOverrides =
     controlledSelection ||
     hasGutterRenderUtility ||
@@ -320,9 +323,9 @@ function mergeFileOptions<LAnnotation>({
   };
 }
 
-function applyEdit<LAnnotation>(
-  instance: File<LAnnotation>,
-  getEditor: () => DiffsEditor<LAnnotation>
+function applyEdit<LAnnotation, Caret>(
+  instance: File<LAnnotation, Caret>,
+  getEditor: () => Editor<'file', LAnnotation, Caret>
 ): () => void {
   const editor = getEditor();
   try {

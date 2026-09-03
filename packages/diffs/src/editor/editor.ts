@@ -1,33 +1,25 @@
+import type { File } from '../components/File';
+import type { FileDiff } from '../components/FileDiff';
+import type { VirtualizedFile } from '../components/VirtualizedFile';
+import type { VirtualizedFileDiff } from '../components/VirtualizedFileDiff';
 import {
   dequeueRender,
   queueRender,
 } from '../managers/UniversalRenderingManager';
 import type {
   DiffLineAnnotation,
-  DiffsEditableComponent,
-  DiffsEditor,
-  EditableInstance,
-  EditorCaret,
-  EditorChange,
-  EditorChangeEvent,
-  EditorDocumentKind,
-  EditorSelection,
-  EditorViewState,
+  DiffsHighlighter,
   FileContents,
+  FileDiffMetadata,
   HighlightedToken,
   LineAnnotation,
-  Position,
-  Range,
   RenderRange,
-  ResolvedTextEdit,
-  RetainedDiffSessionSnapshot,
   SelectionSide,
-  TextEdit,
 } from '../types';
-import { cloneRetainedDiffSessionSnapshot } from '../utils/cloneFileDiffMetadata';
 import { computeLineOffsets } from '../utils/computeFileOffsets';
 import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
 import { isGutterUtilityPath } from '../utils/isGutterUtilityPath';
+import { cloneRetainedDiffSessionSnapshot } from './cloneRetainedDiffSessionSnapshot';
 import {
   type EditorCommand,
   type EditorKeymap,
@@ -127,8 +119,23 @@ import {
   snapTextOffsetToUnicodeBoundary,
 } from './textMeasure';
 import { EditorTokenizer, renderLineTokens } from './tokenizer';
-import type { EditorEditCompleteEvent } from './types';
-import type { EditorInitialState, EditState } from './types';
+import type {
+  EditorCaret,
+  EditorChange,
+  EditorChangeEvent,
+  EditorEditCompleteEvent,
+  EditorInitialState,
+  EditorLineAnnotation,
+  EditorSelection,
+  EditorType,
+  EditorViewState,
+  EditState,
+  Position,
+  Range,
+  ResolvedTextEdit,
+  RetainedDiffSessionSnapshot,
+  TextEdit,
+} from './types';
 import {
   addEventListener,
   clampDomOffset,
@@ -207,7 +214,60 @@ interface TrackedCaret<T> {
   focusOffset: number;
 }
 
-export interface EditorOptions<LAnnotation, LCaret = undefined> {
+interface SyncRenderViewBaseProps {
+  highlighter: DiffsHighlighter;
+  fileContainer: HTMLElement;
+  renderRange: RenderRange | undefined;
+  /** Start fresh history instead of retaining or extending the current history. */
+  resetHistory?: boolean;
+}
+
+interface SyncFileRenderViewProps<LAnnotation> extends SyncRenderViewBaseProps {
+  file: FileContents;
+  lineAnnotations: LineAnnotation<LAnnotation>[] | undefined;
+  /** Treat the supplied contents as an externally provided document update. */
+  externalDocument?: boolean;
+}
+
+interface SyncDiffRenderViewProps<LAnnotation> extends SyncRenderViewBaseProps {
+  fileDiff: FileDiffMetadata;
+  lineAnnotations: DiffLineAnnotation<LAnnotation>[] | undefined;
+  /** Treat the supplied contents as an externally provided document update. */
+  externalDocument?: boolean;
+}
+
+type SyncRenderViewProps<
+  EType extends EditorType,
+  LAnnotation,
+> = EType extends 'file'
+  ? SyncFileRenderViewProps<LAnnotation>
+  : SyncDiffRenderViewProps<LAnnotation>;
+
+type EditorComponent<
+  EType extends EditorType,
+  LAnnotation,
+  Caret,
+> = EType extends 'file'
+  ? File<LAnnotation, Caret>
+  : FileDiff<LAnnotation, Caret>;
+
+type EditorVirtualizedComponent<LAnnotation, Caret> =
+  | VirtualizedFile<LAnnotation, Caret>
+  | VirtualizedFileDiff<LAnnotation, Caret>;
+
+// Narrow an editor host through the virtualized components' runtime marker
+// without importing either component class as a runtime dependency.
+function isVirtualizedEditorComponent<LAnnotation, Caret>(
+  instance: EditorComponent<EditorType, LAnnotation, Caret> | undefined
+): instance is EditorVirtualizedComponent<LAnnotation, Caret> {
+  return (
+    instance != null &&
+    'renderType' in instance &&
+    instance.renderType === 'virtualized'
+  );
+}
+
+export interface EditorOptions<EType extends EditorType, LAnnotation, Caret> {
   /** The maximum number of entries to keep in the undo stack. */
   historyMaxEntries?: number;
   /**
@@ -221,7 +281,7 @@ export interface EditorOptions<LAnnotation, LCaret = undefined> {
    * fields are initialized from the attached component. The editor takes
    * ownership and does not clone supplied objects.
    */
-  initialState?: EditorInitialState<LAnnotation>;
+  initialState?: EditorInitialState<EType, LAnnotation>;
   /** Custom keymap groups checked before defaults; later groups take precedence. */
   keymap?: EditorKeymap;
   /** Render rounded corners for selection ranges, default is true. */
@@ -250,29 +310,31 @@ export interface EditorOptions<LAnnotation, LCaret = undefined> {
   };
   /** Render the selection action widget element. */
   renderSelectionAction?: (
-    context: SelectionActionContext<LAnnotation>
+    context: SelectionActionContext<EType, LAnnotation>
   ) => HTMLElement;
   /**
    * Render an externally owned caret at its normalized document position.
    */
-  renderCaret?: (caret: EditorCaret<LCaret>) => HTMLElement;
+  renderCaret?: (caret: EditorCaret<Caret>) => HTMLElement;
   /** Callback when the editor is attached to a file. */
   onAttach?: (
-    editor: Editor<LAnnotation, LCaret>,
-    fileInstance: DiffsEditableComponent<LAnnotation>
+    editor: Editor<EType, LAnnotation, Caret>,
+    fileInstance: EditorComponent<EType, LAnnotation, Caret>
   ) => void;
   /**
    * Called with an `EditorChangeEvent` whenever the editor document changes.
    * Treat this as a document notification; do not feed the changes back into
    * the editor or you will create loops.
    */
-  onChange?: (event: EditorChangeEvent<LAnnotation, 'file' | 'diff'>) => void;
+  onChange?: (event: EditorChangeEvent<EType, LAnnotation, Caret>) => void;
   /**
    * Observes completion with the same frozen event sent to the component. Runs
    * before the component callback, including when the component callback is
    * missing. There is no way to accept or reject from this API.
    */
-  onComplete?: (event: EditorEditCompleteEvent<LAnnotation>) => void;
+  onComplete?: (
+    event: EditorEditCompleteEvent<EType, LAnnotation, Caret>
+  ) => void;
   /** Callback when the editor gains focus. */
   onFocus?: () => void;
   /** Callback when the editor loses focus. */
@@ -307,12 +369,13 @@ const MULTI_SELECTION_CLIPBOARD_TYPE =
   'application/vnd.pierre.diffs-selections+json';
 
 export class Editor<
-  LAnnotation,
-  LCaret = undefined,
-> implements DiffsEditor<LAnnotation> {
-  #options: EditorOptions<LAnnotation, LCaret>;
-  #initialState: EditorInitialState<LAnnotation> | undefined;
-  #editSession?: ManagedEditSession<LAnnotation>;
+  EType extends EditorType = EditorType,
+  LAnnotation = undefined,
+  Caret = undefined,
+> {
+  #options: EditorOptions<EType, LAnnotation, Caret>;
+  #initialState: EditorInitialState<EType, LAnnotation> | undefined;
+  #editSession?: ManagedEditSession<EType, LAnnotation>;
   #metrics = new Metrics();
   #tokenizer?: EditorTokenizer;
   #popoverManager?: PopoverManager;
@@ -353,21 +416,29 @@ export class Editor<
   #contentElement?: HTMLElement;
   #overlayElement?: HTMLElement;
   #overlayElements?: Map<string, HTMLElement>;
-  #caretElements?: Map<TrackedCaret<LCaret>, HTMLElement>;
+  #caretElements?: Map<TrackedCaret<Caret>, HTMLElement>;
   #caretHighlightElements?: HTMLElement[];
   #primaryCaretElement?: HTMLElement;
   #resizeObserver?: ResizeObserver;
 
   // state
-  #fileInstance?: DiffsEditableComponent<LAnnotation>;
+  #fileInstance?: EditorComponent<EType, LAnnotation, Caret>;
+  // Preserves the current file/diff instance's applyDocumentChange
+  // type/semantics to avoid annoying `as X` narrowing
+  #applyDocumentChange?: (
+    textDocument: TextDocument<EType, LAnnotation>,
+    newLineAnnotations: EditorLineAnnotation<EType, LAnnotation>[] | undefined,
+    shouldUpdateBuffer?: boolean
+  ) => void;
+  #publishChange?: (
+    changes: EditorChange[],
+    file: FileContents,
+    lineAnnotations: EditorLineAnnotation<EType, LAnnotation>[] | undefined
+  ) => void;
   #isRendering = false;
   #restoreEditorStateOnSync = false;
-  // FIXME(amadeus): We need this support both types. I think in an ideal
-  // world, this instance becomes specific to the type of editor that it
-  // is... and we can manage this without `as` ing thing
-  #lineAnnotations?: DiffLineAnnotation<LAnnotation>[];
+  #lineAnnotations?: EditorLineAnnotation<EType, LAnnotation>[];
   readonly #editStateKey?: string;
-  readonly #documentKind: EditorDocumentKind;
   readonly #ownsVerticalViewport: boolean;
   #renderRange?: RenderRange;
   // Bounded render-window size (~viewport + 2*hunkLineCount) from the last view
@@ -378,7 +449,7 @@ export class Editor<
   // windows, where no cap is needed.
   #viewportWindowLines?: number;
   #markerRenderer?: MarkerRenderer;
-  #carets?: TrackedCaret<LCaret>[];
+  #carets?: TrackedCaret<Caret>[];
   #searchPanel?: SearchPanelWidget;
   #selectionAction?: SelectionActionWidget;
   // Programmatic ranges stay passive until the user interacts with the editor.
@@ -456,24 +527,33 @@ export class Editor<
   };
 
   /**
-   * @param documentKind The component surface this editor can attach to.
+   * @param type The component surface this editor can attach to.
    * @param options Configure editor behavior and lifecycle callbacks.
    * @param editStateKey Retain this editable draft and its undo/redo history
-   * in memory so a later editor using the same kind and key can resume them.
+   * in memory so a later editor using the same type and key can resume them.
    */
   constructor(
-    documentKind: EditorDocumentKind,
-    options: EditorOptions<LAnnotation, LCaret> = {},
+    public readonly type: EType,
+    options: EditorOptions<EType, LAnnotation, Caret> = {},
     editStateKey?: string
   ) {
-    this.#documentKind = documentKind;
-    this.#editStateKey = editStateKey;
-    this.#ownsVerticalViewport = options.ownsVerticalViewport === true;
     this.#options = options;
+    this.#ownsVerticalViewport = options.ownsVerticalViewport === true;
     this.#initialState = options.initialState;
+    this.#editStateKey = editStateKey;
   }
 
-  setOptions(options: EditorOptions<LAnnotation, LCaret>): void {
+  // Preserve the component/editor type match while keeping caret metadata
+  // opaque to components, which never read it.
+  get #getTypedEditor():
+    | Editor<'file', LAnnotation, Caret>
+    | Editor<'file-diff', LAnnotation, Caret> {
+    return this.type === 'file'
+      ? (this as Editor<'file', LAnnotation, Caret>)
+      : (this as Editor<'file-diff', LAnnotation, Caret>);
+  }
+
+  setOptions(options: EditorOptions<EType, LAnnotation, Caret>): void {
     const previousRenderCaret = this.#options.renderCaret;
     this.#options = {
       ...this.#options,
@@ -486,11 +566,13 @@ export class Editor<
     }
   }
 
-  __emitEditComplete(event: EditorEditCompleteEvent<LAnnotation>): void {
+  __emitEditComplete(
+    event: EditorEditCompleteEvent<EType, LAnnotation, Caret>
+  ): void {
     this.#options.onComplete?.(event);
   }
 
-  setCarets(carets: EditorCaret<LCaret>[]): void {
+  setCarets(carets: EditorCaret<Caret>[]): void {
     const textDocument = this.#editSession?.document;
     if (textDocument === undefined) return;
     this.#caretElements?.forEach((element) => element.remove());
@@ -516,32 +598,29 @@ export class Editor<
     this.#renderCarets();
   }
 
-  // Small typescript hack to prevent UnresolvedFile from being editable.
-  edit<T extends DiffsEditableComponent<LAnnotation>>(
-    fileInstance: EditableInstance<T>
+  // UnresolvedFile extends FileDiff for rendering, but its conflict-specific
+  // document model is not supported by Editor.
+  edit<T extends EditorComponent<EType, LAnnotation, Caret>>(
+    fileInstance: T extends { readonly type: 'unresolved-file' } ? never : T
   ): () => void;
-  edit(fileInstance: DiffsEditableComponent<LAnnotation>): () => void {
-    const docKind: EditorDocumentKind =
-      fileInstance.type === 'file-diff' ? 'file-diff' : 'file';
+  edit(fileInstance: EditorComponent<EType, LAnnotation, Caret>): () => void {
+    const editor = this.#getTypedEditor;
     const previousSession = this.#editSession;
-    if (this.#documentKind !== docKind) {
-      throw new Error(
-        `Editor: a ${this.#documentKind} editor cannot edit a ${docKind} component`
-      );
-    }
     if (this.#isRendering) {
-      throw new Error('Editor: the editor is already rendering its component');
+      throw new Error(
+        'Editor.edit: the editor is already rendering its component'
+      );
     }
     if (this.#fileInstance != null && this.#fileInstance !== fileInstance) {
       throw new Error(
-        'Editor: a recycled edit session cannot attach to a different component'
+        'Editor.edit: a recycled edit session cannot attach to a different component'
       );
     }
     const initialState = this.#initialState;
     const initialEditorState = initialState?.editor;
     const editStateKey = this.#editStateKey;
     const editSession = getEditSession({
-      documentKind: docKind,
+      type: this.type,
       editStateKey,
       owner: this,
       initialState,
@@ -555,36 +634,75 @@ export class Editor<
     this.#restoreEditorStateOnSync = editSession.editor != null;
     try {
       this.#initialize();
-      // First edit: attach the editor to the component.
-      if (this.#detach == null) {
-        this.#detach = fileInstance.__attachEditor(this);
-      }
-      // After recycling: restore rendering on the same component.
-      else {
-        fileInstance.__resumeEditor(this);
+      if (fileInstance.type === 'file' && editor.type === 'file') {
+        editor.#applyDocumentChange =
+          fileInstance.applyDocumentChange.bind(fileInstance);
+        editor.#publishChange = (changes, file, lineAnnotations) => {
+          const event: EditorChangeEvent<'file', LAnnotation, Caret> = {
+            changes,
+            file,
+            editor,
+            lineAnnotations,
+          };
+          editor.#options.onChange?.(event);
+          fileInstance.emitEditChange(event);
+        };
+        // First edit: attach the editor to the component.
+        if (this.#detach == null) {
+          this.#detach = fileInstance.__attachEditor(editor);
+        }
+        // Otherwise we resume our edit session
+        else {
+          fileInstance.__resumeEditor(editor);
+        }
+      } else if (
+        fileInstance.type === 'file-diff' &&
+        editor.type === 'file-diff'
+      ) {
+        editor.#applyDocumentChange =
+          fileInstance.applyDocumentChange.bind(fileInstance);
+        editor.#publishChange = (changes, file, lineAnnotations) => {
+          const event: EditorChangeEvent<'file-diff', LAnnotation, Caret> = {
+            changes,
+            file,
+            editor,
+            lineAnnotations,
+          };
+          editor.#options.onChange?.(event);
+          fileInstance.emitEditChange(event);
+        };
+        // First edit: attach the editor to the component.
+        if (this.#detach == null) {
+          this.#detach = fileInstance.__attachEditor(editor);
+        }
+        // Otherwise we resume our edit session
+        else {
+          fileInstance.__resumeEditor(editor);
+        }
+      } else {
+        throw new Error('Editor.edit: Impossible edit state');
       }
     } catch (error: unknown) {
       this.cleanUp('recycle');
       // A failed attachment never replaced the claimed session. Restore diff
       // state that cleanup could not recapture before returning its key.
-      if (
-        editSession.documentKind === 'file-diff' &&
-        editSession.diffSession == null
-      ) {
+      if (editSession.type === 'file-diff' && editSession.diffSession == null) {
         editSession.diffSession = previousDiffSession;
       }
       // If we haven't ever attached, and failed to edit, release any edit
       // state lock
       if (this.#detach == null && editStateKey != null) {
-        if (docKind === 'file') {
-          EditStateManager.releaseFile(editStateKey, this);
+        if (editor.type === 'file') {
+          EditStateManager.releaseFile(editStateKey, editor);
         } else {
-          EditStateManager.releaseFileDiff(editStateKey, this);
+          EditStateManager.releaseFileDiff(editStateKey, editor);
         }
       }
       this.#editSession = previousSession;
       if (this.#detach == null) {
         this.#fileInstance = undefined;
+        this.#applyDocumentChange = undefined;
+        this.#publishChange = undefined;
       }
       if (initialState != null && initialEditorState != null) {
         initialState.editor = initialEditorState;
@@ -610,7 +728,7 @@ export class Editor<
   applyEdits(edits: TextEdit[], updateHistory = true): void {
     const textDocument = this.#editSession?.document;
     if (textDocument == null) {
-      throw new Error('Editor is not attached');
+      throw new Error('Editor.applyEdits: Editor is not attached');
     }
     // Only reposition focus and scroll when the editor already holds focus. A
     // programmatic edit must not pull focus from another input the user is
@@ -746,7 +864,7 @@ export class Editor<
    * Return the objects that make up the active edit session, or undefined when
    * no complete session exists.
    */
-  getEditState(): EditState<LAnnotation> | undefined {
+  getEditState(): EditState<EType, LAnnotation> | undefined {
     const editSession = this.#editSession;
     if (editSession == null) {
       return undefined;
@@ -754,21 +872,10 @@ export class Editor<
     const fileInstance = this.#fileInstance;
     if (fileInstance == null) {
       throw new Error(
-        `Editor: active ${this.#documentKind} session has no component`
+        `Editor.getEditState: active ${this.type} session has no component`
       );
     }
-    if (this.#documentKind === 'file' && fileInstance.type !== 'file') {
-      throw new Error('Editor: active file session has no file component');
-    }
-    if (
-      this.#documentKind === 'file-diff' &&
-      fileInstance.type !== 'file-diff'
-    ) {
-      throw new Error(
-        'Editor: active file-diff session has no file-diff component'
-      );
-    }
-    return toManagedEditState(editSession);
+    return toManagedEditState<EType, LAnnotation>(editSession);
   }
 
   setViewState({ selections, view }: EditorViewState): void {
@@ -777,7 +884,7 @@ export class Editor<
       this.#fileInstance === undefined ||
       this.#editSession?.document === undefined
     ) {
-      throw new Error('Editor is not attached');
+      throw new Error('Editor.setViewState: Editor is not attached');
     }
     this.#canMountSelectionAction = false;
     this.#updateSelections(selections ?? []);
@@ -803,7 +910,7 @@ export class Editor<
   ): void {
     const textDocument = this.#editSession?.document;
     if (textDocument === undefined) {
-      throw new Error('Text document is not initialized');
+      throw new Error('Editor.setSelections: Text document is not initialized');
     }
     const resolvedSelections = selections.map<EditorSelection>((selection) => {
       let start = textDocument.normalizePosition(selection.start);
@@ -838,7 +945,7 @@ export class Editor<
   setMarkers(markers: Marker[]): void {
     const textDocument = this.#editSession?.document;
     if (textDocument === undefined) {
-      throw new Error('Text document is not initialized');
+      throw new Error('Editor.setMarkers: Text document is not initialized');
     }
 
     if (markers.length === 0) {
@@ -928,7 +1035,7 @@ export class Editor<
     if (fileInstance != null && editSession != null) {
       const discardDiffState = !this.#checkpointEditSessionState();
       if (!recycle) {
-        this.#releaseEditSession(editSession, discardDiffState);
+        this.#releaseEditSession(discardDiffState);
       }
     }
     this.#invalidateOnAttach();
@@ -994,14 +1101,24 @@ export class Editor<
     if (!recycle) {
       try {
         if (fileInstance != null && editSession != null) {
-          fileInstance.__completeEditSession(
-            this,
-            reason === 'complete' ? 'install' : 'discard'
-          );
+          const editor = this.#getTypedEditor;
+          const mode = reason === 'complete' ? 'install' : 'discard';
+          if (fileInstance.type === 'file' && editor.type === 'file') {
+            fileInstance.__completeEditSession(editor, mode);
+          } else if (
+            fileInstance.type === 'file-diff' &&
+            editor.type === 'file-diff'
+          ) {
+            fileInstance.__completeEditSession(editor, mode);
+          } else {
+            throw new Error('Editor.cleanUp: Impossible edit state');
+          }
         }
       } finally {
         this.#editSession = undefined;
         this.#fileInstance = undefined;
+        this.#applyDocumentChange = undefined;
+        this.#publishChange = undefined;
       }
     }
   }
@@ -1025,7 +1142,7 @@ export class Editor<
     const hasEditorState = editorState.selections != null || hasNonDefaultView;
     editSession.editor = cloneEditorViewState(editorState);
 
-    if (editSession.documentKind === 'file') {
+    if (editSession.type === 'file') {
       return false;
     }
 
@@ -1044,18 +1161,16 @@ export class Editor<
     );
   }
 
-  #releaseEditSession(
-    editSession: ManagedEditSession<LAnnotation>,
-    discardDiffState = false
-  ): void {
+  #releaseEditSession(discardDiffState = false): void {
     const editStateKey = this.#editStateKey;
     if (editStateKey == null) {
       return;
     }
-    if (editSession.documentKind === 'file') {
-      EditStateManager.releaseFile(editStateKey, this);
+    const editor = this.#getTypedEditor;
+    if (editor.type === 'file') {
+      EditStateManager.releaseFile(editStateKey, editor);
     } else {
-      EditStateManager.releaseFileDiff(editStateKey, this, discardDiffState);
+      EditStateManager.releaseFileDiff(editStateKey, editor, discardDiffState);
     }
   }
 
@@ -1114,16 +1229,27 @@ export class Editor<
   }
 
   /** @internal */
-  __syncRenderView: DiffsEditor<LAnnotation>['__syncRenderView'] = ({
-    highlighter,
-    fileContainer,
-    renderRange,
-    resetHistory = false,
-    ...renderView
-  }) => {
-    const isDiff = 'fileDiff' in renderView;
-    const fileOrDiff = isDiff ? renderView.fileDiff : renderView.file;
-    const lineAnnotations = renderView.lineAnnotations;
+  __syncRenderView = (props: SyncRenderViewProps<EType, LAnnotation>): void => {
+    const {
+      highlighter,
+      fileContainer,
+      renderRange,
+      resetHistory = false,
+    } = props;
+    const renderView:
+      | SyncFileRenderViewProps<LAnnotation>
+      | SyncDiffRenderViewProps<LAnnotation> = props;
+    let fileOrDiff: FileContents | FileDiffMetadata;
+    if ('file' in renderView && this.type === 'file') {
+      fileOrDiff = renderView.file;
+    } else if ('fileDiff' in renderView && this.type === 'file-diff') {
+      fileOrDiff = renderView.fileDiff;
+    } else {
+      throw new Error('Editor.__syncRenderView: Impossible render state');
+    }
+    const lineAnnotations = renderView.lineAnnotations as
+      | EditorLineAnnotation<EType, LAnnotation>[]
+      | undefined;
     const editStateKey = this.#editStateKey;
     const externalDocument = renderView.externalDocument === true;
     const fileInstance = this.#fileInstance;
@@ -1213,10 +1339,10 @@ export class Editor<
         editSession.editor = undefined;
       }
       if (textDocument == null) {
-        const editStack = new EditStack<LAnnotation>({
+        const editStack = new EditStack<EType, LAnnotation>({
           maxEntries: this.#options.historyMaxEntries,
         });
-        textDocument = new TextDocument(
+        textDocument = new TextDocument<EType, LAnnotation>(
           fileOrDiff.name,
           contents,
           languageId,
@@ -1247,11 +1373,7 @@ export class Editor<
       this.#applyExternalDocumentReplacement(
         editSession,
         contents,
-        isDiff
-          ? renderView.lineAnnotations
-          : (renderView.lineAnnotations as
-              | DiffLineAnnotation<LAnnotation>[]
-              | undefined)
+        lineAnnotations
       );
       const { name, lang } = fileOrDiff;
       editSession.fileInfo = { name, lang };
@@ -1347,11 +1469,7 @@ export class Editor<
       this.#fileInstance?.__getEffectiveCodeOptions() ?? {}
     );
 
-    this.#lineAnnotations = isDiff
-      ? renderView.lineAnnotations
-      : (renderView.lineAnnotations as
-          | DiffLineAnnotation<LAnnotation>[]
-          | undefined);
+    this.#lineAnnotations = lineAnnotations;
     this.#renderRange = renderRange;
     // Remember the bounded window the virtualizer just synced so #applyChange
     // can clamp any edit-time widening against it. Refreshed on every scroll;
@@ -1441,9 +1559,9 @@ export class Editor<
   // applied twice. __syncRenderView emits the resulting onChange notification
   // afterward.
   #applyExternalDocumentReplacement(
-    editSession: ManagedEditSession<LAnnotation>,
+    editSession: ManagedEditSession<EType, LAnnotation>,
     contents: string,
-    lineAnnotations: DiffLineAnnotation<LAnnotation>[] | undefined
+    lineAnnotations: EditorLineAnnotation<EType, LAnnotation>[] | undefined
   ): void {
     const textDocument = editSession.document;
     if (textDocument == null || textDocument.getText() === contents) {
@@ -1501,24 +1619,38 @@ export class Editor<
     }
   }
 
+  get #fileDiffInstance(): FileDiff<LAnnotation, Caret> | undefined {
+    return this.#fileInstance?.type === 'file-diff'
+      ? this.#fileInstance
+      : undefined;
+  }
+
+  get #virtualizedInstance():
+    | EditorVirtualizedComponent<LAnnotation, Caret>
+    | undefined {
+    return isVirtualizedEditorComponent(this.#fileInstance)
+      ? this.#fileInstance
+      : undefined;
+  }
+
   // Whether a zero-based document line has (or will have on scroll) a
   // rendered row. False only for lines hidden inside a collapsed unchanged
   // region of a diff host; hosts without collapsible regions treat every
   // line as renderable.
   #isLineRenderable(line: number): boolean {
-    return this.#fileInstance?.isLineRenderable?.(line + 1) ?? true;
+    return this.#fileDiffInstance?.isLineRenderable?.(line + 1) ?? true;
   }
 
   // Fold-skip resolver for vertical caret motion (zero-based lines), or
   // undefined for hosts without collapsible regions so motion stays plain
   // line arithmetic.
   get #resolveRenderableLine(): ResolveRenderableLine | undefined {
-    const fileInstance = this.#fileInstance;
-    if (fileInstance?.getNearestRenderableLine == null) {
+    const fileInstance = this.#fileDiffInstance;
+    if (fileInstance == null) {
       return undefined;
     }
     return (line, direction) => {
-      const nearest = fileInstance.getNearestRenderableLine!(
+      const nearest = fileInstance.getNearestRenderableLine(
         line + 1,
         direction
       );
@@ -1531,16 +1663,16 @@ export class Editor<
   // caret's row can render before the scroll below retries toward it.
   #revealLineIfCollapsed(line: number): void {
     if (!this.#isLineRenderable(line)) {
-      this.#fileInstance?.revealLine?.(line + 1);
+      this.#fileDiffInstance?.revealLine?.(line + 1);
     }
   }
 
   get #diffSyle(): 'unified' | 'split' {
-    return this.#fileInstance?.options.diffStyle ?? 'split';
+    return this.#fileDiffInstance?.options.diffStyle ?? 'split';
   }
 
   get #isDiff(): boolean {
-    return this.#fileInstance?.type === 'file-diff';
+    return this.type === 'file-diff';
   }
 
   get #isWrap(): boolean {
@@ -1605,7 +1737,9 @@ export class Editor<
   // A recycled attachment remains the same edit session. If its first
   // notification was canceled, the next live synchronization reschedules it;
   // once delivered, later recycled mounts stay silent.
-  #scheduleOnAttach(fileInstance: DiffsEditableComponent<LAnnotation>): void {
+  #scheduleOnAttach(
+    fileInstance: EditorComponent<EType, LAnnotation, Caret>
+  ): void {
     const attachState = this.#attachState;
     const textDocument = this.#editSession?.document;
     if (
@@ -1649,8 +1783,8 @@ export class Editor<
   // Get the editor's scrolling viewport, return undefined if the Virtualizer
   // is not present.`
   #getScrollViewport(): HTMLElement | Document | undefined {
-    const viewport = this.#fileInstance?.getEditorViewport?.();
-    if (viewport !== undefined) {
+    const viewport = this.#virtualizedInstance?.getEditorViewport?.();
+    if (viewport != null) {
       return viewport;
     }
     const fileContainer = this.#fileContainer;
@@ -1664,8 +1798,8 @@ export class Editor<
     if (!this.#ownsVerticalViewport) {
       return undefined;
     }
-    const viewport = this.#fileInstance?.getEditorViewport?.();
-    if (typeof HTMLElement !== 'undefined' && viewport instanceof HTMLElement) {
+    const viewport = this.#virtualizedInstance?.getEditorViewport?.();
+    if (viewport instanceof HTMLElement) {
       return viewport;
     }
     return undefined;
@@ -2984,10 +3118,11 @@ export class Editor<
             selectionEdits
           )
         : undefined);
-    const replayedLineAnnotations = (lineAnnotations ??
+    const replayedLineAnnotations =
+      lineAnnotations ??
       (this.#lineAnnotations != null
         ? applyDocumentChangeToLineAnnotations(change, this.#lineAnnotations)
-        : undefined)) as DiffLineAnnotation<LAnnotation>[] | undefined;
+        : undefined);
     this.#applyChange(change, nextSelections, replayedLineAnnotations);
   }
 
@@ -2995,7 +3130,7 @@ export class Editor<
   #applyCommandEdits(
     edits: TextEdit[],
     resolveNextSelections?: (
-      textDocument: TextDocument<LAnnotation>
+      textDocument: TextDocument<EType, LAnnotation>
     ) => EditorSelection[]
   ): void {
     const textDocument = this.#editSession?.document;
@@ -3363,20 +3498,22 @@ export class Editor<
 
   #rerender(
     change: TextDocumentChange,
-    newLineAnnotations?: DiffLineAnnotation<LAnnotation>[],
+    newLineAnnotations?: EditorLineAnnotation<EType, LAnnotation>[],
     renderRange = this.#renderRange,
     shouldUpdateBuffer?: boolean
   ) {
     const tokenizer = this.#tokenizer;
     const fileInstance = this.#fileInstance;
+    const applyDocumentChange = this.#applyDocumentChange;
     const textDocument = this.#editSession?.document;
     const gutterEl = this.#gutterElement;
     const contentEl = this.#contentElement;
     if (
-      tokenizer === undefined ||
-      fileInstance === undefined ||
-      textDocument === undefined ||
-      contentEl === undefined
+      tokenizer == null ||
+      fileInstance == null ||
+      applyDocumentChange == null ||
+      textDocument == null ||
+      contentEl == null
     ) {
       return;
     }
@@ -3388,7 +3525,7 @@ export class Editor<
     const dirtyLines = tokenizer.tokenize(
       change,
       renderRange,
-      !this.#isDiff && fileInstance.getLinePosition !== undefined
+      !this.#isDiff && this.#virtualizedInstance != null
     );
     const t2 = performance.now();
 
@@ -3535,11 +3672,7 @@ export class Editor<
     });
     if (didLineCountChange) {
       // Line-count change: recompute hunks from the full document and re-render.
-      fileInstance.applyDocumentChange(
-        textDocument,
-        newLineAnnotations,
-        shouldUpdateBuffer
-      );
+      applyDocumentChange(textDocument, newLineAnnotations, shouldUpdateBuffer);
     }
 
     // A line-count change can remove cached rows, while a unified diff rebuilds
@@ -3948,7 +4081,9 @@ export class Editor<
     // line position to trigger the line to be rendered, then recall this function
     // to ensure the line is scrolled into view
     else {
-      const modelLinePosition = this.#fileInstance?.getLinePosition?.(line + 1);
+      const modelLinePosition = this.#virtualizedInstance?.getLinePosition?.(
+        line + 1
+      );
       if (modelLinePosition !== undefined) {
         virtualCaret.style.top = modelLinePosition.top + 'px';
         this.#fileContainer?.shadowRoot?.appendChild(virtualCaret);
@@ -4026,7 +4161,7 @@ export class Editor<
   #spanLineSelection(
     anchorLine: number,
     focusLine: number,
-    textDocument: TextDocument<LAnnotation>
+    textDocument: TextDocument<EType, LAnnotation>
   ): EditorSelection {
     const lineStart = (line: number): Position => ({ line, character: 0 });
     const lineEnd = (line: number): Position => ({
@@ -4424,9 +4559,9 @@ export class Editor<
       const matches = this.#matches;
       const renderRange = this.#renderRange;
       const shouldCullMatches =
-        (renderRange !== undefined &&
-          Number.isFinite(renderRange.totalLines)) ||
-        (this.#isDiff && this.#fileInstance?.options.expandUnchanged !== true);
+        (renderRange != null && Number.isFinite(renderRange.totalLines)) ||
+        (this.#isDiff &&
+          this.#fileDiffInstance?.options.expandUnchanged !== true);
       const renderedLineRanges = shouldCullMatches
         ? this.#getRenderedEditableLineRanges()
         : undefined;
@@ -5448,7 +5583,7 @@ export class Editor<
     }
     const { nextSelections, change } =
       Array.isArray(text) && text.length === selections.length
-        ? applyTextReplaceToSelections<LAnnotation>(
+        ? applyTextReplaceToSelections<EType, LAnnotation>(
             textDocument,
             selections,
             text,
@@ -5456,7 +5591,7 @@ export class Editor<
             undoBoundary,
             textOrder
           )
-        : applyTextChangeToSelections<LAnnotation>(
+        : applyTextChangeToSelections<EType, LAnnotation>(
             textDocument,
             selections,
             {
@@ -5485,14 +5620,16 @@ export class Editor<
       return;
     }
 
-    const { nextSelections, change } =
-      applyDeleteCharacterToSelections<LAnnotation>(
-        textDocument,
-        selections,
-        forward,
-        this.#lineAnnotations,
-        this.#metrics.tabSize
-      );
+    const { nextSelections, change } = applyDeleteCharacterToSelections<
+      EType,
+      LAnnotation
+    >(
+      textDocument,
+      selections,
+      forward,
+      this.#lineAnnotations,
+      this.#metrics.tabSize
+    );
     if (change !== undefined) {
       this.#applyChange(
         change,
@@ -5521,13 +5658,10 @@ export class Editor<
           return 0;
         }
       : undefined;
-    const { nextSelections, change } =
-      applyDeleteSoftLineBackwardToSelections<LAnnotation>(
-        textDocument,
-        selections,
-        getSoftLineStart,
-        this.#lineAnnotations
-      );
+    const { nextSelections, change } = applyDeleteSoftLineBackwardToSelections<
+      EType,
+      LAnnotation
+    >(textDocument, selections, getSoftLineStart, this.#lineAnnotations);
     if (change !== undefined) {
       this.#applyChange(
         change,
@@ -5543,12 +5677,10 @@ export class Editor<
     if (selections === undefined || textDocument === undefined) {
       return;
     }
-    const { nextSelections, change } =
-      applyDeleteWordBackwardToSelections<LAnnotation>(
-        textDocument,
-        selections,
-        this.#lineAnnotations
-      );
+    const { nextSelections, change } = applyDeleteWordBackwardToSelections<
+      EType,
+      LAnnotation
+    >(textDocument, selections, this.#lineAnnotations);
     if (change !== undefined) {
       this.#applyChange(
         change,
@@ -5564,12 +5696,10 @@ export class Editor<
     if (selections === undefined || textDocument === undefined) {
       return;
     }
-    const { nextSelections, change } =
-      applyDeleteHardLineForwardToSelections<LAnnotation>(
-        textDocument,
-        selections,
-        this.#lineAnnotations
-      );
+    const { nextSelections, change } = applyDeleteHardLineForwardToSelections<
+      EType,
+      LAnnotation
+    >(textDocument, selections, this.#lineAnnotations);
     if (change !== undefined) {
       this.#applyChange(
         change,
@@ -5585,11 +5715,10 @@ export class Editor<
     if (selections === undefined || textDocument === undefined) {
       return;
     }
-    const { nextSelections, change } = applyTransposeToSelections<LAnnotation>(
-      textDocument,
-      selections,
-      this.#lineAnnotations
-    );
+    const { nextSelections, change } = applyTransposeToSelections<
+      EType,
+      LAnnotation
+    >(textDocument, selections, this.#lineAnnotations);
     if (change !== undefined) {
       this.#applyChange(
         change,
@@ -5602,7 +5731,7 @@ export class Editor<
   #applyChange(
     change: TextDocumentChange,
     newSelections?: EditorSelection[],
-    newLineAnnotations?: DiffLineAnnotation<LAnnotation>[],
+    newLineAnnotations?: EditorLineAnnotation<EType, LAnnotation>[],
     options?: { skipSearchRefresh?: boolean; skipFocus?: boolean }
   ) {
     const textDocument = this.#editSession?.document;
@@ -5800,37 +5929,25 @@ export class Editor<
 
   #emitChange(
     changes: EditorChange[],
-    lineAnnotations:
-      | LineAnnotation<LAnnotation>[]
-      | DiffLineAnnotation<LAnnotation>[]
-      | undefined
+    lineAnnotations: EditorLineAnnotation<EType, LAnnotation>[] | undefined
   ): void {
     const file = this.getFile();
-    const onChange = this.#options.onChange;
-    const fileInstance = this.#fileInstance;
-    if (file == null) {
+    const publishChange = this.#publishChange;
+    if (file == null || publishChange == null) {
       return;
     }
-    const event: EditorChangeEvent<LAnnotation, 'file' | 'diff'> = {
-      changes,
-      file,
-      editor: this,
-      lineAnnotations,
-    };
-    onChange?.(event);
-    fileInstance?.emitEditChange(event);
+    publishChange(changes, file, lineAnnotations);
   }
 
   #applyChangeToLineAnnotations(
     change: TextDocumentChange
-  ): DiffLineAnnotation<LAnnotation>[] | undefined {
-    if (this.#lineAnnotations !== undefined) {
-      const nextLineAnnotations =
-        applyDocumentChangeToLineAnnotations<LAnnotation>(
-          change,
-          this.#lineAnnotations
-        );
-      if (nextLineAnnotations !== undefined) {
+  ): EditorLineAnnotation<EType, LAnnotation>[] | undefined {
+    if (this.#lineAnnotations != null) {
+      const nextLineAnnotations = applyDocumentChangeToLineAnnotations(
+        change,
+        this.#lineAnnotations
+      );
+      if (nextLineAnnotations != null) {
         this.#editSession?.document?.setLastUndoLineAnnotations(
           this.#lineAnnotations,
           nextLineAnnotations
@@ -6254,41 +6371,42 @@ export class Editor<
   }
 }
 
-interface GetEditSessionProps<LAnnotation> {
-  documentKind: EditorDocumentKind;
+interface GetEditSessionProps<EType extends EditorType, LAnnotation, Caret> {
+  type: EType;
   editStateKey: string | undefined;
-  owner: DiffsEditor<LAnnotation>;
-  initialState: EditorInitialState<LAnnotation> | undefined;
-  previousSession: ManagedEditSession<LAnnotation> | undefined;
+  owner: Editor<EType, LAnnotation, Caret>;
+  initialState: EditorInitialState<EType, LAnnotation> | undefined;
+  previousSession: ManagedEditSession<EType, LAnnotation> | undefined;
 }
 
-function getEditSession<LAnnotation>({
-  documentKind,
+function getEditSession<EType extends EditorType, LAnnotation, Caret>({
+  type,
   editStateKey,
   owner,
   initialState,
   previousSession,
-}: GetEditSessionProps<LAnnotation>): ManagedEditSession<LAnnotation> {
-  if (initialState != null && initialState.documentKind !== documentKind) {
+}: GetEditSessionProps<EType, LAnnotation, Caret>): ManagedEditSession<
+  EType,
+  LAnnotation
+> {
+  if (initialState != null && initialState.type !== type) {
     throw new TypeError(
-      `Editor: initialState: a ${initialState.documentKind} document cannot initialize a ${documentKind} editor`
+      `Editor: initialState: a ${initialState.type} state cannot initialize a ${type} editor`
     );
   }
+  const initialSession = initialState as
+    | ManagedEditSession<EType, LAnnotation>
+    | undefined;
   if (editStateKey != null) {
-    return EditStateManager.activate(
-      documentKind,
-      editStateKey,
-      owner,
-      initialState
-    );
+    return EditStateManager.activate(type, editStateKey, owner, initialSession);
   }
-  if (initialState != null) {
-    return initialState;
+  if (initialSession != null) {
+    return initialSession;
   }
   if (previousSession != null) {
     return previousSession;
   }
-  return documentKind === 'file'
-    ? { documentKind: 'file' }
-    : { documentKind: 'file-diff' };
+  return (
+    type === 'file' ? { type: 'file' } : { type: 'file-diff' }
+  ) as ManagedEditSession<EType, LAnnotation>;
 }

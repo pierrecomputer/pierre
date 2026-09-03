@@ -41,13 +41,13 @@ import {
 } from '../src/editor/selection';
 import { DirectionBackward } from '../src/editor/selection';
 import { TextDocument } from '../src/editor/textDocument';
-import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
 import type {
   EditorSelection,
-  FileContents,
   ResolvedTextEdit,
   SelectionDirection,
-} from '../src/types';
+} from '../src/editor/types';
+import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
+import type { FileContents } from '../src/types';
 import { installDom, wait } from './domHarness';
 
 afterAll(async () => {
@@ -3903,7 +3903,7 @@ async function waitForEditableContent(
 interface EditorFixture {
   cleanup(): void;
   content: HTMLElement;
-  editor: Editor<undefined>;
+  editor: Editor<'file', undefined>;
 }
 
 async function createEditorFixture(contents: string): Promise<EditorFixture> {
@@ -3915,7 +3915,7 @@ async function createEditorFixture(contents: string): Promise<EditorFixture> {
     disableFileHeader: true,
     theme: DEFAULT_THEMES,
   });
-  const editor = new Editor<undefined>('file');
+  const editor = new Editor('file');
   const initialFile: FileContents = { name: 'selections.txt', contents };
 
   file.render({ file: initialFile, fileContainer, forceRender: true });
@@ -4208,7 +4208,7 @@ function remapRange(
 // positions are never read by the remap (only its direction is), so a dummy
 // caret suffices; `target` must already reflect `edits`.
 function mapOffset(
-  target: TextDocument<unknown>,
+  target: TextDocument,
   offset: number,
   edits: readonly ResolvedTextEdit[]
 ): number {
@@ -4464,14 +4464,8 @@ describe('bidirectional round-trip through history inverse edits', () => {
   // being hand-built. The entry's inverseEdits are expressed in POST-edit
   // offsets, which is exactly the coordinate space the return leg needs.
   function buildHistoryEntry() {
-    const stack = new EditStack<unknown>();
-    const post = new TextDocument<unknown>(
-      'inmemory://1',
-      baseText,
-      'plain',
-      0,
-      stack
-    );
+    const stack = new EditStack<'file'>();
+    const post = new TextDocument('inmemory://1', baseText, 'plain', 0, stack);
     post.applyResolvedEdits(hunks, true);
     const entry = stack.peekUndo();
     if (entry === undefined) {

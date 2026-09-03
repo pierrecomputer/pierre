@@ -12,13 +12,9 @@ import {
   shiftSelectionLines,
 } from '../src/editor/selection';
 import { TextDocument } from '../src/editor/textDocument';
+import type { EditorSelection, TextEdit } from '../src/editor/types';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
-import type {
-  DiffsEditableComponent,
-  EditorSelection,
-  FileContents,
-  TextEdit,
-} from '../src/types';
+import type { FileContents } from '../src/types';
 import { installDom, wait, waitFor } from './domHarness';
 
 afterAll(async () => {
@@ -58,7 +54,7 @@ interface EditorTestWindow extends Window {
 interface EditorFixture {
   cleanup(): void;
   content: HTMLElement;
-  editor: Editor<undefined>;
+  editor: Editor<'file', undefined>;
   file: File<undefined>;
   fileContainer: HTMLElement;
   fileContents: FileContents;
@@ -67,8 +63,8 @@ interface EditorFixture {
 
 async function createEditorFixture(
   contents: string,
-  editorOptions?: EditorOptions<undefined>,
-  fileOptions?: Partial<FileOptions<undefined>>,
+  editorOptions?: EditorOptions<'file', undefined, undefined>,
+  fileOptions?: Partial<FileOptions<undefined, undefined>>,
   fileContents?: Partial<FileContents>
 ): Promise<EditorFixture> {
   const dom = installDom();
@@ -80,7 +76,7 @@ async function createEditorFixture(
     theme: DEFAULT_THEMES,
     ...fileOptions,
   });
-  const editor = new Editor<undefined>('file', editorOptions);
+  const editor = new Editor('file', editorOptions);
   const initialFile: FileContents = {
     name: 'edits.ts',
     contents,
@@ -200,7 +196,9 @@ describe('Editor.applyEdits selection sync', () => {
   test('reports normalized changes against the pre-edit document', async () => {
     const onChange = mock(
       (
-        ..._args: Parameters<NonNullable<EditorOptions<undefined>['onChange']>>
+        ..._args: Parameters<
+          NonNullable<EditorOptions<'file', undefined, undefined>['onChange']>
+        >
       ) => {}
     );
     const { cleanup, editor } = await createEditorFixture(
@@ -1029,15 +1027,11 @@ describe('Editor move line commands', () => {
 
 describe('Editor editing commands', () => {
   test('keeps rows aligned after Enter without a virtualizer', async () => {
-    const { cleanup, content, editor, file, window } =
-      await createEditorFixture('alpha\nbravo\ncharlie');
+    const { cleanup, content, editor, window } = await createEditorFixture(
+      'alpha\nbravo\ncharlie'
+    );
 
     try {
-      // A plain File can provide a viewport for focus and scrolling without
-      // taking ownership of realigning its rendered rows after document edits.
-      const viewport = document.createElement('div');
-      const editableFile: DiffsEditableComponent<undefined> = file;
-      editableFile.getEditorViewport = () => viewport;
       // Seed cached grammar states so Enter can stop once syntax state settles.
       editor.applyEdits([
         {
@@ -1578,7 +1572,9 @@ describe('Editor undo/redo API', () => {
   test('undo reports the inverse change', async () => {
     const onChange = mock(
       (
-        ..._args: Parameters<NonNullable<EditorOptions<undefined>['onChange']>>
+        ..._args: Parameters<
+          NonNullable<EditorOptions<'file', undefined, undefined>['onChange']>
+        >
       ) => {}
     );
     const { cleanup, editor } = await createEditorFixture('alpha', {
@@ -1710,7 +1706,7 @@ function makeRandom(seed: number): () => number {
 // single-block and separate-block cases through the real Editor; the tests
 // here add the merged/interleaved and same-line multi-caret behaviors.
 function moveLines(
-  d: TextDocument<unknown>,
+  d: TextDocument,
   selections: EditorSelection[],
   direction: -1 | 1
 ): EditorSelection[] {
@@ -1787,7 +1783,7 @@ function moveLines(
 // Types a lone Enter at the primary selection, the way the Editor feeds a
 // newline keystroke through applyTextChangeToSelections (which expands it via
 // expandSingleNewlineInsert to carry the current line's indentation).
-function pressEnter(d: TextDocument<unknown>, selection: EditorSelection) {
+function pressEnter(d: TextDocument, selection: EditorSelection) {
   const start = d.offsetAt(selection.start);
   const end = d.offsetAt(selection.end);
   return applyTextChangeToSelections(d, [selection], {

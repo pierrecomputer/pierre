@@ -7,30 +7,65 @@ editor APIs used by common integrations.
 
 | Export                      | Kind  | Purpose                                                        |
 | --------------------------- | ----- | -------------------------------------------------------------- |
+| `CaretMetadata`             | Type  | Supplies the color shared by a remote caret and its highlight. |
 | `Editor`                    | Class | Adds text editing to a `File` or `FileDiff` instance.          |
+| `EditorCaret`               | Type  | Describes an externally owned caret or highlighted selection.  |
 | `EditStateManager`          | Value | Manages keyed in-memory edit history and state.                |
 | `ClearEditStateOptions`     | Type  | Selects retained state parts to clear.                         |
 | `EditState`                 | Type  | Holds one complete live editing session.                       |
 | `EditorInitialState`        | Type  | Selects state fields to supply on first attachment.            |
 | `EditorChange`              | Type  | Describes one normalized editor change.                        |
 | `EditorChangeEvent`         | Type  | Provides normalized edits and the current document.            |
+| `EditorActiveLineOptions`   | Type  | Configures reveal behavior for an editor active line.          |
 | `EditorEditCompleteEvent`   | Type  | Unites file and diff completion events for editor observation. |
 | `FileEditCompleteEvent`     | Type  | Describes a completed file edit session.                       |
 | `FileDiffEditCompleteEvent` | Type  | Describes a completed diff edit session.                       |
 | `EditorCommand`             | Type  | Names an editor command.                                       |
-| `EditorDocumentKind`        | Type  | Selects a `file` or `file-diff` editor surface.                |
+| `EditorType`                | Type  | Selects a `file` or `file-diff` editor surface.                |
+| `EditorFactory`             | Type  | Defines an editor-type-aware editor factory.                   |
 | `EditorFocusOptions`        | Type  | Selects a focus target and scroll behavior.                    |
 | `EditorKeymap`              | Type  | Defines ordered custom shortcut groups.                        |
 | `EditorOptions`             | Type  | Configures history, initial state, behavior, and events.       |
 | `EditorShortcut`            | Type  | Defines one command shortcut.                                  |
+| `EditorSelection`           | Type  | Adds caret direction to an editor range.                       |
 | `EditorViewState`           | Type  | Holds selections and editor-owned viewport offsets.            |
+| `EditorViewportState`       | Type  | Holds horizontal and optional vertical scroll offsets.         |
 | `KeyboardKey`               | Type  | Names a key accepted by an editor shortcut.                    |
 | `KeyboardModifier`          | Type  | Names a modifier accepted by an editor shortcut.               |
 | `TextDocument`              | Class | Stores text, positions, edits, search, and undo history.       |
 | `TextDocumentChange`        | Type  | Describes the lines and characters changed by an edit.         |
 | `Position`                  | Type  | Identifies a zero-based line and character.                    |
 | `Range`                     | Type  | Identifies a start and end position.                           |
+| `ResolvedTextEdit`          | Type  | Stores an edit with resolved document offsets.                 |
+| `SelectionDirection`        | Type  | Selects backward, neutral, or forward selection direction.     |
 | `TextEdit`                  | Type  | Replaces one range with new text.                              |
+| `Marker`                    | Type  | Describes an editor diagnostic marker.                         |
+| `MarkerSeverity`            | Type  | Selects an editor marker severity.                             |
+
+## Lower-level exports
+
+The edit entrypoint also exposes the state-management, keyboard-resolution,
+marker-rendering, and popover-placement building blocks used by `Editor`.
+
+| Export                                  | Kind     | Purpose                                                               |
+| --------------------------------------- | -------- | --------------------------------------------------------------------- |
+| `ManagedEditSession`                    | Type     | Selects mutable in-progress editor state by editor type.              |
+| `ManagedFileEditSession`                | Type     | Holds mutable state for an active file editor session.                |
+| `ManagedFileDiffEditSession`            | Type     | Holds mutable state for an active file-diff editor session.           |
+| `cloneEditorViewState`                  | Function | Clones editor selections and viewport state.                          |
+| `toManagedEditState`                    | Function | Returns complete edit state when a managed session has required data. |
+| `resolveEditorCommandFromKeyboardEvent` | Function | Resolves a keyboard event through custom and default editor keymaps.  |
+| `resolveFindAgainShortcut`              | Function | Recognizes the next or previous native find shortcut.                 |
+| `MarkerRenderOptions`                   | Type     | Supplies marker rendering, measurement, and popover dependencies.     |
+| `MarkerRenderer`                        | Class    | Renders marker ranges and marker hover popovers.                      |
+| `markerSeverityDatasetKey`              | Function | Maps a marker severity to its DOM dataset key.                        |
+| `POPOVER_BOUNDARY_LINES`                | Value    | Sets the document-edge fallback threshold for popover placement.      |
+| `POPOVER_FLIP_HYSTERESIS_PX`            | Value    | Sets the clearance required before a flipped popover returns.         |
+| `PopoverPlacementBounds`                | Type     | Describes vertical popover placement bounds.                          |
+| `PopoverViewportBounds`                 | Type     | Describes all visible viewport edges for popover clamping.            |
+| `PopoverManagerOptions`                 | Type     | Supplies active-popover state callbacks to `PopoverManager`.          |
+| `PopoverManager`                        | Class    | Tracks viewport geometry and stable popover placement.                |
+| `setPopoverPositionStyles`              | Function | Writes the CSS properties used to position and clamp a popover.       |
 
 ## `EditorOptions` fields
 
@@ -47,6 +82,7 @@ editor APIs used by common integrations.
 | `enabledSelectionAction` | Enables the selection action surface.                    |
 | `clipboard`              | Supplies a text clipboard reader.                        |
 | `renderSelectionAction`  | Produces the selection action element.                   |
+| `renderCaret`            | Produces an externally owned caret element.              |
 | `onAttach`               | Receives the editor and attached surface.                |
 | `onChange`               | Receives the event, including its editor instance.       |
 | `onComplete`             | Observes the completed file or diff event.               |
@@ -86,30 +122,32 @@ borrowed editor-owned state rather than a serialization format.
 
 ## `Editor` members
 
-| Member                                                   | Purpose                                                |
-| -------------------------------------------------------- | ------------------------------------------------------ |
-| `new Editor(kind, options?, editStateKey?)`              | Creates an editor with optional keyed state retention. |
-| `edit(instance)`                                         | Attaches and returns the normal completion disposer.   |
-| `setOptions(options)`                                    | Merges editor options.                                 |
-| `applyEdits(edits, updateHistory?)`                      | Applies programmatic text edits.                       |
-| `canUndo`                                                | Reports whether undo has an entry.                     |
-| `canRedo`                                                | Reports whether redo has an entry.                     |
-| `undo()`                                                 | Reverts the latest edit.                               |
-| `redo()`                                                 | Reapplies the latest reverted edit.                    |
-| `getFile()`                                              | Gets the current file contents.                        |
-| `getText()`                                              | Gets the current text.                                 |
-| `getViewState()`                                         | Gets selections and editor-owned view state.           |
-| `setViewState(state)`                                    | Sets selections and editor-owned view state.           |
-| `getEditState()`                                         | Gets the latest edit-lifecycle state checkpoint.       |
-| `setSelections(selections)`                              | Sets directed selection ranges.                        |
-| `setMarkers(markers)`                                    | Sets diagnostic markers.                               |
-| `focus(options?)`                                        | Focuses the editor.                                    |
-| `blur()`                                                 | Removes editor focus.                                  |
-| `cleanUp(reason?: 'discard' \| 'recycle' \| 'complete')` | Suspends rendering or completes the editing session.   |
+| Member                                                   | Purpose                                                 |
+| -------------------------------------------------------- | ------------------------------------------------------- |
+| `new Editor(type, options?, editStateKey?)`              | Creates an editor with optional keyed state retention.  |
+| `type`                                                   | Identifies the editor as `file` or `file-diff`.         |
+| `edit(instance)`                                         | Attaches and returns the normal completion disposer.    |
+| `setOptions(options)`                                    | Merges editor options.                                  |
+| `applyEdits(edits, updateHistory?)`                      | Applies programmatic text edits.                        |
+| `canUndo`                                                | Reports whether undo has an entry.                      |
+| `canRedo`                                                | Reports whether redo has an entry.                      |
+| `undo()`                                                 | Reverts the latest edit.                                |
+| `redo()`                                                 | Reapplies the latest reverted edit.                     |
+| `getFile()`                                              | Gets the current file contents.                         |
+| `getText()`                                              | Gets the current text.                                  |
+| `getViewState()`                                         | Gets selections and editor-owned view state.            |
+| `setViewState(state)`                                    | Sets selections and editor-owned view state.            |
+| `getEditState()`                                         | Gets the latest edit-lifecycle state checkpoint.        |
+| `setSelections(selections)`                              | Sets directed selection ranges.                         |
+| `setCarets(carets)`                                      | Replaces the externally owned caret and highlight list. |
+| `setMarkers(markers)`                                    | Sets diagnostic markers.                                |
+| `focus(options?)`                                        | Focuses the editor.                                     |
+| `blur()`                                                 | Removes editor focus.                                   |
+| `cleanUp(reason?: 'discard' \| 'recycle' \| 'complete')` | Suspends rendering or completes the editing session.    |
 
 `editStateKey` opts an editor into retained in-memory sessions across editor
 instances. File and file-diff namespaces are independent and each keeps up to
-100 inactive entries by default. The same kind/key cannot be active in two
+100 inactive entries by default. The same type/key cannot be active in two
 editors at once.
 
 Call the disposer returned by `edit(instance)` for the normal session-ending
@@ -123,8 +161,8 @@ ending the session or changing the editor-component association. Calling
 
 | Member                              | Purpose                                                         |
 | ----------------------------------- | --------------------------------------------------------------- |
-| `get(kind, editStateKey)`           | Borrows active or inactive complete state without touching LRU. |
-| `clear(kind, editStateKey, parts?)` | Clears inactive complete or granular state.                     |
+| `get(type, editStateKey)`           | Borrows active or inactive complete state without touching LRU. |
+| `clear(type, editStateKey, parts?)` | Clears inactive complete or granular state.                     |
 | `clearAll()`                        | Clears all inactive state without mutating active editors.      |
 | `setCapacity(capacity)`             | Sets each namespace's inactive retained-state capacity.         |
 

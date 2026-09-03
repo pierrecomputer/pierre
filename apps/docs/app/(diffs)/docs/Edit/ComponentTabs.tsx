@@ -11,9 +11,9 @@ import { Notice } from '@/components/ui/notice';
 type EditComponentMode = 'file' | 'file-diff' | 'multi-file-diff';
 
 interface EditComponentTabsProps {
-  fileExample: PreloadedFileResult<undefined>;
-  fileDiffExample: PreloadedFileResult<undefined>;
-  multiFileDiffExample?: PreloadedFileResult<undefined>;
+  fileExample: PreloadedFileResult<undefined, undefined>;
+  fileDiffExample: PreloadedFileResult<undefined, undefined>;
+  multiFileDiffExample?: PreloadedFileResult<undefined, undefined>;
 }
 
 export function EditComponentTabs({

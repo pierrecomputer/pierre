@@ -14,7 +14,10 @@ import { GENERATED_AUI_SESSIONS } from './mockData.generated';
 // attached editor. Sharing one constant also keeps the server and client
 // diffStyle in lockstep so the prerendered HTML always matches what the client
 // renders.
-export const AUI_DIFF_OPTIONS: DiffBasePropsReact<undefined>['options'] = {
+export const AUI_DIFF_OPTIONS: DiffBasePropsReact<
+  undefined,
+  undefined
+>['options'] = {
   theme: DEFAULT_THEMES,
   themeType: 'dark',
   disableFileHeader: true,

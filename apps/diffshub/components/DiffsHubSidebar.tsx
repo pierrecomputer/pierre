@@ -71,7 +71,7 @@ interface DiffsHubSidebarProps {
   source: DiffsHubFileTreeSource;
   streaming: boolean;
   themeCycle: ThemeCycleControls;
-  viewerRef: RefObject<CodeViewHandle<CommentMetadata> | null>;
+  viewerRef: RefObject<CodeViewHandle<CommentMetadata, undefined> | null>;
 }
 
 export const DiffsHubSidebar = memo(function DiffsHubSidebar({

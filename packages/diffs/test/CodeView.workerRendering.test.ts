@@ -55,8 +55,8 @@ function createDiff(
   );
 }
 
-function getRenderedText<LAnnotation>(
-  viewer: CodeView<LAnnotation>,
+function getRenderedText<LAnnotation, Caret>(
+  viewer: CodeView<LAnnotation, Caret>,
   id: string
 ): string | undefined {
   return viewer
@@ -66,7 +66,7 @@ function getRenderedText<LAnnotation>(
 }
 
 function getRenderedSlotText(
-  viewer: CodeView<string>,
+  viewer: CodeView<string, undefined>,
   id: string
 ): string | undefined {
   return viewer
@@ -76,7 +76,7 @@ function getRenderedSlotText(
 }
 
 function getRenderedHeaderPrefix(
-  viewer: CodeView<string>,
+  viewer: CodeView<string, undefined>,
   id: string
 ): string | undefined {
   const element = viewer
@@ -87,7 +87,7 @@ function getRenderedHeaderPrefix(
 }
 
 function getItemTop<LAnnotation>(
-  viewer: CodeView<LAnnotation>,
+  viewer: CodeView<LAnnotation, undefined>,
   id: string
 ): number {
   const top = viewer.getTopForItem(id);
@@ -124,7 +124,7 @@ describe('CodeView worker rendering', () => {
       contents: 'const removed = true;\n',
       cacheKey: 'removed:file',
     };
-    const item: CodeViewItem = {
+    const item: CodeViewItem<undefined> = {
       id: 'file:removed',
       type: 'file',
       file,
@@ -173,7 +173,7 @@ describe('CodeView worker rendering', () => {
     const { manager, worker } = await createInitializedManager({
       theme: 'pierre-dark',
     });
-    const viewer = new CodeView<string>(
+    const viewer = new CodeView<string, undefined>(
       {
         renderAnnotation: (annotation) => {
           const element = document.createElement('span');
@@ -415,7 +415,7 @@ describe('CodeView worker rendering', () => {
     const { manager, worker } = await createInitializedManager({
       theme: 'pierre-dark',
     });
-    const viewer = new CodeView(
+    const viewer = new CodeView<undefined, undefined>(
       {
         disableFileHeader: true,
         stickyHeaders: false,
@@ -437,18 +437,18 @@ describe('CodeView worker rendering', () => {
         ).join('\n') + '\n',
       cacheKey: 'file-layout:tall',
     };
-    const shortItem: CodeViewItem = {
+    const shortItem: CodeViewItem<undefined> = {
       id: 'file:pending',
       type: 'file',
       file: shortFile,
       version: 0,
     };
-    const tallItem: CodeViewItem = {
+    const tallItem: CodeViewItem<undefined> = {
       ...shortItem,
       file: tallFile,
       version: 1,
     };
-    const follower: CodeViewItem = {
+    const follower: CodeViewItem<undefined> = {
       id: 'file:pending-follower',
       type: 'file',
       file: {
@@ -549,7 +549,7 @@ describe('CodeView worker rendering', () => {
     const { manager, worker } = await createInitializedManager({
       theme: 'pierre-dark',
     });
-    const viewer = new CodeView(
+    const viewer = new CodeView<undefined, undefined>(
       {
         disableFileHeader: true,
         stickyHeaders: false,
@@ -565,19 +565,19 @@ describe('CodeView worker rendering', () => {
         (_, index) => `const tallValue${index + 1} = ${index + 1};`
       ).join('\n') + '\n'
     );
-    const diffItem: CodeViewItem = {
+    const diffItem: CodeViewItem<undefined> = {
       id: 'diff:recycle',
       type: 'diff',
       fileDiff: shortDiff,
       version: 0,
     };
-    const replacementItem: CodeViewItem = {
+    const replacementItem: CodeViewItem<undefined> = {
       id: diffItem.id,
       type: 'diff',
       fileDiff: tallDiff,
       version: 1,
     };
-    const follower: CodeViewItem = {
+    const follower: CodeViewItem<undefined> = {
       id: 'file:recycle-follower',
       type: 'file',
       file: {

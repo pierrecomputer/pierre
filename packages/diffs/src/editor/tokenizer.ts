@@ -21,7 +21,7 @@ let nextTokenizerId = 0;
 
 export interface EditorTokenizerProps {
   highlighter: DiffsHighlighter;
-  textDocument: TextDocument<unknown>;
+  textDocument: TextDocument;
   codeOptions: BaseCodeOptions;
   matchBrackets?: boolean;
   setStyle: (style: string) => void;
@@ -47,7 +47,7 @@ export class EditorTokenizer {
   // even when the light/dark mode itself is unchanged.
   #themeName = '';
   #colorMap: string[];
-  #textDocument: TextDocument<unknown>;
+  #textDocument: TextDocument;
   #tokenizeMaxLineLength: number;
   #setStyle: EditorTokenizerProps['setStyle'];
   #onDeferTokenize: EditorTokenizerProps['onDeferTokenize'];

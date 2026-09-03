@@ -1,15 +1,200 @@
 import type {
+  ChangeTypes,
   DiffLineAnnotation,
-  DiffsEditor,
-  EditorSelection,
-  EditorViewState,
   FileContents,
   FileDiffMetadata,
+  Hunk,
   LineAnnotation,
-  ResolvedTextEdit,
-  RetainedDiffSessionSnapshot,
+  SelectionSide,
 } from '../types';
+import type { Editor, EditorOptions } from './editor';
 import type { TextDocument } from './textDocument';
+
+/** FileDiff baseline and hunk state needed to resume an editing session. */
+export interface RetainedDiffSessionSnapshot {
+  oldFile: { name: string; lines: string[] } | null;
+  type: ChangeTypes;
+  hunks: Hunk[];
+}
+
+/** @internal Current diff state and whether the document changed while editing. */
+export interface CapturedDiffSessionState {
+  diffSession: RetainedDiffSessionSnapshot;
+  hasChanges: boolean;
+}
+
+/**
+ * An edit-completion handler's decision: `'accept'` installs the completed
+ * value the event carries, `'reject'` restores the external input. The event
+ * is frozen, so re-key the accepted value in place (`event.file.cacheKey =
+ * '…'`) before returning `'accept'`.
+ */
+export type EditCompletionDecision = 'accept' | 'reject';
+
+export interface EditorActiveLineOptions {
+  lineNumberOnly?: boolean;
+  side?: SelectionSide;
+}
+
+export type EditorType = 'file' | 'file-diff';
+
+/** Creates an editor whose editor type matches the supplied options. */
+export type EditorFactory<LAnnotation, Caret> = <EType extends EditorType>(
+  editorType: EType,
+  options: EditorOptions<EType, LAnnotation, Caret>,
+  editStateKey?: string
+) => Editor<EType, LAnnotation, Caret>;
+
+/**
+ * Position in a text document expressed as zero-based line and character offset.
+ * The offsets are based on a UTF-16 string representation. So a string of the form
+ * `a𐐀b` the character offset of the character `a` is 0, the character offset of `𐐀`
+ * is 1 and the character offset of b is 3 since `𐐀` is represented using two code
+ * units in UTF-16.
+ *
+ * Positions are line end character agnostic. So you can not specify a position that
+ * denotes `\r|\n` or `\n|` where `|` represents the character offset.
+ */
+export interface Position {
+  /**
+   * Line position in a document (zero-based).
+   *
+   * If a line number is greater than the number of lines in a document, it
+   * defaults back to the number of lines in the document.
+   * If a line number is negative, it defaults to 0.
+   *
+   * The above two properties are implementation specific.
+   */
+  readonly line: number;
+  /**
+   * Character offset on a line in a document (zero-based).
+   *
+   * The meaning of this offset is determined by the negotiated
+   * `PositionEncodingKind`.
+   *
+   * If the character value is greater than the line length it defaults back
+   * to the line length. This property is implementation specific.
+   */
+  readonly character: number;
+}
+
+/**
+ * A range in a text document expressed as (zero-based) start and end positions.
+ *
+ * If you want to specify a range that contains a line including the line ending
+ * character(s) then use an end position denoting the start of the next line.
+ * For example:
+ * ```ts
+ * {
+ *     start: { line: 5, character: 23 }
+ *     end : { line 6, character : 0 }
+ * }
+ * ```
+ */
+export interface Range {
+  /**
+   * The range's start position.
+   */
+  readonly start: Position;
+  /**
+   * The range's end position.
+   */
+  readonly end: Position;
+}
+
+/**
+ * A text edit applicable to a text document.
+ */
+export interface TextEdit {
+  /**
+   * The range of the text document to be manipulated. To insert
+   * text into a document create a range where start === end.
+   */
+  readonly range: Range;
+  /**
+   * The string to be inserted. For delete operations use an
+   * empty string.
+   */
+  readonly newText: string;
+}
+
+/** Different with `TextEdit`, the range has been resolved to offsets. */
+export interface ResolvedTextEdit {
+  /** The start offset of the text change. */
+  readonly start: number;
+  /** The end offset of the text change. */
+  readonly end: number;
+  /** The string to be inserted. For delete operations use an empty string. */
+  readonly text: string;
+}
+
+/** A normalized text change reported by the editor. */
+export interface EditorChange extends ResolvedTextEdit {
+  /** The replaced range in the document before the change. */
+  range: Range;
+}
+
+export type EditorLineAnnotation<
+  EType extends EditorType = EditorType,
+  LAnnotation = unknown,
+> = EType extends 'file'
+  ? LineAnnotation<LAnnotation> & { side?: never }
+  : DiffLineAnnotation<LAnnotation>;
+
+/** The document and normalized edits reported after an editor change. */
+export type EditorChangeEvent<
+  EType extends EditorType,
+  LAnnotation,
+  Caret,
+> = EType extends EditorType
+  ? {
+      changes: EditorChange[];
+      file: FileContents;
+      editor: Editor<EType, LAnnotation, Caret>;
+      lineAnnotations?: EditorLineAnnotation<EType, LAnnotation>[];
+    }
+  : never;
+
+/**
+ * The direction of a selection.
+ * -1: backward
+ *  0: none
+ *  1: forward
+ */
+export type SelectionDirection = -1 | 0 | 1;
+
+export interface EditorSelection extends Range {
+  direction: SelectionDirection;
+}
+
+/** Visual metadata shared by a remote caret and its optional highlight. */
+export interface CaretMetadata {
+  /** CSS color used for the caret and its derived highlight tint. */
+  color: string;
+}
+
+/**
+ * A non-editable, externally owned selection. This follows the browser's
+ * anchor/focus model: matching positions render a caret, and differing
+ * positions render a highlighted selection with its caret at `focus`.
+ */
+export interface EditorCaret<T> {
+  anchor: Position;
+  focus: Position;
+  metadata: T & CaretMetadata;
+}
+
+export interface EditorViewportState {
+  /** Horizontal position owned by the current editable code scroller. */
+  scrollLeft: number;
+  /** Vertical position of the editor viewport. */
+  scrollTop?: number;
+}
+
+export interface EditorViewState {
+  selections?: EditorSelection[];
+  view?: EditorViewportState;
+}
 
 /**
  * `onEditComplete` event argument when a file edit session ends.
@@ -27,9 +212,9 @@ import type { TextDocument } from './textDocument';
  * `originalLineAnnotations` is the last collection provided to the component
  * externally, which a revert keeps.
  */
-export interface FileEditCompleteEvent<LAnnotation> {
+export interface FileEditCompleteEvent<LAnnotation, Caret> {
   file: FileContents;
-  editor: DiffsEditor<LAnnotation>;
+  editor: Editor<'file', LAnnotation, Caret>;
   lineAnnotations: LineAnnotation<LAnnotation>[] | undefined;
   originalFile: FileContents;
   originalLineAnnotations: LineAnnotation<LAnnotation>[];
@@ -55,9 +240,9 @@ export interface FileEditCompleteEvent<LAnnotation> {
  * `originalLineAnnotations` is the last collection provided to the component
  * externally, which a revert keeps.
  */
-export interface FileDiffEditCompleteEvent<LAnnotation> {
+export interface FileDiffEditCompleteEvent<LAnnotation, Caret> {
   fileDiff: FileDiffMetadata;
-  editor: DiffsEditor<LAnnotation>;
+  editor: Editor<'file-diff', LAnnotation, Caret>;
   originalFileDiff: FileDiffMetadata;
   oldFile: FileContents | null;
   newFile: FileContents | null;
@@ -69,54 +254,63 @@ export interface FileDiffEditCompleteEvent<LAnnotation> {
  * The exact frozen file or diff completion event observed by the editor before
  * the corresponding component completion callback.
  */
-export type EditorEditCompleteEvent<LAnnotation> =
-  | FileEditCompleteEvent<LAnnotation>
-  | FileDiffEditCompleteEvent<LAnnotation>;
+export type EditorEditCompleteEvent<
+  EType extends EditorType,
+  LAnnotation,
+  Caret,
+> = EType extends 'file'
+  ? FileEditCompleteEvent<LAnnotation, Caret>
+  : FileDiffEditCompleteEvent<LAnnotation, Caret>;
 
 export type EditHistoryCoalescingMode = 'insert' | 'backspace' | 'delete';
-export type EditHistoryLineAnnotation<LAnnotation> =
-  | LineAnnotation<LAnnotation>
-  | DiffLineAnnotation<LAnnotation>;
 
 /** One reversible document transaction. */
-export interface EditHistoryEntry<LAnnotation> {
+export interface EditHistoryEntry<
+  EType extends EditorType,
+  LAnnotation = unknown,
+> {
   forwardEdits: ResolvedTextEdit[];
   inverseEdits: ResolvedTextEdit[];
   versionBefore: number;
   versionAfter: number;
   selectionsBefore?: EditorSelection[];
   selectionsAfter?: EditorSelection[];
-  lineAnnotationsBefore?: EditHistoryLineAnnotation<LAnnotation>[];
-  lineAnnotationsAfter?: EditHistoryLineAnnotation<LAnnotation>[];
+  lineAnnotationsBefore?: EditorLineAnnotation<EType, LAnnotation>[];
+  lineAnnotationsAfter?: EditorLineAnnotation<EType, LAnnotation>[];
   coalescingMode?: EditHistoryCoalescingMode;
   undoBoundary?: boolean;
 }
 
 /** Undo and redo history for a document. */
-export interface EditHistoryState<LAnnotation> {
-  undoStack: EditHistoryEntry<LAnnotation>[];
-  redoStack: EditHistoryEntry<LAnnotation>[];
+export interface EditHistoryState<
+  EType extends EditorType,
+  LAnnotation = unknown,
+> {
+  undoStack: EditHistoryEntry<EType, LAnnotation>[];
+  redoStack: EditHistoryEntry<EType, LAnnotation>[];
   maxEntries: number;
   canCoalesce: boolean;
 }
 
-interface EditStateBase<LAnnotation> {
-  document: TextDocument<LAnnotation>;
+interface EditStateBase<EType extends EditorType, LAnnotation> {
+  document: TextDocument<EType, LAnnotation>;
   fileInfo: Pick<FileContents, 'name' | 'lang'>;
   editor: EditorViewState;
 }
 
-export interface FileEditState<
-  LAnnotation = unknown,
-> extends EditStateBase<LAnnotation> {
-  documentKind: 'file';
+export interface FileEditState<LAnnotation = unknown> extends EditStateBase<
+  'file',
+  LAnnotation
+> {
+  type: 'file';
   diffSession?: never;
 }
 
-export interface FileDiffEditState<
-  LAnnotation = unknown,
-> extends EditStateBase<LAnnotation> {
-  documentKind: 'file-diff';
+export interface FileDiffEditState<LAnnotation = unknown> extends EditStateBase<
+  'file-diff',
+  LAnnotation
+> {
+  type: 'file-diff';
   diffSession: RetainedDiffSessionSnapshot;
 }
 
@@ -124,15 +318,19 @@ export interface FileDiffEditState<
  * The editor-owned objects that make up a complete session. This state is
  * transferred by reference when supplied as `initialState`.
  */
-export type EditState<LAnnotation = unknown> =
-  | FileEditState<LAnnotation>
-  | FileDiffEditState<LAnnotation>;
+export type EditState<
+  EType extends EditorType = EditorType,
+  LAnnotation = unknown,
+> = EType extends 'file'
+  ? FileEditState<LAnnotation>
+  : FileDiffEditState<LAnnotation>;
 
 /** State supplied to a new editor, completed from the attached component. */
-export type EditorInitialState<LAnnotation = unknown> =
-  | ({ documentKind: 'file' } & Partial<
-      Omit<FileEditState<LAnnotation>, 'documentKind'>
-    >)
-  | ({ documentKind: 'file-diff' } & Partial<
-      Omit<FileDiffEditState<LAnnotation>, 'documentKind'>
-    >);
+export type EditorInitialState<
+  EType extends EditorType = EditorType,
+  LAnnotation = unknown,
+> = EType extends 'file'
+  ? { type: 'file' } & Partial<Omit<FileEditState<LAnnotation>, 'type'>>
+  : { type: 'file-diff' } & Partial<
+      Omit<FileDiffEditState<LAnnotation>, 'type'>
+    >;

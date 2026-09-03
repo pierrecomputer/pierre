@@ -75,7 +75,7 @@ export function debounce<Args extends unknown[]>(
 
 // File-mode options for the Live editing example. Pre-enable the token
 // transformer for SSR parity. Diff-only options do not apply to a File.
-export const LIVE_EDITING_FILE_OPTIONS: FileOptions<undefined> = {
+export const LIVE_EDITING_FILE_OPTIONS: FileOptions<undefined, undefined> = {
   theme: DEFAULT_THEMES,
   themeType: 'dark',
   unsafeCSS: CustomScrollbarCSS,
@@ -86,7 +86,10 @@ export const LIVE_EDITING_FILE_OPTIONS: FileOptions<undefined> = {
 // Spreading the resolved result into <File> ships pre-rendered shadow DOM so
 // the initial (default) File component paints from server HTML instead of
 // flashing in after client highlighting.
-export const LIVE_EDITING_FILE_EXAMPLE: PreloadFileOptions<undefined> = {
+export const LIVE_EDITING_FILE_EXAMPLE: PreloadFileOptions<
+  undefined,
+  undefined
+> = {
   file: LIVE_EDITING_NEW_FILE,
   options: LIVE_EDITING_FILE_OPTIONS,
 };
@@ -94,14 +97,16 @@ export const LIVE_EDITING_FILE_EXAMPLE: PreloadFileOptions<undefined> = {
 // Server-side preload input for the FileDiff view of the Live editing example.
 // Pre-enabling the token transformer keeps the SSR-rendered diff aligned with
 // the attached editor so hydration does not flash.
-export const LIVE_EDITING_FILE_DIFF_EXAMPLE: PreloadFileDiffOptions<undefined> =
-  {
-    fileDiff: parseDiffFromFile(LIVE_EDITING_OLD_FILE, LIVE_EDITING_NEW_FILE),
-    options: {
-      theme: DEFAULT_THEMES,
-      themeType: 'dark',
-      diffStyle: 'unified',
-      unsafeCSS: CustomScrollbarCSS,
-      useTokenTransformer: true,
-    },
-  };
+export const LIVE_EDITING_FILE_DIFF_EXAMPLE: PreloadFileDiffOptions<
+  undefined,
+  undefined
+> = {
+  fileDiff: parseDiffFromFile(LIVE_EDITING_OLD_FILE, LIVE_EDITING_NEW_FILE),
+  options: {
+    theme: DEFAULT_THEMES,
+    themeType: 'dark',
+    diffStyle: 'unified',
+    unsafeCSS: CustomScrollbarCSS,
+    useTokenTransformer: true,
+  },
+};

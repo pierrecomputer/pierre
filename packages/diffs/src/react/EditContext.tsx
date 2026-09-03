@@ -4,38 +4,32 @@
 import type { Context, PropsWithChildren } from 'react';
 import { createContext, useContext } from 'react';
 
-import type { EditorOptions } from '../edit';
-import type { DiffsEditor, EditorDocumentKind } from '../types';
+import type { Editor, EditorFactory, EditorOptions, EditorType } from '../edit';
 import { useStableCallback } from './utils/useStableCallback';
 
-/** Creates an Editor. Components manage the instance lifecycle. */
-export type CreateEditor<LAnnotation, LCaret = undefined> = (
-  documentKind: EditorDocumentKind,
-  options: EditorOptions<LAnnotation, LCaret>,
-  editStateKey?: string
-) => DiffsEditor<LAnnotation>;
+export type { EditorFactory } from '../edit';
 
-export interface EditProviderProps<LAnnotation, LCaret = undefined> {
+export interface EditProviderProps<LAnnotation, Caret> {
   /** Combines shared defaults with the supplied per-surface options. */
-  createEditor: CreateEditor<LAnnotation, LCaret>;
+  createEditor: EditorFactory<LAnnotation, Caret>;
 }
 
-export const EditContext: Context<CreateEditor<any, any> | undefined> =
-  createContext<CreateEditor<any, any> | undefined>(undefined);
+export const EditContext: Context<EditorFactory<any, any> | undefined> =
+  createContext<EditorFactory<any, any> | undefined>(undefined);
 
-export function EditProvider<LAnnotation, LCaret = undefined>({
+export function EditProvider<LAnnotation = undefined, Caret = undefined>({
   children,
   createEditor,
 }: PropsWithChildren<
-  EditProviderProps<LAnnotation, LCaret>
+  EditProviderProps<LAnnotation, Caret>
 >): React.JSX.Element {
   const stableCreateEditor = useStableCallback(
-    (
-      documentKind: EditorDocumentKind,
-      options: EditorOptions<LAnnotation, LCaret>,
+    <EType extends EditorType>(
+      editorType: EType,
+      options: EditorOptions<EType, LAnnotation, Caret>,
       editStateKey?: string
-    ): DiffsEditor<LAnnotation> =>
-      createEditor(documentKind, options, editStateKey)
+    ): Editor<EType, LAnnotation, Caret> =>
+      createEditor(editorType, options, editStateKey)
   );
   return (
     <EditContext.Provider value={stableCreateEditor}>
@@ -44,8 +38,8 @@ export function EditProvider<LAnnotation, LCaret = undefined>({
   );
 }
 
-export function useCreateEditor<LAnnotation, LCaret = undefined>():
-  | CreateEditor<LAnnotation, LCaret>
+export function useCreateEditor<LAnnotation, Caret>():
+  | EditorFactory<LAnnotation, Caret>
   | undefined {
   return useContext(EditContext);
 }

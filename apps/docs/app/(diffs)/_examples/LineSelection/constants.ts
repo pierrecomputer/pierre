@@ -3,7 +3,10 @@ import type { PreloadMultiFileDiffOptions } from '@pierre/diffs/ssr';
 
 import { CustomScrollbarCSS } from '@/components/CustomScrollbarCSS';
 
-export const LINE_SELECTION_EXAMPLE: PreloadMultiFileDiffOptions<undefined> = {
+export const LINE_SELECTION_EXAMPLE: PreloadMultiFileDiffOptions<
+  undefined,
+  undefined
+> = {
   oldFile: {
     name: 'vector.cpp',
     contents: `#include <iostream>

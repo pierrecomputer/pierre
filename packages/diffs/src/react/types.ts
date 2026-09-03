@@ -2,17 +2,18 @@ import { type CSSProperties, type ReactNode } from 'react';
 
 import type {
   FileOptions as FileClassOptions,
+  FileEditChangeHandler,
   FileEditCompleteHandler,
 } from '../components/File';
 import type {
   FileDiffOptions as FileDiffClassOptions,
+  FileDiffEditChangeHandler,
   FileDiffEditCompleteHandler,
 } from '../components/FileDiff';
 import type { EditorOptions } from '../edit';
 import type { GetHoveredLineResult } from '../managers/InteractionManager';
 import type {
   DiffLineAnnotation,
-  EditorChangeEvent,
   FileContents,
   FileDiffMetadata,
   LineAnnotation,
@@ -22,22 +23,22 @@ import type {
 
 type ReactOwnedEditCallbacks = 'onEditChange' | 'onEditComplete';
 
-export type FileDiffOptions<LAnnotation> = Omit<
-  FileDiffClassOptions<LAnnotation>,
+export type FileDiffOptions<LAnnotation, Caret> = Omit<
+  FileDiffClassOptions<LAnnotation, Caret>,
   ReactOwnedEditCallbacks
 >;
 
-export type FileOptions<LAnnotation> = Omit<
-  FileClassOptions<LAnnotation>,
+export type FileOptions<LAnnotation, Caret> = Omit<
+  FileClassOptions<LAnnotation, Caret>,
   ReactOwnedEditCallbacks
 >;
 
-export interface DiffBasePropsReact<LAnnotation, LCaret = undefined> {
-  options?: FileDiffOptions<LAnnotation>;
+export interface DiffBasePropsReact<LAnnotation, Caret> {
+  options?: FileDiffOptions<LAnnotation, Caret>;
   /** Whether this surface has an active edit session. */
   edit?: boolean;
   /** Creation-time options passed to the nearest EditProvider factory. */
-  editorOptions?: EditorOptions<LAnnotation, LCaret>;
+  editorOptions?: EditorOptions<'file-diff', LAnnotation, Caret>;
   /** Retain this editable draft and its undo/redo history in memory. */
   editStateKey?: string;
   /**
@@ -49,14 +50,14 @@ export interface DiffBasePropsReact<LAnnotation, LCaret = undefined> {
    * cannot edit the contents of the old file. You are not getting back an
    * update `fileDiff` during this edit session.
    */
-  onEditChange?(event: EditorChangeEvent<LAnnotation, 'diff'>): void;
+  onEditChange?: FileDiffEditChangeHandler<LAnnotation, Caret>;
   /**
    * Fired when `edit` toggles false or the component unmounts. Return `'accept'`
    * to install the completed diff and annotations or `'reject'` to restore the
    * external values. The event contains the detached editor with its final
    * state.
    */
-  onEditComplete?: FileDiffEditCompleteHandler<LAnnotation>;
+  onEditComplete?: FileDiffEditCompleteHandler<LAnnotation, Caret>;
   metrics?: VirtualFileMetrics;
   lineAnnotations?: DiffLineAnnotation<LAnnotation>[];
   selectedLines?: SelectedLineRange | null;
@@ -73,13 +74,13 @@ export interface DiffBasePropsReact<LAnnotation, LCaret = undefined> {
   prerenderedHTML?: string;
 }
 
-export interface FileProps<LAnnotation, LCaret = undefined> {
+export interface FileProps<LAnnotation, Caret> {
   file: FileContents;
-  options?: FileOptions<LAnnotation>;
+  options?: FileOptions<LAnnotation, Caret>;
   /** Whether this surface has an active edit session. */
   edit?: boolean;
   /** Creation-time options passed to the nearest EditProvider factory. */
-  editorOptions?: EditorOptions<LAnnotation, LCaret>;
+  editorOptions?: EditorOptions<'file', LAnnotation, Caret>;
   /** Retain this editable draft and its undo/redo history in memory. */
   editStateKey?: string;
   /**
@@ -87,14 +88,14 @@ export interface FileProps<LAnnotation, LCaret = undefined> {
    * `EditorChangeEvent` the editor reports through its own `onChange`. Don't
    * feed this data back into the component.
    */
-  onEditChange?(event: EditorChangeEvent<LAnnotation, 'file'>): void;
+  onEditChange?: FileEditChangeHandler<LAnnotation, Caret>;
   /**
    * Fired when `edit` toggles false or the component unmounts. Return `'accept'`
    * to install the completed file and annotations or `'reject'` to restore the
    * external values. The event contains the detached editor with its final
    * state.
    */
-  onEditComplete?: FileEditCompleteHandler<LAnnotation>;
+  onEditComplete?: FileEditCompleteHandler<LAnnotation, Caret>;
   metrics?: VirtualFileMetrics;
   lineAnnotations?: LineAnnotation<LAnnotation>[];
   selectedLines?: SelectedLineRange | null;

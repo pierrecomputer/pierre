@@ -75,7 +75,7 @@ async function createFixture(options?: {
     disableFileHeader: true,
     loadDiffFiles: options?.loadDiffFiles,
   });
-  const editor = new Editor<undefined>('file-diff', {
+  const editor = new Editor('file-diff', {
     onChange: (event) => options?.onChange?.(event.file.contents),
   });
 
@@ -117,7 +117,10 @@ function createPartialDiff(
   return diff;
 }
 
-function replaceDocument(editor: Editor<undefined>, contents: string): void {
+function replaceDocument(
+  editor: Editor<'file-diff', undefined>,
+  contents: string
+): void {
   editor.applyEdits([
     {
       range: {

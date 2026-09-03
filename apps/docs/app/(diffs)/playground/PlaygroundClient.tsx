@@ -11,7 +11,7 @@ import {
   type LineAnnotation,
   type SelectedLineRange,
 } from '@pierre/diffs';
-import type { Editor, EditorOptions } from '@pierre/diffs/edit';
+import type { Editor, EditorOptions, EditorType } from '@pierre/diffs/edit';
 import {
   type CodeViewReactOptions,
   File,
@@ -133,7 +133,7 @@ function isDirectView(viewMode: ViewMode): boolean {
 // this as their options prop: it carries no callback keys, so it also spreads
 // cleanly into the plain-file FileOptions their README component uses.
 export type SharedRenderOptions = Pick<
-  FileDiffOptions<undefined>,
+  FileDiffOptions<undefined, undefined>,
   | 'diffStyle'
   | 'diffIndicators'
   | 'lineDiffType'
@@ -151,7 +151,10 @@ export type SharedRenderOptions = Pick<
 };
 
 interface PlaygroundClientProps {
-  prerenderedDiff: PreloadFileDiffResult<PlaygroundAnnotationMetadata>;
+  prerenderedDiff: PreloadFileDiffResult<
+    PlaygroundAnnotationMetadata,
+    undefined
+  >;
 }
 
 interface PlaygroundControlsContentProps {
@@ -696,8 +699,13 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
       ? 'select'
       : 'none';
 
-  const editorRef = useRef<Editor<PlaygroundAnnotationMetadata> | null>(null);
-  const editorOptions = useMemo<EditorOptions<PlaygroundAnnotationMetadata>>(
+  const editorRef = useRef<Editor<
+    EditorType,
+    PlaygroundAnnotationMetadata
+  > | null>(null);
+  const editorOptions = useMemo<
+    EditorOptions<EditorType, PlaygroundAnnotationMetadata, undefined>
+  >(
     () => ({
       onAttach(editor) {
         editorRef.current = editor;
@@ -718,7 +726,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
   const cancelledEdit = useRef(false);
   const savedVersionRef = useRef(0);
   const handleFileEditComplete = useCallback(
-    (event: FileEditCompleteEvent<PlaygroundAnnotationMetadata>) => {
+    (event: FileEditCompleteEvent<PlaygroundAnnotationMetadata, undefined>) => {
       if (cancelledEdit.current) {
         cancelledEdit.current = false;
         return 'reject';
@@ -736,7 +744,9 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
     []
   );
   const handleDiffEditComplete = useCallback(
-    (event: FileDiffEditCompleteEvent<PlaygroundAnnotationMetadata>) => {
+    (
+      event: FileDiffEditCompleteEvent<PlaygroundAnnotationMetadata, undefined>
+    ) => {
       if (cancelledEdit.current) {
         cancelledEdit.current = false;
         return 'reject';
@@ -1135,7 +1145,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
   // CodeView adds its own layout/sticky-header options on top of the shared
   // rendering options; its scrollbar styling mirrors the direct views.
   const codeViewOptions = useMemo<
-    CodeViewReactOptions<PlaygroundAnnotationMetadata>
+    CodeViewReactOptions<PlaygroundAnnotationMetadata, undefined>
   >(
     () => ({
       ...renderOptions,
@@ -1219,7 +1229,9 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
     ]
   );
 
-  const fileOptions = useMemo<FileOptions<PlaygroundAnnotationMetadata>>(
+  const fileOptions = useMemo<
+    FileOptions<PlaygroundAnnotationMetadata, undefined>
+  >(
     () => ({
       ...renderOptions,
       unsafeCSS: ITEM_UNSAFE_CSS,

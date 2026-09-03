@@ -35,12 +35,12 @@ async function waitForEditableContent(
 interface BracketMatchFixture {
   cleanup(): void;
   content: HTMLElement;
-  editor: Editor<undefined>;
+  editor: Editor<'file', undefined>;
 }
 
 async function createBracketMatchFixture(
   contents: string,
-  editorOptions: EditorOptions<undefined> = {}
+  editorOptions: EditorOptions<'file', undefined, undefined> = {}
 ): Promise<BracketMatchFixture> {
   const dom = installDom();
   const fileContainer = document.createElement('div');
@@ -50,7 +50,7 @@ async function createBracketMatchFixture(
     disableFileHeader: true,
     theme: DEFAULT_THEMES,
   });
-  const editor = new Editor<undefined>('file', editorOptions);
+  const editor = new Editor('file', editorOptions);
   const initialFile: FileContents = { name: 'brackets.ts', contents };
 
   file.render({ file: initialFile, fileContainer, forceRender: true });

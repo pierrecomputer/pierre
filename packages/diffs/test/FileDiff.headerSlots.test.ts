@@ -1,8 +1,11 @@
 import { describe, expect, test } from 'bun:test';
 
 import { FileDiff, parseDiffFromFile } from '../src';
-import type { DiffsEditor, DiffsTextDocument } from '../src/types';
 import { installDom, wait } from './domHarness';
+import {
+  createEditorInstance,
+  createTextDocumentFromLines,
+} from './editorTestUtils';
 
 const fileDiff = parseDiffFromFile(
   { name: 'example.txt', contents: 'value 1\n' },
@@ -13,30 +16,6 @@ function createSlotContent(text: string): HTMLElement {
   const element = document.createElement('span');
   element.textContent = text;
   return element;
-}
-
-function createEditorStub(): DiffsEditor<undefined> {
-  return {
-    cleanUp() {},
-    edit: () => () => {},
-    __captureFocusForDOMReplacement() {},
-    __emitEditComplete() {},
-    __getDocumentContents: () => undefined,
-    __getDocumentSessionState: () => undefined,
-    __postponeBgTokenizeToNextFrame() {},
-    __syncRenderView() {},
-  } as unknown as DiffsEditor<undefined>;
-}
-
-function makeTextDocument(lines: string[]): DiffsTextDocument {
-  return {
-    lineCount: lines.length,
-    getText: () => lines.join(''),
-    getLineText: (lineNumber: number, includeLineBreak = false) => {
-      const line = lines[lineNumber] ?? '';
-      return includeLineBreak ? line : line.replace(/\r?\n$/, '');
-    },
-  };
 }
 
 async function waitForSlotText(
@@ -93,8 +72,14 @@ describe('FileDiff header slots', () => {
       instance.render({ fileDiff: externalDiff, fileContainer });
       await waitForHeaderCount(fileContainer, '[data-additions-count]', '+1');
 
-      detach = instance.__attachEditor(createEditorStub());
-      instance.applyDocumentChange(makeTextDocument(['new\n', 'extra\n']));
+      detach = instance.__attachEditor(createEditorInstance('file-diff'));
+      instance.applyDocumentChange(
+        createTextDocumentFromLines(
+          'file-diff',
+          ['new\n', 'extra\n'],
+          'inmemory://file-diff-header'
+        )
+      );
 
       await waitForHeaderCount(fileContainer, '[data-additions-count]', '+2');
       expect(externalDiff.additionLines).toBe(externalAdditionLines);

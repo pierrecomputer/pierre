@@ -11,38 +11,43 @@ const options = {
   unsafeCSS: CustomScrollbarCSS,
 } as const;
 
-export const OVERVIEW_INITIAL_EXAMPLE: PreloadMultiFileDiffOptions<undefined> =
-  {
-    oldFile: {
-      name: 'main.zig',
-      contents: `const std = @import("std");
+export const OVERVIEW_INITIAL_EXAMPLE: PreloadMultiFileDiffOptions<
+  undefined,
+  undefined
+> = {
+  oldFile: {
+    name: 'main.zig',
+    contents: `const std = @import("std");
 
 pub fn main() !void {
     const stdout = std.io.getStdOut().writer();
     try stdout.print("Hi you, {s}!\\n", .{"world"});
 }
 `,
-    },
-    newFile: {
-      name: 'main.zig',
-      contents: `const std = @import("std");
+  },
+  newFile: {
+    name: 'main.zig',
+    contents: `const std = @import("std");
 
 pub fn main() !void {
     const stdout = std.io.getStdOut().writer();
     try stdout.print("Hello there, {s}!\\n", .{"zig"});
 }
 `,
-    },
-    options: {
-      theme: { dark: 'pierre-dark', light: 'pierre-light' },
-      diffStyle: 'split',
-      diffIndicators: 'bars',
-      overflow: 'wrap',
-      unsafeCSS: CustomScrollbarCSS,
-    },
-  };
+  },
+  options: {
+    theme: { dark: 'pierre-dark', light: 'pierre-light' },
+    diffStyle: 'split',
+    diffIndicators: 'bars',
+    overflow: 'wrap',
+    unsafeCSS: CustomScrollbarCSS,
+  },
+};
 
-export const OVERVIEW_REACT_SINGLE_FILE: PreloadFileOptions<undefined> = {
+export const OVERVIEW_REACT_SINGLE_FILE: PreloadFileOptions<
+  undefined,
+  undefined
+> = {
   file: {
     name: 'react_single_file.tsx',
     contents: `import {
@@ -90,7 +95,10 @@ function SingleDiff() {
   options,
 };
 
-export const OVERVIEW_REACT_PATCH_FILE: PreloadFileOptions<undefined> = {
+export const OVERVIEW_REACT_PATCH_FILE: PreloadFileOptions<
+  undefined,
+  undefined
+> = {
   file: {
     name: 'react_patch_file.tsx',
     contents: `import {
@@ -147,7 +155,10 @@ function Patches() {
   options,
 };
 
-export const OVERVIEW_VANILLA_SINGLE_FILE: PreloadFileOptions<undefined> = {
+export const OVERVIEW_VANILLA_SINGLE_FILE: PreloadFileOptions<
+  undefined,
+  undefined
+> = {
   file: {
     name: 'vanilla_single_file.ts',
     contents: `import {
@@ -196,7 +207,10 @@ fileDiffInstance.render({
   options,
 };
 
-export const OVERVIEW_VANILLA_PATCH_FILE: PreloadFileOptions<undefined> = {
+export const OVERVIEW_VANILLA_PATCH_FILE: PreloadFileOptions<
+  undefined,
+  undefined
+> = {
   file: {
     name: 'vanilla_patch_file.ts',
     contents: `import {

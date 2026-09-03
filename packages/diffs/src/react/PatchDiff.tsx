@@ -10,14 +10,15 @@ import { renderDiffChildren } from './utils/renderDiffChildren';
 import { templateRender } from './utils/templateRender';
 import { useFileDiffInstance } from './utils/useFileDiffInstance';
 
-export interface PatchDiffProps<
+export interface PatchDiffProps<LAnnotation, Caret> extends DiffBasePropsReact<
   LAnnotation,
-> extends DiffBasePropsReact<LAnnotation> {
+  Caret
+> {
   patch: string;
   disableWorkerPool?: boolean;
 }
 
-export function PatchDiff<LAnnotation = undefined>({
+export function PatchDiff<LAnnotation = undefined, Caret = undefined>({
   patch,
   options,
   editorOptions,
@@ -38,7 +39,7 @@ export function PatchDiff<LAnnotation = undefined>({
   edit = false,
   onEditChange,
   onEditComplete,
-}: PatchDiffProps<LAnnotation>): React.JSX.Element {
+}: PatchDiffProps<LAnnotation, Caret>): React.JSX.Element {
   const fileDiff = usePatch(patch);
   const { ref, getHoveredLine, getAnnotationSlotName } = useFileDiffInstance({
     fileDiff,

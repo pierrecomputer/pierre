@@ -32,12 +32,12 @@ async function waitForEditableContent(
 interface EditorFixture {
   cleanup(): void;
   content: HTMLElement;
-  editor: Editor<undefined>;
+  editor: Editor<'file', undefined>;
 }
 
 async function createEditorFixture(
   contents: string,
-  fileOptions?: Partial<FileOptions<undefined>>
+  fileOptions?: Partial<FileOptions<undefined, undefined>>
 ): Promise<EditorFixture> {
   const dom = installDom();
   const fileContainer = document.createElement('div');
@@ -48,7 +48,7 @@ async function createEditorFixture(
     theme: DEFAULT_THEMES,
     ...fileOptions,
   });
-  const editor = new Editor<undefined>('file');
+  const editor = new Editor('file');
   const initialFile: FileContents = { name: 'highlight.ts', contents };
 
   file.render({ file: initialFile, fileContainer, forceRender: true });

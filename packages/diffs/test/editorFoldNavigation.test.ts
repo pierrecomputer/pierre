@@ -40,7 +40,7 @@ function getEditSessionDiff(
 
 interface FoldFixture {
   container: HTMLElement;
-  editor: Editor<undefined>;
+  editor: Editor<'file-diff', undefined>;
   fileDiff: FileDiff<undefined>;
   content: HTMLElement;
   cleanup(): Promise<void>;
@@ -66,7 +66,7 @@ async function createFoldFixture(): Promise<FoldFixture> {
     theme: DEFAULT_THEMES,
     diffStyle: 'split',
   });
-  const editor = new Editor<undefined>('file-diff');
+  const editor = new Editor('file-diff');
   fileDiff.render({
     oldFile: { name: 'edit.ts', contents: oldContents },
     newFile: { name: 'edit.ts', contents: newContents },
@@ -102,7 +102,11 @@ async function createFoldFixture(): Promise<FoldFixture> {
   };
 }
 
-function setCaret(editor: Editor<undefined>, line: number, character = 0) {
+function setCaret(
+  editor: Editor<'file-diff', undefined>,
+  line: number,
+  character = 0
+) {
   const position = { line, character };
   editor.setSelections([{ start: position, end: position, direction: 'none' }]);
 }

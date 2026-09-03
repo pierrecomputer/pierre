@@ -5,13 +5,16 @@ import {
   type CodeViewItem,
   type CodeViewLineSelection,
   type DiffLineAnnotation,
-  type EditCompletionDecision,
   type FileDiffEditCompleteEvent,
   type FileEditCompleteEvent,
   type LineAnnotation,
   type SelectedLineRange,
 } from '@pierre/diffs';
-import type { EditorOptions } from '@pierre/diffs/edit';
+import type {
+  EditCompletionDecision,
+  EditorOptions,
+  EditorType,
+} from '@pierre/diffs/edit';
 import {
   CodeView,
   type CodeViewReactOptions,
@@ -31,7 +34,11 @@ const CODE_VIEW_STYLES = { height: '70vh', overflow: 'auto' } as const;
 
 type PlaygroundItem = CodeViewItem<PlaygroundAnnotationMetadata>;
 
-const CODE_VIEW_EDITOR_OPTIONS: EditorOptions<PlaygroundAnnotationMetadata> = {
+const CODE_VIEW_EDITOR_OPTIONS: EditorOptions<
+  EditorType,
+  PlaygroundAnnotationMetadata,
+  undefined
+> = {
   onAttach(editor) {
     editor.focus({ lineNumber: 'first-visible', preventScroll: true });
   },
@@ -39,7 +46,7 @@ const CODE_VIEW_EDITOR_OPTIONS: EditorOptions<PlaygroundAnnotationMetadata> = {
 
 interface PlaygroundCodeViewProps {
   items: PlaygroundItem[];
-  options: CodeViewReactOptions<PlaygroundAnnotationMetadata>;
+  options: CodeViewReactOptions<PlaygroundAnnotationMetadata, undefined>;
   enableLineSelection: boolean;
   enableGutterComments: boolean;
   showAnnotations: boolean;
@@ -94,8 +101,8 @@ export function PlaygroundCodeView({
   const handleEditComplete = useCallback(
     (
       event:
-        | FileEditCompleteEvent<PlaygroundAnnotationMetadata>
-        | FileDiffEditCompleteEvent<PlaygroundAnnotationMetadata>,
+        | FileEditCompleteEvent<PlaygroundAnnotationMetadata, undefined>
+        | FileDiffEditCompleteEvent<PlaygroundAnnotationMetadata, undefined>,
       item: PlaygroundItem,
       nextItem: PlaygroundItem
     ): EditCompletionDecision => {
@@ -273,7 +280,7 @@ export function PlaygroundCodeView({
     enableGutterComments && showAnnotations && !hasOpenCommentForm;
 
   const codeViewOptions = useMemo<
-    CodeViewReactOptions<PlaygroundAnnotationMetadata>
+    CodeViewReactOptions<PlaygroundAnnotationMetadata, undefined>
   >(
     () => ({
       ...options,
