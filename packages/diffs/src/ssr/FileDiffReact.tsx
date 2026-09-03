@@ -111,6 +111,8 @@ export function FileDiffSSR<LAnnotation>({
   return (
     <div
       ref={wrapperRef}
+      // Mostly an unused component, no point in fixing this properly right now
+      // oxlint-disable-next-line react/refs
       dangerouslySetInnerHTML={htmlObjectRef.current}
       suppressHydrationWarning
     />

@@ -21,6 +21,7 @@ import {
 } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { useLatestValueRef } from '@/lib/useLatestValueRef';
 
 interface SelectionDemoProps {
   // Server-preloaded, highlighted File; hydrating from it avoids a highlight flash on load.
@@ -121,8 +122,7 @@ export function SelectionDemo({ prerenderedFile }: SelectionDemoProps) {
     },
     [prerenderedFile.file.name]
   );
-  const addSnippetRef = useRef(addSnippet);
-  addSnippetRef.current = addSnippet;
+  const addSnippetRef = useLatestValueRef(addSnippet);
 
   const editorOptions = useMemo<EditorOptions<'file', undefined, undefined>>(
     () => ({
@@ -163,7 +163,7 @@ export function SelectionDemo({ prerenderedFile }: SelectionDemoProps) {
         return container;
       },
     }),
-    []
+    [addSnippetRef]
   );
 
   const clearChat = useCallback(() => setSnippets([]), []);

@@ -1,8 +1,9 @@
 'use client';
 
 import { type ColorMode } from '@pierre/theming';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import { useLatestValueRef } from './useLatestValueRef';
 import { docsThemeCatalog } from '@/components/themeCatalog';
 import type { DarkThemeName, LightThemeName } from '@/lib/themeNames';
 
@@ -34,6 +35,12 @@ interface UseThemeCycleArgs {
   setColorMode: (mode: ColorMode) => void;
 }
 
+interface ThemeCycleStartState {
+  darkThemeName: DarkThemeName;
+  lightThemeName: LightThemeName;
+  resolvedThemeMode: 'light' | 'dark' | undefined;
+}
+
 // Drives a sweep through every available Shiki theme — all the light
 // themes, then all the dark themes, then back around — so users can
 // preview the full catalog without manually picking each one. The
@@ -55,12 +62,11 @@ export function useThemeCycle({
   // Capture the latest theme state in refs so the cycle effect doesn't
   // restart its interval (and re-anchor the rotation order) every time
   // the cycle advances. Each tick reads the same captured sequence.
-  const lightThemeNameRef = useRef(lightThemeName);
-  const darkThemeNameRef = useRef(darkThemeName);
-  const resolvedModeRef = useRef(resolvedThemeMode);
-  lightThemeNameRef.current = lightThemeName;
-  darkThemeNameRef.current = darkThemeName;
-  resolvedModeRef.current = resolvedThemeMode;
+  const cycleStartStateRef = useLatestValueRef<ThemeCycleStartState>({
+    darkThemeName,
+    lightThemeName,
+    resolvedThemeMode,
+  });
 
   const bumpDuration = useCallback(() => {
     setStepSeconds((prev) => {
@@ -77,7 +83,8 @@ export function useThemeCycle({
 
   useEffect(() => {
     if (!cycling) return undefined;
-    const startMode = resolvedModeRef.current ?? 'light';
+    const cycleStartState = cycleStartStateRef.current;
+    const startMode = cycleStartState.resolvedThemeMode ?? 'light';
     // Snapshot the catalog once per cycle start; each tick reads the same
     // captured sequence.
     const lightThemes = docsThemeCatalog.getThemeNames({
@@ -86,11 +93,11 @@ export function useThemeCycle({
     const darkThemes = docsThemeCatalog.getThemeNames({ colorScheme: 'dark' });
     const lightStartIdx = Math.max(
       0,
-      lightThemes.indexOf(lightThemeNameRef.current)
+      lightThemes.indexOf(cycleStartState.lightThemeName)
     );
     const darkStartIdx = Math.max(
       0,
-      darkThemes.indexOf(darkThemeNameRef.current)
+      darkThemes.indexOf(cycleStartState.darkThemeName)
     );
     type Step =
       | { mode: 'light'; theme: LightThemeName }
@@ -132,7 +139,14 @@ export function useThemeCycle({
     tick();
     const intervalId = window.setInterval(tick, stepSeconds * 1000);
     return () => window.clearInterval(intervalId);
-  }, [cycling, stepSeconds, setLightThemeName, setDarkThemeName, setColorMode]);
+  }, [
+    cycleStartStateRef,
+    cycling,
+    stepSeconds,
+    setLightThemeName,
+    setDarkThemeName,
+    setColorMode,
+  ]);
 
   return useMemo(
     () => ({ cycling, stepSeconds, bumpDuration, toggleCycle }),

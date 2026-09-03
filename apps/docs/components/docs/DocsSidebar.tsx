@@ -29,6 +29,8 @@ interface HeadingItem {
   isBeta: boolean;
 }
 
+const EMPTY_HEADINGS: HeadingItem[] = [];
+
 // Read a heading's label without the permalink anchor or any Beta badge that a
 // React-managed heading may render, so the sidebar shows clean text (e.g.
 // "Edit mode" rather than "Edit modeBeta") and can mirror the badge separately.
@@ -48,6 +50,25 @@ function getHeadingLabel(element: HTMLElement): string {
   return text.trim();
 }
 
+// Collects the page's h2/h3 headings for the table of contents. Their ids are
+// set server-side by rehype-hierarchical-slug during MDX compilation.
+function readPageHeadings(): HeadingItem[] {
+  const headingItems: HeadingItem[] = [];
+  for (const element of document.querySelectorAll('h2[id], h3[id]')) {
+    if (!(element instanceof HTMLElement)) {
+      continue;
+    }
+    headingItems.push({
+      element,
+      id: element.id,
+      isBeta: element.querySelector('[data-heading-badge]') != null,
+      level: parseInt(element.tagName.charAt(1)),
+      text: getHeadingLabel(element),
+    });
+  }
+  return headingItems;
+}
+
 export function DocsSidebar({
   isMobileOpen = false,
   onMobileClose,
@@ -61,45 +82,26 @@ export function DocsSidebar({
   const homePath = product.basePath !== '' ? product.basePath : '/';
   const isActivePath = (target: string) =>
     target === homePath ? pathname === target : pathname.startsWith(target);
-  const [headings, setHeadings] = useState<HeadingItem[]>([]);
+  const [headings, setHeadings] = useState<HeadingItem[]>(EMPTY_HEADINGS);
   const [activeHeading, setActiveHeading] = useState<string>('');
 
-  // Extract headings from the page content
-  // IDs are set server-side by rehype-hierarchical-slug during MDX compilation
+  // The headings live in the MDX content rendered beside this sidebar, so they
+  // are only readable from the committed DOM, and they are fixed for this
+  // mount. Read them once here instead of on every render.
   useLayoutEffect(() => {
-    const headingElements = document.querySelectorAll('h2[id], h3[id]');
-    const headingItems: HeadingItem[] = [];
-
-    for (const element of headingElements) {
-      if (!(element instanceof HTMLElement)) {
-        continue;
-      }
-
-      const text = getHeadingLabel(element);
-      const level = parseInt(element.tagName.charAt(1));
-      const id = element.id;
-      const isBeta = element.querySelector('[data-heading-badge]') != null;
-
-      headingItems.push({
-        id,
-        text,
-        level,
-        element,
-        isBeta,
-      });
-    }
-
+    const headingItems = readPageHeadings();
+    const hashId = window.location.hash.trim().slice(1);
+    /* oxlint-disable react/set-state-in-effect -- synchronizing from DOM that
+     * only exists after commit; there is no render-time source for it */
     setHeadings(headingItems);
+    // A hash names the heading to activate; otherwise the first heading is. A
+    // hash that names a non-heading leaves no link active until the scroll
+    // check below runs.
+    setActiveHeading(hashId !== '' ? hashId : (headingItems[0]?.id ?? ''));
+    /* oxlint-enable react/set-state-in-effect */
 
-    // Set first heading as active by default
-    if (headingItems.length > 0 && window.location.hash.trim() === '') {
-      setActiveHeading(headingItems[0].id);
-    }
-
-    // Scroll to hash if present
-    if (window.location.hash.trim() !== '') {
-      const id = window.location.hash.slice(1);
-      const element = document.getElementById(id);
+    if (hashId !== '') {
+      const element = document.getElementById(hashId);
       if (element != null) {
         element.scrollIntoView({ behavior: 'instant', block: 'start' });
       }
@@ -127,14 +129,16 @@ export function DocsSidebar({
       }
     };
 
-    if (headings.length > 0) {
-      window.addEventListener('scroll', handleScroll);
-      handleScroll(); // Check initial position
-
-      return () => window.removeEventListener('scroll', handleScroll);
+    if (headings.length === 0) {
+      return undefined;
     }
 
-    return undefined;
+    window.addEventListener('scroll', handleScroll);
+    const animationFrame = window.requestAnimationFrame(handleScroll);
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      window.cancelAnimationFrame(animationFrame);
+    };
   }, [headings]);
 
   // Scroll active nav link into view within the sidebar
