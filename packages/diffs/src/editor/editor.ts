@@ -582,6 +582,10 @@ export class Editor<
   };
   #editPredictionHistory: EditPredictionHistoryRecord[] = [];
   #editPredictionSpacers = new Map<HTMLElement, number>();
+  // Ghost text rows shown below lines (zero-based line -> row count). Replaced
+  // only when the contents change and never mutated, so the attached component
+  // can treat the same instance as "nothing changed".
+  #ghostTextRows: ReadonlyMap<number, number> = new Map();
   #onDeferTokenize = (
     lines: Map<number, Array<HighlightedToken>>,
     themeType: 'light' | 'dark'
@@ -675,6 +679,11 @@ export class Editor<
     event: EditorEditCompleteEvent<EType, LAnnotation, Caret>
   ): void {
     this.#options.onComplete?.(event);
+  }
+
+  /** @internal */
+  __getGhostTextRows(): ReadonlyMap<number, number> {
+    return this.#ghostTextRows;
   }
 
   setCarets(carets: EditorCaret<Caret>[]): void {
@@ -4748,24 +4757,29 @@ export class Editor<
   // rows that could be mistaken for document content by the editor.
   #syncEditPredictionSpacers(): void {
     const nextSpacers = new Map<HTMLElement, number>();
+    // Ghost text rows per line for this sync. It replaces #ghostTextRows only
+    // when the contents differ, so an unchanged map keeps its identity.
+    const ghostTextRows = new Map<number, number>();
+    const previousRows = this.#ghostTextRows;
+    let rowsChanged = false;
     const contentElement = this.#contentElement;
     const composed = this.#getEditPredictionGroups();
     if (contentElement != null && composed != null && composed.allVisible) {
-      const continuationLines = new Map<number, number>();
       for (const { edit } of composed.groups) {
         if (edit.newText.length === 0) {
           continue;
         }
         const count = countLineBreaks(edit.newText);
-        if (count > (continuationLines.get(edit.range.start.line) ?? 0)) {
-          continuationLines.set(edit.range.start.line, count);
+        if (count > (ghostTextRows.get(edit.range.start.line) ?? 0)) {
+          ghostTextRows.set(edit.range.start.line, count);
         }
       }
 
-      if (continuationLines.size > 0) {
+      if (ghostTextRows.size > 0) {
         let rowIndexes: Map<Element, number> | undefined;
         const startingLine = this.#renderRange?.startingLine ?? 0;
-        for (const [line, count] of continuationLines) {
+        for (const [line, count] of ghostTextRows) {
+          rowsChanged ||= previousRows.get(line) !== count;
           const lineElement = this.#getLineElement(line);
           if (lineElement === undefined) {
             continue;
@@ -4817,6 +4831,9 @@ export class Editor<
       changed = true;
     }
     this.#editPredictionSpacers = nextSpacers;
+    if (rowsChanged || ghostTextRows.size !== previousRows.size) {
+      this.#ghostTextRows = ghostTextRows;
+    }
     if (changed) {
       this.#resetCache();
     }
