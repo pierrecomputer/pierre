@@ -84,6 +84,12 @@ interface DiffLayoutCache {
   // Measured height for the file annotation row. Starts at 0 so
   // unmeasured annotations behave like all other unmeasured annotations.
   fileAnnotationHeight: number;
+  // Ghost text rows folded into `heightDeltas`. `ghostTextRows` is the editor's
+  // own map (zero-based new-file line -> rows), replaced rather than mutated, so
+  // identity alone says whether anything changed. `ghostTextRowsByIndex` is the
+  // same data keyed by this view's row index, which the deltas use.
+  ghostTextRows: ReadonlyMap<number, number>;
+  ghostTextRowsByIndex: Map<number, number>;
 }
 
 interface ResetLayoutCacheOptions {
@@ -110,6 +116,7 @@ interface PendingRender {
 }
 
 export const VIRTUALIZED_FILE_DIFF_LAYOUT_CHECKPOINT_INTERVAL = 3_000;
+const NO_GHOST_TEXT_ROWS: ReadonlyMap<number, number> = new Map();
 
 let instanceId = -1;
 
@@ -131,6 +138,8 @@ export class VirtualizedFileDiff<
     checkpoints: [],
     totalLines: 0,
     fileAnnotationHeight: 0,
+    ghostTextRows: NO_GHOST_TEXT_ROWS,
+    ghostTextRowsByIndex: new Map(),
   };
   private isVisible: boolean = false;
   private isSetup: boolean = false;
@@ -299,11 +308,11 @@ export class VirtualizedFileDiff<
   }: ResetLayoutCacheOptions = {}): void {
     this.layoutDirty = true;
     this.cache.fileAnnotationHeight = 0;
-    if (this.cache.heightDeltas.size > 0) {
-      this.cache.heightDeltas.clear();
-    }
-    if (this.cache.measuredHeightDeltaTotal !== 0) {
-      this.cache.measuredHeightDeltaTotal = 0;
+    this.cache.heightDeltas.clear();
+    this.cache.measuredHeightDeltaTotal = 0;
+    this.cache.ghostTextRows = NO_GHOST_TEXT_ROWS;
+    if (this.cache.ghostTextRowsByIndex.size > 0) {
+      this.cache.ghostTextRowsByIndex.clear();
     }
     this.invalidateDerivedLayoutCache(
       includeEstimatedHeights,
@@ -336,13 +345,72 @@ export class VirtualizedFileDiff<
     }
   }
 
+  // Fold the ghost text rows the editor is showing below lines into the height
+  // deltas. Ghost text sits in a margin below the row, which measuring never
+  // includes, so the rows are added here on top of the row's own height, and
+  // removed again when the ghost text changes or goes away, even for rows that
+  // are not rendered right now. The editor keys by new-file line; the deltas
+  // are keyed by this view's row index, so lines are translated the same way
+  // getLinePosition does. The editor only reports lines that have a rendered
+  // row (it draws a prediction all or nothing); the translation is undefined
+  // only for a diff without hunks.
+  private applyGhostTextRows(
+    fileDiff: FileDiffMetadata,
+    ghostTextRows: ReadonlyMap<number, number>
+  ): boolean {
+    const {
+      cache: {
+        heightDeltas,
+        ghostTextRows: folded,
+        ghostTextRowsByIndex: previous,
+      },
+      metrics: { lineHeight },
+    } = this;
+    if (folded === ghostTextRows) {
+      return false;
+    }
+    const diffStyle = this.getDiffStyle();
+    const next = new Map<number, number>();
+    for (const [line, rows] of ghostTextRows) {
+      const indexes = this.getLineIndexForDiff(fileDiff, line + 1, 'additions');
+      if (indexes == null) {
+        continue;
+      }
+      next.set(diffStyle === 'split' ? indexes[1] : indexes[0], rows);
+    }
+    let changed = false;
+    for (const rowIndex of new Set([...previous.keys(), ...next.keys()])) {
+      const delta =
+        ((next.get(rowIndex) ?? 0) - (previous.get(rowIndex) ?? 0)) *
+        lineHeight;
+      if (delta === 0) {
+        continue;
+      }
+      const nextDelta = (heightDeltas.get(rowIndex) ?? 0) + delta;
+      if (nextDelta === 0) {
+        heightDeltas.delete(rowIndex);
+      } else {
+        heightDeltas.set(rowIndex, nextDelta);
+      }
+      this.cache.measuredHeightDeltaTotal += delta;
+      changed = true;
+    }
+    this.cache.ghostTextRows = ghostTextRows;
+    this.cache.ghostTextRowsByIndex = next;
+    return changed;
+  }
+
   // Measure rendered lines and update height cache.
   // Called after render to reconcile estimated vs actual heights.
   // Definitely need to optimize this in cases where there aren't any custom
   // line heights or in cases of extremely large files...
   public reconcileHeights(): boolean {
     let hasHeightChange = false;
-    const { overflow = 'scroll' } = this.options;
+    const {
+      options: { overflow = 'scroll' },
+      cache: { ghostTextRowsByIndex },
+      metrics: { lineHeight },
+    } = this;
     const fileDiff = this.getRenderedDiff();
     if (this.fileContainer == null || fileDiff == null) {
       if (this.height !== 0) {
@@ -352,6 +420,10 @@ export class VirtualizedFileDiff<
       return hasHeightChange;
     }
     this.top = this.getVirtualizedTop();
+    hasHeightChange = this.applyGhostTextRows(
+      fileDiff,
+      this.editor?.__getGhostTextRows() ?? NO_GHOST_TEXT_ROWS
+    );
     const lineAnnotations = this.getLatestAnnotations();
     // NOTE(amadeus): We can probably be a lot smarter about this, and we
     // should be thinking about ways to improve this
@@ -362,6 +434,9 @@ export class VirtualizedFileDiff<
       lineAnnotations.length === 0 &&
       !this.isResizeDebuggingEnabled()
     ) {
+      if (hasHeightChange) {
+        this.computeApproximateSize(true);
+      }
       return hasHeightChange;
     }
     const diffStyle = this.getDiffStyle();
@@ -389,6 +464,12 @@ export class VirtualizedFileDiff<
       if (codeGroup == null) continue;
       const content = codeGroup.children[1];
       if (!(content instanceof HTMLElement)) continue;
+      // The ghost prediction margin sits on the additions row. When the two
+      // split columns share one grid, the deletions row stretches to that
+      // taller track, so measuring it would count the rows twice; the
+      // additions row is authoritative for a row pair with ghost text.
+      const skipsGhostRows =
+        diffStyle === 'split' && codeGroup === this.codeDeletions;
       for (const line of content.children) {
         if (!(line instanceof HTMLElement)) continue;
 
@@ -396,7 +477,10 @@ export class VirtualizedFileDiff<
         if (lineIndexAttr == null) continue;
 
         const lineIndex = parseLineIndex(lineIndexAttr, diffStyle);
-        let measuredHeight = line.getBoundingClientRect().height;
+        const ghostRows = ghostTextRowsByIndex.get(lineIndex) ?? 0;
+        if (skipsGhostRows && ghostRows > 0) continue;
+        let measuredHeight =
+          line.getBoundingClientRect().height + ghostRows * lineHeight;
         let hasMetadata = false;
         // Annotations or noNewline metadata increase the size of the their
         // attached line
@@ -1067,6 +1151,20 @@ export class VirtualizedFileDiff<
     );
   }
 
+  // The editor changed the ghost text rows it shows below lines. Ask the
+  // virtualizer for a layout pass, which folds them in (see
+  // applyGhostTextRows). Layout state only changes inside that pass.
+  public syncGhostTextRows(): void {
+    const codeView = this.getAdvancedVirtualizer();
+    if (codeView != null) {
+      codeView.capturePendingLayoutAnchor();
+      this.layoutDirty = true;
+      codeView.instanceChanged(this, true);
+      return;
+    }
+    this.getSimpleVirtualizer()?.requestHeightReconcile(this);
+  }
+
   // Normally triggered by the host when the document line count changes.
   override applyDocumentChange(
     textDocument: TextDocument<'file-diff', LAnnotation>,
@@ -1133,6 +1231,10 @@ export class VirtualizedFileDiff<
       this.layoutDirty = false;
       return;
     }
+    this.applyGhostTextRows(
+      fileDiff,
+      this.editor?.__getGhostTextRows() ?? NO_GHOST_TEXT_ROWS
+    );
 
     const { disableFileHeader = false, collapsed = false } = this.options;
     const headerRegion = getVirtualFileHeaderRegion(
