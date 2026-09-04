@@ -13,14 +13,13 @@ import type {
   PreloadedFileResult,
   PreloadFileDiffResult,
 } from '@pierre/diffs/ssr';
-import { IconBrandGithub, IconRefresh, IconWordWrap } from '@pierre/icons';
+import { IconBrandGithub, IconRefresh } from '@pierre/icons';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { CodestralIcon } from './CodestralIcon';
 import { EDIT_PREDICTION_NEW_FILE } from './constants';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
-import { ToggleSwitch } from '@/components/ui/toggle-switch';
 
 interface EditPredictionDemoProps {
   prerenderedFile: PreloadedFileResult<undefined, undefined>;
@@ -79,7 +78,6 @@ export function EditPredictionDemo({
   const [resetKey, setResetKey] = useState(0);
   const [status, setStatus] = useState<PredictionStatus>('idle');
   const [surface, setSurface] = useState<Surface>('file');
-  const [lineWrapping, setLineWrapping] = useState(false);
 
   const provider = useMemo<EditPredictProvider>(
     () => ({
@@ -331,13 +329,6 @@ export function EditPredictionDemo({
           Reset
         </Button>
 
-        <ToggleSwitch
-          icon={<IconWordWrap />}
-          label="Line wrapping"
-          checked={lineWrapping}
-          onCheckedChange={setLineWrapping}
-        />
-
         <div className="flex basis-full items-center justify-start gap-3 md:ml-auto md:basis-auto md:justify-end">
           {statusText !== null && (
             <span
@@ -374,7 +365,6 @@ export function EditPredictionDemo({
           className="diff-container"
           edit
           editorOptions={editorOptions}
-          options={{ overflow: lineWrapping ? 'wrap' : 'scroll' }}
         />
       ) : (
         <FileDiff
@@ -384,7 +374,6 @@ export function EditPredictionDemo({
           className="diff-container"
           edit
           editorOptions={editorOptions}
-          options={{ overflow: lineWrapping ? 'wrap' : 'scroll' }}
         />
       )}
     </div>
