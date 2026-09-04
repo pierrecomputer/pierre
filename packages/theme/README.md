@@ -43,6 +43,10 @@ Usage:
  Zed:
   Install "Pierre" from the Zed extension registry
 
+ Neovim:
+  A port of this colorscheme is available for Neovim.
+  Check out [pierre-theme.nvim](https://github.com/chaosteil/pierre-theme.nvim)
+
 ```
 
 ## Agent skill
