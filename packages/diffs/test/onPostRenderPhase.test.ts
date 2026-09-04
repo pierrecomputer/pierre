@@ -53,19 +53,26 @@ function makeFileItem(
 
 async function waitForPhases(
   phases: readonly { id: string; phase: PostRenderPhase }[],
-  expected: readonly { id: string; phase: PostRenderPhase }[]
+  expected: readonly { id: string; phase: PostRenderPhase }[],
+  { lifecycleOnly = false }: { lifecycleOnly?: boolean } = {}
 ): Promise<void> {
+  // A rendered item can emit an extra 'update' phase once its content settles
+  // (e.g. a virtualized item painting on scroll-in). lifecycleOnly asserts just
+  // the mount/unmount lifecycle so that incidental update does not race the
+  // match.
+  const view = () =>
+    lifecycleOnly ? phases.filter((entry) => entry.phase !== 'update') : phases;
   // ~4s budget: returns as soon as the phases match, so passing runs only pay
   // a few iterations; the headroom is for loaded CI runners.
   for (let attempt = 0; attempt < 400; attempt++) {
     try {
-      expect(phases).toEqual(expected);
+      expect(view()).toEqual(expected);
       return;
     } catch {
       await wait(10);
     }
   }
-  expect(phases).toEqual(expected);
+  expect(view()).toEqual(expected);
 }
 
 const file: FileContents = {
@@ -293,18 +300,24 @@ describe('onPostRender phases', () => {
       viewer.setup(root);
       await renderItems(viewer, items);
 
-      await waitForPhases(phases, [{ id: 'file:first', phase: 'mount' }]);
+      await waitForPhases(phases, [{ id: 'file:first', phase: 'mount' }], {
+        lifecycleOnly: true,
+      });
 
       root.scrollTop = 2_400;
       dispatchScroll(root);
       viewer.render(true);
       await wait(0);
 
-      await waitForPhases(phases, [
-        { id: 'file:first', phase: 'mount' },
-        { id: 'file:first', phase: 'unmount' },
-        { id: 'file:second', phase: 'mount' },
-      ]);
+      await waitForPhases(
+        phases,
+        [
+          { id: 'file:first', phase: 'mount' },
+          { id: 'file:first', phase: 'unmount' },
+          { id: 'file:second', phase: 'mount' },
+        ],
+        { lifecycleOnly: true }
+      );
     } finally {
       viewer.cleanUp();
       await wait(0);

@@ -209,15 +209,15 @@ test.describe('CodeView edit prediction layout', () => {
         page,
       }) => {
         const pageErrors = await openFixture(page, { overflow, diff });
-        // Errors logged while the items first rendered are outside this
-        // feature; the ghost text must add none from here on.
-        const settled = (await consoleErrors(page)).length;
+        // The items' first paint is deferred by the cold highlighter; the
+        // invariants must stay quiet through it and through the ghost text.
+        expect(await invariantErrorsSince(page, 0)).toEqual([]);
 
         await showGhost(page, 'first', ANCHOR_LINE);
-        expect(await invariantErrorsSince(page, settled)).toEqual([]);
+        expect(await invariantErrorsSince(page, 0)).toEqual([]);
 
         await hideGhost(page, 'first');
-        expect(await invariantErrorsSince(page, settled)).toEqual([]);
+        expect(await invariantErrorsSince(page, 0)).toEqual([]);
         expect(pageErrors).toEqual([]);
       });
     }

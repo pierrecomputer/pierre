@@ -1030,7 +1030,7 @@ describe('Editor document registry surfaces', () => {
     }
   });
 
-  test('a pending compatible replacement retains the outgoing edits', async () => {
+  test('a same-name pending push applies over retained edits and stays undoable', async () => {
     EditStateManager.clearAll();
     const documentKey = 'diff-pending-compatible-replacement';
     const first = await createDiffEditorFixture(
@@ -1055,8 +1055,13 @@ describe('Editor document registry surfaces', () => {
       'replacement contents'
     );
     try {
-      expect(resumed.editor.getText()).toBe(retainedText);
+      // A same-name/language push arriving while edits exist is applied
+      // deterministically as the current content, but the edit stays in history
+      // so undo recovers it.
+      expect(resumed.editor.getText()).toBe('replacement contents');
       expect(resumed.editor.canUndo).toBe(true);
+      resumed.editor.undo();
+      expect(resumed.editor.getText()).toBe(retainedText);
     } finally {
       resumed.cleanup();
       EditStateManager.clearAll();

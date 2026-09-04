@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test';
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { createTwoFilesPatch } from 'diff';
 
 import {
@@ -19,6 +19,10 @@ import type {
   EditorType,
   EditorViewState,
 } from '../src/editor/types';
+import {
+  disposeHighlighter,
+  getSharedHighlighter,
+} from '../src/highlighter/shared_highlighter';
 import type {
   CodeViewItem,
   DiffLineAnnotation,
@@ -226,6 +230,18 @@ async function expectMissingEditorFactoryOnRender(
     cleanup();
   }
 }
+
+beforeAll(async () => {
+  await getSharedHighlighter({
+    themes: ['pierre-dark', 'pierre-light'],
+    langs: ['typescript'],
+    preferredHighlighter: 'shiki-js',
+  });
+});
+
+afterAll(async () => {
+  await disposeHighlighter();
+});
 
 describe('CodeView item edit mode', () => {
   test('validates the factory only when a rendered item needs an editor', async () => {

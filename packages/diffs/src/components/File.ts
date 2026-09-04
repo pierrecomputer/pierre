@@ -32,10 +32,15 @@ import { ResizeManager } from '../managers/ResizeManager';
 import { FileRenderer, type FileRenderResult } from '../renderers/FileRenderer';
 import { SVGSpriteSheet } from '../sprite';
 export type { FileEditCompleteEvent } from '../editor/types';
+import {
+  getHighlighterIfLoaded,
+  getSharedHighlighter,
+} from '../highlighter/shared_highlighter';
 import type {
   AppliedThemeStyleCache,
   BaseCodeOptions,
   DiffLineAnnotation,
+  DiffsHighlighter,
   FileContents,
   HighlightedToken,
   LineAnnotation,
@@ -69,6 +74,7 @@ import { getFileRendererOptions } from '../utils/getFileRendererOptions';
 import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
 import { getLineAnnotationName } from '../utils/getLineAnnotationName';
 import { getOrCreateCodeNode } from '../utils/getOrCreateCodeNode';
+import { getThemes } from '../utils/getThemes';
 import { guardWebKitScrollDuringRebuild } from '../utils/guardWebKitScrollDuringRebuild';
 import { upsertHostThemeStyle } from '../utils/hostTheme';
 import { isFilePlainText } from '../utils/isFilePlainText';
@@ -294,6 +300,14 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     });
   }
 
+  private getTheme() {
+    return (
+      this.workerManager?.getFileRenderOptions().theme ??
+      this.options.theme ??
+      DEFAULT_THEMES
+    );
+  }
+
   // Return the newest file this component intends to display. Once editing
   // starts, the private edit-session file owns that state.
   protected getLatestFile(
@@ -454,10 +468,7 @@ export class File<LAnnotation = undefined, Caret = undefined> {
   private hasThemeChanged(): boolean {
     return (
       this.appliedThemeCSS != null &&
-      !areThemesEqual(
-        this.appliedThemeCSS.theme,
-        this.options.theme ?? DEFAULT_THEMES
-      )
+      !areThemesEqual(this.appliedThemeCSS.theme, this.getTheme())
     );
   }
 
@@ -779,7 +790,7 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     if (editor == null || fileContainer == null || file == null) {
       return;
     }
-    void this.fileRenderer.initializeHighlighter().then((highlighter) => {
+    const sync = (highlighter: DiffsHighlighter): void => {
       if (
         !this.enabled ||
         this.editor !== editor ||
@@ -806,7 +817,22 @@ export class File<LAnnotation = undefined, Caret = undefined> {
         externalDocument,
         resetHistory,
       });
-    });
+    };
+
+    const theme = this.getTheme();
+    const lang = file.lang ?? getFiletypeFromFileName(file.name);
+    const highlighter = getHighlighterIfLoaded({ theme, lang });
+    if (highlighter != null) {
+      sync(highlighter);
+    } else {
+      void getSharedHighlighter({
+        themes: getThemes(theme),
+        langs: Array.from(new Set(['text', lang])),
+        preferredHighlighter:
+          this.workerManager?.getPreferredHighlighter() ??
+          this.options.preferredHighlighter,
+      }).then(sync);
+    }
   }
 
   public emitEditChange(
@@ -1485,7 +1511,7 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     const shadowRoot =
       container.shadowRoot ?? container.attachShadow({ mode: 'open' });
     const effectiveThemeType = baseThemeType ?? themeType;
-    const currentTheme = this.options.theme ?? DEFAULT_THEMES;
+    const currentTheme = this.getTheme();
     const theme =
       typeof currentTheme === 'string' ? currentTheme : { ...currentTheme };
     const scrollbarGutter = getMeasuredScrollbarGutter(shadowRoot);

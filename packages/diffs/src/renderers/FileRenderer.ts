@@ -769,6 +769,7 @@ export class FileRenderer<LAnnotation = undefined> {
       }
     } else {
       this.computedLang = file.lang ?? getFiletypeFromFileName(file.name);
+      this.highlighter ??= getHighlighterIfLoaded();
       const hasThemes =
         this.highlighter != null && areThemesAttached(options.theme);
       const hasLangs =

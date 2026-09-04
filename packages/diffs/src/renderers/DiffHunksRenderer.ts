@@ -1158,6 +1158,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       }
     } else {
       this.computedLang = diff.lang ?? getFiletypeFromFileName(diff.name);
+      this.highlighter ??= getHighlighterIfLoaded();
       const hasThemes =
         this.highlighter != null && areThemesAttached(options.theme);
       const hasLangs =

@@ -25,6 +25,10 @@ import type {
   RetainedDiffSessionSnapshot,
 } from '../editor/types';
 import {
+  getHighlighterIfLoaded,
+  getSharedHighlighter,
+} from '../highlighter/shared_highlighter';
+import {
   type GetHoveredLineResult,
   type GetLineIndexUtility,
   InteractionManager,
@@ -52,6 +56,7 @@ import type {
   CustomPreProperties,
   DiffLineAnnotation,
   ExpansionDirections,
+  DiffsHighlighter,
   FileContents,
   FileDiffMetadata,
   HighlightedToken,
@@ -106,6 +111,7 @@ import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
 import { getHunkSideStartBoundary } from '../utils/getHunkSideBoundaries';
 import { getLineAnnotationName } from '../utils/getLineAnnotationName';
 import { getOrCreateCodeNode } from '../utils/getOrCreateCodeNode';
+import { getThemes } from '../utils/getThemes';
 import { guardWebKitScrollDuringRebuild } from '../utils/guardWebKitScrollDuringRebuild';
 import { upsertHostThemeStyle } from '../utils/hostTheme';
 import { hydratePartialDiff } from '../utils/hydratePartialDiff';
@@ -465,6 +471,14 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     this.rerender();
   };
 
+  private getTheme() {
+    return (
+      this.workerManager?.getDiffRenderOptions().theme ??
+      this.options.theme ??
+      DEFAULT_THEMES
+    );
+  }
+
   protected getHunksRendererOptions(
     options: FileDiffOptions<LAnnotation, Caret>
   ): DiffHunksRendererOptions {
@@ -650,10 +664,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
   private hasThemeChanged(): boolean {
     return (
       this.appliedThemeCSS != null &&
-      !areThemesEqual(
-        this.appliedThemeCSS.theme,
-        this.options.theme ?? DEFAULT_THEMES
-      )
+      !areThemesEqual(this.appliedThemeCSS.theme, this.getTheme())
     );
   }
 
@@ -1714,7 +1725,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     ) {
       return;
     }
-    void this.hunksRenderer.initializeHighlighter().then((highlighter) => {
+    const sync = (highlighter: DiffsHighlighter): void => {
       if (
         !this.enabled ||
         this.editor !== editor ||
@@ -1741,7 +1752,21 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
         externalDocument,
         resetHistory,
       });
-    });
+    };
+    const theme = this.getTheme();
+    const lang = fileDiff.lang ?? getFiletypeFromFileName(fileDiff.name);
+    const highlighter = getHighlighterIfLoaded({ theme, lang });
+    if (highlighter != null) {
+      sync(highlighter);
+    } else {
+      void getSharedHighlighter({
+        themes: getThemes(theme),
+        langs: ['text', lang],
+        preferredHighlighter:
+          this.workerManager?.getPreferredHighlighter() ??
+          this.options.preferredHighlighter,
+      }).then(sync);
+    }
   }
 
   // The stored render range is in rendered-row units for the windowed AST
@@ -2895,7 +2920,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     const shadowRoot =
       container.shadowRoot ?? container.attachShadow({ mode: 'open' });
     const effectiveThemeType = baseThemeType ?? themeType;
-    const currentTheme = this.options.theme ?? DEFAULT_THEMES;
+    const currentTheme = this.getTheme();
     const theme =
       typeof currentTheme === 'string' ? currentTheme : { ...currentTheme };
     const scrollbarGutter = getMeasuredScrollbarGutter(shadowRoot);
