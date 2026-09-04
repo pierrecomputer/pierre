@@ -194,17 +194,6 @@ async function createHost(
     { editPrediction: { provider: createGhostProvider() } }
   );
 
-  // Let the component finish its first paint (a cold highlighter completes it
-  // asynchronously) before the editor takes over rendering.
-  const waitForCode = () =>
-    waitFor(
-      () =>
-        fileContainer.shadowRoot?.querySelector(
-          '[data-code]:not([data-deletions])'
-        ) instanceof HTMLElement,
-      { timeout: 3_000 }
-    );
-
   let host: Omit<LayoutHost, 'editor' | 'content' | 'reconcileRequests'>;
   if (surface === 'File') {
     const file: FileContents = { name: FILE_NAME, contents };
@@ -213,7 +202,6 @@ async function createHost(
       virtualizer
     );
     instance.render({ file, fileContainer, forceRender: true });
-    await waitForCode();
     editor.edit(instance);
     host = {
       instance,
@@ -254,7 +242,6 @@ async function createHost(
       virtualizer
     );
     instance.render({ fileDiff, fileContainer, forceRender: true });
-    await waitForCode();
     editor.edit(instance);
     host = {
       instance,

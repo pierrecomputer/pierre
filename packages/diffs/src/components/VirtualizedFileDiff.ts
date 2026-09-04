@@ -1402,10 +1402,8 @@ export class VirtualizedFileDiff<
     } = (() => {
       if (
         this.pendingRender != null &&
-        areDiffTargetsEqual(
-          this.pendingRender.latestDiff,
-          this.getLatestDiff(nextFileDiff) ?? nextFileDiff
-        )
+        this.pendingRender.latestDiff ===
+          (this.getLatestDiff(nextFileDiff) ?? nextFileDiff)
       ) {
         return {
           pendingRenderDiff: this.pendingRender.diff,

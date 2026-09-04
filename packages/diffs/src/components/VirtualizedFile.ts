@@ -847,10 +847,7 @@ export class VirtualizedFile<
     } = (() => {
       if (
         this.pendingRender != null &&
-        areFileTargetsEqual(
-          this.pendingRender.latestFile,
-          this.getLatestFile(file) ?? file
-        )
+        this.pendingRender.latestFile === (this.getLatestFile(file) ?? file)
       ) {
         return {
           pendingRenderFile: this.pendingRender.file,
