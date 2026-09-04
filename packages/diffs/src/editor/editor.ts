@@ -16,10 +16,7 @@ import type {
   RenderRange,
   SelectionSide,
 } from '../types';
-import {
-  computeLineOffsets,
-  countLineBreaks,
-} from '../utils/computeFileOffsets';
+import { computeLineOffsets } from '../utils/computeFileOffsets';
 import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
 import { isGutterUtilityPath } from '../utils/isGutterUtilityPath';
 import { cloneRetainedDiffSessionSnapshot } from './cloneRetainedDiffSessionSnapshot';
@@ -1555,7 +1552,6 @@ export class Editor<
     }
 
     if (this.#contentElement !== contentEl) {
-      this.#contentElement?.style.removeProperty('padding-block-end');
       this.#gutterElement = gutterEl;
       this.#contentElement = extend(contentEl, {
         contentEditable: 'true',
@@ -4684,7 +4680,6 @@ export class Editor<
   }
 
   #removeRenderedEditPrediction(): void {
-    this.#contentElement?.style.removeProperty('padding-block-end');
     for (const [key, element] of this.#overlayElements ?? []) {
       if (key.startsWith('editPrediction')) {
         element.remove();
@@ -4787,6 +4782,104 @@ export class Editor<
     return { groups, allVisible };
   }
 
+  // Give a ghost text element one block per predicted line. The first line
+  // continues from the caret, so it is indented to the caret's x. When lines
+  // wrap, the element spans the rest of the column so its lines break where
+  // document text would; otherwise it grows to fit its content.
+  #fillGhostTextElement(
+    element: HTMLElement,
+    newText: string,
+    anchorLeft: number,
+    lineLeft: number,
+    insertionSuffix: Node | undefined
+  ): void {
+    if (this.#isWrap) {
+      element.dataset.wrap = '';
+      element.style.width = `calc(100cqw - ${lineLeft}px)`;
+    } else {
+      delete element.dataset.wrap;
+      element.style.width = 'max-content';
+    }
+    const lines = newText.split(/\r\n|\r|\n/);
+    for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+      const lineText = lines[lineIndex];
+      const suffix =
+        lineIndex === lines.length - 1 ? insertionSuffix : undefined;
+      const isEmpty = lineText.length === 0 && suffix === undefined;
+      const line = h(
+        'span',
+        {
+          dataset: isEmpty
+            ? ['editPredictionLine', 'empty']
+            : 'editPredictionLine',
+          textContent: isEmpty ? '\u200b' : lineText,
+        },
+        element
+      );
+      if (suffix !== undefined) {
+        const suffixElement = h(
+          'span',
+          {
+            dataset: 'editPredictionSuffix',
+          },
+          line
+        );
+        suffixElement.append(suffix);
+      }
+      // Indent only the first visual line to the caret; when the line wraps,
+      // its continuation rows start at the column's left edge like document
+      // text does. Padding would indent every row of the block.
+      if (lineIndex === 0 && anchorLeft !== lineLeft) {
+        line.style.textIndent = `${anchorLeft - lineLeft}px`;
+      }
+    }
+  }
+
+  // How many rows of ghost text extend below the anchor row. The ghost's first
+  // visual line sits on the caret's visual line and the rest run down over the
+  // anchor row's remaining visual lines before spilling below it. Without
+  // wrapping every predicted line is one row. With wrapping only the browser
+  // knows where the lines break, so the ghost element is laid out hidden in the
+  // overlay and measured; an element that cannot be measured counts as
+  // unwrapped, the same fallback #wrapLineText uses.
+  #measureGhostTextRows(edit: TextEdit): number {
+    const { start } = edit.range;
+    const [anchorLeft, anchorWrapLine] = this.#getCharX(
+      start.line,
+      start.character
+    );
+    let anchorVisualLines = 1;
+    let ghostVisualLines = edit.newText.split(/\r\n|\r|\n/).length;
+    const overlayElement = this.#overlayElement;
+    if (this.#isWrap && overlayElement != null) {
+      anchorVisualLines = Math.max(
+        1,
+        this.#wrapLineTextOrWholeLine(start.line).length - 1
+      );
+      const probe = h(
+        'span',
+        { dataset: 'editPrediction', style: { visibility: 'hidden' } },
+        overlayElement
+      );
+      this.#fillGhostTextElement(
+        probe,
+        edit.newText,
+        anchorLeft,
+        this.#getCharX(start.line, 0)[0],
+        undefined
+      );
+      const { width, height } = probe.getBoundingClientRect();
+      probe.remove();
+      const { lineHeight } = this.#metrics;
+      // A zero-width column (mid re-render) would wrap every character; treat
+      // that, like a zero height, as unmeasurable.
+      if (width > 0 && height > 0 && lineHeight > 0) {
+        ghostVisualLines = Math.round(height / lineHeight);
+      }
+    }
+    return Math.max(0, ghostVisualLines - (anchorVisualLines - anchorWrapLine));
+  }
+
   // Reserve numberless grid space for ghost continuation lines without adding
   // rows that could be mistaken for document content by the editor.
   #syncEditPredictionSpacers(notifyComponent = true): void {
@@ -4803,7 +4896,7 @@ export class Editor<
         if (edit.newText.length === 0) {
           continue;
         }
-        const count = countLineBreaks(edit.newText);
+        const count = this.#measureGhostTextRows(edit);
         if (count > (ghostTextRows.get(edit.range.start.line) ?? 0)) {
           ghostTextRows.set(edit.range.start.line, count);
         }
@@ -4943,7 +5036,6 @@ export class Editor<
     this.#editPredictionRevealed = false;
     this.#retryEditPredictionOnRender = false;
     this.#editPrediction = undefined;
-    this.#contentElement?.style.removeProperty('padding-block-end');
     this.#syncEditPredictionSpacers(notifyComponent);
     if (removeRendered) {
       this.#removeRenderedEditPrediction();
@@ -5296,7 +5388,6 @@ export class Editor<
   }): void {
     const prediction = this.#editPrediction;
     const textDocument = this.#editSession?.document;
-    this.#contentElement?.style.removeProperty('padding-block-end');
     if (prediction !== undefined) {
       prediction.rendered = false;
     }
@@ -5371,14 +5462,6 @@ export class Editor<
         delete element.dataset.replacement;
         element.style.removeProperty('--diffs-edit-prediction-bg');
       }
-      if (isWrap) {
-        element.dataset.wrap = '';
-        element.style.width = `calc(100cqw - ${lineLeft}px)`;
-      } else {
-        delete element.dataset.wrap;
-        element.style.width = 'max-content';
-      }
-      const lines = edit.newText.split(/\r\n|\r|\n/);
       // Redraw the suffix only when other edits or wrapping cannot relocate it.
       let insertionSuffix: Node | undefined;
       if (
@@ -5410,35 +5493,13 @@ export class Editor<
           }
         }
       }
-      for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
-        const lineText = lines[lineIndex];
-        const suffix =
-          lineIndex === lines.length - 1 ? insertionSuffix : undefined;
-        const isEmpty = lineText.length === 0 && suffix === undefined;
-        const line = h(
-          'span',
-          {
-            dataset: isEmpty
-              ? ['editPredictionLine', 'empty']
-              : 'editPredictionLine',
-            textContent: isEmpty ? '\u200b' : lineText,
-          },
-          element
-        );
-        if (suffix !== undefined) {
-          const suffixElement = h(
-            'span',
-            {
-              dataset: 'editPredictionSuffix',
-            },
-            line
-          );
-          suffixElement.append(suffix);
-        }
-        if (lineIndex === 0 && anchorLeft !== lineLeft) {
-          line.style.paddingInlineStart = `${anchorLeft - lineLeft}px`;
-        }
-      }
+      this.#fillGhostTextElement(
+        element,
+        edit.newText,
+        anchorLeft,
+        lineLeft,
+        insertionSuffix
+      );
       element.style.transform = `translateX(${lineLeft}px) translateY(${anchorTop}px)`;
       renderCtx.elements.set(key, element);
     }
@@ -5627,32 +5688,6 @@ export class Editor<
     this.#overlayElements?.forEach((el) => el.remove());
     this.#overlayElements?.clear();
     this.#overlayElements = renderCtx.elements;
-    let predictionBottom: number | undefined;
-    for (const element of renderCtx.elements.values()) {
-      if (element.dataset.editPrediction !== undefined) {
-        const bottom = element.getBoundingClientRect().bottom;
-        predictionBottom =
-          predictionBottom === undefined
-            ? bottom
-            : Math.max(predictionBottom, bottom);
-      }
-    }
-    const contentElement =
-      predictionBottom === undefined ? undefined : this.#contentElement;
-    const codeElement = contentElement?.parentElement;
-    if (
-      predictionBottom !== undefined &&
-      contentElement !== undefined &&
-      codeElement != null
-    ) {
-      const codeRect = codeElement.getBoundingClientRect();
-      if (codeRect.height > 0 && predictionBottom > codeRect.bottom) {
-        contentElement.style.paddingBlockEnd = `${Math.ceil(
-          predictionBottom - codeRect.bottom
-        )}px`;
-      }
-    }
-
     this.#updateSelectionActionPopover();
     if (selectionsChanged) {
       this.#scheduleEditPrediction();

@@ -74,6 +74,7 @@ async function createPredictionFixture({
   editorOptions,
   name = FILE_NAME,
   oldContents,
+  overflow,
   renderRange,
   surface = 'File',
 }: {
@@ -83,6 +84,7 @@ async function createPredictionFixture({
   // FileDiff only: the old side. Defaults to `contents` with every "value"
   // replaced, so each such line becomes a two-sided change.
   oldContents?: string;
+  overflow?: 'scroll' | 'wrap';
   renderRange?: RenderRange;
   surface?: Surface;
 }): Promise<PredictionFixture> {
@@ -99,6 +101,7 @@ async function createPredictionFixture({
   if (surface === 'File') {
     const file = new File<undefined>({
       disableFileHeader: true,
+      overflow,
       theme: DEFAULT_THEMES,
     });
     file.render({
@@ -126,6 +129,7 @@ async function createPredictionFixture({
     const fileDiff = new FileDiff<undefined>({
       disableFileHeader: true,
       diffStyle: 'split',
+      overflow,
       theme: DEFAULT_THEMES,
     });
     fileDiff.render({
@@ -1302,7 +1306,9 @@ describe('Editor edit prediction', () => {
     }
   });
 
-  test('reserves and clears space for a multiline FileDiff prediction at EOF', async () => {
+  test('sizes wrap-mode ghost rows from the measured ghost text', async () => {
+    // One predicted line with no line breaks that wraps onto three visual
+    // lines: the first shares the anchor row, so two rows are reserved.
     const provider: EditPredictProvider = {
       predict() {
         return Promise.resolve({
@@ -1312,39 +1318,27 @@ describe('Editor edit prediction', () => {
                 start: { line: 0, character: 5 },
                 end: { line: 0, character: 5 },
               },
-              newText: '\nnext',
+              newText: ' + aVeryLongPredictedExpressionThatWraps()',
             },
           ],
-          newCursor: { line: 1, character: 4 },
+          newCursor: { line: 0, character: 47 },
         });
       },
     };
     const fixture = await createPredictionFixture({
       contents: 'value',
       editorOptions: { editPrediction: { provider } },
-      surface: 'FileDiff',
+      overflow: 'wrap',
     });
     const elementPrototype =
       fixture.content.ownerDocument.defaultView!.HTMLElement.prototype;
     const getBoundingClientRect = elementPrototype.getBoundingClientRect;
+    // jsdom does no layout; report three line heights for the ghost element.
     elementPrototype.getBoundingClientRect = function () {
-      if (this.dataset.code !== undefined) {
-        return {
-          bottom: 20,
-          height: 20,
-          left: 0,
-          right: 100,
-          top: 0,
-          width: 100,
-          x: 0,
-          y: 0,
-          toJSON() {},
-        };
-      }
       if (this.dataset.editPrediction !== undefined) {
         return {
-          bottom: 40,
-          height: 40,
+          bottom: 60,
+          height: 60,
           left: 0,
           right: 100,
           top: 0,
@@ -1362,11 +1356,13 @@ describe('Editor edit prediction', () => {
       await waitFor(() => predictionElements(fixture.container).length > 0, {
         timeout: PREDICT_TIMEOUT,
       });
-
-      expect(fixture.content.style.paddingBlockEnd).toBe('20px');
-
-      dispatchKey(fixture.content, 'ArrowLeft');
-      expect(fixture.content.style.paddingBlockEnd).toBe('');
+      expect(
+        fixture.content
+          .querySelector<HTMLElement>('[data-line="1"]')
+          ?.style.getPropertyValue('--diffs-edit-prediction-spacer-height')
+      ).toBe('2lh');
+      // The measuring probe never stays in the overlay.
+      expect(predictionElements(fixture.container)).toHaveLength(1);
     } finally {
       elementPrototype.getBoundingClientRect = getBoundingClientRect;
       await fixture.cleanup();
