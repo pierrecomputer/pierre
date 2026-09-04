@@ -2,6 +2,7 @@ import LRUMapPkg from 'lru_map';
 import type { LRUMap } from 'lru_map';
 
 import { DEFAULT_THEMES } from '../constants';
+import { areLanguagesAttached } from '../highlighter/languages/areLanguagesAttached';
 import { getResolvedLanguages } from '../highlighter/languages/getResolvedLanguages';
 import { hasResolvedLanguages } from '../highlighter/languages/hasResolvedLanguages';
 import { resolveLanguages } from '../highlighter/languages/resolveLanguages';
@@ -983,6 +984,18 @@ export class WorkerPoolManager {
     langs: SupportedLanguages[]
   ): Promise<void> {
     try {
+      // Lets keep the main thread highlighter in sync with loaded themes so
+      // edits can be more seamless
+      const mainThreadLangs = langs.filter(
+        (lang) => !areLanguagesAttached(lang)
+      );
+      if (mainThreadLangs.length > 0) {
+        void getSharedHighlighter({
+          themes: getThemes(this.renderOptions.theme),
+          langs: ['text', ...mainThreadLangs],
+          preferredHighlighter: this.preferredHighlighter,
+        });
+      }
       // Add resolved languages if required
       const workerMissingLangs = langs.filter(
         (lang) => !availableWorker.langs.has(lang)
