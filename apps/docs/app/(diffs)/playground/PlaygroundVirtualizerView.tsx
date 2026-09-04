@@ -9,6 +9,7 @@ import {
   Virtualizer,
 } from '@pierre/diffs';
 import { Editor } from '@pierre/diffs/edit';
+import type { EditorOptions, EditorType } from '@pierre/diffs/edit';
 import { useWorkerPool } from '@pierre/diffs/react';
 import { useEffect, useRef } from 'react';
 import { flushSync } from 'react-dom';
@@ -25,6 +26,9 @@ interface PlaygroundVirtualizerViewProps {
   enableLineSelection: boolean;
   enableGutterComments: boolean;
   showAnnotations: boolean;
+  editPrediction: NonNullable<
+    EditorOptions<EditorType, undefined, undefined>['editPrediction']
+  >;
 }
 
 const VIRTUALIZER_CUSTOM_CSS = `${ITEM_UNSAFE_CSS}
@@ -82,6 +86,7 @@ export function PlaygroundVirtualizerView({
   enableLineSelection,
   enableGutterComments,
   showAnnotations,
+  editPrediction,
 }: PlaygroundVirtualizerViewProps) {
   const pool = useWorkerPool();
   const contentRef = useRef<HTMLDivElement>(null);
@@ -137,6 +142,7 @@ export function PlaygroundVirtualizerView({
     const readmeEditor = new Editor<'file', VirtualizerAnnotationMetadata>(
       'file',
       {
+        editPrediction,
         onAttach(attachedEditor) {
           attachedEditor.focus({
             lineNumber: 'first-visible',
@@ -285,6 +291,7 @@ export function PlaygroundVirtualizerView({
       const editor = new Editor<'file-diff', VirtualizerAnnotationMetadata>(
         'file-diff',
         {
+          editPrediction,
           onAttach(attachedEditor) {
             attachedEditor.focus({
               lineNumber: 'first-visible',
@@ -463,7 +470,7 @@ export function PlaygroundVirtualizerView({
     // Option changes are applied imperatively in the effect below rather than by
     // rebuilding the whole virtualizer.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [diffs, pool]);
+  }, [diffs, editPrediction, pool]);
 
   // Apply live option changes to the existing instances. Spreading over
   // `instance.options` preserves each file's per-instance callbacks (edit
