@@ -44,6 +44,9 @@ interface PredictionFixture {
     name?: string;
     oldContents?: string;
   }): void;
+  // File only: re-render the same contents with a new virtualized window, the
+  // way a scrolling host does. Throws on FileDiff, which has no window here.
+  setRenderRange(renderRange: RenderRange): void;
 }
 
 interface Deferred<T> {
@@ -71,6 +74,7 @@ function findEditableContent(container: HTMLElement): HTMLElement | undefined {
 
 async function createPredictionFixture({
   contents,
+  diffStyle = 'split',
   editorOptions,
   name = FILE_NAME,
   oldContents,
@@ -79,6 +83,8 @@ async function createPredictionFixture({
   surface = 'File',
 }: {
   contents: string;
+  // FileDiff only.
+  diffStyle?: 'split' | 'unified';
   editorOptions: EditorOptions<EditorType, undefined, undefined>;
   name?: string;
   // FileDiff only: the old side. Defaults to `contents` with every "value"
@@ -97,8 +103,10 @@ async function createPredictionFixture({
   );
   let cleanUpSurface: () => void;
   let replaceExternalDocument: PredictionFixture['replaceExternalDocument'];
+  let setRenderRange: PredictionFixture['setRenderRange'];
 
   if (surface === 'File') {
+    let activeRenderRange = renderRange;
     const file = new File<undefined>({
       disableFileHeader: true,
       overflow,
@@ -108,7 +116,7 @@ async function createPredictionFixture({
       file: { name, contents },
       fileContainer: container,
       forceRender: true,
-      renderRange,
+      renderRange: activeRenderRange,
     });
     editor.edit(file);
     cleanUpSurface = () => file.cleanUp();
@@ -120,7 +128,16 @@ async function createPredictionFixture({
         },
         fileContainer: container,
         forceRender: true,
-        renderRange,
+        renderRange: activeRenderRange,
+      });
+    };
+    setRenderRange = (nextRenderRange) => {
+      activeRenderRange = nextRenderRange;
+      file.render({
+        file: { name, contents },
+        fileContainer: container,
+        forceRender: true,
+        renderRange: activeRenderRange,
       });
     };
   } else {
@@ -128,7 +145,7 @@ async function createPredictionFixture({
       oldContents ?? contents.replaceAll('value', 'previous');
     const fileDiff = new FileDiff<undefined>({
       disableFileHeader: true,
-      diffStyle: 'split',
+      diffStyle,
       overflow,
       theme: DEFAULT_THEMES,
     });
@@ -155,6 +172,9 @@ async function createPredictionFixture({
         forceRender: true,
       });
     };
+    setRenderRange = () => {
+      throw new Error('setRenderRange is only available on the File surface');
+    };
   }
 
   await waitFor(() => findEditableContent(container) !== undefined, {
@@ -176,6 +196,7 @@ async function createPredictionFixture({
     content,
     editor,
     replaceExternalDocument,
+    setRenderRange,
   };
 }
 
@@ -244,6 +265,112 @@ function hasVisiblePrediction(container: HTMLElement): boolean {
       style.visibility !== 'hidden'
     );
   });
+}
+
+// jsdom's canvas stub measures every character at 8px (domHarness) and the
+// editor's Metrics keeps its 20px default line height without layout.
+const CH = 8;
+const LINE_HEIGHT = 20;
+
+function domRect(
+  left: number,
+  top: number,
+  width: number,
+  height: number
+): DOMRect {
+  return {
+    bottom: top + height,
+    height,
+    left,
+    right: left + width,
+    top,
+    width,
+    x: left,
+    y: top,
+    toJSON() {
+      return {};
+    },
+  };
+}
+
+// jsdom performs no layout. #wrapLineText finds visual row starts by watching a
+// Range's top move downward, so report a new top every `columns` UTF-16 offsets
+// and give elements a non-zero rect so measurement is attempted at all. The
+// hidden ghost text probe (`[data-edit-prediction]`) reports `ghostHeight`
+// instead, which #measureGhostTextRows divides by the line height.
+function installWrapMeasurement(
+  view: Window & typeof globalThis,
+  columns: number,
+  ghostHeight: number
+): () => void {
+  const rangePrototype: object = Object.getPrototypeOf(
+    view.document.createRange()
+  );
+  const elementPrototype = view.HTMLElement.prototype;
+  const originals: Array<[object, string, PropertyDescriptor | undefined]> = [
+    [
+      rangePrototype,
+      'getBoundingClientRect',
+      Object.getOwnPropertyDescriptor(rangePrototype, 'getBoundingClientRect'),
+    ],
+    [
+      rangePrototype,
+      'getClientRects',
+      Object.getOwnPropertyDescriptor(rangePrototype, 'getClientRects'),
+    ],
+    [
+      elementPrototype,
+      'getBoundingClientRect',
+      Object.getOwnPropertyDescriptor(
+        elementPrototype,
+        'getBoundingClientRect'
+      ),
+    ],
+  ];
+  const rangeRect = (range: Range): DOMRect =>
+    domRect(
+      (range.startOffset % columns) * CH,
+      Math.floor(range.startOffset / columns) * LINE_HEIGHT,
+      CH,
+      LINE_HEIGHT
+    );
+  Object.defineProperty(rangePrototype, 'getBoundingClientRect', {
+    configurable: true,
+    value(this: Range): DOMRect {
+      return rangeRect(this);
+    },
+  });
+  Object.defineProperty(rangePrototype, 'getClientRects', {
+    configurable: true,
+    value(this: Range) {
+      const rects = [rangeRect(this)];
+      return Object.assign(rects, {
+        item(index: number): DOMRect | null {
+          return rects[index] ?? null;
+        },
+      });
+    },
+  });
+  Object.defineProperty(elementPrototype, 'getBoundingClientRect', {
+    configurable: true,
+    value(this: HTMLElement): DOMRect {
+      return domRect(
+        0,
+        0,
+        columns * CH,
+        this.dataset.editPrediction === undefined ? LINE_HEIGHT : ghostHeight
+      );
+    },
+  });
+  return () => {
+    for (const [prototype, property, descriptor] of originals) {
+      if (descriptor === undefined) {
+        Reflect.deleteProperty(prototype, property);
+      } else {
+        Object.defineProperty(prototype, property, descriptor);
+      }
+    }
+  };
 }
 
 async function expectCallCount(
@@ -978,6 +1105,174 @@ describe('Editor edit prediction', () => {
     });
   }
 
+  // A deleted empty line, a deleted line break, or a replacement ending on an
+  // empty line strikes through no text. The prediction still counts as drawn,
+  // so Tab accepts it instead of indenting.
+  for (const { diffStyle, label, surface } of [
+    { label: 'File', surface: 'File' },
+    { diffStyle: 'split', label: 'split FileDiff', surface: 'FileDiff' },
+    { diffStyle: 'unified', label: 'unified FileDiff', surface: 'FileDiff' },
+  ] as const) {
+    test(`${label} accepts a prediction that deletes an empty line`, async () => {
+      const calls: PredictionCall[] = [];
+      const provider: EditPredictProvider = {
+        predict(request, context) {
+          calls.push({ context, request });
+          return Promise.resolve({
+            edits: [
+              {
+                range: {
+                  start: { line: 0, character: 3 },
+                  end: { line: 0, character: 3 },
+                },
+                newText: ' // done',
+              },
+              {
+                range: {
+                  start: { line: 1, character: 0 },
+                  end: { line: 2, character: 0 },
+                },
+                newText: '',
+              },
+            ],
+            newCursor: { line: 0, character: 11 },
+          });
+        },
+      };
+      const fixture = await createPredictionFixture({
+        contents: 'foo\n\nbar\nbaz',
+        diffStyle,
+        editorOptions: { editPrediction: { provider } },
+        oldContents: 'foo\n\nbar\nbase',
+        surface,
+      });
+
+      try {
+        setCaret(fixture.editor, 0, 3);
+        await expectCallCount(calls, 1);
+        await waitFor(() => predictionElements(fixture.container).length > 0, {
+          timeout: PREDICT_TIMEOUT,
+        });
+        expect(predictionElements(fixture.container)).toHaveLength(1);
+        // One mark on the deleted empty line; none on the line that survives
+        // after the range's end at column 0.
+        expect(
+          fixture.container.shadowRoot?.querySelectorAll(
+            '[data-edit-prediction-deletion-range]'
+          )
+        ).toHaveLength(1);
+
+        const tab = dispatchKey(fixture.content, 'Tab');
+        expect(tab.defaultPrevented).toBe(true);
+        expect(fixture.editor.getText()).toBe('foo // done\nbar\nbaz');
+      } finally {
+        await fixture.cleanup();
+      }
+    });
+
+    test(`${label} accepts a replacement that ends on an empty line`, async () => {
+      const calls: PredictionCall[] = [];
+      const provider: EditPredictProvider = {
+        predict(request, context) {
+          calls.push({ context, request });
+          return Promise.resolve({
+            edits: [
+              {
+                range: {
+                  start: { line: 0, character: 3 },
+                  end: { line: 1, character: 0 },
+                },
+                newText: ' // note',
+              },
+            ],
+            newCursor: { line: 0, character: 11 },
+          });
+        },
+      };
+      const fixture = await createPredictionFixture({
+        contents: 'foo\n\nbar',
+        diffStyle,
+        editorOptions: { editPrediction: { provider } },
+        oldContents: 'foo\n\nbase',
+        surface,
+      });
+
+      try {
+        setCaret(fixture.editor, 0, 3);
+        await expectCallCount(calls, 1);
+        await waitFor(() => predictionElements(fixture.container).length > 0, {
+          timeout: PREDICT_TIMEOUT,
+        });
+        expect(
+          predictionElements(fixture.container)[0]?.dataset.replacement
+        ).toBe('');
+
+        const tab = dispatchKey(fixture.content, 'Tab');
+        expect(tab.defaultPrevented).toBe(true);
+        expect(fixture.editor.getText()).toBe('foo // note\nbar');
+      } finally {
+        await fixture.cleanup();
+      }
+    });
+  }
+
+  test('a whole-line deletion strikes only the deleted line', async () => {
+    const calls: PredictionCall[] = [];
+    const provider: EditPredictProvider = {
+      predict(request, context) {
+        calls.push({ context, request });
+        return Promise.resolve({
+          edits: [
+            {
+              range: {
+                start: { line: 0, character: 3 },
+                end: { line: 0, character: 3 },
+              },
+              newText: ' // done',
+            },
+            {
+              range: {
+                start: { line: 1, character: 0 },
+                end: { line: 2, character: 0 },
+              },
+              newText: '',
+            },
+          ],
+          newCursor: { line: 0, character: 11 },
+        });
+      },
+    };
+    const fixture = await createPredictionFixture({
+      contents: 'foo\nbar\nbaz',
+      editorOptions: { editPrediction: { provider } },
+      surface: 'File',
+    });
+
+    try {
+      setCaret(fixture.editor, 0, 3);
+      await expectCallCount(calls, 1);
+      await waitFor(() => predictionElements(fixture.container).length > 0, {
+        timeout: PREDICT_TIMEOUT,
+      });
+      // The range {1,0}->{2,0} removes "bar" and its line break. Only "bar"
+      // is struck through; column 0 of "baz", where the range ends, gets no
+      // one-character mark.
+      const strikes = Array.from(
+        fixture.container.shadowRoot?.querySelectorAll<HTMLElement>(
+          '[data-edit-prediction-deletion-range]'
+        ) ?? []
+      );
+      expect(strikes).toHaveLength(1);
+      expect(parseFloat(strikes[0]?.style.width ?? '0')).toBeGreaterThan(0);
+
+      const tab = dispatchKey(fixture.content, 'Tab');
+      expect(tab.defaultPrevented).toBe(true);
+      expect(fixture.editor.getText()).toBe('foo // done\nbaz');
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
   test('does not accept a response when a virtualized edit is not previewed', async () => {
     const contents = Array.from(
       { length: 100 },
@@ -1125,6 +1420,187 @@ describe('Editor edit prediction', () => {
       setCaret(fixture.editor, 50, 0);
       await wait(PREDICT_TIMEOUT);
       expect(calls).toHaveLength(0);
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  // A ten-line window over a hundred-line File with one prediction whose two
+  // ghost lines sit on lines 0 and 5, both inside the window.
+  async function createWindowedPredictionFixture(): Promise<{
+    calls: PredictionCall[];
+    contents: string;
+    fixture: PredictionFixture;
+    spacerHeights(): Array<[line: string | undefined, height: string]>;
+  }> {
+    const contents = Array.from(
+      { length: 100 },
+      (_, index) => `line ${index + 1}`
+    ).join('\n');
+    const calls: PredictionCall[] = [];
+    const provider: EditPredictProvider = {
+      predict(request, context) {
+        calls.push({ context, request });
+        return Promise.resolve({
+          edits: [
+            {
+              range: {
+                start: { line: 0, character: 6 },
+                end: { line: 0, character: 6 },
+              },
+              newText: '\nghost();',
+            },
+            {
+              range: {
+                start: { line: 5, character: 6 },
+                end: { line: 5, character: 6 },
+              },
+              newText: '\nghost();',
+            },
+          ],
+          newCursor: { line: 1, character: 8 },
+        });
+      },
+    };
+    const fixture = await createPredictionFixture({
+      contents,
+      editorOptions: { editPrediction: { provider } },
+      renderRange: {
+        startingLine: 0,
+        totalLines: 10,
+        bufferAfter: 0,
+        bufferBefore: 0,
+      },
+    });
+    return {
+      calls,
+      contents,
+      fixture,
+      spacerHeights: () =>
+        Array.from(
+          fixture.content.querySelectorAll<HTMLElement>(
+            '[data-edit-prediction-spacer]'
+          )
+        ).map((element) => [
+          element.dataset.line,
+          element.style.getPropertyValue(
+            '--diffs-edit-prediction-spacer-height'
+          ),
+        ]),
+    };
+  }
+
+  test('hides a prediction while the render window drops one of its rows and redraws it when the row returns', async () => {
+    const { calls, fixture, spacerHeights } =
+      await createWindowedPredictionFixture();
+
+    try {
+      setCaret(fixture.editor, 0, 0);
+      await expectCallCount(calls, 1);
+      await waitFor(() => predictionElements(fixture.container).length === 2, {
+        timeout: PREDICT_TIMEOUT,
+      });
+      expect(spacerHeights()).toEqual([
+        ['1', '1lh'],
+        ['6', '1lh'],
+      ]);
+
+      // Line 5 leaves the window: nothing is drawn, not even the visible
+      // group, and no rows stay reserved.
+      fixture.setRenderRange({
+        startingLine: 0,
+        totalLines: 3,
+        bufferAfter: 0,
+        bufferBefore: 0,
+      });
+      await waitFor(() => predictionElements(fixture.container).length === 0, {
+        timeout: PREDICT_TIMEOUT,
+      });
+      expect(predictionElements(fixture.container)).toHaveLength(0);
+      expect(
+        fixture.container.shadowRoot?.querySelectorAll(
+          '[data-edit-prediction-spacer]'
+        )
+      ).toHaveLength(0);
+
+      // The stored prediction is redrawn from the same response once its rows
+      // exist again, without asking the provider a second time.
+      fixture.setRenderRange({
+        startingLine: 0,
+        totalLines: 10,
+        bufferAfter: 0,
+        bufferBefore: 0,
+      });
+      await waitFor(() => predictionElements(fixture.container).length === 2, {
+        timeout: PREDICT_TIMEOUT,
+      });
+      expect(spacerHeights()).toEqual([
+        ['1', '1lh'],
+        ['6', '1lh'],
+      ]);
+
+      const tab = dispatchKey(fixture.content, 'Tab');
+      expect(tab.defaultPrevented).toBe(true);
+      expect(
+        fixture.editor
+          .getText()
+          .startsWith(
+            'line 1\nghost();\nline 2\nline 3\nline 4\nline 5\nline 6\nghost();\nline 7\n'
+          )
+      ).toBe(true);
+      expect(calls).toHaveLength(1);
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  test('Escape discards a prediction hidden by the render window', async () => {
+    const { calls, contents, fixture } =
+      await createWindowedPredictionFixture();
+
+    try {
+      setCaret(fixture.editor, 0, 0);
+      await expectCallCount(calls, 1);
+      await waitFor(() => predictionElements(fixture.container).length === 2, {
+        timeout: PREDICT_TIMEOUT,
+      });
+
+      fixture.setRenderRange({
+        startingLine: 0,
+        totalLines: 3,
+        bufferAfter: 0,
+        bufferBefore: 0,
+      });
+      await waitFor(() => predictionElements(fixture.container).length === 0, {
+        timeout: PREDICT_TIMEOUT,
+      });
+
+      // Nothing is drawn, but the prediction is still stored, so Escape
+      // belongs to it.
+      const escape = dispatchKey(fixture.content, 'Escape');
+      expect(escape.defaultPrevented).toBe(true);
+      expect(fixture.editor.getText()).toBe(contents);
+
+      fixture.setRenderRange({
+        startingLine: 0,
+        totalLines: 10,
+        bufferAfter: 0,
+        bufferBefore: 0,
+      });
+      await waitFor(
+        () =>
+          fixture.content.querySelectorAll(':scope > [data-line]').length ===
+          10,
+        { timeout: PREDICT_TIMEOUT }
+      );
+      await wait(0);
+      expect(predictionElements(fixture.container)).toHaveLength(0);
+      expect(
+        fixture.container.shadowRoot?.querySelectorAll(
+          '[data-edit-prediction-spacer]'
+        )
+      ).toHaveLength(0);
+      expect(calls).toHaveLength(1);
     } finally {
       await fixture.cleanup();
     }
@@ -1426,6 +1902,62 @@ describe('Editor edit prediction', () => {
       await fixture.cleanup();
     }
   });
+
+  test.each([
+    { anchorCharacter: 5, expectedRows: '1lh', visualLine: 'first' },
+    { anchorCharacter: 12, expectedRows: '2lh', visualLine: 'second' },
+  ])(
+    'wrap mode subtracts the anchor rows below the caret on its $visualLine visual line',
+    async ({ anchorCharacter, expectedRows }) => {
+      // The anchor line wraps at ten columns onto two visual lines; the ghost
+      // text measures three. Reserved rows = 3 - (2 - caret visual line).
+      const provider: EditPredictProvider = {
+        predict() {
+          return Promise.resolve({
+            edits: [
+              {
+                range: {
+                  start: { line: 0, character: anchorCharacter },
+                  end: { line: 0, character: anchorCharacter },
+                },
+                newText: ' + predictedExpression()',
+              },
+            ],
+            newCursor: { line: 0, character: anchorCharacter + 24 },
+          });
+        },
+      };
+      const fixture = await createPredictionFixture({
+        contents: 'abcdefghijklmno\nnext',
+        editorOptions: { editPrediction: { provider } },
+        overflow: 'wrap',
+      });
+      const view = fixture.content.ownerDocument.defaultView;
+      if (view == null) {
+        throw new Error('editor content is not attached to a window');
+      }
+      const restoreMeasurement = installWrapMeasurement(
+        view,
+        10,
+        3 * LINE_HEIGHT
+      );
+
+      try {
+        setCaret(fixture.editor, 0, anchorCharacter);
+        await waitFor(() => predictionElements(fixture.container).length > 0, {
+          timeout: PREDICT_TIMEOUT,
+        });
+        expect(
+          fixture.content
+            .querySelector<HTMLElement>('[data-line="1"]')
+            ?.style.getPropertyValue('--diffs-edit-prediction-spacer-height')
+        ).toBe(expectedRows);
+      } finally {
+        restoreMeasurement();
+        await fixture.cleanup();
+      }
+    }
+  );
 
   test('typing aborts an in-flight prediction and ignores its response', async () => {
     const calls: PredictionCall[] = [];

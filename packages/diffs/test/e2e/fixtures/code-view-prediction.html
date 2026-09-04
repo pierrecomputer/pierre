@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>diffs CodeView edit-prediction fixture</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 16px;
+        font-family: system-ui, sans-serif;
+      }
+      /* A fixed-size scroll root so the two items overflow it: trailing ghost
+         rows on the last item must grow the scrollable height, and a narrow
+         column makes a long ghost line soft-wrap in wrap mode. */
+      [data-code-view-root] {
+        width: 720px;
+        height: 640px;
+        overflow: auto;
+        border: 1px solid #ccc;
+      }
+    </style>
+  </head>
+  <body>
+    <a
+      data-fixtures-index
+      href="/test/e2e/fixtures/index.html"
+      style="
+        display: inline-block;
+        margin-bottom: 16px;
+        font-family: system-ui, sans-serif;
+        font-size: 14px;
+        font-weight: 600;
+        color: #0b62d6;
+        text-decoration: none;
+      "
+      >&larr; All fixtures</a
+    >
+    <div data-code-view-root></div>
+
+    <script type="module">
+      import { CodeView, parseDiffFromFile } from '/dist/index.js';
+      import { Editor } from '/dist/edit/index.js';
+
+      const root = document.querySelector('[data-code-view-root]');
+      if (!(root instanceof HTMLElement)) {
+        throw new Error('Missing CodeView root.');
+      }
+
+      // CodeView's dev-only height invariants report through console.error
+      // with a details object whose numbers Playwright's console text
+      // truncates. Record every console.error with its primitive details so
+      // the spec can assert on (and report) exact expected/actual heights.
+      const consoleErrors = [];
+      window.__consoleErrors = consoleErrors;
+      const originalConsoleError = console.error.bind(console);
+      console.error = (...args) => {
+        const [message, details] = args;
+        const record = {
+          message: String(message),
+          ready: window.__predictionReady === true,
+          at: Math.round(performance.now()),
+          details: {},
+        };
+        if (details != null && typeof details === 'object') {
+          for (const [key, value] of Object.entries(details)) {
+            if (
+              typeof value === 'number' ||
+              typeof value === 'string' ||
+              typeof value === 'boolean'
+            ) {
+              record.details[key] = value;
+            }
+          }
+        }
+        consoleErrors.push(record);
+        originalConsoleError(...args);
+      };
+
+      // ?overflow=scroll|wrap selects the column overflow; ?diff=none|unified|split
+      // selects two edit-mode File items or two edit-mode FileDiff items.
+      const params = new URLSearchParams(location.search);
+      const overflow = params.get('overflow') === 'wrap' ? 'wrap' : 'scroll';
+      const diffParam = params.get('diff');
+      const diffStyle =
+        diffParam === 'unified' || diffParam === 'split'
+          ? diffParam
+          : undefined;
+
+      const LINE_COUNT = 16;
+      const ITEM_IDS = ['first', 'second'];
+
+      // The scripted prediction: three ghost lines inserted after the caret. In
+      // wrap mode the middle line is long enough to soft-wrap inside the column
+      // so the reserved rows exceed the line-break count.
+      const GHOST_LINES = [
+        'ghostOne();',
+        overflow === 'wrap'
+          ? `ghostTwo(${'"soft wrapping ghost text" + '.repeat(5)}"end");`
+          : 'ghostTwo();',
+        'ghostThree();',
+      ];
+
+      // Short lines keep every document row on a single visual line in both
+      // overflow modes, so only the ghost text can change a row's height.
+      function makeContents(id, transform = (line) => line) {
+        const lines = [];
+        for (let index = 1; index <= LINE_COUNT; index++) {
+          lines.push(transform(`const ${id}${index} = ${index};`, index));
+        }
+        return lines.join('\n');
+      }
+
+      function makeItem(id) {
+        if (diffStyle === undefined) {
+          return {
+            id,
+            type: 'file',
+            file: { name: `${id}.ts`, contents: makeContents(id) },
+            version: 0,
+            edit: true,
+          };
+        }
+        // Lines 4 and 12 change so the diff has two-sided rows; the rest are
+        // unchanged context (fully expanded via expandUnchanged below).
+        const oldContents = makeContents(id, (line, index) =>
+          index === 4 || index === 12 ? line.replace(';', ' - 1;') : line
+        );
+        return {
+          id,
+          type: 'diff',
+          fileDiff: parseDiffFromFile(
+            { name: `${id}.ts`, contents: oldContents },
+            { name: `${id}.ts`, contents: makeContents(id) }
+          ),
+          version: 0,
+          edit: true,
+        };
+      }
+
+      // Every prediction request is answered with the same multi-line
+      // insertion at the caret. The caret is recovered from the request's own
+      // excerpt so the response always targets the live document position.
+      const requests = [];
+      window.__predictionRequests = requests;
+      const provider = {
+        predict(request) {
+          const before = request.excerptText.slice(
+            0,
+            request.cursorOffsetInExcerpt
+          );
+          const lastBreak = before.lastIndexOf('\n');
+          const line = request.excerptStartLine + before.split('\n').length - 1;
+          const position = { line, character: before.length - lastBreak - 1 };
+          requests.push(position);
+          return Promise.resolve({
+            edits: [
+              {
+                range: { start: position, end: position },
+                newText: `\n${GHOST_LINES.join('\n')}`,
+              },
+            ],
+            newCursor: {
+              line: line + GHOST_LINES.length,
+              character: GHOST_LINES[GHOST_LINES.length - 1].length,
+            },
+          });
+        },
+      };
+
+      const codeView = new CodeView({
+        theme: { dark: 'pierre-dark', light: 'pierre-light' },
+        themeType: 'dark',
+        overflow,
+        diffStyle,
+        expandUnchanged: true,
+        __devOnlyValidateItemHeights: true,
+        createEditor(editorType, options, editStateKey) {
+          return new Editor(
+            editorType,
+            { ...options, editPrediction: { provider } },
+            editStateKey
+          );
+        },
+        onItemEditComplete() {
+          return 'accept';
+        },
+      });
+      window.__codeView = codeView;
+      codeView.setup(root);
+      codeView.setItems(ITEM_IDS.map(makeItem));
+
+      const getHost = (id) =>
+        codeView.getRenderedItems().find((item) => item.id === id)?.element;
+
+      const findEditableContent = (id) => {
+        const shadow = getHost(id)?.shadowRoot;
+        if (shadow == null) {
+          return undefined;
+        }
+        for (const content of shadow.querySelectorAll('[data-content]')) {
+          if (content.getAttribute('contenteditable') === 'true') {
+            return content;
+          }
+        }
+        return undefined;
+      };
+
+      window.__prediction = {
+        itemIds: ITEM_IDS,
+        lineCount: LINE_COUNT,
+        ghostLineCount: GHOST_LINES.length,
+        root,
+        getHost,
+        // Places a collapsed caret at the end of a zero-based document line of
+        // an item's editor and focuses it, which schedules a prediction request.
+        placeCaret(id, line) {
+          const editor = codeView.getEditor(id);
+          if (editor == null) {
+            throw new Error(`No editor for item "${id}".`);
+          }
+          const character = editor.getText().split(/\r\n|\r|\n/)[line].length;
+          const position = { line, character };
+          editor.setSelections([
+            { start: position, end: position, direction: 'none' },
+          ]);
+          editor.focus({ preventScroll: true });
+        },
+        getTopForItem: (id) => codeView.getTopForItem(id),
+      };
+
+      const waitForEditors = async () => {
+        const started = performance.now();
+        while (true) {
+          if (
+            ITEM_IDS.every(
+              (id) =>
+                codeView.getEditor(id) != null &&
+                findEditableContent(id) != null
+            )
+          ) {
+            return;
+          }
+          if (performance.now() - started > 5000) {
+            throw new Error('Timed out waiting for editable CodeView items.');
+          }
+          await new Promise((resolve) => requestAnimationFrame(resolve));
+        }
+      };
+
+      await waitForEditors();
+      window.__predictionReady = true;
+    </script>
+  </body>
+</html>

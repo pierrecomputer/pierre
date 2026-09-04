@@ -5818,12 +5818,17 @@ export class Editor<
 
       // A predicted deletion of an empty line or of a lone line break has no
       // text to strike through; draw a one-character mark at the boundary so
-      // the removal is visible, on flat and soft-wrapped lines alike.
+      // the removal is visible, on flat and soft-wrapped lines alike. A range
+      // that ends at column 0 of a later line also produces an empty segment
+      // on that line, but that line survives the edit, so it gets no mark.
       if (
         startChar === endChar &&
         (type === 'editPredictionDeletion' ||
           type === 'editPredictionReplacement')
       ) {
+        if (isLastLine && line !== start.line) {
+          continue;
+        }
         const [left, wrapLine] = this.#getCharX(line, startChar);
         this.#renderSelectionBlock(
           renderCtx,
