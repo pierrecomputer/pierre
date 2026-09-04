@@ -34,22 +34,20 @@ const CODE_VIEW_STYLES = { height: '70vh', overflow: 'auto' } as const;
 
 type PlaygroundItem = CodeViewItem<PlaygroundAnnotationMetadata>;
 
-const CODE_VIEW_EDITOR_OPTIONS: EditorOptions<
-  EditorType,
-  PlaygroundAnnotationMetadata,
-  undefined
-> = {
-  onAttach(editor) {
-    editor.focus({ lineNumber: 'first-visible', preventScroll: true });
-  },
-};
-
 interface PlaygroundCodeViewProps {
   items: PlaygroundItem[];
   options: CodeViewReactOptions<PlaygroundAnnotationMetadata, undefined>;
   enableLineSelection: boolean;
   enableGutterComments: boolean;
   showAnnotations: boolean;
+  editPrediction?: NonNullable<
+    EditorOptions<
+      EditorType,
+      PlaygroundAnnotationMetadata,
+      undefined
+    >['editPrediction']
+  >;
+  onEditingChange?: (editing: boolean) => void;
 }
 
 // Renders a mix of diff and file items in a CodeView. Unlike the Virtualizer
@@ -74,10 +72,35 @@ export function PlaygroundCodeView({
   enableLineSelection,
   enableGutterComments,
   showAnnotations,
+  editPrediction,
+  onEditingChange,
 }: PlaygroundCodeViewProps) {
   const [items, setItems] = useState(initialItems);
   const [selectedLines, setSelectedLines] =
     useState<CodeViewLineSelection | null>(null);
+  const editorOptions = useMemo<
+    EditorOptions<EditorType, PlaygroundAnnotationMetadata, undefined>
+  >(
+    () => ({
+      editPrediction,
+      onAttach(editor) {
+        editor.focus({ lineNumber: 'first-visible', preventScroll: true });
+      },
+    }),
+    [editPrediction]
+  );
+  const hasEditingItem = items.some((item) => item.edit === true);
+
+  useEffect(() => {
+    onEditingChange?.(hasEditingItem);
+  }, [hasEditingItem, onEditingChange]);
+
+  useEffect(
+    () => () => {
+      onEditingChange?.(false);
+    },
+    [onEditingChange]
+  );
 
   // Item ids whose next completion should revert: Cancel marks the id here
   // before turning edit off, and the completion handler consumes the mark.
@@ -355,7 +378,7 @@ export function PlaygroundCodeView({
 
   return (
     <CodeView
-      editorOptions={CODE_VIEW_EDITOR_OPTIONS}
+      editorOptions={editorOptions}
       items={items}
       className="border-border rounded-lg border"
       style={CODE_VIEW_STYLES}

@@ -69,9 +69,13 @@
   display: contents;
 }
 [data-caret],
+[data-edit-prediction],
 [data-selection-range],
 [data-match-range],
 [data-bracket-match-range],
+[data-edit-prediction-deletion-range],
+[data-edit-prediction-insertion-range],
+[data-edit-prediction-replacement-range],
 [data-marker-range],
 [data-remote-caret],
 [data-caret-highlight-range] {
@@ -82,7 +86,75 @@
   line-height: var(--diffs-line-height);
   pointer-events: none;
 }
+[data-edit-prediction] {
+  z-index: 1;
+  height: auto;
+  overflow: visible;
+  width: max-content;
+  user-select: none;
+  color: var(
+    --diffs-editor-edit-prediction-fg,
+    color-mix(in lab, var(--diffs-fg) 45%, transparent)
+  );
+}
+[data-edit-prediction-line] {
+  box-sizing: border-box;
+  display: block;
+  min-height: 1lh;
+  width: max-content;
+  white-space: pre;
+}
+[data-edit-prediction][data-replacement] [data-edit-prediction-line],
+[data-edit-prediction-insertion-range],
+[data-edit-prediction-replacement-range] {
+  background-color: var(--diffs-edit-prediction-bg, var(--diffs-bg));
+}
+[data-edit-prediction-suffix] {
+  color: var(--diffs-fg);
+}
+[data-edit-prediction][data-wrap] [data-edit-prediction-line] {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+[data-edit-prediction-line][data-empty]::after {
+  content: '↵';
+}
+[data-edit-prediction-spacer] {
+  margin-block-end: var(--diffs-edit-prediction-spacer-height);
+}
+/* The deletions column of a split diff shows no ghost text, so its reserved
+   rows are padding: the row tint and the buffer hatch extend over them instead
+   of leaving a blank strip. Buffers size themselves with a border-box
+   min-height that would absorb the padding, hence content-box. */
+[data-code][data-deletions] [data-edit-prediction-spacer] {
+  margin-block-end: 0;
+  padding-block-end: var(--diffs-edit-prediction-spacer-height);
+  box-sizing: content-box;
+}
+[data-edit-prediction-deletion-range] {
+  --diffs-edit-prediction-deletion-color: var(
+    --diffs-editor-edit-prediction-deletion-fg,
+    color-mix(in lab, var(--diffs-deletion-base) 70%, transparent)
+  );
+
+  z-index: 1;
+  background: linear-gradient(
+    to bottom,
+    transparent calc(50% - 0.5px),
+    var(--diffs-edit-prediction-deletion-color) calc(50% - 0.5px),
+    var(--diffs-edit-prediction-deletion-color) calc(50% + 0.5px),
+    transparent calc(50% + 0.5px)
+  );
+}
+[data-edit-prediction-insertion-range] {
+  z-index: 0;
+}
+[data-edit-prediction-replacement-range] {
+  z-index: 1;
+}
 [data-caret] {
+  z-index: 2;
   width: 2px;
   background-color: var(
     --diffs-bg-caret-override,

@@ -27,6 +27,14 @@ import {
   resolveFindAgainShortcut,
 } from './command';
 import editorCSS from './editor.css?inline';
+import {
+  buildEditPredictionRequest,
+  type EditPredictionHistoryRecord,
+  type EditPredictProvider,
+  type EditPredictResponse,
+  matchesEditPredictionPattern,
+  recordEditPrediction,
+} from './editPrediction';
 import { EditStack } from './editStack';
 import {
   cloneEditorViewState,
@@ -112,6 +120,7 @@ import {
 } from './selectionAction';
 import { createSpriteElement } from './sprite';
 import { TextDocument, type TextDocumentChange } from './textDocument';
+import { getTextDocumentChangeTransaction } from './textDocumentChangeTransaction';
 import {
   getExpandedAsciiTextColumns,
   getUnicodeMeasurementOffsets,
@@ -145,6 +154,13 @@ import {
   lookupScrollContainer,
   round,
 } from './utils';
+
+export type {
+  EditPredictContext,
+  EditPredictProvider,
+  EditPredictRequest,
+  EditPredictResponse,
+} from './editPrediction';
 
 // ShadowRoot.getSelection is a non-standard Blink/WebKit method (predates the
 // spec'd Selection.getComposedRanges) and is missing from the DOM lib types.
@@ -296,10 +312,38 @@ export interface EditorOptions<EType extends EditorType, LAnnotation, Caret> {
   /** Per-language comment tokens used by the comment commands. */
   languageCommentConfig?: LanguageConfigMap;
   /**
-   * Show a floating selection action popover after a user-created selection,
-   * default is disabled. Programmatic selection updates do not open it.
+   * Show a floating selection action popover after a user-created selection.
+   * Defaults to disabled. Programmatic selection updates do not open it.
    */
   enabledSelectionAction?: boolean;
+  /**
+   * Configuration for inline edit prediction.
+   */
+  editPrediction?: {
+    /**
+     * The edit prediction mode.
+     * - 'eager': predictions appear inline when the user types.
+     * - 'subtle': pressing the `Alt` key toggles predictions inline.
+     * @default 'eager'
+     */
+    mode?: 'eager' | 'subtle';
+    /**
+     * The edit prediction provider.
+     */
+    provider: EditPredictProvider;
+    /**
+     * Glob or regular-expression patterns for files to include in prediction.
+     * String patterns support `?`, segment-local `*`, and cross-segment `**`.
+     * An empty array matches no files.
+     */
+    include?: readonly (string | RegExp)[];
+    /**
+     * Glob or regular-expression patterns for files to exclude from prediction.
+     * String patterns support `?`, segment-local `*`, and cross-segment `**`.
+     * Exclusions take precedence over inclusions.
+     */
+    exclude?: readonly (string | RegExp)[];
+  };
   /**
    * Custom clipboard provider.
    * Highly recommended to use native clipboard API if you are building an electron app.
@@ -364,9 +408,39 @@ const MAX_EDIT_WIDEN_WINDOW_MULTIPLE = 2;
 // line. Past this many lines the cache resets and refills lazily for whatever
 // is measured next. A memory bound, not a correctness-critical value.
 const MAX_WRAP_OFFSETS_CACHE_LINES = 10_000;
+const EDIT_PREDICTION_DEBOUNCE_MS = 300;
+const MAX_EDIT_PREDICTION_RESPONSE_EDITS = 256;
+const MAX_EDIT_PREDICTION_RESPONSE_BYTES = 128 * 1024;
+const editPredictionTextEncoder = new TextEncoder();
 const SELECTION_ACTION_POPOVER_PLACEMENT_KEY = 'selection-action';
 const MULTI_SELECTION_CLIPBOARD_TYPE =
   'application/vnd.pierre.diffs-selections+json';
+type OverlayRangeType =
+  | 'selection'
+  | 'match'
+  | 'marker'
+  | 'bracketMatch'
+  | 'caretHighlight'
+  | 'editPredictionDeletion'
+  | 'editPredictionInsertion'
+  | 'editPredictionReplacement';
+
+// Response edits that touch the same source lines are previewed by one ghost
+// overlay. `edit` is their combined text range; `startIndex` and `endIndex`
+// are the response edits it covers.
+interface EditPredictionGroup {
+  edit: TextEdit;
+  startIndex: number;
+  endIndex: number;
+}
+
+// A rendered column's content element and its gutter counterpart, or one
+// content child and the gutter child at the same index. Every rendered column
+// has a gutter, and gutter and content children are kept parallel.
+interface ColumnElements {
+  content: HTMLElement;
+  gutter: HTMLElement;
+}
 
 export class Editor<
   EType extends EditorType = EditorType,
@@ -414,6 +488,7 @@ export class Editor<
   #fileContainer?: HTMLElement;
   #gutterElement?: HTMLElement;
   #contentElement?: HTMLElement;
+  #deletionsColumn?: ColumnElements;
   #overlayElement?: HTMLElement;
   #overlayElements?: Map<string, HTMLElement>;
   #caretElements?: Map<TrackedCaret<Caret>, HTMLElement>;
@@ -495,7 +570,28 @@ export class Editor<
   #retainSearchPanelFocus = false;
   #fontRemeasureScheduled = false;
   #themeSelectionRefreshFrame?: number;
-
+  #editPredictionTimer?: ReturnType<typeof setTimeout>;
+  #editPredictionAbortController?: AbortController;
+  #editPredictionGeneration = 0;
+  #editPredictionRevealed = false;
+  // True when we skipped asking for a prediction because the caret sits on a
+  // line that has no rendered row right now (for example a large paste pushed
+  // it below the virtualized window). The next time the attached component
+  // renders and that row exists, we ask again.
+  #retryEditPredictionOnRender = false;
+  #editPrediction?: {
+    document: TextDocument<EType, LAnnotation>;
+    version: number;
+    cursorOffset: number;
+    rendered: boolean;
+    response: EditPredictResponse;
+  };
+  #editPredictionHistory: EditPredictionHistoryRecord[] = [];
+  #editPredictionSpacers = new Map<HTMLElement, number>();
+  // Ghost text rows shown below lines (zero-based line -> row count). Replaced
+  // only when the contents change and never mutated, so the attached component
+  // can treat the same instance as "nothing changed".
+  #ghostTextRows: ReadonlyMap<number, number> = new Map();
   #onDeferTokenize = (
     lines: Map<number, Array<HighlightedToken>>,
     themeType: 'light' | 'dark'
@@ -510,6 +606,15 @@ export class Editor<
       this.#renderRange !== undefined &&
       this.#renderRange.totalLines !== Infinity
     ) {
+      const predictionLines =
+        this.#editPrediction === undefined
+          ? undefined
+          : new Set(
+              this.#editPrediction.response.edits.map(
+                (edit) => edit.range.start.line
+              )
+            );
+      let refreshPrediction = false;
       const { startingLine, totalLines } = this.#renderRange;
       const endLine = Math.min(
         startingLine + totalLines,
@@ -520,8 +625,12 @@ export class Editor<
           const lineElement = this.#getLineElement(line);
           if (lineElement !== undefined) {
             lineElement.replaceChildren(...renderLineTokens(tokens));
+            refreshPrediction ||= predictionLines?.has(line) === true;
           }
         }
+      }
+      if (refreshPrediction && this.#selections !== undefined) {
+        this.#updateSelections(this.#selections);
       }
     }
   };
@@ -555,6 +664,7 @@ export class Editor<
 
   setOptions(options: EditorOptions<EType, LAnnotation, Caret>): void {
     const previousRenderCaret = this.#options.renderCaret;
+    const previousEditPrediction = this.#options.editPrediction;
     this.#options = {
       ...this.#options,
       ...options,
@@ -564,12 +674,22 @@ export class Editor<
       this.#caretElements = undefined;
       this.#renderCarets();
     }
+    if (previousEditPrediction !== this.#options.editPrediction) {
+      this.#cancelEditPrediction(true);
+      this.#editPredictionHistory = [];
+      this.#scheduleEditPrediction();
+    }
   }
 
   __emitEditComplete(
     event: EditorEditCompleteEvent<EType, LAnnotation, Caret>
   ): void {
     this.#options.onComplete?.(event);
+  }
+
+  /** @internal */
+  __getGhostTextRows(): ReadonlyMap<number, number> {
+    return this.#ghostTextRows;
   }
 
   setCarets(carets: EditorCaret<Caret>[]): void {
@@ -1031,6 +1151,10 @@ export class Editor<
   cleanUp(reason: 'discard' | 'recycle' | 'complete' = 'discard'): void {
     const fileInstance = this.#fileInstance;
     const recycle = reason === 'recycle';
+    this.#cancelEditPrediction(true, false);
+    if (!recycle) {
+      this.#editPredictionHistory = [];
+    }
     const editSession = this.#editSession;
     if (fileInstance != null && editSession != null) {
       const discardDiffState = !this.#checkpointEditSessionState();
@@ -1081,6 +1205,7 @@ export class Editor<
     this.#popoverManager?.cleanUp();
     this.#popoverManager = undefined;
     this.#gutterElement = undefined;
+    this.#deletionsColumn = undefined;
     this.#contentElement?.removeAttribute('contentEditable');
     this.#contentElement = undefined;
     this.#replacementFocusRequest = undefined;
@@ -1266,20 +1391,44 @@ export class Editor<
     let codeElement: HTMLElement | undefined;
     let gutterEl: HTMLElement | undefined;
     let contentEl: HTMLElement | undefined;
+    let deletionsGutterEl: HTMLElement | undefined;
+    let deletionsContentEl: HTMLElement | undefined;
     for (const el of shadowRoot.querySelectorAll<HTMLElement>('[data-code]')) {
-      if (el.dataset.deletions === undefined) {
+      const isDeletions = el.dataset.deletions != null;
+      if (!isDeletions) {
         codeElement = el;
-        for (const child of el.children) {
-          const el = child as HTMLElement;
-          const { gutter, content } = el.dataset;
-          if (gutter !== undefined) {
-            gutterEl = el;
-          } else if (content !== undefined) {
-            contentEl = el;
+      }
+      for (const child of el.children) {
+        if (!(child instanceof HTMLElement)) {
+          continue;
+        }
+        const { gutter, content } = child.dataset;
+        if (gutter != null) {
+          if (isDeletions) {
+            deletionsGutterEl = child;
+          } else {
+            gutterEl = child;
+          }
+        } else if (content != null) {
+          if (isDeletions) {
+            deletionsContentEl = child;
+          } else {
+            contentEl = child;
           }
         }
-        break;
       }
+    }
+    if (deletionsContentEl == null) {
+      this.#deletionsColumn = undefined;
+    } else if (deletionsGutterEl == null) {
+      throw new Error(
+        'Editor.__syncRenderView: the deletions column has no gutter'
+      );
+    } else {
+      this.#deletionsColumn = {
+        content: deletionsContentEl,
+        gutter: deletionsGutterEl,
+      };
     }
     if (codeElement === undefined || contentEl === undefined) {
       this.#replacementFocusRequest = undefined;
@@ -1328,6 +1477,8 @@ export class Editor<
           editSession.document.languageId !== languageId)) ||
       resetForExternalDocument;
     if (shouldRebuildDocument) {
+      this.#cancelEditPrediction(true);
+      this.#editPredictionHistory = [];
       this.#invalidateOnAttach();
       const { name, lang } = fileOrDiff;
       let textDocument =
@@ -1492,6 +1643,9 @@ export class Editor<
         this.#updateSelections(this.#selections ?? []);
       }
       this.#renderCarets();
+      if (this.#retryEditPredictionOnRender) {
+        this.#scheduleEditPrediction();
+      }
 
       if (
         this.#initSelections !== undefined &&
@@ -1935,15 +2089,18 @@ export class Editor<
           // available in newer browsers. When it is missing (older browsers,
           // embedded WebViews, and the pinned CI Chromium), fall back to the
           // older Blink/WebKit-specific ShadowRoot.getSelection(), which still
-          // reports the range inside the shadow tree. Only bail when neither API
-          // yields a range, so a click can still seed the caret rather than
-          // leaving the surface unusable.
-          const composedRange =
-            typeof selectionRaw.getComposedRanges === 'function'
-              ? selectionRaw.getComposedRanges({
-                  shadowRoots: [shadowRoot],
-                })?.[0]
-              : getShadowRootRange(shadowRoot);
+          // reports the range inside the shadow tree. Normalize that live Range
+          // to a StaticRange so it matches the getComposedRanges return shape.
+          // Only bail when neither API yields a range, so a click can still seed
+          // the caret rather than leaving the surface unusable.
+          let composedRange: StaticRange | undefined;
+          if (typeof selectionRaw.getComposedRanges === 'function') {
+            composedRange = selectionRaw.getComposedRanges({
+              shadowRoots: [shadowRoot],
+            })?.[0];
+          } else {
+            composedRange = getShadowRootRange(shadowRoot);
+          }
           if (
             composedRange === undefined ||
             !this.#rangeBelongsToEditor(composedRange)
@@ -2035,6 +2192,14 @@ export class Editor<
         (e) => {
           if (e.key === 'Shift') {
             this.#selectionStart = this.#selections?.at(-1);
+          } else if (
+            e.key === 'Alt' &&
+            !e.repeat &&
+            this.#contentHasFocus &&
+            this.#options.editPrediction?.mode === 'subtle'
+          ) {
+            this.#editPredictionRevealed = !this.#editPredictionRevealed;
+            this.#updateSelections(this.#selections ?? []);
           }
         },
         { passive: true }
@@ -2275,6 +2440,29 @@ export class Editor<
           return;
         }
 
+        if (
+          e.key === 'Tab' &&
+          !e.shiftKey &&
+          !e.ctrlKey &&
+          !e.metaKey &&
+          !e.isComposing &&
+          !this.#isComposing &&
+          (!e.altKey || this.#options.editPrediction?.mode === 'subtle') &&
+          this.#editPrediction?.rendered === true
+        ) {
+          // Ghost text is on screen, so Tab belongs to the prediction even when
+          // acceptance fails; it must never fall through to indentation.
+          this.#acceptEditPrediction();
+          e.preventDefault();
+          return;
+        }
+
+        if (e.key === 'Escape' && this.#editPrediction !== undefined) {
+          this.#cancelEditPrediction(true);
+          e.preventDefault();
+          return;
+        }
+
         const command = resolveEditorCommandFromKeyboardEvent(
           e,
           this.#options.keymap
@@ -2448,6 +2636,7 @@ export class Editor<
           return;
         }
         if (e.inputType === 'insertCompositionText') {
+          this.#cancelEditPrediction(true);
           return;
         }
         e.preventDefault();
@@ -2469,6 +2658,7 @@ export class Editor<
           if (!targetIsContentElement(e)) {
             return;
           }
+          this.#cancelEditPrediction(true);
           this.#isComposing = true;
           this.#shouldIgnoreSelectionChange = true;
         },
@@ -4489,8 +4679,870 @@ export class Editor<
     return true;
   }
 
+  #removeRenderedEditPrediction(): void {
+    for (const [key, element] of this.#overlayElements ?? []) {
+      if (key.startsWith('editPrediction')) {
+        element.remove();
+        this.#overlayElements?.delete(key);
+      }
+    }
+  }
+
+  // Combines edits that share source lines into the exact text range rendered
+  // by one ghost preview. A non-deletion replacement also includes the
+  // preserved line suffix so it reflows after the ghost text. Spacing and
+  // rendering both use this geometry so they cannot disagree about how many
+  // continuation lines the preview contains.
+  #composeEditPredictionGroup(
+    textDocument: TextDocument<EType, LAnnotation>,
+    edits: readonly TextEdit[],
+    startIndex: number
+  ): { edit: TextEdit; endIndex: number } {
+    const firstEdit = edits[startIndex];
+    let endIndex = startIndex;
+    let endLine = firstEdit.range.end.line;
+    while (
+      endIndex + 1 < edits.length &&
+      edits[endIndex + 1].range.start.line <= endLine
+    ) {
+      endIndex++;
+      endLine = Math.max(endLine, edits[endIndex].range.end.line);
+    }
+    if (
+      endIndex === startIndex &&
+      (firstEdit.newText.length === 0 ||
+        comparePosition(firstEdit.range.start, firstEdit.range.end) === 0)
+    ) {
+      return { edit: firstEdit, endIndex };
+    }
+
+    const start = firstEdit.range.start;
+    const end = {
+      line: endLine,
+      character: textDocument.getLineLength(endLine),
+    };
+    const parts: string[] = [];
+    let consumed = textDocument.offsetAt(start);
+    for (let index = startIndex; index <= endIndex; index++) {
+      const edit = edits[index];
+      const editStart = textDocument.offsetAt(edit.range.start);
+      const editEnd = textDocument.offsetAt(edit.range.end);
+      parts.push(textDocument.getTextSlice(consumed, editStart), edit.newText);
+      consumed = editEnd;
+    }
+    parts.push(textDocument.getTextSlice(consumed, textDocument.offsetAt(end)));
+    return {
+      edit: { range: { start, end }, newText: parts.join('') },
+      endIndex,
+    };
+  }
+
+  // Composes the active prediction into ghost groups and decides, once, whether
+  // every group has rendered rows. Spacers and ghost rendering read this result
+  // directly; Tab acceptance reads the `rendered` flag that rendering sets only
+  // after drawing every group. A prediction is therefore shown all-or-nothing
+  // and Tab acts on exactly the ghost text the user sees. A virtualized or
+  // collapsed row cannot show its edit, and accepting would change unseen
+  // document content. Undefined when no prediction applies to the current
+  // document version or subtle mode has not revealed it.
+  #getEditPredictionGroups():
+    | { groups: EditPredictionGroup[]; allVisible: boolean }
+    | undefined {
+    const prediction = this.#editPrediction;
+    const textDocument = this.#editSession?.document;
+    if (
+      prediction == null ||
+      textDocument == null ||
+      prediction.document !== textDocument ||
+      prediction.version !== textDocument.version ||
+      (this.#options.editPrediction?.mode === 'subtle' &&
+        !this.#editPredictionRevealed)
+    ) {
+      return undefined;
+    }
+    const { edits } = prediction.response;
+    const groups: EditPredictionGroup[] = [];
+    let allVisible = edits.length > 0;
+    for (let startIndex = 0; startIndex < edits.length; ) {
+      const { edit, endIndex } = this.#composeEditPredictionGroup(
+        textDocument,
+        edits,
+        startIndex
+      );
+      for (
+        let line = edit.range.start.line;
+        allVisible && line <= edit.range.end.line;
+        line++
+      ) {
+        allVisible = this.#isLineVisible(line);
+      }
+      groups.push({ edit, startIndex, endIndex });
+      startIndex = endIndex + 1;
+    }
+    return { groups, allVisible };
+  }
+
+  // Give a ghost text element one block per predicted line. The first line
+  // continues from the caret, so it is indented to the caret's x. When lines
+  // wrap, the element spans the rest of the column so its lines break where
+  // document text would; otherwise it grows to fit its content.
+  #fillGhostTextElement(
+    element: HTMLElement,
+    newText: string,
+    anchorLeft: number,
+    lineLeft: number,
+    insertionSuffix: Node | undefined
+  ): void {
+    if (this.#isWrap) {
+      element.dataset.wrap = '';
+      element.style.width = `calc(100cqw - ${lineLeft}px)`;
+    } else {
+      delete element.dataset.wrap;
+      element.style.width = 'max-content';
+    }
+    const lines = newText.split(/\r\n|\r|\n/);
+    for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+      const lineText = lines[lineIndex];
+      const suffix =
+        lineIndex === lines.length - 1 ? insertionSuffix : undefined;
+      const isEmpty = lineText.length === 0 && suffix === undefined;
+      const line = h(
+        'span',
+        {
+          dataset: isEmpty
+            ? ['editPredictionLine', 'empty']
+            : 'editPredictionLine',
+          textContent: isEmpty ? '\u200b' : lineText,
+        },
+        element
+      );
+      if (suffix !== undefined) {
+        const suffixElement = h(
+          'span',
+          {
+            dataset: 'editPredictionSuffix',
+          },
+          line
+        );
+        suffixElement.append(suffix);
+      }
+      // Indent only the first visual line to the caret; when the line wraps,
+      // its continuation rows start at the column's left edge like document
+      // text does. Padding would indent every row of the block.
+      if (lineIndex === 0 && anchorLeft !== lineLeft) {
+        line.style.textIndent = `${anchorLeft - lineLeft}px`;
+      }
+    }
+  }
+
+  // A mid-line insertion masks the rest of its line and redraws that text after
+  // the ghost text. Returns the copy to redraw (cloned from the rendered row so
+  // it keeps its colors), or undefined when there is nothing to redraw or a
+  // neighbouring edit on the same line would move it.
+  #cloneInsertionSuffix(group: EditPredictionGroup): Node | undefined {
+    const prediction = this.#editPrediction;
+    const textDocument = this.#editSession?.document;
+    if (prediction == null || textDocument == null) {
+      return undefined;
+    }
+    const { edit, startIndex, endIndex } = group;
+    const { start, end } = edit.range;
+    const isMidLineInsertion =
+      comparePosition(start, end) === 0 &&
+      start.character < textDocument.getLineLength(start.line);
+    if (
+      !isMidLineInsertion ||
+      prediction.response.edits[startIndex - 1]?.range.end.line ===
+        start.line ||
+      prediction.response.edits[endIndex + 1]?.range.start.line === start.line
+    ) {
+      return undefined;
+    }
+    const sourceLine = this.#getLineElement(start.line);
+    if (sourceLine === undefined) {
+      return document.createTextNode(
+        textDocument.getLineText(start.line).slice(start.character)
+      );
+    }
+    const [suffixNode, suffixOffset] = getSelectionAnchor(
+      sourceLine,
+      start.character
+    );
+    const suffixRange = document.createRange();
+    suffixRange.selectNodeContents(sourceLine);
+    suffixRange.setStart(suffixNode, clampDomOffset(suffixNode, suffixOffset));
+    const suffix = suffixRange.cloneContents();
+    if (suffix.firstChild?.textContent === '') {
+      suffix.firstChild.remove();
+    }
+    return suffix;
+  }
+
+  // How many rows of ghost text extend below the anchor row. The ghost's first
+  // visual line sits on the caret's visual line and the rest run down over the
+  // anchor row's remaining visual lines before spilling below it. Without
+  // wrapping every predicted line is one row. With wrapping only the browser
+  // knows where the lines break, so the ghost element is laid out hidden in the
+  // overlay and measured; an element that cannot be measured counts as
+  // unwrapped, the same fallback #wrapLineText uses.
+  #measureGhostTextRows(group: EditPredictionGroup): number {
+    const { edit } = group;
+    const { start } = edit.range;
+    const [anchorLeft, anchorWrapLine] = this.#getCharX(
+      start.line,
+      start.character
+    );
+    let anchorVisualLines = 1;
+    let ghostVisualLines = edit.newText.split(/\r\n|\r|\n/).length;
+    const overlayElement = this.#overlayElement;
+    if (this.#isWrap && overlayElement != null) {
+      anchorVisualLines = Math.max(
+        1,
+        this.#wrapLineTextOrWholeLine(start.line).length - 1
+      );
+      const probe = h(
+        'span',
+        { dataset: 'editPrediction', style: { visibility: 'hidden' } },
+        overlayElement
+      );
+      this.#fillGhostTextElement(
+        probe,
+        edit.newText,
+        anchorLeft,
+        this.#getCharX(start.line, 0)[0],
+        this.#cloneInsertionSuffix(group)
+      );
+      const { width, height } = probe.getBoundingClientRect();
+      probe.remove();
+      const { lineHeight } = this.#metrics;
+      // A zero-width column (mid re-render) would wrap every character; treat
+      // that, like a zero height, as unmeasurable.
+      if (width > 0 && height > 0 && lineHeight > 0) {
+        ghostVisualLines = Math.round(height / lineHeight);
+      }
+    }
+    return Math.max(0, ghostVisualLines - (anchorVisualLines - anchorWrapLine));
+  }
+
+  // Reserve numberless grid space for ghost continuation lines without adding
+  // rows that could be mistaken for document content by the editor.
+  #syncEditPredictionSpacers(notifyComponent = true): void {
+    const nextSpacers = new Map<HTMLElement, number>();
+    // Ghost text rows per line for this sync. It replaces #ghostTextRows only
+    // when the contents differ, so an unchanged map keeps its identity.
+    const ghostTextRows = new Map<number, number>();
+    const previousRows = this.#ghostTextRows;
+    let rowsChanged = false;
+    const contentElement = this.#contentElement;
+    const composed = this.#getEditPredictionGroups();
+    if (contentElement != null && composed != null && composed.allVisible) {
+      for (const group of composed.groups) {
+        const { edit } = group;
+        if (edit.newText.length === 0) {
+          continue;
+        }
+        const count = this.#measureGhostTextRows(group);
+        if (count > (ghostTextRows.get(edit.range.start.line) ?? 0)) {
+          ghostTextRows.set(edit.range.start.line, count);
+        }
+      }
+
+      if (ghostTextRows.size > 0) {
+        let rowIndexes: Map<Element, number> | undefined;
+        const startingLine = this.#renderRange?.startingLine ?? 0;
+        for (const [line, count] of ghostTextRows) {
+          rowsChanged ||= previousRows.get(line) !== count;
+          const lineElement = this.#getLineElement(line);
+          if (lineElement === undefined) {
+            continue;
+          }
+          let rowIndex = line - startingLine;
+          if (contentElement.children[rowIndex] !== lineElement) {
+            if (rowIndexes === undefined) {
+              rowIndexes = new Map();
+              for (
+                let index = 0;
+                index < contentElement.children.length;
+                index++
+              ) {
+                rowIndexes.set(contentElement.children[index], index);
+              }
+            }
+            rowIndex = rowIndexes.get(lineElement) ?? -1;
+          }
+          if (rowIndex < 0) {
+            continue;
+          }
+          nextSpacers.set(lineElement, count);
+          const gutterRow = this.#gutterElement?.children[rowIndex];
+          if (gutterRow instanceof HTMLElement) {
+            nextSpacers.set(gutterRow, count);
+          }
+          const partner = this.#deletionsColumnPartner(rowIndex);
+          if (partner != null) {
+            // Several anchors can share one buffer, so their rows add up.
+            nextSpacers.set(
+              partner.content,
+              (nextSpacers.get(partner.content) ?? 0) + count
+            );
+            nextSpacers.set(
+              partner.gutter,
+              (nextSpacers.get(partner.gutter) ?? 0) + count
+            );
+          }
+        }
+      }
+    }
+
+    let changed = false;
+    for (const [element, count] of this.#editPredictionSpacers) {
+      if (nextSpacers.get(element) === count) {
+        continue;
+      }
+      delete element.dataset.editPredictionSpacer;
+      element.style.removeProperty('--diffs-edit-prediction-spacer-height');
+      changed = true;
+    }
+    for (const [element, count] of nextSpacers) {
+      if (this.#editPredictionSpacers.get(element) === count) {
+        continue;
+      }
+      element.dataset.editPredictionSpacer = '';
+      element.style.setProperty(
+        '--diffs-edit-prediction-spacer-height',
+        `${count}lh`
+      );
+      changed = true;
+    }
+    this.#editPredictionSpacers = nextSpacers;
+    if (rowsChanged || ghostTextRows.size !== previousRows.size) {
+      this.#ghostTextRows = ghostTextRows;
+      if (notifyComponent) {
+        this.#virtualizedInstance?.syncGhostTextRows();
+      }
+    }
+    if (changed) {
+      this.#resetCache();
+    }
+  }
+
+  // In a split diff whose columns scroll separately, each column is its own
+  // grid, so a ghost text margin on an additions row grows that column alone
+  // and the deletions rows below drift out of line. Find the deletions element
+  // in the same grid track as the additions row at `rowIndex`: its paired line
+  // row, or the empty buffer that spans the tracks of a one-sided run. A row is
+  // one track; a buffer spans `data-buffer-size` tracks. Undefined when the
+  // columns share a grid (wrap mode) or this is not a split diff.
+  #deletionsColumnPartner(rowIndex: number): ColumnElements | undefined {
+    const deletionsColumn = this.#deletionsColumn;
+    const contentElement = this.#contentElement;
+    if (
+      deletionsColumn == null ||
+      contentElement == null ||
+      !this.#isDiff ||
+      this.#diffSyle !== 'split' ||
+      this.#isWrap
+    ) {
+      return undefined;
+    }
+    let track = 0;
+    for (let index = 0; index < rowIndex; index++) {
+      track += gridTrackSpan(contentElement.children[index]);
+    }
+    const { content, gutter } = deletionsColumn;
+    let covered = 0;
+    for (let index = 0; index < content.children.length; index++) {
+      const child = content.children[index];
+      covered += gridTrackSpan(child);
+      if (covered > track) {
+        const gutterChild = gutter.children[index];
+        if (
+          !(child instanceof HTMLElement) ||
+          !(gutterChild instanceof HTMLElement)
+        ) {
+          throw new Error(
+            'Editor: deletions column rows and gutter cells are out of step'
+          );
+        }
+        return { content: child, gutter: gutterChild };
+      }
+    }
+    return undefined;
+  }
+
+  #cancelEditPrediction(removeRendered: boolean, notifyComponent = true): void {
+    if (this.#editPredictionTimer !== undefined) {
+      clearTimeout(this.#editPredictionTimer);
+      this.#editPredictionTimer = undefined;
+    }
+    this.#editPredictionAbortController?.abort();
+    this.#editPredictionAbortController = undefined;
+    this.#editPredictionGeneration++;
+    this.#editPredictionRevealed = false;
+    this.#retryEditPredictionOnRender = false;
+    this.#editPrediction = undefined;
+    this.#syncEditPredictionSpacers(notifyComponent);
+    if (removeRendered) {
+      this.#removeRenderedEditPrediction();
+    }
+  }
+
+  #includesEditPredictionPath(path: string): boolean {
+    const options = this.#options.editPrediction;
+    if (options === undefined) {
+      return false;
+    }
+    const normalizedPath = path.replaceAll('\\', '/');
+    return (
+      (options.include === undefined ||
+        options.include.some((pattern) =>
+          matchesEditPredictionPattern(normalizedPath, pattern)
+        )) &&
+      options.exclude?.some((pattern) =>
+        matchesEditPredictionPattern(normalizedPath, pattern)
+      ) !== true
+    );
+  }
+
+  #scheduleEditPrediction(): void {
+    this.#cancelEditPrediction(true);
+    const selection = this.#selections?.[0];
+    if (
+      this.#options.editPrediction === undefined ||
+      this.#editSession?.document === undefined ||
+      this.#editSession?.fileInfo === undefined ||
+      this.#selections?.length !== 1 ||
+      selection === undefined ||
+      !isCollapsedSelection(selection)
+    ) {
+      return;
+    }
+
+    const document = this.#editSession?.document;
+    const cursorOffset = document.offsetAt(getCaretPosition(selection));
+    this.#editPredictionTimer = setTimeout(() => {
+      this.#editPredictionTimer = undefined;
+      const options = this.#options.editPrediction;
+      const currentSelection = this.#selections?.[0];
+      const path = this.#editSession?.fileInfo?.name;
+      if (
+        options === undefined ||
+        path === undefined ||
+        this.#editSession?.document !== document ||
+        this.#selections?.length !== 1 ||
+        currentSelection === undefined ||
+        !isCollapsedSelection(currentSelection) ||
+        document.offsetAt(getCaretPosition(currentSelection)) !== cursorOffset
+      ) {
+        return;
+      }
+
+      if (!this.#includesEditPredictionPath(path)) {
+        return;
+      }
+
+      const isLineEditable = (line: number): boolean =>
+        this.#isLineInRenderRange(line) && this.#isLineRenderable(line);
+      if (!isLineEditable(getCaretPosition(currentSelection).line)) {
+        this.#retryEditPredictionOnRender = true;
+        return;
+      }
+      const request = buildEditPredictionRequest(
+        path,
+        document,
+        cursorOffset,
+        this.#editPredictionHistory,
+        isLineEditable
+      );
+      if (request === undefined) {
+        return;
+      }
+      const excerptStartOffset = document.offsetAt({
+        line: request.excerptStartLine,
+        character: 0,
+      });
+      const editableStart = excerptStartOffset + request.editableRange.start;
+      const editableEnd = excerptStartOffset + request.editableRange.end;
+      const controller = new AbortController();
+      const generation = ++this.#editPredictionGeneration;
+      this.#editPredictionAbortController = controller;
+
+      let prediction: Promise<EditPredictResponse>;
+      try {
+        prediction = options.provider.predict(request, {
+          signal: controller.signal,
+        });
+      } catch {
+        this.#editPredictionAbortController = undefined;
+        return;
+      }
+
+      void Promise.resolve(prediction)
+        .then((response) => {
+          const selection = this.#selections?.[0];
+          if (
+            controller.signal.aborted ||
+            generation !== this.#editPredictionGeneration ||
+            this.#editPredictionAbortController !== controller ||
+            this.#editSession?.document !== document ||
+            document.version !== request.version ||
+            this.#selections?.length !== 1 ||
+            selection === undefined ||
+            !isCollapsedSelection(selection) ||
+            document.offsetAt(getCaretPosition(selection)) !== cursorOffset
+          ) {
+            return;
+          }
+
+          if (
+            response == null ||
+            !Array.isArray(response.edits) ||
+            response.edits.length === 0 ||
+            response.edits.length > MAX_EDIT_PREDICTION_RESPONSE_EDITS ||
+            response.newCursor == null
+          ) {
+            return;
+          }
+          const resolvedEdits: ResolvedTextEdit[] = [];
+          let responseBytes = 0;
+          for (const edit of response.edits) {
+            if (
+              edit == null ||
+              typeof edit.newText !== 'string' ||
+              !isValidEditPredictionPosition(document, edit.range?.start) ||
+              !isValidEditPredictionPosition(document, edit.range?.end) ||
+              comparePosition(edit.range.start, edit.range.end) > 0
+            ) {
+              return;
+            }
+            responseBytes += editPredictionTextEncoder.encode(
+              edit.newText
+            ).byteLength;
+            if (responseBytes > MAX_EDIT_PREDICTION_RESPONSE_BYTES) {
+              return;
+            }
+            const start = document.offsetAt(edit.range.start);
+            const end = document.offsetAt(edit.range.end);
+            const resolvedEdit = document.resolveEdits([edit])[0];
+            if (resolvedEdit.start !== start || resolvedEdit.end !== end) {
+              return;
+            }
+            resolvedEdits.push(resolvedEdit);
+          }
+          resolvedEdits.sort((left, right) => {
+            const startDelta = left.start - right.start;
+            return startDelta === 0 ? left.end - right.end : startDelta;
+          });
+          for (let index = 0; index < resolvedEdits.length; index++) {
+            const edit = resolvedEdits[index];
+            if (
+              edit.start < editableStart ||
+              edit.end > editableEnd ||
+              (index > 0 && resolvedEdits[index - 1].end > edit.start)
+            ) {
+              return;
+            }
+          }
+          const edits = resolvedEdits.filter(
+            (edit) => edit.text !== document.getTextSlice(edit.start, edit.end)
+          );
+          if (edits.length === 0) {
+            return;
+          }
+
+          const firstEditPosition = document.positionAt(edits[0].start);
+          const lastEditPosition = document.positionAt(edits.at(-1)!.end);
+          const affectedStart = document.offsetAt({
+            line: firstEditPosition.line,
+            character: 0,
+          });
+          const affectedEnd = document.offsetAt({
+            line: lastEditPosition.line,
+            character: document.getLineLength(lastEditPosition.line),
+          });
+          const predictedParts: string[] = [];
+          let consumed = affectedStart;
+          for (const edit of edits) {
+            predictedParts.push(
+              document.getTextSlice(consumed, edit.start),
+              edit.text
+            );
+            consumed = edit.end;
+          }
+          predictedParts.push(document.getTextSlice(consumed, affectedEnd));
+          const predictedLines = predictedParts.join('').split(/\r\n|\r|\n/);
+          const affectedEndLine =
+            firstEditPosition.line + predictedLines.length - 1;
+          const lineDelta =
+            predictedLines.length -
+            (lastEditPosition.line - firstEditPosition.line + 1);
+          const newCursor = response.newCursor;
+          if (
+            !Number.isInteger(newCursor.line) ||
+            !Number.isInteger(newCursor.character) ||
+            newCursor.line < 0 ||
+            newCursor.character < 0
+          ) {
+            return;
+          }
+          if (
+            newCursor.line >= firstEditPosition.line &&
+            newCursor.line <= affectedEndLine
+          ) {
+            const line =
+              predictedLines[newCursor.line - firstEditPosition.line];
+            if (
+              newCursor.character > line.length ||
+              splitsSurrogatePair(line, newCursor.character)
+            ) {
+              return;
+            }
+          } else {
+            const originalLine =
+              newCursor.line < firstEditPosition.line
+                ? newCursor.line
+                : newCursor.line - lineDelta;
+            if (
+              originalLine < 0 ||
+              originalLine >= document.lineCount ||
+              newCursor.character > document.getLineLength(originalLine)
+            ) {
+              return;
+            }
+            const originalOffset = document.offsetAt({
+              line: originalLine,
+              character: newCursor.character,
+            });
+            if (
+              splitsSurrogatePair(
+                document.charAt(originalOffset - 1) +
+                  document.charAt(originalOffset),
+                1
+              )
+            ) {
+              return;
+            }
+          }
+
+          this.#editPrediction = {
+            document,
+            version: request.version,
+            cursorOffset,
+            rendered: false,
+            response: {
+              edits: edits.map((edit) => ({
+                range: {
+                  start: document.positionAt(edit.start),
+                  end: document.positionAt(edit.end),
+                },
+                newText: edit.text,
+              })),
+              newCursor: { ...newCursor },
+            },
+          };
+          this.#updateSelections(this.#selections);
+        })
+        .catch(() => {})
+        .finally(() => {
+          if (this.#editPredictionAbortController === controller) {
+            this.#editPredictionAbortController = undefined;
+          }
+        });
+    }, EDIT_PREDICTION_DEBOUNCE_MS);
+  }
+
+  #recordEditPredictionHistory(
+    change: TextDocumentChange,
+    source: 'user' | 'prediction'
+  ): void {
+    const textDocument = this.#editSession?.document;
+    const path = this.#editSession?.fileInfo?.name;
+    const transaction = getTextDocumentChangeTransaction(change);
+    if (
+      textDocument === undefined ||
+      path === undefined ||
+      transaction === undefined ||
+      !this.#includesEditPredictionPath(path)
+    ) {
+      return;
+    }
+    this.#editPredictionHistory = recordEditPrediction(
+      this.#editPredictionHistory,
+      path,
+      textDocument,
+      transaction,
+      source
+    );
+  }
+
+  #acceptEditPrediction(): void {
+    const prediction = this.#editPrediction;
+    const textDocument = this.#editSession?.document;
+    const selection = this.#selections?.[0];
+    if (
+      prediction === undefined ||
+      !prediction.rendered ||
+      textDocument === undefined ||
+      prediction.document !== textDocument ||
+      prediction.version !== textDocument.version ||
+      this.#selections?.length !== 1 ||
+      selection === undefined ||
+      !isCollapsedSelection(selection) ||
+      textDocument.offsetAt(getCaretPosition(selection)) !==
+        prediction.cursorOffset
+    ) {
+      return;
+    }
+
+    const { edits, newCursor } = prediction.response;
+    this.#cancelEditPrediction(true);
+    const change = textDocument.applyEdits(
+      edits.map((edit) => ({
+        range: {
+          start: { ...edit.range.start },
+          end: { ...edit.range.end },
+        },
+        newText: edit.newText,
+      })),
+      true,
+      this.#selections,
+      undefined,
+      true
+    );
+    if (change === undefined) {
+      this.#scheduleEditPrediction();
+      return;
+    }
+
+    const cursor = textDocument.normalizePosition(newCursor);
+    const nextSelections: EditorSelection[] = [
+      { start: cursor, end: cursor, direction: DirectionNone },
+    ];
+    textDocument.setLastUndoSelectionsAfter(nextSelections);
+    this.#applyChange(
+      change,
+      nextSelections,
+      this.#applyChangeToLineAnnotations(change),
+      { editSource: 'prediction' }
+    );
+  }
+
+  #renderEditPrediction(renderCtx: {
+    fragment: DocumentFragment;
+    elements: Map<string, HTMLElement>;
+  }): void {
+    const prediction = this.#editPrediction;
+    const textDocument = this.#editSession?.document;
+    if (prediction !== undefined) {
+      prediction.rendered = false;
+    }
+    const composed = this.#getEditPredictionGroups();
+    if (
+      prediction == null ||
+      textDocument == null ||
+      composed == null ||
+      !composed.allVisible
+    ) {
+      return;
+    }
+
+    for (const group of composed.groups) {
+      const { edit, endIndex } = group;
+      const { start, end } = edit.range;
+      const isDeletion = edit.newText.length === 0;
+      const isReplacement = comparePosition(start, end) !== 0;
+      const lineLength = textDocument.getLineLength(start.line);
+      const isMidLineInsertion = !isReplacement && start.character < lineLength;
+      if (isReplacement) {
+        this.#renderSelection(
+          renderCtx,
+          isDeletion ? 'editPredictionDeletion' : 'editPredictionReplacement',
+          { start, end }
+        );
+      } else if (isMidLineInsertion) {
+        // Hide the in-flow suffix so ghost text never collides with it.
+        this.#renderSelection(renderCtx, 'editPredictionInsertion', {
+          start,
+          end: { line: start.line, character: lineLength },
+        });
+      }
+
+      if (isDeletion) {
+        continue;
+      }
+
+      const [anchorLeft, anchorWrapLine] = this.#getCharX(
+        start.line,
+        start.character
+      );
+      const lineLeft = this.#getCharX(start.line, 0)[0];
+      const anchorTop =
+        this.#getLineY(start.line) + anchorWrapLine * this.#metrics.lineHeight;
+      const key = `editPrediction-${endIndex}`;
+      let element = this.#overlayElements?.get(key);
+      if (element !== undefined) {
+        this.#overlayElements?.delete(key);
+        element.replaceChildren();
+      } else {
+        element = h(
+          'span',
+          {
+            ariaHidden: 'true',
+            contentEditable: 'false',
+            dataset: 'editPrediction',
+          },
+          renderCtx.fragment
+        );
+      }
+      if (isReplacement) {
+        element.dataset.replacement = '';
+        const lineElement = this.#getLineElement(start.line);
+        if (lineElement !== undefined) {
+          element.style.setProperty(
+            '--diffs-edit-prediction-bg',
+            getComputedStyle(lineElement).getPropertyValue('--diffs-line-bg')
+          );
+        }
+      } else {
+        delete element.dataset.replacement;
+        element.style.removeProperty('--diffs-edit-prediction-bg');
+      }
+      this.#fillGhostTextElement(
+        element,
+        edit.newText,
+        anchorLeft,
+        lineLeft,
+        this.#cloneInsertionSuffix(group)
+      );
+      element.style.transform = `translateX(${lineLeft}px) translateY(${anchorTop}px)`;
+      renderCtx.elements.set(key, element);
+    }
+    prediction.rendered = true;
+  }
+
   #updateSelections(selections: EditorSelection[]) {
     this.__postponeBgTokenizeToNextFrame();
+
+    const previousSelections = this.#selections;
+    let selectionsChanged = previousSelections?.length !== selections.length;
+    if (!selectionsChanged && previousSelections !== undefined) {
+      for (let i = 0; i < selections.length; i++) {
+        const previous = previousSelections[i];
+        const next = selections[i];
+        if (
+          previous.direction !== next.direction ||
+          comparePosition(previous.start, next.start) !== 0 ||
+          comparePosition(previous.end, next.end) !== 0
+        ) {
+          selectionsChanged = true;
+          break;
+        }
+      }
+    }
+    if (selectionsChanged) {
+      this.#cancelEditPrediction(true);
+    }
+    this.#syncEditPredictionSpacers();
 
     this.#primaryCaretElement = undefined;
     this.#setEditorActiveLineSafe(null);
@@ -4505,6 +5557,9 @@ export class Editor<
       this.#overlayElements?.clear();
       this.#selectionAction?.cleanup();
       this.#selectionAction = undefined;
+      if (selectionsChanged) {
+        this.#scheduleEditPrediction();
+      }
       return;
     }
 
@@ -4641,12 +5696,16 @@ export class Editor<
       }
     }
 
+    this.#renderEditPrediction(renderCtx);
+
     this.#overlayElement?.appendChild(fragment);
     this.#overlayElements?.forEach((el) => el.remove());
     this.#overlayElements?.clear();
     this.#overlayElements = renderCtx.elements;
-
     this.#updateSelectionActionPopover();
+    if (selectionsChanged) {
+      this.#scheduleEditPrediction();
+    }
   }
 
   // Render externally owned cursors independently from local selections so
@@ -4729,7 +5788,7 @@ export class Editor<
       fragment: DocumentFragment;
       elements: Map<string, HTMLElement>;
     },
-    type: 'selection' | 'match' | 'marker' | 'bracketMatch' | 'caretHighlight',
+    type: OverlayRangeType,
     range: Range,
     extraDataset?: string,
     connectedCaret?: Position
@@ -4756,6 +5815,32 @@ export class Editor<
       const endChar = isLastLine
         ? end.character
         : this.#editSession?.document.getLineLength(line);
+
+      // A predicted deletion of an empty line or of a lone line break has no
+      // text to strike through; draw a one-character mark at the boundary so
+      // the removal is visible, on flat and soft-wrapped lines alike. A range
+      // that ends at column 0 of a later line also produces an empty segment
+      // on that line, but that line survives the edit, so it gets no mark.
+      if (
+        startChar === endChar &&
+        (type === 'editPredictionDeletion' ||
+          type === 'editPredictionReplacement')
+      ) {
+        if (isLastLine && line !== start.line) {
+          continue;
+        }
+        const [left, wrapLine] = this.#getCharX(line, startChar);
+        this.#renderSelectionBlock(
+          renderCtx,
+          type,
+          line,
+          wrapLine,
+          left,
+          this.#metrics.ch,
+          extraDataset
+        );
+        continue;
+      }
 
       if (this.#isWrap) {
         const contentWidth = this.#getContentWidth();
@@ -4838,7 +5923,7 @@ export class Editor<
     startChar: number,
     endChar: number,
     isLastLine: boolean,
-    type: 'selection' | 'match' | 'marker' | 'bracketMatch' | 'caretHighlight',
+    type: OverlayRangeType,
     extraDataset?: string,
     connectedCaret?: Position
   ) {
@@ -4945,7 +6030,7 @@ export class Editor<
         width: number;
       };
     },
-    type: 'selection' | 'match' | 'marker' | 'bracketMatch' | 'caretHighlight',
+    type: OverlayRangeType,
     line: number,
     wrapLine: number,
     left: number,
@@ -5118,6 +6203,20 @@ export class Editor<
 
     rangeEl.style.width = `${width}px`;
     rangeEl.style.transform = `translateX(${left}px) translateY(${y}px)`;
+    if (
+      type === 'editPredictionInsertion' ||
+      type === 'editPredictionReplacement'
+    ) {
+      const lineElement = this.#getLineElement(line);
+      if (lineElement !== undefined) {
+        rangeEl.style.setProperty(
+          '--diffs-edit-prediction-bg',
+          getComputedStyle(lineElement).getPropertyValue('--diffs-line-bg')
+        );
+      }
+    } else {
+      rangeEl.style.removeProperty('--diffs-edit-prediction-bg');
+    }
     if (rounded) {
       addRadiusStyle(rangeEl);
     }
@@ -5732,8 +6831,18 @@ export class Editor<
     change: TextDocumentChange,
     newSelections?: EditorSelection[],
     newLineAnnotations?: EditorLineAnnotation<EType, LAnnotation>[],
-    options?: { skipSearchRefresh?: boolean; skipFocus?: boolean }
+    options?: {
+      skipSearchRefresh?: boolean;
+      skipFocus?: boolean;
+      editSource?: 'user' | 'prediction';
+    }
   ) {
+    // Cancel first so a line-count change, which rebuilds the component's
+    // layout, folds the now-empty ghost rows rather than rows keyed by pre-edit
+    // lines. Every change ends the prediction anyway.
+    if (this.#editPrediction != null) {
+      this.#cancelEditPrediction(true);
+    }
     const textDocument = this.#editSession?.document;
     if (textDocument !== undefined && this.#carets !== undefined) {
       for (const trackedCaret of this.#carets) {
@@ -5883,6 +6992,9 @@ export class Editor<
 
     this.#checkpointEditSessionState();
 
+    this.#recordEditPredictionHistory(change, options?.editSource ?? 'user');
+    this.#scheduleEditPrediction();
+
     // Publish the change only after the host renderer agrees with the new
     // document. Consumers may synchronously render the returned annotations,
     // which must not observe the previous line structure.
@@ -5988,6 +7100,19 @@ export class Editor<
     return ranges;
   }
 
+  // Whether the File or FileDiff component this editor is attached to
+  // currently renders a row for this document line. Virtualized components
+  // only render a window of lines, so a line outside that window has no DOM
+  // row. Without a render range, every line has a row.
+  #isLineInRenderRange(line: number): boolean {
+    const renderRange = this.#renderRange;
+    return (
+      renderRange == null ||
+      (line >= renderRange.startingLine &&
+        line < renderRange.startingLine + renderRange.totalLines)
+    );
+  }
+
   #getLineElement(line: number): HTMLElement | undefined {
     let lineElement = this.#lineElementsCache.get(line);
     if (lineElement !== undefined) {
@@ -5995,11 +7120,7 @@ export class Editor<
     }
 
     const renderRange = this.#renderRange;
-    if (
-      renderRange !== undefined &&
-      (line < renderRange.startingLine ||
-        line >= renderRange.startingLine + renderRange.totalLines)
-    ) {
+    if (!this.#isLineInRenderRange(line)) {
       return undefined;
     }
 
@@ -6409,4 +7530,41 @@ function getEditSession<EType extends EditorType, LAnnotation, Caret>({
   return (
     type === 'file' ? { type: 'file' } : { type: 'file-diff' }
   ) as ManagedEditSession<EType, LAnnotation>;
+}
+
+// Grid tracks a rendered column child occupies: rows take one, empty buffers
+// take the `data-buffer-size` they were emitted with.
+function gridTrackSpan(child: Element | undefined): number {
+  if (!(child instanceof HTMLElement)) {
+    return 1;
+  }
+  return Number(child.dataset.bufferSize ?? 1);
+}
+
+function isValidEditPredictionPosition<EType extends EditorType, LAnnotation>(
+  document: TextDocument<EType, LAnnotation>,
+  position: Position | undefined
+): position is Position {
+  return (
+    position !== undefined &&
+    Number.isInteger(position.line) &&
+    Number.isInteger(position.character) &&
+    position.line >= 0 &&
+    position.line < document.lineCount &&
+    position.character >= 0 &&
+    position.character <= document.getLineLength(position.line)
+  );
+}
+
+function splitsSurrogatePair(text: string, offset: number): boolean {
+  const previous = text.charCodeAt(offset - 1);
+  const next = text.charCodeAt(offset);
+  return (
+    offset > 0 &&
+    offset < text.length &&
+    previous >= 0xd800 &&
+    previous <= 0xdbff &&
+    next >= 0xdc00 &&
+    next <= 0xdfff
+  );
 }

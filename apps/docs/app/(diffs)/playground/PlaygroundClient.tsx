@@ -11,7 +11,13 @@ import {
   type LineAnnotation,
   type SelectedLineRange,
 } from '@pierre/diffs';
-import type { Editor, EditorOptions, EditorType } from '@pierre/diffs/edit';
+import type {
+  Editor,
+  EditorOptions,
+  EditorType,
+  EditPredictProvider,
+  EditPredictResponse,
+} from '@pierre/diffs/edit';
 import {
   type CodeViewReactOptions,
   File,
@@ -21,6 +27,7 @@ import {
 } from '@pierre/diffs/react';
 import type { PreloadFileDiffResult } from '@pierre/diffs/ssr';
 import {
+  IconBrandGithub,
   IconCheck,
   IconChevronSm,
   IconCiWarning,
@@ -40,6 +47,7 @@ import {
   IconLink,
   IconListOrdered,
   IconParagraph,
+  IconSparkle,
   IconSymbolDiffstat,
   IconWordWrap,
   IconXSquircle,
@@ -48,6 +56,7 @@ import { useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
+import { CodestralIcon } from '../_edit/CodestralIcon';
 import type { PlaygroundAnnotationMetadata } from './constants';
 import {
   CODE_VIEW_ITEMS,
@@ -121,6 +130,28 @@ const EMPTY_ANNOTATIONS: DiffLineAnnotation<PlaygroundAnnotationMetadata>[] =
 const EMPTY_FILE_ANNOTATIONS: LineAnnotation<PlaygroundAnnotationMetadata>[] =
   [];
 
+type PredictionStatus =
+  | 'idle'
+  | 'waiting'
+  | 'predicting'
+  | 'ready'
+  | 'empty'
+  | 'error';
+
+const PREDICTION_STATUS_TEXT: Record<PredictionStatus, React.ReactNode> = {
+  idle: null,
+  waiting: 'Codestral ready.',
+  predicting: 'Predicting…',
+  ready: (
+    <>
+      Prediction ready — press <kbd>Tab</kbd> to accept or <kbd>Esc</kbd> to
+      dismiss.
+    </>
+  ),
+  empty: 'No suggestion returned. Keep editing to try again.',
+  error: 'Prediction unavailable. Check the demo service and try again.',
+};
+
 function isDirectView(viewMode: ViewMode): boolean {
   return viewMode === 'diff' || viewMode === 'file';
 }
@@ -188,6 +219,8 @@ interface PlaygroundControlsContentProps {
   setEnableGutterUtility: (v: boolean) => void;
   showAnnotations: boolean;
   setShowAnnotations: (v: boolean) => void;
+  editPredictionEnabled: boolean;
+  setEditPredictionEnabled: (v: boolean) => void;
   editing: boolean;
   showMarkers: boolean;
   setShowMarkers: (v: boolean) => void;
@@ -231,6 +264,8 @@ function PlaygroundControlsContent({
   setEnableGutterUtility,
   showAnnotations,
   setShowAnnotations,
+  editPredictionEnabled,
+  setEditPredictionEnabled,
   editing,
   showMarkers,
   setShowMarkers,
@@ -486,6 +521,13 @@ function PlaygroundControlsContent({
           onCheckedChange={setShowAnnotations}
         />
 
+        <ToggleButton
+          icon={<IconSparkle />}
+          label="Tab completion"
+          checked={editPredictionEnabled}
+          onCheckedChange={setEditPredictionEnabled}
+        />
+
         {/* Markers use the direct view's active edit-session editor. */}
         {isDirectView(viewMode) && (
           <ToggleButton
@@ -679,6 +721,16 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
   );
   const [edit, setEdit] = useState(urlState.edit);
   const [showMarkers, setShowMarkers] = useState(urlState.showMarkers);
+  const editPredictionEnabledRef = useRef(urlState.editPrediction);
+  const [editPredictionEnabled, setEditPredictionEnabled] = useState(
+    urlState.editPrediction
+  );
+  const codestralEnabledRef = useRef(false);
+  const [codestralEnabled, setCodestralEnabled] = useState(false);
+  const [authenticating, setAuthenticating] = useState(false);
+  const [githubAuthenticated, setGithubAuthenticated] = useState(false);
+  const [predictionStatus, setPredictionStatus] =
+    useState<PredictionStatus>('idle');
   const [selectedRange, setSelectedRange] = useState<SelectedLineRange | null>(
     urlState.selectedRange
   );
@@ -699,6 +751,133 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
       ? 'select'
       : 'none';
 
+  const handleEditPredictionEnabledChange = useCallback((enabled: boolean) => {
+    editPredictionEnabledRef.current = enabled;
+    setEditPredictionEnabled(enabled);
+    setPredictionStatus(
+      enabled && codestralEnabledRef.current ? 'waiting' : 'idle'
+    );
+  }, []);
+
+  const redirectToGithubAuth = useCallback(() => {
+    const returnUrl = new URL(window.location.href);
+    returnUrl.searchParams.set('predict', '1');
+    const returnTo = `${returnUrl.pathname}${returnUrl.search}${returnUrl.hash}`;
+    window.location.assign(
+      `/edit/auth?returnTo=${encodeURIComponent(returnTo)}`
+    );
+  }, []);
+
+  const predictionProvider = useMemo<EditPredictProvider>(
+    () => ({
+      async predict(request, { signal }) {
+        if (!editPredictionEnabledRef.current || !codestralEnabledRef.current) {
+          const prefix = request.excerptText.slice(
+            0,
+            request.cursorOffsetInExcerpt
+          );
+          const lines = prefix.split(request.eol);
+          return {
+            edits: [],
+            newCursor: {
+              line: request.excerptStartLine + lines.length - 1,
+              character: lines.at(-1)?.length ?? 0,
+            },
+          };
+        }
+
+        setPredictionStatus('predicting');
+        try {
+          const response = await fetch('/edit/predict', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(request),
+            signal,
+          });
+          if (response.status === 401) {
+            setGithubAuthenticated(false);
+            redirectToGithubAuth();
+            throw new Error('GitHub sign-in required');
+          }
+          if (!response.ok) {
+            throw new Error('Edit prediction request failed');
+          }
+          const prediction = (await response.json()) as EditPredictResponse;
+          if (!signal.aborted) {
+            setPredictionStatus(
+              prediction.edits.length === 0 ? 'empty' : 'ready'
+            );
+          }
+          return prediction;
+        } catch (error) {
+          if (!signal.aborted) {
+            setPredictionStatus('error');
+          }
+          throw error;
+        }
+      },
+    }),
+    [redirectToGithubAuth]
+  );
+
+  const editPrediction = useMemo(
+    () => ({ mode: 'eager' as const, provider: predictionProvider }),
+    [predictionProvider]
+  );
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    void fetch('/edit/auth', {
+      method: 'HEAD',
+      cache: 'no-store',
+      signal: controller.signal,
+    })
+      .then((response) => {
+        if (!controller.signal.aborted) {
+          setGithubAuthenticated(response.status === 204);
+        }
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) {
+          setGithubAuthenticated(false);
+        }
+      });
+
+    return () => controller.abort();
+  }, []);
+
+  const tryCodestral = useCallback(async () => {
+    setAuthenticating(true);
+    try {
+      const response = await fetch('/edit/auth', {
+        method: 'HEAD',
+        cache: 'no-store',
+      });
+      if (response.status === 401) {
+        setGithubAuthenticated(false);
+        redirectToGithubAuth();
+        return;
+      }
+      if (!response.ok) {
+        setPredictionStatus('error');
+        return;
+      }
+      setGithubAuthenticated(true);
+      codestralEnabledRef.current = true;
+      setCodestralEnabled(true);
+      setPredictionStatus('waiting');
+    } catch {
+      setPredictionStatus('error');
+    } finally {
+      setAuthenticating(false);
+    }
+  }, [redirectToGithubAuth]);
+
+  const predictionStatusText = authenticating
+    ? 'Checking GitHub sign-in…'
+    : PREDICTION_STATUS_TEXT[predictionStatus];
+
   const editorRef = useRef<Editor<
     EditorType,
     PlaygroundAnnotationMetadata
@@ -707,12 +886,13 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
     EditorOptions<EditorType, PlaygroundAnnotationMetadata, undefined>
   >(
     () => ({
+      editPrediction,
       onAttach(editor) {
         editorRef.current = editor;
         editor.focus({ lineNumber: 'first-visible', preventScroll: true });
       },
     }),
-    []
+    [editPrediction]
   );
 
   // The file/diff the direct views show: the fixtures until a session is
@@ -842,6 +1022,8 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
       params.set('gutter', enableGutterUtility ? '1' : '0');
     if (showAnnotations !== DEFAULTS.annotations)
       params.set('annot', showAnnotations ? '1' : '0');
+    if (editPredictionEnabled !== DEFAULTS.editPrediction)
+      params.set('predict', editPredictionEnabled ? '1' : '0');
     if (edit && isDirectView(viewMode)) params.set('edit', 'edit');
     if (showMarkers !== DEFAULTS.markers)
       params.set('markers', showMarkers ? '1' : '0');
@@ -876,6 +1058,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
     enableLineSelection,
     enableGutterUtility,
     showAnnotations,
+    editPredictionEnabled,
     edit,
     showMarkers,
     committedSelectedRange,
@@ -1080,6 +1263,8 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
     setEnableGutterUtility,
     showAnnotations,
     setShowAnnotations,
+    editPredictionEnabled,
+    setEditPredictionEnabled: handleEditPredictionEnabledChange,
     editing: edit,
     showMarkers,
     setShowMarkers,
@@ -1345,6 +1530,38 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
           </div>
         </div>
       </div>
+      {editPredictionEnabled && (
+        <div className="flex flex-wrap items-center gap-3">
+          <p className="text-muted-foreground text-xs">
+            Connect Codestral, then edit a file and pause after typing to
+            preview a prediction. Press <kbd>Tab</kbd> to accept or{' '}
+            <kbd>Esc</kbd> to dismiss.
+          </p>
+          <div className="flex basis-full items-center justify-start gap-3 md:ml-auto md:basis-auto md:justify-end">
+            {(authenticating || predictionStatus !== 'idle') && (
+              <span
+                className="text-muted-foreground text-xs"
+                role="status"
+                aria-live="polite"
+              >
+                {predictionStatusText}
+              </span>
+            )}
+            {!codestralEnabled && (
+              <Button
+                variant="outline"
+                onClick={() => void tryCodestral()}
+                disabled={authenticating}
+              >
+                {githubAuthenticated ? <CodestralIcon /> : <IconBrandGithub />}
+                {githubAuthenticated
+                  ? 'Continue with Codestral'
+                  : 'Connect GitHub'}
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
       {viewMode === 'diff' ? (
         fileDiff
       ) : viewMode === 'file' ? (
@@ -1356,6 +1573,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
           enableLineSelection={enableLineSelection}
           enableGutterComments={enableGutterUtility}
           showAnnotations={showAnnotations}
+          editPrediction={editPrediction}
         />
       ) : viewMode === 'virtualizer-element' ? (
         <PlaygroundVirtualizerElementView
@@ -1364,6 +1582,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
           enableLineSelection={enableLineSelection}
           enableGutterComments={enableGutterUtility}
           showAnnotations={showAnnotations}
+          editPrediction={editPrediction}
         />
       ) : (
         <PlaygroundCodeView
@@ -1372,6 +1591,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
           enableLineSelection={enableLineSelection}
           enableGutterComments={enableGutterUtility}
           showAnnotations={showAnnotations}
+          editPrediction={editPrediction}
         />
       )}
     </div>

@@ -27,6 +27,7 @@
     "@radix-ui/react-use-controllable-state": "catalog:",
     "@shikijs/transformers": "catalog:",
     "@vercel/analytics": "catalog:",
+    "@vercel/firewall": "catalog:",
     "@vercel/speed-insights": "catalog:",
     "@vscode/web-custom-data": "catalog:",
     "babel-plugin-react-compiler": "catalog:",

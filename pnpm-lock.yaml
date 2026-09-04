@@ -96,6 +96,9 @@ catalogs:
     '@vercel/analytics':
       specifier: 2.0.1
       version: 2.0.1
+    '@vercel/firewall':
+      specifier: 1.2.1
+      version: 1.2.1
     '@vercel/speed-insights':
       specifier: 2.0.0
       version: 2.0.0
@@ -498,6 +501,9 @@ importers:
       '@vercel/analytics':
         specifier: 'catalog:'
         version: 2.0.1(next@16.2.9(@playwright/test@1.51.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react@19.2.7)
+      '@vercel/firewall':
+        specifier: 'catalog:'
+        version: 1.2.1
       '@vercel/speed-insights':
         specifier: 'catalog:'
         version: 2.0.0(next@16.2.9(@playwright/test@1.51.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react@19.2.7)
@@ -2951,6 +2957,10 @@ packages:
         optional: true
       vue-router:
         optional: true
+
+  '@vercel/firewall@1.2.1':
+    resolution: {integrity: sha512-WlxjEPpf+GWYMontNNZqZjvLL40ziGwy9swwI9da/L1fB/syAO1S2fMtlBXkp4EGVF6nlXSKmwvkUd6YPWJbbg==}
+    engines: {node: '>= 20'}
 
   '@vercel/speed-insights@2.0.0':
     resolution: {integrity: sha512-jwkNcrTeafWxjmWq4AHBaptSqZiJkYU5adLC9QBSqeim0GcqDMgN5Ievh8OG1rJ6W3A4l1oiP7qr9CWxGuzu3w==}
@@ -8273,6 +8283,8 @@ snapshots:
     optionalDependencies:
       next: 16.2.9(@babel/core@7.29.7)(@playwright/test@1.51.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       react: 19.2.7
+
+  '@vercel/firewall@1.2.1': {}
 
   '@vercel/speed-insights@2.0.0(next@16.2.9(@playwright/test@1.51.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react@19.2.7)':
     optionalDependencies:

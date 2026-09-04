@@ -1,20 +1,29 @@
-import { DEFAULT_THEMES, type FileContents } from '@pierre/diffs';
+import {
+  DEFAULT_THEMES,
+  type FileContents,
+  parseDiffFromFile,
+} from '@pierre/diffs';
 import type {
   EditorCaret,
   EditorCommand,
   EditorKeymap,
 } from '@pierre/diffs/edit';
 import type { FileOptions } from '@pierre/diffs/react';
-import type { PreloadFileOptions } from '@pierre/diffs/ssr';
+import type {
+  PreloadFileDiffOptions,
+  PreloadFileOptions,
+} from '@pierre/diffs/ssr';
 
 // The editor requires the token transformer, so enabling it in the SSR preload
 // keeps hydration from rerendering the component after the editor attaches.
 // Mirrors LiveEditing/constants.ts.
-const EDITABLE_FILE_OPTIONS: FileOptions<undefined, undefined> = {
+const EDITABLE_OPTIONS = {
   theme: DEFAULT_THEMES,
   themeType: 'dark',
   useTokenTransformer: true,
-};
+} as const;
+const EDITABLE_FILE_OPTIONS: FileOptions<undefined, undefined> =
+  EDITABLE_OPTIONS;
 
 export interface CursorCaretMetadata {
   name: string;
@@ -47,6 +56,46 @@ export const CARET_DEMO_CARETS: EditorCaret<CursorCaretMetadata>[] = [
     metadata: { name: 'Mark', color: '#c2410c' },
   },
 ];
+
+const EDIT_PREDICTION_OLD_FILE: FileContents = {
+  name: 'cart.ts',
+  contents: `// cart calculator
+
+export type CartItem = {
+  id: string
+  name: string
+  price: number
+  quantity: number
+}
+
+export function cartTotal(items: CartItem[]): number {
+  let total = 0
+
+  for (const item of items) {
+    total += item.price * item.quantity
+  }
+
+  return total
+}
+`,
+};
+
+export const EDIT_PREDICTION_NEW_FILE: FileContents = {
+  name: 'cart.ts',
+  contents: `// cart calculator
+
+export type CartItem = {
+  id: string
+  name: string
+  price: number
+  quantity: number
+}
+
+export function cartTotal(items: CartItem[]): number {
+  return items.
+}
+`,
+};
 
 // Lint-marker demo source. Marker positions below are tied to these exact
 // lines, so keep the two in sync if the contents change.
@@ -364,6 +413,28 @@ const DEFAULT_KEYMAP_FILE: FileContents = {
 // Server-side preload inputs. Spreading the resolved results into <File> ships
 // pre-rendered, already-highlighted shadow DOM so each demo paints instantly
 // instead of flashing in after client highlighting.
+export const EDIT_PREDICTION_FILE_EXAMPLE: PreloadFileOptions<
+  undefined,
+  undefined
+> = {
+  file: EDIT_PREDICTION_NEW_FILE,
+  options: EDITABLE_FILE_OPTIONS,
+};
+
+export const EDIT_PREDICTION_FILE_DIFF_EXAMPLE: PreloadFileDiffOptions<
+  undefined,
+  undefined
+> = {
+  fileDiff: parseDiffFromFile(
+    EDIT_PREDICTION_OLD_FILE,
+    EDIT_PREDICTION_NEW_FILE
+  ),
+  options: {
+    ...EDITABLE_OPTIONS,
+    diffStyle: 'unified',
+  },
+};
+
 export const MARKER_DEMO_FILE_EXAMPLE: PreloadFileOptions<
   undefined,
   undefined
