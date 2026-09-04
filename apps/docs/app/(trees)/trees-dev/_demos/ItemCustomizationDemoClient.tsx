@@ -9,6 +9,7 @@ import type { FileTreePathOptions } from '@trees/_lib/fileTreePathOptions';
 import { useWindowScrollLock } from '@trees/_lib/useWindowScrollLock';
 import {
   type ChangeEvent,
+  type RefObject,
   useCallback,
   useEffect,
   useMemo,
@@ -215,6 +216,16 @@ function areSamePathLists(
   }
 
   return true;
+}
+
+// Quick workaround to allow react compiler to still function in the parent
+// component
+function useDesiredSelectedPaths(
+  desiredSelectedPathsRef: RefObject<readonly string[]>
+) {
+  /* oxlint-disable-next-line react/refs -- this hook preserves the existing
+   * render-time selection snapshot */
+  return desiredSelectedPathsRef.current;
 }
 
 function HydratedItemCustomizationTree({
@@ -450,6 +461,7 @@ export function ItemCustomizationDemoClient({
     gitStatusEnabled ? gitStatusPresetId : 'git-status-off',
     decorationPresetId,
   ].join(':');
+  const desiredSelectedPaths = useDesiredSelectedPaths(desiredSelectedPathsRef);
 
   return (
     <div className="space-y-6">
@@ -649,7 +661,7 @@ export function ItemCustomizationDemoClient({
             containerHtml={containerHtml}
             contextMenuRootRef={contextMenuRootRef}
             contextMenuSlotRef={contextMenuSlotRef}
-            desiredSelectedPaths={desiredSelectedPathsRef.current}
+            desiredSelectedPaths={desiredSelectedPaths}
             gitStatus={gitStatus}
             hasHydratedTreeRef={hasHydratedTreeRef}
             isRestoringSelectionRef={isRestoringSelectionRef}

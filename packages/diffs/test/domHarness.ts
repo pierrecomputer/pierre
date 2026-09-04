@@ -118,10 +118,7 @@ export function installDom(options: InstallDomOptions = {}): DomHandle {
       if (!this.#targets.has(target)) {
         return;
       }
-      this.#callback(
-        [{ target } as ResizeObserverEntry],
-        this as unknown as ResizeObserver
-      );
+      this.#callback([{ target } as ResizeObserverEntry], this);
     }
   }
 
@@ -213,13 +210,13 @@ export function installDom(options: InstallDomOptions = {}): DomHandle {
   });
 
   Object.assign(globalThis, {
-    cancelAnimationFrame: ((id: number) => {
+    cancelAnimationFrame: (id: number) => {
       const timeout = frames.get(id);
       if (timeout != null) {
         clearTimeout(timeout);
         frames.delete(id);
       }
-    }) as typeof cancelAnimationFrame,
+    },
     document: dom.window.document,
     Document: dom.window.Document,
     DocumentFragment: dom.window.DocumentFragment,
@@ -238,7 +235,7 @@ export function installDom(options: InstallDomOptions = {}): DomHandle {
     MutationObserver: dom.window.MutationObserver,
     Node: dom.window.Node,
     PointerEvent: MockPointerEvent,
-    requestAnimationFrame: ((callback: FrameRequestCallback) => {
+    requestAnimationFrame: (callback: FrameRequestCallback) => {
       const id = ++nextFrameId;
       const timeout = setTimeout(() => {
         frames.delete(id);
@@ -246,7 +243,7 @@ export function installDom(options: InstallDomOptions = {}): DomHandle {
       }, 0);
       frames.set(id, timeout);
       return id;
-    }) as typeof requestAnimationFrame,
+    },
     ResizeObserver: MockResizeObserver,
     SVGElement: dom.window.SVGElement,
     SVGSVGElement: dom.window.SVGSVGElement,

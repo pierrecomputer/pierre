@@ -1548,7 +1548,7 @@ function isRenderTask(task: AllWorkerTasks | undefined): task is RenderTask {
 function getInstances(
   task: RenderTask
 ): Set<FileRendererInstance | DiffRendererInstance> {
-  return task.instances as Set<FileRendererInstance | DiffRendererInstance>;
+  return task.instances;
 }
 
 function normalizeWorkerError(error: unknown): Error {

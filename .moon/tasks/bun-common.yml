@@ -11,7 +11,7 @@ inheritedBy:
 # defined in project moon.yml files):
 # - package.json: manifest changes (deps, exports) must re-trigger tasks.
 # - /tsconfig.options.json: every package tsconfig extends the shared root
-#   options, and several builds emit type declarations (tsgo --build, tsdown
+#   options, and several builds emit type declarations (tsc --build, tsdown
 #   dts, next build), so compiler-option changes must re-key everything or
 #   stale declarations get restored from cache.
 implicitInputs:
@@ -30,7 +30,7 @@ tasks:
   # (no TypeScript project references between packages), so typechecking a
   # project requires its workspace dependencies to be built first.
   typecheck:
-    command: 'tsgo --noEmit --pretty'
+    command: 'tsc --noEmit --pretty'
     deps:
       - '^:build'
     inputs:

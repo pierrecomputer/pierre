@@ -1,3 +1,5 @@
+/* oxlint-disable react/refs -- this code is preact, and therefore not
+ * compatible with react compiler */
 /** @jsxImportSource preact */
 import { Fragment } from 'preact';
 import type { JSX } from 'preact';
@@ -1446,21 +1448,21 @@ export function FileTreeView({
 
     rootElement.addEventListener(
       'file-tree-debug-set-context-menu-trigger',
-      handleDebugSetContextMenuTrigger as EventListener
+      handleDebugSetContextMenuTrigger
     );
     rootElement.addEventListener(
       'file-tree-debug-set-scroll-suppression',
-      handleDebugSetScrollSuppression as EventListener
+      handleDebugSetScrollSuppression
     );
 
     return () => {
       rootElement.removeEventListener(
         'file-tree-debug-set-context-menu-trigger',
-        handleDebugSetContextMenuTrigger as EventListener
+        handleDebugSetContextMenuTrigger
       );
       rootElement.removeEventListener(
         'file-tree-debug-set-scroll-suppression',
-        handleDebugSetScrollSuppression as EventListener
+        handleDebugSetScrollSuppression
       );
     };
   }, []);

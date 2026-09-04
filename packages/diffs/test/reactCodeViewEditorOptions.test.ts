@@ -83,6 +83,13 @@ type AnyTrackedCodeViewEditor =
   | TrackedCodeViewEditor<'file'>
   | TrackedCodeViewEditor<'file-diff'>;
 
+interface ReceivedEditorOptions {
+  historyMaxEntries: number | undefined;
+  onAttach: unknown;
+  onChange: unknown;
+  roundedSelection: boolean | undefined;
+}
+
 function createTrackedEditor<EType extends EditorType>(
   editorType: EType,
   options: EditorOptions<EType, undefined, undefined>,
@@ -97,7 +104,7 @@ function createTrackedEditor<EType extends EditorType>(
   editor.recycleCleanUps = 0;
 
   const edit = editor.edit.bind(editor);
-  editor.edit = ((instance: TestEditorComponent<EType>) => {
+  editor.edit = (instance: TestEditorComponent<EType>) => {
     editor.edits.push(instance);
     const complete =
       instance.type === 'file'
@@ -107,7 +114,7 @@ function createTrackedEditor<EType extends EditorType>(
       throw attachmentError;
     }
     return complete;
-  }) as typeof editor.edit;
+  };
 
   const cleanUp = editor.cleanUp.bind(editor);
   editor.cleanUp = (reason) => {
@@ -157,7 +164,7 @@ async function setSessionText(
 function createEditorHarness(attachmentError?: Error) {
   const editors: AnyTrackedCodeViewEditor[] = [];
   const receivedEditorTypes: EditorType[] = [];
-  const receivedOptions: EditorOptions<EditorType, undefined, undefined>[] = [];
+  const receivedOptions: ReceivedEditorOptions[] = [];
   const receivedEditStateKeys: Array<string | undefined> = [];
   const createEditor: EditorFactory<undefined, undefined> = (
     editorType,
@@ -165,9 +172,12 @@ function createEditorHarness(attachmentError?: Error) {
     editStateKey
   ) => {
     receivedEditorTypes.push(editorType);
-    receivedOptions.push(
-      options as EditorOptions<EditorType, undefined, undefined>
-    );
+    receivedOptions.push({
+      historyMaxEntries: options.historyMaxEntries,
+      onAttach: options.onAttach,
+      onChange: options.onChange,
+      roundedSelection: options.roundedSelection,
+    });
     receivedEditStateKeys.push(editStateKey);
     const editor = createTrackedEditor(editorType, options, attachmentError);
     editors.push(editor as unknown as AnyTrackedCodeViewEditor);

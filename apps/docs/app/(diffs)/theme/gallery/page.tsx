@@ -182,9 +182,7 @@ export default async function ThemeGalleryPage() {
   const resolvedThemes = await Promise.all(
     THEMES.map(async (themeName) => {
       try {
-        const theme = await resolveTheme(
-          themeName as Parameters<typeof resolveTheme>[0]
-        );
+        const theme = await resolveTheme(themeName);
         return {
           name: themeName,
           type: theme.type,

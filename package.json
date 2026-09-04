@@ -10,7 +10,6 @@
     "@moonrepo/cli": "catalog:",
     "@pierre/icons": "catalog:",
     "@types/bun": "catalog:",
-    "@typescript/native-preview": "catalog:",
     "lint-staged": "catalog:",
     "oxfmt": "catalog:",
     "oxlint": "catalog:",

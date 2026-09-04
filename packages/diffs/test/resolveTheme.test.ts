@@ -49,7 +49,7 @@ describe('resolveTheme contract', () => {
   test('rejects a name with no registered or bundled loader', async () => {
     let caughtErr: unknown;
     try {
-      await resolveTheme('definitely-not-a-real-theme-xyz' as never);
+      await resolveTheme('definitely-not-a-real-theme-xyz');
     } catch (err) {
       caughtErr = err;
     }

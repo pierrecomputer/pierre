@@ -28,6 +28,9 @@ const useClientLayoutEffect =
   typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
 interface ActiveContextMenuState {
+  // The availability key is compared by identity so an open menu from before a
+  // disable/re-enable cycle cannot reappear.
+  availabilityKey: { hasContextMenu: boolean };
   context: FileTreeContextMenuOpenContext;
   item: FileTreeContextMenuItem;
 }
@@ -159,6 +162,27 @@ export interface FileTreeProps extends Omit<
   ) => ReactNode;
 }
 
+// Captures the composition that each model owned before the React wrapper
+// overrides it. The ref reads intentionally preserve this value for the full
+// lifetime of a model attachment, so React Compiler skips only this hook.
+function useBaselineComposition(
+  model: FileTreeModel
+): FileTreeCompositionOptions | undefined {
+  /* oxlint-disable react/refs -- this hook isolates the per-model restoration snapshot from the compiled component */
+  const baselineCompositionRef = useRef<FileTreeCompositionOptions | undefined>(
+    model.getComposition()
+  );
+  const baselineModelRef = useRef(model);
+  if (baselineModelRef.current !== model) {
+    baselineModelRef.current = model;
+    baselineCompositionRef.current = model.getComposition();
+  }
+  const baselineComposition = baselineCompositionRef.current;
+  /* oxlint-enable react/refs */
+
+  return baselineComposition;
+}
+
 export function FileTree({
   header,
   id,
@@ -170,16 +194,16 @@ export function FileTree({
   const [activeContextMenu, setActiveContextMenu] =
     useState<ActiveContextMenuState | null>(null);
   const [hostElement, setHostElement] = useState<HTMLElement | null>(null);
-  const baselineCompositionRef = useRef<FileTreeCompositionOptions | undefined>(
-    model.getComposition()
-  );
-  const baselineModelRef = useRef(model);
-  if (baselineModelRef.current !== model) {
-    baselineModelRef.current = model;
-    baselineCompositionRef.current = model.getComposition();
-  }
+  const baselineComposition = useBaselineComposition(model);
 
   const hasContextMenu = renderContextMenu != null;
+  // A disabled menu invalidates any open React slot without an effect-driven
+  // state update. Re-enabling creates a fresh key, so stale content cannot
+  // reappear even when the same render function is restored.
+  const contextMenuAvailabilityKey = useMemo(
+    () => ({ hasContextMenu }),
+    [hasContextMenu]
+  );
   const handleContextMenuClose = useCallback(() => {
     setActiveContextMenu(null);
   }, []);
@@ -188,11 +212,14 @@ export function FileTree({
       item: FileTreeContextMenuItem,
       context: FileTreeContextMenuOpenContext
     ) => {
-      setActiveContextMenu({ context, item });
+      setActiveContextMenu({
+        availabilityKey: contextMenuAvailabilityKey,
+        context,
+        item,
+      });
     },
-    []
+    [contextMenuAvailabilityKey]
   );
-  const baselineComposition = baselineCompositionRef.current;
   const composition = useMemo<FileTreeCompositionOptions | undefined>(
     () =>
       resolveComposition(
@@ -215,14 +242,6 @@ export function FileTree({
     setHostElement(node);
   }, []);
 
-  useEffect(() => {
-    if (hasContextMenu) {
-      return;
-    }
-
-    setActiveContextMenu(null);
-  }, [hasContextMenu]);
-
   useClientLayoutEffect(() => {
     model.setComposition(composition);
   }, [composition, model]);
@@ -244,8 +263,12 @@ export function FileTree({
     };
   }, [baselineComposition, hostElement, model, preloadedData]);
 
+  const visibleContextMenu =
+    activeContextMenu?.availabilityKey === contextMenuAvailabilityKey
+      ? activeContextMenu
+      : null;
   const children = renderPreloadedShadowDom(
-    renderFileTreeChildren(header, renderContextMenu, activeContextMenu),
+    renderFileTreeChildren(header, renderContextMenu, visibleContextMenu),
     preloadedData
   );
   const resolvedHostId = id ?? preloadedData?.id;

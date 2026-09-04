@@ -79,7 +79,7 @@ function createTestFile(
   };
 
   const render = component.render.bind(component);
-  component.render = ((props: Partial<FileRenderProps<undefined>>) => {
+  component.render = (props: Partial<FileRenderProps<undefined>>) => {
     currentFile = props.file ?? currentFile;
     if ('lineAnnotations' in props) {
       currentLineAnnotations = props.lineAnnotations;
@@ -99,16 +99,16 @@ function createTestFile(
       content.focus = () => onContentFocus(content);
     }
     return rendered;
-  }) as TestFile['render'];
+  };
 
   const applyDocumentChange = component.applyDocumentChange.bind(component);
-  component.applyDocumentChange = ((textDocument, lineAnnotations) => {
+  component.applyDocumentChange = (textDocument, lineAnnotations) => {
     currentFile = { ...currentFile, contents: textDocument.getText() };
     if (lineAnnotations !== undefined) {
       currentLineAnnotations = lineAnnotations;
     }
     applyDocumentChange(textDocument, lineAnnotations);
-  }) as typeof component.applyDocumentChange;
+  };
 
   Object.defineProperties(component, {
     contentElement: {

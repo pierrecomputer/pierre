@@ -45,10 +45,11 @@ import {
   getSessionGitStatus,
   getSessionPaths,
 } from './mockData';
-
 type AgentUiEditorChangeEvent =
   | EditorChangeEvent<'file', undefined, undefined>
   | EditorChangeEvent<'file-diff', undefined, undefined>;
+
+import { useLatestValueRef } from '@/lib/useLatestValueRef';
 
 // Added/removed line totals for a single file's diff.
 interface DiffStats {
@@ -132,6 +133,16 @@ function formatSelectionLineLabel(
     : `(${String(snippet.lineStart)}-${String(snippet.lineEnd)})`;
 }
 
+// The edited-path set is intentionally imperative; isolate its render-time
+// lookup so the surrounding demo component remains compiler-safe.
+function useHasEditedPath(
+  editedPathsRef: { current: ReadonlySet<string> },
+  path: string | null
+): boolean {
+  /* oxlint-disable-next-line react/refs -- preserves the existing prerender eligibility check */
+  return path != null && editedPathsRef.current.has(path);
+}
+
 // Renders the active session's changed files as a @pierre/trees FileTree, with
 // git-status colours and per-row +/- decorations. The tree is an imperative web
 // component, so it's created in an effect and torn down on session change.
@@ -148,13 +159,11 @@ function ChangesTree({
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const treeRef = useRef<FileTree | null>(null);
-  const onSelectRef = useRef(onSelect);
-  onSelectRef.current = onSelect;
+  const onSelectRef = useLatestValueRef(onSelect);
   // The FileTree lives for the whole session, so its renderRowDecoration closure
   // is created once. Reading the latest stats through a ref keeps the decoration
   // in sync with edits without recreating the tree.
-  const statsRef = useRef(statsByPath);
-  statsRef.current = statsByPath;
+  const statsRef = useLatestValueRef(statsByPath);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -225,7 +234,7 @@ function ChangesTree({
       tree.cleanUp();
       treeRef.current = null;
     };
-  }, [session]);
+  }, [onSelectRef, session, statsRef]);
 
   // Inline color-scheme beats the tree's `:host { color-scheme: light dark }`,
   // pinning its light-dark() colours to the demo's dark mode.
@@ -306,10 +315,12 @@ function FilesTree({
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const treeRef = useRef<FileTree | null>(null);
-  const onSelectRef = useRef(onSelect);
-  onSelectRef.current = onSelect;
-  const onModelReadyRef = useRef(onModelReady);
-  onModelReadyRef.current = onModelReady;
+  const onSelectRef = useLatestValueRef(onSelect);
+  const onModelReadyRef = useLatestValueRef(onModelReady);
+  const notifyModelReady = useCallback(
+    (model: FileTree | null) => onModelReadyRef.current(model),
+    [onModelReadyRef]
+  );
 
   useEffect(() => {
     const container = containerRef.current;
@@ -347,14 +358,14 @@ function FilesTree({
     treeRef.current = tree;
     container.innerHTML = '';
     tree.render({ fileTreeContainer: container });
-    onModelReadyRef.current(tree);
+    notifyModelReady(tree);
 
     return () => {
       tree.cleanUp();
       treeRef.current = null;
-      onModelReadyRef.current(null);
+      notifyModelReady(null);
     };
-  }, [session]);
+  }, [notifyModelReady, onSelectRef, session]);
 
   // Inline color-scheme beats the tree's `:host { color-scheme: light dark }`,
   // pinning its light-dark() colours to the demo's dark mode.
@@ -787,8 +798,7 @@ export function AgentUi({
   >([]);
   // Mirror for the tree mutation handlers (whose closures would otherwise read a
   // stale snapshot) so they can tell explorer-created rows from anything else.
-  const creationsRef = useRef(explorerCreations);
-  creationsRef.current = explorerCreations;
+  const creationsRef = useLatestValueRef(explorerCreations);
 
   // New file / New folder: add a placeholder row, track it, and drop it into
   // inline rename (`removeIfCanceled` discards an unnamed row). Folder paths end
@@ -857,7 +867,7 @@ export function AgentUi({
       offMove();
       offRemove();
     };
-  }, [filesModel]);
+  }, [creationsRef, filesModel]);
 
   // Files created in the explorer, surfaced in the Changes panel as added files
   // (whole contents counted as additions).
@@ -898,8 +908,7 @@ export function AgentUi({
   const [editedPlaceholders, setEditedPlaceholders] = useState<string[]>([]);
   // Mirror the latest edits so the stable editor callback can rebuild a
   // placeholder's Changes entry without depending on edit state.
-  const editedPlaceholdersRef = useRef(editedPlaceholders);
-  editedPlaceholdersRef.current = editedPlaceholders;
+  const editedPlaceholdersRef = useLatestValueRef(editedPlaceholders);
 
   // Snippets sent from the selection action's "Add to chat" land here as
   // composer attachments.
@@ -976,10 +985,9 @@ export function AgentUi({
         filesModel?.applyGitStatusPatch({ remove: [target] });
       }
     },
-    [liveSession, filesModel]
+    [editedPlaceholdersRef, liveSession, filesModel]
   );
-  const recordEditedStatsRef = useRef(recordEditedStats);
-  recordEditedStatsRef.current = recordEditedStats;
+  const recordEditedStatsRef = useLatestValueRef(recordEditedStats);
 
   // One external diff baseline per changed file, created up front for worker
   // priming and reused on every visit so its cache identity remains stable.
@@ -1104,16 +1112,19 @@ export function AgentUi({
     [addSnippet]
   );
 
-  const handleEditChange = useCallback((event: AgentUiEditorChangeEvent) => {
-    const target = activeTargetRef.current;
-    if (target == null) {
-      return;
-    }
-    editedPathsRef.current.add(target);
-    // Recompute the edited file's diff against its original snapshot so the
-    // Changes tree's +/- totals reflect the live edits.
-    recordEditedStatsRef.current(target, event.file.contents);
-  }, []);
+  const handleEditChange = useCallback(
+    (event: AgentUiEditorChangeEvent) => {
+      const target = activeTargetRef.current;
+      if (target == null) {
+        return;
+      }
+      editedPathsRef.current.add(target);
+      // Recompute the edited file's diff against its original snapshot so the
+      // Changes tree's +/- totals reflect the live edits.
+      recordEditedStatsRef.current(target, event.file.contents);
+    },
+    [recordEditedStatsRef]
+  );
 
   const openFile = useCallback((path: string) => {
     setActivePath(path);
@@ -1128,6 +1139,7 @@ export function AgentUi({
     [liveSession, activePath]
   );
   const fileDiff = activeFile != null ? diffs.get(activeFile.path) : undefined;
+  const activePathIsEdited = useHasEditedPath(editedPathsRef, activePath);
 
   // When the active path isn't a changed/added file (e.g. browsing the root
   // README or another explorer file), open editable placeholder contents
@@ -1143,7 +1155,7 @@ export function AgentUi({
   // Server-rendered, already-highlighted HTML for the active diff. Only safe
   // when the file is unedited so the markup matches `fileDiff`.
   const activePrerenderedHTML =
-    activePath != null && !editedPathsRef.current.has(activePath)
+    activePath != null && !activePathIsEdited
       ? prerenderedDiffs?.[activePath]
       : undefined;
   const fileDiffEditStateKey =

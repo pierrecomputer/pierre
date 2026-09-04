@@ -25,8 +25,7 @@ export class CodeToTokenTransformStream extends TransformStream<
           recall,
         } = await tokenizer.enqueue(chunk);
         if (allowRecalls && recall > 0) {
-          // oxlint-disable-next-line typescript/no-explicit-any
-          controller.enqueue({ recall } as any);
+          controller.enqueue({ recall });
         }
         for (const token of stable) {
           controller.enqueue(token);

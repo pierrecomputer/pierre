@@ -153,27 +153,13 @@ export function useFileDiffInstance<LAnnotation, Caret>({
   // from acceptance time (stale) or the completion event's files (installed),
   // the parse is the accepted diff itself; any other pair clears the record
   // and parses fresh.
-  const effectiveFileDiff = useMemo(() => {
-    if (fileDiff != null) {
-      return fileDiff;
-    }
-    const { current: accepted } = acceptedCache;
-    const filePair = accepted?.filePair;
-    if (accepted != null && filePair != null) {
-      if (
-        isSameFilePair(oldFile, newFile, filePair.stale) ||
-        isSameFilePair(oldFile, newFile, filePair.installed)
-      ) {
-        return filePair.fileDiff;
-      }
-      accepted.filePair = null;
-    }
-    return parseDiffFromFile(
-      oldFile ?? null,
-      newFile ?? null,
-      options?.parseDiffOptions
-    );
-  }, [fileDiff, oldFile, newFile, options?.parseDiffOptions]);
+  const effectiveFileDiff = useEffectiveFileDiff({
+    acceptedCache,
+    fileDiff,
+    newFile,
+    oldFile,
+    parseDiffOptions: options?.parseDiffOptions,
+  });
   const instanceRef = useRef<
     | FileDiff<LAnnotation, Caret>
     | VirtualizedFileDiff<LAnnotation, Caret>
@@ -304,6 +290,51 @@ export function useFileDiffInstance<LAnnotation, Caret>({
     getHoveredLine,
     getAnnotationSlotName,
   };
+}
+
+interface UseEffectiveFileDiffProps<LAnnotation, Caret> {
+  acceptedCache: RefObject<AcceptedCompletion<LAnnotation> | null>;
+  fileDiff: FileDiffMetadata | undefined;
+  newFile: FileContents | null | undefined;
+  oldFile: FileContents | null | undefined;
+  parseDiffOptions: FileDiffOptions<LAnnotation, Caret>['parseDiffOptions'];
+}
+
+// This hook breaks the rules of react, so by putting the logic in its own hook
+// we create a boundary so the parent hook can still be compiled
+function useEffectiveFileDiff<LAnnotation, Caret>({
+  acceptedCache,
+  fileDiff,
+  newFile,
+  oldFile,
+  parseDiffOptions,
+}: UseEffectiveFileDiffProps<LAnnotation, Caret>): FileDiffMetadata {
+  /* oxlint-disable react/immutability react/refs -- accepted edit output must
+   * replace stale file-pair props during render */
+  const effectiveFileDiff = useMemo(() => {
+    if (fileDiff != null) {
+      return fileDiff;
+    }
+    const { current: accepted } = acceptedCache;
+    const filePair = accepted?.filePair;
+    if (accepted != null && filePair != null) {
+      if (
+        isSameFilePair(oldFile, newFile, filePair.stale) ||
+        isSameFilePair(oldFile, newFile, filePair.installed)
+      ) {
+        return filePair.fileDiff;
+      }
+      accepted.filePair = null;
+    }
+    return parseDiffFromFile(
+      oldFile ?? null,
+      newFile ?? null,
+      parseDiffOptions
+    );
+  }, [acceptedCache, fileDiff, oldFile, newFile, parseDiffOptions]);
+  /* oxlint-enable react/immutability react/refs */
+
+  return effectiveFileDiff;
 }
 
 // Whether the file props name the same files as a recorded pair.

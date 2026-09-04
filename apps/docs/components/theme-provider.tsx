@@ -8,7 +8,6 @@ import {
   useContext,
   useEffect,
   useMemo,
-  useState,
   useSyncExternalStore,
 } from 'react';
 
@@ -34,6 +33,18 @@ interface ThemeContextValue {
 
 const COLOR_SCHEMES: ColorScheme[] = ['light', 'dark'];
 const COLOR_MODES: ColorMode[] = ['light', 'dark', 'system'];
+
+function nullSubscription(): () => void {
+  return () => {};
+}
+
+function getClientHydrationSnapshot(): boolean {
+  return true;
+}
+
+function getServerHydrationSnapshot(): boolean {
+  return false;
+}
 
 // Navbar tint (iOS Safari's <meta name="theme-color">) for each resolved color
 // scheme. These match the global body `--background` (oklch(1)/oklch(0.145))
@@ -125,10 +136,11 @@ export function ThemeProvider({
   // useTheme() (e.g. diffshub's chrome) matches the SSR markup first, then
   // flips. The DOM application below still uses the real resolved scheme (the
   // pre-paint bootstrap script already painted it), so this gate is invisible.
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const mounted = useSyncExternalStore(
+    nullSubscription,
+    getClientHydrationSnapshot,
+    getServerHydrationSnapshot
+  );
 
   const colorMode = mounted ? state.mode : undefined;
   const resolvedColorScheme = mounted ? state.resolvedColorScheme : undefined;

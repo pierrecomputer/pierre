@@ -37,8 +37,6 @@ function normalizingLoader<TTheme extends ThemeLike>(
   return async () => {
     const raw = await loader();
     const theme = unwrapDefault(raw);
-    return normalizeTheme(
-      theme as Parameters<typeof normalizeTheme>[0]
-    ) as unknown as TTheme;
+    return normalizeTheme(theme) as unknown as TTheme;
   };
 }

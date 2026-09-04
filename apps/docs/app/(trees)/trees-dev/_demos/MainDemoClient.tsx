@@ -477,13 +477,17 @@ export function MainDemoClient({
   const [iconMode, setIconMode] = useState<
     'complete' | 'custom' | 'minimal' | 'standard'
   >('complete');
-  const [pendingWorkloadName, setPendingWorkloadName] = useState(
-    workloadData.selectedWorkload.name
-  );
+  const selectedWorkloadName = workloadData.selectedWorkload.name;
+  const [previousSelectedWorkloadName, setPreviousSelectedWorkloadName] =
+    useState(selectedWorkloadName);
+  const [pendingWorkloadName, setPendingWorkloadName] =
+    useState(selectedWorkloadName);
 
-  useEffect(() => {
-    setPendingWorkloadName(workloadData.selectedWorkload.name);
-  }, [workloadData.selectedWorkload.name]);
+  // Reconcile the optimistic selection before rendering a newly loaded workload.
+  if (previousSelectedWorkloadName !== selectedWorkloadName) {
+    setPreviousSelectedWorkloadName(selectedWorkloadName);
+    setPendingWorkloadName(selectedWorkloadName);
+  }
 
   const preparedInput = useMemo(
     () =>

@@ -102,7 +102,7 @@ function createTestFile(
   component.stateRestoreError = undefined;
 
   const render = component.render.bind(component);
-  component.render = ((props: Partial<FileRenderProps<undefined>>) => {
+  component.render = (props: Partial<FileRenderProps<undefined>>) => {
     currentFile = props.file ?? currentFile;
     virtualizedComponent?.updateCodeViewLayout(currentFile, 0);
     const rendered = render({
@@ -113,7 +113,7 @@ function createTestFile(
     });
     ensureTestDom();
     return rendered;
-  }) as TestFile['render'];
+  };
 
   Object.defineProperty(component, 'testFileContainer', {
     get: () => fileContainer,
