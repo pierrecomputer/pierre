@@ -30,6 +30,8 @@ export interface DomHandle {
    * (e.g. gutter drag selection) must declare their targets explicitly.
    */
   setElementFromPoint(x: number, y: number, element: Element): void;
+  /** Delivers a visibility change to observers currently watching `target`. */
+  triggerIntersectionObserver(target: Element, isIntersecting: boolean): void;
   triggerResizeObserver(target: Element): void;
 }
 
@@ -127,11 +129,14 @@ export function installDom(options: InstallDomOptions = {}): DomHandle {
 
   // jsdom does not implement IntersectionObserver either; observation
   // bookkeeping is enough for components (e.g. the Virtualizer) to construct
-  // and manage observers. Entries never intersect on their own — tests drive
-  // visibility through explicit renders and scroll events instead.
+  // and manage observers. Entries never intersect on their own; tests deliver
+  // visibility changes through triggerIntersectionObserver when needed.
+  const intersectionObservers = new Set<MockIntersectionObserver>();
   class MockIntersectionObserver {
     observed = new Set<Element>();
-    constructor(public callback: IntersectionObserverCallback) {}
+    constructor(public callback: IntersectionObserverCallback) {
+      intersectionObservers.add(this);
+    }
     observe(target: Element): void {
       this.observed.add(target);
     }
@@ -271,6 +276,20 @@ export function installDom(options: InstallDomOptions = {}): DomHandle {
     setElementFromPoint(x: number, y: number, element: Element): void {
       pointTargets.set(`${x},${y}`, element);
     },
+    triggerIntersectionObserver(
+      target: Element,
+      isIntersecting: boolean
+    ): void {
+      for (const intersectionObserver of intersectionObservers) {
+        if (!intersectionObserver.observed.has(target)) {
+          continue;
+        }
+        intersectionObserver.callback(
+          [{ isIntersecting, target } as IntersectionObserverEntry],
+          intersectionObserver as unknown as IntersectionObserver
+        );
+      }
+    },
     triggerResizeObserver(target: Element): void {
       for (const resizeObserver of resizeObservers) {
         resizeObserver.trigger(target);
@@ -282,6 +301,7 @@ export function installDom(options: InstallDomOptions = {}): DomHandle {
         clearTimeout(timeout);
       }
       frames.clear();
+      intersectionObservers.clear();
       resizeObservers.clear();
 
       for (const [key, value] of Object.entries(originalValues)) {

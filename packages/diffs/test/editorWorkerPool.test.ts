@@ -6,6 +6,7 @@ import { parseDiffFromFile } from '../src';
 import { File } from '../src/components/File';
 import { FileDiff } from '../src/components/FileDiff';
 import { VirtualizedFileDiff } from '../src/components/VirtualizedFileDiff';
+import { Virtualizer } from '../src/components/Virtualizer';
 import { Editor } from '../src/editor/editor';
 import {
   disposeHighlighter,
@@ -27,7 +28,7 @@ import { renderDiffWithHighlighter } from '../src/utils/renderDiffWithHighlighte
 import { renderFileWithHighlighter } from '../src/utils/renderFileWithHighlighter';
 import type { RenderDiffRequest } from '../src/worker/types';
 import type { WorkerPoolManager } from '../src/worker/WorkerPoolManager';
-import { installDom, wait } from './domHarness';
+import { createRoot, installDom, wait } from './domHarness';
 import { createEditorInstance } from './editorTestUtils';
 import { createDeferred, type Deferred } from './testUtils';
 import {
@@ -968,6 +969,82 @@ describe('DiffHunksRenderer worker rendering', () => {
       expect(renderedDiffHtml(settledB)).not.toContain('alpha');
     } finally {
       renderer.cleanUp();
+    }
+  });
+});
+
+describe('VirtualizedFileDiff worker rendering', () => {
+  test('recomputes a pending layout when a replacement highlight completes', async () => {
+    const dom = installDom();
+    const { manager, worker } = await createInitializedManager({
+      theme: 'pierre-dark',
+    });
+    const virtualizer = new Virtualizer();
+    const consoleError = spyOn(console, 'error').mockImplementation(() => {});
+    let instance: VirtualizedFileDiff<undefined> | undefined;
+    const currentDiff = createWorkerDiff(
+      'virtualized:current',
+      'const current = 1;\n'
+    );
+    const replacementDiff = createWorkerDiff(
+      'virtualized:replacement',
+      'const replacement = 2;\n'
+    );
+    const primeCurrent = manager.primeDiffHighlightCache(currentDiff);
+
+    try {
+      const currentRequest = await withTimeout(worker.waitForDiffRequest());
+      respondWithHighlightedDiff(manager, worker, currentRequest, currentDiff);
+      await withTimeout(primeCurrent);
+
+      const root = createRoot();
+      const content = document.createElement('div');
+      const fileContainer = document.createElement('div');
+      root.appendChild(content);
+      content.appendChild(fileContainer);
+      virtualizer.setup(root, content);
+      instance = new VirtualizedFileDiff<undefined>(
+        { theme: 'pierre-dark', disableFileHeader: true },
+        virtualizer,
+        undefined,
+        manager
+      );
+
+      expect(instance.render({ fileDiff: currentDiff, fileContainer })).toBe(
+        true
+      );
+      expect(fileContainer.shadowRoot?.innerHTML ?? '').toContain('current');
+      dom.triggerIntersectionObserver(fileContainer, true);
+      await wait(10);
+
+      // The replacement keeps the highlighted current diff visible, and the
+      // following real virtualizer frame records that current diff for layout.
+      expect(instance.render({ fileDiff: replacementDiff })).toBe(true);
+      expect(fileContainer.shadowRoot?.innerHTML ?? '').not.toContain(
+        'replacement'
+      );
+
+      await waitFor(() => expect(worker.diffRequestCount).toBe(2));
+      const replacementRequest = await withTimeout(worker.waitForDiffRequest());
+      await wait(0);
+      respondWithHighlightedDiff(
+        manager,
+        worker,
+        replacementRequest,
+        replacementDiff
+      );
+      await waitFor(() =>
+        expect(fileContainer.shadowRoot?.innerHTML ?? '').toContain(
+          'replacement'
+        )
+      );
+      expect(consoleError).not.toHaveBeenCalled();
+    } finally {
+      consoleError.mockRestore();
+      instance?.cleanUp();
+      virtualizer.cleanUp();
+      manager.terminate();
+      dom.cleanup();
     }
   });
 });
