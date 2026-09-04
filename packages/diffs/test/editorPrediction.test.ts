@@ -1306,6 +1306,64 @@ describe('Editor edit prediction', () => {
     }
   });
 
+  test('wrap mode redraws the masked suffix after a mid-line insertion', async () => {
+    const contents = 'function value(items: CartItem[]): number {';
+    const insertion = ', discount?: number';
+    const character = 'function value(items: CartItem[]'.length;
+    const provider: EditPredictProvider = {
+      predict() {
+        return Promise.resolve({
+          edits: [
+            {
+              range: {
+                start: { line: 0, character },
+                end: { line: 0, character },
+              },
+              newText: insertion,
+            },
+          ],
+          newCursor: { line: 0, character: character + insertion.length },
+        });
+      },
+    };
+    const fixture = await createPredictionFixture({
+      contents,
+      editorOptions: { editPrediction: { provider } },
+      overflow: 'wrap',
+      surface: 'File',
+    });
+
+    try {
+      setCaret(fixture.editor, 0, character);
+      await waitFor(() => predictionElements(fixture.container).length > 0, {
+        timeout: PREDICT_TIMEOUT,
+      });
+
+      // The in-flow remainder is hidden behind the mask, so the ghost must
+      // carry a copy of it or the rest of the line disappears until accept.
+      const prediction = predictionElements(fixture.container)[0];
+      expect(prediction.dataset.wrap).toBe('');
+      expect(
+        fixture.container.shadowRoot?.querySelector(
+          '[data-edit-prediction-insertion-range]'
+        )
+      ).not.toBeNull();
+      expect(
+        prediction.querySelector('[data-edit-prediction-suffix]')?.textContent
+      ).toBe('): number {');
+      expect(
+        prediction.querySelector('[data-edit-prediction-line]')?.textContent
+      ).toBe(', discount?: number): number {');
+
+      expect(dispatchKey(fixture.content, 'Tab').defaultPrevented).toBe(true);
+      expect(fixture.editor.getText()).toBe(
+        'function value(items: CartItem[], discount?: number): number {'
+      );
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
   test('sizes wrap-mode ghost rows from the measured ghost text', async () => {
     // One predicted line with no line breaks that wraps onto three visual
     // lines: the first shares the anchor row, so two rows are reserved.

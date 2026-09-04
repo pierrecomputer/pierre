@@ -4835,6 +4835,49 @@ export class Editor<
     }
   }
 
+  // A mid-line insertion masks the rest of its line and redraws that text after
+  // the ghost text. Returns the copy to redraw (cloned from the rendered row so
+  // it keeps its colors), or undefined when there is nothing to redraw or a
+  // neighbouring edit on the same line would move it.
+  #cloneInsertionSuffix(group: EditPredictionGroup): Node | undefined {
+    const prediction = this.#editPrediction;
+    const textDocument = this.#editSession?.document;
+    if (prediction == null || textDocument == null) {
+      return undefined;
+    }
+    const { edit, startIndex, endIndex } = group;
+    const { start, end } = edit.range;
+    const isMidLineInsertion =
+      comparePosition(start, end) === 0 &&
+      start.character < textDocument.getLineLength(start.line);
+    if (
+      !isMidLineInsertion ||
+      prediction.response.edits[startIndex - 1]?.range.end.line ===
+        start.line ||
+      prediction.response.edits[endIndex + 1]?.range.start.line === start.line
+    ) {
+      return undefined;
+    }
+    const sourceLine = this.#getLineElement(start.line);
+    if (sourceLine === undefined) {
+      return document.createTextNode(
+        textDocument.getLineText(start.line).slice(start.character)
+      );
+    }
+    const [suffixNode, suffixOffset] = getSelectionAnchor(
+      sourceLine,
+      start.character
+    );
+    const suffixRange = document.createRange();
+    suffixRange.selectNodeContents(sourceLine);
+    suffixRange.setStart(suffixNode, clampDomOffset(suffixNode, suffixOffset));
+    const suffix = suffixRange.cloneContents();
+    if (suffix.firstChild?.textContent === '') {
+      suffix.firstChild.remove();
+    }
+    return suffix;
+  }
+
   // How many rows of ghost text extend below the anchor row. The ghost's first
   // visual line sits on the caret's visual line and the rest run down over the
   // anchor row's remaining visual lines before spilling below it. Without
@@ -4842,7 +4885,8 @@ export class Editor<
   // knows where the lines break, so the ghost element is laid out hidden in the
   // overlay and measured; an element that cannot be measured counts as
   // unwrapped, the same fallback #wrapLineText uses.
-  #measureGhostTextRows(edit: TextEdit): number {
+  #measureGhostTextRows(group: EditPredictionGroup): number {
+    const { edit } = group;
     const { start } = edit.range;
     const [anchorLeft, anchorWrapLine] = this.#getCharX(
       start.line,
@@ -4866,7 +4910,7 @@ export class Editor<
         edit.newText,
         anchorLeft,
         this.#getCharX(start.line, 0)[0],
-        undefined
+        this.#cloneInsertionSuffix(group)
       );
       const { width, height } = probe.getBoundingClientRect();
       probe.remove();
@@ -4892,11 +4936,12 @@ export class Editor<
     const contentElement = this.#contentElement;
     const composed = this.#getEditPredictionGroups();
     if (contentElement != null && composed != null && composed.allVisible) {
-      for (const { edit } of composed.groups) {
+      for (const group of composed.groups) {
+        const { edit } = group;
         if (edit.newText.length === 0) {
           continue;
         }
-        const count = this.#measureGhostTextRows(edit);
+        const count = this.#measureGhostTextRows(group);
         if (count > (ghostTextRows.get(edit.range.start.line) ?? 0)) {
           ghostTextRows.set(edit.range.start.line, count);
         }
@@ -5401,8 +5446,8 @@ export class Editor<
       return;
     }
 
-    const isWrap = this.#isWrap;
-    for (const { edit, startIndex, endIndex } of composed.groups) {
+    for (const group of composed.groups) {
+      const { edit, endIndex } = group;
       const { start, end } = edit.range;
       const isDeletion = edit.newText.length === 0;
       const isReplacement = comparePosition(start, end) !== 0;
@@ -5462,43 +5507,12 @@ export class Editor<
         delete element.dataset.replacement;
         element.style.removeProperty('--diffs-edit-prediction-bg');
       }
-      // Redraw the suffix only when other edits or wrapping cannot relocate it.
-      let insertionSuffix: Node | undefined;
-      if (
-        isMidLineInsertion &&
-        !isWrap &&
-        prediction.response.edits[startIndex - 1]?.range.end.line !==
-          start.line &&
-        prediction.response.edits[endIndex + 1]?.range.start.line !== start.line
-      ) {
-        const sourceLine = this.#getLineElement(start.line);
-        if (sourceLine === undefined) {
-          insertionSuffix = document.createTextNode(
-            textDocument.getLineText(start.line).slice(start.character)
-          );
-        } else {
-          const [suffixNode, suffixOffset] = getSelectionAnchor(
-            sourceLine,
-            start.character
-          );
-          const suffixRange = document.createRange();
-          suffixRange.selectNodeContents(sourceLine);
-          suffixRange.setStart(
-            suffixNode,
-            clampDomOffset(suffixNode, suffixOffset)
-          );
-          insertionSuffix = suffixRange.cloneContents();
-          if (insertionSuffix.firstChild?.textContent === '') {
-            insertionSuffix.firstChild.remove();
-          }
-        }
-      }
       this.#fillGhostTextElement(
         element,
         edit.newText,
         anchorLeft,
         lineLeft,
-        insertionSuffix
+        this.#cloneInsertionSuffix(group)
       );
       element.style.transform = `translateX(${lineLeft}px) translateY(${anchorTop}px)`;
       renderCtx.elements.set(key, element);
