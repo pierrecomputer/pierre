@@ -62,10 +62,10 @@ class BufferRecordingFile extends VirtualizedFile<undefined> {
 // explicitly after attaching the private edit session.
 function setRenderedEditSession(instance: BufferRecordingFile): void {
   const state = instance as unknown as {
-    editSessionFile: FileContents | undefined;
+    editSession: { file: FileContents } | undefined;
     renderedFile: FileContents | undefined;
   };
-  state.renderedFile = state.editSessionFile;
+  state.renderedFile = state.editSession?.file;
 }
 
 describe('applyDocumentChange buffer updates', () => {

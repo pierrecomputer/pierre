@@ -308,7 +308,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
    * empty additions document gets one row for the editor's caret.
    */
   public beginEditSession(
-    diff?: FileDiffMetadata,
+    diff: FileDiffMetadata,
     externalDiff?: FileDiffMetadata
   ): void {
     const { editSessionActive: wasAlreadyActive, renderCache } = this;
@@ -316,28 +316,18 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     if (!wasAlreadyActive) {
       this.pendingHighlightResult = undefined;
     }
-    if (diff != null) {
-      this.diff = diff;
-    }
+    this.diff = diff;
 
-    const currentDiff = diff ?? this.diffCache;
-    if (
-      currentDiff != null &&
-      !currentDiff.isPartial &&
-      currentDiff.additionLines.length === 0
-    ) {
+    if (!diff.isPartial && diff.additionLines.length === 0) {
       Object.assign(
-        currentDiff,
-        recomputeEmptyDocumentDiff(currentDiff, this.options.parseDiffOptions)
+        diff,
+        recomputeEmptyDocumentDiff(diff, this.options.parseDiffOptions)
       );
-      this.markEditSessionPass(currentDiff);
+      this.markEditSessionPass(diff);
       this.clearRenderCache();
       return;
     }
 
-    if (diff == null) {
-      return;
-    }
     if (renderCache == null) {
       return;
     }

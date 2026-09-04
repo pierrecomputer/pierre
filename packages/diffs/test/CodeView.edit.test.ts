@@ -142,11 +142,13 @@ function insertAtStart(editor: AnyTrackedEditor, text: string): void {
 }
 
 function getEditSessionDiff(instance: unknown): FileDiffMetadata | undefined {
-  return (instance as { editSessionDiff?: FileDiffMetadata }).editSessionDiff;
+  return (instance as { editSession?: { diff: FileDiffMetadata } }).editSession
+    ?.diff;
 }
 
 function getEditSessionFile(instance: unknown): FileContents | undefined {
-  return (instance as { editSessionFile?: FileContents }).editSessionFile;
+  return (instance as { editSession?: { file: FileContents } }).editSession
+    ?.file;
 }
 
 function getExternalFile(instance: unknown): FileContents | undefined {

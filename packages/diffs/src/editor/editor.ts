@@ -1359,7 +1359,7 @@ export class Editor<
       highlighter,
       fileContainer,
       renderRange,
-      resetHistory = false,
+      externalDocument = false,
     } = props;
     const renderView:
       | SyncFileRenderViewProps<LAnnotation>
@@ -1376,7 +1376,6 @@ export class Editor<
       | EditorLineAnnotation<EType, LAnnotation>[]
       | undefined;
     const editStateKey = this.#editStateKey;
-    const externalDocument = renderView.externalDocument === true;
     const fileInstance = this.#fileInstance;
     const editSession = this.#editSession;
     if (!this.#isRendering || fileInstance == null || editSession == null) {
@@ -1461,6 +1460,16 @@ export class Editor<
         ? fileOrDiff.contents
         : fileOrDiff.additionLines.join('');
     const previousTextDocument = editSession.document;
+    // The caller flags whether the host replaced the file (`externalDocument`)
+    // document that should win. Undo-reset, however, is derived here from the
+    // editor's own fileInfo: it resets only when name/language change or when
+    // the caller passes in resetHistory
+    const resetHistory =
+      props.resetHistory ??
+      (previousTextDocument != null &&
+        editSession.fileInfo != null &&
+        (editSession.fileInfo.name !== fileOrDiff.name ||
+          previousTextDocument.languageId !== languageId));
     const documentChanges =
       externalDocument &&
       previousTextDocument !== undefined &&
