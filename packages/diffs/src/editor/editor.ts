@@ -764,6 +764,7 @@ export class Editor<
             editor,
             lineAnnotations,
           };
+          fileInstance.__acceptEditorChange(event);
           editor.#options.onChange?.(event);
           fileInstance.emitEditChange(event);
         };
@@ -788,6 +789,7 @@ export class Editor<
             editor,
             lineAnnotations,
           };
+          fileInstance.__acceptEditorChange(event);
           editor.#options.onChange?.(event);
           fileInstance.emitEditChange(event);
         };

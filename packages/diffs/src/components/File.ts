@@ -515,7 +515,7 @@ export class File<LAnnotation = undefined, Caret = undefined> {
   //
   // The editor delivers annotations through two calls. An edit that changes
   // the line count sends them with the structural rebuild
-  // (applyDocumentChange) and again with the change event (emitEditChange);
+  // (applyDocumentChange) and again with the change event (__acceptEditorChange);
   // the identity check makes the second call a no-op. An edit that keeps the
   // line count skips the rebuild, so the event is its only path here.
   //
@@ -834,7 +834,8 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     }
   }
 
-  public emitEditChange(
+  /** @internal Settle component state before either observer can install a newer file. */
+  public __acceptEditorChange(
     event: EditorChangeEvent<'file', LAnnotation, Caret>
   ): void {
     // A change means the editor's document now carries the pending external
@@ -847,6 +848,11 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     if (lineAnnotations != null) {
       this.syncEditSessionAnnotationsFromEditor(lineAnnotations);
     }
+  }
+
+  public emitEditChange(
+    event: EditorChangeEvent<'file', LAnnotation, Caret>
+  ): void {
     const { onEditChange } = this.options;
     onEditChange?.(event);
   }
