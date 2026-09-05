@@ -21,6 +21,7 @@
   (global $spanHl (mut i32) (i32.const -1)) ;; $Token of the currently open span, -1 when none
   (global $spanVal (mut i64) (i64.const 0)) ;; style value of the open span, 0 when none
   (global $cssVariables (mut i32) (i32.const 0))
+  (global $spanCacheMode (mut i32) (i32.const -1)) ;; cached style mode, unchanged by token calls
   (global $tokens (mut i32) (i32.const 0))  ;; token-record mode: emit (end:u32, hl:u32) records instead of HTML
   (global $recByte (mut i32) (i32.const 0))
   (global $recChar (mut i32) (i32.const 0))
@@ -126,10 +127,10 @@
     (global.set $spanVal (i64.const 0))
     (global.set $spanHl (i32.const -1)))
 
-  ;; write `<span style="...">` for $hl at $out. The bytes come from a per-run
+  ;; write `<span style="...">` for $hl at $out. The bytes come from a
   ;; cache at $mem.emitterSpanCache (73 slots of [len:u8, fragment:u8*65]) rendered on
-  ;; first use, so a style's colors are hex-formatted once per run, not per
-  ;; span. $hlBegin clears the cache; the theme table is fixed within a run.
+  ;; first use and reused across runs. $hlBegin clears the cache when theme
+  ;; bytes or inline/CSS-variable mode change.
   (func $emitSpanOpen (param $hl i32)
     (local $slot i32)
     (local $len i32)
@@ -198,13 +199,23 @@
   ;; wide loads may read up to 15 bytes past $rhs: always inside the input
   ;; buffer or the 16-byte slack, never past $cap. wide stores may write up to
   ;; 15 bytes of garbage past the advanced cursor; later writes overwrite it.
-  ;; caller has ensured capacity for 5*($rhs-$lhs) + 16.
-  (func $escCopy (param $lhs i32) (param $rhs i32)
+  ;; $gap selects direct copying for whitespace or UTF-8 continuation bytes.
+  ;; caller has ensured capacity for length + 16, or 5*length + 16 when escaping.
+  (func $escCopy (param $lhs i32) (param $rhs i32) (param $gap i32)
     (local $c i32)
     (local $mask i32)
     (local $k i32)
     (local $rem i32)
     (local $w v128)
+    (if (local.get $gap)
+      (then
+        (local.set $rem (i32.sub (local.get $rhs) (local.get $lhs)))
+        ;; Later output overwrites lookahead copied by a short gap's store.
+        (if (i32.le_u (local.get $rem) (i32.const 16))
+          (then (v128.store (global.get $out) (v128.load (local.get $lhs))))
+          (else (memory.copy (global.get $out) (local.get $lhs) (local.get $rem))))
+        (global.set $out (i32.add (global.get $out) (local.get $rem)))
+        (return)))
     (block $done
       (loop $outer
         (br_if $done (i32.ge_u (local.get $lhs) (local.get $rhs)))
@@ -345,10 +356,10 @@
         ;; hop over plain ASCII - anything except LF and non-ASCII counts as
         ;; one UTF-16 unit, CR included - 16 bytes per step. Wide loads may
         ;; pass $rhs into the following record or the buffer slack; matches
-        ;; there are masked off.
+        ;; there are masked off. The bitmask reads non-ASCII high bits directly.
         (local.set $w (v128.load (local.get $p)))
         (local.set $mask (i8x16.bitmask (v128.or
-          (i8x16.lt_s (local.get $w) (i8x16.splat (i32.const 0)))
+          (local.get $w)
           (i8x16.eq (local.get $w) (i8x16.splat (i32.const 10))))))
         (local.set $rem (i32.sub (local.get $rhs) (local.get $p)))
         (if (i32.lt_u (local.get $rem) (i32.const 16))
@@ -436,10 +447,10 @@
       (i32.mul (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 5))
       (i32.const 96)))
     (call $setSpan (local.get $hl))
-    (call $escCopy (local.get $lhs) (local.get $rhs)))
+    (call $escCopy (local.get $lhs) (local.get $rhs) (i32.const 0)))
 
-  ;; emit inter-token bytes [$lhs,$rhs) (whitespace) without touching the open
-  ;; span, so same-colored neighbors merge across the gap
+  ;; Copy whitespace or leading UTF-8 continuation bytes without changing
+  ;; the open span. These bytes cannot contain HTML specials (& < >).
   (func $emitGap (param $lhs i32) (param $rhs i32)
     (if (i32.ge_u (local.get $lhs) (local.get $rhs)) (then (return)))
     (if (global.get $tokens)
@@ -451,9 +462,8 @@
           (else (call $recTok (enum.get $Token.none) (local.get $rhs))))
         (return)))
     (call $ensureCap (i32.add
-      (i32.mul (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 5))
-      (i32.const 16)))
-    (call $escCopy (local.get $lhs) (local.get $rhs)))
+      (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 16)))
+    (call $escCopy (local.get $lhs) (local.get $rhs) (i32.const 1)))
 
   ;; Keep a span open when a bounded range resumes inside a UTF-8 code point.
   ;; Lives here rather than in common.wat so the lexers that import only
@@ -505,6 +515,8 @@
   ;; read the control block ([1]: 0 inline colors, 1 CSS variables, 2 byte-end
   ;; token records, 3 UTF-16 line records), place the output, emit the wrapper
   (func $hlBegin
+    (local $offset i32)
+    (local $changed v128)
     (global.set $cssVariables (i32.eq (i32.load8_u (i32.const 1)) (i32.const 1)))
     (global.set $tokens (i32.ge_u (i32.load8_u (i32.const 1)) (i32.const 2)))
     (global.set $eof (i32.add (global.get $srcBase) (i32.load (i32.const 2))))
@@ -517,9 +529,26 @@
     (global.set $spanVal (i64.const 0))
     (if (i32.eqz (global.get $tokens))
       (then
-        ;; invalidate the span-open fragment cache: the theme table may have
-        ;; changed since the previous run (73 slots x 66 bytes)
-        (memory.fill (i32.const $mem.emitterSpanCache) (i32.const 0) (i32.const 4818))
+        ;; Compare all 73 five-byte records, padded to 384 bytes, in twelve
+        ;; pairs of vectors. Reading bytes also catches direct host writes.
+        (loop $theme
+          (local.set $changed (v128.or (local.get $changed)
+            (v128.or
+              (v128.xor
+                (v128.load (i32.add (i32.const $mem.themeTable) (local.get $offset)))
+                (v128.load (i32.add (i32.const $mem.emitterThemeCache) (local.get $offset))))
+              (v128.xor
+                (v128.load offset=16 (i32.add (i32.const $mem.themeTable) (local.get $offset)))
+                (v128.load offset=16 (i32.add (i32.const $mem.emitterThemeCache) (local.get $offset)))))))
+          (local.set $offset (i32.add (local.get $offset) (i32.const 32)))
+          (br_if $theme (i32.lt_u (local.get $offset) (i32.const 384))))
+        (if (i32.or
+              (v128.any_true (local.get $changed))
+              (i32.ne (global.get $spanCacheMode) (global.get $cssVariables)))
+          (then
+            (memory.fill (i32.const $mem.emitterSpanCache) (i32.const 0) (i32.const 4818))
+            (memory.copy (i32.const $mem.emitterThemeCache) (i32.const $mem.themeTable) (i32.const 384))
+            (global.set $spanCacheMode (global.get $cssVariables))))
         (call $prologue))))
 
   ;; driver epilogue: emit the wrapper closing and publish the result

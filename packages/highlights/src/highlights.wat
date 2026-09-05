@@ -15,19 +15,20 @@
       [2064:4112)     byte-set bitmaps (byteset.get)
       [4112:4264)     emitter HTML fragments
       [4264:9088)     emitter span-open fragment cache
-      [9088:9120)     streaming delimiter
-      [9120:13120)    streaming lexer checkpoints
-      [13120:48224)   language keyword tables
-      [48224:49248)   JSON nesting stack
-      [49248:50304)   markdown fence aliases
-      [50304:50400)   nested markdown fence registers, one record per depth
-      [50400:51424)   TOML nesting stack
-      [51424:52448)   ECMAScript bracket-kind stack
-      [52448:52592)   ECMAScript token-class bitset
-      [52592:52752)   ECMAScript token-kind to $Token map (enum-map)
-      [52752:53776)   ECMAScript template stack
-      [53776:57872)   JSX-mode stack
-      [57872:65536)   free
+      [9088:9472)     saved theme bytes for the emitter span cache
+      [9472:9504)     streaming delimiter
+      [9504:13504)    streaming lexer checkpoints
+      [13504:48608)   language keyword tables
+      [48608:49632)   JSON nesting stack
+      [49632:50688)   markdown fence aliases
+      [50688:50784)   nested markdown fence registers, one record per depth
+      [50784:51808)   TOML nesting stack
+      [51808:52832)   ECMAScript bracket-kind stack
+      [52832:52976)   ECMAScript token-class bitset
+      [52976:53136)   ECMAScript token-kind to $Token map (enum-map)
+      [53136:54160)   ECMAScript template stack
+      [54160:58256)   JSX-mode stack
+      [58256:65536)   free
     [] pages 2..N     (text buffer; a live instance lays them out itself,
                       see src/live.wat)
       [65536:EOF)     input, NUL sentinel, then at least 16 bytes of slack

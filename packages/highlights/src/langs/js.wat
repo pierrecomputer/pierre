@@ -272,8 +272,6 @@
     (local $h i32)
     (local $entry i32)
     (local $p i32)
-    (local $mask64 i64)
-    (local $mask32 i32)
     (local.set $len (i32.sub (local.get $end) (local.get $start)))
     (if (i32.gt_u (i32.sub (local.get $len) (i32.const 2)) (i32.const 8))
       (then (return (enum.get $Lex.invalid))))
@@ -313,35 +311,30 @@
     (local.set $p
       (i32.add (i32.const $mem.tsxWords+143)
         (i32.and (local.get $entry) (i32.const 511))))
+    ;; Shift away loaded bytes beyond the word before testing the difference.
     (if (i32.le_u (local.get $len) (i32.const 8))
       (then
-        (local.set $mask64
-          (i64.shr_u (i64.const -1)
-            (i64.extend_i32_u
-              (i32.shl
-                (i32.sub (i32.const 8) (local.get $len))
-                (i32.const 3)))))
         (if (i64.ne
-              (i64.and (i64.load (local.get $start)) (local.get $mask64))
-              (i64.and (i64.load offset=1 (local.get $p)) (local.get $mask64)))
+              (i64.shl
+                (i64.xor (i64.load (local.get $start)) (i64.load offset=1 (local.get $p)))
+                (i64.extend_i32_u
+                  (i32.shl
+                    (i32.sub (i32.const 8) (local.get $len))
+                    (i32.const 3))))
+              (i64.const 0))
           (then (return (enum.get $Lex.invalid)))))
       (else
         (if (i64.ne
               (i64.load (local.get $start))
               (i64.load offset=1 (local.get $p)))
           (then (return (enum.get $Lex.invalid))))
-        (local.set $mask32
-          (i32.shr_u (i32.const 65535)
-            (i32.shl
-              (i32.sub (i32.const 10) (local.get $len))
-              (i32.const 3))))
-        (if (i32.ne
-              (i32.and
+        (if (i32.shl
+              (i32.xor
                 (i32.load16_u offset=8 (local.get $start))
-                (local.get $mask32))
-              (i32.and
-                (i32.load16_u offset=9 (local.get $p))
-                (local.get $mask32)))
+                (i32.load16_u offset=9 (local.get $p)))
+              (i32.shl
+                (i32.sub (i32.const 12) (local.get $len))
+                (i32.const 3)))
           (then (return (enum.get $Lex.invalid))))))
     (i32.load8_u (local.get $p)))
 

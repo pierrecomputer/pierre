@@ -34,6 +34,62 @@ t.before(() => {
   init(new WebAssembly.Module(wat2wasm(url.pathname, code)));
 });
 
+void t.test(
+  'js: keyword comparisons ignore lookahead and reject interior differences',
+  () => {
+    const url = new URL('./keyword_lookup.wat', import.meta.url);
+    const { code, enumMap } = transformWat(
+      url,
+      `(module
+      (memory (export "memory") 3)
+      (import "../src/langs/tsx.wat")
+      (export "keyword" (func $isKeyword)))`
+    );
+    const { exports } = new WebAssembly.Instance(
+      new WebAssembly.Module(wat2wasm(url.pathname, code)),
+      { env: { is_id_start: () => 0, is_id_continue: () => 0 } }
+    );
+    const memory = new Uint8Array(
+      (exports.memory as WebAssembly.Memory).buffer
+    );
+    const keyword = exports.keyword as (start: number, end: number) => number;
+    const lex = enumMap.get('$Lex')!;
+    const enc = new TextEncoder();
+    for (const word of [
+      'if',
+      'let',
+      'else',
+      'const',
+      'return',
+      'default',
+      'continue',
+      'interface',
+      'instanceof',
+    ]) {
+      for (const tail of [0, 0x26, 0xff]) {
+        memory.fill(tail, 65536, 65552);
+        memory.set(enc.encode(word), 65536);
+        assert.equal(
+          keyword(65536, 65536 + word.length),
+          lex[`keyword_${word}`],
+          word
+        );
+        // The hash uses the first two and last bytes, so these edits still reach
+        // the same candidate and must fail its exact-word comparison.
+        for (let i = 2; i < word.length - 1; i++) {
+          memory[65536 + i] ^= 1;
+          assert.equal(
+            keyword(65536, 65536 + word.length),
+            lex.invalid,
+            `${word}: byte ${i}`
+          );
+          memory[65536 + i] ^= 1;
+        }
+      }
+    }
+  }
+);
+
 // every token type gets its own color, so a parity check also catches kinds
 // that pierre-dark paints alike (function vs function.method, comment vs
 // comment.doc)

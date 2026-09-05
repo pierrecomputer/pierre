@@ -156,6 +156,33 @@ void t.test('json: html-special bytes are escaped', () => {
   assert.ok(!/[<>&]/.test(leftover), `raw special byte leaked: ${leftover}`);
 });
 
+void t.test(
+  'json: HTML escaping stays within each token at vector boundaries',
+  () => {
+    for (let n = 0; n <= 32; n++) {
+      for (const tail of ['', '&', '<', '>', '<&>'.repeat(12), 'é日本語🎈']) {
+        const src = JSON.stringify(['x'.repeat(n) + tail, '<&>']);
+        const html = checkInvariants(json.hl, src);
+        assert.equal(
+          bodyOf(html).replace(/<\/?span[^>]*>/g, ''),
+          src.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        );
+      }
+    }
+  }
+);
+
+void t.test('json: whitespace gaps preserve text and span merging', () => {
+  for (const n of [0, 1, 2, 15, 16, 17, 31, 32, 33, 65_536]) {
+    const gap = ' \t\n\r\v\f'.repeat(Math.ceil(n / 6)).slice(0, n);
+    const html = checkInvariants(json.hl, `${gap}[${gap}]${gap}`);
+    assert.deepEqual(
+      spansOf(html).map((span) => span.text),
+      [`[${gap}]${gap}`]
+    );
+  }
+});
+
 void t.test('json: JSONC comments', () => {
   const html = checkInvariants(
     json.hl,

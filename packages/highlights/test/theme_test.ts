@@ -2,10 +2,12 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { bundledThemesInfo } from 'shiki';
 
+import { HighlightsHighlighter } from '../lib/highlighter';
 import type { Theme } from '../lib/index';
 import tokenTypes from '../lib/token-types';
+import { transformWat, wat2wasm } from '../scripts/build';
 import * as themes from '../themes/index';
-import { checkInvariants, loadLang } from './util';
+import { checkInvariants, loadLang, spansOf } from './util';
 
 const {
   cssVariables,
@@ -21,6 +23,115 @@ const {
 } = themes;
 const json = loadLang('json', '$hlJson');
 const tsx = loadLang('tsx', '$hlTsx');
+const emitterUrl = new URL('./theme_cache.wat', import.meta.url);
+const emitterWat = transformWat(
+  emitterUrl,
+  `(module
+    (memory (export "memory") 3)
+    (import "../src/langs/json.wat")
+    (global (export "spanCache") i32 (i32.const $mem.emitterSpanCache))
+    (global (export "themeTable") i32 (i32.const $mem.themeTable))
+    (global (export "themeCache") i32 (i32.const $mem.emitterThemeCache))
+    (func (export "highlight") (call $hlBegin) (call $hlJson) (call $hlEnd)))`
+);
+const emitterModule = new WebAssembly.Module(
+  wat2wasm(emitterUrl.pathname, emitterWat.code)
+);
+
+/** Expose cache addresses so tests can check reuse and direct theme writes. */
+function cachedEmitter() {
+  const highlighter = new HighlightsHighlighter(emitterModule);
+  const { spanCache, themeTable, themeCache } = highlighter.instance.exports;
+  return {
+    highlighter,
+    spanCache: Number((spanCache as WebAssembly.Global).value),
+    themeTable: Number((themeTable as WebAssembly.Global).value),
+    themeCache: Number((themeCache as WebAssembly.Global).value),
+  };
+}
+
+void test('span cache: HTML and token calls retain previously formatted styles', () => {
+  const { highlighter, spanCache, themeCache } = cachedEmitter();
+  const options = { lang: 'json', theme: pierreDark } as const;
+  const numberSlot = spanCache + tokenTypes.indexOf('number') * 66;
+  highlighter.codeToHtml('1', options);
+  const number = highlighter.buffer.slice(numberSlot, numberSlot + 66);
+  assert.ok(number[0] > 0);
+  highlighter.codeToHtml('"s"', options);
+  assert.deepEqual(
+    highlighter.buffer.slice(numberSlot, numberSlot + 66),
+    number
+  );
+  const spans = highlighter.buffer.slice(spanCache, spanCache + 4818);
+  const theme = highlighter.buffer.slice(themeCache, themeCache + 384);
+  highlighter.codeToTokens('1 "s"', { lang: 'json', theme: pierreLight });
+  assert.deepEqual(
+    highlighter.buffer.slice(spanCache, spanCache + 4818),
+    spans
+  );
+  assert.deepEqual(
+    highlighter.buffer.slice(themeCache, themeCache + 384),
+    theme
+  );
+});
+
+void test('span cache: theme and output-mode switches match a fresh instance', () => {
+  const { highlighter } = cachedEmitter();
+  for (const theme of [
+    cssVariables,
+    pierreDark,
+    pierreLight,
+    { name: 'unthemed', appearance: 'dark', style: {} },
+    cssVariables,
+    pierreDark,
+  ]) {
+    const options = { lang: 'json', theme } as const;
+    const expected = cachedEmitter().highlighter.codeToHtml('1 "s" 2', options);
+    assert.deepEqual(highlighter.codeToHtml('1 "s" 2', options), expected);
+    highlighter.codeToTokens('3', options);
+    assert.deepEqual(highlighter.codeToHtml('1 "s" 2', options), expected);
+  }
+});
+
+void test('span cache: direct theme writes invalidate colors, alpha, and fonts', () => {
+  const { highlighter, themeTable, themeCache, spanCache } = cachedEmitter();
+  const options = { lang: 'json', theme: pierreDark } as const;
+  const number = tokenTypes.indexOf('number');
+  const record = themeTable + number * 5;
+  const dec = new TextDecoder();
+  highlighter.codeToHtml('1', options);
+  for (const [bytes, color, font] of [
+    [
+      [0x12, 0x34, 0x56, 0x78, 0x17],
+      '#12345678',
+      ';font-style:italic;font-weight:700',
+    ],
+    [
+      [0x12, 0x34, 0x56, 0xff, 0x17],
+      '#123456',
+      ';font-style:italic;font-weight:700',
+    ],
+    [[0x12, 0x34, 0x56, 0xff, 0x09], '#123456', ';font-weight:900'],
+    [[0x12, 0x34, 0x56, 0xff, 0], '#123456', ''],
+  ] as const) {
+    const saved = highlighter.buffer.slice(themeCache, themeCache + 384);
+    highlighter.buffer.set(bytes, record);
+    highlighter.codeToTokens('1', options);
+    assert.deepEqual(
+      highlighter.buffer.slice(themeCache, themeCache + 384),
+      saved
+    );
+    const html = dec.decode(highlighter.codeToHtml('1', options));
+    assert.deepEqual(spansOf(html), [{ text: '1', color, font }]);
+  }
+  // Changes in the first and last vector pairs must invalidate unused slots too.
+  for (const name of ['attribute', 'foreground'] as const) {
+    highlighter.codeToHtml('1', options);
+    highlighter.buffer[themeTable + tokenTypes.indexOf(name) * 5] ^= 1;
+    highlighter.codeToHtml('"s"', options);
+    assert.equal(highlighter.buffer[spanCache + number * 66], 0);
+  }
+});
 
 void test('token types: syntax captures are sorted and complete', () => {
   const syntax = tokenTypes.slice(1, -2);

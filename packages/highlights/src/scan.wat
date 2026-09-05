@@ -136,7 +136,7 @@
 
   ;; advance $ptr over [A-Za-z0-9_] bytes, any byte >= 0x80 (UTF-8 tails stay
   ;; inside one token), and the extra byte $x - 16 bytes per step, clamped to
-  ;; $end
+  ;; $end. The bitmask reads non-ASCII high bits directly from the input.
   (func $scanIdentRun (param $x i32)
     (local $mask i32)
     (local $w v128)
@@ -154,7 +154,7 @@
                   (v128.or (local.get $w) (i8x16.splat (i32.const 32)))
                   (i8x16.splat (i32.const "a")))
                 (i8x16.splat (i32.const 25)))
-              (i8x16.lt_s (local.get $w) (i8x16.splat (i32.const 0))))
+              (local.get $w))
             (v128.or
               (i8x16.le_u
                 (i8x16.sub (local.get $w) (i8x16.splat (i32.const "0")))
