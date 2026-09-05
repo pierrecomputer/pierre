@@ -1897,13 +1897,23 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
         themes: getThemes(theme),
         langs: [],
         preferredHighlighter: this.options.preferredHighlighter,
-      }).then(() => {
-        if (cancelled) {
-          return;
+      }).then(
+        () => {
+          if (cancelled) {
+            return;
+          }
+          this.clearReadySubscription();
+          this.render(true);
+        },
+        (error: unknown) => {
+          if (cancelled) {
+            return;
+          }
+          // Let a later render retry without looping on a failing loader.
+          this.clearReadySubscription();
+          console.error(error);
         }
-        this.clearReadySubscription();
-        this.render(true);
-      });
+      );
       return () => {
         cancelled = true;
       };

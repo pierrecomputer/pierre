@@ -994,6 +994,8 @@ export class WorkerPoolManager {
           themes: getThemes(this.renderOptions.theme),
           langs: ['text', ...mainThreadLangs],
           preferredHighlighter: this.preferredHighlighter,
+        }).catch((error: unknown) => {
+          console.error(error);
         });
       }
       // Add resolved languages if required

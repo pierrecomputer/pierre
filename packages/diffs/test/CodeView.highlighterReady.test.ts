@@ -1,4 +1,4 @@
-import { afterAll, expect, spyOn, test } from 'bun:test';
+import { afterAll, expect, mock, spyOn, test } from 'bun:test';
 
 import { CodeView } from '../src/components/CodeView';
 import {
@@ -11,6 +11,59 @@ import { createRoot, installDom, wait, waitFor } from './domHarness';
 import { createDeferred } from './testUtils';
 
 afterAll(disposeHighlighter);
+
+test('retries a failed theme load on a later render without automatically retrying', async () => {
+  const theme = {
+    name: 'codeview-retry-theme',
+    type: 'dark',
+    colors: {},
+    tokenColors: [],
+  } satisfies ThemeRegistration;
+  const firstLoad = createDeferred<ThemeRegistration>();
+  const loader = mock(() => firstLoad.promise);
+  registerCustomTheme(theme.name, loader);
+  const error = new Error('Theme chunk failed to load');
+  const logError = spyOn(console, 'error').mockImplementation(() => {});
+  const dom = installDom();
+  const viewer = new CodeView({ theme: theme.name });
+  const render = spyOn(viewer, 'render');
+  try {
+    viewer.setup(createRoot());
+    viewer.setItems([
+      {
+        id: 'file',
+        type: 'file',
+        file: { name: 'ready.txt', lang: 'text', contents: 'ready\n' },
+      },
+    ]);
+    viewer.render(true);
+    await waitFor(() => loader.mock.calls.length === 1);
+    await wait(0);
+    render.mockClear();
+
+    firstLoad.reject(error);
+    await waitFor(() => logError.mock.calls.length > 0);
+    await wait(0);
+    expect(logError).toHaveBeenCalledWith(error);
+    expect(loader).toHaveBeenCalledTimes(1);
+    expect(render).not.toHaveBeenCalled();
+    expect(viewer.getRenderedItems()).toHaveLength(0);
+
+    loader.mockImplementation(() => Promise.resolve(theme));
+    viewer.render(true);
+    await waitFor(() => viewer.getRenderedItems().length === 1);
+    expect(loader).toHaveBeenCalledTimes(2);
+    expect(
+      viewer.getRenderedItems()[0]?.element.shadowRoot?.textContent
+    ).toContain('ready');
+  } finally {
+    viewer.cleanUp();
+    firstLoad.resolve(theme);
+    render.mockRestore();
+    logError.mockRestore();
+    dom.cleanup();
+  }
+});
 
 for (const obsoleteFinishesFirst of [false, true]) {
   test(`switches pending themes when the ${obsoleteFinishesFirst ? 'obsolete' : 'current'} loader finishes first`, async () => {
