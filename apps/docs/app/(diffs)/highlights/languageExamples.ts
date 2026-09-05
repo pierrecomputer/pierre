@@ -1298,6 +1298,371 @@ object Shape:
   for s <- shapes.sorted do println(f"\${Shape.area(s)}%.2f")
   lazy val largest: Option[Shape] = shapes.maxOption`,
   ],
+  [
+    'clojure',
+    'Clojure',
+    `(ns demo.core
+  (:require [clojure.string :as str])
+  (:import (java.util Date)))
+
+;; A record and a protocol
+(defprotocol Shape (area [this]))
+(defrecord Circle [r]
+  Shape
+  (area [_] (* Math/PI r r)))
+
+(def ^:private max-items 10)
+(defonce state (atom {:count 0, :names #{}}))
+
+(defn- greet
+  "Say hello."
+  [name & rest]
+  (println (str "Hello, " name "!") #"\\d+" \\a \\newline))
+
+(defn process [items]
+  (let [total (reduce + 0 items)
+        avg (/ total (count items))]
+    (if-let [x (first items)]
+      (when-not (nil? x)
+        (->> items (map inc) (filter even?) (into [])))
+      (throw (ex-info "empty" {:items items})))
+    #_(comment ignored)
+    (case avg 1N :one 0x1F :hex 1/2 :half "multi
+line" nil true false)
+    #(+ % %2) @state 'quoted \`(unquote ~x ~@xs) #inst "2024"
+    (.toUpperCase "x") (Date.) (str/join "," items)))`,
+  ],
+  [
+    'cmake',
+    'CMake',
+    `# Top-level build
+cmake_minimum_required(VERSION 3.16)
+project(Demo VERSION 1.2.3 LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 17)
+option(DEMO_TESTS "Build tests" ON)
+#[[ a bracket
+     comment ]]
+if(DEMO_TESTS AND NOT WIN32 OR "\${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
+  add_subdirectory(tests)
+endif()
+add_executable(demo src/main.cpp src/util.cpp)
+target_link_libraries(demo PRIVATE Qt5::Core $<$<CONFIG:Debug>:dbg>)
+message(STATUS "Building \${PROJECT_NAME} in $ENV{HOME} \\"quoted\\"")
+foreach(f IN LISTS SRCS)
+  list(APPEND ALL "\${f};x")
+endforeach()
+set(DOC [[raw
+text]])`,
+  ],
+  [
+    'fsharp',
+    'F#',
+    `/// A shape module.
+module Demo.Shapes
+
+open System
+
+(* nested (* comment *) *)
+type Shape =
+    | Circle of radius: float
+    | Rect of w: float * h: float
+
+[<Struct>]
+type Point = { X: int; Y: int }
+
+let area (s: Shape) : float =
+    match s with
+    | Circle r when r > 0.0 -> Math.PI * r * r
+    | Rect (w, h) -> w * h
+    | _ -> 0.0
+
+let mutable count = 0
+let rec fact n = if n <= 1 then 1 else n * fact (n - 1)
+
+type Counter() =
+    member this.Count = count
+    member _.Bump(n: int) = count <- count + n
+
+let names = [ "a"; "b" ] |> List.map (fun s -> s.ToUpper())
+let msg = $"total {count} of {names.Length}"
+let raw = @"C:\\path\\""quoted"""
+let tri = """multi
+line"""
+let c = 'x'
+let opt: int option = Some 42
+let big = 0x1F + 1_000L + 2.5e3
+printfn "%s %d" msg 1
+#if DEBUG
+let debug = true
+#endif`,
+  ],
+  [
+    'groovy',
+    'Groovy',
+    `#!/usr/bin/env groovy
+package demo
+
+import groovy.transform.ToString
+
+/**
+ * A shape.
+ */
+@ToString
+class Circle implements Shape {
+    static final double PI2 = Math.PI * 2
+    Double radius = 1.5
+
+    double area() {
+        return PI2 / 2 * radius ** 2
+    }
+
+    def describe(String name = 'circle', int count = 1) {
+        def msg = "$name has \${count} item\${count > 1 ? 's' : ''}"
+        println msg
+        return [name: name, count: count, ok: true]
+    }
+}
+
+// Gradle-style DSL
+dependencies {
+    implementation 'org.example:lib:1.0'
+    testImplementation group: 'junit', name: 'junit', version: '4.13'
+}
+
+def shapes = [new Circle(2), new Circle(0x10)] as List
+for (s in shapes) {
+    switch (s.radius) {
+        case 2: println "two"; break
+        default: println '''multi
+line'''
+    }
+}
+assert shapes.size() == 2L && shapes[0] instanceof Circle
+def text = """triple \${shapes[0].area()}
+quoted"""
+def f = { a, b -> a <=> b }`,
+  ],
+  [
+    'julia',
+    'Julia',
+    `# Statistics helpers
+module Stats
+
+using LinearAlgebra: norm
+export mean, Point
+
+#= a block
+   comment =#
+const MAX_ITER = 1_000
+abstract type Shape end
+struct Point{T<:Real} <: Shape
+    x::T
+    y::T
+end
+
+"""
+Compute the mean of \`xs\`.
+"""
+function mean(xs::Vector{Float64}; skip=false)::Float64
+    isempty(xs) && return NaN
+    total = 0.0
+    for (i, x) in enumerate(xs)
+        total += x
+    end
+    return total / length(xs)
+end
+
+sq(x) = x^2
+norm2(p::Point) = sqrt(p.x^2 + p.y^2)
+
+function Base.show(io::IO, p::Point)
+    print(io, "Point($(p.x), $(p.y)) $MAX_ITER")
+end
+
+let v = [1, 2, 3]'
+    m = v' * v
+    r = r"\\d+"
+    c = 'x'; d = '\\n'
+    ok = true && !false || nothing === missing
+    @assert length(v) == 3 "bad"
+    push!(v, 0x1F + 2im)
+    lst = [x for x in 1:10 if x % 2 == 0]
+    sym = :foo
+    println(\`ls -la $(homedir())\`)
+end
+
+end # module`,
+  ],
+  [
+    'makefile',
+    'Makefile',
+    `# Build config
+CC := gcc
+CFLAGS ?= -O2 -Wall $(EXTRA)
+SRCS = $(wildcard src/*.c) \\
+       lib/util.c
+OBJS = $(patsubst %.c,%.o,$(SRCS))
+export VERBOSE
+
+.PHONY: all clean
+all: app | dirs
+
+app: $(OBJS)
+	@echo "linking $@ with $(CC)"
+	$(CC) $(CFLAGS) -o $@ $^ 2>&1 | tee log.txt
+
+%.o: %.c
+	$(CC) -c $< -o $@
+
+ifeq ($(OS),Windows_NT)
+  RM = del
+else
+  RM = rm -f
+endif
+
+define helper
+	@echo $(1)
+endef
+
+clean:
+	-$(RM) $(OBJS) app ; echo done
+	cd $$HOME && ls`,
+  ],
+  [
+    'matlab',
+    'MATLAB',
+    `% Compute statistics
+%{
+block
+comment
+%}
+function [m, s] = stats(x, varargin)
+    % mean and std
+    n = numel(x);
+    m = sum(x) / n;
+    s = sqrt(sum((x - m).^2) / (n - 1));
+    if nargin > 1 && strcmp(varargin{1}, 'robust')
+        m = median(x);
+    elseif isempty(x)
+        m = NaN; s = Inf;
+    end
+end
+
+classdef Shape < handle
+    properties
+        Name = "circle"
+        Radius double = 1.5
+    end
+    methods
+        function a = area(obj)
+            a = pi * obj.Radius^2;
+        end
+    end
+end
+
+A = [1 2; 3 4]';
+B = A.' * A;
+f = @(t) sin(t) .* cos(t);
+for k = 1:numel(A)
+    fprintf('%d: %s\\n', k, 'it''s');
+end
+x = 0x1F + 2.5e3 + 3i;
+y = ~(A == B) | A ~= 0;
+z = x ...
+    + 1; % continued
+disp(MAX_VAL)`,
+  ],
+  [
+    'nix',
+    'Nix',
+    `# A flake-style module
+{ config, lib, pkgs, ... }:
+
+let
+  inherit (lib) mkOption types;
+  version = "1.2.3";
+  src = ./src;
+  greeting = "hello \${config.user.name}!";
+  banner = ''
+    multi \${version}
+    ''\${escaped} and '''quotes'''
+  '';
+  url = https://example.org/x?y=1;
+  count = 3 + 4 * 2;
+in rec {
+  /* block
+     comment */
+  options.services.demo.enable = mkOption {
+    type = types.bool;
+    default = false;
+    description = "Enable demo";
+  };
+  packages = with pkgs; [ hello git ];
+  build = import <nixpkgs> { inherit pkgs; };
+  f = x: y: if x == null then throw "bad" else x // y;
+  list = builtins.map (n: n + 1) [ 1 2 3 ];
+  ok = true && !false || (count >= 10);
+}`,
+  ],
+  [
+    'pascal',
+    'Delphi / Object Pascal',
+    `unit Shapes;
+
+{$mode objfpc}{$H+}
+
+interface
+
+uses
+  SysUtils, System.Generics.Collections;
+
+type
+  { A shape }
+  TShape = class(TObject)
+  private
+    FName: string;
+  public
+    constructor Create(const AName: string); overload;
+    function Area: Double; virtual; abstract;
+    property Name: string read FName write FName;
+  end;
+
+  PShape = ^TShape;
+  TShapes = array[0..MAX_SHAPES - 1] of TShape;
+
+const
+  MAX_SHAPES = $FF;
+  Version = 'v1.0''s';
+
+implementation
+
+(* block
+   comment *)
+constructor TShape.Create(const AName: string);
+begin
+  inherited Create;
+  FName := AName;
+end;
+
+function TCircle.Area: Double;
+var
+  i: Integer;
+begin
+  Result := Pi * Sqr(FRadius);
+  for i := 0 to 10 do
+    if (i mod 2 = 0) or (i in [1, 3]) then
+      WriteLn(Format('%d: %s', [i, FName]) + #13#10);
+  case i of
+    1: Exit;
+    2..5: Self.FRadius := %1010;
+  else
+    Result := nil <> nil;
+  end;
+end;
+
+end.`,
+  ],
 ] as const satisfies readonly (readonly [Lang, string, string])[];
 
 export type PlaygroundLanguage = (typeof PLAYGROUND_LANGUAGES)[number][0];

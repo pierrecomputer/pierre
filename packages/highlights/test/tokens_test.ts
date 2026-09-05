@@ -1,6 +1,7 @@
 import assert from 'node:assert';
 import t from 'node:test';
 
+import { LANGS } from '../lib/highlighter';
 import type {
   CodeToHastOptions,
   CodeToTokensOptions,
@@ -63,14 +64,14 @@ const textValue = (node: HastElement | HastText | undefined): string => {
 };
 
 const langIds = {
-  css: 6,
-  html: 11,
-  json: 12,
-  markdown: 15,
-  python: 18,
-  rust: 19,
-  ts: 31,
-  tsx: 32,
+  css: LANGS.css,
+  html: LANGS.html,
+  json: LANGS.json,
+  markdown: LANGS.markdown,
+  python: LANGS.python,
+  rust: LANGS.rust,
+  ts: LANGS.ts,
+  tsx: LANGS.tsx,
 };
 
 /** Run the previous mode-2 host splitter as a parity baseline. */
@@ -565,6 +566,33 @@ void t.test(
       ],
       ['r', 'x <- "one\ntwo"\ny <- r"(a\nb)"\n'],
       ['scala', 'val s = s"""one ${\n  x\n} two"""\nval y = 1\n'],
+      ['clojure', '(defn f [x]\n  "multi\nline" #"re\ngex")\n'],
+      [
+        'cmake',
+        'set(X "multi\n${Y} line")\n#[[ block\ncomment ]]\nmessage([[raw\ntext]])\n',
+      ],
+      [
+        'fsharp',
+        'let s = """one\ntwo"""\nlet t = $"a {\n  x\n} b"\n(* open\nstill *)\nlet y = 1\n',
+      ],
+      [
+        'groovy',
+        'def s = """one ${\n  x\n} two"""\ndef t = \'\'\'a\nb\'\'\'\n/* open\nstill */\ndef y = 1\n',
+      ],
+      [
+        'julia',
+        's = """one $(\n  x\n) two"""\n#= open\nstill =#\ny = "a\nb"\n',
+      ],
+      [
+        'makefile',
+        'SRCS = a.c \\\n       b.c\nall: $(SRCS)\n\t$(CC) -o $@ \\\n\t  $^\ndefine M\n\techo $(1)\nendef\n',
+      ],
+      ['matlab', '%{\nblock\n%}\nx = [1 2 ...\n     3];\n'],
+      [
+        'nix',
+        "x = \"one ${\n  y\n} two\";\nz = ''\n  multi ${a}\n'';\n/* open\nstill */\nw = 1;\n",
+      ],
+      ['pascal', '{ open\nstill }\n(* also\nopen *)\nx := 1;\n'],
       ['zig', 'const s = \\\\one\n  \\\\two\n;\n'],
       // multi-byte lines followed by ASCII, and astral pairs the random
       // chunking will split across pushes

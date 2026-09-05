@@ -17,17 +17,17 @@
       [4264:9088)     emitter span-open fragment cache
       [9088:9120)     streaming delimiter
       [9120:13120)    streaming lexer checkpoints
-      [13120:41568)   language keyword tables
-      [41568:42592)   JSON nesting stack
-      [42592:43648)   markdown fence aliases
-      [43648:43744)   nested markdown fence registers, one record per depth
-      [43744:44768)   TOML nesting stack
-      [44768:45792)   ECMAScript bracket-kind stack
-      [45792:45936)   ECMAScript token-class bitset
-      [45936:46096)   ECMAScript token-kind to $Token map (enum-map)
-      [46096:47120)   ECMAScript template stack
-      [47120:51216)   JSX-mode stack
-      [51216:65536)   free
+      [13120:48224)   language keyword tables
+      [48224:49248)   JSON nesting stack
+      [49248:50304)   markdown fence aliases
+      [50304:50400)   nested markdown fence registers, one record per depth
+      [50400:51424)   TOML nesting stack
+      [51424:52448)   ECMAScript bracket-kind stack
+      [52448:52592)   ECMAScript token-class bitset
+      [52592:52752)   ECMAScript token-kind to $Token map (enum-map)
+      [52752:53776)   ECMAScript template stack
+      [53776:57872)   JSX-mode stack
+      [57872:65536)   free
     [] pages 2..N     (text buffer; a live instance lays them out itself,
                       see src/live.wat)
       [65536:EOF)     input, NUL sentinel, then at least 16 bytes of slack
@@ -89,6 +89,15 @@
   (import "./langs/powershell.wat")
   (import "./langs/r.wat")
   (import "./langs/scala.wat")
+  (import "./langs/clojure.wat")
+  (import "./langs/cmake.wat")
+  (import "./langs/fsharp.wat")
+  (import "./langs/groovy.wat")
+  (import "./langs/julia.wat")
+  (import "./langs/makefile.wat")
+  (import "./langs/matlab.wat")
+  (import "./langs/nix.wat")
+  (import "./langs/pascal.wat")
 
   ;; Numeric values are the public ABI mirrored by lib/index.mjs.
   (enum $Language
@@ -97,71 +106,80 @@
     "astro"
     "bash"
     "c"
+    "c3"
+    "clojure"
+    "cmake"
     "cpp"
+    "csharp"
     "css"
+    "dart"
     "diff"
+    "dockerfile"
+    "elixir"
+    "erlang"
+    "fsharp"
+    "gleam"
     "glsl"
     "go"
+    "graphql"
+    "groovy"
     "haskell"
+    "hlsl"
     "html"
+    "java"
+    "js"
     "json"
+    "jsx"
+    "julia"
     "kotlin"
+    "less"
+    "lisp"
     "lua"
+    "makefile"
     "markdown"
+    "matlab"
     "mdx"
+    "nix"
+    "objc"
+    "ocaml"
+    "pascal"
+    "perl"
     "php"
+    "powershell"
+    "proto"
     "python"
+    "r"
+    "ruby"
     "rust"
+    "sass"
+    "scala"
+    "scss"
     "sql"
     "svelte"
     "swift"
+    "terraform"
     "toml"
+    "ts"
+    "tsx"
     "vue"
     "wat"
+    "wgsl"
     "xml"
     "yaml"
     "zig"
-    "js"
-    "jsx"
-    "ts"
-    "tsx"
-    "c3"
-    "csharp"
-    "dart"
-    "elixir"
-    "hlsl"
-    "java"
-    "less"
-    "lisp"
-    "objc"
-    "ocaml"
-    "perl"
-    "proto"
-    "ruby"
-    "sass"
-    "scss"
-    "terraform"
-    "wgsl"
-    "dockerfile"
-    "erlang"
-    "gleam"
-    "graphql"
-    "powershell"
-    "r"
-    "scala"
   )
 
   ;; language dispatch table, one entry per $Language member in enum order
   (table $hlDispatch funcref
     (elem
-      $hlPlain $hlAsm $hlAstro $hlBash $hlC $hlCpp $hlCss $hlDiff $hlGlsl
-      $hlGo $hlHaskell $hlHtml $hlJson $hlKotlin $hlLua $hlMarkdown $hlMdx
-      $hlPhp $hlPython $hlRust $hlSql $hlSvelte $hlSwift $hlToml $hlVue
-      $hlWat $hlXml $hlYaml $hlZig $hlJs $hlJsx $hlTs $hlTsx
-      $hlC3 $hlCsharp $hlDart $hlElixir $hlHlsl $hlJava $hlLess $hlLisp
-      $hlObjc $hlOcaml $hlPerl $hlProto $hlRuby $hlSass $hlScss $hlTerraform
-      $hlWgsl $hlDockerfile $hlErlang $hlGleam $hlGraphql $hlPowershell $hlR
-      $hlScala))
+      $hlPlain $hlAsm $hlAstro $hlBash $hlC $hlC3 $hlClojure $hlCmake $hlCpp
+      $hlCsharp $hlCss $hlDart $hlDiff $hlDockerfile $hlElixir $hlErlang
+      $hlFsharp $hlGleam $hlGlsl $hlGo $hlGraphql $hlGroovy $hlHaskell $hlHlsl
+      $hlHtml $hlJava $hlJs $hlJson $hlJsx $hlJulia $hlKotlin $hlLess $hlLisp
+      $hlLua $hlMakefile $hlMarkdown $hlMatlab $hlMdx $hlNix $hlObjc $hlOcaml
+      $hlPascal $hlPerl $hlPhp $hlPowershell $hlProto $hlPython $hlR $hlRuby
+      $hlRust $hlSass $hlScala $hlScss $hlSql $hlSvelte $hlSwift $hlTerraform
+      $hlToml $hlTs $hlTsx $hlVue $hlWat $hlWgsl $hlXml $hlYaml $hlZig))
 
   ;; plain text: one unstyled token covering the whole input
   (func $hlPlain

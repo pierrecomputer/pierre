@@ -1,6 +1,7 @@
 import assert from 'node:assert';
 import t from 'node:test';
 
+import { LANGS } from '../lib/highlighter';
 import type {
   HighlightedToken,
   Lang,
@@ -110,6 +111,30 @@ const samples: [Lang, string][] = [
   ],
   ['r', 'x <- "one\ntwo"\ny <- r"(a\nb)"\n'],
   ['scala', 'val s = s"""one ${\n  x\n} two"""\nval y = 1\n'],
+  ['clojure', '(defn f [x]\n  "multi\nline" #"re\ngex")\n'],
+  [
+    'cmake',
+    'set(X "multi\n${Y} line")\n#[[ block\ncomment ]]\nmessage([[raw\ntext]])\n',
+  ],
+  [
+    'fsharp',
+    'let s = """one\ntwo"""\nlet t = $"a {\n  x\n} b"\n(* open\nstill *)\nlet y = 1\n',
+  ],
+  [
+    'groovy',
+    'def s = """one ${\n  x\n} two"""\ndef t = \'\'\'a\nb\'\'\'\n/* open\nstill */\ndef y = 1\n',
+  ],
+  ['julia', 's = """one $(\n  x\n) two"""\n#= open\nstill =#\ny = "a\nb"\n'],
+  [
+    'makefile',
+    'SRCS = a.c \\\n       b.c\nall: $(SRCS)\n\t$(CC) -o $@ \\\n\t  $^\ndefine M\n\techo $(1)\nendef\n',
+  ],
+  ['matlab', '%{\nblock\n%}\nx = [1 2 ...\n     3];\n'],
+  [
+    'nix',
+    "x = \"one ${\n  y\n} two\";\nz = ''\n  multi ${a}\n'';\n/* open\nstill */\nw = 1;\n",
+  ],
+  ['pascal', '{ open\nstill }\n(* also\nopen *)\nx := 1;\n'],
   ['zig', 'const s = \\\\one\n  \\\\two\n;\n'],
   // parameter lists split across lines: the signature-tracking state must
   // ride the interned line-state blobs
@@ -1301,7 +1326,7 @@ void t.test('live wasm: compaction keeps the document intact', () => {
   const bytes = enc.encode(doc);
   const ptr = raw.liveStage(bytes.length);
   new Uint8Array(raw.memory.buffer).set(bytes, ptr);
-  raw.liveInitDoc(ptr, bytes.length, 31);
+  raw.liveInitDoc(ptr, bytes.length, LANGS.ts);
   raw.liveRun(0x7fffffff);
   // replace everything with three tiny lines; the freed text dwarfs live data
   const newText = enc.encode('let a = 1;\nlet b = 2;\nlet c = 3;');
@@ -1411,7 +1436,7 @@ void t.test(
       const ptr = raw.liveStage(staged);
       const bytes = new TextEncoder().encode('a'.repeat(used - 1) + '\n');
       new Uint8Array(raw.memory.buffer).set(bytes, ptr);
-      raw.liveInitDoc(ptr, used, 4);
+      raw.liveInitDoc(ptr, used, LANGS.c);
       raw.liveRun(0x7fffffff);
       const dv = new DataView(raw.memory.buffer);
       for (let idx = 0; idx < 32; idx++) {
@@ -1454,7 +1479,7 @@ void t.test(
     const bytes = new TextEncoder().encode(doc);
     const ptr = raw.liveStage(bytes.length);
     new Uint8Array(raw.memory.buffer).set(bytes, ptr);
-    raw.liveInitDoc(ptr, bytes.length, 29); // js
+    raw.liveInitDoc(ptr, bytes.length, LANGS.js);
     raw.liveRun(0x7fffffff);
     const states = raw.liveStats(1);
     const stateBytes = raw.liveStats(2);

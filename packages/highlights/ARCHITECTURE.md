@@ -20,7 +20,7 @@ src/scan.wat        read cursors ($ptr/$end/$eof) and SIMD scans
 src/emit.wat        HTML/token-record emitter and driver prologue/epilogue
 src/common.wat      shared ASCII, identifier, number, string, and comment scans
 src/sig.wat         shared parameter-list machine (variable.parameter)
-src/langs/*.wat     56 built-in language modes
+src/langs/*.wat     65 built-in language modes
 src/live.wat        incremental-tokenizer core: heap, line table, state
                     interning, per-line driver, edit splicing, compaction
 src/highlights.wat     memory, $Language enum, imports, and dispatch
@@ -112,16 +112,17 @@ before preprocessing, so editor warnings are expected.
   [4264:9088)     emitter span-open fragment cache
   [9088:9120)     streaming delimiter
   [9120:13120)    streaming lexer checkpoints
-  [13120:41568)   language keyword tables
-  [41568:42592)   JSON nesting stack
-  [42592:43648)   markdown fence aliases
-  [43648:44672)   TOML nesting stack
-  [44672:45696)   ECMAScript bracket-kind stack
-  [45696:45840)   ECMAScript token-class bitset
-  [45840:46000)   ECMAScript token-kind to $Token map (enum-map)
-  [46000:47024)   ECMAScript template stack
-  [47024:51120)   JSX-mode stack
-  [51120:65536)   free
+  [13120:48224)   language keyword tables
+  [48224:49248)   JSON nesting stack
+  [49248:50304)   markdown fence aliases
+  [50304:50400)   nested markdown fence registers, one record per depth
+  [50400:51424)   TOML nesting stack
+  [51424:52448)   ECMAScript bracket-kind stack
+  [52448:52592)   ECMAScript token-class bitset
+  [52592:52752)   ECMAScript token-kind to $Token map (enum-map)
+  [52752:53776)   ECMAScript template stack
+  [53776:57872)   JSX-mode stack
+  [57872:65536)   free
 [] pages 2..N     (text buffer; a live instance lays them out itself,
                   see src/live.wat)
   [65536:EOF)     input, NUL sentinel, then at least 16 bytes of slack

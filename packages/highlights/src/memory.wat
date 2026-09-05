@@ -31,62 +31,71 @@
   (const $mem.streamDelimiter 9088)   ;; 32
   (const $mem.streamState 9120)       ;; 4000
 
-  ;; [13120:41568) word tables, one per language in name order: js.wat's
+  ;; [13120:48224) word tables, one per language in name order: js.wat's
   ;; hand-written ECMAScript table under tsx and a keyword table for every
   ;; other language. The size after each base is the range its table form
   ;; claims in the lexer; it leaves a little headroom above the bytes the
   ;; table needs.
-  (const $mem.bashWords 13120)        ;; 256
-  (const $mem.c3Words 13376)          ;; 1792
-  (const $mem.cWords 15168)           ;; 1024
-  (const $mem.cppWords 16192)         ;; 1280
-  (const $mem.csharpWords 17472)      ;; 1280
-  (const $mem.dartWords 18752)        ;; 1152
-  (const $mem.dockerfileWords 19904)  ;; 256
-  (const $mem.elixirWords 20160)      ;; 896
-  (const $mem.erlangWords 21056)      ;; 512
-  (const $mem.gleamWords 21568)       ;; 384
-  (const $mem.glslWords 21952)        ;; 1152
-  (const $mem.goWords 23104)          ;; 512
-  (const $mem.graphqlWords 23616)     ;; 384
-  (const $mem.haskellWords 24000)     ;; 640
-  (const $mem.hlslWords 24640)        ;; 1152
-  (const $mem.javaWords 25792)        ;; 1024
-  (const $mem.kotlinWords 26816)      ;; 768
-  (const $mem.lispWords 27584)        ;; 1280
-  (const $mem.luaWords 28864)         ;; 256
-  (const $mem.objcWords 29120)        ;; 1024
-  (const $mem.ocamlWords 30144)       ;; 1536
-  (const $mem.perlWords 31680)        ;; 1024
-  (const $mem.powershellWords 32704)  ;; 1280
-  (const $mem.protoWords 33984)       ;; 640
-  (const $mem.pythonWords 34624)      ;; 1152
-  (const $mem.rWords 35776)           ;; 256
-  (const $mem.rubyWords 36032)        ;; 768
-  (const $mem.rustWords 36800)        ;; 640
-  (const $mem.scalaWords 37440)       ;; 512
-  (const $mem.swiftWords 37952)       ;; 768
-  (const $mem.terraformWords 38720)   ;; 384
-  (const $mem.tsxWords 39104)         ;; 544
-  (const $mem.watWords 39648)         ;; 384
-  (const $mem.wgslWords 40032)        ;; 640
-  (const $mem.zigWords 40672)         ;; 896
+  (const $mem.bashWords 13120)           ;; 256
+  (const $mem.c3Words 13376)             ;; 1792
+  (const $mem.cWords 15168)              ;; 1024
+  (const $mem.clojureWords 16192)        ;; 512
+  (const $mem.cmakeWords 16704)          ;; 896
+  (const $mem.cppWords 17600)            ;; 1280
+  (const $mem.csharpWords 18880)         ;; 1280
+  (const $mem.dartWords 20160)           ;; 1152
+  (const $mem.dockerfileWords 21312)     ;; 256
+  (const $mem.elixirWords 21568)         ;; 896
+  (const $mem.erlangWords 22464)         ;; 512
+  (const $mem.fsharpWords 22976)         ;; 1024
+  (const $mem.gleamWords 24000)          ;; 384
+  (const $mem.glslWords 24384)           ;; 1152
+  (const $mem.goWords 25536)             ;; 512
+  (const $mem.groovyWords 26048)         ;; 640
+  (const $mem.graphqlWords 26688)        ;; 384
+  (const $mem.haskellWords 27072)        ;; 640
+  (const $mem.hlslWords 27712)           ;; 1152
+  (const $mem.javaWords 28864)           ;; 1024
+  (const $mem.juliaWords 29888)          ;; 512
+  (const $mem.kotlinWords 30400)         ;; 768
+  (const $mem.lispWords 31168)           ;; 1280
+  (const $mem.luaWords 32448)            ;; 256
+  (const $mem.makefileWords 32704)       ;; 512
+  (const $mem.matlabWords 33216)         ;; 384
+  (const $mem.nixWords 33600)            ;; 384
+  (const $mem.objcWords 33984)           ;; 1024
+  (const $mem.ocamlWords 35008)          ;; 1536
+  (const $mem.pascalWords 36544)         ;; 1792
+  (const $mem.perlWords 38336)           ;; 1024
+  (const $mem.powershellWords 39360)     ;; 1280
+  (const $mem.protoWords 40640)          ;; 640
+  (const $mem.pythonWords 41280)         ;; 1152
+  (const $mem.rWords 42432)              ;; 256
+  (const $mem.rubyWords 42688)           ;; 768
+  (const $mem.rustWords 43456)           ;; 640
+  (const $mem.scalaWords 44096)          ;; 512
+  (const $mem.swiftWords 44608)          ;; 768
+  (const $mem.terraformWords 45376)      ;; 384
+  (const $mem.tsxWords 45760)            ;; 544
+  (const $mem.watWords 46304)            ;; 384
+  (const $mem.wgslWords 46688)           ;; 640
+  (const $mem.zigWords 47328)            ;; 896
 
-  ;; [41568:51216) the other per-language data in alphabetical order: the
+  ;; [48224:57872) the other per-language data in alphabetical order: the
   ;; JSON nesting stack, the markdown fence alias table and the fence
   ;; registers of nested markdown bodies (eight 12-byte records, one per
   ;; nesting depth), the TOML nesting stack, and the ECMAScript bracket-kind
   ;; stack, token-class bitset, token-kind map, template stack, and JSX-mode
   ;; stack; the rest of the page is free
-  (const $mem.jsonStack 41568)              ;; 1024
-  (const $mem.markdownFence 42592)          ;; 1056
-  (const $mem.markdownFenceEnd 43648)
-  (const $mem.markdownFenceStack 43648)     ;; 96
-  (const $mem.markdownFenceStackEnd 43744)
-  (const $mem.tomlStack 43744)              ;; 1024
-  (const $mem.jsBracketStack 44768)         ;; 1024
-  (const $mem.jsLexBits 45792)              ;; 144
-  (const $mem.jsLexHl 45936)                ;; 160
-  (const $mem.jsTemplateStack 46096)        ;; 1024
-  (const $mem.jsxStack 47120)               ;; 4096
+  (const $mem.jsonStack 48224)                   ;; 1024
+  (const $mem.markdownFence 49248)               ;; 1056
+  (const $mem.markdownFenceEnd 50304)            ;; 0
+  (const $mem.markdownFenceStack 50304)          ;; 96
+  (const $mem.markdownFenceStackEnd 50400)       ;; 0
+  (const $mem.tomlStack 50400)                   ;; 1024
+  (const $mem.jsBracketStack 51424)              ;; 1024
+  (const $mem.jsLexBits 52448)                   ;; 144
+  (const $mem.jsLexHl 52592)                     ;; 160
+  (const $mem.jsTemplateStack 52752)             ;; 1024
+  (const $mem.jsxStack 53776)                    ;; 4096
 )

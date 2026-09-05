@@ -5,7 +5,7 @@
   playground](/highlights) before replacing Shiki in production.
 </Notice>
 
-Highlights is a small code highlighter with 56 hand-written language lexers in
+Highlights is a small code highlighter with 65 hand-written language lexers in
 WebAssembly. It has no grammar downloads and can produce HTML, Shiki-compatible
 tokens, HAST, streamed tokens, or incrementally updated editor tokens.
 
@@ -124,64 +124,74 @@ Highlights currently supports the following languages:
 - `astro`
 - `bash`
 - `c`
+- `c3`
+- `clojure`
+- `cmake`
 - `cpp`
+- `csharp`
 - `css`
+- `dart`
 - `diff`
+- `dockerfile`
+- `elixir`
+- `erlang`
+- `fsharp`
+- `gleam`
 - `glsl`
 - `go`
+- `graphql`
+- `groovy`
 - `haskell`
+- `hlsl`
 - `html`
+- `java`
+- `js`
 - `json`
+- `jsx`
+- `julia`
 - `kotlin`
+- `less`
+- `lisp`
 - `lua`
+- `makefile`
 - `markdown`
+- `matlab`
 - `mdx`
+- `nix`
+- `objc`
+- `ocaml`
+- `pascal`
+- `perl`
 - `php`
+- `powershell`
+- `proto`
 - `python`
+- `r`
+- `ruby`
 - `rust`
+- `sass`
+- `scala`
+- `scss`
 - `sql`
 - `svelte`
 - `swift`
+- `terraform`
 - `toml`
+- `ts`
+- `tsx`
 - `vue`
 - `wat`
+- `wgsl`
 - `xml`
 - `yaml`
 - `zig`
-- `js`
-- `jsx`
-- `ts`
-- `tsx`
-- `c3`
-- `csharp`
-- `dart`
-- `elixir`
-- `hlsl`
-- `java`
-- `less`
-- `lisp`
-- `objc`
-- `ocaml`
-- `perl`
-- `proto`
-- `ruby`
-- `sass`
-- `scss`
-- `terraform`
-- `wgsl`
-- `dockerfile`
-- `erlang`
-- `gleam`
-- `graphql`
-- `powershell`
-- `r`
-- `scala`
 
 The `Lang` type includes aliases such as `sh`, `shell`, `zsh`, `py`, `rs`,
 `javascript`, `typescript`, `jsonc`, `patch`, `wasm`, `yml`, `cs`, `rb`, `ex`,
 `ml`, `tf`, `hcl`, `protobuf`, `objective-c`, `m`, `mm`, `docker`, `erl`, `gql`,
-`ps1`, `pwsh`, and `sbt`. Use `isSupportedLanguage(value)` to validate an
-arbitrary string and narrow it to `Lang`.
+`ps1`, `pwsh`, `sbt`, `clj`, `fs`, `gradle`, `jl`, `make`, `octave`, and
+`delphi`. Use `isSupportedLanguage(value)` to validate an arbitrary string and
+narrow it to `Lang`.
 
 ### Diffs integration
 
