@@ -51,8 +51,8 @@ const LINE_HOVER_HIGHLIGHTS = ['disabled', 'both', 'number', 'line'] as const;
 const LINE_MODES = ['select', 'comment', 'none'] as const;
 
 // The syntax-highlighting implementation diffs renders with: shiki (the
-// default TextMate pipeline) or the experimental wasm-based chamele lexers.
-const HIGHLIGHTERS = ['shiki', 'chamele'] as const;
+// default TextMate pipeline) or the experimental wasm-based highlights lexers.
+const HIGHLIGHTERS = ['shiki', 'highlights'] as const;
 export type PlaygroundHighlighter = (typeof HIGHLIGHTERS)[number];
 
 // The rendering view used by the playground. 'diff' and 'file' render one

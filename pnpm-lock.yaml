@@ -444,12 +444,12 @@ importers:
       '@icons-pack/react-simple-icons':
         specifier: 'catalog:'
         version: 13.8.0(react@19.2.7)
-      '@pierre/chamele':
-        specifier: workspace:*
-        version: link:../../packages/chamele
       '@pierre/diffs':
         specifier: workspace:*
         version: link:../../packages/diffs
+      '@pierre/highlights':
+        specifier: workspace:*
+        version: link:../../packages/highlights
       '@pierre/icons':
         specifier: 'catalog:'
         version: 0.7.1(react@19.2.7)
@@ -620,27 +620,6 @@ importers:
         specifier: 6.0.3
         version: 6.0.3
 
-  packages/chamele:
-    devDependencies:
-      binaryen:
-        specifier: 'catalog:'
-        version: 132.0.0
-      shiki:
-        specifier: 4.4.1
-        version: 4.4.1
-      tree-sitter-highlight:
-        specifier: 'catalog:'
-        version: 1.1.2
-      tsdown:
-        specifier: 'catalog:'
-        version: 0.22.3(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.22.3)(@typescript/native-preview@7.0.0-dev.20260622.1)(typescript@6.0.3)
-      typescript:
-        specifier: 6.0.3
-        version: 6.0.3
-      wabt:
-        specifier: 'catalog:'
-        version: 1.0.39
-
   packages/diffs:
     dependencies:
       '@pierre/theme':
@@ -668,9 +647,9 @@ importers:
       '@arethetypeswrong/core':
         specifier: 'catalog:'
         version: 0.18.2
-      '@pierre/chamele':
+      '@pierre/highlights':
         specifier: workspace:*
-        version: link:../chamele
+        version: link:../highlights
       '@playwright/test':
         specifier: 'catalog:'
         version: 1.51.1
@@ -722,6 +701,27 @@ importers:
       vite:
         specifier: 'catalog:'
         version: 8.1.0(@types/node@25.9.3)(jiti@2.7.0)(yaml@2.9.0)
+
+  packages/highlights:
+    devDependencies:
+      binaryen:
+        specifier: 'catalog:'
+        version: 132.0.0
+      shiki:
+        specifier: 4.4.1
+        version: 4.4.1
+      tree-sitter-highlight:
+        specifier: 'catalog:'
+        version: 1.1.2
+      tsdown:
+        specifier: 'catalog:'
+        version: 0.22.3(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.22.3)(@typescript/native-preview@7.0.0-dev.20260622.1)(typescript@6.0.3)
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
+      wabt:
+        specifier: 'catalog:'
+        version: 1.0.39
 
   packages/path-store:
     devDependencies:

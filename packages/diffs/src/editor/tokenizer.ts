@@ -84,7 +84,7 @@ export interface EditorTokenizer {
 
 // Editor-chrome CSS (`--diffs-editor-*`: selection, active line, search and
 // bracket matches, cursor, diagnostics) derived from a theme's VS Code color
-// keys. Custom highlighters with another theme format (chamele's Zed themes)
+// keys. Custom highlighters with another theme format (highlights's Zed themes)
 // map their colors onto these keys in `getTheme`.
 function buildEditorThemeCSS(colors: Record<string, string>): string {
   const selectionBackground = colors['editor.selectionBackground'];
@@ -1141,8 +1141,8 @@ export class ShikiEditorTokenizer extends BaseEditorTokenizer {
   }
 }
 
-/** Stoppable code tokenizer for the editor, over chamele's live tokenizer. */
-export class ChameleEditorTokenizer extends BaseEditorTokenizer {
+/** Stoppable code tokenizer for the editor, over highlights's live tokenizer. */
+export class HighlightsEditorTokenizer extends BaseEditorTokenizer {
   #highlighter: CodeHighlighter;
   #live: CodeLiveTokenizer | undefined;
   #liveLang: string | undefined;
@@ -1314,7 +1314,7 @@ export class ChameleEditorTokenizer extends BaseEditorTokenizer {
     ];
   }
 
-  // The chamele adapter maps its Zed theme's editor colors onto the VS Code
+  // The highlights adapter maps its Zed theme's editor colors onto the VS Code
   // color keys of `getTheme(...).colors`, so the shared CSS block applies to
   // custom highlighters too.
   protected activateTheme(themeName: string): void {
@@ -1532,7 +1532,7 @@ export function createEditorTokenizer(
     // An explicit live tokenizer wins over a shiki pass-through, so a custom
     // highlighter that also exposes a shiki instance keeps its own edit mode.
     if (highlighter.createLiveTokenizer != null) {
-      return new ChameleEditorTokenizer({ ...props, highlighter });
+      return new HighlightsEditorTokenizer({ ...props, highlighter });
     }
     if (highlighter.getShikiInstance != null) {
       const shiki = highlighter.getShikiInstance();
@@ -1543,7 +1543,7 @@ export function createEditorTokenizer(
       }
       return new ShikiEditorTokenizer({ ...props, highlighter: shiki });
     }
-    return new ChameleEditorTokenizer({ ...props, highlighter });
+    return new HighlightsEditorTokenizer({ ...props, highlighter });
   }
   return new ShikiEditorTokenizer({ ...props, highlighter });
 }

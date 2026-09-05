@@ -232,7 +232,7 @@ export class FileStream {
       // the trailing incomplete line back until its newline (or the stream
       // end) arrives, so no token ever needs re-emitting.
       //
-      // Tokenizers may re-scan their whole buffer on every push (Chamele's
+      // Tokenizers may re-scan their whole buffer on every push (Highlights's
       // non-TypeScript lexers currently do), which makes one push per tiny
       // chunk quadratic over the stream.
       // Chunks are therefore coalesced: push once a newline is pending and

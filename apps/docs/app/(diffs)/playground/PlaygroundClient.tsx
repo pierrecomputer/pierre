@@ -187,7 +187,7 @@ export type SharedRenderOptions = Pick<
 
 const HIGHLIGHTER_OPTIONS = [
   { value: 'shiki', label: 'Shiki' },
-  { value: 'chamele', label: 'Chamele' },
+  { value: 'highlights', label: 'Highlights' },
 ] as const;
 
 interface PlaygroundClientProps {
@@ -1274,7 +1274,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
   }, []);
 
   // Swap the library's registered highlighter to match the picker. The
-  // chamele implementation (wasm lexers + Zed themes) is imported lazily so
+  // highlights implementation (wasm lexers + Zed themes) is imported lazily so
   // the default shiki path never pays for it. `activeHighlighter` flips after
   // the swap lands: the resulting commit re-renders the direct File/FileDiff
   // surfaces IN PLACE (their render pass notices the pending registration
@@ -1285,8 +1285,10 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
   useEffect(() => {
     let cancelled = false;
     const implementation =
-      highlighter === 'chamele'
-        ? import('@pierre/diffs/chamele').then((m) => m.chameleHighlighter)
+      highlighter === 'highlights'
+        ? import('@pierre/diffs/highlights').then(
+            (m) => m.highlightsHighlighter
+          )
         : Promise.resolve(shikiHighlighter);
     void implementation.then((impl) => {
       if (cancelled) return;
@@ -1307,7 +1309,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
   }, []);
 
   // The prerendered payload was highlighted by shiki on the server, so it is
-  // only hydrated while shiki is the picked highlighter; picking chamele
+  // only hydrated while shiki is the picked highlighter; picking highlights
   // renders from scratch instead of adopting shiki markup.
   const [usePrerenderedHTML, setUsePrerenderedHTML] = useState(
     () => viewMode === 'diff' && urlState.highlighter === 'shiki'

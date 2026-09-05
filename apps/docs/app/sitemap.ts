@@ -20,7 +20,7 @@ const ROUTES_BY_SITE: Record<ProductId, readonly SitemapRoute[]> = {
   diffs: [
     { path: '/', priority: 1, changeFrequency: 'weekly' },
     { path: '/docs', priority: 0.9, changeFrequency: 'weekly' },
-    { path: '/chamele', priority: 0.8, changeFrequency: 'weekly' },
+    { path: '/highlights', priority: 0.8, changeFrequency: 'weekly' },
     { path: '/edit', priority: 0.8, changeFrequency: 'monthly' },
     { path: '/theme', priority: 0.7, changeFrequency: 'monthly' },
     { path: '/theme/gallery', priority: 0.5, changeFrequency: 'monthly' },

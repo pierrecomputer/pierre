@@ -28,8 +28,8 @@
       "worker": [
         "dist/worker/index.d.ts"
       ],
-      "chamele": [
-        "dist/chamele.d.ts"
+      "highlights": [
+        "dist/highlights.d.ts"
       ]
     }
   },
@@ -38,9 +38,9 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
-    "./chamele": {
-      "types": "./dist/chamele.d.ts",
-      "import": "./dist/chamele.js"
+    "./highlights": {
+      "types": "./dist/highlights.d.ts",
+      "import": "./dist/highlights.js"
     },
     "./edit": {
       "types": "./dist/edit/index.d.ts",
@@ -84,7 +84,7 @@
   },
   "devDependencies": {
     "@arethetypeswrong/core": "catalog:",
-    "@pierre/chamele": "workspace:*",
+    "@pierre/highlights": "workspace:*",
     "@playwright/test": "catalog:",
     "@tsdown/css": "catalog:",
     "@types/hast": "catalog:",
@@ -104,7 +104,7 @@
     "vite": "catalog:"
   },
   "peerDependencies": {
-    "@pierre/chamele": "0.x",
+    "@pierre/highlights": "0.x",
     "react": "^18.3.1 || ^19.0.0",
     "react-dom": "^18.3.1 || ^19.0.0"
   },

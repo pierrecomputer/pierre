@@ -56,7 +56,7 @@ const DIFFS_SECTIONS = [
   'Utilities',
   'Styling',
   'Theming',
-  'ChameleHighlighter',
+  'HighlightsHighlighter',
   'TokenHooks',
   'WorkerPool',
   'SSR',
@@ -107,8 +107,8 @@ const SECTION_DESCRIPTIONS: Record<string, Record<string, string>> = {
     Styling: 'CSS variables, inline styles, and unsafe CSS injection',
     Theming:
       'Pierre Light/Dark themes, custom theme creation, and registration',
-    ChameleHighlighter:
-      'Chamele features, APIs, themes, languages, streaming, incremental editing, and Diffs integration',
+    HighlightsHighlighter:
+      'Highlights features, APIs, themes, languages, streaming, incremental editing, and Diffs integration',
     TokenHooks:
       'Experimental token-level enter/leave/click callbacks for hover UI and LSP integrations',
     WorkerPool:
@@ -385,7 +385,7 @@ const LABEL_PREFIXES_TO_STRIP = [
   'SSR_',
   'STYLING_CODE_',
   'THEMING_',
-  'CHAMELE_',
+  'HIGHLIGHTS_',
   'VIRTUALIZATION_',
   'OVERVIEW_',
   'TREES_',

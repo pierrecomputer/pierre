@@ -13,7 +13,6 @@ import {
   AGENT_PROMPT,
   AGENT_SKILL_INSTALL,
 } from '../docs/BuildWithAgents/constants';
-import { CHAMELE_HIGHLIGHTER_EXAMPLES } from '../docs/ChameleHighlighter/constants';
 import {
   CODE_VIEW_HEADER_FOOTER_REACT_EXAMPLE,
   CODE_VIEW_HEADER_FOOTER_VANILLA_EXAMPLE,
@@ -63,6 +62,7 @@ import {
   EDITOR_OPTIONS_TYPE,
   EDITOR_PUBLIC_API,
 } from '../docs/Edit/constants';
+import { HIGHLIGHTS_HIGHLIGHTER_EXAMPLES } from '../docs/HighlightsHighlighter/constants';
 import {
   INSTALLATION_EXAMPLES,
   PACKAGE_MANAGERS,
@@ -200,7 +200,7 @@ export default function DocsPage() {
           <TokenHooksSection />
           <WorkerPoolSection />
           <SSRSection />
-          <ChameleHighlighterSection />
+          <HighlightsHighlighterSection />
         </div>
       </DocsLayout>
       <Footer />
@@ -637,10 +637,10 @@ async function ThemingSection() {
   return <ProseWrapper>{content}</ProseWrapper>;
 }
 
-async function ChameleHighlighterSection() {
+async function HighlightsHighlighterSection() {
   const content = await renderMDXWithPreloadedFiles(
-    '(diffs)/docs/ChameleHighlighter/content.mdx',
-    CHAMELE_HIGHLIGHTER_EXAMPLES
+    '(diffs)/docs/HighlightsHighlighter/content.mdx',
+    HIGHLIGHTS_HIGHLIGHTER_EXAMPLES
   );
   return <ProseWrapper>{content}</ProseWrapper>;
 }

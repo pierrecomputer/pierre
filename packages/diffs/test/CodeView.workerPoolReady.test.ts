@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, mock, spyOn, test } from 'bun:test';
 
-import chameleHighlighter from '../src/chamele';
 import { CodeView } from '../src/components/CodeView';
 import { DEFAULT_THEMES } from '../src/constants';
 import { setHighlighter } from '../src/highlighter/code_highlighter';
 import { shikiHighlighter } from '../src/highlighter/shiki_highlighter';
+import highlightsHighlighter from '../src/highlights';
 import type {
   HighlighterTypes,
   RenderDiffOptions,
@@ -302,11 +302,11 @@ describe('CodeView worker pool readiness', () => {
       workerManager.asWorkerPoolManager()
     );
 
-    await chameleHighlighter.load({
+    await highlightsHighlighter.load({
       langs: [],
       themes: ['pierre-dark', 'pierre-light'],
     });
-    setHighlighter(chameleHighlighter);
+    setHighlighter(highlightsHighlighter);
     try {
       viewer.setup(createRoot({ height: 1000 }));
       viewer.setItems([makeFileItem('file:custom-ready', 3)]);

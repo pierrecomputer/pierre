@@ -12,7 +12,7 @@
       "path": "apps/docs/tsconfig.json"
     },
     {
-      "path": "packages/chamele/tsconfig.json"
+      "path": "packages/highlights/tsconfig.json"
     },
     {
       "path": "packages/diffs/tsconfig.json"

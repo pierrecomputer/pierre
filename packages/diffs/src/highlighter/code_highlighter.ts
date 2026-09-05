@@ -137,10 +137,10 @@ export interface CodeLiveTokenizerOptions {
  *
  * The library renders with the built-in shiki implementation by default.
  * `setHighlighter` swaps the implementation for subsequently created
- * renderers, e.g. the experimental `@pierre/diffs/chamele`.
+ * renderers, e.g. the experimental `@pierre/diffs/highlights`.
  */
 export interface CodeHighlighter {
-  /** Implementation name, e.g. `'shiki'` or `'chamele'`. */
+  /** Implementation name, e.g. `'shiki'` or `'highlights'`. */
   readonly name: string;
   /**
    * Load everything the given languages/themes need.

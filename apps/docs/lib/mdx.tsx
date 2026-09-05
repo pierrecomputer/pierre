@@ -57,7 +57,7 @@ function MdxLink(props: ComponentPropsWithoutRef<'a'>) {
 // Section headings whose `## ` slug should render a "Beta" badge. The badge is
 // appended after the heading text (not part of the markdown) so the slug—and
 // therefore the anchor and any child heading ids—stays unchanged.
-const BETA_DOC_HEADING_IDS = new Set(['chamele-highlighter', 'edit-mode']);
+const BETA_DOC_HEADING_IDS = new Set(['highlights-highlighter', 'edit-mode']);
 
 function MdxHeading2({
   id,

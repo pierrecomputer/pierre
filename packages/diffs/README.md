@@ -38,32 +38,32 @@ registration, so stale markup is never served — but nothing repaints
 spontaneously on the call itself). Already-running streams and attached editors
 keep the implementation they captured until they are re-created.
 
-The experimental [chamele]-backed highlighter runs its built-in lexers in
+The experimental [highlights]-backed highlighter runs its built-in lexers in
 WebAssembly and lazy-loads bundled themes by ID.
 
 ```ts
 import { File, setHighlighter } from '@pierre/diffs';
-import { chameleHighlighter } from '@pierre/diffs/chamele';
+import { highlightsHighlighter } from '@pierre/diffs/highlights';
 
-setHighlighter(chameleHighlighter);
-const file = new File(); // use the chamele highlighter
+setHighlighter(highlightsHighlighter);
+const file = new File(); // use the highlights highlighter
 ```
 
 Pass the `shikiHighlighter` export back to `setHighlighter` to restore the
 default. Custom implementations conform to the `CodeHighlighter` interface
-exported from `@pierre/diffs`. Notes on the chamele highlighter:
+exported from `@pierre/diffs`. Notes on the highlights highlighter:
 
-- Theme names map onto chamele's bundled Zed themes; register custom names with
-  `registerChameleTheme` from `@pierre/diffs/chamele`.
-- Languages without a chamele lexer render as plain text.
+- Theme names map onto highlights's bundled Zed themes; register custom names
+  with `registerHighlightsTheme` from `@pierre/diffs/highlights`.
+- Languages without a highlights lexer render as plain text.
 - The worker pool always highlights with shiki, so a registered custom
-  highlighter routes rendering to the main thread (chamele is fast enough that
-  this is not a regression).
-- Edit mode tokenizes through chamele's incremental `LiveTokenizer` instead of
-  the TextMate incremental tokenizer.
+  highlighter routes rendering to the main thread (highlights is fast enough
+  that this is not a regression).
+- Edit mode tokenizes through highlights's incremental `LiveTokenizer` instead
+  of the TextMate incremental tokenizer.
 
 [shiki]: https://shiki.style
-[chamele]: ../chamele/README.md
+[highlights]: ../highlights/README.md
 
 ## Agent skill
 

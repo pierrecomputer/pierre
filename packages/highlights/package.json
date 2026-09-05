@@ -1,0 +1,45 @@
+{
+  "name": "@pierre/highlights",
+  "version": "0.0.0",
+  "description": "A fast code highlighter written in WebAssembly Text(Wat), from Pierre",
+  "license": "apache-2.0",
+  "files": [
+    "dist/",
+    "themes/README.md",
+    "themes/THIRD_PARTY_LICENSES.md"
+  ],
+  "type": "module",
+  "main": "./dist/node.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "workerd": "./dist/workerd.js",
+      "node": "./dist/node.js",
+      "import": "./dist/browser.js"
+    },
+    "./themes": {
+      "types": "./dist/themes.d.ts",
+      "import": "./dist/themes.js"
+    },
+    "./themes/*": {
+      "types": "./dist/themes/*.d.ts",
+      "import": "./dist/themes/*.js"
+    }
+  },
+  "scripts": {
+    "prepublishOnly": "moon run highlights:prepublish"
+  },
+  "devDependencies": {
+    "binaryen": "catalog:",
+    "shiki": "catalog:",
+    "tree-sitter-highlight": "catalog:",
+    "tsdown": "catalog:",
+    "typescript": "catalog:",
+    "wabt": "catalog:"
+  },
+  "meta": {
+    "highlights.wasm": 131321,
+    "highlights.wasm.gz": 58588
+  }
+}
