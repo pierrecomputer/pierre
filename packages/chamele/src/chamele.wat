@@ -13,15 +13,16 @@
       [2000:6976)     emitter HTML fragments and span-open fragment cache
       [6976:7008)     streaming delimiter
       [7008:11008)    streaming lexer checkpoints
-      [11008:35872)   word tables: ECMAScript, C, and one per language (see src/memory.wat)
-      [35872:36928)   markdown fence aliases
-      [36928:37952)   JSON nesting stack
-      [37952:38976)   TOML nesting stack
-      [38976:39120)   ECMAScript token-class bitset
-      [39120:40144)   ECMAScript template stack
-      [40144:41168)   ECMAScript bracket-kind stack
-      [41168:45264)   JSX-mode stack
-      [45264:65536)   free
+      [11008:39456)   word tables: ECMAScript, C, and one per language (see src/memory.wat)
+      [39456:40512)   markdown fence aliases
+      [40512:41536)   JSON nesting stack
+      [41536:42560)   TOML nesting stack
+      [42560:42704)   ECMAScript token-class bitset
+      [42704:43728)   ECMAScript template stack
+      [43728:44752)   ECMAScript bracket-kind stack
+      [44752:48848)   JSX-mode stack
+      [48848:48912)   lowercase word copy for case-insensitive keyword lookups
+      [48912:65536)   free
     [] pages 2..N     (text buffer; a live instance lays them out itself,
                       see src/live.wat)
       [65536:EOF)     input, NUL sentinel, then at least 16 bytes of slack
@@ -76,6 +77,13 @@
   (import "./langs/xml.wat")
   (import "./langs/yaml.wat")
   (import "./langs/zig.wat")
+  (import "./langs/dockerfile.wat")
+  (import "./langs/erlang.wat")
+  (import "./langs/gleam.wat")
+  (import "./langs/graphql.wat")
+  (import "./langs/powershell.wat")
+  (import "./langs/r.wat")
+  (import "./langs/scala.wat")
 
   ;; Numeric values are the public ABI mirrored by lib/index.mjs.
   (enum $Language
@@ -129,6 +137,13 @@
     "scss"
     "terraform"
     "wgsl"
+    "dockerfile"
+    "erlang"
+    "gleam"
+    "graphql"
+    "powershell"
+    "r"
+    "scala"
   )
 
   ;; language dispatch table, one entry per $Language member in enum order
@@ -140,7 +155,8 @@
       $hlWat $hlXml $hlYaml $hlZig $hlJs $hlJsx $hlTs $hlTsx
       $hlC3 $hlCsharp $hlDart $hlElixir $hlHlsl $hlJava $hlLess $hlLisp
       $hlObjc $hlOcaml $hlPerl $hlProto $hlRuby $hlSass $hlScss $hlTerraform
-      $hlWgsl))
+      $hlWgsl $hlDockerfile $hlErlang $hlGleam $hlGraphql $hlPowershell $hlR
+      $hlScala))
 
   ;; plain text: one unstyled token covering the whole input
   (func $hlPlain

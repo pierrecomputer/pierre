@@ -89,7 +89,7 @@ export function ChameleHero({ gzipBytes }: { gzipBytes: number }) {
       </div>
 
       <p className="text-muted-foreground mt-2 text-sm">
-        {(gzipBytes / 1024).toFixed(1)} kB gzipped Wasm · 49 built-in languages
+        {(gzipBytes / 1024).toFixed(1)} kB gzipped Wasm · 56 built-in languages
         · 92–771× faster than Shiki (
         <Link
           target="_blank"

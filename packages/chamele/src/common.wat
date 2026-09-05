@@ -708,6 +708,30 @@
         (br_if $cmp (local.get $n))))
     (i32.load8_u (local.get $rec)))
 
+  ;; Copy the word [lhs,rhs) to $dst lowercased so a case-insensitive
+  ;; language can probe a lowercase keyword table with it, zero-padding the
+  ;; eight bytes the lookup's wide loads may read past the word. Returns the
+  ;; copied length, or 0 for a word longer than a table can hold; the empty
+  ;; range then misses like any other non-keyword.
+  (func $lexLowerCopy (param $lhs i32) (param $rhs i32) (param $dst i32) (result i32)
+    (local $n i32)
+    (local $i i32)
+    (local $c i32)
+    (local.set $n (i32.sub (local.get $rhs) (local.get $lhs)))
+    (if (i32.gt_u (local.get $n) (i32.const 31))
+      (then (return (i32.const 0))))
+    (block $done
+      (loop $l
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (local.set $c (i32.load8_u (i32.add (local.get $lhs) (local.get $i))))
+        (if (i32.le_u (i32.sub (local.get $c) (i32.const "A")) (i32.const 25))
+          (then (local.set $c (i32.or (local.get $c) (i32.const 32)))))
+        (i32.store8 (i32.add (local.get $dst) (local.get $i)) (local.get $c))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $l)))
+    (i64.store (i32.add (local.get $dst) (local.get $n)) (i64.const 0))
+    (local.get $n))
+
   ;; Return the next occurrence of either byte, or $end. Long clean runs use
   ;; one SIMD comparison pair per 16 bytes; the tail never reads past $end.
   (func $lexFindEither (param $p i32) (param $a i32) (param $b i32) (result i32)

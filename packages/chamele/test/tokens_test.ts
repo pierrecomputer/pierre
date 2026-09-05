@@ -552,6 +552,19 @@ void t.test(
       ],
       ['terraform', 'x = <<-EOT\n  hello ${var.y}\n  EOT\ny = "a ${z} b"\n'],
       ['wgsl', 'fn f() { /* open\nstill */ return; }\n'],
+      [
+        'dockerfile',
+        'RUN apt-get update && \\\n    apt-get install -y curl\nRUN <<EOF\necho $HOME\nEOF\nCMD ["a"]\n',
+      ],
+      ['erlang', 'f() ->\n    "one\ntwo".\n'],
+      ['gleam', 'pub fn main() {\n  "one\ntwo"\n}\n'],
+      ['graphql', '"""\ndoc\n"""\ntype A { x: Int }\n'],
+      [
+        'powershell',
+        '<# open\nstill #>\n$x = @"\nmulti $y $(1 +\n2)\n"@\n"a $(\n$b\n) c"\n',
+      ],
+      ['r', 'x <- "one\ntwo"\ny <- r"(a\nb)"\n'],
+      ['scala', 'val s = s"""one ${\n  x\n} two"""\nval y = 1\n'],
       ['zig', 'const s = \\\\one\n  \\\\two\n;\n'],
       // multi-byte lines followed by ASCII, and astral pairs the random
       // chunking will split across pushes

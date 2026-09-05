@@ -1072,6 +1072,232 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
   return c;
 }`,
   ],
+  [
+    'dockerfile',
+    'Dockerfile',
+    `# syntax=docker/dockerfile:1
+FROM node:22-alpine AS build
+WORKDIR /app
+COPY package.json pnpm-lock.yaml ./
+RUN --mount=type=cache,target=/root/.pnpm \
+    corepack enable && pnpm install --frozen-lockfile
+COPY . .
+RUN pnpm build
+
+FROM nginx:1.27 AS runtime
+ARG PORT=8080
+ENV PORT=\${PORT}
+COPY --from=build /app/dist /usr/share/nginx/html
+RUN <<EOF
+echo "listen \${PORT}" >> /etc/nginx/conf.d/port.conf
+EOF
+EXPOSE 8080
+HEALTHCHECK --interval=30s CMD wget -q -O - http://localhost:\${PORT}/ || exit 1
+CMD ["nginx", "-g", "daemon off;"]`,
+  ],
+  [
+    'erlang',
+    'Erlang',
+    `-module(counter).
+-behaviour(gen_server).
+-export([start_link/0, add/1]).
+-record(state, {count = 0 :: integer()}).
+-define(TIMEOUT, 5000).
+
+%% Public API
+start_link() ->
+    gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
+
+add(N) when is_integer(N), N > 0 ->
+    gen_server:call(?MODULE, {add, N}, ?TIMEOUT).
+
+%% Callbacks
+init([]) -> {ok, #state{}}.
+
+handle_call({add, N}, _From, State = #state{count = C}) ->
+    io:format("adding ~p~n", [N]),
+    {reply, C + N, State#state{count = C + N}};
+handle_call(_Msg, _From, State) ->
+    {reply, {error, unknown}, State}.
+
+handle_cast(_Msg, State) -> {noreply, State}.`,
+  ],
+  [
+    'gleam',
+    'Gleam',
+    `import gleam/int
+import gleam/io
+import gleam/list
+import gleam/string
+
+/// A geometric shape.
+pub type Shape {
+  Circle(radius: Float)
+  Rect(width: Float, height: Float)
+}
+
+pub fn area(shape: Shape) -> Float {
+  case shape {
+    Circle(radius: r) -> 3.14159 *. r *. r
+    Rect(width: w, height: h) -> w *. h
+  }
+}
+
+@external(erlang, "erlang", "system_time")
+fn now() -> Int
+
+pub fn main() {
+  let shapes = [Circle(1.0), Rect(2.0, 3.5)]
+  let total =
+    shapes
+    |> list.map(area)
+    |> list.fold(0.0, fn(acc, x) { acc +. x })
+  let assert Ok(count) = int.parse("42")
+  io.println("total: " <> string.inspect(total) <> " of " <> int.to_string(count))
+  io.println("at " <> int.to_string(now()))
+}`,
+  ],
+  [
+    'graphql',
+    'GraphQL',
+    `"""
+A registered user.
+"""
+type User implements Node {
+  id: ID!
+  name: String!
+  role: Role = MEMBER
+  posts(first: Int = 10, after: String): PostConnection!
+}
+
+enum Role {
+  ADMIN
+  MEMBER
+}
+
+input NewUser {
+  name: String!
+  email: String!
+}
+
+directive @auth(role: Role = MEMBER) on FIELD_DEFINITION
+
+# Fetch a user with their latest posts
+query GetUser($id: ID!, $withPosts: Boolean = false) {
+  user(id: $id) {
+    id
+    name
+    ...UserFields
+    posts(first: 3) @include(if: $withPosts) {
+      edges { node { title } }
+    }
+  }
+}
+
+fragment UserFields on User {
+  role
+}
+
+mutation CreateUser($input: NewUser!) {
+  createUser(input: $input) { id }
+}`,
+  ],
+  [
+    'powershell',
+    'PowerShell',
+    `#Requires -Version 7
+<#
+.SYNOPSIS
+  Summarize the largest files under a path.
+#>
+[CmdletBinding()]
+param(
+  [Parameter(Mandatory)]
+  [string]$Path,
+  [int]$Top = 5
+)
+
+function Format-Size {
+  param([long]$Bytes)
+  if ($Bytes -gt 1mb) { return "{0:N1} MB" -f ($Bytes / 1mb) }
+  return "$([math]::Round($Bytes / 1kb, 1)) KB"
+}
+
+$files = Get-ChildItem -Path $Path -Recurse -File |
+  Where-Object { $_.Length -gt 0 -and -not $_.Name.StartsWith('.') } |
+  Sort-Object Length -Descending |
+  Select-Object -First $Top
+
+foreach ($file in $files) {
+  $label = Format-Size -Bytes $file.Length
+  Write-Host "\${label}  $($file.FullName)" -ForegroundColor Cyan
+}
+
+$report = @"
+Scanned $Path
+Top $Top of $($files.Count) files
+"@
+Write-Output $report`,
+  ],
+  [
+    'r',
+    'R',
+    `#' Fit a simple model and summarize it.
+library(dplyr)
+library(ggplot2)
+
+fib <- function(n = 10L) {
+  if (n <= 1L) return(n)
+  fib(n - 1L) + fib(n - 2L)
+}
+
+data <- tibble(x = 1:20, y = 2.5 * x + rnorm(20, sd = 3))
+
+summary_stats <- data %>%
+  filter(!is.na(y)) |>
+  mutate(z = (y - mean(y)) / sd(y), \`odd row\` = x %% 2 == 1) %>%
+  summarise(across(c(x, y), list(mean = mean, sd = sd)))
+
+fit <- lm(y ~ x, data = data)
+coefs <- coef(fit)
+cat(sprintf("slope %.2f, intercept %.2f\\n", coefs[["x"]], coefs[[1]]))
+
+square <- \\(v) v^2
+for (i in seq_len(3)) if (i %in% c(1, 3)) print(square(i)) else next
+raw <- r"(C:\\data\\input.csv)"
+stats::median(data$y, na.rm = TRUE)`,
+  ],
+  [
+    'scala',
+    'Scala',
+    `package geometry
+
+import scala.math.{Pi, sqrt}
+
+/** A closed shape with an area. */
+sealed trait Shape derives CanEqual
+final case class Circle(radius: Double) extends Shape
+final case class Rect(width: Double, height: Double) extends Shape
+
+object Shape:
+  given Ordering[Shape] = Ordering.by(area)
+
+  def area(shape: Shape): Double = shape match
+    case Circle(r) if r > 0 => Pi * r * r
+    case Rect(w, h)         => w * h
+    case _                  => 0.0
+
+  extension (c: Circle) def scaled(k: Double): Circle = c.copy(radius = c.radius * k)
+
+@main def run(): Unit =
+  val shapes = List(Circle(1.5), Rect(2, 3), Circle(0.5).scaled(4))
+  val total = shapes.map(Shape.area).sum
+  println(s"\${shapes.size} shapes, total area $total")
+  val report = """|areas:
+                  |\${shapes.map(Shape.area).mkString(", ")}""".stripMargin
+  for s <- shapes.sorted do println(f"\${Shape.area(s)}%.2f")
+  lazy val largest: Option[Shape] = shapes.maxOption`,
+  ],
 ] as const satisfies readonly (readonly [Lang, string, string])[];
 
 export type PlaygroundLanguage = (typeof PLAYGROUND_LANGUAGES)[number][0];

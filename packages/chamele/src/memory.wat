@@ -24,7 +24,7 @@
   (const $mem.streamDelimiter 6976)   ;; 32
   (const $mem.streamState 7008)       ;; 4000
 
-  ;; [11008:35872) word tables: the ECMAScript and C word lists, then one
+  ;; [11008:39456) word tables: the ECMAScript and C word lists, then one
   ;; keyword table per language in language order. The size after each
   ;; keyword-table base is the range its table form claims in the lexer; it
   ;; leaves a little headroom above the bytes the table needs.
@@ -35,40 +35,49 @@
   (const $mem.cppWords 14624)         ;; 1280
   (const $mem.csharpWords 15904)      ;; 1280
   (const $mem.dartWords 17184)        ;; 1152
-  (const $mem.elixirWords 18336)      ;; 896
-  (const $mem.glslWords 19232)        ;; 1152
-  (const $mem.goWords 20384)          ;; 512
-  (const $mem.haskellWords 20896)     ;; 640
-  (const $mem.hlslWords 21536)        ;; 1152
-  (const $mem.javaWords 22688)        ;; 1024
-  (const $mem.kotlinWords 23712)      ;; 768
-  (const $mem.lispWords 24480)        ;; 1280
-  (const $mem.luaWords 25760)         ;; 256
-  (const $mem.objcWords 26016)        ;; 1024
-  (const $mem.ocamlWords 27040)       ;; 1536
-  (const $mem.perlWords 28576)        ;; 1024
-  (const $mem.protoWords 29600)       ;; 640
-  (const $mem.pythonWords 30240)      ;; 1152
-  (const $mem.rubyWords 31392)        ;; 768
-  (const $mem.rustWords 32160)        ;; 640
-  (const $mem.swiftWords 32800)       ;; 768
-  (const $mem.terraformWords 33568)   ;; 384
-  (const $mem.watWords 33952)         ;; 384
-  (const $mem.wgslWords 34336)        ;; 640
-  (const $mem.zigWords 34976)         ;; 896
+  (const $mem.dockerfileWords 18336)  ;; 256
+  (const $mem.elixirWords 18592)      ;; 896
+  (const $mem.erlangWords 19488)      ;; 512
+  (const $mem.gleamWords 20000)       ;; 384
+  (const $mem.glslWords 20384)        ;; 1152
+  (const $mem.goWords 21536)          ;; 512
+  (const $mem.graphqlWords 22048)     ;; 384
+  (const $mem.haskellWords 22432)     ;; 640
+  (const $mem.hlslWords 23072)        ;; 1152
+  (const $mem.javaWords 24224)        ;; 1024
+  (const $mem.kotlinWords 25248)      ;; 768
+  (const $mem.lispWords 26016)        ;; 1280
+  (const $mem.luaWords 27296)         ;; 256
+  (const $mem.objcWords 27552)        ;; 1024
+  (const $mem.ocamlWords 28576)       ;; 1536
+  (const $mem.perlWords 30112)        ;; 1024
+  (const $mem.powershellWords 31136)  ;; 1280
+  (const $mem.protoWords 32416)       ;; 640
+  (const $mem.pythonWords 33056)      ;; 1152
+  (const $mem.rWords 34208)           ;; 256
+  (const $mem.rubyWords 34464)        ;; 768
+  (const $mem.rustWords 35232)        ;; 640
+  (const $mem.scalaWords 35872)       ;; 512
+  (const $mem.swiftWords 36384)       ;; 768
+  (const $mem.terraformWords 37152)   ;; 384
+  (const $mem.watWords 37536)         ;; 384
+  (const $mem.wgslWords 37920)        ;; 640
+  (const $mem.zigWords 38560)         ;; 896
 
-  ;; [35872:45264) the other per-language data, grouped by language: the
+  ;; [39456:48912) the other per-language data, grouped by language: the
   ;; markdown fence alias table; the JSON and TOML nesting stacks; the
   ;; ECMAScript token-class bitset and its template, bracket-kind, and
-  ;; JSX-mode stacks; the rest of the page is free
-  (const $mem.markdownFence 35872)    ;; 1056
-  (const $mem.markdownFenceEnd 36928)
-  (const $mem.jsonStack 36928)        ;; 1024
-  (const $mem.tomlStack 37952)        ;; 1024
-  (const $mem.tsxLexBits 38976)       ;; 144
-  (const $mem.tsxTemplateStack 39120) ;; 1024
-  (const $mem.tsxBracketStack 40144)  ;; 1024
-  (const $mem.tsxJsxStack 41168)      ;; 4096
+  ;; JSX-mode stacks; the lowercase word copy that case-insensitive keyword
+  ;; lookups probe; the rest of the page is free
+  (const $mem.markdownFence 39456)    ;; 1056
+  (const $mem.markdownFenceEnd 40512)
+  (const $mem.jsonStack 40512)        ;; 1024
+  (const $mem.tomlStack 41536)        ;; 1024
+  (const $mem.tsxLexBits 42560)       ;; 144
+  (const $mem.tsxTemplateStack 42704) ;; 1024
+  (const $mem.tsxBracketStack 43728)  ;; 1024
+  (const $mem.tsxJsxStack 44752)      ;; 4096
+  (const $mem.lexLowerScratch 48848)  ;; 64
 
   ;; The live tokenizer owns the text pages (see src/live.wat): the change
   ;; list of up to 1000 16-byte entries, the 32 size-class free-list heads

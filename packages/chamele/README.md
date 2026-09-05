@@ -3,7 +3,7 @@
 `@pierre/chamele` is a fast code highlighter written by hand in WebAssembly Text
 (WAT).
 
-- **Lightweight**: 57.6KB (gzipped Wasm) for 49 languages
+- **Lightweight**: 63.3KB (gzipped Wasm) for 56 languages
 - **Fast**: 92–771× faster than Shiki in the latest
   [benchmark](./benchmark/README.md)
 - Built-in language lexers, no external grammar definitions needed
