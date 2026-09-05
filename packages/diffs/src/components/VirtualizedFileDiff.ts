@@ -1149,6 +1149,11 @@ export class VirtualizedFileDiff<
       latestDiff == null
         ? undefined
         : this.hunksRenderer.getDiffForNextRender(latestDiff);
+    // A completed async highlight can change which diff the next simple
+    // virtualizer render will commit. CodeView refreshes this during layout.
+    if (this.isSimpleMode()) {
+      this.pendingRender = undefined;
+    }
     this.forceRenderOverride = true;
     this.virtualizer.instanceChanged(
       this,

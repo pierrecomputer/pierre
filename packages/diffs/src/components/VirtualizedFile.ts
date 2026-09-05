@@ -766,6 +766,11 @@ export class VirtualizedFile<
       latestFile == null
         ? undefined
         : this.fileRenderer.getFileForNextRender(latestFile);
+    // A completed async highlight can change which file the next simple
+    // virtualizer render will commit. CodeView refreshes this during layout.
+    if (this.isSimpleMode()) {
+      this.pendingRender = undefined;
+    }
     this.forceRenderOverride = true;
     this.virtualizer.instanceChanged(
       this,
