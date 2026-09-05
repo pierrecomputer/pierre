@@ -6,46 +6,29 @@
       (i32.lt_u (local.get $p) (global.get $end))))
 
   ;; group order is the dispatch order in $mlWordHl below
-  (keyword-table $mlWords $mem.ocamlWords $mem.ocamlWords+1536 16 512
-    (group ;; 1: control
+  (keyword-table $mlWords $mem.ocamlWords $mem.ocamlWords+1536
+    (group $Token.keyword.control ;; 1: control
       "do" "if" "of" "to" "for" "try" "done" "else" "then" "when" "with"
       "begin" "match" "while" "downto" "assert" "function" "lazy")
-    (group "let" "and" "rec" "nonrec") ;; 2: value bindings, next name may be a function
-    (group "type")                     ;; 3: type declarations
-    (group "module" "functor" "sig" "struct" "open" "include") ;; 4: modules, next name is a module
-    (group ;; 5: other declarations
+    (group $Token.keyword.declaration+256 "let" "and" "rec" "nonrec") ;; 2: value bindings, next name may be a function
+    (group $Token.keyword.declaration+512 "type")                     ;; 3: type declarations
+    (group $Token.keyword.declaration+1024 "module" "functor" "sig" "struct" "open" "include") ;; 4: modules, next name is a module
+    (group $Token.keyword.declaration ;; 5: other declarations
       "in" "as" "val" "end" "fun" "new" "class" "object" "method" "mutable"
       "private" "virtual" "inherit" "external" "exception" "constraint"
       "initializer")
-    (group ;; 6: word operators
+    (group $Token.keyword.operator ;; 6: word operators
       "or" "mod" "asr" "lsl" "lsr" "lor" "land" "lxor")
-    (group ;; 7: built-in types
+    (group $Token.type.builtin ;; 7: built-in types
       "int" "exn" "ref" "char" "bool" "list" "unit" "array" "bytes" "float"
       "option" "string")
-    (group "true" "false")) ;; 8: booleans
+    (group $Token.boolean "true" "false")) ;; 8: booleans
 
   ;; Token in the low byte; bit 8 marks a value binding whose next name may
   ;; be a function, bit 9 a type declaration, bit 10 a module head. -1 means
   ;; an ordinary identifier.
   (func $mlWordHl (param $lhs i32) (param $rhs i32) (result i32)
-    (local $g i32)
-    (local.set $g (keyword-table.get $mlWords (local.get $lhs) (local.get $rhs)))
-    (if (i32.eqz (local.get $g)) (then (return (i32.const -1))))
-    (if (i32.eq (local.get $g) (i32.const 1))
-      (then (return (enum.get $Token.keyword.control))))
-    (if (i32.eq (local.get $g) (i32.const 2))
-      (then (return (i32.or (enum.get $Token.keyword.declaration) (i32.const 256)))))
-    (if (i32.eq (local.get $g) (i32.const 3))
-      (then (return (i32.or (enum.get $Token.keyword.declaration) (i32.const 512)))))
-    (if (i32.eq (local.get $g) (i32.const 4))
-      (then (return (i32.or (enum.get $Token.keyword.declaration) (i32.const 1024)))))
-    (if (i32.eq (local.get $g) (i32.const 5))
-      (then (return (enum.get $Token.keyword.declaration))))
-    (if (i32.eq (local.get $g) (i32.const 6))
-      (then (return (enum.get $Token.keyword.operator))))
-    (if (i32.eq (local.get $g) (i32.const 7))
-      (then (return (enum.get $Token.type.builtin))))
-    (enum.get $Token.boolean))
+    (keyword-table.value $mlWords (local.get $lhs) (local.get $rhs)))
 
   ;; A character literal starts at the tick $p when a single character - an
   ;; escape, or one code point - sits between it and a closing tick. Any
@@ -63,23 +46,7 @@
       (i32.eq (i32.load8_u (local.get $e)) (i32.const 39))))
 
   (func $mlIsSymbol (param $c i32) (result i32)
-    (i32.or
-      (i32.or
-        (i32.or (i32.eq (local.get $c) (i32.const "!")) (i32.eq (local.get $c) (i32.const "$")))
-        (i32.or (i32.eq (local.get $c) (i32.const "%")) (i32.eq (local.get $c) (i32.const "&"))))
-      (i32.or
-        (i32.or
-          (i32.or (i32.eq (local.get $c) (i32.const "*")) (i32.eq (local.get $c) (i32.const "+")))
-          (i32.or (i32.eq (local.get $c) (i32.const "-")) (i32.eq (local.get $c) (i32.const "/"))))
-        (i32.or
-          (i32.or
-            (i32.or (i32.eq (local.get $c) (i32.const "<")) (i32.eq (local.get $c) (i32.const "=")))
-            (i32.or (i32.eq (local.get $c) (i32.const ">")) (i32.eq (local.get $c) (i32.const "@"))))
-          (i32.or
-            (i32.or (i32.eq (local.get $c) (i32.const "^")) (i32.eq (local.get $c) (i32.const "|")))
-            (i32.or
-              (i32.or (i32.eq (local.get $c) (i32.const "~")) (i32.eq (local.get $c) (i32.const ":")))
-              (i32.eq (local.get $c) (i32.const "?"))))))))
+    (byteset.get "!$%&*+-/:<=>?@^|~" (local.get $c)))
 
   ;; $expect is the pending capture: 1 after `let`, `and`, or `rec` - the
   ;; name is a function when arguments follow it - 2 after `type`, whose
@@ -275,11 +242,7 @@
             (local.set $afterValue (i32.const 1))
             (br $next)))
 
-        (if (i32.or
-              (i32.or (i32.eq (local.get $c) (i32.const "(")) (i32.eq (local.get $c) (i32.const ")")))
-              (i32.or
-                (i32.or (i32.eq (local.get $c) (i32.const "[")) (i32.eq (local.get $c) (i32.const "]")))
-                (i32.or (i32.eq (local.get $c) (i32.const "{")) (i32.eq (local.get $c) (i32.const "}")))))
+        (if (byteset.get "()[]{}" (local.get $c))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (call $emitTok (enum.get $Token.punctuation.bracket) (local.get $lhs) (global.get $ptr))
@@ -359,13 +322,7 @@
   (func $mlIsArgStart (param $c i32) (result i32)
     (i32.or
       (i32.or (call $lexIsIdentStart (local.get $c)) (call $lexIsDigit (local.get $c)))
-      (i32.or
-        (i32.or (i32.eq (local.get $c) (i32.const "(")) (i32.eq (local.get $c) (i32.const "[")))
-        (i32.or
-          (i32.or (i32.eq (local.get $c) (i32.const 34)) (i32.eq (local.get $c) (i32.const "~")))
-          (i32.or
-            (i32.or (i32.eq (local.get $c) (i32.const "`")) (i32.eq (local.get $c) (i32.const "{")))
-            (i32.eq (local.get $c) (i32.const "?")))))))
+      (byteset.get "\22(?[`{~" (local.get $c))))
 
   ;; the end of the lowercase identifier run at $p
   (func $mlIdEnd (param $p i32) (result i32)

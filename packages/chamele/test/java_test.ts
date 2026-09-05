@@ -7,11 +7,16 @@ import tokenTypes from '../lib/token-types';
 import { transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import {
+  assertLineFedParity,
   checkInvariants,
+  distinctTheme,
+  exactColor,
   loadLang,
   spansOf,
   type TestLang,
   textOf,
+  tokenKinds,
+  wordColor,
 } from './util';
 
 // one unique color per token type so equal styles cannot merge neighboring
@@ -187,3 +192,248 @@ void t.test('java: multi-line constructs resume line-fed', () => {
     assert.deepEqual(streamed, whole, JSON.stringify(code));
   }
 });
+
+/** Highlight under the distinct theme after checking the lexer invariants. */
+const distinctHl = (src: string) =>
+  checkInvariants(lexer.hl, src, { theme: distinctTheme });
+
+void t.test('java: packages and imports, including static imports', () => {
+  assert.deepEqual(
+    tokenKinds(
+      'java',
+      'package com.example;\nimport java.util.List;\nimport static java.lang.Math.max;'
+    ),
+    [
+      ['package', 'keyword.declaration'],
+      ['com', 'namespace'],
+      ['.', 'punctuation.delimiter'],
+      ['example', 'namespace'],
+      [';', 'punctuation.delimiter'],
+      ['import', 'keyword.import'],
+      ['java', 'variable'],
+      ['.', 'punctuation.delimiter'],
+      ['util', 'property'],
+      ['.', 'punctuation.delimiter'],
+      ['List', 'type'],
+      [';', 'punctuation.delimiter'],
+      ['import', 'keyword.import'],
+      ['static', 'keyword.declaration'],
+      ['java', 'variable'],
+      ['.', 'punctuation.delimiter'],
+      ['lang', 'property'],
+      ['.', 'punctuation.delimiter'],
+      ['Math', 'type'],
+      ['.', 'punctuation.delimiter'],
+      ['max', 'property'],
+      [';', 'punctuation.delimiter'],
+    ]
+  );
+});
+
+void t.test(
+  'java: class heads, modifiers, members, interfaces, enums, and records',
+  () => {
+    const html = distinctHl(
+      'public abstract class A<T extends B> implements C, D { private static final int MAX = 0xFF; protected volatile transient long n = 1_000L; @Override public synchronized void run() throws E { } }\ninterface I { void f(); } enum Color { RED, GREEN } record P(int x, int y) {}'
+    );
+    for (const word of [
+      'public',
+      'abstract',
+      'class',
+      'extends',
+      'implements',
+      'private',
+      'static',
+      'final',
+      'protected',
+      'volatile',
+      'transient',
+      'synchronized',
+      'throws',
+      'interface',
+      'enum',
+      'record',
+    ]) {
+      assert.equal(
+        wordColor(html, word),
+        distinctColor('keyword.declaration'),
+        word
+      );
+    }
+    for (const type of ['A', 'B', 'C', 'D', 'E', 'I', 'Color', 'P']) {
+      assert.equal(exactColor(html, type), distinctColor('type'), type);
+    }
+    for (const c of ['MAX', 'RED', 'GREEN']) {
+      assert.equal(exactColor(html, c), distinctColor('constant'), c);
+    }
+    assert.equal(exactColor(html, '@Override'), distinctColor('attribute'));
+    for (const fn of ['run', 'f']) {
+      assert.equal(
+        exactColor(html, fn),
+        distinctColor('function.definition'),
+        fn
+      );
+    }
+    for (const type of ['int', 'long', 'void']) {
+      assert.equal(exactColor(html, type), distinctColor('type.builtin'), type);
+    }
+    assert.equal(exactColor(html, '0xFF'), distinctColor('number'));
+    assert.equal(exactColor(html, '1_000L'), distinctColor('number'));
+  }
+);
+
+void t.test('java: numeric, char, string, and text-block literals', () => {
+  const html = distinctHl(
+    'int x = 0x1F + 0b101 + 017 + 1_000 + 1e3f + 2.5d + \'a\' + \'\\n\'; String s = "esc\\t" + """\ntext\n"""; boolean b = true; Object o = null;'
+  );
+  for (const n of ['0x1F', '0b101', '017', '1_000', '1e3f', '2.5d']) {
+    assert.equal(exactColor(html, n), distinctColor('number'), n);
+  }
+  assert.equal(exactColor(html, "'a'"), distinctColor('string'));
+  assert.equal(exactColor(html, '\\n'), distinctColor('string.escape'));
+  assert.equal(exactColor(html, '"esc'), distinctColor('string'));
+  assert.equal(exactColor(html, '\\t'), distinctColor('string.escape'));
+  assert.equal(exactColor(html, '"""\ntext\n"""'), distinctColor('string'));
+  assert.equal(exactColor(html, 'String'), distinctColor('type'));
+  assert.equal(exactColor(html, 'true'), distinctColor('boolean'));
+  assert.equal(exactColor(html, 'null'), distinctColor('constant.builtin'));
+});
+
+void t.test(
+  'java: control flow, exceptions, switch arrows, and object creation',
+  () => {
+    const html = distinctHl(
+      'for (int i = 0; i < n; i++) { if (a && b || !c) break; else continue; } while (x) {} do {} while (false); switch (k) { case 1 -> f(); default -> {} } try { throw new E(); } catch (E | F e) {} finally {} return; assert x; var v = new int[3]; this.x; super.f(); yield; x instanceof Y;'
+    );
+    for (const word of [
+      'for',
+      'if',
+      'break',
+      'else',
+      'continue',
+      'while',
+      'do',
+      'switch',
+      'case',
+      'default',
+      'try',
+      'throw',
+      'catch',
+      'finally',
+      'return',
+      'assert',
+      'yield',
+    ]) {
+      assert.equal(
+        wordColor(html, word),
+        distinctColor('keyword.control'),
+        word
+      );
+    }
+    for (const word of ['new', 'instanceof']) {
+      assert.equal(
+        wordColor(html, word),
+        distinctColor('keyword.operator'),
+        word
+      );
+    }
+    assert.equal(exactColor(html, 'var'), distinctColor('keyword.declaration'));
+    for (const word of ['this', 'super']) {
+      assert.equal(
+        exactColor(html, word),
+        distinctColor('variable.special'),
+        word
+      );
+    }
+    for (const op of ['->', '|', '++', '&&', '||', '!']) {
+      assert.equal(wordColor(html, op), distinctColor('operator'), op);
+    }
+  }
+);
+
+void t.test('java: comment forms, including javadoc', () => {
+  assert.deepEqual(
+    tokenKinds(
+      'java',
+      '// line\n/* block */\n/** javadoc\n * @param x\n */\nclass X {} // tail'
+    ),
+    [
+      ['// line', 'comment'],
+      ['/* block */', 'comment'],
+      ['/** javadoc', 'comment.doc'],
+      ['* @param x', 'comment.doc'],
+      ['*/', 'comment.doc'],
+      ['class', 'keyword.declaration'],
+      ['X', 'type'],
+      ['{}', 'punctuation.bracket'],
+      ['// tail', 'comment'],
+    ]
+  );
+});
+
+void t.test(
+  'java: streams, method references, lambdas, arrays, and members',
+  () => {
+    assert.deepEqual(
+      tokenKinds(
+        'java',
+        'names = items.stream().map(Object::toString).filter(s -> s != null); int[] arr = {1, 2}; arr.length; obj.field.sub;'
+      ),
+      [
+        ['names', 'variable'],
+        ['=', 'operator'],
+        ['items', 'variable'],
+        ['.', 'punctuation.delimiter'],
+        ['stream', 'function.method'],
+        ['()', 'punctuation.bracket'],
+        ['.', 'punctuation.delimiter'],
+        ['map', 'function.method'],
+        ['(', 'punctuation.bracket'],
+        ['Object', 'type'],
+        ['::', 'punctuation.delimiter'],
+        ['toString', 'property'],
+        [')', 'punctuation.bracket'],
+        ['.', 'punctuation.delimiter'],
+        ['filter', 'function.method'],
+        ['(', 'punctuation.bracket'],
+        ['s', 'variable'],
+        ['->', 'operator'],
+        ['s', 'variable'],
+        ['!=', 'operator'],
+        ['null', 'constant.builtin'],
+        [')', 'punctuation.bracket'],
+        [';', 'punctuation.delimiter'],
+        ['int', 'type.builtin'],
+        ['[]', 'punctuation.bracket'],
+        ['arr', 'variable'],
+        ['=', 'operator'],
+        ['{', 'punctuation.bracket'],
+        ['1', 'number'],
+        [',', 'punctuation.delimiter'],
+        ['2', 'number'],
+        ['}', 'punctuation.bracket'],
+        [';', 'punctuation.delimiter'],
+        ['arr', 'variable'],
+        ['.', 'punctuation.delimiter'],
+        ['length', 'property'],
+        [';', 'punctuation.delimiter'],
+        ['obj', 'variable'],
+        ['.', 'punctuation.delimiter'],
+        ['field', 'property'],
+        ['.', 'punctuation.delimiter'],
+        ['sub', 'property'],
+        [';', 'punctuation.delimiter'],
+      ]
+    );
+  }
+);
+
+void t.test(
+  'java: text blocks and javadoc spanning lines stream line-fed',
+  () => {
+    assertLineFedParity(
+      'java',
+      'String s = """\n  a\n  b""";\n/**\n * doc\n */\nclass X {}\n'
+    );
+  }
+);

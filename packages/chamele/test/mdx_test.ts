@@ -6,12 +6,17 @@ import { codeToTokens, init, StreamTokenizer } from '../lib/index';
 import { transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import {
+  assertLineFedParity,
   checkInvariants,
   colorOf,
+  distinctColor,
+  distinctTheme,
+  exactColor,
   loadLang,
   spansOf,
   type TestLang,
   themeColor,
+  tokenKinds,
 } from './util';
 
 let mdx: TestLang;
@@ -169,3 +174,243 @@ void t.test('mdx: many unclosed `<` stay linear', () => {
   const out = checkInvariants(mdx.hl, 'a <b c\n<Card />\n');
   assert.equal(colorOf(out, 'Card'), COMPONENT);
 });
+
+/** Highlight under the distinct theme after checking the lexer invariants. */
+const distinctHl = (src: string) =>
+  checkInvariants(mdx.hl, src, { theme: distinctTheme });
+
+void t.test(
+  'mdx: expressions inside headings, paragraphs, and block quotes',
+  () => {
+    assert.deepEqual(
+      tokenKinds(
+        'mdx',
+        '# Heading {meta.title}\n\nParagraph with {1 + 1} inline.\n\n> quote {expr}'
+      ),
+      [
+        ['#', 'punctuation.special'],
+        ['Heading', 'title'],
+        ['{', 'punctuation.bracket'],
+        ['meta', 'variable'],
+        ['.', 'punctuation.delimiter'],
+        ['title', 'property'],
+        ['}', 'punctuation.bracket'],
+        ['Paragraph with', null],
+        ['{', 'punctuation.bracket'],
+        ['1', 'number'],
+        ['+', 'operator'],
+        ['1', 'number'],
+        ['}', 'punctuation.bracket'],
+        ['inline.', null],
+        ['>', 'punctuation.markup'],
+        ['quote', null],
+        ['{', 'punctuation.bracket'],
+        ['expr', 'variable'],
+        ['}', 'punctuation.bracket'],
+      ]
+    );
+  }
+);
+
+void t.test(
+  'mdx: inline components with expression and string attributes',
+  () => {
+    assert.deepEqual(
+      tokenKinds(
+        'mdx',
+        'Paragraph with <Chart data={[1, 2]} label="sales" /> inline.'
+      ),
+      [
+        ['Paragraph with', null],
+        ['<', 'punctuation.bracket.jsx'],
+        ['Chart', 'tag.component.jsx'],
+        ['data', 'attribute.jsx'],
+        ['=', 'punctuation.delimiter.jsx'],
+        ['{[', 'punctuation.bracket'],
+        ['1', 'number'],
+        [',', 'punctuation.delimiter'],
+        ['2', 'number'],
+        [']}', 'punctuation.bracket'],
+        ['label', 'attribute.jsx'],
+        ['=', 'punctuation.delimiter.jsx'],
+        ['"sales"', 'string'],
+        ['/>', 'punctuation.bracket.jsx'],
+        ['inline.', null],
+      ]
+    );
+  }
+);
+
+void t.test('mdx: nested elements and JSX returned from an expression', () => {
+  assert.deepEqual(
+    tokenKinds(
+      'mdx',
+      '<Chart>\n  <strong>child</strong>\n  {items.map((i) => <li key={i}>{i}</li>)}\n</Chart>'
+    ),
+    [
+      ['<', 'punctuation.bracket.jsx'],
+      ['Chart', 'tag.component.jsx'],
+      ['>', 'punctuation.bracket.jsx'],
+      ['<', 'punctuation.bracket.jsx'],
+      ['strong', 'tag.jsx'],
+      ['>', 'punctuation.bracket.jsx'],
+      ['child', null],
+      ['</', 'punctuation.bracket.jsx'],
+      ['strong', 'tag.jsx'],
+      ['>', 'punctuation.bracket.jsx'],
+      ['{', 'punctuation.bracket'],
+      ['items', 'variable'],
+      ['.', 'punctuation.delimiter'],
+      ['map', 'function.method'],
+      ['((', 'punctuation.bracket'],
+      ['i', 'variable.parameter'],
+      [')', 'punctuation.bracket'],
+      ['=>', 'operator'],
+      ['<', 'punctuation.bracket.jsx'],
+      ['li', 'tag.jsx'],
+      ['key', 'attribute.jsx'],
+      ['=', 'punctuation.delimiter.jsx'],
+      ['{', 'punctuation.bracket'],
+      ['i', 'variable'],
+      ['}', 'punctuation.bracket'],
+      ['>', 'punctuation.bracket.jsx'],
+      ['{', 'punctuation.bracket'],
+      ['i', 'variable'],
+      ['}', 'punctuation.bracket'],
+      ['</', 'punctuation.bracket.jsx'],
+      ['li', 'tag.jsx'],
+      ['>', 'punctuation.bracket.jsx'],
+      [')}', 'punctuation.bracket'],
+      ['</', 'punctuation.bracket.jsx'],
+      ['Chart', 'tag.component.jsx'],
+      ['>', 'punctuation.bracket.jsx'],
+    ]
+  );
+});
+
+void t.test(
+  'mdx: multi-line start tags, markdown inside JSX, lists, and fenced TypeScript',
+  () => {
+    assert.deepEqual(
+      tokenKinds(
+        'mdx',
+        '<Card\n  title="x"\n  count={1}\n>\n  **bold** in jsx\n</Card>\n\n- list\n- `code` and *em*\n\n```ts\nconst a: number = 1;\n```'
+      ),
+      [
+        ['<', 'punctuation.bracket.jsx'],
+        ['Card', 'tag.component.jsx'],
+        ['title', 'attribute.jsx'],
+        ['=', 'punctuation.delimiter.jsx'],
+        ['"x"', 'string'],
+        ['count', 'attribute.jsx'],
+        ['=', 'punctuation.delimiter.jsx'],
+        ['{', 'punctuation.bracket'],
+        ['1', 'number'],
+        ['}', 'punctuation.bracket'],
+        ['>', 'punctuation.bracket.jsx'],
+        ['**bold**', 'emphasis.strong'],
+        ['in jsx', null],
+        ['</', 'punctuation.bracket.jsx'],
+        ['Card', 'tag.component.jsx'],
+        ['>', 'punctuation.bracket.jsx'],
+        ['-', 'punctuation.list_marker'],
+        ['list', null],
+        ['-', 'punctuation.list_marker'],
+        ['`code`', 'text.literal'],
+        ['and', null],
+        ['*em*', 'emphasis'],
+        ['```ts', 'punctuation.delimiter'],
+        ['const', 'keyword.declaration'],
+        ['a', 'variable'],
+        [':', 'punctuation.special'],
+        ['number', 'type.builtin'],
+        ['=', 'operator'],
+        ['1', 'number'],
+        [';', 'punctuation.delimiter'],
+        ['```', 'punctuation.delimiter'],
+      ]
+    );
+  }
+);
+
+void t.test(
+  'mdx: expression comments, plain HTML elements, and brace strings',
+  () => {
+    assert.deepEqual(
+      tokenKinds(
+        'mdx',
+        "{/* comment */}\n\n{\n  /* multi\n  line */\n}\n\n<div>\n  plain html\n</div>\n\nText & <b>bold</b> and {'{'} braces"
+      ),
+      [
+        ['{', 'punctuation.bracket'],
+        ['/* comment */', 'comment'],
+        ['}', 'punctuation.bracket'],
+        ['{', 'punctuation.bracket'],
+        ['/* multi', 'comment'],
+        ['line */', 'comment'],
+        ['}', 'punctuation.bracket'],
+        ['<', 'punctuation.bracket.jsx'],
+        ['div', 'tag.jsx'],
+        ['>', 'punctuation.bracket.jsx'],
+        ['plain html', null],
+        ['</', 'punctuation.bracket.jsx'],
+        ['div', 'tag.jsx'],
+        ['>', 'punctuation.bracket.jsx'],
+        ['Text &', null],
+        ['<', 'punctuation.bracket.jsx'],
+        ['b', 'tag.jsx'],
+        ['>', 'punctuation.bracket.jsx'],
+        ['bold', null],
+        ['</', 'punctuation.bracket.jsx'],
+        ['b', 'tag.jsx'],
+        ['>', 'punctuation.bracket.jsx'],
+        ['and', null],
+        ['{', 'punctuation.bracket'],
+        ["'{'", 'string'],
+        ['}', 'punctuation.bracket'],
+        ['braces', null],
+      ]
+    );
+  }
+);
+
+void t.test('mdx: braces on ESM lines still open expressions', () => {
+  const html = distinctHl(
+    "export const meta = { title: 'x' };\nexport function Foo() { return 1; }"
+  );
+  assert.equal(exactColor(html, 'title'), distinctColor('property'));
+  assert.equal(exactColor(html, "'x'"), distinctColor('string'));
+  assert.equal(exactColor(html, 'return'), distinctColor('keyword.control'));
+  assert.equal(exactColor(html, '1'), distinctColor('number'));
+});
+
+void t.test(
+  'mdx: expressions, components, and comments spanning lines stream line-fed',
+  () => {
+    assertLineFedParity(
+      'mdx',
+      '# Heading {meta.title}\n\nParagraph with {1 + 1} and <Chart data={[1, 2]} label="sales" /> inline.\n\n<Chart>\n  <strong>child</strong>\n  {items.map((i) => <li key={i}>{i}</li>)}\n</Chart>\n\n{/* comment */}\n\n{\n  /* multi\n  line */\n}\n'
+    );
+    assertLineFedParity(
+      'mdx',
+      '<Card\n  title="x"\n  count={1}\n>\n  **bold** in jsx\n</Card>\n\n- list\n- `code` and *em*\n\n```ts\nconst a: number = 1;\n```\n\n> quote {expr}\n'
+    );
+    assertLineFedParity(
+      'mdx',
+      "<div>\n  plain html\n</div>\n\nText & <b>bold</b> and {'{'} braces\n"
+    );
+  }
+);
+
+void t.test(
+  'mdx: markdown fences nested inside a markdown fence stream line-fed',
+  () => {
+    for (const code of [
+      '````md\n```\ninner\n```\n````\n',
+      '<Card>\n````md\n```\ninner\n```\n````\n</Card>\n',
+      '````mdx\n<Card>\n```\ninner\n```\n</Card>\n````\n',
+    ]) {
+      assertLineFedParity('mdx', code);
+    }
+  }
+);

@@ -6,12 +6,18 @@ import { codeToTokens, init, StreamTokenizer } from '../lib/index';
 import { transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import {
+  assertLineFedParity,
   checkInvariants,
   colorOf,
+  distinctColor,
+  distinctTheme,
+  exactColor,
   loadLang,
   spansOf,
   type TestLang,
   themeColor,
+  tokenKinds,
+  wordColor as wordColorOf,
 } from './util';
 
 let python: TestLang;
@@ -365,3 +371,228 @@ void t.test('python: f-string replacement fields track brace depth', () => {
     VARIABLE
   );
 });
+
+/** Highlight under the distinct theme after checking the lexer invariants. */
+const distinctHl = (src: string) =>
+  checkInvariants(python.hl, src, { theme: distinctTheme });
+
+void t.test('python: import forms', () => {
+  const html = distinctHl('import os\nfrom pathlib import Path\nimport numpy');
+  for (const word of ['import', 'from']) {
+    assert.equal(
+      wordColorOf(html, word),
+      distinctColor('keyword.import'),
+      word
+    );
+  }
+  assert.equal(exactColor(html, 'os'), distinctColor('variable'));
+  assert.equal(exactColor(html, 'pathlib'), distinctColor('variable'));
+  assert.equal(exactColor(html, 'Path'), distinctColor('type'));
+});
+
+void t.test('python: every literal form token by token', () => {
+  const html = distinctHl(
+    "x = 0x1F + 0b101 + 0o17 + 1_000 + 1e3 + 2.5j; s = 'a\\n' + \"b\\t\" + r'raw\\n' + b'bytes' + rb'x' + u'u' + '''tri\nple''' + \"\"\"doc\"\"\""
+  );
+  for (const n of ['0x1F', '0b101', '0o17', '1_000', '1e3', '2.5j']) {
+    assert.equal(exactColor(html, n), distinctColor('number'), n);
+  }
+  for (const s of [
+    "'a",
+    '"b',
+    "r'raw\\n'",
+    "b'bytes'",
+    "rb'x'",
+    "u'u'",
+    "'''tri\nple'''",
+    '"""doc"""',
+  ]) {
+    assert.equal(exactColor(html, s), distinctColor('string'), s);
+  }
+  assert.equal(exactColor(html, '\\n'), distinctColor('string.escape'));
+  assert.equal(exactColor(html, '\\t'), distinctColor('string.escape'));
+});
+
+void t.test(
+  'python: classes, dunder methods, decorators, and async forms',
+  () => {
+    const html = distinctHl(
+      'class A(B, metaclass=M):\n    def __init__(self, x: int = 1, *args, **kwargs) -> None:\n        super().__init__()\n        self.x = x\n    @property\n    def value(self): return self._v\nasync def f(): await g()'
+    );
+    assert.equal(
+      exactColor(html, 'class'),
+      distinctColor('keyword.declaration')
+    );
+    assert.equal(exactColor(html, 'A'), distinctColor('type.class'));
+    for (const type of ['B', 'M']) {
+      assert.equal(exactColor(html, type), distinctColor('type'), type);
+    }
+    for (const fn of ['__init__', 'value', 'f']) {
+      assert.equal(
+        exactColor(html, fn),
+        distinctColor('function.definition'),
+        fn
+      );
+    }
+    assert.equal(exactColor(html, 'self'), distinctColor('variable.special'));
+    for (const p of ['x', 'args', 'kwargs']) {
+      assert.equal(exactColor(html, p), distinctColor('variable.parameter'), p);
+    }
+    assert.equal(exactColor(html, 'int'), distinctColor('type.builtin'));
+    assert.equal(exactColor(html, 'None'), distinctColor('constant.builtin'));
+    assert.equal(exactColor(html, 'super'), distinctColor('function'));
+    assert.equal(exactColor(html, '_v'), distinctColor('property'));
+    assert.equal(exactColor(html, '@property'), distinctColor('attribute'));
+    for (const word of ['async', 'await', 'return']) {
+      assert.equal(
+        wordColorOf(html, word),
+        distinctColor('keyword.control'),
+        word
+      );
+    }
+    for (const op of ['*', '**', '->']) {
+      assert.equal(exactColor(html, op), distinctColor('operator'), op);
+    }
+  }
+);
+
+void t.test('python: every statement keyword in its bucket', () => {
+  const html = distinctHl(
+    "if a and not b or c is None: pass\nelif x in y: pass\nelse: pass\nwhile True: break\nfor i in range(3): continue\ntry: raise E from None\nexcept E: pass\nfinally: pass\nwith open(p): pass\nlambda a, b=1: a\ndel x; global g; nonlocal n; assert x, 'm'; return; yield 1\nmatch v:\n    case [a, *rest] | {'k': v} if a: pass\n    case _: pass"
+  );
+  for (const word of [
+    'if',
+    'pass',
+    'elif',
+    'else',
+    'while',
+    'break',
+    'for',
+    'continue',
+    'try',
+    'raise',
+    'except',
+    'finally',
+    'with',
+    'lambda',
+    'del',
+    'global',
+    'nonlocal',
+    'assert',
+    'return',
+    'yield',
+    'match',
+    'case',
+  ]) {
+    assert.equal(
+      wordColorOf(html, word),
+      distinctColor('keyword.control'),
+      word
+    );
+  }
+  for (const word of ['and', 'not', 'or', 'is', 'in']) {
+    assert.equal(
+      wordColorOf(html, word),
+      distinctColor('keyword.operator'),
+      word
+    );
+  }
+  assert.equal(wordColorOf(html, 'from'), distinctColor('keyword.import'));
+  assert.equal(exactColor(html, 'True'), distinctColor('boolean'));
+  assert.equal(exactColor(html, 'E'), distinctColor('type'));
+  assert.equal(exactColor(html, 'range'), distinctColor('type.builtin'));
+  assert.equal(exactColor(html, 'open'), distinctColor('function'));
+  assert.equal(exactColor(html, '|'), distinctColor('operator'));
+});
+
+void t.test('python: builtin functions and builtin types', () => {
+  const html = distinctHl(
+    "print(len(x)); isinstance(a, int); str(1); list(); dict(); set(); tuple(); type(x); sorted(x); getattr(o, 'a'); object; Exception; ValueError"
+  );
+  for (const fn of ['print', 'len', 'isinstance', 'sorted', 'getattr']) {
+    assert.equal(exactColor(html, fn), distinctColor('function'), fn);
+  }
+  for (const type of [
+    'int',
+    'str',
+    'list',
+    'dict',
+    'set',
+    'tuple',
+    'type',
+    'object',
+  ]) {
+    assert.equal(exactColor(html, type), distinctColor('type.builtin'), type);
+  }
+  for (const type of ['Exception', 'ValueError']) {
+    assert.equal(exactColor(html, type), distinctColor('type'), type);
+  }
+});
+
+void t.test('python: operators, members, and special names', () => {
+  const html = distinctHl(
+    'a = b if c else d; x @= y; x //= 2; x **= 2; (x := 1); a <= b != c == d; a & b | c ^ d << 1 >> 2; ~a; a % b; obj.attr.sub; obj.method(); Class.static_method(); Ellipsis; NotImplemented; __name__; cls'
+  );
+  for (const op of [
+    '@=',
+    '//=',
+    '**=',
+    ':=',
+    '<=',
+    '!=',
+    '==',
+    '&',
+    '|',
+    '^',
+    '<<',
+    '>>',
+    '~',
+    '%',
+  ]) {
+    assert.equal(wordColorOf(html, op), distinctColor('operator'), op);
+  }
+  for (const p of ['attr', 'sub']) {
+    assert.equal(exactColor(html, p), distinctColor('property'), p);
+  }
+  for (const m of ['method', 'static_method']) {
+    assert.equal(exactColor(html, m), distinctColor('function.method'), m);
+  }
+  assert.equal(exactColor(html, 'Class'), distinctColor('type'));
+  for (const c of ['Ellipsis', 'NotImplemented']) {
+    assert.equal(exactColor(html, c), distinctColor('constant.builtin'), c);
+  }
+  assert.equal(exactColor(html, '__name__'), distinctColor('variable'));
+  assert.equal(exactColor(html, 'cls'), distinctColor('variable.special'));
+});
+
+void t.test('python: comment and docstring forms', () => {
+  assert.deepEqual(
+    tokenKinds(
+      'python',
+      '# comment\n\'\'\'docstring\nmulti\'\'\'\n"""another"""\ndef f():\n    """Doc."""\n    pass  # tail'
+    ),
+    [
+      ['# comment', 'comment'],
+      ["'''docstring", 'string'],
+      ["multi'''", 'string'],
+      ['"""another"""', 'string'],
+      ['def', 'keyword.declaration'],
+      ['f', 'function.definition'],
+      ['()', 'punctuation.bracket'],
+      [':', 'punctuation.delimiter'],
+      ['"""Doc."""', 'string'],
+      ['pass', 'keyword.control'],
+      ['# tail', 'comment'],
+    ]
+  );
+});
+
+void t.test(
+  'python: triple-quoted strings and bracketed continuations stream line-fed',
+  () => {
+    assertLineFedParity(
+      'python',
+      'x = \'\'\'a\nb\'\'\'\ny = f(\n    1,\n    2,\n)\nz = """c\n"""\n'
+    );
+  }
+);

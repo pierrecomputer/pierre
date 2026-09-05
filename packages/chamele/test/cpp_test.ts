@@ -6,13 +6,19 @@ import { codeToTokens, init, StreamTokenizer } from '../lib/index';
 import { transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import {
+  assertLineFedParity,
   checkInvariants,
   colorOf,
+  distinctColor,
+  distinctTheme,
+  exactColor,
   loadLang,
   spansOf,
   type TestLang,
   textOf,
   themeColor,
+  tokenKinds,
+  wordColor,
 } from './util';
 
 let cpp: TestLang;
@@ -253,3 +259,168 @@ void t.test('cpp: a single long line highlights in linear time', () => {
   assert.equal(textOf(html), src);
   assert.ok(elapsed < 1000, `one long line took ${elapsed.toFixed(0)}ms`);
 });
+
+/** Highlight under the distinct theme after checking the lexer invariants. */
+const distinctHl = (src: string) =>
+  checkInvariants(cpp.hl, src, { theme: distinctTheme });
+
+void t.test(
+  'cpp: namespaces, classes, access labels, and special members',
+  () => {
+    const html = distinctHl(
+      'namespace app { class Stack final : public Base<T> { public: explicit Stack(std::size_t cap); virtual ~Stack() = default; private: std::vector<T> items_; }; }'
+    );
+    assert.equal(
+      exactColor(html, 'namespace'),
+      distinctColor('keyword.declaration')
+    );
+    assert.equal(exactColor(html, 'app'), distinctColor('namespace'));
+    assert.equal(
+      exactColor(html, 'class'),
+      distinctColor('keyword.declaration')
+    );
+    assert.equal(exactColor(html, 'Stack'), distinctColor('type.class'));
+    for (const word of ['final', 'public', 'explicit', 'virtual', 'private']) {
+      assert.equal(wordColor(html, word), distinctColor('keyword'), word);
+    }
+    assert.equal(exactColor(html, 'Base'), distinctColor('type'));
+    assert.equal(exactColor(html, 'std'), distinctColor('namespace'));
+    assert.equal(exactColor(html, 'size_t'), distinctColor('type'));
+    assert.equal(exactColor(html, 'cap'), distinctColor('variable'));
+    assert.equal(exactColor(html, '~'), distinctColor('operator'));
+    assert.equal(exactColor(html, 'default'), distinctColor('keyword.control'));
+    assert.equal(exactColor(html, 'items_'), distinctColor('variable'));
+  }
+);
+
+void t.test(
+  'cpp: templates, constexpr, noexcept, and trailing return types',
+  () => {
+    const html = distinctHl(
+      'template <typename T> constexpr auto sum(T&& t) noexcept -> decltype(t) { return t; }'
+    );
+    assert.equal(
+      exactColor(html, 'template'),
+      distinctColor('keyword.declaration')
+    );
+    assert.equal(exactColor(html, 'typename'), distinctColor('keyword'));
+    assert.equal(exactColor(html, 'T'), distinctColor('type'));
+    assert.equal(exactColor(html, 'constexpr'), distinctColor('keyword'));
+    assert.equal(exactColor(html, 'auto'), distinctColor('type.builtin'));
+    assert.equal(exactColor(html, 'sum'), distinctColor('function'));
+    assert.equal(exactColor(html, '&&'), distinctColor('operator'));
+    assert.equal(exactColor(html, 'noexcept'), distinctColor('keyword'));
+    assert.equal(exactColor(html, '->'), distinctColor('operator'));
+    assert.equal(exactColor(html, 'decltype'), distinctColor('keyword'));
+    assert.equal(exactColor(html, 'return'), distinctColor('keyword.control'));
+  }
+);
+
+void t.test('cpp: raw, prefixed, and digit-separated literals', () => {
+  const html = distinctHl(
+    'auto s = R"tag(raw "text")tag"; auto u = u8"x"; auto w = L"y"; int n = 0xFFu | 0b1010 | 1\'000\'000; long double d = 1.5e-3L;'
+  );
+  for (const s of ['R"tag(raw "text")tag"', 'u8"x"', 'L"y"']) {
+    assert.equal(exactColor(html, s), distinctColor('string'), s);
+  }
+  for (const n of ['0xFFu', '0b1010', "1'000'000", '1.5e-3L']) {
+    assert.equal(exactColor(html, n), distinctColor('number'), n);
+  }
+  assert.equal(exactColor(html, 'long double'), distinctColor('type.builtin'));
+});
+
+void t.test(
+  'cpp: exceptions, casts, lambdas, allocation, and member access',
+  () => {
+    const html = distinctHl(
+      'try { throw std::runtime_error("x"); } catch (const std::exception& e) { e.what(); }\nauto l = [&](int a) { return a; }; p = nullptr; ok = true; this->x; obj.method(); new int[3]; delete[] p; static_cast<int>(1.0);'
+    );
+    for (const word of ['try', 'throw', 'catch']) {
+      assert.equal(
+        wordColor(html, word),
+        distinctColor('keyword.control'),
+        word
+      );
+    }
+    assert.equal(exactColor(html, 'exception'), distinctColor('type'));
+    assert.equal(exactColor(html, 'what'), distinctColor('function.method'));
+    assert.equal(exactColor(html, '"x"'), distinctColor('string'));
+    assert.equal(
+      exactColor(html, 'nullptr'),
+      distinctColor('constant.builtin')
+    );
+    assert.equal(exactColor(html, 'true'), distinctColor('boolean'));
+    assert.equal(exactColor(html, 'this'), distinctColor('variable.special'));
+    assert.equal(exactColor(html, 'method'), distinctColor('function.method'));
+    for (const word of ['new', 'delete', 'static_cast']) {
+      assert.equal(wordColor(html, word), distinctColor('keyword'), word);
+    }
+    assert.equal(exactColor(html, '[&](int'), undefined);
+    assert.equal(exactColor(html, '1.0'), distinctColor('number'));
+  }
+);
+
+void t.test('cpp: preprocessor and comment forms', () => {
+  assert.deepEqual(
+    tokenKinds(
+      'cpp',
+      '#include <vector>\n#define X 1\n#ifdef Y\n#endif\n/// doc\n/** block doc */\n// line'
+    ),
+    [
+      ['#include', 'preproc'],
+      ['<vector>', 'string'],
+      ['#define X 1', 'preproc'],
+      ['#ifdef Y', 'preproc'],
+      ['#endif', 'preproc'],
+      ['/// doc', 'comment.doc'],
+      ['/** block doc */', 'comment.doc'],
+      ['// line', 'comment'],
+    ]
+  );
+});
+
+void t.test(
+  'cpp: scoped enums, aliases, coroutines, concepts, and conversion operators',
+  () => {
+    const html = distinctHl(
+      'enum class Color : int { Red, Green }; struct S { int a; }; using I = int; typedef int J; consteval int f(); co_await x; co_return 1; concept C = true; operator bool();'
+    );
+    assert.equal(
+      exactColor(html, 'enum class'),
+      distinctColor('keyword.declaration')
+    );
+    assert.equal(exactColor(html, 'Color'), distinctColor('type.class'));
+    assert.equal(
+      exactColor(html, 'struct'),
+      distinctColor('keyword.declaration')
+    );
+    assert.equal(exactColor(html, 'S'), distinctColor('type.class'));
+    for (const word of ['using', 'typedef', 'concept']) {
+      assert.equal(
+        wordColor(html, word),
+        distinctColor('keyword.declaration'),
+        word
+      );
+    }
+    assert.equal(exactColor(html, 'consteval'), distinctColor('keyword'));
+    for (const word of ['co_await', 'co_return']) {
+      assert.equal(
+        wordColor(html, word),
+        distinctColor('keyword.control'),
+        word
+      );
+    }
+    assert.equal(exactColor(html, 'operator'), distinctColor('keyword'));
+    assert.equal(exactColor(html, 'bool'), distinctColor('type.builtin'));
+  }
+);
+
+void t.test(
+  'cpp: raw strings, block comments, and template heads spanning lines stream line-fed',
+  () => {
+    assertLineFedParity(
+      'cpp',
+      'auto s = R"x(a\nb)x";\n/* c\n d */\ntemplate <\n  typename T>\nvoid f();\n'
+    );
+  }
+);

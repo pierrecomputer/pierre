@@ -6,12 +6,18 @@ import { codeToTokens, init, StreamTokenizer } from '../lib/index';
 import { transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import {
+  assertLineFedParity,
   checkInvariants,
   colorOf,
+  distinctColor,
+  distinctTheme,
+  exactColor,
   loadLang,
   spansOf,
   type TestLang,
   themeColor,
+  tokenKinds,
+  wordColor,
 } from './util';
 
 let c: TestLang;
@@ -324,3 +330,189 @@ void t.test('c: escaped line breaks inside literals resume line-fed', () => {
     assert.deepEqual(streamed, direct, JSON.stringify(code));
   }
 });
+
+/** Highlight under the distinct theme after checking the lexer invariants. */
+const distinctHl = (src: string) =>
+  checkInvariants(c.hl, src, { theme: distinctTheme });
+
+void t.test(
+  'c: preprocessor lines are one span each, include paths are strings',
+  () => {
+    assert.deepEqual(
+      tokenKinds(
+        'c',
+        '#include <stdio.h>\n#include "util.h"\n#define MAX(a, b) ((a) > (b) ? (a) : (b))\n#if defined(X) && !defined(Y)\n#pragma once\n#endif // done'
+      ),
+      [
+        ['#include', 'preproc'],
+        ['<stdio.h>', 'string'],
+        ['#include', 'preproc'],
+        ['"util.h"', 'string'],
+        ['#define MAX(a, b) ((a) > (b) ? (a) : (b))', 'preproc'],
+        ['#if defined(X) && !defined(Y)', 'preproc'],
+        ['#pragma once', 'preproc'],
+        ['#endif // done', 'preproc'],
+      ]
+    );
+  }
+);
+
+void t.test('c: numeric, character, and string literal forms', () => {
+  const html = distinctHl(
+    'x = 0x1FULL; y = 1e-9f; z = 077; w = 0b101; c = \'\\n\'; s = "a\\tb";'
+  );
+  for (const n of ['0x1FULL', '1e-9f', '077', '0b101']) {
+    assert.equal(exactColor(html, n), distinctColor('number'), n);
+  }
+  assert.equal(exactColor(html, "'"), distinctColor('string'));
+  assert.equal(exactColor(html, '\\n'), distinctColor('string.escape'));
+  assert.equal(exactColor(html, '"a'), distinctColor('string'));
+  assert.equal(exactColor(html, '\\t'), distinctColor('string.escape'));
+});
+
+void t.test(
+  'c: storage classes, qualifiers, aggregates, and enumerators',
+  () => {
+    const html = distinctHl(
+      'static const unsigned long long x = 1;\ntypedef struct node { int value; struct node *next; } node_t;\nenum color { RED = 1, GREEN };\nunion u { int i; float f; };'
+    );
+    assert.equal(
+      exactColor(html, 'static'),
+      distinctColor('keyword.declaration')
+    );
+    assert.equal(exactColor(html, 'const'), distinctColor('keyword'));
+    assert.equal(
+      exactColor(html, 'unsigned long long'),
+      distinctColor('type.builtin')
+    );
+    assert.equal(
+      exactColor(html, 'typedef'),
+      distinctColor('keyword.declaration')
+    );
+    assert.equal(exactColor(html, 'node_t'), distinctColor('type'));
+    assert.equal(exactColor(html, 'RED'), distinctColor('constant'));
+    assert.equal(exactColor(html, 'GREEN'), distinctColor('constant'));
+    for (const type of ['int', 'float']) {
+      assert.equal(exactColor(html, type), distinctColor('type.builtin'), type);
+    }
+    assert.equal(exactColor(html, 'next'), distinctColor('variable'));
+  }
+);
+
+void t.test('c: control flow keywords and operators', () => {
+  const html = distinctHl(
+    'for (int i = 0; i < n; ++i) { if (a && b || !c) break; else continue; } while (x) {} do {} while (0); switch (k) { case 1: goto out; default: return; }'
+  );
+  for (const word of [
+    'for',
+    'if',
+    'break',
+    'else',
+    'continue',
+    'while',
+    'do',
+    'switch',
+    'case',
+    'goto',
+    'default',
+    'return',
+  ]) {
+    assert.equal(wordColor(html, word), distinctColor('keyword.control'), word);
+  }
+  for (const op of ['<', '++', '&&', '||', '!']) {
+    assert.equal(wordColor(html, op), distinctColor('operator'), op);
+  }
+});
+
+void t.test(
+  'c: member access, casts, sizeof, and arithmetic token by token',
+  () => {
+    assert.deepEqual(
+      tokenKinds(
+        'c',
+        'p->next = NULL; a.value = sizeof(int) * 2; x += 1 << 2 | 3 & ~4 ^ 5 % 6; f(g(1), h);'
+      ),
+      [
+        ['p', 'variable'],
+        ['->', 'operator'],
+        ['next', 'variable'],
+        ['=', 'operator'],
+        ['NULL', 'constant'],
+        [';', 'punctuation.delimiter'],
+        ['a', 'variable'],
+        ['.', 'punctuation.delimiter'],
+        ['value', 'variable'],
+        ['=', 'operator'],
+        ['sizeof', 'keyword'],
+        ['(', 'punctuation.bracket'],
+        ['int', 'type.builtin'],
+        [')', 'punctuation.bracket'],
+        ['*', 'operator'],
+        ['2', 'number'],
+        [';', 'punctuation.delimiter'],
+        ['x', 'variable'],
+        ['+=', 'operator'],
+        ['1', 'number'],
+        ['<<', 'operator'],
+        ['2', 'number'],
+        ['|', 'operator'],
+        ['3', 'number'],
+        ['& ~', 'operator'],
+        ['4', 'number'],
+        ['^', 'operator'],
+        ['5', 'number'],
+        ['%', 'operator'],
+        ['6', 'number'],
+        [';', 'punctuation.delimiter'],
+        ['f', 'function'],
+        ['(', 'punctuation.bracket'],
+        ['g', 'function'],
+        ['(', 'punctuation.bracket'],
+        ['1', 'number'],
+        [')', 'punctuation.bracket'],
+        [',', 'punctuation.delimiter'],
+        ['h', 'variable'],
+        [')', 'punctuation.bracket'],
+        [';', 'punctuation.delimiter'],
+      ]
+    );
+  }
+);
+
+void t.test('c: comment forms split from code', () => {
+  assert.deepEqual(
+    tokenKinds('c', '/* block */ // line\n/** doc */\nint x; // tail'),
+    [
+      ['/* block */ // line', 'comment'],
+      ['/** doc */', 'comment.doc'],
+      ['int', 'type.builtin'],
+      ['x', 'variable'],
+      [';', 'punctuation.delimiter'],
+      ['// tail', 'comment'],
+    ]
+  );
+});
+
+void t.test('c: fixed-width types, booleans, and null forms', () => {
+  const html = distinctHl(
+    'bool ok = true; int8_t a; uint32_t b; size_t n; void *p = NULL; q = nullptr; r = false;'
+  );
+  assert.equal(exactColor(html, 'bool'), distinctColor('type.builtin'));
+  for (const type of ['int8_t', 'uint32_t', 'size_t']) {
+    assert.equal(exactColor(html, type), distinctColor('type'), type);
+  }
+  assert.equal(exactColor(html, 'true'), distinctColor('boolean'));
+  assert.equal(exactColor(html, 'false'), distinctColor('boolean'));
+  assert.equal(exactColor(html, 'NULL'), distinctColor('constant'));
+  assert.equal(exactColor(html, 'nullptr'), distinctColor('constant.builtin'));
+});
+
+void t.test(
+  'c: block comments, continued macros, and strings spanning lines stream line-fed',
+  () => {
+    assertLineFedParity(
+      'c',
+      '/* a\n b */\n#define X \\\n  1\nchar *s = "a\\\nb";\nint y; // z\n'
+    );
+  }
+);

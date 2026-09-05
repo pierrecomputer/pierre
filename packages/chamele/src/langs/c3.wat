@@ -9,7 +9,7 @@
   ;; compile-time words that only exist behind a `$` - `$sizeof`, `$vaarg` -
   ;; and is accepted only there; `$vaconst` and `$vasplat` share their hash
   ;; features with `$vacount` and get direct compares instead.
-  (keyword-table $c3Words $mem.c3Words $mem.c3Words+1792 32 512
+  (keyword-table $c3Words $mem.c3Words $mem.c3Words+1792
     (group ;; 1: control
       "if" "do" "asm" "for" "try" "case" "else" "break" "catch" "defer"
       "while" "assert" "return" "switch" "default" "foreach" "continue"
@@ -78,19 +78,7 @@
     (enum.get $Token.constant.builtin))
 
   (func $c3IsOp (param $c i32) (result i32)
-    (i32.or
-      (i32.or
-        (i32.or (i32.eq (local.get $c) (i32.const "+")) (i32.eq (local.get $c) (i32.const "-")))
-        (i32.or (i32.eq (local.get $c) (i32.const "*")) (i32.eq (local.get $c) (i32.const "/"))))
-      (i32.or
-        (i32.or (i32.eq (local.get $c) (i32.const "%")) (i32.eq (local.get $c) (i32.const "=")))
-        (i32.or
-          (i32.or (i32.eq (local.get $c) (i32.const "!")) (i32.eq (local.get $c) (i32.const "<")))
-          (i32.or
-            (i32.or (i32.eq (local.get $c) (i32.const ">")) (i32.eq (local.get $c) (i32.const "&")))
-            (i32.or
-              (i32.or (i32.eq (local.get $c) (i32.const "|")) (i32.eq (local.get $c) (i32.const "^")))
-              (i32.or (i32.eq (local.get $c) (i32.const "~")) (i32.eq (local.get $c) (i32.const "?")))))))))
+    (byteset.get "!%&*+-/<=>?^|~" (local.get $c)))
 
   ;; $expect is the pending capture from $c3WordHl: 1 while a function head
   ;; is open - its return type and receiver are types, the name before `(`
@@ -252,11 +240,7 @@
             (local.set $member (i32.const 0))
             (br $next)))
 
-        (if (i32.or
-              (i32.or (i32.eq (local.get $c) (i32.const "(")) (i32.eq (local.get $c) (i32.const ")")))
-              (i32.or
-                (i32.or (i32.eq (local.get $c) (i32.const "[")) (i32.eq (local.get $c) (i32.const "]")))
-                (i32.or (i32.eq (local.get $c) (i32.const "{")) (i32.eq (local.get $c) (i32.const "}")))))
+        (if (byteset.get "()[]{}" (local.get $c))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (call $emitTok (enum.get $Token.punctuation.bracket) (local.get $lhs) (global.get $ptr))
@@ -299,13 +283,7 @@
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (if (i32.or (i32.eq (local.get $c2) (i32.const "="))
                         (i32.and (i32.eq (local.get $c) (local.get $c2))
-                          (i32.or
-                            (i32.or (i32.eq (local.get $c) (i32.const "+")) (i32.eq (local.get $c) (i32.const "-")))
-                            (i32.or
-                              (i32.or (i32.eq (local.get $c) (i32.const "<")) (i32.eq (local.get $c) (i32.const ">")))
-                              (i32.or
-                                (i32.or (i32.eq (local.get $c) (i32.const "&")) (i32.eq (local.get $c) (i32.const "|")))
-                                (i32.or (i32.eq (local.get $c) (i32.const "?")) (i32.eq (local.get $c) (i32.const "!"))))))))
+                          (byteset.get "!&+-<>?|" (local.get $c))))
               (then
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
                 (if (i32.and

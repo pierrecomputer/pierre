@@ -6,14 +6,21 @@ import { codeToTokens, init, StreamTokenizer } from '../lib/index';
 import { transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import {
+  assertLineFedParity,
   bodyOf,
   checkInvariants,
   colorOf,
+  distinctColor,
+  distinctTheme,
+  exactColor,
   loadLang,
+  spanKinds,
   spansOf,
   type TestLang,
   textOf,
   themeColor,
+  tokenKinds,
+  wordColor,
 } from './util';
 
 let css: TestLang;
@@ -658,3 +665,251 @@ void t.test(
     assert.ok(spans.some((s) => s.color === STRING && s.text === 'def"'));
   }
 );
+
+/** Highlight under the distinct theme after checking the lexer invariants. */
+const distinctHl = (src: string) =>
+  checkInvariants(css.hl, src, { theme: distinctTheme });
+
+void t.test('css: every at-rule form', () => {
+  const html = distinctHl(
+    '@import url("base.css") screen;\n@charset "UTF-8";\n@namespace svg url(http://www.w3.org/2000/svg);\n@font-face { font-family: "X"; src: url(x.woff2) format("woff2"); }\n@media (min-width: 640px) and (prefers-color-scheme: dark), print { a { color: red } }\n@supports (display: grid) and (not (display: inline-grid)) { }\n@keyframes spin { from { transform: rotate(0deg) } 50% { opacity: .5 } to { transform: rotate(360deg) } }\n@layer base, components;\n@container card (min-width: 400px) { }\n@property --x { syntax: "<length>"; inherits: false; initial-value: 0px; }\n@page :first { margin: 1in; }'
+  );
+  for (const rule of [
+    '@import',
+    '@charset',
+    '@namespace',
+    '@font-face',
+    '@media',
+    '@supports',
+    '@keyframes',
+    '@layer',
+    '@container',
+    '@property',
+    '@page',
+  ]) {
+    assert.equal(wordColor(html, rule), distinctColor('keyword'), rule);
+  }
+  for (const fn of ['url', 'format', 'rotate']) {
+    assert.equal(wordColor(html, fn), distinctColor('function'), fn);
+  }
+  for (const s of ['"base.css"', '"UTF-8"', '"X"', '"woff2"', '"<length>"']) {
+    assert.equal(exactColor(html, s), distinctColor('string'), s);
+  }
+  for (const c of [
+    'screen',
+    'print',
+    'dark',
+    'grid',
+    'inline-grid',
+    'red',
+    'base',
+    'components',
+    'card',
+    'false',
+    'spin',
+    'first',
+  ]) {
+    assert.equal(wordColor(html, c), distinctColor('constant.builtin'), c);
+  }
+  assert.equal(exactColor(html, 'svg'), distinctColor('namespace'));
+  for (const p of [
+    'font-family',
+    'src',
+    'min-width',
+    'prefers-color-scheme',
+    'display',
+    'transform',
+    'opacity',
+    'syntax',
+    'inherits',
+    'initial-value',
+    'margin',
+  ]) {
+    assert.equal(wordColor(html, p), distinctColor('property'), p);
+  }
+  for (const word of ['and', 'not']) {
+    assert.equal(
+      wordColor(html, word),
+      distinctColor('keyword.operator'),
+      word
+    );
+  }
+  for (const tag of ['a', 'from', 'to']) {
+    assert.equal(wordColor(html, tag), distinctColor('tag'), tag);
+  }
+  for (const n of [
+    '640px',
+    '0deg',
+    '50%',
+    '.5',
+    '360deg',
+    '400px',
+    '0px',
+    '1in',
+  ]) {
+    assert.equal(wordColor(html, n), distinctColor('number'), n);
+  }
+  assert.equal(exactColor(html, '--x'), distinctColor('variable'));
+});
+
+void t.test('css: selector forms token by token', () => {
+  assert.deepEqual(
+    spanKinds(
+      distinctHl(
+        '.card > .title:hover, #main::before, a[href^="https"], input:not([type="text"]):focus-within, li:nth-child(2n+1), ul li + li ~ p { }'
+      )
+    ),
+    [
+      ['.card', 'selector.class'],
+      ['>', 'operator'],
+      ['.title', 'selector.class'],
+      [':hover', 'selector.pseudo'],
+      [',', 'punctuation.delimiter'],
+      ['#main', 'selector.id'],
+      ['::before', 'selector.pseudo'],
+      [',', 'punctuation.delimiter'],
+      ['a', 'tag'],
+      ['[', 'punctuation.bracket'],
+      ['href', 'attribute'],
+      ['^=', 'operator'],
+      ['"https"', 'string'],
+      [']', 'punctuation.bracket'],
+      [',', 'punctuation.delimiter'],
+      ['input', 'tag'],
+      [':not', 'selector.pseudo'],
+      ['([', 'punctuation.bracket'],
+      ['type', 'attribute'],
+      ['=', 'operator'],
+      ['"text"', 'string'],
+      ['])', 'punctuation.bracket'],
+      [':focus-within', 'selector.pseudo'],
+      [',', 'punctuation.delimiter'],
+      ['li', 'tag'],
+      [':nth-child', 'selector.pseudo'],
+      ['(', 'punctuation.bracket'],
+      ['2n', 'number'],
+      ['+', 'operator'],
+      ['1', 'number'],
+      [')', 'punctuation.bracket'],
+      [',', 'punctuation.delimiter'],
+      ['ul li', 'tag'],
+      ['+', 'operator'],
+      ['li', 'tag'],
+      ['~', 'operator'],
+      ['p', 'tag'],
+      ['{ }', 'punctuation.bracket'],
+    ]
+  );
+  const html = distinctHl(
+    ':is(.x, .y) :where(.z) :has(> img) { }\n.parent { .child { } &:hover { } & + & { } }'
+  );
+  for (const p of [':is', ':where', ':has', ':hover']) {
+    assert.equal(exactColor(html, p), distinctColor('selector.pseudo'), p);
+  }
+  for (const c of ['.x', '.y', '.z', '.parent', '.child']) {
+    assert.equal(exactColor(html, c), distinctColor('selector.class'), c);
+  }
+  assert.equal(exactColor(html, 'img'), distinctColor('tag'));
+  assert.equal(exactColor(html, '&'), distinctColor('operator'));
+});
+
+void t.test(
+  'css: value forms: colors, functions, dimensions, strings, escapes, and !important',
+  () => {
+    const html = distinctHl(
+      '.x { color: #ff8800; color: rgb(255 0 0 / 50%); color: hsl(120deg 100% 50%); color: currentColor; margin: calc(var(--gap, 4px) * 2) 1.5rem -0.5em auto; width: 100vw; font: italic bold 12px/1.5 "Helvetica Neue", sans-serif; background: url(\'img.png\') no-repeat center / cover; content: "\\201C" attr(title); transition: opacity 0.3s ease-in-out !important; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); font-size: clamp(1rem, 2vw + 1rem, 3rem); filter: drop-shadow(0 0 2px #000); }'
+    );
+    for (const c of ['#ff8800', '#000']) {
+      assert.equal(exactColor(html, c), distinctColor('string.special'), c);
+    }
+    for (const fn of [
+      'rgb',
+      'hsl',
+      'calc',
+      'var',
+      'url',
+      'attr',
+      'repeat',
+      'minmax',
+      'clamp',
+      'drop-shadow',
+    ]) {
+      assert.equal(exactColor(html, fn), distinctColor('function'), fn);
+    }
+    assert.equal(exactColor(html, '--gap'), distinctColor('variable'));
+    for (const n of [
+      '255',
+      '50%',
+      '120deg',
+      '4px',
+      '2',
+      '1.5rem',
+      '-0.5em',
+      '100vw',
+      '12px',
+      '1.5',
+      '0.3s',
+      '100px',
+      '1fr',
+      '1rem',
+      '2vw',
+      '3rem',
+      '2px',
+    ]) {
+      assert.equal(wordColor(html, n), distinctColor('number'), n);
+    }
+    for (const c of [
+      'currentColor',
+      'auto',
+      'italic',
+      'bold',
+      'sans-serif',
+      'no-repeat',
+      'center',
+      'cover',
+      'opacity',
+      'ease-in-out',
+      'auto-fill',
+      'title',
+    ]) {
+      assert.equal(wordColor(html, c), distinctColor('constant.builtin'), c);
+    }
+    for (const s of ['"Helvetica Neue"', "'img.png'"]) {
+      assert.equal(exactColor(html, s), distinctColor('string'), s);
+    }
+    assert.equal(exactColor(html, '\\201C'), distinctColor('string.escape'));
+    assert.equal(exactColor(html, '!important'), distinctColor('keyword'));
+    for (const op of ['/', '*', '+']) {
+      assert.equal(wordColor(html, op), distinctColor('operator'), op);
+    }
+  }
+);
+
+void t.test('css: comment forms and an unterminated comment', () => {
+  assert.deepEqual(
+    tokenKinds(
+      'css',
+      '/* block\n comment */\n.a { color: red; /* inline */ }\n/* unterminated'
+    ),
+    [
+      ['/* block', 'comment'],
+      ['comment */', 'comment'],
+      ['.a', 'selector.class'],
+      ['{', 'punctuation.bracket'],
+      ['color', 'property'],
+      [':', 'punctuation.delimiter'],
+      ['red', 'constant.builtin'],
+      [';', 'punctuation.delimiter'],
+      ['/* inline */', 'comment'],
+      ['}', 'punctuation.bracket'],
+      ['/* unterminated', 'comment'],
+    ]
+  );
+});
+
+void t.test('css: comments, strings, and rule blocks stream line-fed', () => {
+  assertLineFedParity(
+    'css',
+    '/* a\n b */\n.x {\n  content: "c\\\n  d";\n  color: red;\n}\n@media (min-width: 1px) {\n  a { b: 1 }\n}\n'
+  );
+});

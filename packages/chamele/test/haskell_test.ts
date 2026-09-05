@@ -6,12 +6,18 @@ import { codeToTokens, init, StreamTokenizer } from '../lib/index';
 import { transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import {
+  assertLineFedParity,
   checkInvariants,
   colorOf,
+  distinctColor,
+  distinctTheme,
+  exactColor,
   loadLang,
   spansOf,
   type TestLang,
   themeColor,
+  tokenKinds,
+  wordColor as wordColorOf,
 } from './util';
 
 let haskell: TestLang;
@@ -266,3 +272,206 @@ void t.test('haskell: primes, dollar, and name-quoting ticks', () => {
   assert.equal(wordColor(qhtml, 'Int'), TYPE);
   assertLineStreamParity(quoted + '\n', 'ticks');
 });
+
+/** Highlight under the distinct theme after checking the lexer invariants. */
+const distinctHl = (src: string) =>
+  checkInvariants(haskell.hl, src, { theme: distinctTheme });
+
+void t.test('haskell: module heads and every import form', () => {
+  const html = distinctHl(
+    "{-# LANGUAGE OverloadedStrings #-}\nmodule Shop (total, Item(..), module X) where\nimport qualified Data.Map as M\nimport Data.List (foldl', sortBy)\nimport Data.Maybe hiding (fromJust)"
+  );
+  assert.equal(
+    exactColor(html, '{-# LANGUAGE OverloadedStrings #-}'),
+    distinctColor('preproc')
+  );
+  for (const word of ['module', 'import', 'import qualified', 'hiding']) {
+    assert.equal(exactColor(html, word), distinctColor('keyword.import'), word);
+  }
+  assert.equal(exactColor(html, 'where'), distinctColor('keyword.control'));
+  assert.equal(exactColor(html, 'as'), distinctColor('keyword'));
+  for (const type of [
+    'Shop',
+    'Item',
+    'X',
+    'Data',
+    'Map',
+    'M',
+    'List',
+    'Maybe',
+  ]) {
+    assert.equal(wordColorOf(html, type), distinctColor('type'), type);
+  }
+  for (const v of ['total', "foldl'", 'sortBy', 'fromJust']) {
+    assert.equal(exactColor(html, v), distinctColor('variable'), v);
+  }
+  assert.equal(exactColor(html, '..'), distinctColor('operator'));
+});
+
+void t.test(
+  'haskell: data, newtype, class, instance, and fixity declarations',
+  () => {
+    const html = distinctHl(
+      'data Item = Item { name :: String } | Empty deriving (Show, Eq)\nnewtype Wrap a = Wrap { unwrap :: a }\nclass Priced a where\n  cost :: a -> Double\ninstance Priced Item where\n  cost = price\ninfixl 6 <+>\n(<+>) :: Int -> Int -> Int\nx <+> y = x + y'
+    );
+    for (const word of ['data', 'newtype', 'class', 'instance']) {
+      assert.equal(
+        wordColorOf(html, word),
+        distinctColor('keyword.declaration'),
+        word
+      );
+    }
+    assert.equal(exactColor(html, 'Item'), distinctColor('type'));
+    assert.deepEqual(
+      tokenKinds('haskell', 'newtype Wrap a = Wrap { unwrap :: a }').slice(
+        0,
+        6
+      ),
+      [
+        ['newtype', 'keyword.declaration'],
+        ['Wrap', 'type'],
+        ['a', 'variable'],
+        ['=', 'operator'],
+        ['Wrap', 'constructor'],
+        ['{', 'punctuation.bracket'],
+      ]
+    );
+    for (const type of ['String', 'Double', 'Show', 'Eq', 'Int']) {
+      assert.equal(wordColorOf(html, type), distinctColor('type'), type);
+    }
+    for (const v of ['name', 'unwrap', 'price']) {
+      assert.equal(exactColor(html, v), distinctColor('variable'), v);
+    }
+    assert.equal(
+      exactColor(html, 'deriving'),
+      distinctColor('keyword.control')
+    );
+    assert.equal(
+      exactColor(html, 'cost'),
+      distinctColor('function.definition')
+    );
+    assert.equal(exactColor(html, 'infixl'), distinctColor('keyword'));
+    assert.equal(exactColor(html, '6'), distinctColor('number'));
+    for (const op of ['<+>', '::', '->', '=', '|', '+']) {
+      assert.equal(wordColorOf(html, op), distinctColor('operator'), op);
+    }
+    assert.equal(exactColor(html, 'x'), distinctColor('function.definition'));
+  }
+);
+
+void t.test(
+  'haskell: numeric, character, string, and constructor literals',
+  () => {
+    const html = distinctHl(
+      "x = 0x1F + 0b101 + 0o17 + 1_000 + 1e3 + 2.5 + 3e-2; c = 'a'; c2 = '\\n'; s = \"esc\\t\"; b = True && False; u = (); l = [1, 2 .. 10]; n = Nothing; j = Just 1; r = Right 1; z = 1 :| [2]"
+    );
+    for (const n of ['0x1F', '0b101', '0o17', '1_000', '1e3', '2.5', '3e-2']) {
+      assert.equal(exactColor(html, n), distinctColor('number'), n);
+    }
+    assert.equal(exactColor(html, "'a'"), distinctColor('string.special'));
+    assert.equal(exactColor(html, '\\n'), distinctColor('string.escape'));
+    assert.equal(exactColor(html, '"esc'), distinctColor('string'));
+    assert.equal(exactColor(html, '\\t'), distinctColor('string.escape'));
+    for (const b of ['True', 'False']) {
+      assert.equal(exactColor(html, b), distinctColor('boolean'), b);
+    }
+    assert.equal(exactColor(html, '()'), distinctColor('punctuation.bracket'));
+    for (const c of ['Nothing', 'Just', 'Right']) {
+      assert.equal(exactColor(html, c), distinctColor('constructor'), c);
+    }
+    for (const op of ['&&', '..', ':|']) {
+      assert.equal(exactColor(html, op), distinctColor('operator'), op);
+    }
+  }
+);
+
+void t.test(
+  'haskell: do blocks, guards, lambdas, sections, and operator names',
+  () => {
+    const html = distinctHl(
+      'main :: IO ()\nmain = do\n  let items = [Item "tea" 2.5]\n      n = length items `div` 2\n  x <- getLine\n  case items of\n    (y:_) | price y > 1 -> putStrLn $ "first"\n    [] -> return ()\n  if n > 0 then pure () else pure ()\n  where\n    helper z = z * 2\ng = \\case { Just v -> v; Nothing -> 0 }\nh = let a = 1 in a\nfmap (+1) [1]; (<$>); (<*>); (>>=); (.); ($); (<>); (++); (!!)'
+    );
+    for (const fn of ['main', 'items', 'helper', 'g', 'h']) {
+      assert.equal(
+        wordColorOf(html, fn),
+        distinctColor('function.definition'),
+        fn
+      );
+    }
+    assert.equal(exactColor(html, 'IO'), distinctColor('type'));
+    for (const word of [
+      'do',
+      'let',
+      'case',
+      'of',
+      'if',
+      'then',
+      'else',
+      'where',
+      'in',
+    ]) {
+      assert.equal(
+        wordColorOf(html, word),
+        distinctColor('keyword.control'),
+        word
+      );
+    }
+    for (const fn of ['length', 'div', 'return', 'pure', 'fmap']) {
+      assert.equal(wordColorOf(html, fn), distinctColor('function'), fn);
+    }
+    assert.equal(exactColor(html, '`'), distinctColor('punctuation.special'));
+    assert.equal(exactColor(html, 'Item'), distinctColor('constructor'));
+    for (const op of [
+      '<-',
+      '->',
+      '$',
+      '\\',
+      '<$>',
+      '<*>',
+      '>>=',
+      '.',
+      '<>',
+      '++',
+      '!!',
+      '|',
+      ':',
+      '*',
+      '>',
+    ]) {
+      assert.equal(wordColorOf(html, op), distinctColor('operator'), op);
+    }
+  }
+);
+
+void t.test(
+  'haskell: comment forms including nested blocks and doc markers',
+  () => {
+    assert.deepEqual(
+      tokenKinds(
+        'haskell',
+        '-- comment\n{- block\n {- nested -} -}\n-- | doc\n-- ^ post doc\nf = 1 -- tail'
+      ),
+      [
+        ['-- comment', 'comment'],
+        ['{- block', 'comment'],
+        ['{- nested -} -}', 'comment'],
+        ['-- | doc', 'comment.doc'],
+        ['-- ^ post doc', 'comment.doc'],
+        ['f', 'function.definition'],
+        ['=', 'operator'],
+        ['1', 'number'],
+        ['-- tail', 'comment'],
+      ]
+    );
+  }
+);
+
+void t.test(
+  'haskell: nested comments, string gaps, and where blocks stream line-fed',
+  () => {
+    assertLineFedParity(
+      'haskell',
+      '{- a\n {- b -}\n -}\ns = "x\\\n  \\y"\nf = g\n  where\n    g = 1\n'
+    );
+  }
+);

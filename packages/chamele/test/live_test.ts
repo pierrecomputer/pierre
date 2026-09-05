@@ -51,6 +51,7 @@ const samples: [Lang, string][] = [
   ['kotlin', 'val s = """one\ntwo"""\n'],
   ['lua', 'local s = [[one\ntwo]]\n'],
   ['markdown', '# title\n\n```js\nlet a = 1\n```\ntail'],
+  ['markdown', '````md\n```\ninner\n```\n````\n> ```\n> quoted\n> ```\n'],
   ['mdx', '<Box value={{\n  x: 1\n}} />\n<p>{\nformat({ x: 1 })\n}</p>\n'],
   ['php', '<p>x</p>\n<?php\nfunction f() { return 1; }\n?>\n'],
   ['python', 'def f():\n    return """doc\nstring"""\n'],

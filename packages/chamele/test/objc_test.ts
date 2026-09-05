@@ -7,11 +7,15 @@ import tokenTypes from '../lib/token-types';
 import { transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import {
+  assertLineFedParity,
   checkInvariants,
+  exactColor,
   loadLang,
   spansOf,
   type TestLang,
   textOf,
+  tokenKinds,
+  wordColor,
 } from './util';
 
 // one unique color per token type so equal styles cannot merge neighboring
@@ -193,3 +197,238 @@ void t.test('objc: multi-line constructs resume line-fed', () => {
     assert.deepEqual(streamed, whole, JSON.stringify(code));
   }
 });
+
+/** Highlight under the distinct theme after checking the lexer invariants. */
+const distinctHl = (src: string) =>
+  checkInvariants(lexer.hl, src, { theme: distinct });
+
+void t.test(
+  'objc: preprocessor lines, @-directives, protocols, interfaces, and properties',
+  () => {
+    const html = distinctHl(
+      '#import <Foundation/Foundation.h>\n#import "X.h"\n#define MAX 10\n#pragma mark - Section\n@import UIKit;\n@class Forward;\n@protocol P <NSObject>\n@required\n- (void)f;\n@optional\n- (void)g;\n@end\n@interface Counter : NSObject <NSCopying, P> { NSInteger _count; }\n@property (nonatomic, strong, readonly) NSString *name;\n+ (instancetype)sharedInstance;\n- (instancetype)initWithCount:(NSInteger)count name:(NSString *)name;\n@end\n@interface Counter (Category) @end\n@implementation Counter\n@synthesize name = _name;\n@dynamic shared;\n@end'
+    );
+    for (const pre of ['#import', '#define', '#pragma']) {
+      assert.equal(wordColor(html, pre), distinctColor('preproc'), pre);
+    }
+    for (const s of ['<Foundation/Foundation.h>', '"X.h"']) {
+      assert.equal(exactColor(html, s), distinctColor('string'), s);
+    }
+    for (const word of [
+      '@import',
+      '@class',
+      '@protocol',
+      '@required',
+      '@optional',
+      '@end',
+      '@interface',
+      '@property',
+      '@implementation',
+      '@synthesize',
+      '@dynamic',
+      'nonatomic',
+      'strong',
+      'readonly',
+    ]) {
+      assert.equal(wordColor(html, word), distinctColor('keyword'), word);
+    }
+    for (const type of [
+      'UIKit',
+      'Forward',
+      'P',
+      'NSObject',
+      'Counter',
+      'NSCopying',
+      'NSInteger',
+      'NSString',
+      'Category',
+    ]) {
+      assert.equal(wordColor(html, type), distinctColor('type'), type);
+    }
+    for (const type of ['void', 'instancetype']) {
+      assert.equal(wordColor(html, type), distinctColor('type.builtin'), type);
+    }
+    for (const fn of ['f', 'g', 'sharedInstance', 'initWithCount']) {
+      assert.equal(
+        exactColor(html, fn),
+        distinctColor('function.definition'),
+        fn
+      );
+    }
+    for (const op of ['-', '+', '*', '<', '>']) {
+      assert.equal(exactColor(html, op), distinctColor('operator'), op);
+    }
+    for (const v of ['_count', 'count', '_name', 'shared']) {
+      assert.equal(exactColor(html, v), distinctColor('variable'), v);
+    }
+  }
+);
+
+void t.test(
+  'objc: literal forms, boxed literals, and special constants',
+  () => {
+    const html = distinctHl(
+      'NSInteger x = 0x1F + 1_000 + 1e3f + 2.5 + 3L; char c = \'a\'; char n = \'\\n\'; NSString *s = @"esc\\t %@"; NSNumber *num = @42; NSNumber *b = @YES; NSArray *a = @[@1, @"x"]; NSDictionary *d = @{ @"k": @1 }; id o = nil; Class cls = Nil; BOOL t = YES; SEL sel = @selector(f:); Protocol *p = @protocol(P); const char *e = @encode(int); void *np = NULL;'
+    );
+    for (const n of ['0x1F', '1_000', '1e3f', '2.5', '3L', '42']) {
+      assert.equal(exactColor(html, n), distinctColor('number'), n);
+    }
+    assert.equal(exactColor(html, "'a'"), distinctColor('string'));
+    for (const esc of ['\\n', '\\t']) {
+      assert.equal(exactColor(html, esc), distinctColor('string.escape'), esc);
+    }
+    for (const s of ['@"esc', '@"x"', '@"k"']) {
+      assert.equal(exactColor(html, s), distinctColor('string'), s);
+    }
+    assert.equal(exactColor(html, '@'), distinctColor('punctuation.special'));
+    assert.equal(exactColor(html, '@YES'), distinctColor('keyword'));
+    for (const type of ['id', 'Class', 'BOOL', 'SEL', 'char', 'void']) {
+      assert.equal(wordColor(html, type), distinctColor('type.builtin'), type);
+    }
+    for (const c of ['nil', 'Nil', 'YES']) {
+      assert.equal(exactColor(html, c), distinctColor('constant.builtin'), c);
+    }
+    for (const word of ['@selector', '@protocol', '@encode', 'const']) {
+      assert.equal(wordColor(html, word), distinctColor('keyword'), word);
+    }
+    assert.equal(exactColor(html, 'NULL'), distinctColor('constant'));
+    for (const type of [
+      'NSString',
+      'NSNumber',
+      'NSArray',
+      'NSDictionary',
+      'Protocol',
+    ]) {
+      assert.equal(wordColor(html, type), distinctColor('type'), type);
+    }
+    assert.equal(exactColor(html, 'f'), distinctColor('function.method'));
+  }
+);
+
+void t.test(
+  'objc: messages, blocks, control flow, exceptions, and storage qualifiers',
+  () => {
+    const html = distinctHl(
+      '- (void)increment:(int)by { if (self.count > MAX && by || !done) { return; } for (NSString *s in items) { continue; } for (int i = 0; i < 3; i++) { break; } while (x) {} do {} while (y); switch (k) { case 1: break; } @try { @throw [NSException new]; } @catch (NSException *e) { } @finally { } @synchronized (self) { } @autoreleasepool { } [self doSomething:1 with:2]; [[Counter alloc] init]; [super dealloc]; self.count += by; obj.prop.sub; ^(int a) { return a; }; __block int bb = 0; __strong id st; __bridge id br; __kindof NSObject *ko; nullable id nn; nonnull id nu; IBOutlet UIView *v; static const int sc = 1; extern int ex; typedef struct { int a; } S; NS_ENUM(NSInteger, T) { T1 }; sizeof(int); typeof(x); @available(iOS 13, *); }'
+    );
+    assert.equal(
+      exactColor(html, 'increment'),
+      distinctColor('function.definition')
+    );
+    assert.equal(exactColor(html, 'by'), distinctColor('variable'));
+    for (const word of [
+      'if',
+      'return',
+      'for',
+      'continue',
+      'break',
+      'while',
+      'do',
+      'switch',
+      'case',
+    ]) {
+      assert.equal(
+        wordColor(html, word),
+        distinctColor('keyword.control'),
+        word
+      );
+    }
+    for (const word of [
+      'in',
+      '@try',
+      '@throw',
+      '@catch',
+      '@finally',
+      '@synchronized',
+      '@autoreleasepool',
+      '__block',
+      '__strong',
+      '__bridge',
+      '__kindof',
+      'nullable',
+      'nonnull',
+      'IBOutlet',
+      'const',
+      'sizeof',
+      'typeof',
+      '@available',
+    ]) {
+      assert.equal(wordColor(html, word), distinctColor('keyword'), word);
+    }
+    for (const word of ['static', 'extern', 'typedef']) {
+      assert.equal(
+        wordColor(html, word),
+        distinctColor('keyword.declaration'),
+        word
+      );
+    }
+    for (const v of ['self', 'super']) {
+      assert.equal(wordColor(html, v), distinctColor('variable.special'), v);
+    }
+    for (const p of ['count', 'prop', 'sub']) {
+      assert.equal(exactColor(html, p), distinctColor('property'), p);
+    }
+    assert.equal(exactColor(html, 'MAX'), distinctColor('constant'));
+    for (const m of [
+      'doSomething',
+      'with',
+      'alloc',
+      'init',
+      'dealloc',
+      'new',
+    ]) {
+      assert.equal(wordColor(html, m), distinctColor('function.method'), m);
+    }
+    assert.equal(exactColor(html, '^'), distinctColor('operator'));
+    for (const type of [
+      'NSException',
+      'Counter',
+      'NSObject',
+      'UIView',
+      'NSInteger',
+      'T',
+      'S',
+    ]) {
+      assert.equal(wordColor(html, type), distinctColor('type'), type);
+    }
+    for (const c of ['T1', 'NS_ENUM']) {
+      assert.equal(exactColor(html, c), distinctColor('constant'), c);
+    }
+    for (const op of ['&&', '||', '!', '++', '+=', '*', '<', '>']) {
+      assert.equal(wordColor(html, op), distinctColor('operator'), op);
+    }
+  }
+);
+
+void t.test('objc: comment forms', () => {
+  assert.deepEqual(
+    tokenKinds(
+      'objc',
+      '// line\n/* block\n */\n/// doc\n/** block doc */\n- (void)f {} // tail'
+    ),
+    [
+      ['// line', 'comment'],
+      ['/* block', 'comment'],
+      ['*/', 'comment'],
+      ['/// doc', 'comment.doc'],
+      ['/** block doc */', 'comment.doc'],
+      ['-', 'operator'],
+      ['(', 'punctuation.bracket'],
+      ['void', 'type.builtin'],
+      [')', 'punctuation.bracket'],
+      ['f', 'function.definition'],
+      ['{}', 'punctuation.bracket'],
+      ['// tail', 'comment'],
+    ]
+  );
+});
+
+void t.test(
+  'objc: block comments and multi-line messages stream line-fed',
+  () => {
+    assertLineFedParity(
+      'objc',
+      '/* a\n b */\n/// c\n[self doSomething:1\n      with:@"x\\n"];\nNSString *s = @"a"\n  @"b";\n'
+    );
+  }
+);

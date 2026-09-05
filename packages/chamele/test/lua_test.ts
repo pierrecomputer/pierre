@@ -6,11 +6,17 @@ import { codeToTokens, init, StreamTokenizer } from '../lib/index';
 import { transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import {
+  assertLineFedParity,
   checkInvariants,
   colorOf,
+  distinctColor,
+  distinctTheme,
+  exactColor,
   loadLang,
   type TestLang,
   themeColor,
+  tokenKinds,
+  wordColor,
 } from './util';
 
 let lua: TestLang;
@@ -164,3 +170,242 @@ void t.test(
     assert.equal(colorOf(html, 'foo'), VARIABLE);
   }
 );
+
+/** Highlight under the distinct theme after checking the lexer invariants. */
+const hl = (src: string) =>
+  checkInvariants(lua.hl, src, { theme: distinctTheme });
+
+void t.test('lua: every comment form', () => {
+  assert.deepEqual(
+    tokenKinds(
+      'lua',
+      '-- line\n--- doc\n--[[ block\nmulti ]]\n--[==[ level\ntwo ]==]\n--[[]] x = 1'
+    ),
+    [
+      ['-- line', 'comment'],
+      ['--- doc', 'comment.doc'],
+      ['--[[ block', 'comment'],
+      ['multi ]]', 'comment'],
+      ['--[==[ level', 'comment'],
+      ['two ]==]', 'comment'],
+      ['--[[]]', 'comment'],
+      ['x', 'variable'],
+      ['=', 'operator'],
+      ['1', 'number'],
+    ]
+  );
+});
+
+void t.test('lua: string escapes, long strings, and concatenation', () => {
+  assert.deepEqual(
+    tokenKinds(
+      'lua',
+      's = "a\\n b\\t c\\"" .. \'d\\\'\' .. [[long]] .. [=[level\none]=]'
+    ),
+    [
+      ['s', 'variable'],
+      ['=', 'operator'],
+      ['"a', 'string'],
+      ['\\n', 'string.escape'],
+      ['b', 'string'],
+      ['\\t', 'string.escape'],
+      ['c', 'string'],
+      ['\\"', 'string.escape'],
+      ['"', 'string'],
+      ['..', 'operator'],
+      ["'d", 'string'],
+      ["\\'", 'string.escape'],
+      ["'", 'string'],
+      ['..', 'operator'],
+      ['[[long]]', 'string'],
+      ['..', 'operator'],
+      ['[=[level', 'string'],
+      ['one]=]', 'string'],
+    ]
+  );
+});
+
+void t.test('lua: numeric literal forms', () => {
+  const html = hl('n = 0x1F + 0x1p4 + 1e10 + .5 + 0xA.8p1 + 1_000 + 42 + 3.25');
+  for (const n of [
+    '0x1F',
+    '0x1p4',
+    '1e10',
+    '.5',
+    '0xA.8p1',
+    '1_000',
+    '42',
+    '3.25',
+  ]) {
+    assert.equal(exactColor(html, n), distinctColor('number'), n);
+  }
+});
+
+void t.test('lua: every keyword in its bucket', () => {
+  const html = hl(
+    'local x = nil; if a and b then return elseif not c then break else goto e end; while d or f do end; repeat until false; for i in t do end; function g() end; y = true'
+  );
+  for (const word of ['local', 'function']) {
+    assert.equal(
+      wordColor(html, word),
+      distinctColor('keyword.declaration'),
+      word
+    );
+  }
+  for (const word of ['and', 'not', 'or', 'in']) {
+    assert.equal(
+      wordColor(html, word),
+      distinctColor('keyword.operator'),
+      word
+    );
+  }
+  for (const word of [
+    'if',
+    'then',
+    'elseif',
+    'break',
+    'else',
+    'end',
+    'while',
+    'do',
+    'repeat',
+    'until',
+    'for',
+  ]) {
+    assert.equal(wordColor(html, word), distinctColor('keyword.control'), word);
+  }
+  for (const word of ['return', 'goto']) {
+    assert.equal(wordColor(html, word), distinctColor('keyword'), word);
+  }
+  assert.equal(wordColor(html, 'nil'), distinctColor('constant.builtin'));
+  assert.equal(wordColor(html, 'false'), distinctColor('boolean'));
+  assert.equal(wordColor(html, 'true'), distinctColor('boolean'));
+});
+
+void t.test('lua: every operator', () => {
+  const html = hl(
+    'a = b .. c; a == b; a ~= b; a <= b; a >= b; a // b; #t; a ^ b; a % b; a & b; a | b; a ~ b; a << b; a >> b; a < b; a > b; -a; a + b; a * b; a / b; f(...)'
+  );
+  for (const op of [
+    '=',
+    '..',
+    '==',
+    '~=',
+    '<=',
+    '>=',
+    '//',
+    '#',
+    '^',
+    '%',
+    '&',
+    '|',
+    '~',
+    '<<',
+    '>>',
+    '<',
+    '>',
+    '-',
+    '+',
+    '*',
+    '/',
+    '...',
+  ]) {
+    assert.equal(exactColor(html, op), distinctColor('operator'), op);
+  }
+});
+
+void t.test('lua: calls, methods, fields, and indexing', () => {
+  assert.deepEqual(
+    tokenKinds(
+      'lua',
+      'obj:method(1)\nobj.field.sub = 2\nf()\nt[1]\nt["k"]\nt.k()'
+    ),
+    [
+      ['obj', 'variable'],
+      [':', 'punctuation.delimiter'],
+      ['method', 'function.method'],
+      ['(', 'punctuation.bracket'],
+      ['1', 'number'],
+      [')', 'punctuation.bracket'],
+      ['obj', 'variable'],
+      ['.', 'punctuation.delimiter'],
+      ['field', 'property'],
+      ['.', 'punctuation.delimiter'],
+      ['sub', 'property'],
+      ['=', 'operator'],
+      ['2', 'number'],
+      ['f', 'function'],
+      ['()', 'punctuation.bracket'],
+      ['t', 'variable'],
+      ['[', 'punctuation.bracket'],
+      ['1', 'number'],
+      [']', 'punctuation.bracket'],
+      ['t', 'variable'],
+      ['[', 'punctuation.bracket'],
+      ['"k"', 'string'],
+      [']', 'punctuation.bracket'],
+      ['t', 'variable'],
+      ['.', 'punctuation.delimiter'],
+      ['k', 'function.method'],
+      ['()', 'punctuation.bracket'],
+    ]
+  );
+});
+
+void t.test('lua: function definition forms', () => {
+  assert.deepEqual(
+    tokenKinds(
+      'lua',
+      'function M.f() end\nfunction M:g(self, x) end\nlocal function h() end\nlocal f = function() end'
+    ),
+    [
+      ['function', 'keyword.declaration'],
+      ['M', 'function.definition'],
+      ['.', 'punctuation.delimiter'],
+      ['f', 'function.method'],
+      ['()', 'punctuation.bracket'],
+      ['end', 'keyword.control'],
+      ['function', 'keyword.declaration'],
+      ['M', 'function.definition'],
+      [':', 'punctuation.delimiter'],
+      ['g', 'function.method'],
+      ['(', 'punctuation.bracket'],
+      ['self', 'variable'],
+      [',', 'punctuation.delimiter'],
+      ['x', 'variable'],
+      [')', 'punctuation.bracket'],
+      ['end', 'keyword.control'],
+      ['local function', 'keyword.declaration'],
+      ['h', 'function.definition'],
+      ['()', 'punctuation.bracket'],
+      ['end', 'keyword.control'],
+      ['local', 'keyword.declaration'],
+      ['f', 'variable'],
+      ['=', 'operator'],
+      ['function', 'keyword.declaration'],
+      ['()', 'punctuation.bracket'],
+      ['end', 'keyword.control'],
+    ]
+  );
+});
+
+void t.test('lua: table constructors and control structures', () => {
+  const html = hl(
+    'local t = { a = 1, ["b"] = 2, [3] = 3 }\nrepeat\n  x = x + 1\nuntil x > 10\nfor k, v in pairs(t) do end\nfor i = 1, 10, 2 do end'
+  );
+  assert.equal(exactColor(html, '"b"'), distinctColor('string'));
+  assert.equal(exactColor(html, '3'), distinctColor('number'));
+  assert.equal(exactColor(html, 'repeat'), distinctColor('keyword.control'));
+  assert.equal(exactColor(html, 'until'), distinctColor('keyword.control'));
+  assert.equal(exactColor(html, 'pairs'), distinctColor('function'));
+  assert.equal(exactColor(html, 'in'), distinctColor('keyword.operator'));
+  assert.equal(exactColor(html, '10'), distinctColor('number'));
+  assert.equal(exactColor(html, ','), distinctColor('punctuation.delimiter'));
+});
+
+void t.test('lua: comments, long strings, and blocks stream line-fed', () => {
+  assertLineFedParity(
+    'lua',
+    '--[==[ a\nb ]==]\nlocal s = [[x\ny]] .. "z"\nfunction f()\n  return {\n    a = 1,\n  }\nend\n'
+  );
+});

@@ -9,38 +9,26 @@
   ;; reserved words and well-known atoms; groups 6-10 are module attribute
   ;; names, looked up only after the `-` that starts a form, where the
   ;; group also says what the name after it is.
-  (keyword-table $erlangWords $mem.erlangWords $mem.erlangWords+512 16 64
-    (group ;; 1: control
+  (keyword-table $erlangWords $mem.erlangWords $mem.erlangWords+512
+    (group $Token.keyword.control ;; 1: control
       "after" "begin" "case" "catch" "cond" "end" "if" "of" "receive" "try"
       "maybe" "else")
-    (group "fun") ;; 2: anonymous function
-    (group ;; 3: word operators
+    (group $Token.keyword "fun") ;; 2: anonymous function
+    (group $Token.keyword.operator ;; 3: word operators
       "and" "andalso" "band" "bnot" "bor" "bsl" "bsr" "bxor" "div" "not"
       "or" "orelse" "rem" "xor" "when")
-    (group "true" "false")                    ;; 4: booleans
-    (group "undefined")                       ;; 5: built-in constant
-    (group "include" "include_lib" "import")  ;; 6: import attributes
-    (group "module")                          ;; 7: next name is the module
-    (group "record" "type" "opaque")          ;; 8: next name is a type
-    (group "define")                          ;; 9: next name is a macro
-    (group "spec" "callback"))                ;; 10: next name is a function
+    (group $Token.boolean "true" "false")                    ;; 4: booleans
+    (group $Token.constant.builtin "undefined")                       ;; 5: built-in constant
+    (group -1 "include" "include_lib" "import")  ;; 6: import attributes
+    (group -1 "module")                          ;; 7: next name is the module
+    (group -1 "record" "type" "opaque")          ;; 8: next name is a type
+    (group -1 "define")                          ;; 9: next name is a macro
+    (group -1 "spec" "callback"))                ;; 10: next name is a function
 
   ;; The token for a bare atom that is a reserved word or a well-known
   ;; constant, or -1 for an ordinary atom.
   (func $erlWordHl (param $lhs i32) (param $rhs i32) (result i32)
-    (local $g i32)
-    (local.set $g (keyword-table.get $erlangWords (local.get $lhs) (local.get $rhs)))
-    (if (i32.eq (local.get $g) (i32.const 1))
-      (then (return (enum.get $Token.keyword.control))))
-    (if (i32.eq (local.get $g) (i32.const 2))
-      (then (return (enum.get $Token.keyword))))
-    (if (i32.eq (local.get $g) (i32.const 3))
-      (then (return (enum.get $Token.keyword.operator))))
-    (if (i32.eq (local.get $g) (i32.const 4))
-      (then (return (enum.get $Token.boolean))))
-    (if (i32.eq (local.get $g) (i32.const 5))
-      (then (return (enum.get $Token.constant.builtin))))
-    (i32.const -1))
+    (keyword-table.value $erlangWords (local.get $lhs) (local.get $rhs)))
 
   ;; A numeric literal from $ptr: the shared scan, then a `base#digits`
   ;; radix body such as `16#FF` or `2#1010`.
@@ -54,15 +42,7 @@
         (call $scanIdentRun (i32.const "_")))))
 
   (func $erlIsOp (param $c i32) (result i32)
-    (i32.or
-      (i32.or
-        (i32.or (i32.eq (local.get $c) (i32.const "+")) (i32.eq (local.get $c) (i32.const "-")))
-        (i32.or (i32.eq (local.get $c) (i32.const "*")) (i32.eq (local.get $c) (i32.const "/"))))
-      (i32.or
-        (i32.or (i32.eq (local.get $c) (i32.const "=")) (i32.eq (local.get $c) (i32.const "!")))
-        (i32.or
-          (i32.or (i32.eq (local.get $c) (i32.const "<")) (i32.eq (local.get $c) (i32.const ">")))
-          (i32.eq (local.get $c) (i32.const "|"))))))
+    (byteset.get "!*+-/<=>|" (local.get $c)))
 
   ;; $col0 is 1 while the next token would start in column zero, where an
   ;; atom before `(` heads a function clause and a `-` opens a module
@@ -227,11 +207,7 @@
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))
             (call $emitTok (enum.get $Token.punctuation.bracket) (local.get $lhs) (global.get $ptr))
             (br $next)))
-        (if (i32.or
-              (i32.or (i32.eq (local.get $c) (i32.const "(")) (i32.eq (local.get $c) (i32.const ")")))
-              (i32.or
-                (i32.or (i32.eq (local.get $c) (i32.const "[")) (i32.eq (local.get $c) (i32.const "]")))
-                (i32.or (i32.eq (local.get $c) (i32.const "{")) (i32.eq (local.get $c) (i32.const "}")))))
+        (if (byteset.get "()[]{}" (local.get $c))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (call $emitTok (enum.get $Token.punctuation.bracket) (local.get $lhs) (global.get $ptr))

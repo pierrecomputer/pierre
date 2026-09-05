@@ -6,22 +6,22 @@
   ;; purpose: it shares every hash feature the table can use - first two
   ;; bytes, last byte, and length - with `alignof`, so $cWordHl matches it
   ;; with one exact eight-byte compare instead.
-  (keyword-table $cWords $mem.cWords $mem.cWords+1024 16 256
-    (group ;; 1: control
+  (keyword-table $cWords $mem.cWords $mem.cWords+1024
+    (group $Token.keyword.control ;; 1: control
       "do" "if" "for" "case" "else" "goto" "break" "while" "return" "switch"
       "default")
-    (group ;; 2: declaration
+    (group $Token.keyword.declaration ;; 2: declaration
       "auto" "extern" "inline" "static" "typedef" "register" "_Noreturn"
       "thread_local" "_Thread_local")
-    (group ;; 3: built-in types
+    (group $Token.type.builtin ;; 3: built-in types
       "int" "bool" "char" "enum" "long" "void" "float" "short" "union"
       "_Bool" "double" "signed" "struct" "unsigned" "_Complex" "_Imaginary")
-    (group ;; 4: qualifiers and operators
+    (group $Token.keyword ;; 4: qualifiers and operators
       "const" "sizeof" "typeof" "alignas" "alignof" "restrict" "volatile"
       "_Atomic" "_Alignas" "_Alignof" "_Generic" "constexpr" "static_assert"
       "typeof_unqual" "_Static_assert")
-    (group "true" "false") ;; 5: booleans
-    (group "nullptr"))     ;; 6: built-in constant
+    (group $Token.boolean "true" "false") ;; 5: booleans
+    (group $Token.constant.builtin "nullptr"))     ;; 6: built-in constant
 
   (func $cWordHl (param $lhs i32) (param $rhs i32) (result i32)
     (local $p i32)
@@ -31,19 +31,9 @@
           (i32.eq (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 8))
           (i64.eq (i64.load (local.get $lhs)) (i64.const "continue")))
       (then (return (enum.get $Token.keyword.control))))
-    (local.set $g (keyword-table.get $cWords (local.get $lhs) (local.get $rhs)))
-    (if (i32.eq (local.get $g) (i32.const 1))
-      (then (return (enum.get $Token.keyword.control))))
-    (if (i32.eq (local.get $g) (i32.const 2))
-      (then (return (enum.get $Token.keyword.declaration))))
-    (if (i32.eq (local.get $g) (i32.const 3))
-      (then (return (enum.get $Token.type.builtin))))
-    (if (i32.eq (local.get $g) (i32.const 4))
-      (then (return (enum.get $Token.keyword))))
-    (if (i32.eq (local.get $g) (i32.const 5))
-      (then (return (enum.get $Token.boolean))))
-    (if (i32.eq (local.get $g) (i32.const 6))
-      (then (return (enum.get $Token.constant.builtin))))
+    (local.set $g (keyword-table.value $cWords (local.get $lhs) (local.get $rhs)))
+    (if (i32.ne (local.get $g) (i32.const -1))
+      (then (return (local.get $g))))
 
     (if (call $lexIsConstCase (local.get $lhs) (local.get $rhs))
       (then (return (enum.get $Token.constant))))
@@ -61,19 +51,7 @@
     (enum.get $Token.variable))
 
   (func $cIsOp (param $c i32) (result i32)
-    (i32.or
-      (i32.or
-        (i32.or (i32.eq (local.get $c) (i32.const "+")) (i32.eq (local.get $c) (i32.const "-")))
-        (i32.or (i32.eq (local.get $c) (i32.const "*")) (i32.eq (local.get $c) (i32.const "/"))))
-      (i32.or
-        (i32.or (i32.eq (local.get $c) (i32.const "%")) (i32.eq (local.get $c) (i32.const "=")))
-        (i32.or
-          (i32.or (i32.eq (local.get $c) (i32.const "!")) (i32.eq (local.get $c) (i32.const "<")))
-          (i32.or
-            (i32.or (i32.eq (local.get $c) (i32.const ">")) (i32.eq (local.get $c) (i32.const "&")))
-            (i32.or
-              (i32.or (i32.eq (local.get $c) (i32.const "|")) (i32.eq (local.get $c) (i32.const "^")))
-              (i32.or (i32.eq (local.get $c) (i32.const "~")) (i32.eq (local.get $c) (i32.const "?")))))))))
+    (byteset.get "!%&*+-/<=>?^|~" (local.get $c)))
 
   ;; Extend the shared numeric run for C hexadecimal floats, whose fractional
   ;; part may begin with an a-f digit (`0x1.fp+3`). The run starts at $ptr.
@@ -200,11 +178,7 @@
             (br $next)))
 
         ;; brackets and delimiters
-        (if (i32.or
-              (i32.or (i32.eq (local.get $c) (i32.const "(")) (i32.eq (local.get $c) (i32.const ")")))
-              (i32.or
-                (i32.or (i32.eq (local.get $c) (i32.const "[")) (i32.eq (local.get $c) (i32.const "]")))
-                (i32.or (i32.eq (local.get $c) (i32.const "{")) (i32.eq (local.get $c) (i32.const "}")))))
+        (if (byteset.get "()[]{}" (local.get $c))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (call $emitTok (enum.get $Token.punctuation.bracket) (local.get $lhs) (global.get $ptr))
@@ -227,11 +201,7 @@
                     (i32.eq (local.get $c2) (i32.const "="))
                     (i32.or
                       (i32.and (i32.eq (local.get $c) (local.get $c2))
-                        (i32.or
-                          (i32.or (i32.eq (local.get $c) (i32.const "+")) (i32.eq (local.get $c) (i32.const "-")))
-                          (i32.or
-                            (i32.or (i32.eq (local.get $c) (i32.const "<")) (i32.eq (local.get $c) (i32.const ">")))
-                            (i32.or (i32.eq (local.get $c) (i32.const "&")) (i32.eq (local.get $c) (i32.const "|"))))))
+                        (byteset.get "&+-<>|" (local.get $c)))
                       (i32.and (i32.eq (local.get $c) (i32.const "-"))
                                (i32.eq (local.get $c2) (i32.const ">"))))))
               (then

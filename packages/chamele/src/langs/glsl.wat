@@ -5,20 +5,20 @@
   ;; open-ended dimensional suffixes stay as prefix checks below, and the few
   ;; words the table hash cannot separate get direct compares in $glslWordHl.
   ;; Group order is the dispatch order in $glslWordHl.
-  (keyword-table $glslWords $mem.glslWords $mem.glslWords+1152 32 128
-    (group "true" "false") ;; 1: booleans
-    (group ;; 2: control flow, including the ray-tracing control statements
+  (keyword-table $glslWords $mem.glslWords $mem.glslWords+1152
+    (group $Token.boolean "true" "false") ;; 1: booleans
+    (group $Token.keyword.control ;; 2: control flow, including the ray-tracing control statements
       "break" "case" "continue" "default" "do" "else" "for" "if"
       "return" "switch" "while" "discard" "demote"
       "terminateInvocation" "terminateRayNV"
       "ignoreIntersectionEXT" "ignoreIntersectionNV")
-    (group "struct") ;; 3: declaration, next name is a type
-    (group ;; 4: scalar, extension scalar and opaque built-in types
+    (group $Token.keyword.declaration "struct") ;; 3: declaration, next name is a type
+    (group $Token.type.builtin ;; 4: scalar, extension scalar and opaque built-in types
       "void" "bool" "int" "uint" "float" "double" "atomic_uint"
       "int8_t" "uint8_t"
       "subpassInput" "isubpassInput" "usubpassInput"
       "accelerationStructureEXT" "rayQueryEXT")
-    (group ;; 5: storage, interpolation, precision and extension qualifiers
+    (group $Token.keyword ;; 5: storage, interpolation, precision and extension qualifiers
       "const" "in" "out" "inout" "uniform" "shared" "attribute" "varying"
       "buffer" "coherent" "volatile" "restrict" "readonly" "writeonly"
       "layout" "centroid" "flat" "smooth" "noperspective" "patch"
@@ -35,17 +35,9 @@
     (local $len i32)
     (local $last i32)
     (local $w i32)
-    (local.set $g (keyword-table.get $glslWords (local.get $lhs) (local.get $rhs)))
-    (if (i32.eq (local.get $g) (i32.const 1))
-      (then (return (enum.get $Token.boolean))))
-    (if (i32.eq (local.get $g) (i32.const 2))
-      (then (return (enum.get $Token.keyword.control))))
-    (if (i32.eq (local.get $g) (i32.const 3))
-      (then (return (enum.get $Token.keyword.declaration))))
-    (if (i32.eq (local.get $g) (i32.const 4))
-      (then (return (enum.get $Token.type.builtin))))
-    (if (local.get $g)
-      (then (return (enum.get $Token.keyword))))
+    (local.set $g (keyword-table.value $glslWords (local.get $lhs) (local.get $rhs)))
+    (if (i32.ne (local.get $g) (i32.const -1))
+      (then (return (local.get $g))))
     (local.set $len (i32.sub (local.get $rhs) (local.get $lhs)))
 
     ;; The table hash mixes only the first two bytes, last byte and length, so
@@ -368,17 +360,7 @@
             (local.set $include (i32.const 0))
             (br $next)))
 
-        (if (i32.or
-              (i32.or
-                (i32.eq (local.get $c) (i32.const "("))
-                (i32.eq (local.get $c) (i32.const ")")))
-              (i32.or
-                (i32.or
-                  (i32.eq (local.get $c) (i32.const "["))
-                  (i32.eq (local.get $c) (i32.const "]")))
-                (i32.or
-                  (i32.eq (local.get $c) (i32.const "{"))
-                  (i32.eq (local.get $c) (i32.const "}")))))
+        (if (byteset.get "()[]{}" (local.get $c))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (call $emitTok (enum.get $Token.punctuation.bracket)
@@ -405,35 +387,7 @@
             (br $next)))
 
         ;; Longest useful GLSL/C operator (one to three bytes).
-        (if (i32.or
-              (i32.or
-                (i32.or
-                  (i32.eq (local.get $c) (i32.const "+"))
-                  (i32.eq (local.get $c) (i32.const "-")))
-                (i32.or
-                  (i32.eq (local.get $c) (i32.const "*"))
-                  (i32.eq (local.get $c) (i32.const "/"))))
-              (i32.or
-                (i32.or
-                  (i32.eq (local.get $c) (i32.const "%"))
-                  (i32.eq (local.get $c) (i32.const "=")))
-                (i32.or
-                  (i32.or
-                    (i32.eq (local.get $c) (i32.const "!"))
-                    (i32.eq (local.get $c) (i32.const "<")))
-                  (i32.or
-                    (i32.or
-                      (i32.eq (local.get $c) (i32.const ">"))
-                      (i32.eq (local.get $c) (i32.const "&")))
-                    (i32.or
-                      (i32.or
-                        (i32.eq (local.get $c) (i32.const "|"))
-                        (i32.eq (local.get $c) (i32.const "^")))
-                      (i32.or
-                        (i32.or
-                          (i32.eq (local.get $c) (i32.const "~"))
-                          (i32.eq (local.get $c) (i32.const "?")))
-                        (i32.eq (local.get $c) (i32.const 92))))))))
+        (if (byteset.get "!%&*+-/<=>?\5c^|~" (local.get $c))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (if (i32.lt_u (global.get $ptr) (global.get $end))
@@ -443,17 +397,7 @@
                       (i32.eq (local.get $n) (i32.const "="))
                       (i32.and
                         (i32.eq (local.get $n) (local.get $c))
-                        (i32.or
-                          (i32.or
-                            (i32.eq (local.get $c) (i32.const "+"))
-                            (i32.eq (local.get $c) (i32.const "-")))
-                          (i32.or
-                            (i32.or
-                              (i32.eq (local.get $c) (i32.const "<"))
-                              (i32.eq (local.get $c) (i32.const ">")))
-                            (i32.or
-                              (i32.eq (local.get $c) (i32.const "&"))
-                              (i32.eq (local.get $c) (i32.const "|")))))))
+                        (byteset.get "&+-<>|" (local.get $c))))
                   (then
                     (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
                     (if (i32.and

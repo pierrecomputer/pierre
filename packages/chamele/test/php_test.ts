@@ -6,12 +6,18 @@ import { codeToTokens, init, StreamTokenizer } from '../lib/index';
 import tokenTypes from '../lib/token-types';
 import { transformWat, wat2wasm } from '../scripts/build';
 import {
+  assertLineFedParity as assertLineFedParityOf,
   checkInvariants,
   colorOf,
+  distinctColor,
+  distinctTheme as distinctThemeOf,
+  exactColor,
   loadLang,
   spansOf,
   type TestLang,
   themeColor,
+  tokenKinds,
+  wordColor as wordColorOf,
 } from './util';
 
 let php: TestLang;
@@ -278,3 +284,236 @@ void t.test('php: a paren on the next line does not make a call', () => {
   assertLineFedParity('php', 'foo\n(1);\n');
   assertLineFedParity('php', '<?php\n$o->bar\n(1);\n');
 });
+
+/** Highlight under the distinct theme after checking the lexer invariants. */
+const distinctHl = (src: string) =>
+  checkInvariants(php.hl, src, { theme: distinctThemeOf });
+
+void t.test('php: open tags, imports, and declare', () => {
+  const html = distinctHl(
+    "<?php\nrequire 'x.php'; include_once 'y.php';\ndeclare(strict_types=1);\n?>"
+  );
+  assert.equal(exactColor(html, '<?php'), distinctColor('preproc'));
+  assert.equal(exactColor(html, '?>'), distinctColor('preproc'));
+  for (const word of ['require', 'include_once', 'declare']) {
+    assert.equal(wordColorOf(html, word), distinctColor('keyword'), word);
+  }
+  assert.equal(exactColor(html, "'x.php'"), distinctColor('string'));
+  assert.equal(exactColor(html, 'strict_types'), distinctColor('variable'));
+});
+
+void t.test(
+  'php: class heads, members, interfaces, traits, enums, and closures',
+  () => {
+    const html = distinctHl(
+      "<?php\nabstract class Cart extends Base {\n    public static ?int $count = null;\n    private readonly array $items;\n    public function __construct(private readonly string $owner = 'guest') {}\n    final public static function make(): self { return new static(); }\n}\ninterface I { public function f(): void; }\ntrait T { }\nenum Suit: string { case Hearts = 'H'; }\nfunction helper(int ...$xs): ?array { return null; }\n$fn = fn($x) => $x * 2;\n$c = function() use ($a, &$b) { };"
+    );
+    for (const word of [
+      'abstract',
+      'public',
+      'static',
+      'private',
+      'readonly',
+      'final',
+      'fn',
+      'use',
+    ]) {
+      assert.equal(wordColorOf(html, word), distinctColor('keyword'), word);
+    }
+    for (const word of [
+      'class',
+      'extends',
+      'function',
+      'interface',
+      'trait',
+      'enum',
+    ]) {
+      assert.equal(
+        wordColorOf(html, word),
+        distinctColor('keyword.declaration'),
+        word
+      );
+    }
+    for (const type of ['Cart', 'Base', 'I', 'T', 'Suit']) {
+      assert.equal(exactColor(html, type), distinctColor('type.class'), type);
+    }
+    for (const type of ['int', 'array', 'string', 'void']) {
+      assert.equal(
+        wordColorOf(html, type),
+        distinctColor('type.builtin'),
+        type
+      );
+    }
+    for (const fn of ['__construct', 'make', 'f', 'helper']) {
+      assert.equal(
+        exactColor(html, fn),
+        distinctColor('function.definition'),
+        fn
+      );
+    }
+    for (const v of [
+      '$count',
+      '$items',
+      '$owner',
+      '$xs',
+      '$fn',
+      '$x',
+      '$c',
+      '$a',
+      '$b',
+    ]) {
+      assert.equal(wordColorOf(html, v), distinctColor('variable'), v);
+    }
+    assert.equal(exactColor(html, 'null'), distinctColor('constant.builtin'));
+    assert.equal(exactColor(html, "'guest'"), distinctColor('string'));
+    assert.equal(wordColorOf(html, 'case'), distinctColor('keyword.control'));
+    assert.equal(wordColorOf(html, 'return'), distinctColor('keyword.control'));
+    for (const op of ['?', '...', '=>', '*', '&']) {
+      assert.equal(wordColorOf(html, op), distinctColor('operator'), op);
+    }
+  }
+);
+
+void t.test('php: numeric literals, heredocs, and nowdocs', () => {
+  const html = distinctHl(
+    "<?php\n$x = 0x1F + 0b101 + 0o17 + 017 + 1_000 + 1e3 + 2.5;\n$s = <<<EOT\nheredoc $x\nEOT;\n$n = <<<'EOT'\nnowdoc $x\nEOT;"
+  );
+  for (const n of ['0x1F', '0b101', '0o17', '017', '1_000', '1e3', '2.5']) {
+    assert.equal(exactColor(html, n), distinctColor('number'), n);
+  }
+  assert.equal(colorOf(html, 'heredoc $x'), distinctColor('string'));
+  assert.equal(colorOf(html, 'nowdoc $x'), distinctColor('string'));
+});
+
+void t.test(
+  'php: control flow, match, exceptions, and language constructs',
+  () => {
+    const html = distinctHl(
+      "<?php\nif ($a && $b || !$c) {} elseif ($g) {} else {} while ($w) { break; continue; } do {} while ($x); for ($i = 0; $i < 3; $i++) {} foreach ($arr as $k => $v) {} switch ($s) { case 1: break; default: } match ($m) { 1, 2 => 'a', default => 'b' }; try { throw new E(); } catch (E $e) {} finally {} return; goto end; echo 'x'; print 'y'; isset($x); unset($x); empty($x); global $g; static $s; clone $o; $x instanceof E; $x ?? $y; $x <=> $y; $x === $y; $x !== $y; $x ** 2; $x .= 'a'; $x ??= 1; (int) $x;"
+    );
+    for (const word of [
+      'if',
+      'elseif',
+      'else',
+      'while',
+      'break',
+      'continue',
+      'do',
+      'for',
+      'foreach',
+      'switch',
+      'case',
+      'default',
+      'match',
+      'try',
+      'throw',
+      'catch',
+      'finally',
+      'return',
+      'goto',
+      'echo',
+      'print',
+      'isset',
+      'unset',
+      'empty',
+    ]) {
+      assert.equal(
+        wordColorOf(html, word),
+        distinctColor('keyword.control'),
+        word
+      );
+    }
+    for (const word of [
+      'as',
+      'new',
+      'global',
+      'static',
+      'clone',
+      'instanceof',
+    ]) {
+      assert.equal(wordColorOf(html, word), distinctColor('keyword'), word);
+    }
+    for (const op of [
+      '&&',
+      '||',
+      '!',
+      '++',
+      '=>',
+      '??',
+      '<=>',
+      '===',
+      '!==',
+      '**',
+      '.=',
+      '??=',
+    ]) {
+      assert.equal(wordColorOf(html, op), distinctColor('operator'), op);
+    }
+    assert.equal(exactColor(html, 'int'), distinctColor('type.builtin'));
+  }
+);
+
+void t.test('php: members, static access, builtins, and constants', () => {
+  const html = distinctHl(
+    "<?php\n$obj->prop->sub; $obj->method(); $obj?->m(); Cls::CONST; Cls::method(); static::y; strlen($s); array_map(fn($x) => $x, $a); count($a); true; false; null; TRUE; FALSE; NULL; $_GET['x'];"
+  );
+  for (const p of ['prop', 'sub', 'CONST', 'y']) {
+    assert.equal(exactColor(html, p), distinctColor('property'), p);
+  }
+  for (const m of ['method', 'm']) {
+    assert.equal(exactColor(html, m), distinctColor('function.method'), m);
+  }
+  for (const op of ['->', '?->', '::']) {
+    assert.equal(exactColor(html, op), distinctColor('operator'), op);
+  }
+  for (const fn of ['strlen', 'array_map', 'count']) {
+    assert.equal(exactColor(html, fn), distinctColor('function'), fn);
+  }
+  for (const b of ['true', 'false', 'TRUE', 'FALSE']) {
+    assert.equal(exactColor(html, b), distinctColor('boolean'), b);
+  }
+  for (const c of ['null', 'NULL']) {
+    assert.equal(exactColor(html, c), distinctColor('constant.builtin'), c);
+  }
+  assert.equal(exactColor(html, '$_GET'), distinctColor('variable'));
+});
+
+void t.test('php: comment forms and short echo tags in markup', () => {
+  assert.deepEqual(
+    tokenKinds(
+      'php',
+      '<?php\n// line\n# hash\n/* block\n */\nfunction f() {} // tail\n?>\n<div><?= $x ?></div>'
+    ),
+    [
+      ['<?php', 'preproc'],
+      ['// line', 'comment'],
+      ['# hash', 'comment'],
+      ['/* block', 'comment'],
+      ['*/', 'comment'],
+      ['function', 'keyword.declaration'],
+      ['f', 'function.definition'],
+      ['() {}', 'punctuation.bracket'],
+      ['// tail', 'comment'],
+      ['?>', 'preproc'],
+      ['<', 'punctuation.bracket.html'],
+      ['div', 'tag'],
+      ['>', 'punctuation.bracket.html'],
+      ['<?=', 'preproc'],
+      ['$x', 'variable'],
+      ['?>', 'preproc'],
+      ['</', 'punctuation.bracket.html'],
+      ['div', 'tag'],
+      ['>', 'punctuation.bracket.html'],
+    ]
+  );
+});
+
+void t.test(
+  'php: block comments and alternative syntax stream line-fed',
+  () => {
+    assertLineFedParityOf(
+      'php',
+      '<?php\n/* a\n b */\n$s = "x\ny";\n?>\n<?php if ($a): ?>\n<p>x</p>\n<?php endif; ?>\n'
+    );
+  }
+);

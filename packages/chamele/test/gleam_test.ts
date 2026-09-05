@@ -7,11 +7,16 @@ import tokenTypes from '../lib/token-types';
 import { transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import {
+  assertLineFedParity,
   checkInvariants,
+  distinctColor as distinctColorOf,
+  exactColor,
   loadLang,
   spansOf,
   type TestLang,
   textOf,
+  tokenKinds,
+  wordColor,
 } from './util';
 
 // one unique color per token type so equal styles cannot merge neighboring
@@ -205,4 +210,175 @@ void t.test('gleam: multi-line constructs resume line-fed', () => {
     const [whole, streamed] = wholeAndLineFed('gleam', code);
     assert.deepEqual(streamed, whole, JSON.stringify(code));
   }
+});
+
+/** Highlight under the distinct theme after checking the lexer invariants. */
+const distinctHl = (src: string) =>
+  checkInvariants(lexer.hl, src, { theme: distinct });
+
+void t.test('gleam: import forms and type declarations', () => {
+  const html = distinctHl(
+    'import gleam/io\nimport gleam/list.{map, filter}\nimport gleam/option.{type Option, None, Some}\n\npub type Shape {\n  Circle(radius: Float)\n  Rect(width: Float, height: Float)\n}\npub opaque type Id { Id(Int) }\nconst pi = 3.14\n@external(erlang, "m", "f")\npub fn ext(x: Int) -> Int'
+  );
+  assert.equal(wordColor(html, 'import'), distinctColorOf('keyword.import'));
+  for (const ns of ['gleam', 'io', 'list', 'option']) {
+    assert.equal(wordColor(html, ns), distinctColorOf('namespace'), ns);
+  }
+  assert.equal(exactColor(html, '/'), distinctColorOf('punctuation.delimiter'));
+  for (const v of ['map', 'filter']) {
+    assert.equal(exactColor(html, v), distinctColorOf('variable'), v);
+  }
+  for (const word of [
+    'type',
+    'pub type',
+    'pub opaque type',
+    'const',
+    'pub fn',
+  ]) {
+    assert.equal(
+      exactColor(html, word),
+      distinctColorOf('keyword.declaration'),
+      word
+    );
+  }
+  for (const type of ['Option', 'None', 'Some', 'Shape', 'Float', 'Int']) {
+    assert.equal(wordColor(html, type), distinctColorOf('type'), type);
+  }
+  for (const c of ['Circle', 'Rect']) {
+    assert.equal(wordColor(html, c), distinctColorOf('constructor'), c);
+  }
+  // the opaque type's own name comes first; its constructor follows
+  assert.deepEqual(
+    tokenKinds('gleam', 'pub opaque type Id { Id(Int) }').slice(1, 4),
+    [
+      ['Id', 'type'],
+      ['{', 'punctuation.bracket'],
+      ['Id', 'constructor'],
+    ]
+  );
+  for (const p of ['radius', 'width', 'height', 'x']) {
+    assert.equal(exactColor(html, p), distinctColorOf('variable.parameter'), p);
+  }
+  assert.equal(exactColor(html, 'pi'), distinctColorOf('variable'));
+  assert.equal(exactColor(html, '3.14'), distinctColorOf('number'));
+  assert.equal(exactColor(html, '@external'), distinctColorOf('attribute'));
+  assert.equal(exactColor(html, '"m"'), distinctColorOf('string'));
+  assert.equal(exactColor(html, 'ext'), distinctColorOf('function.definition'));
+  assert.equal(exactColor(html, '->'), distinctColorOf('operator'));
+});
+
+void t.test('gleam: literal forms and float operators', () => {
+  const html = distinctHl(
+    'let x = 0x1F + 0b101 + 0o17 + 1_000 + 1.5e3\nlet f = 2.5 +. 3.0 *. 4.0 /. 5.0 -. 1.0\nlet s = "esc\\t" <> "multi\nline"\nlet b = True && False || !True\nlet t = #(1, "a")\nlet l = [1, ..rest]\nlet n = Nil\nlet r = Ok(1)\nlet e = Error("x")'
+  );
+  for (const n of ['0x1F', '0b101', '0o17', '1_000', '1.5e3', '2.5', '3.0']) {
+    assert.equal(exactColor(html, n), distinctColorOf('number'), n);
+  }
+  for (const op of ['+', '+.', '*.', '/.', '-.', '<>', '&&', '||', '!', '..']) {
+    assert.equal(wordColor(html, op), distinctColorOf('operator'), op);
+  }
+  assert.equal(exactColor(html, '"esc'), distinctColorOf('string'));
+  assert.equal(exactColor(html, '\\t'), distinctColorOf('string.escape'));
+  assert.equal(exactColor(html, '"multi\nline"'), distinctColorOf('string'));
+  for (const b of ['True', 'False']) {
+    assert.equal(wordColor(html, b), distinctColorOf('boolean'), b);
+  }
+  assert.equal(exactColor(html, '#'), distinctColorOf('punctuation.special'));
+  assert.equal(exactColor(html, 'Nil'), distinctColorOf('constant.builtin'));
+  for (const c of ['Ok', 'Error']) {
+    assert.equal(exactColor(html, c), distinctColorOf('constructor'), c);
+  }
+});
+
+void t.test(
+  'gleam: case clauses, guards, use, captures, and member access',
+  () => {
+    const html = distinctHl(
+      'pub fn area(shape: Shape) -> Float {\n  case shape {\n    Circle(r) if r >. 0.0 -> 3.14 *. r *. r\n    Rect(w, h) | Rect(h, w) -> w *. h\n    _ -> 0.0\n  }\n}\nfn main() {\n  let assert Ok(x) = f()\n  use y <- result.try(g(x))\n  let z = fn(a, b) { a + b }\n  let w = f(_, 1)\n  io.println("x")\n  x.field\n  panic as "never"\n  todo as "later"\n  echo x\n  x == 1 && x != 2 || x < 3 && x > 4 && x <= 5 && x >= 6 && x % 2 == 0\n}'
+    );
+    for (const fn of ['area', 'main']) {
+      assert.equal(
+        exactColor(html, fn),
+        distinctColorOf('function.definition'),
+        fn
+      );
+    }
+    assert.equal(
+      exactColor(html, 'shape'),
+      distinctColorOf('variable.parameter')
+    );
+    for (const word of [
+      'case',
+      'if',
+      'assert',
+      'use',
+      'panic',
+      'todo',
+      'echo',
+    ]) {
+      assert.equal(
+        wordColor(html, word),
+        distinctColorOf('keyword.control'),
+        word
+      );
+    }
+    for (const word of ['let', 'fn']) {
+      assert.equal(
+        wordColor(html, word),
+        distinctColorOf('keyword.declaration'),
+        word
+      );
+    }
+    for (const c of ['Circle', 'Rect', 'Ok']) {
+      assert.equal(wordColor(html, c), distinctColorOf('constructor'), c);
+    }
+    for (const fn of ['f', 'g']) {
+      assert.equal(wordColor(html, fn), distinctColorOf('function'), fn);
+    }
+    for (const m of ['try', 'println']) {
+      assert.equal(exactColor(html, m), distinctColorOf('function.method'), m);
+    }
+    assert.equal(exactColor(html, 'field'), distinctColorOf('property'));
+    for (const op of [
+      '>.',
+      '->',
+      '|',
+      '<-',
+      '==',
+      '!=',
+      '<',
+      '>',
+      '<=',
+      '>=',
+      '%',
+    ]) {
+      assert.equal(wordColor(html, op), distinctColorOf('operator'), op);
+    }
+    assert.equal(exactColor(html, '_'), distinctColorOf('variable'));
+  }
+);
+
+void t.test('gleam: comment forms', () => {
+  assert.deepEqual(
+    tokenKinds(
+      'gleam',
+      '// comment\n/// doc\n//// module doc\nfn f() {} // tail'
+    ),
+    [
+      ['// comment', 'comment'],
+      ['/// doc', 'comment.doc'],
+      ['//// module doc', 'comment.doc'],
+      ['fn', 'keyword.declaration'],
+      ['f', 'function.definition'],
+      ['() {}', 'punctuation.bracket'],
+      ['// tail', 'comment'],
+    ]
+  );
+});
+
+void t.test('gleam: multi-line strings and case blocks stream line-fed', () => {
+  assertLineFedParity(
+    'gleam',
+    'fn f() {\n  let s = "a\n  b"\n  case s {\n    "x" -> 1\n    _ -> 2\n  }\n}\n'
+  );
 });

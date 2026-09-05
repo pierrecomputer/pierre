@@ -27,6 +27,12 @@
   (import "./scan.wat")
   (import "./emit.wat")
 
+  ;; The change list of up to 1000 16-byte entries, the 32 size-class free-list heads
+  ;; of its heap, and the heap itself
+  (const $mem.liveChanges 65536)
+  (const $mem.liveFree 81920)
+  (const $mem.liveHeapBase 86016)
+
   ;; allocator
   (global $lvInited (mut i32) (i32.const 0))
   (global $lvHeapEnd (mut i32) (i32.const 0))   ;; bump cursor
@@ -465,9 +471,10 @@
     (global.set $lvIdFree (local.get $id)))
 
   ;; Blob image: [stackLen, brkLen, jsxLen] u32 head, 37 cross-chunk globals,
-  ;; the 32-byte stream delimiter, the live prefixes of the language's own
-  ;; stack - json or toml nesting, or the ECMAScript template stack - and of
-  ;; the bracket and jsx stacks, then the whole used lexer checkpoint region.
+  ;; the 32-byte stream delimiter, the 96-byte nested markdown fence
+  ;; registers, the live prefixes of the language's own stack - json or toml
+  ;; nesting, or the ECMAScript template stack - and of the bracket and jsx
+  ;; stacks, then the whole used lexer checkpoint region.
   ;; The image
   ;; is a pure function of the incoming state and the line bytes, so exact
   ;; byte identity is a sound convergence test. Capture builds the full
@@ -487,7 +494,7 @@
       (then (return (i32.const $mem.jsonStack))))
     (if (i32.eq (global.get $lvLang) (enum.get $Language.toml))
       (then (return (i32.const $mem.tomlStack))))
-    (i32.const $mem.tsxTemplateStack))
+    (i32.const $mem.jsTemplateStack))
 
   ;; blob bytes for the current stack prefix: json and toml publish their
   ;; depth through a global, the ecma machine derives it from tmplSp
@@ -556,12 +563,14 @@
     (i32.store offset=156 (local.get $dst) (global.get $sigFnAngle))
     (memory.copy (i32.add (local.get $dst) (i32.const 160))
       (i32.const $mem.streamDelimiter) (i32.const 32))
-    (local.set $p (i32.add (local.get $dst) (i32.const 192)))
+    (memory.copy (i32.add (local.get $dst) (i32.const 192))
+      (i32.const $mem.markdownFenceStack) (i32.const 96))
+    (local.set $p (i32.add (local.get $dst) (i32.const 288)))
     (memory.copy (local.get $p) (call $lvStackBase) (local.get $stackLen))
     (local.set $p (i32.add (local.get $p) (local.get $stackLen)))
-    (memory.copy (local.get $p) (i32.const $mem.tsxBracketStack) (local.get $brkLen))
+    (memory.copy (local.get $p) (i32.const $mem.jsBracketStack) (local.get $brkLen))
     (local.set $p (i32.add (local.get $p) (local.get $brkLen)))
-    (memory.copy (local.get $p) (i32.const $mem.tsxJsxStack) (local.get $jsxLen))
+    (memory.copy (local.get $p) (i32.const $mem.jsxStack) (local.get $jsxLen))
     (local.set $p (i32.add (local.get $p) (local.get $jsxLen)))
     (memory.copy (local.get $p)
       (i32.const $mem.streamState) (i32.const $mem.streamStateUsed))
@@ -641,12 +650,14 @@
     (global.set $liveStackBytes (local.get $stackLen))
     (memory.copy (i32.const $mem.streamDelimiter)
       (i32.add (local.get $src) (i32.const 160)) (i32.const 32))
-    (local.set $p (i32.add (local.get $src) (i32.const 192)))
+    (memory.copy (i32.const $mem.markdownFenceStack)
+      (i32.add (local.get $src) (i32.const 192)) (i32.const 96))
+    (local.set $p (i32.add (local.get $src) (i32.const 288)))
     (memory.copy (call $lvStackBase) (local.get $p) (local.get $stackLen))
     (local.set $p (i32.add (local.get $p) (local.get $stackLen)))
-    (memory.copy (i32.const $mem.tsxBracketStack) (local.get $p) (local.get $brkLen))
+    (memory.copy (i32.const $mem.jsBracketStack) (local.get $p) (local.get $brkLen))
     (local.set $p (i32.add (local.get $p) (local.get $brkLen)))
-    (memory.copy (i32.const $mem.tsxJsxStack) (local.get $p) (local.get $jsxLen))
+    (memory.copy (i32.const $mem.jsxStack) (local.get $p) (local.get $jsxLen))
     (local.set $p (i32.add (local.get $p) (local.get $jsxLen)))
     (memory.copy (i32.const $mem.streamState)
       (local.get $p) (i32.const $mem.streamStateUsed)))
@@ -849,8 +860,10 @@
     (local.set $blobBase (i32.and
       (i32.add (i32.add (local.get $recStart) (local.get $recLen)) (i32.const 7))
       (i32.const -8)))
+    ;; head, globals, delimiter, and fence registers (288) plus the three
+    ;; stack prefixes at their caps (1024 + 1024 + 4096), then the checkpoints
     (call $lvGrowTo (i32.add (local.get $blobBase)
-      (i32.const $mem.streamStateUsed+6400)))
+      (i32.const $mem.streamStateUsed+6528)))
     (local.set $blobLen (call $lvTrimBlob (local.get $blobBase)
       (call $lvCaptureBlob (local.get $blobBase))))
     (global.set $lvTransLo (local.get $recStart))

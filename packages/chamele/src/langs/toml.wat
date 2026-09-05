@@ -103,17 +103,7 @@
     (local.set $c (i32.load8_u (local.get $p)))
     (i32.or
       (i32.le_u (i32.sub (local.get $c) (i32.const 9)) (i32.const 1))
-      (i32.or
-        (i32.or
-          (i32.eq (local.get $c) (i32.const 13))
-          (i32.eq (local.get $c) (i32.const 32)))
-        (i32.or
-          (i32.eq (local.get $c) (i32.const "#"))
-          (i32.or
-            (i32.eq (local.get $c) (i32.const ","))
-            (i32.or
-              (i32.eq (local.get $c) (i32.const "]"))
-              (i32.eq (local.get $c) (i32.const "}"))))))))
+      (byteset.get "\0d\20#,]}" (local.get $c))))
 
   (func $tomlTwoDigits
     (param $p i32) (param $min i32) (param $max i32) (result i32)
@@ -233,21 +223,7 @@
         (if (i32.lt_u (i32.add (global.get $ptr) (i32.const 1)) (global.get $end))
           (then
             (local.set $c (i32.load8_u offset=1 (global.get $ptr)))
-            (if (i32.or
-                  (i32.or
-                    (i32.eq (local.get $c) (i32.const 34))
-                    (i32.eq (local.get $c) (i32.const 92)))
-                  (i32.or
-                    (i32.eq (local.get $c) (i32.const "b"))
-                    (i32.or
-                      (i32.eq (local.get $c) (i32.const "e"))
-                      (i32.or
-                        (i32.eq (local.get $c) (i32.const "f"))
-                        (i32.or
-                          (i32.eq (local.get $c) (i32.const "n"))
-                          (i32.or
-                            (i32.eq (local.get $c) (i32.const "r"))
-                            (i32.eq (local.get $c) (i32.const "t"))))))))
+            (if (byteset.get "\22\5cbefnrt" (local.get $c))
               (then
                 (local.set $e (i32.add (global.get $ptr) (i32.const 2)))
                 (local.set $escape (i32.const 1))))

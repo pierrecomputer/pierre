@@ -6,12 +6,18 @@ import { codeToTokens, init, StreamTokenizer } from '../lib/index';
 import { transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import {
+  assertLineFedParity,
   checkInvariants,
   colorOf,
+  distinctColor,
+  distinctTheme,
+  exactColor,
   loadLang,
   spansOf,
   type TestLang,
   themeColor,
+  tokenKinds,
+  wordColor,
 } from './util';
 
 let yaml: TestLang;
@@ -214,3 +220,146 @@ void t.test('yaml: a backslash is a plain scalar byte, not a bracket', () => {
   assert.ok(spans.some((s) => s.text.includes('[') && s.color === BRACKET));
   assert.ok(!spans.some((s) => s.text.includes('\\') && s.color === BRACKET));
 });
+
+/** Highlight under the distinct theme after checking the lexer invariants. */
+const distinctHl = (src: string) =>
+  checkInvariants(yaml.hl, src, { theme: distinctTheme });
+
+void t.test(
+  'yaml: document markers, key styles, nesting, and flow collections',
+  () => {
+    const html = distinctHl(
+      '---\nkey: value\n"quoted key": 1\n\'single\': 2\n? complex\n: 3\nnested:\n  a: 1\n  b:\n    - x\n    - y: 1\n      z: 2\nlist: [1, "a", \'b\', true, null, ~, 1.5, -2, 0x1F, 0o17, 1e3]\nmap: {a: 1, b: [2], c: {d: 3}}\n...'
+    );
+    for (const m of ['---', '...']) {
+      assert.equal(
+        exactColor(html, m),
+        distinctColor('punctuation.special'),
+        m
+      );
+    }
+    for (const key of [
+      'key',
+      "'single'",
+      'nested',
+      'a',
+      'b',
+      'y',
+      'z',
+      'list',
+      'map',
+      'c',
+      'd',
+    ]) {
+      assert.equal(wordColor(html, key), distinctColor('property'), key);
+    }
+    assert.equal(exactColor(html, '"quoted key"'), distinctColor('property'));
+    for (const s of ['value', 'complex', 'x', '"a"', "'b'"]) {
+      assert.equal(wordColor(html, s), distinctColor('string'), s);
+    }
+    for (const n of ['1', '2', '3', '1.5', '-2', '0x1F', '0o17', '1e3']) {
+      assert.equal(wordColor(html, n), distinctColor('number'), n);
+    }
+    assert.equal(exactColor(html, 'true'), distinctColor('boolean'));
+    for (const c of ['null', '~']) {
+      assert.equal(exactColor(html, c), distinctColor('constant.builtin'), c);
+    }
+    for (const b of ['[', '{']) {
+      assert.equal(wordColor(html, b), distinctColor('punctuation.bracket'), b);
+    }
+    assert.equal(wordColor(html, '-'), distinctColor('punctuation.delimiter'));
+    assert.equal(wordColor(html, '?'), distinctColor('punctuation.delimiter'));
+  }
+);
+
+void t.test(
+  'yaml: anchors, aliases, merge keys, tags, and block scalars',
+  () => {
+    const html = distinctHl(
+      'anchors: &a\n  x: 1\nref: *a\nmerge:\n  <<: *a\n  y: 2\ntags: !!str 123\ncustom: !mytag value\nliteral: |\n  line one\n  line two\nliteral_keep: |+\n  keep\n\nliteral_strip: |-\n  strip\nfolded: >\n  folded\n  text\nfolded_strip: >-\n  x\nindented: |2\n    two'
+    );
+    for (const tag of ['&a', '*a', '!!str', '!mytag']) {
+      assert.equal(wordColor(html, tag), distinctColor('type'), tag);
+    }
+    assert.equal(exactColor(html, '<<'), distinctColor('property'));
+    assert.equal(exactColor(html, '123'), distinctColor('number'));
+    assert.equal(exactColor(html, 'value'), distinctColor('string'));
+    // consecutive body lines merge into one span, so check them per line
+    const kinds = tokenKinds(
+      'yaml',
+      'literal: |\n  line one\n  line two\nliteral_keep: |+\n  keep\n\nliteral_strip: |-\n  strip\nfolded: >\n  folded\n  text\nindented: |2\n    two'
+    );
+    for (const body of [
+      'line one',
+      'line two',
+      'keep',
+      'strip',
+      'folded',
+      'text',
+      'two',
+    ]) {
+      assert.ok(
+        kinds.some(([text, kind]) => text === body && kind === 'string'),
+        body
+      );
+    }
+    for (const key of [
+      'literal',
+      'literal_keep',
+      'literal_strip',
+      'folded_strip',
+      'indented',
+    ]) {
+      assert.equal(exactColor(html, key), distinctColor('property'), key);
+    }
+  }
+);
+
+void t.test(
+  'yaml: scalar forms: quoted with escapes, booleans, nulls, urls, times, and colons',
+  () => {
+    const html = distinctHl(
+      'quoted: "a\\n\\"b\\" \\u00e9"\nsingle: \'it\'\'s\'\nempty:\nnull_val: null\ntrue_val: yes\nfalse_val: off\nnum_str: "123"\n"key: colon": v\nurl: http://x.com/a?b=1#c\ntime: 12:30\ncolon_in_value: a:b\ndash-key: -1'
+    );
+    assert.equal(exactColor(html, '"a'), distinctColor('string'));
+    assert.equal(colorOf(html, '\\n'), distinctColor('string.escape'));
+    assert.equal(exactColor(html, "'it''s'"), distinctColor('string'));
+    assert.equal(exactColor(html, 'null'), distinctColor('constant.builtin'));
+    for (const b of ['yes', 'off']) {
+      assert.equal(exactColor(html, b), distinctColor('boolean'), b);
+    }
+    assert.equal(exactColor(html, '"123"'), distinctColor('string'));
+    assert.equal(exactColor(html, '"key: colon"'), distinctColor('property'));
+    for (const s of ['http://x.com/a?b=1#c', '12:30', 'a:b']) {
+      assert.equal(exactColor(html, s), distinctColor('string'), s);
+    }
+    assert.equal(exactColor(html, '-1'), distinctColor('number'));
+    for (const key of ['empty', 'dash-key', 'colon_in_value']) {
+      assert.equal(exactColor(html, key), distinctColor('property'), key);
+    }
+  }
+);
+
+void t.test('yaml: comment forms', () => {
+  assert.deepEqual(
+    tokenKinds('yaml', '# comment\nkey2: value # trailing\n#not-comment: x'),
+    [
+      ['# comment', 'comment'],
+      ['key2', 'property'],
+      [':', 'punctuation.delimiter'],
+      ['value', 'string'],
+      ['# trailing', 'comment'],
+      ['#not-comment: x', 'comment'],
+    ]
+  );
+});
+
+void t.test(
+  'yaml: block scalars and flow collections spanning lines stream line-fed',
+  () => {
+    assertLineFedParity(
+      'yaml',
+      'a: |\n  x\n  y\nb: >-\n  z\nc: [\n  1,\n  2\n]\nd: "multi\n  line"\n'
+    );
+  }
+);

@@ -11,7 +11,7 @@
   ;; operators spelled `-eq`, `-and`, `-match`, and so on, looked up after
   ;; a `-`; any other `-Name` is a parameter. Groups 7-9 are looked up
   ;; after a `$`.
-  (keyword-table $powershellWords $mem.powershellWords $mem.powershellWords+1280 32 256
+  (keyword-table $powershellWords $mem.powershellWords $mem.powershellWords+1280
     (group ;; 1: control
       "if" "else" "elseif" "switch" "for" "foreach" "while" "do" "until"
       "break" "continue" "return" "exit" "throw" "try" "catch" "finally"
@@ -180,17 +180,7 @@
     (local.get $status))
 
   (func $psIsOp (param $c i32) (result i32)
-    (i32.or
-      (i32.or
-        (i32.or (i32.eq (local.get $c) (i32.const "+")) (i32.eq (local.get $c) (i32.const "-")))
-        (i32.or (i32.eq (local.get $c) (i32.const "*")) (i32.eq (local.get $c) (i32.const "/"))))
-      (i32.or
-        (i32.or
-          (i32.or (i32.eq (local.get $c) (i32.const "%")) (i32.eq (local.get $c) (i32.const "=")))
-          (i32.or (i32.eq (local.get $c) (i32.const "!")) (i32.eq (local.get $c) (i32.const "<"))))
-        (i32.or
-          (i32.or (i32.eq (local.get $c) (i32.const ">")) (i32.eq (local.get $c) (i32.const "&")))
-          (i32.or (i32.eq (local.get $c) (i32.const "|")) (i32.eq (local.get $c) (i32.const "?")))))))
+    (byteset.get "!%&*+-/<=>?|" (local.get $c)))
 
   ;; $strKind is the open string body - see $psStringBody - with $seg the
   ;; start of its bytes not yet emitted; $interp counts parens inside a
@@ -475,11 +465,7 @@
             (local.set $cmdPos (i32.const 0))
             (br $next)))
 
-        (if (i32.or
-              (i32.or (i32.eq (local.get $c) (i32.const "(")) (i32.eq (local.get $c) (i32.const ")")))
-              (i32.or
-                (i32.or (i32.eq (local.get $c) (i32.const "[")) (i32.eq (local.get $c) (i32.const "]")))
-                (i32.or (i32.eq (local.get $c) (i32.const "{")) (i32.eq (local.get $c) (i32.const "}")))))
+        (if (byteset.get "()[]{}" (local.get $c))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (if (local.get $interp)

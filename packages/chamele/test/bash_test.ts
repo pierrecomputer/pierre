@@ -2,11 +2,16 @@ import assert from 'node:assert';
 import t from 'node:test';
 
 import {
+  assertLineFedParity,
   checkInvariants,
   colorOf,
+  distinctColor,
+  distinctTheme,
+  exactColor,
   loadLang,
   type TestLang,
   themeColor,
+  tokenKinds,
 } from './util';
 
 let bash: TestLang;
@@ -130,3 +135,251 @@ void t.test('bash: deterministic fuzz preserves lexer invariants', () => {
     checkInvariants(bash.hl, src);
   }
 });
+
+/** Highlight under the distinct theme after checking the lexer invariants. */
+const hl = (src: string) =>
+  checkInvariants(bash.hl, src, { theme: distinctTheme });
+
+void t.test('bash: quoting rules token by token', () => {
+  assert.deepEqual(
+    tokenKinds(
+      'bash',
+      "echo 'no $esc \\n' \"yes $var ${v} $(c) \\\" \\$ \\n\" $'ansi\\t' x"
+    ),
+    [
+      ['echo', 'function'],
+      ["'no $esc \\n' \"yes", 'string'],
+      ['$var', 'variable'],
+      ['${', 'punctuation.special'],
+      ['v', 'variable'],
+      ['}', 'punctuation.special'],
+      ['$(', 'punctuation.special'],
+      ['c', 'string.special'],
+      [')', 'punctuation.special'],
+      ['\\"', 'string.escape'],
+      ['\\$', 'string.escape'],
+      ['\\n', 'string.escape'],
+      ['" $\'ansi', 'string'],
+      ['\\t', 'string.escape'],
+      ["'", 'string'],
+      ['x', 'variable'],
+    ]
+  );
+});
+
+void t.test('bash: every here-document and here-string form', () => {
+  const src =
+    'cat <<EOF\n$expanded\nEOF\ncat <<-EOF\n\tx\n\tEOF\ncat <<\'EOF\'\n$literal\nEOF\ncat <<"EOF"\n$q\nEOF\ncat <<EOF | grep x\ny\nEOF\ncat <<< "here $string"\necho ok';
+  assert.deepEqual(tokenKinds('bash', src), [
+    ['cat', 'function'],
+    ['<<', 'operator'],
+    ['EOF', 'string'],
+    ['$expanded', 'string'],
+    ['EOF', 'string'],
+    ['cat', 'function'],
+    ['<<-', 'operator'],
+    ['EOF', 'string'],
+    ['x', 'string'],
+    ['EOF', 'string'],
+    ['cat', 'function'],
+    ['<<', 'operator'],
+    ["'EOF'", 'string'],
+    ['$literal', 'string'],
+    ['EOF', 'string'],
+    ['cat', 'function'],
+    ['<<', 'operator'],
+    ['"EOF"', 'string'],
+    ['$q', 'string'],
+    ['EOF', 'string'],
+    ['cat', 'function'],
+    ['<<', 'operator'],
+    ['EOF', 'string'],
+    ['|', 'operator'],
+    ['grep', 'function'],
+    ['x', 'variable'],
+    ['y', 'string'],
+    ['EOF', 'string'],
+    ['cat', 'function'],
+    ['<<<', 'operator'],
+    ['"here', 'string'],
+    ['$string', 'variable'],
+    ['"', 'string'],
+    ['echo', 'function'],
+    ['ok', 'variable'],
+  ]);
+  assertLineFedParity('bash', src + '\n');
+});
+
+void t.test('bash: tests, arithmetic, and parameter expansions', () => {
+  const html = hl('x=$((1 + 2)); [[ $a == b && -f "$f" ]]; [ "$a" -eq 1 ]');
+  for (const bracket of ['[[', ']]', '[', ']']) {
+    assert.equal(
+      exactColor(html, bracket),
+      distinctColor('punctuation.bracket'),
+      bracket
+    );
+  }
+  assert.equal(exactColor(html, '=='), distinctColor('operator'));
+  assert.equal(exactColor(html, '&&'), distinctColor('operator'));
+  assert.equal(exactColor(html, '$(('), distinctColor('punctuation.special'));
+  assert.equal(exactColor(html, '$a'), distinctColor('variable'));
+  assert.equal(exactColor(html, '$f'), distinctColor('variable'));
+  const kinds = tokenKinds(
+    'bash',
+    'echo ${arr[@]} ${#arr} ${x//a/b} ${x:-d} ${x^^} ${!ref} $# $? $$ $! $0 $1 $@ $*'
+  );
+  for (const body of ['arr[@]', '#arr', 'x//a/b', 'x:-d', 'x^^', '!ref']) {
+    assert.ok(
+      kinds.some(([text, kind]) => text === body && kind === 'variable'),
+      body
+    );
+  }
+  assert.deepEqual(kinds.at(-1), ['$# $? $$ $! $0 $1 $@ $*', 'variable']);
+});
+
+void t.test('bash: function definitions in all three forms', () => {
+  assert.deepEqual(
+    tokenKinds('bash', 'f() { :; }\nfunction g { :; }\nfunction h() { :; }'),
+    [
+      ['f', 'function.definition'],
+      ['() {', 'punctuation.bracket'],
+      [':', null],
+      [';', 'operator'],
+      ['}', 'punctuation.bracket'],
+      ['function', 'keyword.declaration'],
+      ['g', 'function.definition'],
+      ['{', 'punctuation.bracket'],
+      [':', null],
+      [';', 'operator'],
+      ['}', 'punctuation.bracket'],
+      ['function', 'keyword.declaration'],
+      ['h', 'function.definition'],
+      ['() {', 'punctuation.bracket'],
+      [':', null],
+      [';', 'operator'],
+      ['}', 'punctuation.bracket'],
+    ]
+  );
+});
+
+void t.test(
+  'bash: control words, declarations, and the commands after them',
+  () => {
+    const html = hl(
+      'if true; then :; elif false; then :; else :; fi; for x in a b; do :; break; done; while :; do :; continue; done; until :; do :; done; case $x in a) ;; esac; select y in a; do :; done; time ls; coproc x\nexport A=1\nlocal b=2\ndeclare c\nreadonly d'
+    );
+    for (const word of [
+      'if',
+      'then',
+      'elif',
+      'else',
+      'fi',
+      'for',
+      'in',
+      'do',
+      'break',
+      'done',
+      'while',
+      'continue',
+      'until',
+      'case',
+      'esac',
+      'select',
+    ]) {
+      assert.equal(
+        exactColor(html, word),
+        distinctColor('keyword.control'),
+        word
+      );
+    }
+    for (const word of ['export', 'local', 'declare', 'readonly']) {
+      assert.equal(
+        exactColor(html, word),
+        distinctColor('keyword.declaration'),
+        word
+      );
+    }
+    for (const word of ['time', 'coproc']) {
+      assert.equal(exactColor(html, word), distinctColor('keyword'), word);
+    }
+    for (const command of ['true', 'false']) {
+      assert.equal(
+        exactColor(html, command),
+        distinctColor('function'),
+        command
+      );
+    }
+  }
+);
+
+void t.test('bash: pipes, lists, redirections, and descriptors', () => {
+  assert.deepEqual(
+    tokenKinds(
+      'bash',
+      'ls | grep x || echo n && echo y; ls > out 2>&1 >> app < input; sleep 1 &'
+    ),
+    [
+      ['ls', 'function'],
+      ['|', 'operator'],
+      ['grep', 'function'],
+      ['x', 'variable'],
+      ['||', 'operator'],
+      ['echo', 'function'],
+      ['n', 'variable'],
+      ['&&', 'operator'],
+      ['echo', 'function'],
+      ['y', 'variable'],
+      [';', 'operator'],
+      ['ls', 'function'],
+      ['>', 'operator'],
+      ['out', 'variable'],
+      ['2', 'number'],
+      ['>&', 'operator'],
+      ['1', 'number'],
+      ['>>', 'operator'],
+      ['app', 'variable'],
+      ['<', 'operator'],
+      ['input', 'variable'],
+      [';', 'operator'],
+      ['sleep', 'function'],
+      ['1', 'number'],
+      ['&', 'operator'],
+    ]
+  );
+});
+
+void t.test('bash: assignments and numeric literals', () => {
+  assert.deepEqual(
+    tokenKinds('bash', 'export FOO=1 BAR="$FOO"\nn=42\nm=0x1F\nf=1.5'),
+    [
+      ['export', 'keyword.declaration'],
+      ['FOO', 'variable'],
+      ['=', 'operator'],
+      ['1', 'number'],
+      ['BAR', 'variable'],
+      ['=', 'operator'],
+      ['"', 'string'],
+      ['$FOO', 'variable'],
+      ['"', 'string'],
+      ['n', 'variable'],
+      ['=', 'operator'],
+      ['42', 'number'],
+      ['m', 'variable'],
+      ['=', 'operator'],
+      ['0x1F', 'number'],
+      ['f', 'variable'],
+      ['=', 'operator'],
+      ['1.5', 'number'],
+    ]
+  );
+});
+
+void t.test(
+  'bash: case arms, subshells, groups, and multi-line strings stream line-fed',
+  () => {
+    assertLineFedParity(
+      'bash',
+      'case "$x" in\n  -h|--help) usage ;;\n  *.txt) echo t ;;\n  *) ;;\nesac\n(cd /tmp && ls)\n{ echo a; echo b; } > f\nx="multi\nline $y"\ny=$(cat <<EOF\nbody\nEOF\n)\n'
+    );
+  }
+);

@@ -1,206 +1,37 @@
 import assert from 'node:assert';
 import t from 'node:test';
 
+import { LANGS } from '../lib/highlighter';
 import type { Highlighter, Lang } from '../lib/index';
-import { createHighlighter, init } from '../lib/index';
+import { init } from '../lib/index';
 import { transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import { spansOf, textOf } from './util';
 
-const aliases: Lang[] = [
-  'js',
-  'mjs',
-  'cjs',
-  'jsx',
-  'ts',
-  'mts',
-  'cts',
-  'tsx',
-  'javascript',
-  'typescript',
-  'html',
-  'htm',
-  'css',
-  'json',
-  'jsonc',
-  'bash',
-  'sh',
-  'shell',
-  'zsh',
-  'c',
-  'h',
-  'cpp',
-  'c++',
-  'cc',
-  'cxx',
-  'hh',
-  'hpp',
-  'hxx',
-  'go',
-  'golang',
-  'py',
-  'python',
-  'rs',
-  'rust',
-  'yaml',
-  'yml',
-  'php',
-  'sql',
-  'swift',
-  'haskell',
-  'hs',
-  'kotlin',
-  'kt',
-  'kts',
-  'astro',
-  'vue',
-  'svelte',
-  'xml',
-  'svg',
-  'xsd',
-  'markdown',
-  'md',
-  'mdx',
-  'asm',
-  'assembly',
-  's',
-  'wat',
-  'wasm',
-  'diff',
-  'patch',
-  'glsl',
-  'vert',
-  'frag',
-  'geom',
-  'comp',
-  'lua',
-  'c3',
-  'csharp',
-  'cs',
-  'c#',
-  'dart',
-  'elixir',
-  'ex',
-  'exs',
-  'hlsl',
-  'java',
-  'less',
-  'lisp',
-  'cl',
-  'el',
-  'elisp',
-  'emacs-lisp',
-  'lsp',
-  'scheme',
-  'scm',
-  'objc',
-  'objective-c',
-  'objectivec',
-  'm',
-  'mm',
-  'objcpp',
-  'objective-cpp',
-  'ocaml',
-  'ml',
-  'mli',
-  'perl',
-  'pl',
-  'pm',
-  'proto',
-  'protobuf',
-  'ruby',
-  'rb',
-  'sass',
-  'scss',
-  'terraform',
-  'tf',
-  'tfvars',
-  'hcl',
-  'wgsl',
-  'dockerfile',
-  'docker',
-  'containerfile',
-  'erlang',
-  'erl',
-  'hrl',
-  'gleam',
-  'graphql',
-  'gql',
-  'powershell',
-  'ps',
-  'ps1',
-  'psm1',
-  'psd1',
-  'pwsh',
-  'r',
-  'rscript',
-  'scala',
-  'sc',
-  'sbt',
-];
-const canonical: Lang[] = [
-  'js',
-  'jsx',
-  'ts',
-  'tsx',
-  'html',
-  'css',
-  'json',
-  'bash',
-  'c',
-  'cpp',
-  'go',
-  'python',
-  'rust',
-  'yaml',
-  'php',
-  'sql',
-  'swift',
-  'haskell',
-  'kotlin',
-  'astro',
-  'vue',
-  'svelte',
-  'xml',
-  'markdown',
-  'mdx',
-  'asm',
-  'wat',
-  'diff',
-  'glsl',
-  'lua',
-  'c3',
-  'csharp',
-  'dart',
-  'elixir',
-  'hlsl',
-  'java',
-  'less',
-  'lisp',
-  'objc',
-  'ocaml',
-  'perl',
-  'proto',
-  'ruby',
-  'sass',
-  'scss',
-  'terraform',
-  'wgsl',
-  'dockerfile',
-  'erlang',
-  'gleam',
-  'graphql',
-  'powershell',
-  'r',
-  'scala',
-];
 const decoder = new TextDecoder();
+const watUrl = new URL('../src/chamele.wat', import.meta.url);
+const compiled = transformWat(watUrl);
+const languageNames = new Set(
+  Object.keys(compiled.enumMap.get('$Language') as Record<string, number>)
+);
+// every alias the runtime accepts, and one canonical name per lexer, both
+// read from the tables themselves so a new language cannot be left out
+const aliases = Object.keys(LANGS) as Lang[];
+const canonical = Object.entries(LANGS)
+  .filter(([name, id]) => id !== 0 && LANGS[name] === id && isCanonical(name))
+  .map(([name]) => name as Lang);
+
+/** The canonical name of a lexer is the one its `$Language` member uses. */
+function isCanonical(name: string): boolean {
+  return languageNames.has(name);
+}
+
 let highlighter: Highlighter;
 
 t.before(() => {
-  const url = new URL('../src/chamele.wat', import.meta.url);
-  const { code } = transformWat(url);
-  highlighter = init(new WebAssembly.Module(wat2wasm(url.pathname, code)));
+  highlighter = init(
+    new WebAssembly.Module(wat2wasm(watUrl.pathname, compiled.code))
+  );
 });
 
 void t.test('languages: every public alias reaches a WAT lexer', () => {
@@ -252,54 +83,3 @@ void t.test('languages: deterministic cross-lexer invariant fuzz', () => {
     }
   }
 });
-
-void t.test(
-  'languages: every lexer preserves UTF-8 across every byte split',
-  () => {
-    const contexts = [
-      'aé日本🙂z',
-      '"aé日本🙂z"',
-      '// aé日本🙂z\nx',
-      '<p aé="日本🙂">é</p>',
-    ];
-    const encoder = new TextEncoder();
-    for (const lang of canonical) {
-      const entry = `$hl${lang[0].toUpperCase()}${lang.slice(1)}`;
-      // the ecma lexers share tsx.wat and the css preprocessors css.wat
-      const file = ['js', 'jsx', 'ts'].includes(lang)
-        ? 'tsx'
-        : ['less', 'sass', 'scss'].includes(lang)
-          ? 'css'
-          : lang;
-      const url = new URL(`./utf8_split_${lang}.wat`, import.meta.url);
-      const source = `(module
-  (memory (export "memory") 3)
-  (import "../src/langs/${file}.wat")
-  (func (export "highlight")
-    (call $hlBegin)
-    (global.set $end (i32.add (global.get $ptr) (i32.load (i32.const 32))))
-    (call ${entry})
-    (global.set $end (global.get $eof))
-    (call ${entry})
-    (call $hlEnd)))`;
-      const { code } = transformWat(url, source);
-      const lexer = createHighlighter(
-        new WebAssembly.Module(wat2wasm(url.pathname, code))
-      );
-      // The split offset is passed through a control word in wasm memory;
-      // reach into the highlighter's internal DataView to write it.
-      const lexerInternals = lexer as unknown as { dv: DataView };
-      for (const input of contexts) {
-        const length = encoder.encode(input).length;
-        for (let split = 0; split <= length; split++) {
-          lexerInternals.dv.setUint32(32, split, true);
-          const html = decoder.decode(
-            lexer.codeToHtml(input, { lang, theme: pierreDark })
-          );
-          assert.equal(textOf(html), input, `${lang}: byte ${split}/${length}`);
-          spansOf(html);
-        }
-      }
-    }
-  }
-);

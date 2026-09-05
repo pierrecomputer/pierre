@@ -21,6 +21,7 @@ import {
   type TestLang,
   textOf,
   themeColor,
+  tokenKinds,
 } from './util';
 
 let tsx: TestLang;
@@ -946,4 +947,94 @@ void t.test('tsx: non-object themes throw a clean TypeError', () => {
       TypeError
     );
   }
+});
+
+void t.test('tsx: module import and export forms', () => {
+  assert.deepEqual(
+    tokenKinds(
+      'ts',
+      "import { b, type C } from 'y';\nimport * as ns from 'z';\nimport def, { named } from 'w';\nexport * from 'v';\nexport default class {}\nimport fs = require('fs');"
+    ),
+    [
+      ['import', 'keyword.import'],
+      ['{', 'punctuation.bracket'],
+      ['b', 'variable'],
+      [',', 'punctuation.delimiter'],
+      ['type', 'keyword.declaration'],
+      ['C', 'type'],
+      ['}', 'punctuation.bracket'],
+      ['from', 'keyword.import'],
+      ["'y'", 'string'],
+      [';', 'punctuation.delimiter'],
+      ['import', 'keyword.import'],
+      ['*', 'operator'],
+      ['as', 'keyword'],
+      ['ns', 'variable'],
+      ['from', 'keyword.import'],
+      ["'z'", 'string'],
+      [';', 'punctuation.delimiter'],
+      ['import', 'keyword.import'],
+      ['def', 'variable'],
+      [',', 'punctuation.delimiter'],
+      ['{', 'punctuation.bracket'],
+      ['named', 'variable'],
+      ['}', 'punctuation.bracket'],
+      ['from', 'keyword.import'],
+      ["'w'", 'string'],
+      [';', 'punctuation.delimiter'],
+      ['export', 'keyword.import'],
+      ['*', 'operator'],
+      ['from', 'keyword.import'],
+      ["'v'", 'string'],
+      [';', 'punctuation.delimiter'],
+      ['export', 'keyword.import'],
+      ['default', 'keyword.control'],
+      ['class', 'keyword.declaration'],
+      ['{}', 'punctuation.bracket'],
+      ['import', 'keyword.import'],
+      ['fs', 'variable'],
+      ['=', 'operator'],
+      ['require', 'function'],
+      ['(', 'punctuation.bracket'],
+      ["'fs'", 'string'],
+      [')', 'punctuation.bracket'],
+      [';', 'punctuation.delimiter'],
+    ]
+  );
+  assertLineFedParity(
+    'tsx',
+    "import {\n  a,\n  type B,\n} from 'm';\nexport {\n  a as default,\n};\n"
+  );
+});
+
+void t.test('tsx: JSDoc tag families as an exact token sequence', () => {
+  assert.deepEqual(
+    tokenKinds(
+      'ts',
+      '/**\n * @param {string} key - the key\n * @returns {Promise<boolean>} done\n * @template T\n * @deprecated use other\n */'
+    ),
+    [
+      ['/**', 'comment.doc'],
+      ['*', 'comment.doc'],
+      ['@param', 'keyword.jsdoc'],
+      ['{', 'punctuation.bracket'],
+      ['string', 'type.jsdoc'],
+      ['}', 'punctuation.bracket'],
+      ['key', 'variable.jsdoc'],
+      ['- the key', 'comment.doc'],
+      ['*', 'comment.doc'],
+      ['@returns', 'keyword.jsdoc'],
+      ['{', 'punctuation.bracket'],
+      ['Promise<boolean>', 'type.jsdoc'],
+      ['}', 'punctuation.bracket'],
+      ['done', 'comment.doc'],
+      ['*', 'comment.doc'],
+      ['@template', 'keyword.jsdoc'],
+      ['T', 'variable.jsdoc'],
+      ['*', 'comment.doc'],
+      ['@deprecated', 'keyword.jsdoc'],
+      ['use other', 'comment.doc'],
+      ['*/', 'comment.doc'],
+    ]
+  );
 });

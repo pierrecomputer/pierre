@@ -7,11 +7,15 @@ import tokenTypes from '../lib/token-types';
 import { transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import {
+  assertLineFedParity,
   checkInvariants,
+  exactColor,
   loadLang,
   spansOf,
   type TestLang,
   textOf,
+  tokenKinds,
+  wordColor,
 } from './util';
 
 // one unique color per token type so equal styles cannot merge neighboring
@@ -200,4 +204,178 @@ void t.test('dockerfile: multi-line constructs resume line-fed', () => {
     const [whole, streamed] = wholeAndLineFed('dockerfile', code);
     assert.deepEqual(streamed, whole, JSON.stringify(code));
   }
+});
+
+/** Highlight under the distinct theme after checking the lexer invariants. */
+const distinctHl = (src: string) =>
+  checkInvariants(lexer.hl, src, { theme: distinct });
+
+void t.test(
+  'dockerfile: every instruction, stage names, flags, exec forms, and variables',
+  () => {
+    const html = distinctHl(
+      'ARG NODE_VERSION=20\nARG BASE="node"\nFROM --platform=$BUILDPLATFORM node:${NODE_VERSION}-alpine AS build\nFROM ${BASE}:latest as final\nWORKDIR /app\nCOPY --from=build --chown=node:node package*.json ./\nCOPY ["a.txt", "b.txt", "/dest/"]\nADD --checksum=sha256:abc https://x.com/a.tar.gz /tmp/\nRUN npm ci --omit=dev \\\n    && npm cache clean --force\nRUN ["/bin/bash", "-c", "echo hi"]\nENV PORT=8080 NODE_ENV=production\nEXPOSE 8080/tcp 9090\nLABEL org.opencontainers.image.source="https://x" version=1.0\nUSER node:node\nVOLUME ["/data"]\nSTOPSIGNAL SIGTERM\nSHELL ["powershell", "-command"]\nHEALTHCHECK --interval=30s --timeout=3s CMD curl -f http://localhost:$PORT/ || exit 1\nONBUILD RUN echo x\nMAINTAINER x <x@y.z>\nENTRYPOINT ["node", "server.js"]\nCMD ["--port", "8080"]\nCMD node server.js'
+    );
+    for (const word of [
+      'ARG',
+      'FROM',
+      'AS',
+      'as',
+      'WORKDIR',
+      'COPY',
+      'ADD',
+      'RUN',
+      'ENV',
+      'EXPOSE',
+      'LABEL',
+      'USER',
+      'VOLUME',
+      'STOPSIGNAL',
+      'SHELL',
+      'HEALTHCHECK',
+      'ONBUILD',
+      'MAINTAINER',
+      'ENTRYPOINT',
+      'CMD',
+    ]) {
+      assert.equal(wordColor(html, word), distinctColor('keyword'), word);
+    }
+    for (const flag of [
+      '--platform',
+      '--from',
+      '--chown',
+      '--checksum',
+      '--omit',
+      '--force',
+      '--interval',
+      '--timeout',
+    ]) {
+      assert.equal(
+        wordColor(html, flag),
+        distinctColor('variable.parameter'),
+        flag
+      );
+    }
+    for (const v of ['$BUILDPLATFORM', '${NODE_VERSION}', '${BASE}', '$PORT']) {
+      assert.equal(wordColor(html, v), distinctColor('variable'), v);
+    }
+    for (const s of [
+      '"node"',
+      '"a.txt"',
+      '"b.txt"',
+      '"/dest/"',
+      '"/bin/bash"',
+      '"-c"',
+      '"https://x"',
+      '"/data"',
+      '"powershell"',
+      '"-command"',
+      '"server.js"',
+      '"--port"',
+      '"8080"',
+    ]) {
+      assert.equal(wordColor(html, s), distinctColor('string'), s);
+    }
+    assert.equal(exactColor(html, '"echo hi"'), distinctColor('string'));
+    for (const fn of ['npm', 'node']) {
+      assert.equal(wordColor(html, fn), distinctColor('function'), fn);
+    }
+    for (const op of ['=', '&&', '||', '<', '>']) {
+      assert.equal(wordColor(html, op), distinctColor('operator'), op);
+    }
+    assert.equal(exactColor(html, '\\'), distinctColor('punctuation.special'));
+    for (const n of ['8080', '9090', '1']) {
+      assert.equal(wordColor(html, n), distinctColor('number'), n);
+    }
+    assert.equal(wordColor(html, ','), distinctColor('punctuation.delimiter'));
+    assert.equal(wordColor(html, '['), distinctColor('punctuation.bracket'));
+  }
+);
+
+void t.test(
+  'dockerfile: heredoc markers with dashes and quotes, shell prefixes, and mixed-case instructions',
+  () => {
+    assert.deepEqual(
+      tokenKinds(
+        'dockerfile',
+        'RUN <<EOF\necho "multi line"\napk add --no-cache curl\nEOF\nRUN <<-EOT\n\tindented\n\tEOT\nCOPY <<\'EOF\' /app/file.txt\nliteral $var\nEOF\nRUN python3 <<EOF\nprint("py")\nEOF\nrun lowercase instruction\nFrom mixed Case'
+      ),
+      [
+        ['RUN', 'keyword'],
+        ['<<', 'operator'],
+        ['EOF', 'string.special'],
+        ['echo "multi line"', 'string'],
+        ['apk add --no-cache curl', 'string'],
+        ['EOF', 'string'],
+        ['RUN', 'keyword'],
+        ['<<-', 'operator'],
+        ['EOT', 'string.special'],
+        ['indented', 'string'],
+        ['EOT', 'string'],
+        ['COPY', 'keyword'],
+        ['<<', 'operator'],
+        ["'EOF'", 'string.special'],
+        ['/app/file.txt', null],
+        ['literal $var', 'string'],
+        ['EOF', 'string'],
+        ['RUN', 'keyword'],
+        ['python3', 'function'],
+        ['<<', 'operator'],
+        ['EOF', 'string.special'],
+        ['print("py")', 'string'],
+        ['EOF', 'string'],
+        ['run', 'keyword'],
+        ['lowercase', 'function'],
+        ['instruction', null],
+        ['From', 'keyword'],
+        ['mixed Case', null],
+      ]
+    );
+  }
+);
+
+void t.test(
+  'dockerfile: shell words: quotes, escapes, expansions, numbers, and flags',
+  () => {
+    assert.deepEqual(
+      tokenKinds(
+        'dockerfile',
+        'RUN echo \'single $x\' "double $y" plain\\ escaped ${brace:-def} $HOME 0x1F 42 1.5 --flag'
+      ),
+      [
+        ['RUN', 'keyword'],
+        ['echo', 'function'],
+        ['\'single $x\' "double $y"', 'string'],
+        ['plain', null],
+        ['\\', 'string.escape'],
+        ['escaped', null],
+        ['${brace:-def} $HOME', 'variable'],
+        ['0x1F 42 1.5', 'number'],
+        ['--flag', 'variable.parameter'],
+      ]
+    );
+  }
+);
+
+void t.test('dockerfile: comments only at line starts', () => {
+  assert.deepEqual(
+    tokenKinds(
+      'dockerfile',
+      '# comment\n  # indented comment\nRUN echo x # not a comment'
+    ),
+    [
+      ['# comment', 'comment'],
+      ['# indented comment', 'comment'],
+      ['RUN', 'keyword'],
+      ['echo', 'function'],
+      ['x # not a comment', null],
+    ]
+  );
+});
+
+void t.test('dockerfile: continuations and heredocs stream line-fed', () => {
+  assertLineFedParity(
+    'dockerfile',
+    '# syntax=docker/dockerfile:1\nFROM node:20 AS build\nRUN npm ci --omit=dev \\\n    && npm cache clean --force \\\n    && echo done\nRUN <<EOF\necho "multi line"\napk add curl\nEOF\nCOPY <<-\'EOT\' /app/x\n\tliteral $var\n\tEOT\nCMD ["node", "server.js"]\n'
+  );
 });

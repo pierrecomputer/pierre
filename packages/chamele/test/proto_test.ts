@@ -7,11 +7,15 @@ import tokenTypes from '../lib/token-types';
 import { transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import {
+  assertLineFedParity,
   checkInvariants,
+  exactColor,
   loadLang,
   spansOf,
   type TestLang,
   textOf,
+  tokenKinds,
+  wordColor,
 } from './util';
 
 // one unique color per token type so equal styles cannot merge neighboring
@@ -177,3 +181,201 @@ void t.test('proto: multi-line constructs resume line-fed', () => {
     assert.deepEqual(streamed, whole, JSON.stringify(code));
   }
 });
+
+/** Highlight under the distinct theme after checking the lexer invariants. */
+const distinctHl = (src: string) =>
+  checkInvariants(lexer.hl, src, { theme: distinct });
+
+void t.test(
+  'proto: syntax, edition, package, import modifiers, and file options',
+  () => {
+    const html = distinctHl(
+      'syntax = "proto3";\nedition = "2023";\npackage shop.v1;\nimport "google/protobuf/timestamp.proto";\nimport public "x.proto";\nimport weak "y.proto";\noption java_package = "com.example.shop";\noption (custom.opt) = true;\noption optimize_for = SPEED;'
+    );
+    for (const word of ['syntax', 'edition', 'option', 'public', 'weak']) {
+      assert.equal(wordColor(html, word), distinctColor('keyword'), word);
+    }
+    assert.equal(
+      wordColor(html, 'package'),
+      distinctColor('keyword.declaration')
+    );
+    assert.equal(wordColor(html, 'import'), distinctColor('keyword.import'));
+    for (const ns of ['shop', 'v1', 'custom', 'opt']) {
+      assert.equal(exactColor(html, ns), distinctColor('namespace'), ns);
+    }
+    for (const s of [
+      '"proto3"',
+      '"2023"',
+      '"google/protobuf/timestamp.proto"',
+      '"x.proto"',
+      '"y.proto"',
+      '"com.example.shop"',
+    ]) {
+      assert.equal(exactColor(html, s), distinctColor('string'), s);
+    }
+    for (const prop of ['java_package', 'optimize_for']) {
+      assert.equal(exactColor(html, prop), distinctColor('property'), prop);
+    }
+    assert.equal(exactColor(html, 'SPEED'), distinctColor('constant'));
+    assert.equal(exactColor(html, 'true'), distinctColor('boolean'));
+    assert.equal(wordColor(html, '='), distinctColor('operator'));
+  }
+);
+
+void t.test(
+  'proto: messages, field labels, options, maps, oneofs, enums, nesting, groups, and services',
+  () => {
+    const html = distinctHl(
+      'message Item {\n  option deprecated = true;\n  reserved 7, 8 to 10, 15 to max;\n  reserved "foo", "bar";\n  optional string name = 1 [json_name = "n", (custom) = 1];\n  required int32 id = 2;\n  repeated string tags = 3 [packed = true];\n  map<string, int32> counts = 4;\n  oneof kind { Physical physical = 5; Digital digital = 6; }\n  enum Status { option allow_alias = true; STATUS_UNSPECIFIED = 0; ACTIVE = 1; ALIVE = 1; }\n  message Nested { bool ok = 1; bytes raw = 2; double d = 3; float f = 4; int64 i64 = 5; uint32 u = 6; uint64 u64 = 7; sint32 s = 8; sint64 s64 = 9; fixed32 f32 = 10; fixed64 f64 = 11; sfixed32 sf = 12; sfixed64 sf64 = 13; }\n  google.protobuf.Timestamp created = 9;\n  .shop.v1.Other other = 10;\n  extensions 100 to 199;\n  group Result = 11 { optional string url = 12; }\n  Nested nested = 14;\n}\nextend Item { optional int32 extra = 100; }\nservice Shop {\n  rpc GetItem(GetItemRequest) returns (Item);\n  rpc Watch(stream Item) returns (stream Item);\n}'
+    );
+    for (const word of ['message', 'enum', 'extend', 'service', 'rpc']) {
+      assert.equal(
+        wordColor(html, word),
+        distinctColor('keyword.declaration'),
+        word
+      );
+    }
+    for (const word of [
+      'option',
+      'reserved',
+      'to',
+      'max',
+      'optional',
+      'required',
+      'repeated',
+      'map',
+      'oneof',
+      'extensions',
+      'group',
+      'returns',
+      'stream',
+    ]) {
+      assert.equal(wordColor(html, word), distinctColor('keyword'), word);
+    }
+    for (const type of [
+      'Item',
+      'Physical',
+      'Digital',
+      'Status',
+      'Nested',
+      'Timestamp',
+      'Other',
+      'GetItemRequest',
+      'Shop',
+    ]) {
+      assert.equal(wordColor(html, type), distinctColor('type'), type);
+    }
+    for (const type of [
+      'string',
+      'int32',
+      'bool',
+      'bytes',
+      'double',
+      'float',
+      'int64',
+      'uint32',
+      'uint64',
+      'sint32',
+      'sint64',
+      'fixed32',
+      'fixed64',
+      'sfixed32',
+      'sfixed64',
+    ]) {
+      assert.equal(wordColor(html, type), distinctColor('type.builtin'), type);
+    }
+    for (const prop of [
+      'deprecated',
+      'name',
+      'json_name',
+      'id',
+      'tags',
+      'packed',
+      'counts',
+      'physical',
+      'digital',
+      'allow_alias',
+      'ok',
+      'raw',
+      'created',
+      'other',
+      'url',
+      'nested',
+      'extra',
+      'Result',
+    ]) {
+      assert.equal(wordColor(html, prop), distinctColor('property'), prop);
+    }
+    for (const c of ['STATUS_UNSPECIFIED', 'ACTIVE', 'ALIVE']) {
+      assert.equal(wordColor(html, c), distinctColor('constant'), c);
+    }
+    for (const fn of ['GetItem', 'Watch']) {
+      assert.equal(
+        wordColor(html, fn),
+        distinctColor('function.definition'),
+        fn
+      );
+    }
+    for (const ns of ['google', 'protobuf', 'shop', 'v1']) {
+      assert.equal(wordColor(html, ns), distinctColor('namespace'), ns);
+    }
+    assert.equal(wordColor(html, 'kind'), distinctColor('variable'));
+    for (const s of ['"foo"', '"bar"', '"n"']) {
+      assert.equal(exactColor(html, s), distinctColor('string'), s);
+    }
+    for (const n of ['7', '8', '10', '15', '100', '199']) {
+      assert.equal(wordColor(html, n), distinctColor('number'), n);
+    }
+  }
+);
+
+void t.test(
+  'proto: numeric forms, string escapes, booleans, and comments',
+  () => {
+    const html = distinctHl(
+      'x = 0x1F + 0777 + 1_000 + 1e3 + 2.5 + -3 + 0b1; b = true; f = false;'
+    );
+    for (const n of ['0x1F', '0777', '1_000', '1e3', '2.5', '-3', '0b1']) {
+      assert.equal(exactColor(html, n), distinctColor('number'), n);
+    }
+    assert.equal(exactColor(html, 'true'), distinctColor('boolean'));
+    assert.equal(exactColor(html, 'false'), distinctColor('boolean'));
+    assert.deepEqual(
+      tokenKinds(
+        'proto',
+        "s = \"esc\\t\\n\" + 'single \\'q\\''; // line\n/* block\n */ message A {} // tail"
+      ),
+      [
+        ['s', 'property'],
+        ['=', 'operator'],
+        ['"esc', 'string'],
+        ['\\t\\n', 'string.escape'],
+        ['"', 'string'],
+        ['+', null],
+        ["'single", 'string'],
+        ["\\'", 'string.escape'],
+        ['q', 'string'],
+        ["\\'", 'string.escape'],
+        ["'", 'string'],
+        [';', 'punctuation.delimiter'],
+        ['// line', 'comment'],
+        ['/* block', 'comment'],
+        ['*/', 'comment'],
+        ['message', 'keyword.declaration'],
+        ['A', 'type'],
+        ['{}', 'punctuation.bracket'],
+        ['// tail', 'comment'],
+      ]
+    );
+  }
+);
+
+void t.test(
+  'proto: nested definitions and block comments stream line-fed',
+  () => {
+    assertLineFedParity(
+      'proto',
+      'syntax = "proto3";\n/* block\n */\nmessage Item {\n  oneof kind {\n    Physical physical = 5;\n  }\n  map<string, int32> counts = 4 [\n    deprecated = true\n  ];\n}\nservice Shop {\n  rpc Watch(stream Item) returns (stream Item);\n}\n'
+    );
+  }
+);

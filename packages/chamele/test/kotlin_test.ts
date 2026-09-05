@@ -6,13 +6,19 @@ import { codeToTokens, init, StreamTokenizer } from '../lib/index';
 import { transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import {
+  assertLineFedParity,
   checkInvariants,
   colorOf,
+  distinctColor,
+  distinctTheme,
+  exactColor,
   loadLang,
   spansOf,
   type TestLang,
   textOf,
   themeColor,
+  tokenKinds,
+  wordColor,
 } from './util';
 
 let kotlin: TestLang;
@@ -324,3 +330,202 @@ void t.test('kotlin: nested comments at even depth match line-fed', () => {
   assert.equal(whole[2][0].color, themeColor('comment'));
   assert.equal(whole[3][0].color, themeColor('variable'));
 });
+
+/** Highlight under the distinct theme after checking the lexer invariants. */
+const distinctHl = (src: string) =>
+  checkInvariants(kotlin.hl, src, { theme: distinctTheme });
+
+void t.test('kotlin: packages, imports, and import aliases', () => {
+  assert.deepEqual(
+    tokenKinds(
+      'kotlin',
+      'package demo\nimport kotlinx.coroutines.*\nimport kotlin.math.max as maximum'
+    ),
+    [
+      ['package', 'keyword.import'],
+      ['demo', 'variable'],
+      ['import', 'keyword.import'],
+      ['kotlinx', 'variable'],
+      ['.', 'punctuation.delimiter'],
+      ['coroutines', 'property'],
+      ['.', 'punctuation.delimiter'],
+      ['*', 'operator'],
+      ['import', 'keyword.import'],
+      ['kotlin', 'variable'],
+      ['.', 'punctuation.delimiter'],
+      ['math', 'property'],
+      ['.', 'punctuation.delimiter'],
+      ['max', 'property'],
+      ['as', 'keyword.operator'],
+      ['maximum', 'variable'],
+    ]
+  );
+});
+
+void t.test('kotlin: class kinds, modifiers, and members', () => {
+  const html = distinctHl(
+    'sealed class Shape { abstract fun area(): Double }\ndata class Circle(val r: Double) : Shape() { override fun area() = Math.PI * r * r }\nobject O; interface I { fun f() } enum class E { A, B } inline class M(val v: Int); typealias T = Int; companion object {}'
+  );
+  for (const word of [
+    'sealed',
+    'abstract',
+    'data',
+    'override',
+    'inline',
+    'companion',
+  ]) {
+    assert.equal(wordColor(html, word), distinctColor('keyword'), word);
+  }
+  for (const word of [
+    'class',
+    'fun',
+    'val',
+    'object',
+    'interface',
+    'typealias',
+  ]) {
+    assert.equal(
+      wordColor(html, word),
+      distinctColor('keyword.declaration'),
+      word
+    );
+  }
+  assert.equal(
+    exactColor(html, 'enum class'),
+    distinctColor('keyword.declaration')
+  );
+  for (const type of ['Shape', 'Circle', 'O', 'I', 'E', 'M', 'T']) {
+    assert.equal(exactColor(html, type), distinctColor('type'), type);
+  }
+  for (const fn of ['area', 'f']) {
+    assert.equal(
+      exactColor(html, fn),
+      distinctColor('function.definition'),
+      fn
+    );
+  }
+  for (const type of ['Double', 'Int']) {
+    assert.equal(exactColor(html, type), distinctColor('type.builtin'), type);
+  }
+  assert.equal(exactColor(html, 'PI'), distinctColor('property'));
+  assert.equal(exactColor(html, 'r'), distinctColor('variable'));
+});
+
+void t.test('kotlin: literals, string templates, and raw strings', () => {
+  const html = distinctHl(
+    'val x = 0x1F + 0b101 + 1_000L + 1e3f + 2.5 + \'a\' + \'\\n\'; val s = "esc\\t $x ${x + 1}" + """raw\n$x"""; val b: Boolean = true; val n: Int? = null;'
+  );
+  for (const n of ['0x1F', '0b101', '1_000L', '1e3f', '2.5']) {
+    assert.equal(exactColor(html, n), distinctColor('number'), n);
+  }
+  assert.equal(exactColor(html, "'a'"), distinctColor('string'));
+  assert.equal(exactColor(html, '\\n'), distinctColor('string.escape'));
+  assert.equal(exactColor(html, '"esc'), distinctColor('string'));
+  assert.equal(exactColor(html, '\\t'), distinctColor('string.escape'));
+  assert.equal(exactColor(html, '$x'), distinctColor('variable'));
+  assert.equal(exactColor(html, '${'), distinctColor('punctuation.special'));
+  assert.equal(exactColor(html, '"""raw'), distinctColor('string'));
+  assert.equal(exactColor(html, 'Boolean'), distinctColor('type.builtin'));
+  assert.equal(exactColor(html, 'true'), distinctColor('boolean'));
+  assert.equal(exactColor(html, 'null'), distinctColor('constant.builtin'));
+});
+
+void t.test('kotlin: functions, control flow, when, and type checks', () => {
+  const html = distinctHl(
+    'fun scale(factor: Double, n: Int = 1): Double { for ((i, s) in xs.withIndex()) { if (s is Circle && s.r > 1 || s !is Rect) break else continue }; when (n) { in 0..10 -> 1; is Int -> 2; else -> 3 }; while (x) {}; do {} while (y); try { throw E() } catch (e: E) {} finally {}; return n as Double; lateinit var v: String; this@scale; super.f(); it }'
+  );
+  assert.equal(exactColor(html, 'fun'), distinctColor('keyword.declaration'));
+  assert.equal(exactColor(html, 'scale'), distinctColor('function.definition'));
+  for (const p of ['factor', 'n']) {
+    assert.equal(exactColor(html, p), distinctColor('variable'), p);
+  }
+  for (const word of [
+    'for',
+    'if',
+    'break',
+    'else',
+    'continue',
+    'when',
+    'while',
+    'do',
+    'try',
+    'throw',
+    'catch',
+    'finally',
+    'return',
+  ]) {
+    assert.equal(wordColor(html, word), distinctColor('keyword.control'), word);
+  }
+  for (const word of ['in', 'is', 'as']) {
+    assert.equal(
+      wordColor(html, word),
+      distinctColor('keyword.operator'),
+      word
+    );
+  }
+  assert.equal(exactColor(html, 'lateinit'), distinctColor('keyword'));
+  assert.equal(exactColor(html, 'var'), distinctColor('keyword.declaration'));
+  for (const word of ['this', 'super']) {
+    assert.equal(
+      exactColor(html, word),
+      distinctColor('variable.special'),
+      word
+    );
+  }
+  assert.equal(exactColor(html, '@scale'), distinctColor('attribute'));
+  assert.equal(exactColor(html, 'it'), distinctColor('variable'));
+  assert.equal(exactColor(html, 'withIndex'), distinctColor('function.method'));
+  assert.equal(exactColor(html, '..'), distinctColor('operator'));
+});
+
+void t.test('kotlin: comment forms, including kdoc', () => {
+  assert.deepEqual(
+    tokenKinds(
+      'kotlin',
+      '// line\n/* block */\n/** kdoc\n * @param x\n */\nfun f() {} // tail'
+    ),
+    [
+      ['// line', 'comment'],
+      ['/* block */', 'comment'],
+      ['/** kdoc', 'comment.doc'],
+      ['* @param x', 'comment.doc'],
+      ['*/', 'comment.doc'],
+      ['fun', 'keyword.declaration'],
+      ['f', 'function.definition'],
+      ['() {}', 'punctuation.bracket'],
+      ['// tail', 'comment'],
+    ]
+  );
+});
+
+void t.test(
+  'kotlin: calls, member access, annotations, and null-safety operators',
+  () => {
+    const html = distinctHl(
+      'val l = listOf(1, 2); obj.field.sub; obj.method(); Foo::bar; @JvmStatic fun g() {}; arr[0]; x?.y ?: z; x!!; a..b'
+    );
+    assert.equal(exactColor(html, 'listOf'), distinctColor('function'));
+    for (const p of ['field', 'sub', 'bar', 'y']) {
+      assert.equal(exactColor(html, p), distinctColor('property'), p);
+    }
+    assert.equal(exactColor(html, 'method'), distinctColor('function.method'));
+    assert.equal(exactColor(html, 'Foo'), distinctColor('type'));
+    assert.equal(exactColor(html, '::'), distinctColor('operator'));
+    assert.equal(exactColor(html, '@JvmStatic'), distinctColor('attribute'));
+    assert.equal(exactColor(html, 'g'), distinctColor('function.definition'));
+    assert.equal(exactColor(html, '['), distinctColor('punctuation.bracket'));
+    for (const op of ['?.', '?', '!!', '..']) {
+      assert.equal(exactColor(html, op), distinctColor('operator'), op);
+    }
+  }
+);
+
+void t.test(
+  'kotlin: raw strings and kdoc spanning lines stream line-fed',
+  () => {
+    assertLineFedParity(
+      'kotlin',
+      'val s = """a\n  ${b}\n"""\n/**\n * doc\n */\nfun f() {}\n'
+    );
+  }
+);

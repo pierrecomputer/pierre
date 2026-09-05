@@ -2,13 +2,19 @@ import assert from 'node:assert';
 import t from 'node:test';
 
 import {
+  assertLineFedParity,
   checkInvariants,
   colorOf,
+  distinctColor,
+  distinctTheme,
+  exactColor,
   loadLang,
   spansOf,
   type TestLang,
   textOf,
   themeColor,
+  tokenKinds,
+  wordColor,
 } from './util';
 
 let zig: TestLang;
@@ -543,4 +549,176 @@ void t.test('zig: fn parameters match Zed variable.parameter', () => {
   assert.notEqual(word(html, 'alpha'), PARAM);
   assert.notEqual(word(html, 'beta'), PARAM);
   assert.notEqual(word(html, 'field'), PARAM);
+});
+
+/** Highlight under the distinct theme after checking the lexer invariants. */
+const distinctHl = (src: string) =>
+  checkInvariants(zig.hl, src, { theme: distinctTheme });
+
+void t.test('zig: imports, declarations, and literal forms', () => {
+  const html = distinctHl(
+    "const std = @import(\"std\");\npub fn main() !void { var x: u8 = 0x1F; const y = 0b101 + 0o17 + 1_000 + 1.5e3 + 'a' + '\\n'; _ = x; }"
+  );
+  for (const word of ['const', 'fn', 'var']) {
+    assert.equal(
+      wordColor(html, word),
+      distinctColor('keyword.declaration'),
+      word
+    );
+  }
+  assert.equal(exactColor(html, '@import'), distinctColor('keyword.import'));
+  assert.equal(exactColor(html, '"std"'), distinctColor('string'));
+  assert.equal(exactColor(html, 'pub'), distinctColor('keyword'));
+  assert.equal(exactColor(html, 'main'), distinctColor('function.definition'));
+  assert.equal(exactColor(html, '!'), distinctColor('operator'));
+  for (const type of ['void', 'u8']) {
+    assert.equal(exactColor(html, type), distinctColor('type.builtin'), type);
+  }
+  for (const n of ['0x1F', '0b101', '0o17', '1_000', '1.5e3']) {
+    assert.equal(exactColor(html, n), distinctColor('number'), n);
+  }
+  assert.equal(exactColor(html, "'a'"), distinctColor('string'));
+  assert.equal(exactColor(html, '\\n'), distinctColor('string.escape'));
+  assert.equal(exactColor(html, '_'), distinctColor('variable.special'));
+});
+
+void t.test('zig: container declarations, fields, and methods', () => {
+  const html = distinctHl(
+    'const S = struct { a: i32, b: []const u8 = "x", pub fn init(self: *S) void { self.a = 1; } };\nconst E = enum(u8) { a, b }; const U = union(enum) { x: i32 }; const T = opaque {}; const err = error{ Oops };'
+  );
+  for (const word of ['struct', 'enum', 'union', 'opaque']) {
+    assert.equal(
+      wordColor(html, word),
+      distinctColor('keyword.declaration'),
+      word
+    );
+  }
+  for (const type of ['S', 'E', 'U', 'T', 'Oops']) {
+    assert.equal(exactColor(html, type), distinctColor('type'), type);
+  }
+  assert.equal(exactColor(html, 'a'), distinctColor('property'));
+  assert.equal(exactColor(html, 'b'), distinctColor('property'));
+  assert.equal(exactColor(html, 'init'), distinctColor('function.definition'));
+  assert.equal(exactColor(html, 'self'), distinctColor('variable.parameter'));
+  assert.equal(exactColor(html, 'error'), distinctColor('keyword'));
+  assert.equal(exactColor(html, '[]'), distinctColor('punctuation.bracket'));
+});
+
+void t.test(
+  'zig: comptime parameters, calling conventions, and function qualifiers',
+  () => {
+    const html = distinctHl(
+      'fn f(comptime T: type, x: anytype) !T { return if (x) |v| v else error.Oops; } fn g() callconv(.C) void {} extern "c" fn h() void; export fn i() void {} inline fn j() void {} noinline fn k() void {}'
+    );
+    assert.equal(exactColor(html, 'comptime'), distinctColor('keyword'));
+    for (const p of ['T', 'x']) {
+      assert.equal(exactColor(html, p), distinctColor('variable.parameter'), p);
+    }
+    for (const type of ['type', 'anytype']) {
+      assert.equal(exactColor(html, type), distinctColor('type.builtin'), type);
+    }
+    for (const word of ['return', 'if', 'else']) {
+      assert.equal(
+        wordColor(html, word),
+        distinctColor('keyword.control'),
+        word
+      );
+    }
+    assert.equal(exactColor(html, 'Oops'), distinctColor('property'));
+    for (const word of ['callconv', 'extern', 'inline', 'noinline']) {
+      assert.equal(wordColor(html, word), distinctColor('keyword'), word);
+    }
+    assert.equal(exactColor(html, '"c"'), distinctColor('string'));
+    assert.equal(exactColor(html, 'export'), distinctColor('keyword.import'));
+    for (const fn of ['g', 'h', 'i', 'j', 'k']) {
+      assert.equal(
+        exactColor(html, fn),
+        distinctColor('function.definition'),
+        fn
+      );
+    }
+  }
+);
+
+void t.test('zig: control flow, error handling, and modifiers', () => {
+  const html = distinctHl(
+    'try f(); defer d(); errdefer e(); while (i < 10) { if (a and b or c) break else continue; } for (xs, 0..) |x, i| {} switch (v) { .a => 1, else => 3 } orelse 0; x = unreachable; test "name" {} threadlocal; volatile; align(4); packed;'
+  );
+  for (const word of [
+    'try',
+    'defer',
+    'errdefer',
+    'while',
+    'if',
+    'break',
+    'else',
+    'continue',
+    'for',
+    'switch',
+  ]) {
+    assert.equal(wordColor(html, word), distinctColor('keyword.control'), word);
+  }
+  for (const word of ['and', 'or', 'orelse']) {
+    assert.equal(
+      wordColor(html, word),
+      distinctColor('keyword.operator'),
+      word
+    );
+  }
+  assert.equal(
+    exactColor(html, 'unreachable'),
+    distinctColor('constant.builtin')
+  );
+  for (const word of ['test', 'threadlocal', 'volatile', 'align', 'packed']) {
+    assert.equal(wordColor(html, word), distinctColor('keyword'), word);
+  }
+  assert.equal(exactColor(html, '"name"'), distinctColor('string'));
+  assert.equal(exactColor(html, '..'), distinctColor('operator'));
+  assert.equal(exactColor(html, '=>'), distinctColor('punctuation.delimiter'));
+});
+
+void t.test(
+  'zig: comments, multi-line strings, builtins, and anonymous literals',
+  () => {
+    assert.deepEqual(
+      tokenKinds(
+        'zig',
+        '// line\n/// doc\n//! top doc\nconst m =\n    \\\\multi\n    \\\\line\n;\n@intCast(x); s.field; s.method(); a = null; b = undefined;'
+      ).slice(0, 12),
+      [
+        ['// line', 'comment'],
+        ['/// doc', 'comment.doc'],
+        ['//! top doc', 'comment.doc'],
+        ['const', 'keyword.declaration'],
+        ['m', 'variable'],
+        ['=', 'operator'],
+        ['\\\\multi', 'string'],
+        ['\\\\line', 'string'],
+        [';', 'punctuation.delimiter'],
+        ['@intCast', 'function'],
+        ['(', 'punctuation.bracket'],
+        ['x', 'variable'],
+      ]
+    );
+    const html = distinctHl(
+      '.{ .a = 1 }; s.field; s.method(); @This(); @as(u8, 1); a = null; b = undefined; c = true;'
+    );
+    assert.equal(exactColor(html, 'a'), distinctColor('property'));
+    assert.equal(exactColor(html, 'field'), distinctColor('property'));
+    assert.equal(exactColor(html, 'method'), distinctColor('function.method'));
+    for (const b of ['@This', '@as']) {
+      assert.equal(exactColor(html, b), distinctColor('function'), b);
+    }
+    for (const c of ['null', 'undefined']) {
+      assert.equal(exactColor(html, c), distinctColor('constant.builtin'), c);
+    }
+    assert.equal(exactColor(html, 'true'), distinctColor('boolean'));
+  }
+);
+
+void t.test('zig: multi-line strings and comments stream line-fed', () => {
+  assertLineFedParity(
+    'zig',
+    'const s =\n    \\\\a\n    \\\\b\n;\n/// doc\n// c\nconst t = struct {\n    x: u8,\n};\n'
+  );
 });

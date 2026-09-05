@@ -1,26 +1,50 @@
 (module
   ;; TypeScript-aware semantic classification shared by TS and TSX.
-  ;; $Token bucket for a proper keyword token, mirroring Zed's typescript query:
-  ;; control flow and declaration introducers get their own buckets, literal
-  ;; keywords their literal kinds, everything else - new/typeof/in/void/... -
-  ;; stays plain `keyword`
-  (func $kwHl (param $t i32) (result i32)
-    (if (bitset.get $LexBits.kwControl (local.get $t))
-      (then (return (enum.get $Token.keyword.control))))
-    (if (bitset.get $LexBits.kwDecl (local.get $t))
-      (then (return (enum.get $Token.keyword.declaration))))
-    (if (i32.or (i32.eq (local.get $t) (enum.get $Lex.keyword_import))
-                (i32.eq (local.get $t) (enum.get $Lex.keyword_export)))
-      (then (return (enum.get $Token.keyword.import))))
-    (if (i32.or (i32.eq (local.get $t) (enum.get $Lex.keyword_true))
-                (i32.eq (local.get $t) (enum.get $Lex.keyword_false)))
-      (then (return (enum.get $Token.boolean))))
-    (if (i32.eq (local.get $t) (enum.get $Lex.keyword_null))
-      (then (return (enum.get $Token.constant.builtin))))
-    (if (i32.or (i32.eq (local.get $t) (enum.get $Lex.keyword_this))
-                (i32.eq (local.get $t) (enum.get $Lex.keyword_super)))
-      (then (return (enum.get $Token.variable.special))))
-    (enum.get $Token.keyword))
+  ;; The context-free part is a table: each token kind's $Token bucket -
+  ;; punctuation, operators, literals, and the keyword buckets mirroring Zed's
+  ;; typescript query, where control flow and declaration introducers get
+  ;; their own buckets, literal keywords their literal kinds, and everything
+  ;; else - new/typeof/in/void/... - stays plain `keyword`. Three sentinels
+  ;; mark the kinds that need more: 255 for identifiers and contextual words
+  ;; ($identHl), 254 for `:` and `?`, whose TypeScript punctuation.special
+  ;; reading depends on the next token, and 253 for the multi-part kinds the
+  ;; pipeline emits itself ($emitCur). Anything unlisted is an operator.
+  (enum-map $LexHl $Lex $mem.jsLexHl $Token.operator
+    (value 253
+      "eof" "invalid" "comment" "multiline_comment" "hash_bang"
+      "string_literal" "backtick" "dollar_brace")
+    (value 254 "colon" "question_mark")
+    (value 255
+      "identifier"
+      "ctxword_as" "ctxword_async" "ctxword_await" "ctxword_from" "ctxword_get"
+      "ctxword_of" "ctxword_set" "ctxword_abstract" "ctxword_declare"
+      "ctxword_infer" "ctxword_is" "ctxword_keyof" "ctxword_namespace"
+      "ctxword_override" "ctxword_readonly" "ctxword_satisfies" "ctxword_type")
+    (value $Token.punctuation.bracket
+      "l_paren" "r_paren" "l_bracket" "r_bracket" "l_brace" "r_brace")
+    (value $Token.punctuation.delimiter
+      "comma" "semicolon" "dot" "question_mark_dot")
+    (value $Token.number "number_literal" "bigint_literal")
+    (value $Token.string.regex "regexp_literal")
+    (value $Token.attribute "at_identifier")
+    (value $Token.property "hash_identifier")
+    (value $Token.keyword.control
+      "keyword_if" "keyword_else" "keyword_switch" "keyword_case"
+      "keyword_default" "keyword_for" "keyword_while" "keyword_do"
+      "keyword_return" "keyword_try" "keyword_catch" "keyword_finally"
+      "keyword_throw" "keyword_break" "keyword_continue" "keyword_yield")
+    (value $Token.keyword.declaration
+      "keyword_const" "keyword_let" "keyword_var" "keyword_function"
+      "keyword_class" "keyword_enum" "keyword_interface")
+    (value $Token.keyword.import "keyword_import" "keyword_export")
+    (value $Token.boolean "keyword_true" "keyword_false")
+    (value $Token.constant.builtin "keyword_null")
+    (value $Token.variable.special "keyword_this" "keyword_super")
+    (value $Token.keyword
+      "keyword_debugger" "keyword_delete" "keyword_extends" "keyword_in"
+      "keyword_instanceof" "keyword_new" "keyword_typeof" "keyword_void"
+      "keyword_with" "keyword_implements" "keyword_package" "keyword_private"
+      "keyword_protected" "keyword_public" "keyword_static"))
 
   ;; identifier-like next token: an identifier, keyword, or contextual word -
   ;; the cheap "does this ctxword read as a keyword here" test
@@ -219,11 +243,9 @@
     (if (i32.eq (local.get $t) (enum.get $Lex.r_unsigned_shift))
       (then (call $sigAngleDrop (i32.const 3)))))
 
-  ;; classify an identifier or contextual word from its neighbors
-  (func $identHl (param $prev i32) (param $t i32) (param $next i32)
-        (param $lhs i32) (param $rhs i32) (result i32)
-    (local $c i32)
-    ;; contextual words in keyword position first (cheap heuristics)
+  ;; a contextual word in keyword position: its keyword bucket, or -1 when it
+  ;; reads as an ordinary name here (cheap neighbour heuristics)
+  (func $ctxwordHl (param $prev i32) (param $t i32) (param $next i32) (result i32)
     (if (i32.eq (local.get $t) (enum.get $Lex.ctxword_await))
       (then (return (enum.get $Token.keyword.control))))
     (if (i32.eq (local.get $t) (enum.get $Lex.ctxword_async))
@@ -261,6 +283,19 @@
             (return (select
               (enum.get $Token.keyword.declaration) (enum.get $Token.keyword)
               (i32.eq (local.get $t) (enum.get $Lex.ctxword_type))))))))
+    (i32.const -1))
+
+  ;; classify an identifier or contextual word from its neighbors
+  (func $identHl (param $prev i32) (param $t i32) (param $next i32)
+        (param $lhs i32) (param $rhs i32) (result i32)
+    (local $c i32)
+    ;; a plain identifier - the common case - skips the contextual-word tests
+    (if (i32.ne (local.get $t) (enum.get $Lex.identifier))
+      (then
+        (local.set $c
+          (call $ctxwordHl (local.get $prev) (local.get $t) (local.get $next)))
+        (if (i32.ne (local.get $c) (i32.const -1))
+          (then (return (local.get $c))))))
     ;; member access
     (if (i32.or (i32.eq (local.get $prev) (enum.get $Lex.dot))
                 (i32.eq (local.get $prev) (enum.get $Lex.question_mark_dot)))
@@ -399,68 +434,37 @@
   ;; - strings, templates, comments - are handled by the pipeline itself
   (func $classify (param $prev i32) (param $t i32) (param $next i32)
         (param $lhs i32) (param $rhs i32) (result i32)
+    (local $hl i32)
     (call $sigStep (local.get $prev) (local.get $t) (local.get $next)
       (local.get $lhs) (local.get $rhs))
-    ;; nested so the word compare only runs for a colon before an identifier -
-    ;; wasm i32.and is eager, and this classifier runs for every token
-    (if (i32.and
-          (i32.eq (local.get $t) (enum.get $Lex.colon))
-          (i32.and
-            (i32.eq (local.get $next) (enum.get $Lex.identifier))
-            (call $ecmaHasTypeScript)))
-      (then
-        (if (i32.or
-              (i32.le_u
-                (i32.sub (call $tsxByte (global.get $lhs)) (i32.const "A"))
-                (i32.const 25))
-              (call $isPredefinedType (global.get $lhs) (global.get $rhs)))
-          (then (return (enum.get $Token.punctuation.special))))))
-    (if (i32.and
-          (call $ecmaHasTypeScript)
-          (i32.and
-            (i32.eq (local.get $t) (enum.get $Lex.question_mark))
-            (i32.eq (local.get $next) (enum.get $Lex.colon))))
-      (then (return (enum.get $Token.punctuation.special))))
-    (if (i32.or
-          (i32.or
-            (i32.or (i32.eq (local.get $t) (enum.get $Lex.l_paren))
-                    (i32.eq (local.get $t) (enum.get $Lex.r_paren)))
-            (i32.or (i32.eq (local.get $t) (enum.get $Lex.l_bracket))
-                    (i32.eq (local.get $t) (enum.get $Lex.r_bracket))))
-          (i32.or (i32.eq (local.get $t) (enum.get $Lex.l_brace))
-                  (i32.eq (local.get $t) (enum.get $Lex.r_brace))))
-      (then (return (enum.get $Token.punctuation.bracket))))
-    (if (i32.or
-          (i32.or
-            (i32.or (i32.eq (local.get $t) (enum.get $Lex.comma))
-                    (i32.eq (local.get $t) (enum.get $Lex.semicolon)))
-            (i32.or (i32.eq (local.get $t) (enum.get $Lex.colon))
-                    (i32.eq (local.get $t) (enum.get $Lex.dot))))
-          (i32.eq (local.get $t) (enum.get $Lex.question_mark_dot)))
-      (then (return (enum.get $Token.punctuation.delimiter))))
-    (if (i32.or (i32.eq (local.get $t) (enum.get $Lex.number_literal))
-                (i32.eq (local.get $t) (enum.get $Lex.bigint_literal)))
-      (then (return (enum.get $Token.number))))
-    (if (i32.eq (local.get $t) (enum.get $Lex.regexp_literal))
-      (then (return (enum.get $Token.string.regex))))
-    (if (i32.eq (local.get $t) (enum.get $Lex.at_identifier))
-      (then (return (enum.get $Token.attribute))))
-    (if (i32.eq (local.get $t) (enum.get $Lex.hash_identifier))
-      (then (return (enum.get $Token.property))))
-    (if (i32.or
-          (i32.eq (local.get $t) (enum.get $Lex.identifier))
-          (i32.and (i32.ge_u (local.get $t) (enum.get $Lex.ctxword_as))
-                   (i32.le_u (local.get $t) (enum.get $Lex.ctxword_type))))
+    (local.set $hl (enum-map.get $LexHl (local.get $t)))
+    (if (i32.lt_u (local.get $hl) (i32.const 254))
+      (then (return (local.get $hl))))
+    (if (i32.eq (local.get $hl) (i32.const 255))
       (then (return (call $identHl (local.get $prev) (local.get $t) (local.get $next)
                                    (local.get $lhs) (local.get $rhs)))))
-    (if (i32.and (i32.ge_u (local.get $t) (enum.get $Lex.keyword_break))
-                 (i32.le_u (local.get $t) (enum.get $Lex.keyword_yield)))
-      (then (return (call $kwHl (local.get $t)))))
-    ;; every remaining token below the keyword range is an operator
-    (if (i32.and (i32.ge_u (local.get $t) (enum.get $Lex.ampersand_ampersand_equal))
-                 (i32.le_u (local.get $t) (enum.get $Lex.yield_asterisk)))
-      (then (return (enum.get $Token.operator))))
-    (enum.get $Token.none))
+    ;; `:` before a type name and `?` directly before `:` are TypeScript
+    ;; punctuation.special; the word compare only runs for a colon before an
+    ;; identifier - wasm i32.and is eager, and this runs for every such token
+    (if (call $ecmaHasTypeScript)
+      (then
+        (if (i32.eq (local.get $t) (enum.get $Lex.colon))
+          (then
+            (if (i32.eq (local.get $next) (enum.get $Lex.identifier))
+              (then
+                (if (i32.or
+                      (i32.le_u
+                        (i32.sub (call $tsxByte (global.get $lhs)) (i32.const "A"))
+                        (i32.const 25))
+                      (call $isPredefinedType (global.get $lhs) (global.get $rhs)))
+                  (then (return (enum.get $Token.punctuation.special)))))))
+          (else
+            (if (i32.eq (local.get $next) (enum.get $Lex.colon))
+              (then (return (enum.get $Token.punctuation.special))))))))
+    ;; otherwise `:` is a delimiter and `?` a ternary operator
+    (select
+      (enum.get $Token.punctuation.delimiter) (enum.get $Token.operator)
+      (i32.eq (local.get $t) (enum.get $Lex.colon))))
 
   (func $hlTs (call $hlEcma (i32.const 1)))
   (func $hlTsStream (param $reset i32)

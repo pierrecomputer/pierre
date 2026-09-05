@@ -406,16 +406,7 @@
               (i32.le_u (i32.sub (local.get $c) (i32.const "<")) (i32.const 2))
               (i32.or
                 (i32.le_u (i32.sub (local.get $c) (i32.const "+")) (i32.const 3))
-                (i32.or
-                  (i32.or (i32.eq (local.get $c) (i32.const "%"))
-                          (i32.eq (local.get $c) (i32.const "|")))
-                  (i32.or
-                    (i32.or (i32.eq (local.get $c) (i32.const "*"))
-                            (i32.eq (local.get $c) (i32.const "&")))
-                    (i32.or
-                      (i32.or (i32.eq (local.get $c) (i32.const "^"))
-                              (i32.eq (local.get $c) (i32.const "~")))
-                      (i32.eq (local.get $c) (i32.const "!")))))))
+                (byteset.get "!%&*/^|~" (local.get $c))))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (if (i32.and (i32.lt_u (global.get $ptr) (global.get $end))

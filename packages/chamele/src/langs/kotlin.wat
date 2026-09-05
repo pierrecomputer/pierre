@@ -11,35 +11,35 @@
   ;; can undo, so $kotlinWordHl matches "Short" directly. "where" is missing
   ;; for the same reason: the hash sees only the first two bytes, the last
   ;; byte, and the length, which "while" shares.
-  (keyword-table $kotlinWords $mem.kotlinWords $mem.kotlinWords+768 16 128
-    (group ;; 1: control
+  (keyword-table $kotlinWords $mem.kotlinWords $mem.kotlinWords+768
+    (group $Token.keyword.control ;; 1: control
       "do" "if" "for" "try" "else" "when" "break" "catch" "throw" "while"
       "return" "finally" "continue")
-    (group "fun") ;; 2: declaration, next name is a function
-    (group ;; 3: declaration, next name is a type
+    (group $Token.keyword.declaration+256 "fun") ;; 2: declaration, next name is a function
+    (group $Token.keyword.declaration+512 ;; 3: declaration, next name is a type
       "class" "object" "interface" "typealias")
-    (group ;; 4: declaration
+    (group $Token.keyword.declaration ;; 4: declaration
       "val" "var" "enum" "init" "constructor")
-    (group "package" "import") ;; 5: import
-    (group "in" "is" "as")     ;; 6: operator keywords
-    (group ;; 7: modifiers
+    (group $Token.keyword.import "package" "import") ;; 5: import
+    (group $Token.keyword.operator "in" "is" "as")     ;; 6: operator keywords
+    (group $Token.keyword ;; 7: modifiers
       "by" "out" "open" "data" "const" "final" "infix" "inner" "inline"
       "public" "sealed" "vararg" "private" "reified" "suspend" "abstract"
       "internal" "lateinit" "operator" "override" "companion" "protected")
-    (group ;; 8: built-in types
+    (group $Token.type.builtin ;; 8: built-in types
       "Int" "Any" "Long" "Byte" "Char" "Unit" "Float" "Double"
       "String" "Boolean" "Nothing")
-    (group "true" "false") ;; 9: booleans
-    (group "null")         ;; 10: built-in constant
-    (group "this" "super")) ;; 11: special variables
+    (group $Token.boolean "true" "false") ;; 9: booleans
+    (group $Token.constant.builtin "null")         ;; 10: built-in constant
+    (group $Token.variable.special "this" "super")) ;; 11: special variables
 
   ;; Token in the low byte; the high byte selects the next-name capture:
   ;; 1=function, 2=type.
   (func $kotlinWordHl (param $lhs i32) (param $rhs i32) (result i32)
-    (local $g i32)
-    (local.set $g
-      (keyword-table.get $kotlinWords (local.get $lhs) (local.get $rhs)))
-    (if (i32.eqz (local.get $g))
+    (local $hl i32)
+    (local.set $hl
+      (keyword-table.value $kotlinWords (local.get $lhs) (local.get $rhs)))
+    (if (i32.eq (local.get $hl) (i32.const -1))
       (then
         ;; the two words the table cannot hold - the wide load is safe because
         ;; the input buffer keeps slack past $end, as the table probe assumes
@@ -52,28 +52,8 @@
             (if (i64.eq
                   (i64.and (i64.load (local.get $lhs)) (i64.const 0xffffffffff))
                   (i64.const "where"))
-              (then (return (enum.get $Token.keyword))))))
-        (return (i32.const -1))))
-    (if (i32.eq (local.get $g) (i32.const 1))
-      (then (return (enum.get $Token.keyword.control))))
-    (if (i32.le_u (local.get $g) (i32.const 3))
-      (then (return (i32.or (enum.get $Token.keyword.declaration)
-        (i32.shl (i32.sub (local.get $g) (i32.const 1)) (i32.const 8))))))
-    (if (i32.eq (local.get $g) (i32.const 4))
-      (then (return (enum.get $Token.keyword.declaration))))
-    (if (i32.eq (local.get $g) (i32.const 5))
-      (then (return (enum.get $Token.keyword.import))))
-    (if (i32.eq (local.get $g) (i32.const 6))
-      (then (return (enum.get $Token.keyword.operator))))
-    (if (i32.eq (local.get $g) (i32.const 7))
-      (then (return (enum.get $Token.keyword))))
-    (if (i32.eq (local.get $g) (i32.const 8))
-      (then (return (enum.get $Token.type.builtin))))
-    (if (i32.eq (local.get $g) (i32.const 9))
-      (then (return (enum.get $Token.boolean))))
-    (if (i32.eq (local.get $g) (i32.const 10))
-      (then (return (enum.get $Token.constant.builtin))))
-    (enum.get $Token.variable.special))
+              (then (return (enum.get $Token.keyword))))))))
+    (local.get $hl))
 
   ;; Scan a `"` or `"""` body from $ptr, with the string's bytes since $seg
   ;; still unemitted, emitting plain runs, escapes, and `$name` templates as
@@ -166,19 +146,7 @@
     (local.get $status))
 
   (func $kotlinIsOp (param $c i32) (result i32)
-    (i32.or
-      (i32.or (i32.eq (local.get $c) (i32.const "+")) (i32.eq (local.get $c) (i32.const "-")))
-      (i32.or
-        (i32.or (i32.eq (local.get $c) (i32.const "*")) (i32.eq (local.get $c) (i32.const "/")))
-        (i32.or
-          (i32.or (i32.eq (local.get $c) (i32.const "%")) (i32.eq (local.get $c) (i32.const "=")))
-          (i32.or
-            (i32.or (i32.eq (local.get $c) (i32.const "!")) (i32.eq (local.get $c) (i32.const "<")))
-            (i32.or
-              (i32.or (i32.eq (local.get $c) (i32.const ">")) (i32.eq (local.get $c) (i32.const "&")))
-              (i32.or
-                (i32.or (i32.eq (local.get $c) (i32.const "|")) (i32.eq (local.get $c) (i32.const "^")))
-                (i32.eq (local.get $c) (i32.const "?")))))))))
+    (byteset.get "!%&*+-/<=>?^|" (local.get $c)))
 
   ;; $strKind is 1 inside a `"` body and 2 inside `"""`, with $seg the start
   ;; of its bytes not yet emitted; $interp counts braces inside a `${`
@@ -345,11 +313,7 @@
             (local.set $member (i32.const 0))
             (br $next)))
 
-        (if (i32.or
-              (i32.or (i32.eq (local.get $c) (i32.const "(")) (i32.eq (local.get $c) (i32.const ")")))
-              (i32.or
-                (i32.or (i32.eq (local.get $c) (i32.const "[")) (i32.eq (local.get $c) (i32.const "]")))
-                (i32.or (i32.eq (local.get $c) (i32.const "{")) (i32.eq (local.get $c) (i32.const "}")))))
+        (if (byteset.get "()[]{}" (local.get $c))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (if (local.get $interp)

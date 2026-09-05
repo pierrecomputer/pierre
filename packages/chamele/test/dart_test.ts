@@ -7,11 +7,16 @@ import tokenTypes from '../lib/token-types';
 import { transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import {
+  assertLineFedParity,
   checkInvariants,
+  colorOf,
+  exactColor,
   loadLang,
   spansOf,
   type TestLang,
   textOf,
+  tokenKinds,
+  wordColor,
 } from './util';
 
 // one unique color per token type so equal styles cannot merge neighboring
@@ -199,4 +204,240 @@ void t.test('dart: multi-line constructs resume line-fed', () => {
     const [whole, streamed] = wholeAndLineFed('dart', code);
     assert.deepEqual(streamed, whole, JSON.stringify(code));
   }
+});
+
+/** Highlight under the distinct theme after checking the lexer invariants. */
+const distinctHl = (src: string) =>
+  checkInvariants(lexer.hl, src, { theme: distinct });
+
+void t.test('dart: import, export, part, and library directives', () => {
+  const html = distinctHl(
+    "import 'dart:async';\nimport 'package:flutter/material.dart' as m show X hide Y;\nexport 'x.dart';\npart 'y.dart';\nlibrary l;"
+  );
+  for (const word of ['import', 'export', 'part', 'library', 'show', 'hide']) {
+    assert.equal(wordColor(html, word), distinctColor('keyword.import'), word);
+  }
+  assert.equal(exactColor(html, 'as'), distinctColor('keyword.operator'));
+  for (const s of [
+    "'dart:async'",
+    "'package:flutter/material.dart'",
+    "'x.dart'",
+    "'y.dart'",
+  ]) {
+    assert.equal(exactColor(html, s), distinctColor('string'), s);
+  }
+  for (const type of ['X', 'Y']) {
+    assert.equal(exactColor(html, type), distinctColor('type'), type);
+  }
+});
+
+void t.test(
+  'dart: class heads, members, constructors, mixins, enums, typedefs, and extensions',
+  () => {
+    const html = distinctHl(
+      'abstract class Counter<T extends num> extends StatefulWidget with M implements I { final int initial; static const int max = 10; late int _count; Counter({super.key, this.initial = 0, required this.x}) : assert(initial >= 0); factory Counter.named() => Counter(); @override State<Counter> createState() => _CounterState(); external void ext(); operator +(Counter o) => this; get value => _count; set value(int v) => _count = v; }\nmixin M on Base { }\nenum Color { red, green }\ntypedef Callback = void Function(int);\nextension E on int { int get doubled => this * 2; }\nsealed class S {} base class B {} interface class I2 {} final class F {}'
+    );
+    for (const word of [
+      'abstract',
+      'class',
+      'extends',
+      'with',
+      'implements',
+      'final',
+      'static',
+      'const',
+      'late',
+      'required',
+      'factory',
+      'external',
+      'operator',
+      'get',
+      'set',
+      'mixin',
+      'enum',
+      'typedef',
+      'extension',
+      'sealed',
+      'base',
+      'interface',
+    ]) {
+      assert.equal(
+        wordColor(html, word),
+        distinctColor('keyword.declaration'),
+        word
+      );
+    }
+    for (const type of [
+      'Counter',
+      'StatefulWidget',
+      'M',
+      'I',
+      'State',
+      'Base',
+      'Color',
+      'Callback',
+      'E',
+      'S',
+      'B',
+      'I2',
+      'F',
+    ]) {
+      assert.equal(wordColor(html, type), distinctColor('type'), type);
+    }
+    for (const type of ['num', 'int', 'void']) {
+      assert.equal(wordColor(html, type), distinctColor('type.builtin'), type);
+    }
+    for (const v of ['initial', 'max', '_count', 'o', 'v']) {
+      assert.equal(wordColor(html, v), distinctColor('variable'), v);
+    }
+    for (const v of ['super', 'this']) {
+      assert.equal(wordColor(html, v), distinctColor('variable.special'), v);
+    }
+    for (const p of ['key', 'x']) {
+      assert.equal(exactColor(html, p), distinctColor('property'), p);
+    }
+    assert.equal(exactColor(html, 'assert'), distinctColor('keyword.control'));
+    assert.equal(exactColor(html, 'named'), distinctColor('function.method'));
+    for (const fn of ['createState', 'ext', 'doubled']) {
+      assert.equal(
+        exactColor(html, fn),
+        distinctColor('function.definition'),
+        fn
+      );
+    }
+    assert.equal(exactColor(html, '@override'), distinctColor('attribute'));
+    assert.equal(wordColor(html, 'on'), distinctColor('keyword.control'));
+    assert.equal(wordColor(html, '=>'), distinctColor('operator'));
+  }
+);
+
+void t.test(
+  'dart: literals, interpolation, raw and multi-line strings, and collection literals',
+  () => {
+    const html = distinctHl(
+      "var x = 0x1F + 1_000 + 1e3 + 2.5; var s = 'esc\\t $x ${x + 1}' + \"dq\" + r'raw $x' + '''multi\n$x''' + \"\"\"dq\nmulti\"\"\"; bool b = true; Object? n = null; const c = [1, 2]; final l = <int>[1]; var m = <String, int>{'a': 1};"
+    );
+    for (const n of ['0x1F', '1_000', '1e3', '2.5']) {
+      assert.equal(exactColor(html, n), distinctColor('number'), n);
+    }
+    assert.equal(exactColor(html, "'esc"), distinctColor('string'));
+    assert.equal(exactColor(html, '\\t'), distinctColor('string.escape'));
+    assert.equal(exactColor(html, '$x'), distinctColor('variable'));
+    assert.equal(exactColor(html, '${'), distinctColor('punctuation.special'));
+    for (const s of ['"dq"', "r'raw $x'"]) {
+      assert.equal(exactColor(html, s), distinctColor('string'), s);
+    }
+    assert.equal(colorOf(html, "'''multi"), distinctColor('string'));
+    assert.equal(colorOf(html, '"""dq'), distinctColor('string'));
+    for (const type of ['bool', 'Object', 'int', 'String']) {
+      assert.equal(wordColor(html, type), distinctColor('type.builtin'), type);
+    }
+    assert.equal(exactColor(html, 'true'), distinctColor('boolean'));
+    assert.equal(exactColor(html, 'null'), distinctColor('constant.builtin'));
+    for (const word of ['var', 'const', 'final']) {
+      assert.equal(
+        wordColor(html, word),
+        distinctColor('keyword.declaration'),
+        word
+      );
+    }
+    assert.equal(wordColor(html, '?'), distinctColor('operator'));
+  }
+);
+
+void t.test(
+  'dart: async forms, control flow, exceptions, type tests, and null-aware operators',
+  () => {
+    const html = distinctHl(
+      'Future<void> f() async { await g(); await for (var x in s) {} yield 1; yield* h(); } void main() { for (var i = 0; i < 3; i++) { if (a && b || !c) break; else continue; } while (x) {} do {} while (y); switch (v) { case 1: break; default: } try { throw E(); } on E catch (e, st) { rethrow; } finally {} return; assert(x); var q = x is int ? 1 : 2; q = x as int; var w = a ?? b; a?.b; a!; a..b(); print(x); new Foo(); dynamic d; covariant int e; }'
+    );
+    assert.equal(exactColor(html, 'Future'), distinctColor('type.builtin'));
+    for (const fn of ['f', 'main']) {
+      assert.equal(
+        exactColor(html, fn),
+        distinctColor('function.definition'),
+        fn
+      );
+    }
+    assert.equal(
+      wordColor(html, 'async'),
+      distinctColor('keyword.declaration')
+    );
+    for (const word of [
+      'await',
+      'for',
+      'yield',
+      'if',
+      'break',
+      'else',
+      'continue',
+      'while',
+      'do',
+      'switch',
+      'case',
+      'default',
+      'try',
+      'throw',
+      'on',
+      'catch',
+      'rethrow',
+      'finally',
+      'return',
+      'assert',
+    ]) {
+      assert.equal(
+        wordColor(html, word),
+        distinctColor('keyword.control'),
+        word
+      );
+    }
+    for (const word of ['in', 'is', 'as', 'new']) {
+      assert.equal(
+        wordColor(html, word),
+        distinctColor('keyword.operator'),
+        word
+      );
+    }
+    for (const fn of ['g', 'h', 'print']) {
+      assert.equal(wordColor(html, fn), distinctColor('function'), fn);
+    }
+    for (const type of ['E', 'Foo']) {
+      assert.equal(wordColor(html, type), distinctColor('type'), type);
+    }
+    for (const op of ['&&', '||', '!', '++', '?', '??', '?.', '..', '*']) {
+      assert.equal(wordColor(html, op), distinctColor('operator'), op);
+    }
+    assert.equal(exactColor(html, 'dynamic'), distinctColor('type.builtin'));
+    assert.equal(
+      exactColor(html, 'covariant'),
+      distinctColor('keyword.declaration')
+    );
+  }
+);
+
+void t.test('dart: comment forms', () => {
+  assert.deepEqual(
+    tokenKinds(
+      'dart',
+      '// line\n/// doc\n/* block\n */\n/** block doc */\nvoid f() {} // tail'
+    ),
+    [
+      ['// line', 'comment'],
+      ['/// doc', 'comment.doc'],
+      ['/* block', 'comment'],
+      ['*/', 'comment'],
+      ['/** block doc */', 'comment.doc'],
+      ['void', 'type.builtin'],
+      ['f', 'function.definition'],
+      ['() {}', 'punctuation.bracket'],
+      ['// tail', 'comment'],
+    ]
+  );
+});
+
+void t.test('dart: multi-line strings and doc comments stream line-fed', () => {
+  assertLineFedParity(
+    'dart',
+    "var s = '''a\n$b\n''';\n/// doc\n/* c\n */\nvoid f() {}\n"
+  );
 });

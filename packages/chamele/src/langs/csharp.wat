@@ -11,16 +11,16 @@
   ;; `unmanaged` collides with `unchecked` the same way and stays out, and
   ;; the rare `on` and `scoped` share their slot bits with `out` in every
   ;; geometry that fits the range.
-  (keyword-table $csWords $mem.csharpWords $mem.csharpWords+1280 32 256
-    (group ;; 1: control
+  (keyword-table $csWords $mem.csharpWords $mem.csharpWords+1280
+    (group $Token.keyword.control ;; 1: control
       "if" "do" "for" "try" "case" "else" "goto" "lock" "when" "break"
       "catch" "throw" "while" "yield" "return" "switch" "checked" "default"
       "finally" "foreach" "continue" "unchecked")
-    (group ;; 2: declaration, next name is a type
+    (group $Token.keyword.declaration+256 ;; 2: declaration, next name is a type
       "enum" "class" "record" "struct" "delegate" "interface")
-    (group "namespace") ;; 3: declaration, next name is a namespace
-    (group "using")     ;; 4: import
-    (group ;; 5: declaration, modifiers, accessors, and query clauses
+    (group $Token.keyword.declaration+512 "namespace") ;; 3: declaration, next name is a namespace
+    (group $Token.keyword.import+512 "using")     ;; 4: import
+    (group $Token.keyword.declaration ;; 5: declaration, modifiers, accessors, and query clauses
       "by" "in" "add" "get" "let" "out" "ref" "set" "var" "file" "from"
       "init" "join" "into" "async" "await" "const" "event" "fixed" "group"
       "sealed" "select" "static" "unsafe" "equals" "extern" "global"
@@ -28,23 +28,23 @@
       "private" "virtual" "abstract" "explicit" "implicit" "internal"
       "operator" "override" "readonly" "required" "volatile" "ascending"
       "protected" "descending")
-    (group ;; 6: built-in types
+    (group $Token.type.builtin ;; 6: built-in types
       "int" "bool" "byte" "char" "long" "nint" "uint" "void" "float" "nuint"
       "sbyte" "short" "ulong" "object" "string" "ushort" "decimal" "double"
       "dynamic")
-    (group "true" "false")    ;; 7: booleans
-    (group "null")            ;; 8: built-in constant
-    (group "this" "base")     ;; 9: special variables
-    (group ;; 10: word operators
+    (group $Token.boolean "true" "false")    ;; 7: booleans
+    (group $Token.constant.builtin "null")            ;; 8: built-in constant
+    (group $Token.variable.special "this" "base")     ;; 9: special variables
+    (group $Token.keyword.operator ;; 10: word operators
       "is" "as" "new" "typeof" "sizeof" "nameof" "stackalloc"))
 
   ;; Token in the low byte; the high byte selects the next-name capture:
   ;; 1=type, 2=namespace - also after `using`. -1 means an ordinary
   ;; identifier.
   (func $csWordHl (param $lhs i32) (param $rhs i32) (result i32)
-    (local $g i32)
-    (local.set $g (keyword-table.get $csWords (local.get $lhs) (local.get $rhs)))
-    (if (i32.eqz (local.get $g))
+    (local $hl i32)
+    (local.set $hl (keyword-table.value $csWords (local.get $lhs) (local.get $rhs)))
+    (if (i32.eq (local.get $hl) (i32.const -1))
       (then
         ;; the one word the table cannot hold; the wide load stays inside the
         ;; input slack, as in the table's own compare
@@ -53,26 +53,8 @@
               (i64.eq
                 (i64.and (i64.load (local.get $lhs)) (i64.const 0xffffffffff))
                 (i64.const "where")))
-          (then (return (enum.get $Token.keyword.declaration))))
-        (return (i32.const -1))))
-    (if (i32.eq (local.get $g) (i32.const 1))
-      (then (return (enum.get $Token.keyword.control))))
-    (if (i32.le_u (local.get $g) (i32.const 3))
-      (then (return (i32.or (enum.get $Token.keyword.declaration)
-        (i32.shl (i32.sub (local.get $g) (i32.const 1)) (i32.const 8))))))
-    (if (i32.eq (local.get $g) (i32.const 4))
-      (then (return (i32.or (enum.get $Token.keyword.import) (i32.const 512)))))
-    (if (i32.eq (local.get $g) (i32.const 5))
-      (then (return (enum.get $Token.keyword.declaration))))
-    (if (i32.eq (local.get $g) (i32.const 6))
-      (then (return (enum.get $Token.type.builtin))))
-    (if (i32.eq (local.get $g) (i32.const 7))
-      (then (return (enum.get $Token.boolean))))
-    (if (i32.eq (local.get $g) (i32.const 8))
-      (then (return (enum.get $Token.constant.builtin))))
-    (if (i32.eq (local.get $g) (i32.const 9))
-      (then (return (enum.get $Token.variable.special))))
-    (enum.get $Token.keyword.operator))
+          (then (return (enum.get $Token.keyword.declaration))))))
+    (local.get $hl))
 
   ;; Scan a string body from $ptr with the string's bytes since $seg still
   ;; unemitted. $kind is 1 for a regular literal - escapes, one line - 2 for
@@ -183,19 +165,7 @@
     (i32.or (i32.const 256) (i32.or (local.get $flags) (i32.shl (local.get $n) (i32.const 4)))))
 
   (func $csIsOp (param $c i32) (result i32)
-    (i32.or
-      (i32.or
-        (i32.or (i32.eq (local.get $c) (i32.const "+")) (i32.eq (local.get $c) (i32.const "-")))
-        (i32.or (i32.eq (local.get $c) (i32.const "*")) (i32.eq (local.get $c) (i32.const "/"))))
-      (i32.or
-        (i32.or (i32.eq (local.get $c) (i32.const "%")) (i32.eq (local.get $c) (i32.const "=")))
-        (i32.or
-          (i32.or (i32.eq (local.get $c) (i32.const "!")) (i32.eq (local.get $c) (i32.const "<")))
-          (i32.or
-            (i32.or (i32.eq (local.get $c) (i32.const ">")) (i32.eq (local.get $c) (i32.const "&")))
-            (i32.or
-              (i32.or (i32.eq (local.get $c) (i32.const "|")) (i32.eq (local.get $c) (i32.const "^")))
-              (i32.or (i32.eq (local.get $c) (i32.const "~")) (i32.eq (local.get $c) (i32.const "?")))))))))
+    (byteset.get "!%&*+-/<=>?^|~" (local.get $c)))
 
   ;; $strKind packs an open string body: 1 regular, 2 verbatim, 3 raw, with
   ;; bit 8 for an interpolated literal; $seg is the start of its bytes not
@@ -420,11 +390,7 @@
             (local.set $afterType (i32.const 0))
             (br $next)))
 
-        (if (i32.or
-              (i32.or (i32.eq (local.get $c) (i32.const "(")) (i32.eq (local.get $c) (i32.const ")")))
-              (i32.or
-                (i32.or (i32.eq (local.get $c) (i32.const "[")) (i32.eq (local.get $c) (i32.const "]")))
-                (i32.or (i32.eq (local.get $c) (i32.const "{")) (i32.eq (local.get $c) (i32.const "}")))))
+        (if (byteset.get "()[]{}" (local.get $c))
           (then
             ;; a bracket opening a line starts an attribute list
             (if (i32.eq (local.get $c) (i32.const "["))
@@ -506,13 +472,7 @@
               (else
                 (if (i32.or (i32.eq (local.get $c2) (i32.const "="))
                             (i32.and (i32.eq (local.get $c) (local.get $c2))
-                              (i32.or
-                                (i32.or (i32.eq (local.get $c) (i32.const "+")) (i32.eq (local.get $c) (i32.const "-")))
-                                (i32.or
-                                  (i32.or (i32.eq (local.get $c) (i32.const "<")) (i32.eq (local.get $c) (i32.const ">")))
-                                  (i32.or
-                                    (i32.or (i32.eq (local.get $c) (i32.const "&")) (i32.eq (local.get $c) (i32.const "|")))
-                                    (i32.eq (local.get $c) (i32.const "?")))))))
+                              (byteset.get "&+-<>?|" (local.get $c))))
                   (then
                     (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
                     (if (i32.and

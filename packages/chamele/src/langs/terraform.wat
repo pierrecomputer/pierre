@@ -6,7 +6,7 @@
       (i32.lt_u (local.get $p) (global.get $end))))
 
   ;; group order is the dispatch order in $hlTerraform's identifier branch
-  (keyword-table $tfWords $mem.terraformWords $mem.terraformWords+384 16 64
+  (keyword-table $tfWords $mem.terraformWords $mem.terraformWords+384
     (group "if" "in" "for" "else" "endif" "endfor") ;; 1: template and for-expression keywords
     (group "true" "false")                          ;; 2: booleans
     (group "null")                                  ;; 3: built-in constant
@@ -145,19 +145,7 @@
       (enum.get $Token.string)))
 
   (func $tfIsOp (param $c i32) (result i32)
-    (i32.or
-      (i32.or
-        (i32.or (i32.eq (local.get $c) (i32.const "+")) (i32.eq (local.get $c) (i32.const "-")))
-        (i32.or (i32.eq (local.get $c) (i32.const "*")) (i32.eq (local.get $c) (i32.const "/"))))
-      (i32.or
-        (i32.or (i32.eq (local.get $c) (i32.const "%")) (i32.eq (local.get $c) (i32.const "=")))
-        (i32.or
-          (i32.or (i32.eq (local.get $c) (i32.const "!")) (i32.eq (local.get $c) (i32.const "<")))
-          (i32.or
-            (i32.or (i32.eq (local.get $c) (i32.const ">")) (i32.eq (local.get $c) (i32.const "&")))
-            (i32.or
-              (i32.or (i32.eq (local.get $c) (i32.const "|")) (i32.eq (local.get $c) (i32.const "?")))
-              (i32.eq (local.get $c) (i32.const "~"))))))))
+    (byteset.get "!%&*+-/<=>?|~" (local.get $c)))
 
   ;; $strOpen is 1 while a quoted template body is open, with $seg the start
   ;; of its bytes not yet emitted; $interp counts braces inside a `${` or
@@ -346,11 +334,7 @@
             (local.set $member (i32.const 0))
             (br $next)))
 
-        (if (i32.or
-              (i32.or (i32.eq (local.get $c) (i32.const "(")) (i32.eq (local.get $c) (i32.const ")")))
-              (i32.or
-                (i32.or (i32.eq (local.get $c) (i32.const "[")) (i32.eq (local.get $c) (i32.const "]")))
-                (i32.or (i32.eq (local.get $c) (i32.const "{")) (i32.eq (local.get $c) (i32.const "}")))))
+        (if (byteset.get "()[]{}" (local.get $c))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (if (local.get $interp)

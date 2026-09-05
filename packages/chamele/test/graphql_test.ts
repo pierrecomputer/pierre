@@ -7,11 +7,15 @@ import tokenTypes from '../lib/token-types';
 import { transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import {
+  assertLineFedParity,
   checkInvariants,
+  exactColor,
   loadLang,
   spansOf,
   type TestLang,
   textOf,
+  tokenKinds,
+  wordColor,
 } from './util';
 
 // one unique color per token type so equal styles cannot merge neighboring
@@ -225,3 +229,269 @@ void t.test('graphql: multi-line constructs resume line-fed', () => {
     assert.deepEqual(streamed, whole, JSON.stringify(code));
   }
 });
+
+/** Highlight under the distinct theme after checking the lexer invariants. */
+const distinctHl = (src: string) =>
+  checkInvariants(lexer.hl, src, { theme: distinct });
+
+void t.test(
+  'graphql: type system definitions, descriptions, arguments, and extensions',
+  () => {
+    const html = distinctHl(
+      'schema { query: Query mutation: Mutation subscription: Subscription }\n"""\nA user.\n"""\ntype User implements Node & Entity @key(fields: "id") {\n  "single line description"\n  id: ID!\n  name: String @deprecated(reason: "x")\n  posts(first: Int = 10, after: String, filter: PostFilter = { tag: "a" }): [Post!]!\n  score: Float\n  active: Boolean\n}\ninterface Node { id: ID! }\nunion SearchResult = User | Post\nenum Role { ADMIN EDITOR @deprecated }\ninput NewPost { title: String!, tags: [String!] = [] }\nscalar Date @specifiedBy(url: "https://x")\ndirective @auth(requires: Role = ADMIN) repeatable on FIELD_DEFINITION | OBJECT\nextend type User { extra: Int }\nextend schema @link(url: "x") { query: Q }'
+    );
+    for (const word of [
+      'schema',
+      'type',
+      'implements',
+      'interface',
+      'union',
+      'enum',
+      'input',
+      'scalar',
+      'directive',
+      'repeatable',
+      'on',
+      'extend',
+    ]) {
+      assert.equal(wordColor(html, word), distinctColor('keyword'), word);
+    }
+    for (const type of [
+      'Query',
+      'Mutation',
+      'Subscription',
+      'User',
+      'Node',
+      'Entity',
+      'PostFilter',
+      'Post',
+      'SearchResult',
+      'Role',
+      'NewPost',
+      'Date',
+      'Q',
+    ]) {
+      assert.equal(wordColor(html, type), distinctColor('type'), type);
+    }
+    for (const type of ['ID', 'String', 'Int', 'Float', 'Boolean']) {
+      assert.equal(wordColor(html, type), distinctColor('type.builtin'), type);
+    }
+    for (const attr of [
+      '@key',
+      '@deprecated',
+      '@specifiedBy',
+      '@auth',
+      '@link',
+    ]) {
+      assert.equal(wordColor(html, attr), distinctColor('attribute'), attr);
+    }
+    for (const param of [
+      'fields',
+      'reason',
+      'first',
+      'after',
+      'filter',
+      'tag',
+      'url',
+      'requires',
+    ]) {
+      assert.equal(
+        wordColor(html, param),
+        distinctColor('variable.parameter'),
+        param
+      );
+    }
+    for (const prop of [
+      'query',
+      'mutation',
+      'subscription',
+      'id',
+      'name',
+      'score',
+      'active',
+      'title',
+      'tags',
+      'extra',
+    ]) {
+      assert.equal(wordColor(html, prop), distinctColor('property'), prop);
+    }
+    assert.equal(wordColor(html, 'posts'), distinctColor('function'));
+    for (const c of ['ADMIN', 'EDITOR', 'FIELD_DEFINITION', 'OBJECT']) {
+      assert.equal(wordColor(html, c), distinctColor('constant'), c);
+    }
+    for (const s of [
+      '"""',
+      'A',
+      'user.',
+      '"id"',
+      '"x"',
+      '"a"',
+      '"https://x"',
+    ]) {
+      assert.equal(wordColor(html, s), distinctColor('string'), s);
+    }
+    assert.equal(
+      exactColor(html, '"single line description"'),
+      distinctColor('string')
+    );
+    for (const op of ['&', '!', '=', '|']) {
+      assert.equal(wordColor(html, op), distinctColor('operator'), op);
+    }
+    assert.equal(wordColor(html, '10'), distinctColor('number'));
+  }
+);
+
+void t.test(
+  'graphql: spreads, inline fragments, directives on selections, and aliases',
+  () => {
+    assert.deepEqual(
+      tokenKinds(
+        'graphql',
+        '{ user(id: $id) { ...UserFields ... on Admin { level } ... @include(if: $withPosts) { id } alias: name } }'
+      ),
+      [
+        ['{', 'punctuation.bracket'],
+        ['user', 'function'],
+        ['(', 'punctuation.bracket'],
+        ['id', 'variable.parameter'],
+        [':', 'punctuation.delimiter'],
+        ['$id', 'variable'],
+        [') {', 'punctuation.bracket'],
+        ['...', 'punctuation.special'],
+        ['UserFields', 'function'],
+        ['...', 'punctuation.special'],
+        ['on', 'keyword'],
+        ['Admin', 'type'],
+        ['{', 'punctuation.bracket'],
+        ['level', 'property'],
+        ['}', 'punctuation.bracket'],
+        ['...', 'punctuation.special'],
+        ['@include', 'attribute'],
+        ['(', 'punctuation.bracket'],
+        ['if', 'variable.parameter'],
+        [':', 'punctuation.delimiter'],
+        ['$withPosts', 'variable'],
+        [') {', 'punctuation.bracket'],
+        ['id', 'property'],
+        ['}', 'punctuation.bracket'],
+        ['alias', 'property'],
+        [':', 'punctuation.delimiter'],
+        ['name', 'property'],
+        ['} }', 'punctuation.bracket'],
+      ]
+    );
+  }
+);
+
+void t.test(
+  'graphql: operations, variables with defaults, fragments, literals, and string escapes',
+  () => {
+    const html = distinctHl(
+      'query GetUser($id: ID!, $withPosts: Boolean = false, $n: Int = 5) @cached(ttl: 60) {\n  user(ids: [1, 2], flags: { a: true, b: null }, ratio: 1.5, neg: -1, exp: 1e3, orderBy: { field: CREATED, dir: DESC }) { title __typename }\n}\nfragment UserFields on User { id name }\nmutation { createPost(input: { title: "Hi \\"q\\" \\u00e9", tags: ["a"] }) { id } }\nsubscription OnPost { postAdded { id } }\n{ shorthand }'
+    );
+    for (const word of [
+      'query',
+      'fragment',
+      'on',
+      'mutation',
+      'subscription',
+    ]) {
+      assert.equal(wordColor(html, word), distinctColor('keyword'), word);
+    }
+    for (const fn of ['GetUser', 'UserFields', 'OnPost']) {
+      assert.equal(
+        wordColor(html, fn),
+        distinctColor('function.definition'),
+        fn
+      );
+    }
+    for (const v of ['$id', '$withPosts', '$n']) {
+      assert.equal(wordColor(html, v), distinctColor('variable'), v);
+    }
+    for (const fn of ['user', 'createPost']) {
+      assert.equal(wordColor(html, fn), distinctColor('function'), fn);
+    }
+    for (const param of [
+      'ttl',
+      'ids',
+      'flags',
+      'a',
+      'b',
+      'ratio',
+      'neg',
+      'exp',
+      'orderBy',
+      'field',
+      'dir',
+      'input',
+    ]) {
+      assert.equal(
+        wordColor(html, param),
+        distinctColor('variable.parameter'),
+        param
+      );
+    }
+    for (const prop of [
+      'title',
+      '__typename',
+      'id',
+      'name',
+      'postAdded',
+      'shorthand',
+    ]) {
+      assert.equal(wordColor(html, prop), distinctColor('property'), prop);
+    }
+    for (const n of ['5', '60', '1', '2', '1.5', '-1', '1e3']) {
+      assert.equal(wordColor(html, n), distinctColor('number'), n);
+    }
+    for (const b of ['false', 'true']) {
+      assert.equal(wordColor(html, b), distinctColor('boolean'), b);
+    }
+    assert.equal(wordColor(html, 'null'), distinctColor('constant.builtin'));
+    for (const c of ['CREATED', 'DESC']) {
+      assert.equal(wordColor(html, c), distinctColor('constant'), c);
+    }
+    assert.equal(wordColor(html, '@cached'), distinctColor('attribute'));
+    assert.equal(exactColor(html, '"Hi'), distinctColor('string'));
+    assert.equal(exactColor(html, '\\"'), distinctColor('string.escape'));
+    assert.equal(exactColor(html, '\\u'), distinctColor('string.escape'));
+    assert.equal(exactColor(html, '"a"'), distinctColor('string'));
+  }
+);
+
+void t.test('graphql: comments and block descriptions', () => {
+  assert.deepEqual(
+    tokenKinds(
+      'graphql',
+      '# comment\ntype T { # trailing\n  a: Int\n}\n"""\nblock\ndescription\n"""\nscalar S # tail'
+    ),
+    [
+      ['# comment', 'comment'],
+      ['type', 'keyword'],
+      ['T', 'type'],
+      ['{', 'punctuation.bracket'],
+      ['# trailing', 'comment'],
+      ['a', 'property'],
+      [':', 'punctuation.delimiter'],
+      ['Int', 'type.builtin'],
+      ['}', 'punctuation.bracket'],
+      ['"""', 'string'],
+      ['block', 'string'],
+      ['description', 'string'],
+      ['"""', 'string'],
+      ['scalar', 'keyword'],
+      ['S', 'type'],
+      ['# tail', 'comment'],
+    ]
+  );
+});
+
+void t.test(
+  'graphql: block strings, argument lists, and selections stream line-fed',
+  () => {
+    assertLineFedParity(
+      'graphql',
+      '"""\nA user.\n"""\ntype User {\n  posts(\n    first: Int = 10,\n    filter: PostFilter = { tag: "a" }\n  ): [Post!]!\n}\nquery GetUser(\n  $id: ID!\n) {\n  user(id: $id) {\n    ... on Admin {\n      level\n    }\n  }\n}\n'
+    );
+  }
+);

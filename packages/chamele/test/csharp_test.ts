@@ -7,11 +7,16 @@ import tokenTypes from '../lib/token-types';
 import { transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import {
+  assertLineFedParity,
   checkInvariants,
+  colorOf,
+  exactColor,
   loadLang,
   spansOf,
   type TestLang,
   textOf,
+  tokenKinds,
+  wordColor,
 } from './util';
 
 // one unique color per token type so equal styles cannot merge neighboring
@@ -196,3 +201,322 @@ void t.test('csharp: multi-line constructs resume line-fed', () => {
     assert.deepEqual(streamed, whole, JSON.stringify(code));
   }
 });
+
+/** Highlight under the distinct theme after checking the lexer invariants. */
+const distinctHl = (src: string) =>
+  checkInvariants(lexer.hl, src, { theme: distinct });
+
+void t.test(
+  'csharp: using directives, namespaces, and preprocessor lines',
+  () => {
+    const html = distinctHl(
+      'using System;\nusing System.Collections.Generic;\nusing static System.Math;\nusing Alias = System.Text.StringBuilder;\nglobal using G;\nnamespace Demo;\n#nullable enable\n#region R\n#endregion\n#if DEBUG\n#else\n#endif\n#pragma warning disable\n#define X'
+    );
+    assert.equal(wordColor(html, 'using'), distinctColor('keyword.import'));
+    for (const ns of [
+      'System',
+      'Collections',
+      'Generic',
+      'Alias',
+      'G',
+      'Demo',
+    ]) {
+      assert.equal(wordColor(html, ns), distinctColor('namespace'), ns);
+    }
+    for (const word of ['static', 'global', 'namespace']) {
+      assert.equal(
+        wordColor(html, word),
+        distinctColor('keyword.declaration'),
+        word
+      );
+    }
+    for (const type of ['Math', 'Text', 'StringBuilder']) {
+      assert.equal(wordColor(html, type), distinctColor('type'), type);
+    }
+    for (const pre of [
+      '#nullable',
+      '#region',
+      '#endregion',
+      '#if',
+      '#else',
+      '#endif',
+      '#pragma',
+      '#define',
+    ]) {
+      assert.equal(wordColor(html, pre), distinctColor('preproc'), pre);
+    }
+  }
+);
+
+void t.test(
+  'csharp: type declarations of every kind, members, and modifiers',
+  () => {
+    const html = distinctHl(
+      'public sealed partial class Counter<T> : ICounter where T : struct, new() { private readonly List<T> _items = new(); public static Counter<T> Empty { get; init; } = new(); protected internal event EventHandler? Changed; [Obsolete("use Add")] public async Task<bool> AddAsync(T item, CancellationToken ct = default, params int[] xs) { return true; } public Counter() { } ~Counter() { } public static implicit operator int(Counter<T> c) => 0; public T this[int i] { get => _items[i]; set => _items[i] = value; } }\npublic interface I { void F(); }\npublic struct S { }\npublic record P(int X, int Y);\npublic enum E : byte { A, B }\npublic delegate void D(int x);\nabstract class A { abstract void F(); virtual void G() {} override void H() {} }\nunsafe static extern void U(int* p);\nref struct RS2 {}\nreadonly struct RO {}'
+    );
+    for (const word of [
+      'public',
+      'sealed',
+      'partial',
+      'class',
+      'where',
+      'struct',
+      'private',
+      'readonly',
+      'static',
+      'get',
+      'init',
+      'protected',
+      'internal',
+      'event',
+      'async',
+      'params',
+      'implicit',
+      'operator',
+      'set',
+      'interface',
+      'record',
+      'enum',
+      'delegate',
+      'abstract',
+      'virtual',
+      'override',
+      'unsafe',
+      'extern',
+      'ref',
+    ]) {
+      assert.equal(
+        wordColor(html, word),
+        distinctColor('keyword.declaration'),
+        word
+      );
+    }
+    assert.equal(wordColor(html, 'new'), distinctColor('keyword.operator'));
+    for (const type of [
+      'Counter',
+      'ICounter',
+      'T',
+      'List',
+      'EventHandler',
+      'Task',
+      'CancellationToken',
+      'I',
+      'S',
+      'P',
+      'E',
+      'A',
+      'RS2',
+      'RO',
+    ]) {
+      assert.equal(wordColor(html, type), distinctColor('type'), type);
+    }
+    for (const type of ['bool', 'int', 'void', 'byte']) {
+      assert.equal(wordColor(html, type), distinctColor('type.builtin'), type);
+    }
+    for (const fn of ['AddAsync', 'F', 'D', 'G', 'H', 'U']) {
+      assert.equal(
+        wordColor(html, fn),
+        distinctColor('function.definition'),
+        fn
+      );
+    }
+    assert.equal(exactColor(html, '"use Add"'), distinctColor('string'));
+    for (const word of ['default', 'return']) {
+      assert.equal(
+        wordColor(html, word),
+        distinctColor('keyword.control'),
+        word
+      );
+    }
+    assert.equal(exactColor(html, 'true'), distinctColor('boolean'));
+    assert.equal(exactColor(html, 'this'), distinctColor('variable.special'));
+    for (const op of ['~', '=>', '?', '*']) {
+      assert.equal(wordColor(html, op), distinctColor('operator'), op);
+    }
+    for (const v of [
+      '_items',
+      'item',
+      'ct',
+      'xs',
+      'c',
+      'i',
+      'value',
+      'x',
+      'p',
+    ]) {
+      assert.equal(wordColor(html, v), distinctColor('variable'), v);
+    }
+  }
+);
+
+void t.test(
+  'csharp: numeric suffixes, char escapes, interpolated, verbatim, and raw strings',
+  () => {
+    const html = distinctHl(
+      'int x = 0x1F + 0b101 + 1_000 + 1e3f + 2.5d + 3m + 4L + 5u + \'a\' + \'\\n\'; string s = "esc\\t" + $"i {x} {y:N2} {{lit}}" + @"verbatim ""q"" \\n" + """\n  raw\n  """; bool b = true; object o = null; var v = default; dynamic d = 1; nint n = 1; var l = new List<int> { 1 };'
+    );
+    for (const n of [
+      '0x1F',
+      '0b101',
+      '1_000',
+      '1e3f',
+      '2.5d',
+      '3m',
+      '4L',
+      '5u',
+    ]) {
+      assert.equal(exactColor(html, n), distinctColor('number'), n);
+    }
+    assert.equal(exactColor(html, "'a'"), distinctColor('string'));
+    for (const esc of ['\\n', '\\t']) {
+      assert.equal(exactColor(html, esc), distinctColor('string.escape'), esc);
+    }
+    assert.equal(exactColor(html, '$"i'), distinctColor('string'));
+    assert.equal(exactColor(html, '{'), distinctColor('punctuation.special'));
+    assert.equal(exactColor(html, 'N2'), distinctColor('constant'));
+    assert.equal(
+      exactColor(html, '@"verbatim ""q"" \\n"'),
+      distinctColor('string')
+    );
+    assert.equal(colorOf(html, '  raw'), distinctColor('string'));
+    for (const type of ['int', 'string', 'bool', 'object', 'dynamic', 'nint']) {
+      assert.equal(wordColor(html, type), distinctColor('type.builtin'), type);
+    }
+    assert.equal(exactColor(html, 'true'), distinctColor('boolean'));
+    assert.equal(exactColor(html, 'null'), distinctColor('constant.builtin'));
+    assert.equal(exactColor(html, 'default'), distinctColor('keyword.control'));
+    assert.equal(wordColor(html, 'var'), distinctColor('keyword.declaration'));
+    assert.equal(exactColor(html, 'new'), distinctColor('keyword.operator'));
+    assert.equal(exactColor(html, 'List'), distinctColor('type'));
+  }
+);
+
+void t.test(
+  'csharp: statements, patterns, expressions, and contextual keywords',
+  () => {
+    const html = distinctHl(
+      'for (int i = 0; i < n; i++) { if (a && b || !c) break; else continue; } foreach (var x in xs) {} while (x) {} do {} while (false); switch (k) { case 1: goto case 2; case 2: break; default: return; } var r = k switch { 1 => "a", _ => "b" }; try { throw new E(); } catch (E e) when (e.Ok) {} finally {} using (var d = new D()) {} lock (o) {} checked { } unchecked { } fixed (int* p = arr) {} yield return 1; yield break; var o2 = x is int i2 && i2 > 0; var o4 = x as string; typeof(int); sizeof(int); nameof(x); stackalloc int[3]; this.x; base.F(); x ??= y; x ?? y; x?.Y; a => a; ref int r2 = ref x; in x; out x; init; required; file'
+    );
+    for (const word of [
+      'for',
+      'if',
+      'break',
+      'else',
+      'continue',
+      'foreach',
+      'while',
+      'do',
+      'switch',
+      'case',
+      'goto',
+      'default',
+      'return',
+      'try',
+      'throw',
+      'catch',
+      'when',
+      'finally',
+      'lock',
+      'checked',
+      'unchecked',
+      'yield',
+    ]) {
+      assert.equal(
+        wordColor(html, word),
+        distinctColor('keyword.control'),
+        word
+      );
+    }
+    for (const word of [
+      'var',
+      'fixed',
+      'ref',
+      'in',
+      'out',
+      'init',
+      'required',
+      'file',
+    ]) {
+      assert.equal(
+        wordColor(html, word),
+        distinctColor('keyword.declaration'),
+        word
+      );
+    }
+    assert.equal(wordColor(html, 'using'), distinctColor('keyword.import'));
+    for (const word of [
+      'new',
+      'is',
+      'as',
+      'typeof',
+      'sizeof',
+      'nameof',
+      'stackalloc',
+    ]) {
+      assert.equal(
+        wordColor(html, word),
+        distinctColor('keyword.operator'),
+        word
+      );
+    }
+    for (const op of [
+      '&&',
+      '||',
+      '!',
+      '++',
+      '=>',
+      '??=',
+      '??',
+      '?.',
+      '>',
+      '<',
+    ]) {
+      assert.equal(wordColor(html, op), distinctColor('operator'), op);
+    }
+    for (const v of ['this', 'base']) {
+      assert.equal(exactColor(html, v), distinctColor('variable.special'), v);
+    }
+    assert.equal(exactColor(html, 'F'), distinctColor('function.method'));
+    // `new E()` and `new D()` are constructor calls; the catch clause names the type
+    for (const c of ['E', 'D']) {
+      assert.equal(wordColor(html, c), distinctColor('function'), c);
+    }
+    for (const type of ['Ok', 'Y']) {
+      assert.equal(wordColor(html, type), distinctColor('type'), type);
+    }
+    assert.equal(exactColor(html, 'false'), distinctColor('boolean'));
+    for (const type of ['int', 'string']) {
+      assert.equal(wordColor(html, type), distinctColor('type.builtin'), type);
+    }
+  }
+);
+
+void t.test('csharp: comment forms including XML doc comments', () => {
+  assert.deepEqual(
+    tokenKinds(
+      'csharp',
+      '// line\n/* block\n */\n/// <summary>doc</summary>\n/** block doc */\nvoid F() {} // tail'
+    ),
+    [
+      ['// line', 'comment'],
+      ['/* block', 'comment'],
+      ['*/', 'comment'],
+      ['/// <summary>doc</summary>', 'comment.doc'],
+      ['/** block doc */', 'comment.doc'],
+      ['void', 'type.builtin'],
+      ['F', 'function.definition'],
+      ['() {}', 'punctuation.bracket'],
+      ['// tail', 'comment'],
+    ]
+  );
+});
+
+void t.test(
+  'csharp: raw strings, verbatim strings, and block comments stream line-fed',
+  () => {
+    assertLineFedParity(
+      'csharp',
+      'var s = """\n  a\n  """;\nvar v = @"x\ny";\n/* c\n */\n/// <summary>\n/// d\n/// </summary>\nvoid F() {}\n'
+    );
+  }
+);

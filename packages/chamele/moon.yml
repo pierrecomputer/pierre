@@ -35,6 +35,12 @@ tasks:
   # build.
   test:
     command: 'bun test'
+    # Bun 1.4's JavaScriptCore returns one wrong result from a hot SIMD scan
+    # at the moment its optimizing wasm tier kicks in (see the warm-up note in
+    # test/conformance_test.ts). The baseline tier is correct and only ~15%
+    # slower for this suite.
+    env:
+      BUN_JSC_useOMGJIT: '0'
     options:
       merge: 'replace'
 

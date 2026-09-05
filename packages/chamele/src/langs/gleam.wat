@@ -6,50 +6,25 @@
       (i32.lt_u (local.get $p) (global.get $end))))
 
   ;; Group order is the dispatch order in $gleamWordHl below.
-  (keyword-table $gleamWords $mem.gleamWords $mem.gleamWords+384 16 64
-    (group ;; 1: control
+  (keyword-table $gleamWords $mem.gleamWords $mem.gleamWords+384
+    (group $Token.keyword.control ;; 1: control
       "case" "if" "else" "panic" "todo" "assert" "echo" "use")
-    (group "fn")   ;; 2: declaration, next name is a function
-    (group "type") ;; 3: declaration, next name is a type
-    (group ;; 4: declaration
+    (group $Token.keyword.declaration+256 "fn")   ;; 2: declaration, next name is a function
+    (group $Token.keyword.declaration+512 "type") ;; 3: declaration, next name is a type
+    (group $Token.keyword.declaration ;; 4: declaration
       "let" "const" "pub" "opaque" "auto" "delegate" "derive" "implement"
       "macro" "test")
-    (group "import" "as")  ;; 5: import
-    (group "True" "False") ;; 6: booleans
-    (group "Nil"))         ;; 7: built-in constant
+    (group $Token.keyword.import "import" "as")  ;; 5: import
+    (group $Token.boolean "True" "False") ;; 6: booleans
+    (group $Token.constant.builtin "Nil"))         ;; 7: built-in constant
 
   ;; Token in the low byte; the high byte selects the next-name capture:
   ;; 1=function, 2=type. -1 for an ordinary name.
   (func $gleamWordHl (param $lhs i32) (param $rhs i32) (result i32)
-    (local $g i32)
-    (local.set $g (keyword-table.get $gleamWords (local.get $lhs) (local.get $rhs)))
-    (if (i32.eqz (local.get $g))
-      (then (return (i32.const -1))))
-    (if (i32.eq (local.get $g) (i32.const 1))
-      (then (return (enum.get $Token.keyword.control))))
-    (if (i32.le_u (local.get $g) (i32.const 3))
-      (then (return (i32.or (enum.get $Token.keyword.declaration)
-        (i32.shl (i32.sub (local.get $g) (i32.const 1)) (i32.const 8))))))
-    (if (i32.eq (local.get $g) (i32.const 4))
-      (then (return (enum.get $Token.keyword.declaration))))
-    (if (i32.eq (local.get $g) (i32.const 5))
-      (then (return (enum.get $Token.keyword.import))))
-    (if (i32.eq (local.get $g) (i32.const 6))
-      (then (return (enum.get $Token.boolean))))
-    (enum.get $Token.constant.builtin))
+    (keyword-table.value $gleamWords (local.get $lhs) (local.get $rhs)))
 
   (func $gleamIsOp (param $c i32) (result i32)
-    (i32.or
-      (i32.or
-        (i32.or (i32.eq (local.get $c) (i32.const "+")) (i32.eq (local.get $c) (i32.const "-")))
-        (i32.or (i32.eq (local.get $c) (i32.const "*")) (i32.eq (local.get $c) (i32.const "/"))))
-      (i32.or
-        (i32.or
-          (i32.or (i32.eq (local.get $c) (i32.const "=")) (i32.eq (local.get $c) (i32.const "!")))
-          (i32.or (i32.eq (local.get $c) (i32.const "<")) (i32.eq (local.get $c) (i32.const ">"))))
-        (i32.or
-          (i32.or (i32.eq (local.get $c) (i32.const "|")) (i32.eq (local.get $c) (i32.const "&")))
-          (i32.eq (local.get $c) (i32.const "%"))))))
+    (byteset.get "!%&*+-/<=>|" (local.get $c)))
 
   ;; $expect is 1 after `fn` and 2 after `type`, naming the next capture.
   ;; $importCtx is 1 on an `import` line, where names are module paths.
@@ -164,11 +139,7 @@
             (local.set $member (i32.const 0))
             (br $next)))
 
-        (if (i32.or
-              (i32.or (i32.eq (local.get $c) (i32.const "(")) (i32.eq (local.get $c) (i32.const ")")))
-              (i32.or
-                (i32.or (i32.eq (local.get $c) (i32.const "[")) (i32.eq (local.get $c) (i32.const "]")))
-                (i32.or (i32.eq (local.get $c) (i32.const "{")) (i32.eq (local.get $c) (i32.const "}")))))
+        (if (byteset.get "()[]{}" (local.get $c))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (call $emitTok (enum.get $Token.punctuation.bracket) (local.get $lhs) (global.get $ptr))

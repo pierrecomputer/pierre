@@ -6,12 +6,15 @@ import { codeToTokens, init, StreamTokenizer } from '../lib/index';
 import { transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import {
+  assertLineFedParity,
   checkInvariants,
   colorOf,
+  kindOfColor,
   loadLang,
   spansOf,
   type TestLang,
   themeColor,
+  tokenKinds,
 } from './util';
 
 let markdown: TestLang;
@@ -405,3 +408,241 @@ void t.test('markdown: lines of many `<` or `[` stay linear', () => {
   assert.equal(colorOf(out, 'e'), LINK_TEXT);
   assert.equal(colorOf(out, 'f'), LINK_URI);
 });
+
+void t.test(
+  'markdown: ATX headings at every level, with inline code and closing hashes',
+  () => {
+    assert.deepEqual(
+      tokenKinds(
+        'markdown',
+        '# H1\n## H2 with `code`\n### H3\n#  spaced heading  #'
+      ),
+      [
+        ['#', 'punctuation.special'],
+        ['H1', 'title'],
+        ['##', 'punctuation.special'],
+        ['H2 with `code`', 'title'],
+        ['###', 'punctuation.special'],
+        ['H3', 'title'],
+        ['#', 'punctuation.special'],
+        ['spaced heading  #', 'title'],
+      ]
+    );
+    // a hash glued to a word is a tag, not a heading
+    assert.deepEqual(tokenKinds('markdown', '#hashtag not heading'), [
+      ['#hashtag not heading', null],
+    ]);
+  }
+);
+
+void t.test(
+  'markdown: emphasis, strong, inline code, inline HTML, and escapes',
+  () => {
+    assert.deepEqual(
+      tokenKinds(
+        'markdown',
+        '*em* _em_ **strong** __strong__ `inline` ``double `tick` `` <span>html</span> \\*escaped\\*'
+      ),
+      [
+        ['*em*', 'emphasis'],
+        ['_em_', 'emphasis'],
+        ['**strong**', 'emphasis.strong'],
+        ['__strong__', 'emphasis.strong'],
+        ['`inline`', 'text.literal'],
+        ['``double `tick` ``', 'text.literal'],
+        ['<', 'punctuation.bracket.html'],
+        ['span', 'tag'],
+        ['>', 'punctuation.bracket.html'],
+        ['html', null],
+        ['</', 'punctuation.bracket.html'],
+        ['span', 'tag'],
+        ['>', 'punctuation.bracket.html'],
+        ['\\*', 'string.escape'],
+        ['escaped', null],
+        ['\\*', 'string.escape'],
+      ]
+    );
+  }
+);
+
+void t.test(
+  'markdown: inline links and images split into text, uri, and brackets',
+  () => {
+    assert.deepEqual(
+      tokenKinds('markdown', '[link](https://x.com "title") ![img](a.png)'),
+      [
+        ['[', 'punctuation.bracket'],
+        ['link', 'link_text'],
+        ['](', 'punctuation.bracket'],
+        ['https://x.com "title"', 'link_uri'],
+        [')', 'punctuation.bracket'],
+        ['!', null],
+        ['[', 'punctuation.bracket'],
+        ['img', 'link_text'],
+        ['](', 'punctuation.bracket'],
+        ['a.png', 'link_uri'],
+        [')', 'punctuation.bracket'],
+      ]
+    );
+  }
+);
+
+void t.test(
+  'markdown: every list marker, nested quotes, and table rows',
+  () => {
+    assert.deepEqual(
+      tokenKinds(
+        'markdown',
+        '- a\n* star\n+ plus\n1. one\n2) two\n  - nested\n- [x] done\n> quote\n> > nested quote\n| a | b |\n|:--|--:|'
+      ),
+      [
+        ['-', 'punctuation.list_marker'],
+        ['a', null],
+        ['*', 'punctuation.list_marker'],
+        ['star', null],
+        ['+', 'punctuation.list_marker'],
+        ['plus', null],
+        ['1.', 'punctuation.list_marker'],
+        ['one', null],
+        ['2)', 'punctuation.list_marker'],
+        ['two', null],
+        ['-', 'punctuation.list_marker'],
+        ['nested', null],
+        ['-', 'punctuation.list_marker'],
+        ['[x] done', null],
+        ['>', 'punctuation.markup'],
+        ['quote', null],
+        ['> >', 'punctuation.markup'],
+        ['nested quote', null],
+        ['|', 'punctuation.markup'],
+        ['a', null],
+        ['|', 'punctuation.markup'],
+        ['b', null],
+        ['|', 'punctuation.markup'],
+        ['|', 'punctuation.markup'],
+        [':--', null],
+        ['|', 'punctuation.markup'],
+        ['--:', null],
+        ['|', 'punctuation.markup'],
+      ]
+    );
+  }
+);
+
+void t.test(
+  'markdown: backtick and tilde fences by language, bare, unknown, and nested',
+  () => {
+    assert.deepEqual(
+      tokenKinds(
+        'markdown',
+        '```js\nconst x = 1;\n```\n~~~python\ndef f(): pass\n~~~\n```\nplain fence\n```\n```unknownlang\nx = 1\n```'
+      ),
+      [
+        ['```js', 'punctuation.delimiter'],
+        ['const', 'keyword.declaration'],
+        ['x', 'variable'],
+        ['=', 'operator'],
+        ['1', 'number'],
+        [';', 'punctuation.delimiter'],
+        ['```', 'punctuation.delimiter'],
+        ['~~~python', 'punctuation.delimiter'],
+        ['def', 'keyword.declaration'],
+        ['f', 'function.definition'],
+        ['()', 'punctuation.bracket'],
+        [':', 'punctuation.delimiter'],
+        ['pass', 'keyword.control'],
+        ['~~~', 'punctuation.delimiter'],
+        ['```', 'punctuation.delimiter'],
+        ['plain fence', 'text.literal'],
+        ['```', 'punctuation.delimiter'],
+        ['```unknownlang', 'punctuation.delimiter'],
+        ['x = 1', 'text.literal'],
+        ['```', 'punctuation.delimiter'],
+      ]
+    );
+    // a four-backtick markdown fence highlights the inner three-backtick fence
+    assert.deepEqual(tokenKinds('markdown', '````md\n```\ninner\n```\n````'), [
+      ['````md', 'punctuation.delimiter'],
+      ['```', 'punctuation.delimiter'],
+      ['inner', 'text.literal'],
+      ['```', 'punctuation.delimiter'],
+      ['````', 'punctuation.delimiter'],
+    ]);
+  }
+);
+
+void t.test('markdown: HTML blocks, comments, and hard breaks', () => {
+  assert.deepEqual(
+    tokenKinds(
+      'markdown',
+      '<div class="a">\n<p>html block</p>\n</div>\n<!-- comment -->\nText with trailing spaces  \nhard break\\\nnext'
+    ),
+    [
+      ['<', 'punctuation.bracket.html'],
+      ['div', 'tag'],
+      ['class', 'attribute'],
+      ['=', 'punctuation.delimiter.html'],
+      ['"a"', 'string'],
+      ['>', 'punctuation.bracket.html'],
+      ['<', 'punctuation.bracket.html'],
+      ['p', 'tag'],
+      ['>', 'punctuation.bracket.html'],
+      ['html block', null],
+      ['</', 'punctuation.bracket.html'],
+      ['p', 'tag'],
+      ['>', 'punctuation.bracket.html'],
+      ['</', 'punctuation.bracket.html'],
+      ['div', 'tag'],
+      ['>', 'punctuation.bracket.html'],
+      ['<!-- comment -->', 'comment'],
+      ['Text with trailing spaces', null],
+      ['hard break\\', null],
+      ['next', null],
+    ]
+  );
+});
+
+void t.test(
+  'markdown: headings, lists, fences, tables, and HTML blocks stream line-fed',
+  () => {
+    assertLineFedParity(
+      'markdown',
+      '# H1\n\nSetext\n======\n\n- a\n  - nested\n1. one\n> quote\n\n| a | b |\n|:--|--:|\n\n```js\nconst x = 1;\n```\n~~~python\ndef f(): pass\n~~~\n````md\n```\ninner\n```\n````\n\n<div class="a">\n<p>html block</p>\n</div>\n<!-- multi\nline -->\nhard break\\\nnext\n'
+    );
+  }
+);
+
+void t.test(
+  'markdown: fences nested inside markdown fences resume line-fed at every depth',
+  () => {
+    // an inner fence must survive the chunk boundary alongside the outer one
+    assert.deepEqual(
+      tokenKinds('markdown', '````md\n```\ninner\n```\n````'),
+      assertLineFedParity('markdown', '````md\n```\ninner\n```\n````')
+        .flat()
+        .map(
+          (tok) =>
+            [tok.content.trim(), kindOfColor(tok.color)] as [
+              string,
+              string | null,
+            ]
+        )
+        .filter(([text]) => text !== '')
+    );
+    for (const code of [
+      '`````md\n````md\n```\ninner\n```\n````\n`````\nafter\n',
+      '````md\n```\ninner\n````\nafter\n```\nnot literal\n',
+      '````md\n```js\nconst a = 1;\n```\ntext *em*\n```py\nx = 1\n```\n````\n',
+      '> ````md\n> ```\n> inner\n> ```\n> ````\n',
+      '- ````md\n  ```\n  inner\n  ```\n  ````\n',
+      '````md\n```\ninner\n```\n````\n````md\n```\nsecond\n```\n````\n',
+      '````mdx\n<Card>\n```\ninner\n```\n</Card>\n````\n',
+      '````md\n~~~\n```\nstill tilde\n```\n~~~\n````\n',
+      '````md\n```\nnever closed\n',
+      '```md\n````\ninner\n````\n```\nafter\n',
+      '````md\n```md\n```\ndeep\n```\n```\n````\n',
+    ]) {
+      assertLineFedParity('markdown', code);
+    }
+  }
+);

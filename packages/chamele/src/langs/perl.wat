@@ -12,7 +12,7 @@
   ;; shares its hash features with `require` and stays out, and `undef` and
   ;; `splice` share slot bits with `not` and `return` in every geometry that
   ;; fits the range.
-  (keyword-table $perlWords $mem.perlWords $mem.perlWords+1024 16 256
+  (keyword-table $perlWords $mem.perlWords $mem.perlWords+1024
     (group ;; 1: control
       "do" "if" "for" "else" "last" "next" "redo" "goto" "until" "elsif"
       "while" "unless" "return" "foreach")
@@ -239,21 +239,7 @@
       (local.get $delim) (local.get $n) (i32.shl (local.get $strip) (i32.const 1)) (local.get $hl)))
 
   (func $perlIsOp (param $c i32) (result i32)
-    (i32.or
-      (i32.or
-        (i32.or (i32.eq (local.get $c) (i32.const "+")) (i32.eq (local.get $c) (i32.const "-")))
-        (i32.or (i32.eq (local.get $c) (i32.const "*")) (i32.eq (local.get $c) (i32.const "/"))))
-      (i32.or
-        (i32.or (i32.eq (local.get $c) (i32.const "%")) (i32.eq (local.get $c) (i32.const "=")))
-        (i32.or
-          (i32.or (i32.eq (local.get $c) (i32.const "!")) (i32.eq (local.get $c) (i32.const "<")))
-          (i32.or
-            (i32.or (i32.eq (local.get $c) (i32.const ">")) (i32.eq (local.get $c) (i32.const "&")))
-            (i32.or
-              (i32.or (i32.eq (local.get $c) (i32.const "|")) (i32.eq (local.get $c) (i32.const "^")))
-              (i32.or
-                (i32.or (i32.eq (local.get $c) (i32.const "~")) (i32.eq (local.get $c) (i32.const "?")))
-                (i32.eq (local.get $c) (i32.const ".")))))))))
+    (byteset.get "!%&*+-./<=>?^|~" (local.get $c)))
 
   ;; An open quoted body is described by $sClose, $sOpen, $sDepth, and
   ;; $sFlags - see $perlQuoteBody - with $sActive 1 while it is being
@@ -637,11 +623,7 @@
             (local.set $member (i32.const 0))
             (br $next)))
 
-        (if (i32.or
-              (i32.or (i32.eq (local.get $c) (i32.const "(")) (i32.eq (local.get $c) (i32.const ")")))
-              (i32.or
-                (i32.or (i32.eq (local.get $c) (i32.const "[")) (i32.eq (local.get $c) (i32.const "]")))
-                (i32.or (i32.eq (local.get $c) (i32.const "{")) (i32.eq (local.get $c) (i32.const "}")))))
+        (if (byteset.get "()[]{}" (local.get $c))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (call $emitTok (enum.get $Token.punctuation.bracket) (local.get $lhs) (global.get $ptr))

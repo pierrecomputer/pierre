@@ -7,11 +7,15 @@ import tokenTypes from '../lib/token-types';
 import { transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import {
+  assertLineFedParity,
   checkInvariants,
+  exactColor,
   loadLang,
   spansOf,
   type TestLang,
   textOf,
+  tokenKinds,
+  wordColor,
 } from './util';
 
 // one unique color per token type so equal styles cannot merge neighboring
@@ -183,4 +187,108 @@ void t.test('sass: multi-line constructs resume line-fed', () => {
     const [whole, streamed] = wholeAndLineFed('sass', code);
     assert.deepEqual(streamed, whole, JSON.stringify(code));
   }
+});
+
+/** Highlight under the distinct theme after checking the lexer invariants. */
+const distinctHl = (src: string) =>
+  checkInvariants(lexer.hl, src, { theme: distinct });
+
+void t.test(
+  'sass: module rules, mixin shorthands, control directives, and interpolation',
+  () => {
+    const html = distinctHl(
+      '@use "sass:math"\n@forward "x"\n$map: (a: 1, b: 2)\n=mixin($a, $b: 2)\n  width: $a\n@mixin m2($args...)\n  height: 1px\n.a\n  +mixin(1, 2)\n  @include m2(1, 2)\n  @extend %ph\n  color: map-get($map, a)\n  @if $a == 1\n    x: 1\n  @else if $a == 2\n    x: 2\n  @each $k, $v in $map\n    .#{$k}\n      y: $v\n  @for $i from 1 through 3\n    z: $i\n  @while $i > 0\n    w: $i\n  @function f($x)\n    @return $x * 2\n  @debug "x"\n  &__elem\n    r: 1\n  &:hover\n    s: 1\n  #{$prop}-top: 1px\n%ph\n  t: 1 !default'
+    );
+    for (const word of [
+      '@use',
+      '@forward',
+      '@mixin',
+      '@include',
+      '@extend',
+      '@if',
+      '@else',
+      '@each',
+      '@for',
+      '@while',
+      '@function',
+      '@return',
+      '@debug',
+      '!default',
+      '=',
+      '+',
+    ]) {
+      assert.equal(wordColor(html, word), distinctColor('keyword'), word);
+    }
+    for (const s of ['"sass:math"', '"x"']) {
+      assert.equal(exactColor(html, s), distinctColor('string'), s);
+    }
+    for (const v of [
+      '$map',
+      '$a',
+      '$b',
+      '$args',
+      '$k',
+      '$v',
+      '$i',
+      '$x',
+      '$prop',
+    ]) {
+      assert.equal(wordColor(html, v), distinctColor('variable'), v);
+    }
+    for (const fn of ['mixin', 'm2', 'map-get', 'f']) {
+      assert.equal(wordColor(html, fn), distinctColor('function'), fn);
+    }
+    for (const c of ['.a', '%ph', '&__elem']) {
+      assert.equal(wordColor(html, c), distinctColor('selector.class'), c);
+    }
+    assert.equal(exactColor(html, ':hover'), distinctColor('selector.pseudo'));
+    for (const p of [
+      'width',
+      'height',
+      'color',
+      'x',
+      'y',
+      'z',
+      'w',
+      'r',
+      's',
+      '-top',
+    ]) {
+      assert.equal(wordColor(html, p), distinctColor('property'), p);
+    }
+    for (const word of ['in', 'from', 'through', 'if']) {
+      assert.equal(
+        wordColor(html, word),
+        distinctColor('keyword.operator'),
+        word
+      );
+    }
+    for (const op of ['==', '>', '*', '&']) {
+      assert.equal(wordColor(html, op), distinctColor('operator'), op);
+    }
+    assert.equal(exactColor(html, '#{'), distinctColor('punctuation.special'));
+    assert.equal(exactColor(html, '1px'), distinctColor('number'));
+  }
+);
+
+void t.test('sass: comment forms', () => {
+  assert.deepEqual(
+    tokenKinds('sass', '// line\n/* block */\n.a\n  b: 1 // tail'),
+    [
+      ['// line', 'comment'],
+      ['/* block */', 'comment'],
+      ['.a', 'selector.class'],
+      ['b', 'property'],
+      [':', 'punctuation.delimiter'],
+      ['1', 'number'],
+      ['// tail', 'comment'],
+    ]
+  );
+});
+
+void t.test('sass: nested blocks and block comments stream line-fed', () => {
+  assertLineFedParity(
+    'sass',
+    '/* a\n b */\n.x\n  color: red\n  &:hover\n    color: blue\n  .y\n    z: 1\n'
+  );
 });

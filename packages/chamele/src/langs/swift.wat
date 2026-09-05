@@ -9,23 +9,23 @@
   ;; absent on purpose: the table hash sees only the first two bytes, the last
   ;; byte, and the length, which are identical for `while`, so the two words
   ;; can never share a table and `where` is matched directly in $swiftWordHl.
-  (keyword-table $swiftWords $mem.swiftWords $mem.swiftWords+768 16 128
-    (group ;; 1: control
+  (keyword-table $swiftWords $mem.swiftWords $mem.swiftWords+768
+    (group $Token.keyword.control ;; 1: control
       "do" "if" "for" "try" "case" "else" "defer" "guard" "while" "break"
       "catch" "throw" "async" "await" "repeat" "return" "switch" "default"
       "continue")
-    (group "func") ;; 2: declaration, next name is a function
-    (group ;; 3: declaration, next name is a type
+    (group $Token.keyword.declaration+256 "func") ;; 2: declaration, next name is a function
+    (group $Token.keyword.declaration+512 ;; 3: declaration, next name is a type
       "enum" "class" "actor" "struct" "protocol" "typealias" "extension")
-    (group "let" "var" "deinit" "subscript") ;; 4: declaration
-    (group "import")    ;; 5: import
-    (group "in" "is" "as") ;; 6: operator keywords
-    (group ;; 7: built-in types
+    (group $Token.keyword.declaration "let" "var" "deinit" "subscript") ;; 4: declaration
+    (group $Token.keyword.import "import")    ;; 5: import
+    (group $Token.keyword.operator "in" "is" "as") ;; 6: operator keywords
+    (group $Token.type.builtin ;; 7: built-in types
       "Int" "Bool" "Void" "Float" "Double" "String")
-    (group "true" "false") ;; 8: booleans
-    (group "nil")          ;; 9: built-in constant
-    (group "self" "super") ;; 10: special variables
-    (group ;; 11: modifiers
+    (group $Token.boolean "true" "false") ;; 8: booleans
+    (group $Token.constant.builtin "nil")          ;; 9: built-in constant
+    (group $Token.variable.special "self" "super") ;; 10: special variables
+    (group $Token.keyword ;; 11: modifiers
       "any" "some" "lazy" "weak" "open" "final" "inout" "static" "public"
       "throws" "private" "unowned" "internal" "mutating" "override"
       "rethrows" "fileprivate"))
@@ -33,10 +33,10 @@
   ;; Token in the low byte; the high byte selects the next-name capture:
   ;; 1=function, 2=type.
   (func $swiftWordHl (param $lhs i32) (param $rhs i32) (result i32)
-    (local $g i32)
-    (local.set $g
-      (keyword-table.get $swiftWords (local.get $lhs) (local.get $rhs)))
-    (if (i32.eqz (local.get $g))
+    (local $hl i32)
+    (local.set $hl
+      (keyword-table.value $swiftWords (local.get $lhs) (local.get $rhs)))
+    (if (i32.eq (local.get $hl) (i32.const -1))
       (then
         ;; the one word the table cannot hold; the wide load stays inside the
         ;; input slack, as in the table's own compare
@@ -45,28 +45,8 @@
               (i64.eq
                 (i64.and (i64.load (local.get $lhs)) (i64.const 0xffffffffff))
                 (i64.const "where")))
-          (then (return (enum.get $Token.keyword))))
-        (return (i32.const -1))))
-    (if (i32.eq (local.get $g) (i32.const 1))
-      (then (return (enum.get $Token.keyword.control))))
-    (if (i32.le_u (local.get $g) (i32.const 3))
-      (then (return (i32.or (enum.get $Token.keyword.declaration)
-        (i32.shl (i32.sub (local.get $g) (i32.const 1)) (i32.const 8))))))
-    (if (i32.eq (local.get $g) (i32.const 4))
-      (then (return (enum.get $Token.keyword.declaration))))
-    (if (i32.eq (local.get $g) (i32.const 5))
-      (then (return (enum.get $Token.keyword.import))))
-    (if (i32.eq (local.get $g) (i32.const 6))
-      (then (return (enum.get $Token.keyword.operator))))
-    (if (i32.eq (local.get $g) (i32.const 7))
-      (then (return (enum.get $Token.type.builtin))))
-    (if (i32.eq (local.get $g) (i32.const 8))
-      (then (return (enum.get $Token.boolean))))
-    (if (i32.eq (local.get $g) (i32.const 9))
-      (then (return (enum.get $Token.constant.builtin))))
-    (if (i32.eq (local.get $g) (i32.const 10))
-      (then (return (enum.get $Token.variable.special))))
-    (enum.get $Token.keyword))
+          (then (return (enum.get $Token.keyword))))))
+    (local.get $hl))
 
   (func $swiftRawStart (result i32)
     (local $p i32)
@@ -135,19 +115,7 @@
     (i32.const 0))
 
   (func $swiftIsOp (param $c i32) (result i32)
-    (i32.or
-      (i32.or (i32.eq (local.get $c) (i32.const "+")) (i32.eq (local.get $c) (i32.const "-")))
-      (i32.or
-        (i32.or (i32.eq (local.get $c) (i32.const "*")) (i32.eq (local.get $c) (i32.const "/")))
-        (i32.or
-          (i32.or (i32.eq (local.get $c) (i32.const "%")) (i32.eq (local.get $c) (i32.const "=")))
-          (i32.or
-            (i32.or (i32.eq (local.get $c) (i32.const "!")) (i32.eq (local.get $c) (i32.const "<")))
-            (i32.or
-              (i32.or (i32.eq (local.get $c) (i32.const ">")) (i32.eq (local.get $c) (i32.const "&")))
-              (i32.or
-                (i32.or (i32.eq (local.get $c) (i32.const "|")) (i32.eq (local.get $c) (i32.const "^")))
-                (i32.or (i32.eq (local.get $c) (i32.const "?")) (i32.eq (local.get $c) (i32.const "~"))))))))))
+    (byteset.get "!%&*+-/<=>?^|~" (local.get $c)))
 
   ;; $stringMode marks an open `"` body with $seg the start of its bytes not
   ;; yet emitted - zero across a chunk boundary, where the body resumes at
@@ -371,11 +339,7 @@
             (local.set $member (i32.const 0))
             (br $next)))
 
-        (if (i32.or
-              (i32.or (i32.eq (local.get $c) (i32.const "(")) (i32.eq (local.get $c) (i32.const ")")))
-              (i32.or
-                (i32.or (i32.eq (local.get $c) (i32.const "[")) (i32.eq (local.get $c) (i32.const "]")))
-                (i32.or (i32.eq (local.get $c) (i32.const "{")) (i32.eq (local.get $c) (i32.const "}")))))
+        (if (byteset.get "()[]{}" (local.get $c))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (if (i32.and (i32.eq (local.get $c) (i32.const ")"))

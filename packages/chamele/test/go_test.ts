@@ -6,13 +6,19 @@ import { codeToTokens, init, StreamTokenizer } from '../lib/index';
 import { transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import {
+  assertLineFedParity,
   checkInvariants,
   colorOf,
+  distinctColor,
+  distinctTheme,
+  exactColor,
   loadLang,
   spansOf,
   type TestLang,
   textOf,
   themeColor,
+  tokenKinds,
+  wordColor,
 } from './util';
 
 let go: TestLang;
@@ -229,5 +235,170 @@ func plain() {}`,
       const { direct, streamed } = lineFed(code);
       assert.deepEqual(streamed, direct, JSON.stringify(code));
     }
+  }
+);
+
+/** Highlight under the distinct theme after checking the lexer invariants. */
+const distinctHl = (src: string) =>
+  checkInvariants(go.hl, src, { theme: distinctTheme });
+
+void t.test('go: package clause and grouped imports with aliases', () => {
+  assert.deepEqual(
+    tokenKinds('go', 'package main\nimport (\n\t"fmt"\n\tstr "strings"\n)'),
+    [
+      ['package', 'keyword.declaration'],
+      ['main', 'namespace'],
+      ['import', 'keyword.import'],
+      ['(', 'punctuation.bracket'],
+      ['"fmt"', 'string'],
+      ['str', 'variable'],
+      ['"strings"', 'string'],
+      [')', 'punctuation.bracket'],
+    ]
+  );
+});
+
+void t.test(
+  'go: interfaces, structs, receivers, generics, and struct tags',
+  () => {
+    const html = distinctHl(
+      'type Shape interface { Area() float64 }\ntype Rect struct { W, H float64 `json:"w"` }\nfunc (r *Rect) Area() float64 { return r.W * r.H }\nfunc New[T any](v T) *T { return &v }'
+    );
+    assert.equal(
+      exactColor(html, 'type'),
+      distinctColor('keyword.declaration')
+    );
+    for (const word of ['interface', 'struct', 'func']) {
+      assert.equal(
+        wordColor(html, word),
+        distinctColor('keyword.declaration'),
+        word
+      );
+    }
+    for (const type of ['Shape', 'Rect', 'T']) {
+      assert.equal(exactColor(html, type), distinctColor('type'), type);
+    }
+    assert.equal(exactColor(html, 'float64'), distinctColor('type.builtin'));
+    assert.equal(exactColor(html, 'any'), distinctColor('type.builtin'));
+    assert.equal(exactColor(html, '`json:"w"`'), distinctColor('string'));
+    assert.equal(exactColor(html, 'New'), distinctColor('function.definition'));
+    assert.equal(exactColor(html, 'W'), distinctColor('type'));
+    assert.equal(exactColor(html, 'r'), distinctColor('variable'));
+    assert.equal(exactColor(html, 'return'), distinctColor('keyword.control'));
+  }
+);
+
+void t.test('go: numeric, rune, and string literal forms', () => {
+  const html = distinctHl(
+    "x := 0x1F + 0b101 + 0o17 + 1_000 + 1e3 + 2.5i + 'a' + '\\n'; s := \"esc\\t\" + `raw\nstring`"
+  );
+  for (const n of ['0x1F', '0b101', '0o17', '1_000', '1e3', '2.5i']) {
+    assert.equal(exactColor(html, n), distinctColor('number'), n);
+  }
+  assert.equal(exactColor(html, "'a'"), distinctColor('string'));
+  assert.equal(exactColor(html, '\\n'), distinctColor('string.escape'));
+  assert.equal(exactColor(html, '"esc'), distinctColor('string'));
+  assert.equal(exactColor(html, '\\t'), distinctColor('string.escape'));
+  assert.equal(exactColor(html, '`raw\nstring`'), distinctColor('string'));
+});
+
+void t.test(
+  'go: control flow, goroutines, type switches, select, and defer',
+  () => {
+    const html = distinctHl(
+      'if a && b || !c { break } else if d { continue }; for i := range xs { go f(i) }; switch t := v.(type) { case int: fallthrough; default: goto end }; select { case <-ch: }; defer close(ch)'
+    );
+    for (const word of [
+      'if',
+      'break',
+      'else',
+      'continue',
+      'for',
+      'range',
+      'go',
+      'switch',
+      'case',
+      'fallthrough',
+      'default',
+      'goto',
+      'select',
+      'defer',
+    ]) {
+      assert.equal(
+        wordColor(html, word),
+        distinctColor('keyword.control'),
+        word
+      );
+    }
+    assert.equal(
+      exactColor(html, 'type'),
+      distinctColor('keyword.declaration')
+    );
+    assert.equal(exactColor(html, '<-'), distinctColor('operator'));
+    for (const fn of ['f', 'close']) {
+      assert.equal(exactColor(html, fn), distinctColor('function'), fn);
+    }
+  }
+);
+
+void t.test('go: builtins, channels, maps, and constants', () => {
+  const html = distinctHl(
+    'var m map[string][]int = make(map[string][]int); ch := make(chan int, 1); ch <- 1; v, ok := <-ch; a = nil; b = true; c = false; d = iota; len(m); append(xs, 1); panic("x"); recover(); new(T); cap(xs); copy(a, b); delete(m, k)'
+  );
+  for (const fn of [
+    'make',
+    'len',
+    'append',
+    'panic',
+    'recover',
+    'new',
+    'cap',
+    'copy',
+    'delete',
+  ]) {
+    assert.equal(exactColor(html, fn), distinctColor('function'), fn);
+  }
+  for (const word of ['var', 'map', 'chan']) {
+    assert.equal(
+      wordColor(html, word),
+      distinctColor('keyword.declaration'),
+      word
+    );
+  }
+  for (const c of ['nil', 'iota']) {
+    assert.equal(exactColor(html, c), distinctColor('constant.builtin'), c);
+  }
+  assert.equal(exactColor(html, 'true'), distinctColor('boolean'));
+  assert.equal(exactColor(html, 'false'), distinctColor('boolean'));
+  assert.equal(exactColor(html, 'string'), distinctColor('type.builtin'));
+});
+
+void t.test('go: comment forms and grouped declarations', () => {
+  assert.deepEqual(
+    tokenKinds('go', '// line\n/* block\n */\nfunc main() {} // tail'),
+    [
+      ['// line', 'comment'],
+      ['/* block', 'comment'],
+      ['*/', 'comment'],
+      ['func', 'keyword.declaration'],
+      ['main', 'function.definition'],
+      ['() {}', 'punctuation.bracket'],
+      ['// tail', 'comment'],
+    ]
+  );
+  const html = distinctHl('var ( x int; y = 2 ); type ( I int )');
+  assert.equal(exactColor(html, 'var'), distinctColor('keyword.declaration'));
+  assert.equal(exactColor(html, 'x'), distinctColor('variable'));
+  assert.equal(exactColor(html, 'int'), distinctColor('type.builtin'));
+  assert.equal(exactColor(html, 'I'), distinctColor('type'));
+});
+
+void t.test(
+  'go: raw strings, block comments, and grouped imports stream line-fed',
+  () => {
+    assertLineFedParity(
+      'go',
+      'import (\n\t"a"\n)\nvar s = `x\ny`\n/* c\n d */\nfunc f() {}\n'
+    );
   }
 );

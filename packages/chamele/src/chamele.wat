@@ -9,20 +9,25 @@
       [6:10)          output start (u32 LE)
       [10:14)         output length (u32 LE)
       [14:64)         reserved space
-      [64:2000)       theme table written by JavaScript, then the CSS-variable name table
-      [2000:6976)     emitter HTML fragments and span-open fragment cache
-      [6976:7008)     streaming delimiter
-      [7008:11008)    streaming lexer checkpoints
-      [11008:39456)   word tables: ECMAScript, C, and one per language (see src/memory.wat)
-      [39456:40512)   markdown fence aliases
-      [40512:41536)   JSON nesting stack
-      [41536:42560)   TOML nesting stack
-      [42560:42704)   ECMAScript token-class bitset
-      [42704:43728)   ECMAScript template stack
-      [43728:44752)   ECMAScript bracket-kind stack
-      [44752:48848)   JSX-mode stack
-      [48848:48912)   lowercase word copy for case-insensitive keyword lookups
-      [48912:65536)   free
+      [64:1088)       theme table written by JavaScript, five bytes per token
+      [1088:2000)     CSS-variable name table
+      [2000:2064)     lowercase word copy for case-insensitive keyword lookups
+      [2064:4112)     byte-set bitmaps (byteset.get)
+      [4112:4256)     emitter HTML fragments
+      [4256:9088)     emitter span-open fragment cache
+      [9088:9120)     streaming delimiter
+      [9120:13120)    streaming lexer checkpoints
+      [13120:41568)   language keyword tables
+      [41568:42592)   JSON nesting stack
+      [42592:43648)   markdown fence aliases
+      [43648:43744)   nested markdown fence registers, one record per depth
+      [43744:44768)   TOML nesting stack
+      [44768:45792)   ECMAScript bracket-kind stack
+      [45792:45936)   ECMAScript token-class bitset
+      [45936:46096)   ECMAScript token-kind to $Token map (enum-map)
+      [46096:47120)   ECMAScript template stack
+      [47120:51216)   JSX-mode stack
+      [51216:65536)   free
     [] pages 2..N     (text buffer; a live instance lays them out itself,
                       see src/live.wat)
       [65536:EOF)     input, NUL sentinel, then at least 16 bytes of slack
@@ -351,6 +356,8 @@
     (global.set $markdownStreamFence (i32.const 0))
     (global.set $markdownStreamFenceLen (i32.const 0))
     (global.set $markdownStreamLang (i32.const 0))
+    (memory.fill (i32.const $mem.markdownFenceStack) (i32.const 0)
+      (i32.sub (i32.const $mem.markdownFenceStackEnd) (i32.const $mem.markdownFenceStack)))
     (global.set $phpStreamingCode (i32.const 0))
     (global.set $phpStreamDecl (i32.const 0))
     (global.set $phpStreamMember (i32.const 0)))

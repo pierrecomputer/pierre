@@ -9,7 +9,7 @@
   ;; and $dockerWordGroup probes it with a lowercased copy of the input word.
   ;; Group order is the dispatch order in $hlDockerfile: shell-form
   ;; instructions, other instructions, and the `AS` of a stage name.
-  (keyword-table $dockerfileWords $mem.dockerfileWords $mem.dockerfileWords+256 16 32
+  (keyword-table $dockerfileWords $mem.dockerfileWords $mem.dockerfileWords+256
     (group "run" "cmd" "entrypoint" "shell") ;; 1: shell command follows
     (group ;; 2: other instructions
       "from" "add" "arg" "env" "copy" "user" "label" "expose" "volume"
@@ -84,11 +84,7 @@
           (enum.get $Token.string)))))
 
   (func $dockerIsShellOp (param $c i32) (result i32)
-    (i32.or
-      (i32.or (i32.eq (local.get $c) (i32.const "&")) (i32.eq (local.get $c) (i32.const "|")))
-      (i32.or
-        (i32.or (i32.eq (local.get $c) (i32.const ";")) (i32.eq (local.get $c) (i32.const ">")))
-        (i32.or (i32.eq (local.get $c) (i32.const "<")) (i32.eq (local.get $c) (i32.const "="))))))
+    (byteset.get "&;<=>|" (local.get $c)))
 
   ;; A Dockerfile is line-oriented: $lineHead is 1 until the first token of
   ;; a logical line, where the instruction word sits and a `#` opens a

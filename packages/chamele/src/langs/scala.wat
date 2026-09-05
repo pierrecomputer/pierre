@@ -6,47 +6,28 @@
       (i32.lt_u (local.get $p) (global.get $end))))
 
   ;; Group order is the dispatch order in $scalaWordHl below.
-  (keyword-table $scalaWords $mem.scalaWords $mem.scalaWords+512 16 64
-    (group ;; 1: control
+  (keyword-table $scalaWords $mem.scalaWords $mem.scalaWords+512
+    (group $Token.keyword.control ;; 1: control
       "if" "else" "then" "match" "case" "do" "while" "for" "yield" "return"
       "throw" "try" "catch" "finally" "end")
-    (group "def") ;; 2: declaration, next name is a function
-    (group ;; 3: declaration, next name is a type
+    (group $Token.keyword.declaration+256 "def") ;; 2: declaration, next name is a function
+    (group $Token.keyword.declaration+512 ;; 3: declaration, next name is a type
       "class" "trait" "object" "type" "enum")
-    (group ;; 4: declaration
+    (group $Token.keyword.declaration ;; 4: declaration
       "val" "var" "lazy" "given" "extension")
-    (group "import" "export" "package") ;; 5: import
-    (group ;; 6: modifiers and other keywords
+    (group $Token.keyword.import "import" "export" "package") ;; 5: import
+    (group $Token.keyword ;; 6: modifiers and other keywords
       "abstract" "final" "sealed" "implicit" "override" "private" "protected"
       "inline" "opaque" "open" "transparent" "infix" "using" "extends" "with"
       "derives" "new" "forSome" "macro")
-    (group "true" "false")  ;; 7: booleans
-    (group "null")          ;; 8: built-in constant
-    (group "this" "super")) ;; 9: special variables
+    (group $Token.boolean "true" "false")  ;; 7: booleans
+    (group $Token.constant.builtin "null")          ;; 8: built-in constant
+    (group $Token.variable.special "this" "super")) ;; 9: special variables
 
   ;; Token in the low byte; the high byte selects the next-name capture:
   ;; 1=function, 2=type. -1 for an ordinary name.
   (func $scalaWordHl (param $lhs i32) (param $rhs i32) (result i32)
-    (local $g i32)
-    (local.set $g (keyword-table.get $scalaWords (local.get $lhs) (local.get $rhs)))
-    (if (i32.eqz (local.get $g))
-      (then (return (i32.const -1))))
-    (if (i32.eq (local.get $g) (i32.const 1))
-      (then (return (enum.get $Token.keyword.control))))
-    (if (i32.le_u (local.get $g) (i32.const 3))
-      (then (return (i32.or (enum.get $Token.keyword.declaration)
-        (i32.shl (i32.sub (local.get $g) (i32.const 1)) (i32.const 8))))))
-    (if (i32.eq (local.get $g) (i32.const 4))
-      (then (return (enum.get $Token.keyword.declaration))))
-    (if (i32.eq (local.get $g) (i32.const 5))
-      (then (return (enum.get $Token.keyword.import))))
-    (if (i32.eq (local.get $g) (i32.const 6))
-      (then (return (enum.get $Token.keyword))))
-    (if (i32.eq (local.get $g) (i32.const 7))
-      (then (return (enum.get $Token.boolean))))
-    (if (i32.eq (local.get $g) (i32.const 8))
-      (then (return (enum.get $Token.constant.builtin))))
-    (enum.get $Token.variable.special))
+    (keyword-table.value $scalaWords (local.get $lhs) (local.get $rhs)))
 
   ;; Scan a `"` or `"""` body from $ptr, with the string's bytes since $seg
   ;; still unemitted. Only a single-quote body has backslash escapes; an
@@ -145,23 +126,7 @@
     (local.get $status))
 
   (func $scalaIsOp (param $c i32) (result i32)
-    (i32.or
-      (i32.or
-        (i32.or
-          (i32.or (i32.eq (local.get $c) (i32.const "+")) (i32.eq (local.get $c) (i32.const "-")))
-          (i32.or (i32.eq (local.get $c) (i32.const "*")) (i32.eq (local.get $c) (i32.const "/"))))
-        (i32.or
-          (i32.or (i32.eq (local.get $c) (i32.const "%")) (i32.eq (local.get $c) (i32.const "=")))
-          (i32.or (i32.eq (local.get $c) (i32.const "!")) (i32.eq (local.get $c) (i32.const "<")))))
-      (i32.or
-        (i32.or
-          (i32.or (i32.eq (local.get $c) (i32.const ">")) (i32.eq (local.get $c) (i32.const "&")))
-          (i32.or (i32.eq (local.get $c) (i32.const "|")) (i32.eq (local.get $c) (i32.const "^"))))
-        (i32.or
-          (i32.or (i32.eq (local.get $c) (i32.const "~")) (i32.eq (local.get $c) (i32.const "?")))
-          (i32.or
-            (i32.or (i32.eq (local.get $c) (i32.const "#")) (i32.eq (local.get $c) (i32.const "@")))
-            (i32.eq (local.get $c) (i32.const ":")))))))
+    (byteset.get "!#%&*+-/:<=>?@^|~" (local.get $c)))
 
   ;; $strKind is 1 inside a `"` body, 2 inside `"""`, and 3 or 4 for their
   ;; interpolated forms, with $seg the start of the bytes not yet emitted;
@@ -363,11 +328,7 @@
             (local.set $member (i32.const 0))
             (br $next)))
 
-        (if (i32.or
-              (i32.or (i32.eq (local.get $c) (i32.const "(")) (i32.eq (local.get $c) (i32.const ")")))
-              (i32.or
-                (i32.or (i32.eq (local.get $c) (i32.const "[")) (i32.eq (local.get $c) (i32.const "]")))
-                (i32.or (i32.eq (local.get $c) (i32.const "{")) (i32.eq (local.get $c) (i32.const "}")))))
+        (if (byteset.get "()[]{}" (local.get $c))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (if (local.get $interp)

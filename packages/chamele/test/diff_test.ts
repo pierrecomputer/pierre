@@ -1,7 +1,14 @@
 import assert from 'node:assert';
 import t from 'node:test';
 
-import { checkInvariants, loadLang, spansOf, type TestLang } from './util';
+import {
+  assertLineFedParity,
+  checkInvariants,
+  loadLang,
+  spansOf,
+  type TestLang,
+  tokenKinds,
+} from './util';
 
 let diff: TestLang;
 t.before(() => (diff = loadLang('diff', '$hlDiff')));
@@ -133,8 +140,173 @@ similarity index 88%
   assert.ok(has('88%', colors.number));
 });
 
+void t.test(
+  'diff: file headers keep their marker and color only the path',
+  () => {
+    assert.deepEqual(
+      tokenKinds(
+        'diff',
+        '--- a/x.txt\n+++ b/x.txt\n--- /dev/null\n+++ /dev/null\n'
+      ),
+      [
+        ['---', 'punctuation.special'],
+        ['a/x.txt', 'diff.minus'],
+        ['+++', 'punctuation.special'],
+        ['b/x.txt', 'diff.plus'],
+        ['---', 'punctuation.special'],
+        ['/dev/null', 'diff.minus'],
+        ['+++', 'punctuation.special'],
+        ['/dev/null', 'diff.plus'],
+      ]
+    );
+  }
+);
+
+void t.test('diff: every diff command line shape', () => {
+  assert.deepEqual(
+    tokenKinds(
+      'diff',
+      'diff --git a/x b/x\ndiff -u a b\ndiff a b\ndiff\ndifference\n'
+    ),
+    [
+      ['diff', 'function'],
+      ['--git', 'variable.parameter'],
+      ['a/x b/x', null],
+      ['diff', 'function'],
+      ['-u', 'variable.parameter'],
+      ['a b', null],
+      ['diff', 'function'],
+      ['a', 'variable.parameter'],
+      ['b', null],
+      ['diff', 'function'],
+      // `diff` followed by other letters is not the command
+      ['difference', null],
+    ]
+  );
+});
+
+void t.test('diff: index lines with and without a mode', () => {
+  assert.deepEqual(
+    tokenKinds(
+      'diff',
+      'index 1a2b3c4..5d6e7f8 100644\nindex 1a2b3c4..5d6e7f8\nindex abc\nindex\n'
+    ),
+    [
+      ['index', 'keyword'],
+      ['1a2b3c4', 'constant'],
+      ['..', 'punctuation.special'],
+      ['5d6e7f8', 'constant'],
+      ['100644', 'number'],
+      ['index', 'keyword'],
+      ['1a2b3c4', 'constant'],
+      ['..', 'punctuation.special'],
+      ['5d6e7f8', 'constant'],
+      ['index', 'keyword'],
+      ['abc', 'constant'],
+      ['index', 'keyword'],
+    ]
+  );
+});
+
+void t.test('diff: rename, copy, mode, binary, and similarity metadata', () => {
+  assert.deepEqual(
+    tokenKinds(
+      'diff',
+      'rename from a\nrename to b\ncopy from a\ncopy to b\nnew file mode 100644\ndeleted file mode 100755\nold mode 100644\nnew mode 100755\nBinary files a and b differ\nsimilarity index 88%\n'
+    ),
+    [
+      ['rename from a', 'label'],
+      ['rename to b', 'label'],
+      ['copy from a', 'label'],
+      ['copy to b', 'label'],
+      ['new file mode', 'label'],
+      ['100644', 'number'],
+      ['deleted file mode', 'label'],
+      ['100755', 'number'],
+      ['old mode', 'label'],
+      ['100644', 'number'],
+      ['new mode', 'label'],
+      ['100755', 'number'],
+      ['Binary files a and b differ', 'label'],
+      ['similarity index', 'label'],
+      ['88%', 'number'],
+    ]
+  );
+});
+
+void t.test('diff: hunk headers keep their function context', () => {
+  assert.deepEqual(
+    tokenKinds('diff', '@@ -1,4 +1,5 @@ int main()\n@@@ -1 -1 +1 @@@\n@@\n'),
+    [
+      ['@@ -1,4 +1,5 @@ int main()', 'attribute'],
+      ['@@@ -1 -1 +1 @@@', 'attribute'],
+      ['@@', 'attribute'],
+    ]
+  );
+});
+
+void t.test(
+  'diff: payload lines, empty markers, and the no-newline note',
+  () => {
+    assert.deepEqual(
+      tokenKinds(
+        'diff',
+        '+added\n-removed\n context\n+\n-\n\\ No newline at end of file\nplain\n'
+      ),
+      [
+        ['+', 'punctuation.special'],
+        ['added', 'diff.plus'],
+        ['-', 'punctuation.special'],
+        ['removed', 'diff.minus'],
+        ['context', null],
+        ['+', 'punctuation.special'],
+        ['-', 'punctuation.special'],
+        ['\\ No newline at end of file', null],
+        ['plain', null],
+      ]
+    );
+  }
+);
+
+void t.test('diff: CRLF terminators and commit headers', () => {
+  assert.deepEqual(
+    tokenKinds('diff', '# note\r\n+\r\n-x\r\ncommit abc\r\nAuthor: x\r\n'),
+    [
+      ['# note', 'comment'],
+      ['+', 'punctuation.special'],
+      ['-', 'punctuation.special'],
+      ['x', 'diff.minus'],
+      ['commit abc', null],
+      ['Author: x', null],
+    ]
+  );
+});
+
+void t.test('diff: every line kind streams line-fed', () => {
+  assertLineFedParity(
+    'diff',
+    'diff --git a/x b/x\nsimilarity index 88%\nrename from a\nrename to b\nindex 1a2b3c4..5d6e7f8 100644\n--- a/x\n+++ b/x\n@@ -1,2 +1,2 @@ fn\n ctx\n-old\n+new\n\\ No newline at end of file\n# comment\nBinary files a and b differ\n'
+  );
+  assertLineFedParity('diff', '+one\r\n-two\r\n three\r\n');
+});
+
 void t.test('diff: malformed and bounded ranges stay lossless', () => {
-  for (const src of ['', '+', '-', '@@', 'é\n+日', '\r\n+++', 'diff --git']) {
+  for (const src of [
+    '',
+    '+',
+    '-',
+    '@@',
+    'é\n+日',
+    '\r\n+++',
+    'diff --git',
+    'index',
+    'index ..',
+    'similarity index',
+    'new file mode',
+    '--- ',
+    '+++',
+    '\\',
+  ]) {
     checkInvariants(diff.hl, src);
   }
   const split = loadLang('diff', '$hlDiff', 3);

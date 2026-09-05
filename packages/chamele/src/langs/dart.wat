@@ -8,7 +8,7 @@
   ;; Group order is the dispatch order in $dartWordHl below. `get` and `set`
   ;; are contextual: $hlDart keeps them in group 3 only when a name follows,
   ;; so `Set<int>` stays a type and `set(x)` a call.
-  (keyword-table $dartWords $mem.dartWords $mem.dartWords+1152 64 256
+  (keyword-table $dartWords $mem.dartWords $mem.dartWords+1152
     (group ;; 1: control
       "if" "do" "on" "for" "try" "case" "else" "await" "break" "catch"
       "throw" "while" "yield" "assert" "return" "switch" "default"
@@ -152,19 +152,7 @@
     (local.get $status))
 
   (func $dartIsOp (param $c i32) (result i32)
-    (i32.or
-      (i32.or
-        (i32.or (i32.eq (local.get $c) (i32.const "+")) (i32.eq (local.get $c) (i32.const "-")))
-        (i32.or (i32.eq (local.get $c) (i32.const "*")) (i32.eq (local.get $c) (i32.const "/"))))
-      (i32.or
-        (i32.or (i32.eq (local.get $c) (i32.const "%")) (i32.eq (local.get $c) (i32.const "=")))
-        (i32.or
-          (i32.or (i32.eq (local.get $c) (i32.const "!")) (i32.eq (local.get $c) (i32.const "<")))
-          (i32.or
-            (i32.or (i32.eq (local.get $c) (i32.const ">")) (i32.eq (local.get $c) (i32.const "&")))
-            (i32.or
-              (i32.or (i32.eq (local.get $c) (i32.const "|")) (i32.eq (local.get $c) (i32.const "^")))
-              (i32.or (i32.eq (local.get $c) (i32.const "~")) (i32.eq (local.get $c) (i32.const "?")))))))))
+    (byteset.get "!%&*+-/<=>?^|~" (local.get $c)))
 
   ;; $strKind packs an open string body: the quote byte, bit 8 for a triple
   ;; body, bit 9 for a raw literal; $seg is the start of its bytes not yet
@@ -358,11 +346,7 @@
             (local.set $afterType (i32.const 0))
             (br $next)))
 
-        (if (i32.or
-              (i32.or (i32.eq (local.get $c) (i32.const "(")) (i32.eq (local.get $c) (i32.const ")")))
-              (i32.or
-                (i32.or (i32.eq (local.get $c) (i32.const "[")) (i32.eq (local.get $c) (i32.const "]")))
-                (i32.or (i32.eq (local.get $c) (i32.const "{")) (i32.eq (local.get $c) (i32.const "}")))))
+        (if (byteset.get "()[]{}" (local.get $c))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (if (local.get $interp)
@@ -446,13 +430,7 @@
               (else
                 (if (i32.or (i32.eq (local.get $c2) (i32.const "="))
                             (i32.and (i32.eq (local.get $c) (local.get $c2))
-                              (i32.or
-                                (i32.or (i32.eq (local.get $c) (i32.const "+")) (i32.eq (local.get $c) (i32.const "-")))
-                                (i32.or
-                                  (i32.or (i32.eq (local.get $c) (i32.const "<")) (i32.eq (local.get $c) (i32.const ">")))
-                                  (i32.or
-                                    (i32.or (i32.eq (local.get $c) (i32.const "&")) (i32.eq (local.get $c) (i32.const "|")))
-                                    (i32.eq (local.get $c) (i32.const "?")))))))
+                              (byteset.get "&+-<>?|" (local.get $c))))
                   (then
                     (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
                     (if (i32.and

@@ -6,6 +6,7 @@ import { codeToTokens, init, StreamTokenizer } from '../lib/index';
 import { transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import {
+  assertLineFedParity,
   bodyOf,
   checkInvariants,
   colorOf,
@@ -14,6 +15,7 @@ import {
   type TestLang,
   textOf,
   themeColor,
+  tokenKinds,
 } from './util';
 
 let json: TestLang;
@@ -373,3 +375,132 @@ void t.test(
     assert.ok(spans.some((s) => s.color === STR && s.text === 'y"'));
   }
 );
+
+void t.test('json: every value type token by token', () => {
+  assert.deepEqual(
+    tokenKinds(
+      'json',
+      '{"a": 1, "b": -2.5e-3, "c": true, "d": false, "e": null, "f": "s\\n\\u00e9\\"", "g": [1, {"h": {}}], "i": [] }'
+    ),
+    [
+      ['{', 'punctuation.bracket'],
+      ['"a"', 'property.json_key'],
+      [':', 'punctuation.delimiter'],
+      ['1', 'number'],
+      [',', 'punctuation.delimiter'],
+      ['"b"', 'property.json_key'],
+      [':', 'punctuation.delimiter'],
+      ['-2.5e-3', 'number'],
+      [',', 'punctuation.delimiter'],
+      ['"c"', 'property.json_key'],
+      [':', 'punctuation.delimiter'],
+      ['true', 'boolean'],
+      [',', 'punctuation.delimiter'],
+      ['"d"', 'property.json_key'],
+      [':', 'punctuation.delimiter'],
+      ['false', 'boolean'],
+      [',', 'punctuation.delimiter'],
+      ['"e"', 'property.json_key'],
+      [':', 'punctuation.delimiter'],
+      ['null', 'constant.builtin'],
+      [',', 'punctuation.delimiter'],
+      ['"f"', 'property.json_key'],
+      [':', 'punctuation.delimiter'],
+      ['"s', 'string'],
+      ['\\n\\u00e9\\"', 'string.escape'],
+      ['"', 'string'],
+      [',', 'punctuation.delimiter'],
+      ['"g"', 'property.json_key'],
+      [':', 'punctuation.delimiter'],
+      ['[', 'punctuation.bracket'],
+      ['1', 'number'],
+      [',', 'punctuation.delimiter'],
+      ['{', 'punctuation.bracket'],
+      ['"h"', 'property.json_key'],
+      [':', 'punctuation.delimiter'],
+      ['{}}]', 'punctuation.bracket'],
+      [',', 'punctuation.delimiter'],
+      ['"i"', 'property.json_key'],
+      [':', 'punctuation.delimiter'],
+      ['[] }', 'punctuation.bracket'],
+    ]
+  );
+});
+
+void t.test('json: comments are tolerated as in JSONC', () => {
+  assert.deepEqual(
+    tokenKinds(
+      'json',
+      '// comment\n/* block\n */\n{ "a": 1, /* inline */ "b": 2, // tail\n}'
+    ),
+    [
+      ['// comment', 'comment'],
+      ['/* block', 'comment'],
+      ['*/', 'comment'],
+      ['{', 'punctuation.bracket'],
+      ['"a"', 'property.json_key'],
+      [':', 'punctuation.delimiter'],
+      ['1', 'number'],
+      [',', 'punctuation.delimiter'],
+      ['/* inline */', 'comment'],
+      ['"b"', 'property.json_key'],
+      [':', 'punctuation.delimiter'],
+      ['2', 'number'],
+      [',', 'punctuation.delimiter'],
+      ['// tail', 'comment'],
+      ['}', 'punctuation.bracket'],
+    ]
+  );
+});
+
+void t.test('json: non-JSON tokens stay plain instead of being guessed', () => {
+  const kinds = tokenKinds(
+    'json',
+    '{ "k": 0x1F, "m": +1, "n": .5, "p": NaN, "q": Infinity, s: 1, \'t\': 2, "u": \'v\', "w": "unterminated'
+  );
+  const has = (text: string, kind: string | null) =>
+    kinds.some(([t, k]) => t === text && k === kind);
+  for (const plain of [
+    'x',
+    'F',
+    '+',
+    '.',
+    'NaN',
+    'Infinity',
+    's',
+    "'t'",
+    "'v'",
+  ]) {
+    assert.ok(has(plain, null), plain);
+  }
+  assert.ok(has('"unterminated', 'string'));
+  for (const key of ['"k"', '"m"', '"n"', '"p"', '"q"', '"u"', '"w"']) {
+    assert.ok(has(key, 'property.json_key'), key);
+  }
+});
+
+void t.test(
+  'json: a raw newline ends a string, since JSON strings cannot span lines',
+  () => {
+    assert.deepEqual(
+      tokenKinds('json', '[\n  1,\n  "multi\nline",\n  {"a":\n    1}\n]').slice(
+        0,
+        5
+      ),
+      [
+        ['[', 'punctuation.bracket'],
+        ['1', 'number'],
+        [',', 'punctuation.delimiter'],
+        ['"multi', 'string'],
+        ['line', null],
+      ]
+    );
+  }
+);
+
+void t.test('json: nested containers and comments stream line-fed', () => {
+  assertLineFedParity(
+    'json',
+    '{\n  "a": [\n    1,\n    {"b": "c"}\n  ],\n  /* d\n  */\n  "e": null\n}\n'
+  );
+});

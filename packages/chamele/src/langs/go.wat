@@ -6,56 +6,30 @@
       (i32.lt_u (local.get $p) (global.get $end))))
 
   ;; group order is the dispatch order in $goWordHl below
-  (keyword-table $goWords $mem.goWords $mem.goWords+512 16 64
-    (group ;; 1: control
+  (keyword-table $goWords $mem.goWords $mem.goWords+512
+    (group $Token.keyword.control ;; 1: control
       "go" "if" "for" "case" "else" "goto" "break" "defer" "range" "return"
       "select" "switch" "default" "continue" "fallthrough")
-    (group "func")    ;; 2: declaration, next name is a function
-    (group "type")    ;; 3: declaration, next name is a type
-    (group "package") ;; 4: declaration, next name is a namespace
-    (group ;; 5: declaration
+    (group $Token.keyword.declaration+256 "func")    ;; 2: declaration, next name is a function
+    (group $Token.keyword.declaration+512 "type")    ;; 3: declaration, next name is a type
+    (group $Token.keyword.declaration+768 "package") ;; 4: declaration, next name is a namespace
+    (group $Token.keyword.declaration ;; 5: declaration
       "var" "const" "map" "chan" "struct" "interface")
-    (group "import")  ;; 6: import
-    (group ;; 7: built-in types and constraints
+    (group $Token.keyword.import "import")  ;; 6: import
+    (group $Token.type.builtin ;; 7: built-in types and constraints
       "int" "bool" "byte" "rune" "uint" "error" "string" "uintptr"
       "int8" "int16" "int32" "int64" "uint8" "uint16" "uint32" "uint64"
       "float32" "float64" "complex64" "complex128" "any" "comparable")
-    (group "true" "false") ;; 8: booleans
-    (group "nil" "iota"))  ;; 9: built-in constants
+    (group $Token.boolean "true" "false") ;; 8: booleans
+    (group $Token.constant.builtin "nil" "iota"))  ;; 9: built-in constants
 
   ;; Token in the low byte; the high byte selects the next-name capture:
   ;; 1=function, 2=type, 3=namespace.
   (func $goWordHl (param $lhs i32) (param $rhs i32) (result i32)
-    (local $g i32)
-    (local.set $g (keyword-table.get $goWords (local.get $lhs) (local.get $rhs)))
-    (if (i32.eqz (local.get $g)) (then (return (i32.const -1))))
-    (if (i32.eq (local.get $g) (i32.const 1))
-      (then (return (enum.get $Token.keyword.control))))
-    (if (i32.le_u (local.get $g) (i32.const 4))
-      (then (return (i32.or (enum.get $Token.keyword.declaration)
-        (i32.shl (i32.sub (local.get $g) (i32.const 1)) (i32.const 8))))))
-    (if (i32.eq (local.get $g) (i32.const 5))
-      (then (return (enum.get $Token.keyword.declaration))))
-    (if (i32.eq (local.get $g) (i32.const 6))
-      (then (return (enum.get $Token.keyword.import))))
-    (if (i32.eq (local.get $g) (i32.const 7))
-      (then (return (enum.get $Token.type.builtin))))
-    (if (i32.eq (local.get $g) (i32.const 8))
-      (then (return (enum.get $Token.boolean))))
-    (enum.get $Token.constant.builtin))
+    (keyword-table.value $goWords (local.get $lhs) (local.get $rhs)))
 
   (func $goIsOp (param $c i32) (result i32)
-    (i32.or
-      (i32.or
-        (i32.or (i32.eq (local.get $c) (i32.const "+")) (i32.eq (local.get $c) (i32.const "-")))
-        (i32.or (i32.eq (local.get $c) (i32.const "*")) (i32.eq (local.get $c) (i32.const "/"))))
-      (i32.or
-        (i32.or (i32.eq (local.get $c) (i32.const "%")) (i32.eq (local.get $c) (i32.const "=")))
-        (i32.or
-          (i32.or (i32.eq (local.get $c) (i32.const "!")) (i32.eq (local.get $c) (i32.const "<")))
-          (i32.or
-            (i32.or (i32.eq (local.get $c) (i32.const ">")) (i32.eq (local.get $c) (i32.const "&")))
-            (i32.or (i32.eq (local.get $c) (i32.const "|")) (i32.eq (local.get $c) (i32.const "^"))))))))
+    (byteset.get "!%&*+-/<=>^|" (local.get $c)))
 
   ;; $expect is the pending next-name capture from $goWordHl, or 4 for the
   ;; name after a receiver's closing paren, which is a method definition only
@@ -164,11 +138,7 @@
             (local.set $member (i32.const 0))
             (br $next)))
 
-        (if (i32.or
-              (i32.or (i32.eq (local.get $c) (i32.const "(")) (i32.eq (local.get $c) (i32.const ")")))
-              (i32.or
-                (i32.or (i32.eq (local.get $c) (i32.const "[")) (i32.eq (local.get $c) (i32.const "]")))
-                (i32.or (i32.eq (local.get $c) (i32.const "{")) (i32.eq (local.get $c) (i32.const "}")))))
+        (if (byteset.get "()[]{}" (local.get $c))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (call $emitTok (enum.get $Token.punctuation.bracket) (local.get $lhs) (global.get $ptr))
@@ -217,14 +187,7 @@
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (if (i32.or (i32.eq (local.get $c2) (i32.const "="))
                         (i32.and (i32.eq (local.get $c) (local.get $c2))
-                          (i32.or
-                            (i32.or (i32.eq (local.get $c) (i32.const "+"))
-                                    (i32.eq (local.get $c) (i32.const "-")))
-                            (i32.or
-                              (i32.or (i32.eq (local.get $c) (i32.const "<"))
-                                      (i32.eq (local.get $c) (i32.const ">")))
-                              (i32.or (i32.eq (local.get $c) (i32.const "&"))
-                                      (i32.eq (local.get $c) (i32.const "|")))))))
+                          (byteset.get "&+-<>|" (local.get $c))))
               (then
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
                 (if (i32.and

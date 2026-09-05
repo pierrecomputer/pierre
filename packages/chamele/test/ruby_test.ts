@@ -7,11 +7,16 @@ import tokenTypes from '../lib/token-types';
 import { transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import {
+  assertLineFedParity,
   checkInvariants,
+  distinctColor as distinctColorOf,
+  exactColor,
   loadLang,
   spansOf,
   type TestLang,
   textOf,
+  tokenKinds,
+  wordColor,
 } from './util';
 
 // one unique color per token type so equal styles cannot merge neighboring
@@ -217,3 +222,189 @@ void t.test('ruby: multi-line constructs resume line-fed', () => {
     assert.deepEqual(streamed, whole, JSON.stringify(code));
   }
 });
+
+/** Highlight under the distinct theme after checking the lexer invariants. */
+const distinctHl = (src: string) =>
+  checkInvariants(lexer.hl, src, { theme: distinct });
+
+void t.test(
+  'ruby: requires, modules, mixins, attribute macros, and method forms',
+  () => {
+    const html = distinctHl(
+      "require 'json'\nrequire_relative 'x'\nmodule M\n  class C < B\n    include Enumerable\n    extend Forwardable\n    attr_accessor :a, :b\n    CONST = 1\n    def initialize(x, y = 2, *rest, k:, **opts, &blk); end\n    def self.build; end\n    def to_s = 'x'\n    private\n  end\nend"
+    );
+    for (const fn of [
+      'require',
+      'require_relative',
+      'include',
+      'extend',
+      'attr_accessor',
+      'private',
+    ]) {
+      assert.equal(exactColor(html, fn), distinctColorOf('function'), fn);
+    }
+    for (const word of ['module', 'class', 'def']) {
+      assert.equal(
+        wordColor(html, word),
+        distinctColorOf('keyword.declaration'),
+        word
+      );
+    }
+    for (const type of ['M', 'C', 'B', 'Enumerable', 'Forwardable']) {
+      assert.equal(exactColor(html, type), distinctColorOf('type'), type);
+    }
+    assert.equal(exactColor(html, '<'), distinctColorOf('operator'));
+    for (const sym of [':a', ':b', 'k:']) {
+      assert.equal(
+        exactColor(html, sym),
+        distinctColorOf('string.special.symbol'),
+        sym
+      );
+    }
+    assert.equal(exactColor(html, 'CONST'), distinctColorOf('constant'));
+    for (const fn of ['initialize', 'build', 'to_s']) {
+      assert.equal(
+        exactColor(html, fn),
+        distinctColorOf('function.definition'),
+        fn
+      );
+    }
+    assert.equal(exactColor(html, 'self'), distinctColorOf('variable.special'));
+    for (const p of ['x', 'rest', 'opts', 'blk']) {
+      assert.equal(exactColor(html, p), distinctColorOf('variable'), p);
+    }
+    for (const op of ['*', '**', '&']) {
+      assert.equal(exactColor(html, op), distinctColorOf('operator'), op);
+    }
+    assert.equal(wordColor(html, 'end'), distinctColorOf('keyword.control'));
+  }
+);
+
+void t.test('ruby: numeric literal forms', () => {
+  const html = distinctHl(
+    'x = 0x1F + 0b101 + 0o17 + 017 + 1_000 + 1e3 + 2.5 + 3r + 4i'
+  );
+  for (const n of [
+    '0x1F',
+    '0b101',
+    '0o17',
+    '017',
+    '1_000',
+    '1e3',
+    '2.5',
+    '3r',
+    '4i',
+  ]) {
+    assert.equal(exactColor(html, n), distinctColorOf('number'), n);
+  }
+});
+
+void t.test('ruby: control flow words and word operators', () => {
+  const html = distinctHl(
+    'if a && b || !c then 1 elsif d then 2 end; unless u; end; while w do break end; until t; next; end; for i in 1..3 do redo end; x = 1 when 2 then 3; begin; raise E; rescue E => e; retry; ensure; end; return; yield; not a; a and b; a or b'
+  );
+  for (const word of [
+    'if',
+    'then',
+    'elsif',
+    'end',
+    'unless',
+    'while',
+    'do',
+    'break',
+    'until',
+    'next',
+    'for',
+    'in',
+    'redo',
+    'when',
+    'begin',
+    'raise',
+    'rescue',
+    'retry',
+    'ensure',
+    'return',
+    'yield',
+  ]) {
+    assert.equal(
+      wordColor(html, word),
+      distinctColorOf('keyword.control'),
+      word
+    );
+  }
+  for (const word of ['not', 'and', 'or']) {
+    assert.equal(
+      wordColor(html, word),
+      distinctColorOf('keyword.operator'),
+      word
+    );
+  }
+  for (const op of ['&&', '||', '!', '..', '=>']) {
+    assert.equal(wordColor(html, op), distinctColorOf('operator'), op);
+  }
+  assert.equal(exactColor(html, 'E'), distinctColorOf('type'));
+});
+
+void t.test(
+  'ruby: calls, blocks, members, special variables, and constants',
+  () => {
+    const html = distinctHl(
+      "puts 'x'; p x; lambda { |x| x }; ->(x) { x }; puts(obj.method(arg)); obj[0]; Obj::CONST; obj&.m; nil; true; false; @ivar; @@cvar; $gvar; $1; $stdout; __FILE__; ENV['X']; a <=> b; a =~ /x/; a ** 2; a ||= 1; loop { break }; x.times { |i| i }"
+    );
+    for (const fn of ['puts', 'p', 'lambda', 'loop']) {
+      assert.equal(wordColor(html, fn), distinctColorOf('function'), fn);
+    }
+    for (const m of ['method', 'm', 'times']) {
+      assert.equal(exactColor(html, m), distinctColorOf('function.method'), m);
+    }
+    assert.equal(exactColor(html, 'Obj'), distinctColorOf('type'));
+    assert.equal(
+      exactColor(html, '::'),
+      distinctColorOf('punctuation.delimiter')
+    );
+    assert.equal(
+      exactColor(html, '&.'),
+      distinctColorOf('punctuation.delimiter')
+    );
+    for (const c of ['CONST', 'ENV']) {
+      assert.equal(exactColor(html, c), distinctColorOf('constant'), c);
+    }
+    assert.equal(exactColor(html, 'nil'), distinctColorOf('constant.builtin'));
+    assert.equal(exactColor(html, 'true'), distinctColorOf('boolean'));
+    assert.equal(exactColor(html, 'false'), distinctColorOf('boolean'));
+    for (const v of ['@ivar', '@@cvar', '$gvar', '$1', '$stdout', '__FILE__']) {
+      assert.equal(exactColor(html, v), distinctColorOf('variable.special'), v);
+    }
+    for (const op of ['->', '<=>', '=~', '**', '||=', '|']) {
+      assert.equal(wordColor(html, op), distinctColorOf('operator'), op);
+    }
+    assert.equal(exactColor(html, '/x/'), distinctColorOf('string.regex'));
+  }
+);
+
+void t.test('ruby: comment forms including =begin blocks', () => {
+  assert.deepEqual(
+    tokenKinds('ruby', '# comment\n=begin\nblock\n=end\ndef f; end # tail'),
+    [
+      ['# comment', 'comment'],
+      ['=begin', 'comment'],
+      ['block', 'comment'],
+      ['=end', 'comment'],
+      ['def', 'keyword.declaration'],
+      ['f', 'function.definition'],
+      [';', 'punctuation.delimiter'],
+      ['end', 'keyword.control'],
+      ['# tail', 'comment'],
+    ]
+  );
+});
+
+void t.test(
+  'ruby: heredocs, block comments, and percent literals stream line-fed',
+  () => {
+    assertLineFedParity(
+      'ruby',
+      'x = <<~EOS\n  a #{b}\n  c\nEOS\n=begin\nd\n=end\ny = %w[\n  e\n  f\n]\nz = "multi\nline"\n'
+    );
+  }
+);

@@ -9,7 +9,7 @@
   ;; `reserved` are absent on purpose: the table hash sees only the first two
   ;; bytes, the last byte, and the length, which `repeated` shares, so
   ;; $protoWordHl matches both directly.
-  (keyword-table $protoWords $mem.protoWords $mem.protoWords+640 32 128
+  (keyword-table $protoWords $mem.protoWords $mem.protoWords+640
     (group ;; 1: declaration, next name is a type
       "enum" "extend" "message" "service")
     (group "rpc")     ;; 2: declaration, next name is a function
@@ -137,13 +137,7 @@
             (local.set $member (i32.const 0))
             (br $next)))
 
-        (if (i32.or
-              (i32.or (i32.eq (local.get $c) (i32.const "(")) (i32.eq (local.get $c) (i32.const ")")))
-              (i32.or
-                (i32.or (i32.eq (local.get $c) (i32.const "[")) (i32.eq (local.get $c) (i32.const "]")))
-                (i32.or
-                  (i32.or (i32.eq (local.get $c) (i32.const "{")) (i32.eq (local.get $c) (i32.const "}")))
-                  (i32.or (i32.eq (local.get $c) (i32.const "<")) (i32.eq (local.get $c) (i32.const ">"))))))
+        (if (byteset.get "()<>[]{}" (local.get $c))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (call $emitTok (enum.get $Token.punctuation.bracket) (local.get $lhs) (global.get $ptr))

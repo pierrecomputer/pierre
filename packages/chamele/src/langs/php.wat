@@ -605,14 +605,7 @@
             (local.set $member (i32.const 1))
             (global.set $sigPattern (i32.const 0))
             (br $token)))
-        (if (i32.or
-              (i32.or (i32.eq (local.get $c) (i32.const "("))
-                      (i32.eq (local.get $c) (i32.const ")")))
-              (i32.or
-                (i32.or (i32.eq (local.get $c) (i32.const "["))
-                        (i32.eq (local.get $c) (i32.const "]")))
-                (i32.or (i32.eq (local.get $c) (i32.const "{"))
-                        (i32.eq (local.get $c) (i32.const "}")))))
+        (if (byteset.get "()[]{}" (local.get $c))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (call $emitTok (enum.get $Token.punctuation.bracket) (local.get $lhs) (global.get $ptr))

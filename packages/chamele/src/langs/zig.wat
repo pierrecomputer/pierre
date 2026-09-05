@@ -143,7 +143,7 @@
   ;; words can never share a table and `comptime` is matched directly. The
   ;; one-byte names `c` and `_` are below the table's minimum length and are
   ;; matched directly too.
-  (keyword-table $zigWords $mem.zigWords $mem.zigWords+896 32 128
+  (keyword-table $zigWords $mem.zigWords $mem.zigWords+896
     (group "fn") ;; 1: declaration, next name is a function
     (group "const" "var") ;; 2: declaration, next name is a variable
     (group "struct" "enum" "union" "opaque") ;; 3: declaration
@@ -234,26 +234,7 @@
     (i32.or (enum.get $Token.keyword) (i32.shl (local.get $g) (i32.const 8))))
 
   (func $zigIsOp (param $c i32) (result i32)
-    (i32.or
-      (i32.or
-        (i32.or (i32.eq (local.get $c) (i32.const "+"))
-                (i32.eq (local.get $c) (i32.const "-")))
-        (i32.or (i32.eq (local.get $c) (i32.const "*"))
-                (i32.eq (local.get $c) (i32.const "/"))))
-      (i32.or
-        (i32.or (i32.eq (local.get $c) (i32.const "%"))
-                (i32.eq (local.get $c) (i32.const "=")))
-        (i32.or
-          (i32.or (i32.eq (local.get $c) (i32.const "!"))
-                  (i32.eq (local.get $c) (i32.const "~")))
-          (i32.or
-            (i32.or (i32.eq (local.get $c) (i32.const "<"))
-                    (i32.eq (local.get $c) (i32.const ">")))
-            (i32.or
-              (i32.or (i32.eq (local.get $c) (i32.const "&"))
-                      (i32.eq (local.get $c) (i32.const "|")))
-              (i32.or (i32.eq (local.get $c) (i32.const "^"))
-                      (i32.eq (local.get $c) (i32.const "?")))))))))
+    (byteset.get "!%&*+-/<=>?^|~" (local.get $c)))
 
   (func $hlZig
     (local $base i32)
@@ -604,17 +585,7 @@
             (global.set $sigPattern (i32.const 0))
             (br $next)))
 
-        (if (i32.or
-              (i32.or
-                (i32.eq (local.get $c) (i32.const "("))
-                (i32.eq (local.get $c) (i32.const ")")))
-              (i32.or
-                (i32.or
-                  (i32.eq (local.get $c) (i32.const "["))
-                  (i32.eq (local.get $c) (i32.const "]")))
-                (i32.or
-                  (i32.eq (local.get $c) (i32.const "{"))
-                  (i32.eq (local.get $c) (i32.const "}")))))
+        (if (byteset.get "()[]{}" (local.get $c))
           (then
             (if (i32.eq (local.get $c) (i32.const "("))
               (then

@@ -7,6 +7,15 @@
   ;; emit one classified token, splitting the multi-part kinds
   (func $emitCur (param $t i32) (param $lhs i32) (param $rhs i32) (param $next i32)
     (local $c i32)
+    ;; every single-span kind classifies through the table; only the
+    ;; multi-part kinds (sentinel 253) take the chain below
+    (if (i32.ne (enum-map.get $LexHl (local.get $t)) (i32.const 253))
+      (then
+        (call $emitTok
+          (call $classify (global.get $prevTok) (local.get $t) (local.get $next)
+                          (local.get $lhs) (local.get $rhs))
+          (local.get $lhs) (local.get $rhs))
+        (return)))
     (if (i32.eq (local.get $t) (enum.get $Lex.string_literal))
       (then
         (call $emitEscaped (enum.get $Token.string) (local.get $lhs) (local.get $rhs))
@@ -51,10 +60,8 @@
             (return)))
         (call $emitTok (enum.get $Token.none) (local.get $lhs) (local.get $rhs))
         (return)))
-    (call $emitTok
-      (call $classify (global.get $prevTok) (local.get $t) (local.get $next)
-                      (local.get $lhs) (local.get $rhs))
-      (local.get $lhs) (local.get $rhs)))
+    ;; eof never reaches the emitter; nothing else is left
+    (call $emitTok (enum.get $Token.none) (local.get $lhs) (local.get $rhs)))
 
   (func $tsxFinishStreamToken (param $t i32)
     (global.set $prevLto (global.get $lto))
@@ -207,12 +214,18 @@
         (br_if $out (i32.eq (local.get $curT) (enum.get $Lex.eof)))
         ;; Stop before an embedded framework expression's outer delimiter so
         ;; its parent lexer can emit the punctuation and resume its own scan.
+        ;; A `}` inside a jsx element is never that delimiter: the `{` of a
+        ;; jsx expression container is pulled by $jsxOpenContainer and skips
+        ;; the depth count, so `<li>{i}</li>` in a streamed `{...}` used to
+        ;; close the expression at the container's `}`.
         (if (i32.and
               (i32.ne
                 (global.get $tsxStreamExpressionClose) (i32.const 0))
               (i32.and
                 (i32.eq (local.get $curT) (enum.get $Lex.r_brace))
-                (i32.eqz (global.get $tsxStreamExpressionDepth))))
+                (i32.and
+                  (i32.eqz (global.get $tsxStreamExpressionDepth))
+                  (i32.eqz (global.get $jsxSp)))))
           (then
             (if (i32.or
                   (i32.eq (global.get $tsxStreamExpressionClose) (i32.const 1))

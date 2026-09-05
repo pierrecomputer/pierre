@@ -7,11 +7,16 @@ import tokenTypes from '../lib/token-types';
 import { transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import {
+  assertLineFedParity,
   checkInvariants,
+  colorOf,
+  distinctColor as distinctColorOf,
+  exactColor,
   loadLang,
   spansOf,
   type TestLang,
   textOf,
+  wordColor,
 } from './util';
 
 // one unique color per token type so equal styles cannot merge neighboring
@@ -200,4 +205,238 @@ void t.test('elixir: multi-line constructs resume line-fed', () => {
     const [whole, streamed] = wholeAndLineFed('elixir', code);
     assert.deepEqual(streamed, whole, JSON.stringify(code));
   }
+});
+
+void t.test('elixir: a lone quote inside a heredoc does not close it', () => {
+  // the closer check once and-ed the heredoc flag mask with a boolean, so the
+  // first `"` in a heredoc body closed it, and a body cut two quotes into
+  // its closer emitted the NUL sentinel past the end of the input
+  const html = checkInvariants(lexer.hl, 'x = """\na "b" c\n"""\ny = 1\n', {
+    theme: distinct,
+  });
+  assert.equal(within(html, 'a "b" c'), distinctColor('string'));
+  assert.equal(exact(html, 'y'), distinctColor('variable'));
+  assert.equal(exact(html, '1'), distinctColor('number'));
+  for (const cut of [
+    'x = """\na\n""',
+    'x = """\na\n"',
+    "x = '''\na 'b'\n''",
+    '@doc """\na "b"\n""',
+  ]) {
+    checkInvariants(lexer.hl, cut);
+  }
+  const [whole, streamed] = wholeAndLineFed(
+    'elixir',
+    'x = """\na "b"\n"""\ny = 1\n'
+  );
+  assert.deepEqual(streamed, whole);
+});
+
+/** Highlight under the distinct theme after checking the lexer invariants. */
+const distinctHl = (src: string) =>
+  checkInvariants(lexer.hl, src, { theme: distinct });
+
+void t.test('elixir: module directives, attributes, and every def form', () => {
+  const html = distinctHl(
+    'defmodule Shop.Cart do\n  @moduledoc """\n  Doc.\n  """\n  use GenServer\n  import Enum, only: [map: 2]\n  alias Shop.{Item, Order}\n  require Logger\n  @behaviour B\n  @max 100\n  @type t :: %__MODULE__{items: [Item.t()]}\n  defstruct items: [], total: 0.0\n  defmacro __using__(_) do quote do end end\n  defguard is_pos(x) when x > 0\n  defp helper(x), do: x\n  defdelegate f(x), to: M\n  defprotocol P do end\n  defimpl P, for: Any do end\n  defexception message: "x"\nend'
+  );
+  for (const word of [
+    'defmodule',
+    'defstruct',
+    'defmacro',
+    'defguard',
+    'defp',
+    'defdelegate',
+    'defprotocol',
+    'defimpl',
+    'defexception',
+  ]) {
+    assert.equal(
+      wordColor(html, word),
+      distinctColorOf('keyword.declaration'),
+      word
+    );
+  }
+  for (const word of ['use', 'import', 'alias', 'require']) {
+    assert.equal(
+      wordColor(html, word),
+      distinctColorOf('keyword.import'),
+      word
+    );
+  }
+  for (const type of [
+    'Shop',
+    'Cart',
+    'GenServer',
+    'Enum',
+    'Item',
+    'Order',
+    'Logger',
+    'B',
+    'M',
+    'P',
+    'Any',
+  ]) {
+    assert.equal(exactColor(html, type), distinctColorOf('type'), type);
+  }
+  for (const attr of ['@moduledoc', '@behaviour', '@max', '@type']) {
+    assert.equal(exactColor(html, attr), distinctColorOf('attribute'), attr);
+  }
+  assert.equal(colorOf(html, 'Doc.'), distinctColorOf('comment.doc'));
+  for (const sym of [
+    'only:',
+    'map:',
+    'items:',
+    'total:',
+    'to:',
+    'for:',
+    'message:',
+  ]) {
+    assert.equal(
+      exactColor(html, sym),
+      distinctColorOf('string.special.symbol'),
+      sym
+    );
+  }
+  assert.equal(
+    exactColor(html, '__MODULE__'),
+    distinctColorOf('variable.special')
+  );
+  assert.equal(
+    exactColor(html, '__using__'),
+    distinctColorOf('variable.special')
+  );
+  for (const fn of ['is_pos', 'helper', 'f']) {
+    assert.equal(
+      exactColor(html, fn),
+      distinctColorOf('function.definition'),
+      fn
+    );
+  }
+  assert.equal(wordColor(html, 'when'), distinctColorOf('keyword.operator'));
+  for (const word of ['do', 'end', 'quote']) {
+    assert.equal(
+      wordColor(html, word),
+      distinctColorOf('keyword.control'),
+      word
+    );
+  }
+  assert.equal(exactColor(html, '::'), distinctColorOf('operator'));
+  assert.equal(exactColor(html, '%'), distinctColorOf('punctuation.special'));
+});
+
+void t.test(
+  'elixir: numeric literals, char literals, escapes, and sigils',
+  () => {
+    const html = distinctHl(
+      'x = 0x1F + 0b101 + 0o17 + 1_000 + 1e3 + 2.5 + ?a; s = "str\\t#{x}" <> ~s(sigil #{x}) <> ~r/re/i <> ~w[a b]a; :atom; :"quoted atom"; true; false; nil'
+    );
+    for (const n of ['0x1F', '0b101', '0o17', '1_000', '1e3', '2.5']) {
+      assert.equal(exactColor(html, n), distinctColorOf('number'), n);
+    }
+    assert.equal(exactColor(html, '?a'), distinctColorOf('string.special'));
+    assert.equal(exactColor(html, '"str'), distinctColorOf('string'));
+    assert.equal(exactColor(html, '\\t'), distinctColorOf('string.escape'));
+    assert.equal(
+      exactColor(html, '#{'),
+      distinctColorOf('punctuation.special')
+    );
+    for (const s of ['~s(sigil', '~w[a b]a']) {
+      assert.equal(colorOf(html, s), distinctColorOf('string'), s);
+    }
+    assert.equal(exactColor(html, '~r/re/i'), distinctColorOf('string.regex'));
+    for (const sym of [':atom', ':"quoted atom"']) {
+      assert.equal(
+        exactColor(html, sym),
+        distinctColorOf('string.special.symbol'),
+        sym
+      );
+    }
+    assert.equal(exactColor(html, 'true'), distinctColorOf('boolean'));
+    assert.equal(exactColor(html, 'nil'), distinctColorOf('constant.builtin'));
+    assert.equal(exactColor(html, '<>'), distinctColorOf('operator'));
+  }
+);
+
+void t.test(
+  'elixir: patterns, guards, control forms, captures, and pipes',
+  () => {
+    const html = distinctHl(
+      'def f(%{k: v} = m, [h | t], opts \\\\ []) when is_map(m) and not is_nil(v) or v in [1] do\n  case v do\n    1 -> :one\n    _ -> :none\n  end\n  cond do\n    true -> :ok\n  end\n  if a, do: b, else: c\n  unless d, do: e\n  with {:ok, x} <- g() do x else _ -> :err end\n  for i <- 1..3, into: %{}, do: i\n  try do raise E, message: "m" rescue e in E -> e catch :exit, _ -> :c after :a end\n  receive do {:msg, m} -> m after 1000 -> :t end\n  fn x, y -> x + y end; &(&1 + &2); &f/1; m.field; m.f(); M.f(); @attr; __ENV__; self(); send(pid, :x); x |> f() |> g(); a ++ b; a -- b; a =~ b; a === b; a !== b; a && b; a || b; !a; ^pin; a <<< b\nend'
+    );
+    for (const word of [
+      'case',
+      'cond',
+      'if',
+      'unless',
+      'with',
+      'for',
+      'try',
+      'raise',
+      'rescue',
+      'catch',
+      'after',
+      'receive',
+      'fn',
+      'do',
+      'else',
+      'end',
+    ]) {
+      assert.equal(
+        wordColor(html, word),
+        distinctColorOf('keyword.control'),
+        word
+      );
+    }
+    for (const word of ['when', 'and', 'not', 'or', 'in']) {
+      assert.equal(
+        wordColor(html, word),
+        distinctColorOf('keyword.operator'),
+        word
+      );
+    }
+    for (const fn of ['is_map', 'is_nil', 'g', 'send']) {
+      assert.equal(exactColor(html, fn), distinctColorOf('function'), fn);
+    }
+    for (const sym of [':one', ':none', ':ok', ':err', ':exit', ':msg']) {
+      assert.equal(
+        wordColor(html, sym),
+        distinctColorOf('string.special.symbol'),
+        sym
+      );
+    }
+    for (const op of [
+      '->',
+      '<-',
+      '..',
+      '|',
+      '\\\\',
+      '|>',
+      '++',
+      '--',
+      '=~',
+      '===',
+      '!==',
+      '&&',
+      '||',
+      '!',
+      '^',
+      '<<<',
+    ]) {
+      assert.equal(wordColor(html, op), distinctColorOf('operator'), op);
+    }
+    for (const v of ['&1', '&2', '__ENV__', 'self']) {
+      assert.equal(exactColor(html, v), distinctColorOf('variable.special'), v);
+    }
+    assert.equal(exactColor(html, 'field'), distinctColorOf('property'));
+    assert.equal(exactColor(html, '@attr'), distinctColorOf('attribute'));
+    assert.equal(exactColor(html, 'E'), distinctColorOf('type'));
+  }
+);
+
+void t.test('elixir: heredocs, sigils, and blocks stream line-fed', () => {
+  assertLineFedParity(
+    'elixir',
+    'x = """\na #{b}\n"""\n@doc """\nc\n"""\ny = ~S"""\nd\n"""\ndef f do\n  :ok\nend\n'
+  );
 });

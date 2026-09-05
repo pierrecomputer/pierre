@@ -7,11 +7,15 @@ import tokenTypes from '../lib/token-types';
 import { transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import {
+  assertLineFedParity,
   checkInvariants,
+  exactColor,
   loadLang,
   spansOf,
   type TestLang,
   textOf,
+  tokenKinds,
+  wordColor,
 } from './util';
 
 // one unique color per token type so equal styles cannot merge neighboring
@@ -192,3 +196,126 @@ void t.test('scss: multi-line constructs resume line-fed', () => {
     assert.deepEqual(streamed, whole, JSON.stringify(code));
   }
 });
+
+/** Highlight under the distinct theme after checking the lexer invariants. */
+const distinctHl = (src: string) =>
+  checkInvariants(lexer.hl, src, { theme: distinct });
+
+void t.test('scss: module rules, mixins, control directives, and flags', () => {
+  const html = distinctHl(
+    '@use "sass:math" as m;\n@forward "x" show y;\n$map: (a: 1, b: 2) !default;\n@mixin mixin($a, $b: 2) { width: $a; }\n@mixin m2($args...) { @content; }\n.a { @include mixin(1, $b: 2); @include m2 { x: 1 } @extend %ph; color: map-get($map, a); width: m.div(10px, 2); @if $a == 1 { x: 1 } @else if $a == 2 { x: 2 } @else { x: 3 } @each $k, $v in $map { .#{$k} { y: $v } } @for $i from 1 through 3 { z: $i } @while $i > 0 { w: $i } @debug "x"; @warn "w"; @error "e"; @at-root .b { q: 1 } &__elem { r: 1 } &:hover { s: 1 } #{$prop}-top: 1px; $local: 1 !global; }\n@function f($x) { @return $x * 2; }\n%ph { t: 1 }'
+  );
+  for (const word of [
+    '@use',
+    '@forward',
+    '@mixin',
+    '@content',
+    '@include',
+    '@extend',
+    '@if',
+    '@else',
+    '@each',
+    '@for',
+    '@while',
+    '@debug',
+    '@warn',
+    '@error',
+    '@at-root',
+    '@function',
+    '@return',
+    '!default',
+    '!global',
+  ]) {
+    assert.equal(wordColor(html, word), distinctColor('keyword'), word);
+  }
+  for (const s of ['"sass:math"', '"x"', '"w"', '"e"']) {
+    assert.equal(exactColor(html, s), distinctColor('string'), s);
+  }
+  for (const v of [
+    '$map',
+    '$a',
+    '$b',
+    '$args',
+    '$k',
+    '$v',
+    '$i',
+    '$x',
+    '$prop',
+    '$local',
+  ]) {
+    assert.equal(wordColor(html, v), distinctColor('variable'), v);
+  }
+  for (const fn of ['mixin', 'm2', 'map-get', 'div', 'f']) {
+    assert.equal(wordColor(html, fn), distinctColor('function'), fn);
+  }
+  for (const c of ['.a', '%ph', '&__elem']) {
+    assert.equal(wordColor(html, c), distinctColor('selector.class'), c);
+  }
+  assert.equal(exactColor(html, ':hover'), distinctColor('selector.pseudo'));
+  for (const p of [
+    'width',
+    'color',
+    'x',
+    'z',
+    'w',
+    'q',
+    'r',
+    's',
+    't',
+    '-top',
+  ]) {
+    assert.equal(wordColor(html, p), distinctColor('property'), p);
+  }
+  for (const word of ['in', 'from', 'through', 'if']) {
+    assert.equal(
+      wordColor(html, word),
+      distinctColor('keyword.operator'),
+      word
+    );
+  }
+  for (const op of ['==', '>', '*', '&']) {
+    assert.equal(wordColor(html, op), distinctColor('operator'), op);
+  }
+  assert.equal(exactColor(html, '#{'), distinctColor('punctuation.special'));
+  assert.equal(exactColor(html, '10px'), distinctColor('number'));
+});
+
+void t.test('scss: arithmetic, comparison, and interpolation operators', () => {
+  const html = distinctHl(
+    '.d { a: $x + $y; b: $x - $y; c: $x * $y; d: $x / $y; f: $x == $y; g: $x != $y; k: -$x; m: $x < $y; n: #{$x}px; o: "#{$x}"; }'
+  );
+  for (const op of ['+', '-', '*', '/', '==', '!=', '<']) {
+    assert.equal(wordColor(html, op), distinctColor('operator'), op);
+  }
+  assert.equal(exactColor(html, '#{'), distinctColor('punctuation.special'));
+  assert.equal(exactColor(html, '"#{$x}"'), distinctColor('string'));
+  assert.equal(exactColor(html, 'px'), distinctColor('constant.builtin'));
+});
+
+void t.test('scss: comment forms', () => {
+  assert.deepEqual(
+    tokenKinds('scss', '// line\n/* block */\n.a { b: 1; // tail\n}'),
+    [
+      ['// line', 'comment'],
+      ['/* block */', 'comment'],
+      ['.a', 'selector.class'],
+      ['{', 'punctuation.bracket'],
+      ['b', 'property'],
+      [':', 'punctuation.delimiter'],
+      ['1', 'number'],
+      [';', 'punctuation.delimiter'],
+      ['// tail', 'comment'],
+      ['}', 'punctuation.bracket'],
+    ]
+  );
+});
+
+void t.test(
+  'scss: nested rules, interpolation, and block comments stream line-fed',
+  () => {
+    assertLineFedParity(
+      'scss',
+      '/* a\n b */\n.x {\n  .y {\n    c: #{$d};\n  }\n  &:hover {\n    e: 1;\n  }\n}\n'
+    );
+  }
+);

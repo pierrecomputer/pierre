@@ -1,7 +1,12 @@
 import assert from 'node:assert';
 
-import type { Lang, Theme, ThemeFamily } from '../lib/index';
-import { createHighlighter } from '../lib/index';
+import type { Lang, Theme, ThemedToken, ThemeFamily } from '../lib/index';
+import {
+  codeToTokens,
+  createHighlighter,
+  init,
+  StreamTokenizer,
+} from '../lib/index';
 import { compileTheme } from '../lib/theme';
 import tokenTypes from '../lib/token-types';
 import { listTokenTypes, transformWat, wat2wasm } from '../scripts/build';
@@ -104,6 +109,56 @@ export function loadLang(
   };
 }
 
+/** A lexer harness whose scan is cut at a byte offset chosen per call. */
+export type TestSplitHl = (
+  input: string | Uint8Array,
+  splitBytes: number
+) => string;
+
+/**
+ * Compile one lexer into a harness that runs it twice per highlight: first
+ * over `[0, splitBytes)`, then over the rest. That is the two-range shape an
+ * embedding host (html around a script body) or a chunk boundary produces, so
+ * a lexer that reads past `$end` or leaves a construct half-open shows up as
+ * lost bytes or unbalanced spans. One module serves every split offset: the
+ * offset is passed through a control word at byte 32 of wasm memory, below
+ * the theme table.
+ *
+ * `name` is the language name; the lexer file and export follow the usual
+ * naming (`js`/`jsx`/`ts` live in `tsx.wat`, the css dialects in `css.wat`).
+ */
+export function loadSplitLang(name: Lang): TestSplitHl {
+  const entry = `$hl${name[0].toUpperCase()}${name.slice(1)}`;
+  const file = ['js', 'jsx', 'ts'].includes(name)
+    ? 'tsx'
+    : ['less', 'sass', 'scss'].includes(name)
+      ? 'css'
+      : name;
+  const watUrl = new URL(`./split_${name}.wat`, import.meta.url);
+  const src = `(module
+  (memory (export "memory") 3)
+  (import "../src/langs/${file}.wat")
+  (func (export "highlight")
+    (call $hlBegin)
+    (global.set $end (i32.add (global.get $ptr) (i32.load (i32.const 32))))
+    (call ${entry})
+    (global.set $end (global.get $eof))
+    (call ${entry})
+    (call $hlEnd)))`;
+  const { code } = transformWat(watUrl, src);
+  const highlighter = createHighlighter(
+    new WebAssembly.Module(wat2wasm(watUrl.href, code))
+  );
+  // the control word lives in the highlighter's memory; reach in for its view
+  const internals = highlighter as unknown as { dv: DataView };
+  return (input, splitBytes) => {
+    internals.dv.setUint32(32, splitBytes, true);
+    return dec.decode(
+      highlighter.codeToHtml(input, { lang: name, theme: pierreDark })
+    );
+  };
+}
+
 const WRAPPER_RE =
   /^<pre class="chamele"( style="[^"<>]*")?><code>([\s\S]*)<\/code><\/pre>$/;
 
@@ -195,4 +250,164 @@ export function checkInvariants(
   );
   spansOf(html); // asserts balance
   return html;
+}
+
+// ---- distinct-theme helpers ----
+// Pierre Dark paints several token kinds alike (function and function.method,
+// comment and comment.doc), and the emitter merges same-colored neighbors
+// into one span, so a color check can pass on a misclassified token that
+// happens to share its neighbor's color. Under `distinctTheme` every kind has
+// its own color, a span boundary is a classification boundary, and
+// `spanKinds` names each span's kind for token-by-token assertions.
+
+const distinctNames = tokenTypes.filter(
+  (name) => !['background', 'foreground', 'none'].includes(name)
+);
+const distinctColorOf = new Map(
+  distinctNames.map((name, i) => [
+    name,
+    '#' + (0x100000 + i * 0x101).toString(16),
+  ])
+);
+const distinctNameOf = new Map(
+  [...distinctColorOf].map(([name, color]) => [color, name])
+);
+
+/** A theme giving every token type its own color; plain text stays white. */
+export const distinctTheme = {
+  name: 'distinct',
+  appearance: 'dark',
+  style: {
+    background: '#000000',
+    foreground: '#ffffff',
+    syntax: Object.fromEntries(distinctColorOf),
+  },
+} as unknown as Theme;
+
+/** The distinct theme's color for a token type name. */
+export function distinctColor(name: string): string {
+  const color = distinctColorOf.get(name);
+  assert.ok(color !== undefined, `unknown or unthemed token type: ${name}`);
+  return color;
+}
+
+/** The token type behind a distinct-theme color; plain text is `null`. */
+export function kindOfColor(color: string | null | undefined): string | null {
+  if (color == null || color === '#ffffff') return null;
+  return distinctNameOf.get(color) ?? color;
+}
+
+/**
+ * Trimmed text and token kind of every non-blank span of distinct-theme
+ * HTML, in source order. Neighboring tokens of one kind merge into one entry.
+ */
+export function spanKinds(html: string): [string, string | null][] {
+  return spansOf(html)
+    .map((s): [string, string | null] => [s.text.trim(), kindOfColor(s.color)])
+    .filter(([text]) => text !== '');
+}
+
+/**
+ * Trimmed text and kind of every non-blank token of a whole-buffer run under
+ * the distinct theme, in source order. Unlike `spanKinds`, plain text is
+ * listed (as `null`) and a line break always separates entries, so a
+ * multi-line sequence reads line by line instead of merging same-kind spans
+ * across the break.
+ */
+export function tokenKinds(
+  lang: Lang,
+  code: string
+): [string, string | null][] {
+  initFullModule();
+  return codeToTokens(code, { lang, theme: distinctTheme })
+    .tokens.flat()
+    .map((tok): [string, string | null] => [
+      tok.content.trim(),
+      kindOfColor(tok.color),
+    ])
+    .filter(([text]) => text !== '');
+}
+
+/** The color of the first span whose trimmed text is exactly `word`. */
+export function exactColor(
+  html: string,
+  word: string
+): string | null | undefined {
+  return spansOf(html).find((s) => s.text.trim() === word)?.color;
+}
+
+/**
+ * The color of the first span whose text, split on whitespace, contains
+ * `word`. Neighboring tokens of one kind merge into a single span, so
+ * `then break` is one span in HTML mode; this looks inside such merges.
+ */
+export function wordColor(
+  html: string,
+  word: string
+): string | null | undefined {
+  return spansOf(html).find((s) => s.text.trim().split(/\s+/).includes(word))
+    ?.color;
+}
+
+// ---- whole-module helpers ----
+
+let fullModuleReady = false;
+
+/**
+ * Compile src/chamele.wat once and install it as the shared highlighter, so
+ * `codeToTokens` and `StreamTokenizer` work. Lazy: single-lexer tests still
+ * run while another language file is mid-edit.
+ */
+export function initFullModule(): void {
+  if (fullModuleReady) return;
+  const url = new URL('../src/chamele.wat', import.meta.url);
+  const { code } = transformWat(url);
+  init(new WebAssembly.Module(wat2wasm(url.pathname, code)));
+  fullModuleReady = true;
+}
+
+/** Token content and kind per line under the distinct theme, for diffs. */
+export function flatTokens(lines: ThemedToken[][]): string {
+  return lines
+    .map((line) =>
+      line
+        .map(
+          (tok) =>
+            `${JSON.stringify(tok.content)}:${kindOfColor(tok.color) ?? 'none'}`
+        )
+        .join(' ')
+    )
+    .join('\n');
+}
+
+/**
+ * Tokens for `code` fed to a StreamTokenizer one line per push - the chunk
+ * shape the LiveTokenizer uses.
+ */
+export function lineFedTokens(lang: Lang, code: string): ThemedToken[][] {
+  initFullModule();
+  const stream = new StreamTokenizer({ lang, theme: distinctTheme });
+  const out: ThemedToken[][] = [];
+  for (const line of code.split(/(?<=\n)/)) out.push(...stream.pushCode(line));
+  out.push(...stream.end());
+  return out;
+}
+
+/**
+ * Assert that line-fed streaming yields exactly the whole-buffer tokens of
+ * `code`, and return them.
+ */
+export function assertLineFedParity(
+  lang: Lang,
+  code: string,
+  label?: string
+): ThemedToken[][] {
+  initFullModule();
+  const whole = codeToTokens(code, { lang, theme: distinctTheme }).tokens;
+  assert.equal(
+    flatTokens(lineFedTokens(lang, code)),
+    flatTokens(whole),
+    `${lang}${label === undefined ? '' : `: ${label}`}: ${JSON.stringify(code)}`
+  );
+  return whole;
 }

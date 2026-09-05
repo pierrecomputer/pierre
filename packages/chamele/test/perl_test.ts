@@ -7,11 +7,16 @@ import tokenTypes from '../lib/token-types';
 import { transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import {
+  assertLineFedParity,
   checkInvariants,
+  distinctColor as distinctColorOf,
+  exactColor,
   loadLang,
   spansOf,
   type TestLang,
   textOf,
+  tokenKinds,
+  wordColor,
 } from './util';
 
 // one unique color per token type so equal styles cannot merge neighboring
@@ -200,3 +205,228 @@ void t.test('perl: multi-line constructs resume line-fed', () => {
     assert.deepEqual(streamed, whole, JSON.stringify(code));
   }
 });
+
+/** Highlight under the distinct theme after checking the lexer invariants. */
+const distinctHl = (src: string) =>
+  checkInvariants(lexer.hl, src, { theme: distinct });
+
+void t.test('perl: pragmas, imports, packages, and special blocks', () => {
+  const html = distinctHl(
+    "use strict;\nuse warnings;\nuse List::Util qw(sum max);\nno strict 'refs';\npackage Shop::Cart 1.02;\nour @ISA = ('Base');\nrequire Exporter;\nBEGIN { }\nEND { }"
+  );
+  for (const word of ['use', 'no', 'require']) {
+    assert.equal(
+      wordColor(html, word),
+      distinctColorOf('keyword.import'),
+      word
+    );
+  }
+  for (const ns of ['List', 'Util', 'Shop', 'Cart']) {
+    assert.equal(exactColor(html, ns), distinctColorOf('namespace'), ns);
+  }
+  assert.equal(
+    exactColor(html, '::'),
+    distinctColorOf('punctuation.delimiter')
+  );
+  assert.equal(exactColor(html, 'qw(sum max)'), distinctColorOf('string'));
+  assert.equal(exactColor(html, "'refs'"), distinctColorOf('string'));
+  for (const word of ['package', 'our']) {
+    assert.equal(
+      wordColor(html, word),
+      distinctColorOf('keyword.declaration'),
+      word
+    );
+  }
+  assert.equal(exactColor(html, '1.02'), distinctColorOf('number'));
+  assert.equal(exactColor(html, '@ISA'), distinctColorOf('variable'));
+  assert.equal(exactColor(html, 'Exporter'), distinctColorOf('type'));
+  for (const word of ['BEGIN', 'END']) {
+    assert.equal(exactColor(html, word), distinctColorOf('keyword'), word);
+  }
+});
+
+void t.test('perl: numeric literal forms', () => {
+  const html = distinctHl(
+    'my $x = 0x1F + 0b101 + 0o17 + 017 + 1_000 + 1e3 + 2.5;'
+  );
+  for (const n of ['0x1F', '0b101', '0o17', '017', '1_000', '1e3', '2.5']) {
+    assert.equal(exactColor(html, n), distinctColorOf('number'), n);
+  }
+});
+
+void t.test(
+  'perl: subs, declarators, loops, conditionals, and word operators',
+  () => {
+    const html = distinctHl(
+      "sub total { my ($self, @list) = @_; my %h = (a => 1); foreach my $n (@list) { next if !$n; last unless $n > 0; redo; } for (my $i = 0; $i < 3; $i++) {} while (1) { last } until ($x) {} do {} while 0; if ($a && $b || !$c and $d or $e xor $f) {} elsif ($g) {} else {} unless ($u) {} return wantarray; goto &f; local $_ = 1; state $s = 0; eval { die 'x' }; warn 'w'; die 'd' if $@; }"
+    );
+    assert.equal(
+      exactColor(html, 'sub'),
+      distinctColorOf('keyword.declaration')
+    );
+    assert.equal(
+      exactColor(html, 'total'),
+      distinctColorOf('function.definition')
+    );
+    for (const word of ['my', 'local', 'state']) {
+      assert.equal(
+        wordColor(html, word),
+        distinctColorOf('keyword.declaration'),
+        word
+      );
+    }
+    for (const v of ['$self', '@list', '@_', '%h', '$n', '$i', '$_', '$s']) {
+      assert.equal(wordColor(html, v), distinctColorOf('variable'), v);
+    }
+    assert.equal(
+      exactColor(html, 'a'),
+      distinctColorOf('string.special.symbol')
+    );
+    for (const word of [
+      'foreach',
+      'next',
+      'if',
+      'last',
+      'unless',
+      'redo',
+      'for',
+      'while',
+      'until',
+      'do',
+      'elsif',
+      'else',
+      'return',
+      'goto',
+    ]) {
+      assert.equal(
+        wordColor(html, word),
+        distinctColorOf('keyword.control'),
+        word
+      );
+    }
+    for (const word of ['and', 'or', 'xor']) {
+      assert.equal(
+        wordColor(html, word),
+        distinctColorOf('keyword.operator'),
+        word
+      );
+    }
+    for (const fn of ['wantarray', 'eval', 'die', 'warn']) {
+      assert.equal(wordColor(html, fn), distinctColorOf('function'), fn);
+    }
+    assert.equal(exactColor(html, '&f'), distinctColorOf('function'));
+    assert.equal(exactColor(html, '$@'), distinctColorOf('variable.special'));
+    for (const op of ['&&', '||', '!', '++', '<', '>', '=>']) {
+      assert.equal(wordColor(html, op), distinctColorOf('operator'), op);
+    }
+  }
+);
+
+void t.test(
+  'perl: builtin functions, dereferences, and special variables',
+  () => {
+    const html = distinctHl(
+      "print \"x\"; printf('%s', $x); say 'y'; push @a, 1; pop @a; shift @a; join ',', @a; split /,/, $s; map { $_ * 2 } @a; grep { $_ } @a; sort { $a <=> $b } @a; keys %h; exists $h{k}; delete $h{k}; defined $x; scalar @a; open my $fh, '<', $f or die; close $fh; bless {}, $c; $obj->{key}; $obj->[0]; $Class::var; ${$r}; $#a; $0; $1; $!; $/; __PACKAGE__"
+    );
+    for (const fn of [
+      'print',
+      'printf',
+      'say',
+      'push',
+      'pop',
+      'shift',
+      'join',
+      'split',
+      'map',
+      'grep',
+      'sort',
+      'keys',
+      'exists',
+      'delete',
+      'defined',
+      'scalar',
+      'open',
+      'close',
+      'bless',
+    ]) {
+      assert.equal(wordColor(html, fn), distinctColorOf('function'), fn);
+    }
+    assert.equal(exactColor(html, '/,/'), distinctColorOf('string.regex'));
+    for (const sym of ['k', 'key']) {
+      assert.equal(
+        exactColor(html, sym),
+        distinctColorOf('string.special.symbol'),
+        sym
+      );
+    }
+    assert.equal(exactColor(html, '$Class::var'), distinctColorOf('variable'));
+    assert.equal(exactColor(html, '$#a'), distinctColorOf('variable'));
+    for (const v of ['${$r}', '$0', '$1', '$!', '$/', '__PACKAGE__']) {
+      assert.equal(exactColor(html, v), distinctColorOf('variable.special'), v);
+    }
+    assert.equal(exactColor(html, '<=>'), distinctColorOf('operator'));
+    assert.equal(exactColor(html, 'or'), distinctColorOf('keyword.operator'));
+  }
+);
+
+void t.test('perl: regex operators and comparison words', () => {
+  const html = distinctHl(
+    '$s =~ /^a(b+)c$/i; $s =~ s/a/b/g; $s =~ tr/a-z/A-Z/; $s !~ m{x}x; $s =~ y/a/b/; qr/re/; $a cmp $b; $a eq $b; $a ne $b; $a lt $b; $a gt $b; $a le $b; $a ge $b; $a x 3; $a .. $b; $a ... $b; $a ** 2; $a // $b; $a <<= 1; ++$a; $a--; \\$a'
+  );
+  for (const re of [
+    '/^a(b+)c$/i',
+    's/a/b/g',
+    'tr/a-z/A-Z/',
+    'm{x}x',
+    'y/a/b/',
+    'qr/re/',
+  ]) {
+    assert.equal(exactColor(html, re), distinctColorOf('string.regex'), re);
+  }
+  for (const word of ['cmp', 'eq', 'ne', 'lt', 'gt', 'le', 'ge', 'x']) {
+    assert.equal(
+      wordColor(html, word),
+      distinctColorOf('keyword.operator'),
+      word
+    );
+  }
+  for (const op of ['=~', '!~', '..', '...', '**', '//', '<<=', '++', '--']) {
+    assert.equal(wordColor(html, op), distinctColorOf('operator'), op);
+  }
+});
+
+void t.test('perl: comments, POD, and the __END__ marker', () => {
+  assert.deepEqual(
+    tokenKinds(
+      'perl',
+      '# comment\n=pod\n\nDoc.\n\n=cut\nmy $x = 1; # tail\n=head1 NAME\n\nText\n\n=cut\n__END__\nignored'
+    ),
+    [
+      ['# comment', 'comment'],
+      ['=pod', 'comment.doc'],
+      ['Doc.', 'comment.doc'],
+      ['=cut', 'comment.doc'],
+      ['my', 'keyword.declaration'],
+      ['$x', 'variable'],
+      ['=', 'operator'],
+      ['1', 'number'],
+      [';', 'punctuation.delimiter'],
+      ['# tail', 'comment'],
+      ['=head1 NAME', 'comment.doc'],
+      ['Text', 'comment.doc'],
+      ['=cut', 'comment.doc'],
+      ['__END__', 'comment'],
+      ['ignored', 'comment'],
+    ]
+  );
+});
+
+void t.test(
+  'perl: POD, heredocs, and multi-line strings stream line-fed',
+  () => {
+    assertLineFedParity(
+      'perl',
+      "=head1 X\n\ntext\n\n=cut\nmy $s = <<END;\na $b\nEND\nmy $t = 'multi\nline';\n__END__\nx\n"
+    );
+  }
+);

@@ -8,7 +8,7 @@
   ;; Group order is the dispatch order in $wgslWordHl below. The vector,
   ;; matrix, and texture families are prefix checks in $wgslTypeHl: `mat2x2`
   ;; and `mat3x2` share every hash feature the table can use.
-  (keyword-table $wgslWords $mem.wgslWords $mem.wgslWords+640 32 128
+  (keyword-table $wgslWords $mem.wgslWords $mem.wgslWords+640
     (group ;; 1: control
       "if" "for" "case" "else" "loop" "break" "while" "return" "switch"
       "default" "discard" "continue" "continuing")
@@ -92,19 +92,7 @@
     (enum.get $Token.boolean))
 
   (func $wgslIsOp (param $c i32) (result i32)
-    (i32.or
-      (i32.or
-        (i32.or (i32.eq (local.get $c) (i32.const "+")) (i32.eq (local.get $c) (i32.const "-")))
-        (i32.or (i32.eq (local.get $c) (i32.const "*")) (i32.eq (local.get $c) (i32.const "/"))))
-      (i32.or
-        (i32.or (i32.eq (local.get $c) (i32.const "%")) (i32.eq (local.get $c) (i32.const "=")))
-        (i32.or
-          (i32.or (i32.eq (local.get $c) (i32.const "!")) (i32.eq (local.get $c) (i32.const "<")))
-          (i32.or
-            (i32.or (i32.eq (local.get $c) (i32.const ">")) (i32.eq (local.get $c) (i32.const "&")))
-            (i32.or
-              (i32.or (i32.eq (local.get $c) (i32.const "|")) (i32.eq (local.get $c) (i32.const "^")))
-              (i32.eq (local.get $c) (i32.const "~"))))))))
+    (byteset.get "!%&*+-/<=>^|~" (local.get $c)))
 
   ;; $expect is the pending next-name capture from $wgslWordHl and $member
   ;; is 1 after `.`. WGSL has no string literals, so the loop needs no body
@@ -204,11 +192,7 @@
             (local.set $member (i32.const 0))
             (br $next)))
 
-        (if (i32.or
-              (i32.or (i32.eq (local.get $c) (i32.const "(")) (i32.eq (local.get $c) (i32.const ")")))
-              (i32.or
-                (i32.or (i32.eq (local.get $c) (i32.const "[")) (i32.eq (local.get $c) (i32.const "]")))
-                (i32.or (i32.eq (local.get $c) (i32.const "{")) (i32.eq (local.get $c) (i32.const "}")))))
+        (if (byteset.get "()[]{}" (local.get $c))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (call $emitTok (enum.get $Token.punctuation.bracket) (local.get $lhs) (global.get $ptr))
@@ -239,11 +223,7 @@
               (else
                 (if (i32.or (i32.eq (local.get $c2) (i32.const "="))
                             (i32.and (i32.eq (local.get $c) (local.get $c2))
-                              (i32.or
-                                (i32.or (i32.eq (local.get $c) (i32.const "+")) (i32.eq (local.get $c) (i32.const "-")))
-                                (i32.or
-                                  (i32.or (i32.eq (local.get $c) (i32.const "<")) (i32.eq (local.get $c) (i32.const ">")))
-                                  (i32.or (i32.eq (local.get $c) (i32.const "&")) (i32.eq (local.get $c) (i32.const "|")))))))
+                              (byteset.get "&+-<>|" (local.get $c))))
                   (then
                     (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
                     (if (i32.and

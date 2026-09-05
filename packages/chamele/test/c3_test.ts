@@ -7,11 +7,15 @@ import tokenTypes from '../lib/token-types';
 import { transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import {
+  assertLineFedParity,
   checkInvariants,
+  exactColor,
   loadLang,
   spansOf,
   type TestLang,
   textOf,
+  tokenKinds,
+  wordColor,
 } from './util';
 
 // one unique color per token type so equal styles cannot merge neighboring
@@ -198,3 +202,231 @@ void t.test('c3: multi-line constructs resume line-fed', () => {
     assert.deepEqual(streamed, whole, JSON.stringify(code));
   }
 });
+
+/** Highlight under the distinct theme after checking the lexer invariants. */
+const distinctHl = (src: string) =>
+  checkInvariants(lexer.hl, src, { theme: distinct });
+
+void t.test(
+  'c3: modules, constants, and every aggregate declaration form',
+  () => {
+    const html = distinctHl(
+      'module demo::app;\nimport std::io;\nconst int MAX = 10;\nstruct Point { int x; int y; }\nunion U { int i; float f; }\nenum Color : int { RED, GREEN }\ndef Callback = fn void(int);\ndistinct Meters = int;\nbitstruct Flags : char { bool a : 0; }\ninterface I { fn void g(); }\nextern fn int printf(char* fmt, ...);\nmacro @swap(&a, &b) { $typeof(a) tmp = a; }\nfn void Point.scale(&self, int k) @inline { self.x *= k; }\nfn int! divide(int a, int b) @private { return a / b; }'
+    );
+    for (const word of [
+      'module',
+      'const',
+      'struct',
+      'union',
+      'enum',
+      'def',
+      'fn',
+      'distinct',
+      'bitstruct',
+      'interface',
+      'extern',
+      'macro',
+    ]) {
+      assert.equal(
+        wordColor(html, word),
+        distinctColor('keyword.declaration'),
+        word
+      );
+    }
+    assert.equal(exactColor(html, 'import'), distinctColor('keyword.import'));
+    for (const ns of ['demo', 'app', 'std', 'io']) {
+      assert.equal(exactColor(html, ns), distinctColor('namespace'), ns);
+    }
+    assert.equal(
+      exactColor(html, '::'),
+      distinctColor('punctuation.delimiter')
+    );
+    for (const c of ['MAX', 'RED', 'GREEN']) {
+      assert.equal(exactColor(html, c), distinctColor('constant'), c);
+    }
+    for (const type of [
+      'Point',
+      'U',
+      'Color',
+      'Callback',
+      'Meters',
+      'Flags',
+      'I',
+    ]) {
+      assert.equal(wordColor(html, type), distinctColor('type'), type);
+    }
+    for (const type of ['int', 'float', 'void', 'char', 'bool']) {
+      assert.equal(wordColor(html, type), distinctColor('type.builtin'), type);
+    }
+    for (const fn of ['g', 'printf', 'scale', 'divide']) {
+      assert.equal(
+        exactColor(html, fn),
+        distinctColor('function.definition'),
+        fn
+      );
+    }
+    for (const attr of ['@swap', '@inline', '@private']) {
+      assert.equal(exactColor(html, attr), distinctColor('attribute'), attr);
+    }
+    assert.equal(exactColor(html, '$typeof'), distinctColor('keyword'));
+    assert.equal(exactColor(html, 'return'), distinctColor('keyword.control'));
+    for (const op of ['!', '*', '&', '...', '*=', '/']) {
+      assert.equal(wordColor(html, op), distinctColor('operator'), op);
+    }
+  }
+);
+
+void t.test('c3: literal forms', () => {
+  const html = distinctHl(
+    'fn void main() { int x = 0x1F + 0b101 + 0o17 + 1_000 + 1e3 + 2.5 + 3u + 4L + 5i128; char c = \'a\'; char n = \'\\n\'; String s = "esc\\t"; String r = `raw`; char[] h = x"41"; char[] b = b64"QUJD"; bool t = true; void* p = null; Point pt = { .x = 1 }; }'
+  );
+  for (const n of [
+    '0x1F',
+    '0b101',
+    '0o17',
+    '1_000',
+    '1e3',
+    '2.5',
+    '3u',
+    '4L',
+    '5i128',
+  ]) {
+    assert.equal(exactColor(html, n), distinctColor('number'), n);
+  }
+  assert.equal(exactColor(html, "'a'"), distinctColor('string'));
+  for (const esc of ['\\n', '\\t']) {
+    assert.equal(exactColor(html, esc), distinctColor('string.escape'), esc);
+  }
+  for (const s of ['"esc', '`raw`', 'x"41"', 'b64"QUJD"']) {
+    assert.equal(exactColor(html, s), distinctColor('string'), s);
+  }
+  assert.equal(exactColor(html, 'true'), distinctColor('boolean'));
+  assert.equal(exactColor(html, 'null'), distinctColor('constant.builtin'));
+  assert.equal(exactColor(html, 'String'), distinctColor('type'));
+  assert.equal(wordColor(html, 'x'), distinctColor('variable'));
+});
+
+void t.test(
+  'c3: control flow, error handling, compile-time forms, and operators',
+  () => {
+    const html = distinctHl(
+      'fn void f() { if (a && b || !c) { } else if (d) { } else { } while (x) { break; continue; } do { } while (y); for (int i = 0; i < 3; i++) { } foreach (i, v : list) { } foreach_r (v : list) { } switch (k) { case 1: nextcase; default: return; } defer io::printn("x"); try x = g()!; catch err = h() { } return a ?? 0; asm { } $if $defined(a): $else $endif $for (int j = 0; j < 3; j++): $endfor $foreach ($x : $list) $endforeach $switch $case 1: $default $endswitch $assert true; $echo "x"; $sizeof(int); $nameof(x); @foo; list.push(1); Point.method(); a <=> b; a &&& b; a ||| b; a +++ b; a[1..2]; a[^1]; var v2 = 1; static int s; tlocal int tl; inline fn void i() {} typeid t; any* an; }'
+    );
+    for (const word of [
+      'if',
+      'else',
+      'while',
+      'break',
+      'continue',
+      'do',
+      'for',
+      'foreach',
+      'foreach_r',
+      'switch',
+      'case',
+      'nextcase',
+      'default',
+      'return',
+      'defer',
+      'try',
+      'catch',
+      'asm',
+      '$if',
+      '$else',
+      '$for',
+      '$foreach',
+      '$switch',
+      '$case',
+      '$default',
+      '$assert',
+    ]) {
+      assert.equal(
+        wordColor(html, word),
+        distinctColor('keyword.control'),
+        word
+      );
+    }
+    for (const word of [
+      '$endif',
+      '$endfor',
+      '$endforeach',
+      '$endswitch',
+      '$echo',
+      '$defined',
+      '$sizeof',
+      '$nameof',
+    ]) {
+      assert.equal(wordColor(html, word), distinctColor('keyword'), word);
+    }
+    for (const word of ['var', 'static', 'tlocal', 'inline']) {
+      assert.equal(
+        wordColor(html, word),
+        distinctColor('keyword.declaration'),
+        word
+      );
+    }
+    assert.equal(exactColor(html, '@foo'), distinctColor('attribute'));
+    for (const v of ['$x', '$list']) {
+      assert.equal(exactColor(html, v), distinctColor('variable.special'), v);
+    }
+    for (const m of ['push', 'method']) {
+      assert.equal(exactColor(html, m), distinctColor('function.method'), m);
+    }
+    assert.equal(exactColor(html, 'io'), distinctColor('namespace'));
+    for (const fn of ['printn', 'g', 'h']) {
+      assert.equal(exactColor(html, fn), distinctColor('function'), fn);
+    }
+    for (const op of [
+      '&&',
+      '||',
+      '!',
+      '++',
+      '??',
+      '<=>',
+      '&&&',
+      '|||',
+      '+++',
+      '..',
+      '^',
+    ]) {
+      assert.equal(wordColor(html, op), distinctColor('operator'), op);
+    }
+    for (const type of ['typeid', 'any']) {
+      assert.equal(exactColor(html, type), distinctColor('type.builtin'), type);
+    }
+  }
+);
+
+void t.test(
+  'c3: comment forms including nested blocks and doc contracts',
+  () => {
+    assert.deepEqual(
+      tokenKinds(
+        'c3',
+        '// line\n/* block\n /* nested */ */\n<* doc\n contract *>\nfn void f() {} // tail'
+      ),
+      [
+        ['// line', 'comment'],
+        ['/* block', 'comment'],
+        ['/* nested */ */', 'comment'],
+        ['<* doc', 'comment.doc'],
+        ['contract *>', 'comment.doc'],
+        ['fn', 'keyword.declaration'],
+        ['void', 'type.builtin'],
+        ['f', 'function.definition'],
+        ['() {}', 'punctuation.bracket'],
+        ['// tail', 'comment'],
+      ]
+    );
+  }
+);
+
+void t.test(
+  'c3: raw strings, nested comments, and contracts stream line-fed',
+  () => {
+    assertLineFedParity(
+      'c3',
+      '<* doc\n contract *>\nfn void f() {\n  String s = `a\nb`;\n  /* c /* d */\n  */\n}\n'
+    );
+  }
+);

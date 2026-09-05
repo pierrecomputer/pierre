@@ -10,7 +10,7 @@
   ;; `sampler2D`, `int16_t` - are prefix checks in $hlslTypeHl: their members
   ;; share hash features the table cannot separate. The capitalized resource
   ;; types such as `Texture2D` fall to the capitalization rule.
-  (keyword-table $hlslWords $mem.hlslWords $mem.hlslWords+1152 64 256
+  (keyword-table $hlslWords $mem.hlslWords $mem.hlslWords+1152
     (group "true" "false") ;; 1: booleans
     (group ;; 2: control
       "if" "do" "for" "case" "else" "break" "while" "return" "switch"
@@ -111,19 +111,7 @@
     (enum.get $Token.variable.special))
 
   (func $hlslIsOp (param $c i32) (result i32)
-    (i32.or
-      (i32.or
-        (i32.or (i32.eq (local.get $c) (i32.const "+")) (i32.eq (local.get $c) (i32.const "-")))
-        (i32.or (i32.eq (local.get $c) (i32.const "*")) (i32.eq (local.get $c) (i32.const "/"))))
-      (i32.or
-        (i32.or (i32.eq (local.get $c) (i32.const "%")) (i32.eq (local.get $c) (i32.const "=")))
-        (i32.or
-          (i32.or (i32.eq (local.get $c) (i32.const "!")) (i32.eq (local.get $c) (i32.const "<")))
-          (i32.or
-            (i32.or (i32.eq (local.get $c) (i32.const ">")) (i32.eq (local.get $c) (i32.const "&")))
-            (i32.or
-              (i32.or (i32.eq (local.get $c) (i32.const "|")) (i32.eq (local.get $c) (i32.const "^")))
-              (i32.or (i32.eq (local.get $c) (i32.const "~")) (i32.eq (local.get $c) (i32.const "?")))))))))
+    (byteset.get "!%&*+-/<=>?^|~" (local.get $c)))
 
   ;; $expect is the pending next-name capture from $hlslWordHl. $afterType
   ;; is 1 right after a type and rides through the `<`, `>`, `[`, `]`, and
@@ -287,11 +275,7 @@
             (local.set $afterType (i32.const 0))
             (br $next)))
 
-        (if (i32.or
-              (i32.or (i32.eq (local.get $c) (i32.const "(")) (i32.eq (local.get $c) (i32.const ")")))
-              (i32.or
-                (i32.or (i32.eq (local.get $c) (i32.const "[")) (i32.eq (local.get $c) (i32.const "]")))
-                (i32.or (i32.eq (local.get $c) (i32.const "{")) (i32.eq (local.get $c) (i32.const "}")))))
+        (if (byteset.get "()[]{}" (local.get $c))
           (then
             ;; a bracket opening a line starts an attribute list
             (if (i32.eq (local.get $c) (i32.const "["))
@@ -342,11 +326,7 @@
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (if (i32.or (i32.eq (local.get $c2) (i32.const "="))
                         (i32.and (i32.eq (local.get $c) (local.get $c2))
-                          (i32.or
-                            (i32.or (i32.eq (local.get $c) (i32.const "+")) (i32.eq (local.get $c) (i32.const "-")))
-                            (i32.or
-                              (i32.or (i32.eq (local.get $c) (i32.const "<")) (i32.eq (local.get $c) (i32.const ">")))
-                              (i32.or (i32.eq (local.get $c) (i32.const "&")) (i32.eq (local.get $c) (i32.const "|")))))))
+                          (byteset.get "&+-<>|" (local.get $c))))
               (then
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
                 (if (i32.and

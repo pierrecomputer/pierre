@@ -7,11 +7,16 @@ import tokenTypes from '../lib/token-types';
 import { transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import {
+  assertLineFedParity,
   checkInvariants,
+  distinctColor as distinctColorOf,
+  exactColor,
   loadLang,
   spansOf,
   type TestLang,
   textOf,
+  tokenKinds,
+  wordColor,
 } from './util';
 
 // one unique color per token type so equal styles cannot merge neighboring
@@ -218,3 +223,253 @@ void t.test('erlang: multi-line constructs resume line-fed', () => {
     assert.deepEqual(streamed, whole, JSON.stringify(code));
   }
 });
+
+/** Highlight under the distinct theme after checking the lexer invariants. */
+const distinctHl = (src: string) =>
+  checkInvariants(lexer.hl, src, { theme: distinct });
+
+void t.test('erlang: every module attribute form', () => {
+  const html = distinctHl(
+    '-module(shop).\n-export([start/0, add/2]).\n-import(lists, [map/2]).\n-include("x.hrl").\n-include_lib("kernel/include/file.hrl").\n-record(item, {name :: string(), price = 0 :: number()}).\n-define(MAX, 100).\n-type t() :: #item{} | undefined.\n-spec add(t(), integer()) -> t().\n-behaviour(gen_server).\n-ifdef(TEST).\n-endif.\n-callback f() -> ok.\n-opaque o() :: term().\n-export_type([t/0]).\n-compile(export_all).\n-vsn("1").'
+  );
+  for (const attr of [
+    '-module',
+    '-export',
+    '-record',
+    '-define',
+    '-type',
+    '-spec',
+    '-behaviour',
+    '-ifdef',
+    '-endif',
+    '-callback',
+    '-opaque',
+    '-export_type',
+    '-compile',
+    '-vsn',
+  ]) {
+    assert.equal(wordColor(html, attr), distinctColorOf('keyword'), attr);
+  }
+  for (const attr of ['-import', '-include', '-include_lib']) {
+    assert.equal(
+      wordColor(html, attr),
+      distinctColorOf('keyword.import'),
+      attr
+    );
+  }
+  assert.equal(exactColor(html, 'shop'), distinctColorOf('namespace'));
+  for (const fn of [
+    'start',
+    'add',
+    'map',
+    'string',
+    'number',
+    'integer',
+    'term',
+    'f',
+  ]) {
+    assert.equal(wordColor(html, fn), distinctColorOf('function'), fn);
+  }
+  for (const type of ['item', 'o']) {
+    assert.equal(exactColor(html, type), distinctColorOf('type'), type);
+  }
+  assert.equal(exactColor(html, 'MAX'), distinctColorOf('constant'));
+  for (const sym of [
+    'lists',
+    'gen_server',
+    'export_all',
+    'name',
+    'price',
+    'ok',
+  ]) {
+    assert.equal(
+      wordColor(html, sym),
+      distinctColorOf('string.special.symbol'),
+      sym
+    );
+  }
+  assert.equal(exactColor(html, '"x.hrl"'), distinctColorOf('string'));
+  assert.equal(
+    exactColor(html, 'undefined'),
+    distinctColorOf('constant.builtin')
+  );
+  assert.equal(exactColor(html, '#'), distinctColorOf('punctuation.special'));
+  for (const op of ['/', '::', '->', '|']) {
+    assert.equal(wordColor(html, op), distinctColorOf('operator'), op);
+  }
+});
+
+void t.test(
+  'erlang: numeric, char, string, binary, list, map, and record literals',
+  () => {
+    const html = distinctHl(
+      'X = 16#FF + 2#101 + 1_000 + 1.5e3 + $a + 36#Z; S = "str\\t" ++ "multi\nline"; A = atom; Q = \'quoted atom\'; B = <<"bin", X:8, Y/binary>>; L = [1, 2 | T]; M = #{k => v}; R = #item{name = N}; F = R#item.name; true; false; undefined; nil'
+    );
+    for (const n of ['16#FF', '2#101', '1_000', '1.5e3', '36#Z']) {
+      assert.equal(exactColor(html, n), distinctColorOf('number'), n);
+    }
+    assert.equal(exactColor(html, '$a'), distinctColorOf('string.special'));
+    assert.equal(exactColor(html, '"str'), distinctColorOf('string'));
+    assert.equal(exactColor(html, '\\t'), distinctColorOf('string.escape'));
+    assert.equal(exactColor(html, '"multi\nline"'), distinctColorOf('string'));
+    for (const sym of ['atom', 'binary', 'k', 'v', 'name', 'nil']) {
+      assert.equal(
+        wordColor(html, sym),
+        distinctColorOf('string.special.symbol'),
+        sym
+      );
+    }
+    assert.equal(
+      exactColor(html, "'quoted atom'"),
+      distinctColorOf('string.special.symbol')
+    );
+    for (const b of ['<<', '>>', '[', ']']) {
+      assert.equal(
+        wordColor(html, b),
+        distinctColorOf('punctuation.bracket'),
+        b
+      );
+    }
+    assert.equal(exactColor(html, 'item'), distinctColorOf('type'));
+    assert.equal(exactColor(html, '#'), distinctColorOf('punctuation.special'));
+    for (const op of ['++', '|', '=>', '/']) {
+      assert.equal(wordColor(html, op), distinctColorOf('operator'), op);
+    }
+    assert.equal(exactColor(html, 'true'), distinctColorOf('boolean'));
+    assert.equal(
+      exactColor(html, 'undefined'),
+      distinctColorOf('constant.builtin')
+    );
+  }
+);
+
+void t.test(
+  'erlang: clauses, funs, macros, control forms, and word operators',
+  () => {
+    const html = distinctHl(
+      'start() ->\n    Pid = spawn(fun() -> loop([]) end),\n    register(?MODULE, Pid),\n    {ok, Pid}.\nadd(Name, Price) when is_integer(Price), Price > 0; Price =:= 0 ->\n    ?MODULE ! {add, Name},\n    io:format("~s~n", [Name]),\n    F = fun add/2,\n    case Name of "a" -> a; _ when true -> b end,\n    if Price > 1 -> big; true -> small end,\n    try f() of V -> V catch throw:E -> E after ok end,\n    receive {msg, M} -> M after 5000 -> timeout end,\n    begin x end,\n    [X || X <- L, X > 1],\n    A andalso B orelse not C, A and B or C xor D, A div B, A rem B, A band B, A bor B, A bxor B, A bnot B, A bsl B, A bsr B,\n    A =:= B, A =/= B, A == B, A /= B, A =< B, A >= B, A -- B, ?LOG("x"), ?MAX.'
+    );
+    for (const fn of ['start', 'add']) {
+      assert.equal(
+        wordColor(html, fn),
+        distinctColorOf('function.definition'),
+        fn
+      );
+    }
+    for (const fn of [
+      'spawn',
+      'loop',
+      'register',
+      'is_integer',
+      'format',
+      'f',
+    ]) {
+      assert.equal(wordColor(html, fn), distinctColorOf('function'), fn);
+    }
+    assert.equal(wordColor(html, 'fun'), distinctColorOf('keyword'));
+    for (const c of ['?MODULE', '?LOG', '?MAX']) {
+      assert.equal(wordColor(html, c), distinctColorOf('constant'), c);
+    }
+    assert.equal(exactColor(html, 'io'), distinctColorOf('namespace'));
+    for (const word of [
+      'end',
+      'case',
+      'of',
+      'if',
+      'try',
+      'catch',
+      'after',
+      'receive',
+      'begin',
+    ]) {
+      assert.equal(
+        wordColor(html, word),
+        distinctColorOf('keyword.control'),
+        word
+      );
+    }
+    for (const word of [
+      'when',
+      'andalso',
+      'orelse',
+      'not',
+      'and',
+      'or',
+      'xor',
+      'div',
+      'rem',
+      'band',
+      'bor',
+      'bxor',
+      'bnot',
+      'bsl',
+      'bsr',
+    ]) {
+      assert.equal(
+        wordColor(html, word),
+        distinctColorOf('keyword.operator'),
+        word
+      );
+    }
+    for (const op of [
+      '->',
+      '!',
+      '||',
+      '<-',
+      '=:=',
+      '=/=',
+      '==',
+      '/=',
+      '=<',
+      '>=',
+      '--',
+      '>',
+    ]) {
+      assert.equal(wordColor(html, op), distinctColorOf('operator'), op);
+    }
+    for (const v of [
+      'Pid',
+      'Name',
+      'Price',
+      'V',
+      'E',
+      'M',
+      'X',
+      'L',
+      'A',
+      'B',
+    ]) {
+      assert.equal(wordColor(html, v), distinctColorOf('variable'), v);
+    }
+  }
+);
+
+void t.test('erlang: comment forms', () => {
+  assert.deepEqual(
+    tokenKinds(
+      'erlang',
+      '% comment\n%% double\n%%% triple\n-module(x). % tail'
+    ),
+    [
+      ['% comment', 'comment'],
+      ['%% double', 'comment'],
+      ['%%% triple', 'comment'],
+      ['-module', 'keyword'],
+      ['(', 'punctuation.bracket'],
+      ['x', 'namespace'],
+      [')', 'punctuation.bracket'],
+      ['.', 'punctuation.delimiter'],
+      ['% tail', 'comment'],
+    ]
+  );
+});
+
+void t.test(
+  'erlang: multi-line strings, binaries, and clauses stream line-fed',
+  () => {
+    assertLineFedParity(
+      'erlang',
+      'f() ->\n    S = "a\nb",\n    B = <<\n      1,\n      2\n    >>,\n    {S, B}.\n%% done\n'
+    );
+  }
+);

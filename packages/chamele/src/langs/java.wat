@@ -8,49 +8,29 @@
   ;; Group order is the dispatch order in $javaWordHl below. The module
   ;; directives `exports`/`opens`/`requires` stay out: `exports` shares its
   ;; hash features with `extends`, and module descriptors are rare.
-  (keyword-table $javaWords $mem.javaWords $mem.javaWords+1024 64 256
-    (group ;; 1: control
+  (keyword-table $javaWords $mem.javaWords $mem.javaWords+1024
+    (group $Token.keyword.control ;; 1: control
       "if" "do" "for" "try" "case" "else" "goto" "break" "catch" "throw"
       "while" "yield" "assert" "return" "switch" "default" "finally"
       "continue")
-    (group "enum" "class" "record" "interface") ;; 2: declaration, next name is a type
-    (group "package")                           ;; 3: declaration, next name is a namespace
-    (group "import")                            ;; 4: import
-    (group ;; 5: declaration and modifiers
+    (group $Token.keyword.declaration+256 "enum" "class" "record" "interface") ;; 2: declaration, next name is a type
+    (group $Token.keyword.declaration+512 "package")                           ;; 3: declaration, next name is a namespace
+    (group $Token.keyword.import "import")                            ;; 4: import
+    (group $Token.keyword.declaration ;; 5: declaration and modifiers
       "var" "const" "final" "native" "sealed" "static" "throws" "extends"
       "permits" "private" "abstract" "strictfp" "volatile" "protected"
       "public" "transient" "implements" "synchronized")
-    (group ;; 6: primitive types
+    (group $Token.type.builtin ;; 6: primitive types
       "int" "byte" "char" "long" "void" "float" "short" "double" "boolean")
-    (group "true" "false")    ;; 7: booleans
-    (group "null")            ;; 8: built-in constant
-    (group "this" "super")    ;; 9: special variables
-    (group "new" "instanceof")) ;; 10: word operators
+    (group $Token.boolean "true" "false")    ;; 7: booleans
+    (group $Token.constant.builtin "null")            ;; 8: built-in constant
+    (group $Token.variable.special "this" "super")    ;; 9: special variables
+    (group $Token.keyword.operator "new" "instanceof")) ;; 10: word operators
 
   ;; Token in the low byte; the high byte selects the next-name capture:
   ;; 1=type, 2=namespace. -1 means an ordinary identifier.
   (func $javaWordHl (param $lhs i32) (param $rhs i32) (result i32)
-    (local $g i32)
-    (local.set $g (keyword-table.get $javaWords (local.get $lhs) (local.get $rhs)))
-    (if (i32.eqz (local.get $g)) (then (return (i32.const -1))))
-    (if (i32.eq (local.get $g) (i32.const 1))
-      (then (return (enum.get $Token.keyword.control))))
-    (if (i32.le_u (local.get $g) (i32.const 3))
-      (then (return (i32.or (enum.get $Token.keyword.declaration)
-        (i32.shl (i32.sub (local.get $g) (i32.const 1)) (i32.const 8))))))
-    (if (i32.eq (local.get $g) (i32.const 4))
-      (then (return (enum.get $Token.keyword.import))))
-    (if (i32.eq (local.get $g) (i32.const 5))
-      (then (return (enum.get $Token.keyword.declaration))))
-    (if (i32.eq (local.get $g) (i32.const 6))
-      (then (return (enum.get $Token.type.builtin))))
-    (if (i32.eq (local.get $g) (i32.const 7))
-      (then (return (enum.get $Token.boolean))))
-    (if (i32.eq (local.get $g) (i32.const 8))
-      (then (return (enum.get $Token.constant.builtin))))
-    (if (i32.eq (local.get $g) (i32.const 9))
-      (then (return (enum.get $Token.variable.special))))
-    (enum.get $Token.keyword.operator))
+    (keyword-table.value $javaWords (local.get $lhs) (local.get $rhs)))
 
   ;; Scan a text block body from $ptr, whose bytes from $seg on are still
   ;; unemitted, through the closing `"""` or to $end. Escapes are emitted as
@@ -87,19 +67,7 @@
     (i32.const 0))
 
   (func $javaIsOp (param $c i32) (result i32)
-    (i32.or
-      (i32.or
-        (i32.or (i32.eq (local.get $c) (i32.const "+")) (i32.eq (local.get $c) (i32.const "-")))
-        (i32.or (i32.eq (local.get $c) (i32.const "*")) (i32.eq (local.get $c) (i32.const "/"))))
-      (i32.or
-        (i32.or (i32.eq (local.get $c) (i32.const "%")) (i32.eq (local.get $c) (i32.const "=")))
-        (i32.or
-          (i32.or (i32.eq (local.get $c) (i32.const "!")) (i32.eq (local.get $c) (i32.const "<")))
-          (i32.or
-            (i32.or (i32.eq (local.get $c) (i32.const ">")) (i32.eq (local.get $c) (i32.const "&")))
-            (i32.or
-              (i32.or (i32.eq (local.get $c) (i32.const "|")) (i32.eq (local.get $c) (i32.const "^")))
-              (i32.or (i32.eq (local.get $c) (i32.const "~")) (i32.eq (local.get $c) (i32.const "?")))))))))
+    (byteset.get "!%&*+-/<=>?^|~" (local.get $c)))
 
   ;; $expect is the pending next-name capture from $javaWordHl. $afterType
   ;; is 1 right after a type - a primitive, a capitalized name, or a member
@@ -249,11 +217,7 @@
             (local.set $afterType (i32.const 0))
             (br $next)))
 
-        (if (i32.or
-              (i32.or (i32.eq (local.get $c) (i32.const "(")) (i32.eq (local.get $c) (i32.const ")")))
-              (i32.or
-                (i32.or (i32.eq (local.get $c) (i32.const "[")) (i32.eq (local.get $c) (i32.const "]")))
-                (i32.or (i32.eq (local.get $c) (i32.const "{")) (i32.eq (local.get $c) (i32.const "}")))))
+        (if (byteset.get "()[]{}" (local.get $c))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (call $emitTok (enum.get $Token.punctuation.bracket) (local.get $lhs) (global.get $ptr))
@@ -302,11 +266,7 @@
               (else
                 (if (i32.or (i32.eq (local.get $c2) (i32.const "="))
                             (i32.and (i32.eq (local.get $c) (local.get $c2))
-                              (i32.or
-                                (i32.or (i32.eq (local.get $c) (i32.const "+")) (i32.eq (local.get $c) (i32.const "-")))
-                                (i32.or
-                                  (i32.or (i32.eq (local.get $c) (i32.const "<")) (i32.eq (local.get $c) (i32.const ">")))
-                                  (i32.or (i32.eq (local.get $c) (i32.const "&")) (i32.eq (local.get $c) (i32.const "|")))))))
+                              (byteset.get "&+-<>|" (local.get $c))))
                   (then
                     (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
                     (if (i32.and (i32.eq (local.get $c) (i32.const ">"))

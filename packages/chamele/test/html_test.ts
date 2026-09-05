@@ -2,13 +2,19 @@ import assert from 'node:assert';
 import t from 'node:test';
 
 import {
+  assertLineFedParity,
   bodyOf,
   checkInvariants,
   colorOf,
+  distinctColor,
+  distinctTheme,
+  exactColor,
   loadLang,
   spansOf,
   type TestLang,
   themeColor,
+  tokenKinds,
+  wordColor,
 } from './util';
 
 let html: TestLang;
@@ -255,3 +261,177 @@ void t.test('html: longest named character reference highlights', () => {
   const out = checkInvariants(html.hl, 'x &CounterClockwiseContourIntegral; y');
   assert.equal(colorOf(out, '&CounterClockwiseContourIntegral;'), SPECIAL);
 });
+
+/** Highlight under the distinct theme after checking the lexer invariants. */
+const distinctHl = (src: string) =>
+  checkInvariants(html.hl, src, { theme: distinctTheme });
+
+void t.test(
+  'html: doctype forms, head elements, and character references',
+  () => {
+    const src =
+      '<!DOCTYPE html>\n<!doctype HTML>\n<html lang="en" data-theme=dark hidden>\n<head><meta charset="utf-8"><title>T &amp; &lt; &#169; &#x1F600; &bogus</title><link rel="stylesheet" href="x.css"></head>';
+    const html = distinctHl(src);
+    const kinds = tokenKinds('html', src);
+    for (const d of ['<!DOCTYPE html>', '<!doctype HTML>']) {
+      assert.ok(
+        kinds.some(([text, kind]) => text === d && kind === 'tag.doctype'),
+        d
+      );
+    }
+    for (const tag of ['html', 'head', 'meta', 'title', 'link']) {
+      assert.equal(wordColor(html, tag), distinctColor('tag'), tag);
+    }
+    for (const attr of [
+      'lang',
+      'data-theme',
+      'hidden',
+      'charset',
+      'rel',
+      'href',
+    ]) {
+      assert.equal(exactColor(html, attr), distinctColor('attribute'), attr);
+    }
+    for (const s of ['"en"', 'dark', '"utf-8"', '"stylesheet"', '"x.css"']) {
+      assert.equal(exactColor(html, s), distinctColor('string'), s);
+    }
+    for (const ref of ['&amp;', '&lt;', '&#169;', '&#x1F600;']) {
+      assert.equal(exactColor(html, ref), distinctColor('string.special'), ref);
+    }
+    assert.ok(kinds.some(([text, kind]) => text === '&bogus' && kind === null));
+  }
+);
+
+void t.test(
+  'html: attribute quoting styles, void elements, custom elements, and inline svg',
+  () => {
+    const html = distinctHl(
+      '<body class="a b" id=main style="color: red" onclick="go(1)" aria-label=\'x\' DISABLED>\n<img src=a.png alt="" />\n<br>\n<input type="checkbox" checked>\n<my-element some-attr="1"><slot></slot></my-element>\n<svg viewBox="0 0 10 10"><path d="M0 0" /></svg>\n<a href="https://x.com/?a=1&b=2">l</a>\n<p>text<b>bold</b></p>\n<ul><li>1<li>2</ul>\n</body>'
+    );
+    for (const attr of [
+      'class',
+      'id',
+      'style',
+      'onclick',
+      'aria-label',
+      'DISABLED',
+      'src',
+      'alt',
+      'type',
+      'checked',
+      'some-attr',
+      'viewBox',
+      'd',
+      'href',
+    ]) {
+      assert.equal(exactColor(html, attr), distinctColor('attribute'), attr);
+    }
+    for (const s of [
+      '"a b"',
+      'main',
+      '"color: red"',
+      '"go(1)"',
+      "'x'",
+      'a.png',
+      '""',
+      '"checkbox"',
+      '"1"',
+      '"0 0 10 10"',
+      '"M0 0"',
+      '"https://x.com/?a=1&b=2"',
+    ]) {
+      assert.equal(exactColor(html, s), distinctColor('string'), s);
+    }
+    for (const tag of [
+      'body',
+      'img',
+      'br',
+      'input',
+      'my-element',
+      'slot',
+      'svg',
+      'path',
+      'a',
+      'p',
+      'b',
+      'ul',
+      'li',
+    ]) {
+      assert.equal(wordColor(html, tag), distinctColor('tag'), tag);
+    }
+    assert.equal(
+      exactColor(html, '/>'),
+      distinctColor('punctuation.bracket.html')
+    );
+  }
+);
+
+void t.test('html: script and style bodies embed their languages', () => {
+  const src =
+    '<script type="module">\nconst a = 1;\n</script>\n<script src="x.js"></script>\n<script>if (a < b && c > d) {}</script>\n<style media="print">\n.a { color: red }\n</style>\n<style>@import "x";</style>\n<noscript><p>x</p></noscript>\n<iframe srcdoc="<p>x</p>"></iframe>';
+  const html = distinctHl(src);
+  const kinds = tokenKinds('html', src);
+  const has = (text: string, kind: string | null) =>
+    kinds.some(([t, k]) => t === text && k === kind);
+  assert.equal(exactColor(html, 'const'), distinctColor('keyword.declaration'));
+  assert.equal(exactColor(html, 'if'), distinctColor('keyword.control'));
+  assert.ok(has('<', 'operator'));
+  assert.ok(has('>', 'operator'));
+  assert.ok(has('&&', 'operator'));
+  assert.equal(exactColor(html, '.a'), distinctColor('selector.class'));
+  assert.equal(exactColor(html, 'color'), distinctColor('property'));
+  assert.equal(exactColor(html, 'red'), distinctColor('constant.builtin'));
+  assert.equal(exactColor(html, '@import'), distinctColor('keyword'));
+  assert.equal(exactColor(html, '"x"'), distinctColor('string'));
+  for (const attr of ['type', 'src', 'media', 'srcdoc']) {
+    assert.equal(exactColor(html, attr), distinctColor('attribute'), attr);
+  }
+  for (const tag of ['noscript', 'iframe']) {
+    assert.equal(wordColor(html, tag), distinctColor('tag'), tag);
+  }
+  assert.equal(exactColor(html, '"<p>x</p>"'), distinctColor('string'));
+});
+
+void t.test('html: comment forms, bogus comments, and stray brackets', () => {
+  assert.deepEqual(
+    tokenKinds(
+      'html',
+      '<!-- comment -->\n<!-- multi\nline -->\n<!---->\n<?php echo 1 ?>\n<?xml version="1.0"?>\n<>\n< a>\n<1>'
+    ),
+    [
+      ['<!-- comment -->', 'comment'],
+      ['<!-- multi', 'comment'],
+      ['line -->', 'comment'],
+      ['<!---->', 'comment'],
+      ['<?php echo 1 ?>', 'comment'],
+      ['<?xml version="1.0"?>', 'comment'],
+      ['<>', null],
+      ['< a>', null],
+      ['<1>', null],
+    ]
+  );
+});
+
+void t.test(
+  'html: an unterminated attribute value runs to the end of input',
+  () => {
+    assert.deepEqual(tokenKinds('html', '<a b="unterminated\n<c>'), [
+      ['<', 'punctuation.bracket.html'],
+      ['a', 'tag'],
+      ['b', 'attribute'],
+      ['=', 'punctuation.delimiter.html'],
+      ['"unterminated', 'string'],
+      ['<c>', 'string'],
+    ]);
+  }
+);
+
+void t.test(
+  'html: tags, comments, scripts, and styles spanning lines stream line-fed',
+  () => {
+    assertLineFedParity(
+      'html',
+      '<a\n  href="x"\n  b>y</a>\n<!-- c\n d -->\n<script>\nconst s = `e\nf`;\n</script>\n<style>\n.g {\n  h: 1;\n}\n</style>\n<p\n>z</p>\n'
+    );
+  }
+);

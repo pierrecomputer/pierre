@@ -2,13 +2,19 @@ import assert from 'node:assert';
 import t from 'node:test';
 
 import {
+  assertLineFedParity,
   checkInvariants,
   colorOf,
+  distinctColor,
+  distinctTheme,
+  exactColor,
   loadLang,
   spansOf,
   type TestLang,
   textOf,
   themeColor,
+  tokenKinds,
+  wordColor,
 } from './util';
 
 let toml: TestLang;
@@ -321,3 +327,164 @@ void t.test(
     }
   }
 );
+
+/** Highlight under the distinct theme after checking the lexer invariants. */
+const distinctHl = (src: string) =>
+  checkInvariants(toml.hl, src, { theme: distinctTheme });
+
+void t.test(
+  'toml: tables, arrays of tables, dotted and quoted keys, and inline tables',
+  () => {
+    const html = distinctHl(
+      '# comment\ntitle = "TOML" # trailing\n[owner]\nname = "Tom"\n[database]\nenabled = true\nports = [ 8000, 8001 ]\ndata = [ ["delta", "phi"], [3.14] ]\ntemp_targets = { cpu = 79.5, case = 72.0 }\n[servers.alpha]\nip = "10.0.0.1"\n[[products]]\nname = "Hammer"\n"quoted.key" = 1\n\'literal key\' = 2\nbare-key_1 = 3\nphysical.color = "orange"\nsite."google.com" = true'
+    );
+    for (const c of ['# comment', '# trailing']) {
+      assert.equal(exactColor(html, c), distinctColor('comment'), c);
+    }
+    for (const key of [
+      'title',
+      'owner',
+      'name',
+      'database',
+      'enabled',
+      'ports',
+      'data',
+      'temp_targets',
+      'cpu',
+      'case',
+      'servers',
+      'alpha',
+      'ip',
+      'products',
+      '"quoted.key"',
+      'bare-key_1',
+      'physical',
+      'color',
+      'site',
+      '"google.com"',
+    ]) {
+      assert.equal(wordColor(html, key), distinctColor('property'), key);
+    }
+    assert.equal(exactColor(html, "'literal key'"), distinctColor('property'));
+    assert.equal(exactColor(html, '='), distinctColor('operator'));
+    for (const s of [
+      '"TOML"',
+      '"Tom"',
+      '"delta"',
+      '"phi"',
+      '"10.0.0.1"',
+      '"Hammer"',
+      '"orange"',
+    ]) {
+      assert.equal(exactColor(html, s), distinctColor('string'), s);
+    }
+    assert.equal(exactColor(html, 'true'), distinctColor('constant'));
+    for (const n of ['8000', '8001', '3.14', '79.5', '72.0', '1', '2', '3']) {
+      assert.equal(wordColor(html, n), distinctColor('number'), n);
+    }
+    for (const b of ['[', '[[', '{']) {
+      assert.equal(wordColor(html, b), distinctColor('punctuation.bracket'), b);
+    }
+    assert.equal(exactColor(html, '.'), distinctColor('punctuation.delimiter'));
+  }
+);
+
+void t.test(
+  'toml: string forms with escapes, literal strings, and multi-line strings',
+  () => {
+    const html = distinctHl(
+      'str1 = "I\'m a string. \\"quoted\\"\\t\\u00E9"\nstr2 = \'C:\\\\Users\\\\nodejs\'\nstr3 = """\nRoses\n  violets\\\n  trimmed"""\nstr4 = \'\'\'\nraw\nmulti\'\'\'\nstr5 = """a "" b """'
+    );
+    assert.equal(exactColor(html, '"I\'m a string.'), distinctColor('string'));
+    assert.equal(exactColor(html, '\\"'), distinctColor('string.escape'));
+    assert.equal(
+      exactColor(html, "'C:\\\\Users\\\\nodejs'"),
+      distinctColor('string')
+    );
+    for (const body of ['Roses', 'violets', 'trimmed"""', 'raw', "multi'''"]) {
+      assert.equal(colorOf(html, body), distinctColor('string'), body);
+    }
+    assert.equal(exactColor(html, '"""a "" b """'), distinctColor('string'));
+  }
+);
+
+void t.test('toml: numeric, date-time, and special float forms', () => {
+  const html = distinctHl(
+    'dob = 1979-05-27T07:32:00-08:00\nld = 1979-05-27\nlt = 07:32:00\nint1 = +99\nint2 = -17\nint3 = 1_000\nhex = 0xDEADBEEF\noct = 0o755\nbin = 0b11010110\nflt1 = +1.0\nflt4 = 5e+22\nflt6 = -2E-2\nflt8 = 224_617.445_991_228\nsf1 = inf\nsf2 = +inf\nsf3 = -inf\nsf4 = nan\nbool1 = true\nbool2 = false'
+  );
+  for (const d of ['1979-05-27T07:32:00-08:00', '1979-05-27', '07:32:00']) {
+    assert.equal(exactColor(html, d), distinctColor('string.special'), d);
+  }
+  for (const n of [
+    '+99',
+    '-17',
+    '1_000',
+    '0xDEADBEEF',
+    '0o755',
+    '0b11010110',
+    '+1.0',
+    '5e+22',
+    '-2E-2',
+    '224_617.445_991_228',
+    'inf',
+    '+inf',
+    '-inf',
+    'nan',
+  ]) {
+    assert.equal(exactColor(html, n), distinctColor('number'), n);
+  }
+  for (const b of ['true', 'false']) {
+    assert.equal(exactColor(html, b), distinctColor('constant'), b);
+  }
+});
+
+void t.test(
+  'toml: arrays with comments and inline tables token by token',
+  () => {
+    assert.deepEqual(
+      tokenKinds(
+        'toml',
+        'arr = [ 1, 2, # c\n  3 ]\ninline = { x = 1, y = { z = 2 }, w = [1] }'
+      ),
+      [
+        ['arr', 'property'],
+        ['=', 'operator'],
+        ['[', 'punctuation.bracket'],
+        ['1', 'number'],
+        [',', 'punctuation.delimiter'],
+        ['2', 'number'],
+        [',', 'punctuation.delimiter'],
+        ['# c', 'comment'],
+        ['3', 'number'],
+        [']', 'punctuation.bracket'],
+        ['inline', 'property'],
+        ['=', 'operator'],
+        ['{', 'punctuation.bracket'],
+        ['x', 'property'],
+        ['=', 'operator'],
+        ['1', 'number'],
+        [',', 'punctuation.delimiter'],
+        ['y', 'property'],
+        ['=', 'operator'],
+        ['{', 'punctuation.bracket'],
+        ['z', 'property'],
+        ['=', 'operator'],
+        ['2', 'number'],
+        ['}', 'punctuation.bracket'],
+        [',', 'punctuation.delimiter'],
+        ['w', 'property'],
+        ['=', 'operator'],
+        ['[', 'punctuation.bracket'],
+        ['1', 'number'],
+        ['] }', 'punctuation.bracket'],
+      ]
+    );
+  }
+);
+
+void t.test('toml: multi-line strings and arrays stream line-fed', () => {
+  assertLineFedParity(
+    'toml',
+    'a = """\nb\nc"""\nd = \'\'\'\ne\n\'\'\'\nf = [\n  1,\n  2,\n]\n'
+  );
+});

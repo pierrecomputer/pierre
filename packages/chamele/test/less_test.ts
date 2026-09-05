@@ -7,11 +7,15 @@ import tokenTypes from '../lib/token-types';
 import { transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import {
+  assertLineFedParity,
   checkInvariants,
+  exactColor,
   loadLang,
   spansOf,
   type TestLang,
   textOf,
+  tokenKinds,
+  wordColor,
 } from './util';
 
 // one unique color per token type so equal styles cannot merge neighboring
@@ -180,3 +184,76 @@ void t.test('less: multi-line constructs resume line-fed', () => {
     assert.deepEqual(streamed, whole, JSON.stringify(code));
   }
 });
+
+/** Highlight under the distinct theme after checking the lexer invariants. */
+const distinctHl = (src: string) =>
+  checkInvariants(lexer.hl, src, { theme: distinct });
+
+void t.test(
+  'less: variables, interpolation, mixins, guards, and namespaces',
+  () => {
+    const html = distinctHl(
+      '@import (reference) "x";\n@var: 10px;\n@color: #fff;\n@{name}: value;\n.mixin(@a; @b: 2) when (iscolor(@a)) { width: @a; }\n.a { .mixin(1; 2); .b; .c(); color: darken(@color, 10%); width: ~"calc(100% - @{var})"; height: (@var * 2); .e { } & + & { } }\n@plugin "x";\n#ns { .m() { } }\n.f { #ns > .m(); }\n.g { width: percentage(0.5); @v: @@name; }'
+    );
+    for (const word of ['@import', '@plugin']) {
+      assert.equal(wordColor(html, word), distinctColor('keyword'), word);
+    }
+    assert.equal(
+      exactColor(html, 'reference'),
+      distinctColor('constant.builtin')
+    );
+    assert.equal(exactColor(html, '"x"'), distinctColor('string'));
+    for (const v of ['@var', '@color', '@a', '@b', '@v', '@@name']) {
+      assert.equal(wordColor(html, v), distinctColor('variable'), v);
+    }
+    assert.equal(exactColor(html, '10px'), distinctColor('number'));
+    assert.equal(exactColor(html, '#fff'), distinctColor('string.special'));
+    assert.equal(exactColor(html, '@{'), distinctColor('punctuation.special'));
+    for (const c of ['.mixin', '.a', '.b', '.c', '.e', '.f', '.g', '.m']) {
+      assert.equal(wordColor(html, c), distinctColor('selector.class'), c);
+    }
+    for (const fn of ['iscolor', 'darken', 'percentage']) {
+      assert.equal(exactColor(html, fn), distinctColor('function'), fn);
+    }
+    for (const p of ['width', 'height', 'color']) {
+      assert.equal(wordColor(html, p), distinctColor('property'), p);
+    }
+    assert.equal(exactColor(html, '~'), distinctColor('operator'));
+    assert.equal(
+      exactColor(html, '"calc(100% - @{var})"'),
+      distinctColor('string')
+    );
+    for (const op of ['*', '>', '&']) {
+      assert.equal(wordColor(html, op), distinctColor('operator'), op);
+    }
+    assert.equal(wordColor(html, '#ns'), distinctColor('selector.id'));
+  }
+);
+
+void t.test('less: comment forms', () => {
+  assert.deepEqual(
+    tokenKinds('less', '// line\n/* block */\n.a { b: 1; // tail\n}'),
+    [
+      ['// line', 'comment'],
+      ['/* block */', 'comment'],
+      ['.a', 'selector.class'],
+      ['{', 'punctuation.bracket'],
+      ['b', 'property'],
+      [':', 'punctuation.delimiter'],
+      ['1', 'number'],
+      [';', 'punctuation.delimiter'],
+      ['// tail', 'comment'],
+      ['}', 'punctuation.bracket'],
+    ]
+  );
+});
+
+void t.test(
+  'less: block comments and multi-line mixin calls stream line-fed',
+  () => {
+    assertLineFedParity(
+      'less',
+      '/* a\n b */\n.x {\n  color: red;\n  .m(\n    1;\n    2\n  );\n}\n'
+    );
+  }
+);

@@ -6,13 +6,19 @@ import { codeToTokens, init, StreamTokenizer } from '../lib/index';
 import { transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import {
+  assertLineFedParity,
   checkInvariants,
   colorOf,
+  distinctColor,
+  distinctTheme,
+  exactColor,
   loadLang,
   spansOf,
   type TestLang,
   textOf,
   themeColor,
+  tokenKinds,
+  wordColor,
 } from './util';
 
 let swift: TestLang;
@@ -303,3 +309,236 @@ void t.test('swift: nested comments at even depth match line-fed', () => {
   assert.equal(whole[2][0].color, themeColor('comment'));
   assert.equal(whole[3][0].color, themeColor('variable'));
 });
+
+/** Highlight under the distinct theme after checking the lexer invariants. */
+const distinctHl = (src: string) =>
+  checkInvariants(swift.hl, src, { theme: distinctTheme });
+
+void t.test('swift: imports and declarations of every kind', () => {
+  const html = distinctHl(
+    'import Foundation\nprotocol Shape { var area: Double { get } func f() }\nstruct Circle: Shape, Codable { let r: Double }\nfinal class Cart<T: Shape> where T: Equatable { private(set) var items: [T] = []; static let max = 10; init() {} deinit {} }\nenum Kind: String, CaseIterable { case small, large = "big" }\nextension Cart: CustomStringConvertible {} actor A {} typealias N = Int'
+  );
+  assert.equal(exactColor(html, 'import'), distinctColor('keyword.import'));
+  for (const word of [
+    'protocol',
+    'struct',
+    'class',
+    'enum',
+    'extension',
+    'actor',
+    'typealias',
+    'let',
+    'var',
+    'func',
+    'deinit',
+  ]) {
+    assert.equal(
+      wordColor(html, word),
+      distinctColor('keyword.declaration'),
+      word
+    );
+  }
+  for (const word of ['final', 'static', 'private', 'where']) {
+    assert.equal(wordColor(html, word), distinctColor('keyword'), word);
+  }
+  for (const type of [
+    'Foundation',
+    'Shape',
+    'Circle',
+    'Codable',
+    'Cart',
+    'Equatable',
+    'Kind',
+    'CaseIterable',
+    'CustomStringConvertible',
+    'A',
+    'N',
+  ]) {
+    assert.equal(exactColor(html, type), distinctColor('type'), type);
+  }
+  for (const type of ['Double', 'String', 'Int']) {
+    assert.equal(exactColor(html, type), distinctColor('type.builtin'), type);
+  }
+  assert.equal(exactColor(html, 'f'), distinctColor('function.definition'));
+  assert.equal(exactColor(html, 'init'), distinctColor('function'));
+  assert.equal(exactColor(html, 'case'), distinctColor('keyword.control'));
+  assert.equal(exactColor(html, '"big"'), distinctColor('string'));
+  assert.equal(exactColor(html, '10'), distinctColor('number'));
+});
+
+void t.test(
+  'swift: numeric literals, interpolation, multi-line and raw strings',
+  () => {
+    const html = distinctHl(
+      'let x = 0x1F + 0b101 + 0o17 + 1_000 + 1e3 + 2.5; let s = "esc\\t \\(x)" + """\n  multi\n  """; let r = #"raw "q""#; let c: Character = "c"; let b = true; let n: Int? = nil;'
+    );
+    for (const n of ['0x1F', '0b101', '0o17', '1_000', '1e3', '2.5']) {
+      assert.equal(exactColor(html, n), distinctColor('number'), n);
+    }
+    assert.equal(exactColor(html, '"esc'), distinctColor('string'));
+    assert.equal(exactColor(html, '\\t'), distinctColor('string.escape'));
+    assert.equal(exactColor(html, '\\('), distinctColor('punctuation.special'));
+    assert.equal(exactColor(html, 'x'), distinctColor('variable'));
+    assert.equal(exactColor(html, '#"raw "q""#'), distinctColor('string'));
+    assert.equal(colorOf(html, '  multi'), distinctColor('string'));
+    assert.equal(exactColor(html, 'Character'), distinctColor('type'));
+    assert.equal(exactColor(html, 'true'), distinctColor('boolean'));
+    assert.equal(exactColor(html, 'nil'), distinctColor('constant.builtin'));
+  }
+);
+
+void t.test(
+  'swift: attributes, parameters, guards, pattern matching, and error handling',
+  () => {
+    const html = distinctHl(
+      '@discardableResult func add(_ item: T, qty: Int = 1) throws -> Self { guard qty > 0, items.count < Self.max else { throw CartError.full }; if let first = items.first as? Circle, first.r > 1 || !ok { } else if case .small = kind { }; for i in 0..<10 where i % 2 == 0 { continue }; while x { break }; repeat {} while y; switch v { case .a: return self; default: break }; defer {}; do { try f() } catch let e as E {} catch {}; await g(); try? h(); try! i(); super.init() }\n#if DEBUG\n#endif'
+    );
+    assert.equal(
+      exactColor(html, '@discardableResult'),
+      distinctColor('attribute')
+    );
+    assert.equal(exactColor(html, 'add'), distinctColor('function.definition'));
+    for (const p of ['item', 'qty']) {
+      assert.equal(exactColor(html, p), distinctColor('variable.parameter'), p);
+    }
+    assert.equal(exactColor(html, 'throws'), distinctColor('keyword'));
+    assert.equal(exactColor(html, '->'), distinctColor('operator'));
+    assert.equal(exactColor(html, 'Self'), distinctColor('type'));
+    for (const word of [
+      'guard',
+      'else',
+      'throw',
+      'if',
+      'for',
+      'continue',
+      'while',
+      'break',
+      'repeat',
+      'switch',
+      'case',
+      'default',
+      'defer',
+      'do',
+      'try',
+      'catch',
+      'return',
+      'await',
+    ]) {
+      assert.equal(
+        wordColor(html, word),
+        distinctColor('keyword.control'),
+        word
+      );
+    }
+    for (const word of ['in', 'as']) {
+      assert.equal(
+        wordColor(html, word),
+        distinctColor('keyword.operator'),
+        word
+      );
+    }
+    assert.equal(exactColor(html, 'where'), distinctColor('keyword'));
+    for (const op of ['..<', '%', '==', '||', '!']) {
+      assert.equal(wordColor(html, op), distinctColor('operator'), op);
+    }
+    for (const p of ['count', 'max', 'full']) {
+      assert.equal(exactColor(html, p), distinctColor('property'), p);
+    }
+    assert.equal(exactColor(html, 'CartError'), distinctColor('type'));
+    for (const word of ['self', 'super']) {
+      assert.equal(
+        exactColor(html, word),
+        distinctColor('variable.special'),
+        word
+      );
+    }
+    assert.equal(exactColor(html, '#if'), distinctColor('preproc'));
+    assert.equal(exactColor(html, 'DEBUG'), distinctColor('constant'));
+    assert.equal(exactColor(html, '#endif'), distinctColor('preproc'));
+  }
+);
+
+void t.test('swift: modifiers and contextual keywords', () => {
+  const html = distinctHl(
+    'mutating; lazy; weak; unowned; open; fileprivate; internal; public; override; rethrows; inout; some; any; subscript; x is Y; x as! Y'
+  );
+  for (const word of [
+    'mutating',
+    'lazy',
+    'weak',
+    'unowned',
+    'open',
+    'fileprivate',
+    'internal',
+    'public',
+    'override',
+    'rethrows',
+    'inout',
+    'some',
+    'any',
+  ]) {
+    assert.equal(exactColor(html, word), distinctColor('keyword'), word);
+  }
+  assert.equal(
+    exactColor(html, 'subscript'),
+    distinctColor('keyword.declaration')
+  );
+  assert.equal(exactColor(html, 'is'), distinctColor('keyword.operator'));
+  assert.equal(exactColor(html, 'as'), distinctColor('keyword.operator'));
+});
+
+void t.test('swift: comment forms', () => {
+  assert.deepEqual(
+    tokenKinds(
+      'swift',
+      '// line\n/* block\n */\n/// doc\n/** doc block */\nfunc f() {} // tail'
+    ),
+    [
+      ['// line', 'comment'],
+      ['/* block', 'comment'],
+      ['*/', 'comment'],
+      ['/// doc', 'comment.doc'],
+      ['/** doc block */', 'comment.doc'],
+      ['func', 'keyword.declaration'],
+      ['f', 'function.definition'],
+      ['() {}', 'punctuation.bracket'],
+      ['// tail', 'comment'],
+    ]
+  );
+});
+
+void t.test(
+  'swift: closures, member access, ranges, optionals, and attributes',
+  () => {
+    const html = distinctHl(
+      'items.map { $0 * 2 }.filter { x in x > 1 }; obj.field.sub; obj.method(a: 1, b); Foo.bar(); arr[0]; x?.y ?? z; x!; a...b; a..<b; #selector(f); @escaping; @objc; @MainActor'
+    );
+    assert.equal(exactColor(html, '$0'), distinctColor('variable'));
+    assert.equal(exactColor(html, 'in'), distinctColor('keyword.operator'));
+    for (const p of ['field', 'sub', 'y']) {
+      assert.equal(exactColor(html, p), distinctColor('property'), p);
+    }
+    for (const m of ['method', 'bar']) {
+      assert.equal(exactColor(html, m), distinctColor('function.method'), m);
+    }
+    assert.equal(exactColor(html, 'Foo'), distinctColor('type'));
+    assert.equal(exactColor(html, '['), distinctColor('punctuation.bracket'));
+    for (const op of ['?', '??', '!', '...', '..<']) {
+      assert.equal(exactColor(html, op), distinctColor('operator'), op);
+    }
+    assert.equal(exactColor(html, '#selector'), distinctColor('preproc'));
+    for (const attr of ['@escaping', '@objc', '@MainActor']) {
+      assert.equal(exactColor(html, attr), distinctColor('attribute'), attr);
+    }
+  }
+);
+
+void t.test(
+  'swift: multi-line strings and block comments stream line-fed',
+  () => {
+    assertLineFedParity(
+      'swift',
+      'let s = """\n  a \\(b)\n  """\n/* c\n d */\nlet r = #"x\ny"#\n'
+    );
+  }
+);

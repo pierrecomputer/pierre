@@ -299,13 +299,7 @@
               (i32.or
                 (call $lexIsSpace (local.get $c))
                 (call $lexIsIdentContinue (local.get $c)))
-              (i32.or
-                (i32.or (i32.eq (local.get $c) (i32.const "="))
-                        (i32.eq (local.get $c) (i32.const "/")))
-                (i32.or
-                  (i32.or (i32.eq (local.get $c) (i32.const "-"))
-                          (i32.eq (local.get $c) (i32.const ":")))
-                  (i32.eq (local.get $c) (i32.const "."))))))
+              (byteset.get "-./:=" (local.get $c))))
           (then (return (i32.const 0))))
         (local.set $q (i32.add (local.get $q) (i32.const 1)))
         (br $attrs)))

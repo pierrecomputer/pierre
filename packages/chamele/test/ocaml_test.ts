@@ -7,11 +7,15 @@ import tokenTypes from '../lib/token-types';
 import { transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import {
+  assertLineFedParity,
   checkInvariants,
+  exactColor,
   loadLang,
   spansOf,
   type TestLang,
   textOf,
+  tokenKinds,
+  wordColor,
 } from './util';
 
 // one unique color per token type so equal styles cannot merge neighboring
@@ -205,3 +209,181 @@ void t.test('ocaml: multi-line constructs resume line-fed', () => {
     assert.deepEqual(streamed, whole, JSON.stringify(code));
   }
 });
+
+/** Highlight under the distinct theme after checking the lexer invariants. */
+const distinctHl = (src: string) =>
+  checkInvariants(lexer.hl, src, { theme: distinct });
+
+void t.test('ocaml: literal forms, lists, options, and arrays', () => {
+  const html = distinctHl(
+    "let x = 0x1F + 0b101 + 0o17 + 1_000 + 1e3 + 2.5 +. 3.0; let c = 'a'; let c2 = '\\n'; let s = \"esc\\t\" ^ {|quoted|} ^ {id|x|id}; let b = true && false; let u = (); let l = [1; 2] @ 3 :: []; let n = None; let j = Some 1"
+  );
+  for (const n of ['0x1F', '0b101', '0o17', '1_000', '1e3', '2.5', '3.0']) {
+    assert.equal(exactColor(html, n), distinctColor('number'), n);
+  }
+  assert.equal(exactColor(html, "'a'"), distinctColor('string'));
+  assert.equal(exactColor(html, '\\n'), distinctColor('string.escape'));
+  assert.equal(exactColor(html, '"esc'), distinctColor('string'));
+  assert.equal(exactColor(html, '\\t'), distinctColor('string.escape'));
+  for (const s of ['{|quoted|}', '{id|x|id}']) {
+    assert.equal(exactColor(html, s), distinctColor('string'), s);
+  }
+  for (const b of ['true', 'false']) {
+    assert.equal(exactColor(html, b), distinctColor('boolean'), b);
+  }
+  assert.equal(exactColor(html, '()'), distinctColor('punctuation.bracket'));
+  for (const op of ['+.', '^', '&&', '@', '::']) {
+    assert.equal(exactColor(html, op), distinctColor('operator'), op);
+  }
+  for (const c of ['None', 'Some']) {
+    assert.equal(exactColor(html, c), distinctColor('constructor'), c);
+  }
+});
+
+void t.test(
+  'ocaml: modules, signatures, records, variants, and private types',
+  () => {
+    const html = distinctHl(
+      "module Shop = struct type item = { name : string; mutable price : float } exception Empty of string end\nmodule type S = sig val f : int -> int end\nmodule M = Map.Make(String)\nopen Printf\ninclude Base\ntype 'a tree = Leaf | Node of 'a tree * 'a\ntype t = private int"
+    );
+    for (const word of [
+      'module',
+      'struct',
+      'type',
+      'mutable',
+      'exception',
+      'end',
+      'sig',
+      'val',
+      'open',
+      'include',
+      'private',
+    ]) {
+      assert.equal(
+        wordColor(html, word),
+        distinctColor('keyword.declaration'),
+        word
+      );
+    }
+    for (const ns of ['Shop', 'M', 'Map', 'Printf', 'Base']) {
+      assert.equal(exactColor(html, ns), distinctColor('namespace'), ns);
+    }
+    for (const type of ['item', "'a tree", 't']) {
+      assert.equal(exactColor(html, type), distinctColor('type'), type);
+    }
+    for (const type of ['string', 'float', 'int']) {
+      assert.equal(wordColor(html, type), distinctColor('type.builtin'), type);
+    }
+    for (const c of ['Empty', 'Leaf', 'Node', 'Make', 'String']) {
+      assert.equal(exactColor(html, c), distinctColor('constructor'), c);
+    }
+    assert.equal(wordColor(html, 'of'), distinctColor('keyword.control'));
+    for (const v of ['name', 'price', 'f']) {
+      assert.equal(exactColor(html, v), distinctColor('variable'), v);
+    }
+    for (const op of ['->', '|', '*']) {
+      assert.equal(wordColor(html, op), distinctColor('operator'), op);
+    }
+  }
+);
+
+void t.test(
+  'ocaml: labeled arguments, matching, loops, exceptions, and word operators',
+  () => {
+    const html = distinctHl(
+      'let describe ?(prefix = "item") ~name price = Printf.sprintf "%s" prefix\nlet f x = match x with | [] -> raise (Empty "no") | y :: _ when y.price > 1.0 -> print_endline y.name | _ -> ()\nlet () = if a <> b then print_int 1 else (); for i = 1 to 10 do () done; while true do () done; try f () with Not_found -> () | e -> raise e; begin () end; let open M in fun z -> z; lazy 1; assert true; r := !r + 1; q.field <- 2; M.g x; x |> f; f @@ x; a land b lor c mod 4'
+    );
+    for (const fn of ['describe', 'f']) {
+      assert.equal(
+        exactColor(html, fn),
+        distinctColor('function.definition'),
+        fn
+      );
+    }
+    assert.equal(exactColor(html, '?'), distinctColor('operator'));
+    assert.equal(
+      exactColor(html, '~name'),
+      distinctColor('variable.parameter')
+    );
+    assert.equal(exactColor(html, 'Printf'), distinctColor('namespace'));
+    for (const fn of ['sprintf', 'raise', 'print_endline', 'print_int', 'g']) {
+      assert.equal(wordColor(html, fn), distinctColor('function'), fn);
+    }
+    for (const word of [
+      'match',
+      'with',
+      'when',
+      'if',
+      'then',
+      'else',
+      'for',
+      'to',
+      'do',
+      'done',
+      'while',
+      'try',
+      'begin',
+      'lazy',
+      'assert',
+    ]) {
+      assert.equal(
+        wordColor(html, word),
+        distinctColor('keyword.control'),
+        word
+      );
+    }
+    for (const word of ['let', 'open', 'in', 'fun']) {
+      assert.equal(
+        wordColor(html, word),
+        distinctColor('keyword.declaration'),
+        word
+      );
+    }
+    for (const c of ['Empty', 'Not_found']) {
+      assert.equal(exactColor(html, c), distinctColor('constructor'), c);
+    }
+    // `price` first appears as a parameter of `describe`; the members follow
+    for (const p of ['name', 'field']) {
+      assert.equal(exactColor(html, p), distinctColor('property'), p);
+    }
+    for (const op of [':=', '<-', '|>', '@@', '->', '<>']) {
+      assert.equal(wordColor(html, op), distinctColor('operator'), op);
+    }
+    for (const word of ['land', 'lor', 'mod']) {
+      assert.equal(
+        wordColor(html, word),
+        distinctColor('keyword.operator'),
+        word
+      );
+    }
+  }
+);
+
+void t.test('ocaml: comment forms including nested and doc comments', () => {
+  assert.deepEqual(
+    tokenKinds(
+      'ocaml',
+      '(* comment *)\n(* nested (* block *) *)\n(** doc *)\nlet x = 1 (* tail *)'
+    ),
+    [
+      ['(* comment *)', 'comment'],
+      ['(* nested (* block *) *)', 'comment'],
+      ['(** doc *)', 'comment.doc'],
+      ['let', 'keyword.declaration'],
+      ['x', 'variable'],
+      ['=', 'operator'],
+      ['1', 'number'],
+      ['(* tail *)', 'comment'],
+    ]
+  );
+});
+
+void t.test(
+  'ocaml: nested comments, quoted strings, and match arms stream line-fed',
+  () => {
+    assertLineFedParity(
+      'ocaml',
+      '(* a\n (* b *)\n *)\nlet s = {|x\ny|}\nlet f = function\n  | 0 -> 1\n  | _ -> 2\n'
+    );
+  }
+);

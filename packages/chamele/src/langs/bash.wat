@@ -6,7 +6,7 @@
   (global $bashArith (mut i32) (i32.const 0))
 
   ;; group order is the dispatch order in $bashWordHl below
-  (keyword-table $bashWords $mem.bashWords $mem.bashWords+256 16 32
+  (keyword-table $bashWords $mem.bashWords $mem.bashWords+256
     (group ;; 1: control
       "do" "fi" "if" "in" "for" "case" "done" "elif" "else" "esac" "then"
       "break" "until" "while" "return" "select" "continue")
@@ -31,14 +31,7 @@
   (func $bashIsSpecialParam (param $c i32) (result i32)
     (i32.or
       (call $lexIsDigit (local.get $c))
-      (i32.or
-        (i32.or (i32.eq (local.get $c) (i32.const "@"))
-                (i32.eq (local.get $c) (i32.const "*")))
-        (i32.or
-          (i32.or (i32.eq (local.get $c) (i32.const "#"))
-                  (i32.eq (local.get $c) (i32.const "?")))
-          (i32.or (i32.eq (local.get $c) (i32.const "!"))
-                  (i32.eq (local.get $c) (i32.const "-")))))))
+      (byteset.get "!#*-?@" (local.get $c))))
 
   ;; A word is an identifier run extended over `-`, `/` and `.` - `apt-get`,
   ;; `./run.sh`, `a.b` - so paths and dashed commands stay one token. `$` ends
@@ -243,16 +236,7 @@
   (func $bashIsWordEnd (param $c i32) (result i32)
     (i32.or
       (call $lexIsSpace (local.get $c))
-      (i32.or
-        (i32.or
-          (i32.or (i32.eq (local.get $c) (i32.const ";"))
-                  (i32.eq (local.get $c) (i32.const "|")))
-          (i32.or (i32.eq (local.get $c) (i32.const "&"))
-                  (i32.eq (local.get $c) (i32.const "<"))))
-        (i32.or
-          (i32.or (i32.eq (local.get $c) (i32.const ">"))
-                  (i32.eq (local.get $c) (i32.const "(")))
-          (i32.eq (local.get $c) (i32.const ")"))))))
+      (byteset.get "&();<>|" (local.get $c))))
 
   ;; Consume the body of a here-document from $ptr, the start of the line
   ;; after its opener, through the line holding the $n-byte delimiter at
@@ -303,13 +287,7 @@
       (enum.get $Token.string)))
 
   (func $bashIsOp (param $c i32) (result i32)
-    (i32.or
-      (i32.or
-        (i32.or (i32.eq (local.get $c) (i32.const "&")) (i32.eq (local.get $c) (i32.const "|")))
-        (i32.or (i32.eq (local.get $c) (i32.const ";")) (i32.eq (local.get $c) (i32.const "<"))))
-      (i32.or
-        (i32.or (i32.eq (local.get $c) (i32.const ">")) (i32.eq (local.get $c) (i32.const "=")))
-        (i32.or (i32.eq (local.get $c) (i32.const "!")) (i32.eq (local.get $c) (i32.const "~"))))))
+    (byteset.get "!&;<=>|~" (local.get $c)))
 
   (func $hlBash
     (local $c i32)
@@ -532,11 +510,7 @@
               (then (local.set $cmd (i32.const 1)))
               (else (local.set $cmd (i32.const 0))))
             (br $next)))
-        (if (i32.or
-              (i32.or (i32.eq (local.get $c) (i32.const "(")) (i32.eq (local.get $c) (i32.const ")")))
-              (i32.or
-                (i32.or (i32.eq (local.get $c) (i32.const "[")) (i32.eq (local.get $c) (i32.const "]")))
-                (i32.or (i32.eq (local.get $c) (i32.const "{")) (i32.eq (local.get $c) (i32.const "}")))))
+        (if (byteset.get "()[]{}" (local.get $c))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             ;; `[[`/`]]` double only when the second bracket is inside the range:

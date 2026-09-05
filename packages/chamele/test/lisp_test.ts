@@ -7,11 +7,15 @@ import tokenTypes from '../lib/token-types';
 import { transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import {
+  assertLineFedParity,
   checkInvariants,
+  exactColor,
   loadLang,
   spansOf,
   type TestLang,
   textOf,
+  tokenKinds,
+  wordColor,
 } from './util';
 
 // one unique color per token type so equal styles cannot merge neighboring
@@ -200,4 +204,209 @@ void t.test('lisp: multi-line constructs resume line-fed', () => {
     const [whole, streamed] = wholeAndLineFed('lisp', code);
     assert.deepEqual(streamed, whole, JSON.stringify(code));
   }
+});
+
+/** Highlight under the distinct theme after checking the lexer invariants. */
+const distinctHl = (src: string) =>
+  checkInvariants(lexer.hl, src, { theme: distinct });
+
+void t.test('lisp: comment forms', () => {
+  assert.deepEqual(
+    tokenKinds(
+      'lisp',
+      ';;; header\n;; double\n; single\n#| block\nnested |#\n(defun f () "doc" 1) ; tail'
+    ),
+    [
+      [';;; header', 'comment'],
+      [';; double', 'comment'],
+      ['; single', 'comment'],
+      ['#| block', 'comment'],
+      ['nested |#', 'comment'],
+      ['(', 'punctuation.bracket'],
+      ['defun', 'keyword.declaration'],
+      ['f', 'function.definition'],
+      ['()', 'punctuation.bracket'],
+      ['"doc"', 'string'],
+      ['1', 'number'],
+      [')', 'punctuation.bracket'],
+      ['; tail', 'comment'],
+    ]
+  );
+});
+
+void t.test(
+  'lisp: definers, lambda lists, backquotes, and binding forms',
+  () => {
+    const html = distinctHl(
+      '(defpackage :shop (:use :cl)) (in-package :shop) (defconstant +max+ 100) (defvar *items* nil) (defparameter *p* 1) (defun add-item (name &key (price 0.0) &optional o &rest r) (list :name name)) (defmacro with-timing ((&rest args) &body body) `(let ((start 1)) ,@body ,args)) (defstruct point x y) (defclass c () ((slot :initarg :slot))) (defmethod m ((x c)) x) (defgeneric g (x)) (lambda (x) x) (let ((a 1)) a) (let* ((a 1)) a) (flet ((f (x) x)) (f 1))'
+    );
+    for (const word of [
+      'defpackage',
+      'defconstant',
+      'defvar',
+      'defparameter',
+      'defun',
+      'defmacro',
+      'defstruct',
+      'defclass',
+      'defmethod',
+      'defgeneric',
+    ]) {
+      assert.equal(
+        wordColor(html, word),
+        distinctColor('keyword.declaration'),
+        word
+      );
+    }
+    for (const word of [
+      'in-package',
+      'lambda',
+      'let',
+      'let*',
+      'flet',
+      '&key',
+      '&optional',
+      '&rest',
+      '&body',
+    ]) {
+      assert.equal(wordColor(html, word), distinctColor('keyword'), word);
+    }
+    for (const sym of [':shop', ':use', ':cl', ':name', ':initarg', ':slot']) {
+      assert.equal(
+        wordColor(html, sym),
+        distinctColor('string.special.symbol'),
+        sym
+      );
+    }
+    for (const v of ['+max+', '*items*', '*p*', 'args', 'body', 'o', 'r']) {
+      assert.equal(wordColor(html, v), distinctColor('variable'), v);
+    }
+    assert.equal(exactColor(html, 'nil'), distinctColor('constant.builtin'));
+    for (const fn of ['add-item', 'with-timing', 'm', 'g']) {
+      assert.equal(
+        exactColor(html, fn),
+        distinctColor('function.definition'),
+        fn
+      );
+    }
+    for (const type of ['point', 'c']) {
+      assert.equal(wordColor(html, type), distinctColor('type'), type);
+    }
+    for (const sp of ['`', ',@', ',']) {
+      assert.equal(
+        exactColor(html, sp),
+        distinctColor('punctuation.special'),
+        sp
+      );
+    }
+    assert.equal(exactColor(html, 'list'), distinctColor('function'));
+    assert.equal(exactColor(html, '100'), distinctColor('number'));
+  }
+);
+
+void t.test('lisp: control forms, setters, and list primitives', () => {
+  const html = distinctHl(
+    '(if (> 1 0) \'yes :no) (when t 1) (unless nil 2) (cond ((= 1 1) 1) (t 2)) (case x (1 :a)) (loop for i from 1 to 10 collect i) (do ((i 0 (1+ i))) ((= i 3))) (dolist (x l) x) (dotimes (i 3) i) (progn 1 2) (block b (return-from b 1)) (return 1) (setq x 1) (setf (car l) 2) (push 1 l) (pop l) (incf x) (mapcar #\'car l) (funcall f 1) (apply f l) (format t "~a~%" x) (print x) (cons 1 2) (length l) (append a b) (eq a b) (null x) (not x) (and a b) (or a b) (error "e") (handler-case (f) (error (e) e)) (assert t) (throw \'tag 1) (catch \'tag 2) (unwind-protect 1 2)'
+  );
+  for (const word of [
+    'if',
+    'when',
+    'unless',
+    'cond',
+    'case',
+    'loop',
+    'do',
+    'dolist',
+    'dotimes',
+    'progn',
+    'block',
+    'return-from',
+    'return',
+    'setq',
+    'setf',
+    'and',
+    'or',
+    'error',
+    'handler-case',
+    'assert',
+    'throw',
+    'catch',
+    'unwind-protect',
+  ]) {
+    assert.equal(wordColor(html, word), distinctColor('keyword'), word);
+  }
+  for (const fn of [
+    '>',
+    '=',
+    '1+',
+    'car',
+    'push',
+    'pop',
+    'incf',
+    'mapcar',
+    'funcall',
+    'apply',
+    'format',
+    'print',
+    'cons',
+    'length',
+    'append',
+    'eq',
+    'null',
+    'not',
+  ]) {
+    assert.equal(wordColor(html, fn), distinctColor('function'), fn);
+  }
+  for (const sp of ["'", "#'"]) {
+    assert.equal(
+      exactColor(html, sp),
+      distinctColor('punctuation.special'),
+      sp
+    );
+  }
+  for (const c of ['t', 'nil']) {
+    assert.equal(wordColor(html, c), distinctColor('constant.builtin'), c);
+  }
+  for (const sym of [':no', ':a']) {
+    assert.equal(
+      exactColor(html, sym),
+      distinctColor('string.special.symbol'),
+      sym
+    );
+  }
+  assert.equal(exactColor(html, '"~a~%"'), distinctColor('string'));
+});
+
+void t.test('lisp: literal forms', () => {
+  const html = distinctHl(
+    '(list 42 -1 1.5 1e3 #x1F #b101 #o17 1/2 "str\\"esc" #\\a #\\Space \'sym :key #(1 2) #+sbcl 1 #-sbcl 2 pi *standard-output*)'
+  );
+  for (const n of ['42', '-1', '1.5', '1e3', '#x1F', '#b101', '#o17', '1/2']) {
+    assert.equal(wordColor(html, n), distinctColor('number'), n);
+  }
+  assert.equal(exactColor(html, '"str'), distinctColor('string'));
+  assert.equal(exactColor(html, '\\"'), distinctColor('string.escape'));
+  for (const ch of ['#\\a', '#\\Space']) {
+    assert.equal(wordColor(html, ch), distinctColor('string.special'), ch);
+  }
+  assert.equal(
+    exactColor(html, ':key'),
+    distinctColor('string.special.symbol')
+  );
+  assert.equal(exactColor(html, '#'), distinctColor('punctuation.special'));
+  for (const pre of ['#+sbcl', '#-sbcl']) {
+    assert.equal(exactColor(html, pre), distinctColor('preproc'), pre);
+  }
+  assert.equal(
+    exactColor(html, '*standard-output*'),
+    distinctColor('variable.special')
+  );
+  assert.equal(exactColor(html, 'pi'), distinctColor('variable'));
+});
+
+void t.test('lisp: block comments and multi-line forms stream line-fed', () => {
+  assertLineFedParity(
+    'lisp',
+    '#| a\n b |#\n(defun f (x)\n  "doc\n string"\n  (+ x 1))\n'
+  );
 });

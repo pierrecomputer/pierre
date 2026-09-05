@@ -39,7 +39,7 @@
     "wabt": "catalog:"
   },
   "meta": {
-    "chamele.wasm": 144056,
-    "chamele.wasm.gz": 64798
+    "chamele.wasm": 131318,
+    "chamele.wasm.gz": 58586
   }
 }

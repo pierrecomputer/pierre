@@ -9,27 +9,27 @@
   ;; on purpose: the table hash sees only the first two bytes, the last byte,
   ;; and the length, which are identical for `while`, so the two words can
   ;; never share a table and `where` is matched directly in $rustWordHl.
-  (keyword-table $rustWords $mem.rustWords $mem.rustWords+640 16 128
-    (group "fn") ;; 1: declaration, next name is a function
-    (group ;; 2: declaration, next name is a type
+  (keyword-table $rustWords $mem.rustWords $mem.rustWords+640
+    (group $Token.keyword.declaration+256 "fn") ;; 1: declaration, next name is a function
+    (group $Token.keyword.declaration+512 ;; 2: declaration, next name is a type
       "mod" "type" "enum" "trait" "union" "struct")
-    (group "use" "crate" "super" "extern") ;; 3: import
-    (group ;; 4: control
+    (group $Token.keyword.import "use" "crate" "super" "extern") ;; 3: import
+    (group $Token.keyword.control ;; 4: control
       "if" "for" "else" "loop" "await" "break" "match" "while" "return" "continue")
-    (group "let" "impl" "const" "static") ;; 5: declaration
-    (group "dyn" "mut" "pub" "ref" "move" "async" "unsafe") ;; 6: bare keywords
-    (group "as" "in") ;; 7: word operators
-    (group ;; 8: primitive types
+    (group $Token.keyword.declaration "let" "impl" "const" "static") ;; 5: declaration
+    (group $Token.keyword "dyn" "mut" "pub" "ref" "move" "async" "unsafe") ;; 6: bare keywords
+    (group $Token.keyword.operator "as" "in") ;; 7: word operators
+    (group $Token.type.builtin ;; 8: primitive types
       "i8" "u8" "i16" "u16" "i32" "u32" "i64" "u64" "f32" "f64"
       "str" "bool" "char" "isize" "usize")
-    (group "true" "false") ;; 9: booleans
-    (group "self" "Self")) ;; 10: the receiver value and its type spelling
+    (group $Token.boolean "true" "false") ;; 9: booleans
+    (group $Token.variable.special "self" "Self")) ;; 10: the receiver value and its type spelling
 
   ;; Token in the low byte; bit 8 expects a function name and bit 9 a type.
   (func $rustWordHl (param $lhs i32) (param $rhs i32) (result i32)
-    (local $g i32)
-    (local.set $g (keyword-table.get $rustWords (local.get $lhs) (local.get $rhs)))
-    (if (i32.eqz (local.get $g))
+    (local $hl i32)
+    (local.set $hl (keyword-table.value $rustWords (local.get $lhs) (local.get $rhs)))
+    (if (i32.eq (local.get $hl) (i32.const -1))
       (then
         ;; the one word the table cannot hold; the wide load stays inside the
         ;; input slack, as in the table's own compare
@@ -38,27 +38,8 @@
               (i64.eq
                 (i64.and (i64.load (local.get $lhs)) (i64.const 0xffffffffff))
                 (i64.const "where")))
-          (then (return (enum.get $Token.keyword))))
-        (return (i32.const -1))))
-    ;; groups 1 and 2 also set the capture bit for the name that follows
-    (if (i32.le_u (local.get $g) (i32.const 2))
-      (then (return (i32.or (enum.get $Token.keyword.declaration)
-        (i32.shl (local.get $g) (i32.const 8))))))
-    (if (i32.eq (local.get $g) (i32.const 3))
-      (then (return (enum.get $Token.keyword.import))))
-    (if (i32.eq (local.get $g) (i32.const 4))
-      (then (return (enum.get $Token.keyword.control))))
-    (if (i32.eq (local.get $g) (i32.const 5))
-      (then (return (enum.get $Token.keyword.declaration))))
-    (if (i32.eq (local.get $g) (i32.const 6))
-      (then (return (enum.get $Token.keyword))))
-    (if (i32.eq (local.get $g) (i32.const 7))
-      (then (return (enum.get $Token.keyword.operator))))
-    (if (i32.eq (local.get $g) (i32.const 8))
-      (then (return (enum.get $Token.type.builtin))))
-    (if (i32.eq (local.get $g) (i32.const 9))
-      (then (return (enum.get $Token.boolean))))
-    (enum.get $Token.variable.special))
+          (then (return (enum.get $Token.keyword))))))
+    (local.get $hl))
 
   (func $rustRawStart (param $prefix i32) (result i32)
     (local $p i32)
@@ -118,17 +99,7 @@
     (i32.const 0))
 
   (func $rustIsOp (param $c i32) (result i32)
-    (i32.or
-      (i32.or (i32.eq (local.get $c) (i32.const "+")) (i32.eq (local.get $c) (i32.const "-")))
-      (i32.or
-        (i32.or (i32.eq (local.get $c) (i32.const "*")) (i32.eq (local.get $c) (i32.const "/")))
-        (i32.or
-          (i32.or (i32.eq (local.get $c) (i32.const "%")) (i32.eq (local.get $c) (i32.const "=")))
-          (i32.or
-            (i32.or (i32.eq (local.get $c) (i32.const "!")) (i32.eq (local.get $c) (i32.const "<")))
-            (i32.or
-              (i32.or (i32.eq (local.get $c) (i32.const ">")) (i32.eq (local.get $c) (i32.const "&")))
-              (i32.or (i32.eq (local.get $c) (i32.const "|")) (i32.eq (local.get $c) (i32.const "^")))))))))
+    (byteset.get "!%&*+-/<=>^|" (local.get $c)))
 
   (func $hlRust
     (local $c i32) (local $c2 i32) (local $c3 i32)
@@ -316,11 +287,7 @@
             (local.set $expect (i32.const 0))
             (br $next)))
 
-        (if (i32.or
-              (i32.or (i32.eq (local.get $c) (i32.const "(")) (i32.eq (local.get $c) (i32.const ")")))
-              (i32.or
-                (i32.or (i32.eq (local.get $c) (i32.const "[")) (i32.eq (local.get $c) (i32.const "]")))
-                (i32.or (i32.eq (local.get $c) (i32.const "{")) (i32.eq (local.get $c) (i32.const "}")))))
+        (if (byteset.get "()[]{}" (local.get $c))
           (then
             ;; parameter machine: a paren may open the armed fn list and puts
             ;; the next name in parameter position; other brackets inside a

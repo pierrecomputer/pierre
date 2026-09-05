@@ -7,11 +7,14 @@ import tokenTypes from '../lib/token-types';
 import { transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import {
+  assertLineFedParity,
   checkInvariants,
   loadLang,
   spansOf,
   type TestLang,
   textOf,
+  tokenKinds,
+  wordColor,
 } from './util';
 
 // one unique color per token type so equal styles cannot merge neighboring
@@ -237,3 +240,350 @@ void t.test('powershell: multi-line constructs resume line-fed', () => {
     assert.deepEqual(streamed, whole, JSON.stringify(code));
   }
 });
+
+/** Highlight under the distinct theme after checking the lexer invariants. */
+const distinctHl = (src: string) =>
+  checkInvariants(lexer.hl, src, { theme: distinct });
+
+void t.test(
+  'powershell: requires, using, help comments, attributes, param blocks, functions, classes, and enums',
+  () => {
+    const html = distinctHl(
+      "#Requires -Modules Pester\nusing namespace System.Collections.Generic\n<#\n.SYNOPSIS\n  Build.\n#>\n[CmdletBinding(SupportsShouldProcess)]\nparam(\n    [Parameter(Mandatory, Position = 0)] [ValidateNotNullOrEmpty()] [string] $Target,\n    [int] $Retries = 3,\n    [switch] $Force,\n    [System.IO.FileInfo] $File\n)\nSet-StrictMode -Version Latest\n$ErrorActionPreference = 'Stop'\nfunction Invoke-Build { [CmdletBinding()] param([string] $Name) begin { } process { } end { } }\nfilter Get-Even { if ($_ % 2 -eq 0) { $_ } }\nclass Animal { [string] $Name; static [int] $Count = 0; hidden [int] $Age; [string] Speak() { return \"...\" } static [Animal] Create() { return [Animal]::new('x') } }\nenum Color { }\nworkflow W { }\nconfiguration C { }"
+    );
+    for (const word of ['#Requires', '<#', '.SYNOPSIS', 'Build.', '#>']) {
+      assert.equal(wordColor(html, word), distinctColor('comment'), word);
+    }
+    assert.equal(wordColor(html, 'using'), distinctColor('keyword.import'));
+    for (const attr of [
+      'CmdletBinding',
+      'Parameter',
+      'ValidateNotNullOrEmpty',
+    ]) {
+      assert.equal(wordColor(html, attr), distinctColor('attribute'), attr);
+    }
+    for (const word of [
+      'param',
+      'function',
+      'filter',
+      'class',
+      'static',
+      'hidden',
+      'enum',
+      'workflow',
+      'configuration',
+    ]) {
+      assert.equal(
+        wordColor(html, word),
+        distinctColor('keyword.declaration'),
+        word
+      );
+    }
+    for (const type of [
+      'string',
+      'int',
+      'switch',
+      'System.IO.FileInfo',
+      'Animal',
+      'Color',
+    ]) {
+      assert.equal(wordColor(html, type), distinctColor('type'), type);
+    }
+    for (const v of [
+      '$Target',
+      '$Retries',
+      '$Force',
+      '$File',
+      '$ErrorActionPreference',
+      '$Name',
+      '$Count',
+      '$Age',
+    ]) {
+      assert.equal(wordColor(html, v), distinctColor('variable'), v);
+    }
+    for (const fn of ['Invoke-Build', 'Get-Even', 'W', 'C']) {
+      assert.equal(
+        wordColor(html, fn),
+        distinctColor('function.definition'),
+        fn
+      );
+    }
+    for (const fn of ['Set-StrictMode', 'Speak', 'Create']) {
+      assert.equal(wordColor(html, fn), distinctColor('function'), fn);
+    }
+    assert.equal(wordColor(html, 'new'), distinctColor('function.method'));
+    for (const word of ['begin', 'process', 'end', 'if', 'return']) {
+      assert.equal(
+        wordColor(html, word),
+        distinctColor('keyword.control'),
+        word
+      );
+    }
+    assert.equal(wordColor(html, '$_'), distinctColor('variable.special'));
+    assert.equal(wordColor(html, '-eq'), distinctColor('keyword.operator'));
+    assert.equal(
+      wordColor(html, '-Version'),
+      distinctColor('variable.parameter')
+    );
+    for (const s of ["'Stop'", '"..."', "'x'"]) {
+      assert.equal(wordColor(html, s), distinctColor('string'), s);
+    }
+    for (const op of ['=', '%', '::']) {
+      assert.equal(wordColor(html, op), distinctColor('operator'), op);
+    }
+    for (const n of ['0', '3', '2']) {
+      assert.equal(wordColor(html, n), distinctColor('number'), n);
+    }
+  }
+);
+
+void t.test(
+  'powershell: numbers with unit suffixes, string forms, subexpressions, hashtables, casts, and members',
+  () => {
+    const html = distinctHl(
+      "$x = 0x1F + 1_000 + 1e3 + 2.5 + 1kb + 2mb + 3gb + 4tb + 5pb + 6L + 7d + -8; $s = 'single $x' + \"double $x $($x + 1) ${x} $env:HOME $script:v `n `t `$ `\"\"; $h = @\"\nheredoc $x\n\"@; $l = @'\nliteral $x\n'@; $a = @(1, 2); $m = @{ 'q' = 2 }; $b = $true -and $false -or -not $null; $t = [int]$x; $u = [System.Text.StringBuilder]::new(); $arr = 1..10; $sub = $(Get-Date); $sw = $PSVersionTable; $obj.Prop.Sub; $obj.Method(1); $obj?.x; -join $r; -split 'a b'"
+    );
+    for (const n of [
+      '0x1F',
+      '1_000',
+      '1e3',
+      '2.5',
+      '1kb',
+      '2mb',
+      '3gb',
+      '4tb',
+      '5pb',
+      '6L',
+      '7d',
+      '8',
+      '10',
+    ]) {
+      assert.equal(wordColor(html, n), distinctColor('number'), n);
+    }
+    for (const s of [
+      "'single",
+      "$x'",
+      '"double',
+      '@"',
+      'heredoc',
+      '"@',
+      "@'",
+      'literal',
+      "'@",
+      "'q'",
+      "'a",
+      "b'",
+    ]) {
+      assert.equal(wordColor(html, s), distinctColor('string'), s);
+    }
+    for (const v of [
+      '$x',
+      '${x}',
+      '$env:HOME',
+      '$script:v',
+      '$s',
+      '$h',
+      '$obj',
+    ]) {
+      assert.equal(wordColor(html, v), distinctColor('variable'), v);
+    }
+    for (const esc of ['`n', '`t', '`$', '`"']) {
+      assert.equal(wordColor(html, esc), distinctColor('string.escape'), esc);
+    }
+    for (const p of ['$(', '@']) {
+      assert.equal(wordColor(html, p), distinctColor('punctuation.special'), p);
+    }
+    for (const b of ['$true', '$false']) {
+      assert.equal(wordColor(html, b), distinctColor('boolean'), b);
+    }
+    for (const op of ['-and', '-or', '-not', '-join', '-split']) {
+      assert.equal(wordColor(html, op), distinctColor('keyword.operator'), op);
+    }
+    assert.equal(wordColor(html, '$null'), distinctColor('constant.builtin'));
+    for (const type of ['int', 'System.Text.StringBuilder']) {
+      assert.equal(wordColor(html, type), distinctColor('type'), type);
+    }
+    for (const op of ['::', '..', '?', '+', '-']) {
+      assert.equal(wordColor(html, op), distinctColor('operator'), op);
+    }
+    assert.equal(wordColor(html, 'new'), distinctColor('function.method'));
+    assert.equal(wordColor(html, 'Method'), distinctColor('function.method'));
+    assert.equal(wordColor(html, 'Get-Date'), distinctColor('function'));
+    assert.equal(
+      wordColor(html, '$PSVersionTable'),
+      distinctColor('variable.special')
+    );
+    for (const prop of ['Prop', 'Sub', 'x']) {
+      assert.equal(wordColor(html, prop), distinctColor('property'), prop);
+    }
+  }
+);
+
+void t.test(
+  'powershell: control flow, comparison operators, pipelines, parameters, and automatic variables',
+  () => {
+    const html = distinctHl(
+      "foreach ($item in $items) { if ($Clean -and -not (Test-Path $item)) { continue } elseif ($x) { break } else { } } for ($i = 0; $i -lt 3; $i++) { } while ($x) { } do { } until ($y); switch -Regex ($s) { 'a' { } default { } } try { throw 'e' } catch [System.IO.IOException] { $_.Exception } finally { } trap { } return 1; exit 0; Write-Host \"x\" -ForegroundColor Green -NoNewline; Get-ChildItem -Path \"src\" | Where-Object { $_.Length -gt 0x10 } | ForEach-Object { $_.Name } | Sort-Object -Descending | Select-Object -First 1; $x -eq 1 -ne 2 -gt 3 -ge 4 -lt 5 -le 6 -like 'a*' -notlike 'b' -match 'c' -notmatch 'd' -contains 'e' -in @(1) -is [int] -as [string] -band 1 -bor 2 -bxor 3 -shl 1 -shr 1 -replace 'a', 'b' -f 'x'; $x += 1; $x -= 1; $x *= 2; $x /= 2; $x %= 2; $x++; $x--; $x ?? $y; $x ??= 1; & $cmd; Invoke-Command -ScriptBlock { param($a) $a } -ArgumentList 1; [PSCustomObject]@{ b = 2 }; Get-Item | Out-Null; 2>&1; $?; $PSItem; $args; $input; $PID; $HOME"
+    );
+    for (const word of [
+      'foreach',
+      'if',
+      'continue',
+      'elseif',
+      'break',
+      'else',
+      'for',
+      'while',
+      'do',
+      'until',
+      'switch',
+      'default',
+      'try',
+      'throw',
+      'catch',
+      'finally',
+      'trap',
+      'return',
+      'exit',
+    ]) {
+      assert.equal(
+        wordColor(html, word),
+        distinctColor('keyword.control'),
+        word
+      );
+    }
+    for (const op of [
+      'in',
+      '-and',
+      '-not',
+      '-lt',
+      '-gt',
+      '-eq',
+      '-ne',
+      '-ge',
+      '-le',
+      '-like',
+      '-notlike',
+      '-match',
+      '-notmatch',
+      '-contains',
+      '-in',
+      '-is',
+      '-as',
+      '-band',
+      '-bor',
+      '-bxor',
+      '-shl',
+      '-shr',
+      '-replace',
+      '-f',
+    ]) {
+      assert.equal(wordColor(html, op), distinctColor('keyword.operator'), op);
+    }
+    for (const fn of [
+      'Test-Path',
+      'Write-Host',
+      'Get-ChildItem',
+      'Where-Object',
+      'ForEach-Object',
+      'Sort-Object',
+      'Select-Object',
+      'Invoke-Command',
+      'Get-Item',
+      'Out-Null',
+    ]) {
+      assert.equal(wordColor(html, fn), distinctColor('function'), fn);
+    }
+    for (const param of [
+      '-Regex',
+      '-ForegroundColor',
+      '-NoNewline',
+      '-Path',
+      '-Descending',
+      '-First',
+      '-ScriptBlock',
+      '-ArgumentList',
+    ]) {
+      assert.equal(
+        wordColor(html, param),
+        distinctColor('variable.parameter'),
+        param
+      );
+    }
+    for (const type of [
+      'System.IO.IOException',
+      'int',
+      'string',
+      'PSCustomObject',
+    ]) {
+      assert.equal(wordColor(html, type), distinctColor('type'), type);
+    }
+    for (const v of [
+      '$_',
+      '$?',
+      '$PSItem',
+      '$args',
+      '$input',
+      '$PID',
+      '$HOME',
+    ]) {
+      assert.equal(wordColor(html, v), distinctColor('variable.special'), v);
+    }
+    for (const prop of ['Exception', 'Length', 'Name']) {
+      assert.equal(wordColor(html, prop), distinctColor('property'), prop);
+    }
+    for (const op of [
+      '++',
+      '+=',
+      '-=',
+      '*=',
+      '/=',
+      '%=',
+      '--',
+      '??',
+      '??=',
+      '&',
+      '|',
+      '>&',
+    ]) {
+      assert.equal(wordColor(html, op), distinctColor('operator'), op);
+    }
+    assert.equal(
+      wordColor(html, 'param'),
+      distinctColor('keyword.declaration')
+    );
+    assert.equal(wordColor(html, '@'), distinctColor('punctuation.special'));
+    assert.equal(wordColor(html, '0x10'), distinctColor('number'));
+    for (const s of ["'a*'", "'e'", '"src"']) {
+      assert.equal(wordColor(html, s), distinctColor('string'), s);
+    }
+  }
+);
+
+void t.test('powershell: comment forms', () => {
+  assert.deepEqual(
+    tokenKinds(
+      'powershell',
+      "# comment\n<# block\n   comment #>\nWrite-Host 'x' # tail\n<# nested <# not nested #>"
+    ),
+    [
+      ['# comment', 'comment'],
+      ['<# block', 'comment'],
+      ['comment #>', 'comment'],
+      ['Write-Host', 'function'],
+      ["'x'", 'string'],
+      ['# tail', 'comment'],
+      ['<# nested <# not nested #>', 'comment'],
+    ]
+  );
+});
+
+void t.test(
+  'powershell: here-strings, block comments, and param blocks stream line-fed',
+  () => {
+    assertLineFedParity(
+      'powershell',
+      '<#\n.SYNOPSIS\n  Build.\n#>\nparam(\n    [Parameter(Mandatory)] [string] $Target,\n    [int] $Retries = 3\n)\n$h = @"\nheredoc $x\n  $($x + 1)\n"@\n$l = @\'\nliteral $x\n\'@\nfunction Invoke-Build {\n  begin { }\n  process { $_ }\n}\n'
+    );
+  }
+);

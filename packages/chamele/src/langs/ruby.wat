@@ -8,7 +8,7 @@
   ;; Group order is the dispatch order in $rubyWordHl below. The `attr_*`
   ;; family and the `__FILE__` family are prefix checks there: their members
   ;; share hash features the table cannot separate.
-  (keyword-table $rubyWords $mem.rubyWords $mem.rubyWords+768 16 128
+  (keyword-table $rubyWords $mem.rubyWords $mem.rubyWords+768
     (group ;; 1: control
       "if" "do" "in" "END" "end" "for" "next" "redo" "then" "when" "BEGIN"
       "begin" "break" "elsif" "raise" "retry" "until" "while" "yield"
@@ -218,11 +218,7 @@
   ;; the `%` literal kind letter at $p: 1 for the interpolating kinds - `Q`,
   ;; `W`, `I`, `r`, `x` - 2 for `q`, `w`, `i`, `s`, and 0 for no letter
   (func $rubyPercentKind (param $c i32) (result i32)
-    (if (i32.or
-          (i32.or (i32.eq (local.get $c) (i32.const "Q")) (i32.eq (local.get $c) (i32.const "W")))
-          (i32.or
-            (i32.eq (local.get $c) (i32.const "I"))
-            (i32.or (i32.eq (local.get $c) (i32.const "r")) (i32.eq (local.get $c) (i32.const "x")))))
+    (if (byteset.get "IQWrx" (local.get $c))
       (then (return (i32.const 1))))
     (if (i32.or
           (i32.or (i32.eq (local.get $c) (i32.const "q")) (i32.eq (local.get $c) (i32.const "w")))
@@ -231,19 +227,7 @@
     (i32.const 0))
 
   (func $rubyIsOp (param $c i32) (result i32)
-    (i32.or
-      (i32.or
-        (i32.or (i32.eq (local.get $c) (i32.const "+")) (i32.eq (local.get $c) (i32.const "-")))
-        (i32.or (i32.eq (local.get $c) (i32.const "*")) (i32.eq (local.get $c) (i32.const "/"))))
-      (i32.or
-        (i32.or (i32.eq (local.get $c) (i32.const "%")) (i32.eq (local.get $c) (i32.const "=")))
-        (i32.or
-          (i32.or (i32.eq (local.get $c) (i32.const "!")) (i32.eq (local.get $c) (i32.const "<")))
-          (i32.or
-            (i32.or (i32.eq (local.get $c) (i32.const ">")) (i32.eq (local.get $c) (i32.const "&")))
-            (i32.or
-              (i32.or (i32.eq (local.get $c) (i32.const "|")) (i32.eq (local.get $c) (i32.const "^")))
-              (i32.or (i32.eq (local.get $c) (i32.const "~")) (i32.eq (local.get $c) (i32.const "?")))))))))
+    (byteset.get "!%&*+-/<=>?^|~" (local.get $c)))
 
   ;; An open literal body is described by $sClose, $sOpen, $sDepth, and
   ;; $sFlags - see $rubyLiteralBody - with $sActive 1 while it is being
@@ -671,11 +655,7 @@
             (local.set $member (i32.const 0))
             (br $next)))
 
-        (if (i32.or
-              (i32.or (i32.eq (local.get $c) (i32.const "(")) (i32.eq (local.get $c) (i32.const ")")))
-              (i32.or
-                (i32.or (i32.eq (local.get $c) (i32.const "[")) (i32.eq (local.get $c) (i32.const "]")))
-                (i32.or (i32.eq (local.get $c) (i32.const "{")) (i32.eq (local.get $c) (i32.const "}")))))
+        (if (byteset.get "()[]{}" (local.get $c))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (if (local.get $interp)

@@ -9,7 +9,7 @@
   ;; family is a prefix check there. `receive` is matched directly: it shares
   ;; its hash features with `require`, as `defguardp` does with `defmacrop`
   ;; and `reraise` with both, and those two rare words stay out.
-  (keyword-table $exWords $mem.elixirWords $mem.elixirWords+896 16 256
+  (keyword-table $exWords $mem.elixirWords $mem.elixirWords+896
     (group ;; 1: control
       "do" "if" "fn" "end" "for" "case" "cond" "else" "then" "with"
       "after" "catch" "raise" "throw" "unless" "rescue" "quote" "unquote"
@@ -124,8 +124,10 @@
                 (local.set $depth (i32.sub (local.get $depth) (i32.const 1)))
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
                 (br $scan)))
+            ;; a heredoc closes only on three closers; `i32.and` on the raw
+            ;; flag bit would test bit 0 of the mask and never fire
             (if (i32.and
-                  (i32.and (local.get $flags) (i32.const 8))
+                  (i32.ne (i32.and (local.get $flags) (i32.const 8)) (i32.const 0))
                   (i32.eqz (i32.and
                     (i32.eq (call $exByte (i32.add (global.get $ptr) (i32.const 1))) (local.get $close))
                     (i32.eq (call $exByte (i32.add (global.get $ptr) (i32.const 2))) (local.get $close)))))
@@ -169,19 +171,7 @@
     (i32.or (local.get $status) (i32.shl (local.get $depth) (i32.const 2))))
 
   (func $exIsOp (param $c i32) (result i32)
-    (i32.or
-      (i32.or
-        (i32.or (i32.eq (local.get $c) (i32.const "+")) (i32.eq (local.get $c) (i32.const "-")))
-        (i32.or (i32.eq (local.get $c) (i32.const "*")) (i32.eq (local.get $c) (i32.const "/"))))
-      (i32.or
-        (i32.or (i32.eq (local.get $c) (i32.const "=")) (i32.eq (local.get $c) (i32.const "!")))
-        (i32.or
-          (i32.or (i32.eq (local.get $c) (i32.const "<")) (i32.eq (local.get $c) (i32.const ">")))
-          (i32.or
-            (i32.or (i32.eq (local.get $c) (i32.const "&")) (i32.eq (local.get $c) (i32.const "|")))
-            (i32.or
-              (i32.or (i32.eq (local.get $c) (i32.const "^")) (i32.eq (local.get $c) (i32.const "~")))
-              (i32.or (i32.eq (local.get $c) (i32.const "\\")) (i32.eq (local.get $c) (i32.const "?")))))))))
+    (byteset.get "!&*+-/<=>?\5c^|~" (local.get $c)))
 
   ;; An open literal body is described by $sClose, $sOpen, $sDepth, and
   ;; $sFlags - see $exLiteralBody - with $sActive 1 while it is being
@@ -448,11 +438,7 @@
             (local.set $member (i32.const 0))
             (br $next)))
 
-        (if (i32.or
-              (i32.or (i32.eq (local.get $c) (i32.const "(")) (i32.eq (local.get $c) (i32.const ")")))
-              (i32.or
-                (i32.or (i32.eq (local.get $c) (i32.const "[")) (i32.eq (local.get $c) (i32.const "]")))
-                (i32.or (i32.eq (local.get $c) (i32.const "{")) (i32.eq (local.get $c) (i32.const "}")))))
+        (if (byteset.get "()[]{}" (local.get $c))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (if (local.get $interp)

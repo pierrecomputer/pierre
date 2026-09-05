@@ -27,7 +27,7 @@ const themePtr = 64; // $mem.themeTable in src/memory.wat
 const themeBytes = 1024;
 const themeBuildCache = new WeakMap<Theme, Uint8Array>();
 
-const LANGS: Record<string, number> = {
+export const LANGS: Record<string, number> = {
   plain: 0,
   plaintext: 0,
   text: 0,

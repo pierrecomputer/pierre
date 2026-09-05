@@ -9,7 +9,7 @@
   ;; contextual: `type`, `on`, or `input` is also an ordinary field name,
   ;; so they count as keywords only when a name, brace, directive, paren,
   ;; or `&` follows on the same line.
-  (keyword-table $graphqlWords $mem.graphqlWords $mem.graphqlWords+384 16 32
+  (keyword-table $graphqlWords $mem.graphqlWords $mem.graphqlWords+384
     (group ;; 1: definitions, next name is a type
       "type" "interface" "union" "enum" "input" "scalar" "on" "implements")
     (group ;; 2: operations, next name is an operation or fragment
@@ -169,11 +169,7 @@
             (call $emitTok (enum.get $Token.number) (local.get $lhs) (global.get $ptr))
             (br $next)))
 
-        (if (i32.or
-              (i32.or (i32.eq (local.get $c) (i32.const "(")) (i32.eq (local.get $c) (i32.const ")")))
-              (i32.or
-                (i32.or (i32.eq (local.get $c) (i32.const "[")) (i32.eq (local.get $c) (i32.const "]")))
-                (i32.or (i32.eq (local.get $c) (i32.const "{")) (i32.eq (local.get $c) (i32.const "}")))))
+        (if (byteset.get "()[]{}" (local.get $c))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (call $emitTok (enum.get $Token.punctuation.bracket) (local.get $lhs) (global.get $ptr))

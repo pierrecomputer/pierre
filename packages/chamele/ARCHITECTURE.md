@@ -58,14 +58,37 @@ before preprocessing, so editor warnings are expected.
 6. **Character constants:** `(i32.const "true")` packs up to four ASCII bytes
    little-endian; `i64.const` packs eight. Use hex for escaped quotes.
 7. **Keyword tables:**
-   `(keyword-table $Name <base> <end> <buckets> <slots> (group "word" ...) ...)`
-   emits a displacement-based perfect hash over (first two bytes, last byte,
-   length) with exact-byte verification;
-   `(keyword-table.get $Name <start> <end>)` returns the 1-based group index
-   or 0. Words are 2..31 bytes, matched case-sensitively. Two words sharing
-   first two bytes, last byte, and length collide unfixably - keep one out of
-   the table and match it directly (see rust.wat's `where`). Never spell a form
-   name inside parentheses in a comment; the matchers do not skip comments.
+   `(keyword-table $Name <base> <end> (group <value>? "word" ...) ...)` emits a
+   displacement-based perfect hash over (first two bytes, last byte, length)
+   with exact-byte verification; the build picks the smallest bucket and slot
+   counts that place every word. `(keyword-table.get $Name <start> <end>)`
+   returns the 1-based group index or 0. When every group carries a value - a
+   number, or `$Token.member` with an optional `+bias` -
+   `(keyword-table.value $Name <start> <end>)` returns that value directly, or
+   -1 for a miss. Words are 2..31 bytes, matched case-sensitively. Two words
+   sharing first two bytes, last byte, and length collide unfixably - keep one
+   out of the table and match it directly (see rust.wat's `where`). Never spell
+   a form name inside parentheses in a comment; the matchers do not skip
+   comments.
+8. **Byte sets:** `(byteset.get "bytes" (local.get $c))` tests membership of the
+   byte in `$c` against a 256-bit bitmap (one load and two shifts) instead of an
+   equality ladder; identical sets share a bitmap at `$mem.byteSets`.
+9. **Enum maps:**
+   `(enum-map $Name $Enum <base> <default> (value <v> "member" ...) ...)` emits
+   one byte per enum member; `(enum-map.get $Name <expr>)` loads it. It replaces
+   a chain of equality tests that maps one enum onto another.
+10. **Byte switches:**
+    `(byte-switch (local.get $c) (case <byte>... body...) ...)` dispatches on a
+    byte through one `br_table`; a case body that neither branches out nor
+    returns falls through to the code after the switch, like the if-chain it
+    replaces.
+11. **Stream checkpoints:** the lexers listed in `streamLexers` save their
+    locals to `$mem.streamState` at the end of a top-level streaming call and
+    restore them after the `$lexEmitLeadingContinuation` call of the next chunk.
+    A liveness analysis over the function body keeps only the locals that some
+    path reads before writing - the loop-carried state - so scratch locals cost
+    no code and no bytes in the live tokenizer's state blobs. Such lexers cannot
+    use `return`.
 
 `wat2wasm()` enables bulk memory and SIMD. Hot scans classify 16 bytes with
 `i8x16` comparisons, `i8x16.bitmask`, and `i32.ctz`.
@@ -75,28 +98,35 @@ before preprocessing, so editor warnings are expected.
 ```
 [] page 1         (control, static data, and scratch)
   [0]             language id (u8)
-  [1]             output mode (u8): HTML, CSS variables, byte records, or line records
+  [1]             output mode (u8): 0 inline colors, 1 CSS variables,
+                  2 byte-end records, 3 UTF-16 line records
   [2:6)           input length (u32 LE)
   [6:10)          output start (u32 LE)
   [10:14)         output length (u32 LE)
   [14:64)         reserved space
-  [64:2000)       theme table written by JavaScript, then the CSS-variable name table
-  [2000:6976)     emitter HTML fragments and span-open fragment cache
-  [6976:7008)     streaming delimiter
-  [7008:11008)    streaming lexer checkpoints
-  [11008:39456)   word tables: ECMAScript, C, and one per language (see src/memory.wat)
-  [39456:40512)   markdown fence aliases
-  [40512:41536)   JSON nesting stack
-  [41536:42560)   TOML nesting stack
-  [42560:42704)   ECMAScript token-class bitset
-  [42704:43728)   ECMAScript template stack
-  [43728:44752)   ECMAScript bracket-kind stack
-  [44752:48848)   JSX-mode stack
-  [48848:48912)   lowercase word copy for case-insensitive keyword lookups
-  [48912:65536)   free
-[] pages 2..N     (text buffer)
+  [64:1088)       theme table written by JavaScript, five bytes per token
+  [1088:2000)     CSS-variable name table
+  [2000:2064)     lowercase word copy for case-insensitive keyword lookups
+  [2064:4112)     byte-set bitmaps (byteset.get)
+  [4112:4256)     emitter HTML fragments
+  [4256:9088)     emitter span-open fragment cache
+  [9088:9120)     streaming delimiter
+  [9120:13120)    streaming lexer checkpoints
+  [13120:41568)   language keyword tables
+  [41568:42592)   JSON nesting stack
+  [42592:43648)   markdown fence aliases
+  [43648:44672)   TOML nesting stack
+  [44672:45696)   ECMAScript bracket-kind stack
+  [45696:45840)   ECMAScript token-class bitset
+  [45840:46000)   ECMAScript token-kind to $Token map (enum-map)
+  [46000:47024)   ECMAScript template stack
+  [47024:51120)   JSX-mode stack
+  [51120:65536)   free
+[] pages 2..N     (text buffer; a live instance lays them out itself,
+                  see src/live.wat)
   [65536:EOF)     input, NUL sentinel, then at least 16 bytes of slack
-  [(EOF+47)&~15:) output HTML or token records; $ensureCap grows memory
+  [(EOF+47)&~15:) output HTML bytes or (end:u32, hl:u32) token records;
+                  $ensureCap grows memory
 ```
 
 Text buffer layout:
@@ -234,14 +264,14 @@ then `$streamChunk` runs the ordinary mode-3 pipeline. Output matches
 `StreamTokenizer` fed one line per chunk.
 
 Before and after each line the driver saves streaming state: cross-chunk
-globals, the 32-byte stream delimiter, the live prefixes of the language's
-nesting stack (JSON, TOML, or the ECMAScript template stack) and of the bracket
-and JSX stacks, and the used lexer checkpoint region. Blobs are interned (FNV-1a
-64, then exact bytes) into refcounted ids. Equal ids mean convergence. Trailing
-zeros are trimmed; the checkpoint region comes last so the trim drops it
-entirely for lexers that keep their state in globals and stacks (the ECMAScript
-family). If outgoing bytes match the incoming blob, the same id is reused
-without hashing.
+globals, the 32-byte stream delimiter, the fence registers of nested markdown
+bodies, the live prefixes of the language's nesting stack (JSON, TOML, or the
+ECMAScript template stack) and of the bracket and JSX stacks, and the used lexer
+checkpoint region. Blobs are interned (FNV-1a 64, then exact bytes) into
+refcounted ids. Equal ids mean convergence. Trailing zeros are trimmed; the
+checkpoint region comes last so the trim drops it entirely for lexers that keep
+their state in globals and stacks (the ECMAScript family). If outgoing bytes
+match the incoming blob, the same id is reused without hashing.
 
 The line table is a gap buffer of 32-byte descriptors: text pointer/length,
 UTF-16 length, token block, outgoing state id, terminator and format flags.

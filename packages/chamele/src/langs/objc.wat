@@ -9,7 +9,7 @@
   ;; the words that follow `@`; group 6 the property attributes, which are
   ;; keywords only inside the parens after `@property`. Everything C keeps
   ;; its classification from c.wat.
-  (keyword-table $objcWords $mem.objcWords $mem.objcWords+1024 32 128
+  (keyword-table $objcWords $mem.objcWords $mem.objcWords+1024
     (group ;; 1: compiler directives after `@`
       "end" "try" "defs" "catch" "class" "throw" "encode" "import" "public"
       "dynamic" "finally" "package" "private" "optional" "property" "protocol"
@@ -261,11 +261,7 @@
             (local.set $member (i32.const 0))
             (br $next)))
 
-        (if (i32.or
-              (i32.or (i32.eq (local.get $c) (i32.const "(")) (i32.eq (local.get $c) (i32.const ")")))
-              (i32.or
-                (i32.or (i32.eq (local.get $c) (i32.const "[")) (i32.eq (local.get $c) (i32.const "]")))
-                (i32.or (i32.eq (local.get $c) (i32.const "{")) (i32.eq (local.get $c) (i32.const "}")))))
+        (if (byteset.get "()[]{}" (local.get $c))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (call $emitTok (enum.get $Token.punctuation.bracket) (local.get $lhs) (global.get $ptr))
@@ -331,11 +327,7 @@
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (if (i32.or (i32.eq (local.get $c2) (i32.const "="))
                         (i32.and (i32.eq (local.get $c) (local.get $c2))
-                          (i32.or
-                            (i32.or (i32.eq (local.get $c) (i32.const "+")) (i32.eq (local.get $c) (i32.const "-")))
-                            (i32.or
-                              (i32.or (i32.eq (local.get $c) (i32.const "<")) (i32.eq (local.get $c) (i32.const ">")))
-                              (i32.or (i32.eq (local.get $c) (i32.const "&")) (i32.eq (local.get $c) (i32.const "|")))))))
+                          (byteset.get "&+-<>|" (local.get $c))))
               (then
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
                 (if (i32.and

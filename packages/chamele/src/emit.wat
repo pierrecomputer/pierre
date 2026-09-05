@@ -157,14 +157,21 @@
         (local.set $len (i32.sub (global.get $out) (i32.add (local.get $slot) (i32.const 1))))
         (i32.store8 (local.get $slot) (local.get $len))
         (global.set $out (local.get $save))))
-    (memory.copy (global.get $out)
-      (i32.add (local.get $slot) (i32.const 1)) (local.get $len))
+    ;; copy the fragment as four 16-byte stores: an opener is at most 64
+    ;; bytes, the slot holds 65, and the caller's capacity covers the
+    ;; overshoot, which later output overwrites - cheaper than a bulk copy
+    ;; of a few dozen bytes
+    (v128.store (global.get $out) (v128.load offset=1 (local.get $slot)))
+    (v128.store offset=16 (global.get $out) (v128.load offset=17 (local.get $slot)))
+    (v128.store offset=32 (global.get $out) (v128.load offset=33 (local.get $slot)))
+    (v128.store offset=48 (global.get $out) (v128.load offset=49 (local.get $slot)))
     (global.set $out (i32.add (global.get $out) (local.get $len))))
 
   ;; switch the open span to $hl's color/font. adjacent tokens whose records
   ;; hold identical bytes share one span (a 40-bit compare), so runs of
   ;; same-styled tokens and the whitespace between them do not churn spans.
-  ;; caller has ensured capacity for close (7) + open (19 + 9 + 34 + 2).
+  ;; caller has ensured capacity for close (7) + open (19 + 9 + 34 + 2) plus
+  ;; the 64-byte wide copy $emitSpanOpen performs.
   (func $setSpan (param $hl i32)
     (local $val i64)
     (if (i32.eq (local.get $hl) (global.get $spanHl)) (then (return)))

@@ -10,7 +10,7 @@
   ;; `set!`. `declare` shares its hash features with `deftype` and stays out,
   ;; as do `defconst` and `defrecord`, which share slot bits with `defsubst`
   ;; and `defmethod` in every geometry that fits the range.
-  (keyword-table $lispWords $mem.lispWords $mem.lispWords+1280 16 256
+  (keyword-table $lispWords $mem.lispWords $mem.lispWords+1280
     (group ;; 1: definitions, next name is a function
       "defun" "defmacro" "defmethod" "defgeneric" "define" "define-syntax"
       "define-macro" "defsubst")
@@ -76,13 +76,7 @@
         (i32.or
           (i32.or (i32.eq (local.get $c) (i32.const "(")) (i32.eq (local.get $c) (i32.const ")")))
           (i32.or (i32.eq (local.get $c) (i32.const "[")) (i32.eq (local.get $c) (i32.const "]")))))
-      (i32.or
-        (i32.or
-          (i32.or (i32.eq (local.get $c) (i32.const "{")) (i32.eq (local.get $c) (i32.const "}")))
-          (i32.or (i32.eq (local.get $c) (i32.const 34)) (i32.eq (local.get $c) (i32.const ";"))))
-        (i32.or
-          (i32.or (i32.eq (local.get $c) (i32.const 39)) (i32.eq (local.get $c) (i32.const "`")))
-          (i32.or (i32.eq (local.get $c) (i32.const ",")) (i32.eq (local.get $c) (i32.const 0)))))))
+      (byteset.get "\00\22',;`{}" (local.get $c))))
 
   ;; advance $ptr over the symbol that starts at it
   (func $lispScanSymbol
@@ -156,11 +150,7 @@
             (local.set $head (i32.const 0))
             (br $next)))
 
-        (if (i32.or
-              (i32.or (i32.eq (local.get $c) (i32.const "(")) (i32.eq (local.get $c) (i32.const ")")))
-              (i32.or
-                (i32.or (i32.eq (local.get $c) (i32.const "[")) (i32.eq (local.get $c) (i32.const "]")))
-                (i32.or (i32.eq (local.get $c) (i32.const "{")) (i32.eq (local.get $c) (i32.const "}")))))
+        (if (byteset.get "()[]{}" (local.get $c))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (call $emitTok (enum.get $Token.punctuation.bracket) (local.get $lhs) (global.get $ptr))

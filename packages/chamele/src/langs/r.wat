@@ -7,7 +7,7 @@
 
   ;; Group order is the dispatch order in $hlR. `NA_complex_` is missing on
   ;; purpose: it shares its hash features with `NA_integer_`.
-  (keyword-table $rWords $mem.rWords $mem.rWords+256 16 32
+  (keyword-table $rWords $mem.rWords $mem.rWords+256
     (group ;; 1: control
       "if" "else" "repeat" "while" "for" "next" "break" "return")
     (group "function")     ;; 2: declaration
@@ -97,19 +97,7 @@
     (i32.const 1))
 
   (func $rIsOp (param $c i32) (result i32)
-    (i32.or
-      (i32.or
-        (i32.or (i32.eq (local.get $c) (i32.const "+")) (i32.eq (local.get $c) (i32.const "-")))
-        (i32.or (i32.eq (local.get $c) (i32.const "*")) (i32.eq (local.get $c) (i32.const "/"))))
-      (i32.or
-        (i32.or
-          (i32.or (i32.eq (local.get $c) (i32.const "^")) (i32.eq (local.get $c) (i32.const "=")))
-          (i32.or (i32.eq (local.get $c) (i32.const "!")) (i32.eq (local.get $c) (i32.const "<"))))
-        (i32.or
-          (i32.or
-            (i32.or (i32.eq (local.get $c) (i32.const ">")) (i32.eq (local.get $c) (i32.const "&")))
-            (i32.or (i32.eq (local.get $c) (i32.const "|")) (i32.eq (local.get $c) (i32.const "~"))))
-          (i32.or (i32.eq (local.get $c) (i32.const "?")) (i32.eq (local.get $c) (i32.const ":")))))))
+    (byteset.get "!&*+-/:<=>?^|~" (local.get $c)))
 
   ;; $paren counts open parens, and $fnDepth is the depth of the formals of
   ;; a `function(` or `\(` head that $fnHead announced, where bare names are
@@ -257,11 +245,7 @@
             (local.set $member (i32.const 0))
             (br $next)))
 
-        (if (i32.or
-              (i32.or (i32.eq (local.get $c) (i32.const "(")) (i32.eq (local.get $c) (i32.const ")")))
-              (i32.or
-                (i32.or (i32.eq (local.get $c) (i32.const "[")) (i32.eq (local.get $c) (i32.const "]")))
-                (i32.or (i32.eq (local.get $c) (i32.const "{")) (i32.eq (local.get $c) (i32.const "}")))))
+        (if (byteset.get "()[]{}" (local.get $c))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (call $emitTok (enum.get $Token.punctuation.bracket) (local.get $lhs) (global.get $ptr))

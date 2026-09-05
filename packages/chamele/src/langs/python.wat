@@ -187,31 +187,31 @@
   ;; bytes, last byte, length) with range, so no table geometry holds both;
   ;; $pyWordHl matches it with a direct compare instead. match and case are
   ;; soft keywords and live in $pySoftKeyword, which needs the line position.
-  (keyword-table $pyWords $mem.pythonWords $mem.pythonWords+1152 32 256
-    (group "True" "False")                       ;; 1: booleans
-    (group "None" "Ellipsis" "NotImplemented")   ;; 2: built-in constants
-    (group "self" "cls")                         ;; 3: special variables
-    (group "def")                                ;; 4: decl, next name a function
-    (group "class")                              ;; 5: decl, next name a class
-    (group "from" "import")                      ;; 6: import
-    (group "and" "in" "is" "not" "or")           ;; 7: operator keywords
-    (group ;; 8: control keywords
+  (keyword-table $pyWords $mem.pythonWords $mem.pythonWords+1152
+    (group $Token.boolean "True" "False")                       ;; 1: booleans
+    (group $Token.constant.builtin "None" "Ellipsis" "NotImplemented")   ;; 2: built-in constants
+    (group $Token.variable.special "self" "cls")                         ;; 3: special variables
+    (group $Token.keyword.declaration+256 "def")                                ;; 4: decl, next name a function
+    (group $Token.keyword.declaration+512 "class")                              ;; 5: decl, next name a class
+    (group $Token.keyword.import "from" "import")                      ;; 6: import
+    (group $Token.keyword.operator "and" "in" "is" "not" "or")           ;; 7: operator keywords
+    (group $Token.keyword.control ;; 8: control keywords
       "assert" "async" "await" "break" "continue" "del" "elif"
       "else" "except" "finally" "for" "global" "if" "lambda"
       "nonlocal" "pass" "return" "try" "while" "with" "yield")
-    (group ;; 9: built-in types
+    (group $Token.type.builtin ;; 9: built-in types
       "bool" "bytearray" "bytes" "complex" "dict" "float" "frozenset" "int"
       "list" "memoryview" "object" "range" "set" "slice" "str" "tuple" "type")
-    (group ;; 10: built-in functions
+    (group $Token.function ;; 10: built-in functions
       "abs" "all" "any" "callable" "enumerate" "filter" "getattr" "input"
       "isinstance" "iter" "len" "map" "max" "min" "next" "open" "pow"
       "print" "repr" "round" "sorted" "sum" "super" "zip"))
 
   ;; Token in the low byte; the high byte primes the next name: 1=def, 2=class.
   (func $pyWordHl (param $lhs i32) (param $rhs i32) (result i32)
-    (local $g i32)
-    (local.set $g (keyword-table.get $pyWords (local.get $lhs) (local.get $rhs)))
-    (if (i32.eqz (local.get $g))
+    (local $hl i32)
+    (local.set $hl (keyword-table.value $pyWords (local.get $lhs) (local.get $rhs)))
+    (if (i32.eq (local.get $hl) (i32.const -1))
       (then
         ;; raise, kept out of the table (see above); wide loads stay inside
         ;; the input buffer slack
@@ -222,27 +222,7 @@
                 (i64.const "raise")))
           (then (return (enum.get $Token.keyword.control))))
         (return (enum.get $Token.none))))
-    (if (i32.eq (local.get $g) (i32.const 1))
-      (then (return (enum.get $Token.boolean))))
-    (if (i32.eq (local.get $g) (i32.const 2))
-      (then (return (enum.get $Token.constant.builtin))))
-    (if (i32.eq (local.get $g) (i32.const 3))
-      (then (return (enum.get $Token.variable.special))))
-    (if (i32.eq (local.get $g) (i32.const 4))
-      (then (return (i32.or
-        (enum.get $Token.keyword.declaration) (i32.const 0x100)))))
-    (if (i32.eq (local.get $g) (i32.const 5))
-      (then (return (i32.or
-        (enum.get $Token.keyword.declaration) (i32.const 0x200)))))
-    (if (i32.eq (local.get $g) (i32.const 6))
-      (then (return (enum.get $Token.keyword.import))))
-    (if (i32.eq (local.get $g) (i32.const 7))
-      (then (return (enum.get $Token.keyword.operator))))
-    (if (i32.eq (local.get $g) (i32.const 8))
-      (then (return (enum.get $Token.keyword.control))))
-    (if (i32.eq (local.get $g) (i32.const 9))
-      (then (return (enum.get $Token.type.builtin))))
-    (enum.get $Token.function))
+    (local.get $hl))
 
   ;; The soft keywords `match` and `case` open a statement only at the head
   ;; of a line with a subject or pattern after them; `re.match(p, s)` and
@@ -274,38 +254,10 @@
           (call $lexIsIdentStart (local.get $c))
           (i32.ne (local.get $c) (i32.const "$")))
         (call $lexIsDigit (local.get $c)))
-      (i32.or
-        (i32.or
-          (i32.or (i32.eq (local.get $c) (i32.const 34))
-                  (i32.eq (local.get $c) (i32.const 39)))
-          (i32.or (i32.eq (local.get $c) (i32.const "("))
-                  (i32.eq (local.get $c) (i32.const "["))))
-        (i32.or
-          (i32.eq (local.get $c) (i32.const "{"))
-          (i32.or (i32.eq (local.get $c) (i32.const "-"))
-                  (i32.eq (local.get $c) (i32.const "*")))))))
+      (byteset.get "\22'(*-[{" (local.get $c))))
 
   (func $pyIsOp (param $c i32) (result i32)
-    (i32.or
-      (i32.or
-        (i32.or (i32.eq (local.get $c) (i32.const "+"))
-                (i32.eq (local.get $c) (i32.const "-")))
-        (i32.or (i32.eq (local.get $c) (i32.const "*"))
-                (i32.eq (local.get $c) (i32.const "/"))))
-      (i32.or
-        (i32.or (i32.eq (local.get $c) (i32.const "%"))
-                (i32.eq (local.get $c) (i32.const "=")))
-        (i32.or
-          (i32.or (i32.eq (local.get $c) (i32.const "<"))
-                  (i32.eq (local.get $c) (i32.const ">")))
-          (i32.or
-            (i32.or (i32.eq (local.get $c) (i32.const "!"))
-                    (i32.eq (local.get $c) (i32.const "&")))
-            (i32.or
-              (i32.or (i32.eq (local.get $c) (i32.const "|"))
-                      (i32.eq (local.get $c) (i32.const "^")))
-              (i32.or (i32.eq (local.get $c) (i32.const "~"))
-                      (i32.eq (local.get $c) (i32.const "@")))))))))
+    (byteset.get "!%&*+-/<=>@^|~" (local.get $c)))
 
   (func $hlPython
     (local $afterDecl i32) ;; 1 = def, 2 = class
@@ -554,14 +506,7 @@
             (global.set $sigPattern (i32.const 0))
             (br $next)))
 
-        (if (i32.or
-              (i32.or (i32.eq (local.get $c) (i32.const "("))
-                      (i32.eq (local.get $c) (i32.const ")")))
-              (i32.or
-                (i32.or (i32.eq (local.get $c) (i32.const "["))
-                        (i32.eq (local.get $c) (i32.const "]")))
-                (i32.or (i32.eq (local.get $c) (i32.const "{"))
-                        (i32.eq (local.get $c) (i32.const "}")))))
+        (if (byteset.get "()[]{}" (local.get $c))
           (then
             ;; parameter machine: `(` may open the armed `def` list and puts
             ;; the next name in parameter position; `[` right after the name

@@ -12,9 +12,9 @@
   (func $jsxPush (param $mode i32) (param $target i32)
     (if (i32.lt_u (global.get $jsxSp) (i32.const 512))
       (then
-        (i32.store (i32.add (i32.const $mem.tsxJsxStack) (i32.shl (global.get $jsxSp) (i32.const 3)))
+        (i32.store (i32.add (i32.const $mem.jsxStack) (i32.shl (global.get $jsxSp) (i32.const 3)))
           (local.get $mode))
-        (i32.store offset=4 (i32.add (i32.const $mem.tsxJsxStack) (i32.shl (global.get $jsxSp) (i32.const 3)))
+        (i32.store offset=4 (i32.add (i32.const $mem.jsxStack) (i32.shl (global.get $jsxSp) (i32.const 3)))
           (local.get $target))))
     (global.set $jsxSp (i32.add (global.get $jsxSp) (i32.const 1))))
   ;; address of the top entry, clamped to the last stored one ($jsxSp > 0)
@@ -23,7 +23,7 @@
     (local.set $i (i32.sub (global.get $jsxSp) (i32.const 1)))
     (if (i32.gt_u (local.get $i) (i32.const 511))
       (then (local.set $i (i32.const 511))))
-    (i32.add (i32.const $mem.tsxJsxStack) (i32.shl (local.get $i) (i32.const 3))))
+    (i32.add (i32.const $mem.jsxStack) (i32.shl (local.get $i) (i32.const 3))))
   (func $jsxTopMode (result i32)
     (if (i32.eqz (global.get $jsxSp)) (then (return (i32.const 0))))
     (i32.load (call $jsxTopSlot)))
@@ -304,6 +304,118 @@
     ;; a stray `<`: plain text
     (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
     (call $emitTok (enum.get $Token.text.jsx) (local.get $seg) (global.get $ptr)))
+
+  ;; ---- non-emitting steps for $tsxExpressionEnd ----
+  ;; The expression-end scanner walks tokens with $nextToken, which knows
+  ;; nothing about markup: inside `{items.map((i) => <li>{i}</li>)}` the `/`
+  ;; of `</li>` would start a regexp that swallows the closing brace. These
+  ;; steps mirror $jsxTagStep and $jsxContentStep without emitting, so the
+  ;; scanner keeps the same TAG/CONTENT/CONTAINER mode stack as the lexer and
+  ;; stops at the `}` the lexer will stop at.
+
+  ;; advance $ptr over tag-name bytes
+  (func $jsxSkipName
+    (block $done
+      (loop $l
+        (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
+        (br_if $done (i32.eqz (call $jsxNameCont (i32.load8_u (global.get $ptr)))))
+        (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+        (br $l))))
+
+  ;; a `{` at $ptr opens an expression container; see $jsxOpenContainer
+  (func $jsxSkipOpenContainer
+    (drop (call $nextToken))
+    (call $jsxPush (i32.const 3) (i32.sub (global.get $braceDepth) (i32.const 1)))
+    (global.set $prevTok (enum.get $Lex.l_brace)))
+
+  ;; one step inside an open tag; see $jsxTagStep
+  (func $jsxSkipTagStep
+    (local $c i32)
+    (block $wsDone
+      (loop $ws
+        (br_if $wsDone (i32.ge_u (global.get $ptr) (global.get $end)))
+        (local.set $c (i32.load8_u (global.get $ptr)))
+        (br_if $wsDone (i32.eqz (i32.or
+          (i32.eq (local.get $c) (i32.const 32))
+          (i32.le_u (i32.sub (local.get $c) (i32.const 9)) (i32.const 4)))))
+        (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+        (br $ws)))
+    (if (i32.ge_u (global.get $ptr) (global.get $end)) (then (return)))
+    ;; `>` - the tag opens: children follow
+    (if (i32.eq (local.get $c) (i32.const ">"))
+      (then
+        (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+        (call $jsxSetTopMode (i32.const 2))
+        (return)))
+    ;; `/>` - self-closing
+    (if (i32.and (i32.eq (local.get $c) (i32.const "/"))
+                 (i32.eq (call $tsxByte (i32.add (global.get $ptr) (i32.const 1))) (i32.const ">")))
+      (then
+        (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))
+        (call $jsxPop)
+        (return)))
+    ;; `{` - spread attribute or expression value
+    (if (i32.eq (local.get $c) (i32.const "{"))
+      (then
+        (call $jsxSkipOpenContainer)
+        (return)))
+    ;; quoted attribute value (may span lines; no escapes in JSX strings)
+    (if (i32.or (i32.eq (local.get $c) (i32.const 34)) (i32.eq (local.get $c) (i32.const 39)))
+      (then
+        (global.set $ptr (call $scanFind3
+          (i32.add (global.get $ptr) (i32.const 1))
+          (local.get $c) (local.get $c) (local.get $c)))
+        (if (i32.lt_u (global.get $ptr) (global.get $end))
+          (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))
+        (return)))
+    ;; attribute name
+    (if (call $jsxNameStart (local.get $c))
+      (then
+        (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+        (call $jsxSkipName)
+        (return)))
+    ;; `=` and anything else: one byte
+    (global.set $ptr (i32.add (global.get $ptr) (i32.const 1))))
+
+  ;; one step between `>` and the closing tag; see $jsxContentStep
+  (func $jsxSkipContentStep
+    (local $c i32)
+    (local $c2 i32)
+    (global.set $ptr (call $scanFind3
+      (global.get $ptr) (i32.const "<") (i32.const "{") (i32.const "{")))
+    (if (i32.ge_u (global.get $ptr) (global.get $end)) (then (return)))
+    (local.set $c (i32.load8_u (global.get $ptr)))
+    ;; `{` container
+    (if (i32.eq (local.get $c) (i32.const "{"))
+      (then
+        (call $jsxSkipOpenContainer)
+        (return)))
+    (local.set $c2 (call $tsxByte (i32.add (global.get $ptr) (i32.const 1))))
+    ;; `</name >` closes this element; the lenient tail runs to `>`, or
+    ;; stops before a `<` that starts something new
+    (if (i32.eq (local.get $c2) (i32.const "/"))
+      (then
+        (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))
+        (call $jsxSkipName)
+        (block $tDone
+          (loop $t
+            (br_if $tDone (i32.ge_u (global.get $ptr) (global.get $end)))
+            (local.set $c (i32.load8_u (global.get $ptr)))
+            (br_if $tDone (i32.eq (local.get $c) (i32.const "<")))
+            (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+            (br_if $tDone (i32.eq (local.get $c) (i32.const ">")))
+            (br $t)))
+        (call $jsxPop)
+        (return)))
+    ;; `<name` / `<>` opens a child
+    (if (i32.or (call $jsxNameStart (local.get $c2)) (i32.eq (local.get $c2) (i32.const ">")))
+      (then
+        (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+        (call $jsxSkipName)
+        (call $jsxPush (i32.const 1) (i32.const 0))
+        (return)))
+    ;; a stray `<`: text
+    (global.set $ptr (i32.add (global.get $ptr) (i32.const 1))))
 
   (func $hlJsx (call $hlEcma (i32.const 2)))
   (func $hlJsxStream (param $reset i32)

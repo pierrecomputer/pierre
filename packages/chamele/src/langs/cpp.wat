@@ -7,21 +7,7 @@
       (i32.lt_u (local.get $p) (global.get $end))))
 
   (func $cppIsOp (param $c i32) (result i32)
-    (i32.or
-      (i32.or
-        (i32.or (i32.eq (local.get $c) (i32.const "+")) (i32.eq (local.get $c) (i32.const "-")))
-        (i32.or (i32.eq (local.get $c) (i32.const "*")) (i32.eq (local.get $c) (i32.const "/"))))
-      (i32.or
-        (i32.or (i32.eq (local.get $c) (i32.const "%")) (i32.eq (local.get $c) (i32.const "=")))
-        (i32.or
-          (i32.or (i32.eq (local.get $c) (i32.const "!")) (i32.eq (local.get $c) (i32.const "<")))
-          (i32.or
-            (i32.or (i32.eq (local.get $c) (i32.const ">")) (i32.eq (local.get $c) (i32.const "&")))
-            (i32.or
-              (i32.or (i32.eq (local.get $c) (i32.const "|")) (i32.eq (local.get $c) (i32.const "^")))
-              (i32.or
-                (i32.or (i32.eq (local.get $c) (i32.const "~")) (i32.eq (local.get $c) (i32.const "?")))
-                (i32.eq (local.get $c) (i32.const "#")))))))))
+    (byteset.get "!#%&*+-/<=>?^|~" (local.get $c)))
 
   ;; C++ numeric preprocessing token: radix digits, digit separators,
   ;; exponents and user-defined/type suffixes stay in one allocation-free run.
@@ -339,27 +325,27 @@
     (i32.const 0))
 
   ;; group order is the dispatch order in $cppWordHl below
-  (keyword-table $cppWords $mem.cppWords $mem.cppWords+1280 64 256
-    (group ;; 1: control - `continue` lives in $cppWordHl instead
+  (keyword-table $cppWords $mem.cppWords $mem.cppWords+1280
+    (group $Token.keyword.control ;; 1: control - `continue` lives in $cppWordHl instead
       "if" "do" "for" "try" "else" "case" "goto" "while" "break" "catch"
       "throw" "switch" "return" "default" "co_await" "co_yield"
       "co_return")
-    (group "class" "union" "struct")           ;; 2: declaration, next name is a class type
-    (group "enum" "using" "typedef" "concept") ;; 3: declaration, next name is a type
-    (group "namespace")                        ;; 4: declaration, next name is a namespace
-    (group ;; 5: declaration
+    (group $Token.keyword.declaration+256 "class" "union" "struct")           ;; 2: declaration, next name is a class type
+    (group $Token.keyword.declaration+512 "enum" "using" "typedef" "concept") ;; 3: declaration, next name is a type
+    (group $Token.keyword.declaration+768 "namespace")                        ;; 4: declaration, next name is a namespace
+    (group $Token.keyword.declaration ;; 5: declaration
       "extern" "inline" "static" "register" "template")
-    (group "import" "module" "export") ;; 6: modules
-    (group ;; 7: primitive types - `char32_t` lives in $cppWordHl instead
+    (group $Token.keyword.import "import" "module" "export") ;; 6: modules
+    (group $Token.type.builtin ;; 7: primitive types - `char32_t` lives in $cppWordHl instead
       "int" "auto" "bool" "char" "long" "void" "float" "short" "double"
       "signed" "char8_t" "wchar_t" "char16_t" "unsigned")
-    (group "true" "false") ;; 8: booleans
-    (group "nullptr")      ;; 9: built-in constant
-    (group "this")         ;; 10: special variable
-    (group ;; 11: alternative operator spellings
+    (group $Token.boolean "true" "false") ;; 8: booleans
+    (group $Token.constant.builtin "nullptr")      ;; 9: built-in constant
+    (group $Token.variable.special "this")         ;; 10: special variable
+    (group $Token.operator ;; 11: alternative operator spellings
       "or" "and" "not" "xor" "bitor" "compl" "or_eq" "and_eq" "bitand"
       "not_eq" "xor_eq")
-    (group ;; 12: remaining keywords, including casts and specifiers
+    (group $Token.keyword ;; 12: remaining keywords, including casts and specifiers
       "asm" "new" "const" "final" "delete" "friend" "public" "sizeof"
       "typeid" "alignas" "alignof" "mutable" "private" "virtual" "decltype"
       "explicit" "noexcept" "operator" "override" "requires" "typename"
@@ -374,35 +360,13 @@
   ;; each takes one exact eight-byte compare here instead. Input sentinel slack
   ;; keeps the unaligned i64 loads safe.
   (func $cppWordHl (param $lhs i32) (param $rhs i32) (result i32)
-    (local $g i32)
     (if (i32.eq (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 8))
       (then
         (if (i64.eq (i64.load (local.get $lhs)) (i64.const "continue"))
           (then (return (enum.get $Token.keyword.control))))
         (if (i64.eq (i64.load (local.get $lhs)) (i64.const "char32_t"))
           (then (return (enum.get $Token.type.builtin))))))
-    (local.set $g (keyword-table.get $cppWords (local.get $lhs) (local.get $rhs)))
-    (if (i32.eqz (local.get $g)) (then (return (i32.const -1))))
-    (if (i32.eq (local.get $g) (i32.const 1))
-      (then (return (enum.get $Token.keyword.control))))
-    (if (i32.le_u (local.get $g) (i32.const 4))
-      (then (return (i32.or (enum.get $Token.keyword.declaration)
-        (i32.shl (i32.sub (local.get $g) (i32.const 1)) (i32.const 8))))))
-    (if (i32.eq (local.get $g) (i32.const 5))
-      (then (return (enum.get $Token.keyword.declaration))))
-    (if (i32.eq (local.get $g) (i32.const 6))
-      (then (return (enum.get $Token.keyword.import))))
-    (if (i32.eq (local.get $g) (i32.const 7))
-      (then (return (enum.get $Token.type.builtin))))
-    (if (i32.eq (local.get $g) (i32.const 8))
-      (then (return (enum.get $Token.boolean))))
-    (if (i32.eq (local.get $g) (i32.const 9))
-      (then (return (enum.get $Token.constant.builtin))))
-    (if (i32.eq (local.get $g) (i32.const 10))
-      (then (return (enum.get $Token.variable.special))))
-    (if (i32.eq (local.get $g) (i32.const 11))
-      (then (return (enum.get $Token.operator))))
-    (enum.get $Token.keyword))
+    (keyword-table.value $cppWords (local.get $lhs) (local.get $rhs)))
 
   (func $hlCpp
     (local $c i32)
@@ -576,11 +540,7 @@
             (br $next)))
 
         ;; brackets
-        (if (i32.or
-              (i32.or (i32.eq (local.get $c) (i32.const "(")) (i32.eq (local.get $c) (i32.const ")")))
-              (i32.or
-                (i32.or (i32.eq (local.get $c) (i32.const "[")) (i32.eq (local.get $c) (i32.const "]")))
-                (i32.or (i32.eq (local.get $c) (i32.const "{")) (i32.eq (local.get $c) (i32.const "}")))))
+        (if (byteset.get "()[]{}" (local.get $c))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (call $emitTok (enum.get $Token.punctuation.bracket) (local.get $lhs) (global.get $ptr))
@@ -673,18 +633,7 @@
               (i32.or
                 (i32.or (call $lexIsSpace (local.get $c)) (call $lexIsIdentStart (local.get $c)))
                 (i32.or (call $lexIsDigit (local.get $c)) (call $cppIsOp (local.get $c))))
-              (i32.or
-                (i32.or (i32.eq (local.get $c) (i32.const 34)) (i32.eq (local.get $c) (i32.const 39)))
-                (i32.or
-                  (i32.or
-                    (i32.or (i32.eq (local.get $c) (i32.const "(")) (i32.eq (local.get $c) (i32.const ")")))
-                    (i32.or (i32.eq (local.get $c) (i32.const "[")) (i32.eq (local.get $c) (i32.const "]"))))
-                  (i32.or
-                    (i32.or (i32.eq (local.get $c) (i32.const "{")) (i32.eq (local.get $c) (i32.const "}")))
-                    (i32.or
-                      (i32.or (i32.eq (local.get $c) (i32.const ",")) (i32.eq (local.get $c) (i32.const ";")))
-                      (i32.or (i32.eq (local.get $c) (i32.const ":"))
-                              (i32.eq (local.get $c) (i32.const ".")))))))))
+              (byteset.get "\22'(),.:;[]{}" (local.get $c))))
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (br $plain)))
         (call $emitTok (enum.get $Token.none) (local.get $lhs) (global.get $ptr))

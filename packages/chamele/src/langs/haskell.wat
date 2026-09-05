@@ -19,7 +19,7 @@
 
   ;; group order is the dispatch order in $hsWordHl below; let and where keep
   ;; dedicated groups so the caller can prime the next name as a definition
-  (keyword-table $hsWords $mem.haskellWords $mem.haskellWords+640 32 64
+  (keyword-table $hsWords $mem.haskellWords $mem.haskellWords+640
     (group "True" "False")                              ;; 1: booleans
     (group "module" "import" "qualified" "hiding")      ;; 2: import
     (group "data" "newtype" "type" "class" "instance")  ;; 3: declaration
@@ -53,35 +53,7 @@
     (enum.get $Token.function))
 
   (func $hsIsSymbol (param $c i32) (result i32)
-    (i32.or
-      (i32.or
-        (i32.or (i32.eq (local.get $c) (i32.const "!"))
-                (i32.eq (local.get $c) (i32.const "#")))
-        (i32.or (i32.eq (local.get $c) (i32.const "$"))
-                (i32.eq (local.get $c) (i32.const "%"))))
-      (i32.or
-        (i32.or
-          (i32.or (i32.eq (local.get $c) (i32.const "&"))
-                  (i32.eq (local.get $c) (i32.const "*")))
-          (i32.or (i32.eq (local.get $c) (i32.const "+"))
-                  (i32.eq (local.get $c) (i32.const "."))))
-        (i32.or
-          (i32.or
-            (i32.or (i32.eq (local.get $c) (i32.const "/"))
-                    (i32.eq (local.get $c) (i32.const "<")))
-            (i32.or (i32.eq (local.get $c) (i32.const "="))
-                    (i32.eq (local.get $c) (i32.const ">"))))
-          (i32.or
-            (i32.or
-              (i32.or (i32.eq (local.get $c) (i32.const "?"))
-                      (i32.eq (local.get $c) (i32.const "@")))
-              (i32.or (i32.eq (local.get $c) (i32.const 92))
-                      (i32.eq (local.get $c) (i32.const "^"))))
-            (i32.or
-              (i32.or (i32.eq (local.get $c) (i32.const "|"))
-                      (i32.eq (local.get $c) (i32.const "-")))
-              (i32.or (i32.eq (local.get $c) (i32.const "~"))
-                      (i32.eq (local.get $c) (i32.const ":")))))))))
+    (byteset.get "!#$%&*+-./:<=>?@\5c^|~" (local.get $c)))
 
   (func $hlHaskell
     (local $atHead i32)
@@ -277,14 +249,7 @@
             (local.set $lineHead (i32.const 0))
             (br $next)))
 
-        (if (i32.or
-              (i32.or (i32.eq (local.get $c) (i32.const "("))
-                      (i32.eq (local.get $c) (i32.const ")")))
-              (i32.or
-                (i32.or (i32.eq (local.get $c) (i32.const "["))
-                        (i32.eq (local.get $c) (i32.const "]")))
-                (i32.or (i32.eq (local.get $c) (i32.const "{"))
-                        (i32.eq (local.get $c) (i32.const "}")))))
+        (if (byteset.get "()[]{}" (local.get $c))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (call $emitTok (enum.get $Token.punctuation.bracket) (local.get $lhs) (global.get $ptr))

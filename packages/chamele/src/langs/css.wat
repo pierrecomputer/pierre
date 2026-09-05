@@ -719,14 +719,7 @@
                   (call $emitTok (enum.get $Token.punctuation.delimiter) (local.get $lhs) (global.get $ptr))
                   (br $next)))
               ;; combinators and attr-match operators
-              (if (i32.or
-                    (i32.or
-                      (i32.or (i32.eq (local.get $c) (i32.const ">")) (i32.eq (local.get $c) (i32.const "+")))
-                      (i32.or (i32.eq (local.get $c) (i32.const "~")) (i32.eq (local.get $c) (i32.const "*"))))
-                    (i32.or
-                      (i32.or (i32.eq (local.get $c) (i32.const "&")) (i32.eq (local.get $c) (i32.const "-")))
-                      (i32.or (i32.eq (local.get $c) (i32.const "^"))
-                        (i32.or (i32.eq (local.get $c) (i32.const "|")) (i32.eq (local.get $c) (i32.const "$"))))))
+              (if (byteset.get "$&*+->^|~" (local.get $c))
                 (then
                   (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
                   (call $emitTok (enum.get $Token.operator) (local.get $lhs) (global.get $ptr))
@@ -937,14 +930,7 @@
               (br $next)))
 
           ;; value operators: calc arithmetic, font shorthand `/`, media ranges
-          (if (i32.or
-                (i32.or
-                  (i32.or (i32.eq (local.get $c) (i32.const "*")) (i32.eq (local.get $c) (i32.const "/")))
-                  (i32.or (i32.eq (local.get $c) (i32.const "+")) (i32.eq (local.get $c) (i32.const "-"))))
-                (i32.or
-                  (i32.or (i32.eq (local.get $c) (i32.const "<")) (i32.eq (local.get $c) (i32.const ">")))
-                  (i32.or (i32.eq (local.get $c) (i32.const "="))
-                    (i32.or (i32.eq (local.get $c) (i32.const "~")) (i32.eq (local.get $c) (i32.const "^"))))))
+          (if (byteset.get "*+-/<=>^~" (local.get $c))
             (then
               (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
               (call $emitTok (enum.get $Token.operator) (local.get $lhs) (global.get $ptr))

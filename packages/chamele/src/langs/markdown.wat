@@ -99,9 +99,65 @@
   ;; around each delegation and so returns to zero on its own; never reset it
   ;; in `$hlMarkdown`, which is itself one of the recursive entry points.
   (global $markdownDepth (mut i32) (i32.const 0))
+  ;; The fence left open at the end of a stream chunk, so the next chunk
+  ;; resumes its body: the fence byte, its run length with the block-quote
+  ;; depth packed above, and the body language. The globals hold the
+  ;; document's own fence. A fence opened inside a `markdown` or `mdx` fence
+  ;; body keeps its registers in $mem.markdownFenceStack at its nesting
+  ;; depth, so an inner fence survives the chunk boundary alongside the outer
+  ;; one instead of being overwritten by it. The live tokenizer captures both
+  ;; and $streamResetGlobals clears both.
   (global $markdownStreamFence (mut i32) (i32.const 0))
   (global $markdownStreamFenceLen (mut i32) (i32.const 0))
   (global $markdownStreamLang (mut i32) (i32.const 0))
+
+  ;; Address of the 12-byte fence register record for nesting depth $depth
+  ;; (1..8); depth 0 lives in the globals above.
+  (func $markdownFenceSlot (param $depth i32) (result i32)
+    (i32.add (i32.const $mem.markdownFenceStack)
+      (i32.mul (i32.sub (local.get $depth) (i32.const 1)) (i32.const 12))))
+
+  ;; Fence byte of the fence left open at the current depth, 0 when none.
+  (func $markdownFenceReg (result i32)
+    (if (i32.eqz (global.get $markdownDepth))
+      (then (return (global.get $markdownStreamFence))))
+    (i32.load (call $markdownFenceSlot (global.get $markdownDepth))))
+
+  (func $markdownFenceLenReg (result i32)
+    (if (i32.eqz (global.get $markdownDepth))
+      (then (return (global.get $markdownStreamFenceLen))))
+    (i32.load offset=4 (call $markdownFenceSlot (global.get $markdownDepth))))
+
+  (func $markdownFenceLangReg (result i32)
+    (if (i32.eqz (global.get $markdownDepth))
+      (then (return (global.get $markdownStreamLang))))
+    (i32.load offset=8 (call $markdownFenceSlot (global.get $markdownDepth))))
+
+  ;; Record the fence left open at the current depth; a zero $fence clears it.
+  (func $markdownFenceSet (param $fence i32) (param $len i32) (param $lang i32)
+    (local $slot i32)
+    (if (i32.eqz (global.get $markdownDepth))
+      (then
+        (global.set $markdownStreamFence (local.get $fence))
+        (global.set $markdownStreamFenceLen (local.get $len))
+        (global.set $markdownStreamLang (local.get $lang))
+        (return)))
+    (local.set $slot (call $markdownFenceSlot (global.get $markdownDepth)))
+    (i32.store (local.get $slot) (local.get $fence))
+    (i32.store offset=4 (local.get $slot) (local.get $len))
+    (i32.store offset=8 (local.get $slot) (local.get $lang)))
+
+  ;; Forget the fences recorded by bodies nested below the current depth.
+  ;; Once the fence at this depth closes, whatever its body left open is
+  ;; text of a finished block and must not resume in a later chunk.
+  (func $markdownFenceClearDeeper
+    (local $from i32)
+    (local.set $from
+      (call $markdownFenceSlot (i32.add (global.get $markdownDepth) (i32.const 1))))
+    (if (i32.lt_u (local.get $from) (i32.const $mem.markdownFenceStackEnd))
+      (then
+        (memory.fill (local.get $from) (i32.const 0)
+          (i32.sub (i32.const $mem.markdownFenceStackEnd) (local.get $from))))))
 
   (func $markdownCodeRange (param $lang i32) (param $from i32) (param $to i32)
     (local $save i32)
@@ -119,6 +175,15 @@
     (global.set $end (local.get $to))
     (global.set $ptr (local.get $from))
     (block $codeDone
+      ;; A `markdown` or `mdx` body first resumes the fence its previous
+      ;; chunk left open at this depth, as the document does at top level;
+      ;; the lexer then continues after the closer, or the range is spent.
+      (if (i32.and
+            (global.get $streaming)
+            (i32.ne (call $markdownFenceReg) (i32.const 0)))
+        (then
+          (br_if $codeDone (call $markdownStreamResume))
+          (br_if $codeDone (i32.ge_u (global.get $ptr) (global.get $end)))))
       (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.tsx)) (then (call $hlTsx) (br $codeDone)))
       (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.js)) (then (call $hlJs) (br $codeDone)))
       (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.jsx)) (then (call $hlJsx) (br $codeDone)))
@@ -277,8 +342,11 @@
 
   ;; Continue a fenced block whose closing delimiter is in a later stream
   ;; chunk. Returns one while the whole chunk belongs to the fence body.
-  ;; $markdownStreamFenceLen packs the block-quote depth of the opener into
-  ;; its upper half so the closer scan can demand the same `>` prefix.
+  ;; The fence length register packs the block-quote depth of the opener
+  ;; into its upper half so the closer scan can demand the same `>` prefix.
+  ;; Runs at the current nesting depth: for the document itself from
+  ;; $streamResumeLang, and for a nested markdown body from
+  ;; $markdownCodeRange, which resumes a fence recorded one depth down.
   (func $markdownStreamResume (result i32)
     (local $after i32)
     (local $close i32)
@@ -286,11 +354,11 @@
     (local $lang i32)
     (local $len i32)
     (local $lineEnd i32)
-    (if (i32.eqz (global.get $markdownStreamFence))
+    (local.set $fence (call $markdownFenceReg))
+    (if (i32.eqz (local.get $fence))
       (then (return (i32.const 0))))
-    (local.set $fence (global.get $markdownStreamFence))
-    (local.set $len (global.get $markdownStreamFenceLen))
-    (local.set $lang (global.get $markdownStreamLang))
+    (local.set $len (call $markdownFenceLenReg))
+    (local.set $lang (call $markdownFenceLangReg))
     (local.set $close (call $markdownFenceClose (global.get $ptr)
       (local.get $fence)
       (i32.and (local.get $len) (i32.const 0xffff))
@@ -305,21 +373,18 @@
       (else (call $emitTok
         (enum.get $Token.text.literal) (global.get $ptr) (local.get $close))))
     (call $markdownClearEmbeddedStream)
+    ;; a nested body records its own fences one depth down, so the registers
+    ;; at this depth still describe the fence being resumed
     (if (i32.eq (local.get $close) (global.get $end))
-      (then
-        ;; a nested markdown body may have re-targeted the fence registers
-        ;; to its own inner fence; the outer fence is the one being resumed
-        (global.set $markdownStreamFence (local.get $fence))
-        (global.set $markdownStreamFenceLen (local.get $len))
-        (global.set $markdownStreamLang (local.get $lang))
-        (return (i32.const 1))))
+      (then (return (i32.const 1))))
     (global.set $ptr (local.get $close))
     (local.set $lineEnd (call $markdownLineEnd (global.get $ptr)))
     (local.set $after (call $markdownAfterLine (local.get $lineEnd)))
     (call $emitTok (enum.get $Token.punctuation.delimiter)
       (global.get $ptr) (local.get $after))
     (global.set $ptr (local.get $after))
-    (global.set $markdownStreamFence (i32.const 0))
+    (call $markdownFenceSet (i32.const 0) (i32.const 0) (i32.const 0))
+    (call $markdownFenceClearDeeper)
     (i32.const 0))
 
   (func $markdownPlainEnd (param $p i32) (result i32)
@@ -353,19 +418,7 @@
       (loop $scalar
         (br_if $done (i32.ge_u (local.get $p) (global.get $end)))
         (local.set $mask (i32.load8_u (local.get $p)))
-        (br_if $done (i32.or
-          (i32.eq (local.get $mask) (i32.const "|"))
-          (i32.or
-            (i32.or
-              (i32.or (i32.eq (local.get $mask) (i32.const 10))
-                      (i32.eq (local.get $mask) (i32.const 13)))
-              (i32.or (i32.eq (local.get $mask) (i32.const "<"))
-                      (i32.eq (local.get $mask) (i32.const "["))))
-            (i32.or
-              (i32.or (i32.eq (local.get $mask) (i32.const "`"))
-                      (i32.eq (local.get $mask) (i32.const 92)))
-              (i32.or (i32.eq (local.get $mask) (i32.const "*"))
-                      (i32.eq (local.get $mask) (i32.const "_")))))))
+        (br_if $done (byteset.get "\0a\0d*<[\5c_`|" (local.get $mask)))
         (local.set $p (i32.add (local.get $p) (i32.const 1)))
         (br $scalar)))
     (local.get $p))
@@ -720,16 +773,20 @@
                     (call $markdownClearEmbeddedStream)
                     (if (i32.eq (local.get $close) (global.get $end))
                       (then
-                        (global.set $markdownStreamFence (local.get $fence))
                         ;; run length in the low half, block-quote depth above
-                        (global.set $markdownStreamFenceLen (i32.or
-                          (select (i32.const 0xffff) (local.get $fenceLen)
-                            (i32.gt_u (local.get $fenceLen) (i32.const 0xffff)))
-                          (i32.shl
-                            (select (i32.const 0x7fff) (local.get $quotes)
-                              (i32.gt_u (local.get $quotes) (i32.const 0x7fff)))
-                            (i32.const 16))))
-                        (global.set $markdownStreamLang (local.get $lang))))))
+                        (call $markdownFenceSet
+                          (local.get $fence)
+                          (i32.or
+                            (select (i32.const 0xffff) (local.get $fenceLen)
+                              (i32.gt_u (local.get $fenceLen) (i32.const 0xffff)))
+                            (i32.shl
+                              (select (i32.const 0x7fff) (local.get $quotes)
+                                (i32.gt_u (local.get $quotes) (i32.const 0x7fff)))
+                              (i32.const 16)))
+                          (local.get $lang)))
+                      ;; the block closed in this chunk, so fences its body
+                      ;; left open at deeper depths are finished text
+                      (else (call $markdownFenceClearDeeper)))))
                 (global.set $ptr (local.get $close))
                 (if (i32.lt_u (local.get $close) (global.get $end))
                   (then

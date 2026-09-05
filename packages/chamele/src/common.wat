@@ -656,7 +656,9 @@
         (i32.const 0xe51fac89)))
     (local.set $h
       (i32.xor (local.get $h) (i32.shr_u (local.get $h) (i32.const 24))))
-    ;; base: displacement bytes; base+buckets: u16 (len<<11 | recOffset+1)
+    ;; base: displacement bytes; base+buckets: u16 (len<<11 | recOffset+1).
+    ;; The slot is the bucket's displacement times an odd second hash plus
+    ;; the base slot - double hashing, so the build can pack tables densely
     (local.set $entry
       (i32.load16_u
         (i32.add
@@ -665,10 +667,12 @@
           (i32.shl
             (i32.and
               (i32.add
-                (i32.and (i32.shr_u (local.get $h) (i32.const 4)) (local.get $slotMask))
-                (i32.load8_u
-                  (i32.add (local.get $base)
-                    (i32.and (local.get $h) (local.get $bucketMask)))))
+                (i32.shr_u (local.get $h) (i32.const 4))
+                (i32.mul
+                  (i32.load8_u
+                    (i32.add (local.get $base)
+                      (i32.and (local.get $h) (local.get $bucketMask))))
+                  (i32.or (i32.shr_u (local.get $h) (i32.const 12)) (i32.const 1))))
               (local.get $slotMask))
             (i32.const 1)))))
     ;; a length mismatch also rejects empty slots (their length field is 0)
@@ -708,7 +712,20 @@
         (br_if $cmp (local.get $n))))
     (i32.load8_u (local.get $rec)))
 
-  ;; Copy the word [lhs,rhs) to $dst lowercased so a case-insensitive
+  ;; The value a keyword table assigns to a word's group - see the
+  ;; keyword-table.value form - or -1 when the word is not in the table or
+  ;; its group declares no value.
+  (func $lexKeywordValue
+    (param $start i32) (param $end i32) (param $base i32)
+    (param $bucketMask i32) (param $slotMask i32) (param $values i32) (result i32)
+    (local $g i32)
+    (local.set $g (call $lexKeywordLookup
+      (local.get $start) (local.get $end) (local.get $base)
+      (local.get $bucketMask) (local.get $slotMask)))
+    (if (i32.eqz (local.get $g)) (then (return (i32.const -1))))
+    (i32.load16_s (i32.add (local.get $values) (i32.shl (local.get $g) (i32.const 1)))))
+
+
   ;; language can probe a lowercase keyword table with it, zero-padding the
   ;; eight bytes the lookup's wide loads may read past the word. Returns the
   ;; copied length, or 0 for a word longer than a table can hold; the empty
