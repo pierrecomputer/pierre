@@ -1356,7 +1356,7 @@ export class Editor<
   }
 
   /** @internal */
-  __syncRenderView = (props: SyncRenderViewProps<EType, LAnnotation>): void => {
+  __syncRenderView(props: SyncRenderViewProps<EType, LAnnotation>): void {
     const {
       highlighter,
       fileContainer,
@@ -1705,6 +1705,11 @@ export class Editor<
         );
       }
 
+      // A reconciled replacement is current even when its text did not change.
+      // Retire it before checkpointing the new diff state or notifying observers.
+      if (externalDocument) {
+        fileInstance.__acknowledgeDocumentUpdate();
+      }
       this.#checkpointEditSessionState();
     } catch (error) {
       this.#restoreEditorStateOnSync = restoreEditorStateOnSync;
@@ -1717,7 +1722,7 @@ export class Editor<
     }
 
     this.#scheduleOnAttach(fileInstance);
-  };
+  }
 
   // The host component has already rendered these external contents. Update
   // only the editor document and history so the same replacement is not
@@ -7001,6 +7006,8 @@ export class Editor<
       this.#updateSelections(newSelections);
     }
 
+    // A completed local edit also supersedes any pending external replacement.
+    this.#fileInstance?.__acknowledgeDocumentUpdate();
     this.#checkpointEditSessionState();
 
     this.#recordEditPredictionHistory(change, options?.editSource ?? 'user');

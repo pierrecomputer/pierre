@@ -435,6 +435,85 @@ describe('external FileDiff updates during editing', () => {
     }
   });
 
+  for (const deferredTheme of [false, true]) {
+    test(`an old-side-only replacement resets history once with a ${deferredTheme ? 'loading' : 'ready'} theme`, async () => {
+      const changes: string[] = [];
+      const fixture = await createFixture({
+        onChange: (contents) => changes.push(contents),
+      });
+      const themeName = `old-side-replacement-${deferredTheme}`;
+      const theme: ThemeRegistration = {
+        name: themeName,
+        type: 'dark',
+        colors: {},
+        tokenColors: [],
+      };
+      const loadedTheme = createDeferred<ThemeRegistration>();
+      const replacement = createDiff({
+        cacheKey: 'session:new-base',
+        oldContents: 'different base\n',
+        newContents: 'bravo\n',
+      });
+
+      try {
+        replaceDocument(fixture.editor, 'bravo\n');
+        expect(fixture.editor.canUndo).toBe(true);
+        if (deferredTheme) {
+          registerCustomTheme(themeName, () => loadedTheme.promise);
+          fixture.instance.setOptions({
+            disableErrorHandling: true,
+            disableFileHeader: true,
+            theme: themeName,
+          });
+        }
+        fixture.instance.render({
+          fileDiff: replacement,
+          fileContainer: fixture.fileContainer,
+          forceRender: true,
+        });
+        if (deferredTheme) {
+          expect(fixture.editor.canUndo).toBe(true);
+          loadedTheme.resolve(theme);
+          await waitFor(() => !fixture.editor.canUndo);
+        }
+        expect(fixture.editor.canUndo).toBe(false);
+        expect(fixture.editor.canRedo).toBe(false);
+        expect(changes).toEqual(['bravo\n']);
+        expect(
+          fixture.editor.__getDocumentSessionState()?.oldFile?.lines
+        ).toEqual(['different base\n']);
+
+        fixture.editor.setSelections([
+          {
+            start: { line: 0, character: 2 },
+            end: { line: 0, character: 2 },
+            direction: 'none',
+          },
+        ]);
+        const selections = fixture.editor.getViewState().selections;
+        expect(selections).toBeDefined();
+        fixture.instance.rerender();
+        fixture.instance.rerender();
+        expect(fixture.editor.getViewState().selections).toEqual(selections);
+        expect(changes).toEqual(['bravo\n']);
+
+        replaceDocument(fixture.editor, 'charlie\n');
+        fixture.instance.rerender();
+        fixture.editor.undo();
+        expect(fixture.editor.getText()).toBe('bravo\n');
+        expect(fixture.editor.canUndo).toBe(false);
+        fixture.editor.redo();
+        expect(fixture.editor.getText()).toBe('charlie\n');
+      } finally {
+        loadedTheme.resolve(theme);
+        if (deferredTheme) {
+          await getSharedHighlighter({ themes: [themeName], langs: ['text'] });
+        }
+        fixture.cleanup();
+      }
+    });
+  }
+
   test('an identical update changes external identity without adding history', async () => {
     const changes: string[] = [];
     const fixture = await createFixture({

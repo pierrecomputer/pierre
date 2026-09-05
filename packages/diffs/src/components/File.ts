@@ -834,16 +834,17 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     }
   }
 
-  /** @internal Settle component state before either observer can install a newer file. */
-  public __acceptEditorChange(
-    event: EditorChangeEvent<'file', LAnnotation, Caret>
-  ): void {
-    // A change means the editor's document now carries the pending external
-    // replacement (or the user has edited past it), so the next sync no longer
-    // needs to force that content over the document.
+  /** @internal The editor applied or edited past the pending external replacement. */
+  public __acknowledgeDocumentUpdate(): void {
     if (this.editSession != null) {
       this.editSession.externalReplacement = false;
     }
+  }
+
+  /** @internal Settle annotations */
+  public __acceptEditorChange(
+    event: EditorChangeEvent<'file', LAnnotation, Caret>
+  ): void {
     const { lineAnnotations } = event;
     if (lineAnnotations != null) {
       this.syncEditSessionAnnotationsFromEditor(lineAnnotations);

@@ -1844,18 +1844,17 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     };
   }
 
-  /** @internal Settle component state before either observer can install a newer diff. */
-  public __acceptEditorChange(
-    event: EditorChangeEvent<'file-diff', LAnnotation, Caret>
-  ): void {
-    // A change means the editor's document now carries the pending replacement
-    // (or the user has edited past it), so the next sync no longer needs to
-    // force that diff over the document. Clearing here rather than per-sync
-    // keeps the signal alive across syncs that don't reconcile it — e.g. a
-    // render for an item being recycled before its editor detaches.
+  /** @internal The editor applied or edited past the pending external replacement. */
+  public __acknowledgeDocumentUpdate(): void {
     if (this.editSession != null) {
       this.editSession.outgoingDiff = undefined;
     }
+  }
+
+  /** @internal Settle annotations locally. */
+  public __acceptEditorChange(
+    event: EditorChangeEvent<'file-diff', LAnnotation, Caret>
+  ): void {
     const { lineAnnotations } = event;
     if (lineAnnotations != null) {
       this.syncEditSessionAnnotationsFromEditor(lineAnnotations);
