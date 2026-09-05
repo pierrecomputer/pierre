@@ -37,11 +37,13 @@ import type {
   CodeViewRangeScrollTarget,
   CodeViewScrollBehavior,
   CodeViewScrollTarget,
+  DiffsThemeNames,
   HunkSeparators,
   PendingCodeViewLayoutReset,
   SelectedLineRange,
   SelectionSide,
   SmoothScrollSettings,
+  ThemesType,
   VirtualFileMetrics,
   VirtualWindowSpecs,
 } from '../types';
@@ -822,6 +824,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   private options: CodeViewOptions<LAnnotation, Caret>;
   private workerManager: WorkerPoolManager | undefined;
   private isReadySubscription: (() => void) | undefined;
+  private pendingHighlighterTheme: DiffsThemeNames | ThemesType | undefined;
   private isContainerManaged: boolean;
 
   constructor(
@@ -1871,6 +1874,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     }
     this.isReadySubscription();
     this.isReadySubscription = undefined;
+    this.pendingHighlighterTheme = undefined;
   }
 
   private isSharedHighlighterReady(): boolean {
@@ -1882,7 +1886,12 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       this.clearReadySubscription();
       return true;
     }
+    // A pending request for an obsolete theme must not block the current one.
+    if (!areThemesEqual(this.pendingHighlighterTheme, theme)) {
+      this.clearReadySubscription();
+    }
     this.isReadySubscription ??= (() => {
+      this.pendingHighlighterTheme = theme;
       let cancelled = false;
       void preloadHighlighter({
         themes: getThemes(theme),
