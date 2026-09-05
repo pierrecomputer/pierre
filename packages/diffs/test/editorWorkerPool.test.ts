@@ -5,6 +5,7 @@ import { toHtml } from 'hast-util-to-html';
 import { parseDiffFromFile } from '../src';
 import { File } from '../src/components/File';
 import { FileDiff } from '../src/components/FileDiff';
+import { VirtualizedFile } from '../src/components/VirtualizedFile';
 import { VirtualizedFileDiff } from '../src/components/VirtualizedFileDiff';
 import { Virtualizer } from '../src/components/Virtualizer';
 import { Editor } from '../src/editor/editor';
@@ -981,7 +982,13 @@ describe('VirtualizedFileDiff worker rendering', () => {
     });
     const virtualizer = new Virtualizer();
     const consoleError = spyOn(console, 'error').mockImplementation(() => {});
-    let instance: VirtualizedFileDiff<undefined> | undefined;
+    const instance = new VirtualizedFileDiff<undefined>(
+      { theme: 'pierre-dark', disableFileHeader: true },
+      virtualizer,
+      undefined,
+      manager
+    );
+    const onRender = spyOn(instance, 'onRender');
     const currentDiff = createWorkerDiff(
       'virtualized:current',
       'const current = 1;\n'
@@ -1003,30 +1010,27 @@ describe('VirtualizedFileDiff worker rendering', () => {
       root.appendChild(content);
       content.appendChild(fileContainer);
       virtualizer.setup(root, content);
-      instance = new VirtualizedFileDiff<undefined>(
-        { theme: 'pierre-dark', disableFileHeader: true },
-        virtualizer,
-        undefined,
-        manager
-      );
 
       expect(instance.render({ fileDiff: currentDiff, fileContainer })).toBe(
         true
       );
       expect(fileContainer.shadowRoot?.innerHTML ?? '').toContain('current');
       dom.triggerIntersectionObserver(fileContainer, true);
-      await wait(10);
+      await waitFor(() => expect(onRender).toHaveReturnedWith(false));
 
       // The replacement keeps the highlighted current diff visible, and the
       // following real virtualizer frame records that current diff for layout.
       expect(instance.render({ fileDiff: replacementDiff })).toBe(true);
+      onRender.mockClear();
       expect(fileContainer.shadowRoot?.innerHTML ?? '').not.toContain(
         'replacement'
       );
 
       await waitFor(() => expect(worker.diffRequestCount).toBe(2));
       const replacementRequest = await withTimeout(worker.waitForDiffRequest());
-      await wait(0);
+      // Observe a completed no-op pass while the worker still holds B. This
+      // proves the stale layout exists without assuming a particular delay.
+      await waitFor(() => expect(onRender).toHaveReturnedWith(false));
       respondWithHighlightedDiff(
         manager,
         worker,
@@ -1040,8 +1044,79 @@ describe('VirtualizedFileDiff worker rendering', () => {
       );
       expect(consoleError).not.toHaveBeenCalled();
     } finally {
+      onRender.mockRestore();
       consoleError.mockRestore();
-      instance?.cleanUp();
+      instance.cleanUp();
+      virtualizer.cleanUp();
+      manager.terminate();
+      dom.cleanup();
+    }
+  });
+});
+
+describe('VirtualizedFile worker rendering', () => {
+  test('recomputes a pending layout when a replacement highlight completes', async () => {
+    const dom = installDom();
+    const { manager, worker } = await createInitializedManager({
+      theme: 'pierre-dark',
+    });
+    const virtualizer = new Virtualizer();
+    const instance = new VirtualizedFile<undefined>(
+      { theme: 'pierre-dark', disableFileHeader: true },
+      virtualizer,
+      undefined,
+      manager
+    );
+    const onRender = spyOn(instance, 'onRender');
+    const consoleError = spyOn(console, 'error').mockImplementation(() => {});
+    const currentFile: FileContents = {
+      name: 'pending.ts',
+      contents: 'const current = 1;\n',
+      cacheKey: 'virtualized-file:current',
+    };
+    const replacementFile: FileContents = {
+      name: 'pending.ts',
+      contents: 'const replacement = 2;\n',
+      cacheKey: 'virtualized-file:replacement',
+    };
+
+    try {
+      const primeCurrent = manager.primeFileHighlightCache(currentFile);
+      await respondWithRealFileHighlight(manager, worker, currentFile);
+      await withTimeout(primeCurrent);
+
+      const root = createRoot();
+      const content = document.createElement('div');
+      const fileContainer = document.createElement('div');
+      root.appendChild(content);
+      content.appendChild(fileContainer);
+      virtualizer.setup(root, content);
+
+      expect(instance.render({ file: currentFile, fileContainer })).toBe(true);
+      expect(fileContainer.shadowRoot?.innerHTML ?? '').toContain('current');
+      dom.triggerIntersectionObserver(fileContainer, true);
+      await waitFor(() => expect(onRender).toHaveReturnedWith(false));
+
+      expect(instance.render({ file: replacementFile })).toBe(true);
+      onRender.mockClear();
+      expect(fileContainer.shadowRoot?.innerHTML ?? '').not.toContain(
+        'replacement'
+      );
+
+      // Keep the worker result pending until the real virtualizer has
+      // prepared the old file's layout and completed a no-op render pass.
+      await waitFor(() => expect(onRender).toHaveReturnedWith(false));
+      await respondWithRealFileHighlight(manager, worker, replacementFile);
+      await waitFor(() =>
+        expect(fileContainer.shadowRoot?.innerHTML ?? '').toContain(
+          'replacement'
+        )
+      );
+      expect(consoleError).not.toHaveBeenCalled();
+    } finally {
+      onRender.mockRestore();
+      consoleError.mockRestore();
+      instance.cleanUp();
       virtualizer.cleanUp();
       manager.terminate();
       dom.cleanup();
