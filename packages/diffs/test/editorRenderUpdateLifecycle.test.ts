@@ -9,6 +9,9 @@ import {
   parseDiffFromFile,
   parsePatchFiles,
   registerCustomTheme,
+  VirtualizedFile,
+  VirtualizedFileDiff,
+  Virtualizer,
 } from '../src';
 import { Editor } from '../src/editor/editor';
 import type { EditorChangeEvent } from '../src/editor/types';
@@ -19,7 +22,7 @@ import type {
   SupportedLanguages,
   ThemeRegistration,
 } from '../src/types';
-import { installDom, waitFor } from './domHarness';
+import { createRoot, installDom, waitFor } from './domHarness';
 import { assertDefined, createDeferred } from './testUtils';
 
 afterAll(async () => {
@@ -282,6 +285,99 @@ describe('external replacements from editor onChange', () => {
           editor.cleanUp();
           instance.cleanUp();
           await getSharedHighlighter({ themes: [themeName], langs: ['text'] });
+          dom.cleanup();
+        }
+      });
+    }
+  }
+});
+
+describe('virtualized render completion before notifications', () => {
+  for (const type of ['file', 'file-diff'] as const) {
+    for (const observer of [
+      'onChange',
+      'onEditChange',
+      'onPostRender',
+    ] as const) {
+      test(`${type} can dispose its host in ${observer} during an external replacement`, async () => {
+        await getSharedHighlighter({
+          themes: ['pierre-dark', 'pierre-light'],
+          langs: ['text'],
+        });
+        const dom = installDom();
+        const virtualizer = new Virtualizer();
+        const root = createRoot();
+        const fileContainer = document.createElement('diffs-container');
+        root.appendChild(fileContainer);
+        let armed = false;
+        let notifications = 0;
+        let renderReturned = false;
+        const disposeHost = () => {
+          if (!armed) return;
+          armed = false;
+          notifications++;
+          expect(renderReturned).toBe(false);
+          expect(editor.getText()).toBe('server\n');
+          editor.cleanUp();
+          instance.cleanUp();
+        };
+        const options = {
+          disableFileHeader: true,
+          disableErrorHandling: true,
+          onEditChange: observer === 'onEditChange' ? disposeHost : undefined,
+          onPostRender: observer === 'onPostRender' ? disposeHost : undefined,
+        };
+        const instance =
+          type === 'file'
+            ? new VirtualizedFile(options, virtualizer)
+            : new VirtualizedFileDiff(options, virtualizer);
+        const editorOptions = {
+          onChange: observer === 'onChange' ? disposeHost : undefined,
+        };
+        const editor =
+          type === 'file'
+            ? new Editor('file', editorOptions)
+            : new Editor('file-diff', editorOptions);
+        const render = (contents: string) => {
+          const file: FileContents = {
+            name: 'lifecycle.txt',
+            lang: 'text',
+            contents,
+          };
+          return instance.type === 'file'
+            ? instance.render({ file, fileContainer, forceRender: true })
+            : instance.render({
+                fileDiff: parseDiffFromFile(
+                  { ...file, contents: 'base\n' },
+                  file
+                ),
+                fileContainer,
+                forceRender: true,
+              });
+        };
+
+        try {
+          virtualizer.setup(root);
+          render('alpha\n');
+          if (instance.type === 'file' && editor.type === 'file') {
+            editor.edit(instance);
+          } else if (
+            instance.type === 'file-diff' &&
+            editor.type === 'file-diff'
+          ) {
+            editor.edit(instance);
+          }
+          await waitFor(() => editor.getText() === 'alpha\n');
+          armed = true;
+          expect(render('server\n')).toBe(true);
+          renderReturned = true;
+          expect(notifications).toBe(1);
+          expect(editor.getFile()).toBeUndefined();
+        } finally {
+          armed = false;
+          editor.cleanUp();
+          instance.cleanUp();
+          virtualizer.cleanUp();
           dom.cleanup();
         }
       });

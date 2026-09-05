@@ -1110,7 +1110,11 @@ export class File<LAnnotation = undefined, Caret = undefined> {
       !annotationsChanged &&
       !themeChanged
     ) {
-      return this.applyCachedThemeState(themeType);
+      const rendered = this.applyCachedThemeState(themeType);
+      if (rendered) {
+        this.finalizeRender();
+      }
+      return rendered;
     }
 
     this.renderRange = nextRenderRange;
@@ -1177,6 +1181,7 @@ export class File<LAnnotation = undefined, Caret = undefined> {
           this.applyErrorToDOM(error, fileContainer);
         }
       }
+      this.finalizeRender();
       if (!preventEmit) {
         this.emitPostRender();
       }
@@ -1242,6 +1247,7 @@ export class File<LAnnotation = undefined, Caret = undefined> {
         this.flushManagers();
       }
 
+      this.finalizeRender();
       if (this.editor != null) {
         this.syncRenderViewToEditor();
       }
@@ -1259,6 +1265,10 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     }
     return true;
   }
+
+  // Finish subclass layout bookkeeping before editor sync or post-render
+  // callbacks can synchronously replace or dispose this component.
+  protected finalizeRender(): void {}
 
   private emitPostRender(unmount = false) {
     const {

@@ -1469,7 +1469,11 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
         // equal
         (fileDiff == null && !filesDidChange))
     ) {
-      return this.applyCachedThemeState(themeType);
+      const rendered = this.applyCachedThemeState(themeType);
+      if (rendered) {
+        this.finalizeRender();
+      }
+      return rendered;
     }
 
     let nextParsedFileDiff: FileDiffMetadata | undefined;
@@ -1589,6 +1593,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
           this.applyErrorToDOM(error, fileContainer);
         }
       }
+      this.finalizeRender();
       if (!preventEmit) {
         this.emitPostRender();
       }
@@ -1670,6 +1675,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
         this.flushManagers();
       }
 
+      this.finalizeRender();
       if (this.editor != null) {
         this.syncRenderViewToEditor();
       }
@@ -1687,6 +1693,8 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     }
     return true;
   }
+
+  protected finalizeRender(): void {}
 
   protected emitPostRender(unmount = false): void {
     const {
