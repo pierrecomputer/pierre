@@ -468,33 +468,11 @@
   ;; substitution opens, invalid when $end cuts the template short.
   (func $scanTemplateBody (result i32)
     (local $c i32)
-    (local $mask i32)
-    (local $rem i32)
-    (local $w v128)
     (block $bail
       (loop $l
+        (global.set $ptr (call $scanFind3
+          (global.get $ptr) (i32.const "`") (i32.const "$") (i32.const 92)))
         (br_if $bail (i32.ge_u (global.get $ptr) (global.get $end)))
-        ;; hop to the next backtick, `$`, or backslash, 16 bytes per step
-        (block $found
-          (loop $wide
-            (local.set $w (v128.load (global.get $ptr)))
-            (local.set $mask (i8x16.bitmask (v128.or
-              (v128.or
-                (i8x16.eq (local.get $w) (i8x16.splat (i32.const "`")))
-                (i8x16.eq (local.get $w) (i8x16.splat (i32.const "$"))))
-              (i8x16.eq (local.get $w) (i8x16.splat (i32.const 92))))))
-            (local.set $rem (i32.sub (global.get $end) (global.get $ptr)))
-            (if (i32.lt_u (local.get $rem) (i32.const 16))
-              (then (local.set $mask (i32.and (local.get $mask)
-                (i32.sub (i32.shl (i32.const 1) (local.get $rem)) (i32.const 1))))))
-            (br_if $found (local.get $mask))
-            (if (i32.le_u (local.get $rem) (i32.const 16))
-              (then
-                (global.set $ptr (global.get $end))
-                (br $bail)))
-            (global.set $ptr (i32.add (global.get $ptr) (i32.const 16)))
-            (br $wide)))
-        (global.set $ptr (i32.add (global.get $ptr) (i32.ctz (local.get $mask))))
         (local.set $c (i32.load8_u (global.get $ptr)))
         (if (i32.eq (local.get $c) (i32.const "`"))
           (then

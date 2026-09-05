@@ -750,60 +750,47 @@
     (local.get $n))
 
   ;; Return the next occurrence of either byte, or $end. Long clean runs use
-  ;; one SIMD comparison pair per 16 bytes; the tail never reads past $end.
+  ;; one SIMD comparison pair per 16 bytes; matches in slack clamp to $end.
   (func $lexFindEither (param $p i32) (param $a i32) (param $b i32) (result i32)
     (local $mask i32)
     (local $w v128)
     (if (i32.ge_u (local.get $p) (global.get $end))
       (then (return (global.get $end))))
-    (block $scalar
+    (block $done
       (loop $simd
-        (br_if $scalar
-          (i32.lt_u (i32.sub (global.get $end) (local.get $p)) (i32.const 16)))
         (local.set $w (v128.load (local.get $p)))
         (local.set $mask (i8x16.bitmask (v128.or
           (i8x16.eq (local.get $w) (i8x16.splat (local.get $a)))
           (i8x16.eq (local.get $w) (i8x16.splat (local.get $b))))))
         (if (local.get $mask)
-          (then (return (i32.add (local.get $p) (i32.ctz (local.get $mask))))))
+          (then
+            (local.set $p (i32.add (local.get $p) (i32.ctz (local.get $mask))))
+            (br $done)))
         (local.set $p (i32.add (local.get $p) (i32.const 16)))
-        (br $simd)))
-    (block $done
-      (loop $tail
-        (br_if $done (i32.ge_u (local.get $p) (global.get $end)))
-        (if (i32.or
-              (i32.eq (i32.load8_u (local.get $p)) (local.get $a))
-              (i32.eq (i32.load8_u (local.get $p)) (local.get $b)))
-          (then (return (local.get $p))))
-        (local.set $p (i32.add (local.get $p) (i32.const 1)))
-        (br $tail)))
-    (global.get $end))
+        (br_if $simd (i32.lt_u (local.get $p) (global.get $end)))))
+    (select (local.get $p) (global.get $end)
+      (i32.lt_u (local.get $p) (global.get $end))))
 
   ;; Return the next occurrence of byte $a, or $end - one SIMD comparison per
   ;; 16 bytes. Prefer this over $lexFindEither with a repeated byte: the loop
-  ;; body drops a splat, a compare, and an or per step.
+  ;; body drops a splat, a compare, and an or per step. Matches in the input
+  ;; slack clamp to $end.
   (func $lexFindByte (param $p i32) (param $a i32) (result i32)
     (local $mask i32)
     (if (i32.ge_u (local.get $p) (global.get $end))
       (then (return (global.get $end))))
-    (block $scalar
+    (block $done
       (loop $simd
-        (br_if $scalar
-          (i32.lt_u (i32.sub (global.get $end) (local.get $p)) (i32.const 16)))
         (local.set $mask (i8x16.bitmask
           (i8x16.eq (v128.load (local.get $p)) (i8x16.splat (local.get $a)))))
         (if (local.get $mask)
-          (then (return (i32.add (local.get $p) (i32.ctz (local.get $mask))))))
+          (then
+            (local.set $p (i32.add (local.get $p) (i32.ctz (local.get $mask))))
+            (br $done)))
         (local.set $p (i32.add (local.get $p) (i32.const 16)))
-        (br $simd)))
-    (block $done
-      (loop $tail
-        (br_if $done (i32.ge_u (local.get $p) (global.get $end)))
-        (if (i32.eq (i32.load8_u (local.get $p)) (local.get $a))
-          (then (return (local.get $p))))
-        (local.set $p (i32.add (local.get $p) (i32.const 1)))
-        (br $tail)))
-    (global.get $end))
+        (br_if $simd (i32.lt_u (local.get $p) (global.get $end)))))
+    (select (local.get $p) (global.get $end)
+      (i32.lt_u (local.get $p) (global.get $end))))
 
   ;; Whether the operator [lhs,rhs) is made only of `<`, `>`, and `?` - the
   ;; bytes that glue a generic or nullable type together - so a C-family
