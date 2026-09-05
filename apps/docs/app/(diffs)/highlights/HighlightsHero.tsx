@@ -70,7 +70,7 @@ export function HighlightsHero({ gzipBytes }: { gzipBytes: number }) {
           <CopyStateIcon copied={copied} />
         </Button>
         <Button asChild size="xl">
-          <Link href="/docs#highlights-highlighter">
+          <Link href="/docs#highlights">
             <IconBook />
             Documentation
           </Link>

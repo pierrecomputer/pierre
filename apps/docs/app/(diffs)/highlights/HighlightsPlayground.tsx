@@ -33,6 +33,9 @@ import {
 } from '@/components/ui/select';
 
 const [DEFAULT_LANGUAGE, , DEFAULT_CODE] = PLAYGROUND_LANGUAGES[0];
+const LANGUAGE_OPTIONS = [...PLAYGROUND_LANGUAGES].sort(([, a], [, b]) =>
+  a.localeCompare(b)
+);
 
 export function HighlightsPlayground({
   prerenderedHTML,
@@ -183,7 +186,7 @@ export function HighlightsPlayground({
             <SelectValue />
           </SelectTrigger>
           <SelectContent align="end">
-            {PLAYGROUND_LANGUAGES.map(([value, label]) => (
+            {LANGUAGE_OPTIONS.map(([value, label]) => (
               <SelectItem key={value} value={value}>
                 {label}
               </SelectItem>
