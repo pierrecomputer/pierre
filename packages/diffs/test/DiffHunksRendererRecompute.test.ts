@@ -267,7 +267,8 @@ describe('DiffHunksRenderer edit-session hunk updates', () => {
     );
     await renderer.asyncRender(diff);
     renderer.renderDiff(diff);
-    renderer.beginEditSession();
+    renderer.beginEditSession(diff);
+    renderer.renderDiff(diff);
     return { renderer, diff };
   }
 
@@ -289,8 +290,8 @@ describe('DiffHunksRenderer edit-session hunk updates', () => {
       { name: 'jump.ts', contents: newContents, cacheKey: 'jump:new' }
     );
     await renderer.asyncRender(diff);
+    renderer.beginEditSession(diff);
     renderer.renderDiff(diff);
-    renderer.beginEditSession();
 
     // The Enter keystroke: one blank line inserted below the changed line.
     const editedLines = newContents.split('\n');
@@ -382,8 +383,8 @@ describe('DiffHunksRenderer edit-session hunk updates', () => {
       { name: 'jump.ts', contents: newContents, cacheKey: 'jump:new' }
     );
     await renderer.asyncRender(diff);
+    renderer.beginEditSession(diff);
     renderer.renderDiff(diff);
-    renderer.beginEditSession();
 
     const editedLines = newContents.split('\n');
     // Mirror the dirty-token pass that precedes applyDocumentChange. The
@@ -450,8 +451,8 @@ describe('DiffHunksRenderer edit-session hunk updates', () => {
       { context: totalLines }
     );
     await renderer.asyncRender(diff);
+    renderer.beginEditSession(diff);
     renderer.renderDiff(diff);
-    renderer.beginEditSession();
 
     const styledRowTexts = (result: ReturnType<typeof renderer.renderDiff>) =>
       collectAllElements(result?.additionsContentAST ?? [])
@@ -546,8 +547,8 @@ describe('DiffHunksRenderer edit-session hunk updates', () => {
       { name: 'topology.ts', contents: 'a\na\na\nd\n' }
     );
     await renderer.asyncRender(diff);
+    renderer.beginEditSession(diff);
     renderer.renderDiff(diff);
-    renderer.beginEditSession();
     const boundsBefore = {
       additionLineIndex: diff.hunks[0].additionLineIndex,
       additionCount: diff.hunks[0].additionCount,
@@ -576,8 +577,8 @@ describe('DiffHunksRenderer edit-session hunk updates', () => {
       { name: 'pairing.ts', contents: '\n!\nb\nc\n' }
     );
     await renderer.asyncRender(diff);
+    renderer.beginEditSession(diff);
     renderer.renderDiff(diff);
-    renderer.beginEditSession();
     const boundsBefore = {
       additionLineIndex: diff.hunks[0].additionLineIndex,
       additionCount: diff.hunks[0].additionCount,
@@ -805,8 +806,8 @@ describe('DiffHunksRenderer edit-session hunk updates', () => {
       { name: 'after.ts', contents: 'temporary\n' }
     );
     await renderer.asyncRender(diff);
+    renderer.beginEditSession(diff);
     renderer.renderDiff(diff);
-    renderer.beginEditSession();
 
     renderer.applyDocumentChange(makeTextDocument(['']));
 

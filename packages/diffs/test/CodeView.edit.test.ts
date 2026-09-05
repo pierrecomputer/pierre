@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test';
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { createTwoFilesPatch } from 'diff';
 
 import {
@@ -19,6 +19,10 @@ import type {
   EditorType,
   EditorViewState,
 } from '../src/editor/types';
+import {
+  disposeHighlighter,
+  getSharedHighlighter,
+} from '../src/highlighter/shared_highlighter';
 import type {
   CodeViewItem,
   DiffLineAnnotation,
@@ -138,11 +142,13 @@ function insertAtStart(editor: AnyTrackedEditor, text: string): void {
 }
 
 function getEditSessionDiff(instance: unknown): FileDiffMetadata | undefined {
-  return (instance as { editSessionDiff?: FileDiffMetadata }).editSessionDiff;
+  return (instance as { editSession?: { diff: FileDiffMetadata } }).editSession
+    ?.diff;
 }
 
 function getEditSessionFile(instance: unknown): FileContents | undefined {
-  return (instance as { editSessionFile?: FileContents }).editSessionFile;
+  return (instance as { editSession?: { file: FileContents } }).editSession
+    ?.file;
 }
 
 function getExternalFile(instance: unknown): FileContents | undefined {
@@ -226,6 +232,18 @@ async function expectMissingEditorFactoryOnRender(
     cleanup();
   }
 }
+
+beforeAll(async () => {
+  await getSharedHighlighter({
+    themes: ['pierre-dark', 'pierre-light'],
+    langs: ['typescript'],
+    preferredHighlighter: 'shiki-js',
+  });
+});
+
+afterAll(async () => {
+  await disposeHighlighter();
+});
 
 describe('CodeView item edit mode', () => {
   test('validates the factory only when a rendered item needs an editor', async () => {

@@ -201,11 +201,10 @@ describe('FileRenderer edit session', () => {
       theme: 'pierre-dark',
     });
     try {
-      let renderUpdates = 0;
       const renderer = new FileRenderer(
         { theme: 'pierre-dark' },
         undefined,
-        () => renderUpdates++,
+        undefined,
         manager
       );
       const file = createFile('file:session');
@@ -216,9 +215,6 @@ describe('FileRenderer edit session', () => {
 
       const editSessionFile = createEditSessionFile(file);
       renderer.beginEditSession(editSessionFile, file);
-      renderer.renderFile(editSessionFile);
-
-      await waitFor(() => expect(renderUpdates).toBeGreaterThan(0));
       const result = renderer.renderFile(editSessionFile);
       if (result == null) {
         throw new Error('expected a render result');
@@ -237,11 +233,10 @@ describe('FileRenderer edit session', () => {
       theme: 'pierre-dark',
     });
     try {
-      let renderUpdates = 0;
       const renderer = new FileRenderer(
         { theme: 'pierre-dark' },
         undefined,
-        () => renderUpdates++,
+        undefined,
         manager
       );
       const file = createFile('file:late');
@@ -261,9 +256,9 @@ describe('FileRenderer edit session', () => {
         },
       ];
       respondToFileRequest(manager, worker, request, poolMarker);
-      // Refused outright: nothing is applied and nothing is requested — the
-      // session render issued at editor attach supplies the highlight.
-      await waitFor(() => expect(renderUpdates).toBeGreaterThan(0));
+      // Let the refused worker result have a chance to (wrongly) apply before
+      // asserting it did not; the session already painted synchronously.
+      await wait(50);
 
       const result = renderer.renderFile(editSessionFile);
       if (result == null) {
@@ -281,11 +276,10 @@ describe('FileRenderer edit session', () => {
       useTokenTransformer: true,
     });
     try {
-      let renderUpdates = 0;
       const renderer = new FileRenderer(
         { theme: 'pierre-dark' },
         undefined,
-        () => renderUpdates++,
+        undefined,
         manager
       );
       const file = createFile('file:pool-transformer');
@@ -308,17 +302,17 @@ describe('FileRenderer edit session', () => {
       // session options — the refused result must not sneak back in through
       // the manager's result cache on the next session render.
       respondToFileRequest(manager, worker, request, poolMarker);
-      await waitFor(() => expect(renderUpdates).toBeGreaterThan(0));
+      // Let the refused worker result have a chance to (wrongly) apply before
+      // asserting it did not; the session already painted synchronously.
+      await wait(50);
 
-      // The session render issued at editor attach stays local: no adoption
-      // of the refused result, and the local highlight lands when ready.
+      // The session render stays local: no adoption of the refused result.
       let result = renderer.renderFile(editSessionFile);
       if (result == null) {
         throw new Error('expected a render result');
       }
       expect(toHtml(result.contentAST)).not.toContain('data-pool-result');
 
-      await waitFor(() => expect(renderUpdates).toBeGreaterThan(0));
       result = renderer.renderFile(editSessionFile);
       if (result == null) {
         throw new Error('expected a render result');
@@ -359,11 +353,10 @@ describe('FileRenderer edit session', () => {
       theme: 'pierre-dark',
     });
     try {
-      let renderUpdates = 0;
       const renderer = new FileRenderer(
         { theme: 'pierre-dark' },
         undefined,
-        () => renderUpdates++,
+        undefined,
         manager
       );
       const file = createFile('file:dirty');
@@ -380,8 +373,6 @@ describe('FileRenderer edit session', () => {
 
       const editSessionFile = createEditSessionFile(file);
       renderer.beginEditSession(editSessionFile, file);
-      renderer.renderFile(editSessionFile);
-      await waitFor(() => expect(renderUpdates).toBeGreaterThan(1));
       renderer.renderFile(editSessionFile);
 
       // Simulate an editor keystroke: line 0 rewritten, cache marked dirty.
@@ -408,11 +399,10 @@ describe('FileRenderer edit session', () => {
       theme: 'pierre-dark',
     });
     try {
-      let renderUpdates = 0;
       const renderer = new FileRenderer(
         { theme: 'pierre-dark' },
         undefined,
-        () => renderUpdates++,
+        undefined,
         manager
       );
       const file = createFile('file:detach');
@@ -420,7 +410,6 @@ describe('FileRenderer edit session', () => {
       renderer.beginEditSession(editSessionFile, file);
 
       renderer.renderFile(editSessionFile);
-      await waitFor(() => expect(renderUpdates).toBeGreaterThan(0));
       expect(worker.fileRequestCount).toBe(0);
 
       renderer.endEditSession();
@@ -1163,11 +1152,9 @@ describe('DiffHunksRenderer edit session', () => {
       expect(renderUpdates).toBe(0);
 
       // The session render stays local and completes the highlight with
-      // editor-compatible markup.
-      renderer.renderDiff(sessionDiff);
-      expect(worker.diffRequestCount).toBe(1);
-      await waitFor(() => expect(renderUpdates).toBeGreaterThan(0));
+      // editor-compatible markup, synchronously.
       const result = renderer.renderDiff(sessionDiff);
+      expect(worker.diffRequestCount).toBe(1);
       if (result == null) {
         throw new Error('expected a render result');
       }
@@ -1190,11 +1177,10 @@ describe('DiffHunksRenderer edit session', () => {
       theme: 'pierre-dark',
     });
     try {
-      let renderUpdates = 0;
       const renderer = new DiffHunksRenderer(
         { theme: 'pierre-dark' },
         undefined,
-        () => renderUpdates++,
+        undefined,
         manager
       );
       const externalDiff = parseDiffFromFile(
@@ -1213,7 +1199,6 @@ describe('DiffHunksRenderer edit session', () => {
 
       renderer.beginEditSession(sessionDiff, externalDiff);
       renderer.renderDiff(sessionDiff);
-      await waitFor(() => expect(renderUpdates).toBeGreaterThan(0));
       expect(worker.diffRequestCount).toBe(0);
 
       await renderer.refreshHighlightedResult();
@@ -1302,11 +1287,10 @@ describe('DiffHunksRenderer edit session', () => {
       theme: 'pierre-dark',
       useTokenTransformer: true,
     });
-    let renderUpdates = 0;
     const renderer = new DiffHunksRenderer(
       { theme: 'pierre-dark' },
       undefined,
-      () => renderUpdates++,
+      undefined,
       manager
     );
     try {
@@ -1330,11 +1314,6 @@ describe('DiffHunksRenderer edit session', () => {
       renderer.beginEditSession(sessionDiff, externalDiff);
       expect(renderer.editorRenderReady()).toBe(false);
 
-      const updatesBeforeSessionRender = renderUpdates;
-      renderer.renderDiff(sessionDiff);
-      await waitFor(() => {
-        expect(renderUpdates).toBeGreaterThan(updatesBeforeSessionRender);
-      });
       const result = renderer.renderDiff(sessionDiff);
       expect(renderer.editorRenderReady()).toBe(true);
       expect(result?.fileDiff).toBe(sessionDiff);
@@ -1382,11 +1361,6 @@ describe('DiffHunksRenderer edit session', () => {
       renderer.beginEditSession(sessionDiff, externalDiff);
       expect(renderer.editorRenderReady()).toBe(false);
 
-      const updatesBeforeSessionHighlight = renderUpdates;
-      renderer.renderDiff(sessionDiff);
-      await waitFor(() =>
-        expect(renderUpdates).toBeGreaterThan(updatesBeforeSessionHighlight)
-      );
       const result = renderer.renderDiff(sessionDiff);
       expect(renderer.editorRenderReady()).toBe(true);
       if (result == null) {
@@ -1457,11 +1431,6 @@ describe('DiffHunksRenderer edit session', () => {
       renderer.beginEditSession(sessionDiff, sessionExternalDiff);
       expect(renderer.editorRenderReady()).toBe(false);
 
-      const updatesBeforeSessionHighlight = renderUpdates;
-      renderer.renderDiff(sessionDiff);
-      await waitFor(() =>
-        expect(renderUpdates).toBeGreaterThan(updatesBeforeSessionHighlight)
-      );
       const result = renderer.renderDiff(sessionDiff);
       expect(renderer.editorRenderReady()).toBe(true);
       if (result == null) {
@@ -1484,8 +1453,11 @@ describe('DiffHunksRenderer edit session', () => {
   });
 
   test('an older highlight result cannot overwrite the diff being edited', async () => {
+    // Use a theme no other test in this file loads, so it stays unattached and
+    // the renderer's grab cannot render synchronously — that keeps the async
+    // initialization path this test exercises.
     const renderer = new DeferredHighlighterDiffRenderer({
-      theme: 'pierre-dark',
+      theme: 'nord',
     });
     try {
       // Exercise the renderer's async initialization path without resetting
@@ -1515,7 +1487,12 @@ describe('DiffHunksRenderer edit session', () => {
         throw new Error('expected two pending highlighter initializations');
       }
 
-      sessionInitialization.resolve(sharedHighlighter);
+      const editHighlighter = await getSharedHighlighter({
+        themes: ['nord'],
+        langs: ['typescript'],
+        preferredHighlighter: 'shiki-js',
+      });
+      sessionInitialization.resolve(editHighlighter);
       await wait(0);
       renderer.renderDiff(sessionDiff);
       expect(renderer.diffCache).toBe(sessionDiff);
@@ -1543,7 +1520,7 @@ describe('DiffHunksRenderer edit session', () => {
 
       expect(renderSessionHtml()).toContain('sessionResult');
 
-      staleInitialization.resolve(sharedHighlighter);
+      staleInitialization.resolve(editHighlighter);
       await wait(0);
 
       expect(renderer.diffCache).toBe(sessionDiff);

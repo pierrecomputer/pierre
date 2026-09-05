@@ -56,8 +56,8 @@ function countEditableLineEls(content: HTMLElement): number {
 function getEditSessionDiff(
   fileDiff: FileDiff<undefined>
 ): FileDiffMetadata | undefined {
-  return (fileDiff as unknown as { editSessionDiff?: FileDiffMetadata })
-    .editSessionDiff;
+  return (fileDiff as unknown as { editSession?: { diff: FileDiffMetadata } })
+    .editSession?.diff;
 }
 
 interface DiffEditorFixture {

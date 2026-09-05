@@ -16,6 +16,11 @@ import type {
   EditorChangeEvent,
   EditorType,
 } from '../editor/types';
+import {
+  isHighlighterLoaded,
+  preloadHighlighter,
+} from '../highlighter/shared_highlighter';
+import { areThemesAttached } from '../highlighter/themes/areThemesAttached';
 import type { SelectionWriteOptions } from '../managers/InteractionManager';
 import {
   dequeueRender,
@@ -32,11 +37,13 @@ import type {
   CodeViewRangeScrollTarget,
   CodeViewScrollBehavior,
   CodeViewScrollTarget,
+  DiffsThemeNames,
   HunkSeparators,
   PendingCodeViewLayoutReset,
   SelectedLineRange,
   SelectionSide,
   SmoothScrollSettings,
+  ThemesType,
   VirtualFileMetrics,
   VirtualWindowSpecs,
 } from '../types';
@@ -47,6 +54,7 @@ import { areSelectionsEqual } from '../utils/areSelectionsEqual';
 import { areThemesEqual } from '../utils/areThemesEqual';
 import { createCodeViewHeaderFooterHostElement } from '../utils/createCodeViewHeaderFooterHostElement';
 import { createWindowFromScrollPosition } from '../utils/createWindowFromScrollPosition';
+import { getThemes } from '../utils/getThemes';
 import { isStyleNode } from '../utils/isStyleNode';
 import { prefersReducedMotion } from '../utils/prefersReducedMotion';
 import { roundToDevicePixel } from '../utils/roundToDevicePixel';
@@ -816,6 +824,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   private options: CodeViewOptions<LAnnotation, Caret>;
   private workerManager: WorkerPoolManager | undefined;
   private isReadySubscription: (() => void) | undefined;
+  private pendingHighlighterTheme: DiffsThemeNames | ThemesType | undefined;
   private isContainerManaged: boolean;
 
   constructor(
@@ -1829,14 +1838,13 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
 
   private isReady(): boolean {
     const { workerManager } = this;
-    // A failed worker pool never reaches the 'initialized' state (it reverts to
-    // 'waiting' with workersFailed: true), so treat failure as ready and let
-    // the renderers fall back to synchronous highlighting.
-    if (
-      workerManager == null ||
-      workerManager.isInitialized() ||
-      workerManager.getStats().workersFailed
-    ) {
+    // A failed worker pool never reaches the 'initialized' state (it reverts
+    // to 'waiting' with workersFailed: true), so it renders through the shared
+    // highlighter instead.
+    if (workerManager == null || workerManager.getStats().workersFailed) {
+      return this.isSharedHighlighterReady();
+    }
+    if (workerManager.isInitialized()) {
       this.clearReadySubscription();
       return true;
     }
@@ -1866,6 +1874,51 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     }
     this.isReadySubscription();
     this.isReadySubscription = undefined;
+    this.pendingHighlighterTheme = undefined;
+  }
+
+  private isSharedHighlighterReady(): boolean {
+    const theme =
+      this.workerManager?.getFileRenderOptions().theme ??
+      this.options.theme ??
+      DEFAULT_THEMES;
+    if (isHighlighterLoaded() && areThemesAttached(theme)) {
+      this.clearReadySubscription();
+      return true;
+    }
+    // A pending request for an obsolete theme must not block the current one.
+    if (!areThemesEqual(this.pendingHighlighterTheme, theme)) {
+      this.clearReadySubscription();
+    }
+    this.isReadySubscription ??= (() => {
+      this.pendingHighlighterTheme = theme;
+      let cancelled = false;
+      void preloadHighlighter({
+        themes: getThemes(theme),
+        langs: [],
+        preferredHighlighter: this.options.preferredHighlighter,
+      }).then(
+        () => {
+          if (cancelled) {
+            return;
+          }
+          this.clearReadySubscription();
+          this.render(true);
+        },
+        (error: unknown) => {
+          if (cancelled) {
+            return;
+          }
+          // Let a later render retry without looping on a failing loader.
+          this.clearReadySubscription();
+          console.error(error);
+        }
+      );
+      return () => {
+        cancelled = true;
+      };
+    })();
+    return false;
   }
 
   public instanceChanged(

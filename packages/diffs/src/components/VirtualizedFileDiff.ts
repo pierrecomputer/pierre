@@ -1407,10 +1407,8 @@ export class VirtualizedFileDiff<
     } = (() => {
       if (
         this.pendingRender != null &&
-        areDiffTargetsEqual(
-          this.pendingRender.latestDiff,
-          this.getLatestDiff(nextFileDiff) ?? nextFileDiff
-        )
+        this.pendingRender.latestDiff ===
+          (this.getLatestDiff(nextFileDiff) ?? nextFileDiff)
       ) {
         return {
           pendingRenderDiff: this.pendingRender.diff,
@@ -1474,7 +1472,7 @@ export class VirtualizedFileDiff<
       fileTop,
       windowSpecs
     );
-    const rendered = super.render({
+    return super.render({
       fileDiff: nextFileDiff,
       fileContainer,
       renderRange,
@@ -1487,23 +1485,23 @@ export class VirtualizedFileDiff<
       ...fileInput,
       ...fileInputProps,
     });
-    if (rendered) {
-      if (this.getRenderedDiff() !== pendingRenderDiff) {
-        throw new Error(
-          'VirtualizedFileDiff.render: rendered a different diff than its prepared layout'
-        );
-      }
-      this.pendingRender = undefined;
+  }
+
+  protected override finalizeRender(): void {
+    if (this.getRenderedDiff() !== this.pendingRender?.diff) {
+      throw new Error(
+        'VirtualizedFileDiff.render: rendered a different diff than its prepared layout'
+      );
     }
+    this.pendingRender = undefined;
     // Renders can be driven from outside the virtualizer (host/React render
     // calls, async highlight completions), and the virtualizer only
     // auto-reconciles renders it initiated. Queue a measured-height
     // reconciliation for every applied content render so line deltas
     // (wrapped lines, annotation heights) survive layout resets.
-    if (this.isSimpleMode() && rendered) {
+    if (this.isSimpleMode()) {
       this.getSimpleVirtualizer()?.requestHeightReconcile(this);
     }
-    return rendered;
   }
 
   private updatePendingRender(

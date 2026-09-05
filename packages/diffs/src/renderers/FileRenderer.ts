@@ -196,16 +196,13 @@ export class FileRenderer<LAnnotation = undefined> {
    * rendering resumes after recycle.
    */
   public beginEditSession(
-    file?: FileContents,
+    file: FileContents,
     externalFile?: FileContents
   ): void {
     const { editSessionActive: wasAlreadyActive, renderCache } = this;
     this.editSessionActive = true;
     if (!wasAlreadyActive) {
       this.pendingHighlightResult = undefined;
-    }
-    if (file == null) {
-      return;
     }
 
     this.file = file;
@@ -769,6 +766,7 @@ export class FileRenderer<LAnnotation = undefined> {
       }
     } else {
       this.computedLang = file.lang ?? getFiletypeFromFileName(file.name);
+      this.highlighter ??= getHighlighterIfLoaded();
       const hasThemes =
         this.highlighter != null && areThemesAttached(options.theme);
       const hasLangs =

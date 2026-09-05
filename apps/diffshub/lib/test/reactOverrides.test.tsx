@@ -110,10 +110,10 @@ describe('React themed component overrides', () => {
           ref={codeViewRef}
           disableWorkerPool
           options={{
-            theme: { light: 'old-light', dark: 'old-dark' },
+            theme: { light: 'github-light', dark: 'github-dark' },
             themeType: 'system',
           }}
-          theme={{ light: 'next-light', dark: 'next-dark' }}
+          theme={{ light: 'pierre-light', dark: 'pierre-dark' }}
         />
       );
       await flushReact();
@@ -128,8 +128,8 @@ describe('React themed component overrides', () => {
         }
       | undefined;
     expect(instance?.options.theme).toEqual({
-      light: 'next-light',
-      dark: 'next-dark',
+      light: 'pierre-light',
+      dark: 'pierre-dark',
     });
     expect(instance?.options.themeType).toBe('system');
 

@@ -1,28 +1,40 @@
-import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  test,
+} from 'bun:test';
 
 import { File, type FileRenderProps } from '../src/components/File';
 import { FileDiff } from '../src/components/FileDiff';
 import { DEFAULT_THEMES } from '../src/constants';
 import { Editor } from '../src/editor/editor';
 import { EditStateManager } from '../src/editor/EditStateManager';
+import {
+  disposeHighlighter,
+  getHighlighterIfLoaded,
+  getSharedHighlighter,
+} from '../src/highlighter/shared_highlighter';
 import { queueRender } from '../src/managers/UniversalRenderingManager';
-import type {
-  DiffsHighlighter,
-  FileContents,
-  LineAnnotation,
-} from '../src/types';
+import type { FileContents, LineAnnotation } from '../src/types';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import { installDom, wait, waitFor } from './domHarness';
 
-function createTestHighlighter(): DiffsHighlighter {
-  return {
-    getLanguage: () => undefined,
-    getLoadedLanguages: () => [],
-    getTheme: () => ({ type: 'light', colors: {} }),
-    loadLanguage: async () => {},
-    setTheme: () => ({ theme: { type: 'light' }, colorMap: [''] }),
-  } as unknown as DiffsHighlighter;
-}
+// These lifecycle tests need a ready renderer so File owns every editor sync.
+beforeAll(async () => {
+  await getSharedHighlighter({
+    themes: ['pierre-dark', 'pierre-light'],
+    langs: ['text', 'typescript'],
+  });
+});
+
+afterAll(async () => {
+  await disposeHighlighter();
+});
 
 interface TestFileHarnessOptions {
   queueRerender?: boolean;
@@ -53,39 +65,26 @@ function createTestFile(
     onContentFocus,
   }: TestFileHarnessOptions = {}
 ): TestFile {
-  const component = new File<undefined>({
-    disableFileHeader: true,
-    theme: DEFAULT_THEMES,
-  }) as TestFile;
+  const component = new File<undefined>(
+    {
+      disableFileHeader: true,
+      theme: DEFAULT_THEMES,
+    },
+    undefined,
+    true
+  ) as TestFile;
   const fileContainer = document.createElement('div');
   document.body.appendChild(fileContainer);
 
   let currentFile = initialFile;
   let currentLineAnnotations: LineAnnotation<undefined>[] | undefined;
-  let currentRenderRange: FileRenderProps<undefined>['renderRange'];
-  let attachedEditor: Editor<'file', undefined> | undefined;
-  let completePendingAttach: (() => void) | undefined;
-
-  const syncRenderView = (externalDocument = false) => {
-    attachedEditor?.__syncRenderView({
-      highlighter: createTestHighlighter(),
-      fileContainer,
-      file: currentFile,
-      lineAnnotations: currentLineAnnotations,
-      renderRange: currentRenderRange,
-      externalDocument,
-      resetHistory: false,
-    });
-  };
+  let attaching = false;
 
   const render = component.render.bind(component);
   component.render = ((props: Partial<FileRenderProps<undefined>>) => {
     currentFile = props.file ?? currentFile;
     if ('lineAnnotations' in props) {
       currentLineAnnotations = props.lineAnnotations;
-    }
-    if ('renderRange' in props) {
-      currentRenderRange = props.renderRange;
     }
     const rendered = render({
       ...props,
@@ -103,7 +102,6 @@ function createTestFile(
 
   const applyDocumentChange = component.applyDocumentChange.bind(component);
   component.applyDocumentChange = ((textDocument, lineAnnotations) => {
-    currentFile = { ...currentFile, contents: textDocument.getText() };
     if (lineAnnotations !== undefined) {
       currentLineAnnotations = lineAnnotations;
     }
@@ -138,57 +136,37 @@ function createTestFile(
     lineAnnotations = currentLineAnnotations
   ) => {
     component.render({ file, lineAnnotations });
-    completePendingAttach?.();
-    syncRenderView(true);
   };
 
   const rerender = component.rerender.bind(component);
   component.rerender = () => {
+    // Hold the first editor render to exercise adoption before its DOM is
+    // ready. The real association and edit session are already installed.
+    if (attaching && !syncOnAttach) return;
     if (queueRerender) {
-      queueRender(() => {
-        rerender();
-        syncRenderView();
-      });
+      queueRender(rerender);
       return;
     }
     rerender();
-    syncRenderView();
   };
 
   const attach = component.__attachEditor.bind(component);
   component.__attachEditor = (editor) => {
-    attachedEditor = editor;
-    let detach: (() => void) | undefined;
-    let pending = !syncOnAttach;
-    const attachNow = () => {
-      detach = attach(editor);
-      completePendingAttach = undefined;
-      syncRenderView();
-    };
-    if (!pending) {
-      attachNow();
-    } else {
-      completePendingAttach = () => {
-        if (!pending) return;
-        pending = false;
-        attachNow();
-      };
+    attaching = true;
+    try {
+      return attach(editor);
+    } finally {
+      attaching = false;
     }
-    const resume = component.rerender.bind(component);
-    component.rerender = () => {
-      if (pending) {
-        pending = false;
-        attachNow();
-      } else {
-        resume();
-      }
-    };
-    return () => {
-      pending = false;
-      completePendingAttach = undefined;
-      attachedEditor = undefined;
-      detach?.();
-    };
+  };
+
+  const cleanUp = component.cleanUp.bind(component);
+  component.cleanUp = (recycle) => {
+    cleanUp(recycle);
+    // The host owns container cleanup, just as CodeView.cleanElement strips
+    // item DOM before putting a managed container back in its pool.
+    fileContainer.shadowRoot?.replaceChildren();
+    if (recycle !== true) fileContainer.remove();
   };
 
   component.render({ file: initialFile });
@@ -208,18 +186,6 @@ function createTestDiff(file: FileContents): FileDiff<undefined> {
     fileContainer,
     forceRender: true,
   });
-  const attach = component.__attachEditor.bind(component);
-  component.__attachEditor = (editor) => {
-    const detach = attach(editor);
-    editor.__syncRenderView({
-      highlighter: createTestHighlighter(),
-      fileContainer,
-      fileDiff,
-      lineAnnotations: undefined,
-      renderRange: undefined,
-    });
-    return detach;
-  };
   return component;
 }
 
@@ -365,7 +331,7 @@ describe('Editor onAttach lifecycle', () => {
 
       const file = createFile();
       editor.__syncRenderView({
-        highlighter: createTestHighlighter(),
+        highlighter: getHighlighterIfLoaded()!,
         fileContainer: component.testFileContainer,
         file,
         lineAnnotations: undefined,
@@ -1158,6 +1124,7 @@ describe('Editor edit-state manager', () => {
       first.cleanUp();
 
       secondEditor.edit(second);
+      expect(second.contentElement.contentEditable).not.toBe('true');
       second.renderExternalFile(
         createFile({ contents: `${retainedText}\nexternal` }),
         [{ lineNumber: 2, metadata: undefined }]
@@ -1536,11 +1503,11 @@ describe('Editor edit-state manager', () => {
 });
 
 describe('Editor recycle cleanUp', () => {
-  test('recycle keeps document and undo history across re-attach', async () => {
+  test('recycle keeps document and undo history across re-attach', () => {
     const dom = installDom();
+    const editor = new Editor('file');
+    const first = createTestFile(createFile());
     try {
-      const editor = new Editor('file');
-      const first = createTestFile(createFile());
       editor.edit(first);
       insertAtStart(editor, 'X');
       expect(editor.getText()).toBe(`X${FILE_CONTENTS}`);
@@ -1559,10 +1526,9 @@ describe('Editor recycle cleanUp', () => {
       // Undo history lives in the retained document and survives with it.
       editor.undo();
       expect(editor.getText()).toBe(FILE_CONTENTS);
-
-      editor.cleanUp();
-      await wait(0);
     } finally {
+      editor.cleanUp();
+      first.cleanUp();
       dom.cleanup();
     }
   });
@@ -1648,11 +1614,11 @@ describe('Editor recycle cleanUp', () => {
     }
   });
 
-  test('recycled re-attach recreates a tokenizer so edits still paint', async () => {
+  test('recycled re-attach recreates a tokenizer so edits still paint', () => {
     const dom = installDom();
+    const editor = new Editor('file');
+    const first = createTestFile(createFile());
     try {
-      const editor = new Editor('file');
-      const first = createTestFile(createFile());
       editor.edit(first);
 
       editor.cleanUp('recycle');
@@ -1663,24 +1629,29 @@ describe('Editor recycle cleanUp', () => {
       // rebuild. The tokenizer must be recreated anyway, otherwise #rerender
       // bails and this edit would update the model without painting.
       editor.edit(first);
+      expect(first.testFileContainer.isConnected).toBe(true);
+      expect(
+        first.testFileContainer.shadowRoot?.querySelectorAll('[data-content]')
+      ).toHaveLength(1);
+      expect(first.contentElement.contentEditable).toBe('true');
       insertAtStart(editor, 'Y');
 
       expect(editor.getText()).toBe(`Y${FILE_CONTENTS}`);
       const firstLine = first.contentElement.children[0] as HTMLElement;
       expect(firstLine.textContent).toBe('Yalpha');
-
-      editor.cleanUp();
-      await wait(0);
     } finally {
+      editor.cleanUp();
+      first.cleanUp();
       dom.cleanup();
     }
   });
 
   test('full cleanUp still rebuilds from host contents', () => {
     const dom = installDom();
+    const editor = new Editor('file');
+    const first = createTestFile(createFile());
+    let second: TestFile | undefined;
     try {
-      const editor = new Editor('file');
-      const first = createTestFile(createFile());
       editor.edit(first);
       insertAtStart(editor, 'X');
       expect(editor.getText()).toBe(`X${FILE_CONTENTS}`);
@@ -1690,27 +1661,28 @@ describe('Editor recycle cleanUp', () => {
 
       // A destructive cleanUp drops the document, so the next edit() builds
       // from whatever the host currently renders and undo history is gone.
-      const second = createTestFile(createFile());
+      second = createTestFile(createFile());
       editor.edit(second);
       expect(second.contentElement.textContent).toBe('alphabravocharlie');
 
       editor.undo();
       expect(second.contentElement.textContent).toBe('alphabravocharlie');
-
-      editor.cleanUp();
     } finally {
+      editor.cleanUp();
+      first.cleanUp();
+      second?.cleanUp();
       dom.cleanup();
     }
   });
 
   test('recycle re-attach to a different file rebuilds without re-notifying', async () => {
     const dom = installDom();
+    const onAttach = mock(
+      (_editor: Editor<'file', undefined>, _component: File<undefined>) => {}
+    );
+    const editor = new Editor('file', { onAttach });
+    const first = createTestFile(createFile());
     try {
-      const onAttach = mock(
-        (_editor: Editor<'file', undefined>, _component: File<undefined>) => {}
-      );
-      const editor = new Editor('file', { onAttach });
-      const first = createTestFile(createFile());
       editor.edit(first);
       await wait(0);
       expect(onAttach).toHaveBeenCalledTimes(1);
@@ -1740,9 +1712,9 @@ describe('Editor recycle cleanUp', () => {
       expect(editor.getText()).toBe('zulu');
       expect(editor.getViewState().selections).toBeUndefined();
       expect(onAttach).toHaveBeenCalledTimes(1);
-
-      editor.cleanUp();
     } finally {
+      editor.cleanUp();
+      first.cleanUp();
       dom.cleanup();
     }
   });
