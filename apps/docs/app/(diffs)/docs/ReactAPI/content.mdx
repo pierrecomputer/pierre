@@ -33,11 +33,10 @@ The React API exposes six main components:
 For editing, mount one stable `EditProvider` high in the tree. Standalone
 components use `edit`, and optional `editorOptions` and `editStateKey`;
 `CodeView` uses item `edit` flags, `editorOptions`, and optional
-`getEditStateKey`. Forward the provider factory's document kind, options, and
-key to `new Editor()`. Each active component or item receives an independent
-editor. Two active editors of the same kind cannot share one key.
-`UnresolvedFile` is not editable. See
-[Edit mode → Enable editing](#edit-mode-enable-editing) and
+`getEditStateKey`. Forward the provider factory's editor type, options, and key
+to `new Editor()`. Each active component or item receives an independent editor.
+Two active editors of the same type cannot share one key. `UnresolvedFile` is
+not editable. See [Edit mode → Enable editing](#edit-mode-enable-editing) and
 [CodeView → Editing](#codeview-editing) for lifecycle and callback details.
 
 `editStateKey` retains state only in memory. See

@@ -1,5 +1,9 @@
-import type { DiffLineAnnotation } from '../types';
 import { getLineAnnotationName } from '../utils/getLineAnnotationName';
+import {
+  getLineAnnotationSource,
+  type LineAnnotationPosition,
+  recordLineAnnotationSource,
+} from '../utils/lineAnnotationIdentity';
 import type { TextDocumentChange } from './textDocument';
 import { getLineNumberAttr, h } from './utils';
 
@@ -12,37 +16,31 @@ interface LineAnnotationChange {
   readonly lineDelta: number;
 }
 
-// When an edit moves an annotation to another line, the remap replaces it
-// with a shallow clone holding the new line number, and later edits clone
-// those clones again. This map links every clone back to the original
-// annotation the caller passed in, so session state keyed by that original —
-// most importantly recorded slot names — keeps working no matter how many
-// times an annotation has been cloned, or which clone generation an undo
-// brings back.
-const lineAnnotationSources = new WeakMap<object, object>();
-
-/**
- * Resolve a possibly-remapped annotation back to the original object it
- * descends from. Annotations that were never cloned resolve to themselves.
- */
-export function getLineAnnotationSource<T extends object>(annotation: T): T {
-  const source = lineAnnotationSources.get(annotation);
-  return source == null ? annotation : (source as T);
+function getDefaultLineAnnotationName(
+  annotation: LineAnnotationPosition
+): string {
+  return getLineAnnotationName(annotation);
 }
 
-export function applyDocumentChangeToLineAnnotations<T>(
+export function applyDocumentChangeToLineAnnotations<
+  TLineAnnotation extends LineAnnotationPosition,
+>(
   change: TextDocumentChange,
-  lineAnnotations: DiffLineAnnotation<T>[]
-): DiffLineAnnotation<T>[] | undefined {
+  lineAnnotations: TLineAnnotation[]
+): TLineAnnotation[] | undefined {
   const annotationChanges = getLineAnnotationChanges(change);
   if (annotationChanges.length === 0) {
     return undefined;
   }
 
-  const nextLineAnnotations: DiffLineAnnotation<T>[] = [];
+  const nextLineAnnotations: TLineAnnotation[] = [];
   let changed = false;
   for (const annotation of lineAnnotations) {
-    if (annotation.side === 'deletions' || annotation.lineNumber <= 0) {
+    if (
+      ('side' in annotation && annotation.side === 'deletions') ||
+      annotation.lineNumber <= 0
+    ) {
+      // Annotations that should not be repositioned
       nextLineAnnotations.push(annotation);
       continue;
     }
@@ -83,7 +81,7 @@ export function applyDocumentChangeToLineAnnotations<T>(
         nextLineAnnotations.push(annotation);
       } else {
         const moved = { ...annotation, lineNumber };
-        lineAnnotationSources.set(moved, getLineAnnotationSource(annotation));
+        recordLineAnnotationSource(moved, getLineAnnotationSource(annotation));
         nextLineAnnotations.push(moved);
       }
       changed = true;
@@ -240,13 +238,15 @@ function clampLine(line: number, lineCount: number): number {
   return Math.max(0, Math.min(line, Math.max(0, lineCount - 1)));
 }
 
-export function renderLineAnnotations<LAnnotation>(
-  lineAnnotations: DiffLineAnnotation<LAnnotation>[],
+export function renderLineAnnotations<
+  TLineAnnotation extends LineAnnotationPosition,
+>(
+  lineAnnotations: TLineAnnotation[],
   contentEl: HTMLElement,
   gutterEl?: HTMLElement,
   getName: (
-    annotation: DiffLineAnnotation<LAnnotation>
-  ) => string = getLineAnnotationName
+    annotation: TLineAnnotation
+  ) => string = getDefaultLineAnnotationName
 ): void {
   const additionAnnotations = new Map<number, string[]>();
   const deletionAnnotations = new Map<number, string[]>();
@@ -259,7 +259,7 @@ export function renderLineAnnotations<LAnnotation>(
       deletionAnnotations.set(lineNumber, []);
     }
     const map =
-      annotation.side === 'deletions'
+      'side' in annotation && annotation.side === 'deletions'
         ? deletionAnnotations
         : additionAnnotations;
     map.get(lineNumber)!.push(getName(annotation));

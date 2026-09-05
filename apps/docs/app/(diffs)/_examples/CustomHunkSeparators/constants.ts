@@ -165,22 +165,24 @@ function createTaskSummarySource(version: 'old' | 'new'): string {
   return lines.join('\n');
 }
 
-export const CUSTOM_HUNK_SEPARATORS_EXAMPLE: PreloadMultiFileDiffOptions<undefined> =
-  {
-    oldFile: {
-      name: 'task-summary.ts',
-      contents: createTaskSummarySource('old'),
-    },
-    newFile: {
-      name: 'task-summary.ts',
-      contents: createTaskSummarySource('new'),
-    },
-    options: {
-      theme: DEFAULT_THEMES,
-      themeType: 'dark',
-      diffStyle: 'split',
-      expansionLineCount: 5,
-      hunkSeparators: 'line-info',
-      unsafeCSS: CustomScrollbarCSS,
-    },
-  };
+export const CUSTOM_HUNK_SEPARATORS_EXAMPLE: PreloadMultiFileDiffOptions<
+  undefined,
+  undefined
+> = {
+  oldFile: {
+    name: 'task-summary.ts',
+    contents: createTaskSummarySource('old'),
+  },
+  newFile: {
+    name: 'task-summary.ts',
+    contents: createTaskSummarySource('new'),
+  },
+  options: {
+    theme: DEFAULT_THEMES,
+    themeType: 'dark',
+    diffStyle: 'split',
+    expansionLineCount: 5,
+    hunkSeparators: 'line-info',
+    unsafeCSS: CustomScrollbarCSS,
+  },
+};

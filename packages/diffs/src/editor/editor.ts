@@ -1,32 +1,25 @@
+import type { File } from '../components/File';
+import type { FileDiff } from '../components/FileDiff';
+import type { VirtualizedFile } from '../components/VirtualizedFile';
+import type { VirtualizedFileDiff } from '../components/VirtualizedFileDiff';
+import type { RenderersHighlighter } from '../highlighter/resolve_highlighter';
 import {
   dequeueRender,
   queueRender,
 } from '../managers/UniversalRenderingManager';
 import type {
   DiffLineAnnotation,
-  DiffsEditableComponent,
-  DiffsEditor,
-  EditableInstance,
-  EditorChange,
-  EditorChangeEvent,
-  EditorDocumentKind,
-  EditorSelection,
-  EditorViewState,
   FileContents,
+  FileDiffMetadata,
   HighlightedToken,
   LineAnnotation,
-  Position,
-  Range,
   RenderRange,
-  ResolvedTextEdit,
-  RetainedDiffSessionSnapshot,
   SelectionSide,
-  TextEdit,
 } from '../types';
-import { cloneRetainedDiffSessionSnapshot } from '../utils/cloneFileDiffMetadata';
 import { computeLineOffsets } from '../utils/computeFileOffsets';
 import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
 import { isGutterUtilityPath } from '../utils/isGutterUtilityPath';
+import { cloneRetainedDiffSessionSnapshot } from './cloneRetainedDiffSessionSnapshot';
 import {
   type EditorCommand,
   type EditorKeymap,
@@ -34,6 +27,14 @@ import {
   resolveFindAgainShortcut,
 } from './command';
 import editorCSS from './editor.css?inline';
+import {
+  buildEditPredictionRequest,
+  type EditPredictionHistoryRecord,
+  type EditPredictProvider,
+  type EditPredictResponse,
+  matchesEditPredictionPattern,
+  recordEditPrediction,
+} from './editPrediction';
 import { EditStack } from './editStack';
 import {
   cloneEditorViewState,
@@ -105,6 +106,7 @@ import {
   mapCursorMove,
   mapSelectionShift,
   mergeOverlappingSelections,
+  remapOffsetThroughEdits,
   remapSelectionsAfterEdits,
   resolveIndentEdits,
   resolveSelectionCut,
@@ -118,6 +120,7 @@ import {
 } from './selectionAction';
 import { createSpriteElement } from './sprite';
 import { TextDocument, type TextDocumentChange } from './textDocument';
+import { getTextDocumentChangeTransaction } from './textDocumentChangeTransaction';
 import {
   getExpandedAsciiTextColumns,
   getUnicodeMeasurementOffsets,
@@ -129,8 +132,23 @@ import {
   type EditorTokenizer,
   renderLineTokens,
 } from './tokenizer';
-import type { EditorEditCompleteEvent } from './types';
-import type { EditorInitialState, EditState } from './types';
+import type {
+  EditorCaret,
+  EditorChange,
+  EditorChangeEvent,
+  EditorEditCompleteEvent,
+  EditorInitialState,
+  EditorLineAnnotation,
+  EditorSelection,
+  EditorType,
+  EditorViewState,
+  EditState,
+  Position,
+  Range,
+  ResolvedTextEdit,
+  RetainedDiffSessionSnapshot,
+  TextEdit,
+} from './types';
 import {
   addEventListener,
   clampDomOffset,
@@ -140,6 +158,13 @@ import {
   lookupScrollContainer,
   round,
 } from './utils';
+
+export type {
+  EditPredictContext,
+  EditPredictProvider,
+  EditPredictRequest,
+  EditPredictResponse,
+} from './editPrediction';
 
 // ShadowRoot.getSelection is a non-standard Blink/WebKit method (predates the
 // spec'd Selection.getComposedRanges) and is missing from the DOM lib types.
@@ -203,7 +228,66 @@ interface AltColumnDrag {
   renderedGoal?: Position;
 }
 
-export interface EditorOptions<LAnnotation> {
+interface TrackedCaret<T> {
+  caret: EditorCaret<T>;
+  anchorOffset: number;
+  focusOffset: number;
+}
+
+interface SyncRenderViewBaseProps {
+  highlighter: RenderersHighlighter;
+  fileContainer: HTMLElement;
+  renderRange: RenderRange | undefined;
+  /** Start fresh history instead of retaining or extending the current history. */
+  resetHistory?: boolean;
+}
+
+interface SyncFileRenderViewProps<LAnnotation> extends SyncRenderViewBaseProps {
+  file: FileContents;
+  lineAnnotations: LineAnnotation<LAnnotation>[] | undefined;
+  /** Treat the supplied contents as an externally provided document update. */
+  externalDocument?: boolean;
+}
+
+interface SyncDiffRenderViewProps<LAnnotation> extends SyncRenderViewBaseProps {
+  fileDiff: FileDiffMetadata;
+  lineAnnotations: DiffLineAnnotation<LAnnotation>[] | undefined;
+  /** Treat the supplied contents as an externally provided document update. */
+  externalDocument?: boolean;
+}
+
+type SyncRenderViewProps<
+  EType extends EditorType,
+  LAnnotation,
+> = EType extends 'file'
+  ? SyncFileRenderViewProps<LAnnotation>
+  : SyncDiffRenderViewProps<LAnnotation>;
+
+type EditorComponent<
+  EType extends EditorType,
+  LAnnotation,
+  Caret,
+> = EType extends 'file'
+  ? File<LAnnotation, Caret>
+  : FileDiff<LAnnotation, Caret>;
+
+type EditorVirtualizedComponent<LAnnotation, Caret> =
+  | VirtualizedFile<LAnnotation, Caret>
+  | VirtualizedFileDiff<LAnnotation, Caret>;
+
+// Narrow an editor host through the virtualized components' runtime marker
+// without importing either component class as a runtime dependency.
+function isVirtualizedEditorComponent<LAnnotation, Caret>(
+  instance: EditorComponent<EditorType, LAnnotation, Caret> | undefined
+): instance is EditorVirtualizedComponent<LAnnotation, Caret> {
+  return (
+    instance != null &&
+    'renderType' in instance &&
+    instance.renderType === 'virtualized'
+  );
+}
+
+export interface EditorOptions<EType extends EditorType, LAnnotation, Caret> {
   /** The maximum number of entries to keep in the undo stack. */
   historyMaxEntries?: number;
   /**
@@ -217,7 +301,7 @@ export interface EditorOptions<LAnnotation> {
    * fields are initialized from the attached component. The editor takes
    * ownership and does not clone supplied objects.
    */
-  initialState?: EditorInitialState<LAnnotation>;
+  initialState?: EditorInitialState<EType, LAnnotation>;
   /** Custom keymap groups checked before defaults; later groups take precedence. */
   keymap?: EditorKeymap;
   /** Render rounded corners for selection ranges, default is true. */
@@ -232,10 +316,38 @@ export interface EditorOptions<LAnnotation> {
   /** Per-language comment tokens used by the comment commands. */
   languageCommentConfig?: LanguageConfigMap;
   /**
-   * Show a floating selection action popover after a user-created selection,
-   * default is disabled. Programmatic selection updates do not open it.
+   * Show a floating selection action popover after a user-created selection.
+   * Defaults to disabled. Programmatic selection updates do not open it.
    */
   enabledSelectionAction?: boolean;
+  /**
+   * Configuration for inline edit prediction.
+   */
+  editPrediction?: {
+    /**
+     * The edit prediction mode.
+     * - 'eager': predictions appear inline when the user types.
+     * - 'subtle': pressing the `Alt` key toggles predictions inline.
+     * @default 'eager'
+     */
+    mode?: 'eager' | 'subtle';
+    /**
+     * The edit prediction provider.
+     */
+    provider: EditPredictProvider;
+    /**
+     * Glob or regular-expression patterns for files to include in prediction.
+     * String patterns support `?`, segment-local `*`, and cross-segment `**`.
+     * An empty array matches no files.
+     */
+    include?: readonly (string | RegExp)[];
+    /**
+     * Glob or regular-expression patterns for files to exclude from prediction.
+     * String patterns support `?`, segment-local `*`, and cross-segment `**`.
+     * Exclusions take precedence over inclusions.
+     */
+    exclude?: readonly (string | RegExp)[];
+  };
   /**
    * Custom clipboard provider.
    * Highly recommended to use native clipboard API if you are building an electron app.
@@ -246,25 +358,31 @@ export interface EditorOptions<LAnnotation> {
   };
   /** Render the selection action widget element. */
   renderSelectionAction?: (
-    context: SelectionActionContext<LAnnotation>
+    context: SelectionActionContext<EType, LAnnotation>
   ) => HTMLElement;
+  /**
+   * Render an externally owned caret at its normalized document position.
+   */
+  renderCaret?: (caret: EditorCaret<Caret>) => HTMLElement;
   /** Callback when the editor is attached to a file. */
   onAttach?: (
-    editor: Editor<LAnnotation>,
-    fileInstance: DiffsEditableComponent<LAnnotation>
+    editor: Editor<EType, LAnnotation, Caret>,
+    fileInstance: EditorComponent<EType, LAnnotation, Caret>
   ) => void;
   /**
    * Called with an `EditorChangeEvent` whenever the editor document changes.
    * Treat this as a document notification; do not feed the changes back into
    * the editor or you will create loops.
    */
-  onChange?: (event: EditorChangeEvent<LAnnotation, 'file' | 'diff'>) => void;
+  onChange?: (event: EditorChangeEvent<EType, LAnnotation, Caret>) => void;
   /**
    * Observes completion with the same frozen event sent to the component. Runs
    * before the component callback, including when the component callback is
    * missing. There is no way to accept or reject from this API.
    */
-  onComplete?: (event: EditorEditCompleteEvent<LAnnotation>) => void;
+  onComplete?: (
+    event: EditorEditCompleteEvent<EType, LAnnotation, Caret>
+  ) => void;
   /** Callback when the editor gains focus. */
   onFocus?: () => void;
   /** Callback when the editor loses focus. */
@@ -294,14 +412,48 @@ const MAX_EDIT_WIDEN_WINDOW_MULTIPLE = 2;
 // line. Past this many lines the cache resets and refills lazily for whatever
 // is measured next. A memory bound, not a correctness-critical value.
 const MAX_WRAP_OFFSETS_CACHE_LINES = 10_000;
+const EDIT_PREDICTION_DEBOUNCE_MS = 300;
+const MAX_EDIT_PREDICTION_RESPONSE_EDITS = 256;
+const MAX_EDIT_PREDICTION_RESPONSE_BYTES = 128 * 1024;
+const editPredictionTextEncoder = new TextEncoder();
 const SELECTION_ACTION_POPOVER_PLACEMENT_KEY = 'selection-action';
 const MULTI_SELECTION_CLIPBOARD_TYPE =
   'application/vnd.pierre.diffs-selections+json';
+type OverlayRangeType =
+  | 'selection'
+  | 'match'
+  | 'marker'
+  | 'bracketMatch'
+  | 'caretHighlight'
+  | 'editPredictionDeletion'
+  | 'editPredictionInsertion'
+  | 'editPredictionReplacement';
 
-export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
-  #options: EditorOptions<LAnnotation>;
-  #initialState: EditorInitialState<LAnnotation> | undefined;
-  #editSession?: ManagedEditSession<LAnnotation>;
+// Response edits that touch the same source lines are previewed by one ghost
+// overlay. `edit` is their combined text range; `startIndex` and `endIndex`
+// are the response edits it covers.
+interface EditPredictionGroup {
+  edit: TextEdit;
+  startIndex: number;
+  endIndex: number;
+}
+
+// A rendered column's content element and its gutter counterpart, or one
+// content child and the gutter child at the same index. Every rendered column
+// has a gutter, and gutter and content children are kept parallel.
+interface ColumnElements {
+  content: HTMLElement;
+  gutter: HTMLElement;
+}
+
+export class Editor<
+  EType extends EditorType = EditorType,
+  LAnnotation = undefined,
+  Caret = undefined,
+> {
+  #options: EditorOptions<EType, LAnnotation, Caret>;
+  #initialState: EditorInitialState<EType, LAnnotation> | undefined;
+  #editSession?: ManagedEditSession<EType, LAnnotation>;
   #metrics = new Metrics();
   #tokenizer?: EditorTokenizer;
   #popoverManager?: PopoverManager;
@@ -340,21 +492,32 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #fileContainer?: HTMLElement;
   #gutterElement?: HTMLElement;
   #contentElement?: HTMLElement;
+  #deletionsColumn?: ColumnElements;
   #overlayElement?: HTMLElement;
   #overlayElements?: Map<string, HTMLElement>;
+  #caretElements?: Map<TrackedCaret<Caret>, HTMLElement>;
+  #caretHighlightElements?: HTMLElement[];
   #primaryCaretElement?: HTMLElement;
   #resizeObserver?: ResizeObserver;
 
   // state
-  #fileInstance?: DiffsEditableComponent<LAnnotation>;
+  #fileInstance?: EditorComponent<EType, LAnnotation, Caret>;
+  // Preserves the current file/diff instance's applyDocumentChange
+  // type/semantics to avoid annoying `as X` narrowing
+  #applyDocumentChange?: (
+    textDocument: TextDocument<EType, LAnnotation>,
+    newLineAnnotations: EditorLineAnnotation<EType, LAnnotation>[] | undefined,
+    shouldUpdateBuffer?: boolean
+  ) => void;
+  #publishChange?: (
+    changes: EditorChange[],
+    file: FileContents,
+    lineAnnotations: EditorLineAnnotation<EType, LAnnotation>[] | undefined
+  ) => void;
   #isRendering = false;
   #restoreEditorStateOnSync = false;
-  // FIXME(amadeus): We need this support both types. I think in an ideal
-  // world, this instance becomes specific to the type of editor that it
-  // is... and we can manage this without `as` ing thing
-  #lineAnnotations?: DiffLineAnnotation<LAnnotation>[];
+  #lineAnnotations?: EditorLineAnnotation<EType, LAnnotation>[];
   readonly #editStateKey?: string;
-  readonly #documentKind: EditorDocumentKind;
   readonly #ownsVerticalViewport: boolean;
   #renderRange?: RenderRange;
   // Bounded render-window size (~viewport + 2*hunkLineCount) from the last view
@@ -365,6 +528,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   // windows, where no cap is needed.
   #viewportWindowLines?: number;
   #markerRenderer?: MarkerRenderer;
+  #carets?: TrackedCaret<Caret>[];
   #searchPanel?: SearchPanelWidget;
   #selectionAction?: SelectionActionWidget;
   // Programmatic ranges stay passive until the user interacts with the editor.
@@ -410,7 +574,28 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #retainSearchPanelFocus = false;
   #fontRemeasureScheduled = false;
   #themeSelectionRefreshFrame?: number;
-
+  #editPredictionTimer?: ReturnType<typeof setTimeout>;
+  #editPredictionAbortController?: AbortController;
+  #editPredictionGeneration = 0;
+  #editPredictionRevealed = false;
+  // True when we skipped asking for a prediction because the caret sits on a
+  // line that has no rendered row right now (for example a large paste pushed
+  // it below the virtualized window). The next time the attached component
+  // renders and that row exists, we ask again.
+  #retryEditPredictionOnRender = false;
+  #editPrediction?: {
+    document: TextDocument<EType, LAnnotation>;
+    version: number;
+    cursorOffset: number;
+    rendered: boolean;
+    response: EditPredictResponse;
+  };
+  #editPredictionHistory: EditPredictionHistoryRecord[] = [];
+  #editPredictionSpacers = new Map<HTMLElement, number>();
+  // Ghost text rows shown below lines (zero-based line -> row count). Replaced
+  // only when the contents change and never mutated, so the attached component
+  // can treat the same instance as "nothing changed".
+  #ghostTextRows: ReadonlyMap<number, number> = new Map();
   #onDeferTokenize = (
     lines: Map<number, Array<HighlightedToken>>,
     themeType: 'light' | 'dark'
@@ -425,6 +610,15 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#renderRange !== undefined &&
       this.#renderRange.totalLines !== Infinity
     ) {
+      const predictionLines =
+        this.#editPrediction === undefined
+          ? undefined
+          : new Set(
+              this.#editPrediction.response.edits.map(
+                (edit) => edit.range.start.line
+              )
+            );
+      let refreshPrediction = false;
       const { startingLine, totalLines } = this.#renderRange;
       const endLine = Math.min(
         startingLine + totalLines,
@@ -435,67 +629,122 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           const lineElement = this.#getLineElement(line);
           if (lineElement !== undefined) {
             lineElement.replaceChildren(...renderLineTokens(tokens));
+            refreshPrediction ||= predictionLines?.has(line) === true;
           }
         }
+      }
+      if (refreshPrediction && this.#selections !== undefined) {
+        this.#updateSelections(this.#selections);
       }
     }
   };
 
   /**
-   * @param documentKind The component surface this editor can attach to.
+   * @param type The component surface this editor can attach to.
    * @param options Configure editor behavior and lifecycle callbacks.
    * @param editStateKey Retain this editable draft and its undo/redo history
-   * in memory so a later editor using the same kind and key can resume them.
+   * in memory so a later editor using the same type and key can resume them.
    */
   constructor(
-    documentKind: EditorDocumentKind,
-    options: EditorOptions<LAnnotation> = {},
+    public readonly type: EType,
+    options: EditorOptions<EType, LAnnotation, Caret> = {},
     editStateKey?: string
   ) {
-    this.#documentKind = documentKind;
-    this.#editStateKey = editStateKey;
-    this.#ownsVerticalViewport = options.ownsVerticalViewport === true;
     this.#options = options;
+    this.#ownsVerticalViewport = options.ownsVerticalViewport === true;
     this.#initialState = options.initialState;
+    this.#editStateKey = editStateKey;
   }
 
-  setOptions(options: EditorOptions<LAnnotation>): void {
+  // Preserve the component/editor type match while keeping caret metadata
+  // opaque to components, which never read it.
+  get #getTypedEditor():
+    | Editor<'file', LAnnotation, Caret>
+    | Editor<'file-diff', LAnnotation, Caret> {
+    return this.type === 'file'
+      ? (this as Editor<'file', LAnnotation, Caret>)
+      : (this as Editor<'file-diff', LAnnotation, Caret>);
+  }
+
+  setOptions(options: EditorOptions<EType, LAnnotation, Caret>): void {
+    const previousRenderCaret = this.#options.renderCaret;
+    const previousEditPrediction = this.#options.editPrediction;
     this.#options = {
       ...this.#options,
       ...options,
     };
+    if (previousRenderCaret !== this.#options.renderCaret) {
+      this.#caretElements?.forEach((element) => element.remove());
+      this.#caretElements = undefined;
+      this.#renderCarets();
+    }
+    if (previousEditPrediction !== this.#options.editPrediction) {
+      this.#cancelEditPrediction(true);
+      this.#editPredictionHistory = [];
+      this.#scheduleEditPrediction();
+    }
   }
 
-  __emitEditComplete(event: EditorEditCompleteEvent<LAnnotation>): void {
+  __emitEditComplete(
+    event: EditorEditCompleteEvent<EType, LAnnotation, Caret>
+  ): void {
     this.#options.onComplete?.(event);
   }
 
-  // Small typescript hack to prevent UnresolvedFile from being editable.
-  edit<T extends DiffsEditableComponent<LAnnotation>>(
-    fileInstance: EditableInstance<T>
+  /** @internal */
+  __getGhostTextRows(): ReadonlyMap<number, number> {
+    return this.#ghostTextRows;
+  }
+
+  setCarets(carets: EditorCaret<Caret>[]): void {
+    const textDocument = this.#editSession?.document;
+    if (textDocument === undefined) return;
+    this.#caretElements?.forEach((element) => element.remove());
+    this.#caretElements = undefined;
+    this.#caretHighlightElements?.forEach((element) => element.remove());
+    this.#caretHighlightElements = undefined;
+    this.#carets =
+      carets.length === 0
+        ? undefined
+        : carets.map((caret) => {
+            const anchor = textDocument.normalizePosition(caret.anchor);
+            const focus = textDocument.normalizePosition(caret.focus);
+            return {
+              caret: {
+                ...caret,
+                anchor,
+                focus,
+              },
+              anchorOffset: textDocument.offsetAt(anchor),
+              focusOffset: textDocument.offsetAt(focus),
+            };
+          });
+    this.#renderCarets();
+  }
+
+  // UnresolvedFile extends FileDiff for rendering, but its conflict-specific
+  // document model is not supported by Editor.
+  edit<T extends EditorComponent<EType, LAnnotation, Caret>>(
+    fileInstance: T extends { readonly type: 'unresolved-file' } ? never : T
   ): () => void;
-  edit(fileInstance: DiffsEditableComponent<LAnnotation>): () => void {
-    const docKind: EditorDocumentKind =
-      fileInstance.type === 'file-diff' ? 'file-diff' : 'file';
+  edit(fileInstance: EditorComponent<EType, LAnnotation, Caret>): () => void {
+    const editor = this.#getTypedEditor;
     const previousSession = this.#editSession;
-    if (this.#documentKind !== docKind) {
-      throw new Error(
-        `Editor: a ${this.#documentKind} editor cannot edit a ${docKind} component`
-      );
-    }
     if (this.#isRendering) {
-      throw new Error('Editor: the editor is already rendering its component');
+      throw new Error(
+        'Editor.edit: the editor is already rendering its component'
+      );
     }
     if (this.#fileInstance != null && this.#fileInstance !== fileInstance) {
       throw new Error(
-        'Editor: a recycled edit session cannot attach to a different component'
+        'Editor.edit: a recycled edit session cannot attach to a different component'
       );
     }
     const initialState = this.#initialState;
     const initialEditorState = initialState?.editor;
     const editStateKey = this.#editStateKey;
     const editSession = getEditSession({
-      documentKind: docKind,
+      type: this.type,
       editStateKey,
       owner: this,
       initialState,
@@ -509,36 +758,77 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#restoreEditorStateOnSync = editSession.editor != null;
     try {
       this.#initialize();
-      // First edit: attach the editor to the component.
-      if (this.#detach == null) {
-        this.#detach = fileInstance.__attachEditor(this);
-      }
-      // After recycling: restore rendering on the same component.
-      else {
-        fileInstance.__resumeEditor(this);
+      if (fileInstance.type === 'file' && editor.type === 'file') {
+        editor.#applyDocumentChange =
+          fileInstance.applyDocumentChange.bind(fileInstance);
+        editor.#publishChange = (changes, file, lineAnnotations) => {
+          const event: EditorChangeEvent<'file', LAnnotation, Caret> = {
+            changes,
+            file,
+            editor,
+            lineAnnotations,
+          };
+          fileInstance.__acceptEditorChange(event);
+          editor.#options.onChange?.(event);
+          fileInstance.emitEditChange(event);
+        };
+        // First edit: attach the editor to the component.
+        if (this.#detach == null) {
+          this.#detach = fileInstance.__attachEditor(editor);
+        }
+        // Otherwise we resume our edit session
+        else {
+          fileInstance.__resumeEditor(editor);
+        }
+      } else if (
+        fileInstance.type === 'file-diff' &&
+        editor.type === 'file-diff'
+      ) {
+        editor.#applyDocumentChange =
+          fileInstance.applyDocumentChange.bind(fileInstance);
+        editor.#publishChange = (changes, file, lineAnnotations) => {
+          const event: EditorChangeEvent<'file-diff', LAnnotation, Caret> = {
+            changes,
+            file,
+            editor,
+            lineAnnotations,
+          };
+          fileInstance.__acceptEditorChange(event);
+          editor.#options.onChange?.(event);
+          fileInstance.emitEditChange(event);
+        };
+        // First edit: attach the editor to the component.
+        if (this.#detach == null) {
+          this.#detach = fileInstance.__attachEditor(editor);
+        }
+        // Otherwise we resume our edit session
+        else {
+          fileInstance.__resumeEditor(editor);
+        }
+      } else {
+        throw new Error('Editor.edit: Impossible edit state');
       }
     } catch (error: unknown) {
       this.cleanUp('recycle');
       // A failed attachment never replaced the claimed session. Restore diff
       // state that cleanup could not recapture before returning its key.
-      if (
-        editSession.documentKind === 'file-diff' &&
-        editSession.diffSession == null
-      ) {
+      if (editSession.type === 'file-diff' && editSession.diffSession == null) {
         editSession.diffSession = previousDiffSession;
       }
       // If we haven't ever attached, and failed to edit, release any edit
       // state lock
       if (this.#detach == null && editStateKey != null) {
-        if (docKind === 'file') {
-          EditStateManager.releaseFile(editStateKey, this);
+        if (editor.type === 'file') {
+          EditStateManager.releaseFile(editStateKey, editor);
         } else {
-          EditStateManager.releaseFileDiff(editStateKey, this);
+          EditStateManager.releaseFileDiff(editStateKey, editor);
         }
       }
       this.#editSession = previousSession;
       if (this.#detach == null) {
         this.#fileInstance = undefined;
+        this.#applyDocumentChange = undefined;
+        this.#publishChange = undefined;
       }
       if (initialState != null && initialEditorState != null) {
         initialState.editor = initialEditorState;
@@ -564,7 +854,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   applyEdits(edits: TextEdit[], updateHistory = true): void {
     const textDocument = this.#editSession?.document;
     if (textDocument == null) {
-      throw new Error('Editor is not attached');
+      throw new Error('Editor.applyEdits: Editor is not attached');
     }
     // Only reposition focus and scroll when the editor already holds focus. A
     // programmatic edit must not pull focus from another input the user is
@@ -700,7 +990,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
    * Return the objects that make up the active edit session, or undefined when
    * no complete session exists.
    */
-  getEditState(): EditState<LAnnotation> | undefined {
+  getEditState(): EditState<EType, LAnnotation> | undefined {
     const editSession = this.#editSession;
     if (editSession == null) {
       return undefined;
@@ -708,21 +998,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     const fileInstance = this.#fileInstance;
     if (fileInstance == null) {
       throw new Error(
-        `Editor: active ${this.#documentKind} session has no component`
+        `Editor.getEditState: active ${this.type} session has no component`
       );
     }
-    if (this.#documentKind === 'file' && fileInstance.type !== 'file') {
-      throw new Error('Editor: active file session has no file component');
-    }
-    if (
-      this.#documentKind === 'file-diff' &&
-      fileInstance.type !== 'file-diff'
-    ) {
-      throw new Error(
-        'Editor: active file-diff session has no file-diff component'
-      );
-    }
-    return toManagedEditState(editSession);
+    return toManagedEditState<EType, LAnnotation>(editSession);
   }
 
   setViewState({ selections, view }: EditorViewState): void {
@@ -731,7 +1010,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#fileInstance === undefined ||
       this.#editSession?.document === undefined
     ) {
-      throw new Error('Editor is not attached');
+      throw new Error('Editor.setViewState: Editor is not attached');
     }
     this.#canMountSelectionAction = false;
     this.#updateSelections(selections ?? []);
@@ -757,7 +1036,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   ): void {
     const textDocument = this.#editSession?.document;
     if (textDocument === undefined) {
-      throw new Error('Text document is not initialized');
+      throw new Error('Editor.setSelections: Text document is not initialized');
     }
     const resolvedSelections = selections.map<EditorSelection>((selection) => {
       let start = textDocument.normalizePosition(selection.start);
@@ -792,7 +1071,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   setMarkers(markers: Marker[]): void {
     const textDocument = this.#editSession?.document;
     if (textDocument === undefined) {
-      throw new Error('Text document is not initialized');
+      throw new Error('Editor.setMarkers: Text document is not initialized');
     }
 
     if (markers.length === 0) {
@@ -816,6 +1095,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#markerRenderer.listenHover(this.#contentElement);
     }
     this.#updateSelections(this.#selections ?? []);
+    this.#renderCarets();
   }
 
   focus(options?: EditorFocusOptions): void {
@@ -877,11 +1157,15 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   cleanUp(reason: 'discard' | 'recycle' | 'complete' = 'discard'): void {
     const fileInstance = this.#fileInstance;
     const recycle = reason === 'recycle';
+    this.#cancelEditPrediction(true, false);
+    if (!recycle) {
+      this.#editPredictionHistory = [];
+    }
     const editSession = this.#editSession;
     if (fileInstance != null && editSession != null) {
       const discardDiffState = !this.#checkpointEditSessionState();
       if (!recycle) {
-        this.#releaseEditSession(editSession, discardDiffState);
+        this.#releaseEditSession(discardDiffState);
       }
     }
     this.#invalidateOnAttach();
@@ -927,6 +1211,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#popoverManager?.cleanUp();
     this.#popoverManager = undefined;
     this.#gutterElement = undefined;
+    this.#deletionsColumn = undefined;
     this.#contentElement?.removeAttribute('contentEditable');
     this.#contentElement = undefined;
     this.#replacementFocusRequest = undefined;
@@ -943,18 +1228,28 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#themeSelectionRefreshFrame = undefined;
     }
 
-    this.#resetState();
+    this.#resetState(recycle);
     if (!recycle) {
       try {
         if (fileInstance != null && editSession != null) {
-          fileInstance.__completeEditSession(
-            this,
-            reason === 'complete' ? 'install' : 'discard'
-          );
+          const editor = this.#getTypedEditor;
+          const mode = reason === 'complete' ? 'install' : 'discard';
+          if (fileInstance.type === 'file' && editor.type === 'file') {
+            fileInstance.__completeEditSession(editor, mode);
+          } else if (
+            fileInstance.type === 'file-diff' &&
+            editor.type === 'file-diff'
+          ) {
+            fileInstance.__completeEditSession(editor, mode);
+          } else {
+            throw new Error('Editor.cleanUp: Impossible edit state');
+          }
         }
       } finally {
         this.#editSession = undefined;
         this.#fileInstance = undefined;
+        this.#applyDocumentChange = undefined;
+        this.#publishChange = undefined;
       }
     }
   }
@@ -978,7 +1273,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     const hasEditorState = editorState.selections != null || hasNonDefaultView;
     editSession.editor = cloneEditorViewState(editorState);
 
-    if (editSession.documentKind === 'file') {
+    if (editSession.type === 'file') {
       return false;
     }
 
@@ -997,18 +1292,16 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     );
   }
 
-  #releaseEditSession(
-    editSession: ManagedEditSession<LAnnotation>,
-    discardDiffState = false
-  ): void {
+  #releaseEditSession(discardDiffState = false): void {
     const editStateKey = this.#editStateKey;
     if (editStateKey == null) {
       return;
     }
-    if (editSession.documentKind === 'file') {
-      EditStateManager.releaseFile(editStateKey, this);
+    const editor = this.#getTypedEditor;
+    if (editor.type === 'file') {
+      EditStateManager.releaseFile(editStateKey, editor);
     } else {
-      EditStateManager.releaseFileDiff(editStateKey, this, discardDiffState);
+      EditStateManager.releaseFileDiff(editStateKey, editor, discardDiffState);
     }
   }
 
@@ -1067,18 +1360,28 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   }
 
   /** @internal */
-  __syncRenderView: DiffsEditor<LAnnotation>['__syncRenderView'] = ({
-    highlighter,
-    fileContainer,
-    renderRange,
-    resetHistory = false,
-    ...renderView
-  }) => {
-    const isDiff = 'fileDiff' in renderView;
-    const fileOrDiff = isDiff ? renderView.fileDiff : renderView.file;
-    const lineAnnotations = renderView.lineAnnotations;
+  __syncRenderView(props: SyncRenderViewProps<EType, LAnnotation>): void {
+    const {
+      highlighter,
+      fileContainer,
+      renderRange,
+      externalDocument = false,
+    } = props;
+    const renderView:
+      | SyncFileRenderViewProps<LAnnotation>
+      | SyncDiffRenderViewProps<LAnnotation> = props;
+    let fileOrDiff: FileContents | FileDiffMetadata;
+    if ('file' in renderView && this.type === 'file') {
+      fileOrDiff = renderView.file;
+    } else if ('fileDiff' in renderView && this.type === 'file-diff') {
+      fileOrDiff = renderView.fileDiff;
+    } else {
+      throw new Error('Editor.__syncRenderView: Impossible render state');
+    }
+    const lineAnnotations = renderView.lineAnnotations as
+      | EditorLineAnnotation<EType, LAnnotation>[]
+      | undefined;
     const editStateKey = this.#editStateKey;
-    const externalDocument = renderView.externalDocument === true;
     const fileInstance = this.#fileInstance;
     const editSession = this.#editSession;
     if (!this.#isRendering || fileInstance == null || editSession == null) {
@@ -1093,20 +1396,44 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     let codeElement: HTMLElement | undefined;
     let gutterEl: HTMLElement | undefined;
     let contentEl: HTMLElement | undefined;
+    let deletionsGutterEl: HTMLElement | undefined;
+    let deletionsContentEl: HTMLElement | undefined;
     for (const el of shadowRoot.querySelectorAll<HTMLElement>('[data-code]')) {
-      if (el.dataset.deletions === undefined) {
+      const isDeletions = el.dataset.deletions != null;
+      if (!isDeletions) {
         codeElement = el;
-        for (const child of el.children) {
-          const el = child as HTMLElement;
-          const { gutter, content } = el.dataset;
-          if (gutter !== undefined) {
-            gutterEl = el;
-          } else if (content !== undefined) {
-            contentEl = el;
+      }
+      for (const child of el.children) {
+        if (!(child instanceof HTMLElement)) {
+          continue;
+        }
+        const { gutter, content } = child.dataset;
+        if (gutter != null) {
+          if (isDeletions) {
+            deletionsGutterEl = child;
+          } else {
+            gutterEl = child;
+          }
+        } else if (content != null) {
+          if (isDeletions) {
+            deletionsContentEl = child;
+          } else {
+            contentEl = child;
           }
         }
-        break;
       }
+    }
+    if (deletionsContentEl == null) {
+      this.#deletionsColumn = undefined;
+    } else if (deletionsGutterEl == null) {
+      throw new Error(
+        'Editor.__syncRenderView: the deletions column has no gutter'
+      );
+    } else {
+      this.#deletionsColumn = {
+        content: deletionsContentEl,
+        gutter: deletionsGutterEl,
+      };
     }
     if (codeElement === undefined || contentEl === undefined) {
       this.#replacementFocusRequest = undefined;
@@ -1139,6 +1466,16 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         ? fileOrDiff.contents
         : fileOrDiff.additionLines.join('');
     const previousTextDocument = editSession.document;
+    // The caller flags whether the host replaced the file (`externalDocument`)
+    // document that should win. Undo-reset, however, is derived here from the
+    // editor's own fileInfo: it resets only when name/language change or when
+    // the caller passes in resetHistory
+    const resetHistory =
+      props.resetHistory ??
+      (previousTextDocument != null &&
+        editSession.fileInfo != null &&
+        (editSession.fileInfo.name !== fileOrDiff.name ||
+          previousTextDocument.languageId !== languageId));
     const documentChanges =
       externalDocument &&
       previousTextDocument !== undefined &&
@@ -1155,6 +1492,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           editSession.document.languageId !== languageId)) ||
       resetForExternalDocument;
     if (shouldRebuildDocument) {
+      this.#cancelEditPrediction(true);
+      this.#editPredictionHistory = [];
       this.#invalidateOnAttach();
       const { name, lang } = fileOrDiff;
       let textDocument =
@@ -1166,10 +1505,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         editSession.editor = undefined;
       }
       if (textDocument == null) {
-        const editStack = new EditStack<LAnnotation>({
+        const editStack = new EditStack<EType, LAnnotation>({
           maxEntries: this.#options.historyMaxEntries,
         });
-        textDocument = new TextDocument(
+        textDocument = new TextDocument<EType, LAnnotation>(
           fileOrDiff.name,
           contents,
           languageId,
@@ -1200,11 +1539,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#applyExternalDocumentReplacement(
         editSession,
         contents,
-        isDiff
-          ? renderView.lineAnnotations
-          : (renderView.lineAnnotations as
-              | DiffLineAnnotation<LAnnotation>[]
-              | undefined)
+        lineAnnotations
       );
       const { name, lang } = fileOrDiff;
       editSession.fileInfo = { name, lang };
@@ -1300,11 +1635,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#fileInstance?.__getEffectiveCodeOptions() ?? {}
     );
 
-    this.#lineAnnotations = isDiff
-      ? renderView.lineAnnotations
-      : (renderView.lineAnnotations as
-          | DiffLineAnnotation<LAnnotation>[]
-          | undefined);
+    this.#lineAnnotations = lineAnnotations;
     this.#renderRange = renderRange;
     // Remember the bounded window the virtualizer just synced so #applyChange
     // can clamp any edit-time widening against it. Refreshed on every scroll;
@@ -1325,6 +1656,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         this.#markerRenderer !== undefined
       ) {
         this.#updateSelections(this.#selections ?? []);
+      }
+      this.#renderCarets();
+      if (this.#retryEditPredictionOnRender) {
+        this.#scheduleEditPrediction();
       }
 
       if (
@@ -1374,6 +1709,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         );
       }
 
+      // A reconciled replacement is current even when its text did not change.
+      // Retire it before checkpointing the new diff state or notifying observers.
+      if (externalDocument) {
+        fileInstance.__acknowledgeDocumentUpdate();
+      }
       this.#checkpointEditSessionState();
     } catch (error) {
       this.#restoreEditorStateOnSync = restoreEditorStateOnSync;
@@ -1386,16 +1726,16 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
 
     this.#scheduleOnAttach(fileInstance);
-  };
+  }
 
   // The host component has already rendered these external contents. Update
   // only the editor document and history so the same replacement is not
   // applied twice. __syncRenderView emits the resulting onChange notification
   // afterward.
   #applyExternalDocumentReplacement(
-    editSession: ManagedEditSession<LAnnotation>,
+    editSession: ManagedEditSession<EType, LAnnotation>,
     contents: string,
-    lineAnnotations: DiffLineAnnotation<LAnnotation>[] | undefined
+    lineAnnotations: EditorLineAnnotation<EType, LAnnotation>[] | undefined
   ): void {
     const textDocument = editSession.document;
     if (textDocument == null || textDocument.getText() === contents) {
@@ -1453,24 +1793,38 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
   }
 
+  get #fileDiffInstance(): FileDiff<LAnnotation, Caret> | undefined {
+    return this.#fileInstance?.type === 'file-diff'
+      ? this.#fileInstance
+      : undefined;
+  }
+
+  get #virtualizedInstance():
+    | EditorVirtualizedComponent<LAnnotation, Caret>
+    | undefined {
+    return isVirtualizedEditorComponent(this.#fileInstance)
+      ? this.#fileInstance
+      : undefined;
+  }
+
   // Whether a zero-based document line has (or will have on scroll) a
   // rendered row. False only for lines hidden inside a collapsed unchanged
   // region of a diff host; hosts without collapsible regions treat every
   // line as renderable.
   #isLineRenderable(line: number): boolean {
-    return this.#fileInstance?.isLineRenderable?.(line + 1) ?? true;
+    return this.#fileDiffInstance?.isLineRenderable?.(line + 1) ?? true;
   }
 
   // Fold-skip resolver for vertical caret motion (zero-based lines), or
   // undefined for hosts without collapsible regions so motion stays plain
   // line arithmetic.
   get #resolveRenderableLine(): ResolveRenderableLine | undefined {
-    const fileInstance = this.#fileInstance;
-    if (fileInstance?.getNearestRenderableLine == null) {
+    const fileInstance = this.#fileDiffInstance;
+    if (fileInstance == null) {
       return undefined;
     }
     return (line, direction) => {
-      const nearest = fileInstance.getNearestRenderableLine!(
+      const nearest = fileInstance.getNearestRenderableLine(
         line + 1,
         direction
       );
@@ -1483,16 +1837,16 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   // caret's row can render before the scroll below retries toward it.
   #revealLineIfCollapsed(line: number): void {
     if (!this.#isLineRenderable(line)) {
-      this.#fileInstance?.revealLine?.(line + 1);
+      this.#fileDiffInstance?.revealLine?.(line + 1);
     }
   }
 
   get #diffSyle(): 'unified' | 'split' {
-    return this.#fileInstance?.options.diffStyle ?? 'split';
+    return this.#fileDiffInstance?.options.diffStyle ?? 'split';
   }
 
   get #isDiff(): boolean {
-    return this.#fileInstance?.type === 'file-diff';
+    return this.type === 'file-diff';
   }
 
   get #isWrap(): boolean {
@@ -1519,7 +1873,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#lastAccessedCharX = undefined;
   }
 
-  #resetState(): void {
+  #resetState(preserveCarets = false): void {
     this.#setEditorActiveLineSafe(null);
     this.#gutterWidthCache = undefined;
     this.#contentWidthCache = undefined;
@@ -1527,6 +1881,13 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#suppressNativeSelectionSync = false;
     this.#overlayElements?.forEach((el) => el.remove());
     this.#overlayElements = undefined;
+    this.#caretElements?.forEach((element) => element.remove());
+    this.#caretElements = undefined;
+    this.#caretHighlightElements?.forEach((element) => element.remove());
+    this.#caretHighlightElements = undefined;
+    if (!preserveCarets) {
+      this.#carets = undefined;
+    }
     this.#selections = undefined;
     this.#scrollingToLine = undefined;
     this.#markerRenderer?.cleanup();
@@ -1550,7 +1911,9 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   // A recycled attachment remains the same edit session. If its first
   // notification was canceled, the next live synchronization reschedules it;
   // once delivered, later recycled mounts stay silent.
-  #scheduleOnAttach(fileInstance: DiffsEditableComponent<LAnnotation>): void {
+  #scheduleOnAttach(
+    fileInstance: EditorComponent<EType, LAnnotation, Caret>
+  ): void {
     const attachState = this.#attachState;
     const textDocument = this.#editSession?.document;
     if (
@@ -1594,8 +1957,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   // Get the editor's scrolling viewport, return undefined if the Virtualizer
   // is not present.`
   #getScrollViewport(): HTMLElement | Document | undefined {
-    const viewport = this.#fileInstance?.getEditorViewport?.();
-    if (viewport !== undefined) {
+    const viewport = this.#virtualizedInstance?.getEditorViewport?.();
+    if (viewport != null) {
       return viewport;
     }
     const fileContainer = this.#fileContainer;
@@ -1609,8 +1972,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     if (!this.#ownsVerticalViewport) {
       return undefined;
     }
-    const viewport = this.#fileInstance?.getEditorViewport?.();
-    if (typeof HTMLElement !== 'undefined' && viewport instanceof HTMLElement) {
+    const viewport = this.#virtualizedInstance?.getEditorViewport?.();
+    if (viewport instanceof HTMLElement) {
       return viewport;
     }
     return undefined;
@@ -1746,15 +2109,18 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           // available in newer browsers. When it is missing (older browsers,
           // embedded WebViews, and the pinned CI Chromium), fall back to the
           // older Blink/WebKit-specific ShadowRoot.getSelection(), which still
-          // reports the range inside the shadow tree. Only bail when neither API
-          // yields a range, so a click can still seed the caret rather than
-          // leaving the surface unusable.
-          const composedRange =
-            typeof selectionRaw.getComposedRanges === 'function'
-              ? selectionRaw.getComposedRanges({
-                  shadowRoots: [shadowRoot],
-                })?.[0]
-              : getShadowRootRange(shadowRoot);
+          // reports the range inside the shadow tree. Normalize that live Range
+          // to a StaticRange so it matches the getComposedRanges return shape.
+          // Only bail when neither API yields a range, so a click can still seed
+          // the caret rather than leaving the surface unusable.
+          let composedRange: StaticRange | undefined;
+          if (typeof selectionRaw.getComposedRanges === 'function') {
+            composedRange = selectionRaw.getComposedRanges({
+              shadowRoots: [shadowRoot],
+            })?.[0];
+          } else {
+            composedRange = getShadowRootRange(shadowRoot);
+          }
           if (
             composedRange === undefined ||
             !this.#rangeBelongsToEditor(composedRange)
@@ -1846,6 +2212,14 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         (e) => {
           if (e.key === 'Shift') {
             this.#selectionStart = this.#selections?.at(-1);
+          } else if (
+            e.key === 'Alt' &&
+            !e.repeat &&
+            this.#contentHasFocus &&
+            this.#options.editPrediction?.mode === 'subtle'
+          ) {
+            this.#editPredictionRevealed = !this.#editPredictionRevealed;
+            this.#updateSelections(this.#selections ?? []);
           }
         },
         { passive: true }
@@ -2086,6 +2460,29 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           return;
         }
 
+        if (
+          e.key === 'Tab' &&
+          !e.shiftKey &&
+          !e.ctrlKey &&
+          !e.metaKey &&
+          !e.isComposing &&
+          !this.#isComposing &&
+          (!e.altKey || this.#options.editPrediction?.mode === 'subtle') &&
+          this.#editPrediction?.rendered === true
+        ) {
+          // Ghost text is on screen, so Tab belongs to the prediction even when
+          // acceptance fails; it must never fall through to indentation.
+          this.#acceptEditPrediction();
+          e.preventDefault();
+          return;
+        }
+
+        if (e.key === 'Escape' && this.#editPrediction !== undefined) {
+          this.#cancelEditPrediction(true);
+          e.preventDefault();
+          return;
+        }
+
         const command = resolveEditorCommandFromKeyboardEvent(
           e,
           this.#options.keymap
@@ -2259,6 +2656,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           return;
         }
         if (e.inputType === 'insertCompositionText') {
+          this.#cancelEditPrediction(true);
           return;
         }
         e.preventDefault();
@@ -2280,6 +2678,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           if (!targetIsContentElement(e)) {
             return;
           }
+          this.#cancelEditPrediction(true);
           this.#isComposing = true;
           this.#shouldIgnoreSelectionChange = true;
         },
@@ -2929,10 +3328,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
             selectionEdits
           )
         : undefined);
-    const replayedLineAnnotations = (lineAnnotations ??
+    const replayedLineAnnotations =
+      lineAnnotations ??
       (this.#lineAnnotations != null
         ? applyDocumentChangeToLineAnnotations(change, this.#lineAnnotations)
-        : undefined)) as DiffLineAnnotation<LAnnotation>[] | undefined;
+        : undefined);
     this.#applyChange(change, nextSelections, replayedLineAnnotations);
   }
 
@@ -2940,7 +3340,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #applyCommandEdits(
     edits: TextEdit[],
     resolveNextSelections?: (
-      textDocument: TextDocument<LAnnotation>
+      textDocument: TextDocument<EType, LAnnotation>
     ) => EditorSelection[]
   ): void {
     const textDocument = this.#editSession?.document;
@@ -3261,6 +3661,9 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
     this.#markerRenderer?.removePopover();
     this.#computeContentOffset(this.#contentElement!);
+    // Reposition remote carets after a gutter or content-width change. Their
+    // transforms and wrapped rows use the same geometry caches as selections.
+    this.#renderCarets();
   };
 
   // A custom monospace web font can finish loading after the editor first
@@ -3298,26 +3701,29 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       ) {
         this.#updateSelections(this.#selections ?? []);
       }
+      this.#renderCarets();
       this.#markerRenderer?.removePopover();
     });
   }
 
   #rerender(
     change: TextDocumentChange,
-    newLineAnnotations?: DiffLineAnnotation<LAnnotation>[],
+    newLineAnnotations?: EditorLineAnnotation<EType, LAnnotation>[],
     renderRange = this.#renderRange,
     shouldUpdateBuffer?: boolean
   ) {
     const tokenizer = this.#tokenizer;
     const fileInstance = this.#fileInstance;
+    const applyDocumentChange = this.#applyDocumentChange;
     const textDocument = this.#editSession?.document;
     const gutterEl = this.#gutterElement;
     const contentEl = this.#contentElement;
     if (
-      tokenizer === undefined ||
-      fileInstance === undefined ||
-      textDocument === undefined ||
-      contentEl === undefined
+      tokenizer == null ||
+      fileInstance == null ||
+      applyDocumentChange == null ||
+      textDocument == null ||
+      contentEl == null
     ) {
       return;
     }
@@ -3329,7 +3735,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     const dirtyLines = tokenizer.tokenize(
       change,
       renderRange,
-      !this.#isDiff && fileInstance.getLinePosition !== undefined
+      !this.#isDiff && this.#virtualizedInstance != null
     );
     const t2 = performance.now();
 
@@ -3476,11 +3882,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     });
     if (didLineCountChange) {
       // Line-count change: recompute hunks from the full document and re-render.
-      fileInstance.applyDocumentChange(
-        textDocument,
-        newLineAnnotations,
-        shouldUpdateBuffer
-      );
+      applyDocumentChange(textDocument, newLineAnnotations, shouldUpdateBuffer);
     }
 
     // A line-count change can remove cached rows, while a unified diff rebuilds
@@ -3505,6 +3907,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         );
       }
     }
+    this.#renderCarets();
 
     if (this.#options.__debug === true) {
       console.log(
@@ -3888,7 +4291,9 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     // line position to trigger the line to be rendered, then recall this function
     // to ensure the line is scrolled into view
     else {
-      const modelLinePosition = this.#fileInstance?.getLinePosition?.(line + 1);
+      const modelLinePosition = this.#virtualizedInstance?.getLinePosition?.(
+        line + 1
+      );
       if (modelLinePosition !== undefined) {
         virtualCaret.style.top = modelLinePosition.top + 'px';
         this.#fileContainer?.shadowRoot?.appendChild(virtualCaret);
@@ -3966,7 +4371,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #spanLineSelection(
     anchorLine: number,
     focusLine: number,
-    textDocument: TextDocument<LAnnotation>
+    textDocument: TextDocument<EType, LAnnotation>
   ): EditorSelection {
     const lineStart = (line: number): Position => ({ line, character: 0 });
     const lineEnd = (line: number): Position => ({
@@ -4294,8 +4699,870 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     return true;
   }
 
+  #removeRenderedEditPrediction(): void {
+    for (const [key, element] of this.#overlayElements ?? []) {
+      if (key.startsWith('editPrediction')) {
+        element.remove();
+        this.#overlayElements?.delete(key);
+      }
+    }
+  }
+
+  // Combines edits that share source lines into the exact text range rendered
+  // by one ghost preview. A non-deletion replacement also includes the
+  // preserved line suffix so it reflows after the ghost text. Spacing and
+  // rendering both use this geometry so they cannot disagree about how many
+  // continuation lines the preview contains.
+  #composeEditPredictionGroup(
+    textDocument: TextDocument<EType, LAnnotation>,
+    edits: readonly TextEdit[],
+    startIndex: number
+  ): { edit: TextEdit; endIndex: number } {
+    const firstEdit = edits[startIndex];
+    let endIndex = startIndex;
+    let endLine = firstEdit.range.end.line;
+    while (
+      endIndex + 1 < edits.length &&
+      edits[endIndex + 1].range.start.line <= endLine
+    ) {
+      endIndex++;
+      endLine = Math.max(endLine, edits[endIndex].range.end.line);
+    }
+    if (
+      endIndex === startIndex &&
+      (firstEdit.newText.length === 0 ||
+        comparePosition(firstEdit.range.start, firstEdit.range.end) === 0)
+    ) {
+      return { edit: firstEdit, endIndex };
+    }
+
+    const start = firstEdit.range.start;
+    const end = {
+      line: endLine,
+      character: textDocument.getLineLength(endLine),
+    };
+    const parts: string[] = [];
+    let consumed = textDocument.offsetAt(start);
+    for (let index = startIndex; index <= endIndex; index++) {
+      const edit = edits[index];
+      const editStart = textDocument.offsetAt(edit.range.start);
+      const editEnd = textDocument.offsetAt(edit.range.end);
+      parts.push(textDocument.getTextSlice(consumed, editStart), edit.newText);
+      consumed = editEnd;
+    }
+    parts.push(textDocument.getTextSlice(consumed, textDocument.offsetAt(end)));
+    return {
+      edit: { range: { start, end }, newText: parts.join('') },
+      endIndex,
+    };
+  }
+
+  // Composes the active prediction into ghost groups and decides, once, whether
+  // every group has rendered rows. Spacers and ghost rendering read this result
+  // directly; Tab acceptance reads the `rendered` flag that rendering sets only
+  // after drawing every group. A prediction is therefore shown all-or-nothing
+  // and Tab acts on exactly the ghost text the user sees. A virtualized or
+  // collapsed row cannot show its edit, and accepting would change unseen
+  // document content. Undefined when no prediction applies to the current
+  // document version or subtle mode has not revealed it.
+  #getEditPredictionGroups():
+    | { groups: EditPredictionGroup[]; allVisible: boolean }
+    | undefined {
+    const prediction = this.#editPrediction;
+    const textDocument = this.#editSession?.document;
+    if (
+      prediction == null ||
+      textDocument == null ||
+      prediction.document !== textDocument ||
+      prediction.version !== textDocument.version ||
+      (this.#options.editPrediction?.mode === 'subtle' &&
+        !this.#editPredictionRevealed)
+    ) {
+      return undefined;
+    }
+    const { edits } = prediction.response;
+    const groups: EditPredictionGroup[] = [];
+    let allVisible = edits.length > 0;
+    for (let startIndex = 0; startIndex < edits.length; ) {
+      const { edit, endIndex } = this.#composeEditPredictionGroup(
+        textDocument,
+        edits,
+        startIndex
+      );
+      for (
+        let line = edit.range.start.line;
+        allVisible && line <= edit.range.end.line;
+        line++
+      ) {
+        allVisible = this.#isLineVisible(line);
+      }
+      groups.push({ edit, startIndex, endIndex });
+      startIndex = endIndex + 1;
+    }
+    return { groups, allVisible };
+  }
+
+  // Give a ghost text element one block per predicted line. The first line
+  // continues from the caret, so it is indented to the caret's x. When lines
+  // wrap, the element spans the rest of the column so its lines break where
+  // document text would; otherwise it grows to fit its content.
+  #fillGhostTextElement(
+    element: HTMLElement,
+    newText: string,
+    anchorLeft: number,
+    lineLeft: number,
+    insertionSuffix: Node | undefined
+  ): void {
+    if (this.#isWrap) {
+      element.dataset.wrap = '';
+      element.style.width = `calc(100cqw - ${lineLeft}px)`;
+    } else {
+      delete element.dataset.wrap;
+      element.style.width = 'max-content';
+    }
+    const lines = newText.split(/\r\n|\r|\n/);
+    for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+      const lineText = lines[lineIndex];
+      const suffix =
+        lineIndex === lines.length - 1 ? insertionSuffix : undefined;
+      const isEmpty = lineText.length === 0 && suffix === undefined;
+      const line = h(
+        'span',
+        {
+          dataset: isEmpty
+            ? ['editPredictionLine', 'empty']
+            : 'editPredictionLine',
+          textContent: isEmpty ? '\u200b' : lineText,
+        },
+        element
+      );
+      if (suffix !== undefined) {
+        const suffixElement = h(
+          'span',
+          {
+            dataset: 'editPredictionSuffix',
+          },
+          line
+        );
+        suffixElement.append(suffix);
+      }
+      // Indent only the first visual line to the caret; when the line wraps,
+      // its continuation rows start at the column's left edge like document
+      // text does. Padding would indent every row of the block.
+      if (lineIndex === 0 && anchorLeft !== lineLeft) {
+        line.style.textIndent = `${anchorLeft - lineLeft}px`;
+      }
+    }
+  }
+
+  // A mid-line insertion masks the rest of its line and redraws that text after
+  // the ghost text. Returns the copy to redraw (cloned from the rendered row so
+  // it keeps its colors), or undefined when there is nothing to redraw or a
+  // neighbouring edit on the same line would move it.
+  #cloneInsertionSuffix(group: EditPredictionGroup): Node | undefined {
+    const prediction = this.#editPrediction;
+    const textDocument = this.#editSession?.document;
+    if (prediction == null || textDocument == null) {
+      return undefined;
+    }
+    const { edit, startIndex, endIndex } = group;
+    const { start, end } = edit.range;
+    const isMidLineInsertion =
+      comparePosition(start, end) === 0 &&
+      start.character < textDocument.getLineLength(start.line);
+    if (
+      !isMidLineInsertion ||
+      prediction.response.edits[startIndex - 1]?.range.end.line ===
+        start.line ||
+      prediction.response.edits[endIndex + 1]?.range.start.line === start.line
+    ) {
+      return undefined;
+    }
+    const sourceLine = this.#getLineElement(start.line);
+    if (sourceLine === undefined) {
+      return document.createTextNode(
+        textDocument.getLineText(start.line).slice(start.character)
+      );
+    }
+    const [suffixNode, suffixOffset] = getSelectionAnchor(
+      sourceLine,
+      start.character
+    );
+    const suffixRange = document.createRange();
+    suffixRange.selectNodeContents(sourceLine);
+    suffixRange.setStart(suffixNode, clampDomOffset(suffixNode, suffixOffset));
+    const suffix = suffixRange.cloneContents();
+    if (suffix.firstChild?.textContent === '') {
+      suffix.firstChild.remove();
+    }
+    return suffix;
+  }
+
+  // How many rows of ghost text extend below the anchor row. The ghost's first
+  // visual line sits on the caret's visual line and the rest run down over the
+  // anchor row's remaining visual lines before spilling below it. Without
+  // wrapping every predicted line is one row. With wrapping only the browser
+  // knows where the lines break, so the ghost element is laid out hidden in the
+  // overlay and measured; an element that cannot be measured counts as
+  // unwrapped, the same fallback #wrapLineText uses.
+  #measureGhostTextRows(group: EditPredictionGroup): number {
+    const { edit } = group;
+    const { start } = edit.range;
+    const [anchorLeft, anchorWrapLine] = this.#getCharX(
+      start.line,
+      start.character
+    );
+    let anchorVisualLines = 1;
+    let ghostVisualLines = edit.newText.split(/\r\n|\r|\n/).length;
+    const overlayElement = this.#overlayElement;
+    if (this.#isWrap && overlayElement != null) {
+      anchorVisualLines = Math.max(
+        1,
+        this.#wrapLineTextOrWholeLine(start.line).length - 1
+      );
+      const probe = h(
+        'span',
+        { dataset: 'editPrediction', style: { visibility: 'hidden' } },
+        overlayElement
+      );
+      this.#fillGhostTextElement(
+        probe,
+        edit.newText,
+        anchorLeft,
+        this.#getCharX(start.line, 0)[0],
+        this.#cloneInsertionSuffix(group)
+      );
+      const { width, height } = probe.getBoundingClientRect();
+      probe.remove();
+      const { lineHeight } = this.#metrics;
+      // A zero-width column (mid re-render) would wrap every character; treat
+      // that, like a zero height, as unmeasurable.
+      if (width > 0 && height > 0 && lineHeight > 0) {
+        ghostVisualLines = Math.round(height / lineHeight);
+      }
+    }
+    return Math.max(0, ghostVisualLines - (anchorVisualLines - anchorWrapLine));
+  }
+
+  // Reserve numberless grid space for ghost continuation lines without adding
+  // rows that could be mistaken for document content by the editor.
+  #syncEditPredictionSpacers(notifyComponent = true): void {
+    const nextSpacers = new Map<HTMLElement, number>();
+    // Ghost text rows per line for this sync. It replaces #ghostTextRows only
+    // when the contents differ, so an unchanged map keeps its identity.
+    const ghostTextRows = new Map<number, number>();
+    const previousRows = this.#ghostTextRows;
+    let rowsChanged = false;
+    const contentElement = this.#contentElement;
+    const composed = this.#getEditPredictionGroups();
+    if (contentElement != null && composed != null && composed.allVisible) {
+      for (const group of composed.groups) {
+        const { edit } = group;
+        if (edit.newText.length === 0) {
+          continue;
+        }
+        const count = this.#measureGhostTextRows(group);
+        if (count > (ghostTextRows.get(edit.range.start.line) ?? 0)) {
+          ghostTextRows.set(edit.range.start.line, count);
+        }
+      }
+
+      if (ghostTextRows.size > 0) {
+        let rowIndexes: Map<Element, number> | undefined;
+        const startingLine = this.#renderRange?.startingLine ?? 0;
+        for (const [line, count] of ghostTextRows) {
+          rowsChanged ||= previousRows.get(line) !== count;
+          const lineElement = this.#getLineElement(line);
+          if (lineElement === undefined) {
+            continue;
+          }
+          let rowIndex = line - startingLine;
+          if (contentElement.children[rowIndex] !== lineElement) {
+            if (rowIndexes === undefined) {
+              rowIndexes = new Map();
+              for (
+                let index = 0;
+                index < contentElement.children.length;
+                index++
+              ) {
+                rowIndexes.set(contentElement.children[index], index);
+              }
+            }
+            rowIndex = rowIndexes.get(lineElement) ?? -1;
+          }
+          if (rowIndex < 0) {
+            continue;
+          }
+          nextSpacers.set(lineElement, count);
+          const gutterRow = this.#gutterElement?.children[rowIndex];
+          if (gutterRow instanceof HTMLElement) {
+            nextSpacers.set(gutterRow, count);
+          }
+          const partner = this.#deletionsColumnPartner(rowIndex);
+          if (partner != null) {
+            // Several anchors can share one buffer, so their rows add up.
+            nextSpacers.set(
+              partner.content,
+              (nextSpacers.get(partner.content) ?? 0) + count
+            );
+            nextSpacers.set(
+              partner.gutter,
+              (nextSpacers.get(partner.gutter) ?? 0) + count
+            );
+          }
+        }
+      }
+    }
+
+    let changed = false;
+    for (const [element, count] of this.#editPredictionSpacers) {
+      if (nextSpacers.get(element) === count) {
+        continue;
+      }
+      delete element.dataset.editPredictionSpacer;
+      element.style.removeProperty('--diffs-edit-prediction-spacer-height');
+      changed = true;
+    }
+    for (const [element, count] of nextSpacers) {
+      if (this.#editPredictionSpacers.get(element) === count) {
+        continue;
+      }
+      element.dataset.editPredictionSpacer = '';
+      element.style.setProperty(
+        '--diffs-edit-prediction-spacer-height',
+        `${count}lh`
+      );
+      changed = true;
+    }
+    this.#editPredictionSpacers = nextSpacers;
+    if (rowsChanged || ghostTextRows.size !== previousRows.size) {
+      this.#ghostTextRows = ghostTextRows;
+      if (notifyComponent) {
+        this.#virtualizedInstance?.syncGhostTextRows();
+      }
+    }
+    if (changed) {
+      this.#resetCache();
+    }
+  }
+
+  // In a split diff whose columns scroll separately, each column is its own
+  // grid, so a ghost text margin on an additions row grows that column alone
+  // and the deletions rows below drift out of line. Find the deletions element
+  // in the same grid track as the additions row at `rowIndex`: its paired line
+  // row, or the empty buffer that spans the tracks of a one-sided run. A row is
+  // one track; a buffer spans `data-buffer-size` tracks. Undefined when the
+  // columns share a grid (wrap mode) or this is not a split diff.
+  #deletionsColumnPartner(rowIndex: number): ColumnElements | undefined {
+    const deletionsColumn = this.#deletionsColumn;
+    const contentElement = this.#contentElement;
+    if (
+      deletionsColumn == null ||
+      contentElement == null ||
+      !this.#isDiff ||
+      this.#diffSyle !== 'split' ||
+      this.#isWrap
+    ) {
+      return undefined;
+    }
+    let track = 0;
+    for (let index = 0; index < rowIndex; index++) {
+      track += gridTrackSpan(contentElement.children[index]);
+    }
+    const { content, gutter } = deletionsColumn;
+    let covered = 0;
+    for (let index = 0; index < content.children.length; index++) {
+      const child = content.children[index];
+      covered += gridTrackSpan(child);
+      if (covered > track) {
+        const gutterChild = gutter.children[index];
+        if (
+          !(child instanceof HTMLElement) ||
+          !(gutterChild instanceof HTMLElement)
+        ) {
+          throw new Error(
+            'Editor: deletions column rows and gutter cells are out of step'
+          );
+        }
+        return { content: child, gutter: gutterChild };
+      }
+    }
+    return undefined;
+  }
+
+  #cancelEditPrediction(removeRendered: boolean, notifyComponent = true): void {
+    if (this.#editPredictionTimer !== undefined) {
+      clearTimeout(this.#editPredictionTimer);
+      this.#editPredictionTimer = undefined;
+    }
+    this.#editPredictionAbortController?.abort();
+    this.#editPredictionAbortController = undefined;
+    this.#editPredictionGeneration++;
+    this.#editPredictionRevealed = false;
+    this.#retryEditPredictionOnRender = false;
+    this.#editPrediction = undefined;
+    this.#syncEditPredictionSpacers(notifyComponent);
+    if (removeRendered) {
+      this.#removeRenderedEditPrediction();
+    }
+  }
+
+  #includesEditPredictionPath(path: string): boolean {
+    const options = this.#options.editPrediction;
+    if (options === undefined) {
+      return false;
+    }
+    const normalizedPath = path.replaceAll('\\', '/');
+    return (
+      (options.include === undefined ||
+        options.include.some((pattern) =>
+          matchesEditPredictionPattern(normalizedPath, pattern)
+        )) &&
+      options.exclude?.some((pattern) =>
+        matchesEditPredictionPattern(normalizedPath, pattern)
+      ) !== true
+    );
+  }
+
+  #scheduleEditPrediction(): void {
+    this.#cancelEditPrediction(true);
+    const selection = this.#selections?.[0];
+    if (
+      this.#options.editPrediction === undefined ||
+      this.#editSession?.document === undefined ||
+      this.#editSession?.fileInfo === undefined ||
+      this.#selections?.length !== 1 ||
+      selection === undefined ||
+      !isCollapsedSelection(selection)
+    ) {
+      return;
+    }
+
+    const document = this.#editSession?.document;
+    const cursorOffset = document.offsetAt(getCaretPosition(selection));
+    this.#editPredictionTimer = setTimeout(() => {
+      this.#editPredictionTimer = undefined;
+      const options = this.#options.editPrediction;
+      const currentSelection = this.#selections?.[0];
+      const path = this.#editSession?.fileInfo?.name;
+      if (
+        options === undefined ||
+        path === undefined ||
+        this.#editSession?.document !== document ||
+        this.#selections?.length !== 1 ||
+        currentSelection === undefined ||
+        !isCollapsedSelection(currentSelection) ||
+        document.offsetAt(getCaretPosition(currentSelection)) !== cursorOffset
+      ) {
+        return;
+      }
+
+      if (!this.#includesEditPredictionPath(path)) {
+        return;
+      }
+
+      const isLineEditable = (line: number): boolean =>
+        this.#isLineInRenderRange(line) && this.#isLineRenderable(line);
+      if (!isLineEditable(getCaretPosition(currentSelection).line)) {
+        this.#retryEditPredictionOnRender = true;
+        return;
+      }
+      const request = buildEditPredictionRequest(
+        path,
+        document,
+        cursorOffset,
+        this.#editPredictionHistory,
+        isLineEditable
+      );
+      if (request === undefined) {
+        return;
+      }
+      const excerptStartOffset = document.offsetAt({
+        line: request.excerptStartLine,
+        character: 0,
+      });
+      const editableStart = excerptStartOffset + request.editableRange.start;
+      const editableEnd = excerptStartOffset + request.editableRange.end;
+      const controller = new AbortController();
+      const generation = ++this.#editPredictionGeneration;
+      this.#editPredictionAbortController = controller;
+
+      let prediction: Promise<EditPredictResponse>;
+      try {
+        prediction = options.provider.predict(request, {
+          signal: controller.signal,
+        });
+      } catch {
+        this.#editPredictionAbortController = undefined;
+        return;
+      }
+
+      void Promise.resolve(prediction)
+        .then((response) => {
+          const selection = this.#selections?.[0];
+          if (
+            controller.signal.aborted ||
+            generation !== this.#editPredictionGeneration ||
+            this.#editPredictionAbortController !== controller ||
+            this.#editSession?.document !== document ||
+            document.version !== request.version ||
+            this.#selections?.length !== 1 ||
+            selection === undefined ||
+            !isCollapsedSelection(selection) ||
+            document.offsetAt(getCaretPosition(selection)) !== cursorOffset
+          ) {
+            return;
+          }
+
+          if (
+            response == null ||
+            !Array.isArray(response.edits) ||
+            response.edits.length === 0 ||
+            response.edits.length > MAX_EDIT_PREDICTION_RESPONSE_EDITS ||
+            response.newCursor == null
+          ) {
+            return;
+          }
+          const resolvedEdits: ResolvedTextEdit[] = [];
+          let responseBytes = 0;
+          for (const edit of response.edits) {
+            if (
+              edit == null ||
+              typeof edit.newText !== 'string' ||
+              !isValidEditPredictionPosition(document, edit.range?.start) ||
+              !isValidEditPredictionPosition(document, edit.range?.end) ||
+              comparePosition(edit.range.start, edit.range.end) > 0
+            ) {
+              return;
+            }
+            responseBytes += editPredictionTextEncoder.encode(
+              edit.newText
+            ).byteLength;
+            if (responseBytes > MAX_EDIT_PREDICTION_RESPONSE_BYTES) {
+              return;
+            }
+            const start = document.offsetAt(edit.range.start);
+            const end = document.offsetAt(edit.range.end);
+            const resolvedEdit = document.resolveEdits([edit])[0];
+            if (resolvedEdit.start !== start || resolvedEdit.end !== end) {
+              return;
+            }
+            resolvedEdits.push(resolvedEdit);
+          }
+          resolvedEdits.sort((left, right) => {
+            const startDelta = left.start - right.start;
+            return startDelta === 0 ? left.end - right.end : startDelta;
+          });
+          for (let index = 0; index < resolvedEdits.length; index++) {
+            const edit = resolvedEdits[index];
+            if (
+              edit.start < editableStart ||
+              edit.end > editableEnd ||
+              (index > 0 && resolvedEdits[index - 1].end > edit.start)
+            ) {
+              return;
+            }
+          }
+          const edits = resolvedEdits.filter(
+            (edit) => edit.text !== document.getTextSlice(edit.start, edit.end)
+          );
+          if (edits.length === 0) {
+            return;
+          }
+
+          const firstEditPosition = document.positionAt(edits[0].start);
+          const lastEditPosition = document.positionAt(edits.at(-1)!.end);
+          const affectedStart = document.offsetAt({
+            line: firstEditPosition.line,
+            character: 0,
+          });
+          const affectedEnd = document.offsetAt({
+            line: lastEditPosition.line,
+            character: document.getLineLength(lastEditPosition.line),
+          });
+          const predictedParts: string[] = [];
+          let consumed = affectedStart;
+          for (const edit of edits) {
+            predictedParts.push(
+              document.getTextSlice(consumed, edit.start),
+              edit.text
+            );
+            consumed = edit.end;
+          }
+          predictedParts.push(document.getTextSlice(consumed, affectedEnd));
+          const predictedLines = predictedParts.join('').split(/\r\n|\r|\n/);
+          const affectedEndLine =
+            firstEditPosition.line + predictedLines.length - 1;
+          const lineDelta =
+            predictedLines.length -
+            (lastEditPosition.line - firstEditPosition.line + 1);
+          const newCursor = response.newCursor;
+          if (
+            !Number.isInteger(newCursor.line) ||
+            !Number.isInteger(newCursor.character) ||
+            newCursor.line < 0 ||
+            newCursor.character < 0
+          ) {
+            return;
+          }
+          if (
+            newCursor.line >= firstEditPosition.line &&
+            newCursor.line <= affectedEndLine
+          ) {
+            const line =
+              predictedLines[newCursor.line - firstEditPosition.line];
+            if (
+              newCursor.character > line.length ||
+              splitsSurrogatePair(line, newCursor.character)
+            ) {
+              return;
+            }
+          } else {
+            const originalLine =
+              newCursor.line < firstEditPosition.line
+                ? newCursor.line
+                : newCursor.line - lineDelta;
+            if (
+              originalLine < 0 ||
+              originalLine >= document.lineCount ||
+              newCursor.character > document.getLineLength(originalLine)
+            ) {
+              return;
+            }
+            const originalOffset = document.offsetAt({
+              line: originalLine,
+              character: newCursor.character,
+            });
+            if (
+              splitsSurrogatePair(
+                document.charAt(originalOffset - 1) +
+                  document.charAt(originalOffset),
+                1
+              )
+            ) {
+              return;
+            }
+          }
+
+          this.#editPrediction = {
+            document,
+            version: request.version,
+            cursorOffset,
+            rendered: false,
+            response: {
+              edits: edits.map((edit) => ({
+                range: {
+                  start: document.positionAt(edit.start),
+                  end: document.positionAt(edit.end),
+                },
+                newText: edit.text,
+              })),
+              newCursor: { ...newCursor },
+            },
+          };
+          this.#updateSelections(this.#selections);
+        })
+        .catch(() => {})
+        .finally(() => {
+          if (this.#editPredictionAbortController === controller) {
+            this.#editPredictionAbortController = undefined;
+          }
+        });
+    }, EDIT_PREDICTION_DEBOUNCE_MS);
+  }
+
+  #recordEditPredictionHistory(
+    change: TextDocumentChange,
+    source: 'user' | 'prediction'
+  ): void {
+    const textDocument = this.#editSession?.document;
+    const path = this.#editSession?.fileInfo?.name;
+    const transaction = getTextDocumentChangeTransaction(change);
+    if (
+      textDocument === undefined ||
+      path === undefined ||
+      transaction === undefined ||
+      !this.#includesEditPredictionPath(path)
+    ) {
+      return;
+    }
+    this.#editPredictionHistory = recordEditPrediction(
+      this.#editPredictionHistory,
+      path,
+      textDocument,
+      transaction,
+      source
+    );
+  }
+
+  #acceptEditPrediction(): void {
+    const prediction = this.#editPrediction;
+    const textDocument = this.#editSession?.document;
+    const selection = this.#selections?.[0];
+    if (
+      prediction === undefined ||
+      !prediction.rendered ||
+      textDocument === undefined ||
+      prediction.document !== textDocument ||
+      prediction.version !== textDocument.version ||
+      this.#selections?.length !== 1 ||
+      selection === undefined ||
+      !isCollapsedSelection(selection) ||
+      textDocument.offsetAt(getCaretPosition(selection)) !==
+        prediction.cursorOffset
+    ) {
+      return;
+    }
+
+    const { edits, newCursor } = prediction.response;
+    this.#cancelEditPrediction(true);
+    const change = textDocument.applyEdits(
+      edits.map((edit) => ({
+        range: {
+          start: { ...edit.range.start },
+          end: { ...edit.range.end },
+        },
+        newText: edit.newText,
+      })),
+      true,
+      this.#selections,
+      undefined,
+      true
+    );
+    if (change === undefined) {
+      this.#scheduleEditPrediction();
+      return;
+    }
+
+    const cursor = textDocument.normalizePosition(newCursor);
+    const nextSelections: EditorSelection[] = [
+      { start: cursor, end: cursor, direction: DirectionNone },
+    ];
+    textDocument.setLastUndoSelectionsAfter(nextSelections);
+    this.#applyChange(
+      change,
+      nextSelections,
+      this.#applyChangeToLineAnnotations(change),
+      { editSource: 'prediction' }
+    );
+  }
+
+  #renderEditPrediction(renderCtx: {
+    fragment: DocumentFragment;
+    elements: Map<string, HTMLElement>;
+  }): void {
+    const prediction = this.#editPrediction;
+    const textDocument = this.#editSession?.document;
+    if (prediction !== undefined) {
+      prediction.rendered = false;
+    }
+    const composed = this.#getEditPredictionGroups();
+    if (
+      prediction == null ||
+      textDocument == null ||
+      composed == null ||
+      !composed.allVisible
+    ) {
+      return;
+    }
+
+    for (const group of composed.groups) {
+      const { edit, endIndex } = group;
+      const { start, end } = edit.range;
+      const isDeletion = edit.newText.length === 0;
+      const isReplacement = comparePosition(start, end) !== 0;
+      const lineLength = textDocument.getLineLength(start.line);
+      const isMidLineInsertion = !isReplacement && start.character < lineLength;
+      if (isReplacement) {
+        this.#renderSelection(
+          renderCtx,
+          isDeletion ? 'editPredictionDeletion' : 'editPredictionReplacement',
+          { start, end }
+        );
+      } else if (isMidLineInsertion) {
+        // Hide the in-flow suffix so ghost text never collides with it.
+        this.#renderSelection(renderCtx, 'editPredictionInsertion', {
+          start,
+          end: { line: start.line, character: lineLength },
+        });
+      }
+
+      if (isDeletion) {
+        continue;
+      }
+
+      const [anchorLeft, anchorWrapLine] = this.#getCharX(
+        start.line,
+        start.character
+      );
+      const lineLeft = this.#getCharX(start.line, 0)[0];
+      const anchorTop =
+        this.#getLineY(start.line) + anchorWrapLine * this.#metrics.lineHeight;
+      const key = `editPrediction-${endIndex}`;
+      let element = this.#overlayElements?.get(key);
+      if (element !== undefined) {
+        this.#overlayElements?.delete(key);
+        element.replaceChildren();
+      } else {
+        element = h(
+          'span',
+          {
+            ariaHidden: 'true',
+            contentEditable: 'false',
+            dataset: 'editPrediction',
+          },
+          renderCtx.fragment
+        );
+      }
+      if (isReplacement) {
+        element.dataset.replacement = '';
+        const lineElement = this.#getLineElement(start.line);
+        if (lineElement !== undefined) {
+          element.style.setProperty(
+            '--diffs-edit-prediction-bg',
+            getComputedStyle(lineElement).getPropertyValue('--diffs-line-bg')
+          );
+        }
+      } else {
+        delete element.dataset.replacement;
+        element.style.removeProperty('--diffs-edit-prediction-bg');
+      }
+      this.#fillGhostTextElement(
+        element,
+        edit.newText,
+        anchorLeft,
+        lineLeft,
+        this.#cloneInsertionSuffix(group)
+      );
+      element.style.transform = `translateX(${lineLeft}px) translateY(${anchorTop}px)`;
+      renderCtx.elements.set(key, element);
+    }
+    prediction.rendered = true;
+  }
+
   #updateSelections(selections: EditorSelection[]) {
     this.__postponeBgTokenizeToNextFrame();
+
+    const previousSelections = this.#selections;
+    let selectionsChanged = previousSelections?.length !== selections.length;
+    if (!selectionsChanged && previousSelections !== undefined) {
+      for (let i = 0; i < selections.length; i++) {
+        const previous = previousSelections[i];
+        const next = selections[i];
+        if (
+          previous.direction !== next.direction ||
+          comparePosition(previous.start, next.start) !== 0 ||
+          comparePosition(previous.end, next.end) !== 0
+        ) {
+          selectionsChanged = true;
+          break;
+        }
+      }
+    }
+    if (selectionsChanged) {
+      this.#cancelEditPrediction(true);
+    }
+    this.#syncEditPredictionSpacers();
 
     this.#primaryCaretElement = undefined;
     this.#setEditorActiveLineSafe(null);
@@ -4310,6 +5577,9 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#overlayElements?.clear();
       this.#selectionAction?.cleanup();
       this.#selectionAction = undefined;
+      if (selectionsChanged) {
+        this.#scheduleEditPrediction();
+      }
       return;
     }
 
@@ -4364,9 +5634,9 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       const matches = this.#matches;
       const renderRange = this.#renderRange;
       const shouldCullMatches =
-        (renderRange !== undefined &&
-          Number.isFinite(renderRange.totalLines)) ||
-        (this.#isDiff && this.#fileInstance?.options.expandUnchanged !== true);
+        (renderRange != null && Number.isFinite(renderRange.totalLines)) ||
+        (this.#isDiff &&
+          this.#fileDiffInstance?.options.expandUnchanged !== true);
       const renderedLineRanges = shouldCullMatches
         ? this.#getRenderedEditableLineRanges()
         : undefined;
@@ -4446,12 +5716,91 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       }
     }
 
+    this.#renderEditPrediction(renderCtx);
+
     this.#overlayElement?.appendChild(fragment);
     this.#overlayElements?.forEach((el) => el.remove());
     this.#overlayElements?.clear();
     this.#overlayElements = renderCtx.elements;
-
     this.#updateSelectionActionPopover();
+    if (selectionsChanged) {
+      this.#scheduleEditPrediction();
+    }
+  }
+
+  // Render externally owned cursors independently from local selections so
+  // collaboration state never changes focus, editing, or native selection.
+  #renderCarets(): void {
+    const carets = this.#carets;
+    const renderCaret = this.#options.renderCaret;
+    const overlayElement = this.#overlayElement;
+    this.#caretHighlightElements?.forEach((element) => element.remove());
+    this.#caretHighlightElements = undefined;
+    if (
+      carets === undefined ||
+      renderCaret === undefined ||
+      overlayElement === undefined
+    ) {
+      this.#caretElements?.forEach((element) => element.remove());
+      this.#caretElements = undefined;
+      return;
+    }
+
+    const elements = (this.#caretElements ??= new Map());
+    for (const [trackedCaret, element] of elements) {
+      if (!this.#isLineVisible(trackedCaret.caret.focus.line)) {
+        element.remove();
+        elements.delete(trackedCaret);
+      }
+    }
+
+    const fragment = document.createDocumentFragment();
+    const highlightElements: HTMLElement[] = [];
+    for (const trackedCaret of carets) {
+      const { caret } = trackedCaret;
+      const { line, character } = caret.focus;
+      if (trackedCaret.anchorOffset !== trackedCaret.focusOffset) {
+        // Keep each collaborator's rounded-corner state and highlight elements
+        // separate so overlapping ranges retain their own geometry and color.
+        const highlightContext = {
+          fragment,
+          elements: new Map<string, HTMLElement>(),
+        };
+        this.#renderSelection(
+          highlightContext,
+          'caretHighlight',
+          trackedCaret.anchorOffset < trackedCaret.focusOffset
+            ? { start: caret.anchor, end: caret.focus }
+            : { start: caret.focus, end: caret.anchor },
+          undefined,
+          caret.focus
+        );
+        for (const highlightElement of highlightContext.elements.values()) {
+          highlightElement.style.setProperty(
+            '--diffs-caret-highlight-bg',
+            `color-mix(in srgb, ${caret.metadata.color} 32%, transparent)`
+          );
+          highlightElements.push(highlightElement);
+        }
+      }
+      // Virtualized views omit off-screen rows. Do not leave an unpositioned
+      // anchor at the overlay origin for a caret whose row is not rendered.
+      if (!this.#isLineVisible(line)) continue;
+      let element = elements.get(trackedCaret);
+      if (element === undefined) {
+        element = h(
+          'div',
+          { dataset: 'remoteCaret', children: [renderCaret(caret)] },
+          fragment
+        );
+        elements.set(trackedCaret, element);
+      }
+      const [left, wrapLine] = this.#getCharX(line, character);
+      const top = this.#getLineY(line) + wrapLine * this.#metrics.lineHeight;
+      element.style.transform = `translateX(${left}px) translateY(${top}px)`;
+    }
+    this.#caretHighlightElements = highlightElements;
+    overlayElement.appendChild(fragment);
   }
 
   #renderSelection(
@@ -4459,9 +5808,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       fragment: DocumentFragment;
       elements: Map<string, HTMLElement>;
     },
-    type: 'selection' | 'match' | 'marker' | 'bracketMatch',
+    type: OverlayRangeType,
     range: Range,
-    extraDataset?: string
+    extraDataset?: string,
+    connectedCaret?: Position
   ) {
     if (this.#editSession?.document == null) {
       return;
@@ -4486,6 +5836,32 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         ? end.character
         : this.#editSession?.document.getLineLength(line);
 
+      // A predicted deletion of an empty line or of a lone line break has no
+      // text to strike through; draw a one-character mark at the boundary so
+      // the removal is visible, on flat and soft-wrapped lines alike. A range
+      // that ends at column 0 of a later line also produces an empty segment
+      // on that line, but that line survives the edit, so it gets no mark.
+      if (
+        startChar === endChar &&
+        (type === 'editPredictionDeletion' ||
+          type === 'editPredictionReplacement')
+      ) {
+        if (isLastLine && line !== start.line) {
+          continue;
+        }
+        const [left, wrapLine] = this.#getCharX(line, startChar);
+        this.#renderSelectionBlock(
+          renderCtx,
+          type,
+          line,
+          wrapLine,
+          left,
+          this.#metrics.ch,
+          extraDataset
+        );
+        continue;
+      }
+
       if (this.#isWrap) {
         const contentWidth = this.#getContentWidth();
         const lineText = this.#editSession?.document.getLineText(line);
@@ -4500,7 +5876,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
             endChar,
             isLastLine,
             type,
-            extraDataset
+            extraDataset,
+            connectedCaret
           );
           continue;
         }
@@ -4535,7 +5912,17 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         0,
         left,
         width,
-        extraDataset
+        extraDataset,
+        {
+          start:
+            connectedCaret?.line === start.line &&
+            connectedCaret.character === start.character &&
+            line === start.line,
+          end:
+            connectedCaret?.line === end.line &&
+            connectedCaret.character === end.character &&
+            line === end.line,
+        }
       );
     }
   }
@@ -4556,8 +5943,9 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     startChar: number,
     endChar: number,
     isLastLine: boolean,
-    type: 'selection' | 'match' | 'marker' | 'bracketMatch',
-    extraDataset?: string
+    type: OverlayRangeType,
+    extraDataset?: string,
+    connectedCaret?: Position
   ) {
     const wrapOffsets = this.#wrapLineTextOrWholeLine(line);
     const segmentCount = wrapOffsets.length - 1;
@@ -4613,7 +6001,17 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         wrapLine,
         segmentLeft,
         segmentWidth,
-        extraDataset
+        extraDataset,
+        {
+          start:
+            connectedCaret?.line === line &&
+            connectedCaret.character === startChar &&
+            wrapStartChar === startChar,
+          end:
+            connectedCaret?.line === line &&
+            connectedCaret.character === endChar &&
+            wrapEndChar === endChar,
+        }
       );
     }
   }
@@ -4652,12 +6050,13 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         width: number;
       };
     },
-    type: 'selection' | 'match' | 'marker' | 'bracketMatch',
+    type: OverlayRangeType,
     line: number,
     wrapLine: number,
     left: number,
     width: number,
-    extraDataset?: string
+    extraDataset?: string,
+    connectedCaretEdge?: { start: boolean; end: boolean }
   ) {
     if (width === 0) {
       return;
@@ -4668,7 +6067,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     const cacheKey = `${type}-${line}/${wrapLine}-${left}-${width} ${extraDataset ?? ''}`;
     const overlayEls = this.#overlayElements;
     const rounded =
-      (this.#options.roundedSelection ?? true) && type === 'selection';
+      (this.#options.roundedSelection ?? true) &&
+      (type === 'selection' || type === 'caretHighlight');
 
     const addRoundedCorner = (
       line: number,
@@ -4718,7 +6118,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         cornerEl = h(
           'div',
           {
-            dataset: 'selectionRange',
+            dataset:
+              type === 'caretHighlight'
+                ? 'caretHighlightRange'
+                : 'selectionRange',
             style: { cssText: css },
             children: [
               h('div', {
@@ -4783,6 +6186,16 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         dataset.rbl = '';
         dataset.rbr = '';
       }
+      // A collaborator's selection meets its caret at this endpoint. Keep
+      // that seam square, while preserving rounded corners at the free edge.
+      if (connectedCaretEdge?.start === true) {
+        delete dataset.rtl;
+        delete dataset.rbl;
+      }
+      if (connectedCaretEdge?.end === true) {
+        delete dataset.rtr;
+        delete dataset.rbr;
+      }
     };
 
     let rangeEl = renderCtx.elements.get(cacheKey);
@@ -4810,6 +6223,20 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
     rangeEl.style.width = `${width}px`;
     rangeEl.style.transform = `translateX(${left}px) translateY(${y}px)`;
+    if (
+      type === 'editPredictionInsertion' ||
+      type === 'editPredictionReplacement'
+    ) {
+      const lineElement = this.#getLineElement(line);
+      if (lineElement !== undefined) {
+        rangeEl.style.setProperty(
+          '--diffs-edit-prediction-bg',
+          getComputedStyle(lineElement).getPropertyValue('--diffs-line-bg')
+        );
+      }
+    } else {
+      rangeEl.style.removeProperty('--diffs-edit-prediction-bg');
+    }
     if (rounded) {
       addRadiusStyle(rangeEl);
     }
@@ -5275,7 +6702,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
     const { nextSelections, change } =
       Array.isArray(text) && text.length === selections.length
-        ? applyTextReplaceToSelections<LAnnotation>(
+        ? applyTextReplaceToSelections<EType, LAnnotation>(
             textDocument,
             selections,
             text,
@@ -5283,7 +6710,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
             undoBoundary,
             textOrder
           )
-        : applyTextChangeToSelections<LAnnotation>(
+        : applyTextChangeToSelections<EType, LAnnotation>(
             textDocument,
             selections,
             {
@@ -5312,14 +6739,16 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       return;
     }
 
-    const { nextSelections, change } =
-      applyDeleteCharacterToSelections<LAnnotation>(
-        textDocument,
-        selections,
-        forward,
-        this.#lineAnnotations,
-        this.#metrics.tabSize
-      );
+    const { nextSelections, change } = applyDeleteCharacterToSelections<
+      EType,
+      LAnnotation
+    >(
+      textDocument,
+      selections,
+      forward,
+      this.#lineAnnotations,
+      this.#metrics.tabSize
+    );
     if (change !== undefined) {
       this.#applyChange(
         change,
@@ -5348,13 +6777,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           return 0;
         }
       : undefined;
-    const { nextSelections, change } =
-      applyDeleteSoftLineBackwardToSelections<LAnnotation>(
-        textDocument,
-        selections,
-        getSoftLineStart,
-        this.#lineAnnotations
-      );
+    const { nextSelections, change } = applyDeleteSoftLineBackwardToSelections<
+      EType,
+      LAnnotation
+    >(textDocument, selections, getSoftLineStart, this.#lineAnnotations);
     if (change !== undefined) {
       this.#applyChange(
         change,
@@ -5370,12 +6796,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     if (selections === undefined || textDocument === undefined) {
       return;
     }
-    const { nextSelections, change } =
-      applyDeleteWordBackwardToSelections<LAnnotation>(
-        textDocument,
-        selections,
-        this.#lineAnnotations
-      );
+    const { nextSelections, change } = applyDeleteWordBackwardToSelections<
+      EType,
+      LAnnotation
+    >(textDocument, selections, this.#lineAnnotations);
     if (change !== undefined) {
       this.#applyChange(
         change,
@@ -5391,12 +6815,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     if (selections === undefined || textDocument === undefined) {
       return;
     }
-    const { nextSelections, change } =
-      applyDeleteHardLineForwardToSelections<LAnnotation>(
-        textDocument,
-        selections,
-        this.#lineAnnotations
-      );
+    const { nextSelections, change } = applyDeleteHardLineForwardToSelections<
+      EType,
+      LAnnotation
+    >(textDocument, selections, this.#lineAnnotations);
     if (change !== undefined) {
       this.#applyChange(
         change,
@@ -5412,11 +6834,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     if (selections === undefined || textDocument === undefined) {
       return;
     }
-    const { nextSelections, change } = applyTransposeToSelections<LAnnotation>(
-      textDocument,
-      selections,
-      this.#lineAnnotations
-    );
+    const { nextSelections, change } = applyTransposeToSelections<
+      EType,
+      LAnnotation
+    >(textDocument, selections, this.#lineAnnotations);
     if (change !== undefined) {
       this.#applyChange(
         change,
@@ -5429,9 +6850,38 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #applyChange(
     change: TextDocumentChange,
     newSelections?: EditorSelection[],
-    newLineAnnotations?: DiffLineAnnotation<LAnnotation>[],
-    options?: { skipSearchRefresh?: boolean; skipFocus?: boolean }
+    newLineAnnotations?: EditorLineAnnotation<EType, LAnnotation>[],
+    options?: {
+      skipSearchRefresh?: boolean;
+      skipFocus?: boolean;
+      editSource?: 'user' | 'prediction';
+    }
   ) {
+    // Cancel first so a line-count change, which rebuilds the component's
+    // layout, folds the now-empty ghost rows rather than rows keyed by pre-edit
+    // lines. Every change ends the prediction anyway.
+    if (this.#editPrediction != null) {
+      this.#cancelEditPrediction(true);
+    }
+    const textDocument = this.#editSession?.document;
+    if (textDocument !== undefined && this.#carets !== undefined) {
+      for (const trackedCaret of this.#carets) {
+        trackedCaret.anchorOffset = remapOffsetThroughEdits(
+          trackedCaret.anchorOffset,
+          change.changes
+        );
+        trackedCaret.focusOffset = remapOffsetThroughEdits(
+          trackedCaret.focusOffset,
+          change.changes
+        );
+        trackedCaret.caret.anchor = textDocument.positionAt(
+          trackedCaret.anchorOffset
+        );
+        trackedCaret.caret.focus = textDocument.positionAt(
+          trackedCaret.focusOffset
+        );
+      }
+    }
     // Invalidate layout caches touched by the edit. Clear cached line Y
     // positions from startLine onward when either:
     // - the line count changed (inserts/deletes renumber every later line), or
@@ -5560,7 +7010,12 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#updateSelections(newSelections);
     }
 
+    // A completed local edit also supersedes any pending external replacement.
+    this.#fileInstance?.__acknowledgeDocumentUpdate();
     this.#checkpointEditSessionState();
+
+    this.#recordEditPredictionHistory(change, options?.editSource ?? 'user');
+    this.#scheduleEditPrediction();
 
     // Publish the change only after the host renderer agrees with the new
     // document. Consumers may synchronously render the returned annotations,
@@ -5608,37 +7063,25 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
   #emitChange(
     changes: EditorChange[],
-    lineAnnotations:
-      | LineAnnotation<LAnnotation>[]
-      | DiffLineAnnotation<LAnnotation>[]
-      | undefined
+    lineAnnotations: EditorLineAnnotation<EType, LAnnotation>[] | undefined
   ): void {
     const file = this.getFile();
-    const onChange = this.#options.onChange;
-    const fileInstance = this.#fileInstance;
-    if (file == null) {
+    const publishChange = this.#publishChange;
+    if (file == null || publishChange == null) {
       return;
     }
-    const event: EditorChangeEvent<LAnnotation, 'file' | 'diff'> = {
-      changes,
-      file,
-      editor: this,
-      lineAnnotations,
-    };
-    onChange?.(event);
-    fileInstance?.emitEditChange(event);
+    publishChange(changes, file, lineAnnotations);
   }
 
   #applyChangeToLineAnnotations(
     change: TextDocumentChange
-  ): DiffLineAnnotation<LAnnotation>[] | undefined {
-    if (this.#lineAnnotations !== undefined) {
-      const nextLineAnnotations =
-        applyDocumentChangeToLineAnnotations<LAnnotation>(
-          change,
-          this.#lineAnnotations
-        );
-      if (nextLineAnnotations !== undefined) {
+  ): EditorLineAnnotation<EType, LAnnotation>[] | undefined {
+    if (this.#lineAnnotations != null) {
+      const nextLineAnnotations = applyDocumentChangeToLineAnnotations(
+        change,
+        this.#lineAnnotations
+      );
+      if (nextLineAnnotations != null) {
         this.#editSession?.document?.setLastUndoLineAnnotations(
           this.#lineAnnotations,
           nextLineAnnotations
@@ -5679,6 +7122,19 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     return ranges;
   }
 
+  // Whether the File or FileDiff component this editor is attached to
+  // currently renders a row for this document line. Virtualized components
+  // only render a window of lines, so a line outside that window has no DOM
+  // row. Without a render range, every line has a row.
+  #isLineInRenderRange(line: number): boolean {
+    const renderRange = this.#renderRange;
+    return (
+      renderRange == null ||
+      (line >= renderRange.startingLine &&
+        line < renderRange.startingLine + renderRange.totalLines)
+    );
+  }
+
   #getLineElement(line: number): HTMLElement | undefined {
     let lineElement = this.#lineElementsCache.get(line);
     if (lineElement !== undefined) {
@@ -5686,11 +7142,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
 
     const renderRange = this.#renderRange;
-    if (
-      renderRange !== undefined &&
-      (line < renderRange.startingLine ||
-        line >= renderRange.startingLine + renderRange.totalLines)
-    ) {
+    if (!this.#isLineInRenderRange(line)) {
       return undefined;
     }
 
@@ -6062,41 +7514,79 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   }
 }
 
-interface GetEditSessionProps<LAnnotation> {
-  documentKind: EditorDocumentKind;
+interface GetEditSessionProps<EType extends EditorType, LAnnotation, Caret> {
+  type: EType;
   editStateKey: string | undefined;
-  owner: DiffsEditor<LAnnotation>;
-  initialState: EditorInitialState<LAnnotation> | undefined;
-  previousSession: ManagedEditSession<LAnnotation> | undefined;
+  owner: Editor<EType, LAnnotation, Caret>;
+  initialState: EditorInitialState<EType, LAnnotation> | undefined;
+  previousSession: ManagedEditSession<EType, LAnnotation> | undefined;
 }
 
-function getEditSession<LAnnotation>({
-  documentKind,
+function getEditSession<EType extends EditorType, LAnnotation, Caret>({
+  type,
   editStateKey,
   owner,
   initialState,
   previousSession,
-}: GetEditSessionProps<LAnnotation>): ManagedEditSession<LAnnotation> {
-  if (initialState != null && initialState.documentKind !== documentKind) {
+}: GetEditSessionProps<EType, LAnnotation, Caret>): ManagedEditSession<
+  EType,
+  LAnnotation
+> {
+  if (initialState != null && initialState.type !== type) {
     throw new TypeError(
-      `Editor: initialState: a ${initialState.documentKind} document cannot initialize a ${documentKind} editor`
+      `Editor: initialState: a ${initialState.type} state cannot initialize a ${type} editor`
     );
   }
+  const initialSession = initialState as
+    | ManagedEditSession<EType, LAnnotation>
+    | undefined;
   if (editStateKey != null) {
-    return EditStateManager.activate(
-      documentKind,
-      editStateKey,
-      owner,
-      initialState
-    );
+    return EditStateManager.activate(type, editStateKey, owner, initialSession);
   }
-  if (initialState != null) {
-    return initialState;
+  if (initialSession != null) {
+    return initialSession;
   }
   if (previousSession != null) {
     return previousSession;
   }
-  return documentKind === 'file'
-    ? { documentKind: 'file' }
-    : { documentKind: 'file-diff' };
+  return (
+    type === 'file' ? { type: 'file' } : { type: 'file-diff' }
+  ) as ManagedEditSession<EType, LAnnotation>;
+}
+
+// Grid tracks a rendered column child occupies: rows take one, empty buffers
+// take the `data-buffer-size` they were emitted with.
+function gridTrackSpan(child: Element | undefined): number {
+  if (!(child instanceof HTMLElement)) {
+    return 1;
+  }
+  return Number(child.dataset.bufferSize ?? 1);
+}
+
+function isValidEditPredictionPosition<EType extends EditorType, LAnnotation>(
+  document: TextDocument<EType, LAnnotation>,
+  position: Position | undefined
+): position is Position {
+  return (
+    position !== undefined &&
+    Number.isInteger(position.line) &&
+    Number.isInteger(position.character) &&
+    position.line >= 0 &&
+    position.line < document.lineCount &&
+    position.character >= 0 &&
+    position.character <= document.getLineLength(position.line)
+  );
+}
+
+function splitsSurrogatePair(text: string, offset: number): boolean {
+  const previous = text.charCodeAt(offset - 1);
+  const next = text.charCodeAt(offset);
+  return (
+    offset > 0 &&
+    offset < text.length &&
+    previous >= 0xd800 &&
+    previous <= 0xdbff &&
+    next >= 0xdc00 &&
+    next <= 0xdfff
+  );
 }

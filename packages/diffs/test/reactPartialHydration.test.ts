@@ -34,10 +34,10 @@ interface PartialChange {
 }
 
 const ReactFileDiffComponent = ReactFileDiff as ComponentType<
-  ReactFileDiffProps<undefined>
+  ReactFileDiffProps<undefined, undefined>
 >;
 const ReactPatchDiffComponent = PatchDiff as ComponentType<
-  ReactPatchDiffProps<undefined>
+  ReactPatchDiffProps<undefined, undefined>
 >;
 
 function createPartialChange(name = 'partial.txt'): PartialChange {
@@ -141,7 +141,7 @@ describe('React partial diff hydration', () => {
     let root: Root | undefined;
     try {
       const { oldFile, newFile, partial } = createPartialChange('react.ts');
-      const props: ReactFileDiffProps<undefined> = {
+      const props: ReactFileDiffProps<undefined, undefined> = {
         fileDiff: partial,
         options: {
           disableErrorHandling: true,
@@ -181,7 +181,7 @@ describe('React partial diff hydration', () => {
     let root: Root | undefined;
     try {
       const { oldFile, newFile, patch } = createPartialChange('patch.ts');
-      const props: ReactPatchDiffProps<undefined> = {
+      const props: ReactPatchDiffProps<undefined, undefined> = {
         patch,
         options: {
           disableErrorHandling: true,
@@ -220,7 +220,7 @@ describe('React partial diff hydration', () => {
     try {
       const firstChange = createPartialChange('first.ts');
       const secondChange = createPartialChange('second.ts');
-      const props: ReactFileDiffProps<undefined> = {
+      const props: ReactFileDiffProps<undefined, undefined> = {
         fileDiff: firstChange.partial,
         options: {
           disableErrorHandling: true,

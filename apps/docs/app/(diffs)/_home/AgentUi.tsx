@@ -45,6 +45,11 @@ import {
   getSessionGitStatus,
   getSessionPaths,
 } from './mockData';
+
+type AgentUiEditorChangeEvent =
+  | EditorChangeEvent<'file', undefined, undefined>
+  | EditorChangeEvent<'file-diff', undefined, undefined>;
+
 // Added/removed line totals for a single file's diff.
 interface DiffStats {
   additions: number;
@@ -1033,7 +1038,9 @@ export function AgentUi({
     [liveSession, editedPlaceholderFiles]
   );
 
-  const editorOptions = useMemo<EditorOptions<undefined>>(
+  const editorOptions = useMemo<
+    EditorOptions<'file-diff' | 'file', undefined, undefined>
+  >(
     () => ({
       enabledSelectionAction: true,
       ownsVerticalViewport: true,
@@ -1097,19 +1104,16 @@ export function AgentUi({
     [addSnippet]
   );
 
-  const handleEditChange = useCallback(
-    (event: EditorChangeEvent<undefined, 'file' | 'diff'>) => {
-      const target = activeTargetRef.current;
-      if (target == null) {
-        return;
-      }
-      editedPathsRef.current.add(target);
-      // Recompute the edited file's diff against its original snapshot so the
-      // Changes tree's +/- totals reflect the live edits.
-      recordEditedStatsRef.current(target, event.file.contents);
-    },
-    []
-  );
+  const handleEditChange = useCallback((event: AgentUiEditorChangeEvent) => {
+    const target = activeTargetRef.current;
+    if (target == null) {
+      return;
+    }
+    editedPathsRef.current.add(target);
+    // Recompute the edited file's diff against its original snapshot so the
+    // Changes tree's +/- totals reflect the live edits.
+    recordEditedStatsRef.current(target, event.file.contents);
+  }, []);
 
   const openFile = useCallback((path: string) => {
     setActivePath(path);

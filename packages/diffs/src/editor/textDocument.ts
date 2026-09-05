@@ -1,12 +1,3 @@
-import type {
-  DiffLineAnnotation,
-  EditorChange,
-  EditorSelection,
-  Position,
-  Range,
-  ResolvedTextEdit,
-  TextEdit,
-} from '../types';
 import { countLineBreaks } from '../utils/computeFileOffsets';
 import {
   coalesceEditStackEntries,
@@ -16,9 +7,20 @@ import {
 } from './editStack';
 import { PieceTable } from './pieceTable';
 import type { SearchParams } from './searchPanel';
-import type { EditHistoryLineAnnotation, EditHistoryState } from './types';
+import { setTextDocumentChangeTransaction } from './textDocumentChangeTransaction';
+import type {
+  EditHistoryState,
+  EditorChange,
+  EditorLineAnnotation,
+  EditorSelection,
+  EditorType,
+  Position,
+  Range,
+  ResolvedTextEdit,
+  TextEdit,
+} from './types';
 
-export type { Position, Range, TextEdit } from '../types';
+export type { Position, Range, TextEdit } from './types';
 
 export interface TextDocumentChange {
   /** The edits that were applied to the text document. */
@@ -54,22 +56,25 @@ export interface TextDocumentChange {
 
 // Metadata-less replay results include the resolved edits so Editor can remap
 // its live selections without storing a snapshot on the history entry.
-type TextDocumentHistoryResult<LAnnotation> = [
+type TextDocumentHistoryResult<EType extends EditorType, LAnnotation> = [
   change: TextDocumentChange,
   selections?: EditorSelection[],
-  lineAnnotations?: EditHistoryLineAnnotation<LAnnotation>[],
+  lineAnnotations?: EditorLineAnnotation<EType, LAnnotation>[],
   selectionEdits?: ResolvedTextEdit[],
 ];
 
 /**
  * A vscode-languageserver-textdocument compatible text document.
  */
-export class TextDocument<LAnnotation> {
+export class TextDocument<
+  EType extends EditorType = EditorType,
+  LAnnotation = unknown,
+> {
   #uri: string;
   #languageId: string;
   #version: number;
   #pieceTable: PieceTable;
-  #editStack: EditStack<LAnnotation>;
+  #editStack: EditStack<EType, LAnnotation>;
   #eol: '\n' | '\r\n' | '\r';
 
   constructor(
@@ -77,7 +82,7 @@ export class TextDocument<LAnnotation> {
     text: string,
     languageId = 'text',
     version = 0,
-    editStack: EditStack<LAnnotation> = new EditStack(),
+    editStack: EditStack<EType, LAnnotation> = new EditStack(),
     eol?: '\n' | '\r\n' | '\r'
   ) {
     this.#uri = new URL(uri, 'file://').toString();
@@ -124,7 +129,7 @@ export class TextDocument<LAnnotation> {
     return this.#eol;
   }
 
-  get history(): EditHistoryState<LAnnotation> {
+  get history(): EditHistoryState<EType, LAnnotation> {
     return this.#editStack.getLiveState();
   }
 
@@ -300,6 +305,10 @@ export class TextDocument<LAnnotation> {
     } else {
       this.#editStack.push(entry);
     }
+    setTextDocumentChangeTransaction(change, {
+      appliedEdits: entry.forwardEdits,
+      inverseEdits: entry.inverseEdits,
+    });
     return change;
   }
 
@@ -308,8 +317,8 @@ export class TextDocument<LAnnotation> {
   }
 
   setLastUndoLineAnnotations(
-    lineAnnotationsBefore: DiffLineAnnotation<LAnnotation>[],
-    lineAnnotationsAfter: DiffLineAnnotation<LAnnotation>[]
+    lineAnnotationsBefore: EditorLineAnnotation<EType, LAnnotation>[],
+    lineAnnotationsAfter: EditorLineAnnotation<EType, LAnnotation>[]
   ): void {
     this.#editStack.setLastUndoLineAnnotations(
       lineAnnotationsBefore,
@@ -317,7 +326,7 @@ export class TextDocument<LAnnotation> {
     );
   }
 
-  undo(): TextDocumentHistoryResult<LAnnotation> | undefined {
+  undo(): TextDocumentHistoryResult<EType, LAnnotation> | undefined {
     const entry = this.#editStack.popUndoToRedo();
     if (entry === undefined) {
       return undefined;
@@ -326,6 +335,10 @@ export class TextDocument<LAnnotation> {
     if (change === undefined) {
       return undefined;
     }
+    setTextDocumentChangeTransaction(change, {
+      appliedEdits: entry.inverseEdits,
+      inverseEdits: entry.forwardEdits,
+    });
     this.#version = entry.versionBefore;
     const selections = entry.selectionsBefore?.slice();
     return [
@@ -338,7 +351,7 @@ export class TextDocument<LAnnotation> {
     ];
   }
 
-  redo(): TextDocumentHistoryResult<LAnnotation> | undefined {
+  redo(): TextDocumentHistoryResult<EType, LAnnotation> | undefined {
     const entry = this.#editStack.popRedoToUndo();
     if (entry === undefined) {
       return undefined;
@@ -347,6 +360,10 @@ export class TextDocument<LAnnotation> {
     if (change === undefined) {
       return undefined;
     }
+    setTextDocumentChangeTransaction(change, {
+      appliedEdits: entry.forwardEdits,
+      inverseEdits: entry.inverseEdits,
+    });
     this.#version = entry.versionAfter;
     const selections = entry.selectionsAfter?.slice();
     return [

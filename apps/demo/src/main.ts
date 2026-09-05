@@ -397,7 +397,7 @@ function renderDiff(parsedPatches: ParsedPatch[], manager?: WorkerPoolManager) {
     const patchAnnotations = FAKE_DIFF_LINE_ANNOTATIONS[patchIndex] ?? [];
     let hunkIndex = 0;
     for (const fileDiff of parsedPatch.files) {
-      const editor = new Editor<LineCommentMetadata>('file-diff', {
+      const editor = new Editor<'file-diff', LineCommentMetadata>('file-diff', {
         onAttach: (editor) => {
           editor.setSelections([
             {
@@ -417,7 +417,7 @@ function renderDiff(parsedPatches: ParsedPatch[], manager?: WorkerPoolManager) {
       });
       const fileAnnotations = patchAnnotations[hunkIndex];
       let isEditing = false;
-      const options: FileDiffOptions<LineCommentMetadata> = {
+      const options: FileDiffOptions<LineCommentMetadata, undefined> = {
         theme: DEMO_THEME,
         themeType,
         diffStyle: unified ? 'unified' : 'split',
@@ -960,7 +960,7 @@ if (renderFileButton != null) {
 
     virtualizer?.setup(globalThis.document);
     const wrap = getWrapped();
-    const editor = new Editor<LineCommentMetadata>('file', {
+    const editor = new Editor<'file', LineCommentMetadata>('file', {
       enabledSelectionAction: true,
       renderSelectionAction: (ctx) => {
         const div = document.createElement('div');
@@ -1060,7 +1060,7 @@ if (renderFileButton != null) {
     const fileContainer = document.createElement(DIFFS_TAG_NAME);
     wrapper.appendChild(fileContainer);
     let isEditing = false;
-    const options: FileOptions<LineCommentMetadata> = {
+    const options: FileOptions<LineCommentMetadata, undefined> = {
       overflow: wrap ? 'wrap' : 'scroll',
       theme: DEMO_THEME,
       themeType: getThemeType(),

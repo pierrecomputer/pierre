@@ -1,6 +1,8 @@
 import LRUMapPkg from 'lru_map';
+import type { LRUMap } from 'lru_map';
 
 import { DEFAULT_THEMES } from '../constants';
+import { areLanguagesAttached } from '../highlighter/languages/areLanguagesAttached';
 import { getResolvedLanguages } from '../highlighter/languages/getResolvedLanguages';
 import { hasResolvedLanguages } from '../highlighter/languages/hasResolvedLanguages';
 import { resolveLanguages } from '../highlighter/languages/resolveLanguages';
@@ -77,8 +79,8 @@ class WorkerPoolTaskCanceledError extends Error {
 }
 
 interface GetCachesResult {
-  fileCache: LRUMapPkg.LRUMap<string, RenderFileResult>;
-  diffCache: LRUMapPkg.LRUMap<string, RenderDiffResult>;
+  fileCache: LRUMap<string, RenderFileResult>;
+  diffCache: LRUMap<string, RenderDiffResult>;
 }
 
 interface ManagedWorker {
@@ -125,8 +127,8 @@ export class WorkerPoolManager {
   private themeSubscribers = new Set<ThemeSubscriber>();
   private workersFailed = false;
   private statSubscribers = new Set<(stats: WorkerStats) => unknown>();
-  private fileCache: LRUMapPkg.LRUMap<string, RenderFileResult>;
-  private diffCache: LRUMapPkg.LRUMap<string, RenderDiffResult>;
+  private fileCache: LRUMap<string, RenderFileResult>;
+  private diffCache: LRUMap<string, RenderDiffResult>;
   private _queuedBroadcast: number | undefined;
   // Incremented on terminate so async lifecycle work can identify stale results.
   private lifecycleGeneration = 0;
@@ -985,6 +987,20 @@ export class WorkerPoolManager {
     langs: SupportedLanguages[]
   ): Promise<void> {
     try {
+      // Lets keep the main thread highlighter in sync with loaded themes so
+      // edits can be more seamless
+      const mainThreadLangs = langs.filter(
+        (lang) => !areLanguagesAttached(lang)
+      );
+      if (mainThreadLangs.length > 0) {
+        void getSharedHighlighter({
+          themes: getThemes(this.renderOptions.theme),
+          langs: ['text', ...mainThreadLangs],
+          preferredHighlighter: this.preferredHighlighter,
+        }).catch((error: unknown) => {
+          console.error(error);
+        });
+      }
       // Add resolved languages if required
       const workerMissingLangs = langs.filter(
         (lang) => !availableWorker.langs.has(lang)

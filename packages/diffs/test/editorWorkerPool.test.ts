@@ -5,7 +5,9 @@ import { toHtml } from 'hast-util-to-html';
 import { parseDiffFromFile } from '../src';
 import { File } from '../src/components/File';
 import { FileDiff } from '../src/components/FileDiff';
+import { VirtualizedFile } from '../src/components/VirtualizedFile';
 import { VirtualizedFileDiff } from '../src/components/VirtualizedFileDiff';
+import { Virtualizer } from '../src/components/Virtualizer';
 import { Editor } from '../src/editor/editor';
 import {
   disposeHighlighter,
@@ -17,7 +19,6 @@ import {
 } from '../src/renderers/DiffHunksRenderer';
 import { FileRenderer } from '../src/renderers/FileRenderer';
 import type {
-  DiffsEditor,
   DiffsHighlighter,
   FileContents,
   FileDiffMetadata,
@@ -28,7 +29,8 @@ import { renderDiffWithHighlighter } from '../src/utils/renderDiffWithHighlighte
 import { renderFileWithHighlighter } from '../src/utils/renderFileWithHighlighter';
 import type { RenderDiffRequest } from '../src/worker/types';
 import type { WorkerPoolManager } from '../src/worker/WorkerPoolManager';
-import { installDom, wait } from './domHarness';
+import { createRoot, installDom, wait } from './domHarness';
+import { createEditorInstance } from './editorTestUtils';
 import { createDeferred, type Deferred } from './testUtils';
 import {
   createInitializedManager,
@@ -199,11 +201,10 @@ describe('FileRenderer edit session', () => {
       theme: 'pierre-dark',
     });
     try {
-      let renderUpdates = 0;
       const renderer = new FileRenderer(
         { theme: 'pierre-dark' },
         undefined,
-        () => renderUpdates++,
+        undefined,
         manager
       );
       const file = createFile('file:session');
@@ -214,9 +215,6 @@ describe('FileRenderer edit session', () => {
 
       const editSessionFile = createEditSessionFile(file);
       renderer.beginEditSession(editSessionFile, file);
-      renderer.renderFile(editSessionFile);
-
-      await waitFor(() => expect(renderUpdates).toBeGreaterThan(0));
       const result = renderer.renderFile(editSessionFile);
       if (result == null) {
         throw new Error('expected a render result');
@@ -235,11 +233,10 @@ describe('FileRenderer edit session', () => {
       theme: 'pierre-dark',
     });
     try {
-      let renderUpdates = 0;
       const renderer = new FileRenderer(
         { theme: 'pierre-dark' },
         undefined,
-        () => renderUpdates++,
+        undefined,
         manager
       );
       const file = createFile('file:late');
@@ -259,9 +256,9 @@ describe('FileRenderer edit session', () => {
         },
       ];
       respondToFileRequest(manager, worker, request, poolMarker);
-      // Refused outright: nothing is applied and nothing is requested — the
-      // session render issued at editor attach supplies the highlight.
-      await waitFor(() => expect(renderUpdates).toBeGreaterThan(0));
+      // Let the refused worker result have a chance to (wrongly) apply before
+      // asserting it did not; the session already painted synchronously.
+      await wait(50);
 
       const result = renderer.renderFile(editSessionFile);
       if (result == null) {
@@ -279,11 +276,10 @@ describe('FileRenderer edit session', () => {
       useTokenTransformer: true,
     });
     try {
-      let renderUpdates = 0;
       const renderer = new FileRenderer(
         { theme: 'pierre-dark' },
         undefined,
-        () => renderUpdates++,
+        undefined,
         manager
       );
       const file = createFile('file:pool-transformer');
@@ -306,17 +302,17 @@ describe('FileRenderer edit session', () => {
       // session options — the refused result must not sneak back in through
       // the manager's result cache on the next session render.
       respondToFileRequest(manager, worker, request, poolMarker);
-      await waitFor(() => expect(renderUpdates).toBeGreaterThan(0));
+      // Let the refused worker result have a chance to (wrongly) apply before
+      // asserting it did not; the session already painted synchronously.
+      await wait(50);
 
-      // The session render issued at editor attach stays local: no adoption
-      // of the refused result, and the local highlight lands when ready.
+      // The session render stays local: no adoption of the refused result.
       let result = renderer.renderFile(editSessionFile);
       if (result == null) {
         throw new Error('expected a render result');
       }
       expect(toHtml(result.contentAST)).not.toContain('data-pool-result');
 
-      await waitFor(() => expect(renderUpdates).toBeGreaterThan(0));
       result = renderer.renderFile(editSessionFile);
       if (result == null) {
         throw new Error('expected a render result');
@@ -357,11 +353,10 @@ describe('FileRenderer edit session', () => {
       theme: 'pierre-dark',
     });
     try {
-      let renderUpdates = 0;
       const renderer = new FileRenderer(
         { theme: 'pierre-dark' },
         undefined,
-        () => renderUpdates++,
+        undefined,
         manager
       );
       const file = createFile('file:dirty');
@@ -378,8 +373,6 @@ describe('FileRenderer edit session', () => {
 
       const editSessionFile = createEditSessionFile(file);
       renderer.beginEditSession(editSessionFile, file);
-      renderer.renderFile(editSessionFile);
-      await waitFor(() => expect(renderUpdates).toBeGreaterThan(1));
       renderer.renderFile(editSessionFile);
 
       // Simulate an editor keystroke: line 0 rewritten, cache marked dirty.
@@ -406,11 +399,10 @@ describe('FileRenderer edit session', () => {
       theme: 'pierre-dark',
     });
     try {
-      let renderUpdates = 0;
       const renderer = new FileRenderer(
         { theme: 'pierre-dark' },
         undefined,
-        () => renderUpdates++,
+        undefined,
         manager
       );
       const file = createFile('file:detach');
@@ -418,7 +410,6 @@ describe('FileRenderer edit session', () => {
       renderer.beginEditSession(editSessionFile, file);
 
       renderer.renderFile(editSessionFile);
-      await waitFor(() => expect(renderUpdates).toBeGreaterThan(0));
       expect(worker.fileRequestCount).toBe(0);
 
       renderer.endEditSession();
@@ -972,6 +963,156 @@ describe('DiffHunksRenderer worker rendering', () => {
   });
 });
 
+describe('VirtualizedFileDiff worker rendering', () => {
+  test('recomputes a pending layout when a replacement highlight completes', async () => {
+    const dom = installDom();
+    const { manager, worker } = await createInitializedManager({
+      theme: 'pierre-dark',
+    });
+    const virtualizer = new Virtualizer();
+    const consoleError = spyOn(console, 'error').mockImplementation(() => {});
+    const instance = new VirtualizedFileDiff<undefined>(
+      { theme: 'pierre-dark', disableFileHeader: true },
+      virtualizer,
+      undefined,
+      manager
+    );
+    const onRender = spyOn(instance, 'onRender');
+    const currentDiff = createWorkerDiff(
+      'virtualized:current',
+      'const current = 1;\n'
+    );
+    const replacementDiff = createWorkerDiff(
+      'virtualized:replacement',
+      'const replacement = 2;\n'
+    );
+    const primeCurrent = manager.primeDiffHighlightCache(currentDiff);
+
+    try {
+      const currentRequest = await withTimeout(worker.waitForDiffRequest());
+      respondWithHighlightedDiff(manager, worker, currentRequest, currentDiff);
+      await withTimeout(primeCurrent);
+
+      const root = createRoot();
+      const content = document.createElement('div');
+      const fileContainer = document.createElement('div');
+      root.appendChild(content);
+      content.appendChild(fileContainer);
+      virtualizer.setup(root, content);
+
+      expect(instance.render({ fileDiff: currentDiff, fileContainer })).toBe(
+        true
+      );
+      expect(fileContainer.shadowRoot?.innerHTML ?? '').toContain('current');
+      dom.triggerIntersectionObserver(fileContainer, true);
+      await waitFor(() => expect(onRender).toHaveReturnedWith(false));
+
+      // The replacement keeps the highlighted current diff visible, and the
+      // following real virtualizer frame records that current diff for layout.
+      expect(instance.render({ fileDiff: replacementDiff })).toBe(true);
+      onRender.mockClear();
+      expect(fileContainer.shadowRoot?.innerHTML ?? '').not.toContain(
+        'replacement'
+      );
+
+      await waitFor(() => expect(worker.diffRequestCount).toBe(2));
+      const replacementRequest = await withTimeout(worker.waitForDiffRequest());
+      // Observe a completed no-op pass while the worker still holds B. This
+      // proves the stale layout exists without assuming a particular delay.
+      await waitFor(() => expect(onRender).toHaveReturnedWith(false));
+      respondWithHighlightedDiff(
+        manager,
+        worker,
+        replacementRequest,
+        replacementDiff
+      );
+      await waitFor(() =>
+        expect(fileContainer.shadowRoot?.innerHTML ?? '').toContain(
+          'replacement'
+        )
+      );
+      expect(consoleError).not.toHaveBeenCalled();
+    } finally {
+      onRender.mockRestore();
+      consoleError.mockRestore();
+      instance.cleanUp();
+      virtualizer.cleanUp();
+      manager.terminate();
+      dom.cleanup();
+    }
+  });
+});
+
+describe('VirtualizedFile worker rendering', () => {
+  test('recomputes a pending layout when a replacement highlight completes', async () => {
+    const dom = installDom();
+    const { manager, worker } = await createInitializedManager({
+      theme: 'pierre-dark',
+    });
+    const virtualizer = new Virtualizer();
+    const instance = new VirtualizedFile<undefined>(
+      { theme: 'pierre-dark', disableFileHeader: true },
+      virtualizer,
+      undefined,
+      manager
+    );
+    const onRender = spyOn(instance, 'onRender');
+    const consoleError = spyOn(console, 'error').mockImplementation(() => {});
+    const currentFile: FileContents = {
+      name: 'pending.ts',
+      contents: 'const current = 1;\n',
+      cacheKey: 'virtualized-file:current',
+    };
+    const replacementFile: FileContents = {
+      name: 'pending.ts',
+      contents: 'const replacement = 2;\n',
+      cacheKey: 'virtualized-file:replacement',
+    };
+
+    try {
+      const primeCurrent = manager.primeFileHighlightCache(currentFile);
+      await respondWithRealFileHighlight(manager, worker, currentFile);
+      await withTimeout(primeCurrent);
+
+      const root = createRoot();
+      const content = document.createElement('div');
+      const fileContainer = document.createElement('div');
+      root.appendChild(content);
+      content.appendChild(fileContainer);
+      virtualizer.setup(root, content);
+
+      expect(instance.render({ file: currentFile, fileContainer })).toBe(true);
+      expect(fileContainer.shadowRoot?.innerHTML ?? '').toContain('current');
+      dom.triggerIntersectionObserver(fileContainer, true);
+      await waitFor(() => expect(onRender).toHaveReturnedWith(false));
+
+      expect(instance.render({ file: replacementFile })).toBe(true);
+      onRender.mockClear();
+      expect(fileContainer.shadowRoot?.innerHTML ?? '').not.toContain(
+        'replacement'
+      );
+
+      // Keep the worker result pending until the real virtualizer has
+      // prepared the old file's layout and completed a no-op render pass.
+      await waitFor(() => expect(onRender).toHaveReturnedWith(false));
+      await respondWithRealFileHighlight(manager, worker, replacementFile);
+      await waitFor(() =>
+        expect(fileContainer.shadowRoot?.innerHTML ?? '').toContain(
+          'replacement'
+        )
+      );
+      expect(consoleError).not.toHaveBeenCalled();
+    } finally {
+      onRender.mockRestore();
+      consoleError.mockRestore();
+      instance.cleanUp();
+      virtualizer.cleanUp();
+      manager.terminate();
+      dom.cleanup();
+    }
+  });
+});
+
 describe('DiffHunksRenderer edit session', () => {
   test('editing renders the diff locally and ignores a worker result that finishes late', async () => {
     const { manager, worker } = await createInitializedManager({
@@ -1011,11 +1152,9 @@ describe('DiffHunksRenderer edit session', () => {
       expect(renderUpdates).toBe(0);
 
       // The session render stays local and completes the highlight with
-      // editor-compatible markup.
-      renderer.renderDiff(sessionDiff);
-      expect(worker.diffRequestCount).toBe(1);
-      await waitFor(() => expect(renderUpdates).toBeGreaterThan(0));
+      // editor-compatible markup, synchronously.
       const result = renderer.renderDiff(sessionDiff);
+      expect(worker.diffRequestCount).toBe(1);
       if (result == null) {
         throw new Error('expected a render result');
       }
@@ -1038,11 +1177,10 @@ describe('DiffHunksRenderer edit session', () => {
       theme: 'pierre-dark',
     });
     try {
-      let renderUpdates = 0;
       const renderer = new DiffHunksRenderer(
         { theme: 'pierre-dark' },
         undefined,
-        () => renderUpdates++,
+        undefined,
         manager
       );
       const externalDiff = parseDiffFromFile(
@@ -1061,7 +1199,6 @@ describe('DiffHunksRenderer edit session', () => {
 
       renderer.beginEditSession(sessionDiff, externalDiff);
       renderer.renderDiff(sessionDiff);
-      await waitFor(() => expect(renderUpdates).toBeGreaterThan(0));
       expect(worker.diffRequestCount).toBe(0);
 
       await renderer.refreshHighlightedResult();
@@ -1150,11 +1287,10 @@ describe('DiffHunksRenderer edit session', () => {
       theme: 'pierre-dark',
       useTokenTransformer: true,
     });
-    let renderUpdates = 0;
     const renderer = new DiffHunksRenderer(
       { theme: 'pierre-dark' },
       undefined,
-      () => renderUpdates++,
+      undefined,
       manager
     );
     try {
@@ -1178,11 +1314,6 @@ describe('DiffHunksRenderer edit session', () => {
       renderer.beginEditSession(sessionDiff, externalDiff);
       expect(renderer.editorRenderReady()).toBe(false);
 
-      const updatesBeforeSessionRender = renderUpdates;
-      renderer.renderDiff(sessionDiff);
-      await waitFor(() => {
-        expect(renderUpdates).toBeGreaterThan(updatesBeforeSessionRender);
-      });
       const result = renderer.renderDiff(sessionDiff);
       expect(renderer.editorRenderReady()).toBe(true);
       expect(result?.fileDiff).toBe(sessionDiff);
@@ -1230,11 +1361,6 @@ describe('DiffHunksRenderer edit session', () => {
       renderer.beginEditSession(sessionDiff, externalDiff);
       expect(renderer.editorRenderReady()).toBe(false);
 
-      const updatesBeforeSessionHighlight = renderUpdates;
-      renderer.renderDiff(sessionDiff);
-      await waitFor(() =>
-        expect(renderUpdates).toBeGreaterThan(updatesBeforeSessionHighlight)
-      );
       const result = renderer.renderDiff(sessionDiff);
       expect(renderer.editorRenderReady()).toBe(true);
       if (result == null) {
@@ -1305,11 +1431,6 @@ describe('DiffHunksRenderer edit session', () => {
       renderer.beginEditSession(sessionDiff, sessionExternalDiff);
       expect(renderer.editorRenderReady()).toBe(false);
 
-      const updatesBeforeSessionHighlight = renderUpdates;
-      renderer.renderDiff(sessionDiff);
-      await waitFor(() =>
-        expect(renderUpdates).toBeGreaterThan(updatesBeforeSessionHighlight)
-      );
       const result = renderer.renderDiff(sessionDiff);
       expect(renderer.editorRenderReady()).toBe(true);
       if (result == null) {
@@ -1332,8 +1453,11 @@ describe('DiffHunksRenderer edit session', () => {
   });
 
   test('an older highlight result cannot overwrite the diff being edited', async () => {
+    // Use a theme no other test in this file loads, so it stays unattached and
+    // the renderer's grab cannot render synchronously — that keeps the async
+    // initialization path this test exercises.
     const renderer = new DeferredHighlighterDiffRenderer({
-      theme: 'pierre-dark',
+      theme: 'nord',
     });
     try {
       // Exercise the renderer's async initialization path without resetting
@@ -1363,7 +1487,12 @@ describe('DiffHunksRenderer edit session', () => {
         throw new Error('expected two pending highlighter initializations');
       }
 
-      sessionInitialization.resolve(sharedHighlighter);
+      const editHighlighter = await getSharedHighlighter({
+        themes: ['nord'],
+        langs: ['typescript'],
+        preferredHighlighter: 'shiki-js',
+      });
+      sessionInitialization.resolve(editHighlighter);
       await wait(0);
       renderer.renderDiff(sessionDiff);
       expect(renderer.diffCache).toBe(sessionDiff);
@@ -1391,7 +1520,7 @@ describe('DiffHunksRenderer edit session', () => {
 
       expect(renderSessionHtml()).toContain('sessionResult');
 
-      staleInitialization.resolve(sharedHighlighter);
+      staleInitialization.resolve(editHighlighter);
       await wait(0);
 
       expect(renderer.diffCache).toBe(sessionDiff);
@@ -1432,16 +1561,8 @@ describe('File component edit session', () => {
         plainFileCode(FILE_CONTENTS)
       );
 
-      const editorStub = {
-        cleanUp: () => undefined,
-        __syncRenderView: () => undefined,
-        __postponeBgTokenizeToNextFrame: () => undefined,
-        __captureFocusForDOMReplacement: () => undefined,
-        __emitEditComplete: () => undefined,
-        __getDocumentContents: () => undefined,
-        __getDocumentSessionState: () => undefined,
-      } as unknown as DiffsEditor<undefined>;
-      const detach = instance.__attachEditor(editorStub);
+      const editor = new Editor('file');
+      const detach = instance.__attachEditor(editor);
       instance.rerender();
       await waitFor(() => {
         expect(fileContainer.shadowRoot?.innerHTML ?? '').toContain(
@@ -1506,16 +1627,8 @@ describe('FileDiff component edit session', () => {
       await withTimeout(worker.waitForDiffRequest());
       expect(worker.diffRequestCount).toBe(1);
 
-      const editorStub = {
-        cleanUp: () => undefined,
-        __syncRenderView: () => undefined,
-        __postponeBgTokenizeToNextFrame: () => undefined,
-        __captureFocusForDOMReplacement: () => undefined,
-        __emitEditComplete: () => undefined,
-        __getDocumentContents: () => undefined,
-        __getDocumentSessionState: () => undefined,
-      } as unknown as DiffsEditor<undefined>;
-      instance.__attachEditor(editorStub);
+      const editor = new Editor('file-diff');
+      instance.__attachEditor(editor);
       instance.rerender();
       await waitFor(() => {
         expect(fileContainer.shadowRoot?.innerHTML ?? '').toContain(
@@ -1529,18 +1642,6 @@ describe('FileDiff component edit session', () => {
     }
   });
 });
-
-function createEditorStub(): DiffsEditor<undefined> {
-  return {
-    cleanUp: () => undefined,
-    __syncRenderView: () => undefined,
-    __postponeBgTokenizeToNextFrame: () => undefined,
-    __captureFocusForDOMReplacement: () => undefined,
-    __emitEditComplete: () => undefined,
-    __getDocumentContents: () => undefined,
-    __getDocumentSessionState: () => undefined,
-  } as unknown as DiffsEditor<undefined>;
-}
 
 // Renders `file` the way a transformer-configured pool worker would, so
 // tests can settle a pool highlight with genuine editor-compatible markup.
@@ -1598,7 +1699,7 @@ describe('rendering when an editor attaches', () => {
       const updatesBefore = updates;
       const lineBefore =
         fileContainer.shadowRoot?.querySelector('[data-line="1"]');
-      const detach = instance.__attachEditor(createEditorStub());
+      const detach = instance.__attachEditor(createEditorInstance('file'));
       await wait(50);
 
       expect(updates).toBe(updatesBefore);
@@ -1672,7 +1773,7 @@ describe('rendering when an editor attaches', () => {
 
       const updatesBefore = updates;
       const siblingUpdatesBefore = siblingUpdates;
-      const detach = instance.__attachEditor(createEditorStub());
+      const detach = instance.__attachEditor(createEditorInstance('file'));
       await waitFor(() => {
         expect(fileContainer.shadowRoot?.innerHTML ?? '').toContain(
           'data-char'
@@ -1712,7 +1813,7 @@ describe('rendering when an editor attaches', () => {
       instance.render({ file, fileContainer, forceRender: true });
       const request = await withTimeout(worker.waitForFileRequest());
 
-      const detach = instance.__attachEditor(createEditorStub());
+      const detach = instance.__attachEditor(createEditorInstance('file'));
       // The local highlight lands without the pool ever answering. The plain
       // pool AST already carries data-char (transformer-shaped), so only the
       // highlight colors prove the attach-time session render ran.
@@ -1752,7 +1853,7 @@ describe('rendering when an editor attaches', () => {
       useTokenTransformer: true,
     });
     let attaches = 0;
-    const editor = new Editor<undefined>('file-diff', {
+    const editor = new Editor('file-diff', {
       onAttach: () => attaches++,
     });
     try {
@@ -1877,7 +1978,7 @@ describe('rendering when an editor attaches', () => {
       const updatesBefore = updates;
       const lineBefore =
         fileContainer.shadowRoot?.querySelector('[data-line="1"]');
-      const detach = instance.__attachEditor(createEditorStub());
+      const detach = instance.__attachEditor(createEditorInstance('file'));
       await wait(50);
 
       expect(updates).toBe(updatesBefore);
@@ -1919,7 +2020,7 @@ describe('rendering when an editor attaches', () => {
       });
 
       const updatesBefore = updates;
-      const detach = instance.__attachEditor(createEditorStub());
+      const detach = instance.__attachEditor(createEditorInstance('file'));
       await wait(50);
 
       expect(updates).toBe(updatesBefore);

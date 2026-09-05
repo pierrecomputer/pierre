@@ -1,15 +1,100 @@
-import { DEFAULT_THEMES, type FileContents } from '@pierre/diffs';
-import type { EditorCommand, EditorKeymap } from '@pierre/diffs/edit';
+import {
+  DEFAULT_THEMES,
+  type FileContents,
+  parseDiffFromFile,
+} from '@pierre/diffs';
+import type {
+  EditorCaret,
+  EditorCommand,
+  EditorKeymap,
+} from '@pierre/diffs/edit';
 import type { FileOptions } from '@pierre/diffs/react';
-import type { PreloadFileOptions } from '@pierre/diffs/ssr';
+import type {
+  PreloadFileDiffOptions,
+  PreloadFileOptions,
+} from '@pierre/diffs/ssr';
 
 // The editor requires the token transformer, so enabling it in the SSR preload
 // keeps hydration from rerendering the component after the editor attaches.
 // Mirrors LiveEditing/constants.ts.
-const EDITABLE_FILE_OPTIONS: FileOptions<undefined> = {
+const EDITABLE_OPTIONS = {
   theme: DEFAULT_THEMES,
   themeType: 'dark',
   useTokenTransformer: true,
+} as const;
+const EDITABLE_FILE_OPTIONS: FileOptions<undefined, undefined> =
+  EDITABLE_OPTIONS;
+
+export interface CursorCaretMetadata {
+  name: string;
+  color: string;
+}
+
+export const CARET_DEMO_FILE: FileContents = {
+  name: 'review.ts',
+  contents: `type Review = {
+  author: string
+  approved: boolean
+}
+
+export function summarize(review: Review) {
+  const status = review.approved ? 'approved' : 'needs review'
+  return \`\${review.author}: \${status}\`
+}
+`,
+};
+
+export const CARET_DEMO_CARETS: EditorCaret<CursorCaretMetadata>[] = [
+  {
+    anchor: { line: 5, character: 26 },
+    focus: { line: 5, character: 26 },
+    metadata: { name: 'Amadeus', color: '#7c3aed' },
+  },
+  {
+    anchor: { line: 1, character: 2 },
+    focus: { line: 1, character: 8 },
+    metadata: { name: 'Mark', color: '#c2410c' },
+  },
+];
+
+const EDIT_PREDICTION_OLD_FILE: FileContents = {
+  name: 'cart.ts',
+  contents: `// cart calculator
+
+export type CartItem = {
+  id: string
+  name: string
+  price: number
+  quantity: number
+}
+
+export function cartTotal(items: CartItem[]): number {
+  let total = 0
+
+  for (const item of items) {
+    total += item.price * item.quantity
+  }
+
+  return total
+}
+`,
+};
+
+export const EDIT_PREDICTION_NEW_FILE: FileContents = {
+  name: 'cart.ts',
+  contents: `// cart calculator
+
+export type CartItem = {
+  id: string
+  name: string
+  price: number
+  quantity: number
+}
+
+export function cartTotal(items: CartItem[]): number {
+  return items.
+}
+`,
 };
 
 // Lint-marker demo source. Marker positions below are tied to these exact
@@ -41,8 +126,8 @@ function calculateTotal(items, taxRate) {
 
 // Diagnostics a real linter might produce for MARKER_DEMO_FILE. Positions are
 // zero-based line/character ranges. Severities are `as const` so the literals
-// satisfy the editor's MarkerSeverity union without importing the (not yet
-// exported) Marker type.
+// satisfy the editor's MarkerSeverity union without separately annotating the
+// array as Marker[].
 export const MARKER_DEMO_MARKERS = [
   {
     severity: 'hint' as const,
@@ -328,27 +413,70 @@ const DEFAULT_KEYMAP_FILE: FileContents = {
 // Server-side preload inputs. Spreading the resolved results into <File> ships
 // pre-rendered, already-highlighted shadow DOM so each demo paints instantly
 // instead of flashing in after client highlighting.
-export const MARKER_DEMO_FILE_EXAMPLE: PreloadFileOptions<undefined> = {
+export const EDIT_PREDICTION_FILE_EXAMPLE: PreloadFileOptions<
+  undefined,
+  undefined
+> = {
+  file: EDIT_PREDICTION_NEW_FILE,
+  options: EDITABLE_FILE_OPTIONS,
+};
+
+export const EDIT_PREDICTION_FILE_DIFF_EXAMPLE: PreloadFileDiffOptions<
+  undefined,
+  undefined
+> = {
+  fileDiff: parseDiffFromFile(
+    EDIT_PREDICTION_OLD_FILE,
+    EDIT_PREDICTION_NEW_FILE
+  ),
+  options: {
+    ...EDITABLE_OPTIONS,
+    diffStyle: 'unified',
+  },
+};
+
+export const MARKER_DEMO_FILE_EXAMPLE: PreloadFileOptions<
+  undefined,
+  undefined
+> = {
   file: MARKER_DEMO_FILE,
   options: EDITABLE_FILE_OPTIONS,
 };
 
-export const FIND_DEMO_FILE_EXAMPLE: PreloadFileOptions<undefined> = {
-  file: FIND_DEMO_FILE,
-  options: EDITABLE_FILE_OPTIONS,
+export const CARET_DEMO_FILE_EXAMPLE: PreloadFileOptions<
+  undefined,
+  CursorCaretMetadata
+> = {
+  file: CARET_DEMO_FILE,
+  options: EDITABLE_FILE_OPTIONS as FileOptions<undefined, CursorCaretMetadata>,
 };
 
-export const HISTORY_DEMO_FILE_EXAMPLE: PreloadFileOptions<undefined> = {
+export const FIND_DEMO_FILE_EXAMPLE: PreloadFileOptions<undefined, undefined> =
+  {
+    file: FIND_DEMO_FILE,
+    options: EDITABLE_FILE_OPTIONS,
+  };
+
+export const HISTORY_DEMO_FILE_EXAMPLE: PreloadFileOptions<
+  undefined,
+  undefined
+> = {
   file: HISTORY_DEMO_FILE,
   options: EDITABLE_FILE_OPTIONS,
 };
 
-export const DEFAULT_KEYMAP_FILE_EXAMPLE: PreloadFileOptions<undefined> = {
+export const DEFAULT_KEYMAP_FILE_EXAMPLE: PreloadFileOptions<
+  undefined,
+  undefined
+> = {
   file: DEFAULT_KEYMAP_FILE,
   options: { ...EDITABLE_FILE_OPTIONS, disableFileHeader: true },
 };
 
-export const SELECTION_DEMO_FILE_EXAMPLE: PreloadFileOptions<undefined> = {
+export const SELECTION_DEMO_FILE_EXAMPLE: PreloadFileOptions<
+  undefined,
+  undefined
+> = {
   file: SELECTION_DEMO_FILE,
   options: EDITABLE_FILE_OPTIONS,
 };

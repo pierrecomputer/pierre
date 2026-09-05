@@ -1,6 +1,7 @@
 'use client';
 
 import type {
+  FileDiffEditChangeHandler,
   FileDiffEditCompleteEvent,
   FileDiffEditCompleteHandler,
 } from '../components/FileDiff';
@@ -12,19 +13,21 @@ import { templateRender } from './utils/templateRender';
 import { useFileDiffInstance } from './utils/useFileDiffInstance';
 
 export type {
+  FileDiffEditChangeHandler,
   FileDiffEditCompleteEvent,
   FileDiffEditCompleteHandler,
   FileDiffMetadata,
 };
 
-export interface FileDiffProps<
+export interface FileDiffProps<LAnnotation, Caret> extends DiffBasePropsReact<
   LAnnotation,
-> extends DiffBasePropsReact<LAnnotation> {
+  Caret
+> {
   fileDiff: FileDiffMetadata;
   disableWorkerPool?: boolean;
 }
 
-export function FileDiff<LAnnotation = undefined>({
+export function FileDiff<LAnnotation = undefined, Caret = undefined>({
   fileDiff,
   options,
   editorOptions,
@@ -45,7 +48,7 @@ export function FileDiff<LAnnotation = undefined>({
   edit = false,
   onEditChange,
   onEditComplete,
-}: FileDiffProps<LAnnotation>): React.JSX.Element {
+}: FileDiffProps<LAnnotation, Caret>): React.JSX.Element {
   const { ref, getHoveredLine, getAnnotationSlotName } = useFileDiffInstance({
     fileDiff,
     options,

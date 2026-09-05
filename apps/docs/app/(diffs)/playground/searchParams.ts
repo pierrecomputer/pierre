@@ -82,6 +82,7 @@ export const DEFAULTS = {
   gutterButton: true,
   interactionMode: 'comment' as const,
   annotations: true,
+  editPrediction: false,
   edit: false,
   markers: false,
   highlighter: 'shiki' as PlaygroundHighlighter,
@@ -103,6 +104,7 @@ export interface PlaygroundUrlState {
   enableLineSelection: boolean;
   enableGutterUtility: boolean;
   showAnnotations: boolean;
+  editPrediction: boolean;
   edit: boolean;
   showMarkers: boolean;
   highlighter: PlaygroundHighlighter;
@@ -181,6 +183,7 @@ export function parsePlaygroundSearchParams(
     enableLineSelection,
     enableGutterUtility,
     showAnnotations: pickBool(get('annot'), DEFAULTS.annotations),
+    editPrediction: pickBool(get('predict'), DEFAULTS.editPrediction),
     // Only the direct File and FileDiff views carry their edit session in the
     // URL; the scrolling views own per-file controls instead.
     edit:

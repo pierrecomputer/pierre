@@ -5,7 +5,10 @@ import type {
 
 import { WorkerPoolContext } from '../_components/WorkerPoolContext';
 import { LiveEditing } from '../_examples/LiveEditing/LiveEditing';
+import { CaretDemo } from './CaretDemo';
+import type { CursorCaretMetadata } from './constants';
 import { EditHero } from './EditHero';
+import { EditPredictionDemo } from './EditPredictionDemo';
 import { EditReference } from './EditReference';
 import { FindDemo } from './FindDemo';
 import { HistoryDemo } from './HistoryDemo';
@@ -19,23 +22,29 @@ import { Header } from '@/components/Header';
 import { PierreCompanySection } from '@/components/PierreCompanySection';
 
 interface EditPageProps {
-  liveEditingFile: PreloadedFileResult<undefined>;
-  liveEditingDiff: PreloadFileDiffResult<undefined>;
-  markerFile: PreloadedFileResult<undefined>;
-  findFile: PreloadedFileResult<undefined>;
-  historyFile: PreloadedFileResult<undefined>;
-  keymapFile: PreloadedFileResult<undefined>;
-  selectionFile: PreloadedFileResult<undefined>;
+  liveEditingFile: PreloadedFileResult<undefined, undefined>;
+  liveEditingDiff: PreloadFileDiffResult<undefined, undefined>;
+  editPredictionFile: PreloadedFileResult<undefined, undefined>;
+  editPredictionDiff: PreloadFileDiffResult<undefined, undefined>;
+  markerFile: PreloadedFileResult<undefined, undefined>;
+  findFile: PreloadedFileResult<undefined, undefined>;
+  historyFile: PreloadedFileResult<undefined, undefined>;
+  keymapFile: PreloadedFileResult<undefined, undefined>;
+  selectionFile: PreloadedFileResult<undefined, undefined>;
+  caretFile: PreloadedFileResult<undefined, CursorCaretMetadata>;
 }
 
 export function EditPage({
   liveEditingFile,
   liveEditingDiff,
+  editPredictionFile,
+  editPredictionDiff,
   markerFile,
   findFile,
   historyFile,
   keymapFile,
   selectionFile,
+  caretFile,
 }: EditPageProps) {
   return (
     <WorkerPoolContext>
@@ -50,6 +59,43 @@ export function EditPage({
               prerenderedFile={liveEditingFile}
               prerenderedDiff={liveEditingDiff}
             />
+
+            <div className="space-y-5">
+              <FeatureHeader
+                id="carets"
+                title="Remote carets and highlights"
+                description={
+                  <>
+                    Show collaborators with <code>editor.setCarets()</code>.
+                    Type or select in either editor below to see edits, carets,
+                    and highlights reflected in the other collaborator&apos;s
+                    view.
+                  </>
+                }
+              />
+              <CaretDemo prerenderedFile={caretFile} />
+            </div>
+
+            <div className="space-y-5">
+              <FeatureHeader
+                id="tab-tab-tab"
+                title="Tab Tab Tab"
+                description={
+                  <>
+                    Pause after typing or moving the cursor to preview an edit
+                    prediction, then press <code>Tab</code> to accept it. This
+                    demo connects the service-agnostic <code>predict()</code>
+                    API to Codestral built by Mistral AI—to try, first connect
+                    GitHub, then continue with Mistral. Switch between{' '}
+                    <code>File</code> and <code>FileDiff</code>.
+                  </>
+                }
+              />
+              <EditPredictionDemo
+                prerenderedFile={editPredictionFile}
+                prerenderedDiff={editPredictionDiff}
+              />
+            </div>
 
             <div className="space-y-5">
               <FeatureHeader

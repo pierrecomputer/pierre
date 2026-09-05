@@ -56,13 +56,13 @@ function countEditableLineEls(content: HTMLElement): number {
 function getEditSessionDiff(
   fileDiff: FileDiff<undefined>
 ): FileDiffMetadata | undefined {
-  return (fileDiff as unknown as { editSessionDiff?: FileDiffMetadata })
-    .editSessionDiff;
+  return (fileDiff as unknown as { editSession?: { diff: FileDiffMetadata } })
+    .editSession?.diff;
 }
 
 interface DiffEditorFixture {
   container: HTMLElement;
-  editor: Editor<undefined>;
+  editor: Editor<'file-diff', undefined>;
   fileDiff: FileDiff<undefined>;
   cleanup(): Promise<void>;
 }
@@ -83,7 +83,7 @@ async function createDiffEditorFixture(
   });
   const oldFile: FileContents = { name: 'edit.ts', contents: oldContents };
   const newFile: FileContents = { name: 'edit.ts', contents: newContents };
-  const editor = new Editor<undefined>('file-diff');
+  const editor = new Editor('file-diff');
 
   fileDiff.render({
     oldFile,
@@ -119,7 +119,10 @@ async function createDiffEditorFixture(
 
 // Replaces the whole document with `newText`, mirroring select-all then a
 // delete or paste.
-function replaceAll(editor: Editor<undefined>, newText: string): void {
+function replaceAll(
+  editor: Editor<'file-diff', undefined>,
+  newText: string
+): void {
   const lines = editor.getText().split('\n');
   const end = { line: lines.length - 1, character: lines.at(-1)!.length };
   editor.setSelections([

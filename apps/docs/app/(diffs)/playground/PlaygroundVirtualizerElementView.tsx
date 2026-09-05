@@ -11,7 +11,7 @@ import {
   type LineAnnotation,
   type SelectedLineRange,
 } from '@pierre/diffs';
-import type { EditorOptions } from '@pierre/diffs/edit';
+import type { EditorOptions, EditorType } from '@pierre/diffs/edit';
 import {
   File,
   FileDiff,
@@ -34,6 +34,13 @@ interface PlaygroundVirtualizerElementViewProps {
   enableLineSelection: boolean;
   enableGutterComments: boolean;
   showAnnotations: boolean;
+  editPrediction: NonNullable<
+    EditorOptions<
+      EditorType,
+      PlaygroundAnnotationMetadata,
+      undefined
+    >['editPrediction']
+  >;
 }
 
 // Renders the diff list through the React <Virtualizer> wrapper, which always
@@ -49,6 +56,7 @@ export function PlaygroundVirtualizerElementView({
   enableLineSelection,
   enableGutterComments,
   showAnnotations,
+  editPrediction,
 }: PlaygroundVirtualizerElementViewProps) {
   return (
     <Virtualizer
@@ -60,6 +68,7 @@ export function PlaygroundVirtualizerElementView({
         enableLineSelection={enableLineSelection}
         enableGutterComments={enableGutterComments}
         showAnnotations={showAnnotations}
+        editPrediction={editPrediction}
       />
       {diffs.map((fileDiff) => (
         <ElementVirtualizerDiff
@@ -69,6 +78,7 @@ export function PlaygroundVirtualizerElementView({
           enableLineSelection={enableLineSelection}
           enableGutterComments={enableGutterComments}
           showAnnotations={showAnnotations}
+          editPrediction={editPrediction}
         />
       ))}
     </Virtualizer>
@@ -80,6 +90,13 @@ interface ElementVirtualizerFileProps {
   enableLineSelection: boolean;
   enableGutterComments: boolean;
   showAnnotations: boolean;
+  editPrediction: NonNullable<
+    EditorOptions<
+      'file',
+      PlaygroundAnnotationMetadata,
+      undefined
+    >['editPrediction']
+  >;
 }
 
 const EMPTY_FILE_ANNOTATIONS: LineAnnotation<PlaygroundAnnotationMetadata>[] =
@@ -92,6 +109,7 @@ function ElementVirtualizerFile({
   enableLineSelection,
   enableGutterComments,
   showAnnotations,
+  editPrediction,
 }: ElementVirtualizerFileProps) {
   const [file, setFile] = useState(LONG_README_FILE);
   const [editing, setEditing] = useState(false);
@@ -106,19 +124,22 @@ function ElementVirtualizerFile({
     null
   );
 
-  const editorOptions = useMemo<EditorOptions<PlaygroundAnnotationMetadata>>(
+  const editorOptions = useMemo<
+    EditorOptions<'file', PlaygroundAnnotationMetadata, undefined>
+  >(
     () => ({
+      editPrediction,
       onAttach(editor) {
         editor.focus({ lineNumber: 'first-visible', preventScroll: true });
       },
     }),
-    []
+    [editPrediction]
   );
 
   // Save accepts the completed file under a fresh cacheKey and stores it as
   // the component's file; Cancel reverts to the current one.
   const handleEditComplete = useCallback(
-    (event: FileEditCompleteEvent<PlaygroundAnnotationMetadata>) => {
+    (event: FileEditCompleteEvent<PlaygroundAnnotationMetadata, undefined>) => {
       if (cancelled.current) {
         cancelled.current = false;
         return 'reject';
@@ -189,7 +210,9 @@ function ElementVirtualizerFile({
   const canUseGutterComments =
     enableGutterComments && showAnnotations && !hasOpenCommentForm;
 
-  const fileOptions = useMemo<FileOptions<PlaygroundAnnotationMetadata>>(
+  const fileOptions = useMemo<
+    FileOptions<PlaygroundAnnotationMetadata, undefined>
+  >(
     () => ({
       ...options,
       stickyHeader: true,
@@ -264,10 +287,17 @@ function ElementVirtualizerFile({
 
 interface ElementVirtualizerDiffProps {
   fileDiff: FileDiffMetadata;
-  options: FileDiffOptions<PlaygroundAnnotationMetadata>;
+  options: FileDiffOptions<PlaygroundAnnotationMetadata, undefined>;
   enableLineSelection: boolean;
   enableGutterComments: boolean;
   showAnnotations: boolean;
+  editPrediction: NonNullable<
+    EditorOptions<
+      'file-diff',
+      PlaygroundAnnotationMetadata,
+      undefined
+    >['editPrediction']
+  >;
 }
 
 const EMPTY_ANNOTATIONS: DiffLineAnnotation<PlaygroundAnnotationMetadata>[] =
@@ -283,6 +313,7 @@ function ElementVirtualizerDiff({
   enableLineSelection,
   enableGutterComments,
   showAnnotations,
+  editPrediction,
 }: ElementVirtualizerDiffProps) {
   const [currentDiff, setCurrentDiff] = useState(fileDiff);
   const [editing, setEditing] = useState(false);
@@ -297,19 +328,24 @@ function ElementVirtualizerDiff({
     null
   );
 
-  const editorOptions = useMemo<EditorOptions<PlaygroundAnnotationMetadata>>(
+  const editorOptions = useMemo<
+    EditorOptions<'file-diff', PlaygroundAnnotationMetadata, undefined>
+  >(
     () => ({
+      editPrediction,
       onAttach(editor) {
         editor.focus({ lineNumber: 'first-visible', preventScroll: true });
       },
     }),
-    []
+    [editPrediction]
   );
 
   // Save accepts the completed diff under a fresh cacheKey and stores it as
   // the component's diff; Cancel reverts to the current one.
   const handleEditComplete = useCallback(
-    (event: FileDiffEditCompleteEvent<PlaygroundAnnotationMetadata>) => {
+    (
+      event: FileDiffEditCompleteEvent<PlaygroundAnnotationMetadata, undefined>
+    ) => {
       if (cancelled.current) {
         cancelled.current = false;
         return 'reject';
@@ -395,7 +431,7 @@ function ElementVirtualizerDiff({
     enableGutterComments && showAnnotations && !hasOpenCommentForm;
 
   const fileDiffOptions = useMemo<
-    FileDiffOptions<PlaygroundAnnotationMetadata>
+    FileDiffOptions<PlaygroundAnnotationMetadata, undefined>
   >(
     () => ({
       ...options,

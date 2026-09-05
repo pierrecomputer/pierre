@@ -3,17 +3,26 @@ import { createTwoFilesPatch } from 'diff';
 
 import {
   disposeHighlighter,
+  File,
   FileDiff,
+  getSharedHighlighter,
   parseDiffFromFile,
   parsePatchFiles,
+  registerCustomTheme,
+  VirtualizedFile,
+  VirtualizedFileDiff,
+  Virtualizer,
 } from '../src';
 import { Editor } from '../src/editor/editor';
+import type { EditorChangeEvent } from '../src/editor/types';
 import type {
+  FileContents,
   FileDiffLoadedFiles,
   FileDiffMetadata,
   SupportedLanguages,
+  ThemeRegistration,
 } from '../src/types';
-import { installDom, waitFor } from './domHarness';
+import { createRoot, installDom, waitFor } from './domHarness';
 import { assertDefined, createDeferred } from './testUtils';
 
 afterAll(async () => {
@@ -75,7 +84,7 @@ async function createFixture(options?: {
     disableFileHeader: true,
     loadDiffFiles: options?.loadDiffFiles,
   });
-  const editor = new Editor<undefined>('file-diff', {
+  const editor = new Editor('file-diff', {
     onChange: (event) => options?.onChange?.(event.file.contents),
   });
 
@@ -117,7 +126,10 @@ function createPartialDiff(
   return diff;
 }
 
-function replaceDocument(editor: Editor<undefined>, contents: string): void {
+function replaceDocument(
+  editor: Editor<'file-diff', undefined>,
+  contents: string
+): void {
   editor.applyEdits([
     {
       range: {
@@ -146,6 +158,232 @@ async function renderReplacement(
     timeout: 4_000,
   });
 }
+
+describe('external replacements from editor onChange', () => {
+  for (const type of ['file', 'file-diff'] as const) {
+    for (const deferredTheme of [false, true]) {
+      test(`${type} retains a callback replacement with a ${deferredTheme ? 'loading' : 'ready'} theme`, async () => {
+        await getSharedHighlighter({
+          themes: ['pierre-dark', 'pierre-light'],
+          langs: ['text'],
+        });
+        const themeName = `editor-callback-${type}-${deferredTheme}`;
+        const theme: ThemeRegistration = {
+          name: themeName,
+          type: 'dark',
+          colors: {
+            'editor.background': '#000000',
+            'editor.foreground': '#ffffff',
+          },
+          tokenColors: [],
+        };
+        const loadedTheme = createDeferred<ThemeRegistration>();
+        registerCustomTheme(themeName, () => loadedTheme.promise);
+        if (!deferredTheme) {
+          loadedTheme.resolve(theme);
+          await getSharedHighlighter({ themes: [themeName], langs: ['text'] });
+        }
+
+        const dom = installDom();
+        const fileContainer = document.createElement('div');
+        document.body.appendChild(fileContainer);
+        const notifications: string[] = [];
+        const onEditChange = (
+          event: EditorChangeEvent<'file' | 'file-diff', undefined, undefined>
+        ) => notifications.push(`component:${event.file.contents}`);
+        const options = {
+          disableErrorHandling: true,
+          disableFileHeader: true,
+          onEditChange,
+        };
+        const instance =
+          type === 'file' ? new File(options) : new FileDiff(options);
+        const render = (contents: string) => {
+          const file: FileContents = {
+            name: 'callback.txt',
+            lang: 'text',
+            contents,
+          };
+          if (instance.type === 'file') {
+            instance.render({ file, fileContainer, forceRender: true });
+          } else {
+            instance.render({
+              fileDiff: parseDiffFromFile(
+                { ...file, contents: 'base\n' },
+                file
+              ),
+              fileContainer,
+              forceRender: true,
+            });
+          }
+        };
+        let replaced = false;
+        const onChange = (
+          event: EditorChangeEvent<'file' | 'file-diff', undefined, undefined>
+        ) => {
+          notifications.push(`editor:${event.file.contents}`);
+          if (replaced) return;
+          replaced = true;
+          instance.setOptions({ ...options, theme: themeName });
+          render('server\n');
+        };
+        const editor =
+          type === 'file'
+            ? new Editor('file', { onChange })
+            : new Editor('file-diff', { onChange });
+
+        try {
+          render('alpha\n');
+          if (instance.type === 'file' && editor.type === 'file') {
+            editor.edit(instance);
+          } else if (
+            instance.type === 'file-diff' &&
+            editor.type === 'file-diff'
+          ) {
+            editor.edit(instance);
+          }
+          expect(editor.getText()).toBe('alpha\n');
+          editor.applyEdits([
+            {
+              range: {
+                start: { line: 0, character: 0 },
+                end: { line: 0, character: 0 },
+              },
+              newText: 'X',
+            },
+          ]);
+
+          if (deferredTheme) {
+            expect(editor.getText()).toBe('Xalpha\n');
+            expect(notifications).toEqual([
+              'editor:Xalpha\n',
+              'component:Xalpha\n',
+            ]);
+            loadedTheme.resolve(theme);
+            await waitFor(() => editor.getText() === 'server\n');
+            expect(notifications).toEqual([
+              'editor:Xalpha\n',
+              'component:Xalpha\n',
+              'editor:server\n',
+              'component:server\n',
+            ]);
+          }
+          // A ready theme must reconcile within applyEdits itself.
+          expect(editor.getText()).toBe('server\n');
+          const content = Array.from(
+            fileContainer.shadowRoot?.querySelectorAll<HTMLElement>(
+              '[data-content]'
+            ) ?? []
+          ).find((element) => element.contentEditable === 'true');
+          expect(content?.textContent).toContain('server');
+          editor.undo();
+          expect(editor.getText()).toBe('Xalpha\n');
+          editor.undo();
+          expect(editor.getText()).toBe('alpha\n');
+        } finally {
+          loadedTheme.resolve(theme);
+          editor.cleanUp();
+          instance.cleanUp();
+          await getSharedHighlighter({ themes: [themeName], langs: ['text'] });
+          dom.cleanup();
+        }
+      });
+    }
+  }
+});
+
+describe('virtualized render completion before notifications', () => {
+  for (const type of ['file', 'file-diff'] as const) {
+    for (const observer of [
+      'onChange',
+      'onEditChange',
+      'onPostRender',
+    ] as const) {
+      test(`${type} can dispose its host in ${observer} during an external replacement`, async () => {
+        await getSharedHighlighter({
+          themes: ['pierre-dark', 'pierre-light'],
+          langs: ['text'],
+        });
+        const dom = installDom();
+        const virtualizer = new Virtualizer();
+        const root = createRoot();
+        const fileContainer = document.createElement('diffs-container');
+        root.appendChild(fileContainer);
+        let armed = false;
+        let notifications = 0;
+        let renderReturned = false;
+        const disposeHost = () => {
+          if (!armed) return;
+          armed = false;
+          notifications++;
+          expect(renderReturned).toBe(false);
+          expect(editor.getText()).toBe('server\n');
+          editor.cleanUp();
+          instance.cleanUp();
+        };
+        const options = {
+          disableFileHeader: true,
+          disableErrorHandling: true,
+          onEditChange: observer === 'onEditChange' ? disposeHost : undefined,
+          onPostRender: observer === 'onPostRender' ? disposeHost : undefined,
+        };
+        const instance =
+          type === 'file'
+            ? new VirtualizedFile(options, virtualizer)
+            : new VirtualizedFileDiff(options, virtualizer);
+        const editorOptions = {
+          onChange: observer === 'onChange' ? disposeHost : undefined,
+        };
+        const editor =
+          type === 'file'
+            ? new Editor('file', editorOptions)
+            : new Editor('file-diff', editorOptions);
+        const render = (contents: string) => {
+          const file: FileContents = {
+            name: 'lifecycle.txt',
+            lang: 'text',
+            contents,
+          };
+          return instance.type === 'file'
+            ? instance.render({ file, fileContainer, forceRender: true })
+            : instance.render({
+                fileDiff: parseDiffFromFile(
+                  { ...file, contents: 'base\n' },
+                  file
+                ),
+                fileContainer,
+                forceRender: true,
+              });
+        };
+
+        try {
+          virtualizer.setup(root);
+          render('alpha\n');
+          if (instance.type === 'file' && editor.type === 'file') {
+            editor.edit(instance);
+          } else if (
+            instance.type === 'file-diff' &&
+            editor.type === 'file-diff'
+          ) {
+            editor.edit(instance);
+          }
+          await waitFor(() => editor.getText() === 'alpha\n');
+          armed = true;
+          expect(render('server\n')).toBe(true);
+          renderReturned = true;
+          expect(notifications).toBe(1);
+          expect(editor.getFile()).toBeUndefined();
+        } finally {
+          armed = false;
+          editor.cleanUp();
+          instance.cleanUp();
+          virtualizer.cleanUp();
+          dom.cleanup();
+        }
+      });
+    }
+  }
+});
 
 describe('external FileDiff updates during editing', () => {
   test('a compatible update becomes one undoable edit and emits its contents', async () => {
@@ -196,6 +434,85 @@ describe('external FileDiff updates during editing', () => {
       fixture.cleanup();
     }
   });
+
+  for (const deferredTheme of [false, true]) {
+    test(`an old-side-only replacement resets history once with a ${deferredTheme ? 'loading' : 'ready'} theme`, async () => {
+      const changes: string[] = [];
+      const fixture = await createFixture({
+        onChange: (contents) => changes.push(contents),
+      });
+      const themeName = `old-side-replacement-${deferredTheme}`;
+      const theme: ThemeRegistration = {
+        name: themeName,
+        type: 'dark',
+        colors: {},
+        tokenColors: [],
+      };
+      const loadedTheme = createDeferred<ThemeRegistration>();
+      const replacement = createDiff({
+        cacheKey: 'session:new-base',
+        oldContents: 'different base\n',
+        newContents: 'bravo\n',
+      });
+
+      try {
+        replaceDocument(fixture.editor, 'bravo\n');
+        expect(fixture.editor.canUndo).toBe(true);
+        if (deferredTheme) {
+          registerCustomTheme(themeName, () => loadedTheme.promise);
+          fixture.instance.setOptions({
+            disableErrorHandling: true,
+            disableFileHeader: true,
+            theme: themeName,
+          });
+        }
+        fixture.instance.render({
+          fileDiff: replacement,
+          fileContainer: fixture.fileContainer,
+          forceRender: true,
+        });
+        if (deferredTheme) {
+          expect(fixture.editor.canUndo).toBe(true);
+          loadedTheme.resolve(theme);
+          await waitFor(() => !fixture.editor.canUndo);
+        }
+        expect(fixture.editor.canUndo).toBe(false);
+        expect(fixture.editor.canRedo).toBe(false);
+        expect(changes).toEqual(['bravo\n']);
+        expect(
+          fixture.editor.__getDocumentSessionState()?.oldFile?.lines
+        ).toEqual(['different base\n']);
+
+        fixture.editor.setSelections([
+          {
+            start: { line: 0, character: 2 },
+            end: { line: 0, character: 2 },
+            direction: 'none',
+          },
+        ]);
+        const selections = fixture.editor.getViewState().selections;
+        expect(selections).toBeDefined();
+        fixture.instance.rerender();
+        fixture.instance.rerender();
+        expect(fixture.editor.getViewState().selections).toEqual(selections);
+        expect(changes).toEqual(['bravo\n']);
+
+        replaceDocument(fixture.editor, 'charlie\n');
+        fixture.instance.rerender();
+        fixture.editor.undo();
+        expect(fixture.editor.getText()).toBe('bravo\n');
+        expect(fixture.editor.canUndo).toBe(false);
+        fixture.editor.redo();
+        expect(fixture.editor.getText()).toBe('charlie\n');
+      } finally {
+        loadedTheme.resolve(theme);
+        if (deferredTheme) {
+          await getSharedHighlighter({ themes: [themeName], langs: ['text'] });
+        }
+        fixture.cleanup();
+      }
+    });
+  }
 
   test('an identical update changes external identity without adding history', async () => {
     const changes: string[] = [];

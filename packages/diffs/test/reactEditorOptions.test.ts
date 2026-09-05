@@ -23,6 +23,11 @@ import {
 import { DEFAULT_THEMES } from '../src/constants';
 import { Editor, type EditorOptions } from '../src/editor/editor';
 import { EditStateManager } from '../src/editor/EditStateManager';
+import type {
+  EditorChangeEvent,
+  EditorFactory,
+  EditorType,
+} from '../src/editor/types';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
 import {
   MultiFileDiff,
@@ -36,19 +41,10 @@ import {
   type FileProps as ReactFileProps,
   Virtualizer,
 } from '../src/react';
-import {
-  type CreateEditor,
-  EditProvider,
-  type EditProviderProps,
-} from '../src/react/EditContext';
+import { EditProvider, type EditProviderProps } from '../src/react/EditContext';
 import { type FileDiffProps as ReactFileDiffProps } from '../src/react/FileDiff';
 import type {
   DiffLineAnnotation,
-  DiffsEditableComponent,
-  DiffsEditor,
-  EditableInstance,
-  EditorChangeEvent,
-  EditorDocumentKind,
   FileContents,
   LineAnnotation,
 } from '../src/types';
@@ -60,51 +56,62 @@ afterAll(async () => {
 });
 
 const ReactFileComponent = ReactFile as ComponentType<
-  ReactFileProps<undefined>
+  ReactFileProps<undefined, undefined>
 >;
 const ReactFileDiffComponent = ReactFileDiff as ComponentType<
-  ReactFileDiffProps<undefined>
+  ReactFileDiffProps<undefined, undefined>
 >;
 const EditProviderComponent = EditProvider as ComponentType<
-  PropsWithChildren<EditProviderProps<undefined>>
+  PropsWithChildren<EditProviderProps<undefined, undefined>>
 >;
 const MultiFileDiffComponent = MultiFileDiff as ComponentType<
-  MultiFileDiffProps<undefined>
+  MultiFileDiffProps<undefined, undefined>
 >;
 const PatchDiffComponent = PatchDiff as ComponentType<
-  PatchDiffProps<undefined>
+  PatchDiffProps<undefined, undefined>
 >;
 
-function createEditor(
-  documentKind: EditorDocumentKind,
-  options: EditorOptions<undefined>
-): Editor<undefined> {
-  return new Editor(documentKind, options);
+function createEditor<EType extends EditorType>(
+  editorType: EType,
+  options: EditorOptions<EType, undefined, undefined>
+): Editor<EType, undefined> {
+  return new Editor(editorType, options);
 }
 
-class TrackedEditor extends Editor<undefined> {
-  cleanUpCount = 0;
+type TrackedEditor<EType extends EditorType> = Editor<EType, undefined> & {
+  cleanUpCount: number;
+};
 
-  override cleanUp(reason?: 'discard' | 'recycle' | 'complete'): void {
-    this.cleanUpCount += 1;
-    super.cleanUp(reason);
-  }
+type AnyEditor = Editor<EditorType, undefined>;
+type AnyTrackedEditor = TrackedEditor<EditorType>;
+
+function createTrackedEditor<EType extends EditorType>(
+  editorType: EType,
+  options: EditorOptions<EType, undefined, undefined>,
+  editStateKey?: string
+): TrackedEditor<EType> {
+  const editor = new Editor(
+    editorType,
+    options,
+    editStateKey
+  ) as TrackedEditor<EType>;
+  editor.cleanUpCount = 0;
+  const cleanUp = editor.cleanUp.bind(editor);
+  editor.cleanUp = (reason) => {
+    editor.cleanUpCount += 1;
+    cleanUp(reason);
+  };
+  return editor;
 }
 
-class AttachmentFailingEditor extends TrackedEditor {
-  constructor(
-    documentKind: EditorDocumentKind,
-    options: EditorOptions<undefined>,
-    private readonly attachmentError: Error
-  ) {
-    super(documentKind, options);
-  }
-
-  override edit<T extends DiffsEditableComponent<undefined>>(
-    _fileInstance: EditableInstance<T>
-  ): () => void {
-    throw this.attachmentError;
-  }
+function createTrackedEditorFactory(
+  editors: AnyTrackedEditor[]
+): EditorFactory<undefined, undefined> {
+  return (editorType, options, editStateKey) => {
+    const editor = createTrackedEditor(editorType, options, editStateKey);
+    editors.push(editor as unknown as AnyTrackedEditor);
+    return editor;
+  };
 }
 
 function installReactActEnvironment(): () => void {
@@ -199,7 +206,7 @@ function unwrapRenderError(error: unknown): unknown {
   return error;
 }
 
-function insertAtStart(editor: Editor<undefined>, newText: string): void {
+function insertAtStart(editor: AnyEditor, newText: string): void {
   editor.applyEdits([
     {
       range: {
@@ -211,10 +218,7 @@ function insertAtStart(editor: Editor<undefined>, newText: string): void {
   ]);
 }
 
-function deleteAndRetypeSecondLine(
-  editor: Editor<undefined>,
-  lineText: string
-): void {
+function deleteAndRetypeSecondLine(editor: AnyEditor, lineText: string): void {
   editor.applyEdits([
     {
       range: {
@@ -243,13 +247,13 @@ type ReactEditableSurfaceInstance =
 function createEditableSurfaceElement(
   surface: ReactEditableSurface,
   edit = true,
-  editorOptions?: EditorOptions<undefined>,
+  editorOptions?: EditorOptions<EditorType, undefined, undefined>,
   onInstance?: (instance: ReactEditableSurfaceInstance) => void,
   editStateKey?: string
 ): ReactElement {
   const oldFile = { name: 'edit.ts', contents: 'const value = 1;\n' };
   if (surface === 'File') {
-    const options: ReactFileOptions<undefined> = {
+    const options: ReactFileOptions<undefined, undefined> = {
       disableFileHeader: true,
       theme: DEFAULT_THEMES,
       onPostRender(_node, instance, phase) {
@@ -267,7 +271,7 @@ function createEditableSurfaceElement(
       options,
     });
   }
-  const options: ReactFileDiffOptions<undefined> = {
+  const options: ReactFileDiffOptions<undefined, undefined> = {
     disableFileHeader: true,
     theme: DEFAULT_THEMES,
     onPostRender(_node, instance, phase) {
@@ -308,7 +312,7 @@ describe('React edit surfaces', () => {
     document.body.appendChild(container);
     let instance: FileInstance<undefined> | undefined;
     let root: Root | undefined;
-    const options: ReactFileOptions<undefined> = {
+    const options: ReactFileOptions<undefined, undefined> = {
       disableFileHeader: true,
       theme: DEFAULT_THEMES,
       useTokenTransformer: false,
@@ -359,7 +363,7 @@ describe('React edit surfaces', () => {
     document.body.appendChild(container);
     let instance: FileDiffInstance<undefined> | undefined;
     let root: Root | undefined;
-    const options: ReactFileDiffOptions<undefined> = {
+    const options: ReactFileDiffOptions<undefined, undefined> = {
       disableFileHeader: true,
       theme: DEFAULT_THEMES,
       useTokenTransformer: false,
@@ -463,31 +467,29 @@ describe('React editor factory lifecycle', () => {
       const cleanupActEnvironment = installReactActEnvironment();
       const container = document.createElement('div');
       document.body.appendChild(container);
-      const editors: TrackedEditor[] = [];
+      const editors: AnyTrackedEditor[] = [];
       const firstEditStateKey = `${surface}:first`;
       const secondEditStateKey = `${surface}:second`;
       let instance: ReactEditableSurfaceInstance | undefined;
       let root: Root | undefined;
       const firstOnChange = mock(
-        (_event: EditorChangeEvent<undefined, 'file' | 'diff'>) => {}
+        (
+          _event: EditorChangeEvent<'file' | 'file-diff', undefined, undefined>
+        ) => {}
       );
       const secondOnChange = mock(
-        (_event: EditorChangeEvent<undefined, 'file' | 'diff'>) => {}
+        (
+          _event: EditorChangeEvent<'file' | 'file-diff', undefined, undefined>
+        ) => {}
       );
-      const firstFactory = mock((documentKind, options, editStateKey) => {
-        const editor = new TrackedEditor(documentKind, options, editStateKey);
-        editors.push(editor);
-        return editor;
-      });
-      const secondFactory = mock((documentKind, options, editStateKey) => {
-        const editor = new TrackedEditor(documentKind, options, editStateKey);
-        editors.push(editor);
-        return editor;
-      });
+      const firstFactory = mock(createTrackedEditorFactory(editors));
+      const secondFactory = mock(createTrackedEditorFactory(editors));
       const render = async (
         edit: boolean,
-        factory: CreateEditor<undefined>,
-        onChange: NonNullable<EditorOptions<undefined>['onChange']>,
+        factory: EditorFactory<undefined, undefined>,
+        onChange: NonNullable<
+          EditorOptions<EditorType, undefined, undefined>['onChange']
+        >,
         editStateKey: string
       ) => {
         await act(async () => {
@@ -526,7 +528,9 @@ describe('React editor factory lifecycle', () => {
         expect(firstFactory.mock.calls[0]?.[0]).toBe(
           surface === 'File' ? 'file' : 'file-diff'
         );
-        expect(firstFactory.mock.calls[0]?.[1].onChange).toBe(firstOnChange);
+        expect(firstFactory.mock.calls[0]?.[1].onChange === firstOnChange).toBe(
+          true
+        );
         expect(firstFactory.mock.calls[0]?.[2]).toBe(firstEditStateKey);
         expect(editors[0]?.cleanUpCount).toBe(0);
         expect(container.firstElementChild).toBe(host);
@@ -553,7 +557,9 @@ describe('React editor factory lifecycle', () => {
         expect(secondFactory.mock.calls[0]?.[0]).toBe(
           surface === 'File' ? 'file' : 'file-diff'
         );
-        expect(secondFactory.mock.calls[0]?.[1].onChange).toBe(secondOnChange);
+        expect(
+          secondFactory.mock.calls[0]?.[1].onChange === secondOnChange
+        ).toBe(true);
         expect(secondFactory.mock.calls[0]?.[2]).toBe(secondEditStateKey);
         expect(editors[1]?.cleanUpCount).toBe(0);
         expect(container.firstElementChild).toBe(host);
@@ -567,9 +573,9 @@ describe('React editor factory lifecycle', () => {
         expect(editors[1]?.cleanUpCount).toBeGreaterThan(0);
       } finally {
         await unmountRoot(root);
-        const documentKind = surface === 'File' ? 'file' : 'file-diff';
-        EditStateManager.clear(documentKind, firstEditStateKey);
-        EditStateManager.clear(documentKind, secondEditStateKey);
+        const editorType = surface === 'File' ? 'file' : 'file-diff';
+        EditStateManager.clear(editorType, firstEditStateKey);
+        EditStateManager.clear(editorType, secondEditStateKey);
         cleanupActEnvironment();
         cleanup();
       }
@@ -583,18 +589,8 @@ describe('React editor factory lifecycle', () => {
       const container = document.createElement('div');
       document.body.appendChild(container);
       const editStateKey = `${surface}-history`;
-      const editors: TrackedEditor[] = [];
-      const factory = mock(
-        (
-          documentKind: EditorDocumentKind,
-          options: EditorOptions<undefined>,
-          historyKey?: string
-        ) => {
-          const editor = new TrackedEditor(documentKind, options, historyKey);
-          editors.push(editor);
-          return editor;
-        }
-      );
+      const editors: AnyTrackedEditor[] = [];
+      const factory = mock(createTrackedEditorFactory(editors));
       let root: Root | undefined;
 
       try {
@@ -639,17 +635,9 @@ describe('React editor factory lifecycle', () => {
       const container = document.createElement('div');
       document.body.appendChild(container);
       const editStateKey = `${surface}-shared-history`;
-      const editorOptions: EditorOptions<undefined> = {};
-      const editors: TrackedEditor[] = [];
-      const factory: CreateEditor<undefined> = (
-        documentKind,
-        options,
-        historyKey
-      ) => {
-        const editor = new TrackedEditor(documentKind, options, historyKey);
-        editors.push(editor);
-        return editor;
-      };
+      const editorOptions: EditorOptions<EditorType, undefined, undefined> = {};
+      const editors: AnyTrackedEditor[] = [];
+      const factory = createTrackedEditorFactory(editors);
       let root: Root | undefined;
 
       try {
@@ -704,20 +692,22 @@ describe('React editor factory lifecycle', () => {
       const cleanupActEnvironment = installReactActEnvironment();
       const container = document.createElement('div');
       document.body.appendChild(container);
-      const editors: TrackedEditor[] = [];
-      const factory: CreateEditor<undefined> = (documentKind, options) => {
-        const editor = new TrackedEditor(documentKind, options);
-        editors.push(editor);
-        return editor;
-      };
+      const editors: AnyTrackedEditor[] = [];
+      const factory = createTrackedEditorFactory(editors);
       const editorOnChange = mock(
-        (_event: EditorChangeEvent<undefined, 'file' | 'diff'>) => {}
+        (
+          _event: EditorChangeEvent<'file' | 'file-diff', undefined, undefined>
+        ) => {}
       );
       const firstOnEditChange = mock(
-        (_event: EditorChangeEvent<undefined, 'file' | 'diff'>) => {}
+        (
+          _event: EditorChangeEvent<'file' | 'file-diff', undefined, undefined>
+        ) => {}
       );
       const secondOnEditChange = mock(
-        (_event: EditorChangeEvent<undefined, 'file' | 'diff'>) => {}
+        (
+          _event: EditorChangeEvent<'file' | 'file-diff', undefined, undefined>
+        ) => {}
       );
       // Stable inputs across renders (real callers memoize their diff), so a
       // re-render only swaps the onEditChange prop instead of also delivering
@@ -733,7 +723,7 @@ describe('React editor factory lifecycle', () => {
       };
       const makeSurface = (
         onEditChange: (
-          event: EditorChangeEvent<undefined, 'file' | 'diff'>
+          event: EditorChangeEvent<'file' | 'file-diff', undefined, undefined>
         ) => void
       ): ReactElement =>
         surface === 'File'
@@ -756,7 +746,7 @@ describe('React editor factory lifecycle', () => {
       let root: Root | undefined;
       const render = async (
         onEditChange: (
-          event: EditorChangeEvent<undefined, 'file' | 'diff'>
+          event: EditorChangeEvent<'file' | 'file-diff', undefined, undefined>
         ) => void
       ) => {
         await act(async () => {
@@ -781,15 +771,21 @@ describe('React editor factory lifecycle', () => {
         expect(firstOnEditChange.mock.calls[0]?.[0]).toBe(
           editorOnChange.mock.calls[0]?.[0]
         );
-        expect(firstOnEditChange.mock.calls[0]?.[0].editor).toBe(editors[0]);
-        expect(editorOnChange.mock.calls[0]?.[0].editor).toBe(editors[0]);
+        expect(firstOnEditChange.mock.calls[0]?.[0].editor === editors[0]).toBe(
+          true
+        );
+        expect(editorOnChange.mock.calls[0]?.[0].editor === editors[0]).toBe(
+          true
+        );
 
         await render(secondOnEditChange);
         expect(editors).toHaveLength(1);
         insertAtStart(editors[0], '/* two */');
         expect(firstOnEditChange).toHaveBeenCalledTimes(1);
         expect(secondOnEditChange).toHaveBeenCalledTimes(1);
-        expect(secondOnEditChange.mock.calls[0]?.[0].editor).toBe(editors[0]);
+        expect(
+          secondOnEditChange.mock.calls[0]?.[0].editor === editors[0]
+        ).toBe(true);
       } finally {
         await unmountRoot(root);
         cleanupActEnvironment();
@@ -803,12 +799,8 @@ describe('React editor factory lifecycle', () => {
     const cleanupActEnvironment = installReactActEnvironment();
     const container = document.createElement('div');
     document.body.appendChild(container);
-    const editors: TrackedEditor[] = [];
-    const factory: CreateEditor<undefined> = (documentKind, options) => {
-      const editor = new TrackedEditor(documentKind, options);
-      editors.push(editor);
-      return editor;
-    };
+    const editors: AnyTrackedEditor[] = [];
+    const factory = createTrackedEditorFactory(editors);
     const lineAnnotations = [{ lineNumber: 2 }];
     let root: Root | undefined;
 
@@ -884,17 +876,15 @@ describe('React editor factory lifecycle', () => {
       const cleanupActEnvironment = installReactActEnvironment();
       const container = document.createElement('div');
       document.body.appendChild(container);
-      const editors: TrackedEditor[] = [];
+      const editors: AnyTrackedEditor[] = [];
       const onChange = mock(
-        (_event: EditorChangeEvent<undefined, 'file' | 'diff'>) => {}
+        (
+          _event: EditorChangeEvent<'file' | 'file-diff', undefined, undefined>
+        ) => {}
       );
       let root: Root | undefined;
       const editStateKey = `${wrapper}-history`;
-      const factory = mock((documentKind, options, historyKey?: string) => {
-        const editor = new TrackedEditor(documentKind, options, historyKey);
-        editors.push(editor);
-        return editor;
-      });
+      const factory = mock(createTrackedEditorFactory(editors));
       const oldFile = { name: 'edit.ts', contents: 'const value = 1;\n' };
       const newFile = { name: 'edit.ts', contents: 'const value = 2;\n' };
       const sharedProps = {
@@ -942,7 +932,7 @@ describe('React editor factory lifecycle', () => {
         expect(editors).toHaveLength(1);
         expect(factory).toHaveBeenCalledTimes(1);
         expect(factory.mock.calls[0]?.[0]).toBe('file-diff');
-        expect(factory.mock.calls[0]?.[1].onChange).toBe(onChange);
+        expect(factory.mock.calls[0]?.[1].onChange === onChange).toBe(true);
         expect(factory.mock.calls[0]?.[2]).toBe(editStateKey);
         insertAtStart(editors[0], '/* wrapper */');
         expect(onChange).toHaveBeenCalledTimes(1);
@@ -968,27 +958,26 @@ describe('React editor factory lifecycle', () => {
     const container = document.createElement('div');
     document.body.appendChild(container);
     const callbacks = Array.from({ length: 2 }, () =>
-      mock((_event: EditorChangeEvent<undefined, 'file' | 'diff'>) => {})
+      mock(
+        (
+          _event: EditorChangeEvent<'file' | 'file-diff', undefined, undefined>
+        ) => {}
+      )
     );
-    const siblingEditors: (TrackedEditor | undefined)[] = [
+    const siblingEditors: (AnyTrackedEditor | undefined)[] = [
       undefined,
       undefined,
     ];
-    const editorOptions: EditorOptions<undefined>[] = callbacks.map(
-      (onChange, index) => ({
+    const editorOptions: EditorOptions<EditorType, undefined, undefined>[] =
+      callbacks.map((onChange, index) => ({
         onAttach(editor) {
-          siblingEditors[index] = editor as TrackedEditor;
+          siblingEditors[index] = editor as AnyTrackedEditor;
         },
         onChange,
-      })
-    );
-    const editors: TrackedEditor[] = [];
+      }));
+    const editors: AnyTrackedEditor[] = [];
     let root: Root | undefined;
-    const factory: CreateEditor<undefined> = (documentKind, options) => {
-      const editor = new TrackedEditor(documentKind, options);
-      editors.push(editor);
-      return editor;
-    };
+    const factory = createTrackedEditorFactory(editors);
     const oldFile = { name: 'edit.ts', contents: 'const value = 1;\n' };
     const newFile = { name: 'edit.ts', contents: 'const value = 2;\n' };
 
@@ -1105,54 +1094,6 @@ describe('React editor factory lifecycle', () => {
         cleanup();
       }
     });
-
-    test(`${surface} cleans an editor whose attachment fails`, async () => {
-      const { cleanup } = installDom();
-      const cleanupActEnvironment = installReactActEnvironment();
-      const container = document.createElement('div');
-      document.body.appendChild(container);
-      const attachmentError = new Error(`${surface} attachment failed`);
-      const editors: AttachmentFailingEditor[] = [];
-      const onAttach = mock((_editor: Editor<undefined>) => {});
-      let root: Root | undefined;
-      const factory: CreateEditor<undefined> = (documentKind, options) => {
-        const editor = new AttachmentFailingEditor(
-          documentKind,
-          options,
-          attachmentError
-        );
-        editors.push(editor);
-        return editor;
-      };
-
-      try {
-        root = createReactRoot(container);
-        const renderError = await captureRenderError(
-          root,
-          createElement(
-            EditProviderComponent,
-            { createEditor: factory },
-            createEditableSurfaceElement(surface, true, { onAttach })
-          )
-        );
-        expect(renderError).toBe(attachmentError);
-        expect(editors.length).toBeGreaterThan(0);
-        expect(editors.every((editor) => editor.cleanUpCount > 0)).toBe(true);
-        const cleanUpCounts = editors.map((editor) => editor.cleanUpCount);
-        await wait(0);
-        expect(onAttach).not.toHaveBeenCalled();
-
-        await unmountRoot(root);
-        root = undefined;
-        expect(editors.map((editor) => editor.cleanUpCount)).toEqual(
-          cleanUpCounts
-        );
-      } finally {
-        await unmountRoot(root);
-        cleanupActEnvironment();
-        cleanup();
-      }
-    });
   }
 
   for (const surface of ['File', 'FileDiff'] as const) {
@@ -1163,13 +1104,9 @@ describe('React editor factory lifecycle', () => {
         const frames = holdAnimationFrames();
         const container = document.createElement('div');
         document.body.appendChild(container);
-        const editors: TrackedEditor[] = [];
-        const onAttach = mock((_editor: Editor<undefined>) => {});
-        const factory: CreateEditor<undefined> = (documentKind, options) => {
-          const editor = new TrackedEditor(documentKind, options);
-          editors.push(editor);
-          return editor;
-        };
+        const editors: AnyTrackedEditor[] = [];
+        const onAttach = mock((_editor: AnyEditor) => {});
+        const factory = createTrackedEditorFactory(editors);
         const renderSurface = (edit: boolean) =>
           createElement(
             EditProviderComponent,
@@ -1219,14 +1156,10 @@ describe('React editor factory lifecycle', () => {
     const cleanupActEnvironment = installReactActEnvironment();
     const container = document.createElement('div');
     document.body.appendChild(container);
-    const editors: TrackedEditor[] = [];
-    const onAttach = mock((_editor: Editor<undefined>) => {});
+    const editors: AnyTrackedEditor[] = [];
+    const onAttach = mock((_editor: AnyEditor) => {});
     let root: Root | undefined;
-    const factory: CreateEditor<undefined> = (documentKind, options) => {
-      const editor = new TrackedEditor(documentKind, options);
-      editors.push(editor);
-      return editor;
-    };
+    const factory = createTrackedEditorFactory(editors);
     const oldFile = { name: 'edit.ts', contents: 'const value = 1;\n' };
     const newFile = { name: 'edit.ts', contents: 'const value = 2;\n' };
 
@@ -1282,7 +1215,7 @@ describe('React editor factory lifecycle', () => {
       expect(editors).toHaveLength(4);
       expect(onAttach).toHaveBeenCalledTimes(2);
       const attachedEditors = onAttach.mock.calls.map(
-        ([editor]) => editor as TrackedEditor
+        ([editor]) => editor as AnyTrackedEditor
       );
       expect(new Set(attachedEditors).size).toBe(2);
       expect(attachedEditors.every((editor) => editors.includes(editor))).toBe(
@@ -1328,17 +1261,22 @@ describe('React editor factory lifecycle', () => {
     // The owner-constructed editor is used exactly as constructed: its own
     // onAttach must fire, while the surface's editorOptions (including its
     // onAttach) only reach the factory, which discards them.
-    let attachedEditor: Editor<undefined> | undefined;
-    const sharedEditor = new Editor<undefined>('file', {
+    let attachedEditor: AnyEditor | undefined;
+    const sharedEditor = new Editor('file', {
       onAttach(editor) {
         attachedEditor = editor;
       },
     });
-    const factory = mock(
-      (_documentKind: EditorDocumentKind, _options: EditorOptions<undefined>) =>
-        sharedEditor
-    );
-    const surfaceOnAttach = mock((_editor: Editor<undefined>) => {});
+    const createSharedEditor: EditorFactory<undefined, undefined> = (
+      editorType
+    ) => {
+      if (editorType !== 'file') {
+        throw new Error('Expected a file editor');
+      }
+      return sharedEditor as Editor<typeof editorType, undefined>;
+    };
+    const factory = mock(createSharedEditor);
+    const surfaceOnAttach = mock((_editor: AnyEditor) => {});
     let root: Root | undefined;
 
     try {
@@ -1377,8 +1315,8 @@ describe('React completion lifecycle', () => {
   interface FileHarness {
     cleanup(): Promise<void>;
     container: HTMLElement;
-    editors: TrackedEditor[];
-    events: FileEditCompleteEvent<undefined>[];
+    editors: AnyTrackedEditor[];
+    events: FileEditCompleteEvent<undefined, undefined>[];
     getInstance(): FileInstance<undefined> | undefined;
     render(props: FileHarnessProps): Promise<void>;
     renderError(props: { file: FileContents; edit: boolean }): Promise<unknown>;
@@ -1388,23 +1326,19 @@ describe('React completion lifecycle', () => {
     file: FileContents;
     edit: boolean;
     lineAnnotations?: LineAnnotation<undefined>[];
-    onEditChange?(event: EditorChangeEvent<undefined, 'file'>): void;
+    onEditChange?(event: EditorChangeEvent<'file', undefined, undefined>): void;
   }
 
   function createFileHarness(
-    onEditComplete: FileEditCompleteHandler<undefined>
+    onEditComplete: FileEditCompleteHandler<undefined, undefined>
   ): FileHarness {
     const { cleanup: cleanupDom } = installDom();
     const cleanupActEnvironment = installReactActEnvironment();
     const container = document.createElement('div');
     document.body.appendChild(container);
-    const editors: TrackedEditor[] = [];
-    const events: FileEditCompleteEvent<undefined>[] = [];
-    const factory: CreateEditor<undefined> = (documentKind, options) => {
-      const editor = new TrackedEditor(documentKind, options);
-      editors.push(editor);
-      return editor;
-    };
+    const editors: AnyTrackedEditor[] = [];
+    const events: FileEditCompleteEvent<undefined, undefined>[] = [];
+    const factory = createTrackedEditorFactory(editors);
     let instance: FileInstance<undefined> | undefined;
     const root = createReactRoot(container);
     const element = (props: FileHarnessProps) =>
@@ -1452,7 +1386,7 @@ describe('React completion lifecycle', () => {
   }
 
   test('accepting installs the completed file with no stale-prop repaint', async () => {
-    const events: FileEditCompleteEvent<undefined>[] = [];
+    const events: FileEditCompleteEvent<undefined, undefined>[] = [];
     const harness = createFileHarness((event) => {
       events.push(event);
       event.file.cacheKey = 'accepted:v2';
@@ -1510,7 +1444,7 @@ describe('React completion lifecycle', () => {
 
   test('a re-serialized keyed file prop keeps the accepted file installed', async () => {
     const KEYED_FILE: FileContents = { ...FILE_A, cacheKey: 'file:v1' };
-    const events: FileEditCompleteEvent<undefined>[] = [];
+    const events: FileEditCompleteEvent<undefined, undefined>[] = [];
     const harness = createFileHarness((event) => {
       events.push(event);
       event.file.cacheKey = 'accepted:v2';
@@ -1539,7 +1473,7 @@ describe('React completion lifecycle', () => {
   });
 
   test('returning null reverts to the exact file prop', async () => {
-    const events: FileEditCompleteEvent<undefined>[] = [];
+    const events: FileEditCompleteEvent<undefined, undefined>[] = [];
     const harness = createFileHarness((event) => {
       events.push(event);
       return 'reject';
@@ -1563,7 +1497,7 @@ describe('React completion lifecycle', () => {
   });
 
   test('unmount completes a changed session once without installing', async () => {
-    const events: FileEditCompleteEvent<undefined>[] = [];
+    const events: FileEditCompleteEvent<undefined, undefined>[] = [];
     const externalFile: FileContents = { ...FILE_A };
     const harness = createFileHarness((event) => {
       events.push(event);
@@ -1589,7 +1523,7 @@ describe('React completion lifecycle', () => {
 
   test('accepted annotations keep their moved rows through stale commits', async () => {
     const annotations: LineAnnotation<undefined>[] = [{ lineNumber: 2 }];
-    const events: FileEditCompleteEvent<undefined>[] = [];
+    const events: FileEditCompleteEvent<undefined, undefined>[] = [];
     const harness = createFileHarness((event) => {
       events.push(event);
       event.file.cacheKey = 'accepted:v2';
@@ -1630,7 +1564,7 @@ describe('React completion lifecycle', () => {
 
   test('accepting unchanged text does not restore stale annotation props', async () => {
     const annotations: LineAnnotation<undefined>[] = [{ lineNumber: 2 }];
-    const events: FileEditCompleteEvent<undefined>[] = [];
+    const events: FileEditCompleteEvent<undefined, undefined>[] = [];
     const harness = createFileHarness((event) => {
       events.push(event);
       return 'accept';
@@ -1685,23 +1619,23 @@ describe('React diff input bridges after acceptance', () => {
     const cleanupActEnvironment = installReactActEnvironment();
     const container = document.createElement('div');
     document.body.appendChild(container);
-    const editors: TrackedEditor[] = [];
-    const events: FileDiffEditCompleteEvent<undefined>[] = [];
-    const completionEditors: DiffsEditor<undefined>[] = [];
-    const factory: CreateEditor<undefined> = (documentKind, options) => {
-      const editor = new TrackedEditor(documentKind, options);
-      editors.push(editor);
-      return editor;
-    };
+    const editors: AnyTrackedEditor[] = [];
+    const events: FileDiffEditCompleteEvent<undefined, undefined>[] = [];
+    const completionEditors: AnyEditor[] = [];
+    const factory = createTrackedEditorFactory(editors);
     let instance: FileDiffInstance<undefined> | undefined;
     const root = createReactRoot(container);
-    const onEditComplete: FileDiffEditCompleteHandler<undefined> = (event) => {
+    const onEditComplete: FileDiffEditCompleteHandler<undefined, undefined> = (
+      event
+    ) => {
       events.push(event);
       completionEditors.push(event.editor);
       event.fileDiff.cacheKey = 'accepted:v2';
       return 'accept';
     };
-    const baseOptions = (extra?: Partial<ReactFileDiffOptions<undefined>>) => ({
+    const baseOptions = (
+      extra?: Partial<ReactFileDiffOptions<undefined, undefined>>
+    ) => ({
       disableFileHeader: true,
       theme: DEFAULT_THEMES,
       onPostRender(

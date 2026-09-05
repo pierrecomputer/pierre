@@ -57,7 +57,7 @@ function renderedLineNumbers(container: HTMLElement): number[] {
 
 interface CollapsedEditFixture {
   container: HTMLElement;
-  editor: Editor<undefined>;
+  editor: Editor<'file-diff', undefined>;
   fileDiff: FileDiff<undefined>;
   cleanup(): Promise<void>;
 }
@@ -88,7 +88,7 @@ async function createCollapsedEditFixture(
     diffStyle: 'split',
     parseDiffOptions,
   });
-  const editor = new Editor<undefined>('file-diff', {}, documentKey);
+  const editor = new Editor('file-diff', {}, documentKey);
   fileDiff.render({
     oldFile: { name: 'edit.ts', contents: oldContents },
     newFile: { name: 'edit.ts', contents: newContents },
@@ -124,7 +124,7 @@ async function createCollapsedEditFixture(
 }
 
 function typeAt(
-  editor: Editor<undefined>,
+  editor: Editor<'file-diff', undefined>,
   line: number,
   character: number,
   text: string
@@ -158,7 +158,7 @@ describe('diff editor: attach-time markup normalization', () => {
         if (phase === 'update') updates++;
       },
     });
-    const editor = new Editor<undefined>('file-diff');
+    const editor = new Editor('file-diff');
     try {
       fileDiff.render({
         oldFile: { name: 'edit.ts', contents: 'a\nb\n' },

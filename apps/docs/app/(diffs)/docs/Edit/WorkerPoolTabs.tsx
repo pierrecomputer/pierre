@@ -9,8 +9,8 @@ import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 type EditWorkerPoolMode = 'vanilla' | 'react';
 
 interface EditWorkerPoolTabsProps {
-  vanillaExample: PreloadedFileResult<undefined>;
-  reactExample: PreloadedFileResult<undefined>;
+  vanillaExample: PreloadedFileResult<undefined, undefined>;
+  reactExample: PreloadedFileResult<undefined, undefined>;
 }
 
 export function EditWorkerPoolTabs({

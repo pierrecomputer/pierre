@@ -11,10 +11,10 @@ type PropsType = 'file-diff' | 'file';
 type DiffHunksType = 'from-file' | 'from-patch';
 
 interface VanillaComponentTabsProps {
-  codeViewExample: PreloadedFileResult<undefined>;
-  fileDiffExample: PreloadedFileResult<undefined>;
-  fileExample: PreloadedFileResult<undefined>;
-  unresolvedFileExample: PreloadedFileResult<undefined>;
+  codeViewExample: PreloadedFileResult<undefined, undefined>;
+  fileDiffExample: PreloadedFileResult<undefined, undefined>;
+  fileExample: PreloadedFileResult<undefined, undefined>;
+  unresolvedFileExample: PreloadedFileResult<undefined, undefined>;
 }
 
 export function VanillaComponentTabs({
@@ -78,8 +78,8 @@ export function VanillaComponentTabs({
 }
 
 interface VanillaPropTabsProps {
-  fileDiffProps: PreloadedFileResult<undefined>;
-  fileProps: PreloadedFileResult<undefined>;
+  fileDiffProps: PreloadedFileResult<undefined, undefined>;
+  fileProps: PreloadedFileResult<undefined, undefined>;
 }
 
 export function VanillaPropTabs({
@@ -107,8 +107,8 @@ export function VanillaPropTabs({
 }
 
 interface DiffHunksTabsProps {
-  diffHunksRenderer: PreloadedFileResult<undefined>;
-  diffHunksRendererPatch: PreloadedFileResult<undefined>;
+  diffHunksRenderer: PreloadedFileResult<undefined, undefined>;
+  diffHunksRendererPatch: PreloadedFileResult<undefined, undefined>;
 }
 
 export function DiffHunksTabs({

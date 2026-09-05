@@ -10,9 +10,15 @@ import {
 } from 'bun:test';
 
 import { parseDiffFromFile } from '../src';
+import * as sharedHighlighter from '../src/highlighter/shared_highlighter';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
-import type { FileContents, FileDiffMetadata } from '../src/types';
+import type {
+  DiffsHighlighter,
+  FileContents,
+  FileDiffMetadata,
+} from '../src/types';
 import type { DiffRendererInstance } from '../src/worker/types';
+import { createDeferred } from './testUtils';
 import {
   createInitializedManager,
   createInitializingManager,
@@ -134,6 +140,41 @@ describe('WorkerPoolManager lifecycle', () => {
 });
 
 describe('WorkerPoolManager cache priming', () => {
+  test('reports a background preload failure without blocking worker rendering', async () => {
+    await disposeHighlighter();
+    const { manager, worker } = await createInitializedManager();
+    const highlighter = await sharedHighlighter.getSharedHighlighter({
+      themes: [],
+      langs: [],
+    });
+    const preload = createDeferred<DiffsHighlighter>();
+    const logged = createDeferred<unknown>();
+    const error = new Error('Shared highlighter preload failed');
+    spyOn(sharedHighlighter, 'getSharedHighlighter').mockImplementation(
+      () => preload.promise
+    );
+    const logError = spyOn(console, 'error').mockImplementation((error) => {
+      logged.resolve(error);
+    });
+    try {
+      const file = { ...createCacheableFile(), lang: 'css' as const };
+      const prime = manager.primeFileHighlightCache(file);
+      const request = await withTimeout(worker.waitForFileRequest());
+      respondToFileRequest(manager, worker, request);
+      await withTimeout(prime);
+      expect(manager.getFileResultCache(file)).toBeDefined();
+
+      preload.reject(error);
+      expect(await withTimeout(logged.promise)).toBe(error);
+      expect(logError).toHaveBeenCalledTimes(1);
+      expect(manager.isWorkingPool()).toBe(true);
+      expect(manager.getStats().activeTasks).toBe(0);
+    } finally {
+      preload.resolve(highlighter);
+      manager.terminate();
+    }
+  });
+
   test('does not read or populate the shared cache for an unkeyed diff', async () => {
     const { manager, worker } = await createInitializedManager();
     const successes: FileDiffMetadata[] = [];

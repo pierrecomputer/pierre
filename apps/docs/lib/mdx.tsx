@@ -144,7 +144,7 @@ export async function renderMDX({ filePath, scope = {} }: RenderMDXOptions) {
 // of the exported `PreloadFileOptions` constant in a sibling `constants.ts`.
 export async function renderMDXWithPreloadedFiles(
   filePath: string,
-  files: Readonly<Record<string, PreloadFileOptions<unknown>>>
+  files: Readonly<Record<string, PreloadFileOptions<unknown, undefined>>>
 ) {
   const entries = Object.entries(files);
   const results = await Promise.all(

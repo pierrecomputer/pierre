@@ -12,8 +12,6 @@ export * from './components/VirtualizedFile';
 export * from './components/VirtualizedFileDiff';
 export * from './components/Virtualizer';
 export * from './constants';
-export type { EditorFocusOptions } from './editor/editor';
-export type { Marker, MarkerSeverity } from './editor/marker';
 export {
   type CodeHighlighter,
   type CodeHighlighterOptions,
@@ -126,6 +124,7 @@ export * from './utils/hast_utils';
 export * from './utils/hydratePartialDiff';
 export * from './utils/isDefaultRenderRange';
 export * from './utils/isWorkerContext';
+export * from './utils/lineAnnotationIdentity';
 export * from './utils/parseDiffDecorations';
 export * from './utils/parseDiffFromFile';
 export * from './utils/parseLineType';

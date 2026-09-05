@@ -1,4 +1,7 @@
-import { getLineAnnotationSource } from '../editor/lineAnnotations';
+import {
+  getLineAnnotationSource,
+  type LineAnnotationPosition,
+} from './lineAnnotationIdentity';
 
 /**
  * Annotation state for an active edit session. Like the private
@@ -46,7 +49,9 @@ export interface EditSessionAnnotations<TAnnotation> {
  * a slot with it. Names for annotations that didn't survive the swap are
  * simply dropped.
  */
-export function adoptEditSessionAnnotations<TAnnotation extends object>(
+export function adoptEditSessionAnnotations<
+  TAnnotation extends LineAnnotationPosition,
+>(
   annotations: TAnnotation[],
   getName: (annotation: TAnnotation) => string,
   previousSession?: EditSessionAnnotations<TAnnotation>
@@ -70,7 +75,9 @@ export function adoptEditSessionAnnotations<TAnnotation extends object>(
  * before keep their recorded slot names; new ones record a name for wherever
  * they landed.
  */
-export function writeEditSessionAnnotations<TAnnotation extends object>(
+export function writeEditSessionAnnotations<
+  TAnnotation extends LineAnnotationPosition,
+>(
   session: EditSessionAnnotations<TAnnotation>,
   annotations: TAnnotation[],
   getName: (annotation: TAnnotation) => string
@@ -93,7 +100,9 @@ export function writeEditSessionAnnotations<TAnnotation extends object>(
  * writes slot names — the renderers, the editor, the light-DOM wrappers —
  * lands on the same name for the same annotation.
  */
-export function resolveEditSessionSlotName<TAnnotation extends object>(
+export function resolveEditSessionSlotName<
+  TAnnotation extends LineAnnotationPosition,
+>(
   session: EditSessionAnnotations<TAnnotation> | undefined,
   annotation: TAnnotation,
   getName: (annotation: TAnnotation) => string

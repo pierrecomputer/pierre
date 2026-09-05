@@ -28,7 +28,7 @@ let nextTokenizerId = 0;
 
 export interface EditorTokenizerProps {
   highlighter: DiffsHighlighter;
-  textDocument: TextDocument<unknown>;
+  textDocument: TextDocument;
   codeOptions: BaseCodeOptions;
   matchBrackets?: boolean;
   setStyle: (style: string) => void;
@@ -127,7 +127,7 @@ function buildEditorThemeCSS(colors: Record<string, string>): string {
  * drop their tokenization caches when it changes (`resetForThemeChange`).
  */
 abstract class BaseEditorTokenizer implements EditorTokenizer {
-  protected readonly textDocument: TextDocument<unknown>;
+  protected readonly textDocument: TextDocument;
   protected readonly tokenizeMaxLineLength: number;
   protected readonly setStyle: EditorTokenizerProps['setStyle'];
   protected readonly onDeferTokenize: EditorTokenizerProps['onDeferTokenize'];

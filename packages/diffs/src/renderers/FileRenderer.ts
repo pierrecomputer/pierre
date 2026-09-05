@@ -6,6 +6,7 @@ import {
   DEFAULT_THEMES,
   DEFAULT_TOKENIZE_MAX_LENGTH,
 } from '../constants';
+import type { TextDocument } from '../editor/textDocument';
 import type { CodeHighlighter } from '../highlighter/code_highlighter';
 import {
   areHighlighterThemesReady,
@@ -19,7 +20,6 @@ import {
 } from '../highlighter/resolve_highlighter';
 import type {
   BaseCodeOptions,
-  DiffsTextDocument,
   FileContents,
   FileHeaderRenderMode,
   HighlightedToken,
@@ -140,7 +140,10 @@ export class FileRenderer<LAnnotation = undefined> {
   private lineAnnotations: AnnotationLineMap<LAnnotation> = {};
   private lineCache: LineCache | undefined;
   private pendingStructuralRows: Map<number, HASTElement> | undefined;
-  private textDocumentCache = new WeakMap<FileContents, DiffsTextDocument>();
+  private textDocumentCache = new WeakMap<
+    FileContents,
+    TextDocument<'file', LAnnotation>
+  >();
 
   // Edit-session state: while active, this renderer stays on the main thread
   // with editor-compatible token markup — the editor's caret/selection
@@ -198,16 +201,13 @@ export class FileRenderer<LAnnotation = undefined> {
    * rendering resumes after recycle.
    */
   public beginEditSession(
-    file?: FileContents,
+    file: FileContents,
     externalFile?: FileContents
   ): void {
     const { editSessionActive: wasAlreadyActive, renderCache } = this;
     this.editSessionActive = true;
     if (!wasAlreadyActive) {
       this.pendingHighlightResult = undefined;
-    }
-    if (file == null) {
-      return;
     }
 
     this.file = file;
@@ -614,7 +614,9 @@ export class FileRenderer<LAnnotation = undefined> {
   }
 
   // normally triggered by the host when the document line count changes
-  public applyDocumentChange(textDocument: DiffsTextDocument): void {
+  public applyDocumentChange(
+    textDocument: TextDocument<'file', LAnnotation>
+  ): void {
     const { pendingStructuralRows, renderCache } = this;
     this.pendingStructuralRows = undefined;
     if (renderCache == null) {
@@ -802,6 +804,7 @@ export class FileRenderer<LAnnotation = undefined> {
       }
     } else {
       this.computedLang = file.lang ?? getFiletypeFromFileName(file.name);
+      this.highlighter ??= getHighlighterIfReady(options.theme);
       const hasThemes =
         this.highlighter != null && areHighlighterThemesReady(options.theme);
       const hasLangs =

@@ -33,7 +33,7 @@ async function waitForEditableContent(
 interface EditorFixture {
   cleanup(): void;
   content: HTMLElement;
-  editor: Editor<undefined>;
+  editor: Editor<'file', undefined>;
   window: EditorTestWindow;
 }
 
@@ -50,7 +50,7 @@ interface EditorTestWindow extends Window {
 }
 
 type EditableSelection = Parameters<
-  Editor<undefined>['setSelections']
+  Editor<'file', undefined>['setSelections']
 >[0][number];
 
 interface CreateEditorFixtureOptions {
@@ -75,7 +75,7 @@ async function createEditorFixture(
     name: 'editor.ts',
     contents,
   };
-  const editor = new Editor<undefined>('file');
+  const editor = new Editor('file');
 
   file.render({
     file: initialFile,

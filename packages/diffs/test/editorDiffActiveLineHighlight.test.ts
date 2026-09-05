@@ -112,7 +112,7 @@ function dispatchCopy(
 
 interface DiffEditorFixture {
   container: HTMLElement;
-  editor: Editor<undefined>;
+  editor: Editor<'file-diff', undefined>;
   fileDiff: FileDiff<undefined>;
   setElementFromPoint(x: number, y: number, element: Element): void;
   cleanup(): Promise<void>;
@@ -122,7 +122,7 @@ async function createDiffEditorFixture(
   diffStyle: 'split' | 'unified',
   oldContents: string,
   newContents: string,
-  options: Partial<FileDiffOptions<undefined>> = {}
+  options: Partial<FileDiffOptions<undefined, undefined>> = {}
 ): Promise<DiffEditorFixture> {
   const dom = installDom();
   const container = document.createElement('div');
@@ -134,7 +134,7 @@ async function createDiffEditorFixture(
     diffStyle,
     ...options,
   });
-  const editor = new Editor<undefined>('file-diff');
+  const editor = new Editor('file-diff');
   const oldFile: FileContents = { name: 'edit.ts', contents: oldContents };
   const newFile: FileContents = { name: 'edit.ts', contents: newContents };
 

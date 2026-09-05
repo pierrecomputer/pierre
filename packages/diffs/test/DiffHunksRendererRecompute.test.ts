@@ -7,7 +7,6 @@ import {
 } from '../src';
 import { TextDocument } from '../src/editor/textDocument';
 import type { FileDiffMetadata, HighlightedToken } from '../src/types';
-import type { DiffsTextDocument } from '../src/types';
 import { finishEditSessionForDiff } from '../src/utils/editSessionHunks';
 import { iterateOverDiff } from '../src/utils/iterateOverDiff';
 import {
@@ -49,8 +48,25 @@ const EDITED_LINES = [
 // The tokenizer reports the truncated line and the new line as dirty, using the
 // post-edit line indexes.
 
-function makeTextDocumentFromText(text: string): DiffsTextDocument {
-  return new TextDocument('edit.ts', text, 'typescript', 0);
+function makeTextDocumentFromText(
+  text: string
+): TextDocument<'file-diff', undefined> {
+  return new TextDocument<'file-diff', undefined>(
+    'inmemory://diff-hunks-recompute',
+    text,
+    'typescript'
+  );
+}
+
+function makeTextDocument(
+  lines: string[]
+): TextDocument<'file-diff', undefined> {
+  const hasEmbeddedLineBreaks = lines.some(
+    (line) => line.includes('\n') || line.includes('\r')
+  );
+  return makeTextDocumentFromText(
+    lines.join(hasEmbeddedLineBreaks ? '' : '\n')
+  );
 }
 
 function makeDirtyLines(
@@ -62,15 +78,6 @@ function makeDirtyLines(
     dirty.set(line, [[0, '', lineText]]);
   }
   return dirty;
-}
-
-function makeTextDocument(lines: string[]): DiffsTextDocument {
-  const text = lines.join('\n');
-  return {
-    lineCount: lines.length,
-    getText: () => text,
-    getLineText: (lineNumber: number) => lines[lineNumber] ?? '',
-  };
 }
 
 function pairingProjection(diff: FileDiffMetadata) {
@@ -158,7 +165,11 @@ describe('DiffHunksRenderer content-edit recompute split', () => {
     const renderer = await createPrimedRenderer('split');
 
     renderer.applyDocumentChange(
-      makeTextDocumentFromText(EDITED_LINES.join('\n'))
+      new TextDocument<'file-diff', undefined>(
+        'inmemory://diff-hunks',
+        EDITED_LINES.join('\n'),
+        'typescript'
+      )
     );
 
     const rendered = renderer.diffCache;
@@ -197,15 +208,18 @@ describe('DiffHunksRenderer content-edit recompute split', () => {
     });
   });
 
-  test('line-count edits preserve line breaks from legacy host documents', async () => {
+  test('line-count edits do not materialize the document text', async () => {
     const renderer = await createPrimedRenderer('split');
+    const textDocument = new TextDocument<'file-diff', undefined>(
+      'inmemory://diff-hunks-line-breaks',
+      EDITED_LINES.join('\n'),
+      'typescript'
+    );
+    textDocument.getText = () => {
+      throw new Error('getText should not be called for line-count edits');
+    };
 
-    renderer.applyDocumentChange({
-      ...makeTextDocument(EDITED_LINES),
-      getText: () => {
-        throw new Error('getText should not be called for line-count edits');
-      },
-    });
+    renderer.applyDocumentChange(textDocument);
 
     const rendered = renderer.diffCache;
     expect(rendered).toBeDefined();
@@ -253,7 +267,8 @@ describe('DiffHunksRenderer edit-session hunk updates', () => {
     );
     await renderer.asyncRender(diff);
     renderer.renderDiff(diff);
-    renderer.beginEditSession();
+    renderer.beginEditSession(diff);
+    renderer.renderDiff(diff);
     return { renderer, diff };
   }
 
@@ -275,8 +290,8 @@ describe('DiffHunksRenderer edit-session hunk updates', () => {
       { name: 'jump.ts', contents: newContents, cacheKey: 'jump:new' }
     );
     await renderer.asyncRender(diff);
+    renderer.beginEditSession(diff);
     renderer.renderDiff(diff);
-    renderer.beginEditSession();
 
     // The Enter keystroke: one blank line inserted below the changed line.
     const editedLines = newContents.split('\n');
@@ -368,8 +383,8 @@ describe('DiffHunksRenderer edit-session hunk updates', () => {
       { name: 'jump.ts', contents: newContents, cacheKey: 'jump:new' }
     );
     await renderer.asyncRender(diff);
+    renderer.beginEditSession(diff);
     renderer.renderDiff(diff);
-    renderer.beginEditSession();
 
     const editedLines = newContents.split('\n');
     // Mirror the dirty-token pass that precedes applyDocumentChange. The
@@ -436,8 +451,8 @@ describe('DiffHunksRenderer edit-session hunk updates', () => {
       { context: totalLines }
     );
     await renderer.asyncRender(diff);
+    renderer.beginEditSession(diff);
     renderer.renderDiff(diff);
-    renderer.beginEditSession();
 
     const styledRowTexts = (result: ReturnType<typeof renderer.renderDiff>) =>
       collectAllElements(result?.additionsContentAST ?? [])
@@ -532,8 +547,8 @@ describe('DiffHunksRenderer edit-session hunk updates', () => {
       { name: 'topology.ts', contents: 'a\na\na\nd\n' }
     );
     await renderer.asyncRender(diff);
+    renderer.beginEditSession(diff);
     renderer.renderDiff(diff);
-    renderer.beginEditSession();
     const boundsBefore = {
       additionLineIndex: diff.hunks[0].additionLineIndex,
       additionCount: diff.hunks[0].additionCount,
@@ -562,8 +577,8 @@ describe('DiffHunksRenderer edit-session hunk updates', () => {
       { name: 'pairing.ts', contents: '\n!\nb\nc\n' }
     );
     await renderer.asyncRender(diff);
+    renderer.beginEditSession(diff);
     renderer.renderDiff(diff);
-    renderer.beginEditSession();
     const boundsBefore = {
       additionLineIndex: diff.hunks[0].additionLineIndex,
       additionCount: diff.hunks[0].additionCount,
@@ -791,8 +806,8 @@ describe('DiffHunksRenderer edit-session hunk updates', () => {
       { name: 'after.ts', contents: 'temporary\n' }
     );
     await renderer.asyncRender(diff);
+    renderer.beginEditSession(diff);
     renderer.renderDiff(diff);
-    renderer.beginEditSession();
 
     renderer.applyDocumentChange(makeTextDocument(['']));
 

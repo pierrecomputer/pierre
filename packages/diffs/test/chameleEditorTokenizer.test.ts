@@ -27,13 +27,13 @@ afterAll(() => {
 
 interface Harness {
   tokenizer: EditorTokenizer;
-  textDocument: TextDocument<undefined>;
+  textDocument: TextDocument;
   styles: string[];
   deferred: Map<number, HighlightedToken[]>[];
 }
 
 function createHarness(contents: string, languageId = 'ts'): Harness {
-  const textDocument = new TextDocument<undefined>(
+  const textDocument = new TextDocument(
     'inmemory://live',
     contents,
     languageId
@@ -64,7 +64,7 @@ function settleTimers(): Promise<void> {
 }
 
 /** A whole-document change, like the editor's initial paint. */
-function fullChange(textDocument: TextDocument<undefined>): TextDocumentChange {
+function fullChange(textDocument: TextDocument): TextDocumentChange {
   const endLine = textDocument.lineCount - 1;
   return {
     changes: [],

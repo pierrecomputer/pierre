@@ -13,17 +13,18 @@ import type {
   FileDiffOptions,
 } from '../src/components/FileDiff';
 import { Editor, type EditorOptions } from '../src/editor/editor';
+import type { EditorChangeEvent, EditorViewState } from '../src/editor/types';
 import type {
   DiffLineAnnotation,
-  DiffsEditor,
-  DiffsTextDocument,
-  EditorChangeEvent,
-  EditorViewState,
   FileContents,
   FileDiffMetadata,
   HighlightedToken,
 } from '../src/types';
 import { installDom, waitFor } from './domHarness';
+import {
+  createEditorInstance,
+  createTextDocumentFromLines,
+} from './editorTestUtils';
 
 afterAll(async () => {
   await disposeHighlighter();
@@ -62,22 +63,6 @@ class TestFileDiff extends FileDiff<undefined> {
     }
     super.rerender();
   }
-}
-
-function createEditorStub(
-  overrides: Partial<DiffsEditor<undefined>> = {}
-): DiffsEditor<undefined> {
-  return {
-    cleanUp() {},
-    edit: () => () => {},
-    __captureFocusForDOMReplacement() {},
-    __emitEditComplete() {},
-    __getDocumentContents: () => undefined,
-    __getDocumentSessionState: () => undefined,
-    __postponeBgTokenizeToNextFrame() {},
-    __syncRenderView() {},
-    ...overrides,
-  } as unknown as DiffsEditor<undefined>;
 }
 
 function createExternalDiff(): FileDiffMetadata {
@@ -120,17 +105,6 @@ function makeDirtyLines(
   return new Map(edits.map(([line, text]) => [line, [[0, '', text]]]));
 }
 
-function makeTextDocument(lines: string[]): DiffsTextDocument {
-  return {
-    lineCount: lines.length,
-    getText: () => lines.join(''),
-    getLineText: (lineNumber: number, includeLineBreak = false) => {
-      const line = lines[lineNumber] ?? '';
-      return includeLineBreak ? line : line.replace(/\r?\n$/, '');
-    },
-  };
-}
-
 async function createAttachedFixture(): Promise<{
   cleanup(): void;
   detach(): void;
@@ -152,7 +126,9 @@ async function createAttachedFixture(): Promise<{
     fileContainer,
     forceRender: true,
   });
-  const detachEditor = instance.__attachEditor(createEditorStub());
+  const detachEditor = instance.__attachEditor(
+    createEditorInstance('file-diff')
+  );
 
   await waitFor(
     () => {
@@ -211,7 +187,11 @@ describe('FileDiff edit-session ownership', () => {
       ).toThrow('FileDiff.updateRenderCache: requires an active edit session');
       expect(() =>
         instance.applyDocumentChange(
-          makeTextDocument(['alpha\n', 'inserted\n', 'new value\n', 'omega\n'])
+          createTextDocumentFromLines(
+            'file-diff',
+            ['alpha\n', 'inserted\n', 'new value\n', 'omega\n'],
+            'inmemory://file-diff-session'
+          )
         )
       ).toThrow(
         'FileDiff.applyDocumentChange: requires an active edit session'
@@ -239,12 +219,12 @@ describe('FileDiff edit-session ownership', () => {
       });
       instance.clearRenderCacheForTest();
       instance.throwOnRerender = true;
-      expect(() => instance.__attachEditor(createEditorStub())).toThrow(
-        'attachment failed'
-      );
+      expect(() =>
+        instance.__attachEditor(createEditorInstance('file-diff'))
+      ).toThrow('attachment failed');
 
       instance.throwOnRerender = false;
-      const detach = instance.__attachEditor(createEditorStub());
+      const detach = instance.__attachEditor(createEditorInstance('file-diff'));
       detach();
     } finally {
       instance.cleanUp();
@@ -316,7 +296,11 @@ describe('FileDiff edit-session ownership', () => {
       expect(sessionBefore.hunks).toBe(externalDiff.hunks);
 
       instance.applyDocumentChange(
-        makeTextDocument(['alpha\n', 'inserted\n', 'new value\n', 'omega\n'])
+        createTextDocumentFromLines(
+          'file-diff',
+          ['alpha\n', 'inserted\n', 'new value\n', 'omega\n'],
+          'inmemory://file-diff-session'
+        )
       );
 
       const sessionAfter = instance.getLatestDiffForTest();
@@ -514,7 +498,7 @@ describe('FileDiff edit-session ownership', () => {
       disableErrorHandling: true,
       disableFileHeader: true,
     });
-    const editor = new Editor<undefined>('file-diff', {
+    const editor = new Editor('file-diff', {
       onChange: (event) => changedFiles.push(event.file),
     });
 
@@ -559,14 +543,19 @@ describe('FileDiff edit-session ownership', () => {
     document.body.appendChild(fileContainer);
     const externalDiff = createExternalDiff();
     const externalBefore = captureExternalDiffState(externalDiff);
-    const editorEvents: EditorChangeEvent<undefined, 'file' | 'diff'>[] = [];
-    const componentEvents: EditorChangeEvent<undefined, 'diff'>[] = [];
+    const editorEvents: EditorChangeEvent<'file-diff', undefined, undefined>[] =
+      [];
+    const componentEvents: EditorChangeEvent<
+      'file-diff',
+      undefined,
+      undefined
+    >[] = [];
     const instance = new TestFileDiff({
       disableErrorHandling: true,
       disableFileHeader: true,
       onEditChange: (event) => componentEvents.push(event),
     });
-    const editor = new Editor<undefined>('file-diff', {
+    const editor = new Editor('file-diff', {
       onChange: (event) => editorEvents.push(event),
     });
 
@@ -619,7 +608,7 @@ describe('FileDiff edit-session ownership', () => {
       disableErrorHandling: true,
       disableFileHeader: true,
     });
-    const editor = new Editor<undefined>('file-diff');
+    const editor = new Editor('file-diff');
 
     try {
       instance.render({
@@ -681,12 +670,16 @@ describe('__completeEditSession', () => {
   const EXTERNAL_CONTENTS = 'alpha\nnew value\nomega\n';
 
   async function createCompletionFixture(config?: {
-    editorOnComplete?: NonNullable<EditorOptions<undefined>['onComplete']>;
-    onEditComplete?: FileDiffEditCompleteHandler<undefined>;
-    onEditChange?: (event: EditorChangeEvent<undefined, 'diff'>) => void;
+    editorOnComplete?: NonNullable<
+      EditorOptions<'file-diff', undefined, undefined>['onComplete']
+    >;
+    onEditComplete?: FileDiffEditCompleteHandler<undefined, undefined>;
+    onEditChange?: (
+      event: EditorChangeEvent<'file-diff', undefined, undefined>
+    ) => void;
     lineAnnotations?: DiffLineAnnotation<undefined>[];
     externalDiff?: FileDiffMetadata;
-    loadDiffFiles?: FileDiffOptions<undefined>['loadDiffFiles'];
+    loadDiffFiles?: FileDiffOptions<undefined, undefined>['loadDiffFiles'];
   }) {
     const dom = installDom();
     const fileContainer = document.createElement('div');
@@ -699,7 +692,7 @@ describe('__completeEditSession', () => {
       onEditChange: config?.onEditChange,
       loadDiffFiles: config?.loadDiffFiles,
     });
-    const editor = new Editor<undefined>('file-diff', {
+    const editor = new Editor('file-diff', {
       onComplete: config?.editorOnComplete,
     });
     instance.render({
@@ -729,7 +722,10 @@ describe('__completeEditSession', () => {
     };
   }
 
-  function replaceDocument(editor: Editor<undefined>, contents: string): void {
+  function replaceDocument(
+    editor: Editor<'file-diff', undefined>,
+    contents: string
+  ): void {
     editor.applyEdits([
       {
         range: {
@@ -744,7 +740,7 @@ describe('__completeEditSession', () => {
     ]);
   }
 
-  function insertLinesAtStart(editor: Editor<undefined>): void {
+  function insertLinesAtStart(editor: Editor<'file-diff', undefined>): void {
     editor.applyEdits([
       {
         range: {
@@ -757,7 +753,7 @@ describe('__completeEditSession', () => {
   }
 
   test('editor completion fires without a component handler and cannot accept', async () => {
-    const events: FileDiffEditCompleteEvent<undefined>[] = [];
+    const events: FileDiffEditCompleteEvent<undefined, undefined>[] = [];
     const fixture = await createCompletionFixture({
       editorOnComplete(event) {
         if ('fileDiff' in event) {
@@ -782,10 +778,12 @@ describe('__completeEditSession', () => {
   });
 
   test('a changed session delivers a recomputed detached diff and complete files', async () => {
-    const events: FileDiffEditCompleteEvent<undefined>[] = [];
-    let completionEditor: DiffsEditor<undefined> | undefined;
+    const events: FileDiffEditCompleteEvent<undefined, undefined>[] = [];
+    let completionEditor: Editor<'file-diff', undefined> | undefined;
     let completionState: EditorViewState | undefined;
-    let completionEditState: ReturnType<DiffsEditor<undefined>['getEditState']>;
+    let completionEditState: ReturnType<
+      Editor<'file-diff', undefined>['getEditState']
+    >;
     const fixture = await createCompletionFixture({
       onEditComplete(event) {
         events.push(event);
@@ -870,7 +868,7 @@ describe('__completeEditSession', () => {
     const externalAnnotations: DiffLineAnnotation<undefined>[] = [
       { side: 'additions', lineNumber: 2 },
     ];
-    const events: FileDiffEditCompleteEvent<undefined>[] = [];
+    const events: FileDiffEditCompleteEvent<undefined, undefined>[] = [];
     const fixture = await createCompletionFixture({
       lineAnnotations: externalAnnotations,
       onEditComplete(event) {
@@ -1045,7 +1043,7 @@ describe('__completeEditSession', () => {
     const externalAnnotations: DiffLineAnnotation<undefined>[] = [
       { side: 'additions', lineNumber: 2 },
     ];
-    const events: FileDiffEditCompleteEvent<undefined>[] = [];
+    const events: FileDiffEditCompleteEvent<undefined, undefined>[] = [];
     const fixture = await createCompletionFixture({
       lineAnnotations: externalAnnotations,
       onEditComplete(event) {
@@ -1080,7 +1078,7 @@ describe('__completeEditSession', () => {
   });
 
   test('editing and undoing back to the external contents still completes', async () => {
-    const events: FileDiffEditCompleteEvent<undefined>[] = [];
+    const events: FileDiffEditCompleteEvent<undefined, undefined>[] = [];
     const fixture = await createCompletionFixture({
       onEditComplete(event) {
         events.push(event);
@@ -1104,7 +1102,8 @@ describe('__completeEditSession', () => {
   });
 
   test('completion emits no onEditChange', async () => {
-    const changeEvents: EditorChangeEvent<undefined, 'diff'>[] = [];
+    const changeEvents: EditorChangeEvent<'file-diff', undefined, undefined>[] =
+      [];
     const fixture = await createCompletionFixture({
       onEditChange: (event) => changeEvents.push(event),
       onEditComplete(event) {
@@ -1148,7 +1147,7 @@ describe('__completeEditSession', () => {
       name: 'session.ts',
       contents: EXTERNAL_CONTENTS,
     };
-    const events: FileDiffEditCompleteEvent<undefined>[] = [];
+    const events: FileDiffEditCompleteEvent<undefined, undefined>[] = [];
     const instance = new TestFileDiff({
       disableErrorHandling: true,
       disableFileHeader: true,
@@ -1158,7 +1157,7 @@ describe('__completeEditSession', () => {
         return 'accept';
       },
     });
-    const editor = new Editor<undefined>('file-diff');
+    const editor = new Editor('file-diff');
     try {
       instance.render({ oldFile, newFile, fileContainer, forceRender: true });
       editor.edit(instance);
@@ -1209,7 +1208,7 @@ describe('__completeEditSession', () => {
       contents: EXTERNAL_CONTENTS,
     });
     newFileDiff.cacheKey = 'external:new-v1';
-    const events: FileDiffEditCompleteEvent<undefined>[] = [];
+    const events: FileDiffEditCompleteEvent<undefined, undefined>[] = [];
     const fixture = await createCompletionFixture({
       externalDiff: newFileDiff,
       onEditComplete(event) {
@@ -1264,7 +1263,7 @@ describe('__completeEditSession', () => {
     expect(partial.isPartial).toBe(true);
     partial.cacheKey = 'external:partial-v1';
 
-    const events: FileDiffEditCompleteEvent<undefined>[] = [];
+    const events: FileDiffEditCompleteEvent<undefined, undefined>[] = [];
     const fixture = await createCompletionFixture({
       externalDiff: partial,
       loadDiffFiles: () => Promise.resolve({ oldFile, newFile }),
@@ -1352,7 +1351,7 @@ describe('editor session lifecycle', () => {
     const fileContainer = document.createElement('div');
     document.body.appendChild(fileContainer);
     const externalDiff = createExternalDiff();
-    const events: FileDiffEditCompleteEvent<undefined>[] = [];
+    const events: FileDiffEditCompleteEvent<undefined, undefined>[] = [];
     const instance = new TestFileDiff({
       disableErrorHandling: true,
       disableFileHeader: true,
@@ -1362,7 +1361,7 @@ describe('editor session lifecycle', () => {
         return 'accept';
       },
     });
-    const editor = new Editor<undefined>('file-diff');
+    const editor = new Editor('file-diff');
     try {
       instance.render({
         fileDiff: externalDiff,
@@ -1403,7 +1402,7 @@ describe('editor session lifecycle', () => {
     document.body.appendChild(fileContainer);
     const externalDiff = createExternalDiff();
     const externalBefore = captureExternalDiffState(externalDiff);
-    const events: FileDiffEditCompleteEvent<undefined>[] = [];
+    const events: FileDiffEditCompleteEvent<undefined, undefined>[] = [];
     const instance = new TestFileDiff({
       disableErrorHandling: true,
       disableFileHeader: true,
@@ -1413,7 +1412,7 @@ describe('editor session lifecycle', () => {
         return 'accept';
       },
     });
-    const editor = new Editor<undefined>('file-diff');
+    const editor = new Editor('file-diff');
     try {
       instance.render({
         fileDiff: externalDiff,

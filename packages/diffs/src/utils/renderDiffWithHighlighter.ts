@@ -16,6 +16,7 @@ import type {
   SupportedLanguages,
   ThemedDiffResult,
 } from '../types';
+import { appendItems } from './appendItems';
 import { cleanLastNewline } from './cleanLastNewline';
 import { createTransformerWithState } from './createTransformerWithState';
 import { formatCSSVariablePrefix } from './formatCSSVariablePrefix';
@@ -225,7 +226,7 @@ export function renderDiffWithHighlighter(
         }
       }
     } else {
-      code.deletionLines.push(...deletionLines);
+      appendItems(code.deletionLines, deletionLines);
     }
     if (bucket.additionSegments.length > 0) {
       for (const seg of bucket.additionSegments) {
@@ -235,7 +236,7 @@ export function renderDiffWithHighlighter(
         }
       }
     } else {
-      code.additionLines.push(...additionLines);
+      appendItems(code.additionLines, additionLines);
     }
   }
 

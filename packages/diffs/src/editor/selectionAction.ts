@@ -1,16 +1,19 @@
-import type { EditorSelection, TextEdit } from '../types';
 import {
   type PopoverViewportBounds,
   setPopoverPositionStyles,
 } from './popover';
 import type { TextDocument } from './textDocument';
+import type { EditorSelection, EditorType, TextEdit } from './types';
 import { h } from './utils';
 
-export interface SelectionActionContext<LAnnotation> {
+export interface SelectionActionContext<
+  EType extends EditorType = EditorType,
+  LAnnotation = unknown,
+> {
   /** The current selection (live: reflects keyboard-driven changes). */
   selection: EditorSelection;
   /** The text document. */
-  textDocument: TextDocument<LAnnotation>;
+  textDocument: TextDocument<EType, LAnnotation>;
   /** Applies the edits to the text document. */
   applyEdits: (edits: TextEdit[]) => void;
   /** Gets the text of the current selection. */

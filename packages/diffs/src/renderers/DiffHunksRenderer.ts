@@ -8,6 +8,7 @@ import {
   DEFAULT_THEMES,
   DEFAULT_TOKENIZE_MAX_LENGTH,
 } from '../constants';
+import type { TextDocument } from '../editor/textDocument';
 import type { CodeHighlighter } from '../highlighter/code_highlighter';
 import {
   areHighlighterThemesReady,
@@ -27,7 +28,6 @@ import type {
   CodeColumnType,
   CustomPreProperties,
   DiffLineAnnotation,
-  DiffsTextDocument,
   ExpansionDirections,
   FileDiffMetadata,
   FileHeaderRenderMode,
@@ -313,7 +313,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
    * empty additions document gets one row for the editor's caret.
    */
   public beginEditSession(
-    diff?: FileDiffMetadata,
+    diff: FileDiffMetadata,
     externalDiff?: FileDiffMetadata
   ): void {
     const { editSessionActive: wasAlreadyActive, renderCache } = this;
@@ -321,28 +321,18 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     if (!wasAlreadyActive) {
       this.pendingHighlightResult = undefined;
     }
-    if (diff != null) {
-      this.diff = diff;
-    }
+    this.diff = diff;
 
-    const currentDiff = diff ?? this.diffCache;
-    if (
-      currentDiff != null &&
-      !currentDiff.isPartial &&
-      currentDiff.additionLines.length === 0
-    ) {
+    if (!diff.isPartial && diff.additionLines.length === 0) {
       Object.assign(
-        currentDiff,
-        recomputeEmptyDocumentDiff(currentDiff, this.options.parseDiffOptions)
+        diff,
+        recomputeEmptyDocumentDiff(diff, this.options.parseDiffOptions)
       );
-      this.markEditSessionPass(currentDiff);
+      this.markEditSessionPass(diff);
       this.clearRenderCache();
       return;
     }
 
-    if (diff == null) {
-      return;
-    }
     if (renderCache == null) {
       return;
     }
@@ -744,7 +734,9 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   }
 
   // Normally triggered by the host when the document line count changes.
-  public applyDocumentChange(textDocument: DiffsTextDocument): void {
+  public applyDocumentChange(
+    textDocument: TextDocument<'file-diff', LAnnotation>
+  ): void {
     const { pendingStructuralRows, renderCache } = this;
     this.pendingStructuralRows = undefined;
     if (renderCache == null) {
@@ -763,10 +755,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     // Reading line-by-line also preserves blank documents and the final
     // editable empty row after a trailing line break.
     const { additionLines: previousAdditionLines } = diff;
-    diff.additionLines = getEditorDocumentLines(
-      textDocument,
-      previousAdditionLines
-    );
+    diff.additionLines = getEditorDocumentLines(textDocument);
     result.code.additionLines = realignAdditionHastLines(
       previousAdditionLines,
       diff.additionLines,
@@ -1208,6 +1197,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       }
     } else {
       this.computedLang = diff.lang ?? getFiletypeFromFileName(diff.name);
+      this.highlighter ??= getHighlighterIfReady(options.theme);
       const hasThemes =
         this.highlighter != null && areHighlighterThemesReady(options.theme);
       const hasLangs =
@@ -2578,11 +2568,11 @@ function contentLineCount(lines: string[]): number {
 // `nextLines` is editor-shaped, and comparing the raw tails would mismatch on
 // the representational trailing `''`, zero out the suffix, and plain-fill
 // every line below the tokenizer's render window.
-function realignAdditionHastLines(
+function realignAdditionHastLines<LAnnotation>(
   previousLines: string[],
   nextLines: string[],
   hastLines: ElementContent[],
-  textDocument: DiffsTextDocument
+  textDocument: TextDocument<'file-diff', LAnnotation>
 ): ElementContent[] {
   const previousContentLength = contentLineCount(previousLines);
   const nextContentLength = contentLineCount(nextLines);
@@ -2656,40 +2646,14 @@ function createPlainAdditionLineElement(
   };
 }
 
-function getEditorDocumentLines(
-  textDocument: DiffsTextDocument,
-  previousLines: string[]
+function getEditorDocumentLines<LAnnotation>(
+  textDocument: TextDocument<'file-diff', LAnnotation>
 ): string[] {
   const lines: string[] = [];
-  const fallbackLineBreak = getFallbackLineBreak(previousLines);
   for (let line = 0; line < textDocument.lineCount; line++) {
-    const lineText = textDocument.getLineText(line, true);
-    lines.push(
-      line < textDocument.lineCount - 1 && !hasLineBreakSuffix(lineText)
-        ? lineText + fallbackLineBreak
-        : lineText
-    );
+    lines.push(textDocument.getLineText(line, true));
   }
   return lines;
-}
-
-function hasLineBreakSuffix(line: string): boolean {
-  return line.endsWith('\n') || line.endsWith('\r');
-}
-
-function getFallbackLineBreak(lines: string[]): string {
-  for (const line of lines) {
-    if (line.endsWith('\r\n')) {
-      return '\r\n';
-    }
-    if (line.endsWith('\n')) {
-      return '\n';
-    }
-    if (line.endsWith('\r')) {
-      return '\r';
-    }
-  }
-  return '\n';
 }
 
 function isDiffMassive(

@@ -231,7 +231,9 @@ await preloadHighlighter({
     },
     options,
   },
-} as const satisfies Readonly<Record<string, PreloadFileOptions<undefined>>>;
+} as const satisfies Readonly<
+  Record<string, PreloadFileOptions<undefined, undefined>>
+>;
 
 export const {
   chameleApiRuntime: CHAMELE_API_RUNTIME,

@@ -8,19 +8,23 @@ const options = {
   unsafeCSS: CustomScrollbarCSS,
 } as const;
 
-export const WORKER_POOL_HELPER_VITE: PreloadFileOptions<undefined> = {
-  file: {
-    name: 'utils/workerFactory.ts',
-    contents: `import WorkerUrl from '@pierre/diffs/worker/worker.js?worker&url';
+export const WORKER_POOL_HELPER_VITE: PreloadFileOptions<undefined, undefined> =
+  {
+    file: {
+      name: 'utils/workerFactory.ts',
+      contents: `import WorkerUrl from '@pierre/diffs/worker/worker.js?worker&url';
 
 export function workerFactory(): Worker {
   return new Worker(WorkerUrl, { type: 'module' });
 }`,
-  },
-  options,
-};
+    },
+    options,
+  };
 
-export const WORKER_POOL_HELPER_NEXTJS: PreloadFileOptions<undefined> = {
+export const WORKER_POOL_HELPER_NEXTJS: PreloadFileOptions<
+  undefined,
+  undefined
+> = {
   file: {
     name: 'utils/workerFactory.ts',
     contents: `'use client';
@@ -37,7 +41,10 @@ export function workerFactory(): Worker {
   options,
 };
 
-export const WORKER_POOL_VSCODE_LOCAL_ROOTS: PreloadFileOptions<undefined> = {
+export const WORKER_POOL_VSCODE_LOCAL_ROOTS: PreloadFileOptions<
+  undefined,
+  undefined
+> = {
   file: {
     name: 'extension.ts',
     contents: `function getWebviewOptions(extensionUri: vscode.Uri): vscode.WebviewOptions {
@@ -60,7 +67,10 @@ export const WORKER_POOL_VSCODE_LOCAL_ROOTS: PreloadFileOptions<undefined> = {
   options,
 };
 
-export const WORKER_POOL_VSCODE_WORKER_URI: PreloadFileOptions<undefined> = {
+export const WORKER_POOL_VSCODE_WORKER_URI: PreloadFileOptions<
+  undefined,
+  undefined
+> = {
   file: {
     name: 'extension.ts',
     contents: `const workerScriptPath = vscode.Uri.joinPath(
@@ -77,7 +87,10 @@ const workerScriptUri = webview.asWebviewUri(workerScriptPath);`,
   options,
 };
 
-export const WORKER_POOL_VSCODE_INLINE_SCRIPT: PreloadFileOptions<undefined> = {
+export const WORKER_POOL_VSCODE_INLINE_SCRIPT: PreloadFileOptions<
+  undefined,
+  undefined
+> = {
   file: {
     name: 'extension.ts',
     contents: `<script nonce="\${nonce}">window.WORKER_URI = "\${workerScriptUri}";</script>`,
@@ -85,16 +98,20 @@ export const WORKER_POOL_VSCODE_INLINE_SCRIPT: PreloadFileOptions<undefined> = {
   options,
 };
 
-export const WORKER_POOL_VSCODE_CSP: PreloadFileOptions<undefined> = {
-  file: {
-    name: 'extension.ts',
-    contents: `worker-src \${webview.cspSource} blob:;
+export const WORKER_POOL_VSCODE_CSP: PreloadFileOptions<undefined, undefined> =
+  {
+    file: {
+      name: 'extension.ts',
+      contents: `worker-src \${webview.cspSource} blob:;
 connect-src \${webview.cspSource};`,
-  },
-  options,
-};
+    },
+    options,
+  };
 
-export const WORKER_POOL_VSCODE_GLOBAL: PreloadFileOptions<undefined> = {
+export const WORKER_POOL_VSCODE_GLOBAL: PreloadFileOptions<
+  undefined,
+  undefined
+> = {
   file: {
     name: 'webview-ui/index.ts',
     contents: `declare global {
@@ -106,7 +123,10 @@ export const WORKER_POOL_VSCODE_GLOBAL: PreloadFileOptions<undefined> = {
   options,
 };
 
-export const WORKER_POOL_VSCODE_BLOB_URL: PreloadFileOptions<undefined> = {
+export const WORKER_POOL_VSCODE_BLOB_URL: PreloadFileOptions<
+  undefined,
+  undefined
+> = {
   file: {
     name: 'webview-ui/index.ts',
     contents: `async function createWorkerBlobUrl(): Promise<string> {
@@ -119,7 +139,10 @@ export const WORKER_POOL_VSCODE_BLOB_URL: PreloadFileOptions<undefined> = {
   options,
 };
 
-export const WORKER_POOL_VSCODE_FACTORY: PreloadFileOptions<undefined> = {
+export const WORKER_POOL_VSCODE_FACTORY: PreloadFileOptions<
+  undefined,
+  undefined
+> = {
   file: {
     name: 'webview-ui/index.ts',
     contents: `const workerBlobUrl = await createWorkerBlobUrl();
@@ -131,7 +154,10 @@ function workerFactory() {
   options,
 };
 
-export const WORKER_POOL_HELPER_WEBPACK: PreloadFileOptions<undefined> = {
+export const WORKER_POOL_HELPER_WEBPACK: PreloadFileOptions<
+  undefined,
+  undefined
+> = {
   file: {
     name: 'utils/workerFactory.ts',
     contents: `export function workerFactory(): Worker {
@@ -147,7 +173,10 @@ export const WORKER_POOL_HELPER_WEBPACK: PreloadFileOptions<undefined> = {
   options,
 };
 
-export const WORKER_POOL_HELPER_ESBUILD: PreloadFileOptions<undefined> = {
+export const WORKER_POOL_HELPER_ESBUILD: PreloadFileOptions<
+  undefined,
+  undefined
+> = {
   file: {
     name: 'utils/workerFactory.ts',
     contents: `export function workerFactory(): Worker {
@@ -163,7 +192,10 @@ export const WORKER_POOL_HELPER_ESBUILD: PreloadFileOptions<undefined> = {
   options,
 };
 
-export const WORKER_POOL_HELPER_STATIC: PreloadFileOptions<undefined> = {
+export const WORKER_POOL_HELPER_STATIC: PreloadFileOptions<
+  undefined,
+  undefined
+> = {
   file: {
     name: 'utils/workerFactory.ts',
     contents: `// For Rollup or bundlers without special worker support:
@@ -177,7 +209,10 @@ export function workerFactory(): Worker {
   options,
 };
 
-export const WORKER_POOL_HELPER_VANILLA: PreloadFileOptions<undefined> = {
+export const WORKER_POOL_HELPER_VANILLA: PreloadFileOptions<
+  undefined,
+  undefined
+> = {
   file: {
     name: 'utils/workerFactory.js',
     contents: `// No bundler / Vanilla JS
@@ -190,7 +225,7 @@ export function workerFactory() {
   options,
 };
 
-export const WORKER_POOL_USAGE: PreloadFileOptions<undefined> = {
+export const WORKER_POOL_USAGE: PreloadFileOptions<undefined, undefined> = {
   file: {
     name: 'example.ts',
     contents: `import { createWorkerAPI } from './utils/createWorkerAPI';
@@ -238,7 +273,10 @@ workerAPI.terminate();`,
   options,
 };
 
-export const WORKER_POOL_REACT_COMPONENT: PreloadFileOptions<undefined> = {
+export const WORKER_POOL_REACT_COMPONENT: PreloadFileOptions<
+  undefined,
+  undefined
+> = {
   file: {
     name: 'CodeView.tsx',
     contents: `'use client';
@@ -266,10 +304,11 @@ export function CodeView() {
   options,
 };
 
-export const WORKER_POOL_REACT_USAGE: PreloadFileOptions<undefined> = {
-  file: {
-    name: 'HighlightProvider.tsx',
-    contents: `// components/HighlightProvider.tsx
+export const WORKER_POOL_REACT_USAGE: PreloadFileOptions<undefined, undefined> =
+  {
+    file: {
+      name: 'HighlightProvider.tsx',
+      contents: `// components/HighlightProvider.tsx
 'use client';
 
 import {
@@ -343,11 +382,14 @@ function ThemeSwitcher() {
 }
 // WARNING: Changing render options will force all mounted components
 // to re-render and will clear the render cache.`,
-  },
-  options,
-};
+    },
+    options,
+  };
 
-export const WORKER_POOL_VANILLA_USAGE: PreloadFileOptions<undefined> = {
+export const WORKER_POOL_VANILLA_USAGE: PreloadFileOptions<
+  undefined,
+  undefined
+> = {
   file: {
     name: 'vanilla-worker-usage.ts',
     contents: `import { FileDiff } from '@pierre/diffs';
@@ -411,7 +453,10 @@ await workerPool.setRenderOptions({
   options,
 };
 
-export const WORKER_POOL_API_REFERENCE: PreloadFileOptions<undefined> = {
+export const WORKER_POOL_API_REFERENCE: PreloadFileOptions<
+  undefined,
+  undefined
+> = {
   file: {
     name: 'api-reference.ts',
     contents: `// WorkerPoolManager constructor
@@ -484,7 +529,7 @@ poolManager.evictDiffFromCache(cacheKey)
   options,
 };
 
-export const WORKER_POOL_CACHING: PreloadFileOptions<undefined> = {
+export const WORKER_POOL_CACHING: PreloadFileOptions<undefined, undefined> = {
   file: {
     name: 'caching-example.ts',
     contents: `import {
@@ -554,7 +599,10 @@ workerPool.evictDiffFromCache('diff-xyz789');`,
   options,
 };
 
-export const WORKER_POOL_ARCHITECTURE_ASCII: PreloadFileOptions<undefined> = {
+export const WORKER_POOL_ARCHITECTURE_ASCII: PreloadFileOptions<
+  undefined,
+  undefined
+> = {
   file: {
     name: 'architecture.txt',
     contents: `┌────────────── Main Thread ──────────────┐

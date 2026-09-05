@@ -38,7 +38,7 @@ import { pageMetadata } from '@/lib/page-metadata';
 interface DocsSection {
   filePath: string;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  constants?: Readonly<Record<string, PreloadFileOptions<any>>>;
+  constants?: Readonly<Record<string, PreloadFileOptions<any, any>>>;
 }
 
 const GUIDE_SECTIONS: readonly DocsSection[] = [

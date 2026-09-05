@@ -2,7 +2,10 @@ import { preloadFile, preloadFileDiff } from '@pierre/diffs/ssr';
 import type { Metadata } from 'next';
 
 import {
+  CARET_DEMO_FILE_EXAMPLE,
   DEFAULT_KEYMAP_FILE_EXAMPLE,
+  EDIT_PREDICTION_FILE_DIFF_EXAMPLE,
+  EDIT_PREDICTION_FILE_EXAMPLE,
   FIND_DEMO_FILE_EXAMPLE,
   HISTORY_DEMO_FILE_EXAMPLE,
   MARKER_DEMO_FILE_EXAMPLE,
@@ -26,36 +29,46 @@ export const metadata: Metadata = pageMetadata({
 });
 
 // Server-renders every edit demo so they all paint highlighted on first load
-// and hydrate cleanly (no flash): the "Live editing" File component, and the
-// lint-marker, find-in-file, undo-history, shortcuts, and selection files.
+// and hydrate cleanly (no flash): the "Live editing" File surface, and the
+// edit-prediction, lint-marker, find-in-file, undo-history, shortcuts, and
+// selection surfaces.
 export default async function EditRoute() {
   const [
     liveEditingFile,
     liveEditingDiff,
+    editPredictionFile,
+    editPredictionDiff,
     markerFile,
     findFile,
     historyFile,
     keymapFile,
     selectionFile,
+    caretFile,
   ] = await Promise.all([
     preloadFile(LIVE_EDITING_FILE_EXAMPLE),
     preloadFileDiff(LIVE_EDITING_FILE_DIFF_EXAMPLE),
+    preloadFile(EDIT_PREDICTION_FILE_EXAMPLE),
+    preloadFileDiff(EDIT_PREDICTION_FILE_DIFF_EXAMPLE),
     preloadFile(MARKER_DEMO_FILE_EXAMPLE),
     preloadFile(FIND_DEMO_FILE_EXAMPLE),
     preloadFile(HISTORY_DEMO_FILE_EXAMPLE),
     preloadFile(DEFAULT_KEYMAP_FILE_EXAMPLE),
     preloadFile(SELECTION_DEMO_FILE_EXAMPLE),
+    preloadFile(CARET_DEMO_FILE_EXAMPLE),
   ]);
 
   return (
     <EditPage
       liveEditingFile={liveEditingFile}
       liveEditingDiff={liveEditingDiff}
+      editPredictionFile={editPredictionFile}
+      editPredictionDiff={editPredictionDiff}
       markerFile={markerFile}
       findFile={findFile}
       historyFile={historyFile}
       keymapFile={keymapFile}
       selectionFile={selectionFile}
+      caretFile={caretFile}
     />
   );
 }

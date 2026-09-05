@@ -131,7 +131,7 @@ export const DiffsHubHeader = memo(function DiffsHubHeader({
   return (
     <div
       className={cn(
-        'z-10 contain-layout contain-paint flex flex-wrap md:flex-nowrap items-center gap-2.5 pt-3 pb-2 px-4 md:px-3 md:py-1.5 border-b border-[var(--color-border-opaque)]',
+        'diffshub-theme-bootstrap z-10 contain-layout contain-paint flex flex-wrap md:flex-nowrap items-center gap-2.5 pt-3 pb-2 px-4 md:px-3 md:py-1.5 border-b border-[var(--color-border-opaque)]',
         themeChromeStyle == null &&
           'bg-background md:bg-[var(--diffshub-sidebar-bg)]',
         className

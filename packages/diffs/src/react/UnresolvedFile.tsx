@@ -35,7 +35,7 @@ export type MergeConflictActionsTypeOption =
 export interface UnresolvedFileReactOptions<LAnnotation>
   extends
     Omit<
-      FileDiffOptions<LAnnotation>,
+      FileDiffOptions<LAnnotation, undefined>,
       'hunkSeparators' | 'diffStyle' | 'onMergeConflictAction' | 'onPostRender'
     >,
     UnresolvedFileHunksRendererOptions {
@@ -49,7 +49,7 @@ export interface UnresolvedFileReactOptions<LAnnotation>
 }
 
 export interface UnresolvedFileProps<LAnnotation> extends Omit<
-  FileDiffProps<LAnnotation>,
+  FileDiffProps<LAnnotation, undefined>,
   | 'fileDiff'
   | 'options'
   | 'edit'

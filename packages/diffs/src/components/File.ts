@@ -13,7 +13,14 @@ import {
   THEME_CSS_ATTRIBUTE,
   UNSAFE_CSS_ATTRIBUTE,
 } from '../constants';
-import type { FileEditCompleteEvent } from '../editor/types';
+import type { Editor } from '../editor/editor';
+import type { TextDocument } from '../editor/textDocument';
+import type {
+  EditCompletionDecision,
+  EditorActiveLineOptions,
+  EditorChangeEvent,
+  FileEditCompleteEvent,
+} from '../editor/types';
 import {
   type GetHoveredLineResult,
   InteractionManager,
@@ -25,16 +32,15 @@ import { ResizeManager } from '../managers/ResizeManager';
 import { FileRenderer, type FileRenderResult } from '../renderers/FileRenderer';
 import { SVGSpriteSheet } from '../sprite';
 export type { FileEditCompleteEvent } from '../editor/types';
+import {
+  getHighlighterIfLoaded,
+  getSharedHighlighter,
+} from '../highlighter/shared_highlighter';
 import type {
   AppliedThemeStyleCache,
   BaseCodeOptions,
   DiffLineAnnotation,
-  DiffsEditableComponent,
-  DiffsEditor,
-  DiffsTextDocument,
-  EditCompletionDecision,
-  EditorActiveLineOptions,
-  EditorChangeEvent,
+  DiffsHighlighter,
   FileContents,
   HighlightedToken,
   LineAnnotation,
@@ -68,6 +74,7 @@ import { getFileRendererOptions } from '../utils/getFileRendererOptions';
 import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
 import { getLineAnnotationName } from '../utils/getLineAnnotationName';
 import { getOrCreateCodeNode } from '../utils/getOrCreateCodeNode';
+import { getThemes } from '../utils/getThemes';
 import { guardWebKitScrollDuringRebuild } from '../utils/guardWebKitScrollDuringRebuild';
 import { upsertHostThemeStyle } from '../utils/hostTheme';
 import { isFilePlainText } from '../utils/isFilePlainText';
@@ -100,6 +107,10 @@ export interface FileHydrateProps<LAnnotation> extends Omit<
   prerenderedHTML?: string;
 }
 
+export type FileEditChangeHandler<LAnnotation, Caret> = (
+  event: EditorChangeEvent<'file', LAnnotation, Caret>
+) => void;
+
 /**
  * Decides a completed edit synchronously: return `'accept'` to install the
  * event's `file` and annotations, or `'reject'` to restore the original values.
@@ -108,11 +119,11 @@ export interface FileHydrateProps<LAnnotation> extends Omit<
  * detached and returns its final state from `getViewState()`. A missing handler
  * rejects.
  */
-export type FileEditCompleteHandler<LAnnotation> = (
-  event: FileEditCompleteEvent<LAnnotation>
+export type FileEditCompleteHandler<LAnnotation, Caret> = (
+  event: FileEditCompleteEvent<LAnnotation, Caret>
 ) => EditCompletionDecision;
 
-export interface FileOptions<LAnnotation>
+export interface FileOptions<LAnnotation, Caret>
   extends BaseCodeOptions, InteractionManagerBaseOptions<'file'> {
   disableFileHeader?: boolean;
   renderHeaderPrefix?: RenderFileMetadata;
@@ -134,7 +145,7 @@ export interface FileOptions<LAnnotation>
 
   onPostRender?(
     node: HTMLElement,
-    instance: File<LAnnotation>,
+    instance: File<LAnnotation, Caret>,
     phase: PostRenderPhase
   ): unknown;
 
@@ -144,7 +155,7 @@ export interface FileOptions<LAnnotation>
    * its own `onChange`. Do not feed the event's file back into the component
    * while the session is active.
    */
-  onEditChange?(event: EditorChangeEvent<LAnnotation, 'file'>): void;
+  onEditChange?: FileEditChangeHandler<LAnnotation, Caret>;
 
   /**
    * Fired when `edit` toggles false or a component unmounts, including when the
@@ -152,7 +163,7 @@ export interface FileOptions<LAnnotation>
    * reverts to the last `file` and annotations passed into it. The callback
    * receives the detached editor with its final pre-detach state.
    */
-  onEditComplete?: FileEditCompleteHandler<LAnnotation>;
+  onEditComplete?: FileEditCompleteHandler<LAnnotation, Caret>;
 }
 
 interface AnnotationElementCache<LAnnotation> {
@@ -170,29 +181,26 @@ interface HydrationSetup<LAnnotation> {
   lineAnnotations: LineAnnotation<LAnnotation>[] | undefined;
 }
 
+interface EditSession<LAnnotation> {
+  file: FileContents;
+  annotations: EditSessionAnnotations<LineAnnotation<LAnnotation>> | undefined;
+  /*
+   * `externalReplacement` records that the host swapped in a new file
+   * mid-session, so the next sync tells the editor to adopt `file` over its
+   * own document
+   */
+  externalReplacement: boolean;
+}
+
 function createEditSessionFile(file: FileContents): FileContents {
   const editSessionFile = { ...file };
   delete editSessionFile.cacheKey;
   return editSessionFile;
 }
 
-function shouldResetUndoState(
-  previousFile: FileContents,
-  nextFile: FileContents
-): boolean {
-  const previousLanguage =
-    previousFile.lang ?? getFiletypeFromFileName(previousFile.name);
-  const nextLanguage = nextFile.lang ?? getFiletypeFromFileName(nextFile.name);
-  return (
-    previousFile.name !== nextFile.name || previousLanguage !== nextLanguage
-  );
-}
-
 let instanceId = -1;
 
-export class File<
-  LAnnotation = undefined,
-> implements DiffsEditableComponent<LAnnotation> {
+export class File<LAnnotation = undefined, Caret = undefined> {
   static LoadedCustomComponent: boolean = DiffsContainerLoaded;
 
   readonly __id: string = `file:${++instanceId}`;
@@ -234,21 +242,17 @@ export class File<
   protected managersDirty = false;
 
   public file: FileContents | undefined;
-  private editSessionFile: FileContents | undefined;
-  private editSessionAnnotations:
-    | EditSessionAnnotations<LineAnnotation<LAnnotation>>
-    | undefined;
-  // Keeps the outgoing editable file until its replacement is ready to sync,
-  // so the editor can decide whether to preserve or reset undo history.
-  private outgoingSessionFile: FileContents | undefined;
+  private editSession: EditSession<LAnnotation> | undefined;
   protected renderedFile: FileContents | undefined;
   protected renderRange: RenderRange | undefined;
   protected enabled = true;
 
-  protected editor: DiffsEditor<LAnnotation> | undefined;
+  protected editor: Editor<'file', LAnnotation, Caret> | undefined;
 
   constructor(
-    public options: FileOptions<LAnnotation> = { theme: DEFAULT_THEMES },
+    public options: FileOptions<LAnnotation, Caret> = {
+      theme: DEFAULT_THEMES,
+    },
     private workerManager?: WorkerPoolManager | undefined,
     private isContainerManaged = false
   ) {
@@ -270,7 +274,7 @@ export class File<
     annotation: LineAnnotation<LAnnotation> | DiffLineAnnotation<LAnnotation>
   ): string => {
     return resolveEditSessionSlotName(
-      this.editSessionAnnotations,
+      this.editSession?.annotations,
       annotation,
       getLineAnnotationName
     );
@@ -289,12 +293,20 @@ export class File<
     });
   }
 
+  private getTheme() {
+    return (
+      this.workerManager?.getFileRenderOptions().theme ??
+      this.options.theme ??
+      DEFAULT_THEMES
+    );
+  }
+
   // Return the newest file this component intends to display. Once editing
   // starts, the private edit-session file owns that state.
   protected getLatestFile(
     file: FileContents | undefined = this.file
   ): FileContents | undefined {
-    return this.editSessionFile ?? file;
+    return this.editSession?.file ?? file;
   }
 
   // Return the file that produced the DOM currently owned by this instance.
@@ -303,7 +315,7 @@ export class File<
   }
 
   protected getLatestAnnotations(): LineAnnotation<LAnnotation>[] {
-    return this.editSessionAnnotations?.current ?? this.lineAnnotations;
+    return this.editSession?.annotations?.current ?? this.lineAnnotations;
   }
 
   // Returns true when the caller passed annotations this component has not
@@ -314,10 +326,8 @@ export class File<
   protected isNewAnnotations(
     lineAnnotations: LineAnnotation<LAnnotation>[]
   ): boolean {
-    const {
-      editSessionAnnotations: session,
-      lineAnnotations: externalAnnotations,
-    } = this;
+    const session = this.editSession?.annotations;
+    const externalAnnotations = this.lineAnnotations;
     if (lineAnnotations === externalAnnotations) {
       return false;
     }
@@ -329,9 +339,9 @@ export class File<
   }
 
   // Install a replacement file from the caller; returns false when it is the
-  // file already installed. During an edit session, the outgoing session file
-  // is kept aside until the editor syncs so it can decide whether the swap
-  // keeps or resets undo history.
+  // file already installed. During an edit session the swap re-seeds the
+  // session as a host replacement, and the next sync decides whether it keeps
+  // or resets undo history.
   protected updateExternalFile(
     incomingFile: FileContents,
     lineAnnotations?: LineAnnotation<LAnnotation>[]
@@ -340,55 +350,73 @@ export class File<
       return false;
     }
 
-    const previousEditSessionFile =
-      this.outgoingSessionFile ?? this.editSessionFile;
-
+    const hadSession = this.editSession != null;
     this.file = incomingFile;
-    this.outgoingSessionFile = undefined;
 
-    if (previousEditSessionFile != null || this.editor != null) {
-      this.outgoingSessionFile = previousEditSessionFile;
+    if (hadSession || this.editor != null) {
       this.installEditSession(
         incomingFile,
-        previousEditSessionFile == null
-          ? this.editor?.__getDocumentContents(incomingFile)
-          : undefined
+        hadSession
+          ? undefined
+          : this.editor?.__getDocumentContents(incomingFile),
+        true
       );
     } else {
-      this.editSessionFile = undefined;
+      this.editSession = undefined;
     }
-    if (this.editSessionAnnotations != null && lineAnnotations != null) {
+    if (this.editSession?.annotations != null && lineAnnotations != null) {
       // These annotations arrived with the new file, so their line numbers
       // describe it. The positions the session tracked for the old document
       // mean nothing now: the session restarts from these annotations, and
       // they also become what renders once the session ends.
       this.lineAnnotations = lineAnnotations;
-      this.editSessionAnnotations = adoptEditSessionAnnotations(
+      this.editSession.annotations = adoptEditSessionAnnotations(
         lineAnnotations,
         getLineAnnotationName,
-        this.editSessionAnnotations
+        this.editSession.annotations
       );
     }
     return true;
   }
 
-  // A retained keyed document seeds a new session. Existing sessions omit it
-  // so incoming files render as external replacements and join undo history.
+  // Set up the edit session's working copy — the editable copy of this file that
+  // edit mode operates on: create the session if there isn't one, or replace its
+  // file if one is already running (its annotations carry over). The working
+  // copy's text is normally `externalFile`, but if `retainedDocument` is given
+  // and its text differs, the session keeps that content instead so text carried
+  // over from an earlier session isn't lost.
+  //
+  // `hostReplacement` is true only when the host swapped in a new file, not on a
+  // plain first attach — the one case where the editor should overwrite whatever
+  // it is currently showing with this file. It is recorded on the session for
+  // the next sync to act on.
   private installEditSession(
     externalFile: FileContents,
-    retainedDocument?: FileContents
+    retainedDocument?: FileContents,
+    hostReplacement = false
   ): void {
     const usesExternalDocument =
       retainedDocument == null ||
       (retainedDocument.name === externalFile.name &&
         retainedDocument.lang === externalFile.lang &&
         retainedDocument.contents === externalFile.contents);
-    const editSessionFile = createEditSessionFile(
-      retainedDocument ?? externalFile
-    );
-    this.editSessionFile = editSessionFile;
+    const file = createEditSessionFile(retainedDocument ?? externalFile);
+    this.editSession = {
+      file,
+      externalReplacement: hostReplacement && usesExternalDocument,
+      // Seed annotations when the session is created so the adopt-block in
+      // updateExternalFile fires on the next external update — this is what an
+      // attach-before-hydrate (React) mount relies on, since the session does
+      // not exist yet at attach. A live session keeps the ones it tracks.
+      annotations:
+        this.editSession?.annotations ??
+        adoptEditSessionAnnotations(
+          this.lineAnnotations,
+          getLineAnnotationName
+        ),
+    };
     this.fileRenderer.beginEditSession(
-      editSessionFile,
+      file,
       usesExternalDocument ? externalFile : undefined
     );
   }
@@ -398,7 +426,9 @@ export class File<
     this.rerender();
   }
 
-  public setOptions(options: FileOptions<LAnnotation> | undefined): void {
+  public setOptions(
+    options: FileOptions<LAnnotation, Caret> | undefined
+  ): void {
     if (options == null) return;
     this.options = options;
     this.cachedHeaderHTML = undefined;
@@ -409,7 +439,9 @@ export class File<
     this.interactionManager.setOptions(pluckInteractionOptions(this.options));
   }
 
-  private mergeOptions(options: Partial<FileOptions<LAnnotation>>): void {
+  private mergeOptions(
+    options: Partial<FileOptions<LAnnotation, Caret>>
+  ): void {
     this.options = { ...this.options, ...options };
   }
 
@@ -445,10 +477,7 @@ export class File<
   private hasThemeChanged(): boolean {
     return (
       this.appliedThemeCSS != null &&
-      !areThemesEqual(
-        this.appliedThemeCSS.theme,
-        this.options.theme ?? DEFAULT_THEMES
-      )
+      !areThemesEqual(this.appliedThemeCSS.theme, this.getTheme())
     );
   }
 
@@ -459,7 +488,7 @@ export class File<
   public setLineAnnotations(
     lineAnnotations: LineAnnotation<LAnnotation>[]
   ): void {
-    const { editSessionAnnotations: sessionAnnotations } = this;
+    const sessionAnnotations = this.editSession?.annotations;
     if (sessionAnnotations == null) {
       this.lineAnnotations = lineAnnotations;
       return;
@@ -486,7 +515,7 @@ export class File<
   //
   // The editor delivers annotations through two calls. An edit that changes
   // the line count sends them with the structural rebuild
-  // (applyDocumentChange) and again with the change event (emitEditChange);
+  // (applyDocumentChange) and again with the change event (__acceptEditorChange);
   // the identity check makes the second call a no-op. An edit that keeps the
   // line count skips the rebuild, so the event is its only path here.
   //
@@ -495,7 +524,7 @@ export class File<
   protected syncEditSessionAnnotationsFromEditor(
     lineAnnotations: LineAnnotation<LAnnotation>[]
   ): boolean {
-    const { editSessionAnnotations: session } = this;
+    const session = this.editSession?.annotations;
     if (session == null || lineAnnotations === session.current) {
       return false;
     }
@@ -617,9 +646,7 @@ export class File<
       this.fileRenderer.cleanUp();
       this.workerManager = undefined;
       this.file = undefined;
-      this.editSessionFile = undefined;
-      this.editSessionAnnotations = undefined;
-      this.outgoingSessionFile = undefined;
+      this.editSession = undefined;
       this.renderedFile = undefined;
     }
     this.enabled = false;
@@ -770,7 +797,7 @@ export class File<
     if (editor == null || fileContainer == null || file == null) {
       return;
     }
-    void this.fileRenderer.initializeHighlighter().then((highlighter) => {
+    const syncEditor = (highlighter: DiffsHighlighter): void => {
       if (
         !this.enabled ||
         this.editor !== editor ||
@@ -779,32 +806,54 @@ export class File<
       ) {
         return;
       }
-      const { outgoingSessionFile: replacement, file: externalFile } = this;
-      const externalDocument =
-        replacement != null && externalFile != null && replacement !== file;
-      const resetHistory = externalDocument
-        ? shouldResetUndoState(replacement, externalFile)
-        : false;
-      if (externalDocument) {
-        this.outgoingSessionFile = undefined;
-      }
       editor.__syncRenderView({
         highlighter,
         fileContainer,
         file,
         lineAnnotations,
         renderRange,
-        externalDocument,
-        resetHistory,
+        externalDocument: this.editSession?.externalReplacement === true,
       });
-    });
+    };
+
+    const theme = this.getTheme();
+    const lang = file.lang ?? getFiletypeFromFileName(file.name);
+    // Sync editor synchronously whenever the shared highlighter is ready;
+    // otherwise load it and sync once it resolves.
+    const highlighter = getHighlighterIfLoaded({ theme, lang });
+    if (highlighter != null) {
+      syncEditor(highlighter);
+    } else {
+      void getSharedHighlighter({
+        themes: getThemes(theme),
+        langs: Array.from(new Set(['text', lang])),
+        preferredHighlighter:
+          this.workerManager?.getPreferredHighlighter() ??
+          this.options.preferredHighlighter,
+      }).then(syncEditor);
+    }
   }
 
-  public emitEditChange(event: EditorChangeEvent<LAnnotation, 'file'>): void {
+  /** @internal The editor applied or edited past the pending external replacement. */
+  public __acknowledgeDocumentUpdate(): void {
+    if (this.editSession != null) {
+      this.editSession.externalReplacement = false;
+    }
+  }
+
+  /** @internal Settle annotations */
+  public __acceptEditorChange(
+    event: EditorChangeEvent<'file', LAnnotation, Caret>
+  ): void {
     const { lineAnnotations } = event;
     if (lineAnnotations != null) {
       this.syncEditSessionAnnotationsFromEditor(lineAnnotations);
     }
+  }
+
+  public emitEditChange(
+    event: EditorChangeEvent<'file', LAnnotation, Caret>
+  ): void {
     const { onEditChange } = this.options;
     onEditChange?.(event);
   }
@@ -815,7 +864,9 @@ export class File<
   }
 
   /** @internal Associate this component with its editor for a render lifecycle. */
-  public __attachEditor(editor: DiffsEditor<LAnnotation>): () => void {
+  public __attachEditor(
+    editor: Editor<'file', LAnnotation, Caret>
+  ): () => void {
     if (this.editor != null) {
       throw new Error('File.__attachEditor: an editor is already attached');
     }
@@ -834,29 +885,32 @@ export class File<
   }
 
   /** @internal Resume rendering for the editor already associated with this component. */
-  public __resumeEditor(editor: DiffsEditor<LAnnotation>): void {
+  public __resumeEditor(editor: Editor<'file', LAnnotation, Caret>): void {
     if (this.editor !== editor) {
       throw new Error('File.__resumeEditor: editor association changed');
     }
     this.resumeEditorRendering(editor);
   }
 
-  private resumeEditorRendering(editor: DiffsEditor<LAnnotation>): void {
-    this.editSessionAnnotations ??= adoptEditSessionAnnotations(
-      this.lineAnnotations,
-      getLineAnnotationName
-    );
-    if (this.editSessionFile == null && this.file != null) {
+  private resumeEditorRendering(
+    editor: Editor<'file', LAnnotation, Caret>
+  ): void {
+    // A retained session just re-starts its render; a fresh attach with a file
+    // installs a session seeded from the editor's document. The editor can also
+    // attach before the file arrives, there is nothing to begin yet, so the
+    // session installs on the later hydrate.
+    if (this.editSession != null) {
+      this.fileRenderer.beginEditSession(this.editSession.file);
+    } else if (this.file != null) {
       this.installEditSession(
         this.file,
         editor.__getDocumentContents(this.file)
       );
-    } else {
-      this.fileRenderer.beginEditSession(this.editSessionFile);
     }
+    const editSessionFile = this.editSession?.file;
     if (this.fileRenderer.editorRenderReady()) {
-      if (this.fileRenderer.fileCache === this.editSessionFile) {
-        this.renderedFile = this.editSessionFile;
+      if (this.fileRenderer.fileCache === editSessionFile) {
+        this.renderedFile = editSessionFile;
       }
       this.syncRenderViewToEditor();
     } else {
@@ -882,7 +936,7 @@ export class File<
    * the replaced file's `cacheKey`.
    */
   public __completeEditSession(
-    editor: DiffsEditor<LAnnotation>,
+    editor: Editor<'file', LAnnotation, Caret>,
     mode: 'install' | 'discard'
   ): void {
     this.settleEditSession(mode === 'install', editor);
@@ -890,17 +944,18 @@ export class File<
 
   private settleEditSession(
     installResult: boolean,
-    editor: DiffsEditor<LAnnotation> | undefined
+    editor: Editor<'file', LAnnotation, Caret> | undefined
   ): void {
     const {
-      editSessionFile,
-      editSessionAnnotations,
+      editSession,
       file: externalFile,
       lineAnnotations: externalAnnotations,
     } = this;
-    if (editSessionFile == null || externalFile == null) {
+    if (editSession == null || externalFile == null) {
       return;
     }
+    const { file: editSessionFile, annotations: editSessionAnnotations } =
+      editSession;
     if (this.editor != null) {
       throw new Error(
         'File.__completeEditSession: detach the editor before completing the session'
@@ -917,7 +972,7 @@ export class File<
       );
     }
     const completedFile = { ...editSessionFile };
-    const event: FileEditCompleteEvent<LAnnotation> = {
+    const event: FileEditCompleteEvent<LAnnotation, Caret> = {
       file: completedFile,
       editor,
       originalFile: externalFile,
@@ -953,9 +1008,7 @@ export class File<
         this.lineAnnotations = sessionAnnotationsCurrent;
       }
     }
-    this.editSessionFile = undefined;
-    this.editSessionAnnotations = undefined;
-    this.outgoingSessionFile = undefined;
+    this.editSession = undefined;
     // Ending the session with the settled file lets the renderer adopt it as
     // the rendered identity when its cache already shows this content, so
     // the next render treats it as current instead of a new file.
@@ -979,10 +1032,10 @@ export class File<
 
   // normally triggered by the host when the document line count changes
   public applyDocumentChange(
-    textDocument: DiffsTextDocument,
+    textDocument: TextDocument<'file', LAnnotation>,
     newLineAnnotations?: LineAnnotation<LAnnotation>[]
   ): void {
-    const { editSessionFile } = this;
+    const editSessionFile = this.editSession?.file;
     if (editSessionFile == null) {
       throw new Error(
         'File.applyDocumentChange: requires an active edit session'
@@ -1002,7 +1055,7 @@ export class File<
       lineCountChangeInFlight?: boolean;
     }
   ): void {
-    const { editSessionFile } = this;
+    const editSessionFile = this.editSession?.file;
     if (editSessionFile == null) {
       throw new Error(
         'File.updateRenderCache: requires an active edit session'
@@ -1060,7 +1113,11 @@ export class File<
       !themeChanged &&
       !highlighterChanged
     ) {
-      return this.applyCachedThemeState(themeType);
+      const rendered = this.applyCachedThemeState(themeType);
+      if (rendered) {
+        this.finalizeRender();
+      }
+      return rendered;
     }
 
     this.renderRange = nextRenderRange;
@@ -1127,6 +1184,7 @@ export class File<
           this.applyErrorToDOM(error, fileContainer);
         }
       }
+      this.finalizeRender();
       if (!preventEmit) {
         this.emitPostRender();
       }
@@ -1192,6 +1250,7 @@ export class File<
         this.flushManagers();
       }
 
+      this.finalizeRender();
       if (this.editor != null) {
         this.syncRenderViewToEditor();
       }
@@ -1209,6 +1268,10 @@ export class File<
     }
     return true;
   }
+
+  // Finish subclass layout bookkeeping before editor sync or post-render
+  // callbacks can synchronously replace or dispose this component.
+  protected finalizeRender(): void {}
 
   private emitPostRender(unmount = false) {
     const {
@@ -1472,7 +1535,7 @@ export class File<
     const shadowRoot =
       container.shadowRoot ?? container.attachShadow({ mode: 'open' });
     const effectiveThemeType = baseThemeType ?? themeType;
-    const currentTheme = this.options.theme ?? DEFAULT_THEMES;
+    const currentTheme = this.getTheme();
     const theme =
       typeof currentTheme === 'string' ? currentTheme : { ...currentTheme };
     const scrollbarGutter = getMeasuredScrollbarGutter(shadowRoot);

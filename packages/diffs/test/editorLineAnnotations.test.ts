@@ -2,11 +2,11 @@ import { describe, expect, test } from 'bun:test';
 
 import {
   applyDocumentChangeToLineAnnotations,
-  getLineAnnotationSource,
   renderLineAnnotations,
 } from '../src/editor/lineAnnotations';
 import { TextDocument } from '../src/editor/textDocument';
 import type { DiffLineAnnotation } from '../src/types';
+import { getLineAnnotationSource } from '../src/utils/lineAnnotationIdentity';
 import { installDom, wait } from './domHarness';
 
 describe('applyDocumentChangeToLineAnnotations', () => {

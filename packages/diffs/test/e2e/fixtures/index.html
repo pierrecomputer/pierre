@@ -99,6 +99,23 @@
         </p>
       </li>
       <li>
+        <a href="/test/e2e/fixtures/code-view-prediction.html"
+          >code-view-prediction.html</a
+        >
+        <p class="desc">
+          A <code>CodeView</code> with two edit-mode items and a scripted
+          edit-prediction provider that answers every request with three ghost
+          lines, running with <code>__devOnlyValidateItemHeights</code>. Drives
+          <code>code-view-prediction.pw.ts</code> (ghost-row layout: height
+          invariants, next-item offset, wrap probe, split column padding,
+          trailing scroll height). <code>?overflow=scroll|wrap</code> and
+          <code>?diff=none|unified|split</code> select variants. Ready flag:
+          <code>window.__predictionReady</code>; helpers on
+          <code>window.__prediction</code>, recorded errors on
+          <code>window.__consoleErrors</code>.
+        </p>
+      </li>
+      <li>
         <a href="/test/e2e/fixtures/conflict.html">conflict.html</a>
         <p class="desc">
           An <code>UnresolvedFile</code> with two merge conflicts. Clicking the

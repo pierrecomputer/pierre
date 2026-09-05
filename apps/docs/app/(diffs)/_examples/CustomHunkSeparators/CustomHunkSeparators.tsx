@@ -25,7 +25,7 @@ function isHunkSeparatorOption(value: unknown): value is HunkSeparators {
 }
 
 interface CustomHunkSeparatorsProps {
-  prerenderedDiff: PreloadMultiFileDiffResult<undefined>;
+  prerenderedDiff: PreloadMultiFileDiffResult<undefined, undefined>;
   showHeader?: boolean;
 }
 

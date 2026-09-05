@@ -4,8 +4,9 @@ import { createTwoFilesPatch } from 'diff';
 import { disposeHighlighter, parseDiffFromFile, parsePatchFiles } from '../src';
 import { VirtualizedFileDiff } from '../src/components/VirtualizedFileDiff';
 import type { Virtualizer } from '../src/components/Virtualizer';
-import type { DiffsEditor, FileContents, FileDiffMetadata } from '../src/types';
+import type { FileContents, FileDiffMetadata } from '../src/types';
 import { installDom, wait } from './domHarness';
+import { createEditorInstance } from './editorTestUtils';
 import { assertDefined, createDeferred } from './testUtils';
 
 afterAll(async () => {
@@ -24,19 +25,6 @@ class TestVirtualizedFileDiff extends VirtualizedFileDiff<undefined> {
   getPendingFileLoadPromiseForTest() {
     return this.pendingFiles?.promise;
   }
-}
-
-function createEditorStub(): DiffsEditor<undefined> {
-  return {
-    cleanUp() {},
-    edit: () => () => {},
-    __captureFocusForDOMReplacement() {},
-    __emitEditComplete() {},
-    __getDocumentContents: () => undefined,
-    __getDocumentSessionState: () => undefined,
-    __postponeBgTokenizeToNextFrame() {},
-    __syncRenderView() {},
-  } as unknown as DiffsEditor<undefined>;
 }
 
 function createVirtualizer(visible = true): {
@@ -473,7 +461,7 @@ describe('VirtualizedFileDiff partial hydration', () => {
 
     try {
       instance.updateCodeViewLayout(partial, 0);
-      const editor = createEditorStub();
+      const editor = createEditorInstance('file-diff');
       detach = instance.__attachEditor(editor);
       const loadPromise = instance.getPendingFileLoadPromiseForTest();
       assertDefined(loadPromise, 'expected edit hydration to be pending');
@@ -544,7 +532,7 @@ describe('VirtualizedFileDiff partial hydration', () => {
 
     try {
       instance.updateCodeViewLayout(initial, 0);
-      detach = instance.__attachEditor(createEditorStub());
+      detach = instance.__attachEditor(createEditorInstance('file-diff'));
       const previousSession = instance.getLatestDiffForTest();
       expect(previousSession).not.toBe(initial);
 
@@ -597,7 +585,7 @@ describe('VirtualizedFileDiff partial hydration', () => {
 
     try {
       instance.updateCodeViewLayout(partial, 0);
-      detach = instance.__attachEditor(createEditorStub());
+      detach = instance.__attachEditor(createEditorInstance('file-diff'));
       const loadPromise = instance.getPendingFileLoadPromiseForTest();
       assertDefined(loadPromise, 'expected edit hydration to be pending');
 
@@ -684,7 +672,7 @@ describe('VirtualizedFileDiff partial hydration', () => {
 
     try {
       instance.render({ fileContainer, fileDiff: externalDiff });
-      detach = instance.__attachEditor(createEditorStub());
+      detach = instance.__attachEditor(createEditorInstance('file-diff'));
       const sessionDiff = instance.getLatestDiffForTest();
 
       instance.updateCodeViewLayout(equivalentDiff, 0);
