@@ -7,17 +7,10 @@ import type {
   CodeToTokensOptions,
   HastElement,
   HastText,
-  Lang,
   Theme,
   ThemedToken,
 } from '../lib/index';
-import {
-  codeToHast,
-  codeToTokens,
-  init,
-  LiveTokenizer,
-  StreamTokenizer,
-} from '../lib/index';
+import { codeToHast, codeToTokens, init, StreamTokenizer } from '../lib/index';
 import {
   buildHast,
   lineRecordsToRuns,
@@ -29,7 +22,7 @@ import { transformWat, wat2wasm } from '../scripts/build';
 import { cssVariables } from '../themes/index';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import pierreLight from '../themes/pierre-light.json' with { type: 'json' };
-import { themeColor } from './util';
+import { makeRand, themeColor } from './_util';
 
 /** `init` returns the full internal class; parity tests reach its record APIs. */
 interface InternalHighlighter {
@@ -167,9 +160,9 @@ void t.test('codeToTokens: css-variable theme resolves var() colors', () => {
     lang: 'ts',
     theme: cssVariables,
   });
-  assert.equal(tokens[0][0].color, 'var(--cha-keyword-declaration)');
-  assert.equal(fg, 'var(--cha-foreground)');
-  assert.equal(bg, 'var(--cha-background)');
+  assert.equal(tokens[0][0].color, 'var(--hls-keyword-declaration)');
+  assert.equal(fg, 'var(--hls-foreground)');
+  assert.equal(bg, 'var(--hls-background)');
 });
 
 void t.test('codeToTokens: token records tile every input (fuzz)', () => {
@@ -182,17 +175,15 @@ void t.test('codeToTokens: token records tile every input (fuzz)', () => {
     'python',
     'rust',
   ];
-  // BMP-only, so code-unit split('') equals code-point iteration
-  const alphabet =
-    'abcXYZ09 _-$#@/\\\'"`()[]{}<>=+*&|:;,.!?\n\r\t\0é_日本語'.split('');
-  let seed = 0x2545f491;
+  const alphabet = Array.from(
+    'abcXYZ09 _-$#@/\\\'"`()[]{}<>=+*&|:;,.!?\n\r\t\0é_日本語🙂𝛼'
+  );
+  const rand = makeRand(0x2545f491);
   for (const lang of langs) {
-    for (let sample = 0; sample < 48; sample++) {
-      seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+    for (let sample = 0; sample < 64; sample++) {
       let input = '';
-      for (let n = seed & 63; n-- !== 0; ) {
-        seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
-        input += alphabet[seed % alphabet.length];
+      for (let n = sample; n-- !== 0; ) {
+        input += alphabet[rand() % alphabet.length];
       }
       const { tokens } = codeToTokens(input, { lang, theme: pierreDark });
       const expectedRuns = hostRuns(input, lang);
@@ -211,21 +202,23 @@ void t.test('codeToTokens: token records tile every input (fuzz)', () => {
       const adapted = lineRecordsToRuns(recs, recs.length >> 1);
       assert.deepEqual(adapted.lineRuns, expectedRuns);
       assert.deepEqual(adapted.lineStarts, hostLineStarts(input));
-      // rebuild the input from lines: token contents joined by the input's
-      // own terminators must reproduce it exactly (the lossless invariant)
-      let rebuilt = '';
-      let cursor = 0;
+      const expectedLines = input.split(/\r?\n/);
+      const terminators = input.match(/\r?\n/g) ?? [];
+      assert.equal(tokens.length, expectedLines.length);
+      let offset = 0;
       for (const [i, line] of tokens.entries()) {
-        rebuilt += lineText(line);
-        if (i < tokens.length - 1) {
-          const nl = input.indexOf('\n', rebuilt.length);
-          assert.notEqual(nl, -1, `${lang}: missing terminator`);
-          rebuilt += input.slice(rebuilt.length, nl + 1);
+        assert.equal(
+          lineText(line),
+          expectedLines[i],
+          `${lang}: line ${i} of ${JSON.stringify(input)}`
+        );
+        for (const token of line) {
+          assert.equal(token.offset, offset, `${lang}: token offset`);
+          offset += token.content.length;
         }
-        cursor = rebuilt.length;
+        offset += terminators[i]?.length ?? 0;
       }
-      assert.equal(rebuilt, input, `${lang}: ${JSON.stringify(input)}`);
-      assert.ok(cursor === input.length);
+      assert.equal(offset, input.length);
     }
   }
 });
@@ -474,216 +467,6 @@ void t.test('codeToHast: transformer context and token htmlAttrs', () => {
   assert.equal(span.properties.class, 'tok');
 });
 
-void t.test(
-  'StreamTokenizer: chunked output matches codeToTokens (fuzz)',
-  () => {
-    const samples: [Lang, string][] = [
-      ['plain', 'one\ntwo\n'],
-      ['asm', 'start:\n  /* open\nstill */\n  mov eax, 1\n'],
-      [
-        'astro',
-        '---\nconst title = "x"\n---\n<h1>{\nformat({ title })\n}</h1>\n',
-      ],
-      ['bash', 'cat <<EOF\nhello $USER\nEOF\necho done\n'],
-      ['c', 'int x; /* open\nstill comment */\nint y;\n'],
-      ['cpp', 'auto s = R"tag(one\ntwo)tag";\n'],
-      ['css', '.a {\n  color: red; /* note\nspans lines */\n}\n'],
-      ['diff', '@@ -1 +1 @@\n-old\n+new\n'],
-      ['glsl', 'void main() { /* open\nstill */ return;\n}\n'],
-      ['go', 'var s = `one\ntwo`\n'],
-      ['haskell', 'x = 1 {- open\nstill -}\ny = 2\n'],
-      ['html', '<script>\nconst x = 1\n</script>\n'],
-      ['js', 'const view = `one ${\nvalue\n}`;\n'],
-      ['jsx', 'const view = <Box value={{\n  x: 1\n}} />;\n'],
-      ['jsonc', '{ /* open\nstill */ "x": 1\n}\n'],
-      ['kotlin', 'val s = """one\ntwo"""\n'],
-      ['lua', 'local s = [[one\ntwo]]\n'],
-      ['markdown', '# title\n\n```js\nlet a = 1\n```\ntail'],
-      ['mdx', '<Box value={{\n  x: 1\n}} />\n<p>{\nformat({ x: 1 })\n}</p>\n'],
-      ['php', '<p>x</p>\n<?php\nfunction f() { return 1; }\n?>\n'],
-      ['python', 'def f():\n    return """doc\nstring"""\n'],
-      ['rust', 'let s = r#"one\ntwo"#;\n'],
-      ['sql', 'SELECT $tag$one\ntwo$tag$;\n'],
-      [
-        'svelte',
-        '<script>\nlet x = 1;\n</script>\n<p>{\nformat({ x })\n}</p>\n',
-      ],
-      ['swift', 'let s = """one\ntwo"""\n'],
-      ['toml', 'x = """one\ntwo"""\n'],
-      ['ts', 'interface Box {\n  value?: string\n}\n'],
-      [
-        'tsx',
-        '/**\n * @param {string} name\n */\n' +
-          'const view = <Box title="hello\nworld">text\n{value}</Box>\n' +
-          'const joined = "a\\\nb";\n',
-      ],
-      [
-        'vue',
-        '<script setup>\nconst x = 1\n</script>\n<template>{{\nformat({ x })\n}}</template>\n',
-      ],
-      ['wat', '(; open\nstill ;)\n(module)\n'],
-      ['xml', '<![CDATA[one\ntwo]]>\n<root/>\n'],
-      [
-        'yaml',
-        'message: |\n  one: # literal\n  two\nitems: [\n  one,\n  two\n]\n',
-      ],
-      ['c3', 'String s = `one\ntwo`;\n/* a /* b */ c */\nint x;\n'],
-      ['csharp', 'var s = @"one\ntwo";\nvar t = $"a {x} b";\n'],
-      ['dart', "var s = '''one\n$x two''';\nvar y = 1;\n"],
-      ['elixir', 'x = """\none #{y}\n"""\nz = 1\n'],
-      ['hlsl', 'float4 main() { /* open\nstill */ return 0; }\n'],
-      ['java', 'String s = """\n  one\n  two""";\nint x;\n'],
-      ['less', '.a {\n  color: @c; /* note\nspans lines */\n}\n'],
-      ['lisp', '#| open\nstill |#\n(defun f () "multi\nline")\n'],
-      ['objc', 'NSString *s = @"a"; /* open\nstill */\nint x;\n'],
-      ['ocaml', 'let s = {id|one\ntwo|id} (* open\nstill *)\nlet x = 1\n'],
-      [
-        'perl',
-        'my $s = <<"EOT";\nhello $x\nEOT\n=head1 doc\ntext\n=cut\nprint 1;\n',
-      ],
-      ['proto', 'message A { /* open\nstill */ int32 x = 1; }\n'],
-      [
-        'ruby',
-        'x = <<~EOS\n  hi #{y}\nEOS\n=begin\nblock\n=end\nz = %w[a\nb]\n',
-      ],
-      ['sass', '// note\n.a\n  color: red\n  &:hover\n    color: blue\n'],
-      [
-        'scss',
-        '.a {\n  color: red; /* note\nspans lines */\n  .b { c: #{$d}; }\n}\n',
-      ],
-      ['terraform', 'x = <<-EOT\n  hello ${var.y}\n  EOT\ny = "a ${z} b"\n'],
-      ['wgsl', 'fn f() { /* open\nstill */ return; }\n'],
-      [
-        'dockerfile',
-        'RUN apt-get update && \\\n    apt-get install -y curl\nRUN <<EOF\necho $HOME\nEOF\nCMD ["a"]\n',
-      ],
-      ['erlang', 'f() ->\n    "one\ntwo".\n'],
-      ['gleam', 'pub fn main() {\n  "one\ntwo"\n}\n'],
-      ['graphql', '"""\ndoc\n"""\ntype A { x: Int }\n'],
-      [
-        'powershell',
-        '<# open\nstill #>\n$x = @"\nmulti $y $(1 +\n2)\n"@\n"a $(\n$b\n) c"\n',
-      ],
-      ['r', 'x <- "one\ntwo"\ny <- r"(a\nb)"\n'],
-      ['scala', 'val s = s"""one ${\n  x\n} two"""\nval y = 1\n'],
-      ['clojure', '(defn f [x]\n  "multi\nline" #"re\ngex")\n'],
-      [
-        'cmake',
-        'set(X "multi\n${Y} line")\n#[[ block\ncomment ]]\nmessage([[raw\ntext]])\n',
-      ],
-      [
-        'fsharp',
-        'let s = """one\ntwo"""\nlet t = $"a {\n  x\n} b"\n(* open\nstill *)\nlet y = 1\n',
-      ],
-      [
-        'groovy',
-        'def s = """one ${\n  x\n} two"""\ndef t = \'\'\'a\nb\'\'\'\n/* open\nstill */\ndef y = 1\n',
-      ],
-      [
-        'julia',
-        's = """one $(\n  x\n) two"""\n#= open\nstill =#\ny = "a\nb"\n',
-      ],
-      [
-        'makefile',
-        'SRCS = a.c \\\n       b.c\nall: $(SRCS)\n\t$(CC) -o $@ \\\n\t  $^\ndefine M\n\techo $(1)\nendef\n',
-      ],
-      ['matlab', '%{\nblock\n%}\nx = [1 2 ...\n     3];\n'],
-      [
-        'nix',
-        "x = \"one ${\n  y\n} two\";\nz = ''\n  multi ${a}\n'';\n/* open\nstill */\nw = 1;\n",
-      ],
-      ['pascal', '{ open\nstill }\n(* also\nopen *)\nx := 1;\n'],
-      ['zig', 'const s = \\\\one\n  \\\\two\n;\n'],
-      // multi-byte lines followed by ASCII, and astral pairs the random
-      // chunking will split across pushes
-      ['ts', 'const é = "日本語"\nconst x = 1 // 🎈🎈\nlet y = 2\n'],
-      // parameter lists split across lines: the signature-tracking state
-      // must survive chunk boundaries
-      [
-        'ts',
-        'function make(\n  first: string,\n  last = "x",\n  ...rest: number[]\n) { return first }\n',
-      ],
-      [
-        'python',
-        'def make(\n    first,\n    second="x",\n    *rest,\n):\n    return first\n',
-      ],
-      [
-        'rust',
-        'fn make(\n    first: i32,\n    second: Vec<u8>,\n) -> i32 { first }\n',
-      ],
-    ];
-    let seed = 0x51ed2701;
-    for (const [lang, code] of samples) {
-      const direct = codeToTokens(code, { lang, theme: pierreDark }).tokens;
-      for (let round = 0; round < 16; round++) {
-        const stream = new StreamTokenizer({ lang, theme: pierreDark });
-        const streamed: ThemedToken[][] = [];
-        let at = 0;
-        while (at < code.length) {
-          seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
-          const step = 1 + (seed % 9);
-          streamed.push(...stream.pushCode(code.slice(at, at + step)));
-          at += step;
-        }
-        streamed.push(...stream.end());
-        assert.deepEqual(streamed, direct, `${lang} round ${round}`);
-      }
-    }
-  }
-);
-
-void t.test('StreamTokenizer: empty stream yields one empty line', () => {
-  const stream = new StreamTokenizer({ lang: 'ts', theme: pierreDark });
-  assert.deepEqual(stream.pushCode(''), []);
-  assert.deepEqual(stream.end(), [[]]);
-  assert.throws(() => stream.pushCode('next'), /stream has ended/);
-  assert.throws(() => stream.end(), /stream has ended/);
-});
-
-void t.test('StreamTokenizer: dispose abandons the stream', () => {
-  const stream = new StreamTokenizer({ lang: 'ts', theme: pierreDark });
-  stream.pushCode('/* open\nbuffered');
-  stream.dispose();
-  assert.throws(() => stream.pushCode('next'), /stream has ended/);
-  assert.throws(() => stream.end(), /stream has ended/);
-  stream.dispose(); // idempotent
-
-  const next = new StreamTokenizer({ lang: 'ts', theme: pierreDark });
-  const code = 'const x = 1\n';
-  assert.deepEqual(
-    [...next.pushCode(code), ...next.end()],
-    codeToTokens(code, { lang: 'ts', theme: pierreDark }).tokens
-  );
-});
-
-void t.test('StreamTokenizer: ASCII resumed after a multi-byte line', () => {
-  // the resumed byte offset (3 for `é\n`) exceeds the char offset (2); the
-  // ASCII fast path must not treat record byte ends as string offsets
-  const code = 'é\nconst x = 1\n';
-  const direct = codeToTokens(code, { lang: 'ts', theme: pierreDark }).tokens;
-  const stream = new StreamTokenizer({ lang: 'ts', theme: pierreDark });
-  const streamed = [
-    ...stream.pushCode('é\n'),
-    ...stream.pushCode('const x = 1\n'),
-  ];
-  streamed.push(...stream.end());
-  assert.deepEqual(streamed, direct);
-  assert.equal(lineText(streamed[1]), 'const x = 1');
-});
-
-void t.test('StreamTokenizer: surrogate pair split across chunks', () => {
-  const code = 'const s = "🎈"\nlet x = 1\n';
-  const direct = codeToTokens(code, { lang: 'ts', theme: pierreDark }).tokens;
-  const [high, low] = ['🎈'[0], '🎈'[1]];
-  const stream = new StreamTokenizer({ lang: 'ts', theme: pierreDark });
-  const streamed = [
-    ...stream.pushCode(`const s = "${high}`),
-    ...stream.pushCode(`${low}"\nlet x = 1\n`),
-    ...stream.end(),
-  ];
-  assert.deepEqual(streamed, direct);
-});
-
 void t.test('tokenizeMaxLineLength collapses overlong lines', () => {
   const code = 'let a = 1\nlet bb = 22\nlet c = 3';
   const { tokens } = codeToTokens(code, {
@@ -710,6 +493,45 @@ void t.test('tokenizeMaxLineLength collapses overlong lines', () => {
   assert.deepEqual(streamed, tokens);
 });
 
+void t.test(
+  'tokenizeMaxLineLength includes the exact UTF-16 limit and excludes terminators',
+  () => {
+    for (const line of ['x = 1234', 'x = "🙂"']) {
+      for (const newline of ['\n', '\r\n']) {
+        const code = line + newline;
+        for (const limit of [
+          0,
+          line.length - 1,
+          line.length,
+          line.length + 1,
+        ]) {
+          const options = {
+            lang: 'ts',
+            theme: pierreDark,
+            tokenizeMaxLineLength: limit,
+          } as const;
+          const tokens = codeToTokens(code, options).tokens;
+          assert.deepEqual(tokens[1], []);
+          assert.equal(lineText(tokens[0]), line);
+          if (limit > 0 && limit <= line.length) {
+            assert.equal(tokens[0].length, 1);
+            assert.equal(tokens[0][0].offset, 0);
+            assert.equal(tokens[0][0].color, themeColor('foreground'));
+          } else {
+            assert.deepEqual(
+              tokens,
+              codeToTokens(code, { lang: 'ts', theme: pierreDark }).tokens
+            );
+            assert.ok(tokens[0].length > 1);
+          }
+          const stream = new StreamTokenizer(options);
+          assert.deepEqual([...stream.pushCode(code), ...stream.end()], tokens);
+        }
+      }
+    }
+  }
+);
+
 void t.test('theme styles cache by object identity, not name', () => {
   const variantA = {
     name: 'same-name',
@@ -725,89 +547,8 @@ void t.test('theme styles cache by object identity, not name', () => {
     codeToTokens('const a = 1', { lang: 'ts', theme }).tokens[0][0].color;
   assert.equal(colorOf(variantA), '#ff0000');
   assert.equal(colorOf(variantB), '#00ff00');
-});
-
-/** Replace one whole line through the batched edit API. */
-const replaceLine = (live: LiveTokenizer, line: number, text: string) =>
-  live.applyEdits([
-    {
-      range: {
-        start: { line, character: 0 },
-        end: { line, character: live.getLineLength(line) },
-      },
-      newText: text,
-    },
-  ]);
-
-void t.test('LiveTokenizer: line updates and bracket-ignored ranges', () => {
-  const live = new LiveTokenizer({
-    lang: 'ts',
-    theme: pierreDark,
-    code: 'function f() {\n  return 1;\n}',
-  });
-  assert.equal(live.lineCount, 3);
-  replaceLine(live, 1, '  return "a { b"; // c(d)');
-  const updated = live.getLineTokens(1);
-  assert.equal(lineText(updated.tokens), '  return "a { b"; // c(d)');
-  // offsets are line-relative
-  assert.equal(updated.tokens[0].offset, 0);
-  // the string and the comment are ignored ranges for bracket matching
-  assert.deepEqual(updated.bracketIgnoredRanges, [
-    [9, 16],
-    [18, 25],
-  ]);
-  // unchanged lines agree with codeToTokens
-  const line0 = live.getLineTokens(0);
-  const direct = codeToTokens('function f() {\n  return "a { b"; // c(d)\n}', {
-    lang: 'ts',
-    theme: pierreDark,
-  }).tokens[0];
-  assert.deepEqual(
-    line0.tokens.map((tk) => [tk.offset, tk.content, tk.color]),
-    direct.map((tk) => [tk.offset, tk.content, tk.color])
-  );
-  assert.deepEqual(line0.bracketIgnoredRanges, []);
-});
-
-void t.test(
-  'LiveTokenizer: multi-line constructs re-tokenize across lines',
-  () => {
-    const live = new LiveTokenizer({
-      lang: 'ts',
-      theme: pierreDark,
-      code: 'const s = `abc\nrest`;',
-    });
-    // line 1 starts inside the template literal
-    assert.equal(live.getLineTokens(1).tokens[0].type, 2);
-    // closing the template on line 0 flips line 1 out of the string
-    const update = replaceLine(live, 0, 'const s = `abc`;');
-    assert.equal(update.lineChanges.length, 1);
-    assert.notEqual(live.getLineTokens(1).tokens[0].type, 2);
-  }
-);
-
-void t.test('LiveTokenizer: structural edits move lines', () => {
-  const live = new LiveTokenizer({ lang: 'ts', theme: pierreDark, code: 'a' });
-  live.applyEdits([
-    {
-      range: {
-        start: { line: 0, character: 1 },
-        end: { line: 0, character: 1 },
-      },
-      newText: '\nlet b = 1',
-    },
-  ]);
-  assert.equal(live.lineCount, 2);
-  live.applyEdits([
-    {
-      range: {
-        start: { line: 0, character: 0 },
-        end: { line: 1, character: 0 },
-      },
-      newText: '',
-    },
-  ]);
-  assert.equal(live.lineCount, 1);
-  const { tokens } = live.getLineTokens(0);
-  assert.equal(lineText(tokens), 'let b = 1');
+  assert.equal(colorOf(variantA), '#ff0000');
+  assert.equal(themeColor('keyword', variantA), '#ff0000');
+  assert.equal(themeColor('keyword', variantB), '#00ff00');
+  assert.equal(themeColor('keyword', variantA), '#ff0000');
 });

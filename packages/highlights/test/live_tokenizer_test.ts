@@ -17,6 +17,8 @@ import {
 } from '../lib/index';
 import { transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
+import { tokenizerSamples } from './_samples';
+import { makeRand } from './_util';
 
 let wasmModule: WebAssembly.Module;
 
@@ -26,134 +28,6 @@ t.before(() => {
   wasmModule = new WebAssembly.Module(wat2wasm(url.pathname, code));
   init(wasmModule);
 });
-
-/**
- * Documents with multi-line constructs for every supported language. Live
- * tokenization feeds whole lines through the streaming pipeline, so these
- * must match full-document output (the same boundary condition the
- * StreamTokenizer fuzz pins down).
- */
-const samples: [Lang, string][] = [
-  ['plain', 'one\ntwo\n'],
-  ['asm', 'start:\n  /* open\nstill */\n  mov eax, 1\n'],
-  ['astro', '---\nconst title = "x"\n---\n<h1>{\nformat({ title })\n}</h1>\n'],
-  ['bash', 'cat <<EOF\nhello $USER\nEOF\necho done\n'],
-  ['c', 'int x; /* open\nstill comment */\nint y;\n'],
-  ['cpp', 'auto s = R"tag(one\ntwo)tag";\n'],
-  ['css', '.a {\n  color: red; /* note\nspans lines */\n}\n'],
-  ['diff', '@@ -1 +1 @@\n-old\n+new\n'],
-  ['glsl', 'void main() { /* open\nstill */ return;\n}\n'],
-  ['go', 'var s = `one\ntwo`\n'],
-  ['haskell', 'x = 1 {- open\nstill -}\ny = 2\n'],
-  ['html', '<script>\nconst x = 1\n</script>\n'],
-  ['js', 'const view = `one ${\nvalue\n}`;\n'],
-  ['jsx', 'const view = <Box value={{\n  x: 1\n}} />;\n'],
-  ['jsonc', '{ /* open\nstill */ "x": 1\n}\n'],
-  ['kotlin', 'val s = """one\ntwo"""\n'],
-  ['lua', 'local s = [[one\ntwo]]\n'],
-  ['markdown', '# title\n\n```js\nlet a = 1\n```\ntail'],
-  ['markdown', '````md\n```\ninner\n```\n````\n> ```\n> quoted\n> ```\n'],
-  ['mdx', '<Box value={{\n  x: 1\n}} />\n<p>{\nformat({ x: 1 })\n}</p>\n'],
-  ['php', '<p>x</p>\n<?php\nfunction f() { return 1; }\n?>\n'],
-  ['python', 'def f():\n    return """doc\nstring"""\n'],
-  ['rust', 'let s = r#"one\ntwo"#;\n'],
-  ['sql', 'SELECT $tag$one\ntwo$tag$;\n'],
-  ['svelte', '<script>\nlet x = 1;\n</script>\n<p>{\nformat({ x })\n}</p>\n'],
-  ['swift', 'let s = """one\ntwo"""\n'],
-  ['toml', 'x = """one\ntwo"""\n'],
-  ['ts', 'interface Box {\n  value?: string\n}\n'],
-  [
-    'tsx',
-    '/**\n * @param {string} name\n */\n' +
-      'const view = <Box title="hello\nworld">text\n{value}</Box>\n' +
-      'const joined = "a\\\nb";\n',
-  ],
-  [
-    'vue',
-    '<script setup>\nconst x = 1\n</script>\n<template>{{\nformat({ x })\n}}</template>\n',
-  ],
-  ['wat', '(; open\nstill ;)\n(module)\n'],
-  ['xml', '<![CDATA[one\ntwo]]>\n<root/>\n'],
-  ['yaml', 'message: |\n  one: # literal\n  two\nitems: [\n  one,\n  two\n]\n'],
-  ['c3', 'String s = `one\ntwo`;\n/* a /* b */ c */\nint x;\n'],
-  ['csharp', 'var s = @"one\ntwo";\nvar t = $"a {x} b";\n'],
-  ['dart', "var s = '''one\n$x two''';\nvar y = 1;\n"],
-  ['elixir', 'x = """\none #{y}\n"""\nz = 1\n'],
-  ['hlsl', 'float4 main() { /* open\nstill */ return 0; }\n'],
-  ['java', 'String s = """\n  one\n  two""";\nint x;\n'],
-  ['less', '.a {\n  color: @c; /* note\nspans lines */\n}\n'],
-  ['lisp', '#| open\nstill |#\n(defun f () "multi\nline")\n'],
-  ['objc', 'NSString *s = @"a"; /* open\nstill */\nint x;\n'],
-  ['ocaml', 'let s = {id|one\ntwo|id} (* open\nstill *)\nlet x = 1\n'],
-  [
-    'perl',
-    'my $s = <<"EOT";\nhello $x\nEOT\n=head1 doc\ntext\n=cut\nprint 1;\n',
-  ],
-  ['proto', 'message A { /* open\nstill */ int32 x = 1; }\n'],
-  ['ruby', 'x = <<~EOS\n  hi #{y}\nEOS\n=begin\nblock\n=end\nz = %w[a\nb]\n'],
-  ['sass', '// note\n.a\n  color: red\n  &:hover\n    color: blue\n'],
-  [
-    'scss',
-    '.a {\n  color: red; /* note\nspans lines */\n  .b { c: #{$d}; }\n}\n',
-  ],
-  ['terraform', 'x = <<-EOT\n  hello ${var.y}\n  EOT\ny = "a ${z} b"\n'],
-  ['wgsl', 'fn f() { /* open\nstill */ return; }\n'],
-  [
-    'dockerfile',
-    'RUN apt-get update && \\\n    apt-get install -y curl\nRUN <<EOF\necho $HOME\nEOF\nCMD ["a"]\n',
-  ],
-  ['erlang', 'f() ->\n    "one\ntwo".\n'],
-  ['gleam', 'pub fn main() {\n  "one\ntwo"\n}\n'],
-  ['graphql', '"""\ndoc\n"""\ntype A { x: Int }\n'],
-  [
-    'powershell',
-    '<# open\nstill #>\n$x = @"\nmulti $y $(1 +\n2)\n"@\n"a $(\n$b\n) c"\n',
-  ],
-  ['r', 'x <- "one\ntwo"\ny <- r"(a\nb)"\n'],
-  ['scala', 'val s = s"""one ${\n  x\n} two"""\nval y = 1\n'],
-  ['clojure', '(defn f [x]\n  "multi\nline" #"re\ngex")\n'],
-  [
-    'cmake',
-    'set(X "multi\n${Y} line")\n#[[ block\ncomment ]]\nmessage([[raw\ntext]])\n',
-  ],
-  [
-    'fsharp',
-    'let s = """one\ntwo"""\nlet t = $"a {\n  x\n} b"\n(* open\nstill *)\nlet y = 1\n',
-  ],
-  [
-    'groovy',
-    'def s = """one ${\n  x\n} two"""\ndef t = \'\'\'a\nb\'\'\'\n/* open\nstill */\ndef y = 1\n',
-  ],
-  ['julia', 's = """one $(\n  x\n) two"""\n#= open\nstill =#\ny = "a\nb"\n'],
-  [
-    'makefile',
-    'SRCS = a.c \\\n       b.c\nall: $(SRCS)\n\t$(CC) -o $@ \\\n\t  $^\ndefine M\n\techo $(1)\nendef\n',
-  ],
-  ['matlab', '%{\nblock\n%}\nx = [1 2 ...\n     3];\n'],
-  [
-    'nix',
-    "x = \"one ${\n  y\n} two\";\nz = ''\n  multi ${a}\n'';\n/* open\nstill */\nw = 1;\n",
-  ],
-  ['pascal', '{ open\nstill }\n(* also\nopen *)\nx := 1;\n'],
-  ['zig', 'const s = \\\\one\n  \\\\two\n;\n'],
-  // parameter lists split across lines: the signature-tracking state must
-  // ride the interned line-state blobs
-  [
-    'ts',
-    'function make(\n  first: string,\n  last = "x",\n  ...rest: number[]\n) { return first }\n',
-  ],
-  [
-    'python',
-    'def make(\n    first,\n    second="x",\n    *rest,\n):\n    return first\n',
-  ],
-  // multi-byte and astral text, CRLF/CR/LF terminators, and NUL
-  ['ts', 'const é = "日本語"\nconst x = 1 // 🎈🎈\nlet y = 2\n'],
-  ['ts', 'const a = 1\r\nconst b = `x\r\ny`\r\nconst c = 3'],
-  ['ts', 'let x = 1 \r let y = 2\nz\n'],
-  ['ts', 'const a = 1\rconst b = `x\ry`\rconst c = 3'],
-  ['ts', 'mixed = 1\r\nlet two = 2\rlet three = 3\nlet four = 4\r'],
-  ['ts', 'const z = "a\0b"\nlet q = 1\n'],
-];
 
 const terminatorRe = /\r\n|\r|\n/g;
 
@@ -211,15 +85,6 @@ function assertMatchesFresh(
       `${label}: line ${i} tokens`
     );
   }
-}
-
-/** Deterministic 32-bit LCG for reproducible fuzzing. */
-function makeRand(seed: number): () => number {
-  let state = seed >>> 0;
-  return () => {
-    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
-    return state >>> 4;
-  };
 }
 
 const editTexts = [
@@ -308,7 +173,12 @@ function applyToMirror(code: string, edits: readonly LiveTextEdit[]): string {
 }
 
 void t.test('LiveTokenizer: eager indexing matches codeToTokens', () => {
-  for (const [lang, code] of samples) {
+  assert.deepEqual(
+    new Set(tokenizerSamples.map(([lang]) => LANGS[lang])),
+    new Set(Object.values(LANGS)),
+    'tokenizer samples cover every lexer, including plain text'
+  );
+  for (const [lang, code] of tokenizerSamples) {
     const live = new LiveTokenizer({ lang, theme: pierreDark, code });
     assertMatchesFresh(live, code, lang, `init ${lang}`);
     live.dispose();
@@ -357,7 +227,7 @@ function assertMatchesLineStream(
 
 void t.test('LiveTokenizer: randomized edit batches match streaming', () => {
   const rand = makeRand(0x2f6e2b1);
-  for (const [lang, code] of samples) {
+  for (const [lang, code] of tokenizerSamples) {
     const live = new LiveTokenizer({ lang, theme: pierreDark, code });
     let mirror = code;
     for (let round = 0; round < 6; round++) {
@@ -377,7 +247,7 @@ void t.test(
   'LiveTokenizer: randomized renderRange batches match unranged updates',
   () => {
     const rand = makeRand(0x51c37a9);
-    for (const [lang, code] of samples) {
+    for (const [lang, code] of tokenizerSamples) {
       const plain = new LiveTokenizer({ lang, theme: pierreDark, code });
       const deliveries: Map<number, HighlightedToken[]>[] = [];
       const ranged = new LiveTokenizer({
@@ -652,6 +522,28 @@ void t.test('LiveTokenizer: batch validation is atomic', () => {
     assert.equal(live.revision, revision);
     assert.equal(live.getLineText(0), 'one');
     assert.equal(live.getLineText(1), 'two');
+  }
+  for (const endpoint of ['start', 'end'] as const) {
+    for (const coordinate of ['line', 'character'] as const) {
+      for (const value of [-1, 0.5, NaN, Infinity]) {
+        const invalid = {
+          ...good,
+          range: {
+            ...good.range,
+            [endpoint]: { ...good.range[endpoint], [coordinate]: value },
+          },
+        };
+        assert.throws(() => live.applyEdits([good, invalid]), TypeError);
+        assert.equal(live.revision, revision);
+        assert.equal(live.getText(), code);
+        assertMatchesFresh(
+          live,
+          code,
+          'plain',
+          `${endpoint}.${coordinate}=${value}`
+        );
+      }
+    }
   }
   live.dispose();
 });
@@ -963,7 +855,8 @@ void t.test('LiveTokenizer: CR terminators merge and split like bytes', () => {
 });
 
 void t.test('LiveTokenizer: renderRange updates match sync updates', () => {
-  const [lang, code] = samples[12]; // js template sample
+  const lang = 'js';
+  const code = 'const view = `one ${\nvalue\n}`;\n';
   const syncLive = new LiveTokenizer({ lang, theme: pierreDark, code });
   const deliveries: Map<number, HighlightedToken[]>[] = [];
   const rangedLive = new LiveTokenizer({
@@ -1283,7 +1176,7 @@ void t.test('LiveTokenizer: line accessors check bounds', () => {
     theme: pierreDark,
     code: 'a\nb',
   });
-  for (const bad of [-1, 2, 1.5, Number.NaN]) {
+  for (const bad of [-1, 2, 1.5, Number.NaN, Infinity, -Infinity]) {
     assert.throws(() => live.getLineText(bad), RangeError);
     assert.throws(() => live.getLineLength(bad), RangeError);
     assert.throws(() => live.getLineRecords(bad), RangeError);
@@ -1490,3 +1383,97 @@ void t.test(
     );
   }
 );
+
+/** Join a line's token contents for the edit assertions below. */
+const tokenLineText = (tokens: ThemedToken[]) =>
+  tokens.map((token) => token.content).join('');
+
+/** Replace one whole line through the batched edit API. */
+const replaceLine = (live: LiveTokenizer, line: number, text: string) =>
+  live.applyEdits([
+    {
+      range: {
+        start: { line, character: 0 },
+        end: { line, character: live.getLineLength(line) },
+      },
+      newText: text,
+    },
+  ]);
+
+void t.test('LiveTokenizer: line updates and bracket-ignored ranges', () => {
+  const live = new LiveTokenizer({
+    lang: 'ts',
+    theme: pierreDark,
+    code: 'function f() {\n  return 1;\n}',
+  });
+  assert.equal(live.lineCount, 3);
+  replaceLine(live, 1, '  return "a { b"; // c(d)');
+  const updated = live.getLineTokens(1);
+  assert.equal(tokenLineText(updated.tokens), '  return "a { b"; // c(d)');
+  // offsets are line-relative
+  assert.equal(updated.tokens[0].offset, 0);
+  // the string and the comment are ignored ranges for bracket matching
+  assert.deepEqual(updated.bracketIgnoredRanges, [
+    [9, 16],
+    [18, 25],
+  ]);
+  // unchanged lines agree with codeToTokens
+  const line0 = live.getLineTokens(0);
+  const direct = codeToTokens('function f() {\n  return "a { b"; // c(d)\n}', {
+    lang: 'ts',
+    theme: pierreDark,
+  }).tokens[0];
+  assert.deepEqual(line0.tokens, direct);
+  assert.deepEqual(line0.bracketIgnoredRanges, []);
+  live.dispose();
+});
+
+void t.test(
+  'LiveTokenizer: multi-line constructs re-tokenize across lines',
+  () => {
+    const live = new LiveTokenizer({
+      lang: 'ts',
+      theme: pierreDark,
+      code: 'const s = `abc\nrest`;',
+    });
+    // line 1 starts inside the template literal
+    assert.equal(live.getLineTokens(1).tokens[0].type, 2);
+    // closing the template on line 0 flips line 1 out of the string
+    const update = replaceLine(live, 0, 'const s = `abc`;');
+    assert.equal(update.lineChanges.length, 1);
+    assertMatchesFresh(
+      live,
+      'const s = `abc`;\nrest`;',
+      'ts',
+      'closed template'
+    );
+    live.dispose();
+  }
+);
+
+void t.test('LiveTokenizer: structural edits move lines', () => {
+  const live = new LiveTokenizer({ lang: 'ts', theme: pierreDark, code: 'a' });
+  live.applyEdits([
+    {
+      range: {
+        start: { line: 0, character: 1 },
+        end: { line: 0, character: 1 },
+      },
+      newText: '\nlet b = 1',
+    },
+  ]);
+  assert.equal(live.lineCount, 2);
+  live.applyEdits([
+    {
+      range: {
+        start: { line: 0, character: 0 },
+        end: { line: 1, character: 0 },
+      },
+      newText: '',
+    },
+  ]);
+  assert.equal(live.lineCount, 1);
+  const { tokens } = live.getLineTokens(0);
+  assert.equal(tokenLineText(tokens), 'let b = 1');
+  live.dispose();
+});

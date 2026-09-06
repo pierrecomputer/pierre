@@ -15,7 +15,7 @@ import {
   themeColor,
   tokenKinds,
   wordColor,
-} from './util';
+} from './_util';
 
 let zig: TestLang;
 t.before(() => (zig = loadLang('zig', '$hlZig')));

@@ -24,7 +24,7 @@ export interface TokenStyle {
 
 /**
  * A Zed theme resolved to per-token-id styles for JavaScript rendering.
- * `styles` is indexed by token ID; CSS-variable themes reference `var(--cha-*)`.
+ * `styles` is indexed by token ID; CSS-variable themes reference `var(--hls-*)`.
  */
 export interface ResolvedThemeStyles {
   name: string;
@@ -58,9 +58,9 @@ for (let i = 0; i < tokenTypes.length; i++) {
     standardTypes[i] = 2;
 }
 
-/** `var(--cha-<token>)` for a `$Token` slot, matching the Wasm emitter. */
+/** `var(--hls-<token>)` for a `$Token` slot, matching the Wasm emitter. */
 function cssVariable(name: string): string {
-  return `var(--cha-${name.replace(/[._]/g, '-')})`;
+  return `var(--hls-${name.replace(/[._]/g, '-')})`;
 }
 
 // Cache by object identity, not name: same-named themes may have different
@@ -72,7 +72,7 @@ const styleCache = new WeakMap<Theme, ResolvedThemeStyles>();
  * Resolve a Zed theme or family to styles for JavaScript rendering.
  *
  * `styles` is indexed by token ID. Each slot is `{color, italic, weight}` or
- * `null`; CSS-variable themes set each color to its `var(--cha-*)` reference.
+ * `null`; CSS-variable themes set each color to its `var(--hls-*)` reference.
  * The result also includes foreground and background colors.
  */
 export function resolveThemeStyles(
@@ -552,7 +552,7 @@ export function buildHast(
   options: CodeToHastOptions,
   common: Pick<TransformerContextCommon, 'codeToHast' | 'codeToTokens' | 'meta'>
 ): HastRoot {
-  const cssVariablePrefix = options.cssVariablePrefix ?? '--cha-';
+  const cssVariablePrefix = options.cssVariablePrefix ?? '--hls-';
   const transformers = options.transformers ?? [];
   const themeInfo = themeMeta(themes, cssVariablePrefix);
   const decorations =

@@ -17,7 +17,7 @@ import {
   type TestLang,
   themeColor,
   tokenKinds,
-} from './util';
+} from './_util';
 
 let mdx: TestLang;
 t.before(() => {

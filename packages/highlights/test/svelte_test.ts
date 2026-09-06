@@ -12,7 +12,7 @@ import {
   type TestLang,
   themeColor,
   tokenKinds,
-} from './util';
+} from './_util';
 
 let svelte: TestLang;
 t.before(() => (svelte = loadLang('svelte', '$hlSvelte')));

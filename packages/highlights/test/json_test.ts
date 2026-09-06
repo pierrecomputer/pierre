@@ -16,7 +16,7 @@ import {
   textOf,
   themeColor,
   tokenKinds,
-} from './util';
+} from './_util';
 
 let json: TestLang;
 

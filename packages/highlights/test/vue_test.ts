@@ -12,7 +12,7 @@ import {
   type TestLang,
   themeColor,
   tokenKinds,
-} from './util';
+} from './_util';
 
 let vue: TestLang;
 t.before(() => (vue = loadLang('vue', '$hlVue')));

@@ -390,7 +390,7 @@ export class HighlightsHighlighter implements Highlighter {
   ): TokensResult {
     const code = toCode(input);
     const themes = resolveOptionThemes(options);
-    const cssVariablePrefix = options.cssVariablePrefix ?? '--cha-';
+    const cssVariablePrefix = options.cssVariablePrefix ?? '--hls-';
     const recs = this.tokenizeLineRecords(
       langIdOf(options.lang),
       this.writeInput(code)
@@ -576,7 +576,7 @@ export class StreamTokenizer {
     pooledStreamHighlighter = undefined;
     this.#langId = langIdOf(options.lang);
     this.#themes = resolveOptionThemes(options);
-    this.#cssVariablePrefix = options.cssVariablePrefix ?? '--cha-';
+    this.#cssVariablePrefix = options.cssVariablePrefix ?? '--hls-';
     this.#maxLineLength = options.tokenizeMaxLineLength;
   }
 

@@ -13,7 +13,7 @@ import {
   type TestLang,
   themeColor,
   tokenKinds,
-} from './util';
+} from './_util';
 
 let astro: TestLang;
 t.before(() => (astro = loadLang('astro', '$hlAstro')));

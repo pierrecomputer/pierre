@@ -8,7 +8,7 @@ import {
   spansOf,
   type TestLang,
   tokenKinds,
-} from './util';
+} from './_util';
 
 let diff: TestLang;
 t.before(() => (diff = loadLang('diff', '$hlDiff')));

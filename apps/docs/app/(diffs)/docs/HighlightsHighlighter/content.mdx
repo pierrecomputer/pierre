@@ -51,7 +51,7 @@ The shared token options are:
 | `lang`                  | A built-in language name or alias                                      |
 | `theme`                 | One Zed `Theme` or `ThemeFamily`                                       |
 | `themes`                | Named themes such as `{ dark, light }`; emits per-theme CSS properties |
-| `cssVariablePrefix`     | Prefix for multi-theme properties; defaults to `--cha-`                |
+| `cssVariablePrefix`     | Prefix for multi-theme properties; defaults to `--hls-`                |
 | `defaultColor: false`   | Emits every theme color as a custom property                           |
 | `tokenizeMaxLineLength` | Collapses longer lines into one unthemed token for DOM safety          |
 
@@ -111,7 +111,7 @@ themes in Shiki's catalog plus eight Pierre themes. Import named themes from
 
 <DocsCodeExample {...highlightsThemes} />
 
-`cssVariables` emits `var(--cha-*)` colors, while `toCSS(theme)` creates the
+`cssVariables` emits `var(--hls-*)` colors, while `toCSS(theme)` creates the
 matching declarations from any Zed theme. CSS-variable mode controls colors
 only; it ignores the theme's `font_style` and `font_weight` values.
 

@@ -18,7 +18,7 @@ import {
   themeColor,
   tokenKinds,
   wordColor,
-} from './util';
+} from './_util';
 
 let yaml: TestLang;
 t.before(() => {

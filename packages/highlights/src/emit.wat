@@ -11,7 +11,7 @@
     "background-color:"                  ;; 17
     ";font-style:italic"                 ;; 18
     ";font-weight:"                      ;; 13
-    "var(--cha-"                         ;; 10
+    "var(--hls-"                         ;; 10
     "\22><code>"                         ;; 8
     "</code></pre>"                      ;; 13
   )
@@ -62,7 +62,7 @@
     (if (i32.ne (local.get $a) (i32.const 0xff))
       (then (call $hexByte (local.get $a)))))
 
-  ;; Write `var(--cha-SUFFIX)` for $hl using the generated token table.
+  ;; Write `var(--hls-SUFFIX)` for $hl using the generated token table.
   (func $emitCssVariable (param $hl i32)
     (local $entry i32)
     (local $n i32)

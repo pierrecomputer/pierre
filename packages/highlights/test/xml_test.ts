@@ -10,7 +10,7 @@ import {
   type TestLang,
   themeColor,
   tokenKinds,
-} from './util';
+} from './_util';
 
 let xml: TestLang;
 t.before(() => (xml = loadLang('xml', '$hlXml')));

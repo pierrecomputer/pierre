@@ -3,10 +3,10 @@
 `@pierre/highlights` is a fast code highlighter written by hand in WebAssembly
 Text (WAT).
 
-- **Lightweight**: 66.4KB (gzipped Wasm) for 65 languages
-- **Fast**: 92–771× faster than Shiki in the latest
+- **Lightweight**: 66.4 KiB (gzipped Wasm) for 65 languages
+- **Fast**: 124–566× faster than Shiki in the latest
   [benchmark](./benchmark/README.md)
-- Built-in language lexers, no external grammar definitions needed
+- Includes 65 built-in language lexers, no external grammar definitions needed
 - Compatible with Zed's theme format
 
 Try it live in the [playground](https://diffs.com/highlights).
@@ -150,19 +150,19 @@ import { cssVariables } from '@pierre/highlights/themes';
 
 const html = codeToHtml('const a = 1', { lang: 'js', theme: cssVariables });
 new TextDecoder().decode(html);
-// <pre class="highlights" style="background-color:var(--cha-background);color:var(--cha-foreground);"><code><span style="color:var(--cha-keyword-declaration)">const </span>...
+// <pre class="highlights" style="background-color:var(--hls-background);color:var(--hls-foreground);"><code><span style="color:var(--hls-keyword-declaration)">const </span>...
 ```
 
 Define the variables in your CSS:
 
 ```css
 :root {
-  --cha-background: #0a0a0a;
-  --cha-foreground: #fafafa;
-  --cha-comment: #737373;
-  --cha-comment-doc: #737373;
-  --cha-string: #5ecc71;
-  --cha-keyword-declaration: #ff678d;
+  --hls-background: #0a0a0a;
+  --hls-foreground: #fafafa;
+  --hls-comment: #737373;
+  --hls-comment-doc: #737373;
+  --hls-string: #5ecc71;
+  --hls-keyword-declaration: #ff678d;
   ...
 }
 ```
@@ -173,7 +173,7 @@ Generate declarations from any Zed theme with `toCSS`:
 import { toCSS, pierreDark } from '@pierre/highlights/themes';
 
 toCSS(pierreDark);
-// --cha-background: #0a0a0a;--cha-foreground: #fafafa;--cha-comment: #737373;--cha-comment-doc: #737373;...
+// --hls-background: #0a0a0a;--hls-foreground: #fafafa;--hls-comment: #737373;--hls-comment-doc: #737373;...
 ```
 
 > [!IMPORTANT] CSS-variable mode ignores `font_style` and `font_weight`. Its

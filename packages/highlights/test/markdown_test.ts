@@ -15,7 +15,7 @@ import {
   type TestLang,
   themeColor,
   tokenKinds,
-} from './util';
+} from './_util';
 
 let markdown: TestLang;
 t.before(() => {
@@ -102,8 +102,8 @@ void t.test(
         style: {},
       },
     });
-    assert.equal(colorOf(out, '>'), 'var(--cha-punctuation-markup)');
-    assert.equal(colorOf(out, '|'), 'var(--cha-punctuation-markup)');
+    assert.equal(colorOf(out, '>'), 'var(--hls-punctuation-markup)');
+    assert.equal(colorOf(out, '|'), 'var(--hls-punctuation-markup)');
   }
 );
 

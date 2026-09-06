@@ -28,7 +28,7 @@ Use `toCSS` to convert a theme into CSS-variable declarations:
 import { toCSS, pierreDark } from '@pierre/highlights/themes';
 
 toCSS(pierreDark);
-// --cha-background: #0a0a0a;--cha-foreground: #fafafa;--cha-comment: #737373;...
+// --hls-background: #0a0a0a;--hls-foreground: #fafafa;--hls-comment: #737373;...
 ```
 
 Each community theme uses its Zed core, marketplace, or GitHub counterpart when

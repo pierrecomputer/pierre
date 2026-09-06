@@ -13,7 +13,7 @@ import { listTokenTypes, transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 
 const dec = new TextDecoder();
-const tableCache = new Map<string, Uint8Array>();
+const tableCache = new WeakMap<Theme, Uint8Array>();
 
 /** Options tests may pass through `loadLang`'s `hl` to `codeToHtml`. */
 export interface TestHlOptions {
@@ -45,9 +45,9 @@ export function themeColor(
 ): string | null {
   const i = tokenTypes.indexOf(name);
   assert.ok(i >= 0, `unknown token type: ${name}`);
-  let table = tableCache.get(theme.name);
+  let table = tableCache.get(theme);
   if (table === undefined) {
-    tableCache.set(theme.name, (table = compileTheme(theme)));
+    tableCache.set(theme, (table = compileTheme(theme)));
   }
   const [r, g, b, a] = table.subarray(i * 5, i * 5 + 4);
   if ((r | g | b | a) === 0) return null;
@@ -404,10 +404,19 @@ export function assertLineFedParity(
 ): ThemedToken[][] {
   initFullModule();
   const whole = codeToTokens(code, { lang, theme: distinctTheme }).tokens;
-  assert.equal(
-    flatTokens(lineFedTokens(lang, code)),
-    flatTokens(whole),
+  assert.deepEqual(
+    lineFedTokens(lang, code),
+    whole,
     `${lang}${label === undefined ? '' : `: ${label}`}: ${JSON.stringify(code)}`
   );
   return whole;
+}
+
+/** Deterministic random values for reproducible input and edit fuzzing. */
+export function makeRand(seed: number): () => number {
+  let state = seed >>> 0;
+  return () => {
+    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+    return state >>> 4;
+  };
 }

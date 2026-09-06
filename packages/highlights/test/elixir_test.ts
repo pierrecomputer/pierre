@@ -17,7 +17,7 @@ import {
   type TestLang,
   textOf,
   wordColor,
-} from './util';
+} from './_util';
 
 // one unique color per token type so equal styles cannot merge neighboring
 // spans and hide a classification behind a same-colored token

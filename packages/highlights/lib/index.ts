@@ -243,7 +243,7 @@ export interface CodeToHtmlOptions {
 export interface ThemedToken {
   content: string;
   offset: number;
-  /** Six- or eight-digit hex color, or `var(--cha-*)` for CSS-variable themes. */
+  /** Six- or eight-digit hex color, or `var(--hls-*)` for CSS-variable themes. */
   color?: string;
   /** Background color. Highlights never emits it, but transformers may set it. */
   bgColor?: string;
@@ -263,7 +263,7 @@ export interface ThemedToken {
 /** Options shared by every tokenization entry point. */
 export interface CodeToTokensBaseOptions {
   lang: Lang;
-  /** Prefix for per-theme custom properties. Defaults to `--cha-`. */
+  /** Prefix for per-theme custom properties. Defaults to `--hls-`. */
   cssVariablePrefix?: string;
   /** Only `false` has an effect: emit all theme colors as custom properties. */
   defaultColor?: string | false;

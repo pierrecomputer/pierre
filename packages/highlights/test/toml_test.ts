@@ -15,7 +15,7 @@ import {
   themeColor,
   tokenKinds,
   wordColor,
-} from './util';
+} from './_util';
 
 let toml: TestLang;
 t.before(() => (toml = loadLang('toml', '$hlToml')));

@@ -12,7 +12,7 @@ import {
   type TestLang,
   textOf,
   tokenKinds,
-} from './util';
+} from './_util';
 
 let lexer: TestLang;
 t.before(() => {

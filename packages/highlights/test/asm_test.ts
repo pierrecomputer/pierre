@@ -13,7 +13,7 @@ import {
   type TestLang,
   themeColor,
   tokenKinds,
-} from './util';
+} from './_util';
 
 let asm: TestLang;
 t.before(() => (asm = loadLang('asm', '$hlAsm')));

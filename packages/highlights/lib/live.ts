@@ -270,7 +270,7 @@ export class LiveTokenizer {
   constructor(options: LiveTokenizerOptions) {
     this.#langId = langIdOf(options.lang);
     this.#themes = resolveOptionThemes(options);
-    this.#cssVariablePrefix = options.cssVariablePrefix ?? '--cha-';
+    this.#cssVariablePrefix = options.cssVariablePrefix ?? '--hls-';
     this.#maxLineLength = options.tokenizeMaxLineLength;
     this.#onDeferTokenize = options.onDeferTokenize;
     const renderRange = checkRenderRange(options.renderRange);

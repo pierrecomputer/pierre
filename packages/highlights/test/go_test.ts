@@ -19,7 +19,7 @@ import {
   themeColor,
   tokenKinds,
   wordColor,
-} from './util';
+} from './_util';
 
 let go: TestLang;
 t.before(() => {

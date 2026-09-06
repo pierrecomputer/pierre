@@ -17,7 +17,7 @@ import {
   themeColor,
   tokenKinds,
   wordColor,
-} from './util';
+} from './_util';
 
 let lua: TestLang;
 t.before(() => (lua = loadLang('lua', '$hlLua')));

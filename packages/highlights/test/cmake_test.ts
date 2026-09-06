@@ -13,7 +13,7 @@ import {
   textOf,
   tokenKinds,
   wordColor,
-} from './util';
+} from './_util';
 
 let lexer: TestLang;
 t.before(() => {

@@ -143,7 +143,7 @@ export function transformWat(
   // written, so their value carries over from the previous chunk - are saved
   // and restored; scratch locals that every iteration recomputes cost
   // nothing. See liveLocalsAtCheckpoint.
-  const streamLexers = new Set([
+  const lexers = new Set([
     '$hlAsm',
     '$hlAstro',
     '$hlBash',
@@ -206,7 +206,7 @@ export function transformWat(
   let streamStateOffset = 0;
   code = replaceForm(code, 'func', (inner) => {
     const name = inner.match(/^\s*(\$\w+)/)?.[1];
-    if (name === undefined || !streamLexers.has(name)) return `(func${inner})`;
+    if (name === undefined || !lexers.has(name)) return `(func${inner})`;
     if (inner.includes('(return')) {
       throw new Error(`${name} cannot checkpoint locals with an early return`);
     }

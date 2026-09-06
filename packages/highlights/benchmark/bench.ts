@@ -1,10 +1,13 @@
-import { readFileSync } from 'node:fs';
+import assert from 'node:assert/strict';
+import { openSync, readFileSync } from 'node:fs';
 import { arch, cpus, totalmem, type } from 'node:os';
+import { WriteStream } from 'node:tty';
 import type { Language } from 'tree-sitter-highlight';
 
-import { init, StreamTokenizer } from '../lib/index';
+import { init, StreamTokenizer, type ThemedToken } from '../lib/index';
 import { optimizeWasm, transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
+import { measure, type Measurement } from './measure';
 
 const enc = new TextEncoder();
 const dec = new TextDecoder();
@@ -71,7 +74,24 @@ interface Column {
 }
 
 function printTable(cols: Column[], rows: string[][]) {
-  const termW = process.stdout.columns ?? Infinity;
+  // Moon pipes stdout; COLUMNS can lag behind the actual terminal size.
+  let columns = process.stdout.columns ?? Number(process.env.COLUMNS);
+  if (process.stdout.isTTY !== true) {
+    try {
+      const terminal = new WriteStream(openSync('/dev/tty', 'w'));
+      try {
+        columns = terminal.getWindowSize()[0];
+      } finally {
+        terminal.destroy();
+      }
+    } catch {
+      // Detached runs use the supplied COLUMNS value.
+    }
+  }
+  const target = process.env.MOON_TARGET;
+  const termW =
+    (columns > 0 ? columns : Infinity) -
+    (target == null ? 0 : target.length + 3);
   const colWidth = (c: Column, i: number) =>
     Math.max(c.title.length, ...rows.map((r) => (r[i] ?? '').length));
   const tableW = (idxs: number[]) =>
@@ -112,46 +132,15 @@ function printTable(cols: Column[], rows: string[][]) {
   }
 }
 
-function runBench<T>(
-  fn: (arg: T) => unknown,
-  arg: T,
-  budget = 1500,
-  iters = 2000
-): { median: number; iters: number } {
-  const first = (() => {
-    const t = performance.now();
-    fn(arg);
-    return performance.now() - t;
-  })();
-  // Shorten warmup for slow contenders to cap runtime.
-  const warmup = first > 200 ? 1 : 5;
-  for (let i = 0; i < warmup; i++) fn(arg);
-  const samples = [];
-  const budgetEnd = performance.now() + budget;
-  while (
-    (samples.length < 3 || performance.now() < budgetEnd) &&
-    samples.length < iters
-  ) {
-    const start = performance.now();
-    fn(arg);
-    samples.push(performance.now() - start);
-  }
-  samples.sort((a, b) => a - b);
-  return {
-    median: samples[Math.floor(samples.length / 2)],
-    iters: samples.length,
-  };
-}
-
 interface Contender {
   name: string;
-  html?: boolean;
   /** The main benchmark passes the fixture as UTF-8 bytes instead of a string. */
   bytes?: boolean;
+  langs?: readonly FixtureLang[];
   fn: (src: string | Uint8Array, lang: FixtureLang) => unknown;
-  tokens?: (src: string, lang: FixtureLang) => unknown;
+  tokens?: (src: string, lang: FixtureLang) => { tokens: ThemedToken[][] };
   hast?: (src: string, lang: FixtureLang) => unknown;
-  stream?: (chunks: string[], lang: FixtureLang) => number;
+  stream?: (chunks: string[], lang: FixtureLang) => ThemedToken[][];
 }
 
 async function loadContenders(): Promise<Contender[]> {
@@ -159,24 +148,22 @@ async function loadContenders(): Promise<Contender[]> {
 
   contenders.push({
     name: 'highlights',
-    html: true,
     fn: (src, lang) =>
       dec.decode(highlights.codeToHtml(src, { lang, theme: pierreDark })),
     tokens: (src, lang) =>
       highlights.codeToTokens(src, { lang, theme: pierreDark }),
     stream: (chunks, lang) => {
       const stream = new StreamTokenizer({ lang, theme: pierreDark });
-      let tokenCount = 0;
+      const tokens: ThemedToken[][] = [];
       for (const chunk of chunks) {
-        for (const line of stream.pushCode(chunk)) tokenCount += line.length;
+        tokens.push(...stream.pushCode(chunk));
       }
-      for (const line of stream.end()) tokenCount += line.length;
-      return tokenCount;
+      tokens.push(...stream.end());
+      return tokens;
     },
   });
   contenders.push({
-    name: 'highlights (bytes io)',
-    html: true,
+    name: 'highlights (bytes)',
     bytes: true,
     fn: (bytes, lang) =>
       highlights.codeToHtml(bytes, { lang, theme: pierreDark }),
@@ -186,41 +173,57 @@ async function loadContenders(): Promise<Contender[]> {
     const { createHighlighter } = await import('shiki');
     const langs: FixtureLang[] = ['ts', 'jsonc', 'css', 'html'];
     const hl = await createHighlighter({ themes: ['github-dark'], langs });
+    // Disable early exits so long lines receive complete tokenization too.
+    const options = {
+      theme: 'github-dark',
+      tokenizeMaxLineLength: 0,
+      tokenizeTimeLimit: 0,
+    };
     contenders.push({
       name: 'shiki',
-      html: true,
-      fn: (src, lang) =>
-        hl.codeToHtml(src as string, { lang, theme: 'github-dark' }),
-      tokens: (src, lang) =>
-        hl.codeToTokens(src, { lang, theme: 'github-dark' }),
-      hast: (src, lang) => hl.codeToHast(src, { lang, theme: 'github-dark' }),
+      fn: (src, lang) => hl.codeToHtml(src as string, { ...options, lang }),
+      tokens: (src, lang) => hl.codeToTokens(src, { ...options, lang }),
+      hast: (src, lang) => hl.codeToHast(src, { ...options, lang }),
       stream: (chunks, lang) => {
         let grammarState: ReturnType<typeof hl.getLastGrammarState> | undefined;
         let tail = '';
-        let tokenCount = 0;
+        let offset = 0;
+        const tokens: ThemedToken[][] = [];
         for (const chunk of chunks) {
-          const lines = (tail + chunk).split('\n');
-          tail = lines.pop() ?? '';
-          for (const line of lines) {
-            const result = hl.codeToTokens(line, {
-              lang,
-              theme: 'github-dark',
-              grammarState,
-            });
-            grammarState = result.grammarState;
-            tokenCount += result.tokens[0].length;
+          tail += chunk;
+          const end = tail.lastIndexOf('\n') + 1;
+          if (end === 0) continue;
+          // Process the same completed lines as StreamTokenizer.pushCode.
+          // Omit the final separator so grammar state doesn't advance an
+          // extra empty line before the next chunk.
+          const contentEnd = tail[end - 2] === '\r' ? end - 2 : end - 1;
+          const result = hl.codeToTokens(tail.slice(0, contentEnd), {
+            ...options,
+            lang,
+            grammarState,
+          });
+          tail = tail.slice(end);
+          grammarState = result.grammarState;
+          for (const line of result.tokens) {
+            for (const token of line) token.offset += offset;
           }
+          tokens.push(...result.tokens);
+          offset += end;
         }
         const result = hl.codeToTokens(tail, {
           lang,
-          theme: 'github-dark',
+          ...options,
           grammarState,
         });
-        return tokenCount + result.tokens[0].length;
+        for (const line of result.tokens) {
+          for (const token of line) token.offset += offset;
+        }
+        tokens.push(...result.tokens);
+        return tokens;
       },
     });
-  } catch {
-    console.log('(shiki not installed, skipping)');
+  } catch (e) {
+    console.log(`(shiki unavailable, skipping: ${(e as Error).message})`);
   }
 
   try {
@@ -234,13 +237,14 @@ async function loadContenders(): Promise<Contender[]> {
       html: 7,
     };
     contenders.push({
-      name: 'tree-sitter-highlight',
-      html: true,
+      name: 'tree-sitter (NAPI)',
+      // Its JSON grammar handles comments, but HTML output has no token spans.
+      langs: ['ts', 'jsonc', 'css'],
       fn: (src, lang) => treeSitter.highlight(src as string, langs[lang]),
     });
   } catch (e) {
     console.log(
-      `(tree-sitter-highlight not installed, skipping: ${(e as Error).message})`
+      `(tree-sitter syntax unavailable, skipping: ${(e as Error).message})`
     );
   }
 
@@ -276,23 +280,21 @@ function benchmarkTokens(contenders: Contender[]) {
     const rows = [];
     for (const { name, lang, input } of TOKEN_FIXTURES) {
       const mb = enc.encode(input).length / 1024 / 1024;
-      const lines = highlights.codeToTokens(input, { lang, theme: pierreDark })
-        .tokens.length;
-      const highlightsResult = runBench(
-        (src: string) => highlightsFn(src, lang),
-        input
-      );
-      const shikiResult = runBench((src: string) => shikiFn(src, lang), input);
+      const lines = input.split('\n').length;
+      const [highlightsResult, shikiResult] = measure([
+        () => highlightsFn(input, lang),
+        () => shikiFn(input, lang),
+      ]);
       rows.push([
         name,
         String(lines),
         us(highlightsResult.median),
-        fmt(mb / (highlightsResult.median / 1000)) + ' MB/s',
+        fmt(mb / (highlightsResult.median / 1000)) + ' MiB/s',
         us(shikiResult.median),
         baselineLabel(highlightsResult.median / shikiResult.median),
       ]);
     }
-    console.log(`${title} (TypeScript):`);
+    console.log(title + ':');
     printTable(
       [
         { title: 'input' },
@@ -318,26 +320,50 @@ function benchmarkStream(contenders: Contender[]) {
     console.log('shiki not installed; stream benchmark skipped');
     return;
   }
+  const streams: NonNullable<Contender['stream']>[] = [
+    highlightsStream,
+    shikiStream,
+  ];
 
-  const rows = [];
-  for (const { name, lang, input } of STREAM_FIXTURES) {
+  // Validate every fixture before starting the slower timing runs.
+  const fixtures = STREAM_FIXTURES.map(({ name, lang, input }) => {
     const chunks: string[] = [];
     for (let at = 0; at < input.length; at += 4096) {
       chunks.push(input.slice(at, at + 4096));
     }
+    const lines = input.split(/\r?\n/);
+    for (const stream of streams) {
+      const tokens = stream(chunks, lang);
+      assert.equal(tokens.length, lines.length, `${name}: streamed line count`);
+      for (const [i, line] of tokens.entries()) {
+        assert.ok(
+          line.map((token) => token.content).join('') === lines[i],
+          `${name}: streamed content on line ${i}`
+        );
+        for (const token of line) {
+          assert.ok(
+            input.slice(token.offset, token.offset + token.content.length) ===
+              token.content,
+            `${name}: streamed offset on line ${i}`
+          );
+        }
+      }
+    }
+    return { name, lang, input, chunks };
+  });
+  const rows = [];
+  for (const { name, lang, input, chunks } of fixtures) {
     const mb = enc.encode(input).length / 1024 / 1024;
-    const highlightsResult = runBench((parts: string[]) => {
-      highlightsStream(parts, lang);
-    }, chunks);
-    const shikiResult = runBench((parts: string[]) => {
-      shikiStream(parts, lang);
-    }, chunks);
+    const [highlightsResult, shikiResult] = measure([
+      () => highlightsStream(chunks, lang),
+      () => shikiStream(chunks, lang),
+    ]);
     rows.push([
       name,
       String(input.split('\n').length),
       String(chunks.length),
       us(highlightsResult.median),
-      fmt(mb / (highlightsResult.median / 1000)) + ' MB/s',
+      fmt(mb / (highlightsResult.median / 1000)) + ' MiB/s',
       us(shikiResult.median),
       baselineLabel(highlightsResult.median / shikiResult.median),
     ]);
@@ -379,15 +405,18 @@ const machine = `${cpu} (${cpus().length} cores), ${Math.round(
     : `node ${process.versions.node}`
 }`;
 console.log(dim(machine + '\n'));
+console.log(
+  dim(
+    '200 ms warmup; ≥1.5 s timed per case; rotating batches; median batch mean.\n'
+  )
+);
 
 const BASELINE = 'shiki';
 const contenders = await loadContenders();
 
-interface BenchResult {
+interface BenchResult extends Partial<Measurement> {
   name: string;
-  html?: boolean;
-  median?: number;
-  iters?: number;
+  bytes?: boolean;
   error?: string;
 }
 
@@ -396,39 +425,57 @@ if (streamOnly) {
 } else if (tokensOnly) {
   benchmarkTokens(contenders);
 } else {
+  const order = [
+    'highlights (bytes)',
+    'highlights',
+    'tree-sitter (NAPI)',
+    'shiki',
+  ];
   for (const { name, lang, input } of FIXTURES) {
     const inputBytes = enc.encode(input);
     const mb = inputBytes.length / 1024 / 1024;
 
     const results: BenchResult[] = [];
-    for (const { name: cname, fn, bytes: wantsBytes, html } of contenders) {
+    const cases: (() => unknown)[] = [];
+    for (const { name: cname, fn, bytes: wantsBytes, langs } of contenders) {
+      if (langs != null && !langs.includes(lang)) {
+        console.log(
+          dim(`${cname}: ${lang} excluded (incomplete language support)`)
+        );
+        continue;
+      }
       try {
+        const run = () => fn(wantsBytes === true ? inputBytes : input, lang);
+        run();
+        cases.push(run);
         results.push({
           name: cname,
-          html,
-          ...runBench(
-            (arg: string | Uint8Array) => fn(arg, lang),
-            wantsBytes === true ? inputBytes : input
-          ),
+          bytes: wantsBytes,
         });
       } catch (e) {
         results.push({ name: cname, error: (e as Error).message });
       }
     }
+    const measurements = measure(cases);
+    let index = 0;
+    for (const result of results) {
+      if (result.error == null) Object.assign(result, measurements[index++]);
+    }
     const base =
-      results.find((r) => r.name === BASELINE && r.error == null) ??
-      results.find((r) => r.error == null);
+      results.find((r) => r.name === BASELINE && r.median != null) ??
+      results.find((r) => r.bytes !== true && r.median != null);
     if (base?.median == null) continue;
     const baseMedian = base.median;
-    results.sort((a, b) => (b.median ?? Infinity) - (a.median ?? Infinity));
+    results.sort((a, b) => order.indexOf(a.name) - order.indexOf(b.name));
 
     console.log(
-      `input: ${name} (${(inputBytes.length / 1024).toFixed(0)} KB, lang=${lang})`
+      `input: ${name} (${(inputBytes.length / 1024).toFixed(0)} KiB, lang=${lang})`
     );
     const cols = [
       { title: 'tool' },
       { title: 'output', hide: 1 },
       { title: 'iters', align: 'right' as const, hide: 2 },
+      { title: 'samples', align: 'right' as const, hide: 2 },
       { title: 'median', align: 'right' as const },
       { title: 'throughput', align: 'right' as const, hide: 3 },
       { title: `vs ${base.name}`, hide: 4 },
@@ -441,17 +488,23 @@ if (streamOnly) {
           '—',
           '—',
           '—',
+          '—',
           `failed: ${(r.error ?? 'no samples').slice(0, 40)}`,
         ];
       }
       const vs =
-        r === base ? '1.00× (baseline)' : baselineLabel(r.median / baseMedian);
+        r.bytes === true
+          ? 'different I/O'
+          : r === base
+            ? '1.00× (baseline)'
+            : baselineLabel(r.median / baseMedian);
       return [
         r.name,
-        r.html != null ? 'html' : 'tree',
-        String(r.iters),
+        r.bytes === true ? 'HTML bytes' : 'HTML string',
+        String(r.iterations),
+        String(r.samples),
         us(r.median),
-        fmt(mb / (r.median / 1000)) + ' MB/s',
+        fmt(mb / (r.median / 1000)) + ' MiB/s',
         vs,
       ];
     });

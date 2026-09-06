@@ -1,17 +1,65 @@
-// https://github.com/microsoft/TypeScript/blob/b465fdbfe175304d9b977da137b2c178ae1091d3/tests/baselines/reference/requireOfJsonFile_PathMapping.trace.json
-[
-    "======== Resolving module 'foo/bar/foobar.json' from '/a.ts'. ========",
-    "Module resolution kind is not specified, using 'Bundler'.",
-    "Resolving in CJS mode with conditions 'require', 'types'.",
-    "'baseUrl' option is set to '/', using this value to resolve non-relative module name 'foo/bar/foobar.json'.",
-    "'paths' option is specified, looking for a pattern to match module name 'foo/bar/foobar.json'.",
-    "Module name 'foo/bar/foobar.json', matched pattern '*'.",
-    "Trying substitution 'node_modules/*', candidate module location: 'node_modules/foo/bar/foobar.json'.",
-    "Loading module as file / folder, candidate module location '/node_modules/foo/bar/foobar.json', target file types: TypeScript, JavaScript, Declaration, JSON.",
-    "File name '/node_modules/foo/bar/foobar.json' has a '.json' extension - stripping it.",
-    "File '/node_modules/foo/bar/foobar.d.json.ts' does not exist.",
-    "File '/node_modules/foo/bar/foobar.json' exists - use it as a name resolution result.",
-    "File '/node_modules/foo/package.json' does not exist.",
-    "Resolving real path for '/node_modules/foo/bar/foobar.json', result '/node_modules/foo/bar/foobar.json'.",
-    "======== Module name 'foo/bar/foobar.json' was successfully resolved to '/node_modules/foo/bar/foobar.json'. ========"
-]
+// https://github.com/microsoft/terminal/blob/093e49e29a9f806ff83025c49be5d0c970673b00/src/cascadia/TerminalSettingsModel/defaults.json
+// Excerpt: global settings and profiles.
+{
+  "defaultProfile": "{61c54bbd-c2c6-5271-96e7-009a87ff44bf}",
+
+  // Launch Settings
+  "initialCols": 120,
+  "initialRows": 30,
+  "launchMode": "default",
+  "alwaysOnTop": false,
+
+  // Selection
+  "copyOnSelect": false,
+  "copyFormatting": true,
+  "trimBlockSelection": true,
+  "trimPaste": true,
+  "wordDelimiters": " /\\()\"'-.,:;<>~!@#$%^&*|+=[]{}~?\u2502",
+
+  // Tab UI
+  "alwaysShowTabs": true,
+  "showTabsInTitlebar": true,
+  "showTerminalTitleInTitlebar": true,
+  "tabWidthMode": "equal",
+  "tabSwitcherMode": "inOrder",
+  "showAdminShield": true,
+
+  // Miscellaneous
+  "warning.confirmOnClose": "automatic",
+  "theme": "dark",
+  "snapToGridOnResize": true,
+  "disableAnimations": false,
+  "startupActions": "",
+  "focusFollowMouse": false,
+  "minimizeToNotificationArea": false,
+  "alwaysShowNotificationIcon": false,
+
+  "profiles": [
+    {
+      "guid": "{61c54bbd-c2c6-5271-96e7-009a87ff44bf}",
+      "name": "Windows PowerShell",
+      "commandline": "%SystemRoot%\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+      "icon": "ms-appx:///ProfileIcons/{61c54bbd-c2c6-5271-96e7-009a87ff44bf}.png",
+      "colorScheme": "Campbell",
+      "antialiasingMode": "grayscale",
+      "closeOnExit": "automatic",
+      "cursorShape": "bar",
+      "fontFace": "Cascadia Mono",
+      "fontSize": 12,
+      "hidden": false,
+      "historySize": 9001,
+      "padding": "8, 8, 8, 8",
+      "snapOnInput": true,
+      "altGrAliasing": true,
+      "startingDirectory": "%USERPROFILE%",
+      "useAcrylic": false,
+    },
+    {
+      "guid": "{0caa0dad-35be-5f56-a8ff-afceeeaa6101}",
+      "name": "Command Prompt",
+      "commandline": "%SystemRoot%\\System32\\cmd.exe",
+      "icon": "ms-appx:///ProfileIcons/{0caa0dad-35be-5f56-a8ff-afceeeaa6101}.png",
+      "colorScheme": "Campbell",
+    },
+  ],
+}

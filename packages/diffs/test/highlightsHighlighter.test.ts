@@ -281,7 +281,7 @@ describe('highlights highlighter', () => {
     // the pre style moved through the context's addClassToHast
     expect(html).toContain('__shiki_');
     expect(html).not.toContain('style=');
-    expect(transformer.getCSS()).toContain('--cha-dark:');
+    expect(transformer.getCSS()).toContain('--hls-dark:');
   });
 
   test('FileRenderer re-renders through a newly registered highlighter', () => {

@@ -1,49 +1,75 @@
-// https://github.com/microsoft/TypeScript/blob/v6.0.3/src/compiler/corePublic.ts
+// https://github.com/microsoft/vscode/blob/d9637b3f2faa8f8ce0636e556291fdb1ba714c0b/src/vs/base/common/controlFlow.ts
 
-// WARNING: The script `configurePrerelease.ts` uses a regexp to parse out these values.
-// If changing the text in this section, be sure to test `configurePrerelease` too.
-export const versionMajorMinor = "6.0";
-// The following is baselined as a literal template type without intervention
-/** The version of the TypeScript compiler release */
-export const version: string = `${versionMajorMinor}.0-dev`;
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+import { BugIndicatingError } from './errors.js';
+
+/*
+ * This file contains helper classes to manage control flow.
+ */
 
 /**
- * Type of objects whose values are all of the same type.
- * The `in` and `for-in` operators can *not* be safely used,
- * since `Object.prototype` may be modified by outside code.
+ * Prevents code from being re-entrant.
  */
-export interface MapLike<T> {
-    [index: string]: T;
-}
+export class ReentrancyBarrier {
+  private _isOccupied = false;
 
-export interface SortedReadonlyArray<T> extends ReadonlyArray<T> {
-    " __sortedArrayBrand": any;
-}
+  /**
+   * Calls `runner` if the barrier is not occupied.
+   * During the call, the barrier becomes occupied.
+   */
+  public runExclusivelyOrSkip(runner: () => void): void {
+    if (this._isOccupied) {
+      return;
+    }
+    this._isOccupied = true;
+    try {
+      runner();
+    } finally {
+      this._isOccupied = false;
+    }
+  }
 
-export interface SortedArray<T> extends Array<T> {
-    " __sortedArrayBrand": any;
-}
+  /**
+   * Calls `runner`. If the barrier is occupied, throws an error.
+   * During the call, the barrier becomes active.
+   */
+  public runExclusivelyOrThrow(runner: () => void): void {
+    if (this._isOccupied) {
+      throw new BugIndicatingError(
+        `ReentrancyBarrier: reentrant call detected!`
+      );
+    }
+    this._isOccupied = true;
+    try {
+      runner();
+    } finally {
+      this._isOccupied = false;
+    }
+  }
 
-/**
- * Common read methods for ES6 Map/Set.
- *
- * @internal
- */
-export interface ReadonlyCollection<K> {
-    readonly size: number;
-    has(key: K): boolean;
-    keys(): IterableIterator<K>;
-}
+  /**
+   * Indicates if some runner occupies this barrier.
+   */
+  public get isOccupied() {
+    return this._isOccupied;
+  }
 
-/** @internal */
-export type EqualityComparer<T> = (a: T, b: T) => boolean;
-
-/** @internal */
-export type Comparer<T> = (a: T, b: T) => Comparison;
-
-/** @internal */
-export const enum Comparison {
-    LessThan = -1,
-    EqualTo = 0,
-    GreaterThan = 1,
+  public makeExclusiveOrSkip<TArgs extends unknown[]>(
+    fn: (...args: TArgs) => void
+  ): (...args: TArgs) => void {
+    return (...args: TArgs) => {
+      if (this._isOccupied) {
+        return;
+      }
+      this._isOccupied = true;
+      try {
+        return fn(...args);
+      } finally {
+        this._isOccupied = false;
+      }
+    };
+  }
 }

@@ -19,7 +19,7 @@ import {
   themeColor,
   tokenKinds,
   wordColor,
-} from './util';
+} from './_util';
 
 let swift: TestLang;
 t.before(() => {

@@ -18,7 +18,7 @@ import {
   themeColor,
   tokenKinds,
   wordColor as wordColorOf,
-} from './util';
+} from './_util';
 
 let python: TestLang;
 

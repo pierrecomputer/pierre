@@ -1,19 +1,18 @@
 // Benchmarks for the incremental LiveTokenizer: eager indexing, cached
-// reads, one-character and structural edits with convergence profiles, and
-// retained-memory footprints. The full-rebuild baseline re-runs codeToTokens
-// over the whole document per edit, which is what the previous LiveTokenizer
-// did on every line change.
+// reads, edits paired with full rebuilds of the same edited text, and memory.
+import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-import type { LiveTextEdit } from '../lib/index';
+import type { LiveTextEdit, LiveUpdateOptions } from '../lib/index';
 import { codeToTokens, init, LiveTokenizer } from '../lib/index';
 import { optimizeWasm, transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
+import { measure, type Measurement } from './measure';
 
 const fmt = (n: number, unit = '') =>
   n.toFixed(n >= 100 ? 0 : n >= 10 ? 1 : 2) + unit;
 const us = (ms: number) => (ms >= 10 ? fmt(ms) + 'ms' : fmt(ms * 1000) + 'µs');
-const mb = (bytes: number) => fmt(bytes / 1048576) + 'MB';
+const mb = (bytes: number) => fmt(bytes / 1048576) + 'MiB';
 
 const url = new URL('../src/highlights.wat', import.meta.url);
 const { code } = transformWat(url);
@@ -32,50 +31,16 @@ const unicode = 'const greeting = "日本語 🎈"; // naïve résumé\n'.repeat
   10_000
 );
 
-interface Sample {
-  median: number;
-  p95: number;
-}
-
-function measure(rounds: number, run: () => void, settle?: () => void): Sample {
-  const times: number[] = [];
-  for (let i = 0; i < rounds; i++) {
-    const t0 = performance.now();
-    run();
-    times.push(performance.now() - t0);
-    settle?.();
-  }
-  times.sort((a, b) => a - b);
-  return {
-    median: times[times.length >> 1],
-    p95: times[Math.min(times.length - 1, Math.ceil(times.length * 0.95) - 1)],
-  };
-}
-
 const changedLines = (u: {
   lineChanges: readonly { newStartLine: number; newEndLine: number }[];
 }) => u.lineChanges.reduce((s, c) => s + (c.newEndLine - c.newStartLine), 0);
-
-function editAt(
-  live: LiveTokenizer,
-  line: number,
-  flip: boolean
-): LiveTextEdit {
-  const len = live.getLineLength(line);
-  return {
-    range: {
-      start: { line, character: Math.max(0, len - 1) },
-      end: { line, character: len },
-    },
-    newText: flip ? '1' : '2',
-  };
-}
 
 interface Row {
   fixture: string;
   scenario: string;
   median: string;
   p95: string;
+  samples: string;
   lines: string;
 }
 
@@ -84,7 +49,7 @@ const rows: Row[] = [];
 function bench(
   fixture: string,
   scenario: string,
-  sample: Sample,
+  sample: Measurement,
   lines = ''
 ): void {
   rows.push({
@@ -92,159 +57,194 @@ function bench(
     scenario,
     median: us(sample.median),
     p95: us(sample.p95),
+    samples: String(sample.samples),
     lines,
   });
 }
+
+console.log(
+  '200 ms warmup; 1.5 s budget per case, including cleanup; ≥20 timed calls.'
+);
+console.log(
+  'Live edits update retained records; rebuilds materialize all themed tokens.'
+);
+console.log(
+  'Edits and rebuild inputs are prepared before timing; undo and flush are untimed.\n'
+);
 
 for (const [name, source, lang] of [
   ['large.ts (10k lines)', largeTs, 'ts'],
   ['synthetic 100k lines', hundredK, 'ts'],
   ['unicode 10k lines', unicode, 'ts'],
 ] as const) {
-  const initSample = measure(name.includes('100k') ? 3 : 7, () => {
-    new LiveTokenizer({ lang, theme: pierreDark, code: source }).dispose();
-  });
+  let initialized: LiveTokenizer | undefined;
+  const [initSample] = measure(
+    [
+      {
+        run: () =>
+          (initialized = new LiveTokenizer({
+            lang,
+            theme: pierreDark,
+            code: source,
+          })),
+        afterEach: () => initialized?.dispose(),
+      },
+    ],
+    { batch: false }
+  );
   bench(name, 'eager init', initSample);
 
-  const live = new LiveTokenizer({ lang, theme: pierreDark, code: source });
-  const lineCount = live.lineCount;
-  const middle = lineCount >> 1;
-
-  let flip = false;
-  let retok = 0;
+  const lines = source.split('\n');
+  const middle = lines.length >> 1;
+  const offsets = [0];
+  for (const line of lines)
+    offsets.push(offsets[offsets.length - 1] + line.length + 1);
+  const scenarios: {
+    label: string;
+    edit: LiveTextEdit;
+    options?: LiveUpdateOptions;
+  }[] = [];
   for (const [label, line] of [
     ['edit top', 0],
     ['edit middle', middle],
-    ['edit end', lineCount - 2],
+    ['edit end', lines.length - 2],
   ] as const) {
-    const sample = measure(200, () => {
-      flip = !flip;
-      retok = changedLines(live.applyEdits([editAt(live, line, flip)]));
+    const len = lines[line].length;
+    scenarios.push({
+      label,
+      edit: {
+        range: {
+          start: { line, character: Math.max(0, len - 1) },
+          end: { line, character: len },
+        },
+        newText: lines[line].endsWith('1') ? '2' : '1',
+      },
     });
-    bench(name, label, sample, String(retok));
+  }
+  scenarios.push(
+    {
+      label: 'insert line',
+      edit: {
+        range: {
+          start: { line: middle, character: 0 },
+          end: { line: middle, character: 0 },
+        },
+        newText: 'const inserted = 1;\n',
+      },
+    },
+    {
+      label: 'delete line',
+      edit: {
+        range: {
+          start: { line: middle, character: 0 },
+          end: { line: middle + 1, character: 0 },
+        },
+        newText: '',
+      },
+    }
+  );
+  for (const viewport of [false, true]) {
+    scenarios.push({
+      label: viewport ? 'template + viewport' : 'template propagation',
+      edit: {
+        range: {
+          start: { line: 2, character: 0 },
+          end: { line: 2, character: 0 },
+        },
+        newText: '`',
+      },
+      options: viewport ? { renderRange: [0, 120] } : undefined,
+    });
   }
 
-  // structural churn: insert a line, then delete it again
-  const structural = measure(100, () => {
-    flip = !flip;
-    if (flip) {
-      retok = changedLines(
-        live.applyEdits([
-          {
-            range: {
-              start: { line: middle, character: 0 },
-              end: { line: middle, character: 0 },
-            },
-            newText: 'const inserted = 1;\n',
+  for (const { label, edit, options } of scenarios) {
+    const live = new LiveTokenizer({ lang, theme: pierreDark, code: source });
+    try {
+      const { start, end } = edit.range;
+      const from = offsets[start.line] + start.character;
+      const to = offsets[end.line] + end.character;
+      const edited = source.slice(0, from) + edit.newText + source.slice(to);
+      const inserted = edit.newText.split('\n');
+      const undo: LiveTextEdit = {
+        range: {
+          start,
+          end: {
+            line: start.line + inserted.length - 1,
+            character:
+              inserted.length === 1
+                ? start.character + edit.newText.length
+                : inserted[inserted.length - 1].length,
           },
-        ])
-      );
-    } else {
-      retok = changedLines(
-        live.applyEdits([
-          {
-            range: {
-              start: { line: middle, character: 0 },
-              end: { line: middle + 1, character: 0 },
-            },
-            newText: '',
-          },
-        ])
-      );
-    }
-  });
-  bench(name, 'structural edit', structural, String(retok));
+        },
+        newText: source.slice(from, to),
+      };
+      const edits = [edit];
+      const undoEdits = [undo];
+      const update = live.applyEdits(edits, options);
+      const retok = options == null ? changedLines(update) : update.lines.size;
+      live.flush();
+      assert.equal(live.getText(), edited);
+      live.applyEdits(undoEdits);
+      assert.equal(live.getText(), source);
 
-  // worst case: opening a template literal near the top re-tokenizes to EOF,
-  // closing it again re-tokenizes back
-  const eof = measure(20, () => {
-    flip = !flip;
-    retok = changedLines(
-      live.applyEdits([
-        flip
-          ? {
-              range: {
-                start: { line: 2, character: 0 },
-                end: { line: 2, character: 0 },
-              },
-              newText: '`',
-            }
-          : {
-              range: {
-                start: { line: 2, character: 0 },
-                end: { line: 2, character: 1 },
-              },
-              newText: '',
-            },
-      ])
-    );
-  });
-  bench(name, 'EOF propagation', eof, String(retok));
-
-  // the same worst case bounded to a 120-line viewport renderRange: the timed
-  // slice re-tokenizes the visible window only, and the off-screen tail
-  // settles between rounds outside the timing
-  const viewport = measure(
-    20,
-    () => {
-      flip = !flip;
-      retok = live.applyEdits(
+      const [incremental, rebuild] = measure(
         [
-          flip
-            ? {
-                range: {
-                  start: { line: 2, character: 0 },
-                  end: { line: 2, character: 0 },
-                },
-                newText: '`',
-              }
-            : {
-                range: {
-                  start: { line: 2, character: 0 },
-                  end: { line: 2, character: 1 },
-                },
-                newText: '',
-              },
+          {
+            run: () => live.applyEdits(edits, options),
+            afterEach: () => {
+              live.flush();
+              live.applyEdits(undoEdits);
+            },
+          },
+          () => codeToTokens(edited, { lang, theme: pierreDark }),
         ],
-        { renderRange: [0, 120] }
-      ).lines.size;
-    },
-    () => live.flush()
-  );
-  bench(name, 'EOF + renderRange', viewport, String(retok));
-
-  const rawReads = measure(50, () => {
-    for (let i = 0; i < 100; i++) {
-      live.getLineRecords((((i * 7919) % lineCount) + lineCount) % lineCount);
+        { batch: false }
+      );
+      assert.equal(live.getText(), source);
+      bench(name, label, incremental, String(retok));
+      bench(name, label + ' / rebuild', rebuild);
+    } finally {
+      live.dispose();
     }
-  });
-  bench(name, 'raw reads ×100', rawReads);
+  }
 
-  const themedReads = measure(50, () => {
-    for (let i = 0; i < 100; i++) {
-      live.getLineTokens((((i * 7919) % lineCount) + lineCount) % lineCount);
-    }
-  });
-  bench(name, 'themed reads ×100', themedReads);
-
-  // full-rebuild baseline: what every keystroke used to cost
-  const baseline = measure(name.includes('100k') ? 5 : 20, () => {
-    codeToTokens(source, { lang, theme: pierreDark });
-  });
-  bench(name, 'baseline full rebuild', baseline);
-
-  live.dispose();
+  const live = new LiveTokenizer({ lang, theme: pierreDark, code: source });
+  try {
+    const indices = Array.from(
+      { length: 100 },
+      (_, i) => (i * 7919) % live.lineCount
+    );
+    const [rawReads, themedReads] = measure(
+      [
+        () => indices.map((line) => live.getLineRecords(line)),
+        () => indices.map((line) => live.getLineTokens(line)),
+      ],
+      { batch: false }
+    );
+    bench(name, 'raw reads \u00D7100', rawReads);
+    bench(name, 'themed reads \u00D7100', themedReads);
+  } finally {
+    live.dispose();
+  }
 }
 
 const pad = (s: string, w: number, right = false) =>
   right ? s.padStart(w) : s.padEnd(w);
-const cols = ['fixture', 'scenario', 'median', 'p95', 'retok lines'] as const;
+const cols = [
+  'fixture',
+  'scenario',
+  'median',
+  'p95',
+  'samples',
+  'changed lines',
+] as const;
 const widths = [
   Math.max(...rows.map((r) => r.fixture.length), 7),
   Math.max(...rows.map((r) => r.scenario.length), 8),
   Math.max(...rows.map((r) => r.median.length), 6),
   Math.max(...rows.map((r) => r.p95.length), 4),
-  Math.max(...rows.map((r) => r.lines.length), 11),
+  Math.max(...rows.map((r) => r.samples.length), 7),
+  Math.max(...rows.map((r) => r.lines.length), 13),
 ];
 console.log(cols.map((c, i) => pad(c, widths[i], i >= 2)).join('   '));
 let lastFixture = '';
@@ -255,7 +255,8 @@ for (const r of rows) {
       pad(r.scenario, widths[1]),
       pad(r.median, widths[2], true),
       pad(r.p95, widths[3], true),
-      pad(r.lines, widths[4], true),
+      pad(r.samples, widths[4], true),
+      pad(r.lines, widths[5], true),
     ].join('   ')
   );
   lastFixture = r.fixture;

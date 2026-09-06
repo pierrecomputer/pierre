@@ -14,7 +14,7 @@ import {
   themeColor,
   tokenKinds,
   wordColor,
-} from './util';
+} from './_util';
 
 let sql: TestLang;
 t.before(() => (sql = loadLang('sql', '$hlSql')));

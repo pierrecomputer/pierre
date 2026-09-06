@@ -170,7 +170,7 @@ stays empty. Any zero record inherits the `<pre>` foreground without a span.
 
 The emitter writes lowercase `#rrggbb`, adds alpha only when non-opaque, and
 appends font attributes. It compares 40-bit records to merge equal styles.
-CSS-variable mode bypasses the table, emits `var(--cha-<token>)`, and merges
+CSS-variable mode bypasses the table, emits `var(--hls-<token>)`, and merges
 only identical token types.
 
 ## Emitter contract (src/emit.wat, src/scan.wat)

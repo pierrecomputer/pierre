@@ -1,17 +1,30 @@
 export interface Measurement {
   median: number;
+  p95: number;
   samples: number;
   iterations: number;
+}
+
+export interface MeasurementCase {
+  run: () => unknown;
+  /** Untimed cleanup after each call, including warmup. */
+  afterEach?: () => void;
 }
 
 // Keep results observable without walking outputs of different sizes.
 export let lastResult: unknown;
 
-// Warm every contender, then rotate batches so each gets the same timed budget.
-// Each sample is the per-call average of a batch calibrated to about 5 ms.
-export function measure(cases: (() => unknown)[]): Measurement[] {
-  const states = cases.map((fn) => ({
-    fn,
+// Warm every contender, then rotate batches with the same budget per case.
+// Throughput samples average ~5 ms batches; batch:false measures call latency.
+// Cleanup is excluded from samples but counts toward the runtime budget;
+// otherwise fast edits with expensive deferred work can run for minutes.
+// Cases with cleanup always run one call per sample.
+export function measure(
+  cases: readonly ((() => unknown) | MeasurementCase)[],
+  { batch = true }: { batch?: boolean } = {}
+): Measurement[] {
+  const states = cases.map((entry) => ({
+    ...(typeof entry === 'function' ? { run: entry } : entry),
     batch: 1,
     elapsed: 0,
     iterations: 0,
@@ -19,7 +32,7 @@ export function measure(cases: (() => unknown)[]): Measurement[] {
   }));
   for (const warmup of [true, false]) {
     const budget = warmup ? 200 : 1500;
-    const minimum = warmup ? 3 : 10;
+    const minimum = warmup ? 3 : 20;
     for (const state of states) {
       state.elapsed = 0;
       state.iterations = 0;
@@ -35,12 +48,18 @@ export function measure(cases: (() => unknown)[]): Measurement[] {
           continue;
         }
         complete = false;
+        let elapsed: number;
         const start = performance.now();
-        for (let i = 0; i < state.batch; i++) lastResult = state.fn();
-        const elapsed = performance.now() - start;
-        state.elapsed += elapsed;
+        try {
+          for (let i = 0; i < state.batch; i++) lastResult = state.run();
+        } finally {
+          elapsed = performance.now() - start;
+          state.afterEach?.();
+        }
+        state.elapsed +=
+          state.afterEach == null ? elapsed : performance.now() - start;
         state.iterations += state.batch;
-        if (warmup) {
+        if (warmup && batch && state.afterEach == null) {
           state.batch = Math.max(
             1,
             Math.min(
@@ -48,7 +67,7 @@ export function measure(cases: (() => unknown)[]): Measurement[] {
               Math.ceil((state.batch * 5) / Math.max(elapsed, 0.001))
             )
           );
-        } else {
+        } else if (!warmup) {
           state.samples.push(elapsed / state.batch);
         }
       }
@@ -63,6 +82,7 @@ export function measure(cases: (() => unknown)[]): Measurement[] {
         samples.length % 2 === 0
           ? (samples[middle - 1] + samples[middle]) / 2
           : samples[middle],
+      p95: samples[Math.ceil(samples.length * 0.95) - 1],
       samples: samples.length,
       iterations,
     };

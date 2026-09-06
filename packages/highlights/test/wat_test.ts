@@ -13,7 +13,7 @@ import {
   type TestLang,
   themeColor,
   tokenKinds,
-} from './util';
+} from './_util';
 
 let wat: TestLang;
 t.before(() => (wat = loadLang('wat', '$hlWat')));

@@ -73,7 +73,7 @@ import vitesseBlackJson from './vitesse-black.json' with { type: 'json' };
 import vitesseDarkJson from './vitesse-dark.json' with { type: 'json' };
 import vitesseLightJson from './vitesse-light.json' with { type: 'json' };
 
-/** A pass-through theme: every color resolves to its `var(--cha-*)` variable. */
+/** A pass-through theme: every color resolves to its `var(--hls-*)` variable. */
 export const cssVariables: Theme = {
   name: 'CSS Variables',
   appearance: 'dark',
@@ -89,16 +89,16 @@ export function toCSS({ style }: Theme): string {
   const foreground =
     style['editor.foreground'] ?? style.text ?? style.foreground;
   if (background) {
-    css += `--cha-background: ${background};`;
+    css += `--hls-background: ${background};`;
   }
   if (foreground) {
-    css += `--cha-foreground: ${foreground};`;
+    css += `--hls-foreground: ${foreground};`;
   }
   if (style.syntax != null) {
     for (const [name, value] of Object.entries(style.syntax)) {
       const color = typeof value === 'string' ? value : value.color;
       if (color) {
-        css += `--cha-${name.replace(/[._]/g, '-')}: ${color};`;
+        css += `--hls-${name.replace(/[._]/g, '-')}: ${color};`;
       }
     }
   }

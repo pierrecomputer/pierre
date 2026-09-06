@@ -7,7 +7,7 @@ import type { Theme } from '../lib/index';
 import tokenTypes from '../lib/token-types';
 import { transformWat, wat2wasm } from '../scripts/build';
 import * as themes from '../themes/index';
-import { checkInvariants, loadLang, spansOf } from './util';
+import { checkInvariants, loadLang, spansOf } from './_util';
 
 const {
   cssVariables,
@@ -215,8 +215,8 @@ void test('toCSS: converts a theme to custom properties', () => {
   const css = toCSS(pierreDark);
   assert.ok(
     css.startsWith(
-      '--cha-background: #0a0a0a;--cha-foreground: #fafafa;' +
-        '--cha-comment: #737373;--cha-comment-doc: #737373;'
+      '--hls-background: #0a0a0a;--hls-foreground: #fafafa;' +
+        '--hls-comment: #737373;--hls-comment-doc: #737373;'
     )
   );
 });
@@ -229,15 +229,15 @@ void test('css variables: exported theme selects the dedicated mode', () => {
 void test('css variables: renderer emits custom properties', () => {
   assert.equal(
     checkInvariants(tsx.hl, 'const a = 1', { theme: cssVariables }),
-    `<pre class="highlights" style="background-color:var(--cha-background);color:var(--cha-foreground);"><code>` +
-      `<span style="color:var(--cha-keyword-declaration)">const </span>` +
-      `<span style="color:var(--cha-variable)">a </span>` +
-      `<span style="color:var(--cha-operator)">= </span>` +
-      `<span style="color:var(--cha-number)">1</span></code></pre>`
+    `<pre class="highlights" style="background-color:var(--hls-background);color:var(--hls-foreground);"><code>` +
+      `<span style="color:var(--hls-keyword-declaration)">const </span>` +
+      `<span style="color:var(--hls-variable)">a </span>` +
+      `<span style="color:var(--hls-operator)">= </span>` +
+      `<span style="color:var(--hls-number)">1</span></code></pre>`
   );
   assert.match(
     checkInvariants(json.hl, '{"key": 1}', { theme: cssVariables }),
-    /color:var\(--cha-property-json-key\)/
+    /color:var\(--hls-property-json-key\)/
   );
 });
 
@@ -273,6 +273,6 @@ void test('css variables: bypasses compilation and ignores theme styles', () => 
   };
   const html = checkInvariants(tsx.hl, 'const', { theme });
   assert.equal(styleReads, 0);
-  assert.match(html, /color:var\(--cha-keyword-declaration\)/);
+  assert.match(html, /color:var\(--hls-keyword-declaration\)/);
   assert.doesNotMatch(html, /#000000|font-style|font-weight/);
 });

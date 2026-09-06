@@ -1,3 +1,5 @@
+import type { Lang } from '../lib/index';
+
 /**
  * One realistic, multi-line source sample per built-in lexer, shared by the
  * cross-language conformance suite. Every sample mixes the constructs a lexer
@@ -3382,3 +3384,130 @@ export const samples: Record<string, LangSample> = {
     ],
   },
 };
+
+/** Short documents with multiline constructs and Unicode for tokenizer tests. */
+export const tokenizerSamples: [Lang, string][] = [
+  ['plain', 'one\ntwo\n'],
+  ['asm', 'start:\n  /* open\nstill */\n  mov eax, 1\n'],
+  ['astro', '---\nconst title = "x"\n---\n<h1>{\nformat({ title })\n}</h1>\n'],
+  ['bash', 'cat <<EOF\nhello $USER\nEOF\necho done\n'],
+  ['c', 'int x; /* open\nstill comment */\nint y;\n'],
+  ['cpp', 'auto s = R"tag(one\ntwo)tag";\n'],
+  ['css', '.a {\n  color: red; /* note\nspans lines */\n}\n'],
+  ['diff', '@@ -1 +1 @@\n-old\n+new\n'],
+  ['glsl', 'void main() { /* open\nstill */ return;\n}\n'],
+  ['go', 'var s = `one\ntwo`\n'],
+  ['haskell', 'x = 1 {- open\nstill -}\ny = 2\n'],
+  ['html', '<script>\nconst x = 1\n</script>\n'],
+  ['js', 'const view = `one ${\nvalue\n}`;\n'],
+  ['jsx', 'const view = <Box value={{\n  x: 1\n}} />;\n'],
+  ['jsonc', '{ /* open\nstill */ "x": 1\n}\n'],
+  ['kotlin', 'val s = """one\ntwo"""\n'],
+  ['lua', 'local s = [[one\ntwo]]\n'],
+  ['markdown', '# title\n\n```js\nlet a = 1\n```\ntail'],
+  ['markdown', '````md\n```\ninner\n```\n````\n> ```\n> quoted\n> ```\n'],
+  ['mdx', '<Box value={{\n  x: 1\n}} />\n<p>{\nformat({ x: 1 })\n}</p>\n'],
+  ['php', '<p>x</p>\n<?php\nfunction f() { return 1; }\n?>\n'],
+  ['python', 'def f():\n    return """doc\nstring"""\n'],
+  ['rust', 'let s = r#"one\ntwo"#;\n'],
+  ['sql', 'SELECT $tag$one\ntwo$tag$;\n'],
+  ['svelte', '<script>\nlet x = 1;\n</script>\n<p>{\nformat({ x })\n}</p>\n'],
+  ['swift', 'let s = """one\ntwo"""\n'],
+  ['toml', 'x = """one\ntwo"""\n'],
+  ['ts', 'interface Box {\n  value?: string\n}\n'],
+  [
+    'tsx',
+    '/**\n * @param {string} name\n */\n' +
+      'const view = <Box title="hello\nworld">text\n{value}</Box>\n' +
+      'const joined = "a\\\nb";\n',
+  ],
+  [
+    'vue',
+    '<script setup>\nconst x = 1\n</script>\n<template>{{\nformat({ x })\n}}</template>\n',
+  ],
+  ['wat', '(; open\nstill ;)\n(module)\n'],
+  ['xml', '<![CDATA[one\ntwo]]>\n<root/>\n'],
+  ['yaml', 'message: |\n  one: # literal\n  two\nitems: [\n  one,\n  two\n]\n'],
+  ['c3', 'String s = `one\ntwo`;\n/* a /* b */ c */\nint x;\n'],
+  ['csharp', 'var s = @"one\ntwo";\nvar t = $"a {x} b";\n'],
+  ['dart', "var s = '''one\n$x two''';\nvar y = 1;\n"],
+  ['elixir', 'x = """\none #{y}\n"""\nz = 1\n'],
+  ['hlsl', 'float4 main() { /* open\nstill */ return 0; }\n'],
+  ['java', 'String s = """\n  one\n  two""";\nint x;\n'],
+  ['less', '.a {\n  color: @c; /* note\nspans lines */\n}\n'],
+  ['lisp', '#| open\nstill |#\n(defun f () "multi\nline")\n'],
+  ['objc', 'NSString *s = @"a"; /* open\nstill */\nint x;\n'],
+  ['ocaml', 'let s = {id|one\ntwo|id} (* open\nstill *)\nlet x = 1\n'],
+  [
+    'perl',
+    'my $s = <<"EOT";\nhello $x\nEOT\n=head1 doc\ntext\n=cut\nprint 1;\n',
+  ],
+  ['proto', 'message A { /* open\nstill */ int32 x = 1; }\n'],
+  ['ruby', 'x = <<~EOS\n  hi #{y}\nEOS\n=begin\nblock\n=end\nz = %w[a\nb]\n'],
+  ['sass', '// note\n.a\n  color: red\n  &:hover\n    color: blue\n'],
+  [
+    'scss',
+    '.a {\n  color: red; /* note\nspans lines */\n  .b { c: #{$d}; }\n}\n',
+  ],
+  ['terraform', 'x = <<-EOT\n  hello ${var.y}\n  EOT\ny = "a ${z} b"\n'],
+  ['wgsl', 'fn f() { /* open\nstill */ return; }\n'],
+  [
+    'dockerfile',
+    'RUN apt-get update && \\\n    apt-get install -y curl\nRUN <<EOF\necho $HOME\nEOF\nCMD ["a"]\n',
+  ],
+  ['erlang', 'f() ->\n    "one\ntwo".\n'],
+  ['gleam', 'pub fn main() {\n  "one\ntwo"\n}\n'],
+  ['graphql', '"""\ndoc\n"""\ntype A { x: Int }\n'],
+  [
+    'powershell',
+    '<# open\nstill #>\n$x = @"\nmulti $y $(1 +\n2)\n"@\n"a $(\n$b\n) c"\n',
+  ],
+  ['r', 'x <- "one\ntwo"\ny <- r"(a\nb)"\n'],
+  ['scala', 'val s = s"""one ${\n  x\n} two"""\nval y = 1\n'],
+  ['clojure', '(defn f [x]\n  "multi\nline" #"re\ngex")\n'],
+  [
+    'cmake',
+    'set(X "multi\n${Y} line")\n#[[ block\ncomment ]]\nmessage([[raw\ntext]])\n',
+  ],
+  [
+    'fsharp',
+    'let s = """one\ntwo"""\nlet t = $"a {\n  x\n} b"\n(* open\nstill *)\nlet y = 1\n',
+  ],
+  [
+    'groovy',
+    'def s = """one ${\n  x\n} two"""\ndef t = \'\'\'a\nb\'\'\'\n/* open\nstill */\ndef y = 1\n',
+  ],
+  ['julia', 's = """one $(\n  x\n) two"""\n#= open\nstill =#\ny = "a\nb"\n'],
+  [
+    'makefile',
+    'SRCS = a.c \\\n       b.c\nall: $(SRCS)\n\t$(CC) -o $@ \\\n\t  $^\ndefine M\n\techo $(1)\nendef\n',
+  ],
+  ['matlab', '%{\nblock\n%}\nx = [1 2 ...\n     3];\n'],
+  [
+    'nix',
+    "x = \"one ${\n  y\n} two\";\nz = ''\n  multi ${a}\n'';\n/* open\nstill */\nw = 1;\n",
+  ],
+  ['pascal', '{ open\nstill }\n(* also\nopen *)\nx := 1;\n'],
+  ['zig', 'const s = \\\\one\n  \\\\two\n;\n'],
+  // parameter lists split across lines: the signature-tracking state must
+  // ride the interned line-state blobs
+  [
+    'ts',
+    'function make(\n  first: string,\n  last = "x",\n  ...rest: number[]\n) { return first }\n',
+  ],
+  [
+    'python',
+    'def make(\n    first,\n    second="x",\n    *rest,\n):\n    return first\n',
+  ],
+  // multi-byte and astral text, CRLF/CR/LF terminators, and NUL
+  ['ts', 'const é = "日本語"\nconst x = 1 // 🎈🎈\nlet y = 2\n'],
+  ['ts', 'const a = 1\r\nconst b = `x\r\ny`\r\nconst c = 3'],
+  ['ts', 'let x = 1 \r let y = 2\nz\n'],
+  ['ts', 'const a = 1\rconst b = `x\ry`\rconst c = 3'],
+  ['ts', 'mixed = 1\r\nlet two = 2\rlet three = 3\nlet four = 4\r'],
+  ['ts', 'const z = "a\0b"\nlet q = 1\n'],
+  [
+    'rust',
+    'fn make(\n    first: i32,\n    second: Vec<u8>,\n) -> i32 { first }\n',
+  ],
+];

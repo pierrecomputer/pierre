@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import t from 'node:test';
 
 import { LANGS } from '../lib/highlighter';
-import type { Lang, Theme, ThemedToken } from '../lib/index';
+import type { Lang, ThemedToken } from '../lib/index';
 import {
   codeToHtml,
   codeToTokens,
@@ -13,11 +13,20 @@ import {
 } from '../lib/index';
 import tokenTypes from '../lib/token-types';
 import { transformWat, wat2wasm } from '../scripts/build';
-import { samples } from './samples';
-import { bodyOf, loadSplitLang, spansOf, textOf } from './util';
+import { samples } from './_samples';
+import {
+  bodyOf,
+  distinctTheme as distinct,
+  flatTokens as flat,
+  kindOfColor,
+  loadSplitLang,
+  makeRand,
+  spansOf,
+  textOf,
+} from './_util';
 
 // The same contract, checked for every built-in lexer against its corpus
-// sample (test/samples.ts): the sample must reach every token kind it
+// sample (test/_samples.ts): the sample must reach every token kind it
 // promises; HTML and token output must describe the same runs and lose no
 // byte; streaming must not depend on where chunks are cut; CRLF must
 // tokenize like LF; a run over malformed input must not leak state into the
@@ -45,27 +54,6 @@ const languageEnum = compiled.enumMap.get('$Language') as Record<
 /** Every lexer name in enum order; `plain` has no lexer and no sample. */
 const lexers = Object.keys(languageEnum).filter((name) => name !== 'plain');
 
-// one unique color per token type so equal styles cannot merge neighboring
-// tokens and hide a classification behind a same-colored neighbor
-const names = tokenTypes.filter(
-  (name) => !['background', 'foreground', 'none'].includes(name)
-);
-const distinct = {
-  name: 'distinct',
-  appearance: 'dark',
-  style: {
-    background: '#000000',
-    foreground: '#ffffff',
-    syntax: Object.fromEntries(
-      names.map((name, i) => [name, '#' + (0x100000 + i * 0x101).toString(16)])
-    ),
-  },
-} as unknown as Theme;
-const nameOfColor = new Map(
-  names.map((name, i) => ['#' + (0x100000 + i * 0x101).toString(16), name])
-);
-const FOREGROUND = '#ffffff';
-
 // Bun 1.4's JavaScriptCore can return one wrong result from a hot SIMD
 // scanner at the moment it tiers up (an identifier run cut after 8 bytes; the
 // next call with the same input is right again, and BUN_JSC_useOMGJIT=0 hides
@@ -83,8 +71,7 @@ for (let round = 0; round < 240; round++) {
 
 /** The token kind name behind a themed token's color; plain text is `none`. */
 function kindOf(token: ThemedToken): string {
-  if (token.color === undefined || token.color === FOREGROUND) return 'none';
-  return nameOfColor.get(token.color) ?? token.color;
+  return kindOfColor(token.color) ?? 'none';
 }
 
 /** Whole-buffer tokens for `code` under the distinct theme. */
@@ -95,17 +82,6 @@ function tokensOf(lang: Lang, code: string): ThemedToken[][] {
 /** Whole-buffer HTML for `code` under the distinct theme. */
 function htmlOf(lang: Lang, code: string): string {
   return dec.decode(codeToHtml(code, { lang, theme: distinct }));
-}
-
-/** Token content and kind per line, for readable diffs. */
-function flat(lines: ThemedToken[][]): string {
-  return lines
-    .map((line) =>
-      line
-        .map((tok) => `${JSON.stringify(tok.content)}:${kindOf(tok)}`)
-        .join(' ')
-    )
-    .join('\n');
 }
 
 /** Tokens for `code` fed to a StreamTokenizer in the given chunks. */
@@ -130,15 +106,6 @@ function byLines(code: string, n: number): string[] {
     out.push(lines.slice(i, i + n).join(''));
   }
   return out;
-}
-
-/** Deterministic 32-bit LCG for reproducible fuzzing. */
-function makeRand(seed: number): () => number {
-  let state = seed >>> 0;
-  return () => {
-    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
-    return state >>> 4;
-  };
 }
 
 /** Cut `code` into chunks of 1..17 UTF-16 units chosen by `rand`. */
@@ -220,7 +187,11 @@ function checkTokensLossless(lang: Lang, code: string, lines: ThemedToken[][]) {
   );
   let rebuilt = '';
   for (const [i, line] of lines.entries()) {
-    rebuilt += line.map((tok) => tok.content).join('');
+    for (const tok of line) {
+      assert.ok(tok.content.length > 0, `${lang}: empty token on line ${i}`);
+      assert.equal(tok.offset, rebuilt.length, `${lang}: offset on line ${i}`);
+      rebuilt += tok.content;
+    }
     if (i < terminators.length) rebuilt += terminators[i];
   }
   assert.equal(
@@ -363,43 +334,32 @@ for (const name of lexers) {
     checkTokensLossless(lang, sample, whole);
     const html = checkHtml(lang, sample);
     assert.deepEqual(htmlRuns(html), tokenRuns(whole), `${name}: runs`);
-    // every token stays inside its line and offsets tile the input
-    let expected = 0;
-    for (const line of whole) {
-      for (const tok of line) {
-        assert.equal(tok.offset, expected, `${name}: offset of ${tok.content}`);
-        assert.ok(!tok.content.includes('\n'), `${name}: newline in token`);
-        expected += tok.content.length;
-      }
-      const nl = sample.indexOf('\n', expected);
-      expected = nl === -1 ? sample.length : nl + 1;
-    }
   });
 
   void t.test(
     `${name}: streaming matches the whole buffer however it is cut`,
     () => {
-      const whole = flat(tokensOf(lang, sample));
-      assert.equal(
-        flat(streamed(lang, byLine(sample))),
+      const whole = tokensOf(lang, sample);
+      assert.deepEqual(
+        streamed(lang, byLine(sample)),
         whole,
         `${name}: one line per chunk`
       );
-      assert.equal(
-        flat(streamed(lang, byLines(sample, 2))),
+      assert.deepEqual(
+        streamed(lang, byLines(sample, 2)),
         whole,
         `${name}: two lines per chunk`
       );
-      assert.equal(
-        flat(streamed(lang, byLines(sample, 3))),
+      assert.deepEqual(
+        streamed(lang, byLines(sample, 3)),
         whole,
         `${name}: three lines per chunk`
       );
-      assert.equal(flat(streamed(lang, [sample])), whole, `${name}: one chunk`);
+      assert.deepEqual(streamed(lang, [sample]), whole, `${name}: one chunk`);
       const rand = makeRand(0x5eed0000 + lexers.indexOf(name));
       for (let round = 0; round < 4; round++) {
-        assert.equal(
-          flat(streamed(lang, randomChunks(sample, rand))),
+        assert.deepEqual(
+          streamed(lang, randomChunks(sample, rand)),
           whole,
           `${name}: random chunks, round ${round}`
         );
@@ -408,10 +368,10 @@ for (const name of lexers) {
       const crlf = sample.replace(/\n/g, '\r\n');
       const crlfWhole = tokensOf(lang, crlf);
       checkTokensLossless(lang, crlf, crlfWhole);
-      assert.equal(flat(crlfWhole), whole, `${name}: CRLF whole`);
-      assert.equal(
-        flat(streamed(lang, byLine(crlf))),
-        whole,
+      assert.equal(flat(crlfWhole), flat(whole), `${name}: CRLF whole`);
+      assert.deepEqual(
+        streamed(lang, byLine(crlf)),
+        crlfWhole,
         `${name}: CRLF line-fed`
       );
       checkHtml(lang, crlf);
@@ -427,9 +387,9 @@ for (const name of lexers) {
         const prefix = lines.slice(0, n).join('');
         const whole = tokensOf(lang, prefix);
         checkTokensLossless(lang, prefix, whole);
-        assert.equal(
-          flat(streamed(lang, lines.slice(0, n))),
-          flat(whole),
+        assert.deepEqual(
+          streamed(lang, lines.slice(0, n)),
+          whole,
           `${name}: ${n} of ${lines.length} lines`
         );
         checkHtml(lang, prefix);
@@ -439,7 +399,7 @@ for (const name of lexers) {
 
   void t.test(`${name}: malformed runs leave no state behind`, () => {
     const pristineHtml = checkHtml(lang, sample);
-    const pristineTokens = flat(tokensOf(lang, sample));
+    const pristineTokens = tokensOf(lang, sample);
     const bytes = enc.encode(sample);
     // the sample cut at arbitrary byte offsets, including inside multi-byte
     // characters, then every opener alone and glued to a cut
@@ -464,8 +424,8 @@ for (const name of lexers) {
       pristineHtml,
       `${name}: html after junk`
     );
-    assert.equal(
-      flat(tokensOf(lang, sample)),
+    assert.deepEqual(
+      tokensOf(lang, sample),
       pristineTokens,
       `${name}: tokens after junk`
     );
@@ -475,8 +435,8 @@ for (const name of lexers) {
       streamed(lang, byLine(head + opener));
       streamed(lang, [opener]);
     }
-    assert.equal(
-      flat(streamed(lang, byLine(sample))),
+    assert.deepEqual(
+      streamed(lang, byLine(sample)),
       pristineTokens,
       `${name}: stream after junk`
     );
