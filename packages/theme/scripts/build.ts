@@ -1,6 +1,11 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 
 import { convertRolesToP3 } from '../src/color';
+import {
+  createFigmaPrimitives,
+  createFigmaSemanticMode,
+  stringifyFigmaTokens,
+} from '../src/createFigmaTokens';
 import { createTheme } from '../src/createTheme';
 import { createZedTheme } from '../src/createZedTheme';
 import {
@@ -16,6 +21,7 @@ import {
 
 mkdirSync('themes', { recursive: true });
 mkdirSync('zed/themes', { recursive: true });
+mkdirSync('figma/semantic', { recursive: true });
 
 // Convert palettes to Display P3 color space
 const rolesLightP3 = convertRolesToP3(rolesLight);
@@ -160,6 +166,41 @@ writeFileSync(
   'utf8'
 );
 console.log('Wrote zed/themes/pierre.json');
+
+// ============================================
+// Figma variables (DTCG design tokens)
+// ============================================
+// Each semantic file becomes one Figma mode on import, listed light-first so
+// dragging them in together makes light the collection's default mode.
+const figmaSemanticModes = [
+  { file: 'figma/semantic/light.json', roles: rolesLight },
+  { file: 'figma/semantic/light-soft.json', roles: rolesLightSoft },
+  {
+    file: 'figma/semantic/light-protanopia-deuteranopia.json',
+    roles: rolesProtanDeutanLight,
+  },
+  { file: 'figma/semantic/light-tritanopia.json', roles: rolesTritanopiaLight },
+  { file: 'figma/semantic/dark.json', roles: rolesDark },
+  { file: 'figma/semantic/dark-soft.json', roles: rolesDarkSoft },
+  {
+    file: 'figma/semantic/dark-protanopia-deuteranopia.json',
+    roles: rolesProtanDeutanDark,
+  },
+  { file: 'figma/semantic/dark-tritanopia.json', roles: rolesTritanopiaDark },
+];
+
+const figmaDocuments = [
+  { file: 'figma/primitives.json', document: createFigmaPrimitives() },
+  ...figmaSemanticModes.map(({ file, roles }) => ({
+    file,
+    document: createFigmaSemanticMode(roles),
+  })),
+];
+
+for (const { file, document } of figmaDocuments) {
+  writeFileSync(file, stringifyFigmaTokens(document), 'utf8');
+  console.log('Wrote', file);
+}
 
 // ============================================
 // ESM wrapper modules (for npm / Shiki consumers)

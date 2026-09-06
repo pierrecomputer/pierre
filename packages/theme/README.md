@@ -43,6 +43,19 @@ Usage:
  Zed:
   Install "Pierre" from the Zed extension registry
 
+ Figma:
+  Variables ship as DTCG design tokens under figma/
+
+  1. Variables view > create a collection named exactly "Pierre Primitives",
+     then drag in figma/primitives.json
+  2. Create a second collection, then drag in all of figma/semantic/*.json
+     together — each file becomes a mode, and its values link back to the
+     primitives collection from step 1
+  3. Drag light.json in first so Light lands in the left-most column and
+     becomes the collection's default mode
+
+  The Vibrant variants are not exported: Figma imports sRGB and HSL only.
+
 ```
 
 ## Agent skill

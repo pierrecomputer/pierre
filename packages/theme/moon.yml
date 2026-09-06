@@ -15,6 +15,7 @@ tasks:
       - 'dist'
       - 'themes/*.json'
       - 'zed/themes/pierre.json'
+      - 'figma/**/*.json'
 
   # The generated-output suite reads themes/ and dist/ directly, so the
   # package build must run before tests just like the theming dist guards.
