@@ -190,7 +190,11 @@ export class FileTree
   readonly #density: FileTreeDensityPreset;
   readonly #viewOptions: Pick<
     FileTreeOptions,
-    'initialVisibleRowCount' | 'itemHeight' | 'overscan' | 'stickyFolders'
+    | 'initialVisibleRowCount'
+    | 'itemHeight'
+    | 'overscan'
+    | 'stickyFolders'
+    | 'flattenedSegmentsTruncation'
   >;
   #fileTreeContainer: HTMLElement | undefined;
   #gitStatusState: FileTreeGitStatusState | null;
@@ -230,6 +234,7 @@ export class FileTree
       stickyFolders,
       unsafeCSS,
       initialVisibleRowCount,
+      flattenedSegmentsTruncation,
       ...controllerOptions
     } = options;
     this.#composition = composition;
@@ -248,6 +253,7 @@ export class FileTree
       itemHeight: this.#density.itemHeight,
       overscan,
       stickyFolders,
+      flattenedSegmentsTruncation,
       initialVisibleRowCount,
     };
     this.#controller = new FileTreeController({
@@ -561,6 +567,7 @@ export class FileTree
     itemHeight?: number;
     overscan?: number;
     stickyFolders?: boolean;
+    flattenedSegmentsTruncation?: 'per-segment' | 'end';
   } {
     return {
       initialViewportHeight: resolveInitialViewportHeight({
@@ -570,6 +577,8 @@ export class FileTree
       itemHeight: this.#viewOptions.itemHeight,
       overscan: this.#viewOptions.overscan,
       stickyFolders: this.#viewOptions.stickyFolders,
+      flattenedSegmentsTruncation:
+        this.#viewOptions.flattenedSegmentsTruncation,
     };
   }
 
@@ -877,6 +886,7 @@ export function preloadFileTree(options: FileTreeOptions): FileTreeSsrPayload {
     searchFakeFocus,
     stickyFolders,
     unsafeCSS,
+    flattenedSegmentsTruncation,
     initialVisibleRowCount,
     ...controllerOptions
   } = options;
@@ -925,6 +935,7 @@ export function preloadFileTree(options: FileTreeOptions): FileTreeSsrPayload {
       searchEnabled: search === true,
       searchFakeFocus: searchFakeFocus === true,
       stickyFolders,
+      flattenedSegmentsTruncation,
       initialViewportHeight,
     })
   );
