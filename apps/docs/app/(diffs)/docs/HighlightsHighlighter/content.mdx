@@ -1,0 +1,282 @@
+## Highlights
+
+<Notice variant="warning" icon={<IconCiWarningFill />}>
+  Highlights is experimental and subject to change. Try the [interactive
+  playground](/highlights) before replacing Shiki in production.
+</Notice>
+
+Highlights is a small code highlighter with 65 hand-written language lexers in
+WebAssembly. It has no grammar downloads and can produce HTML, Shiki-compatible
+tokens, HAST, streamed tokens, or incrementally updated editor tokens.
+
+Install Highlights from npm:
+
+```sh
+pnpm add @pierre/highlights
+```
+
+The package runs in Node.js, browsers, and Cloudflare Workers. Its conditional
+exports select and initialize the matching WebAssembly loader automatically.
+
+### HTML
+
+`codeToHtml(input, options)` returns a self-contained `<pre class="highlights">`
+fragment as a `Uint8Array`. `input` can be a `string`, `Uint8Array`, or
+`ArrayBuffer`.
+
+<DocsCodeExample {...highlightsHtml} />
+
+The returned bytes are a zero-copy view of WebAssembly memory and remain valid
+only until the next call on that highlighter. Send or decode them immediately,
+or call `.slice()` before retaining them.
+
+### Tokens and HAST
+
+`codeToTokens()` returns one `ThemedToken[]` per line, with absolute UTF-16
+offsets. The result also includes `fg`, `bg`, `themeName`, and `rootStyle` when
+the selected theme provides them. `codeToHast()` returns the classic
+`root > pre > code > span.line` tree used by Shiki.
+
+<DocsCodeExample {...highlightsTokensAndHast} />
+
+HAST output supports range `decorations`, mutable `meta`, and Shiki-style
+`preprocess`, `tokens`, `span`, `line`, `code`, `pre`, and `root` transformer
+hooks. It supports the classic structure and does not run Shiki's `postprocess`
+hook.
+
+The shared token options are:
+
+| Option                  | Behavior                                                               |
+| ----------------------- | ---------------------------------------------------------------------- |
+| `lang`                  | A built-in language name or alias                                      |
+| `theme`                 | One Zed `Theme` or `ThemeFamily`                                       |
+| `themes`                | Named themes such as `{ dark, light }`; emits per-theme CSS properties |
+| `cssVariablePrefix`     | Prefix for multi-theme properties; defaults to `--hls-`                |
+| `defaultColor: false`   | Emits every theme color as a custom property                           |
+| `tokenizeMaxLineLength` | Collapses longer lines into one unthemed token for DOM safety          |
+
+Choose either `theme` or `themes`. `codeToHtml()` accepts one `theme`, while the
+token and HAST APIs accept either form.
+
+### Streaming
+
+`StreamTokenizer` owns an isolated WebAssembly instance, preserves lexer state
+between chunks, and tokenizes each completed chunk once. Token offsets stay
+relative to the complete stream.
+
+<DocsCodeExample {...highlightsStream} />
+
+`pushCode(chunk)` accepts strings and returns only completed lines. `end()`
+returns the remaining lines, including the empty final line after a trailing
+terminator. Call `dispose()` when the stream is no longer needed; calling
+`end()` also finishes it.
+
+### Incremental editing
+
+`LiveTokenizer` keeps the document, line table, token records, and per-line
+lexer states in WebAssembly. Edits are batched UTF-16 range replacements. It
+re-tokenizes from the first changed line until the outgoing lexer state matches
+the pre-edit state.
+
+<DocsCodeExample {...highlightsLive} />
+
+Passing a half-open `renderRange: [startLine, endLine]` bounds synchronous work
+to the visible area. Updated visible lines are returned in `update.lines`; other
+lines arrive through `onDeferTokenize`. Without a range, updates converge
+synchronously and `update.lines` is empty, so read changed lines with
+`lineChanges` and `getLineTokens()`.
+
+| Member                                          | Purpose                                                    |
+| ----------------------------------------------- | ---------------------------------------------------------- |
+| `revision`, `lineCount`, `pendingTokenization`  | Current document and deferred-work state                   |
+| `applyEdits(edits, options?)`                   | Apply a validated edit batch                               |
+| `reset(code, options?)`                         | Replace the complete document                              |
+| `getLineLength()`, `getLineText()`, `getText()` | Read the exact document, preserving `LF`, `CRLF`, and `CR` |
+| `getLineTokens()`                               | Read themed tokens and bracket-ignored ranges for one line |
+| `getLineRecords()`                              | Read a zero-copy packed token-record view                  |
+| `flush()`, `pause()`, `resume()`                | Control deferred tokenization                              |
+| `dispose()`                                     | Release the isolated WebAssembly instance                  |
+
+`getLineRecords()` views are invalidated by the next edit, reset, deferred
+slice, or disposal. Copy `.data` when ownership is required. `tokenNames` maps
+each packed token ID to its syntax-scope name.
+
+### Themes
+
+Highlights accepts Zed `Theme` and `ThemeFamily` objects. It bundles the 65
+themes in Shiki's catalog plus eight Pierre themes. Import named themes from
+`@pierre/highlights/themes`, use a per-theme default subpath such as
+`@pierre/highlights/themes/vitesse-dark`, or lazy-load by ID through the
+`themes` map.
+
+<DocsCodeExample {...highlightsThemes} />
+
+`cssVariables` emits `var(--hls-*)` colors, while `toCSS(theme)` creates the
+matching declarations from any Zed theme. CSS-variable mode controls colors
+only; it ignores the theme's `font_style` and `font_weight` values.
+
+### Languages
+
+Highlights currently supports the following languages:
+
+- `plain`
+- `asm`
+- `astro`
+- `bash`
+- `c`
+- `c3`
+- `clojure`
+- `cmake`
+- `cpp`
+- `csharp`
+- `css`
+- `dart`
+- `diff`
+- `dockerfile`
+- `elixir`
+- `erlang`
+- `fsharp`
+- `gleam`
+- `glsl`
+- `go`
+- `graphql`
+- `groovy`
+- `haskell`
+- `hlsl`
+- `html`
+- `java`
+- `js`
+- `json`
+- `jsx`
+- `julia`
+- `kotlin`
+- `less`
+- `lisp`
+- `lua`
+- `makefile`
+- `markdown`
+- `matlab`
+- `mdx`
+- `nix`
+- `objc`
+- `ocaml`
+- `pascal`
+- `perl`
+- `php`
+- `powershell`
+- `proto`
+- `python`
+- `r`
+- `ruby`
+- `rust`
+- `sass`
+- `scala`
+- `scss`
+- `sql`
+- `svelte`
+- `swift`
+- `terraform`
+- `toml`
+- `ts`
+- `tsx`
+- `vue`
+- `wat`
+- `wgsl`
+- `xml`
+- `yaml`
+- `zig`
+
+The `Lang` type includes aliases such as `sh`, `shell`, `zsh`, `py`, `rs`,
+`javascript`, `typescript`, `jsonc`, `patch`, `wasm`, `yml`, `cs`, `rb`, `ex`,
+`ml`, `tf`, `hcl`, `protobuf`, `objective-c`, `m`, `mm`, `docker`, `erl`, `gql`,
+`ps1`, `pwsh`, `sbt`, `clj`, `fs`, `gradle`, `jl`, `make`, `octave`, and
+`delphi`. Use `isSupportedLanguage(value)` to validate an arbitrary string and
+narrow it to `Lang`.
+
+### Diffs integration
+
+Register the adapter once before creating or rendering Diffs content. Highlights
+then powers files, file diffs, multi-file diffs, patch diffs, streams, React and
+vanilla renderers, SSR preloads, and edit mode.
+
+<DocsCodeExample {...highlightsDiffs} />
+
+`setHighlighter(highlightsHighlighter)` changes the process-wide Diffs
+highlighter. New renderers use it immediately, and existing file or diff
+renderers adopt it on their next render. Running streams and attached editors
+keep the implementation they captured until they are recreated. Pass
+`shikiHighlighter` back to `setHighlighter()` to restore the default.
+
+Theme names resolve to Highlights's bundled Zed themes. Diffs loads missing
+themes automatically, so components, SSR preload helpers, and streams do not
+need a separate `preloadHighlighter()` call. Use it only to warm themes before
+the first client render or before calling synchronous low-level render APIs. Its
+`langs` option has no effect with Highlights because languages are built in.
+Call `registerHighlightsTheme(name, theme)` before rendering to add or replace a
+name.
+
+For example, warm both default themes before mounting your app:
+
+<DocsCodeExample {...highlightsPreload} />
+
+Diffs maps common extra aliases including `angular-html`, `angular-ts`,
+`git-commit`, `git-rebase`, `objective-c`, `objective-cpp`, `riscv`,
+`shellscript`, and `shellsession`. Other unsupported languages render as plain
+text. Edit mode uses `LiveTokenizer`. The Diffs worker pool remains Shiki-only,
+so a registered custom highlighter renders on the main thread instead.
+
+### API reference
+
+#### `@pierre/highlights`
+
+The main entry exports the complete runtime and its public types:
+
+<DocsCodeExample {...highlightsApiRuntime} />
+
+`codeToHtml()` returns a zero-copy `Uint8Array` view of a complete `<pre>`
+fragment. `codeToTokens()` returns a `TokensResult`, and `codeToHast()` returns
+a `HastRoot`. All three accept a string, `Uint8Array`, or `ArrayBuffer`.
+
+`StreamTokenizer` owns an isolated WebAssembly instance. `pushCode(chunk)`
+returns tokens for completed lines, `end()` returns the remaining lines and
+disposes the stream, and `dispose()` discards an unfinished stream.
+
+`LiveTokenizer` owns the editable document and its incremental lexer state:
+
+- `applyEdits()` and `reset()` update the document.
+- `getLineLength()`, `getLineText()`, and `getText()` read the document.
+- `getLineTokens()` returns themed tokens and bracket-ignored ranges.
+- `getLineRecords()` returns zero-copy packed records; copy `data` with
+  `.slice()` before retaining it.
+- `pause()`, `resume()`, and `flush()` control deferred tokenization;
+  `pendingTokenization` reports unfinished work.
+- `revision` and `lineCount` expose document state, and `dispose()` releases the
+  instance.
+
+Pass `renderRange: [startLine, endLine]` to the constructor, `applyEdits()`, or
+`reset()` to bound synchronous work. Remaining lines are delivered in background
+slices through `onDeferTokenize`.
+
+`isSupportedLanguage()` validates language names and aliases. `tokenNames` maps
+raw `LiveTokenRecords` token IDs to syntax-scope names.
+
+Most applications do not call `init()` because the environment-specific entry
+point initializes the shared instance. `init()` and `createHighlighter()` are
+for embedders that manage their own compiled `WebAssembly.Module`.
+
+The public type surface is available from the same entry:
+
+<DocsCodeExample {...highlightsApiTypes} />
+
+#### `@pierre/highlights/themes`
+
+The themes entry exports `cssVariables`, `toCSS()`, the lazy `themes` loader
+map, and every bundled theme as a named `Theme`. Each theme is also available
+from a per-theme default subpath such as
+`@pierre/highlights/themes/vitesse-dark`.
+
+#### `@pierre/diffs/highlights`
+
+The Diffs adapter entry exports `highlightsHighlighter` as both its default and
+named export. `registerHighlightsTheme(name, theme)` adds or replaces a theme
+name before rendering.

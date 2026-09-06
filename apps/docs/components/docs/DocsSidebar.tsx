@@ -194,6 +194,14 @@ export function DocsSidebar({
             </MobileNavLink>
             {product.id === 'diffs' && (
               <MobileNavLink
+                href={`${product.basePath}/highlights`}
+                active={isActivePath(`${product.basePath}/highlights`)}
+              >
+                Highlights
+              </MobileNavLink>
+            )}
+            {product.id === 'diffs' && (
+              <MobileNavLink
                 href={
                   isTrees ? PRODUCTS.trees.basePath : getExternalUrl('trees')
                 }

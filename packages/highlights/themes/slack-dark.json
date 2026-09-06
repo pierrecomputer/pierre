@@ -1,0 +1,106 @@
+{
+  "name": "Slack Dark",
+  "appearance": "dark",
+  "style": {
+    "background": "#222222",
+    "editor.background": "#222222",
+    "text": "#E6E6E6",
+    "editor.foreground": "#E6E6E6",
+    "editor.active_line.background": "#141414",
+    "players": [
+      {
+        "cursor": "#E6E6E6"
+      }
+    ],
+    "syntax": {
+      "attribute": {
+        "color": "#9cdcfe"
+      },
+      "boolean": {
+        "color": "#569cd6"
+      },
+      "comment": {
+        "color": "#6A9955"
+      },
+      "comment.doc": {
+        "color": "#6A9955"
+      },
+      "constant": {
+        "color": "#569cd6"
+      },
+      "constructor": {
+        "color": "#569cd6"
+      },
+      "embedded": {
+        "color": "#D4D4D4"
+      },
+      "emphasis.strong": {
+        "color": "#569cd6",
+        "font_weight": 700
+      },
+      "function": {
+        "color": "#DCDCAA"
+      },
+      "keyword": {
+        "color": "#569cd6"
+      },
+      "number": {
+        "color": "#b5cea8"
+      },
+      "operator": {
+        "color": "#d4d4d4"
+      },
+      "preproc": {
+        "color": "#569cd6"
+      },
+      "property": {
+        "color": "#9cdcfe"
+      },
+      "punctuation": {
+        "color": "#808080"
+      },
+      "punctuation.bracket": {
+        "color": "#808080"
+      },
+      "punctuation.delimiter": {
+        "color": "#808080"
+      },
+      "punctuation.list_marker": {
+        "color": "#808080"
+      },
+      "punctuation.special": {
+        "color": "#808080"
+      },
+      "string": {
+        "color": "#ce9178"
+      },
+      "string.escape": {
+        "color": "#569cd6"
+      },
+      "string.regex": {
+        "color": "#ce9178"
+      },
+      "string.special": {
+        "color": "#ce9178"
+      },
+      "string.special.symbol": {
+        "color": "#ce9178"
+      },
+      "tag": {
+        "color": "#569cd6"
+      },
+      "text.literal": {
+        "color": "#ce9178"
+      },
+      "type": {
+        "color": "#4EC9B0"
+      },
+      "variable": {
+        "color": "#9CDCFE"
+      },
+      "variable.special": {
+        "color": "#569cd6"
+      }
+    }
+  }
+}

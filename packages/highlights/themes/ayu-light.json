@@ -1,0 +1,199 @@
+{
+  "name": "Ayu Light",
+  "appearance": "light",
+  "style": {
+    "background": "#dcdddeff",
+    "text": "#5c6166ff",
+    "editor.background": "#fcfcfcff",
+    "editor.foreground": "#5c6166ff",
+    "editor.active_line.background": "#ececedbf",
+    "search.match_background": "#3b9ee566",
+    "players": [
+      {
+        "cursor": "#3b9ee5ff",
+        "background": "#3b9ee5ff",
+        "selection": "#3b9ee53d"
+      },
+      {
+        "cursor": "#55b4d3ff",
+        "background": "#55b4d3ff",
+        "selection": "#55b4d33d"
+      },
+      {
+        "cursor": "#f98d3fff",
+        "background": "#f98d3fff",
+        "selection": "#f98d3f3d"
+      },
+      {
+        "cursor": "#a37accff",
+        "background": "#a37accff",
+        "selection": "#a37acc3d"
+      },
+      {
+        "cursor": "#4dbf99ff",
+        "background": "#4dbf99ff",
+        "selection": "#4dbf993d"
+      },
+      {
+        "cursor": "#ef7271ff",
+        "background": "#ef7271ff",
+        "selection": "#ef72713d"
+      },
+      {
+        "cursor": "#f1ad49ff",
+        "background": "#f1ad49ff",
+        "selection": "#f1ad493d"
+      },
+      {
+        "cursor": "#85b304ff",
+        "background": "#85b304ff",
+        "selection": "#85b3043d"
+      }
+    ],
+    "error": "#ef7271ff",
+    "warning": "#f1ad49ff",
+    "info": "#3b9ee5ff",
+    "hint": "#8ca7c2ff",
+    "syntax": {
+      "attribute": {
+        "color": "#3b9ee5ff"
+      },
+      "boolean": {
+        "color": "#a37accff"
+      },
+      "comment": {
+        "color": "#abb0b6ff"
+      },
+      "comment.doc": {
+        "color": "#898d90ff"
+      },
+      "constant": {
+        "color": "#a37accff"
+      },
+      "constructor": {
+        "color": "#3b9ee5ff"
+      },
+      "embedded": {
+        "color": "#5c6166ff"
+      },
+      "emphasis": {
+        "color": "#3b9ee5ff"
+      },
+      "emphasis.strong": {
+        "color": "#3b9ee5ff",
+        "font_weight": 700
+      },
+      "enum": {
+        "color": "#f98d3fff"
+      },
+      "function": {
+        "color": "#f2ad48ff"
+      },
+      "hint": {
+        "color": "#8ca7c2ff"
+      },
+      "keyword": {
+        "color": "#fa8d3eff"
+      },
+      "label": {
+        "color": "#3b9ee5ff"
+      },
+      "link_text": {
+        "color": "#f98d3fff",
+        "font_style": "italic"
+      },
+      "link_uri": {
+        "color": "#85b304ff"
+      },
+      "namespace": {
+        "color": "#5c6166ff"
+      },
+      "number": {
+        "color": "#a37accff"
+      },
+      "operator": {
+        "color": "#ed9365ff"
+      },
+      "predictive": {
+        "color": "#9eb9d3ff",
+        "font_style": "italic"
+      },
+      "preproc": {
+        "color": "#fa8d3eff"
+      },
+      "primary": {
+        "color": "#5c6166ff"
+      },
+      "property": {
+        "color": "#3b9ee5ff"
+      },
+      "punctuation": {
+        "color": "#73777bff"
+      },
+      "punctuation.bracket": {
+        "color": "#73777bff"
+      },
+      "punctuation.delimiter": {
+        "color": "#73777bff"
+      },
+      "punctuation.list_marker": {
+        "color": "#73777bff"
+      },
+      "punctuation.markup": {
+        "color": "#73777bff"
+      },
+      "punctuation.special": {
+        "color": "#a37accff"
+      },
+      "selector": {
+        "color": "#a37accff"
+      },
+      "selector.pseudo": {
+        "color": "#3b9ee5ff"
+      },
+      "string": {
+        "color": "#86b300ff"
+      },
+      "string.escape": {
+        "color": "#898d90ff"
+      },
+      "string.regex": {
+        "color": "#4bbf98ff"
+      },
+      "string.special": {
+        "color": "#e6ba7eff"
+      },
+      "string.special.symbol": {
+        "color": "#f98d3fff"
+      },
+      "tag": {
+        "color": "#3b9ee5ff"
+      },
+      "text.literal": {
+        "color": "#f98d3fff"
+      },
+      "title": {
+        "color": "#5c6166ff",
+        "font_weight": 700
+      },
+      "type": {
+        "color": "#389ee6ff"
+      },
+      "variable": {
+        "color": "#5c6166ff"
+      },
+      "variable.parameter": {
+        "color": "#a37accff"
+      },
+      "variant": {
+        "color": "#3b9ee5ff"
+      },
+      "diff.plus": {
+        "color": "#6cbf43ff"
+      },
+      "diff.minus": {
+        "color": "#ff6666ff"
+      }
+    }
+  }
+}

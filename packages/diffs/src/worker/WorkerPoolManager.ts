@@ -6,6 +6,7 @@ import { areLanguagesAttached } from '../highlighter/languages/areLanguagesAttac
 import { getResolvedLanguages } from '../highlighter/languages/getResolvedLanguages';
 import { hasResolvedLanguages } from '../highlighter/languages/hasResolvedLanguages';
 import { resolveLanguages } from '../highlighter/languages/resolveLanguages';
+import { getCustomHighlighter } from '../highlighter/resolve_highlighter';
 import { getSharedHighlighter } from '../highlighter/shared_highlighter';
 import { attachResolvedThemes } from '../highlighter/themes/attachResolvedThemes';
 import { getResolvedThemes } from '../highlighter/themes/getResolvedThemes';
@@ -158,7 +159,9 @@ export class WorkerPoolManager {
   }
 
   public isWorkingPool(): boolean {
-    return !this.workersFailed;
+    // Workers always highlight with shiki, so a custom highlighter registered
+    // via setHighlighter routes every render to the local (main-thread) path.
+    return !this.workersFailed && getCustomHighlighter() == null;
   }
 
   public getFileResultCache(file: FileContents): RenderFileResult | undefined {

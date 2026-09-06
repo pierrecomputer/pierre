@@ -1,0 +1,167 @@
+{
+  "name": "Rosé Pine",
+  "appearance": "dark",
+  "style": {
+    "background": "#191724",
+    "text": "#e0def4",
+    "editor.background": "#191724",
+    "editor.foreground": "#e0def4",
+    "editor.active_line.background": "#1f1d2e",
+    "search.match_background": "#f6c1774d",
+    "players": [
+      {
+        "cursor": "#e0def4",
+        "background": "#e0def4",
+        "selection": "#e0def422"
+      },
+      {
+        "cursor": "#9ccfd8",
+        "background": "#9ccfd8",
+        "selection": "#9ccfd844"
+      },
+      {
+        "cursor": "#c4a7e7",
+        "background": "#c4a7e7",
+        "selection": "#c4a7e744"
+      },
+      {
+        "cursor": "#31748f",
+        "background": "#31748f",
+        "selection": "#31748f44"
+      },
+      {
+        "cursor": "#eb6f92",
+        "background": "#eb6f92",
+        "selection": "#eb6f9244"
+      }
+    ],
+    "error": "#eb6f92",
+    "warning": "#f6c177",
+    "info": "#31748f",
+    "hint": "#908caa",
+    "syntax": {
+      "attribute": {
+        "color": "#c4a7e7"
+      },
+      "boolean": {
+        "color": "#ebbcba"
+      },
+      "comment": {
+        "color": "#6e6a86",
+        "font_style": "italic"
+      },
+      "comment.doc": {
+        "color": "#908caa"
+      },
+      "constant": {
+        "color": "#f6c177"
+      },
+      "constructor": {
+        "color": "#9ccfd8"
+      },
+      "embedded": {
+        "color": "#e0def4"
+      },
+      "emphasis": {
+        "color": "#c4a7e7",
+        "font_style": "italic"
+      },
+      "emphasis.strong": {
+        "color": "#9ccfd8",
+        "font_weight": 700
+      },
+      "enum": {
+        "color": "#31748f"
+      },
+      "function": {
+        "color": "#ebbcba"
+      },
+      "hint": {
+        "color": "#c4a7e7"
+      },
+      "keyword": {
+        "color": "#31748f"
+      },
+      "label": {
+        "color": "#9ccfd8"
+      },
+      "link_text": {
+        "color": "#c4a7e7"
+      },
+      "link_uri": {
+        "color": "#31748f"
+      },
+      "number": {
+        "color": "#f6c177"
+      },
+      "operator": {
+        "color": "#908caa"
+      },
+      "predictive": {
+        "color": "#908caa"
+      },
+      "preproc": {
+        "color": "#f6c177"
+      },
+      "primary": {
+        "color": "#c4a7e7"
+      },
+      "property": {
+        "color": "#9ccfd8"
+      },
+      "punctuation": {
+        "color": "#908caa"
+      },
+      "punctuation.bracket": {
+        "color": "#908caa"
+      },
+      "punctuation.delimiter": {
+        "color": "#908caa"
+      },
+      "punctuation.list_marker": {
+        "color": "#908caa",
+        "font_weight": 700
+      },
+      "punctuation.special": {
+        "color": "#908caa"
+      },
+      "string": {
+        "color": "#f6c177"
+      },
+      "string.escape": {
+        "color": "#31748f"
+      },
+      "string.regex": {
+        "color": "#c4a7e7"
+      },
+      "string.special": {
+        "color": "#31748f"
+      },
+      "string.special.symbol": {
+        "color": "#31748f"
+      },
+      "tag": {
+        "color": "#9ccfd8"
+      },
+      "text.literal": {
+        "color": "#f6c177"
+      },
+      "title": {
+        "color": "#eb6f92",
+        "font_weight": 700
+      },
+      "type": {
+        "color": "#9ccfd8"
+      },
+      "variable": {
+        "color": "#e0def4"
+      },
+      "variable.special": {
+        "color": "#eb6f92"
+      },
+      "variant": {
+        "color": "#ebbcba"
+      }
+    }
+  }
+}

@@ -1,0 +1,175 @@
+{
+  "name": "Abyss (VS Code)",
+  "appearance": "dark",
+  "style": {
+    "background": "#000c18ff",
+    "text": "#6688ccff",
+    "editor.background": "#000c18ff",
+    "editor.foreground": "#6688ccff",
+    "editor.active_line.background": "#082050ff",
+    "editor.document_highlight.bracket_background": "#6688cc1a",
+    "search.match_background": "#eeeeee44",
+    "players": [
+      {
+        "cursor": "#ddbb88ff",
+        "selection": "#770811ff"
+      }
+    ],
+    "error": "#f44747ff",
+    "warning": "#cca700ff",
+    "info": "#3794ffff",
+    "hint": "#969696ff",
+    "syntax": {
+      "comment": {
+        "color": "#384887ff"
+      },
+      "comment.doc": {
+        "color": "#384887ff"
+      },
+      "string": {
+        "color": "#22aa44ff"
+      },
+      "string.regex": {
+        "color": "#22aa44ff"
+      },
+      "string.escape": {
+        "color": "#f280d0ff"
+      },
+      "link_text": {
+        "color": "#22aa44ff"
+      },
+      "number": {
+        "color": "#f280d0ff"
+      },
+      "boolean": {
+        "color": "#f280d0ff"
+      },
+      "constant.builtin": {
+        "color": "#f280d0ff"
+      },
+      "constant": {
+        "color": "#f280d0ff"
+      },
+      "variable.parameter": {
+        "color": "#2277ffff",
+        "font_style": "italic"
+      },
+      "keyword": {
+        "color": "#225588ff"
+      },
+      "operator": {
+        "color": "#225588ff"
+      },
+      "type": {
+        "color": "#ffeebbff"
+      },
+      "type.builtin": {
+        "color": "#9966b8ff",
+        "font_style": "italic"
+      },
+      "function": {
+        "color": "#ddbb88ff"
+      },
+      "function.builtin": {
+        "color": "#9966b8ff"
+      },
+      "tag": {
+        "color": "#225588ff"
+      },
+      "attribute": {
+        "color": "#ddbb88ff"
+      },
+      "preproc": {
+        "color": "#ddbb88ff"
+      },
+      "title": {
+        "color": "#6688ccff",
+        "font_weight": 700
+      },
+      "emphasis.strong": {
+        "font_weight": 700
+      },
+      "emphasis": {
+        "font_style": "italic"
+      },
+      "text.literal": {
+        "color": "#9966b8ff"
+      },
+      "enum": {
+        "color": "#ffeebbff"
+      },
+      "label": {
+        "color": "#225588ff"
+      },
+      "constructor": {
+        "color": "#ddbb88ff"
+      },
+      "namespace": {
+        "color": "#ffeebbff"
+      },
+      "diff.minus": {
+        "color": "#dc322fff"
+      },
+      "diff.plus": {
+        "color": "#219186ff"
+      },
+      "embedded": {
+        "color": "#6688ccff"
+      },
+      "selector": {
+        "color": "#225588ff"
+      },
+      "selector.pseudo": {
+        "color": "#ddbb88ff"
+      },
+      "string.special": {
+        "color": "#22aa44ff"
+      },
+      "string.special.symbol": {
+        "color": "#f280d0ff"
+      },
+      "primary": {
+        "color": "#6688ccff"
+      },
+      "link_uri": {
+        "color": "#2b3c5dff"
+      },
+      "hint": {
+        "color": "#6688cc66"
+      },
+      "predictive": {
+        "color": "#6688cc66"
+      },
+      "variant": {
+        "color": "#ffeebbff"
+      },
+      "property": {
+        "color": "#6688ccff"
+      },
+      "punctuation": {
+        "color": "#6688ccff"
+      },
+      "punctuation.bracket": {
+        "color": "#6688ccff"
+      },
+      "punctuation.delimiter": {
+        "color": "#6688ccff"
+      },
+      "punctuation.list_marker": {
+        "color": "#6688ccff"
+      },
+      "punctuation.markup": {
+        "color": "#6688ccff"
+      },
+      "punctuation.special": {
+        "color": "#6688ccff"
+      },
+      "variable": {
+        "color": "#6688ccff"
+      },
+      "variable.special": {
+        "color": "#6688ccff"
+      }
+    }
+  }
+}

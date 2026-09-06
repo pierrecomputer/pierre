@@ -1,0 +1,199 @@
+{
+  "name": "Ayu Mirage",
+  "appearance": "dark",
+  "style": {
+    "background": "#464a52ff",
+    "text": "#cccac2ff",
+    "editor.background": "#242835ff",
+    "editor.foreground": "#cccac2ff",
+    "editor.active_line.background": "#353944bf",
+    "search.match_background": "#73cffe66",
+    "players": [
+      {
+        "cursor": "#72cffeff",
+        "background": "#72cffeff",
+        "selection": "#72cffe3d"
+      },
+      {
+        "cursor": "#5bcde5ff",
+        "background": "#5bcde5ff",
+        "selection": "#5bcde53d"
+      },
+      {
+        "cursor": "#fead66ff",
+        "background": "#fead66ff",
+        "selection": "#fead663d"
+      },
+      {
+        "cursor": "#debffeff",
+        "background": "#debffeff",
+        "selection": "#debffe3d"
+      },
+      {
+        "cursor": "#95e5cbff",
+        "background": "#95e5cbff",
+        "selection": "#95e5cb3d"
+      },
+      {
+        "cursor": "#f18779ff",
+        "background": "#f18779ff",
+        "selection": "#f187793d"
+      },
+      {
+        "cursor": "#fecf72ff",
+        "background": "#fecf72ff",
+        "selection": "#fecf723d"
+      },
+      {
+        "cursor": "#d5fe80ff",
+        "background": "#d5fe80ff",
+        "selection": "#d5fe803d"
+      }
+    ],
+    "error": "#f18779ff",
+    "warning": "#fecf72ff",
+    "info": "#72cffeff",
+    "hint": "#7399a3ff",
+    "syntax": {
+      "attribute": {
+        "color": "#72cffeff"
+      },
+      "boolean": {
+        "color": "#dfbfffff"
+      },
+      "comment": {
+        "color": "#5c6773ff"
+      },
+      "comment.doc": {
+        "color": "#9b9b99ff"
+      },
+      "constant": {
+        "color": "#dfbfffff"
+      },
+      "constructor": {
+        "color": "#72cffeff"
+      },
+      "embedded": {
+        "color": "#cccac2ff"
+      },
+      "emphasis": {
+        "color": "#72cffeff"
+      },
+      "emphasis.strong": {
+        "color": "#72cffeff",
+        "font_weight": 700
+      },
+      "enum": {
+        "color": "#fead66ff"
+      },
+      "function": {
+        "color": "#ffd173ff"
+      },
+      "hint": {
+        "color": "#7399a3ff"
+      },
+      "keyword": {
+        "color": "#ffad65ff"
+      },
+      "label": {
+        "color": "#72cffeff"
+      },
+      "link_text": {
+        "color": "#fead66ff",
+        "font_style": "italic"
+      },
+      "link_uri": {
+        "color": "#d5fe80ff"
+      },
+      "namespace": {
+        "color": "#cccac2ff"
+      },
+      "number": {
+        "color": "#dfbfffff"
+      },
+      "operator": {
+        "color": "#f29e74ff"
+      },
+      "predictive": {
+        "color": "#6d839bff",
+        "font_style": "italic"
+      },
+      "preproc": {
+        "color": "#ffad65ff"
+      },
+      "primary": {
+        "color": "#cccac2ff"
+      },
+      "property": {
+        "color": "#72cffeff"
+      },
+      "punctuation": {
+        "color": "#b4b3aeff"
+      },
+      "punctuation.bracket": {
+        "color": "#b4b3aeff"
+      },
+      "punctuation.delimiter": {
+        "color": "#b4b3aeff"
+      },
+      "punctuation.list_marker": {
+        "color": "#b4b3aeff"
+      },
+      "punctuation.markup": {
+        "color": "#b4b3aeff"
+      },
+      "punctuation.special": {
+        "color": "#dfbfffff"
+      },
+      "selector": {
+        "color": "#dfbfffff"
+      },
+      "selector.pseudo": {
+        "color": "#72cffeff"
+      },
+      "string": {
+        "color": "#d4fe7fff"
+      },
+      "string.escape": {
+        "color": "#9b9b99ff"
+      },
+      "string.regex": {
+        "color": "#95e6cbff"
+      },
+      "string.special": {
+        "color": "#ffdfb3ff"
+      },
+      "string.special.symbol": {
+        "color": "#fead66ff"
+      },
+      "tag": {
+        "color": "#72cffeff"
+      },
+      "text.literal": {
+        "color": "#fead66ff"
+      },
+      "title": {
+        "color": "#cccac2ff",
+        "font_weight": 700
+      },
+      "type": {
+        "color": "#73cfffff"
+      },
+      "variable": {
+        "color": "#cccac2ff"
+      },
+      "variable.parameter": {
+        "color": "#dfbfffff"
+      },
+      "variant": {
+        "color": "#72cffeff"
+      },
+      "diff.plus": {
+        "color": "#aad94cff"
+      },
+      "diff.minus": {
+        "color": "#f07178ff"
+      }
+    }
+  }
+}

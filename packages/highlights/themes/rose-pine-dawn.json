@@ -1,0 +1,167 @@
+{
+  "name": "Rosé Pine Dawn",
+  "appearance": "light",
+  "style": {
+    "background": "#faf4ed",
+    "text": "#575279",
+    "editor.background": "#faf4ed",
+    "editor.foreground": "#575279",
+    "editor.active_line.background": "#fffaf3",
+    "search.match_background": "#ea9d344d",
+    "players": [
+      {
+        "cursor": "#575279",
+        "background": "#575279",
+        "selection": "#57527922"
+      },
+      {
+        "cursor": "#56949f",
+        "background": "#56949f",
+        "selection": "#56949f44"
+      },
+      {
+        "cursor": "#907aa9",
+        "background": "#907aa9",
+        "selection": "#907aa944"
+      },
+      {
+        "cursor": "#286983",
+        "background": "#286983",
+        "selection": "#28698344"
+      },
+      {
+        "cursor": "#b4637a",
+        "background": "#b4637a",
+        "selection": "#b4637a44"
+      }
+    ],
+    "error": "#b4637a",
+    "warning": "#ea9d34",
+    "info": "#286983",
+    "hint": "#797593",
+    "syntax": {
+      "attribute": {
+        "color": "#907aa9"
+      },
+      "boolean": {
+        "color": "#d7827e"
+      },
+      "comment": {
+        "color": "#9893a5",
+        "font_style": "italic"
+      },
+      "comment.doc": {
+        "color": "#797593"
+      },
+      "constant": {
+        "color": "#ea9d34"
+      },
+      "constructor": {
+        "color": "#56949f"
+      },
+      "embedded": {
+        "color": "#575279"
+      },
+      "emphasis": {
+        "color": "#907aa9",
+        "font_style": "italic"
+      },
+      "emphasis.strong": {
+        "color": "#56949f",
+        "font_weight": 700
+      },
+      "enum": {
+        "color": "#286983"
+      },
+      "function": {
+        "color": "#d7827e"
+      },
+      "hint": {
+        "color": "#907aa9"
+      },
+      "keyword": {
+        "color": "#286983"
+      },
+      "label": {
+        "color": "#56949f"
+      },
+      "link_text": {
+        "color": "#907aa9"
+      },
+      "link_uri": {
+        "color": "#286983"
+      },
+      "number": {
+        "color": "#ea9d34"
+      },
+      "operator": {
+        "color": "#797593"
+      },
+      "predictive": {
+        "color": "#797593"
+      },
+      "preproc": {
+        "color": "#ea9d34"
+      },
+      "primary": {
+        "color": "#907aa9"
+      },
+      "property": {
+        "color": "#56949f"
+      },
+      "punctuation": {
+        "color": "#797593"
+      },
+      "punctuation.bracket": {
+        "color": "#797593"
+      },
+      "punctuation.delimiter": {
+        "color": "#797593"
+      },
+      "punctuation.list_marker": {
+        "color": "#797593",
+        "font_weight": 700
+      },
+      "punctuation.special": {
+        "color": "#797593"
+      },
+      "string": {
+        "color": "#ea9d34"
+      },
+      "string.escape": {
+        "color": "#286983"
+      },
+      "string.regex": {
+        "color": "#907aa9"
+      },
+      "string.special": {
+        "color": "#286983"
+      },
+      "string.special.symbol": {
+        "color": "#286983"
+      },
+      "tag": {
+        "color": "#56949f"
+      },
+      "text.literal": {
+        "color": "#ea9d34"
+      },
+      "title": {
+        "color": "#b4637a",
+        "font_weight": 700
+      },
+      "type": {
+        "color": "#56949f"
+      },
+      "variable": {
+        "color": "#575279"
+      },
+      "variable.special": {
+        "color": "#b4637a"
+      },
+      "variant": {
+        "color": "#d7827e"
+      }
+    }
+  }
+}

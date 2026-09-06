@@ -1,0 +1,96 @@
+{
+  "name": "Horizon Bright",
+  "appearance": "light",
+  "style": {
+    "background": "#FDF0ED",
+    "text": "#06060C",
+    "editor.background": "#FDF0ED",
+    "editor.active_line.background": "#F9CBBE4D",
+    "players": [],
+    "error": "#F43E5C",
+    "warning": "#1EB980B3",
+    "hint": "#969696ff",
+    "syntax": {
+      "attribute": {
+        "color": "#DC3318"
+      },
+      "comment": {
+        "color": "#33333380",
+        "font_style": "italic"
+      },
+      "comment.doc": {
+        "color": "#33333380",
+        "font_style": "italic"
+      },
+      "constant": {
+        "color": "#DC3318"
+      },
+      "constructor": {
+        "color": "#DA103F"
+      },
+      "emphasis": {
+        "color": "#1D8991",
+        "font_style": "italic"
+      },
+      "emphasis.strong": {
+        "color": "#8A31B9",
+        "font_weight": 700
+      },
+      "function": {
+        "color": "#1D8991"
+      },
+      "keyword": {
+        "color": "#8A31B9"
+      },
+      "label": {
+        "color": "#F77D26"
+      },
+      "link_text": {
+        "color": "#F6661E"
+      },
+      "link_uri": {
+        "color": "#F6661E"
+      },
+      "number": {
+        "color": "#DC3318"
+      },
+      "operator": {
+        "color": "#333333"
+      },
+      "property": {
+        "color": "#DA103F"
+      },
+      "punctuation": {
+        "color": "#333333"
+      },
+      "punctuation.bracket": {
+        "color": "#333333"
+      },
+      "punctuation.delimiter": {
+        "color": "#333333"
+      },
+      "punctuation.list_marker": {
+        "color": "#333333"
+      },
+      "punctuation.special": {
+        "color": "#333333"
+      },
+      "tag": {
+        "color": "#DA103F"
+      },
+      "title": {
+        "color": "#F77D26"
+      },
+      "type": {
+        "color": "#F77D26"
+      },
+      "variable": {
+        "color": "#DA103F"
+      },
+      "variable.special": {
+        "color": "#F77D26",
+        "font_style": "italic"
+      }
+    }
+  }
+}

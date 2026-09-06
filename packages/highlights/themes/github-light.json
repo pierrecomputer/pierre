@@ -1,0 +1,177 @@
+{
+  "name": "GitHub Light",
+  "appearance": "light",
+  "style": {
+    "background": "#ffffff",
+    "text": "#444d56",
+    "editor.background": "#ffffff",
+    "editor.foreground": "#24292e",
+    "editor.active_line.background": "#f6f8fa",
+    "editor.document_highlight.bracket_background": "#34d05840",
+    "search.match_background": "#ffdf5d",
+    "players": [
+      {
+        "cursor": "#005cc5",
+        "selection": "#79b8ff33",
+        "background": "#005cc5"
+      },
+      {
+        "cursor": "#586069",
+        "selection": "#e1e4e833",
+        "background": "#586069"
+      },
+      {
+        "cursor": "#22863a",
+        "selection": "#bef5cb33",
+        "background": "#22863a"
+      },
+      {
+        "cursor": "#e36209",
+        "selection": "#ffd1ac33",
+        "background": "#e36209"
+      },
+      {
+        "cursor": "#d03592",
+        "selection": "#f9b3dd33",
+        "background": "#d03592"
+      },
+      {
+        "cursor": "#5a32a3",
+        "selection": "#d1bcf933",
+        "background": "#5a32a3"
+      },
+      {
+        "cursor": "#cb2431",
+        "selection": "#fdaeb733",
+        "background": "#cb2431"
+      },
+      {
+        "cursor": "#f9c513",
+        "selection": "#fff5b133",
+        "background": "#f9c513"
+      }
+    ],
+    "error": "#cb2431",
+    "warning": "#f9c513",
+    "info": "#005cc5",
+    "hint": "#848d97",
+    "syntax": {
+      "boolean": {
+        "color": "#005cc5"
+      },
+      "comment": {
+        "color": "#6a737d"
+      },
+      "comment.doc": {
+        "color": "#6a737d"
+      },
+      "comment.documentation": {
+        "color": "#6a737d"
+      },
+      "constant": {
+        "color": "#005cc5"
+      },
+      "constant.builtin": {
+        "color": "#005cc5"
+      },
+      "constructor": {
+        "color": "#22863a"
+      },
+      "emphasis": {
+        "color": "#24292e",
+        "font_style": "italic"
+      },
+      "emphasis.strong": {
+        "color": "#24292e",
+        "font_weight": 700
+      },
+      "enum": {
+        "color": "#005cc5"
+      },
+      "function": {
+        "color": "#6f42c1"
+      },
+      "function.builtin": {
+        "color": "#6f42c1"
+      },
+      "function.method": {
+        "color": "#6f42c1"
+      },
+      "function.method.call": {
+        "color": "#6f42c1"
+      },
+      "keyword": {
+        "color": "#d73a49"
+      },
+      "keyword.operator": {
+        "color": "#d73a49"
+      },
+      "label": {
+        "color": "#6f42c1"
+      },
+      "link_text": {
+        "color": "#032f62"
+      },
+      "link_uri": {
+        "color": "#032f62"
+      },
+      "number": {
+        "color": "#005cc5"
+      },
+      "operator": {
+        "color": "#d73a49"
+      },
+      "property": {
+        "color": "#005cc5"
+      },
+      "punctuation.bracket": {
+        "color": "#005cc5"
+      },
+      "punctuation.delimiter": {
+        "color": "#d73a49"
+      },
+      "string": {
+        "color": "#032f62"
+      },
+      "string.escape": {
+        "color": "#032f62"
+      },
+      "string.regex": {
+        "color": "#032f62"
+      },
+      "string.regexp": {
+        "color": "#032f62"
+      },
+      "string.special": {
+        "color": "#032f62"
+      },
+      "string.special.symbol": {
+        "color": "#032f62"
+      },
+      "tag": {
+        "color": "#22863a"
+      },
+      "text.literal": {
+        "color": "#032f62"
+      },
+      "title": {
+        "color": "#6f42c1"
+      },
+      "type": {
+        "color": "#6f42c1"
+      },
+      "type.builtin": {
+        "color": "#6f42c1"
+      },
+      "type.class.definition": {
+        "color": "#6f42c1"
+      },
+      "variable": {
+        "color": "#24292e"
+      },
+      "variable.member": {
+        "color": "#e36209"
+      }
+    }
+  }
+}

@@ -64,6 +64,11 @@ interface Window {
   __themeReady?: boolean;
   __selectionActionReady?: boolean;
   __selectionActionEdgesReady?: boolean;
+  __highlightsReady?: boolean;
+
+  // highlights.html worker-pool routing flags captured around setHighlighter.
+  __poolWorkingWithShiki?: boolean;
+  __poolWorkingWithHighlights?: boolean;
 
   // Interaction logs populated by fixture callbacks.
   __editorEvents?: string[];

@@ -17,10 +17,10 @@ import type {
   EditorType,
 } from '../editor/types';
 import {
-  isHighlighterLoaded,
+  getCustomHighlighter,
+  getHighlighterIfReady,
   preloadHighlighter,
-} from '../highlighter/shared_highlighter';
-import { areThemesAttached } from '../highlighter/themes/areThemesAttached';
+} from '../highlighter/resolve_highlighter';
 import type { SelectionWriteOptions } from '../managers/InteractionManager';
 import {
   dequeueRender,
@@ -1838,6 +1838,10 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
 
   private isReady(): boolean {
     const { workerManager } = this;
+    // Custom highlighters render on the main thread without worker startup.
+    if (getCustomHighlighter() != null) {
+      return this.isSharedHighlighterReady();
+    }
     // A failed worker pool never reaches the 'initialized' state (it reverts
     // to 'waiting' with workersFailed: true), so it renders through the shared
     // highlighter instead.
@@ -1882,7 +1886,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       this.workerManager?.getFileRenderOptions().theme ??
       this.options.theme ??
       DEFAULT_THEMES;
-    if (isHighlighterLoaded() && areThemesAttached(theme)) {
+    if (getHighlighterIfReady(theme) != null) {
       this.clearReadySubscription();
       return true;
     }

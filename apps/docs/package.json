@@ -6,6 +6,7 @@
   "dependencies": {
     "@icons-pack/react-simple-icons": "catalog:",
     "@pierre/diffs": "workspace:*",
+    "@pierre/highlights": "workspace:*",
     "@pierre/icons": "catalog:",
     "@pierre/theme": "workspace:*",
     "@pierre/theming": "workspace:*",

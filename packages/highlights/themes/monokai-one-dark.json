@@ -1,0 +1,88 @@
+{
+  "name": "One Monokai",
+  "appearance": "dark",
+  "style": {
+    "background": "#282c34",
+    "editor.background": "#282c34",
+    "editor.active_line.background": "#383E4A",
+    "error": "#c24038",
+    "hint": "#969696ff",
+    "syntax": {
+      "attribute": {
+        "color": "#98c379"
+      },
+      "boolean": {
+        "color": "#56b6c2"
+      },
+      "comment": {
+        "color": "#676f7d"
+      },
+      "comment.doc": {
+        "color": "#676f7d"
+      },
+      "constant": {
+        "color": "#56b6c2"
+      },
+      "constructor": {
+        "color": "#e06c75"
+      },
+      "function": {
+        "color": "#98c379"
+      },
+      "keyword": {
+        "color": "#e06c75"
+      },
+      "number": {
+        "color": "#c678dd"
+      },
+      "operator": {
+        "color": "#e06c75"
+      },
+      "punctuation": {
+        "color": "#abb2bf"
+      },
+      "punctuation.bracket": {
+        "color": "#abb2bf"
+      },
+      "punctuation.delimiter": {
+        "color": "#abb2bf"
+      },
+      "punctuation.list_marker": {
+        "color": "#abb2bf"
+      },
+      "punctuation.special": {
+        "color": "#abb2bf"
+      },
+      "string": {
+        "color": "#e5c07b"
+      },
+      "string.escape": {
+        "color": "#56b6c2"
+      },
+      "string.regex": {
+        "color": "#e5c07b"
+      },
+      "string.special": {
+        "color": "#e5c07b"
+      },
+      "string.special.symbol": {
+        "color": "#e5c07b"
+      },
+      "tag": {
+        "color": "#e06c75"
+      },
+      "text.literal": {
+        "color": "#e5c07b"
+      },
+      "type": {
+        "color": "#61afef"
+      },
+      "variable": {
+        "color": "#e06c75"
+      },
+      "variable.special": {
+        "color": "#e06c75"
+      }
+    }
+  }
+}

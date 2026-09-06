@@ -1,0 +1,314 @@
+{
+  "name": "Tokyo Night Light",
+  "appearance": "light",
+  "style": {
+    "background": "#d5d6db",
+    "text": "#343b58",
+    "editor.background": "#d5d6db",
+    "editor.foreground": "#343b59",
+    "editor.active_line.background": "#dcdee3",
+    "search.match_background": "#9699a3",
+    "players": [
+      {
+        "cursor": "#7c7f93",
+        "selection": "#267ead3d"
+      }
+    ],
+    "error": "#8c4351",
+    "warning": "#8f5e15",
+    "info": "#0da0ba",
+    "hint": "#634f30",
+    "syntax": {
+      "attribute": {
+        "color": "#5a4a78"
+      },
+      "boolean": {
+        "color": "#965027"
+      },
+      "comment": {
+        "color": "#9699a3"
+      },
+      "comment.doc": {
+        "color": "#9699a3"
+      },
+      "constant": {
+        "color": "#965027"
+      },
+      "constructor": {
+        "color": "#8c4351"
+      },
+      "emphasis": {
+        "color": "#8c4351",
+        "font_style": "italic"
+      },
+      "emphasis.strong": {
+        "color": "#8c4351",
+        "font_weight": 700
+      },
+      "function": {
+        "color": "#34548a"
+      },
+      "keyword": {
+        "color": "#5a4a78"
+      },
+      "label": {
+        "color": "#343b58"
+      },
+      "link_text": {
+        "color": "#33635c"
+      },
+      "link_uri": {
+        "color": "#33635c"
+      },
+      "number": {
+        "color": "#965027"
+      },
+      "operator": {
+        "color": "#4c505e"
+      },
+      "preproc": {
+        "color": "#33635c"
+      },
+      "punctuation": {
+        "color": "#4c505e"
+      },
+      "punctuation.bracket": {
+        "color": "#4c505e"
+      },
+      "punctuation.delimiter": {
+        "color": "#4c505e"
+      },
+      "punctuation.list_marker": {
+        "color": "#4c505e"
+      },
+      "punctuation.special": {
+        "color": "#4c505e"
+      },
+      "string": {
+        "color": "#485e30"
+      },
+      "string.escape": {
+        "color": "#5a4a78"
+      },
+      "string.regex": {
+        "color": "#485e30"
+      },
+      "string.special": {
+        "color": "#485e30"
+      },
+      "string.special.symbol": {
+        "color": "#485e30"
+      },
+      "tag": {
+        "color": "#8c4351"
+      },
+      "text.literal": {
+        "color": "#485e30"
+      },
+      "title": {
+        "color": "#965027"
+      },
+      "type": {
+        "color": "#166775"
+      },
+      "variable": {
+        "color": "#343b58"
+      },
+      "variable.special": {
+        "color": "#8c4351"
+      },
+      "character": {
+        "color": "#485e30"
+      },
+      "character.special": {
+        "color": "#5a4a78"
+      },
+      "comment.documentation": {
+        "color": "#9699a3"
+      },
+      "comment.error": {
+        "color": "#8c4351"
+      },
+      "comment.hint": {
+        "color": "#9699a3"
+      },
+      "comment.note": {
+        "color": "#9699a3"
+      },
+      "comment.todo": {
+        "color": "#9699a3"
+      },
+      "comment.warning": {
+        "color": "#9699a3"
+      },
+      "concept": {
+        "color": "#5a4a78"
+      },
+      "constant.builtin": {
+        "color": "#965027"
+      },
+      "constant.macro": {
+        "color": "#5a4a78"
+      },
+      "diff.minus": {
+        "color": "#8c4351"
+      },
+      "diff.plus": {
+        "color": "#485e30"
+      },
+      "embedded": {
+        "color": "#343b58"
+      },
+      "enum": {
+        "color": "#0f4b6e"
+      },
+      "field": {
+        "color": "#343b58"
+      },
+      "float": {
+        "color": "#965027"
+      },
+      "function.builtin": {
+        "color": "#34548a"
+      },
+      "function.call": {
+        "color": "#34548a"
+      },
+      "function.decorator": {
+        "color": "#5a4a78"
+      },
+      "function.macro": {
+        "color": "#5a4a78"
+      },
+      "function.method": {
+        "color": "#34548a"
+      },
+      "function.method.call": {
+        "color": "#34548a"
+      },
+      "keyword.conditional": {
+        "color": "#5a4a78"
+      },
+      "keyword.conditional.ternary": {
+        "color": "#5a4a78"
+      },
+      "keyword.coroutine": {
+        "color": "#5a4a78"
+      },
+      "keyword.debug": {
+        "color": "#8c4351"
+      },
+      "keyword.directive": {
+        "color": "#5a4a78"
+      },
+      "keyword.directive.define": {
+        "color": "#5a4a78"
+      },
+      "keyword.exception": {
+        "color": "#5a4a78"
+      },
+      "keyword.export": {
+        "color": "#5a4a78"
+      },
+      "keyword.function": {
+        "color": "#5a4a78"
+      },
+      "keyword.import": {
+        "color": "#5a4a78"
+      },
+      "keyword.modifier": {
+        "color": "#5a4a78"
+      },
+      "keyword.operator": {
+        "color": "#4c505e"
+      },
+      "keyword.repeat": {
+        "color": "#5a4a78"
+      },
+      "keyword.return": {
+        "color": "#5a4a78"
+      },
+      "keyword.type": {
+        "color": "#5a4a78"
+      },
+      "module": {
+        "color": "#343b58"
+      },
+      "namespace": {
+        "color": "#343b58"
+      },
+      "number.float": {
+        "color": "#965027"
+      },
+      "parameter": {
+        "color": "#343b58"
+      },
+      "parent": {
+        "color": "#343b58"
+      },
+      "predoc": {
+        "color": "#9699a3"
+      },
+      "primary": {
+        "color": "#343b58"
+      },
+      "property": {
+        "color": "#343b58"
+      },
+      "string.doc": {
+        "color": "#485e30"
+      },
+      "string.documentation": {
+        "color": "#485e30"
+      },
+      "string.regexp": {
+        "color": "#485e30"
+      },
+      "string.special.path": {
+        "color": "#485e30"
+      },
+      "string.special.url": {
+        "color": "#0f4b6e"
+      },
+      "symbol": {
+        "color": "#343b58"
+      },
+      "tag.attribute": {
+        "color": "#5a4a78"
+      },
+      "tag.delimiter": {
+        "color": "#4c505e"
+      },
+      "tag.doctype": {
+        "color": "#9699a3"
+      },
+      "type.builtin": {
+        "color": "#0f4b6e"
+      },
+      "type.class.definition": {
+        "color": "#0f4b6e"
+      },
+      "type.definition": {
+        "color": "#0f4b6e"
+      },
+      "type.interface": {
+        "color": "#0f4b6e"
+      },
+      "type.super": {
+        "color": "#0f4b6e"
+      },
+      "variable.builtin": {
+        "color": "#8c4351"
+      },
+      "variable.member": {
+        "color": "#343b58"
+      },
+      "variable.parameter": {
+        "color": "#343b58"
+      },
+      "variant": {
+        "color": "#343b58"
+      }
+    }
+  }
+}

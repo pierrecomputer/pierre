@@ -988,7 +988,7 @@ export function AgentUi({
     for (const file of session.changedFiles) {
       const diff = getFileDiff(file);
       diffs.set(file.path, diff);
-      void workerPool?.primeDiffHighlightCache(diff);
+      void workerPool?.primeDiffHighlightCache(diff).catch(() => undefined);
     }
     return diffs;
   });

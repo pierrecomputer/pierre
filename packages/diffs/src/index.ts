@@ -12,6 +12,21 @@ export * from './components/VirtualizedFile';
 export * from './components/VirtualizedFileDiff';
 export * from './components/Virtualizer';
 export * from './constants';
+export {
+  type CodeHighlighter,
+  type CodeHighlighterOptions,
+  type CodeLiveLineChange,
+  type CodeLiveTokenizer,
+  type CodeLiveTokenizerOptions,
+  type CodeLiveTokenizerUpdate,
+  type CodeLiveUpdateOptions,
+  type CodeTextEdit,
+  type CodeTextPosition,
+  type CodeStreamTokenizer,
+  isBuiltinShikiHighlighter,
+  type RenderHighlighter,
+  setHighlighter,
+} from './highlighter/code_highlighter';
 export * from './highlighter/languages/areLanguagesAttached';
 export * from './highlighter/languages/attachResolvedLanguages';
 export * from './highlighter/languages/cleanUpResolvedLanguages';
@@ -22,7 +37,21 @@ export * from './highlighter/languages/hasResolvedLanguages';
 export * from './highlighter/languages/registerCustomLanguage';
 export * from './highlighter/languages/resolveLanguage';
 export * from './highlighter/languages/resolveLanguages';
+export {
+  areHighlighterThemesReady,
+  areHighlighterThemesResolved,
+  customHighlighterOf,
+  getCodeHighlighter,
+  getCustomHighlighter,
+  getHighlighterIfReady,
+  isHighlighterLanguageReady,
+  loadHighlighter,
+  preloadHighlighter,
+  type RenderersHighlighter,
+  resolveRenderHighlighter,
+} from './highlighter/resolve_highlighter';
 export * from './highlighter/shared_highlighter';
+export { shikiHighlighter } from './highlighter/shiki_highlighter';
 export * from './highlighter/themes/areThemesAttached';
 export * from './highlighter/themes/attachResolvedThemes';
 export * from './highlighter/themes/cleanUpResolvedThemes';

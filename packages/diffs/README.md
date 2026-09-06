@@ -27,6 +27,44 @@ JavaScript and React components.
 pnpm add @pierre/diffs
 ```
 
+## Highlighters
+
+`@pierre/diffs` highlights with [shiki] out of the box — nothing changes for
+existing consumers. `setHighlighter` swaps the implementation for everything
+rendered afterwards: newly created files, diffs, streams, editors, React
+components, and SSR renderers use it, and an existing file or diff renderer
+adopts it the next time something makes it render (its caches are keyed by the
+registration, so stale markup is never served — but nothing repaints
+spontaneously on the call itself). Already-running streams and attached editors
+keep the implementation they captured until they are re-created.
+
+The experimental [highlights]-backed highlighter runs its built-in lexers in
+WebAssembly and lazy-loads bundled themes by ID.
+
+```ts
+import { File, setHighlighter } from '@pierre/diffs';
+import { highlightsHighlighter } from '@pierre/diffs/highlights';
+
+setHighlighter(highlightsHighlighter);
+const file = new File(); // use the highlights highlighter
+```
+
+Pass the `shikiHighlighter` export back to `setHighlighter` to restore the
+default. Custom implementations conform to the `CodeHighlighter` interface
+exported from `@pierre/diffs`. Notes on the highlights highlighter:
+
+- Theme names map onto highlights's bundled Zed themes; register custom names
+  with `registerHighlightsTheme` from `@pierre/diffs/highlights`.
+- Languages without a highlights lexer render as plain text.
+- The worker pool always highlights with shiki, so a registered custom
+  highlighter routes rendering to the main thread (highlights is fast enough
+  that this is not a regression).
+- Edit mode tokenizes through highlights's incremental `LiveTokenizer` instead
+  of the TextMate incremental tokenizer.
+
+[shiki]: https://shiki.style
+[highlights]: ../highlights/README.md
+
 ## Agent skill
 
 Install the agent skill for this package with the

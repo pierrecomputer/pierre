@@ -2,13 +2,13 @@ import type { File } from '../components/File';
 import type { FileDiff } from '../components/FileDiff';
 import type { VirtualizedFile } from '../components/VirtualizedFile';
 import type { VirtualizedFileDiff } from '../components/VirtualizedFileDiff';
+import type { RenderersHighlighter } from '../highlighter/resolve_highlighter';
 import {
   dequeueRender,
   queueRender,
 } from '../managers/UniversalRenderingManager';
 import type {
   DiffLineAnnotation,
-  DiffsHighlighter,
   FileContents,
   FileDiffMetadata,
   HighlightedToken,
@@ -127,7 +127,11 @@ import {
   Metrics,
   snapTextOffsetToUnicodeBoundary,
 } from './textMeasure';
-import { EditorTokenizer, renderLineTokens } from './tokenizer';
+import {
+  createEditorTokenizer,
+  type EditorTokenizer,
+  renderLineTokens,
+} from './tokenizer';
 import type {
   EditorCaret,
   EditorChange,
@@ -231,7 +235,7 @@ interface TrackedCaret<T> {
 }
 
 interface SyncRenderViewBaseProps {
-  highlighter: DiffsHighlighter;
+  highlighter: RenderersHighlighter;
   fileContainer: HTMLElement;
   renderRange: RenderRange | undefined;
   /** Start fresh history instead of retaining or extending the current history. */
@@ -1548,7 +1552,7 @@ export class Editor<
     // skips the rebuild, able to paint edits.
     const textDocument = editSession.document;
     if (this.#tokenizer == null && textDocument != null) {
-      this.#tokenizer = new EditorTokenizer({
+      this.#tokenizer = createEditorTokenizer({
         highlighter,
         textDocument,
         codeOptions: this.#fileInstance?.__getEffectiveCodeOptions() ?? {},

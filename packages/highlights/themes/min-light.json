@@ -1,0 +1,91 @@
+{
+  "name": "Min Light",
+  "appearance": "light",
+  "style": {
+    "background": "#FBFBFB",
+    "text": "#606060",
+    "editor.background": "#FFFFFF",
+    "editor.foreground": "#212121",
+    "search.match_background": "#E7C54764",
+    "players": [],
+    "error": "#D32F2F",
+    "warning": "#FFE62A",
+    "hint": "#757575",
+    "syntax": {
+      "attribute": {
+        "color": "#6F42C1"
+      },
+      "boolean": {
+        "color": "#1976D2"
+      },
+      "comment": {
+        "color": "#C2C3C5"
+      },
+      "comment.doc": {
+        "color": "#C2C3C5"
+      },
+      "constant": {
+        "color": "#1976D2"
+      },
+      "enum": {
+        "color": "#6F42C1"
+      },
+      "function": {
+        "color": "#6F42C1"
+      },
+      "keyword": {
+        "color": "#D32F2F"
+      },
+      "number": {
+        "color": "#212121"
+      },
+      "operator": {
+        "color": "#D32F2F"
+      },
+      "property": {
+        "color": "#212121"
+      },
+      "punctuation": {
+        "color": "#424242"
+      },
+      "string": {
+        "color": "#22863A"
+      },
+      "string.escape": {
+        "color": "#D32F2F",
+        "font_style": "normal",
+        "font_weight": 400
+      },
+      "tag": {
+        "color": "#22863A",
+        "font_style": "normal",
+        "font_weight": 400
+      },
+      "text.literal": {
+        "color": "#C2185B",
+        "font_style": "normal",
+        "font_weight": 400
+      },
+      "type": {
+        "color": "#1976D2",
+        "font_style": "normal",
+        "font_weight": 400
+      },
+      "type.builtin": {
+        "color": "#1976D2",
+        "font_style": "normal",
+        "font_weight": 400
+      },
+      "variable": {
+        "color": "#212121",
+        "font_style": "normal",
+        "font_weight": 400
+      },
+      "variable.special": {
+        "color": "#1976D2",
+        "font_style": "normal",
+        "font_weight": 400
+      }
+    }
+  }
+}

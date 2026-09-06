@@ -57,6 +57,17 @@
     </p>
     <ul>
       <li>
+        <a href="/test/e2e/fixtures/highlights.html">highlights.html</a>
+        <p class="desc">
+          A <code>FileDiff</code> rendered through the experimental
+          <code>@pierre/diffs/highlights</code> highlighter after
+          <code>setHighlighter</code>, alongside a real worker pool whose
+          <code>isWorkingPool()</code> is captured before and after the swap.
+          Drives <code>highlights.pw.ts</code> (wasm resolution, main-thread
+          routing). Ready flag: <code>window.__highlightsReady</code>.
+        </p>
+      </li>
+      <li>
         <a href="/test/e2e/fixtures/diff-render.html">diff-render.html</a>
         <p class="desc">
           A <code>FileDiff</code> (split view) with two changed regions and a

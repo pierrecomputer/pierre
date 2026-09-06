@@ -2,6 +2,9 @@ import { afterEach, describe, expect, mock, spyOn, test } from 'bun:test';
 
 import { CodeView } from '../src/components/CodeView';
 import { DEFAULT_THEMES } from '../src/constants';
+import { setHighlighter } from '../src/highlighter/code_highlighter';
+import { shikiHighlighter } from '../src/highlighter/shiki_highlighter';
+import highlightsHighlighter from '../src/highlights';
 import type {
   HighlighterTypes,
   RenderDiffOptions,
@@ -282,6 +285,43 @@ describe('CodeView worker pool readiness', () => {
       expect(workerManager.statSubscriberCount).toBe(0);
       expect(consoleError).not.toHaveBeenCalled();
     } finally {
+      viewer.cleanUp();
+      await wait(0);
+      cleanup();
+    }
+  });
+
+  test('a custom highlighter never gates rendering on worker readiness', async () => {
+    // A custom highlighter routes every render to the main thread, so a
+    // still-booting (waiting) worker pool must not hold the first paint.
+    const { cleanup } = installDom();
+    const consoleError = spyOn(console, 'error').mockImplementation(() => {});
+    const workerManager = new FakeWorkerPoolManager();
+    const viewer = new CodeView(
+      { disableFileHeader: true },
+      workerManager.asWorkerPoolManager()
+    );
+
+    await highlightsHighlighter.load({
+      langs: [],
+      themes: ['pierre-dark', 'pierre-light'],
+    });
+    setHighlighter(highlightsHighlighter);
+    try {
+      viewer.setup(createRoot({ height: 1000 }));
+      viewer.setItems([makeFileItem('file:custom-ready', 3)]);
+
+      viewer.render(true);
+      await wait(0);
+
+      expect(viewer.getRenderedItems().map((item) => item.id)).toEqual([
+        'file:custom-ready',
+      ]);
+      expect(workerManager.statSubscriberCount).toBe(0);
+      expect(workerManager.initializeCallCount).toBe(0);
+      expect(consoleError).not.toHaveBeenCalled();
+    } finally {
+      setHighlighter(shikiHighlighter);
       viewer.cleanUp();
       await wait(0);
       cleanup();

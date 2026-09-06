@@ -1,0 +1,109 @@
+{
+  "name": "Snazzy Light",
+  "appearance": "light",
+  "style": {
+    "background": "#fafbfc",
+    "foreground": "#565869",
+    "text": "#565869",
+    "editor.background": "#fafbfc",
+    "editor.foreground": "#565869",
+    "editor.active_line.background": "#f3f4f5",
+    "search.match_background": "#00e6e06a",
+    "error": "#ff5c57",
+    "warning": "#b38700",
+    "info": "#09a1ed",
+    "syntax": {
+      "comment": {
+        "color": "#adb1c2",
+        "font_style": "italic"
+      },
+      "comment.doc": {
+        "color": "#adb1c2"
+      },
+      "function": {
+        "color": "#09a1ed"
+      },
+      "function.method": {
+        "color": "#09a1ed"
+      },
+      "function.builtin": {
+        "color": "#11658f"
+      },
+      "function.constructor": {
+        "color": "#09a1ed"
+      },
+      "string": {
+        "color": "#cf9c00"
+      },
+      "string.escape": {
+        "color": "#f5b900"
+      },
+      "string.regex": {
+        "color": "#13bbb7"
+      },
+      "string.special": {
+        "color": "#cf9c00"
+      },
+      "type": {
+        "color": "#2dae58"
+      },
+      "type.builtin": {
+        "color": "#2dae58"
+      },
+      "constant": {
+        "color": "#2dae58"
+      },
+      "constant.builtin": {
+        "color": "#2dae58"
+      },
+      "constant.macro": {
+        "color": "#11658f"
+      },
+      "number": {
+        "color": "#ff5c57"
+      },
+      "boolean": {
+        "color": "#2dae58"
+      },
+      "property": {
+        "color": "#11658f"
+      },
+      "operator": {
+        "color": "#adb1c2"
+      },
+      "punctuation": {
+        "color": "#adb1c2"
+      },
+      "punctuation.bracket": {
+        "color": "#adb1c2"
+      },
+      "punctuation.delimiter": {
+        "color": "#adb1c2"
+      },
+      "variable": {
+        "color": "#565869"
+      },
+      "variable.special": {
+        "color": "#13bbb7"
+      },
+      "variable.parameter": {
+        "color": "#565869"
+      },
+      "tag": {
+        "color": "#13bbb7"
+      },
+      "attribute": {
+        "color": "#ff8380"
+      },
+      "constructor": {
+        "color": "#13bbb7"
+      },
+      "embedded": {
+        "color": "#565869"
+      },
+      "keyword": {
+        "color": "#f767bb"
+      }
+    }
+  }
+}

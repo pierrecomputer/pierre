@@ -85,6 +85,14 @@ export function HeaderMobileMenu({
         >
           Docs
         </MobileNavLink>
+        {product.id === 'diffs' && (
+          <MobileNavLink
+            href={`${product.basePath}/highlights`}
+            active={isActivePath(`${product.basePath}/highlights`)}
+          >
+            Highlights
+          </MobileNavLink>
+        )}
         {product.themePath != null && (
           <MobileNavLink
             href={product.themePath}

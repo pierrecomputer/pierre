@@ -9,7 +9,9 @@ import {
   type FileEditCompleteEvent,
   type FileOptions,
   type LineAnnotation,
+  setHighlighter as registerHighlighter,
   type SelectedLineRange,
+  shikiHighlighter,
 } from '@pierre/diffs';
 import type {
   Editor,
@@ -28,6 +30,7 @@ import {
 import type { PreloadFileDiffResult } from '@pierre/diffs/ssr';
 import {
   IconBrandGithub,
+  IconBrush,
   IconCheck,
   IconChevronSm,
   IconCiWarning,
@@ -77,6 +80,7 @@ import { PlaygroundVirtualizerView } from './PlaygroundVirtualizerView';
 import type {
   HunkSeparatorValue,
   LineHoverHighlight,
+  PlaygroundHighlighter,
   ViewMode,
 } from './searchParams';
 import {
@@ -181,6 +185,11 @@ export type SharedRenderOptions = Pick<
   hunkSeparators: HunkSeparatorValue;
 };
 
+const HIGHLIGHTER_OPTIONS = [
+  { value: 'shiki', label: 'Shiki' },
+  { value: 'highlights', label: 'Highlights' },
+] as const;
+
 interface PlaygroundClientProps {
   prerenderedDiff: PreloadFileDiffResult<
     PlaygroundAnnotationMetadata,
@@ -224,6 +233,8 @@ interface PlaygroundControlsContentProps {
   editing: boolean;
   showMarkers: boolean;
   setShowMarkers: (v: boolean) => void;
+  highlighter: PlaygroundHighlighter;
+  setHighlighter: (v: PlaygroundHighlighter) => void;
   selectedRange: SelectedLineRange | null;
   setSelectedRange: (v: SelectedLineRange | null) => void;
   handleCopyLink: () => void;
@@ -269,6 +280,8 @@ function PlaygroundControlsContent({
   editing,
   showMarkers,
   setShowMarkers,
+  highlighter,
+  setHighlighter,
   selectedRange,
   setSelectedRange,
   handleCopyLink,
@@ -637,6 +650,38 @@ function PlaygroundControlsContent({
           </DropdownMenuContent>
         </DropdownMenu>
 
+        <div className="bg-border h-6 w-px" />
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" className="justify-start px-3">
+              <IconBrush />
+              Highlighter:{' '}
+              {HIGHLIGHTER_OPTIONS.find((opt) => opt.value === highlighter)
+                ?.label ?? highlighter}
+              <IconChevronSm className="text-muted-foreground ml-auto" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            align="start"
+            scrollSelectedIntoView
+            className={dropdownContentClassName}
+          >
+            {HIGHLIGHTER_OPTIONS.map((option) => (
+              <DropdownMenuItem
+                key={option.value}
+                onClick={() => setHighlighter(option.value)}
+                selected={highlighter === option.value}
+              >
+                {option.label}
+                {highlighter === option.value && (
+                  <IconCheck className="ml-auto" />
+                )}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+
         {interactionMode === 'select' && (
           <>
             <div className="bg-border h-6 w-px" />
@@ -721,6 +766,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
   );
   const [edit, setEdit] = useState(urlState.edit);
   const [showMarkers, setShowMarkers] = useState(urlState.showMarkers);
+  const [highlighter, setHighlighterChoice] = useState(urlState.highlighter);
   const editPredictionEnabledRef = useRef(urlState.editPrediction);
   const [editPredictionEnabled, setEditPredictionEnabled] = useState(
     urlState.editPrediction
@@ -1025,6 +1071,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
     if (editPredictionEnabled !== DEFAULTS.editPrediction)
       params.set('predict', editPredictionEnabled ? '1' : '0');
     if (edit && isDirectView(viewMode)) params.set('edit', 'edit');
+    if (highlighter !== DEFAULTS.highlighter) params.set('hl', highlighter);
     if (showMarkers !== DEFAULTS.markers)
       params.set('markers', showMarkers ? '1' : '0');
 
@@ -1061,6 +1108,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
     editPredictionEnabled,
     edit,
     showMarkers,
+    highlighter,
     committedSelectedRange,
   ]);
 
@@ -1225,10 +1273,48 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
     setEdit(false);
   }, []);
 
+  // Swap the library's registered highlighter to match the picker. The
+  // highlights implementation (wasm lexers + Zed themes) is imported lazily so
+  // the default shiki path never pays for it. `activeHighlighter` flips after
+  // the swap lands: the resulting commit re-renders the direct File/FileDiff
+  // surfaces IN PLACE (their render pass notices the pending registration
+  // change), keeping scroll position so the two color palettes can be
+  // compared side by side; the imperative list views remount via `key`.
+  const [activeHighlighter, setActiveHighlighter] =
+    useState<PlaygroundHighlighter>('shiki');
+  useEffect(() => {
+    let cancelled = false;
+    const implementation =
+      highlighter === 'highlights'
+        ? import('@pierre/diffs/highlights').then(
+            (m) => m.highlightsHighlighter
+          )
+        : Promise.resolve(shikiHighlighter);
+    void implementation.then((impl) => {
+      if (cancelled) return;
+      registerHighlighter(impl);
+      setActiveHighlighter(highlighter);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [highlighter]);
+
+  // The registry is process-wide: leaving the playground must not leave the
+  // rest of the docs app on the picker's choice.
+  useEffect(() => {
+    return () => {
+      registerHighlighter(shikiHighlighter);
+    };
+  }, []);
+
+  // The prerendered payload was highlighted by shiki on the server, so it is
+  // only hydrated while shiki is the picked highlighter; picking highlights
+  // renders from scratch instead of adopting shiki markup.
   const [usePrerenderedHTML, setUsePrerenderedHTML] = useState(
-    () => viewMode === 'diff'
+    () => viewMode === 'diff' && urlState.highlighter === 'shiki'
   );
-  if (usePrerenderedHTML && viewMode !== 'diff') {
+  if (usePrerenderedHTML && (viewMode !== 'diff' || highlighter !== 'shiki')) {
     setUsePrerenderedHTML(false);
   }
 
@@ -1268,6 +1354,8 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
     editing: edit,
     showMarkers,
     setShowMarkers,
+    highlighter,
+    setHighlighter: setHighlighterChoice,
     selectedRange,
     setSelectedRange: handleLineSelectionEnd,
     handleCopyLink,
@@ -1568,6 +1656,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
         file
       ) : viewMode === 'virtualizer' ? (
         <PlaygroundVirtualizerView
+          key={activeHighlighter}
           diffs={VIRTUALIZER_FILE_DIFFS}
           options={renderOptions}
           enableLineSelection={enableLineSelection}
@@ -1577,6 +1666,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
         />
       ) : viewMode === 'virtualizer-element' ? (
         <PlaygroundVirtualizerElementView
+          key={activeHighlighter}
           diffs={VIRTUALIZER_FILE_DIFFS}
           options={renderOptions}
           enableLineSelection={enableLineSelection}
@@ -1586,6 +1676,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
         />
       ) : (
         <PlaygroundCodeView
+          key={activeHighlighter}
           items={CODE_VIEW_ITEMS}
           options={codeViewOptions}
           enableLineSelection={enableLineSelection}

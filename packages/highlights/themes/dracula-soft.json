@@ -1,0 +1,92 @@
+{
+  "name": "Dracula Theme Soft",
+  "appearance": "dark",
+  "style": {
+    "background": "#282A36",
+    "editor.background": "#282A36",
+    "text": "#f6f6f4",
+    "editor.foreground": "#f6f6f4",
+    "search.match_background": "#FFB86C80",
+    "error": "#ee6666",
+    "warning": "#97e1f1",
+    "players": [
+      {
+        "cursor": "#f6f6f4",
+        "selection": "#44475A"
+      }
+    ],
+    "syntax": {
+      "attribute": {
+        "color": "#62e884",
+        "font_style": "italic"
+      },
+      "comment": {
+        "color": "#7b7f8b"
+      },
+      "comment.doc": {
+        "color": "#7b7f8b"
+      },
+      "constant": {
+        "color": "#bf9eee"
+      },
+      "constructor": {
+        "color": "#f286c4"
+      },
+      "emphasis": {
+        "color": "#e7ee98",
+        "font_style": "italic"
+      },
+      "emphasis.strong": {
+        "color": "#FFB86C",
+        "font_weight": 700
+      },
+      "function": {
+        "color": "#62e884"
+      },
+      "keyword": {
+        "color": "#f286c4"
+      },
+      "link_text": {
+        "color": "#97e1f1"
+      },
+      "link_uri": {
+        "color": "#97e1f1"
+      },
+      "number": {
+        "color": "#bf9eee"
+      },
+      "string": {
+        "color": "#e7ee98"
+      },
+      "string.escape": {
+        "color": "#e7ee98"
+      },
+      "string.regex": {
+        "color": "#e7ee98"
+      },
+      "string.special": {
+        "color": "#e7ee98"
+      },
+      "string.special.symbol": {
+        "color": "#e7ee98"
+      },
+      "tag": {
+        "color": "#f286c4"
+      },
+      "text.literal": {
+        "color": "#e7ee98"
+      },
+      "type": {
+        "color": "#97e1f1",
+        "font_style": "italic"
+      },
+      "variable": {
+        "color": "#f6f6f4"
+      },
+      "variable.special": {
+        "color": "#bf9eee",
+        "font_style": "italic"
+      }
+    }
+  }
+}

@@ -50,6 +50,11 @@ const HUNK_SEPARATOR_VALUES = [
 const LINE_HOVER_HIGHLIGHTS = ['disabled', 'both', 'number', 'line'] as const;
 const LINE_MODES = ['select', 'comment', 'none'] as const;
 
+// The syntax-highlighting implementation diffs renders with: shiki (the
+// default TextMate pipeline) or the experimental wasm-based highlights lexers.
+const HIGHLIGHTERS = ['shiki', 'highlights'] as const;
+export type PlaygroundHighlighter = (typeof HIGHLIGHTERS)[number];
+
 // The rendering view used by the playground. 'diff' and 'file' render one
 // directly controlled component; the virtualizer modes render scrolling lists;
 // 'codeview' renders a mixed list in CodeView's own scroller.
@@ -80,6 +85,7 @@ export const DEFAULTS = {
   editPrediction: false,
   edit: false,
   markers: false,
+  highlighter: 'shiki' as PlaygroundHighlighter,
 } as const;
 
 export interface PlaygroundUrlState {
@@ -101,6 +107,7 @@ export interface PlaygroundUrlState {
   editPrediction: boolean;
   edit: boolean;
   showMarkers: boolean;
+  highlighter: PlaygroundHighlighter;
   selectedRange: SelectedLineRange | null;
 }
 
@@ -182,6 +189,7 @@ export function parsePlaygroundSearchParams(
     edit:
       (viewMode === 'diff' || viewMode === 'file') && get('edit') === 'edit',
     showMarkers: pickBool(get('markers'), DEFAULTS.markers),
+    highlighter: pick(get('hl'), HIGHLIGHTERS, DEFAULTS.highlighter),
     selectedRange: parseLineSelection(get('line')),
   };
 }

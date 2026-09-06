@@ -1093,6 +1093,7 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     const nextRenderRange = collapsed ? undefined : renderRange;
     const previousRenderRange = this.renderRange;
     const themeChanged = this.hasThemeChanged();
+    const highlighterChanged = this.fileRenderer.hasPendingHighlighterChange();
     const annotationsChanged =
       lineAnnotations != null &&
       (lineAnnotations.length > 0 || this.getLatestAnnotations().length > 0)
@@ -1109,7 +1110,8 @@ export class File<LAnnotation = undefined, Caret = undefined> {
       areRenderRangesEqual(nextRenderRange, this.renderRange) &&
       !didFileChange &&
       !annotationsChanged &&
-      !themeChanged
+      !themeChanged &&
+      !highlighterChanged
     ) {
       const rendered = this.applyCachedThemeState(themeType);
       if (rendered) {

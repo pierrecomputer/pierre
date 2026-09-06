@@ -1,0 +1,133 @@
+{
+  "name": "Nord",
+  "appearance": "dark",
+  "style": {
+    "background": "#2e3440",
+    "text": "#eceff4",
+    "editor.background": "#2e3440",
+    "editor.foreground": "#d8dee9",
+    "editor.active_line.background": "#3b4252",
+    "search.match_background": "#88c0d033",
+    "players": [
+      {
+        "cursor": "#eceff4",
+        "background": "#434c5e99",
+        "selection": "#434c5e99"
+      },
+      {
+        "cursor": "#eceff4",
+        "background": "#eceff4",
+        "selection": "#3b4252"
+      },
+      {
+        "cursor": "#d08770",
+        "background": "#d08770",
+        "selection": "#d087703d"
+      },
+      {
+        "cursor": "#a3be8c",
+        "background": "#a3be8c",
+        "selection": "#a3be8c3d"
+      },
+      {
+        "cursor": "#b48ead",
+        "background": "#b48ead",
+        "selection": "#b48ead3d"
+      },
+      {
+        "cursor": "#d08770",
+        "background": "#d08770",
+        "selection": "#d087703d"
+      }
+    ],
+    "error": "#bf616a",
+    "warning": "#ebcb8b",
+    "info": "#5e81ac",
+    "hint": "#5e81ac",
+    "syntax": {
+      "attribute": {
+        "color": "#8FBCBB"
+      },
+      "boolean": {
+        "color": "#81A1C1"
+      },
+      "comment": {
+        "color": "#4C566A",
+        "font_style": "italic"
+      },
+      "comment.doc": {
+        "color": "#4C566A",
+        "font_style": "italic"
+      },
+      "constant": {
+        "color": "#D8DEE9"
+      },
+      "constructor": {
+        "color": "#81A1C1"
+      },
+      "function": {
+        "color": "#88c0d0"
+      },
+      "keyword": {
+        "color": "#81A1C1"
+      },
+      "number": {
+        "color": "#B48EAD"
+      },
+      "operator": {
+        "color": "#81A1C1"
+      },
+      "preproc": {
+        "color": "#5E81AC"
+      },
+      "punctuation": {
+        "color": "#ECEFF4"
+      },
+      "punctuation.bracket": {
+        "color": "#ECEFF4"
+      },
+      "punctuation.delimiter": {
+        "color": "#81A1C1"
+      },
+      "punctuation.list_marker": {
+        "color": "#ECEFF4"
+      },
+      "punctuation.special": {
+        "color": "#ECEFF4"
+      },
+      "string": {
+        "color": "#A3BE8C"
+      },
+      "string.escape": {
+        "color": "#EBCB8B"
+      },
+      "string.regex": {
+        "color": "#A3BE8C"
+      },
+      "string.special": {
+        "color": "#A3BE8C"
+      },
+      "string.special.symbol": {
+        "color": "#A3BE8C"
+      },
+      "tag": {
+        "color": "#81A1C1"
+      },
+      "text.literal": {
+        "color": "#A3BE8C"
+      },
+      "type": {
+        "color": "#8FBCBB"
+      },
+      "variable": {
+        "color": "#D8DEE9"
+      },
+      "variable.special": {
+        "color": "#D8DEE9"
+      },
+      "property": {
+        "color": "#88C0D0"
+      }
+    }
+  }
+}

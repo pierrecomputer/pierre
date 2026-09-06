@@ -1,0 +1,96 @@
+{
+  "name": "Horizon",
+  "appearance": "dark",
+  "style": {
+    "background": "#1C1E26",
+    "text": "#D5D8DA",
+    "editor.background": "#1C1E26",
+    "editor.active_line.background": "#2E303E4D",
+    "players": [],
+    "error": "#F43E5C",
+    "warning": "#27D797B3",
+    "hint": "#969696ff",
+    "syntax": {
+      "attribute": {
+        "color": "#F09483E6"
+      },
+      "comment": {
+        "color": "#BBBBBB4D",
+        "font_style": "italic"
+      },
+      "comment.doc": {
+        "color": "#BBBBBB4D",
+        "font_style": "italic"
+      },
+      "constant": {
+        "color": "#F09483E6"
+      },
+      "constructor": {
+        "color": "#E95678E6"
+      },
+      "emphasis": {
+        "color": "#25B0BCE6",
+        "font_style": "italic"
+      },
+      "emphasis.strong": {
+        "color": "#B877DBE6",
+        "font_weight": 700
+      },
+      "function": {
+        "color": "#25B0BCE6"
+      },
+      "keyword": {
+        "color": "#B877DBE6"
+      },
+      "label": {
+        "color": "#FAC29AE6"
+      },
+      "link_text": {
+        "color": "#FAB795E6"
+      },
+      "link_uri": {
+        "color": "#FAB795E6"
+      },
+      "number": {
+        "color": "#F09483E6"
+      },
+      "operator": {
+        "color": "#BBBBBB"
+      },
+      "property": {
+        "color": "#E95678E6"
+      },
+      "punctuation": {
+        "color": "#BBBBBB"
+      },
+      "punctuation.bracket": {
+        "color": "#BBBBBB"
+      },
+      "punctuation.delimiter": {
+        "color": "#BBBBBB"
+      },
+      "punctuation.list_marker": {
+        "color": "#BBBBBB"
+      },
+      "punctuation.special": {
+        "color": "#BBBBBB"
+      },
+      "tag": {
+        "color": "#E95678E6"
+      },
+      "title": {
+        "color": "#FAC29AE6"
+      },
+      "type": {
+        "color": "#FAC29AE6"
+      },
+      "variable": {
+        "color": "#E95678E6"
+      },
+      "variable.special": {
+        "color": "#FAC29AE6",
+        "font_style": "italic"
+      }
+    }
+  }
+}
