@@ -243,6 +243,19 @@ export const EXTENSION_TO_FILE_FORMAT: ExtensionFormatMap = {
   py: 'python',
   pyw: 'python',
   pyi: 'python',
+  // FIXME: these should be changed to a Starlark file type if/when one
+  // appears in shiki. For now, Starlark is highlighted like the Python subset
+  // it is.
+  BUCK: 'python',
+  BUILD: 'python',
+  MODULE: 'python',
+  PACKAGE: 'python',
+  WORKSPACE: 'python',
+  bazel: 'python',
+  bxl: 'python',
+  bzl: 'python',
+  star: 'python',
+  sky: 'python',
   qml: 'qml',
   qmldir: 'qmldir',
   qss: 'qss',
