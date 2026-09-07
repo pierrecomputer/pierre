@@ -389,6 +389,7 @@ export interface MergeConflictMarkerRow {
 
 export type SupportedLanguages =
   | BundledLanguage
+  | 'tsrx'
   | 'text'
   | 'ansi'
   | (string & {});

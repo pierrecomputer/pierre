@@ -13,6 +13,8 @@ JavaScript and React components.
 - Diff file versions, patches, and arbitrary files
 - Split or stacked layout
 - Automatically adapts to Shiki themes
+- Automatically highlights `.tsrx` modules with the TSRX TextMate grammar,
+  including template directives and embedded CSS and TypeScript
 - Supports light and dark mode
 - Options for diff highlight styles, in-line highlighting, wrapping, line
   numbers, and more

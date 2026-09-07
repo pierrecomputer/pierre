@@ -5,6 +5,7 @@
   "files": [
     "dist",
     "LICENSE.md",
+    "NOTICE.md",
     "README.md"
   ],
   "type": "module",

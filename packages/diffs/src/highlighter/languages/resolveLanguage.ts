@@ -27,6 +27,9 @@ export async function resolveLanguage(
 
   try {
     let loader = RegisteredCustomLanguages.get(lang);
+    if (loader == null && lang === 'tsrx') {
+      loader = () => import('./grammars/tsrx');
+    }
     if (
       loader == null &&
       Object.prototype.hasOwnProperty.call(bundledLanguages, lang)

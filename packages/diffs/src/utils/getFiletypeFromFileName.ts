@@ -317,6 +317,7 @@ export const EXTENSION_TO_FILE_FORMAT: ExtensionFormatMap = {
   mts: 'typescript',
   cts: 'typescript',
   tsp: 'typespec',
+  tsrx: 'tsrx',
   tsv: 'tsv',
   tsx: 'tsx',
   ttl: 'turtle',
