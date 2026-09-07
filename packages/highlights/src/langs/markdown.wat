@@ -2,6 +2,7 @@
   (import "../common.wat")
   (import "./tsx.wat")
   (import "./html.wat")
+  (import "./angular-html.wat")
   (import "./css.wat")
   (import "./json.wat")
   (import "./bash.wat")
@@ -32,7 +33,7 @@
     "tsx" "html" "css" "json" "bash" "c" "cpp" "go" "python"
     "rust" "yaml" "php" "sql" "swift" "haskell" "kotlin" "astro"
     "vue" "svelte" "xml" "markdown" "mdx" "asm" "wat" "diff" "glsl" "lua"
-    "js" "jsx" "ts"
+    "js" "jsx" "ts" "angular-html"
   )
 
   ;; Public language aliases: 16-byte records containing length, enum id, and
@@ -53,6 +54,12 @@
     (local $mask i64)
     (local $word i64)
     (local.set $len (i32.sub (local.get $rhs) (local.get $lhs)))
+    ;; Angular's public name is longer than the compact alias records.
+    (if (i32.and (i32.eq (local.get $len) (i32.const 12))
+          (i32.and
+            (i64.eq (i64.or (i64.load (local.get $lhs)) (i64.const 0x2020202020202020)) (i64.const "angular-"))
+            (i32.eq (i32.or (i32.load offset=8 (local.get $lhs)) (i32.const 0x20202020)) (i32.const "html"))))
+      (then (return (enum.get $MarkdownFenceLang.angular-html))))
     (if (i32.or (i32.eqz (local.get $len)) (i32.gt_u (local.get $len) (i32.const 10)))
       (then (return (enum.get $MarkdownFenceLang.unknown))))
     (local.set $record (i32.const $mem.markdownFence))
@@ -189,6 +196,7 @@
       (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.jsx)) (then (call $hlJsx) (br $codeDone)))
       (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.ts)) (then (call $hlTs) (br $codeDone)))
       (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.html)) (then (call $hlHtml) (br $codeDone)))
+      (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.angular-html)) (then (call $hlAngularHtml) (br $codeDone)))
       (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.css)) (then (call $hlCss) (br $codeDone)))
       (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.json)) (then (call $hlJson) (br $codeDone)))
       (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.bash)) (then (call $hlBash) (br $codeDone)))

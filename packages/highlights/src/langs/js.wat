@@ -1092,7 +1092,8 @@
     (if (local.get $leadBrace)
       (then
         (if (i32.eq (i32.load8_u (local.get $lhs)) (i32.const 96))
-          (then (global.set $jsTemplateState (global.get $jsTemplateMarker)))
+          (then (global.set $jsTemplateState (select (i32.const 0) (global.get $jsTemplateMarker)
+            (i32.and (global.get $jsTemplateMarker) (i32.const 0x40000000)))))
           (else
             (if (global.get $jsTemplateEmitSp)
               (then
@@ -1119,7 +1120,7 @@
           (then
             (local.set $p (i32.add (local.get $lhs) (i32.const 1)))
             (call $emitTok (enum.get $Token.string) (local.get $lhs) (local.get $p))))
-        (if (i32.ge_u (global.get $jsTemplateState) (i32.const 256))
+        (if (i32.ge_s (global.get $jsTemplateState) (i32.const 256))
           (then (call $emitCssTemplateBody (local.get $p)
             (i32.sub (local.get $e) (local.get $closed))))
           (else (call $emitHtmlTemplateBody (local.get $p)

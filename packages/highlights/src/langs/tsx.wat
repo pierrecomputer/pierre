@@ -159,6 +159,8 @@
     (local $done i32)
     (local $m i32)
     (local $cut i32)
+    (local $metadataMarker i32)
+    (local $markerBefore i32)
     (local $markerLhs i32)
     (local $markerRhs i32)
     (call $lexEmitLeadingContinuation)
@@ -300,11 +302,39 @@
         (local.set $nxtLhs (global.get $lhs))
         (local.set $nxtRhs (global.get $rhs))
         (local.set $haveNext (i32.const 1))
-        (call $emitCur (local.get $curT) (local.get $curLhs) (local.get $curRhs)
-                       (local.get $nxtT))
+        (local.set $metadataMarker (i32.const 0))
+        (if (i32.and
+              (i32.or (i32.eq (global.get $prevTok) (enum.get $Lex.eof))
+                (i32.or (i32.eq (global.get $prevTok) (enum.get $Lex.l_brace))
+                        (i32.eq (global.get $prevTok) (enum.get $Lex.comma))))
+              (i32.or (i32.eq (local.get $curT) (enum.get $Lex.identifier))
+                      (i32.eq (local.get $curT) (enum.get $Lex.string_literal))))
+          (then
+            (local.set $markerLhs (local.get $curLhs))
+            (local.set $markerRhs (local.get $curRhs))
+            (if (i32.eq (local.get $curT) (enum.get $Lex.string_literal))
+              (then
+                (local.set $markerLhs (i32.add (local.get $markerLhs) (i32.const 1)))
+                (local.set $markerRhs (i32.sub (local.get $markerRhs) (i32.const 1)))))
+            (if (i32.and
+                  (i32.eq (i32.sub (local.get $markerRhs) (local.get $markerLhs)) (i32.const 8))
+                  (i64.eq (i64.load (local.get $markerLhs)) (i64.const "template")))
+              (then (local.set $metadataMarker (i32.const 0xc0000001))))
+            (if (i32.and
+                  (i32.eq (i32.sub (local.get $markerRhs) (local.get $markerLhs)) (i32.const 6))
+                  (i64.eq (i64.and (i64.load (local.get $markerLhs)) (i64.const 0xffffffffffff)) (i64.const "styles")))
+              (then (local.set $metadataMarker (i32.const 0x40000104))))))
+        (if (i32.and (i32.ne (local.get $metadataMarker) (i32.const 0))
+              (i32.and (i32.eq (local.get $curT) (enum.get $Lex.identifier))
+                (i32.or (i32.eq (local.get $nxtT) (enum.get $Lex.colon))
+                  (i32.or (i32.eq (local.get $nxtT) (enum.get $Lex.eof))
+                    (i32.ne (bitset.get $LexBits.comment (local.get $nxtT)) (i32.const 0))))))
+          (then (call $emitTok (enum.get $Token.property) (local.get $curLhs) (local.get $curRhs)))
+          (else (call $emitCur (local.get $curT) (local.get $curLhs) (local.get $curRhs) (local.get $nxtT))))
+        (local.set $markerBefore (global.get $jsTemplateMarker))
         (global.set $jsTemplateMarker (i32.const 0))
-        ;; Only the immediately preceding identifier or exact comment marker
-        ;; selects an embedded language; whitespace is already excluded by the token scanner.
+        ;; Tagged identifiers and exact comment markers select embedded languages.
+        ;; The token scanner already excludes whitespace.
         (local.set $markerLhs (local.get $curLhs))
         (local.set $markerRhs (local.get $curRhs))
         (if (i32.eq (local.get $curT) (enum.get $Lex.multiline_comment))
@@ -342,6 +372,16 @@
                     (i32.eq (i32.or (i32.and (i32.load (local.get $markerLhs)) (i32.const 0xffffff))
                               (i32.const 0x202020)) (i32.const "css"))))
               (then (global.set $jsTemplateMarker (i32.const 260))))))
+        ;; Component metadata keys select the language after their colon.
+        ;; Bit 30 marks a key awaiting its colon; comments preserve that decision.
+        (if (i32.and (i32.eq (local.get $curT) (enum.get $Lex.colon))
+              (i32.ne (i32.and (local.get $markerBefore) (i32.const 0x40000000)) (i32.const 0)))
+          (then (global.set $jsTemplateMarker (i32.and (local.get $markerBefore) (i32.const 0xbfffffff)))))
+        (if (i32.and (i32.ne (bitset.get $LexBits.comment (local.get $curT)) (i32.const 0))
+              (i32.eqz (global.get $jsTemplateMarker)))
+          (then (global.set $jsTemplateMarker (local.get $markerBefore))))
+        (if (local.get $metadataMarker)
+          (then (global.set $jsTemplateMarker (local.get $metadataMarker))))
         (local.set $done (local.get $curRhs))
         ;; comments are transparent to prev; a cut token's kind is recorded by
         ;; the resume instead

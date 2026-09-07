@@ -62,7 +62,7 @@ export function transformWat(
           members
             .split(/\s+/g)
             .map((l: string) => l.trim())
-            .filter((l: string) => l !== '' && /^"[\w.]+"$/.test(l))
+            .filter((l: string) => l !== '' && /^"[\w.-]+"$/.test(l))
             .map((l: string): [string, number] => [
               JSON.parse(l) as string,
               i++,
@@ -509,7 +509,7 @@ export function transformWat(
     const values: (number | null)[] = [0];
     let group = 0;
     for (const [, value, list] of inner.matchAll(
-      /\(group(?:\s+(\$[\w.]+(?:\+\d+)?|-?\d+))?((?:\s+"[\w.@#!-]+")+)\s*\)/g
+      /\(group(?:\s+(\$[\w.-]+(?:\+\d+)?|-?\d+))?((?:\s+"[\w.$@#!-]+")+)\s*\)/g
     )) {
       group += 1;
       if (group > 255)
@@ -517,7 +517,7 @@ export function transformWat(
       values.push(
         value === undefined ? null : resolveEnumValue(value, enumMap)
       );
-      for (const q of list.match(/"[\w.@#!-]+"/g) ?? []) {
+      for (const q of list.match(/"[\w.$@#!-]+"/g) ?? []) {
         const word = JSON.parse(q);
         if (word.length < 2 || word.length > 31)
           throw new Error(
@@ -701,7 +701,7 @@ export function transformWat(
 
   code = code
     .replace(
-      /(\(\s*)enum\.get\s+(\$\w+)\.([\w.]+)/g,
+      /(\(\s*)enum\.get\s+(\$\w+)\.([\w.-]+)/g,
       (_, prefix, key, memberName) => {
         const i = enumMap.get(key)?.[memberName];
         if (i === undefined)
@@ -791,7 +791,7 @@ function resolveEnumValue(
   enumMap: Map<string, Record<string, number>>
 ): number {
   if (/^-?\d+$/.test(text)) return Number(text);
-  const m = text.match(/^(\$\w+)\.([\w.]+?)(?:\+(\d+))?$/);
+  const m = text.match(/^(\$\w+)\.([\w.-]+?)(?:\+(\d+))?$/);
   const value = m === null ? undefined : enumMap.get(m[1])?.[m[2]];
   if (value === undefined) throw new Error(`unknown enum value '${text}'`);
   return value + Number(m?.[3] ?? 0);

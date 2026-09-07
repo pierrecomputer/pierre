@@ -393,6 +393,39 @@ void t.test(
   }
 );
 
+void t.test(
+  'LiveTokenizer: Angular metadata restores markup and expression state after edits',
+  () => {
+    for (const lang of ['js', 'jsx', 'ts', 'tsx'] as const) {
+      let code =
+        '({ template: `<p\n [title]="${\n({ template: `<b>{{ nested }}</b>` }).template\n} + name">\n@if (ready) { {{\n name | uppercase\n }} }\n</p>` });';
+      const live = new LiveTokenizer({ lang, theme: pierreDark, code });
+      assertMatchesFresh(live, code, lang, 'initial Angular template');
+      let key = 'template';
+      for (const replacement of ['fallback', 'styles', 'template']) {
+        live.applyEdits([
+          {
+            range: {
+              start: { line: 0, character: 3 },
+              end: { line: 0, character: 3 + key.length },
+            },
+            newText: replacement,
+          },
+        ]);
+        code = code.slice(0, 3) + replacement + code.slice(3 + key.length);
+        key = replacement;
+        if (key === 'styles') {
+          // Angular markup is malformed CSS, whose lookahead can differ by line.
+          assertMatchesLineStream(live, code, lang, key);
+        } else {
+          assertMatchesFresh(live, code, lang, key);
+        }
+      }
+      live.dispose();
+    }
+  }
+);
+
 void t.test('LiveTokenizer: restores a full template stack after edits', () => {
   for (const lang of ['js', 'jsx', 'ts', 'tsx'] as const) {
     const head = 'html`<b>${'.repeat(256) + '\n';

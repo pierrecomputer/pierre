@@ -128,7 +128,10 @@ export type TestSplitHl = (
  * naming (`js`/`jsx`/`ts` live in `tsx.wat`, the css dialects in `css.wat`).
  */
 export function loadSplitLang(name: Lang): TestSplitHl {
-  const entry = `$hl${name[0].toUpperCase()}${name.slice(1)}`;
+  const entry =
+    name === 'angular-html'
+      ? '$hlAngularHtml'
+      : `$hl${name[0].toUpperCase()}${name.slice(1)}`;
   const file = ['js', 'jsx', 'ts'].includes(name)
     ? 'tsx'
     : ['less', 'sass', 'scss'].includes(name)

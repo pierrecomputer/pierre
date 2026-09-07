@@ -31,7 +31,7 @@
       [46592:47616)   TOML nesting stack
       [47616:63632)   live tokenizer change list
       [63632:63760)   live tokenizer free-list heads
-      [63760:65536)   free
+      [63760:65536)   Angular keyword table
     [] pages 2..N     (text buffer; a live instance lays them out itself,
                       see src/live.wat)
       [65536:EOF)     input, NUL sentinel, then at least 16 bytes of slack
@@ -43,6 +43,7 @@
   (import "./token.wat")
   (import "./emit.wat")
   (import "./live.wat")
+  (import "./langs/angular-html.wat")
   (import "./langs/asm.wat")
   (import "./langs/astro.wat")
   (import "./langs/bash.wat")
@@ -103,9 +104,10 @@
   (import "./langs/nix.wat")
   (import "./langs/pascal.wat")
 
-  ;; Numeric values are the public ABI mirrored by lib/index.mjs.
+  ;; Numeric values are the public ABI mirrored by lib/highlighter.ts.
   (enum $Language
     "plain"
+    "angular-html"
     "asm"
     "astro"
     "bash"
@@ -176,7 +178,7 @@
   ;; language dispatch table, one entry per $Language member in enum order
   (table $hlDispatch funcref
     (elem
-      $hlPlain $hlAsm $hlAstro $hlBash $hlC $hlC3 $hlClojure $hlCmake $hlCpp
+      $hlPlain $hlAngularHtml $hlAsm $hlAstro $hlBash $hlC $hlC3 $hlClojure $hlCmake $hlCpp
       $hlCsharp $hlCss $hlDart $hlDiff $hlDockerfile $hlElixir $hlErlang
       $hlFsharp $hlGleam $hlGlsl $hlGo $hlGraphql $hlGroovy $hlHaskell $hlHlsl
       $hlHtml $hlJava $hlJs $hlJson $hlJsx $hlJulia $hlKotlin $hlLess $hlLisp

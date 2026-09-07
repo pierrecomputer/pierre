@@ -79,5 +79,6 @@
   ;; [47616:63760) live tokenizer controls; the heap starts in page 2.
   (const $mem.liveChanges 47616)              ;; 16016: count + 1000 records, padded
   (const $mem.liveFree 63632)                 ;; 128: 32 size-class free-list heads
+  (const $mem.angularWords 63760)           ;; 1776: Angular keyword table
   (const $mem.liveHeapStart 65536)
 )

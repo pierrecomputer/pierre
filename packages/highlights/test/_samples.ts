@@ -24,6 +24,36 @@ export interface LangSample {
 }
 
 export const samples: Record<string, LangSample> = {
+  'angular-html': {
+    code: lines(
+      '<!-- Angular template -->',
+      '@let user = profile();',
+      '@if (user) {',
+      '  <section [class.active]="true" (click)="save($event)">',
+      '    <input [(ngModel)]="user.name" #name />',
+      '    <p title="Hello {{ user.name }}">{{ user.name | uppercase }}</p>',
+      '    @for (item of items; track item.id; let i = $index) {',
+      '      <span>{{ i + 1 }} &amp; {{ item.name }}</span>',
+      '    } @empty { <p>No items</p> }',
+      '  </section>',
+      '} @else { <p>Loading</p> }',
+      '@defer (on viewport) { <app-card /> } @placeholder { <p>Wait</p> }'
+    ),
+    kinds: [
+      'comment',
+      'keyword.declaration',
+      'variable',
+      'function',
+      'keyword.control',
+      'tag',
+      'attribute',
+      'boolean',
+      'variable.special',
+      'property',
+      'number',
+      'string.special',
+    ],
+  },
   asm: {
     code: lines(
       '.section .text',
@@ -3388,6 +3418,10 @@ export const samples: Record<string, LangSample> = {
 /** Short documents with multiline constructs and Unicode for tokenizer tests. */
 export const tokenizerSamples: [Lang, string][] = [
   ['plain', 'one\ntwo\n'],
+  [
+    'angular-html',
+    '<section\n [title]="user.\nname">{{\n user.name | uppercase\n}}</section>\n@if (ready) {\n <p>你好 🌍</p>\n}\n',
+  ],
   ['asm', 'start:\n  /* open\nstill */\n  mov eax, 1\n'],
   ['astro', '---\nconst title = "x"\n---\n<h1>{\nformat({ title })\n}</h1>\n'],
   ['bash', 'cat <<EOF\nhello $USER\nEOF\necho done\n'],

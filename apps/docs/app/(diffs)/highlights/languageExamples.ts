@@ -101,6 +101,90 @@ export default function Badge({ label, count = 0 }: BadgeProps) {
 </html>`,
   ],
   [
+    'angular-ts',
+    'Angular TypeScript',
+    `import { Component, signal } from "@angular/core";
+
+@Component({
+  selector: "app-counter",
+  template: \`
+    <section class="counter" [class.active]="count() > 0">
+      <h2>{{ title }}</h2>
+      <button [disabled]="count() === 0" (click)="decrement()">−</button>
+      <output>{{ count() }}</output>
+      <button (click)="increment()">+</button>
+
+      @if (count() > 0) {
+        <p>You clicked {{ count() }} times.</p>
+      } @else {
+        <p>Click + to get started.</p>
+      }
+    </section>
+  \`,
+  styles: \`
+    :host { display: block; font-family: system-ui; }
+    .counter { padding: 1rem; border: 1px solid #444; border-radius: 8px; }
+    .counter.active { border-color: rebeccapurple; }
+    output { padding: 0 1rem; font-weight: bold; }
+    button:disabled { opacity: 0.5; }
+  \`,
+})
+export class CounterComponent {
+  readonly title = "Angular counter";
+  readonly count = signal(0);
+
+  increment() {
+    this.count.update((value) => value + 1);
+  }
+
+  decrement() {
+    this.count.update((value) => Math.max(0, value - 1));
+  }
+}`,
+  ],
+  [
+    'angular-html',
+    'Angular HTML',
+    `<!-- Bindings, interpolation, pipes, and control flow -->
+@let user = currentUser();
+
+<section [class.signed-in]="user !== null">
+  @if (user; as profile) {
+    <h2>Hello, {{ profile.name | uppercase }}!</h2>
+    <label>
+      Search
+      <input #search [(ngModel)]="query" (keyup.enter)="searchProducts(query)" />
+    </label>
+
+    <ul>
+      @for (product of products(); track product.id; let i = $index) {
+        <li [attr.data-index]="i">
+          <span>{{ product.name }}</span>
+          <strong>{{ product.price | currency : "USD" }}</strong>
+          <button [disabled]="!product.inStock" (click)="addToCart(product)">
+            Add to cart
+          </button>
+        </li>
+      } @empty {
+        <li>No products match {{ query }}.</li>
+      }
+    </ul>
+  } @else {
+    <p>Please sign in to browse your favorites.</p>
+  }
+</section>
+
+@defer (on viewport) {
+  <app-recommendations />
+} @placeholder {
+  <p>Recommendations will appear here.</p>
+} @loading {
+  <p>Loading recommendations…</p>
+} @error {
+  <p>Could not load recommendations.</p>
+}`,
+  ],
+  [
     'css',
     'CSS',
     `/* style.css */

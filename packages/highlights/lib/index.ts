@@ -1,5 +1,7 @@
 /** A language name or alias supported by a built-in lexer. */
 export type Lang =
+  | 'angular-html'
+  | 'angular-ts'
   | 'asm'
   | 'assembly'
   | 'astro'

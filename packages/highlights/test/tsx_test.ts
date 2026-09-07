@@ -339,6 +339,84 @@ void t.test('tsx: nested and multiline templates', () => {
 
 for (const lang of ['js', 'jsx', 'ts', 'tsx'] as const) {
   void t.test(
+    `${lang}: Angular metadata selects template and style lexers`,
+    () => {
+      for (const [key, body, embedded] of [
+        [
+          'template',
+          '<p [title]="name">{{ name | uppercase }}</p>',
+          'angular-html',
+        ],
+        ['styles', 'body { color: red; margin: 1rem; }', 'css'],
+      ] as const) {
+        assert.ok(
+          tokenKinds(lang, `${key}: \`${body}\``).some(([text]) => text === '`')
+        );
+        for (const property of [key, `"${key}"`, `'${key}'`]) {
+          for (const separator of [':', '\n:\n', '/* key */: /* value */']) {
+            const kinds = tokenKinds(
+              lang,
+              `@Component({ ${property}${separator}\`${body}\` })`
+            );
+            const start = kinds.findIndex(([text]) => text === '`');
+            const end = kinds.findLastIndex(([text]) => text === '`');
+            assert.ok(start >= 0, `${property}${separator}`);
+            assert.deepEqual(
+              kinds.slice(start + 1, end),
+              tokenKinds(embedded, body)
+            );
+          }
+        }
+      }
+      for (const code of [
+        'const template = `<p>{{ name }}</p>`;',
+        'const styles = `body { color: red; }`;',
+        '({ mytemplate: `<p>{{ name }}</p>`, style: `body { color: red; }` })',
+        '({ template: other, fallback: `<p>{{ name }}</p>` })',
+        '({ template() { return `<p>{{ name }}</p>` } })',
+      ]) {
+        assert.ok(
+          !tokenKinds(lang, code).some(([, kind]) => kind === 'tag'),
+          code
+        );
+      }
+    }
+  );
+
+  void t.test(
+    `${lang}: Angular metadata survives streaming and nested templates`,
+    () => {
+      for (const code of [
+        '@Component({\n template\n :\n `<section\n [title]="name">\n @if (ready) {\n <p>{{\n name | uppercase\n }}</p>\n }\n </section>`,\n styles: `body {\n color: red;\n }`\n})',
+        '({ template: `<p [title]="${name} + suffix">{{ value | ${pipe} }}</p>` })',
+        '({ template: `<p title="before ${\n({ template: `<b>{{ nested }}</b>`, styles: `a { color: red }` }).template\n} after">{{ name }}</p>` }); const after = 1;',
+        '({ styles: `body { color: ${color};\n margin: ${gap}px; }`, template: `<p>${html`<b>${name}</b>`}{{ name }}</p>` })',
+        '({ template: `<p [title]="unterminated\n',
+        "({ template: `{{ {name: 'open\n",
+      ]) {
+        assertLineFedParity(lang, code);
+        checkInvariants(tsx.hl, code);
+      }
+      const kinds = tokenKinds(
+        lang,
+        '({ template: `<p [title]="${name} + suffix">{{ value | ${pipe} }}</p>` }); `<plain>`'
+      );
+      assert.ok(
+        kinds.some(([text, kind]) => text === 'suffix' && kind === 'variable')
+      );
+      assert.ok(
+        kinds.some(([text, kind]) => text === '`<plain>`' && kind === 'string')
+      );
+      assert.ok(
+        kinds.some(
+          ([text, kind]) =>
+            text.endsWith('}}') && kind === 'punctuation.special'
+        )
+      );
+    }
+  );
+
+  void t.test(
     `${lang}: nested templates preserve state across lookahead`,
     () => {
       const code =
