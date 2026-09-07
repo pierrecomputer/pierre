@@ -267,7 +267,6 @@
   ;; the analog of span merging. Records tile the input; a record's start is
   ;; the previous record's end (0 for the first).
   (func $recTok (param $hl i32) (param $rhs i32)
-    (call $ensureCap (i32.const 16))
     (if (i32.and
           (i32.gt_u (global.get $out) (i32.load (i32.const 6)))
           (i32.eq (i32.load (i32.sub (global.get $out) (i32.const 4))) (local.get $hl)))
@@ -275,6 +274,7 @@
         (i32.store (i32.sub (global.get $out) (i32.const 8))
           (i32.sub (local.get $rhs) (global.get $srcBase)))
         (return)))
+    (call $ensureCap (i32.const 16))
     (i32.store (global.get $out) (i32.sub (local.get $rhs) (global.get $srcBase)))
     (i32.store offset=4 (global.get $out) (local.get $hl))
     (global.set $out (i32.add (global.get $out) (i32.const 8))))
@@ -303,7 +303,6 @@
   ;; line terminator and ends after it. Other equal neighbors merge.
   (func $recLineWrite (param $hl i32) (param $end i32)
     (local $start i32)
-    (call $ensureCap (i32.const 16))
     (if (i32.gt_u (global.get $out) (i32.load (i32.const 6)))
       (then
         (local.set $start (i32.load (i32.sub (global.get $out) (i32.const 8))))))
@@ -316,6 +315,7 @@
       (then
         (i32.store (i32.sub (global.get $out) (i32.const 8)) (local.get $end))
         (return)))
+    (call $ensureCap (i32.const 16))
     (i32.store (global.get $out) (local.get $end))
     (i32.store offset=4 (global.get $out) (local.get $hl))
     (global.set $out (i32.add (global.get $out) (i32.const 8))))

@@ -89,9 +89,10 @@ function printTable(cols: Column[], rows: string[][]) {
     }
   }
   const target = process.env.MOON_TARGET;
-  const termW =
-    (columns > 0 ? columns : Infinity) -
-    (target == null ? 0 : target.length + 3);
+  const termW = process.argv.includes('--wide')
+    ? Infinity
+    : (columns > 0 ? columns : Infinity) -
+      (target == null ? 0 : target.length + 3);
   const colWidth = (c: Column, i: number) =>
     Math.max(c.title.length, ...rows.map((r) => (r[i] ?? '').length));
   const tableW = (idxs: number[]) =>

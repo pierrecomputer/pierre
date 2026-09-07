@@ -4,7 +4,7 @@ import { gzipSync } from 'node:zlib';
 import { pathToFileURL } from 'url';
 import wabt from 'wabt';
 
-const { parseWat } = await wabt();
+const { parseWat, readWasm } = await wabt();
 
 /** The expanded module text and its resolved enums. */
 export interface TransformedWat {
@@ -478,9 +478,9 @@ export function transformWat(
   // `(keyword-table $Name <base> <end> (group <value>? "word" ...) ...)`
   // emits a displacement-based perfect hash table for keyword lookup:
   // [buckets] displacement bytes, [slots] u16 descriptors
-  // (len<<11 | recOffset+1), [group:u8, word bytes] records (7 zero bytes of
-  // slack for wide compares), and, when every group carries a value, a u16
-  // value per group. `(keyword-table.get $Name <start> <end>)` looks a word
+  // (len<<11 | recOffset+1), [group:u8, word bytes] records, and, when every
+  // group carries a value, a u16 value per group.
+  // `(keyword-table.get $Name <start> <end>)` looks a word
   // up and returns its 1-based group index, or 0 for a miss;
   // `(keyword-table.value $Name <start> <end>)` returns the group's value, or
   // -1 for a miss (a group whose value is -1 also reads as a miss). The hash mixes the first two bytes, last byte, and length,
@@ -577,13 +577,6 @@ export function transformWat(
       ...placed.disp,
       ...[...placed.table].flatMap((v) => [v & 0xff, v >> 8]),
       ...records,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0, // slack for the lookup's 8-byte-wide tail compare
     ];
     // group values follow as signed 16-bit entries indexed by group (entry 0
     // unused); -1 marks a group the value lookup reports as a miss
@@ -1259,7 +1252,22 @@ export function optimizeWasm(wasmBytes: Uint8Array): Uint8Array {
       wasmModule.dispose();
     }
   }
-  return wasmBytes;
+  // Binaryen folds byte splats into 18-byte vector constants. Encode them
+  // as a scalar and splat (4–5 bytes) after the final optimization pass.
+  const compact = readWasm(wasmBytes, { readDebugNames: false });
+  try {
+    const code = compact.toText({ foldExprs: false, inlineExport: false });
+    return wat2wasm(
+      'highlights.wat',
+      code.replace(
+        /^[ \t]*v128\.const i32x4 (0x([0-9a-f]{2})\2\2\2) \1 \1 \1$/gm,
+        (_match, _word, byte: string) =>
+          `i32.const ${(parseInt(byte, 16) << 24) >> 24}\n    i8x16.splat`
+      )
+    );
+  } finally {
+    compact.destroy();
+  }
 }
 
 /**

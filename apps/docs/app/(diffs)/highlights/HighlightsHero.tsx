@@ -90,12 +90,12 @@ export function HighlightsHero({ gzipBytes }: { gzipBytes: number }) {
 
       <p className="text-muted-foreground mt-2 text-sm">
         {(gzipBytes / 1024).toFixed(1)} KiB gzipped Wasm · 66 built-in languages
-        · 124–566× faster than Shiki (
+        · 120–582× Shiki HTML throughput (
         <Link
           target="_blank"
           rel="noopener noreferrer"
           className="hover:text-foreground muted-foreground hover:decoration-foreground underline decoration-[1px] underline-offset-4 transition-colors"
-          href="https://github.com/pierrecomputer/pierre/tree/main/packages/highlights/benchmark"
+          href="https://github.com/pierrecomputer/pierre/tree/main/packages/highlights/benchmark#html-generation"
         >
           Benchmark
         </Link>

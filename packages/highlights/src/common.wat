@@ -697,9 +697,7 @@
     (local $h i32)
     (local $entry i32)
     (local $rec i32)
-    (local $p i32)
-    (local $n i32)
-    (local $mask i64)
+    (local $mask i32)
     (local.set $len (i32.sub (local.get $end) (local.get $start)))
     (if (i32.gt_u (i32.sub (local.get $len) (i32.const 2)) (i32.const 29))
       (then (return (i32.const 0))))
@@ -747,30 +745,24 @@
             (i32.add (local.get $bucketMask) (i32.const 1)))
           (i32.shl (i32.add (local.get $slotMask) (i32.const 1)) (i32.const 1)))
         (i32.sub (i32.and (local.get $entry) (i32.const 2047)) (i32.const 1))))
-    ;; verify 8 bytes per step; wide loads stay inside the input slack and the
-    ;; table's trailing pad
-    (local.set $p (local.get $rec))
-    (local.set $n (local.get $len))
-    (block $verified
-      (loop $cmp
-        (if (i32.lt_u (local.get $n) (i32.const 8))
-          (then
-            (local.set $mask (i64.shr_u (i64.const -1)
-              (i64.extend_i32_u
-                (i32.shl (i32.sub (i32.const 8) (local.get $n)) (i32.const 3)))))
-            (if (i64.ne
-                  (i64.and (i64.load (local.get $start)) (local.get $mask))
-                  (i64.and (i64.load offset=1 (local.get $p)) (local.get $mask)))
-              (then (return (i32.const 0))))
-            (br $verified)))
-        (if (i64.ne
-              (i64.load (local.get $start))
-              (i64.load offset=1 (local.get $p)))
-          (then (return (i32.const 0))))
-        (local.set $start (i32.add (local.get $start) (i32.const 8)))
-        (local.set $p (i32.add (local.get $p) (i32.const 8)))
-        (local.set $n (i32.sub (local.get $n) (i32.const 8)))
-        (br_if $cmp (local.get $n))))
+    ;; Compare up to 16 bytes at once. Longer words use an overlapping tail
+    ;; inside the word. Short words mask lookahead into input slack or the
+    ;; memory following a static table record; neither needs zero padding.
+    (local.set $mask (i8x16.bitmask (i8x16.ne
+      (v128.load (local.get $start))
+      (v128.load offset=1 (local.get $rec)))))
+    (if (i32.gt_u (local.get $len) (i32.const 16))
+      (then
+        (if (i32.or (local.get $mask)
+              (i8x16.bitmask (i8x16.ne
+                (v128.load (i32.sub (local.get $end) (i32.const 16)))
+                (v128.load (i32.add (local.get $rec)
+                  (i32.sub (local.get $len) (i32.const 15)))))))
+          (then (return (i32.const 0)))))
+      (else
+        (if (i32.and (local.get $mask)
+              (i32.sub (i32.shl (i32.const 1) (local.get $len)) (i32.const 1)))
+          (then (return (i32.const 0))))))
     (i32.load8_u (local.get $rec)))
 
   ;; The value a keyword table assigns to a word's group - see the
@@ -787,27 +779,29 @@
     (i32.load16_s (i32.add (local.get $values) (i32.shl (local.get $g) (i32.const 1)))))
 
 
-  ;; language can probe a lowercase keyword table with it, zero-padding the
-  ;; eight bytes the lookup's wide loads may read past the word. Returns the
-  ;; copied length, or 0 for a word longer than a table can hold; the empty
-  ;; range then misses like any other non-keyword.
+  ;; Copy a word as lowercase ASCII for case-insensitive keyword lookup.
+  ;; Wide loads use input slack; stores fit the 64-byte scratch buffer.
+  ;; Returns the copied length, or 0 for a word longer than a table can hold;
+  ;; the empty range then misses like any other non-keyword.
   (func $lexLowerCopy (param $lhs i32) (param $rhs i32) (param $dst i32) (result i32)
     (local $n i32)
     (local $i i32)
-    (local $c i32)
+    (local $w v128)
     (local.set $n (i32.sub (local.get $rhs) (local.get $lhs)))
     (if (i32.gt_u (local.get $n) (i32.const 31))
       (then (return (i32.const 0))))
     (block $done
-      (loop $l
+      (loop $wide
         (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
-        (local.set $c (i32.load8_u (i32.add (local.get $lhs) (local.get $i))))
-        (if (i32.le_u (i32.sub (local.get $c) (i32.const "A")) (i32.const 25))
-          (then (local.set $c (i32.or (local.get $c) (i32.const 32)))))
-        (i32.store8 (i32.add (local.get $dst) (local.get $i)) (local.get $c))
-        (local.set $i (i32.add (local.get $i) (i32.const 1)))
-        (br $l)))
-    (i64.store (i32.add (local.get $dst) (local.get $n)) (i64.const 0))
+        (local.set $w (v128.load (i32.add (local.get $lhs) (local.get $i))))
+        (v128.store (i32.add (local.get $dst) (local.get $i))
+          (v128.or (local.get $w) (v128.and
+            (i8x16.le_u
+              (i8x16.sub (local.get $w) (i8x16.splat (i32.const "A")))
+              (i8x16.splat (i32.const 25)))
+            (i8x16.splat (i32.const 32)))))
+        (local.set $i (i32.add (local.get $i) (i32.const 16)))
+        (br $wide)))
     (local.get $n))
 
   ;; Return the next occurrence of either byte, or $end. Long clean runs use

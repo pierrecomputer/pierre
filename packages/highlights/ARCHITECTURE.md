@@ -23,7 +23,7 @@ src/sig.wat         shared parameter-list machine (variable.parameter)
 src/langs/*.wat     65 built-in language modes
 src/live.wat        incremental-tokenizer core: heap, line table, state
                     interning, per-line driver, edit splicing, compaction
-src/highlights.wat     memory, $Language enum, imports, and dispatch
+src/highlights.wat  memory, $Language enum, imports, and dispatch
 lib/index.ts        public types and the export barrel
 lib/highlighter.ts  HighlightsHighlighter, codeToHtml/codeToTokens/codeToHast,
                     language aliases, theme cache, StreamTokenizer
@@ -92,6 +92,11 @@ before preprocessing, so editor warnings are expected.
 
 `wat2wasm()` enables bulk memory and SIMD. Hot scans classify 16 bytes with
 `i8x16` comparisons, `i8x16.bitmask`, and `i32.ctz`.
+
+Keyword verification compares one SIMD vector for words up to 16 bytes, or two
+overlapping vectors for longer words. Short-word comparisons mask bytes beyond
+the word, so static keyword records and lowercase scratch copies need no zero
+padding. Case-insensitive lookups lowercase ASCII 16 bytes at a time.
 
 ## Memory layout
 
