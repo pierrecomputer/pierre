@@ -23,8 +23,6 @@
   (global $cssVariables (mut i32) (i32.const 0))
   (global $spanCacheMode (mut i32) (i32.const -1)) ;; cached style mode, unchanged by token calls
   (global $tokens (mut i32) (i32.const 0))  ;; token-record mode: emit (end:u32, hl:u32) records instead of HTML
-  (global $recByte (mut i32) (i32.const 0))
-  (global $recChar (mut i32) (i32.const 0))
   (global $recCarryHl (mut i32) (i32.const -1))
   (global $streaming (mut i32) (i32.const 0))
   (global $streamReset (mut i32) (i32.const 0))
@@ -337,19 +335,16 @@
       (then (global.set $out (local.get $last)))
       (else (i32.store (local.get $last) (local.get $end)))))
 
-  ;; Scan newly emitted input bytes once, converting ends to UTF-16 and
-  ;; splitting token records at LF/CRLF boundaries.
-  (func $recLineTok (param $hl i32) (param $rhs i32)
-    (local $p i32)
-    (local $char i32)
+  ;; Scan newly emitted input bytes once, splitting records at LF/CRLF
+  ;; boundaries and returning the UTF-16 cursor for the next record.
+  (func $recLineTok (param $hl i32) (param $p i32) (param $rhs i32)
+    (param $char i32) (result i32)
     (local $b i32)
     (local $cut i32)
     (local $step i32)
     (local $mask i32)
     (local $rem i32)
     (local $w v128)
-    (local.set $p (global.get $recByte))
-    (local.set $char (global.get $recChar))
     (block $done
       (loop $scan
         (br_if $done (i32.ge_u (local.get $p) (local.get $rhs)))
@@ -405,8 +400,7 @@
             (local.set $char (i32.add (local.get $char) (i32.const 1)))))
         (br $scan)))
     (call $recLineWrite (local.get $hl) (local.get $char))
-    (global.set $recByte (local.get $rhs))
-    (global.set $recChar (local.get $char)))
+    (local.get $char))
 
   ;; Convert byte-end token records to line-aware UTF-16 records after lexing.
   ;; Keeping the original emission order first preserves malformed-input cases
@@ -414,25 +408,28 @@
   (func $recLinesPost
     (local $rec i32)
     (local $oldEnd i32)
+    (local $lhs i32)
     (local $rhs i32)
+    (local $char i32)
     (local.set $rec (i32.load (i32.const 6)))
     (local.set $oldEnd (global.get $out))
     (global.set $out
       (i32.and (i32.add (local.get $oldEnd) (i32.const 15)) (i32.const -16)))
     (i32.store (i32.const 6) (global.get $out))
-    (global.set $recByte (global.get $srcBase))
-    (global.set $recChar (i32.const 0))
     (block $done
       (loop $records
         (br_if $done (i32.ge_u (local.get $rec) (local.get $oldEnd)))
         (local.set $rhs (i32.load (local.get $rec)))
         (if (i32.gt_u
               (local.get $rhs)
-              (i32.sub (global.get $recByte) (global.get $srcBase)))
+              (local.get $lhs))
           (then
-            (call $recLineTok
+            (local.set $char (call $recLineTok
               (i32.load offset=4 (local.get $rec))
-              (i32.add (global.get $srcBase) (local.get $rhs)))))
+              (i32.add (global.get $srcBase) (local.get $lhs))
+              (i32.add (global.get $srcBase) (local.get $rhs))
+              (local.get $char)))
+            (local.set $lhs (local.get $rhs))))
         (local.set $rec (i32.add (local.get $rec) (i32.const 8)))
         (br $records))))
 

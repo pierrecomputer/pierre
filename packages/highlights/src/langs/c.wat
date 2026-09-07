@@ -6,7 +6,7 @@
   ;; purpose: it shares every hash feature the table can use - first two
   ;; bytes, last byte, and length - with `alignof`, so $cWordHl matches it
   ;; with one exact eight-byte compare instead.
-  (keyword-table $cWords $mem.cWords $mem.cWords+1024
+  (keyword-table $cWords $mem.cWords $mem.clojureWords
     (group $Token.keyword.control ;; 1: control
       "do" "if" "for" "case" "else" "goto" "break" "while" "return" "switch"
       "default")

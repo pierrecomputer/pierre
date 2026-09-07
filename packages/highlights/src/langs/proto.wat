@@ -9,7 +9,7 @@
   ;; `reserved` are absent on purpose: the table hash sees only the first two
   ;; bytes, the last byte, and the length, which `repeated` shares, so
   ;; $protoWordHl matches both directly.
-  (keyword-table $protoWords $mem.protoWords $mem.protoWords+640
+  (keyword-table $protoWords $mem.protoWords $mem.pythonWords
     (group ;; 1: declaration, next name is a type
       "enum" "extend" "message" "service")
     (group "rpc")     ;; 2: declaration, next name is a function

@@ -13,7 +13,7 @@
   ;; property directives, which are ordinary names outside a property
   ;; declaration and carry bit 12. `result` shares its hash features with
   ;; `repeat` and is matched directly.
-  (keyword-table $pascalWords $mem.pascalWords $mem.pascalWords+1792
+  (keyword-table $pascalWords $mem.pascalWords $mem.perlWords
     (group $Token.keyword.control ;; 1: control flow
       "if" "then" "else" "case" "of" "for" "to" "downto" "while" "do"
       "repeat" "until" "with" "goto" "break" "continue" "exit" "try" "except"

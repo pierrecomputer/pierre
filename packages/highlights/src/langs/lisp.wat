@@ -10,7 +10,7 @@
   ;; `set!`. `declare` shares its hash features with `deftype` and stays out,
   ;; as do `defconst` and `defrecord`, which share slot bits with `defsubst`
   ;; and `defmethod` in every geometry that fits the range.
-  (keyword-table $lispWords $mem.lispWords $mem.lispWords+1280
+  (keyword-table $lispWords $mem.lispWords $mem.luaWords
     (group ;; 1: definitions, next name is a function
       "defun" "defmacro" "defmethod" "defgeneric" "define" "define-syntax"
       "define-macro" "defsubst")

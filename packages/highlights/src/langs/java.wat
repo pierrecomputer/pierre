@@ -8,7 +8,7 @@
   ;; Group order is the dispatch order in $javaWordHl below. The module
   ;; directives `exports`/`opens`/`requires` stay out: `exports` shares its
   ;; hash features with `extends`, and module descriptors are rare.
-  (keyword-table $javaWords $mem.javaWords $mem.javaWords+1024
+  (keyword-table $javaWords $mem.javaWords $mem.juliaWords
     (group $Token.keyword.control ;; 1: control
       "if" "do" "for" "try" "case" "else" "goto" "break" "catch" "throw"
       "while" "yield" "assert" "return" "switch" "default" "finally"

@@ -9,7 +9,7 @@
   ;; on purpose: the table hash sees only the first two bytes, the last byte,
   ;; and the length, which are identical for `while`, so the two words can
   ;; never share a table and `where` is matched directly in $rustWordHl.
-  (keyword-table $rustWords $mem.rustWords $mem.rustWords+640
+  (keyword-table $rustWords $mem.rustWords $mem.scalaWords
     (group $Token.keyword.declaration+256 "fn") ;; 1: declaration, next name is a function
     (group $Token.keyword.declaration+512 ;; 2: declaration, next name is a type
       "mod" "type" "enum" "trait" "union" "struct")

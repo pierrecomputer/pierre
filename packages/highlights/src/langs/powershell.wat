@@ -11,7 +11,7 @@
   ;; operators spelled `-eq`, `-and`, `-match`, and so on, looked up after
   ;; a `-`; any other `-Name` is a parameter. Groups 7-9 are looked up
   ;; after a `$`.
-  (keyword-table $powershellWords $mem.powershellWords $mem.powershellWords+1280
+  (keyword-table $powershellWords $mem.powershellWords $mem.protoWords
     (group ;; 1: control
       "if" "else" "elseif" "switch" "for" "foreach" "while" "do" "until"
       "break" "continue" "return" "exit" "throw" "try" "catch" "finally"

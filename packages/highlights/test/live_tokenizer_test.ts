@@ -23,8 +23,13 @@ import { makeRand } from './_util';
 let wasmModule: WebAssembly.Module;
 
 t.before(() => {
-  const url = new URL('../src/highlights.wat', import.meta.url);
-  const { code } = transformWat(url);
+  const url = new URL('./live_test.wat', import.meta.url);
+  const { code } = transformWat(
+    url,
+    `(module
+      (import "../src/highlights.wat")
+      (global (export "freeHeads") i32 (i32.const $mem.liveFree)))`
+  );
   wasmModule = new WebAssembly.Module(wat2wasm(url.pathname, code));
   init(wasmModule);
 });
@@ -487,6 +492,36 @@ void t.test('LiveTokenizer: multiline edits stop at state convergence', () => {
   );
   live.dispose();
 });
+
+void t.test(
+  'LiveTokenizer: a full change list preserves adjacent allocator state',
+  () => {
+    const code = 'const a = 0;\n'.repeat(2000);
+    const live = new LiveTokenizer({ lang: 'ts', theme: pierreDark, code });
+    const edits = Array.from({ length: 1000 }, (_, i) => ({
+      range: {
+        start: { line: i * 2, character: 10 },
+        end: { line: i * 2, character: 11 },
+      },
+      newText: '1',
+    }));
+    assert.equal(live.applyEdits(edits).lineChanges.length, 1000);
+    assertMatchesFresh(
+      live,
+      'const a = 1;\nconst a = 0;\n'.repeat(1000),
+      'ts',
+      'full change list'
+    );
+    // Reuse the free lists after the last change record has been written.
+    assert.equal(
+      live.applyEdits(edits.map((edit) => ({ ...edit, newText: '0' })))
+        .lineChanges.length,
+      1000
+    );
+    assertMatchesFresh(live, code, 'ts', 'reused free lists');
+    live.dispose();
+  }
+);
 
 void t.test('LiveTokenizer: unterminated constructs propagate to EOF', () => {
   const code = 'let a = 1;\nlet b = 2;\nlet c = 3;\n';
@@ -1394,6 +1429,7 @@ void t.test(
     // block parked there would overrun its neighbor on the next allocation.
     interface RawLive {
       memory: WebAssembly.Memory;
+      freeHeads: WebAssembly.Global;
       liveStage(len: number): number;
       liveInitDoc(ptr: number, len: number, lang: number): void;
       liveRun(budget: number): number;
@@ -1410,7 +1446,7 @@ void t.test(
       const quarter = 1 << (p - 2);
       return (size + quarter - 1) & -quarter;
     };
-    const freeHeads = 81920; // $mem.liveFree in src/memory.wat
+    const freeHeads = Number(raw.freeHeads.value);
     for (const [staged, used] of [
       [1000, 300],
       [4096, 100],

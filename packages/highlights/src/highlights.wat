@@ -9,27 +9,29 @@
       [6:10)          output start (u32 LE)
       [10:14)         output length (u32 LE)
       [14:64)         reserved space
-      [64:1088)       theme table written by JavaScript, five bytes per token
-      [1088:2000)     CSS-variable name table
-      [2000:2064)     lowercase word copy for case-insensitive keyword lookups
-      [2064:4112)     byte-set bitmaps (byteset.get)
-      [4112:4264)     emitter HTML fragments
-      [4264:9088)     emitter span-open fragment cache
-      [9088:9472)     saved theme bytes for the emitter span cache
-      [9472:9504)     streaming delimiter
-      [9504:13504)    streaming lexer checkpoints
-      [13504:48608)   language keyword tables
-      [48608:49632)   JSON nesting stack
-      [49632:50656)   JavaScript bracket-kind stack
-      [50656:50800)   JavaScript token-class bitset
-      [50800:50960)   JavaScript token-kind to $Token map (enum-map)
-      [50960:51984)   JavaScript template bracket stack
-      [51984:53008)   JavaScript template HTML/CSS resume states
-      [53008:57104)   JSX-mode stack
-      [57104:58160)   markdown fence aliases
-      [58160:58256)   nested markdown fence registers, one record per depth
-      [58256:59280)   TOML nesting stack
-      [59280:65536)   free
+      [64:448)        theme table written by JavaScript, five bytes per token
+      [448:1360)      CSS-variable name table
+      [1360:1424)     lowercase word copy for case-insensitive keyword lookups
+      [1424:3472)     byte-set bitmaps (byteset.get)
+      [3472:3624)     emitter HTML fragments
+      [3624:8448)     emitter span-open fragment cache
+      [8448:8832)     saved theme bytes for the emitter span cache
+      [8832:8864)     streaming delimiter
+      [8864:10144)    streaming lexer checkpoints
+      [10144:36960)   language keyword tables
+      [36960:37984)   JSON nesting stack
+      [37984:39008)   JavaScript bracket-kind stack
+      [39008:39152)   JavaScript token-class bitset
+      [39152:39296)   JavaScript token-kind to $Token map (enum-map)
+      [39296:40320)   JavaScript template bracket stack
+      [40320:41344)   JavaScript template HTML/CSS resume states
+      [41344:45440)   JSX-mode stack
+      [45440:46496)   markdown fence aliases
+      [46496:46592)   nested markdown fence registers, one record per depth
+      [46592:47616)   TOML nesting stack
+      [47616:63632)   live tokenizer change list
+      [63632:63760)   live tokenizer free-list heads
+      [63760:65536)   free
     [] pages 2..N     (text buffer; a live instance lays them out itself,
                       see src/live.wat)
       [65536:EOF)     input, NUL sentinel, then at least 16 bytes of slack
@@ -377,7 +379,7 @@
     (global.set $markdownStreamFenceLen (i32.const 0))
     (global.set $markdownStreamLang (i32.const 0))
     (memory.fill (i32.const $mem.markdownFenceStack) (i32.const 0)
-      (i32.sub (i32.const 58256) (i32.const $mem.markdownFenceStack)))
+      (i32.sub (i32.const $mem.tomlStack) (i32.const $mem.markdownFenceStack)))
     (global.set $phpStreamingCode (i32.const 0))
     (global.set $phpStreamDecl (i32.const 0))
     (global.set $phpStreamMember (i32.const 0)))

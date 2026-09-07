@@ -58,7 +58,7 @@
     (local.set $record (i32.const $mem.markdownFence))
     (block $done
       (loop $alias
-        (br_if $done (i32.ge_u (local.get $record) (i32.const 58160)))
+        (br_if $done (i32.ge_u (local.get $record) (i32.const $mem.markdownFenceStack)))
         (if (i32.eq (local.get $len) (i32.load8_u (local.get $record)))
           (then
             (local.set $word (i64.or
@@ -154,10 +154,10 @@
     (local $from i32)
     (local.set $from
       (call $markdownFenceSlot (i32.add (global.get $markdownDepth) (i32.const 1))))
-    (if (i32.lt_u (local.get $from) (i32.const 58256))
+    (if (i32.lt_u (local.get $from) (i32.const $mem.tomlStack))
       (then
         (memory.fill (local.get $from) (i32.const 0)
-          (i32.sub (i32.const 58256) (local.get $from))))))
+          (i32.sub (i32.const $mem.tomlStack) (local.get $from))))))
 
   (func $markdownCodeRange (param $lang i32) (param $from i32) (param $to i32)
     (local $save i32)

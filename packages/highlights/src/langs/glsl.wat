@@ -5,7 +5,7 @@
   ;; open-ended dimensional suffixes stay as prefix checks below, and the few
   ;; words the table hash cannot separate get direct compares in $glslWordHl.
   ;; Group order is the dispatch order in $glslWordHl.
-  (keyword-table $glslWords $mem.glslWords $mem.glslWords+1152
+  (keyword-table $glslWords $mem.glslWords $mem.goWords
     (group $Token.boolean "true" "false") ;; 1: booleans
     (group $Token.keyword.control ;; 2: control flow, including the ray-tracing control statements
       "break" "case" "continue" "default" "do" "else" "for" "if"

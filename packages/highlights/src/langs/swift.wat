@@ -9,7 +9,7 @@
   ;; absent on purpose: the table hash sees only the first two bytes, the last
   ;; byte, and the length, which are identical for `while`, so the two words
   ;; can never share a table and `where` is matched directly in $swiftWordHl.
-  (keyword-table $swiftWords $mem.swiftWords $mem.swiftWords+768
+  (keyword-table $swiftWords $mem.swiftWords $mem.terraformWords
     (group $Token.keyword.control ;; 1: control
       "do" "if" "for" "try" "case" "else" "defer" "guard" "while" "break"
       "catch" "throw" "async" "await" "repeat" "return" "switch" "default"

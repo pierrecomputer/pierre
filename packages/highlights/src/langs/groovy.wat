@@ -8,7 +8,7 @@
   ;; Group order is the dispatch order in $hlGroovy. The high byte of a
   ;; declaration value names the next name's capture: 1 after `def`, where
   ;; the name is a function when `(` follows, 2 a type.
-  (keyword-table $groovyWords $mem.groovyWords $mem.groovyWords+640
+  (keyword-table $groovyWords $mem.groovyWords $mem.graphqlWords
     (group $Token.keyword.control ;; 1: control flow
       "if" "else" "for" "while" "do" "switch" "case" "default" "break"
       "continue" "return" "throw" "throws" "try" "catch" "finally" "assert"

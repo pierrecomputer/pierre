@@ -6,7 +6,7 @@
       (i32.lt_u (local.get $p) (global.get $end))))
 
   ;; Group order is the dispatch order in $gleamWordHl below.
-  (keyword-table $gleamWords $mem.gleamWords $mem.gleamWords+384
+  (keyword-table $gleamWords $mem.gleamWords $mem.glslWords
     (group $Token.keyword.control ;; 1: control
       "case" "if" "else" "panic" "todo" "assert" "echo" "use")
     (group $Token.keyword.declaration+256 "fn")   ;; 2: declaration, next name is a function

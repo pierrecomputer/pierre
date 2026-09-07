@@ -8,7 +8,7 @@
   ;; Group order is the dispatch order in $rubyWordHl below. The `attr_*`
   ;; family and the `__FILE__` family are prefix checks there: their members
   ;; share hash features the table cannot separate.
-  (keyword-table $rubyWords $mem.rubyWords $mem.rubyWords+768
+  (keyword-table $rubyWords $mem.rubyWords $mem.rustWords
     (group ;; 1: control
       "if" "do" "in" "END" "end" "for" "next" "redo" "then" "when" "BEGIN"
       "begin" "break" "elsif" "raise" "retry" "until" "while" "yield"

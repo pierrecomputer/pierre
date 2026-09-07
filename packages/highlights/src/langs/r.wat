@@ -7,7 +7,7 @@
 
   ;; Group order is the dispatch order in $hlR. `NA_complex_` is missing on
   ;; purpose: it shares its hash features with `NA_integer_`.
-  (keyword-table $rWords $mem.rWords $mem.rWords+256
+  (keyword-table $rWords $mem.rWords $mem.rubyWords
     (group ;; 1: control
       "if" "else" "repeat" "while" "for" "next" "break" "return")
     (group "function")     ;; 2: declaration

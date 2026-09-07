@@ -7,7 +7,7 @@
 
   ;; Group order is the dispatch order in $hlNix. Every group carries its
   ;; token, so the lookup returns it directly, or -1 for an ordinary name.
-  (keyword-table $nixWords $mem.nixWords $mem.nixWords+384
+  (keyword-table $nixWords $mem.nixWords $mem.objcWords
     (group $Token.keyword "let" "in" "with" "rec" "inherit" "assert")  ;; 1
     (group $Token.keyword.control "if" "then" "else")                  ;; 2
     (group $Token.boolean "true" "false")                              ;; 3

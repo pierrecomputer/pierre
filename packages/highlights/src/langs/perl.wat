@@ -12,7 +12,7 @@
   ;; shares its hash features with `require` and stays out, and `undef` and
   ;; `splice` share slot bits with `not` and `return` in every geometry that
   ;; fits the range.
-  (keyword-table $perlWords $mem.perlWords $mem.perlWords+1024
+  (keyword-table $perlWords $mem.perlWords $mem.powershellWords
     (group ;; 1: control
       "do" "if" "for" "else" "last" "next" "redo" "goto" "until" "elsif"
       "while" "unless" "return" "foreach")

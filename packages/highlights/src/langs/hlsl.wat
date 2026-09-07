@@ -10,7 +10,7 @@
   ;; `sampler2D`, `int16_t` - are prefix checks in $hlslTypeHl: their members
   ;; share hash features the table cannot separate. The capitalized resource
   ;; types such as `Texture2D` fall to the capitalization rule.
-  (keyword-table $hlslWords $mem.hlslWords $mem.hlslWords+1152
+  (keyword-table $hlslWords $mem.hlslWords $mem.javaWords
     (group "true" "false") ;; 1: booleans
     (group ;; 2: control
       "if" "do" "for" "case" "else" "break" "while" "return" "switch"

@@ -6,7 +6,7 @@
       (i32.lt_u (local.get $p) (global.get $end))))
 
   ;; group order is the dispatch order in $goWordHl below
-  (keyword-table $goWords $mem.goWords $mem.goWords+512
+  (keyword-table $goWords $mem.goWords $mem.groovyWords
     (group $Token.keyword.control ;; 1: control
       "go" "if" "for" "case" "else" "goto" "break" "defer" "range" "return"
       "select" "switch" "default" "continue" "fallthrough")

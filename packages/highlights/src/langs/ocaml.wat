@@ -6,7 +6,7 @@
       (i32.lt_u (local.get $p) (global.get $end))))
 
   ;; group order is the dispatch order in $mlWordHl below
-  (keyword-table $mlWords $mem.ocamlWords $mem.ocamlWords+1536
+  (keyword-table $mlWords $mem.ocamlWords $mem.pascalWords
     (group $Token.keyword.control ;; 1: control
       "do" "if" "of" "to" "for" "try" "done" "else" "then" "when" "with"
       "begin" "match" "while" "downto" "assert" "function" "lazy")

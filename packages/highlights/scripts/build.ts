@@ -234,9 +234,6 @@ export function transformWat(
         streamStateOffset += size;
         return { local, type, at };
       });
-    if (streamStateOffset > 4000) {
-      throw new Error('stream lexer state exceeds reserved memory');
-    }
     const load = state
       .map(
         ({ local, type, at }) =>
@@ -296,6 +293,13 @@ export function transformWat(
     return base + expr.bias;
   };
   for (const name of constExprs.keys()) resolveConst(name, new Set());
+  if (
+    streamStateOffset >
+    (constMap.get('$mem.bashWords') ?? 0) -
+      (constMap.get('$mem.streamState') ?? 0)
+  ) {
+    throw new Error('stream lexer state exceeds reserved memory');
+  }
   code = code.replace(/(\$[\w.]+)([+-]\d+)?/g, (all, name, bias) => {
     const value = constMap.get(name);
     return value !== undefined ? String(value + Number(bias ?? 0)) : all;

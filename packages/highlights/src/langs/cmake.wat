@@ -10,7 +10,7 @@
   ;; Groups 4 and 5 are uppercase argument words matched exactly: the
   ;; operators of a condition and the boolean constants. Group order is the
   ;; dispatch order in $hlCmake.
-  (keyword-table $cmakeWords $mem.cmakeWords $mem.cmakeWords+896
+  (keyword-table $cmakeWords $mem.cmakeWords $mem.cppWords
     (group ;; 1: flow control
       "if" "elseif" "else" "endif" "foreach" "endforeach" "while" "endwhile"
       "break" "continue" "return" "function" "endfunction" "macro" "endmacro"

@@ -9,7 +9,7 @@
   ;; directives that may head a line; group 5 holds the built-in functions
   ;; looked up after `$(`. `endef` shares its hash features with `endif` and
   ;; `addprefix` with `addsuffix`, so both are matched directly.
-  (keyword-table $makefileWords $mem.makefileWords $mem.makefileWords+512
+  (keyword-table $makefileWords $mem.makefileWords $mem.matlabWords
     (group ;; 1: conditionals
       "ifeq" "ifneq" "ifdef" "ifndef" "else" "endif")
     (group "include" "sinclude" "-include") ;; 2: includes

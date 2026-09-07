@@ -9,7 +9,7 @@
   ;; and $dockerWordGroup probes it with a lowercased copy of the input word.
   ;; Group order is the dispatch order in $hlDockerfile: shell-form
   ;; instructions, other instructions, and the `AS` of a stage name.
-  (keyword-table $dockerfileWords $mem.dockerfileWords $mem.dockerfileWords+256
+  (keyword-table $dockerfileWords $mem.dockerfileWords $mem.elixirWords
     (group "run" "cmd" "entrypoint" "shell") ;; 1: shell command follows
     (group ;; 2: other instructions
       "from" "add" "arg" "env" "copy" "user" "label" "expose" "volume"

@@ -24,7 +24,7 @@ const enc = new TextEncoder();
 const dec = new TextDecoder();
 const pageSize = 65536;
 const themePtr = 64; // $mem.themeTable in src/memory.wat
-const themeBytes = 1024;
+const themeBytes = 384; // 73 five-byte records, padded for SIMD comparisons
 const themeBuildCache = new WeakMap<Theme, Uint8Array>();
 
 export const LANGS: Record<string, number> = {

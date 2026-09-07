@@ -8,7 +8,7 @@
   ;; Group order is the dispatch order in $dartWordHl below. `get` and `set`
   ;; are contextual: $hlDart keeps them in group 3 only when a name follows,
   ;; so `Set<int>` stays a type and `set(x)` a call.
-  (keyword-table $dartWords $mem.dartWords $mem.dartWords+1152
+  (keyword-table $dartWords $mem.dartWords $mem.dockerfileWords
     (group ;; 1: control
       "if" "do" "on" "for" "try" "case" "else" "await" "break" "catch"
       "throw" "while" "yield" "assert" "return" "switch" "default"

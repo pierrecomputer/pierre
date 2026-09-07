@@ -6,10 +6,9 @@
     line table, per-line token blocks, and interned per-line lexer states in
     linear memory:
 
-      page 1                    control, static data, lexer scratch
-      [65536:81920)             line-change list: count, then 16-byte entries
-      [81920:82048)             size-class free-list heads, 32 u32
-      [86016:$lvHeapCeil)       size-class heap: staged text, line text
+      page 1                    control, static data, lexer scratch,
+                                line-change list and size-class free-list heads
+      [65536:$lvHeapCeil)       size-class heap: staged text, line text
                                 blocks, token blocks, state blobs, line table
       [$lvHeapCeil:mem end)     transient per-line scratch: the line's bytes,
                                 terminator, NUL sentinel, then the standard
@@ -27,14 +26,7 @@
   (import "./scan.wat")
   (import "./emit.wat")
 
-  ;; The change list of up to 1000 16-byte entries, the 32 size-class free-list heads
-  ;; of its heap, and the heap itself
-  (const $mem.liveChanges 65536)
-  (const $mem.liveFree 81920)
-  (const $mem.liveHeapBase 86016)
-
   ;; allocator
-  (global $lvInited (mut i32) (i32.const 0))
   (global $lvHeapEnd (mut i32) (i32.const 0))   ;; bump cursor
   (global $lvHeapCeil (mut i32) (i32.const 0))  ;; heap top, scratch base
   (global $lvHeapLive (mut i32) (i32.const 0))  ;; allocated bytes incl headers
@@ -220,10 +212,9 @@
 
   ;; lazy first-use setup: heap cursors and free-list heads
   (func $lvHeapInit
-    (if (global.get $lvInited) (then (return)))
-    (global.set $lvInited (i32.const 1))
-    (global.set $lvHeapEnd (i32.const $mem.liveHeapBase))
-    (global.set $lvHeapCeil (i32.const $mem.liveHeapBase))
+    (if (global.get $lvHeapEnd) (then (return)))
+    (global.set $lvHeapEnd (i32.const $mem.liveHeapStart))
+    (global.set $lvHeapCeil (i32.const $mem.liveHeapStart))
     (global.set $lvHeapLive (i32.const 0))
     (global.set $lvHeapFreed (i32.const 0))
     (memory.fill (i32.const $mem.liveFree) (i32.const 0) (i32.const 128)))
@@ -1501,8 +1492,8 @@
     (local $newInitial i32)
     (local $newEnd i32)
     ;; pass one: assign new addresses
-    (local.set $hdr (i32.const $mem.liveHeapBase))
-    (local.set $to (i32.const $mem.liveHeapBase))
+    (local.set $hdr (i32.const $mem.liveHeapStart))
+    (local.set $to (i32.const $mem.liveHeapStart))
     (block $assigned
       (loop $assign
         (br_if $assigned (i32.ge_u (local.get $hdr) (global.get $lvHeapEnd)))
@@ -1579,7 +1570,7 @@
     (global.set $lvIdTab (call $lvNewAddr (global.get $lvIdTab)))
     (global.set $lvBuckets (call $lvNewAddr (global.get $lvBuckets)))
     ;; pass three: move live blocks downward and reset the free lists
-    (local.set $hdr (i32.const $mem.liveHeapBase))
+    (local.set $hdr (i32.const $mem.liveHeapStart))
     (block $moved
       (loop $move
         (br_if $moved (i32.ge_u (local.get $hdr) (global.get $lvHeapEnd)))

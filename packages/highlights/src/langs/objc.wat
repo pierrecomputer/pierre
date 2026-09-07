@@ -9,7 +9,7 @@
   ;; the words that follow `@`; group 6 the property attributes, which are
   ;; keywords only inside the parens after `@property`. Everything C keeps
   ;; its classification from c.wat.
-  (keyword-table $objcWords $mem.objcWords $mem.objcWords+1024
+  (keyword-table $objcWords $mem.objcWords $mem.ocamlWords
     (group ;; 1: compiler directives after `@`
       "end" "try" "defs" "catch" "class" "throw" "encode" "import" "public"
       "dynamic" "finally" "package" "private" "optional" "property" "protocol"

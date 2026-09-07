@@ -10,7 +10,7 @@
   ;; declaration value names the pending capture: 1 a value binding whose
   ;; name is a function when arguments follow, 2 a type, 3 a module or
   ;; namespace line, 5 a member whose self identifier and name follow.
-  (keyword-table $fsharpWords $mem.fsharpWords $mem.fsharpWords+1024
+  (keyword-table $fsharpWords $mem.fsharpWords $mem.gleamWords
     (group $Token.keyword.control ;; 1: control flow
       "if" "then" "elif" "else" "match" "with" "when" "for" "to" "downto"
       "while" "do" "done" "try" "finally" "raise" "failwith" "yield" "return"

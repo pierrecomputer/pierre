@@ -8,7 +8,7 @@
   ;; Group order is the dispatch order in $wgslWordHl below. The vector,
   ;; matrix, and texture families are prefix checks in $wgslTypeHl: `mat2x2`
   ;; and `mat3x2` share every hash feature the table can use.
-  (keyword-table $wgslWords $mem.wgslWords $mem.wgslWords+640
+  (keyword-table $wgslWords $mem.wgslWords $mem.zigWords
     (group ;; 1: control
       "if" "for" "case" "else" "loop" "break" "while" "return" "switch"
       "default" "discard" "continue" "continuing")

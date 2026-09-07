@@ -9,7 +9,7 @@
   ;; declaration value names the next name's capture: 1 a function, 2 a
   ;; type, 3 a module. `where` shares its hash features with `while` and is
   ;; matched directly.
-  (keyword-table $juliaWords $mem.juliaWords $mem.juliaWords+512
+  (keyword-table $juliaWords $mem.juliaWords $mem.kotlinWords
     (group $Token.keyword.control ;; 1: control flow and blocks
       "if" "elseif" "else" "for" "while" "break" "continue" "return" "try"
       "catch" "finally" "do" "begin" "end" "let" "quote")

@@ -10,7 +10,7 @@
   ;; variable, 3 a type, 4 a namespace. `defonce`, `declare`, `defrecord`,
   ;; `if-let`, and `when-let` share hash features with table words and are
   ;; matched directly; `refer` is left out for the same reason.
-  (keyword-table $clojureWords $mem.clojureWords $mem.clojureWords+512
+  (keyword-table $clojureWords $mem.clojureWords $mem.cmakeWords
     (group $Token.keyword.declaration+256 ;; 1: the next symbol is a function
       "defn" "defn-" "defmacro" "defmulti" "defmethod" "definline")
     (group $Token.keyword.declaration+512 "def")      ;; 2: a variable

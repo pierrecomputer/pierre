@@ -6,7 +6,7 @@
       (i32.lt_u (local.get $p) (global.get $end))))
 
   ;; group order is the dispatch order in $hlTerraform's identifier branch
-  (keyword-table $tfWords $mem.terraformWords $mem.terraformWords+384
+  (keyword-table $tfWords $mem.terraformWords $mem.tsxWords
     (group "if" "in" "for" "else" "endif" "endfor") ;; 1: template and for-expression keywords
     (group "true" "false")                          ;; 2: booleans
     (group "null")                                  ;; 3: built-in constant

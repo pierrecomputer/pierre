@@ -11,7 +11,7 @@
   ;; `unmanaged` collides with `unchecked` the same way and stays out, and
   ;; the rare `on` and `scoped` share their slot bits with `out` in every
   ;; geometry that fits the range.
-  (keyword-table $csWords $mem.csharpWords $mem.csharpWords+1280
+  (keyword-table $csWords $mem.csharpWords $mem.dartWords
     (group $Token.keyword.control ;; 1: control
       "if" "do" "for" "try" "case" "else" "goto" "lock" "when" "break"
       "catch" "throw" "while" "yield" "return" "switch" "checked" "default"

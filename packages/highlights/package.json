@@ -39,7 +39,7 @@
     "wabt": "catalog:"
   },
   "meta": {
-    "highlights.wasm": 155611,
-    "highlights.wasm.gz": 68720
+    "highlights.wasm": 155577,
+    "highlights.wasm.gz": 68700
   }
 }
