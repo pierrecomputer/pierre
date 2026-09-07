@@ -256,7 +256,7 @@
         (if (i32.or (call $lexIsDigit (local.get $c))
                     (i32.and (i32.eq (local.get $c) (i32.const ".")) (call $lexIsDigit (local.get $c2))))
           (then
-            (call $cScanNumber)
+            (call $lexScanHexNumber (i32.const 0))
             (call $emitTok (enum.get $Token.number) (local.get $lhs) (global.get $ptr))
             (local.set $member (i32.const 0))
             (br $next)))

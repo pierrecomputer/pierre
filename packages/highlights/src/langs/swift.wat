@@ -83,15 +83,32 @@
     (i32.or (i32.shl (i32.add (local.get $hashes) (i32.const 1)) (i32.const 1)) (local.get $triple)))
 
   ;; Advance $ptr through a hash-delimited or triple-quoted body to just past
-  ;; its closing quote or quotes and $hashes hashes, or to $end: hop between
-  ;; quotes with SIMD and verify the rest only at each candidate. Returns 1
-  ;; when the body closed.
+  ;; its closing quote or quotes and $hashes hashes, or to $end. An escape
+  ;; uses the same hash count as the delimiter, so its quote cannot close
+  ;; the body. Returns 1 when the body closed.
   (func $swiftHashBody (param $hashes i32) (param $triple i32) (result i32)
     (local $q i32) (local $seen i32)
     (block $done
       (loop $scan
-        (global.set $ptr (call $lexFindByte (global.get $ptr) (i32.const 34)))
+        (global.set $ptr (call $lexFindEither (global.get $ptr) (i32.const 34) (i32.const 92)))
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
+        (if (i32.eq (i32.load8_u (global.get $ptr)) (i32.const 92))
+          (then
+            (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+            (local.set $q (global.get $ptr))
+            (local.set $seen (i32.const 0))
+            (block $escapeDone
+              (loop $hash
+                (br_if $escapeDone (i32.ge_u (local.get $seen) (local.get $hashes)))
+                (br_if $escapeDone (i32.ne (call $swiftByte (local.get $q)) (i32.const "#")))
+                (local.set $seen (i32.add (local.get $seen) (i32.const 1)))
+                (local.set $q (i32.add (local.get $q) (i32.const 1)))
+                (br $hash)))
+            (if (i32.eq (local.get $seen) (local.get $hashes))
+              (then
+                (global.set $ptr (call $utf8SpanEnd
+                  (i32.add (local.get $q) (i32.const 1)) (global.get $end)))))
+            (br $scan)))
         (if (i32.or (i32.eqz (local.get $triple))
               (i32.and
                 (i32.eq (call $swiftByte (i32.add (global.get $ptr) (i32.const 1))) (i32.const 34))
@@ -334,7 +351,7 @@
         (if (i32.or (call $lexIsDigit (local.get $c))
                     (i32.and (i32.eq (local.get $c) (i32.const ".")) (call $lexIsDigit (local.get $c2))))
           (then
-            (call $lexScanNumber)
+            (call $lexScanHexNumber (i32.const 1))
             (call $emitTok (enum.get $Token.number) (local.get $lhs) (global.get $ptr))
             (local.set $member (i32.const 0))
             (br $next)))

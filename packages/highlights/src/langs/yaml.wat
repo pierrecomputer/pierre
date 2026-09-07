@@ -371,7 +371,8 @@
                     (i32.lt_u (i32.add (global.get $ptr) (i32.const 1)) (global.get $end))
                     (call $lexIsDigit (i32.load8_u offset=1 (global.get $ptr))))))
             (then
-              (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+              (if (i32.eqz (call $lexIsDigit (local.get $c)))
+                (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))
               (call $lexScanNumber)
               ;; a number that runs straight into more scalar bytes, as in
               ;; `12:30:00` or `2024-01-01`, is one plain scalar

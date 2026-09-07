@@ -13,6 +13,7 @@ import {
   distinctTheme,
   exactColor,
   loadLang,
+  loadSplitLang,
   spansOf,
   type TestLang,
   textOf,
@@ -263,6 +264,51 @@ void t.test('swift: hash-delimited bodies close on the full delimiter', () => {
   assert.equal(colorOf(html, '##"""d"""#e"""##'), themeColor('string'));
   assert.equal(colorOf(html, 'x'), themeColor('variable'));
   assert.equal(colorOf(html, 'y'), themeColor('variable'));
+});
+
+void t.test(
+  'swift: escaped quotes do not close raw or multiline strings',
+  () => {
+    for (const nl of ['\n', '\r\n']) {
+      for (const hashes of [0, 1, 3, 40]) {
+        const h = '#'.repeat(hashes);
+        for (const quotes of hashes === 0 ? ['"""'] : ['"', '"""']) {
+          const gap = quotes.length === 3 ? nl : '';
+          const literal = `${h}${quotes}${gap}escaped \\${h}${quotes}${h} still${gap}${quotes}${h}`;
+          const code = `${literal}${nl}let after = 1${nl}`;
+          const html = checkInvariants(swift.hl, code, {
+            theme: distinctTheme,
+          });
+          assert.equal(exactColor(html, literal), distinctColor('string'));
+          assert.equal(
+            exactColor(html, 'let'),
+            distinctColor('keyword.declaration')
+          );
+          assertLineFedParity('swift', code);
+        }
+      }
+    }
+    // A backslash without the delimiter's hashes does not escape its quote.
+    for (const literal of [
+      String.raw`#"ends here\"#`,
+      String.raw`##"ends here\#"##`,
+    ]) {
+      assert.equal(
+        exactColor(checkInvariants(swift.hl, `${literal} let x = 1`), 'let'),
+        themeColor('keyword.declaration')
+      );
+    }
+  }
+);
+
+void t.test('swift: raw escapes stay lossless at every byte boundary', () => {
+  const split = loadSplitLang('swift');
+  const code = String.raw`##"\##"## still \##🙂"## let x = 1`;
+  for (let at = 0; at <= new TextEncoder().encode(code).length; at++) {
+    const html = split(code, at);
+    assert.equal(textOf(html), code, `split ${at}`);
+    spansOf(html);
+  }
 });
 
 void t.test('swift: hash strings resume line-fed for any hash count', () => {

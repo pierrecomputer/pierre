@@ -176,18 +176,7 @@
         (if (i32.or (call $lexIsDigit (local.get $c))
                     (i32.and (i32.eq (local.get $c) (i32.const ".")) (call $lexIsDigit (local.get $c2))))
           (then
-            (call $lexScanNumber)
-            ;; hex floats keep a fraction that starts with a hex letter
-            (if (i32.and
-                  (i32.eq (call $wgslByte (global.get $ptr)) (i32.const "."))
-                  (i32.and
-                    (i32.eq (i32.load8_u (local.get $lhs)) (i32.const "0"))
-                    (i32.and
-                      (i32.eq (i32.or (call $wgslByte (i32.add (local.get $lhs) (i32.const 1))) (i32.const 32)) (i32.const "x"))
-                      (call $lexIsHex (call $wgslByte (i32.add (global.get $ptr) (i32.const 1)))))))
-              (then
-                (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-                (call $lexScanNumber)))
+            (call $lexScanHexNumber (i32.const 0))
             (call $emitTok (enum.get $Token.number) (local.get $lhs) (global.get $ptr))
             (local.set $member (i32.const 0))
             (br $next)))

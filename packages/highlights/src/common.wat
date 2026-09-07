@@ -42,8 +42,15 @@
 
   ;; A language-neutral numeric run. It keeps radix digits, separators,
   ;; exponents, and type suffixes together, but leaves `.` for member access
-  ;; unless a digit follows it.
+  ;; unless a digit follows it. Start at the first digit or dot, after any
+  ;; sign, so `0x` is visible and its `e` digits cannot consume a `+` or `-`.
   (func $lexScanNumber
+    (call $lexScanNumberBody (i32.and
+      (i32.lt_u (i32.add (global.get $ptr) (i32.const 1)) (global.get $end))
+      (i32.eq (i32.or (i32.load16_u (global.get $ptr)) (i32.const 0x2000)) (i32.const "0x")))))
+
+  ;; Keep the radix when resuming after the dot of a hexadecimal fraction.
+  (func $lexScanNumberBody (param $hex i32)
     (local $c i32)
     (local $next i32)
     (local $prev i32)
@@ -69,13 +76,67 @@
               (i32.or (i32.eq (local.get $c) (i32.const "+"))
                       (i32.eq (local.get $c) (i32.const "-")))
               (i32.or
-                (i32.eq (i32.or (local.get $prev) (i32.const 32)) (i32.const "e"))
+                (i32.and (i32.eqz (local.get $hex))
+                  (i32.eq (i32.or (local.get $prev) (i32.const 32)) (i32.const "e")))
                 (i32.eq (i32.or (local.get $prev) (i32.const 32)) (i32.const "p"))))
           (then
             (local.set $prev (local.get $c))
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (br $l)))
         (br $done))))
+
+  ;; Extend the shared numeric run for hexadecimal floats, whose fractional
+  ;; part may begin with an a-f digit (`0x1.fp+3`) or be empty (`0x1.p2`).
+  ;; Requiring an exponent preserves members such as Swift's `0xff.distance`.
+  (func $lexScanHexNumber (param $requireExponent i32)
+    (local $lhs i32)
+    (local $next i32)
+    (local $p i32)
+    (local $c i32)
+    (local.set $lhs (global.get $ptr))
+    (call $lexScanNumber)
+    (if (i32.and
+          (i32.lt_u (i32.add (local.get $lhs) (i32.const 1)) (global.get $end))
+          (i32.and
+            (i32.eq (i32.load8_u (local.get $lhs)) (i32.const "0"))
+            (i32.eq (i32.or (i32.load8_u offset=1 (local.get $lhs)) (i32.const 32)) (i32.const "x"))))
+      (then
+        (if (i32.lt_u (global.get $ptr) (global.get $end))
+          (then
+            (local.set $next (select
+              (i32.load8_u offset=1 (global.get $ptr)) (i32.const 0)
+              (i32.lt_u (i32.add (global.get $ptr) (i32.const 1)) (global.get $end))))
+            (if (i32.and
+                  (i32.eq (i32.load8_u (global.get $ptr)) (i32.const "."))
+                  (i32.or (call $lexIsHex (local.get $next))
+                    (i32.eq (i32.or (local.get $next) (i32.const 32)) (i32.const "p"))))
+              (then
+                (if (i32.or (local.get $requireExponent)
+                      (i32.eq (i32.or (local.get $next) (i32.const 32)) (i32.const "p")))
+                  (then
+                    (local.set $p (i32.add (global.get $ptr) (i32.const 1)))
+                    (block $fractionDone
+                      (loop $fraction
+                        (br_if $fractionDone (i32.ge_u (local.get $p) (global.get $end)))
+                        (local.set $c (i32.load8_u (local.get $p)))
+                        (br_if $fractionDone (i32.eqz (i32.or
+                          (call $lexIsHex (local.get $c)) (i32.eq (local.get $c) (i32.const "_")))))
+                        (local.set $p (i32.add (local.get $p) (i32.const 1)))
+                        (br $fraction)))
+                    (if (i32.or (i32.ge_u (local.get $p) (global.get $end))
+                          (i32.ne (i32.or (i32.load8_u (local.get $p)) (i32.const 32)) (i32.const "p")))
+                      (then (return)))
+                    (local.set $p (i32.add (local.get $p) (i32.const 1)))
+                    (if (i32.lt_u (local.get $p) (global.get $end))
+                      (then
+                        (local.set $c (i32.load8_u (local.get $p)))
+                        (if (i32.or (i32.eq (local.get $c) (i32.const "+")) (i32.eq (local.get $c) (i32.const "-")))
+                          (then (local.set $p (i32.add (local.get $p) (i32.const 1)))))))
+                    (if (i32.or (i32.ge_u (local.get $p) (global.get $end))
+                          (i32.eqz (call $lexIsDigit (i32.load8_u (local.get $p)))))
+                      (then (return)))))
+                (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+                (call $lexScanNumberBody (i32.const 1)))))))))
 
   ;; End of the escape span that starts at the backslash $p: the backslash,
   ;; the escaped byte with any UTF-8 continuation bytes, and - when the

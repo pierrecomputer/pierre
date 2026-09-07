@@ -159,8 +159,7 @@
                 (i32.eq (local.get $c) (i32.const "."))
                 (call $lexIsDigit (local.get $next))))
           (then
-            (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-            (call $lexScanNumber)
+            (call $lexScanHexNumber (i32.const 0))
             (call $emitTok (enum.get $Token.number) (local.get $lhs) (global.get $ptr))
             (local.set $decl (i32.const 0))
             (local.set $member (i32.const 0))

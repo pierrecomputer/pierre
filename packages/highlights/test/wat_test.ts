@@ -98,15 +98,38 @@ void t.test('wat: every module field keyword and the value types', () => {
 });
 
 void t.test('wat: numeric literal forms, including signs and nan', () => {
-  const html = hl(
-    '(f64.const -1.5e2) (i32.const 0x7f) (i32.const +5) (i64.const 1_000) (f32.const nan) (f32.const inf)'
-  );
-  for (const n of ['-1.5e2', '0x7f', '+5', '1_000']) {
-    assert.equal(exactColor(html, n), distinctColor('number'), n);
+  for (const literal of [
+    '-1.5e2',
+    '0x7f',
+    '+5',
+    '1_000',
+    '1.',
+    '-0x1.fp+2',
+    '0x1.p-2',
+    'nan',
+    '+nan',
+    '-nan',
+    'inf',
+    '+inf',
+    '-inf',
+    'nan:0x1',
+    '-nan:0x80_00',
+  ]) {
+    const code = `(f64.const ${literal})\n`;
+    assert.equal(
+      exactColor(hl(code), literal),
+      distinctColor('number'),
+      literal
+    );
+    assertLineFedParity('wat', code);
   }
-  // the special float words are bare words, so they read as keywords
-  assert.equal(exactColor(html, 'nan'), distinctColor('keyword'));
-  assert.equal(exactColor(html, 'inf'), distinctColor('keyword'));
+  for (const word of ['infinite', 'nanosecond', 'nan:', 'nan:0x', 'nan:0xg']) {
+    assert.equal(
+      exactColor(hl(`(${word})`), word),
+      distinctColor('keyword'),
+      word
+    );
+  }
 });
 
 void t.test('wat: names may carry punctuation and dots', () => {

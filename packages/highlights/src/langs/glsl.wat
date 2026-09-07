@@ -294,23 +294,7 @@
                   (i32.lt_u (i32.add (global.get $ptr) (i32.const 1)) (global.get $end))
                   (call $lexIsDigit (i32.load8_u offset=1 (global.get $ptr))))))
           (then
-            (call $lexScanNumber)
-            ;; The shared lexer keeps a dot only when a decimal digit follows.
-            ;; Hex floats also permit `a-f` after it (`0x1.fp2`).
-            (if (i32.and
-                  (i32.and
-                    (i32.lt_u (i32.add (local.get $lhs) (i32.const 1)) (global.get $end))
-                    (i32.eq (i32.load8_u (local.get $lhs)) (i32.const "0")))
-                  (i32.and
-                    (i32.eq
-                      (i32.or (i32.load8_u offset=1 (local.get $lhs)) (i32.const 32))
-                      (i32.const "x"))
-                    (i32.and
-                      (i32.lt_u (global.get $ptr) (global.get $end))
-                      (i32.eq (i32.load8_u (global.get $ptr)) (i32.const ".")))))
-              (then
-                (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-                (call $lexScanNumber)))
+            (call $lexScanHexNumber (i32.const 0))
             (call $emitTok (enum.get $Token.number) (local.get $lhs) (global.get $ptr))
             (local.set $include (i32.const 0))
             (local.set $afterDot (i32.const 0))

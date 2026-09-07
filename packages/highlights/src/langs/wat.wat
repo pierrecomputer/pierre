@@ -19,6 +19,36 @@
     (local $c i32)
     (local $g i32)
     (local $p i32)
+    ;; Numeric atoms include their sign, trailing dot, and NaN payload.
+    (local.set $p (local.get $lhs))
+    (local.set $c (i32.load8_u (local.get $p)))
+    (if (i32.or (i32.eq (local.get $c) (i32.const "+"))
+                (i32.eq (local.get $c) (i32.const "-")))
+      (then (local.set $p (i32.add (local.get $p) (i32.const 1)))))
+    (if (i32.and (i32.lt_u (local.get $p) (local.get $rhs))
+          (call $lexIsDigit (i32.load8_u (local.get $p))))
+      (then (return (enum.get $Token.number))))
+    (local.set $c (i32.and (i32.load (local.get $p)) (i32.const 0xffffff)))
+    (if (i32.and
+          (i32.eq (i32.sub (local.get $rhs) (local.get $p)) (i32.const 3))
+          (i32.or (i32.eq (local.get $c) (i32.const "inf"))
+                  (i32.eq (local.get $c) (i32.const "nan"))))
+      (then (return (enum.get $Token.number))))
+    (if (i32.and
+          (i32.gt_u (i32.sub (local.get $rhs) (local.get $p)) (i32.const 6))
+          (i64.eq (i64.and (i64.load (local.get $p)) (i64.const 0xffffffffffff))
+            (i64.const "nan:0x")))
+      (then
+        (local.set $p (i32.add (local.get $p) (i32.const 6)))
+        (block $notNumber
+          (loop $payload
+            (br_if $notNumber (i32.eqz (call $lexIsHex (i32.load8_u (local.get $p)))))
+            (local.set $p (i32.add (local.get $p) (i32.const 1)))
+            (if (i32.eq (local.get $p) (local.get $rhs))
+              (then (return (enum.get $Token.number))))
+            (if (i32.eq (i32.load8_u (local.get $p)) (i32.const "_"))
+              (then (local.set $p (i32.add (local.get $p) (i32.const 1)))))
+            (br_if $payload (i32.lt_u (local.get $p) (local.get $rhs)))))))
     (local.set $g (keyword-table.get $watWords (local.get $lhs) (local.get $rhs)))
     (if (i32.eq (local.get $g) (i32.const 1))
       (then (return (enum.get $Token.type.builtin))))
@@ -132,17 +162,6 @@
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (call $watScanName (i32.const 0))
             (call $emitTok (enum.get $Token.variable) (local.get $lhs) (global.get $ptr))
-            (br $token)))
-        (if (i32.or
-              (call $lexIsDigit (local.get $c))
-              (i32.and
-                (i32.or (i32.eq (local.get $c) (i32.const "+"))
-                        (i32.eq (local.get $c) (i32.const "-")))
-                (call $lexIsDigit (local.get $next))))
-          (then
-            (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-            (call $lexScanNumber)
-            (call $emitTok (enum.get $Token.number) (local.get $lhs) (global.get $ptr))
             (br $token)))
         (if (i32.or (i32.eq (local.get $c) (i32.const "("))
                     (i32.eq (local.get $c) (i32.const ")")))

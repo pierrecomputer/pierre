@@ -53,31 +53,6 @@
   (func $cIsOp (param $c i32) (result i32)
     (byteset.get "!%&*+-/<=>?^|~" (local.get $c)))
 
-  ;; Extend the shared numeric run for C hexadecimal floats, whose fractional
-  ;; part may begin with an a-f digit (`0x1.fp+3`). The run starts at $ptr.
-  (func $cScanNumber
-    (local $lhs i32)
-    (local $next i32)
-    (local.set $lhs (global.get $ptr))
-    (call $lexScanNumber)
-    (if (i32.and
-          (i32.lt_u (i32.add (local.get $lhs) (i32.const 1)) (global.get $end))
-          (i32.and
-            (i32.eq (i32.load8_u (local.get $lhs)) (i32.const "0"))
-            (i32.eq (i32.or (i32.load8_u offset=1 (local.get $lhs)) (i32.const 32)) (i32.const "x"))))
-      (then
-        (if (i32.lt_u (global.get $ptr) (global.get $end))
-          (then
-            (local.set $next (select
-              (i32.load8_u offset=1 (global.get $ptr)) (i32.const 0)
-              (i32.lt_u (i32.add (global.get $ptr) (i32.const 1)) (global.get $end))))
-            (if (i32.and
-                  (i32.eq (i32.load8_u (global.get $ptr)) (i32.const "."))
-                  (call $lexIsHex (local.get $next)))
-              (then
-                (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-                (call $lexScanNumber))))))))
-
   (func $hlC
     (local $c i32)
     (local $c2 i32)
@@ -173,7 +148,7 @@
               (i32.and (i32.eq (local.get $c) (i32.const "."))
                        (call $lexIsDigit (local.get $c2))))
           (then
-            (call $cScanNumber)
+            (call $lexScanHexNumber (i32.const 0))
             (call $emitTok (enum.get $Token.number) (local.get $lhs) (global.get $ptr))
             (br $next)))
 
