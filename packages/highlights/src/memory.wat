@@ -1,43 +1,23 @@
 (module
-  ;; Named addresses on page 1, in address order: the two per-token tables,
-  ;; the lowercase word scratch and byte-set bitmaps, the emitter's HTML
-  ;; fragments and cache with the streaming state, every
-  ;; word table back to back, and the rest of the per-language data -
-  ;; bitsets, hash, fence aliases, stacks. The forms that fill a region
-  ;; enforce its bounds at build time: overlapping data segments and keyword
-  ;; tables that outgrow their range are rejected, so moving a region means
-  ;; editing only this file and the memory map in highlights.wat.
+  ;; memory map for highlights.wat
 
-  ;; [64:2000) the per-token tables: the theme table JavaScript writes
-  ;; before each run - five bytes per token, lib/highlighter.ts mirrors the
-  ;; address - and the CSS-variable name table, three-byte records over a
-  ;; blob of kebab-case suffixes
+  ;; [64:2000) per-token theme and CSS-variable name tables.
+  ;; lib/highlighter.ts mirrors the theme-table address.
   (const $mem.themeTable 64)          ;; 1024
   (const $mem.tokenCssTable 1088)     ;; 912
 
-  ;; [2000:4112) the lowercase word copy that case-insensitive keyword lookups
-  ;; probe, then the byte-set bitmaps the byteset.get form emits - up to 64
-  ;; sets of 32 bytes
+  ;; [2000:4112) lowercase word buffer and byte-set bitmaps.
   (const $mem.lexLowerScratch 2000)   ;; 64
   (const $mem.byteSets 2064)          ;; 2048
 
-  ;; [4112:13504) the emitter's HTML fragments, its span-open cache - 73
-  ;; slots of 66 bytes holding each token's rendered span opener, reused until
-  ;; theme bytes or output style mode change - then 384 saved theme bytes
-  ;; (73 five-byte records padded to SIMD pairs) and the streaming state:
-  ;; 32-byte delimiter and the lexer checkpoints capped at 4000 bytes by
-  ;; scripts/build.ts
+  ;; [4112:13504) emitter HTML fragments, caches, and streaming state.
   (const $mem.emitterHtml 4112)       ;; 152
   (const $mem.emitterSpanCache 4264)  ;; 4824
   (const $mem.emitterThemeCache 9088) ;; 384
   (const $mem.streamDelimiter 9472)   ;; 32
   (const $mem.streamState 9504)       ;; 4000
 
-  ;; [13504:48608) word tables, one per language in name order: js.wat's
-  ;; hand-written ECMAScript table under tsx and a keyword table for every
-  ;; other language. The size after each base is the range its table form
-  ;; claims in the lexer; it leaves a little headroom above the bytes the
-  ;; table needs.
+  ;; [13504:48608) keyword tables (one per language in name order)
   (const $mem.bashWords 13504)           ;; 256
   (const $mem.c3Words 13760)             ;; 1792
   (const $mem.cWords 15552)              ;; 1024
@@ -83,21 +63,15 @@
   (const $mem.wgslWords 47072)           ;; 640
   (const $mem.zigWords 47712)            ;; 896
 
-  ;; [48608:58256) the other per-language data in alphabetical order: the
-  ;; JSON nesting stack, the markdown fence alias table and the fence
-  ;; registers of nested markdown bodies (eight 12-byte records, one per
-  ;; nesting depth), the TOML nesting stack, and the ECMAScript bracket-kind
-  ;; stack, token-class bitset, token-kind map, template stack, and JSX-mode
-  ;; stack
+  ;; [48608:59280) per-language stacks and lookup tables.
   (const $mem.jsonStack 48608)                   ;; 1024
-  (const $mem.markdownFence 49632)               ;; 1056
-  (const $mem.markdownFenceEnd 50688)            ;; 0
-  (const $mem.markdownFenceStack 50688)          ;; 96
-  (const $mem.markdownFenceStackEnd 50784)       ;; 0
-  (const $mem.tomlStack 50784)                   ;; 1024
-  (const $mem.jsBracketStack 51808)              ;; 1024
-  (const $mem.jsLexBits 52832)                   ;; 144
-  (const $mem.jsLexHl 52976)                     ;; 160
-  (const $mem.jsTemplateStack 53136)             ;; 1024
-  (const $mem.jsxStack 54160)                    ;; 4096
+  (const $mem.jsBracketStack 49632)              ;; 1024
+  (const $mem.jsTokenFlags 50656)                ;; 144
+  (const $mem.jsTokenHighlightMap 50800)         ;; 160
+  (const $mem.jsTemplateBracketStack 50960)      ;; 1024
+  (const $mem.jsTemplateFn 51984)                ;; 1024
+  (const $mem.jsxStack 53008)                    ;; 4096
+  (const $mem.markdownFence 57104)               ;; 1056
+  (const $mem.markdownFenceStack 58160)          ;; 96
+  (const $mem.tomlStack 58256)                   ;; 1024
 )

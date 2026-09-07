@@ -2,6 +2,7 @@
   (import "./js.wat")
   (import "./ts.wat")
   (import "./jsx.wat")
+  (import "./js-inline-template.wat")
 
   ;; One feature-gated pipeline composes JS, JSX, TS, and TSX.
   ;; emit one classified token, splitting the multi-part kinds
@@ -22,11 +23,11 @@
         (return)))
     (if (i32.eq (local.get $t) (enum.get $Lex.backtick))
       (then
-        (call $emitTemplate (local.get $lhs) (local.get $rhs) (i32.const 0) (i32.const 1))
+        (call $emitTemplate (local.get $lhs) (local.get $rhs) (i32.const 0) (i32.const 1) (i32.const 1))
         (return)))
     (if (i32.eq (local.get $t) (enum.get $Lex.dollar_brace))
       (then
-        (call $emitTemplate (local.get $lhs) (local.get $rhs) (i32.const 1) (i32.const 1))
+        (call $emitTemplate (local.get $lhs) (local.get $rhs) (i32.const 1) (i32.const 1) (i32.const 0))
         (return)))
     (if (i32.or (i32.eq (local.get $t) (enum.get $Lex.comment))
                 (i32.eq (local.get $t) (enum.get $Lex.hash_bang)))
@@ -52,7 +53,7 @@
             (return)))
         (if (i32.or (i32.eq (local.get $c) (i32.const "`")) (i32.eq (local.get $c) (i32.const "}")))
           (then
-            (call $emitTemplate (local.get $lhs) (local.get $rhs) (i32.const 0) (i32.const 1))
+            (call $emitTemplate (local.get $lhs) (local.get $rhs) (i32.const 0) (i32.const 1) (i32.const 0))
             (return)))
         (if (i32.eq (local.get $c) (i32.const "/"))
           (then
@@ -89,7 +90,8 @@
           (local.get $from)
           (global.get $ptr)
           (i32.eq (local.get $t) (enum.get $Lex.dollar_brace))
-          (i32.const 0))
+          (i32.const 0)
+          (i32.eq (local.get $t) (enum.get $Lex.backtick)))
         (if (i32.eq (local.get $t) (enum.get $Lex.invalid))
           (then (return (i32.const 1))))
         (global.set $tsxStreamMode (i32.const 0))
@@ -157,6 +159,8 @@
     (local $done i32)
     (local $m i32)
     (local $cut i32)
+    (local $markerLhs i32)
+    (local $markerRhs i32)
     (call $lexEmitLeadingContinuation)
     (if (local.get $reset)
       (then
@@ -166,7 +170,10 @@
         (global.set $prevTok (enum.get $Lex.eof))
         (global.set $nlBefore (i32.const 0))
         (global.set $braceDepth (i32.const 0))
-        (global.set $tmplSp (i32.const 0))
+        (global.set $jsTemplateLexSp (i32.const 0))
+        (global.set $jsTemplateEmitSp (i32.const 0))
+        (global.set $jsTemplateState (i32.const 0))
+        (global.set $jsTemplateMarker (i32.const 0))
         (global.set $brkSp (i32.const 0))
         (global.set $rxCloser (i32.const 0))
         (global.set $jsxSp (i32.const 0))
@@ -279,6 +286,7 @@
               (then
                 (call $emitTok (enum.get $Token.punctuation.bracket.jsx)
                   (local.get $curLhs) (local.get $curRhs))
+                (global.set $jsTemplateMarker (i32.const 0))
                 (call $jsxEmitName)
                 (call $jsxPush (i32.const 1) (i32.const 0))
                 (local.set $done (global.get $ptr))
@@ -294,6 +302,46 @@
         (local.set $haveNext (i32.const 1))
         (call $emitCur (local.get $curT) (local.get $curLhs) (local.get $curRhs)
                        (local.get $nxtT))
+        (global.set $jsTemplateMarker (i32.const 0))
+        ;; Only the immediately preceding identifier or exact comment marker
+        ;; selects an embedded language; whitespace is already excluded by the token scanner.
+        (local.set $markerLhs (local.get $curLhs))
+        (local.set $markerRhs (local.get $curRhs))
+        (if (i32.eq (local.get $curT) (enum.get $Lex.multiline_comment))
+          (then
+            (local.set $markerLhs (i32.add (local.get $markerLhs) (i32.const 2)))
+            (local.set $markerRhs (i32.sub (local.get $markerRhs) (i32.const 2)))
+            (block $trimLeft
+              (loop $left
+                (br_if $trimLeft (i32.ge_u (local.get $markerLhs) (local.get $markerRhs)))
+                (br_if $trimLeft (i32.gt_u (i32.load8_u (local.get $markerLhs)) (i32.const 32)))
+                (local.set $markerLhs (i32.add (local.get $markerLhs) (i32.const 1)))
+                (br $left)))
+            (block $trimRight
+              (loop $right
+                (br_if $trimRight (i32.ge_u (local.get $markerLhs) (local.get $markerRhs)))
+                (br_if $trimRight (i32.gt_u (i32.load8_u (i32.sub (local.get $markerRhs) (i32.const 1))) (i32.const 32)))
+                (local.set $markerRhs (i32.sub (local.get $markerRhs) (i32.const 1)))
+                (br $right)))))
+        (if (i32.eq (i32.sub (local.get $markerRhs) (local.get $markerLhs)) (i32.const 4))
+          (then
+            (global.set $jsTemplateMarker
+              (i32.or
+                (i32.and (i32.eq (local.get $curT) (enum.get $Lex.identifier))
+                  (i32.eq (i32.load (local.get $markerLhs)) (i32.const "html")))
+                (i32.and (i32.and (i32.eqz (local.get $cut))
+                    (i32.eq (local.get $curT) (enum.get $Lex.multiline_comment)))
+                  (i32.eq (i32.or (i32.load (local.get $markerLhs)) (i32.const 0x20202020)) (i32.const "html")))))))
+        (if (i32.eq (i32.sub (local.get $markerRhs) (local.get $markerLhs)) (i32.const 3))
+          (then
+            (if (i32.or
+                  (i32.and (i32.eq (local.get $curT) (enum.get $Lex.identifier))
+                    (i32.eq (i32.and (i32.load (local.get $markerLhs)) (i32.const 0xffffff)) (i32.const "css")))
+                  (i32.and (i32.and (i32.eqz (local.get $cut))
+                      (i32.eq (local.get $curT) (enum.get $Lex.multiline_comment)))
+                    (i32.eq (i32.or (i32.and (i32.load (local.get $markerLhs)) (i32.const 0xffffff))
+                              (i32.const 0x202020)) (i32.const "css"))))
+              (then (global.set $jsTemplateMarker (i32.const 260))))))
         (local.set $done (local.get $curRhs))
         ;; comments are transparent to prev; a cut token's kind is recorded by
         ;; the resume instead

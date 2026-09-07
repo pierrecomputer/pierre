@@ -153,7 +153,7 @@
     "ctxword_type"
   )
 
-  ;; Shared ECMAScript state. Feature bit 0 enables TypeScript and bit 1 JSX.
+  ;; Shared JavaScript state. Feature bit 0 enables TypeScript and bit 1 JSX.
   (global $ecmaFeatures (mut i32) (i32.const 3))
   (global $sourceStart (mut i32) (i32.const 65536))
   (global $lhs  (mut i32) (i32.const 0))
@@ -162,7 +162,10 @@
   (global $prevLto (mut i32) (i32.const 0))
   (global $nlBefore (mut i32) (i32.const 0))
   (global $braceDepth (mut i32) (i32.const 0))
-  (global $tmplSp (mut i32) (i32.const 0))
+  ;; The lexer tracks template brace depth; the emitter saves HTML/CSS state.
+  ;; Their stacks advance separately because the lexer reads one token ahead.
+  (global $jsTemplateLexSp (mut i32) (i32.const 0))
+  (global $jsTemplateEmitSp (mut i32) (i32.const 0))
   (global $brkSp (mut i32) (i32.const 0))
   (global $rxCloser (mut i32) (i32.const 0))
   (global $prevTok (mut i32) (i32.const 0)) ;; significant token before the current one
@@ -210,8 +213,8 @@
     (i32.const 0))
 
 
-  ;; token-class table at 3328, one byte per $Lex member.
-  (bitset $LexBits $Lex $mem.jsLexBits
+  ;; Token flags, one byte per $Lex member.
+  (bitset $LexBits $Lex $mem.jsTokenFlags
     ;; can end an expression: a `/` or `<` after one divides/compares
     (exprEnd
       "identifier" "number_literal" "bigint_literal" "string_literal"
@@ -474,14 +477,14 @@
         (if (i32.and (i32.eq (local.get $c) (i32.const "$"))
                      (i32.eq (call $tsxByte (i32.add (global.get $ptr) (i32.const 1))) (i32.const "{")))
           (then
-            (if (i32.ge_u (global.get $tmplSp) (i32.const 256))
+            (if (i32.ge_u (global.get $jsTemplateLexSp) (i32.const 256))
               (then
                 ;; template stack full: treat the `${` as plain characters
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))
                 (br $l)))
-            (i32.store (i32.add (i32.const $mem.jsTemplateStack) (i32.shl (global.get $tmplSp) (i32.const 2)))
+            (i32.store (i32.add (i32.const $mem.jsTemplateBracketStack) (i32.shl (global.get $jsTemplateLexSp) (i32.const 2)))
                        (global.get $braceDepth))
-            (global.set $tmplSp (i32.add (global.get $tmplSp) (i32.const 1)))
+            (global.set $jsTemplateLexSp (i32.add (global.get $jsTemplateLexSp) (i32.const 1)))
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))
             (return (enum.get $Lex.dollar_brace))))
         (if (i32.eq (local.get $c) (i32.const 92))
@@ -706,12 +709,12 @@
           (br $takeDone (i32.or (i32.shl (enum.get $Lex.l_brace) (i32.const 3)) (i32.const 1))))
       (case "}"
           ;; does this `}` resume a template literal?
-          (if (i32.and (i32.gt_u (global.get $tmplSp) (i32.const 0))
+          (if (i32.and (i32.gt_u (global.get $jsTemplateLexSp) (i32.const 0))
                 (i32.eq (global.get $braceDepth)
-                        (i32.load (i32.add (i32.const $mem.jsTemplateStack)
-                          (i32.shl (i32.sub (global.get $tmplSp) (i32.const 1)) (i32.const 2))))))
+                        (i32.load (i32.add (i32.const $mem.jsTemplateBracketStack)
+                          (i32.shl (i32.sub (global.get $jsTemplateLexSp) (i32.const 1)) (i32.const 2))))))
             (then
-              (global.set $tmplSp (i32.sub (global.get $tmplSp) (i32.const 1)))
+              (global.set $jsTemplateLexSp (i32.sub (global.get $jsTemplateLexSp) (i32.const 1)))
               (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
               (return (call $scanTemplateBody))))
           (call $brkPop)
@@ -963,7 +966,7 @@
     (global.set $prevTok (enum.get $Lex.eof))
     (global.set $nlBefore (i32.const 0))
     (global.set $braceDepth (i32.const 0))
-    (global.set $tmplSp (i32.const 0))
+    (global.set $jsTemplateLexSp (i32.const 0))
     (global.set $brkSp (i32.const 0))
     (global.set $rxCloser (i32.const 0))
     (global.set $jsxSp (i32.const 0))
@@ -1076,14 +1079,27 @@
 
   ;; emit a template token: a trailing `${` is punctuation.special, and so is
   ;; a leading `}` when $leadBrace is set - the token picked the template up
-  ;; after a substitution. The rest is string with escape sub-spans. A chunk
+  ;; after a substitution. Marked templates emit HTML or CSS; other templates emit
+  ;; strings with escape sub-spans. Save the embedded state across substitutions so
+  ;; nested templates cannot change the surrounding HTML or CSS. A chunk
   ;; continuation passes $leadBrace zero: its first byte is template text
   ;; even when it happens to be a `}`
   (func $emitTemplate (param $lhs i32) (param $rhs i32) (param $dollarBrace i32)
-        (param $leadBrace i32)
+        (param $leadBrace i32) (param $closed i32)
     (local $p i32)
     (local $e i32)
     (local.set $p (local.get $lhs))
+    (if (local.get $leadBrace)
+      (then
+        (if (i32.eq (i32.load8_u (local.get $lhs)) (i32.const 96))
+          (then (global.set $jsTemplateState (global.get $jsTemplateMarker)))
+          (else
+            (if (global.get $jsTemplateEmitSp)
+              (then
+                (global.set $jsTemplateEmitSp (i32.sub (global.get $jsTemplateEmitSp) (i32.const 1)))
+                (global.set $jsTemplateState (i32.load
+                  (i32.add (i32.const $mem.jsTemplateFn)
+                    (i32.shl (global.get $jsTemplateEmitSp) (i32.const 2)))))))))))
     (if (i32.and
           (local.get $leadBrace)
           (i32.eq (i32.load8_u (local.get $lhs)) (i32.const "}")))
@@ -1096,8 +1112,32 @@
         (local.set $e (i32.sub (local.get $rhs) (i32.const 2)))
         (if (i32.lt_u (local.get $e) (local.get $p))
           (then (local.set $e (local.get $p))))))
-    (call $emitEscaped (enum.get $Token.string) (local.get $p) (local.get $e))
-    (call $emitTok (enum.get $Token.punctuation.special) (local.get $e) (local.get $rhs)))
+    (if (global.get $jsTemplateState)
+      (then
+        (if (i32.and (local.get $leadBrace)
+              (i32.eq (i32.load8_u (local.get $lhs)) (i32.const 96)))
+          (then
+            (local.set $p (i32.add (local.get $lhs) (i32.const 1)))
+            (call $emitTok (enum.get $Token.string) (local.get $lhs) (local.get $p))))
+        (if (i32.ge_u (global.get $jsTemplateState) (i32.const 256))
+          (then (call $emitCssTemplateBody (local.get $p)
+            (i32.sub (local.get $e) (local.get $closed))))
+          (else (call $emitHtmlTemplateBody (local.get $p)
+            (i32.sub (local.get $e) (local.get $closed)))))
+        (if (local.get $closed)
+          (then (call $emitTok (enum.get $Token.string)
+            (i32.sub (local.get $e) (i32.const 1)) (local.get $e)))))
+      (else (call $emitEscaped (enum.get $Token.string) (local.get $p) (local.get $e))))
+    (call $emitTok (enum.get $Token.punctuation.special) (local.get $e) (local.get $rhs))
+    (if (local.get $dollarBrace)
+      (then
+        (if (i32.lt_u (global.get $jsTemplateEmitSp) (i32.const 256))
+          (then
+            (i32.store (i32.add (i32.const $mem.jsTemplateFn)
+              (i32.shl (global.get $jsTemplateEmitSp) (i32.const 2))) (global.get $jsTemplateState))
+            (global.set $jsTemplateEmitSp (i32.add (global.get $jsTemplateEmitSp) (i32.const 1)))))))
+    (if (i32.or (local.get $dollarBrace) (local.get $closed))
+      (then (global.set $jsTemplateState (i32.const 0)))))
 
   ;; the JSDoc tag word [$lhs,$rhs) - without the `@` - takes a name argument
   ;; (`@param {t} name`). words longer than 8 bytes match nothing; shorter

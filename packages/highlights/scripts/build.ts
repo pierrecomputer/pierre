@@ -250,7 +250,7 @@ export function transformWat(
       )
       .join('\n        ');
     let body = inner.replace(
-      new RegExp(`^(\\s*\\${name}\\b)`),
+      new RegExp(`^(\\s*\\${name}\\b(?:\\s*\\((?:param|result)\\b[^)]*\\))*)`),
       '$1\n    (local $streamRoot i32)'
     );
     body = body.replace(

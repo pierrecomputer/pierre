@@ -20,15 +20,16 @@
       [9504:13504)    streaming lexer checkpoints
       [13504:48608)   language keyword tables
       [48608:49632)   JSON nesting stack
-      [49632:50688)   markdown fence aliases
-      [50688:50784)   nested markdown fence registers, one record per depth
-      [50784:51808)   TOML nesting stack
-      [51808:52832)   ECMAScript bracket-kind stack
-      [52832:52976)   ECMAScript token-class bitset
-      [52976:53136)   ECMAScript token-kind to $Token map (enum-map)
-      [53136:54160)   ECMAScript template stack
-      [54160:58256)   JSX-mode stack
-      [58256:65536)   free
+      [49632:50656)   JavaScript bracket-kind stack
+      [50656:50800)   JavaScript token-class bitset
+      [50800:50960)   JavaScript token-kind to $Token map (enum-map)
+      [50960:51984)   JavaScript template bracket stack
+      [51984:53008)   JavaScript template HTML/CSS resume states
+      [53008:57104)   JSX-mode stack
+      [57104:58160)   markdown fence aliases
+      [58160:58256)   nested markdown fence registers, one record per depth
+      [58256:59280)   TOML nesting stack
+      [59280:65536)   free
     [] pages 2..N     (text buffer; a live instance lays them out itself,
                       see src/live.wat)
       [65536:EOF)     input, NUL sentinel, then at least 16 bytes of slack
@@ -376,7 +377,7 @@
     (global.set $markdownStreamFenceLen (i32.const 0))
     (global.set $markdownStreamLang (i32.const 0))
     (memory.fill (i32.const $mem.markdownFenceStack) (i32.const 0)
-      (i32.sub (i32.const $mem.markdownFenceStackEnd) (i32.const $mem.markdownFenceStack)))
+      (i32.sub (i32.const 58256) (i32.const $mem.markdownFenceStack)))
     (global.set $phpStreamingCode (i32.const 0))
     (global.set $phpStreamDecl (i32.const 0))
     (global.set $phpStreamMember (i32.const 0)))

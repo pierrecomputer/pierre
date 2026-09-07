@@ -324,6 +324,96 @@ void t.test(
   }
 );
 
+void t.test(
+  'LiveTokenizer: HTML template state survives edits and restores',
+  () => {
+    for (const lang of ['js', 'jsx', 'ts', 'tsx'] as const) {
+      let code =
+        'html`<div title="before ${\nhtml`<b>${value}</b>`\n} after"\n disabled>\n<!-- comment\nend -->\n</div>`;';
+      const live = new LiveTokenizer({ lang, theme: pierreDark, code });
+      assertMatchesFresh(live, code, lang, 'initial HTML');
+      for (const marker of ['other', '/* HTML */', 'html']) {
+        const end = code.indexOf('`');
+        live.applyEdits([
+          {
+            range: {
+              start: { line: 0, character: 0 },
+              end: { line: 0, character: end },
+            },
+            newText: marker,
+          },
+        ]);
+        code = marker + code.slice(end);
+        assertMatchesFresh(live, code, lang, marker);
+        const start = code.indexOf('value');
+        const range = {
+          start: { line: 1, character: 10 },
+          end: { line: 1, character: 15 },
+        };
+        live.applyEdits([{ range, newText: 'count' }]);
+        code = code.slice(0, start) + 'count' + code.slice(start + 5);
+        assertMatchesFresh(live, code, lang, 'nested edit');
+        live.applyEdits([{ range, newText: 'value' }]);
+        code = code.slice(0, start) + 'value' + code.slice(start + 5);
+      }
+      live.dispose();
+    }
+  }
+);
+
+void t.test(
+  'LiveTokenizer: CSS templates restore state after marker edits',
+  () => {
+    for (const lang of ['js', 'jsx', 'ts', 'tsx'] as const) {
+      let code =
+        'css`.card {\n color: ${\ncss`red`\n};\n content: "${html`<b>${value}</b>`} after";\n /* first\n last */\n}`;';
+      const live = new LiveTokenizer({ lang, theme: pierreDark, code });
+      assertMatchesFresh(live, code, lang, 'initial CSS');
+      for (const marker of ['other', '/* CSS */', 'html', 'css']) {
+        const end = code.indexOf('`');
+        live.applyEdits([
+          {
+            range: {
+              start: { line: 0, character: 0 },
+              end: { line: 0, character: end },
+            },
+            newText: marker,
+          },
+        ]);
+        code = marker + code.slice(end);
+        assertMatchesFresh(live, code, lang, marker);
+      }
+      live.dispose();
+    }
+  }
+);
+
+void t.test('LiveTokenizer: restores a full template stack after edits', () => {
+  for (const lang of ['js', 'jsx', 'ts', 'tsx'] as const) {
+    const head = 'html`<b>${'.repeat(256) + '\n';
+    const tail = '\n' + '}</b>`'.repeat(256);
+    const code = head + 'value' + tail;
+    const live = new LiveTokenizer({ lang, theme: pierreDark, code });
+    assertMatchesFresh(live, code, lang, 'full template stack');
+    live.applyEdits([
+      {
+        range: {
+          start: { line: 1, character: 0 },
+          end: { line: 1, character: 5 },
+        },
+        newText: '({ value: "x" }).value',
+      },
+    ]);
+    assertMatchesFresh(
+      live,
+      head + '({ value: "x" }).value' + tail,
+      lang,
+      'edited full template stack'
+    );
+    live.dispose();
+  }
+});
+
 void t.test('LiveTokenizer: empty and edge documents', () => {
   for (const code of [
     '',
@@ -1349,7 +1439,7 @@ void t.test(
 );
 
 void t.test(
-  'live wasm: ECMAScript state blobs stay small inside braces',
+  'live wasm: JavaScript state blobs stay small inside braces',
   () => {
     // The ecma lexers keep their cross-line state in globals and stacks, so
     // the lexer checkpoint region is all zero for them; the blob layout puts

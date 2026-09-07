@@ -56,14 +56,16 @@
   ;; 2-byte string.escape sub-spans for `\x` escapes. A raw CR/LF terminates the
   ;; (invalid) string leniently without being consumed; `\` + newline is an
   ;; escape, so continuation lines keep the string open. 16 bytes per step.
-  (func $cssString
-    (local $q i32)
+  ;; Skip the opening quote, or pass zero to resume a template part. Returns
+  ;; one when the body is still open at the end of the range.
+  (func $cssString (param $q i32) (param $skip i32) (result i32)
+    (local $open i32)
     (local $seg i32)
     (local $c i32)
     (local $e i32)
-    (local.set $q (i32.load8_u (global.get $ptr)))
+    (local.set $open (i32.const 1))
     (local.set $seg (global.get $ptr))
-    (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+    (global.set $ptr (i32.add (global.get $ptr) (local.get $skip)))
     (block $done
       (loop $wide
         (global.set $ptr (call $scanFindSpecial
@@ -73,9 +75,13 @@
         (if (i32.eq (local.get $c) (local.get $q))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+            (local.set $open (i32.const 0))
             (br $done)))
-        (br_if $done (i32.or (i32.eq (local.get $c) (i32.const 10))
-                             (i32.eq (local.get $c) (i32.const 13))))
+        (if (i32.or (i32.eq (local.get $c) (i32.const 10))
+                    (i32.eq (local.get $c) (i32.const 13)))
+          (then
+            (local.set $open (i32.const 0))
+            (br $done)))
         ;; backslash escape: `\` + up to 6 hex digits (css hex escape) or the
         ;; escaped byte, clamped to $end. An escaped multibyte UTF-8 character
         ;; stays whole inside the escape span - a span boundary must never
@@ -92,7 +98,8 @@
         (local.set $seg (global.get $ptr))
         (call $cssStringOpenAtChunkEnd (local.get $q))
         (br $wide)))
-    (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr)))
+    (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
+    (local.get $open))
 
   ;; A string whose escaped line break ends the chunk stays open: hand it to
   ;; the shared string mode so the next chunk resumes the body instead of
@@ -369,18 +376,23 @@
   ;; mixin heads, and, for the indented syntax, line-terminated statements.
   (func $hlCss
     (global.set $cssDialect (i32.const 0))
-    (call $hlCssImpl))
+    (drop (call $hlCssImpl (i32.const 0))))
   (func $hlLess
     (global.set $cssDialect (i32.const 1))
-    (call $hlCssImpl))
+    (drop (call $hlCssImpl (i32.const 0))))
   (func $hlScss
     (global.set $cssDialect (i32.const 2))
-    (call $hlCssImpl))
+    (drop (call $hlCssImpl (i32.const 0))))
   (func $hlSass
     (global.set $cssDialect (i32.const 3))
-    (call $hlCssImpl))
+    (drop (call $hlCssImpl (i32.const 0))))
 
-  (func $hlCssImpl
+  ;; A nonzero state highlights a JS template part. Bits 0..1 hold the mode,
+  ;; bit 2 the statement decision, bits 3..4 the attribute state, bit 5 the
+  ;; namespace flag, bits 6..7 an open comment or quote, bit 8 marks CSS,
+  ;; and the remaining bits hold block depth. Zero uses normal CSS streaming.
+  (func $hlCssImpl (param $state i32) (result i32)
+    (local $span i32)
     (local $c i32)
     (local $c2 i32)
     (local $gap i32)
@@ -398,8 +410,30 @@
     (local $sassDepth i32) ;; the indented syntax: 1 when the statement is indented
     (local.set $decide (i32.const 1))
     (call $lexEmitLeadingContinuation)
+    (if (local.get $state)
+      (then
+        (local.set $mode (i32.and (local.get $state) (i32.const 3)))
+        (local.set $decide (i32.and (i32.shr_u (local.get $state) (i32.const 2)) (i32.const 1)))
+        (local.set $attr (i32.and (i32.shr_u (local.get $state) (i32.const 3)) (i32.const 3)))
+        (local.set $namespace (i32.and (i32.shr_u (local.get $state) (i32.const 5)) (i32.const 1)))
+        (local.set $span (i32.and (i32.shr_u (local.get $state) (i32.const 6)) (i32.const 3)))
+        (local.set $depth (i32.shr_u (local.get $state) (i32.const 9)))))
     (block $done
       (loop $next
+        (if (local.get $span)
+          (then
+            (local.set $lhs (global.get $ptr))
+            (if (i32.eq (local.get $span) (i32.const 1))
+              (then
+                (call $lexBlockComment (i32.const 0) (enum.get $Token.comment))
+                (br_if $done (i32.or
+                  (i32.lt_u (i32.sub (global.get $ptr) (local.get $lhs)) (i32.const 2))
+                  (i32.ne (i32.load16_u (i32.sub (global.get $ptr) (i32.const 2))) (i32.const "*/")))))
+              (else
+                (br_if $done (call $cssString
+                  (select (i32.const 34) (i32.const 39) (i32.eq (local.get $span) (i32.const 2)))
+                  (i32.const 0)))))
+            (local.set $span (i32.const 0))))
         (local.set $gap (global.get $ptr))
         (call $scanWhitespace)
         ;; the indented syntax ends a statement at its line break
@@ -423,6 +457,13 @@
                      (i32.eq (local.get $c2) (i32.const "*")))
           (then
             (call $lexBlockComment (i32.const 2) (enum.get $Token.comment))
+            (if (i32.and (i32.ne (local.get $state) (i32.const 0))
+                  (i32.or
+                    (i32.lt_u (i32.sub (global.get $ptr) (local.get $lhs)) (i32.const 4))
+                    (i32.ne (i32.load16_u (i32.sub (global.get $ptr) (i32.const 2))) (i32.const "*/"))))
+              (then
+                (local.set $span (i32.const 1))
+                (br $done)))
             (br $next)))
         ;; line comments in every preprocessor dialect
         (if (i32.and
@@ -604,7 +645,11 @@
         ;; quoted strings, in any mode
         (if (i32.or (i32.eq (local.get $c) (i32.const 34)) (i32.eq (local.get $c) (i32.const 39)))
           (then
-            (call $cssString)
+            (local.set $p (call $cssString (local.get $c) (i32.const 1)))
+            (if (i32.and (i32.ne (local.get $state) (i32.const 0)) (local.get $p))
+              (then
+                (local.set $span (select (i32.const 2) (i32.const 3) (i32.eq (local.get $c) (i32.const 34))))
+                (br $done)))
             (br $next)))
 
         (block $misc
@@ -940,5 +985,15 @@
         ;; anything unclassified: one plain byte
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
         (call $emitTok (enum.get $Token.none) (local.get $lhs) (global.get $ptr))
-        (br $next))))
+        (br $next)))
+    (if (result i32) (local.get $state)
+      (then
+        (i32.or (i32.const 256)
+          (i32.or (local.get $mode)
+            (i32.or (i32.shl (local.get $decide) (i32.const 2))
+              (i32.or (i32.shl (local.get $attr) (i32.const 3))
+                (i32.or (i32.shl (local.get $namespace) (i32.const 5))
+                  (i32.or (i32.shl (local.get $span) (i32.const 6))
+                    (i32.shl (local.get $depth) (i32.const 9)))))))))
+      (else (i32.const 0))))
 )

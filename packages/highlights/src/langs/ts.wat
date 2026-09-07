@@ -9,7 +9,7 @@
   ;; ($identHl), 254 for `:` and `?`, whose TypeScript punctuation.special
   ;; reading depends on the next token, and 253 for the multi-part kinds the
   ;; pipeline emits itself ($emitCur). Anything unlisted is an operator.
-  (enum-map $LexHl $Lex $mem.jsLexHl $Token.operator
+  (enum-map $LexHl $Lex $mem.jsTokenHighlightMap $Token.operator
     (value 253
       "eof" "invalid" "comment" "multiline_comment" "hash_bang"
       "string_literal" "backtick" "dollar_brace")

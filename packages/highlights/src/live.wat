@@ -470,16 +470,16 @@
       (i32.or (i32.shl (global.get $lvIdFree) (i32.const 1)) (i32.const 1)))
     (global.set $lvIdFree (local.get $id)))
 
-  ;; Blob image: [stackLen, brkLen, jsxLen] u32 head, 37 cross-chunk globals,
+  ;; Blob image: [stackLen, brkLen, jsxLen] u32 head, 40 cross-chunk globals,
   ;; the 32-byte stream delimiter, the 96-byte nested markdown fence
   ;; registers, the live prefixes of the language's own stack - json or toml
-  ;; nesting, or the ECMAScript template stack - and of the bracket and jsx
-  ;; stacks, then the whole used lexer checkpoint region.
-  ;; The image
-  ;; is a pure function of the incoming state and the line bytes, so exact
-  ;; byte identity is a sound convergence test. Capture builds the full
-  ;; image; interning and restore work on its zero-trimmed form. The
-  ;; checkpoint region comes last because it is all zero for the ECMAScript
+  ;; nesting, or the JavaScript template bracket stack - and of the template
+  ;; HTML/CSS state, bracket and jsx stacks, then the lexer checkpoints.
+  ;; The image is a pure function of the
+  ;; incoming state and the line bytes, so exact byte identity is a sound
+  ;; convergence test. Capture builds the full image; interning and restore
+  ;; work on its zero-trimmed form. The
+  ;; checkpoint region comes last because it is all zero for the JavaScript
   ;; family (which keeps its state in globals and the stacks): trailing-zero
   ;; trimming then drops it entirely instead of storing, hashing, and
   ;; comparing a kilobyte of zeros per line.
@@ -488,23 +488,23 @@
   (global $lvMachineId (mut i32) (i32.const -1)) ;; state the machine holds now
 
   ;; the stack the current language nests in: json and toml keep their own,
-  ;; every other lexer that has one uses the ECMAScript template stack
+  ;; every other lexer that has one uses the JavaScript template bracket stack
   (func $lvStackBase (result i32)
     (if (i32.eq (global.get $lvLang) (enum.get $Language.json))
       (then (return (i32.const $mem.jsonStack))))
     (if (i32.eq (global.get $lvLang) (enum.get $Language.toml))
       (then (return (i32.const $mem.tomlStack))))
-    (i32.const $mem.jsTemplateStack))
+    (i32.const $mem.jsTemplateBracketStack))
 
   ;; blob bytes for the current stack prefix: json and toml publish their
-  ;; depth through a global, the ecma machine derives it from tmplSp
+  ;; depth through a global; JavaScript uses the template lexer's cursor.
   (func $lvStackPrefix (result i32)
     (local $n i32)
     (if (i32.or
           (i32.eq (global.get $lvLang) (enum.get $Language.json))
           (i32.eq (global.get $lvLang) (enum.get $Language.toml)))
       (then (local.set $n (global.get $liveStackBytes)))
-      (else (local.set $n (i32.shl (global.get $tmplSp) (i32.const 2)))))
+      (else (local.set $n (i32.shl (global.get $jsTemplateLexSp) (i32.const 2)))))
     (if (i32.gt_u (local.get $n) (i32.const 1024))
       (then (local.set $n (i32.const 1024))))
     (local.get $n))
@@ -546,7 +546,7 @@
     (i32.store offset=88 (local.get $dst) (global.get $nlBefore))
     (i32.store offset=92 (local.get $dst) (global.get $braceDepth))
     (i32.store offset=96 (local.get $dst) (global.get $rxCloser))
-    (i32.store offset=100 (local.get $dst) (global.get $tmplSp))
+    (i32.store offset=100 (local.get $dst) (global.get $jsTemplateLexSp))
     (i32.store offset=104 (local.get $dst) (global.get $brkSp))
     (i32.store offset=108 (local.get $dst) (global.get $jsxSp))
     (i32.store offset=112 (local.get $dst) (global.get $tsxStreamMode))
@@ -561,13 +561,19 @@
     (i32.store offset=148 (local.get $dst) (global.get $sigAngle))
     (i32.store offset=152 (local.get $dst) (global.get $sigFnPend))
     (i32.store offset=156 (local.get $dst) (global.get $sigFnAngle))
-    (memory.copy (i32.add (local.get $dst) (i32.const 160))
+    (i32.store offset=160 (local.get $dst) (global.get $jsTemplateMarker))
+    (i32.store offset=164 (local.get $dst) (global.get $jsTemplateState))
+    (i32.store offset=168 (local.get $dst) (global.get $jsTemplateEmitSp))
+    (memory.copy (i32.add (local.get $dst) (i32.const 172))
       (i32.const $mem.streamDelimiter) (i32.const 32))
-    (memory.copy (i32.add (local.get $dst) (i32.const 192))
+    (memory.copy (i32.add (local.get $dst) (i32.const 204))
       (i32.const $mem.markdownFenceStack) (i32.const 96))
-    (local.set $p (i32.add (local.get $dst) (i32.const 288)))
+    (local.set $p (i32.add (local.get $dst) (i32.const 300)))
     (memory.copy (local.get $p) (call $lvStackBase) (local.get $stackLen))
     (local.set $p (i32.add (local.get $p) (local.get $stackLen)))
+    (memory.copy (local.get $p) (i32.const $mem.jsTemplateFn)
+      (i32.shl (global.get $jsTemplateEmitSp) (i32.const 2)))
+    (local.set $p (i32.add (local.get $p) (i32.shl (global.get $jsTemplateEmitSp) (i32.const 2))))
     (memory.copy (local.get $p) (i32.const $mem.jsBracketStack) (local.get $brkLen))
     (local.set $p (i32.add (local.get $p) (local.get $brkLen)))
     (memory.copy (local.get $p) (i32.const $mem.jsxStack) (local.get $jsxLen))
@@ -632,7 +638,7 @@
     (global.set $nlBefore (i32.load offset=88 (local.get $src)))
     (global.set $braceDepth (i32.load offset=92 (local.get $src)))
     (global.set $rxCloser (i32.load offset=96 (local.get $src)))
-    (global.set $tmplSp (i32.load offset=100 (local.get $src)))
+    (global.set $jsTemplateLexSp (i32.load offset=100 (local.get $src)))
     (global.set $brkSp (i32.load offset=104 (local.get $src)))
     (global.set $jsxSp (i32.load offset=108 (local.get $src)))
     (global.set $tsxStreamMode (i32.load offset=112 (local.get $src)))
@@ -647,14 +653,20 @@
     (global.set $sigAngle (i32.load offset=148 (local.get $src)))
     (global.set $sigFnPend (i32.load offset=152 (local.get $src)))
     (global.set $sigFnAngle (i32.load offset=156 (local.get $src)))
+    (global.set $jsTemplateMarker (i32.load offset=160 (local.get $src)))
+    (global.set $jsTemplateState (i32.load offset=164 (local.get $src)))
+    (global.set $jsTemplateEmitSp (i32.load offset=168 (local.get $src)))
     (global.set $liveStackBytes (local.get $stackLen))
     (memory.copy (i32.const $mem.streamDelimiter)
-      (i32.add (local.get $src) (i32.const 160)) (i32.const 32))
+      (i32.add (local.get $src) (i32.const 172)) (i32.const 32))
     (memory.copy (i32.const $mem.markdownFenceStack)
-      (i32.add (local.get $src) (i32.const 192)) (i32.const 96))
-    (local.set $p (i32.add (local.get $src) (i32.const 288)))
+      (i32.add (local.get $src) (i32.const 204)) (i32.const 96))
+    (local.set $p (i32.add (local.get $src) (i32.const 300)))
     (memory.copy (call $lvStackBase) (local.get $p) (local.get $stackLen))
     (local.set $p (i32.add (local.get $p) (local.get $stackLen)))
+    (memory.copy (i32.const $mem.jsTemplateFn) (local.get $p)
+      (i32.shl (global.get $jsTemplateEmitSp) (i32.const 2)))
+    (local.set $p (i32.add (local.get $p) (i32.shl (global.get $jsTemplateEmitSp) (i32.const 2))))
     (memory.copy (i32.const $mem.jsBracketStack) (local.get $p) (local.get $brkLen))
     (local.set $p (i32.add (local.get $p) (local.get $brkLen)))
     (memory.copy (i32.const $mem.jsxStack) (local.get $p) (local.get $jsxLen))
@@ -675,7 +687,10 @@
     (global.set $nlBefore (i32.const 0))
     (global.set $braceDepth (i32.const 0))
     (global.set $rxCloser (i32.const 0))
-    (global.set $tmplSp (i32.const 0))
+    (global.set $jsTemplateLexSp (i32.const 0))
+    (global.set $jsTemplateMarker (i32.const 0))
+    (global.set $jsTemplateState (i32.const 0))
+    (global.set $jsTemplateEmitSp (i32.const 0))
     (global.set $brkSp (i32.const 0))
     (global.set $jsxSp (i32.const 0))
     (global.set $tsxStreamMode (i32.const 0))
@@ -824,9 +839,9 @@
             (local.set $node (i32.load (i32.add (global.get $lvIdTab)
               (i32.shl (global.get $lvIncoming) (i32.const 2)))))
             (call $lvGrowTo (i32.add (local.get $inBase)
-              (i32.const $mem.streamStateUsed+6400)))
+              (i32.const $mem.streamStateUsed+7472)))
             (memory.fill (local.get $inBase) (i32.const 0)
-              (i32.const $mem.streamStateUsed+6400))
+              (i32.const $mem.streamStateUsed+7472))
             (memory.copy (local.get $inBase)
               (i32.add (local.get $node) (i32.const 24))
               (i32.load offset=8 (local.get $node)))
@@ -860,10 +875,10 @@
     (local.set $blobBase (i32.and
       (i32.add (i32.add (local.get $recStart) (local.get $recLen)) (i32.const 7))
       (i32.const -8)))
-    ;; head, globals, delimiter, and fence registers (288) plus the three
-    ;; stack prefixes at their caps (1024 + 1024 + 4096), then the checkpoints
+    ;; head, globals, delimiter, and fence registers (300) plus the four
+    ;; stack prefixes at their caps (1024 + 1024 + 1024 + 4096), then the checkpoints
     (call $lvGrowTo (i32.add (local.get $blobBase)
-      (i32.const $mem.streamStateUsed+6528)))
+      (i32.const $mem.streamStateUsed+7552)))
     (local.set $blobLen (call $lvTrimBlob (local.get $blobBase)
       (call $lvCaptureBlob (local.get $blobBase))))
     (global.set $lvTransLo (local.get $recStart))

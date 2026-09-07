@@ -24,7 +24,7 @@
 
   ;; Stream a directive expression [$from,$to) as TSX: $reset starts a fresh
   ;; expression, 0 continues one cut by the previous chunk end. Whole-buffer
-  ;; runs use $vueTsxRange; the stream entry keeps the ECMAScript state
+  ;; runs use $vueTsxRange; the stream entry keeps the JavaScript state
   ;; across chunks so the pieces classify like the whole.
   (func $vueTsxStream (param $from i32) (param $to i32) (param $reset i32)
     (local $save i32)

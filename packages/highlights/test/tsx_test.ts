@@ -337,6 +337,169 @@ void t.test('tsx: nested and multiline templates', () => {
   checkInvariants(tsx.hl, 'tag`a${1}`');
 });
 
+for (const lang of ['js', 'jsx', 'ts', 'tsx'] as const) {
+  void t.test(
+    `${lang}: nested templates preserve state across lookahead`,
+    () => {
+      const code =
+        'html`<div title="${`plain ${{ value: css`a { color: ${color}; }` }.value} tail`}\nend">${html`<b>${count}</b>`}${css`.next { margin: ${gap}px; }`}</div>`';
+      const kinds = tokenKinds(lang, code);
+      assert.deepEqual(
+        kinds.filter(([, kind]) => kind === 'tag').map(([text]) => text),
+        ['div', 'a', 'b', 'b', 'div']
+      );
+      for (const property of ['color', 'margin']) {
+        assert.ok(
+          kinds.some(([text, kind]) => text === property && kind === 'property')
+        );
+      }
+      assert.ok(
+        kinds.some(([text, kind]) => text === 'end"' && kind === 'string')
+      );
+      assertLineFedParity(lang, code);
+      checkInvariants(tsx.hl, code);
+    }
+  );
+
+  void t.test(`${lang}: CSS template markers reuse CSS token kinds`, () => {
+    for (const marker of ['css', '/* css */', '/* CSS */', '/*css*/']) {
+      for (const body of [
+        '.card:hover { color: #fafafa; padding: 1rem; }',
+        'color: red; --gap: 4px; margin: calc(var(--gap) * 2);',
+        '@media (min-width: 600px) { a[href="/home"] { display: flex; } }',
+        '@namespace svg "http://www.w3.org/2000/svg"; svg|a { fill: blue; }',
+      ]) {
+        assert.deepEqual(
+          tokenKinds(lang, marker + '`' + body + '`').slice(2, -1),
+          tokenKinds('css', body)
+        );
+      }
+    }
+    for (const marker of [
+      '',
+      'other',
+      'mycss',
+      'CSS',
+      '/* css-ish */',
+      '/** css */',
+      'css;',
+      '/* css */ other',
+    ]) {
+      assert.ok(
+        !tokenKinds(lang, marker + '`.card { color: red; }`').some(
+          ([, kind]) => kind === 'selector.class'
+        ),
+        marker
+      );
+    }
+  });
+
+  void t.test(
+    `${lang}: CSS templates preserve interpolation and streamed state`,
+    () => {
+      assert.deepEqual(tokenKinds(lang, 'css`.card { color: ${color}; }`'), [
+        ['css', 'variable'],
+        ['`', 'string'],
+        ['.card', 'selector.class'],
+        ['{', 'punctuation.bracket'],
+        ['color', 'property'],
+        [':', 'punctuation.delimiter'],
+        ['${', 'punctuation.special'],
+        ['color', 'variable'],
+        ['}', 'punctuation.special'],
+        [';', 'punctuation.delimiter'],
+        ['}', 'punctuation.bracket'],
+        ['`', 'string'],
+      ]);
+      for (const code of [
+        'css`\n.card {\n color: ${color};\n margin: ${gap}px;\n}\n`',
+        '/* CSS */\n`@media (min-width: ${width}px) {\n.card:hover { color: ${color}; }\n}`',
+        'css`.card { content: "before ${\nname\n} after"; /* start\n${comment} end */\n color: red; }`',
+        'css`.card { ${\ncss`color: ${color};`\n} content: "${html`<b>${value}</b>`}"; }`; `.plain { color: red; }`',
+        'html`<div title="${css`.card { color: ${color}; }`}">${html`<b>nested</b>`}</div>`',
+        'css`a { content: "line\\\ncontinued ${name}"; }`',
+        'css`a { /* unfinished\ncomment',
+        'css`a { content: "${name}',
+      ]) {
+        assertLineFedParity(lang, code);
+        checkInvariants(tsx.hl, code);
+      }
+    }
+  );
+
+  void t.test(`${lang}: HTML template markers highlight markup`, () => {
+    for (const marker of ['html', '/* html */', '/* HTML */', '/*html*/']) {
+      const code = marker + '`<div class="box">&amp;${count + 1}</div>`';
+      assert.deepEqual(tokenKinds(lang, code).slice(1), [
+        ['`', 'string'],
+        ['<', 'punctuation.bracket.html'],
+        ['div', 'tag'],
+        ['class', 'attribute'],
+        ['=', 'punctuation.delimiter.html'],
+        ['"box"', 'string'],
+        ['>', 'punctuation.bracket.html'],
+        ['&amp;', 'string.special'],
+        ['${', 'punctuation.special'],
+        ['count', 'variable'],
+        ['+', 'operator'],
+        ['1', 'number'],
+        ['}', 'punctuation.special'],
+        ['</', 'punctuation.bracket.html'],
+        ['div', 'tag'],
+        ['>', 'punctuation.bracket.html'],
+        ['`', 'string'],
+      ]);
+    }
+    for (const marker of [
+      '',
+      'other',
+      'myhtml',
+      'HTML',
+      '/* html-ish */',
+      '/** html */',
+      'html;',
+      '/* html */ other',
+    ]) {
+      assert.ok(
+        !tokenKinds(lang, marker + '`<div>`').some(
+          ([, kind]) => kind === 'tag'
+        ),
+        marker
+      );
+    }
+  });
+
+  void t.test(
+    `${lang}: HTML templates preserve nested and streamed state`,
+    () => {
+      for (const code of [
+        'html`<div title="before ${name}\nafter" data-id=${id}\n disabled>\n${html`<b>${count}</b>`}\n${`plain <i>${value}</i>`}\n</div>`; const after = 1;',
+        '/* HTML */\n`<!doctype html>\n<!-- comment\n${value} -->\n<div\n class="box\nwide">text &amp; more</div>\n`',
+        'html\n`<div>\\` \\${literal} \\u{1f600}</div>`',
+        'html`<div title="${\nhtml`<b>nested</b>`\n}">tail</div>`',
+        'html`<div title="unfinished\nattribute',
+      ]) {
+        assertLineFedParity(lang, code);
+        checkInvariants(tsx.hl, code);
+      }
+      const kinds = tokenKinds(
+        lang,
+        'html`<div title="${name} tail">${`<b>`}${html`<i/>`}</div>`; `<p>`'
+      );
+      assert.ok(
+        kinds.some(([text, kind]) => text === 'tail"' && kind === 'string')
+      );
+      assert.deepEqual(
+        kinds.filter(([, kind]) => kind === 'tag').map(([text]) => text),
+        ['div', 'i', 'div']
+      );
+      assert.ok(
+        kinds.some(([text, kind]) => text === '`<p>`' && kind === 'string')
+      );
+    }
+  );
+}
+
 void t.test('tsx: regexp vs division', () => {
   for (const [src, re] of [
     ['a = /re[/]x/gi', '/re[/]x/gi'],
