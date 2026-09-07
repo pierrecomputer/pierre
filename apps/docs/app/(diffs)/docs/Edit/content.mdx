@@ -490,20 +490,7 @@ unchanged absolute cursor as `newCursor`.
 
 For example, inserting `hello` at line 10, character 4 returns:
 
-```json
-{
-  "edits": [
-    {
-      "range": {
-        "start": { "line": 10, "character": 4 },
-        "end": { "line": 10, "character": 4 }
-      },
-      "newText": "hello"
-    }
-  ],
-  "newCursor": { "line": 10, "character": 9 }
-}
-```
+<DocsCodeExample {...editPredictionResponseExample} />
 
 #### Codestral FIM example
 
@@ -513,16 +500,7 @@ uses Mistral's **Codestral fill-in-the-middle (FIM)** model. It calls
 `https://api.mistral.ai/v1/fim/completions` with the following body, where
 `input` is the validated `EditPredictRequest`:
 
-```ts
-const body = {
-  model: 'codestral-latest',
-  prompt: input.excerptText.slice(0, input.cursorOffsetInExcerpt),
-  suffix: input.excerptText.slice(input.cursorOffsetInExcerpt),
-  max_tokens: 128,
-  temperature: 0,
-  stream: false,
-};
-```
+<DocsCodeExample {...editPredictionCodestralExample} />
 
 Codestral generates the missing text between `prompt` and `suffix`. The route
 reads `choices[0].message.content`, normalizes its line endings, and returns a
