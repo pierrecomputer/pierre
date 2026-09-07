@@ -25,9 +25,11 @@ import type {
   RetainedDiffSessionSnapshot,
 } from '../editor/types';
 import {
-  getHighlighterIfLoaded,
-  getSharedHighlighter,
-} from '../highlighter/shared_highlighter';
+  getCodeHighlighter,
+  loadHighlighter,
+  type RenderersHighlighter,
+  resolveRenderHighlighter,
+} from '../highlighter/resolve_highlighter';
 import {
   type GetHoveredLineResult,
   type GetLineIndexUtility,
@@ -56,7 +58,6 @@ import type {
   CustomPreProperties,
   DiffLineAnnotation,
   ExpansionDirections,
-  DiffsHighlighter,
   FileContents,
   FileDiffMetadata,
   HighlightedToken,
@@ -1752,12 +1753,14 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     ) {
       return;
     }
-    const sync = (highlighter: DiffsHighlighter): void => {
+    const registration = getCodeHighlighter();
+    const sync = (highlighter: RenderersHighlighter): void => {
       if (
         !this.enabled ||
         this.editor !== editor ||
         this.fileContainer !== fileContainer ||
-        this.getLatestDiff() !== fileDiff
+        this.getLatestDiff() !== fileDiff ||
+        getCodeHighlighter() !== registration
       ) {
         return;
       }
@@ -1780,19 +1783,18 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     };
     const theme = this.getTheme();
     const lang = fileDiff.lang ?? getFiletypeFromFileName(fileDiff.name);
-    // Sync synchronously whenever the shared highlighter is ready; otherwise
-    // load it and sync once it resolves.
-    const highlighter = getHighlighterIfLoaded({ theme, lang });
-    if (highlighter != null) {
-      sync(highlighter);
+    const loadOptions = {
+      themes: getThemes(theme),
+      langs: Array.from(new Set(['text' as const, lang])),
+      preferredHighlighter:
+        this.workerManager?.getPreferredHighlighter() ??
+        this.options.preferredHighlighter,
+    };
+    // Edit mode uses the registered implementation, just like the renderer.
+    if (registration.isReady(loadOptions)) {
+      sync(resolveRenderHighlighter(registration));
     } else {
-      void getSharedHighlighter({
-        themes: getThemes(theme),
-        langs: ['text', lang],
-        preferredHighlighter:
-          this.workerManager?.getPreferredHighlighter() ??
-          this.options.preferredHighlighter,
-      }).then(sync);
+      void loadHighlighter(loadOptions).then(sync);
     }
   }
 

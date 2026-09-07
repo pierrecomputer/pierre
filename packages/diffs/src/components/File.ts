@@ -33,14 +33,15 @@ import { FileRenderer, type FileRenderResult } from '../renderers/FileRenderer';
 import { SVGSpriteSheet } from '../sprite';
 export type { FileEditCompleteEvent } from '../editor/types';
 import {
-  getHighlighterIfLoaded,
-  getSharedHighlighter,
-} from '../highlighter/shared_highlighter';
+  getCodeHighlighter,
+  loadHighlighter,
+  type RenderersHighlighter,
+  resolveRenderHighlighter,
+} from '../highlighter/resolve_highlighter';
 import type {
   AppliedThemeStyleCache,
   BaseCodeOptions,
   DiffLineAnnotation,
-  DiffsHighlighter,
   FileContents,
   HighlightedToken,
   LineAnnotation,
@@ -797,12 +798,14 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     if (editor == null || fileContainer == null || file == null) {
       return;
     }
-    const syncEditor = (highlighter: DiffsHighlighter): void => {
+    const registration = getCodeHighlighter();
+    const syncEditor = (highlighter: RenderersHighlighter): void => {
       if (
         !this.enabled ||
         this.editor !== editor ||
         this.fileContainer !== fileContainer ||
-        this.getLatestFile() !== file
+        this.getLatestFile() !== file ||
+        getCodeHighlighter() !== registration
       ) {
         return;
       }
@@ -818,19 +821,18 @@ export class File<LAnnotation = undefined, Caret = undefined> {
 
     const theme = this.getTheme();
     const lang = file.lang ?? getFiletypeFromFileName(file.name);
-    // Sync editor synchronously whenever the shared highlighter is ready;
-    // otherwise load it and sync once it resolves.
-    const highlighter = getHighlighterIfLoaded({ theme, lang });
-    if (highlighter != null) {
-      syncEditor(highlighter);
+    const loadOptions = {
+      themes: getThemes(theme),
+      langs: Array.from(new Set(['text' as const, lang])),
+      preferredHighlighter:
+        this.workerManager?.getPreferredHighlighter() ??
+        this.options.preferredHighlighter,
+    };
+    // Edit mode uses the registered implementation, just like the renderer.
+    if (registration.isReady(loadOptions)) {
+      syncEditor(resolveRenderHighlighter(registration));
     } else {
-      void getSharedHighlighter({
-        themes: getThemes(theme),
-        langs: Array.from(new Set(['text', lang])),
-        preferredHighlighter:
-          this.workerManager?.getPreferredHighlighter() ??
-          this.options.preferredHighlighter,
-      }).then(syncEditor);
+      void loadHighlighter(loadOptions).then(syncEditor);
     }
   }
 
